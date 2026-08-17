@@ -93,8 +93,8 @@ ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxStri
 
 	m_dataEditor->Bind(wxEVT_MENU, &ibDialogUserList::OnCommandMenu, this);
 
-	m_dataEditor->AppendColumn(columnName);
-	m_dataEditor->AppendColumn(columnFullName);
+	m_dataEditor->GetRootColumnGroup()->AppendColumn(columnName);
+	m_dataEditor->GetRootColumnGroup()->AppendColumn(columnFullName);
 
 	m_dataEditor->SetForegroundColour(wxDefaultStypeFGColour);
 	//m_dataEditor->SetBackgroundColour(wxDefaultStypeBGColour);

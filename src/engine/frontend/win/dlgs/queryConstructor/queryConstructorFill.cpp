@@ -1319,7 +1319,7 @@ void ibDialogQueryConstructor::FillUnions()
 	// taught — see SyncNotebookPages).
 	const unsigned int wanted = 1 + m_unionFieldModel->BranchCount();   // the name column + a branch each
 	if (m_unions != nullptr && m_unionFields->GetColumnCount() != wanted) {
-		m_unionFields->ClearColumns();
+		m_unionFields->GetRootColumnGroup()->ClearColumns();
 		// CALLED WHAT IT IS. The header said "Field name", so a person looking for the aliases saw a
 		// column of names identical to the branch columns and concluded there were none. It is the
 		// ALIAS — the output field's name — and it is typed into.
@@ -1328,7 +1328,7 @@ void ibDialogQueryConstructor::FillUnions()
 		// EMPTY cell for every row whose field resolved to an icon, which is the worst possible way
 		// to fail: the ones that stayed visible were exactly the ones nothing was found for.
 		// Editable because this is the one place an output field is named.
-		m_unionFields->AppendColumn(new ibDataViewColumn(_("Alias"),
+		m_unionFields->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Alias"),
 			new ibDataViewIconTextRenderer(ibDataViewIconTextRenderer::GetDefaultType(),
 				wxDATAVIEW_CELL_EDITABLE),
 			kUnionColName, FromDIP(220), wxAlignment::wxALIGN_LEFT));
@@ -1337,7 +1337,7 @@ void ibDialogQueryConstructor::FillUnions()
 		// the line-up off by name is right often enough to be misleading. The empty entry is an
 		// answer too: this branch supplies nothing here, and the column is NULL for its rows.
 		for (unsigned int branch = 0; branch < m_unionFieldModel->BranchCount(); ++branch)
-			m_unionFields->AppendColumn(new ibDataViewColumn(
+			m_unionFields->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(
 				wxString::Format(_("Query %u"), branch + 1),
 				new ibRowChoiceRenderer([this, branch]() -> wxArrayString {
 					wxArrayString words;

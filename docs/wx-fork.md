@@ -57,6 +57,13 @@ model never anticipated. `datavgen.scrollbar.cpp` is the matching scrollbar beha
 This is the file where the "more items exist, no scrollbar, yet it scrolls" and
 "the flag does not get through" comments live — the paging seam is the delicate part.
 
+**Two more files that are purely ours** (2026-08-17) — `datavlayout.{h,cpp}`: COLUMN GROUPS.
+A row is drawn as N **bands** and a column is a rectangle in an (x, band) grid, so twelve
+account-dimension columns can stand in two stacks instead of one unreadable row. The root
+group became the control's column store — upstream's `m_cols` and its column-management API
+are gone from `ibDataViewCtrl`. See [column-groups.md](column-groups.md) for the tree, the
+law on widths, the resize drag and the drop gesture.
+
 ### 2.2 `grid/` — wxGrid → `ibGrid`
 
 `gridext.h` keeps upstream's header verbatim:

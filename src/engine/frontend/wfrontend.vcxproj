@@ -211,6 +211,8 @@
     <ClCompile Include="visualView\ctrl\tableBox_res.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxColumn.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxColumn_res.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup_res.cpp" />
     <ClCompile Include="visualView\ctrl\wrapsizer.cpp" />
     <ClCompile Include="visualView\ctrl\staticboxsizer.cpp" />
     <ClCompile Include="visualView\ctrl\gridsizer.cpp" />

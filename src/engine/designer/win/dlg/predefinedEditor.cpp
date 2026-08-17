@@ -116,9 +116,9 @@ void ibDialogPredefinedEditor::CreateDialogView()
 
 	m_tableEditor->Connect(wxEVT_MENU, wxCommandEventHandler(ibDialogPredefinedEditor::OnCommandMenu), nullptr, this);
 
-	m_tableEditor->AppendColumn(columnName);
-	m_tableEditor->AppendColumn(columnCode);
-	m_tableEditor->AppendColumn(columnDescription);
+	m_tableEditor->GetRootColumnGroup()->AppendColumn(columnName);
+	m_tableEditor->GetRootColumnGroup()->AppendColumn(columnCode);
+	m_tableEditor->GetRootColumnGroup()->AppendColumn(columnDescription);
 
 	m_tableEditor->SetForegroundColour(wxDefaultStypeFGColour);
 	//m_tableEditor->SetBackgroundColour(wxDefaultStypeBGColour);

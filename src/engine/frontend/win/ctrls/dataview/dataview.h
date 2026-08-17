@@ -43,6 +43,9 @@ class ibHeaderGenericCtrl;
 #include "backend/modelView.h"
 #include "headerctrlg.h"
 #include "frontend/frontend.h"
+// The (x, band) geometry a grouped table paints in, and the ORIENTATION a group can
+// carry. Free of any dataview type — which is why the form layer can include it alone.
+#include "datavlayout.h"
 
 // ----------------------------------------------------------------------------
 // ibDataViewCtrl globals
@@ -266,15 +269,18 @@ public:
 
 	virtual ~ibDataViewColumnBase();
 
-	// setters:
-	virtual void SetOwner(ibDataViewCtrl* owner)
-	{
-		m_owner = owner;
-	}
-
 	// getters:
 	unsigned int GetModelColumn() const { return static_cast<unsigned int>(m_model_column); }
-	ibDataViewCtrl* GetOwner() const { return m_owner; }
+
+	// ITS PARENT IS THE GROUP THAT HOLDS IT — the same word a group uses for its own
+	// holder, so a member of either kind answers "who is above me" the same way.
+	ibDataViewColumnGroup* GetParent() const { return m_group; }
+
+	// And the control comes THROUGH the parent: a column is an element of a group, the
+	// group asks its own parent, and only the ROOT knows the control. Nothing here can
+	// point at a different table than its parent does, because it holds no such link.
+	ibDataViewCtrl* GetOwner() const;
+
 	ibDataViewRenderer* GetRenderer() const { return m_renderer; }
 
 	// Re-apply THIS column's header sort arrow from the model's active sort (the L5 composer). The control calls
@@ -296,11 +302,14 @@ public:
 	virtual int WXGetSpecifiedWidth() const { return GetWidth(); }
 
 protected:
-	
+
 	ibDataViewRenderer* m_renderer;
 	int                      m_model_column;
 	wxBitmapBundle           m_bitmap;
-	ibDataViewCtrl* m_owner;
+
+	// The GROUP this column is an element of — its only link upwards. Set when a group
+	// takes it in; the control is reached through the group (GetOwner above).
+	ibDataViewColumnGroup* m_group = nullptr;
 
 private:
 
@@ -338,71 +347,80 @@ enum ibDataViewViewMode
 	ibDataViewList
 };
 
-class FRONTEND_API ibDataViewCtrlBase : public wxSystemThemedControl<wxControl>
-{
+// ----------------------------------------------------------------------------
+// COLUMN GROUPS — the sizer of the grid.
+//
+// A grid used to be a ROW of columns: every column a full-height stripe, laid
+// out left to right, and a header cell of its own above it. That is one way of
+// spending the width, not the only one, and it runs out early — an accounting
+// register puts twelve account-dimension columns side by side and every title
+// is cut to "Account di...".
+//
+// A GROUP is a header that owns columns. It carries an ORIENTATION, and that is
+// the whole mechanism:
+//
+//   Horizontal — its columns sit side by side (the classic row), the group's
+//                title spanning them as one header cell above.
+//   Vertical   — its columns sit ONE UNDER ANOTHER inside the same width. The
+//                row grows taller instead of wider: three account dimensions
+//                cost one column of width and three BANDS of height.
+//
+// A band is a sub-row: the row a model gives us is drawn as `bandCount`
+// sub-rows, and a column occupies one rectangle in that (x, band) grid rather
+// than a stripe. This is the ONE place that geometry is decided; the header,
+// the cells, hit-testing and the editor all ask for the same rectangle, so
+// "header + value + columns line up" holds by construction rather than by three
+// implementations agreeing.
+//
+// A group HOLDS its members, in order — columns and groups alike. The control has a
+// ROOT group and no separate column store: "a column of this table" means "a member,
+// however deep", and there is no such state as a column without a holder. That is
+// what makes adding uniform — you always hand the member to a group, root or not —
+// and it is why an EMPTY group still exists (it is a group with no members, not an
+// absence of evidence).
+//
+// The tree used to be DERIVED (columns' order + a pointer up), which could not tell
+// an empty group from none at all and let a column dropped between two others cut
+// their group in half.
+// ----------------------------------------------------------------------------
+
+// (ibColumnGroupKind — the orientation — is declared in datavlayout.h, included
+//  above: the form layer needs the KIND without dragging in any dataview type.)
+
+class ibDataViewColumnGroup;
+
+// ONE MEMBER OF A GROUP — a column or a nested group, never both. Groups and columns
+// stand side by side in one ordered list precisely so that nesting needs no second
+// mechanism: "what this group holds" has a single answer, in a single order.
+struct ibColumnMember {
+	ibDataViewColumn* column = nullptr;
+	ibDataViewColumnGroup* group = nullptr;
+
+	bool IsColumn() const { return column != nullptr; }
+	bool IsGroup() const { return group != nullptr; }
+};
+
+class FRONTEND_API ibDataViewColumnGroup : public wxObject {
 public:
 
-	ibDataViewCtrlBase();
-	virtual ~ibDataViewCtrlBase();
+	// Defaults to VERTICAL, like the control that creates it: a group is added in
+	// order to stack columns — running them side by side is what they do anyway.
+	explicit ibDataViewColumnGroup(const wxString& title = wxEmptyString,
+		ibColumnGroupKind kind = ibColumnGroupVertical,
+		wxAlignment align = wxALIGN_CENTER)
+		: m_title(title), m_kind(kind), m_align(align), m_parent(nullptr), m_hidden(false)
+	{
+	}
 
-	// model
-	// -----
 
-	virtual bool AssociateModel(ibDataViewModel* model);
-	ibDataViewModel* GetModel();
-	const ibDataViewModel* GetModel() const;
-
-	// column management
-	// -----------------
-
-	ibDataViewColumn* PrependTextColumn(const wxString& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
-		wxAlignment align = wxALIGN_NOT,
-		int flags = wxDATAVIEW_COL_RESIZABLE);
-	ibDataViewColumn* PrependIconTextColumn(const wxString& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
-		wxAlignment align = wxALIGN_NOT,
-		int flags = wxDATAVIEW_COL_RESIZABLE);
-	ibDataViewColumn* PrependToggleColumn(const wxString& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_TOGGLE_DEFAULT_WIDTH,
-		wxAlignment align = wxALIGN_CENTER,
-		int flags = wxDATAVIEW_COL_RESIZABLE);
-	ibDataViewColumn* PrependProgressColumn(const wxString& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_DEFAULT_WIDTH,
-		wxAlignment align = wxALIGN_CENTER,
-		int flags = wxDATAVIEW_COL_RESIZABLE);
-	ibDataViewColumn* PrependDateColumn(const wxString& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_ACTIVATABLE, int width = wxCOL_WIDTH_DEFAULT,
-		wxAlignment align = wxALIGN_NOT,
-		int flags = wxDATAVIEW_COL_RESIZABLE);
-	ibDataViewColumn* PrependBitmapColumn(const wxString& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
-		wxAlignment align = wxALIGN_CENTER,
-		int flags = wxDATAVIEW_COL_RESIZABLE);
-	ibDataViewColumn* PrependTextColumn(const wxBitmap& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
-		wxAlignment align = wxALIGN_NOT,
-		int flags = wxDATAVIEW_COL_RESIZABLE);
-	ibDataViewColumn* PrependIconTextColumn(const wxBitmap& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
-		wxAlignment align = wxALIGN_NOT,
-		int flags = wxDATAVIEW_COL_RESIZABLE);
-	ibDataViewColumn* PrependToggleColumn(const wxBitmap& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_TOGGLE_DEFAULT_WIDTH,
-		wxAlignment align = wxALIGN_CENTER,
-		int flags = wxDATAVIEW_COL_RESIZABLE);
-	ibDataViewColumn* PrependProgressColumn(const wxBitmap& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_DEFAULT_WIDTH,
-		wxAlignment align = wxALIGN_CENTER,
-		int flags = wxDATAVIEW_COL_RESIZABLE);
-	ibDataViewColumn* PrependDateColumn(const wxBitmap& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_ACTIVATABLE, int width = wxCOL_WIDTH_DEFAULT,
-		wxAlignment align = wxALIGN_NOT,
-		int flags = wxDATAVIEW_COL_RESIZABLE);
-	ibDataViewColumn* PrependBitmapColumn(const wxBitmap& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
-		wxAlignment align = wxALIGN_CENTER,
-		int flags = wxDATAVIEW_COL_RESIZABLE);
+	// ---- COLUMN MANAGEMENT, ON THE GROUP -------------------------------------
+	//
+	// You call these ON THE GROUP YOU MEAN, and that is the point: the column lands in
+	// THAT group, and there is never a question of which one it went to. The table's
+	// root group gives the flat list of old; a group you added to it gives a stack.
+	//
+	// Bodies are out of line (datavcmn.cpp) because they build renderers, which are
+	// declared further down this header.
 
 	ibDataViewColumn* AppendTextColumn(const wxString& label, unsigned int model_column,
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
@@ -453,16 +471,194 @@ public:
 		wxAlignment align = wxALIGN_CENTER,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 
-	virtual bool PrependColumn(ibDataViewColumn* col);
-	virtual bool InsertColumn(unsigned int pos, ibDataViewColumn* col);
-	virtual bool AppendColumn(ibDataViewColumn* col);
+	ibDataViewColumn* PrependTextColumn(const wxString& label, unsigned int model_column,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
+		wxAlignment align = wxALIGN_NOT,
+		int flags = wxDATAVIEW_COL_RESIZABLE);
+	ibDataViewColumn* PrependIconTextColumn(const wxString& label, unsigned int model_column,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
+		wxAlignment align = wxALIGN_NOT,
+		int flags = wxDATAVIEW_COL_RESIZABLE);
+	ibDataViewColumn* PrependToggleColumn(const wxString& label, unsigned int model_column,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_TOGGLE_DEFAULT_WIDTH,
+		wxAlignment align = wxALIGN_CENTER,
+		int flags = wxDATAVIEW_COL_RESIZABLE);
+	ibDataViewColumn* PrependProgressColumn(const wxString& label, unsigned int model_column,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_DEFAULT_WIDTH,
+		wxAlignment align = wxALIGN_CENTER,
+		int flags = wxDATAVIEW_COL_RESIZABLE);
+	ibDataViewColumn* PrependDateColumn(const wxString& label, unsigned int model_column,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_ACTIVATABLE, int width = wxCOL_WIDTH_DEFAULT,
+		wxAlignment align = wxALIGN_NOT,
+		int flags = wxDATAVIEW_COL_RESIZABLE);
+	ibDataViewColumn* PrependBitmapColumn(const wxString& label, unsigned int model_column,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
+		wxAlignment align = wxALIGN_CENTER,
+		int flags = wxDATAVIEW_COL_RESIZABLE);
+	ibDataViewColumn* PrependTextColumn(const wxBitmap& label, unsigned int model_column,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
+		wxAlignment align = wxALIGN_NOT,
+		int flags = wxDATAVIEW_COL_RESIZABLE);
+	ibDataViewColumn* PrependIconTextColumn(const wxBitmap& label, unsigned int model_column,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
+		wxAlignment align = wxALIGN_NOT,
+		int flags = wxDATAVIEW_COL_RESIZABLE);
+	ibDataViewColumn* PrependToggleColumn(const wxBitmap& label, unsigned int model_column,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_TOGGLE_DEFAULT_WIDTH,
+		wxAlignment align = wxALIGN_CENTER,
+		int flags = wxDATAVIEW_COL_RESIZABLE);
+	ibDataViewColumn* PrependProgressColumn(const wxBitmap& label, unsigned int model_column,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_DEFAULT_WIDTH,
+		wxAlignment align = wxALIGN_CENTER,
+		int flags = wxDATAVIEW_COL_RESIZABLE);
+	ibDataViewColumn* PrependDateColumn(const wxBitmap& label, unsigned int model_column,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_ACTIVATABLE, int width = wxCOL_WIDTH_DEFAULT,
+		wxAlignment align = wxALIGN_NOT,
+		int flags = wxDATAVIEW_COL_RESIZABLE);
+	ibDataViewColumn* PrependBitmapColumn(const wxBitmap& label, unsigned int model_column,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
+		wxAlignment align = wxALIGN_CENTER,
+		int flags = wxDATAVIEW_COL_RESIZABLE);
 
-	virtual unsigned int GetColumnCount() const = 0;
-	virtual ibDataViewColumn* GetColumn(unsigned int pos) const = 0;
-	virtual int GetColumnPosition(const ibDataViewColumn* column) const = 0;
+	// A GROUP can add groups too, and hang columns on itself — that is all nesting is.
+	// Created and taken in, in one call.
+	ibDataViewColumnGroup* AppendColumnGroup(const wxString& title,
+		ibColumnGroupKind kind = ibColumnGroupVertical,
+		wxAlignment align = wxALIGN_CENTER);
+	ibDataViewColumnGroup* PrependColumnGroup(const wxString& title,
+		ibColumnGroupKind kind = ibColumnGroupVertical,
+		wxAlignment align = wxALIGN_CENTER);
+	ibDataViewColumnGroup* InsertColumnGroup(unsigned int pos, const wxString& title,
+		ibColumnGroupKind kind = ibColumnGroupVertical,
+		wxAlignment align = wxALIGN_CENTER);
 
-	virtual bool DeleteColumn(ibDataViewColumn* column) = 0;
-	virtual bool ClearColumns() = 0;
+	const wxString& GetTitle() const { return m_title; }
+	void SetTitle(const wxString& title) { m_title = title; }
+
+	// DOES THE GROUP SHOW A TITLE OF ITS OWN?
+	//
+	// Off by default, and that is the quiet case: the columns are merely grouped —
+	// they stack, or they merge — and the header stays as deep as it was. Turn it on
+	// and the group takes a band above them, which is what makes the columns under it
+	// read as one thing ("Account Dr" over its dimensions).
+	bool IsTitleShown() const { return m_titleShown; }
+	void SetTitleShown(bool shown = true) { m_titleShown = shown; }
+
+	ibColumnGroupKind GetKind() const { return m_kind; }
+	void SetKind(ibColumnGroupKind kind) { m_kind = kind; }
+
+	wxAlignment GetAlignment() const { return m_align; }
+	void SetAlignment(wxAlignment align) { m_align = align; }
+
+	// A group nests: its parent is the group ABOVE it (nullptr = top level).
+	ibDataViewColumnGroup* GetParent() const { return m_parent; }
+	void SetParent(ibDataViewColumnGroup* parent) { m_parent = parent; }
+
+	// THE CONTROL, ASKED OF THE PARENT. Only the ROOT group holds the pointer — every
+	// group below it answers by asking whoever holds it, so there is one place the
+	// table is recorded and no way for two groups of one table to disagree.
+	//
+	// It has to come from HERE rather than by walking the form: during teardown that
+	// walk (form → document → view → host) no longer resolves, and a detach that
+	// quietly does not happen leaves the group in the control's list to be freed twice.
+	class ibDataViewCtrl* GetOwner() const
+	{
+		return m_parent != nullptr ? m_parent->GetOwner() : m_owner;
+	}
+	// Set on the ROOT only (the control does it when it creates its store).
+	void SetOwner(class ibDataViewCtrl* owner) { m_owner = owner; }
+
+	// ---- MEMBERS ------------------------------------------------------------
+	//
+	// One list, in display order, holding columns and groups alike — a group is a
+	// member exactly as a column is, which is what lets nesting be written without a
+	// second mechanism.
+	//
+	// THE GROUP MANAGES ITS OWN MEMBERS: take one in, take it out, move it. A member
+	// belongs to exactly ONE group, so taking it in is also taking it OFF whoever held
+	// it — including this same group, which makes Insert the move as well. The control
+	// does not arrange anything: it owns the columns and reads what the groups say.
+
+	void AppendColumn(ibDataViewColumn* column) { InsertColumn(GetMemberCount(), column); }
+	void AppendGroup(ibDataViewColumnGroup* group) { InsertGroup(GetMemberCount(), group); }
+
+	void InsertColumn(unsigned int at, ibDataViewColumn* column);
+	void InsertGroup(unsigned int at, ibDataViewColumnGroup* group);
+
+	// Takes the member out (does not free it — ownership is the control's).
+	void RemoveColumn(ibDataViewColumn* column);
+	void RemoveGroup(ibDataViewColumnGroup* group);
+	void RemoveAllMembers() { m_members.clear(); }
+
+	unsigned int GetMemberCount() const { return (unsigned int)m_members.size(); }
+	const ibColumnMember& GetMember(unsigned int idx) const { return m_members[idx]; }
+	const std::vector<ibColumnMember>& GetMembers() const { return m_members; }
+
+	// Position of a member, or wxNOT_FOUND when it is not one — the same answer, and the
+	// same word for it, as GetColumnPosition below.
+	int GetMemberPosition(const ibDataViewColumn* column) const;
+	int GetMemberPosition(const ibDataViewColumnGroup* group) const;
+
+	// ---- THE COLUMNS UNDER IT ------------------------------------------------
+	//
+	// Not just its own members: every column below it, at any depth, in the order the
+	// members put them. This is what "the nth column" means anywhere — the table asks
+	// its root group and repeats the answer, because it keeps no column list of its own.
+	unsigned int GetColumnCount() const;
+	ibDataViewColumn* GetColumn(unsigned int pos) const;
+	int GetColumnPosition(const ibDataViewColumn* column) const;
+
+	// (A column in hand is let go through its own holder — column->GetParent()->
+	//  RemoveColumn(column). There is no second verb for "find whoever holds it".)
+	// Let ALL of them go, groups included; the members are dropped, not freed (whoever
+	// created them frees them).
+	void ClearColumns();
+
+	// Hiding a group hides the columns under it — asked by the layout, not by
+	// each column (a column keeps its own Visible for its own sake).
+	bool IsHidden() const { return m_hidden; }
+	void SetHidden(bool hidden = true) { m_hidden = hidden; }
+
+private:
+
+	wxString m_title;
+	ibColumnGroupKind m_kind;
+	wxAlignment m_align;
+	ibDataViewColumnGroup* m_parent;
+	class ibDataViewCtrl* m_owner = nullptr;
+	bool m_hidden;
+	bool m_titleShown = false;
+
+	// What it holds, in display order. Not owned — the control owns columns and
+	// groups alike; this is the ORDER and the nesting, nothing more.
+	std::vector<ibColumnMember> m_members;
+};
+
+class FRONTEND_API ibDataViewCtrlBase : public wxSystemThemedControl<wxControl>
+{
+public:
+
+	ibDataViewCtrlBase();
+	virtual ~ibDataViewCtrlBase();
+
+	// model
+	// -----
+
+	virtual bool AssociateModel(ibDataViewModel* model);
+	ibDataViewModel* GetModel();
+	const ibDataViewModel* GetModel() const;
+
+	// column management
+	// -----------------
+	//
+	// THERE IS NONE HERE. A column exists only as a member of a GROUP, so adding,
+	// counting, finding, moving and removing columns all live on ibDataViewColumnGroup
+	// (above). A table hands out its ROOT group and nothing else: want a flat list of
+	// columns, describe them on the root; want them grouped, add a group to the root
+	// and describe them on that.
+	//
+	// Whoever needs to find something takes the root and looks from there.
+	virtual ibDataViewColumnGroup* GetRootColumnGroup() const = 0;
 
 	void SetExpanderColumn(ibDataViewColumn* col)
 	{
@@ -1009,15 +1205,18 @@ public:
 		return IsSelected(RowToItem(row));
 	}
 
+	// A LIST control's columns come in pairs: the visible column and the STORE's value
+	// type behind it, which is why these exist here rather than on the group — the group
+	// takes the column, the store is told its type in the same call. They hang the
+	// column on the root group like everybody else.
 	bool AppendColumn(ibDataViewColumn* column, const wxString& varianttype);
 	bool PrependColumn(ibDataViewColumn* column, const wxString& varianttype);
 	bool InsertColumn(unsigned int pos, ibDataViewColumn* column, const wxString& varianttype);
 
-	// overridden from base class
-	virtual bool PrependColumn(ibDataViewColumn* col) wxOVERRIDE;
-	virtual bool InsertColumn(unsigned int pos, ibDataViewColumn* col) wxOVERRIDE;
-	virtual bool AppendColumn(ibDataViewColumn* col) wxOVERRIDE;
-	virtual bool ClearColumns() wxOVERRIDE;
+	bool PrependColumn(ibDataViewColumn* col);
+	bool InsertColumn(unsigned int pos, ibDataViewColumn* col);
+	bool AppendColumn(ibDataViewColumn* col);
+	bool ClearColumns();
 
 	ibDataViewColumn* AppendTextColumn(const wxString& label,
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,

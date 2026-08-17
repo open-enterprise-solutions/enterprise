@@ -111,20 +111,129 @@ bool ibValueModelTableBox::SetControlValue(const ibValue& varControlVal)
 	return true;
 }
 
+#ifndef OES_USE_WEB
+ibDataViewColumnGroup* ibValueModelTableBox::GetRootColumnGroup() const
+{
+	ibDataViewCtrl* dataViewCtrl = dynamic_cast<ibDataViewCtrl*>(GetInnerWx());
+	return dataViewCtrl != nullptr ? dataViewCtrl->GetRootColumnGroup() : nullptr;
+}
+
+
+// ONE QUESTION, ASKED OF THE PARENT — and both possible answers are the parent's own,
+// so nothing here reaches past it: a GROUP is a column store already, and the TABLE has
+// the hidden root one. The root is never a designer control; it is only what the first
+// level is given, everything deeper being held by the group it was created in.
+ibDataViewColumnGroup* ibFindColumnHolder(const ibValueFrame* parent)
+{
+	if (const ibValueModelTableBoxColumnGroup* group =
+		dynamic_cast<const ibValueModelTableBoxColumnGroup*>(parent))
+		return group->GetColumnGroup();
+
+	const ibValueModelTableBox* table = dynamic_cast<const ibValueModelTableBox*>(parent);
+	return table != nullptr ? table->GetRootColumnGroup() : nullptr;
+}
+#endif // !OES_USE_WEB
+
+
+
+// Depth-first through the control tree, columns in the order they will be shown in.
+// A column is no longer always a direct child — it may sit inside a column GROUP, and
+// groups nest — so the table walks the tree instead of looping over its children,
+// which would silently see none of the grouped ones.
+static void CollectColumns(const ibValueFrame* parent,
+	std::vector<ibValueModelTableBoxColumn*>& out)
+{
+	if (parent == nullptr)
+		return;
+
+	for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
+
+		ibValueFrame* child = parent->GetChild(idx);
+		if (child == nullptr)
+			continue;
+
+		// dynamic_cast, NOT ConvertToType: the latter goes through CastValue, which
+		// answers null for a value whose m_typeClass is TYPE_EMPTY — and a control is
+		// such a value. Asking it here silently returned "no columns" for every table
+		// in the product, which is what the original code avoided by casting plainly.
+		ibValueModelTableBoxColumn* column = dynamic_cast<ibValueModelTableBoxColumn*>(child);
+		if (column != nullptr) {
+			out.push_back(column);
+			continue;
+		}
+
+		// A group holds columns (and groups) — walk into it.
+		if (dynamic_cast<ibValueModelTableBoxColumnGroup*>(child) != nullptr)
+			CollectColumns(child, out);
+	}
+}
+
+
+// A COLUMN THE SOURCE PUT IN A GROUP GOES INTO THAT GROUP. The name comes from the source
+// (ibSourceExplorer::GetSourceGroup) — the columns of one family say the same thing there,
+// and the register's dimension slots are the case this exists for: twelve of them in one
+// row is a journal nobody can read, the same twelve in two stacks fit the screen.
+ibValueFrame* ibValueModelTableBox::GetColumnGroupHolder(const wxString& group, bool* created)
+{
+	if (created != nullptr)
+		*created = false;
+
+	if (group.IsEmpty())
+		return this;
+
+	// The group's control name is the table's plus the family name, which is what makes it
+	// findable — so a second column of the family lands in the SAME group, whether or not
+	// it came right after the first.
+	const wxString groupName = GetControlName() + group;
+
+	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
+		ibValueFrame* child = GetChild(idx);
+		if (dynamic_cast<ibValueModelTableBoxColumnGroup*>(child) != nullptr
+			&& child->GetControlName() == groupName)
+			return child;
+	}
+
+	wxASSERT(m_formOwner);
+	ibValueModelTableBoxColumnGroup* newGroup =
+		dynamic_cast<ibValueModelTableBoxColumnGroup*>(
+			m_formOwner->CreateControl(wxT("TableboxColumnGroup"), this));
+	if (newGroup == nullptr)
+		return this;
+
+	newGroup->SetControlName(groupName);
+	newGroup->SetCaption(group);
+
+	if (created != nullptr)
+		*created = true;
+
+	return newGroup;
+}
+
 void ibValueModelTableBox::AddColumn()
 {
 #ifndef OES_USE_WEB
 	wxASSERT(m_formOwner);
 
-	// Create a BARE view column — NO source, and NO storage column injected into the bound value-table.
+	// A BARE view column — NO source, and NO storage column injected into the bound value-table.
 	// A tablebox column on the form is a VIEW that BINDS (through its Source, which may be a dotted path to
 	// another / composite field) to a field the user picks; it must not silently add a fourth column to the
 	// value-table's schema (that schema is edited via the attribute's own "Add column"). Auto-adding one both
 	// duplicated the schema and froze the value-table column id to the CONTROL id (a different id space) — a
 	// serialization hazard. Source-less, the new column stays hidden until the user binds it (visibility gate
 	// in ibValueModelTableBoxColumn::OnUpdated), exactly like any other unbound source control.
-	ibValueModelTableBoxColumn* columnTable = dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->NewObject(g_controlTableBoxColumnCLSID, this));
-	g_visualHostContext->InsertControl(columnTable, this);
+	ibValueFrame* newColumn = m_formOwner->NewObject(g_controlTableBoxColumnCLSID, this);
+	g_visualHostContext->InsertControl(newColumn, this);
+	g_visualHostContext->RefreshEditor();
+#endif
+}
+
+void ibValueModelTableBox::AddColumnGroup()
+{
+#ifndef OES_USE_WEB
+	wxASSERT(m_formOwner);
+
+	ibValueFrame* newColumnGroup = m_formOwner->NewObject(g_controlTableBoxColumnGroupCLSID, this);
+	g_visualHostContext->InsertControl(newColumnGroup, this);
 	g_visualHostContext->RefreshEditor();
 #endif
 }
@@ -155,8 +264,9 @@ void ibValueModelTableBox::CreateColumnCollection(ibDataViewCtrl* dataViewCtrl)
 	//clear all children — owning handles release the column controls (cascade)
 	RemoveAllChildren();
 
-	//clear all old columns
-	tc->ClearColumns();
+	//clear all old columns — said to the STORE, the root group (the column controls
+	//themselves were just destroyed by the host above, which detached each one)
+	tc->GetRootColumnGroup()->ClearColumns();
 
 	//create new columns
 	ibValueModel::ibValueModelColumnCollection* tableColumns = m_tableModel->GetColumnCollection();
@@ -211,20 +321,21 @@ void ibValueModelTableBox::CreateTable(bool recreateModel) {
 		m_tableModel = ibTypeControlFactory::CreateAndConvertValueRef<ibValueModel>();
 
 		if (m_tableModel != nullptr) {
-			for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
-				ibValueModelTableBoxColumn* columnTable = dynamic_cast<ibValueModelTableBoxColumn*>(GetChild(idx));
-				if (columnTable != nullptr) {
-					ibValueModel::ibValueModelColumnCollection* columnData = m_tableModel->GetColumnCollection();
-					if (columnData == nullptr) continue;
-					ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* column_info = columnData->AddColumn(
-						columnTable->GetControlName(),
-						columnTable->GetTypeDesc(),
-						columnTable->GetCaption(),
-						columnTable->GetWidthColumn()
-					);
+			// Through the WALK, not the children: a column inside a group is still a
+			// column of this table and must reach the model like any other.
+			std::vector<ibValueModelTableBoxColumn*> columns;
+			CollectColumns(this, columns);
+			for (ibValueModelTableBoxColumn* columnTable : columns) {
+				ibValueModel::ibValueModelColumnCollection* columnData = m_tableModel->GetColumnCollection();
+				if (columnData == nullptr) continue;
+				ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* column_info = columnData->AddColumn(
+					columnTable->GetControlName(),
+					columnTable->GetTypeDesc(),
+					columnTable->GetCaption(),
+					columnTable->GetWidthColumn()
+				);
 
-					if (column_info != nullptr) column_info->SetColumnID(columnTable->GetControlID());
-				}
+				if (column_info != nullptr) column_info->SetColumnID(columnTable->GetControlID());
 			}
 		}
 	}
@@ -355,7 +466,7 @@ ibClassID ibValueModelTableBox::GetSourceClassType() const
 
 ibValueModelTableBox::ibValueModelTableBox() : ibValueWindowComposite(), ibTypeControlFactory(),
 m_dataViewCreated(false), m_dataViewSelected(false),
-m_need_calculate_pos(false),
+m_needExpanderColumn(false),
 m_tableModel(nullptr), m_tableCurrentLine(nullptr)
 {
 	m_members.Bind(this, &ibValueModelTableBox::FillControlMembers);
@@ -384,31 +495,27 @@ ResolveLineByValue(ibValueModel* model, const ibValue& value)
 }
 #endif
 
-void ibValueModelTableBox::CalculateColumnPos()
+// THE TREE-EXPANDER COLUMN — the first SHOWN one, which is all that is left to decide
+// here. (This used to be CalculateColumnPos and used to re-insert every column to match
+// its position on the form: a workaround for the native, pre-generic header. Order is the
+// column TREE's now, so nothing has any positions to calculate.)
+void ibValueModelTableBox::UpdateExpanderColumn()
 {
 #ifndef OES_USE_WEB
-	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx());
-	if (dataViewCtrl == nullptr)
+	ibDataViewColumnGroup* columns = GetRootColumnGroup();
+	if (columns == nullptr)
 		return;
 
-	// Columns render in child (append) order — the generic dataview honours the order columns are appended /
-	// inserted in, so there is nothing to force here. This used to DeleteColumn+InsertColumn every column to
-	// match GetParentPosition(): a workaround for the NATIVE (pre-generic) header, which threw a logic error
-	// when columns were moved and had to be re-synced. The generic header made that dead weight — and its
-	// reorder decision read the header's DISPLAY order (GetColumnPos), transiently stale during a drop/refill,
-	// which reshuffled freshly-dropped columns out of order. User header drag-reorder still persists through
-	// OnColumnReordered -> ChangeChildPosition (the generic dataview has already moved the column visually).
-	// All that remains is dropping the anchor: the tree-expander column = the first shown column.
-	dataViewCtrl->SetExpanderColumn(nullptr);
-	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
-
-		const ibValueFrame* valueFrame = GetChild(idx);
-		wxASSERT(valueFrame);
-
-		ibDataViewColumn* column = dynamic_cast<ibDataViewColumn*>(valueFrame->GetWxObject());
-		if (column != nullptr && column->IsShown() && dataViewCtrl->GetExpanderColumn() == nullptr)
-			dataViewCtrl->SetExpanderColumn(column);
+	// Asked of the TREE, in the order it draws them — not of the form's children, which
+	// would be a second answer to "which column comes first".
+	ibDataViewColumn* first = nullptr;
+	for (unsigned int idx = 0; first == nullptr && idx < columns->GetColumnCount(); idx++) {
+		ibDataViewColumn* column = columns->GetColumn(idx);
+		if (column != nullptr && column->IsShown())
+			first = column;
 	}
+
+	columns->GetOwner()->SetExpanderColumn(first);
 #endif // !OES_USE_WEB
 }
 
@@ -670,9 +777,9 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 			}
 		}
 
-		if (m_need_calculate_pos) {
-			CalculateColumnPos();
-			m_need_calculate_pos = false;
+		if (m_needExpanderColumn) {
+			UpdateExpanderColumn();
+			m_needExpanderColumn = false;
 		}
 	}
 #endif // !OES_USE_WEB

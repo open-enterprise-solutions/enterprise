@@ -324,6 +324,45 @@ public:
 		return false;
 	}
 
+	// ⭐ THE GROUP A COLUMN OF THIS REGISTER BELONGS WITH — its name WITHOUT THE NUMBER,
+	// plus "Group".
+	//
+	// The slots are numbered (AccountDimensionDr1 … Dr4, each with its Kind half, and the
+	// Cr side likewise), and a number is exactly what distinguishes one slot from another
+	// of the SAME family — so dropping it names the family. The four Dr values land in
+	// AccountDimensionDrGroup, their kinds in AccountDimensionDrKindGroup, the Cr side in
+	// its own two, and none of that is a list written out here: the sides and the halves
+	// differ because their slot names differ.
+	//
+	// A generated form reads this as "these columns are one thing" and puts them in a
+	// group, which stacks them — twelve dimension columns in one row is what makes a
+	// register journal unreadable ("Account di…" ×12).
+	//
+	// Only the slots have one. WHICH columns are slots comes from the one description of
+	// them (ForEachOwnAttribute), never from reading a role back out of a name.
+	wxString GetSourceGroupOf(const ibValueMetaObjectAttributeBase* attribute) const {
+		if (attribute == nullptr)
+			return wxEmptyString;
+
+		bool numbered = false;
+		ForEachOwnAttribute([&](const ibValueMetaObjectAttributePredefined* own, ibOwnRole role) {
+			// The credit ACCOUNT is one column, not a family — nothing to group it with.
+			if (own == attribute && role != ibOwnRole::AccountCr)
+				numbered = true;
+			return !numbered;   // found it — stop walking
+		});
+
+		if (!numbered)
+			return wxEmptyString;
+
+		wxString group;
+		for (const wxUniChar& ch : attribute->GetName()) {
+			if (ch < wxUniChar('0') || ch > wxUniChar('9'))
+				group += ch;
+		}
+
+		return group + wxT("Group");
+	}
 	// ⭐ AVAILABLE, BUT NOT SHOWN — the kinds. A movement's meaning is its VALUES; opening a list with
 	// the kind beside every value doubles the columns to repeat what the value already says, and the
 	// row becomes unreadable. The column stays in the source, so anyone who wants it puts it back.

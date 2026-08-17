@@ -1,4 +1,4 @@
-﻿/////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
 // Name:        wx/generic/dataview.h
 // Purpose:     ibDataViewCtrl generic implementation header
 // Author:      Robert Roebling
@@ -34,6 +34,9 @@
 #if wxUSE_ACCESSIBILITY
 #include <wx/access.h>
 #endif // wxUSE_ACCESSIBILITY
+
+// Column groups + the (x, band) geometry every painter / hit-test asks for.
+#include "frontend/win/ctrls/dataview/datavlayout.h"
 
 class ibDataViewMainWindow;
 class ibDataViewHeaderWindow;
@@ -216,6 +219,12 @@ public:
 		UpdateWidth();
 	}
 
+	// Set when a group takes this column in (GetParent / GetOwner are on the base).
+	// A PLAIN SETTER: the group announces the change once it is complete — see the
+	// definition for why announcing it from here was a notification ahead of the fact.
+	void SetParent(ibDataViewColumnGroup* group);
+
+
 	// implement footer methods
 	void SetFooterTitle(const wxString& title) { m_footer_column.SetTitle(title); }
 	wxString GetFooterTitle() const { return m_footer_column.GetTitle(); }
@@ -242,7 +251,32 @@ public:
 	// user interactively.
 	void WXOnResize(int width);
 
+	// THE WIDTH AS ASKED FOR, RECORDED QUIETLY. Same effect as WXOnResize minus the
+	// announcement: an interactive drag rewrites SEVERAL columns at once (a range and its
+	// neighbour, stacks included) and the control re-derives the display once, at the end,
+	// instead of once per column with half-applied widths in between.
+	void WXSetSpecifiedWidth(int width) { m_width = m_manuallySetWidth = width; }
+
+	// THE WIDTH IT IS SHOWN AT — the automatic fit's own result, and nothing else: it does
+	// not touch what the column ASKS for, and it says nothing to the control. The fit sets
+	// all the columns and then announces ONCE. Announcing per column ran the layout rebuild
+	// and a header repaint thirteen times per mouse-move, over half-applied widths — the
+	// header filled with leftover dividers and the drag crawled.
+	void WXSetShownWidth(int width) { m_width = width; }
+
 	virtual int WXGetSpecifiedWidth() const wxOVERRIDE;
+
+	// ---- THE WIDTH ITS CONTENTS WANT ----------------------------------------
+	//
+	// Measured by the control (it has the rows), cached HERE — on the column being
+	// measured. It used to be an array in the control, one entry per column POSITION,
+	// which had to be resized and re-based every time the column order changed; the
+	// cache belongs to the thing it describes, and then no order can invalidate it.
+	// 0 = not measured yet; `dirty` = the header still shows the old width.
+	int WXBestWidth() const { return m_bestWidth; }
+	void WXSetBestWidth(int width) const { m_bestWidth = width; }
+	bool WXIsBestWidthDirty() const { return m_bestWidthDirty; }
+	void WXSetBestWidthDirty(bool dirty = true) { m_bestWidthDirty = dirty; if (dirty) m_bestWidth = 0; }
 
 private:
 	// common part of all ctors
@@ -262,6 +296,9 @@ private:
 	int m_width,
 		m_manuallySetWidth,
 		m_minWidth;
+	// Measured lazily by a const getter, hence mutable — see WXBestWidth.
+	mutable int m_bestWidth = 0;
+	bool m_bestWidthDirty = true;
 	wxAlignment m_align;
 
 	int m_flags;
@@ -699,18 +736,13 @@ public:
 
 	virtual bool AssociateModel(ibDataViewModel* model) wxOVERRIDE;
 
-	virtual bool AppendColumn(ibDataViewColumn* col) wxOVERRIDE;
-	virtual bool PrependColumn(ibDataViewColumn* col) wxOVERRIDE;
-	virtual bool InsertColumn(unsigned int pos, ibDataViewColumn* col) wxOVERRIDE;
+	// THE COLUMN STORE — and the only thing about columns this control says. Adding,
+	// counting, moving and removing are the GROUP's (ibDataViewColumnGroup in dataview.h);
+	// the root is handed out and the caller says it to whichever group it meant.
+	virtual ibDataViewColumnGroup* GetRootColumnGroup() const wxOVERRIDE { return m_rootGroup; }
 
 	virtual void DoSetExpanderColumn() wxOVERRIDE;
 	virtual void DoSetIndent() wxOVERRIDE;
-
-	virtual unsigned int GetColumnCount() const wxOVERRIDE;
-	virtual ibDataViewColumn* GetColumn(unsigned int pos) const wxOVERRIDE;
-	virtual bool DeleteColumn(ibDataViewColumn* column) wxOVERRIDE;
-	virtual bool ClearColumns() wxOVERRIDE;
-	virtual int GetColumnPosition(const ibDataViewColumn* column) const wxOVERRIDE;
 
 	virtual ibDataViewColumn* GetSortingColumn() const wxOVERRIDE;
 	virtual wxVector<ibDataViewColumn*> GetSortingColumns() const wxOVERRIDE;
@@ -979,17 +1011,28 @@ private:
 
 public:     // utility functions not part of the API
 
-	// returns the "best" width for the idx-th column
-	unsigned int GetBestColumnWidth(int idx) const;
+	// the width the CONTENTS of a column want (cached on the column itself)
+	unsigned int GetBestColumnWidth(ibDataViewColumn* column) const;
 
-	// called by header window after reorder
-	void ColumnMoved(ibDataViewColumn* col, unsigned int new_pos);
+	// MOVE A COLUMN TO `holder`, AT `at` — what a header drag ends in. The header decides
+	// the holder (it has the drop point; see ibDataViewHeaderWindow::EndReordering), this
+	// moves the member and announces it, and the form mirrors the move by asking the
+	// column which group it is in now.
+	void WXMoveColumn(ibDataViewColumn* column, ibDataViewColumnGroup* holder, unsigned int at);
 
 	// update the display after a change to an individual column
 	void OnColumnChange(unsigned int idx);
 
 	// update after the column width changes due to interactive resizing
 	void OnColumnResized();
+
+	// Re-derive the horizontal scrollbar from the published virtual width (it needs a
+	// non-zero scroll rate to exist at all — see the definition).
+	void SyncHorizontalScrollbar();
+
+	// The same, ASKED FOR rather than done: served on the next idle, at most once per frame.
+	// This is what a drag uses — see OnColumnResized.
+	void RequestScrollbarSync();
 
 	// update after the column width changes because of e.g. title or bitmap
 	// change, invalidates the column best width and calls OnColumnChange()
@@ -998,16 +1041,134 @@ public:     // utility functions not part of the API
 	// update after a change to the number of columns
 	void OnColumnsCountChanged();
 
+	// Everything that follows from a fresh set of column widths, said ONCE — the automatic
+	// fit sets every width quietly and then calls this (see the definition).
+	void WXColumnWidthsApplied();
+
 	wxWindow* GetMainWindow() { return (wxWindow*)m_tableAreaWin; }
 
-	// return the index of the given column in m_cols
-	int GetColumnIndex(const ibDataViewColumn* column) const;
+	// ---- THE COLUMNS, AS THE PAINTERS SEE THEM ------------------------------
+	//
+	// wx addresses columns by position, and that position MEANS "the nth column of the
+	// tree" — these three are the root group asked, not a list kept here. There is no
+	// list kept here: the tree is where columns live, so the order drawn and the order
+	// stored cannot drift apart.
+	// (There used to be a GetColumnAt beside GetColumn for the DISPLAY position, mapped
+	// through the header's own order array. The tree IS the display order now, so the
+	// two asked the same question and one of them is gone.)
+	unsigned int GetColumnCount() const { return m_rootGroup->GetColumnCount(); }
+	ibDataViewColumn* GetColumn(unsigned int pos) const { return m_rootGroup->GetColumn(pos); }
+	int GetColumnIndex(const ibDataViewColumn* column) const { return m_rootGroup->GetColumnPosition(column); }
 
 	// Return the index of the column having the given model index.
 	int GetModelColumnIndex(unsigned int model_column) const;
 
-	// return the column displayed at the given position in the control
-	ibDataViewColumn* GetColumnAt(unsigned int pos) const;
+	// ---- COLUMN GROUPS (datavlayout.h) --------------------------------------
+	//
+	// A group is a header that holds columns and carries an orientation. Vertical
+	// puts its columns one under another inside one width — the row is drawn as
+	// several BANDS (sub-rows) instead of growing sideways, which is what lets a
+	// register with twelve dimension columns fit a screen.
+	//
+	// WHERE each column sits is the groups' own business — see ibDataViewColumnGroup in
+	// dataview.h. WHAT the table owns is the same fact: MEMBERSHIP IS OWNERSHIP. Whatever
+	// hangs on the root group, at any depth, this control frees when it dies; taking a
+	// member OUT hands it back to whoever detached it (which is what the visual host
+	// wants — it deletes the object right after). One fact, so there is no second list to
+	// disagree with the tree and nothing can be freed twice or not at all.
+
+	// THE TREE CHANGED — a group took a member in, moved it or let it go. Called by the
+	// group itself: the caches that are keyed by position (best widths, the geometry) are
+	// dropped here, because position means "the nth column of the tree".
+	void WXColumnTreeChanged();
+
+	// DETACHES the group (does not free it — whoever detached it does); columns under it,
+	// and nested groups, fall back to its holder.
+	void RemoveColumnGroup(ibDataViewColumnGroup* group);
+	// The groups under one group, freed depth first (its columns are the caller's to
+	// place). What the destructor lets go of; ungrouping without freeing is the group's
+	// own ClearColumns.
+	void FreeGroupsUnder(ibDataViewColumnGroup* group);
+
+	// THE geometry — every painter, hit-test and editor asks this and nothing else,
+	// so header, cells and editor line up by construction. Rebuilt on demand.
+	const ibDataViewColumnLayout& GetColumnLayout() const;
+
+	// Sub-rows a row is drawn as (1 = the flat grid).
+	int GetRowBandCount() const { return GetColumnLayout().GetRowBandCount(); }
+
+	// The rectangle a COLUMN occupies inside the row that starts at `rowTop` and is
+	// `lineHeight` tall. false when the column is not laid out (hidden, or under a
+	// hidden group).
+	bool GetColumnCellRect(const ibDataViewColumn* column,
+		int rowTop, int lineHeight, wxRect& rect) const;
+
+	// Drop the cached geometry (a column changed width / visibility / group, or the
+	// column set itself changed) and re-apply the row + header heights it decides.
+	void InvalidateColumnLayout();
+
+	// A DRAG STARTS HERE, and what it remembers is the widths as they were at that moment.
+	//
+	// Every mouse-move that follows is measured against THAT, not against the previous move.
+	// A move is often a single pixel, and one pixel cannot be shared among twelve columns —
+	// whoever came first in the list took it, so a drag of 200px arrived as 200 separate
+	// pixels each paid by one column, and the proportion Max asked for never appeared.
+	void WXBeginColumnDrag(ibDataViewColumn* column);
+	void WXEndColumnDrag();
+
+	// Is a border being dragged right now? While it is, the widths are re-applied on every
+	// mouse-move and the SCROLLBAR is left alone: re-deriving it per move drags a whole
+	// window-geometry cascade behind it (AdjustScrollbars → size → layout), which is what
+	// made the drag feel sticky. It is re-derived once, when the drag ends.
+	bool WXIsColumnDragActive() const { return m_dragColumn != nullptr; }
+
+	// Interactive resize: `width` is what the user dragged the border to, ON SCREEN.
+	// A column stacked under a vertical group shares its width with the rest of that
+	// stack, and the screen width is converted back into an ASKED-FOR width — see the
+	// definition, and ibWidthRange below for why the two are not the same number.
+	void WXApplyColumnWidth(ibDataViewColumn* column, int width);
+
+	// ---- WIDTHS: ASKED FOR vs ON SCREEN -------------------------------------
+	//
+	// A column asks for a width; what it gets is that width times the room-to-asking
+	// ratio, so a table wider than its columns shows them stretched in proportion
+	// rather than with a gap on the right (UpdateColumnSizes). The asked-for widths are
+	// never overwritten by that, which is what makes the stretch a VIEW and not a state
+	// to keep in step — and what keeps a drag from compounding: writing the stretched
+	// width back as the asked-for one made every drag multiply itself.
+	//
+	// ONE RANGE = ONE WIDTH. A stack of three columns is one range: they are drawn one
+	// under another and their edges have to agree.
+	struct ibWidthRange {
+		std::vector<ibDataViewColumn*> columns;
+		int specified = 0;   // the widest thing any of them asked for
+		// ONE FLOOR: a sliver, enough to keep the column on screen and its border grabbable.
+		//
+		// There was a second, higher floor for a while — a column paying for its neighbour
+		// could not be squeezed past its own TITLE — because the AUTOMATIC fit used to squeeze
+		// too, and it produced unreadable rows on its own. The fit no longer squeezes at all
+		// (it stretches or it scrolls), so the only thing that narrows a column now is the
+		// user dragging one, and they may narrow the rest as far as they like: a column pared
+		// down to "С…" is a choice, and 1C allows exactly that.
+		int minimum = 0;
+	};
+	// The ranges, left to right, with what each asks for.
+	void CollectWidthRanges(std::vector<ibWidthRange>& out);
+
+	// The room the columns are stretched into: the ROWS area, not this control — the
+	// vertical scrollbar and the frozen panes are not theirs to fill. Out-of-line
+	// because the rows window is a private type (datavgen.window.private.h).
+	int GetTableAreaWidth() const;
+
+
+
+
+	// THE columns that share a width with this one — itself alone in a flat grid, the
+	// whole stack (at any depth) when it sits under a vertical group. One description
+	// of "who moves together", so an interactive drag and the automatic stretch of the
+	// last column cannot disagree about it.
+	void ForEachWidthPeer(ibDataViewColumn* column,
+		const std::function<void(ibDataViewColumn*)>& apply);
 
 	virtual ibDataViewColumn* GetCurrentColumn() const wxOVERRIDE;
 
@@ -1070,9 +1231,11 @@ private:
 	virtual void DoExpand(const ibDataViewItem& item, bool expandChildren) wxOVERRIDE;
 
 	void InvalidateColBestWidths();
-	void InvalidateColBestWidth(int idx);
+	void InvalidateColBestWidth(ibDataViewColumn* column);
 	void UpdateColWidths();
 
+	// Frees everything hanging on the root group — MEMBERSHIP IS OWNERSHIP, so this is
+	// the whole of what the control owns. Called from the destructor.
 	void DoClearColumns();
 
 public:
@@ -1352,7 +1515,7 @@ private:
 		for (unsigned int i = 0; i < cols; i++)
 		{
 			if (model->HasValue(item, i))
-				return GetColumnAt(i);
+				return GetColumn(i);
 		}
 
 		return NULL;
@@ -1420,20 +1583,43 @@ private:
 	// Id m_editorCtrl is non-NULL, pointer to the associated renderer.
 	ibDataViewRenderer* m_editorRenderer;
 
-	wxVector<ibDataViewColumn*> m_cols;
-	// cached column best widths information, values are for
-	// respective columns from m_cols and the arrays have same size
-	struct CachedColWidthInfo
-	{
-		CachedColWidthInfo() : width(0), dirty(true) {}
-		int width;  // cached width or 0 if not computed
-		bool dirty; // column was invalidated, header needs updating
-	};
-	wxVector<CachedColWidthInfo> m_colsBestWidths;
-	// This indicates that at least one entry in m_colsBestWidths has 'dirty'
-	// flag set. It's cheaper to check one flag in OnInternalIdle() than to
-	// iterate over m_colsBestWidths to check if anything needs to be done.
+	// At least one column has an invalidated best width. Cheaper to check one flag in
+	// OnInternalIdle() than to walk the columns asking each (the widths themselves are
+	// cached on the columns — see ibDataViewColumn::WXBestWidth).
 	bool                      m_colsDirty;
+
+	// THE WIDTHS AS THEY WERE WHEN THE CURRENT DRAG STARTED, and the range being dragged.
+	// Empty when no drag is in progress. See WXBeginColumnDrag.
+	std::vector<int> m_dragWidths;
+	ibDataViewColumn* m_dragColumn = nullptr;
+
+	// A scrollbar re-derivation was ASKED FOR and not served yet (RequestScrollbarSync).
+	bool m_scrollSyncPending = false;
+
+	// THE COLUMN STORE — created with the control and living as long as it, so every
+	// reader can take it without a null check. A column, and a group, is only ever a
+	// member of it or of something under it: that is both where it SITS and what says
+	// the control owns it.
+	ibDataViewColumnGroup* m_rootGroup = nullptr;
+	// The geometry the tree decides — derived, so it is cached rather than maintained:
+	// any change to the columns drops it and the next reader rebuilds it.
+	mutable ibDataViewColumnLayout m_columnLayout;
+	mutable bool m_columnLayoutDirty = true;
+	// Height of ONE band. The ROW height is this times the band count — which is
+	// why the two are kept apart: SetRowHeight sets the band, the layout decides
+	// how many of them a row is made of.
+	int m_bandHeight = 0;
+	// Header height ASKED FOR (the form's "Header height" property). The header is
+	// drawn at whichever is deeper, this or the group titles the layout needs — the
+	// property may not shrink the header below what its own content occupies.
+	int m_userHeaderHeight = 1;
+	// The same for the FOOTER, measured against the body's bands: it draws a cell per
+	// column, each in that column's band, so a stack needs a band each.
+	int m_userFooterHeight = 1;
+
+	void ApplyHeaderHeight();
+	// Height of ONE sub-row, in pixels (the row height when nothing is grouped).
+	int GetBandHeight() const;
 
 	ibDataViewModelNotifier* m_notifier;
 

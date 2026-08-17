@@ -55,6 +55,13 @@ void ibValueModelTableBox::OnColumnClick(ibDataViewEvent& event)
 	// Handled — do NOT Skip: the generic default sort in datavgen must not also run.
 }
 
+// A COLUMN LANDS WHERE IT WAS DROPPED — including in whose GROUP.
+//
+// THE DRAG HAS ALREADY MOVED THE MEMBER (ibDataViewCtrl::ColumnMoved) — the runtime tree
+// is the order, holders included, so this only brings the CONTROL tree to the same story:
+// the column is asked which group it is in now, and it goes to that group's control, at
+// the same place. Nothing is worked out from its neighbours a second time; two answers to
+// "who holds it" is precisely how the tree and the form used to disagree.
 void ibValueModelTableBox::OnColumnReordered(ibDataViewEvent& event)
 {
 	ibDataViewColumnObject* dataViewColumn =
@@ -63,11 +70,36 @@ void ibValueModelTableBox::OnColumnReordered(ibDataViewEvent& event)
 
 	ibValueModelTableBoxColumn* columnObject = dataViewColumn->GetControl();
 	wxASSERT(columnObject);
-	if (ChangeChildPosition(columnObject, event.GetColumn())) {
-		if (g_visualHostContext != nullptr) g_visualHostContext->RefreshEditor();
+
+	ibDataViewColumnGroup* holderGroup = dataViewColumn->GetParent();
+	if (holderGroup == nullptr) {
+		event.Skip();
+		return;
 	}
 
-	SetCalculateColumnPos();
+	// A GROUP the designer put there has a control of its own; the ROOT group has none —
+	// it is the table itself, which is what "not in any group" means on a form.
+	auto* groupObject = dynamic_cast<ibDataViewColumnGroupObject*>(holderGroup);
+	ibValueFrame* holder = groupObject != nullptr
+		? static_cast<ibValueFrame*>(groupObject->GetControl())
+		: static_cast<ibValueFrame*>(this);
+	const int at = holderGroup->GetMemberPosition(dataViewColumn);
+
+	// ONE PATH for both cases — a move inside the same holder and a move into another one
+	// differ only in which parent it is taken off.
+	ibValuePtr<ibValueFrame> keep(columnObject);
+	if (ibValueFrame* oldHolder = columnObject->GetParent())
+		oldHolder->RemoveChild(columnObject);
+
+	columnObject->SetParent(holder);
+	holder->AddChild(at != wxNOT_FOUND
+		? wxMin((unsigned int)at, holder->GetChildCount()) : holder->GetChildCount(),
+		columnObject);
+
+	if (g_visualHostContext != nullptr)
+		g_visualHostContext->RefreshEditor();
+
+	SetUpdateExpanderColumn();
 	event.Skip();
 }
 
@@ -289,7 +321,16 @@ void ibValueModelTableBox::OnHeaderResizing(ibHeaderGenericCtrlEvent& event)
 			dynamic_cast<ibDataViewColumnObject*>(dataViewCtrl->GetColumn(event.GetColumn()));
 		ibValueModelTableBoxColumn* columnControl = dataViewColumn->GetControl();
 		wxASSERT(columnControl);
-		columnControl->SetWidthColumn(event.GetWidth());
+
+		// THE WIDTH THE COLUMN ASKS FOR, not the one it currently shows.
+		//
+		// What the form stores is a REQUEST — the width this column wants — and the table
+		// then stretches the columns it has room for. Storing the stretched width instead
+		// made the request grow every time: a column asking 80 and shown 126 came back as
+		// asking 126, so reopening the form (or narrowing it a little) went straight to a
+		// scrollbar. The drag has already worked out the request (WXApplyColumnWidth); this
+		// only records it.
+		columnControl->SetWidthColumn(dataViewColumn->WXGetSpecifiedWidth());
 		if (g_visualHostContext != nullptr)
 			g_visualHostContext->SelectControl(columnControl);
 	}

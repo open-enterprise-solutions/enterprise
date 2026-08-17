@@ -93,6 +93,18 @@ ibValueModelTableBoxColumn::ibValueModelTableBoxColumn() :
 {
 }
 
+// THE TABLE THIS COLUMN SERVES — asked of its PARENT, one step at a time. A table answers
+// with itself; a group asks ITS holder, and that is the whole walk: no loop, and no depth to
+// know, because each node answers only for the step it can see.
+ibValueModelTableBox* ibValueModelTableBoxColumn::GetOwner() const
+{
+	if (ibValueModelTableBox* table = dynamic_cast<ibValueModelTableBox*>(m_parent))
+		return table;
+	if (ibValueModelTableBoxColumnGroup* group = dynamic_cast<ibValueModelTableBoxColumnGroup*>(m_parent))
+		return group->GetOwner();
+	return nullptr;
+}
+
 bool ibValueModelTableBoxColumn::GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const
 {
 	// #3 — the table-COLUMN source list = the current table (what the parent tablebox offers: the
@@ -149,20 +161,14 @@ wxObject* ibValueModelTableBoxColumn::Create(ibFrontendWindow* wxparent, ibVisua
 void ibValueModelTableBoxColumn::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 #ifndef OES_USE_WEB
-	// Pull the real dataview from the COMPOSITE owner (unwraps the chrome
-	// wrapper) — the raw wxparent is the ibChromeWindow, not the dataview.
-	ibDataViewCtrl* dataViewCtrl = dynamic_cast<ibDataViewCtrl*>(GetOwner()->GetInnerWx());
-	// Composite inner may be gone during host/form teardown (GetInnerWx resolves
-	// through form→visualDoc→view→host, which is being destroyed) or not yet
-	// built — skip gracefully instead of asserting.
-	if (dataViewCtrl == nullptr)
-		return;
 	ibDataViewColumnObject* dataViewColumn = dynamic_cast<ibDataViewColumnObject*>(wxobject);
 	if (dataViewColumn == nullptr)
 		return;
 
-	dataViewCtrl->AppendColumn(dataViewColumn);
-	GetOwner()->SetCalculateColumnPos();
+	// HUNG ON ITS HOLDER — the group the parent stands for. Null while the grid is not
+	// built yet or already gone (teardown), which this always skipped over.
+	if (ibDataViewColumnGroup* holder = ibFindColumnHolder(m_parent))
+		holder->AppendColumn(dataViewColumn);
 #endif
 }
 
@@ -237,18 +243,14 @@ void ibValueModelTableBoxColumn::Cleanup(wxObject* obj, ibVisualHost* visualHost
 	ibDataViewColumnObject* dataViewColumn = dynamic_cast<ibDataViewColumnObject*>(obj);
 	if (dataViewColumn == nullptr)
 		return;
-	// Take the OWNING dataview straight from the column (SetOwner at AppendColumn)
-	// — reliable during teardown, unlike GetOwner()->GetInnerWx() which resolves
-	// through the dying host and returns null. Must DETACH the column from the
-	// dataview's m_cols here; otherwise its dtor (DoClearColumns) double-frees it
-	// after ClearControl's wxDELETE (crash: DoClearColumns over freed memory).
-	ibDataViewCtrl* dataViewCtrl = dataViewColumn->GetOwner();
-	if (dataViewCtrl == nullptr)
-		return;
 
-	dataViewCtrl->DeleteColumn(dataViewColumn);
-	if (ibValueModelTableBox* owner = GetOwner())
-		owner->SetCalculateColumnPos();
+	// THE GROUP THAT HOLDS IT LETS IT GO — that is the whole of removing a column, and
+	// it MUST happen: being a member is what makes the table's destructor free it, so a
+	// column left hanging is freed a second time after the visual host's wxDELETE here
+	// (that crash was real). The holder is taken off the column itself — during teardown
+	// the walk through the dying host resolves to nothing.
+	if (ibDataViewColumnGroup* holder = dataViewColumn->GetParent())
+		holder->RemoveColumn(dataViewColumn);
 #endif
 }
 

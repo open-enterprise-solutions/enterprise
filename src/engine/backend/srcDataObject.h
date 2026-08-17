@@ -47,6 +47,8 @@ public:
 		struct ibSourceInfo {
 			wxString          m_srcName;
 			wxString          m_srcSynonym;
+			// THE GROUP THIS COLUMN BELONGS WITH, by name — see GetSourceGroup.
+			wxString          m_srcGroup;
 			ibMetaID          m_mid = wxNOT_FOUND;
 			ibTypeDescription m_typeDesc;        // what the field IS — the declaration, shown as it was written
 			ibTypeDescription m_typeValueDesc;   // what a VALUE here may be — the declaration expanded (see below)
@@ -88,6 +90,18 @@ public:
 
 		wxString GetSourceName()    const { return m_sourceInfo.m_srcName; }
 		wxString GetSourceSynonym() const { return m_sourceInfo.m_srcSynonym; }
+
+		// ⭐ COLUMNS THAT BELONG TOGETHER SAY THE SAME NAME HERE, and a form builder reads
+		// that as "put these in one group, titled this". Empty — the ordinary case — means
+		// the column stands on its own and the columns come out as a flat row.
+		//
+		// A NAME rather than a structure of groups on purpose: the source describes its
+		// columns, it does not lay a form out, so what it can say is which of them are one
+		// thing. How that is shown (a stack, a merged cell, a title) is the form''s to
+		// decide — an account register only knows that its four Dr dimensions are the Dr
+		// dimensions, and twelve of them side by side is what makes a journal unreadable.
+		wxString GetSourceGroup()   const { return m_sourceInfo.m_srcGroup; }
+		void SetSourceGroup(const wxString& group) { m_sourceInfo.m_srcGroup = group; }
 		ibMetaID GetSourceId()      const { return m_sourceInfo.m_mid; }
 		const ibTypeDescription& GetTypeDesc() const { return m_sourceInfo.m_typeDesc; }   // node's Type (structure-hop reads the reference target)	
 		
@@ -129,7 +143,9 @@ public:
 		// Append a COLUMN from its neutral descriptor (an attribute / a queryable column — both
 		// ibBackendQueryColumn). Skipped when the column is not allowed (a deleted / disabled field):
 		// the metadata judgement lives on the column, not here.
-		void AppendColumn(const ibBackendQueryColumn* col, bool enabled = true, bool visible = true) {
+		// `group` names the group these columns belong with (see GetSourceGroup); empty = on its own.
+		void AppendColumn(const ibBackendQueryColumn* col, bool enabled = true, bool visible = true,
+			const wxString& group = wxEmptyString) {
 			if (col == nullptr || !col->IsAllowed()) return;
 			// BOTH ANSWERS AT ONCE: the DECLARATION (a characteristic must say it is one — inspector,
 			// generated column, type picker) and what a value here may BE (the chart's references —
@@ -138,6 +154,7 @@ public:
 				col->GetTypeDesc(), col->GetTypeValueDesc(), /*tableSection*/false, /*select*/true, enabled, visible });
 			m_arraySource.back().m_sourceInfo.m_owner = m_sourceInfo.m_owner;   // child fetches through the same source
 			m_arraySource.back().m_sourceInfo.m_col = col;                      // keep the descriptor (a query column IS-A source column)
+			m_arraySource.back().m_sourceInfo.m_srcGroup = group;
 		}
 
 		// Append a COLUMN by plain values (a queryable column with no descriptor object).
@@ -150,12 +167,14 @@ public:
 		// overload (a DB / queryable column that carries its own GetColumnId), a plain source column (e.g. a
 		// RAM value-table column) has no query identity, so the id is passed explicitly. The descriptor is
 		// KEPT (m_col) so WalkColumns returns it as the leaf — the header / type resolve through it.
-		void AppendColumn(const ibBackendSourceColumn* col, const ibMetaID& id, bool enabled = true, bool visible = true) {
+		void AppendColumn(const ibBackendSourceColumn* col, const ibMetaID& id, bool enabled = true, bool visible = true,
+			const wxString& group = wxEmptyString) {
 			if (col == nullptr || !col->IsAllowed()) return;
 			m_arraySource.emplace_back(ibSourceExplorer{ col->GetName(), col->GetSynonym(), id,
 				col->GetTypeDesc(), col->GetTypeValueDesc(), /*tableSection*/false, /*select*/true, enabled, visible });
 			m_arraySource.back().m_sourceInfo.m_owner = m_sourceInfo.m_owner;
 			m_arraySource.back().m_sourceInfo.m_col = col;
+			m_arraySource.back().m_sourceInfo.m_srcGroup = group;
 		}
 
 		// Append a TABLE-SECTION node (tableSection = true). Returns a reference so the caller adds the

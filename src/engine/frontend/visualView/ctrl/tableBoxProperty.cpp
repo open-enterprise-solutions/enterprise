@@ -88,18 +88,28 @@ void ibValueModelTableBox::RefillFromSource()
 			// source, whose GetSourceExplorer()->Reset() CLEARS the helper vector this loop reads through
 			// (GetHelper returns &m_arraySource[idx]) -> the live nodes dangle mid-loop (freed, 0xDD fill), so
 			// only the FIRST column reads real data. Read the explorer ONCE while stable, then build from the copy.
-			struct ColumnSnap { ibSourceId id; wxString name; wxString synonym; bool visible; };
+			struct ColumnSnap { ibSourceId id; wxString name; wxString synonym; wxString group; bool visible; };
 			std::vector<ColumnSnap> snaps;
 			for (unsigned int idx = 0; idx < explorer->GetHelperCount(); idx++) {
 				const ibSourceExplorer* columnPtr = explorer->GetHelper(idx);
 				if (columnPtr == nullptr)
 					continue;
 				snaps.push_back({ columnPtr->GetSourceId(), columnPtr->GetSourceName(),
-					columnPtr->GetSourceSynonym(), columnPtr->IsVisible() });
+					columnPtr->GetSourceSynonym(), columnPtr->GetSourceGroup(), columnPtr->IsVisible() });
 			}
+
 			for (const ColumnSnap& snap : snaps) {
+
+				// COLUMNS THAT NAME THE SAME FAMILY COME OUT IN ONE GROUP — asked of the
+				// table, the same way the auto-built form asks it. A newly made group has
+				// to be shown to the editor as well, which is what `created` is for.
+				bool createdGroup = false;
+				ibValueFrame* holderControl = GetColumnGroupHolder(snap.group, &createdGroup);
+				if (createdGroup)
+					g_visualHostContext->InsertControl(holderControl, this);
+
 				ibValueModelTableBoxColumn* tableBoxColumn =
-					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), this));
+					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), holderControl));
 				wxASSERT(tableBoxColumn);
 				tableBoxColumn->SetControlName(GetControlName() + snap.name);
 				tableBoxColumn->SetCaption(snap.synonym);
@@ -108,7 +118,7 @@ void ibValueModelTableBox::RefillFromSource()
 				colDesc.AppendSource(snap.id);
 				tableBoxColumn->SetSource(colDesc);
 				tableBoxColumn->SetVisibleColumn(snap.visible);
-				g_visualHostContext->InsertControl(tableBoxColumn, this);
+				g_visualHostContext->InsertControl(tableBoxColumn, holderControl);
 			}
 		}
 	}

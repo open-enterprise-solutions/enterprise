@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko, wxFormBuilder
 //	Description : visual editor 
 ////////////////////////////////////////////////////////////////////////////
@@ -1206,6 +1206,11 @@ void ibVisualEditorNotebook::ibVisualEditor::InsertObject(ibValueFrame* obj, ibV
 {
 	Execute(new ibVisualEditorInsertObjectCmd(this, obj, parent));
 	NotifyObjectCreated(obj);
+	// WHAT WAS JUST MADE IS WHAT YOU ARE WORKING ON — so it is the selection, and its
+	// properties are the ones in the inspector. Said once here rather than in every
+	// "Add column / Add group / Add page / Add button", which is why the drag-and-drop
+	// path (which selects for itself) looked different from the menu one.
+	SelectObject(obj, true, true);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::CopyObject(ibValueFrame* obj)

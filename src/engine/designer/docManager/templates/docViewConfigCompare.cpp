@@ -126,7 +126,7 @@ void ibConfigCompareView::BuildLayout(wxWindow* parent)
 		ibDataViewMetaDiffModel::kColSelect,
 		parent->FromDIP(60), wxALIGN_CENTER,
 		wxDATAVIEW_COL_RESIZABLE);
-	m_dataView->AppendColumn(colSelect);
+	m_dataView->GetRootColumnGroup()->AppendColumn(colSelect);
 
 	// Column 1 — object name with per-class icon.
 	ibDataViewColumn* colName = new ibDataViewColumn(
@@ -135,7 +135,7 @@ void ibConfigCompareView::BuildLayout(wxWindow* parent)
 		ibDataViewMetaDiffModel::kColName,
 		parent->FromDIP(260), wxALIGN_LEFT,
 		wxDATAVIEW_COL_RESIZABLE);
-	m_dataView->AppendColumn(colName);
+	m_dataView->GetRootColumnGroup()->AppendColumn(colName);
 
 	// Expander on the Object column (default would pick col 0, which is
 	// the merge checkbox — hides the tree shape).
@@ -147,7 +147,7 @@ void ibConfigCompareView::BuildLayout(wxWindow* parent)
 		ibDataViewMetaDiffModel::kColStatus,
 		parent->FromDIP(110), wxALIGN_LEFT,
 		wxDATAVIEW_COL_RESIZABLE);
-	m_dataView->AppendColumn(colStatus);
+	m_dataView->GetRootColumnGroup()->AppendColumn(colStatus);
 
 	ibDataViewColumn* colLeft = new ibDataViewColumn(
 		m_compareDoc->GetLeftLabel(),
@@ -155,7 +155,7 @@ void ibConfigCompareView::BuildLayout(wxWindow* parent)
 		ibDataViewMetaDiffModel::kColLeft,
 		parent->FromDIP(200), wxALIGN_LEFT,
 		wxDATAVIEW_COL_RESIZABLE);
-	m_dataView->AppendColumn(colLeft);
+	m_dataView->GetRootColumnGroup()->AppendColumn(colLeft);
 
 	ibDataViewColumn* colRight = new ibDataViewColumn(
 		m_compareDoc->GetRightLabel(),
@@ -163,7 +163,7 @@ void ibConfigCompareView::BuildLayout(wxWindow* parent)
 		ibDataViewMetaDiffModel::kColRight,
 		parent->FromDIP(200), wxALIGN_LEFT,
 		wxDATAVIEW_COL_RESIZABLE);
-	m_dataView->AppendColumn(colRight);
+	m_dataView->GetRootColumnGroup()->AppendColumn(colRight);
 
 	// AssociateModel AFTER columns — mirrors predefinedEditor / audit log
 	// pattern.

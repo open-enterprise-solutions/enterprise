@@ -35,6 +35,7 @@ These are done and verified; treat them as ground truth, not as open questions.
 | Connection pool | [connection-pool.md](connection-pool.md) | landed |
 | Firebird driver hardening | [firebird-driver-hardening.md](firebird-driver-hardening.md) | landed, shipped v1.3.0 |
 | Doc/View fork | [docview-fork.md](docview-fork.md) | landed in working tree |
+| Column groups (stack / row / in-cell) | [column-groups.md](column-groups.md) | landed 2026-08-17, designer + runtime |
 
 Undocumented-until-now subsystems, mapped 2026-07-15:
 [report-engine.md](report-engine.md) · [command-interface.md](command-interface.md) ·

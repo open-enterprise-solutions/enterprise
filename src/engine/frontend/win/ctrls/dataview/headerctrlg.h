@@ -20,6 +20,8 @@
 
 #include <wx/headercol.h>
 
+#include <vector>
+
 // notice that the classes in this header are defined in the core library even
 // although currently they're only used by wxGrid which is in wxAdv because we
 // plan to use it in wxListCtrl which is in core too in the future
@@ -48,6 +50,11 @@ enum
 };
 
 extern const char ibHeaderGenericCtrlNameStr[];
+
+// "no column here" — the answer FindColumnAtPoint gives over a gap, and now also over
+// a GROUP title (which labels columns rather than being one). Part of that contract,
+// so it lives beside it rather than in one .cpp.
+const unsigned COL_NONE = (unsigned)-1;
 
 // ----------------------------------------------------------------------------
 // ibHeaderGenericCtrlBase defines the interface of a header control
@@ -248,6 +255,26 @@ private:
 };
 
 // ----------------------------------------------------------------------------
+// One drawn cell of the header.
+//
+// Flat headers have exactly one per column, spanning the whole height — that is
+// the degenerate case, not a separate code path. A grouped header (see
+// datavlayout.h) also carries GROUP titles, which belong to no column and stand
+// one band above the columns they own; and a column's own cell then occupies a
+// sub-rectangle instead of the full height. Everything the painter needs is in
+// here, so the paint loop is the same loop either way.
+// ----------------------------------------------------------------------------
+
+struct ibHeaderButton {
+	wxRect rect;                       // UNSCROLLED x; the painter adds the scroll offset
+	unsigned int column = 0;           // column index (meaningless when isGroup)
+	bool isGroup = false;              // a group title: no sort arrow, no hover, no resize
+	wxString title;
+	wxBitmapBundle bitmap;
+	wxAlignment align = wxALIGN_LEFT;
+};
+
+// ----------------------------------------------------------------------------
 // ibHeaderGenericCtrl
 // ----------------------------------------------------------------------------
 
@@ -292,6 +319,68 @@ protected:
 
 	virtual wxSize DoGetBestSize() const wxOVERRIDE;
 
+	// The cells to draw, in paint order. The base builds the FLAT header — one
+	// full-height cell per column, left to right — and a derived header that knows
+	// about column groups (ibDataViewHeaderWindow) replaces the geometry without
+	// touching the paint loop that consumes it.
+	virtual void BuildHeaderButtons(std::vector<ibHeaderButton>& cells, int height) const;
+
+	// x just past the last cell — where the empty filler on the right starts.
+	int GetHeaderButtonsEnd(const std::vector<ibHeaderButton>& cells) const;
+
+	// Column geometry, in PHYSICAL coordinates (scroll offset included). Virtual
+	// for the same reason BuildHeaderButtons is: a grouped header does not lay its
+	// columns out by accumulating widths, and resizing / reordering / the drop
+	// marker all read their x from here.
+	virtual int GetColStart(unsigned int idx) const;
+	virtual int GetColEnd(unsigned int idx) const;
+
+	// The column at a header point. `yPhysical` matters only where columns are
+	// STACKED (a vertical group): several of them then share one x range, and the
+	// band under the cursor is what tells them apart. -1 = "no y known", answer by
+	// x alone, which is what a flat header always does.
+	virtual unsigned int FindColumnAtPoint(int xPhysical, int yPhysical, bool* onSeparator) const;
+
+	unsigned int FindColumnAtPoint(int xPhysical, bool* onSeparator = NULL) const
+	{
+		return FindColumnAtPoint(xPhysical, -1, onSeparator);
+	}
+
+	// Physical x = logical x + this.
+	int GetScrollOffset() const { return m_scrollOffset; }
+
+	// ---- REORDERING: THE DROP IS A POINT ------------------------------------
+	//
+	// Protected rather than private because WHERE a dragged column lands is not always
+	// "between two columns": with groups it can land INSIDE one, or come OUT of one, and
+	// only a header that knows about groups can say which. ibDataViewHeaderWindow
+	// overrides both the decision and the hint that shows it.
+
+	// is a drag reordering operation currently in progress
+	bool IsReordering() const;
+
+	// the column being dragged; COL_NONE when none is
+	unsigned int GetColumnBeingReordered() const { return m_colBeingReordered; }
+
+	// end the drag: true when the column really moved (a mere click answers false)
+	virtual bool EndReordering(int xPhysical, int yPhysical = -1);
+
+	// the hint shown while the column is dragged around
+	virtual void UpdateReorderingMarker(int xPhysical, int yPhysical = -1);
+
+	// THE PHANTOM PLUS THE DROP HINT — one overlay, so both are drawn in one go. A derived
+	// header says where the hint goes; an empty rect draws the phantom alone.
+	void DrawReorderingMarker(int xPhysical, const wxRect& hint);
+
+	// Move the column with given idx to given position (this doesn't generate any events
+	// but does refresh the display).
+	//
+	// Virtual, and protected, because a header whose column order lives ELSEWHERE has
+	// nothing to do here: the dataview's columns are ordered by their group TREE, which
+	// the drag has already rewritten by the time this would run, and permuting this array
+	// as well would leave two answers to "which column is at position N".
+	virtual void DoMoveCol(unsigned int idx, unsigned int pos);
+
 private:
 
 	// implement base class pure virtuals
@@ -313,16 +402,8 @@ private:
 	void OnKeyDown(wxKeyEvent& event);
 	void OnCaptureLost(wxMouseCaptureLostEvent& event);
 
-	// move the column with given idx at given position (this doesn't generate
-	// any events but does refresh the display)
-	void DoMoveCol(unsigned int idx, unsigned int pos);
-
-	// return the horizontal start position of the given column in physical
-	// coordinates
-	int GetColStart(unsigned int idx) const;
-
-	// and the end position
-	int GetColEnd(unsigned int idx) const;
+	// (GetColStart / GetColEnd / FindColumnAtPoint moved up to the protected
+	//  section — a grouped header overrides them.)
 
 	// refresh the given column [only]; idx must be valid
 	void RefreshCol(unsigned int idx);
@@ -333,22 +414,18 @@ private:
 	// refresh all the controls starting from (and including) the given one
 	void RefreshColsAfter(unsigned int idx);
 
-	// return the column at the given position or -1 if it is beyond the
-	// rightmost column and put true into onSeparator output parameter if the
-	// position is near the divider at the right end of this column (notice
-	// that this means that we return column 0 even if the position is over
-	// column 1 but close enough to the divider separating it from column 0)
-	unsigned int FindColumnAtPoint(int x, bool* onSeparator = NULL) const;
+	// (FindColumnAtPoint moved up to the protected section — a grouped header
+	//  overrides it, since stacked columns share an x range and only the band
+	//  under the cursor tells them apart.)
 
 	// return the result of FindColumnAtPoint() if it is a valid column,
 	// otherwise the index of the last (rightmost) displayed column
-	unsigned int FindColumnClosestToPoint(int xPhysical) const;
+	// The POINT, not just its x: where columns are STACKED several of them share one x
+	// range, and only the band under the cursor tells them apart. -1 = "no y known".
+	unsigned int FindColumnClosestToPoint(int xPhysical, int yPhysical = -1) const;
 
 	// return true if a drag resizing operation is currently in progress
 	bool IsResizing() const;
-
-	// return true if a drag reordering operation is currently in progress
-	bool IsReordering() const;
 
 	// return true if any drag operation is currently in progress
 	bool IsDragging() const { return IsResizing() || IsReordering(); }
@@ -374,17 +451,9 @@ private:
 	// resizing
 	void StartReordering(unsigned int col, int xPhysical);
 
-	// returns true if we did drag the column somewhere else or false if we
-	// didn't really move it -- in this case we consider that no reordering
-	// took place and that a normal column click event should be generated
-	bool EndReordering(int xPhysical);
-
 	// constrain the given position to be larger than the start position of the
 	// given column plus its minimal width and return the effective width
 	int ConstrainByMinWidth(unsigned int col, int& xPhysical);
-
-	// update the information displayed while a column is being moved around
-	void UpdateReorderingMarker(int xPhysical);
 
 	// clear any overlaid markers
 	void ClearMarkers();

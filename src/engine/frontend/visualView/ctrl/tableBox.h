@@ -38,6 +38,11 @@ enum ibDataViewViewMode {
 #endif
 #endif
 
+// Column groups: the orientation lives here (ibColumnGroupKind) and the geometry it
+// decides lives in the grid. Free of any wxDataView type, so the web build includes
+// it as happily as the desktop one.
+#include "frontend/win/ctrls/dataview/datavlayout.h"
+
 //********************************************************************************************
 //*                                 define commom clsid									     *
 //********************************************************************************************
@@ -45,6 +50,18 @@ enum ibDataViewViewMode {
 //COMMON TABLE & COLUMN
 constexpr ibClassID g_controlTableBoxCLSID = control_to_clsid("CT_TABL");
 constexpr ibClassID g_controlTableBoxColumnCLSID = control_to_clsid("CT_TBLC");
+constexpr ibClassID g_controlTableBoxColumnGroupCLSID = control_to_clsid("CT_TBCG");
+
+#ifndef OES_USE_WEB
+//********************************************************************************************
+//*                        WHERE A COLUMN (OR A GROUP) IS BEING PLACED                        *
+//********************************************************************************************
+
+// THE GROUP A NEW MEMBER HANGS ON — ONE question, asked of its parent: a column GROUP
+// holds its members itself, and anything else is the TABLE, which answers with its
+// hidden ROOT group. Null while the grid is not built yet or already gone.
+FRONTEND_API ibDataViewColumnGroup* ibFindColumnHolder(const ibValueFrame* parent);
+#endif // !OES_USE_WEB
 
 //********************************************************************************************
 //*                                 Value TableBox                                           *
@@ -251,8 +268,26 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 
 	//other
 	void AddColumn();
+	// Add a GROUP of columns — the columns then move into it.
+	void AddColumnGroup();
+
+	// ⭐ WHERE A COLUMN WITH THIS GROUP NAME HANGS — this table for an empty name, else the
+	// group of that name, made on the first ask and found again on every later one.
+	//
+	// THE one description of "when a group opens", shared by both builders — the auto-built
+	// form (ibValueForm::BuildForm) and the designer's refill-from-source. Written twice,
+	// they would drift; and finding the group BY NAME rather than by remembering a run also
+	// means the source may hand its columns out in any order.
+	//
+	// `created` (optional) says a group control was just made, which the designer needs in
+	// order to tell its editor about it.
+	ibValueFrame* GetColumnGroupHolder(const wxString& group, bool* created = nullptr);
 #ifndef OES_USE_WEB
 	void CreateColumnCollection(ibDataViewCtrl* tableCtrl = nullptr);
+
+	// THE COLUMN STORE — the grid's hidden root group. Not a control anybody can select:
+	// it is what the FIRST level hangs on, and it lays its members out in a line.
+	ibDataViewColumnGroup* GetRootColumnGroup() const;
 #endif
 
 	void CreateTable(bool recreateModel = false);
@@ -281,13 +316,15 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	void ApplyCurrentLine(ibValueModel::ibValueModelReturnLine* line,
 	                      bool focus = true);
 
-	void SetCalculateColumnPos() { m_need_calculate_pos = true; }
+	// THE TREE-EXPANDER ANCHOR has to be re-picked (it is the first shown column, and the
+	// columns just changed). Deferred to idle: a drag or a refill moves several of them.
+	void SetUpdateExpanderColumn() { m_needExpanderColumn = true; }
 
 protected:
 
-	virtual void OnChangeChildPosition(ibValueFrame* obj, unsigned int pos) { SetCalculateColumnPos(); }
+	virtual void OnChangeChildPosition(ibValueFrame* obj, unsigned int pos) { SetUpdateExpanderColumn(); }
 
-	void CalculateColumnPos();
+	void UpdateExpanderColumn();
 
 	// The TableBox's OWN command handlers — the view-state band it composes runs DIRECTLY against the live control
 	// runtime (no model → notifier shim). Desktop-only bodies (the web front runs its own command path).
@@ -378,10 +415,106 @@ private:
 
 	bool m_dataViewCreated, m_dataViewSelected;
 
-	bool m_need_calculate_pos;
+	bool m_needExpanderColumn;
 
 	ibValuePtr<ibValueModel> m_tableModel;
 	ibValuePtr<ibValueModel::ibValueModelReturnLine> m_tableCurrentLine;
+};
+
+//********************************************************************************************
+//*                            TableBox column GROUP                                         *
+//********************************************************************************************
+
+// The orientation, as the user picks it. A TYPE rather than a flag: the grid asks
+// what KIND a group is, and a third kind (say, one that wraps) is a member here and
+// a case in the layout, not a second boolean somewhere.
+class ibValueEnumTableBoxColumnGrouping :
+	public ibValueEnumeration<ibColumnGroupKind> {
+	public:
+	ibValueEnumTableBoxColumnGrouping() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibColumnGroupHorizontal, wxT("Horizontal"), _("Horizontal"));
+		AddEnumeration(ibColumnGroupVertical, wxT("Vertical"), _("Vertical"));
+		AddEnumeration(ibColumnGroupInCell, wxT("InCell"), _("In cell"));
+	}
+private:
+};
+
+// A GROUP OF COLUMNS — a header that owns columns, plus the direction they run in.
+//
+// It renders NOTHING of its own in the rows: it is a title in the header and a
+// decision about where its columns go. Horizontal keeps them side by side under one
+// title (the classic look); Vertical stacks them inside one width, so the row grows
+// taller instead of wider — twelve account-dimension columns become three, and the
+// titles stop being cut to "Account di...".
+//
+// Groups nest, so "Amount (Qty Dr / Qty Cr / currency amount)" beside
+// "Account Dr (its dimensions under it)" is just two of them side by side.
+class ibValueModelTableBoxColumnGroup : public ibValueControl {
+public:
+
+	ibValueModelTableBoxColumnGroup();
+
+	// The table this group serves — groups nest, so it is looked for up the tree.
+	ibValueModelTableBox* GetOwner() const;
+
+#ifndef OES_USE_WEB
+	// THE COLUMN STORE this group is — what its own members hang on.
+	ibDataViewColumnGroup* GetColumnGroup() const;
+#endif
+
+	// The same four lines a notebook writes to add a page.
+	void AddColumn();
+	void AddColumnGroup();
+
+	// Building a group from code takes exactly two things: what it is called and
+	// which way its columns run. (The title is READ through GetControlTitle, like
+	// every other control's — no second reader for it here.)
+	void SetCaption(const wxString& caption) { m_propertyTitle->SetValue(caption); }
+	void SetGrouping(ibColumnGroupKind kind) { m_propertyGrouping->SetValue(kind); }
+	ibColumnGroupKind GetGrouping() const { return m_propertyGrouping->GetValueAsEnum(); }
+
+	//get metaData
+	virtual const ibMetaData* GetMetaData() const;
+
+	//get title
+	virtual wxString GetControlTitle() const;
+
+	//control factory
+	virtual wxObject* Create(ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
+	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated) override;
+	virtual void OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
+	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
+
+	//get component type — a header, not a window
+	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
+
+	//support icons
+	virtual wxIcon GetIcon() const;
+	static wxIcon GetIconGroup();
+
+	virtual void PrepareDefaultMenu(wxMenu* menu);
+	virtual void ExecuteMenu(ibVisualHost* visualHost, int id);
+
+	//load & save object in control
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
+
+private:
+
+	ibPropertyCategory* m_categoryInfo = ibPropertyObject::CreatePropertyCategory(wxT("Info"), _("Info"));
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryInfo, wxT("Title"), _("Title"), wxT(""));
+	// VERTICAL by default — stacking the columns is what a group is added FOR. Side by
+	// side is what they already do without one.
+	ibPropertyEnum<ibValueEnumTableBoxColumnGrouping>* m_propertyGrouping = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTableBoxColumnGrouping>>(m_categoryInfo, wxT("Grouping"), _("Grouping"), ibColumnGroupVertical);
+	// OFF by default: the plain use of a group is to STACK or MERGE its columns, and
+	// that needs no title. Turned on, the group takes a band of the header above them
+	// and they read as one thing under it.
+	ibPropertyBoolean* m_propertyShowTitle = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, wxT("ShowTitle"), _("Show title"), wxT(""), false);
+
+	ibPropertyCategory* m_categoryStyle = ibPropertyObject::CreatePropertyCategory(wxT("Style"), _("Style"));
+	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyHeaderAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, wxT("HeaderAlign"), _("Header align"), wxALIGN_CENTER);
+	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, wxT("Visible"), _("Visible"), true);
 };
 
 class ibValueModelTableBoxColumn : public ibValueControl,
@@ -457,7 +590,11 @@ public:
 
 	///////////////////////////////////////////////////////////////////////
 
-	ibValueModelTableBox* GetOwner() const { return m_parent->ConvertToType<ibValueModelTableBox>(); }
+	// The tablebox this column belongs to. NOT simply the parent any more: a column
+	// may sit inside a column GROUP (and groups nest), so the table is looked for UP
+	// the tree. Everything that resolves a cell goes through here, which is why
+	// grouping a column must not change the answer.
+	ibValueModelTableBox* GetOwner() const;
 
 	ibValueModel::ibValueModelReturnLine* GetCurrentLine() const {
 		const ibValueModelTableBox* tableBox = GetOwner();

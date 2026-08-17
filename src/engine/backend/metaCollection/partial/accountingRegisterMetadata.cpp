@@ -1,9 +1,11 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : accounting register metaData
 ////////////////////////////////////////////////////////////////////////////
 
 #include "accountingRegister.h"
+
+#include <algorithm>   // std::find — the posting block is a handful of pointers
 #include "backend/serialize/dataBuilder.h"
 #include "chartOfAccounts.h"
 #include "chartOfCharacteristicTypes.h"   // the CONTOUR — a slot's value type is the chart's own composition
@@ -800,10 +802,56 @@ ibSourceDataObject* ibValueMetaObjectAccountingRegister::CreateSourceObject(cons
 // the source — pickers, filters and the query see them — so this is a default, not a removal.
 void ibValueMetaObjectAccountingRegister::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
 {
+	// ⭐ THE ORDER A POSTING IS READ IN: an account, then ITS breakdown; then the other
+	// account, then its breakdown. That is how the entry is written on paper and how a
+	// bookkeeper scans it — the account first, the analytics under it, and never the two
+	// accounts pressed together with eight dimension columns trailing behind them.
+	//
+	// The generic attribute list is ordered for the SCHEMA (every kind, then every value —
+	// see GetGenericAttributeArrayObject), which is a different question, so it is not
+	// touched. This is the READING order, and the posting block is laid down where the
+	// debit account stands in that list; everything else keeps its place.
+	std::vector<const ibValueMetaObjectAttributeBase*> posting;
+
+	posting.push_back(GetRegisterAccount());
+	for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
+		posting.push_back(GetAccountDimensionKindSlot(/*creditSide*/false, idx));
+		posting.push_back(GetAccountDimensionSlot(/*creditSide*/false, idx));
+	}
+
+	posting.push_back(GetRegisterAccountCr());
+	for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
+		posting.push_back(GetAccountDimensionKindSlot(/*creditSide*/true, idx));
+		posting.push_back(GetAccountDimensionSlot(/*creditSide*/true, idx));
+	}
+
+	// A kind and its value alternate above because the GROUPS sort them out: each lands in
+	// the group of its own family, and the form draws the families as stacks. The list here
+	// only decides which family comes first.
+	const auto append = [&](const ibValueMetaObjectAttributeBase* attribute) {
+		if (attribute == nullptr)
+			return;
+		// The GROUP goes with the column: the register knows which of its columns are one
+		// thing (the dimension slots of a side), the form decides how that is shown.
+		explorer.AppendColumn(attribute, /*enabled*/true, /*visible*/ !IsAccountDimensionKindColumn(attribute),
+			GetSourceGroupOf(attribute));
+	};
+
 	for (const ibValueMetaObjectAttributeBase* attribute : GetGenericAttributeArrayObject()) {
+
 		if (attribute == nullptr)
 			continue;
-		explorer.AppendColumn(attribute, /*enabled*/true, /*visible*/ !IsAccountDimensionKindColumn(attribute));
+
+		if (std::find(posting.begin(), posting.end(), attribute) != posting.end()) {
+			// Part of the posting: laid out with the block, at the debit account's place.
+			if (attribute == GetRegisterAccount()) {
+				for (const ibValueMetaObjectAttributeBase* member : posting)
+					append(member);
+			}
+			continue;
+		}
+
+		append(attribute);
 	}
 }
 

@@ -1,4 +1,4 @@
-﻿#include "tableBox.h"
+#include "tableBox.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
 #include "backend/composition/listFilter.h"     // ibValueListSettings::GetFilter()->Add / Clear + ibComparisonKind
@@ -135,7 +135,7 @@ bool ibValueModelTableBox::EditCurrentRow(const ibDataViewItem& item)
 		editCol = cur;
 	else
 		for (unsigned int i = 0; i < ctrl->GetColumnCount(); ++i) {
-			ibDataViewColumn* c = ctrl->GetColumnAt(i);
+			ibDataViewColumn* c = ctrl->GetColumn(i);
 			if (c != nullptr && m_tableModel->EditableLine(item, c->GetModelColumn())) { editCol = c; break; }
 		}
 

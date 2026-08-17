@@ -338,25 +338,30 @@ void ibAuditLogView::BuildLayout(wxWindow* parent)
 		&ibAuditLogView::OnItemActivated, this);
 	m_dataEditor->Bind(wxEVT_MENU, &ibAuditLogView::OnCommandMenu, this);
 
-	m_dataEditor->AppendColumn(new ibDataViewColumn(_("Time"),
+	// Columns are hung on a GROUP — here the table's root one, which is what a table
+	// hands out. A grouped header would be built by adding a group to this and hanging
+	// columns on that instead; same two calls, one level down.
+	ibDataViewColumnGroup* columns = m_dataEditor->GetRootColumnGroup();
+
+	columns->AppendColumn(new ibDataViewColumn(_("Time"),
 		new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT),
 		ibAuditLogModel::kColTime, parent->FromDIP(140), wxALIGN_LEFT, wxDATAVIEW_COL_SORTABLE));
-	m_dataEditor->AppendColumn(new ibDataViewColumn(_("Level"),
+	columns->AppendColumn(new ibDataViewColumn(_("Level"),
 		new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT),
 		ibAuditLogModel::kColLevel, parent->FromDIP(60), wxALIGN_LEFT, wxDATAVIEW_COL_SORTABLE));
-	m_dataEditor->AppendColumn(new ibDataViewColumn(_("User"),
+	columns->AppendColumn(new ibDataViewColumn(_("User"),
 		new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT),
 		ibAuditLogModel::kColUser, parent->FromDIP(120), wxALIGN_LEFT, wxDATAVIEW_COL_SORTABLE));
-	m_dataEditor->AppendColumn(new ibDataViewColumn(_("Source"),
+	columns->AppendColumn(new ibDataViewColumn(_("Source"),
 		new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT),
 		ibAuditLogModel::kColSource, parent->FromDIP(80), wxALIGN_LEFT, wxDATAVIEW_COL_SORTABLE));
-	m_dataEditor->AppendColumn(new ibDataViewColumn(_("Event"),
+	columns->AppendColumn(new ibDataViewColumn(_("Event"),
 		new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT),
 		ibAuditLogModel::kColEvent, parent->FromDIP(100), wxALIGN_LEFT, wxDATAVIEW_COL_SORTABLE));
-	m_dataEditor->AppendColumn(new ibDataViewColumn(_("Message"),
+	columns->AppendColumn(new ibDataViewColumn(_("Message"),
 		new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT),
 		ibAuditLogModel::kColMessage, parent->FromDIP(320), wxALIGN_LEFT, 0));
-	m_dataEditor->AppendColumn(new ibDataViewColumn(_("Ref"),
+	columns->AppendColumn(new ibDataViewColumn(_("Ref"),
 		new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT),
 		ibAuditLogModel::kColRef, parent->FromDIP(80), wxALIGN_LEFT, 0));
 

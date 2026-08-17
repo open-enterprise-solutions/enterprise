@@ -85,6 +85,8 @@
     <ClCompile Include="visualView\ctrl\tableBox_res.cpp">      <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\tableBoxColumn.cpp">    <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\tableBoxColumn_res.cpp"><Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup.cpp"><Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup_res.cpp"><Filter>visualView\ctrl</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="wfrontend.h" />

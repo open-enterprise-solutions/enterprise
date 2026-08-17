@@ -121,11 +121,11 @@ ibDialogQueryCase::ibDialogQueryCase(wxWindow* parent,
 		wxDV_ROW_LINES | wxDV_SINGLE);
 	m_model->SetOnChanged([this] { ShowBranches(); });
 	m_grid->AssociateModel(m_model);
-	m_grid->AppendColumn(new ibDataViewColumn(Kw(ibQueryKeyword::When),
+	m_grid->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(Kw(ibQueryKeyword::When),
 		new ibDataViewTextRenderer(ibDataViewTextRenderer::GetDefaultType(),
 			m_readOnly ? wxDATAVIEW_CELL_INERT : wxDATAVIEW_CELL_EDITABLE),
 		kCaseColWhen, FromDIP(360), wxAlignment::wxALIGN_LEFT));
-	m_grid->AppendColumn(new ibDataViewColumn(Kw(ibQueryKeyword::Then),
+	m_grid->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(Kw(ibQueryKeyword::Then),
 		new ibDataViewTextRenderer(ibDataViewTextRenderer::GetDefaultType(),
 			m_readOnly ? wxDATAVIEW_CELL_INERT : wxDATAVIEW_CELL_EDITABLE),
 		kCaseColThen, FromDIP(320), wxAlignment::wxALIGN_LEFT));

@@ -202,6 +202,16 @@ ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame*
 				//object->SetReadOnly(controlParent->IsEditable());
 			}
 		}
+		// A column GROUP takes exactly what a table takes — columns, and groups of
+		// their own. Its own kind IS "TableboxColumn", which is what lets the branch
+		// above accept it into a table without a second rule for it.
+		else if (controlParent->GetClassName() == wxT("TableboxColumnGroup"))
+		{
+			if (classType == wxT("TableboxColumn"))
+			{
+				object = NewObject(className, controlParent);
+			}
+		}
 		else if (controlParent->GetObjectTypeName() == wxT("NotebookPage"))
 		{
 			ibValueSizerItem* sizerItem = NewObject<ibValueSizerItem>("SizerItem", controlParent);

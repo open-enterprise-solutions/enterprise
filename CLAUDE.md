@@ -62,6 +62,7 @@ enterprise/
 │   ├── query-engine-layers.md # THE FLOOR PLAN — L1–L5 taxonomy, one house (read first for the query arc)
 │   ├── data-composer.md      # L5 — declarative composition over the query language
 │   ├── table-model.md        # tables/lists/trees — ibDataViewModel + ibValueModel + RunComposerPage (fetch = web road)
+│   ├── column-groups.md      # a row is N bands — column groups (stack/row/in-cell), width law, resize drag
 │   ├── report-engine.md      # Report metaobject + spreadsheet document (runtime shape)
 │   ├── command-interface.md  # Interface metaobject = subsystem + command bar
 │   ├── job-manager.md        # scheduled + background work — the engine (built)

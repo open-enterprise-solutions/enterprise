@@ -1,4 +1,4 @@
-﻿#include "frontend/win/dlgs/listSettings/listSettings.h"
+#include "frontend/win/dlgs/listSettings/listSettings.h"
 #include "frontend/win/dlgs/listSettings/filterTreeModel.h"   // the filter is a TREE — model + column ids
 #include "frontend/win/dlgs/queryConstructor/queryConstructor.h"   // the Query tab's constructor button
 #include "frontend/win/dlgs/callbackDropTarget.h"                  // the same-process drag: the source knows what moved
@@ -1103,7 +1103,7 @@ wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
 	// meant an order that had to match an enum by hand and a second place to
 	// translate.)
 
-	m_filterView->AppendToggleColumn(_("Use"), kFilterColUse,
+	m_filterView->GetRootColumnGroup()->AppendToggleColumn(_("Use"), kFilterColUse,
 		wxDATAVIEW_CELL_ACTIVATABLE, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
 	// LEFT is the expander column: the tree hangs off it, and a group's caption
 	// starts here and flows across the columns it has no value in.
@@ -1114,19 +1114,19 @@ wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
 	// row decides.
 	ibDataViewColumn* leftColumn = new ibDataViewColumn(_("Left value"),
 		new ibFilterValueRenderer(this, kFilterColLeft), kFilterColLeft, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
-	m_filterView->AppendColumn(leftColumn);
+	m_filterView->GetRootColumnGroup()->AppendColumn(leftColumn);
 	ibDataViewColumn* cmpColumn = new ibDataViewColumn(_("Comparison"),
 		new ibFilterValueRenderer(this, kFilterColComparison),
 		kFilterColComparison, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
-	m_filterView->AppendColumn(cmpColumn);
+	m_filterView->GetRootColumnGroup()->AppendColumn(cmpColumn);
 	ibDataViewColumn* valColumn = new ibDataViewColumn(_("Right value"),
 		new ibFilterValueRenderer(this, kFilterColRight), kFilterColRight, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
-	m_filterView->AppendColumn(valColumn);
+	m_filterView->GetRootColumnGroup()->AppendColumn(valColumn);
 	ibDataViewColumn* modeColumn = new ibDataViewColumn(_("Display mode"),
 		new ibFilterValueRenderer(this, kFilterColDisplayMode),
 		kFilterColDisplayMode, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
-	m_filterView->AppendColumn(modeColumn);
-	m_filterView->AppendTextColumn(_("Presentation"), kFilterColPresentation,
+	m_filterView->GetRootColumnGroup()->AppendColumn(modeColumn);
+	m_filterView->GetRootColumnGroup()->AppendTextColumn(_("Presentation"), kFilterColPresentation,
 		wxDATAVIEW_CELL_EDITABLE, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
 	// A TREE, not a list. The control defaults to ibDataViewList — it fetches the
 	// children and then draws them all at one level, so a nested filter reads as a
@@ -1202,7 +1202,7 @@ wxWindow* ibDialogListSettings::BuildOrderPage(wxWindow* parent)
 	// FIELD and DIRECTION are both VALUES of the row — a composition field and a
 	// SortDirection member — so one cell serves both: the field opens the source
 	// tree, the direction opens its enumeration. Nothing here spells a list.
-	m_orderView->AppendColumn(new ibDataViewColumn(_("Field"),
+	m_orderView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Field"),
 		new ibRowValueCellRenderer(this,
 			[this](const ibDataViewItem& row) -> ibValue {
 				// ⚠ BUILT FROM THE PATH, not taken off a line object. On a live list GetItem MINTS one and
@@ -1233,7 +1233,7 @@ wxWindow* ibDialogListSettings::BuildOrderPage(wxWindow* parent)
 			}),
 		eOrderField, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));
 
-	m_orderView->AppendColumn(new ibDataViewColumn(_("Direction"),
+	m_orderView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Direction"),
 		new ibRowValueCellRenderer(this,
 			[this](const ibDataViewItem& row) -> ibValue {
 				ibValueSortList* o = GetOrderList();
@@ -1334,7 +1334,7 @@ wxWindow* ibDialogListSettings::BuildGroupPage(wxWindow* parent)
 	// FIELD and KIND — the same two questions a sort line answers, so the same cell.
 	// The kind is a registered enumeration now (GroupKind), which is what makes
 	// "elements / hierarchy"selectable at all.
-	m_groupView->AppendColumn(new ibDataViewColumn(_("Field"),
+	m_groupView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Field"),
 		new ibRowValueCellRenderer(this,
 			[this](const ibDataViewItem& row) -> ibValue {
 				const size_t idx = GroupIndexAt(row);
@@ -1356,7 +1356,7 @@ wxWindow* ibDialogListSettings::BuildGroupPage(wxWindow* parent)
 			}),
 		eGroupField, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));
 
-	m_groupView->AppendColumn(new ibDataViewColumn(_("Kind"),
+	m_groupView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Kind"),
 		new ibRowValueCellRenderer(this,
 			[this](const ibDataViewItem& row) -> ibValue {
 				ibValueGroupList* g = GetGroupList();

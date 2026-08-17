@@ -218,4 +218,36 @@ private:
 	ibValueModelTableBoxColumn* m_tableBoxColumn;
 };
 
+// ----------------------------------------------------------------------------
+// ibDataViewColumnGroupObject
+// ----------------------------------------------------------------------------
+
+// The runtime side of a column GROUP, exactly as ibDataViewColumnObject is the
+// runtime side of a column: the thing the grid holds, carrying a way back to the
+// control that owns it. It draws no cells — it is a header with an orientation, and
+// what it TAKES IN is columns (and other groups).
+class ibDataViewColumnGroupObject : public ibDataViewColumnGroup {
+public:
+
+	ibDataViewColumnGroupObject(ibValueModelTableBoxColumnGroup* control,
+		const wxString& title = wxEmptyString,
+		ibColumnGroupKind kind = ibColumnGroupVertical,
+		wxAlignment align = wxALIGN_CENTER)
+		: ibDataViewColumnGroup(title, kind, align), m_tableBoxColumnGroup(control)
+	{
+	}
+
+	void SetControl(ibValueModelTableBoxColumnGroup* control) { m_tableBoxColumnGroup = control; }
+	ibValueModelTableBoxColumnGroup* GetControl() const { return m_tableBoxColumnGroup; }
+
+	// Take a member in — the column's own group pointer is the membership.
+	void AppendColumn(ibDataViewColumnObject* column) {
+		ibDataViewColumnGroup::AppendColumn(column);
+	}
+
+private:
+
+	ibValueModelTableBoxColumnGroup* m_tableBoxColumnGroup;
+};
+
 #endif // !_DVC_H__

@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : frame object
 ////////////////////////////////////////////////////////////////////////////
@@ -95,8 +95,13 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 			const ibSourceExplorer& nextSourceExplorer = *nextPtr;
 
 			if (isTableSource) {
+				// The source says which of its columns are ONE FAMILY (the register's dimension
+				// slots), and such a column hangs on that family's GROUP rather than on the
+				// table — which stacks them, instead of laying twelve of them out sideways.
+				ibValueFrame* holder = mainTableBox->GetColumnGroupHolder(nextSourceExplorer.GetSourceGroup());
+
 				ibValueModelTableBoxColumn* tableBoxColumn =
-					dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(wxT("TableboxColumn"), mainTableBox));
+					dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(wxT("TableboxColumn"), holder));
 				tableBoxColumn->SetControlName(mainTableBox->GetControlName() + nextSourceExplorer.GetSourceName());
 				tableBoxColumn->SetVisibleColumn(nextSourceExplorer.IsVisible() || sourceExplorer.GetHelperCount() == 1);
 				// Column = [mainAttr, field] → "List.Field". The row-type hop (the catalog/document)
@@ -119,8 +124,10 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 							continue;
 						const ibSourceExplorer& colSourceExplorer = *colExplorerPtr;
 
+						ibValueFrame* holder = tableBox->GetColumnGroupHolder(colSourceExplorer.GetSourceGroup());
+
 						ibValueModelTableBoxColumn* tableBoxColumn =
-							dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(wxT("TableboxColumn"), tableBox));
+							dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(wxT("TableboxColumn"), holder));
 						tableBoxColumn->SetControlName(tableBox->GetControlName() + colSourceExplorer.GetSourceName());
 						//tableBoxColumn->SetCaption(colSourceExplorer.GetSourceSynonym());
 						tableBoxColumn->SetVisibleColumn(colSourceExplorer.IsVisible()

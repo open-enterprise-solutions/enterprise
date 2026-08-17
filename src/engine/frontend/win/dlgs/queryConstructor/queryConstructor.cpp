@@ -500,8 +500,8 @@ wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 	});
 	m_statements = MakeGrid(panel, m_statementModel, [this] { FillAll(); });
 	AttachContextMenu(m_statements, bar);
-	m_statements->AppendColumn(TextColumn(_("Query"),  kGridCol1, FromDIP(160)));
-	m_statements->AppendColumn(TextColumn(_("Does"),   kGridCol2, FromDIP(520)));
+	m_statements->GetRootColumnGroup()->AppendColumn(TextColumn(_("Query"),  kGridCol1, FromDIP(160)));
+	m_statements->GetRootColumnGroup()->AppendColumn(TextColumn(_("Does"),   kGridCol2, FromDIP(520)));
 	m_statements->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, &ibDialogQueryConstructor::OnStatementSelected, this);
 	sizer->Add(m_statements, 1, wxEXPAND | wxALL, FromDIP(3));
 
@@ -678,7 +678,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 		return select != nullptr && row < select->m_projections.size()
 			? IconOfExpr(select->m_projections[row].m_expr) : wxNullIcon;
 	});
-	m_fields->AppendColumn(IconColumn(_("Field"), kGridCol1, FromDIP(240)));   // fits its pane — see the totals grid
+	m_fields->GetRootColumnGroup()->AppendColumn(IconColumn(_("Field"), kGridCol1, FromDIP(240)));   // fits its pane — see the totals grid
 	// EditItem is inert on an inert column, so the double-click lands here instead.
 	m_fields->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED,
 		[this](ibDataViewEvent&) { wxCommandEvent e; OnEditFieldExpression(e); });
@@ -747,22 +747,22 @@ wxWindow* ibDialogQueryConstructor::BuildLinksPage(wxWindow* parent)
 	// already in the query this link joins is exactly this row's business, and a drop-down is what
 	// says so. The list is the live sources, minus the one picked on the other side: a table joined
 	// to itself in one row is not a link, it is a typo the grid should not have offered.
-	m_links->AppendColumn(new ibDataViewColumn(_("Table 1"),
+	m_links->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Table 1"),
 		new ibRowChoiceRenderer([this]() -> wxArrayString { return LinkTableChoices(/*leftSide*/true); }),
 		kLinkColLeftTable, FromDIP(210), wxAlignment::wxALIGN_LEFT));
-	m_links->AppendColumn(new ibDataViewColumn(_("All"),
+	m_links->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("All"),
 		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(), wxDATAVIEW_CELL_ACTIVATABLE),
 		kLinkColAllLeft, FromDIP(44), wxAlignment::wxALIGN_CENTER));
-	m_links->AppendColumn(new ibDataViewColumn(_("Table 2"),
+	m_links->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Table 2"),
 		new ibRowChoiceRenderer([this]() -> wxArrayString { return LinkTableChoices(/*leftSide*/false); }),
 		kLinkColRightTable, FromDIP(210), wxAlignment::wxALIGN_LEFT));
-	m_links->AppendColumn(new ibDataViewColumn(_("All"),
+	m_links->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("All"),
 		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(), wxDATAVIEW_CELL_ACTIVATABLE),
 		kLinkColAllRight, FromDIP(44), wxAlignment::wxALIGN_CENTER));
 	// ⭐ THE SWITCH, BEFORE THE CONDITION IT SWITCHES. Cleared, the cell beside it is a closed list of
 	// the field pairs these two tables offer; ticked, it is free text with the "..." into the
 	// expression editor. Neither changes the query — only which of the two ways this row is written.
-	m_links->AppendColumn(new ibDataViewColumn(_("Arbitrary"),
+	m_links->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Arbitrary"),
 		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(),
 			m_readOnly ? wxDATAVIEW_CELL_INERT : wxDATAVIEW_CELL_ACTIVATABLE),
 		kLinkColArbitrary, FromDIP(80), wxAlignment::wxALIGN_CENTER));
@@ -773,7 +773,7 @@ wxWindow* ibDialogQueryConstructor::BuildLinksPage(wxWindow* parent)
 	// `a.x = b.y AND a.z = b.w` even more so, and the fields of the two tables were three tabs away
 	// while typing it. The engine now accepts an arbitrary ON (queryLowering splits it: the first
 	// comparison is the join key, the rest are conditions), so the cell has to be able to write one.
-	m_links->AppendColumn(new ibDataViewColumn(_("Link condition"),
+	m_links->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Link condition"),
 		new ibExpressionCellRenderer(
 			[this]() -> wxArrayString { return LinkConditionChoices(); },
 			[this](wxString& text) -> bool { return EditLinkCondition(text); },
@@ -868,7 +868,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 		return select != nullptr && row < select->m_groupBy.size()
 			? IconOfExpr(select->m_groupBy[row]) : wxNullIcon;
 	});
-	m_grouping->AppendColumn(IconColumn(_("Grouping field"), kGridCol1, FromDIP(420)));
+	m_grouping->GetRootColumnGroup()->AppendColumn(IconColumn(_("Grouping field"), kGridCol1, FromDIP(420)));
 	m_grouping->SetDropTarget(new ibCallbackDropTarget([this] { wxCommandEvent e; OnAddGrouping(e); }));
 	keys->Add(m_grouping, 1, wxEXPAND | wxALL, FromDIP(3));
 	keysRow->Add(keys, 1, wxEXPAND);
@@ -976,11 +976,11 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 		const ibQueryAstExprPtr& expr = select->m_projections[rows[row]].m_expr;
 		return expr ? IconOfExpr(expr->m_arg) : wxNullIcon;
 	});
-	m_aggregates->AppendColumn(IconColumn(_("Summed field"), kGridCol1, FromDIP(320)));
+	m_aggregates->GetRootColumnGroup()->AppendColumn(IconColumn(_("Summed field"), kGridCol1, FromDIP(320)));
 	// ⭐ THE AGGREGATES THAT FIT THIS ROW'S FIELD — asked of the engine, per row. A string field
 	// offers Count / Min / Max and no Sum, because there is no sum of strings; a number offers all
 	// five. The same list CheckNames refuses by, so the cell cannot offer what the query rejects.
-	m_aggregates->AppendColumn(new ibDataViewColumn(_("Function"),
+	m_aggregates->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Function"),
 		new ibRowChoiceRenderer([this]() -> wxArrayString {
 			wxArrayString words;
 			const ibQuerySelect* select = Current();
@@ -1081,7 +1081,7 @@ wxWindow* ibDialogQueryConstructor::BuildConditionsPage(wxWindow* parent)
 	m_conditionModel->SetOnError([this](const wxString& message) { ShowEngineError(message); });
 	m_conditions->AssociateModel(m_conditionModel);
 
-	m_conditions->AppendColumn(new ibDataViewColumn(wxT("#"),
+	m_conditions->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(wxT("#"),
 		new ibDataViewTextRenderer(ibDataViewTextRenderer::GetDefaultType(), wxDATAVIEW_CELL_INERT),
 		kConditionColNumber, FromDIP(40), wxAlignment::wxALIGN_RIGHT));   // the row's position, not a field
 	// ⭐ "ARBITRARY" IS A SWITCH NOW, and it has something to switch. It stood here once as an
@@ -1093,7 +1093,7 @@ wxWindow* ibDialogQueryConstructor::BuildConditionsPage(wxWindow* parent)
 	// identical either way, which is what makes this a property of the row's editor and not of the
 	// query. A condition that cannot be decomposed keeps the box ticked whoever clears it: that one
 	// is still the observation, and the model says so rather than mangling the condition.
-	m_conditions->AppendColumn(new ibDataViewColumn(_("Arbitrary"),
+	m_conditions->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Arbitrary"),
 		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(),
 			m_readOnly ? wxDATAVIEW_CELL_INERT : wxDATAVIEW_CELL_ACTIVATABLE),
 		kConditionColArbitrary, FromDIP(80), wxAlignment::wxALIGN_CENTER));
@@ -1104,7 +1104,7 @@ wxWindow* ibDialogQueryConstructor::BuildConditionsPage(wxWindow* parent)
 	// typed blind with the fields on the other side of the window, which is the state this tab was
 	// in: the row said `Catalog1.DataVersion = &DataVersion` and there was no way to make it say
 	// anything else without retyping it by hand.
-	m_conditions->AppendColumn(new ibDataViewColumn(_("Condition"),
+	m_conditions->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Condition"),
 		new ibExpressionCellRenderer(
 			[this]() -> wxArrayString { return ConditionChoices(); },
 			[this](wxString& text) -> bool { return EditConditionText(text); },
@@ -1205,7 +1205,7 @@ wxWindow* ibDialogQueryConstructor::BuildIndexPage(wxWindow* parent)
 		return select != nullptr && row < select->m_indexBy.size()
 			? IconOfExpr(select->m_indexBy[row]) : wxNullIcon;
 	});
-	m_indexFields->AppendColumn(IconColumn(_("Indexed field"), kGridCol1, FromDIP(420)));
+	m_indexFields->GetRootColumnGroup()->AppendColumn(IconColumn(_("Indexed field"), kGridCol1, FromDIP(420)));
 	m_indexFields->SetDropTarget(new ibCallbackDropTarget([this] { wxCommandEvent e; OnAddIndexField(e); }));
 	right->Add(m_indexFields, 1, wxEXPAND | wxALL, FromDIP(3));
 	rightRow->Add(right, 1, wxEXPAND);
@@ -1301,9 +1301,9 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 		return select != nullptr && row < select->m_orderBy.size()
 			? IconOfExpr(select->m_orderBy[row].m_expr) : wxNullIcon;
 	});
-	m_order->AppendColumn(IconColumn(_("Field"), kGridCol1, FromDIP(380)));
+	m_order->GetRootColumnGroup()->AppendColumn(IconColumn(_("Field"), kGridCol1, FromDIP(380)));
 	// TWO WORDS, and the language owns both — a choice, not a typed word.
-	m_order->AppendColumn(ChoiceColumn(_("Direction"), kGridCol2, FromDIP(140),
+	m_order->GetRootColumnGroup()->AppendColumn(ChoiceColumn(_("Direction"), kGridCol2, FromDIP(140),
 		{ ibQueryKeyword::Asc, ibQueryKeyword::Desc }));
 	m_order->SetDropTarget(new ibCallbackDropTarget([this] { wxCommandEvent e; OnAddOrder(e); }));
 	right->Add(m_order, 1, wxEXPAND | wxALL, FromDIP(3));
@@ -1468,12 +1468,12 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		return select != nullptr && row < select->m_totalsBy.size()
 			? IconOfExpr(select->m_totalsBy[row].m_expr) : wxNullIcon;
 	});
-	m_totalsDimensions->AppendColumn(IconColumn(_("Grouping field"), kGridCol1, FromDIP(250)));
+	m_totalsDimensions->GetRootColumnGroup()->AppendColumn(IconColumn(_("Grouping field"), kGridCol1, FromDIP(250)));
 	// THE UNFOLD IS A TYPE (a registered runtime enumeration — see ibQueryDimUnfold), so the cell
 	// offers its three words and nothing else.
-	m_totalsDimensions->AppendColumn(ChoiceColumn(_("Totals kind"), kGridCol2, FromDIP(130),
+	m_totalsDimensions->GetRootColumnGroup()->AppendColumn(ChoiceColumn(_("Totals kind"), kGridCol2, FromDIP(130),
 		{ ibQueryKeyword::Elements, ibQueryKeyword::Hierarchy, ibQueryKeyword::HierarchyOnly }));
-	m_totalsDimensions->AppendColumn(TextColumn(_("Alias"), kGridCol3, FromDIP(160), true));
+	m_totalsDimensions->GetRootColumnGroup()->AppendColumn(TextColumn(_("Alias"), kGridCol3, FromDIP(160), true));
 	// ⚠⚠ AND A DOOR THAT DOES NOT DEPEND ON THE GRID'S EDITING MACHINERY AT ALL.
 	//
 	// Five attempts went into making this one cell open in place (the column from the event, the
@@ -1586,7 +1586,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		const ibQueryAstExprPtr& expr = select->m_totalsAggregates[row];
 		return expr ? IconOfExpr(expr->m_arg) : wxNullIcon;
 	});
-	m_totalsAggregates->AppendColumn(IconColumn(_("Totals field"), kGridCol1, FromDIP(240)));
+	m_totalsAggregates->GetRootColumnGroup()->AppendColumn(IconColumn(_("Totals field"), kGridCol1, FromDIP(240)));
 	// ⭐ READY EXPRESSIONS TO PICK FROM, AND THE EDITOR FOR EVERYTHING ELSE.
 	//
 	// A totals expression is nearly always one of four calls over the field on this row, so the cell
@@ -1597,7 +1597,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	// And it stays a free cell: a DOUBLE-CLICK opens the arbitrary-expression editor over the same
 	// row, which is where a condition inside a total, or anything the four calls do not cover, is
 	// written. Quick choice and full freedom side by side — neither takes the other away.
-	m_totalsAggregates->AppendColumn(new ibDataViewColumn(_("Expression"),
+	m_totalsAggregates->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Expression"),
 		new ibExpressionCellRenderer([this]() -> wxArrayString {
 			wxArrayString words;
 			const ibQuerySelect* select = Current();
@@ -1697,9 +1697,9 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 	m_unionModel = new ibQueryUnionModel();
 	m_unionModel->SetOnChanged([this] { FillAll(); });
 	m_unions->AssociateModel(m_unionModel);
-	m_unions->AppendColumn(new ibDataViewColumn(_("Name"),
+	m_unions->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Name"),
 		new ibDataViewTextRenderer(), kUnionColName, FromDIP(180), wxAlignment::wxALIGN_LEFT));
-	m_unions->AppendColumn(new ibDataViewColumn(_("No duplicates"),
+	m_unions->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("No duplicates"),
 		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(), wxDATAVIEW_CELL_ACTIVATABLE),
 		kUnionColKeepDuplicates, FromDIP(110), wxAlignment::wxALIGN_CENTER));
 	m_unions->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent&) { wxCommandEvent e; OnEditUnionBranch(e); });

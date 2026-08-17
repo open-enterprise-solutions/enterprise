@@ -144,6 +144,8 @@
     <ClCompile Include="visualView\ctrl\tableBoxColumn.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxColumnEvent.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxColumnProperty.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup_res.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxColumnRenderer.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxColumn_res.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxEvent.cpp" />
@@ -312,6 +314,7 @@
     <ClCompile Include="win\ctrls\dataview\datavgen.cpp" />
     <ClCompile Include="win\ctrls\dataview\datavgen.paged.cpp" />
     <ClCompile Include="win\ctrls\dataview\datavgen.scrollbar.cpp" />
+    <ClCompile Include="win\ctrls\dataview\datavlayout.cpp" />
     <ClCompile Include="win\ctrls\dynamicBorder.cpp" />
     <ClCompile Include="win\ctrls\grid\gridext.cpp" />
     <ClCompile Include="win\ctrls\grid\gridextctrl.cpp" />
@@ -696,6 +699,7 @@
     <ClInclude Include="win\ctrls\dataview\headerctrlg.h" />
     <ClInclude Include="win\ctrls\tableView.h" />
     <ClInclude Include="win\ctrls\dataview\datavgen.h" />
+    <ClInclude Include="win\ctrls\dataview\datavlayout.h" />
     <ClInclude Include="win\ctrls\dataview\dataview.h" />
     <ClInclude Include="win\ctrls\dataview\dvrenderers.h" />
     <ClInclude Include="win\ctrls\dynamicBorder.h" />

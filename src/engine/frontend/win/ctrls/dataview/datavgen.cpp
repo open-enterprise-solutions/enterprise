@@ -1,4 +1,4 @@
-﻿/////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
 // Name:        src/generic/datavgen.cpp
 // Purpose:     ibDataViewCtrl generic implementation
 // Author:      Robert Roebling
@@ -83,7 +83,7 @@ namespace
 		if (!expander)
 		{
 			// TODO-RTL: last column for RTL support
-			expander = dataview->GetColumnAt(0);
+			expander = dataview->GetColumn(0);
 			dataview->SetExpanderColumn(expander);
 		}
 
@@ -146,11 +146,11 @@ int ibDataViewColumn::DoGetEffectiveWidth(int width) const
 	switch (width)
 	{
 	case wxCOL_WIDTH_DEFAULT:
-		return wxWindow::FromDIP(wxDVC_DEFAULT_WIDTH, m_owner);
+		return wxWindow::FromDIP(wxDVC_DEFAULT_WIDTH, GetOwner());
 
 	case wxCOL_WIDTH_AUTOSIZE:
-		wxCHECK_MSG(m_owner, wxDVC_DEFAULT_WIDTH, "no owner control");
-		return m_owner->GetBestColumnWidth(m_owner->GetColumnIndex(this));
+		wxCHECK_MSG(GetOwner(), wxDVC_DEFAULT_WIDTH, "no owner control");
+		return GetOwner()->GetBestColumnWidth(const_cast<ibDataViewColumn*>(this));
 
 	default:
 		return width;
@@ -167,10 +167,10 @@ void ibDataViewColumn::WXOnResize(int width)
 	m_width =
 		m_manuallySetWidth = width;
 
-	int idx = m_owner->GetColumnIndex(this);
-
-	m_owner->InvalidateColBestWidth(idx);
-	m_owner->OnColumnResized();
+	if (ibDataViewCtrl* owner = GetOwner()) {
+		owner->InvalidateColBestWidth(this);
+		owner->OnColumnResized();
+	}
 }
 
 int ibDataViewColumn::WXGetSpecifiedWidth() const
@@ -184,46 +184,41 @@ int ibDataViewColumn::WXGetSpecifiedWidth() const
 
 void ibDataViewColumn::UpdateDisplay()
 {
-	if (m_owner)
-	{
-		int idx = m_owner->GetColumnIndex(this);
-		m_owner->OnColumnChange(idx);
-	}
+	if (ibDataViewCtrl* owner = GetOwner())
+		owner->OnColumnChange(owner->GetColumnIndex(this));
 }
 
 void ibDataViewColumn::UpdateWidth()
 {
-	if (m_owner)
-	{
-		int idx = m_owner->GetColumnIndex(this);
-		m_owner->OnColumnWidthChange(idx);
-	}
+	if (ibDataViewCtrl* owner = GetOwner())
+		owner->OnColumnWidthChange(owner->GetColumnIndex(this));
 }
 
 void ibDataViewColumn::UnsetAsSortKey()
 {
 	m_sort = false;
 
-	if (m_owner)
-		m_owner->DontUseColumnForSorting(m_owner->GetColumnIndex(this));
+	if (ibDataViewCtrl* owner = GetOwner())
+		owner->DontUseColumnForSorting(owner->GetColumnIndex(this));
 
 	UpdateDisplay();
 }
 
 void ibDataViewColumn::SetSortOrder(bool ascending)
 {
-	if (!m_owner)
+	ibDataViewCtrl* owner = GetOwner();
+	if (!owner)
 		return;
 
-	const int idx = m_owner->GetColumnIndex(this);
+	const int idx = owner->GetColumnIndex(this);
 
 	// If this column isn't sorted already, mark it as sorted
 	if (!m_sort)
 	{
-		wxASSERT(!m_owner->IsColumnSorted(idx));
+		wxASSERT(!owner->IsColumnSorted(idx));
 
 		// Now set this one as the new sort column.
-		m_owner->UseColumnForSorting(idx);
+		owner->UseColumnForSorting(idx);
 		m_sort = true;
 	}
 
@@ -231,7 +226,24 @@ void ibDataViewColumn::SetSortOrder(bool ascending)
 
 	// Call this directly instead of using UpdateDisplay() as we already have
 	// the column index, no need to look it up again.
-	m_owner->OnColumnChange(idx);
+	owner->OnColumnChange(idx);
+}
+
+// ----------------------------------------------------------------------------
+// ibDataViewColumn — the group it lives under
+// ----------------------------------------------------------------------------
+
+// A POINTER, NOT AN EVENT. Whoever changed the membership announces it — the group does,
+// through WXColumnTreeChanged, once BOTH sides of the fact are set.
+//
+// This used to refresh from here, and that was a notification AHEAD OF THE FACT: a column
+// inserted into a group is already the nth column of the tree while the header still
+// counts n of them, so OnColumnChange(n) ran off the end of the header (the wxCHECK in
+// UpdateColumn — it broke opening any form with a table). The tree-changed notification
+// drops the geometry anyway, so nothing is lost by keeping this a plain setter.
+void ibDataViewColumn::SetParent(ibDataViewColumnGroup* group)
+{
+	m_group = group;
 }
 
 //-----------------------------------------------------------------------------
@@ -303,15 +315,175 @@ protected:
 	virtual bool UpdateColumnWidthToFit(unsigned int idx, int widthTitle) wxOVERRIDE
 	{
 		ibDataViewCtrl* const owner = GetOwner();
+		ibDataViewColumn* const column = owner->GetColumn(idx);
 
-		int widthContents = owner->GetBestColumnWidth(idx);
-		owner->GetColumn(idx)->SetWidth(wxMax(widthTitle, widthContents));
+		int widthContents = owner->GetBestColumnWidth(column);
+		column->SetWidth(wxMax(widthTitle, widthContents));
 		owner->OnColumnChange(idx);
 
 		return true;
 	}
 
+	// THE HEADER FOLLOWS THE SAME GEOMETRY AS THE CELLS.
+	//
+	// Both read the control's column layout, so a group title stands exactly over
+	// the columns it owns and a stacked column's title sits exactly over its own
+	// band — there is no second arithmetic to keep in step with the first. Flat is
+	// the degenerate case here (one full-height cell per column), not a separate path.
+	virtual void BuildHeaderButtons(std::vector<ibHeaderButton>& cells, int height) const wxOVERRIDE
+	{
+		ibDataViewCtrl* const owner = GetOwner();
+		const ibDataViewColumnLayout& layout = owner->GetColumnLayout();
+
+		const int bands = wxMax(layout.GetHeaderBandCount(), 1);
+
+		for (const ibHeaderCell& source : layout.GetHeaderCells()) {
+
+			const ibColumnPlacement& place = source.place;
+
+			// Divide the height we were GIVEN rather than multiplying a nominal band
+			// height: the header is sized in whole bands and the last one has to
+			// reach the bottom pixel.
+			const int top = (height * place.band) / bands;
+			const int bottom = (height * (place.band + place.bandSpan)) / bands;
+
+			ibHeaderButton cell;
+			cell.rect = wxRect(place.x, top, place.width, bottom - top);
+
+			if (source.group != nullptr) {
+				cell.isGroup = true;
+				cell.title = source.group->GetTitle();
+				cell.align = source.group->GetAlignment();
+			}
+			else if (place.column != nullptr) {
+				const int idx = owner->GetColumnIndex(place.column);
+				if (idx == wxNOT_FOUND)
+					continue;
+				cell.column = (unsigned int)idx;
+				cell.title = place.column->GetTitle();
+				cell.bitmap = place.column->GetBitmapBundle();
+				cell.align = place.column->GetAlignment();
+			}
+			else {
+				continue;
+			}
+
+			cells.push_back(cell);
+		}
+	}
+
+	// Same source for the INTERACTION geometry as for the drawn one: resizing, the
+	// reorder drop marker and the refresh rectangle all read a column's x from the
+	// layout instead of adding up the widths to its left (which stops being true the
+	// moment two columns share an x range).
+	virtual int GetColStart(unsigned int idx) const wxOVERRIDE
+	{
+		ibColumnPlacement place;
+		if (!GetColumnHeaderPlacement(idx, place))
+			return ibHeaderGenericCtrl::GetColStart(idx);
+
+		return place.x + GetScrollOffset();
+	}
+
+	virtual int GetColEnd(unsigned int idx) const wxOVERRIDE
+	{
+		ibColumnPlacement place;
+		if (!GetColumnHeaderPlacement(idx, place))
+			return ibHeaderGenericCtrl::GetColEnd(idx);
+
+		return place.x + place.width + GetScrollOffset();
+	}
+
+	// Which column a header point belongs to. Stacked columns share an x range, so
+	// the BAND under the cursor is what tells them apart — that is the whole reason
+	// this override exists.
+	virtual unsigned int FindColumnAtPoint(int xPhysical, int yPhysical, bool* onSeparator) const wxOVERRIDE
+	{
+		ibDataViewCtrl* const owner = GetOwner();
+		const ibDataViewColumnLayout& layout = owner->GetColumnLayout();
+
+		// Only "no y known" falls back to the base arithmetic — a grouped header needs the
+		// band, and a FLAT header is just a header of one band, answered by the same
+		// placements it is drawn from (see GetColumnHeaderPlacement).
+		if (yPhysical < 0)
+			return ibHeaderGenericCtrl::FindColumnAtPoint(xPhysical, yPhysical, onSeparator);
+
+		if (onSeparator != nullptr)
+			*onSeparator = false;
+
+		int w, h;
+		GetClientSize(&w, &h);
+
+		const int bands = wxMax(layout.GetHeaderBandCount(), 1);
+		const int band = h > 0 ? wxMin((yPhysical * bands) / h, bands - 1) : 0;
+		const int xLogical = xPhysical - GetScrollOffset();
+
+		const ibHeaderCell* cell = layout.FindHeaderCellAt(xLogical, band);
+		if (cell == nullptr)
+			return COL_NONE;
+
+		const int separatorClickMargin = FromDIP(8);
+
+		// A DIVIDER BELONGS TO THE CELL ON ITS LEFT, from either side of it. The point
+		// lands in the cell whose range contains it, so a pixel to the RIGHT of a
+		// divider is already inside the NEXT cell — and asking that cell about its own
+		// right edge said "no divider here". Half the grab zone was dead: you could
+		// only catch a border by approaching it from the left.
+		if (abs(xLogical - cell->place.x) < separatorClickMargin) {
+			if (const ibHeaderCell* prev = layout.FindHeaderCellAt(cell->place.x - 1, band))
+				cell = prev;
+		}
+
+		const int right = cell->place.x + cell->place.width;
+		const bool onEdge = abs(xLogical - right) < separatorClickMargin;
+
+		// A GROUP TITLE IS NOT A COLUMN — it cannot be clicked to sort or dragged to
+		// reorder. Its EDGE, though, is the edge of the columns under it, and dragging
+		// that is how you widen a group: the drag is handed to the last column under it
+		// and WXApplyColumnWidth passes the new width to the whole stack.
+		ibDataViewColumn* column = cell->place.column;
+		if (column == nullptr) {
+			if (!onEdge)
+				return COL_NONE;
+			column = layout.FindLastColumnOf(cell->group);
+			if (column == nullptr)
+				return COL_NONE;
+		}
+
+		const int idx = owner->GetColumnIndex(column);
+		if (idx == wxNOT_FOUND)
+			return COL_NONE;
+
+		if (onSeparator != nullptr && column->IsResizeable())
+			*onSeparator = onEdge;
+
+		return (unsigned int)idx;
+	}
+
+	// NOTHING TO MOVE HERE. The generic header keeps an order array of its own; this
+	// header's order is the column TREE, and the drag has already moved the member in it
+	// (ibDataViewCtrl::ColumnMoved, called from OnEndReorder just above). Permuting the
+	// array as well would give two answers to "which column is at position N" — and it is
+	// the array that everything else here no longer reads.
+	virtual void DoMoveCol(unsigned int WXUNUSED(idx), unsigned int WXUNUSED(pos)) wxOVERRIDE
+	{
+		Refresh();
+	}
+
 private:
+
+	// The column's place in the HEADER grid, by its index in the control.
+	bool GetColumnHeaderPlacement(unsigned int idx, ibColumnPlacement& place) const
+	{
+		// ALWAYS the layout, flat or grouped. It used to answer "no" for a flat table and let
+		// the base class add up column widths instead — a SECOND account of where the columns
+		// are, beside the one they are DRAWN from. The two disagree as soon as anything (a
+		// hidden column, the header's own order array, a stretch just applied) touches one and
+		// not the other, and that shows as a resize border you grab to the LEFT of where it is
+		// painted. One account, and the cursor cannot be out of step with it.
+		ibDataViewCtrl* const owner = GetOwner();
+		return owner->GetColumnLayout().GetHeaderPlacement(owner->GetColumn(idx), place);
+	}
 
 	void FinishEditing();
 
@@ -406,6 +578,16 @@ private:
 		}
 	}
 
+	// A DRAG BEGINS: the control remembers the widths it starts from, so the whole drag is
+	// measured against ONE picture instead of against the previous mouse-move.
+	void OnBeginResize(ibHeaderGenericCtrlEvent& event)
+	{
+		ibDataViewCtrl* const owner = GetOwner();
+
+		owner->WXBeginColumnDrag(owner->GetColumn(event.GetColumn()));
+		event.Skip();
+	}
+
 	void OnResize(ibHeaderGenericCtrlEvent& event)
 	{
 		FinishEditing();
@@ -413,17 +595,170 @@ private:
 		ibDataViewCtrl* const owner = GetOwner();
 
 		const unsigned col = event.GetColumn();
-		owner->GetColumn(col)->WXOnResize(event.GetWidth());
+
+		// Through the control rather than straight at the column: columns STACKED
+		// under one vertical group share an x range, so a drag on that edge is a drag
+		// on all of them — one keeping its old width would leave the group ragged.
+		owner->WXApplyColumnWidth(owner->GetColumn(col), event.GetWidth());
 	}
 
-	void OnEndReorder(ibHeaderGenericCtrlEvent& event)
+	// The last width of the drag, and then the remembered picture is let go.
+	void OnEndResize(ibHeaderGenericCtrlEvent& event)
 	{
+		OnResize(event);
+		GetOwner()->WXEndColumnDrag();
+	}
+
+	// WHERE A DROP WOULD PUT THE COLUMN — the group it joins, the place in it, and the
+	// rectangle that SHOWS it. One answer, read both while dragging (the hint) and when
+	// the button comes up (the move), so what the user is shown is what happens.
+	struct ibColumnDrop {
+		ibDataViewColumnGroup* holder = nullptr;
+		unsigned int at = 0;
+		wxRect hint;              // physical, over the header
+	};
+
+	// IN THE MIDDLE of a column = into that column's group, beside it. NEAR THE EDGE of a
+	// group = out of it, next to the group itself, ONE LEVEL UP — which is how a column
+	// gets between two groups, and the only way it can leave the group it is in: every
+	// point of a grouped header belongs to somebody, so without an edge zone there is
+	// nowhere to drop a column meaning "not inside anything".
+	//
+	// The hint is shaped after the holder: a bar BETWEEN COLUMNS where they run side by
+	// side, and a bar BETWEEN BANDS inside a stack — so "it will go under this one" and
+	// "it will go beside this one" look different while the mouse is still down.
+	bool FindColumnDrop(int xPhysical, int yPhysical, ibColumnDrop& out) const
+	{
+		ibDataViewCtrl* const owner = GetOwner();
+		const ibDataViewColumnLayout& layout = owner->GetColumnLayout();
+
+		int w, h;
+		GetClientSize(&w, &h);
+
+		const int bands = wxMax(layout.GetHeaderBandCount(), 1);
+		const int band = (h > 0 && yPhysical >= 0)
+			? wxMin((yPhysical * bands) / h, bands - 1) : 0;
+		const int xLogical = xPhysical - GetScrollOffset();
+
+		const ibHeaderCell* cell = layout.FindHeaderCellAt(xLogical, band);
+		if (cell == nullptr)
+			return false;
+
+		// A GROUP's own title cell names the group; a column cell names the column, and
+		// then the group is the column's holder.
+		ibDataViewColumnGroup* holder = cell->group != nullptr
+			? cell->group
+			: (cell->place.column != nullptr ? cell->place.column->GetParent() : nullptr);
+		if (holder == nullptr)
+			return false;
+
+		const int edge = FromDIP(10);
+		const int left = cell->place.x, right = cell->place.x + cell->place.width;
+		const bool atLeft = abs(xLogical - left) < edge;
+		const bool atRight = abs(xLogical - right) < edge;
+
+		// Out of the group only where there IS an out: the root has no holder above it.
+		if (holder->GetParent() != nullptr && (atLeft || atRight)) {
+
+			ibDataViewColumnGroup* above = holder->GetParent();
+			const int pos = above->GetMemberPosition(holder);
+
+			out.holder = above;
+			out.at = pos != wxNOT_FOUND ? (unsigned int)pos : above->GetMemberCount();
+			if (atRight)
+				out.at++;
+
+			// BETWEEN the groups: the full height of the header, at the group's edge.
+			const int x = (atRight ? right : left) + GetScrollOffset();
+			out.hint = wxRect(x - kDropMarker / 2, 0, kDropMarker, h);
+			return true;
+		}
+
+		if (cell->place.column != nullptr) {
+
+			const int pos = holder->GetMemberPosition(cell->place.column);
+			const bool after = holder->GetKind() == ibColumnGroupVertical
+				? (band >= cell->place.band + cell->place.bandSpan - 1
+					&& yPhysical > CellMiddleY(cell->place, h, bands))
+				: (xLogical > left + cell->place.width / 2);
+
+			out.holder = holder;
+			out.at = pos != wxNOT_FOUND ? (unsigned int)pos + (after ? 1 : 0) : holder->GetMemberCount();
+
+			if (holder->GetKind() == ibColumnGroupVertical) {
+				// UNDER (or over) the column it was dropped on — a stack grows downwards,
+				// so that is what the hint has to say.
+				const int top = (h * cell->place.band) / bands;
+				const int bottom = (h * (cell->place.band + cell->place.bandSpan)) / bands;
+				const int y = after ? bottom : top;
+				out.hint = wxRect(left + GetScrollOffset(), y - kDropMarker / 2,
+					cell->place.width, kDropMarker);
+			}
+			else {
+				const int x = (after ? right : left) + GetScrollOffset();
+				out.hint = wxRect(x - kDropMarker / 2, 0, kDropMarker, h);
+			}
+			return true;
+		}
+
+		// On a group TITLE, away from its edges: into it, at the end.
+		out.holder = holder;
+		out.at = holder->GetMemberCount();
+		out.hint = wxRect(left + GetScrollOffset(), 0, cell->place.width, h);
+		return true;
+	}
+
+	virtual void UpdateReorderingMarker(int xPhysical, int yPhysical) wxOVERRIDE
+	{
+		const ibDataViewColumnLayout& layout = GetOwner()->GetColumnLayout();
+		if (layout.IsFlat()) {
+			ibHeaderGenericCtrl::UpdateReorderingMarker(xPhysical, yPhysical);
+			return;
+		}
+
+		ibColumnDrop drop;
+		DrawReorderingMarker(xPhysical,
+			FindColumnDrop(xPhysical, yPhysical, drop) ? drop.hint : wxRect());
+	}
+
+	// THE DROP ITSELF — the same answer the hint was drawn from, so the column lands where
+	// the user was shown it would.
+	virtual bool EndReordering(int xPhysical, int yPhysical) wxOVERRIDE
+	{
+		ibDataViewCtrl* const owner = GetOwner();
+		ibDataViewColumn* const dragged = IsReordering()
+			? owner->GetColumn(GetColumnBeingReordered()) : nullptr;
+
+		// The base ends the drag itself — mouse capture, the overlay, and its "did we
+		// really move it" answer. The ORDER it would apply is a no-op: DoMoveCol is
+		// overridden here, because the tree is the order.
+		const bool moved = ibHeaderGenericCtrl::EndReordering(xPhysical, yPhysical);
+		if (!moved || dragged == nullptr)
+			return moved;
+
 		FinishEditing();
 
-		ibDataViewCtrl* const owner = GetOwner();
-		owner->ColumnMoved(owner->GetColumn(event.GetColumn()),
-			event.GetNewOrder());
+		ibColumnDrop drop;
+		if (FindColumnDrop(xPhysical, yPhysical, drop))
+			owner->WXMoveColumn(dragged, drop.holder, drop.at);
+
+		return moved;
 	}
+
+private:
+
+	// Thickness of the drop hint, and the middle of a cell's band range — both used by
+	// FindColumnDrop only.
+	static const int kDropMarker = 4;
+
+	static int CellMiddleY(const ibColumnPlacement& place, int height, int bands)
+	{
+		const int top = (height * place.band) / bands;
+		const int bottom = (height * (place.band + place.bandSpan)) / bands;
+		return (top + bottom) / 2;
+	}
+
+protected:
 
 	wxDECLARE_EVENT_TABLE();
 	wxDECLARE_NO_COPY_CLASS(ibDataViewHeaderWindow);
@@ -433,10 +768,10 @@ wxBEGIN_EVENT_TABLE(ibDataViewHeaderWindow, ibHeaderGenericCtrl)
 EVT_HEADER_CLICK(wxID_ANY, ibDataViewHeaderWindow::OnClick)
 EVT_HEADER_RIGHT_CLICK(wxID_ANY, ibDataViewHeaderWindow::OnRClick)
 
+EVT_HEADER_BEGIN_RESIZE(wxID_ANY, ibDataViewHeaderWindow::OnBeginResize)
 EVT_HEADER_RESIZING(wxID_ANY, ibDataViewHeaderWindow::OnResize)
-EVT_HEADER_END_RESIZE(wxID_ANY, ibDataViewHeaderWindow::OnResize)
+EVT_HEADER_END_RESIZE(wxID_ANY, ibDataViewHeaderWindow::OnEndResize)
 
-EVT_HEADER_END_REORDER(wxID_ANY, ibDataViewHeaderWindow::OnEndReorder)
 wxEND_EVENT_TABLE()
 
 //-----------------------------------------------------------------------------
@@ -485,12 +820,125 @@ protected:
 	virtual bool UpdateColumnWidthToFit(unsigned int idx, int widthTitle) wxOVERRIDE
 	{
 		ibDataViewCtrl* const owner = GetOwner();
+		ibDataViewColumn* const column = owner->GetColumn(idx);
 
-		int widthContents = owner->GetBestColumnWidth(idx);
-		owner->GetColumn(idx)->SetWidth(wxMax(widthTitle, widthContents));
+		int widthContents = owner->GetBestColumnWidth(column);
+		column->SetWidth(wxMax(widthTitle, widthContents));
 		owner->OnColumnChange(idx);
 
 		return true;
+	}
+
+	// THE FOOTER FOLLOWS THE CELLS, and so it follows the same layout the header and the
+	// cells do. Not the header's geometry, though, but the BODY's: a footer cell is the
+	// foot of the column above it, so it takes that column's x, width and BAND — a
+	// stacked column's total sits under that column, in its own band, and not in one
+	// wide strip pretending the stack is a single column. Group titles have no place
+	// here: a group heads its columns, it does not total them.
+	virtual void BuildHeaderButtons(std::vector<ibHeaderButton>& cells, int height) const wxOVERRIDE
+	{
+		ibDataViewCtrl* const owner = GetOwner();
+		const ibDataViewColumnLayout& layout = owner->GetColumnLayout();
+
+		const int bands = wxMax(layout.GetRowBandCount(), 1);
+
+		for (const ibColumnPlacement& place : layout.GetBodyPlacements()) {
+
+			if (place.column == nullptr)
+				continue;
+
+			const int idx = owner->GetColumnIndex(place.column);
+			if (idx == wxNOT_FOUND)
+				continue;
+
+			// Divided out of the height GIVEN, exactly as the header does it, so the
+			// last band reaches the bottom pixel.
+			const int top = (height * place.band) / bands;
+			const int bottom = (height * (place.band + place.bandSpan)) / bands;
+
+			ibHeaderButton cell;
+			cell.rect = wxRect(place.x, top, place.width, bottom - top);
+			cell.column = (unsigned int)idx;
+			cell.title = place.column->GetFooterTitle();
+			cell.bitmap = place.column->GetFooterBitmapBundle();
+			cell.align = place.column->GetFooterAlignment();
+
+			cells.push_back(cell);
+		}
+	}
+
+	// The INTERACTION geometry from the same place as the drawn one — see the header's
+	// overrides. The footer reads BODY placements, since that is what it draws.
+	virtual int GetColStart(unsigned int idx) const wxOVERRIDE
+	{
+		ibColumnPlacement place;
+		if (!GetColumnBodyPlacement(idx, place))
+			return ibHeaderGenericCtrl::GetColStart(idx);
+
+		return place.x + GetScrollOffset();
+	}
+
+	virtual int GetColEnd(unsigned int idx) const wxOVERRIDE
+	{
+		ibColumnPlacement place;
+		if (!GetColumnBodyPlacement(idx, place))
+			return ibHeaderGenericCtrl::GetColEnd(idx);
+
+		return place.x + place.width + GetScrollOffset();
+	}
+
+	// Stacked columns share an x range in the footer as they do everywhere else, so the BAND
+	// under the cursor is what tells them apart. A FLAT footer is one band, answered by the
+	// same placements it is drawn from — never by a second account of the widths (see the
+	// header's GetColumnHeaderPlacement for what that second account cost).
+	virtual unsigned int FindColumnAtPoint(int xPhysical, int yPhysical, bool* onSeparator) const wxOVERRIDE
+	{
+		ibDataViewCtrl* const owner = GetOwner();
+		const ibDataViewColumnLayout& layout = owner->GetColumnLayout();
+
+		if (yPhysical < 0)
+			return ibHeaderGenericCtrl::FindColumnAtPoint(xPhysical, yPhysical, onSeparator);
+
+		if (onSeparator != nullptr)
+			*onSeparator = false;
+
+		int w, h;
+		GetClientSize(&w, &h);
+
+		const int bands = wxMax(layout.GetRowBandCount(), 1);
+		const int band = h > 0 ? wxMin((yPhysical * bands) / h, bands - 1) : 0;
+		const int xLogical = xPhysical - GetScrollOffset();
+
+		ibDataViewColumn* column = layout.FindColumnAt(xLogical, band);
+		if (column == nullptr)
+			return COL_NONE;
+
+		const int idx = owner->GetColumnIndex(column);
+		if (idx == wxNOT_FOUND)
+			return COL_NONE;
+
+		ibColumnPlacement place;
+		if (!layout.GetBodyPlacement(column, place))
+			return (unsigned int)idx;
+
+		// A divider belongs to the cell on its LEFT from either side — the same rule as
+		// in the header, and for the same reason (half the grab zone was dead).
+		const int separatorClickMargin = FromDIP(8);
+		if (abs(xLogical - place.x) < separatorClickMargin) {
+			if (ibDataViewColumn* prev = layout.FindColumnAt(place.x - 1, band)) {
+				const int prevIdx = owner->GetColumnIndex(prev);
+				if (prevIdx != wxNOT_FOUND && layout.GetBodyPlacement(prev, place)) {
+					if (onSeparator != nullptr)
+						*onSeparator = true;
+					return (unsigned int)prevIdx;
+				}
+			}
+		}
+
+		if (onSeparator != nullptr)
+			*onSeparator = abs(xLogical - (place.x + place.width)) < separatorClickMargin;
+
+		return (unsigned int)idx;
 	}
 
 	void OnResize(ibHeaderGenericCtrlEvent& event)
@@ -498,8 +946,24 @@ protected:
 		ibDataViewCtrl* const owner = GetOwner();
 
 		const unsigned col = event.GetColumn();
-		owner->GetColumn(col)->WXOnResize(event.GetWidth());
+		// Through the control, exactly as the header does it: a drag names a width ON
+		// SCREEN, and only WXApplyColumnWidth knows what to store for it.
+		owner->WXApplyColumnWidth(owner->GetColumn(col), event.GetWidth());
 	}
+
+private:
+
+	// The column's rectangle in the BODY grid, by display index.
+	bool GetColumnBodyPlacement(unsigned int idx, ibColumnPlacement& place) const
+	{
+		ibDataViewCtrl* const owner = GetOwner();
+		if (idx >= owner->GetColumnCount())
+			return false;
+
+		return owner->GetColumnLayout().GetBodyPlacement(owner->GetColumn(idx), place);
+	}
+
+protected:
 
 	wxDECLARE_EVENT_TABLE();
 	wxDECLARE_NO_COPY_CLASS(ibDataViewFooterWindow);
@@ -2094,7 +2558,7 @@ bool ibDataViewCtrl::DoItemChanged(const ibDataViewItem& item, int view_column)
 	else
 	{
 		column = GetColumn(view_column);
-		InvalidateColBestWidth(view_column);
+		InvalidateColBestWidth(column);
 	}
 
 	// Update the displayed value(s).
@@ -2250,12 +2714,19 @@ void ibDataViewCtrl::ScrollTo(int rows, int column)
 
 int ibDataViewCtrl::GetEndOfLastCol() const
 {
+	// The width the whole column area takes — which is NOT the sum of the column
+	// widths once grouping is in play: columns stacked under a vertical group share
+	// one width instead of adding up. The layout knows; ask it.
+	const ibDataViewColumnLayout& layout = GetColumnLayout();
+	if (!layout.IsFlat())
+		return layout.GetTotalWidth();
+
 	int width = 0;
 	unsigned int i;
 	for (i = 0; i < GetColumnCount(); i++)
 	{
 		const ibDataViewColumn* c =
-			GetColumnAt(i);
+			GetColumn(i);
 
 		if (!c->IsHidden())
 			width += c->GetWidth();
@@ -2275,14 +2746,28 @@ int ibDataViewCtrl::GetColumnStart(int column) const
 
 	CalcUnscrolledPosition(rect.x, rect.y, &xx, &yy);
 
-	for (x_start = 0; colnum < column; colnum++)
-	{
-		ibDataViewColumn* col = GetColumnAt(colnum);
-		if (col->IsHidden())
-			continue;      // skip it!
+	const ibDataViewColumnLayout& layout = GetColumnLayout();
 
-		w = col->GetWidth();
-		x_start += w;
+	ibColumnPlacement place;
+	if (!layout.IsFlat() && column >= 0
+		&& layout.GetBodyPlacement(GetColumn((unsigned int)column), place))
+	{
+		// Grouped: a column's x is not the sum of the widths before it (stacked
+		// columns share one), so it is read off the layout.
+		x_start = place.x;
+		w = place.width;
+	}
+	else
+	{
+		for (x_start = 0; colnum < column; colnum++)
+		{
+			ibDataViewColumn* col = GetColumn(colnum);
+			if (col->IsHidden())
+				continue;      // skip it!
+
+			w = col->GetWidth();
+			x_start += w;
+		}
 	}
 
 	int x_end = x_start + w;
@@ -3062,21 +3547,51 @@ void ibDataViewCtrl::HitTest(const wxPoint& point, ibDataViewItem& item,
 	int x, y;
 
 	CalcUnscrolledPosition(point.x, point.y, &x, &y);
-	for (unsigned x_start = 0; colnum < cols; colnum++)
+
+	const unsigned int row = GetLineAt(y);
+	const ibDataViewColumnLayout& layout = GetColumnLayout();
+
+	if (layout.IsFlat())
 	{
-		col = GetColumnAt(colnum);
-		if (col->IsHidden())
-			continue;      // skip it!
+		for (unsigned x_start = 0; colnum < cols; colnum++)
+		{
+			col = GetColumn(colnum);
+			if (col->IsHidden())
+				continue;      // skip it!
 
-		unsigned int w = col->GetWidth();
-		if (x_start + w >= (unsigned int)x)
-			break;
+			unsigned int w = col->GetWidth();
+			if (x_start + w >= (unsigned int)x)
+				break;
 
-		x_start += w;
+			x_start += w;
+		}
+	}
+	else
+	{
+		// Grouped: the point picks a cell, not a stripe — WHICH BAND of the row it
+		// falls in decides between columns stacked at the same x.
+		const int lineStart = GetLineStart(row);
+		const int lineHeight = wxMax(GetLineHeight(row), 1);
+		const int bands = wxMax(layout.GetRowBandCount(), 1);
+		const int band = wxMin(wxMax((y - lineStart) * bands / lineHeight, 0), bands - 1);
+
+		col = layout.FindColumnAt(x, band);
+
+		// Past the right edge the old behaviour is to answer with the last column
+		// rather than nothing — several callers rely on a non-null column.
+		if (col == nullptr)
+		{
+			for (unsigned int pos = 0; pos < cols; pos++)
+			{
+				ibDataViewColumn* candidate = GetColumn(pos);
+				if (candidate != nullptr && !candidate->IsHidden())
+					col = candidate;
+			}
+		}
 	}
 
 	column = col;
-	item = GetItemByRow(GetLineAt(y));
+	item = GetItemByRow(row);
 }
 
 wxRect ibDataViewCtrl::GetItemRect(const ibDataViewItem& item,
@@ -3084,16 +3599,31 @@ wxRect ibDataViewCtrl::GetItemRect(const ibDataViewItem& item,
 {
 	int xpos = 0;
 	int width = 0;
+	// Which band of the row the cell occupies — the whole row unless the column is
+	// stacked under a vertical group. Filled in from the layout below.
+	int bandFirst = 0;
+	int bandSpan = 0;
 
 	unsigned int cols = GetColumnCount();
+	const ibDataViewColumnLayout& layout = GetColumnLayout();
+
 	// If column is null the loop will compute the combined width of all columns.
 	// Otherwise, it will compute the x position of the column we are looking for.
 	for (unsigned int i = 0; i < cols; i++)
 	{
-		ibDataViewColumn* col = GetColumnAt(i);
+		ibDataViewColumn* col = GetColumn(i);
 
 		if (col == column)
+		{
+			ibColumnPlacement place;
+			if (layout.GetBodyPlacement(col, place))
+			{
+				xpos = place.x;
+				bandFirst = place.band;
+				bandSpan = place.bandSpan;
+			}
 			break;
+		}
 
 		if (col->IsHidden())
 			continue;      // skip it!
@@ -3115,6 +3645,7 @@ wxRect ibDataViewCtrl::GetItemRect(const ibDataViewItem& item,
 	{
 		// If we have no column, we reset the x position back to zero.
 		xpos = 0;
+		width = layout.GetTotalWidth() > 0 ? layout.GetTotalWidth() : width;
 	}
 
 	const int row = GetRowByItem(item, Walk_ExpandedOnly);
@@ -3137,7 +3668,21 @@ wxRect ibDataViewCtrl::GetItemRect(const ibDataViewItem& item,
 
 	const int lineStart  = GetLineStart(row);
 	const int lineHeight = GetLineHeight(row);
-	wxRect itemRect(xpos + indent, lineStart, width - indent, lineHeight);
+
+	// The cell's own slice of the row. Without a band (no column asked for, or a
+	// flat grid) this is the row itself — the old rectangle, unchanged.
+	int cellTop = lineStart;
+	int cellHeight = lineHeight;
+	if (bandSpan > 0)
+	{
+		const int bands = wxMax(layout.GetRowBandCount(), 1);
+		const int top = (lineHeight * bandFirst) / bands;
+		const int bottom = (lineHeight * (bandFirst + bandSpan)) / bands;
+		cellTop = lineStart + top;
+		cellHeight = bottom - top;
+	}
+
+	wxRect itemRect(xpos + indent, cellTop, width - indent, cellHeight);
 
 	ibDataViewMainWindow* tableWindow = CellToDataViewWindow(item, column);
 	const wxPoint winOffset = GetDataViewWindowOffset(tableWindow);
@@ -3408,8 +3953,7 @@ void ibDataViewCtrl::BuildTree(ibDataViewModel* model)
 
 void ibDataViewCtrl::DestroyTree()
 {
-	const size_t kids = (m_root != nullptr) ? m_root->GetChildNodes().size() : 0;
-			if (!IsVirtualList())
+	if (!IsVirtualList())
 	{
 		wxDELETE(m_root);
 		m_countRows = 0;
@@ -3453,7 +3997,7 @@ ibDataViewCtrl::FindColumnForEditing(const ibDataViewItem& item, ibDataViewCellM
 		const unsigned cols = GetColumnCount();
 		for (unsigned i = 0; i < cols; i++)
 		{
-			ibDataViewColumn* c = GetColumnAt(i);
+			ibDataViewColumn* c = GetColumn(i);
 			if (c->IsHidden())
 				continue;
 
@@ -3593,7 +4137,7 @@ bool ibDataViewCtrl::TryAdvanceCurrentColumn(ibDataViewTreeNode* node, wxKeyEven
 			{
 				// in the special "list" case, all columns have values, so just
 				// take the first one
-				m_currentCol = GetColumnAt(0);
+				m_currentCol = GetColumn(0);
 			}
 
 			m_currentColSetByKeyboard = true;
@@ -3663,85 +4207,168 @@ bool ibDataViewCtrl::TryAdvanceCurrentColumn(ibDataViewTreeNode* node, wxKeyEven
 		return true;
 	}
 
-	m_currentCol = GetColumnAt(idx);
+	m_currentCol = GetColumn(idx);
 	m_currentColSetByKeyboard = true;
 	RefreshRow(m_currentRow);
 	return true;
 }
 
+int ibDataViewCtrl::GetTableAreaWidth() const
+{
+	return m_tableAreaWin != nullptr ? m_tableAreaWin->GetClientSize().x : 0;
+}
+
+// ⭐ THE LAW ON COLUMN WIDTHS, and it has exactly two cases.
+//
+//   the columns fit    → they are STRETCHED in proportion to what they ask for, filling the
+//                        width to the right edge (widening the table widens the columns).
+//   they do not fit    → nothing is squeezed. Every column keeps the width it asks for and
+//                        the SCROLLBAR carries the overflow — drawn as it always was.
+//
+// There is NO automatic squeeze, and that is deliberate: squeezing produced "P..R..L..A.."
+// (a row of initials, unreadable), and per-column floors invented to stop it then fought the
+// manual drag — the drag asked a neighbour for room, the fit pushed it back to its floor,
+// and the width came out of the dragged column instead.
+//
+// Proportion still applies to a DRAG, where it belongs: pull a border and the range to its
+// right gives up exactly what this one gains (WXApplyColumnWidth).
+//
+// The share is always taken from the ASKED-FOR width, never from the current one, so every
+// pass starts from the same numbers and the fitting cannot compound. A stack counts ONCE:
+// its columns share one x range and their edges have to agree.
+// THE WIDTHS HAVE ALL BEEN SET — and now, ONCE, everything that follows from them: the cached
+// geometry goes, and the header, footer and rows area are repainted whole. A changed width
+// moves every column after it (and under a group, cells above and below), so repainting one
+// column's old rectangle leaves the previous dividers standing — the picket fence beside the
+// dragged edge. Said per column instead, this ran thirteen times per mouse-move over
+// half-applied widths, which is what made the drag crawl.
+void ibDataViewCtrl::WXColumnWidthsApplied()
+{
+	InvalidateColumnLayout();
+
+	if (m_headerAreaWin != nullptr)
+		m_headerAreaWin->Refresh();
+
+	if (m_footerAreaWin != nullptr)
+		m_footerAreaWin->Refresh();
+
+	if (m_tableAreaWin != nullptr)
+		m_tableAreaWin->Refresh();
+}
+
 void ibDataViewCtrl::UpdateColumnSizes()
 {
-	int colsCount = GetColumnCount();
-	if (!colsCount)
+	if (GetColumnCount() == 0 || m_tableAreaWin == nullptr)
 		return;
 
-	int fullWinWidth = m_tableAreaWin->GetClientSize().x;
+	const int room = GetTableAreaWidth();
 
-	// Find the last shown column: we shouldn't bother to resize the columns
-	// that are hidden anyhow.
-	int lastColIndex = -1;
-	ibDataViewColumn* lastCol wxDUMMY_INITIALIZE(NULL);
-	for (int colIndex = colsCount - 1; colIndex >= 0; --colIndex)
-	{
-		lastCol = GetColumnAt(colIndex);
-		if (!lastCol->IsHidden())
-		{
-			lastColIndex = colIndex;
-			break;
-		}
-	}
+	// NOT WHILE THE ROWS AREA HAS NO REAL WIDTH YET. On the way up, this is called several
+	// times before the windows are laid out — measured: room 18, then 83, 148, 224 — and
+	// every one of those says "the columns do not fit", so a freshly opened form started in
+	// the scrolling state and only the next resize straightened it out. There is nothing to
+	// fit into a strip 18 pixels wide; the layout will call again when there is.
+	if (room < FromDIP(64))
+		return;
 
-	if (lastColIndex == -1)
-	{
-		// All columns are hidden.
+	// A DRAG OWNS THE WIDTHS WHILE IT LASTS — the fit stands aside and only publishes the extent.
+	//
+	// Its arithmetic already keeps the very invariant this function exists for: while the columns
+	// fit, whatever the dragged range takes the ranges to its RIGHT give, so the row stays exactly
+	// as wide as the table; once those are at their floors the row grows and the scrollbar with it.
+	// So re-deriving the widths here corrects nothing — it only disagrees, and two accounts of one
+	// geometry always end the same way. Measured on the 13-column journal: the stretch handed every
+	// range 3 px (including the ones LEFT of the drag, which must never move), the next pass took
+	// them back, and the two took turns per mouse-move — the dragged column's left edge alternating
+	// 504/516 and its border up to 47 px away from the pointer.
+	if (WXIsColumnDragActive()) {
+
+		const int taken = GetEndOfLastCol();
+		m_tableAreaWin->SetVirtualSize(
+			taken > room ? taken : 0, m_tableAreaWin->GetVirtualSize().y);
 		return;
 	}
 
-	int lastColX = 0;
-	for (int colIndex = 0; colIndex < lastColIndex; ++colIndex)
-	{
-		const ibDataViewColumn* c = GetColumnAt(colIndex);
+	std::vector<ibWidthRange> ranges;
+	CollectWidthRanges(ranges);
 
-		if (!c->IsHidden())
-			lastColX += c->GetWidth();
+	int asking = 0;
+	for (const ibWidthRange& range : ranges)
+		asking += range.specified;
+
+	if (ranges.empty() || asking <= 0 || room <= 0) {
+		// Nothing to share out — publish what the columns really take (the layout's total,
+		// not the widths added up: under a vertical group they SHARE one width, so adding
+		// them claims the table is far wider than it is).
+		const int taken = GetEndOfLastCol();
+		m_tableAreaWin->SetVirtualSize(
+			taken > room ? taken : 0, m_tableAreaWin->GetVirtualSize().y);
+		return;
 	}
 
-	int colswidth = lastColX + lastCol->GetWidth();
-	if (lastColX < fullWinWidth)
-	{
-		const int availableWidth = fullWinWidth - lastColX;
+	// DOES NOT FIT: leave every width alone and let the scrollbar do its job.
+	if (asking > room) {
 
-		// Never make the column automatically smaller than the last width it
-		// was explicitly given nor its minimum width (however we do need to
-		// reduce it until this size if it's currently wider, so this
-		// comparison needs to be strict).
-		if (availableWidth < wxMax(lastCol->GetMinWidth(),
-			lastCol->WXGetSpecifiedWidth()))
-		{
-			// The remaining space can't hold the last column at its minimum
-			// width — content overflows the viewport. Publish the real total
-			// width so the horizontal scrollbar appears; a bare return would
-			// leave a stale virtual width (possibly 0 from an earlier "fits"
-			// pass) and hide the scrollbar even though there's content to scroll.
-			m_tableAreaWin->SetVirtualSize(colswidth, m_tableAreaWin->GetVirtualSize().y);
-			return;
+		bool moved = false;
+		for (const ibWidthRange& range : ranges) {
+			const int width = wxMax(range.specified, range.minimum);
+			for (ibDataViewColumn* column : range.columns) {
+				if (column->GetWidth() != width)
+					moved = true;
+
+				column->WXSetShownWidth(width);
+			}
 		}
 
-		lastCol->WXUpdateWidth(availableWidth);
+		// Same rule as in the FITS branch below: a change nobody made is not announced.
+		if (moved)
+			WXColumnWidthsApplied();
+		m_tableAreaWin->SetVirtualSize(GetEndOfLastCol(), m_tableAreaWin->GetVirtualSize().y);
+		return;
+	}
 
-		// All columns fit on screen, so we don't need horizontal scrolling.
-		// To prevent flickering scrollbar when resizing the window to be
-		// narrower, force-set the virtual width to 0 here. It will eventually
-		// be corrected at idle time.
-		m_tableAreaWin->SetVirtualSize(0, m_tableAreaWin->GetVirtualSize().y);
-		m_tableAreaWin->RefreshRect(wxRect(lastColX, 0, availableWidth, GetSize().y));
+	// FITS: stretched in proportion, the rounding remainder going to the LAST range so the
+	// columns end exactly on the right edge with no sliver of background beside them.
+	int given = 0;
+	bool moved = false;   // did any width really change — see the announcement below
+
+	for (size_t idx = 0; idx < ranges.size(); idx++) {
+
+		const bool lastOne = (idx + 1 == ranges.size());
+		const int width = lastOne
+			? room - given
+			: wxMax((int)((wxLongLong_t)room * ranges[idx].specified / asking), ranges[idx].minimum);
+
+		// Set QUIETLY, and not into the asked-for width: an automatic stretch is not a width
+		// the user requested, and everything that follows from the new widths is announced
+		// once, below — announcing per column rebuilt the layout and repainted the header
+		// thirteen times per mouse-move, over half-applied widths (the header filled with
+		// leftover dividers and the drag crawled).
+		for (ibDataViewColumn* column : ranges[idx].columns) {
+			if (column->GetWidth() != width)
+				moved = true;
+
+			column->WXSetShownWidth(width);
+		}
+
+		given += width;
 	}
-	else
-	{
-		// else: don't bother, the columns won't fit anyway
-		m_tableAreaWin->SetVirtualSize(colswidth, m_tableAreaWin->GetVirtualSize().y);
-	}
+
+	// ONLY IF A WIDTH ACTUALLY MOVED. The fit runs far more often than the widths change — a
+	// drag alone brings it here twice per mouse-move, the second time from the scrollbar's own
+	// size cascade — and announcing a change that did not happen is not free: it drops the
+	// geometry, rebuilds it, and repaints all three windows. Measured on one drag: the layout
+	// was rebuilt 2–6 times per pixel of mouse travel (generation 9→11→13→19→20→24) and the
+	// rows area painted TWICE per pass, the second time a frame behind the header — which is
+	// what "the row catches up with the column" looked like on screen.
+	if (moved)
+		WXColumnWidthsApplied();
+
+	// On screen by construction, so no horizontal scrolling. Forced to 0 to keep the
+	// scrollbar from flickering while the window is dragged narrower; idle corrects it.
+	m_tableAreaWin->SetVirtualSize(0, m_tableAreaWin->GetVirtualSize().y);
 }
+
 
 //-----------------------------------------------------------------------------
 // ibDataViewCtrl
@@ -3898,7 +4525,12 @@ ibDataViewCtrl::~ibDataViewCtrl()
 	if (m_notifier)
 		GetModel()->RemoveNotifier(m_notifier);
 
+	// EVERYTHING STILL HANGING ON THE TREE IS OURS — columns and groups alike. Whatever was
+	// detached along the way (a form control being torn down) belongs to whoever detached it
+	// and is already gone.
 	DoClearColumns();
+
+	wxDELETE(m_rootGroup);
 
 #if wxUSE_ACCESSIBILITY
 	SetAccessible(NULL);
@@ -3923,6 +4555,17 @@ void ibDataViewCtrl::Init()
 	m_footerAreaWin = NULL;
 
 	m_colsDirty = false;
+
+	// THE COLUMN STORE, BORN WITH THE CONTROL — so every reader can take it without asking
+	// whether it exists yet. Its behaviour is decided, not configured: horizontal (columns
+	// side by side, the ordinary table) and showing nothing of itself, ever.
+	//
+	// Made ONCE although Init runs TWICE — the default ctor calls it and so does Create. A
+	// second store would orphan whatever the first already held, and leak it.
+	if (m_rootGroup == nullptr) {
+		m_rootGroup = new ibDataViewColumnGroup(wxEmptyString, ibColumnGroupHorizontal);
+		m_rootGroup->SetOwner(this);
+	}
 
 	m_allowMultiColumnSort = false;
 
@@ -4139,22 +4782,42 @@ bool ibDataViewCtrl::IsFrozen() const
 
 void ibDataViewCtrl::SetHeaderHeight(int point)
 {
-	if (m_headerAreaWin)
-		m_headerAreaWin->SetColumnHeight(point);
+	m_userHeaderHeight = wxMax(point, 1);
+	ApplyHeaderHeight();
 }
 
 int ibDataViewCtrl::GetHeaderHeight() const
 {
 	if (m_headerAreaWin)
-		return m_footerAreaWin->GetColumnHeight();
+		return m_headerAreaWin->GetColumnHeight();
 
 	return 0;
 }
 
 void ibDataViewCtrl::SetFooterHeight(int point)
 {
-	if (m_footerAreaWin)
-		m_footerAreaWin->SetColumnHeight(point);
+	m_userFooterHeight = wxMax(point, 1);
+	ApplyHeaderHeight();
+}
+
+// The header is as deep as the DEEPER of the two claims on it: what the form asked for, and
+// what the column groups need (one band per group level). Asking for one band cannot flatten
+// a two-level header — that would clip the titles it draws.
+//
+// THE FOOTER IS SIZED BY THE SAME RULE, against the BODY's band count: it draws one cell per
+// column, in that column's own band, so a stack of three needs three bands under it or two
+// of the three totals have nowhere to be.
+void ibDataViewCtrl::ApplyHeaderHeight()
+{
+	const ibDataViewColumnLayout& layout = GetColumnLayout();
+
+	if (m_headerAreaWin != nullptr)
+		m_headerAreaWin->SetColumnHeight(
+			wxMax(m_userHeaderHeight, layout.GetHeaderBandCount()));
+
+	if (m_footerAreaWin != nullptr)
+		m_footerAreaWin->SetColumnHeight(
+			wxMax(m_userFooterHeight, layout.GetRowBandCount()));
 }
 
 int ibDataViewCtrl::GetFooterHeight() const
@@ -4239,11 +4902,14 @@ ibDataViewMainWindow* ibDataViewCtrl::CellToDataViewWindow(const ibDataViewItem&
 	// frozen corner window in this case.
 	if (!item.IsOk() && column == NULL)
 		return m_tableAreaWin;
-	else if (GetRowByItem(item) < wxMax(m_countFrozenRows, m_countFrozenHierarchicalRows) && GetColumnPosition(column) < m_countFrozenCols)
+	else if (GetRowByItem(item) < wxMax(m_countFrozenRows, m_countFrozenHierarchicalRows) && GetColumnIndex(column) < m_countFrozenCols)
 		return m_tableFrozenCornerAreaWin;
 	else if (GetRowByItem(item) < wxMax(m_countFrozenRows, m_countFrozenHierarchicalRows))
 		return m_tableFrozenRowAreaWin;
-	else if (GetRowByItem(item) < m_countFrozenCols)
+	// A cell is in the frozen COLUMN area by its COLUMN, not by its row — this read the row
+	// against the frozen-COLUMN count, so a cell landed there or not depending on how far
+	// down it was.
+	else if (GetColumnIndex(column) < m_countFrozenCols)
 		return m_tableFrozenColAreaWin;
 
 	return m_tableAreaWin;
@@ -4375,18 +5041,20 @@ void ibDataViewCtrl::CalcWindowSizes()
 			freezeAreaHeight += GetLineHeight(row);
 		}
 
-		for (int col = 0, count = 0; col < (int)GetColumnCount(); col++) {
+		// THE FROZEN EDGE IS A GEOMETRY QUESTION, so the layout answers it: the frozen area
+		// reaches the RIGHT EDGE of the last column counted. Adding up the first N widths
+		// counted a vertical STACK once per column in it (they share one x range, each
+		// holding the stack's full width), which pushed the edge far past where those
+		// columns are actually drawn. Reading edges also makes splitting a stack impossible:
+		// the first of its columns to be counted carries the whole stack.
+		int frozen = 0;
+		for (const ibColumnPlacement& place : GetColumnLayout().GetBodyPlacements()) {
 
-			if (count == m_countFrozenCols)
+			if (frozen == m_countFrozenCols)
 				break;
 
-			ibDataViewColumn* column = GetColumnAt(col);
-
-			if (column->IsHidden())
-				continue;      // skip it!
-
-			freezeAreaWidth += column->GetWidth();
-			count++;
+			freezeAreaWidth = (unsigned int)wxMax((int)freezeAreaWidth, place.x + place.width);
+			frozen++;
 		}
 
 		// We need to override OnSize so that our scrolled
@@ -4475,9 +5143,15 @@ void ibDataViewCtrl::CalcWindowSizes()
 
 void ibDataViewCtrl::OnSize(wxSizeEvent& event)
 {
-	const wxSize sz = event.GetSize();
-	const int cpp = m_lineHeight > 0 ? sz.y / m_lineHeight : -1;
-		CalcWindowSizes();
+	CalcWindowSizes();
+
+	// AND THE COLUMNS FOLLOW THE NEW WIDTH. CalcWindowSizes lays the windows out; the widths
+	// are a separate question and the only place that answers it is this one — the geometry
+	// cache has to be dropped as well, or the row keeps the positions it had at the old size.
+	// (Without this a table simply did not react to the window being resized.)
+	InvalidateColumnLayout();
+	UpdateColumnSizes();
+	SyncHorizontalScrollbar();
 
 	// Top-up fill in OnInternalIdle is condition-driven (loaded < cpp +
 	// slack) — it fires whenever the buffer has room, regardless of why.
@@ -4491,17 +5165,20 @@ void ibDataViewCtrl::OnDPIChanged(wxDPIChangedEvent& event)
 	ClearRowHeightCache();
 	SetRowHeight(GetDefaultRowHeight());
 
-	for (unsigned i = 0; i < m_cols.size(); ++i)
+	const unsigned int count = GetColumnCount();
+	for (unsigned int idx = 0; idx < count; idx++)
 	{
-		int minWidth = m_cols[i]->GetMinWidth();
+		ibDataViewColumn* column = GetColumn(idx);
+
+		int minWidth = column->GetMinWidth();
 		if (minWidth > 0)
 			minWidth = event.ScaleX(minWidth);
-		m_cols[i]->SetMinWidth(minWidth);
+		column->SetMinWidth(minWidth);
 
-		int width = m_cols[i]->WXGetSpecifiedWidth();
+		int width = column->WXGetSpecifiedWidth();
 		if (width > 0)
 			width = event.ScaleX(width);
-		m_cols[i]->SetWidth(width);
+		column->SetWidth(width);
 	}
 
 	event.Skip();
@@ -4850,7 +5527,7 @@ ibDataViewCtrl::DropItemInfo ibDataViewCtrl::GetDropItemInfo(const wxCoord x, co
 			ibDataViewColumn* const expander = GetExpanderColumnOrFirstOne(this);
 			for (unsigned int i = 0; i < GetColumnCount(); i++)
 			{
-				ibDataViewColumn* col = GetColumnAt(i);
+				ibDataViewColumn* col = GetColumn(i);
 				if (col->IsHidden())
 					continue;   // skip it!
 
@@ -5022,7 +5699,7 @@ wxBitmap ibDataViewCtrl::CreateItemBitmap(unsigned int row, int& indent)
 	unsigned int col;
 	for (col = 0; col < cols; col++)
 	{
-		ibDataViewColumn* column = GetColumnAt(col);
+		ibDataViewColumn* column = GetColumn(col);
 		if (column->IsHidden())
 			continue;      // skip it!
 		width += column->GetWidth();
@@ -5058,7 +5735,7 @@ wxBitmap ibDataViewCtrl::CreateItemBitmap(unsigned int row, int& indent)
 	int x = 0;
 	for (col = 0; col < cols; col++)
 	{
-		ibDataViewColumn* column = GetColumnAt(col);
+		ibDataViewColumn* column = GetColumn(col);
 		ibDataViewRenderer* cell = column->GetRenderer();
 
 		if (column->IsHidden())
@@ -5100,48 +5777,74 @@ bool ibDataViewCtrl::DoEnableDropTarget(const wxVector<wxDataFormat>& formats)
 }
 
 #endif // wxUSE_DRAG_AND_DROP
-
-bool ibDataViewCtrl::AppendColumn(ibDataViewColumn* col)
-{
-	if (!ibDataViewCtrlBase::AppendColumn(col))
-		return false;
-
-	m_cols.push_back(col);
-	m_colsBestWidths.push_back(CachedColWidthInfo());
-	OnColumnsCountChanged();
-	return true;
-}
-
-bool ibDataViewCtrl::PrependColumn(ibDataViewColumn* col)
-{
-	if (!ibDataViewCtrlBase::PrependColumn(col))
-		return false;
-
-	m_cols.insert(m_cols.begin(), col);
-	m_colsBestWidths.insert(m_colsBestWidths.begin(), CachedColWidthInfo());
-	OnColumnsCountChanged();
-	return true;
-}
-
-bool ibDataViewCtrl::InsertColumn(unsigned int pos, ibDataViewColumn* col)
-{
-	if (!ibDataViewCtrlBase::InsertColumn(pos, col))
-		return false;
-
-	m_cols.insert(m_cols.begin() + pos, col);
-	m_colsBestWidths.insert(m_colsBestWidths.begin() + pos, CachedColWidthInfo());
-	OnColumnsCountChanged();
-	return true;
-}
-
 void ibDataViewCtrl::OnColumnResized()
 {
+	// THE CACHED GEOMETRY GOES FIRST — an interactive drag does not run through
+	// OnColumnChange, so without this the layout kept the widths from before the drag and
+	// the table would not resize at all.
+	InvalidateColumnLayout();
+
+	// AND THE SCROLLBAR FOLLOWS THE DRAG. Publish the width the columns now take, then ask for
+	// the bar to be re-derived — ASK, not do, while a drag is in progress. AdjustScrollbars
+	// pulls a whole window-geometry cascade behind it and paying that per mouse-move is what
+	// made the drag feel sticky; deferring it to the mouse being RELEASED was worse in a
+	// different way: crossing the table's edge mid-drag left the rows laid out for the old
+	// width, so the bar appeared only on release and the row visibly caught up with the header
+	// afterwards. A request is served once per frame, which is exactly the right cadence: one
+	// cascade per repaint instead of one per pixel.
+	UpdateColumnSizes();
+
+	if (WXIsColumnDragActive())
+		RequestScrollbarSync();
+	else
+		SyncHorizontalScrollbar();
+
 	UpdateDisplay();
+}
+
+// THE HORIZONTAL SCROLLBAR, RE-DERIVED.
+//
+// AdjustScrollbars turns the virtual width into a range by dividing it by the scroll RATE —
+// so with a rate of 0 the range is 0 and no scrollbar appears however far the columns
+// overflow. The rate used to be set in two unrelated places (a window resize and
+// RecalculateDisplay), which is why widening a COLUMN published the right virtual width and
+// still showed no scrollbar: nobody re-derived it on that path.
+//
+// Only the x-rate is touched, deliberately: forcing a y-rate would raise a vertical
+// scrollbar on controls that never had one (it stays 0 until RecalculateDisplay sets it) —
+// the small tablebox preview in the designer, for one.
+// THE BAR ON THE NEXT FRAME, AND ONCE PER FRAME. Whoever changes the widths says so and goes
+// on; idle serves the request, so twenty mouse-moves between two repaints cost one cascade.
+//
+// It also makes the two hosts behave alike. The bar used to appear during a drag in the thick
+// client and only on release in the Designer — same control, same table: the client's form was
+// getting a size cascade from its own layout that re-derived the bar as a side effect, and the
+// Designer's dialog was not. Asking the control itself for the frame depends on nobody's layout.
+void ibDataViewCtrl::RequestScrollbarSync()
+{
+	m_scrollSyncPending = true;
+	wxWakeUpIdle();
+}
+
+void ibDataViewCtrl::SyncHorizontalScrollbar()
+{
+	m_scrollSyncPending = false;
+
+	if (m_tableAreaWin == nullptr)
+		return;
+
+	int xUnit = 0, yUnit = 0;
+	GetScrollPixelsPerUnit(&xUnit, &yUnit);
+
+	if (xUnit <= 0)
+		SetScrollRate(1, yUnit);
+
+	AdjustScrollbars();
 }
 
 void ibDataViewCtrl::OnColumnWidthChange(unsigned int idx)
 {
-	InvalidateColBestWidth(idx);
+	InvalidateColBestWidth(GetColumn(idx));
 
 	OnColumnChange(idx);
 }
@@ -5154,23 +5857,39 @@ void ibDataViewCtrl::OnColumnChange(unsigned int idx)
 	if (m_footerAreaWin)
 		m_footerAreaWin->UpdateColumn(idx);
 
+	// AND THE CACHED GEOMETRY GOES. Width, visibility, group — any of them moves every OTHER
+	// column too, because a row is laid out as a whole (x AND band). Without this the widths
+	// changed while the layout kept the old ones: measured as columns 126 wide and a right
+	// edge still at 13×80 — the table drew narrow columns, would not fill its width, and
+	// jumped on the next drag. AFTER telling the header, for the same reason as in
+	// OnColumnsCountChanged: it keeps its own count, and a paint in between must not meet the
+	// two disagreeing.
+	InvalidateColumnLayout();
+
 	UpdateDisplay();
 }
 
 void ibDataViewCtrl::OnColumnsCountChanged()
 {
+	// THE HEADER FIRST, THE GEOMETRY AFTER. The header keeps its own count of columns (it
+	// draws them) and the layout is read while painting, so telling the header after dropping
+	// the geometry would leave a paint in between that walks a count and a tree disagreeing
+	// about how many columns there are — it crashed on the first form with a table.
 	if (m_headerAreaWin)
 		m_headerAreaWin->SetColumnCount(GetColumnCount());
 
 	if (m_footerAreaWin)
 		m_footerAreaWin->SetColumnCount(GetColumnCount());
 
+	// A column arrived or left: every position in the row moves, so the cached geometry goes.
+	InvalidateColumnLayout();
+
 	int editableCount = 0;
 
 	const unsigned cols = GetColumnCount();
 	for (unsigned i = 0; i < cols; i++)
 	{
-		ibDataViewColumn* c = GetColumnAt(i);
+		ibDataViewColumn* c = GetColumn(i);
 		if (c->IsHidden())
 			continue;
 		if (c->GetRenderer()->GetMode() != wxDATAVIEW_CELL_INERT)
@@ -5184,13 +5903,7 @@ void ibDataViewCtrl::OnColumnsCountChanged()
 
 void ibDataViewCtrl::DoSetExpanderColumn()
 {
-	ibDataViewColumn* column = GetExpanderColumn();
-	if (column)
-	{
-		int index = GetColumnIndex(column);
-		if (index != wxNOT_FOUND)
-			InvalidateColBestWidth(index);
-	}
+	InvalidateColBestWidth(GetExpanderColumn());
 
 	UpdateDisplay();
 }
@@ -5200,17 +5913,16 @@ void ibDataViewCtrl::DoSetIndent()
 	UpdateDisplay();
 }
 
-unsigned int ibDataViewCtrl::GetColumnCount() const
-{
-	return m_cols.size();
-}
-
 bool ibDataViewCtrl::SetRowHeight(int lineHeight)
 {
 	if (!m_tableAreaWin)
 		return false;
 
-	m_lineHeight = lineHeight;
+	// What is being set is the height of ONE BAND — the row itself is as many of
+	// them as the column groups make it (one, when nothing is grouped, which is the
+	// old meaning unchanged).
+	m_bandHeight = lineHeight;
+	m_lineHeight = lineHeight * wxMax(GetRowBandCount(), 1);
 	return true;
 }
 
@@ -5234,33 +5946,6 @@ int ibDataViewCtrl::GetDefaultRowHeight() const
 	else
 #endif // __WXMSW__
 		return wxMax(SMALL_ICON_HEIGHT, GetCharHeight()) + FromDIP(1);
-}
-
-ibDataViewColumn* ibDataViewCtrl::GetColumn(unsigned int idx) const
-{
-	return m_cols[idx];
-}
-
-ibDataViewColumn* ibDataViewCtrl::GetColumnAt(unsigned int pos) const
-{
-	// columns can't be reordered if there is no header window which allows
-	// to do this
-	const unsigned idx = m_headerAreaWin ? m_headerAreaWin->GetColumnsOrder()[pos]
-		: pos;
-
-	return GetColumn(idx);
-}
-
-int ibDataViewCtrl::GetColumnIndex(const ibDataViewColumn* column) const
-{
-	const unsigned count = m_cols.size();
-	for (unsigned n = 0; n < count; n++)
-	{
-		if (m_cols[n] == column)
-			return n;
-	}
-
-	return wxNOT_FOUND;
 }
 
 int ibDataViewCtrl::GetModelColumnIndex(unsigned int model_column) const
@@ -5330,13 +6015,15 @@ private:
 	int m_expanderSize;
 };
 
-unsigned int ibDataViewCtrl::GetBestColumnWidth(int idx) const
+unsigned int ibDataViewCtrl::GetBestColumnWidth(ibDataViewColumn* column) const
 {
-	if (m_colsBestWidths[idx].width != 0)
-		return m_colsBestWidths[idx].width;
+	if (column == nullptr)
+		return 0;
+
+	if (column->WXBestWidth() != 0)
+		return column->WXBestWidth();
 
 	const int count = GetRowCount();
-	ibDataViewColumn* column = GetColumn(idx);
 	ibDataViewRenderer* renderer =
 		const_cast<ibDataViewRenderer*>(column->GetRenderer());
 
@@ -5361,75 +6048,72 @@ unsigned int ibDataViewCtrl::GetBestColumnWidth(int idx) const
 	if (max_width > 0)
 		max_width += 2 * FromDIP(PADDING_RIGHTLEFT);
 
-	const_cast<ibDataViewCtrl*>(this)->m_colsBestWidths[idx].width = max_width;
+	column->WXSetBestWidth(max_width);
 	return max_width;
 }
 
-void ibDataViewCtrl::ColumnMoved(ibDataViewColumn* col, unsigned int new_pos)
+// THE DRAG ENDS HERE: the member moves, and everyone who cares is told once.
+//
+// `holder` and `at` come from the header, which is the only place that knows WHERE the
+// mouse let go — inside a group, or at its edge, which means beside it one level up. The
+// tree IS the order, so moving the member is the whole of the move; there is no display
+// order to record it in a second time.
+void ibDataViewCtrl::WXMoveColumn(ibDataViewColumn* column, ibDataViewColumnGroup* holder, unsigned int at)
 {
-	// do _not_ reorder m_cols elements here, they should always be in the
-	// order in which columns were added, we only display the columns in
-	// different order
+	if (column == nullptr || holder == nullptr)
+		return;
+
+	holder->InsertColumn(at, column);
+
+	InvalidateColumnLayout();
 	UpdateDisplay();
 
-	ibDataViewEvent event(wxEVT_DATAVIEW_COLUMN_REORDERED, this, col);
-	event.SetColumn(new_pos);
+	ibDataViewEvent event(wxEVT_DATAVIEW_COLUMN_REORDERED, this, column);
+	event.SetColumn(GetColumnIndex(column));
 	ProcessWindowEvent(event);
 }
-
-bool ibDataViewCtrl::DeleteColumn(ibDataViewColumn* column)
-{
-	const int idx = GetColumnIndex(column);
-	if (idx == wxNOT_FOUND)
-		return false;
-
-	m_colsBestWidths.erase(m_colsBestWidths.begin() + idx);
-	m_cols.erase(m_cols.begin() + idx);
-
-	if (GetCurrentColumn() == column)
-		ClearCurrentColumn();
-
-	OnColumnsCountChanged();
-
-	return true;
-}
-
+// MEMBERSHIP IS OWNERSHIP, so this frees what is still hanging on the tree, and only
+// the destructor calls it: everything detached along the way has already been handed
+// back to whoever detached it.
 void ibDataViewCtrl::DoClearColumns()
 {
-	typedef wxVector<ibDataViewColumn*>::const_iterator citer;
-	for (citer it = m_cols.begin(); it != m_cols.end(); ++it)
-		delete* it;
+	const unsigned int count = m_rootGroup->GetColumnCount();
+	wxVector<ibDataViewColumn*> owned;
+	owned.reserve(count);
+	for (unsigned int idx = 0; idx < count; idx++)
+		owned.push_back(m_rootGroup->GetColumn(idx));
+
+	// The columns are taken out of the TREE first and only then freed — and they are
+	// forgotten one by one (SetParent(nullptr)) rather than handed back to the root the
+	// way ungrouping does it, because there is nothing here to hand them to: this runs
+	// while the control is dying.
+	FreeGroupsUnder(m_rootGroup);
+	m_rootGroup->RemoveAllMembers();
+
+	for (ibDataViewColumn* column : owned) {
+		if (column != nullptr) {
+			column->SetParent(nullptr);
+			delete column;
+		}
+	}
 }
 
-bool ibDataViewCtrl::ClearColumns()
+void ibDataViewCtrl::InvalidateColBestWidth(ibDataViewColumn* column)
 {
-	SetExpanderColumn(NULL);
+	if (column == nullptr)
+		return;
 
-	DoClearColumns();
-
-	m_cols.clear();
-	m_sortingColumnIdxs.clear();
-	m_colsBestWidths.clear();
-
-	ClearCurrentColumn();
-
-	OnColumnsCountChanged();
-
-	return true;
-}
-
-void ibDataViewCtrl::InvalidateColBestWidth(int idx)
-{
-	m_colsBestWidths[idx].width = 0;
-	m_colsBestWidths[idx].dirty = true;
+	column->WXSetBestWidthDirty();
 	m_colsDirty = true;
 }
 
 void ibDataViewCtrl::InvalidateColBestWidths()
 {
 	// mark all columns as dirty:
-	m_colsBestWidths.clear();
-	m_colsBestWidths.resize(m_cols.size());
+	const unsigned int count = GetColumnCount();
+	for (unsigned int idx = 0; idx < count; idx++)
+		GetColumn(idx)->WXSetBestWidthDirty();
+
 	m_colsDirty = true;
 }
 
@@ -5440,9 +6124,11 @@ void ibDataViewCtrl::UpdateColWidths()
 	if (!m_headerAreaWin && !m_footerAreaWin)
 		return;
 
-	const unsigned len = m_colsBestWidths.size();
-	for (unsigned i = 0; i < len; i++)
+	const unsigned int count = GetColumnCount();
+	for (unsigned int idx = 0; idx < count; idx++)
 	{
+		ibDataViewColumn* column = GetColumn(idx);
+
 		// Note that we have to have an explicit 'dirty' flag here instead of
 		// checking if the width==0, as is done in GetBestColumnWidth().
 		//
@@ -5451,14 +6137,14 @@ void ibDataViewCtrl::UpdateColWidths()
 		// ibDataViewCtrl::UpdateColWidths() was called at idle time. This
 		// would result in the header's column width getting out of sync with
 		// the control itself.
-		if (m_colsBestWidths[i].dirty)
+		if (column->WXIsBestWidthDirty())
 		{
 			if (m_headerAreaWin)
-				m_headerAreaWin->UpdateColumn(i);
+				m_headerAreaWin->UpdateColumn(idx);
 			if (m_footerAreaWin)
-				m_footerAreaWin->UpdateColumn(i);
+				m_footerAreaWin->UpdateColumn(idx);
 
-			m_colsBestWidths[i].dirty = false;
+			column->WXSetBestWidthDirty(false);
 		}
 	}
 }
@@ -5470,6 +6156,11 @@ void ibDataViewCtrl::OnInternalIdle()
 
 	if (m_colsDirty)
 		UpdateColWidths();
+
+	// The frame a width change asked for (see RequestScrollbarSync) — before the display is
+	// recalculated, since the scroll range is one of the things it is recalculated from.
+	if (m_scrollSyncPending)
+		SyncHorizontalScrollbar();
 
 	if (m_dirty)
 	{
@@ -5567,19 +6258,6 @@ void ibDataViewCtrl::EndBootstrapFreeze()
 	// Match the rows-area-only Freeze in OnPagedFetchResetComplete /
 	// AssociateModel — outer ctrl was never frozen, no Thaw needed.
 	if (m_tableAreaWin) m_tableAreaWin->Thaw();
-}
-
-int ibDataViewCtrl::GetColumnPosition(const ibDataViewColumn* column) const
-{
-	unsigned int len = GetColumnCount();
-	for (unsigned int i = 0; i < len; i++)
-	{
-		ibDataViewColumn* col = GetColumnAt(i);
-		if (column == col)
-			return i;
-	}
-
-	return wxNOT_FOUND;
 }
 
 ibDataViewColumn* ibDataViewCtrl::GetSortingColumn() const
@@ -6345,33 +7023,51 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 		return;
 	}
 
+	// THE geometry of the row: which column sits where, across AND down. Flat is
+	// the common case and keeps the old left-to-right arithmetic; once a column
+	// group is in play a column is a rectangle in an (x, band) grid and the
+	// clipping shortcut below no longer holds — every column is walked and the DC
+	// clips what falls outside.
+	const ibDataViewColumnLayout& columnLayout = GetColumnLayout();
+
 	unsigned int col_start = 0;
-	unsigned int x_start;
-	for (x_start = 0; col_start < cols; col_start++)
+	unsigned int col_last = 0;
+	unsigned int x_start = 0;
+	unsigned int x_last = 0;
+
+	if (columnLayout.IsFlat())
 	{
-		ibDataViewColumn* col = GetColumnAt(col_start);
-		if (col->IsHidden())
-			continue;      // skip it!
+		for (x_start = 0; col_start < cols; col_start++)
+		{
+			ibDataViewColumn* col = GetColumn(col_start);
+			if (col->IsHidden())
+				continue;      // skip it!
 
-		unsigned int w = col->GetWidth();
-		if (x_start + w >= (unsigned int)left)
-			break;
+			unsigned int w = col->GetWidth();
+			if (x_start + w >= (unsigned int)left)
+				break;
 
-		x_start += w;
+			x_start += w;
+		}
+
+		col_last = col_start;
+		x_last = x_start;
+		for (; col_last < cols; col_last++)
+		{
+			ibDataViewColumn* col = GetColumn(col_last);
+			if (col->IsHidden())
+				continue;      // skip it!
+
+			if (x_last > (unsigned int)right)
+				break;
+
+			x_last += col->GetWidth();
+		}
 	}
-
-	unsigned int col_last = col_start;
-	unsigned int x_last = x_start;
-	for (; col_last < cols; col_last++)
+	else
 	{
-		ibDataViewColumn* col = GetColumnAt(col_last);
-		if (col->IsHidden())
-			continue;      // skip it!
-
-		if (x_last > (unsigned int)right)
-			break;
-
-		x_last += col->GetWidth();
+		col_last = cols;
+		x_last = (unsigned int)wxMax(columnLayout.GetTotalWidth(), 0);
 	}
 
 	// Instead of calling GetLineStart() for each line from the first to the
@@ -6448,18 +7144,52 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 		//     consistency with MSW native list control. There's no vertical
 		//     rule at the most-left side of the control.
 
-		int x = x_start - 1;
-		int line_last = GetLineStart(item_last);
-		for (unsigned int i = col_start; i < col_last; i++)
+		const int line_last = GetLineStart(item_last);
+
+		if (columnLayout.IsFlat())
 		{
-			ibDataViewColumn* col = GetColumnAt(i);
-			if (col->IsHidden())
-				continue;       // skip it
+			int x = x_start - 1;
+			for (unsigned int i = col_start; i < col_last; i++)
+			{
+				ibDataViewColumn* col = GetColumn(i);
+				if (col->IsHidden())
+					continue;       // skip it
 
-			x += col->GetWidth();
+				x += col->GetWidth();
 
-			dc.DrawLine(x, first_line_start,
-				x, line_last);
+				dc.DrawLine(x, first_line_start,
+					x, line_last);
+			}
+		}
+		else
+		{
+			// Grouped: the rule belongs to the CELL, not to a full-height stripe —
+			// a column stacked under another one must not draw a line through its
+			// neighbour's band.
+			for (unsigned int i = col_start; i < col_last; i++)
+			{
+				ibColumnPlacement place;
+				if (!columnLayout.GetBodyPlacement(GetColumn(i), place) || place.width <= 0)
+					continue;
+
+				// Merged into the cell on its right (an in-cell group): the two are one
+				// cell showing two values, and a rule through it would deny that.
+				if (place.mergedRight)
+					continue;
+
+				int line_top = first_line_start;
+				for (unsigned int item = item_start; item < item_last; item++)
+				{
+					const int lh = GetLineHeight(item);
+					wxRect ruleRect;
+					if (GetColumnCellRect(GetColumn(i), line_top, lh, ruleRect))
+					{
+						const int rx = ruleRect.x + ruleRect.width - 1;
+						dc.DrawLine(rx, ruleRect.y, rx, ruleRect.y + ruleRect.height);
+					}
+					line_top += lh;
+				}
+			}
 		}
 	}
 
@@ -6520,11 +7250,14 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 
 					for (unsigned int i = col_start; i < col_last; i++)
 					{
-						ibDataViewColumn* col = GetColumnAt(i);
+						ibDataViewColumn* col = GetColumn(i);
 						if (col->IsHidden())
 							continue;
 
-						colRect.width = col->GetWidth();
+						// The cell's OWN rectangle — its band inside the row when the column
+						// lives under a vertical group, the full row height otherwise.
+						if (!GetColumnCellRect(col, cur_line_start, line_height, colRect))
+							continue;
 
 						if (col == m_currentCol)
 						{
@@ -6570,8 +7303,6 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 
 							break;
 						}
-
-						colRect.x += colRect.width;
 					}
 				}
 				else // Not using column focus.
@@ -6631,13 +7362,15 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 
 					for (unsigned int i = col_start; i < col_last; i++)
 					{
-						ibDataViewColumn* col = GetColumnAt(i);
+						ibDataViewColumn* col = GetColumn(i);
 						if (col->IsHidden())
 							continue;
 
-						ibDataViewRenderer* cell = col->GetRenderer();
-
-						colRect.width = col->GetWidth();
+						// Same (x, band) rectangle the cell itself will be drawn in —
+						// the highlight has to sit ON the cell, not on a full-height
+						// stripe through the other bands of the row.
+						if (!GetColumnCellRect(col, cur_line_start, line_height, colRect))
+							continue;
 
 						if (col == m_currentCol || m_currentCol == nullptr)
 						{
@@ -6654,8 +7387,6 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 							selectedCol = col;
 							break;
 						}
-
-						colRect.x += colRect.width;
 					}
 				}
 				else
@@ -6699,7 +7430,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 	{
 		const unsigned int expIdx = GetColumnIndex(expander);
 		for (unsigned int c = 0; c < expIdx; c++) {
-			ibDataViewColumn* cc = GetColumnAt(c);
+			ibDataViewColumn* cc = GetColumn(c);
 			if (cc != nullptr && !cc->IsHidden())
 				grpCaptionColX += cc->GetWidth();
 		}
@@ -6708,20 +7439,23 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 
 	// redraw all cells for all rows which must be repainted and all columns
 	wxRect cell_rect;
-	cell_rect.x = x_start;
 
 	for (unsigned int i = col_start; i < col_last; i++)
 	{
-		ibDataViewColumn* col = GetColumnAt(i);
+		ibDataViewColumn* col = GetColumn(i);
 		if (col->IsHidden())
 			continue;       // skip it!
 
 		ibDataViewRenderer* cell = col->GetRenderer();
-		cell_rect.width = col->GetWidth();
-		if (cell_rect.width <= 0)
+
+		// Where the column sits INSIDE a row: x / width across, band down. Only the
+		// row's top moves from here on — the rest of the rectangle is the same for
+		// every row, which is why it is asked once per column.
+		ibColumnPlacement place;
+		if (!columnLayout.GetBodyPlacement(col, place) || place.width <= 0)
 			continue;
 
-		cell_rect.y = first_line_start;
+		int line_top = first_line_start;
 
 		for (unsigned int item = item_start; item < item_last; item++)
 		{
@@ -6738,7 +7472,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 				node = GetTreeNodeByRow(item);
 				if (node == NULL)
 				{
-					cell_rect.y += line_height;
+					line_top += line_height;
 					continue;
 				}
 
@@ -6750,8 +7484,8 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 				dataitem = ibDataViewItem(wxUIntToPtr(item + 1));
 			}
 
-			// update cell_rect
-			cell_rect.height = line_height;
+			// update cell_rect — the band of THIS row the column occupies
+			GetColumnCellRect(col, line_top, line_height, cell_rect);
 
 			bool selected = m_selectionMode == ibDataViewSelectCell
 				? m_selection.IsSelected(item) && (col == selectedCol) : m_selection.IsSelected(item);
@@ -6837,7 +7571,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 
 			if (item_rect.width <= 0)
 			{
-				cell_rect.y += line_height;
+				line_top += line_height;
 				continue;
 			}
 
@@ -6856,10 +7590,8 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 			if (hasValue)
 				cell->WXCallRender(item_rect, &dc, state);
 
-			cell_rect.y += line_height;
+			line_top += line_height;
 		}
-
-		cell_rect.x += cell_rect.width;
 	}
 
 	// GROUP-row captions — drawn LAST, as ONE continuous span per row, so nothing (column rules, per-cell padding,
@@ -6883,7 +7615,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 				int cx = 0;
 				for (unsigned int i = 0; i < GetColumnCount(); i++)
 				{
-					ibDataViewColumn* c = GetColumnAt(i);
+					ibDataViewColumn* c = GetColumn(i);
 					if (c->IsHidden()) continue;
 					if (c != expander && cx >= capX && c->GetRenderer() != NULL
 					    && c->GetRenderer()->PrepareForItem(model, gitem, c->GetModelColumn()))
@@ -7239,7 +7971,7 @@ void ibDataViewCtrl::ProcessTableMouseEvent(wxMouseEvent& event, ibDataViewMainW
 	unsigned int i;
 	for (i = 0; i < cols; i++)
 	{
-		ibDataViewColumn* c = GetColumnAt(i);
+		ibDataViewColumn* c = GetColumn(i);
 		if (c->IsHidden())
 			continue;      // skip it!
 
@@ -7892,7 +8624,7 @@ wxAccStatus ibDataViewCtrlAccessible::GetName(int childId, wxString* name)
 		const unsigned int numCols = dvCtrl->GetColumnCount();
 		for (unsigned int col = 0; col < numCols; col++)
 		{
-			ibDataViewColumn* dvCol = dvCtrl->GetColumnAt(col);
+			ibDataViewColumn* dvCol = dvCtrl->GetColumn(col);
 			if (dvCol->IsHidden())
 				continue; // skip it
 
@@ -8052,7 +8784,7 @@ wxAccStatus ibDataViewCtrlAccessible::GetDescription(int childId, wxString* desc
 			if (!model->HasValue(item, col))
 				continue; // skip it
 
-			ibDataViewColumn* dvCol = dvCtrl->GetColumnAt(col);
+			ibDataViewColumn* dvCol = dvCtrl->GetColumn(col);
 			if (dvCol->IsHidden())
 				continue; // skip it
 

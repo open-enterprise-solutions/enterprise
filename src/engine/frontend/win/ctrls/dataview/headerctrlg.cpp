@@ -29,8 +29,6 @@
 
 namespace
 {
-	const unsigned COL_NONE = (unsigned)-1;
-
 	static wxColour colour_selection(0x66, 0x66, 0x66);
 
 	static wxPen pen_reorder(colour_selection);
@@ -367,7 +365,7 @@ int ibHeaderGenericCtrl::GetColEnd(unsigned int idx) const
 	return x + GetColumn(idx).GetWidth();
 }
 
-unsigned int ibHeaderGenericCtrl::FindColumnAtPoint(int xPhysical, bool* onSeparator) const
+unsigned int ibHeaderGenericCtrl::FindColumnAtPoint(int xPhysical, int WXUNUSED(yPhysical), bool* onSeparator) const
 {
 	int pos = 0;
 	int xLogical = xPhysical - m_scrollOffset;
@@ -422,9 +420,9 @@ unsigned int ibHeaderGenericCtrl::FindColumnAtPoint(int xPhysical, bool* onSepar
 	return COL_NONE;
 }
 
-unsigned int ibHeaderGenericCtrl::FindColumnClosestToPoint(int xPhysical) const
+unsigned int ibHeaderGenericCtrl::FindColumnClosestToPoint(int xPhysical, int yPhysical) const
 {
-	const unsigned int colIndexAtPoint = FindColumnAtPoint(xPhysical);
+	const unsigned int colIndexAtPoint = FindColumnAtPoint(xPhysical, yPhysical, nullptr);
 
 	// valid column found?
 	if (colIndexAtPoint != COL_NONE)
@@ -446,8 +444,14 @@ unsigned int ibHeaderGenericCtrl::FindColumnClosestToPoint(int xPhysical) const
 void ibHeaderGenericCtrl::RefreshCol(unsigned int idx)
 {
 	wxRect rect = GetClientRect();
-	rect.x += GetColStart(idx);
-	rect.width = GetColumn(idx).GetWidth();
+	const int start = GetColStart(idx);
+	rect.x += start;
+	// Between the column's EDGES, not "its own width from its start". The two agree
+	// in a flat header and stop agreeing the moment columns are stacked: there a
+	// column's cell is as wide as its GROUP, so repainting its own narrower width
+	// left the rest of the cell holding whatever was drawn on it before — a hover
+	// underline that stayed behind after the mouse had gone.
+	rect.width = GetColEnd(idx) - start;
 
 	RefreshRect(rect);
 }
@@ -494,11 +498,31 @@ void ibHeaderGenericCtrl::ClearMarkers()
 
 void ibHeaderGenericCtrl::EndDragging()
 {
+	// THE HIGHLIGHT IS DROPPED WITH THE DRAG. It is remembered as a column INDEX, and the
+	// drag has just moved every border — so the cell drawn "under the mouse" afterwards is
+	// a cell the mouse is no longer over: a frame left standing around a heading. The next
+	// mouse-move sets it again, correctly.
+	m_hover = COL_NONE;
+
+	// A REPAINT ENDS EVERY DRAG, resize as well as reorder: the header that was on screen
+	// while the mouse was down (a phantom, a selection frame, a half-drawn divider) is not
+	// the header that should be on screen after it comes up.
+	Refresh();
+
 	// We currently only use markers for reordering, not for resizing
 	if (IsReordering())
 	{
+		// THE OVERLAY IS RELEASED, NOT JUST CLEARED, AND THE HEADER REDRAWN.
+		//
+		// Clearing paints the overlay's own backing back — which is the header as it was
+		// when the drag STARTED. After a reorder the header is no longer that: the column
+		// has moved, so the restored pixels are a ghost of the drag (a phantom frame with
+		// two half-titles inside it, sitting between the columns it used to be dragged
+		// past). Dropping the overlay and asking for a real repaint is the only way the
+		// header on screen is the header as it now IS.
 		ClearMarkers();
-		//m_overlay.Reset();
+		m_overlay.Reset();
+		Refresh();
 	}
 
 	// don't use the special dragging cursor any more
@@ -587,33 +611,44 @@ void ibHeaderGenericCtrl::EndResizing(int xPhysical)
 	m_colBeingResized = COL_NONE;
 }
 
-void ibHeaderGenericCtrl::UpdateReorderingMarker(int xPhysical)
+void ibHeaderGenericCtrl::UpdateReorderingMarker(int xPhysical, int yPhysical)
+{
+	// BETWEEN TWO COLUMNS — a vertical bar at the edge the column would land on. Where
+	// columns are grouped the drop is not always between two of them, and the derived
+	// header shapes its own hint (see ibDataViewHeaderWindow).
+	const unsigned int col = FindColumnClosestToPoint(xPhysical, yPhysical);
+	if (col == COL_NONE) {
+		DrawReorderingMarker(xPhysical, wxRect());
+		return;
+	}
+
+	static const int DROP_MARKER_WIDTH = 4;
+
+	DrawReorderingMarker(xPhysical, wxRect(GetColEnd(col) - DROP_MARKER_WIDTH / 2, 0,
+		DROP_MARKER_WIDTH, GetClientSize().y));
+}
+
+// THE PHANTOM AND THE HINT TOGETHER, because they share one overlay: drawing either alone
+// would rub the other out. A derived header decides WHERE the hint goes and passes it in —
+// a bar between columns, or a bar between BANDS when the column would land in a stack.
+void ibHeaderGenericCtrl::DrawReorderingMarker(int xPhysical, const wxRect& hint)
 {
 	wxClientDC dc(this);
 
 	wxDCOverlay dcover(m_overlay, &dc);
 	dcover.Clear();
 
+	// ONLY THE HINT — where the column would land. The upstream code also drew a PHANTOM
+	// frame of the dragged column following the pointer, and that frame is what read as "the
+	// overlay glitches": it is restored from pixels captured when the drag began, so after
+	// the columns move it shows a stale header inside a floating box, and any repaint leaves
+	// pieces of it behind. The hint alone says everything the phantom did.
+	if (hint.IsEmpty())
+		return;
+
 	dc.SetPen(colour_selection);
-	dc.SetBrush(*wxTRANSPARENT_BRUSH);
-
-	// draw the phantom position of the column being dragged
-	int x = xPhysical - m_dragOffset;
-	int y = GetClientSize().y;
-	dc.DrawRectangle(x, 0,
-		GetColumn(m_colBeingReordered).GetWidth(), y);
-
-	// and also a hint indicating where it is going to be inserted if it's
-	// dropped now
-	unsigned int col = FindColumnClosestToPoint(xPhysical);
-	if (col != COL_NONE)
-	{
-		static const int DROP_MARKER_WIDTH = 4;
-
-		dc.SetBrush(brush_reorder);
-		dc.DrawRectangle(GetColEnd(col) - DROP_MARKER_WIDTH / 2, 0,
-			DROP_MARKER_WIDTH, y);
-	}
+	dc.SetBrush(brush_reorder);
+	dc.DrawRectangle(hint);
 }
 
 void ibHeaderGenericCtrl::StartReordering(unsigned int col, int xPhysical)
@@ -639,7 +674,7 @@ void ibHeaderGenericCtrl::StartReordering(unsigned int col, int xPhysical)
 	// as he might want to just click on the column and not move it at all
 }
 
-bool ibHeaderGenericCtrl::EndReordering(int xPhysical)
+bool ibHeaderGenericCtrl::EndReordering(int xPhysical, int yPhysical)
 {
 	wxASSERT_MSG(IsReordering(), "shouldn't be called if we're not reordering");
 
@@ -648,7 +683,7 @@ bool ibHeaderGenericCtrl::EndReordering(int xPhysical)
 	ReleaseMouse();
 
 	const int colOld = m_colBeingReordered;
-	const unsigned colNew = FindColumnClosestToPoint(xPhysical);
+	const unsigned colNew = FindColumnClosestToPoint(xPhysical, yPhysical);
 
 	m_colBeingReordered = COL_NONE;
 
@@ -718,15 +753,13 @@ EVT_MOUSE_CAPTURE_LOST(ibHeaderGenericCtrl::OnCaptureLost)
 EVT_KEY_DOWN(ibHeaderGenericCtrl::OnKeyDown)
 wxEND_EVENT_TABLE()
 
-void ibHeaderGenericCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
+// The FLAT header: one full-height cell per column, left to right. A header that
+// knows about column groups overrides this and hands back a different geometry —
+// the paint loop below does not change, which is the point of routing both
+// through one description.
+void ibHeaderGenericCtrl::BuildHeaderButtons(std::vector<ibHeaderButton>& cells, int height) const
 {
-	int w, h;
-	GetClientSize(&w, &h);
-
-	wxAutoBufferedPaintDC dc(this);
-	dc.Clear();
-
-	int xpos = m_scrollOffset;
+	int xpos = 0;
 	for (unsigned int i = 0; i < m_numColumns; i++)
 	{
 		const unsigned idx = m_colIndices[i];
@@ -735,63 +768,96 @@ void ibHeaderGenericCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
 			continue;
 
 		const int colWidth = col.GetWidth();
-		if (xpos + colWidth < 0)
-		{
-			// This column is not shown on screen because it is to the left of
-			// the shown area, don't bother drawing it.
-			xpos += colWidth;
+
+		ibHeaderButton cell;
+		cell.rect = wxRect(xpos, 0, colWidth, height);
+		cell.column = idx;
+		cell.title = col.GetTitle();
+		cell.bitmap = col.GetBitmapBundle();
+		cell.align = col.GetAlignment();
+		cells.push_back(cell);
+
+		xpos += colWidth;
+	}
+}
+
+int ibHeaderGenericCtrl::GetHeaderButtonsEnd(const std::vector<ibHeaderButton>& cells) const
+{
+	int end = 0;
+	for (const ibHeaderButton& cell : cells)
+		end = wxMax(end, cell.rect.GetRight() + 1);
+	return end;
+}
+
+void ibHeaderGenericCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
+{
+	int w, h;
+	GetClientSize(&w, &h);
+
+	wxAutoBufferedPaintDC dc(this);
+	dc.Clear();
+
+	std::vector<ibHeaderButton> cells;
+	BuildHeaderButtons(cells, h);
+
+	bool firstDrawn = true;
+	for (const ibHeaderButton& cell : cells)
+	{
+		wxRect rect = cell.rect;
+		rect.x += m_scrollOffset;
+
+		// Off screen either way — nothing to draw. (Not a `break`: with groups the
+		// cells are not handed out in left-to-right order, so a cell past the right
+		// edge says nothing about the ones after it.)
+		if (rect.GetRight() < 0 || rect.x > w)
 			continue;
-		}
 
-		wxHeaderSortIconType sortArrow;
-		if (col.IsSortKey())
-		{
-			sortArrow = col.IsSortOrderAscending() ? wxHDR_SORT_ICON_UP
-				: wxHDR_SORT_ICON_DOWN;
-		}
-		else // not sorting by this column
-		{
-			sortArrow = wxHDR_SORT_ICON_NONE;
-		}
-
+		wxHeaderSortIconType sortArrow = wxHDR_SORT_ICON_NONE;
 		int state = 0;
-		if (IsEnabled())
-		{
-			if (idx == m_hover)
-				state = wxCONTROL_SELECTED;
-		}
-		else // disabled
+
+		if (!IsEnabled())
 		{
 			state = wxCONTROL_DISABLED;
 		}
+		else if (!cell.isGroup && cell.column == m_hover)
+		{
+			// A group title is not hovered / sorted / clicked — it labels columns,
+			// it is not one.
+			state = wxCONTROL_SELECTED;
+		}
 
-		if (i == 0)
+		if (!cell.isGroup)
+		{
+			const wxHeaderColumn& col = GetColumn(cell.column);
+			if (col.IsSortKey())
+			{
+				sortArrow = col.IsSortOrderAscending() ? wxHDR_SORT_ICON_UP
+					: wxHDR_SORT_ICON_DOWN;
+			}
+		}
+
+		if (firstDrawn)
+		{
 			state |= wxCONTROL_SPECIAL;
+			firstDrawn = false;
+		}
 
 		wxHeaderButtonParams params;
-		params.m_labelText = col.GetTitle();
-		params.m_labelBitmap = col.GetBitmapBundle().GetBitmapFor(this);
-		params.m_labelAlignment = col.GetAlignment();
+		params.m_labelText = cell.title;
+		params.m_labelBitmap = cell.bitmap.GetBitmapFor(this);
+		params.m_labelAlignment = cell.align;
 
-		DrawHeaderButton(this, dc,
-			wxRect(xpos, 0, colWidth, h), state, sortArrow, &params);
-
-		xpos += colWidth;
-		if (xpos > w)
-		{
-			// Next column and all the others are beyond the right border of
-			// the window, no need to continue.
-			break;
-		}
+		DrawHeaderButton(this, dc, rect, state, sortArrow, &params);
 	}
 
-	if (xpos < w)
+	const int xend = GetHeaderButtonsEnd(cells) + m_scrollOffset;
+	if (xend < w)
 	{
 		int state = wxCONTROL_NONE;
 		if (!IsEnabled())
 			state |= wxCONTROL_DISABLED;
 		DrawHeaderButton(
-			this, dc, wxRect(xpos, 0, w - xpos, h));
+			this, dc, wxRect(xend, 0, w - xend, h));
 	}
 }
 
@@ -846,23 +912,24 @@ void ibHeaderGenericCtrl::OnMouse(wxMouseEvent& mevent)
 		if (!mevent.LeftUp())
 		{
 			// update the column position
-			UpdateReorderingMarker(xPhysical);
+			UpdateReorderingMarker(xPhysical, mevent.GetY());
 
 			return;
 		}
 
 		// finish reordering and continue to generate a click event below if we
 		// didn't really reorder anything
-		if (EndReordering(xPhysical))
+		if (EndReordering(xPhysical, mevent.GetY()))
 			return;
 	}
 
 
-	// find if the event is over a column at all
+	// find if the event is over a column at all — the y matters where columns are
+	// stacked (a vertical group), several sharing one x range.
 	bool onSeparator;
 	const unsigned col = mevent.Leaving()
 		? (onSeparator = false, COL_NONE)
-		: FindColumnAtPoint(xPhysical, &onSeparator);
+		: FindColumnAtPoint(xPhysical, mevent.GetY(), &onSeparator);
 
 
 	// update the highlighted column if it changed

@@ -737,6 +737,12 @@
     <ClCompile Include="visualView\ctrl\tableBoxColumn_res.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="visualView\ctrl\tableBoxColumnEvent.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
@@ -879,6 +885,9 @@
       <Filter>win\ctrls\dataview</Filter>
     </ClCompile>
     <ClCompile Include="win\ctrls\dataview\datavgen.scrollbar.cpp">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\dataview\datavlayout.cpp">
       <Filter>win\ctrls\dataview</Filter>
     </ClCompile>
     <ClCompile Include="win\ctrls\dataview\datavcmn.cpp">
@@ -1717,6 +1726,9 @@
       <Filter>win\ctrls\dataview</Filter>
     </ClInclude>
     <ClInclude Include="win\ctrls\dataview\datavgen.h">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dataview\datavlayout.h">
       <Filter>win\ctrls\dataview</Filter>
     </ClInclude>
     <ClInclude Include="win\ctrls\dataview\dvrenderers.h">
