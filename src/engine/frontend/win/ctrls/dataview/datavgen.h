@@ -1100,6 +1100,19 @@ public:     // utility functions not part of the API
 	// The rectangle a COLUMN occupies inside the row that starts at `rowTop` and is
 	// `lineHeight` tall. false when the column is not laid out (hidden, or under a
 	// hidden group).
+	// WHICH COLUMN A POINT IN THE ROWS AREA BELONGS TO — the ONE answer, and both the hit
+	// test and the click handler ask it. Coordinates are UNSCROLLED table coordinates.
+	//
+	// It reads the BAND, which is the whole point: columns stacked under a vertical group
+	// share an x range, so x alone can only ever name the first of them. Answering by x
+	// meant a click could not reach any member of a group but the topmost, and (because
+	// summing widths counts a stack once per member) columns to the RIGHT of a stack
+	// answered with the wrong column too.
+	//
+	// nullptr when the point is past the last column or over nothing; callers decide what
+	// that means for them.
+	ibDataViewColumn* WXColumnAtRowPoint(int x, int y) const;
+
 	bool GetColumnCellRect(const ibDataViewColumn* column,
 		int rowTop, int lineHeight, wxRect& rect) const;
 

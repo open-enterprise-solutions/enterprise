@@ -3541,57 +3541,28 @@ ibDataViewCtrl::FindNode(const ibDataViewItem& item)
 void ibDataViewCtrl::HitTest(const wxPoint& point, ibDataViewItem& item,
 	ibDataViewColumn*& column)
 {
-	ibDataViewColumn* col = NULL;
-	unsigned int cols = GetColumnCount();
-	unsigned int colnum = 0;
 	int x, y;
-
 	CalcUnscrolledPosition(point.x, point.y, &x, &y);
 
-	const unsigned int row = GetLineAt(y);
-	const ibDataViewColumnLayout& layout = GetColumnLayout();
+	// ONE answer to "which cell is this", shared with the click handler — the point picks a
+	// CELL, not a stripe, so the band decides between columns stacked at the same x.
+	ibDataViewColumn* col = WXColumnAtRowPoint(x, y);
 
-	if (layout.IsFlat())
+	// Past the right edge the old behaviour is to answer with the last column rather than
+	// nothing — several callers rely on a non-null column.
+	if (col == nullptr)
 	{
-		for (unsigned x_start = 0; colnum < cols; colnum++)
+		const unsigned int cols = GetColumnCount();
+		for (unsigned int pos = 0; pos < cols; pos++)
 		{
-			col = GetColumn(colnum);
-			if (col->IsHidden())
-				continue;      // skip it!
-
-			unsigned int w = col->GetWidth();
-			if (x_start + w >= (unsigned int)x)
-				break;
-
-			x_start += w;
-		}
-	}
-	else
-	{
-		// Grouped: the point picks a cell, not a stripe — WHICH BAND of the row it
-		// falls in decides between columns stacked at the same x.
-		const int lineStart = GetLineStart(row);
-		const int lineHeight = wxMax(GetLineHeight(row), 1);
-		const int bands = wxMax(layout.GetRowBandCount(), 1);
-		const int band = wxMin(wxMax((y - lineStart) * bands / lineHeight, 0), bands - 1);
-
-		col = layout.FindColumnAt(x, band);
-
-		// Past the right edge the old behaviour is to answer with the last column
-		// rather than nothing — several callers rely on a non-null column.
-		if (col == nullptr)
-		{
-			for (unsigned int pos = 0; pos < cols; pos++)
-			{
-				ibDataViewColumn* candidate = GetColumn(pos);
-				if (candidate != nullptr && !candidate->IsHidden())
-					col = candidate;
-			}
+			ibDataViewColumn* candidate = GetColumn(pos);
+			if (candidate != nullptr && !candidate->IsHidden())
+				col = candidate;
 		}
 	}
 
 	column = col;
-	item = GetItemByRow(row);
+	item = GetItemByRow(GetLineAt(y));
 }
 
 wxRect ibDataViewCtrl::GetItemRect(const ibDataViewItem& item,
@@ -5523,19 +5494,14 @@ ibDataViewCtrl::DropItemInfo ibDataViewCtrl::GetDropItemInfo(const wxCoord x, co
 			// 3 - expanded (opened) or not
 			// 4 - mouse x position
 
-			int xStart = 0;     // Expander column x position start
+			// The expander column's left edge, from the layout — adding up the widths before
+			// it counts a stack once per member and puts the indent zone somewhere else.
 			ibDataViewColumn* const expander = GetExpanderColumnOrFirstOne(this);
-			for (unsigned int i = 0; i < GetColumnCount(); i++)
-			{
-				ibDataViewColumn* col = GetColumn(i);
-				if (col->IsHidden())
-					continue;   // skip it!
 
-				if (col == expander)
-					break;
-
-				xStart += col->GetWidth();
-			}
+			int xStart = 0;
+			ibColumnPlacement expanderPlace;
+			if (GetColumnLayout().GetBodyPlacement(expander, expanderPlace))
+				xStart = expanderPlace.x;
 
 			const int expanderWidth = wxRendererNative::Get().GetExpanderSize(this).GetWidth();
 
@@ -7964,24 +7930,11 @@ void ibDataViewCtrl::ProcessTableMouseEvent(wxMouseEvent& event, ibDataViewMainW
 
 	const wxPoint unscrolledPos = CalcDataViewWindowUnscrolledPosition(event.GetPosition(), tableWin);
 
-	ibDataViewColumn* col = NULL;
-
-	int xpos = 0;
-	unsigned int cols = GetColumnCount();
-	unsigned int i;
-	for (i = 0; i < cols; i++)
-	{
-		ibDataViewColumn* c = GetColumn(i);
-		if (c->IsHidden())
-			continue;      // skip it!
-
-		if (unscrolledPos.x < xpos + c->GetWidth())
-		{
-			col = c;
-			break;
-		}
-		xpos += c->GetWidth();
-	}
+	// WHICH CELL WAS CLICKED — asked of the layout, so a column stacked under a group can be
+	// reached at all. This used to add up widths left to right and take the first column whose
+	// range held the x: in a stack every member has the same range, so the answer was always
+	// the topmost one, and no click could ever put the cursor on the others.
+	ibDataViewColumn* col = WXColumnAtRowPoint(unscrolledPos.x, unscrolledPos.y);
 
 	ibDataViewModel* const model = GetModel();
 
@@ -8105,10 +8058,15 @@ void ibDataViewCtrl::ProcessTableMouseEvent(wxMouseEvent& event, ibDataViewMainW
 		if (node->HasChildren())
 		{
 			// we make the rectangle we are looking in a bit bigger than the actual
-			// visual expander so the user can hit that little thing reliably
-			wxRect rect(xpos + itemOffset,
-				GetLineStart(current) + (GetLineHeight(current) - m_lineHeight) / 2,
-				expWidth, m_lineHeight);
+			// visual expander so the user can hit that little thing reliably.
+			// THE COLUMN'S OWN CELL is where it sits — asked of the layout, the same way it
+			// is drawn, so the zone is under the triangle even when the column is stacked.
+			wxRect expanderCell;
+			GetColumnCellRect(col, GetLineStart(current), GetLineHeight(current), expanderCell);
+
+			wxRect rect(expanderCell.x + itemOffset,
+				expanderCell.y + (expanderCell.height - GetBandHeight()) / 2,
+				expWidth, GetBandHeight());
 
 			if (rect.Contains(unscrolledPos.x, unscrolledPos.y))
 			{
@@ -8353,10 +8311,15 @@ void ibDataViewCtrl::ProcessTableMouseEvent(wxMouseEvent& event, ibDataViewMainW
 		{
 			// notify cell about click
 
-			wxRect cell_rect(xpos + itemOffset,
-				GetLineStart(current),
-				col->GetWidth() - itemOffset,
-				GetLineHeight(current));
+			// THE CELL THAT WAS CLICKED, from the layout — its own band, not the whole row.
+			// A renderer that acts on a click (a checkbox) is handed the rectangle it was
+			// drawn in; the row-tall one put the hot zone over the cell below it in a stack.
+			wxRect cell_rect;
+			if (!GetColumnCellRect(col, GetLineStart(current), GetLineHeight(current), cell_rect))
+				cell_rect = wxRect(0, GetLineStart(current), col->GetWidth(), GetLineHeight(current));
+
+			cell_rect.x += itemOffset;
+			cell_rect.width -= itemOffset;
 
 			// Note that PrepareForItem() should be called after GetLineStart()
 			// call in cell_rect initialization above as GetLineStart() calls

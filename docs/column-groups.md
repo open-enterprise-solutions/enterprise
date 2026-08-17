@@ -210,6 +210,16 @@ whose range contains it, so a pixel to the right of a divider is already inside 
 and asking that cell about its own right edge said "no divider here" — half the grab zone was
 dead, catchable only from the left.
 
+**In the rows area the same rule, and one function for it**: `WXColumnAtRowPoint(x, y)` — the
+inverse of `GetColumnCellRect`, reading the same grid (the row, then its band, then the column).
+The hit test and the click handler both ask it. The click handler used to add up widths left to
+right and take the first column whose range held the x, which in a stack is always the topmost
+member — so no click could put the cell cursor on any other member of a group, and because
+summing widths counts a stack once per member, columns to the RIGHT of a stack answered as the
+wrong column too. The expander's hit zone and the rectangle handed to an activatable renderer
+come from the same placements: a row-tall rectangle put a checkbox's hot zone over the cell
+below it.
+
 ## 8. Honest remainder
 
 - The runtime builds its columns from the model's column collection, which carries no family

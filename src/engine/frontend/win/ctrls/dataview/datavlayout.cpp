@@ -457,6 +457,26 @@ int ibDataViewCtrl::GetBandHeight() const
 	return m_bandHeight > 0 ? m_bandHeight : GetDefaultRowHeight();
 }
 
+// THE INVERSE OF GetColumnCellRect, and it must read the same grid: a point names a CELL,
+// so it needs the band as well as the x. See the declaration for what answering by x alone
+// cost — a group whose members below the first could not be reached at all.
+ibDataViewColumn* ibDataViewCtrl::WXColumnAtRowPoint(int x, int y) const
+{
+	const ibDataViewColumnLayout& layout = GetColumnLayout();
+
+	const unsigned int row = GetLineAt(y);
+
+	// Which band of THIS row the point is in. The row's own height, not the nominal one:
+	// with wxDV_VARIABLE_LINE_HEIGHT they differ, and then a fixed divisor names the wrong
+	// band in every taller row.
+	const int lineStart = GetLineStart(row);
+	const int lineHeight = wxMax(GetLineHeight(row), 1);
+	const int bands = wxMax(layout.GetRowBandCount(), 1);
+	const int band = wxMin(wxMax(((y - lineStart) * bands) / lineHeight, 0), bands - 1);
+
+	return layout.FindColumnAt(x, band);
+}
+
 bool ibDataViewCtrl::GetColumnCellRect(const ibDataViewColumn* column,
 	int rowTop, int lineHeight, wxRect& rect) const
 {
