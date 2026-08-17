@@ -40,15 +40,9 @@ void ibValueMetaObjectAccountingRegister::OnPropertyChanged(ibProperty* property
 		//
 		// SyncAccountDimensionSlots runs FIRST because turning correspondence on creates the credit
 		// account inside it — typing before that would type something that does not exist yet.
+		// (The dimension slots themselves come back from it already typed — the sync's own tail.)
 		if (m_accountCr != nullptr)
 			m_accountCr->GetTypeDesc().SetDefaultMetaType(typeDesc);
-
-		// ⭐ AND THEIR TYPES, IN THE SAME BREATH. Half of that asymmetry survived the last fix: the
-		// slots were CREATED here and TYPED only by the run phase, so a save made in between built
-		// the schema from typeless slots — one discriminator column each and nothing else — while
-		// the configuration saved a moment later carried the types. From then on the two disagree,
-		// and the next apply drops reference columns that were never created.
-		ApplyAccountDimensionSlotTypes();
 	}
 
 	// Enable/disable Account field based on binding

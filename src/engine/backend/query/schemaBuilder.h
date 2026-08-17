@@ -71,8 +71,13 @@ public:
 	// WHAT THIS SAVE CREATED — the barrier's own ledger, exposed because the two-phase apply needs it
 	// to compensate: if the phase AFTER the DDL commit fails, these tables are durable while the
 	// baseline still says they do not exist, and dropping them is what keeps the two in step
-	// (ibStructureBuilder::UndoCreatedTables). Empty off a barrier dialect.
+	// (ibStructureBuilder::UndoAppliedDdl). Empty off a barrier dialect.
 	std::set<wxString> CreatedTables() const;
+
+	// THE COMPENSATION LEDGER — one inverse action per DDL the first commit ran on a pre-existing
+	// object, in execution order (the caller replays it in REVERSE). Built by Execute from the
+	// statements themselves; empty off a barrier dialect. See connectionHolder.h.
+	std::vector<std::function<void(ibDatabaseLayer*)>> UndoActions() const;
 
 	// Does the target dialect accept a multi-clause ALTER TABLE (one statement, several ADD/DROP)? The
 	// structure builder folds a batch into one ALTER when true, and into one statement per clause when

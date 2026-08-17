@@ -8,7 +8,6 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/backend_exception.h"
 #include "backend/session/session.h"   // ibSession::Current()->Holder() — the DDL holder IS the session's
-#include <set>   // UndoCreatedTables walks the barrier ledger
 #include "appData.h"                                     // db_query — the default connection
 
 ibDatabaseLayer* ibStructureBuilder::Conn() const
@@ -132,18 +131,18 @@ int ibStructureBuilder::FlushDeferredFirebird()
 		catch (const ibBackendException& err) {
 			if (Conn()->IsActiveTransaction())
 				Conn()->RollBack();
-			UndoCreatedTables();   // put the schema back where the baseline still says it is
+			UndoAppliedDdl();   // put the schema back where the baseline still says it is
 			throw;
 		}
 		catch (...) {
 			if (Conn()->IsActiveTransaction())
 				Conn()->RollBack();
-			UndoCreatedTables();
+			UndoAppliedDdl();
 			throw;
 		}
 		if (!ok) {
 			Conn()->RollBack();
-			UndoCreatedTables();
+			UndoAppliedDdl();
 			return DATABASE_LAYER_QUERY_RESULT_ERROR;
 		}
 		Conn()->Commit();
@@ -154,50 +153,55 @@ int ibStructureBuilder::FlushDeferredFirebird()
 
 // ⭐⭐ THE SECOND COMMIT'S COMPENSATION — what makes a two-phase apply behave like one.
 //
+// ⚠⚠ FIREBIRD TWO-PHASE PATCH, AND THE CANONICAL DESCRIPTION OF ITS ONE HOLE. Everything in this
+// function — and the two TableExists guards in schemaSnapshot.cpp that reference it — exists only
+// because a Firebird apply is two commits. What the compensation CANNOT undo is a pre-existing
+// derived table the first commit dropped (no RENAME TABLE on Firebird to park it, no statement in
+// the ledger that knows its shape) — that absence is what the guards absorb, loudly, one apply
+// later. Postgres runs the whole apply as ONE transaction and none of this machinery activates.
+// Decided 2026-08-17 to KEEP this shape: the hole is narrow, loud (the Warn below) and
+// self-converging. If it ever bites on live data, the first move is an undo-CREATE of the derived
+// table from its baseline declaration (the diff knows the full shape at the point of the drop) —
+// not a rework of the phases.
+//
 // Firebird cannot build the maintenance in the same transaction as the tables it addresses, so an
 // apply is TWO commits and can fail between them. The first is already durable at that point, and
 // nothing above rolls it back: the active configuration is not published (OnAfterSaveDatabase), so
-// the baseline still describes the database as it was BEFORE — but the tables from the first commit
-// are there, and a differ working from that baseline would try to create them again and be refused
-// with "table already exists", permanently.
+// the baseline still describes the database as it was BEFORE the apply — while the first commit's
+// DDL is all there. A differ working from that baseline then re-issues work already done and is
+// refused — "table already exists" for a create, and for a column the first commit DROPPED, a DROP
+// of something no longer present: refused, rolled back, on every retry, permanently.
 //
-// So the created tables go away. The ledger the barrier keeps is exactly the right list: it holds
-// what THIS apply created, which is the same set the barrier deferred writes for. A derived table
-// costs nothing to drop — every row in it is a function of the movements and is recomputed on the
-// next apply — and the tables are empty in any case, because the writes that would have filled them
-// are the ones that just failed.
-//
-// ⚠ WHAT THIS DOES NOT UNDO: an ALTER on a table that already existed. Adding a column to a live
-// table cannot be reversed without knowing it was not there before, and asking the database that is
-// exactly the physical-introspection road this engine does not take. That case stays open by
-// construction; it is narrower than it sounds, because the phase that fails here is the maintenance,
-// and maintenance is built for tables the same apply created.
-void ibStructureBuilder::UndoCreatedTables()
+// So the whole first commit is unwound from the barrier's UNDO LEDGER — one inverse action per
+// statement, recorded by ibSchemaBuilder::Execute from the statements themselves (never from
+// reading the database), replayed here in REVERSE: added columns come off, dropped ones return
+// (EMPTY — that loss is the first commit's, and the ledger SAYS it), altered types are restored
+// from the shape the statement carried, created tables are dropped wholesale (their clauses were
+// never recorded — the table-drop takes them along). What cannot come back — a dropped table, a
+// dropped index — is warned about instead of being silently skipped.
+void ibStructureBuilder::UndoAppliedDdl()
 {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 	ibSchemaBuilder schema(m_holder);
-	const std::set<wxString> created = schema.CreatedTables();
-	if (created.empty())
+	const std::vector<std::function<void(ibDatabaseLayer*)>> undo = schema.UndoActions();
+	if (undo.empty())
 		return;
 
-	// ⚠ THROUGH L2, WITH `IF EXISTS` — not a hand-built string on the connection.
-	//
-	// Rendering and running are one step and it is level 2's (schemaBuilder.cpp), and here the rule
-	// pays twice over: the renderer quotes the identifier, and it spells the engine's own "drop only
-	// if present". Without that, dropping a table this apply did NOT get as far as creating is an
-	// error — and on Firebird an error in a DDL transaction takes the whole transaction with it, so
-	// ONE absent table would abort the compensation and leave every other created table standing.
-	// That is precisely the permanent "table already exists" state this function exists to prevent.
+	// ⚠ THROUGH L2, AND NOTHING GUARDED — every entry describes work that actually RAN (Execute
+	// records it after the statement succeeds), so at replay time its object exists by
+	// construction, and no IF EXISTS form is needed (Firebird, the barrier dialect, has none).
+	// The predecessor spelled `DROP TABLE IF EXISTS` here — a syntax error on the one engine the
+	// compensation runs on, swallowed by the catch below on its very first statement.
 	try {
 		Conn()->BeginTransaction();
-		for (const wxString& table : created)
-			ibExecuteDdl(Conn(), ibDropTable(table, /*ifExists*/ true));
+		for (auto it = undo.rbegin(); it != undo.rend(); ++it)
+			(*it)(Conn());
 		Conn()->Commit();
 	}
 	catch (...) {
 		// Best effort, and deliberately silent: the caller is already carrying the REAL failure and
-		// that is the one worth reporting. A drop that cannot run leaves a table the next apply will
-		// refuse to create — worse than this, but not worth replacing the original diagnosis with.
+		// that is the one worth reporting. An undo that cannot run leaves the schema ahead of the
+		// baseline — worse than this, but not worth replacing the original diagnosis with.
 		if (Conn()->IsActiveTransaction()) {
 			try { Conn()->RollBack(); } catch (...) {}
 		}

@@ -309,8 +309,9 @@ public:
 	}
 
 	// HOW MANY dimension slots this register currently has — the number the chart of accounts
-	// declares, not a constant of the implementation.
-	unsigned int GetAccountDimensionCount() const { return m_accountDimensionCount; }
+	// declares, not a constant of the implementation. It IS the debit vector's size: the sync grows
+	// and shrinks the vectors to the chart's number, so there is no second count to disagree with it.
+	unsigned int GetAccountDimensionCount() const { return static_cast<unsigned int>(m_accountDimensionSlots.size()); }
 
 	// Is this the KIND half of a dimension pair — `AccountDimension<i>Kind`, either side? Asked by
 	// IDENTITY against the slots themselves, never by reading the role back out of the name.
@@ -404,11 +405,11 @@ public:
 	// account's kinds cannot silently change the meaning of data already written — and a reading
 	// needs no join per slot per row.
 	ibValueMetaObjectAttributePredefined* GetRegisterAccountDimension(unsigned int idx) const {
-		return idx < m_accountDimensionCount ? m_accountDimensionSlots[idx] : nullptr;
+		return idx < m_accountDimensionSlots.size() ? m_accountDimensionSlots[idx] : nullptr;
 	}
 
 	ibValueMetaObjectAttributePredefined* GetRegisterAccountDimensionKind(unsigned int idx) const {
-		return idx < m_accountDimensionCount ? m_accountDimensionKinds[idx] : nullptr;
+		return idx < m_accountDimensionKinds.size() ? m_accountDimensionKinds[idx] : nullptr;
 	}
 
 	// The CREDIT side of the same pair — populated only in correspondence mode, where one line names
@@ -575,11 +576,11 @@ public:
 		return true;
 	}
 
-	// Bring the slot set in line with the chart of accounts. Slots are created once and REUSED:
-	// a metaID is the physical column name (fld<metaID>), so a slot that came back with a fresh id
-	// would be a different column and the data in the old one unreachable. Lowering the count
-	// therefore deactivates from the tail rather than destroying, and raising it again finds the
-	// very same slots waiting. Growth is append-only for the same reason.
+	// Bring the slot set in line with the chart of accounts — grow to its number, DELETE the tail
+	// past it (the ordinary attribute lifecycle: delete events, deleted mark, columns dropped by
+	// the differ), and type what remains. The number is governed from above — the chart of
+	// characteristic types governs the chart of accounts, the chart governs its registers — and
+	// this is the one place the register follows it.
 	void SyncAccountDimensionSlots();
 
 	///////////////////////////////////////////////////////////////////
@@ -772,15 +773,15 @@ protected:
 		array.push_back(m_propertyAttributeAccount->GetMetaObject());   // the DEBIT account in correspondence
 		if (m_accountCr != nullptr)
 			array.push_back(m_accountCr);
-		// Only the ACTIVE slots are part of the object — that is what makes the count a schema
-		// decision: a slot outside it contributes no column, so lowering the number drops one.
+		// Every living slot is part of the object — the sync deletes a pair the chart's number no
+		// longer covers, so the vectors themselves are the one answer to "which slots exist".
 		//
 		// ⚠ ALL THE KINDS, THEN ALL THE VALUES — not pair by pair. The kinds are the vocabulary of the
 		// breakdown and the values are what was filed under it, and a list that alternates between the
 		// two reads as eight unrelated fields instead of two groups of four.
-		for (unsigned int idx = 0; idx < m_accountDimensionCount; idx++)
+		for (unsigned int idx = 0; idx < m_accountDimensionKinds.size(); idx++)
 			array.push_back(m_accountDimensionKinds[idx]);
-		for (unsigned int idx = 0; idx < m_accountDimensionCount; idx++)
+		for (unsigned int idx = 0; idx < m_accountDimensionSlots.size(); idx++)
 			array.push_back(m_accountDimensionSlots[idx]);
 
 		// The credit side exists only in correspondence mode, and then it is the same shape again.
@@ -874,11 +875,10 @@ private:
 
 	// THE DIMENSION SLOTS — created by SyncAccountDimensionSlots, not declared here.
 	//
-	// The vector holds every slot ever created; m_accountDimensionCount says how many of them are
-	// currently part of the register. The two differ after the chart of accounts lowers its number:
-	// the surplus stays alive (its id belongs to its column for good) and simply stops being
-	// contributed, so the column drops at the next restructuring and comes back untouched if the
-	// number is raised again.
+	// The vectors hold exactly the slots the chart of accounts currently declares — the sync grows
+	// them to its number and DELETES the tail past it, the ordinary attribute lifecycle. No count
+	// lives beside them: a count that could disagree with the vector did, and the register saved
+	// three dimensions on one side and four on the other.
 	// Parallel by construction: index i is one slot, its kind and its value.
 	//
 	// ARITHMETIC, so nobody is surprised at restructuring: one dimension is TWO columns (kind +
@@ -897,8 +897,6 @@ private:
 	// and therefore carries two independent analytical breakdowns.
 	std::vector<ibValueMetaObjectAttributePredefined*> m_accountDimensionKindsCr;
 	std::vector<ibValueMetaObjectAttributePredefined*> m_accountDimensionSlotsCr;
-
-	unsigned int m_accountDimensionCount = 0;
 
 	// Predefined attributes: the account dimension VALUE slots.
 	//

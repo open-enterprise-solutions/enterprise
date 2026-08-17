@@ -78,21 +78,34 @@ public:
 	class ibConnectionScope OpenConnectionScope();
 
 	// --- DDL/DML barrier state (the current restructuring save) -----------------------------------
-	// Tables whose SHAPE this save changed on a barrier dialect (Firebird) — created, or given /
-	// dropped / retyped a column — and the work DEFERRED past the DDL commit. What is not durable in
-	// the transaction that shaped it is the shape, not merely the table's existence: a rebuild that
-	// reads a column added three statements earlier is refused exactly like a write to a table created
-	// three statements earlier. The state lives
-	// here, not in process-wide statics, because the barrier is tied to THIS holder's connection /
-	// transaction — so the SEVERAL ibSchemaBuilder instances of one save (Reset / per-table Execute /
-	// Flush) share one home through the holder they run on. ibSchemaBuilder owns the logic; the holder
-	// only stores. (query/schemaBuilder.h)
-	std::set<wxString>&                 DdlCreatedTables()  { return m_ddlCreated; }
+	// The state lives here, not in process-wide statics, because the barrier is tied to THIS holder's
+	// connection / transaction — so the SEVERAL ibSchemaBuilder instances of one save (Reset /
+	// per-table Execute / Flush) share one home through the holder they run on. ibSchemaBuilder owns
+	// the logic; the holder only stores. (query/schemaBuilder.h)
+	//
+	// ⭐⭐ TWO SETS, BECAUSE TWO DIFFERENT QUESTIONS ARE ASKED — and answering both from one set is
+	// how the compensation came to DROP live tables. The barrier's DEFERRAL asks "did this save
+	// change what the table LOOKS like" (created, or given / dropped / retyped a column — a rebuild
+	// reading a column added three statements earlier is refused exactly like a write into a
+	// just-created table, so the wide set is the right answer there). The COMPENSATION asks the
+	// narrower "did this save CREATE it" — those are the only tables it may drop wholesale. When the
+	// shape question widened the single set, the compensation kept reading it as the created list,
+	// and a failed second phase dropped a table that had merely gained a column — with its data.
+	std::set<wxString>&                 DdlCreatedTables()  { return m_ddlCreated; }   // created by THIS save
+	std::set<wxString>&                 DdlShapedTables()   { return m_ddlShaped; }    // shape changed (deferral)
 	std::vector<std::function<bool()>>& DdlDeferredWrites() { return m_ddlDeferred; }
+
+	// The compensation ledger: for every DDL the first commit ran on a PRE-EXISTING object, the
+	// INVERSE action (drop the added column, re-add the dropped one from its recorded shape, restore
+	// the altered type), appended in execution order and replayed in REVERSE when the second phase
+	// fails. Built from the statements this save itself issued — never from reading the database.
+	std::vector<std::function<void(ibDatabaseLayer*)>>& DdlUndoActions() { return m_ddlUndo; }
 
 private:
 	std::set<wxString>                 m_ddlCreated;
+	std::set<wxString>                 m_ddlShaped;
 	std::vector<std::function<bool()>> m_ddlDeferred;
+	std::vector<std::function<void(ibDatabaseLayer*)>> m_ddlUndo;
 };
 
 // ibSingleConnectionHolder — generic empty holder. The OES runtime

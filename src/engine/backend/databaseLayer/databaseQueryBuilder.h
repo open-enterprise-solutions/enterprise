@@ -638,6 +638,17 @@ inline ibDdlStatement ibDropColumn(const wxString& table, const wxString& column
 	return s;
 }
 
+// The same DROP COLUMN carrying the FULL column description, not just its name. The renderer
+// still spells only the name; the extra shape is for the barrier's compensation ledger, which
+// re-adds the column (EMPTY — the data died with the first commit) if the second phase fails.
+inline ibDdlStatement ibDropColumn(const wxString& table, ibDdlColumn column)
+{
+	ibDdlStatement s(ibDdlKind::DropColumn);
+	s.m_table = table;
+	s.m_columns.push_back(std::move(column));
+	return s;
+}
+
 // ALTER TABLE <table> ALTER/MODIFY COLUMN <column> <new-type> — change a column's
 // type. The per-DBMS spelling is the dialect's m_alterColumnTemplate; SQLite cannot do
 // it in place and its (empty) template makes the renderer throw.
@@ -646,6 +657,18 @@ inline ibDdlStatement ibAlterColumn(const wxString& table, ibDdlColumn column)
 	ibDdlStatement s(ibDdlKind::AlterColumn);
 	s.m_table = table;
 	s.m_columns.push_back(std::move(column));
+	return s;
+}
+
+// The same ALTER with the PREVIOUS shape riding second (m_columns[1]). Renderers read only the
+// front; the barrier's compensation ledger reads the tail to restore the column's old type when
+// the second phase fails. Without it the alter is irreversible and the compensation says so.
+inline ibDdlStatement ibAlterColumn(const wxString& table, ibDdlColumn column, ibDdlColumn prev)
+{
+	ibDdlStatement s(ibDdlKind::AlterColumn);
+	s.m_table = table;
+	s.m_columns.push_back(std::move(column));
+	s.m_columns.push_back(std::move(prev));
 	return s;
 }
 

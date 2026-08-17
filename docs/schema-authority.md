@@ -100,6 +100,7 @@ decides what the diff is.**
 | Read | Where | Why it is legitimate |
 |---|---|---|
 | `m_viewExistsQuery` / `m_triggerExistsQuery` | dialect probes, `databaseLayer.h:414–426` | they make a `DROP` survivable where a failed DDL is not harmless — Firebird rolls the whole restructuring back, so a drop of something never created would destroy the first apply. The question is "will this statement kill the transaction", not "what should I change" |
+| `TableExists` before a **derived** table's `DROP` | the two `FIREBIRD TWO-PHASE PATCH` guards in `schemaSnapshot.cpp` (2026-08-17) | same class as the view/trigger probes, one tier up: a derived table is a produced object whose replacement is the normal path, and it may legitimately be absent after a failed apply's compensation (§ 4.3 — the one thing the compensation cannot restore). Without the guard the next apply died on `DROP` −607 forever, the refusal rolling back the very `CREATE` that would have healed it. Data tables stay unguarded: their absence is a defect and must refuse |
 | `ibDatabaseQueryBuilder::TableExists()` in a `m_beforeChange` guard | e.g. the chart's analytics ceiling, the hierarchy rule | a rule that reads rows has one legitimate reason to find none — the table does not exist yet, on a base nothing has been applied to — and it must tell that from "I could not establish it" ([exceptions.md § 5b](exceptions.md)) |
 | `TableExists` / `GetColumns` in `appDataQuery.cpp` | the platform's OWN tables (`sys_user`, `sys_session`, the job table, the bytecode cache) | no configuration declares them, so no diff covers them: they are **bootstrapped**, not restructured, and the code that creates them is the code that reads them |
 
@@ -135,6 +136,22 @@ drain has run, so a failure anywhere leaves `config` at the previous configurati
 has real work to do. A refused commit is itself rolled back (once, in `ibDatabaseLayer::Commit`, for
 every driver), so a failure does not leave a live transaction holding locks that the next apply meets
 as a deadlock.
+
+Since 2026-08-17 the compensation is an **undo ledger**, not a created-tables list:
+`ibSchemaBuilder::Execute` records the inverse of every DDL the first commit ran on a *pre-existing*
+object — an added column comes off, a dropped one returns (empty, its shape carried by the statement
+itself), an altered type is restored from the previous shape riding the statement, a created table is
+dropped — and `ibStructureBuilder::UndoAppliedDdl` replays it in reverse, from the apply's own
+memory, never from reading the base. (The predecessor read one set for two different questions and
+would have dropped live tables that had merely gained a column; it also spelled `DROP TABLE IF
+EXISTS`, a syntax error on the one engine it runs on, swallowed by its own catch — it had never
+worked.) **The one thing the ledger cannot undo** is the `DROP` of a pre-existing *derived* table:
+Firebird has no `RENAME TABLE` to park it, and the statement does not carry its shape. That absence
+is absorbed one apply later by the two `TableExists` guards (§ 3 table) — narrow, loud (the
+compensation warns), self-converging, and deliberately **kept** in this shape: if it ever bites on
+live data, the first move is an undo-`CREATE` of the derived table from its baseline declaration
+(the diff knows the full shape at the point of the drop), not a rework of the phases. On Postgres
+the whole apply is one transaction and none of this machinery activates.
 
 **4.4 Anything that participates in the SCHEMA must be serialised.** A property read by
 `ContributeTables` and absent from `ReadData` / `WriteData` cannot survive a save, and a setting that

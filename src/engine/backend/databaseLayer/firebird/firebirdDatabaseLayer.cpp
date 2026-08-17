@@ -1013,7 +1013,13 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 				wxCharBuffer sqlBuffer = ConvertToUnicodeStream(*start);
 				isc_db_handle pDatabase = m_pDatabase;
 				isc_tr_handle pTransaction = m_pTransaction;
-				int nReturn = m_pInterface->GetIscDsqlExecuteImmediate()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pTransaction, GetEncodedStreamLength(*start), (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, NULL);
+				// ⚠ LENGTH 0 = NULL-TERMINATED, and that is the only form that survives a long
+				// statement: the API parameter is an unsigned short, so an explicit length is taken
+				// MODULO 65536 — a 84-KB CREATE TRIGGER (a totals register past ~25 analytics) arrived
+				// as its tail-end 18 KB and failed with "Unexpected end of command" at exactly
+				// length % 65536. Both prepare paths already pass 0; this was the one caller left
+				// spelling a length.
+				int nReturn = m_pInterface->GetIscDsqlExecuteImmediate()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pTransaction, 0, (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, NULL);
 				m_pDatabase = pDatabase;
 				m_pTransaction = pTransaction;
 				if (nReturn != 0)

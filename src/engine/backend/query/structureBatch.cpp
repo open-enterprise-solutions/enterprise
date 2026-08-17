@@ -46,7 +46,7 @@ void ibStructureBatch::AddColumn(const ibBackendQueryColumn* column)
 void ibStructureBatch::DropColumn(const ibBackendQueryColumn* column)
 {
 	for (const ibColumnSlot& slot : DescribeColumnLayout(column))
-		DropField(slot.m_name);
+		DropField(slot);
 }
 
 // Each clause, as it is decided — this is the half that says WHICH column the differ believes in.
@@ -57,14 +57,16 @@ void ibStructureBatch::AddField(const ibColumnSlot& slot)
 	m_steps.push_back(ibAddColumn(m_table, ColumnOf(slot)));
 }
 
-void ibStructureBatch::DropField(const wxString& fieldName)
+void ibStructureBatch::DropField(const ibColumnSlot& slot)
 {
-	m_steps.push_back(ibDropColumn(m_table, fieldName));
+	// The full column rides the statement: the renderer spells only the name, the compensation
+	// ledger reads the shape back if the second phase fails and the drop has to be undone (empty).
+	m_steps.push_back(ibDropColumn(m_table, ColumnOf(slot)));
 }
 
-void ibStructureBatch::AlterField(const ibColumnSlot& slot)
+void ibStructureBatch::AlterField(const ibColumnSlot& slot, const ibColumnSlot& prev)
 {
-	m_steps.push_back(ibAlterColumn(m_table, ColumnOf(slot)));
+	m_steps.push_back(ibAlterColumn(m_table, ColumnOf(slot), ColumnOf(prev)));
 }
 
 void ibStructureBatch::CreateTable(std::vector<const ibBackendQueryColumn*> columns)
@@ -126,6 +128,14 @@ int ibStructureBatch::Flush(ibSchemaBuilder& schema)
 	std::vector<ibAlterClause> run;
 	ibAlterOp                  runOp = ibAlterOp::Add;
 
+	// ⚠ NO EXISTENCE PROBE HERE, ON PURPOSE. A guard that read the table's physical columns and
+	// skipped the DROP of an absent one lived here briefly (2026-08-17) and was removed the same
+	// day: the base is a function of the configuration BY CONSTRUCTION, and reading it to decide
+	// which DDL to emit legalises exactly the drift it papers over. The view / trigger probes are
+	// the boundary, not a precedent — those are DERIVED objects whose replacement is the normal
+	// path. A drop that meets a missing column is a DEFECT upstream (or an outside edit, which is
+	// not covered) and must fail loudly; a base crippled by a past defective apply is repaired by
+	// hand, not by a permanent listener in every apply.
 	// Errors propagate as EXCEPTIONS now (schema.Execute -> RunQuery throws); the return is an
 	// affected-row COUNT — 0 (DDL, or a cleanup matching no rows) is NOT a failure, so it is ignored.
 	auto flushRun = [&]() {
@@ -280,7 +290,7 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		const ibColumnSlot* s = SlotByName(srcLayout, d.m_name);
 		if (s == nullptr) {
 			// gone -> DROP the field; clear the stale _TYPE tag of rows that held this type.
-			batch.DropField(d.m_name);
+			batch.DropField(d);
 			if (d.m_role != ibColumnRole::Discriminator)
 				ClearRowsOfType(batch, tableName, fieldName, ibPersistedTypeTag(d.m_role));
 		}
@@ -288,11 +298,11 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 			// A date narrowing from Time cannot ALTER in place -> drop + re-add; else ALTER.
 			if (s->m_role == ibColumnRole::Date
 			    && s->m_type.m_datePrec != ibDatePrec::Time && d.m_type.m_datePrec == ibDatePrec::Time) {
-				batch.DropField(d.m_name);
+				batch.DropField(d);
 				batch.AddField(*s);
 			}
 			else {
-				batch.AlterField(*s);
+				batch.AlterField(*s, d);
 			}
 		}
 	}
@@ -328,10 +338,13 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 	}
 	else if (oldHasRef && !newHasRef) {
 		// Field LOST all references -> clear the rows that held one + DROP the shared pair (never a row
-		// DELETE — that wipes records).
+		// DELETE — that wipes records). The slots come off the OLD layout — they exist there because
+		// oldHasRef is what this branch means.
 		ClearRowsOfType(batch, tableName, fieldName, ibPersistedTypeTag(ibColumnRole::ReferenceType));
-		batch.DropField(fieldName + ibFieldSuffix(ibColumnRole::ReferenceType));
-		batch.DropField(fieldName + ibFieldSuffix(ibColumnRole::ReferenceId));
+		if (const ibColumnSlot* rt = SlotOfRole(dstLayout, ibColumnRole::ReferenceType))
+			batch.DropField(*rt);
+		if (const ibColumnSlot* rr = SlotOfRole(dstLayout, ibColumnRole::ReferenceId))
+			batch.DropField(*rr);
 	}
 	else if (!removedRef.empty()) {
 		// Still a reference, but SOME targets were dropped (incl. a full retarget) -> KEEP the shared pair;

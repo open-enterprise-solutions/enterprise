@@ -80,7 +80,7 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 		// evidence about THIS one. So the moment the credit block was missing for any reason, the
 		// debit slots were looked up under the wrong name, the very first FindProperty answered
 		// null, and the loop broke on iteration one: not "the credit half is gone" but
-		// m_accountDimensionCount == 0, the WHOLE breakdown lost.
+		// a breakdown of zero slots, the WHOLE breakdown lost.
 		//
 		// The schema snapshot then knew of no slots at all while the DDL still built them, so every
 		// apply re-issued ADD for columns that already existed — surfacing as RDB$INDEX_15 three
@@ -122,7 +122,6 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 		m_accountDimensionKinds.push_back(kind);
 		m_accountDimensionSlots.push_back(slot);
 	}
-	m_accountDimensionCount = static_cast<unsigned int>(m_accountDimensionSlots.size());
 
 	// The credit side. Its presence in the file IS the record that this register was saved in
 	// correspondence mode — the property says so too, and the two are written together.
@@ -204,9 +203,11 @@ bool ibValueMetaObjectAccountingRegister::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyAttributeRecordType->GetName(), m_propertyAttributeRecordType->GetNodeValue());
 	node.SetProperty(m_propertyAttributeAccount->GetName(), m_propertyAttributeAccount->GetNodeValue());
-	// Only the ACTIVE slots are written — a deactivated one has no column and no business in the
-	// file. Each rides its whole node, id included, keyed by its own name.
-	for (unsigned int idx = 0; idx < m_accountDimensionCount; idx++) {
+	// Every LIVING pair is written, and living is the vector itself: lowering the chart's number
+	// DELETES the tail pair (SyncAccountDimensionSlots), so there is no second count to consult here.
+	// Written by a count beside the vector it once was, and the debit side saved three dimensions
+	// while the credit loop below saved four — one register, two sizes of the same breakdown.
+	for (size_t idx = 0; idx < m_accountDimensionSlots.size(); idx++) {
 		auto kindChild = std::make_shared<ibDataNode>();
 		m_accountDimensionKinds[idx]->SaveNode(*kindChild);
 		node.SetProperty(m_accountDimensionKinds[idx]->GetName(), ibDataValue::Child(kindChild));
@@ -538,6 +539,34 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	// So the slots stay. A one-sided register simply never writes into them, exactly as it never
 	// writes into AccountCr, and the columns stand empty — which costs storage and nothing else.
 
+	// ⭐⭐ LOWERING THE NUMBER, though, DELETES the tail pair — the ordinary attribute lifecycle.
+	//
+	// The number is not this register's decision: the chart of characteristic types governs the chart
+	// of accounts, the chart governs every register bound to it, and the register only follows. When
+	// the chart says three, the fourth pair is an attribute the author just deleted — so it goes the
+	// way any deleted attribute goes (close + delete events, the deleted mark, the purge on save),
+	// the differ drops its columns, and raising the number again creates a NEW pair under new ids,
+	// exactly as re-creating an attribute would.
+	//
+	// It was kept alive "for later" for a while, deactivated by a count beside the vector — and that
+	// count was a second currency: two sizes for one breakdown, a file carrying three dimensions on
+	// one side and four on the other, and accessors that answered null on the debit side while the
+	// credit side still answered a live slot. (Correspondence going OFF is the paragraph above and
+	// stays a mark, not a delete: the number has not changed, and neither has what exists.)
+	auto removePair = [&](std::vector<ibValueMetaObjectAttributePredefined*>& kinds,
+		std::vector<ibValueMetaObjectAttributePredefined*>& values) {
+		if (m_metaData != nullptr) {
+			m_metaData->RemoveMetaObject(values.back(), this);
+			m_metaData->RemoveMetaObject(kinds.back(), this);
+		}
+		values.pop_back();
+		kinds.pop_back();
+	};
+	while (m_accountDimensionSlots.size() > want)
+		removePair(m_accountDimensionKinds, m_accountDimensionSlots);
+	while (m_accountDimensionSlotsCr.size() > want)
+		removePair(m_accountDimensionKindsCr, m_accountDimensionSlotsCr);
+
 	// ⭐ AND THE SIDE THAT IS NOT THERE IS MARKED AS SUCH — the columns stay, the FIELDS do not.
 	//
 	// The paragraph above is about storage; this is about what a line offers a script. A one-sided
@@ -557,7 +586,15 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionSlotsCr) markSide(slot, correspondence);
 	for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionKindsCr) markSide(slot, correspondence);
 
-	m_accountDimensionCount = want;
+	// ⭐⭐ AND THE SLOTS LEAVE HERE TYPED. A predefined attribute serialises no type — the declaration
+	// lives in code, so every path that creates a slot must also finish it. While the typing was a
+	// step apart, it was a step a CALLER had to remember: the register's own property change and the
+	// run phase did, the chart's count change did not — so a dimension added in a live session stood
+	// as a bare _TYPE column while the baseline, reloaded and run after every apply, typed the same
+	// slot in full. Two readings of one slot, and the differ never converged again: every apply
+	// dropped reference columns that had never been created. Typed as the tail of the sync, the slot
+	// set and its types are one fact no caller can split.
+	ApplyAccountDimensionSlotTypes();
 }
 
 // ⭐⭐ THE SLOTS' TYPES, AS A STEP OF ITS OWN — because two different moments need it.
@@ -691,8 +728,6 @@ bool ibValueMetaObjectAccountingRegister::OnAfterRunMetaObject(int flags)
 		(*m_propertyAttributeAccount)->ClearFlag(metaDisableFlag);
 	else
 		(*m_propertyAttributeAccount)->SetFlag(metaDisableFlag);
-
-	ApplyAccountDimensionSlotTypes();
 
 	// ⭐ THE VIRTUAL TABLES. The base records descriptor (the movements table itself) is registered by
 	// ibValueMetaObjectRegisterData below; these five are the register's own readings, reached as

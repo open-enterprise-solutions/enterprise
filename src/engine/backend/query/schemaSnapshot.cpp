@@ -623,6 +623,14 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 			if (old.m_derived)
 				ibDropMaterialization(schema.Connection(), old.m_materialize.ToRenderSpec(old.m_name));
 
+			// ⚠⚠ FIREBIRD TWO-PHASE PATCH — same guard, same hole as the derived replace below: a
+			// failed apply's compensation cannot restore a pre-existing derived table its first
+			// commit dropped (structureBuilder.cpp::UndoAppliedDdl). Comes out with the two-phase
+			// apply if that is ever reworked. Data tables stay unguarded: their absence is a defect
+			// and must refuse.
+			if (old.m_derived && !schema.Connection().TableExists(old.m_name))
+				continue;
+
 			ibStructureBatch batch(old.m_name);   // a drop needs no metadata
 			batch.DropTable();
 			if (report != nullptr)
@@ -671,11 +679,25 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 		//
 		// The maintenance goes first — the triggers live on the MOVEMENTS table and merely mention
 		// this one by name, so they would survive the drop and fire into nothing.
+		//
+		// ⚠⚠ FIREBIRD TWO-PHASE PATCH — this guard exists ONLY because a Firebird apply is two
+		// commits and its compensation cannot restore a pre-existing derived table the first commit
+		// dropped (structureBuilder.cpp::UndoAppliedDdl — the canonical description of the hole).
+		// On a one-transaction engine (Postgres) the state it guards against cannot exist. If the
+		// two-phase apply is ever reworked, this guard comes OUT with it.
+		//
+		// The DROP is guarded exactly as the bundle's views and triggers are — a derived table is
+		// the probe-before-drop class, a produced object whose replacement is the normal path (never
+		// a data table: those drops stay unguarded, their absence is a defect that must refuse). It
+		// may legitimately be absent here, and without the guard the next apply died on DROP -607 —
+		// permanently, because the refusal rolled back the very CREATE that would have healed it.
 		if (cur.m_derived && old != nullptr && ibDerivedState::NeedsRegeneration(old, cur)) {
 			ibDropMaterialization(schema.Connection(), old->m_materialize.ToRenderSpec(old->m_name));
-			ibStructureBatch drop(old->m_name);
-			drop.DropTable();
-			drop.Flush(schema);
+			if (schema.Connection().TableExists(old->m_name)) {
+				ibStructureBatch drop(old->m_name);
+				drop.DropTable();
+				drop.Flush(schema);
+			}
 			if (report != nullptr)
 				report->AppendInfo(_("Rebuild totals table ") + LedgerName(cur));
 			old = nullptr;   // from here it is a CREATE, and everything below follows from that
