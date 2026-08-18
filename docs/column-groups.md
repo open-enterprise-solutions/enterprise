@@ -220,6 +220,27 @@ wrong column too. The expander's hit zone and the rectangle handed to an activat
 come from the same placements: a row-tall rectangle put a checkbox's hot zone over the cell
 below it.
 
+## 7a. The expander column — one question, two askers
+
+The tree twisty is drawn in ONE column, and after the layout moved to groups two places decided which
+one, by different rules:
+
+- `ibValueModelTableBox::UpdateExpanderColumn` — the first **shown** column, asked of the column tree
+  in the order it draws;
+- `GetExpanderColumnOrFirstOne` (the render fallback, used until the owner has assigned one) —
+  `GetColumn(0)`, with no question about visibility.
+
+While every column was visible the two agreed by accident. With a hidden leading column the expander
+was pinned to a column the render loop skips (`if (col->IsHidden()) continue;`), so `col == expander`
+never came true and the twisty was drawn **nowhere**: a folder looked exactly like an item, with no
+way to see that it opens at all. Both now ask the same question — the first column actually shown —
+and the fallback re-picks if the stored one turns out to be hidden.
+
+Worth keeping in view while reading this file: the container flag itself does NOT come from the model
+on demand. The fetch stamps it on the row node (`ibComposerNode`), `ibDataViewItem::IsContainer()`
+reads it off the node, and `MakeChildNode` turns it into `SetHasChildren` — one marker, read by BOTH
+the folder icon and the expander.
+
 ## 8. Honest remainder
 
 - The runtime builds its columns from the model's column collection, which carries no family
@@ -228,3 +249,7 @@ below it.
   families yet; the mechanism is ready, the naming belongs where those columns are declared.
 - Group serialization round-trip has not been exercised deliberately (a group is an ordinary
   control with `ReadData`/`WriteData`, so it rides the form's own path).
+- Containerness is decided in `modelDb` as `isFolderRow || itemHierarchy || hasChildren` — the VIEW
+  MODE is not part of it, although the rule is per mode (a flat `List` renders no containers at all;
+  `Hierarchical` / `Tree` do). Nothing visible depends on it today, because the render draws no
+  expander in a list — but that means the rule lives in two places instead of one.

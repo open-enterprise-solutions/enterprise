@@ -37,7 +37,18 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 			return false;   // the user closed the type choice
 		current = metaData->CreateObject(clsid);
 		ownerValue->SetControlValue(current);
-		// and keep going: the editor for that type opens now, not on a second click
+
+		// AND THE CHOICE ENDS HERE. Settling the type is a MODAL question, and a modal runs an event
+		// loop of its own: while it is up the grid finishes editing this cell and destroys the editor
+		// control - which is the window handed to us as `parent`. Carrying on in the same call opened
+		// the value chooser parented to freed memory, and it died inside wxGetTopLevelParent with a
+		// stack pointing at the popup rather than at the modal that invalidated its parent.
+		//
+		// So the type is settled, said and returned; the value is chosen on the NEXT click, by which
+		// time there is a live editor to hang it on. No window pointer outlives a modal here, which is
+		// the rule rather than this one repair - the previous line ("keep going, the editor opens now,
+		// not on a second click") described a convenience the lifetime does not allow.
+		return true;
 	}
 
 	// THE VALUE OF THAT TYPE: the built-in quick choice first (it knows a boolean,

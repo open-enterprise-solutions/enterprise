@@ -44,6 +44,31 @@ Undocumented-until-now subsystems, mapped 2026-07-15:
 
 ---
 
+## 1e. Identity, division, and the data transfer — 2026-08-18 session
+
+One thread ran through the whole day and it is the sequel to §1d: **a value was asked about its
+printed form instead of about what it IS**, and **one question had two answers**. Each defect below
+was found by fixing the one above it.
+
+| Found | What it was | Now |
+|---|---|---|
+| an enumeration showed no values; quick choice crashed | the seed bound the row key as the guid's TEXT into a `BINARY(16)` column, so every declared row landed under the first sixteen characters of its own guid | the key is written through the write door in the form its COLUMN accepts (raw scaffold → guid, declared reference → the reference itself); the cell that duplicates it is dropped, since a column named twice is refused by the engine ([reference-objects.md](reference-objects.md) §4) |
+| the key was taken off the tail of a SORT | `GetIdentitySort().back()` was read as "the key" — true only while nothing else sorted first. An enumeration ordering itself by `Order` put a NUMBER there, and six manager reads then parsed a guid out of its text | `GetIdentitySort` **removed**; `GetPrimaryKeyColumns()` is the one key authority — the UPSERT match, the dot-walk join, the keyset tail and the row key ([query-language-arc.md](query-language-arc.md) §22.1) |
+| the metaobject was asked for three ways | `GetSourceMetaObject()` + `GetQueryTableGuid()` + `GetQueryTableId()`, the last two implemented identically in every source (`m_meta->GetGuid()` / `GetMetaID()`), one of them with a single live consumer | guid and id are derived from the metaobject by default; a source overrides only when it owns an identity WITHOUT one (a temp table) or cannot answer that question at all (a tabular section — its metaobject is a composite) |
+| `ibRowKeyColumn` named the wrong thing | after the scaffold was retired the column survives in ONE place — a tabular section — where it holds the row's OWNER, not its identity. The name kept being reached for wherever identity was wanted | renamed `ibOwnerRefField` / `ibOwnerRefColumn`; the physical field is untouched (renaming a column is a migration, not a cleanup) |
+| "string too long" aborted an apply, saying nothing | a corrupt numeric blob decoded into 10^2000000000, and it detonated in the TEXT OF AN ERROR MESSAGE — the driver prints the offending value when a bind does not fit, so the report died of what it was reporting | the exponent is bounded at both doors (bytes and text); past the bound `ToString` answers in scientific notation, so a number ALWAYS has a text ([fnumber.md](fnumber.md) §9) |
+| division had no stated rule | precision was a by-product: fixed 30 digits inflated BEFORE the divisor's exponent was subtracted, so the answer's length depended on the divisor; the last digit was truncated, and exact quotients carried a tail of zeros | dividend's digits + 15, last digit rounded, trailing zeros trimmed, ceiling 100 as the stop for a chain — measured on the NORMALISED operands, so equal numbers written differently divide equally ([fnumber.md](fnumber.md) §5a, `NumberDivision.*`) |
+| saving a database died on the first table | the dump asked for the key by NAME; a reference key spreads into three fields and its bare name is a field nothing has | `KeyOf` answers with the COLUMN; the key is not dumped twice; the wire codec learned raw columns, which is why identity no longer travels as text ([data-transfer.md](data-transfer.md)) |
+| loading a database failed after replacing the structure | a full rebuild diffs target → empty, and an EXTERNAL table (`sys_const`) was skipped whole — columns included — so the rebuild declared them anew on a table that still had them | the table stands, its declared columns come down with the rest ([schema-authority.md](schema-authority.md) §4.5); a failed apply now writes `apply_failed` with the reason, and a load refuses to run data before configuration |
+| a load hung on a table of numbers | a cell was read `while (!eof)`, which assumes every read consumes something — zero's encoding is "write nothing", so the same cell was re-read forever | one chunk is one cell, read once; an absent chunk reads as zero, because an EMPTY chunk is indistinguishable from an absent one in this reader |
+| folders were indistinguishable from items | the expander column was decided in two places by different rules — the table asks for the first SHOWN column, the render fallback took `GetColumn(0)` without asking about visibility. With a hidden leading column the twisty was drawn nowhere | both ask the same question ([column-groups.md](column-groups.md) §7a). The container flag itself was correct all along — the probe that proved it wrote to the base's journal, because the app under test is a launched exe |
+
+Two rules earned their keep and are worth carrying forward: **a projection published beside its
+source is an incubator** — consumers take whichever is nearer, and the two drift at the first
+override; and **the honest search is for the second answer**, not for the site that read it wrongly.
+The audit that followed the first removal found two more duplicates by counting implementations
+against consumers.
+
 ## 1d. Identity, and the failures it uncovered — 2026-08-12 session
 
 The Designer's navigator was audited and rewritten (the layout is one table now —

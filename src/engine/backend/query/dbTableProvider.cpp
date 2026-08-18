@@ -21,6 +21,7 @@
 #include "backend/metaData.h"                                     // ibMetaData (threaded through reads/writes)
 #include "backend/objCtor.h"                                      // ibCtorMetaValueType::GetQueryable — reference-target resolution (clsid -> ctor -> queryable, no cast)
 #include "backend/system/value/valueType.h"                      // ibValueTypeDescription::AdjustValue (dot-walk typed empty)
+#include "backend/system/value/valueGuid.h"                      // ibValueGuid — a raw row key reads back AS a guid
 
 #include <map>            // dot-walk join dedup
 #include <unordered_map>  // ROLLUP node index — keyed by the group values themselves
@@ -71,15 +72,22 @@ bool IsReferenceValued(const ibBackendQueryColumn* col)
 	return FirstValueSlotOf(col).m_role == ibColumnRole::ReferenceId;
 }
 
-// The row-key physical field of a single-key source (catalog / document: the uuid). Read off the
-// UNIQUE tail of GetIdentitySort — the identity's last column is the unique tiebreaker, so for a
-// catalog it IS the uuid column. No GetRowKeyColumn: the row-key is just the identity tail now,
-// the same real-column mechanism a register's composite identity already rides. A register has a
-// composite identity and never takes the single-key (row-key condition / key-IN) paths.
+// ⭐⭐ THE ROW KEY IS THE PRIMARY KEY, ASKED FOR AS ONE.
+//
+// This used to read the LAST item of the identity sort and call it the key — "the identity's tail is
+// the unique tiebreaker, so for a catalog it IS the uuid column". True while that sort ended with the
+// key, and silently false the moment a source gained an ordering of its own: an enumeration sorts by
+// Order first and by its reference second, so the tail became a NUMBER, and everything that took a
+// key from here took a number instead. The same guess stood in six manager reads and cost a day.
+//
+// The primary key is the authority on what identifies a row, it is asked by name, and no rearranged
+// sort can move it. A source with a COMPOSITE key (a register: recorder + line + period) has no single
+// row-key column, and answering nullptr is correct — those paths (row-key condition, key-IN) are
+// single-key by construction and a register never takes them.
 const ibBackendQueryColumn* RowKeyColumn(const ibBackendQueryable* queryable)
 {
-	const std::vector<ibQuerySortItem> ids = queryable->GetIdentitySort();
-	return ids.empty() ? nullptr : ids.back().m_col;
+	const std::vector<const ibBackendQueryColumn*> keys = queryable->GetPrimaryKeyColumns();
+	return keys.size() == 1 ? keys.front() : nullptr;
 }
 
 wxString RowKeyField(const ibBackendQueryable* queryable)
@@ -123,22 +131,30 @@ ibQueryExprPtr ReferenceKeyBlob(const ibValue& v)
 
 ibQueryExprPtr ColumnConst(const ibBackendQueryColumn* col, const ibValue& v)
 {
-	if (col == nullptr || !col->IsRawColumn())
+	if (col == nullptr)
 		return ibConst(v);
 
-	const ibRawDBColumn::RawType raw = static_cast<const ibRawDBColumn*>(col)->GetRawType();
-
-	// A KEY column and a single-target REFERENCE column store the same thing — sixteen bytes of
-	// identity — so both compare as bytes. The value may arrive either way: a reference (a script
-	// wrote `WHERE Section.Ref = doc`) or a guid's text (a row key handed round as a string), and
-	// both spell the same key.
-	if (raw != ibRawDBColumn::RawType::Guid && raw != ibRawDBColumn::RawType::Reference)
+	// ⭐ DOES THIS COLUMN HOLD SIXTEEN BYTES OF IDENTITY? A raw key / reference column says so by its
+	// declared RawType; a metadata REFERENCE ATTRIBUTE says so by its first value slot being the
+	// reference id - and both are then compared as bytes, never as text.
+	//
+	// The attribute case matters since a reference object is identified BY ITS REFERENCE rather than
+	// by a row-key scaffold beside it: the key lookup then names an attribute here, and answering it
+	// with the guid's text compared 36 characters against a sixteen-byte field - no error, no empty
+	// result with a reason, just a row that is there and is never found.
+	const bool identityValued = col->IsRawColumn()
+		? (static_cast<const ibRawDBColumn*>(col)->GetRawType() == ibRawDBColumn::RawType::Guid
+			|| static_cast<const ibRawDBColumn*>(col)->GetRawType() == ibRawDBColumn::RawType::Reference)
+		: IsReferenceValued(col);
+	if (!identityValued)
 		return ibConst(v);
 
+	// The value may arrive either way: a reference (a script wrote `WHERE Section.Ref = doc`) or a
+	// guid handed round on its own; both spell the same key.
 	if (ibQueryExprPtr fromReference = ReferenceKeyBlob(v))
 		return fromReference;
 
-	const ibReference key{ ibGuid(v.GetString()) };
+	const ibReference key{ GuidOf(v) };
 	return ibConstBlob(&key, sizeof(ibReference));
 }
 
@@ -704,7 +720,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 	}
 	if (c.m_col == nullptr) {
 		// Row-key condition — a lookup by the row's own key (uuid, the identity tail), never
-		// LIKE. No GetRowKeyColumn: the key field comes off GetIdentitySort like any column.
+		// LIKE. No GetRowKeyColumn: the key field comes off the PRIMARY KEY like any column.
 		return ibBinOp(op, ibColQ(mainQual, RowKeyField(queryable)),
 		               ColumnConst(RowKeyColumn(queryable), c.m_value));
 	}
@@ -2309,7 +2325,7 @@ ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuery
 // translation — the uuid guid just goes in as a string); a metadata column via the TYPE-tagged
 // SetValueColumn decomposition (over the column's type descriptor + the metadata context). The
 // ONLY place SetValueColumn is called.
-static void BindWriteValue(ibQueryStatement& stmt, const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& v, int& pos)
+void BindWriteValue(ibQueryStatement& stmt, const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& v, int& pos)
 {
 	if (col->IsRawColumn()) {
 		switch (static_cast<const ibRawDBColumn*>(col)->GetRawType()) {
@@ -2318,7 +2334,12 @@ static void BindWriteValue(ibQueryStatement& stmt, const ibBackendQueryColumn* c
 				// The guid's STORAGE form, which is the reference key's form — one representation, so
 				// a row key and a reference to that row are byte-comparable. The text spelling is a
 				// rendering for humans and never reaches the column.
-				const ibReference key{ ibGuid(v.GetString()) };
+				//
+				// ⭐ AND THE VALUE'S OWN GUID IS TAKEN AS A GUID. It used to be read out as TEXT and
+				// parsed back here — the identity spelled into 36 characters and reassembled from them
+				// on the way to a sixteen-byte column, for no reason but that the value had no guid to
+				// ask for. It has one, and GuidOf is where that question is answered for everybody.
+				const ibReference key{ GuidOf(v) };
 				stmt.SetParamBlob(pos++, &key, sizeof(ibReference));
 				break;
 			}
@@ -3138,14 +3159,19 @@ public:
 			switch (static_cast<const ibRawDBColumn*>(col)->GetRawType()) {
 				case ibRawDBColumn::RawType::String:    return ibValue(m_cursor.GetResultString(f));
 				case ibRawDBColumn::RawType::Guid: {
-					// The write side's twin: sixteen bytes back into a guid, handed on in the text
-					// form every caller of a raw key already expects.
+					// ⭐⭐ THE WRITE SIDE'S TWIN — sixteen bytes back into A GUID, and handed on AS ONE.
+					//
+					// It used to hand on the guid's TEXT, and the text is a PROJECTION: a caller that
+					// wanted the identity had to parse it back, so the same value was converted twice
+					// on every row, and nobody downstream could tell a key from any other string. The
+					// runtime guid is a type this system already has — return it, and the text stays
+					// available to whoever wants it, because that is what its GetString() answers.
 					wxMemoryBuffer bytes;
 					m_cursor.GetResultBlob(f, bytes);
 					if (bytes.GetDataLen() < sizeof(ibReference))
 						return ibValue();
 					const ibReference* key = static_cast<const ibReference*>(bytes.GetData());
-					return ibValue(wxString(ibGuid(key->m_guid)));
+					return ibValuePtr<ibValueGuid>(new ibValueGuid(ibGuid(key->m_guid)));
 				}
 				case ibRawDBColumn::RawType::Number:    return ibValue(m_cursor.GetResultNumber(f));
 				case ibRawDBColumn::RawType::Date:      return ibValue(m_cursor.GetResultDate(f));

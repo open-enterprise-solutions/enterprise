@@ -424,9 +424,25 @@ namespace
 			bool eneg = false;
 			if (*p == L'+') ++p;
 			else if (*p == L'-') { eneg = true; ++p; }
+			// STOPS CLIMBING AT THE CEILING, and it must: `eVal * 10` on a long run of digits overflows
+			// a signed int32 - undefined behaviour that lands wherever it lands - and even a clean parse
+			// of "1e2000000000" produces a value whose only property is that nobody can ever write it
+			// down. Held at the limit, the range test below refuses the whole literal.
 			int32_t eVal = 0;
-			while (*p >= L'0' && *p <= L'9') { eVal = eVal * 10 + (*p - L'0'); ++p; }
+			while (*p >= L'0' && *p <= L'9') {
+				if (eVal <= ibNumber::kMaxDecodedExp10)
+					eVal = eVal * 10 + (*p - L'0');
+				++p;
+			}
 			exp10 += eneg ? -eVal : eVal;
+		}
+
+		// ⭐ TEXT IS A DOOR TOO. The same ceiling the blob decoder applies (kMaxDecodedExp10): a literal
+		// naming a power of ten past anything writable is not a number this type holds, and the honest
+		// answer is the one this parser already has for "that is not a number".
+		if (exp10 > ibNumber::kMaxDecodedExp10 || exp10 < -ibNumber::kMaxDecodedExp10) {
+			out.limbs.clear();
+			return false;
 		}
 
 		if (!sawDigit) {
@@ -437,6 +453,21 @@ namespace
 		out.negative = negative && !out.IsZero();
 		out.exp = exp10;
 		return true;
+	}
+}
+
+// Drop the trailing DECIMAL zeros of a value: 0.1000000 and 0.1 are the same number written two ways,
+// and every rule that measures "how many digits does this have" must see the same one. Used by the
+// division on both operands (so equal inputs size the same quotient) and on its result (so a chain of
+// divisions measures real digits and does not creep upward).
+void TrimFractionZeros(ibNumber::BigImpl& v)
+{
+	while (v.exp < 0 && !ibNumber::BigImpl::IsZeroMag(v.limbs)) {
+		std::vector<uint32_t> shorter = v.limbs;
+		if (ibNumber::BigImpl::DivMagSmall(shorter, 10u) != 0)
+			return;
+		v.limbs = std::move(shorter);
+		++v.exp;
 	}
 }
 
@@ -713,12 +744,72 @@ ibNumber& ibNumber::operator/=(const ibNumber& rhs)
 	LoadBig(a);
 	rhs.LoadBig(b);
 
-	// Inflate dividend so integer division yields ~30 fractional digits of result.
-	const int32_t kExtra = 30;
-	a.MulMagPow10(kExtra);
-	a.exp -= kExtra;
+	// ⭐⭐ THE QUOTIENT'S LENGTH IS DECIDED BEFORE THE DIVISION, NOT DISCOVERED DURING IT.
+	//
+	// A third divided by anything is an endless fraction, and there is no point at which the long
+	// division "notices" it: it would go on producing digits for as long as it is asked to. So it is
+	// asked for exactly as many as the rule allows (kDivExtraDigits beyond what the dividend carries,
+	// kMaxDivFracDigits as the stop for a chain), and the dividend is inflated by precisely that much
+	// up front. What comes out is a finite number of the declared length; nothing is left
+	// half-computed, and the part that WAS computed is kept whole.
+	//
+	// The remainder is not lost silently either: it is what `%` returns, exactly, so quotient and
+	// remainder together still reconstruct the operand to the last digit.
+	//
+	// MEASURED ON THE NORMALISED FORM. 0.1 and 0.1000000 are one number written two ways, and if the
+	// step is measured on the way they happen to be written, two equal operands produce quotients of
+	// different length — which are then not equal. Trimmed first, they cannot.
+	TrimFractionZeros(a);
+	TrimFractionZeros(b);
+
+	const int32_t fracA = a.exp < 0 ? -a.exp : 0;
+	const int32_t fracB = b.exp < 0 ? -b.exp : 0;
+
+	// ⚠ THE ROOM IS A CONSTANT, NOT A FUNCTION OF THE DIVIDEND. `extra` is what gets ADDED to the
+	// dividend's own digits (the inflation below is measured from a.exp), so writing `fracA + …` here
+	// grants the room TWICE: the quotient comes out at 2*fracA + 15 and every division in a chain
+	// DOUBLES the length — 15, 45, 105, … which is not slow, it is unbounded. (Caught by
+	// NumberDivision.RoomIsAddedToTheDividendsOwnLength; the chain test simply never returned.)
+	//
+	// The ceiling then takes the ROOM away, never the digits that arrived: a dividend already past it
+	// keeps every one of them and is granted nothing more.
+	int32_t extra = kDivExtraDigits;
+	if (fracA + extra > kMaxDivFracDigits)
+		extra = fracA >= kMaxDivFracDigits ? 0 : kMaxDivFracDigits - fracA;
+
+	// ⚠ THE ROOM IS ADDED TO THE DIVIDEND'S OWN LENGTH — never to its MAGNITUDE. Inflating by
+	// (a.exp - b.exp + digits) would put the quotient at exactly -digits, which reads well and is a
+	// trap: a dividend of 10^1000 would then be multiplied out into a thousand-digit integer to hold
+	// decimal places nobody wants on a number that size. The digits asked for are the digits BEYOND
+	// what the dividend already carries, so the inflation is bounded by the rule, not by the value.
+	const int32_t inflate = extra + fracB;   // + fracB so the divisor's own digits do not shorten the answer
+	a.MulMagPow10(inflate);
+	a.exp -= inflate;
 	a.exp -= b.exp;
-	a.Div(b);
+
+	// ⭐ THE LAST DIGIT IS ROUNDED, NOT DROPPED. The long division hands back the remainder, and a
+	// remainder of half the divisor or more means the digit above it is nearer the truth — the same
+	// round-half-away-from-zero Round() applies. Truncating instead reported 2/3 as 0.666…6, which is
+	// not the nearest number of that length and biases every proportion downwards.
+	const bool resNeg = (a.negative != b.negative);
+	std::vector<uint32_t> quotient, remainder;
+	BigImpl::DivModMag(a.limbs, b.limbs, quotient, remainder);
+	if (!BigImpl::IsZeroMag(remainder)) {
+		std::vector<uint32_t> twice = remainder;
+		BigImpl::MulMagSmall(twice, 2u);
+		BigImpl::TrimMag(twice);        // CmpMag compares trimmed magnitudes
+		if (BigImpl::CmpMag(twice, b.limbs) >= 0)
+			quotient = BigImpl::AddMag(quotient, std::vector<uint32_t>{ 1u });
+	}
+	a.limbs    = std::move(quotient);
+	a.negative = (BigImpl::IsZeroMag(a.limbs) ? false : resNeg);
+
+	// ⭐ AND THE ZEROES IT DID NOT NEED GO AWAY. A quotient is always produced at the full declared
+	// length, so 1/8 comes back as 0.125 followed by however many zeros the step asked for — which is
+	// not what it is, and worse, is what the NEXT division would measure to size its own step.
+	BigImpl::TrimMag(a.limbs);
+	TrimFractionZeros(a);
+
 	StoreBig(a);
 	return *this;
 }
@@ -1054,8 +1145,9 @@ ibNumber ibNumber::Pow(int n) const
 }
 
 // Working fractional precision carried through the transcendental series /
-// Newton iterations below. A small margin over operator/'s ~30 (kExtra)
-// fractional digits so intermediate rounding doesn't eat the reported tail.
+// Newton iterations below. A margin over the division step the intermediate
+// values climb to (kDivStepDigits), so intermediate rounding doesn't eat the
+// reported tail.
 // These functions restore the high-precision Sqrt/Ln/Exp/Log/Pow that ttmath
 // used to provide and that the ttmath removal had shortcut to plain double.
 static constexpr int kTransWorkScale = 34;
@@ -1266,6 +1358,30 @@ double ibNumber::ToDouble() const
 	return b.negative ? -d : d;
 }
 
+// ⭐ A NUMBER ALWAYS HAS A TEXT — even one nobody would want to read.
+//
+// The plain decimal expansion of a value with a large exponent is a string of that many characters,
+// and it is built by RESERVING it first, so past a point the request is not slow, it THROWS:
+// std::length_error, message "string too long", raised inside whoever asked for the number's text.
+// That is frequently the code composing an error message ABOUT this number — a driver reporting a
+// value that does not fit its column — so the number killed the sentence that was going to name it,
+// and what came out was three words about a string. (See kMaxDecodedExp10.)
+//
+// Scientific notation is the same value in a form whose length is bounded by the DIGITS, never by the
+// exponent, and FromString reads it back.
+static wxString ScientificText(const wchar_t* digits, size_t magLen, bool negative, int32_t exp)
+{
+	wxString out;
+	if (negative) out += wxT('-');
+	out += wxString(digits, 1);
+	if (magLen > 1) {
+		out += wxT('.');
+		out += wxString(digits + 1, magLen - 1);
+	}
+	out += wxString::Format(wxT("E%+d"), static_cast<int>(exp) + static_cast<int>(magLen) - 1);
+	return out;
+}
+
 wxString ibNumber::ToString() const
 {
 	// Fast path: immediate-tier integer (mantissa fits in int64, exp == 0).
@@ -1305,6 +1421,11 @@ wxString ibNumber::ToString() const
 	while (p < end - 1 && *p == L'0') ++p;
 
 	const size_t magLen = static_cast<size_t>(end - p);
+
+	// Past the ceiling the plain form cannot be built at all — see ScientificText above.
+	if (b.exp > kMaxDecodedExp10 || b.exp < -kMaxDecodedExp10)
+		return ScientificText(p, magLen, b.negative, b.exp);
+
 	wxString out;
 
 	if (b.exp >= 0) {
@@ -1380,6 +1501,10 @@ wxString ibNumber::ToString(const Format& fmt) const
 		while (p < end - 1 && *p == L'0') ++p;
 	}
 	const size_t magLen = static_cast<size_t>(end - p);
+
+	// Past the ceiling the plain form cannot be built at all — see ScientificText above.
+	if (b.exp > kMaxDecodedExp10 || b.exp < -kMaxDecodedExp10)
+		return ScientificText(p, magLen, b.negative, b.exp);
 
 	// Layout:
 	//   exp >= 0: int = magLen digits at p, plus `exp` trailing zeros; no fraction.
@@ -1575,6 +1700,14 @@ bool ibNumber::SetBuffer(const void* data, size_t len)
 	                   | (static_cast<uint32_t>(p[4]) << 24);
 	b.exp = static_cast<int32_t>(expU);
 
+	// The blob's exponent is four bytes of somebody else's memory until it is checked — see
+	// kMaxDecodedExp10. Out of range, this is not a number and never was; saying so HERE keeps the
+	// fault at the cell that produced it instead of at whoever later asks for its text.
+	if (b.exp > kMaxDecodedExp10 || b.exp < -kMaxDecodedExp10) {
+		wxASSERT_MSG(false, wxT("ibNumber::SetBuffer - exponent out of range (corrupt blob)"));
+		return false;
+	}
+
 	const uint32_t cnt = static_cast<uint32_t>(p[5])
 	                   | (static_cast<uint32_t>(p[6]) <<  8)
 	                   | (static_cast<uint32_t>(p[7]) << 16)
@@ -1609,11 +1742,19 @@ bool ibNumber::SetBuffer(const wxMemoryBuffer& in)
 // readers find the exact same chunk the writer produced.
 namespace { constexpr uint64_t kIbNumberChunk = 0x023456555ULL; }
 
+// ⭐⭐ ZERO WRITES NOTHING, AND READS BACK AS ZERO — which is a fact about the STREAM, not a preference.
+//
+// GetBuffer(wxMemoryBuffer&) encodes zero as no bytes at all. Writing that as an EMPTY chunk does not
+// help a reader: ibReaderMemory::r_chunk answers "not found" for a chunk of size zero, so an empty one
+// is indistinguishable from an absent one — it only puts bytes on the wire that nobody will ever read
+// back. So zero stays unwritten, and the READER is the half that was wrong: it answered false, which
+// the mover reported as "failed to read TYPE_NUMBER from stream", one line per zero cell, about data
+// that was perfectly fine.
 bool ibNumber::GetBuffer(ibWriterMemory& writer) const
 {
 	wxMemoryBuffer buf;
 	GetBuffer(buf);
-	if (buf.GetDataLen() == 0) return false;
+	if (buf.GetDataLen() == 0) return false;   // zero — nothing to write, and nothing is what it means
 	writer.w_chunk(kIbNumberChunk, buf);
 	return true;
 }
@@ -1621,7 +1762,10 @@ bool ibNumber::GetBuffer(ibWriterMemory& writer) const
 bool ibNumber::SetBuffer(const ibReaderMemory& reader)
 {
 	wxMemoryBuffer buf;
-	if (!reader.r_chunk(kIbNumberChunk, buf)) return false;
+	if (!reader.r_chunk(kIbNumberChunk, buf)) {
+		SetZero();     // no chunk IS the zero (see GetBuffer above) — an answer, not a failure
+		return true;
+	}
 	return SetBuffer(buf);
 }
 

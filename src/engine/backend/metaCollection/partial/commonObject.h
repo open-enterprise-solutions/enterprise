@@ -427,11 +427,8 @@ public:
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;   // all attributes (SELECT *)
 	virtual wxString GetQueryTableName() const override;
-	virtual ibGuid GetQueryTableGuid() const override;
 	virtual wxString GetQueryName() const override;   // the metaobject's user-facing name (change ledger)
-	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
-	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;       // { uuid } — real column
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { data-reference } — key authority
 	// (ResolveReferenceTarget/Targets moved to ibDbTableProvider — the provider owns metadata.)
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override;   // the parent attribute (hierarchy key)
@@ -472,6 +469,7 @@ public:
 	friend class ibRecordQueryable;
 
 	virtual ibValueMetaObjectAttributePredefined* GetDataReference() const { return m_propertyAttributeReference->GetMetaObject(); }
+
 
 	virtual bool IsDataReference(const ibMetaID& id) const override { return id == (*m_propertyAttributeReference)->GetMetaID(); }
 
@@ -685,6 +683,13 @@ protected:
 	// that mistake structurally impossible.
 	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		array.push_back(m_propertyAttributeReference->GetMetaObject());
+		// ORDER IS AN ATTRIBUTE OF THE OBJECT, so it belongs in the list that MAKES attributes real:
+		// this list becomes the columns, the queryable's columns and the object's members. It was
+		// declared as a property and left out of here, so the position existed in the metadata and
+		// nowhere else - no column to write it into, and nothing for a list to sort by. The values
+		// then came back in whatever order the table handed them over, which is not the order the
+		// configuration declares them in and is what a person picking from the list actually reads.
+		array.push_back(m_propertyAttributeOrder->GetMetaObject());
 		return true;
 	}
 
@@ -1218,11 +1223,8 @@ public:
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;   // identity (recorder+line / period) ++ dims ++ generic attrs
 	virtual wxString GetQueryTableName() const override;
-	virtual ibGuid GetQueryTableGuid() const override;
 	virtual wxString GetQueryName() const override;   // the metaobject's user-facing name (change ledger)
-	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
-	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // recorder+line+period / period+dims
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta (body in .cpp — the metaobject type is complete there)
 private:

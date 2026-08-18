@@ -11,6 +11,7 @@
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"     // L2-2 RenderMaterialization — derived-state triggers + view
 #include "backend/query/derivedStateBuilder.h"              // L3-4 — rebuild derived state after a structure change
 #include "appData.h"                                        // db_query — the local channel the seed writes target
+#include "backend/system/value/valueGuid.h"                 // ibValueGuid — the row key bound as the guid it is
 
 ibSchemaMaterialize& ibSchemaMaterialize::Guard(const wxString& expr, const ibQueryPredicatePtr& regenExpr)
 {
@@ -199,7 +200,40 @@ wxString LedgerName(const ibSchemaTable& t)
 	return t.m_queryable != nullptr ? t.m_queryable->GetQueryName() : t.m_name;
 }
 
-const ibSchemaSeedRow* FindSeedRow(const std::vector<ibSchemaSeedRow>& seed, const wxString& id)
+// The row-key column a declared row is written and erased through — the row-identity SCAFFOLD that a
+// UNIQUE index covers (the upsert's conflict target), read OFF THE SCHEMA rather than by a hardcoded
+// name. A table whose key floats over other fields (a register: recorder + line / dimensions) has no
+// unique scaffold key — and carries no declared rows either, so the write degrades to a plain insert.
+//
+// One lookup for both directions on purpose: a key found one way for the write and another for the
+// delete is a row that can be created and never removed, and nothing would report it.
+const ibBackendQueryColumn* SeedKeyColumn(const ibSchemaTable& t)
+{
+	// ⭐ THE KEY IS WHAT A UNIQUE INDEX COVERS — scaffold or declared column, asked of the SCHEMA.
+	// It used to look among the scaffolds only, which was true while every reference object carried a
+	// row-key column beside its reference. An object keyed by its REFERENCE has no such scaffold, and
+	// a lookup that found nothing did not fail: the upsert degraded to a plain insert, so every apply
+	// added the declared rows again instead of updating them.
+	const auto covered = [&t](const ibBackendQueryColumn* col) {
+		for (const ibSchemaIndex& idx : t.m_indexes) {
+			if (!idx.m_unique || idx.m_columns.size() != 1)
+				continue;   // a COMPOSITE unique key is not a single conflict target
+			if (idx.m_columns.front() == col)
+				return true;
+		}
+		return false;
+	};
+
+	for (const ibBackendQueryColumn* sc : t.m_scaffold)
+		if (covered(sc))
+			return sc;
+	for (const ibSchemaColumn& c : t.m_columns)
+		if (c.m_column != nullptr && covered(c.m_column))
+			return c.m_column;
+	return nullptr;
+}
+
+const ibSchemaSeedRow* FindSeedRow(const std::vector<ibSchemaSeedRow>& seed, const ibGuid& id)
 {
 	for (const ibSchemaSeedRow& r : seed)
 		if (r.m_id == id)
@@ -233,6 +267,67 @@ bool SeedRowsEqual(const ibSchemaSeedRow& a, const ibSchemaSeedRow& b)
 	return true;
 }
 
+// The seed key IN A FORM THAT SURVIVES THE DEFERRED WRITE — and the two kinds of key are not carried
+// the same way.
+//
+// A SCAFFOLD key (a tabular section's row key) belongs to the SNAPSHOT, which is ephemeral: built at
+// save, diffed, dropped, while the write it feeds runs past the DDL commit on Firebird. It must be
+// COPIED, or the pointer dangles and the crash lands frames away from the capture that caused it.
+//
+// A DECLARED key is a different object entirely — a reference object is keyed by its own reference,
+// which is an ATTRIBUTE, and an attribute lives in the configuration, which outlives every apply. It
+// must NOT be copied: it is not an ibRawDBColumn at all, so the cast that copies one reads its memory
+// as a class it never was. Both kinds arrive here as the same interface pointer, and the interface is
+// what tells them apart (IsRawColumn) — the question was already there to ask.
+struct SeedKey {
+	const ibBackendQueryColumn*    m_col = nullptr;   // bind through this
+	std::shared_ptr<ibRawDBColumn> m_owned;           // non-null only for a copied scaffold column
+	bool IsOk() const { return m_col != nullptr; }
+};
+
+SeedKey SeedKeyFor(const ibSchemaTable& t)
+{
+	SeedKey key;
+	const ibBackendQueryColumn* const src = SeedKeyColumn(t);
+	if (src == nullptr)
+		return key;   // no key — the table carries no declared rows either
+	if (src->IsRawColumn()) {
+		key.m_owned = std::make_shared<ibRawDBColumn>(*static_cast<const ibRawDBColumn*>(src));
+		key.m_col   = key.m_owned.get();
+	}
+	else {
+		key.m_col = src;
+	}
+	return key;
+}
+
+// ⭐⭐ THE IDENTITY, IN THE FORM ITS KEY COLUMN ACCEPTS — and the two forms are not interchangeable.
+//
+// A SCAFFOLD key is a raw guid field: handed an ibValueGuid, it writes sixteen bytes and the row is
+// identified. A REFERENCE key is not a guid column at all — it spreads into _TYPE / _RTRef / _RRRef and
+// is written by the metadata codec, which expects a REFERENCE value. Handed a bare guid, the codec has
+// no reference to spread and writes the empty one: every declared row then lands with the same three
+// fields, MATCHING folds them into each other, and a dozen declared values become ONE empty row.
+//
+// The split is not between KINDS of metaobject: an enumeration's reference is the same column a
+// catalog's is, and since the row-key scaffold was retired every reference object is keyed this way.
+// It is between a column that IS a raw field and a column that spreads — which is what IsRawColumn
+// answers, and today only a tabular section still answers it yes.
+//
+// The declaration already carries the right value — the row sets its own reference as a cell — so that
+// is what the key is written from, and the cell itself is dropped from the column list (a value named
+// twice is a column repeated in the INSERT, which Firebird refuses outright).
+ibValue SeedKeyValue(const ibSchemaTable& t, const SeedKey& key, const ibSchemaSeedRow& row)
+{
+	if (key.IsOk() && !key.m_col->IsRawColumn()) {
+		for (const auto& cell : row.m_values)
+			if (const ibSchemaColumn* c = FindColumn(t.m_columns, cell.first))
+				if (c->m_column == key.m_col)
+					return cell.second;
+	}
+	return ibValuePtr<ibValueGuid>(new ibValueGuid(row.m_id));
+}
+
 // Generic seed-row UPSERT — resolve each cell's column by id from the table's own m_columns and SetValue
 // it; the uuid is the row key. Captured BY VALUE (queryable + resolved column ptrs live in the config, the
 // cells copied) so the closure survives the FB barrier (a row into a just-created table runs post-commit,
@@ -241,94 +336,125 @@ void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 {
 	const wxString    table    = t.m_name;
 	const ibMetaData* metaData = t.m_queryable != nullptr ? t.m_queryable->GetMetaData() : nullptr;
-	const wxString    uuid     = row.m_id;
 	ibDatabaseConnectionHolder* h = holder != nullptr ? holder : db_query->GetHolder();   // the builder's conn, or local
 
-	// The seed's row-key column = the row-identity SCAFFOLD that a UNIQUE index covers (the upsert conflict
-	// target), read OFF THE SCHEMA — never a hardcoded "uuid". A table whose key floats over other fields
-	// (a register: recorder+line / dimensions) has no unique scaffold key here — but it also carries no
-	// predefined seed, so keyName stays empty and the write degrades to a plain insert. Resolved to a
-	// string so the deferred lambda holds no pointer into the snapshot.
-	wxString keyName;
-	for (const ibBackendQueryColumn* sc : t.m_scaffold) {
-		for (const ibSchemaIndex& idx : t.m_indexes) {
-			if (!idx.m_unique)
-				continue;
-			bool covers = false;
-			for (const ibBackendQueryColumn* ic : idx.m_columns)
-				if (ic == sc) { covers = true; break; }
-			if (covers) { keyName = sc->GetPhysicalName(); break; }
-		}
-		if (!keyName.empty())
-			break;
-	}
+	// The key, carried the way its KIND requires — see SeedKeyFor. (Cell columns are always live
+	// configuration pointers and need nothing.)
+	//
+	// ⭐⭐ AND IT IS AS MANY FIELDS AS ITS COLUMN SPREADS INTO — not one name.
+	//
+	// A scaffold key is a single physical field, so naming the column was naming the field, and the two
+	// were the same sentence while every declared row was keyed by a scaffold. A key that is a REFERENCE
+	// is not: it occupies three fields (_TYPE / _RTRef / _RRRef), the unique index over it covers all
+	// three (ibStructureBatch::CreateIndex expands the same way), and the bind below pushes three
+	// values. Naming one produced a statement whose column list and parameter list did not describe the
+	// same row - "UPDATE OR INSERT INTO … (fld1622, fld1622_TYPE, fld1622_RTRef, fld1622_RRRef, …)" -
+	// and Firebird answered about the one name that is not a column at all.
+	const SeedKey key = SeedKeyFor(t);
+	const std::vector<wxString> keyFields = key.IsOk()
+		? ColumnFieldNames(key.m_col)
+		: std::vector<wxString>();
+	const ibValue keyValue = SeedKeyValue(t, key, row);
 
 	// Resolve each cell to the table's live column by id (a cell for a column the table lacks is dropped).
+	//
+	// ⭐ AND THE KEY IS NOT ALSO A CELL. When the key is a DECLARED column, the row that declares its
+	// value declares it twice over: once as the identity the upsert matches on, once as an ordinary
+	// cell - the row's reference IS its key, and it is written as a cell because that is how a row says
+	// what it holds. Both spread to the same physical fields, so the statement listed
+	// fld1622_TYPE twice and Firebird refused it ("column cannot be repeated in INSERT statement").
+	// The key wins: it carries the same value, and it is the one the MATCHING clause needs.
 	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> cells;
 	for (const auto& cell : row.m_values)
 		if (const ibSchemaColumn* c = FindColumn(t.m_columns, cell.first))
-			cells.push_back({ c->m_column, cell.second });
+			if (c->m_column != key.m_col)
+				cells.push_back({ c->m_column, cell.second });
 
-	batch.Insert([table, uuid, keyName, cells, metaData, h]() -> bool {
+	batch.Insert([table, keyValue, keyFields, key, cells, metaData, h]() -> bool {
 		// A seed row is a VALUE-TABLE row keyed by its scaffold key (the uuid) — UPSERT matching on THAT
 		// key, NOT the queryable's data-reference (a seed never sets it, and an enum table has no such
 		// column, so matching on it raised "FLDxxxx_TYPE does not belong"). Columns = the key + each
 		// cell's physical field spread; cell values bind through the column codec like a real row write.
-		const bool hasKey = !keyName.empty();
-		std::vector<wxString> columns;
-		if (hasKey)
-			columns.push_back(keyName);
+		const bool hasKey = !keyFields.empty();
+		std::vector<wxString> columns = keyFields;
 		for (const auto& cell : cells)
 			for (const wxString& f : ColumnFieldNames(cell.first))
 				columns.push_back(f);
 
-		ibQueryStatement stmt(ibQueryStatement::Kind::Upsert, table, columns,
-			hasKey ? std::vector<wxString>{ keyName } : std::vector<wxString>{}, h);
+		ibQueryStatement stmt(ibQueryStatement::Kind::Upsert, table, columns, keyFields, h);
 		int position = 1;
+		// ⭐⭐ EVERY VALUE GOES THROUGH THE WRITE PATH'S OWN DOOR — key and cells alike.
+		//
+		// The key used to be bound here by hand, as the guid's TEXT, into a column declared BINARY(16)
+		// (columnLayout.cpp § THE ROW KEY): the engine stored what fitted, so every declared row landed
+		// under a key that is the FIRST SIXTEEN CHARACTERS of its own guid — rows that exist and cannot
+		// be found by identity, which a list shows as "Not found <…>". The codec is not the answer to
+		// that either: it serves METADATA columns and opens with a type discriminator, which a raw key
+		// has no field for. BindWriteValue is the one that knows both kinds, and it is what the ordinary
+		// row write has always used — so the seed now writes a row exactly the way saving one does.
 		if (hasKey)
-			stmt.SetParamString(position++, uuid);
+			BindWriteValue(stmt, key.m_col, metaData, keyValue, position);
 		for (const auto& cell : cells)
-			ibColumnCodec::WriteValue(cell.first, metaData, cell.second, &stmt, position);
+			BindWriteValue(stmt, cell.first, metaData, cell.second, position);
 		stmt.RunQuery();   // a real failure THROWS; the affected-row count (0 = no change) is not an error
 		return true;
 	});
 }
 
-// Generic seed-row DELETE by uuid.
-void EraseSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const wxString& uuid, ibDatabaseConnectionHolder* holder)
+// Generic seed-row DELETE by identity — the same key, in the same form, the write used. A delete
+// spelled differently from the write matches no row and reports success, which is the quietest way to
+// leave a retired value in the table for good.
+void EraseSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchemaSeedRow& row, ibDatabaseConnectionHolder* holder)
 {
-	const wxString table = t.m_name;
+	const wxString    table    = t.m_name;
+	const ibMetaData* metaData = t.m_queryable != nullptr ? t.m_queryable->GetMetaData() : nullptr;
+	const SeedKey key = SeedKeyFor(t);            // carried the same way the write carries it
+	const ibValue keyValue = SeedKeyValue(t, key, row);   // and SPELLED the same way — see SeedKeyValue
 	ibDatabaseConnectionHolder* h = holder != nullptr ? holder : db_query->GetHolder();
-	batch.Insert([table, uuid, h]() -> bool {
-		ibQueryStatement del(ibQueryStatement::Kind::Delete, table, { ibRowKeyField() }, {}, h);
-		del.SetParamString(1, uuid);
+	batch.Insert([table, keyValue, key, metaData, h]() -> bool {
+		if (!key.IsOk())
+			return true;   // no key to delete by — the table carries no declared rows either
+		ibQueryStatement del(ibQueryStatement::Kind::Delete, table, ColumnFieldNames(key.m_col), {}, h);
+		int position = 1;
+		BindWriteValue(del, key.m_col, metaData, keyValue, position);
 		del.RunQuery();    // a real failure THROWS; deleting a row that isn't there (0 rows) is not an error
 		return true;
 	});
 }
 
-// SEED diff: compare two value tables (baseline vs target) cell-by-cell, poured into the SAME batch as the
-// structure so a row seeded into a just-created table defers past the DDL commit (FB barrier):
+// SEED application: every declared row is RE-ASSERTED, poured into the SAME batch as the structure so a
+// row seeded into a just-created table defers past the DDL commit (FB barrier). The baseline is compared
+// only to decide what the change ledger SAYS:
 //   * not in baseline            -> new      -> upsert + "Add value"
 //   * in baseline, cells changed -> changed  -> upsert + "Change value"
-//   * in baseline, cells equal   -> unchanged-> SKIP (no re-write, no ledger line)
+//   * in baseline, cells equal   -> unchanged-> upsert, silently (no ledger line)
 //   * gone from target           -> removed  -> delete + "Remove value"
+//
+// ⭐⭐ THE UNCHANGED ROWS ARE WRITTEN TOO, AND THAT IS THE POINT. A seed row is DATA, and the only writer
+// that ever puts it there is this batch — which on Firebird runs DEFERRED, past the DDL commit. A failure
+// in that second phase loses rows the diff can never mention again: both configurations agree the value
+// exists, so every later apply computes "nothing changed" and the row stays missing for good. That is the
+// data half of the hole docs/schema-authority.md § 4.3 patches for structure with a TableExists guard —
+// and data needs no guard, because an upsert is idempotent: repeating it IS the repair, and it decides
+// nothing from what the database happens to hold, so the diff remains the sole authority.
+// The declared rows are a handful per table (enum values, predefined items), so re-asserting them costs
+// nothing measurable — and the ledger stays quiet about the ones that did not change, which is what keeps
+// the apply dialog honest.
 int DiffSeedInto(ibStructureBatch& batch, const ibSchemaTable* old, const ibSchemaTable& cur, ibRestructureInfo* report, ibDatabaseConnectionHolder* holder)
 {
 	for (const ibSchemaSeedRow& row : cur.m_seed) {
 		const ibSchemaSeedRow* o = (old != nullptr) ? FindSeedRow(old->m_seed, row.m_id) : nullptr;
-		if (o != nullptr && SeedRowsEqual(*o, row))
-			continue;                              // every cell unchanged -> nothing to write
+		const bool unchanged = (o != nullptr) && SeedRowsEqual(*o, row);
 
 		WriteSeedRow(batch, cur, row, holder);
-		if (report != nullptr)
+		if (report != nullptr && !unchanged)
 			report->AppendInfo((o != nullptr ? _("Change value ") : _("Add value ")) + row.m_name + _(" in ") + LedgerName(cur));
 	}
 	if (old != nullptr) {
 		for (const ibSchemaSeedRow& orow : old->m_seed) {
 			if (FindSeedRow(cur.m_seed, orow.m_id) != nullptr)
 				continue;
-			EraseSeedRow(batch, cur, orow.m_id, holder);
+			EraseSeedRow(batch, cur, orow, holder);
 			if (report != nullptr)
 				report->AppendWarning(_("Remove value ") + orow.m_name + _(" from ") + LedgerName(cur));
 		}
@@ -609,8 +735,31 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 		for (const ibSchemaTable& old : baseline->Tables()) {
 			if (target.Find(old.m_id) != nullptr)
 				continue;
-			if (old.m_external)
-				continue;                         // external tables (sys_const) are never dropped by the differ
+			// ⭐⭐ AN EXTERNAL TABLE IS NOT DROPPED — BUT ITS COLUMNS ARE STILL THE CONFIGURATION'S.
+			//
+			// sys_const is created by the system scaffold and outlives every configuration, so the differ
+			// never drops the TABLE. It used to skip the whole table here, columns included — harmless on
+			// an incremental apply (sys_const is always in the target, so this branch is never reached),
+			// and wrong on the one path that does reach it: a full REBUILD diffs target -> empty, and
+			// skipping meant its columns survived a teardown that removed everything else. The rebuild's
+			// second half then declared them anew on a table that still had them, and Firebird answered
+			// "violation of PRIMARY or UNIQUE KEY constraint on RDB$RELATION_FIELDS" — a constant's column
+			// already exists — which is how loading a database failed after its structure was replaced.
+			//
+			// So the table stands and its declared columns come down, which is exactly what "the differ
+			// manages only its COLUMNS" was supposed to mean.
+			if (old.m_external) {
+				ibStructureBatch external = (old.m_queryable != nullptr)
+					? ibStructureBatch(old.m_queryable)
+					: ibStructureBatch(old.m_name);
+				for (const ibSchemaColumn& c : old.m_columns)
+					if (c.m_column != nullptr)
+						external.DropColumn(c.m_column);
+				if (report != nullptr)
+					report->AppendWarning(_("Clear ") + LedgerName(old));
+				external.Flush(schema);
+				continue;
+			}
 
 			// A DERIVED table does not own its maintenance: the triggers hang on the MOVEMENTS table
 			// and only MENTION the totals by name. Dropping the table therefore leaves them behind,

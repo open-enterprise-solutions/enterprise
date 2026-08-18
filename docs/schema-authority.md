@@ -159,6 +159,28 @@ cannot survive a save is a baseline that lies. The check is mechanical: compare 
 members declared in a metatype's header against the ones named in its `ReadData` / `WriteData`
 (predefined *attributes* are exempt — they serialise as attribute objects, not as properties).
 
+**4.5 An EXTERNAL table is not dropped — but its COLUMNS are still the configuration's.**
+`sys_const` is created by the system scaffold and outlives every configuration, so the differ never
+drops the table. It used to skip the whole table, columns included. Harmless on an incremental apply
+(`sys_const` is always in the target, so that branch is unreachable) and wrong on the one path that
+does reach it: a full **rebuild** diffs target → empty, so its columns survived a teardown that
+removed everything else, and the rebuild's second half declared them anew on a table that still had
+them — Firebird: *"violation of PRIMARY or UNIQUE KEY constraint on RDB$RELATION_FIELDS"*. That is
+what made **loading a database from a file** fail after its structure was replaced. The table stands;
+its declared columns come down with the rest.
+
+**4.6 A failed apply leaves a record.** The audit entry is written by `OnAfterSaveDatabase`, which the
+exception path skips by definition — so a base whose restructuring blew up showed `applied`, `saved`,
+`saved` in its journal and then nothing at all where the failure was. `OnSaveDatabase`'s catch now
+writes `apply_failed` **with the reason** before re-throwing.
+
+**4.7 Loading a file is structure-then-data, and the order is enforced.** The export is a zip of
+`config` / `user` / `data`: the load clears the base, applies the configuration from the file
+(creating the very tables, with the very column ids, the rows are about to be written into), and only
+then restores the rows. Two holes were closed here: the answer of the apply was **discarded** (a
+failed apply went unnoticed and rows poured into tables that were not there), and the entry order was
+not enforced (a file with `data` before `config` would have filled the structure being replaced).
+
 ---
 
 ## 5. How to use this rule when something goes wrong

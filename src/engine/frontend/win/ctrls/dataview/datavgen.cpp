@@ -75,16 +75,31 @@ namespace
 	// helper functions
 	// ----------------------------------------------------------------------------
 
-	// Return the expander column or, if it is not set, the first column and also
-	// set it as the expander one for the future.
+	// Return the expander column or, if it is not set, the first VISIBLE one — and remember it.
+	//
+	// ⭐⭐ THE FALLBACK HAS TO ASK THE SAME QUESTION THE OWNER ASKS. ibValueModelTableBox's
+	// UpdateExpanderColumn picks the first SHOWN column; this fallback used to take GetColumn(0)
+	// regardless of whether anything is drawn there. While every column was visible the two agreed by
+	// accident. They stopped agreeing once a list carried a hidden leading column: the expander was
+	// pinned to a column the render loop skips (`if (col->IsHidden()) continue;`), so `col == expander`
+	// never came true and the twisty was drawn NOWHERE — a folder looked exactly like an item, with no
+	// way to tell that it can be opened at all.
+	//
+	// One question, one rule, in both places: the first column that is actually shown.
 	ibDataViewColumn* GetExpanderColumnOrFirstOne(ibDataViewCtrl* dataview)
 	{
 		ibDataViewColumn* expander = dataview->GetExpanderColumn();
-		if (!expander)
+		if (!expander || expander->IsHidden())
 		{
 			// TODO-RTL: last column for RTL support
-			expander = dataview->GetColumn(0);
-			dataview->SetExpanderColumn(expander);
+			expander = nullptr;
+			for (unsigned int i = 0; expander == nullptr && i < dataview->GetColumnCount(); i++) {
+				ibDataViewColumn* const candidate = dataview->GetColumn(i);
+				if (candidate != nullptr && !candidate->IsHidden())
+					expander = candidate;
+			}
+			if (expander != nullptr)
+				dataview->SetExpanderColumn(expander);
 		}
 
 		return expander;

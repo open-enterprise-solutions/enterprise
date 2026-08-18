@@ -93,8 +93,24 @@ wxString ibDataComposer::AddParam(const ibValue& value)
 	return param;
 }
 
+// ⭐⭐ A SETTING WITH NO FIELD IS NOT A SETTING — IT IS THE ABSENCE OF ONE, and it stops here.
+//
+// These three verbs write a PATH into the rendered text, and an empty one renders a clause with a hole
+// in it: `ORDER BY ` (nothing after it), `WHERE  = &p0`, `TOTALS BY `. The parser then refuses the whole
+// query — correctly, it is not a query — and the list that asked shows the same blank a source with no
+// rows shows. That is how one unset field turned an ENUM's choice list into an empty window: its default
+// sort named a presentation column the enum has no physical field for, so the path arrived empty, and
+// `SELECT Ref FROM Temp.t0 ORDER BY ` died at the space after BY.
+//
+// Dropping is the right answer rather than raising: "sort by nothing" HAS a meaning — the source's own
+// order — while a refusal would only trade an empty list for an error on lists that are otherwise fine.
+// The façade already guarded one of its two doors this way (ibValueSortList::Add writes the composer
+// only `if (!field.IsEmpty())`, while its buffer branch stored the empty item that later came here), and
+// a guard living in one of two doors is the shape of this defect, not its fix.
 ibDataComposer& ibDataComposer::Filter(const wxString& path, const wxString& op, const ibValue& value)
 {
+	if (path.IsEmpty())
+		return *this;
 	m_filters.push_back({ path, op, AddParam(value) });
 	return *this;
 }
@@ -108,6 +124,8 @@ ibDataComposer& ibDataComposer::FilterAst(const ibQueryAstExprPtr& condition)
 
 ibDataComposer& ibDataComposer::Sort(const wxString& path, bool ascending)
 {
+	if (path.IsEmpty())
+		return *this;   // see the note above Filter
 	m_sorts.push_back({ path, ascending });
 	return *this;
 }
@@ -120,6 +138,8 @@ ibDataComposer& ibDataComposer::Total(const wxString& func, const wxString& path
 
 ibDataComposer& ibDataComposer::TotalBy(const wxString& path, ibQueryDimUnfold kind)
 {
+	if (path.IsEmpty())
+		return *this;   // see the note above Filter
 	m_totalBy.push_back({ path, kind });
 	return *this;
 }

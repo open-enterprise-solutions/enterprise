@@ -161,7 +161,7 @@ public:
 	// reference object too, and callers loop ALL columns uniformly. A RAW column (the
 	// uuid; a computed balance field) is read straight off the backing by its RawType.
 	// The row guid is NO special case: read the uuid identity column —
-	//   GetValue(queryable->GetIdentitySort().back().m_col).GetString()
+	//   GetValue(queryable->GetPrimaryKeyColumns().front())
 	// (the raw overload takes a column by ref so a temporary works). No GetGuidString.
 	ibValue GetValue(const ibBackendQueryColumn* col) const;
 	ibValue GetValue(const ibRawDBColumn& rawColumn) const;
@@ -565,7 +565,7 @@ public:
 	// through: From(queryable) + SetValue(col, value)* + Insert()/Upsert(); DELETE keys off
 	// Where() only. The UPSERT match is the QUERYABLE's uniqueness key (GetPrimaryKeyColumns — a
 	// record's data-reference, a register's composite), NOT a per-column flag. The uuid is the read
-	// keyset (GetIdentitySort). The provider does the per-column physical decomposition + positional bind
+	// keyset (the primary key). The provider does the per-column physical decomposition + positional bind
 	// DEEP in L2 (ExecuteWrite builds an ibQueryStatement and calls SetValueAttribute); no field
 	// / position is ever visible here. The column is the ibBackendQueryColumn abstraction (an
 	// attribute IS one; a raw db field — ibRawDBColumn — is one too). (docs §22.1)

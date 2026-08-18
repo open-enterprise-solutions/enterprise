@@ -86,7 +86,6 @@ public:
 	wxString GetQueryTableName() const override { return m_name; }
 	ibMetaID GetQueryTableId()   const override { return m_id; }
 	ibGuid   GetQueryTableGuid() const override { ibGuidImpl i{}; i.m_data1 = static_cast<unsigned long>(m_id); return ibGuid(i); }
-	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 private:
 	wxString m_name;
@@ -117,7 +116,6 @@ public:
 	wxString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()   const override { return m_id; }
 	ibGuid   GetQueryTableGuid() const override { ibGuidImpl i{}; i.m_data1 = static_cast<unsigned long>(m_id); return ibGuid(i); }
-	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 private:
 	wxString m_table;

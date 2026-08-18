@@ -15,7 +15,7 @@
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject - the seed's reference cells
-#include "backend/query/columnLayout.h"                           // ibRowKeyColumn / ibFieldSuffix - the scaffold + field names
+#include "backend/query/columnLayout.h"                           // ibOwnerRefColumn / ibFieldSuffix - the scaffold + field names
 #include "backend/query/schemaSnapshot.h"                         // ibSchemaSnapshot / ibSchemaTable - what a declaration is
 #include "backend/databaseLayer/databaseQueryBuilder.h"           // the L2 door - the rules count rows through it
 #include "backend/restructureInfo.h"                              // ibRestructureInfo - where a refused rule states its reason
@@ -48,8 +48,16 @@ void ContributeAttributeIndexes(ibSchemaTable& t,
 void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& out) const
 {
 	// --- the record's main table ---
+	// ⭐⭐ NO ROW-KEY SCAFFOLD: A REFERENCE OBJECT IS IDENTIFIED BY ITS REFERENCE. The scaffold held
+	// the same sixteen bytes the reference column holds, so the row carried its identity twice and
+	// every tier had to know which of the two it was looking at. It stays where a row has no reference
+	// of its own - a tabular section's line, identified by its owner and its number, and cheaper for
+	// it: those tables are large, their rows repeat one owner, and no type varies down the column.
+	// A reference object is the opposite case, so it keeps the whole reference and nothing beside it.
+	//
+	// Existing databases keep the physical column and lose nothing: a scaffold carries no model id,
+	// so the differ never tracked it and will not drop it.
 	ibSchemaTable& t = out.CreateSchemaTable(GetQueryable());
-	const ibBackendQueryColumn* uuid = t.Scaffold(ibRowKeyColumn());   // uuid row-key
 
 	// THE GENERIC LIST, not predefined + own: it is the one that also carries the common
 	// attributes this object was checked into. They are columns like any other — but they
@@ -60,9 +68,8 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	for (const auto object : GetGenericAttributeArrayObject())
 		t.Add(object);
 
-	t.Index(t.m_name + wxT("_INDEX"), { uuid }, true);                        // uuid uniqueness (replaced the old PRIMARY KEY)
 	if (const ibValueMetaObjectAttributeBase* refAttr = GetDataReference())
-		t.Index(t.m_name + wxT("_REF_UQ"), { refAttr }, true);               // _REF_UQ — the data-reference unique key
+		t.Index(t.m_name + wxT("_REF_UQ"), { refAttr }, true);               // _REF_UQ — the identity, and the only one
 
 	// Per-attribute secondary indexes (plain + predefined: Code / Description / Parent / ...) —
 	// the row reference is the additional-order column. Each carries its own Indexing flag.
@@ -73,7 +80,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	// --- tabular sections — each its own table ---
 	for (const auto tab : GetTableArrayObject()) {
 		ibSchemaTable& tt = out.CreateSchemaTable(tab->GetQueryable());
-		const ibBackendQueryColumn* tabUuid = tt.Scaffold(ibRowKeyColumn());
+		const ibBackendQueryColumn* tabUuid = tt.Scaffold(ibOwnerRefColumn());
 		for (const auto object : tab->GetGenericAttributeArrayObject())
 			tt.Add(object);
 		tt.Index(tt.m_name + wxT("_INDEX"), { tabUuid });                     // tabular uuid index — NOT unique (repeats per owner)
@@ -85,15 +92,48 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 
 void ibValueMetaObjectRecordDataEnumRef::ContributeTables(ibSchemaSnapshot& out) const
 {
-	// The enum table is just the uuid key — the enum VALUES are its SEED rows (data), not columns.
+	// The enum table is its attribute columns; the enum VALUES are its SEED rows (data). No row-key
+	// scaffold - see the record variant above: the reference IS the identity.
 	ibSchemaTable& t = out.CreateSchemaTable(GetQueryable());
-	const ibBackendQueryColumn* uuid = t.Scaffold(ibRowKeyColumn());
-	t.Index(t.m_name + wxT("_INDEX"), { uuid }, true);
 
-	// SEED rows: one per enum value, uuid only (no cells) — the builder diffs by uuid (new -> insert,
-	// gone -> delete); there is no per-value content to compare.
-	for (const auto object : GetEnumObjectArray())
-		t.AddRow(object->GetGuid().str(), object->GetFullName());
+	// ⭐⭐ ITS ATTRIBUTES ARE ITS COLUMNS — the same walk the record family makes, and the whole of what an
+	// enumeration was missing. It declares the SAME predefined attributes every reference object does (the
+	// data reference, and its Order), and it kept none of them: the table was the row key and nothing else.
+	// So the reference existed in the metadata and nowhere in the database, and every tier that names
+	// physical fields named fields nobody had written — the cursor's identity tail asked for
+	// `fld<id>_RRRef`, Firebird answered "Column unknown", and no enum list or choice form could open.
+	//
+	// Nothing here is special-cased for enums: it is what a catalog does, applied to an object whose rows
+	// happen to be declared rather than entered. Storing them costs nothing worth counting either — an
+	// enumeration holds ten or fifteen values, not a million.
+	for (const auto object : GetGenericAttributeArrayObject())
+		t.Add(object);
+
+	// The data-reference unique key, as on the record side: each row's own reference, unique per row.
+	const ibValueMetaObjectAttributeBase* reference = GetDataReference();
+	if (reference != nullptr)
+		t.Index(t.m_name + wxT("_REF_UQ"), { reference }, true);
+
+	const ibValueMetaObjectAttributeBase* order = GetDataOrder();
+
+	// SEED rows: one per enum value — the builder diffs by uuid (new -> insert, gone -> delete) and
+	// writes the cells, so the position travels with the row and needs no second mechanism to maintain.
+	int position = 0;
+	for (const auto object : GetEnumObjectArray()) {
+		ibSchemaSeedRow& row = t.AddRow(object->GetGuid(), object->GetFullName());
+		// The row's own reference, written like a predefined item's — the value IS the row, so the cell
+		// carries the same guid the key does, and every read gets a reference without rebuilding one.
+		// RAW, never Create: a seed cell needs the reference's IDENTITY BYTES, and Create materialises
+		// the object - it goes to read the row it points at, from a table this very declaration is
+		// about to create. Five SELECTs against a table that does not exist yet, five swallowed
+		// exceptions, on every apply. (The record family writes its own reference the same way.)
+		if (reference != nullptr)
+			row.Set(reference, ibValuePtr<ibValueReferenceDataObject>(
+				ibValueReferenceDataObject::CreateRaw(this, object->GetGuid())));
+		if (order != nullptr)
+			row.Set(order, ibValue(position));
+		position++;
+	}
 }
 
 void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) const
@@ -251,13 +291,23 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 		}
 	}
 
+	// RAW, never Create - the same rule the enum's seed above states, and this is the site it was
+	// written for: a seed cell needs the reference's IDENTITY BYTES, while Create MATERIALISES the
+	// object, going off to read the row it points at through the L3 door. That read selects every
+	// attribute this metaobject declares - including the one this very apply is about to ADD - so it
+	// asks the base for a column that does not exist yet and fails once PER PREDEFINED ITEM, at
+	// DECLARATION time, before a single statement has been emitted. ("Field 'fldNNNN_TYPE' not found
+	// in the resultset", twelve times over, in front of the real failure.)
+	//
+	// It is also the schema-authority rule (docs/schema-authority.md): what DDL to emit is decided by
+	// the two configurations, never by asking the database what it currently holds.
 	for (const auto& object : m_predefinedObjectVector) {
 		const wxObjectDataPtr<ibPredefinedValueObject>& parent = object->GetPredefinedParent();
 
-		t.AddRow(object->GetPredefinedGuid().str(), object->GetPredefinedName())
+		t.AddRow(object->GetPredefinedGuid(), object->GetPredefinedName())
 			.Set(GetDataReference(),
 				ibValuePtr<ibValueReferenceDataObject>(
-					ibValueReferenceDataObject::Create(this, object->GetPredefinedGuid())))
+					ibValueReferenceDataObject::CreateRaw(this, object->GetPredefinedGuid())))
 			.Set(m_propertyAttributePredefined->GetMetaObject(), ibValue(object->GetPredefinedName()))
 			.Set(m_propertyAttributeCode->GetMetaObject(), ibValue(object->GetPredefinedCode()))
 			.Set(m_propertyAttributeDescription->GetMetaObject(), ibValue(object->GetPredefinedDescription()))
@@ -265,6 +315,6 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 			.Set(m_propertyAttributeDeletionMark->GetMetaObject(), ibValue(false))
 			.Set(m_propertyAttributeParent->GetMetaObject(),
 				ibValuePtr<ibValueReferenceDataObject>(
-					ibValueReferenceDataObject::Create(this, parent != nullptr ? parent->GetPredefinedGuid() : wxNullGuid)));
+					ibValueReferenceDataObject::CreateRaw(this, parent != nullptr ? parent->GetPredefinedGuid() : wxNullGuid)));
 	}
 }

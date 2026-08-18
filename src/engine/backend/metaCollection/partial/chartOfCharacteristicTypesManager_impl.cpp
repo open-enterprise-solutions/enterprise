@@ -27,9 +27,11 @@ ibValueReferenceDataObject* FindByAttributeLike(const ibValueMetaObjectRecordDat
 		page.m_count = 1;
 		ibDataQueryResult sel = q.Execute(page);
 		if (sel.Next()) {
-			const ibGuid foundedGuid = sel.GetValue(meta->GetQueryable()->GetIdentitySort().back().m_col).GetString();   // uuid identity column
-			if (foundedGuid.isValid())
-				return ibValueReferenceDataObject::Create(meta, foundedGuid);
+			// The identity column by NAME, and the guid from the reference itself — see the same read in
+			// catalogManager_impl.cpp for what the two guesses on this line used to cost.
+			const ibValue rowValue = sel.GetValue(meta->GetDataReference());
+			if (const ibValueReferenceDataObject* const found = rowValue.ConvertToType<ibValueReferenceDataObject>())
+				return ibValueReferenceDataObject::Create(meta, found->GetGuid().GetGuid());
 		}
 	}
 	catch (...) { /* fall through to an empty reference */ }

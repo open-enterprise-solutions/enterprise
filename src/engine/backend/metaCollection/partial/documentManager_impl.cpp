@@ -33,7 +33,11 @@ ibValueReferenceDataObject* ibValueManagerDataObjectDocument::FindByNumber(const
 		page.m_count = 1;
 		ibDataQueryResult sel = q.Execute(page);
 		if (sel.Next()) {
-			const ibGuid foundedGuid = sel.GetValue(m_metaObject->GetQueryable()->GetIdentitySort().back().m_col).GetString();   // uuid identity column
+			// The identity column by NAME, and the guid from the reference itself — see the same read in
+			// catalogManager_impl.cpp for what the two guesses on this line used to cost.
+			const ibValue rowValue = sel.GetValue(m_metaObject->GetDataReference());
+			const ibValueReferenceDataObject* const found = rowValue.ConvertToType<ibValueReferenceDataObject>();
+			const ibGuid foundedGuid = found != nullptr ? found->GetGuid().GetGuid() : ibGuid();
 			if (foundedGuid.isValid())
 				return ibValueReferenceDataObject::Create(m_metaObject, foundedGuid);
 		}

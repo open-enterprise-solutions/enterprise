@@ -31,6 +31,7 @@
 #include "datavgen.paged.private.h"   // kBufferSlack + ScopedPagedFreeze + ibPagedFetch
 
 #include <wx/weakref.h>
+#include <wx/log.h>                              // a first page that failed is SAID, not only journalled
 #include <wx/generic/private/rowheightcache.h>   // HeightCache::Remove
 
 #include <algorithm>
@@ -971,13 +972,15 @@ void ibDataViewCtrl::DispatchPagedFetch(ibFetchDirection dir, int batch)
 		}
 		catch (const ibBackendException& err) {
 			req->m_ok = false;
+			req->m_error = err.GetErrorDescription();
 			if (ibLogger* const log = ibApplicationData::GetLogger())
-				log->Error(wxT("list"), wxT("fetch"), err.GetErrorDescription());
+				log->Error(wxT("list"), wxT("fetch"), req->m_error);
 		}
 		catch (...) {
 			req->m_ok = false;
+			req->m_error = _("unknown exception");
 			if (ibLogger* const log = ibApplicationData::GetLogger())
-				log->Error(wxT("list"), wxT("fetch"), _("unknown exception"));
+				log->Error(wxT("list"), wxT("fetch"), req->m_error);
 		}
 
 		// Marshal back to the UI thread. Through wxTheApp rather than the
@@ -1041,6 +1044,18 @@ void ibDataViewCtrl::DispatchPagedFetch(ibFetchDirection dir, int batch)
 			if (!req->m_ok) {
 				if (!isForward) s->m_pagedRestoreFocusOffset = -1;
 				again = false;
+
+				// ⭐ A FIRST PAGE THAT FAILED IS NOT AN EMPTY LIST, AND MUST NOT LOOK LIKE ONE.
+				// Nothing was read, so the window shows exactly the blank a source with no rows
+				// shows — which is how "the query never ran" reaches a person as "there is no
+				// data here", with the reason sitting in a journal they do not have open.
+				//
+				// Only the RESET speaks. A scroll that fails keeps the rows already on screen and
+				// will be asked again on the next wheel tick, so a dialog per tick would bury the
+				// window it belongs to; that case stays with the journal line it already writes.
+				// The description is DATA, never a format string (docs/exceptions.md).
+				if (isReset && !req->m_error.empty())
+					wxLogError(wxT("%s"), req->m_error);
 				return;
 			}
 

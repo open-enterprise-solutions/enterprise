@@ -68,11 +68,15 @@
 >   factories `String/Number/Binary/Date/Boolean`) = a direct physical column the provider
 >   binds raw (vs attribute decomposition), dispatched on `IsRawColumn()`.
 > - **Key model = one authority.** `GetRowKeyColumn` / `IsReferenceAttribute` /
->   `GetReferenceKeyColumn` **removed**. `GetPrimaryKeyColumns()` owns the UPSERT match +
->   dot-walk self-reference (record → data-reference `_RRRef`, register → composite,
->   constant → `RECORD_KEY`); `GetIdentitySort()` owns the read keyset as **real columns**
->   (catalog uuid, no null sentinel). uuid is a rudiment (PK + read/DELETE key) coexisting
->   with `_RRRef` as two link keys until cleaned. (A code-declared index — `_RRRef` unique, a
+>   `GetReferenceKeyColumn` / `GetIdentitySort` **removed**. `GetPrimaryKeyColumns()` owns the UPSERT
+>   match, the dot-walk self-reference, the read keyset tail AND the row-key / DELETE-by-key column
+>   (record → data-reference `_RRRef`, register → composite, constant → `RECORD_KEY`). The last of
+>   those four was retired 2026-08-18 for being a SECOND answer: it replied with a SORT whose tail
+>   happened to be the key, so consumers took `GetIdentitySort().back()` as "the key" — true only
+>   while nothing else sorted first. An enumeration that orders itself by `Order` put a NUMBER there,
+>   and six manager reads (catalog / chart of accounts / chart of characteristic types / document /
+>   job manager + its start-up census) began reading a number as identity, then parsing a guid out of
+>   its TEXT. `RowKeyColumn` now asks the primary key: one column → the key, composite → none. (A code-declared index — `_RRRef` unique, a
 >   register's dimension key — now reaches EXISTING tables through the normal schema diff: the differ
 >   introspects the physical indexes (`ibDialectDictionary::m_indexListQuery` → FB `RDB$INDICES`,
 >   SQLite `sqlite_master`, PG `pg_indexes`) and creates only the ones the DB is MISSING, via the
@@ -1332,16 +1336,16 @@ The contract digests a metaobject and emits everything needed to build a query:
 - `ResolveAttribute(name | id)` — digest an attribute reference by string (L4
   text) or metaID (L3) into the resolved attribute; null = "no such requisite",
   which is also how L3 validates a name against the metadata tree.
-- `GetQueryTableName` / `GetQueryTableId` — physical layout.
-- `GetIdentitySort()` — the identity / keyset-tiebreaker columns as query-native
-  sort items, **all REAL columns** (no null sentinel): catalog returns `{ uuid }`,
-  a register its real identity attributes (recorder+line, or period?+dimensions),
-  a tabular section `{ line number }`. L3 appends them to the user sort
-  (`EffectiveSort`, deduped by column pointer) → one uniform total order, **no
-  catalog-vs-register fork** in the keyset code. The provider reads a single-key
-  source's row-key field off the unique tail (`RowKeyField` =
-  `GetIdentitySort().back()`); the uuid is a **rudiment** kept as this read keyset
-  + DELETE-by-key column until it is cleaned.
+- `GetQueryTableName` — the physical table. `GetQueryTableGuid` / `GetQueryTableId` are **projections
+  of `GetSourceMetaObject()`**, not questions of their own: every metaobject-backed source implemented
+  both as `m_meta->GetGuid()` / `m_meta->GetMetaID()`, so they are derived by default and overridden
+  only where a source owns an identity WITHOUT a metaobject (a temp table) or cannot answer the
+  metaobject question at all (a tabular section — its metaobject is a COMPOSITE, and the question is
+  typed on the generic data metaobject).
+- **The keyset tail is the PRIMARY KEY.** `EffectiveSort` appends `GetPrimaryKeyColumns()` to the user
+  sort (deduped by column pointer) → one uniform total order, **no catalog-vs-register fork** in the
+  keyset code. There is no separate identity-sort question: the key IS the tiebreaker, so a second
+  answer only gave consumers something wrong to reach for (see the key-model note above).
 - `GetPrimaryKeyColumns()` — the **ONE key authority** for the write UPSERT match
   AND the dot-walk self-reference. A record returns its `{ data-reference }` (the
   row's own `_RRRef` reference blob — unique; the provider reads its Reference field
@@ -1364,11 +1368,11 @@ The contract digests a metaobject and emits everything needed to build a query:
 
 Just as `ibListSqlBuilder` was L2's acceptance test (§18), **`ibRegisterSqlBuilder`
 is L3's**: the register list (`ibValueListRegisterObject`) now reads through the
-same door as catalogs — `From(meta) / Where / OrderBy`, identity tail appended by
-`GetIdentitySort`, anchor via `EffectiveSort` + `Param`. The string builder
+same door as catalogs — `From(meta) / Where / OrderBy`, identity tail appended from the PRIMARY KEY,
+anchor via `EffectiveSort` + `Param`. The string builder
 (`registerSqlBuilder.{h,cpp}`: `BuildSelectHead / BuildFilterWhere / BuildOrderBy
 / BuildAnchorPredicate / Bind*`, plus `IdentityAttrs / EffectiveOrder`) is gone —
-`IdentityAttrs` became `GetIdentitySort`, `EffectiveOrder` became
+`IdentityAttrs` became the queryable's primary key, `EffectiveOrder` became
 `ibMetaQueryBuilder::EffectiveSort`.
 
 ### Performance — L3 must not be inferior to L1
@@ -1418,9 +1422,9 @@ tabular ×2, constant) pass the L3 enum.
 `ibMetaQueryResult::Raw()` (the transitional raw cursor) is **removed**. Its last
 users were the catalog tree-fetch (`BuildTreeRowFromResultSet`); they became
 `BuildTreeRowFromSelection`, reading through `GetValue(attr)` and the row guid via
-the uuid identity column (`GetValue(GetIdentitySort().back().m_col)`; the former
-`GetGuidString()` special accessor is gone — the row-key is read as a column like
-any other). The public surface of `ibMetaQueryResult` now names no L2 result set.
+the identity column (`GetValue(GetPrimaryKeyColumns().front())` — asked by NAME, never taken off the
+tail of a sort; the former `GetGuidString()` special accessor is gone, and the identity is read as a
+column like any other, then asked for its guid AS a reference rather than parsed out of its text). The public surface of `ibMetaQueryResult` now names no L2 result set.
 
 ### 21.4 Header purity — the L3 header includes no L2
 

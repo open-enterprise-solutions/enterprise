@@ -61,17 +61,24 @@ struct ibColumnSlot {
 // Raw -> empty (the column is its own field, no suffix).
 BACKEND_API const wxString& ibFieldSuffix(ibColumnRole role);
 
-// ⭐⭐ THE ROW KEY — ONE NAME, AND IT SAYS WHAT THE COLUMN IS.
+// ⭐⭐ THE OWNER REFERENCE OF A TABULAR SECTION'S LINE — sixteen bytes naming the row's OWNER.
 //
-// Every table carries a key identifying its row, and it holds exactly what a REFERENCE to that row
-// holds: sixteen bytes of pure identity. So it is named the way a reference key is — `Row` plus the
-// reference-id suffix, spelled through the same table every other physical field goes through — and
-// the resemblance stops being a coincidence a reader has to notice.
+// It was called the ROW KEY, and once that was true: every table carried a scaffold column
+// identifying its own row. Reference objects are identified by their REFERENCE now, so the scaffold
+// survives in exactly ONE place — a tabular section, where it holds not the line's identity but the
+// document or catalog item the line belongs to. Repeated across every line of one owner, and
+// deliberately NOT unique (ibDataMover::KeyOf says exactly that where it matches rows by it).
 //
-// It used to be the literal `"uuid"`, typed out at nine call sites and, at six of them, with the
-// wrong KIND beside it (`String`, while the column was declared `Guid`). Both mistakes are the same
-// mistake: a name repeated is a name that can differ. Ask for the column, not for its spelling.
-BACKEND_API const wxString& ibRowKeyField();
+// The old name cost real time. "Row key" reads as identity, so it kept being reached for wherever
+// identity was wanted — into an object's primary key, into a cursor's identity tail, into a seed's
+// match — and each time the mistake surfaced far from here ("unknown attribute 'Row_RRRef'"; a quick
+// choice that would not open). A name is a claim about content, and this one made the wrong claim for
+// a whole family of tables.
+//
+// The PHYSICAL field is unchanged (`Row` + the reference-id suffix, spelled through the same suffix
+// table as every other field): existing databases carry it, and renaming a column is a migration, not
+// a cleanup.
+BACKEND_API const wxString& ibOwnerRefField();
 
 // CAN THIS COLUMN BE COMPARED AT ALL? A value kept WHOLE — a schedule, a type description — lives in a
 // single BLOB field, and a blob is not something SQL can test for equality or order. Filtering or
@@ -82,7 +89,7 @@ BACKEND_API const wxString& ibRowKeyField();
 // the filter and order pickers instead of accepting a condition nobody can execute. Asked of the TYPE,
 // not of a list of clsids at the call site — a value that starts being stored whole answers here.
 BACKEND_API bool ibIsComparableType(const ibTypeDescription& typeDesc);
-BACKEND_API ibRawDBColumn   ibRowKeyColumn();
+BACKEND_API ibRawDBColumn   ibOwnerRefColumn();
 
 // The authority. Decompose a logical column into its physical fields, derived purely
 // from (physical name, type descriptor) — NO metadata: the reference slot is gated by the
@@ -140,6 +147,19 @@ BACKEND_API std::vector<wxString> ColumnFieldNames(const ibBackendQueryColumn* c
 BACKEND_API wxString       ColumnFieldList(const ibBackendQueryColumn* col, const wxString& aggr = wxEmptyString);
 BACKEND_API wxString       ColumnComparePredicate(const ibBackendQueryColumn* col, const wxString& cmp = wxT("="));
 
+
+// ⭐⭐ BIND A VALUE INTO A COLUMN — THE ONE DOOR, and the thing to call instead of the codec.
+//
+// A RAW column (the owner reference, a computed field) is bound straight by its declared RawType; a METADATA
+// column goes through ibColumnCodec below. The distinction matters and is easy to miss from outside:
+// the codec's first act is the TYPE discriminator, which a raw column has no field for — bind a raw
+// key through it and a NUMBER lands in the key's parameter ("a number was bound to a parameter the
+// statement declares as SQL type 452"), or, where the driver is lenient, the tag is stored AS the key.
+//
+// The write path has always gone through here. The schema's seed phase used to bind its key by hand
+// beside it, which is how a declared row's guid reached a BINARY(16) column as text.
+BACKEND_API void BindWriteValue(class ibQueryStatement& statement, const ibBackendQueryColumn* col,
+                                const ibMetaData* metaData, const ibValue& value, int& position);
 
 // ==========================================================================
 // ibColumnCodec — the VALUE codec: the inverse pair that spreads an ibValue across a

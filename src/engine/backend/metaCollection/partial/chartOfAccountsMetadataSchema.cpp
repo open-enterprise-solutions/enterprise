@@ -11,7 +11,7 @@
 #include "chartOfAccounts.h"
 #include "backend/metaData.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // the L2 door - the "who already holds too many" count
-#include "backend/query/columnLayout.h"                   // ibRowKeyField - the section's owner column
+#include "backend/query/columnLayout.h"                   // ibOwnerRefField - the section's owner column
 #include "backend/query/schemaSnapshot.h"                 // ibSchemaTable::m_beforeChange - the rule the declaration carries
 #include "backend/restructureInfo.h"                      // ibRestructureInfo - where that rule states its reason
 
@@ -58,8 +58,8 @@ void ibValueMetaObjectChartOfAccounts::ContributeTables(ibSchemaSnapshot& out) c
 			{
 				ibQueryIR ir;
 				ir.m_root = ibAggregate(ibScan(tableName),
-					{ { ibFunc(wxT("COUNT"), { ibCol(ibRowKeyField()) }), wxT("kindCount") } },
-					{ ibCol(ibRowKeyField()) });
+					{ { ibFunc(wxT("COUNT"), { ibCol(ibOwnerRefField()) }), wxT("kindCount") } },
+					{ ibCol(ibOwnerRefField()) });
 
 				ibQueryResult rs = q.ExecuteIR(ir);
 				while (rs.Next()) {

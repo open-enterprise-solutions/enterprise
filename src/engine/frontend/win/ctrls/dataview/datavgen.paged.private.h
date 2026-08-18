@@ -51,6 +51,10 @@ struct ibPagedFetch {
 	std::shared_ptr<bool> m_alive;            // …if it is still there
 	uint64_t         m_gen = 0;               // …and still the question being asked
 	bool             m_ok  = true;            // the read came back with an answer
+	// WHY the read has no answer, carried back so the delivery can SAY it. The journal line is
+	// written where the throw is caught; this is the copy a person gets to see, and without it
+	// a first page that never ran is indistinguishable on screen from a source with no rows.
+	wxString         m_error;
 	ibDataViewItem   m_anchor;                // Forward / Backward: the row to page from
 
 	// RESET ONLY — how many rows to pull in BEFORE the cursor, so the row the user

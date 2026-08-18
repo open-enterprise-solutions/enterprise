@@ -212,6 +212,33 @@ const ibBackendQueryColumn* ibBackendQueryable::ResolveColumnByName(const wxStri
 	return nullptr;
 }
 
+// ⭐⭐ THE METAOBJECT IS ASKED ONCE, AND ITS GUID AND ID ARE READ OFF IT.
+//
+// These two used to be pure virtuals of their own, and every metaobject-backed source implemented
+// both with the same two lines — `m_meta->GetGuid()`, `m_meta->GetMetaID()`. Three questions, one
+// fact: "which metaobject stands behind this source". A source with none (temp / subquery /
+// computed) answered a hand-written empty, which is precisely what falling through to no metaobject
+// says by itself.
+//
+// The cost of the duplicate is not the typing. A projection published beside the thing it projects
+// invites a consumer to reach for whichever is nearest, and the two drift the moment one is
+// overridden and the other forgotten — the same shape that let a SORT stand in for a KEY until an
+// enumeration reordered itself and every reader of that key read a number.
+//
+// GetQueryTableName stays virtual on purpose: the PHYSICAL table is a different fact, and a temp
+// source has one without a metaobject anywhere.
+ibGuid ibBackendQueryable::GetQueryTableGuid() const
+{
+	const ibValueMetaObjectGenericData* const meta = GetSourceMetaObject();
+	return meta != nullptr ? meta->GetGuid() : wxNullGuid;
+}
+
+ibMetaID ibBackendQueryable::GetQueryTableId() const
+{
+	const ibValueMetaObjectGenericData* const meta = GetSourceMetaObject();
+	return meta != nullptr ? meta->GetMetaID() : 0;
+}
+
 // ==========================================================================
 // ibSubqueryQueryable — a nested query as a source. It is a COMPUTED (RAM) source: the
 // inner query is RUN and its rows materialised into an ibQueryRamTable, so the outer query

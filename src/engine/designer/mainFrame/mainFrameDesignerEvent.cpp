@@ -42,12 +42,43 @@ void ShowBackendErrorChain(wxWindow* parent,
 	// then show only what the user has not just read.
 	const auto chain = ibBackendException::DrainLastErrors();
 	wxString extra;
-	for (std::size_t i = 0; i < chain.size(); ++i) {
+	// THE SAME SENTENCE TWELVE TIMES IS NOT A CHAIN - it is one fact with a count. A failure that
+	// happens PER ROW pushes an identical entry per row, so this had to render thousands of copies of
+	// one line and died of std::length_error ("string too long"), taking the real message with it.
+	// Collapse repeats and say how many: the COUNT is information (the failure is systematic, not a
+	// one-off), the copies are not.
+	wxString previous;
+	size_t repeats = 0;
+	const auto flush = [&extra, &previous, &repeats]() {
+		if (previous.IsEmpty())
+			return;
+		extra += wxT("\n");
+		extra += previous;
+		if (repeats > 1)
+			extra += wxString::Format(wxT("  (x%u)"), (unsigned int)repeats);
+		previous.clear();
+		repeats = 0;
+	};
+	// AND A CEILING ON TOP OF THAT. Collapsing repeats answers the identical-message case; it does
+	// nothing when each entry differs by a row guid, and a per-row failure then builds a string of
+	// thousands of distinct lines - which is the other half of how this report killed itself
+	// (std::length_error, "string too long"). A person reads the first few and the count; the rest
+	// is what the journal is for.
+	const size_t kMaxShown = 20;
+	size_t shown = 0, dropped = 0;
+	for (size_t i = 0; i < chain.size(); ++i) {
 		if (chain[i] == detail || chain[i] == heading)
 			continue;
-		extra += wxT("\n");
-		extra += chain[i];
+		if (chain[i] == previous) { ++repeats; continue; }
+		if (shown >= kMaxShown) { ++dropped; continue; }
+		flush();
+		previous = chain[i];
+		repeats = 1;
+		++shown;
 	}
+	flush();
+	if (dropped > 0)
+		extra += wxString::Format(wxT("\n... and %u more"), (unsigned int)dropped);
 	if (!extra.IsEmpty()) {
 		body += wxT("\n\n--- backend error chain ---");
 		body += extra;

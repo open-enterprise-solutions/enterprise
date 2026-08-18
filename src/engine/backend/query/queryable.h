@@ -417,8 +417,9 @@ public:
 	// its DATA-REFERENCE attribute (the row's own _RRRef reference — unique; the provider reads
 	// its Reference field for the join and its fields for the match); a register returns recorder
 	// + line number + period (recorder-based) or period + dimensions (information register); a
-	// constant its single RECORD_KEY column. The uuid is NOT here — it stays the read keyset /
-	// DELETE key (GetIdentitySort), a second link key until cleaned. Default: none. (docs §22.1)
+	// constant its single RECORD_KEY column. It is ALSO the read keyset and the DELETE key: those
+	// used to ask a second question (GetIdentitySort) that answered with a sort, and a sort stops
+	// being a key the moment something else sorts first. Default: none. (docs §22.1)
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const { return {}; }
 
 	// THIS source's own column with the given name — for UNION, where each branch supplies
@@ -448,15 +449,21 @@ public:
 	// already joins a nested MAX(period) aggregate through ibSubquery — this only lets a queryable
 	// declare the same thing for itself.
 	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const { return nullptr; }
-	virtual ibGuid GetQueryTableGuid() const = 0;
+
+	// This source's guid — DERIVED from GetSourceMetaObject by default, so a metaobject-backed source
+	// says nothing: it already said which metaobject it is. Still virtual, because a source can own an
+	// identity WITHOUT a metaobject — a temp table has a guid of its own and nothing to read it off.
+	// (Body in queryProvider.cpp, where the metaobject type is complete.)
+	virtual ibGuid GetQueryTableGuid() const;
 
 	// The USER-facing name (as in the metadata tree, e.g. "Enumeration3") — for the restructure change
 	// ledger, NOT for SQL. A metaobject-backed source returns its metaobject's name; the default is the
 	// physical table name (a temp / computed source has no friendlier name).
 	virtual wxString GetQueryName() const { return GetQueryTableName(); }
 
-	// This queryable's metaID — the parent-reference blob (tree filter) needs it.
-	virtual ibMetaID GetQueryTableId() const = 0;
+	// This queryable's metaID (the parent-reference blob / tree filter needs it) — the same projection
+	// of the same metaobject, with the same escape for a source that has none.
+	virtual ibMetaID GetQueryTableId() const;
 	// The metadata context the DB provider needs to reconstruct a column's value WITHOUT the
 	// attribute: a reference column rebuilds its ibValueReferenceDataObject from (clsid, blob) via
 	// metaData->GetTypeCtor, an enum its variant via metaData->Create*. A metaobject-backed source
@@ -469,16 +476,19 @@ public:
 	// here so the front reads the source's icon / presentation off the metaobject (as every source object does).
 	virtual const class ibValueMetaObjectGenericData* GetSourceMetaObject() const { return nullptr; }
 
-	// --- row identity / keyset tail --------------------------------------
-	// Identity columns that give a cursor a TOTAL order; L3 appends them after
-	// the user sort. The LAST one is unique. ALL real columns now — no null sentinel:
-	//   catalog/document : { uuid }                          -> the uuid column
-	//   register         : recorder+line  OR  period?+dimensions  (real attrs)
-	// The dot-walk self-reference key AND the UPSERT match both derive from
-	// GetPrimaryKeyColumns (a record's data-reference / a register's composite) — so
-	// there is no GetRowKeyColumn / IsReferenceAttribute / GetReferenceKeyColumn: one
-	// key authority. The uuid stays a second link key (this identity tail) until cleaned.
-	virtual std::vector<ibQuerySortItem> GetIdentitySort() const = 0;
+	// --- row identity ------------------------------------------------------
+	// ⭐⭐ ONE KEY AUTHORITY — GetPrimaryKeyColumns below, and nothing beside it.
+	//
+	// There used to be a second answer here (GetIdentitySort: the columns that give a cursor a total
+	// order, "the last one is unique"). Both described the same fact — what identifies a row — and the
+	// duplicate did the damage a duplicate does: consumers wanting a KEY reached for the tail of a
+	// SORT, which is the same thing only while nothing else sorts first. An enumeration ordering itself
+	// by Order put a number there, and every reader of that tail read a number as identity.
+	//
+	// The keyset tail is now taken from the primary key directly (ibDataQueryBuilder::EffectiveSort),
+	// which is where it always belonged: the key IS the tiebreaker, so there was never a second
+	// question to ask. Likewise no GetRowKeyColumn / IsReferenceAttribute / GetReferenceKeyColumn.
+
 
 	// Reference dot-walk target resolution moved to the PROVIDER (ibDbTableProvider — the one metadata
 	// owner): callers use queryable->GetProvider().ResolveReferenceTarget(queryable, col). The queryable
@@ -631,7 +641,6 @@ public:
 	wxString GetQueryTableName() const override { return wxEmptyString; }
 	ibGuid   GetQueryTableGuid() const override { return wxNullGuid; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
-	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 
 private:
 	std::unique_ptr<ibDataQueryBuilder>      m_inner;     // the nested query (owned by value via the heap)
@@ -696,11 +705,8 @@ public:
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override { return NavigationSource()->ResolveColumnByName(name); }
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override { return NavigationSource()->GetColumns(); }
 	virtual wxString GetQueryTableName() const override { return NavigationSource()->GetQueryTableName(); }
-	virtual ibGuid GetQueryTableGuid() const override { return NavigationSource()->GetQueryTableGuid(); }
 	virtual wxString GetQueryName()       const override { return NavigationSource()->GetQueryName(); }
-	virtual ibMetaID GetQueryTableId()    const override { return NavigationSource()->GetQueryTableId(); }
 	virtual const ibMetaData* GetMetaData() const override { return m_reg->GetQueryable()->GetMetaData(); }
-	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override { return NavigationSource()->GetIdentitySort(); }
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return NavigationSource()->GetPrimaryKeyColumns(); }
 
 protected:

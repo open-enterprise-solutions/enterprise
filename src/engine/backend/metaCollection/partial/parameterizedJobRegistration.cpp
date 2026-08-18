@@ -339,7 +339,13 @@ bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 		ibDataQueryResult selection = query.Execute(page);
 		while (selection.Next()) {
 
-			const ibGuid rowGuid = selection.GetValue(queryable->GetIdentitySort().back().m_col).GetString();
+			// The identity column by NAME, and the guid from the reference itself — see the same read in
+			// catalogManager_impl.cpp for what the two guesses on this line used to cost.
+			const ibValueReferenceDataObject* const rowReference =
+				selection.GetValue(GetDataReference()).ConvertToType<ibValueReferenceDataObject>();
+			if (rowReference == nullptr)
+				continue;
+			const ibGuid rowGuid = rowReference->GetGuid().GetGuid();
 			if (!rowGuid.isValid())
 				continue;
 

@@ -5,7 +5,7 @@
 
 #include "tabularSection.h"
 #include "backend/backend_exception.h"    // ibBackendCoreException — a failed clear says it was the clear
-#include "backend/query/columnLayout.h"   // ibRowKeyColumn — the row key, named in one place
+#include "backend/query/columnLayout.h"   // ibOwnerRefColumn — the owner reference, named in one place
 
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/query/dataQueryBuilder.h"            // L3 — read + write door (From/SetValue/Where/Insert/Delete) + ibRawDBColumn
@@ -17,7 +17,7 @@
 // and a transient (data-processor / report) parent simply never queries it.
 // ⭐⭐ THE OWNER, AS A FIELD OF THE SECTION.
 //
-// A section's rows are keyed to their owner by the row key it stores — the SAME sixteen bytes the
+// A section's rows are tied to their owner by the owner reference each line stores — the SAME sixteen bytes the
 // owner's own reference is. So the link that was only ever a physical detail becomes a field a query
 // can name: `Ref` selects the owner and joins to it, and neither the author nor the engine needs a
 // second column to make that possible.
@@ -41,7 +41,7 @@ const ibBackendQueryColumn* ibTabularQueryable::OwnerRefColumn() const
 		// table contributes `uuid` as a scaffold, so the schema differ never sees this one.
 		const ibMetaID identity = m_meta != nullptr ? (m_meta->GetMetaID() | 0x20000000) : 0;
 
-		m_ownerRef.reset(new ibRawDBColumn(ibRawDBColumn::Reference(ibRowKeyField(),
+		m_ownerRef.reset(new ibRawDBColumn(ibRawDBColumn::Reference(ibOwnerRefField(),
 			owner != nullptr ? reference_to_clsid(owner->GetMetaID()) : 0, wxT("Ref"), identity)));
 	}
 	return m_ownerRef.get();
@@ -62,15 +62,19 @@ std::vector<const ibBackendQueryColumn*> ibTabularQueryable::GetColumns() const
 		columns.push_back(attribute);
 	return columns;
 }
-wxString ibTabularQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
+// ⚠ ANSWERED HERE, and it is not the duplicate the others were. Everywhere else the guid and the
+// metaID are read off GetSourceMetaObject (ibBackendQueryable::GetQueryTableGuid) — a tabular section
+// cannot say that: its metaobject is a COMPOSITE, not the generic data metaobject that question is
+// typed on. It has an identity and no way to publish the thing carrying it, so it states it directly.
 ibGuid ibTabularQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
-wxString ibTabularQueryable::GetQueryName()      const { return m_meta->GetName(); }
 ibMetaID ibTabularQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
+wxString ibTabularQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
+wxString ibTabularQueryable::GetQueryName()      const { return m_meta->GetName(); }
 const ibMetaData* ibTabularQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
-// Identity tail = line number (rows of one parent are ordered + uniquely keyed by it). The PARENT
-// uuid is NOT the identity tail — it is a plain query filter (Where on the raw "uuid" column at
-// read/delete time), so the tabular section has no GetPrimaryKeyColumns (it INSERTs, never upserts).
-std::vector<ibQuerySortItem> ibTabularQueryable::GetIdentitySort() const { return { ibQuerySortItem{ m_meta->GetNumberLine(), true } }; }
+// No key of its own: a line is identified by its OWNER plus its number, and the owner arrives as a
+// plain query filter (Where on the raw "uuid" column at read/delete time) - so the tabular section
+// vends no primary key, and INSERTs rather than upserts. Its reading order is the line number, which
+// the caller states itself (LoadData orders by it).
 // (value materialisation moved to the DB provider's static get-helper.)
 
 bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool createData)
@@ -88,9 +92,9 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 	// set at this call site.
 	try {
 		ibDataQueryBuilder q;
-		// WHERE uuid = srcGuid (the parent filter is a plain raw-column condition, NOT a row-key
+		// WHERE owner = srcGuid (the parent filter is a plain raw-column condition, NOT an identity
 		// sentinel — the tabular identity tail is the line number), ORDER BY line number.
-		q.From(m_metaTable->GetQueryable()).Where(ibRowKeyColumn(), ibValue(wxString(srcGuid)));
+		q.From(m_metaTable->GetQueryable()).Where(ibOwnerRefColumn(), ibValue(wxString(srcGuid)));
 		ibReadPageRequest page;
 		page.m_count = 0;   // all lines
 		ibDataQueryResult selection = q.Execute(page);
@@ -148,7 +152,7 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 	// no-op for a new one), so every line here is a fresh row — never an in-place update. A native UPSERT is
 	// both wrong and impossible here: a tabular row has NO primary-key column, so MATCHING would be empty
 	// (`MATCHING ()` -> FB -104), and post-wipe there is nothing to match anyway. The owner's write is the
-	// gated event; these lines inherit it (the builder is de-policied). uuid is the parent's raw row-key.
+	// gated event; these lines inherit it (the builder is de-policied). The owner reference is the parent's.
 	//
 	// ONE STATEMENT PER CHUNK, NOT ONE PER LINE. All of the above is exactly the shape the door
 	// batches — same columns line to line, a fresh INSERT, no trigger on the table. A hundred-line
@@ -161,9 +165,9 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 
 	for (long row = 0; row < GetRowCount(); row++) {
 		if (row > 0) q.NextRow();
-		// The parent's raw row-key goes on EVERY row: the columns are the statement's, so each
+		// The parent's reference goes on EVERY row: the columns are the statement's, so each
 		// staged row must name the same list in the same order.
-		q.SetValue(ibRowKeyColumn(), ibValue(m_objectValue->GetGuid()));
+		q.SetValue(ibOwnerRefColumn(), ibValue(m_objectValue->GetGuid()));
 		for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 			if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
 				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
@@ -188,7 +192,7 @@ bool ibValueTabularSectionDataObjectRef::DeleteData()
 	if (m_readOnly || m_objectValue->IsNewObject())
 		return true;
 
-	// DELETE ... WHERE uuid = <parent guid> through the L3 write door (uuid = raw row-key). The tabular
+	// DELETE ... WHERE owner = <parent guid> through the L3 write door (a raw guid field). The tabular
 	// section inherits the owner's access (WithAccessPolicy(nullptr)): the owner's OnAccessWrite already
 	// gated this save, and an EMPTY section legitimately deletes 0 rows — under a policy that 0 is misread
 	// as an access denial (fail-closed), which would wrongly block saving a document that has no lines.
@@ -209,7 +213,7 @@ bool ibValueTabularSectionDataObjectRef::DeleteData()
 	if (!ibDataQueryBuilder()
 		.WithAccessPolicy(nullptr)
 		.From(m_metaTable->GetQueryable())
-		.Where(ibRowKeyColumn(), ibValue(m_objectValue->GetGuid()))
+		.Where(ibOwnerRefColumn(), ibValue(m_objectValue->GetGuid()))
 		.Delete())
 		ibBackendCoreException::Error(_("Tabular section '%s': failed to clear the stored rows"),
 			m_metaTable->GetSynonym());

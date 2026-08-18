@@ -17,10 +17,8 @@ public:
 	explicit ibConstantQueryable(const ibValueMetaObjectConstant* meta) : m_meta(meta) {}
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // -> the constant's value column
 	virtual wxString GetQueryTableName() const override;
-	virtual ibGuid GetQueryTableGuid() const override;
-	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
-	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
+	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta — the guid / metaID are read off it
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { RECORD_KEY } — the single-row UPSERT match
 private:
 	const ibValueMetaObjectConstant* m_meta;

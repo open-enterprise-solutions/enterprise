@@ -74,7 +74,6 @@ public:
 	}
 	bool     IsComputedInRam()   const override { return false; }   // physical source (dot-walk allowed; unused here)
 	const ibMetaData* GetMetaData() const override { return nullptr; }
-	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;

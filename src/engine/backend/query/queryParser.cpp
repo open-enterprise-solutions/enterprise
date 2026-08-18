@@ -49,8 +49,13 @@ void ibQueryParser::ExpectPunct(wxChar c, const wxChar* what)
 // can put a caret on it rather than reading the number out of a translated sentence.
 void ibQueryParser::ThrowQueryException(const ibQueryToken& at, const wxString& msg) const
 {
+	// ⚠ THE NUMBER A PERSON READS IS 1-BASED; the one that travels as DATA is not. The lexer converts
+	// the line (`GetCurrentLine() + 1`) and leaves the column as the raw offset, which a caret wants —
+	// so only the SENTENCE is shifted here. Printing the raw offset made every reported position one
+	// character short of the token it named, which reads as "the parser is pointing at the space before
+	// the problem" and costs whoever is reading the log an argument with their own arithmetic.
 	ibBackendQuerySourceException::ErrorAt(at.m_line, at.m_col,
-		_("Query syntax error at line %u (position %u): %s"), at.m_line, at.m_col, msg);
+		_("Query syntax error at line %u (position %u): %s"), at.m_line, at.m_col + 1, msg);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -456,7 +461,12 @@ void ibQueryParser::ParseOrderBy(ibQuerySelect& sel)
 	do {
 		ibQueryOrderItem it;
 		it.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
-		it.m_expr->m_path = ParseDottedName();
+		// ⚠ IN AN ORDER BY ITEM, A KEYWORD IS A NAME — the same rule that already holds after a `.`,
+		// one position earlier. Nothing but a column may stand here, so there is no ambiguity to
+		// resolve, and a configuration naming an attribute `Order`, `Value`, `Count` or `Group` does
+		// not consult our keyword table first. Before this, an enumeration's own `Order` attribute made
+		// `ORDER BY Order` a syntax error, and the list that asked simply came back empty.
+		it.m_expr->m_path = ParseDottedName(/*firstMayBeKeyword*/true);
 		if (AcceptKw(ibQueryKeyword::Desc))      it.m_ascending = false;
 		else if (AcceptKw(ibQueryKeyword::Asc))  it.m_ascending = true;
 		sel.m_orderBy.push_back(std::move(it));
@@ -831,6 +841,25 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 		e->m_paramName = tk.m_text;
 		e->m_line = tk.m_line; e->m_col = tk.m_col;
 		++m_pos;
+		return e;
+	}
+
+	// ⭐⭐ AND WHATEVER KEYWORD IS STILL STANDING HERE IS A NAME.
+	//
+	// Every keyword that can BEGIN an expression has already been taken above — SELECT (subquery),
+	// CASE, NOT, the aggregates, VALUE, CAST, TRUE / FALSE / NULL. One that reaches this line is in a
+	// position where nothing but a column may stand, so there is nothing left for it to be, and the
+	// question needs no list of exceptions to answer: the structure of this function has answered it.
+	//
+	// It is the same rule already written into ORDER BY items and into names after a `.`, arriving at
+	// the third place that needed it. A configuration is entitled to call an attribute `Order`, `Value`
+	// or `Count` — those are ordinary words, and OUR grammar is not a fact about the user's data. An
+	// enumeration's own `Order` column made the list that selected it die on "expected a column,
+	// literal, or parameter", and the form came back empty with no visible reason.
+	if (tk.m_kind == ibQueryTokenKind::Keyword) {
+		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+		e->m_line = tk.m_line; e->m_col = tk.m_col;
+		e->m_path = ParseDottedName(/*firstMayBeKeyword*/true);
 		return e;
 	}
 

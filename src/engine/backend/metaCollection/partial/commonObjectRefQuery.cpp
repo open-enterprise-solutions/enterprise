@@ -122,7 +122,7 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 		ibDataQueryBuilder q;
 		q.WithAccessPolicy(nullptr)   // row LOCK + version read is a physical concurrency op, not a user read:
 		 .From(m_metaObject->GetQueryable())   // lock the RAW row regardless of RLS visibility (RLS is enforced by
-		 .Where(ibRowKeyColumn(), ibValue(wxString(m_objGuid)));   // the guarded UPDATE below)
+		 .WhereKey(m_objGuid);   // the guarded UPDATE below) - by the row's own identity, the reference
 		ibReadPageRequest page;
 		page.m_count         = 1;
 		page.m_lockForUpdate = true;
@@ -328,9 +328,12 @@ bool ibValueRecordDataObjectRef::SaveData()
 	// a hidden L2 statement; the per-DBMS UPSERT spelling is closed by the dialect template;
 	// the match key is the queryable's row-key (uuid). The write goes through the session
 	// holder, so it joins the outer document-save TX.
+	// ⭐ NO SEPARATE ROW-KEY VALUE. The row used to be given its guid twice - once into a row-key
+	// column and once into its own reference cell below - and the two were the same sixteen bytes.
+	// The reference is the identity now, so it is written once, and the UPSERT matches on it (the
+	// primary key the queryable vends).
 	ibDataQueryBuilder writer;
-	writer.From(m_metaObject->GetQueryable())
-	      .SetValue(ibRowKeyColumn(), ibValue(m_objGuid));   // row-key value
+	writer.From(m_metaObject->GetQueryable());
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		ibValue value;
 		if (m_metaObject->IsDataReference(object->GetMetaID())) {
@@ -425,7 +428,7 @@ bool ibValueRecordDataObjectRef::DeleteData()
 	// Best-effort like the prior path (it ignored the result).
 	ibDataQueryBuilder()
 		.From(m_metaObject->GetQueryable())
-		.Where(ibRowKeyColumn(), ibValue(m_objGuid))
+		.WhereKey(m_objGuid)
 		.Delete();
 	return true;
 }

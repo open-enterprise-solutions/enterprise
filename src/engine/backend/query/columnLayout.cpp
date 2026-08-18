@@ -40,17 +40,17 @@ const wxString& ibFieldSuffix(ibColumnRole role)
 	return it != s_suffix.end() ? it->second : s_empty;
 }
 
-const wxString& ibRowKeyField()
+const wxString& ibOwnerRefField()
 {
-	// Built from the ONE suffix table rather than written out: the row key and a reference key are
+	// Built from the ONE suffix table rather than written out: this column and a reference key hold
 	// the same sixteen bytes, and they stay spelled alike because they are spelled from one place.
 	static const wxString s_field = wxT("Row") + ibFieldSuffix(ibColumnRole::ReferenceId);
 	return s_field;
 }
 
-ibRawDBColumn ibRowKeyColumn()
+ibRawDBColumn ibOwnerRefColumn()
 {
-	return ibRawDBColumn::Guid(ibRowKeyField());
+	return ibRawDBColumn::Guid(ibOwnerRefField());
 }
 
 int ibPersistedTypeTag(ibColumnRole role)
@@ -137,7 +137,7 @@ ibColumnType RawType(const ibBackendQueryColumn* col)
 	// Making them one representation is what lets a row's uuid be COMPARED with a reference to that
 	// row: a tabular section's link to its owner, a dot-walk, a join written by hand. Two spellings
 	// of one identity could never meet; one spelling meets itself.
-	case ibRawDBColumn::RawType::Guid:    return ibTypeBinary(reference_size_t);   // the uuid row-key
+	case ibRawDBColumn::RawType::Guid:    return ibTypeBinary(reference_size_t);   // a raw guid field (the owner reference)
 	case ibRawDBColumn::RawType::Blob:    return ibTypeBlob();   // a register's rowData
 	}
 	return ibTypeString(255);

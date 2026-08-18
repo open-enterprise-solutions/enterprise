@@ -5,7 +5,8 @@
 > the **queryable** factory (query sources).
 > Companions: [../CLAUDE.md](../CLAUDE.md) §6 (CLSID kind-typing), §7 (`ibMetaImage`),
 > [script-value-types.md](script-value-types.md) (what gets registered),
-> [query-language-arc.md](query-language-arc.md).
+> [reference-objects.md](reference-objects.md) (what each registered ROLE is for — reference vs
+> object vs manager vs record set), [query-language-arc.md](query-language-arc.md).
 > This is foundation code.
 
 ---

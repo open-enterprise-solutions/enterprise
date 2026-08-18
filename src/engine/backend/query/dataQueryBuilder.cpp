@@ -480,8 +480,9 @@ std::vector<ibQuerySortItem> ibDataQueryBuilder::EffectiveSort(
 	// register's recorder+line+period / period+dimensions). The primary key IS the cursor tie-breaker — the
 	// same key the anchor node carries as its row-key — and a reference key now compares by its real _RRRef
 	// BLOB (BuildAnchorPredicate::ReferenceKeyBlob), so `_RRRef OP blob` agrees with `ORDER BY _RRRef`. L3 just
-	// appends what the user sort does not already cover, for a TOTAL order. GetIdentitySort (the uuid string)
-	// stays the row-key field for delete-by-key / key-in restore — a different concern.
+	// appends what the user sort does not already cover, for a TOTAL order. There is no second identity
+	// question beside the key: delete-by-key and key-IN read the SAME primary key (dbTableProvider's
+	// RowKeyColumn).
 	std::vector<ibQuerySortItem> effective = userSorts;
 	for (const ibBackendQueryColumn* pk : queryable->GetPrimaryKeyColumns()) {
 		if (pk == nullptr) continue;

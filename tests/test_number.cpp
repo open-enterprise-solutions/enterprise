@@ -232,6 +232,72 @@ TEST(NumberArith, OneThirdHasManyDigits) {
     EXPECT_TRUE(c.ToString().StartsWith(wxT("0.3333333333")));
 }
 
+// --- the DIVISION RULE: dividend's digits + kDivExtraDigits, last digit rounded, trailing zeros
+// --- trimmed, kMaxDivFracDigits as the stop for a chain. An endless fraction has to be stopped
+// --- SOMEWHERE, and where it stops must not depend on how the operands happen to be written.
+
+TEST(NumberDivision, IntegerOperandsGetTheFixedRoom) {
+    // 0 fractional digits in -> exactly kDivExtraDigits out.
+    const ibNumber c = ibNumber(1) / ibNumber(3);
+    const wxString text = c.ToString();
+    ASSERT_TRUE(text.StartsWith(wxT("0.")));
+    EXPECT_EQ(text.length() - 2, static_cast<size_t>(ibNumber::kDivExtraDigits));
+}
+
+TEST(NumberDivision, RoomIsAddedToTheDividendsOwnLength) {
+    // A dividend carrying 4 fractional digits keeps them and gains the room on top.
+    const ibNumber c = ibNumber(wxString(wxT("0.1234"))) / ibNumber(3);
+    const wxString text = c.ToString();
+    ASSERT_TRUE(text.StartsWith(wxT("0.")));
+    EXPECT_EQ(text.length() - 2, static_cast<size_t>(4 + ibNumber::kDivExtraDigits));
+}
+
+TEST(NumberDivision, LastDigitIsRoundedNotTruncated) {
+    // 2/3 = 0.666…67, never 0.666…66 — truncation biases every proportion downwards.
+    const wxString text = (ibNumber(2) / ibNumber(3)).ToString();
+    EXPECT_TRUE(text.EndsWith(wxT("7")));
+}
+
+TEST(NumberDivision, ExactQuotientKeepsNoTrailingZeros) {
+    // 1/8 is 0.125 — not 0.125 followed by however many zeros the rule asked for. The next division
+    // measures ITS room from this length, so the zeros would compound.
+    EXPECT_EQ((ibNumber(1) / ibNumber(8)).ToString(), wxString(wxT("0.125")));
+}
+
+TEST(NumberDivision, EqualOperandsWrittenDifferentlyDivideEqually) {
+    // 0.10 and 0.1000000 are one number in two spellings: measured on the written form they would
+    // produce quotients of different length, which are then not equal to each other.
+    const ibNumber a = ibNumber(wxString(wxT("0.10")))      / ibNumber(3);
+    const ibNumber b = ibNumber(wxString(wxT("0.1000000"))) / ibNumber(3);
+    EXPECT_EQ(a, b);
+    EXPECT_EQ(a.ToString(), b.ToString());
+}
+
+TEST(NumberDivision, DivisorLengthDoesNotChangeTheQuotientsLength) {
+    // The room is the DIVIDEND's, so a long divisor must not shorten (or lengthen) the answer.
+    const wxString viaShort = (ibNumber(1) / ibNumber(wxString(wxT("3")))).ToString();
+    const wxString viaLong  = (ibNumber(1) / ibNumber(wxString(wxT("3.0000000000")))).ToString();
+    EXPECT_EQ(viaShort.length(), viaLong.length());
+}
+
+TEST(NumberDivision, ChainStopsAtTheCeiling) {
+    // Each division adds its room; the ceiling is what keeps a chain from climbing forever. It never
+    // shortens the input — only declines to invent more digits.
+    ibNumber v(1);
+    for (int i = 0; i < 40; ++i)
+        v = v / ibNumber(3);
+    const wxString text = v.ToString();
+    const size_t point = text.Find(wxT('.'));
+    ASSERT_NE(point, wxString::npos);
+    EXPECT_LE(text.length() - point - 1, static_cast<size_t>(ibNumber::kMaxDivFracDigits));
+}
+
+TEST(NumberDivision, QuotientAndRemainderReconstructTheDividend) {
+    // What a division drops is the REMAINDER, and `%` returns it exactly — the pair still adds up.
+    const ibNumber a(17), b(5);
+    EXPECT_EQ((a / b).Trunc() * b + (a % b), a);
+}
+
 TEST(NumberArith, DivByZeroThrows) {
     EXPECT_THROW({ ibNumber c = ibNumber(5) / ibNumber(0); (void)c; },
                  std::runtime_error);

@@ -127,6 +127,39 @@ range (e.g. a subtraction) demotes to immediate on the next `StoreBig`.
 
 ---
 
+## 5a. Division — where an endless fraction stops
+
+A quotient has to stop somewhere, and nothing in long division stops it: the algorithm produces digits
+for exactly as long as it is asked to. So the length is decided **before** the division runs, from one
+rule:
+
+> **The dividend's own fractional digits, plus `kDivExtraDigits` (15). The last digit is rounded
+> (half away from zero, the same rule `Round` uses), trailing zeros are trimmed, and
+> `kMaxDivFracDigits` (100) is the stop for a chain.**
+
+Four properties follow, and each of them was a defect before the rule was stated this way:
+
+- **The input is never shortened.** The room is added on top of what the dividend already carries, so
+  dividing a value with 32 digits does not quietly round it to a fixed width first. The ceiling only
+  ever declines to invent more digits — it does not cut the ones that arrived.
+- **The same division always answers the same.** Length is measured on the **normalised** operands
+  (trailing decimal zeros dropped), because `0.10` and `0.1000000` are one number in two spellings.
+  Measured as written, they would produce quotients of different length, which are then **not equal to
+  each other** — and that inequality travels into comparisons, grouping keys and folded totals.
+- **The divisor does not change the answer's length.** The room belongs to the dividend. (Before, the
+  inflation happened before the divisor's exponent was subtracted, so a longer divisor silently
+  produced a shorter quotient.)
+- **A chain of divisions does not creep.** Trimming means `1/8` is `0.125`, not `0.125` followed by
+  however many zeros the rule asked for — so the next division measures its room from real digits.
+
+The remainder is not lost: `%` returns it exactly, so quotient and remainder still reconstruct the
+dividend. Inflation is bounded by the RULE, never by the VALUE — a dividend of 10^1000 is not
+multiplied out into a thousand-digit integer to hold decimal places a number that size has no use for.
+
+Tests: `NumberDivision.*` in `tests/test_number.cpp`.
+
+---
+
 ## 6. Transcendental / power math — exact tier, not `double`
 
 `Pow`, `Sqrt`, `Ln`, `Exp`, `Log(base)` are computed on the **exact decimal tier** (~30 significant
@@ -181,6 +214,12 @@ result is decimal-precise.
 - **Non-exact division is inherently the slow path.** The immediate fast path (§3) covers exact
   integer division only; a decimal quotient with a remainder always pays full long division. That is
   the cost of exactness, not a missing optimisation.
+- **A decoded number's exponent is bounded** (`kMaxDecodedExp10`, ±1e6) at both byte and text doors:
+  past it the bytes are not a number and the decoder says so. Beyond that bound `ToString` answers in
+  scientific notation rather than attempting the plain expansion — a number ALWAYS has a text. This
+  exists because the plain form is built by RESERVING the string first, so a corrupt exponent raised
+  `std::length_error` ("string too long") inside whoever asked for the text — typically the code
+  composing an error message ABOUT that very number, which then lost the message it was carrying.
 - **`exp10` ranges differ by tier** — ±32767 inline (16-bit), full `int32_t` on the heap. A value
   with an extreme exponent but a tiny mantissa still promotes to `BigImpl` purely to carry the
   exponent.

@@ -67,7 +67,6 @@ public:
 	}
 	bool     IsComputedInRam()   const override { return m_computed; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
-	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
@@ -113,7 +112,6 @@ public:
 		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(m_metaId); return ibGuid(impl);
 	}
 	const ibMetaData* GetMetaData() const override { return nullptr; }
-	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;

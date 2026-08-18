@@ -65,7 +65,13 @@ struct ibSchemaIndex
 // Upsert), so the metaobject only DECLARES the data and the builder does the I/O.
 struct ibSchemaSeedRow
 {
-	wxString                    m_id;      // identity (the row uuid) — the match key
+	// ⭐⭐ THE IDENTITY IS A GUID, AND IT STAYS ONE ALL THE WAY DOWN. It used to be held as TEXT here,
+	// so a declared row's guid was spelled out at the declaration, parsed back at the write, spelled
+	// again for the delete — three conversions of a value that never needed to become words. Worse,
+	// the text is what invited the write to bind it AS text into a sixteen-byte key column, where it
+	// was truncated to its first sixteen characters: rows that exist under a key nothing can match,
+	// and a value whose presentation is looked up BY GUID then finds nothing to show.
+	ibGuid                      m_id;      // identity (the row's guid) — the match key
 	wxString                    m_name;    // friendly name for the change ledger
 	std::map<ibMetaID, ibValue> m_values;  // cell map: column metaID -> value (empty for an enum: uuid only)
 
@@ -293,6 +299,7 @@ struct ibSchemaTable
 	// Declared DATA rows (enum / predefined values) — diffed by uuid, applied/erased through the batch.
 	std::vector<ibSchemaSeedRow>            m_seed;
 
+
 	// Own a raw column and return a stable pointer to it (for scaffold / index use).
 	const ibBackendQueryColumn* OwnRaw(ibRawDBColumn col)
 	{
@@ -336,7 +343,7 @@ struct ibSchemaTable
 	}
 
 	// Add a DATA row (enum value / predefined value) — returns it so cells bind fluently: AddRow(uuid,name).Set(qc,val)...
-	ibSchemaSeedRow& AddRow(const wxString& uuid, const wxString& name = wxEmptyString)
+	ibSchemaSeedRow& AddRow(const ibGuid& uuid, const wxString& name = wxEmptyString)
 	{
 		ibSchemaSeedRow r; r.m_id = uuid; r.m_name = name;
 		m_seed.push_back(std::move(r));

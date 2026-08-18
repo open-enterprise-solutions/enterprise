@@ -43,7 +43,6 @@ public:
 	ibMetaID GetQueryTableId()   const override { return 1; }
 	ibGuid   GetQueryTableGuid() const override { ibGuidImpl impl{}; impl.m_data1 = 1; return ibGuid(impl); }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
-	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;

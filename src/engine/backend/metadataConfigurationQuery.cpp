@@ -258,6 +258,23 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 
 	}
 	catch (...) {
+		// ⭐ A FAILED APPLY LEAVES A RECORD — and until now it was the ONLY outcome that did not. The
+		// audit entry is written by OnAfterSaveDatabase, which this path skips BY DEFINITION, so a base
+		// whose restructuring blew up showed "applied", "saved", "saved" in its journal and then simply
+		// nothing where the failure was. Reading the journal afterwards, the failure had never happened.
+		//
+		// The reason travels with it. The exception is re-thrown unchanged (the caller still surfaces the
+		// chain); this only makes sure the base itself remembers what refused and when.
+		if (ibLog != nullptr && ibLog->IsEnabled(ibLogLevel::Audit)) {
+			wxString reason;
+			try { throw; }
+			catch (const ibBackendException& err) { reason = err.GetErrorDescription(); }
+			catch (const std::exception& err)     { reason = wxString::FromUTF8(err.what()); }
+			catch (...)                           { reason = _("unknown exception"); }
+			ibLog->Audit(wxT("metadata"), wxT("apply_failed"),
+			             wxString::Format(wxT("flags=0x%X: %s"), flags, reason));
+		}
+
 		// The exception skips OnAfterSaveDatabase, so close the build here through the builder — it rolls
 		// back its transaction AND releases the exclusive it took (its OnAfterSave's AutoRelease). Then
 		// rethrow so the caller surfaces the backend error chain.

@@ -23,11 +23,12 @@ const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const wxStr
 	const ibValueMetaObjectConstant::ibValueMetaObjectConstantColumn* column = m_meta->GetValueColumn();
 	return column != nullptr && name.IsSameAs(column->GetName(), false) ? column : nullptr;
 }
+// The metaobject behind this source — the guid and the metaID are READ OFF IT (see
+// ibBackendQueryable::GetQueryTableGuid), not answered a second time here.
+const ibValueMetaObjectGenericData* ibConstantQueryable::GetSourceMetaObject() const { return m_meta; }
+
 wxString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
-ibGuid ibConstantQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
-ibMetaID ibConstantQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 const ibMetaData* ibConstantQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
-std::vector<ibQuerySortItem> ibConstantQueryable::GetIdentitySort() const { return {}; }   // single row — no keyset
 std::vector<const ibBackendQueryColumn*> ibConstantQueryable::GetPrimaryKeyColumns() const {
 	// The single-row sys_const key (UPSERT match) — a RAW column, no metadata translation.
 	static const ibRawDBColumn s_recordKey(wxT("RECORD_KEY"), ibRawDBColumn::RawType::String);

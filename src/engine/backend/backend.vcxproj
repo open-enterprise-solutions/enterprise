@@ -339,6 +339,7 @@
     <ClInclude Include="system\value\valueArray.h" />
     <ClInclude Include="system\value\valueColour.h" />
     <ClInclude Include="system\value\valueEvent.h" />
+    <ClInclude Include="system\value\valueBinaryData.h" />
     <ClInclude Include="system\value\valueFile.h" />
     <ClInclude Include="system\value\valueFont.h" />
     <ClInclude Include="system\value\valueGuid.h" />
@@ -782,6 +783,7 @@
     <ClCompile Include="system\value\valueDatabasePrepareStatement.cpp" />
     <ClCompile Include="system\value\valueDatabaseResultSet.cpp" />
     <ClCompile Include="system\value\valueEvent.cpp" />
+    <ClCompile Include="system\value\valueBinaryData.cpp" />
     <ClCompile Include="system\value\valueFile.cpp" />
     <ClCompile Include="system\value\valueFont.cpp" />
     <ClCompile Include="system\value\valueGuid.cpp" />

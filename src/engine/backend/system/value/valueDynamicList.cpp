@@ -329,12 +329,37 @@ void ibValueDynamicList::AddSort(const wxString& path, bool ascending)
 	NotifyReset();
 }
 
+// ⭐⭐ A SORT IS ONLY A SORT IF THE SOURCE HAS THAT COLUMN.
+//
+// The metaobject hands a column in; the composer writes its NAME into query text. A column the queryable
+// does not carry therefore leaves the source and returns as a word in `ORDER BY` that resolves to nothing
+// — and the whole list query dies, which a list shows as an empty window, indistinguishable from a source
+// with no rows.
+//
+// It is not hypothetical: an ENUMERATION passed its `Order` attribute here, from a time when that was a
+// physical column. Its table is the uuid key plus seed rows now, so the source vends `Ref` and nothing
+// else, and every enum choice list rendered `SELECT Ref FROM Temp.t0 ORDER BY Order` — refused by the
+// parser, since `Order` is also a keyword. One stale argument, and no enum could be picked at all.
+//
+// Asked of the queryable rather than fixed at the four call sites: the factory is the one place that holds
+// BOTH facts (the source and the column), so a metaobject cannot get this wrong again by passing a column
+// that used to exist.
+static bool ibSourceHasColumn(const ibBackendQueryable* queryable, const ibBackendQueryColumn* column)
+{
+	if (queryable == nullptr || column == nullptr)
+		return false;
+	for (const ibBackendQueryColumn* col : queryable->GetColumns())
+		if (col == column)
+			return true;
+	return false;
+}
+
 // Create a list with a DEFAULT sort set at creation — the metaobject passes its presentation column. The sort lands
 // on the composer (the store) so the serializer saves it and the user can remove it; NOT re-applied at runtime.
 ibValueDynamicList* ibCreateList(const ibBackendQueryable* queryable, const ibBackendQueryColumn* defaultSort, ibDynamicListView view)
 {
 	ibValueDynamicList* list = new ibValueDynamicList(queryable, view);
-	if (defaultSort != nullptr)
+	if (ibSourceHasColumn(queryable, defaultSort))
 		list->AddSort(defaultSort->GetName());
 	return list;
 }
@@ -346,9 +371,10 @@ ibValueDynamicList* ibCreateHierarchyList(const ibBackendQueryable* queryable, c
 	ibValueDynamicList* list = new ibValueDynamicList(queryable, view);
 	if (folderCol != nullptr) {
 		list->SetFolderColumn(folderCol);                          // folder rows render as drillable containers (even empty)
-		list->AddSort(folderCol->GetName(), /*ascending*/false);   // folders first (IsFolder true sorts before false)
+		if (ibSourceHasColumn(queryable, folderCol))
+			list->AddSort(folderCol->GetName(), /*ascending*/false);   // folders first (IsFolder true sorts before false)
 	}
-	if (presentationCol != nullptr)
+	if (ibSourceHasColumn(queryable, presentationCol))
 		list->AddSort(presentationCol->GetName());
 	return list;
 }
@@ -359,9 +385,9 @@ ibValueDynamicList* ibCreateHierarchyList(const ibBackendQueryable* queryable, c
 ibValueDynamicList* ibCreateFolderList(const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view)
 {
 	ibValueDynamicList* list = new ibValueDynamicList(queryable, view);
-	if (presentationCol != nullptr)
+	if (ibSourceHasColumn(queryable, presentationCol))
 		list->AddSort(presentationCol->GetName());
-	if (folderCol != nullptr)
+	if (ibSourceHasColumn(queryable, folderCol))
 		list->AddFilter(folderCol->GetName(), wxT("="), ibValue(true));   // only folders
 	return list;
 }

@@ -22,11 +22,10 @@ public:
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column + the owner Ref
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;                   // the section's own attributes + Ref
 	virtual wxString GetQueryTableName() const override;
-	virtual ibGuid GetQueryTableGuid() const override;
 	virtual wxString GetQueryName() const override;   // the section's user-facing name (change ledger)
-	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                  // metadata context for column-based value reads
-	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;   // { line number } — parent uuid is a plain filter
+	virtual ibGuid GetQueryTableGuid() const override;    // stated, not derived — see the body (its metaobject is a composite)
+	virtual ibMetaID GetQueryTableId() const override;
 	// The owner reference, as a field of the section — built on demand, kept because a queryable
 	// hands out column POINTERS.
 	const ibBackendQueryColumn* OwnerRefColumn() const;

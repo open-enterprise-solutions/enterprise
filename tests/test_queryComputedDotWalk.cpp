@@ -94,7 +94,6 @@ public:
 	ibGuid   GetQueryTableGuid() const override {
 		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(m_id); return ibGuid(impl);
 	}
-	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 private:
 	wxString m_name;

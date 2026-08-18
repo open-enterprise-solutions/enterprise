@@ -153,7 +153,6 @@ public:
 	wxString GetQueryTableName() const override { return wxEmptyString; }
 	ibGuid GetQueryTableGuid() const override { return wxNullGuid; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
-	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 
 private:
 	ibValue                                    m_table;     // owns the pre-filled rows
@@ -185,7 +184,6 @@ public:
 	ibGuid          GetQueryTableGuid() const override { return m_tableGuid; }
 	ibMetaID          GetQueryTableId()    const override { return 0; }                 // not a metaobject
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }        // reference / enum reconstruction context
-	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }       // scan source — no keyset
 
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
 	{
@@ -250,7 +248,6 @@ public:
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }
 	// No row key and no keyset: a derived table is addressed by its declared key columns, never
 	// scrolled. An identity sort would invent an ordering nothing stores.
-	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
 	{

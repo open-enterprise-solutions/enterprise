@@ -108,26 +108,23 @@ std::vector<const ibBackendQueryColumn*> ibRecordQueryable::GetColumns() const {
 	return cols;
 }
 wxString ibRecordQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
-ibGuid ibRecordQueryable::GetQueryTableGuid() const { return  m_meta->GetGuid(); }
 wxString ibRecordQueryable::GetQueryName()      const { return m_meta->GetName(); }
-ibMetaID ibRecordQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 const ibMetaData* ibRecordQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
-std::vector<ibQuerySortItem> ibRecordQueryable::GetIdentitySort() const {
-	// The row identity is a REAL column now — the uuid, exactly like a register's identity is
-	// real recorder/line/dimension columns (no null sentinel, no GetRowKeyColumn special case;
-	// Pass 1 of BuildSortKeys consumes it uniformly). uuid stays as this rudiment key-column
-	// until it is cleaned up; the function-local static gives a stable address for the sort item.
-	// The row key, asked of the layout tier — this used to name it a second time AND with the wrong
-	// kind (String, while every declaration of the column says Guid), which is exactly what a repeated
-	// name costs.
-	static const ibRawDBColumn s_uuidKey = ibRowKeyColumn();
-	return { ibQuerySortItem{ &s_uuidKey, true } };
-}
 // The uniqueness key (UPSERT match + dot-walk self-reference + row identity) — the data-reference
 // attribute (the pure-guid self-reference blob the row stores; type is the _RTRef column). The provider reads its
-// Reference field for the join key and its fields for the match; uuid stays as a second link key
-// (GetIdentitySort) until cleaned. No GetRowKeyColumn / IsReferenceAttribute / GetReferenceKeyColumn:
-// all three are derived from this one authority. (docs/query-language-arc.md §22.1)
+// Reference field for the join key and its fields for the match. No GetRowKeyColumn /
+// IsReferenceAttribute / GetReferenceKeyColumn / GetIdentitySort — all of them derive from this one
+// authority, and the last of them was retired for pretending to be a second one: it answered with a
+// SORT whose tail happened to be the key, so a source that sorts by something else first (an
+// enumeration, by Order) handed a number to everyone who wanted identity.
+// (docs/query-language-arc.md §22.1)
+// ⚠ THE ROW KEY IS NOT AN ALTERNATIVE ANSWER HERE, however well it fits a source that stores no reference
+// of its own (an enumeration). This key is read by TWO tiers that want different things from it: the cursor
+// expands it into PHYSICAL fields, where the row key is exactly right — and the composer writes its NAME into
+// query TEXT, where the row key is `Row_RRRef`, a physical field the query language deliberately does not
+// know (columnLayout.h § THE ROW KEY). Answering with it made the enum's ordering right and every
+// text-rendered read wrong ("unknown attribute 'Row_RRRef'"), which is how the quick choice stopped opening.
+// Whatever fixes an enum's ordering belongs at the tier that expands fields, not in what the key IS.
 std::vector<const ibBackendQueryColumn*> ibRecordQueryable::GetPrimaryKeyColumns() const {
 	const ibValueMetaObjectAttributeBase* refAttr = m_meta->GetDataReference();
 	if (refAttr == nullptr)
@@ -201,24 +198,9 @@ std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetColumns() c
 	return cols;
 }
 wxString ibRegisterDataQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
-ibGuid ibRegisterDataQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
 wxString ibRegisterDataQueryable::GetQueryName()      const { return m_meta->GetName(); }
-ibMetaID ibRegisterDataQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 const ibMetaData* ibRegisterDataQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
 const ibValueMetaObjectGenericData* ibRegisterDataQueryable::GetSourceMetaObject() const { return m_meta; }   // the metaobject behind the source (front reads its icon)
-std::vector<ibQuerySortItem> ibRegisterDataQueryable::GetIdentitySort() const {
-	std::vector<ibQuerySortItem> ret;
-	if (m_meta->HasRecorder()) {
-		ret.push_back({ m_meta->GetRegisterRecorder(), true });
-		ret.push_back({ m_meta->GetRegisterLineNumber(), true });
-		return ret;
-	}
-	if (m_meta->HasPeriod())
-		ret.push_back({ m_meta->GetRegisterPeriod(), true });
-	for (auto* dim : m_meta->GetGenericDimensionArrayObject())
-		ret.push_back({ dim, true });
-	return ret;
-}
 // Uniqueness key (UPSERT match): recorder + line number + period for a recorder-based register
 // (its dimensions are data); period + dimensions for an information register. The queryable is
 // the authority — no per-column / per-attribute flag. (docs/query-language-arc.md §22.1)

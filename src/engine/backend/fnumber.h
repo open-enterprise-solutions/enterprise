@@ -181,6 +181,43 @@ public:
 	int64_t      ToInt64()   const; // throws on overflow / non-integer
 	double       ToDouble()  const; // lossy for values outside double's precision
 	float        ToFloat()   const; // lossy; truncated double
+	// ⭐⭐ THE EXPONENT A DECODED NUMBER MAY CARRY — and it is not a matter of taste.
+	//
+	// This type is EXACT DECIMAL: every value it holds must be writable as digits, and a value with
+	// exponent e needs |e| of them. The exponent, though, arrives from a BLOB as four raw bytes and was
+	// believed verbatim, so bytes that are not a number at all — a cell read through a column layout
+	// that no longer matches the table, which is exactly what a half-applied restructuring produces —
+	// decoded into a "number" of 10^2000000000. Nothing complained. It detonated later and elsewhere,
+	// the first time anyone asked for its text: the formatter reserves the string it is about to fill,
+	// two billion characters do not fit one, and the standard library throws std::length_error — whose
+	// message is "string too long" and which names neither the number, nor the column, nor the row.
+	// That sentence, arriving in the middle of an apply, said nothing about anything.
+	//
+	// A million digits is past any value an accounting engine can mean and far short of where the text
+	// stops fitting, so the two failure modes cannot meet. Past it, the bytes are not a number, and the
+	// decoder already has a way to say so.
+	static constexpr int32_t kMaxDecodedExp10 = 1000000;
+
+	// ⭐⭐ WHAT STOPS AN ENDLESS FRACTION — because nothing in a long division stops it by itself.
+	//
+	// A third of anything runs forever, and the algorithm has no opinion about that: it produces digits
+	// for exactly as long as it is asked to. So it is asked for a fixed amount MORE than the dividend
+	// already carries — ten digits in, twenty-five out — and that is the whole of the rule. A quotient
+	// is never longer than its dividend plus this, so no division can turn a short number into a
+	// thousand decimal places.
+	//
+	// Measured on the NORMALISED form (trailing decimal zeros dropped first), which is what keeps equal
+	// operands producing equal quotients: 0.10 / 3 and 0.1000000 / 3 would otherwise come out at
+	// different lengths and stop being equal to each other, and that inequality travels into
+	// comparisons, grouping keys and folded totals.
+	static constexpr int32_t kDivExtraDigits = 15;
+
+	// The stop for a CHAIN of divisions, where each result feeds the next and every step would add its
+	// own room. Past it the room is simply not added any more — the DIVIDEND'S OWN digits are never cut,
+	// because shortening data on its way through an operation is a different thing entirely from
+	// declining to invent more of it.
+	static constexpr int32_t kMaxDivFracDigits = 100;
+
 	wxString     ToString()  const;
 	std::wstring ToWString() const;
 
@@ -194,8 +231,8 @@ public:
 	ibNumber Round(int n) const;     // to n decimal places (n >= 0)
 	ibNumber Trunc() const;          // truncate fractional part toward zero
 
-	// Transcendental / power math. Computed on the EXACT decimal tier (~30
-	// significant digits, matching operator/'s precision) — NOT through double:
+	// Transcendental / power math. Computed on the EXACT decimal tier (~34
+	// significant digits) — NOT through double:
 	//   Pow(int)   — exact, repeated multiplication.
 	//   Sqrt       — Newton-Raphson (Heron), double-seeded then refined.
 	//   Exp        — Taylor series + exp(x)=exp(x/2^n)^(2^n) argument reduction.

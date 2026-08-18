@@ -145,7 +145,7 @@ public:
 	// (No per-column primary-key flag: a source's uniqueness key is owned by the QUERYABLE —
 	// ibBackendQueryable::GetPrimaryKeyColumns is the ONE authority for both the write UPSERT
 	// match AND the auto-join self-reference key (a record's data-reference); the uuid read keyset
-	// is GetIdentitySort. The column stays a pure typed descriptor. docs/query-language-arc.md §22.1)
+	// is GetPrimaryKeyColumns. The column stays a pure typed descriptor. docs/query-language-arc.md §22.1)
 
 	// Is this a RAW (direct) physical column — addressed by its concrete field name with NO
 	// metadata translation (no TYPE/_N/_S/_RRRef expansion, no SetValueAttribute decomposition)?

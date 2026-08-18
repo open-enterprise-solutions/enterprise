@@ -1158,6 +1158,12 @@ bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
 	wxZipInputStream zis(fis);
 	std::unique_ptr<wxZipEntry> entry;
 
+	// The entries are READ IN FILE ORDER, and the order carries meaning: rows can only be written once
+	// the structure holding them exists. Our own writer emits config before data, so this is a guard
+	// against a file that says otherwise — answered with a refusal rather than with rows quietly
+	// landing in whatever structure the database happened to have.
+	bool configLoaded = false;
+
 	// Iterate through all entries in the zip file
 	while (entry.reset(zis.GetNextEntry()), entry) {
 
@@ -1184,7 +1190,19 @@ bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
 				if (!activeMetaData->LoadConfigFromBuffer(buffer))
 					return false;
 
-				activeMetaData->SaveDatabase(saveConfigFlag);
+				// ⭐⭐ THE STRUCTURE IS BUILT FIRST, AND THE LOAD STOPS IF IT WAS NOT.
+				//
+				// This is the whole shape of a load: the file carries the configuration and the rows, so
+				// the configuration is applied — creating the very tables, with the very column ids, the
+				// rows are about to be written into — and only then does `data` arrive. The answer used
+				// to be discarded. A failed apply therefore went unnoticed and the load carried on,
+				// pouring rows into tables that were not there or were still the shape of the database
+				// being overwritten: no rows restored, no word said, and a base left half-replaced.
+				if (!activeMetaData->SaveDatabase(saveConfigFlag)) {
+					wxLogError(_("The configuration from the file could not be applied - the data was not loaded"));
+					return false;
+				}
+				configLoaded = true;
 			}
 		}
 		else if (!entry->IsDir() && entry->GetName() == wxT("user")) {
@@ -1224,6 +1242,11 @@ bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
 				wxMemoryBuffer buffer;
 				fos.CopyTo(buffer.GetAppendBuf(fos.GetSize()), fos.GetSize());
 				buffer.SetDataLen(fos.GetSize());
+
+				if (!configLoaded) {
+					wxLogError(_("The file carries data before the configuration - it cannot be loaded"));
+					return false;
+				}
 
 				if (!activeMetaData->RestoreDataFromBuffer(buffer))
 					return false;
