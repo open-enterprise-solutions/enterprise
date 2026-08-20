@@ -838,3 +838,78 @@ TEST(QueryRender, InHierarchyRoundTrips) {
 	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Parent NOT IN HIERARCHY (&Roots)"));
 	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN (&A, &B)"));
 }
+
+// --- windows: `<call> OVER (…)` ---------------------------------------------
+//
+// The grammar reads them; the lowering does not run them yet (it refuses, loudly). These pin the
+// SHAPE the parser produces, so the road that executes it later is built against a fixed target —
+// and pin the four refusals, each of which exists because the silent alternative is worse.
+
+TEST(QueryL4Parser, Window_PartitionOrderAndFrame)
+{
+	auto sel = Parse(wxT("SELECT Region, SUM(Amount) OVER (PARTITION BY Region ORDER BY Period DESC RANGE) AS Running "
+	                     "FROM Document.Sales"));
+	ASSERT_TRUE(sel != nullptr);
+	ASSERT_EQ(sel->m_projections.size(), 2u);
+
+	const ibQueryAstExpr& call = *sel->m_projections[1].m_expr;
+	ASSERT_EQ(call.m_kind, ibQueryAstExprKind::Func);
+	ASSERT_TRUE(call.m_over != nullptr);
+	ASSERT_EQ(call.m_over->m_partitionBy.size(), 1u);
+	ASSERT_EQ(call.m_over->m_orderBy.size(), 1u);
+	EXPECT_FALSE(call.m_over->m_orderBy[0].m_ascending);          // DESC carried
+	EXPECT_EQ(call.m_over->m_frame, ibQueryAstFrame::Range);
+	EXPECT_EQ(sel->m_projections[1].m_alias, wxT("Running"));
+}
+
+// No OVER at all = an ordinary aggregate. The common case must stay untouched by the suffix parser.
+TEST(QueryL4Parser, Window_AbsentLeavesAPlainAggregate)
+{
+	auto sel = Parse(wxT("SELECT SUM(Amount) FROM Document.Sales"));
+	ASSERT_TRUE(sel != nullptr);
+	ASSERT_EQ(sel->m_projections.size(), 1u);
+	EXPECT_TRUE(sel->m_projections[0].m_expr->m_over == nullptr);
+}
+
+// An unordered partition is legal and frameless — it is the denominator of a share-of-total.
+TEST(QueryL4Parser, Window_PartitionOnlyIsTheGroupTotal)
+{
+	auto sel = Parse(wxT("SELECT SUM(Amount) OVER (PARTITION BY Region) FROM Document.Sales"));
+	ASSERT_TRUE(sel != nullptr);
+	const ibQueryAstExpr& call = *sel->m_projections[0].m_expr;
+	ASSERT_TRUE(call.m_over != nullptr);
+	EXPECT_TRUE(call.m_over->m_orderBy.empty());
+	EXPECT_EQ(call.m_over->m_frame, ibQueryAstFrame::Unstated);
+}
+
+TEST(QueryL4Parser, Window_RankingCall)
+{
+	auto sel = Parse(wxT("SELECT ROW_NUMBER() OVER (PARTITION BY Region ORDER BY Amount DESC) AS rn "
+	                     "FROM Document.Sales"));
+	ASSERT_TRUE(sel != nullptr);
+	const ibQueryAstExpr& call = *sel->m_projections[0].m_expr;
+	EXPECT_EQ(call.m_func, ibQueryKeyword::RowNumber);
+	EXPECT_FALSE(call.m_star);                                    // no argument, and no star either
+	ASSERT_TRUE(call.m_over != nullptr);
+	EXPECT_EQ(call.m_over->m_frame, ibQueryAstFrame::Unstated);   // a ranking call has no frame
+}
+
+// A ranking call without OVER numbers rows within nothing — refused where the rule lives, not two
+// layers down as "cannot prepare statement".
+TEST(QueryL4Parser, Window_RankingWithoutOverIsRefused)
+{
+	EXPECT_THROW(Parse(wxT("SELECT ROW_NUMBER() FROM Document.Sales")), ibBackendException);
+}
+
+TEST(QueryL4Parser, Window_RankingWithArgumentIsRefused)
+{
+	EXPECT_THROW(Parse(wxT("SELECT RANK(Amount) OVER (ORDER BY Amount) FROM Document.Sales")), ibBackendException);
+}
+
+// A frame is a position in an ORDER; without one it is about nothing, and quietly ignoring it is how
+// a reader comes to believe the query says something it does not.
+TEST(QueryL4Parser, Window_FrameWithoutOrderIsRefused)
+{
+	EXPECT_THROW(Parse(wxT("SELECT SUM(Amount) OVER (PARTITION BY Region ROWS) FROM Document.Sales")),
+	             ibBackendException);
+}

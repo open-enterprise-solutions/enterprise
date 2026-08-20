@@ -2188,14 +2188,36 @@ statement:= DROP name                              -- release a temp table the p
 select   := SELECT [ALLOWED] [TOP n] [DISTINCT] selList [INTO name] FROM source { join }
             [WHERE predicate] [GROUP BY exprList [HAVING predicate]]
             [ORDER BY orderList] [TOTALS aggregate {',' aggregate} BY totalDim {',' totalDim}]
-proj     := (aggregate | columnPath) [ [AS] alias ]
-aggregate:= (SUM|MIN|MAX|AVG) '(' columnPath ')' | COUNT '(' ('*'|columnPath) ')'
+proj     := (aggregate | ranking | columnPath) [ [AS] alias ]
+aggregate:= ((SUM|MIN|MAX|AVG) '(' columnPath ')' | COUNT '(' ('*'|columnPath) ')') [over]
+ranking  := (ROW_NUMBER|RANK|DENSE_RANK) '(' ')' over
+over     := OVER '(' [PARTITION BY exprList] [ORDER BY orderList] [ROWS | RANGE] ')'
 predicate:= andE {OR andE};  andE := notE {AND notE};  notE := NOT notE | comparison
 comparison := primary [ cmpOp primary | [NOT] LIKE primary
                       | [NOT] IN [HIERARCHY|HIERARCHYONLY] '(' … ')'
                       | IS [NOT] NULL | [NOT] BETWEEN primary AND primary ]
 totalDim := columnPath [HIERARCHY | HIERARCHYONLY | ELEMENTS]
 ```
+
+**`OVER (…)` — windows in the grammar, 2026-08-20. READ, NOT YET RUN.** The parser builds them
+(`ibQueryAstExpr::m_over` → `ibQueryAstWindow`), the renderer writes them back, and the round trip is
+tested. The LOWERING refuses them — `RefuseUnloweredWindow`, naming the call — because the road L4→L3
+does not carry one yet: an aggregate travels as `ibAggregateItem`, which has no window field, and
+five places in `dbTableProvider` build the call out of it. L2-1 has had the node since the same day
+(`ibQueryExpr::m_over`), so what is missing is the middle, not either end.
+
+Refusing beats dropping the `OVER`: a query with the window silently removed still RUNS, reports a
+plain total under the name of a running one, and reads as bad data rather than as a missing feature.
+
+Three grammar rules, each enforced where it is stated rather than two layers down as *cannot prepare
+statement*: a ranking call takes **no argument** and **no frame** and **needs an OVER**; a frame needs
+an `ORDER BY` inside the same `OVER`.
+
+⚠ **THE FRAME IS ONE WORD.** SQL writes `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`; this
+grammar writes `ROWS` (or `RANGE`) and means exactly that. The engine's IR offers those two frames and
+no others, so accepting arbitrary boundaries would be a sentence nothing below could carry out.
+`RANGE` folds rows sharing this row's sort key together — which is what a running BALANCE wants;
+`ROWS` counts strictly row by row and is only right where the sort key is unique by construction.
 
 **`IN HIERARCHY` — the three unfold words in their SECOND venue** (2026-08-13). `Elements` /
 `Hierarchy` / `HierarchyOnly` were parsed only as modifiers of a `TOTALS BY` dimension; they now

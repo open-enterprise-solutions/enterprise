@@ -23,6 +23,7 @@
 
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
+#include "backend/query/queryException.h"   // the READ half refuses a running form with no grain
 
 namespace {
 
@@ -484,6 +485,21 @@ TEST(MaterializeRenderer, TheRunningBalanceIsLeftOutOfTheZeroRowTest) {
     EXPECT_FALSE(text.Contains(wxT(") <> 0 OR SUM(qty_in - qty_out) OVER")));   // ...and not in the test
 }
 
+// ⭐ THE FRAME IS WRITTEN OUT, not left to the engine (2026-08-20, when the clause moved onto L2-1's
+// ibRenderOverClause). All three engines default an ordered window to exactly this, so the SQL means
+// what it always meant -- and that is the point: an unwritten default is a decision nobody can find
+// later, and a fourth engine defaulting differently would move balances without changing any code.
+//
+// RANGE, never ROWS, for a stored total: movements sharing one period are one period's worth of
+// stock, so the closing figure must not depend on the order they come back in.
+TEST(MaterializeRenderer, TheRunningBalanceNamesItsFrame) {
+    Fixture f;
+    const wxString text = CreateText(RenderSqlite(f.spec));
+
+    EXPECT_TRUE(text.Contains(wxT("RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW")));
+    EXPECT_FALSE(text.Contains(wxT("ROWS BETWEEN")));
+}
+
 // Grouped, the test is a HAVING; ungrouped, the same test is a WHERE. One rule, and the clause it
 // belongs in follows from whether anything actually merged.
 TEST(MaterializeRenderer, TheZeroRowTestGoesWhereTheGroupingPutIt) {
@@ -542,4 +558,107 @@ TEST(TotalsPeriod, AMomentOnTheEdgeStillMovesForward) {
 
 TEST(TotalsPeriod, AnInvalidMomentStaysInvalid) {
     EXPECT_FALSE(ibNextPeriodStart(wxDateTime(), ibTotalsPeriod::Day).IsValid());
+}
+
+// ---------------------------------------------------------------------------
+// The READ half — RenderMaterializedRead
+// ---------------------------------------------------------------------------
+//
+// Until 2026-08-20 this half had no tests at all, and it is the half a report's numbers come out
+// of. The periodised reading below is the one that used to be impossible on the server: each period
+// opens where the previous one closed, which no combination of conditional sums expresses.
+
+namespace {
+
+// A balance-and-turnovers read over the turnovers surface: one key, one resource, three figures.
+ibMaterializeReadSpec ReadFixture()
+{
+    ibMaterializeReadSpec r;
+    r.m_view         = wxT("Reg7_T_V");
+    r.m_periodColumn = wxT("period_");
+    r.m_keyColumns   = { wxT("wh") };
+    r.m_to           = ibValue(2026, 3, 31);
+    r.m_from         = ibValue(2026, 1, 1);
+    return r;
+}
+
+wxString ReadSql(const ibMaterializeReadSpec& spec)
+{
+    // Wrapped in a Project so the subquery renders where a caller would actually put it — in a FROM.
+    const ibQueryRelPtr rel = RenderMaterializedRead(spec, wxT("src"));
+    return ibQueryRenderer(SqliteQ()).Render(ibQueryIR(ibProject(rel))).m_sql;
+}
+
+} // namespace
+
+// The unperiodised road, unchanged: three conditions over one scan, no window anywhere. Pinned
+// because the periodised road was added beside it and the two share every line of the builder.
+TEST(MaterializeRead, WholeIntervalStaysConditionalSums) {
+    ibMaterializeReadSpec r = ReadFixture();
+    r.m_columns = {
+        { wxT("Qty_OpeningBalance"), wxT("qty_turn"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true },
+        { wxT("Qty_Turnover"),       wxT("qty_turn"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true },
+        { wxT("Qty_ClosingBalance"), wxT("qty_turn"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo,     true },
+    };
+    const wxString sql = ReadSql(r);
+
+    EXPECT_TRUE(sql.Contains(wxT("CASE")));           // the conditions
+    EXPECT_TRUE(sql.Contains(wxT("GROUP BY wh")));    // one row per key
+    EXPECT_FALSE(sql.Contains(wxT("OVER (")));        // and nothing accumulates
+}
+
+// ⭐ THE READING THAT USED TO FALL INTO RAM. Grouped by the month, the two balances are windows over
+// the period sums, and the opening one is the closing one minus this period's own movement.
+TEST(MaterializeRead, PeriodisedBalanceAccumulatesOnTheServer) {
+    ibMaterializeReadSpec r = ReadFixture();
+    r.m_grain      = ibMaterializeGrain::Calendar;
+    r.m_periodUnit = ibTotalsPeriod::Month;
+    r.m_fromGrain  = ibValue(2026, 1, 1);
+    r.m_columns = {
+        { wxT("Qty_OpeningBalance"), wxT("qty_turn"), wxString(), ibMaterializeAgg::RunningSumExcludingCurrent, ibMaterializeWhen::Always, true },
+        { wxT("Qty_Turnover"),       wxT("qty_turn"), wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::Always, true },
+        { wxT("Qty_ClosingBalance"), wxT("qty_turn"), wxString(), ibMaterializeAgg::RunningSum,                 ibMaterializeWhen::Always, true },
+    };
+    const wxString sql = ReadSql(r);
+
+    // The accumulation: a sum of the period sums, partitioned by the key, ordered by the grain.
+    EXPECT_TRUE(sql.Contains(wxT("SUM(CAST(SUM(")));
+    EXPECT_TRUE(sql.Contains(wxT("OVER (PARTITION BY wh ORDER BY")));
+    // RANGE, so two movements stamped with one period cannot close at two different figures.
+    EXPECT_TRUE(sql.Contains(wxT("RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW")));
+    // The period joined the keys.
+    EXPECT_TRUE(sql.Contains(wxT("GROUP BY wh")));
+    // Opening = closing minus this period's own movement — one window, not two.
+    EXPECT_TRUE(sql.Contains(wxT(") - CAST(SUM(")));
+}
+
+// The lower bound is applied AFTER the window and against the GRAIN. Applied before it, the first
+// period's opening balance would be zero — the accumulation that produces it lives in the periods
+// the answer never shows.
+TEST(MaterializeRead, PeriodisedLowerBoundIsAppliedOutsideTheWindow) {
+    ibMaterializeReadSpec r = ReadFixture();
+    r.m_grain      = ibMaterializeGrain::Calendar;
+    r.m_periodUnit = ibTotalsPeriod::Month;
+    r.m_fromGrain  = ibValue(2026, 1, 1);
+    r.m_columns = {
+        { wxT("Qty_ClosingBalance"), wxT("qty_turn"), wxString(), ibMaterializeAgg::RunningSum, ibMaterializeWhen::Always, true },
+    };
+    const wxString sql = ReadSql(r);
+
+    // An outer layer exists, and the >= test lives in it — after the aggregation, not in its WHERE.
+    const size_t window = sql.find(wxT("OVER ("));
+    const size_t lower  = sql.rfind(wxT("period_ >="));
+    ASSERT_NE(window, wxString::npos);
+    ASSERT_NE(lower,  wxString::npos);
+    EXPECT_GT(lower, window);
+}
+
+// 🛑 A running form in a reading that reports no periods is refused, not read as a plain sum. Read
+// that way it would return the interval's total under the name of an opening balance.
+TEST(MaterializeRead, RunningFormWithoutAGrainIsRefused) {
+    ibMaterializeReadSpec r = ReadFixture();   // m_grain stays Whole
+    r.m_columns = {
+        { wxT("Qty_OpeningBalance"), wxT("qty_turn"), wxString(), ibMaterializeAgg::RunningSum, ibMaterializeWhen::Always, true },
+    };
+    EXPECT_THROW(ReadSql(r), ibBackendQueryException);
 }

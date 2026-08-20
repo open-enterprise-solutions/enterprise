@@ -7,6 +7,7 @@
 
 #include "backend/backend_exception.h"
 #include "backend/query/queryException.h"   // ibBackendQueryException — a bundle that will not install is OURS
+#include "databaseQueryBuilder.h"           // ibRenderOverClause — the OVER (…) spelling is L2-1's, shared, not copied here
 #include "databaseErrorCodes.h"   // DATABASE_LAYER_QUERY_RESULT_ERROR — a failed CREATE is real
 #include "databaseResultSet.h"    // the existence probe reads a row
 
@@ -491,9 +492,29 @@ wxString RenderView(const ibMaterializeSpec& spec,
 	// The window every running form is evaluated over: partition by the key, ordered by the period.
 	// The DATABASE walks the periods — the alternative is carrying every row out to a client and
 	// accumulating there, which turns a report into a transfer.
-	const wxString over = wxT(" OVER (PARTITION BY ") + Join(spec.m_keyColumns, wxT(", "))
-	                    + (spec.m_periodColumn.IsEmpty() ? wxString() : (wxT(" ORDER BY ") + spec.m_periodColumn))
-	                    + wxT(")");
+	//
+	// ⭐ THE FRAME IS NAMED, not left to the engine. RANGE takes every row sharing this row's period
+	// (its PEERS), so a period holding three movements yields ONE closing figure no matter which
+	// order they come back in. That was already the behaviour — it was the unwritten default of all
+	// three engines — and writing it down is what keeps it from changing under a fourth.
+	//
+	// The clause itself is spelled by L2-1's ibRenderOverClause. This file used to concatenate it,
+	// which made a second place that knew what an OVER looks like and, worse, one that never asked
+	// whether the engine HAS window functions. Now the refusal is the shared function's.
+	// ⚠ ASKED FOR ONLY WHERE IT IS USED. The clause speller REFUSES an engine without window
+	// functions, so building it up front would refuse a view that has no running column at all —
+	// a turnovers-only surface would stop working on an engine it never needed windows for.
+	bool hasRunningForm = false;
+	for (const ibMaterializeViewColumn& c : view.m_columns)
+		if (c.m_agg == ibMaterializeAgg::RunningSum || c.m_agg == ibMaterializeAgg::RunningSumExcludingCurrent)
+			hasRunningForm = true;
+
+	const std::vector<wxString> windowOrder = spec.m_periodColumn.IsEmpty()
+		? std::vector<wxString>()
+		: std::vector<wxString>{ spec.m_periodColumn };
+	const wxString over = hasRunningForm
+		? ibRenderOverClause(dialect, spec.m_keyColumns, windowOrder, ibQueryFrame::RangeThroughPeers)
+		: wxString();
 
 	wxString nonZero;
 	for (const ibMaterializeViewColumn& c : view.m_columns) {
@@ -796,13 +817,42 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 		keys.push_back(ibCol(k));
 	}
 
+	// ⭐⭐ THE GRAIN — what one row of the answer is.
+	//
+	// Periodised, the period joins the keys in the GROUP BY and becomes the order the running
+	// columns accumulate along. It is projected under the period column's OWN name, so everything
+	// above (the outer bound below, and the caller's own query) names one thing whether the grain is
+	// the surface's or a calendar unit.
+	const bool periodised = spec.m_grain != ibMaterializeGrain::Whole && !spec.m_periodColumn.IsEmpty();
+	ibQueryExprPtr grain;
+	if (periodised) {
+		grain = (spec.m_grain == ibMaterializeGrain::Calendar)
+			? ibPeriodTrunc(ibCol(spec.m_periodColumn), spec.m_periodUnit)
+			: ibCol(spec.m_periodColumn);
+		proj.push_back(ibQueryProjItem{ grain, spec.m_periodColumn });
+	}
+
 	bool anyAggregate = false;
-	ibQueryExprPtr nonZero;
+	ibQueryExprPtr nonZero;        // HAVING — plain aggregates only
+	ibQueryExprPtr outerNonZero;   // the same test over the finished rows, when a window is involved
+
+	// 🛑 A RUNNING FORM WITHOUT A GRAIN IS A CALLER ERROR, and a loud one on purpose. "Accumulate
+	// along the periods" has no meaning when the answer holds one row per key: read as a plain sum
+	// it would return the interval's total under the name of an opening balance — a number that
+	// looks right, reconciles to nothing, and blames the register.
+	for (const ibMaterializeReadColumn& c : spec.m_columns)
+		if (!periodised && (c.m_agg == ibMaterializeAgg::RunningSum
+		                 || c.m_agg == ibMaterializeAgg::RunningSumExcludingCurrent))
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+				_("A running total was asked for in a reading that reports no periods"));
 
 	for (const ibMaterializeReadColumn& c : spec.m_columns) {
+		const bool runningForm = c.m_agg == ibMaterializeAgg::RunningSum
+		                      || c.m_agg == ibMaterializeAgg::RunningSumExcludingCurrent;
+
 		// The value before any conditioning: a stored column, or the difference of two.
 		ibQueryExprPtr value = ibCol(c.m_columnA);
-		if (c.m_agg == ibMaterializeAgg::Difference && !c.m_columnB.IsEmpty())
+		if ((c.m_agg == ibMaterializeAgg::Difference || runningForm) && !c.m_columnB.IsEmpty())
 			value = ibBinOp(ibQueryBinOp::Sub, ibCol(c.m_columnA), ibCol(c.m_columnB));
 
 		// Conditioning turns "sum this column" into "sum it only for the rows that count" — which
@@ -811,7 +861,34 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 		if (ibQueryExprPtr when = WhenPredicate(spec, c.m_when))
 			value = ibCase({ { when, value } }, zero);
 
-		if (c.m_aggregate) {
+		if (runningForm && periodised) {
+			// ⭐⭐ EACH PERIOD OPENS WHERE THE PREVIOUS ONE CLOSED — the computation conditional sums
+			// cannot express, and the reason this reading fell back to RAM until the IR had a window.
+			//
+			// Two levels of fold, and both are honest SQL: the inner SUM is this period's own
+			// movement, the outer one accumulates those period sums along the order. RANGE, so
+			// nothing depends on the order rows arrive in within a period.
+			const ibQueryExprPtr periodSum = ibCast(ibFunc(wxT("SUM"), { value }), ibTypeNumber(18, 6));
+			const ibQueryExprPtr running = ibWindowed(ibFunc(wxT("SUM"), { periodSum }),
+				ibQueryWindow{ keys, { ibQuerySortKey{ grain, ibQuerySortDir::Asc } },
+				               ibQueryFrame::RangeThroughPeers });
+
+			// The OPENING balance is the same accumulation minus what this period itself did: one
+			// window instead of two, and true by construction — what enters a period is what left
+			// the one before it.
+			value = (c.m_agg == ibMaterializeAgg::RunningSumExcludingCurrent)
+				? ibBinOp(ibQueryBinOp::Sub, running, periodSum)
+				: running;
+			anyAggregate = true;
+
+			// A window may not appear in HAVING — it is computed after it. So a row carrying only a
+			// balance is kept or dropped OUTSIDE, by its alias, where it is an ordinary column.
+			if (spec.m_dropZeroRows) {
+				ibQueryExprPtr nz = ibBinOp(ibQueryBinOp::Ne, ibCol(c.m_alias), zero);
+				outerNonZero = outerNonZero ? ibBinOp(ibQueryBinOp::Or, outerNonZero, nz) : nz;
+			}
+		}
+		else if (c.m_aggregate) {
 			// Pin the width: a bare SUM narrows to (9,0)/(10,0) on Firebird and silently
 			// truncates the fraction.
 			value = ibCast(ibFunc(wxT("SUM"), { value }), ibTypeNumber(18, 6));
@@ -819,13 +896,19 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 			if (spec.m_dropZeroRows) {
 				ibQueryExprPtr nz = ibBinOp(ibQueryBinOp::Ne, value, zero);
 				nonZero = nonZero ? ibBinOp(ibQueryBinOp::Or, nonZero, nz) : nz;
+				// Periodised, the whole test moves outside — a row must survive if ANY figure is
+				// non-zero, and some of those figures are windows. Splitting the test between a
+				// HAVING and an outer WHERE would drop rows the other half would have kept.
+				ibQueryExprPtr onz = ibBinOp(ibQueryBinOp::Ne, ibCol(c.m_alias), zero);
+				outerNonZero = outerNonZero ? ibBinOp(ibQueryBinOp::Or, outerNonZero, onz) : onz;
 			}
 		}
 		proj.push_back(ibQueryProjItem{ value, c.m_alias });
 	}
 
-	// The period column rides through unaggregated reads: the caller groups or reports by it.
-	if (!anyAggregate && !spec.m_periodColumn.IsEmpty())
+	// The period column rides through unaggregated reads: the caller groups or reports by it. A
+	// periodised read already projects it as the grain, above.
+	if (!anyAggregate && !periodised && !spec.m_periodColumn.IsEmpty())
 		proj.insert(proj.begin(), ibQueryProjItem{ ibCol(spec.m_periodColumn), wxString() });
 
 	ibDatabaseQueryBuilder q;
@@ -892,10 +975,32 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 
 	if (anyAggregate) {
 		for (const ibQueryExprPtr& k : keys) q.GroupBy(k);
-		if (nonZero) q.Having(nonZero);
+		if (grain) q.GroupBy(grain);   // the period is a key too, once the reading reports per period
+		// HAVING is post-aggregation but PRE-window, so it can only test the plain sums. Periodised,
+		// the test is done outside instead — see outerNonZero.
+		if (nonZero && !periodised) q.Having(nonZero);
 	}
 
-	return ibSubquery(q.Build().m_root, alias);
+	if (!periodised)
+		return ibSubquery(q.Build().m_root, alias);
+
+	// ⭐ THE PERIODISED READ HAS AN OUTER LAYER, and it is not decoration: a window is computed after
+	// WHERE / GROUP BY / HAVING, so anything that tests a running figure — the lower bound of the
+	// interval, the drop-zero rule — has to stand where the window has already been evaluated.
+	//
+	// The accumulation therefore runs over EVERY period up to the upper bound, including those
+	// before the interval, and the rows the reader did not ask for are dropped here. That is what
+	// makes the first period's opening balance correct: it is the closing balance of a period the
+	// answer never shows.
+	ibDatabaseQueryBuilder outer;
+	outer.From(ibSubquery(q.Build().m_root, alias + wxT("_acc")));
+
+	if (spec.m_fromGrain.GetType() == TYPE_DATE)
+		outer.Where(ibBinOp(ibQueryBinOp::Ge, ibCol(spec.m_periodColumn), ibConst(spec.m_fromGrain)));
+	if (spec.m_dropZeroRows && outerNonZero)
+		outer.Where(outerNonZero);
+
+	return ibSubquery(outer.Build().m_root, alias);
 }
 
 // Does the object a guarded drop targets actually exist? A read, never DDL — so it cannot fail the

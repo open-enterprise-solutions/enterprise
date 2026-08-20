@@ -1554,3 +1554,30 @@ TEST(QueryComputedFilter, ConditionOnUnvendedColumnDoesNotEmptyTheResult)
 	while (res.Next()) ++rows;
 	EXPECT_EQ(rows, 2) << "an unvended column is the source's business; enforcement must skip it";
 }
+
+// ⭐ MEASURES DO NOT CLOSE THE PAGE. The gate has never looked at m_aggregates — ExecuteGroupLevelPage
+// projects them beside the dimension — and until 2026-08-20 nothing upstream noticed: the L4 router
+// required a level with NO figures, so a grouped list with a SUM took the fold and read every detail
+// row of the source to show one page of groups.
+//
+// This pins the premise that router now stands on. If a later change makes the gate reject a shape
+// with aggregates, the routing above it goes quietly back to reading everything.
+TEST(QueryComposerGate, GroupLevelPage_WithMeasures_StillPageable)
+{
+	ibRawDBColumn dim = ibRawDBColumn::String(wxT("code"));
+	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
+
+	SpecBuf buf;
+	buf.groupBy = { &dim };                                  // one plain scalar grouping level…
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };                                      // …and a figure on it
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+
+	EXPECT_TRUE(ibDbTableProvider::CanPageGroupLevel(spec));
+}
+
+// (No sibling test for the COMPUTED-select case: `SpecBuf` does not populate `m_selectExprs`, so the
+//  gate's clause for it cannot be reached from this harness without widening the harness itself. The
+//  router above refuses that shape on its own — a measure over a projection's name goes to the fold.)

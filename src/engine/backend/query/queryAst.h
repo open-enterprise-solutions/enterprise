@@ -95,6 +95,11 @@ struct ibQueryAstExpr
 	bool                  m_distinctArg = false;
 	ibQueryAstExprPtr        m_arg;                          // Func argument
 
+	// Func: the OVER (…) that makes this call a WINDOW — a MODIFIER of the call, held as a field for
+	// the same reason m_distinctArg is one, and mirroring how L2-1 carries it (ibQueryExpr::m_over).
+	// Null = an ordinary call. Defined below, beside the sort item it holds.
+	std::shared_ptr<struct ibQueryAstWindow> m_over;
+
 	ibQueryCompareOp      m_cmp = ibQueryCompareOp::Eq;   // Compare
 	ibQueryArithOp        m_arith = ibQueryArithOp::Add;  // Arith
 	bool                  m_negated = false;              // Like/In/IsNull/Between negation
@@ -175,6 +180,29 @@ struct ibQueryOrderItem
 {
 	ibQueryAstExprPtr m_expr;        // column path (or a reference to a projection alias)
 	bool           m_ascending = true;
+};
+
+// The frame a windowed AGGREGATE folds over — written as ONE word, never as SQL's full boundary
+// clause, because the engine below offers exactly these two and a grammar should not accept a
+// sentence nothing can carry out.
+//
+// Its own enum rather than L2-1's ibQueryFrame: this header is deliberately free of L2 and L3 (the
+// same rule ibQueryDimUnfold follows). The lowering maps one to the other, in one place.
+enum class ibQueryAstFrame
+{
+	Unstated,   // no frame word written — a ranking call, or an unordered partition (the whole of it)
+	Rows,       // this row and every row before it, counted one by one
+	Range       // …and every row sharing this one's sort key, so ties fold together
+};
+
+// `OVER (PARTITION BY … ORDER BY … [ROWS|RANGE])`. Empty partition = the whole result is one
+// partition; empty order = the call folds the partition unordered, which is what the denominator
+// of a share-of-total is.
+struct ibQueryAstWindow
+{
+	std::vector<ibQueryAstExprPtr> m_partitionBy;
+	std::vector<ibQueryOrderItem>  m_orderBy;
+	ibQueryAstFrame                m_frame = ibQueryAstFrame::Unstated;
 };
 
 // (ibQueryDimUnfold — the three unfold words — is declared above the expression node, which now

@@ -479,13 +479,14 @@ arithmetic, and it degrades linearly with headcount.
 This is a requirement on the configuration, not on the engine, and it is the single decision
 that separates a run measured in seconds from one measured in tens of minutes.
 
-### 7.3 `Intervals` and the missing window node
+### 7.3 `Intervals` and the window node
 
 The natural SQL for milestone slicing is `LEAD(period) OVER (PARTITION BY key ORDER BY
-period)`. **The IR has no window node** — all five drivers advertise `m_window = true`
-(`databaseLayer.h`), but nothing in `query/` emits one; the existing `ComputeSlice` reaches
-the same answer through an aggregate subquery self-joined back to the table, materialising an
-`ibQueryRamTable`.
+period)`. **The IR has the node as of 2026-08-20** — `ibQueryExpr::m_over` +
+`ibRenderOverClause`, gated by `m_features.m_window`
+([query-engine-layers.md](query-engine-layers.md) § L2-1). What is still true is that nothing
+in `query/` emits one: the existing `ComputeSlice` reaches the same answer through an
+aggregate subquery self-joined back to the table, materialising an `ibQueryRamTable`.
 
 Given §6.2, this is not a problem — and the day-grain form makes it disappear entirely.
 "Which salary was in force on day D" for every day of the month is the **existing**

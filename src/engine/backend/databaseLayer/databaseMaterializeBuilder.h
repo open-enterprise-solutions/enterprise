@@ -263,15 +263,43 @@ struct ibMaterializeReadColumn
 	bool              m_aggregate = false;                   // wrap in SUM and GROUP BY the keys
 };
 
+// WHAT ONE ROW OF THE ANSWER IS. The whole interval folded into a single figure per key, or the
+// interval broken into periods — and if broken, at the surface's own grain or at a calendar one.
+//
+// This is the difference between "how much moved this quarter" and "how much moved each month of
+// it", and it is the reason the running forms exist at read time: a periodised reading has to open
+// each period where the previous one closed, which conditional sums cannot express and a window can.
+enum class ibMaterializeGrain
+{
+	Whole,         // one row per key
+	StoredPeriod,  // one row per key per period, AS STORED (the surface's own grain)
+	Calendar       // one row per key per period truncated to m_periodUnit
+};
+
 struct ibMaterializeReadSpec
 {
 	wxString m_view;                       // the relation to read — a view, or the totals table
 	wxString m_periodColumn;               // empty = this surface carries no period
 
+	// The grain, and the unit it means when Calendar. A periodised read groups by the period
+	// (truncated or not) ALONGSIDE the keys, and evaluates its running columns over that order.
+	ibMaterializeGrain m_grain      = ibMaterializeGrain::Whole;
+	ibTotalsPeriod     m_periodUnit = ibTotalsPeriod::Month;
+
 	// The period bounds, already resolved to values. Invalid = unbounded on that side; the
 	// conditional columns above are what give each bound its meaning.
 	ibValue  m_from;
 	ibValue  m_to;
+
+	// ⭐ THE FIRST PERIOD TO REPORT — only read when the grain is periodised, and resolved BY THE
+	// CALLER through the same truncation the stored key is built with (`ibTruncateToPeriod`).
+	//
+	// Two things make it a field of its own rather than m_from reused. A running column accumulates
+	// from the beginning of the data, so the lower bound cannot be applied before the window — it is
+	// applied after it, over the finished rows. And it is compared against the GRAIN: an interval
+	// starting at noon on the 15th still reports the month that contains it, so `>= m_from` would
+	// drop the very period the reader asked about. Invalid = report every period read.
+	ibValue  m_fromGrain;
 
 	std::vector<wxString> m_keyColumns;    // projected, and grouped by when any column aggregates
 	std::vector<std::pair<wxString, ibValue>> m_filters;   // column = value, applied INSIDE

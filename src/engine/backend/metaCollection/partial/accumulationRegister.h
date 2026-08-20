@@ -625,11 +625,14 @@ public:
 	// closing over the whole interval — in a single grouped pass.
 	//
 	// A PERIODISED reading is a different computation: each period opens where the previous one
-	// closed, which is a running balance the conditional sums cannot express. It is served by the
-	// live path, which folds the periods explicitly. Routing it there is not a limitation quietly
-	// admitted — it is the alternative to accepting the parameter and silently ignoring it, which
-	// is what this did before and which would have returned a plausible, wrong single row.
-	virtual bool IsComputedInRam() const override { return !m_fold.IsWholeInterval() || !m_reg->HasMaterializedViews(); }
+	// closed, which is a running balance the conditional sums cannot express. It used to be served
+	// by the live path for exactly that reason; since 2026-08-20 the IR HAS a window node, so the
+	// accumulation is the server's wherever the engine can rank — and the live path remains the
+	// answer where it cannot, and the oracle the server road is checked against either way.
+	//
+	// Out of line because the answer depends on the CONNECTION (ibCanPushWindow), not only on the
+	// register and the fold.
+	virtual bool IsComputedInRam() const override;
 	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
 
 	// Same rule as the turnover reading — see ibTurnoverQueryable::ResolveColumnByName.

@@ -575,3 +575,123 @@ TEST(QueryRenderer, BlobConst_BindsAsOpaqueBytes)
 	EXPECT_TRUE(out.m_params[0].m_isBlob);
 	EXPECT_EQ(out.m_params[0].m_blob.GetDataLen(), 4u);
 }
+
+// --- window functions: OVER (…) on a Func -----------------------------------
+//
+// A window is a MODIFIER of a call, not a node of its own (databaseQueryBuilder.h, m_over), so
+// these tests pin the two halves that a caller cannot see from the IR: WHERE the clause lands in
+// the text, and WHICH frame is spelled. The frame is the part worth guarding — it is the whole
+// reason the enum has no "Default" member.
+
+// The running balance. PARTITION BY the key, ORDER BY the period, and the frame written OUT: RANGE
+// takes every row sharing this row's period, so a period holding three movements closes at one
+// figure whatever order they arrive in.
+TEST(QueryRenderer, Window_RunningBalanceNamesItsFrame)
+{
+	std::vector<ibQueryProjItem> proj = {
+		{ ibCol(wxT("wh")), wxEmptyString },
+		{ ibCol(wxT("period")), wxEmptyString },
+		{ ibWindowed(ibFunc(wxT("SUM"), { ibCol(wxT("qty_N")) }),
+		             { { ibCol(wxT("wh")) },
+		               { { ibCol(wxT("period")), ibQuerySortDir::Asc } },
+		               ibQueryFrame::RangeThroughPeers }), wxT("closing") },
+	};
+	const ibRenderedQuery out = ibQueryRenderer(SqliteDialect())
+		.Render(ibQueryIR(ibProject(ibScan(wxT("Reg7_T")), proj)));
+
+	EXPECT_EQ(Sql(out),
+		"SELECT wh, period, SUM(qty_N) OVER (PARTITION BY wh ORDER BY period ASC "
+		"RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS closing FROM Reg7_T");
+}
+
+// ROWS is the other explicit answer — row by row, valid only where the sort key is unique by
+// construction. Same IR, one member changed, and the SQL says which one was meant.
+TEST(QueryRenderer, Window_RowsFrameIsTheOtherExplicitAnswer)
+{
+	std::vector<ibQueryProjItem> proj = {
+		{ ibWindowed(ibFunc(wxT("SUM"), { ibCol(wxT("qty_N")) }),
+		             { { ibCol(wxT("wh")) },
+		               { { ibCol(wxT("line")), ibQuerySortDir::Asc } },
+		               ibQueryFrame::RowsThroughCurrent }), wxT("running") },
+	};
+	const ibRenderedQuery out = ibQueryRenderer(FbDialect())
+		.Render(ibQueryIR(ibProject(ibScan(wxT("Reg7")), proj)));
+
+	EXPECT_EQ(Sql(out),
+		"SELECT SUM(qty_N) OVER (PARTITION BY wh ORDER BY line ASC "
+		"ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running FROM Reg7");
+}
+
+// A ranking function takes NO frame — SQL forbids one — and the descending order rides through.
+// This is the shape that picks "the record nearest a moment" in one pass.
+TEST(QueryRenderer, Window_RankingTakesNoFrame)
+{
+	std::vector<ibQueryProjItem> proj = {
+		{ ibCol(wxT("*")), wxEmptyString },
+		{ ibWindowed(ibFunc(wxT("ROW_NUMBER")),
+		             { { ibCol(wxT("wh")), ibCol(wxT("goods")) },
+		               { { ibCol(wxT("period")), ibQuerySortDir::Desc },
+		                 { ibCol(wxT("recorder")), ibQuerySortDir::Desc } },
+		               ibQueryFrame::NoFrame }), wxT("rn") },
+	};
+	const ibRenderedQuery out = ibQueryRenderer(PgDialect())
+		.Render(ibQueryIR(ibProject(ibScan(wxT("Reg9")), proj)));
+
+	EXPECT_EQ(Sql(out),
+		"SELECT *, ROW_NUMBER() OVER (PARTITION BY wh, goods "
+		"ORDER BY period DESC, recorder DESC) AS rn FROM Reg9");
+}
+
+// The denominator of a share-of-total: no ORDER BY, so the function folds the whole partition. A
+// frame would be about nothing here, and it is DROPPED rather than rendered — engines disagree
+// about an unordered RANGE, and the disagreement would be silent.
+TEST(QueryRenderer, Window_UnorderedPartitionDropsTheFrame)
+{
+	std::vector<ibQueryProjItem> proj = {
+		{ ibWindowed(ibFunc(wxT("SUM"), { ibCol(wxT("amount_N")) }),
+		             { { ibCol(wxT("grp")) }, {}, ibQueryFrame::RangeThroughPeers }), wxT("grp_total") },
+	};
+	const ibRenderedQuery out = ibQueryRenderer(SqliteDialect())
+		.Render(ibQueryIR(ibProject(ibScan(wxT("Sales")), proj)));
+
+	EXPECT_EQ(Sql(out), "SELECT SUM(amount_N) OVER (PARTITION BY grp) AS grp_total FROM Sales");
+}
+
+// Binds stay in SQL-TEXT order across the clause: the call's own argument, then the partition
+// expression, then the WHERE. RenderExpr appends as it goes, so a window that rendered its
+// operands out of order would cross the bind plan exactly the way a BinOp once did.
+TEST(QueryRenderer, Window_OperandsBindInTextOrder)
+{
+	std::vector<ibQueryProjItem> proj = {
+		{ ibWindowed(ibFunc(wxT("SUM"), { ibFunc(wxT("COALESCE"), { ibCol(wxT("qty_N")), ibParam(0) }) }),
+		             { { ibFunc(wxT("COALESCE"), { ibCol(wxT("wh")), ibParam(1) }) },
+		               { { ibCol(wxT("period")), ibQuerySortDir::Asc } },
+		               ibQueryFrame::RangeThroughPeers }), wxT("running") },
+	};
+	const ibRenderedQuery out = ibQueryRenderer(PgDialect()).Render(ibQueryIR(
+		ibProject(ibFilter(ibScan(wxT("Reg7_T")),
+			ibBinOp(ibQueryBinOp::Ge, ibCol(wxT("period")), ibParam(2))), proj)));
+
+	ASSERT_EQ(out.m_params.size(), 3u);
+	EXPECT_EQ(out.m_params[0].m_externalIndex, 0);   // inside the call
+	EXPECT_EQ(out.m_params[1].m_externalIndex, 1);   // inside PARTITION BY
+	EXPECT_EQ(out.m_params[2].m_externalIndex, 2);   // WHERE, last in the text
+	EXPECT_TRUE(out.m_sql.Contains(wxT("COALESCE(qty_N, $1)")));
+	EXPECT_TRUE(out.m_sql.Contains(wxT("PARTITION BY COALESCE(wh, $2)")));
+}
+
+// An engine without window functions is REFUSED, not emulated. The default dictionary is the ANSI
+// baseline — what ODBC gets, and what an MSSQL layer would derive from — so this is the live case,
+// not a hypothetical one.
+TEST(QueryRenderer, Window_RefusedWhereTheEngineHasNone)
+{
+	const ibDialectDictionary ansi;   // m_features.m_window stays false
+	ASSERT_FALSE(ansi.m_features.m_window);
+
+	std::vector<ibQueryProjItem> proj = {
+		{ ibWindowed(ibFunc(wxT("SUM"), { ibCol(wxT("qty_N")) }),
+		             { { ibCol(wxT("wh")) }, {}, ibQueryFrame::NoFrame }), wxT("total") },
+	};
+	EXPECT_THROW(ibQueryRenderer(ansi).Render(ibQueryIR(ibProject(ibScan(wxT("Reg7_T")), proj))),
+	             ibBackendQueryException);
+}

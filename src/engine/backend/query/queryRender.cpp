@@ -169,9 +169,47 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 
 	case ibQueryAstExprKind::Func:
 	{
-		const wxString arg = expr.m_star ? wxString(wxT("*")) : RenderExpr(*expr.m_arg);
+		// A RANKING call has no argument at all — `ROW_NUMBER()`, not `ROW_NUMBER(*)`. Rendering the
+		// star here would produce text the parser refuses, which is the worst kind of round trip: the
+		// query survives being read and dies being read BACK.
+		const bool ranking = ibIsRankingKeyword(expr.m_func);
+		const wxString arg = ranking ? wxString()
+			: (expr.m_star ? wxString(wxT("*")) : RenderExpr(*expr.m_arg));
 		const wxString distinct = expr.m_distinctArg ? Kw(ibQueryKeyword::Distinct) + wxT(" ") : wxString();
-		return Kw(expr.m_func) + wxT("(") + distinct + arg + wxT(")");
+
+		wxString out = Kw(expr.m_func) + wxT("(") + distinct + arg + wxT(")");
+
+		// …and the window, when the call carries one. Written back exactly as it is read — the whole
+		// point of a renderer that feeds a PARSER (the constructor's nine tabs round-trip through it).
+		if (expr.m_over) {
+			out += wxT(" ") + Kw(ibQueryKeyword::Over) + wxT(" (");
+			bool first = true;
+			if (!expr.m_over->m_partitionBy.empty()) {
+				out += Kw(ibQueryKeyword::Partition) + wxT(" ") + Kw(ibQueryKeyword::By) + wxT(" ");
+				for (size_t i = 0; i < expr.m_over->m_partitionBy.size(); ++i) {
+					if (i) out += wxT(", ");
+					out += RenderExpr(*expr.m_over->m_partitionBy[i]);
+				}
+				first = false;
+			}
+			if (!expr.m_over->m_orderBy.empty()) {
+				if (!first) out += wxT(" ");
+				out += Kw(ibQueryKeyword::Order) + wxT(" ") + Kw(ibQueryKeyword::By) + wxT(" ");
+				for (size_t i = 0; i < expr.m_over->m_orderBy.size(); ++i) {
+					if (i) out += wxT(", ");
+					out += RenderExpr(*expr.m_over->m_orderBy[i].m_expr);
+					if (!expr.m_over->m_orderBy[i].m_ascending)
+						out += wxT(" ") + Kw(ibQueryKeyword::Desc);
+				}
+				first = false;
+			}
+			if (expr.m_over->m_frame == ibQueryAstFrame::Rows)
+				out += (first ? wxString() : wxT(" ")) + Kw(ibQueryKeyword::Rows);
+			else if (expr.m_over->m_frame == ibQueryAstFrame::Range)
+				out += (first ? wxString() : wxT(" ")) + Kw(ibQueryKeyword::Range);
+			out += wxT(")");
+		}
+		return out;
 	}
 
 	case ibQueryAstExprKind::Arith:

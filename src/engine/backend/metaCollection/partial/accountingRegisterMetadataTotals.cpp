@@ -2964,15 +2964,31 @@ bool ibAcctBalanceAndTurnoverQueryable::CanReadOnServer() const
 	if (!m_condition.IsEmpty())
 		return false;               // its slot half is built per side
 
-	// ⚠⚠ A PERIODICITY CLOSES THIS ROAD, and the reason is arithmetic rather than effort. The spec
-	// keeps the period OUT of the key — one row per key for the whole interval — which is exactly what
+	if (m_fold.FromMovements())
+		return false;               // recorder / line: a fold is exactly what discards them
+
+	// ⚠⚠ A PERIODICITY USED TO CLOSE THIS ROAD, and the reason was arithmetic rather than effort. The
+	// spec kept the period OUT of the key — one row per key for the whole interval — which is what
 	// makes `BeforeFrom` and `UpToTo` mean "before the interval" and "through its end". Ask for rows
-	// PER MONTH and each row's opening balance would have to be measured against ITS OWN month, which
-	// is a running sum over the periods and not a conditional one over the interval. The same spec
-	// would answer, with the interval's opening balance repeated on every row — plausible, and wrong
-	// on every row but the first.
-	if (m_fold.HasPeriod() || m_fold.FromMovements())
-		return false;
+	// PER MONTH and each row's opening balance has to be measured against ITS OWN month: a running sum
+	// over the periods, not a conditional one over the interval. Answered by the same spec it would
+	// have repeated the interval's opening balance on every row — plausible, and wrong on every row
+	// but the first.
+	//
+	// Since 2026-08-20 the spec HAS that arithmetic (ibMaterializeGrain + the running forms), so the
+	// road is open wherever the engine can rank. Two conditions still close it:
+	if (m_fold.HasPeriod()) {
+		// ⭐ AN EMPTY PERIOD IS STILL A PERIOD, and no window invents a row that the surface does not
+		// have. Carrying a balance across a month nothing moved in needs a calendar to LEFT JOIN
+		// against; until there is one, that question belongs to the live path, which builds the
+		// periods itself.
+		if (m_fillEmptyPeriods)
+			return false;
+
+		ibConnectionScope scope;
+		if (!ibCanPushWindow(scope.get()))
+			return false;   // no windows on this driver — the RAM road answers exactly as before
+	}
 
 	const ibValueMetaObjectChartOfAccounts* chart = m_reg->GetChartOfAccounts();
 	if (chart == nullptr || chart->GetAccountType() == nullptr || chart->GetDataReference() == nullptr
@@ -3008,6 +3024,19 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 	r.m_to           = m_end.m_date;
 	r.m_dropZeroRows = true;   // and here the balances count as figures too, so a key carried in reports
 
+	// PER PERIOD — the same shape the accumulation register's reading takes, because it is the same
+	// question asked of the same kind of surface. The period joins the key, and the balances become
+	// running forms over the period sums; the gate above has already established that this engine
+	// can rank and that no empty periods were asked for.
+	const bool periodised = m_fold.HasPeriod();
+	if (periodised) {
+		r.m_grain      = m_fold.IsCalendar() ? ibMaterializeGrain::Calendar : ibMaterializeGrain::StoredPeriod;
+		r.m_periodUnit = m_fold.m_unit;
+		r.m_fromGrain  = (r.m_from.GetType() == TYPE_DATE && m_fold.IsCalendar())
+			? ibValue(ibTruncateToPeriod(r.m_from.GetDateTime(), m_fold.m_unit))
+			: r.m_from;
+	}
+
 	const auto appendFields = [&r](const ibValueMetaObjectAttributeBase* attribute) {
 		if (attribute == nullptr)
 			return;
@@ -3041,11 +3070,14 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 		const wxString fromDr = ibRegPhysicalOf(view, base + ibAcctFigure::TurnoverDr);
 		const wxString fromCr = ibRegPhysicalOf(view, base + ibAcctFigure::TurnoverCr);
 
-		// The turnover half is reported for EVERY resource — what moved in the interval.
+		// The turnover half is reported for EVERY resource — what moved in the interval. Periodised,
+		// the period itself is the condition: rows are grouped by it, so each figure is a plain sum of
+		// that period's rows and `InRange` would be a second, redundant answer to the same question.
+		const ibMaterializeWhen movedWhen = periodised ? ibMaterializeWhen::Always : ibMaterializeWhen::InRange;
 		r.m_columns.push_back({ base + ibAcctFigure::TurnoverDr, fromDr, wxString(),
-		                        ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
+		                        ibMaterializeAgg::Value, movedWhen, true });
 		r.m_columns.push_back({ base + ibAcctFigure::TurnoverCr, fromCr, wxString(),
-		                        ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
+		                        ibMaterializeAgg::Value, movedWhen, true });
 
 		// …the balance halves only where a balance is kept. A quantitative register therefore reports
 		// what moved in and out and no opening or closing at all, which is what "we keep no balance
@@ -3053,14 +3085,20 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 		if (!resource->IsBalanceResource())
 			continue;
 		balanceResources.push_back(resource);
-		r.m_columns.push_back({ base + ibAcctFigure::OpeningBalanceDr, fromDr, wxString(),
-		                        ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true });
-		r.m_columns.push_back({ base + ibAcctFigure::OpeningBalanceCr, fromCr, wxString(),
-		                        ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true });
-		r.m_columns.push_back({ base + ibAcctFigure::ClosingBalanceDr, fromDr, wxString(),
-		                        ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true });
-		r.m_columns.push_back({ base + ibAcctFigure::ClosingBalanceCr, fromCr, wxString(),
-		                        ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true });
+
+		// ⭐ THE TWO SIDES ACCUMULATE INDEPENDENTLY, and each is a running form of its own — a debit
+		// balance is the debit turnovers carried forward, a credit balance the credit ones. The fold
+		// by account type happens ABOVE this read (the CASE over the chart's AccountType), so what is
+		// asked for here is the pair, not the difference.
+		const ibMaterializeAgg opening = periodised ? ibMaterializeAgg::RunningSumExcludingCurrent : ibMaterializeAgg::Value;
+		const ibMaterializeAgg closing = periodised ? ibMaterializeAgg::RunningSum                 : ibMaterializeAgg::Value;
+		const ibMaterializeWhen openWhen  = periodised ? ibMaterializeWhen::Always : ibMaterializeWhen::BeforeFrom;
+		const ibMaterializeWhen closeWhen = periodised ? ibMaterializeWhen::Always : ibMaterializeWhen::UpToTo;
+
+		r.m_columns.push_back({ base + ibAcctFigure::OpeningBalanceDr, fromDr, wxString(), opening, openWhen,  true });
+		r.m_columns.push_back({ base + ibAcctFigure::OpeningBalanceCr, fromCr, wxString(), opening, openWhen,  true });
+		r.m_columns.push_back({ base + ibAcctFigure::ClosingBalanceDr, fromDr, wxString(), closing, closeWhen, true });
+		r.m_columns.push_back({ base + ibAcctFigure::ClosingBalanceCr, fromCr, wxString(), closing, closeWhen, true });
 	}
 	if (r.m_columns.empty())
 		return nullptr;
@@ -3079,6 +3117,13 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 	std::vector<ibQueryProjItem> projection;
 	for (const wxString& field : r.m_keyColumns)
 		projection.push_back({ ibCol(innerAlias, field), field });
+
+	// ⚠ THE PERIOD IS A COLUMN OF THE ANSWER, not only of the grouping. It is not in m_keyColumns —
+	// the read puts it there itself — so a projection built from the keys alone would group by the
+	// month and then decline to say WHICH month, which is the one column a periodised reading is
+	// asked for.
+	if (periodised)
+		projection.push_back({ ibCol(innerAlias, r.m_periodColumn), r.m_periodColumn });
 
 	// The turnovers pass through UNFOLDED — see the note above the gate.
 	for (const auto resource : m_reg->GetResourceArrayObject()) {

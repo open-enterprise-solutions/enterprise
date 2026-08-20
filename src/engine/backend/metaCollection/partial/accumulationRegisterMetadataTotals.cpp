@@ -208,6 +208,26 @@ ibQueryRamTable ibBalanceAndTurnoverQueryable::ComputeRows(const std::vector<ibQ
 {
 	return m_reg->ComputeBalanceAndTurnover(m_begin, m_end, m_fold, m_filter);
 }
+
+// WHICH ROAD, and every clause of it is a different question — kept as separate returns rather than
+// one folded expression, because "there is no surface", "no period was asked for" and "this driver
+// cannot rank" are three unrelated reasons that happen to share an answer today.
+bool ibBalanceAndTurnoverQueryable::IsComputedInRam() const
+{
+	if (m_reg == nullptr || !m_reg->HasMaterializedViews())
+		return true;    // nothing stored to read — the live aggregation IS the reading
+
+	if (m_fold.IsWholeInterval())
+		return false;   // one row per key: three conditional sums over one pass, no window involved
+
+	if (m_fold.FromMovements())
+		return true;    // a recorder is not a calendar interval; no rolled-up total carries one
+
+	// Periodised. The running balance is a window, so this road exists only where the engine has
+	// them — and where it does not, the live path answers exactly as it did before.
+	ibConnectionScope scope;
+	return !ibCanPushWindow(scope.get());
+}
 // ⭐⭐ THE READING IS A READING. Nothing is recomputed here.
 //
 // This used to build the whole aggregate by hand in L2 IR — signed sums over the movements, a CASE
@@ -710,8 +730,8 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 		return nullptr;
 
 	// The symbiosis, in ONE pass: what was carried in, what moved, what remains. Three different
-	// conditions over the same scan — which is why no join and no window is needed, and why a
-	// register with an opening balance but no movements in the interval still reports.
+	// conditions over the same scan — which is why an UNPERIODISED reading needs no join and no
+	// window, and why a register with an opening balance but no movements still reports.
 	ibMaterializeReadSpec r;
 	r.m_view         = m_reg->GetTurnoverViewName();
 	r.m_periodColumn = ibRegValueField(m_reg->GetRegisterPeriod());
@@ -719,6 +739,25 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 	r.m_to           = ibReadRegisterBound(m_end).m_date;
 	r.m_keyColumns   = ReadKeys(m_reg);
 	r.m_filters      = ReadFilters(m_reg, m_filter);
+
+	// ⭐⭐ PER PERIOD IS A DIFFERENT COMPUTATION, and this is where it now happens instead of in RAM.
+	//
+	// Broken into periods, each one opens where the previous one closed — a running balance, which
+	// the three conditional sums above cannot express at any grain. That is why this reading used to
+	// route itself to the live path whenever a periodicity was asked for. With a window node in the
+	// IR the accumulation is the server's, and the shape below says so: the figures of the period are
+	// plain sums, the two balances are running forms over them.
+	//
+	// The lower bound travels as the GRAIN containing it, because the window has to accumulate over
+	// the periods BEFORE the interval — that accumulation IS the first period's opening balance.
+	const bool periodised = m_fold.HasPeriod();
+	if (periodised) {
+		r.m_grain      = m_fold.IsCalendar() ? ibMaterializeGrain::Calendar : ibMaterializeGrain::StoredPeriod;
+		r.m_periodUnit = m_fold.m_unit;
+		r.m_fromGrain  = (r.m_from.GetType() == TYPE_DATE && m_fold.IsCalendar())
+			? ibValue(ibTruncateToPeriod(r.m_from.GetDateTime(), m_fold.m_unit))
+			: r.m_from;
+	}
 	// Same rule as the turnover reading above — and here the opening and closing balances count as
 	// figures too, so a key carried in with a balance still reports even if nothing moved.
 	r.m_dropZeroRows = true;
@@ -750,6 +789,18 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 		const wxString turn = ibRegPhysicalOf(src, base + ibRegFigure::Turnover);
 		const wxString rec  = ibRegPhysicalOf(src, base + ibRegFigure::Receipt);
 		const wxString exp  = ibRegPhysicalOf(src, base + ibRegFigure::Expense);
+
+		if (periodised) {
+			// The period IS the condition here: rows are grouped by it, so each figure of a period is
+			// a plain sum of that period's rows. Only the two balances look outside their own row —
+			// backwards, along the periods, which is exactly what a running form does.
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::OpeningBalance), turn, wxString(), ibMaterializeAgg::RunningSumExcludingCurrent, ibMaterializeWhen::Always, true });
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Receipt),        rec,  wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::Always, true });
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Expense),        exp,  wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::Always, true });
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Turnover),       turn, wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::Always, true });
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::ClosingBalance), turn, wxString(), ibMaterializeAgg::RunningSum,                 ibMaterializeWhen::Always, true });
+			continue;
+		}
 
 		r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::OpeningBalance), turn, wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true });
 		r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Receipt),        rec,  wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true });

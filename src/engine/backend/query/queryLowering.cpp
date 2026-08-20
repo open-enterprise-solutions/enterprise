@@ -737,6 +737,26 @@ ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& pa
 	return ibValue();
 }
 
+// 🛑 THE GRAMMAR READS A WINDOW; THIS TIER DOES NOT YET LOWER ONE — so it says so, naming the call
+// it choked on.
+//
+// The parser accepts `SUM(x) OVER (…)` and ROW_NUMBER() / RANK() / DENSE_RANK() (queryParser.cpp),
+// and L2-1 has carried an OVER since 2026-08-20 (ibQueryExpr::m_over). What is missing is the road
+// BETWEEN them: an aggregate travels L4→L3 as an ibAggregateItem, which has no window field yet, and
+// five places in dbTableProvider build the call out of it.
+//
+// Until that road exists the only honest answer is a refusal. Dropping the OVER would leave a query
+// that RUNS — reporting a plain total under the name of a running one, which reconciles to nothing
+// and reads as bad data rather than as a missing feature.
+void RefuseUnloweredWindow(const ibQueryAstExpr& e)
+{
+	if (!e.m_over && !ibIsRankingKeyword(e.m_func))
+		return;
+
+	ThrowQueryException(e.m_line, e.m_col,
+		_("window functions are not executed yet: the language reads OVER (…), the query engine does not run it"));
+}
+
 ibAggregateFn AggFn(ibQueryKeyword kw)
 {
 	switch (kw) {
@@ -1406,6 +1426,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			oc.m_name = alias;
 
 			if (e.m_kind == ibQueryAstExprKind::Func) {
+				RefuseUnloweredWindow(e);
 				// Aggregate input: a plain column, a reference dot-walk leaf (SUM(Producer.Weight)), or a
 				// COMPUTED expression (SUM(Qty * Price) — the provider lowers it; single DB source, gated).
 				if (e.m_star) {
@@ -3276,15 +3297,91 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// Reports (measures), multi-level, dot-walk and multi-source keep the detail-read + fold below.
 	const bool multiSourceTotals = !ast.m_joins.empty() || !ast.m_unions.empty();
 	if (outServerGroupedLevel != nullptr && page.m_count > 0 && !multiSourceTotals
-	    && ast.m_totalsBy.size() == 1 && ast.m_totalsAggregates.empty()
+	    && ast.m_totalsBy.size() == 1
 	    && ast.m_totalsBy[0].m_unfold == ibQueryDimUnfold::Elements) {   // flat grouping only (Hierarchy = recursive tree -> fold)
 		const std::vector<const ibBackendQueryColumn*> pathCols = ResolvePath(sources, *ast.m_totalsBy[0].m_expr);
-		if (pathCols.size() == 1) {   // plain scalar dim (no dot-walk expansion -> single-column keyset ORDER BY)
+
+		// ⭐ THE MEASURES COME WITH IT — when each of them is a PLAIN one.
+		//
+		// This gate used to require `m_totalsAggregates.empty()`, i.e. a level with no figures at all,
+		// and the effect was that the very lists that cost the most read the most: a level with sums
+		// fell to the fold below, which reads EVERY detail row of the source to show twenty groups. The
+		// provider was never the obstacle — ExecuteGroupLevelPage has projected `m_aggregates` alongside
+		// the dimension all along; nothing upstream ever handed it any.
+		//
+		// PLAIN means: COUNT(*), or an aggregate over a column that resolves to ONE real column. A
+		// measure over a COMPUTED select field needs the fold's synthetic receiver (a projected
+		// expression aggregated through a made-up column id), so a bare name that a projection already
+		// claims sends the whole level back to the fold rather than risk aggregating a different thing
+		// under the same name.
+		struct PagedMeasure {
+			ibAggregateFn               m_fn;
+			const ibBackendQueryColumn* m_col = nullptr;   // null = COUNT(*)
+			wxString                    m_name;
+			bool                        m_distinct = false;
+		};
+		std::vector<PagedMeasure> pagedMeasures;
+		bool measuresArePlain = true;
+
+		// A vector, not a set: <set> is not included here and this file has already been bitten once by
+		// a container MSVC hands over transitively and GCC/Clang do not (see <algorithm> at the top).
+		// The list is a handful of names and it is walked once per measure.
+		std::vector<wxString> projectionNames;
+		{
+			int idx = 0;
+			for (const ibQueryProjection& p : ast.m_projections)
+				if (!p.m_star && p.m_expr)
+					projectionNames.push_back(OutputNameFor(ast, p, idx++));
+		}
+
+		for (const ibQueryAstExprPtr& agg : ast.m_totalsAggregates) {
+			if (!agg || agg->m_kind != ibQueryAstExprKind::Func) { measuresArePlain = false; break; }
+			// A WINDOWED measure is not "not plain" — it is not executable at all yet, and the fold path
+			// below is where that is said out loud. Leave it to the fold rather than refusing here, so
+			// there is ONE sentence about it in the engine instead of two.
+			if (agg->m_over || ibIsRankingKeyword(agg->m_func)) { measuresArePlain = false; break; }
+
+			PagedMeasure m;
+			m.m_fn       = AggFn(agg->m_func);
+			m.m_distinct = agg->m_distinctArg;
+			m.m_name     = agg->m_star
+				? ibQueryKeywordText(agg->m_func)
+				: (agg->m_arg && !agg->m_arg->m_path.empty() ? agg->m_arg->m_path.back() : ibQueryKeywordText(agg->m_func));
+
+			if (!agg->m_star) {
+				if (!agg->m_arg) { measuresArePlain = false; break; }
+				// A bare name a projection claims may be a computed field — the fold's business.
+				if (agg->m_arg->m_kind == ibQueryAstExprKind::Column && agg->m_arg->m_path.size() == 1
+				    && std::find(projectionNames.begin(), projectionNames.end(),
+				                 agg->m_arg->m_path.back()) != projectionNames.end()) { measuresArePlain = false; break; }
+				try {
+					const std::vector<const ibBackendQueryColumn*> argCols = ResolvePath(sources, *agg->m_arg);
+					if (argCols.size() != 1 || argCols.back() == nullptr) { measuresArePlain = false; break; }
+					m.m_col = argCols.back();
+				}
+				catch (const ibBackendException&) { measuresArePlain = false; break; }
+			}
+			pagedMeasures.push_back(m);
+		}
+
+		if (pathCols.size() == 1 && measuresArePlain) {   // plain scalar dim (no dot-walk expansion -> single-column keyset ORDER BY)
 			const ibBackendQueryColumn* leaf = pathCols.back();
 			b.GroupBy(leaf);
 			OutputColumn oc; oc.m_name = leaf->GetName(); oc.m_col = leaf;
 			oc.m_role = ibQueryLowering::ibColumnRole::Dimension;   // a server-paged grouping level IS a dimension
 			outSchema.clear(); outSchema.push_back(oc);
+
+			// The figures, in the order they were written — read back exactly as the fold's are: by the
+			// column for a real one, by alias for COUNT(*), which has no column to be keyed on.
+			for (const PagedMeasure& m : pagedMeasures) {
+				b.Aggregate(m.m_fn, m.m_col, m.m_name, m.m_distinct);
+
+				OutputColumn mc; mc.m_name = m.m_name;
+				mc.m_role = ibQueryLowering::ibColumnRole::Measure;
+				if (m.m_col != nullptr) mc.m_col = m.m_col;
+				else { mc.m_alias = m.m_name; mc.m_byAlias = true; }
+				outSchema.push_back(mc);
+			}
 			// WHERE = the drill SCOPE filter + the user filter (same lowering the fold path uses below).
 			if (ast.m_where) {
 				if (IsFlatAndWhere(*ast.m_where))
@@ -3389,6 +3486,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	for (const ibQueryAstExprPtr& agg : ast.m_totalsAggregates) {
 		if (!agg || agg->m_kind != ibQueryAstExprKind::Func)
 			ThrowQueryException(0, 0, _("TOTALS expects aggregate functions (SUM/COUNT/MIN/MAX/AVG)"));
+		RefuseUnloweredWindow(*agg);
 
 		// Output name read back via res[name]: COUNT(*) -> the function name; a field -> its identifier.
 		const wxString outName = agg->m_star

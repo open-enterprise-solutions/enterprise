@@ -496,3 +496,28 @@ TEST(QueryRoundTripProperty, TheGeneratorReallyProducesTheAwkwardShapes)
 	EXPECT_TRUE(aggArith)    << "no arithmetic over a call was ever generated";
 	EXPECT_TRUE(overall)     << "BY OVERALL never occurred";
 }
+
+// ⭐ WINDOWS MAKE THE TRIP TOO — and they are checked by hand because the generator does not build
+// them: it walks the AST shapes it knows, and `m_over` arrived later. A window is exactly the kind
+// of thing the standing asymmetry above bites — the renderer emits it on every constructor refresh,
+// while the parser only meets it in text somebody wrote.
+TEST(QueryRoundTripProperty, WindowsSurviveTheTrip)
+{
+	const wxChar* queries[] = {
+		wxT("SELECT SUM(Amount) OVER (PARTITION BY Region) FROM Document.Sales"),
+		wxT("SELECT SUM(Amount) OVER (PARTITION BY Region ORDER BY Period RANGE) FROM Document.Sales"),
+		wxT("SELECT SUM(Amount) OVER (ORDER BY Period DESC ROWS) FROM Document.Sales"),
+		wxT("SELECT ROW_NUMBER() OVER (PARTITION BY Region ORDER BY Amount DESC) FROM Document.Sales"),
+		wxT("SELECT DENSE_RANK() OVER (ORDER BY Amount) FROM Document.Sales"),
+	};
+
+	for (const wxChar* text : queries) {
+		ibQueryParser parser;
+		ibQuerySelectPtr ast;
+		ASSERT_NO_THROW(ast = parser.Parse(text)) << text;
+		ASSERT_NE(nullptr, ast) << text;
+
+		const wxString failure = RoundTripFailure(*ast);
+		EXPECT_TRUE(failure.IsEmpty()) << text << "\n" << failure.ToStdString();
+	}
+}

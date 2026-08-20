@@ -71,6 +71,13 @@ static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 	{ ibQueryKeyword::Avg,      wxT("AVG")      },
 	{ ibQueryKeyword::Value,    wxT("VALUE")    },
 	{ ibQueryKeyword::Cast,     wxT("CAST")     },
+	{ ibQueryKeyword::Over,      wxT("OVER")       },
+	{ ibQueryKeyword::Partition, wxT("PARTITION")  },
+	{ ibQueryKeyword::Rows,      wxT("ROWS")       },
+	{ ibQueryKeyword::Range,     wxT("RANGE")      },
+	{ ibQueryKeyword::RowNumber, wxT("ROW_NUMBER") },
+	{ ibQueryKeyword::Rank,      wxT("RANK")       },
+	{ ibQueryKeyword::DenseRank, wxT("DENSE_RANK") },
 };
 
 namespace {
@@ -115,6 +122,18 @@ bool ibIsAggregateKeyword(ibQueryKeyword kw)
 	case ibQueryKeyword::Min:
 	case ibQueryKeyword::Max:
 	case ibQueryKeyword::Avg:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool ibIsRankingKeyword(ibQueryKeyword kw)
+{
+	switch (kw) {
+	case ibQueryKeyword::RowNumber:
+	case ibQueryKeyword::Rank:
+	case ibQueryKeyword::DenseRank:
 		return true;
 	default:
 		return false;

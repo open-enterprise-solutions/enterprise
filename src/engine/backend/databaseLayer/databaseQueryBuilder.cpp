@@ -688,6 +688,10 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 			s += RenderExpr(expr->m_args[i]);
 		}
 		s += wxT(")");
+		// A window is a MODIFIER of the call, so it is spelled where the call ends. The operands
+		// render first (they append to the bind plan, and the plan is in SQL-text order).
+		if (expr->m_over)
+			s += RenderOver(*expr->m_over);
 		return s;
 	}
 
@@ -763,6 +767,23 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 	}
 
 	return wxString();
+}
+
+wxString ibQueryRenderer::RenderOver(const ibQueryWindow& window)
+{
+	// Render the operands HERE and hand finished text to the one clause speller. PARTITION before
+	// ORDER, because RenderExpr appends to the bind plan and the plan must stay in SQL-text order —
+	// the same rule BinOp sequences its operands under.
+	std::vector<wxString> partitionBy;
+	for (const ibQueryExprPtr& e : window.m_partitionBy)
+		partitionBy.push_back(RenderExpr(e));
+
+	std::vector<wxString> orderBy;
+	for (const ibQuerySortKey& key : window.m_orderBy)
+		orderBy.push_back(RenderExpr(key.m_expr)
+			+ ((key.m_dir == ibQuerySortDir::Desc) ? wxT(" DESC") : wxT(" ASC")));
+
+	return ibRenderOverClause(m_dialect, partitionBy, orderBy, window.m_frame);
 }
 
 wxString ibQueryRenderer::RenderPlaceholder()
@@ -953,6 +974,67 @@ wxString ibQueryRenderer::RenderColumn(const ibDdlColumn& col)
 wxString ibQueryRenderer::MapType(const ibColumnType& type) const
 {
 	return ibMapColumnType(m_dialect, type);
+}
+
+// THE ONE OVER (…) — see the header for why it is reachable rather than private (same reason as the
+// type map below: L2-2 holds a dictionary, not a builder).
+//
+// Operands arrive FINISHED. This function owns the clause: the keywords, their order, the frame,
+// and the refusal — and nothing about how a column or an expression is spelled, which is what lets
+// the IR renderer and the view generator share it while quoting identifiers differently.
+wxString ibRenderOverClause(const ibDialectDictionary& dialect,
+                            const std::vector<wxString>& partitionBy,
+                            const std::vector<wxString>& orderBy,
+                            ibQueryFrame frame)
+{
+	if (!dialect.m_features.m_window)
+		// Refuse loudly, the way an unsupported RETURNING does. The alternatives all LOOK like
+		// success: emulate with a correlated subquery and a report silently goes quadratic; drop the
+		// window and the figures are wrong while the query still runs.
+		ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+			_("The database engine has no window functions"));
+
+	wxString sql = wxT(" OVER (");
+
+	if (!partitionBy.empty()) {
+		sql += wxT("PARTITION BY ");
+		for (size_t i = 0; i < partitionBy.size(); ++i) {
+			if (i) sql += wxT(", ");
+			sql += partitionBy[i];
+		}
+	}
+
+	if (!orderBy.empty()) {
+		if (!partitionBy.empty()) sql += wxT(" ");
+		sql += wxT("ORDER BY ");
+		for (size_t i = 0; i < orderBy.size(); ++i) {
+			if (i) sql += wxT(", ");
+			sql += orderBy[i];
+		}
+	}
+
+	// The frame is written out in full on every engine. Firebird 3+, PostgreSQL and SQLite 3.25+ all
+	// accept both spellings, so there is nothing to negotiate here — and writing it is the entire
+	// point: an omitted frame means whatever each engine decides it means.
+	//
+	// A frame needs an ORDER BY to be about anything; asked for without one, it is dropped rather
+	// than rendered into `RANGE … CURRENT ROW` over an unordered partition, which some engines
+	// reject and others read as the whole partition.
+	if (!orderBy.empty()) {
+		switch (frame) {
+		case ibQueryFrame::RangeThroughPeers:
+			sql += wxT(" RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW");
+			break;
+		case ibQueryFrame::RowsThroughCurrent:
+			sql += wxT(" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW");
+			break;
+		case ibQueryFrame::NoFrame:
+			break;
+		}
+	}
+
+	sql += wxT(")");
+	return sql;
 }
 
 // THE SAME MAP, REACHABLE. It was a private method, and the second caller that needs it — the view
@@ -1283,6 +1365,11 @@ ibDatabaseResultSet* ibQueryStatement::RunQueryWithResults()
 bool ibCanPushRollup(const ibDatabaseLayer* layer)
 {
 	return layer != nullptr && layer->GetDialect().m_features.m_rollup;
+}
+
+bool ibCanPushWindow(const ibDatabaseLayer* layer)
+{
+	return layer != nullptr && layer->GetDialect().m_features.m_window;
 }
 
 int ibExecuteDdl(ibDatabaseLayer* layer, const ibDdlStatement& ddl)

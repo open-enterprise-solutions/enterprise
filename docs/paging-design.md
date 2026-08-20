@@ -803,11 +803,41 @@ viewport does not drift). The probe-trim/reverse is gated to the detail path onl
 the window `out.Add`s the on-page ones (IncRef), then one pass DecRefs every node —
 on-page → 1 (owned by `out`), off-page → 0 (freed).
 
-Boundary (honest): the fold is still eager — the whole level lands in RAM every
-fetch, the window only bounds what reaches the control. A true keyset group push-down
-in SQL (`LIMIT` on `GROUP BY` cursored by the dimension) is a larger, separate arc,
-not this. What is closed here is correctness (no lost group) and working group
-navigation, not server-side group streaming.
+Boundary as of 2026-07-16 (honest, and now superseded): the fold is still eager — the
+whole level lands in RAM every fetch, the window only bounds what reaches the control.
+A true keyset group push-down in SQL (`LIMIT` on `GROUP BY` cursored by the dimension)
+is a larger, separate arc, not this. What is closed here is correctness (no lost group)
+and working group navigation, not server-side group streaming.
+
+### 9.1.2 …and then the push-down landed
+
+**The keyset group push-down exists.** `ExecuteTotals` routes a single-level drill to
+`SelectAggregatePage` → `ibDbTableProvider::ExecuteGroupLevelPage`, which runs
+`SELECT dim [, aggs] FROM src WHERE … [AND dim ≷ anchor] GROUP BY dim ORDER BY dim
+LIMIT count` and returns the page of groups; `outServerGroupedLevel` tells the composer
+to emit them flat and skip the fold entirely. Note what the shape does NOT need: no
+window function. The grouping dimension IS the keyset column, so the cursor rides an
+ordinary `WHERE` — the level pages in plain SQL.
+
+The gate (`CanPageGroupLevel` + the router's own conditions) wants a **single plain
+scalar dimension** over a **single source**, `Elements` unfolding, a real page, no
+dot-walk, no key-in, no computed select.
+
+**Measures ride along, since 2026-08-20.** The router used to require a level with no
+figures at all (`m_totalsAggregates.empty()`), which meant the lists that cost the most
+read the most: a grouped list with a `SUM` fell to the fold and read EVERY detail row of
+the source to show one page of groups. The provider was never the obstacle —
+`ExecuteGroupLevelPage` has projected `m_aggregates` beside the dimension all along, and
+nothing upstream handed it any. A measure now travels the paged road when it is PLAIN:
+`COUNT(*)`, or an aggregate over a path resolving to ONE real column. An aggregate over a
+computed select field still takes the fold, which owns the synthetic receiver such a
+measure is read through. Gate pinned by `QueryComposerGate.GroupLevelPage_WithMeasures_StillPageable`.
+
+⚠ Two things remain on the client: the fold-free path still passes through
+`ibComputePageWindow` (harmless — a server page of `count` groups windows to itself), and
+a level that misses the gate silently returns the whole level, where the client window is
+what makes it correct rather than fast. Multi-level, hierarchy, dot-walk and multi-source
+drills are all still folds.
 
 ### 9.2 Selection restore across a view-mode switch — `BuildAncestorBreadcrumb`
 

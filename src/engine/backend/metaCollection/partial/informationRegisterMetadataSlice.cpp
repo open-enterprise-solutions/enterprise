@@ -26,6 +26,8 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 — structured IR for the slice self-join (ComputeSlice)
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldsOf / ibRegCompositeIR (shared lowering)
 
+#include <set>   // the partition-key names a pushed-down filter is checked against
+
 
 // ibValueMetaObjectInformationRegister::ComputeSlice — THE one place the period-slice
 // is computed, and it belongs to the REGISTER (it is the register's own table /
@@ -131,6 +133,120 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		const ibQueryBinOp periodOp = last
 			? (bound.m_excluding ? ibQueryBinOp::Lt : ibQueryBinOp::Le)
 			: (bound.m_excluding ? ibQueryBinOp::Gt : ibQueryBinOp::Ge);
+
+		ibQueryIR sliceIr;
+		ibConnectionScope scope;
+
+		// ⭐⭐ TWO SPELLINGS OF ONE SLICE, and which one is written depends on the engine.
+		//
+		// "The record nearest a moment" is a RANKING question, and an engine that can rank answers it
+		// in ONE pass: number the rows of each key by period (and by the recorder that separates
+		// documents sharing an instant), keep number one. The aggregate road below reaches the same
+		// answer through MAX per key, a second level to break the tie, and a join back for the record
+		// — three visits to the register's table where the ranked form makes one.
+		//
+		// The old road STAYS, because it is the only one on an engine without windows (the ANSI
+		// baseline, i.e. ODBC and whatever derives from it). Same rule as a batched INSERT, which is
+		// VALUES on one engine and UNION ALL on another: a second SPELLING, not a second mechanism —
+		// and both must answer identically, which is what makes the pair testable.
+		if (ibCanPushWindow(scope.get())) {
+			// PARTITION BY exactly what the aggregate road GROUPS BY — the period's type tag, the
+			// dimensions, the resources. Identical on purpose: partition the slice differently and the
+			// two roads stop answering the same question.
+			std::vector<ibQueryExprPtr> partitionBy;
+			std::vector<wxString>       sliceFields;
+			std::vector<ibQuerySortKey> orderBy;
+
+			// The direction IS the reading: a last slice ranks the greatest period first, a first slice
+			// the least. One fact, both halves — the same reason the aggregate road derives MAX / MIN
+			// from `last` rather than taking two strings.
+			const ibQuerySortDir dir = last ? ibQuerySortDir::Desc : ibQuerySortDir::Asc;
+
+			const std::vector<wxString> rankPeriodFields = ibRegFieldsOf(periodAttr);
+			for (size_t i = 0; i < rankPeriodFields.size(); ++i) {
+				sliceFields.push_back(rankPeriodFields[i]);
+				if (i == 0)   // _TYPE tag — a partition key, exactly as it is a GROUP BY key below
+					partitionBy.push_back(ibCol(rankPeriodFields[i]));
+				else          // the period VALUE — what the ranking orders by
+					orderBy.push_back(ibQuerySortKey{ ibCol(rankPeriodFields[i]), dir });
+			}
+
+			auto addSliceKey = [&](const ibValueMetaObjectAttributeBase* a) {
+				for (const wxString& f : ibRegFieldsOf(a)) {
+					partitionBy.push_back(ibCol(f));
+					sliceFields.push_back(f);
+				}
+			};
+			for (const auto object : meta->GetDimensionArrayObject()) addSliceKey(object);
+			for (const auto object : meta->GetResourceArrayObject())  addSliceKey(object);
+
+			// ⭐ THE TIE IS ONE MORE SORT KEY. Where the aggregate road needs a whole extra level to
+			// choose among the records sitting AT the boundary period, an ordered ranking already has
+			// somewhere to put that question: after the period, in the same direction.
+			const wxString rankRecorderId = RecorderIdField(meta);
+			if (!rankRecorderId.IsEmpty()) {
+				orderBy.push_back(ibQuerySortKey{ ibCol(rankRecorderId), dir });
+				sliceFields.push_back(rankRecorderId);
+			}
+
+			// ⭐⭐ THE DIMENSION FILTER RIDES DOWN — but only the part that is SAFE to push.
+			//
+			// A condition on a PARTITION key narrows which partitions exist and changes nothing inside
+			// any of them, so pushing it under the ranking is free: the slice of warehouse X is the
+			// same rows whether the other warehouses were read and discarded or never read. That is
+			// worth a great deal — the aggregate road ranks the WHOLE table and filters the finished
+			// slice, so asking for one price reads every price.
+			//
+			// A condition on anything else is NOT free: filtering by recorder before the ranking would
+			// answer "the last record BY THAT DOCUMENT" instead of "the last record, if that document
+			// wrote it". Those stay outside, over the finished slice, where they mean what they say.
+			std::set<wxString> partitionNames;
+			for (const auto object : meta->GetDimensionArrayObject())
+				if (object != nullptr) partitionNames.insert(object->GetName());
+			for (const auto object : meta->GetResourceArrayObject())
+				if (object != nullptr) partitionNames.insert(object->GetName());
+
+			ibDatabaseQueryBuilder ranked;
+			ranked.From(table);
+			if (meta->HasRecorder())
+				ranked.Where(ibRegCompositeIR(meta->GetRegisterActive(), GetMetaData(), ibValue(true), ibQueryBinOp::Eq));
+			ranked.Where(SliceBoundaryPredicate(meta, GetMetaData(), periodAttr, bound, last, periodOp));
+
+			std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> keptOutside;
+			for (auto filter : selFilter) {
+				if (filter.first != nullptr && partitionNames.count(filter.first->GetName()) > 0)
+					ranked.Where(ibRegCompositeIR(filter.first, GetMetaData(), filter.second, ibQueryBinOp::Eq));
+				else
+					keptOutside.push_back(filter);
+			}
+
+			std::vector<ibQueryProjItem> rankedProj;
+			for (const wxString& f : sliceFields)
+				rankedProj.push_back(ibQueryProjItem{ ibCol(f), wxString() });
+			rankedProj.push_back(ibQueryProjItem{
+				ibWindowed(ibFunc(wxT("ROW_NUMBER")), { partitionBy, orderBy, ibQueryFrame::NoFrame }),
+				wxT("slice_rank") });
+			ranked.Project(rankedProj);
+
+			// Rank 1 is the slice. The test lives OUTSIDE the ranking because a window is computed
+			// after WHERE — there is no such thing as a predicate on a rank in the same SELECT that
+			// produces it, and a HAVING would not do it either.
+			std::vector<ibQueryProjItem> sliceProj;
+			for (const wxString& f : sliceFields)
+				sliceProj.push_back(ibQueryProjItem{ ibCol(wxT("sliceTable"), f), f });
+
+			ibDatabaseQueryBuilder slice;
+			slice.From(ibSubquery(ranked.Build().m_root, wxT("sliceTable")))
+			     .Where(ibBinOp(ibQueryBinOp::Eq,
+			                    ibCol(wxT("sliceTable"), wxT("slice_rank")), ibConst(ibValue(1))))
+			     .Project(sliceProj);
+
+			for (auto filter : keptOutside)
+				slice.Where(ibRegCompositeIR(filter.first, GetMetaData(), filter.second, ibQueryBinOp::Eq));
+
+			sliceIr = slice.Build();
+		}
+		else {
 
 		// Level 1 — boundary period per dimension key (aggregate subquery T1). The period
 		// TYPE is grouped + projected bare; the period value is aggregated (MAX / MIN);
@@ -246,20 +362,28 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		for (auto filter : selFilter)
 			l3.Where(ibRegCompositeIR(filter.first, GetMetaData(), filter.second, ibQueryBinOp::Eq));
 
+		sliceIr = l3.Build();
+
+		}   // end of the aggregate road
+
 		// Run through L2 (session holder) + materialise the slice table BY metaID — the
 		// columns read back the same way the door / record form read them.
-		try {
-			ibQueryResult rs = ibDatabaseQueryBuilder().ExecuteIR(l3.Build());
-			while (rs.Next()) {
-				const long retRow = retTable.AppendRow();
-				for (const auto object : meta->GetGenericAttributeArrayObject()) {
-					ibValue retValue;
-					if (ibDbTableProvider::GetValueAttribute(object, retValue, rs))
-						retTable.SetCell(retRow, object->GetMetaID(), retValue);
-				}
+		//
+		// 🛑 NOT WRAPPED IN `catch (...) {}` ANY MORE. It was, and the comment ninety lines up says
+		// what that cost: a query naming a column the table does not have raised, the catch ate it,
+		// and the slice came back EMPTY — which reads as "no data yet", not as "the query was wrong".
+		// With two roads to this answer the silence would be worse still, since the one that broke
+		// would be the one nobody looked at. A slice that cannot be computed is an error, and the
+		// caller is entitled to hear which.
+		ibQueryResult rs = ibDatabaseQueryBuilder().ExecuteIR(sliceIr);
+		while (rs.Next()) {
+			const long retRow = retTable.AppendRow();
+			for (const auto object : meta->GetGenericAttributeArrayObject()) {
+				ibValue retValue;
+				if (ibDbTableProvider::GetValueAttribute(object, retValue, rs))
+					retTable.SetCell(retRow, object->GetMetaID(), retValue);
 			}
 		}
-		catch (...) {}
 	}
 
 	return retTable;

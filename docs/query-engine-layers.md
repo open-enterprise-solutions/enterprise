@@ -57,6 +57,27 @@ dictionary, and neither knows anything about metadata:
   Limit/Join/Aggregate/Subquery/Distinct/Union, expressions, DDL, DML — rendered generically
   through `ibDialectDictionary`.
 
+  **Window functions ride as a FIELD on a Func**, not as a node kind of their own (added
+  2026-08-20). `ibQueryExpr::m_over` holds an `ibQueryWindow { partitionBy, orderBy, frame }`, and
+  the renderer appends the clause where the call ends — the same shape `m_distinct` already had,
+  and for the same reason: the functions are the ordinary `SUM` / `COUNT` / `MIN` / `MAX` (plus
+  the ranking ones), and only what they fold over changes.
+
+  Two things are deliberate here. The **frame is an explicit choice** — `ibQueryFrame` offers
+  `RangeThroughPeers` (every row sharing this row's sort key contributes, which is what a running
+  BALANCE wants) and `RowsThroughCurrent` (strictly row by row, valid only where the sort key is
+  unique by construction), with **no `Default` member**, because the three engines' unstated
+  defaults are not required to agree and a divergence would travel silently into somebody's
+  figures. `NoFrame` means a ranking call (SQL forbids a frame there) or an unordered partition —
+  a share-of-total denominator. And the **clause has one speller**, `ibRenderOverClause`, which
+  both this renderer and L2-2's view generator call; that function is also where the capability is
+  checked, refusing with `UnsupportedNode` on an engine without windows rather than emulating one
+  (every emulation turns a linear report quadratic, and a query that merely got slower is not a
+  failure anyone reports).
+
+  Support: Firebird 3+, PostgreSQL, SQLite 3.25+ — all three advertise `m_features.m_window`. The
+  ANSI baseline (what ODBC gets, and what an MSSQL layer derives from) does not, and is refused.
+
   A write can also hand back what it wrote: `ibReturning(dml, {cols})` +
   `ExecuteReturning` yields a **cursor over the affected rows**, exactly like a SELECT. This is
   what makes "bump a counter and read the new value" ONE statement, hence atomic — no window

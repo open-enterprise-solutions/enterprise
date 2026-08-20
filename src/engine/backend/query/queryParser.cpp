@@ -788,6 +788,10 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	if (IsAggregateKw(tk))
 		return ParseAggregate();
 
+	// ranking function — ROW_NUMBER() / RANK() / DENSE_RANK() OVER (…)
+	if (tk.m_kind == ibQueryTokenKind::Keyword && ibIsRankingKeyword(tk.m_keyword))
+		return ParseRanking();
+
 	// value(<Kind>.<Name>.<Member>) — a literal reference constant (empty ref / predefined), resolved at lowering
 	if (tk.IsKeyword(ibQueryKeyword::Value))
 		return ParseValueConstant();
@@ -897,7 +901,84 @@ ibQueryAstExprPtr ibQueryParser::ParseAggregate()
 	}
 
 	ExpectPunct(wxT(')'), wxT("')'"));
+	ParseWindowSuffix(*e);   // …OVER (…) — the call folds a PARTITION instead of a group
 	return e;
+}
+
+// ROW_NUMBER() / RANK() / DENSE_RANK() OVER ( … ) — a call that numbers rows rather than folding
+// them. Three rules, all of them consequences of what such a call IS, and all three enforced here
+// so the error names the rule rather than the SQL the engine would have failed to prepare:
+// no argument, an OVER is mandatory, and no frame (there is nothing to fold over).
+ibQueryAstExprPtr ibQueryParser::ParseRanking()
+{
+	const ibQueryToken& tk = Cur();
+	const ibQueryKeyword fn = tk.m_keyword;
+	++m_pos;
+
+	ExpectPunct(wxT('('), wxT("'(' after a ranking function"));
+	if (!Cur().IsPunct(wxT(')')))
+		ThrowQueryException(tk, _("a ranking function takes no argument — write it as NAME() OVER (…)"));
+	ExpectPunct(wxT(')'), wxT("')'"));
+
+	auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Func);
+	e->m_func = fn; e->m_line = tk.m_line; e->m_col = tk.m_col;
+
+	if (!Cur().IsKeyword(ibQueryKeyword::Over))
+		ThrowQueryException(tk, _("a ranking function needs OVER (…): it numbers rows within a partition"));
+	ParseWindowSuffix(*e);
+
+	if (e->m_over && e->m_over->m_frame != ibQueryAstFrame::Unstated)
+		ThrowQueryException(tk, _("a ranking function takes no ROWS / RANGE: it numbers rows, it does not fold them"));
+	if (e->m_over && e->m_over->m_orderBy.empty())
+		ThrowQueryException(tk, _("a ranking function needs an ORDER BY inside its OVER: without one there is no order to number by"));
+	return e;
+}
+
+// The OVER suffix, shared by both kinds of call. Absent = an ordinary aggregate, and that is the
+// common case — so this reads one token and leaves.
+//
+//   OVER ( [PARTITION BY expr, …] [ORDER BY expr [ASC|DESC], …] [ROWS|RANGE] )
+//
+// ⚠ THE FRAME IS ONE WORD. SQL writes the boundaries out (`ROWS BETWEEN UNBOUNDED PRECEDING AND
+// CURRENT ROW`) and this grammar does not, because the engine offers those two frames and no
+// others; accepting the long form would let someone write boundaries that quietly become different
+// ones. What ROWS and RANGE mean is stated once, in queryKeywords.h.
+void ibQueryParser::ParseWindowSuffix(ibQueryAstExpr& call)
+{
+	if (!AcceptKw(ibQueryKeyword::Over))
+		return;
+
+	const ibQueryToken& open = Cur();
+	ExpectPunct(wxT('('), wxT("'(' after OVER"));
+
+	auto window = std::make_shared<ibQueryAstWindow>();
+
+	if (AcceptKw(ibQueryKeyword::Partition)) {
+		ExpectKw(ibQueryKeyword::By, wxT("BY after PARTITION"));
+		do { window->m_partitionBy.push_back(ParseAddSub()); } while (AcceptPunct(wxT(',')));
+	}
+
+	if (AcceptKw(ibQueryKeyword::Order)) {
+		ExpectKw(ibQueryKeyword::By, wxT("BY after ORDER"));
+		do {
+			ibQueryOrderItem item;
+			item.m_expr = ParseAddSub();
+			if (AcceptKw(ibQueryKeyword::Desc))     item.m_ascending = false;
+			else if (AcceptKw(ibQueryKeyword::Asc)) item.m_ascending = true;
+			window->m_orderBy.push_back(item);
+		} while (AcceptPunct(wxT(',')));
+	}
+
+	if (AcceptKw(ibQueryKeyword::Rows))       window->m_frame = ibQueryAstFrame::Rows;
+	else if (AcceptKw(ibQueryKeyword::Range)) window->m_frame = ibQueryAstFrame::Range;
+
+	// A FRAME WITHOUT AN ORDER IS ABOUT NOTHING, and silently ignoring it is how a reader comes to
+	// believe a query says something it does not.
+	if (window->m_frame != ibQueryAstFrame::Unstated && window->m_orderBy.empty())
+		ThrowQueryException(open, _("ROWS / RANGE needs an ORDER BY inside the OVER: a frame is a position in an order"));
+
+	ExpectPunct(wxT(')'), wxT("')' closing OVER"));
+	call.m_over = window;
 }
 
 // VALUE( <Kind>.<Name>.<Member> ) — a LITERAL reference constant: the empty reference of a metaobject

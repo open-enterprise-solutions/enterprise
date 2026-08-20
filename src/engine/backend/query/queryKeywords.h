@@ -68,6 +68,21 @@ enum class ibQueryKeyword
 	// aggregate functions
 	Sum, Count, Min, Max, Avg,
 
+	// ⭐ WINDOWS — `<call> OVER (PARTITION BY … ORDER BY … [ROWS|RANGE])`. The same five aggregates,
+	// folded over a partition of the result instead of over a group of it, plus three RANKING calls
+	// that only make sense inside one.
+	//
+	// ⚠ THE FRAME IS TWO WORDS AND NO MORE. SQL spells the boundaries in full
+	// (`ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`), and this grammar deliberately does not:
+	// the engine's IR offers exactly two frames, so accepting arbitrary boundaries would be a
+	// promise nothing below can keep. `ROWS` and `RANGE` each mean "from the start of the partition
+	// through this row"; the difference is whether rows sharing this one's sort key count with it.
+	Over, Partition, Rows, Range,
+
+	// Ranking calls. They take NO argument and NO frame, and they are meaningless without an
+	// OVER — all three facts are asked of the keyword table (ibIsRankingKeyword), never re-listed.
+	RowNumber, Rank, DenseRank,
+
 	// literal-reference constant: value(<Kind>.<Name>.<Member>) — an empty reference / a predefined item
 	Value,
 
@@ -114,6 +129,13 @@ BACKEND_API bool ibIsAggregateKeyword(ibQueryKeyword kw);
 // already need it (the aggregate cell's choices, the expression editor's palette) and every later
 // host will need the same answer.
 BACKEND_API bool ibDistinctMattersFor(ibQueryKeyword aggregate);
+
+// IS THIS A RANKING CALL — ROW_NUMBER / RANK / DENSE_RANK?
+//
+// Asked of the table for the same reason the aggregate question is: three separate rules hang off
+// the answer (no argument, no frame, an OVER is mandatory), and a hand-kept list of three names in
+// the parser would be a fourth place to update when the set grows.
+BACKEND_API bool ibIsRankingKeyword(ibQueryKeyword kw);
 
 // EVERY WORD OF THE ACTIVE TABLE, space-separated. Written for the editor's syntax highlighting,
 // which needs the whole set at once — and asked of the TABLE rather than typed out again, so a

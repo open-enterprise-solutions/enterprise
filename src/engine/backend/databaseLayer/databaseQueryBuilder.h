@@ -51,7 +51,8 @@ struct ibQuerySpan
 	int m_col  = 0;
 };
 
-struct ibQueryRel;   // fwd — the EXISTS subquery source (relation tree, defined below)
+struct ibQueryRel;      // fwd — the EXISTS subquery source (relation tree, defined below)
+struct ibQueryWindow;   // fwd — the OVER (…) spec a Func may carry (defined below, beside the sort key it holds)
 
 enum class ibQueryExprKind
 {
@@ -114,6 +115,15 @@ struct ibQueryExpr
 	// spelled identically by every dialect this layer writes for, so it rides the generic renderer
 	// rather than becoming a per-driver branch.
 	bool m_distinct = false;
+
+	// Func: the OVER (…) that turns this call into a WINDOW function — `SUM(x) OVER (PARTITION BY
+	// k ORDER BY p)`. A MODIFIER of the call, exactly like m_distinct above, which is why it is a
+	// field here and not a node kind of its own: the functions are the same SUM / COUNT / MIN /
+	// MAX, and only what they fold over changes. Null = an ordinary call.
+	//
+	// Held by pointer for the reason m_subquery is: the spec names types declared further down,
+	// and a window is rare enough that every expression node should not carry two vectors.
+	std::shared_ptr<ibQueryWindow> m_over;
 
 	// BinOp: operator + operands.
 	ibQueryBinOp m_binOp = ibQueryBinOp::Eq;
@@ -310,6 +320,53 @@ struct ibQuerySortKey
 	ibQueryExprPtr m_expr;
 	ibQuerySortDir m_dir = ibQuerySortDir::Asc;
 };
+
+// ⭐⭐ WHICH ROWS OF THE PARTITION THE FUNCTION FOLDS — and this is a DECISION, not a detail.
+//
+// There is deliberately no `Default` member. The three engines' unstated defaults are not required
+// to agree with each other, and a running balance that quietly changed shape between Firebird and
+// PostgreSQL would be wrong in the way nobody audits: plausible numbers, reconciling to nothing.
+// Every aggregate window says which of the two it means.
+enum class ibQueryFrame
+{
+	// RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW — PEERS INCLUDED. Every row whose sort key
+	// is EQUAL to this one contributes, so the answer does not depend on the order rows happen to
+	// arrive in within one period. This is what a running BALANCE wants: three movements stamped
+	// with the same period are one period's worth of stock, in any order.
+	RangeThroughPeers,
+
+	// ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW — strictly row by row. Correct ONLY where the
+	// sort key is unique BY CONSTRUCTION; with ties the figures move between runs, which is a defect
+	// that reports itself as "the numbers changed" long after the query that caused it.
+	RowsThroughCurrent,
+
+	// No frame clause at all. RANKING functions (ROW_NUMBER / RANK / DENSE_RANK / LAG / LEAD) take
+	// none and SQL forbids one there, and a window with no ORDER BY folds the whole partition by
+	// definition — "the total of the group", the denominator of a share-of-total.
+	//
+	// ⚠ NOT a way to say "whatever the engine does" for an ordered aggregate. That is the case the
+	// two members above exist to make explicit.
+	NoFrame
+};
+
+// The OVER (…) spec. Empty partition = one partition (the whole result); empty order = the function
+// folds the partition unordered, which is what a share-of-total denominator is.
+struct ibQueryWindow
+{
+	std::vector<ibQueryExprPtr> m_partitionBy;
+	std::vector<ibQuerySortKey> m_orderBy;
+	ibQueryFrame                m_frame = ibQueryFrame::NoFrame;
+};
+
+// Attach a window to a call: `ibWindowed(ibFunc("SUM", {ibCol("qty")}), { {ibCol("wh")}, {…}, frame })`.
+// Returns the SAME expression so it composes inline. Deliberately a separate step rather than more
+// arguments on ibFunc: an extra argument travels into every projection-building call site (m_distinct
+// went that way once and surfaced in six), a field travels nowhere.
+inline ibQueryExprPtr ibWindowed(ibQueryExprPtr func, ibQueryWindow window)
+{
+	func->m_over = std::make_shared<ibQueryWindow>(std::move(window));
+	return func;
+}
 
 struct ibQueryProjItem
 {
@@ -846,6 +903,20 @@ struct ibRenderedQuery
 // than a builder and would otherwise need a copy of the same switch.
 BACKEND_API wxString ibMapColumnType(const ibDialectDictionary& dialect, const ibColumnType& type);
 
+// THE spelling of an OVER (…) clause — one place, two doors, for the same reason ibMapColumnType is
+// one place: the IR renderer below reaches it with rendered expressions, and L2-2's view generator
+// reaches it with the SQL text it already holds. Both hand over FINISHED operand strings, so this
+// function owns the clause and nothing else.
+//
+// It is also where the capability is CHECKED. An engine without window functions is refused here
+// with UnsupportedNode — the same answer RETURNING gives — because every emulation of a running
+// total (a self-join per row, a correlated subquery) silently changes the cost of a report from
+// linear to quadratic, and a query that merely got slower is not a failure anyone reports.
+BACKEND_API wxString ibRenderOverClause(const ibDialectDictionary& dialect,
+                                        const std::vector<wxString>& partitionBy,
+                                        const std::vector<wxString>& orderBy,
+                                        ibQueryFrame frame);
+
 class BACKEND_API ibQueryRenderer
 {
 public:
@@ -860,15 +931,17 @@ public:
 	ibRenderedQuery RenderDML(const ibDmlStatement& dml);
 
 	// (No view-body renderer here. A VIEW's body is produced by L2-2 — see
-	//  databaseMaterializeBuilder — because the bodies that matter carry window functions and
-	//  shard folds, which the query IR has no nodes for. Adding an inline-literal mode to THIS
-	//  renderer would have meant owning per-dialect quote escaping for a caller that does not
-	//  exist.)
+	//  databaseMaterializeBuilder — because the bodies that matter carry shard folds, which the
+	//  query IR has no nodes for. Adding an inline-literal mode to THIS renderer would have meant
+	//  owning per-dialect quote escaping for a caller that does not exist.
+	//  Window functions used to be on that list and no longer are: they are a field on Func
+	//  (m_over), and both renderers now spell the clause through the one ibRenderOverClause.)
 
 private:
 
 	wxString RenderSelect(const ibQueryRel* root);  // flatten a relation chain into one SELECT (appends binds)
 	wxString RenderExpr(const ibQueryExprPtr& expr);
+	wxString RenderOver(const ibQueryWindow& window);  // renders the operands, spells the clause via ibRenderOverClause
 	wxString RenderSource(const ibQueryRel* rel);   // FROM source: Scan / Join-tree / Subquery (recursive)
 	wxString RenderPlaceholder();              // spells the next placeholder, bumps the counter
 	wxString QuoteIdent(const wxString& name) const;
@@ -905,6 +978,12 @@ private:
 // GROUP BY ROLLUP — can the subtotal levels be folded by the SERVER, or must the result tier build
 // them? (FB5, PG yes; SQLite no.)
 BACKEND_API bool ibCanPushRollup(const ibDatabaseLayer* layer);
+
+// OVER (…) — can this driver rank and run totals ITSELF? A reading that folds periods, or picks the
+// row nearest a moment, is one pass with windows and a stack of self-joins without. (FB3+, PG,
+// SQLite 3.25+ yes; the ANSI baseline no.) Asked before choosing the SHAPE of the query — unlike
+// ibRenderOverClause, which refuses once a window has already been built.
+BACKEND_API bool ibCanPushWindow(const ibDatabaseLayer* layer);
 
 // (No `ibCanUseTempTables` here, and the reason is worth keeping: the per-driver temp facts'
 //  PRESENCE already IS that capability, and the one caller — the temp-table manager — needs the
