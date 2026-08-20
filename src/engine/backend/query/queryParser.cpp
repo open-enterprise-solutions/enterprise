@@ -331,8 +331,20 @@ ibQueryProjection ibQueryParser::ParseProjection()
 	p.m_expr = ParsePredicate();
 
 	// AS alias, or an implicit bare-identifier alias (SELECT Code c)
+	//
+	// ⭐ AFTER AN EXPLICIT `AS`, A KEYWORD IS A NAME — the same rule the dotted path already lives by
+	// (`Document.Order`: after the dot, a word is a name whatever the table says). `AS` makes the
+	// alias MANDATORY, so whatever follows it is being used as one, and there is nothing for the
+	// word to be ambiguous with.
+	//
+	// Written the day `ROWS` joined the keyword table and `SELECT COUNT(*) AS rows` stopped parsing —
+	// but the class is older and wider: `AS order`, `AS group`, `AS value`, `AS index` all failed the
+	// same way, and every future keyword would silently claim another name people already use.
+	//
+	// WITHOUT the `AS` the rule cannot hold: the alias is optional there, so a keyword after the
+	// expression is the NEXT CLAUSE (`SELECT Code FROM …`), and reading it as a name would swallow it.
 	if (AcceptKw(ibQueryKeyword::As)) {
-		if (Cur().m_kind != ibQueryTokenKind::Ident)
+		if (Cur().m_kind != ibQueryTokenKind::Ident && Cur().m_kind != ibQueryTokenKind::Keyword)
 			ThrowQueryException(Cur(), _("expected an alias name after AS"));
 		p.m_alias = Next().m_text;
 	}
