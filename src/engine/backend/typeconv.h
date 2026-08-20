@@ -450,11 +450,6 @@ namespace typeConv
 
 	inline wxColour StringToColour(const wxString& str) {
 
-		// NOTHING WRITTEN MEANS NOTHING SET — the twin of ColourToString's empty answer. Falling
-		// through would build a black out of three missing components.
-		if (str.IsEmpty())
-			return wxColour();
-
 		// check for system colour
 		if (str.find_first_of(wxT("wx")) == 0)
 		{
@@ -546,12 +541,6 @@ namespace typeConv
 	}
 
 	inline wxString ColourToString(const wxColour& colour) {
-		// ⭐ AN UNSET COLOUR STAYS UNSET. Without this it wrote "0,0,0" — the components of an invalid
-		// wxColour — and came back as a perfectly valid BLACK, so "the cell was never given a colour"
-		// turned into "the cell is painted black" on the next load. Empty is the only spelling that
-		// reads back as nothing.
-		if (!colour.IsOk())
-			return wxEmptyString;
 		return wxString::Format(wxT("%d,%d,%d"), colour.Red(), colour.Green(), colour.Blue());
 	}
 
