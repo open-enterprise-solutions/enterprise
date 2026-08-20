@@ -28,6 +28,37 @@ ibBackendSpreadsheetObject               (backend — the result)
             └── ibGridEditor's notifier  (frontend — one reader among several)
 ```
 
+### 🛑 "No UI in it" includes not ASKING the desktop anything (2026-08-20)
+
+A cell used to be born knowing the window colour: two of its members were initialised from
+`wxSystemSettings::GetColour(...)`. That reads as harmless — it is only a default — and it held for
+years, because on MSW and on Cocoa the desktop answers that question without anybody having a
+screen. **On GTK it does not.** The call builds a `GtkStyleContext`, a `GtkStyleContext` needs a
+display connection, and a missing one is a *fatal* `Gtk-ERROR`, not a warning:
+
+```
+Gtk-ERROR **: Can't create a GtkStyleContext without a display connection
+```
+
+So on a headless Linux runner every test that created a single cell died with `SIGTRAP`, and the
+one test that created none passed. Three things are worth keeping from it:
+
+- **It was a layer violation before it was a crash.** `wxSystemSettings` is a GUI class and this is
+  the GUI-free half of the engine. The rule the crash enforced was already written down.
+- **An unset value is UNSET, not a default written down early.** The members are now left empty and
+  the *getters* resolve them — which is where the question belongs, because the caller asking for a
+  colour is the one about to paint. They already had that shape for a missing cell.
+- **The platform axis here is the TOOLKIT, not the compiler.** Windows and macOS both forgive this;
+  no local build of any kind reproduces it. Only headless Linux does, which in practice means only
+  CI does — so a CI log that ends in `SIGTRAP` with no assertion text is worth reading in full
+  rather than skimming (fetch the raw log to a file; the blob view truncates it).
+
+A second defect surfaced beside it, from a plain GCC warning MSVC never emits: `GetCellAlignment`
+left its out-parameters **untouched** when the cell did not exist, and every caller declares a bare
+`int` for them. Reading the alignment of an unwritten cell therefore handed back stack garbage cast
+to an enum, and setting one alignment carried the other's garbage into the cell it created. It
+answers with a new cell's defaults now — fixed in the getter, so a fifth caller cannot get it wrong.
+
 ---
 
 ## 2. Storage — sparse, and the extent follows the writes

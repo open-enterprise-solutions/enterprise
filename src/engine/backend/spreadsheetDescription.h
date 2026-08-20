@@ -174,8 +174,18 @@ struct ibSpreadsheetCellDescription {
 	int m_alignVert = wxALIGN_TOP;
 	int m_textOrient = wxHORIZONTAL;
 	wxFont m_font = s_defaultSpreadsheetFont;
-	wxColour m_backgroundColour = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
-	wxColour m_textColour = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
+	// 🛑 NOT SEEDED FROM THE SYSTEM. An unset colour is UNSET — it is not the window colour written
+	// down early. Asking wxSystemSettings here made every cell CONSTRUCTION a question to the
+	// desktop, and on GTK that question builds a GtkStyleContext, which needs a display connection:
+	// on a headless runner it is a fatal Gtk-ERROR, so every test that created a single cell died
+	// with SIGTRAP while the one that created none passed (CI, 2026-08-20).
+	//
+	// ⭐ AND IT WAS A LAYER VIOLATION BEFORE IT WAS A CRASH: wxSystemSettings is a GUI class, and the
+	// backend is GUI-free by rule. What the desktop's window colour is happens to be a question only
+	// something with a screen can answer — so it is asked where there IS one: the getters below
+	// resolve an unset colour, exactly as they already resolved a missing cell.
+	wxColour m_backgroundColour;
+	wxColour m_textColour;
 	ibSpreadsheetBorderDescription m_borderAt[4]; //left, right, top, bottom
 	int m_row_size = 1, m_col_size = 1;
 	ibFitMode m_fitMode = ibFitMode::Mode_Overflow;
@@ -507,9 +517,13 @@ struct ibSpreadsheetDescription {
 	int GetSizeNumberCols() const { return m_colWidthAt.size(); }
 
 	//cell
+	// ⭐ THE ONE PLACE THE DESKTOP IS ASKED — and only when somebody actually wants a colour. A cell
+	// that was never given one and a cell that does not exist are the same answer: whatever the
+	// window colour is. Storing that answer at construction is what took the question to a machine
+	// with no screen; asking it here takes it to a caller that is about to paint.
 	wxColour GetCellBackgroundColour(int row, int col) const {
 		const ibSpreadsheetCellDescription* cell = GetCell(row, col);
-		if (cell != nullptr)
+		if (cell != nullptr && cell->m_backgroundColour.IsOk())
 			return cell->m_backgroundColour;
 		return wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
 	}
@@ -522,7 +536,7 @@ struct ibSpreadsheetDescription {
 
 	wxColour GetCellTextColour(int row, int col) const {
 		const ibSpreadsheetCellDescription* cell = GetCell(row, col);
-		if (cell != nullptr)
+		if (cell != nullptr && cell->m_textColour.IsOk())
 			return cell->m_textColour;
 		return wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
 	}
@@ -559,12 +573,19 @@ struct ibSpreadsheetDescription {
 			cell->m_font = font;
 	}
 
+	// 🛑 IT ALWAYS ANSWERS. It used to leave the outputs UNTOUCHED when the cell did not exist, and
+	// every caller declares a bare `int` for them — so reading the alignment of a cell nobody has
+	// written handed back whatever was on the stack, and WRITING one alignment carried the other's
+	// garbage into the cell it created (`SetCellAlignment(m_row, m_col, horz, vertical)`). GCC says
+	// so plainly ("may be used uninitialized") and MSVC never has (CI, 2026-08-20).
+	//
+	// A cell that does not exist has the alignment a new cell would have — which is what the caller
+	// means by asking. Answered HERE rather than at the four call sites, so a fifth caller cannot
+	// get it wrong: the same shape the colour getters already have.
 	void GetCellAlignment(int row, int col, int* horiz, int* vert) const {
 		const ibSpreadsheetCellDescription* cell = GetCell(row, col);
-		if (cell != nullptr) {
-			if (horiz) *horiz = cell->m_alignHorz;
-			if (vert) *vert = cell->m_alignVert;
-		}
+		if (horiz) *horiz = cell != nullptr ? cell->m_alignHorz : wxALIGN_LEFT;
+		if (vert)  *vert  = cell != nullptr ? cell->m_alignVert : wxALIGN_TOP;
 	}
 
 	void SetCellAlignment(int row, int col, const int horiz, const int vert) {
