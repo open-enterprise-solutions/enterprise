@@ -158,7 +158,15 @@ bin\
 `wfrontend.dll` + `wenterprise-server.exe` are the web runtime (headless
 server + web frontend). `simplePlugin.dll` is the plugin example; it builds into
 `bin\<Platform>\<Configuration>\plugins\` — the directory the plugin manager scans at
-startup. Firebird embedded libraries (`fbclient.dll`,
+startup.
+
+> **Build ORDER is declared in the solution, and every project declares it** (fixed 2026-08-20).
+> `simplePlugin` used to fail a parallel `msbuild /t:Rebuild /m` with
+> `LNK1104: cannot open backend.lib` — it links `backend.lib` but was the one project with **no
+> `ProjectSection(ProjectDependencies)`**, so nothing ordered it after `backend`. An incremental
+> build hid it (the .lib was already there from last time), which is why it read for a while as "a
+> known race, not a defect". If a new project links another's output, give it the dependency section
+> its neighbours have. Firebird embedded libraries (`fbclient.dll`,
 `ib_util.dll`, ICU) are expected alongside the executables — they ship in the
 repo's prebuilt `_fb` payload and are copied next to the binaries.
 
@@ -393,6 +401,11 @@ Four notes on why it is shaped this way — each one paid for by a wasted round:
   exercises it.
 - **Build every non-GUI test target, not just `oes_tests`.** `ctest` registers them all, so
   building one reports the rest as `<name>_NOT_BUILT` failures.
+- **The solution compiles no tests.** `enterprise.sln` carries the 14 shipping projects and nothing
+  from `tests/` — the test tree is reached through CMake only. So a rename or a header move that a
+  local `Debug|x86` build accepts can still leave test sources naming a file that no longer exists,
+  and CI is what says so. Three did, on 2026-08-20
+  ([portability.md § 1.10](portability.md)).
 
 On a crash, the Linux job runs the two smallest failing tests under `gdb` and prints a backtrace:
 `ctest` reports only the signal, and a 40-minute round trip is too expensive to spend on a guess.

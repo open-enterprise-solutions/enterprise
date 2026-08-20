@@ -195,6 +195,7 @@
     <ClCompile Include="docManager\templates\docViewCommonAttribute.cpp" />
     <ClCompile Include="docManager\templates\docViewMetaFile.cpp" />
     <ClCompile Include="docManager\templates\docViewModuleEditor.cpp" />
+    <ClCompile Include="docManager\templates\docViewComposer.cpp" />
     <ClCompile Include="docManager\templates\docViewRole.cpp" />
     <ClCompile Include="docManager\templates\docViewConfigCompare.cpp" />
     <ClCompile Include="mainApp.cpp" />
@@ -249,6 +250,7 @@
     <ClInclude Include="docManager\templates\docViewCommonAttribute.h" />
     <ClInclude Include="docManager\templates\docViewMetaFile.h" />
     <ClInclude Include="docManager\templates\docViewModuleEditor.h" />
+    <ClInclude Include="docManager\templates\docViewComposer.h" />
     <ClInclude Include="docManager\templates\docViewRole.h" />
     <ClInclude Include="docManager\templates\docViewConfigCompare.h" />
     <ClInclude Include="mainApp.h" />

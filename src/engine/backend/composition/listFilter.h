@@ -10,7 +10,6 @@
 class ibValueMetaObjectGenericData;
 class ibDataDBComposer;
 class ibDataComposer;
-class ibValueModel;
 class ibDataNode;
 
 // Filter / Order / Group come in TWO MODES (Max: "the form is transactional; the runtime wrapper mutates
@@ -399,7 +398,7 @@ public:
 	// saved. They were two stores for one day, and everything that touched only
 	// one of them (Clear, the quick filter) silently did nothing.
 	explicit ibValueFilterList(ibValueFilterGroup* root = nullptr);            // BUFFER mode; no root = nothing to hold
-	ibValueFilterList(ibValueFilterGroup* root, ibValueModel& model, std::function<void()> onChange);   // FACADE mode (live)
+	ibValueFilterList(ibValueFilterGroup* root, ibDataComposer& composer, std::function<void()> onChange);   // FACADE mode (live)
 	virtual ~ibValueFilterList() {}
 
 	void FillMembers(ibMemberTable& helper) const;
@@ -420,15 +419,13 @@ public:
 	void Clear();
 
 private:
-	// FACADE: resolve the model's composer LAZILY (it is polymorphic + lazily created, so it does not exist
-	// when the model's ctor builds this facade — by first USE the model is fully constructed). null = BUFFER mode.
-	ibDataComposer*   Composer() const;
+	ibDataComposer*   Composer() const { return m_composer; }   // null = BUFFER mode
 	// FACADE: re-state the WHOLE tree on the composer after a mutation, so the
 	// live list shows what the settings now say (and an emptied filter empties).
 	void              ApplyToComposer();
 	ibValuePtr<ibValueFilterGroup> m_ownRoot;     // only when standing alone (no settings behind it)
 	ibValueFilterGroup*   m_root = nullptr;       // THE store — normally the settings' root group
-	ibValueModel*         m_model = nullptr;      // FACADE target (the model); null = BUFFER mode
+	ibDataComposer*       m_composer = nullptr;  // FACADE target — the STORE itself; null = BUFFER mode
 	std::function<void()> m_onChange;             // FACADE: fire the model's refresh after a mutation
 };
 
@@ -473,7 +470,7 @@ public:
 	enum Method { enAdd = 0, enCount, enGet, enClear };
 
 	ibValueSortList();                                                      // BUFFER mode (own storage)
-	ibValueSortList(ibValueModel& model, std::function<void()> onChange);     // FACADE mode (live over the model's composer)
+	ibValueSortList(ibDataComposer& composer, std::function<void()> onChange);     // FACADE mode (live over the store)
 	virtual ~ibValueSortList() {}
 
 	void FillMembers(ibMemberTable& helper) const;
@@ -502,8 +499,8 @@ public:
 	bool Move(size_t idx, int delta);
 
 private:
-	ibDataComposer*   Composer() const;        // FACADE: lazily resolve the model's composer; null = BUFFER mode
-	ibValueModel*         m_model = nullptr;       // FACADE target (the model); null = BUFFER mode
+	ibDataComposer*   Composer() const { return m_composer; }   // null = BUFFER mode
+	ibDataComposer*       m_composer = nullptr;   // FACADE target — the STORE itself; null = BUFFER mode
 	std::function<void()> m_onChange;             // FACADE: fire the model's refresh after a mutation
 	std::vector<ibValuePtr<ibValueSortItem>> m_items;   // BUFFER storage (unused in facade mode)
 };
@@ -529,7 +526,7 @@ public:
 	};
 
 	ibValueGroupList();                                                     // BUFFER mode (own storage)
-	ibValueGroupList(ibValueModel& model, std::function<void()> onChange);    // FACADE mode (live over the model's composer)
+	ibValueGroupList(ibDataComposer& composer, std::function<void()> onChange);    // FACADE mode (live over the store)
 	virtual ~ibValueGroupList() {}
 
 	void FillMembers(ibMemberTable& helper) const;
@@ -554,8 +551,8 @@ public:
 	bool Move(size_t idx, int delta);
 
 private:
-	ibDataComposer*   Composer() const;        // FACADE: lazily resolve the model's composer; null = BUFFER mode
-	ibValueModel*         m_model = nullptr;       // FACADE target (the model); null = BUFFER mode
+	ibDataComposer*   Composer() const { return m_composer; }   // null = BUFFER mode
+	ibDataComposer*       m_composer = nullptr;   // FACADE target — the STORE itself; null = BUFFER mode
 	std::function<void()> m_onChange;             // FACADE: fire the model's refresh after a mutation
 	std::vector<Item>     m_items;                // BUFFER storage (unused in facade mode)
 };
@@ -577,7 +574,13 @@ public:
 	//   * BUFFER  (default ctor) — own storage, the settings DIALOG's transactional copy (load FROM the composer
 	//     on open via ibLoadSettingsFromComposer, commit BACK on OK via ibCommitSettingsToComposer; Cancel = discard).
 	ibValueListSettings();
-	ibValueListSettings(ibValueModel& model, std::function<void()> onChange);
+	//
+	// ⭐ THE FACADE TAKES THE STORE — exactly what the line above has always said it takes. It took an
+	// `ibValueModel&` instead, and only to reach that model's composer LAZILY, because a model's ctor
+	// built this before its own subclass composer existed. The owner is built lazily now and hands
+	// over the composer it has. Keyed on a model, "has settings" meant "is a table" — which is why a
+	// COMPOSITION, all settings and no table, could not be given the same live settings.
+	ibValueListSettings(ibDataComposer& composer, std::function<void()> onChange);
 	virtual ~ibValueListSettings() {}
 
 	void FillMembers(ibMemberTable& helper) const;

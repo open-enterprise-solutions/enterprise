@@ -3,15 +3,15 @@
 //	Description : DB value-model (L5-1 fetch)
 ////////////////////////////////////////////////////////////////////////////
 //
-// The DB half of the value-model, split out of model.cpp: ibValueModelCursor::RunComposerPage (render the
+// The DB half of the value-model, split out of tabularModel.cpp: ibValueModelCursor::RunComposerPage (render the
 // settings → SQL → keyset page → walk → COPY nodes; hierarchy drill via GROUPING) + ibValueModel::ResolveAnchorByKey
 // (the point lookup a FindRowValue restore stub positions on). A DB model reads dynamically from the cursor — no
-// stored rows. The RAM half lives in modelRam.cpp; the shared ibValueModel base + the node lives in model.cpp.
+// stored rows. The RAM half lives in tabularModelRam.cpp; the shared ibValueModel base + the node lives in tabularModel.cpp.
 
-#include "model.h"
+#include "tabularModel.h"
 
 #include "backend/backend_exception.h"             // ibBackendException — the fetch's catch/restore-scope guard
-#include "backend/modelView.h"                     // s_constIgnoreParent / ibDataViewItem
+#include "backend/tabularModelView.h"              // s_constIgnoreParent / ibDataViewItem
 #include "backend/composition/dataComposer.h"      // ibDataDBComposer — render → SQL
 #include "backend/composition/listFetchDriver.h"   // ibListFetchDriver — the universal composer-fetch sink
 #include "backend/query/dataQueryBuilder.h"        // ibReadPageRequest — the page envelope
@@ -123,7 +123,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// from the COMPOSER (the committed store; set by the ctor / settings-dialog commit), skip empty lines. A
 	// Hierarchy/HierarchyOnly dim makes that level unfold the reference's parent tree.
 	//
-	// The VIEW MODE decides flat-vs-grouped, exactly as the RAM half does (modelRam.cpp): a flat LIST view
+	// The VIEW MODE decides flat-vs-grouped, exactly as the RAM half does (tabularModelRam.cpp): a flat LIST view
 	// passes the ignore-parent SENTINEL → grouping is OFF (the user chose the Flat view → a flat table even with a
 	// grouping configured, so the flat toggle always wins over a stored grouping); a TREE / Hierarchical view
 	// passes an empty/real parent → grouping is ON. Populating dims in a flat view drove groupLevel=true there,

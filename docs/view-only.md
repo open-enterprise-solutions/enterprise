@@ -117,6 +117,34 @@ through `form->IsWritableBinding(sourceDesc)`.
 - **Radio button / slider** — not data-bound (value lives in a property), so view-only does
   not apply.
 
+### 4.1 🪤 An ACTIVATABLE cell ignores the edit veto — read-only lives on the MODEL (2026-08-20)
+
+A dataview cell has **two roads in, and only one of them sends an event.** An *editable* cell opens
+an editor and fires `wxEVT_DATAVIEW_ITEM_START_EDITING` first, which a host can veto — that is the
+door `tableBox` and every settings grid use. An **ACTIVATABLE** cell — a checkbox column, the
+composer parameters' *For user* tick, a filter line's *Use* tick — is not edited at all: the fork
+toggles it straight from the click (`ibDataViewCtrl::ProcessTableMouseEvent`) and from **Space**
+(`ProcessTableCharEvent` → `FindColumnForEditing(item, wxDATAVIEW_CELL_ACTIVATABLE)`), and neither
+road sends that event.
+
+The single gate both roads consult is `ibDataViewCtrl::IsCellEditableInMode`, and what it asks is the
+**model**:
+
+```cpp
+if (col->GetRenderer()->GetMode() != mode)                 return false;
+if (!GetModel()->IsEnabled(item, col->GetModelColumn()))   return false;   // ← the only gate
+if (!GetModel()->HasValue(item, col->GetModelColumn()))    return false;
+```
+
+So a panel that vetoed the editing event and nothing else was still one click from being edited —
+which is what a read-only composer tab was until `ibParameterModel::IsEnabledByRow` and
+`ibFilterTreeModel::IsEnabled` were added ([designer-editors.md § 4b](designer-editors.md)).
+
+⭐ **The rule for the whole form layer: for a dataview cell, read-only lives on the MODEL; the event
+veto only covers the editor road.** The veto is not wrong and is not redundant — it is the half that
+gives a refusal at the right moment for a *typed* value. It simply does not reach a cell that was
+never going to open an editor. A grid that carries both kinds of column needs both answers.
+
 ---
 
 ## 5. Commands — the `modifiesData` flag

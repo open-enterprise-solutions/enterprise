@@ -136,7 +136,7 @@ Four predicates, each named for the question its callers ask (`commonObject.h`):
 |---|---|---|
 | `HasParentLink()` | everything but `eNone` | `ApplyHierarchyType` — is there a Parent field at all |
 | `IsHierarchical()` | `eItems`, `eFoldersAndItems` | `GetHierarchyColumn()`, which returns null otherwise — and every tree behaviour is gated on it being non-null; also the list's decision to hide the Parent column (under subordination the parent is the one fact the arrangement exists for, so it stays visible) |
-| `IsItemHierarchy()` | `eItems` | the queryable (`ibRecordQueryable::IsItemHierarchy`) → `modelDb.cpp`: any element is a container; and `CallAsCommand`, where a new node nests INSIDE the anchor instead of beside it |
+| `IsItemHierarchy()` | `eItems` | the queryable (`ibRecordQueryable::IsItemHierarchy`) → `tabularModelDb.cpp`: any element is a container; and `CallAsCommand`, where a new node nests INSIDE the anchor instead of beside it |
 | `HasFolders()` | `eFoldersAndItems` | the `AddFolder` command; the Parent field's select mode |
 
 `ApplyHierarchyType()` turns the declaration into the two predefined attributes it governs. It runs
@@ -281,6 +281,33 @@ side effects until commit):
 | Export → file (`.osv` / `.oap`) | `ibWriterMemory` buffer | temp file + `std::filesystem::rename` | no (`saveToFileFlag` = export) |
 | Delete (object removal) | — | DB TX (DDL rollback) → `DeleteSubtree` → `OnDeleteMetaObject` | — |
 
+### Where "modified" lives — on the CONTAINER, not on what was edited
+
+There is **one** dirty flag for a whole configuration, and it is `ibMetaData::m_metaModify`:
+
+```cpp
+virtual void Modify(bool modify = true) {
+    if (m_metaTree != nullptr) m_metaTree->Modify(modify);   // the navigator's own mark
+    m_metaModify = modify;
+}
+```
+
+A metaobject carries no flag of its own, and neither does an editor tab: `ibMetaDocument::Modify`
+(`frontend/docView/docView.cpp`) forwards to the metaobject's `ibMetaData` and only falls back to
+its own `m_documentModified` when there is no metaobject behind the document (a plain text or help
+file). So *"the tab has unsaved work"* and *"the configuration has unsaved work"* are the same fact
+asked from two places — which is what makes Save answerable at all: the Designer saves a
+configuration, not a window.
+
+⭐ **Anything that edits a metaobject's contents has to reach this, and the road is the property
+system's**, not a call of its own: a change bubbles up the attach-owner chain
+(`ibPropertyObject::OnChildChanged`) to whichever holder can say what it means, and for a metaobject
+that means `m_metaData->Modify(true)`. Two things landed on 2026-08-20 because they had no such
+holder and their edits reached nothing — a report's composer
+([report-engine.md § 4f](report-engine.md)) and a form's dynamic-list settings
+([dynamic-list.md](dynamic-list.md)). The rule they cost is in
+[property-system.md § 5.2](property-system.md).
+
 ---
 
 ## 7. CLOSE
@@ -293,6 +320,23 @@ CloseDatabase
  ├─ DestroyMainModule                                → release the manager before its node is reset
  └─ CloseSubtree(After)   → OnAfterCloseMetaObject   → UN-REGISTER: drop the type ctors
 ```
+
+### 🛑 Teardown has to survive a failed OPEN (2026-08-20)
+
+A refused open is rolled back through **this same road**: `LoadFromFile` gives up, the framework
+closes the document, and the close ends here — on a container that never opened. So
+`CloseDatabase` opened with `wxASSERT(IsConfigOpen())` and then walked a tree that was not there,
+which turned one bad file into a session the user could not shut down (Max: *"it crashes so that you
+cannot even close the base afterwards"*).
+
+The fix keeps both halves. The assert **stays** — in the Designer, under a debugger, an unexpected
+close is worth knowing about — and is followed by `if (!IsConfigOpen()) return true;`. Debug tells
+the developer, Release closes silently, and neither traps the user: **nothing to close IS a
+successful close**, the rule the destructors in this tree already follow. All three containers do
+it identically (`metadataConfiguration.cpp`, `metadataReport.cpp`, `metadataDataProcessor.cpp`).
+
+The general shape is worth keeping: *a precondition on a TEARDOWN path is a trap, because teardown
+is exactly what runs when the precondition failed to be established.*
 
 ---
 
@@ -322,6 +366,15 @@ template — they already share the node methods). Differences from config:
 
 So: **config commits to the DB and runs per-session; an external DP/Report commits to its file
 and owns its own runtime.** That single difference explains every branch above.
+
+⭐ **`LoadCommonTree` is the boundary, and it SPEAKS now** (2026-08-20). `ApplyDataNode` raises on a
+factory miss or bad data; the container catches it there — which is right, the caller has a fresh
+root to discard — but it used to answer `false` in **silence**, so a report that would not open
+looked exactly like one that opened and failed later. It now logs the engine's own description
+(`wxLogError(wxT("%s"), err.GetErrorDescription())`) before returning false. The failure that found
+this — a composer's variant nodes read as metatypes
+([serialization-io.md §4b](serialization-io.md)) — was invisible until a probe was put in that
+catch, which is the whole argument for the line being there permanently.
 
 ---
 

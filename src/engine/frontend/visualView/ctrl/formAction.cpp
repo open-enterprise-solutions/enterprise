@@ -57,6 +57,13 @@ ibValueForm::ibStandardCommandSet ibValueForm::GetStandardCommands(const ibFormI
 	if (ibStandardCommandSource* provider = GetCommandProvider())
 		actionData.AppendFrom(provider->GetStandardCommands(formType));
 
+	// ⭐ A RULE OFF THE SUBJECT'S VERBS. What the provider gave is about the DATA (compose it, post
+	// it, add a row); what follows is about the WINDOW. Run together they read as one list of
+	// equals, and the eye has to know the vocabulary to tell them apart (Max, 2026-08-20: "and
+	// there is no separator").
+	if (actionData.GetCount() > 0)
+		actionData.AddSeparator();
+
 	// Form chrome is navigation / view — never data-modifying — so it stays live in a view-only form.
 	actionData.AddAction(wxT("Close"), _("Close"), g_picCloseFormCLSID, false, enClose).SetModify(false);
 	actionData.AddAction(wxT("Update"), _("Update"), g_picUpdateFormCLSID, false, enUpdate).SetModify(false);

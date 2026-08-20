@@ -67,7 +67,7 @@ list, enum list, register list, folder tree — see [paging-design.md](paging-de
 that history). All of it was **retired** into one composer-rendering primitive:
 
 ```cpp
-// ibValueModel (model.h) — PURE VIRTUAL, realised per SOURCE KIND, not per table type.
+// ibValueModel (tabularModel.h) — PURE VIRTUAL, realised per SOURCE KIND, not per table type.
 // The body renders the model's composer to a page; the composer is the source of truth.
 virtual unsigned int RunComposerPage(const ibDataViewItem& parent, const ibDataViewItem& anchor,
     int count, ibFetchDirection dir, ibDataViewItemArray& out) const = 0;
@@ -77,8 +77,8 @@ Two realisations, and only two:
 
 | Realisation | Source | What it does | Rows it hands out |
 |---|---|---|---|
-| `ibValueModelCursor::RunComposerPage` (`modelDb.cpp`) | a queryable (DB) | render the composer → SQL → **keyset** page → walk driver rows | **COPY** nodes (`ibComposerNode`) |
-| `ibValueModelStorage::RunComposerPage` (`modelRam.cpp`) | `ibRamValueStorage` (live nodes) | `ibDataRamComposer::ComputeOrder` filters + sorts the live rows **in place**, windowed by anchor | the **LIVE** storage node (the node IS the row) |
+| `ibValueModelCursor::RunComposerPage` (`tabularModelDb.cpp`) | a queryable (DB) | render the composer → SQL → **keyset** page → walk driver rows | **COPY** nodes (`ibComposerNode`) |
+| `ibValueModelStorage::RunComposerPage` (`tabularModelRam.cpp`) | `ibRamValueStorage` (live nodes) | `ibDataRamComposer::ComputeOrder` filters + sorts the live rows **in place**, windowed by anchor | the **LIVE** storage node (the node IS the row) |
 
 Every table type in the product — dynamic list, table-of-values, tabular section, register
 recordset — is one of these two by inheritance (§7). Filter / sort / group are **not** per-model:
@@ -93,11 +93,11 @@ A table is two collaborating bases fused into one runtime object:
 
 | Layer | Class | Lives | Is |
 |---|---|---|---|
-| **View contract** | `ibDataViewModel` | `backend/modelView.h` | wx-neutral: what a data-view control needs (values, hierarchy, notifier, paged fetch) |
-| **Script + composition** | `ibValueModel` | `backend/model.h` | `ibValue` + tabular command/data object: the model as a script value, owner of the L5 composer |
+| **View contract** | `ibDataViewModel` | `backend/tabularModelView.h` | wx-neutral: what a data-view control needs (values, hierarchy, notifier, paged fetch) |
+| **Script + composition** | `ibValueModel` | `backend/tabularModel.h` | `ibValue` + tabular command/data object: the model as a script value, owner of the L5 composer |
 
 `ibValueModel` does **not** inherit `ibDataViewModel` — it *owns a bridge* to it, a nested
-`ibDataViewModelProviderImpl m_modelProvider` (model.h) that forwards every view virtual
+`ibDataViewModelProviderImpl m_modelProvider` (tabularModel.h) that forwards every view virtual
 (`GetValue` / `GetParent` / `GetFirstFetch` / `GetFeatures` / …) to the owning value-model:
 
 ```cpp
@@ -118,7 +118,7 @@ inherited by every subclass, so the class factory reports them all as tables by 
 Rows are **refcount-aware** and carry their own queries, so the model shrinks to "produce items,
 accept writes, notify".
 
-- **`ibDataViewObject : wxRefCounter`** (`modelView.h`) — the base every row/node subclass
+- **`ibDataViewObject : wxRefCounter`** (`tabularModelView.h`) — the base every row/node subclass
   (`ibComposerNode`, `ibValueTreeNode`, `ibValueTableRow`) derives. Virtuals live **on the row**,
   not the model: `IsContainer()`, `GetParentItem()`, `IsEqualTo()` (logical row equality across
   re-fetch behind a fresh pointer), `IsAttached()` (row survives its model's Clear via refcount →
@@ -230,7 +230,7 @@ GetPrevFetch  → anchor ? RunComposerPage(…, Backward) : 0
 ```
 
 - **`parent`** = the scope. Invalid item = the invisible root (top-level rows). The sentinel
-  `s_constIgnoreParent` (modelView.h) = a FLAT scan of a *hierarchical* source (one `ORDER BY`
+  `s_constIgnoreParent` (tabularModelView.h) = a FLAT scan of a *hierarchical* source (one `ORDER BY`
   over the whole table instead of recursing per folder) — the front's List view passes it.
 - **`anchor`** = the keyset cursor: the last (Forward) / first (Backward) loaded row. Not a
   positional offset — a concurrent insert/delete can't make pages overlap or skip. On a sort
@@ -265,9 +265,9 @@ is, and it is the only place in the engine that knows a background job exists:
 
 | | Answers | Because |
 |---|---|---|
-| `ibDataViewModel::SubmitFetchAsync` (base, `modelView.cpp`) | **a thread of the model's own** — one, owned, joined in the dtor and before the next read | "the thread that asked" is not always a UI thread with time to spare: the same forms render on the web server, where it is a session's worker and a blocking read holds up that session's whole answer |
-| `ibValueModel::SubmitFetchAsync` (`model.cpp`) | **a rented run** | that is a RUNTIME table — it reads a DATABASE |
-| `ibValueModelStorage::SubmitFetchAsync` (`model.h`) | **back to the base's thread** | RAM: there is no database on the other end, so a session and a pooled connection would be minted for nothing — and its rows are the LIVE storage nodes the view is holding, pinned by a non-atomic refcount |
+| `ibDataViewModel::SubmitFetchAsync` (base, `tabularModelView.cpp`) | **a thread of the model's own** — one, owned, joined in the dtor and before the next read | "the thread that asked" is not always a UI thread with time to spare: the same forms render on the web server, where it is a session's worker and a blocking read holds up that session's whole answer |
+| `ibValueModel::SubmitFetchAsync` (`tabularModel.cpp`) | **a rented run** | that is a RUNTIME table — it reads a DATABASE |
+| `ibValueModelStorage::SubmitFetchAsync` (`tabularModel.h`) | **back to the base's thread** | RAM: there is no database on the other end, so a session and a pooled connection would be minted for nothing — and its rows are the LIVE storage nodes the view is holding, pinned by a non-atomic refcount |
 
 A model also outlives its own read by construction: `ibValueModel` keeps the run handle and
 cancels + waits it out in its destructor (the base joins its thread there). The control's alive
@@ -340,11 +340,11 @@ There is no per-fetch cancel handle, and none is wanted: a rented run ends by co
 the alive token makes a delivery already posted to the UI queue a no-op when it lands on a
 control that is gone.
 
-`ibValueModel::SubmitFetchAsync` still exists (`model.cpp`) and still routes through
+`ibValueModel::SubmitFetchAsync` still exists (`tabularModel.cpp`) and still routes through
 `ibSession::Submit` — i.e. the caller's OWN session, which on the desktop *is* the wx main
 thread. Its only caller now is the debounced `SchedulePagedRefresh`; it is not the fetch path.
 
-**There is no UI dispatcher.** The former `SetUiDispatcher` / `DispatchToUi` hop on `model.h` was
+**There is no UI dispatcher.** The former `SetUiDispatcher` / `DispatchToUi` hop on `tabularModel.h` was
 REMOVED, not moved. It was a process-wide static, which is the wrong shape twice over: the
 backend had to know what a host's UI thread is, and a web server — one process, MANY sessions —
 has no single answer to give it. "Run this where the view lives" is already answered per session
@@ -423,7 +423,17 @@ kinds (§1) meet.
 A model carries `m_listSettings` (`ibValueListSettings`, `backend/composition/listFilter.h`) —
 the script-visible container of **Filter** / **Order** / **Group**, a thin facade over the L5
 composer. `RunComposerPage` reads the composer **directly every fetch**; the legacy per-model
-`m_filterRow` / `m_sortOrder` are abolished. The settings object is a transactional dialog
+`m_filterRow` / `m_sortOrder` are abolished.
+
+⭐ **The facade takes the STORE, and is built on the first ASK** (2026-08-20). It used to take the
+`ibValueModel&` and reach `GetModelComposer()` through it, for one reason: a model's constructor
+built the facade before the SUBCLASS's composer existed, so the store could only be resolved later.
+That made "has settings" mean "is a table" — and a report's COMPOSITION, which has settings and is
+not a table, could not be given the same facade. Building it lazily in `GetListSettings()` removes
+the reason: by the first question the model is whole, so it hands over the composer it has. The
+same facade now serves a composition over its own store. (A one-method interface for "who holds a
+composer" was written and thrown away — when a type takes X only to reach Y and the reason is
+CONSTRUCTION ORDER, move the construction, not the abstraction.) The settings object is a transactional dialog
 buffer: `ibLoadSettingsFromComposer` on open (composer → buffer), `ibCommitSettingsToComposer`
 on OK (buffer → composer, clear then re-apply); Cancel is a no-op.
 
@@ -441,7 +451,7 @@ pokes this model's composer + `RefetchAll`) — the model bridges no `{col, asc}
 
 ## 6. Notifier + refresh — pure push, single entry
 
-`ibDataViewModelNotifier` (`modelView.h`) is **PURE PUSH**: the model tells the front WHAT
+`ibDataViewModelNotifier` (`tabularModelView.h`) is **PURE PUSH**: the model tells the front WHAT
 CHANGED (`ItemInserted` / `ItemDeleted` / `ItemChanged` / `ValueChanged` / `BeforeReset` /
 `AfterReset` / `Cleared` / `Resort`) and nothing else. Everything the notifier used to *pull*
 (selection, drill parent, page size, view mode) is gone — the control owns selection + page
@@ -511,9 +521,9 @@ source-command band. Details: [paging-design.md](paging-design.md) §8.
 | `backend/modelView.{h,cpp}` | `ibDataViewModel`, `ibDataViewItem`, `ibDataViewObject`, notifier, `ibFetchDirection`, `s_constIgnoreParent` |
 | `backend/tabularDataObject.{h,cpp}` | `ibTabularDataObject` — the two hop gates, the shared row-less body, `GetValueByPath` (§3a) |
 | `backend/srcDataObject.{h,cpp}` | `ibSourceDataObject::ResolvePath` (the shared deep loop) + `WalkColumns` (its design-time twin) |
-| `backend/model.h` + `model.cpp` | `ibValueModel`, the provider bridge, `Get*Fetch` defaults, `RefetchAll`, `ResolveAnchorByKey`, `m_listSettings` |
-| `backend/modelDb.cpp` | `ibValueModelCursor::RunComposerPage` — DB keyset fetch |
-| `backend/modelRam.cpp` | `ibValueModelStorage::RunComposerPage` — RAM in-place fetch; `ibValueModelRamTableBase` |
+| `backend/tabularModel.h` + `tabularModel.cpp` | `ibValueModel`, the provider bridge, `Get*Fetch` defaults, `RefetchAll`, `ResolveAnchorByKey`, `m_listSettings` |
+| `backend/tabularModelDb.cpp` | `ibValueModelCursor::RunComposerPage` — DB keyset fetch |
+| `backend/tabularModelRam.cpp` | `ibValueModelStorage::RunComposerPage` — RAM in-place fetch; `ibValueModelRamTableBase` |
 | `backend/composition/ramComposer.{h,cpp}` | `ibDataRamComposer::ComputeOrder` (RAM filter/sort) |
 | `backend/composition/listFilter.h` | `ibValueListSettings`, `ibLoadSettingsFromComposer` / `ibCommitSettingsToComposer` |
 | `system/value/valueTable.h` | `ibValueModelTable` (table-of-values) |

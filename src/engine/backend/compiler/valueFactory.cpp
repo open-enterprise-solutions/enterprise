@@ -222,6 +222,7 @@ wxString ibValue::GetNameObjectFromID(const ibClassID& clsid, bool upper)
 		return upper ? typeCtor->GetClassName().Upper() :
 			typeCtor->GetClassName();
 	}
+
 	ibBackendCoreException::Error(_("Object with id '%llu' is not exist"), clsid);
 	return wxEmptyString;
 }

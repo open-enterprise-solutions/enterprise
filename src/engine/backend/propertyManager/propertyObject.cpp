@@ -234,6 +234,12 @@ bool ibPropertyObject::HideProperty(const ibProperty* property, bool hide)
 	for (ibPropertyObjectNotifier* notifier : m_notifiers)
 		if (notifier->PropertyHidden(property, hide))
 			result = true;
+	// ⭐ …AND UP THE ATTACH CHAIN. An attached object's properties are DRAWN by its owner's
+	// inspector, and the notifier lives on the owner — so an attached object hiding one of its own
+	// properties reached nobody at all. (That is why a composition kept showing Source and Query
+	// text after being told to hide them: it was talking to an empty notifier list.)
+	if (m_attachOwner != nullptr && m_attachOwner != this && m_attachOwner->HideProperty(property, hide))
+		result = true;
 	return result;
 }
 

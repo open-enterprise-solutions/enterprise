@@ -381,8 +381,12 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalByDotWalk(const std::vector<const i
 	const ibBackendQueryColumn* dimCol, const wxString& alias, ibDimensionKind dim)
 {
 	if (path.size() < 2 || dimCol == nullptr) return *this;
-	m_dimWalks.push_back(ibDotWalkColumn{ path, alias });    // provider projects the leaf scalar AS `alias`
+	m_dimWalks.push_back(ibDotWalkColumn{ path, alias });    // provider projects the leaf under `alias`
 	m_totals.push_back(ibTotalLevel{ dimCol, dim });         // fold groups by dimCol's OWN unique model id
+	// A NON-SCALAR leaf is projected as a SPREAD under that alias and reassembles on the read — the
+	// result has to be told, because only this call knows both halves (see StampResult).
+	if (!path.back()->IsRawColumn())
+		m_dimObjectReads.push_back({ dimCol->GetColumnId(), alias, path.back() });
 	return *this;
 }
 
@@ -554,7 +558,14 @@ void ibDataQueryBuilder::StampResult(ibDataQueryResult& r) const
 {
 	r.SetMaterialiseColumns(MaterialiseColumns());
 	r.SetTotals(m_totals, m_totalAggregates, m_totalsOverall);
-	r.SetSource(m_holder, m_queryable, m_selectCols, m_conditions);   // lazy sub-selections + ref-dimension resolution
+	// …and HOW a dot-walked object dimension is read back — see ibDataQueryResult::m_objectReads.
+	for (const ibDimObjectRead& read : m_dimObjectReads)
+		r.SetObjectRead(read.m_dimColumnId, read.m_alias, read.m_leaf);
+	// …and the source recipe, WITH the ownership of the sources built for this query: everything
+	// stamped above is raw pointers into the columns those sources publish, and the result is read
+	// after this builder is gone. (Max, 2026-08-19: "the two of them own it — the query dies, the
+	// result still holds the skeleton".)
+	r.SetSource(m_holder, m_queryable, m_selectCols, m_conditions, m_ownedSources);
 }
 
 // An empty temp table, as a result. Nothing here knows WHY the caller wants one — that

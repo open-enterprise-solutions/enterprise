@@ -40,7 +40,7 @@ class WXDLLIMPEXP_FWD_CORE wxImageList;
 class wxItemAttr;
 class ibHeaderGenericCtrl;
 
-#include "backend/modelView.h"
+#include "backend/tabularModelView.h"
 #include "headerctrlg.h"
 #include "frontend/frontend.h"
 // The (x, band) geometry a grouped table paints in, and the ORIENTATION a group can

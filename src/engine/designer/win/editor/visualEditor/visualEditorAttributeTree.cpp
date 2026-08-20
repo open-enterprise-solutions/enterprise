@@ -8,7 +8,10 @@
 #include "frontend/visualView/ctrl/formAttribute.h"                    // ibFormAttributeValue (+ clipboard statics)
 #include "frontend/visualView/ctrl/form.h"                              // ibValueForm attribute API
 #include "frontend/visualView/ctrl/widgets.h"                           // g_controlCheckboxCLSID / g_controlTextCtrlCLSID (node -> control map)
+#include "backend/system/value/valueDataComposition.h"                   // g_valueDataCompositionCLSID — drags as a gridbox
+#include "backend/system/value/valueSpreadsheet.h"                        // g_valueSpreadsheetCLSID — so does a document
 #include "frontend/visualView/ctrl/tableBox.h"                          // g_controlTableBoxCLSID
+#include "frontend/visualView/ctrl/gridBox.h"                           // g_controlGridBoxCLSID
 #include "backend/metaCollection/attribute/metaAttributeObject.h"      // GetIconGroup (default attribute icon)
 #include "backend/srcDataObject.h"                                      // ibSourceDataObject / ibSourceExplorer / ConvertToMetaIds
 #include "backend/sourceDescription.h"                                   // ibSourceDescription / ibSourceDescriptionMemory (drag payload = the source path, unified serialize)
@@ -116,6 +119,11 @@ static ibClassID DropControlClass(bool isTable, const std::vector<ibMetaID>& ref
 {
 	if (isTable)
 		return g_controlTableBoxCLSID;
+	// A composition and a spreadsheet document are draggable — both build a GRIDBOX on the drop side
+	// (the box that shows a document, and a composition composes one).
+	if (typeDesc.GetClsidCount() == 1 &&
+		(typeDesc.ContainType(g_valueDataCompositionCLSID) || typeDesc.ContainType(g_valueSpreadsheetCLSID)))
+		return g_controlGridBoxCLSID;
 	if (typeDesc.GetClsidCount() == 1) {
 		if (typeDesc.ContainType(ibValueTypes::TYPE_BOOLEAN))
 			return g_controlCheckboxCLSID;

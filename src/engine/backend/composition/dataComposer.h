@@ -156,6 +156,15 @@ public:
 	// Totals: aggregates + dimension levels (DB → `TOTALS agg… BY dim…`, the folded tree). RAM grouping is a
 	// deferred follow-up; the slice-1 RAM composer ignores totals (filter + sort only).
 	ibDataComposer& Total(const wxString& func, const wxString& path);
+
+	// A RESOURCE AS AN EXPRESSION — `SUM(Amount) / COUNT(DISTINCT Doc)`, written in the query
+	// language and rendered verbatim into TOTALS.
+	//
+	// The two-argument form above is the DEGENERATE CASE of this one: `Total("SUM", "Amount")`
+	// renders `SUM(Amount)`, which is what an expression of that shape would render to anyway. A
+	// window offering ready aggregates writes the pair; a person writing a ratio writes this, and
+	// the composer stores both the same way — an empty function means "the text IS the expression".
+	ibDataComposer& TotalExpr(const wxString& expression) { return Total(wxEmptyString, expression); }
 	// The grouping VID (kind): Elements / Hierarchy / HierarchyOnly — the ONE switch between a flat and a
 	// hierarchical view (lifted to L5 — the list settings carry it).
 	ibDataComposer& TotalBy(const wxString& path, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements);
@@ -194,6 +203,53 @@ public:
 	bool   GetGroupAt(size_t i, wxString& path, ibQueryDimUnfold& kind) const {
 		if (i >= m_totalBy.size()) return false;
 		path = m_totalBy[i].m_path; kind = m_totalBy[i].m_kind; return true;
+	}
+
+	// THE PROJECTION, readable. Third member of this family to be write-only (filters and sorts
+	// always had their triple, totals got theirs today, and this is the last): a settings window
+	// showing WHICH FIELDS a level outputs has to read them back, and there was no way to.
+	//
+	// EMPTY MEANS ALL, and that is a real answer rather than a missing one — a composition that
+	// selects nothing outputs every column its source has. A host shows that as "everything",
+	// never as an empty list of chosen fields.
+	void   ClearSelected() { m_selected.clear(); }
+	size_t SelectCount() const { return m_selected.size(); }
+	bool   GetSelectAt(size_t i, wxString& path) const {
+		if (i >= m_selected.size()) return false;
+		path = m_selected[i];
+		return true;
+	}
+	bool   RemoveSelectAt(size_t i) {
+		if (i >= m_selected.size()) return false;
+		m_selected.erase(m_selected.begin() + i);
+		return true;
+	}
+
+	// THE AGGREGATES, readable like every other setting. They were writable and not readable — the
+	// one member of this family without the triple, which is invisible while only a fetch consumes
+	// them and becomes a hole the moment a WINDOW has to show what it is folding. A report's
+	// resources are exactly that window.
+	void   ClearTotals() { m_totals.clear(); }
+	size_t TotalCount() const { return m_totals.size(); }
+	bool   GetTotalAt(size_t i, wxString& func, wxString& path) const {
+		if (i >= m_totals.size()) return false;
+		func = m_totals[i].m_func; path = m_totals[i].m_path; return true;
+	}
+	// Drop one line, keeping the order of the rest — the verb a settings window needs and the only
+	// one Clear cannot express.
+	bool   RemoveTotalAt(size_t i) {
+		if (i >= m_totals.size()) return false;
+		m_totals.erase(m_totals.begin() + i);
+		return true;
+	}
+	// CHANGE ONE LINE IN PLACE, keeping its position. A resource that can be added and removed but
+	// not EDITED sends a person round the houses to change `SUM` into `AVG`; and Remove+Add would
+	// move the line to the end, which is a different report the moment order carries meaning.
+	// An EMPTY func means the path IS the expression — the same rule the renderer follows.
+	bool   SetTotalAt(size_t i, const wxString& func, const wxString& path) {
+		if (i >= m_totals.size() || path.IsEmpty()) return false;
+		m_totals[i].m_func = func; m_totals[i].m_path = path;
+		return true;
 	}
 
 	// DROP EVERY SETTING WHOSE FIELD THE SOURCE NO LONGER HAS. Returns how many went.

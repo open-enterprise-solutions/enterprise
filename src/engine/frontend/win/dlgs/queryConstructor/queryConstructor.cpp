@@ -264,8 +264,30 @@ bool ibDialogQueryConstructor::IsMetaDataReadOnly(const ibMetaData* metaData)
 //  Construction
 // ===========================================================================
 
+
+// A HOST THAT FOLDS ELSEWHERE GETS NO TOTALS — and not only as a hidden tab.
+//
+// ⭐ Max, 2026-08-19: "the arbitrary query of a list, and the composer — they exclude TOTALS from
+// what it shows. And if any slip through, it throws them out." The tab going is half the promise:
+// text pasted in, or a query written before the rule existed, would otherwise keep a TOTALS clause
+// that nothing in the window can show, edit or delete. So it is dropped on the way in, once, here.
+//
+// Why those two hosts: a composition's totals ARE its resources and its levels ARE its groupings,
+// and a dynamic list folds through its own settings. In both, a TOTALS in the text is the same
+// setting written twice — in the copy nobody can see.
+static void ibDropTotalsFromPackage(ibQueryPackage& package)
+{
+	for (ibQueryAstStatement& statement : package.m_statements) {
+		if (!statement.m_select)
+			continue;
+		statement.m_select->m_totalsBy.clear();
+		statement.m_select->m_totalsAggregates.clear();
+		statement.m_select->m_totalsOverall = false;
+		statement.m_select->m_hasTotals = false;
+	}
+}
 ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQueryPackage& package,
-                                                   const ibMetaData* metaData, bool readOnly)
+                                                   const ibMetaData* metaData, bool readOnly, int exclude)
 	: wxDialog(parent, wxID_ANY, _("Query constructor"), wxDefaultPosition, wxSize(1040, 720),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	, m_package(package)
@@ -274,7 +296,14 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	// The metadata is asked FIRST, and the caller can only add to its answer. A configuration
 	// opened without the right to change it stays unchangeable through this window too.
 	, m_readOnly(readOnly || IsMetaDataReadOnly(metaData))
+	, m_exclude(exclude)
 {
+	// ⭐ WHAT THIS HOST DOES NOT TAKE, TAKEN OUT AT ONCE. Hiding the tab is only half of it: the
+	// package may already carry a TOTALS clause (pasted text, a query written before the rule), and
+	// what no tab can show, nobody can remove either.
+	if ((m_exclude & ibQueryExclude_Totals) != 0)
+		ibDropTotalsFromPackage(m_package);
+
 	// ONE FONT, SET BEFORE ANYTHING IS BUILT. Controls made at different times otherwise pick up
 	// different defaults and the window reads as several dialogs stitched together — and setting it
 	// afterwards is worse: the notebook keeps the tab strip it measured for the old font, which is
@@ -342,21 +371,25 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	// `queryPage` marks the tabs that describe a QUERY. A statement that drops a temp table has no
 	// query, so those tabs are REMOVED for it rather than greyed: a disabled tab invites clicking,
 	// and there is nothing behind it to see.
-	m_pages.push_back({ BuildTablesPage(m_notebook),     _("Tables and fields"), true  });
-	m_pages.push_back({ BuildLinksPage(m_notebook),      _("Links"),             true,  true });
-	m_pages.push_back({ BuildGroupingPage(m_notebook),   _("Grouping"),          true  });
-	m_pages.push_back({ BuildConditionsPage(m_notebook), _("Conditions"),        true  });
-	m_pages.push_back({ BuildAdvancedPage(m_notebook),   _("Advanced"),          false });
+	//
+	// The LAST field is the exclusion bit — which flag of the host's mask turns this tab off. Every
+	// tab carries one, so a host that owns a setting itself (a composition's totals, a list's
+	// grouping) says so with a flag rather than with a new parameter here.
+	m_pages.push_back({ BuildTablesPage(m_notebook),     _("Tables and fields"), true,  false, false, false, ibQueryExclude_Tables });
+	m_pages.push_back({ BuildLinksPage(m_notebook),      _("Links"),             true,  true,  false, false, ibQueryExclude_Links });
+	m_pages.push_back({ BuildGroupingPage(m_notebook),   _("Grouping"),          true,  false, false, false, ibQueryExclude_Grouping });
+	m_pages.push_back({ BuildConditionsPage(m_notebook), _("Conditions"),        true,  false, false, false, ibQueryExclude_Conditions });
+	m_pages.push_back({ BuildAdvancedPage(m_notebook),   _("Advanced"),          false, false, false, false, ibQueryExclude_Advanced });
 	// UNIONS / ALIASES — one tab, because it is one question. An output field's NAME is what a union
 	// lines its branches up BY, so the place that shows the line-up is the place the name is typed;
 	// the tab is called both things because it genuinely is both.
-	m_pages.push_back({ BuildUnionsPage(m_notebook),     _("Unions / Aliases"),  true  });
-	m_pages.push_back({ BuildOrderPage(m_notebook),      _("Order"),             true  });
+	m_pages.push_back({ BuildUnionsPage(m_notebook),     _("Unions / Aliases"),  true,  false, false, false, ibQueryExclude_Unions });
+	m_pages.push_back({ BuildOrderPage(m_notebook),      _("Order"),             true,  false, false, false, ibQueryExclude_Order });
 	// Totals is refused for a statement that makes a temp table — the parser says so, so the tab
-	// goes rather than being left to write text the engine rejects.
-	m_pages.push_back({ BuildTotalsPage(m_notebook),     _("Totals"),            true, false, false, true });
-	m_pages.push_back({ BuildIndexPage(m_notebook),      _("Index"),             true,  false, true });
-	m_pages.push_back({ BuildPackagePage(m_notebook),    _("Query batch"),     false });
+	// goes rather than being left to write text the engine rejects. A HOST may exclude it as well.
+	m_pages.push_back({ BuildTotalsPage(m_notebook),     _("Totals"),            true,  false, false, true,  ibQueryExclude_Totals });
+	m_pages.push_back({ BuildIndexPage(m_notebook),      _("Index"),             true,  false, true,  false, ibQueryExclude_Index });
+	m_pages.push_back({ BuildPackagePage(m_notebook),    _("Query batch"),       false, false, false, false, ibQueryExclude_Batch });
 	SyncNotebookPages();
 	upper->Add(m_notebook, 1, wxEXPAND | wxALL, FromDIP(6));
 
@@ -1623,8 +1656,10 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 				const ibSourceMetaDataScope resolveAgainst(m_metaData);
 				type = m_model.TypeOfPath(*select, argument->m_path, m_package, m_statement);
 			}
-			for (ibQueryKeyword keyword : ibQueryLowering::AggregatesFor(type))
-				words.Add(ibQueryKeywordText(keyword) + wxT("(") + field + wxT(")"));
+			// THE ENGINE COMPOSES THE OFFERS (AggregateCallsFor) — the ready calls over this field,
+			// including the DISTINCT twin where it asks a different question.
+			for (const wxString& call : ibQueryLowering::AggregateCallsFor(type, field))
+				words.Add(call);
 			return words;
 		},
 		// "..." - the arbitrary-expression editor over what the cell currently holds.

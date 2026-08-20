@@ -132,6 +132,12 @@ ibDataComposer& ibDataComposer::Sort(const wxString& path, bool ascending)
 
 ibDataComposer& ibDataComposer::Total(const wxString& func, const wxString& path)
 {
+	// A RESOURCE WITH NOTHING TO AGGREGATE is the absence of one — the same rule the sort and the
+	// filter follow above. It would render `SUM()` (or a bare comma with the expression form) and
+	// the parser would refuse the whole query, which the caller then sees as an empty result
+	// rather than as the empty setting it actually was.
+	if (path.IsEmpty())
+		return *this;
 	m_totals.push_back({ func, path });
 	return *this;
 }
@@ -304,7 +310,12 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text) const
 		text += wxT(" TOTALS");
 		for (size_t i = 0; i < m_totals.size(); ++i) {
 			text += (i == 0 ? wxT(" ") : wxT(", "));
-			text += m_totals[i].m_func + wxT("(") + m_totals[i].m_path + wxT(")");
+			// NO FUNCTION MEANS THE TEXT IS THE EXPRESSION. `Total("SUM", "Amount")` renders
+			// `SUM(Amount)`; `TotalExpr("SUM(Amount) / COUNT(DISTINCT Doc)")` renders itself.
+			// One store, because the first is what the second would have been written as.
+			text += m_totals[i].m_func.IsEmpty()
+				? m_totals[i].m_path
+				: m_totals[i].m_func + wxT("(") + m_totals[i].m_path + wxT(")");
 		}
 		for (size_t i = 0; i < m_totalBy.size(); ++i) {
 			text += (i == 0 ? wxT(" BY ") : wxT(", "));
@@ -513,6 +524,7 @@ bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 			driver.OnRow(sel.Level(), sel.HasChildren(), row);
 		}
 	}
+
 
 	driver.OnComplete(hasTotals);
 	return true;

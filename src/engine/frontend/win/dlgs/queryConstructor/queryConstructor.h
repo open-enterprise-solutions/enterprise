@@ -67,6 +67,33 @@ class ibMetaData;
 //   * ibShowQueryConstructorFor(parent, sel) — over ONE select, in place: how a nested table and
 //     a union branch are edited (the re-entrant path).
 // ---------------------------------------------------------------------------
+
+// ⭐ WHAT AN OPENING LEAVES OUT — a mask of EXCLUSIONS, and the default is zero: everything shows
+// (Max, 2026-08-19: "by default null means we see it all; the flag says what to exclude — totals,
+// sorting, and so on — so you never add another boolean").
+//
+// A host excludes what belongs to IT rather than to the query text. A composition's totals ARE its
+// resources and its levels ARE its groupings; a dynamic list folds through its own settings. Both
+// therefore open the constructor with Totals excluded.
+//
+// ⚠ EXCLUDED IS NOT MERELY HIDDEN: a clause whose tab is not on offer is DROPPED from the query on
+// the way in, because what no tab can show, nobody can remove either.
+enum ibQueryConstructorExclude {
+	ibQueryExclude_None       = 0,
+	ibQueryExclude_Totals     = 1 << 0,
+	ibQueryExclude_Order      = 1 << 1,
+	ibQueryExclude_Unions     = 1 << 2,
+	ibQueryExclude_Advanced   = 1 << 3,
+	ibQueryExclude_Index      = 1 << 4,
+	ibQueryExclude_Batch      = 1 << 5,
+	ibQueryExclude_Links      = 1 << 6,
+	ibQueryExclude_Grouping   = 1 << 7,
+	ibQueryExclude_Conditions = 1 << 8,
+	// The first tab. Excluded by nobody today — it is what a query IS — but it carries a bit like
+	// every other, so a host that one day opens the window on a fixed source does not need a new one.
+	ibQueryExclude_Tables     = 1 << 9,
+};
+
 class FRONTEND_API ibDialogQueryConstructor : public wxDialog
 {
 public:
@@ -83,7 +110,8 @@ public:
 	// (IsMetaDataReadOnly below) — a configuration opened without the right to change it already
 	// says so, and a window that could be told "no, it is editable" would be a way around that.
 	ibDialogQueryConstructor(wxWindow* parent, const ibQueryPackage& package,
-	                         const ibMetaData* metaData, bool readOnly = false);
+	                         const ibMetaData* metaData, bool readOnly = false,
+	                         int exclude = ibQueryExclude_None);
 
 	// Does this configuration allow its structure to be changed? The answer lives on the metadata's
 	// own tree (ibBackendMetadataTree::IsEditable) — the same question the designer asks before it
@@ -140,6 +168,11 @@ private:
 		// is the one — a temp table is a flat table and TOTALS yields a tree, which the parser
 		// refuses outright. The tab goes rather than being left to write text the engine rejects.
 		bool      m_refusedByTempTable = false;
+		// WHICH EXCLUSION BIT TURNS THIS TAB OFF (0 = a tab no host may exclude). Two different rules
+		// remove the Totals tab now: a temp table cannot carry a tree, and a HOST may fold elsewhere
+		// entirely (a composition folds through its resources). Asking by the tab.s TITLE would be
+		// asking in the language of the caption.
+		int       m_excludeBit = 0;
 	};
 	std::vector<Page> m_pages;
 	void SyncNotebookPages();   // the tab set follows what the current statement IS
@@ -439,6 +472,10 @@ private:
 	ibQueryConstructorModel  m_model;
 	bool                     m_readOnly = false;
 	bool                     m_subQuery = false;   // editing a nested table / a union branch
+	// WHAT THIS OPENING LEAVES OUT (a mask of ibQueryConstructorExclude). A host that folds elsewhere
+	// — a composition (its totals ARE its resources), a dynamic list (it folds through its settings)
+	// — excludes Totals, and any TOTALS in the text it was opened on is dropped on the way in.
+	int                      m_exclude = ibQueryExclude_None;
 
 	size_t                   m_statement = 0;   // which statement of the package the tabs show
 	// The select the tabs edit. Normally the current statement's own; a union branch while one is
@@ -576,12 +613,14 @@ private:
 // default that quietly fell back to the active one would resolve a copied query's tables against
 // somebody else's configuration.
 FRONTEND_API bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText,
-                                         const ibMetaData* metaData, bool readOnly = false);
+                                         const ibMetaData* metaData, bool readOnly = false,
+                                         int exclude = ibQueryExclude_None);
 
 // Open it over ONE select, edited in place — a nested table, a union branch. This is the re-entrant
 // door: the shell is not tied to a top-level statement.
 FRONTEND_API bool ibShowQueryConstructorFor(wxWindow* parent, ibQuerySelectPtr& select,
-                                            const ibMetaData* metaData, bool readOnly = false);
+                                            const ibMetaData* metaData, bool readOnly = false,
+                                         int exclude = ibQueryExclude_None);
 
 // STYLE A PANE THAT SHOWS QUERY TEXT — the SQL lexer, the keyword set taken from the LANGUAGE'S own
 // table, and the ENGINE's font and colours. Shared, because there is more than one such pane (the

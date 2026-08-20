@@ -327,13 +327,32 @@ along than input.
 > `ibWebToolBarItem` / `ibWebToolBarSeparator` are real classes, so `CT_TLBR` / `CT_TLITM` /
 > `CT_TLSP` all register on the web.
 
-### 4.3 Report — generate action ~~missing~~ LANDED 2026-08-02
+### 4.3 Report — generate action ~~missing~~ LANDED 2026-08-02, and the ENGINE around it 2026-08-20
 
-`backend/metaCollection/partial/dataReportAction.cpp` now registers the **Generate**
-standard command and routes it to the object module's `Generating(cancel)` handler — the
-report's twin of a document's `Post` → `Posting`. The script still owns data and
-presentation both; the platform owns only the command. See
-[report-engine.md § 5](report-engine.md).
+`backend/metaCollection/partial/dataReportAction.cpp` registers the **Compose** standard command and
+routes it to the object module's `Composing(StandartProcessing)` handler — the report's twin of a
+document's `Post` → `Posting`.
+
+**What a report IS, as of 2026-08-20** (built and run live; details in
+[report-engine.md](report-engine.md)):
+
+- a **COMPOSER is a metatype declared inside the report** (`ibValueMetaObjectComposer`), beside its
+  forms and templates, with its own designer tab and a `DefaultComposer` — so a report needs no form
+  at all: the generated one is a **gridbox bound to the default composer**, and only when there IS
+  one (`if (defaultComposer != wxNOT_FOUND)`), because the box binds to the composer and there is
+  nothing to bind to without it;
+- **external reports have them too** — the same metaobject always held them; only their tree did not
+  show the group;
+- the live composition is a **FIELD of the report object**, created in `PrepareEmptyObject` beside
+  the attributes and tabular sections, in the one store every field lives in — not a parallel map
+  with a lifecycle of its own;
+- what a gridbox holds is a **spreadsheet MODEL** (`ibValueSpreadsheetModel`): it owns the sheet,
+  answers `Compose()`, and IS the command store — the control only lays its verbs out. The base's
+  fetch is an event; the **composer** overrides it and is the only place a background run is rented;
+- settings: a list's window and a composition's are **two worlds**, sharing exactly the FILTER and
+  SORT editors (`frontend/win/dlgs/settings/`), each over its own buffer.
+
+The script seam is untouched: a report with no composer still composes in its handler.
 
 ### 4.4 JSON provider — Read implemented 2026-08-02, deliberately unwired
 

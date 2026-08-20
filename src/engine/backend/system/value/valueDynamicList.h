@@ -1,7 +1,7 @@
 #ifndef __VALUE_DYNAMIC_LIST_H__
 #define __VALUE_DYNAMIC_LIST_H__
 
-#include "backend/model.h"                       // ibValueModelCursor
+#include "backend/tabularModel.h"                // ibValueModelCursor
 #include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject
 #include "backend/composition/dataComposer.h"        // L5 — ibDataDBComposer
 #include "backend/composition/listFilter.h"          // ibValueListSettings
@@ -270,6 +270,16 @@ private:
 
 	// --- property surface — the list's properties SURFACE onto the form attribute (like
 	// ibValueSizerItem). CreateProperty right in the declaration (this / protected base).
+	// ⭐ THE INSPECTOR SHOWS SOURCE, SETTINGS AND DYNAMIC READ — and nothing else (Max, 2026-08-19).
+	// The arbitrary-query FLAG and its TEXT are edited on the settings window's Query tab, where the
+	// styled editor, the constructor button and the engine's verdict already are; a bare checkbox and
+	// a one-line string beside them are a second, worse door to the same setting. They stay
+	// properties (serialised, settable from generated code) — they are simply not offered here.
+	virtual void OnPropertyRefresh() override {
+		HideProperty(m_propertyUseCustomQuery, true);
+		HideProperty(m_propertyCustomQuery, true);
+	}
+
 	// "Source" = the registered queryables; "Settings" = an "Open" action button. ---
 	ibPropertyCategory*        m_categoryList   = ibPropertyObject::CreatePropertyCategory(wxT("DynamicList"), _("Dynamic list"));
 	// Source = a dynamic-source property holding the chosen queryable variable; the list

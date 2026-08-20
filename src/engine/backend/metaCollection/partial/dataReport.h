@@ -2,6 +2,7 @@
 #define __REPORT_H__
 
 #include "commonObject.h"
+#include "backend/metaCollection/metaComposerObject.h"   // the report's own composers
 
 class ibValueMetaObjectReport : public ibValueMetaObjectRecordDataExt {
 	public:
@@ -31,6 +32,47 @@ public:
 	void SetDefFormObject(const ibFormID& id) const {
 		m_propertyDefFormObject->SetValue(id);
 	}
+
+	// ⭐ A REPORT HOSTS COMPOSERS, and only a report does. The owner is what decides which kinds it
+	// accepts (ResolveChild) — the tree, the copy walkers and the serializer all ask this one
+	// question, so a metatype missing from here exists but can never be created under anything.
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const override {
+		if (clsid == g_metaComposerCLSID)
+			return clsid;
+		return ibValueMetaObjectRecordDataExt::ResolveChild(clsid);
+	}
+
+	// ⭐ THE COMPOSERS THIS REPORT DECLARES — the report's own children, like its forms and its
+	// templates. Declaring one is what makes `Report.<Name>` exist; nobody adds an attribute beside
+	// it (Max, 2026-08-20: "an attribute you add by hand; this one lives in the object").
+	std::vector<ibValueMetaObjectComposer*> GetComposerArrayObject(
+		std::vector<ibValueMetaObjectComposer*> array = std::vector<ibValueMetaObjectComposer*>()) const {
+		FillArrayObjectByFilter<ibValueMetaObjectComposer>(array, { g_metaComposerCLSID });
+		return array;
+	}
+
+	template <typename _T1>
+	ibValueMetaObjectComposer* FindComposerObjectByFilter(const _T1& id) const {
+		return FindObjectByFilter<ibValueMetaObjectComposer>(id, { g_metaComposerCLSID });
+	}
+
+	// THE DEFAULT COMPOSER — what makes the report a report. The generated form is built from it
+	// (a grid over it plus its settings), and the object's Compose command exists BECAUSE it is
+	// set: with no default composer there is nothing for the platform to compose, and a button
+	// that composes nothing is worse than no button.
+	ibMetaID GetDefComposer() const {
+		return m_propertyDefComposer->GetValueAsInteger();
+	}
+
+	void SetDefComposer(const ibMetaID& id) const {
+		m_propertyDefComposer->SetValue(id);
+	}
+
+	// The FIRST composer declared becomes the default one, and removing the default one clears it —
+	// the same two hooks a form already has (OnCreateFormObject / OnRemoveMetaForm), so a person
+	// never has to know that "default" is a separate property to fill in.
+	void OnCreateComposerObject(ibValueMetaObjectComposer* metaComposer);
+	void OnRemoveComposerObject(ibValueMetaObjectComposer* metaComposer);
 
 	ibValueMetaObjectReport();
 	virtual ~ibValueMetaObjectReport();
@@ -114,8 +156,24 @@ private:
 	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"));
 	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"));
 
+	// The default composer is offered from the report's OWN composers — the same shape the default
+	// form is chosen with, so the two questions are answered by one kind of control.
+	bool FillComposer(ibPropertyList* prop) {
+		for (auto object : GetComposerArrayObject()) {
+			if (!object->IsAllowed()) continue;
+			prop->AppendItem(
+				object->GetName(),
+				object->GetMetaID(),
+				object->GetIcon(),
+				object);
+		}
+
+		return true;
+	}
+
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
 	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), &ibValueMetaObjectReport::FillFormObject);
+	ibPropertyList* m_propertyDefComposer = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultComposer"), _("Default composer"), &ibValueMetaObjectReport::FillComposer);
 
 	friend class ibValueRecordDataObjectReport;
 	friend class ibMetaData;
@@ -139,6 +197,13 @@ class ibValueMetaObjectExternalReport : public ibValueMetaObjectReport {
 
 class ibValueRecordDataObjectReport : public ibValueRecordDataObjectExt {
 	public:
+
+	// ⏳ WHAT WILL BECOME THE MODEL FACE. A report shows what its DEFAULT composer composes, and it
+	// speaks FIRST: `Composing` is the author's chance to fill the sheet himself (taking the
+	// composer's settings if he wants them), after which the platform stands down. These two are
+	// already shaped like ibValueSpreadsheetModel's verbs — a report cannot DERIVE it until the
+	// composer comes off the cursor model, because a report object already carries the runtime once.
+	BACKEND_API bool Compose(class ibBackendSpreadsheetObject* document);
 	ibValueRecordDataObjectReport(const ibValueRecordDataObjectReport& source);
 	ibValueRecordDataObjectReport(const ibValueMetaObjectReport* metaObject);
 public:
@@ -151,6 +216,17 @@ protected:
 	}
 public:
 
+	// ⭐ THE OBJECT CARRIES ITS COMPOSITIONS. Each composer the report declares becomes a live
+	// composition on the object, seeded from what the metaobject holds — which is the DEFAULT of the
+	// user's settings, not a separate author's copy. `Report.<Name>` reaches any of them, and
+	// `Report.Composer` the default one (the SAME object, not a second copy: two names, one value,
+	// or a filter set through one of them would be invisible through the other).
+	// BACKEND_API on the methods, not the class: these two are what the FRONTEND reaches (the
+	// gridbox resolves a report object to its default composer), and the class itself carries
+	// members no export boundary needs to see.
+	BACKEND_API ibValueDataComposition* GetComposition(const ibMetaID& id) const;
+	BACKEND_API ibValueDataComposition* GetDefaultComposition() const;
+
 	//support actionData
 	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
 	virtual void CallAsAction(const ibActionID& action, ibBackendValueForm* srcForm);
@@ -160,7 +236,8 @@ public:
 	// means entering an object on the basis of another. The flag arrives TRUE ("the platform
 	// composes"); a handler that composed the result itself sets it FALSE. See
 	// dataReportAction.cpp.
-	bool Composing() const;
+	// BACKEND_API: the gridbox's Generate raises this before composing anything itself.
+	BACKEND_API bool Composing() const;
 
 protected:
 	// The platform side of that flag — virtual so a report kind can own its standard
@@ -171,7 +248,31 @@ protected:
 
 public:
 
+	// WHAT THE OBJECT PUBLISHES — its attributes and tables (the base) plus its COMPOSITIONS by
+	// name, and `Composer` for the default one.
+	void FillDataMembers(class ibMemberTable& helper) const;
+
+	// …and what a FORM sees of it. The composers are nodes here too, which is what puts a gridbox
+	// on the generated form without anybody drawing one (Max, 2026-08-20: "the form is not made —
+	// there is a composer, so no form has to be made").
+	virtual const ibSourceExplorer* GetSourceExplorer() const override;
+
+	// A report's MAIN node is its DEFAULT composer — the one a generated form is built from, and the
+	// one whose control speaks for the whole form.
+	virtual bool IsMainSourceNode(const ibMetaID& id) const override;
+
+	// (GetValueByMetaID is NOT overridden: a composition is a FIELD of the object, so the base finds
+	//  it where it finds every other one.)
+	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) override;
+
 protected:
+
+	// ⭐ WHERE A COMPOSITION IS BORN — the object's own filler, beside the attributes and the tabular
+	// sections, into the same store (Max, 2026-08-20: "it is created, initialised, the whole cycle,
+	// like a tabular section"). No map of its own: a second store beside m_listObjectValue would be
+	// a second lifecycle, and the two would part company at the first re-read.
+	virtual void PrepareEmptyObject() override;
+
 	friend class ibValue;
 	friend class ibValueMetaObjectReport;
 	friend class ibValueModuleRuntimeManagerExternalReport;

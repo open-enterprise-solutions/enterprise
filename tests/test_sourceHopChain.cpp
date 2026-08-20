@@ -22,7 +22,7 @@
 
 #include "backend/tabularDataObject.h"     // ibTabularDataObject
 #include "backend/srcDataObject.h"         // ibSourceDataObject + ResolvePath
-#include "backend/modelView.h"             // ibDataViewItem
+#include "backend/tabularModelView.h"      // ibDataViewItem
 #include "backend/compiler/value.h"        // ibValue
 #include "backend/sourceDescription.h"     // ibSourceHop
 

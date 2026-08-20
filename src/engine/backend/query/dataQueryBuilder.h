@@ -49,6 +49,7 @@ enum class ibAccessStage { Table, Value };
 #include <vector>
 #include <utility>
 #include <memory>
+#include <functional>   // the detach callback — see ibDataQueryResult::DetachColumns
 
 class ibValueMetaObjectAttributeBase;
 class ibDatabaseConnectionHolder;
@@ -193,6 +194,10 @@ public:
 	void SetTotals(std::vector<ibTotalLevel> levels, std::vector<ibAggregateItem> aggregates,
 		bool overall = false);
 
+	// A dot-walked dimension whose leaf is NOT one field: say under which alias PREFIX its spread was
+	// projected and which column reassembles from it. See m_objectReads.
+	void SetObjectRead(ibMetaID dimColumnId, const wxString& prefix, const ibBackendQueryColumn* leaf);
+
 	// The stamped totals config — read by result.Select(kind) to configure the Selector's fold.
 	const std::vector<ibTotalLevel>&    TotalLevels()     const { return m_totalLevels; }
 	const std::vector<ibAggregateItem>& TotalAggregates() const { return m_totalAggregates; }
@@ -201,9 +206,23 @@ public:
 	// The door also stamps the SOURCE (holder + queryable + select list + filter) so the Selector can
 	// run LAZY sub-selections (selection.Select() re-Executes a node's children) and resolve a
 	// reference-dimension's catalog hierarchy. (docs/query-language-arc.md §22.1b)
+	// ⭐⭐ THE SOURCE COMES WITH ITS OWNERSHIP — `owned` is the skeleton, not a second bookkeeping list.
+	//
+	// A subquery / UNION branch is wrapped in an ibSubqueryQueryable that owns the columns it
+	// publishes, and a result points at those columns by raw pointer from four lists (materialise
+	// columns, totals levels, totals aggregates, this recipe) which are read long after the lowering
+	// returned. Releasing the wrappers at the end of the run therefore left every one of those
+	// pointers dangling — 2026-08-19: Select() read GetTypeDesc() through freed memory while a report
+	// was being composed.
+	//
+	// So the sources travel WITH the recipe, as shares: the builder is one owner, the result becomes
+	// another (Max: "the two of them own it — the query dies, the result still holds the skeleton…
+	// however many selects there are, they all own it, and it goes when the last of them goes").
+	// Nothing is copied, so a column stays the SAME column: same identity, same id, same type object.
 	void SetSource(ibDatabaseConnectionHolder* holder, const ibBackendQueryable* queryable,
 		std::vector<std::pair<const ibBackendQueryColumn*, wxString>> selectCols,
-		std::vector<ibQueryCondition> conditions);
+		std::vector<ibQueryCondition> conditions,
+		std::vector<std::shared_ptr<const ibBackendQueryable>> owned = {});
 
 private:
 	// The backing — a physical DB scan OR a computed RAM table, behind one
@@ -212,6 +231,16 @@ private:
 	// consumer — not even this class — learns the backing. (docs §22.4d)
 	std::unique_ptr<ibDataResultSource> m_source;
 	std::vector<const ibBackendQueryColumn*> m_matColumns;   // columns a Select(mode) drains into the snapshot
+	// Co-ownership of the sources built for the query (AdoptSources) — every column pointer above
+	// lives inside one of them, so they stay valid for exactly as long as this result does.
+	std::vector<std::shared_ptr<const ibBackendQueryable>> m_ownedSources;
+
+	// ⭐ HOW A DOT-WALKED DIMENSION IS READ. Its value is not one projected field: a reference /
+	// enum / composite leaf is projected as its whole physical SPREAD under an alias PREFIX, and it
+	// reassembles from those fields (ColumnObject). The pair is stamped by the builder — the door
+	// knows it, the snapshot does not — keyed by the dimension column's own id.
+	struct ibObjectRead { wxString m_prefix; const ibBackendQueryColumn* m_leaf = nullptr; };
+	std::map<ibMetaID, ibObjectRead> m_objectReads;
 	std::vector<ibTotalLevel>    m_totalLevels;              // totals dimensions (stamped by the door)
 	std::vector<ibAggregateItem> m_totalAggregates;          // common totals aggregate set
 	bool                         m_totalsOverall = false;    // walk the tree's ROOT as a row (BY OVERALL)
@@ -359,6 +388,18 @@ public:
 	// at L3 the value goes straight into Where.)
 	ibDataQueryBuilder& From(const ibBackendQueryable* queryable, const wxString& alias = wxEmptyString); // primary source -> the relational tree root
 
+	// ⭐ THE SAME DOORS, TAKING THE SOURCE AS AN OWNING HANDLE. A source built FOR this query — a
+	// subquery, a UNION branch — dies when the lowering returns, while the RESULT it produced is read
+	// afterwards and points into the columns that source publishes. Passing it as a shared_ptr makes
+	// the builder a co-owner, and StampResult passes that ownership on to the result: the skeleton
+	// then lives until the last holder lets go, with nothing to track and nothing to copy.
+	//
+	// Metadata-backed sources keep using the raw overloads above — they outlive every query by
+	// construction, and wrapping them would say otherwise.
+	ibDataQueryBuilder& From(std::shared_ptr<const ibBackendQueryable> queryable, const wxString& alias = wxEmptyString) {
+		return From(AdoptOwnedSource(std::move(queryable)), alias);
+	}
+
 	// --- multi-source composition (the crown) ----------------------------
 	// Add another source. Join(b) auto-joins by reference (dot-walk style); Join(b,
 	// left, right) joins on explicit columns (temp / RAM / arbitrary). Union(b) stacks
@@ -389,6 +430,32 @@ public:
 	// behaviour); false = plain UNION, deduplicating the accumulated rows at this operator.
 	ibDataQueryBuilder& Union(const ibBackendQueryable* queryable, const wxString& alias = wxEmptyString,
 	                          bool keepDuplicates = true);
+
+	// Owning overloads — see From(shared_ptr) above. A UNION branch and a joined subquery are exactly
+	// the sources that die with the run, so this is where the handle matters.
+	ibDataQueryBuilder& Union(std::shared_ptr<const ibBackendQueryable> queryable, const wxString& alias = wxEmptyString,
+	                          bool keepDuplicates = true) {
+		return Union(AdoptOwnedSource(std::move(queryable)), alias, keepDuplicates);
+	}
+	ibDataQueryBuilder& Join(std::shared_ptr<const ibBackendQueryable> queryable,
+	                         const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
+	                         ibJoinCompareOp onOp,
+	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
+	                         const wxString& alias = wxEmptyString) {
+		return Join(AdoptOwnedSource(std::move(queryable)), onLeft, onRight, onOp, kind, alias);
+	}
+	ibDataQueryBuilder& Join(std::shared_ptr<const ibBackendQueryable> queryable,
+	                         const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
+	                         ibJoinCompareOp onOp,
+	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
+	                         const wxString& alias = wxEmptyString) {
+		return Join(AdoptOwnedSource(std::move(queryable)), onExprL, onExprR, onOp, kind, alias);
+	}
+	ibDataQueryBuilder& CrossJoin(std::shared_ptr<const ibBackendQueryable> queryable,
+	                              ibQueryJoinKind kind = ibQueryJoinKind::Inner,
+	                              const wxString& alias = wxEmptyString) {
+		return CrossJoin(AdoptOwnedSource(std::move(queryable)), kind, alias);
+	}
 	ibDataQueryBuilder& Where(const ibBackendQueryColumn* col,
 	                          ibQueryFilterOp comparison, const ibValue& value);             // condition -> predicate (Equal/NotEqual)
 	ibDataQueryBuilder& Where(const ibBackendQueryColumn* col, const ibValue& value);        // 2-arg = equality (meta column)
@@ -806,6 +873,11 @@ private:
 	bool                          m_allowed     = false;  // .Allowed() — a policy refusal yields an EMPTY read instead of throwing
 	long                          m_top         = 0;      // .Top() — aggregate-terminal row limit (0 = all groups)
 	std::vector<ibDotWalkColumn>  m_dotWalks;       // .SelectPath()
+	// The dot-walk dimensions whose leaf is NOT one field: {dimension column id, alias prefix, leaf}.
+	// Stamped onto the result (SetObjectRead) so the snapshot reassembles the value instead of asking
+	// for a field that was never projected on its own.
+	struct ibDimObjectRead { ibMetaID m_dimColumnId; wxString m_alias; const ibBackendQueryColumn* m_leaf; };
+	std::vector<ibDimObjectRead>  m_dimObjectReads;
 	std::vector<ibDotWalkColumn>  m_dimWalks;       // .TotalByDotWalk() — a dot-walk TOTALS dimension: the provider
 	                                                //   joins the path and projects the leaf's SCALAR value under
 	                                                //   m_alias (distinct), read by a synthetic dimension column.

@@ -85,6 +85,8 @@ void ibPGTypeProperty::FillByClsid(const ibSelectorDataType& selectorDataType, c
 
 #include "backend/system/value/valueTable.h"
 #include "backend/system/value/valueDynamicList.h"   // g_valueDynamicListCLSID
+#include "backend/system/value/valueDataComposition.h"  // g_valueDataCompositionCLSID
+#include "backend/system/value/valueSpreadsheet.h"       // g_valueSpreadsheetCLSID — what a gridbox shows
 
 ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSelectorDataType& selectorDataType, const wxString& label, const wxString& strName, const wxVariant& value) :
 	wxPGProperty(label, strName), m_ownerProperty(property)
@@ -130,6 +132,12 @@ ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSel
 		FillByClsid(selectorDataType, g_valueTableCLSID);
 		// Unified dynamic list — selectable as an attribute type alongside Table.
 		FillByClsid(selectorDataType, g_valueDynamicListCLSID);
+		// Data composer — a list's sibling: a source plus a query plus the fold a user edits.
+		FillByClsid(selectorDataType, g_valueDataCompositionCLSID);
+		// A SPREADSHEET DOCUMENT is an attribute type as well — it is what a GRIDBOX shows. Creating
+		// the control creates the variable; naming it here is what lets a form declare one on its own
+		// and point several controls (or a composition's Compose) at the same document.
+		FillByClsid(selectorDataType, g_valueSpreadsheetCLSID);
 	}
 
 	/////////////////////////////////////////////////
@@ -567,6 +575,7 @@ wxPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 			// reaches through its Select button. This editor says only WHICH SHAPE to render; what
 			// belongs to that shape the picker works out from the registry, and no filter narrows it
 			// here because a metadata declaration may name any type the configuration has.
+
 			ibVariantDataAttribute* clone = data->Clone();
 
 			if (!ibShowTypeSelector(pg, selectorDataType, std::vector<ibClassID>(), clone->GetTypeDesc(),

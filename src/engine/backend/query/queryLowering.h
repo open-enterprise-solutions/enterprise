@@ -34,6 +34,19 @@
 class ibQueryLowering
 {
 public:
+	// ⭐ WHAT A COLUMN IS FOR, said out loud rather than left to be guessed downstream. The lowering
+	// KNOWS: a TOTALS dimension is built from `TOTALS BY`, a measure from the aggregate list, and
+	// everything else is a plain projected field. A report lays these out in three different ways —
+	// dimensions stack into ONE column read down the page, measures get a column each with their
+	// numbers to the right, details sit under their group — so a consumer that is handed only names
+	// has to re-derive the roles by position or by type, and gets it wrong the first time a query
+	// projects a number that is not a measure.
+	enum class ibColumnRole {
+		Detail,      // a projected field — the ordinary SELECT output
+		Dimension,   // a TOTALS BY level, in the order the levels nest
+		Measure,     // a TOTALS aggregate — the report's resource
+	};
+
 	// One output column the script reads back. A plain / dot-walk / aggregate column
 	// is read either by source column (GetValue) or by door alias (GetColumn).
 	struct OutputColumn
@@ -63,6 +76,8 @@ public:
 		// outlives the door AND the result: the schema travels with the selection, and m_col points into
 		// this. Null for a real metadata column (owned by the metadata) or a by-alias read.
 		std::shared_ptr<ibBackendQueryColumn> m_ownedCol;
+		// WHAT IT IS FOR — see ibColumnRole. Detail unless the totals path says otherwise.
+		ibColumnRole                m_role = ibColumnRole::Detail;
 	};
 
 	// Resolve + build + run. Fills outSchema (in projection order). Throws
@@ -120,6 +135,17 @@ public:
 	// A COMPOSITE type (several clsids) yields the full set: which type a row holds is a fact about
 	// the ROW, and narrowing on "it might be a string" would be this answer inventing one.
 	BACKEND_API static std::vector<ibQueryKeyword> AggregatesFor(const ibTypeDescription& type);
+	// ⭐ THE READY CALLS OVER A FIELD, as TEXT — what a window offers in a cell.
+	//
+	// AggregatesFor answers in KEYWORDS, and a window then wraps each one around the field itself.
+	// Two windows did that wrapping (the constructor's Totals tab and the composition's Resources),
+	// and the moment an offer stopped being one plain keyword the two had to be taught separately —
+	// which is how `COUNT(DISTINCT x)` ended up in the LANGUAGE (the parser reads it) and in neither
+	// list. DISTINCT is not an aggregate of its own; it is a modifier on one, so it cannot come back
+	// through the keyword list at all.
+	//
+	// So the ENGINE composes the offers: it knows what the type admits AND what forms a call may take.
+	BACKEND_API static std::vector<wxString> AggregateCallsFor(const ibTypeDescription& type, const wxString& field);
 
 	// WHICH PROJECTIONS THIS QUERY STILL HAS TO GROUP BY — the ONE door for "can this be grouped".
 	//

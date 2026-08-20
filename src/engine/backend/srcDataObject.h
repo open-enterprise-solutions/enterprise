@@ -310,6 +310,16 @@ public:
 	//support source data
 	virtual const ibSourceExplorer* GetSourceExplorer() const = 0;
 
+	// ⭐ IS THIS NODE THE SOURCE'S MAIN ONE — the field that IS what the source is about, when the
+	// source has such a thing. A report has one: its DEFAULT composer, the thing a generated form is
+	// built from. Everything else answers false and nothing changes for it.
+	//
+	// Asked so that a CONTROL bound to that node can behave as the form's main view — the toolbar
+	// then serves its verbs and the control carries no second bar (Max, 2026-08-20: "when it is the
+	// main one it suppresses its own interface"). The control asks the SOURCE instead of knowing
+	// which kinds have a main node, exactly as it asks for columns rather than listing metatypes.
+	virtual bool IsMainSourceNode(const ibMetaID& id) const { return false; }
+
 	// THE hop gate — read/write a value addressed by a HOP (id + the type the path pinned) instead of a bare
 	// id. The dot-walk fetches THROUGH these; every other caller (runtime, object-to-object value copy) still
 	// uses the id-only primitives above, which these sit on. A hop is really {metaID, clsid}: the id-only call

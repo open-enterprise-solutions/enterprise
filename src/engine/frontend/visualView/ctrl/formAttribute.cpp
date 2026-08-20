@@ -10,7 +10,7 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valueType.h"                 // ibValueTypeDescription::AdjustValue
 #include "backend/composition/listFilter.h"                 // ibValueListSettings (list settings form)
-#include "backend/model.h"                               // ibValueModel (table-source check)
+#include "backend/tabularModel.h"                        // ibValueModel (table-source check)
 #include "backend/typeDescription.h"                          // ibTypeDescription::GetFirstClsid (value materialise)
 #include "backend/metaData.h"                                // GetTypeCtor
 #include "backend/objCtor.h"                                 // ibCtorMetaValueType / ibCtorObjectMetaType
@@ -624,8 +624,27 @@ void ibFormAttributeValue::OnChildChanged()
 	ibPropertyObject::OnChildChanged();
 
 #ifndef OES_USE_WEB
-	if (ibFrontendVisualEditorNotebook* editor = ibFrontendVisualEditorNotebook::FindEditorByForm(m_attribute->GetOwnerForm()))
+	if (ibFrontendVisualEditorNotebook* editor = ibFrontendVisualEditorNotebook::FindEditorByForm(m_attribute->GetOwnerForm())) {
+		// 🛑 AND IT IS A MODIFICATION, not just a repaint (Max, 2026-08-20: "the same defect is in
+		// the dynamic list — when I change something it has to be able to say it changed").
+		//
+		// A property edit one function up goes through ModifyProperty, which is the one place that
+		// marks the form modified. This road had only the repaint half: editing a dynamic list's
+		// SETTINGS — a filter, a sort, a grouping — redrew the editor and left the configuration
+		// looking untouched, so Save had nothing to do and the work was gone on the next open.
+		//
+		// The DOCUMENT is asked rather than the metadata directly: ibMetaDocument::Modify delegates
+		// to ibMetaData::Modify, which is where modified-ness lives, and going through the document
+		// also lets the view put its asterisk in the tab title.
+		//
+		// ⚠ Not routed through ModifyProperty: this signal deliberately carries no property (see
+		// ibPropertyObject::OnChildChanged), and inventing one to push onto the undo stack would put
+		// a command there that cannot undo what actually changed.
+		if (ibMetaDocument* document = editor->GetEditorDocument())
+			document->Modify(true);
+
 		editor->RefreshEditor();
+	}
 #endif
 }
 

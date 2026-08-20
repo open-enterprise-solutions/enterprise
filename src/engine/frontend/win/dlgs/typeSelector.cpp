@@ -8,6 +8,10 @@
 #include "backend/metaData.h"
 #include "backend/objCtor.h"          // ibCtorMetaValueType — the ctor a reference clsid resolves to
 #include "backend/compiler/value.h"
+#include "backend/system/value/valueTable.h"           // g_valueTableCLSID — the container kinds an attribute may be
+#include "backend/system/value/valueDynamicList.h"     // g_valueDynamicListCLSID
+#include "backend/system/value/valueDataComposition.h"  // g_valueDataCompositionCLSID
+#include "backend/system/value/valueSpreadsheet.h"       // g_valueSpreadsheetCLSID
 #include "frontend/win/ctrls/checktree.h"
 
 #include <wx/dialog.h>
@@ -82,6 +86,22 @@ static std::vector<ibClassID> ibTypesForKind(ibSelectorDataType kind, const ibMe
 	if (anyType)
 		types.push_back(ibValue::GetIDByVT(ibValueTypes::TYPE_NULL));
 
+
+	// ⭐ THE CONTAINER KINDS — what an attribute may BE when it holds ROWS rather than one value: a
+	// table, a dynamic list, a data composition. The attribute's type DROP-DOWN offers all three, so
+	// this dialog offers them too: two lists of what a table-shaped attribute may be is one list too
+	// many, and the one a person reaches for second is the one that turns out to be missing entries
+	// (seen live 2026-08-19 — the drop-down had them, the dialog did not).
+	//
+	// They need no metadata: they are registered value types, not something a configuration declares.
+	if (anyType || kind == ibSelectorDataType::ibSelectorDataType_table) {
+		types.push_back(g_valueTableCLSID);
+		types.push_back(g_valueDynamicListCLSID);
+		types.push_back(g_valueDataCompositionCLSID);
+		// …and the document a gridbox shows: the control creates the variable, so the variable has to
+		// be nameable on its own too.
+		types.push_back(g_valueSpreadsheetCLSID);
+	}
 	if (metaData == nullptr)
 		return types;
 

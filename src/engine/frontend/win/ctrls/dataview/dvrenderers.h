@@ -226,6 +226,17 @@ public:
 
 	virtual bool IsCustomRenderer() const { return false; }
 
+	// ⭐ DOES A SINGLE CLICK OPEN THIS CELL? Default no — the grid's own rule is the file manager's
+	// one: the first click SELECTS, and a second click on the already-selected cell edits.
+	//
+	// That rule is wrong for a cell whose editor IS the point of clicking it: a value cell with a
+	// choice button, a field picker, an expression list. There the first click looks like nothing
+	// happened, and the report is always the same sentence — "you have to click twice".
+	//
+	// It belongs to the CELL and not to the grid, because only the renderer knows whether its editor
+	// is something one opens deliberately or something one falls into.
+	virtual bool EditOnSingleClick() const { return false; }
+
 
 	// Implementation only from now on.
 

@@ -123,6 +123,9 @@
     <ClCompile Include="docManager\templates\docViewModuleEditor.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
+    <ClCompile Include="docManager\templates\docViewComposer.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
     <ClCompile Include="docManager\templates\docViewRole.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
@@ -247,6 +250,9 @@
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewModuleEditor.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewComposer.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewRole.h">

@@ -1,6 +1,6 @@
 ﻿#include "backend/composition/listFilter.h"
 #include "backend/composition/dataComposer.h"
-#include "backend/model.h"             // ibValueModel::GetModelComposer — the FACADE resolves it lazily
+#include "backend/tabularModel.h"      // ibValueModel — still the caller for a list's own settings
 #include "backend/compiler/typeCtor.h"
 #include "backend/serialize/dataBuilder.h"
 #include "backend/metadataConfiguration.h"   // activeMetaData + ibMetaData::Deserialize — the DOOR for configuration types
@@ -468,15 +468,11 @@ ibValueFilterList::ibValueFilterList(ibValueFilterGroup* root)
 	m_members.Bind(this, &ibValueFilterList::FillMembers);
 }
 
-ibValueFilterList::ibValueFilterList(ibValueFilterGroup* root, ibValueModel& model, std::function<void()> onChange)
+ibValueFilterList::ibValueFilterList(ibValueFilterGroup* root, ibDataComposer& composer, std::function<void()> onChange)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, false),
-	  m_root(root), m_model(&model), m_onChange(std::move(onChange)) {
+	  m_root(root), m_composer(&composer), m_onChange(std::move(onChange)) {
 	m_members.Bind(this, &ibValueFilterList::FillMembers);
 }
-
-// FACADE: the model's composer is polymorphic + lazily created — resolve it on demand (by first USE the model
-// is fully constructed, so GetModelComposer picks the right realisation). null model = BUFFER mode.
-ibDataComposer* ibValueFilterList::Composer() const { return m_model != nullptr ? &m_model->GetModelComposer() : nullptr; }
 
 void ibValueFilterList::FillMembers(ibMemberTable& helper) const {
 	helper.AppendFunc(wxT("Add"),   3, wxT("Add(field, comparison, value)"));
@@ -648,12 +644,10 @@ ibValueSortList::ibValueSortList()
 	m_members.Bind(this, &ibValueSortList::FillMembers);
 }
 
-ibValueSortList::ibValueSortList(ibValueModel& model, std::function<void()> onChange)
-	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, false), m_model(&model), m_onChange(std::move(onChange)) {
+ibValueSortList::ibValueSortList(ibDataComposer& composer, std::function<void()> onChange)
+	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, false), m_composer(&composer), m_onChange(std::move(onChange)) {
 	m_members.Bind(this, &ibValueSortList::FillMembers);
 }
-
-ibDataComposer* ibValueSortList::Composer() const { return m_model != nullptr ? &m_model->GetModelComposer() : nullptr; }
 
 void ibValueSortList::FillMembers(ibMemberTable& helper) const {
 	helper.AppendFunc(wxT("Add"),   2, wxT("Add(field, direction)"));
@@ -786,12 +780,10 @@ ibValueGroupList::ibValueGroupList()
 	m_members.Bind(this, &ibValueGroupList::FillMembers);
 }
 
-ibValueGroupList::ibValueGroupList(ibValueModel& model, std::function<void()> onChange)
-	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, false), m_model(&model), m_onChange(std::move(onChange)) {
+ibValueGroupList::ibValueGroupList(ibDataComposer& composer, std::function<void()> onChange)
+	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, false), m_composer(&composer), m_onChange(std::move(onChange)) {
 	m_members.Bind(this, &ibValueGroupList::FillMembers);
 }
-
-ibDataComposer* ibValueGroupList::Composer() const { return m_model != nullptr ? &m_model->GetModelComposer() : nullptr; }
 
 void ibValueGroupList::FillMembers(ibMemberTable& helper) const {
 	helper.AppendFunc(wxT("Add"),   1, wxT("Add(field)"));
@@ -952,15 +944,16 @@ ibValueListSettings::ibValueListSettings()
 	m_group  = new ibValueGroupList();
 }
 
-// FACADE container — Filter / Order / Group are thin live wrappers over `composer` (the store); each mutation
-// fires `onChange` (the owning model's refresh). The model owns ONE of these as its runtime/script settings.
-ibValueListSettings::ibValueListSettings(ibValueModel& model, std::function<void()> onChange)
+// FACADE container — Filter / Order / Group are thin live wrappers over the HOST's composer (the
+// store); each mutation fires `onChange` (its owner's refresh). Whoever holds a composer owns ONE of
+// these as its runtime/script settings: a list model, a composition.
+ibValueListSettings::ibValueListSettings(ibDataComposer& composer, std::function<void()> onChange)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, false) {
 	m_members.Bind(this, &ibValueListSettings::FillMembers);
 	m_filterRoot = new ibValueFilterGroup();
-	m_filter = new ibValueFilterList(m_filterRoot, model, onChange);
-	m_order  = new ibValueSortList(model, onChange);
-	m_group  = new ibValueGroupList(model, onChange);
+	m_filter = new ibValueFilterList(m_filterRoot, composer, onChange);
+	m_order  = new ibValueSortList(composer, onChange);
+	m_group  = new ibValueGroupList(composer, onChange);
 }
 
 void ibValueListSettings::FillMembers(ibMemberTable& helper) const {

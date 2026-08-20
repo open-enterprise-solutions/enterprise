@@ -1042,7 +1042,11 @@ void ibDialogQueryConstructor::OnAddNestedTable(wxCommandEvent&)
 	// opening the same class over the inner select.
 	ibQuerySelectPtr inner = std::make_shared<ibQuerySelect>();
 	inner->m_selectAll = true;
-	if (!ibShowQueryConstructorFor(this, inner, m_metaData, m_readOnly))
+	// WHAT THIS OPENING LEAVES OUT TRAVELS DOWN, like the configuration beside it. A host that folds
+	// elsewhere excludes Totals; a nested select opened from inside it is part of the SAME query, so
+	// letting the tab back in there is the same leak by a longer road — and a TOTALS written in the
+	// nested one survives into the text the host was told could not carry any.
+	if (!ibShowQueryConstructorFor(this, inner, m_metaData, m_readOnly, m_exclude))
 		return;
 
 	ibQuerySource source;
@@ -1097,7 +1101,7 @@ void ibDialogQueryConstructor::OnEditNestedTable(wxCommandEvent&)
 	}
 
 	ibQuerySelectPtr inner = source->m_subquery;
-	if (ibShowQueryConstructorFor(this, inner, m_metaData, m_readOnly)) {
+	if (ibShowQueryConstructorFor(this, inner, m_metaData, m_readOnly, m_exclude)) {
 		source->m_subquery = inner;
 		FillAll();
 	}
@@ -2084,7 +2088,7 @@ void ibDialogQueryConstructor::OnEditUnionBranch(wxCommandEvent&)
 		return;
 
 	ibQuerySelectPtr branch = select->m_unions[index];
-	if (ibShowQueryConstructorFor(this, branch, m_metaData, m_readOnly)) {
+	if (ibShowQueryConstructorFor(this, branch, m_metaData, m_readOnly, m_exclude)) {
 		select->m_unions[index] = branch;
 		FillAll();
 	}

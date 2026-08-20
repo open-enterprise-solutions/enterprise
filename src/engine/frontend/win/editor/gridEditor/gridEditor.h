@@ -606,6 +606,25 @@ public:
 	void OnIdle(wxIdleEvent& event);
 	void OnSize(wxSizeEvent& event);
 
+	// ⭐ THE SHEET SAYS IT IS BUSY. A report composes on a background run, so the window stays alive
+	// and usable while it does — and a window that looks finished while it is still filling is worse
+	// than one that waits: the person reads a half-built report as the answer. A small spinner with
+	// a word beside it, centred over the sheet, is the whole story (Max, 2026-08-19: "while the
+	// report is being built the little circle turns, like in the list, and meanwhile we can work").
+	//
+	// Idempotent: showing it twice is one spinner, hiding a hidden one does nothing.
+	void ShowComposeProgress(bool busy);
+
+	// ⭐ THE SHEET FILLS THE WINDOW. A document holds as many columns and rows as somebody put into
+	// it — a composed report may hold two — and the space to the right of them is not "outside the
+	// sheet", it is empty sheet. Growing the table to cover the visible area is what makes it look
+	// like one; without it a report ends in a blank void with no grid lines, which reads as a
+	// rendering failure rather than as an empty page (Max, 2026-08-19).
+	//
+	// Called on resize AND whenever the document is rebuilt: a report replaces the whole sheet
+	// without the window ever changing size, so a resize-only trigger never fires for it.
+	void FillVisibleArea(int width = -1, int height = -1);
+
 	void OnGridZoom(ibGridEvent& event);
 
 private:
@@ -621,6 +640,9 @@ private:
 	//grid doc
 	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetObject;
 	wxSharedPtr<ibBackendSpreadsheetNotifier> m_notifier;
+
+	// The "composing…" overlay — see ShowComposeProgress. Created on first use, kept hidden after.
+	class wxWindow* m_composeProgress = nullptr;
 
 	//grid enabled property? 
 	bool m_enableProperty;

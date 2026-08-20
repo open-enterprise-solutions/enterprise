@@ -30,7 +30,7 @@ class BACKEND_API ibDataViewModel;
 
 // Page DIRECTION for the universal paged fetch — shared by ibValueModel::RunComposerPage (the model layer) AND
 // ibReadPageRequest (the query layer, dataQueryBuilder.h). It lives HERE, the shared view/query-neutral header,
-// so the query layer sees it without including model.h (which would re-introduce the include cycle).
+// so the query layer sees it without including tabularModel.h (which would re-introduce the include cycle).
 enum class ibFetchDirection : int8_t {
 	Reset    = 0,   // discard buffer, fetch initial window at anchor
 	Forward  = 1,   // append after anchor
@@ -593,7 +593,7 @@ public:
 	// background job instead. The decision is per model, never per control, which is
 	// why it is a virtual here and not a branch at the call site — and it is the
 	// only place in the engine that knows a background job exists at all.
-	// (Out-of-line in modelView.cpp — it is the only thing here that needs <thread>.)
+	// (Out-of-line in tabularModelView.cpp — it is the only thing here that needs <thread>.)
 	virtual void SubmitFetchAsync(std::function<void()> work);
 
 	// ONE PORTION AT A TIME — the only lock in the whole path, and it lives in the

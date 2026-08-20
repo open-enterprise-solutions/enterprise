@@ -17,7 +17,7 @@
 #include <map>
 #include <vector>
 #include "backend/tabularDataObject.h"     // ibTabularDataObject (gate + GetValueByPath)
-#include "backend/modelView.h"             // ibDataViewItem (the row handle the gate carries)
+#include "backend/tabularModelView.h"      // ibDataViewItem (the row handle the gate carries)
 #include "backend/compiler/value.h"        // ibValue
 #include "backend/sourceDescription.h"     // ibSourceHop
 

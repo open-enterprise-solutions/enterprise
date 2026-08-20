@@ -66,6 +66,9 @@ add_executable(oes_tests
     test_queryTotals.cpp
     test_queryL2.cpp
     test_queryComposer.cpp
+    test_spreadsheetCompose.cpp
+    test_spreadsheetDocument.cpp
+    bench_spreadsheet.cpp
     test_queryAccessPolicy.cpp
     test_queryParity.cpp
     test_queryJoinParity.cpp

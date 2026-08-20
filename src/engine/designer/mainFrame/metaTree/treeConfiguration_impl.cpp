@@ -10,6 +10,7 @@
 #include "backend/appData.h"
 #include "backend/appEnv.h"
 #include "backend/metaCollection/metaCommandObject.h"   // ibValueMetaObjectCommand::GetSubCommands (hub — nested commands)
+#include "backend/metaCollection/metaComposerObject.h"  // the report's composers, as tree items
 
 #include <wx/intl.h>  // wxGetTranslation — the layout table holds SOURCE strings, translated on use
 
@@ -31,6 +32,7 @@
 #define objectDimensionsName _("Dimensions")
 #define objectResourcesName _("Resources")
 
+#define objectComposersName _("Composers")
 #define objectTablesName _("Tables")
 #define objectEnumerationsName _("Enums")
 
@@ -928,9 +930,18 @@ void ibConfigurationTree::AddDataProcessorItem(ibValueMetaObject* metaObject, co
 		metaObjectValue->GetTemplateArrayObject());
 }
 
+// A REPORT is a data processor plus the thing that makes it a report: its COMPOSERS. They are its
+// own children, like its forms — the default one is what the generated form is built from, so a
+// report that declares one needs no form at all (docs/report-engine.md §4b).
 void ibConfigurationTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
 	AddDataProcessorItem(metaObject, hParentID);   // same shape, down to the RAM tabular sections
+
+	ibValueMetaObjectReport* metaReport = metaObject->ConvertToType<ibValueMetaObjectReport>();
+	wxASSERT(metaReport);
+
+	AppendObjectGroup(hParentID, g_metaComposerCLSID, objectComposersName,
+		metaReport->GetComposerArrayObject());
 }
 
 // A REGISTER — dimensions and resources where a reference object has tabular sections.

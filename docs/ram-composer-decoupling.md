@@ -67,7 +67,7 @@ ibValueModel  (ABSTRACT — the universal node + display + columns + list-settin
 3. ✅ `ibValueModelRam` complete: owns `ibRamValueStorage m_storage` + `ibRamComposer m_composer`; ctor
    `FromStorage(&m_storage)`; RAM ops + GetRowCount/GetRow/GetItem + StorageIndexOf/RowOf delegate to the storage;
    GetSourceQueryable (ramTableQueryable) for explicit querying only. `ibValueModelDb` holds `ibDataComposer`.
-4. ✅ model.cpp: RunComposerPage SPLIT (ibValueModelDb / ibValueModelRam); base GetModelComposer /
+4. ✅ tabularModel.cpp: RunComposerPage SPLIT (ibValueModelDb / ibValueModelRam); base GetModelComposer /
    BindComposerSource / StorageIndexOf / StorageRowOf impls removed; `ibRamComposer::ComputeOrder + Run` read the
    storage; the model-vector m_nodeValues fully gone (the remaining m_nodeValues are the NODE's cell map).
 5. ✅ Subclass access: DB ctors bind `m_composer.FromSource(q)` DIRECTLY (m_composer is the subclass's own
@@ -138,7 +138,7 @@ Settings form: ONE dialog, talks to `ibDataComposerBase` polymorphically (DB/RAM
    (Select/Filter/Sort/Total/TotalBy/Parameter/ClearSettings + facade + scope + SetDriver) + `virtual bool
    Run(driver)`. `ibDataComposer` is now the DB descendant (`FromSource(ns,name)`/`FromText`/`RenderText`/
    `Execute`/the SQL `Run`). Additive — DB behaviour unchanged.
-2. ✅ **`ibRamComposer` built** (composition/ramComposer.h; `Run`/`ComputeOrder`/`OrderRows` in model.cpp):
+2. ✅ **`ibRamComposer` built** (composition/ramComposer.h; `Run`/`ComputeOrder`/`OrderRows` in tabularModel.cpp):
    `ComputeOrder()` = filter + stable multi-key sort over the queryable's `ComputeRows` snapshot → storage
    indices; `Run(driver)` = the generic value-copy walk (a validation row-sink). No text / parse / lowering.
 3. ✅ **RAM routed through it + node = LIVE storage row**: the model holds a polymorphic
@@ -207,16 +207,20 @@ contained (no L5-1 / L4-1 / queryable tie). What changed:
   node semantics as the DB path (GetGroupPath / container), so the paged control treats both identically. `slice`:
   Elements grouping; a dot-tail dim groups by the walked value (stamped under the head column).
 
-- **File split**: `model.cpp` → shared base + node (`model.cpp`), DB fetch (`modelDb.cpp`:
-  `ibValueModelDb::RunComposerPage` + `ResolveAnchorByKey`), RAM fetch + composer (`modelRam.cpp`:
+- **File split**: `tabularModel.cpp` → shared base + node (`tabularModel.cpp`), DB fetch (`tabularModelDb.cpp`:
+  `ibValueModelDb::RunComposerPage` + `ResolveAnchorByKey`), RAM fetch + composer (`tabularModelRam.cpp`:
   `ibRamValueStorage::ResolveField`/`SplitField` (shipped names; the free `Ram*` helpers of this
   phase no longer exist) + `ibRamValueStorage::ColumnIdByName` +
   `ibDataRamComposer::ComputeOrder` + `ibValueModelRam::RunComposerPage`). Both new units added to backend.vcxproj.
 
-**Open**: the header `model.h` name is now misleading (it holds `ibValueModel`/`ibComposerNode`/
-`ibRamValueStorage`, nothing "table"-specific) — a header rename is a ~30-file include churn, DEFERRED pending a
-call. RAM keyset-vs-index at scale, tabular line-number under a sorted RAM view, and dot-walk-in-a-composite-mid-
-segment remain runtime-test-gated. Everything here is a single final build away.
+**Renamed 2026-08-20** (was open here as "the header name is misleading"): the family is now
+`tabularModel.h` / `tabularModel.cpp` / `tabularModelDb.cpp` / `tabularModelRam.cpp` /
+`tabularModelView.{h,cpp}` — named for what it IS, a TABULAR model, by analogy with
+`spreadsheetModel.h`. The include churn was 24 sites; CMake globs, so only the MSBuild project
+needed editing.
+
+**Open**: RAM keyset-vs-index at scale, tabular line-number under a sorted RAM view, and
+dot-walk-in-a-composite-mid-segment remain runtime-test-gated.
 
 ### Phase 2 — FINAL (build green, 2026-07-01)
 
@@ -230,8 +234,8 @@ Built clean (Debug|x86, 0 errors) after two post-split fixes + a naming pass:
   derive `ibValueModelCursor` → the DB `RunComposerPage`; the RAM path lives only on `ibValueModelStorage`.
 - **`ibDataRamComposer::ComputeOrder` moved to `composition/ramComposer.cpp`** (beside its declaration). The shared
   dot-walk helpers became storage methods `ibRamValueStorage::SplitField` / `ResolveField`, reused by the composer's
-  ComputeOrder and the model's grouping. Files now: `model.cpp` (base + node), `modelDb.cpp` (Cursor fetch),
-  `modelRam.cpp` (Storage fetch + storage methods), `composition/ramComposer.cpp` (the RAM engine).
+  ComputeOrder and the model's grouping. Files now: `tabularModel.cpp` (base + node), `tabularModelDb.cpp` (Cursor fetch),
+  `tabularModelRam.cpp` (Storage fetch + storage methods), `composition/ramComposer.cpp` (the RAM engine).
 
 ---
 

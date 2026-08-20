@@ -216,6 +216,26 @@ saved perfectly well.
 
 ## 7. How the form edits it
 
+> **Where these editors live (2026-08-20).** A dynamic list's settings window and a report
+> composition's are **two different worlds** and neither is a case of the other. What they genuinely
+> share is exactly two editors — the FILTER and the SORT — plus the field tree behind them and one
+> header spelling how a settings surface LOOKS (`settingsStyle.h`: one picture per verb, the grid
+> styling), and those sit at the root of `frontend/win/dlgs/settings/`, with `settings/list/` and
+> `settings/composer/` beside them. Each editor works over a settings BUFFER and knows nothing about a model, a list or a
+> report; each world owns its buffer and commits it. Everything else differs by nature: a list folds
+> by a flat ordered grouping, a composition by a structure of levels. See
+> [report-engine.md](report-engine.md) § *Two worlds*.
+
+Two consequences of sharing those two editors, both landed 2026-08-20. **Committing says so
+upward:** `ibListSettingsPanel::Commit` raises `OnChildChanged()` on the list beside the
+`NotifyReset()` it already did — two different statements, one to the views and one to the holder
+(the story is [dynamic-list.md](dynamic-list.md), the mechanism
+[property-system.md § 5.2](property-system.md)). And **view-only lives on the editors themselves**:
+`ibFilterEditor::SetReadOnly` / `ibSortEditor::SetReadOnly` shut the toolbar, the context menu and
+the cell editor, so both worlds get the identical answer from the identical code
+([designer-editors.md § 4b](designer-editors.md)). ⏳ Only the composer's window calls them today —
+the list's panel has no read-only mode yet, because nothing opens it that way.
+
 The settings form has one rule: **the cell asks the row for a VALUE, and the
 value's TYPE decides how it is chosen.**
 
@@ -266,8 +286,8 @@ OK and was refused — *"The value of condition 'Recorder' does not fit the fiel
 the field itself opened.
 
 The cell editor's write (`SetSideValue`, case `kFilterColRight`, in
-`frontend/win/dlgs/listSettings/listSettings.cpp`) now goes through
-`ibValueTypeDescription::AdjustValue(value, m_dialog->SourceMetaData())`. `AdjustValue` answers what the TYPE
+`frontend/win/dlgs/settings/settingsFilterEditor.cpp`) now goes through
+`ibValueTypeDescription::AdjustValue(value, m_editor->GetMetaData())`. `AdjustValue` answers what the TYPE
 makes of a value: a row becomes the reference it stands for, an empty becomes the type's own empty
 (False for a Boolean, an empty reference of the right kind, 0 for a number) — so the cell holds what
 the comparison will actually be made with, not what the editor happened to be holding.

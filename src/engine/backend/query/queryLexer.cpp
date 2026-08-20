@@ -203,6 +203,34 @@ bool ibQueryLexer::IsIdentifier(const wxString& text)
 	}
 }
 
+// IN FIRST-APPEARANCE ORDER, because that is the order a person reads them in the query — a
+// parameters page sorted by anything else makes them hunt. Repeats collapse: `&Period` written
+// three times is ONE thing to fill in.
+std::vector<wxString> ibQueryLexer::ParamNames(const wxString& queryText)
+{
+	std::vector<wxString> names;
+	if (queryText.IsEmpty())
+		return names;
+
+	try {
+		ibQueryLexer lexer;
+		for (const ibQueryToken& token : lexer.Tokenize(queryText)) {
+			if (token.m_kind != ibQueryTokenKind::Param || token.m_text.IsEmpty())
+				continue;
+			// Case-insensitively, like every other name in this layer.
+			const auto seen = std::find_if(names.begin(), names.end(),
+				[&token](const wxString& name) { return name.IsSameAs(token.m_text, false); });
+			if (seen == names.end())
+				names.push_back(token.m_text);
+		}
+	}
+	catch (const ibBackendException&) {
+		// Half-typed text has no parameters to speak of yet — see the header.
+		names.clear();
+	}
+	return names;
+}
+
 std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 {
 	Load(queryText);            // resets buffer + position counters

@@ -6,7 +6,7 @@ design (`ibTableViewBuffer` / `ibTreeViewBuffer` / `ibPagingLog`)
 that **did not survive** the §8 convergence — those symbols are
 **not** in the current tree. The actual paging implementation is:
 `ibFetchAnchor / ibFetchRequest / ibFetchResponse` templates in
-`backend/model.h`, per-model `GetFirstFetch / GetNextFetch /
+`backend/tabularModel.h`, per-model `GetFirstFetch / GetNextFetch /
 GetPrevFetch` virtuals on `ibDataViewModel` + `ibValueModel`,
 control-driven prefetch + lying scrollbar inside `ibDataViewCtrl`.
 Keep §1-7 as design history; treat §8 as the canonical reference.
@@ -345,7 +345,7 @@ Phased; no big-bang.
 
 ### Phase 2 — add types + skeleton ✅ landed 2026-05-05
 * `ibFetchAnchor<TKey>`, `ibFetchDirection`, `ibFetchRequest<TKey>`,
-  `ibFetchResponse<TKey, TRow>`, `ibViewport` — `model.h`.
+  `ibFetchResponse<TKey, TRow>`, `ibViewport` — `tabularModel.h`.
 * `IsPaged() / NotifyViewportChanged / ResetForFilterOrSort` non-templated
   virtuals on `ibValueModel` (default no-op).
 * `ibTableViewBuffer<TKey, TRow>` template — controller, holds no row
@@ -456,7 +456,7 @@ when revisiting paging behaviour.
 
 ## 7. Files touched (planned)
 
-* `enterprise/src/engine/backend/model.h` / `.cpp` — `ibFetchRequest`,
+* `enterprise/src/engine/backend/tabularModel.h` / `.cpp` — `ibFetchRequest`,
   `ibFetchResponse`, `ibFetchAnchor`, `ibViewBuffer`, virtuals on
   `ibValueModel*Base`.
 * `enterprise/src/engine/backend/metaCollection/partial/list/objectList.h`
@@ -557,7 +557,7 @@ Existing ctor signature `(void*)` preserved for ABI; cast to
 
 **Resolved** (2026-05-05, verified 2026-06-06): ownership transport for
 `Get*Fetch` results. Typed Fetch hands out `vector<TRow*>` with refcount=1;
-`ibValueModel::AdoptRowsToItems` (model.h) adopts them — the typed
+`ibValueModel::AdoptRowsToItems` (tabularModel.h) adopts them — the typed
 `ibDataViewItem(ibDataViewObject*)` ctor IncRefs to 2, then `r->DecRef()`
 drops the initial allocation reference so `out` owns exactly one ref per
 row. Every typed→universal bridge routes through it (objectListQuery, register
@@ -652,7 +652,7 @@ re-fetches via `Get*Fetch`.
 | Ownership-transport convention (`AdoptRowsToItems` / Append / Insert) | ✅ landed 2026-05-05 — `ibValueModel::AdoptRowsToItems` template; FolderRef bridges use it; tape-buffer Apply path already adopts via `Append`/`Insert`. **Retired 2026-07 (§9.6):** the typed-Fetch→universal bridge is gone (all families emit `ibComposerNode` from `RunComposerPage` directly), so the template had no callers and was removed |
 | Selection re-locate by stable key | covered by existing `FindRowValue` + new `IsEqualTo` virtual on row — current-row check inside loaded buffer; no separate `FindRowByKey` API (request from 2026-05-05 plan superseded by the `IsEqualTo` path) |
 | `ibPredefinedValueObject` shared_ptr/refcount mixing | ✅ closed 2026-05-06 — audit confirmed no callsite passes the object through `ibDataViewItem` (ctor takes only model/view rows), so the original mixing concern doesn't apply. Base stays `wxRefCounter` — `ibPredefinedValueObject` is not part of the data-view hierarchy |
-| RAM-backed `Get*Fetch` for TabularSection / ibValueTable | ✅ landed — new intermediate base `ibValueModelRamTableBase` (`model.h:1100`) hosts a `GetFirstFetch` override (`model.h:1324`) slicing `m_nodeValues` by anchor+count. Inherited by `ibValueTabularSectionDataObjectBase`, `ibValueModelTable` (`system/value/valueTable.h`), and `ibValueRecordSetObject` for registers. `Features::RamFetch` flag advertised via `GetFeatures()` override |
+| RAM-backed `Get*Fetch` for TabularSection / ibValueTable | ✅ landed — new intermediate base `ibValueModelRamTableBase` (`tabularModel.h:1100`) hosts a `GetFirstFetch` override (`tabularModel.h:1324`) slicing `m_nodeValues` by anchor+count. Inherited by `ibValueTabularSectionDataObjectBase`, `ibValueModelTable` (`system/value/valueTable.h`), and `ibValueRecordSetObject` for registers. `Features::RamFetch` flag advertised via `GetFeatures()` override |
 | Composite-key cursor for registers | ✅ landed — `registerSqlBuilder.{h,cpp}` mirrors `ibListSqlBuilder` for registers: `EffectiveOrder = [user_sorts] ++ [identity_tail]` (recorder+line for HasRecorder, period?+dimensions otherwise), `BuildAnchorPredicate` emits the same composite cmp_op + case-when tiebreak as Ref. `ibValueListRegisterObject::Fetch(ibFetchRequest<ibUniqueKeyPair>)` (`objectListQuery.cpp:389`) is the cursor-paginated single SQL point; `GetFirst/Next/PrevFetch` (`objectListQuery.cpp:478/502/…`) build the anchor via `BuildRegisterAnchor` (`objectListQuery.cpp:454`) which captures `m_sortValues` directly from `row->GetTableValue(attr->GetMetaID())`. `ibUniqueKeyPair::operator<>` aren't used here — cursor binds `m_sortValues`, not the key itself; equality goes through `m_keyValues == other.m_keyValues` for selection survival and dedup |
 | FB binary BINARY(20) bind for parent ref | ✅ landed 2026-05-07 — column is `BINARY(sizeof(ibReference)) = 16` bytes — a pure `ibGuidImpl`, the target type living in the sibling `_RTRef` clsid column (was 20 with an inline metaID until `f4d92cc7`, 2026-07-29) — not CHAR(16). FolderRef `GetNextFetch / GetPrevFetch` build a `ibReference` matching how save-path stores it (m_id=catalog metaID always, m_guid=zero for top-level / real for drill) and bind via `SetParamBlob`; SQL uses `WHERE refDataField = ?`. C++ byte-matcher gone. Bonus: `firebirdParameter.cpp::SetParamBlob` ctor got an `SQL_VARYING` branch (was a silent no-op for varying-typed params — write u16 length prefix + data into sqldata) |
 | Iherarchical scrollbar after drill stuck at top | ✅ landed 2026-05-07 — `ibDataViewCtrl::SetTopParent` (drill UP / drill INTO) now calls `RecalculateDisplay()` after `Cleared()` so `m_tableAreaWin->SetVirtualSize` reflects the post-drill row count. Without this the virtual size kept the pre-drill value, wxScrollHelper computed a one-viewport range, and the thumb stayed pinned at top |
@@ -674,7 +674,7 @@ re-fetches via `Get*Fetch`.
 | DynamicRead OFF served pre-save rows | ✅ landed 2026-08-03 — the RAM snapshot re-materialised only on a view-generation bump (sort / filter / `RefetchAll`), and a save bumps nothing, so a created element never appeared and an edited one kept its old cells. A Reset fetch now drops `m_snapshotValid`; scrolls still reuse the materialisation. See [table-model.md](table-model.md) §4a |
 | By-key commands dead on a just-created element (the current row was a restore stub) | ✅ landed 2026-08-03 — the `FindRowValue` stub becomes the current row after a save and stays it (programmatic Select fires no `SELECTION_CHANGED`); `GetItemKey` read the node's cells, a stub has none → empty key → Copy / Edit / Delete / MarkAsDelete returned at their `if (!key.IsOk())` guard, doing nothing. `ibValueDynamicList::GetItemKey` now resolves a key-only node through `ResolveAnchorByKey` first. On the MODEL, so the web front inherits it. See [dynamic-list.md](dynamic-list.md) § "Selection restore" |
 | Current-row highlight blinked off while the post-save Reset was out | ✅ landed 2026-08-03 — `ApplyCurrentLine` cleared the selection before `Select(item)`, so on a paged model (row still a stub) the list spent the whole query with no current row: "the row disappears for a second and then shows up in its new place". Eager `UnselectAllRows` + the duplicate `SetCurrentItem` removed; `Select` now drops the old highlight only where it puts the new one up. See §9.9 "No highlight dropped ahead of the frame that replaces it" |
-| Sort + filter types in modelView.h | ✅ landed 2026-05-09 — `ibSortOrder` / `ibSortData` / `ibSortModel` / `ibFilterRow` / `ibComparisonType` migrated from `model.h` to `modelView.h` so `datavgen.cpp`'s header-arrow path (`SyncColumnArrowsFromModel`) doesn't need to pull the value-subsystem header.  `modelView.h` now includes `<algorithm>` + `<vector>` + `backend/system/value/valueType.h`; no cycle (value subsystem doesn't include `modelView.h`).  See `session-2026-05-09.md` §10 |
+| Sort + filter types in tabularModelView.h | ✅ landed 2026-05-09 — `ibSortOrder` / `ibSortData` / `ibSortModel` / `ibFilterRow` / `ibComparisonType` migrated from `tabularModel.h` to `tabularModelView.h` so `datavgen.cpp`'s header-arrow path (`SyncColumnArrowsFromModel`) doesn't need to pull the value-subsystem header.  `tabularModelView.h` now includes `<algorithm>` + `<vector>` + `backend/system/value/valueType.h`; no cycle (value subsystem doesn't include `tabularModelView.h`).  See `session-2026-05-09.md` §10 |
 
 ### 8.9 Open audits
 
@@ -687,7 +687,7 @@ re-fetches via `Get*Fetch`.
 
 * ~~**`ibDataViewObject` migration coverage.**~~ Closed 2026-05-07
   — every `ibDataViewItem(void*)` callsite confirmed safe. The
-  Mode::RawId ctor (`modelView.h:112`) is used only by virtual-list
+  Mode::RawId ctor (`tabularModelView.h:112`) is used only by virtual-list
   encodings (`wxUIntToPtr(row+1)` in `datavcmn.cpp:97 / 113 / 206 /
   301` and `datavgen.cpp:2777 / 6373 / 7440`) and by the
   `ibDataViewTreeStoreNode m_root` sentinel (`datavcmn.cpp:2519`).
@@ -743,7 +743,7 @@ layer it exercised.
 ### 9.1 DB list grouping composition
 
 DB grouping had **never** produced output. Three defects, all in
-`ibValueModelCursor::RunComposerPage` (`modelDb.cpp`) / its display path, now
+`ibValueModelCursor::RunComposerPage` (`tabularModelDb.cpp`) / its display path, now
 fixed:
 
 * **Group headers were dropped by the level filter.** A `TOTALS BY` result is a
@@ -774,7 +774,7 @@ fixed:
   under the folder ("infinite" re-grouping). Fix: under grouping a DETAIL row is
   always a LEAF (`isContainer = grouping ? false : …`).
 
-`flatView` gates `dims` exactly as RAM does (`modelRam.cpp`): a flat List view
+`flatView` gates `dims` exactly as RAM does (`tabularModelRam.cpp`): a flat List view
 passes the ignore-parent sentinel → grouping OFF; Tree/Hierarchical → ON. Note the
 view-mode enum order (`dataview.h`): `ibDataViewTree = 0`,
 `ibDataViewHierarchical = 1`, `ibDataViewList = 2` — only List(2) yields the
@@ -794,8 +794,8 @@ with more than `defaultCountPerPage` groups the last group silently vanished.
 
 Fixed by windowing the grouped level on the **client**, the SAME rule the RAM half
 pages by (`ibComputePageWindow`, factored out of the former `RamWindowPositions` in
-`modelRam.cpp` into `model.h` so both halves share it — no duplication).
-`RunComposerPage` (`modelDb.cpp`) now collects every group node of the level,
+`tabularModelRam.cpp` into `tabularModel.h` so both halves share it — no duplication).
+`RunComposerPage` (`tabularModelDb.cpp`) now collects every group node of the level,
 locates the browsed anchor group by its own last group-path value, and takes the
 `count` groups after/before it per direction (the anchor stays in a Reset page so the
 viewport does not drift). The probe-trim/reverse is gated to the detail path only
@@ -820,7 +820,7 @@ level the row lived in.
 
 Implemented per source, two shapes:
 
-* **DB cursor** (`ibValueModelCursor::BuildAncestorBreadcrumb`, `modelDb.cpp`):
+* **DB cursor** (`ibValueModelCursor::BuildAncestorBreadcrumb`, `tabularModelDb.cpp`):
   * *Folder* (no grouping): read the row's parent reference (the queryable's
     hierarchy column) and walk UP — one point lookup (`ResolveAnchorByKey` by the
     parent ref = the folder's own PK) per level, each yielding the folder's values
@@ -829,7 +829,7 @@ Implemented per source, two shapes:
     dimension, keyed by the row's own value for that dim, carrying the group PATH
     `root→this`.
 * **RAM storage** (`ibValueModelStorage::BuildAncestorBreadcrumb`,
-  `modelRam.cpp`): group branch only (a plain RAM list is flat), dim values via
+  `tabularModelRam.cpp`): group branch only (a plain RAM list is flat), dim values via
   `m_storage.SplitField` / `ResolveField(StorageIndexOf(row), head, tail)`.
 
 Contract: `out[0]` = the immediate (innermost) parent — the scope
@@ -913,7 +913,7 @@ the order is by the joined value → the next page overlaps rows already shown. 
 dot-walk value is not even marshalled into the anchor row (it is resolved per row on
 the frontend, absent from the SELECT), so a full keyset fix is large (marshal the
 join value + predicate over the alias). Low-risk fix instead: `RunComposerPage`
-(`modelDb.cpp`) detects a dot-walk sort (`GetColumnIDByName(field) == NOT_FOUND`)
+(`tabularModelDb.cpp`) detects a dot-walk sort (`GetColumnIDByName(field) == NOT_FOUND`)
 and fetches the whole ordered result in ONE unbounded snapshot (`page.m_count = 0`,
 `dir = Reset`), returning 0 on any anchored continuation. Non-dot-walk paging is
 untouched. Trade: a dot-walk sort loads all rows at once (user-chosen, acceptable).
@@ -949,7 +949,7 @@ dropped here and reverted).
 above it (group 2 shows group 1; group 3 shows 1 and 2). DB: `FoldDimLevel`
 (`queryProvider.cpp`) seeds the child node with `child->m_values = node->m_values`
 (the parent's cells) before stamping its own dimension — both branches; the cascade
-carries every ancestor down. RAM parity (`modelRam.cpp` `RunComposerPage`
+carries every ancestor down. RAM parity (`tabularModelRam.cpp` `RunComposerPage`
 group-level): the node stamped only its own dimension; fixed with a loop over the
 ancestors — `for (k < depth) vals[dims[k].first] = parentPath[k]` — seeding ancestor
 dimension cells under their own head-column ids before the node's own. (RAM detail
@@ -976,7 +976,7 @@ driver emits final model rows; the conversion loops + refcount dance retire) was
 **already landed** — a re-audit found no per-family rows left. `ibValueTableEnumRow`,
 `ibValueTreeListNode`, and `ibValueTableKeyRow` are gone (the former `objectList.h/.cpp`
 was itself removed, the surviving list bodies folded into `commonObject.*`);
-**`ibComposerNode`** (`model.h`) is the single row for every family —
+**`ibComposerNode`** (`tabularModel.h`) is the single row for every family —
 enum / catalog / FolderRef tree / register — carrying the values map (`m_nodeValues`), the
 identity (`m_rowKey` PK values, `m_groupPath` dimension path, or live-node pointer), and the
 container flag (`m_container`). `RunComposerPage` (DB + RAM) wraps the driver's
@@ -1005,7 +1005,7 @@ Both removed. Also removed: the dead `ibListFetchDriver::ibTreeScope` struct + t
 in `RunComposerPage`.
 
 **Rename.** The hierarchy block (`m_parentFilter` / `m_parentCol` / `m_parentGuid`) is set
-ONLY on a tree drill (`modelDb.cpp` under `if (hierarchy …)`) and read only by the
+ONLY on a tree drill (`tabularModelDb.cpp` under `if (hierarchy …)`) and read only by the
 parent-ref predicate + the cache guard — a hierarchy-only concern — so `m_parent*` →
 `m_hierarchy*`. (`ibTreeScope`'s own `m_parent*` would have stayed as "the browsed parent
 node", but the struct is gone.)

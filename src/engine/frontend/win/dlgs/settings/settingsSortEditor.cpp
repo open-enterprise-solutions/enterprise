@@ -1,0 +1,356 @@
+////////////////////////////////////////////////////////////////////////////
+//	The SORT editor — shared by both settings worlds
+////////////////////////////////////////////////////////////////////////////
+
+#include "frontend/win/dlgs/settings/settingsSortEditor.h"
+#include "frontend/win/dlgs/settings/settingsFieldTree.h"
+#include "frontend/win/dlgs/settings/settingsStyle.h"
+#include "frontend/win/dlgs/callbackDropTarget.h"   // the same-process drag: the source knows what moved
+#include "frontend/win/dlgs/rowValueCell.h"         // ibRowValueCellRenderer — the shared value cell
+
+#include <wx/menu.h>
+#include <wx/sizer.h>
+#include <wx/splitter.h>
+#include <wx/stattext.h>
+#include <wx/toolbar.h>
+#include <wx/treectrl.h>
+
+// COLUMN 0 IS RESERVED by the ibDataViewCtrl fork (a model column 0 paints blank and does not edit)
+// — which is why the columns start at 1. Starting at 0 is what once made the Field cell impossible
+// to open at all: F2 and the Select button had nothing to open.
+enum { eOrderField = 1, eOrderDir };
+
+// ---- The model — a virtual list over the buffer's sort list (Field + editable Direction). ----
+class ibSortEditor::ibOrderModel : public ibDataViewVirtualListModel {
+	ibSortEditor* m_editor;
+public:
+	explicit ibOrderModel(ibSortEditor* editor) : ibDataViewVirtualListModel(), m_editor(editor) {}
+	ibValueSortList* GetOrder() const { return m_editor->GetOrderList(); }
+	void ResetFromList() { ibValueSortList* o = GetOrder(); Reset(o != nullptr ? (unsigned int)o->Count() : 0u); }
+	virtual void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+		ibValueSortList* o = GetOrder();
+		if (o == nullptr) return;
+		// BOUNDS FIRST. The view paints rows it has, the list may already have fewer (a Reset lands
+		// after the paint is queued) — reading past the end crashed on repaint.
+		if (row >= o->Count())
+			return;
+		ibValueSortItem* it = o->GetItem(row);
+		if (it == nullptr) return;
+		// EVERY COLUMN IS A VALUE PRESENTING ITSELF — the field by its readable path,
+		// the direction by its enumeration caption. No indices, no parallel lists.
+		if (col == eOrderField)
+			variant = it->GetFieldObject() != nullptr ? it->GetFieldObject()->GetString() : it->GetField();
+		else if (col == eOrderDir)
+			variant = ibValue::CreateEnumObject<ibValueEnumSortDirection>(it->GetDirection()).GetString();
+	}
+	virtual bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
+		ibValueSortList* o = GetOrder();
+		if (o == nullptr) return false;
+		ibValueSortItem* it = o->GetItem(row);
+		if (it == nullptr) return false;
+		if (col == eOrderDir) {   // the Direction choice carries the ibSortDirection as its index
+			it->SetDirection(static_cast<ibSortDirection>(variant.GetLong()));
+			return true;
+		}
+		return false;
+	}
+};
+
+// ===========================================================================
+
+ibSortEditor::ibSortEditor(wxWindow* parent, ibValueListSettings* settings, ibSettingsFieldTree* fields)
+	: wxPanel(parent, wxID_ANY), m_settings(settings), m_fields(fields)
+{
+	wxSplitterWindow* splitter = new wxSplitterWindow(this, wxID_ANY,
+		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
+	splitter->SetMinimumPaneSize(FromDIP(120));
+
+	// ---- LEFT pane: available fields (dot-walkable) ----
+	wxPanel* leftPane = new wxPanel(splitter);
+	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
+	leftSizer->Add(new wxStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
+	m_fieldTree = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
+	leftSizer->Add(m_fieldTree, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(4));
+	leftPane->SetSizer(leftSizer);
+
+	// ---- RIGHT pane: the sort list — Field + editable Direction (choice), model-driven ----
+	wxPanel* rightPane = new wxPanel(splitter);
+	wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
+	m_view = new ibDataViewCtrl(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxDV_ROW_LINES | wxDV_SINGLE);
+	ibStyleSettingsGrid(m_view);
+
+	// WHO KNOWS THE SOURCE opens the picker — here, the field tree this editor was handed.
+	ibRowValueCellRenderer::FieldChooser chooser =
+		[this](wxWindow* pickerParent, const wxString& held) -> ibValueCompositionField* {
+			return m_fields != nullptr ? m_fields->ChooseField(pickerParent, held) : nullptr;
+		};
+
+	// FIELD and DIRECTION are both VALUES of the row — a composition field and a
+	// SortDirection member — so one cell serves both: the field opens the source
+	// tree, the direction opens its enumeration. Nothing here spells a list.
+	m_view->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Field"),
+		new ibRowValueCellRenderer(this, chooser,
+			[this](const ibDataViewItem& row) -> ibValue {
+				// ⚠ BUILT FROM THE PATH, not taken off a line object. On a live list GetItem MINTS one and
+				// hands back a raw pointer nobody owns — the cells ask this while painting, so it leaked
+				// once per repaint. A field built here is owned by the ibValue that wraps it.
+				ibValueSortList* o = GetOrderList();
+				const size_t idx = IndexAt(row);
+				if (o == nullptr || idx >= o->Count())
+					return ibValue();
+				const wxString path = o->GetField(idx);
+				return path.IsEmpty() ? ibValue() : ibValue(new ibValueCompositionField(path));
+			},
+			[this](const ibDataViewItem& row, const ibValue& value) {
+				ibValueSortList* o = GetOrderList();
+				const size_t idx = IndexAt(row);
+				if (o == nullptr || idx >= o->Count())
+					return;
+				// CLEARING SENDS AN EMPTY VALUE, and an empty value fails the cast — so testing only
+				// "did it convert" made the clear button do nothing at all.
+				//
+				// ⚠ THROUGH SetLine, not through the line OBJECT. On a LIVE list there is no line
+				// object — GetItem mints a transient one — so writing into it lost the edit without
+				// a word. Same door the grouping cells use, and the same reason.
+				ibValueCompositionField* field = nullptr;
+				const bool chosen = value.ConvertToValue(field) && field != nullptr;
+				o->SetLine(idx, chosen ? field->GetPath() : wxString(), o->GetDirection(idx));
+				if (m_model != nullptr) m_model->ResetFromList();
+			}),
+		eOrderField, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));
+
+	m_view->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Direction"),
+		new ibRowValueCellRenderer(this, chooser,
+			[this](const ibDataViewItem& row) -> ibValue {
+				ibValueSortList* o = GetOrderList();
+				const size_t idx = IndexAt(row);
+				return (o != nullptr && idx < o->Count())
+					? ibValue::CreateEnumObject<ibValueEnumSortDirection>(o->GetDirection(idx))
+					: ibValue();
+			},
+			[this](const ibDataViewItem& row, const ibValue& value) {
+				ibValueSortList* o = GetOrderList();
+				const size_t idx = IndexAt(row);
+				if (o != nullptr && idx < o->Count())
+					o->SetLine(idx, o->GetField(idx), value.ConvertToEnumValue<ibSortDirection>());
+				if (m_model != nullptr) m_model->ResetFromList();
+			}),
+		eOrderDir, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));
+
+	rightSizer->Add(m_view, 1, wxALL | wxEXPAND, FromDIP(4));
+
+	// THE SAME COMMANDS AS THE FILTER EDITOR, on the same kind of toolbar: add,
+	// delete, and the two that make an ordered list an ordered list. Two buttons at
+	// the bottom and no way to reorder was a form that could only express "these
+	// fields", never "in this order" — which is the whole content of a sort.
+	wxToolBar* toolbar = m_toolbar = new wxToolBar(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+	toolbar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
+	toolbar->AddTool(wxID_ADD, _("Add"),
+		ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add (Ins)"));
+	toolbar->AddTool(wxID_REMOVE, _("Delete"),
+		ibSettingsArt(wxASCII_STR(wxART_DELETE), this), _("Delete (Del)"));
+	toolbar->AddSeparator();
+	toolbar->AddTool(wxID_UP, _("Move up"),
+		ibSettingsArt(wxASCII_STR(wxART_GO_UP), this), _("Move up"));
+	toolbar->AddTool(wxID_DOWN, _("Move down"),
+		ibSettingsArt(wxASCII_STR(wxART_GO_DOWN), this), _("Move down"));
+	toolbar->Realize();
+	// THE BAR KEEPS THE GRID'S MARGINS. Stretched edge to edge over a view inset by 4, it overhung
+	// the grid's top-left corner and the left border read as unfinished (Max, 2026-08-19: "the left
+	// border where the field is is not fully visible - and it is like that everywhere").
+	rightSizer->Insert(0, toolbar, 0, wxLEFT | wxRIGHT | wxTOP | wxEXPAND, FromDIP(4));
+	rightPane->SetSizer(rightSizer);
+
+	toolbar->Bind(wxEVT_TOOL, &ibSortEditor::OnAdd, this, wxID_ADD);
+	toolbar->Bind(wxEVT_TOOL, &ibSortEditor::OnRemove, this, wxID_REMOVE);
+	toolbar->Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveLine(-1); }, wxID_UP);
+	toolbar->Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveLine(+1); }, wxID_DOWN);
+
+	// WIDE ENOUGH FOR WHAT THE FIELDS ARE CALLED. At 180 a name like "Account dimension Dr1"
+	// is cut after "Account dimension", so eight distinct slots read as eight identical rows and
+	// the only way to tell them apart is to count positions. The pane is user-resizable; what
+	// changes here is what it shows BEFORE anyone resizes it.
+	splitter->SplitVertically(leftPane, rightPane, FromDIP(260));
+	wxBoxSizer* panelSizer = new wxBoxSizer(wxVERTICAL);
+	panelSizer->Add(splitter, 1, wxEXPAND);
+	SetSizer(panelSizer);
+
+	if (m_fields != nullptr) {
+		m_fields->Populate(m_fieldTree);
+		m_fields->Attach(m_fieldTree);   // unfold a reference, drag a field out
+	}
+	m_fieldTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this](wxTreeEvent& e) { AddForField(e.GetItem()); });
+	rightPane->SetDropTarget(new ibCallbackDropTarget([this] {
+		if (m_fields != nullptr) AddForField(m_fields->GetDragItem());
+	}));
+
+	// DOUBLE CLICK OPENS THE EDITOR — the grid sends an ACTIVATE for it, and without
+	// this binding the cell could only be opened with F2.
+	m_view->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
+		if (m_view != nullptr)
+			m_view->EditItem(e.GetItem(), e.GetDataViewColumn());
+		e.Skip();
+	});
+
+	m_model = new ibOrderModel(this);
+	m_view->AssociateModel(m_model);
+	m_view->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibSortEditor::OnContextMenu, this);
+	m_view->Bind(wxEVT_DATAVIEW_ITEM_START_EDITING, &ibSortEditor::OnStartEditing, this);
+	// A CELL edit writes the buffer without changing the number of lines, so it never reaches
+	// RefreshLines. One bind covers every column.
+	m_view->Bind(wxEVT_DATAVIEW_ITEM_VALUE_CHANGED, [this](ibDataViewEvent& e) {
+		e.Skip();
+		if (!m_reloading && m_onChanged)
+			m_onChanged();
+	});
+	m_model->ResetFromList();
+}
+
+void ibSortEditor::SetSettings(ibValueListSettings* settings)
+{
+	m_settings = settings;
+	Reload();
+}
+
+void ibSortEditor::Reload()
+{
+	// QUIET — filling from the buffer is not somebody editing it. See ibFilterEditor::Reload.
+	const bool wasReloading = m_reloading;
+	m_reloading = true;
+	RefreshLines();
+	m_reloading = wasReloading;
+}
+
+// RE-READ THE LINES, AND SAY THEY CHANGED. The four mutating commands all ended in the same two
+// lines; they end here now, so "a sort was edited" is stated once instead of four times.
+void ibSortEditor::RefreshLines()
+{
+	if (m_model != nullptr)
+		m_model->ResetFromList();
+	if (!m_reloading && m_onChanged)
+		m_onChanged();
+}
+
+void ibSortEditor::ReloadFields()
+{
+	if (m_fields != nullptr)
+		m_fields->Populate(m_fieldTree);
+}
+
+// THE ROW'S INDEX, which is what an EDIT needs. A virtual-list row id is 1-based.
+size_t ibSortEditor::IndexAt(const ibDataViewItem& row) const
+{
+	const size_t id = reinterpret_cast<size_t>(row.GetID());
+	return id > 0 ? id - 1 : (size_t)-1;
+}
+
+// Add the chosen available field to the sort list (default Ascending; direction is edited
+// inline in the Direction column). Mutates the BUFFER, then refreshes the model.
+void ibSortEditor::AddForField(const wxTreeItemId& item)
+{
+	// VIEW ONLY — guarded here, where the toolbar, the menu, the field-tree double-click and the
+	// drop all meet. See ibFilterEditor::AddFilterForField.
+	if (m_readOnly)
+		return;
+	// THE FIELD THE TREE RESOLVED, whole: adding by path alone would rebuild a bare
+	// field and lose the readable path and the type behind it.
+	ibValuePtr<ibValueCompositionField> field(ibSettingsFieldTree::FieldAt(m_fieldTree, item));
+	ibValueSortList* o = GetOrderList();
+	if (field == nullptr || o == nullptr)
+		return;
+	if (ibValueSortItem* line = o->Add(field->GetPath()))
+		line->SetField(field);
+	RefreshLines();
+	ibSelectLastSettingsRow(m_view, o->Count());
+}
+
+// A NEW LINE IS EMPTY — the field is chosen in the row, by hand. Taking whatever is
+// selected in the field tree conjures a line the user did not ask for.
+void ibSortEditor::OnAdd(wxCommandEvent&)
+{
+	ibValueSortList* o = GetOrderList();
+	if (o == nullptr)
+		return;
+	o->Add(wxEmptyString, ibSortDirection_Ascending);
+	RefreshLines();
+	ibSelectLastSettingsRow(m_view, o->Count());
+}
+
+void ibSortEditor::OnRemove(wxCommandEvent&)
+{
+	// THE LIST REMOVES ITS OWN LINE. Rebuilding the whole sort order to drop one
+	// row was how this used to work — and it lost everything the line carried that
+	// a rebuild could not spell back (the field object, its resolved type).
+	ibValueSortList* o = GetOrderList();
+	if (o == nullptr || m_view == nullptr)
+		return;
+	const ibDataViewItem& sel = m_view->GetSelection();
+	if (!sel.IsOk())
+		return;
+	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based
+	if (index == 0 || !o->Remove(index - 1))
+		return;
+	RefreshLines();
+}
+
+// ORDER IS THE MEANING of a sort list, so moving a line is a first-class command,
+// not something the user emulates by deleting and re-adding in the right sequence.
+void ibSortEditor::MoveLine(int delta)
+{
+	ibValueSortList* o = GetOrderList();
+	if (o == nullptr || m_view == nullptr)
+		return;
+	const ibDataViewItem& sel = m_view->GetSelection();
+	if (!sel.IsOk())
+		return;
+	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based
+	if (index == 0 || !o->Move(index - 1, delta))
+		return;
+	RefreshLines();
+	// The row travelled — the cursor goes with it, or the next press moves a
+	// different line.
+	const size_t moved = (size_t)((int)index + delta);
+	m_view->Select(ibDataViewItem(reinterpret_cast<void*>(moved)));
+}
+
+// THE SAME FOUR VERBS THE TOOLBAR CARRIES — add, delete, and the two that make an
+// ordered list ordered. Both roads end in one handler and cannot drift apart.
+// ⭐ VIEW ONLY — the twin of ibFilterEditor::SetReadOnly, word for word, because the two editors
+// stand side by side and a different answer from one of them reads as a different rule.
+void ibSortEditor::SetReadOnly(bool readOnly)
+{
+	m_readOnly = readOnly;
+	if (m_toolbar != nullptr)
+		m_toolbar->Enable(!readOnly);
+}
+
+void ibSortEditor::OnStartEditing(ibDataViewEvent& event)
+{
+	if (m_readOnly)
+		event.Veto();
+	else
+		event.Skip();
+}
+
+void ibSortEditor::OnContextMenu(ibDataViewEvent&)
+{
+	// VIEW ONLY — the second road to the verbs the toolbar already refuses.
+	if (m_readOnly)
+		return;
+
+	wxMenu menu;
+	ibAppendCmd(menu, wxID_ADD, _("Add") + wxT("\tIns"), wxASCII_STR(wxART_NEW), this);
+	ibAppendCmd(menu, wxID_REMOVE, _("Delete") + wxT("\tDel"), wxASCII_STR(wxART_DELETE), this);
+	menu.AppendSeparator();
+	ibAppendCmd(menu, wxID_UP, _("Move up"), wxASCII_STR(wxART_GO_UP), this);
+	ibAppendCmd(menu, wxID_DOWN, _("Move down"), wxASCII_STR(wxART_GO_DOWN), this);
+
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnAdd(e); }, wxID_ADD);
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnRemove(e); }, wxID_REMOVE);
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)   { MoveLine(-1); }, wxID_UP);
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)   { MoveLine(+1); }, wxID_DOWN);
+
+	PopupMenu(&menu);
+}

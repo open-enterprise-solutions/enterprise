@@ -2176,7 +2176,7 @@ the structure asks for it, a query, a grouping*. Both venues are fixed by that o
 
 ⚠ **It is a behaviour change beyond this register, and it belongs in its own commit.** A source that
 records a parent is now a tree to the level fetch as well, so a list of accounts becomes one in a
-tree view (`modelDb.cpp` — whose own comment already called a chart of accounts inherently a tree).
+tree view (`tabularModelDb.cpp` — whose own comment already called a chart of accounts inherently a tree).
 Left open, and worth asking once the tree is seen: with the parent meaning a hierarchy in both,
 `Subordination` and `Items` now differ only in whether an item may be ENTERED by declaration — so
 either a chart of accounts should simply declare `Items`, or the two arrangements should become one.

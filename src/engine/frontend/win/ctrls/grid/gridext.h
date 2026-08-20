@@ -104,6 +104,7 @@ class FRONTEND_API ibGridRowAreaWindow;
 class FRONTEND_API ibGridRowLabelWindow;
 class FRONTEND_API ibGridRowOutlineWindow;
 class FRONTEND_API ibGridColOutlineWindow;
+class FRONTEND_API ibGridOutlineCornerWindow;
 class FRONTEND_API ibGridWindow;
 class FRONTEND_API ibGridSubwindow;
 class FRONTEND_API ibGridTypeRegistry;
@@ -2623,6 +2624,17 @@ public:
 	// Groups live in m_rowGroupAt / m_colGroupAt. level >= 1 (deeper = closer
 	// to cells). Toggle hides/shows rows inside [start, end] via HideRow/ShowRow.
 	int  AddRowGroup(int first, int last, int level = 1, bool collapsed = false);
+
+	// ⭐ TURN A SEQUENCE OF LEVELS INTO AN OUTLINE. A producer writes rows and states how deep each
+	// one is — that is all it knows. What follows from the sequence is the shape: a row is a HEADING
+	// when the rows after it are deeper, and what it folds is that run. A row nothing deeper follows
+	// is a LEAF: it heads nothing, so it gets no marker at all (Max, 2026-08-19: "the last group,
+	// the one with no children, renders nothing"). The root — level 0 — is not drawn either: it is
+	// the sheet.
+	//
+	// Called after groups arrive (loaded with a document, or appended one by one); rebuilding from
+	// the raw list is what keeps the two roads to the same answer.
+	void NormalizeRowGroups();
 	int  AddColGroup(int first, int last, int level = 1, bool collapsed = false);
 	void DeleteRowGroup(int idx);
 	void DeleteColGroup(int idx);
@@ -3181,6 +3193,14 @@ protected:
 	// alongside the other subwindows but only shown when any group is defined.
 	ibGridRowOutlineWindow* m_rowOutlineWin = nullptr;
 	ibGridColOutlineWindow* m_colOutlineWin = nullptr;
+	// …and their FROZEN strips: the frozen rows / columns are part of the sheet and may open a
+	// group of their own, so the pane needs the same twin the labels and the areas have.
+	ibGridRowOutlineWindow* m_rowFrozenOutlineWin = nullptr;
+	ibGridColOutlineWindow* m_colFrozenOutlineWin = nullptr;
+	// …and the chrome each pane does not reach: the strip above the row pane (it starts below the
+	// column chrome) and the strip left of the column pane. Colour only, no content.
+	ibGridOutlineCornerWindow* m_rowOutlineCornerWin = nullptr;
+	ibGridOutlineCornerWindow* m_colOutlineCornerWin = nullptr;
 
 	//Row positions
 	wxArrayInt m_rowBrakeAt;

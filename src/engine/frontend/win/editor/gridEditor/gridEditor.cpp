@@ -5,6 +5,9 @@
 
 #include "gridEditor.h"
 
+#include <wx/activityindicator.h>   // the "composing..." spinner — see ShowComposeProgress
+#include <wx/stattext.h>
+
 #include "frontend/docView/docView.h"
 
 enum
@@ -173,6 +176,43 @@ void ibGridEditor::DockTable()
 	ibGridEditor::FreezeTo(cellRange.GetBottomRow(), cellRange.GetRightCol());
 
 	ibGrid::ForceRefresh();
+}
+
+// See the header. Built on first use and kept: a spinner that is created and destroyed per compose
+// flickers, and the second compose is the common case.
+void ibGridEditor::ShowComposeProgress(bool busy)
+{
+	if (m_composeProgress == nullptr) {
+		if (!busy)
+			return;   // nothing built, nothing to hide
+
+		wxWindow* const panel = new wxPanel(this, wxID_ANY);
+		panel->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
+
+		wxBoxSizer* const sizer = new wxBoxSizer(wxHORIZONTAL);
+		wxActivityIndicator* const spinner = new wxActivityIndicator(panel);
+		spinner->Start();
+		sizer->Add(spinner, 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(6));
+		sizer->Add(new wxStaticText(panel, wxID_ANY, _("Composing...")),
+			0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(6));
+		panel->SetSizerAndFit(sizer);
+
+		m_composeProgress = panel;
+	}
+
+	if (!busy) {
+		m_composeProgress->Hide();
+		return;
+	}
+
+	// Centred over the sheet — it belongs to the thing that is filling, and it must not cover the
+	// toolbar the person still uses while it fills.
+	const wxSize client = GetClientSize();
+	const wxSize own    = m_composeProgress->GetSize();
+	m_composeProgress->Move((client.x - own.x) / 2, (client.y - own.y) / 3);
+	m_composeProgress->Show();
+	m_composeProgress->Raise();
+	m_composeProgress->Update();
 }
 
 #pragma endregion
@@ -870,6 +910,36 @@ void ibGridEditor::OnSize(wxSizeEvent& event)
 	const int w = wxMax(0, event.m_size.x - chromeX);
 	const int h = wxMax(0, event.m_size.y - chromeY);
 
+	FillVisibleArea(w, h);
+	event.Skip();
+}
+
+// See the header: grow the table until it covers the visible area, so the sheet looks like a sheet
+// wherever the window ends. Sizes are the gridWin-visible ones; passing -1 measures them here (the
+// caller that rebuilt a document has no size event to take them from).
+void ibGridEditor::FillVisibleArea(int width, int height)
+{
+	int ux, uy, sx, sy;
+	ibGrid::GetScrollPixelsPerUnit(&ux, &uy);
+	ibGrid::GetViewStart(&sx, &sy);
+	sx *= ux; sy *= uy;
+
+	int w = width;
+	int h = height;
+	if (w < 0 || h < 0) {
+		const wxSize client = ibGrid::GetClientSize();
+		const int chromeX = ibCalcGridScale(m_rowLabelWidth, GetGridZoom())
+			+ (GridRowAreaEnabled() ? ibCalcGridScale(m_rowAreaWidth, GetGridZoom()) : 0)
+			+ GetRowOutlineSize();
+		const int chromeY = ibCalcGridScale(m_colLabelHeight, GetGridZoom())
+			+ (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0)
+			+ GetColOutlineSize();
+		w = wxMax(0, client.x - chromeX);
+		h = wxMax(0, client.y - chromeY);
+	}
+	if (w <= 0 || h <= 0)
+		return;
+
 	int x0 = ibGrid::XToCol(sx);
 	int y0 = ibGrid::YToRow(sy);
 	int x1 = ibGrid::XToCol(sx + w);
@@ -904,8 +974,6 @@ void ibGridEditor::OnSize(wxSizeEvent& event)
 			m_table->AppendRows(row + 1);
 		}
 	}
-
-	event.Skip();
 }
 
 void ibGridEditor::OnGridZoom(ibGridEvent& event)

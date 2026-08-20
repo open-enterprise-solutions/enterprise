@@ -19,7 +19,7 @@
 //
 // See docs/query-language-arc.md §18 (name substitution) / §20 (this interface).
 
-#include "backend/modelView.h"          // ibMetaID (via backend.h) — NOT model.h, so model.h can hold
+#include "backend/tabularModelView.h"   // ibMetaID (via backend.h) — NOT tabularModel.h, so that one can hold
                                         // ibDataDBComposer BY VALUE (breaks the dataComposer→queryLowering→queryable→
                                         // model include cycle). (ibComparisonType is no longer used here — the
                                         // L3 condition op is ibQueryFilterOp now, defined below.)
@@ -367,6 +367,14 @@ struct ibSubqueryOutput
 	// schema is read, or the value arrives as one field of an object instead of the object.
 	wxString                    m_objectPrefix;
 	ibTypeDescription           m_type;            // empty = unknown (a computed expression)
+	// ⭐ AND WHO KEEPS `m_col` ALIVE, when it is not the metadata. The inner SELECT's schema owns the
+	// columns IT minted (a dot-walk leaf, a synthetic measure) through OutputColumn::m_ownedCol, and
+	// that schema is a LOCAL of the function that builds this list — so a wrapper holding the bare
+	// pointer outlived the storage and read through freed memory (2026-08-19: the row values came
+	// back EMPTY, which folded 56 rows into one group and printed a blank report).
+	//
+	// Carried as a share: empty for a metadata column (it outlives everything), set for a minted one.
+	std::shared_ptr<ibBackendQueryColumn> m_owned;
 };
 
 // ==========================================================================
@@ -629,6 +637,20 @@ public:
 			if (c.get() == col) return true;
 		return false;
 	}
+	// …and the answer that lets a consumer KEEP it: the storage itself, so holding on to a published
+	// column is a matter of raising its refcount rather than copying it. A wrapper dies at the end of
+	// the run; whoever still needs the column simply shares its ownership and the column lives on —
+	// the SAME column, same id, same type. Empty when this wrapper did not allocate it (a metadata
+	// column outlives everything and needs no keeping).
+	std::shared_ptr<ibBackendQueryColumn> ShareColumn(const ibBackendQueryColumn* col) const {
+		for (const std::shared_ptr<ibBackendQueryColumn>& c : m_ownedColumns)
+			if (c.get() == col) return c;
+		return nullptr;
+	}
+	// Everything this wrapper allocated, for a consumer that keeps the WHOLE run alive rather than
+	// hand-picking (the query result: it holds columns in four separate lists, and a list added later
+	// would silently be the one nobody remembered to keep).
+	const std::vector<std::shared_ptr<ibBackendQueryColumn>>& SharedColumns() const { return m_ownedColumns; }
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override { return Column(name); }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_columns; }
 
@@ -636,11 +658,19 @@ public:
 	bool IsComputedInRam() const override { return true; }
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;   // out-of-line — runs the inner query
 
-	// trivial L3 surface for a non-metaobject (derived) source — no metadata, so no
-	// metadata guid (matches the RAM temp-table queryable).
+	// trivial L3 surface for a non-metaobject (derived) source — no metadata guid, no table name
+	// (matches the RAM temp-table queryable).
 	wxString GetQueryTableName() const override { return wxEmptyString; }
 	ibGuid   GetQueryTableGuid() const override { return wxNullGuid; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
+
+	// ⭐ BUT IT DOES KNOW WHICH CONFIGURATION IT READS — the inner query's own. Answering "no
+	// metadata" made every reference published by a subquery UNWALKABLE: resolving a reference to its
+	// target needs the configuration the target lives in, so `Ref.Attribute1` over
+	// `SELECT * FROM (SELECT Document1.Ref …)` came back as "'Ref' is not a single-target reference
+	// (cannot walk)" — about a column whose type says exactly which document it points at
+	// (2026-08-20). A wrapper is not a metadata-free source: it is a query over one.
+	const ibMetaData* GetMetaData() const override;
 
 private:
 	std::unique_ptr<ibDataQueryBuilder>      m_inner;     // the nested query (owned by value via the heap)

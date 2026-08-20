@@ -84,7 +84,7 @@ The id bands are a fourth thing to notice: `0x50000000` (derived column) and `0x
 stored column of a resource, and the aggregate receivers) are re-declared as a local constant at each
 site — `accumulationRegisterMetadataSchema.cpp:165`, `accountingRegisterMetadataSchema.cpp:228`,
 `query/queryLowering.cpp:1016`, `query/queryProvider.cpp:1582/1727/1740/2196`,
-`query/dbTableProvider.cpp:1630`, `backend/modelDb.cpp:371`,
+`query/dbTableProvider.cpp:1630`, `backend/tabularModelDb.cpp:371`,
 `frontend/visualView/ctrl/formCommand.h:32`. No one place owns the bands; every new one is claimed by
 reading a comment.
 

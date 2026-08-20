@@ -781,7 +781,7 @@ everything else through, so a session kind added tomorrow defaults to working ra
 silence. A tenant never reaches this code — it is not authenticated and asks for no runtime —
 so the gate is not what keeps renting cheap.
 
-**Who starts one is the MODEL, not the control.** `ibValueModel::SubmitFetchAsync` (`model.cpp`)
+**Who starts one is the MODEL, not the control.** `ibValueModel::SubmitFetchAsync` (`tabularModel.cpp`)
 is the override that rents; the base `ibDataViewModel::SubmitFetchAsync` runs the work on a thread
 the model owns, and `ibValueModelStorage` (RAM) goes back to that base — renting a session and a
 pooled connection for an in-memory sort buys nothing, and its rows are the live nodes the view
@@ -839,7 +839,7 @@ session's own worker) the scope saves and restores what was there.
 ### Which reads can go background — the existing switch already says
 
 A list reads one of two ways, and the platform already lets the configuration choose
-(`ibValueModelCursor::IsDynamicRead`, `model.h`; the dynamic list surfaces it as
+(`ibValueModelCursor::IsDynamicRead`, `tabularModel.h`; the dynamic list surfaces it as
 **DynamicRead**):
 
 | DynamicRead | How it reads | Background? |

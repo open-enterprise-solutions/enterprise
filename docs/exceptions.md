@@ -244,7 +244,7 @@ handler, an application entry point, a callback handed to a library.
 | **Application entry** (`mainApp.cpp`, `wes/main.cpp`) | catch, show, drain the error chain (§6) |
 | **`crashGuard`** | last resort: record before the process dies |
 
-Two rules for what a boundary does with what it caught:
+The rules for what a boundary does with what it caught:
 
 1. **Report the description, never the fact alone.** "unknown exception" and "operation failed"
    are the same sentence: they say a thing happened and nothing about which.
@@ -260,6 +260,41 @@ Two rules for what a boundary does with what it caught:
    does not extend to an application-level failure that merely happened to be raised on that
    thread (a name that does not resolve, a query that failed). Same throw, different consequence:
    the invariant question is "can the rest of the system still trust our state?".
+
+### ⭐ A catch that lands in ONE OF N TWINS is not landed (2026-08-20)
+
+Three containers load a metadata tree by the same eight lines — `metadataReport.cpp`,
+`metadataDataProcessor.cpp`, `metadataConfiguration.cpp` — and each wraps `ApplyDataNode` in a
+`catch (const ibBackendException&)` that answers `false` to its caller. Rule 1 above was written
+into the report's copy, where the failure of the day was being chased, and stopped there; the other
+two kept returning `false` in silence.
+
+That gap is not cosmetic, because of what all three now MEET: the child-node guard in
+`ibValueMetaObject::ApplyDataNode` ([serialization-io.md § 4b](serialization-io.md)) raises for any
+container, so a **configuration** that hit it simply did not open — no message, no log line — which
+is the exact symptom the guard exists to expose, hidden by the one boundary that had not been taught
+to speak. All three report now. **A boundary obligation belongs to every copy of the boundary**: fix
+one of N identical catches and the remaining N-1 keep the old behaviour, with the door the user
+happened to open deciding whether the engine's words reach them.
+
+### 🛑 A handler must not THROW — what it asks has to be answerable on the failing path (2026-08-20)
+
+A `catch` block runs precisely when the world is already half torn down. Anything it calls to
+compose its message has to be answerable in **that** state, or the second exception replaces the
+first and the user is told about the reporting rather than about the fault.
+
+The concrete case: `ibValueModuleRuntimeManagerExternalReport::CreateMainModule` and its
+data-processor twin (`moduleManager/moduleManagerExt.cpp`) caught a failed `Compile()` / `Run()` and
+asked `m_objectValue->GetClassName()` for a name to log. A value's class NAME is a **ctor-registry
+lookup by dynamic clsid**, and the external pair is registered on RUN and dropped on CLOSE — so on
+the very path that reports a failed init the entry may already be gone, `GetNameObjectFromID`
+raises, and what reached the user was *"Object with id '…' is not exist"* instead of the cause. The
+open was then aborted by the report rather than by the fault (Max: *"it is addressed after it was
+taken off the registry"*).
+
+Both handlers ask the **METAOBJECT** for its name now. That needs no registry — it is plain
+metadata, and it is the name a person recognises anyway. The rule generalises past this registry:
+inside a handler, prefer what is HELD over what is LOOKED UP.
 
 ---
 

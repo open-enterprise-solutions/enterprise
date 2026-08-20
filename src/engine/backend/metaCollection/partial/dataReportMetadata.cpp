@@ -100,6 +100,17 @@ bool ibValueMetaObjectReport::WriteData(ibDataNode& node) const
 
 	node.SetValue(m_propertyDefFormObject->GetName(), GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()).str());
 
+	// 🛑 …AND THE DEFAULT COMPOSER, by the same road (Max, 2026-08-20: "you missed it when you did the
+	// main composer"). A report declares TWO things about itself — the form it opens with and the
+	// composer it composes by — and the second was given a property, a choice in the header and a
+	// first-one-wins rule, but never a line here: it was set, used, saved nowhere, and came back
+	// "<not selected>" on the next open.
+	//
+	// BY GUID, not by metaID: an id is only unique inside the container that stamped it, and an
+	// external report is carried between configurations — which is exactly why the form beside it
+	// travels this way.
+	node.SetValue(m_propertyDefComposer->GetName(), GetGuidByID(m_propertyDefComposer->GetValueAsInteger()).str());
+
 	return true;
 }
 
@@ -109,6 +120,7 @@ bool ibValueMetaObjectReport::ReadData(const ibDataNode& node)
 	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
 	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
+	m_propertyDefComposer->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefComposer->GetName())));
 
 	return true;
 }
@@ -266,6 +278,21 @@ void ibValueMetaObjectReport::OnCreateFormObject(ibValueMetaObjectFormBase* meta
 	{
 		m_propertyDefFormObject->SetValue(metaForm->GetMetaID());
 	}
+}
+
+// ⭐ THE FIRST COMPOSER IS THE DEFAULT ONE. A report declares a composer because it wants a report;
+// making them then hunt for a "default composer" property to fill in would be asking a question
+// whose answer is already obvious. The same pair of hooks the default FORM has, for the same reason.
+void ibValueMetaObjectReport::OnCreateComposerObject(ibValueMetaObjectComposer* metaComposer)
+{
+	if (metaComposer != nullptr && m_propertyDefComposer->GetValueAsInteger() == wxNOT_FOUND)
+		m_propertyDefComposer->SetValue(metaComposer->GetMetaID());
+}
+
+void ibValueMetaObjectReport::OnRemoveComposerObject(ibValueMetaObjectComposer* metaComposer)
+{
+	if (metaComposer != nullptr && m_propertyDefComposer->GetValueAsInteger() == metaComposer->GetMetaID())
+		m_propertyDefComposer->SetValue(wxNOT_FOUND);
 }
 
 void ibValueMetaObjectReport::OnRemoveMetaForm(ibValueMetaObjectFormBase* metaForm)

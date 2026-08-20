@@ -5,15 +5,15 @@
 //
 // The SHARED half of the value-model: the ibValueModel base (settings / selection / actions / iteration /
 // column collection) + the ibComposerNode out-of-line members. The two paged-fetch realisations live in their
-// own translation units — the DB fetch in modelDb.cpp (ibValueModelCursor::RunComposerPage), the in-place RAM
-// fetch + composer in modelRam.cpp (ibValueModelStorage::RunComposerPage / ibDataRamComposer).
+// own translation units — the DB fetch in tabularModelDb.cpp (ibValueModelCursor::RunComposerPage), the in-place RAM
+// fetch + composer in tabularModelRam.cpp (ibValueModelStorage::RunComposerPage / ibDataRamComposer).
 
-#include "model.h"
+#include "tabularModel.h"
 
 #include "backend/session/session.h"            // ibSession — the caller a rented run borrows from
 #include "backend/job/jobManager.h"             // ibJobManager / ibJobTenancy — the rented run a portion reads on
 #include "backend/backend_exception.h"          // ibBackendException — a refusal to rent falls back to inline
-#include "backend/modelView.h"                  // ibDataViewModel / ibDataViewItem — the base view types
+#include "backend/tabularModelView.h"           // ibDataViewModel / ibDataViewItem — the base view types
 #include "backend/composition/listFilter.h"    // ibValueListSettings (dialog buffer) + ibLoad/CommitSettings — settings live on the composer
 #include "backend/composition/dataComposer.h"  // ibDataComposer — IsGroupedModel reads GroupCount() off the composer
 #include "backend/uniqueKey.h"                  // ibUniqueKey — GetItemKey return (base default = no key)
@@ -70,9 +70,20 @@ bool ibValueModel::ibComposerNode::SetValue(const ibMetaID& id, const ibValue& v
 	return true;
 }
 
-// Out-of-line (declared in model.h): the ibValuePtr<ibValueListSettings> -> ibValueListSettings* conversion
+// Out-of-line (declared in tabularModel.h): the ibValuePtr<ibValueListSettings> -> ibValueListSettings* conversion
 // needs the COMPLETE ibValueListSettings type (listFilter.h, included here), not the header's forward decl.
-ibValueListSettings* ibValueModel::GetListSettings() const { return m_listSettings; }
+//
+// ⭐ BUILT ON FIRST ASK. The facade is handed the STORE it writes through — and the store is the
+// SUBCLASS's composer, which does not exist while this base's constructor runs (GetModelComposer is
+// pure virtual there). Built here instead, the model is whole by definition: nobody can ask a model
+// for its settings before the model exists.
+ibValueListSettings* ibValueModel::GetListSettings() const
+{
+	if (m_listSettings == nullptr)
+		m_listSettings = new ibValueListSettings(GetModelComposer(), [this] { NotifyReset(); });
+
+	return m_listSettings;
+}
 
 
 ibValueModel::ibValueModel()
@@ -81,15 +92,14 @@ ibValueModel::ibValueModel()
 {
 	m_modelProvider = new ibDataViewModelProviderImpl(this);
 
-	// The model's RUNTIME/script settings — a FACADE (thin live wrapper) over the composer (the store): a
-	// script's list.Settings.Filter.Add(...) writes the composer IMMEDIATELY and fires this model's refresh
-	// (NotifyReset). It is a SYSTEM type owned by the model, NOT created standalone (Max: "this is a system type,
-	// lives inside the model, the composer is passed to it"). The settings DIALOG uses its OWN separate BUFFER copy
-	// (load on open, commit on OK) so the form stays transactional. Held via ibValuePtr (DecrRef on dtor).
-	m_listSettings = new ibValueListSettings(*this, [this] { NotifyReset(); });
+	// (The model's RUNTIME/script settings — a FACADE over the composer, so a script's
+	//  list.Settings.Filter.Add(...) writes the store IMMEDIATELY and fires this model's refresh — are
+	//  built on the first ASK, in GetListSettings above: they take the composer, and the composer is
+	//  the SUBCLASS's, so it does not exist yet here. The settings DIALOG uses its own separate BUFFER
+	//  copy (load on open, commit on OK) so the form stays transactional.)
 
-	// (m_composer is POLYMORPHIC + lazily created — the facade resolves GetModelComposer() on first use, by
-	// which time the full subclass exists so CreateComposer picks ibDataDBComposer (DB) / ibDataRamComposer (RAM).
+	// (m_composer is POLYMORPHIC + lazily created, by which time the full subclass exists so
+	// CreateComposer picks ibDataDBComposer (DB) / ibDataRamComposer (RAM).
 	// Subclasses set their source + default sort/grouping STRAIGHT on it in their ctor —
 	// GetModelComposer().FromSource(q).Sort(...) — the persistent settings store the fetch reads.)
 }
@@ -104,15 +114,29 @@ ibValueModel::~ibValueModel()
 	//
 	// Cheap in the ordinary case: by the time a form closes its portion has long
 	// since landed, and a run that has finished returns from Wait immediately.
-	if (m_fetchRun) {
-		m_fetchRun->Cancel();   // cooperative — a query already in flight still finishes
-		m_fetchRun->Wait();
-		m_fetchRun.reset();
-	}
+	CancelFetch();
 
 	// The RAM node storage (ibRamValueStorage) is a member of ibValueModelStorage — its dtor DecRefs the nodes; the
 	// base just drops the view provider. (A DB model has no node storage.)
 	m_modelProvider->DecRef();
+}
+
+// ⭐ SAY STOP OUT LOUD. The destructor has always done this, but a form CLOSING is not the same moment
+// as the model dying: a report still composing holds references of its own, so the window goes and the
+// read carries on against a session nobody is watching. A control that starts a read is the one that
+// tells it to stop when its window is going away (Max, 2026-08-19: "it has to understand it must break
+// off, forcibly").
+//
+// Cooperative and blocking, in that order: raise the cancel flag, then wait the run out — a read that
+// is already inside a query finishes that query, and returning before it did would let the worker walk
+// a model the caller is about to release.
+void ibValueModel::CancelFetch()
+{
+	if (!m_fetchRun)
+		return;
+	m_fetchRun->Cancel();   // cooperative — a query already in flight still finishes
+	m_fetchRun->Wait();
+	m_fetchRun.reset();
 }
 
 // (Header-click sort lives on the FRONT — ibValueModelTableBox::OnColumnClick pokes this model's composer

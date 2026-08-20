@@ -7,6 +7,11 @@
 #include "formAttribute.h"
 #include "backend/appData.h"
 #include "backend/system/value/valueJob.h"   // g_valueScheduleCLSID — a schedule requisite builds as static text
+#include "backend/system/value/valueDataComposition.h"   // g_valueDataCompositionCLSID — a composition builds as a gridbox
+#ifndef OES_USE_WEB
+#include "gridBox.h"   // ibValueGridBox — DESKTOP only; the web build has no grid visuals yet
+#include "backend/metaCollection/partial/dataReport.h"   // …bound to the report itself, when it has a default composer
+#endif
 #include "backend/metaData.h"
 #include "frontend/docView/docView.h"
 #include "backend/srcDataObject.h"
@@ -87,6 +92,39 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 			mainTableBox->SetSource({ mainAttrId });
 		}
 
+#ifndef OES_USE_WEB
+		// ⭐⭐ A REPORT IS SHOWN BY A GRID (Max, 2026-08-20: "we know we are looking at a report
+		// object, so we can give it a grid by default") — but only a report that DECLARED a
+		// composer, because the box is bound to the composer and there is nothing to bind to
+		// without one. A report with no composer gets no box; declaring the first one is what
+		// makes the box appear.
+		//
+		// Bound to the object — a single hop — which is what makes this box the form's MAIN view:
+		// the form's command provider resolves to it, so the composer's verbs appear on the form's
+		// own toolbar and the box carries no second bar (IsMainSourceBound / HasCommandBar).
+		//
+		// ⚠ DESKTOP ONLY, like the rest of the grid visuals: the web build links no grid at all.
+		//
+		// ⭐ AND ITS SOURCE IS THE COMPOSER, NOT THE REPORT (Max, 2026-08-20: "a report cannot itself
+		// be the source — the composer can; you substitute it in the builder by default"). The
+		// report DECLARES what to show; what is shown is the composition, so the binding names it.
+		if (!isTableSource) {
+			const auto* report = dynamic_cast<const ibValueRecordDataObjectReport*>(sourceObject);
+			const ibValueMetaObjectReport* metaReport =
+				report != nullptr ? dynamic_cast<const ibValueMetaObjectReport*>(report->GetMetaObject()) : nullptr;
+			const ibMetaID defaultComposer = metaReport != nullptr ? metaReport->GetDefComposer() : wxNOT_FOUND;
+
+			if (defaultComposer != wxNOT_FOUND) {
+				ibValueGridBox* gridBox =
+					dynamic_cast<ibValueGridBox*>(ibValueForm::CreateControl(wxT("Gridbox")));
+				if (gridBox != nullptr) {
+					gridBox->SetControlName(sourceExplorer.GetSourceName());
+					gridBox->SetSource({ mainAttrId, defaultComposer });
+				}
+			}
+		}
+#endif
+
 		for (unsigned int idx = 0; idx < sourceExplorer.GetHelperCount(); idx++) {
 
 			const ibSourceExplorer* nextPtr = sourceExplorer.GetHelper(idx);
@@ -145,6 +183,19 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 						checkbox->EnableWindow(nextSourceExplorer.IsEnabled());
 						checkbox->VisibleWindow(nextSourceExplorer.IsVisible());
 						checkbox->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
+					}
+					// ⭐ A COMPOSITION IS SHOWN BY A GRIDBOX, and that is what makes a report need no
+					// form: the report declares a composer, the composer is a node here, and the
+					// generated form comes up with the sheet the report composes into — plus the
+					// gridbox's own Compose / Settings commands, which it carries because its
+					// source is a composition (Max, 2026-08-20: "you add a composer, save, and you
+					// do not even have to make a form").
+					// A COMPOSER IS NOT A FIELD — it is not laid out one by one here. The report
+					// itself is the grid's source (see above), and a second composer is reached by
+					// hand (`Object.Composer2`, a grid of its own).
+					else if (nextSourceExplorer.GetClsidList().size() == 1
+						&& nextSourceExplorer.ContainType(g_valueDataCompositionCLSID)) {
+						continue;
 					}
 					// (g_valueScheduleCLSID — backend/system/value/valueJob.h, included at the top)
 					// A SCHEDULE is shown, not typed. There is nothing sensible to put in an edit

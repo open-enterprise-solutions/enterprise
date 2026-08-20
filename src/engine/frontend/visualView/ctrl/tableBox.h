@@ -1,7 +1,7 @@
 #ifndef __TABLE_BOX_H__
 #define __TABLE_BOX_H__
 
-#include "backend/model.h"
+#include "backend/tabularModel.h"
 // ibValueEnumeration template + AddEnumeration come from here; on
 // desktop they were pulled in transitively through tableView.h. Web
 // build skips tableView.h, so add the direct include.

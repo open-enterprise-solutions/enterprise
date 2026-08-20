@@ -142,14 +142,51 @@ construction.)
 - **Settings entry point** — a form attribute (`ibValueFormAttribute`) of type
   DynamicList gets a **«List settings»** property in the inspector; picking
   «Open...» calls the frontend static `ibDialogListSettings::ShowListSettingsDialog(list)`
-  (`frontend/win/dlgs/listSettings/listSettings.h`, invoked from `advpropDynamicList.cpp`).
+  (`frontend/win/dlgs/settings/list/listSettings.h`, invoked from `advpropDynamicList.cpp`).
   The settings buffer lives on the **base model** — `ibValueModel::m_listSettings`
-  (`backend/model.h`) — not on the attribute, and no subclass holds its own.
-- **Form** — `ibDialogListSettings` (`frontend/win/dlgs/listSettings/`), a modal
+  (`backend/tabularModel.h`) — not on the attribute, and no subclass holds its own.
+- **Form** — `ibDialogListSettings` (`frontend/win/dlgs/settings/list/`), a modal
   `wxDialog` + `wxNotebook` with **Source / Filter / Sort / Group** tabs. The
   Source tab is where the **main table / custom query** is chosen. Backend→frontend
   bridge: the frontend registers `ms_showDialog` at load; the backend never links
   the frontend.
+
+### 🛑 Editing the settings marks the FORM modified (2026-08-20)
+
+A filter, a sort or a grouping written in the designer redrew the list and was **gone on the next
+open**: nothing said the form had changed, so Save had nothing to do. The defect is the composer's
+one layer up ([report-engine.md § 4f](report-engine.md)), and it had the same shape — half a road.
+
+A property edit on a form attribute goes through `ibFormAttributeValue::OnPropertyChanged` →
+the visual editor's `ModifyProperty`, which that file calls *"the ONE place a property edit marks
+the form modified"*. `OnChildChanged` is the road a **nested** value's change takes instead — and it
+had only the repaint half:
+
+```cpp
+void ibFormAttributeValue::OnChildChanged() {
+    ibPropertyObject::OnChildChanged();          // keep bubbling
+    ...
+    document->Modify(true);                      // ← this was missing
+    editor->RefreshEditor();
+}
+```
+
+⚠ It asks the **document**, not the metadata: `ibMetaDocument::Modify` delegates to
+`ibMetaData::Modify` where modified-ness lives, and going through the document also lets the view
+put its asterisk in the tab title. And it is deliberately **not** routed through `ModifyProperty` —
+the signal carries no property, and inventing one to push onto the undo stack would put a command
+there that cannot undo what actually changed.
+
+The other half is the raiser: `ibListSettingsPanel::Commit` calls `m_list->OnChildChanged()`, the
+twin of what the composer's panel does at its own Commit. It is raised on the **list**, not the
+model: only `ibValueDynamicList` wears the property face the signal travels on, and only a dynamic
+list is ever held by something that could care.
+
+🛑 **`NotifyReset()` and `OnChildChanged()` are two different statements**, and having only the
+first is what made this invisible. `NotifyReset` speaks DOWN to the views — *"your rows are stale,
+fetch again"*; `OnChildChanged` speaks UP to the holder — *"what I am has changed"*. The list
+redrew perfectly and saved nothing. The general rule is stated once in
+[property-system.md § 5.2](property-system.md).
 
 ### The field picker (Filter / Sort / Group)
 

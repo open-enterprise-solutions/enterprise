@@ -3,20 +3,46 @@
 
 #include "backend/compiler/value.h"
 #include "backend/backend_spreadsheet.h"
+#include "backend/spreadsheetModel.h"   // ibValueSpreadsheetModel — a document IS one
+
+// The document a GRIDBOX shows, and an attribute type in its own right: creating the control creates
+// the variable, and a composition composes INTO it. Named here so a window can offer the type without
+// re-deriving the id from its registration key.
+constexpr ibClassID g_valueSpreadsheetCLSID = value_to_clsid("VL_SPSTD");
 
 void ibValueSpreadsheetDocument_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 
-class BACKEND_API ibValueSpreadsheetDocument :
-	public ibValueStaticMembers<&ibValueSpreadsheetDocument_BindNames> {
+// ⭐⭐ A DOCUMENT IS A SPREADSHEET MODEL — the plainest one: what makes something a model here is
+// HOLDING the backend sheet and handing it back, and that is precisely what this value does. The
+// composer does the same and, on top of it, knows how to produce the content.
+//
+// The sheet itself lives on the base (m_spreadsheetDoc) — one place, whichever of the two holds it.
+class BACKEND_API ibValueSpreadsheetDocument : public ibValueSpreadsheetModel {
 	public:
 
-	wxObjectDataPtr<ibBackendSpreadsheetObject> GetSpreadsheetDocument() const { return m_spreadsheetDoc; }
+	// A hand-filled sheet IS already the result: there is nothing to produce.
+	virtual bool Compose() override { return true; }
+
+	// ⭐ THE VALUE SHOWS *THIS* DOCUMENT — the whole of it, in one move. A document is not just its
+	// description: the drill-down PARAMETERS (the values behind the cells) and the edit mode live on
+	// the object, so handing over the description alone leaves cells bound to names nothing answers
+	// to — the report looks right and stops opening anything (2026-08-20).
+	//
+	// Which is what a composition needs: it builds into a document of its own (off the UI thread, so
+	// the shown one is not being written to while it is painted) and then this puts that document in
+	// place, complete.
+	void SetSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc) {
+		if (doc) m_spreadsheetDoc = doc;
+	}
 
 	ibSpreadsheetDescription& GetSpreadsheetDesc() { return m_spreadsheetDoc->GetSpreadsheetDesc(); }
 	const ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_spreadsheetDoc->GetSpreadsheetDesc(); }
 
 	ibValueSpreadsheetDocument(const ibSpreadsheetDescription& spreadsheetDesc = ibSpreadsheetDescription()) :
-		ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_spreadsheetDoc(new ibBackendSpreadsheetObject(spreadsheetDesc)) {
+		ibValueSpreadsheetModel(spreadsheetDesc) {
+		// The surface it always had, bound per instance: the model carries a members table of its
+		// own, where the shared one belonged to the base this no longer derives.
+		m_members.Bind(&ibValueSpreadsheetDocument_BindNames, this);
 	}
 
 	virtual bool IsEmpty() const { return m_spreadsheetDoc->IsEmptyDocument(); }
@@ -27,10 +53,8 @@ class BACKEND_API ibValueSpreadsheetDocument :
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       //function call
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);       //procudre call
 
-	// DoGetPMethods (protected) + Shared<&ibValueSpreadsheetDocument_BindNames> come from the base.
-
-private:
-	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetDoc;
+	// DoGetPMethods (protected) + the members table come from the base, and so does the SHEET
+	// itself (ibValueSpreadsheetModel::m_spreadsheetDoc) — holding it is what makes this a model.
 };
 
 #pragma region enumeration 

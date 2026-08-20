@@ -135,8 +135,20 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 			Run();
 		}
 		catch (const ibBackendException& err) {
+			// 🛑 THE HANDLER MUST NOT THROW — and `GetClassName()` can (Max, 2026-08-20: "it is
+			// addressed after it was taken off the registry"). A value's class NAME is looked up in
+			// the ctor registry by its dynamic clsid, and the external pair is registered on RUN and
+			// dropped on CLOSE — so on the very path that reports a failed init the entry may be
+			// gone, `GetNameObjectFromID` raises, and the SECOND exception replaces the first:
+			// what reached the user was "Object with id '…' is not exist" instead of the real cause,
+			// and the create/open was aborted by the report rather than by the fault.
+			//
+			// The METAOBJECT's name needs no registry — it is plain metadata, and it is the name a
+			// person recognises anyway.
+			const ibValueMetaObjectRecordData* metaObject =
+				m_objectValue != nullptr ? m_objectValue->GetMetaObject() : nullptr;
 			wxLogWarning(_("External module '%s' init failed: %s"),
-				m_objectValue ? m_objectValue->GetClassName() : wxString(wxEmptyString),
+				metaObject != nullptr ? metaObject->GetName() : wxString(wxEmptyString),
 				err.GetErrorDescription());
 			return false;
 		};
@@ -367,8 +379,14 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 			Run();
 		}
 		catch (const ibBackendException& err) {
+			// Same rule as the data processor's twin above: the handler asks the METAOBJECT for a
+			// name, because a value's class name is a registry lookup and the registry entry may
+			// already be gone on this very path — a reporting call that throws replaces the fault
+			// with a complaint about itself.
+			const ibValueMetaObjectRecordData* metaObject =
+				m_objectValue != nullptr ? m_objectValue->GetMetaObject() : nullptr;
 			wxLogWarning(_("External module '%s' re-init failed: %s"),
-				m_objectValue ? m_objectValue->GetClassName() : wxString(wxEmptyString),
+				metaObject != nullptr ? metaObject->GetName() : wxString(wxEmptyString),
 				err.GetErrorDescription());
 			return false;
 		};

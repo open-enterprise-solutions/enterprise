@@ -357,6 +357,98 @@ for a configuration with a small `ibMetaData` subclass — enough to pin the con
 without a database behind it.
 
 ---
+
+## 4b. A node's areas mean different things — and a metaobject's children ARE metaobjects (2026-08-20)
+
+`ibDataNode` (`serialize/dataBuilder.h`) is not one bag. It has three areas, and the difference
+between them is a statement about the object, not a storage detail:
+
+| Area | Written with | Means |
+|---|---|---|
+| **fields** | `SetValue` / `GetValue` | the node's plain intrinsic values (its id, its name) |
+| **properties** | `SetProperty` / `GetProperty`, and `Child(name)` for a composite one | **what the object IS** — the property walk's own area, and where a named sub-node lives |
+| **children** | `AddChild(clsid, metaId)`, walked by `Children()` | **the objects UNDER it** — the metaobject tree, recursed by `ApplyDataNode` |
+
+⭐ **So a metatype keeps its content in a PROPERTY.** A composite value — a spreadsheet description,
+a whole composition, a type descriptor — goes into a named sub-node of the properties area, where it
+may write as many children of its own as it likes, because they are inside ITS node. The metatype's
+own two lines then read the same in every type: `node.SetProperty(name, prop->GetNodeValue())` out,
+`prop->SetNodeValue(node.GetProperty(name))` in.
+
+🛑 **The rule is now enforced, and it raises.** `ibValueMetaObject::ApplyDataNode`
+(`metaCollection/metaObjectSerialize.cpp`) refuses a child node whose clsid is not metadata-kinded:
+
+```cpp
+if (!IsMetadata(childNode.GetClsid()))
+    ibBackendCoreException::Error(
+        _("Node of '%s' holds a child that is not metadata (class id %lld) — a metaobject's "
+          "children ARE metaobjects; its own data belongs in a named sub-node"), …);
+```
+
+The id is KIND-TYPED ([../CLAUDE.md](../CLAUDE.md) §6), so the question is answered by the id itself
+with no registry lookup. **Raised, not skipped** (Max, 2026-08-20: *"give me an exception when it is
+not a metaobject — not a quiet create"*): a skip would let a writer keep making the mistake behind a
+warning nobody reads, while the refusal names the id — and the id names the writer.
+
+**The defect it was written for.** The composer metatype lent its own node to
+`ibValueDataComposition::WriteProperty`, which writes a child per VARIANT and a child per PARAMETER,
+keyed by the loop INDEX under synthetic `CompositionVariant` / `CompositionParameter` ids of kind
+`None`. Those sat in the area where a `(clsid, metaId)` pair means identity. The file saved cleanly
+and then could never be opened again — *"Error creating object '67799176431653306'"*, that clsid as a
+number. The composer now serialises through a property like the template metatype does
+([report-engine.md §4f](report-engine.md)); this guard is what stops the next writer losing a file
+the same way.
+
+⚠ **A raise is only as loud as the boundary that catches it.** All three metadata containers wrap
+`ApplyDataNode`, and until 2026-08-20 only the report's copy reported what it caught — so this
+refusal, met by a configuration, closed the file with nothing said at all
+([exceptions.md § 4](exceptions.md)).
+
+---
+
+## 4c. What LEVEL a thing is written at is a claim about it (2026-08-20)
+
+The composition's node holds three child kinds — variants, parameters and resources — and where each
+one hangs is not a filing convenience. **The level is the statement.** A variant is a snapshot, so
+what hangs UNDER a variant is claimed to be per-snapshot; what hangs beside the variants is claimed
+to be shared by all of them.
+
+`ibValueDataComposition::WriteTotals` / `ReadTotals` write the **resources at composition level**,
+beside the parameters, and that is a deliberate refusal to write them per variant. Today one store
+(`ibDataComposer`'s totals) holds them for every variant — switching a variant does not switch them —
+so writing a copy under each variant would put a snapshot on disk that the code never takes, and the
+next reader would trust the file over the code. The parameters are written at the same level for the
+same reason, and both are ⏳ open to move down the day the composer really does snapshot them.
+
+⚠ **Order matters on the way back in, and only on the way back in.** `ReadProperty` reads the
+resources **after** the variants: applying a variant rewrites the store's settings, and the store is
+where a resource lives, so reading them first would hand them to a store that is about to be
+overwritten. Nothing about the WRITE side cares about order, which is exactly why the read side's
+dependence on it is worth writing down.
+
+---
+
+## 4d. 🛑 Writing through a live FACADE during a LOAD announces a change nobody made (2026-08-20)
+
+A settings object comes in two modes — a **buffer** with its own storage, and a **facade** over the
+composer's store ([list-settings.md § 6](list-settings.md)). A facade's mutators now also carry the
+change signal, so a filter written through one announces itself
+([property-system.md § 5.2](property-system.md)). That is right for an edit and wrong for a **load**:
+reading a saved record is not somebody changing it.
+
+The legacy read path is where it showed. `ibValueDataComposition::ReadProperty` has a branch for
+records written before variants existed, and that branch read the old single settings set *through*
+the live facade — so opening an old report announced it as modified before the person had touched
+anything. It now reads into a **buffer-mode** `ibValueListSettings` and commits to the store directly
+(`ibCommitSettingsToComposer`), which is the shape the variants path always had. The filter TREE is
+the one thing that cannot travel that way — the composer takes a filter as one expression and cannot
+hand it back — so it is installed with `SetFilterRoot`, which replaces the root without going through
+a mutator and therefore stays silent too.
+
+⭐ The general rule, and it applies to every value that grew a change signal: **anything that writes
+through a live facade during a LOAD must go through the buffer instead.** A load has no author.
+
+---
 ## 5. Honest remainder
 
 - `fileSystem/` should be `io/` (§ header note).

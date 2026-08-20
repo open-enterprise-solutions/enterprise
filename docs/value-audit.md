@@ -528,7 +528,7 @@ keeps its attribute values in `ibMetaValueArray` — historically
 most-trodden runtime path: every `Object.Attribute` read/write goes
 `GetPropVal`/`SetPropVal` → `GetValueByMetaID`/`SetValueByMetaID` →
 `find(id)`/`at(id)`, and the same typedef also backs table-row columns
-(`model.h`), composite keys (`uniqueKey.h`) and selector rows.
+(`tabularModel.h`), composite keys (`uniqueKey.h`) and selector rows.
 
 **Swap (drop-in behind the typedef):** `std::map` → `ibRowValues<Key,T>`
 (`backend/rowValues.h`) — a sorted `std::vector<pair<Key,T>>` with a

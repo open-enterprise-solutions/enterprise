@@ -1,7 +1,7 @@
 ﻿#ifndef _FILTER_TREE_MODEL_H__
 #define _FILTER_TREE_MODEL_H__
 
-#include "backend/modelView.h"
+#include "backend/tabularModelView.h"
 #include "backend/composition/listFilter.h"
 
 #include <map>
@@ -126,10 +126,18 @@ public:
 	// the grid give the caption their space instead of drawing empty cells.
 	bool HasValue(const ibDataViewItem& item, unsigned col) const override;
 
+	// 🛑 VIEW ONLY, AND THE ONLY DOOR THAT REACHES AN ACTIVATABLE CELL. The "Use" tick is toggled
+	// straight from the click and from Space, without the start-editing event the editor vetoes —
+	// the model's IsEnabled is the single gate the fork consults on both roads (final audit,
+	// 2026-08-20).
+	void SetReadOnly(bool readOnly) { m_readOnly = readOnly; }
+	bool IsEnabled(const ibDataViewItem&, unsigned int) const override { return !m_readOnly; }
+
 	unsigned int GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor,
 		int count, ibDataViewItemArray& out) const override;
 
 private:
+	bool m_readOnly = false;   // view only — see SetReadOnly
 	// One row object per value, kept alive by the model so a parent pointer
 	// stays valid and so the same value keeps the same row across refreshes.
 	ibFilterTreeNode* NodeFor(const ibValue& value, ibFilterTreeNode* parent) const;

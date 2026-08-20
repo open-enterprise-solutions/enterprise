@@ -22,8 +22,19 @@ enum action {
 // form (the greying reads modifiesData — see docs/view-only.md).
 ibValueRecordDataObjectReport::ibStandardCommandSet ibValueRecordDataObjectReport::GetStandardCommands(const ibFormID &formType)
 {
+	// ⭐⭐ COMPOSE BELONGS TO THE COMPOSER, AND ONLY THERE (Max, 2026-08-20: "all of that logic is
+	// inside the composer — I press Compose, the composer does everything and shows the result").
+	//
+	// The object used to carry a Compose command of its own. With a composer declared, that is the
+	// SAME button twice: the box already carries Compose and Settings whenever its source resolves
+	// to a composition, and a report object resolves to its default composer
+	// (ibValueGridBox::ResolveComposition). Two buttons doing one thing is how they start meaning
+	// slightly different things.
+	//
+	// The script seam is NOT gone: Composing() / DoStandardCompose() below are still the report's
+	// twin of a document's Posting, callable from code — what was removed is a second doorway to
+	// them, not the door. A report that needs a button of its own declares a command.
 	ibStandardCommandSet reportActions(this);
-	reportActions.AddAction(wxT("Compose"), _("Compose"), g_picGenerateCLSID, true, eCompose).SetModify(false);
 	return reportActions;
 }
 
@@ -58,18 +69,32 @@ bool ibValueRecordDataObjectReport::Composing() const
 // The PLATFORM's own composition — the branch taken when the handler leaves StandartProcessing
 // TRUE (including the report with no handler at all).
 //
-// It composes nothing yet, and says so rather than pretending: a standard composition needs a
-// declared composition SCHEMA on the metaobject — what to read and how to lay it out — and the
-// Report metaobject has no such property today (it carries modules, forms and a default form,
-// see dataReport.h). Until that schema exists there is nothing for the platform to compose FROM,
-// and inventing one here would be a second, private notion of a report's data.
+// ⭐ WHAT IT READS NOW EXISTS — the default composer says what to read and how to lay it out. What
+// is still missing is the other half: WHERE the result goes. A composition composes INTO a
+// spreadsheet document, and the document belongs to the control that shows it — the gridbox owns
+// it, rents a background run and publishes the finished sheet in one step (gridBoxAction.cpp).
+// The object has no window and no document, so composing here would produce a sheet nobody holds.
 //
-// So this is the seam, not a stub hiding a missing feature: a report written today sets
-// StandartProcessing to FALSE and composes in its handler (data through the query / composer
-// layer, presentation through the spreadsheet's areas — docs/report-engine.md § 1), which is
-// exactly how every report already worked before the command existed. When the schema lands,
-// its execution goes HERE and every existing report keeps working unchanged.
+// So the running path is the gridbox's Compose command, which the generated form carries because a
+// report object resolves to its default composer. This stays false until the object owns a document
+// of its own — and false is the honest answer, not a stub: a report with no default composer
+// composes in its handler exactly as it always did (docs/report-engine.md §1).
 bool ibValueRecordDataObjectReport::DoStandardCompose() const
 {
 	return false;
+}
+
+// ⭐ THE MODEL'S VERB, for a report: the HANDLER SPEAKS FIRST, then the platform composes.
+//
+// `Composing` is the report's twin of a document's Posting — it arrives with StandartProcessing
+// TRUE and a handler that filled the sheet itself sets it FALSE. So an author can take the
+// composer's settings and write the result by hand, and the platform stands down (Max, 2026-08-20).
+// Nothing written? Then the default composer composes into the very document the caller handed us.
+bool ibValueRecordDataObjectReport::Compose(ibBackendSpreadsheetObject* document)
+{
+	if (Composing())
+		return true;   // the script composed it — the sheet is filled
+
+	ibValueDataComposition* composition = GetDefaultComposition();
+	return composition != nullptr && composition->Compose(document);
 }

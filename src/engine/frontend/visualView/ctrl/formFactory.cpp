@@ -1,5 +1,6 @@
 ﻿#include "form.h"
 #include "frontend/visualView/ctrl/sizer.h"
+#include "backend/backend_exception.h"   // ibBackendException — a control that refuses to build keeps its reason
 
 #include <algorithm>
 #include <cwctype>
@@ -68,7 +69,17 @@ ibValueFrame* ibValueForm::NewObject(const ibClassID& clsid, ibValueFrame* contr
 			// ownership via this reference (e.g. an ibValuePtr member).
 			if (controlParent == nullptr) newControl->IncrRef();
 		}
+		// 🛑 THE REFUSAL KEEPS ITS REASON. A control that cannot be built returns nullptr, and every
+		// caller treats that as "not this one" — a form LOADING its controls simply skipped the one
+		// that threw, so a saved control disappeared from the form with nothing said anywhere. The
+		// nullptr contract stays (an old file may name a control this build does not have, and that
+		// must not cost the whole form); what changes is that the engine's own words survive it.
+		catch (const ibBackendException& err) {
+			wxLogError(wxT("%s"), err.GetErrorDescription());
+			return nullptr;
+		}
 		catch (...) {
+			wxLogError(_("Failed to create form element (class id %lld)"), (long long)clsid);
 			return nullptr;
 		}
 		return newControl;

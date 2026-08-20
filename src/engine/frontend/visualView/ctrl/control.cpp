@@ -75,14 +75,25 @@ void ibValueControl::AutoBindNewSource(ibTypeControlFactory* factory)
 {
 	// Called by the source controls (checkbox / textbox / tablebox) from their CREATION event when the
 	// first-created flag is set. A just-added control with no source provisions a fresh attribute NAMED
-	// after this control and binds to it. TYPE = the control's DEFAULT, from the ONE shared filter-kind ->
-	// default-clsid mapping (ibBackendTypeConfigFactory::GetDefaultTypeByFilter) — the SAME mapping
+	// after this control and binds to it.
+	//
+	// ⭐ THE TYPE IS THE ONE THE CONTROL ALREADY DECLARES. A control that accepts particular types says
+	// so in its own type description (a gridbox: spreadsheet document or composition) — that is what the
+	// picker offers, so it is also what a provisioned attribute should BE. Asking a second question
+	// ("and what is your default type?") was one more place to keep in step with the first, and it
+	// answered for exactly one control.
+	//
+	// Where a control declares nothing, the shared filter-kind -> clsid mapping stands
+	// (ibBackendTypeConfigFactory::GetDefaultTypeByFilter) — the SAME mapping
 	// ibVariantDataAttribute::DoSetDefaultMetaType uses, so a control's auto-attribute and a variant's
-	// default never diverge. No throwaway variant, no reinvented per-control switch, no cross-cast.
+	// default never diverge.
 	if (factory == nullptr || m_formOwner == nullptr || !IsSourceMissing())
 		return;
+	const ibTypeDescription& declared = factory->GetTypeDesc();
 	ibTypeDescription typeDesc;
-	typeDesc.SetDefaultMetaType(ibBackendTypeConfigFactory::GetDefaultTypeByFilter(factory->GetFilterDataType()));
+	typeDesc.SetDefaultMetaType(declared.GetClsidCount() > 0
+		? declared.GetFirstClsid()
+		: ibBackendTypeConfigFactory::GetDefaultTypeByFilter(factory->GetFilterDataType()));
 	const ibMetaID id = m_formOwner->AddAutoAttribute(GetControlName(), typeDesc);
 	if (id != wxNOT_FOUND)
 		factory->SetDefaultSourceType(id);   // one-hop bind, over the mutable GetSourceDesc (twin of SetDefaultMetaType over GetTypeDesc)

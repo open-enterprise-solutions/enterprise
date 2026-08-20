@@ -122,6 +122,8 @@ bool ibGridEditor::LoadDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 			if (g == nullptr) continue;
 			AddRowGroup((int)g->m_start, (int)g->m_end, (int)g->m_level, g->m_collapsed);
 		}
+		// The levels are in; the OUTLINE is what they mean — see ibGrid::NormalizeRowGroups.
+		NormalizeRowGroups();
 		m_colGroupAt.clear();
 		for (int idx = 0; idx < spreadsheetDesc.GetGroupNumberCols(); idx++) {
 			const ibSpreadsheetGroupDescription* g = spreadsheetDesc.GetColGroupByIdx(idx);
@@ -166,6 +168,13 @@ bool ibGridEditor::LoadDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 
 		ibGrid::SetEvtHandlerEnabled(true);
 	}
+
+	// ⭐ THE SHEET FILLS THE WINDOW — HERE, not at every callsite. A loaded document holds exactly the
+	// rows and columns it was written with (a composed report may hold two), and the space beyond them
+	// is empty SHEET rather than "outside the document" — without this the report ends in a gridless
+	// void that reads as a rendering failure. Loading IS the moment that changes, so the trigger
+	// belongs inside it: a caller cannot forget what it never has to remember (Max, 2026-08-19).
+	FillVisibleArea();
 
 	return AssociatibDocument(doc);
 }
@@ -325,6 +334,10 @@ void ibGridEditor::JoinDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 
 void ibGridEditor::AppendRowOutlineGroup(unsigned int start, unsigned int end, unsigned int level)
 {
+	// ⚠ NOT normalised here. Shaping the outline needs the WHOLE sequence — whether a row heads
+	// anything is answered by the rows that come after it — and this arrives one group at a time.
+	// The document's own load path (LoadDocument) re-reads every group and shapes them together,
+	// which is what the report goes through after it is composed.
 	AddRowGroup((int)start, (int)end, (int)level);
 	if (m_rowOutlineWin) m_rowOutlineWin->Refresh();
 	CalcDimensions();
@@ -433,6 +446,8 @@ bool ibGridEditor::LoadSpreadsheet(const ibSpreadsheetDescription& spreadsheetDe
 			if (g == nullptr) continue;
 			AddRowGroup((int)g->m_start, (int)g->m_end, (int)g->m_level, g->m_collapsed);
 		}
+		// The levels are in; the OUTLINE is what they mean — see ibGrid::NormalizeRowGroups.
+		NormalizeRowGroups();
 		m_colGroupAt.clear();
 		for (int idx = 0; idx < spreadsheetDesc.GetGroupNumberCols(); idx++) {
 			const ibSpreadsheetGroupDescription* g = spreadsheetDesc.GetColGroupByIdx(idx);

@@ -3,15 +3,15 @@
 //	Description : RAM value-model + its value-storage
 ////////////////////////////////////////////////////////////////////////////
 //
-// The RAM half of the value-model, split out of model.cpp: ibValueModelStorage (the in-memory model whose live
+// The RAM half of the value-model, split out of tabularModel.cpp: ibValueModelStorage (the in-memory model whose live
 // rows fetch straight from ibRamValueStorage) + the storage's own out-of-line methods (ColumnIdByName /
 // SplitField / ResolveField). The in-place engine itself — ibDataRamComposer — lives WITH its declaration in
 // composition/ramComposer.cpp; a RAM fetch here just windows the order it computes. The DB half lives in
-// modelDb.cpp; the shared ibValueModel base + the node lives in model.cpp.
+// tabularModelDb.cpp; the shared ibValueModel base + the node lives in tabularModel.cpp.
 
-#include "model.h"
+#include "tabularModel.h"
 
-#include "backend/modelView.h"                  // s_constIgnoreParent / ibDataViewItem
+#include "backend/tabularModelView.h"           // s_constIgnoreParent / ibDataViewItem
 #include "backend/composition/ramComposer.h"    // ibDataRamComposer (pulls dataComposer.h) — m_composer.ComputeOrder()
 #include "backend/srcDataObject.h"               // ibSourceDataObject / ibSourceExplorer — ResolveField dot-walk over reference cells
 
@@ -74,7 +74,7 @@ ibValue ibRamValueStorage::ResolveField(long row, ibMetaID headCol, const std::v
 // The `want` display positions in [0,total) around the browsed anchor position `p` (or the top / bottom when
 // there is no anchor, p==-1), honouring the fetch direction — the ONE windowing rule the flat / grouped /
 // detail levels all page by, in BOTH the RAM half (in-place sorted rows) and the DB half (a grouped level's
-// folded group list; declared in model.h). Backward gathers nearest-first then flips to display order.
+// folded group list; declared in tabularModel.h). Backward gathers nearest-first then flips to display order.
 std::vector<long> ibComputePageWindow(long total, long p, ibFetchDirection dir, int want)
 {
 	std::vector<long> win;

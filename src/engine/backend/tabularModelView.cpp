@@ -1,4 +1,4 @@
-#include "modelView.h"
+#include "tabularModelView.h"
 
 #include <system_error>
 #include <thread>
@@ -82,7 +82,7 @@ ibDataViewModel::ibDataViewModel()
 }
 
 // The model's own fetch thread — see ibDataViewModel::SubmitFetchAsync. A class of
-// its own only so <thread> stays out of modelView.h, which half the engine sees.
+// its own only so <thread> stays out of tabularModelView.h, which half the engine sees.
 class ibModelFetchThread
 {
 public:

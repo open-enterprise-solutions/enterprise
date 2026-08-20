@@ -170,13 +170,10 @@ public:
 	ibTypeDescription TypeOfPath(const ibQuerySelect& select, const std::vector<wxString>& path,
 	                             const ibQueryPackage& package, size_t beforeStatement) const;
 
-private:
-	ibQueryableFactory* Factory() const;
-
-	// The projections of a select, as fields — how a NESTED table and a TEMP table both answer.
-	// An unaliased projection is named by its own expression, which is what the renderer writes
-	// and therefore what the outer query can refer to.
-	// The projections of a select, as fields — how a NESTED table and a TEMP table both answer.
+	// WHAT A SELECT PRODUCES, as fields — how a NESTED table and a TEMP table both answer, and
+	// the same question a host asks about the whole query: "which fields may I write an
+	// expression over". An unaliased projection is named by its own expression, which is what
+	// the renderer writes and therefore what an outer query can refer to.
 	//
 	// ⚠ IT RESOLVES THE TYPE, not just the name. A temp table made by `SELECT Owner.Ref INTO Tmp`
 	// vends a column that IS a reference, and the next statement must be able to walk into it —
@@ -186,9 +183,16 @@ private:
 	//
 	// `package` / `beforeStatement` — because resolving a projection means resolving it against the
 	// making select's OWN sources, and one of those may itself be an earlier temp table.
+	//
+	// (Public since 2026-08-19: the data composition's settings window builds its expression
+	// editor over exactly this answer. A window assembling the list itself would part company
+	// with this one at the first reference field — this one unfolds, a hand-made one does not.)
 	std::vector<ibQueryConstructorField> FieldsOfSelect(const ibQuerySelect& select,
 	                                                    const ibQueryPackage& package,
 	                                                    size_t beforeStatement) const;
+
+private:
+	ibQueryableFactory* Factory() const;
 
 	const ibMetaData* m_metaData = nullptr;
 };

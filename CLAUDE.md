@@ -83,6 +83,7 @@ enterprise/
 │   ├── metadata-lifecycle.md # load/run/save/close — the metaobject events in order + external DP/Report
 │   ├── metadata-containers.md # the ibMetaData family — mechanism + varieties (config vs external DP/Report)
 │   ├── form-editor.md        # visual designer — panels, undo/redo, drag-to-create
+│   ├── spreadsheet-document.md # the SERVER-side document — cells, parameters, areas, notifiers
 │   ├── spreadsheet-editor.md # the grid behind templates and report output
 │   ├── system-functions.md   # the global script API — 92 functions + 6 procedures
 │   ├── database-modes.md     # file vs server base — where each puts its artefacts
@@ -379,8 +380,13 @@ configuration root, `SetSessionParameters`), and writable nowhere else — a wri
 raises, which is what row-level access can be filtered by safely. Reached as `SessionParameters.<Name>`
 ([docs/session-parameters.md](docs/session-parameters.md)).
 
-Five further registered metatypes are **not** top-level business objects: `ExternalDataProcessor`,
-`ExternalReport`, `AccountDimensionKindsTable` (renamed from `SubcontoKindsTable` on 2026-08-12 —
+Six further registered metatypes are **not** top-level business objects: `ExternalDataProcessor`,
+`ExternalReport`, `Composer` (2026-08-20, `MD_CMPS` — a **data composer declared inside a report**,
+beside its forms and templates: what to read and how to fold it. The report names one of them
+`DefaultComposer`, and a report that declares one needs no form — the generated form is a gridbox
+bound to that composer. Embedded and external reports both have them, being the same metaobject.
+See [docs/report-engine.md](docs/report-engine.md) §4f),
+`AccountDimensionKindsTable` (renamed from `SubcontoKindsTable` on 2026-08-12 —
 *subconto* was a calque; the concept is an **account dimension**, «аналитика», and its KIND is a
 characteristic. The CLSID key `MD_SKTB` stayed, being an opaque body key rather than a name),
 `AccumulationRegisterTotals` (the totals table became a

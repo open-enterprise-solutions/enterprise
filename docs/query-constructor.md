@@ -21,7 +21,7 @@
 | the ONE expression editor (conditions, joins, aggregates, totals) | `.../queryExpressionDialog.{h,cpp}` |
 | the grid models (links, conditions, unions + the field map) | `.../queryLinkModel`, `queryConditionModel`, `queryUnionModel` |
 | the join diagram | `.../queryJoinDiagram.{h,cpp}` |
-| host 1 — the dynamic list's *Arbitrary query* tab | `frontend/win/dlgs/listSettings/listSettings.cpp` |
+| host 1 — the dynamic list's *Arbitrary query* tab | `frontend/win/dlgs/settings/list/listSettings.cpp` |
 | host 2 — the code editor's context menu, over a string literal | `frontend/win/editor/codeEditor/codeEditor.{h,cpp}` |
 | the CASE builder - `CASE WHEN` as the ordered LIST it is | `.../queryCaseDialog.{h,cpp}` |
 | tests | `tests/test_queryL4Parser.cpp` (language + package round trip), `tests/test_queryConstructor.cpp` (model), `tests/test_queryNaming.cpp` (naming, the composer wrap, DescribeOutput, grouping, the parameter table, aggregate types), `tests/test_frontendQueryConstructor.cpp` (the literal, read-only, the CASE round trip) |
@@ -88,7 +88,7 @@ window that shows an `ibQuerySelect` and takes edits.
 
 **The first place to wire it, because it already exists** (Max, 2026-08-06): the dynamic
 list's settings, tab *Arbitrary query* — a checkbox plus a multi-line text field
-(`frontend/win/dlgs/listSettings/listSettings.cpp`, `BuildQueryPage`). The text already
+(`frontend/win/dlgs/settings/list/listSettings.cpp`, `BuildQueryPage`). The text already
 travels the normal road (`composer.FromText` → parser → lowering), so the round trip is
 proven there the day the button appears. Nothing to invent: take the field's text, parse,
 show, render back into the field. That makes the constructor testable against a real list
@@ -421,6 +421,15 @@ required argument and the dialog passes it down to a nested constructor. A defau
 fell back to the active configuration would resolve a copied query's tables against somebody
 else's config — the same class of defect the source catalogue avoids by walking rather than
 listing.
+
+**And so does the EXCLUSION MASK** (2026-08-20). `ibShowQueryConstructorFor` is the re-entrant door —
+a nested table, a union branch — and its three call sites in `queryConstructorEdit.cpp` handed the
+metadata down and left `m_exclude` behind. A host that folds elsewhere and therefore excludes the
+Totals tab (a composition, a dynamic list's arbitrary query — [report-engine.md](report-engine.md)
+§ *The constructor is opened with a mask of EXCLUSIONS*) got that tab back one level down, and a
+`TOTALS` written there rendered into text the host had been told could not carry one. A nested select
+is part of the SAME query: what an opening leaves out travels with it, exactly as the configuration
+beside it does.
 
 ---
 

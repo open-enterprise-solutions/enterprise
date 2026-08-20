@@ -18,6 +18,7 @@
 #include "templates/docViewInterface.h"
 #include "templates/docViewCommonAttribute.h"
 #include "templates/docViewRole.h"
+#include "templates/docViewComposer.h"   // a composer opens on a tab, like a form or a template
 #include "templates/docViewConfigCompare.h"
 
 //files
@@ -59,6 +60,9 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	AddDocTemplate(g_metaManagerCLSID, CLASSINFO(ibModuleEditDocument), CLASSINFO(ibModuleEditView));
 	AddDocTemplate(g_metaFormCLSID, CLASSINFO(ibFormEditDocument), CLASSINFO(ibFormEditView));
 	AddDocTemplate(g_metaTemplateCLSID, _("Spreadsheet document"), ibFileMask(ibFileKind::Table), ibFileExtension(ibFileKind::Table), CLASSINFO(ibSpreadsheetEditDocument), CLASSINFO(ibSpreadsheetEditView));
+	// A COMPOSER — the report's own declaration of what it reads and how it is laid out. Opens on a
+	// tab like everything else here; its editor is the platform's settings panel.
+	AddDocTemplate(g_metaComposerCLSID, CLASSINFO(ibComposerEditDocument), CLASSINFO(ibComposerEditView));
 }
 
 void ibDocManagerDesigner::OnUpdateSaveMetadata(wxUpdateUIEvent& event)

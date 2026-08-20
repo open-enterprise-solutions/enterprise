@@ -149,6 +149,28 @@ bool ibValueMetaObject::BuildDataNode(ibDataNode& node, int flags)
 bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node, bool resetId)
 {
 	for (const ibDataNode& childNode : node.Children()) {
+		// ⭐⭐ A CHILD NODE IS A CHILD METAOBJECT ONLY IF ITS CLSID SAYS SO. The id is KIND-TYPED
+		// (clsid.h): the high byte names WHAT a class is, so "is this metadata" is answered by the id
+		// itself, with no registry lookup.
+		//
+		// 🛑 THE SEPARATION IS ibDataNode's OWN: `Child(name)` is a named sub-node in the PROPERTIES
+		// area, `AddChild(clsid, metaId)` is a metaobject child walked as the object tree. A writer
+		// that lends its metaobject node to something meant for a VALUE breaks it — and that is a
+		// real defect, not a variation: it put `CompositionVariant` nodes keyed by LOOP INDEX where a
+		// (clsid, metaId) pair means an object's identity, and a report saved with a composer could
+		// then be written and never opened again (2026-08-20; the door was fixed in
+		// metaComposerObject.cpp, this is the guard that keeps a whole file from being lost to it).
+		//
+		// ⭐ RAISED, NOT SKIPPED (Max, 2026-08-20: "a spreadsheet document does all of this properly;
+		// a composer has to pass the same way. Give me an exception when it is not a metaobject —
+		// not a quiet create"). A skip would let a writer keep making this mistake behind a warning
+		// nobody reads; the refusal names the id, and the id says which writer it was.
+		if (!IsMetadata(childNode.GetClsid()))
+			ibBackendCoreException::Error(
+				_("Node of '%s' holds a child that is not metadata (class id %lld) — a metaobject's "
+				  "children ARE metaobjects; its own data belongs in a named sub-node"),
+				GetName(), (long long)childNode.GetClsid());
+
 		ibValue* ppParams[] = { this };
 		ibValueMetaObject* newMetaObject =
 			ibValue::CreateAndConvertObjectRef<ibValueMetaObject>(childNode.GetClsid(), ppParams, 1);

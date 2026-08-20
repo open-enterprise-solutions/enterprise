@@ -254,6 +254,8 @@ void ibDialogQueryConstructor::SyncNotebookPages()
 			continue;   // only a table this statement makes can be indexed
 		if (page.m_refusedByTempTable && makesTempTable)
 			continue;   // a temp table is flat; TOTALS yields a tree, and the parser refuses the pair
+		if (page.m_excludeBit != 0 && (m_exclude & page.m_excludeBit) != 0)
+			continue;   // the host owns this setting itself - see ibQueryConstructorExclude
 		if (page.m_title == _("Query batch") && m_subQuery)
 			continue;   // a sub-query is not a package
 		wanted.push_back(&page);

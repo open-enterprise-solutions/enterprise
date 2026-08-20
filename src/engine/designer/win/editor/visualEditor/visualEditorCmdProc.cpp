@@ -12,6 +12,8 @@
 #include "backend/backend_exception.h"   // ibBackendException — caught explicitly; it is NOT a std::exception
 #include "backend/propertyManager/propertyManager.h"
 #include "backend/system/value/valueJob.h"   // g_valueScheduleCLSID — a dropped schedule builds as static text
+#include "backend/system/value/valueDataComposition.h"  // g_valueDataCompositionCLSID — drops as a gridbox
+#include "backend/system/value/valueSpreadsheet.h"       // g_valueSpreadsheetCLSID — so does a document
 
 #include "frontend/visualView/ctrl/formAttribute.h"   // ibFormAttributeValue (form attribute add command)
 #include "frontend/visualView/ctrl/formCommand.h"      // ibFormCommandValue (ibEditorSelection command ctor upcast)
@@ -1013,6 +1015,13 @@ static wxString ResolveDropControlClass(ibValueForm* form, const ibSourceDescrip
 
 	if (isTable)
 		return wxT("Tablebox");
+	// ⭐ A COMPOSITION OR A SPREADSHEET DOCUMENT DROPS AS A GRIDBOX (Max, 2026-08-19). Both are shown
+	// by the same control and by no other: the document IS what a gridbox displays, and a composition
+	// composes one. Dropping either therefore builds the box that can show it, bound to the attribute
+	// that was dragged.
+	if (typeDesc.GetClsidCount() == 1 &&
+		(typeDesc.ContainType(g_valueDataCompositionCLSID) || typeDesc.ContainType(g_valueSpreadsheetCLSID)))
+		return wxT("Gridbox");
 	if (typeDesc.GetClsidCount() == 1 && typeDesc.ContainType(ibValueTypes::TYPE_BOOLEAN))
 		return wxT("Checkbox");
 	// A SCHEDULE is shown, not typed — the static text renders it as its own sentence and opens

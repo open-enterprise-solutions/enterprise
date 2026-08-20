@@ -8175,7 +8175,13 @@ void ibDataViewCtrl::ProcessTableMouseEvent(wxMouseEvent& event, ibDataViewMainW
 		// If the user click the expander, we do not do editing even if the column
 		// with expander are editable
 		//
-		if (m_lastOnSame && !ignore_other_columns)
+		// ⭐ …OR THE CELL SAYS ONE CLICK IS ENOUGH. `m_lastOnSame` is the file-manager rule (select
+		// first, edit on the second click at the same place), which is right for a text cell and
+		// wrong for a cell whose editor IS what the click is for — a value with a choice button, a
+		// field picker, an expression list. The renderer decides; see EditOnSingleClick.
+		const bool editsOnFirstClick = col != nullptr && col->GetRenderer() != nullptr
+			&& col->GetRenderer()->EditOnSingleClick();
+		if ((m_lastOnSame || editsOnFirstClick) && !ignore_other_columns)
 		{
 			if ((col == m_currentCol) && (current == m_currentRow) &&
 				IsCellEditableInMode(item, col, wxDATAVIEW_CELL_EDITABLE))

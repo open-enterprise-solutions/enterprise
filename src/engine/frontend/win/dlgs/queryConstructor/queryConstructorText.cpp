@@ -292,7 +292,7 @@ void ibDialogQueryConstructor::SetSubQueryMode()
 //  Entry points
 // ===========================================================================
 
-bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText, const ibMetaData* metaData, bool readOnly)
+bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText, const ibMetaData* metaData, bool readOnly, int exclude)
 {
 	// ⭐⭐ ONE REFUSAL, ONE QUESTION — the two halves of "the engine cannot read this" said together.
 	//
@@ -329,7 +329,7 @@ bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText, const ibMetaD
 		}
 	}
 
-	ibDialogQueryConstructor dialog(parent, package, metaData, readOnly);
+	ibDialogQueryConstructor dialog(parent, package, metaData, readOnly, exclude);
 	if (dialog.ShowModal() != wxID_OK)
 		return false;
 
@@ -337,7 +337,7 @@ bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText, const ibMetaD
 	return true;
 }
 
-bool ibShowQueryConstructorFor(wxWindow* parent, ibQuerySelectPtr& select, const ibMetaData* metaData, bool readOnly)
+bool ibShowQueryConstructorFor(wxWindow* parent, ibQuerySelectPtr& select, const ibMetaData* metaData, bool readOnly, int exclude)
 {
 	// ONE SELECT, edited in place. A nested table and a union branch are both this: a query
 	// standing inside another, so they open the same window one level down rather than a second
@@ -347,7 +347,7 @@ bool ibShowQueryConstructorFor(wxWindow* parent, ibQuerySelectPtr& select, const
 	statement.m_select = select ? select : std::make_shared<ibQuerySelect>();
 	package.m_statements.push_back(statement);
 
-	ibDialogQueryConstructor dialog(parent, package, metaData, readOnly);
+	ibDialogQueryConstructor dialog(parent, package, metaData, readOnly, exclude);
 	dialog.SetSubQueryMode();   // a query inside another one — no package, no INTO, no FOR UPDATE
 	if (dialog.ShowModal() != wxID_OK)
 		return false;   // read-only closes this way too — nothing is written back, by construction

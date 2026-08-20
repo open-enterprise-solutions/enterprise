@@ -157,9 +157,18 @@ L3 door.
    `AdoptAndCount`, and the manual refcount dance retire.
 3. **Group verbs** (row axis) on the composer; the tree becomes a declared
    grouping; lazy branch browse via the selector's sub-selection.
-4. **The report provider** (the crown): the TOTALS walk written into a
-   spreadsheet document by the rules of the structure; then the column axis /
-   pivot, and the L5-2 appearance tier (conditional formatting, layouts).
+4. ~~**The report provider** (the crown)~~ — **the first half LANDED 2026-08-18…20**: the TOTALS walk
+   is written into a spreadsheet document by `ibSpreadsheetComposeDriver`, and the composition it
+   walks is now a declared metatype inside the report (`Composer`), held by the report OBJECT as a
+   field like a tabular section, shown by a gridbox through the SPREADSHEET MODEL. Full account:
+   [report-engine.md](report-engine.md) §4a / §4f. Still ahead: the column axis / pivot, and the
+   L5-2 appearance tier (conditional formatting, layouts).
+
+   ⚠ Two things wear the name *composer* and they NEST: the value a person holds is the SHELL
+   (`ibValueDataComposition` — settings, variants, parameters, and the report's verbs), and inside
+   it sits `ibDataDBComposer`, the L5 store this document is about. The shell is not on the model
+   base: filling a sheet is not the same as reading one, and a hand-filled spreadsheet document has
+   no query at all.
 
 Known language gaps L5 will press on (by-demand): a dot-walk LEAF inside a boolean
 WHERE over a non-co-located JOIN (the plain boolean WHERE itself now runs as a

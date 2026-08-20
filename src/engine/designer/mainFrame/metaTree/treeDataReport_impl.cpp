@@ -52,6 +52,13 @@ ibValueMetaObject* ibDataReportTree::CreateItem(bool showValue)
 			ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
 			if (metaDoc != nullptr) metaDoc->UpdateAllViews();
 		}
+
+		// ⭐ THE HEADER'S CHOICES FOLLOW WHAT THE TREE NOW HOLDS. Adding a form or a composer changes
+		// what "default" may point at — and the FIRST composer becomes the default by itself
+		// (ibValueMetaObjectReport::OnCreateComposerObject), so without this the report already had a
+		// main composer and the field above still read "<not selected>" (Max, 2026-08-20). Removal
+		// and rename already refreshed; creation was the one road that did not.
+		UpdateChoiceSelection();
 	}
 
 	m_metaTreeCtrl->RefreshSelectedItem();
@@ -459,6 +466,32 @@ void ibDataReportTree::UpdateChoiceSelection()
 
 	m_defaultFormValue->SetSelection(defSelection);
 	m_defaultFormValue->SendSelectionChangedEvent(wxEVT_CHOICE);
+
+	// …AND THE DEFAULT COMPOSER, the same way. A report declares two things about itself — the form
+	// it opens with and the composer it composes by — and both are chosen here (Max, 2026-08-20).
+	// The FIRST composer added becomes the default on its own (ibValueMetaObjectReport::
+	// OnCreateComposerObject); this is where that answer becomes visible and changeable.
+	m_defaultComposerValue->Clear();
+	m_defaultComposerValue->AppendString(_("<not selected>"));
+
+	int defComposer = 0;
+
+	for (auto metaComposer : commonMetadata->GetComposerArrayObject())
+	{
+		if (metaComposer->IsDeleted())
+			continue;
+
+		// WIDEN FIRST, then reinterpret — see the note on the form loop above.
+		int selection_id = m_defaultComposerValue->Append(metaComposer->GetName(),
+			reinterpret_cast<void*>(static_cast<intptr_t>(metaComposer->GetMetaID())));
+
+		if (commonMetadata->GetDefComposer() == metaComposer->GetMetaID()) {
+			defComposer = selection_id;
+		}
+	}
+
+	m_defaultComposerValue->SetSelection(defComposer);
+	m_defaultComposerValue->SendSelectionChangedEvent(wxEVT_CHOICE);
 }
 
 bool ibDataReportTree::RenameMetaObject(ibValueMetaObject* obj, const wxString& sNewName)
@@ -510,6 +543,15 @@ const ibExternalGroupDef s_reportGroups[] = {
 	{ g_metaFormCLSID,      wxTRANSLATE("Forms")      },
 	{ g_metaCommandCLSID,   wxTRANSLATE("Commands")   },
 	{ g_metaTemplateCLSID,  wxTRANSLATE("Templates")  },
+	// ⭐ AN EXTERNAL REPORT IS A REPORT (Max, 2026-08-20). It derives the very same metaobject, so it
+	// already HELD its composers and answered for them — only this tree never showed the group, and
+	// what a tree does not show cannot be added to. A report without its composers is a data
+	// processor with a different name.
+	//
+	// LAST, exactly as in the configuration tree: there a report is "a data processor PLUS its
+	// composers" and AddReportItem appends the group after everything the processor has
+	// (treeConfiguration_impl.cpp). One report, one order, wherever it is opened from.
+	{ g_metaComposerCLSID,  wxTRANSLATE("Composers")  },
 };
 
 } // namespace
@@ -616,6 +658,15 @@ void ibDataReportTree::FillData()
 		if (metaTemplates->IsDeleted())
 			continue;
 		AppendItem(Group(g_metaTemplateCLSID), metaTemplates);
+	}
+
+	// composers — LAST, as in the configuration tree: what makes a report a report. Each is a
+	// declaration of what to read and how to fold it, and the DEFAULT one is what a generated form
+	// is built from.
+	for (auto metaComposer : commonMetadata->GetComposerArrayObject()) {
+		if (metaComposer->IsDeleted())
+			continue;
+		AppendItem(Group(g_metaComposerCLSID), metaComposer);
 	}
 
 	//update choice selection

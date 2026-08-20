@@ -186,6 +186,18 @@ silently vanish from the grid. Headless registers nothing and never reaches `Cre
 the assert costs it nothing. Note what this replaced: 32 separate `if (ms_x != nullptr)`
 checks. Headless is no longer a special case — the question simply does not arise.
 
+⚠ **The assert doing its job, 2026-08-20.** `ibPropertyComposition` — the property the composer
+metatype keeps its whole composition in ([report-engine.md § 4f](report-engine.md)) — was added with
+no registration of either kind, so selecting a Composer node in the designer tripped that `wxFAIL_MSG`
+in Debug and dropped the row from the grid in Release. Its absence was in fact deliberate, only never
+declared: the composition is edited in the composer's own window, never in a grid cell. That is
+`RegisterNoEditor<ibPropertyComposition>()`, stated in `advpropDataComposition.cpp` beside the maker
+for the other composition property.
+
+⭐ **So, for every property type added after this one: a new `ibProperty*` subclass owes the registry
+either a `Register` or a `RegisterNoEditor`.** There is no third answer, and "nobody wrote one" is
+precisely the answer the assert exists to refuse.
+
 ### 4.3 What a maker may read
 
 Everything the old 32 slots ferried was **already on the property**, which is why one
@@ -376,10 +388,58 @@ property's owner and fire the child's handler a second time.
 > upward path (`OnChildChanged` along the attach chain) replaced a set of ad-hoc
 > `NotifyFormModified` / `RefreshAttributeTree` / `RefreshCompositionTree` calls.
 
+#### ⭐⭐ A change is announced WHERE IT HAPPENS (2026-08-20)
+
+The signal has **two halves**, and a mechanism with only one of them looks exactly like a
+mechanism that is not there. Something has to RAISE it at the moment it writes; something above
+has to name itself the attach owner and REACT. A raiser with nobody above it bubbles to `nullptr`
+and dies — which is what a whole editor's worth of edits did, silently, until
+`ibValueMetaObjectComposer`'s constructor called `SetAttachOwner(this)` on the composition it holds
+and overrode `OnChildChanged()` to mark the metadata modified. Naming an owner from a constructor
+is not a special case: it is the documented one — the upward edge is *"set on
+`AttachPropertyObject` or by a **structural** owner"*.
+
+Five things follow, and each of them was a defect before it was a rule:
+
+- **Every door that writes raises it — not one commit at the end.** A settings window's buffer may
+  be transactional, but what sits beside it usually is not: on a composition the resources, the
+  parameters and the variants are written LIVE and survive Cancel, so a signal raised at Commit
+  missed precisely those. Raising it inside each writing verb has no cases to keep in step.
+- 🛑 **A holder that can be reached PAST cannot be responsible for what happens to it.** Three call
+  sites edited a composition's resources through the store it holds (`ibDataComposer::SetTotalAt` /
+  `RemoveTotalAt`), so the composition could not learn of the edit even in principle. The fix is a
+  door on the holder, not a notification bolted to the store.
+- ⚠ **Silence is by CONSTRUCTION, not by a flag.** The same value at runtime has nobody above it,
+  so the signal simply stops — no `IsDesignerMode()` test, nothing to remember to check.
+- ⚡ **The cost of a signal belongs to its LISTENER.** `OnChildChanged` is payload-free and looks
+  free to raise; it is not, because what it costs is whatever the holder above decides to do. A
+  composition held by a **form attribute** answers it by re-rendering the whole form editor — control
+  tree, object tree, attribute tree, drop targets — so `SetQueryText`, which runs per character, is
+  the one writing door that deliberately raises nothing and lets its caller announce the edit once,
+  on the pause after the typing stops. The rule: **a signal raised per keystroke has to be measured
+  against the most expensive listener, not the cheapest** — and the raiser cannot see that listener,
+  which is why the answer is a coalescing caller rather than a cheaper handler
+  ([report-engine.md § *What is stored*](report-engine.md)).
+- 🛑 **A LOAD is not a change, so it must not go through the door that announces one.** The moment a
+  live facade's mutators carry the signal, every path that fills that facade while READING a saved
+  record starts announcing an untouched object as modified — which is what the composition's legacy
+  read path did to a report the instant it opened. Load into the BUFFER and commit to the store; hand
+  over what cannot travel that way with a setter that mutates nothing
+  ([serialization-io.md § 4d](serialization-io.md)).
+
+🛑 **`OnChildChanged` is not `NotifyReset`, and having only the latter is what makes the gap
+invisible.** `NotifyReset()` speaks DOWN, to the views — *"the rows you are showing are stale"*;
+`OnChildChanged()` speaks UP, to the holder — *"what I am has changed"*. A window that only speaks
+down redraws correctly and saves nothing, which reads as working right up until the next open.
+
+Where modified-ness ends up is [metadata-lifecycle.md § 6](metadata-lifecycle.md); the two
+instances this arc landed are [report-engine.md § 4f](report-engine.md) (a composer) and
+[dynamic-list.md](dynamic-list.md) (a dynamic list's settings).
+
 ### 5.3 The outward edge — `ibPropertyObjectNotifier`
 
 `OnChildChanged` carries a change *up*. This carries one *out*, to whatever is showing the
-object. Modelled on `ibDataViewModelNotifier` ([../src/engine/backend/modelView.h](../src/engine/backend/modelView.h)),
+object. Modelled on `ibDataViewModelNotifier` ([../src/engine/backend/tabularModelView.h](../src/engine/backend/tabularModelView.h)),
 including its rule: **PURE PUSH** — the object says what changed, in `ibProperty` terms, and
 the front owns the widget.
 

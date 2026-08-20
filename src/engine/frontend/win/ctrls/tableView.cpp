@@ -1,5 +1,5 @@
 ﻿#include "tableView.h"
-#include "backend/model.h"
+#include "backend/tabularModel.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibTableViewCtrl, ibDataViewCtrl);
 
@@ -11,7 +11,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibTableViewCtrl, ibDataViewCtrl);
 
 #include "backend/objCtor.h"
 
-#include "frontend/win/dlgs/listSettings/listSettings.h"   // ibDialogListSettings — the List-Settings window
+#include "frontend/win/dlgs/settings/list/listSettings.h"   // ibDialogListSettings — the List-Settings window
 
 bool ibTableViewCtrl::ShowListSettings(ibValueModel* model)
 {

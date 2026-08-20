@@ -34,11 +34,23 @@
     <ClCompile Include="mainFrame\objinspect\objinspect.cpp">
       <Filter>mainFrame\objinspect</Filter>
     </ClCompile>
-    <ClCompile Include="win\dlgs\listSettings\filterTreeModel.cpp">
-      <Filter>win\dlgs\listSettings</Filter>
+    <ClCompile Include="win\dlgs\settings\composer\composerSettings.cpp">
+      <Filter>win\dlgs\settings\composer</Filter>
     </ClCompile>
-    <ClCompile Include="win\dlgs\listSettings\listSettings.cpp">
-      <Filter>win\dlgs\listSettings</Filter>
+    <ClCompile Include="win\dlgs\settings\filterTreeModel.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\settings\settingsFieldTree.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\settings\settingsFilterEditor.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\settings\settingsSortEditor.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\settings\list\listSettings.cpp">
+      <Filter>win\dlgs\settings\list</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\queryConstructor\queryConstructor.cpp">
       <Filter>win\dlgs\queryConstructor</Filter>
@@ -647,6 +659,15 @@
     <ClCompile Include="visualView\ctrl\gridBox.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBoxAction.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBoxProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBoxSource.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="visualView\ctrl\gridBox_res.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
@@ -914,6 +935,9 @@
     <ClCompile Include="propertyManager\propertyEditor.cpp">
       <Filter>propertyManager</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropDataComposition.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\advprop\advpropEvent.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
@@ -1036,11 +1060,26 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="win\dlgs\listSettings\filterTreeModel.h">
-      <Filter>win\dlgs\listSettings</Filter>
+    <ClInclude Include="win\dlgs\settings\composer\composerSettings.h">
+      <Filter>win\dlgs\settings\composer</Filter>
     </ClInclude>
-    <ClInclude Include="win\dlgs\listSettings\listSettings.h">
-      <Filter>win\dlgs\listSettings</Filter>
+    <ClInclude Include="win\dlgs\settings\filterTreeModel.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\settingsFieldTree.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\settingsFilterEditor.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\settingsSortEditor.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\settingsStyle.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\list\listSettings.h">
+      <Filter>win\dlgs\settings\list</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\queryConstructor\queryConstructor.h">
       <Filter>win\dlgs\queryConstructor</Filter>
@@ -1067,6 +1106,9 @@
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\callbackDropTarget.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\rowValueCell.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h">
@@ -1755,6 +1797,9 @@
     <ClInclude Include="propertyManager\property\private\propertyRegistry.h">
       <Filter>propertyManager\property\private</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropDataComposition.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\advprop\advpropEvent.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
@@ -1958,8 +2003,14 @@
     <Filter Include="win\dlgs">
       <UniqueIdentifier>{0F7CB570-C767-4C50-B602-646AC313AA62}</UniqueIdentifier>
     </Filter>
-    <Filter Include="win\dlgs\listSettings">
+    <Filter Include="win\dlgs\settings">
       <UniqueIdentifier>{9d2c51ab-73f4-4a6e-8c15-2ad7e40b96c1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\settings\list">
+      <UniqueIdentifier>{3f8a17c5-0d94-4b2e-9a61-7c5e2b840d13}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\settings\composer">
+      <UniqueIdentifier>{6b2d94e0-5a13-47c8-8f36-1e90c7a5d284}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\dlgs\queryConstructor">
       <UniqueIdentifier>{a4f1c2d7-6b3e-4f18-9c22-5d0e7a1b3f64}</UniqueIdentifier>

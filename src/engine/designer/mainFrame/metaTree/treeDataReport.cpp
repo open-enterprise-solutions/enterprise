@@ -46,6 +46,14 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 	m_defaultForm->Wrap(-1);
 
 	bSizerCaption->Add(m_defaultForm, 0, wxALL, FromDIP(5));
+
+	// ⭐ THE REPORT'S OTHER DECLARATION, beside its default form: WHICH COMPOSER IS THE MAIN ONE.
+	// That is what a generated form is built from, so a person opening an external report needs to
+	// see it — and to change it — exactly where they see the default form (Max, 2026-08-20).
+	m_defaultComposer = new wxStaticText(this, wxID_ANY, _("Default composer:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_defaultComposer->Wrap(-1);
+
+	bSizerCaption->Add(m_defaultComposer, 0, wxALL, FromDIP(5));
 	bSizerHeader->Add(bSizerCaption, 0, wxEXPAND, FromDIP(5));
 
 	wxBoxSizer* bSizerValue = new wxBoxSizer(wxVERTICAL);
@@ -69,6 +77,14 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 	m_defaultFormValue->Connect(wxEVT_CHOICE, wxCommandEventHandler(ibDataReportTree::OnChoiceDefForm), nullptr, this);
 
 	bSizerValue->Add(m_defaultFormValue, 1, wxALL | wxEXPAND, 1);
+
+	m_defaultComposerValue = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, NULL, 0);
+	m_defaultComposerValue->AppendString(_("<not selected>"));
+	m_defaultComposerValue->SetSelection(0);
+
+	m_defaultComposerValue->Connect(wxEVT_CHOICE, wxCommandEventHandler(ibDataReportTree::OnChoiceDefComposer), nullptr, this);
+
+	bSizerValue->Add(m_defaultComposerValue, 1, wxALL | wxEXPAND, 1);
 	bSizerHeader->Add(bSizerValue, 1, 0, FromDIP(5));
 	bSizerMain->Add(bSizerHeader, 0, wxEXPAND, FromDIP(5));
 
@@ -215,6 +231,21 @@ void ibDataReportTree::OnChoiceDefForm(wxCommandEvent& event)
 	else {
 		report->SetDefFormObject(wxNOT_FOUND);
 	}
+
+	if (m_initialized) {
+		m_metaData->Modify(true);
+	}
+}
+
+// The twin of OnChoiceDefForm: the row carries the composer's metaID as its client data, so the
+// choice hands back an identity and nothing is matched by label.
+void ibDataReportTree::OnChoiceDefComposer(wxCommandEvent& event)
+{
+	ibValueMetaObjectReport* report = m_metaData->GetReport();
+	wxASSERT(report);
+
+	const ibMetaID id = static_cast<ibMetaID>(reinterpret_cast<intptr_t>(event.GetClientData()));
+	report->SetDefComposer(id > 0 ? id : wxNOT_FOUND);
 
 	if (m_initialized) {
 		m_metaData->Modify(true);

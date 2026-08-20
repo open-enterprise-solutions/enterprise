@@ -527,7 +527,7 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueSpreadsheetDocument, "SpreadsheetDocument", value_to_clsid("VL_SPSTD"));
+VALUE_TYPE_REGISTER(ibValueSpreadsheetDocument, "SpreadsheetDocument", g_valueSpreadsheetCLSID);
 SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentRange, "SpreadsheetAreaRange", system_to_clsid("SY_SPPRA"));
 SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentAreaCollection, "SpreadsheetAreaCollection", system_to_clsid("SY_SPAEA"));
 SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentParameterCollection, "SpreadsheetParameterCollection", system_to_clsid("SY_SPPRM"));

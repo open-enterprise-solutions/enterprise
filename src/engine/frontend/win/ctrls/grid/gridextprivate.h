@@ -397,6 +397,18 @@ private:
 	wxDECLARE_NO_COPY_CLASS(ibGridRowOutlineWindow);
 };
 
+// A FROZEN STRIP IS STILL PART OF THE SHEET, and rows kept in view may perfectly well open a
+// group. Without a pane of its own the outline simply stopped where the freeze began: no rail,
+// no button and no background at all beside the frozen rows (Max, 2026-08-20: "nothing is
+// rendered at the top — even the colour is lost"). Same twin the label and the area panes have.
+class ibGridRowFrozenOutlineWindow : public ibGridRowOutlineWindow
+{
+public:
+	ibGridRowFrozenOutlineWindow(ibGrid* parent) : ibGridRowOutlineWindow(parent) {}
+
+	virtual bool IsFrozen() const wxOVERRIDE { return true; }
+};
+
 class ibGridColOutlineWindow : public ibGridSubwindow
 {
 public:
@@ -407,6 +419,29 @@ private:
 	void OnMouseWheel(wxMouseEvent& event);
 	wxDECLARE_EVENT_TABLE();
 	wxDECLARE_NO_COPY_CLASS(ibGridColOutlineWindow);
+};
+
+class ibGridColFrozenOutlineWindow : public ibGridColOutlineWindow
+{
+public:
+	ibGridColFrozenOutlineWindow(ibGrid* parent) : ibGridColOutlineWindow(parent) {}
+
+	virtual bool IsFrozen() const wxOVERRIDE { return true; }
+};
+
+// WHERE THE OUTLINE PANE MEETS THE REST OF THE CHROME. The row pane starts below the column
+// chrome and the column pane to the right of the row chrome, so the corner between them — and the
+// strip each pane runs past — belonged to nobody and came up as bare window background: a white
+// notch in the frame (Max, 2026-08-20: "you forgot the corner"). It carries no content, only the
+// chrome colour, so it needs no paint handler of its own.
+class ibGridOutlineCornerWindow : public ibGridSubwindow
+{
+public:
+	ibGridOutlineCornerWindow(ibGrid* parent) : ibGridSubwindow(parent) {}
+
+	virtual bool AcceptsFocus() const wxOVERRIDE { return false; }
+
+	wxDECLARE_NO_COPY_CLASS(ibGridOutlineCornerWindow);
 };
 
 class ibGridColLabelWindow : public ibGridSubwindow

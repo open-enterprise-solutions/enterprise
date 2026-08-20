@@ -204,6 +204,16 @@ of these appeared, the same pattern was grepped across the tree, and it usually 
 sides (`ibNumber`'s constructors, then its `ToInt`) — a root fix retires the whole class,
 including the instances the compiler had not reached yet.
 
+⚠ **And a sweep that stops at `src/` stops where your LOCAL compiler stops.** The `model*` →
+`tabularModel*` rename (2026-08-20) repointed some twenty include sites under `src/` and left three
+live gtests still naming `backend/modelView.h`: `test_tabularHop.cpp`, `test_sourceHopChain.cpp`,
+`test_modelFetchDoor.cpp`, all three registered in `tests/CMakeLists.txt`. `enterprise.sln` compiles
+no test target at all, so a green local `Debug|x86` build meant nothing about them — the three files
+that could not compile anywhere were left for Linux, macOS and CI to find, half an hour later and on
+somebody else's machine. The tree is larger than the build you happen to run: grep `tests/` in the
+same pass as `src/`. It is the same class as the two build systems seeing different source sets
+(§ 3).
+
 ---
 
 ## 2. Platform status

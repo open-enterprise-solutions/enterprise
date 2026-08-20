@@ -179,7 +179,7 @@ turns the door's calls into L2-1 IR. Alongside it:
   **no data**, second base so `ibValue` stays at offset 0.
 - **`ibBackendQueryColumn`** (`query/queryColumn.h`) — the column counterpart. Its header is
   deliberately **light** (one include, `typeDescription.h`) so the fundamental attribute metaobject
-  can derive from it without dragging `queryable.h` / `model.h` in.
+  can derive from it without dragging `queryable.h` / `tabularModel.h` in.
 
   ⚠ **A light header stays light only while somebody checks** (2026-08-14). It had grown
   `#include <wx/icon.h>` — three lines under the comment calling itself light — for the single return

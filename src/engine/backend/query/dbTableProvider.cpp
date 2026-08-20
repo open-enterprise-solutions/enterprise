@@ -2864,6 +2864,19 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					wxString a; const ibBackendQueryable* tq = nullptr;
 					if (!resolvePath(dw.m_path, a, tq) || tq == nullptr) continue;
 					const ibBackendQueryColumn* leaf = dw.m_path.back();
+
+					// ⭐ A NON-SCALAR LEAF IS NOT ONE FIELD. A reference / enum / composite dimension
+					// (group by Parent, by Ref.Ref) is stored as a SPREAD, so it is projected the way
+					// every other object output is: each physical field under the dimension's alias as
+					// a prefix, reassembled on the read (ColumnObject). Projecting only its first field
+					// gave the fold a key it could not read — every row landed in one empty group.
+					if (!leaf->IsRawColumn()) {
+						const wxString base = leaf->GetPhysicalName();
+						for (const wxString& f : ColumnFieldNames(leaf))
+							projection.push_back(ibQueryProjItem{ ibCol(a, f), dw.m_alias + f.Mid(base.length()) });
+						continue;
+					}
+
 					ibQueryExprPtr colE  = ibCol(a, FirstSqlFieldOfColumn(leaf));
 					ibQueryExprPtr empty = scalarEmpty(leaf);   // typed empty for an empty / broken parent ref
 					projection.push_back(ibQueryProjItem{

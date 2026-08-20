@@ -119,6 +119,9 @@ wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 	if (clsid == g_metaAttributeCLSID)                  return _("Attributes");
 	if (clsid == g_metaFormCLSID)                       return _("Forms");
 	if (clsid == g_metaTemplateCLSID)                   return _("Templates");
+	// A composer is a report's own group, right after its templates — the same defect the comment
+	// above records for commands: a metatype the walk does not know shows as a raw clsid number.
+	if (clsid == g_metaComposerCLSID)                   return _("Composers");
 	if (clsid == g_metaModuleCLSID)                     return _("Modules");
 	if (clsid == g_metaManagerCLSID)                    return _("Manager modules");
 	if (clsid == g_metaTableCLSID)                      return _("Tables");
@@ -191,6 +194,7 @@ int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 		{ g_metaFormCLSID,                       370 },
 		{ g_metaCommandCLSID,                    375 },   // an object's own commands sit between forms and templates
 		{ g_metaTemplateCLSID,                   380 },
+		{ g_metaComposerCLSID,                   385 },   // a report's composers, where both trees put them: after templates
 		{ g_metaModuleCLSID,                     390 },
 		{ g_metaManagerCLSID,                    400 },
 	};

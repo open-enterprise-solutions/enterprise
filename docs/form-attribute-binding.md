@@ -590,12 +590,15 @@ object inspector; it cannot reach the frontend designer to re-render when its Ca
   owns the attached) and structurally by a value-table on its column-infos (`AddColumn`). Severed both ways in
   the destructor (`DetachAllPropertyObjects` + `RemoveAttachedObject`), so no back-link dangles.
 - `virtual void OnChildChanged()` — default bubbles up the attach-owner chain; a frontend holder
-  (`ibFormAttributeValue`) overrides it to `RefreshEditor`. It carries NO payload — a refresh signal, not the
+  (`ibFormAttributeValue`) overrides it to `RefreshEditor` **and to mark the document modified** (2026-08-20 —
+  the repaint half alone let a dynamic list's edited settings redraw and never reach the disk, see
+  [dynamic-list.md](dynamic-list.md)). It carries NO payload — a refresh signal, not the
   property event: reusing `OnPropertyChanged` would make the holder re-forward to the property's owner and fire
   the child's handler twice. Mirrors `wxPGProperty::ChildChanged`.
-- The inspector (`ModifyProperty` AND `ModifyEvent`) calls `GetAttachOwner()->OnChildChanged()` after an edit —
-  from the OWNER, not self, so the edited object's handler isn't re-run. Chain:
-  column-info → value-table → holder → refresh. Controls / the holder itself have no attach-owner → no-op.
+- The inspector (`ModifyProperty` AND `ModifyEvent`) raises it from the edited property's own owner
+  (`prop->GetPropertyObject()->OnChildChanged()`) after an edit — from the OWNER, not self, so the edited
+  object's handler isn't re-run, and so a NESTED child the holder only accumulates reacts before the bubble.
+  Chain: column-info → value-table → holder → refresh. Controls / the holder itself have no attach-owner → no-op.
 
 The attribute tree shows a column node by its NAME (its identity), not its Caption/synonym — the control's
 header takes the synonym, the tree stays name-keyed so a column is findable by name.

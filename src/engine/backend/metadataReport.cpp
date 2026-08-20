@@ -194,7 +194,18 @@ bool ibMetaDataReport::RunDatabase(int flags)
 
 bool ibMetaDataReport::CloseDatabase(int flags)
 {
+	// 🛑 A FAILED OPEN IS CLOSED BY THE SAME ROAD, and it must not be a trap (Max, 2026-08-20: "it
+	// crashes so that you cannot even close the base afterwards"). When LoadFromFile refuses — an
+	// old file, a record this build no longer understands — the framework rolls the document back,
+	// and the rollback ends HERE, on a container that never opened.
+	//
+	// ⭐ THE ASSERT STAYS, THE EXIT HAPPENS ANYWAY (Max: "let it warn me there is an error, and let
+	// it still come out — in the designer while debugging I want to know; in the runtime it does not
+	// matter"). Debug tells the developer, Release closes silently, and neither traps the user:
+	// nothing to close IS a successful close — the rule the destructors in this tree already follow.
 	wxASSERT(IsConfigOpen());
+	if (!IsConfigOpen())
+		return true;
 
 	if (!ExitMainModule((flags & forceCloseFlag) != 0))
 		return false;
@@ -408,7 +419,12 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 		root->ApplyDataNode(rootNode, resetId);
 		return true;
 	}
-	catch (const ibBackendException&) {
+	catch (const ibBackendException& err) {
+		// ⭐ THE ENGINE'S WORDS REACH THE USER. This catch used to answer `false` in silence, so a
+		// report that would not open looked exactly like one that opened and failed later — and the
+		// failure that found this (a composer's variant nodes read as metatypes, 2026-08-20) was
+		// invisible until a probe was put here. A refusal is data, never a format string.
+		wxLogError(wxT("%s"), err.GetErrorDescription());
 		return false;
 	}
 }

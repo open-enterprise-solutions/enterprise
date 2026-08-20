@@ -11,7 +11,7 @@
 // / ResolveField). slice: filter + sort, flat order; dot-walk up to references.
 
 #include "backend/composition/ramComposer.h"   // ibDataRamComposer
-#include "backend/model.h"                  // ibRamValueStorage — RowCount / SplitField / ResolveField
+#include "backend/tabularModel.h"           // ibRamValueStorage — RowCount / SplitField / ResolveField
 
 // The DISPLAY-order source: filter + stable multi-key sort the storage's rows → their STORAGE indices in display
 // order (index i ↔ storage node i). A field path is split into a HEAD storage column + a dotted TAIL walked over

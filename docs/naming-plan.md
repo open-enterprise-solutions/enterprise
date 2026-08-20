@@ -3,8 +3,11 @@
 > **Status: PARTIALLY APPLIED** (re-verified 2026-07-29). **Wave 1 is done** — all seven empty
 > `advprop*.h` headers are deleted (no zero-byte headers remain in the tree). The `tableInfo*` /
 > `tableView*` renames of §6.2/§7 are also done, under different target names: those files are now
-> `backend/model.{h,cpp}` / `modelDb.cpp` / `modelRam.cpp` / `modelView.{h,cpp}`, which also
-> dissolves the `backend/tableView.h ↔ frontend/win/ctrls/tableView.h` collision §5.3 warns about.
+> `backend/tabularModel.{h,cpp}` / `tabularModelDb.cpp` / `tabularModelRam.cpp` /
+> `tabularModelView.{h,cpp}` (2026-08-20 — the `model*` names they landed under first said "a model"
+> without saying WHICH; the family is the TABULAR one, named by analogy with `spreadsheetModel.h`),
+> which also dissolves the `backend/tableView.h ↔ frontend/win/ctrls/tableView.h` collision §5.3
+> warns about.
 > Waves 2-4 are outstanding. ⚠️ The occurrence counts below were measured 2026-07-15 and have
 > drifted — the `backend/` root is now 99 files / 63 modules, not 94 / 59.
 > Scope: **file and folder names only** — naming that follows what the code *does*, rather

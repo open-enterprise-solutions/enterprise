@@ -257,7 +257,12 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 bool ibMetaDataConfigurationFile::CloseDatabase(int flags)
 {
 
-	wxASSERT(IsConfigOpen());   // image must exist — closing a closed config is a bug
+	// The assert warns (Debug), the close happens anyway — see the report's twin
+	// (metadataReport.cpp). A configuration whose open failed is torn down through this same road,
+	// and it must not leave a session that cannot be shut down over a file it already refused.
+	wxASSERT(IsConfigOpen());
+	if (!IsConfigOpen())
+		return true;
 
 	//if (!ExitMainModule((flags & forceCloseFlag) != 0))
 	//	return false;
@@ -389,7 +394,10 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	try {
 		fresh->ApplyDataNode(rootNode);
 	}
-	catch (const ibBackendException&) {
+	catch (const ibBackendException& err) {
+		// ⭐ THE ENGINE'S WORDS REACH THE USER — the twin of the report / data-processor catches.
+		// A configuration that refuses to load is the costliest of the three to face in silence.
+		wxLogError(wxT("%s"), err.GetErrorDescription());
 		return false; // fresh (ibValuePtr) discards the root automatically
 	}
 

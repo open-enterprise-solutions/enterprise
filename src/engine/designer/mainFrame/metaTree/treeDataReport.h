@@ -78,6 +78,10 @@ protected:
 	void OnEditCaptionComment(wxCommandEvent& event);
 
 	void OnChoiceDefForm(wxCommandEvent& event);
+	// ⭐ THE SAME QUESTION ABOUT THE OTHER THING A REPORT DECLARES: which composer is the MAIN one.
+	// A report's default form and its default composer are the two answers a report gives about
+	// itself, so they stand together (Max, 2026-08-20).
+	void OnChoiceDefComposer(wxCommandEvent& event);
 
 	void OnButtonModuleClicked(wxCommandEvent& event);
 
@@ -88,10 +92,12 @@ protected:
 	wxStaticText* m_synonymCaption = nullptr;
 	wxStaticText* m_commentCaption = nullptr;
 	wxStaticText* m_defaultForm = nullptr;
+	wxStaticText* m_defaultComposer = nullptr;
 	wxTextCtrl* m_nameValue = nullptr;
 	wxTextCtrl* m_synonymValue = nullptr;
 	wxTextCtrl* m_commentValue = nullptr;
 	wxChoice* m_defaultFormValue = nullptr;
+	wxChoice* m_defaultComposerValue = nullptr;
 
 	wxButton* m_buttonModule = nullptr;
 

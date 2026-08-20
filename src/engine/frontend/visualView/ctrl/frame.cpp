@@ -122,8 +122,16 @@ bool ibValueFrame::LoadNode(const ibDataNode& node)
 	if (ownerForm != nullptr) {
 		for (const ibDataNode& childNode : node.Children()) {
 			ibValueFrame* child = ownerForm->NewObject(childNode.GetClsid(), this, false);
-			if (child == nullptr)
+			// 🛑 A CONTROL THAT WAS SAVED AND DOES NOT COME BACK IS SAID OUT LOUD. The form still
+			// opens — the rest of it is intact, and losing the whole form over one control is the
+			// worse trade — but "the table is simply not there" must never again be the only
+			// symptom (Max, 2026-08-20). NewObject has already reported WHY when it had a reason;
+			// this names WHAT and WHERE, which the reason alone does not carry.
+			if (child == nullptr) {
+				wxLogError(_("Control '%s' of '%s' could not be restored (class id %lld)"),
+					childNode.GetValue<wxString>(wxT("Name")), GetControlName(), (long long)childNode.GetClsid());
 				continue;
+			}
 			if (!child->LoadNode(childNode))
 				return false;
 		}
@@ -212,8 +220,13 @@ bool ibValueFrame::PasteNode(const ibDataNode& node)
 	if (ownerForm != nullptr) {
 		for (const ibDataNode& childNode : node.Children()) {
 			ibValueFrame* child = ownerForm->NewObject(childNode.GetClsid(), this, false);
-			if (child == nullptr)
+			// Same rule on the paste road — a control silently missing from what was pasted reads
+			// as "the clipboard lost it", which is the one thing the user cannot investigate.
+			if (child == nullptr) {
+				wxLogError(_("Control '%s' of '%s' could not be pasted (class id %lld)"),
+					childNode.GetValue<wxString>(wxT("Name")), GetControlName(), (long long)childNode.GetClsid());
 				continue;
+			}
 			if (!child->PasteNode(childNode))
 				return false;
 		}

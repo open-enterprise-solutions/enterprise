@@ -218,6 +218,42 @@ chrome reads its look off its parent); the chrome layers are deleted outright an
 content (a deferred `Destroy()` would be freed twice by a host whose chrome shares the controls'
 window); and `ClearContent` asks who owns the controls' sizer before dropping it.
 
+#### 🪤 A COMPOSITE's `GetWxObject()` is not its widget — and changing a base is SILENT (2026-08-20)
+
+The facade shape above repeats one floor down, on controls. `ibValueWindowComposite::CreateWithLayers`
+(`visualView/ctrl/window.cpp`) wraps the control's real window in an `ibCanvasWindow` — the layer stack
+that carries the command bar — so for a composite `GetWxObject()` answers the CANVAS and the widget
+itself is behind **`GetInnerWx()`**.
+
+What makes that worth a rule is the failure mode when a control CHANGES base. `ibValueGridBox` became
+an `ibValueWindowComposite` so it could carry command verbs ([report-engine.md § 4c](report-engine.md));
+two sites in `gridBox.cpp` kept casting `GetWxObject()` to `ibGridEditor*`, and both were **null from
+that moment** — `CreatePrintout()` printed an empty nothing, `SetControlValue` never handed the new
+document to the window. Nothing failed to compile and nothing was logged, because a `dynamic_cast`
+says "not that type" in exactly the same voice it says "not the object you meant". **A null
+`dynamic_cast` is the silent failure mode of a base-class change**, so changing one means sweeping
+every cast that looked at the old shape — and the neighbours are the test: `tableBox.cpp`, a composite
+from the start, and the gridbox's own `gridBoxAction.cpp` were already asking `GetInnerWx()`.
+
+#### 🛑 A control that fails to build is REPORTED, not dropped (2026-08-20)
+
+`CreateContent` walks the `ibValueFrame` children and builds each one inside a `try`. Keeping the
+catch is right — one bad control must not cost the whole window — but until now the only trace was a
+`wxLogError` line in a Messages panel that is closed by default, so what a person actually saw was a
+form with its table simply **missing**, and nothing to look at (Max: *"let it at least tell me there
+is an error"*).
+
+The failures are now **collected and said once**: each caught exception appends
+`"<control name>: <the engine's words>"`, and after the walk one message box names every control
+that did not build. Collected rather than immediate, because N failing controls used to mean N
+dialogs stacked over a half-built form. The naming is the point — *"the report shows no table"* is a
+mystery, *"Ref: …"* is a place to look.
+
+Both handler rules from [exceptions.md § 4](exceptions.md) live in that catch and were needed here:
+`ibBackendException` is named **before** `std::exception` (it derives from it now), and the
+description goes through `wxT("%s")` — an object name carrying a `%` had the logger reading a vararg
+nobody passed. `UpdateContent` keeps the same pair of handlers for the refresh walk.
+
 ---
 
 ## 6. Living and dying

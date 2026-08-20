@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClInclude Include="backend.h" />
@@ -320,6 +320,9 @@
     <ClInclude Include="metaCollection\metaFormObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\metaComposerObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\metaSpreadsheetObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
@@ -482,6 +485,12 @@
     <ClInclude Include="propertyManager\property\propertyString.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyDataComposition.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyComposition.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\propertyEnum.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -539,7 +548,7 @@
     </ClInclude>
     <ClInclude Include="srcObject.h" />
     <ClInclude Include="moduleInfo.h" />
-    <ClInclude Include="model.h" />
+    <ClInclude Include="tabularModel.h" />
     <ClInclude Include="valueInfo.h" />
     <ClInclude Include="standardCommand.h" />
     <ClInclude Include="compiler\value.h">
@@ -727,6 +736,7 @@
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="spreadsheetDescription.h" />
+    <ClInclude Include="spreadsheetModel.h" />
     <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
@@ -739,7 +749,7 @@
     </ClInclude>
     <ClInclude Include="value_ptr.h" />
     <ClInclude Include="restructureInfo.h" />
-    <ClInclude Include="modelView.h" />
+    <ClInclude Include="tabularModelView.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfCharacteristicTypes.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -1108,6 +1118,15 @@
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaFormObjectProperty.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaComposerObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaComposerObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaComposerObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaSpreadsheetObject.cpp">
@@ -1536,6 +1555,12 @@
     <ClCompile Include="propertyManager\property\propertyBoolean.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyDataComposition.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyComposition.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\propertyNumber.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
@@ -1597,9 +1622,9 @@
     <ClCompile Include="metaCollection\metaObjectComposite.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="model.cpp" />
-    <ClCompile Include="modelDb.cpp" />
-    <ClCompile Include="modelRam.cpp" />
+    <ClCompile Include="tabularModel.cpp" />
+    <ClCompile Include="tabularModelDb.cpp" />
+    <ClCompile Include="tabularModelRam.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="compiler\value_res.cpp">
@@ -1845,7 +1870,7 @@
     <ClCompile Include="system\value\valueSpreadsheetCell.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
-    <ClCompile Include="modelView.cpp" />
+    <ClCompile Include="tabularModelView.cpp" />
     <ClCompile Include="propertyManager\property\propertyChartOfAccounts.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
@@ -2242,6 +2267,9 @@
     <ClCompile Include="composition\dataComposer.cpp">
       <Filter>composition</Filter>
     </ClCompile>
+    <ClCompile Include="composition\spreadsheetComposeDriver.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
     <ClCompile Include="composition\ramComposer.cpp">
       <Filter>composition</Filter>
     </ClCompile>
@@ -2252,6 +2280,9 @@
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueQueryable.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueDataComposition.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueDynamicList.cpp">
@@ -2396,6 +2427,9 @@
     <ClInclude Include="composition\dataComposer.h">
       <Filter>composition</Filter>
     </ClInclude>
+    <ClInclude Include="composition\spreadsheetComposeDriver.h">
+      <Filter>composition</Filter>
+    </ClInclude>
     <ClInclude Include="composition\listFetchDriver.h">
       <Filter>composition</Filter>
     </ClInclude>
@@ -2406,6 +2440,9 @@
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueQueryable.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueDataComposition.h">
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueDynamicList.h">

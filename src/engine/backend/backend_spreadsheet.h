@@ -77,6 +77,7 @@ public:
 
 	bool IsEmptyDocument() const { return m_spreadsheetDesc.IsEmptySpreadsheet(); }
 
+
 #pragma region __notifier_h__
 
 	void ClearSpreadsheet(int count = 0);
@@ -254,8 +255,14 @@ public:
 	}
 
 	void RemoveNotifier(const wxSharedPtr<ibBackendSpreadsheetNotifier>& notify) {
+		// remove-ERASE, both halves. `std::remove` returns the new logical end — and when there is
+		// nothing to remove that end IS end(), so erasing it alone is erasing past the last element:
+		// undefined behaviour, and the debug runtime says so ("vector erase iterator outside range").
+		// Removing a notifier twice — a view detaching after the document already dropped it — is an
+		// ordinary thing to do, and it must be a no-op.
 		m_spreadsheetNotifiers.erase(
-			std::remove(m_spreadsheetNotifiers.begin(), m_spreadsheetNotifiers.end(), notify));
+			std::remove(m_spreadsheetNotifiers.begin(), m_spreadsheetNotifiers.end(), notify),
+			m_spreadsheetNotifiers.end());
 	}
 
 #pragma endregion

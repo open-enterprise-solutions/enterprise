@@ -655,6 +655,15 @@ void ibVisualHost::ibContentWindow::CreateContent(const ibValueForm* valueForm)
 	// layers always sit above them.
 	m_host.SetOrientation(valueForm->GetOrient());
 
+	// 🛑 A CONTROL THAT FAILED TO BUILD IS NOT ALLOWED TO VANISH QUIETLY (Max, 2026-08-20: "let it at
+	// least tell me there is an error"). The catch below keeps the rest of the form alive — one bad
+	// control must not cost the whole window — but until now the only trace was a line in a Messages
+	// panel that is closed by default, so what a person saw was a form with a table simply missing.
+	//
+	// Collected, then said ONCE: N failing controls used to mean N dialogs stacked over a
+	// half-built form.
+	wxString failures;
+
 	for (unsigned int i = 0; i < valueForm->GetChildCount(); i++) {
 		ibValueFrame* child = valueForm->GetChild(i);
 		// Recursively generate the ObjectTree
@@ -669,10 +678,23 @@ void ibVisualHost::ibContentWindow::CreateContent(const ibValueForm* valueForm)
 		// that was never passed.
 		catch (const ibBackendException& err) {
 			wxLogError(wxT("%s"), err.GetErrorDescription());
+			failures << wxString::Format(wxT("%s: %s\n"),
+				child != nullptr ? child->GetControlName() : wxString(wxEmptyString),
+				err.GetErrorDescription());
 		}
 		catch (const std::exception& ex) {
-			wxLogError(wxT("%s"), wxString::FromUTF8(ex.what()));
+			const wxString what = wxString::FromUTF8(ex.what());
+			wxLogError(wxT("%s"), what);
+			failures << wxString::Format(wxT("%s: %s\n"),
+				child != nullptr ? child->GetControlName() : wxString(wxEmptyString), what);
 		}
+	}
+
+	// SAID WHERE IT IS SEEN, and it names the control — "the report shows no table" is a mystery,
+	// "Ref: <the engine's words>" is a place to look.
+	if (!failures.IsEmpty()) {
+		wxMessageBox(_("Some controls of this form could not be built:") + wxT("\n\n") + failures,
+			valueForm->GetCaption(), wxOK | wxICON_ERROR);
 	}
 }
 

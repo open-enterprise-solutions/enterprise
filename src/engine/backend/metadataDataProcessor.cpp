@@ -197,7 +197,12 @@ bool ibMetaDataDataProcessor::RunDatabase(int flags)
 
 bool ibMetaDataDataProcessor::CloseDatabase(int flags)
 {
+	// The assert warns (Debug), the close happens anyway — see the report's twin
+	// (metadataReport.cpp): a refused open is rolled back through this very road, and a bad file
+	// must not leave an application that cannot be shut down.
 	wxASSERT(IsConfigOpen());
+	if (!IsConfigOpen())
+		return true;
 
 	if (!ExitMainModule((flags & forceCloseFlag) != 0))
 		return false;
@@ -417,7 +422,12 @@ bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* roo
 		root->ApplyDataNode(rootNode, resetId);
 		return true;
 	}
-	catch (const ibBackendException&) {
+	catch (const ibBackendException& err) {
+		// ⭐ THE ENGINE'S WORDS REACH THE USER — the twin of the report container's catch, and it
+		// has to say the same thing: `ApplyDataNode` refuses for reasons the user can act on, and
+		// answering `false` in silence makes a file that will not open indistinguishable from one
+		// that opened and failed later. A refusal is data, never a format string.
+		wxLogError(wxT("%s"), err.GetErrorDescription());
 		return false;
 	}
 }

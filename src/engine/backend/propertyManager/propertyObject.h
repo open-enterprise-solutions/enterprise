@@ -503,7 +503,18 @@ public:
 	// The front's ONE refresh entry — sent per render and after an edit, NOT per property.
 	// Default fans out to both halves; override a half to push what that kind's state
 	// decides, or this to do both at once.
-	virtual void OnRefresh() { OnPropertyRefresh(); OnEventRefresh(); }
+	// ⭐ AND EVERY ATTACHED OBJECT IS ASKED TOO (2026-08-19). An attached object's properties surface
+	// through OURS — that is the whole point of attaching — so its own answer about which of them are
+	// visible has to be asked as well. Without this a held value that hides part of itself (a data
+	// composition shows only "Settings…", a dynamic list hides its query text) was never asked at all,
+	// because the inspector selects the HOLDER and refreshes only that.
+	virtual void OnRefresh() {
+		OnPropertyRefresh();
+		OnEventRefresh();
+		for (ibPropertyObject* other : m_attachedObjects)
+			if (other != nullptr && other != this)
+				other->OnRefresh();
+	}
 
 	/**
 	* ibProperty events

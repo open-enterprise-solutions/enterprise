@@ -72,6 +72,7 @@
     <ClInclude Include="moduleManager\globalContextManager.h" />
     <ClInclude Include="restructureInfo.h" />
     <ClInclude Include="spreadsheetDescription.h" />
+    <ClInclude Include="spreadsheetModel.h" />
     <ClInclude Include="clsid.h" />
     <ClInclude Include="compiler\cache\byteCodeCache.h" />
     <ClInclude Include="compiler\byteCode.h" />
@@ -186,6 +187,7 @@
     <ClInclude Include="metaCollection\metaCommonAttributeObject.h" />
     <ClInclude Include="metaCollection\metaObjectComposite.h" />
     <ClInclude Include="metaCollection\metaFormObject.h" />
+    <ClInclude Include="metaCollection\metaComposerObject.h" />
     <ClInclude Include="metaCollection\metaSpreadsheetObject.h" />
     <ClInclude Include="metaCollection\metaModuleObject.h" />
     <ClInclude Include="metaCollection\metaDiff.h" />
@@ -254,12 +256,14 @@
     <ClInclude Include="compiler\lambdaQueryAst.h" />
     <ClInclude Include="query\queryableFactory.h" />
     <ClInclude Include="composition\dataComposer.h" />
+    <ClInclude Include="composition\spreadsheetComposeDriver.h" />
     <ClInclude Include="composition\listFetchDriver.h" />
     <ClInclude Include="composition\compositionField.h" />
     <ClInclude Include="composition\listFilter.h" />
     <ClInclude Include="system\value\valueComposer.h" />
     <ClInclude Include="system\value\valueQuery.h" />
     <ClInclude Include="system\value\valueQueryable.h" />
+    <ClInclude Include="system\value\valueDataComposition.h" />
     <ClInclude Include="system\value\valueDynamicList.h" />
     <ClInclude Include="metaCollection\partial\commonObject.h" />
     <ClInclude Include="metaCollection\partial\reference\reference.h" />
@@ -290,6 +294,8 @@
     <ClInclude Include="propertyManager\property\propertyEnum.h" />
     <ClInclude Include="propertyManager\property\propertyFont.h" />
     <ClInclude Include="propertyManager\property\propertyForm.h" />
+    <ClInclude Include="propertyManager\property\propertyComposition.h" />
+    <ClInclude Include="propertyManager\property\propertyDataComposition.h" />
     <ClInclude Include="propertyManager\property\propertyDynamicList.h" />
     <ClInclude Include="propertyManager\property\propertyDynamicSource.h" />
     <ClInclude Include="propertyManager\property\propertyGeneration.h" />
@@ -355,8 +361,8 @@
     <ClInclude Include="system\value\valueDatabase.h" />
     <ClInclude Include="system\value\valueTable.h" />
     <ClInclude Include="system\value\valueType.h" />
-    <ClInclude Include="model.h" />
-    <ClInclude Include="modelView.h" />
+    <ClInclude Include="tabularModel.h" />
+    <ClInclude Include="tabularModelView.h" />
     <ClInclude Include="commandDescription.h" />
     <ClInclude Include="sourceDescription.h" />
     <ClInclude Include="typeconv.h" />
@@ -522,6 +528,9 @@
     <ClCompile Include="metaCollection\metaFormObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaFormObjectProperty.cpp" />
     <ClCompile Include="metaCollection\metaFormObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaComposerObject.cpp" />
+    <ClCompile Include="metaCollection\metaComposerObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaComposerObject_res.cpp" />
     <ClCompile Include="metaCollection\metaSpreadsheetObject.cpp" />
     <ClCompile Include="metaCollection\metaSpreadsheetObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaSpreadsheetObject_res.cpp" />
@@ -666,6 +675,7 @@
     <ClCompile Include="compiler\lambdaQueryAst.cpp" />
     <ClCompile Include="query\queryableFactory.cpp" />
     <ClCompile Include="composition\dataComposer.cpp" />
+    <ClCompile Include="composition\spreadsheetComposeDriver.cpp" />
     <ClCompile Include="composition\ramComposer.cpp" />
     <ClCompile Include="composition\compositionField.cpp" />
     <ClCompile Include="composition\listFilter.cpp" />
@@ -684,6 +694,7 @@
     <ClCompile Include="query\structureBatch.cpp" />
     <ClCompile Include="query\structureBuilder.cpp" />
     <ClCompile Include="query\tempTableManager.cpp" />
+    <ClCompile Include="system\value\valueDataComposition.cpp" />
     <ClCompile Include="system\value\valueDynamicList.cpp" />
     <ClCompile Include="metaCollection\partial\commonObject.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectEnum.cpp" />
@@ -736,6 +747,8 @@
     <ClCompile Include="propertyManager\property\propertyEnum.cpp" />
     <ClCompile Include="propertyManager\property\propertyFont.cpp" />
     <ClCompile Include="propertyManager\property\propertyForm.cpp" />
+    <ClCompile Include="propertyManager\property\propertyComposition.cpp" />
+    <ClCompile Include="propertyManager\property\propertyDataComposition.cpp" />
     <ClCompile Include="propertyManager\property\propertyDynamicList.cpp" />
     <ClCompile Include="propertyManager\property\propertyDynamicSource.cpp" />
     <ClCompile Include="propertyManager\property\propertyGeneration.cpp" />
@@ -802,12 +815,12 @@
     <ClCompile Include="system\value\valueTableModel.cpp" />
     <ClCompile Include="system\value\valueTable_res.cpp" />
     <ClCompile Include="system\value\valueType.cpp" />
-    <ClCompile Include="model.cpp" />
-    <ClCompile Include="modelDb.cpp" />
-    <ClCompile Include="modelRam.cpp" />
+    <ClCompile Include="tabularModel.cpp" />
+    <ClCompile Include="tabularModelDb.cpp" />
+    <ClCompile Include="tabularModelRam.cpp" />
     <ClCompile Include="commandDescription.cpp" />
     <ClCompile Include="sourceDescription.cpp" />
-    <ClCompile Include="modelView.cpp" />
+    <ClCompile Include="tabularModelView.cpp" />
     <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="uniqueKey.cpp" />
     <ClCompile Include="compiler\typeAny.cpp" />

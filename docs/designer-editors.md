@@ -203,6 +203,56 @@ Opened as a document via `docViewInterface.{h,cpp}`, like every other editor
 object in creates a real attribute inside it; unchecking removes it. The full mechanism is
 [common-attributes.md](common-attributes.md).
 
+## 4b. View-only is the verbs CLOSED, not the window dimmed (2026-08-20)
+
+A metaobject can be opened for reading — the tree passes `ibDOC_READONLY` instead of `ibDOC_NEW`
+(`treeConfiguration_impl.cpp`) — and every editor answers it with the same one-line house call from
+its view's `OnCreate`:
+
+```cpp
+m_roleEditor->SetReadOnly(flags == ibDOC_READONLY);   // role, interface, module, visual, help, composer
+```
+
+⭐ **`Enable(false)` on the whole panel is the wrong answer**, and the composer tab was written that
+way before it joined the house call: disabling greys the very text a person opened the tab to READ
+(Max: *"open the tabs in view mode so they cannot be changed afterwards — no copying, no adding,
+only looking"*). A styled text control goes `SetReadOnly`, not disabled, so it can still be read and
+copied out.
+
+🛑 **Every road to a verb has to be shut, because leaving one open is the whole failure.** The
+composer's panel (`ibComposerSettingsPanel::SetReadOnly`) is the fullest case and names three:
+
+| road | how it is shut | why not the obvious alternative |
+|---|---|---|
+| toolbars | `Enable(false)` on the bar | a disabled bar also stops *looking* clickable — the honest signal |
+| context menus | the handler asks `m_readOnly` and the menu does not appear at all | a greyed menu item still invites the click |
+| cell editors | `wxEVT_DATAVIEW_ITEM_START_EDITING` vetoed — the door `tableBox` already uses | there is no per-cell "disabled": the edit is refused as it starts |
+| **activatable cells** | the MODEL answers `IsEnabled` / `IsEnabledByRow` — `ibParameterModel`, `ibFilterTreeModel` | 🪤 no veto reaches them: a tick toggles straight from the click and from Space, without ever starting an edit ([view-only.md § 4.1](view-only.md)) |
+
+⭐ **And a verb is guarded in its HANDLER, not on each road to it.** *Add a resource* has four roads —
+the toolbar, the context menu, a double-click on the field tree and a drop on the pane — and until
+the final audit (2026-08-20) two of them were guarded and two were not, so a read-only tab added
+resources by mouse. The shared filter and sort editors had the identical hole in the identical shape.
+All four roads end in one function (`OnAddResource`, `ibFilterEditor::AddFilterForField`,
+`ibSortEditor::AddForField`), and that is where `m_readOnly` is asked now: guarding roads is how the
+fourth one gets forgotten, guarding where they meet has no list to keep in step. 🛑 The road that did
+not look like one: **switching a variant WRITES** — `ActivateVariant` commits the buffer and makes
+another snapshot the composer's settings, so a selectable grid was itself a way to rewrite a
+read-only composition ([report-engine.md § 4f](report-engine.md)).
+
+⚠ **And `Commit()` writes nothing and answers `true`.** Closing a designer tab is *accepting* it,
+so a panel that committed anyway would write itself back on the way out — and raise the change
+signal doing it ([property-system.md § 5.2](property-system.md)): a look-only session would come out
+with the configuration modified. Answering `false` is not the alternative — false means *"stay open,
+I objected"*, and there is nothing to object to. ⚠ Read-only turned out to be only the LOUD half of
+that: the same unconditional commit did the same thing to an ordinary tab opened and closed untouched
+([report-engine.md § 4f](report-engine.md), *a commit that announces unconditionally*).
+
+The two SHARED settings editors (`ibFilterEditor` / `ibSortEditor`) carry `SetReadOnly` themselves
+and are forwarded to rather than re-implemented, so the dynamic list's world gets the identical
+answer from the identical code the day its window asks for it. The field tree on the left is
+deliberately left alone: browsing what a filter COULD name is reading, not editing.
+
 ---
 
 ## 5. Honest remainder

@@ -130,6 +130,29 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 		}
 	}
 
+	// A DOT-WALK TOTALS DIMENSION IS PUBLISHED UNDER ITS OWN ALIAS — the RAM twin of the DB
+	// provider's `<leaf fields> AS dim0…`. The walk above brought the leaf in keyed by its own id,
+	// which is the very thing that cannot identify the level (a self-reference walks back to the
+	// SAME column). The reader asks for the alias — ColumnObject falls back to Column(prefix) on a
+	// RAM source — so the value is copied into a column NAMED for the dimension.
+	std::vector<ibComputedExprColumn> dimCols;
+	if (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty()) {
+		dimCols.reserve(spec.m_dimWalks->size());
+		ibMetaID dimId = 0x71000000u;   // synthetic ids, clear of the computed-expression block above
+		for (const ibDotWalkColumn& dw : *spec.m_dimWalks)
+			dimCols.emplace_back(dw.m_alias, dimId++);
+		for (size_t k = 0; k < dimCols.size(); ++k) {
+			const ibBackendQueryColumn* leaf = (*spec.m_dimWalks)[k].m_path.empty()
+				? nullptr : (*spec.m_dimWalks)[k].m_path.back();
+			if (leaf == nullptr)
+				continue;
+			rows.AddColumn(dimCols[k].GetColumnId(), dimCols[k].GetName(), leaf->GetTypeDesc());
+			for (long i = 0; i < rows.RowCount(); ++i)
+				rows.SetCell(i, dimCols[k].GetColumnId(), rows.GetCell(i, leaf->GetColumnId()));
+			cols.push_back(&dimCols[k]);
+		}
+	}
+
 	if (spec.m_predicate)
 		rows = ibQueryComposer::FilterRows(rows, spec.m_predicate.get());
 
@@ -278,19 +301,29 @@ private:
 class ibSubqueryAliasColumn final : public ibBackendQueryColumn
 {
 public:
+	// 🛑 WHAT IT NEEDS FROM THE COLUMN IT STANDS FOR IS TAKEN HERE, NOT KEPT AS A POINTER. It asks
+	// exactly two things — the physical name and the type — and both are known at construction, so
+	// holding the column afterwards buys nothing and costs a lifetime: the source may be a nested
+	// wrapper's own column, which dies with that wrapper (see ibSubqueryQueryable::OwnsColumnStorage),
+	// while this alias is read for as long as the outer query runs. That is what crashed on 2026-08-19
+	// — `GetTypeDesc` through a freed column (0xdddddddd) while a report was being composed.
 	ibSubqueryAliasColumn(const wxString& alias, const ibBackendQueryColumn* from, ibMetaID id)
-		: m_alias(alias), m_from(from), m_id(id) {}
+		: m_alias(alias)
+		, m_physical(from != nullptr ? from->GetPhysicalName() : alias)
+		, m_type(from != nullptr ? from->GetTypeDesc() : ibTypeDescription())
+		, m_id(id) {}
 
 	wxString GetName() const override { return m_alias; }
-	wxString GetPhysicalName() const override { return m_from != nullptr ? m_from->GetPhysicalName() : m_alias; }
-	// The TYPE is the column's own — an alias renames, it does not re-type.
-	ibTypeDescription& GetTypeDesc() const override { return m_from->GetTypeDesc(); }
+	wxString GetPhysicalName() const override { return m_physical; }
+	// The TYPE is the column's own — an alias renames, it does not re-type — taken at construction.
+	ibTypeDescription& GetTypeDesc() const override { return m_type; }
 	ibMetaID GetColumnId() const override { return m_id; }
 
 private:
-	wxString                    m_alias;
-	const ibBackendQueryColumn* m_from = nullptr;
-	ibMetaID                    m_id;
+	wxString                  m_alias;
+	wxString                  m_physical;
+	mutable ibTypeDescription m_type;   // GetTypeDesc returns a non-const ref (engine-wide signature)
+	ibMetaID                  m_id;
 };
 
 // A COMPUTED projection of the inner query — `a * b`, a CASE — seen from outside under its alias.
@@ -454,6 +487,13 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		if (out.m_name.IsEmpty())
 			continue;
 
+		// ⭐ FIRST, KEEP WHAT WE ARE ABOUT TO POINT AT. `m_col` may be a column the inner schema
+		// MINTED (a dot-walk leaf, a synthetic measure) whose storage belongs to that schema — a
+		// local of the caller. Every list below (m_columns, m_readFrom) holds it by bare pointer and
+		// is read on every fetch, long after the caller returned, so the share travels with it.
+		if (out.m_owned)
+			m_ownedColumns.push_back(out.m_owned);
+
 		// THE SIMPLE CASE: a real column that already answers to this name IS the published column.
 		if (out.m_alias.IsEmpty() && out.m_objectPrefix.IsEmpty()
 		    && out.m_col != nullptr && out.m_col->GetName() == out.m_name) {
@@ -493,6 +533,17 @@ ibBackendQueryProvider& ibSubqueryQueryable::GetProvider() const
 // Run the inner query (with the outer's pushed-down conditions) and materialise its rows
 // into a RAM table keyed by column model-id — the same leaf-materialise recipe. m_top > 0
 // limits the materialised rows (SELECT TOP n in the branch / subquery).
+// See the header: the configuration this wrapper reads is the inner query's own, and it is what a
+// reference walk needs to find its target. Asked of the inner source rather than stored, so a
+// wrapper built over another wrapper answers through the chain and never goes stale.
+const ibMetaData* ibSubqueryQueryable::GetMetaData() const
+{
+	if (!m_inner)
+		return nullptr;
+	const ibBackendQueryable* primary = m_inner->GetPrimarySource();
+	return primary != nullptr ? primary->GetMetaData() : nullptr;
+}
+
 ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondition>& extra) const
 {
 	ibQueryRamTable t;
@@ -782,6 +833,13 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 	std::vector<const std::vector<const ibBackendQueryColumn*>*> paths;
 	if (spec.m_dotWalks != nullptr)
 		for (const ibDotWalkColumn& dw : *spec.m_dotWalks)
+			if (dw.m_path.size() > 1) paths.push_back(&dw.m_path);
+	// ⭐ A TOTALS DIMENSION IS A DOT-WALK LIKE ANY OTHER (m_dimWalks — TOTALS BY Ref.Ref). It was the
+	// one walker this gathering did not know about, so over a COMPUTED source (a subquery wrapper, a
+	// register slice) the level's value was never brought in: the DB provider joins and projects it,
+	// this path simply had no case for it, and the level folded every row into one empty group.
+	if (spec.m_dimWalks != nullptr)
+		for (const ibDotWalkColumn& dw : *spec.m_dimWalks)
 			if (dw.m_path.size() > 1) paths.push_back(&dw.m_path);
 	if (spec.m_sorts != nullptr)
 		for (const ibQuerySortItem& s : *spec.m_sorts)
@@ -2979,14 +3037,25 @@ void ibDataQueryResult::SetTotals(std::vector<ibTotalLevel> levels, std::vector<
 	m_totalsOverall   = overall;
 }
 
+void ibDataQueryResult::SetObjectRead(ibMetaID dimColumnId, const wxString& prefix, const ibBackendQueryColumn* leaf)
+{
+	if (prefix.IsEmpty() || leaf == nullptr)
+		return;
+	m_objectReads[dimColumnId] = ibObjectRead{ prefix, leaf };
+}
+
 void ibDataQueryResult::SetSource(ibDatabaseConnectionHolder* holder, const ibBackendQueryable* queryable,
 	std::vector<std::pair<const ibBackendQueryColumn*, wxString>> selectCols,
-	std::vector<ibQueryCondition> conditions)
+	std::vector<ibQueryCondition> conditions,
+	std::vector<std::shared_ptr<const ibBackendQueryable>> owned)
 {
 	m_srcHolder     = holder;
 	m_srcQueryable  = queryable;
 	m_srcSelectCols = std::move(selectCols);
 	m_srcConditions = std::move(conditions);
+	// SHARE, don't copy — the sources keep their identity, and every column pointer stamped on this
+	// result lives inside one of them.
+	m_ownedSources  = std::move(owned);
 }
 
 // selection = result.Select(mode). Drain the cursor ONCE into a flat snapshot (the stamped
@@ -3000,8 +3069,18 @@ ibSelector ibDataQueryResult::Select(ibSelectKind mode)
 
 	while (Next()) {
 		const long r = snapshot.AppendRow();
-		for (const ibBackendQueryColumn* c : m_matColumns)
-			if (c != nullptr) snapshot.SetCell(r, c->GetColumnId(), m_source->Value(c));
+		for (const ibBackendQueryColumn* c : m_matColumns) {
+			if (c == nullptr)
+				continue;
+			// A DOT-WALKED DIMENSION READS AS AN OBJECT, not as a field. Its leaf is a reference /
+			// enum / composite projected as a whole spread under an alias prefix, so asking for the
+			// column itself finds nothing and the level folds every row into one empty group. The
+			// pair was stamped by the door, which is the only place that knows it (see m_objectReads).
+			const auto objectRead = m_objectReads.find(c->GetColumnId());
+			snapshot.SetCell(r, c->GetColumnId(), objectRead != m_objectReads.end()
+				? m_source->ColumnObject(objectRead->second.m_prefix, objectRead->second.m_leaf)
+				: m_source->Value(c));
+		}
 	}
 	ibSelector s(std::move(snapshot), mode);
 	s.WithTotals(m_totalLevels, m_totalAggregates, m_totalsOverall);            // fold by the door's TotalBy config

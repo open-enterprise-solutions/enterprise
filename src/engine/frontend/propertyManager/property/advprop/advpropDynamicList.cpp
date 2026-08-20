@@ -50,10 +50,13 @@ bool ibPGDynamicListProperty::StringToValue(wxVariant& variant,
 }
 
 #include "frontend/visualView/ctrl/formAttribute.h"
-#include "frontend/win/dlgs/listSettings/listSettings.h"
+#include "frontend/win/dlgs/settings/list/listSettings.h"
 #include "backend/system/value/valueDynamicList.h"
 #include "backend/composition/listFilter.h"
 
+// ⚠ A COMPOSITION IS NOT HANDLED HERE any more (2026-08-20). It has its own property
+// (ibPGDataCompositionProperty) over its own backend type, so the two settings windows are told
+// apart by the REGISTRY, where types are already dispatched — not by a fork inside this handler.
 void ibPGDynamicListProperty::OnSetValue()
 {
 	if (wxT("hyperLink_clicked") == m_value.GetName() && m_value.GetBool()) {

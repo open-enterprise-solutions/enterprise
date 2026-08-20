@@ -72,6 +72,18 @@ public:
 	// table alias, a totals level's name, a temporary table's name.
 	static bool IsIdentifier(const wxString& text);
 
+	// WHICH &PARAMETERS THIS TEXT MENTIONS, in first-appearance order and without repeats.
+	//
+	// Asked of the LEXER for the same reason IsIdentifier is: what a parameter looks like is the
+	// lexer's definition, and a settings window scanning for ampersands itself would be a second
+	// set of rules that disagrees the day either changes. A host needs this BEFORE running
+	// anything — a parameters page has to show what to fill in, and the lowering only reports a
+	// missing parameter at execute time, which is far too late to ask a person for it.
+	//
+	// Text that does not lex (half-typed, being edited) yields an EMPTY list rather than throwing:
+	// a window asking "what would I need here" is not the place a syntax error is reported.
+	static std::vector<wxString> ParamNames(const wxString& queryText);
+
 protected:
 	// The base body is a no-op (the script compiler overrides it). We THROW so a
 	// malformed numeric / string / date literal does not silently return false.

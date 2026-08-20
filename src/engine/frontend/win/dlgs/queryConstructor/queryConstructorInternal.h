@@ -251,6 +251,9 @@ public:
 
 	bool HasEditorCtrl() const override { return true; }
 
+	// A CLICK HERE IS FOR THE EDITOR — the button is the whole point of the cell.
+	bool EditOnSingleClick() const override { return true; }
+
 	wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect rect, const wxVariant& value) override
 	{
 		wxPanel* host = new wxPanel(parent, wxID_ANY, rect.GetTopLeft(), rect.GetSize());

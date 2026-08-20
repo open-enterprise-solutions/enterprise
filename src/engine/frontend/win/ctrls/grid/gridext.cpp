@@ -2599,11 +2599,15 @@ wxEND_EVENT_TABLE()
 void ibGridRowOutlineWindow::OnPaint(wxPaintEvent&)
 {
 	wxPaintDC dc(this);
-	// match the scroll offset convention used by RowAreaWindow::OnPaint
-	int x, y;
-	ibGridWindow* gridWindow = m_owner->m_gridWin;
-	m_owner->GetGridWindowOffset(gridWindow, x, y);
-	m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, gridWindow);
+	// match the scroll offset convention used by RowAreaWindow::OnPaint. A FROZEN strip does not
+	// scroll — its rows sit where they always were, so shifting the origin would slide the buttons
+	// away from the very rows the freeze keeps in place.
+	int x = 0, y = 0;
+	if (!IsFrozen()) {
+		ibGridWindow* gridWindow = m_owner->m_gridWin;
+		m_owner->GetGridWindowOffset(gridWindow, x, y);
+		m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, gridWindow);
+	}
 	wxPoint pt = dc.GetDeviceOrigin();
 	dc.SetDeviceOrigin(pt.x, pt.y - y);
 	m_owner->DrawRowOutline(dc);
@@ -2612,10 +2616,12 @@ void ibGridRowOutlineWindow::OnPaint(wxPaintEvent&)
 void ibGridRowOutlineWindow::OnMouseEvent(wxMouseEvent& event)
 {
 	if (event.LeftDown()) {
-		// unscrolled position inside outline pane — y needs un-scrolling
-		int x, y;
-		m_owner->GetGridWindowOffset(m_owner->m_gridWin, x, y);
-		m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, m_owner->m_gridWin);
+		// unscrolled position inside outline pane — y needs un-scrolling (never on a frozen strip)
+		int x = 0, y = 0;
+		if (!IsFrozen()) {
+			m_owner->GetGridWindowOffset(m_owner->m_gridWin, x, y);
+			m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, m_owner->m_gridWin);
+		}
 		const wxPoint pt(event.GetX(), event.GetY() + y);
 		const int gi = m_owner->HitTestRowOutlineButton(pt);
 		if (gi >= 0) {
@@ -2643,10 +2649,12 @@ void ibGridColOutlineWindow::OnPaint(wxPaintEvent&)
 {
 	wxPaintDC dc(this);
 	if (m_owner->GetNumberCols() == 0) return;
-	int x, y;
-	ibGridWindow* gridWindow = m_owner->m_gridWin;
-	m_owner->GetGridWindowOffset(gridWindow, x, y);
-	m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, gridWindow);
+	int x = 0, y = 0;
+	if (!IsFrozen()) {   // a frozen strip does not scroll — see ibGridRowOutlineWindow::OnPaint
+		ibGridWindow* gridWindow = m_owner->m_gridWin;
+		m_owner->GetGridWindowOffset(gridWindow, x, y);
+		m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, gridWindow);
+	}
 	wxPoint pt = dc.GetDeviceOrigin();
 	dc.SetDeviceOrigin(pt.x - x, pt.y);
 	m_owner->DrawColOutline(dc);
@@ -2655,9 +2663,11 @@ void ibGridColOutlineWindow::OnPaint(wxPaintEvent&)
 void ibGridColOutlineWindow::OnMouseEvent(wxMouseEvent& event)
 {
 	if (event.LeftDown()) {
-		int x, y;
-		m_owner->GetGridWindowOffset(m_owner->m_gridWin, x, y);
-		m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, m_owner->m_gridWin);
+		int x = 0, y = 0;
+		if (!IsFrozen()) {
+			m_owner->GetGridWindowOffset(m_owner->m_gridWin, x, y);
+			m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, m_owner->m_gridWin);
+		}
 		const wxPoint pt(event.GetX() + x, event.GetY());
 		const int gi = m_owner->HitTestColOutlineButton(pt);
 		if (gi >= 0) {
@@ -3244,6 +3254,10 @@ void ibGrid::Create()
 #pragma endregion
 	m_rowOutlineWin = new ibGridRowOutlineWindow(this);
 	m_colOutlineWin = new ibGridColOutlineWindow(this);
+	m_rowFrozenOutlineWin = new ibGridRowFrozenOutlineWindow(this);
+	m_colFrozenOutlineWin = new ibGridColFrozenOutlineWindow(this);
+	m_rowOutlineCornerWin = new ibGridOutlineCornerWindow(this);
+	m_colOutlineCornerWin = new ibGridOutlineCornerWindow(this);
 	m_rowLabelWin = new ibGridRowLabelWindow(this);
 
 	CreateColumnWindow();
@@ -3281,6 +3295,18 @@ void ibGrid::Create()
 
 	m_labelBackgroundColour = m_rowLabelWin->GetBackgroundColour();
 	m_labelTextColour = m_rowLabelWin->GetForegroundColour();
+
+	// ⭐ THE OUTLINE PANE IS CHROME, AND CHROME IS THE LABEL COLOUR. Left with the default window
+	// background it came up white beside the tinted labels — the strip read as a gap in the sheet
+	// rather than as part of its frame.
+	for (ibGridSubwindow* pane : { (ibGridSubwindow*)m_rowOutlineWin, (ibGridSubwindow*)m_colOutlineWin,
+	                               (ibGridSubwindow*)m_rowFrozenOutlineWin, (ibGridSubwindow*)m_colFrozenOutlineWin,
+	                               (ibGridSubwindow*)m_rowOutlineCornerWin, (ibGridSubwindow*)m_colOutlineCornerWin }) {
+		if (pane == nullptr)
+			continue;
+		pane->SetOwnForegroundColour(m_labelTextColour);
+		pane->SetOwnBackgroundColour(m_labelBackgroundColour);
+	}
 
 	InitPixelFields();
 }
@@ -3453,6 +3479,10 @@ void ibGrid::Init()
 	m_rowLabelWin = NULL;
 	m_rowFrozenLabelWin = NULL;
 	m_rowOutlineWin = NULL;
+	m_rowFrozenOutlineWin = NULL;
+	m_colFrozenOutlineWin = NULL;
+	m_rowOutlineCornerWin = NULL;
+	m_colOutlineCornerWin = NULL;
 	m_colAreaWin = NULL;
 	m_colFrozenAreaWin = NULL;
 	m_colLabelWin = NULL;
@@ -3799,12 +3829,20 @@ void ibGrid::CalcWindowSizes()
 	if (m_colFrozenAreaWin && m_colFrozenAreaWin->IsShown())
 		m_colFrozenAreaWin->SetSize(xAfterChrome, colOutlineH, fgw, colAreaHeight);
 
-	// Column outline pane: strip sitting at the very top of the column chrome.
+	// Column outline pane: strip sitting at the very top of the column chrome, plus its FROZEN
+	// twin over the frozen columns — a frozen column may open a group like any other.
 	if (m_colOutlineWin) {
 		const bool show = GridColOutlineEnabled();
 		m_colOutlineWin->Show(show);
 		if (show)
 			m_colOutlineWin->SetSize(xAfterChrome + fgw, 0, gw, colOutlineH);
+	}
+
+	if (m_colFrozenOutlineWin) {
+		const bool show = GridColOutlineEnabled() && fgw > 0;
+		m_colFrozenOutlineWin->Show(show);
+		if (show)
+			m_colFrozenOutlineWin->SetSize(xAfterChrome, 0, fgw, colOutlineH);
 	}
 
 	if (m_colFrozenLabelWin && m_colFrozenLabelWin->IsShown())
@@ -3822,12 +3860,39 @@ void ibGrid::CalcWindowSizes()
 	if (m_rowFrozenAreaWin && m_rowFrozenAreaWin->IsShown())
 		m_rowFrozenAreaWin->SetSize(rowOutlineW, yAfterChrome, rowAreaWidth, fgh);
 
-	// Row outline pane: strip at the very left of the row chrome.
+	// Row outline pane: strip at the very left of the row chrome, plus its FROZEN twin beside the
+	// frozen rows — those stay in view and their groups have to stay openable there.
 	if (m_rowOutlineWin) {
 		const bool show = GridRowOutlineEnabled();
 		m_rowOutlineWin->Show(show);
 		if (show)
 			m_rowOutlineWin->SetSize(0, yAfterChrome + fgh, rowOutlineW, gh);
+	}
+
+	if (m_rowFrozenOutlineWin) {
+		const bool show = GridRowOutlineEnabled() && fgh > 0;
+		m_rowFrozenOutlineWin->Show(show);
+		if (show)
+			m_rowFrozenOutlineWin->SetSize(0, yAfterChrome, rowOutlineW, fgh);
+	}
+
+	// THE CORNERS THE PANES DO NOT REACH. The row pane begins under the column chrome and the
+	// column pane to the right of the row chrome, so two strips of the frame belong to neither and
+	// were left as bare window background — a white notch beside the labels. They carry the chrome
+	// colour and nothing else: [row pane's strip] is the full height of the column chrome above it,
+	// [column pane's strip] the remainder of its own row to the left.
+	if (m_rowOutlineCornerWin) {
+		const bool show = rowOutlineW > 0 && yAfterChrome > 0;
+		m_rowOutlineCornerWin->Show(show);
+		if (show)
+			m_rowOutlineCornerWin->SetSize(0, 0, rowOutlineW, yAfterChrome);
+	}
+
+	if (m_colOutlineCornerWin) {
+		const bool show = colOutlineH > 0 && xAfterChrome > rowOutlineW;
+		m_colOutlineCornerWin->Show(show);
+		if (show)
+			m_colOutlineCornerWin->SetSize(rowOutlineW, 0, xAfterChrome - rowOutlineW, colOutlineH);
 	}
 
 	if (m_rowFrozenLabelWin && m_rowFrozenLabelWin->IsShown())
@@ -6158,6 +6223,13 @@ void ibGrid::ClearGrid()
 
 		m_rowBrakeAt.Clear();
 		m_colBrakeAt.Clear();
+
+		// 🛑 AND THE OUTLINE GOES WITH THE ROWS IT DESCRIBED. Groups are ranges of row NUMBERS, so
+		// once the rows are gone the ranges point at nothing — and the outline pane, which paints
+		// from them, walked straight off the end of the height array the next time it drew (crash,
+		// 2026-08-19, on re-composing a report into a sheet that already held one).
+		m_rowGroupAt.clear();
+		m_colGroupAt.clear();
 
 		m_selection = new ibGridSelection(this, selmode);
 		CalcDimensions();
@@ -9998,6 +10070,20 @@ void ibGrid::SetLabelBackgroundColour(const wxColour& colour)
 		if (m_colFrozenLabelWin)
 			m_colFrozenLabelWin->SetBackgroundColour(colour);
 
+		// The outline panes are chrome too — see where they are first coloured.
+		if (m_rowOutlineWin)
+			m_rowOutlineWin->SetBackgroundColour(colour);
+		if (m_colOutlineWin)
+			m_colOutlineWin->SetBackgroundColour(colour);
+		if (m_rowFrozenOutlineWin)
+			m_rowFrozenOutlineWin->SetBackgroundColour(colour);
+		if (m_colFrozenOutlineWin)
+			m_colFrozenOutlineWin->SetBackgroundColour(colour);
+		if (m_rowOutlineCornerWin)
+			m_rowOutlineCornerWin->SetBackgroundColour(colour);
+		if (m_colOutlineCornerWin)
+			m_colOutlineCornerWin->SetBackgroundColour(colour);
+
 		if (ShouldRefresh())
 		{
 			m_rowAreaWin->Refresh();
@@ -10860,6 +10946,40 @@ int ibGrid::AddColGroup(int first, int last, int level, bool collapsed)
 	return (int)m_colGroupAt.size() - 1;
 }
 
+// See the header. A row that heads nothing is not a group; a row that heads something folds the run
+// of deeper rows that follows it — which is where the marker's line lives, and why the marker itself
+// sits on the heading (GetRowGroupButtonRect) rather than on the first row it hides.
+void ibGrid::NormalizeRowGroups()
+{
+	if (m_rowGroupAt.empty())
+		return;
+
+	std::vector<ibGridCellGroup> shaped;
+	shaped.reserve(m_rowGroupAt.size());
+
+	for (size_t i = 0; i < m_rowGroupAt.size(); ++i) {
+		const ibGridCellGroup& head = m_rowGroupAt[i];
+
+		// How far the deeper run after this row reaches — that run IS what this row folds.
+		int end = head.m_end;
+		for (size_t j = i + 1; j < m_rowGroupAt.size() && m_rowGroupAt[j].m_level > head.m_level; ++j)
+			end = m_rowGroupAt[j].m_end;
+
+		if (end <= head.m_end)
+			continue;   // a leaf: nothing deeper follows, so there is nothing to fold and no marker
+
+		ibGridCellGroup g;
+		g.m_start     = head.m_end + 1;   // the heading stays visible; its children are what collapse
+		g.m_end       = end;
+		g.m_level     = head.m_level;
+		g.m_collapsed = head.m_collapsed;
+		shaped.push_back(g);
+	}
+
+	m_rowGroupAt.swap(shaped);
+
+}
+
 void ibGrid::DeleteRowGroup(int idx)
 {
 	if (idx < 0 || (size_t)idx >= m_rowGroupAt.size()) return;
@@ -10885,7 +11005,24 @@ void ibGrid::SetRowGroupCollapsed(int idx, bool collapsed)
 	for (int r = g.m_start; r <= g.m_end; ++r) {
 		if (collapsed) HideRow(r); else ShowRow(r);
 	}
+
+	// ⭐ EXPANDING AN OUTER GROUP DOES NOT EXPAND WHAT IS FOLDED INSIDE IT. The rows just shown
+	// include the ones belonging to nested groups that are still collapsed — showing those would
+	// undo a fold the person did on purpose, and the nested marker would then say "+" over rows that
+	// are visible. So every nested collapsed group folds itself back.
+	if (!collapsed) {
+		for (const ibGridCellGroup& nested : m_rowGroupAt) {
+			if (!nested.m_collapsed || &nested == &g)
+				continue;
+			if (nested.m_start < g.m_start || nested.m_end > g.m_end)
+				continue;   // not inside this one
+			for (int r = nested.m_start; r <= nested.m_end; ++r)
+				HideRow(r);
+		}
+	}
+
 	if (m_rowOutlineWin) m_rowOutlineWin->Refresh();
+	if (m_rowFrozenOutlineWin) m_rowFrozenOutlineWin->Refresh();
 }
 
 void ibGrid::SetColGroupCollapsed(int idx, bool collapsed)
@@ -10898,6 +11035,7 @@ void ibGrid::SetColGroupCollapsed(int idx, bool collapsed)
 		if (collapsed) HideCol(c); else ShowCol(c);
 	}
 	if (m_colOutlineWin) m_colOutlineWin->Refresh();
+	if (m_colFrozenOutlineWin) m_colFrozenOutlineWin->Refresh();
 }
 
 bool ibGrid::ToggleRowGroup(int idx)
@@ -10921,18 +11059,29 @@ int ibGrid::GetMaxColGroupLevel() const {
 	int mx = 0; for (const auto& g : m_colGroupAt) mx = wxMax(mx, g.m_level); return mx;
 }
 
-// Size of the outline button in pixels (square).
-static const int kOutlineBtnSize = 14;
-// Space taken per nesting level along the outline axis.
+// How much smaller than its cell the button is drawn, per side — the marker sits INSIDE the row
+// (resp. the column) rather than filling it (Max, 2026-08-20: "the square should be a little
+// smaller than the cell").
+static const int kOutlineBtnInset = 3;
+// …and the floor under it: below this the minus bar stops reading as one.
+static const int kOutlineBtnMinSize = 7;
+// Space taken per nesting level along the outline axis, at 100%.
 static const int kOutlineLevelStep = 18;
+// The pane's trailing margin, at 100%.
+static const int kOutlineMargin = 4;
 
+// ⭐ THE OUTLINE PANE ZOOMS WITH THE SHEET. Its geometry is read against ROW positions
+// (GetRowTop / GetRowHeight), which are scaled — so a pane sized from raw constants drifts away
+// from the rows it points at the moment the zoom leaves 100%: the buttons no longer line up with
+// their headings, and at a small zoom they are taller than the rows and overlap into a smear.
+// Every length here therefore goes through the same ibCalcGridScale the labels and the areas use.
 int ibGrid::GetRowOutlineSize() const {
 	const int mx = GetMaxRowGroupLevel();
-	return mx > 0 ? (mx * kOutlineLevelStep + 4) : 0;
+	return mx > 0 ? ibCalcGridScale(mx * kOutlineLevelStep + kOutlineMargin, GetGridZoom()) : 0;
 }
 int ibGrid::GetColOutlineSize() const {
 	const int mx = GetMaxColGroupLevel();
-	return mx > 0 ? (mx * kOutlineLevelStep + 4) : 0;
+	return mx > 0 ? ibCalcGridScale(mx * kOutlineLevelStep + kOutlineMargin, GetGridZoom()) : 0;
 }
 
 // Button rectangles are expressed in outline-pane local coords. Level 1 is
@@ -10941,10 +11090,42 @@ wxRect ibGrid::GetRowGroupButtonRect(int idx) const
 {
 	if (idx < 0 || (size_t)idx >= m_rowGroupAt.size()) return wxRect();
 	const ibGridCellGroup& g = m_rowGroupAt[idx];
+	// A group whose rows no longer exist has no button — asking for the geometry of a row that is
+	// not there is what crashed the outline pane after a re-compose. Empty rect = nothing drawn,
+	// nothing hit-tested, which is the truthful answer for a range with no rows behind it.
+	if (g.m_start >= GetNumberRows() || g.m_end >= GetNumberRows()) return wxRect();
 	ibGrid* self = const_cast<ibGrid*>(this);
-	const int x = (g.m_level - 1) * kOutlineLevelStep + 2;
-	const int y = self->GetRowTop(g.m_start, self->GetGridZoom()) + 2;
-	return wxRect(x, y, kOutlineBtnSize, kOutlineBtnSize);
+	const float zoom = GetGridZoom();
+	const int step = ibCalcGridScale(kOutlineLevelStep, zoom);
+	const int lane = (g.m_level - 1) * step;   // the band this level owns, left to right
+	// 🛑 THE BUTTON BELONGS TO THE ROW THAT OPENS THE GROUP, not to the first row inside it. A group
+	// is what its HEADING introduces — the row carrying the value — and the rows it spans are what
+	// collapsing hides. Drawn on m_start it sat on the first hidden row instead: one line below where
+	// it belongs, and on a report whose heading row is followed by an empty one it landed on a blank
+	// line, so the control appeared where there was nothing to expand (Max, 2026-08-19: "the plus
+	// should be where there IS a value").
+	//
+	// A group that starts at row 0 has no heading above it (a document may be grouped from its very
+	// first row) — there the button stays on the group's own first row, which is the only row it can
+	// be drawn against.
+	const int headingRow = (g.m_start > 0) ? g.m_start - 1 : g.m_start;
+	// 🛑 A GROUP FOLDED INSIDE ANOTHER ONE IS GONE, MARKER AND ALL. Collapsing an outer group hides
+	// the rows under it — including the headings of the groups NESTED in it — and a button drawn
+	// against a hidden row has nowhere to sit: it collapses onto the outer group's own line and
+	// stands there offering to expand something nobody can see (Max, 2026-08-20: "one group has to
+	// hide all the subgroups under it, and it does not — it still shows a plus").
+	if (!IsRowShown(headingRow)) return wxRect();
+	// ⭐ THE BUTTON IS SIZED FROM ITS ROW — a little smaller than the cell it sits against (Max,
+	// 2026-08-20). A fixed square is right at exactly one zoom: taller rows leave it lost in the
+	// middle of the band, shorter ones have it spill over the row below. It is bounded by its
+	// LANE too, so a deep level's marker never crosses into its neighbour's.
+	const int rowTop    = self->GetRowTop(headingRow, zoom);
+	const int rowHeight = self->GetRowHeight(headingRow, zoom);
+	const int size      = wxMax(kOutlineBtnMinSize,
+		wxMin(rowHeight - kOutlineBtnInset * 2, step - kOutlineBtnInset * 2));
+	const int x         = lane + wxMax(0, (step - size) / 2);
+	const int y         = rowTop + wxMax(0, (rowHeight - size) / 2);
+	return wxRect(x, y, size, size);
 }
 
 wxRect ibGrid::GetColGroupButtonRect(int idx) const
@@ -10952,9 +11133,19 @@ wxRect ibGrid::GetColGroupButtonRect(int idx) const
 	if (idx < 0 || (size_t)idx >= m_colGroupAt.size()) return wxRect();
 	const ibGridCellGroup& g = m_colGroupAt[idx];
 	ibGrid* self = const_cast<ibGrid*>(this);
-	const int y = (g.m_level - 1) * kOutlineLevelStep + 2;
-	const int x = self->GetColLeft(g.m_start, self->GetGridZoom()) + 2;
-	return wxRect(x, y, kOutlineBtnSize, kOutlineBtnSize);
+	const float zoom = self->GetGridZoom();
+	const int step = ibCalcGridScale(kOutlineLevelStep, zoom);
+	const int lane = (g.m_level - 1) * step;
+	// The column that OPENS the group carries the button — see GetRowGroupButtonRect.
+	const int headingCol = (g.m_start > 0) ? g.m_start - 1 : g.m_start;
+	const int colLeft  = self->GetColLeft(headingCol, zoom);
+	const int colWidth = self->GetColWidth(headingCol, zoom);
+	// Sized from the cell, floored, and bounded by its lane — the row pane's rule, turned sideways.
+	const int size     = wxMax(kOutlineBtnMinSize,
+		wxMin(colWidth - kOutlineBtnInset * 2, step - kOutlineBtnInset * 2));
+	const int x        = colLeft + wxMax(0, (colWidth - size) / 2);
+	const int y        = lane + wxMax(0, (step - size) / 2);
+	return wxRect(x, y, size, size);
 }
 
 int ibGrid::HitTestRowOutlineButton(const wxPoint& pt) const
@@ -10999,6 +11190,7 @@ void ibGrid::DrawRowOutline(wxDC& dc)
 	for (size_t i = 0; i < m_rowGroupAt.size(); ++i) {
 		const ibGridCellGroup& g = m_rowGroupAt[i];
 		if (g.m_collapsed) continue;
+		if (g.m_end >= GetNumberRows()) continue;   // stale range — see GetRowGroupButtonRect
 		const wxRect btn = GetRowGroupButtonRect((int)i);
 		if (btn.IsEmpty()) continue;
 		const int railX = btn.x + btn.width / 2;
@@ -11006,6 +11198,12 @@ void ibGrid::DrawRowOutline(wxDC& dc)
 		const int rowBottom = GetRowTop(g.m_end, GetGridZoom())
 			+ GetRowHeight(g.m_end, GetGridZoom()) - 1;
 		if (rowBottom > railTop) dc.DrawLine(railX, railTop, railX, rowBottom);
+		// ⭐ AND THE RAIL CLOSES, OUT TO THE PANE'S RIGHT EDGE (Max, 2026-08-20: "there is no line
+		// at the bottom — it should run to the right edge"). A bare vertical line says where a
+		// group begins and never where it ends; the closing tick on the group's LAST row is what
+		// makes the span readable without counting rows, and it reaches the edge so the eye can
+		// follow it straight into the row it belongs to.
+		if (rowBottom >= railTop) dc.DrawLine(railX, rowBottom, GetRowOutlineSize(), rowBottom);
 	}
 	for (size_t i = 0; i < m_rowGroupAt.size(); ++i) {
 		const wxRect btn = GetRowGroupButtonRect((int)i);
@@ -11027,6 +11225,8 @@ void ibGrid::DrawColOutline(wxDC& dc)
 		const int colRight = GetColLeft(g.m_end, GetGridZoom())
 			+ GetColWidth(g.m_end, GetGridZoom()) - 1;
 		if (colRight > railLeft) dc.DrawLine(railLeft, railY, colRight, railY);
+		// The same closing tick, turned on its side — see DrawRowOutline.
+		if (colRight >= railLeft) dc.DrawLine(colRight, railY, colRight, GetColOutlineSize());
 	}
 	for (size_t i = 0; i < m_colGroupAt.size(); ++i) {
 		const wxRect btn = GetColGroupButtonRect((int)i);

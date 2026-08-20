@@ -1471,7 +1471,7 @@ offset 0 holds). `GetName`/`GetPhysicalName` on the base; `GetTypeDesc` is the
 attribute's existing accessor, **reused as-is** to satisfy the interface (no copy,
 no separate method). No adapter in the builder — the attribute carries the column
 identity directly. It lives in its own light header so the fundamental attribute
-class does not drag in the full `queryable.h` / `model.h` weight.
+class does not drag in the full `queryable.h` / `tabularModel.h` weight.
 
 A **constant** used to be both: a column (it derived `ibValueMetaObjectAttribute`) **and** the
 single-row `sys_const` table it lives in. **It is neither now — it HAS both (2026-07-29).** The
@@ -3583,6 +3583,80 @@ it takes a snapshot of exactly those three, owned by the schema itself through t
 `OutputColumn::m_ownedCol` a synthetic totals measure already used. A metadata-owned column is left
 alone — it outlives the schema by construction. Applied at every exit where the owner is local and
 the schema escapes: `ExecuteImpl` (both terminals), `DescribeOutput`, `ExecuteTotals`, `LowerUnion`.
+
+### Ownership, not tracking — and what the run hands on (2026-08-19)
+
+The snapshot rule above was the first half. The second: a RESULT points at the same columns from
+four lists of its own (materialise columns, totals levels, totals aggregates, the source recipe) and
+is read after the lowering returned. Copying them would be a second, poorer answer, so the sources
+travel as SHARES instead — `From` / `Join` / `CrossJoin` / `Union` take an owning handle, the builder
+keeps it, and it goes to the result WITH the source recipe. The query dies, the result still holds
+the skeleton, and the skeleton goes when the last holder does. Metadata sources ride a NON-owning
+share (a pointer with no control block): they outlive every query by construction.
+
+Two dangling reads were the same defect seen twice — `ibSubqueryAliasColumn::GetTypeDesc` and
+`ibDataQueryResult::Select`, both reading `0xdddddddd`. A third list was found the same way: the
+wrapper's `m_readFrom`, pointing into the inner SELECT's schema, which is a LOCAL of the function
+that built the wrapper — so a published column now carries its storage with it (`ibSubqueryOutput::m_owned`).
+
+### A subquery is a query OVER a configuration, not a metadata-free source
+
+Reading a reference published by a subquery needs the configuration the target lives in. The wrapper
+answered "no metadata" — matching the RAM temp table — and that made every such reference
+UNWALKABLE: `Ref.Attribute1` over `SELECT * FROM (SELECT Document1.Ref …)` came back as *"'Ref' is
+not a single-target reference (cannot walk)"*, about a column whose type says exactly which document
+it points at. It now answers with the inner source's metadata, asked through the chain rather than
+stored (2026-08-20).
+
+⭐ And a column projected in a subquery is read the way its SHAPE says, not the way its name does:
+only a RAW column is one projected field a name can fetch, everything else reassembles from its
+physical spread. Asking `IsRawColumn` — the same question the co-located join asks when it plans a
+projection — is what fixed rows that came back with every value empty; a list of type names would
+have been wrong the day a type was added, and silent about it.
+
+### A dot-walked dimension needs a column of its OWN
+
+Grouping by `Ref.Ref` folded every row into one blank group, and two levels behaved as one. Both
+follow from the same thing: the level had no column of its own. It was given the LEAF's column, whose
+id is the target attribute's metaID — and a self-reference walks back to the same attribute, so the
+level and the row's own field were indistinguishable to a fold that keys on ids.
+
+A scalar leaf already had the answer: project the walked value under the dimension's own alias and
+fold by a SYNTHETIC column with a fresh id (`TotalByDotWalk`). A reference leaf now takes the same
+road, with one difference — it is not one field, so it is projected as its whole physical SPREAD
+under that alias and reassembled on the read (`ColumnObject`). The pair {dimension column, alias +
+leaf} is stamped on the result, because only the door knows both halves (2026-08-20).
+
+⭐ **And the second walker — the RAM path.** All of the above is the DB provider's answer, and a
+composition's source is very often NOT a physical table: a subquery wrapper (`ibSubqueryQueryable`)
+answers `IsComputedInRam()`, so the read goes through `ibComputedProvider`, never through
+`BuildPageIR`. There `ResolveComputedDotWalks` gathers the reference chains to LEFT-join from five
+places — projection, ORDER BY, GROUP BY, aggregate inputs, WHERE — and `m_dimWalks` was in none of
+them. The level's value was therefore never brought in at all, and every row folded into ONE EMPTY
+GROUP — the same symptom as the metaID clash above, one floor down and for a different reason
+(2026-08-20).
+
+Two halves to the fix, and the second is the one worth remembering: gathering the path is not
+enough, because the walk lands the leaf keyed by its OWN id — precisely the id that cannot identify
+the level. So `ibComputedProvider::ExecuteRead` publishes the dimension under its ALIAS, in a column
+named for it (the RAM twin of `… AS dim0`), which is what the reader asks for: on a RAM source
+`ColumnObject(prefix, col)` falls back to `Column(prefix)`. The shape was already there for computed
+SELECT fields (`m_selectExprs` → an alias-named column with a synthetic id) — the dimension takes the
+same road.
+
+⚠ The class of defect, stated plainly: **a new setting on the door needs every walker that reads the
+door, not just the one being tested.** Here the DB provider learned about dot-walk dimensions and the
+RAM provider did not, so the feature worked over a table and silently produced blank levels over a
+subquery. The evidence that pinned it in one run was a probe on both sides of the seam: the door
+reported `dimWalks=1` while the spec that actually reached a provider reported `0` — and its
+queryable had NO TABLE NAME, which is what named the wrapper.
+
+### ORDER BY reaches the TOTALS read too
+
+The fold keeps groups in first-seen order and rows inside a group in arrival order, so the order the
+DETAIL is read in is the order the report comes out in — at every level. `ExecuteTotals` did not
+apply `ORDER BY` at all, so a sort set in the settings changed the query text and nothing else
+(2026-08-20).
 
 ### The order of the tables is the engine's business
 

@@ -67,10 +67,28 @@ void DrawHeaderButton(wxWindow* win,
 
 	static wxPen lightPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT));
 
-	dc.SetPen(lightPen);
+	// ⭐ THE OUTER LEFT EDGE IS DRAWN LIKE THE OUTER RIGHT ONE — in SHADOW, not in light.
+	//
+	// The pair of pens below is the old 3D button look: a shadow line down the right of every
+	// column and a light line down its left. Between two columns that reads fine (the shadow is
+	// the separator), but at the very first column the light line IS the control's left edge — and
+	// against a white header it is invisible. The right-hand edge, being shadow, is not: the grid
+	// then looks bordered on the right and cut off on the left (Max, 2026-08-19: "on the right it
+	// is fine, on the left something ate it — and it is like that absolutely everywhere").
+	//
+	// Only the leftmost column is affected; every other column keeps its light line, because there
+	// the shadow of the column before it is already the separator and two dark lines side by side
+	// would read as a gap.
+	const bool outerLeftEdge = rect.GetLeft() <= 0;
+	dc.SetPen(outerLeftEdge ? shadowPen : lightPen);
 	dc.DrawLine(rect.GetLeft(), rect.GetTop() + ofs,
 		rect.GetLeft(), rect.GetBottom());
-	dc.DrawLine(rect.GetLeft(), rect.GetTop() + ofs,
+
+	// ⚠ AND IT STARTS ONE PIXEL IN AT THE OUTER EDGE. This light line is drawn AFTER the vertical
+	// one and from the same x, so at the leftmost column it repainted the top pixel of the dark
+	// edge — a single light dot in the corner, which is exactly what it looked like.
+	dc.SetPen(lightPen);
+	dc.DrawLine(rect.GetLeft() + (outerLeftEdge ? 1 : 0), rect.GetTop() + ofs,
 		rect.GetRight(), rect.GetTop() + ofs);
 
 	int labelWidth = 0;

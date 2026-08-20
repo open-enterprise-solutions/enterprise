@@ -200,6 +200,15 @@ later would start a fourth copy — the compare walker even says so in a comment
 same list is kept in a fourth form again by the role editor and the query constructor
 ([metaobject-naming.md § 4](metaobject-naming.md)).
 
+⭐ **And it happened again on 2026-08-20, to the metatype added that day.** `Composer`
+(`g_metaComposerCLSID`) was taught to both designer trees and not to `metaDiff`, which walks the same
+metadata a fourth time and is the copy nobody has open while building the thing itself.
+`GroupOrderRank` and the caption lookup both answer a default for a clsid they do not know, so the
+compare tree captioned the group with a raw clsid NUMBER and sorted it last. It now has a caption and rank **385**, immediately after Templates
+(380), which is where both designer trees put it. Commands cost exactly this on 2026-08-14 (§ 7) —
+the same file, the same two lookups, the same silence. Counting the copies is the whole defence there
+is until the order moves onto the metatype.
+
 This is the concrete price § 3.1 predicted: **the order belongs on the METATYPE** (a band, a rank and
 a label beside the `GetIconGroup()` it already answers), and until it moves there, every rule about
 reading order has to be re-stated once per consumer, by hand, with nothing to fail when one is
@@ -280,6 +289,25 @@ bool ibReportEditView::OnCreate(ibDocument* docBase, long flags) {
 
 `OnActivateView` forwards to `m_metaTree->ActivateTree()`; `OnClose` freezes and destroys
 the tree. `docViewDataProcessorFile.cpp` is the same shape for processors.
+
+⭐ **Its groups are a LIST, and the list is the contract** (`s_reportGroups` in
+`treeDataReport_impl.cpp`): Attributes, Tables, Forms, Commands, Templates, **Composers** — the last
+one added 2026-08-20. An external report derives the very same metaobject as an embedded one, so it
+always HELD its composers and answered for them; only this tree never showed the group, and **what a
+tree does not show cannot be added to**. The order matches the configuration tree, where a report is
+"a data processor PLUS its composers" and `AddReportItem` appends the group after everything else —
+one report, one order, wherever it is opened from.
+
+**Its header pane asks the report's two questions, not one.** "Default composer:" stands beside
+"Default form:" (`treeDataReport.{h,cpp}`), both seeded by `UpdateChoiceSelection` and both writing
+back through their own `wxEVT_CHOICE` handler. A report declares the form it opens with *and* the
+composer it composes by, and the second decides whether the generated form has a grid at all
+([report-engine.md §4f](report-engine.md)).
+
+⚠ **Every road that changes the tree owes those choices a refresh.** Removal and rename already
+called `UpdateChoiceSelection`; `CreateItem` was the one that did not — and since the FIRST composer
+added becomes the default by itself (`ibValueMetaObjectReport::OnCreateComposerObject`), the report
+had a main composer while the field above still read `<not selected>`.
 
 ### 5.2 At runtime — one script function
 
@@ -410,5 +438,13 @@ is only that the navigator contributes nothing to it.
   copies. The copies therefore also match group-bearing rows, so sorting the *Tables* group in an
   external data processor reorders the tabular sections through `ChangeChildPosition`, which the
   configuration tree refuses to do. One of the two is right; they should not differ.
-- `UpdateChoiceSelection()` is the one contract method with an empty default; which trees
-  actually implement it is unverified here.
+- `UpdateChoiceSelection()` is the one contract method with an empty default
+  (`backend_metatree.h`). **Verified 2026-08-20:** both external trees implement it — `ibDataReportTree`
+  and `ibDataProcessorTree`, each refilling its header pane's choices ("Default form", and on a report
+  "Default composer"); the configuration tree has no such pane and keeps the empty default. What is
+  worth copying is **who CALLS it**: the metatype does, from `OnCreateMetaObject`
+  (`ibValueMetaObjectForm`, and since 2026-08-20 `ibValueMetaObjectComposer`), not the tree's create
+  command. ⭐ **Notify from the metatype, not from the tree command** — a command covers ONE road,
+  while paste, undo and the second tree all reach creation through the metatype, which knows it was
+  born. Hanging it on `CreateItem` is how a list of forms ends up stale in one window and fresh in
+  another ([report-engine.md § 4f](report-engine.md)).
