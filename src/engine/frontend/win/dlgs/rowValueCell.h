@@ -42,10 +42,19 @@ public:
 	// `held` — the path the line already carries, so the picker opens standing on it.
 	using FieldChooser = std::function<ibValueCompositionField*(wxWindow* parent, const wxString& held)>;
 
+	// ⭐ …OR THE ROW OPENS SOMETHING OF ITS OWN. A cell that stands for ONE value is edited by
+	// choosing that value; a cell that stands for a WHOLE NODE — a grouping is a LIST of fields —
+	// has to open the window that edits the node. Set this and the "…" calls it instead of the
+	// picker: same button, and it means the same thing (open what edits this cell), which is why it
+	// is one button and not two.
+	using Expand = std::function<void(const ibDataViewItem& row)>;
+
 	ibRowValueCellRenderer(wxWindow* host, FieldChooser chooser, Getter get, Setter set)
 		: ibDataViewValueRenderer(nullptr), m_host(host), m_chooser(std::move(chooser)),
 		  m_get(std::move(get)), m_set(std::move(set)) {
 	}
+
+	void SetExpand(Expand expand) { m_expand = std::move(expand); }
 
 	virtual bool HasEditorCtrl() const override { return true; }
 
@@ -110,6 +119,15 @@ private:
 	// own quick choice, which is what makes a direction and a grouping kind editable
 	// without a line of list-building here.
 	void OnSelect(wxCommandEvent&) {
+		// THE ROW'S OWN WINDOW, when it has one — closing the editor first for the same reason the
+		// picker does: a modal opened over a live cell editor never sees the clicks meant for it.
+		if (m_expand) {
+			const ibDataViewItem row = m_row;
+			FinishSelecting();
+			m_expand(row);
+			return;
+		}
+
 		ibValue current; GetControlValue(current);
 		ibValueCompositionField* asField = nullptr;
 		if (current.ConvertToValue(asField) || current.IsEmpty()) {
@@ -142,6 +160,7 @@ private:
 	FieldChooser   m_chooser;
 	Getter         m_get;
 	Setter         m_set;
+	Expand         m_expand;    // set = the "…" opens the ROW's own window instead of the picker
 	ibDataViewItem m_row;
 };
 

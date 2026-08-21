@@ -9,6 +9,7 @@
 #include "backend/query/columnLayout.h"                         // ibIsComparableType — a whole-value blob has nothing to compare
 #include "backend/srcDataObject.h"                              // ibSourceDataObject::ibSourceExplorer
 #include "backend/metaCollection/partial/reference/reference.h" // ibValueReferenceDataObject — reference-as-source
+#include "backend/metaCollection/resource/metaResourceObject.h"   // the RESOURCE metatype — its own class icon
 
 #include <wx/dialog.h>
 #include <wx/dnd.h>
@@ -37,9 +38,40 @@ struct ibSourceFieldNode : public wxTreeItemData {
 // Append each field of `explorer` under `parent`, carrying the accumulated dot-path.
 // A reference field gets a dummy [+] and expands lazily (ExpandSourceFieldNode); a
 // tabular section is skipped (a setting binds a scalar / reference field, not a section).
+// ⭐ ONE PICTURE, ADDED ONCE. A tree's image list is by INDEX, so the same icon asked for twice
+// would be two entries and a growing list on every refill. Icons compare by handle here, which is
+// enough: a metaobject vends the same icon object to everyone who asks.
+//
+// A null icon (a field with no column behind it) answers 0 — the attribute picture the list is
+// seeded with, which is what such a field has always worn.
+static int ibSettingsFieldIcon(wxTreeCtrl* tree, const wxIcon& icon)
+{
+	wxImageList* images = tree->GetImageList();
+	if (images == nullptr || !icon.IsOk())
+		return 0;
+
+	// The list is small (the kinds a source publishes), so a walk is cheaper than a map that would
+	// have to be cleared with the tree.
+	for (int i = 0; i < images->GetImageCount(); ++i)
+		if (images->GetIcon(i).IsSameAs(icon))
+			return i;
+	return images->Add(icon);
+}
+
+// ⭐ THE RESOURCE PICTURE — THE METAOBJECT'S OWN (Max, 2026-08-22: take the resource from the
+// metaobject). A resource is a registered metatype (`ibValueMetaObjectResource`) and it vends its
+// class icon like every other; drawing a mark of our own would be a second picture for a thing that
+// already has one, and it would drift from the one the metadata tree shows.
+static int ibSettingsResourceIcon(wxTreeCtrl* tree)
+{
+	return ibSettingsFieldIcon(tree, ibValueMetaObjectResource::GetIconGroup());
+}
+
 static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
 	const ibSourceDataObject::ibSourceExplorer& explorer, const wxString& prefix,
-	const ibMetaData* metaData, const wxString& prefixText = wxEmptyString)
+	const ibMetaData* metaData, const std::function<bool(const wxString&)>& isResource,
+	const std::function<bool(const wxString&)>& isVisible = nullptr,
+	const wxString& prefixText = wxEmptyString)
 {
 	for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
 		const auto* col = explorer.GetHelper(i);
@@ -66,7 +98,25 @@ static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
 		// PATH is built from (above) — showing it in the picker makes the form speak
 		// in identifiers instead of in the words the configuration author chose.
 		// GetSynonym falls back to the name when there is none, so nothing is blank.
-		const wxTreeItemId item = tree->AppendItem(parent, label, 0, 0, data);   // icon 0 = attribute
+		// ⭐ WHAT THIS FIELD IS, IN A PICTURE (Max, 2026-08-22: once a field is added to the report's
+		// resources, the settings list must already show that it is one).
+		//
+		// Two answers, in order. Being a RESOURCE is a DECLARATION the composition makes — the host
+		// answers that, since the field itself knows nothing about it. Otherwise the picture is the
+		// COLUMN'S own (a dimension, a register resource and a plain attribute each vend their own),
+		// so nothing here holds a list of kinds and a kind added tomorrow is dressed the day it
+		// registers.
+		// ⭐ MAY THIS NODE USE THE FIELD AT ALL — the available set, narrowed by whoever owns it. A
+		// LEAF the set does not name is not offered; a ROAD stays, because what it leads to may well
+		// be named (see SetVisibleTest).
+		if (isVisible && data->m_refTypes.empty() && !isVisible(data->m_path)) {
+			delete data;
+			continue;
+		}
+		const bool resource = isResource && isResource(data->m_path);
+		const int icon = resource ? ibSettingsResourceIcon(tree)
+		                          : ibSettingsFieldIcon(tree, col->GetSourceIcon());
+		const wxTreeItemId item = tree->AppendItem(parent, label, icon, icon, data);
 		if (!data->m_refTypes.empty())
 			tree->AppendItem(item, wxEmptyString);   // dummy -> [+] (a reference expands into its target's fields)
 	}
@@ -75,7 +125,9 @@ static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
 // Lazily build a reference field node's children (its target's fields). An EMPTY typed
 // reference-as-source vends the target's explorer; its fields are copied into tree nodes
 // synchronously, so the temporary reference can die after.
-static void ExpandSourceFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item, const ibMetaData* metaData)
+static void ExpandSourceFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item, const ibMetaData* metaData,
+	const std::function<bool(const wxString&)>& isResource = nullptr,
+	const std::function<bool(const wxString&)>& isVisible = nullptr)
 {
 	ibSourceFieldNode* data = dynamic_cast<ibSourceFieldNode*>(tree->GetItemData(item));
 	if (data == nullptr || data->m_refTypes.empty() || data->m_loaded || metaData == nullptr)
@@ -94,7 +146,8 @@ static void ExpandSourceFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item, co
 		if (const auto* refExplorer = refObj->GetSourceExplorer())
 			// NO DEPTH LIMIT. The tree unfolds LAZILY — a level exists only where the
 			// user opened it — so a self-referencing type cannot run away on its own.
-			AppendSourceFields(tree, item, *refExplorer, data->m_path, metaData, data->m_presentation);
+			AppendSourceFields(tree, item, *refExplorer, data->m_path, metaData, isResource, isVisible,
+				data->m_presentation);
 	}
 
 	if (tree->GetChildrenCount(item, false) <= before)
@@ -149,7 +202,7 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 
 	if (m_source != nullptr) {
 		if (const auto* explorer = m_source->GetSourceExplorer())
-			AppendSourceFields(tree, root, *explorer, wxEmptyString, metaData);
+			AppendSourceFields(tree, root, *explorer, wxEmptyString, metaData, m_isResource, m_isVisible);
 		return;
 	}
 
@@ -162,6 +215,12 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 		// into what a value may be.
 		data->m_type     = field.m_type;
 		data->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(field.m_type.GetClsidList(), metaData);
+		// The same narrowing the explorer path applies — a leaf outside the available set is not
+		// offered, a road stays walkable.
+		if (m_isVisible && data->m_refTypes.empty() && !m_isVisible(data->m_path)) {
+			delete data;
+			continue;
+		}
 		const wxTreeItemId item = tree->AppendItem(root, field.m_name, 0, 0, data);
 		if (!data->m_refTypes.empty())
 			tree->AppendItem(item, wxEmptyString);   // dummy -> [+]
@@ -195,7 +254,7 @@ void ibSettingsFieldTree::SelectByPath(wxTreeCtrl* tree, const wxString& path) c
 		if (!found.IsOk())
 			return;
 		if (parts.HasMoreTokens()) {
-			ExpandSourceFieldNode(tree, found, GetMetaData());   // the road continues — load it
+			ExpandSourceFieldNode(tree, found, GetMetaData(), m_isResource, m_isVisible);   // the road continues — load it
 			tree->Expand(found);
 		}
 		parent = found;
@@ -215,7 +274,7 @@ void ibSettingsFieldTree::Attach(wxTreeCtrl* tree)
 
 	// Lazily expand a reference field — the tree that fired the event is the one to expand.
 	tree->Bind(wxEVT_TREE_ITEM_EXPANDING, [this, tree](wxTreeEvent& e) {
-		ExpandSourceFieldNode(tree, e.GetItem(), GetMetaData());
+		ExpandSourceFieldNode(tree, e.GetItem(), GetMetaData(), m_isResource, m_isVisible);
 		e.Skip();
 	});
 
@@ -277,13 +336,13 @@ ibValueCompositionField* ibSettingsFieldTree::ChooseField(wxWindow* parent, cons
 	// the picker's tree refusing to unfold while the identical tree on the tab
 	// behind it worked — the same handler, a different window.
 	tree->Bind(wxEVT_TREE_ITEM_EXPANDING, [tree, this](wxTreeEvent& e) {
-		ExpandSourceFieldNode(tree, e.GetItem(), GetMetaData());
+		ExpandSourceFieldNode(tree, e.GetItem(), GetMetaData(), m_isResource, m_isVisible);
 		e.Skip();
 	});
 	// A CLICK ON THE ARROW is not the only way in: selecting a reference loads its
 	// fields too, so the node is ready by the time the user reaches for the arrow.
 	tree->Bind(wxEVT_TREE_SEL_CHANGED, [tree, this](wxTreeEvent& e) {
-		ExpandSourceFieldNode(tree, e.GetItem(), GetMetaData());
+		ExpandSourceFieldNode(tree, e.GetItem(), GetMetaData(), m_isResource, m_isVisible);
 		e.Skip();
 	});
 
@@ -299,7 +358,7 @@ ibValueCompositionField* ibSettingsFieldTree::ChooseField(wxWindow* parent, cons
 			return;
 		const ibSourceFieldNode* node = dynamic_cast<ibSourceFieldNode*>(tree->GetItemData(item));
 		if (node != nullptr && !node->m_refTypes.empty()) {
-			ExpandSourceFieldNode(tree, item, GetMetaData());
+			ExpandSourceFieldNode(tree, item, GetMetaData(), m_isResource, m_isVisible);
 			tree->Expand(item);
 			return;   // a reference is a ROAD — going down it is not choosing it
 		}

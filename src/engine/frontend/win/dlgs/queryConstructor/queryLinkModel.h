@@ -47,6 +47,28 @@ enum ibQueryLinkColumn {
 	kLinkColArbitrary,
 };
 
+// ⭐ THE TWO BOXES, READ OFF THE KIND — and written back into it. Stated once, here, because BOTH
+// link grids show them: the joins of one statement (ibQueryLinkModel) and the package's own links
+// between named selections (ibQuerySelectionLinkModel). Two copies of this fold would be two places
+// where "left ticked" could stop meaning the same thing.
+inline bool ibJoinAllFromLeft(ibQueryJoinKindAst kind)
+{
+	return kind == ibQueryJoinKindAst::Left || kind == ibQueryJoinKindAst::Full;
+}
+
+inline bool ibJoinAllFromRight(ibQueryJoinKindAst kind)
+{
+	return kind == ibQueryJoinKindAst::Right || kind == ibQueryJoinKindAst::Full;
+}
+
+inline ibQueryJoinKindAst ibJoinKindOf(bool allLeft, bool allRight)
+{
+	if (allLeft && allRight) return ibQueryJoinKindAst::Full;
+	if (allLeft)             return ibQueryJoinKindAst::Left;
+	if (allRight)            return ibQueryJoinKindAst::Right;
+	return ibQueryJoinKindAst::Inner;   // neither box: only the rows that match
+}
+
 class ibQueryLinkModel : public ibDataViewVirtualListModel
 {
 public:
@@ -62,6 +84,12 @@ public:
 	// Where the ENGINE'S complaint goes when a condition typed into the cell does not parse. Handed
 	// on verbatim — there is no second opinion here about what a valid condition is.
 	void SetOnError(std::function<void(const wxString&)> onError) { m_onError = std::move(onError); }
+
+	// ⚠ THIS MODEL IS THE STATEMENT'S — one row per link between the tables ONE select reads. The
+	// package's links between NAMED RESULTS are a different sentence in a different list, and they
+	// have a model of their own (ibQuerySelectionLinkModel). This one briefly grew a hook for them
+	// ("make this name a source") and the hook is gone with the shape that needed it: a link between
+	// selections adds no table to anybody's FROM.
 
 	// ⭐⭐ A ROW IS A LINK, NOT A TABLE.
 	//

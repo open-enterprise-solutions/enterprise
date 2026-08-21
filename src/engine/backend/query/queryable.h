@@ -74,6 +74,39 @@ private:
 	const std::map<wxString, const ibBackendQueryable*>* m_prev;
 };
 
+struct ibQuerySelect;   // an AST select — a named result IS one, kept by pointer only
+
+// ==========================================================================
+// ibNamedResultScope — THE RESULTS THIS PACKAGE HAS NAMED, for the statements that read them.
+//
+// `SELECT … ONTO Sales` names a result; a later statement reads it by writing `FROM Sales`. That
+// name resolves to no metaobject and no temp table — it is a QUERY, and the reader may either take
+// its rows (the old road: substitute it as a nested source, which materialises in RAM) or declare
+// it to the DBMS (`WITH Sales AS (…)`) and let the server do the join.
+//
+// So the lowering has to know which bare names are named results, exactly as ibTempSourceScope tells
+// it which are transient sources. Same shape, same lifetime, same reason: thread-local, RAII-scoped
+// to ONE package execution, nothing left behind.
+//
+// It carries the AST rather than a queryable BECAUSE the choice is not made here: the reader's own
+// lowering decides between the two roads (see BuildSourceTree — the engine must have WITH, and the
+// named query must be one the server can read).
+class BACKEND_API ibNamedResultScope
+{
+public:
+	explicit ibNamedResultScope(const std::map<wxString, const ibQuerySelect*>& results);
+	~ibNamedResultScope();
+
+	// The named result for `name` (matched without regard to case), or null.
+	static const ibQuerySelect* Find(const wxString& name);
+
+	ibNamedResultScope(const ibNamedResultScope&) = delete;
+	ibNamedResultScope& operator=(const ibNamedResultScope&) = delete;
+
+private:
+	const std::map<wxString, const ibQuerySelect*>* m_prev;
+};
+
 class ibMetaData;   // the config a query runs on behalf of — its factory resolves by-name metaobject sources
 class ibQueryableFactory;
 
@@ -420,6 +453,18 @@ public:
 	// source returns its attributes, a temp source its temp columns. (docs §22 nested subquery)
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const { return {}; }
 
+	// ⭐ DID THIS SOURCE MINT THAT COLUMN — and if so, here is its STORAGE, so whoever still needs
+	// the column past the run keeps it by raising a refcount instead of copying it (a copy answers
+	// only the questions it copied; identity and everything the real column knows stop matching).
+	//
+	// Default EMPTY, which is the honest answer for a metadata-backed source: its columns are the
+	// configuration's and outlive every query, so there is nothing to keep. Only the sources built
+	// FOR one query — a nested subquery, a named query (`WITH`) — mint columns of their own and
+	// answer here. (docs/query-language-arc.md §22 / §24.4)
+	virtual std::shared_ptr<ibBackendQueryColumn> ShareColumn(const ibBackendQueryColumn* /*col*/) const {
+		return nullptr;
+	}
+
 	// The source's UNIQUENESS-KEY COLUMNS — the ONE authority for the write UPSERT match AND the
 	// dot-walk self-reference key. The source owns its key: a record (catalog / document) returns
 	// its DATA-REFERENCE attribute (the row's own _RRRef reference — unique; the provider reads
@@ -642,7 +687,7 @@ public:
 	// the run; whoever still needs the column simply shares its ownership and the column lives on —
 	// the SAME column, same id, same type. Empty when this wrapper did not allocate it (a metadata
 	// column outlives everything and needs no keeping).
-	std::shared_ptr<ibBackendQueryColumn> ShareColumn(const ibBackendQueryColumn* col) const {
+	std::shared_ptr<ibBackendQueryColumn> ShareColumn(const ibBackendQueryColumn* col) const override {
 		for (const std::shared_ptr<ibBackendQueryColumn>& c : m_ownedColumns)
 			if (c.get() == col) return c;
 		return nullptr;

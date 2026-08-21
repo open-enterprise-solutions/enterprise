@@ -175,3 +175,130 @@ WHERE over a non-co-located JOIN (the plain boolean WHERE itself now runs as a
 post-compose `RamFilter`), dot-walk filters/sorts over a JOIN, TOTALS over a subquery
 source, reference-awareness of subquery columns, the shared virtual-table
 companion under concurrency.
+
+---
+
+## OUTPUTS — what a composition produces (2026-08-21)
+
+A composition no longer holds one set of settings; it holds **outputs**, and there is always at
+least one. A list declares one, a report declares several, and each is read and handed to its own
+driver.
+
+```
+Composer
+├── source · parameters · RESOURCES · the composition-wide set of selected fields
+├── the filter and sort that stand ABOVE the outputs
+└── Outputs (at least one)
+    └── Output: name (= the ONTO name of a result) · its own query package · ITS OWN DRIVER
+        ├── m_rowGroups    — levels down the page, in order (the order IS the nesting)
+        ├── m_columnGroups — the same levels across it; non-empty ⇒ this output is a CROSS-TABLE
+        ├── its own filter / sort / selected fields (or "auto", taken from above)
+        └── a level with NO fields is the DETAIL rows — not a second kind of output
+```
+
+### What is read off the data rather than stored
+
+`Output::Kind()` answers *grouping* or *table* by looking at the column axis. Nothing stores "what
+this output is", so nothing can disagree with the fields. A CHART is deliberately not a third kind:
+it reads what a cross-table reads and differs only in being drawn — that is the driver's business.
+
+### One level, several fields
+
+A level holds one or more fields and groups by the TUPLE of them: `BY (Partner, Contract)` is one
+heading, not two nested ones. Which of them actually divide the rows is the data's answer. The
+UNFOLD (elements / hierarchy / hierarchy-only) belongs to each FIELD; a hierarchy walks one parent
+chain, so a level of several fields carrying one is refused where it is written.
+
+### The driver belongs to the output
+
+Whoever declares the outputs also says who draws each. The composer never routes and never asks a
+driver what it understands. **An output with no driver is not read at all** — nobody would take its
+rows, so the query is not run. `Run()` (no argument) reads every output that has somewhere to go;
+`Run(driver)` stays the short way in for a caller holding one, which is what a list is.
+
+### The node language of the driver
+
+`OnOutputBegin(kind, schema, name)` → `OnGroup(level, hasChildren, values)` /
+`OnDetail(level, values)` → `OnOutputEnd(totals)`. Stated ON TOP of the row verbs, so a driver that
+only understands rows keeps working; a group and a detail row are no longer the same sentence the
+printer has to tell apart by depth.
+
+### Detail records — a level of the ladder (2026-08-21)
+
+*"A detail record is an empty grouping"* (Max) — the rows themselves sit at the bottom of the ladder,
+under the deepest heading, and the settings tree writes them as a node like any other
+(`ibCompositionLevelKind::Details`, `GroupNode::m_kind`).
+
+**Adding a level is a FORM, not a field picker.** A grouping is a LIST of fields welded into one
+heading, so the act of adding it asks for the list: `ibComposerGroupingDialog` (the same
+`ibGroupingFieldsModel` the Grouping tab uses, over the node being made) with add / delete / move
+and the per-field unfold. **OK with an empty list is an answer** — that node is the detail records,
+and the dialog stamps the kind so nothing downstream reads it off the emptiness. One verb makes a
+level; what the level is gets decided inside it.
+
+**The kind is a type, not an emptiness.** A level with no fields happens by accident as well — one
+whose fields stopped resolving loses them, and `CollapseEmptyLevels` drops it so a nameless heading
+cannot swallow every row. One emptiness, two opposite meanings; the node says which it is.
+
+**What it costs, and where that is paid.** A report that prints every row holds every row — that is
+what printing them means. So the read changes in exactly two ways when an output asks for details
+(`WantsDetails`): `ExecuteTotals(…, withDetails)` adds one more level with NO FIELDS to the door's
+config (`ibDataQueryBuilder::TotalsDetails`, its own verb so an accidental empty level can still be
+refused), and the server-side fold is declined — `GROUP BY ROLLUP` returns aggregated rows and would
+leave nothing to hang. `TryTotalsPushdown` refuses an empty level itself, so no other road can lose
+the rows quietly.
+
+**What the fold does with it.** `FoldDimLevel` reads a fieldless level as "no group here" and hangs
+one node per source row under the last heading, marked `ibSelectorNodeKind::Detail`. The rows are
+already in the snapshot the headings were folded from, so it costs nodes, not a second read.
+
+**How it reaches the printer.** The walk asks the NODE (`ibSelector::Kind()`) and calls
+`OnDetail(level, values)` instead of `OnGroup` — the printer is told in its own words rather than
+inferring it from the depth, which a depth cannot answer once the tree holds both.
+
+**Where the figures are printed** is the driver's business and follows one rule: a heading names the
+group, a TOTAL LINE closes it, and the grand total is the last line of the output's section. See
+report-engine.md § 6bb.
+
+⏳ Not yet: the query TEXT cannot ask for detail records — there is no keyword, so the constructor
+has nothing to offer either. It is deliberately open: a new global word steals an identifier
+(`reference_query_keyword_steals_a_name`), and the naming is Max's call. Today the request travels
+as an argument of the read, which is where "how much of the tree do you want to look at" belongs.
+
+### Where a filter sits decides what it does
+
+| Where | What it does |
+|---|---|
+| above the outputs | EXCLUDES, for the whole composition — no output sees more than it admits |
+| on an output | EXCLUDES, within that output |
+| on a level | HIDES the heading, and its rows keep counting (applied on the walk, never in the WHERE) |
+
+Cutting data at a level would move every total above it, and a total that shifts because somebody
+tidied a sub-heading is a figure nobody can defend. A hidden heading hides what is under it, since
+printing a child of an unprinted parent would file it under the wrong one.
+
+### Available and selected fields inherit
+
+Composition → output → level, each may take its own set or say "auto". The flag is explicit because
+an empty list already means something: *show nothing*.
+
+Two sets, two questions, one inheritance (`AvailableFor` / `SelectedFor`, both on `ibDataComposer`):
+
+| set | question | who reads it |
+|---|---|---|
+| **available** | what this node MAY use — group, filter, sort, show | the settings window: it narrows every field pane |
+| **selected** | what this node DOES show | the render — the projection written into the query |
+
+**Available narrows the PICKERS, and that is the whole of it** (2026-08-22). It changes no query and
+no read: what a node may be *offered* is a UI statement, and offering a person a field the report
+forbids is the defect it exists to prevent. `ibSettingsFieldTree::SetVisibleTest` takes the
+predicate; the composer window answers it from the SELECTED node's set, so the panes re-fill when
+the selection moves (`ReloadFieldTrees`). Empty means everything, as it does everywhere here.
+
+⚠ **A road is never hidden.** The test is asked of a field's path, and answering "no" for `Producer`
+would take `Producer.Region` with it — so only LEAVES are narrowed and a reference stays walkable.
+
+⚠ **The top of the inheritance is the REPORT row**, and its set lives in the window's own buffer
+until Apply. Only the *selected* buffer was being loaded and written back, so everything a person
+narrowed on the report was read from an empty list and saved nowhere (found by audit, 2026-08-22 —
+`LoadStructure` / `ApplyStructure` now carry both).

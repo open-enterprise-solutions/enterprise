@@ -78,6 +78,13 @@ public:
 		m_totalLevels = levels; m_aggregates = aggs; m_totalsOverall = overall; return *this;
 	}
 
+	// ⭐ THE SAME THING, SAID BY THE READER. `BY OVERALL` is how the QUERY asks for the root row; a
+	// consumer that always wants it — a report, which prints a grand total at the bottom whatever
+	// the text says — asks here instead of having the text rewritten under it. Nothing is folded
+	// differently: the root already holds the whole-result aggregates, and this only puts it in the
+	// walk.
+	ibSelector& WalkOverall(bool on = true) { m_totalsOverall = on; return *this; }
+
 	// EAGER fold: the whole snapshot → the node tree per the TRAVERSAL kind. Subtotals from THIS snapshot.
 	//   Direct            → flat: each row a leaf node;
 	//   ByGroups / ByGroupsHierarchy → fold by the TotalBy LEVELS (in order). A SINGLE Hierarchy /
@@ -86,8 +93,29 @@ public:
 	//     hierarchy unfold still needs the target catalog's rows, so those levels group by value
 	//     (Elements semantics). Manual ByParentRef / ByGroups (no TotalBy levels) is the direct-config /
 	//     unit-test path.
+	// ⭐ THE TREE MAY ARRIVE ALREADY BUILT — when the DBMS folded it. `GROUP BY ROLLUP` computes
+	// every subtotal level server-side and only the aggregated rows travel; there is nothing left
+	// to fold here, and folding again would need the detail rows this path exists to avoid reading.
+	//
+	// Handed over rather than rebuilt, because the two trees are the SAME tree: same levels, same
+	// aggregates, same shape. Where they would differ, the server path is not taken at all.
+	ibSelector& WithReadyTree(std::shared_ptr<ibSelectorTree> tree)
+	{
+		m_readyTree = std::move(tree);
+		return *this;
+	}
+
 	ibSelectorTree Build() const
 	{
+		// A tree the server already folded is the answer, whatever the walk kind: a flat walk over
+		// it still reads its nodes, which is what a caller asking for groups wants either way.
+		//
+		// ⚠ COPIED, NOT MOVED. The ready tree is SHARED — the result keeps it and hands the same
+		// shared_ptr to every selector it makes — so moving out of it emptied the tree for whoever
+		// asked second (a result read twice, a drill fetching a node's children).
+		if (m_readyTree)
+			return m_readyTree->Clone();
+
 		if (m_kind == ibSelectKind::ibSelectKind_Direct)
 			return BuildFlat();
 
@@ -100,12 +128,15 @@ public:
 			// Self-hierarchy fast path: a SINGLE Hierarchy level on the source's OWN parent column is
 			// ROW-keyed (each catalog row is a node) — that is BuildHierarchyTree, rowKey from the
 			// queryable (already in the snapshot), NO extra query.
-			if (m_totalLevels.size() == 1 && m_totalLevels[0].m_dim != ibDimensionKind::Elements && m_queryable != nullptr
-			    && m_totalLevels[0].m_col == m_queryable->GetHierarchyColumn()) {
+			// ONE FIELD, because a hierarchy unfolds a single parent chain: a level keyed by a tuple
+			// has no one chain to walk, and it takes the general road below.
+			if (m_totalLevels.size() == 1 && m_totalLevels[0].IsSingleField()
+			    && m_totalLevels[0].HeadDim() != ibDimensionKind::Elements && m_queryable != nullptr
+			    && m_totalLevels[0].HeadCol() == m_queryable->GetHierarchyColumn()) {
 				const std::vector<const ibBackendQueryColumn*> keys = m_queryable->GetPrimaryKeyColumns();
 				if (!keys.empty() && keys.front() != nullptr)
-					return ibQueryComposer::BuildHierarchyTree(m_snapshot, keys.front(), m_totalLevels[0].m_col,
-					                                           m_aggregates, m_totalLevels[0].m_dim);
+					return ibQueryComposer::BuildHierarchyTree(m_snapshot, keys.front(), m_totalLevels[0].HeadCol(),
+					                                           m_aggregates, m_totalLevels[0].HeadDim());
 			}
 			// Everything else — Elements / cross-catalog ref-hierarchy / multi-level (in order, with
 			// per-level dimension unfold) → the general value-keyed combiner.
@@ -155,6 +186,9 @@ public:
 
 	int  Level()       const { const ibSelectorTree::Node* n = Current(); return n ? n->m_level + m_baseLevel : 0; }  // absolute depth
 	bool HasChildren() const { const ibSelectorTree::Node* n = Current(); return n ? n->m_hasChildren : false; }      // expandable (folder)
+	// A HEADING OR A ROW — asked of the node, never guessed from the depth. A fold with a detail
+	// level yields both in one walk, and only the node knows which of the two this visit is.
+	ibSelectorNodeKind Kind() const { const ibSelectorTree::Node* n = Current(); return n ? n->m_kind : ibSelectorNodeKind::Group; }
 
 	// GRAND TOTAL — lives IN the selection itself (the root of the folded tree), read without walking.
 	// A column / an aggregate alias rolled over the WHOLE result. Absent → runtime NULL.
@@ -238,6 +272,9 @@ private:
 	std::vector<ibTotalLevel>                      m_totalLevels;   // totals dimensions (from the door, via WithTotals)
 	bool                                           m_totalsOverall = false;  // walk the ROOT as a row (BY OVERALL)
 	std::vector<ibDataQueryBuilder::AggregateItem> m_aggregates;
+	// The tree the DBMS folded, when it did (see WithReadyTree). Shared because a selector is copied
+	// on its way from the result to the caller, and the tree must not be copied with it.
+	std::shared_ptr<ibSelectorTree>                m_readyTree;
 
 	// sub-selection recipe (Select(kind) only)
 	ibDatabaseConnectionHolder* m_holder    = nullptr;

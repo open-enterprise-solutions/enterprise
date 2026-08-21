@@ -145,6 +145,9 @@ private:
 	// Name-substitution lowering — spec -> L2 IR (connection-free Build()).
 	static ibQueryIR BuildPageIR(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
 	                             const std::vector<ibQuerySortItem>& effective);
+	// The named queries the door declared (`With`), lowered into the SAME IR as `WITH … AS (…)`.
+	// Each is an ordinary spec lowered by BuildPageIR — a CTE is a query written in another place.
+	static void AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryIR& ir);
 	static std::vector<ibValue> BuildExternal(const ibReadPageRequest& req, const std::vector<ibQuerySortItem>& effective);
 };
 

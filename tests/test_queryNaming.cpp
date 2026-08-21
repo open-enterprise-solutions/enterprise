@@ -852,3 +852,77 @@ TEST(QueryDistinctAggregate, ItWorksInTotalsToo)
 	const wxString written = ibRenderQuery(*select);
 	EXPECT_EQ(written, ibRenderQuery(*Parse(written)));
 }
+
+// ===========================================================================
+//  Detail records — a level of the ladder, and NOT a word of the query text
+// ===========================================================================
+
+// ⭐ "A detail record is an empty grouping" (Max). The node sits in the ladder like any other,
+// but it says nothing about WHAT TO COMPUTE — so the rendered query is the same query it would be
+// without it, and the request travels as an argument of the READ (ExecuteTotals(…, withDetails)).
+//
+// The pin that matters: a fieldless level must not write `BY` with nothing after it. That produced
+// a query the parser refused, and the caller saw an empty report with no reason given.
+TEST(QueryComposerDetails, ADetailLevelWritesNothingIntoTheQuery)
+{
+	ibDataDBComposer composer;
+	composer.FromText(wxT("SELECT Partner, Amount FROM Document.Sales"));
+	composer.Total(wxT("SUM"), wxT("Amount"));
+	composer.TotalBy(wxT("Partner"));
+
+	const wxString grouped = composer.RenderText();
+	EXPECT_TRUE(grouped.Contains(wxT("TOTALS")));
+	EXPECT_TRUE(grouped.Contains(wxT("BY Partner")));
+
+	// The detail level joins the ladder…
+	ibDataComposer::GroupNode details;
+	details.m_kind = ibCompositionLevelKind::Details;
+	composer.Root().m_rowGroups.push_back(details);
+
+	// …and the query text does not change by one character.
+	EXPECT_EQ(grouped, composer.RenderText());
+	EXPECT_FALSE(composer.RenderText().Contains(wxT("BY ,")));
+
+	// What DID change is what the read is asked for.
+	EXPECT_TRUE(ibDataComposer::WantsDetails(composer.Root()));
+}
+
+// AN OUTPUT THAT GROUPS BY NOTHING is not "details under a heading" — it has no heading to hang
+// them under, its read is a flat cursor and every row it returns is a detail row already. So the
+// question answers NO there, and the totals read is not asked for something it need not do.
+TEST(QueryComposerDetails, AnOutputWithNoGroupingIsNotADetailsRequest)
+{
+	ibDataDBComposer composer;
+	composer.FromText(wxT("SELECT Partner, Amount FROM Document.Sales"));
+
+	EXPECT_FALSE(ibDataComposer::WantsDetails(composer.Root()));
+
+	ibDataComposer::GroupNode details;
+	details.m_kind = ibCompositionLevelKind::Details;
+	composer.Root().m_rowGroups.push_back(details);
+	EXPECT_FALSE(ibDataComposer::WantsDetails(composer.Root()));
+	EXPECT_FALSE(ibDataComposer::HasGroupingFields(composer.Root()));
+}
+
+// ⚠ AND THE DETAIL LEVEL SURVIVES A TIDY-UP. A level that LOST its fields is dropped — it would
+// fold every row it sees into one nameless heading — and the two emptinesses must not be confused:
+// one is a setting that stopped resolving, the other is a setting the author wrote.
+TEST(QueryComposerDetails, CollapsingEmptyLevelsKeepsTheDetailOne)
+{
+	ibDataDBComposer composer;
+	composer.FromText(wxT("SELECT Partner, Amount FROM Document.Sales"));
+	composer.TotalBy(wxT("Partner"));
+
+	ibDataComposer::GroupNode orphan;              // a grouping whose fields stopped resolving
+	composer.Root().m_rowGroups.push_back(orphan);
+	ibDataComposer::GroupNode details;
+	details.m_kind = ibCompositionLevelKind::Details;
+	composer.Root().m_rowGroups.push_back(details);
+	ASSERT_EQ(3u, composer.Root().m_rowGroups.size());
+
+	composer.CollapseEmptyLevels();
+
+	ASSERT_EQ(2u, composer.Root().m_rowGroups.size());
+	EXPECT_EQ(ibCompositionLevelKind::Grouping, composer.Root().m_rowGroups[0].m_kind);
+	EXPECT_EQ(ibCompositionLevelKind::Details,  composer.Root().m_rowGroups[1].m_kind);
+}

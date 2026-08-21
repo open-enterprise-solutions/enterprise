@@ -43,6 +43,11 @@ struct ibQueryConstructorSource
 	std::vector<wxString> m_path;
 	wxString              m_presentation;   // what a person reads (the synonym where there is one)
 	bool                  m_temp = false;   // declared by the package being edited, not by the metadata
+	// ⭐ …AND WHICH OF THE TWO IT IS. A package declares two kinds of source of its own: a TEMPORARY
+	// TABLE (`INTO`, rows put away for later statements) and a NAMED RESULT (`ONTO`, a result a
+	// later statement may read — a query result link). They behave the same in a FROM, so they share
+	// m_temp; they are different things to a person, so the catalogue shows them apart.
+	bool                  m_namedResult = false;
 
 	// INLINE, not exported: the struct itself carries no BACKEND_API (it is a plain value the
 	// frontend copies), so a definition in the .cpp would be invisible across the DLL — which is

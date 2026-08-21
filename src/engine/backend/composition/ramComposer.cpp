@@ -153,28 +153,18 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 
 		// THE TREE, when there is one — evaluated first because it is the whole
 		// condition, not one line of it.
-		if (m_filterAst) {
+		if (m_commonFilterAst) {
 			bool unknown = false;
-			if (!RamEvalCondition(*m_filterAst, m_storage, r, m_params, unknown))
+			if (!RamEvalCondition(*m_commonFilterAst, m_storage, r, m_params, unknown))
 				continue;
 		}
 
 		for (const RamFilter& f : filters) {
+			// ONE SPELLING OF THE OPERATORS, shared with everything else that reads a filter line
+			// (ibCompositionCompare, dataComposer.h). It used to be written out here as well, and
+			// two copies of "what does <= mean" is exactly the kind of pair that drifts.
 			const ibValue cell = m_storage->ResolveField(r, f.m_col, f.m_tail);
-			bool ok;
-			if      (f.m_op == wxT("="))                          ok = (cell == f.m_value);
-			else if (f.m_op == wxT("<>") || f.m_op == wxT("!="))  ok = (cell != f.m_value);
-			else if (f.m_op == wxT(">"))                          ok = (cell >  f.m_value);
-			else if (f.m_op == wxT(">="))                         ok = (cell >= f.m_value);
-			else if (f.m_op == wxT("<"))                          ok = (cell <  f.m_value);
-			else if (f.m_op == wxT("<="))                         ok = (cell <= f.m_value);
-			else if (f.m_op.CmpNoCase(wxT("LIKE")) == 0) {
-				wxString pat = f.m_value.GetString();
-				pat.Replace(wxT("%"), wxT("*")); pat.Replace(wxT("_"), wxT("?"));
-				ok = cell.GetString().Lower().Matches(pat.Lower());
-			}
-			else                                                  ok = true;   // unknown op → do not hide the row
-			if (!ok) { pass = false; break; }
+			if (!ibCompositionCompare(cell, f.m_op, f.m_value)) { pass = false; break; }
 		}
 		if (!pass)
 			continue;

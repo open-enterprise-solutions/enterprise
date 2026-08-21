@@ -208,17 +208,40 @@ struct ibQueryAstWindow
 // (ibQueryDimUnfold — the three unfold words — is declared above the expression node, which now
 //  needs it too: the same words are a FILTER modifier as well as a grouping one.)
 
-// One TOTALS-BY level: the dimension column + how it unfolds. Levels apply IN ORDER
-// (each yields a subtotal node; the root is the grand total). -> door TotalBy(col, dim).
-struct ibQueryTotalDim
+// ONE FIELD of a TOTALS-BY level: the dimension column + how it unfolds. The unfold belongs to
+// the FIELD, not to the level — a level may group by a reference unfolded through its hierarchy
+// and by a plain column beside it.
+struct ibQueryTotalField
 {
 	ibQueryAstExprPtr   m_expr;                                  // dimension column path
 	ibQueryDimUnfold m_unfold = ibQueryDimUnfold::Elements;
+};
+
+// One TOTALS-BY level. Levels apply IN ORDER (each yields a subtotal node; the root is the grand
+// total) -> door TotalBy(col, dim).
+//
+// A level holds ONE OR MORE fields, and its key is the TUPLE of their values: `BY (Partner,
+// Contract)` is a SINGLE level asking "partner and contract together", not two nested ones. Which
+// of the fields add rows is the DATA's answer, not a distinction the engine draws — a partner's own
+// attribute repeats the key it depends on and yields nothing new, a contract genuinely divides it.
+struct ibQueryTotalDim
+{
+	std::vector<ibQueryTotalField> m_fields;                     // one or more; empty only mid-build
 	// The name this LEVEL is read back under. A totals tree is walked by level and each level's
 	// value is asked for by name, so a dimension needs one of its own — without it two levels over
 	// the same column (Date by month, Date by day) answer to the same name and one of them wins.
-	// Empty = the column's own name, which is right for the ordinary single-level case.
+	// Empty = the head field's own column name, which is right for the ordinary single-field case.
 	wxString         m_alias;
+
+	// THE HEAD — the level's first field. Callers that legitimately speak of "the level's field"
+	// (its icon, the single-field paging gate) ask here rather than indexing into a vector that a
+	// half-built level can leave empty.
+	const ibQueryTotalField* Head() const { return m_fields.empty() ? nullptr : &m_fields.front(); }
+	ibQueryTotalField*       Head()       { return m_fields.empty() ? nullptr : &m_fields.front(); }
+	// How the level's head field unfolds. A window shows ONE unfold per level, and it is the head's:
+	// only a single-field level can carry a hierarchy at all (the lowering refuses the other case).
+	ibQueryDimUnfold HeadUnfold() const { return m_fields.empty() ? ibQueryDimUnfold::Elements : m_fields.front().m_unfold; }
+	bool IsSingleField() const { return m_fields.size() == 1; }
 };
 
 // The whole SELECT statement.
@@ -240,6 +263,11 @@ struct ibQuerySelect
 	// yields a ROW COUNT (there is no table to hand back — it went into the temp), and later statements
 	// of the same package select FROM that name. Empty = an ordinary select. (docs §5 — query batch.)
 	wxString                       m_intoTemp;
+	// ONTO <name> — NAME THIS STATEMENT'S RESULT. The result still comes back (unlike INTO, which
+	// puts it in a table and hands back a row count); the name is how a reader asks for it —
+	// `package["Sales"]` rather than "the third statement" — and how a composition's output says
+	// which result it shows. Optional, and usually absent: a lone select needs no name.
+	wxString                       m_ontoName;
 	// INDEX BY … — the columns the temp table this statement makes is indexed by, so the statements
 	// that read it find rows instead of scanning for them. Meaningless without INTO (a table nobody
 	// keeps cannot be looked things up in), and the parser says so rather than accepting it quietly.
@@ -310,9 +338,30 @@ struct ibQueryAstStatement
 	bool IsDrop() const { return !m_dropTemp.IsEmpty(); }
 };
 
+// ⭐⭐ A LINK BETWEEN TWO NAMED RESULTS — and it belongs to the PACKAGE, not to any statement in it.
+//
+// Max, 2026-08-21: mark two statements as named selections and set the links between them, and that
+// is all — nothing is added to anybody's tables, nothing is materialised, nothing is substituted.
+// A link written INSIDE a statement is an ordinary JOIN and stays what it always was; this is the
+// other thing: a relation the package declares BETWEEN the results its statements named.
+//
+// Both sides are NAMES (`ONTO`), never sources: which statement produced a name is the package's
+// own business, and a link that named a source would break the moment a statement moved.
+struct ibQueryPackageLink
+{
+	wxString           m_left;    // the ONTO name on the left of the relation
+	wxString           m_right;   // …and on the right
+	ibQueryJoinKindAst m_kind = ibQueryJoinKindAst::Inner;
+	ibQueryAstExprPtr  m_on;      // the condition; null = declared and not written yet
+};
+
 struct ibQueryPackage
 {
 	std::vector<ibQueryAstStatement> m_statements;
+
+	// The relations between this package's NAMED results, in the order they were written. Empty for
+	// every package that declares none, which is every package that existed before this.
+	std::vector<ibQueryPackageLink>  m_links;
 
 	// A package of one plain select is what an ordinary query IS — so a caller that
 	// only ever wanted a single statement asks for it here rather than indexing.

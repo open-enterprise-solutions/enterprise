@@ -94,10 +94,15 @@ void ibDialogQueryConstructor::ShowBranchStrip()
 	// ⚠ AND TOTALS ARE NOT PER BRANCH. They are taken over the WHOLE union — every branch collapsed
 	// into one relation — so there is no such thing as "the totals of branch 2", and a strip offering
 	// to switch to it says there is. The tab is about the result; the result has no branches.
+	// ⭐ …AND NEITHER STRIP BELONGS ON *SELECTION LINKS*. That tab is about the PACKAGE — the links
+	// between the results its statements named — so "which statement am I editing" is not a question
+	// it has (Max, 2026-08-21, seeing `Query 1` / `Query 2` beside it: they should not be there).
+	// The strips offer to switch something the tab does not depend on, which is an offer that can
+	// only confuse; the batch tab is hidden for exactly the same reason, one level down.
+	const bool packageTab = tab == _("Query batch") || tab == _("Selection links");
 	const bool showBranches = m_branchStrip->GetPageCount() > 1
-		&& tab != _("Unions / Aliases") && tab != _("Query batch") && tab != _("Totals");
-	const bool showBatch = m_batchStrip != nullptr && m_batchStrip->GetPageCount() > 1
-		&& tab != _("Query batch");
+		&& tab != _("Unions / Aliases") && !packageTab && tab != _("Totals");
+	const bool showBatch = m_batchStrip != nullptr && m_batchStrip->GetPageCount() > 1 && !packageTab;
 
 	bool changed = false;
 	if (m_branchStrip->IsShown() != showBranches) { m_branchStrip->Show(showBranches); changed = true; }
@@ -190,8 +195,17 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 	//
 	// A kind that needs a name therefore PROPOSES one. That is what "the kind asks for the name"
 	// means: it asks by putting an answer there, not by refusing to change until one is typed.
+	// ⭐ A PROPOSED NAME BELONGS TO THE KIND THAT PROPOSED IT (Max, 2026-08-21: making a NAMED table
+	// gave it a temporary table's name). Switching a
+	// statement from *temporary table* to *select under a name* left `TempTable1` in the box — the
+	// box was not empty, so nothing re-proposed — and the package then showed a RESULT called
+	// TempTable1, which says the wrong thing about what it is. A name the AUTHOR typed is theirs and
+	// is kept; one this window minted is recognisable by its own pattern and is re-minted.
+	const bool windowMintedTemp = name.StartsWith(_("TempTable"));
 	if (kind == 1 && name.IsEmpty())
 		name = SuggestTempTableName();
+	if (kind == 3 && (name.IsEmpty() || windowMintedTemp))
+		name = SuggestResultName();
 	if (kind == 2 && name.IsEmpty()) {
 		// A DROP names a table that already exists — so the proposal is the last one this package
 		// made before this statement, not a fresh name nobody created.
@@ -209,23 +223,51 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 
 	// A TEMP TABLE'S NAME IS A NAME — the same gate as every other. It goes into the text after
 	// INTO / DROP, so a space in it is a query nothing can read.
-	if (kind != 0 && !AcceptName(name, _("temporary table name"))) {
+	if (kind != 0 && !AcceptName(name, kind == 3 ? _("result name") : _("temporary table name"))) {
 		FillAll();   // put the controls back on what the statement actually is
 		return;
+	}
+
+	// A RESULT NAME IS UNIQUE IN ITS PACKAGE, checked as it is typed. Results are asked for BY NAME
+	// — that is the whole reason one has a name — so two the same make one of them unreachable and
+	// the package says nothing about it. (The same rule the totals levels follow for the same
+	// reason.)
+	if (kind == 3) {
+		for (size_t i = 0; i < m_package.m_statements.size(); ++i) {
+			if (i == m_statement)
+				continue;
+			const ibQueryAstStatement& other = m_package.m_statements[i];
+			if (other.m_select == nullptr || !other.m_select->m_ontoName.IsSameAs(name, false))
+				continue;
+			wxMessageBox(wxString::Format(
+					_("Another query of this package already produces the result '%s'.\n\nResults are "
+					  "asked for by name, so two the same would make one of them unreachable."), name),
+				_("Query constructor"), wxOK | wxICON_WARNING, this);
+			FillAll();
+			return;
+		}
 	}
 
 	switch (kind) {
 	case 1:   // materialise the result under a name
 		statement.m_dropTemp.clear();
+		statement.m_select->m_ontoName.clear();   // a materialised statement hands back no result to name
 		statement.m_select->m_intoTemp = name;
 		break;
 	case 2:   // drop a name made earlier — the query stays behind it, unrendered
 		statement.m_select->m_intoTemp.clear();
+		statement.m_select->m_ontoName.clear();
 		statement.m_dropTemp = name;
 		break;
-	default:  // a plain select — neither name means anything
+	case 3:   // the result comes back, under a name a reader can ask for
 		statement.m_dropTemp.clear();
 		statement.m_select->m_intoTemp.clear();
+		statement.m_select->m_ontoName = name;
+		break;
+	default:  // a plain select — no name means anything
+		statement.m_dropTemp.clear();
+		statement.m_select->m_intoTemp.clear();
+		statement.m_select->m_ontoName.clear();
 		break;
 	}
 
@@ -254,6 +296,62 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 
 // A NAME NOBODY IS USING. The counter runs over the temp tables this package already declares, so
 // two statements cannot propose the same one and quietly overwrite each other's table.
+// ⭐ A NAME MADE OF WHAT THE STATEMENT READS (Max): the main table plus what it joins — `Goods`,
+// `Goods_Prices_Balances`. Long, but it SAYS something; "Query2" says only that somebody pressed a
+// button twice, and a link written against it reads as noise.
+//
+// Uniqueness is added at the end, and only if it is needed: two statements over the same tables are
+// a legitimate thing to write.
+wxString ibDialogQueryConstructor::SuggestResultName() const
+{
+	const ibQuerySelect* select = Current();
+	if (select == nullptr)
+		return _("Result");
+
+	auto leafOf = [](const ibQuerySource& source) -> wxString {
+		if (!source.m_alias.IsEmpty())
+			return source.m_alias;                       // what the author already calls it
+		return source.m_name.empty() ? wxString() : source.m_name.back();
+	};
+
+	wxString name = leafOf(select->m_from);
+	for (const ibQueryAstJoin& join : select->m_joins) {
+		const wxString part = leafOf(join.m_source);
+		if (part.IsEmpty())
+			continue;
+		name += (name.IsEmpty() ? wxString() : wxString(wxT("_"))) + part;
+	}
+	if (name.IsEmpty())
+		name = _("Result");
+
+	// The gate every typed name goes through applies here too — a proposal that the language cannot
+	// carry is not a proposal. Anything the lexer would refuse is dropped rather than smuggled in.
+	wxString cleaned;
+	for (const wxUniChar ch : name)
+		if (wxIsalnum(ch) || ch == wxT('_'))
+			cleaned += ch;
+	if (cleaned.IsEmpty() || wxIsdigit(cleaned[0]))
+		cleaned = wxString(wxT("R")) + cleaned;
+
+	auto taken = [this](const wxString& candidate) {
+		for (size_t i = 0; i < m_package.m_statements.size(); ++i) {
+			if (i == m_statement)
+				continue;
+			const ibQueryAstStatement& statement = m_package.m_statements[i];
+			if (statement.m_select && statement.m_select->m_ontoName.IsSameAs(candidate, false))
+				return true;
+		}
+		return false;
+	};
+	if (!taken(cleaned))
+		return cleaned;
+	for (unsigned int n = 2; ; ++n) {
+		const wxString candidate = cleaned + wxString::Format(wxT("%u"), n);
+		if (!taken(candidate))
+			return candidate;
+	}
+}
+
 wxString ibDialogQueryConstructor::SuggestTempTableName() const
 {
 	auto taken = [this](const wxString& candidate) {
@@ -698,18 +796,188 @@ wxArrayString ibDialogQueryConstructor::LinkTableChoices(bool leftSide) const
 	return out;
 }
 
+// ---------------------------------------------------------------------------------------------
+// THE PACKAGE'S LINKS between its NAMED selections — which names may be picked, and what the "…"
+// behind a condition opens. The rows themselves live on ibQuerySelectionLinkModel, over the package.
+// ---------------------------------------------------------------------------------------------
+
+std::vector<wxString> ibDialogQueryConstructor::NamedResults() const
+{
+	std::vector<wxString> out;
+	// EVERY NAME THE PACKAGE DECLARES, in order. A package link relates two of them and is not itself
+	// a statement, so there is no "before" to stop at: a link may relate any two selections the
+	// package names, whichever order they were written in.
+	for (size_t i = 0; i < m_package.m_statements.size(); ++i) {
+		const ibQueryAstStatement& statement = m_package.m_statements[i];
+		if (statement.m_select && !statement.m_select->m_ontoName.IsEmpty())
+			out.push_back(statement.m_select->m_ontoName);
+	}
+	return out;
+}
+
+wxArrayString ibDialogQueryConstructor::NamedResultChoices(bool leftSide) const
+{
+	wxArrayString out;
+	if (m_selectionLinks == nullptr || m_selectionLinkModel == nullptr)
+		return out;
+
+	// WHAT STANDS ON THE OTHER SIDE OF THIS ROW — kept off the list: a selection linked to itself is
+	// not a link. Read off the LINK, which is where both sides live now.
+	wxString other;
+	if (const ibQueryPackageLink* link =
+			m_selectionLinkModel->LinkAt(m_selectionLinkModel->GetRow(m_selectionLinks->GetSelection())))
+		other = leftSide ? link->m_right : link->m_left;
+
+	for (const wxString& name : NamedResults())
+		if (!name.IsSameAs(other, false))
+			out.Add(name);
+	return out;
+}
+
+// ⭐ "ADD LINK" ADDS A ROW, AND NOTHING ELSE. No statement gains a source, no statement is created,
+// nothing is materialised — the two cells of the row are what say which selections are related
+// (Max, 2026-08-21). A package with fewer than two names has nothing to relate, and says so.
+void ibDialogQueryConstructor::OnSelectionLinkAdd(wxCommandEvent&)
+{
+	if (!CanEdit() || m_selectionLinkModel == nullptr)
+		return;
+
+	if (NamedResults().size() < 2) {
+		wxMessageBox(_("Name two of the package's selections with ONTO first: a link relates two of them."),
+			GetTitle(), wxOK | wxICON_INFORMATION, this);
+		return;
+	}
+
+	m_selectionLinkModel->AddLink();
+	FillAll();
+}
+
+void ibDialogQueryConstructor::OnSelectionLinkRemove(wxCommandEvent&)
+{
+	if (!CanEdit() || m_selectionLinks == nullptr || m_selectionLinkModel == nullptr)
+		return;
+
+	// THE LINK GOES AND NOTHING ELSE MOVES — the selections it related are statements of the package
+	// and stay exactly where they are.
+	m_selectionLinkModel->RemoveLink(m_selectionLinkModel->GetRow(m_selectionLinks->GetSelection()));
+	FillAll();
+}
+
+// ⭐ THE READY CONDITIONS FOR A PACKAGE LINK — every pair of fields the two SELECTIONS offer.
+//
+// The same rule the Links tab follows for two tables, asked of two named results instead: their
+// fields are the projections of the statements that made them (GetFields resolves a bare name that
+// way), crossed, and kept when the two TYPES can meet. Left empty, this cell offered only what the
+// author had already typed — a drop-down that pulls nothing in (Max, 2026-08-21).
+wxArrayString ibDialogQueryConstructor::SelectionLinkConditionChoices() const
+{
+	wxArrayString out;
+	if (m_selectionLinks == nullptr || m_selectionLinkModel == nullptr)
+		return out;
+
+	const ibQueryPackageLink* link =
+		m_selectionLinkModel->LinkAt(m_selectionLinkModel->GetRow(m_selectionLinks->GetSelection()));
+	if (link == nullptr || link->m_left.IsEmpty() || link->m_right.IsEmpty())
+		return out;   // nothing is related yet — there are no pairs to offer
+
+	// NOT SET is a real answer here too: it clears the condition and leaves the row.
+	out.Add(wxEmptyString);
+
+	auto fieldsOf = [this](const wxString& name) {
+		ibQuerySource source;
+		source.m_name.push_back(name);
+		source.m_alias = name;
+		// Resolved as of the WHOLE package: a link relates two selections, whichever order their
+		// statements were written in.
+		return m_model.GetFields(source, m_package, m_package.m_statements.size());
+	};
+	const std::vector<ibQueryConstructorField> leftFields  = fieldsOf(link->m_left);
+	const std::vector<ibQueryConstructorField> rightFields = fieldsOf(link->m_right);
+
+	const auto typesMeet = [](const ibTypeDescription& a, const ibTypeDescription& b) {
+		if (!a.IsOk() || !b.IsOk())
+			return true;   // unknown on either side — do not pretend to know better than the engine
+		for (unsigned int i = 0; i < a.GetClsidCount(); ++i)
+			if (b.ContainType(a.GetByIdx(i)))
+				return true;
+		return false;
+	};
+
+	// SAME-NAMED PAIRS FIRST — they are right more often than not, and a list is read from the top.
+	wxArrayString rest;
+	for (const ibQueryConstructorField& l : leftFields)
+		for (const ibQueryConstructorField& r : rightFields) {
+			if (!typesMeet(l.m_type, r.m_type))
+				continue;
+			const wxString pair = link->m_left + wxT(".") + l.m_name
+			                    + wxT(" = ") + link->m_right + wxT(".") + r.m_name;
+			if (l.m_name.IsSameAs(r.m_name, false)) out.Add(pair);
+			else                                    rest.Add(pair);
+		}
+	WX_APPEND_ARRAY(out, rest);
+	return out;
+}
+
+// THE "…" BEHIND A PACKAGE LINK'S CONDITION — the shared expression editor, opened over the fields
+// of the two selections this row names. Their fields are what such a condition may mention, and
+// they come from the statements that produced the names (GetFields resolves a bare name that way).
+bool ibDialogQueryConstructor::EditSelectionLinkCondition(wxString& text)
+{
+	std::vector<ibQueryConstructorField> fields;
+	if (m_selectionLinks != nullptr && m_selectionLinkModel != nullptr) {
+		if (const ibQueryPackageLink* link =
+				m_selectionLinkModel->LinkAt(m_selectionLinkModel->GetRow(m_selectionLinks->GetSelection()))) {
+			auto add = [&](const wxString& name) {
+				if (name.IsEmpty())
+					return;
+				ibQuerySource source;
+				source.m_name.push_back(name);
+				source.m_alias = name;   // the condition names a selection by its own name
+				const std::vector<ibQueryConstructorField> its =
+					m_model.GetQualifiedFields(source, m_package, m_package.m_statements.size());
+				fields.insert(fields.end(), its.begin(), its.end());
+			};
+			add(link->m_left);
+			add(link->m_right);
+		}
+	}
+
+	ibQueryAstExprPtr existing;
+	wxString written = text;
+	written.Trim(true).Trim(false);
+	if (!written.IsEmpty()) {
+		try { ibQueryParser parser; existing = parser.ParseExpression(written); }
+		catch (const ibBackendException&) { existing = nullptr; }
+	}
+
+	ibDialogQueryExpression dialog(this, _("Link condition"), fields, existing, m_metaData, !CanEdit());
+	if (existing == nullptr && !written.IsEmpty())
+		dialog.SetText(written);
+	if (dialog.ShowModal() != wxID_OK)
+		return false;
+
+	text = dialog.GetText();
+	return true;
+}
+
 // THE READY LINKS for the selected join — the shapes worth one click. Left empty on purpose when
 // nothing obvious offers itself: a list of guesses is worse than none, and the "..." is right there.
 wxArrayString ibDialogQueryConstructor::LinkConditionChoices() const
 {
 	wxArrayString out;
+	// THE LINKS TAB'S OWN GRID — the package's links are edited on their own model and offer no ready
+	// pairs at all (their two sides are RESULTS, whose fields belong to statements the row does not
+	// read), so this helper is once again about one statement's joins and nothing else.
+	ibDataViewCtrl* grid = m_links;
+	ibQueryLinkModel* model = m_linkModel;
 	const ibQuerySelect* select = Current();
-	if (select == nullptr || m_links == nullptr)
+	const size_t against = m_statement;
+	if (select == nullptr || grid == nullptr || model == nullptr)
 		return out;
 
 	// The row is asked the way every other verb over this grid asks it — through the model, which is
 	// what turns a selected ITEM into an index.
-	const size_t row = m_linkModel->JoinIndexOf(m_linkModel->GetRow(m_links->GetSelection()));
+	const size_t row = model->JoinIndexOf(model->GetRow(grid->GetSelection()));
 	if (row >= select->m_joins.size())
 		return out;
 
@@ -723,9 +991,9 @@ wxArrayString ibDialogQueryConstructor::LinkConditionChoices() const
 		return out;
 
 	const std::vector<ibQueryConstructorField> leftFields =
-		m_model.GetFields(select->m_from, m_package, m_statement);
+		m_model.GetFields(select->m_from, m_package, against);
 	const std::vector<ibQueryConstructorField> rightFields =
-		m_model.GetFields(select->m_joins[row].m_source, m_package, m_statement);
+		m_model.GetFields(select->m_joins[row].m_source, m_package, against);
 
 	// ⭐ EVERY PAIR THAT CAN STAND ON EITHER SIDE OF `=`, AND THE ENGINE DECIDES WHICH THOSE ARE.
 	//
@@ -1935,10 +2203,15 @@ void ibDialogQueryConstructor::OnAddTotalsDimension(wxCommandEvent&)
 		fields.push_back(asked);
 	}
 
+	// EACH PICKED FIELD IS A LEVEL OF ITS OWN, which is what picking several in the tree has always
+	// meant here. Grouping two fields INTO one level is said in the level's cell, by writing them as
+	// a list — the toolbar adds levels, the cell composes one.
 	for (const wxString& field : fields) {
 		ibQueryTotalDim dimension;
-		dimension.m_expr = ibQueryColumnFromPath(field);
-		select->m_totalsBy.push_back(dimension);
+		ibQueryTotalField dimField;
+		dimField.m_expr = ibQueryColumnFromPath(field);
+		dimension.m_fields.push_back(std::move(dimField));
+		select->m_totalsBy.push_back(std::move(dimension));
 	}
 	select->m_hasTotals = true;
 	FillAll();
@@ -2024,8 +2297,12 @@ void ibDialogQueryConstructor::OnEditTotalsDimension(wxCommandEvent&)
 	if (select == nullptr || index < 0 || static_cast<size_t>(index) >= select->m_totalsBy.size())
 		return;
 
+	// THE EXPRESSION EDITOR EDITS ONE EXPRESSION, so it opens on the level's HEAD field. A level of
+	// several fields is composed in its cell, where they are written as a list; here the head is
+	// what the editor was raised for.
+	ibQueryTotalField* head = select->m_totalsBy[index].Head();
 	ibDialogQueryExpression dialog(this, _("Grouping level"), AvailableFields(),
-		select->m_totalsBy[index].m_expr, m_metaData, m_readOnly);
+		head != nullptr ? head->m_expr : ibQueryAstExprPtr(), m_metaData, m_readOnly);
 	if (dialog.ShowModal() != wxID_OK)
 		return;
 
@@ -2034,8 +2311,8 @@ void ibDialogQueryConstructor::OnEditTotalsDimension(wxCommandEvent&)
 		select->m_totalsBy.erase(select->m_totalsBy.begin() + index);
 		DropTotalsIfLevelless(*select);
 	}
-	else {
-		select->m_totalsBy[index].m_expr = edited;
+	else if (ibQueryTotalField* editedHead = select->m_totalsBy[index].Head()) {
+		editedHead->m_expr = edited;
 	}
 	FillAll();
 }
@@ -2143,6 +2420,7 @@ void ibDialogQueryConstructor::OnCopyUnionBranch(wxCommandEvent&)
 		return;
 	copy->m_unions.clear();     // a branch has no branches of its own
 	copy->m_intoTemp.clear();   // and it materialises nothing: that belongs to the statement
+	copy->m_ontoName.clear();   // nor does a branch name a result — the statement's result is one
 	copy->m_indexBy.clear();
 
 	// ⚠ AND NEITHER THE ORDERING NOR THE TOTALS COME WITH IT. They read as part of the select they

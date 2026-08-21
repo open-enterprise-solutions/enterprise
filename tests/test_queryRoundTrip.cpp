@@ -367,11 +367,24 @@ public:
 			const unsigned int dims = s->m_totalsOverall ? Below(3) : 1 + Below(2);
 			for (unsigned int d = 0; d < dims; ++d) {
 				ibQueryTotalDim dim;
-				dim.m_expr = Column(2);
-				switch (Below(3)) {
-				case 0:  dim.m_unfold = ibQueryDimUnfold::Hierarchy; break;
-				case 1:  dim.m_unfold = ibQueryDimUnfold::HierarchyOnly; break;
-				default: dim.m_unfold = ibQueryDimUnfold::Elements; break;
+				// A LEVEL OF SEVERAL FIELDS is generated as often as a plain one, because the bracket
+				// that holds it together is exactly the spelling a round trip can lose: read back
+				// without it, one level of two fields becomes two levels of one and the report changes
+				// shape without a word.
+				const unsigned int fields = Chance(3) ? 2u : 1u;
+				for (unsigned int f = 0; f < fields; ++f) {
+					ibQueryTotalField field;
+					field.m_expr = Column(2);
+					// Only a single-field level may unfold through a hierarchy — the same rule the
+					// engine holds, so the generator does not manufacture queries it refuses.
+					if (fields == 1) {
+						switch (Below(3)) {
+						case 0:  field.m_unfold = ibQueryDimUnfold::Hierarchy; break;
+						case 1:  field.m_unfold = ibQueryDimUnfold::HierarchyOnly; break;
+						default: field.m_unfold = ibQueryDimUnfold::Elements; break;
+						}
+					}
+					dim.m_fields.push_back(std::move(field));
 				}
 				if (Chance(3))
 					dim.m_alias = SafeName() + wxString::Format(wxT("L%u"), d);
@@ -472,12 +485,16 @@ TEST(QueryRoundTripProperty, TheGeneratorReallyProducesTheAwkwardShapes)
 	// ⚠ A PROPERTY TEST THAT GENERATES NOTHING INTERESTING PASSES FOR THE WRONG REASON. This is the
 	// generator's own test: over the same seeds, the shapes that actually broke must ALL occur —
 	// a keyword used as a name, a walk after a cast, arithmetic over aggregates, and OVERALL.
-	bool keywordName = false, castWalk = false, aggArith = false, overall = false;
+	bool keywordName = false, castWalk = false, aggArith = false, overall = false, multiFieldLevel = false;
 
 	for (unsigned int seed = 1; seed <= 400; ++seed) {
 		ibAstGen gen(seed * 2654435761u);
 		const ibQuerySelectPtr ast = gen.Select(0, true);
 		const wxString text = ibRenderQuery(*ast);
+
+		for (const ibQueryTotalDim& dim : ast->m_totalsBy)
+			if (dim.m_fields.size() > 1)
+				multiFieldLevel = true;
 
 		if (text.Contains(wxT(".Order")) || text.Contains(wxT(".Group"))
 		    || text.Contains(wxT(".Count")) || text.Contains(wxT(".Value"))
@@ -495,6 +512,7 @@ TEST(QueryRoundTripProperty, TheGeneratorReallyProducesTheAwkwardShapes)
 	EXPECT_TRUE(castWalk)    << "no walk after a cast was ever generated";
 	EXPECT_TRUE(aggArith)    << "no arithmetic over a call was ever generated";
 	EXPECT_TRUE(overall)     << "BY OVERALL never occurred";
+	EXPECT_TRUE(multiFieldLevel) << "no TOTALS level of several fields was ever generated";
 }
 
 // ⭐ WINDOWS MAKE THE TRIP TOO — and they are checked by hand because the generator does not build

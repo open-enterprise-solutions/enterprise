@@ -35,6 +35,10 @@ enum class ibQueryKeyword
 	Allowed,
 	// package verbs: SELECT … INTO <name> materialises a temp table, DROP <name> releases it early
 	Into, Drop,
+	// SELECT … ONTO <name> — NAME THIS STATEMENT'S FINISHED RESULT. The pair to INTO and deliberately
+	// not the same thing: INTO makes a table for later statements to read, ONTO names the result a
+	// reader asks for BY NAME instead of by its position in the package.
+	Onto,
 	// INDEX BY … — the columns a materialised temp table is indexed by
 	Index,
 	// FOR UPDATE — the select HOLDS the rows it returned until the transaction ends

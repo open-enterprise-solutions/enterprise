@@ -1710,6 +1710,41 @@ void AddSyntheticAggColumns(ibSelectorTree& tree, const std::vector<ibDataQueryB
 // nothing is rendered to text per row to say so.
 using ibRowsByValue    = std::unordered_map<ibValue, std::vector<long>,    ibValueHash, ibValueEqual>;
 using ibRefChildren    = std::unordered_map<ibValue, std::vector<ibValue>, ibValueHash, ibValueEqual>;
+
+// A LEVEL'S KEY — the values of its fields, in the level's own order. One field is the ordinary
+// case and stays a one-element key rather than a shape of its own, so nothing downstream branches
+// on how many fields a level has.
+using ibLevelKey = std::vector<ibValue>;
+
+struct ibLevelKeyHash
+{
+	std::size_t operator()(const ibLevelKey& key) const
+	{
+		// Mixed in 64 bits and folded down at the end: on a 32-bit build std::size_t is half the
+		// width, and mixing IN it silently throws away the upper half of every value's hash.
+		const ibValueHash one;
+		wxULongLong_t h = 0xcbf29ce484222325ull;
+		for (const ibValue& value : key) {
+			h ^= static_cast<wxULongLong_t>(one(value));
+			h *= 0x100000001b3ull;
+		}
+		return static_cast<std::size_t>(h ^ (h >> 32));
+	}
+};
+
+struct ibLevelKeyEqual
+{
+	bool operator()(const ibLevelKey& left, const ibLevelKey& right) const
+	{
+		if (left.size() != right.size()) return false;
+		const ibValueEqual same;
+		for (std::size_t i = 0; i < left.size(); ++i)
+			if (!same(left[i], right[i])) return false;
+		return true;
+	}
+};
+
+using ibRowsByLevelKey = std::unordered_map<ibLevelKey, std::vector<long>, ibLevelKeyHash, ibLevelKeyEqual>;
 using ibValueSeen      = std::unordered_map<ibValue, char,                 ibValueHash, ibValueEqual>;
 using ibValueParentMap = std::unordered_map<ibValue, ibValue,              ibValueHash, ibValueEqual>;
 
@@ -2623,7 +2658,9 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 
 	ibSelectorTree::Node* node = parent->AddChild(parent->m_level + 1);
 	node->m_values = parent->m_values;   // inherit the grouping fields available from the levels above (same rule as the Elements branch)
-	node->m_values[level.m_col->GetColumnId()] = valueKey;   // the key IS the value
+	// A hierarchy level is single-field by construction (FoldDimLevel routes it here only then), so
+	// its key is the head field's value.
+	node->m_values[level.HeadCol()->GetColumnId()] = valueKey;   // the key IS the value
 
 	std::vector<long> ownRows;
 	const auto rit = byVal.find(valueKey);
@@ -2649,51 +2686,101 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 	if (levelIdx >= ctx.levels->size()) return;          // leaf level reached
 	const ibTotalLevel& level = (*ctx.levels)[levelIdx];
 
-	// Grouped by the VALUE, in first-seen order. `valOf` is gone with the string key — it only ever
-	// mapped a rendered key back to the value it was rendered from.
-	ibRowsByValue            byVal;
-	std::vector<ibValue> order;
-	for (long r : rows) {
-		const ibValue v = ctx.snapshot->GetCell(r, level.m_col->GetColumnId());
-		if (byVal.find(v) == byVal.end()) order.push_back(v);
-		byVal[v].push_back(r);
-	}
-
-	if (level.m_dim == ibDimensionKind::Elements) {
-		for (const ibValue& k : order) {
-			ibSelectorTree::Node* child = node->AddChild(node->m_level + 1);
-			// A SUBGROUP inherits the grouping fields AVAILABLE from the levels above (Max) — copy the parent
-			// group's stamped dimension values down, then add this level's own. So a display column that
-			// dot-walks an ANCESTOR dimension's reference (e.g. the parent grouped by Reference, this level by
-			// Reference.DataVersion) resolves against the inherited value in the subgroup header, not just at the
-			// top level. Aggregates are (re)stamped by ApplyAggregates below, so inheriting them is harmless.
-			child->m_values = node->m_values;
-			child->m_values[level.m_col->GetColumnId()] = k;   // the key IS the value
-			FoldDimLevel(ctx, child, byVal[k], levelIdx + 1);   // next level inside
-			child->m_hasChildren = !child->m_children.empty();
-			ApplyAggregates(*child, *ctx.snapshot, byVal[k], *ctx.aggregates);
+	// ⭐⭐ A LEVEL WITH NO FIELDS IS THE DETAIL RECORDS. Grouping by nothing does not make one group
+	// of everything — that is what OVERALL means, at the other end of the list — it makes NO group
+	// at all, so what hangs here is the rows themselves: one node per row, carrying the values it
+	// was read with. That is the whole of "a detail record is an empty grouping", and it is one
+	// primitive rather than a second kind of level: the settings tree writes an empty grouping node
+	// and the fold answers with rows.
+	//
+	// The rows are ALREADY HERE — this is the snapshot the levels above were folded from — so the
+	// detail level costs nodes, not a second read. (It does cost nodes: a report that prints every
+	// row holds every row, which is what printing every row means. The server-side fold is refused
+	// upstream when details are asked for, since ROLLUP returns no rows to hang.)
+	if (level.m_fields.empty()) {
+		for (long r : rows) {
+			ibSelectorTree::Node* leaf = node->AddChild(node->m_level + 1);
+			leaf->m_kind = ibSelectorNodeKind::Detail;
+			leaf->m_values = node->m_values;   // the group keys above stay readable on the row
+			for (const ibQueryRamColumn& col : ctx.snapshot->Columns())
+				leaf->m_values[col.m_id] = ctx.snapshot->GetCell(r, col.m_id);
+			// THE RESOURCES, OVER THIS ONE ROW — which is the row's own contribution to the totals
+			// above it (a sum of one row is that row; a count of one row is one). Rolled through the
+			// same call every heading uses, so a figure on a detail line and the figure it adds up
+			// into cannot be computed two different ways.
+			ApplyAggregates(*leaf, *ctx.snapshot, std::vector<long>{ r }, *ctx.aggregates);
 		}
 		return;
 	}
 
-	// Hierarchy / HierarchyOnly — arrange the values into the catalog's parent-ref tree.
-	const ibValueParentMap parentOf = ParentMapForField(ctx, level.m_col);
-	ibRefChildren childrenOf;
-	ibValueSeen   seen;
-	std::function<void(const ibValue&)> chainUp = [&](const ibValue& key) {
-		if (IsNoKey(key) || seen[key]) return;
-		seen[key] = 1;
-		const auto pit = parentOf.find(key);
-		const ibValue par = (pit != parentOf.end()) ? pit->second : ibValue();
-		childrenOf[par].push_back(key);
-		chainUp(par);
-	};
-	for (const auto& kv : byVal) chainUp(kv.first);
-	ibValueSeen visited;
-	const auto rit = childrenOf.find(ibValue());
-	if (rit != childrenOf.end())
-		for (const ibValue& rootKey : rit->second)
-			AttachDimValue(ctx, node, levelIdx, rootKey, byVal, childrenOf, visited);
+	// A HIERARCHY UNFOLD walks ONE parent chain, so it is a single-field level's answer — there is no
+	// one chain to walk for a key made of several fields. The lowering refuses that combination where
+	// it is written, so this reads the head field and never has to blend the two readings.
+	if (level.IsSingleField() && level.HeadDim() != ibDimensionKind::Elements) {
+		// Grouped by the VALUE, in first-seen order. `valOf` is gone with the string key — it only ever
+		// mapped a rendered key back to the value it was rendered from.
+		ibRowsByValue byVal;
+		for (long r : rows)
+			byVal[ctx.snapshot->GetCell(r, level.HeadCol()->GetColumnId())].push_back(r);
+
+		// Hierarchy / HierarchyOnly — arrange the values into the catalog's parent-ref tree.
+		const ibValueParentMap parentOf = ParentMapForField(ctx, level.HeadCol());
+		ibRefChildren childrenOf;
+		ibValueSeen   seen;
+		std::function<void(const ibValue&)> chainUp = [&](const ibValue& key) {
+			if (IsNoKey(key) || seen[key]) return;
+			seen[key] = 1;
+			const auto pit = parentOf.find(key);
+			const ibValue par = (pit != parentOf.end()) ? pit->second : ibValue();
+			childrenOf[par].push_back(key);
+			chainUp(par);
+		};
+		for (const auto& kv : byVal) chainUp(kv.first);
+		ibValueSeen visited;
+		const auto rit = childrenOf.find(ibValue());
+		if (rit != childrenOf.end())
+			for (const ibValue& rootKey : rit->second)
+				AttachDimValue(ctx, node, levelIdx, rootKey, byVal, childrenOf, visited);
+		return;
+	}
+
+	// GROUPED BY THE TUPLE of the level's fields, in first-seen order. One field is the degenerate
+	// case of the same walk — a one-element key — so a level of two fields costs one more cell read
+	// per row and nothing else.
+	ibRowsByLevelKey        byKey;
+	std::vector<ibLevelKey> order;
+	for (long r : rows) {
+		ibLevelKey key;
+		key.reserve(level.m_fields.size());
+		for (const ibTotalField& field : level.m_fields)
+			key.push_back(ctx.snapshot->GetCell(r, field.m_col->GetColumnId()));
+
+		const auto it = byKey.find(key);
+		if (it == byKey.end()) {
+			order.push_back(key);
+			byKey.emplace(std::move(key), std::vector<long>{ r });
+		}
+		else {
+			it->second.push_back(r);
+		}
+	}
+
+	for (const ibLevelKey& key : order) {
+		ibSelectorTree::Node* child = node->AddChild(node->m_level + 1);
+		// A SUBGROUP inherits the grouping fields AVAILABLE from the levels above (Max) — copy the parent
+		// group's stamped dimension values down, then add this level's own. So a display column that
+		// dot-walks an ANCESTOR dimension's reference (e.g. the parent grouped by Reference, this level by
+		// Reference.DataVersion) resolves against the inherited value in the subgroup header, not just at the
+		// top level. Aggregates are (re)stamped by ApplyAggregates below, so inheriting them is harmless.
+		child->m_values = node->m_values;
+		for (std::size_t i = 0; i < level.m_fields.size(); ++i)
+			child->m_values[level.m_fields[i].m_col->GetColumnId()] = key[i];   // every field of the key IS a value
+
+		const std::vector<long>& own = byKey[key];
+		FoldDimLevel(ctx, child, own, levelIdx + 1);        // next level inside
+		child->m_hasChildren = !child->m_children.empty();
+		ApplyAggregates(*child, *ctx.snapshot, own, *ctx.aggregates);
+	}
 }
 
 } // namespace
@@ -2933,6 +3020,31 @@ ibDataQueryResult ibQueryComposer::ExecuteGroupLevelPage(const ibDataQuerySpec& 
 // columns are the LEVELS (in order); the aggregates the sums folded at every level + the
 // grand total. Input = the single source materialised, or the composed multi-source
 // result. The tree lives in L3's own ibQueryRamTable. (docs/query-language-arc.md §22.1b)
+// ⭐ CAN THE DBMS FOLD THIS TOTALS ITSELF, and if so — fold it. The same two push-downs
+// ExecuteTotals takes when it can, asked as a QUESTION so a caller that must otherwise read detail
+// rows (the query lowering) can take the cheap road when it exists and its own road when it does
+// not. False = nothing was read; the caller proceeds exactly as before.
+bool ibQueryComposer::TryFoldTotalsInDbms(const ibDataQuerySpec& spec, ibSelectorTree& out)
+{
+	if (IsSingleSource(spec) && ibDbTableProvider::CanPushRollupTotals(spec)) {
+		out = ibDbTableProvider::ExecuteRollupTotals(spec);
+		return true;
+	}
+	if (!IsSingleSource(spec) && ibDbTableProvider::CanPushColocatedRollupTotals(spec)) {
+		out = ibDbTableProvider::ExecuteColocatedRollupTotals(spec);
+		return true;
+	}
+	return false;
+}
+
+// CAN A STATEMENT DECLARE A NAMED QUERY HERE (`WITH …`)? The connected driver's own answer, asked
+// through L2's question rather than read off its dictionary — same road as the rollup gate above.
+bool ibQueryComposer::CanDeclareNamedQuery(ibDatabaseConnectionHolder* holder)
+{
+	ibConnectionScope scope(holder);
+	return scope && ibCanUseCte(scope.get());
+}
+
 ibSelectorTree ibQueryComposer::ExecuteTotals(const ibDataQuerySpec& spec)
 {
 	// Push-down: a single-source totals on a ROLLUP-capable DBMS runs server-side (GROUP BY ROLLUP),
@@ -3037,6 +3149,13 @@ void ibDataQueryResult::SetTotals(std::vector<ibTotalLevel> levels, std::vector<
 	m_totalsOverall   = overall;
 }
 
+void ibDataQueryResult::SetReadyTree(ibSelectorTree tree)
+{
+	// The push-down's answer, carried to whoever walks this result. Held by shared pointer because a
+	// result is moved around and the tree is not a thing to copy.
+	m_readyTree = std::make_shared<ibSelectorTree>(std::move(tree));
+}
+
 void ibDataQueryResult::SetObjectRead(ibMetaID dimColumnId, const wxString& prefix, const ibBackendQueryColumn* leaf)
 {
 	if (prefix.IsEmpty() || leaf == nullptr)
@@ -3063,6 +3182,16 @@ void ibDataQueryResult::SetSource(ibDatabaseConnectionHolder* holder, const ibBa
 // / hierarchy-only) polymorphically; the caller sees one interface, never the backing or the form.
 ibSelector ibDataQueryResult::Select(ibSelectKind mode)
 {
+	// ⭐ THE DBMS MAY HAVE FOLDED IT ALREADY. When the totals were pushed down (GROUP BY ROLLUP), the
+	// tree is complete and there is no cursor of detail rows to drain — draining one here would read
+	// exactly the rows the push-down exists to leave in the database.
+	if (m_readyTree) {
+		ibSelector s(ibQueryRamTable(), mode);
+		s.WithTotals(m_totalLevels, m_totalAggregates, m_totalsOverall);
+		s.WithReadyTree(m_readyTree);
+		return s;
+	}
+
 	ibQueryRamTable snapshot;
 	for (const ibBackendQueryColumn* c : m_matColumns)
 		if (c != nullptr) snapshot.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());

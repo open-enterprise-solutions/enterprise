@@ -1127,3 +1127,194 @@ still the report's twin of a document's `Posting` — what went is a second door
 - `IsCellReadOnly(int row, int col, bool isReadOnly = true)` takes an `isReadOnly`
   argument it never uses — a getter carrying a setter's signature. Harmless, and a
   cleanup candidate.
+
+---
+
+## 6. The composition settings window, rebuilt around NODES (2026-08-21)
+
+The window edits a SNAPSHOT of the composition's outputs and applies it whole on accept. The flat
+buffer it used before (filter / sort / a flat grouping ladder) cannot describe a level made of
+several fields, a second output, or an axis of columns — and papering over that with a "same level
+as the one above" flag would have carried the lie into every saved variant.
+
+```
+Report                       ← available fields · filter · sort that reach EVERY output
+└── Output / Table           ← empty outputs are not shown at all
+    ├── Grouping             ← its elements, side by side; a level with none = detail records
+    └── Grouping …
+```
+
+- **"Add grouping" on the report starts a NEW OUTPUT**; on a grouping it nests one under it. That is
+  the whole gesture: levels added one under another belong to one output, going back to the root
+  begins the next.
+- **Deleting a grouping breaks the chain** — it and everything under it go, together with their node
+  buffers. Pulling the deeper levels up would silently re-parent them into a different report.
+- **The node's own pages**: *Grouping* (its elements, each with its own unfold — shown only when a
+  grouping is selected, since nothing else has one), *Available fields* (its own set or "auto" from
+  above, with add / delete / copy / move), *Filter*, *Sort*. The filter and sort editors are the
+  SHARED ones, re-pointed at the selected node's buffer.
+- **By mouse**: double-click or DRAG a field from the tree into the list (the same drop target the
+  filter and sort use). Moving groupings by dragging is still to come; the toolbar's arrows are the
+  standing road.
+
+### What the printer does with a level of several fields
+
+They are WELDED: written side by side on one row, not one under another — one heading, several
+columns. The dimension area is as wide as the widest level; the indent rides on the level's first
+field; the header carries one line per LEVEL. Before this the printer counted dimension columns as
+if each were a level, so the second field of one level took the next level's place and the last
+level fell off the page ("the date disappears").
+
+### A report with a composer needs no form
+
+`StartMainModule` builds the generated form (a gridbox over the default composer) when the report
+has NO default form but HAS a default composer. Before, the module started and quietly died. With
+neither, the refusal stands: an empty window is a worse answer than none.
+
+### What a variant now carries
+
+Its structure, beside its settings: outputs, their levels, the fields inside them with their
+unfolds, and the per-node field sets with their "auto" flags. Captured when the variant is left,
+applied when it is entered (AFTER the flat settings, which rebuild the ladder from a list that
+cannot hold a multi-field level), and written to the file. A file written before this simply has no
+structure section — absence reads as absence.
+
+⏳ Not serialised yet: a level's own filter and sort. They live as an expression and need a format
+of their own.
+
+### 6a. Several outputs on one sheet (2026-08-21)
+
+The composition hands every output to the SAME driver and runs once; each prints as a SECTION below
+the previous one. Three things that had to be said out loud for that to read as a report:
+
+- the document is cleared for the FIRST section only (clearing per section made the second output
+  erase the first);
+- the title and its parameter lines are the REPORT's, written once above everything;
+- sections are separated by a clear gap — two blank, untinted lines, because one reads as a row that
+  failed to print;
+- the header freeze belongs to the PAGE, not to a section. Freezing again on the next output pinned
+  everything printed so far and the sheet stopped scrolling ("with two reports the scroll does
+  nothing").
+
+The grand-total row prints only when the output declares MEASURES: at depth 0 there is no dimension
+value, so without figures it is an empty tinted stripe above the first heading — which reads as a
+drawing fault rather than as a total.
+
+### 6b. Detail records — the rows under the headings (2026-08-21)
+
+*"A detail record is an empty grouping"* (Max) — the rows are a LEVEL of the ladder, the last one, and
+the settings tree writes them as a node with no fields (`ibCompositionLevelKind::Details`).
+
+**How one is added.** "Add grouping" opens a FORM — the level's field list, with add / delete / move
+and the per-field unfold — and **OK with an empty list makes it the detail level**. One verb makes a
+level; what the level IS gets decided inside the form. (There is no second command for the empty
+case: two verbs for one node is how two ways of making it start to disagree.)
+
+**What the printer gets.** The walk asks the NODE (`ibSelector::Kind()`) and calls `OnDetail` rather
+than `OnGroup`, so the spreadsheet driver lays a row out as a row: faint fill, no bold, no indent of
+its own. It needed no change — a detail row was already its other case.
+
+**What the reading costs.** A report that prints every row holds every row; that is what printing
+them means, and it is why this is opt-in per output rather than a mode. Two things follow when an
+output asks for them (`ibDataComposer::WantsDetails`):
+
+- the server-side fold is REFUSED — `GROUP BY ROLLUP` returns aggregated rows, so there would be
+  nothing left to hang under the last heading;
+- the SELECTed fields join the totals schema as `Detail` columns. Without that a detail row could
+  print only the resources: a `TOTALS` read projects the levels and the measures and nothing else.
+
+Each detail node carries the row's own values, and its resources are rolled over that ONE row
+through the same `ApplyAggregates` every heading uses — so a figure on a line and the figure it adds
+up into cannot be computed two different ways.
+
+**A level's own filter and sort are saved now.** The filter is kept as the TREE it was written as
+(that is what the editor reopens on) and the expression the engine reads is DERIVED from it —
+rebuilt when a file is loaded or a variant switched (`RebuildLevelFilters`). An expression can be
+run but not taken apart back into the lines a person wrote, which is why the tree is what travels.
+
+⏳ The query TEXT still cannot ask for detail records — there is no keyword, so the constructor has
+nothing to offer either. Deliberately open: a new global word takes an identifier away from every
+configuration, and the naming is Max's. Today the request rides as an argument of the READ
+(`ExecuteTotals(…, withDetails)`), which is where "how much of the tree do you want to see" belongs.
+
+### 6bb. Where the totals are printed (2026-08-21, settled 2026-08-22)
+
+Every level's figures were computed all along — the fold rolls `Sum / Count / Min / Max / Avg` at
+every node, so each subgroup has its own. The question was only WHERE to write them, and the answer
+Max gave after seeing both shapes on screen is:
+
+**A GROUP IS ONE ROW — its name and its figures. Only the GRAND total stands on its own.**
+
+```
+Warehouse A                380.00   ← the heading IS the group's total
+    Apple                  120.00   ← its subgroup, same rule
+        …rows, if the output asks for detail records…
+    Pear                   260.00
+Grand total              1 240.00   ← the whole output, at the bottom of its section
+```
+
+**The shape that was tried and rejected** put a `Total …` line under every group. It is the
+reference platform's layout and it reads badly here, because our heading already carries the
+group's resources beside its name: the line below repeats, word for word, the line above it (Max,
+2026-08-22 — *"that is nonsense, you already have the resource there… by every grouping it is not
+readable"*). The per-group machinery (`m_openGroups` / `CloseGroupsFrom`) is gone; `WriteTotalLine`
+stayed, with exactly one caller.
+
+**Where the grand total comes from — nothing computes it twice.** It is the ROOT of the folded
+tree, and the fold has always rolled the whole result into it (`ApplyAggregates(tree.Root(), …)` —
+"grand total in-place"). What decides whether anyone SEES it is the walk, not the arithmetic:
+`ibSelector::EnsureWalk` puts the root in the visit list only when the totals are `OVERALL`.
+
+So `OVERALL` is a WALK setting, and the reader may ask for it in its own words:
+
+| who asks | how |
+|---|---|
+| the query text | `TOTALS SUM(x) BY OVERALL, Warehouse` — the level above every dimension |
+| the READER | `ibSelector::WalkOverall()` — the same flag, set by whoever walks |
+| the REPORT | `ibCompositionDriver::WantsGrandTotal()` → true on `ibSpreadsheetComposeDriver` |
+
+The composer asks the driver (`RunOutput`) and sets the flag; a list's fetch answers `false`, so a
+grouped list does not grow a stray top-level row. When the settings eventually get an explicit
+"grand totals" switch of their own, that is the seam it lands on.
+
+**And it is written LAST though it arrives FIRST.** The walk is pre-order and the root has nothing
+above it, so `OnRow(0, hasChildren=true, …)` is the first call the driver receives. It is held
+(`m_grandTotal`) and written by `OnComplete`, at the bottom of the output's own section. Its caption
+goes inside the DIMENSION area (`m_dimWidth`); an output with no dimensions at all has no such area,
+so that line is figures only — column 0 there is a number, and the word "Grand total" would replace
+it. Pinned: `SpreadsheetCompose.GrandTotal_ArrivesFirstAndIsPrintedLast`,
+`…GrandTotalWithNoDimensions_WritesFiguresOnly`, `…NoPerGroupTotalLine_TheHeadingCarriesTheFigures`.
+
+⚠ **A server-folded tree had to be taught to say it has children.** `GROUP BY ROLLUP` builds its
+nodes by finding each parent through a key map — nothing ever descends — so `m_hasChildren` stayed
+false on every node and the printer drew headings as ordinary rows. `MarkRollupFolders` states it
+once the shape is complete (`RunRollupTotals`). The RAM fold sets it as it descends and always did.
+
+### 6c. What the live run changed (2026-08-21)
+
+Five things came out of Max running the window, and all five are the same class: **the mechanism was
+there, the door was wrong.**
+
+- **The "…" on a level's Field cell opens the GROUPING FORM**, not the single-field picker. A level
+  groups by a LIST of fields (the cell plainly shows `Ref, DataVersion`), and a picker could only
+  ever edit the head one. The shared row-value cell grew one hook for this — `SetExpand`: set it and
+  the button opens the ROW's own window. Same button, same meaning ("open what edits this cell"),
+  which is why it is one button and not two. The form is the same one *Add grouping* opens, so a
+  grouping is made and changed in one place.
+- **The available-fields list is edited by the picker too.** Drawn as plain text, a wrong line could
+  only be re-made — delete, add — which is a verb this window offers nowhere else.
+- **A parameter's expression compiles against the OBJECT'S OWN config**, through the attach chain
+  (`GetMetaData`), not against the query's SOURCE config and not against whatever configuration is
+  open globally. The expression is SCRIPT: the names it may call are the ones its configuration
+  declares.
+- **…and its parent is the MODULE MANAGER, not the configuration's root module.** `CurrentDate()` is
+  not a function of any module — it is a METHOD of a scope-context value (`SystemManager`, bound
+  through `BindScopeVariable`), and those live on the module manager. Parented to the configuration's
+  own module, the check compiled against a world with no built-ins at all and reported "procedure or
+  function not detected (currentdate)" about a function every module can call.
+  `ibSession::EditModuleManagerFor(metaData)` is the one seam, with both roads already inside it
+  (the Designer's lightweight manager from the compile cache, the session's root at run time) — so
+  this window neither branches on the mode nor names either of them.
+- **ASCII only in UI literals** in this file — it has no BOM, so MSVC reads it as ANSI and an em
+  dash reaches the screen as mojibake. The rule was already written at the top; this is what
+  forgetting it looks like.

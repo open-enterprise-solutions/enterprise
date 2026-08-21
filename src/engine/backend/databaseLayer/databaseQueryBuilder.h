@@ -555,9 +555,32 @@ inline ibQueryExprPtr ibExists(ibQueryRelPtr subquery, bool negated = false)
 	return e;
 }
 
+// ⭐ ONE NAMED QUERY, WRITTEN ONCE AND READ BY NAME — a common table expression.
+//
+// It exists for the thing a package already says: a statement NAMES its result (`ONTO`) and later
+// statements read it. Substituting that statement's text at every mention is correct and costs a
+// second execution the moment there are two mentions; `WITH Sales AS (…)` says it once and every
+// mention is a name the engine resolves.
+//
+// The relation is an ORDINARY one — the same tree a FROM subquery holds — so nothing about building
+// a query changes; only where it is written.
+struct ibQueryCte
+{
+	wxString      m_name;
+	ibQueryRelPtr m_query;
+};
+
 struct ibQueryIR
 {
 	ibQueryRelPtr m_root;
+
+	// THE NAMED QUERIES THIS STATEMENT READS, in the order they must be declared — an engine reads
+	// them top to bottom, so a CTE that mentions an earlier one has to come after it.
+	//
+	// ⚠ Only a dialect that HAS `WITH` may be handed these (ibSqlFeatures::m_cte). The renderer
+	// refuses rather than inlining them: an engine without CTEs needs the SUBQUERY form, and that is
+	// a different tree — deciding it here would be L2 quietly rewriting the query it was given.
+	std::vector<ibQueryCte> m_with;
 
 	// Pessimistic read-for-update: the renderer appends the dialect's row-lock clause
 	// (m_rowLockSuffix) to the TOP-level SELECT. Used by the register set lock + ibLockManager.
@@ -984,6 +1007,12 @@ BACKEND_API bool ibCanPushRollup(const ibDatabaseLayer* layer);
 // SQLite 3.25+ yes; the ANSI baseline no.) Asked before choosing the SHAPE of the query — unlike
 // ibRenderOverClause, which refuses once a window has already been built.
 BACKEND_API bool ibCanPushWindow(const ibDatabaseLayer* layer);
+
+// WITH … AS (…) — can this driver read a query the statement NAMES? It is what lets a named result
+// of a package stay INSIDE the SQL: without it the named query has to come back as rows and be
+// joined here. (FB 2.1+, PG, SQLite 3.8.3+ yes; the ANSI baseline — ODBC — no.) Asked before
+// choosing the shape, unlike the renderer, which refuses once a WITH has already been built.
+BACKEND_API bool ibCanUseCte(const ibDatabaseLayer* layer);
 
 // (No `ibCanUseTempTables` here, and the reason is worth keeping: the per-driver temp facts'
 //  PRESENCE already IS that capability, and the one caller — the temp-table manager — needs the

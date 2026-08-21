@@ -206,6 +206,13 @@ class ibValueRecordDataObjectReport : public ibValueRecordDataObjectExt {
 	BACKEND_API bool Compose(class ibBackendSpreadsheetObject* document);
 	ibValueRecordDataObjectReport(const ibValueRecordDataObjectReport& source);
 	ibValueRecordDataObjectReport(const ibValueMetaObjectReport* metaObject);
+
+	// ⭐ IT KNOWS WHAT IT IS. A report object is built from a report metaobject and can be built
+	// from nothing else, so it says so — a caller asking "is this a report?" with a dynamic_cast
+	// would be re-deriving what the constructor already guaranteed.
+	virtual const ibValueMetaObjectReport* GetMetaObject() const override {
+		return static_cast<const ibValueMetaObjectReport*>(ibValueRecordDataObjectExt::GetMetaObject());
+	}
 public:
 
 	// ShowFormValue / GetFormValue inherited from base. Report has a

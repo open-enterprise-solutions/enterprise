@@ -65,7 +65,8 @@ ibQuerySelectPtr CloneSelect(const ibQuerySelect& s)
 	for (ibQueryAstExprPtr& t : c->m_totalsAggregates)
 		t = CloneExpr(t);
 	for (ibQueryTotalDim& d : c->m_totalsBy)
-		d.m_expr = CloneExpr(d.m_expr);
+		for (ibQueryTotalField& f : d.m_fields)
+			f.m_expr = CloneExpr(f.m_expr);
 	for (std::shared_ptr<ibQuerySelect>& u : c->m_unions)
 		u = CloneSelect(*u);
 	return c;
@@ -285,7 +286,8 @@ void FlattenFrom(ibQuerySelect& s)
 		WalkColumns(s.m_having, checkRef);
 		for (ibQueryOrderItem& o : s.m_orderBy)           WalkColumns(o.m_expr, checkRef);
 		for (ibQueryAstExprPtr& t : s.m_totalsAggregates) WalkColumns(t, checkRef);
-		for (ibQueryTotalDim& d : s.m_totalsBy)           WalkColumns(d.m_expr, checkRef);
+		for (ibQueryTotalDim& d : s.m_totalsBy)
+			for (ibQueryTotalField& f : d.m_fields)       WalkColumns(f.m_expr, checkRef);
 		if (outOfScope) return;
 	}
 
@@ -316,7 +318,8 @@ void FlattenFrom(ibQuerySelect& s)
 	WalkColumns(s.m_having, subst);
 	for (ibQueryOrderItem& o : s.m_orderBy)         WalkColumns(o.m_expr, subst);
 	for (ibQueryAstExprPtr& t : s.m_totalsAggregates) WalkColumns(t, subst);
-	for (ibQueryTotalDim& d : s.m_totalsBy)         WalkColumns(d.m_expr, subst);
+	for (ibQueryTotalDim& d : s.m_totalsBy)
+		for (ibQueryTotalField& f : d.m_fields)      WalkColumns(f.m_expr, subst);
 
 	// Outer SELECT * over an explicit inner projection = exactly the subquery's output.
 	if (s.m_selectAll && !inner.m_selectAll) {

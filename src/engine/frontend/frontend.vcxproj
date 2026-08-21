@@ -340,6 +340,7 @@
     <ClCompile Include="win\dlgs\queryConstructor\queryConstructorText.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryJoinDiagram.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryLinkModel.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\querySelectionLinkModel.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryConditionModel.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryUnionModel.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryExpressionDialog.cpp" />
@@ -733,6 +734,7 @@
     <ClInclude Include="win\dlgs\queryConstructor\queryConstructor.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryJoinDiagram.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryLinkModel.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\querySelectionLinkModel.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryConditionModel.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryUnionModel.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryGridModel.h" />

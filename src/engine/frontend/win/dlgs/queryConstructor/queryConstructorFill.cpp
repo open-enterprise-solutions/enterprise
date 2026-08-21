@@ -207,14 +207,16 @@ void ibDialogQueryConstructor::FillPackage()
 	// The KIND, read back off the statement — which is where it lives; the control is a view of it.
 	const int kind = statement == nullptr ? 0
 		: statement->IsDrop() ? 2
-		: (statement->m_select && !statement->m_select->m_intoTemp.IsEmpty()) ? 1 : 0;
+		: (statement->m_select && !statement->m_select->m_intoTemp.IsEmpty()) ? 1
+		: (statement->m_select && !statement->m_select->m_ontoName.IsEmpty()) ? 3 : 0;
 
 	if (m_queryKind != nullptr)
 		m_queryKind->SetSelection(kind);
 	if (m_tempName != nullptr) {
 		m_tempName->ChangeValue(statement == nullptr ? wxString()
 			: statement->IsDrop() ? statement->m_dropTemp
-			: (statement->m_select ? statement->m_select->m_intoTemp : wxString()));
+			: statement->m_select == nullptr ? wxString()
+			: (kind == 3 ? statement->m_select->m_ontoName : statement->m_select->m_intoTemp));
 		m_tempName->Enable(kind != 0);   // the name is asked only by the kinds that need one
 	}
 
@@ -224,6 +226,18 @@ void ibDialogQueryConstructor::FillPackage()
 // The tab set follows what the statement IS. A drop has no query, so the query tabs are not there
 // — its select is KEPT behind the scenes, so switching the kind back brings the query with it
 // rather than a blank.
+// HOW MANY SELECTIONS THIS PACKAGE HAS NAMED — the whole package, not only what precedes the
+// current statement: the tab is about the package, and a name declared below is still a name the
+// author is working with.
+size_t ibDialogQueryConstructor::NamedResultCount() const
+{
+	size_t count = 0;
+	for (const ibQueryAstStatement& statement : m_package.m_statements)
+		if (statement.m_select && !statement.m_select->m_ontoName.IsEmpty())
+			++count;
+	return count;
+}
+
 void ibDialogQueryConstructor::SyncNotebookPages()
 {
 	if (m_notebook == nullptr)
@@ -254,6 +268,16 @@ void ibDialogQueryConstructor::SyncNotebookPages()
 			continue;   // only a table this statement makes can be indexed
 		if (page.m_refusedByTempTable && makesTempTable)
 			continue;   // a temp table is flat; TOTALS yields a tree, and the parser refuses the pair
+		// ⭐ THE LINKS ARE THE PACKAGE'S, like the batch beside them (Max, 2026-08-21: the links are
+		// common, exactly as the batch is, and the tab shows once the package has two or more named
+		// tables). So the count is the PACKAGE's names, not what the statement you
+		// happen to stand in can see: a link relates two named results, and with fewer than two the
+		// tab would be a control over nothing.
+		//
+		// ⚠ And it is the ADDING that counts differently: the READER is the statement you stand in,
+		// so it needs ONE other name, not two (see OnSelectionLinkAdd).
+		if (page.m_needsNamedResults && NamedResultCount() < 2)
+			continue;
 		if (page.m_excludeBit != 0 && (m_exclude & page.m_excludeBit) != 0)
 			continue;   // the host owns this setting itself - see ibQueryConstructorExclude
 		if (page.m_title == _("Query batch") && m_subQuery)
@@ -433,7 +457,8 @@ void queryctor::ibQueryRenameSourceReferences(ibQuerySelect& select, const wxStr
 	for (ibQueryAstExprPtr& aggregate : select.m_totalsAggregates)
 		ibQueryRenameMentioned(aggregate, from, to);
 	for (ibQueryTotalDim& dimension : select.m_totalsBy)
-		ibQueryRenameMentioned(dimension.m_expr, from, to);
+		for (ibQueryTotalField& field : dimension.m_fields)
+			ibQueryRenameMentioned(field.m_expr, from, to);
 	// The JOIN CONDITIONS name both sides — renaming one of them is exactly what this is for.
 	for (ibQueryAstJoin& join : select.m_joins)
 		ibQueryRenameMentioned(join.m_on, from, to);
@@ -650,9 +675,16 @@ void queryctor::ibQueryDropMissingFields(ibQuerySelect& select, const wxString& 
 		std::remove_if(select.m_orderBy.begin(), select.m_orderBy.end(),
 			[&](const ibQueryOrderItem& o) { return lost(o.m_expr); }),
 		select.m_orderBy.end());
+	// A LEVEL LOSES THE FIELDS THAT DIED WITH THE TABLE, and only an empty level goes itself — the
+	// author's other grouping field is not collateral.
+	for (ibQueryTotalDim& dimension : select.m_totalsBy)
+		dimension.m_fields.erase(
+			std::remove_if(dimension.m_fields.begin(), dimension.m_fields.end(),
+				[&](const ibQueryTotalField& f) { return lost(f.m_expr); }),
+			dimension.m_fields.end());
 	select.m_totalsBy.erase(
 		std::remove_if(select.m_totalsBy.begin(), select.m_totalsBy.end(),
-			[&](const ibQueryTotalDim& d) { return lost(d.m_expr); }),
+			[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }),
 		select.m_totalsBy.end());
 
 	for (ibQueryAstJoin& join : select.m_joins)
@@ -698,9 +730,14 @@ void queryctor::ibQueryDropSourceReferences(ibQuerySelect& select, const wxStrin
 		std::remove_if(select.m_orderBy.begin(), select.m_orderBy.end(),
 			[&](const ibQueryOrderItem& o) { return mentions(o.m_expr); }),
 		select.m_orderBy.end());
+	for (ibQueryTotalDim& dimension : select.m_totalsBy)
+		dimension.m_fields.erase(
+			std::remove_if(dimension.m_fields.begin(), dimension.m_fields.end(),
+				[&](const ibQueryTotalField& f) { return mentions(f.m_expr); }),
+			dimension.m_fields.end());
 	select.m_totalsBy.erase(
 		std::remove_if(select.m_totalsBy.begin(), select.m_totalsBy.end(),
-			[&](const ibQueryTotalDim& d) { return mentions(d.m_expr); }),
+			[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }),
 		select.m_totalsBy.end());
 
 	// AND THE LINKS THAT NAMED IT. The join ENTRY of the departed table is erased by the verb (it IS
@@ -883,10 +920,28 @@ void ibDialogQueryConstructor::FillSourceTree()
 		// does not know where the picture came from.
 		const int tempIcon = KindIcon(icons, kKindTempTable);
 
-		const wxTreeItemId group = m_sourceTree->AppendItem(root, _("Temporary tables"),
-			tempIcon, tempIcon);
+		// ⭐⭐ ONLY TEMPORARY TABLES ARE OFFERED HERE. A NAMED RESULT (`ONTO`) is not a source you put
+		// into a query — it is a selection the package NAMES, and the only place it appears is the
+		// Selection links tab, where two of them are related (Max, 2026-08-21: "I should not see it
+		// in the second query; I see it only when I set the links, and nothing else gets in").
+		//
+		// The difference is what each one IS. A temp table holds rows the package put away, and
+		// reading it is an ordinary read. A named selection is another statement's RESULT: what
+		// relates it to anything is a LINK, and the final query is run through those links — no
+		// source is added to anybody's FROM by hand.
+		//
+		// Created on demand: a heading over nothing is worse than no heading.
+		wxTreeItemId tables;
+		auto groupFor = [&]() {
+			if (!tables.IsOk())
+				tables = m_sourceTree->AppendItem(root, _("Temporary tables"), tempIcon, tempIcon);
+			return tables;
+		};
+
 		for (const ibQueryConstructorSource& temp : temps) {
-			const wxTreeItemId table = m_sourceTree->AppendItem(group, temp.m_presentation,
+			if (temp.m_namedResult)
+				continue;   // a selection, not a table — see above
+			const wxTreeItemId table = m_sourceTree->AppendItem(groupFor(), temp.m_presentation,
 				tempIcon, tempIcon, new ibQueryTreeNode(temp.m_path, true));
 
 			// AND ITS FIELDS, exactly as a permanent table gets them above. A temp table was the
@@ -899,7 +954,7 @@ void ibDialogQueryConstructor::FillSourceTree()
 			for (const ibQueryConstructorField& field : m_model.GetFields(asSource, m_package, m_statement))
 				ibQueryAddFieldNode(m_sourceTree, table, field, FieldIcon(icons, field), -1, wxEmptyString, temp.m_path);
 		}
-		m_sourceTree->Expand(group);
+		if (tables.IsOk()) m_sourceTree->Expand(tables);
 	}
 }
 
@@ -960,6 +1015,11 @@ void ibDialogQueryConstructor::FillLinks()
 	if (m_linkModel != nullptr)
 		m_linkModel->SetContent(select, tableNames);
 
+	// ⭐ THE SELECTION-LINKS GRID IS THE PACKAGE'S — literally: it is bound to the package, not to any
+	// statement, so it does not change under the person when they click another statement on the
+	// batch tab (which is also why that tab shows no statement strip).
+	if (m_selectionLinkModel != nullptr)
+		m_selectionLinkModel->SetContent(&m_package);
 }
 
 // ONE ANSWER, SHOWN FOUR TIMES. Grouping, Conditions, Order and Index all ask "which fields does

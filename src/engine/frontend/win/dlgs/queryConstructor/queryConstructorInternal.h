@@ -26,6 +26,7 @@
 #include "queryConstructor.h"
 #include "queryJoinDiagram.h"
 #include "queryLinkModel.h"
+#include "querySelectionLinkModel.h"   // the PACKAGE's own links between named selections
 #include "queryConditionModel.h"
 #include "queryUnionModel.h"
 #include "queryGridModel.h"

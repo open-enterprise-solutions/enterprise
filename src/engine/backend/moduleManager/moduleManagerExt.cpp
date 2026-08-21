@@ -438,7 +438,9 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 	//incrRef - for control delete
 	m_objectValue->IncrRef();
 
-	const ibValueMetaObjectRecordData* commonObject = m_objectValue->GetMetaObject();
+	// THE METAOBJECT IS A REPORT'S, and it says so — so both questions below are asked of it
+	// directly: which form is the default one, and which composer is.
+	const ibValueMetaObjectReport* commonObject = m_objectValue->GetMetaObject();
 	wxASSERT(commonObject);
 	ibValueMetaObjectFormBase* defFormObject = commonObject->GetDefaultFormByID
 	(
@@ -464,22 +466,30 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 			}
 		}
 	}
-	//else {
-	//	ibBackendValueForm* valueForm = ibBackendValueForm::CreateNewForm(nullptr, nullptr, m_objectValue, ibGuid::newGuid());
-	//	valueForm->BuildForm(ibValueMetaObjectReport::eFormReport);
-	//	try {
-	//		valueForm->ShowForm();
-	//	}
-	//	catch (...) {
-	//		wxDELETE(valueForm);
-	//		if (appData->EnterpriseMode() ||
-	//			appData->ServiceMode()) {
-	//			//decrRef - for control delete 
-	//			m_objectValue->DecrRef();
-	//			return false;
-	//		}
-	//	}
-	//}
+	// ⭐ A REPORT WITH A COMPOSER NEEDS NO FORM OF ITS OWN (Max): you add a composer with the mouse
+	// and the report opens — the generated form is a gridbox bound to the default composer, and
+	// drawing one by hand to hold a single control is time spent on nothing.
+	//
+	// Gated on the composer, not offered unconditionally: with neither a form NOR a composer there
+	// is nothing to show, and an empty window would be a worse answer than none. Without this the
+	// module started and quietly died, which is the same outcome with no explanation.
+	else if (commonObject->GetDefComposer() != wxNOT_FOUND) {
+		// wxNullUniqueKey — the form is generated, so it takes a fresh key of its own.
+		ibBackendValueForm* valueForm =
+			ibBackendValueForm::CreateNewForm(nullptr, nullptr, m_objectValue, wxNullUniqueKey);
+		valueForm->BuildForm(ibValueMetaObjectReport::eFormReport);
+		try {
+			valueForm->ShowForm();
+		}
+		catch (...) {
+			wxDELETE(valueForm);
+			if (appData->EnterpriseMode() || appData->ServiceMode()) {
+				//decrRef - for control delete
+				m_objectValue->DecrRef();
+				return false;
+			}
+		}
+	}
 
 	//decrRef - for control delete 
 	m_objectValue->DecrRef();

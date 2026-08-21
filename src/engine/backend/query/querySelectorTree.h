@@ -14,6 +14,14 @@
 #include <vector>
 #include <memory>
 
+// ⭐ WHAT A NODE IS — a HEADING or a ROW. The fold produces both: every level of the BY list makes
+// headings, and a level with NO FIELDS makes one node per source row (a detail record IS an empty
+// grouping). A reader lays the two out differently — a heading carries a group key and its
+// totals, a row carries the values it was read with — so the node SAYS which it is instead of
+// leaving the reader to infer it from the depth, which is exactly what a depth cannot answer once
+// the tree has both.
+enum class ibSelectorNodeKind { Group, Detail };
+
 class BACKEND_API ibSelectorTree
 {
 public:
@@ -28,6 +36,7 @@ public:
 		int                                m_level = 0;
 		std::vector<std::unique_ptr<Node>> m_children;
 		bool                               m_hasChildren = false;
+		ibSelectorNodeKind                 m_kind = ibSelectorNodeKind::Group;
 
 		Node* AddChild(int level) { m_children.push_back(std::make_unique<Node>()); m_children.back()->m_level = level; return m_children.back().get(); }
 	};
@@ -43,12 +52,47 @@ public:
 	Node&       Root()       { return m_root; }
 	const Node& Root() const { return m_root; }
 
+	// ⭐ A DEEP COPY, because the tree is MOVE-ONLY and a folded tree may have more than one reader.
+	//
+	// A server-folded tree is handed to the selector as a SHARED one (ibDataQueryResult keeps it and
+	// every Select() hands over the same shared_ptr), so a selector that MOVED out of it left the
+	// next reader an empty tree: the second `Select()` — a script reading a result twice, a drill
+	// asking for a node's children — walked nothing and the report came back blank.
+	//
+	// Copying is what a second reader needs and the cost is the SHAPE, not the data: a folded tree
+	// is groups, and the rows it was folded from are not in it.
+	ibSelectorTree Clone() const
+	{
+		ibSelectorTree copy;
+		copy.m_columns = m_columns;
+		CopyNode(m_root, copy.m_root);
+		return copy;
+	}
+
 	// The columns the nodes carry (names/types for rendering) — the source snapshot's columns plus
 	// the aggregate columns the fold adds.
 	void AddColumn(ibMetaID id, const wxString& name, const ibTypeDescription& type) { m_columns.push_back({ id, name, type }); }
 	const std::vector<ibQueryRamColumn>& Columns() const { return m_columns; }
 
 private:
+	// One node and everything under it. Recursion follows the tree's own depth — the levels of a
+	// grouping, never the number of rows.
+	static void CopyNode(const Node& from, Node& to)
+	{
+		to.m_values      = from.m_values;
+		to.m_level       = from.m_level;
+		to.m_hasChildren = from.m_hasChildren;
+		to.m_kind        = from.m_kind;
+		to.m_children.clear();
+		to.m_children.reserve(from.m_children.size());
+		for (const std::unique_ptr<Node>& child : from.m_children) {
+			if (child == nullptr)
+				continue;
+			to.m_children.push_back(std::make_unique<Node>());
+			CopyNode(*child, *to.m_children.back());
+		}
+	}
+
 	std::vector<ibQueryRamColumn> m_columns;
 	Node                          m_root;   // grand-total / invisible root
 };

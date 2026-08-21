@@ -72,6 +72,23 @@ ibDataDBComposer& ibDataDBComposer::FromText(const wxString& text)
 	return *this;
 }
 
+bool ibCompositionCompare(const ibValue& cell, const wxString& op, const ibValue& value)
+{
+	if (op == wxT("="))                            return cell == value;
+	if (op == wxT("<>") || op == wxT("!="))        return cell != value;
+	if (op == wxT(">"))                            return cell >  value;
+	if (op == wxT(">="))                           return cell >= value;
+	if (op == wxT("<"))                            return cell <  value;
+	if (op == wxT("<="))                           return cell <= value;
+	if (op.CmpNoCase(wxT("LIKE")) == 0) {
+		wxString pattern = value.GetString();
+		pattern.Replace(wxT("%"), wxT("*"));
+		pattern.Replace(wxT("_"), wxT("?"));
+		return cell.GetString().Lower().Matches(pattern.Lower());
+	}
+	return true;   // unknown operator → do not hide anything over a line nobody can read
+}
+
 //////////////////////////////////////////////////////////////////////
 // settings
 //////////////////////////////////////////////////////////////////////
@@ -79,7 +96,7 @@ ibDataDBComposer& ibDataDBComposer::FromText(const wxString& text)
 ibDataComposer& ibDataComposer::Select(const wxString& nameOrPath)
 {
 	if (!nameOrPath.IsEmpty())
-		m_selected.push_back(nameOrPath);
+		m_commonSelected.push_back(nameOrPath);
 	return *this;
 }
 
@@ -111,14 +128,14 @@ ibDataComposer& ibDataComposer::Filter(const wxString& path, const wxString& op,
 {
 	if (path.IsEmpty())
 		return *this;
-	m_filters.push_back({ path, op, AddParam(value) });
+	m_commonFilters.push_back({ path, op, AddParam(value) });
 	return *this;
 }
 
 ibDataComposer& ibDataComposer::FilterAst(const ibQueryAstExprPtr& condition)
 {
-	m_filterAst = condition;
-	++m_filterAstVersion;
+	m_commonFilterAst = condition;
+	++m_commonFilterAstVersion;
 	return *this;
 }
 
@@ -126,7 +143,7 @@ ibDataComposer& ibDataComposer::Sort(const wxString& path, bool ascending)
 {
 	if (path.IsEmpty())
 		return *this;   // see the note above Filter
-	m_sorts.push_back({ path, ascending });
+	m_commonSorts.push_back({ path, ascending });
 	return *this;
 }
 
@@ -146,7 +163,9 @@ ibDataComposer& ibDataComposer::TotalBy(const wxString& path, ibQueryDimUnfold k
 {
 	if (path.IsEmpty())
 		return *this;   // see the note above Filter
-	m_totalBy.push_back({ path, kind });
+	// A LEVEL, not a field: "group by this, then by that". Welding several fields into ONE heading
+	// is the report's own act and it happens in the grouping form, over the level's field list.
+	AppendLevel(path, kind);
 	return *this;
 }
 
@@ -158,11 +177,11 @@ ibDataComposer& ibDataComposer::Parameter(const wxString& name, const ibValue& v
 
 ibDataComposer& ibDataComposer::ClearSettings()
 {
-	m_selected.clear();
-	m_filters.clear();
-	m_sorts.clear();
+	m_commonSelected.clear();
+	m_commonFilters.clear();
+	m_commonSorts.clear();
 	m_totals.clear();
-	m_totalBy.clear();
+	TrimLevels(0);
 	return *this;
 }
 
@@ -178,8 +197,21 @@ const wxChar* ibDataDBComposer::AuthorQuerySourceName() { return kAuthorQuerySou
 
 wxString ibDataDBComposer::RenderText() const
 {
-	const bool hasSettings = !m_selected.empty() || !m_filters.empty() || !m_sorts.empty()
-	                       || !m_totals.empty() || !m_totalBy.empty();
+	// THE FIRST OUTPUT is what "the composer's query" has always meant — a list has exactly one.
+	return RenderTextFor(Root());
+}
+
+// RENDER ONE OUTPUT: its own levels, its own filter and sort, its own selected fields. The
+// RESOURCES are the composition's and every output rolls the same ones, which is why they are read
+// off `m_totals` here rather than off the output.
+wxString ibDataDBComposer::RenderTextFor(const Output& output) const
+{
+	// Anything asked of this read — by the composition above it or by the output itself. Miss one
+	// and the author's verbatim text is handed back unchanged, with the setting silently dropped.
+	const bool hasSettings = !SelectedFor(output).empty()
+	                       || !output.m_filters.empty() || !output.m_sorts.empty()
+	                       || !m_commonFilters.empty() || !m_commonSorts.empty()
+	                       || !m_totals.empty() || !ChainFrom(output).empty();
 
 	if (!m_sourceText.IsEmpty() && !hasSettings)
 		return m_sourceText;   // the author's text, verbatim — nothing is being asked of it
@@ -204,7 +236,7 @@ wxString ibDataDBComposer::RenderText() const
 	// to pick from (a dynamic list vends them as its column collection) — the same names, both sides.
 	if (!m_sourceText.IsEmpty()) {
 		wxString authorProj;
-		for (const wxString& name : m_selected) {
+		for (const wxString& name : SelectedFor(output)) {
 			if (!authorProj.IsEmpty())
 				authorProj += wxT(", ");
 			authorProj += name;
@@ -214,21 +246,23 @@ wxString ibDataDBComposer::RenderText() const
 		// resolving the text here, and the lowering is about to do that anyway.
 		wxString text = wxT("SELECT ") + (authorProj.IsEmpty() ? wxString(wxT("*")) : authorProj)
 			+ wxT("\nFROM (") + m_sourceText + wxT(") AS ") + kAuthorQuerySource;
-		AppendSettingsClauses(text);
+		AppendSettingsClauses(text, output);
 		return text;
 	}
 
 	if (m_sources.empty())
 		ibBackendCoreException::Error(_("Composer: no source is set"));
-	if (!m_totals.empty() && m_totalBy.empty())
-		ibBackendCoreException::Error(_("Composer: totals need at least one TotalBy dimension"));
+	// (RESOURCES WITH NO GROUPING ARE NO LONGER REFUSED. They are a grand total, and the clause
+	//  writer says so with `BY OVERALL` — see AppendSettingsClauses. Refusing them was a rule about
+	//  what the RENDERER could write, stated as if it were a rule about what a report may ask for.)
+	//
 	// NB: TotalBy WITHOUT an aggregate is valid — "TOTALS BY <dim>" is a pure grouping
 	// / hierarchy with no rolled aggregate (a list grouped by a field).
 
 	// --- the projection -------------------------------------------------------
 	wxString proj;
-	if (!m_selected.empty()) {
-		for (const wxString& name : m_selected) {
+	if (!SelectedFor(output).empty()) {
+		for (const wxString& name : SelectedFor(output)) {
 			if (!proj.IsEmpty())
 				proj += wxT(", ");
 			proj += name;
@@ -280,23 +314,42 @@ wxString ibDataDBComposer::RenderText() const
 	for (size_t i = 1; i < m_sources.size(); ++i)
 		text += wxT(" JOIN ") + m_sources[i].m_namespace + wxT(".") + m_sources[i].m_name;
 
-	AppendSettingsClauses(text);
+	AppendSettingsClauses(text, output);
 	return text;
 }
 
 // WHERE / ORDER BY / TOTALS — the settings, written the same way whichever source they stand over.
 // A composed source and an author's query differ in their FROM and in nothing else: the filter a
 // person set is the same filter, and two spellings of it would be two chances to drift.
-void ibDataDBComposer::AppendSettingsClauses(wxString& text) const
+void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& output) const
 {
-	for (size_t i = 0; i < m_filters.size(); ++i) {
-		const FilterItem& f = m_filters[i];
-		text += (i == 0 ? wxT(" WHERE ") : wxT(" AND "));
-		text += f.m_path + wxT(" ") + f.m_op + wxT(" &") + f.m_param;
-	}
+	// ⭐ WHERE A FILTER SITS DECIDES WHAT IT DOES (Max):
+	//
+	//   * ON THE OUTPUT — it REMOVES ROWS. This is the report's subject ("only this warehouse"), and
+	//     everything, totals included, is computed over what is left. That is the WHERE below.
+	//   * ON A LEVEL — it HIDES HEADINGS, and the rows keep counting. Deleting five rows three
+	//     levels down would move the grand total, and a total that shifts because somebody tidied a
+	//     sub-heading is a number nobody can defend. Applied on the WALK instead (see RunOutput).
+	//
+	// So a level's filter is deliberately NOT written here.
+	// THE COMPOSITION'S OWN FILTER FIRST, then the output's. Both exclude; the first excludes for
+	// every output there is, so no output can see more than it admits.
+	bool wrote = false;
+	auto appendFilters = [&text, &wrote](const std::vector<FilterItem>& filters) {
+		for (const FilterItem& f : filters) {
+			text += (wrote ? wxT(" AND ") : wxT(" WHERE "));
+			text += f.m_path + wxT(" ") + f.m_op + wxT(" &") + f.m_param;
+			wrote = true;
+		}
+	};
+	appendFilters(m_commonFilters);
+	appendFilters(output.m_filters);
 
-	for (size_t i = 0; i < m_sorts.size(); ++i) {
-		const SortItem& s = m_sorts[i];
+	// THE ORDER: the output's own when it stated one, otherwise the composition's. A level's sort
+	// orders that level's headings and is applied on the walk — it is not this clause.
+	const std::vector<SortItem>& sorts = output.m_sorts.empty() ? m_commonSorts : output.m_sorts;
+	for (size_t i = 0; i < sorts.size(); ++i) {
+		const SortItem& s = sorts[i];
 		text += (i == 0 ? wxT(" ORDER BY ") : wxT(", "));
 		text += s.m_path;
 		if (!s.m_ascending)
@@ -306,7 +359,7 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text) const
 	// TOTALS [agg(path), …] BY dim [HIERARCHY], … — the aggregate list may be empty
 	// (pure grouping / hierarchy), so emit the block whenever there is either an
 	// aggregate OR a BY dimension.
-	if (!m_totals.empty() || !m_totalBy.empty()) {
+	if (!m_totals.empty() || HasGroupingFields(output)) {
 		text += wxT(" TOTALS");
 		for (size_t i = 0; i < m_totals.size(); ++i) {
 			text += (i == 0 ? wxT(" ") : wxT(", "));
@@ -317,14 +370,47 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text) const
 				? m_totals[i].m_path
 				: m_totals[i].m_func + wxT("(") + m_totals[i].m_path + wxT(")");
 		}
-		for (size_t i = 0; i < m_totalBy.size(); ++i) {
-			text += (i == 0 ? wxT(" BY ") : wxT(", "));
-			text += m_totalBy[i].m_path;
-			if (m_totalBy[i].m_kind == ibQueryDimUnfold::Hierarchy)
-				text += wxT(" HIERARCHY");
-			else if (m_totalBy[i].m_kind == ibQueryDimUnfold::HierarchyOnly)
-				text += wxT(" HIERARCHYONLY");
+		// ONE LEVEL PER OUTPUT IN THE CHAIN, and a level's own fields inside it. Several fields are
+		// written in BRACKETS — `BY (Partner, Contract), Store` — which is what says they are one
+		// heading; a single field keeps the bare spelling it always had.
+		// ⚠ A LEVEL WITH NO FIELDS IS NOT A DIMENSION — it is the DETAIL records, and it has nothing
+		// to write here. Writing it anyway produced `BY ` with nothing after it and the parser
+		// refused the whole query, which the caller then saw as an empty report.
+		const std::vector<GroupNode>& chain = ChainFrom(output);
+		bool wroteBy = false;
+		for (size_t i = 0; i < chain.size(); ++i) {
+			const std::vector<TotalByItem>& fields = chain[i].m_fields;
+			if (fields.empty())
+				continue;
+			text += (wroteBy ? wxT(", ") : wxT(" BY "));
+			wroteBy = true;
+			const bool bracketed = fields.size() > 1;
+			if (bracketed)
+				text += wxT("(");
+			for (size_t f = 0; f < fields.size(); ++f) {
+				if (f > 0)
+					text += wxT(", ");
+				text += fields[f].m_path;
+				if (fields[f].m_kind == ibQueryDimUnfold::Hierarchy)
+					text += wxT(" HIERARCHY");
+				else if (fields[f].m_kind == ibQueryDimUnfold::HierarchyOnly)
+					text += wxT(" HIERARCHYONLY");
+			}
+			if (bracketed)
+				text += wxT(")");
 		}
+
+		// ⭐⭐ RESOURCES WITH NO GROUPING ARE A GRAND TOTAL — `TOTALS COUNT(x) BY OVERALL`, which is
+		// exactly "one row over everything" and is what the author asked for by declaring resources
+		// and no level (Max, 2026-08-22: added the resources and composing refused).
+		//
+		// Written here rather than refused, because there is nothing wrong with the request. What
+		// WAS wrong is what came out: `TOTALS COUNT(x)` with no BY at all — a query the engine's own
+		// parser throws back ("expected BY in TOTALS"), on a composition nobody typed by hand. The
+		// guard that catches this on the other road never runs for a composition over an AUTHOR'S
+		// TEXT, which is what every report's composer is.
+		if (!wroteBy)
+			text += wxT(" BY OVERALL");
 	}
 }
 
@@ -366,7 +452,7 @@ void ibDataDBComposer::EnsureAst() const
 	// condition never becomes text, so the text alone would say "nothing changed"
 	// after the user rewrote the whole filter.
 	const wxString text = RenderText();
-	if (m_ast != nullptr && text == m_renderedText && m_filterAstVersion == m_renderedFilterAstVersion)
+	if (m_ast != nullptr && text == m_renderedText && m_commonFilterAstVersion == m_renderedFilterAstVersion)
 		return;   // same query, same condition — the cached parse stands
 
 	m_ast = ibQueryParser().Parse(text);
@@ -376,21 +462,21 @@ void ibDataDBComposer::EnsureAst() const
 	// THE TREE'S CONDITION GOES IN AS AN AST, ANDed with whatever the query text
 	// already asked for. No rendering, no re-parsing — the expression the filter
 	// built is the expression the engine lowers.
-	if (m_filterAst) {
+	if (m_commonFilterAst) {
 		if (m_ast->m_where) {
 			ibQueryAstExprPtr both = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
 			both->m_isOr = false;
 			both->m_lhs = m_ast->m_where;
-			both->m_rhs = m_filterAst;
+			both->m_rhs = m_commonFilterAst;
 			m_ast->m_where = both;
 		}
 		else {
-			m_ast->m_where = m_filterAst;
+			m_ast->m_where = m_commonFilterAst;
 		}
 	}
 
 	m_renderedText = text;
-	m_renderedFilterAstVersion = m_filterAstVersion;
+	m_renderedFilterAstVersion = m_commonFilterAstVersion;
 }
 
 bool ibDataDBComposer::BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const
@@ -441,7 +527,8 @@ ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputC
 		// Pass THIS fetch's page so a single-scalar-dim TOTALS drill can page its groups server-side
 		// (m_serverGroupedLevel then tells Run to emit the flat groups at level 1, skipping the fold).
 		bool serverGrouped = false;
-		ibDataQueryResult r = ibQueryLowering::ExecuteTotals(*m_ast, m_params, schema, page, &serverGrouped);
+		ibDataQueryResult r = ibQueryLowering::ExecuteTotals(*m_ast, m_params, schema, page, &serverGrouped,
+			WantsDetails(Root()));
 		m_serverGroupedLevel = serverGrouped;
 		return r;
 	}
@@ -455,7 +542,44 @@ ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputC
 	return ibQueryLowering::Execute(*m_ast, m_params, schema, page);
 }
 
+bool ibDataDBComposer::LevelShows(const Output& output, int depth,
+	const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row) const
+{
+	// Depth 0 is the grand total and belongs to no level; past the last level there is nothing left
+	// to hide by.
+	if (depth <= 0 || static_cast<size_t>(depth) > output.m_rowGroups.size())
+		return true;
+
+	const GroupNode& level = output.m_rowGroups[static_cast<size_t>(depth) - 1];
+	for (const FilterItem& filter : level.m_filters) {
+		// The filter names an OUTPUT column — the same names a person picked from. A name this
+		// result does not carry cannot hide anything: it says nothing about the rows in hand, and
+		// hiding on it would be hiding for a reason nobody can see.
+		size_t at = schema.size();
+		for (size_t i = 0; i < schema.size(); ++i) {
+			if (schema[i].m_name.IsSameAs(filter.m_path, false)
+			    || schema[i].m_alias.IsSameAs(filter.m_path, false)) {
+				at = i;
+				break;
+			}
+		}
+		if (at >= schema.size() || at >= row.size())
+			continue;
+
+		const auto value = m_params.find(filter.m_param);
+		if (!ibCompositionCompare(row[at], filter.m_op, value != m_params.end() ? value->second : ibValue()))
+			return false;
+	}
+	return true;
+}
+
 bool ibDataDBComposer::Run(ibCompositionDriver& driver)
+{
+	// THE FIRST OUTPUT — what a list has, and what "run the composer" has always meant.
+	return RunOutput(Root(), driver);
+}
+
+bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driver)
 {
 	// The driver IS the envelope: a paged driver (the list fetch) vends the page
 	// request; a plain driver reads everything.
@@ -464,10 +588,16 @@ bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 
 	std::vector<ibQueryLowering::OutputColumn> schema;
 	bool hasTotals = false;
-	ibDataQueryResult result = paged ? Execute(schema, hasTotals, page)
-	                                 : Execute(schema, hasTotals);
+	ibDataQueryResult result = ExecuteFor(output, schema, hasTotals, page);
 
-	driver.OnColumns(schema);
+	// WHAT IS COMING, said before the first row: the output's kind, its own schema and its name.
+	// Two outputs of one composition show different fields, so the schema belongs to the output and
+	// not to the composition.
+	ibCompositionOutputInfo info;
+	info.m_kind   = output.Kind();   // read off its fields — a column grouping is what makes it a cross-table
+	info.m_schema = schema;
+	info.m_name   = output.m_name;
+	driver.OnOutputBegin(info);
 
 	std::vector<ibValue> row(schema.size());
 	if (m_serverGroupedLevel) {
@@ -483,7 +613,8 @@ bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 				else
 					row[i] = oc.m_byAlias ? result.GetColumn(oc.m_alias) : result.GetValue(oc.m_col);
 			}
-			driver.OnRow(1, /*hasChildren*/true, row);
+			// GROUPS the server already folded — a group, said as one.
+			driver.OnGroup(1, /*hasChildren*/true, row);
 		}
 	}
 	else if (!hasTotals) {
@@ -509,25 +640,100 @@ bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 				else
 					row[i] = oc.m_byAlias ? result.GetColumn(oc.m_alias) : result.GetValue(oc.m_col);
 			}
-			driver.OnRow(0, /*hasChildren*/false, row);
+			// NOTHING WAS GROUPED, so every row is a DETAIL row — which is exactly what an output
+			// with no grouping fields is for. Said as a detail rather than as a level-0 group,
+			// because a printer lays the two out differently and should not have to infer which
+			// it got from the depth.
+			driver.OnDetail(0, row);
 		}
 	}
 	else {
 		// TOTALS — the folded tree; the selector's Next() is a pre-order walk over
 		// EVERY node, so one loop covers groups and details, Level() = depth.
+		//
+		// ⭐ A LEVEL'S FILTER IS APPLIED HERE, and hiding is all it does: the fold has already run,
+		// so a heading that fails its level's filter simply is not written, and every total above it
+		// keeps the rows it was computed from. `hiddenAbove` carries that down — what hangs under a
+		// hidden heading is hidden with it, since printing a child of an unprinted parent would put
+		// it under the wrong heading.
+		int hiddenAbove = -1;
 		ibSelector sel = result.Select(ibSelectKind::ibSelectKind_ByGroups);
+		// ⭐ THE GRAND TOTAL IS PART OF THE WALK WHEN THE READER WANTS ONE. It is the tree's root and
+		// the fold already rolled every row into it; asking for it here is what puts it in front of
+		// the driver, which prints it at the BOTTOM of the section (a pre-order walk hands it over
+		// first — see ibSpreadsheetComposeDriver).
+		if (driver.WantsGrandTotal())
+			sel.WalkOverall();
 		while (sel.Next()) {
 			for (size_t i = 0; i < schema.size(); ++i) {
 				const ibQueryLowering::OutputColumn& oc = schema[i];
 				row[i] = oc.m_byAlias ? sel.GetColumn(oc.m_alias) : sel.GetValue(oc.m_col);
 			}
-			driver.OnRow(sel.Level(), sel.HasChildren(), row);
+
+			if (hiddenAbove >= 0 && sel.Level() > hiddenAbove)
+				continue;                       // inside a hidden heading
+			hiddenAbove = -1;                   // back out at or above it — the hiding is over
+
+			if (!LevelShows(output, sel.Level(), schema, row)) {
+				hiddenAbove = sel.Level();
+				continue;
+			}
+			// ⭐ A HEADING OR A ROW — the NODE says which, and the driver is told in its own words.
+			// The fold produces headings for every level of the BY list and, when the output asked
+			// for them, one node per source row under the deepest one. A printer lays the two out
+			// differently, so it must not have to infer the difference from the depth — a depth
+			// cannot answer it once the tree holds both.
+			if (sel.Kind() == ibSelectorNodeKind::Detail)
+				driver.OnDetail(sel.Level(), row);
+			else
+				driver.OnGroup(sel.Level(), sel.HasChildren(), row);
 		}
 	}
 
 
-	driver.OnComplete(hasTotals);
+	driver.OnOutputEnd(hasTotals);
 	return true;
+}
+
+// EXECUTE FOR ONE OUTPUT. The first output rides the CACHED parse — a list re-reads it on every
+// page, and re-parsing per page is what that cache exists to avoid. Any other output renders and
+// parses on the spot: keying one cache by which output asked would be a second question for it to
+// answer, and outputs past the first are read once per composition, not once per scroll.
+ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
+	std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals, const ibReadPageRequest& page) const
+{
+	if (&output == &Root())
+		return Execute(schema, hasTotals, page);
+
+	const wxString text = RenderTextFor(output);
+	ibQuerySelectPtr ast = ibQueryParser().Parse(text);
+	if (ast == nullptr)
+		ibBackendCoreException::Error(_("Composer: the rendered query of an output failed to parse"));
+
+	// The output's own tree condition, ANDed into what the text already asks — the same rule the
+	// first output follows in EnsureAst, and for the same reason: a condition built as an expression
+	// is never rendered and re-parsed.
+	if (output.m_filterAst) {
+		if (ast->m_where) {
+			ibQueryAstExprPtr both = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
+			both->m_isOr = false;
+			both->m_lhs  = ast->m_where;
+			both->m_rhs  = output.m_filterAst;
+			ast->m_where = both;
+		}
+		else {
+			ast->m_where = output.m_filterAst;
+		}
+	}
+
+	ibTempSourceScope     tempScope(m_directSources);
+	ibSourceMetaDataScope mdScope(m_metaData);
+
+	hasTotals = ast->m_hasTotals;
+	m_serverGroupedLevel = false;   // group-level paging belongs to the paged list, not to a report's output
+	return hasTotals
+		? ibQueryLowering::ExecuteTotals(*ast, m_params, schema, page, nullptr, WantsDetails(output))
+		: ibQueryLowering::Execute(*ast, m_params, schema, page);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -546,15 +752,15 @@ int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxStr
 	{
 		std::vector<FilterItem> kept;
 		std::map<wxString, ibValue> keptParams;
-		for (const FilterItem& item : m_filters) {
+		for (const FilterItem& item : m_commonFilters) {
 			if (!resolves(item.m_path)) { ++dropped; continue; }
 			const auto param = m_params.find(item.m_param);
 			if (param != m_params.end())
 				keptParams.emplace(param->first, param->second);
 			kept.push_back(item);
 		}
-		if (kept.size() != m_filters.size()) {
-			m_filters = std::move(kept);
+		if (kept.size() != m_commonFilters.size()) {
+			m_commonFilters = std::move(kept);
 			// A parameter belongs to the line that bound it; the ones whose line went are gone with
 			// it. Left behind they would be bound into a query that never mentions them.
 			for (auto it = m_params.begin(); it != m_params.end(); ) {
@@ -569,29 +775,33 @@ int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxStr
 
 	{
 		std::vector<SortItem> kept;
-		for (const SortItem& item : m_sorts) {
+		for (const SortItem& item : m_commonSorts) {
 			if (!resolves(item.m_path)) { ++dropped; continue; }
 			kept.push_back(item);
 		}
-		if (kept.size() != m_sorts.size())
-			m_sorts = std::move(kept);
+		if (kept.size() != m_commonSorts.size())
+			m_commonSorts = std::move(kept);
 	}
 
-	{
+	// EVERY LEVEL OF THE LADDER, and every field inside it. A level that loses ALL its fields loses
+	// itself and the levels below move up — the author's deeper grouping is not what stopped
+	// resolving, so it is not what should disappear.
+	for (GroupNode& level : LevelChain()) {
 		std::vector<TotalByItem> kept;
-		for (const TotalByItem& item : m_totalBy) {
+		for (const TotalByItem& item : level.m_fields) {
 			if (!resolves(item.m_path)) { ++dropped; continue; }
 			kept.push_back(item);
 		}
-		if (kept.size() != m_totalBy.size())
-			m_totalBy = std::move(kept);
+		if (kept.size() != level.m_fields.size())
+			level.m_fields = std::move(kept);
 	}
+	CollapseEmptyLevels();
 
 	// The rendered text and its cached parse are keyed by the settings — a dropped line changes both.
 	// The rendered text and its cached parse are keyed by the settings; the version is what tells the
 	// cache the tree changed when the TEXT alone would say it did not.
 	if (dropped > 0)
-		++m_filterAstVersion;
+		++m_commonFilterAstVersion;
 
 	return dropped;
 }

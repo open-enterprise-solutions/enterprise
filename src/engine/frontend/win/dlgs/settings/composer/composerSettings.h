@@ -10,7 +10,9 @@
 #include <wx/stattext.h>
 #include <wx/textdlg.h>   // wxGetTextFromUser — a hand-made parameter is named when it is added
 
+#include <map>
 #include <memory>
+#include <vector>
 
 #include "backend/system/value/valueDataComposition.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — the variants are snapshotted on open
@@ -74,6 +76,42 @@
 //
 // What "accept" and "cancel" mean lives on the PANEL (Commit / RestoreOpenState), because both
 // hosts have to mean the same thing by them; the buttons that raise them are the host's own.
+
+// ⭐⭐ WHERE A NODE STANDS — ONE COORDINATE, and the type ANSWERS WHAT IT IS. Four kinds of row,
+// told apart by which parts are set:
+//
+//   the report      m_output = -1
+//   an output       m_output = i,  m_axis = -1
+//   an AXIS         m_output = i,  m_axis = 0|1, m_level = -1    (shown only when there are two)
+//   a level         m_output = i,  m_axis = 0|1, m_level = k
+//
+// ⚠ ASK THE PREDICATES, never the numbers. "No level" is true of an output AND of an axis, and a
+// command that tested only `m_level < 0` treated the "Columns" row as the output it hangs under —
+// Delete then erased the whole output, rows included (found by audit, 2026-08-22).
+//
+// It lives here, and not inside the tree model, because the panel keys its per-node buffers by the
+// same coordinate: one written twice is two answers to "which node is this" waiting to drift.
+struct ibStructurePos
+{
+	int m_output = -1;
+	int m_axis   = -1;   // 0 = rows, 1 = columns
+	int m_level  = -1;
+
+	ibStructurePos() = default;
+	ibStructurePos(int output, int axis, int level) : m_output(output), m_axis(axis), m_level(level) {}
+
+	bool IsReport() const { return m_output < 0; }
+	bool IsOutput() const { return m_output >= 0 && m_axis < 0; }
+	bool IsAxis()   const { return m_output >= 0 && m_axis >= 0 && m_level < 0; }
+	bool IsLevel()  const { return m_output >= 0 && m_axis >= 0 && m_level >= 0; }
+
+	bool operator<(const ibStructurePos& other) const {
+		if (m_output != other.m_output) return m_output < other.m_output;
+		if (m_axis   != other.m_axis)   return m_axis   < other.m_axis;
+		return m_level < other.m_level;
+	}
+};
+
 class FRONTEND_API ibComposerSettingsPanel : public wxPanel {
 public:
 
@@ -85,6 +123,9 @@ public:
 	void ReloadSettings();
 	// RE-READ WHICH FIELDS EXIST — the query was edited on this window's own Query tab.
 	void ReloadFields();
+	// The field panes alone — re-filled when the query changed OR when another node was selected
+	// (what a node may use narrows what they offer).
+	void ReloadFieldTrees();
 
 	// ⭐ VIEW ONLY — the tabs open, everything reads, nothing can be changed (Max, 2026-08-20: "in
 	// view mode you can only look: no copying, no adding, nothing"). The house call, the one every
@@ -131,6 +172,10 @@ private:
 	bool EditParameterExpression(wxString& text);
 	// The "..." behind the Type cell: the product.s type picker over this parameter.s declaration.
 	bool EditParameterType(wxString& text);
+	// ⭐ MAKE THE NAMES AN EXPRESSION MAY CALL EXIST — compile the module manager of the config this
+	// composition belongs to, ONCE, as the window opens. Not during a check: compiling rebuilds the
+	// module chain, and from inside a cell editor that rebuild destroys the renderer mid-call.
+	void PrepareModuleContext();
 	// COMPILE-time check of one expression, and of every parameter.s — the window asks before closing.
 	static bool CheckExpression(const wxString& expression, wxString& complaint,
 	                            const class ibMetaData* metaData);
@@ -173,14 +218,18 @@ private:
 	// A LEVEL IS A FIELD **AND** HOW IT UNFOLDS, and both are edited as VALUES in the
 	// tree's own cells (the shared row-value cell): the field through the panel's picker,
 	// the kind through the runtime's quick choice over the GroupKind enumeration.
-	void OnStructureAdd(wxCommandEvent&);      // pick a field in a DIALOG, add it as the innermost level
+	// ⭐ OPEN THE GROUPING FORM and add what it made as the innermost level — a grouping of one or
+	// more fields, or, with none chosen, the detail records (a node with no group, but a node).
+	void OnStructureAdd(wxCommandEvent&);
+	// …and the same form over an EXISTING level — what the "…" on its Field cell opens.
+	void EditLevelInForm(const class ibDataViewItem& row);
 	void OnStructureRemove(wxCommandEvent&);
 	void MoveStructureLevel(int delta);        // order IS the nesting
 	// Re-read the ladder and put the cursor on `selectLevel` (wxNOT_FOUND = the Report node).
 	void ReloadStructure(int selectLevel = wxNOT_FOUND);
 	// Which level the cursor stands on, or wxNOT_FOUND when it is on the Report node —
 	// so a command aimed at a level does nothing there instead of acting on level zero.
-	int  SelectedLevel() const;
+	int  SelectedLevel();
 	void UpdateSettingsHeader();
 
 	// ---- Variants — the snapshots, and the one that is active -----------------
@@ -277,8 +326,111 @@ private:
 
 	// THIS WINDOW'S OWN TRANSACTIONAL BUFFER. Loaded from the composition when the window opens,
 	// committed onto it when the window is accepted — the same rule the list's window follows over
-	// its own store. Its GROUP list is this composition's STRUCTURE (see Levels).
+	// its own store. It carries the FILTER and the SORT; the structure has a buffer of its own.
 	ibValuePtr<ibValueListSettings> m_settings;
+
+	// ⭐ THE STRUCTURE BUFFER — a SNAPSHOT of the composition's outputs, edited here and applied
+	// whole on accept. It is the outputs themselves (levels, their fields, their own settings), not
+	// a flattened picture of them: a level made of several fields cannot be told from two levels in
+	// a flat list, and papering over that with a "same level as the one above" flag would carry the
+	// lie straight into a saved variant.
+	std::vector<ibDataComposer::Output> m_structure;
+	void LoadStructure();    // composition -> buffer, on open and on a variant switch
+	void ApplyStructure();   // buffer -> composition, on accept
+	// THE LEVEL A TREE ROW POINTS AT, in the buffer — null on the report, an output or an axis, and
+	// on a row whose coordinate the buffer no longer has. Every cell editor asks through here, so
+	// "which level is this row" is answered once.
+	ibDataComposer::GroupNode* LevelAtRow(const class ibDataViewItem& row);
+
+	// ⭐ A NODE HAS ITS OWN PANELS (Max, on the first run: "the groupings have panels of their
+	// own"). The shared filter / sort editors are re-pointed at the SELECTED node's buffer instead
+	// of at one composition-wide one, which is what they were built to allow (SetSettings).
+	//
+	// Keyed by the node's coordinate — the SAME type the tree names its rows with (ibStructurePos),
+	// not a second triple of numbers beside it. Created on first selection, kept until the window is
+	// accepted, then written back into the structure.
+	using ibNodeKey = ibStructurePos;
+
+	// ⭐ WHICH NODE IS SELECTED, REMEMBERED — never asked of the tree control.
+	//
+	// Asking it during its own selection-changed event walks a selection the control is still
+	// rebuilding, and it says so: "invalid item in selection - bad internal state" (a crash on the
+	// first click after this window learnt about nodes, 2026-08-21). The event carries the item; we
+	// keep what it said, and every reader below works from that.
+	ibNodeKey m_currentNode = ibNodeKey(-1, -1, -1);
+	ibDataComposer::GroupNode* CurrentLevel();
+	std::map<ibNodeKey, ibValuePtr<ibValueListSettings>> m_nodeSettings;
+	class ibValueListSettings* NodeSettings(const ibNodeKey& key);
+	void BindNodeEditors();        // point the shared editors at what is selected now
+	void CommitNodeSettings();     // node buffers -> the structure buffer, on accept
+
+	// ---- The GROUPING page — the fields ONE level groups by ---------------------
+	wxWindow* BuildGroupingPage(wxWindow* parent);
+	void OnGroupingFieldAdd(wxCommandEvent&);
+	void OnGroupingFieldRemove(wxCommandEvent&);
+	void MoveGroupingField(int delta);
+	int  SelectedGroupingField() const;
+	void ReloadGrouping(int select = wxNOT_FOUND);
+	// Repaint the structure tree's text (a level's elements are shown there) WITHOUT rebuilding it:
+	// a rebuild collapses every node, which is not what changing a field should do.
+	void RefreshStructureText();
+
+	// Double-click in the picker puts the field into this level's elements.
+	void AddGroupingFieldFromTree(const class wxTreeItemId& item);
+	// The Grouping page belongs to a GROUPING — taken off the notebook where there is none.
+	void SyncGroupingPage();
+
+	class wxNotebook*           m_settingsTabs  = nullptr;
+	wxWindow*                   m_groupingPage  = nullptr;
+	wxTreeCtrl*                 m_groupingFieldTree = nullptr;   // available fields, the shared tree's view
+	class ibDataViewCtrl*       m_groupingView  = nullptr;
+	class ibGroupingFieldsModel* m_groupingModel = nullptr;
+
+	// ---- TWO FIELD-SET PAGES, one shape ----------------------------------------
+	//
+	// AVAILABLE — what the node MAY see; SELECTED — what it SHOWS. Two different questions over
+	// identical machinery: a list the user fills himself, a toolbar over it, and an "Auto" switch
+	// that says "take the set from the node above". So there is ONE page builder and one set of
+	// handlers, told apart by which set they were asked for — a second copy of this would drift the
+	// day one of the two grew a button.
+	enum class ibFieldSet { Available, Selected };
+
+	struct ibFieldSetPage {
+		wxTreeCtrl*              m_sourceTree = nullptr;   // everything the source offers, to pick FROM
+		class ibDataViewCtrl*    m_view    = nullptr;
+		class ibStringListModel* m_model   = nullptr;
+		wxCheckBox*              m_autoBox = nullptr;
+	};
+
+	wxWindow* BuildFieldSetPage(wxWindow* parent, ibFieldSet set);
+	void OnFieldSetAdd(ibFieldSet set);
+	void OnFieldSetRemove(ibFieldSet set);
+	void OnFieldSetCopy(ibFieldSet set);
+	void OnFieldSetAuto(ibFieldSet set, bool checked);
+	void ReloadFieldSets();          // both pages follow the selection
+	void ReloadFieldSet(ibFieldSet set);
+	// The selected node's OWN set of that kind, and its Auto flag — the report has no flag, being
+	// the top of the inheritance.
+	std::vector<wxString>* CurrentFieldSet(ibFieldSet set, bool** autoFlag = nullptr);
+	int  SelectedFieldSetRow(ibFieldSet set);   // the line the cursor is on, or wxNOT_FOUND
+	void MoveFieldSetRow(ibFieldSet set, int delta);
+	// Put the field a tree row stands for into the set — double-click on the left pane.
+	void AddFieldFromTree(ibFieldSet set, const class wxTreeItemId& item);
+	ibFieldSetPage& PageOf(ibFieldSet set) { return set == ibFieldSet::Available ? m_availablePage : m_selectedPage; }
+
+	ibFieldSetPage m_availablePage;
+	ibFieldSetPage m_selectedPage;
+	// The composition-wide sets, buffered like the structure — applied on accept.
+	std::vector<wxString>        m_commonAvailableBuffer;
+	std::vector<wxString>        m_commonSelectedBuffer;
+	// WHAT THE SELECTED NODE MAY USE — the available set of the current node, inherited upwards
+	// (level, then output, then the composition). Read out of THIS window's buffers, because a
+	// narrowing just made has not reached the composition yet.
+	const std::vector<wxString>* AvailableForCurrentNode() const;
+	// WHICH AXIS a structure command acts on, read off what is selected: a level's own axis, the
+	// axis itself, an output's rows, or — with the report selected — the first output's rows. `at`
+	// comes back as the selected level, or -1 when the selection names no level.
+	std::vector<ibDataComposer::GroupNode>* AxisForCommand(int& at);
 
 	// WHICH FIELDS THIS COMPOSITION OFFERS, as the shared TREE both editors above read and the
 	// structure pane picks through (settings/settingsFieldTree.h). Distinct from m_fields below,

@@ -47,6 +47,12 @@ public:
 	void SetTitle(const wxString& title) { m_title = title; }
 	void AddHeaderLine(const wxString& line) { m_headerLines.push_back(line); }
 
+	// A REPORT ENDS WITH ITS TOTAL. Whatever the composition's text asks for, a printed report shows
+	// what everything above it adds up to — so the walk is asked for the tree's root, and the row it
+	// hands over is held and written last (Max, 2026-08-22: "the grand total is needed, at the
+	// bottom").
+	virtual bool WantsGrandTotal() const override { return true; }
+
 	virtual void OnColumns(const std::vector<ibQueryLowering::OutputColumn>& schema) override;
 	virtual void OnRow(int level, bool hasChildren, const std::vector<ibValue>& values) override;
 	virtual void OnComplete(bool totals) override;
@@ -64,17 +70,39 @@ private:
 	// reads as a different value).
 	std::vector<size_t>         m_widest;
 
-	// WHERE EACH SCHEMA ENTRY LANDS. Sheet column per schema index (-1 = not written), and the
-	// schema indices of the DIMENSIONS in level order — they all share one column, so a row needs
-	// the order to know which of them is its own. See OnColumns for why the layout is by ROLE.
+	// WHERE EACH SCHEMA ENTRY LANDS — the sheet column per schema index (-1 = not written). See
+	// OnColumns for why the layout is by ROLE rather than by schema order.
 	std::vector<int>            m_layout;
-	std::vector<size_t>         m_dimColumns;
+	// WHICH LEVEL each schema entry belongs to (-1 = not a dimension). A level may hold several
+	// fields, so this is what tells "the second field of level 1" from "the first field of level 2";
+	// counting dimension columns instead is how the last level used to disappear.
+	std::vector<int>            m_dimLevel;
 
 	ibBackendSpreadsheetObject* m_document = nullptr;
 	wxString                    m_title;
 	std::vector<wxString>       m_headerLines;
 	int                         m_columnCount = 0;
 	int                         m_rowsWritten = 0;
+	// HAS ANYTHING BEEN PRINTED YET? The first section clears the document; the ones after it print
+	// below, because a composition's outputs share one sheet.
+	bool                        m_started = false;
+	// Does this output declare any measures? Without them the grand-total row has nothing to show.
+	bool                        m_hasMeasures = false;
+	// How many columns the DIMENSION area occupies (0 = this output has none). A total line writes
+	// its caption inside that area and its figures outside it.
+	int                         m_dimWidth = 0;
+	// ⭐ THE GRAND TOTAL, HELD UNTIL THE END. The walk hands it over FIRST (it is the root of the
+	// folded tree, and the walk is pre-order); a report reads it at the BOTTOM. Kept as the row it
+	// arrived as and written by OnComplete through the ordinary row road, so nothing about how a
+	// total looks is decided twice.
+	std::vector<ibValue>        m_grandTotal;
+	bool                        m_hasGrandTotal = false;
+
+	// ⚠ NO PER-GROUP TOTAL LINE, and it was tried: a group's heading already carries its resources
+	// beside its name, so a "Total …" row under every group repeats what the line above it says and
+	// the report stops being readable (Max, 2026-08-22). One total row exists — the grand one, at
+	// the end of the section.
+	void WriteTotalLine(int level, const std::vector<ibValue>& values, bool grand);
 };
 
 #endif // __SPREADSHEET_COMPOSE_DRIVER_H__

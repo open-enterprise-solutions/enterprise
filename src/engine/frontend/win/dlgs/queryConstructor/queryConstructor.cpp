@@ -275,6 +275,35 @@ bool ibDialogQueryConstructor::IsMetaDataReadOnly(const ibMetaData* metaData)
 // Why those two hosts: a composition's totals ARE its resources and its levels ARE its groupings,
 // and a dynamic list folds through its own settings. In both, a TOTALS in the text is the same
 // setting written twice — in the copy nobody can see.
+// A LEVEL'S FIELDS ARE ONE CELL, WRITTEN AS A LIST — `Partner, Contract` groups by both together.
+// Split on the commas that are OUTSIDE brackets and outside a literal, so a call in the list
+// (`SUBSTRING(Name, 1, 3)`) stays one field. Both quote characters are honoured, since which one a
+// literal uses is the lexer's business and this only has to avoid cutting inside one.
+static std::vector<wxString> ibSplitLevelFields(const wxString& text)
+{
+	std::vector<wxString> parts;
+	wxString current;
+	int      depth = 0;
+	wxChar   quote = 0;
+	for (size_t i = 0; i < text.length(); ++i) {
+		const wxChar c = text[i];
+		if (quote != 0) {
+			current += c;
+			if (c == quote) quote = 0;
+			continue;
+		}
+		if (c == wxT('"') || c == wxT('\'')) { quote = c; current += c; continue; }
+		if (c == wxT('(')) ++depth;
+		else if (c == wxT(')')) --depth;
+		if (c == wxT(',') && depth <= 0) { parts.push_back(current); current.clear(); continue; }
+		current += c;
+	}
+	parts.push_back(current);
+	for (wxString& part : parts)
+		part.Trim(true).Trim(false);
+	return parts;
+}
+
 static void ibDropTotalsFromPackage(ibQueryPackage& package)
 {
 	for (ibQueryAstStatement& statement : package.m_statements) {
@@ -390,6 +419,11 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	m_pages.push_back({ BuildTotalsPage(m_notebook),     _("Totals"),            true,  false, false, true,  ibQueryExclude_Totals });
 	m_pages.push_back({ BuildIndexPage(m_notebook),      _("Index"),             true,  false, true,  false, ibQueryExclude_Index });
 	m_pages.push_back({ BuildPackagePage(m_notebook),    _("Query batch"),       false, false, false, false, ibQueryExclude_Batch });
+	// ⭐ …AND ONE TIER UP: links between the results the package has NAMED. Not a query tab — it is
+	// about the package, like the batch beside it — and it appears only once there are two names to
+	// relate. It shares the exclusion bit of the batch: a host that has no package has no results
+	// to link either.
+	m_pages.push_back({ BuildSelectionLinksPage(m_notebook), _("Selection links"), false, false, false, false, ibQueryExclude_Batch, true });
 	SyncNotebookPages();
 	upper->Add(m_notebook, 1, wxEXPAND | wxALL, FromDIP(6));
 
@@ -529,6 +563,8 @@ wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 			return wxString::Format(_("drops the temp table %s"), statement.m_dropTemp);
 		if (statement.m_select && !statement.m_select->m_intoTemp.IsEmpty())
 			return wxString::Format(_("makes the temp table %s"), statement.m_select->m_intoTemp);
+		if (statement.m_select && !statement.m_select->m_ontoName.IsEmpty())
+			return wxString::Format(_("selects as %s"), statement.m_select->m_ontoName);
 		return _("selects");
 	});
 	m_statements = MakeGrid(panel, m_statementModel, [this] { FillAll(); });
@@ -824,6 +860,73 @@ wxWindow* ibDialogQueryConstructor::BuildLinksPage(wxWindow* parent)
 	AttachContextMenu(m_links, bar);
 	bottom->Add(m_links, 1, wxEXPAND | wxALL, FromDIP(3));
 	page->SetSizer(bottom);
+	return page;
+}
+
+// ⭐⭐ LINKING THE PACKAGE'S NAMED SELECTIONS — and NOTHING ELSE HAPPENS.
+////////////////////////////////////////////////////////////////////////////
+//
+// Max, 2026-08-21, after three shapes of this tab: mark two statements as named selections and set
+// the links between them — no temporary tables, no substitutions, no source appearing in anybody's
+// Tables, no statement added to the package. That is the whole feature, and it is why this tab does
+// not edit a statement at all: it edits `ibQueryPackage::m_links`, which belongs to the PACKAGE.
+//
+// A link INSIDE a query is still an ordinary JOIN and still lives on the Links tab. This is the
+// other thing — a relation the package declares between two of its results — and the text spells it
+// where a statement would stand: `JOIN T1 AND T2 ON …` (no new keyword; the position decides).
+//
+// The grid is the same five cells a join is read through, so nothing had to be learnt to use it.
+//
+// See docs/query-constructor.md §8a.
+wxWindow* ibDialogQueryConstructor::BuildSelectionLinksPage(wxWindow* parent)
+{
+	wxPanel* page = new wxPanel(parent);
+	wxBoxSizer* box = new wxBoxSizer(wxVERTICAL);
+
+	wxToolBar* bar = MakeToolBar(page);
+	AddTool(bar, _("Add link"), wxART_NEW,    [this](wxCommandEvent& e) { OnSelectionLinkAdd(e); });
+	AddTool(bar, _("Delete"),   wxART_DELETE, [this](wxCommandEvent& e) { OnSelectionLinkRemove(e); });
+	bar->Realize();
+	box->Add(bar, 0, wxEXPAND);
+
+	m_selectionLinks = new ibDataViewCtrl(page, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		wxDV_ROW_LINES | wxDV_SINGLE);
+	m_selectionLinkModel = new ibQuerySelectionLinkModel();
+	m_selectionLinkModel->SetOnChanged([this] { FillAll(); });
+	m_selectionLinkModel->SetOnError([this](const wxString& message) { ShowEngineError(message); });
+	m_selectionLinks->AssociateModel(m_selectionLinkModel);
+
+	m_selectionLinks->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Selection 1"),
+		new ibRowChoiceRenderer([this]() -> wxArrayString { return NamedResultChoices(/*leftSide*/true); }),
+		kLinkColLeftTable, FromDIP(210), wxAlignment::wxALIGN_LEFT));
+	m_selectionLinks->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("All"),
+		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(), wxDATAVIEW_CELL_ACTIVATABLE),
+		kLinkColAllLeft, FromDIP(44), wxAlignment::wxALIGN_CENTER));
+	m_selectionLinks->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Selection 2"),
+		new ibRowChoiceRenderer([this]() -> wxArrayString { return NamedResultChoices(/*leftSide*/false); }),
+		kLinkColRightTable, FromDIP(210), wxAlignment::wxALIGN_LEFT));
+	m_selectionLinks->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("All"),
+		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(), wxDATAVIEW_CELL_ACTIVATABLE),
+		kLinkColAllRight, FromDIP(44), wxAlignment::wxALIGN_CENTER));
+	// ⚠ NO "ARBITRARY" COLUMN HERE, unlike the Links tab. There it distinguishes a link the author
+	// wrote by hand from one picked out of the ready field pairs; between two SELECTIONS there is no
+	// such distinction — every one of them is written by hand — so the cell said "yes" on every row
+	// and refused every click, which is a column that carries no information and promises an edit
+	// that cannot happen.
+	// THE CONDITION — the ready field pairs of the two SELECTIONS beside a "…" into the full editor,
+	// exactly as a link between two tables is written. Their fields are the projections of the
+	// statements that named them, so there is a list to offer and no reason to make a person type it.
+	m_selectionLinks->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Link condition"),
+		new ibExpressionCellRenderer(
+			[this]() -> wxArrayString { return SelectionLinkConditionChoices(); },
+			[this](wxString& text) -> bool { return EditSelectionLinkCondition(text); },
+			wxDATAVIEW_CELL_EDITABLE),
+		kLinkColCondition, FromDIP(340), wxAlignment::wxALIGN_LEFT));
+
+	EditOnActivate(m_selectionLinks);
+	AttachContextMenu(m_selectionLinks, bar);
+	box->Add(m_selectionLinks, 1, wxEXPAND | wxALL, FromDIP(3));
+	page->SetSizer(box);
 	return page;
 }
 
@@ -1413,11 +1516,21 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		if (select == nullptr || row >= select->m_totalsBy.size())
 			return wxEmptyString;
 		const ibQueryTotalDim& dim = select->m_totalsBy[row];
-		if (col == kGridCol1)
-			return dim.m_expr ? ibRenderQueryExpr(*dim.m_expr) : wxString();
+		if (col == kGridCol1) {
+			// THE LEVEL'S FIELDS, AS A LIST. A level groups by all of them together, so the cell shows
+			// them the way the query text spells them inside its brackets — one field is the same
+			// reading with a list of one.
+			wxString fields;
+			for (const ibQueryTotalField& field : dim.m_fields) {
+				if (!field.m_expr) continue;
+				if (!fields.IsEmpty()) fields += wxT(", ");
+				fields += ibRenderQueryExpr(*field.m_expr);
+			}
+			return fields;
+		}
 		if (col == kGridCol2)
-			return ibQueryKeywordText(dim.m_unfold == ibQueryDimUnfold::Hierarchy ? ibQueryKeyword::Hierarchy
-				: dim.m_unfold == ibQueryDimUnfold::HierarchyOnly ? ibQueryKeyword::HierarchyOnly
+			return ibQueryKeywordText(dim.HeadUnfold() == ibQueryDimUnfold::Hierarchy ? ibQueryKeyword::Hierarchy
+				: dim.HeadUnfold() == ibQueryDimUnfold::HierarchyOnly ? ibQueryKeyword::HierarchyOnly
 				: ibQueryKeyword::Elements);
 		// EMPTY MEANS "the column's own name" — shown as what it WILL be, so the cell is not blank
 		// where the result will in fact have a name.
@@ -1431,9 +1544,21 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		if (col == kGridCol2) {
 			// THE LANGUAGE'S OWN THREE WORDS, matched against the keyword table rather than against a
 			// second list of them kept here.
-			dim.m_unfold = text.IsSameAs(ibQueryKeywordText(ibQueryKeyword::Hierarchy), false) ? ibQueryDimUnfold::Hierarchy
+			const ibQueryDimUnfold unfold =
+				text.IsSameAs(ibQueryKeywordText(ibQueryKeyword::Hierarchy), false) ? ibQueryDimUnfold::Hierarchy
 				: text.IsSameAs(ibQueryKeywordText(ibQueryKeyword::HierarchyOnly), false) ? ibQueryDimUnfold::HierarchyOnly
 				: ibQueryDimUnfold::Elements;
+			// A HIERARCHY UNFOLDS ONE PARENT CHAIN, so a level grouped by several fields has none to
+			// walk. Said here, at the cell, rather than left for the engine to refuse after the whole
+			// query is written.
+			if (unfold != ibQueryDimUnfold::Elements && !dim.IsSingleField()) {
+				wxMessageBox(_("This level groups by several fields, and a hierarchy unfolds one field's "
+				               "parent chain.\n\nGive the hierarchy field a level of its own."),
+					_("Query constructor"), wxOK | wxICON_WARNING, this);
+				return false;
+			}
+			if (ibQueryTotalField* head = dim.Head())
+				head->m_unfold = unfold;
 			return true;
 		}
 		if (col == kGridCol3) {
@@ -1446,8 +1571,10 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			//
 			// The name matters where it is NOT the column's own — two levels over the same column
 			// (Date by month, Date by day) are two output columns, and that is what this is for.
-			const wxString natural = dim.m_expr && dim.m_expr->m_kind == ibQueryAstExprKind::Column
-			                         && !dim.m_expr->m_path.empty() ? dim.m_expr->m_path.back() : wxString();
+			const ibQueryTotalField* head = dim.Head();
+			const wxString natural = head != nullptr && head->m_expr
+			                         && head->m_expr->m_kind == ibQueryAstExprKind::Column
+			                         && !head->m_expr->m_path.empty() ? head->m_expr->m_path.back() : wxString();
 			if (alias.IsSameAs(natural, false)) { dim.m_alias.clear(); return true; }
 			if (!alias.IsEmpty() && !AcceptName(alias, _("totals level name")))
 				return false;
@@ -1473,8 +1600,35 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			return true;
 		}
 		try {
+			// THE WHOLE LEVEL IS REWRITTEN FROM THE CELL — one field or several. The head keeps the
+			// unfold it had (the cell beside this one edits that); fields added here are plain, which
+			// is the only reading a level of several fields has.
+			const std::vector<wxString> pieces = ibSplitLevelFields(text);
+			std::vector<ibQueryTotalField> parsed;
 			ibQueryParser parser;
-			dim.m_expr = parser.ParseExpression(text);
+			for (const wxString& piece : pieces) {
+				if (piece.IsEmpty()) continue;
+				ibQueryTotalField field;
+				field.m_expr = parser.ParseExpression(piece);
+				parsed.push_back(std::move(field));
+			}
+			if (parsed.empty())
+				return false;                       // an empty cell removes nothing — the toolbar does that
+			if (parsed.size() > 1) {
+				// Refused where it is written, for the same reason the engine refuses it: a hierarchy
+				// unfolds one parent chain and a key of several fields has none.
+				if (dim.HeadUnfold() != ibQueryDimUnfold::Elements) {
+					wxMessageBox(_("This level unfolds through a hierarchy, which follows one field's "
+					               "parent chain.\n\nRemove the hierarchy first, or give the extra "
+					               "fields a level of their own."),
+						_("Query constructor"), wxOK | wxICON_WARNING, this);
+					return false;
+				}
+			}
+			else if (const ibQueryTotalField* head = dim.Head()) {
+				parsed.front().m_unfold = head->m_unfold;
+			}
+			dim.m_fields = std::move(parsed);
 		}
 		catch (const ibBackendException& error) {
 			ShowEngineError(error.GetErrorDescription());
@@ -1498,8 +1652,10 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	m_totalsDimensionModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
 	m_totalsDimensionModel->SetIconReader([this](unsigned int row) -> wxIcon {
 		const ibQuerySelect* select = Current();
-		return select != nullptr && row < select->m_totalsBy.size()
-			? IconOfExpr(select->m_totalsBy[row].m_expr) : wxNullIcon;
+		// The icon is the HEAD field's — a level of several fields shows what it leads with.
+		const ibQueryTotalField* head = select != nullptr && row < select->m_totalsBy.size()
+			? select->m_totalsBy[row].Head() : nullptr;
+		return head != nullptr ? IconOfExpr(head->m_expr) : wxNullIcon;
 	});
 	m_totalsDimensions->GetRootColumnGroup()->AppendColumn(IconColumn(_("Grouping field"), kGridCol1, FromDIP(250)));
 	// THE UNFOLD IS A TYPE (a registered runtime enumeration — see ibQueryDimUnfold), so the cell
@@ -1857,13 +2013,19 @@ wxWindow* ibDialogQueryConstructor::BuildAdvancedPage(wxWindow* parent)
 	kinds.Add(_("Select"));
 	kinds.Add(_("Create a temporary table"));
 	kinds.Add(_("Drop a temporary table"));
+	// A FOURTH: the select still hands its result back, and NAMES it (ONTO). The pair to the second
+	// kind and not the same thing — a temporary table is read by later statements, a named result is
+	// asked for by whoever runs the package, by name instead of by position.
+	kinds.Add(_("Select under a name"));
 	m_queryKind = new wxRadioBox(kindBox, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
 		kinds, 1, wxRA_SPECIFY_COLS);
 	m_queryKind->SetSelection(0);
 	m_queryKind->Bind(wxEVT_RADIOBOX, &ibDialogQueryConstructor::OnQueryKindChanged, this);
 	kind->Add(m_queryKind, 0, wxEXPAND | wxALL, FromDIP(4));
 
-	kind->Add(new wxStaticText(kindBox, wxID_ANY, _("Temporary table name")), 0,
+	// ONE FIELD, because all three naming kinds ask the same thing: what this statement's name is.
+	// Which name it becomes — a temporary table's or a result's — is what the kind above says.
+	kind->Add(new wxStaticText(kindBox, wxID_ANY, _("Name")), 0,
 		wxLEFT | wxRIGHT, FromDIP(4));
 	m_tempName = new wxTextCtrl(kindBox, wxID_ANY, wxEmptyString, wxDefaultPosition,
 		FromDIP(wxSize(240, -1)));

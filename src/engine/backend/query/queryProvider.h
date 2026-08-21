@@ -138,6 +138,16 @@ public:
 	// shape is pageable (ibDbTableProvider::CanPageGroupLevel), else the unpaged ExecuteAggregate (all groups).
 	static ibDataQueryResult ExecuteGroupLevelPage(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
 	static ibSelectorTree    ExecuteTotals(const ibDataQuerySpec& spec);   // totals — raw hierarchical totals tree
+	// The same push-downs ExecuteTotals uses, asked as a QUESTION: true = the DBMS folded the levels
+	// and `out` is the tree; false = nothing was read, fold it yourself. This is what lets the query
+	// lowering — and therefore every composition — stop reading detail rows to add them up here.
+	static bool              TryFoldTotalsInDbms(const ibDataQuerySpec& spec, ibSelectorTree& out);
+	// ⭐ CAN A STATEMENT DECLARE A NAMED QUERY HERE — `WITH <name> AS (…)`? Asked by the LOWERING
+	// before it chooses how a named result travels: declared, the server reads it itself and the
+	// join is the server's; otherwise its rows come back and the join is ours. Asked THROUGH the
+	// composer for the same reason the fold is — this is an L2 fact, and the tier that owns the
+	// answer answers it, so the lowering never names a dialect.
+	static bool              CanDeclareNamedQuery(ibDatabaseConnectionHolder* holder = nullptr);
 	// The totals fold in isolation: detail SNAPSHOT -> subtotal tree. Pure (no DB) — unit-testable.
 	static ibSelectorTree    BuildTotalsTree(const ibQueryRamTable& detail,
 	                                         const std::vector<const ibBackendQueryColumn*>& groupFields,

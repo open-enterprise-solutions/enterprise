@@ -216,3 +216,184 @@ TEST(QueryCompose, UnionHeterogeneousBranches)
 	EXPECT_EQ(out.GetCell(2, OUT_CODE).GetString().ToStdString(), "B1");
 	EXPECT_TRUE(out.GetCell(2, OUT_NAME).GetString().IsEmpty());   // absent in branch B -> NULL
 }
+
+// ⭐ THE DETAIL LEVEL — a level with NO FIELDS is the rows themselves, hung under the deepest
+// heading ("a detail record is an empty grouping"). Not "one group of everything": that is what
+// OVERALL means at the other end of the list, and the two must not be confused.
+//
+// `TOTALS SUM(amount) BY region, <details>` over the same four rows:
+//   root = 25
+//   ├─ North = 18 → three DETAIL nodes (10, 5, 3)
+//   └─ South = 7  → one DETAIL node (7)
+TEST(QueryTotals, EmptyLevelHangsTheDetailRows)
+{
+	const ibMetaID REGION = 1, PRODUCT = 2, AMOUNT = 3;
+
+	ibQueryRamTable detail;
+	detail.AddColumn(REGION,  wxT("region"),  ibTypeDescription());
+	detail.AddColumn(PRODUCT, wxT("product"), ibTypeDescription());
+	detail.AddColumn(AMOUNT,  wxT("amount"),  ibTypeDescription());
+	auto add = [&](const wxString& r, const wxString& p, long a) {
+		const long row = detail.AppendRow();
+		detail.SetCell(row, REGION,  ibValue(r));
+		detail.SetCell(row, PRODUCT, ibValue(p));
+		detail.SetCell(row, AMOUNT,  ibValue(ibNumber(a)));
+	};
+	add(wxT("North"), wxT("Apple"), 10);
+	add(wxT("North"), wxT("Apple"),  5);
+	add(wxT("North"), wxT("Pear"),   3);
+	add(wxT("South"), wxT("Apple"),  7);
+
+	TestCol region(wxT("region"), REGION), amount(wxT("amount"), AMOUNT);
+
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn    = ibDataQueryBuilder::AggregateFn::Sum;
+	sum.m_col   = &amount;
+	sum.m_alias = wxT("total");
+
+	// ONE grouping level, then the detail level — an ibTotalLevel with no fields at all.
+	std::vector<ibTotalLevel> levels;
+	levels.push_back(ibTotalLevel::One(&region, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel{});
+
+	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
+
+	const ibMetaID AGG0 = AMOUNT;   // the aggregate rolls in place, into its own column
+	const ibSelectorTree::Node& root = tree.Root();
+	EXPECT_TRUE(NumEq(root.m_values.at(AGG0), 25));
+	ASSERT_EQ(root.m_children.size(), 2u);
+
+	const ibSelectorTree::Node& north = *root.m_children[0];
+	EXPECT_EQ(north.m_kind, ibSelectorNodeKind::Group);         // a heading, as before
+	EXPECT_TRUE(NumEq(north.m_values.at(AGG0), 18));
+	ASSERT_EQ(north.m_children.size(), 3u);                     // ONE NODE PER ROW, not one group
+
+	// Every row of the group, in the order it was read, saying what it IS.
+	const long expected[] = { 10, 5, 3 };
+	for (size_t i = 0; i < north.m_children.size(); ++i) {
+		const ibSelectorTree::Node& row = *north.m_children[i];
+		EXPECT_EQ(row.m_kind, ibSelectorNodeKind::Detail);
+		EXPECT_EQ(row.m_level, 2);
+		EXPECT_TRUE(row.m_children.empty());
+		// The row's OWN value in the resource column — a sum over one row is that row.
+		EXPECT_TRUE(NumEq(row.m_values.at(AGG0), expected[i]));
+		// …and the fields it was read with, including the ones no level groups by.
+		EXPECT_EQ(row.m_values.at(REGION).GetString().ToStdString(), "North");
+		EXPECT_FALSE(row.m_values.at(PRODUCT).GetString().IsEmpty());
+	}
+
+	const ibSelectorTree::Node& south = *root.m_children[1];
+	ASSERT_EQ(south.m_children.size(), 1u);
+	EXPECT_EQ(south.m_children[0]->m_kind, ibSelectorNodeKind::Detail);
+	EXPECT_TRUE(NumEq(south.m_children[0]->m_values.at(AGG0), 7));
+}
+
+// A LEVEL OF SEVERAL FIELDS is ONE heading keyed by the TUPLE — `BY (region, product)` folds into
+// one level, not two nested ones. Two rows share a heading only when BOTH fields match.
+TEST(QueryTotals, TupleLevelGroupsByEveryFieldTogether)
+{
+	const ibMetaID REGION = 1, PRODUCT = 2, AMOUNT = 3;
+
+	ibQueryRamTable detail;
+	detail.AddColumn(REGION,  wxT("region"),  ibTypeDescription());
+	detail.AddColumn(PRODUCT, wxT("product"), ibTypeDescription());
+	detail.AddColumn(AMOUNT,  wxT("amount"),  ibTypeDescription());
+	auto add = [&](const wxString& r, const wxString& p, long a) {
+		const long row = detail.AppendRow();
+		detail.SetCell(row, REGION,  ibValue(r));
+		detail.SetCell(row, PRODUCT, ibValue(p));
+		detail.SetCell(row, AMOUNT,  ibValue(ibNumber(a)));
+	};
+	add(wxT("North"), wxT("Apple"), 10);
+	add(wxT("North"), wxT("Apple"),  5);   // same pair — the same heading
+	add(wxT("North"), wxT("Pear"),   3);   // same region, other product — its own heading
+	add(wxT("South"), wxT("Apple"),  7);
+
+	TestCol region(wxT("region"), REGION), product(wxT("product"), PRODUCT), amount(wxT("amount"), AMOUNT);
+
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+
+	ibTotalLevel pair;
+	pair.m_fields.push_back(ibTotalField{ &region,  ibDimensionKind::Elements });
+	pair.m_fields.push_back(ibTotalField{ &product, ibDimensionKind::Elements });
+
+	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, { pair }, { sum }, nullptr, nullptr);
+
+	const ibMetaID AGG0 = AMOUNT;
+	const ibSelectorTree::Node& root = tree.Root();
+	EXPECT_TRUE(NumEq(root.m_values.at(AGG0), 25));
+	// THREE headings, ONE level deep — three distinct pairs, and nothing nested inside them.
+	ASSERT_EQ(root.m_children.size(), 3u);
+	for (const auto& node : root.m_children) {
+		EXPECT_EQ(node->m_level, 1);
+		EXPECT_TRUE(node->m_children.empty());
+	}
+
+	// EVERY FIELD OF THE KEY is on the heading — a reader prints them side by side.
+	const ibSelectorTree::Node& northApple = *root.m_children[0];
+	EXPECT_EQ(northApple.m_values.at(REGION).GetString().ToStdString(),  "North");
+	EXPECT_EQ(northApple.m_values.at(PRODUCT).GetString().ToStdString(), "Apple");
+	EXPECT_TRUE(NumEq(northApple.m_values.at(AGG0), 15));   // 10 + 5 — both rows of the pair
+	EXPECT_TRUE(NumEq(root.m_children[1]->m_values.at(AGG0), 3));
+	EXPECT_TRUE(NumEq(root.m_children[2]->m_values.at(AGG0), 7));
+}
+
+// ⭐ AN AGGREGATE ROLLS INTO ITS INPUT COLUMN'S SLOT — that is what "in place" means here, and it
+// is why TWO aggregates over ONE column cannot both be kept: the second writes where the first
+// wrote. `TOTALS SUM(amount), COUNT(amount)` printed one figure under two headings until the
+// lowering started projecting the repeat under a synthetic alias, which gives it a column — and
+// therefore a slot — of its own (found by audit, 2026-08-22).
+//
+// Pinned from BOTH sides, because the workaround is only right if the trap is real.
+TEST(QueryTotals, TwoAggregatesOverOneColumnNeedTwoColumns)
+{
+	const ibMetaID REGION = 1, AMOUNT = 2, AMOUNT_AGAIN = 3;
+
+	ibQueryRamTable detail;
+	detail.AddColumn(REGION,       wxT("region"), ibTypeDescription());
+	detail.AddColumn(AMOUNT,       wxT("amount"), ibTypeDescription());
+	detail.AddColumn(AMOUNT_AGAIN, wxT("agg0"),   ibTypeDescription());   // the second projection of it
+	auto add = [&](const wxString& r, long a) {
+		const long row = detail.AppendRow();
+		detail.SetCell(row, REGION,       ibValue(r));
+		detail.SetCell(row, AMOUNT,       ibValue(ibNumber(a)));
+		detail.SetCell(row, AMOUNT_AGAIN, ibValue(ibNumber(a)));
+	};
+	add(wxT("North"), 10);
+	add(wxT("North"),  5);
+	add(wxT("South"),  7);
+
+	TestCol region(wxT("region"), REGION), amount(wxT("amount"), AMOUNT), again(wxT("agg0"), AMOUNT_AGAIN);
+	const std::vector<ibTotalLevel> levels{ ibTotalLevel::One(&region, ibDimensionKind::Elements) };
+
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum;   sum.m_col = &amount; sum.m_alias = wxT("total");
+
+	// THE TRAP: the same column twice. Both aggregates key on AMOUNT, so the tree holds ONE value —
+	// whichever ran last — and a report shows the count where the sum should be.
+	{
+		ibDataQueryBuilder::AggregateItem countSameCol;
+		countSameCol.m_fn = ibDataQueryBuilder::AggregateFn::Count;
+		countSameCol.m_col = &amount;   countSameCol.m_alias = wxT("rows");
+
+		const ibSelectorTree tree =
+			ibQueryComposer::BuildDimensionTree(detail, levels, { sum, countSameCol }, nullptr, nullptr);
+		const ibSelectorTree::Node& north = *tree.Root().m_children[0];
+		EXPECT_TRUE(NumEq(north.m_values.at(AMOUNT), 2));   // the COUNT, standing where the SUM was
+	}
+
+	// THE ANSWER: a column of its own for the repeat — both figures survive, each in its own slot.
+	{
+		ibDataQueryBuilder::AggregateItem countOwnCol;
+		countOwnCol.m_fn = ibDataQueryBuilder::AggregateFn::Count;
+		countOwnCol.m_col = &again;    countOwnCol.m_alias = wxT("rows");
+
+		const ibSelectorTree tree =
+			ibQueryComposer::BuildDimensionTree(detail, levels, { sum, countOwnCol }, nullptr, nullptr);
+		const ibSelectorTree::Node& north = *tree.Root().m_children[0];
+		EXPECT_TRUE(NumEq(north.m_values.at(AMOUNT),       15));
+		EXPECT_TRUE(NumEq(north.m_values.at(AMOUNT_AGAIN),  2));
+		EXPECT_TRUE(NumEq(tree.Root().m_values.at(AMOUNT), 22));   // and the grand total is still whole
+	}
+}

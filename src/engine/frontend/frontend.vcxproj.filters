@@ -70,6 +70,9 @@
     <ClCompile Include="win\dlgs\queryConstructor\queryLinkModel.cpp">
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\querySelectionLinkModel.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\queryConstructor\queryConditionModel.cpp">
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClCompile>
@@ -1088,6 +1091,9 @@
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\queryConstructor\queryLinkModel.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\querySelectionLinkModel.h">
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\queryConstructor\queryConditionModel.h">

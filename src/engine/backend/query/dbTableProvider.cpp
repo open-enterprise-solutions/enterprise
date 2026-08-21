@@ -1962,6 +1962,20 @@ bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
 // per-column plan (scalar? + qualifier for the spread fields + the metaData for reassembly).
 struct RollupGroupKey { bool scalar; wxString qualifier; const ibMetaData* meta; };
 
+// A NODE THAT HAS CHILDREN SAYS SO. The flag is what every reader folds by — a report tints and
+// bolds a heading, a grid draws the expander, the walk asks HasChildren() — and a tree assembled
+// from ROLLUP rows had nobody to set it: parents are found through the key map, not by descending,
+// so nothing ever looked at its own children. Left false, a server-folded report printed its
+// headings as ordinary rows. The RAM fold sets it as it descends (FoldDimLevel); this is the same
+// statement made once the shape is complete.
+static void MarkRollupFolders(ibSelectorTree::Node& node)
+{
+	node.m_hasChildren = !node.m_children.empty();
+	for (const std::unique_ptr<ibSelectorTree::Node>& child : node.m_children)
+		if (child != nullptr)
+			MarkRollupFolders(*child);
+}
+
 static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr from,
 	const std::function<ibQueryExprPtr(const ibBackendQueryColumn*)>& colExpr,
 	const std::function<RollupGroupKey(const ibBackendQueryColumn*)>& keyInfo)
@@ -2096,6 +2110,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			if (const ibBackendQueryColumn* ac = (*spec.m_aggregates)[i].m_col)
 				node->m_values[ac->GetColumnId()] = rr.aggs[i];   // IN-PLACE in the aggregate's own column
 	}
+	MarkRollupFolders(tree.Root());
 	return tree;
 }
 
@@ -3050,7 +3065,40 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		ibQueryIR ir = q.Build();
 		if (spec.m_distinct) ir.m_root = ibDistinct(ir.m_root);   // SELECT DISTINCT — SELECT DISTINCT over the read
 		ir.m_lockForUpdate = req.m_lockForUpdate;   // pessimistic register set lock — dialect appends the clause
+		AttachNamedQueries(spec, ir);               // WITH … — the queries this statement declared
 		return ir;
+	}
+
+// ⭐ THE NAMED QUERIES THIS STATEMENT DECLARED, into the SAME IR — `WITH a AS (…) SELECT …`.
+//
+// Each is an ordinary door, so it is lowered by the ordinary road: its own spec through this very
+// function, and what comes back is a RELATION — the same tree a FROM subquery would hold. That is
+// the whole implementation, and it is why nothing about building a query had to change: a CTE is a
+// query that ended up written in a different PLACE.
+//
+// Recursion is the inner query's own business: a named query that itself declares one arrives here
+// with its own list and is handed back whole. (A cycle is a query the engine refuses, and refusing
+// it there rather than counting hops here keeps one opinion about what a valid query is.)
+void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryIR& ir)
+	{
+		if (spec.m_with == nullptr || spec.m_with->empty())
+			return;
+		for (const ibDataQueryBuilder::ibNamedQuery& named : *spec.m_with) {
+			if (named.m_name.IsEmpty() || !named.m_inner)
+				continue;
+			const ibDataQuerySpec innerSpec = named.m_inner->BuildSpec();
+			if (innerSpec.m_queryable == nullptr)
+				continue;   // nothing to read — a declaration of nothing declares nothing
+			const std::vector<ibQuerySortItem> innerSort =
+				ibDataQueryBuilder::EffectiveSort(innerSpec.m_queryable, *innerSpec.m_sorts);
+			// The inner query is read WHOLE — a page request belongs to the reader, not to what it
+			// reads: limiting the named query would silently narrow every mention of it.
+			ibQueryIR innerIR = BuildPageIR(innerSpec, ibReadPageRequest{}, innerSort);
+			ir.m_with.push_back({ named.m_name, innerIR.m_root });
+			// …and anything IT declared travels with it, ahead of it: an engine reads the list top to
+			// bottom, and a name must be declared before the query that mentions it.
+			ir.m_with.insert(ir.m_with.end() - 1, innerIR.m_with.begin(), innerIR.m_with.end());
+		}
 	}
 
 // External binds — EMPTY. The anchor keyset EMBEDS its values (ibConst for scalars, ibConstBlob for a reference

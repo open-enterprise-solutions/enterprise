@@ -23,6 +23,7 @@
 #include <wx/treectrl.h>
 
 #include <vector>
+#include <functional>
 
 #include "backend/composition/compositionField.h"   // ibValueCompositionField — a field IS a value
 #include "backend/backend_type.h"                   // ibTypeDescription
@@ -60,6 +61,28 @@ public:
 		m_source = nullptr;
 	}
 
+	// ⭐ WHICH OF THESE FIELDS ARE RESOURCES — asked of the HOST, because being a resource is not a
+	// property of the field: it is a DECLARATION the composition makes about it (Max, 2026-08-22:
+	// once a field is added to the resources, the settings list must already show that it is one).
+	//
+	// A predicate rather than a list, so the tree never holds a second copy of the resources and
+	// cannot fall out of step with them; unset, every field is drawn as it always was.
+	void SetResourceTest(std::function<bool(const wxString& path)> isResource) {
+		m_isResource = std::move(isResource);
+	}
+
+	// ⭐⭐ AND WHICH OF THEM MAY BE USED AT ALL — the AVAILABLE fields, asked of the host for the
+	// same reason: what a node may see is a statement the COMPOSITION makes about it, inherited
+	// from the report down through the outputs to the levels. Narrowing it is the whole point of
+	// having it, and a set that narrows nothing is a list a person fills in and never sees again.
+	//
+	// A ROAD IS NEVER HIDDEN. A reference is asked about its own path, and answering "no" for
+	// `Producer` would take away `Producer.Region` with it — so a node that unfolds stays, and only
+	// LEAVES are narrowed. Unset (every other host) shows everything, as before.
+	void SetVisibleTest(std::function<bool(const wxString& path)> isVisible) {
+		m_isVisible = std::move(isVisible);
+	}
+
 	// The config that resolves reference targets — the source's own, else the active one.
 	const ibMetaData* GetMetaData() const;
 
@@ -94,6 +117,10 @@ private:
 	const ibSourceDataObject*         m_source   = nullptr;   // PATH B — a self-describing source
 	std::vector<ibSettingsPlainField> m_plain;                // PATH A — flat columns
 	const ibMetaData*                 m_metaData = nullptr;
+	// "Is this path one of the composition's resources?" — see SetResourceTest.
+	std::function<bool(const wxString& path)> m_isResource;
+	// "May this node use this field?" — see SetVisibleTest.
+	std::function<bool(const wxString& path)> m_isVisible;
 
 	wxTreeItemId m_dragItem;   // field being dragged from a tree
 };

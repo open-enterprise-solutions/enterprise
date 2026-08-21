@@ -26,6 +26,7 @@
 // prune passes; MSVC hands <algorithm> over transitively and GCC/Clang do not, so the Windows build
 // stayed green while the other three CI jobs could not compile it. See docs/portability.md.
 #include <algorithm>
+#include <set>          // the aggregate inputs already claimed in one TOTALS clause
 
 // --- the AUXILIARY per-query temp-source registry (decl in queryable.h) ------------
 // Thread-local so concurrent sessions don't see each other's transient sources; RAII so a
@@ -50,6 +51,33 @@ const ibBackendQueryable* ibTempSourceScope::Find(const wxString& name)
 		return nullptr;
 	const auto it = t_tempSources->find(name);
 	return it != t_tempSources->end() ? it->second : nullptr;
+}
+
+// --- the results a PACKAGE has named, for the statements that read them (decl in queryable.h) ---
+// Same shape and the same lifetime as the temp sources above, and separate from them for a reason:
+// a temp table HAS rows, a named result is a QUERY — and which of the two roads a reader takes
+// (declare it to the server, or take its rows) is decided by the reader's own lowering.
+static thread_local const std::map<wxString, const ibQuerySelect*>* t_namedResults = nullptr;
+
+ibNamedResultScope::ibNamedResultScope(const std::map<wxString, const ibQuerySelect*>& results)
+	: m_prev(t_namedResults)
+{
+	t_namedResults = &results;
+}
+
+ibNamedResultScope::~ibNamedResultScope()
+{
+	t_namedResults = m_prev;
+}
+
+const ibQuerySelect* ibNamedResultScope::Find(const wxString& name)
+{
+	if (t_namedResults == nullptr || name.IsEmpty())
+		return nullptr;
+	// NAMES IN THIS LANGUAGE MATCH WITHOUT REGARD TO CASE, and the package stores them lower-cased —
+	// asked here so every caller says the name the author wrote.
+	const auto it = t_namedResults->find(name.Lower());
+	return it != t_namedResults->end() ? it->second : nullptr;
 }
 
 // The config a query runs on behalf of, for one execution — the composer threads its metadata in through here (parallel
@@ -775,7 +803,10 @@ ibAggregateFn AggFn(ibQueryKeyword kw)
 // columns — the builder, the result it stamps, the output schema — outlive this list. So ownership
 // is SHARED from the start: `owner` keeps the run's wrappers together while the lowering runs, each
 // consumer takes a share of the ones it names, and a wrapper dies when the last of them lets go.
-using ibSubqueryOwner = std::vector<std::shared_ptr<ibSubqueryQueryable>>;
+// The sources built FOR one execution — a nested subquery wrapper, a named query declared as a CTE.
+// Held as the BASE type: both mint columns of their own and answer ShareColumn, and the run keeps
+// them alive by holding the source, not by knowing which class it is.
+using ibSubqueryOwner = std::vector<std::shared_ptr<const ibBackendQueryable>>;
 std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& sel,
                                                 const std::map<wxString, ibValue>& params, ibSubqueryOwner& owner);
 
@@ -1155,6 +1186,10 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 // table. The id sits in its own high range, clear of real metaIDs AND the COUNT(*) synthetic receivers
 // (kAggSyntheticBase = 0x40000000).
 const ibMetaID kSyntheticColumnBase = 0x50000000u;
+// How far apart two NAMED QUERIES' column blocks stand (DeclareNamedResultAsCte). Wide enough that
+// a named query's whole output fits inside its own block; the blocks are numbered from the RUN's
+// source count, so they restart with every execution instead of climbing forever.
+const ibMetaID kCteColumnStride = 4096;
 
 class ibSyntheticScalarColumn : public ibRawDBColumn
 {
@@ -1235,10 +1270,10 @@ void DetachSchemaFromRunSources(std::vector<OutputColumn>& schema, const ibSubqu
 		// copy answers only the three questions it copied: anything the real column knows, and
 		// anything asked through pointer identity, quietly stopped matching.)
 		std::shared_ptr<ibBackendQueryColumn> shared;
-		for (const std::shared_ptr<ibSubqueryQueryable>& wrapper : owner) {
-			if (wrapper == nullptr)
+		for (const std::shared_ptr<const ibBackendQueryable>& source : owner) {
+			if (source == nullptr)
 				continue;
-			shared = wrapper->ShareColumn(oc.m_col);
+			shared = source->ShareColumn(oc.m_col);   // asked of the SOURCE — a metadata one answers nothing
 			if (shared)
 				break;
 		}
@@ -1341,11 +1376,42 @@ ibQueryAstExprPtr QualifyToSource(const ibQueryAstExprPtr& expr, const wxString&
 // the caller passes both kinds to From / Join the same way, and only the ones that CAN die carry a
 // refcount. (Max, 2026-08-19: "safer to run everything through shared_ptr and not keep track of
 // which raw pointer is in what state".)
+// ⭐⭐ A NAMED RESULT AS A CTE — declared on the reader's own door and read by NAME.
+//
+// The inner query is built exactly as a nested source is (the same PopulateBuilder over the same
+// kind of door); what differs is where it ends up: `.With(name, inner)` writes it into the reader's
+// statement as `WITH <name> AS (…)`, and the source becomes an ibCteQueryable — a NAME the server
+// resolves. The rows never come back to us, and the join is the DBMS's.
+//
+// Returns null when this select cannot travel that way, and the caller then takes the old road (a
+// nested source, materialised in RAM). Nothing here refuses a query: it either has a server-side
+// form or it does not.
+std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBuilder& outer,
+	const wxString& name, const ibQuerySelect& sel,
+	const std::map<wxString, ibValue>& params, ibSubqueryOwner& owner);
+
 std::shared_ptr<const ibBackendQueryable> ResolveFrom(const ibQuerySource& src,
                                       const std::map<wxString, ibValue>& params,
                                       ibSubqueryOwner& owner,
-                                      std::vector<ibQueryAstExprPtr>* conditionsOut = nullptr)
+                                      std::vector<ibQueryAstExprPtr>* conditionsOut = nullptr,
+                                      ibDataQueryBuilder* declareOn = nullptr)
 {
+	// ⭐ A BARE NAME MAY BE A RESULT AN EARLIER STATEMENT NAMED — a query result link. Two roads lead
+	// from here and the choice is made ONCE, here: declare it to the server (`WITH`) when the engine
+	// can read a named query and the reader has a door to declare it on, otherwise take its rows as
+	// a nested source, which is what this has always done.
+	if (!src.m_subquery && !src.m_parameter && src.m_name.size() == 1) {
+		if (const ibQuerySelect* named = ibNamedResultScope::Find(src.m_name.front())) {
+			if (declareOn != nullptr) {
+				std::shared_ptr<const ibBackendQueryable> cte =
+					DeclareNamedResultAsCte(*declareOn, src.m_name.front(), *named, params, owner);
+				if (cte)
+					return cte;
+			}
+			return WrapSelectAsQueryable(*named, params, owner);   // its ROWS, read here — the old road
+		}
+	}
+
 	if (!src.m_subquery) {
 		// A virtual table's CONDITION argument comes back here rather than being evaluated: it is a
 		// predicate over the table's own columns, and it is applied by ANDing it into the WHERE —
@@ -1747,7 +1813,12 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 	inner.From(qi, sel.m_from.m_alias);   // owning handle — a nested wrapper stays alive through this builder
 
 	std::vector<OutputColumn> innerSchema;
-	const std::vector<ibSourceBinding> innerSources{ { sel.m_from.m_alias, qi.get() } };
+	// ⚠ BOUND BY THE ONE NAME A SOURCE HAS — the alias if written, the last segment of its name if
+	// not (ibQuerySourceName). Binding by `m_alias` alone leaves an UNALIASED source bound to the
+	// empty string, and then its own qualified fields (`Sales.Partner`) resolve against nothing:
+	// "left over from a table this query does not read", about the table it is reading. The
+	// statement road already learnt this (BuildSourceTree); the two inner roads had not.
+	const std::vector<ibSourceBinding> innerSources{ { ibQuerySourceName(sel.m_from), qi.get() } };
 	// A FOLDING inner (GROUP BY, with or without aggregate projections) is fine: the wrapper reads the
 	// fold off the builder and ComputeRows runs SelectAggregate — the unpaged, full-spread read a
 	// grouped query needs. The outer's pushed-down conditions post-filter the materialised rows.
@@ -1781,6 +1852,77 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 		std::make_shared<ibSubqueryQueryable>(inner, sel.m_top, published);
 	owner.push_back(wrapped);
 	return wrapped;
+}
+
+// A NAMED RESULT, DECLARED ON THE READER'S DOOR (the decision is in ResolveFrom — see there).
+std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBuilder& outer,
+	const wxString& name, const ibQuerySelect& sel,
+	const std::map<wxString, ibValue>& params, ibSubqueryOwner& owner)
+{
+	// THE ENGINE MUST BE ABLE TO READ ONE. Asked of the connected driver through L2's own question,
+	// never of its dictionary — and a driver that cannot simply sends this back to the rows road.
+	if (!ibQueryComposer::CanDeclareNamedQuery(outer.GetHolder()))
+		return nullptr;
+
+	// WHAT THE SERVER CANNOT READ FOR US goes back the other way rather than being half-translated:
+	// a named query whose own source is computed in RAM (a register slice, a nested subquery, a temp
+	// table we filled) has no SQL to declare, and its TOTALS is a tree, which no CTE can carry.
+	//
+	// ⚠ ASKED FIRST, BEFORE ANY WORK. The JOIN check used to sit after the inner door was built, so a
+	// named query with a join resolved its sources twice — once here and once on the rows road that
+	// then took it. A refusal costs nothing when it is the first thing said.
+	if (sel.m_hasTotals || !sel.m_unions.empty() || !sel.m_joins.empty())
+		return nullptr;
+
+	std::shared_ptr<const ibBackendQueryable> qi;
+	try {
+		qi = ResolveFrom(sel.m_from, params, owner);   // its own sources — nested named results included
+	}
+	catch (const ibBackendException&) {
+		return nullptr;   // unresolvable HERE is not a refusal: the rows road resolves it the same way
+	}
+	if (qi == nullptr || qi->IsComputedInRam())
+		return nullptr;
+
+	ibDataQueryBuilder inner;
+	inner.From(qi, sel.m_from.m_alias);
+
+	std::vector<OutputColumn> innerSchema;
+	// Bound by the one name a source has — see WrapSelectAsQueryable for what binding by the alias
+	// alone did to an unaliased source.
+	const std::vector<ibSourceBinding> innerSources{ { ibQuerySourceName(sel.m_from), qi.get() } };
+	// asSubquery — every output field is projected under an explicit alias, which is exactly what a
+	// CTE publishes and what the reader then names (`Sales.Partner`).
+	//
+	// ⚠ AND ITS REFUSAL IS A FALLBACK, NOT A FAILURE. Anything this select does that the CTE road
+	// cannot build has to leave by returning null so the rows road takes it — including whatever
+	// PopulateBuilder itself refuses, which is why it runs inside the catch.
+	try {
+		PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true);
+	}
+	catch (const ibBackendException&) {
+		return nullptr;
+	}
+
+	std::vector<ibCteQueryable::Field> fields;
+	fields.reserve(innerSchema.size());
+	for (const OutputColumn& oc : innerSchema)
+		fields.push_back({ oc.m_name, oc.m_type });
+	if (fields.empty())
+		return nullptr;   // nothing to read by name
+
+	outer.With(name, inner);   // …and the declaration lands on the READER's statement
+
+	// ⚠ THE IDS ARE NUMBERED FROM THE RUN, not from a counter that keeps growing. `ibMetaID` is a
+	// 32-bit signed int, so a thread_local that only ever climbs eventually overflows and, long
+	// before that, walks into the range real metaIDs live in. What these ids have to be is UNIQUE
+	// AMONG THIS RUN'S SOURCES — and `owner` counts exactly those, resetting with every execution.
+	const ibMetaID base = kSyntheticColumnBase + 100000
+	                    + static_cast<ibMetaID>(owner.size()) * kCteColumnStride;
+	std::shared_ptr<ibCteQueryable> source =
+		std::make_shared<ibCteQueryable>(name, fields, base, ibSourceMetaDataScope::Get());
+	owner.push_back(source);
+	return source;
 }
 
 // UNION — every branch (the first SELECT's core + each m_unions branch) is wrapped as a queryable and
@@ -1873,7 +2015,9 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
                      ibSubqueryOwner& owner, std::vector<ibSourceBinding>& sources, ibDataQueryBuilder& b,
                      std::vector<ibQueryAstExprPtr>* sourceConditions)
 {
-	const std::shared_ptr<const ibBackendQueryable> q0 = ResolveFrom(ast.m_from, params, owner, sourceConditions);
+	// The door goes in as well: a source that turns out to be a NAMED RESULT is declared ON it
+	// (`WITH …`) instead of being read into RAM — see ResolveFrom.
+	const std::shared_ptr<const ibBackendQueryable> q0 = ResolveFrom(ast.m_from, params, owner, sourceConditions, &b);
 	// ⭐⭐ ONE NAME FOR A SOURCE, HERE TOO. `ibQuerySourceName` — the alias if written, the last
 	// segment of the name if not — is what the renderer writes and what the constructor matches on,
 	// so it is the name the AUTHOR sees. Binding by `m_alias` alone made `BalanceAndTurnovers.Period`
@@ -1900,7 +2044,7 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			continue;
 		}
 
-		const std::shared_ptr<const ibBackendQueryable> qi = ResolveFrom(j.m_source, params, owner, sourceConditions);
+		const std::shared_ptr<const ibBackendQueryable> qi = ResolveFrom(j.m_source, params, owner, sourceConditions, &b);
 		const wxString alias = ibQuerySourceName(j.m_source);   // same one name — see the FROM above
 		// ⚠ ASKED OF THE WRITTEN ALIAS, not of the name it falls back to. This rule is about an author
 		// writing one `AS` twice; two unaliased reads of the same table are a different (and older)
@@ -2469,7 +2613,8 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 	for (const ibQueryAstExprPtr& aggregate : ast.m_totalsAggregates)
 		CollectColumns(aggregate, strict);
 	for (const ibQueryTotalDim& dim : ast.m_totalsBy)
-		CollectColumns(dim.m_expr, strict);
+		for (const ibQueryTotalField& field : dim.m_fields)
+			CollectColumns(field.m_expr, strict);
 	for (const ibQueryAstJoin& join : ast.m_joins)
 		CollectColumns(join.m_on, strict);
 	for (const ibQueryOrderItem& item : ast.m_orderBy)
@@ -2684,8 +2829,15 @@ int PruneSelect(ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
 	ast.m_totalsAggregates.erase(std::remove_if(ast.m_totalsAggregates.begin(), ast.m_totalsAggregates.end(),
 		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); }), ast.m_totalsAggregates.end());
 
+	// A LEVEL LOSES THE FIELDS THAT NO LONGER RESOLVE, and only then, having none left, loses itself.
+	// Dropping the whole level because one of its fields died would take the grouping away over a
+	// field the author never touched.
+	for (ibQueryTotalDim& d : ast.m_totalsBy)
+		d.m_fields.erase(std::remove_if(d.m_fields.begin(), d.m_fields.end(),
+			[&](const ibQueryTotalField& f) { return gone(StillResolves(sources, f.m_expr)); }), d.m_fields.end());
+
 	ast.m_totalsBy.erase(std::remove_if(ast.m_totalsBy.begin(), ast.m_totalsBy.end(),
-		[&](const ibQueryTotalDim& d) { return gone(StillResolves(sources, d.m_expr)); }), ast.m_totalsBy.end());
+		[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }), ast.m_totalsBy.end());
 
 	if (ast.m_totalsAggregates.empty() && ast.m_totalsBy.empty() && !ast.m_totalsOverall)
 		ast.m_hasTotals = false;   // TOTALS with nothing in it is not a TOTALS
@@ -2948,6 +3100,11 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 	ibQueryTempTableStore& temps = store != nullptr ? *store : ownStore;
 	ibTempSourceScope packageScope(temps.Sources());
 
+	// THE RESULTS THIS PACKAGE HAS NAMED so far, by their ONTO name (lower-cased: names in this
+	// language are matched without regard to case). A later statement may read one of them, and
+	// reading it is what a RESULT LINK is.
+	std::map<wxString, const ibQuerySelect*> named;
+
 	for (const ibQueryAstStatement& statement : package.m_statements) {
 
 		if (statement.IsDrop()) {
@@ -2965,14 +3122,62 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 		if (!statement.m_select)
 			continue;
 
+		// ⭐⭐ QUERY RESULT LINKS (Max, 2026-08-21).
+		//
+		// A statement may READ a result an earlier statement named with ONTO: `FROM Sales AS S INNER
+		// JOIN Plan AS P ON …`. The name is resolved HERE, by putting that statement's own select in
+		// as a SUBQUERY — so the link becomes an ordinary join and the whole thing goes to the DBMS
+		// as ONE query. Nothing is materialised and nothing comes back to us in between.
+		//
+		// This is what replaces the "data sets + links between sets" machinery other composition
+		// systems grow: there are statements, their results have names, and a link is a join.
+		//
+		// ⚠ NOT the same as INTO. INTO makes a table (and hands back a row count); a named result
+		// stays a result.
+		//
+		// ⭐⭐ AND THE NAME IS RESOLVED BY THE LOWERING, NOT SUBSTITUTED HERE. It used to be
+		// substituted here — the named statement's AST cloned into the reader's FROM as a nested
+		// source — and that road has ONE execution model: a nested source is computed in RAM
+		// (ibSubqueryQueryable::IsComputedInRam), so the rows came back to us and the join happened
+		// here. Which road to take depends on what the ENGINE can do (`WITH`) and on what the named
+		// query IS, and both are things only the lowering knows. So the names travel to it in a
+		// scope, exactly as transient sources do, and it decides per source (ResolveFrom):
+		// declare it to the server, or take its rows.
+		ibNamedResultScope namedScope(named);
+
+		// ⚠ A STATEMENT IS LEFT EXACTLY AS IT WAS WRITTEN. A package statement PREPARES a selection;
+		// grafting another statement's source into it — which one build of this did — mixes two
+		// prepared selections into one query nobody wrote (Max, 2026-08-21, on seeing it). What the
+		// links mean is assembled AFTER the statements, as the package's FINAL query (below).
 		const ibQuerySelect& ast = *statement.m_select;
 
 		PackageResult r;
 		r.m_hasTotals = ast.m_hasTotals;
+		// ONTO — the name this statement gave its result. Carried out with the result so a caller
+		// asks by name; an INTO statement never has one (the parser refuses the pair).
+		r.m_name = ast.m_ontoName;
 		std::vector<OutputColumn> schema;
 		ibDataQueryResult read = ast.m_hasTotals
 			? ExecuteTotals(ast, params, schema)
 			: Execute(ast, params, schema);
+
+		// ⚠⚠ REGISTERED AFTER ITS OWN READ, and that is not a detail. The name travels to the
+		// lowering in a scope now (ibNamedResultScope), and the lowering RESOLVES a bare source
+		// against it — so a name visible while its own statement is being lowered means
+		// `SELECT … FROM Sales … ONTO Sales` resolves to itself, and the resolution recurses without
+		// end. A statement cannot read the result it is producing; registering afterwards is what
+		// says so, and the statements below still see it — they are lowered later.
+		//
+		// (The temp-table road has always carried the same guard, in its own words: a temp source is
+		// resolved as of its MAKER, which is what stops one resolving through itself.)
+		// ⚠⚠ AND A NAME IS DECLARED ONCE. Overwriting silently is not a tidier answer: with two
+		// statements naming the same result, a reader gets whichever came last, and a package can
+		// name a CYCLE (`… ONTO A; … FROM A ONTO B; … FROM B ONTO A`) whose resolution calls itself
+		// until the stack ends — a crash, not an error message. The window checks uniqueness as a
+		// name is typed; text written by hand and packages built by script come in through here.
+		if (!ast.m_ontoName.IsEmpty() && !named.emplace(ast.m_ontoName.Lower(), statement.m_select.get()).second)
+			ThrowQueryException(0, 0, wxString::Format(
+				_("two statements of this package name their result '%s'"), ast.m_ontoName));
 
 		if (ast.m_intoTemp.IsEmpty()) {
 			r.m_result = std::make_unique<ibDataQueryResult>(std::move(read));
@@ -3030,6 +3235,176 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 		}
 
 		results.push_back(std::move(r));
+	}
+
+	// ⭐⭐ THE FINAL QUERY, ASSEMBLED FROM THE LINKS — and it is the ONLY place two selections meet.
+	//
+	// Max, 2026-08-21: the statements PREPARE the selections and know nothing about each other; at
+	// the end you say how they join, two ready tables are related, and the value goes on. So nothing
+	// is grafted into a statement and nothing is materialised: the package's last act is a query
+	// whose sources ARE the named selections, joined exactly as the links say.
+	//
+	// The names resolve through the scope below — declared to the server as `WITH` where the engine
+	// reads a named query, read as rows where it does not (ResolveFrom decides). Either way no
+	// temporary table is made for a selection, named or otherwise.
+	if (!package.m_links.empty() && !named.empty()) {
+		ibNamedResultScope namedScope(named);
+
+		// A HALF-FILLED ROW SAYS NOTHING YET — the author opened it and has not written it, which is
+		// an ordinary state of the window and not a mistake.
+		//
+		// ⚠ A NAME THIS PACKAGE DOES NOT DECLARE IS A MISTAKE, and it is said out loud: skipping it
+		// quietly runs a DIFFERENT query — one link fewer — and hands back numbers nobody can explain.
+		// Everywhere else in this lowering an unknown name raises; a link is no exception.
+		auto usable = [&named](const ibQueryPackageLink& link) {
+			if (link.m_left.IsEmpty() || link.m_right.IsEmpty() || !link.m_on)
+				return false;
+			for (const wxString& side : { link.m_left, link.m_right })
+				if (named.find(side.Lower()) == named.end())
+					ThrowQueryException(0, 0, wxString::Format(
+						_("the link names '%s', which is not a result this package names"), side));
+			return true;
+		};
+		auto asSource = [](const wxString& name) {
+			ibQuerySource source;
+			source.m_name.push_back(name);
+			// NAMED BY ITS OWN NAME, because that is what a link's condition qualifies its fields
+			// with (`T1.Ref = T2.Ref`); any other alias would leave the condition naming a source
+			// this query does not have.
+			source.m_alias = name;
+			return source;
+		};
+
+		ibQuerySelect final;
+		std::vector<wxString> present;
+
+		// THE LINKS ARE A GRAPH, NOT A LIST, so they are placed until nothing else can be placed —
+		// not in one pass down the vector. Written in any order, `[A-B, C-D, B-C]` is one chain; a
+		// single pass drops the middle link (neither side placed yet when it is read) and D never
+		// enters the query at all, silently.
+		std::vector<const ibQueryPackageLink*> pending;
+		for (const ibQueryPackageLink& link : package.m_links)
+			if (usable(link))
+				pending.push_back(&link);
+
+		auto reads = [&present](const wxString& name) {
+			for (const wxString& had : present)
+				if (had.IsSameAs(name, false))
+					return true;
+			return false;
+		};
+
+		while (!pending.empty()) {
+			bool placed = false;
+			for (size_t i = 0; i < pending.size(); ) {
+				const ibQueryPackageLink& link = *pending[i];
+
+				if (present.empty()) {
+					final.m_from = asSource(link.m_left);
+					present.push_back(link.m_left);
+				}
+				const bool hasLeft  = reads(link.m_left);
+				const bool hasRight = reads(link.m_right);
+
+				if (!hasLeft && !hasRight) { ++i; continue; }   // nothing to hang it off YET
+
+				// ⭐ BOTH SIDES ALREADY IN — this is a SECOND condition between two selections that
+				// are already joined, and it must not be dropped: dropping it widens the result by
+				// exactly the rows the author wrote it to exclude. It is ANDed into the join that
+				// relates them.
+				if (hasLeft && hasRight) {
+					for (ibQueryAstJoin& join : final.m_joins) {
+						const wxString joined = ibQuerySourceName(join.m_source);
+						if (!joined.IsSameAs(link.m_left, false) && !joined.IsSameAs(link.m_right, false))
+							continue;
+						if (join.m_on) {
+							ibQueryAstExprPtr both = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
+							both->m_isOr = false;
+							both->m_lhs  = join.m_on;
+							both->m_rhs  = link.m_on;
+							join.m_on    = both;
+						}
+						else {
+							join.m_on = link.m_on;
+						}
+						break;
+					}
+					pending.erase(pending.begin() + i);
+					placed = true;
+					continue;
+				}
+
+				const wxString& missing = hasLeft ? link.m_right : link.m_left;
+				ibQueryAstJoin join;
+				join.m_source = asSource(missing);
+				join.m_kind   = link.m_kind;
+				// SHARED, not copied: the lowering rewrites a deep clone of whatever it is given, so
+				// nothing downstream can reach back into the author's link.
+				join.m_on     = link.m_on;
+				final.m_joins.push_back(std::move(join));
+				present.push_back(missing);
+				pending.erase(pending.begin() + i);
+				placed = true;
+			}
+
+			// ⚠ NOTHING MOVED AND SOMETHING IS LEFT: what remains relates selections this query does
+			// not reach — a second, disconnected group. Joining it in would be a cross product
+			// nobody asked for, so the package says so instead.
+			if (!placed) {
+				ThrowQueryException(0, 0, wxString::Format(
+					_("the link between '%s' and '%s' relates selections this package does not join to the rest"),
+					pending.front()->m_left, pending.front()->m_right));
+			}
+		}
+
+		// ⭐ WHAT THE FINAL QUERY SELECTS — every selection's fields, each under ITS OWN NAME.
+		//
+		// `SELECT *` over two joined selections publishes both sides' columns under their bare names,
+		// so two `Partner` columns answer to one name and a read by name lands on whichever came
+		// first — the right-hand key silently reading the left-hand value. Qualifying by the
+		// selection is what the author already writes in the link's condition (`Sales.Partner`), so
+		// it is the same vocabulary and not a new one.
+		// The names come from the SELECTS THEMSELVES — the statements that produced them are right
+		// here, and what a select publishes is what its projections are called. No constructor model
+		// is asked: that is the window's view of a query, and this is the engine running one.
+		bool everyNameKnown = true;
+		for (const wxString& name : present) {
+			const auto found = named.find(name.Lower());
+			const ibQuerySelect* source = found != named.end() ? found->second : nullptr;
+			if (source == nullptr || source->m_selectAll || source->m_projections.empty()) {
+				everyNameKnown = false;   // `SELECT *` inside — its fields are not named here
+				break;
+			}
+			int index = 0;
+			for (const ibQueryProjection& projection : source->m_projections) {
+				if (projection.m_star || !projection.m_expr)
+					continue;
+				const wxString field = OutputNameFor(*source, projection, index++);
+				if (field.IsEmpty())
+					continue;
+				ibQueryProjection qualified;
+				qualified.m_expr  = ibQueryColumnFromPath(name + wxT(".") + field);
+				qualified.m_alias = name + wxT("_") + field;
+				final.m_projections.push_back(std::move(qualified));
+			}
+		}
+		// ⚠ ALL OR NOTHING. A half-qualified list would publish one side by name and the other not at
+		// all; the star is the honest fallback when a selection does not name its own fields, and the
+		// duplicate-name hazard is then the author's own `SELECT *`, visible in their text.
+		if (!everyNameKnown) {
+			final.m_projections.clear();
+			final.m_selectAll = true;
+		}
+
+		if (!present.empty() && !final.m_joins.empty()) {
+			PackageResult r;
+			r.m_isFinal = true;   // the one the package exists to produce — findable by what it IS
+			std::vector<OutputColumn> schema;
+			ibDataQueryResult read = Execute(final, params, schema);
+			r.m_result = std::make_unique<ibDataQueryResult>(std::move(read));
+			r.m_schema = std::move(schema);
+			results.push_back(std::move(r));
+		}
 	}
 
 	return results;
@@ -3232,7 +3607,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
                                                  const std::map<wxString, ibValue>& params,
                                                  std::vector<OutputColumn>& outSchema,
                                                  const ibReadPageRequest& page,
-                                                 bool* outServerGroupedLevel)
+                                                 bool* outServerGroupedLevel,
+                                                 bool withDetails)
 {
 	// Same optimizer pass as Execute — the totals path benefits from a flattened FROM
 	// and a normalized WHERE the same way. (queryRewrite.h)
@@ -3297,9 +3673,11 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// Reports (measures), multi-level, dot-walk and multi-source keep the detail-read + fold below.
 	const bool multiSourceTotals = !ast.m_joins.empty() || !ast.m_unions.empty();
 	if (outServerGroupedLevel != nullptr && page.m_count > 0 && !multiSourceTotals
+	    && !withDetails                                                 // the groups alone, and the rows were asked for
 	    && ast.m_totalsBy.size() == 1
-	    && ast.m_totalsBy[0].m_unfold == ibQueryDimUnfold::Elements) {   // flat grouping only (Hierarchy = recursive tree -> fold)
-		const std::vector<const ibBackendQueryColumn*> pathCols = ResolvePath(sources, *ast.m_totalsBy[0].m_expr);
+	    && ast.m_totalsBy[0].IsSingleField()                            // one FIELD too: a tuple key pages differently
+	    && ast.m_totalsBy[0].Head()->m_unfold == ibQueryDimUnfold::Elements) {   // flat grouping only (Hierarchy = recursive tree -> fold)
+		const std::vector<const ibBackendQueryColumn*> pathCols = ResolvePath(sources, *ast.m_totalsBy[0].Head()->m_expr);
 
 		// ⭐ THE MEASURES COME WITH IT — when each of them is a PLAIN one.
 		//
@@ -3408,62 +3786,94 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// The dimension levels, IN ORDER (each yields a subtotal node; the root is the grand total). They
 	// are the leading output columns (their group key at each node — read by GetValue(col)).
 	for (const ibQueryTotalDim& d : ast.m_totalsBy) {
-		const std::vector<const ibBackendQueryColumn*> pathCols = ResolvePath(sources, *d.m_expr);   // plain col OR dot-walk path
-		const ibBackendQueryColumn* leaf = pathCols.back();
-		const ibDimensionKind dim =
-			d.m_unfold == ibQueryDimUnfold::Hierarchy       ? ibDimensionKind::Hierarchy
-			: d.m_unfold == ibQueryDimUnfold::HierarchyOnly ? ibDimensionKind::HierarchyOnly
-			                                                : ibDimensionKind::Elements;
+		// ONE LEVEL, ONE OR MORE FIELDS — grouped by the TUPLE of them. Each field resolves exactly as
+		// a lone dimension always did (plain column or dot-walk); what changed is that they are
+		// collected into one level instead of each becoming a level of its own.
+		ibTotalLevel level;
 
-		// THE LEVEL'S NAME. Its own when it was given one — that is what makes two levels over the
-		// same column (Date by month, Date by day) two readable columns instead of one name answered
-		// by whichever came last.
-		OutputColumn oc; oc.m_name = d.m_alias.IsEmpty() ? leaf->GetName() : d.m_alias;
-		oc.m_role = ibQueryLowering::ibColumnRole::Dimension;   // a TOTALS BY level
-		if (pathCols.size() == 1) {
-			b.TotalBy(leaf, dim);            // plain dimension — group by the column's own metaID
-			oc.m_col = leaf;
-		}
-		else {
-			// DOT-WALK dimension — two strategies by source shape / leaf kind:
-			//  - single-source SCALAR leaf (Parent.Code): SQL ROLLUP via a synthetic scalar projection
-			//    (TotalByDotWalk) — the DBMS folds, efficient. The synthetic's DISTINCT id avoids a
-			//    self-reference metaID clash with the main table's same-named field.
-			//  - multi-source OR a NON-scalar leaf (reference / composite): expand the ref path into explicit
-			//    LEFT-join leaves (ExpandDotWalkJoins) and group by the leaf in the RAM fold (by the leaf's
-			//    VALUE — scalar OR reference). A non-scalar single-source leaf rides this too: adding the
-			//    ref-join makes it multi-source / RAM-folded, grouping by the reference value the scalar
-			//    synthetic could not carry. (A composite MID-segment still fails inside the expand — that path
-			//    is not a single-target reference; same edge as projection.)
-			// ⭐ A REFERENCE LEAF TAKES THE SAME ROAD AS A SCALAR ONE, over a SINGLE source: the path is
-			// joined once and the leaf projected under the dimension's own alias — as a SPREAD, since a
-			// reference is not one field — and the fold groups by a synthetic column with an id of its
-			// own. Without that id the level was indistinguishable from the row's own attribute (a
-			// self-reference walks back to the SAME metaID), so two levels folded as one and the value
-			// came back empty (2026-08-20: three groupings produced one blank row).
-			ibRawDBColumn::RawType rt;
-			const bool scalarLeaf = ScalarRawType(leaf, rt);
-			if (!multiSource && !scalarLeaf) {
-				const wxString alias = wxString::Format(wxT("dim%u"), static_cast<unsigned>(nextSynthId - kSyntheticColumnBase));
-				auto synth = std::make_shared<ibSyntheticOutputColumn>(alias, leaf->GetTypeDesc(), nextSynthId++);
-				b.TotalByDotWalk(pathCols, synth.get(), alias, dim);
-				oc.m_col = synth.get(); oc.m_ownedCol = synth;
-			}
-			else if (multiSource) {
-				const ibBackendQueryColumn* dwLeaf =
-					ExpandDotWalkJoins(b, RootForPath(sources, *d.m_expr), pathCols, dwJoined, dwAliasSeq, *d.m_expr);
-				b.TotalBy(dwLeaf, dim);
-				oc.m_col = dwLeaf;
+		// A HIERARCHY UNFOLD walks one parent chain, and a key made of several fields has no single
+		// chain to walk. Refused HERE, where the query says it, rather than folded into something
+		// plausible downstream — the reading it would silently become (plain grouping) is not what
+		// the word asks for.
+		if (d.m_fields.size() > 1)
+			for (const ibQueryTotalField& field : d.m_fields)
+				if (field.m_unfold != ibQueryDimUnfold::Elements)
+					ThrowQueryException(0, 0, _("a TOTALS level of several fields cannot unfold one of them through a hierarchy — give the hierarchy a level of its own"));
+
+		for (const ibQueryTotalField& dimField : d.m_fields) {
+			const ibQueryAstExprPtr& dimExpr = dimField.m_expr;
+			const std::vector<const ibBackendQueryColumn*> pathCols = ResolvePath(sources, *dimExpr);   // plain col OR dot-walk path
+			const ibBackendQueryColumn* leaf = pathCols.back();
+			const ibDimensionKind dim =
+				dimField.m_unfold == ibQueryDimUnfold::Hierarchy       ? ibDimensionKind::Hierarchy
+				: dimField.m_unfold == ibQueryDimUnfold::HierarchyOnly ? ibDimensionKind::HierarchyOnly
+				                                                       : ibDimensionKind::Elements;
+	
+			// THE LEVEL'S NAME. Its own when it was given one — that is what makes two levels over the
+			// same column (Date by month, Date by day) two readable columns instead of one name answered
+			// by whichever came last. With several fields the given name belongs to the HEAD; the rest
+			// answer to their own column names, since one name cannot stand for a tuple.
+			const bool headField = (&dimField == &d.m_fields.front());
+			OutputColumn oc; oc.m_name = (headField && !d.m_alias.IsEmpty()) ? d.m_alias : leaf->GetName();
+			oc.m_role = ibQueryLowering::ibColumnRole::Dimension;   // a TOTALS BY level
+			// WHICH level it belongs to — several fields of one level all carry the same number, so
+			// a printer can put them side by side instead of counting columns as if they were levels.
+			oc.m_level = (int)(&d - &ast.m_totalsBy.front());
+			if (pathCols.size() == 1) {
+				level.m_fields.push_back(ibTotalField{ leaf, dim });   // plain dimension — group by the column's own metaID
+				oc.m_col = leaf;
 			}
 			else {
-				const wxString alias = wxString::Format(wxT("dim%u"), static_cast<unsigned>(nextSynthId - kSyntheticColumnBase));
-				auto synth = std::make_shared<ibSyntheticScalarColumn>(alias, nextSynthId++, rt);
-				b.TotalByDotWalk(pathCols, synth.get(), alias, dim);   // provider joins path, projects leaf scalar AS alias
-				oc.m_col = synth.get(); oc.m_ownedCol = synth;
+				// DOT-WALK dimension — two strategies by source shape / leaf kind:
+				//  - single-source SCALAR leaf (Parent.Code): SQL ROLLUP via a synthetic scalar projection
+				//    (TotalByDotWalk) — the DBMS folds, efficient. The synthetic's DISTINCT id avoids a
+				//    self-reference metaID clash with the main table's same-named field.
+				//  - multi-source OR a NON-scalar leaf (reference / composite): expand the ref path into explicit
+				//    LEFT-join leaves (ExpandDotWalkJoins) and group by the leaf in the RAM fold (by the leaf's
+				//    VALUE — scalar OR reference). A non-scalar single-source leaf rides this too: adding the
+				//    ref-join makes it multi-source / RAM-folded, grouping by the reference value the scalar
+				//    synthetic could not carry. (A composite MID-segment still fails inside the expand — that path
+				//    is not a single-target reference; same edge as projection.)
+				// ⭐ A REFERENCE LEAF TAKES THE SAME ROAD AS A SCALAR ONE, over a SINGLE source: the path is
+				// joined once and the leaf projected under the dimension's own alias — as a SPREAD, since a
+				// reference is not one field — and the fold groups by a synthetic column with an id of its
+				// own. Without that id the level was indistinguishable from the row's own attribute (a
+				// self-reference walks back to the SAME metaID), so two levels folded as one and the value
+				// came back empty (2026-08-20: three groupings produced one blank row).
+				ibRawDBColumn::RawType rt;
+				const bool scalarLeaf = ScalarRawType(leaf, rt);
+				if (!multiSource && !scalarLeaf) {
+					const wxString alias = wxString::Format(wxT("dim%u"), static_cast<unsigned>(nextSynthId - kSyntheticColumnBase));
+					auto synth = std::make_shared<ibSyntheticOutputColumn>(alias, leaf->GetTypeDesc(), nextSynthId++);
+					level.m_fields.push_back(b.DeclareDimDotWalk(pathCols, synth.get(), alias, dim));
+					oc.m_col = synth.get(); oc.m_ownedCol = synth;
+				}
+				else if (multiSource) {
+					const ibBackendQueryColumn* dwLeaf =
+						ExpandDotWalkJoins(b, RootForPath(sources, *dimExpr), pathCols, dwJoined, dwAliasSeq, *dimExpr);
+					level.m_fields.push_back(ibTotalField{ dwLeaf, dim });
+					oc.m_col = dwLeaf;
+				}
+				else {
+					const wxString alias = wxString::Format(wxT("dim%u"), static_cast<unsigned>(nextSynthId - kSyntheticColumnBase));
+					auto synth = std::make_shared<ibSyntheticScalarColumn>(alias, nextSynthId++, rt);
+					// provider joins path, projects leaf scalar AS alias
+					level.m_fields.push_back(b.DeclareDimDotWalk(pathCols, synth.get(), alias, dim));
+					oc.m_col = synth.get(); oc.m_ownedCol = synth;
+				}
 			}
+			outSchema.push_back(oc);
 		}
-		outSchema.push_back(oc);
+
+		b.TotalByLevel(std::move(level));   // the level goes in WHOLE, after all its fields resolved
 	}
+
+	// …AND THE ROWS UNDER THEM, when the reader asked for them: one more level, with no fields. The
+	// fold reads that as "no group here — the rows themselves" and hangs a detail node per row under
+	// the deepest heading. Nothing else in this function changes: the same read, the same schema,
+	// one extra level in the config.
+	if (withDetails)
+		b.TotalsDetails();
 
 	// SELECT output-name map, so a TOTALS aggregate may name a SELECTed field (the resource pattern:
 	// SELECT Price … TOTALS SUM(Price); SELECT 1 AS test … TOTALS SUM(test)). A real column aggregates by
@@ -3483,15 +3893,51 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	b.Totals();
 	std::map<wxString, const ibBackendQueryColumn*> measureCol;   // computed alias -> its synthetic measure (projected once)
 
+	// ⭐⭐ A NAME STANDS FOR ONE COLUMN. A resource is named after its ARGUMENT — `SUM(Amount)` reads
+	// back as `Amount` — so a report that GROUPS BY Amount and also sums it produced two columns
+	// both answering to "Amount": two identical captions on the sheet, and `res["Amount"]` returning
+	// whichever came first (seen live, 2026-08-22).
+	//
+	// The later one is qualified by its FUNCTION (`SUMAmount`), which is the name a person would
+	// have written themselves, and a counter settles the rest. The FIRST claimant keeps the plain
+	// name, so nothing that reads a report by its resource's name changes.
+	auto uniqueOutputName = [&outSchema](const wxString& wanted, const wxString& funcName) {
+		auto taken = [&outSchema](const wxString& name) {
+			for (const OutputColumn& used : outSchema)
+				if (used.m_name.IsSameAs(name, false))
+					return true;
+			return false;
+		};
+		if (!taken(wanted))
+			return wanted;
+		const wxString qualified = funcName + wanted;
+		if (!taken(qualified))
+			return qualified;
+		for (int seq = 2; ; ++seq) {
+			const wxString candidate = qualified + wxString::Format(wxT("%d"), seq);
+			if (!taken(candidate))
+				return candidate;
+		}
+	};
+
+	// WHICH COLUMNS ARE ALREADY BEING AGGREGATED in this clause. The fold rolls an aggregate INTO
+	// its own column, so a second aggregate over the SAME column would write into the slot the first
+	// one wrote — `TOTALS SUM(Amount), COUNT(Amount)` printed one figure twice. A repeat is
+	// projected a second time under a synthetic alias, which gives it a column, and therefore a
+	// slot, of its own.
+	std::set<const ibBackendQueryColumn*> aggregatedCols;
+
 	for (const ibQueryAstExprPtr& agg : ast.m_totalsAggregates) {
 		if (!agg || agg->m_kind != ibQueryAstExprKind::Func)
 			ThrowQueryException(0, 0, _("TOTALS expects aggregate functions (SUM/COUNT/MIN/MAX/AVG)"));
 		RefuseUnloweredWindow(*agg);
 
 		// Output name read back via res[name]: COUNT(*) -> the function name; a field -> its identifier.
-		const wxString outName = agg->m_star
+		// Qualified when that name is already spoken for — see uniqueOutputName.
+		const wxString wantedName = agg->m_star
 			? ibQueryKeywordText(agg->m_func)
 			: (agg->m_arg && !agg->m_arg->m_path.empty() ? agg->m_arg->m_path.back() : ibQueryKeywordText(agg->m_func));
+		const wxString outName = uniqueOutputName(wantedName, ibQueryKeywordText(agg->m_func));
 
 		const ibBackendQueryColumn*           col   = nullptr;   // the column the fold aggregates by metaID
 		std::shared_ptr<ibBackendQueryColumn> owned;             // set only for a synthetic computed measure
@@ -3518,6 +3964,22 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				col = ResolvePath(sources, *pit->second->m_expr).back();   // a SELECTed real column, named by alias
 			}
 			else col = ResolveColumnSingle(sources, *agg->m_arg);          // a metadata attribute
+
+			// ⭐ A SECOND AGGREGATE OVER THE SAME COLUMN NEEDS A COLUMN OF ITS OWN. The fold rolls
+			// each one IN PLACE — into the slot keyed by its input column — so `SUM(Amount)` and
+			// `COUNT(Amount)` both wrote into Amount's slot and the report printed one figure under
+			// two headings, the second having quietly overwritten the first.
+			//
+			// The repeat is PROJECTED AGAIN under a synthetic alias, through the same road a computed
+			// resource already takes: a projection of its own gives it a column of its own, and a
+			// column of its own is a slot of its own. The first claimant is untouched.
+			if (col != nullptr && !aggregatedCols.insert(col).second) {
+				const wxString alias = wxString::Format(wxT("agg%u"),
+					static_cast<unsigned>(nextSynthId - kSyntheticColumnBase));
+				b.SelectExpr(BuildColumnExprFromAst(sources, *agg->m_arg, params), alias);
+				owned = std::make_shared<ibSyntheticScalarColumn>(alias, nextSynthId++);
+				col   = owned.get();
+			}
 		}
 		b.Aggregate(AggFn(agg->m_func), col, outName, agg->m_distinctArg);   // in-place — rolls into its own column (named for read-back)
 
@@ -3526,6 +3988,72 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		if (col != nullptr) { oc.m_col = col; oc.m_ownedCol = owned; }   // real OR synthetic column — keyed by metaID
 		else { oc.m_alias = outName; oc.m_byAlias = true; }              // COUNT(*) — synthetic receiver, read by name
 		outSchema.push_back(oc);
+	}
+
+	// ⭐ AND WHAT THE DETAIL ROWS SHOW. A TOTALS read projects the levels and the resources and
+	// nothing else — a heading has no use for the rest, and reading columns nobody prints is what
+	// this path exists to avoid. Detail rows DO have a use: what they print is the SELECTed fields,
+	// which is the list the query already carries. So when the rows were asked for, those fields are
+	// projected as well and take their place in the schema as DETAIL columns; a heading simply holds
+	// no value for them and prints an empty cell.
+	if (withDetails) {
+		int projectionIndex = 0;
+		for (const ibQueryProjection& p : ast.m_projections) {
+			if (p.m_star || !p.m_expr)
+				continue;
+			const wxString name = OutputNameFor(ast, p, projectionIndex++);
+
+			// Already in the schema — a dimension or a resource of that name prints it, and a
+			// second column under one name would be the same field twice.
+			bool already = false;
+			for (const OutputColumn& taken : outSchema)
+				if (taken.m_name.IsSameAs(name, false)) { already = true; break; }
+			if (already)
+				continue;
+
+			OutputColumn oc;
+			oc.m_name = name;
+			oc.m_role = ibQueryLowering::ibColumnRole::Detail;
+
+			if (p.m_expr->m_kind == ibQueryAstExprKind::Column) {
+				const std::vector<const ibBackendQueryColumn*> pathCols = ResolvePath(sources, *p.m_expr);
+				const ibBackendQueryColumn* leaf = pathCols.back();
+				if (pathCols.size() > 1) {
+					// A DOT-WALK, by the road this query is already on: several sources expand the
+					// reference chain into explicit joins, a single source lets the door resolve the
+					// path. Either way the LEAF is what the column holds.
+					if (multiSource) {
+						const ibBackendQueryColumn* dwLeaf =
+							ExpandDotWalkJoins(b, RootForPath(sources, *p.m_expr), pathCols, dwJoined, dwAliasSeq, *p.m_expr);
+						b.Select(dwLeaf, name);
+						oc.m_type = dwLeaf->GetTypeDesc();
+					}
+					else {
+						b.SelectPath(pathCols, name);
+						oc.m_type = leaf->GetTypeDesc();
+					}
+					oc.m_alias = name;
+					oc.m_byAlias = true;
+				}
+				else {
+					b.Select(leaf, name);
+					oc.m_type = leaf->GetTypeDesc();
+					// ⚠ AN ALIAS ONLY FETCHES A RAW COLUMN. Anything else is a SPREAD of physical
+					// fields the provider projects under its own names, so a by-alias read finds
+					// nothing and hands back the type's default — indistinguishable from a table of
+					// blank rows. The flat read documents the same trap at its own projection.
+					if (leaf->IsRawColumn()) { oc.m_alias = name; oc.m_byAlias = true; }
+					else                     { oc.m_col = leaf; }
+				}
+			}
+			else {
+				// A COMPUTED field — projected once, read back under its own name.
+				b.SelectExpr(BuildColumnExprFromAst(sources, *p.m_expr, params), name);
+				oc.m_alias = name;
+				oc.m_byAlias = true;
+			}
+			outSchema.push_back(oc);
+		}
 	}
 
 	// WHERE (flat verbs or the boolean tree) — dot-walk rejected here (the totals fold is its own path).
@@ -3590,6 +4118,27 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// FOR UPDATE reaches the DETAIL read — the one that actually touches rows. A subtotal holds
 	// nothing of its own, so locking the detail is what the word can honestly mean here.
 	if (ast.m_forUpdate) topPage.m_lockForUpdate = true;
+
+	// ⭐⭐ LET THE DBMS FOLD IT. Until now every TOTALS came back as DETAIL ROWS that were folded
+	// here, in memory — the composition's whole point (report over many rows) paying for exactly
+	// what it should not. The push-down (GROUP BY ROLLUP) computes every subtotal level server-side
+	// and returns only the aggregated rows; the tree arrives built, and the walk reads it.
+	//
+	// Refused where it would change the answer rather than the cost: TOP limits the DETAIL rows the
+	// fold runs over, and FOR UPDATE has to touch the rows it locks — neither survives being folded
+	// away, so both keep the detail read. Everything else asks the shape and the driver.
+	// …and refused when the reader asked for the DETAIL ROWS: ROLLUP folds them away server-side, so
+	// there would be nothing left to hang under the last heading. Details cost the rows by
+	// definition — the choice is the reader's, and this is where it is paid.
+	if (ast.m_top == 0 && !ast.m_forUpdate && !withDetails) {
+		// The result has no default state — an empty one is made the way every empty result is.
+		ibDataQueryResult folded = ibMakeEmptyQueryResult(nullptr);
+		if (b.TryTotalsPushdown(folded)) {
+			DetachSchemaFromRunSources(outSchema, owner);
+			return folded;
+		}
+	}
+
 	ibDataQueryResult detail = b.Execute(topPage);
 	DetachSchemaFromRunSources(outSchema, owner);   // the schema leaves; the sources do not
 	return detail;

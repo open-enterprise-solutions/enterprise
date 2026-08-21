@@ -395,6 +395,11 @@ private:
 	struct ibCompositionVariant {
 		wxString                        m_name;
 		ibValuePtr<ibValueListSettings> m_settings;
+		// ⭐ AND ITS STRUCTURE — the outputs, their levels and the fields inside them. A variant is
+		// a whole way of showing the data, and the flat settings above cannot describe a level made
+		// of several fields, a second output, or an axis of columns. Captured when the variant is
+		// left, applied when it is entered, written to the file with the rest of it.
+		std::vector<ibDataComposer::Output> m_structure;
 	};
 	std::vector<ibCompositionVariant> m_variants;
 	size_t                            m_activeVariant = 0;
@@ -402,6 +407,10 @@ private:
 	// Snapshot <-> composer, both directions, in one place — activation and capture are the same
 	// two doors the settings window's OK already goes through.
 	void ApplyActiveVariant();
+	// EVERY LEVEL'S CONDITION, REBUILT FROM ITS TREE. What a level SAVES is the tree a person wrote;
+	// what the engine reads is an expression derived from it. Run wherever levels arrive from
+	// outside (a file, a variant switch) — a level edited in the window commits both at once.
+	void RebuildLevelFilters();
 	// The first variant, made on construction so the invariant "there is always one" holds from the
 	// first moment rather than from the first window.
 	void EnsureVariant();

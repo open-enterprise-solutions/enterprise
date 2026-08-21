@@ -92,7 +92,23 @@ ibQueryPackage ibQueryParser::ParsePackage(const wxString& queryText)
 		return package;
 
 	for (;;) {
-		package.m_statements.push_back(ParseStatement());
+		// ⭐⭐ A PACKAGE-LEVEL LINK, written where a statement would be: `JOIN T1 AND T2 ON …`.
+		//
+		// It relates two NAMED results of this package and belongs to the package, not to any
+		// statement — nothing is added to anybody's FROM and nothing is materialised (Max,
+		// 2026-08-21: mark two selections as named and set the links between them, and that is all).
+		//
+		// ⭐ NO NEW WORD. The position decides: at statement level a query begins with SELECT or
+		// DROP, so a JOIN standing there can only be this. Inventing a keyword would take a name
+		// away from every configuration that has an attribute called by it.
+		if (Cur().IsKeyword(ibQueryKeyword::Join)    || Cur().IsKeyword(ibQueryKeyword::Inner)
+		 || Cur().IsKeyword(ibQueryKeyword::Left)    || Cur().IsKeyword(ibQueryKeyword::Right)
+		 || Cur().IsKeyword(ibQueryKeyword::Full)) {
+			package.m_links.push_back(ParsePackageLink());
+		}
+		else {
+			package.m_statements.push_back(ParseStatement());
+		}
 		if (!AcceptPunct(wxT(';')))
 			break;
 		if (Cur().IsEnd())
@@ -120,6 +136,39 @@ ibQueryAstExprPtr ibQueryParser::ParseExpression(const wxString& exprText)
 		ThrowQueryException(Cur(), _("unexpected text after the expression"));
 
 	return expr;
+}
+
+// A PACKAGE-LEVEL LINK — `[INNER|LEFT|RIGHT|FULL] JOIN <name> AND <name> ON <condition>`.
+//
+// Both sides are NAMES a statement gave its result with `ONTO`; the condition is an ordinary
+// expression over their fields. The kind is spelled exactly as it is inside a query, because it
+// means exactly the same thing.
+ibQueryPackageLink ibQueryParser::ParsePackageLink()
+{
+	ibQueryPackageLink link;
+
+	if      (AcceptKw(ibQueryKeyword::Inner)) { ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); link.m_kind = ibQueryJoinKindAst::Inner; }
+	else if (AcceptKw(ibQueryKeyword::Left))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); link.m_kind = ibQueryJoinKindAst::Left;  }
+	else if (AcceptKw(ibQueryKeyword::Right)) { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); link.m_kind = ibQueryJoinKindAst::Right; }
+	else if (AcceptKw(ibQueryKeyword::Full))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); link.m_kind = ibQueryJoinKindAst::Full;  }
+	else                                      { ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); link.m_kind = ibQueryJoinKindAst::Inner; }
+
+	if (Cur().m_kind != ibQueryTokenKind::Ident)
+		ThrowQueryException(Cur(), _("expected the name of a selection after JOIN"));
+	link.m_left = Next().m_text;
+
+	ExpectKw(ibQueryKeyword::And, wxT("AND"));
+
+	if (Cur().m_kind != ibQueryTokenKind::Ident)
+		ThrowQueryException(Cur(), _("expected the name of the second selection after AND"));
+	link.m_right = Next().m_text;
+
+	// The condition is optional in the AST — a link may be declared and not written yet, which is
+	// what the constructor's empty row is — but in TEXT it has to be there: a package that says two
+	// selections are related without saying how says nothing.
+	ExpectKw(ibQueryKeyword::On, wxT("ON"));
+	link.m_on = ParsePredicate();
+	return link;
 }
 
 // One statement of a package. DROP releases a temp table the package made earlier; anything
@@ -170,6 +219,17 @@ ibQuerySelectPtr ibQueryParser::ParseSelectCore()
 		if (Cur().m_kind != ibQueryTokenKind::Ident)
 			ThrowQueryException(Cur(), _("expected a temporary-table name after INTO"));
 		sel->m_intoTemp = Next().m_text;
+	}
+
+	// ONTO <name> — name the result this statement hands back. Written where INTO is, because the two
+	// answer the same question ("what becomes of this result") and a reader should meet them in one
+	// place. They are mutually exclusive: INTO hands back no result, so naming it would name nothing.
+	if (AcceptKw(ibQueryKeyword::Onto)) {
+		if (Cur().m_kind != ibQueryTokenKind::Ident)
+			ThrowQueryException(Cur(), _("expected a name after ONTO"));
+		if (!sel->m_intoTemp.IsEmpty())
+			ThrowQueryException(Cur(), _("INTO and ONTO cannot both be written: INTO puts the result in a temporary table and returns none, ONTO names the result it returns"));
+		sel->m_ontoName = Next().m_text;
 	}
 
 	// FROM IS OPTIONAL. `SELECT 1` is a legitimate query: it returns one row carrying the value 1,
@@ -516,14 +576,27 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 
 	do {
 		ibQueryTotalDim d;
-		d.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
-		d.m_expr->m_path = ParseDottedName();
-		if (AcceptKw(ibQueryKeyword::HierarchyOnly))     d.m_unfold = ibQueryDimUnfold::HierarchyOnly;
-		else if (AcceptKw(ibQueryKeyword::Hierarchy))    d.m_unfold = ibQueryDimUnfold::Hierarchy;
-		else if (AcceptKw(ibQueryKeyword::Elements))     d.m_unfold = ibQueryDimUnfold::Elements;
 
-		// [AS] alias — the name this LEVEL answers to. Written after the unfold, because the unfold
-		// belongs to the dimension and the alias belongs to the level it produces.
+		// ONE LEVEL, SEVERAL FIELDS — `BY (Partner, Contract)`. The bracket is what says "together":
+		// outside it a comma has always separated LEVELS, and that reading is untouched. A single
+		// field needs no bracket, so every query written before this parses exactly as it did.
+		const bool bracketed = AcceptPunct(wxT('('));
+		do {
+			ibQueryTotalField f;
+			f.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+			f.m_expr->m_path = ParseDottedName();
+			// The unfold is the FIELD's — a level may unfold one of its fields through a hierarchy
+			// and take the next one flat.
+			if (AcceptKw(ibQueryKeyword::HierarchyOnly))     f.m_unfold = ibQueryDimUnfold::HierarchyOnly;
+			else if (AcceptKw(ibQueryKeyword::Hierarchy))    f.m_unfold = ibQueryDimUnfold::Hierarchy;
+			else if (AcceptKw(ibQueryKeyword::Elements))     f.m_unfold = ibQueryDimUnfold::Elements;
+			d.m_fields.push_back(std::move(f));
+		} while (bracketed && AcceptPunct(wxT(',')));
+		if (bracketed)
+			ExpectPunct(wxT(')'), wxT("')' after the fields of one TOTALS level"));
+
+		// [AS] alias — the name this LEVEL answers to. Written after the fields, because the unfold
+		// belongs to a dimension and the alias belongs to the level they produce together.
 		if (AcceptKw(ibQueryKeyword::As)) {
 			if (Cur().m_kind != ibQueryTokenKind::Ident)
 				ThrowQueryException(Cur(), _("expected an alias name after AS"));

@@ -10,25 +10,12 @@
 
 namespace {
 
-// The two boxes, read off the kind. Written out both ways in one place so the four states and the
-// four kinds cannot drift apart.
-bool AllFromLeft(ibQueryJoinKindAst kind)
-{
-	return kind == ibQueryJoinKindAst::Left || kind == ibQueryJoinKindAst::Full;
-}
-
-bool AllFromRight(ibQueryJoinKindAst kind)
-{
-	return kind == ibQueryJoinKindAst::Right || kind == ibQueryJoinKindAst::Full;
-}
-
-ibQueryJoinKindAst KindOf(bool allLeft, bool allRight)
-{
-	if (allLeft && allRight) return ibQueryJoinKindAst::Full;
-	if (allLeft)             return ibQueryJoinKindAst::Left;
-	if (allRight)            return ibQueryJoinKindAst::Right;
-	return ibQueryJoinKindAst::Inner;   // neither box: only the rows that match
-}
+// The two boxes ↔ the kind now live in the HEADER (ibJoinAllFromLeft / ibJoinAllFromRight /
+// ibJoinKindOf), because the package's own link grid folds them the same way — and one fold written
+// twice is two places where a ticked box could stop meaning the same thing.
+constexpr auto AllFromLeft  = &ibJoinAllFromLeft;
+constexpr auto AllFromRight = &ibJoinAllFromRight;
+constexpr auto KindOf       = &ibJoinKindOf;
 
 } // namespace
 

@@ -378,6 +378,11 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 	if (!select.m_intoTemp.IsEmpty())
 		out += wxT("\n") + pad + Kw(ibQueryKeyword::Into) + wxT(" ") + select.m_intoTemp;
 
+	// ONTO sits where INTO sits — same question, same place in the text (Max). The two never appear
+	// together, so there is no order between them to decide.
+	if (!select.m_ontoName.IsEmpty())
+		out += wxT("\n") + pad + Kw(ibQueryKeyword::Onto) + wxT(" ") + select.m_ontoName;
+
 	// NO TABLE, NO `FROM`. A query being built has no source yet, and writing the keyword over
 	// nothing produced `FROM` followed by emptiness — which the parser then complained about at a
 	// position pointing at thin air ("expected a name"). Left out, the same parser says the true
@@ -461,13 +466,25 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 			if (select.m_totalsOverall)
 				dims.push_back(Kw(ibQueryKeyword::Overall));
 			for (const auto& dim : select.m_totalsBy) {
-				if (!dim.m_expr) continue;
-				wxString text = RenderExpr(*dim.m_expr);
-				// Elements is the default unfold — written only when it is not.
-				if (dim.m_unfold == ibQueryDimUnfold::Hierarchy)
-					text += wxT(" ") + Kw(ibQueryKeyword::Hierarchy);
-				else if (dim.m_unfold == ibQueryDimUnfold::HierarchyOnly)
-					text += wxT(" ") + Kw(ibQueryKeyword::HierarchyOnly);
+				std::vector<wxString> fields;
+				fields.reserve(dim.m_fields.size());
+				for (const ibQueryTotalField& field : dim.m_fields) {
+					if (!field.m_expr) continue;
+					wxString one = RenderExpr(*field.m_expr);
+					// Elements is the default unfold — written only when it is not.
+					if (field.m_unfold == ibQueryDimUnfold::Hierarchy)
+						one += wxT(" ") + Kw(ibQueryKeyword::Hierarchy);
+					else if (field.m_unfold == ibQueryDimUnfold::HierarchyOnly)
+						one += wxT(" ") + Kw(ibQueryKeyword::HierarchyOnly);
+					fields.push_back(one);
+				}
+				if (fields.empty()) continue;
+				// SEVERAL FIELDS ARE BRACKETED, one field is not. The bracket is the only thing that
+				// tells a level of two fields from two levels when the text is read back; writing it
+				// around a lone field would change the spelling of every query that already exists.
+				wxString text = fields.size() == 1
+					? fields.front()
+					: wxT("(") + Join(fields, wxT(", ")) + wxT(")");
 				// The LEVEL's name, when it has one of its own. Written with AS, so reading it back
 				// cannot be confused with the next dimension in the list.
 				if (!dim.m_alias.IsEmpty())
@@ -522,6 +539,35 @@ wxString ibRenderQueryPackage(const ibQueryPackage& package)
 		else if (statement.m_select)
 			out += RenderSelect(*statement.m_select, 0);
 	}
+
+	// ⭐ AND THE PACKAGE'S OWN LINKS, after the statements that produced the names — `JOIN T1 AND T2
+	// ON …`. They stand where a statement stands and are told apart by their first word, so the
+	// language gained no new one; written last because a name has to be declared before it is
+	// related to anything.
+	//
+	// A link with no condition is not written at all: it is a row the author opened in the window
+	// and has not filled in, and a package saying two selections are related without saying how says
+	// nothing the parser could read back.
+	for (const ibQueryPackageLink& link : package.m_links) {
+		if (link.m_left.IsEmpty() || link.m_right.IsEmpty() || !link.m_on)
+			continue;
+		if (!out.IsEmpty())
+			out += wxT("\n;\n");
+		switch (link.m_kind) {
+		case ibQueryJoinKindAst::Left:  out += Kw(ibQueryKeyword::Left)  + wxT(" "); break;
+		case ibQueryJoinKindAst::Right: out += Kw(ibQueryKeyword::Right) + wxT(" "); break;
+		case ibQueryJoinKindAst::Full:  out += Kw(ibQueryKeyword::Full)  + wxT(" "); break;
+		default: break;   // INNER is the bare JOIN, as it is inside a query
+		}
+		// LAID OUT LIKE EVERY OTHER CLAUSE — the keyword on its own line and what it takes indented
+		// under it. A link written as one long line was the only sentence in this language a reader
+		// had to scroll sideways for.
+		const wxString item(wxT("\t"));
+		out += Kw(ibQueryKeyword::Join)
+		     + wxT("\n") + item + link.m_left
+		     + wxT("\n") + item + Kw(ibQueryKeyword::And) + wxT(" ") + link.m_right
+		     + wxT("\n") + item + Kw(ibQueryKeyword::On)  + wxT(" ") + RenderExpr(*link.m_on);
+	}
 	return out;
 }
 
@@ -574,6 +620,11 @@ wxString ibQueryDimensionName(const ibQueryTotalDim& dim)
 {
 	if (!dim.m_alias.IsEmpty())
 		return dim.m_alias;
-	return dim.m_expr && dim.m_expr->m_kind == ibQueryAstExprKind::Column && !dim.m_expr->m_path.empty()
-		? dim.m_expr->m_path.back() : wxString();
+	// No alias — the level answers to its HEAD field's column name. With several fields that name
+	// is the level's head and not a description of the whole key, which is exactly why a level of
+	// more than one field is worth naming.
+	const ibQueryTotalField* head = dim.Head();
+	return head != nullptr && head->m_expr && head->m_expr->m_kind == ibQueryAstExprKind::Column
+		&& !head->m_expr->m_path.empty()
+		? head->m_expr->m_path.back() : wxString();
 }

@@ -30,6 +30,7 @@ static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 	{ ibQueryKeyword::Top,      wxT("TOP")      },
 	{ ibQueryKeyword::Allowed,  wxT("ALLOWED")  },
 	{ ibQueryKeyword::Into,     wxT("INTO")     },
+	{ ibQueryKeyword::Onto,     wxT("ONTO")     },
 	{ ibQueryKeyword::Drop,     wxT("DROP")     },
 	{ ibQueryKeyword::Index,    wxT("INDEX")    },
 	{ ibQueryKeyword::For,      wxT("FOR")      },

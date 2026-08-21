@@ -92,8 +92,27 @@ struct ibAggregateItem { ibAggregateFn m_fn; const ibBackendQueryColumn* m_col; 
                          std::vector<const ibBackendQueryColumn*> m_path;
                          ibQueryColumnExprPtr m_expr;
                          bool m_distinct = false; };
-// One TotalBy dimension level — the field to roll up by + how it unfolds. Levels apply IN ORDER.
-struct ibTotalLevel    { const ibBackendQueryColumn* m_col; ibDimensionKind m_dim; };
+// ONE FIELD of a TotalBy level — the column to roll up by + how it unfolds.
+struct ibTotalField    { const ibBackendQueryColumn* m_col; ibDimensionKind m_dim; };
+
+// One TotalBy dimension level. Levels apply IN ORDER; a level holds ONE OR MORE fields and its
+// group key is the TUPLE of their values — "by partner AND contract" is one level, not two nested
+// ones, and a field that repeats what the key already says simply adds no rows.
+struct ibTotalLevel
+{
+	std::vector<ibTotalField> m_fields;
+
+	// THE HEAD — the first field. The gates that only make sense over ONE field (the hierarchy
+	// unfold, the server-side group-level page) ask through here and check IsSingleField first.
+	const ibBackendQueryColumn* HeadCol() const { return m_fields.empty() ? nullptr : m_fields.front().m_col; }
+	ibDimensionKind             HeadDim() const { return m_fields.empty() ? ibDimensionKind::Elements : m_fields.front().m_dim; }
+	bool IsSingleField() const { return m_fields.size() == 1; }
+
+	// One field, spelled the way every existing caller states a level.
+	static ibTotalLevel One(const ibBackendQueryColumn* col, ibDimensionKind dim) {
+		ibTotalLevel level; level.m_fields.push_back(ibTotalField{ col, dim }); return level;
+	}
+};
 
 // A dot-walk select column — a reference-navigation PATH of query columns + the
 // output alias the leaf is projected under. The path's non-leaf segments are single-
@@ -194,6 +213,12 @@ public:
 	void SetTotals(std::vector<ibTotalLevel> levels, std::vector<ibAggregateItem> aggregates,
 		bool overall = false);
 
+	// ⭐ THE TOTALS TREE, ALREADY FOLDED BY THE DBMS. Stamped when the read was pushed down as
+	// `GROUP BY ROLLUP`: the result then has no detail cursor to walk, and Select(kind) hands this
+	// tree over instead of building one. Same levels, same aggregates, same shape — the push-down is
+	// not taken where they would differ.
+	void SetReadyTree(class ibSelectorTree tree);
+
 	// A dot-walked dimension whose leaf is NOT one field: say under which alias PREFIX its spread was
 	// projected and which column reassembles from it. See m_objectReads.
 	void SetObjectRead(ibMetaID dimColumnId, const wxString& prefix, const ibBackendQueryColumn* leaf);
@@ -244,6 +269,8 @@ private:
 	std::vector<ibTotalLevel>    m_totalLevels;              // totals dimensions (stamped by the door)
 	std::vector<ibAggregateItem> m_totalAggregates;          // common totals aggregate set
 	bool                         m_totalsOverall = false;    // walk the tree's ROOT as a row (BY OVERALL)
+	// Set when the DBMS folded the levels itself — see SetReadyTree.
+	std::shared_ptr<class ibSelectorTree> m_readyTree;
 	// source recipe (for lazy sub-selections + reference-dimension resolution)
 	ibDatabaseConnectionHolder*  m_srcHolder    = nullptr;
 	const ibBackendQueryable*    m_srcQueryable = nullptr;
@@ -400,6 +427,31 @@ public:
 		return From(AdoptOwnedSource(std::move(queryable)), alias);
 	}
 
+	// ⭐⭐ A NAMED QUERY THIS STATEMENT DECLARES — `WITH <name> AS (<inner>)`, and then read by NAME.
+	//
+	// It exists for what a package already says: a statement names its result (`ONTO`) and later
+	// statements read it. Until now such a read wrapped the named select in a subquery source, which
+	// is a RAM source by construction (ibSubqueryQueryable::IsComputedInRam) — the rows came back to
+	// us and the join happened here. Declared instead, the named query stays INSIDE the SQL and the
+	// DBMS does the join with nothing in our memory.
+	//
+	// The inner door is copied whole: it is the same door any query is built with, so nothing about
+	// building one changes — only where its text ends up. Declaration ORDER is kept, since an engine
+	// reads them top to bottom and one may mention another.
+	//
+	// ⚠ ONLY WHERE THE ENGINE HAS `WITH` (ibSqlFeatures::m_cte) and only for a DB-backed inner query.
+	// The caller decides that — the renderer refuses rather than rewriting, and a RAM source has no
+	// SQL to declare in the first place.
+	ibDataQueryBuilder& With(const wxString& name, const ibDataQueryBuilder& inner);
+
+	// One declared query: the name it is read by and the door that produces it. PUBLIC because the
+	// SPEC carries the list to the provider, which lowers each into the same IR — a private shape
+	// there would be a fact the reader cannot name.
+	//
+	// The inner door is held by shared_ptr so this door stays COPYABLE (a subquery wrapper copies it)
+	// and so a copy SHARES the inner query rather than duplicating a whole query per copy.
+	struct ibNamedQuery { wxString m_name; std::shared_ptr<ibDataQueryBuilder> m_inner; };
+
 	// --- multi-source composition (the crown) ----------------------------
 	// Add another source. Join(b) auto-joins by reference (dot-walk style); Join(b,
 	// left, right) joins on explicit columns (temp / RAM / arbitrary). Union(b) stacks
@@ -535,6 +587,7 @@ public:
 	using AggregateFn   = ibAggregateFn;
 	using AggregateItem = ibAggregateItem;
 	using ibTotalLevel  = ::ibTotalLevel;
+	using ibTotalField  = ::ibTotalField;
 
 	// HAVING — post-aggregation predicate (stays nested; only the door + provider name it).
 	struct HavingItem {
@@ -591,7 +644,14 @@ public:
 	// dialect LIMIT, the RAM fold truncates after grouping. Plain reads ride the page request
 	// instead (ibReadPageRequest::m_count) — this is only for the unpaged SelectAggregate.
 	ibDataQueryBuilder& Top(long count) { m_top = count; return *this; }
-	// One totals dimension level — the field to roll up by + how it unfolds. Levels apply IN ORDER.
+	// ONE LEVEL, DECLARED WHOLE — its fields and how each unfolds. Levels apply IN ORDER, and a
+	// level of several fields groups by the TUPLE of them. This is the door the multi-field level
+	// comes through; the two calls below are the one-field spelling of it.
+	ibDataQueryBuilder& TotalByLevel(ibTotalLevel level);
+	// THE DETAIL RECORDS — the source rows, hung under the deepest heading. Its own verb rather than
+	// an empty level handed to the call above, which drops one on purpose (see the .cpp).
+	ibDataQueryBuilder& TotalsDetails();
+	// One totals dimension level of a single field — the field to roll up by + how it unfolds.
 	ibDataQueryBuilder& TotalBy(const ibBackendQueryColumn* col, ibDimensionKind dim);
 	ibDataQueryBuilder& TotalBy(const std::vector<const ibBackendQueryColumn*>& path, ibDimensionKind dim);   // dot-walk dimension
 	// Dot-walk dimension with a caller-owned SYNTHETIC dimension column: the provider joins the path and
@@ -599,6 +659,11 @@ public:
 	// by `dimCol` (which reads that alias) under its OWN unique model id — so a self-referential dimension
 	// (Parent.Code) does not clash by metaID with the row's own attribute. The caller owns dimCol.
 	ibDataQueryBuilder& TotalByDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
+		const ibBackendQueryColumn* dimCol, const wxString& alias, ibDimensionKind dim);
+	// The same declaration WITHOUT a level of its own — the projection and the spread are registered
+	// and the FIELD is handed back, so a caller assembling a level of several fields can put a
+	// dot-walk beside a plain column in one key. TotalByDotWalk is this plus TotalByLevel.
+	ibTotalField DeclareDimDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
 		const ibBackendQueryColumn* dimCol, const wxString& alias, ibDimensionKind dim);
 	// THE OVERALL LEVEL — one row above every dimension, folding the whole result.
 	//
@@ -733,6 +798,11 @@ public:
 	// flat-vs-hierarchical rendering is the runtime's call (it walks Root()/Node and
 	// builds its own model; L3 names no runtime type but ibValue). (docs §22.1b)
 	[[nodiscard]] ibSelectorTree SelectTotals() const;
+
+	// The same totals, pushed down to the DBMS and handed back as a RESULT — true when the shape and
+	// the driver allow it (see the definition). False = read and fold as before; same tree either
+	// way, so this decides cost, not the answer.
+	bool TryTotalsPushdown(ibDataQueryResult& out) const;
 
 	// --- introspection (a nested subquery reads its inner query's shape) -----
 	// The explicit Select(col, alias) output list (empty = SELECT *), and the PRIMARY
@@ -881,6 +951,7 @@ private:
 	std::vector<ibDotWalkColumn>  m_dimWalks;       // .TotalByDotWalk() — a dot-walk TOTALS dimension: the provider
 	                                                //   joins the path and projects the leaf's SCALAR value under
 	                                                //   m_alias (distinct), read by a synthetic dimension column.
+	std::vector<ibNamedQuery>     m_with;           // .With(name, inner) — the named queries, in declaration order
 	std::vector<ibQueryColumnSelect> m_selectExprs; // .SelectExpr() — computed output columns (arithmetic / CASE)
 	std::vector<std::pair<const ibBackendQueryColumn*, wxString>> m_selectCols;   // .Select(col, alias) — multi-source output list
 
@@ -895,6 +966,13 @@ private:
 	// view of refs). The door builds it per terminal and hands it to the vended
 	// provider — so the door names no L2 and the provider never reaches into the door.
 	ibDataQuerySpec BuildSpec() const;
+
+	// ⚠ ONE EXCEPTION, and it is the NAMED QUERY. A `.With(name, inner)` declaration is a whole door
+	// the statement carries, and the provider lowers it into the SAME statement — so it asks that
+	// inner door for its spec exactly as the outer one was asked. Friendship rather than a public
+	// BuildSpec: the rule ("the door hands its own spec over, nobody takes one") still holds for
+	// everybody else.
+	friend class ibDbTableProvider;
 
 	// Columns a later result.Select(mode) drains into its snapshot (Select() list + agg inputs + TotalBy fields).
 	std::vector<const ibBackendQueryColumn*> MaterialiseColumns() const;
@@ -938,6 +1016,10 @@ struct ibDataQuerySpec
 	const std::vector<ibDotWalkColumn>*             m_dotWalks    = nullptr;
 	const std::vector<ibDotWalkColumn>*             m_dimWalks    = nullptr;   // dot-walk TOTALS dimensions
 	const std::vector<ibQueryColumnSelect>*         m_selectExprs = nullptr;   // computed output columns (arithmetic / CASE)
+	// The NAMED QUERIES this statement declares (`WITH …`), in declaration order — the provider
+	// renders each into the statement's own IR. Empty for every query that names none, which is
+	// every query that existed before this.
+	const std::vector<ibDataQueryBuilder::ibNamedQuery>* m_with = nullptr;
 	const std::vector<std::pair<const ibBackendQueryColumn*, wxString>>* m_selectCols = nullptr;   // multi-source output list
 	bool                                            m_distinct    = false;   // .Distinct() — SELECT DISTINCT
 	long                                            m_topCount    = 0;       // .Top() — aggregate-terminal row limit (0 = all groups)

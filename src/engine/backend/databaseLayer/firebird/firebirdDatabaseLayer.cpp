@@ -45,6 +45,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_returningClause  = wxT("RETURNING");      // FB 2.1+
 		d.m_features.m_window = true;                 // FB3+
 		d.m_features.m_rollup = true;                 // GROUP BY ROLLUP(...) — FB5 (vendored: security5.fdb)
+		d.m_features.m_cte    = true;                 // WITH … AS (…) — FB 2.1+
 		// m_multiRowValues stays FALSE — Firebird has no multi-row VALUES at any version. A batched
 		// INSERT is rendered as INSERT … SELECT … UNION ALL SELECT … instead (see RenderDML).
 		// type map

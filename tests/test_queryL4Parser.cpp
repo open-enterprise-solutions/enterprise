@@ -10,6 +10,10 @@
 #include <vector>
 
 #include "backend/query/queryParser.h"
+// ⚠ AT THE TOP, not beside the round-trip section further down: a test up here renders an AST back
+// to text (ONTO is written where INTO is), and an include that arrives 200 lines later is not
+// visible to it. MSBuild does not compile tests, so this only ever fails in the CMake tree.
+#include "backend/query/queryRender.h"
 
 namespace {
 
@@ -176,10 +180,11 @@ TEST(QueryL4Parser, TotalsByDimensions)
 	EXPECT_EQ(sel->m_totalsAggregates[0]->m_arg->m_path[0], wxT("Amount"));
 	EXPECT_EQ(sel->m_totalsAggregates[1]->m_func, ibQueryKeyword::Max);
 	ASSERT_EQ(sel->m_totalsBy.size(), 2u);
-	EXPECT_EQ(sel->m_totalsBy[0].m_expr->m_path[0], wxT("Client"));
-	EXPECT_EQ(sel->m_totalsBy[0].m_unfold, ibQueryDimUnfold::Elements);   // no keyword => Elements
-	EXPECT_EQ(sel->m_totalsBy[1].m_expr->m_path[0], wxT("Store"));
-	EXPECT_EQ(sel->m_totalsBy[1].m_unfold, ibQueryDimUnfold::Hierarchy);  // explicit HIERARCHY
+	ASSERT_EQ(sel->m_totalsBy[0].m_fields.size(), 1u);                       // a bare dimension is a level of ONE field
+	EXPECT_EQ(sel->m_totalsBy[0].Head()->m_expr->m_path[0], wxT("Client"));
+	EXPECT_EQ(sel->m_totalsBy[0].HeadUnfold(), ibQueryDimUnfold::Elements);  // no keyword => Elements
+	EXPECT_EQ(sel->m_totalsBy[1].Head()->m_expr->m_path[0], wxT("Store"));
+	EXPECT_EQ(sel->m_totalsBy[1].HeadUnfold(), ibQueryDimUnfold::Hierarchy); // explicit HIERARCHY
 	EXPECT_TRUE(sel->m_totalsBy[0].m_alias.IsEmpty());                    // no name given => the column's own
 }
 
@@ -190,8 +195,8 @@ TEST(QueryL4Parser, TotalsDimensionAlias)
 	auto sel = Parse(wxT("SELECT Client, Amount FROM Document.Sales "
 	                     "TOTALS SUM(Amount) BY Date HIERARCHY AS Period, Client AS Buyer"));
 	ASSERT_EQ(sel->m_totalsBy.size(), 2u);
-	EXPECT_EQ(sel->m_totalsBy[0].m_expr->m_path[0], wxT("Date"));
-	EXPECT_EQ(sel->m_totalsBy[0].m_unfold, ibQueryDimUnfold::Hierarchy);   // the unfold stays the dimension's
+	EXPECT_EQ(sel->m_totalsBy[0].Head()->m_expr->m_path[0], wxT("Date"));
+	EXPECT_EQ(sel->m_totalsBy[0].HeadUnfold(), ibQueryDimUnfold::Hierarchy);   // the unfold stays the dimension's
 	EXPECT_EQ(sel->m_totalsBy[0].m_alias, wxT("Period"));                  // the alias is the LEVEL's
 	EXPECT_EQ(sel->m_totalsBy[1].m_alias, wxT("Buyer"));
 
@@ -199,6 +204,90 @@ TEST(QueryL4Parser, TotalsDimensionAlias)
 	auto bare = Parse(wxT("SELECT Amount FROM Document.Sales TOTALS SUM(Amount) BY Client Buyer"));
 	ASSERT_EQ(bare->m_totalsBy.size(), 1u);
 	EXPECT_EQ(bare->m_totalsBy[0].m_alias, wxT("Buyer"));
+}
+
+// ONE LEVEL OVER SEVERAL FIELDS. The bracket is what says "together": inside it the comma separates
+// FIELDS OF ONE LEVEL, outside it the comma separates LEVELS — and a report grouping by partner and
+// contract at once is one heading, not two nested ones.
+TEST(QueryL4Parser, TotalsLevelOverSeveralFields)
+{
+	auto sel = Parse(wxT("SELECT Amount FROM Document.Sales "
+	                     "TOTALS SUM(Amount) BY (Partner, Contract) AS Party, Store"));
+	ASSERT_EQ(sel->m_totalsBy.size(), 2u);                                 // TWO levels, not three
+
+	ASSERT_EQ(sel->m_totalsBy[0].m_fields.size(), 2u);                     // the bracketed pair is ONE level
+	EXPECT_EQ(sel->m_totalsBy[0].m_fields[0].m_expr->m_path[0], wxT("Partner"));
+	EXPECT_EQ(sel->m_totalsBy[0].m_fields[1].m_expr->m_path[0], wxT("Contract"));
+	EXPECT_EQ(sel->m_totalsBy[0].m_alias, wxT("Party"));                   // the name belongs to the LEVEL
+	EXPECT_FALSE(sel->m_totalsBy[0].IsSingleField());
+
+	ASSERT_EQ(sel->m_totalsBy[1].m_fields.size(), 1u);                     // and the plain one beside it
+	EXPECT_EQ(sel->m_totalsBy[1].Head()->m_expr->m_path[0], wxT("Store"));
+}
+
+// ONTO NAMES A RESULT — and it is the pair to INTO, not a synonym: INTO makes a temporary table and
+// hands back a row count, ONTO names the result that comes back. A reader then asks for "Sales"
+// instead of "the third statement", which is the one thing a position cannot survive: inserting a
+// statement above it renumbers everything below.
+TEST(QueryL4Parser, OntoNamesTheResult)
+{
+	auto sel = Parse(wxT("SELECT Client, Amount ONTO Sales FROM Document.Sales"));
+	EXPECT_EQ(sel->m_ontoName, wxT("Sales"));
+	EXPECT_TRUE(sel->m_intoTemp.IsEmpty());
+
+	// Written where INTO is written, and rendered back to the same place.
+	const wxString text = ibRenderQuery(*sel);
+	EXPECT_TRUE(text.Contains(wxT("ONTO Sales")));
+	EXPECT_EQ(Parse(text)->m_ontoName, wxT("Sales"));
+}
+
+// A QUERY RESULT LINK. A later statement READS a result an earlier one named, and it
+// says so the way it says everything else: by naming it as a source and joining to it. The language
+// needs nothing new for this; what it needs is that a bare name in FROM stays a bare name until
+// somebody resolves it (the package does, at execution).
+TEST(QueryL4Parser, AStatementCanReadANamedResult)
+{
+	auto package = ibQueryParser().ParsePackage(
+		// ⚠ ONTO STANDS WHERE INTO STANDS — after the projection, before FROM. That is the whole
+		// point of the pair, and writing it at the end is a syntax error, not a second spelling.
+		wxT("SELECT Partner, Amount ONTO Sales FROM Document.Sales;")
+		wxT("SELECT S.Partner FROM Sales AS S INNER JOIN Document.Plan AS P ON P.Partner = S.Partner"));
+	ASSERT_EQ(package.m_statements.size(), 2u);
+
+	const ibQuerySelect* first = package.m_statements[0].m_select.get();
+	ASSERT_TRUE(first != nullptr);
+	EXPECT_EQ(first->m_ontoName, wxT("Sales"));
+
+	// The reader keeps the NAME — resolving it into that statement's own select is the package's
+	// job at execution, not the parser's. A parser that resolved it would have to know what the
+	// statements around it are, which is exactly the coupling this language does not have.
+	const ibQuerySelect* second = package.m_statements[1].m_select.get();
+	ASSERT_TRUE(second != nullptr);
+	ASSERT_EQ(second->m_from.m_name.size(), 1u);
+	EXPECT_EQ(second->m_from.m_name.front(), wxT("Sales"));
+	EXPECT_EQ(second->m_from.m_alias, wxT("S"));
+	EXPECT_TRUE(second->m_from.m_subquery == nullptr);
+	ASSERT_EQ(second->m_joins.size(), 1u);
+}
+
+// THE TWO CANNOT BOTH BE WRITTEN. An INTO statement returns no result, so naming that result names
+// nothing — refused with a sentence rather than by quietly ignoring one of the two words.
+TEST(QueryL4Parser, IntoAndOntoTogetherAreRefused)
+{
+	EXPECT_THROW(Parse(wxT("SELECT Client INTO Tmp ONTO Sales FROM Document.Sales")), ibBackendException);
+}
+
+// THE UNFOLD BELONGS TO THE FIELD, so a level may take one field through a hierarchy and the next
+// one flat. What the ENGINE does with that combination is its own refusal (a hierarchy walks one
+// parent chain) — the language reads it, which is what keeps the two answers separable.
+TEST(QueryL4Parser, TotalsLevelFieldsKeepTheirOwnUnfold)
+{
+	auto sel = Parse(wxT("SELECT Amount FROM Document.Sales "
+	                     "TOTALS SUM(Amount) BY (Store HIERARCHY, Partner)"));
+	ASSERT_EQ(sel->m_totalsBy.size(), 1u);
+	ASSERT_EQ(sel->m_totalsBy[0].m_fields.size(), 2u);
+	EXPECT_EQ(sel->m_totalsBy[0].m_fields[0].m_unfold, ibQueryDimUnfold::Hierarchy);
+	EXPECT_EQ(sel->m_totalsBy[0].m_fields[1].m_unfold, ibQueryDimUnfold::Elements);
 }
 
 TEST(QueryL4Parser, SyntaxErrorThrows)
@@ -912,4 +1001,77 @@ TEST(QueryL4Parser, Window_FrameWithoutOrderIsRefused)
 {
 	EXPECT_THROW(Parse(wxT("SELECT SUM(Amount) OVER (PARTITION BY Region ROWS) FROM Document.Sales")),
 	             ibBackendException);
+}
+
+// ===========================================================================
+//  A PACKAGE'S OWN LINKS between its named selections (2026-08-21)
+// ===========================================================================
+
+// ⭐ Max's shape, in his words: mark two statements as named selections and set the links between
+// them — nothing else. So the link is not a statement and lives in no statement: it is the
+// PACKAGE's, and the text spells it where a statement stands.
+//
+// NO NEW KEYWORD. A statement begins with SELECT or DROP, so a JOIN standing at that position can
+// only be a package link — the position decides, and no configuration loses an identifier.
+TEST(QueryL4Parser, PackageLinkRelatesTwoNamedSelections)
+{
+	auto package = ibQueryParser().ParsePackage(
+		wxT("SELECT Partner, Amount ONTO Sales FROM Document.Sales;")
+		wxT("SELECT Partner, Paid ONTO Payments FROM Document.Payments;")
+		wxT("JOIN Sales AND Payments ON Sales.Partner = Payments.Partner"));
+
+	// The two statements stayed statements — the link did not become one of them…
+	ASSERT_EQ(package.m_statements.size(), 2u);
+	ASSERT_EQ(package.m_links.size(), 1u);
+
+	// …and nothing was pushed into either query: both read exactly what they were written to read.
+	EXPECT_TRUE(package.m_statements[0].m_select->m_joins.empty());
+	EXPECT_TRUE(package.m_statements[1].m_select->m_joins.empty());
+
+	const ibQueryPackageLink& link = package.m_links.front();
+	EXPECT_EQ(link.m_left,  wxT("Sales"));
+	EXPECT_EQ(link.m_right, wxT("Payments"));
+	EXPECT_EQ(link.m_kind,  ibQueryJoinKindAst::Inner);
+	ASSERT_NE(link.m_on, nullptr);
+
+	// AND IT COMES BACK OUT THE WAY IT WENT IN — the same contract as everything else in this language.
+	const wxString written = ibRenderQueryPackage(package);
+	// The layout is the renderer.s (a keyword per line, its operands indented); what this test
+	// pins is that the link is THERE and reads back as the same link.
+	EXPECT_TRUE(written.Contains(wxT("JOIN"))) << written.ToStdString();
+	EXPECT_TRUE(written.Contains(wxT("AND Payments"))) << written.ToStdString();
+	const ibQueryPackage again = ibQueryParser().ParsePackage(written);
+	ASSERT_EQ(again.m_links.size(), 1u);
+	EXPECT_EQ(again.m_links.front().m_left,  wxT("Sales"));
+	EXPECT_EQ(again.m_links.front().m_right, wxT("Payments"));
+}
+
+// THE KIND IS SPELLED AS IT IS INSIDE A QUERY, because it means the same thing: which side keeps
+// its rows when the other has none.
+TEST(QueryL4Parser, PackageLinkCarriesItsJoinKind)
+{
+	auto package = ibQueryParser().ParsePackage(
+		wxT("SELECT Partner ONTO Sales FROM Document.Sales;")
+		wxT("SELECT Partner ONTO Plan FROM Document.Plan;")
+		wxT("LEFT JOIN Sales AND Plan ON Sales.Partner = Plan.Partner"));
+	ASSERT_EQ(package.m_links.size(), 1u);
+	EXPECT_EQ(package.m_links.front().m_kind, ibQueryJoinKindAst::Left);
+
+	// Rendered back with the same word, and read back as the same kind.
+	const wxString written = ibRenderQueryPackage(package);
+	EXPECT_TRUE(written.Contains(wxT("LEFT JOIN"))) << written.ToStdString();
+	EXPECT_TRUE(written.Contains(wxT("AND Plan"))) << written.ToStdString();
+	EXPECT_EQ(ibQueryParser().ParsePackage(written).m_links.front().m_kind, ibQueryJoinKindAst::Left);
+}
+
+// A LINK NAMES TWO SELECTIONS AND SAYS HOW THEY MEET — all three parts are required in TEXT. A
+// package that says two selections are related without saying how says nothing the parser can read.
+TEST(QueryL4Parser, PackageLinkWithoutAConditionIsRefused)
+{
+	EXPECT_THROW(ibQueryParser().ParsePackage(
+		wxT("SELECT Partner ONTO Sales FROM Document.Sales;")
+		wxT("JOIN Sales AND Payments")), ibBackendException);
+	EXPECT_THROW(ibQueryParser().ParsePackage(
+		wxT("SELECT Partner ONTO Sales FROM Document.Sales;")
+		wxT("JOIN Sales ON Sales.Partner = Payments.Partner")), ibBackendException);
 }

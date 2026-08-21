@@ -100,13 +100,26 @@ std::vector<ibQueryConstructorSource> ibQueryConstructorModel::GetTempSources(
 			continue;
 		}
 
-		if (!statement.m_select || statement.m_select->m_intoTemp.IsEmpty())
+		if (!statement.m_select)
+			continue;
+
+		// ⭐ A NAMED RESULT IS SELECTABLE TOO — a query result link. `ONTO Sales` makes `Sales` a name a
+		// later statement can read, and reading it is what a LINK is: the package resolves the name
+		// into that statement's own select, so the join runs in the DBMS.
+		//
+		// Listed beside the temp tables because from the constructor's side they are the same
+		// question — "what may this statement select from that the package itself made" — and the
+		// difference (a table versus a named result) is the package's business, not the tree's.
+		const wxString& name = statement.m_select->m_intoTemp.IsEmpty()
+			? statement.m_select->m_ontoName : statement.m_select->m_intoTemp;
+		if (name.IsEmpty())
 			continue;
 
 		ibQueryConstructorSource source;
-		source.m_path.push_back(statement.m_select->m_intoTemp);
-		source.m_presentation = statement.m_select->m_intoTemp;
+		source.m_path.push_back(name);
+		source.m_presentation = name;
 		source.m_temp = true;
+		source.m_namedResult = statement.m_select->m_intoTemp.IsEmpty();   // named by ONTO, not INTO
 		out.push_back(std::move(source));
 	}
 	return out;
@@ -259,7 +272,11 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetFields(
 		const size_t limit = std::min(beforeStatement, package.m_statements.size());
 		for (size_t i = limit; i > 0; --i) {
 			const ibQueryAstStatement& statement = package.m_statements[i - 1];
-			if (statement.m_select && statement.m_select->m_intoTemp.IsSameAs(source.m_name[0], false))
+			// The name may be a temp table's OR a named result's — both are defined by the select
+			// that made them, and that select is what answers "which fields does this have".
+			if (statement.m_select
+			    && (statement.m_select->m_intoTemp.IsSameAs(source.m_name[0], false)
+			     || statement.m_select->m_ontoName.IsSameAs(source.m_name[0], false)))
 				// ⚠ RESOLVED AS OF THE MAKER, not as of us: the making statement sees only what came
 				// BEFORE it, which is also what stops a temp table resolving through itself.
 				return stamp(FieldsOfSelect(*statement.m_select, package, i - 1));

@@ -52,6 +52,14 @@ public:
 	struct OutputColumn
 	{
 		wxString                    m_name;             // script-visible output name
+		// ⭐ WHICH LEVEL A DIMENSION BELONGS TO — 0 for the first `BY` level, 1 for the next, and -1
+		// for anything that is not a dimension.
+		//
+		// A level may group by SEVERAL fields, so "the n-th dimension column" and "the n-th level"
+		// stopped being the same number the day a level could hold two: a printer counting columns
+		// put the second field of level 2 where level 3 belonged, and the last level fell off the
+		// page entirely. The level is stated here rather than counted there.
+		int                         m_level = -1;
 		const ibBackendQueryColumn* m_col   = nullptr;  // source column (GetValue) — null when by-alias
 		wxString                    m_alias;            // door alias (GetColumn) — dot-walk / aggregate / explicit
 		bool                        m_byAlias = false;  // read via GetColumn(alias) vs GetValue(col)
@@ -228,10 +236,20 @@ public:
 	// — releasing early inside a long package has to be sayable rather than left to scope.
 	struct PackageResult
 	{
+		// ONTO <name> — what this statement called its result. Empty for the ordinary unnamed one.
+		// It is the whole reason ONTO exists: a caller asks for "Sales" instead of "the third
+		// statement", and a position is exactly the thing that changes when somebody inserts a
+		// statement above it.
+		wxString m_name;
 		wxString m_intoTemp;                                 // non-empty: this statement materialised that temp table
 		wxString m_dropTemp;                                 // non-empty: this statement released that temp table
 		long     m_rowCount = -1;                            // rows materialised by an INTO statement (-1 = not one)
 		bool     m_hasTotals = false;                        // the statement had a TOTALS clause (the result folds)
+		// ⭐ THE ONE THE PACKAGE EXISTS TO PRODUCE — the query assembled from the package's LINKS,
+		// which relates the named selections to each other (ExecutePackage, at the end). It belongs
+		// to no statement, so it has no `ONTO` name of its own, and without a mark the only way to
+		// find it would be "the last element", which changes meaning the day a statement is added.
+		bool     m_isFinal = false;
 		std::unique_ptr<ibDataQueryResult> m_result;         // the table of a plain select (null otherwise)
 		std::vector<OutputColumn>          m_schema;         // its output columns, in projection order
 	};
@@ -295,11 +313,18 @@ public:
 	// (GROUP BY dim ORDER BY dim [keyset] LIMIT count) and *outServerGroupedLevel is set true — the caller then
 	// emits the flat groups at level 1 WITHOUT the ByGroups fold. Otherwise the usual detail-read + fold (docs:
 	// group-level paging). Defaults keep every non-paged / report / multi-level caller on the fold.
+	// ⭐ `withDetails` — HANG THE ROWS UNDER THE LAST LEVEL (the detail records). It is asked of the
+	// READ rather than written in the query, because it is not about what to compute: the same
+	// TOTALS query feeds a list that wants headings only and a report that prints every row under
+	// them. Two things follow from it and nothing else does — the config gets one more level with NO
+	// FIELDS (which is what the fold reads as "the rows themselves"), and the server-side fold is
+	// refused, since `GROUP BY ROLLUP` returns aggregated rows and no detail to hang.
 	static ibDataQueryResult ExecuteTotals(const ibQuerySelect& ast,
 	                                       const std::map<wxString, ibValue>& params,
 	                                       std::vector<OutputColumn>& outSchema,
 	                                       const ibReadPageRequest& page = ibReadPageRequest{},
-	                                       bool* outServerGroupedLevel = nullptr);
+	                                       bool* outServerGroupedLevel = nullptr,
+	                                       bool withDetails = false);
 
 	// === L4-2 (LINQ pushdown) — recorded-lambda lowering against ONE source ===
 	// The lambda recorder (compiler/lambdaQueryAst.*) emits the same

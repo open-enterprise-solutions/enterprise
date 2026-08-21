@@ -57,6 +57,14 @@ dictionary, and neither knows anything about metadata:
   Limit/Join/Aggregate/Subquery/Distinct/Union, expressions, DDL, DML — rendered generically
   through `ibDialectDictionary`.
 
+  **A NAMED QUERY rides on the STATEMENT** (added 2026-08-21): `ibQueryIR::m_with` is a list of
+  `ibQueryCte { name, query }`, and the renderer writes them ahead of the select — `WITH a AS (…),
+  b AS (…) SELECT …` — which is also what puts their bind parameters first, in the order the driver
+  binds them. Declaration ORDER is the caller's (an engine reads the list top to bottom). A dialect
+  without CTEs is refused with a sentence, never rewritten into nested sources: that is a different
+  tree, and choosing it belongs to the tier that built the query. The consumer is a package's named
+  result — see query-language-arc.md § 24.4a.
+
   **Window functions ride as a FIELD on a Func**, not as a node kind of their own (added
   2026-08-20). `ibQueryExpr::m_over` holds an `ibQueryWindow { partitionBy, orderBy, frame }`, and
   the renderer appends the clause where the call ends — the same shape `m_distinct` already had,
@@ -289,6 +297,22 @@ backing-blind (a DB cursor **or** a RAM table, chosen once in `MakeProvider`). F
 | **L3-2** | **structure** — `ibStructureBuilder` / `DiffSnapshots` / `ibSchemaBuilder` generate & migrate the **tables** (DDL) | **metadata** |
 | **L3-3** | **data mover** — `ibDataMover` (`query/dataMover`) dumps / restores the **rows** | **metadata** |
 | **L3-4** | **regeneration** — `ibDerivedState` (`query/derivedStateBuilder`) rebuilds a **derived** table from its source | derived state |
+
+**A DOOR MAY DECLARE A NAMED QUERY** (2026-08-21). `.With(name, innerDoor)` records one; the spec
+carries the list; `ibDbTableProvider::AttachNamedQueries` lowers each through the ordinary road (its
+own spec through `BuildPageIR`) and puts the resulting relation on the SAME IR. The source that
+reads it is `ibCteQueryable` — a NAME in SQL with declared columns, read by the ordinary physical
+scan, the third member of the family beside `ibDbTempTableQueryable` and `ibSchemaTableQueryable`.
+
+It is deliberately **not** `ibSubqueryQueryable` with a flag: that one is computed in RAM by
+construction (the inner query runs, its rows come back, the join happens here), which is the right
+answer for a source the DBMS cannot see and the wrong one for a named result of the same package on
+the same connection. Same shape, opposite execution — two classes, not one with a switch.
+
+Both mint columns of their own, so the base queryable grew one question — `ShareColumn(col)`: "did
+you mint this, and may I keep it?" A metadata-backed source answers nothing (its columns outlive
+every query); a per-run source hands over the storage, so a schema that names one of them keeps it
+by a refcount rather than by a copy.
 
 **A WRITE IS A SET OF ROWS, AND ONE ROW IS THE DEGENERATE CASE** (2026-08-15). `SetValue` fills the
 row being assembled; `NextRow()` opens another; `Insert()` writes them all. A caller that never calls

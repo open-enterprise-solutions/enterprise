@@ -173,9 +173,43 @@ private:
 		// entirely (a composition folds through its resources). Asking by the tab.s TITLE would be
 		// asking in the language of the caption.
 		int       m_excludeBit = 0;
+		// A tab that exists only when the PACKAGE has named results to work with (`ONTO`). Linking
+		// two selections is a relation between two of them, so with fewer than two there is nothing
+		// to show — the same rule the Links tab follows for tables, one tier up.
+		// LAST on purpose: every existing row of the table below stops at the exclusion bit, and a
+		// flag slotted in the middle would silently re-read that bit as this one.
+		bool      m_needsNamedResults = false;
 	};
 	std::vector<Page> m_pages;
 	void SyncNotebookPages();   // the tab set follows what the current statement IS
+
+	// ---- Selection links — joining the package's NAMED results (query result links) -----
+	// Shown when the package has two or more of them. ⭐ IT EDITS THE PACKAGE'S OWN LIST — no
+	// statement is touched, nothing is added to anybody's FROM, and no temp table is created: a link
+	// is a row saying "these two results are related, by this condition", and the package's final
+	// query is assembled FROM the links at execution time (Max: "the fields we already see from the
+	// selection; just run the final query through the links").
+	wxWindow* BuildSelectionLinksPage(wxWindow* parent);
+	void OnSelectionLinkAdd(wxCommandEvent&);
+	void OnSelectionLinkRemove(wxCommandEvent&);
+	size_t NamedResultCount() const;
+	// Every name the package declares with `ONTO` — what the two choice cells offer.
+	std::vector<wxString> NamedResults() const;
+	// …minus the one standing on the other side of the row being edited: a selection linked to
+	// itself is not a link.
+	wxArrayString NamedResultChoices(bool leftSide) const;
+	// The ready conditions for a package link — every pair of fields the two selections offer, the
+	// same rule the Links tab follows for two tables.
+	wxArrayString SelectionLinkConditionChoices() const;
+	// The "…" behind a package link's condition — the shared expression editor over the fields of
+	// the two selections the row names.
+	bool EditSelectionLinkCondition(wxString& text);
+
+	// (The two link grids share no model: the Links tab edits ONE STATEMENT'S JOINS, this one edits
+	//  the PACKAGE'S OWN LINKS. Nothing has to ask which grid a cell belongs to.)
+
+	class ibDataViewCtrl*   m_selectionLinks     = nullptr;
+	class ibQuerySelectionLinkModel* m_selectionLinkModel = nullptr;   // over the PACKAGE's links, not a statement's joins
 
 	wxWindow* BuildIndexPage   (wxWindow* parent);   // shown only for a create-temp-table statement
 	wxWindow* BuildPackagePage(wxWindow* parent);    // the statement list — its own tab, last
@@ -228,6 +262,10 @@ private:
 	// to change until a name is typed — in this AST the kind IS the name, so an empty box meant the
 	// statement never changed kind at all.
 	wxString SuggestTempTableName() const;
+	// A default name for a NAMED RESULT, built from what the statement reads: the main table plus
+	// what it joins. Readable by construction, which "Query2" is not — and a link written against a
+	// readable name says what it links.
+	wxString SuggestResultName() const;
 	void OnMoveStatement(int delta);
 	void OnStatementSelected(class ibDataViewEvent&);
 	void OnBranchSelected(wxBookCtrlEvent&);   // the union-branch tabs down the right edge
@@ -241,7 +279,7 @@ private:
 	void OnTableAliasEditEnd(wxTreeEvent&);
 	void OnTableContextMenu(wxTreeEvent&);   // add / nested / rename / delete / parameters, on the table itself
 	// THE TABLE THE CURSOR STANDS ON — null on a field row or an empty selection.
-	class ibQuerySource* SelectedSource() const;
+	struct ibQuerySource* SelectedSource() const;
 	// VIRTUAL TABLE PARAMETERS — one row per parameter the SOURCE declares, in its order. Offered
 	// only where a source declares any, and it decides both the rows and what a condition may name.
 	void OnTableParameters(wxCommandEvent&);

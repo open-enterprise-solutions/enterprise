@@ -88,6 +88,9 @@ private:
 
 	// --- productions -----------------------------------------------------
 	ibQueryAstStatement           ParseStatement();         // one package statement: a DROP or a full SELECT
+	// A package-level LINK between two named results: `JOIN T1 AND T2 ON …`. Recognised by POSITION
+	// (a statement begins with SELECT or DROP), so the language gains no new word.
+	ibQueryPackageLink            ParsePackageLink();
 	ibQuerySelectPtr           ParseSelectStatement();   // a full SELECT (+ UNION branches + trailing ORDER/TOTALS)
 	ibQuerySelectPtr           ParseSelectCore();        // one SELECT body up to HAVING (a UNION branch)
 	void                       ParseSelectList(ibQuerySelect& sel);

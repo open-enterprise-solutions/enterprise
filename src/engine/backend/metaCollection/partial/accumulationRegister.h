@@ -366,8 +366,8 @@ protected:
 	// it says which way the running figure moves. A turnover-only register keeps no running figure —
 	// every movement is one more thing added to a period's total — so there is no way for a movement
 	// to face, and offering the field would invite a filter over a distinction the register does not
-	// make. (Max, 2026-08-14, deciding it explicitly: «если остатки есть, то мы для оборотов не
-	// выводим вид движения — там это не имеет смысла».)
+	// make. (Max, 2026-08-14, deciding it explicitly: "if there are balances, then for turnovers we
+	// do not output the movement kind — it makes no sense there".)
 	//
 	// ⚠ The column therefore comes and goes with the register kind, and a column that disappears
 	// takes its data with it — the accounting register states that trap in full (accountingRegister.h,

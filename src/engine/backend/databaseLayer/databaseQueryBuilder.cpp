@@ -470,7 +470,27 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 {
 	m_out = ibRenderedQuery{};
 	m_paramPos = 0;
-	m_out.m_sql = RenderSelect(ir.m_root.get());
+
+	// ⭐ THE NAMED QUERIES FIRST — `WITH a AS (…), b AS (…) SELECT …`. They render BEFORE the main
+	// select so their bind parameters land in placeholder order, which is the order the driver binds
+	// them in: a CTE written after the select would have its values bound to the select's markers.
+	wxString with;
+	for (const ibQueryCte& cte : ir.m_with) {
+		if (cte.m_name.IsEmpty() || !cte.m_query)
+			continue;
+		// REFUSED, NOT INLINED. An engine without `WITH` needs the subquery FORM, and that is a
+		// different tree — rewriting it here would be L2 answering a question about the query's
+		// shape, which belongs to the tier that built it (the same rule the OVER clause follows).
+		if (!m_dialect.m_features.m_cte)
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+				_("This database cannot read a named query (WITH …): write it as a nested source instead"));
+		with += with.IsEmpty() ? wxT("WITH ") : wxT(", ");
+		with += QuoteIdent(cte.m_name) + wxT(" AS (") + RenderSelect(cte.m_query.get()) + wxT(")");
+	}
+	if (!with.IsEmpty())
+		with += wxT(" ");
+
+	m_out.m_sql = with + RenderSelect(ir.m_root.get());
 	// Pessimistic row lock — appended to the TOP-level SELECT only (subqueries render through
 	// RenderSelect above and must NOT carry it). The dialect owns the clause + its emptiness.
 	if (ir.m_lockForUpdate && !m_dialect.m_rowLockSuffix.empty()) {
@@ -1370,6 +1390,11 @@ bool ibCanPushRollup(const ibDatabaseLayer* layer)
 bool ibCanPushWindow(const ibDatabaseLayer* layer)
 {
 	return layer != nullptr && layer->GetDialect().m_features.m_window;
+}
+
+bool ibCanUseCte(const ibDatabaseLayer* layer)
+{
+	return layer != nullptr && layer->GetDialect().m_features.m_cte;
 }
 
 int ibExecuteDdl(ibDatabaseLayer* layer, const ibDdlStatement& ddl)

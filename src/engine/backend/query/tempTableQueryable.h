@@ -271,4 +271,84 @@ private:
 	const ibMetaData*                        m_metaData;   // reference / enum reconstruction context
 };
 
+// ==========================================================================
+// ibCteQueryable — A QUERY THIS STATEMENT NAMED, read as if it were a table.
+//
+// The third member of this family, and the same idea as the two above: a source that is a NAME in
+// SQL with declared columns, read by the ordinary physical scan (GetProvider is NOT overridden). It
+// differs from a temp table in WHO makes the name exist — nobody creates anything: the statement
+// DECLARES it with `WITH <name> AS (…)`, and the door carries the inner query (ibDataQueryBuilder::With)
+// so the provider can write that declaration into the same IR.
+//
+// ⭐ WHY IT IS NOT ibSubqueryQueryable. That one is COMPUTED IN RAM by construction — the inner
+// query runs, its rows come back to us, and everything above joins them here. That is the right
+// answer for a nested query over a source the DBMS cannot see, and the wrong one for the case this
+// class exists for: a named result of the SAME package, on the SAME connection, which the server can
+// read itself. Same shape, opposite execution — so they are two classes and not one with a flag.
+//
+// The columns are the inner query's OUTPUT columns, shared (not copied): the inner door published
+// them and outlives the read through the builder the CTE holds.
+// (docs/query-language-arc.md §24.4 — result links)
+// ==========================================================================
+class ibCteQueryable : public ibBackendQueryable
+{
+public:
+	// WHAT THE NAMED QUERY PUBLISHES — one entry per output field: the name it is read by and the
+	// type it holds. Both come from the inner query's own output schema, which is the only honest
+	// source for them: a CTE has no storage to ask.
+	struct Field { wxString m_name; ibTypeDescription m_type; };
+
+	// `firstColumnId` — the id the minted columns are numbered from. A CTE's columns stand for
+	// nothing stored, so their ids exist only to tell them apart; the caller passes a base out of the
+	// synthetic range it already uses, so two named queries in one statement cannot collide.
+	ibCteQueryable(wxString name, const std::vector<Field>& fields, ibMetaID firstColumnId,
+	               const ibMetaData* metaData = nullptr)
+		: m_name(std::move(name)), m_guid(wxNewUniqueGuid), m_metaData(metaData)
+	{
+		ibMetaID id = firstColumnId;
+		for (const Field& field : fields) {
+			if (field.m_name.IsEmpty())
+				continue;   // a field with no name cannot be read back by one
+			// The name IS the physical name: a CTE exposes exactly the aliases its select wrote.
+			m_owned.push_back(std::make_shared<ibTempColumn>(field.m_name, field.m_name, field.m_type, id++));
+			m_columns.push_back(m_owned.back().get());
+		}
+	}
+
+	// The storage, so a schema that names one of these columns keeps it alive past the run — the
+	// same contract the nested-subquery wrapper answers (queryable.h ShareColumn).
+	std::shared_ptr<ibBackendQueryColumn> ShareColumn(const ibBackendQueryColumn* col) const override
+	{
+		for (const std::shared_ptr<ibTempColumn>& c : m_owned)
+			if (c.get() == col) return c;
+		return nullptr;
+	}
+
+	wxString          GetQueryTableName() const override { return m_name; }
+	ibGuid            GetQueryTableGuid() const override { return m_guid; }
+	ibMetaID          GetQueryTableId()   const override { return 0; }          // not a metaobject
+	const ibMetaData* GetMetaData()       const override { return m_metaData; }
+
+	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
+	{
+		for (const ibBackendQueryColumn* c : m_columns)
+			if (c != nullptr && c->GetName() == name) return c;
+		return nullptr;
+	}
+	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_columns; }
+	bool OwnsColumn(const ibBackendQueryColumn* col) const override
+	{
+		for (const ibBackendQueryColumn* c : m_columns)
+			if (c == col) return true;
+		return false;
+	}
+
+private:
+	wxString                                 m_name;
+	ibGuid                                   m_guid;
+	std::vector<std::shared_ptr<ibTempColumn>> m_owned;    // the columns this source publishes — minted here, SHARED so a reader may keep one
+	std::vector<const ibBackendQueryColumn*> m_columns;    // …and the same ones as the interface hands them out
+	const ibMetaData*                        m_metaData;
+};
+
 #endif // __TEMP_TABLE_QUERYABLE_H__

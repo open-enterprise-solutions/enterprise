@@ -52,7 +52,10 @@ void ibValueQueryExec_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 	// of one — so Execute() is simply "the first result", and ExecuteBatch() hands back the whole
 	// array to be indexed. No branch about which kind of text this is, and no verb that sometimes
 	// returns a table and sometimes a number.
-	helper.AppendFunc(wxT("Execute"), wxT("Execute()"));
+	// Execute() takes an OPTIONAL NAME — the one a statement gave its result with ONTO. Asking by
+	// name is the point of that word: a position changes the moment somebody inserts a statement
+	// above it, a name does not. Same verb, because it is the same act.
+	helper.AppendFunc(wxT("Execute"), wxT("Execute([name : string])"));
 	helper.AppendFunc(wxT("ExecuteBatch"), wxT("ExecuteBatch()"));
 	// WHERE this query's temp tables live. Left unset they die with the execution; set to a
 	// TempTablesManager they outlive it and other queries attached to the same manager read them.
@@ -121,7 +124,7 @@ bool ibValueQueryExec::CallAsProc(const long lMethodNum, ibValue** paParams, con
 // table a result of ONE column and ONE row holding the number of records placed there; a drop the
 // UNDEFINED value, because a drop produces no result. The statements see each other's temp tables;
 // that is what makes a package worth writing rather than merely tidy.
-bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out)
+bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out, std::vector<wxString>* names)
 {
 	if (m_package.m_statements.empty())
 		return false;
@@ -152,6 +155,11 @@ bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out)
 				out.push_back(new ibValueQueryResult(std::move(*r.m_result), std::move(r.m_schema), r.m_hasTotals));
 			else
 				out.push_back(ibValue());   // a drop: a position with no result
+
+			// The name travels ALONGSIDE, in step with the results — an unnamed statement keeps its
+			// place with an empty one, so a position and a name never disagree about which is which.
+			if (names != nullptr)
+				names->push_back(r.m_name);
 		}
 		return true;
 	}
@@ -168,13 +176,33 @@ bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out)
 }
 
 bool ibValueQueryExec::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
-                                  ibValue** /*paParams*/, const long /*lSizeArray*/)
+                                  ibValue** paParams, const long lSizeArray)
 {
 	if (lMethodNum != enExecute && lMethodNum != enExecuteBatch)
 		return false;
 
+	// Execute(<name>) — the result a statement named with ONTO. Read before the run, because a name
+	// nobody wrote is a mistake in the CALL, not in the package.
+	const bool byName = lMethodNum == enExecute && lSizeArray >= 1
+	                    && paParams != nullptr && paParams[0] != nullptr && !paParams[0]->IsEmpty();
+	const wxString wanted = byName ? paParams[0]->GetString() : wxString();
+
 	std::vector<ibValue> results;
-	RunPackage(results);
+	std::vector<wxString> names;
+	RunPackage(results, &names);
+
+	if (byName) {
+		for (size_t i = 0; i < results.size() && i < names.size(); ++i) {
+			if (!names[i].IsSameAs(wanted, false))
+				continue;
+			pvarRetValue = results[i];
+			return true;
+		}
+		// SAID, NOT SHRUGGED. Handing back an empty value here is indistinguishable from a query
+		// that returned nothing, and the difference — "no such name" — is the one worth knowing.
+		ibBackendCoreException::Error(_("the query package has no result named '%s'"), wanted);
+		return false;
+	}
 
 	// ExecuteBatch() — the whole array, indexed by the position each statement was written at.
 	if (lMethodNum == enExecuteBatch) {

@@ -46,10 +46,15 @@ wxObjectDataPtr<ibBackendSpreadsheetObject> MakeDocument() {
 	return wxObjectDataPtr<ibBackendSpreadsheetObject>(new ibBackendSpreadsheetObject());
 }
 
-ibQueryLowering::OutputColumn Dim(const wxString& name) {
+// ⭐ A DIMENSION SAYS WHICH LEVEL IT BELONGS TO, and the driver reads that rather than counting
+// dimension columns — a level may be made of SEVERAL fields, so "the n-th dimension column" and
+// "the n-th level" stopped being the same number. A schema entry with no level (-1) is not a
+// dimension the layout can place, so every Dim() here names its own.
+ibQueryLowering::OutputColumn Dim(const wxString& name, int level) {
 	ibQueryLowering::OutputColumn c;
 	c.m_name = name;
 	c.m_role = ibQueryLowering::ibColumnRole::Dimension;
+	c.m_level = level;
 	return c;
 }
 
@@ -118,7 +123,7 @@ TEST(SpreadsheetCompose, DeeperLevel_IsIndentedInTheDimensionColumn)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns({ Dim(wxT("Partner")), Dim(wxT("Product")), Measure(wxT("Amount")) });
+	driver.OnColumns({ Dim(wxT("Partner"), 0), Dim(wxT("Product"), 1), Measure(wxT("Amount")) });
 	driver.OnRow(1, true,  { ibValue(wxT("Group")), ibValue(),             ibValue(100) });
 	driver.OnRow(2, false, { ibValue(),             ibValue(wxT("Leaf")), ibValue(40)  });
 	driver.OnComplete(true);
@@ -157,24 +162,59 @@ TEST(SpreadsheetCompose, EveryNonEmptyCell_CarriesItsValue)
 
 // COMPOSING TWICE REPLACES. Changing a filter and pressing Generate again is the
 // ordinary case; appending would grow a report that looks like its data doubled.
+//
+// ⭐ AND A COMPOSE IS A DRIVER. The composition builds one per run (valueDataComposition::Compose),
+// so "compose again" is a NEW driver over the same document — which is what clears it. Reusing one
+// driver means something else entirely; see the test below.
 TEST(SpreadsheetCompose, SecondCompose_ReplacesTheFirst)
+{
+	auto doc = MakeDocument();
+	{
+		ibSpreadsheetComposeDriver driver(doc.get());
+		driver.OnColumns(Schema());
+		driver.OnRow(0, false, { ibValue(wxT("Alpha")), ibValue(10) });
+		driver.OnRow(0, false, { ibValue(wxT("Beta")), ibValue(20) });
+		driver.OnComplete(false);
+		EXPECT_EQ(2, driver.GetRowsWritten());
+	}
+
+	ibSpreadsheetComposeDriver again(doc.get());
+	again.OnColumns(Schema());
+	again.OnRow(0, false, { ibValue(wxT("Gamma")), ibValue(30) });
+	again.OnComplete(false);
+
+	EXPECT_EQ(1, again.GetRowsWritten());
+	EXPECT_EQ(wxT("Gamma"), doc->GetCellValue(1, 0));
+	EXPECT_TRUE(doc->GetCellValue(2, 0).IsEmpty());   // the second row of the first run is gone
+}
+
+// ⭐ AN OUTPUT IS A SECTION OF ONE SHEET (Max). A composition hands its outputs to the SAME driver,
+// one after another, and each prints BELOW the previous one — clearing per output is what made a
+// second output erase the first. Between them go two blank lines: one reads as a row that failed to
+// print, two say "this report ended, another begins".
+TEST(SpreadsheetCompose, SecondOutput_PrintsBelowTheFirstAfterAGap)
 {
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
 	driver.OnColumns(Schema());
 	driver.OnRow(0, false, { ibValue(wxT("Alpha")), ibValue(10) });
-	driver.OnRow(0, false, { ibValue(wxT("Beta")), ibValue(20) });
 	driver.OnComplete(false);
-	EXPECT_EQ(2, driver.GetRowsWritten());
 
 	driver.OnColumns(Schema());
 	driver.OnRow(0, false, { ibValue(wxT("Gamma")), ibValue(30) });
 	driver.OnComplete(false);
 
-	EXPECT_EQ(1, driver.GetRowsWritten());
-	EXPECT_EQ(wxT("Gamma"), doc->GetCellValue(1, 0));
-	EXPECT_TRUE(doc->GetCellValue(2, 0).IsEmpty());   // the second row of the first run is gone
+	// The first section stayed where it was.
+	EXPECT_EQ(wxT("Partner"), doc->GetCellValue(0, 0));
+	EXPECT_EQ(wxT("Alpha"),   doc->GetCellValue(1, 0));
+	// …then the gap, then the second section's own header and row.
+	EXPECT_TRUE(doc->GetCellValue(2, 0).IsEmpty());
+	EXPECT_TRUE(doc->GetCellValue(3, 0).IsEmpty());
+	EXPECT_EQ(wxT("Partner"), doc->GetCellValue(4, 0));
+	EXPECT_EQ(wxT("Gamma"),   doc->GetCellValue(5, 0));
+	// The count is the REPORT's, not the section's — both rows are on the sheet.
+	EXPECT_EQ(2, driver.GetRowsWritten());
 }
 
 // ===========================================================================
@@ -189,7 +229,7 @@ TEST(SpreadsheetCompose, DimensionsShareOneColumn_MeasuresGetTheirOwn)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns({ Dim(wxT("Partner")), Dim(wxT("Product")), Measure(wxT("Amount")) });
+	driver.OnColumns({ Dim(wxT("Partner"), 0), Dim(wxT("Product"), 1), Measure(wxT("Amount")) });
 	driver.OnRow(1, true,  { ibValue(wxT("Alpha")), ibValue(),               ibValue(100) });
 	driver.OnRow(2, false, { ibValue(),             ibValue(wxT("Widget")), ibValue(40)  });
 	driver.OnComplete(true);
@@ -213,7 +253,7 @@ TEST(SpreadsheetCompose, RowLevels_BecomeOutlineGroups)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns({ Dim(wxT("Partner")), Measure(wxT("Amount")) });
+	driver.OnColumns({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) });
 	driver.OnRow(1, true,  { ibValue(wxT("Alpha")), ibValue(100) });
 	driver.OnRow(2, false, { ibValue(wxT("Widget")), ibValue(40) });
 	driver.OnComplete(true);
@@ -251,4 +291,61 @@ TEST(SpreadsheetCompose, Columns_AreSizedFromTheirContent)
 	driver.OnComplete(false);
 
 	EXPECT_GT(doc->GetColSize(0), doc->GetColSize(1));
+}
+
+// ⭐ THE GRAND TOTAL IS WRITTEN LAST, whatever order it ARRIVES in. The fold's walk is pre-order,
+// so the root — the row standing for everything — is handed over BEFORE the first heading; printed
+// where it arrives it sits above the column titles' first group, which is not where a reader looks
+// for the sum of a report (Max, 2026-08-21: "the totals must always be at the end").
+TEST(SpreadsheetCompose, GrandTotal_ArrivesFirstAndIsPrintedLast)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnColumns({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) });
+	driver.OnRow(0, true,  { ibValue(),             ibValue(140) });   // the root — everything
+	driver.OnRow(1, true,  { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnRow(1, true,  { ibValue(wxT("Beta")),  ibValue(40)  });
+	driver.OnComplete(true);
+
+	// Row 0 is the header; the two groups follow; the total closes the section.
+	EXPECT_EQ(wxT("Partner"), doc->GetCellValue(0, 0));
+	EXPECT_TRUE(doc->GetCellValue(1, 0).EndsWith(wxT("Alpha")));
+	EXPECT_TRUE(doc->GetCellValue(2, 0).EndsWith(wxT("Beta")));
+	EXPECT_EQ(wxT("140"), doc->GetCellValue(3, 1));
+	EXPECT_FALSE(doc->GetCellValue(3, 0).IsEmpty());   // and it says what it is
+}
+
+// …AND ITS CAPTION STAYS INSIDE THE DIMENSION AREA. With no dimensions there IS no such area —
+// resources and no grouping is one row over everything — so column 0 holds a FIGURE, and writing
+// the word "Total" into it would replace the first number with a caption.
+TEST(SpreadsheetCompose, GrandTotalWithNoDimensions_WritesFiguresOnly)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnColumns({ Measure(wxT("Amount")), Measure(wxT("Count")) });
+	driver.OnRow(0, true, { ibValue(140), ibValue(2) });
+	driver.OnComplete(true);
+
+	EXPECT_EQ(wxT("140"), doc->GetCellValue(1, 0));
+	EXPECT_EQ(wxT("2"),   doc->GetCellValue(1, 1));
+}
+
+// A GROUP HEADING CARRIES ITS OWN FIGURES and there is no "Total …" line under it: the heading IS
+// the group's total, and repeating it a row below says the same thing twice (Max, 2026-08-22: "you
+// already have the resource there — it is not readable"). Only the grand total stands alone.
+TEST(SpreadsheetCompose, NoPerGroupTotalLine_TheHeadingCarriesTheFigures)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnColumns({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) });
+	driver.OnRow(1, true,  { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnRow(2, false, { ibValue(),             ibValue(60)  });
+	driver.OnRow(2, false, { ibValue(),             ibValue(40)  });
+	driver.OnComplete(true);
+
+	EXPECT_EQ(wxT("100"), doc->GetCellValue(1, 1));   // the heading's own figure
+	EXPECT_EQ(3, driver.GetRowsWritten());            // heading + two rows, and nothing else
 }

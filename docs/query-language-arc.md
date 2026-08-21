@@ -3680,6 +3680,31 @@ DETAIL is read in is the order the report comes out in — at every level. `Exec
 apply `ORDER BY` at all, so a sort set in the settings changed the query text and nothing else
 (2026-08-20).
 
+### A resource is named after its argument — so the name is made UNIQUE (2026-08-22)
+
+`SUM(Amount)` reads back as `Amount`: the resource takes its argument's identifier, which is what a
+report wants to print and what `res["Amount"]` should find. It is also how one name came to stand
+for two columns.
+
+* **A grouping and a resource over the SAME field.** `TOTALS SUM(Amount) BY Amount` puts two entries
+  named `Amount` in the output schema — two identical captions on the sheet, and a read by name
+  taking whichever came first (seen live).
+* **Two resources over one field.** `TOTALS SUM(Amount), COUNT(Amount)` is worse than a naming
+  problem: the fold rolls every aggregate **in place**, into the slot keyed by its INPUT column, so
+  the second wrote where the first wrote and the report printed one figure under two headings.
+
+Both are answered where the schema is built (`ExecuteTotals`):
+
+1. **The name is qualified when it is taken** — the first claimant keeps the plain `Amount`, the
+   next becomes `SUMAmount`, and a counter settles anything past that. Nothing that reads a report
+   by its resource's name changes.
+2. **A repeat input is projected again under a synthetic alias** (`agg<N>`), through the same road a
+   COMPUTED resource already takes. A projection of its own gives it a column of its own, and a
+   column of its own is a slot of its own.
+
+Pinned from both sides in `QueryTotals.TwoAggregatesOverOneColumnNeedTwoColumns` — the workaround is
+only right if the trap it works around is real.
+
 ### The order of the tables is the engine's business
 
 A link may only relate tables already read, because sources are joined left to right. Written
@@ -3739,3 +3764,154 @@ Three properties make it a field rather than a workaround:
 * the periodicity shorthand on turnovers (`…Turnovers(&From, &To, Month)`) is still refused by the
   lowering — see [register-totals-strategy.md](register-totals-strategy.md);
 * a filter structure written in script code does not yet convert into the same condition.
+
+---
+
+## § 24. A TOTALS level of several fields, and ONTO (2026-08-21)
+
+### 24.1 `BY (a, b)` — one level, several fields
+
+`TOTALS SUM(Amount) BY (Partner, Contract) AS Party, Store` is TWO levels: the bracketed pair is a
+single heading whose key is the TUPLE of both. Outside the bracket a comma separates LEVELS, as it
+always did, so **no query written before this changes meaning or spelling** — a lone field needs no
+bracket and is not given one by the renderer.
+
+The unfold belongs to the FIELD (`BY (Store HIERARCHY, Partner)` parses), because a level may take
+one field through a hierarchy and the next one flat. The LOWERING refuses that combination with a
+sentence: a hierarchy walks one parent chain and a tuple key has none. Refused where it is written
+rather than folded into plain grouping, which is not what the word asks for.
+
+Carried through every tier: `ibQueryTotalDim` holds `m_fields` (+ the level's alias), `ibTotalLevel`
+holds `m_fields`, and the RAM fold groups by an `ibLevelKey` (the tuple) — hashed in 64 bits and
+folded down at the end, because on a 32-bit build mixing IN `size_t` throws away half of every
+value's hash. `OutputColumn::m_level` states which level a dimension column belongs to, so a printer
+never has to count columns as if they were levels (the bug that made the last level disappear).
+
+Tests: `test_queryL4Parser` (bracketed level, per-field unfold), and the round-trip generator now
+produces multi-field levels — its own test asserts that it does.
+
+### 24.2 `ONTO <name>` — naming a result
+
+Written where `INTO` is written, and the PAIR to it rather than a synonym:
+
+| | `INTO <name>` | `ONTO <name>` |
+|---|---|---|
+| what it makes | a temporary table later statements read | a NAME for the result this statement returns |
+| what comes back | the ROW COUNT | the result itself |
+
+The two are mutually exclusive and saying both is refused: an `INTO` statement returns no result, so
+naming that result names nothing.
+
+Why it exists: a reader asks the package for `"Sales"` instead of "the third statement" — a position
+is exactly what changes when somebody inserts a statement above it. `PackageResult::m_name` carries
+it out; in script `Execute("Sales")` returns that result, and an unknown name raises with a sentence
+instead of answering an empty value. The constructor gained a fourth statement kind (*select under a
+name*) with its own uniqueness check.
+
+### 24.3 Where this is going: packages INSTEAD of "data sets"
+
+Mature composition systems grow a parallel world — data sets, links between sets, set parameters —
+because their query language was never let in. Ours already says all of it:
+
+| there | here |
+|---|---|
+| data set | a statement of the package |
+| a set's temporary table | `INTO` |
+| a named set an output shows | `ONTO` |
+| an external table parameter | `FROM &Table` |
+| **links between sets** | an ordinary `JOIN` / `IN (…)` over named results |
+
+⏳ NOT BUILT YET (the direction, 2026-08-21): a name given by `ONTO` becomes a SOURCE — `FROM Sales
+AS S INNER JOIN Plan AS P ON …` — rendered as `WITH Sales AS (…), Plan AS (…)`, so the set is
+described once, referred to several times, and the DBMS sees it is one thing. That removes the need
+for a link editor entirely: a link is a join.
+
+⚠ Measured 2026-08-21: `INTO` today drains its result INTO MEMORY (`DrainIntoSnapshot` →
+`ibQueryRamTable`), so joining two package tables happens HERE, not in the DBMS. Real server-side
+temporaries are their own arc, and Firebird is the constraint: its global temporary tables must
+exist in the schema BEFORE the run — either declared `sys_` tables or nothing.
+
+**The name of the mechanism (Max, 2026-08-21): QUERY RESULT LINKS.**
+Not "data set links": there are no data sets here, there are statements of a package and the names
+their results carry. A link is a condition between two named results, and it is spelled as the
+language already spells conditions.
+
+### 24.4 Result links — BUILT (2026-08-21)
+
+`ONTO` is a PERMISSION as much as a name: a statement without it returns its result and cannot be
+referred to; a named one may stand in a later statement's `FROM`, and standing there IS the link.
+
+A bare one-segment source whose name matches an earlier statement's `ONTO` is a link — in the FROM
+and in every join alike. `FROM &Table` is never a candidate: the sigil already says where that one
+comes from.
+
+Nothing new was needed for the link itself: it is an ordinary `JOIN` with its ordinary kinds, and in
+the constructor the ordinary links tab (which appears from the second source), plus a tab of its own
+for links between named results (query-constructor.md §8a). The catalogue lists named results in
+their own group, apart from temporary tables — in a FROM they behave alike, to a person they are
+different things.
+
+**WHERE THE NAME IS RESOLVED — and the correction that matters.** The first cut resolved it in
+`ExecutePackage`, by cloning the named statement's select into the reader's FROM as a nested source.
+That is one line of code and one execution model, and the model is not the one the shape suggests:
+a nested source is `ibSubqueryQueryable`, which is **computed in RAM by construction**
+(`IsComputedInRam() == true`) — its rows come back to us and the join happens HERE, either as a RAM
+stitch or (inner join, explicit keys, a worthwhile row count) through a real DB temp table. So the
+first description of this feature — "the DBMS does the joining, nothing is materialised" — was
+wrong, and it was wrong because it was reasoned from the SQL the query looks like rather than
+measured against the tier that runs it.
+
+Resolution now lives in the LOWERING, where both roads are visible (§24.4a).
+
+### 24.4a `WITH` — a named query the server reads (2026-08-21)
+
+**The capability (L2).** `ibQueryCte { name, query }` on `ibQueryIR::m_with`; the renderer writes
+`WITH a AS (…), b AS (…) SELECT …` — the named queries FIRST, which is also what puts their bind
+parameters first, in the order the driver binds them. A dialect without CTEs is REFUSED with a
+sentence rather than rewritten: inlining a named query as a nested source is a different tree, and
+choosing it is the business of the tier that built the query (the same rule `OVER` follows).
+`ibSqlFeatures::m_cte`: Firebird 2.1+, PostgreSQL, SQLite 3.8.3+ — the ANSI baseline (ODBC) no.
+Asked as a QUESTION — `ibCanUseCte(layer)` — never by reading the dictionary.
+
+**The producer (L3).** `ibDataQueryBuilder::With(name, innerDoor)` records a named query; the spec
+carries the list; `ibDbTableProvider::AttachNamedQueries` lowers each through the ordinary road —
+its own spec through `BuildPageIR` — and puts the resulting RELATION on the same IR. A CTE is a
+query that ended up written in a different place; nothing about building one changed. A named query
+that declares its own travels ahead of it, since an engine reads the list top to bottom.
+
+**The source.** `ibCteQueryable` — a NAME in SQL with declared columns, read by the ordinary
+physical scan (it does not override `GetProvider`), the third member of the family beside
+`ibDbTempTableQueryable` and `ibSchemaTableQueryable`. It is deliberately NOT a flag on the
+subquery wrapper: same shape, opposite execution. Its columns are minted from the inner query's
+output schema (name + type), and it answers the new base question `ShareColumn` so a schema that
+names one of them keeps it alive past the run.
+
+**The choice (L4).** The package installs `ibNamedResultScope` — the names it has declared so far,
+thread-local and RAII-scoped, exactly like `ibTempSourceScope` — and `ResolveFrom` decides per
+source: declare it (`With` + `ibCteQueryable`) when the connected engine can read a named query and
+the named select has a server-side form, otherwise take its rows as before. The old road is the
+fallback, not a deleted one — which is what makes this change safe on a driver without `WITH`.
+
+Sent back to the rows road, deliberately: a named query with `TOTALS` (a tree, which no CTE
+carries), with `UNION`, with a JOIN of its own (this road builds a single-source inner door), or
+whose own source is computed in RAM (a register slice, a temp table we filled — there is no SQL to
+declare).
+
+Tests: `test_queryRenderer` (bind order, declaration order, the refusal, and that every production
+dialect advertises it).
+
+### 24.5 Totals folded by the DBMS — CONNECTED (2026-08-21)
+
+The push-down existed (`CanPushRollupTotals` / `ExecuteRollupTotals`, and the co-located variant) and
+the composition never reached it: everything under `TOTALS` came back as DETAIL rows and was folded
+in memory. Now the lowering ASKS first (`ibQueryComposer::TryFoldTotalsInDbms`), and where the shape
+and the driver allow it the levels are computed as `GROUP BY ROLLUP` — only aggregated rows travel,
+and the result carries the finished tree (`ibDataQueryResult::SetReadyTree`, walked by the selector
+instead of draining a cursor).
+
+Refused where it would change the ANSWER rather than the cost: `TOP` bounds the detail rows the fold
+runs over, `FOR UPDATE` must touch the rows it locks. SQLite has no ROLLUP and keeps the RAM fold,
+which is also the oracle the pushed-down numbers are checked against.
+
+⚠ The lesson, written down because it repeats: half of what this arc "needed" was already in the
+tree and unconnected. Ask what exists before designing.

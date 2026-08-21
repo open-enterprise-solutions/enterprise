@@ -695,3 +695,73 @@ TEST(QueryRenderer, Window_RefusedWhereTheEngineHasNone)
 	EXPECT_THROW(ibQueryRenderer(ansi).Render(ibQueryIR(ibProject(ibScan(wxT("Reg7_T")), proj))),
 	             ibBackendQueryException);
 }
+
+// ===========================================================================
+//  WITH — a named query, written once and read by name (2026-08-21)
+// ===========================================================================
+
+// ⭐ The shape a PACKAGE already speaks: a statement NAMES its result and later statements read it.
+// Substituting that statement's text at every mention costs a second execution the moment there are
+// two mentions; `WITH Sales AS (…)` says it once and every mention is a name.
+//
+// The pin that matters most is the BIND ORDER: the named queries render BEFORE the main select, so
+// their parameters take the first placeholders — the order the driver binds in. A CTE written after
+// the select would have its values bound to the select's markers, which is silent wrong data rather
+// than an error.
+TEST(QueryRenderer, With_NamedQueriesComeFirstAndSoDoTheirBinds)
+{
+	ibQueryIR ir(
+		ibFilter(ibScan(wxT("Sales")),
+		         ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("Partner")), ibConst(ibValue(wxString(wxT("BETA")))))));
+	ir.m_with.push_back({ wxT("Sales"),
+		ibFilter(ibScan(wxT("Document_Sales")),
+		         ibBinOp(ibQueryBinOp::Gt, ibCol(wxT("Amount")), ibConst(ibValue(ibNumber(100))))) });
+
+	const ibRenderedQuery out = ibQueryRenderer(PgDialect()).Render(ir);
+	const std::string sql = Sql(out);
+	EXPECT_NE(sql.find("WITH "), std::string::npos) << sql;
+	// The named query stands before the select that reads it…
+	EXPECT_LT(sql.find("WITH "), sql.find("FROM Sales")) << sql;
+	EXPECT_NE(sql.find("AS (SELECT * FROM Document_Sales"), std::string::npos) << sql;
+
+	// …and so do its binds: the CTE's value is placeholder 1, the outer WHERE's is 2.
+	ASSERT_EQ(out.m_params.size(), 2u);
+	EXPECT_EQ(out.m_params[0].m_value.GetString(), wxT("100"));
+	EXPECT_EQ(out.m_params[1].m_value.GetString(), wxT("BETA"));
+}
+
+// TWO NAMED QUERIES, in the order they were declared — an engine reads them top to bottom, so one
+// that mentions another has to come after it. The list keeps the caller's order and does not sort.
+TEST(QueryRenderer, With_KeepsTheDeclaredOrder)
+{
+	ibQueryIR ir(ibScan(wxT("Second")));
+	ir.m_with.push_back({ wxT("First"),  ibScan(wxT("A")) });
+	ir.m_with.push_back({ wxT("Second"), ibScan(wxT("First")) });
+
+	const std::string sql = Sql(ibQueryRenderer(SqliteDialect()).Render(ir));
+	ASSERT_NE(sql.find("First"), std::string::npos) << sql;
+	EXPECT_LT(sql.find("First"), sql.find("Second")) << sql;
+	EXPECT_NE(sql.find("WITH First AS (SELECT * FROM A), Second AS (SELECT * FROM First)"), std::string::npos) << sql;
+}
+
+// AN ENGINE WITHOUT `WITH` IS REFUSED, NOT REWRITTEN. Inlining the named query as a nested source
+// would be L2 answering a question about the query's SHAPE — which belongs to the tier that built
+// it, the same rule the OVER clause follows. The ANSI baseline is the live case (ODBC).
+TEST(QueryRenderer, With_RefusedWhereTheEngineHasNone)
+{
+	const ibDialectDictionary ansi;
+	ASSERT_FALSE(ansi.m_features.m_cte);
+
+	ibQueryIR ir(ibScan(wxT("Sales")));
+	ir.m_with.push_back({ wxT("Sales"), ibScan(wxT("Document_Sales")) });
+	EXPECT_THROW(ibQueryRenderer(ansi).Render(ir), ibBackendQueryException);
+}
+
+// …and the engines that DO have it say so — the flag is read by the renderer, and by the tier that
+// decides whether a named result may travel as a CTE at all.
+TEST(QueryRenderer, With_EveryProductionDialectHasIt)
+{
+	EXPECT_TRUE(PgDialect().m_features.m_cte);
+	EXPECT_TRUE(FbDialect().m_features.m_cte);        // FB 2.1+
+	EXPECT_TRUE(SqliteDialect().m_features.m_cte);    // SQLite 3.8.3+
+}

@@ -47,6 +47,21 @@ ibDataQueryBuilder& ibDataQueryBuilder::From(const ibBackendQueryable* queryable
 	return *this;
 }
 
+// A NAMED QUERY this statement declares. The inner door is copied whole — it is an ordinary door,
+// and what makes it a CTE is being declared here rather than executed on its own.
+ibDataQueryBuilder& ibDataQueryBuilder::With(const wxString& name, const ibDataQueryBuilder& inner)
+{
+	if (name.IsEmpty())
+		return *this;   // a nameless declaration cannot be read back — nothing to say
+	// DECLARED ONCE. Two declarations of one name is a query the engine refuses, and the caller that
+	// mentions a result twice means one declaration, not two.
+	for (const ibNamedQuery& declared : m_with)
+		if (declared.m_name.IsSameAs(name, false))
+			return *this;
+	m_with.push_back({ name, std::make_shared<ibDataQueryBuilder>(inner) });
+	return *this;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
 	const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	ibQueryJoinKind kind, const wxString& alias)
@@ -360,10 +375,32 @@ ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
 	return *this;
 }
 
+ibDataQueryBuilder& ibDataQueryBuilder::TotalByLevel(ibTotalLevel level)
+{
+	// A level with no field is not a level. Fields with no column are dropped here rather than
+	// downstream, where a null column reads as "group everything into one" — the opposite answer.
+	level.m_fields.erase(std::remove_if(level.m_fields.begin(), level.m_fields.end(),
+		[](const ibTotalField& f) { return f.m_col == nullptr; }), level.m_fields.end());
+	if (!level.m_fields.empty()) m_totals.push_back(std::move(level));
+	return *this;
+}
+
+// ⭐ THE DETAIL LEVEL — the rows themselves, under the deepest heading. It IS an empty level in the
+// config (the fold reads "no fields" as "no group here"), and it has a verb of its own because the
+// guard above must keep refusing an empty level that arrived by ACCIDENT: a level whose fields all
+// failed to resolve is a level that did not resolve, not a request for detail rows. One shape
+// downstream, two intents upstream, and no way to mistake the second for the first.
+//
+// Goes LAST, always — there is nothing to group below the rows.
+ibDataQueryBuilder& ibDataQueryBuilder::TotalsDetails()
+{
+	m_totals.push_back(ibTotalLevel{});
+	return *this;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const ibBackendQueryColumn* col, ibDimensionKind dim)
 {
-	if (col != nullptr) m_totals.push_back(ibTotalLevel{ col, dim });
-	return *this;
+	return TotalByLevel(ibTotalLevel::One(col, dim));
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const std::vector<const ibBackendQueryColumn*>& path, ibDimensionKind dim)
@@ -377,17 +414,24 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const std::vector<const ibBacken
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::TotalByDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
+ibTotalField ibDataQueryBuilder::DeclareDimDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
 	const ibBackendQueryColumn* dimCol, const wxString& alias, ibDimensionKind dim)
 {
-	if (path.size() < 2 || dimCol == nullptr) return *this;
+	if (path.size() < 2 || dimCol == nullptr) return ibTotalField{ nullptr, dim };
 	m_dimWalks.push_back(ibDotWalkColumn{ path, alias });    // provider projects the leaf under `alias`
-	m_totals.push_back(ibTotalLevel{ dimCol, dim });         // fold groups by dimCol's OWN unique model id
 	// A NON-SCALAR leaf is projected as a SPREAD under that alias and reassembles on the read — the
 	// result has to be told, because only this call knows both halves (see StampResult).
 	if (!path.back()->IsRawColumn())
 		m_dimObjectReads.push_back({ dimCol->GetColumnId(), alias, path.back() });
-	return *this;
+	return ibTotalField{ dimCol, dim };                      // fold groups by dimCol's OWN unique model id
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::TotalByDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
+	const ibBackendQueryColumn* dimCol, const wxString& alias, ibDimensionKind dim)
+{
+	const ibTotalField field = DeclareDimDotWalk(path, dimCol, alias, dim);
+	ibTotalLevel level; level.m_fields.push_back(field);
+	return TotalByLevel(std::move(level));
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Having(AggregateFn fn,
@@ -526,6 +570,7 @@ ibDataQuerySpec ibDataQueryBuilder::BuildSpec() const
 	spec.m_dimWalks    = &m_dimWalks;
 	spec.m_selectExprs = &m_selectExprs;
 	spec.m_selectCols  = &m_selectCols;
+	spec.m_with        = &m_with;       // the named queries this statement declares
 	spec.m_distinct    = m_distinct;
 	spec.m_topCount    = m_top;
 	return spec;
@@ -548,7 +593,8 @@ std::vector<const ibBackendQueryColumn*> ibDataQueryBuilder::MaterialiseColumns(
 	for (const auto& sc : m_selectCols)              add(sc.first);
 	for (const AggregateItem& a : m_aggregates)       add(a.m_col);
 	for (const AggregateItem& a : m_totalAggregates)  add(a.m_col);   // totals aggregates roll from the snapshot
-	for (const ibTotalLevel&  t : m_totals)           add(t.m_col);   // TotalBy dimension fields
+	for (const ibTotalLevel&  t : m_totals)                            // TotalBy dimension fields
+		for (const ibTotalField& f : t.m_fields)      add(f.m_col);   // every field of every level
 	return cols;
 }
 
@@ -707,6 +753,42 @@ ibDataQueryResult ibDataQueryBuilder::SelectAggregatePage(const ibReadPageReques
 
 // GUARDED TOO, though nothing calls it today. A read terminal with no policy on it is a loaded gun:
 // the first caller gets an unchecked read and no one notices, because nothing looks wrong.
+// ⭐ THE TOTALS, FOLDED BY THE DBMS — as a RESULT rather than as a bare tree, so a caller that
+// speaks in results (the query lowering, and therefore every composition) can use the push-down it
+// could not reach before.
+//
+// True only when the shape actually pushes down: single source, real DB queryable, keys the dialect
+// can group by, and a driver that folds levels itself (Firebird 5 / PostgreSQL; SQLite does not).
+// Anywhere else this answers false and the caller reads and folds as it always did — the two paths
+// produce the same tree, so which one ran is a question of cost, never of the number.
+bool ibDataQueryBuilder::TryTotalsPushdown(ibDataQueryResult& out) const
+{
+	if (m_policy != nullptr) {
+		// A policy narrows the read, and its decorator belongs to the paths that already carry it —
+		// pushing down under it would need the same check twice, in two spellings.
+		return false;
+	}
+	// DETAIL ROWS WERE ASKED FOR (a level with no fields), and a server-side fold returns none —
+	// `GROUP BY ROLLUP` sends back the aggregated rows and nothing else. Refused here as well as
+	// upstream, so a caller that stamps the level through some other road cannot lose the rows
+	// quietly: the answer would look right and be missing everything under the last heading.
+	for (const ibTotalLevel& level : m_totals)
+		if (level.m_fields.empty())
+			return false;
+
+	// ⚠ WHETHER it pushes down is asked of the COMPOSER, not decided here: this file deliberately
+	// knows no L2 and no provider internals, and "can this dialect fold levels" is exactly such a
+	// question. The door asks; the tier that owns the answer answers.
+	ibSelectorTree folded;
+	if (!ibQueryComposer::TryFoldTotalsInDbms(BuildSpec(), folded))
+		return false;
+
+	out = ibMakeEmptyQueryResult(m_queryable);
+	out.SetTotals(m_totals, m_totalAggregates, m_totalsOverall);
+	out.SetReadyTree(std::move(folded));
+	return true;
+}
+
 ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 {
 	if (m_policy != nullptr) {

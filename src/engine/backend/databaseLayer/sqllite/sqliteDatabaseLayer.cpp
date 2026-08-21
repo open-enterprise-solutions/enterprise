@@ -20,6 +20,7 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 		d.m_pagination = ibPagination::LimitOffset;  // LIMIT n OFFSET m
 		d.m_boolForm   = ibBoolForm::OneZero;
 		d.m_features.m_window = true;                 // SQLite 3.25+
+		d.m_features.m_cte    = true;                 // WITH … AS (…) — SQLite 3.8.3+
 		d.m_features.m_multiRowValues = true;         // INSERT … VALUES (…), (…) — SQLite 3.7.11+
 		d.m_alterColumnTemplate = wxEmptyString;      // no in-place type change -> renderer throws
 		d.m_alterTableMultiClause = false;            // one ADD/DROP per ALTER — the structure builder splits batches

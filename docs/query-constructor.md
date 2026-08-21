@@ -1298,3 +1298,75 @@ the constructor has run, and takes it back.
   text, and everything in the text must survive a trip through the constructor. The AST is
   the single source; a "constructor-only" setting would be a second currency.
 - **A hand-written list of metatypes.** See § 4.
+
+---
+
+## § 8. Two constructions the window learnt (2026-08-21)
+
+**A totals level of several fields.** The Totals tab's level cell now edits the level's FIELD LIST —
+`Partner, Contract` is one level over both, the same spelling the query text uses inside its
+brackets. The kind cell speaks for the level's head field and refuses a hierarchy on a level of
+several fields, with the reason, where the choice is made. Removing a table drops the fields it
+broke out of a level and only then the level itself, if nothing is left.
+
+**`ONTO` — a fourth statement kind.** The kind box reads *Select · Create a temporary table · Drop a
+temporary table · **Select under a name***, over ONE name field (which name it becomes is what the
+kind says). The package list shows it as "selects as <name>", and the name is checked for uniqueness
+as it is typed — results are asked for by name, so two the same make one unreachable.
+
+## § 8a. Selection links — the tenth tab (2026-08-21)
+
+A named result is now a **source**: `ONTO` names what a statement produces. The tenth tab is where
+two of those names are related — and after several reshapes Max settled what a link IS:
+
+> *"just a named area, over which we then set the links… no temporary tables at all, neither named
+> nor unnamed. The fields we already see from the selection. I want the FINAL query simply run
+> through the links."*
+
+**A LINK BELONGS TO THE PACKAGE, in a list of its own** (`ibQueryPackage::m_links`) — not to any
+statement. Adding one adds NOTHING else: no source in anybody's `FROM`, no statement, no temp table.
+Three shapes were tried and rejected before this one, each because it made the package hold
+something nobody asked for — an auto-created reader statement, a named result shown in the
+catalogue, a temp table minted per link.
+
+**What it writes** is a construction of its own, recognised by POSITION rather than by a new
+keyword (nothing was added to the lexer):
+
+```
+JOIN
+    Sales
+    AND Payments
+    ON Sales.Partner = Payments.Partner
+```
+
+Written after the statements, one per link, `[INNER|LEFT|RIGHT|FULL]` optional. `ParsePackageLink`
+reads it, `ibRenderQueryPackage` writes it back, and the package's FINAL query is assembled from the
+links at execution time (`ExecutePackage`: place each link when both its names are known, AND a
+second condition into an existing join, refuse a link that relates nothing else in the package).
+
+**The grid is its own model** (`ibQuerySelectionLinkModel`, over `m_links`) — five cells: selection ·
+all · selection · all · condition. There is **no *Arbitrary* column**, unlike the Links tab: between
+two selections every link is written by hand, so the flag would say "yes" on every row and refuse
+every click.
+
+**The tab does not follow the statement you stand in** (Max: they are common, exactly as the batch
+is — you see batch one, batch two, and set the links between them). The statement / branch STRIPS
+are hidden here, as they are on *Query batch*: "which statement am I editing" is not a question this
+tab has.
+
+**The names it offers** are every name the package declares with `ONTO` (`NamedResults`), minus the
+one standing on the other side of the row being edited. The ready conditions are the cross pairs of
+the two selections' own fields — they are the projections of the statements that named them, so
+there is a list to offer and no reason to make a person type it.
+
+**When it appears.** The package has two or more named results (`Page::m_needsNamedResults`, counted
+by `NamedResultCount`) — a link relates two of them, so with fewer the tab is a control over nothing.
+
+**A kind proposes its own name.** Switching a statement from *temporary table* to *select under a
+name* used to leave `TempTable1` in the box — it was not empty, so nothing re-proposed — and the
+catalogue then showed a RESULT called `TempTable1`. A name this window minted is recognisable by its
+own pattern and is re-minted for the new kind; a name the author typed is theirs and is kept.
+
+**How it RUNS is the lowering's decision, not the tab's.** On an engine that reads a named query the
+two results are declared (`WITH Sales AS (…)`) and the server does the join; on one that cannot,
+their rows are read and the join is ours. See query-language-arc.md § 24.4 / § 24.4a.

@@ -341,6 +341,182 @@ namespace {
 const ibClassID g_variantNodeClsid = make_clsid(wxT("CompositionVariant"), ibClassKind_None);
 const wxString  kVariantName       = wxT("Name");
 const wxString  kActiveVariant     = wxT("ActiveVariant");
+
+// ---------------------------------------------------------------------------
+// THE STRUCTURE OF A VARIANT — its outputs, their levels, and the fields inside them.
+//
+// The flat filter / sort / grouping a variant has always written cannot say any of this: a level
+// made of several fields is indistinguishable there from several levels, and an output beside the
+// first — or an axis of columns — has nowhere to go at all. So the structure is written as itself,
+// beside the settings rather than instead of them.
+//
+// Without it everything the settings window builds lives until the file is closed and no further,
+// which is exactly what "external reports do not serialise their groupings" was.
+// ---------------------------------------------------------------------------
+const ibClassID g_outputNodeClsid = make_clsid(wxT("CompositionOutput"), ibClassKind_None);
+const ibClassID g_levelNodeClsid  = make_clsid(wxT("CompositionLevel"),  ibClassKind_None);
+const ibClassID g_fieldNodeClsid  = make_clsid(wxT("CompositionField"),  ibClassKind_None);
+const wxString  kStructureNode  = wxT("Structure");
+const wxString  kRowsNode       = wxT("Rows");
+const wxString  kColumnsNode    = wxT("Columns");
+const wxString  kSelectedNode   = wxT("Selected");
+const wxString  kAvailableNode  = wxT("Available");
+const wxString  kSourceText     = wxT("Source");
+const wxString  kSelectedAuto   = wxT("SelectedAuto");
+const wxString  kAvailableAuto  = wxT("AvailableAuto");
+const wxString  kPathName       = wxT("Path");
+const wxString  kKindName       = wxT("Kind");
+// A LEVEL'S OWN SORT AND FILTER — written inside the level, because that is where they belong.
+const ibClassID g_sortNodeClsid = make_clsid(wxT("CompositionSortLine"), ibClassKind_None);
+const wxString  kSortNode       = wxT("Sort");
+const wxString  kFilterNode     = wxT("Filter");
+const wxString  kAscendingName  = wxT("Ascending");
+// WHAT THE LEVEL IS — a grouping or the detail records. Absent in a file written before detail
+// levels existed, and absence reads back as Grouping, which is what every level in such a file is.
+const wxString  kLevelKindName  = wxT("LevelKind");
+
+void WriteFieldList(ibDataNode& node, const wxString& name, const std::vector<wxString>& list)
+{
+	if (list.empty())
+		return;   // an empty set writes nothing — absence reads back as absence
+	ibDataNode& sub = node.Child(name);
+	for (size_t i = 0; i < list.size(); ++i)
+		sub.AddChild(g_fieldNodeClsid, static_cast<ibMetaID>(i)).SetValue<wxString>(kPathName, list[i]);
+}
+
+void ReadFieldList(const ibDataNode& node, const wxString& name, std::vector<wxString>& list)
+{
+	list.clear();
+	const ibDataNode* sub = node.FindChild(name);
+	if (sub == nullptr)
+		return;
+	for (const ibDataNode& child : sub->Children())
+		if (child.GetClsid() == g_fieldNodeClsid)
+			list.push_back(child.GetValue<wxString>(kPathName));
+}
+
+void WriteLevels(ibDataNode& parent, const wxString& name, const std::vector<ibDataComposer::GroupNode>& levels)
+{
+	if (levels.empty())
+		return;
+	ibDataNode& axis = parent.Child(name);
+	for (size_t i = 0; i < levels.size(); ++i) {
+		const ibDataComposer::GroupNode& level = levels[i];
+		ibDataNode& node = axis.AddChild(g_levelNodeClsid, static_cast<ibMetaID>(i));
+		node.SetValue<s32>(kLevelKindName, static_cast<s32>(level.m_kind));
+		node.SetValue<bool>(kSelectedAuto, level.m_selectedAuto);
+		node.SetValue<bool>(kAvailableAuto, level.m_availableAuto);
+		WriteFieldList(node, kSelectedNode, level.m_selected);
+		WriteFieldList(node, kAvailableNode, level.m_available);
+		// ⭐ ITS OWN SORT AND ITS OWN FILTER (Max). A level's settings live where the level does, so
+		// they are written INSIDE it: the sort as the plain list it is, the filter as the TREE it was
+		// written as — the expression the engine runs is derived from that tree and is not saved,
+		// because an expression cannot be edited back into the lines a person wrote.
+		if (!level.m_sorts.empty()) {
+			ibDataNode& order = node.Child(kSortNode);
+			for (size_t s = 0; s < level.m_sorts.size(); ++s) {
+				ibDataNode& line = order.AddChild(g_sortNodeClsid, static_cast<ibMetaID>(s));
+				line.SetValue<wxString>(kPathName, level.m_sorts[s].m_path);
+				line.SetValue<bool>(kAscendingName, level.m_sorts[s].m_ascending);
+			}
+		}
+		if (!level.m_filterTree.IsEmpty())
+			level.m_filterTree.Serialize(node.Child(kFilterNode));
+
+		// THE ELEMENTS, IN ORDER — a level groups by all of them together, and each carries its own
+		// unfold. Order is the order they are read in, so it is written as position.
+		for (size_t f = 0; f < level.m_fields.size(); ++f) {
+			ibDataNode& field = node.AddChild(g_fieldNodeClsid, static_cast<ibMetaID>(f));
+			field.SetValue<wxString>(kPathName, level.m_fields[f].m_path);
+			field.SetValue<s32>(kKindName, static_cast<s32>(level.m_fields[f].m_kind));
+		}
+	}
+}
+
+void ReadLevels(const ibDataNode& parent, const wxString& name, std::vector<ibDataComposer::GroupNode>& levels)
+{
+	levels.clear();
+	const ibDataNode* axis = parent.FindChild(name);
+	if (axis == nullptr)
+		return;
+	for (const ibDataNode& node : axis->Children()) {
+		if (node.GetClsid() != g_levelNodeClsid)
+			continue;
+		ibDataComposer::GroupNode level;
+		level.m_kind          = static_cast<ibCompositionLevelKind>(node.GetValue<s32>(kLevelKindName));
+		level.m_selectedAuto  = node.GetValue<bool>(kSelectedAuto);
+		level.m_availableAuto = node.GetValue<bool>(kAvailableAuto);
+		ReadFieldList(node, kSelectedNode, level.m_selected);
+		ReadFieldList(node, kAvailableNode, level.m_available);
+
+		// ITS OWN SORT AND FILTER, back the way they were written. The filter comes back as the
+		// TREE; the expression the engine runs is built from it once the composer is in hand
+		// (RebuildLevelFilters), because building it needs the parameters the composer names.
+		if (const ibDataNode* order = node.FindChild(kSortNode))
+			for (const ibDataNode& line : order->Children()) {
+				const wxString path = line.GetValue<wxString>(kPathName);
+				if (!path.IsEmpty())
+					level.m_sorts.push_back({ path, line.GetValue<bool>(kAscendingName) });
+			}
+		if (const ibDataNode* filter = node.FindChild(kFilterNode))
+			level.m_filterTree = ibValue::FromNode(*filter);
+
+		for (const ibDataNode& field : node.Children()) {
+			if (field.GetClsid() != g_fieldNodeClsid)
+				continue;
+			ibDataComposer::TotalByItem item;
+			item.m_path = field.GetValue<wxString>(kPathName);
+			item.m_kind = static_cast<ibQueryDimUnfold>(field.GetValue<s32>(kKindName));
+			if (!item.m_path.IsEmpty())
+				level.m_fields.push_back(item);
+		}
+		levels.push_back(std::move(level));
+	}
+}
+
+void WriteStructure(ibDataNode& node, const std::vector<ibDataComposer::Output>& outputs)
+{
+	ibDataNode& structure = node.Child(kStructureNode);
+	for (size_t i = 0; i < outputs.size(); ++i) {
+		const ibDataComposer::Output& output = outputs[i];
+		ibDataNode& sub = structure.AddChild(g_outputNodeClsid, static_cast<ibMetaID>(i));
+		sub.SetValue<wxString>(kVariantName, output.m_name);
+		sub.SetValue<wxString>(kSourceText, output.m_sourceText);
+		sub.SetValue<bool>(kSelectedAuto, output.m_selectedAuto);
+		sub.SetValue<bool>(kAvailableAuto, output.m_availableAuto);
+		WriteFieldList(sub, kSelectedNode, output.m_selected);
+		WriteFieldList(sub, kAvailableNode, output.m_available);
+		WriteLevels(sub, kRowsNode, output.m_rowGroups);
+		WriteLevels(sub, kColumnsNode, output.m_columnGroups);
+	}
+}
+
+bool ReadStructure(const ibDataNode& node, std::vector<ibDataComposer::Output>& outputs)
+{
+	const ibDataNode* structure = node.FindChild(kStructureNode);
+	if (structure == nullptr)
+		return false;   // written before there was a structure — the caller keeps what it had
+
+	std::vector<ibDataComposer::Output> read;
+	for (const ibDataNode& sub : structure->Children()) {
+		if (sub.GetClsid() != g_outputNodeClsid)
+			continue;
+		ibDataComposer::Output output;
+		output.m_name          = sub.GetValue<wxString>(kVariantName);
+		output.m_sourceText    = sub.GetValue<wxString>(kSourceText);
+		output.m_selectedAuto  = sub.GetValue<bool>(kSelectedAuto);
+		output.m_availableAuto = sub.GetValue<bool>(kAvailableAuto);
+		ReadFieldList(sub, kSelectedNode, output.m_selected);
+		ReadFieldList(sub, kAvailableNode, output.m_available);
+		ReadLevels(sub, kRowsNode, output.m_rowGroups);
+		ReadLevels(sub, kColumnsNode, output.m_columnGroups);
+		read.push_back(std::move(output));
+	}
+	if (read.empty())
+		return false;
+	outputs = std::move(read);
+	return true;
+}
 }
 
 void ibValueDataComposition::EnsureVariant()
@@ -383,6 +559,12 @@ void ibValueDataComposition::ApplyActiveVariant()
 
 	ibCommitSettingsToComposer(GetModelComposer(), snapshot);
 
+	// ⭐ THE STRUCTURE LANDS AFTER THE FLAT SETTINGS, and overrides what they rebuilt: the commit
+	// above re-creates the grouping ladder from a list that cannot hold a level of several fields,
+	// so applying the variant's own outputs last is what makes such a level survive a switch.
+	if (!m_variants[m_activeVariant].m_structure.empty())
+		GetModelComposer().Outputs() = m_variants[m_activeVariant].m_structure;
+
 	// AND THE LIVE FILTER TREE FOLLOWS — as a COPY, and through a BUFFER.
 	//
 	// 🛑 NOT `ibLoadSettingsFromComposer(live, …)`. The model's settings object is a FACADE over the
@@ -398,6 +580,31 @@ void ibValueDataComposition::ApplyActiveVariant()
 		ibLoadSettingsFromComposer(copy, GetModelComposer(), snapshot);
 		if (ibValueFilterGroup* tree = copy->GetFilterRoot())
 			live->SetFilterRoot(tree);
+	}
+
+	// …AND EVERY LEVEL'S OWN CONDITION, built from the tree it was written as. The structure that
+	// just landed carries trees, not expressions: an expression is what the engine reads and it is
+	// DERIVED, so it is made here — once, where the composer is in hand.
+	RebuildLevelFilters();
+}
+
+// THE EXPRESSION IS DERIVED FROM THE TREE, everywhere and always. A level keeps the lines a person
+// wrote (that is what reopens in the editor); the engine reads a condition built from them. So this
+// runs wherever levels ARRIVE from outside — a file, a variant switch — and nowhere else: a level
+// edited in the window commits both at once.
+void ibValueDataComposition::RebuildLevelFilters()
+{
+	ibDataComposer& composer = GetModelComposer();
+	for (ibDataComposer::Output& output : composer.Outputs()) {
+		std::vector<ibDataComposer::GroupNode>* axes[] = { &output.m_rowGroups, &output.m_columnGroups };
+		for (std::vector<ibDataComposer::GroupNode>* axis : axes)
+			for (ibDataComposer::GroupNode& level : *axis) {
+				ibValueFilterGroup* root = nullptr;
+				if (!level.m_filterTree.ConvertToValue(root) || root == nullptr)
+					continue;   // no tree written — the level simply has no condition of its own
+				level.m_filterAst = ibBuildFilterAst(composer, root);
+				++level.m_filterAstVersion;
+			}
 	}
 }
 
@@ -421,6 +628,9 @@ void ibValueDataComposition::CaptureActiveVariant()
 	EnsureVariant();
 	if (ibValueListSettings* snapshot = m_variants[m_activeVariant].m_settings)
 		ibLoadSettingsFromComposer(snapshot, GetModelComposer(), GetListSettings());
+	// THE STRUCTURE TRAVELS WITH IT. It is not expressible in the flat snapshot above — a level of
+	// several fields, a second output, an axis of columns — so it is captured as itself.
+	m_variants[m_activeVariant].m_structure = GetModelComposer().Outputs();
 }
 
 size_t ibValueDataComposition::AddVariant(const wxString& name, int copyFrom)
@@ -589,10 +799,14 @@ void ibValueDataComposition::WriteVariants(ibDataNode& node) const
 			ibValuePtr<ibValueListSettings> live(new ibValueListSettings());
 			ibLoadSettingsFromComposer(live, GetModelComposer(), GetListSettings());
 			live->WriteData(sub);
+			// …AND THE STRUCTURE, read from the composer for the same reason: the outputs it holds
+			// are the live ones, and the variant's copy beside them is the stale one.
+			WriteStructure(sub, GetModelComposer().Outputs());
 			continue;
 		}
 		if (m_variants[i].m_settings)
 			m_variants[i].m_settings->WriteData(sub);
+		WriteStructure(sub, m_variants[i].m_structure);
 	}
 }
 
@@ -610,6 +824,7 @@ bool ibValueDataComposition::ReadVariants(const ibDataNode& node)
 			variant.m_name = _("Variant");
 		variant.m_settings = new ibValueListSettings();
 		variant.m_settings->ReadData(child);
+		ReadStructure(child, variant.m_structure);   // absent in an older file — the variant simply has none
 		read.push_back(variant);
 	}
 
@@ -995,7 +1210,23 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 		driver.AddHeaderLine(path + wxT(" ") + op + wxT(" ") + value.GetString());
 	}
 
-	return composer.Run(driver);
+	// ⭐ EVERY OUTPUT PRINTS, one after another, onto the SAME sheet (Max: "you load the outputs and
+	// then run once, and it fills the drivers"). Running the first one only is what made a second
+	// output look dead: it was declared, settings and all, and never read.
+	//
+	// One driver for all of them — the document is one, and an output's block follows the previous
+	// one down the page. A driver of its own comes when an output needs a different KIND of drawing
+	// (a chart), which is a driver question, not a composition one.
+	for (ibDataComposer::Output& output : composer.Outputs())
+		output.m_driver = &driver;
+	const bool composed = composer.Run();
+
+	// The pointers do not outlive this call — the driver is a stack object, and an output holding a
+	// dangling one would be read on the next compose.
+	for (ibDataComposer::Output& output : composer.Outputs())
+		output.m_driver = nullptr;
+
+	return composed;
 }
 
 // ⭐⭐ THE COMPOSITION'S OWN FETCH — one shot, not a page.
