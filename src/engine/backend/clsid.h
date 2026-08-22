@@ -199,6 +199,20 @@ constexpr ibClassID externalManager_to_clsid     (ibClassID metaID) { return mak
 // --- stateless kind reads — no metadata, no registry, just the high byte ---
 constexpr ibClassKind clsid_kind (ibClassID c) { return static_cast<ibClassKind>(static_cast<unsigned char>(c >> 56)); }
 
+// THE INVERSE OF make_clsid_dynamic. A constructive id carries the metaID as its body, so the
+// metaobject a dynamic value names is readable straight off the bits — no ibMetaData search, no type
+// ctor. Worth having a name: a caller that already holds a reference clsid can key on the metaobject
+// WITHOUT resolving it, which is the difference between a hash probe and a metadata lookup on a path
+// that runs once per reference cell.
+//
+// ⚠ MEANINGLESS FOR A STATIC ID, whose body is a name hash. Ask the kind first (IsReference / IsObject
+// / … ) — every kind from ibClassKind_Reference up is constructive; below it, the body is a hash.
+//
+// Returns the BODY, not an ibMetaID: this header is self-contained and backend_core.h includes IT, so
+// the metaID typedef is not available here and cannot be without inverting that. The caller narrows,
+// which is where the decision belongs anyway.
+constexpr ibClassID metaID_from_clsid(ibClassID c) { return c & kIbClsidBodyMask; }
+
 constexpr bool IsReference     (ibClassID c) { return clsid_kind(c) == ibClassKind_Reference; }
 constexpr bool IsList          (ibClassID c) { return clsid_kind(c) == ibClassKind_List; }
 constexpr bool IsObject        (ibClassID c) { return clsid_kind(c) == ibClassKind_Object || clsid_kind(c) == ibClassKind_ExternalObject; }

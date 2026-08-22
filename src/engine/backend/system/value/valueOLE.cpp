@@ -456,7 +456,8 @@ IDispatch* ibValueOLE::DoCreateInstance()
 		IID_IDispatch, (void**)&pDispatch);
 
 	if (FAILED(hr)) {
-		wxLogSysError(hr, _("Failed to create an instance of \"%s\""), m_objectName);
+		ibJournalSysError(wxT("ole"), hr,
+			wxString::Format(_("Failed to create an instance of \"%s\""), m_objectName));
 		return nullptr;
 	}
 

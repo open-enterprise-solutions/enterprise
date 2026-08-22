@@ -1,5 +1,6 @@
 ﻿#include "metaData.h"
 #include "backend/objCtor.h"
+#include "backend/utils/debugTrace.h"   // ibDebugTraceEnabled — class-registration tracing is opt-in
 #include "backend/query/queryableFactory.h"   // ibMetaQueryableFactory — the per-config source factory (complete here)
 
 // The image's designer infrastructure (compile cache + its module-manager) is built by the owner metadata's
@@ -90,9 +91,12 @@ void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)
 			return;
 		}
 
-#ifdef DEBUG
-		ibJournalInfo(wxT("metadata"),"* Register class '%s' with clsid '%s:%llu' ", typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
-#endif
+		// OFF unless asked for — see the note on OES_TRACE_METAIDS in metaObject.cpp. One line per
+		// registered class is a hundred lines of "as expected" before anything interesting happens.
+		static const bool s_traceTypes = ibDebugTraceEnabled("OES_TRACE_TYPES");
+		if (s_traceTypes)
+			ibJournalInfo(wxT("metadata"), wxT("register %s -> %s"),
+				typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()));
 
 		wxASSERT(m_image);                 // registration happens only while open (image live)
 		m_image->RegisterCtor(typeCtor);   // facade: CallEvent(Register) + register
@@ -104,9 +108,13 @@ void ibMetaData::UnRegisterCtor(ibCtorMetaValueType*& typeCtor)
 {
 	if (typeCtor != nullptr && ibMetaData::IsRegisterCtor(typeCtor->GetClassType())) {
 
-#ifdef DEBUG
-		ibJournalInfo(wxT("metadata"),"* Unregister class '%s' with clsid '%s:%llu' ", typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
-#endif
+		// Behind the same gate as its twin above, and it should have been from the start: closing a
+		// configuration unregisters every class it declared, so this was a hundred lines of "as
+		// expected" at every shutdown while the REGISTER side of the same pair stayed quiet.
+		static const bool s_traceTypes = ibDebugTraceEnabled("OES_TRACE_TYPES");
+		if (s_traceTypes)
+			ibJournalInfo(wxT("metadata"), wxT("unregister %s -> %s"),
+				typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()));
 
 		// Facade: CallEvent(UnRegister) + unregister. The registry owns the ctor via
 		// shared_ptr, so this FREES it — null the caller's (by-ref) pointer so nobody

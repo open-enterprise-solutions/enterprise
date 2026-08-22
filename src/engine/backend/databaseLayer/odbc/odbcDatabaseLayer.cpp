@@ -271,6 +271,16 @@ void ibDatabaseLayerODBC::DoBeginTransaction(const ibTxOptions& opts)
 		ThrowDatabaseException();
 	}
 
+	// ONE COMMITTED STATE FOR THE WHOLE TRANSACTION — see ibDbTxOptions::snapshot. Set through the
+	// ODBC attribute rather than a dialect statement, so it holds for whatever backend is behind the
+	// driver instead of only the ones that speak the MSSQL spelling. Best-effort like the lock knob
+	// below: a driver that refuses the level leaves the transaction at its default, which is the
+	// behaviour there was before the flag existed.
+	if (opts.snapshot) {
+		m_pInterface->GetSQLSetConnectAttr()((SQLHDBC)m_sqlHDBC, SQL_ATTR_TXN_ISOLATION,
+			(SQLPOINTER)SQL_TXN_REPEATABLE_READ, 0);
+	}
+
 	// MSSQL's session-level lock-wait is set via `SET LOCK_TIMEOUT 0`.
 	// Works for any ODBC-linked MSSQL backend; other DBMSes behind ODBC
 	// ignore the statement (some error-out). Wrapped so a failing

@@ -1,6 +1,7 @@
 #include "journal.h"
 
 #include "crashGuard.h"          // the journal lives beside the dumps — same directory decision
+#include "backend/utils/debugTrace.h"   // ibDebugTraceEnabled — the house env-var switch
 
 #include <wx/datetime.h>
 #include <wx/ffile.h>
@@ -187,6 +188,18 @@ void ibTechJournal::Close()
 	}
 }
 
+void ibTechJournal::SysError(const wxString& source, long code, const wxString& message)
+{
+	// The platform's own words for the number, when it has any. wxSysErrorMsgStr answers for the
+	// LAST error on some platforms and for the given code on others; a code it cannot explain comes
+	// back empty, and then the number alone is still worth having — it is what a support forum is
+	// searched by.
+	const wxString explained = wxSysErrorMsgStr(static_cast<unsigned long>(code));
+	Write(ibJournalMark::Error, source, explained.IsEmpty()
+		? wxString::Format(wxT("%s (system code 0x%08lX)"), message, code)
+		: wxString::Format(wxT("%s (system code 0x%08lX: %s)"), message, code, explained));
+}
+
 bool ibTechJournal::IsOpen()
 {
 	return s_open.load(std::memory_order_relaxed);
@@ -234,16 +247,20 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 		s_file.Flush();               // a crash must not cost the lines that explain it
 	}
 
-	// ⭐⭐ AND TO STANDARD ERROR, so a machine with no debugger still shows the run. That is CI: the
-	// build agent has no output window to attach to, the journal file is thrown away with the
-	// container, and a failing job would otherwise print a test name and nothing about what the
-	// engine was doing when it failed. Written here rather than left to a log target because it must
-	// survive whatever wx's logging is or is not set up to do on a headless box.
+	// ⭐ AND TO STANDARD ERROR, ON REQUEST — for a machine with no debugger to attach to: a console
+	// build, a headless run, a CI job where the journal file is thrown away with the container.
 	//
-	// Harmless everywhere else: a console binary interleaves it with its own output, and a GUI
-	// binary has no console to write to, so nobody sees a thing.
-	std::fputs(line.utf8_str(), stderr);
-	std::fflush(stderr);
+	// ⚠ OFF BY DEFAULT, and that is a correction of the first shape of this. Always-on drowned the
+	// one place it was meant to help: a suite of twelve hundred tests would put every line the engine
+	// writes into the job log, and a log nobody can scroll is a log nobody reads. The file is always
+	// written; the stream is for a run that has been asked to narrate itself.
+	//
+	//     set OES_JOURNAL_STDERR=1
+	static const bool s_toStderr = ibDebugTraceEnabled("OES_JOURNAL_STDERR");
+	if (s_toStderr) {
+		std::fputs(line.utf8_str(), stderr);
+		std::fflush(stderr);
+	}
 
 	// ⭐ AND THE SAME LINE INTO THE DEBUGGER, so the two views never disagree: what is watched live
 	// is what is read afterwards, in the same words and the same order.

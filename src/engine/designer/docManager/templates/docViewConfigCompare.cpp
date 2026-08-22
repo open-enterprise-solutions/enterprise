@@ -393,14 +393,14 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 			else if (replaceOp) { ApplyReplace(rec, pull); ++applied; }
 		}
 		catch (const ibBackendException& err) {
-			wxLogMessage(wxT("[merge] %s: %s"),
+			ibJournalInfo(wxT("designer"), wxT("[merge] %s: %s"),
 				rec.GetAnyObject() != nullptr
 					? rec.GetAnyObject()->GetName()
 					: wxString(),
 				err.GetErrorDescription());
 		}
 		catch (...) {
-			wxLogMessage(wxT("[merge] unknown error on %s"),
+			ibJournalInfo(wxT("designer"), wxT("[merge] unknown error on %s"),
 				rec.GetAnyObject() != nullptr
 					? rec.GetAnyObject()->GetName()
 					: wxString());

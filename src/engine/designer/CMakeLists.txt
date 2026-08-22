@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
-file(GLOB_RECURSE DESIGNER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+# CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt.
+file(GLOB_RECURSE DESIGNER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
 # Exclude stale root-level files superseded by mainFrame/ versions
 list(REMOVE_ITEM DESIGNER_SOURCES

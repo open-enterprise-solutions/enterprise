@@ -19,6 +19,29 @@ class BACKEND_API ibValueRecordDataObjectRef;
 
 //********************************************************************************************
 
+// ⭐ HOW MUCH OF THE ROW IS WANTED NOW — the one axis the creation doors actually differ on, said as
+// a type instead of as a function name and a bool. Three names used to carry this: `CreateRaw` read
+// nothing, `CreateFromPtr` read without settling, `Create` read and settled — and none of the three
+// names mentioned reading at all.
+enum class ibReferenceLoad {
+	// Read nothing now; the row loads the first time somebody asks what this reference is. REQUIRED
+	// on the value-ctor path (ibCtorMetaValueTypeReference::CreateObject): reading there recurses —
+	// the row's attributes are themselves references, re-entering CreateObject -> stack overflow.
+	OnDemand,
+
+	// Read the row now, but do not mark the reference settled: a later PrepareRef reads it again.
+	Unlatched,
+
+	// Read the row now and mark it settled — later PrepareRef calls are no-ops.
+	Latched
+};
+
+
+//********************************************************************************************
+
+
+//********************************************************************************************
+
 class BACKEND_API ibValueReferenceDataObject : public ibValueDynamicMembers,
 	public ibValueDataObject, public ibSourceDataObject {
 	public:
@@ -54,21 +77,36 @@ public:
 
 	virtual ~ibValueReferenceDataObject();
 
-	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, const ibMetaID& id, const ibGuid& objGuid = wxNullGuid);
-	static ibValueReferenceDataObject* Create(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid = wxNullGuid);
+	// ⭐ ONE WAY TO MAKE A REFERENCE, ASKED THREE WAYS. The overloads differ ONLY in how the caller
+	// happens to name the type — a metaobject in hand, a metaID, or the clsid stored in a row — and
+	// they all end in the same body. How much is READ is the `load` argument, never the function name.
+	//
+	// There were five names before, and they encoded the two axes on top of each other: `CreateRaw`
+	// and `CreateFromPtr` were named after WHERE THEIR ARGUMENTS CAME FROM while actually differing
+	// in HOW DEEPLY THEY READ, and plain `Create` meant "read and settle" in two overloads and "read
+	// nothing" in a third. The verb said nothing about what happened, so the only way to know was to
+	// open the body — which is what a name is for.
+	//
+	// The row is read HERE, at creation, and the getters find it already in hand — which is what lets
+	// GetString and GetValueByMetaID stay const without casting anything away. OnDemand is for the
+	// callers that must not read yet (the value-ctor path, which would recurse) and for the ones that
+	// only ever wanted the key.
+	static ibValueReferenceDataObject* Create(const ibValueMetaObjectRecordDataRef* metaObject,
+	                                          const ibGuid& objGuid = wxNullGuid,
+	                                          ibReferenceLoad load = ibReferenceLoad::Latched);
 
-	// Like Create(metaObject, guid) but WITHOUT the PrepareRef call. The
-	// value-ctor registry path (ibCtorMetaValueTypeReference::CreateObject)
-	// must use this: PrepareRef there recurses — it materialises the
-	// reference's attribute values, one of which is itself a reference,
-	// re-entering CreateObject -> stack overflow. PrepareRef runs later, on
-	// first real use. (Member, so it reaches the private ctor.)
-	static ibValueReferenceDataObject* CreateRaw(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid = wxNullGuid);
+	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, const ibMetaID& id,
+	                                          const ibGuid& objGuid = wxNullGuid,
+	                                          ibReferenceLoad load = ibReferenceLoad::Latched);
 
 	// Reconstruct from a stored row: `refClsid` is the _RTRef target type, `ptr` the pure _RRRef guid blob.
 	// The type comes from the column (clsid -> metaObject), NOT from the key bytes.
-	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, const ibClassID& refClsid, void* ptr);
-	static ibValueReferenceDataObject* CreateFromPtr(const ibMetaData* metaData, const ibClassID& refClsid, void* ptr);
+	//
+	// ⚠ NO DEFAULT LOAD HERE, deliberately. This overload used to read nothing while its two siblings
+	// read everything, all four under the name `Create` — so a caller reading the header saw one verb
+	// and got two behaviours. Its three callers now say which they want.
+	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, const ibClassID& refClsid,
+	                                          void* ptr, ibReferenceLoad load);
 
 	// The pinned-type twin materialiser for the dot-walk — STATIC, on the REFERENCE (the side that knows how to
 	// build one, and where the metaData coupling BELONGS). If `out` is not already the pinned reference type (a
@@ -238,6 +276,80 @@ protected:
 	ibReference* m_reference_impl;
 
 	bool m_foundedRef;
+
+	// The session register this reference put itself into, held so it can strike itself out of THAT
+	// one — see ibReferenceRegistry::Remember. Opaque: its type belongs to reference.cpp. Empty for
+	// a reference built with no session at all (bring-up, a tool, a test), which registers nowhere.
+	std::shared_ptr<void> m_registryTable;
+
+	friend class ibReferenceRegistry;
 };
 
-#endif 
+//********************************************************************************************
+
+// ⭐⭐ ONE REFERENCE PER OBJECT, FOR AS LONG AS SOMEBODY HOLDS IT.
+//
+// A reference is an IDENTITY — this catalogue, this row — so two of them naming the same object are
+// not two things; they are one thing counted twice. Before this they really were two: every cell of
+// every list built its own, and each went to the database for its own copy of the same row. The same
+// nomenclature printed on forty lines was read forty times.
+//
+// So the creation door asks first. If the object is already here, that one is returned and nothing is
+// built — the row it has already read serves every later holder for nothing.
+//
+// LIFETIME NEEDS NO POLICY, which is what makes this a register rather than a cache. A reference is
+// reference-counted already: when the last holder lets go, its destructor runs and it strikes itself
+// out. The table therefore holds exactly what is alive and never one entry more. A base with a
+// billion rows does not mean a billion entries — only what a form, a report or a script is holding
+// at this moment, which is the population that existed anyway.
+//
+// ⚠ HASHED, NOT SCANNED. The earlier attempt walked an array on every creation — a thousand live
+// references and a thousand more being built is a million comparisons, slower than the database read
+// it was meant to save. Looked up by key, the cost does not depend on how many are alive.
+//
+// ⚠ PER SESSION, AND THAT IS NOT CAUTION — IT IS RIGHTS. Row-level access decides what a given user
+// may read, and a row he may not read comes back as "not found". Sharing OBJECTS between sessions
+// would be harmless (a reference is only a type and a guid); sharing what they have READ is not, and
+// the read row is the entire point of the register. So it lives on the session that read it.
+//
+// ⚠ AND THEREFORE NO LOCK ON THE HOT PATH. A session is worked by one thread at a time — the worker
+// pool leases it and other workers skip a leased session — so the table has no concurrent reader by
+// construction, not by discipline. A lock here would sit on the busiest path in the engine and cost
+// more than the read it saves.
+class BACKEND_API ibReferenceRegistry {
+public:
+	// The live reference for this object in the CURRENT session, or null. Asked by the creation
+	// doors before they build anything. No session (bring-up, a tool, a test) — no register, and
+	// every reference is built as it always was.
+	//
+	// ⭐ THE RAW KEY, not an ibGuid. This is what the table is keyed by, and it is what the callers
+	// already hold: a row's _RRRef blob IS an ibGuidImpl (ibReference::m_guid). Taking the rich type
+	// here made the stored-row door build a whole ibGuid out of bytes that were then taken apart
+	// again to form the key. Callers holding an ibGuid still just pass it — the conversion to the
+	// storage form is implicit and is the same 16 bytes.
+	// ⭐ THE IDENTIFIER IS THE KEY, so this is the primitive and the metaobject overload forwards to
+	// it. It matters which way round that is: a caller holding a metaID or a reference clsid used to
+	// have to SEARCH THE METADATA for the metaobject before it could ask a question the table answers
+	// off the identifier alone. On a hit the metaobject is never needed — the live reference already
+	// has it — so resolving it first was a metadata lookup spent to find something already in hand.
+	static ibValueReferenceDataObject* Find(const ibMetaID& id, const ibGuidImpl& objGuid);
+
+	static ibValueReferenceDataObject* Find(const ibValueMetaObjectRecordDataRef* metaObject,
+	                                        const ibGuidImpl& objGuid);
+
+	// Take note of a newly built one. Called by the CONSTRUCTOR, not by the doors: every reference
+	// is born through it, so one call covers every way of making one — including the raw door and
+	// the value-ctor path, which a per-door call would have missed, leaving exactly the twin the
+	// register exists to prevent.
+	static void Remember(ibValueReferenceDataObject* ref);
+
+	// The last holder let go — called from ~ibValueReferenceDataObject, and nowhere else.
+	//
+	// ⚠ It strikes itself from the session it REGISTERED in, which need not be the current one: a
+	// value can travel and be released elsewhere. Erasing from "whatever session is current now"
+	// would leave the original table pointing at freed memory.
+	static void Forget(const ibValueReferenceDataObject* ref);
+};
+
+#endif
+

@@ -118,6 +118,15 @@ ibQueryableFactory* ibSourceMetaDataScope::GetFactory()
 
 namespace {
 
+// ⭐ NAMES IN THIS LANGUAGE ARE MATCHED WITHOUT REGARD TO CASE — every comparison in this file says
+// so (`IsSameAs(x, false)`, `CmpNoCase`), and a map keyed by the default `wxString` ordering would
+// say the opposite in the one place a name is LOOKED UP rather than compared. `SELECT Qty * Price AS
+// Total … TOTALS SUM(total)` then refuses a field the query plainly carries.
+struct ibNoCaseLess
+{
+	bool operator()(const wxString& a, const wxString& b) const { return a.CmpNoCase(b) < 0; }
+};
+
 // The output-column descriptor the runtime reads back — used unqualified throughout this namespace.
 using OutputColumn = ibQueryLowering::OutputColumn;
 
@@ -2567,7 +2576,7 @@ void CheckTotalsNameSelectedFields(const ibQuerySelect& ast)
 	if (ast.m_totalsAggregates.empty() || ast.m_selectAll)
 		return;
 
-	std::map<wxString, const ibQueryProjection*> byOutputName;
+	std::map<wxString, const ibQueryProjection*, ibNoCaseLess> byOutputName;
 	{
 		int idx = 0;
 		for (const ibQueryProjection& p : ast.m_projections) {
@@ -2688,7 +2697,16 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 		CollectColumns(aggregate, strict);
 	// …and the aggregates answer one question the resolver cannot: whether the RESULT has a column
 	// for the figure. Asked here so the dialog's verdict and the run agree.
-	CheckTotalsNameSelectedFields(ast);
+	//
+	// ⚠ ON THE FULLY REWRITTEN FORM, and this one rule is the exception to the paragraph at the top
+	// of this function. Everywhere else a check judges what was WRITTEN, because complaining about a
+	// rephrasing the author cannot see is useless to them. Here the rephrasing is what makes the
+	// query legal: flattening a nested SELECT substitutes its aliases, so
+	// `SELECT Q.a AS x FROM (SELECT b AS a FROM …) AS Q TOTALS SUM(a) BY x` names nothing the outer
+	// text carries and everything the flattened query does. Judged as typed, the dialog refuses a
+	// query the engine runs — the same false complaint, arrived at from the other side.
+	const ibQuerySelectPtr asRun = ibQueryRewrite::Rewrite(astAsWritten);
+	CheckTotalsNameSelectedFields(asRun ? *asRun : ast);
 	for (const ibQueryTotalDim& dim : ast.m_totalsBy)
 		for (const ibQueryTotalField& field : dim.m_fields)
 			CollectColumns(field.m_expr, strict);
@@ -3894,7 +3912,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// It used to be built AFTER the dimension loop and served the aggregates alone, so a dimension
 	// could only ever be a source path — and the constructor compensated by writing source paths into
 	// the Totals tab, which is a shim standing in for a missing resolution.
-	std::map<wxString, const ibQueryProjection*> selectByName;
+	std::map<wxString, const ibQueryProjection*, ibNoCaseLess> selectByName;
 	{
 		int idx = 0;
 		for (const ibQueryProjection& p : ast.m_projections) {
@@ -4379,13 +4397,34 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// …and refused when the reader asked for the DETAIL ROWS: ROLLUP folds them away server-side, so
 	// there would be nothing left to hang under the last heading. Details cost the rows by
 	// definition — the choice is the reader's, and this is where it is paid.
-	if (ast.m_top == 0 && !ast.m_forUpdate && !withDetails) {
+	// ⭐⭐ WHICH ROAD, AND WHY — the one decision in this function nobody can see from outside, and the
+	// one that decides whether a report answers in a second or in a minute. Four separate things can
+	// send a fold into memory (rows were asked for, TOP, FOR UPDATE, or the shape the DBMS refused),
+	// and every one of them is silent by construction: the answer is identical either way, only the
+	// cost differs. So the journal says which road was taken and what stood in the way of the other.
+	const bool eligible = (ast.m_top == 0 && !ast.m_forUpdate && !withDetails);
+	if (eligible) {
 		// The result has no default state — an empty one is made the way every empty result is.
 		ibDataQueryResult folded = ibMakeEmptyQueryResult(nullptr);
 		if (b.TryTotalsPushdown(folded)) {
+			ibJournalInfo(wxT("query.totals"), wxT("%u level(s), %u resource(s): folded by the DBMS"),
+				static_cast<unsigned>(ast.m_totalsBy.size()),
+				static_cast<unsigned>(ast.m_totalsAggregates.size()));
 			DetachSchemaFromRunSources(outSchema, owner);
 			return folded;
 		}
+		ibJournalInfo(wxT("query.totals"), wxT("%u level(s), %u resource(s): folded in memory ")
+			wxT("- the engine or the driver refused the shape"),
+			static_cast<unsigned>(ast.m_totalsBy.size()),
+			static_cast<unsigned>(ast.m_totalsAggregates.size()));
+	}
+	else {
+		ibJournalInfo(wxT("query.totals"), wxT("%u level(s), %u resource(s): folded in memory - %s"),
+			static_cast<unsigned>(ast.m_totalsBy.size()),
+			static_cast<unsigned>(ast.m_totalsAggregates.size()),
+			withDetails      ? wxT("the rows were asked for")
+			: ast.m_forUpdate ? wxT("FOR UPDATE must touch the rows it locks")
+			                  : wxT("TOP caps the detail rows the fold runs over"));
 	}
 
 	ibDataQueryResult detail = b.Execute(topPage);

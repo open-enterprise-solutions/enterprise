@@ -798,7 +798,7 @@ wxThread::ExitCode ibDebuggerServer::ibDebuggerServerConnection::Entry()
 #ifdef __WXMSW__
 	HRESULT hr = ::CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 	if (FAILED(hr)) {
-		wxLogSysError(hr, _("Failed to create an instance in thread!"));
+		ibJournalSysError(wxT("debugger"), hr, _("Failed to initialise COM on the debug thread"));
 	}
 #endif // !_WXMSW
 

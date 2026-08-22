@@ -624,14 +624,31 @@ class ibConnectionPool;
 // `noWait`   — fail immediately instead of blocking on a conflicting lock.
 // `readOnly` — the caller promises this transaction issues no DML, letting a driver pick a
 //              cheaper isolation. Drivers without one ignore the flag.
+// `snapshot` — every statement in this transaction reads the SAME committed state.
+//
+// ⭐⭐ WHY THE THIRD FLAG EXISTS: A REPORT MUST NOT CONTRADICT ITSELF. It runs a dozen queries —
+// balances, turnovers, the detail lines under them — and under read-committed each of those reads
+// whatever is committed at the moment it starts. Post a batch of documents while one is running and
+// the total in the header stops matching the rows beneath it: half the figures from before, half
+// from after. Nobody can tell which half, and the report looks simply wrong.
+//
+// ⚠ NEITHER OF THE OTHER TWO GIVES THIS, which is the trap this flag exists to close. The default is
+// read-committed, and `readOnly` is read-committed too — with read_consistency, which stabilises a
+// SINGLE statement and says nothing about the next one. So a report wrapped in either still tears.
+//
+// It is not free: holding one state visible means the server keeps the record versions that state
+// needs, so the older they get the more it holds. That is the right trade for a report — figures
+// that agree with each other are the entire point of one — and the wrong trade for a long write.
 struct ibDbTxOptions {
 	bool noWait = false;
 	bool readOnly = false;
+	bool snapshot = false;
 };
 
 class BACKEND_API ibDatabaseLayer
 	: public ibDatabaseErrorReporter
 	, public ibDatabaseStringConverter
+	, public ibDatabaseResultSetOwner
 	, public std::enable_shared_from_this<ibDatabaseLayer>
 {
 public:
@@ -999,9 +1016,50 @@ protected:
 	friend class ibConnectionPool;
 
 	/// Add result set object pointer to the list for "garbage collection"
-	void LogResultSetForCleanup(ibDatabaseResultSet* pResultSet) { m_ResultSets.insert(pResultSet); }
+	void LogResultSetForCleanup(ibDatabaseResultSet* pResultSet)
+	{
+		m_ResultSets.insert(pResultSet);
+		pResultSet->SetOwner(this);   // ...and it strikes itself out again when it dies
+	}
+
+	/// A result set of ours is going away — drop it from the books, do NOT free it
+	void ForgetResultSet(ibDatabaseResultSet* pResultSet) override { m_ResultSets.erase(pResultSet); }
 	/// Add prepared statement object pointer to the list for "garbage collection"
-	void LogStatementForCleanup(ibPreparedStatement* pStatement) { m_Statements.insert(pStatement); }
+	void LogStatementForCleanup(ibPreparedStatement* pStatement)
+	{
+		m_Statements.insert(pStatement);
+		pStatement->SetOwner(this);   // ...and it strikes itself out again when it dies — see its dtor
+	}
+
+	/// Drop a statement from the books WITHOUT freeing it — called by ~ibPreparedStatement, nowhere else
+	//
+	// The friendship below is that sentence made enforceable: unregistering without freeing is exactly
+	// half of a release, and half a release in anybody else's hands is the leak this was built to end.
+	friend class ibPreparedStatement;
+	void ForgetStatement(ibPreparedStatement* pStatement) { m_Statements.erase(pStatement); }
+
+	// ⚠ EVERY READ BY KEY PREPARES ITS OWN STATEMENT, and it is not because nobody noticed. Measured
+	// on 2026-08-22: 277 reference reads produced 276 prepares of two SQL texts, byte for byte
+	// identical, differing only in the key bound to them — the server parsing, planning and allocating
+	// descriptors each time, then throwing all of it away after fetching one row.
+	//
+	// Reuse was built and taken out again the same night, and what it broke says what it needs. A
+	// statement may be handed out a second time only once its CURSOR is finished with, and the moment
+	// a reader is finished is its DESTRUCTOR — which is exactly the signal reuse gives up, since
+	// reusing means not destroying. Marking "in use" by hand instead produced both failures at once:
+	// statements never marked free again (every ask prepared a new one, so reuse bought nothing) and
+	// one marked free too early, handed out with its cursor still open — "-502, cursor already open".
+	//
+	// The shape that works: hand the caller a HOLDER that knows its layer, so destroying the holder
+	// returns the statement instead of freeing it.
+	//
+	// ⚠ AND IT WAITS ON AN OLDER DEFECT, which is why this is a note rather than a smaller patch.
+	// Closing is not releasing here: the layer keeps the pointer in m_Statements either way, so a
+	// statement is only really let go by going through the layer — and the statement's own cursor
+	// bookkeeping is inert (CloseResultSet is a stub returning false, CloseResultSets is empty, and
+	// nothing erases from its list). So nothing today can answer "is this cursor finished with", and
+	// reuse needs exactly that answer. Routing release through the layer fixes both at once, which is
+	// the argument for doing it properly rather than patching around it.
 
 private:
 

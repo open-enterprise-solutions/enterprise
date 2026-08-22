@@ -134,6 +134,12 @@ stmt->SetParamInt(1, 42);
 stmt->RunQuery();
 ```
 
+> **Amended 2026-08-23 — the statement half of that is closed** (§3d). An `ibPreparedStatement`
+> now strikes itself out of the layer's books as it dies, so a plain `delete` no longer leaves a
+> dangling registration. **`ibDatabaseResultSet` has no such back-pointer**, so the paragraph above
+> still holds for result sets exactly as written. Use both guards regardless — they are also what
+> makes `Close()` happen.
+
 `ibDatabaseConnectionHolder` is worth reading as a design note in its own right:
 
 ```
@@ -236,6 +242,93 @@ subsystem whose entire job is to be the record of what happened. Every other blo
 `(GetData(), GetDataLen())` and was never affected. `ibQueryStatement` re-exposes the base overload
 with `using ibPreparedStatement::SetParamBlob;` (`databaseQueryBuilder.h:1109`), so an L2 statement
 inherited the same empty binder and the same latent hole.
+
+---
+
+## 3c. ⭐⭐ One committed state for a whole transaction — `snapshot` (2026-08-22)
+
+`ibDbTxOptions` (`databaseLayer.h`, namespace scope; the nested spelling
+`ibDatabaseLayer::ibTxOptions` is an alias) carried two flags and now carries three:
+
+| Flag | Meaning |
+|---|---|
+| `noWait` | fail immediately instead of blocking on a conflicting lock |
+| `readOnly` | the caller promises this transaction issues no DML, letting a driver pick a cheaper isolation |
+| `snapshot` | **every statement in this transaction reads the SAME committed state** |
+
+**Why the third flag exists: neither of the other two gives that.** The default is read-committed,
+and `readOnly` is read-committed too — with `read_consistency`, which stabilises a **single**
+statement and says nothing about the next one. So a multi-statement read wrapped in either can see
+one state for the total and another for the lines under it, and contradict itself.
+
+**It is not free.** Holding one state visible means the server keeps the record versions that state
+needs, so the longer the transaction runs the more it holds. The right trade for a report; the wrong
+one for a long write.
+
+Per driver, all in `DoBeginTransaction`:
+
+| Driver | How `snapshot` is asked for |
+|---|---|
+| Firebird | TPB `isc_tpb_snapshotMode` — version3 + write + wait + **concurrency** + 30 s lock timeout. With `readOnly` as well: `isc_tpb_snapshotReadMode` — version3 + read + wait + concurrency |
+| PostgreSQL | `BEGIN ISOLATION LEVEL REPEATABLE READ`, and `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY` when `readOnly` is also set. It has to be on the `BEGIN` itself — the level cannot be changed once a statement has run |
+| SQLite | **nothing needed.** A deferred transaction takes its read lock at the first read and holds it to the end, so every statement in it already sees one committed state — a property, not an omission |
+| ODBC | `SQL_ATTR_TXN_ISOLATION` set to `SQL_TXN_REPEATABLE_READ` through `SQLSetConnectAttr`. Best-effort: a driver that refuses the level stays at its default, which is what there was before the flag |
+
+Firebird's write-mode snapshot is deliberate — a posting run reading what it is about to write needs
+one state too, and a read TPB would refuse it. A caller says `readOnly` when it means it.
+
+⛔ **Nothing asks for `snapshot` today** (2026-08-23). The flag and all four realisations above are
+in the tree and correct; they are simply not requested. The caller they were built for —
+`ibQueryReadState` (`query/queryReadState.h`), one committed state for the length of one answer — is
+declared at the four read doors and opened at none of them. It was opened, and the application hung:
+the read state holds a WRITE-mode snapshot for a whole answer and pins the connection to the session
+for that time (`BeginTransaction` → `ibConnectionPool::SetActiveTxConnection`), so an incidental
+write on the same session mid-answer — the bytecode cache, the session heartbeat — meets that
+transaction and the Firebird TPB above waits (`isc_tpb_wait`). Available and unused until it is
+settled which writes may happen inside a read; the account is in
+[query-engine-layers.md § L3](query-engine-layers.md).
+
+---
+
+## 3d. "Closed" and "released" became one act (2026-08-23)
+
+**Before:** the layer kept every statement it created in `m_Statements`, and only
+`ibDatabaseLayer::CloseStatement` erased from that list **and** deleted. A statement freed by any
+other route left a dangling pointer in the layer's list — so *closed* and *released* were different
+acts, and exactly one door did both.
+
+**Now:** `ibPreparedStatement` holds a back-pointer to its layer (`SetOwner`, set in
+`LogStatementForCleanup` — the single place a statement is registered), and its destructor calls
+`ibDatabaseLayer::ForgetStatement(this)`. Whatever destroys a statement, the books agree afterwards.
+
+**Forget and delete are deliberately two verbs.** `ForgetStatement` **only** unregisters; deleting
+stays with whoever owns the pointer. Had the destructor called the deleting door instead, each
+delete would re-enter it and free the statement twice.
+
+Consequence recorded in the code: `ibDatabaseLayer::CloseStatements()` swaps `m_Statements` into a
+local before deleting, because each delete now erases from the member set — deleting while walking
+the member would be erasing from the container being iterated.
+
+---
+
+## 3e. Prepared-statement reuse — built, measured, taken back out (2026-08-22)
+
+Recorded here as a **known cost with a prerequisite**, not as a feature. Nothing in the tree reuses
+a prepared statement today.
+
+**The measurement** ([technology-journal.md](technology-journal.md)): 277 reference reads produced
+**276 prepares** of two SQL texts that were byte for byte identical and differed only in the key
+bound to them.
+
+**What the attempt broke.** Reuse keyed on a hand-maintained "in use" mark failed both ways in one
+run: statements that were never marked free again — so every ask prepared a new one and reuse bought
+nothing — and one marked free too early and handed out with its cursor still open, which Firebird
+answered with `-502`, *cursor already open*.
+
+**The prerequisite.** Reuse has to know when a **cursor** is finished with, and nothing can answer
+that today: `ibPreparedStatement::CloseResultSet` is a stub returning `false`, `CloseResultSets` is
+empty, and nothing erases from its list. The shape that would work is handing callers a **holder that
+knows its layer**, so destroying the holder returns the statement instead of freeing it.
 
 ## 4. Drivers
 

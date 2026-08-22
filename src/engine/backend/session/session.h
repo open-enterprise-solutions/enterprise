@@ -29,6 +29,8 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <typeindex>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -250,6 +252,33 @@ public:
 	// and restores after; ibProcUnit::Execute snapshots m_pByteCode
 	// at entry so re-entrant lambdas don't clobber the outer view.
 	ibProcUnit* GetLambdaRuntime() { return m_lambdaRuntime.get(); }
+
+	// ⭐⭐ STATE THAT LIVES ONCE PER SESSION — ASKED FOR BY ITS TYPE.
+	//
+	// A subsystem that needs something per session (the live reference table is the first: one
+	// reference object per identity, so a row is read once however many cells name it) asks here for
+	// its own type and gets the one belonging to this session, made on first use and destroyed with
+	// it. Nothing is declared in advance and nothing is registered by name.
+	//
+	// ⭐ THE SESSION DOES NOT KNOW WHAT IT IS HOLDING, deliberately. A named member per subsystem
+	// would make this header the list of everything that happens to want per-session state — and a
+	// list like that is only ever right on the day it is written; the next subsystem adds a second
+	// member, then a third, and the session gains a dependency on each of their headers. The type is
+	// the key, so a new one costs nothing here and is impossible to collide with.
+	//
+	// ⚠ NOT LOCKED, and it does not need to be: a session is leased to one worker at a time (see
+	// workerPoolHeadless.h), so there is never a second thread inside it.
+	template <class T>
+	std::shared_ptr<T> Local(bool createIfMissing = true)
+	{
+		const std::type_index key(typeid(T));
+		std::shared_ptr<void> slot = FindLocal(key);
+		if (!slot && createIfMissing) {
+			slot = std::make_shared<T>();
+			SetLocal(key, slot);
+		}
+		return std::static_pointer_cast<T>(slot);
+	}
 
 	// Root runtime of this session. Populated by CreateRoot() driven from
 	// the registry's NotifyAuthenticated phase right after Open() succeeds;
@@ -926,6 +955,13 @@ private:
 	// in CreateRoot; SetParent(m_root's procUnit) is wired lazily on
 	// first GetLambdaRuntime() call once m_root's procUnit exists.
 	std::unique_ptr<ibProcUnit> m_lambdaRuntime;
+
+	// Per-session state, keyed by the asking type — see Local() above. The map holds the only owning
+	// pointer, so everything parked here is released when the session goes.
+	std::shared_ptr<void> FindLocal(const std::type_index& key) const;
+	void SetLocal(const std::type_index& key, const std::shared_ptr<void>& value);
+
+	std::unordered_map<std::type_index, std::shared_ptr<void>> m_locals;
 
 	// Identity fields — populated progressively as the session moves
 	// through Add → Attach. Registry thread is the sole writer.

@@ -114,19 +114,19 @@ public:
 			throw;
 		}
 		catch (const ibBackendException& e) {
-			wxLogError(wxT("%s"), e.GetErrorDescription());
+			ibJournalError(wxT("app"), wxT("%s"), e.GetErrorDescription());
 			wxMessageBox(e.GetErrorDescription(),
 				wxT("OES ") + exe,
 				wxOK | wxICON_ERROR);
 			return true;
 		}
 		catch (const std::exception& e) {
-			wxLogError(wxT("std::exception in main loop: %s"),
+			ibJournalError(wxT("app"), wxT("std::exception in main loop: %s"),
 				wxString::FromUTF8(e.what()));
 			return false;
 		}
 		catch (...) {
-			wxLogError(wxT("Unknown exception in main loop"));
+			ibJournalError(wxT("app"), wxT("Unknown exception in main loop"));
 			return false;
 		}
 	}
@@ -152,7 +152,7 @@ public:
 		}
 
 		ibCrashGuard::LogUnhandledException(GetExeName(), diag);
-		wxLogError("%s", diag);
+		ibJournalError(wxT("app"), "%s", diag);
 
 		wxDebugReportCompress report;
 		report.AddAll(wxDebugReport::Context_Current);

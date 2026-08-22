@@ -76,6 +76,21 @@ jobs:
         working-directory: build/linux-debug
         run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
 
+      # ⭐ THE TECHNOLOGY JOURNAL OF THE FAILING RUN. ctest tells you WHICH test failed and what it
+      # expected; the journal tells you what the engine was doing while it did — which query it ran,
+      # which road the fold took, what a source refused to read. Without this the file dies with the
+      # container and the next step is guessing across a forty-minute round trip.
+      #
+      # Only on failure, because a green run's journal is nobody's business and it is not small.
+      - name: Journal on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-linux-debug
+          path: build/linux-debug/bin/Debug/journal/
+          if-no-files-found: ignore
+          retention-days: 7
+
       # The APPLICATIONS, which no test target pulls in: enterprise / designer / daemon /
       # launcher / codeRunner / simplePlugin. Without this step nothing in CI ever compiled
       # them, so a break in an .exe's own sources reached a developer's machine first.
@@ -133,6 +148,16 @@ jobs:
         # No -C: every preset here uses Ninja, which is single-config.
         working-directory: build/windows-x64-debug
         run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
+
+      # See the note in the Linux job — the journal of the run that failed.
+      - name: Journal on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-windows-x64-debug
+          path: build/windows-x64-debug/bin/Debug/journal/
+          if-no-files-found: ignore
+          retention-days: 7
 
       # The applications — see the note in the Linux job. This is the SHIPPING platform,
       # so if they only ever compile in one place, it has to be this one.
@@ -414,6 +439,16 @@ jobs:
       - name: Run
         working-directory: build/macos-debug
         run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
+
+      # See the note in the Linux job — the journal of the run that failed.
+      - name: Journal on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-macos-debug
+          path: build/macos-debug/bin/Debug/journal/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Build the applications
         run: cmake --build --preset macos-debug -- -k 0

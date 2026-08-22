@@ -62,9 +62,9 @@ public:
 		}
 
 		if (selobj != nullptr)
-			wxLogDebug(wxT("! <debug> activate property %s"), selobj->GetClassName());
+			ibJournalInfo(wxT("ui"), wxT("! <debug> activate property %s"), selobj->GetClassName());
 		else
-			wxLogDebug(wxT("! <debug> clear property"));
+			ibJournalInfo(wxT("ui"), wxT("! <debug> clear property"));
 	}
 
 	ibPropertyObject* GetSelectedObject() const { return m_currentSel; }

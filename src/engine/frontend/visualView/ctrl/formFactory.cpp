@@ -75,11 +75,11 @@ ibValueFrame* ibValueForm::NewObject(const ibClassID& clsid, ibValueFrame* contr
 		// nullptr contract stays (an old file may name a control this build does not have, and that
 		// must not cost the whole form); what changes is that the engine's own words survive it.
 		catch (const ibBackendException& err) {
-			wxLogError(wxT("%s"), err.GetErrorDescription());
+			ibJournalError(wxT("ui.form"), wxT("%s"), err.GetErrorDescription());
 			return nullptr;
 		}
 		catch (...) {
-			wxLogError(_("Failed to create form element (class id %lld)"), (long long)clsid);
+			ibJournalError(wxT("ui.form"), _("Failed to create form element (class id %lld)"), (long long)clsid);
 			return nullptr;
 		}
 		return newControl;

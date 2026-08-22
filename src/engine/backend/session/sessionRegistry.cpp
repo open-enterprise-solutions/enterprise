@@ -1798,6 +1798,72 @@ void ibSessionRegistry::JobRefreshSnapshot()
 		// stays restricted to core columns so the query parses everywhere;
 		// kind is read best-effort (missing column would throw from some
 		// drivers mid-stream and abort the snapshot).
+		// ⭐⭐ ONE READ WHEN THE SCHEMA ALLOWS IT. `kind` and `exclusive` are optional — a pre-migration
+		// base has neither — so the three passes below ask about them separately and tolerate their
+		// absence. That answer never changes while the process runs, and asking it every second cost
+		// three full scans of the session table per tick, on an idle client, forever.
+		//
+		// So: try the wide read once. If it works, every later tick is a single query; if the schema
+		// is legacy, remember that and take the three-pass road, which stays exactly as it was.
+		//
+		// ⚠ READ WHOLE BEFORE ANYTHING IS APPENDED. A schema that lacks the column fails inside the
+		// read, and a snapshot half-filled by a read that then threw is worse than one never started:
+		// the rows are gathered locally and handed over only once the read has finished.
+		bool wideRead = false;
+		if (m_sessionHasOptionalColumns.load(std::memory_order_relaxed) >= 0) {
+			struct WideRow {
+				ibRunMode  m_application;
+				wxDateTime m_started;
+				wxString   m_userName, m_computer, m_session;
+				int        m_kind;
+				bool       m_exclusive;
+			};
+			std::vector<WideRow> wide;
+			try {
+				ibDatabaseQueryBuilder qw(&m_writeHolder);
+				ibQueryResult rw = qw.From(session_table)
+					.Select({ wxT("userName"), wxT("application"), wxT("started"), wxT("computer"),
+					          wxT("session"), wxT("kind"), wxT("exclusive") })
+					.OrderBy(wxT("started")).OrderBy(wxT("session"))
+					.Execute();
+				while (rw.Next())
+					wide.push_back(WideRow{
+						static_cast<ibRunMode>(rw.GetResultInt("application")),
+						rw.GetResultDate  ("started"),
+						rw.GetResultString("userName"),
+						rw.GetResultString("computer"),
+						rw.GetResultString("session"),
+						rw.GetResultInt   ("kind"),
+						rw.GetResultInt   ("exclusive") != 0 });
+				wideRead = true;
+			}
+			catch (...) {
+				// A column this schema does not have. Said once, then never asked again.
+				if (m_sessionHasOptionalColumns.exchange(-1, std::memory_order_relaxed) == 0)
+					ibJournalInfo(wxT("session"), wxT("session table has no kind/exclusive ")
+						wxT("- the snapshot refresh falls back to three reads (legacy schema)"));
+			}
+
+			if (wideRead) {
+				std::unordered_map<wxString, int>  kindBySession;
+				std::unordered_map<wxString, bool> exclusiveBySession;
+				for (const WideRow& r : wide) {
+					fresh->AppendSession(r.m_application, 0, r.m_started,
+						r.m_userName, r.m_computer, r.m_session);
+					kindBySession[r.m_session]      = r.m_kind;
+					exclusiveBySession[r.m_session] = r.m_exclusive;
+					++rowCount;
+				}
+				fresh->SetKindsFromMap(kindBySession);
+				fresh->SetExclusiveFromMap(exclusiveBySession);
+
+				if (m_sessionHasOptionalColumns.exchange(1, std::memory_order_relaxed) == 0)
+					ibJournalInfo(wxT("session"), wxT("session table carries kind/exclusive ")
+						wxT("- the snapshot refresh reads it in one query"));
+			}
+		}
+
+		if (!wideRead) {
 		ibDatabaseQueryBuilder q(&m_writeHolder);
 		ibQueryResult rs = q.From(session_table)
 			.Select({ wxT("userName"), wxT("application"), wxT("started"), wxT("computer"), wxT("session") })
@@ -1843,6 +1909,7 @@ void ibSessionRegistry::JobRefreshSnapshot()
 			}
 			fresh->SetExclusiveFromMap(exclusiveBySession);
 		} catch (...) { /* legacy schema — fine, exclusive stays false */ }
+		}   // !wideRead — the legacy three-pass road
 	}
 	catch (const ibBackendException& err) {
 		SESSION_LOG("[session REFRESH] SELECT failed: "

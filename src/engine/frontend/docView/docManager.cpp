@@ -541,7 +541,7 @@ ibMetaDocument* ibDocManager::OpenForm(ibValueMetaObject* metaObject,
 		return nullptr;
 	}
 	catch (...) {
-		wxLogError(wxT("OpenForm: failed to create document view"));
+		ibJournalError(wxT("docview"), wxT("OpenForm: failed to create document view"));
 		if (GetDocuments().Member(newDocument))
 			newDocument->DeleteAllViews();
 	}
@@ -586,8 +586,8 @@ void ibView::Activate(bool activate)
 		mgr->ActivateView(this, activate);
 	}
 
-	if (activate) wxLogDebug("! <debug> activate view %s", GetViewName());
-	else wxLogDebug("! <debug> deactivate view %s", GetViewName());
+	if (activate) ibJournalInfo(wxT("docview"), "! <debug> activate view %s", GetViewName());
+	else ibJournalInfo(wxT("docview"), "! <debug> deactivate view %s", GetViewName());
 #else
 	// Web: activation is driven from ibWebFrame::SetActiveTab directly
 	// on the session's tab list — no docManager round-trip needed.

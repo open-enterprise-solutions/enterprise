@@ -97,6 +97,7 @@ enterprise/
 │   ├── enumerations.md       # the enum template system + RECIPE to add one
 │   ├── descriptions.md       # the ibXxxDescription storage-shape pattern
 │   ├── source-object.md      # what a form binds to — the metadata-free source node
+│   ├── reference-registry.md # one reference object per identity, per session — the live table
 │   ├── main-frame.md         # one base, Designer/Enterprise windows, startup phases
 │   ├── session-ownership.md  # the window owns the session — holder/watch, open & close paths
 │   ├── designer-editors.md   # code / role / interface editors

@@ -366,7 +366,7 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 	// Any change to the spawn/handshake protocol lives in one place.
 	const long pid = ibApplicationData::SpawnWebServerWithManifest(cmd);
 	if (pid == 0) {
-		wxLogError(_("Failed to start wenterprise-server: %s"), cmd);
+		ibJournalError(wxT("launcher"), _("Failed to start wenterprise-server: %s"), cmd);
 		return;
 	}
 	Close(true);

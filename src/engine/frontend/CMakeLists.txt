@@ -4,7 +4,9 @@
 # themes, and the visual host framework.
 # =============================================================================
 
-file(GLOB_RECURSE FRONTEND_SOURCES
+# CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt: without it a newly added source stays
+# invisible until somebody re-runs cmake, and nothing announces that it is missing.
+file(GLOB_RECURSE FRONTEND_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
 

@@ -10,12 +10,20 @@
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 door — reference read by key / scan
 #include "backend/logger/logger.h"        // a read that FAILED is said out loud, unlike a row that is absent
+#include "backend/diagnostics/journal.h"  // every read is counted — how many there are is a measurement, not a guess
 
 
 bool ibValueReferenceDataObject::ReadData(bool createData)
 {
 	if (m_metaObject == nullptr || !m_objGuid.isValid())
 		return false;
+
+	// ⭐ NO CACHE OF ROWS HERE, deliberately. There used to be one, keyed by (metaobject, guid), and it
+	// existed to stop the SAME row being read once per reference object holding that identity. The
+	// register removed the twins it was compensating for: there is now one object per identity per
+	// session, its own m_initializedRef says the read already happened, and a row read twice would
+	// mean two objects — which can no longer occur. A cache on top of that would only add a second
+	// answer to the question the object already answers, and one that goes stale after a write.
 
 	// Load the row by its own key through the L3 door — the FB FIRST / others
 	// LIMIT fork and the raw-concat '%s' guid (injection-shaped) are gone. Values
@@ -30,6 +38,12 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
 				if (!m_metaObject->IsDataReference(object->GetMetaID()))
 					m_listObjectValue[object->GetMetaID()] = selection.GetValue(object);
+
+			// ⭐ ONE LINE PER ROW ACTUALLY READ. The register and the read window exist to make this
+			// happen once where it used to happen once per cell, and whether they do is a question a
+			// run answers: forty of these under one print means the window is not covering that path.
+			ibJournalInfo(wxT("reference"), wxT("read %s <%i>"),
+				m_objGuid.str(), static_cast<int>(m_metaObject->GetMetaID()));
 			return true;
 		}
 		return false;   // NO SUCH ROW - a legitimate answer, and the only one this returns quietly

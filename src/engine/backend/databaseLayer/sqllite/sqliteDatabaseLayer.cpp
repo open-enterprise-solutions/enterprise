@@ -242,6 +242,10 @@ void ibDatabaseLayerSQLite::DoBeginTransaction(const ibTxOptions& opts)
 {
 	// SQLite is single-writer, file-level locked — no per-TX wait/nowait
 	// knob to honour. Options parameter accepted for interface conformance.
+	//
+	// `snapshot` needs nothing either, and that is a property rather than an omission: a deferred
+	// transaction takes its read lock at the first read and holds it to the end, so every statement
+	// in it already sees one committed state. SQLite gives for free what the others must be asked for.
 	(void)opts;
 	ibJournalInfo(wxT("db.sqlite"),wxT("Beginning transaction"));
 	DoRunQuery(wxT("begin deferred transaction;"), false);

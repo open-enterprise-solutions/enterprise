@@ -146,6 +146,13 @@ bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out, std::vector<wxStrin
 		config = ibQuerySessionConfig();
 	const ibSourceMetaDataScope resolveAgainst(config);
 
+	// ⭐ ONE STATE FOR THE WHOLE PACKAGE, AND FOR THE ROWS DRAWN OUT OF IT AFTERWARDS. A package is
+	// several statements by construction, and each result it hands back is a LIVE cursor the script
+	// reads whenever it likes — so the state has to be fixed before the first statement runs and held
+	// until the last reader lets go. Every result below takes a share of it; when they are all gone,
+	// so is it. Null when a transaction is already open, and then this adds nothing.
+	const std::shared_ptr<ibQueryReadState> readsOneState;   // ⛔ NOT OPENED — see queryReadState.h
+
 	try {
 		for (ibQueryLowering::PackageResult& r : ibQueryLowering::ExecutePackage(m_package, m_params, store)) {
 			// ONE KIND PER POSITION, and only two of them. A statement that produced a table hands
@@ -153,7 +160,7 @@ bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out, std::vector<wxStrin
 			// row holding the record count. A DROP has no result at all and hands back the UNDEFINED
 			// value. Nothing in the array is a bare number, so walking it needs no branch.
 			if (r.m_result != nullptr)
-				out.push_back(new ibValueQueryResult(std::move(*r.m_result), std::move(r.m_schema), r.m_hasTotals));
+				out.push_back(new ibValueQueryResult(std::move(*r.m_result), std::move(r.m_schema), r.m_hasTotals, readsOneState));
 			else
 				out.push_back(ibValue());   // a drop: a position with no result
 
@@ -271,11 +278,13 @@ ibValueQueryResult::ibValueQueryResult()
 }
 
 ibValueQueryResult::ibValueQueryResult(ibDataQueryResult&& result,
-                                       std::vector<ibQueryLowering::OutputColumn> schema, bool hasTotals)
+                                       std::vector<ibQueryLowering::OutputColumn> schema, bool hasTotals,
+                                       std::shared_ptr<ibQueryReadState> snapshot)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE)
 	, m_result(std::make_unique<ibDataQueryResult>(std::move(result)))
 	, m_schema(std::move(schema))
 	, m_hasTotals(hasTotals)
+	, m_snapshot(std::move(snapshot))
 {
 	m_members.Bind(this, &ibValueQueryResult::FillMembers);
 }
@@ -303,13 +312,13 @@ bool ibValueQueryResult::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 		? paParams[0]->ConvertToEnumValue<ibSelectKind>()
 		: ibSelectKind::ibSelectKind_Direct;
 	if (kind == ibSelectKind::ibSelectKind_Direct && !m_hasTotals) {
-		pvarRetValue = new ibValueQuerySelect(std::move(m_result), m_schema);
+		pvarRetValue = new ibValueQuerySelect(std::move(m_result), m_schema, m_snapshot);
 	}
 	else {
 		ibSelector top = m_result->Select(kind);
 		ibJournalInfo(wxT("query.walk"), wxT("select(%d): %ld node(s) at the first level"),
 			static_cast<int>(kind), top.NodeCount());
-		pvarRetValue = new ibValueQuerySelect(std::move(top), m_schema);
+		pvarRetValue = new ibValueQuerySelect(std::move(top), m_schema, m_snapshot);
 	}
 	return true;
 }
@@ -325,19 +334,23 @@ ibValueQuerySelect::ibValueQuerySelect()
 }
 
 ibValueQuerySelect::ibValueQuerySelect(std::unique_ptr<ibDataQueryResult> flat,
-                                       std::vector<ibQueryLowering::OutputColumn> schema)
+                                       std::vector<ibQueryLowering::OutputColumn> schema,
+                                       std::shared_ptr<ibQueryReadState> snapshot)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE)
 	, m_flat(std::move(flat))
 	, m_schema(std::move(schema))
+	, m_snapshot(std::move(snapshot))
 {
 	m_members.Bind(this, &ibValueQuerySelect::FillMembers);
 }
 
 ibValueQuerySelect::ibValueQuerySelect(ibSelector&& tree,
-                                       std::vector<ibQueryLowering::OutputColumn> schema)
+                                       std::vector<ibQueryLowering::OutputColumn> schema,
+                                       std::shared_ptr<ibQueryReadState> snapshot)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE)
 	, m_tree(std::make_unique<ibSelector>(std::move(tree)))
 	, m_schema(std::move(schema))
+	, m_snapshot(std::move(snapshot))
 {
 	m_members.Bind(this, &ibValueQuerySelect::FillMembers);
 }
@@ -402,7 +415,7 @@ bool ibValueQuerySelect::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 		ibSelector sub = m_tree->Select(kind);
 		ibJournalInfo(wxT("query.walk"), wxT("descend from level %d: %ld node(s)"),
 			m_tree->Level(), sub.NodeCount());
-		pvarRetValue = new ibValueQuerySelect(std::move(sub), m_schema);
+		pvarRetValue = new ibValueQuerySelect(std::move(sub), m_schema, m_snapshot);
 		return true;
 	}
 

@@ -15,6 +15,7 @@
 
 #include "gridextctrl.h"
 #include "gridexteditors.h"
+#include "backend/diagnostics/journal.h"   // ibJournal* — this TU does not pull in backend_core.h
 
 #ifndef WX_PRECOMP
 #include <wx/textctrl.h>
@@ -799,7 +800,7 @@ void ibGridCellNumberRenderer::SetParameters(const wxString& params)
 
 	if (!minStr.ToLong(&m_minValue) || !maxStr.ToLong(&m_maxValue))
 	{
-		wxLogDebug("Invalid ibGridCellNumberRenderer parameters \"%s\"", params);
+		ibJournalInfo(wxT("ui"), "Invalid ibGridCellNumberRenderer parameters \"%s\"", params);
 	}
 }
 
@@ -926,7 +927,7 @@ void ibGridCellFloatRenderer::SetParameters(const wxString& params)
 			}
 			else
 			{
-				wxLogDebug(wxT("Invalid ibGridCellFloatRenderer width parameter string '%s ignored"), params);
+				ibJournalInfo(wxT("ui"), wxT("Invalid ibGridCellFloatRenderer width parameter string '%s ignored"), params);
 			}
 		}
 
@@ -940,7 +941,7 @@ void ibGridCellFloatRenderer::SetParameters(const wxString& params)
 			}
 			else
 			{
-				wxLogDebug(wxT("Invalid ibGridCellFloatRenderer precision parameter string '%s ignored"), params);
+				ibJournalInfo(wxT("ui"), wxT("Invalid ibGridCellFloatRenderer precision parameter string '%s ignored"), params);
 			}
 		}
 
@@ -976,7 +977,7 @@ void ibGridCellFloatRenderer::SetParameters(const wxString& params)
 			}
 			else
 			{
-				wxLogDebug("Invalid ibGridCellFloatRenderer format "
+				ibJournalInfo(wxT("ui"), "Invalid ibGridCellFloatRenderer format "
 					"parameter string '%s ignored", params);
 			}
 		}

@@ -13,7 +13,12 @@ cmake_minimum_required(VERSION 3.20)
 # ---------------------------------------------------------------------------
 # Collect every .cpp and .c file under the backend tree
 # ---------------------------------------------------------------------------
-file(GLOB_RECURSE BACKEND_SOURCES
+# CONFIGURE_DEPENDS: a plain GLOB is evaluated ONCE, at configure time, so a file added afterwards is
+# invisible until somebody thinks to re-run cmake — and nothing says so. The build simply links without
+# it and fails somewhere else entirely, on a machine that is usually not the one where the file was
+# added (the MSBuild project lists files by hand and is never affected). With this, the glob is
+# re-checked on every build and a new source pulls a reconfigure by itself.
+file(GLOB_RECURSE BACKEND_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
 )

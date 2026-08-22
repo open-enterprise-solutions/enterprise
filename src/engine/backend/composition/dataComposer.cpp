@@ -12,6 +12,7 @@
 #include "backend/appData.h"                  // ibApplicationData::GetQueryableFactory
 #include "backend/metaData.h"                 // ibMetaData::GetSourceFactory — resolve by-name sources per-config
 #include "backend/backend_exception.h"        // ibBackendCoreException
+#include "backend/query/queryReadState.h"  // ibQueryReadState — one build, one state of the data
 
 //////////////////////////////////////////////////////////////////////
 // sources
@@ -526,9 +527,28 @@ ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputC
 	if (hasTotals) {
 		// Pass THIS fetch's page so a single-scalar-dim TOTALS drill can page its groups server-side
 		// (m_serverGroupedLevel then tells Run to emit the flat groups at level 1, skipping the fold).
+		//
+		// ⭐⭐ A PAGE MEANS A LEVEL, AND A LEVEL HAS NO ROWS IN IT. This is the line where a RESULT and
+		// a DRILL stop being the same question. A report asks for the whole thing and its rows are the
+		// bottom of it — always, unconditionally, that is what a total is made of. A browsed list asks
+		// for ONE FLOOR at a time: RunComposerPage renders just the browsed level's TotalBy, and the
+		// rows under the deepest heading arrive as their own flat fetch with a parent filter, not as
+		// detail nodes hanging off this one ("a list drills through headings and its rows ARE its
+		// detail" — the note above TakeGroups, which is where this became visible).
+		//
+		// Asking for details here cost everything and bought nothing: details and the DBMS's own fold
+		// are exclusive, so every page of a grouped list fell back to reading the WHOLE table and
+		// folding it in memory, to show twenty headings. The page was never applied to the detail read
+		// either, so it was the whole table per page. On a register of a million rows that is not a
+		// slow list, it is an unusable one.
+		//
+		// ⚠ THE TEST IS THE PAGE, not the caller. A door that asked "am I a report or a list?" would
+		// be answering by who is calling instead of by what was asked for, and the next caller would
+		// have to be added to it by hand.
+		const bool wholeResult = (page.m_count == 0);
 		bool serverGrouped = false;
 		ibDataQueryResult r = ibQueryLowering::ExecuteTotals(*m_ast, m_params, schema, page, &serverGrouped,
-			WantsDetails(Root()));
+			wholeResult && WantsDetails(Root()));
 		m_serverGroupedLevel = serverGrouped;
 		return r;
 	}
@@ -594,12 +614,42 @@ bool ibDataDBComposer::LevelShows(const Output& output, int depth,
 
 bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 {
+	// ⭐⭐ ONE BUILD, ONE STATE OF THE DATA. A composition is not one query — it is a dozen: the source
+	// itself, a join the server would not take stitched from two reads, a subquery promoted to a temp
+	// table, a page at a time, and a fetch per reference whose presentation is printed. Under
+	// read-committed each of those reads whatever has committed by the moment it starts, so a batch of
+	// documents posted mid-build lands in some parts of the answer and not others — the total in the
+	// header stops matching the rows beneath it, with nothing to say which half is which. A snapshot
+	// makes the whole build read one state; see ibDbTxOptions::snapshot.
+	//
+	// ⚠ HERE AND NOT IN L3, and the reason is worth keeping: L3's ExecuteRead does not finish the read
+	// it starts. It hands back a live cursor and the caller draws the rows afterwards, so a
+	// transaction ending when that function returns kills the cursor its own result depends on —
+	// measured on 2026-08-22 as "-504, cursor is not open" on the first row of the first query. The
+	// transaction has to outlive the RESULT, and this is the nearest place that does.
+	//
+	// ⚠ AROUND THE BUILD, NOT AROUND THE WINDOW. Holding one state costs the server the record
+	// versions that state needs. A build ends; a list left open and scrolled for minutes does not, and
+	// must not hold one — between its pages the data legitimately moves.
+	//
+	// A build reads its rows before it returns, so holding the snapshot in a local is enough here —
+	// unlike the script's query door, where the answer outlives the call and the snapshot travels
+	// with it. Same object either way; only who holds it differs. A transaction already open makes
+	// this null, and a null holder holds nothing.
+	const std::shared_ptr<ibQueryReadState> readsOneState;   // ⛔ NOT OPENED — see queryReadState.h
+
 	// THE FIRST OUTPUT — what a list has, and what "run the composer" has always meant.
 	return RunOutput(Root(), driver);
 }
 
 bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driver)
 {
+	// ONE READ PER REFERENCE — and nothing declared here to arrange it. The reference knows whether it
+	// has read (its own initialised flag), and there is one of it per identity per session, so forty
+	// printed lines naming the same object hold one object and cost one query. This function briefly
+	// opened a scope to bound that; the scope was the wrong shape, because knowing every place a
+	// reference gets reused is knowing nearly every place there is.
+
 	// The driver IS the envelope: a paged driver (the list fetch) vends the page
 	// request; a plain driver reads everything.
 	ibReadPageRequest page;
@@ -730,8 +780,25 @@ bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driv
 				// A heading, and then whatever it stands over — including the GRAND TOTAL, which is
 				// a level like any other: the one that groups by nothing. Descending into it is how
 				// the first dimension level is reached when a report asked for it.
-				driver.OnGroup(level.Level(), level.HasChildren(), row);
+				// ⚠ EXPANDABLE MEANS "THERE IS SOMETHING TO SHOW", not "there is something there".
+				// The rows are always folded in now, so the deepest heading always HAS children —
+				// but an output whose ladder never declared a Details level does not write them, and
+				// a triangle that opens onto nothing is worse than no triangle. So the flag asks the
+				// same question the writing does.
 				ibSelector under = level.Select(ibSelectKind::ibSelectKind_ByGroups);
+
+				// Asked by LOOKING: step onto the first child, read what kind it is, and rewind. The
+				// selection is already folded, so this costs a pointer move — and it is the only way
+				// to know, because a heading two levels up stands over headings while the deepest one
+				// stands over rows, and nothing on the node itself says which.
+				bool showsWhatIsUnder = false;
+				if (under.Next()) {
+					showsWhatIsUnder = under.Kind() != ibSelectorNodeKind::Detail
+						|| OutputWrites(output, ibSelectorNodeKind::Detail);
+					under.Reset();
+				}
+
+				driver.OnGroup(level.Level(), showsWhatIsUnder, row);
 				walk(under);
 			}
 		};
@@ -779,8 +846,12 @@ ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
 
 	hasTotals = ast->m_hasTotals;
 	m_serverGroupedLevel = false;   // group-level paging belongs to the paged list, not to a report's output
+	// Same rule as the root output above: a fetch that carries a page is asking for ONE LEVEL, and a
+	// level has no rows in it. Written the same way in both places on purpose — one question, one
+	// answer, wherever it is asked from.
 	return hasTotals
-		? ibQueryLowering::ExecuteTotals(*ast, m_params, schema, page, nullptr, WantsDetails(output))
+		? ibQueryLowering::ExecuteTotals(*ast, m_params, schema, page, nullptr,
+			page.m_count == 0 && WantsDetails(output))
 		: ibQueryLowering::Execute(*ast, m_params, schema, page);
 }
 

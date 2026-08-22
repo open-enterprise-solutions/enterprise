@@ -71,6 +71,50 @@ ibCompositionDriver — the passive output sink ("where the data goes"):
   terminal — no grammar change; a `TOP n` in the text still caps the page
   (the smaller positive count wins). Plain SELECT path only.
 
+### One build, one state of the data — ⛔ declared, not opened (2026-08-23)
+
+`ibDataDBComposer::Run` declares a holder for an `ibQueryReadState`
+(`query/queryReadState.h`) — a local, meant to stand for the whole build — and
+**does not open it**. Nothing does: opened here and at the other three read
+doors, the application hung, and all four holders were left in place unopened
+(*why it is off*, below). The reason it exists is unchanged: a composition is
+several statements underneath — a stitched join, a subquery promoted to a DB
+temp table, a page at a time, one read per printed reference — and under
+read-committed each of them sees whatever had committed by the moment it
+started, so a total and the rows beneath it can disagree with nothing in the
+result to say which is which.
+
+- **In `Run`, not in the L3 door.** L3's `ExecuteRead` hands back a live cursor
+  and the caller draws the rows afterwards; a transaction ended at that return
+  kills the cursor its own result depends on (Firebird `-504, cursor is not
+  open`). A build reads its rows before it returns, so a local is enough here —
+  the script's query door instead hands every result a share, because there the
+  answer outlives the call. Same object either way; only who holds it differs.
+- **Null when a transaction is already open**, and then it adds nothing — the
+  caller's window is wider and gives the guarantee instead. It is also null with
+  no session at all (bring-up, a tool, a test). A null holder holds nothing and
+  needs no branch.
+- ⚠ **Around the BUILD, not around the window.** Holding one state costs the
+  server the record versions that state needs. A build ends; a list left open and
+  scrolled for minutes does not, and must not hold one — between its pages the
+  data legitimately moves.
+
+⛔ **Why it is off.** Opened at the four read doors, the application hung within
+minutes: a list was reading under one of them and the thread that stopped was
+WRITING — a delete and an insert into `sys_bytecode_cache` — after which only the
+session heartbeat kept logging. The state holds a WRITE-mode snapshot for the
+length of an answer and pins the connection to the session for that time, so an
+incidental write on the same session mid-build meets it and Firebird waits
+(`isc_tpb_wait`). The
+consistency argument stands, the placement does not: what has to be settled first
+is WHICH writes may happen inside a read, and whether they belong in the same
+transaction or must be kept out of it. Until then a build reads under whatever
+transaction it happens to find.
+
+The class itself — the rename from `ibQueryReadSnapshot`, why it asks for a
+WRITE-mode transaction and what it does not add:
+[query-engine-layers.md](query-engine-layers.md) § L3.
+
 ### Sources
 
 - `FromSource(ns, name)` — any factory-registered source (metaobject families,

@@ -1055,7 +1055,7 @@ void ibDataViewCtrl::DispatchPagedFetch(ibFetchDirection dir, int batch)
 				// window it belongs to; that case stays with the journal line it already writes.
 				// The description is DATA, never a format string (docs/exceptions.md).
 				if (isReset && !req->m_error.empty())
-					wxLogError(wxT("%s"), req->m_error);
+					ibJournalError(wxT("ui"), wxT("%s"), req->m_error);
 				return;
 			}
 

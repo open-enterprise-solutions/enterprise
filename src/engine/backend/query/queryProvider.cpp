@@ -1626,6 +1626,25 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_totalAggregates)
 			carry(a.m_col);
 
+	// ⭐⭐ DISTINCT AND A TOTAL OVER A FIELD THE SELECT DOES NOT NAME CANNOT BOTH BE HONOURED, and the
+	// combination is refused rather than answered.
+	//
+	// DISTINCT collapses rows by what the author selected. A resource over a column outside that list
+	// then sums whichever row survived the collapse — one arbitrary row per duplicate group. On a
+	// query that fans out (`SELECT DISTINCT Doc.Posted … JOIN Lines … TOTALS SUM(Lines.Amount)`) the
+	// figure comes back looking perfectly reasonable and being the amount of one line instead of all
+	// of them.
+	//
+	// Refusing is the only answer that keeps both promises. Deduping over the carried columns instead
+	// would silently change what DISTINCT means — rows the author's list cannot tell apart would stop
+	// collapsing — and answering with the arbitrary row is the failure this arc spent the day
+	// removing: a wrong number that looks right is worse than a missing one, because nobody checks it.
+	if (spec.m_distinct && outCols.size() > spec.m_selectCols->size())
+		ibBackendCoreException::Error(
+			_("SELECT DISTINCT cannot be totalled over a field the selection does not carry: "
+			  "DISTINCT folds rows by the selected fields, so a resource over any other field would "
+			  "add up one arbitrary row per fold. Add the field to SELECT, or drop DISTINCT."));
+
 	// ⭐ WHAT THE COMPOSED TABLE HOLDS, against what leaves it. Between the leaves claiming their
 	// columns and the fold reading them there are two silent filters — the join's own column list
 	// and this projection — and a column dropped by either is indistinguishable downstream from a
@@ -1640,7 +1659,8 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 			if (outCols[k] != nullptr)
 				out += (out.IsEmpty() ? wxString() : wxT(", "))
 				     + wxString::Format(wxT("%s#%u"), outCols[k]->GetName(), static_cast<unsigned>(outIds[k]));
-		ibJournalInfo(wxT("query.stitch"), wxT("composed %ld rows, holds [%s]  carries out [%s]"),
+		ibJournalInfo(wxT("query.stitch"),
+			wxT("IN MEMORY: %ld composed rows, holds [%s]  carries out [%s]"),
 			rows, have, out);
 	}
 	// COMPUTED output columns (arithmetic / CASE over the JOIN) — evaluated per row off the AST below.
@@ -2156,13 +2176,29 @@ std::unique_ptr<ibTempTableManager> PromoteComputedLeaf(
 	ibQueryRamTable rows = computed->ComputeRows(computedConds);
 
 	// SHOULD-gate (temp-db.md §7) with the exact materialised count; CAN lives in Materialise.
-	if (!WorthDbTemp(rows.RowCount()))
+	//
+	// ⭐ AND THE VERDICT IS WRITTEN DOWN. This is the other place a query quietly changes cost without
+	// changing its answer: a computed leaf either travels into a DB temp table and the join happens in
+	// the database, or it stays in memory and the join is stitched here. Nobody can tell from the
+	// outside which happened, and the difference on a large leaf is the whole query.
+	if (!WorthDbTemp(rows.RowCount())) {
+		ibJournalInfo(wxT("query.join"), wxT("IN MEMORY: computed leaf %s has %ld row(s) ")
+			wxT("- not worth a DB temp table, joining in memory"),
+			computed->GetQueryName(), rows.RowCount());
 		return nullptr;
+	}
 
 	std::unique_ptr<ibTempTableManager> mgr =
 		ibTempTableManager::Materialise(spec.m_holder, rows, computed->GetMetaData());
-	if (!mgr)
+	if (!mgr) {
+		ibJournalInfo(wxT("query.join"), wxT("IN MEMORY: computed leaf %s (%ld row(s)) ")
+			wxT("could not be written to a DB temp table, joining in memory"),
+			computed->GetQueryName(), rows.RowCount());
 		return nullptr;
+	}
+	ibJournalInfo(wxT("query.join"), wxT("IN THE DATABASE: computed leaf %s (%ld row(s)) ")
+		wxT("promoted to a temp table, the join runs there"),
+		computed->GetQueryName(), rows.RowCount());
 	const ibDbTempTableQueryable* temp = mgr->Queryable();
 
 	// Remap a referenced column: a computed-leaf column -> the temp queryable's same-named raw column;
@@ -2457,6 +2493,7 @@ ibDataQueryResult ibComputedProvider::ExecuteAggregate(const ibDataQuerySpec& sp
 
 ibDataQueryResult ibQueryComposer::ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& page)
 {
+
 	if (IsSingleSource(spec))
 		return spec.m_queryable->GetProvider().ExecuteRead(spec, page);
 	return ComposeMultiSource(spec, page);
@@ -3225,6 +3262,8 @@ bool ibQueryComposer::CanDeclareNamedQuery(ibDatabaseConnectionHolder* holder)
 
 ibSelectorTree ibQueryComposer::ExecuteTotals(const ibDataQuerySpec& spec)
 {
+	// The one that needs it most: totals read the detail AND fold it, often in more than one pass.
+
 	// Push-down: a single-source totals on a ROLLUP-capable DBMS runs server-side (GROUP BY ROLLUP),
 	// the DBMS computing every subtotal level — only the aggregated rows transit, no raw detail.
 	if (IsSingleSource(spec) && ibDbTableProvider::CanPushRollupTotals(spec))

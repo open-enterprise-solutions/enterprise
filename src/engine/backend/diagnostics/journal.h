@@ -102,6 +102,16 @@ public:
 	// line. Timestamped, thread-stamped and flushed here; echoed to the debugger by the same call.
 	static void Write(ibJournalMark mark, const wxString& source, const wxString& message);
 
+	// ⭐ A FAILURE THE OPERATING SYSTEM EXPLAINS. A COM HRESULT or a Win32 error code is a number
+	// nobody can read; the platform holds the sentence that goes with it, and this is the one verb
+	// that asks for it. Everything else is an ordinary error: the line is journalled, the dump is
+	// taken, the user is told.
+	//
+	// Kept as its own door rather than folded into ibJournalError because the CODE is not part of the
+	// message — a caller that has one must not have to render it itself, and a caller that has none
+	// must not have to invent one.
+	static void SysError(const wxString& source, long code, const wxString& message);
+
 	// …and the same with the message's OWN arguments, on wx's vararg machinery — the shape every
 	// raise in this codebase uses (`ibBackendQuerySourceException::ErrorAt`, `ibDatabaseLayer::
 	// RunQuery`). Two things a hand-rolled parameter pack does not give: the format string is
@@ -150,6 +160,7 @@ private:
 #	define ibJournalInfo(source, ...)     ((void)0)
 #	define ibJournalWarning(source, ...)  ((void)0)
 #	define ibJournalError(source, ...)    ((void)0)
+#	define ibJournalSysError(source, code, message)  ((void)0)
 #else
 // ⚠ WRAPPED IN do/while(false), and not out of habit. A bare `if` inside a macro STEALS A DANGLING
 // `else`: `if (x) ibJournalInfo(...); else Report();` binds Report() to the macro's own `if`, so it
@@ -161,6 +172,9 @@ private:
 		do { if (ibTechJournal::IsOpen()) ibTechJournal::Print(ibJournalMark::Warning, (source), __VA_ARGS__); } while (false)
 #	define ibJournalError(source, ...) \
 		do { if (ibTechJournal::IsOpen()) ibTechJournal::Print(ibJournalMark::Error,   (source), __VA_ARGS__); } while (false)
+// A code the OPERATING SYSTEM issued — the number plus the sentence the platform keeps for it.
+#	define ibJournalSysError(source, code, message) \
+		do { if (ibTechJournal::IsOpen()) ibTechJournal::SysError((source), (code), (message)); } while (false)
 #endif
 
 #endif // __IB_TECH_JOURNAL_H__

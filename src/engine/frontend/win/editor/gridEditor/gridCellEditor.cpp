@@ -314,7 +314,7 @@ void ibGridEditor::ibGridEditorCellTextEditor::SetParameters(const wxString& par
 		}
 		else
 		{
-			wxLogDebug(wxT("Invalid ibGridEditor::ibGridEditorCellTextEditor parameter string '%s' ignored"), params);
+			ibJournalInfo(wxT("ui"), wxT("Invalid ibGridEditor::ibGridEditorCellTextEditor parameter string '%s' ignored"), params);
 		}
 	}
 }

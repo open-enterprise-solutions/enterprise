@@ -761,6 +761,18 @@ private:
 	//     generously (5 s) so every cluster member has a chance to
 	//     reconnect and re-heartbeat before any pruning happens.
 	std::atomic<bool>                            m_refreshFailedLastTick { false };
+
+	// ⭐ DOES THIS SCHEMA CARRY `kind` AND `exclusive`? 0 = not asked yet, 1 = yes, -1 = legacy.
+	//
+	// The snapshot refresh used to answer it EVERY TICK, by reading the whole session table three
+	// times — once for the base columns and once more for each optional one, each in its own
+	// try/catch so a missing column could not kill the snapshot. Correct, and paid for once a
+	// second, forever: an idle designer made three full scans and an UPDATE every second, which is
+	// what the technology journal showed the first evening it existed (61 of each in one sitting).
+	//
+	// A schema does not gain or lose a column while the process runs, so the question is asked once
+	// and the answer kept. After that the common case is ONE read.
+	std::atomic<int>                             m_sessionHasOptionalColumns { 0 };
 	std::atomic<std::int64_t>                    m_sweepSuppressUntilMs  { 0 };
 
 	// Priority bins — one deque per ibPriority value. Drain iterates

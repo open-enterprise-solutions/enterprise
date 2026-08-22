@@ -340,9 +340,8 @@ bool ibValueRecordDataObjectRef::SaveData()
 			// The row's OWN reference, written in the SAME binary form (_RTRef = clsid +
 			// _RRRef = the pure guid) as any reference TO this row. That byte-identity is
 			// what makes a dot-walk JOIN equate source.fldX_RRRef = target.<selfref>_RRRef.
-			// CreateRaw skips PrepareRef (we only need the reference identity bytes, not
-			// materialised members).
-			value = ibValue(ibValueReferenceDataObject::CreateRaw(m_metaObject, m_objGuid));
+			// OnDemand: only the identity bytes are wanted here, not materialised members.
+			value = ibValue(ibValueReferenceDataObject::Create(m_metaObject, m_objGuid, ibReferenceLoad::OnDemand));
 		}
 		else {
 			const auto it = m_listObjectValue.find(object->GetMetaID());
@@ -418,7 +417,7 @@ bool ibValueRecordDataObjectRef::DeleteData()
 		if (const ibValueMetaObjectAttributePredefined* parent = hierarchy->GetDataParent()) {
 			ibDataQueryBuilder()
 				.From(m_metaObject->GetQueryable())
-				.Where(parent, ibValue(ibValueReferenceDataObject::CreateRaw(m_metaObject, m_objGuid)))
+				.Where(parent, ibValue(ibValueReferenceDataObject::Create(m_metaObject, m_objGuid, ibReferenceLoad::OnDemand)))
 				.SetValue(parent, parent->CreateValue())
 				.Update();
 		}

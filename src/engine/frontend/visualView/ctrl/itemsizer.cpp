@@ -61,7 +61,7 @@ void ibValueSizerItem::OnCreated(wxObject* wxobject, ibFrontendWindow* /*wxparen
 	wxObject*        child = GetSizerItemChildWx(visualHost, object);
 	if (sizer == nullptr || child == nullptr) {
 		if (child == nullptr)
-			wxLogError(wxT("The SizerItem component has no child - this should not be possible!"));
+			ibJournalError(wxT("ui.form"), wxT("The SizerItem component has no child - this should not be possible!"));
 		return;
 	}
 
@@ -87,7 +87,7 @@ void ibValueSizerItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* /*wxparen
 	wxObject*        child = GetSizerItemChildWx(visualHost, object);
 	if (sizer == nullptr || child == nullptr) {
 		if (child == nullptr)
-			wxLogError(wxT("The SizerItem component has no child - this should not be possible!"));
+			ibJournalError(wxT("ui.form"), wxT("The SizerItem component has no child - this should not be possible!"));
 		return;
 	}
 

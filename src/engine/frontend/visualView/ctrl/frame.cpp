@@ -128,7 +128,7 @@ bool ibValueFrame::LoadNode(const ibDataNode& node)
 			// symptom (Max, 2026-08-20). NewObject has already reported WHY when it had a reason;
 			// this names WHAT and WHERE, which the reason alone does not carry.
 			if (child == nullptr) {
-				wxLogError(_("Control '%s' of '%s' could not be restored (class id %lld)"),
+				ibJournalError(wxT("ui.form"), _("Control '%s' of '%s' could not be restored (class id %lld)"),
 					childNode.GetValue<wxString>(wxT("Name")), GetControlName(), (long long)childNode.GetClsid());
 				continue;
 			}
@@ -223,7 +223,7 @@ bool ibValueFrame::PasteNode(const ibDataNode& node)
 			// Same rule on the paste road — a control silently missing from what was pasted reads
 			// as "the clipboard lost it", which is the one thing the user cannot investigate.
 			if (child == nullptr) {
-				wxLogError(_("Control '%s' of '%s' could not be pasted (class id %lld)"),
+				ibJournalError(wxT("ui.form"), _("Control '%s' of '%s' could not be pasted (class id %lld)"),
 					childNode.GetValue<wxString>(wxT("Name")), GetControlName(), (long long)childNode.GetClsid());
 				continue;
 			}

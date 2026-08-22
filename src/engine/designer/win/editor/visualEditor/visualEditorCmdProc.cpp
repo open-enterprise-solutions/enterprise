@@ -924,11 +924,11 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateObject(const wxStrin
 	// is exactly the code that raises it.
 	catch (const ibBackendException& err)
 	{
-		wxLogError(wxT("%s"), err.GetErrorDescription());
+		ibJournalError(wxT("designer"), wxT("%s"), err.GetErrorDescription());
 	}
 	catch (const std::exception& ex)
 	{
-		wxLogError(wxT("%s"), wxString::FromUTF8(ex.what()));
+		ibJournalError(wxT("designer"), wxT("%s"), wxString::FromUTF8(ex.what()));
 	}
 
 	return obj;
@@ -1344,12 +1344,12 @@ bool ibVisualEditorNotebook::ibVisualEditor::PasteObject(ibValueFrame* dstObject
 	// The project's own exception first — see the twin note above.
 	catch (const ibBackendException& err)
 	{
-		wxLogError(wxT("%s"), err.GetErrorDescription());
+		ibJournalError(wxT("designer"), wxT("%s"), err.GetErrorDescription());
 		return false;
 	}
 	catch (const std::exception& ex)
 	{
-		wxLogError(wxT("%s"), wxString::FromUTF8(ex.what()));
+		ibJournalError(wxT("designer"), wxT("%s"), wxString::FromUTF8(ex.what()));
 		return false;
 	}
 

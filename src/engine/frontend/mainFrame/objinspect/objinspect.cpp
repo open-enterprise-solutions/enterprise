@@ -472,7 +472,7 @@ void ibObjectInspector::OnPropertyGridItemSelected(wxPropertyGridEvent& event)
 
 void ibObjectInspector::OnBitmapPropertyChanged(wxCommandEvent& event)
 {
-	wxLogDebug(wxT("OI::BitmapPropertyChanged: %s"), event.GetString().c_str());
+	ibJournalInfo(wxT("ui"), wxT("OI::BitmapPropertyChanged: %s"), event.GetString().c_str());
 
 	//if (!propVal.IsEmpty()) {
 	//	wxPGBitmapProperty* bp = wxDynamicCast(m_pg->GetPropertyByLabel(strPropName), wxPGBitmapProperty);

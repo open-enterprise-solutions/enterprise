@@ -2508,7 +2508,7 @@ void ibComposerSettingsPanel::PrepareModuleContext()
 			// names than it should" is invisible otherwise, and the reason is exactly this line.
 			try { context->Compile(); }
 			catch (const ibBackendException& error) {
-				wxLogDebug(wxT("composer settings: module manager did not compile - %s"),
+				ibJournalInfo(wxT("ui"), wxT("composer settings: module manager did not compile - %s"),
 					error.GetErrorDescription());
 			}
 		}

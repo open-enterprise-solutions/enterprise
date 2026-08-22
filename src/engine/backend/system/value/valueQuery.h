@@ -29,6 +29,7 @@
 #include "backend/query/queryLowering.h"
 #include "backend/query/queryTempStore.h"        // ibQueryTempTableStore — what TempTablesManager holds
 #include "backend/query/dataQueryBuilder.h"     // ibDataQueryResult / ibSelectKind
+#include "backend/query/queryReadState.h"    // ibQueryReadState — the state a live answer is read in
 #include "backend/query/querySelector.h"        // ibSelector — the grouped / hierarchical traversal
 
 #include <map>
@@ -158,11 +159,18 @@ class BACKEND_API ibValueQueryResult : public ibValueDynamicMembers
 	std::vector<ibQueryLowering::OutputColumn> m_schema;
 	bool                                       m_hasTotals = false;   // the query had a TOTALS clause
 
+	// ⭐ THE STATE THIS ANSWER WAS READ IN, held for as long as the answer is. A script runs a query
+	// and draws its rows whenever it likes; the cursor above is live until then, and every statement
+	// behind it must see the same data or the answer contradicts itself. Handed on to the selection
+	// in Select(), so releasing THIS does not end the read. Null when a transaction was already open.
+	std::shared_ptr<ibQueryReadState>       m_snapshot;
+
 	void FillMembers(ibMemberTable& helper) const;
 
 public:
 	ibValueQueryResult();                                                                            // empty
-	ibValueQueryResult(ibDataQueryResult&& result, std::vector<ibQueryLowering::OutputColumn> schema, bool hasTotals);
+	ibValueQueryResult(ibDataQueryResult&& result, std::vector<ibQueryLowering::OutputColumn> schema, bool hasTotals,
+	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr);
 	~ibValueQueryResult() override;
 
 	bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
@@ -181,15 +189,21 @@ class BACKEND_API ibValueQuerySelect : public ibValueDynamicMembers
 	std::unique_ptr<ibSelector>                m_tree;
 	std::vector<ibQueryLowering::OutputColumn> m_schema;
 
+	// The read's state, inherited from the QueryResult this selection came out of — see the note
+	// there. A flat selection needs it most: its cursor is still live and draws rows on demand.
+	std::shared_ptr<ibQueryReadState>       m_snapshot;
+
 	void    FillMembers(ibMemberTable& helper) const;
 	ibValue ReadColumn(const ibQueryLowering::OutputColumn& oc) const;   // current row / node cell
 
 public:
 	ibValueQuerySelect();                                                                            // empty
 	ibValueQuerySelect(std::unique_ptr<ibDataQueryResult> flat,
-	                   std::vector<ibQueryLowering::OutputColumn> schema);                            // flat list
+	                   std::vector<ibQueryLowering::OutputColumn> schema,
+	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr);                      // flat list
 	ibValueQuerySelect(ibSelector&& tree,
-	                   std::vector<ibQueryLowering::OutputColumn> schema);                            // grouped / TOTALS
+	                   std::vector<ibQueryLowering::OutputColumn> schema,
+	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr);                      // grouped / TOTALS
 	~ibValueQuerySelect() override;
 
 	bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,

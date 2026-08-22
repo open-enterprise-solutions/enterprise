@@ -30,6 +30,8 @@
 #include <wx/debug.h>   // wxSetAssertHandler
 #include <wx/log.h>     // wxLogStderr — the default wxLogGui is a MODAL flush
 
+#include "backend/diagnostics/journal.h"   // ibTechJournal — the suite gets one too
+
 #ifdef _WIN32
 #include <crtdbg.h>
 #include <windows.h>
@@ -79,6 +81,16 @@ public:
 			// (libpng's "iCCP: known incorrect sRGB profile" on our icons is one).
 			// stderr has no OK button.
 			delete wxLog::SetActiveTarget(new wxLogStderr());
+
+			// ⭐ THE TECHNOLOGY JOURNAL, FOR THE SUITE TOO. Applications open it inside
+			// ibCrashGuard::Install; a gtest binary has no such entry, so without this the one place
+			// a failure is hardest to reproduce — someone else's machine, hours later, from a job
+			// log — is the one place with no record of what the engine was doing.
+			//
+			// The file lands in `journal/` beside the test binary, named for this run. It does NOT
+			// go to stderr unless OES_JOURNAL_STDERR says so: twelve hundred tests' worth of engine
+			// commentary in a job log helps nobody.
+			ibTechJournal::Open(wxT("oes_tests"));
 
 			m_ok = wxTheApp->CallOnInit();
 		}

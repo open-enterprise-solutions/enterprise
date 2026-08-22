@@ -95,7 +95,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddChildr
 				itemParent->GetControlName().c_str(),
 				itemParent->GetClassName().c_str());
 
-			wxLogError(msg);
+			ibJournalError(wxT("designer"), msg);
 		}
 	}
 	else {
@@ -296,7 +296,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnObjectS
 		m_notifySelecting = false;
 	}
 	else {
-		wxLogError(wxT("There is no tree item associated with this object.\n\tClass: %s\n\tName: %s"), obj->GetClassName().c_str(), obj->GetControlName().c_str());
+		ibJournalError(wxT("designer"), wxT("There is no tree item associated with this object.\n\tClass: %s\n\tName: %s"), obj->GetClassName().c_str(), obj->GetControlName().c_str());
 	}
 }
 

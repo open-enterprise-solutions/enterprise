@@ -501,7 +501,15 @@ bool ibDatabaseLayerPostgres::IsOpen()
 // transaction support
 void ibDatabaseLayerPostgres::DoBeginTransaction(const ibTxOptions& opts)
 {
-	DoRunQuery(wxT("BEGIN"), false);
+	// ONE COMMITTED STATE FOR THE WHOLE TRANSACTION — see ibDbTxOptions::snapshot. PG's default is
+	// READ COMMITTED, where each statement re-reads whatever has committed since, so a report built
+	// under it can show a total from before a posting and the lines from after it. REPEATABLE READ is
+	// PG's name for the same guarantee Firebird calls concurrency; it must be asked for on the BEGIN
+	// itself, since the isolation level cannot be changed once a statement has run.
+	DoRunQuery(opts.snapshot
+		? (opts.readOnly ? wxT("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
+		                 : wxT("BEGIN ISOLATION LEVEL REPEATABLE READ"))
+		: wxT("BEGIN"), false);
 
 	// PG's NOWAIT behaviour is per-statement (`SELECT ... FOR UPDATE NOWAIT`)
 	// or session-level (`SET lock_timeout`). Inside a TX the cleanest knob

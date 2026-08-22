@@ -189,94 +189,59 @@ ibPreparedStatement* ibDatabaseLayer::DoPrepareStatementUtf8(const wxChar* forma
 
 void ibDatabaseLayer::CloseResultSets()
 {
-	// Iterate through all of the result sets and close them all
-	DatabaseResultSetHashSet::iterator start = m_ResultSets.begin();
-	DatabaseResultSetHashSet::iterator stop = m_ResultSets.end();
-	while (start != stop)
+	// Take the list first, then delete — each result set erases itself from it as it dies, so deleting
+	// while walking the member would be erasing from the container being iterated.
+	DatabaseResultSetHashSet resultSets;
+	resultSets.swap(m_ResultSets);
+
+	for (ibDatabaseResultSet* pResultSet : resultSets)
 	{
 		ibJournalInfo(wxT("db"),wxT("ResultSet NOT closed and cleaned up by the ibDatabaseLayer dtor"));
-		delete(*start++);
+		delete pResultSet;
 	}
-	m_ResultSets.clear();
 }
 
 void ibDatabaseLayer::CloseStatements()
 {
+	// ⚠ TAKE THE LIST FIRST, THEN DELETE. Each statement now strikes itself out of m_Statements as it
+	// dies (see ~ibPreparedStatement), so deleting while walking the member would be erasing from the
+	// container being iterated. Moving it out settles that: what is deleted below belongs to nobody
+	// else, and the members' erase finds an empty set.
+	DatabaseStatementHashSet statements;
+	statements.swap(m_Statements);
 
-	// Iterate through all of the statements and close them all
-	DatabaseStatementHashSet::iterator start = m_Statements.begin();
-	DatabaseStatementHashSet::iterator stop = m_Statements.end();
-	while (start != stop)
+	for (ibPreparedStatement* pStatement : statements)
 	{
 		ibJournalInfo(wxT("db"),wxT("PreparedStatement NOT closed and cleaned up by the DatabaseLayer dtor"));
-		//delete (*start); start++;
-		delete(*start++);
+		delete pStatement;
 	}
-	m_Statements.clear();
 }
 
 bool ibDatabaseLayer::CloseResultSet(ibDatabaseResultSet*& pResultSet)
 {
-	if (pResultSet != nullptr)
-	{
-		// Check if we have this result set in our list
-		if (m_ResultSets.find(pResultSet) != m_ResultSets.end())
-		{
-			// Remove the result set pointer from the list and delete the pointer
-			m_ResultSets.erase(pResultSet); wxDELETE(pResultSet);
-			return true;
-		}
-
-		// If not then iterate through all of the statements and see
-		//  if any of them have the result set in their lists
-		DatabaseStatementHashSet::iterator it;
-		for (it = m_Statements.begin(); it != m_Statements.end(); ++it)
-		{
-			// If the statement knows about the result set then it will close the 
-			//  result set and return true, otherwise it will return false
-			ibPreparedStatement* pStatement = *it;
-			if (pStatement != nullptr)
-			{
-				if (pStatement->CloseResultSet(pResultSet))
-				{
-					return true;
-				}
-			}
-		}
-
-		// If we don't know about the result set and the statements don't
-		//  know about it, the just delete it
-		wxDELETE(pResultSet);
-		return true;
-	}
-	else
-	{
-		// Return false on nullptr pointer
+	if (pResultSet == nullptr)
 		return false;
-	}
 
+	// ONE ACT NOW, AND NO SEARCH. This used to look in our own list, then ask every prepared statement
+	// in turn whether the result set was theirs — a hunt for the answer to "who is keeping this",
+	// which the result set has known all along. It knows because whoever registered it said so, and it
+	// tells that owner on the way out (~ibDatabaseResultSet). So deleting it takes it out of the right
+	// books, whichever those are, and asking around is no longer any part of it.
+	wxDELETE(pResultSet);
+	return true;
 }
 
 bool ibDatabaseLayer::CloseStatement(ibPreparedStatement*& pStatement)
 {
-	if (pStatement != nullptr)
-	{
-		// See if we know about this pointer, if so then remove it from the list
-		if (m_Statements.find(pStatement) != m_Statements.end()) {
-			// Remove the statement pointer from the list and delete the pointer
-			m_Statements.erase(pStatement); wxDELETE(pStatement);
-			return true;
-		}
-
-		// Otherwise just delete it
-		wxDELETE(pStatement);
-		return true;
-	}
-	else
-	{
-		// Return false on nullptr pointer
+	if (pStatement == nullptr)
 		return false;
-	}
+
+	// ONE ACT NOW: deleting it takes it out of the books, because it does that itself on the way out
+	// (~ibPreparedStatement). This used to erase first and delete second, and the two halves were the
+	// defect — a statement freed by any other route stayed in the list as a dangling pointer, so
+	// "closed" and "released" were different things and only this door did both.
+	wxDELETE(pStatement);
+	return true;
 }
 
 

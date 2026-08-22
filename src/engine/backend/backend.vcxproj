@@ -231,6 +231,7 @@
     <ClInclude Include="query\queryable.h" />
     <ClInclude Include="query\dataQueryBuilder.h" />
     <ClInclude Include="query\queryProvider.h" />
+    <ClInclude Include="query\queryReadState.h" />
     <ClInclude Include="query\dbTableProvider.h" />
     <ClInclude Include="query\columnLayout.h" />
     <ClInclude Include="query\columnSpread.h" />
@@ -467,6 +468,7 @@
     <ClCompile Include="databaseLayer\databaseLayerException.cpp" />
     <ClCompile Include="databaseLayer\databaseQueryParser.cpp" />
     <ClCompile Include="databaseLayer\databaseResultSet.cpp" />
+    <ClCompile Include="databaseLayer\preparedStatement.cpp" />
     <ClCompile Include="databaseLayer\databaseStringConverter.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdBlobCompression.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdBootstrap.cpp" />
@@ -685,6 +687,7 @@
     <ClCompile Include="system\value\valueQuery.cpp" />
     <ClCompile Include="system\value\valueQueryable.cpp" />
     <ClCompile Include="query\queryProvider.cpp" />
+    <ClCompile Include="query\queryReadState.cpp" />
     <ClCompile Include="query\dbTableProvider.cpp" />
     <ClCompile Include="query\columnLayout.cpp" />
     <ClCompile Include="query\dataMover.cpp" />

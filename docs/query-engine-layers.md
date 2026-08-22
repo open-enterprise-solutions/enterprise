@@ -342,6 +342,68 @@ column NULL — after which the first dimension level is reached the way every l
 into the one above it. The tree may also arrive ALREADY BUILT, when the DBMS folded it
 (`WithReadyTree`, `GROUP BY ROLLUP`); the walk over it is identical, which is the point.
 
+**ONE ANSWER, ONE STATE OF THE DATA** (`query/queryReadState.h`) — ⛔ **built, and opened by nothing
+since 2026-08-23**: the design first, the switch-off below it. What an author writes as ONE query is
+several statements down here: a join the server would not take is stitched from two reads, a
+subquery is promoted to a DB temp table and read back, a page is fetched at a time,
+and every printed reference fetches its own row. Under read-committed each of those reads whatever
+has committed by the moment it starts, so records written while an answer is being drawn land in some
+parts of it and not others — and nothing in the result says which parts.
+
+`ibQueryReadState::Open()` hands back a `shared_ptr` holding a transaction opened with
+`ibDbTxOptions::snapshot`, or **null** when there is nothing to open: a transaction is already
+active, or there is no session at all. Null is not a failure and needs no branch — a null holder
+simply holds nothing. When the last holder releases it, the destructor commits.
+
+**It was `ibQueryReadSnapshot` (`query/queryReadSnapshot.{h,cpp}`) until 2026-08-23.** The word was
+taken twice here already — the L3 flat RAM materialisation, and configuration-compare's
+`DiffSnapshots` — so a third meaning read as one of the other two. The name now says what the object
+holds: the state of the data one answer is read in.
+
+⭐ **IT IS HELD, NOT SCOPED TO A CALL** — the reason it is an object rather than a guard at the top of
+the L3 execute functions. A query does not FINISH when its execute returns: `ExecuteRead` hands back
+a LIVE cursor and the caller draws rows from it afterwards. The guard version was written first and
+killed the cursor its own result depended on — measured as Firebird `-504, cursor is not open` on the
+first row of the first query. So the read state travels WITH the result. Four read doors declare a
+holder for it — ⛔ all four unopened today — and the shape of each holder is set by who outlives the
+cursor:
+
+| door (holder declared, not opened) | shape |
+|---|---|
+| `ibDataDBComposer::Run` (`composition/dataComposer.cpp`) | a local: a build draws its rows before it returns |
+| `ibValueQueryExec::RunPackage` (`system/value/valueQuery.cpp`) | before the first statement of the package; each `ibValueQueryResult` takes a share and `Select()` passes it on to `ibValueQuerySelect`, so the transaction would end when the last reader let go |
+| `ibValueQueryable::DispatchLinqMethod` (`system/value/valueQueryable.cpp`) | a local for the terminal, plus a share on `ibQueryableIteratorState` — a `Foreach` draws rows after the pipeline returned; that member is declared BEFORE the cursor, so it would open first and close last |
+| `ibValueQueryDecorator::DispatchLinqMethod` (`system/value/valueQueryable.cpp`) | the same, one door lower: whichever door is entered first opens it and the inner one finds it already open |
+
+**It defers to a transaction already open.** `Open()` returns null when one is active — the caller's
+window is wider and gives the guarantee instead. That is how a caller says *every query in this build
+reads one state*: open a transaction first, and each query then finds it and adds nothing.
+
+**WRITE mode, though nothing here means to write.** A read is allowed to write on our behalf — a
+source computed in RAM is promoted into a DB temp table and filled
+(`ibTempTableManager::Materialise`) — and a read-only transaction refuses that, failing a query that
+used to work.
+
+⚠ **It is not free**, which is why it belongs to the answer and not to the screen: holding one state
+means the server keeps the record versions that state needs. An answer is read and released; a list
+left open and scrolled for minutes must NOT hold one, because between its pages the data legitimately
+moves. What it does **not** add is the transaction itself — a live cursor already keeps one open
+today (with no outer transaction the prepared statement starts and manages its own), so what changes
+is the ISOLATION of a transaction that existed either way.
+
+⛔ **AND NOTHING OPENS ONE — 2026-08-23.** Opened at all four doors, the application hung within
+minutes of starting. The journal shows a list reading under one of them, and the thread that then
+stopped was WRITING — a DELETE and an INSERT into `sys_bytecode_cache`; after that only the session
+heartbeat kept logging. The state pins the connection to the session for the length of an answer
+(`ibDatabaseLayer::BeginTransaction` → `ibConnectionPool::SetActiveTxConnection`), so an incidental
+write on the same session mid-answer meets that WRITE-mode transaction, and the Firebird TPB waits
+(`isc_tpb_wait`).
+
+The consistency argument stands; the placement does not. What has to be settled before it is switched
+on again: WHICH writes may happen inside a read, and whether they belong in the same transaction or
+must be kept out of it. Until then every read reads under whatever transaction it happens to find, as
+it did before — and `query/queryReadState.h` carries the long form of this note.
+
 **A DOOR MAY DECLARE A NAMED QUERY** (2026-08-21). `.With(name, innerDoor)` records one; the spec
 carries the list; `ibDbTableProvider::AttachNamedQueries` lowers each through the ordinary road (its
 own spec through `BuildPageIR`) and puts the resulting relation on the SAME IR. The source that
@@ -619,6 +681,12 @@ See [data-composer.md](data-composer.md); the two composers are the DB/RAM split
 - **L4-3 decorates, it does not source.** L4-1/L4-2/L5 *produce* queries; L4-3 *wraps* any of them
   on the L3 door — so RLS composes with everything above it for free.
 - **L5-1 renders to L4-1.** The DB composer emits L4-1 text; L5-2 (RAM) is independent.
+- **The read state is held ABOVE the door it protects** — ⛔ and held by nobody today.
+  `ibQueryReadState` lives at L3, but no L3 code would hold it: the four read doors above it do
+  (L5's `ibDataDBComposer::Run`, the script query door, both LINQ dispatchers), because they are the
+  ones that outlive the cursor. All four declare the holder unopened since 2026-08-23 — see § L3 for
+  why. A caller that opens a transaction of its own gets a null holder and its own wider window
+  instead.
 - **Temp tables ride the L4 seam.** A RAM/temp source has no registered name, so L5 registers it in
   `ibTempSourceScope` at the L4 resolve step; L4 resolves it directly; **L3 runs it unchanged** (it
   already IS a complete L3 queryable).

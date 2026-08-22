@@ -8,6 +8,7 @@
 #include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase::GetRestructureInfo (the static ledger accessor)
 
 #include "backend/metaData.h"
+#include "backend/utils/debugTrace.h"   // ibDebugTraceEnabled — per-object id tracing is opt-in
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 #include <wx/log.h>
@@ -104,11 +105,13 @@ bool ibValueMetaObject::OnCreateMetaObject(ibMetaData* metaData, int flags)
 	// WHO got which number, and under whom. The owner is the half that identifies a slot: six
 	// analytics slots and a dimension are indistinguishable by class alone, and it is precisely a
 	// slot and a dimension that were seen holding the same id.
-#ifdef DEBUG  
-	ibJournalInfo(wxT("metadata"),wxT("* Create metaData object %s with id %i"),
-		GetClassName(), GetMetaID()
-	);
-#endif
+	// ⚠ OFF UNLESS ASKED FOR (`OES_TRACE_METAIDS=1`). This fires for EVERY object of every
+	// configuration load — two hundred lines before the first window appears — and a journal whose
+	// first half is a list of things that always happen is a journal whose second half nobody
+	// reaches. The counter it exists for is still one variable away when it is needed.
+	static const bool s_traceIds = ibDebugTraceEnabled("OES_TRACE_METAIDS");
+	if (s_traceIds)
+		ibJournalInfo(wxT("metadata"), wxT("id %i -> %s"), GetMetaID(), GetClassName());
 	return true;
 }
 

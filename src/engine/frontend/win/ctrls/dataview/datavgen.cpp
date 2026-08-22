@@ -8089,12 +8089,12 @@ void ibDataViewCtrl::ProcessTableMouseEvent(wxMouseEvent& event, ibDataViewMainW
 				hoverOverExpander = true;
 				if (m_underMouse && m_underMouse != node)
 				{
-					// wxLogMessage("Undo the row: %d", GetRowByItem(m_underMouse->GetItem()));
+					// ibJournalInfo(wxT("ui"), "Undo the row: %d", GetRowByItem(m_underMouse->GetItem()));
 					RefreshRow(GetRowByItem(m_underMouse->GetItem()));
 				}
 				if (m_underMouse != node)
 				{
-					// wxLogMessage("Do the row: %d", current);
+					// ibJournalInfo(wxT("ui"), "Do the row: %d", current);
 					RefreshRow(current);
 				}
 				m_underMouse = node;
@@ -8110,7 +8110,7 @@ void ibDataViewCtrl::ProcessTableMouseEvent(wxMouseEvent& event, ibDataViewMainW
 	{
 		if (m_underMouse != NULL)
 		{
-			// wxLogMessage("Undo the row: %d", GetRowByItem(m_underMouse->GetItem()));
+			// ibJournalInfo(wxT("ui"), "Undo the row: %d", GetRowByItem(m_underMouse->GetItem()));
 			RefreshRow(GetRowByItem(m_underMouse->GetItem()));
 			m_underMouse = NULL;
 		}

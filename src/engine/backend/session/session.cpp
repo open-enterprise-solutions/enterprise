@@ -1289,6 +1289,19 @@ ibSessionThreadBinding::~ibSessionThreadBinding()
 	ibSession::UnbindThread(m_tid);
 }
 
+// --- per-session state, keyed by type (see ibSession::Local) ------------
+
+std::shared_ptr<void> ibSession::FindLocal(const std::type_index& key) const
+{
+	const auto it = m_locals.find(key);
+	return it != m_locals.end() ? it->second : std::shared_ptr<void>();
+}
+
+void ibSession::SetLocal(const std::type_index& key, const std::shared_ptr<void>& value)
+{
+	m_locals[key] = value;
+}
+
 // --- ibSessionScope -----------------------------------------------------
 
 ibSessionScope::ibSessionScope(ibSession* s)

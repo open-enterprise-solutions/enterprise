@@ -247,7 +247,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 	// Get the ibValueFrame from the event
 	if (obj == nullptr) {
 		// Strange...
-		wxLogDebug(wxT("The event object is nullptr - why?"));
+		ibJournalInfo(wxT("designer"), wxT("The event object is nullptr - why?"));
 		return;
 	}
 

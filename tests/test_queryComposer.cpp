@@ -1261,30 +1261,76 @@ TEST(QuerySelector, Select_NoSource_EmptyAndNoDbHit)
 
 // The Selector is a CURSOR: Next() walks the folded tree pre-order, GetValue/Level read the current
 // visit. One interface over flat-vs-tree (here: Hierarchy → folder then its subtree).
-TEST(QuerySelector, Iterate_PreOrderCursorWithLevels)
+// ⭐⭐ A SELECTION WALKS ONE LEVEL, and what hangs under a node is reached by descending into it.
+//
+// This test used to assert the opposite — one cursor over the whole tree, pre-order, five visits —
+// and that was the contract until 2026-08-22. It changed on purpose: three groupings are three
+// nested loops, which is how the language reads and how a person writes it. Under the old shape the
+// reader could tell a heading from a row only by watching Level() change, and a script written the
+// obvious way saw every row twice, once mixed into the outer loop.
+//
+// The tree here: F1 and E3 at the top, E1 and F2 under F1, E2 under F2.
+TEST(QuerySelector, Iterate_OneLevelPerSelection_DescendForChildren)
 {
 	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
 	ibSelector sel(HierDetail(), ibSelectKind::ibSelectKind_ByGroupsHierarchy);
 	sel.ByParentRef(&keyCol, &parentCol).Aggregating({ SumOf(&amtCol) });
 
-	std::vector<std::string> keys;
-	std::vector<int>         levels;
-	while (sel.Next()) {
-		keys.push_back(sel.GetValue(&keyCol).GetString().ToStdString());
-		levels.push_back(sel.Level());
-	}
+	auto keysOf = [&keyCol](ibSelector& s, std::vector<int>* levels = nullptr) {
+		std::vector<std::string> out;
+		while (s.Next()) {
+			out.push_back(s.GetValue(&keyCol).GetString().ToStdString());
+			if (levels != nullptr) levels->push_back(s.Level());
+		}
+		return out;
+	};
 
-	ASSERT_EQ(keys.size(), 5u);                          // F1, E1, F2, E2, E3 — pre-order
-	EXPECT_EQ(keys[0], "1");   EXPECT_EQ(levels[0], 1);  // F1 folder, top level
-	EXPECT_EQ(keys[2], "3");                             // F2 (nested folder)
-	EXPECT_EQ(levels[3], 3);                             // E2 — under F2 under F1
-	EXPECT_EQ(keys[4], "5");   EXPECT_EQ(levels[4], 1);  // E3 top-level element
+	// The top level, and ONLY the top level.
+	std::vector<int> topLevels;
+	const std::vector<std::string> top = keysOf(sel, &topLevels);
+	ASSERT_EQ(top.size(), 2u);
+	EXPECT_EQ(top[0], "1");   EXPECT_EQ(topLevels[0], 1);   // F1
+	EXPECT_EQ(top[1], "5");   EXPECT_EQ(topLevels[1], 1);   // E3
+
+	// Descend into F1 — its own children, and LEVELS STAY ABSOLUTE across the descent.
+	sel.Reset();
+	ASSERT_TRUE(sel.Next());
+	ASSERT_EQ(sel.GetValue(&keyCol).GetString(), wxT("1"));
+	ibSelector underF1 = sel.Select(ibSelectKind::ibSelectKind_ByGroupsHierarchy);
+	std::vector<int> f1Levels;
+	const std::vector<std::string> f1 = keysOf(underF1, &f1Levels);
+	ASSERT_EQ(f1.size(), 2u);
+	EXPECT_EQ(f1[0], "2");   EXPECT_EQ(f1Levels[0], 2);     // E1
+	EXPECT_EQ(f1[1], "3");   EXPECT_EQ(f1Levels[1], 2);     // F2
+
+	// …and one floor further: F2's own child.
+	underF1.Reset();
+	ASSERT_TRUE(underF1.Next());
+	ASSERT_TRUE(underF1.Next());                            // F2
+	ASSERT_EQ(underF1.GetValue(&keyCol).GetString(), wxT("3"));
+	ibSelector underF2 = underF1.Select(ibSelectKind::ibSelectKind_ByGroupsHierarchy);
+	std::vector<int> f2Levels;
+	const std::vector<std::string> f2 = keysOf(underF2, &f2Levels);
+	ASSERT_EQ(f2.size(), 1u);
+	EXPECT_EQ(f2[0], "4");   EXPECT_EQ(f2Levels[0], 3);     // E2, three floors down
 
 	// Reset rewinds — the same tree walks again (no re-query, no re-fold).
 	sel.Reset();
-	int again = 0;
-	while (sel.Next()) ++again;
-	EXPECT_EQ(again, 5);
+	EXPECT_EQ(keysOf(sel).size(), 2u);
+}
+
+// …AND AN EXHAUSTED SELECTION STAYS ON ITS LAST ROW. `Next()` answering false means "there is no
+// next row", not "you are now nowhere": reading a column after the loop gives the last row's value
+// rather than a screenful of NULLs, which is indistinguishable from a real row made of nothing.
+TEST(QuerySelector, Exhausted_KeepsTheLastRow)
+{
+	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	ibSelector sel(HierDetail(), ibSelectKind::ibSelectKind_ByGroupsHierarchy);
+	sel.ByParentRef(&keyCol, &parentCol).Aggregating({ SumOf(&amtCol) });
+
+	while (sel.Next()) {}
+	EXPECT_FALSE(sel.Next());                               // still refuses, idempotently
+	EXPECT_EQ(sel.GetValue(&keyCol).GetString(), wxT("5")); // …and still stands on E3
 }
 
 // ===========================================================================

@@ -755,13 +755,13 @@ bool ibDocument::DoSaveDocument(const wxString& file)
     if ( store.GetLastError() != wxSTREAM_NO_ERROR )
 #endif
     {
-        wxLogError(_("File \"%s\" could not be opened for writing."), file);
+        ibJournalError(wxT("docview"), _("File \"%s\" could not be opened for writing."), file);
         return false;
     }
 
     if (!SaveObject(store))
     {
-        wxLogError(_("Failed to save document to the file \"%s\"."), file);
+        ibJournalError(wxT("docview"), _("Failed to save document to the file \"%s\"."), file);
         return false;
     }
 
@@ -778,7 +778,7 @@ bool ibDocument::DoOpenDocument(const wxString& file)
     if (store.GetLastError() != wxSTREAM_NO_ERROR || !store.IsOk())
 #endif
     {
-        wxLogError(_("File \"%s\" could not be opened for reading."), file);
+        ibJournalError(wxT("docview"), _("File \"%s\" could not be opened for reading."), file);
         return false;
     }
 
@@ -790,7 +790,7 @@ bool ibDocument::DoOpenDocument(const wxString& file)
     if ( res != wxSTREAM_NO_ERROR && res != wxSTREAM_EOF )
 #endif
     {
-        wxLogError(_("Failed to read document from the file \"%s\"."), file);
+        ibJournalError(wxT("docview"), _("Failed to read document from the file \"%s\"."), file);
         return false;
     }
 
@@ -1236,7 +1236,7 @@ void ibDocManager::OnMRUFileNotExist(unsigned n, const wxString& filename)
     RemoveFileFromHistory(n);
 
     // and tell the user about it
-    wxLogError(_("The file '%s' doesn't exist and couldn't be opened.\n"
+    ibJournalError(wxT("docview"), _("The file '%s' doesn't exist and couldn't be opened.\n"
                  "It has been removed from the most recently used files list."),
                filename);
 }
@@ -1301,7 +1301,7 @@ void ibDocManager::OnPreview(wxCommandEvent& WXUNUSED(event))
         if ( !preview->IsOk() )
         {
             delete preview;
-            wxLogError(_("Print preview creation failed."));
+            ibJournalError(wxT("docview"), _("Print preview creation failed."));
             return;
         }
 
@@ -1542,7 +1542,7 @@ ibDocument *ibDocManager::CreateDocument(const wxString& pathOrig, long flags)
         temp = FindTemplateForPath(path);
         if ( !temp )
         {
-            wxLogWarning(_("The format of file '%s' couldn't be determined."),
+            ibJournalWarning(wxT("docview"), _("The format of file '%s' couldn't be determined."),
                          path);
         }
     }

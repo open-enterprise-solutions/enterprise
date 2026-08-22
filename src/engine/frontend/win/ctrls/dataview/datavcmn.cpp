@@ -524,7 +524,7 @@ ibDataViewRendererBase::CheckedGetValue(const ibDataViewModel* model,
 			// If you're seeing this message, this indicates that either your
 			// renderer is using the wrong type, or your model returns values
 			// of the wrong type.
-			wxLogDebug("Wrong type returned from the model for column %u: "
+			ibJournalInfo(wxT("ui"), "Wrong type returned from the model for column %u: "
 				"%s required but actual type is %s",
 				column,
 				GetVariantType(),
@@ -578,7 +578,7 @@ ibDataViewRendererBase::PrepareForItem(const ibDataViewModel* model,
 		(
 			// There is not much we can do about it here, just log it and don't
 			// show anything in this cell.
-			wxLogDebug("Retrieving the value from the model threw an exception");
+			ibJournalInfo(wxT("ui"), "Retrieving the value from the model threw an exception");
 	return false;
 		)
 }

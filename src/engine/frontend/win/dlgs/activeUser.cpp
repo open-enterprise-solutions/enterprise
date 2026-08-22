@@ -237,7 +237,7 @@ void ibDialogActiveUser::OnKickSelected(wxCommandEvent&)
 
 	auto* reg = ibApplicationData::GetSessionRegistry();
 	if (reg == nullptr || !reg->Kick(guid)) {
-		wxLogWarning(_("Failed to queue kick for session %s"), guid);
+		ibJournalWarning(wxT("ui"), _("Failed to queue kick for session %s"), guid);
 	}
 }
 
@@ -262,7 +262,7 @@ void ibDialogActiveUser::OnReloadSelected(wxCommandEvent&)
 
 	auto* reg = ibApplicationData::GetSessionRegistry();
 	if (reg == nullptr || !reg->Reload(guid)) {
-		wxLogWarning(_("Failed to queue reload for session %s"), guid);
+		ibJournalWarning(wxT("ui"), _("Failed to queue reload for session %s"), guid);
 	}
 }
 
@@ -305,13 +305,13 @@ void ibDialogActiveUser::OnForceReleaseSelected(wxCommandEvent&)
 	try {
 		const ibGuid g(lockGuid);
 		if (!g.isValid()) {
-			wxLogWarning(_("Invalid lock guid: %s"), lockGuid);
+			ibJournalWarning(wxT("ui"), _("Invalid lock guid: %s"), lockGuid);
 			return;
 		}
 		std::vector<ibGuid> one{ g };
 		auto* lm = ibApplicationData::GetLockManager();
 		if (lm == nullptr) {
-			wxLogWarning(_("Lock manager not available"));
+			ibJournalWarning(wxT("ui"), _("Lock manager not available"));
 			return;
 		}
 		lm->ReleaseRows(one);
@@ -321,10 +321,10 @@ void ibDialogActiveUser::OnForceReleaseSelected(wxCommandEvent&)
 		RefreshLocksTable();
 	}
 	catch (const ibBackendException& err) {
-		wxLogWarning(_("Failed to release lock %s: %s"),
+		ibJournalWarning(wxT("ui"), _("Failed to release lock %s: %s"),
 			lockGuid, err.GetErrorDescription());
 	}
 	catch (...) {
-		wxLogWarning(_("Failed to release lock %s"), lockGuid);
+		ibJournalWarning(wxT("ui"), _("Failed to release lock %s"), lockGuid);
 	}
 }

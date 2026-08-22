@@ -208,7 +208,7 @@ bool ibWebApplication::OnInit(ibSessionHolder&& holder)
 	// m_procUnitMap is already populated.
 	ibValueModuleManagerRuntimeConfiguration* sharedMgr = GetManagerModule();
 	if (sharedMgr == nullptr) {
-		wxLogWarning(wxT("ibWebApplication::OnInit: no shared moduleManager"));
+		ibJournalWarning(wxT("web"), wxT("ibWebApplication::OnInit: no shared moduleManager"));
 		delete m_frame;
 		m_frame = nullptr;
 		return false;
@@ -235,7 +235,7 @@ bool ibWebApplication::OnInit(ibSessionHolder&& holder)
 	const bool startOk = StartMainModuleSafe(sharedMgr);
 	std::cerr << "[app] StartMainModule: " << (startOk ? "ok" : "failed/vetoed") << std::endl;
 	if (!startOk) {
-		wxLogWarning(wxT("ibWebApplication::OnInit: StartMainModule returned false"));
+		ibJournalWarning(wxT("web"), wxT("ibWebApplication::OnInit: StartMainModule returned false"));
 		delete m_frame;
 		m_frame = nullptr;
 		return false;

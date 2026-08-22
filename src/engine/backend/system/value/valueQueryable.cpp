@@ -11,6 +11,7 @@
 #include "valueTable.h"                          // ibValueModelTable — the ToTable materialised result
 
 #include "backend/query/queryable.h"             // ibBackendQueryable / ibBackendQueryColumn
+#include "backend/query/queryReadState.h"        // ibQueryReadState — one state for a whole pipeline
 #include "backend/query/queryAst.h"              // ibQueryAstExpr — the recorded lambda body
 #include "backend/query/queryLowering.h"         // LowerLambdaPredicate / LowerLambdaColumnPath
 #include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — wrap a RAM value-table Join argument
@@ -124,7 +125,7 @@ public:
 	                         const wxString& projectAlias = wxEmptyString)
 		: m_builder(builder), m_take(take), m_refCol(refCol), m_cols(std::move(cols)),
 		  m_ownedSource(std::move(ownedSource)), m_projectCol(projectCol), m_projectAlias(projectAlias),
-		  m_sel(Run(builder, take)) {}
+		  m_sel(Run(builder, take)) {}   // m_readState stays null — see queryReadState.h
 
 	bool MoveNext(ibValue& current) override {
 		if (!m_sel.Next()) return false;
@@ -146,6 +147,15 @@ private:
 	std::shared_ptr<const ibBackendQueryable> m_ownedSource;   // keeps a Data.From wrapper alive
 	const ibBackendQueryColumn* m_projectCol;                  // single-column scalar projection (null = full row)
 	wxString                    m_projectAlias;                // dot-walk scalar projection, read by alias
+
+	// ⭐ THE STATE THE ROWS ARE READ IN, held because THIS outlives the call that made it — a Foreach
+	// draws rows long after the pipeline returned, out of a live cursor. DECLARED BEFORE m_sel on
+	// purpose: members are built in declaration order, so the state is open before the cursor that
+	// depends on it and closed after that cursor is gone. Null when a transaction is already open.
+	//
+	// Reset() re-executes and therefore reads whatever is current then — deliberately: re-running a
+	// loop is a new question, not a continuation of the old one.
+	std::shared_ptr<ibQueryReadState> m_readState;
 	ibDataQueryResult           m_sel;
 };
 
@@ -407,6 +417,16 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 
 	if (m_queryable == nullptr)
 		ibBackendCoreException::Error(_("Queryable: the source is not initialised"));
+
+	// ⭐ ONE STATE OF THE DATA FOR THE WHOLE PIPELINE. A terminal here is rarely one read: a join the
+	// server would not take is stitched from two, a computed source is materialised, an untranslatable
+	// step falls to the RAM floor and reads again. Under read-committed those are separate moments,
+	// and a pipeline can then answer out of two different states at once. This is the same holder the
+	// text query door and the composer use; null when a transaction is already open.
+	//
+	// ⚠ THE ITERATOR TAKES ITS OWN SHARE, and must: this local ends with the call, while the iterator
+	// hands rows out afterwards from a live cursor. See where it is built below.
+	const std::shared_ptr<ibQueryReadState> readsOneState;   // ⛔ NOT OPENED — see queryReadState.h
 
 	switch (method) {
 
@@ -683,6 +703,11 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 	using M = ibLinqMethod;
 	if (m_source == nullptr || m_target == nullptr)
 		ibBackendCoreException::Error(_("QueryDecorator: not initialised"));
+
+	// The decorator is a pipeline door of its own, so it needs the same guarantee — see the note in
+	// ibValueQueryable::DispatchLinqMethod. Nested: whichever door is entered first opens it and the
+	// inner one finds it already open, which is exactly the intent.
+	const std::shared_ptr<ibQueryReadState> readsOneState;   // ⛔ NOT OPENED — see queryReadState.h
 
 	switch (method) {
 

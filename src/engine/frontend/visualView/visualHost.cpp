@@ -677,14 +677,14 @@ void ibVisualHost::ibContentWindow::CreateContent(const ibValueForm* valueForm)
 		// message is DATA, not a format — an object name carrying a '%' made this read a vararg
 		// that was never passed.
 		catch (const ibBackendException& err) {
-			wxLogError(wxT("%s"), err.GetErrorDescription());
+			ibJournalError(wxT("ui.form"), wxT("%s"), err.GetErrorDescription());
 			failures << wxString::Format(wxT("%s: %s\n"),
 				child != nullptr ? child->GetControlName() : wxString(wxEmptyString),
 				err.GetErrorDescription());
 		}
 		catch (const std::exception& ex) {
 			const wxString what = wxString::FromUTF8(ex.what());
-			wxLogError(wxT("%s"), what);
+			ibJournalError(wxT("ui.form"), wxT("%s"), what);
 			failures << wxString::Format(wxT("%s: %s\n"),
 				child != nullptr ? child->GetControlName() : wxString(wxEmptyString), what);
 		}
@@ -713,10 +713,10 @@ void ibVisualHost::ibContentWindow::UpdateContent(const ibValueForm* valueForm)
 		// message is DATA, not a format — an object name carrying a '%' made this read a vararg
 		// that was never passed.
 		catch (const ibBackendException& err) {
-			wxLogError(wxT("%s"), err.GetErrorDescription());
+			ibJournalError(wxT("ui.form"), wxT("%s"), err.GetErrorDescription());
 		}
 		catch (const std::exception& ex) {
-			wxLogError(wxT("%s"), wxString::FromUTF8(ex.what()));
+			ibJournalError(wxT("ui.form"), wxT("%s"), wxString::FromUTF8(ex.what()));
 		}
 	}
 

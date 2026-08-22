@@ -129,7 +129,7 @@ void ibValueMetaObjectRecordDataEnumRef::ContributeTables(ibSchemaSnapshot& out)
 		// exceptions, on every apply. (The record family writes its own reference the same way.)
 		if (reference != nullptr)
 			row.Set(reference, ibValuePtr<ibValueReferenceDataObject>(
-				ibValueReferenceDataObject::CreateRaw(this, object->GetGuid())));
+				ibValueReferenceDataObject::Create(this, object->GetGuid(), ibReferenceLoad::OnDemand)));
 		if (order != nullptr)
 			row.Set(order, ibValue(position));
 		position++;
@@ -307,7 +307,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 		t.AddRow(object->GetPredefinedGuid(), object->GetPredefinedName())
 			.Set(GetDataReference(),
 				ibValuePtr<ibValueReferenceDataObject>(
-					ibValueReferenceDataObject::CreateRaw(this, object->GetPredefinedGuid())))
+					ibValueReferenceDataObject::Create(this, object->GetPredefinedGuid(), ibReferenceLoad::OnDemand)))
 			.Set(m_propertyAttributePredefined->GetMetaObject(), ibValue(object->GetPredefinedName()))
 			.Set(m_propertyAttributeCode->GetMetaObject(), ibValue(object->GetPredefinedCode()))
 			.Set(m_propertyAttributeDescription->GetMetaObject(), ibValue(object->GetPredefinedDescription()))
@@ -315,6 +315,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 			.Set(m_propertyAttributeDeletionMark->GetMetaObject(), ibValue(false))
 			.Set(m_propertyAttributeParent->GetMetaObject(),
 				ibValuePtr<ibValueReferenceDataObject>(
-					ibValueReferenceDataObject::CreateRaw(this, parent != nullptr ? parent->GetPredefinedGuid() : wxNullGuid)));
+					ibValueReferenceDataObject::Create(this, parent != nullptr ? parent->GetPredefinedGuid() : wxNullGuid,
+						ibReferenceLoad::OnDemand)));
 	}
 }

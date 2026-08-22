@@ -88,7 +88,7 @@ void ibDialogFormEditor::AddChildren(ibValueFrame* obj, const wxTreeItemId& pare
 				itemParent->GetControlName().c_str(),
 				itemParent->GetClassName().c_str());
 
-			wxLogError(msg);
+			ibJournalError(wxT("ui"), msg);
 		}
 	}
 	else {

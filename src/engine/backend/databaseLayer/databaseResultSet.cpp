@@ -12,6 +12,10 @@ ibDatabaseResultSet::~ibDatabaseResultSet()
 {
 	//wxPrintf(_("~ibDatabaseResultSet()\n"));
 	CloseMetaData();
+
+	// Whoever was keeping books on this one stops now — see the note on the declaration.
+	if (m_owner != nullptr)
+		m_owner->ForgetResultSet(this);
 }
 
 int ibDatabaseResultSet::GetResultInt(const wxString& strField)

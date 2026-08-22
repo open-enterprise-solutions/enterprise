@@ -279,8 +279,10 @@ ibValue ReadSingleTargetReference(const ibMetaData* metaData, const ibClassID& t
 	if (metaData == nullptr || target == 0 || keyBytes.GetDataLen() < sizeof(ibReference))
 		return ibValue();
 
+	// The key is all a query column carries; whoever asks the reference what it IS pays for the read.
 	ibValuePtr<ibValueReferenceDataObject> reference(
-		ibValueReferenceDataObject::Create(metaData, target, const_cast<void*>(keyBytes.GetData())));
+		ibValueReferenceDataObject::Create(metaData, target, const_cast<void*>(keyBytes.GetData()),
+			ibReferenceLoad::OnDemand));
 	return reference != nullptr ? ibValue(reference) : ibValue();
 }
 
@@ -456,17 +458,13 @@ bool ibColumnCodec::ReadField(const wxString& fieldName, int fieldType,
 		result.GetResultBlob(fieldName + ibFieldSuffix(ibColumnRole::ReferenceId), bufferData);
 		if (!bufferData.IsEmpty()) {
 
-			if (createData) {
-
-				ibValuePtr<ibValueReferenceDataObject> created_reference(
-					ibValueReferenceDataObject::CreateFromPtr(metaData, refType, bufferData.GetData()));
-
-				retValue = created_reference;
-				return created_reference != nullptr;
-			}
-
+			// Reading the row is what `createData` asks for here — it never meant "settle it", which is
+			// why the reference stays unlatched and a later use may read it again. This used to be an
+			// if/else over two differently NAMED creation functions, and neither name said anything
+			// about reading; the branch is the argument now.
 			ibValuePtr<ibValueReferenceDataObject> created_reference(
-				ibValueReferenceDataObject::Create(metaData, refType, bufferData.GetData()));
+				ibValueReferenceDataObject::Create(metaData, refType, bufferData.GetData(),
+					createData ? ibReferenceLoad::Unlatched : ibReferenceLoad::OnDemand));
 
 			retValue = created_reference;
 			return created_reference != nullptr;

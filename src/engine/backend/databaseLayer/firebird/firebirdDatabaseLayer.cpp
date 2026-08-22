@@ -877,7 +877,27 @@ void ibDatabaseLayerFirebird::DoBeginTransaction(const ibTxOptions& opts)
 		isc_tpb_version3, isc_tpb_read, isc_tpb_wait, isc_tpb_read_committed, (char)isc_tpb_read_consistency,
 		(char)isc_tpb_lock_timeout, 4, 30, 0, 0, 0
 	};
+	// Snapshot mode: concurrency — ONE committed state for the whole transaction, not per statement.
+	// This is the mode the table above calls ISOLATION_REPEATABLE_READ, and until 2026-08-22 it was
+	// only ever a line in that comment; a report asking for consistent figures had nothing to ask
+	// with. read_committed (the two modes above) re-reads what has committed since, which is exactly
+	// what makes a report disagree with itself halfway down. See ibDbTxOptions::snapshot.
+	//
+	// Write-mode rather than read: a snapshot is also what a posting run wants when it reads what it
+	// is about to write, and a read TPB would refuse that. The caller says readOnly when it means it.
+	static const std::string isc_tpb_snapshotMode = {
+		isc_tpb_version3, isc_tpb_write, isc_tpb_wait, isc_tpb_concurrency,
+		(char)isc_tpb_lock_timeout, 4, 30, 0, 0, 0
+	};
+	// ...and the same snapshot for a caller that also promises not to write. THE LIGHTEST MODE THERE
+	// IS for reading: one committed state for the whole transaction, and no write-intent locks at all,
+	// so it does not contend with concurrent writers. This is what an ordinary query takes; the
+	// write-mode snapshot above is for the ones that materialise a temp table on the way.
+	static const std::string isc_tpb_snapshotReadMode = {
+		isc_tpb_version3, isc_tpb_read, isc_tpb_wait, isc_tpb_concurrency
+	};
 	const std::string& isc_tpb =
+		opts.snapshot ? (opts.readOnly ? isc_tpb_snapshotReadMode : isc_tpb_snapshotMode) :
 		opts.noWait   ? isc_tpb_nowaitMode :
 		opts.readOnly ? isc_tpb_readOnlyMode :
 		                isc_tpb_waitMode;

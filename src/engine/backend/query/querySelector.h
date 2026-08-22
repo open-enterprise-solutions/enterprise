@@ -213,16 +213,16 @@ public:
 	{
 		EnsureWalk();
 		if (col == nullptr) return ibValue(ibValueTypes::TYPE_NULL);
-		const auto it = m_walk->Root().m_values.find(col->GetColumnId());
-		return it != m_walk->Root().m_values.end() ? it->second : ibValue(ibValueTypes::TYPE_NULL);
+		const auto it = WalkRoot().m_values.find(col->GetColumnId());
+		return it != WalkRoot().m_values.end() ? it->second : ibValue(ibValueTypes::TYPE_NULL);
 	}
 	ibValue GetTotalColumn(const wxString& alias) const
 	{
 		EnsureWalk();
 		for (const ibQueryRamColumn& c : m_walk->Columns())
 			if (c.m_name == alias) {
-				const auto it = m_walk->Root().m_values.find(c.m_id);
-				return it != m_walk->Root().m_values.end() ? it->second : ibValue(ibValueTypes::TYPE_NULL);
+				const auto it = WalkRoot().m_values.find(c.m_id);
+				return it != WalkRoot().m_values.end() ? it->second : ibValue(ibValueTypes::TYPE_NULL);
 			}
 		return ibValue(ibValueTypes::TYPE_NULL);
 	}
@@ -265,10 +265,29 @@ private:
 	// fold/recipe, the new Selector walked with `kind`, Level() based at `childBaseLevel`.
 	ibSelector MakeChild(const ibValue& parentKeyValue, int childBaseLevel, ibSelectKind kind) const;
 
+	// WHERE THIS SELECTION STARTS: the tree's own root, or the node a descent was made over. One
+	// place answers it, so nothing below has to remember which kind of selection it is in.
+	const ibSelectorTree::Node& WalkRoot() const
+	{
+		return m_viewNode != nullptr ? *m_viewNode : m_walk->Root();
+	}
+
 	void EnsureWalk() const
 	{
+		// A VIEW is already built — it is somebody else's tree, entered at a node. Nothing to fold,
+		// nothing to copy: the visits are that node's children, read where they already live.
+		if (m_viewNode != nullptr) {
+			if (!m_visits.empty() || m_pos != -1)
+				return;                    // already prepared
+			for (const auto& child : m_viewNode->m_children)
+				if (child != nullptr)
+					m_visits.push_back(child.get());
+			m_pos = -1;
+			return;
+		}
+
 		if (m_walk) return;
-		m_walk = std::make_unique<ibSelectorTree>(Build());
+		m_walk = std::make_shared<ibSelectorTree>(Build());
 		m_visits.clear();
 		// THE ROOT IS THE OVERALL ROW, and it comes FIRST — pre-order, and there is nothing above it.
 		// Normally the walk starts at the root's CHILDREN: the root is the fold over everything, which
@@ -284,7 +303,7 @@ private:
 		// first level's nodes, which put two different levels in one cursor and made a descent into
 		// the root print everything twice.
 		if (m_totalsOverall) {
-			m_visits.push_back(&m_walk->Root());
+			m_visits.push_back(&WalkRoot());
 			m_pos = -1;
 			return;
 		}
@@ -302,7 +321,7 @@ private:
 		//
 		// A DIRECT walk is unaffected: its tree is one flat layer of leaves under the root, so its
 		// direct children ARE the rows.
-		for (const auto& child : m_walk->Root().m_children)
+		for (const auto& child : WalkRoot().m_children)
 			if (child != nullptr)          // an empty slot is not a row — see Next()
 				m_visits.push_back(child.get());
 		m_pos = -1;
@@ -329,7 +348,16 @@ private:
 	int                                                           m_baseLevel = 0;  // Level() offset
 
 	// iteration state (lazy walk over the folded tree; mutable — built on the first Next)
-	mutable std::unique_ptr<ibSelectorTree>           m_walk;    // heap → stable Node addresses across a move
+	// ⭐ SHARED, not owned alone — a descent is a VIEW of this tree, not a copy of part of it. See
+	// ibSelector::Select: the child holds this same tree plus the node it starts at, so entering a
+	// heading costs a pointer instead of a deep copy of everything under it. Heap either way, because
+	// Node addresses must stay stable across a move of the selector.
+	mutable std::shared_ptr<ibSelectorTree>          m_walk;
+
+	// A SUB-SELECTION'S STARTING NODE, inside `m_walk` above. Null = this selection walks the tree's
+	// own root; set = it walks that node's children, and its "grand total" is that node's figures.
+	// The tree is kept alive by the shared pointer beside it, so the parent may be gone.
+	const ibSelectorTree::Node*                      m_viewNode = nullptr;
 	mutable std::vector<const ibSelectorTree::Node*>  m_visits;  // pre-order visit order
 	mutable long                                      m_pos = -1;
 };
@@ -362,17 +390,24 @@ inline ibSelector ibSelector::Select(ibSelectKind kind) const
 {
 	const ibSelectorTree::Node* n = Current();
 
-	// ⭐ THE CHILDREN ARE ALREADY THERE, when the fold built them. Hand over the node's subtree as a
-	// tree of its own and let the sub-selection walk ITS direct children — no query, no re-fold, and
-	// it works for a fold with no live source behind it, which the re-execution below cannot serve at
-	// all. That is the ordinary case for a scripted TOTALS: everything was read once, folded once,
-	// and a descent is a move inside what is already in hand.
+	// ⭐ THE CHILDREN ARE ALREADY THERE, when the fold built them. The sub-selection is a VIEW of this
+	// same tree, entered at this node — no query, no re-fold, and no copy. That is the ordinary case
+	// for a scripted TOTALS: everything was read once, folded once, and a descent is a move inside
+	// what is already in hand.
+	//
+	// ⚠ A VIEW, NOT A SUBTREE COPY, and the difference is the difference between a report that runs
+	// and one that does not. The first shape of this copied the node's subtree and then Build()
+	// cloned it again — two deep copies per heading, each carrying every node's value map. A report
+	// that descends into every group over a hundred thousand rows would copy hundreds of thousands of
+	// nodes, where the old flat walk copied none. Sharing the tree costs a pointer, and the shared
+	// pointer is what makes it safe: the child keeps the tree alive whether or not the parent does.
 	//
 	// The re-execution road stays for what it was built for: a LAZY drill, where a node is expandable
 	// but its children were deliberately not read yet.
 	if (n != nullptr && !n->m_children.empty() && m_walk != nullptr) {
 		ibSelector child(ibQueryRamTable{}, kind);
-		child.WithReadyTree(std::make_shared<ibSelectorTree>(m_walk->SubtreeOf(*n)));
+		child.m_walk     = m_walk;      // the same tree, kept alive by the pointer
+		child.m_viewNode = n;           // …entered here
 		child.m_baseLevel = m_baseLevel;   // the nodes keep their own levels; Level() stays absolute
 		return child;
 	}

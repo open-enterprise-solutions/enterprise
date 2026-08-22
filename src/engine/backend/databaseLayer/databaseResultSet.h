@@ -24,14 +24,40 @@
 WX_DECLARE_STRING_HASH_MAP(int, StringToIntMap);
 WX_DECLARE_HASH_SET(ibResultSetMetaData*, wxPointerHash, wxPointerEqual, MetaDataHashSet);
 
+// ⭐⭐ WHOEVER KEEPS BOOKS ON A RESULT SET. There are two of them — the layer for a result it produced
+// itself, and the prepared statement for one its own cursor vends — and a result set has to be able to
+// strike itself out of whichever one holds it, without either knowing about the other.
+//
+// It is an interface rather than two back-pointers because "who is keeping this" is ONE fact with two
+// possible answers. Two nullable pointers would be a place to set the wrong one, and a place to ask
+// the wrong one; there is nothing to get wrong about a single pointer to whoever it was.
+class BACKEND_API ibDatabaseResultSetOwner {
+public:
+	/// Drop it from the books WITHOUT freeing it — called by ~ibDatabaseResultSet, nowhere else
+	virtual void ForgetResultSet(class ibDatabaseResultSet* pResultSet) = 0;
+
+protected:
+	~ibDatabaseResultSetOwner() = default;   // never destroyed through this interface — it is only a role
+};
+
 class BACKEND_API ibDatabaseResultSet : public ibDatabaseErrorReporter, public ibDatabaseStringConverter
 {
 public:
 	/// Constructor
 	ibDatabaseResultSet();
 
-	/// Destructor
+	// ⭐ IT STRIKES ITSELF OUT OF ITS OWNER'S BOOKS — the twin of what ~ibPreparedStatement does, and
+	// closed on the same day for the same reason. Whoever kept it held a raw pointer that only ONE
+	// door removed, so a result set freed any other way left that list naming freed memory, and
+	// "closed" was never quite "released". Saying it here makes the two the same act.
+	//
+	// ⚠ Forget is not free — see ibDatabaseResultSetOwner::ForgetResultSet. The owner's teardown deletes what
+	// it still holds; if this called that, each delete would re-enter it and free the same twice.
 	virtual ~ibDatabaseResultSet();
+
+	// Told by whoever registers it — see LogResultSetForCleanup on the layer and on the statement.
+	// Null for a result set nobody keeps books on, which then has nothing to strike itself from.
+	void SetOwner(ibDatabaseResultSetOwner* owner) { m_owner = owner; }
 
 	/// Move to the next record in the result set
 	virtual bool Next() = 0;
@@ -93,6 +119,8 @@ protected:
 
 private:
 	MetaDataHashSet m_MetaData;
+
+	ibDatabaseResultSetOwner* m_owner = nullptr;   // whoever is keeping books on this one — see the dtor
 };
 
 #endif // __DATABASE_RESULT_SET_H__
