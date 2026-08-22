@@ -1004,10 +1004,26 @@ struct ibDataQuerySpec
 	const std::vector<ibValue>*                     m_keyIn       = nullptr;
 	const std::vector<ibQuerySortItem>*             m_sorts       = nullptr;
 	const std::vector<const ibBackendQueryColumn*>* m_groupBy     = nullptr;
+	// ⭐ THE TOTALS LEVELS — `TOTALS … BY a, (b, c)` — and they are NOT `m_groupBy`.
+	//
+	// A door that folds hierarchical totals fills `m_totals` (TotalByLevel) and never touches
+	// `m_groupBy`, which only `GroupBy*` writes. The server-side fold used to read `m_groupBy` and so
+	// refused every totals query the composer produced: `CanRollupTotalsShape` returns false on an
+	// empty list, and for `SELECT … TOTALS SUM(x) BY Warehouse` that list IS empty.
+	//
+	// They cannot be mirrored into `m_groupBy` either: a LEVEL may hold several fields grouped as
+	// one key (`BY (Partner, Contract)` is one heading, not two), and a flat column list cannot say
+	// that — the mirror would split a tuple into two ROLLUP levels and quietly change the report.
+	const std::vector<ibTotalLevel>*                m_totals      = nullptr;
 	const std::vector<std::vector<const ibBackendQueryColumn*>>* m_groupPaths = nullptr;   // parallel to m_groupBy: dot-walk path per key (empty = plain)
 	const std::vector<ibQueryColumnExprPtr>* m_groupExprs   = nullptr;   // parallel: computed key (null = column key)
 	const std::vector<wxString>*             m_groupAliases = nullptr;   // parallel: output name of a computed key
 	const std::vector<ibDataQueryBuilder::AggregateItem>* m_aggregates = nullptr;
+	// ⭐ …AND THE TOTALS' OWN AGGREGATES, for the same reason the levels are separate: a door that
+	// folds totals puts them in `m_totalAggregates` (the `Totals()` switch), so `m_aggregates` is
+	// EMPTY for exactly the queries the server-side fold exists to serve. Reading the wrong one
+	// projected no figures at all — the second half of the same disconnect as `m_totals`.
+	const std::vector<ibDataQueryBuilder::AggregateItem>* m_totalAggregates = nullptr;
 	const std::vector<ibDataQueryBuilder::HavingItem>*    m_having     = nullptr;
 	// The rows to write, in order. NEVER empty: a door with no SetValue still carries one empty
 	// row, so a reader that wants "the row" says front() and never tests for emptiness first.

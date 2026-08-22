@@ -157,6 +157,10 @@ struct SpecBuf {
 	std::vector<std::pair<const ibBackendQueryColumn*, wxString>> sel;
 	std::vector<std::vector<const ibBackendQueryColumn*>> groupPaths;   // parallel to groupBy (dot-walk keys)
 	std::vector<ibDotWalkColumn> dimWalks;                              // TotalByDotWalk dimensions
+	// The TOTALS door's own two lists. A door that folds hierarchical totals fills THESE and leaves
+	// groupBy / aggs empty — which is exactly what the gate used to be blind to.
+	std::vector<ibTotalLevel> totals;
+	std::vector<ibDataQueryBuilder::AggregateItem> totalAggs;
 
 	ibDataQuerySpec Make(const ibQueryNode* root, const ibBackendQueryable* primary) {
 		ibDataQuerySpec s;
@@ -165,6 +169,7 @@ struct SpecBuf {
 		s.m_groupBy = &groupBy; s.m_aggregates = &aggs; s.m_having = &having;
 		s.m_writeRows = &writeRows; s.m_dotWalks = &dots; s.m_selectCols = &sel;
 		s.m_groupPaths = &groupPaths; s.m_dimWalks = &dimWalks;
+		s.m_totals = &totals; s.m_totalAggregates = &totalAggs;
 		return s;
 	}
 };
@@ -775,6 +780,89 @@ TEST(QueryComposerGate, RollupTotals_JoinScalarLevels_Colocatable)
 	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanColocateRollupTotals(spec));   // JOIN + scalar level + scalar SUM -> server-side ROLLUP
+}
+
+// ===========================================================================
+// The gate must read the door's OWN lists. A door that folds TOTALS fills m_totals / m_totalAggregates
+// (TotalByLevel + Totals()) and never touches m_groupBy — so a gate that looked only at m_groupBy
+// refused every totals query the composer produces, and the whole server-side fold was unreachable
+// from it. These are the tests that would have said so: they build the spec the way the door does.
+// ===========================================================================
+
+TEST(QueryComposerGate, RollupTotals_LevelsFromTotalsList_ShapeAccepted)
+{
+	ibRawDBColumn dim = ibRawDBColumn::String(wxT("dim"));
+	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
+
+	SpecBuf buf;
+	buf.totals.push_back(ibTotalLevel::One(&dim, ibDimensionKind::Elements));   // TOTALS … BY dim
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	buf.totalAggs = { sum };                                                   // …and the figure it rolls
+	// groupBy / aggs stay EMPTY — that is the whole point.
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+
+	EXPECT_TRUE(ibDbTableProvider::CanRollupTotalsShape(spec));
+}
+
+TEST(QueryComposerGate, RollupTotals_TupleLevel_ShapeAccepted)
+{
+	// ONE level over TWO fields — `BY (Partner, Contract)`. It is one heading, and the fold renders it
+	// as ONE composite ROLLUP element; the gate must not mistake it for two levels or refuse it.
+	ibRawDBColumn partner  = ibRawDBColumn::String(wxT("partner"));
+	ibRawDBColumn contract = ibRawDBColumn::String(wxT("contract"));
+	ibRawDBColumn amt      = ibRawDBColumn::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&partner); A.AddCol(&contract); A.AddCol(&amt);
+
+	SpecBuf buf;
+	ibTotalLevel level;
+	level.m_fields.push_back(ibTotalField{ &partner,  ibDimensionKind::Elements });
+	level.m_fields.push_back(ibTotalField{ &contract, ibDimensionKind::Elements });
+	buf.totals.push_back(level);
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	buf.totalAggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+
+	EXPECT_TRUE(ibDbTableProvider::CanRollupTotalsShape(spec));
+}
+
+TEST(QueryComposerGate, RollupTotals_DetailLevel_Refused)
+{
+	// A level with NO fields is the detail records. ROLLUP folds the rows away, so there would be
+	// nothing left to hang under the last heading — the RAM fold keeps them.
+	ibRawDBColumn dim = ibRawDBColumn::String(wxT("dim"));
+	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
+
+	SpecBuf buf;
+	buf.totals.push_back(ibTotalLevel::One(&dim, ibDimensionKind::Elements));
+	buf.totals.push_back(ibTotalLevel{});                                      // the detail level
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	buf.totalAggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+
+	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));
+}
+
+TEST(QueryComposerGate, RollupTotals_HierarchyLevel_Refused)
+{
+	// A HIERARCHY unfold walks the reference's parent chain; no GROUP BY can do that, and folding it
+	// server-side would come back as a plain grouping under a word that asked for something else.
+	ibRawDBColumn dim = ibRawDBColumn::String(wxT("dim"));
+	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
+
+	SpecBuf buf;
+	buf.totals.push_back(ibTotalLevel::One(&dim, ibDimensionKind::Hierarchy));
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	buf.totalAggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+
+	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));
 }
 
 TEST(QueryComposerGate, RollupTotals_SingleSource_NotColocatable)

@@ -1909,13 +1909,81 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 // read the result + the GROUPING(key) flags and assemble the ibSelectorTree node tree the runtime
 // already consumes. Only the aggregated subtotal rows transit — no raw detail.
 // ==========================================================================
+// ⭐ THE LEVELS THIS SPEC FOLDS BY — asked in ONE place, because the two lists are filled by
+// DIFFERENT verbs and every gate here needs the same answer. A door that folds hierarchical totals
+// fills `m_totals` (TotalByLevel) and leaves `m_groupBy` empty; a hand-built spec (and the plain
+// GROUP BY aggregate) fills `m_groupBy` and knows nothing of levels. Reading only the second is what
+// made this whole tier unreachable from the composer: for `SELECT … TOTALS SUM(x) BY Warehouse` the
+// list the gate looked at IS empty.
+//
+// A flat group key reads as a ONE-FIELD level, which is exactly what it is.
+static std::vector<ibTotalLevel> RollupLevelsOf(const ibDataQuerySpec& spec)
+{
+	if (spec.m_totals != nullptr && !spec.m_totals->empty())
+		return *spec.m_totals;
+
+	std::vector<ibTotalLevel> levels;
+	if (spec.m_groupBy != nullptr)
+		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
+			levels.push_back(ibTotalLevel::One(g, ibDimensionKind::Elements));
+	return levels;
+}
+
+// …AND WHAT THEY ROLL. Same split, same reason: `Totals()` diverts the aggregates into
+// `m_totalAggregates`, so a totals door's `m_aggregates` is empty and a fold reading it would
+// project no figures at all.
+static const std::vector<ibDataQueryBuilder::AggregateItem>& RollupAggregatesOf(const ibDataQuerySpec& spec)
+{
+	static const std::vector<ibDataQueryBuilder::AggregateItem> s_none;
+	if (spec.m_totalAggregates != nullptr && !spec.m_totalAggregates->empty())
+		return *spec.m_totalAggregates;
+	return spec.m_aggregates != nullptr ? *spec.m_aggregates : s_none;
+}
+
 bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 	{
 		// Single-source DB queryable (a multi-source totals goes through the co-located / RAM paths).
 		if (spec.m_root != nullptr && spec.m_root->m_kind != ibQueryNode::Kind::Source) return false;
 		const ibBackendQueryable* q = spec.m_queryable;
 		if (q == nullptr || q->IsComputedInRam())                 return false;
-		if (spec.m_groupBy->empty())                              return false;
+
+		const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
+		if (levels.empty())                                       return false;
+
+		// ⚠ THREE REFUSALS THAT COULD NOT BE STATED BEFORE, because a flat column list does not carry
+		// what they ask about. Each is a SILENT wrong answer if it is missed, not a slow one:
+		for (const ibTotalLevel& level : levels) {
+			// DETAIL RECORDS — a level with no fields. ROLLUP folds the rows away, so there would be
+			// nothing left to hang under the last heading. (The phantom level that WILL carry them to
+			// the server is a separate step — docs/data-composer.md § the phantom level.)
+			if (level.m_fields.empty())                           return false;
+			for (const ibTotalField& f : level.m_fields) {
+				if (f.m_col == nullptr)                           return false;
+				// A HIERARCHY UNFOLD walks the reference's parent chain — the RAM fold's
+				// AttachDimValue does that, and no GROUP BY can. Folded here it would come back as a
+				// plain grouping under a word that asked for something else.
+				if (f.m_dim != ibDimensionKind::Elements)         return false;
+			}
+		}
+		// A DOT-WALKED DIMENSION rides a join the ROLLUP builder does not construct for levels.
+		if (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty()) return false;
+
+		// ⚠ AND THE ORDER HAS TO BE SAYABLE OVER THE FOLDED RESULT. A grouped query may only order by
+		// what it grouped by (or by an aggregate); a sort naming an ordinary field would be rejected by
+		// the engine — an error where there used to be a slower but correct answer. In this model the
+		// sort names the very fields the groupings run over, so the ordinary report passes; anything
+		// else keeps the RAM fold, which orders the rows and then groups them in first-seen order.
+		if (spec.m_sorts != nullptr)
+			for (const ibQuerySortItem& s : *spec.m_sorts) {
+				if (s.m_expr != nullptr || !s.m_path.empty())     return false;   // computed / dot-walk sort
+				if (s.m_col == nullptr)                           return false;   // row-key sort — no such thing over groups
+				bool isLevelField = false;
+				for (const ibTotalLevel& level : levels)
+					for (const ibTotalField& f : level.m_fields)
+						if (f.m_col == s.m_col) { isLevelField = true; break; }
+				if (!isLevelField)                                return false;
+			}
+
 		if (!spec.m_dotWalks->empty() || !spec.m_keyIn->empty())  return false;
 
 		// A dot-walk GROUP key rides a reference JOIN chain (ExecuteRollupTotals builds it) — allowed WHEN every
@@ -1930,11 +1998,10 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 				if (walk == nullptr) return false;   // an unresolvable hop -> RAM-fold
 			}
 		// Group keys: SCALAR or a REFERENCE / variant (a reference groups by its full spread as ONE composite
-		// ROLLUP element, reassembled on read — RunRollupTotals handles it). Aggregate inputs stay SCALAR.
+		// ROLLUP element, reassembled on read — RunRollupTotals handles it). Aggregate inputs stay SCALAR;
+		// the null-column check for the keys is made above, where the levels are walked.
 		ColocatedLeaves one; one.push_back(q);
-		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-			if (g == nullptr) return false;
-		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
+		for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec))
 			if (a.m_col != nullptr && !ScalarReadable(a.m_col, one)) return false;
 		return true;
 	}
@@ -1978,50 +2045,78 @@ static void MarkRollupFolders(ibSelectorTree::Node& node)
 
 static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr from,
 	const std::function<ibQueryExprPtr(const ibBackendQueryColumn*)>& colExpr,
-	const std::function<RollupGroupKey(const ibBackendQueryColumn*)>& keyInfo)
+	const std::function<RollupGroupKey(const ibBackendQueryColumn*)>& keyInfo,
+	std::vector<ibQuerySortKey> orderKeys)
 {
-	// Build the IR: SELECT <g<i> | spread>, GROUPING(<key rep>) AS grp<i>, <agg> AS alias FROM <from>
-	//               GROUP BY ROLLUP(g0 | (spread0), g1 | (spread1), …)
-	struct KeyPlan { const ibBackendQueryColumn* col; bool scalar; wxString tag; const ibMetaData* meta; };
-	std::vector<KeyPlan>         keyPlans;
+	// Build the IR: SELECT <field | spread>, GROUPING(<level's first field>) AS grp<L>, <agg> AS alias
+	//               FROM <from> GROUP BY ROLLUP(<level 0>, <level 1>, …)
+	//
+	// ⭐⭐ ONE ROLLUP ELEMENT PER **LEVEL**, NOT PER COLUMN. A level may group by SEVERAL fields
+	// together — `BY (Partner, Contract)` is one heading whose key is the tuple — so the element is
+	// all of its fields, and the flat "one column, one level" reading would have turned one heading
+	// into two nested ones and silently changed the report. A reference field spreads into its own
+	// fields inside that element, so a tuple of references is simply a longer element.
+	//
+	// A lone scalar field stays a BARE expression, exactly as it rendered before: `ROLLUP(a, b)`, not
+	// `ROLLUP((a), (b))`. The parenthesised form is legal SQL, but the common shape has no business
+	// changing spelling because a rarer one was made expressible.
+	struct FieldPlan { const ibBackendQueryColumn* col; bool scalar; wxString tag; const ibMetaData* meta; };
+	struct LevelPlan { std::vector<FieldPlan> fields; };
+	const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
+
+	std::vector<LevelPlan>       levelPlans;
 	std::vector<ibQueryProjItem> projection;
 	std::vector<ibQueryExprPtr>  groupKeys;
 	std::vector<wxString>        groupingAliases;
-	int gi = 0;
-	for (const ibBackendQueryColumn* g : *spec.m_groupBy) {
-		const RollupGroupKey ki       = keyInfo(g);
-		const wxString       grpalias = wxString::Format(wxT("grp%d"), gi);
-		auto fieldCol = [&](const wxString& f) { return ki.qualifier.empty() ? ibCol(f) : ibCol(ki.qualifier, f); };
-		if (ki.scalar) {
-			const wxString       galias = wxString::Format(wxT("g%d"), gi);
-			const ibQueryExprPtr gexpr  = colExpr(g);
-			groupKeys.push_back(gexpr);
-			projection.push_back(ibQueryProjItem{ gexpr, galias });
-			projection.push_back(ibQueryProjItem{ ibFunc(wxT("GROUPING"), { colExpr(g) }), grpalias });
-			keyPlans.push_back({ g, true, galias, ki.meta });
-		}
-		else {
-			// REFERENCE / variant key: GROUP BY its SPREAD as ONE composite ROLLUP element ((f0,f1,…) — an empty-
-			// name Func renders as a parenthesised tuple) so the whole reference is a single ROLLUP level; project
-			// the spread under a prefix; GROUPING on the FIRST field (a ROLLUP element's fields share the flag).
-			const wxString prefix = wxString::Format(wxT("gcol%d"), gi);
-			const wxString base   = g->GetPhysicalName();
-			std::vector<ibQueryExprPtr> spread;
-			ibQueryExprPtr firstField;
-			for (const wxString& f : ColumnFieldNames(g)) {
-				const ibQueryExprPtr fexpr = fieldCol(f);
-				if (!firstField) firstField = fexpr;
-				spread.push_back(fexpr);
-				projection.push_back(ibQueryProjItem{ fexpr, prefix + f.Mid(base.length()) });
+	int li = 0;
+	for (const ibTotalLevel& level : levels) {
+		const wxString grpalias = wxString::Format(wxT("grp%d"), li);
+		LevelPlan                   plan;
+		std::vector<ibQueryExprPtr> element;      // every field of this level, in order
+		ibQueryExprPtr              firstField;   // GROUPING is asked of ONE of them — they share the flag
+
+		int fi = 0;
+		for (const ibTotalField& field : level.m_fields) {
+			const ibBackendQueryColumn* g  = field.m_col;
+			const RollupGroupKey        ki = keyInfo(g);
+			auto fieldCol = [&](const wxString& f) { return ki.qualifier.empty() ? ibCol(f) : ibCol(ki.qualifier, f); };
+
+			if (ki.scalar) {
+				const wxString       galias = wxString::Format(wxT("g%d_%d"), li, fi);
+				const ibQueryExprPtr gexpr  = colExpr(g);
+				if (!firstField) firstField = colExpr(g);
+				element.push_back(gexpr);
+				projection.push_back(ibQueryProjItem{ gexpr, galias });
+				plan.fields.push_back({ g, true, galias, ki.meta });
 			}
-			groupKeys.push_back(ibFunc(wxT(""), std::move(spread)));   // composite element -> "(f0, f1, …)"
-			projection.push_back(ibQueryProjItem{ ibFunc(wxT("GROUPING"), { firstField }), grpalias });
-			keyPlans.push_back({ g, false, prefix, ki.meta });
+			else {
+				// REFERENCE / variant field: its FULL SPREAD joins this level's element, projected under a
+				// prefix and reassembled on read (ibColumnCodec::ReadValue).
+				const wxString prefix = wxString::Format(wxT("gcol%d_%d"), li, fi);
+				const wxString base   = g->GetPhysicalName();
+				for (const wxString& f : ColumnFieldNames(g)) {
+					const ibQueryExprPtr fexpr = fieldCol(f);
+					if (!firstField) firstField = fexpr;
+					element.push_back(fexpr);
+					projection.push_back(ibQueryProjItem{ fexpr, prefix + f.Mid(base.length()) });
+				}
+				plan.fields.push_back({ g, false, prefix, ki.meta });
+			}
+			++fi;
 		}
+
+		// One field, scalar: the bare expression (the shape that was always rendered). Anything else is
+		// a composite element — an empty-name Func renders as "(f0, f1, …)".
+		if (element.size() == 1) groupKeys.push_back(element.front());
+		else                     groupKeys.push_back(ibFunc(wxT(""), std::move(element)));
+
+		projection.push_back(ibQueryProjItem{ ibFunc(wxT("GROUPING"), { firstField }), grpalias });
 		groupingAliases.push_back(grpalias);
-		++gi;
+		levelPlans.push_back(std::move(plan));
+		++li;
 	}
-	for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
+	const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates = RollupAggregatesOf(spec);
+	for (const ibDataQueryBuilder::AggregateItem& a : aggregates) {
 		std::vector<ibQueryExprPtr> args;
 		args.push_back(a.m_col != nullptr ? colExpr(a.m_col) : ibCol(wxT("*")));
 		projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct), a.m_alias });
@@ -2036,26 +2131,34 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 		having = having ? ibBinOp(ibQueryBinOp::And, having, cmp) : cmp;
 	}
 
-	ibQueryIR ir(ibAggregate(from, std::move(projection), std::move(groupKeys), having, /*rollup*/ true));
+	// THE ORDER IS THE QUERY'S, and it is stated ONCE — where the composition states it. The fold does
+	// not decide anything about order and does not derive a second one from the levels: it carries
+	// what it was handed (empty = the query asked for no order, and then neither does the fold).
+	ibQueryRelPtr folded = ibAggregate(from, std::move(projection), std::move(groupKeys), having, /*rollup*/ true);
+	if (!orderKeys.empty())
+		folded = ibSort(folded, std::move(orderKeys));
+	ibQueryIR ir(folded);
 	ibDatabaseQueryBuilder qb(spec.m_holder);
 	ibQueryResult cursor = qb.ExecuteIR(ir);
 
-	// Read every ROLLUP row: its group values, its aggregate values, and its LEVEL (= count of
-	// GROUPING=0 keys — for ROLLUP they are always a prefix).
-	struct RRow { std::vector<ibValue> groups; std::vector<ibValue> aggs; int level; };
-	const size_t nGroup = spec.m_groupBy->size();
+	// Read every ROLLUP row: the values of each LEVEL's fields, its aggregate values, and its LEVEL
+	// depth (= count of GROUPING=0 elements — for ROLLUP they are always a prefix).
+	struct RRow { std::vector<std::vector<ibValue>> levelValues; std::vector<ibValue> aggs; int level; };
 	std::vector<RRow> rrows;
 	while (cursor.Next()) {
 		RRow rr; rr.level = 0;
-		for (size_t i = 0; i < nGroup; ++i) {
-			const KeyPlan& kp = keyPlans[i];
-			ibValue v;
-			if (kp.scalar) v = ReadScalarByAlias(kp.col, kp.tag, cursor);
-			else           ibColumnCodec::ReadValue(kp.tag, kp.col, kp.meta, v, cursor);   // reference / variant key reassembly
-			rr.groups.push_back(v);
+		for (size_t i = 0; i < levelPlans.size(); ++i) {
+			std::vector<ibValue> values;
+			for (const FieldPlan& fp : levelPlans[i].fields) {
+				ibValue v;
+				if (fp.scalar) v = ReadScalarByAlias(fp.col, fp.tag, cursor);
+				else           ibColumnCodec::ReadValue(fp.tag, fp.col, fp.meta, v, cursor);   // reference / variant reassembly
+				values.push_back(v);
+			}
+			rr.levelValues.push_back(std::move(values));
 			if (cursor.GetResultInt(groupingAliases[i]) == 0) ++rr.level;
 		}
-		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
+		for (const ibDataQueryBuilder::AggregateItem& a : aggregates) {
 			using Fn = ibDataQueryBuilder::AggregateFn;
 			rr.aggs.push_back((a.m_fn == Fn::Min || a.m_fn == Fn::Max)
 				? ReadScalarByAlias(a.m_col, a.m_alias, cursor)
@@ -2066,9 +2169,11 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 
 	// Assemble the tree. Columns = group cols + aggregates IN-PLACE in their own source columns.
 	ibSelectorTree tree;
-	for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-		tree.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
-	for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
+	for (const ibTotalLevel& level : levels)
+		for (const ibTotalField& field : level.m_fields)
+			if (field.m_col != nullptr)
+				tree.AddColumn(field.m_col->GetColumnId(), field.m_col->GetName(), field.m_col->GetTypeDesc());
+	for (const ibDataQueryBuilder::AggregateItem& a : aggregates)
 		if (a.m_col != nullptr) tree.AddColumn(a.m_col->GetColumnId(), a.m_col->GetName(), a.m_col->GetTypeDesc());
 
 	// Parent-before-child: process by level ascending (a level-L node's level-(L-1) parent must
@@ -2087,27 +2192,37 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	// policy the LINQ join and group-by indexes use. The parent key stops being a
 	// second string and becomes the prefix it always was — the key minus its last
 	// element.
+	//
+	// ⭐ A LEVEL CONTRIBUTES AS MANY VALUES AS IT HAS FIELDS, so the parent key is the key minus the
+	// LAST LEVEL, not minus one value. With a tuple level, "minus one" would have pointed at a key
+	// that belongs to nobody, and every node under it would have been re-parented onto the root.
 	std::unordered_map<std::vector<ibValue>, ibSelectorTree::Node*,
 	                   ibValueSeqHash, ibValueSeqEqual> nodes;
 	nodes[std::vector<ibValue>()] = &tree.Root();
 	for (const RRow& rr : rrows) {
 		const size_t level = static_cast<size_t>(rr.level);
-		std::vector<ibValue> key(rr.groups.begin(), rr.groups.begin() + level);
+		std::vector<ibValue> key;
+		for (size_t i = 0; i < level && i < rr.levelValues.size(); ++i)
+			key.insert(key.end(), rr.levelValues[i].begin(), rr.levelValues[i].end());
+
 		ibSelectorTree::Node* node = nullptr;
 		if (rr.level == 0) {
 			node = &tree.Root();          // grand total
 		}
 		else {
-			const std::vector<ibValue> parentKey(key.begin(), key.end() - 1);
+			const size_t lastLevelWidth = rr.levelValues[level - 1].size();
+			const std::vector<ibValue> parentKey(key.begin(), key.end() - static_cast<long>(lastLevelWidth));
 			const auto pit = nodes.find(parentKey);
 			ibSelectorTree::Node* parent = (pit != nodes.end()) ? pit->second : &tree.Root();
 			node = parent->AddChild(rr.level);
-			for (int i = 0; i < rr.level; ++i)
-				node->m_values[(*spec.m_groupBy)[static_cast<size_t>(i)]->GetColumnId()] = rr.groups[static_cast<size_t>(i)];
+			for (size_t i = 0; i < level && i < levels.size(); ++i)
+				for (size_t f = 0; f < levels[i].m_fields.size() && f < rr.levelValues[i].size(); ++f)
+					if (const ibBackendQueryColumn* gc = levels[i].m_fields[f].m_col)
+						node->m_values[gc->GetColumnId()] = rr.levelValues[i][f];
 			nodes[std::move(key)] = node;
 		}
-		for (size_t i = 0; i < rr.aggs.size() && i < spec.m_aggregates->size(); ++i)
-			if (const ibBackendQueryColumn* ac = (*spec.m_aggregates)[i].m_col)
+		for (size_t i = 0; i < rr.aggs.size() && i < aggregates.size(); ++i)
+			if (const ibBackendQueryColumn* ac = aggregates[i].m_col)
 				node->m_values[ac->GetColumnId()] = rr.aggs[i];   // IN-PLACE in the aggregate's own column
 	}
 	MarkRollupFolders(tree.Root());
@@ -2131,10 +2246,14 @@ ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spe
 			wxString a; const ibBackendQueryable* tq = nullptr;
 			if (chain.Resolve(path, a, tq) && tq != nullptr) { dw[col] = { a, tq }; hasDotWalk = true; }   // gate guaranteed resolvable
 		};
+		// The flat group keys and THEIR paths (parallel lists). A door that folds TOTALS levels fills
+		// neither — its dimensions live in `m_totals`, and a DOT-WALKED one is refused by the shape gate
+		// precisely because this chain is not built for them. So this loop is a no-op on that path and
+		// stays here for the flat GROUP BY one.
 		for (size_t i = 0; i < spec.m_groupBy->size(); ++i)
 			resolveDot((*spec.m_groupBy)[i], i < spec.m_groupPaths->size() ? (*spec.m_groupPaths)[i]
 			                                                               : std::vector<const ibBackendQueryColumn*>{});
-		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
+		for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec))
 			resolveDot(a.m_col, a.m_path);
 
 		ibQueryRelPtr from = hasDotWalk ? chain.From() : ibScan(mainTable);
@@ -2158,7 +2277,11 @@ ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spe
 				const ibBackendQueryable* owner = (it != dw.end()) ? it->second.second : q;
 				ColocatedLeaves ls; ls.push_back(owner);
 				return { g->IsRawColumn() || ScalarReadable(g, ls), qualOf(g), owner->GetMetaData() };
-			});
+			},
+			// ⭐ THE QUERY'S OWN ORDER, HANDED OVER — not a second one derived from the levels. The
+			// composition sorts the data the groupings run over and says so ONCE; the fold reflects it.
+			// (The RAM fold gets the same thing for free: it groups in first-seen order over that read.)
+			ibMetaIRBuilder::BuildSortKeys(q, *spec.m_sorts, /*reverse*/ false, mainQual));
 	}
 
 // STRUCTURAL gate for a co-located UNION totals: every branch a real DB Source leaf, and every column
@@ -2267,7 +2390,14 @@ bool ibDbTableProvider::CanColocateRollupTotals(const ibDataQuerySpec& spec)
 	{
 		const ibQueryNode* root = spec.m_root;
 		if (root == nullptr)         return false;   // single-source -> CanRollupTotalsShape, not this gate
-		if (spec.m_groupBy->empty()) return false;   // a totals query always has levels
+
+		// ⚠ DELIBERATE BOUNDARY, and it is what this line MEANS today. A door that folds TOTALS levels
+		// fills `m_totals`, not `m_groupBy` — so a MULTI-SOURCE totals refuses here and keeps the RAM
+		// fold, which answers correctly. The single-source gate was taught to read the levels
+		// (RollupLevelsOf); this one is not, because a level's fields would also have to be validated
+		// against every union branch, and a push-down that skipped that check would return a WRONG
+		// report rather than a slow one. Next step, not an oversight.
+		if (spec.m_groupBy->empty()) return false;
 
 		// Neither the JOIN nor the UNION co-located FROM renders a dot-walk / dimension join or a
 		// COMPUTED group / aggregate -> those RAM-fold (which DOES handle them). (mirrors §22 honest-fail)
@@ -2317,7 +2447,11 @@ ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuery
 					const auto it = aliasOf.find(c);
 					return ibCol(wxT("u"), it != aliasOf.end() ? it->second : FirstSqlFieldOfColumn(c));
 				},
-				[](const ibBackendQueryColumn*) -> RollupGroupKey { return { true, wxString(), nullptr }; });   // CanColocateRollupTotals guarantees SCALAR group keys (a co-located reference ROLLUP still RAM-folds)
+				[](const ibBackendQueryColumn*) -> RollupGroupKey { return { true, wxString(), nullptr }; },   // CanColocateRollupTotals guarantees SCALAR group keys (a co-located reference ROLLUP still RAM-folds)
+				// No order here: the branch-union derived table renames every column to an inner alias,
+				// so the query's sort keys do not name anything this statement can order by. A co-located
+				// totals keeps whatever order the union produced — as it did before.
+				std::vector<ibQuerySortKey>{});
 		}
 
 		// JOIN tree -> ROLLUP over the co-located join; qualify each column by its owning leaf's table.
@@ -2333,7 +2467,11 @@ ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuery
 				// reassembled via the owning leaf's metaData.
 				const ibBackendQueryable* o = ColocatedOwner(leaves, g);
 				return { g->IsRawColumn() || ScalarReadable(g, leaves), ColocatedQual(leaves, g), o ? o->GetMetaData() : nullptr };
-			});
+			},
+			// The co-located JOIN qualifies every column by its own leaf's table, and the query's sort
+			// keys are built against the PRIMARY source — carrying them here would order by a name this
+			// statement does not have. Unordered, as it was.
+			std::vector<ibQuerySortKey>{});
 	}
 
 // Bind a write column's value positionally: a RAW column straight by its declared RawType (no

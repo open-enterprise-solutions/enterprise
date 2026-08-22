@@ -69,7 +69,7 @@ struct ibSqlFeatures
 	bool m_cte           = false;   // WITH ... AS (...)
 	bool m_fullOuterJoin = false;
 	bool m_iLike         = false;   // case-insensitive LIKE
-	bool m_rollup        = false;   // GROUP BY ROLLUP(...) — hierarchical subtotals server-side (FB 2.1+ / PG; NOT SQLite)
+	bool m_rollup        = false;   // GROUP BY ROLLUP(...) — hierarchical subtotals server-side (FB **5**+ / PG; NOT SQLite)
 
 	// INSERT … VALUES (…), (…), (…) — several rows in ONE statement.
 	//

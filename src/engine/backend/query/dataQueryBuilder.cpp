@@ -559,10 +559,12 @@ ibDataQuerySpec ibDataQueryBuilder::BuildSpec() const
 	spec.m_keyIn       = &m_keyIn;
 	spec.m_sorts       = &m_sorts;
 	spec.m_groupBy      = &m_groupBy;
+	spec.m_totals       = &m_totals;        // the TOTALS levels — see the field's note; NOT the same list
 	spec.m_groupPaths   = &m_groupPaths;
 	spec.m_groupExprs   = &m_groupExprs;
 	spec.m_groupAliases = &m_groupAliases;
 	spec.m_aggregates  = &m_aggregates;
+	spec.m_totalAggregates = &m_totalAggregates;   // what the LEVELS roll — see the field's note
 	spec.m_having      = &m_having;
 	spec.m_writeRows   = &m_writeRows;
 	spec.m_writeAdditive = &m_writeAdditive;

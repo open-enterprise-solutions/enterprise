@@ -300,6 +300,29 @@ What "phantom" means, then, is that the level is not a grouping in the SQL sense
 FIELD a person named. It exists in the query all the same, because that is what carries it to the
 server.
 
+> ✅ **STEP ONE LANDED AND RAN, 2026-08-22** — and it turned out to be the precondition for
+> everything below. The server-side fold had **never executed once**: a door that folds totals fills
+> `m_totals` / `m_totalAggregates`, the gate read `m_groupBy` / `m_aggregates`, and so
+> `CanRollupTotalsShape` refused every totals query the composer produces. The spec now carries the
+> door's own two lists; `RollupLevelsOf` / `RollupAggregatesOf` answer "what does it fold by, what
+> does it roll" in ONE place; and the ROLLUP element is **one per LEVEL**, so `BY (Partner, Contract)`
+> is one composite element rather than two nested levels — with the parent key taken as the key minus
+> the last LEVEL, not minus one value.
+>
+> Three refusals that a flat column list could not even state came with it — a detail level, a
+> HIERARCHY unfold, a dot-walked dimension — plus a sort naming anything that is not a level field
+> (invalid SQL over a grouped result). Each of them is a silently WRONG report if missed, not a slow
+> one.
+>
+> Verified live on Firebird: `Ref` → `(DeletionMark, Number)` → `Posted` over 62 documents; grand
+> total, nesting and order identical to the RAM road, the tuple level printed as one heading, and the
+> expanders present — the first time `MarkRollupFolders` had ever run.
+>
+> ⏭ Still refused, and next in line: **a dot-walked dimension** (`Producer.Region`), which is half of
+> the reports people actually write. The reference JOIN chain already exists in
+> `ExecuteRollupTotals` — it resolves dot-walks for the FLAT keys — and the level's fields simply do
+> not travel through it yet.
+
 **2. A level can be pushed down; a refusal cannot.** The reason details cancel the server fold is
 that `ROLLUP` folds the rows away — but only because the grouping sets stop at the last named field.
 Add the phantom level as the row's own IDENTITY (`GetPrimaryKeyColumns()`, the one key authority)
