@@ -42,13 +42,21 @@ void ibComposerEditView::OnDraw(wxDC* WXUNUSED(dc))
 	// nothing to do here — the panel draws itself
 }
 
+// ACCEPTING THIS TAB — the panel's own verb, reached through the view so a host that never learned
+// what a settings panel is (the save path) can still ask for it.
+bool ibComposerEditView::Commit()
+{
+	return m_composerPanel == nullptr || m_composerPanel->Commit();
+}
+
 bool ibComposerEditView::OnClose(bool deleteWindow)
 {
-	// ⭐ CLOSING THE TAB IS ACCEPTING IT. The embedded filter / sort live in a transactional buffer
-	// until Commit, so a tab that closed without it would lose exactly the settings the person came
-	// here to write. A panel that objects (a half-written condition, an expression that does not
-	// compile and was not confirmed) keeps the tab open on what it objected to.
-	if (m_composerPanel != nullptr && !m_composerPanel->Commit())
+	// ⭐ CLOSING THE TAB IS ACCEPTING IT — and so is SAVING while it is open (ibCommitOpenComposers).
+	// The embedded filter / sort live in a transactional buffer until Commit, so a tab that closed
+	// without it would lose exactly the settings the person came here to write. A panel that objects
+	// (a half-written condition, an expression that does not compile and was not confirmed) keeps
+	// the tab open on what it objected to.
+	if (!Commit())
 		return false;
 
 	if (deleteWindow) {
@@ -93,6 +101,15 @@ bool ibComposerDocument::DoOpenDocument(const wxString& filename)
 	return true;
 }
 
+bool ibComposerDocument::Save()
+{
+	ibComposerEditView* view = dynamic_cast<ibComposerEditView*>(GetFirstView());
+	if (view != nullptr && !view->Commit())
+		return false;
+
+	return ibMetaDocument::Save();
+}
+
 bool ibComposerDocument::IsModified() const
 {
 	return ibMetaDocument::IsModified();
@@ -108,3 +125,23 @@ void ibComposerDocument::Modify(bool modified)
 // ----------------------------------------------------------------------------
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibComposerEditDocument, ibComposerDocument);
+
+// ----------------------------------------------------------------------------
+
+bool ibCommitOpenComposers()
+{
+	if (docManager == nullptr)
+		return true;
+
+	// The VIEW is asked, not the document: the panel belongs to the view, and a document with no
+	// view open has nothing buffered by construction.
+	for (ibDocument* doc : docManager->GetDocumentsVector()) {
+		if (doc == nullptr)
+			continue;
+		ibComposerEditView* view = dynamic_cast<ibComposerEditView*>(doc->GetFirstView());
+		if (view != nullptr && !view->Commit())
+			return false;
+	}
+
+	return true;
+}

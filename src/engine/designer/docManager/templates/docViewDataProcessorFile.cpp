@@ -79,8 +79,10 @@ bool ibDataProcessorFileDocument::DoOpenDocument(const wxString& filename)
 
 bool ibDataProcessorFileDocument::DoSaveDocument(const wxString& filename)
 {
-	if (!GetMetaTree()->Save())
-		return false;
+	// The twin of the report's save — the tree answers FALSE for "there was nothing to save", and
+	// reading that as a failure meant an unchanged data processor could not be written to a file.
+	if (ibDataProcessorTree* metaTree = GetMetaTree())
+		metaTree->Save();
 
 	if (!m_metaData->SaveToFile(filename))
 		return false;

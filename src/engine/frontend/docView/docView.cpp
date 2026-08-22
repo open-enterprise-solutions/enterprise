@@ -2660,9 +2660,15 @@ bool ibMetaDocument::Save()
 			return false;
 		}
 
-		if ((m_documentParent == nullptr && m_metaObject != nullptr) && IsChildDocument()) {
-			if (activeMetaData->SaveDatabase()) return false;
-		}
+		// ⭐ A METAOBJECT DOCUMENT HAS NO FILE OF ITS OWN — its content lives in the metadata, so
+		// saving it IS saving the metadata, and the answer to "did it save" is the SAVE's own.
+		//
+		// This read that answer INVERTED, both ways round: a metadata that saved successfully was
+		// reported as a failed save, and one that FAILED fell through to SaveAs() — which answers
+		// true for a metaobject document — and was reported as a success. The write itself always
+		// happened, which is why it went unnoticed: only the verdict was wrong.
+		if ((m_documentParent == nullptr && m_metaObject != nullptr) && IsChildDocument())
+			return activeMetaData->SaveDatabase();
 
 		if (m_documentFile.IsEmpty() ||
 			!m_savedYet) {

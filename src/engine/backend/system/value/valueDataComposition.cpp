@@ -582,6 +582,19 @@ void ibValueDataComposition::ApplyActiveVariant()
 			live->SetFilterRoot(tree);
 	}
 
+	// …AND WHAT THIS VARIANT SET ITS PARAMETERS TO — a MERGE BY NAME over the list the query
+	// declares, not a replacement of it. A name the query no longer asks for is simply not found,
+	// and a parameter this variant says nothing about keeps what it holds.
+	for (const ibVariantParameter& saved : m_variants[m_activeVariant].m_parameters) {
+		for (ibCompositionParameter& parameter : m_parameters) {
+			if (parameter.m_name != saved.m_name)
+				continue;
+			parameter.m_value      = saved.m_value;
+			parameter.m_expression = saved.m_expression;
+			break;
+		}
+	}
+
 	// …AND EVERY LEVEL'S OWN CONDITION, built from the tree it was written as. The structure that
 	// just landed carries trees, not expressions: an expression is what the engine reads and it is
 	// DERIVED, so it is made here — once, where the composer is in hand.
@@ -631,6 +644,20 @@ void ibValueDataComposition::CaptureActiveVariant()
 	// THE STRUCTURE TRAVELS WITH IT. It is not expressible in the flat snapshot above — a level of
 	// several fields, a second output, an axis of columns — so it is captured as itself.
 	m_variants[m_activeVariant].m_structure = GetModelComposer().Outputs();
+
+	// …AND SO DO THE PARAMETERS, by name and by what a person actually set: the value and the
+	// expression. Rebuilt rather than merged — this IS the capture, and a parameter the query has
+	// stopped asking for has no business surviving in the snapshot of what is on screen now.
+	m_variants[m_activeVariant].m_parameters = LiveParameterSnapshot();
+}
+
+std::vector<ibValueDataComposition::ibVariantParameter> ibValueDataComposition::LiveParameterSnapshot() const
+{
+	std::vector<ibVariantParameter> snapshot;
+	snapshot.reserve(m_parameters.size());
+	for (const ibCompositionParameter& parameter : m_parameters)
+		snapshot.push_back({ parameter.m_name, parameter.m_value, parameter.m_expression });
+	return snapshot;
 }
 
 size_t ibValueDataComposition::AddVariant(const wxString& name, int copyFrom)
@@ -649,6 +676,22 @@ size_t ibValueDataComposition::AddVariant(const wxString& name, int copyFrom)
 			ibDataNode packed(g_variantNodeClsid, 0);
 			source->WriteData(packed);
 			added.m_settings->ReadData(packed);
+		}
+
+		// ⭐ AND THE REST OF WHAT A VARIANT IS. "Everything" was said of the flat settings alone, so
+		// a copy came back with the groupings of its original and NO outputs, no levels, no
+		// parameters — the two halves the flat snapshot cannot describe.
+		//
+		// Read LIVE when the original is the ACTIVE variant, for the same reason the file does: the
+		// composer holds the current outputs and m_parameters the current values, while the
+		// snapshot beside them is only as fresh as the last capture.
+		if ((size_t)copyFrom == m_activeVariant) {
+			added.m_structure  = GetModelComposer().Outputs();
+			added.m_parameters = LiveParameterSnapshot();
+		}
+		else {
+			added.m_structure  = m_variants[copyFrom].m_structure;
+			added.m_parameters = m_variants[copyFrom].m_parameters;
 		}
 	}
 
@@ -696,6 +739,40 @@ const wxString  kParamUser       = wxT("ForUser");
 const wxString  kParamFromQuery  = wxT("FromQuery");
 const wxString  kParamValue      = wxT("Value");
 const wxString  kParamType       = wxT("Type");
+}
+
+// A VARIANT'S OWN PARAMETER RECORDS — written as children of the VARIANT node, in the same shape and
+// under the same clsid as the composition's. No third name is needed: the two lists never meet,
+// because they hang off different parents, and the reader of each walks only its own children.
+//
+// Only what a variant owns travels here (name, value, expression); the declared type and the two
+// flags stay on the composition's list, which is the one place that states them.
+void ibValueDataComposition::WriteVariantParameters(ibDataNode& node,
+                                                    const std::vector<ibVariantParameter>& parameters)
+{
+	for (size_t i = 0; i < parameters.size(); ++i) {
+		ibDataNode& sub = node.AddChild(g_parameterNodeClsid, static_cast<ibMetaID>(i));
+		sub.SetValue<wxString>(kParamName, parameters[i].m_name);
+		sub.SetValue<wxString>(kParamExpression, parameters[i].m_expression);
+		parameters[i].m_value.Serialize(sub.Child(kParamValue));
+	}
+}
+
+void ibValueDataComposition::ReadVariantParameters(const ibDataNode& node,
+                                                   std::vector<ibVariantParameter>& parameters)
+{
+	parameters.clear();
+	for (const ibDataNode& child : node.Children()) {
+		if (child.GetClsid() != g_parameterNodeClsid)
+			continue;   // the settings and the structure are children of this node too
+		ibVariantParameter parameter;
+		parameter.m_name       = child.GetValue<wxString>(kParamName);
+		parameter.m_expression = child.GetValue<wxString>(kParamExpression);
+		if (const ibDataNode* value = child.FindChild(kParamValue))
+			parameter.m_value = ibValue::FromNode(*value);
+		if (!parameter.m_name.IsEmpty())
+			parameters.push_back(parameter);
+	}
 }
 
 void ibValueDataComposition::WriteParameters(ibDataNode& node) const
@@ -791,6 +868,12 @@ void ibValueDataComposition::WriteVariants(ibDataNode& node) const
 		ibDataNode& sub = node.AddChild(g_variantNodeClsid, static_cast<ibMetaID>(i));
 		sub.SetValue<wxString>(kVariantName, m_variants[i].m_name);
 
+		// ITS PARAMETERS — live for the ACTIVE one, for the same reason its settings and its
+		// structure are read live below: the snapshot beside them is only as fresh as the last
+		// capture, and what a person just typed into the parameter grid has not been captured yet.
+		WriteVariantParameters(sub, i == m_activeVariant ? LiveParameterSnapshot()
+		                                                 : m_variants[i].m_parameters);
+
 		// ⭐ THE ACTIVE VARIANT IS READ FROM THE COMPOSER, not from its snapshot. The composer is
 		// where the active settings actually live — a script that adds a filter writes THERE, and a
 		// settings window commits THERE — so the snapshot beside it is the stale copy. Reading the
@@ -825,6 +908,7 @@ bool ibValueDataComposition::ReadVariants(const ibDataNode& node)
 		variant.m_settings = new ibValueListSettings();
 		variant.m_settings->ReadData(child);
 		ReadStructure(child, variant.m_structure);   // absent in an older file — the variant simply has none
+		ReadVariantParameters(child, variant.m_parameters);   // absent likewise, and absence is "says nothing"
 		read.push_back(variant);
 	}
 

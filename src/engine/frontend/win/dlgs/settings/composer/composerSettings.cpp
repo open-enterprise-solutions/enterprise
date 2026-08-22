@@ -2275,11 +2275,23 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 
 	// WHAT THIS NODE MAY SEE — its own page, because it is a setting and not a list of hints: set
 	// on the report it reaches every output, set on an output it reaches its levels.
-	// ⚠ ONE PAGE, NOT TWO. "Available" and "selected" are two questions in the engine, but the
-	// window asks only the first: what this node may see. Showing both put two nearly identical
-	// lists side by side and made the person choose which one they meant — the second page is gone
-	// until there is a question only it can answer.
 	tabs->AddPage(BuildFieldSetPage(tabs, ibFieldSet::Available), _("Available fields"), false);
+
+	// ⭐ …AND WHAT IT READS. This page was taken off as "two nearly identical lists, and the person
+	// has to work out which one they meant". The objection was right and it is answered by saying
+	// what each one ASKS, not by hiding one of them:
+	//
+	//   Available — what may be REACHED here. A field it excludes cannot be grouped, filtered or
+	//               sorted by, and it does not appear in any picker (ibSettingsFieldTree).
+	//   Selected  — what is actually READ. `ibDataComposer::SelectedFor(output[, level])` composes
+	//               the query's SELECT list out of it, with the same report → output → level
+	//               inheritance and the same Auto flag.
+	//
+	// And that is the question only this page can answer — one the window could not answer at all.
+	// The engine has read this set from the beginning; nothing but a script could write it, so
+	// every report composed from the window projected "every column the source has": forty
+	// attributes read per row to print three.
+	tabs->AddPage(BuildFieldSetPage(tabs, ibFieldSet::Selected), _("Selected fields"), false);
 
 	m_filterEditor = new ibFilterEditor(tabs, m_settings, m_fieldTree.get());
 	tabs->AddPage(m_filterEditor, _("Filter"), false);

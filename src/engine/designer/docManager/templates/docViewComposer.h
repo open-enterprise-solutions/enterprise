@@ -20,6 +20,15 @@ class ibComposerEditView : public ibMetaView {
 public:
 	ibComposerEditView() : ibMetaView() {}
 
+	// ⭐ PUT THE BUFFER ONTO THE COMPOSITION — the one verb, said in one place, for both gestures
+	// that accept this tab: closing it, and SAVING while it is still open. Until this existed only
+	// the first of the two landed anything, so a person who added a grouping and pressed the
+	// diskette wrote a report that still held the settings from before the edit.
+	//
+	// Answers false when the panel objects (a half-written condition): the caller must keep the tab
+	// open on what it objected to, and must not write the tree.
+	bool Commit();
+
 	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnUpdate(ibView* sender, wxObject* hint) override;
 	virtual void OnDraw(wxDC* dc) override;
@@ -41,6 +50,12 @@ public:
 	virtual bool IsModified() const override;
 	virtual void Modify(bool mod) override;
 
+	// SAVING THIS TAB ACCEPTS IT — the same house call the module and the form editors make
+	// (ibModuleDocument::Save / ibFormDocument::Save flush their editor before the base writes).
+	// This covers the configuration's Ctrl+S while a composer tab has the focus; an external report
+	// is saved from its own tree and lands through ibCommitOpenComposers.
+	virtual bool Save() override;
+
 protected:
 
 	virtual bool DoSaveDocument(const wxString& filename) override;
@@ -58,5 +73,15 @@ public:
 	wxDECLARE_NO_COPY_CLASS(ibComposerEditDocument);
 	wxDECLARE_DYNAMIC_CLASS(ibComposerEditDocument);
 };
+
+// ⭐ LAND EVERY OPEN COMPOSER TAB, then the tree may be written.
+//
+// Asked of EVERY open document rather than of the one being saved: the tab the diskette is pressed
+// on is rarely the tab that was edited — an external report is saved from its own tree while the
+// composer sits on the tab beside it. A composition edited there is not on the metaobject yet, and
+// serialising the tree without asking writes the report as it was BEFORE the edit.
+//
+// Answers false when a panel objected; the save must then not happen, exactly as a close does not.
+bool ibCommitOpenComposers();
 
 #endif // !_COMPOSER_H__

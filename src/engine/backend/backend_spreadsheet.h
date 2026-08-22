@@ -164,7 +164,7 @@ public:
 	ibSpreadsheetCellDescription::ibFitMode GetCellFitMode(int row, int col) { return m_spreadsheetDesc.GetCellFitMode(row, col); }
 	void SetCellFitMode(int row, int col, ibSpreadsheetCellDescription::ibFitMode fitMode);
 
-	bool IsCellReadOnly(int row, int col, bool isReadOnly = true) { return m_spreadsheetDesc.IsCellReadOnly(row, col); }
+	bool IsCellReadOnly(int row, int col) const { return m_spreadsheetDesc.IsCellReadOnly(row, col); }
 	void SetCellReadOnly(int row, int col, bool isReadOnly = true);
 
 	// ------ cell brake accessors

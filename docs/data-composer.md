@@ -260,10 +260,84 @@ inferring it from the depth, which a depth cannot answer once the tree holds bot
 group, a TOTAL LINE closes it, and the grand total is the last line of the output's section. See
 report-engine.md § 6bb.
 
-⏳ Not yet: the query TEXT cannot ask for detail records — there is no keyword, so the constructor
-has nothing to offer either. It is deliberately open: a new global word steals an identifier
-(`reference_query_keyword_steals_a_name`), and the naming is Max's call. Today the request travels
-as an argument of the read, which is where "how much of the tree do you want to look at" belongs.
+✅ **DECIDED (2026-08-22): there is no keyword, and there will not be one.** Not because naming is
+hard, but because the word would name one point of something continuous (Max):
+
+> a group already holds its rows; the drill can go by other fields too, so detail records come as a
+> bonus — every object of ours has them by its nature.
+
+The general act is **descending from a group**, and what you descend BY is the parameter: by another
+field, or by nothing at all — and "by nothing" IS the detail rows. A keyword would name that one
+setting of the dial and leave the rest of it unsayable, while the read already carries the whole
+dial (`ibSelectKind` on `ibSelector::Select(kind)`, `withDetails` on `ExecuteTotals`). Both are the
+same question — *how much of the tree do you want to look at* — and it belongs to the READER,
+because one TOTALS feeds a list (headings, and children on expand) and a report (the lot, printed).
+
+🛑 **What must NOT follow from this, as the code stands today**: making details unconditional.
+Asking for them REFUSES the server-side fold (`ROLLUP` returns aggregates with no rows to hang under
+a heading — `TryTotalsPushdown`, and the gate above it), so a list that always asked would drag every
+row into memory to show ten headings — the one thing the acceptance criterion forbids (*memory grows
+by GROUPS, not by detail rows*). A list drills instead: expanding a node re-reads scoped to it
+(`RunComposerPage`'s drill scope). Paper has no expand button, so a report materialises.
+
+### ⏭ THE PHANTOM LEVEL — direction, decided 2026-08-22, NOT BUILT
+
+Max, and it removes the refusal above rather than living with it:
+
+> a phantom grouping that groups by no fields — nothing declares it, it exists by the fact that
+> there are groupings at all — and being a level is what lets the whole thing go to the server.
+
+Two things fall out, and the second is why it is worth building.
+
+**1. The empty grouping STAYS — it is the word a person says.** (Corrected 2026-08-22: the first
+reading of "nothing declares it" was that the settings node should go. Max: *"I want to add an empty
+grouping in the composer — that is me saying I want to see the detail records. How would I ever see
+them if you take empty groupings away? That is the whole point."*) The node is the DECLARATION; the
+phantom level is its LOWERING — the same road everything else in L5 travels, settings → text →
+engine. Nothing in the window changes.
+
+What "phantom" means, then, is that the level is not a grouping in the SQL sense — it groups by no
+FIELD a person named. It exists in the query all the same, because that is what carries it to the
+server.
+
+**2. A level can be pushed down; a refusal cannot.** The reason details cancel the server fold is
+that `ROLLUP` folds the rows away — but only because the grouping sets stop at the last named field.
+Add the phantom level as the row's own IDENTITY (`GetPrimaryKeyColumns()`, the one key authority)
+and `GROUP BY ROLLUP(Warehouse, Item, <key>)` makes the deepest set one row per group — which IS
+the detail rows. Headings, subtotals, grand total and rows then come back from ONE server pass, and
+the RAM snapshot the fold runs over is not needed at all.
+
+What has to be answered before it is built:
+
+- **what the phantom level groups BY — whatever makes a row unique, which is not always a key.**
+  The levels above are already in the grouping set, so a detail row is scoped by its ancestors for
+  free (Max: *"the last one has no groupings, but takes the ones above it as the filter for the
+  details"*) — the phantom level adds only what tells two rows with the same ancestors apart. For a
+  table that is its identity (`GetPrimaryKeyColumns()`). For a register's virtual table there is no
+  key and none is wanted: a row there is already an aggregate, so what makes it unique is the rest
+  of its DIMENSIONS. Without that distinction the phantom level would collapse every row sharing
+  the ancestors into one. A source that can name neither — a RAM or temp queryable, an author's
+  subquery — degrades to today's RAM fold; degradation, not refusal, and the composer must be able
+  to tell which one it got;
+- **the projected non-grouping columns** — what a detail line PRINTS is the selected fields, scoped
+  by the levels above (Max: *"all the selected fields, with this Nomenclature taken into account,
+  land there and are printed row by row"* — the resources are along for the ride, since an aggregate
+  over one row is that row). SQL wants every projection grouped or aggregated, and at a unique level
+  `MIN(col)` IS `col`. Two things follow, and the second is a silent one:
+  - the engine currently REFUSES a column that is both folded and a group key (`CheckNames`) — right
+    for what an AUTHOR writes, and the platform's own wrapping has to be told apart from it;
+  - 🛑 **a wrapper lies at the HEADING levels.** `ROLLUP` evaluates every projection at every
+    grouping set, so `MIN(Date)` on the *Nomenclature* row is the minimum date over that whole
+    group — a real number, printed in a detail column, on a line that has no detail. Nobody sees a
+    NULL there to be suspicious of. The level has to be asked for (`GROUPING(<uniqueness>)`) and the
+    detail columns blanked where it says "this row is a heading". The RAM fold never had the problem
+    because a heading node simply carries no detail values;
+- **the leaf's node kind** — a ROLLUP tree is assembled through a key map, so the deepest level's
+  nodes must be stamped `ibSelectorNodeKind::Detail` where `MarkRollupFolders` already stamps
+  `m_hasChildren`. That is the one place the phantom level is named, and it is internal;
+- **order** — the prize past the fold is printing as the rows STREAM, which needs `ROLLUP` rows to
+  arrive parents-first (`GROUPING()` in the `ORDER BY`). Separate step, and only worth it after the
+  fold itself lands.
 
 ### Where a filter sits decides what it does
 
@@ -288,6 +362,15 @@ Two sets, two questions, one inheritance (`AvailableFor` / `SelectedFor`, both o
 |---|---|---|
 | **available** | what this node MAY use — group, filter, sort, show | the settings window: it narrows every field pane |
 | **selected** | what this node DOES show | the render — the projection written into the query |
+
+**Both sets are editable from the window** (2026-08-22). The *Selected* page had been taken off the
+node's notebook as "two nearly identical lists, and the person has to work out which one they
+meant" — a fair objection, answered by stating what each one asks rather than by removing one of
+them. It was the only way to write a set the engine had read from the beginning: with no page, every
+report composed from the window projected **every column its source has** — forty attributes read
+per row to print three — because `SelectedFor` fell through to the empty composition-wide list, and
+empty means all. The whole plumbing was already generic (`BuildFieldSetPage(parent, ibFieldSet)`,
+`ReloadFieldSets`, the report-level buffers); only the `AddPage` was missing.
 
 **Available narrows the PICKERS, and that is the whole of it** (2026-08-22). It changes no query and
 no read: what a node may be *offered* is a UI statement, and offering a person a field the report

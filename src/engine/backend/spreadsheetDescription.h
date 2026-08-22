@@ -668,10 +668,17 @@ struct ibSpreadsheetDescription {
 		if (cell != nullptr) cell->m_fitMode = fitMode;
 	}
 
-	bool IsCellReadOnly(int row, int col, bool isReadOnly = true) {
-		ibSpreadsheetCellDescription* cell = GetOrCreateCell(row, col);
-		if (cell != nullptr) return cell->m_isReadOnly;
-		return false;
+	// ⭐ A READ THAT DOES NOT WRITE. This asked GetOrCreateCell, so ASKING whether a cell was
+	// read-only MATERIALISED it — a walk that probes a sheet grew the description by every cell it
+	// merely looked at. GetCell answers the same question without creating: an absent cell is not
+	// read-only, which is exactly what the created-and-empty one used to answer.
+	//
+	// It also carried an `isReadOnly` argument it never read — a getter wearing its setter's
+	// signature, one slip away from `IsCellReadOnly(r, c, false)` reading as a question that was
+	// never asked.
+	bool IsCellReadOnly(int row, int col) const {
+		const ibSpreadsheetCellDescription* cell = GetCell(row, col);
+		return cell != nullptr && cell->m_isReadOnly;
 	}
 
 	void SetCellReadOnly(int row, int col, bool isReadOnly = true) {

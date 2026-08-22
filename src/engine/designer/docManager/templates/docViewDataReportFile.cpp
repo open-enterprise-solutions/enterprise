@@ -1,5 +1,7 @@
 #include "docViewDataReportFile.h"
 
+#include "docViewComposer.h"   // ibCommitOpenComposers — a composer tab lands before the tree is written
+
 wxIMPLEMENT_DYNAMIC_CLASS(ibReportEditView, ibMetaView);
 
 bool ibReportEditView::OnCreate(ibDocument* docBase, long flags)
@@ -81,8 +83,18 @@ bool ibReportFileDocument::DoOpenDocument(const wxString& filename)
 
 bool ibReportFileDocument::DoSaveDocument(const wxString& filename)
 {
-	if (!GetMetaTree()->Save())
+	// ⭐ THE OPEN EDITORS LAND BEFORE THE TREE IS WRITTEN. A composer tab edits into a transactional
+	// buffer and used to put it onto the metaobject only when it CLOSED — so saving an external
+	// report from its tree wrote the composition as it was before the grouping was added. A panel
+	// that objects stops the save the same way it stops a close.
+	if (!ibCommitOpenComposers())
 		return false;
+
+	// The tree writes the report's own name / synonym / comment onto the metaobject, and saves the
+	// image when something changed. It answers FALSE for "there was nothing to save" — which is not
+	// a failure: reading it as one meant an unchanged report could not be written to a file at all.
+	if (ibDataReportTree* metaTree = GetMetaTree())
+		metaTree->Save();
 
 	if (!m_metaData->SaveToFile(filename))
 		return false;

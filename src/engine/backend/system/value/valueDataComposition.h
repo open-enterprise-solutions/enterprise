@@ -392,6 +392,16 @@ private:
 	// THE VARIANTS THEMSELVES. Each holds a BUFFER-mode settings object — own storage, not a facade
 	// over the composer — because a snapshot that wrote through to the composer would not be a
 	// snapshot. Never empty: the constructor puts the first one in.
+	// WHAT A PARAMETER IS WORTH IN THIS VARIANT — its value and the expression that produces one.
+	// Only those two: the parameter's TYPE, whether the user may set it and whether the query asked
+	// for it are facts about the SCHEMA, the same in every variant, and a variant that carried them
+	// would be a second place stating them.
+	struct ibVariantParameter {
+		wxString m_name;
+		ibValue  m_value;
+		wxString m_expression;
+	};
+
 	struct ibCompositionVariant {
 		wxString                        m_name;
 		ibValuePtr<ibValueListSettings> m_settings;
@@ -400,6 +410,15 @@ private:
 		// of several fields, a second output, or an axis of columns. Captured when the variant is
 		// left, applied when it is entered, written to the file with the rest of it.
 		std::vector<ibDataComposer::Output> m_structure;
+		// ⭐ …AND WHAT ITS PARAMETERS WERE SET TO. "Sales for last month" and "sales for the year"
+		// are one structure and two periods, so a variant that did not carry them was not a whole
+		// way of showing the data — switching one changed the groupings and left the period behind.
+		//
+		// Held BY NAME and applied as a merge, never as a replacement of the list: the list itself
+		// is derived from the query text (SyncParametersWithQuery adds what it mentions and drops
+		// the auto ones it stopped mentioning), so a variant restoring it wholesale would resurrect
+		// parameters the query no longer asks for. A name that is no longer there is not matched.
+		std::vector<ibVariantParameter> m_parameters;
 	};
 	std::vector<ibCompositionVariant> m_variants;
 	size_t                            m_activeVariant = 0;
@@ -414,6 +433,15 @@ private:
 	// The first variant, made on construction so the invariant "there is always one" holds from the
 	// first moment rather than from the first window.
 	void EnsureVariant();
+	// WHAT THE LIVE PARAMETERS ARE WORTH, said in a variant's terms. One spelling, because three
+	// places ask the same question: the capture, a copy taken from the active variant, and the file.
+	std::vector<ibVariantParameter> LiveParameterSnapshot() const;
+
+	// A VARIANT'S PARAMETER RECORDS, to and from its node. Members rather than the file-local
+	// helpers their neighbours (WriteStructure / ReadStructure) are, for one reason: what they carry
+	// is private to this class, and a free function cannot name it.
+	static void WriteVariantParameters(ibDataNode& node, const std::vector<ibVariantParameter>& parameters);
+	static void ReadVariantParameters(const ibDataNode& node, std::vector<ibVariantParameter>& parameters);
 
 	// THE PARAMETERS THEMSELVES. Kept in the order the query mentions them (that is the order a
 	// person reads them in), with hand-made ones appended after.

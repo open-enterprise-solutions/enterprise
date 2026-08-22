@@ -281,8 +281,12 @@ between two panes was the odd one out — three unlabelled arrows, and a proport
   what a type may be folded by, one gesture away from the cell that states it properly.
 - `ibDataComposer::SetTotalAt` — change a line in place, keeping its position. A resource that can
   be added and removed but not edited sends a person round the houses to turn `SUM` into `AVG`.
-- ⏳ Missing from the offer: **`COUNT(DISTINCT …)`**. The language parses it (the parser reads
-  DISTINCT inside the call); it is not a keyword of its own, so it is not in `AggregatesFor`'s list.
+- ✅ **`COUNT(DISTINCT …)` is offered** — and not by a second list. `AggregatesFor` answers in
+  KEYWORDS and DISTINCT is not one, so the twin is added where the CALLS are composed:
+  `ibQueryLowering::AggregateCallsFor(type, field)` writes `COUNT(x)` and, when
+  `ibDistinctMattersFor` says the question differs, `COUNT(DISTINCT x)` beside it. MIN and MAX get
+  no twin — their answer is the same value however often it occurs. Both the constructor's Totals
+  cell and this page's resource cell read that one function, so neither spells DISTINCT itself.
 
 ### The constructor is opened with a mask of EXCLUSIONS
 
@@ -1179,8 +1183,12 @@ applied when it is entered (AFTER the flat settings, which rebuild the ladder fr
 cannot hold a multi-field level), and written to the file. A file written before this simply has no
 structure section — absence reads as absence.
 
-⏳ Not serialised yet: a level's own filter and sort. They live as an expression and need a format
-of their own.
+✅ A level's own filter and sort ARE serialised. The FILTER travels as the TREE it was written as
+(`GroupNode::m_filterTree`, a plain `ibValue` — the tree packs itself, the same road the
+composition's own filter takes), and the condition the engine reads (`m_filterAst`) is DERIVED from
+it and rebuilt when it changes. The tree is what is saved and what the editor reopens on: an
+expression can be run but not read back into the lines a person wrote, so a level whose filter
+travelled only as an AST came back empty.
 
 ### 6a. Several outputs on one sheet (2026-08-21)
 
@@ -1232,10 +1240,16 @@ up into cannot be computed two different ways.
 rebuilt when a file is loaded or a variant switched (`RebuildLevelFilters`). An expression can be
 run but not taken apart back into the lines a person wrote, which is why the tree is what travels.
 
-⏳ The query TEXT still cannot ask for detail records — there is no keyword, so the constructor has
-nothing to offer either. Deliberately open: a new global word takes an identifier away from every
-configuration, and the naming is Max's. Today the request rides as an argument of the READ
-(`ExecuteTotals(…, withDetails)`), which is where "how much of the tree do you want to see" belongs.
+✅ **SETTLED 2026-08-22 — no keyword, by decision.** The word would name ONE setting of a dial that
+is continuous: descending from a group can go by another field, and going by *nothing* is what
+"detail records" means (Max: "a group already holds its rows; the drill can be by the other fields
+too — details come as a bonus, every object of ours has them by its nature"). The read already
+carries the whole dial — `ibSelectKind` on `ibSelector::Select(kind)` for a script walking the tree,
+`withDetails` on `ExecuteTotals` for a printer — and it belongs there, because one TOTALS feeds both
+a list and a report. See [data-composer.md](data-composer.md) § detail records for the full
+reasoning and for the one thing that must not follow from it (details are never unconditional: they
+refuse the `ROLLUP` pushdown, and a list that always asked would hold every row to print ten
+headings).
 
 ### 6bb. Where the totals are printed (2026-08-21, settled 2026-08-22)
 
