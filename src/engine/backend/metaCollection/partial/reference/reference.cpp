@@ -164,8 +164,14 @@ void ibReferenceRegistry::Remember(ibValueReferenceDataObject* ref)
 	// GetMetaObject / GetGuid would be filed under the base's answer and found under its own, which
 	// is a twin that never gets reused and never gets struck out. Reading the members is exact at
 	// every point in the object's life. The register is a friend for this reason.
-	const ibGuidImpl key = ref != nullptr ? ref->m_objGuid : ibGuidImpl{};
-	if (ref == nullptr || ref->m_metaObject == nullptr || !NamesAnObject(key))
+	if (ref == nullptr || ref->m_metaObject == nullptr)
+		return;
+
+	// The key AFTER the null check, not through a conditional producing one of two guid types: ibGuid
+	// and ibGuidImpl each convert to the other, so a ternary over both is ambiguous — MSVC picks one
+	// and GCC refuses. Checking first is what this should have said anyway.
+	const ibGuidImpl key = ref->m_objGuid;
+	if (!NamesAnObject(key))
 		return;
 	const std::shared_ptr<ibReferenceTable> table = TableOfCurrentSession(/*createIfMissing*/true);
 	if (!table)
