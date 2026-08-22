@@ -55,7 +55,7 @@ void LogSession(const std::string& msg)
 	line << "[pid=" << CurrentPid() << "] " << msg;
 	const std::string tagged = line.str();
 	std::cerr << tagged << std::endl;
-	wxLogDebug(wxT("%s"), wxString::FromUTF8(tagged.c_str()));
+	ibJournalInfo(wxT("session"),wxT("%s"), wxString::FromUTF8(tagged.c_str()));
 }
 
 } // namespace
@@ -421,7 +421,7 @@ void ibSessionRegistry::Stop()
 	}
 	const bool detached = m_threadAlive.load(std::memory_order_acquire);
 	if (detached) {
-		wxLogWarning(wxT("registry: m_thread join timed out - detaching ")
+		ibJournalWarning(wxT("session"),wxT("registry: m_thread join timed out - detaching ")
 			wxT("(deadlock against an in-flight ProcessRemove -> DetachRuntime / ")
 			wxT("listener callback chain). Process will exit anyway."));
 		m_thread.detach();

@@ -87,12 +87,12 @@ void ibSession::SetSessionParameters()
 		unit->ExecAsProc(wxT("SetSessionParameters"));
 	}
 	catch (const ibBackendException& err) {
-		wxLogWarning(_("SetSessionParameters: %s"), err.GetErrorDescription());
+		ibJournalWarning(wxT("session.params"),_("SetSessionParameters: %s"), err.GetErrorDescription());
 	}
 	catch (const std::exception& err) {
-		wxLogWarning(wxT("SetSessionParameters: %s"), err.what());
+		ibJournalWarning(wxT("session.params"),wxT("SetSessionParameters: %s"), err.what());
 	}
 	catch (...) {
-		wxLogWarning(wxT("SetSessionParameters: unknown exception"));
+		ibJournalWarning(wxT("session.params"),wxT("SetSessionParameters: unknown exception"));
 	}
 }

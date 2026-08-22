@@ -91,7 +91,7 @@ void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)
 		}
 
 #ifdef DEBUG
-		wxLogDebug("* Register class '%s' with clsid '%s:%llu' ", typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
+		ibJournalInfo(wxT("metadata"),"* Register class '%s' with clsid '%s:%llu' ", typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
 		wxASSERT(m_image);                 // registration happens only while open (image live)
@@ -105,7 +105,7 @@ void ibMetaData::UnRegisterCtor(ibCtorMetaValueType*& typeCtor)
 	if (typeCtor != nullptr && ibMetaData::IsRegisterCtor(typeCtor->GetClassType())) {
 
 #ifdef DEBUG
-		wxLogDebug("* Unregister class '%s' with clsid '%s:%llu' ", typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
+		ibJournalInfo(wxT("metadata"),"* Unregister class '%s' with clsid '%s:%llu' ", typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
 		// Facade: CallEvent(UnRegister) + unregister. The registry owns the ctor via

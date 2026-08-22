@@ -483,7 +483,7 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 		// shape, which belongs to the tier that built it (the same rule the OVER clause follows).
 		if (!m_dialect.m_features.m_cte)
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
-				_("This database cannot read a named query (WITH …): write it as a nested source instead"));
+				_("This database cannot read a named query (WITH ...): write it as a nested source instead"));
 		with += with.IsEmpty() ? wxT("WITH ") : wxT(", ");
 		with += QuoteIdent(cte.m_name) + wxT(" AS (") + RenderSelect(cte.m_query.get()) + wxT(")");
 	}
@@ -1385,6 +1385,13 @@ ibDatabaseResultSet* ibQueryStatement::RunQueryWithResults()
 bool ibCanPushRollup(const ibDatabaseLayer* layer)
 {
 	return layer != nullptr && layer->GetDialect().m_features.m_rollup;
+}
+
+// DOES IT HAVE `GROUPING(expr)` — asked apart from ROLLUP, because Firebird 5 has the one and not
+// the other. Where the answer is no, the fold reads a row's level off its NULL keys instead.
+bool ibCanUseGrouping(const ibDatabaseLayer* layer)
+{
+	return layer != nullptr && layer->GetDialect().m_features.m_grouping;
 }
 
 bool ibCanPushWindow(const ibDatabaseLayer* layer)

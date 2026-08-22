@@ -1,4 +1,5 @@
 #include "firebirdReplicationConfig.h"
+#include "backend/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 
 #include <wx/file.h>
 #include <wx/filename.h>
@@ -61,7 +62,7 @@ wxString ibFirebirdReplicationConfig::Build(
 	// break the line-oriented format. Empty string on rejection so
 	// callers don't ship a half-generated config.
 	if (!LooksSafeForConfig(databasePath) || !LooksSafeForConfig(journalDir)) {
-		wxLogError(wxT("ibFirebirdReplicationConfig: databasePath or ")
+		ibJournalError(wxT("db.firebird"),wxT("ibFirebirdReplicationConfig: databasePath or ")
 		           wxT("journalDir contains characters unsafe for ")
 		           wxT("replication.conf (newline / brace / hash)"));
 		return wxEmptyString;
@@ -87,7 +88,7 @@ wxString ibFirebirdReplicationConfig::Build(
 		if (!LooksSafeForConfig(p.address)
 		 || !LooksSafeForConfig(user)
 		 || !LooksSafeForConfig(pwd)) {
-			wxLogError(wxT("ibFirebirdReplicationConfig: peer entry contains ")
+			ibJournalError(wxT("db.firebird"),wxT("ibFirebirdReplicationConfig: peer entry contains ")
 			           wxT("characters unsafe for replication.conf - skipped"));
 			continue;
 		}
@@ -96,7 +97,7 @@ wxString ibFirebirdReplicationConfig::Build(
 		// is plaintext on disk and SYSDBA/masterkey is the FB OOTB
 		// secret that every attacker tries first.
 		if (pwd == wxT("masterkey")) {
-			wxLogWarning(wxT("ibFirebirdReplicationConfig: peer %s uses ")
+			ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdReplicationConfig: peer %s uses ")
 			             wxT("default 'masterkey' password - change before ")
 			             wxT("production deploy"), p.address);
 		}
@@ -116,7 +117,7 @@ bool ibFirebirdReplicationConfig::WriteToRuntimeDir(
 	const wxString& content)
 {
 	if (fbRuntimeDir.IsEmpty()) {
-		wxLogError(wxT("ibFirebirdReplicationConfig: FB runtime dir not set"));
+		ibJournalError(wxT("db.firebird"),wxT("ibFirebirdReplicationConfig: FB runtime dir not set"));
 		return false;
 	}
 
@@ -130,7 +131,7 @@ bool ibFirebirdReplicationConfig::WriteToRuntimeDir(
 	{
 		wxFile f;
 		if (!f.Open(tempPath, wxFile::write)) {
-			wxLogError(wxT("ibFirebirdReplicationConfig: cannot open %s"),
+			ibJournalError(wxT("db.firebird"),wxT("ibFirebirdReplicationConfig: cannot open %s"),
 			           tempPath);
 			return false;
 		}
@@ -140,14 +141,14 @@ bool ibFirebirdReplicationConfig::WriteToRuntimeDir(
 		const auto utf8 = content.utf8_str();
 		const size_t len = utf8.length();
 		if (f.Write(utf8.data(), len) != len) {
-			wxLogError(wxT("ibFirebirdReplicationConfig: short write on %s"),
+			ibJournalError(wxT("db.firebird"),wxT("ibFirebirdReplicationConfig: short write on %s"),
 			           tempPath);
 			f.Close();
 			wxRemoveFile(tempPath);
 			return false;
 		}
 		if (!f.Close()) {
-			wxLogError(wxT("ibFirebirdReplicationConfig: close failed on %s"),
+			ibJournalError(wxT("db.firebird"),wxT("ibFirebirdReplicationConfig: close failed on %s"),
 			           tempPath);
 			wxRemoveFile(tempPath);
 			return false;
@@ -157,7 +158,7 @@ bool ibFirebirdReplicationConfig::WriteToRuntimeDir(
 	// wxRenameFile overwrites the destination by default — atomic on
 	// the same volume on every supported platform (Win32 / POSIX).
 	if (!wxRenameFile(tempPath, finalPath, /*overwrite=*/true)) {
-		wxLogError(wxT("ibFirebirdReplicationConfig: rename %s -> %s failed"),
+		ibJournalError(wxT("db.firebird"),wxT("ibFirebirdReplicationConfig: rename %s -> %s failed"),
 		           tempPath, finalPath);
 		wxRemoveFile(tempPath);
 		return false;

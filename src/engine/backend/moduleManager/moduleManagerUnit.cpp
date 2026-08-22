@@ -55,7 +55,7 @@ bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::CreateCommonModule()
 		Compile();
 	}
 	catch (const ibBackendException& err) {
-		wxLogWarning(_("Common module init failed: %s"), err.GetErrorDescription());
+		ibJournalWarning(wxT("module"),_("Common module init failed: %s"), err.GetErrorDescription());
 		return false;
 	};
 

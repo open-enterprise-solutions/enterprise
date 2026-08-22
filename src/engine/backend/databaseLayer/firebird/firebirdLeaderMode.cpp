@@ -2,6 +2,7 @@
 
 #include "firebirdCommon.h"
 #include "firebirdLease.h"
+#include "backend/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 #include "firebirdLocalServer.h"
 
 #include <wx/file.h>
@@ -375,7 +376,7 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 			// firebird.exe missing or spawn failed — degrade to
 			// embedded-only. Write port=0 into lease so followers
 			// know they can't connect; surface a warning.
-			wxLogWarning(wxT("ibFirebirdLeaderMode: leader role acquired ")
+			ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLeaderMode: leader role acquired ")
 			             wxT("but local server can't start (firebird.exe ")
 			             wxT("missing from _fb/?). Falling back to embedded ")
 			             wxT("attach; remote followers will fail to connect."));

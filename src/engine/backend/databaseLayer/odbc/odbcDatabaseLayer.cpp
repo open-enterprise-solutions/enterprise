@@ -675,7 +675,7 @@ wxArrayString ibDatabaseLayerODBC::GetColumns(const wxString& table)
 //void ibDatabaseLayerODBC::InterpretErrorCodes( long nCode, SQLHSTMT stmth_ptr )
 void ibDatabaseLayerODBC::InterpretErrorCodes(long nCode, void* stmth_ptr)
 {
-	wxLogDebug(wxT("ibDatabaseLayerODBC::InterpretErrorCodes()\n"));
+	ibJournalInfo(wxT("db.odbc"),wxT("ibDatabaseLayerODBC::InterpretErrorCodes()\n"));
 
 	//if ((nCode != SQL_SUCCESS) ) // && (nCode != SQL_SUCCESS_WITH_INFO))
 	{

@@ -88,6 +88,7 @@ enterprise/
 │   ├── system-functions.md   # the global script API — 92 functions + 6 procedures
 │   ├── database-modes.md     # file vs server base — where each puts its artefacts
 │   ├── debugger-architecture.md # TCP transport, why the debuggee is the server
+│   ├── technology-journal.md # ibJournal — the engine's running commentary (wxLog* lives in one file)
 │   ├── database-layer.md     # driver abstraction — lineage, what's ours, adding a driver
 │   ├── script-value-types.md # every script type — creatable vs vended
 │   ├── fnumber.md            # ibNumber — exact-decimal number in 8 bytes (tagged word + bignum tier)

@@ -32,15 +32,15 @@ void LogWorkerException(const wxString& location)
 	// rethrow, so set_exception below still gets the same one.
 	try { throw; }
 	catch (const ibBackendException& e) {
-		wxLogWarning(wxT("%s: ibBackendException: %s"),
+		ibJournalWarning(wxT("session.worker"),wxT("%s: ibBackendException: %s"),
 		             location, e.GetErrorDescription());
 	}
 	catch (const std::exception& e) {
-		wxLogWarning(wxT("%s: std::exception: %s"),
+		ibJournalWarning(wxT("session.worker"),wxT("%s: std::exception: %s"),
 		             location, wxString::FromUTF8(e.what()));
 	}
 	catch (...) {
-		wxLogWarning(wxT("%s: unknown exception"), location);
+		ibJournalWarning(wxT("session.worker"),wxT("%s: unknown exception"), location);
 	}
 }
 
@@ -316,7 +316,7 @@ void ibWorkerPoolHeadless::Stop()
 	while (!m_stopCv.wait_for(lk, kStopWaitReport, [this]() {
 		return m_aliveWorkers.load(std::memory_order_acquire) == 0;
 	})) {
-		wxLogWarning(wxT("worker pool: still waiting on %lu worker(s) after stop"),
+		ibJournalWarning(wxT("session.worker"),wxT("worker pool: still waiting on %lu worker(s) after stop"),
 		             (unsigned long)m_aliveWorkers.load(std::memory_order_acquire));
 	}
 }

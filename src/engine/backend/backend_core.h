@@ -181,4 +181,15 @@ enum ibProgramSyntax {
 #define COMPONENT_TYPE_ABSTRACT		 0
 #define COMPONENT_TYPE_METADATA		 COMPONENT_TYPE_ABSTRACT
 
+//*******************************************************************************************
+
+// ⭐ THE TECHNOLOGY JOURNAL, DECLARED IN THE CORE — so `ibJournalInfo(...)` is available in every file
+// of the engine without an include of its own. A diagnostic that has to be arranged for is a
+// diagnostic nobody writes at the moment they need it; this one is simply there, like `_()`.
+//
+// Included LAST, and from here rather than the other way round: journal.h includes this header for
+// BACKEND_API, and the guard above makes that re-entry a no-op, so the pair resolves whichever file
+// is reached first.
+#include "backend/diagnostics/journal.h"
+
 #endif 

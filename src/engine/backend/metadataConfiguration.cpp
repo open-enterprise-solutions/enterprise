@@ -234,7 +234,7 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 			return false;
 	}
 	catch (const ibBackendException& err) {
-		wxLogError(err.GetErrorDescription());
+		ibJournalError(wxT("metadata.config"),err.GetErrorDescription());
 		return false;
 	}
 
@@ -397,7 +397,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	catch (const ibBackendException& err) {
 		// ⭐ THE ENGINE'S WORDS REACH THE USER — the twin of the report / data-processor catches.
 		// A configuration that refuses to load is the costliest of the three to face in silence.
-		wxLogError(wxT("%s"), err.GetErrorDescription());
+		ibJournalError(wxT("metadata.config"),wxT("%s"), err.GetErrorDescription());
 		return false; // fresh (ibValuePtr) discards the root automatically
 	}
 

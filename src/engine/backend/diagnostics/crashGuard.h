@@ -36,6 +36,7 @@
 #include "backend/backend_core.h"
 #include <wx/string.h>
 #include <functional>
+#include <utility>      // std::forward — the journal's parameter pack
 
 namespace ibCrashGuard {
 
@@ -46,6 +47,7 @@ namespace ibCrashGuard {
 // Idempotent — second Install with a different exeName updates the
 // label but does not re-register handlers.
 BACKEND_API void Install(const wxString& exeName);
+
 
 // Append `message` to `<exeName>_startup.log` next to the binary. No UI.
 // Frontend / web / console wrappers add their own user-visible surface.
@@ -81,6 +83,15 @@ BACKEND_API void TerminateProcessFast(int exitCode);
 // direct path.
 BACKEND_API int WrapStartup(const wxString& exeName,
                              std::function<int()> body);
+
+// ⭐ A DUMP RIGHT NOW, with nothing wrong yet — the process keeps running. Written when something
+// reports a failure it can still walk away from: by the time a person reads the journal line, the
+// state that produced it is long gone, and this is the only way to keep it.
+//
+// `kindSuffix` goes into the file name beside the pid and the stamp, so a deliberate dump is
+// distinguishable from a crash one at a glance. No-op off Windows for now — the POSIX side writes a
+// backtrace from its signal handler and has no equivalent "snapshot me" call.
+BACKEND_API void WriteDumpNow(const wxString& kindSuffix);
 
 // Where this process writes its dump files. Resolved on first Install,
 // stable for the rest of the process. ibWxApp::OnFatalException quotes

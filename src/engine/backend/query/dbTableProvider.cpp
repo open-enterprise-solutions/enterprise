@@ -1950,6 +1950,20 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 		const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
 		if (levels.empty())                                       return false;
 
+		// ⚠ A DERIVED SOURCE AND A DOT-WALK CANNOT BOTH BE HONOURED. A source that is not a table puts
+		// its own relation in the FROM (GetDerivedRelation), and the reference JOIN chain a dot-walked
+		// key rides is built over the main TABLE — there is none to hang it on. Both are fine alone;
+		// together they keep the RAM fold, which reads either.
+		if (q->GetSourceRelation(q->GetQueryTableName()) != nullptr) {
+			if (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty()) return false;
+			if (spec.m_groupPaths != nullptr)
+				for (const std::vector<const ibBackendQueryColumn*>& gp : *spec.m_groupPaths)
+					if (!gp.empty())                              return false;
+			for (const ibTotalLevel& level : levels)
+				for (const ibTotalField& f : level.m_fields)
+					if (!f.m_path.empty())                        return false;
+		}
+
 		// ⚠ THREE REFUSALS THAT COULD NOT BE STATED BEFORE, because a flat column list does not carry
 		// what they ask about. Each is a SILENT wrong answer if it is missed, not a slow one:
 		for (const ibTotalLevel& level : levels) {
@@ -1963,10 +1977,18 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 				// AttachDimValue does that, and no GROUP BY can. Folded here it would come back as a
 				// plain grouping under a word that asked for something else.
 				if (f.m_dim != ibDimensionKind::Elements)         return false;
+				// A DOT-WALKED DIMENSION (`Producer.Region`) rides a reference JOIN chain, the same
+				// one a dot-walked flat key rides — allowed WHEN every non-leaf hop is a SINGLE-TARGET
+				// reference, so the chain is resolvable from metadata alone. A composite / multi-target
+				// mid-hop cannot be joined and keeps the RAM fold, which handles it.
+				if (!f.m_path.empty()) {
+					const ibBackendQueryable* walk = q;
+					for (size_t s = 0; s + 1 < f.m_path.size() && walk != nullptr; ++s)
+						walk = walk->GetProvider().ResolveReferenceTarget(walk, f.m_path[s]);
+					if (walk == nullptr)                          return false;
+				}
 			}
 		}
-		// A DOT-WALKED DIMENSION rides a join the ROLLUP builder does not construct for levels.
-		if (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty()) return false;
 
 		// ⚠ AND THE ORDER HAS TO BE SAYABLE OVER THE FOLDED RESULT. A grouped query may only order by
 		// what it grouped by (or by an aggregate); a sort naming an ordinary field would be rejected by
@@ -2009,9 +2031,9 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
 	{
 		if (!CanRollupTotalsShape(spec)) return false;
-		// The connected driver must be able to fold the levels itself (FB5 / PG; NOT SQLite
-		// -> RAM). Asked of L2 rather than read off its dictionary: what a driver CAN DO is a question,
-		// and this tier has no business knowing which field carries the answer.
+		// The connected driver must be able to fold the levels itself (PG; NOT Firebird through 5.0,
+		// NOT SQLite -> RAM). Asked of L2 rather than read off its dictionary: what a driver CAN DO is
+		// a question, and this tier has no business knowing which field carries the answer.
 		ibConnectionScope scope(spec.m_holder);
 		if (!scope) return false;
 		return ibCanPushRollup(scope.get());
@@ -2060,8 +2082,20 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	// A lone scalar field stays a BARE expression, exactly as it rendered before: `ROLLUP(a, b)`, not
 	// `ROLLUP((a), (b))`. The parenthesised form is legal SQL, but the common shape has no business
 	// changing spelling because a rarer one was made expressible.
+	// Does this engine have GROUPING()? Asked ONCE, of L2, the same way "can it fold at all" is asked
+	// — the two are separate facts (Firebird 5 has the fold and not the function).
+	bool hasGrouping = false;
+	{
+		ibConnectionScope scope(spec.m_holder);
+		hasGrouping = scope && ibCanUseGrouping(scope.get());
+	}
+
 	struct FieldPlan { const ibBackendQueryColumn* col; bool scalar; wxString tag; const ibMetaData* meta; };
-	struct LevelPlan { std::vector<FieldPlan> fields; };
+	// ⭐ …AND THE ALIAS OF THE LEVEL'S FIRST PROJECTED FIELD. It is what says whether this row is AT
+	// this level, on an engine with no GROUPING(): a level that the rollup folded away comes back
+	// SQL NULL in its own keys. Exact here — OES attributes hold typed empties and never SQL NULL, so
+	// a NULL in a result can only have come from the fold (see ibSqlFeatures::m_grouping).
+	struct LevelPlan { std::vector<FieldPlan> fields; wxString firstAlias; };
 	const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
 
 	std::vector<LevelPlan>       levelPlans;
@@ -2077,7 +2111,11 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 
 		int fi = 0;
 		for (const ibTotalField& field : level.m_fields) {
-			const ibBackendQueryColumn* g  = field.m_col;
+			// ⭐ TWO COLUMNS, ONE FIELD. A dot-walked dimension groups by a SYNTHETIC column — the id
+			// the tree keys on, and the one the reader asks `GetValue(col)` for — while the SQL has to
+			// name the JOINED LEAF, which is where the value physically lives. For a plain field the
+			// two are the same column and nothing below notices the difference.
+			const ibBackendQueryColumn* g  = field.SqlCol();   // what the STATEMENT names
 			const RollupGroupKey        ki = keyInfo(g);
 			auto fieldCol = [&](const wxString& f) { return ki.qualifier.empty() ? ibCol(f) : ibCol(ki.qualifier, f); };
 
@@ -2087,6 +2125,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 				if (!firstField) firstField = colExpr(g);
 				element.push_back(gexpr);
 				projection.push_back(ibQueryProjItem{ gexpr, galias });
+				if (plan.firstAlias.IsEmpty()) plan.firstAlias = galias;
 				plan.fields.push_back({ g, true, galias, ki.meta });
 			}
 			else {
@@ -2098,7 +2137,9 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 					const ibQueryExprPtr fexpr = fieldCol(f);
 					if (!firstField) firstField = fexpr;
 					element.push_back(fexpr);
-					projection.push_back(ibQueryProjItem{ fexpr, prefix + f.Mid(base.length()) });
+					const wxString falias = prefix + f.Mid(base.length());
+					projection.push_back(ibQueryProjItem{ fexpr, falias });
+					if (plan.firstAlias.IsEmpty()) plan.firstAlias = falias;
 				}
 				plan.fields.push_back({ g, false, prefix, ki.meta });
 			}
@@ -2110,7 +2151,11 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 		if (element.size() == 1) groupKeys.push_back(element.front());
 		else                     groupKeys.push_back(ibFunc(wxT(""), std::move(element)));
 
-		projection.push_back(ibQueryProjItem{ ibFunc(wxT("GROUPING"), { firstField }), grpalias });
+		// ⭐ THE LEVEL FLAG, ONLY WHERE THE ENGINE HAS THE FUNCTION. Without GROUPING the same fact is
+		// read off the keys themselves (the row comes back NULL in the level the fold rolled away), so
+		// projecting a call the engine does not know would fail the whole statement for a label.
+		if (hasGrouping)
+			projection.push_back(ibQueryProjItem{ ibFunc(wxT("GROUPING"), { firstField }), grpalias });
 		groupingAliases.push_back(grpalias);
 		levelPlans.push_back(std::move(plan));
 		++li;
@@ -2156,7 +2201,17 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 				values.push_back(v);
 			}
 			rr.levelValues.push_back(std::move(values));
-			if (cursor.GetResultInt(groupingAliases[i]) == 0) ++rr.level;
+
+			// ⭐ IS THIS ROW AT THIS LEVEL — asked of GROUPING where the engine has it, and of the KEY
+			// ITSELF where it does not. A level the fold rolled away comes back SQL NULL in its own
+			// columns, and in this storage that is unambiguous: attributes hold typed empties and
+			// never SQL NULL, so a NULL here cannot have come from the data. Read as an ibValue,
+			// which carries TYPE_NULL from the driver — the codec would have turned it into a typed
+			// empty and lost exactly the distinction being made.
+			const bool atThisLevel = hasGrouping
+				? (cursor.GetResultInt(groupingAliases[i]) == 0)
+				: !cursor.GetValue(levelPlans[i].firstAlias).IsNull();
+			if (atThisLevel) ++rr.level;
 		}
 		for (const ibDataQueryBuilder::AggregateItem& a : aggregates) {
 			using Fn = ibDataQueryBuilder::AggregateFn;
@@ -2246,17 +2301,32 @@ ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spe
 			wxString a; const ibBackendQueryable* tq = nullptr;
 			if (chain.Resolve(path, a, tq) && tq != nullptr) { dw[col] = { a, tq }; hasDotWalk = true; }   // gate guaranteed resolvable
 		};
-		// The flat group keys and THEIR paths (parallel lists). A door that folds TOTALS levels fills
-		// neither — its dimensions live in `m_totals`, and a DOT-WALKED one is refused by the shape gate
-		// precisely because this chain is not built for them. So this loop is a no-op on that path and
-		// stays here for the flat GROUP BY one.
+		// The flat group keys and THEIR paths (parallel lists) — the plain GROUP BY road.
 		for (size_t i = 0; i < spec.m_groupBy->size(); ++i)
 			resolveDot((*spec.m_groupBy)[i], i < spec.m_groupPaths->size() ? (*spec.m_groupPaths)[i]
 			                                                               : std::vector<const ibBackendQueryColumn*>{});
+		// …AND THE TOTALS LEVELS' OWN FIELDS, which carry their paths themselves (ibTotalField). A
+		// dot-walked DIMENSION rides the very same reference JOIN chain a dot-walked flat key rides —
+		// it was refused outright only because nothing walked it through here. Keyed by the LEAF,
+		// which is what colExpr / keyInfo will ask about.
+		for (const ibTotalLevel& level : RollupLevelsOf(spec))
+			for (const ibTotalField& f : level.m_fields)
+				resolveDot(f.SqlCol(), f.m_path);
 		for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec))
 			resolveDot(a.m_col, a.m_path);
 
-		ibQueryRelPtr from = hasDotWalk ? chain.From() : ibScan(mainTable);
+		// ⭐ A SOURCE THAT IS NOT A PLAIN TABLE PUTS ITSELF IN THE FROM. `GetSourceRelation(alias)` is
+		// the queryable's own answer to "what am I read from" — null for an ordinary table (scan its
+		// name), a derived table for the ones that cannot be a view: a register's Balance / Turnover
+		// "as of a date" is an aggregate whose date lives in that subquery. The flat read asks it
+		// (BuildSourceTree does, with the table name as the alias); this path did not, and built
+		// `ibScan(name)` unconditionally — so a totals push-down over such a source rendered
+		// `FROM  GROUP BY ROLLUP(…)`, with nothing at all between FROM and GROUP. Firebird said
+		// exactly that: "Token unknown - line 1, column 219: GROUP" (2026-08-22, with the road forced
+		// open). The engine was right; the statement was ours.
+		const ibQueryRelPtr derived = q->GetSourceRelation(mainTable);
+		ibQueryRelPtr from = hasDotWalk ? chain.From()
+		                   : (derived ? derived : ibScan(mainTable));
 		if (ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(q, *spec.m_conditions, spec.m_predicate))
 			from = ibFilter(from, where);
 

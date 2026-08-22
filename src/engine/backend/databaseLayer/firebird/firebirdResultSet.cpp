@@ -53,7 +53,7 @@ bool ibDatabaseResultSetFirebird::Next()
 	}
 	else  // Errors!!!
 	{
-		wxLogError(wxT("Error retrieving Next record\n"));
+		ibJournalError(wxT("db.firebird"),wxT("Error retrieving Next record\n"));
 		InterpretErrorCodes();
 		ThrowDatabaseException();
 		return false;

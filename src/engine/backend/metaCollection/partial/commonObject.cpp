@@ -509,6 +509,9 @@ bool ibValueMetaObjectRecordDataMutableRef::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyAttributeDataVersion->GetName(), m_propertyAttributeDataVersion->GetNodeValue());
 	node.SetProperty(m_propertyAttributeDeletionMark->GetName(), m_propertyAttributeDeletionMark->GetNodeValue());
+	// …AND THE MOMENT, so its id survives the file. An id assigned at creation and never written
+	// would be a different number in every session, and a number is what a query field is named by.
+	node.SetProperty(m_propertyAttributePointInTime->GetName(), m_propertyAttributePointInTime->GetNodeValue());
 	if (!ibValueMetaObjectRecordDataRef::WriteData(node))
 		return false;
 	node.SetProperty(m_propertyGeneration->GetName(), m_propertyGeneration->GetNodeValue());
@@ -519,6 +522,7 @@ bool ibValueMetaObjectRecordDataMutableRef::ReadData(const ibDataNode& node)
 {
 	m_propertyAttributeDataVersion->SetNodeValue(node.GetProperty(m_propertyAttributeDataVersion->GetName()));
 	m_propertyAttributeDeletionMark->SetNodeValue(node.GetProperty(m_propertyAttributeDeletionMark->GetName()));
+	m_propertyAttributePointInTime->SetNodeValue(node.GetProperty(m_propertyAttributePointInTime->GetName()));
 	if (!ibValueMetaObjectRecordDataRef::ReadData(node))
 		return false;
 	m_propertyGeneration->SetNodeValue(node.GetProperty(m_propertyGeneration->GetName()));
@@ -534,8 +538,24 @@ bool ibValueMetaObjectRecordDataMutableRef::OnCreateMetaObject(ibMetaData* metaD
 	if (!ibValueMetaObjectRecordDataRef::OnCreateMetaObject(metaData, flags))
 		return false;
 
+	// ⭐ THE MOMENT REGISTERS TOO — it is virtual, not anonymous.
+	//
+	// It never joins the predefined LIST (see the declaration: what it is built from is already
+	// stored, and storing the pair again would be two answers to one question), and that is about
+	// STORAGE. Registration is about IDENTITY, and it was skipped here along with it — so the
+	// attribute carried metaID 0 and answered `fld0` when anything asked for its field name. Two
+	// consequences, both live:
+	//
+	//   * every read that walked it went looking for `fld0_TYPE`, and the driver raised
+	//     "field not found in the resultset" — once PER ROW, swallowed by the codec's guard and
+	//     invisible except in a query log (62 of them on a 62-row report, seen 2026-08-22);
+	//   * `IsPointInTime(id)` compares against that 0, so it answered TRUE for any unassigned id.
+	//
+	// Registering adds NO column: the physical schema is built from GetGenericAttributeArrayObject,
+	// which fills from the predefined list this one stays out of.
 	return (*m_propertyAttributeDataVersion)->OnCreateMetaObject(metaData, flags)
-		&& (*m_propertyAttributeDeletionMark)->OnCreateMetaObject(metaData, flags);
+		&& (*m_propertyAttributeDeletionMark)->OnCreateMetaObject(metaData, flags)
+		&& (*m_propertyAttributePointInTime)->OnCreateMetaObject(metaData, flags);
 }
 
 bool ibValueMetaObjectRecordDataMutableRef::OnLoadMetaObject(ibMetaData* metaData)
@@ -546,6 +566,16 @@ bool ibValueMetaObjectRecordDataMutableRef::OnLoadMetaObject(ibMetaData* metaDat
 	if (!(*m_propertyAttributeDeletionMark)->OnLoadMetaObject(metaData))
 		return false;
 
+	// The moment's id has to come back with the rest, or it would be a different field name in every
+	// session — and a name is what a query writes down.
+	if (!(*m_propertyAttributePointInTime)->OnLoadMetaObject(metaData))
+		return false;
+
+	// ⚠ A configuration written BEFORE the moment was registered carries no id for it, and loading
+	// such a file leaves it at metaID 0 — which is what `fld0` was. Deliberately NOT repaired on
+	// load: a base made after this change has the id from the start (Max: "easier to make a new
+	// base"), and a lazy assignment during a load is a migration wearing a small disguise.
+
 	return ibValueMetaObjectRecordDataRef::OnLoadMetaObject(metaData);
 }
 
@@ -555,6 +585,9 @@ bool ibValueMetaObjectRecordDataMutableRef::OnSaveMetaObject(int flags)
 		return false;
 
 	if (!(*m_propertyAttributeDeletionMark)->OnSaveMetaObject(flags))
+		return false;
+
+	if (!(*m_propertyAttributePointInTime)->OnSaveMetaObject(flags))
 		return false;
 
 	return ibValueMetaObjectRecordDataRef::OnSaveMetaObject(flags);
@@ -568,6 +601,9 @@ bool ibValueMetaObjectRecordDataMutableRef::OnDeleteMetaObject()
 	if (!(*m_propertyAttributeDeletionMark)->OnDeleteMetaObject())
 		return false;
 
+	if (!(*m_propertyAttributePointInTime)->OnDeleteMetaObject())
+		return false;
+
 	return ibValueMetaObjectRecordDataRef::OnDeleteMetaObject();
 }
 
@@ -577,6 +613,9 @@ bool ibValueMetaObjectRecordDataMutableRef::OnBeforeRunMetaObject(int flags)
 		return false;
 
 	if (!(*m_propertyAttributeDeletionMark)->OnBeforeRunMetaObject(flags))
+		return false;
+
+	if (!(*m_propertyAttributePointInTime)->OnBeforeRunMetaObject(flags))
 		return false;
 
 	registerObject();
@@ -591,6 +630,9 @@ bool ibValueMetaObjectRecordDataMutableRef::OnAfterRunMetaObject(int flags)
 	if (!(*m_propertyAttributeDeletionMark)->OnAfterRunMetaObject(flags))
 		return false;
 
+	if (!(*m_propertyAttributePointInTime)->OnAfterRunMetaObject(flags))
+		return false;
+
 	return ibValueMetaObjectRecordDataRef::OnAfterRunMetaObject(flags);
 }
 
@@ -602,6 +644,9 @@ bool ibValueMetaObjectRecordDataMutableRef::OnBeforeCloseMetaObject()
 	if (!(*m_propertyAttributeDeletionMark)->OnBeforeCloseMetaObject())
 		return false;
 
+	if (!(*m_propertyAttributePointInTime)->OnBeforeCloseMetaObject())
+		return false;
+
 	return ibValueMetaObjectRecordDataRef::OnBeforeCloseMetaObject();
 }
 
@@ -611,6 +656,9 @@ bool ibValueMetaObjectRecordDataMutableRef::OnAfterCloseMetaObject()
 		return false;
 
 	if (!(*m_propertyAttributeDeletionMark)->OnAfterCloseMetaObject())
+		return false;
+
+	if (!(*m_propertyAttributePointInTime)->OnAfterCloseMetaObject())
 		return false;
 
 	unregisterObject();

@@ -93,7 +93,7 @@ void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
 
 #ifdef DEBUG
 		if (s_traceTypes && wxTheApp != NULL)
-			wxLogDebug(wxT("* Register class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
+			ibJournalInfo(wxT("compiler"),wxT("* Register class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
 		s_factoryCtorCountChanges++;
@@ -115,7 +115,7 @@ void ibValue::UnRegisterCtor(ibCtorAbstractType*& typeCtor)
 		// call would ask wx to build a log target nobody can then delete (see OnExit's
 		// wxLog::DontCreateOnDemand note).
 		if (s_traceTypes && wxTheApp != NULL)
-			wxLogDebug(wxT("* Unregister class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
+			ibJournalInfo(wxT("compiler"),wxT("* Unregister class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 		// Registry owns the ctor via shared_ptr — Unregister FREES it; null the caller's
 		// (by-ref) pointer so the now-dangling ctor is never dereferenced (replaces the

@@ -771,10 +771,10 @@ whose rows no longer existed.
 ⚠ The shaping is not idempotent: it turns headings into the ranges they fold, so it runs once over
 the WHOLE list (on load), never per incoming group.
 
-⏳ **DETAIL RECORDS** — a structure node with NO field is the remaining portion written out row by
-row: everything the groupings above it have not folded away, spelled in full under its parent. Named
-here because the layout already has a place for it (the `Detail` role); the node itself is not built
-yet.
+✅ **DETAIL RECORDS** — a structure node with NO field is the remaining portion written out row by
+row: everything the groupings above it have not folded away, spelled in full under its parent. The
+layout had a place for it before the node existed (the `Detail` role); the node landed 2026-08-21
+and the rows behind it became unconditional on 2026-08-22 — § 6b.
 
 A grouping row
 opens its outline group AFTER itself, so the caption stays visible when the group is collapsed, and
@@ -1128,9 +1128,22 @@ still the report's twin of a document's `Posting` — what went is a second door
   (walk → Excel / Word) are separate consumers of the same `ibBackendSpreadsheetObject`;
   Excel is deliberately *not* produced through the printout path. Cell typing is the
   known risk in the semantic branch.
-- `IsCellReadOnly(int row, int col, bool isReadOnly = true)` takes an `isReadOnly`
-  argument it never uses — a getter carrying a setter's signature. Harmless, and a
-  cleanup candidate.
+- ~~`IsCellReadOnly` takes an `isReadOnly` argument it never uses~~ — **fixed 2026-08-22**, and it
+  was worse than cosmetic: the getter asked `GetOrCreateCell`, so ASKING whether a cell was read-only
+  MATERIALISED it, and a walk that probes a sheet grew the description by every cell it merely looked
+  at. It reads through `GetCell` now, and is `const`.
+- 🛑 **A REPORT READS ITS ROWS TWICE — one query per row (2026-08-22, open).** Composing a 62-row
+  report over a document issued **63** statements: one `SELECT * FROM Document1020 …` for the data,
+  then `SELECT FIRST 1 * FROM Document1020 WHERE (key = ?)` **once per row**
+  (`ibValueReferenceDataObject::ReadData`). The row being read is the row the composition already has
+  in hand — it re-reads it to render the reference's PRESENTATION.
+  It is the same defect its own neighbour documents having fixed once already: *"the row being judged
+  is the row already in hand"* (`referenceQuery.cpp`, `FindValue` — which used to run a query per row
+  for exactly this reason). The presentation half was not swept with it.
+  Two costs, and the second is why it stayed invisible: 62 round trips, and 62 THROWN exceptions,
+  because each of those reads walked the unregistered PointInTime attribute and asked the driver for
+  `fld0_TYPE` (see [metadata-lifecycle.md](metadata-lifecycle.md) § 9a — the attribute is registered
+  now, but the N+1 itself is not fixed).
 
 ---
 
@@ -1223,17 +1236,30 @@ than `OnGroup`, so the spreadsheet driver lays a row out as a row: faint fill, n
 its own. It needed no change — a detail row was already its other case.
 
 **What the reading costs.** A report that prints every row holds every row; that is what printing
-them means, and it is why this is opt-in per output rather than a mode. Two things follow when an
-output asks for them (`ibDataComposer::WantsDetails`):
+them means. Two things follow from an output's rows being read (`ibDataComposer::WantsDetails`):
 
 - the server-side fold is REFUSED — `GROUP BY ROLLUP` returns aggregated rows, so there would be
   nothing left to hang under the last heading;
-- the SELECTed fields join the totals schema as `Detail` columns. Without that a detail row could
-  print only the resources: a `TOTALS` read projects the levels and the measures and nothing else.
+- the SELECTed fields join the totals schema as `Detail` columns — unconditionally, so the SCHEMA
+  does not depend on the traversal. Without them a detail row could print only the resources: a
+  `TOTALS` read projects the levels and the measures and nothing else.
 
-Each detail node carries the row's own values, and its resources are rolled over that ONE row
-through the same `ApplyAggregates` every heading uses — so a figure on a line and the figure it adds
-up into cannot be computed two different ways.
+Each detail node carries the ROW'S OWN VALUES, and nothing is rolled on top of them. A resource
+column carries two things — the figure at every heading, the row's own value on the bottom floor —
+and aggregating over that single row overwrote the second with the first: invisible for `SUM`, where
+a sum of one row IS the row, and wrong for everything else (`COUNT(Number)` put a `1` where the
+document's number belongs). There is nothing to compute there anyway: what a row contributes to the
+total above it is the value it already holds.
+
+🛑 **DETAILS ARE NO LONGER OPT-IN (2026-08-22).** `WantsDetails` is `HasGroupingFields(output)` — an
+output that groups by anything at all reads its rows, because the totals were computed FROM them.
+Whether they are PRINTED is the ladder's separate answer (`OutputWrites`): a report that declared no
+`Details` level meets the rows in the walk and steps over them. Before this an output without that
+level could not reach its rows at all, not even on demand, so a heading's figure had nothing under
+it to justify where it came from. The price — and it is a real one — is that the single-level
+server-side group page no longer fires for a grouped list; the whole account, including why the
+opposite rule was written the same day and dropped, is in
+[data-composer.md](data-composer.md) § *the rows are not asked for*.
 
 **A level's own filter and sort are saved now.** The filter is kept as the TREE it was written as
 (that is what the editor reopens on) and the expression the engine reads is DERIVED from it —
@@ -1247,9 +1273,8 @@ too — details come as a bonus, every object of ours has them by its nature"). 
 carries the whole dial — `ibSelectKind` on `ibSelector::Select(kind)` for a script walking the tree,
 `withDetails` on `ExecuteTotals` for a printer — and it belongs there, because one TOTALS feeds both
 a list and a report. See [data-composer.md](data-composer.md) § detail records for the full
-reasoning and for the one thing that must not follow from it (details are never unconditional: they
-refuse the `ROLLUP` pushdown, and a list that always asked would hold every row to print ten
-headings).
+reasoning; the composer's own answer on that dial is now always *yes* (above), and what is left to
+the reader is the traversal — one level at a time, descending only where it wants to look.
 
 ### 6bb. Where the totals are printed (2026-08-21, settled 2026-08-22)
 
@@ -1279,6 +1304,19 @@ tree, and the fold has always rolled the whole result into it (`ApplyAggregates(
 "grand total in-place"). What decides whether anyone SEES it is the walk, not the arithmetic:
 `ibSelector::EnsureWalk` puts the root in the visit list only when the totals are `OVERALL`.
 
+⭐⭐ **AND IT IS A LEVEL, not a row bolted on top of the walk (2026-08-22).** The grand total is the
+grouping that names NO fields — *"as if you had set no dimensions at all"* (Max) — and a grouping by
+nothing has exactly one node covering the whole result, which is the root. So when it is asked for,
+the selection visits **that node and nothing else**; every dimension level below is reached the way
+every level is reached, by descending into the one above it. What the row holds follows from being a
+level rather than from a special case: the aggregates are filled, and every DIMENSION column reads
+NULL, because the root carries no group key — there is no value a fold over everything could put
+there.
+
+Said this way it needs no special case anywhere else. The root used to be pushed IN FRONT of the
+first level's nodes, which put two different levels in one cursor: a descent into the root then
+printed everything a second time.
+
 So `OVERALL` is a WALK setting, and the reader may ask for it in its own words:
 
 | who asks | how |
@@ -1291,8 +1329,10 @@ The composer asks the driver (`RunOutput`) and sets the flag; a list's fetch ans
 grouped list does not grow a stray top-level row. When the settings eventually get an explicit
 "grand totals" switch of their own, that is the seam it lands on.
 
-**And it is written LAST though it arrives FIRST.** The walk is pre-order and the root has nothing
-above it, so `OnRow(0, hasChildren=true, …)` is the first call the driver receives. It is held
+**And it is written LAST though it arrives FIRST.** A heading is handed over before the composer
+descends into it, and the root is the outermost heading there is — so `OnRow(0, hasChildren=true, …)`
+is the first call the driver receives (`OnGroup` defaults to `OnRow`, which is the one this driver
+overrides). It is held
 (`m_grandTotal`) and written by `OnComplete`, at the bottom of the output's own section. Its caption
 goes inside the DIMENSION area (`m_dimWidth`); an output with no dimensions at all has no such area,
 so that line is figures only — column 0 there is a number, and the word "Grand total" would replace

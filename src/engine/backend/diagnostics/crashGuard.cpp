@@ -1,15 +1,19 @@
 #include "crashGuard.h"
 
+#include "journal.h"                 // the technology journal opens with the guard, before anything else
 #include "backend/backend_exception.h"
 
 #include <wx/datetime.h>
+#include <wx/ffile.h>
 #include <wx/file.h>
 #include <wx/filename.h>
+#include <wx/log.h>
 #include <wx/stdpaths.h>
 #include <wx/thread.h>
 #include <wx/utils.h>
 
 #include <atomic>
+#include <cstdarg>      // va_list — the journal's vararg door
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -250,6 +254,19 @@ void Install(const wxString& exeName)
 	if (s_installed.exchange(true, std::memory_order_acq_rel))
 		return;
 
+	// FIRST, before any handler — so that whatever the handlers below go on to say has somewhere
+	// to be said. Every application in the tree calls Install as its first act, which is exactly
+	// why the journal lives here and not in a subsystem someone might not start.
+	//
+	// ⭐ A DEBUG BUILD IS THE CONSENT. There, the journal is on by itself and needs no switch: a
+	// developer running a Debug binary has already said what they want. A Release build does not
+	// write one at all yet — turning it on there is a decision about disk, privacy and support
+	// workflow, and it will be made when there is a Release story to make it for. The API stays
+	// either way, so a `ibJournalInfo(...)` callsite compiles in both and simply writes nowhere.
+#ifndef NDEBUG
+	ibTechJournal::Open(exeName);
+#endif
+
 	if (s_prevTerminate == nullptr)
 		s_prevTerminate = std::set_terminate(&OesTerminateHandler);
 
@@ -269,6 +286,7 @@ void Install(const wxString& exeName)
 	::sigaction(SIGBUS,  &sa, nullptr);
 #endif
 }
+
 
 void LogStartupError(const wxString& exeName, const wxString& message)
 {
@@ -340,6 +358,35 @@ int WrapStartup(const wxString& exeName, std::function<int()> body)
 		report(wxT("Unknown exception during startup (non-std, non-ibBackend)"));
 		return 1;
 	}
+}
+
+void WriteDumpNow(const wxString& kindSuffix)
+{
+#ifdef __WXMSW__
+	const wxString dumpPath = MakeDumpPath(kindSuffix, wxT("dmp"));
+	HANDLE hFile = ::CreateFileW(dumpPath.wc_str(), GENERIC_WRITE, 0, nullptr,
+		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (hFile == INVALID_HANDLE_VALUE)
+		return;
+
+	// SMALLER THAN A CRASH DUMP, on purpose. The crash path takes full memory because it is the
+	// last thing that will ever happen; this one runs in a process that is still working, may run
+	// while a user waits, and is worth having often rather than worth having complete. Threads,
+	// stacks, handles and the loaded modules answer "what was going on" — a full heap answers
+	// "what was in it", which is a question a crash dump exists for.
+	const MINIDUMP_TYPE type = static_cast<MINIDUMP_TYPE>(
+		MiniDumpWithDataSegs |
+		MiniDumpWithHandleData |
+		MiniDumpWithUnloadedModules |
+		MiniDumpWithThreadInfo |
+		MiniDumpWithIndirectlyReferencedMemory);
+
+	::MiniDumpWriteDump(::GetCurrentProcess(), ::GetCurrentProcessId(),
+		hFile, type, nullptr, nullptr, nullptr);
+	::CloseHandle(hFile);
+#else
+	(void)kindSuffix;   // POSIX writes its backtrace from the signal handler; no snapshot call here
+#endif
 }
 
 wxString GetCrashDir()

@@ -1314,7 +1314,14 @@ void ibDialogQueryConstructor::OnAddNestedTable(wxCommandEvent&)
 	// elsewhere excludes Totals; a nested select opened from inside it is part of the SAME query, so
 	// letting the tab back in there is the same leak by a longer road — and a TOTALS written in the
 	// nested one survives into the text the host was told could not carry any.
-	if (!ibShowQueryConstructorFor(this, inner, m_metaData, m_readOnly, m_exclude))
+	//
+	// ⭐ AND A NESTED SELECT HAS NEITHER OF ITS OWN, whatever the host allowed (Max): totals are how a
+	// RESULT is presented and a nested query is not a result; an order inside a derived table is not
+	// promised by SQL and is not read by anything. Offering the two tabs there offers what cannot
+	// work — and an ORDER BY written in one is what kept the whole read in memory, because the
+	// subquery then refused to collapse into its parent (queryRewrite, rule 2).
+	if (!ibShowQueryConstructorFor(this, inner, m_metaData, m_readOnly,
+	                               m_exclude | ibQueryExclude_Totals | ibQueryExclude_Order))
 		return;
 
 	ibQuerySource source;
@@ -1369,7 +1376,9 @@ void ibDialogQueryConstructor::OnEditNestedTable(wxCommandEvent&)
 	}
 
 	ibQuerySelectPtr inner = source->m_subquery;
-	if (ibShowQueryConstructorFor(this, inner, m_metaData, m_readOnly, m_exclude)) {
+	// A nested source carries no totals and no order of its own — see the note at the other opening.
+	if (ibShowQueryConstructorFor(this, inner, m_metaData, m_readOnly,
+	                              m_exclude | ibQueryExclude_Totals | ibQueryExclude_Order)) {
 		source->m_subquery = inner;
 		FillAll();
 	}
@@ -2365,7 +2374,10 @@ void ibDialogQueryConstructor::OnEditUnionBranch(wxCommandEvent&)
 		return;
 
 	ibQuerySelectPtr branch = select->m_unions[index];
-	if (ibShowQueryConstructorFor(this, branch, m_metaData, m_readOnly, m_exclude)) {
+	// A UNION BRANCH is the same case: the order and the totals belong to the whole union, stated
+	// once on the statement that owns it, never on a branch inside it.
+	if (ibShowQueryConstructorFor(this, branch, m_metaData, m_readOnly,
+	                              m_exclude | ibQueryExclude_Totals | ibQueryExclude_Order)) {
 		select->m_unions[index] = branch;
 		FillAll();
 	}

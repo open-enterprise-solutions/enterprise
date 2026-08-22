@@ -44,7 +44,46 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_upsertUpdateItem = wxEmptyString;
 		d.m_returningClause  = wxT("RETURNING");      // FB 2.1+
 		d.m_features.m_window = true;                 // FB3+
-		d.m_features.m_rollup = true;                 // GROUP BY ROLLUP(...) — FB5 (vendored: security5.fdb)
+		// 🛑 FIREBIRD HAS NO `GROUP BY ROLLUP` — not through 5.0, whatever this line used to claim.
+		// MEASURED 2026-08-22 against the vendored engine (5.0.5.1821): its parser's keyword table
+		// carries PARTITION / OVER / WINDOW / MERGE / RETURNING / LATERAL and carries neither ROLLUP
+		// nor CUBE nor GROUPING. (LATERAL is itself a 5.0 word, so the engine measured IS the fifth.)
+		//
+		// The comment that said "FB5" was inferred from the shipped security5.fdb, not from the
+		// engine — and it was harmless only while nothing ever asked: the totals push-down could not
+		// fire at all until 2026-08-22. The moment it could, this flag would have sent every grouped
+		// report into a statement Firebird rejects. PostgreSQL keeps the road.
+		//
+		// ⏭ IT ARRIVES IN FIREBIRD 6 (Max), and then this is a ONE-LINE change: everything above the
+		// flag — the levels, the grouping sets, the GROUPING flags, the tree assembled from them — is
+		// already built and does not care which engine folds. Nothing costly is lost meanwhile:
+		// Firebird runs in-process, so "hand the work to the server" has no server to hand it to, and
+		// the RAM fold is the same work in the same address space.
+		// ⚠ MEASURED, not recalled: the vendored engine's keyword table (plugins/engine13.dll,
+		// 5.0.5.1821) carries PARTITION / OVER / WINDOW / MERGE / RETURNING / LATERAL and carries
+		// neither ROLLUP nor CUBE nor GROUPING. It arrives in Firebird 6, and then this is a one-line
+		// change — everything above the flag is already built and does not care which engine folds.
+		//
+		// ⭐ AND THE FLAG IS THE WHOLE DECISION (Max): set it true and the statement goes out in that
+		// form, the engine refuses it, the report dies and stays dead until the flag is corrected.
+		// Never a quiet fall back to memory — that is how a wrong flag lives for years. Which also
+		// makes it the probe for "did this reach the server at all": if nothing failed, nothing went.
+		// 🛑 NEITHER — MEASURED LIVE against the vendored 5.0.5.1821, twice, 2026-08-22:
+		//     `SELECT … GROUPING(f) … GROUP BY ROLLUP(f)`  ->  -804 Function unknown: GROUPING
+		//     `SELECT …            … GROUP BY ROLLUP(f)`   ->  -804 Function unknown: ROLLUP
+		// The second run is the one that settles it, and the first is the trap: -804 was briefly read
+		// as "the keyword was accepted, since an unknown one would be -104 at parse time". It is NOT.
+		// An unknown word followed by `(` parses as an ordinary FUNCTION CALL, so no syntax error
+		// occurs and the code cannot tell a missing keyword from a missing function — name resolution
+		// simply reports the FIRST unknown it meets, and GROUPING stood earlier in the statement.
+		//
+		// FirebirdSQL PR #9029 adds ROLLUP / CUBE / GROUPING SETS / GROUPING / GROUPING_ID together
+		// and is OPEN, not merged — which is why they are absent together. When it lands, these two
+		// lines are the whole change: everything above them is built and does not care which engine
+		// folds. Nothing is lost meanwhile — Firebird runs in-process, so there is no server to hand
+		// the work to, and the RAM fold is the same work in the same address space.
+		d.m_features.m_rollup   = false;
+		d.m_features.m_grouping = false;
 		d.m_features.m_cte    = true;                 // WITH … AS (…) — FB 2.1+
 		// m_multiRowValues stays FALSE — Firebird has no multi-row VALUES at any version. A batched
 		// INSERT is rendered as INSERT … SELECT … UNION ALL SELECT … instead (see RenderDML).
@@ -673,7 +712,7 @@ bool ibDatabaseLayerFirebird::Open()
 	// (`server:db`) bypasses leader-mode entirely.
 	m_currentConnectUrl = strDatabaseUrl;
 
-	wxLogDebug(wxT("ibDatabaseLayerFirebird: attached to %s"),
+	ibJournalInfo(wxT("db.firebird"), wxT("ibDatabaseLayerFirebird: attached to %s"),
 	           strDatabaseUrl);
 
 	// Spin up the maintenance scheduler — ONLY for Standalone single-
@@ -954,7 +993,7 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 	{
 		wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
 #ifdef DEBUG
-		wxLogDebug(wxT("Running query: \"%s\"\n"), (const char*)sqlDebugBuffer);
+		ibJournalInfo(wxT("db.firebird"), wxT("Running query: \"%s\"\n"), (const char*)sqlDebugBuffer);
 #endif // !DEBUG
 		wxArrayString QueryArray;
 		if (bParseQuery)
@@ -1003,7 +1042,7 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 				BeginTransaction();
 				if (GetErrorCode() != DATABASE_LAYER_OK)
 				{
-					wxLogError(wxT("Unable to start transaction"));
+					ibJournalError(wxT("db.firebird"),wxT("Unable to start transaction"));
 					ThrowDatabaseException();
 					return DATABASE_LAYER_QUERY_RESULT_ERROR;
 				}
@@ -1067,7 +1106,7 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 	}
 	else
 	{
-		wxLogError(wxT("Database handle is NULL"));
+		ibJournalError(wxT("db.firebird"),wxT("Database handle is NULL"));
 		return DATABASE_LAYER_QUERY_RESULT_ERROR;
 	}
 }
@@ -1086,7 +1125,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 		// zero depending on the compiler. Two spellings of one switch mean one of them is off and
 		// nobody notices which.
 #ifdef DEBUG
-		wxLogDebug(wxT("Running query: \"%s\""), (const char*)sqlDebugBuffer);
+		ibJournalInfo(wxT("db.firebird"), wxT("Running query: \"%s\""), (const char*)sqlDebugBuffer);
 #endif
 		wxArrayString QueryArray = ParseQueries(strQuery);
 
@@ -1123,7 +1162,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 					BeginTransaction();
 					if (GetErrorCode() != DATABASE_LAYER_OK)
 					{
-						wxLogError(wxT("Unable to start transaction"));
+						ibJournalError(wxT("db.firebird"),wxT("Unable to start transaction"));
 						ThrowDatabaseException();
 						return NULL;
 					}
@@ -1382,7 +1421,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 	}
 	else
 	{
-		wxLogError(wxT("Database handle is NULL"));
+		ibJournalError(wxT("db.firebird"),wxT("Database handle is NULL"));
 		return NULL;
 	}
 }
@@ -1415,7 +1454,7 @@ ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const wxString&
 #ifdef DEBUG
 	{
 		const wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
-		wxLogDebug(wxT("Prepared query: \"%s\""), (const char*)sqlDebugBuffer);
+		ibJournalInfo(wxT("db.firebird"), wxT("Prepared query: \"%s\""), (const char*)sqlDebugBuffer);
 	}
 #endif
 
@@ -1767,7 +1806,7 @@ wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird
 
 void ibDatabaseLayerFirebird::InterpretErrorCodes()
 {
-	//wxLogDebug(wxT("ibDatabaseLayerFirebird::InterpretErrorCodes()"));
+	//ibJournalInfo(wxT("db.firebird"), wxT("ibDatabaseLayerFirebird::InterpretErrorCodes()"));
 
 	long nSqlCode = m_pInterface->GetIscSqlcode()(*(ISC_STATUS_ARRAY*)m_pStatus);
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface.get(), nSqlCode, *(ISC_STATUS_ARRAY*)m_pStatus));
@@ -1817,7 +1856,7 @@ bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
 	// a half-statement-tx onto the new leader. Caller is expected
 	// to catch, rollback their logical TX, and retry from scratch.
 	if (m_pTransaction != 0) {
-		wxLogError(wxT("ibDatabaseLayerFirebird: leader handoff during ")
+		ibJournalError(wxT("db.firebird"),wxT("ibDatabaseLayerFirebird: leader handoff during ")
 		           wxT("active transaction (was %s, now %s) - caller must ")
 		           wxT("rollback and retry"),
 		           m_currentConnectUrl, currentLeaderUrl);
@@ -1833,7 +1872,7 @@ bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
 	// spam 20 identical "handoff detected" lines per cluster event.
 	// Cluster-level handoff is already logged once by
 	// ibFirebirdLeaderMode's heartbeat thread. Debug only.
-	wxLogDebug(wxT("ibDatabaseLayerFirebird: leader handoff detected ")
+	ibJournalInfo(wxT("db.firebird"), wxT("ibDatabaseLayerFirebird: leader handoff detected ")
 	           wxT("(was %s, now %s); reconnecting"),
 	           m_currentConnectUrl, currentLeaderUrl);
 
@@ -1863,7 +1902,7 @@ bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
 	bool opened = false;
 	try { opened = Open(); } catch (...) { opened = false; }
 	if (!opened) {
-		wxLogError(wxT("ibDatabaseLayerFirebird: reconnect against new ")
+		ibJournalError(wxT("db.firebird"),wxT("ibDatabaseLayerFirebird: reconnect against new ")
 		           wxT("leader URL %s failed"), currentLeaderUrl);
 		return false;
 	}

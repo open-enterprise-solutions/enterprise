@@ -1,5 +1,10 @@
 #ifndef _TYPECONV_H__
 #define _TYPECONV_H__
+// ⚠ THE JOURNAL DIRECTLY, not through backend_core.h. The core header includes the journal LAST,
+// and this header is reached from inside that same chain — so by the time we get here the core's
+// include guard is already set and its own include of the journal has not run yet. Asking for the
+// journal by name is the only order that works from inside the cycle.
+#include "diagnostics/journal.h"      // ibJournal — the technology journal
 #include "fnumber.h"
 #include "fontcontainer.h"
 
@@ -612,7 +617,7 @@ namespace typeConv
 				*source = children[0];
 			}
 		}
-		wxLogDebug(wxT("typeConv:ParseBitmap: source:%s image:%s "), source->c_str(), image->c_str());
+		ibJournalInfo(wxT("typeconv"), wxT("typeConv:ParseBitmap: source:%s image:%s "), source->c_str(), image->c_str());
 	}
 
 	/**

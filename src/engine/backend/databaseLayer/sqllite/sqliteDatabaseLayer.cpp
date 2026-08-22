@@ -243,19 +243,19 @@ void ibDatabaseLayerSQLite::DoBeginTransaction(const ibTxOptions& opts)
 	// SQLite is single-writer, file-level locked — no per-TX wait/nowait
 	// knob to honour. Options parameter accepted for interface conformance.
 	(void)opts;
-	wxLogDebug(wxT("Beginning transaction"));
+	ibJournalInfo(wxT("db.sqlite"),wxT("Beginning transaction"));
 	DoRunQuery(wxT("begin deferred transaction;"), false);
 }
 
 void ibDatabaseLayerSQLite::DoCommit()
 {
-	wxLogDebug(wxT("Commiting transaction"));
+	ibJournalInfo(wxT("db.sqlite"),wxT("Commiting transaction"));
 	DoRunQuery(wxT("commit transaction;"), false);
 }
 
 void ibDatabaseLayerSQLite::DoRollBack()
 {
-	wxLogDebug(wxT("Rolling back transaction"));
+	ibJournalInfo(wxT("db.sqlite"),wxT("Rolling back transaction"));
 	DoRunQuery(wxT("rollback transaction;"), false);
 }
 

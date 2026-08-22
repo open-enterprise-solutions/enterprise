@@ -215,7 +215,7 @@ ibBackendException::ibBackendException(const wxString& strErrorDescription)
 	: m_errorHandled(false), m_errorDescriptionUtf8(strErrorDescription.utf8_string())
 {
 #ifdef DEBUG
-	wxLogDebug(strErrorDescription);
+	ibJournalInfo(wxT("exception"), wxT("%s"), strErrorDescription);
 #endif // !DEBUG
 
 	// EVERY refusal, in the same file as the ids and the SQL — the point of the trace is the ORDER of
@@ -405,7 +405,7 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 	PushLastError(strErrorMessage);
 
 #ifdef DEBUG
-	wxLogDebug(strErrorMessage);
+	ibJournalInfo(wxT("exception"), wxT("%s"), strErrorMessage);
 #endif // !DEBUG
 
 	return strErrorMessage;

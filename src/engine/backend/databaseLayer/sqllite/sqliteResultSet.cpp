@@ -64,7 +64,7 @@ bool ibDatabaseResultSetSQLite::Next()
 
 	if ((nReturn != SQLITE_ROW) && (nReturn != SQLITE_DONE))
 	{
-		wxLogError(wxT("Error with RunQueryWithResults\n"));
+		ibJournalError(wxT("db.sqlite"),wxT("Error with RunQueryWithResults\n"));
 		SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
 #if SQLITE_VERSION_NUMBER>=3002002
 		// sqlite3_db_handle wasn't added to the SQLite3 API until version 3.2.2

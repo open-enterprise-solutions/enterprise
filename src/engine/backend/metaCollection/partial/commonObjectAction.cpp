@@ -166,7 +166,7 @@ void ibValueMetaObjectRecordDataMutableRef::CallAsCommand(ibActionID id, const i
 	// the user was told nothing. (Same fix in every command / show entry point in this file.)
 	catch (const ibBackendInterruptException&) {}   // the user stopped it — nothing to report
 	catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
-	catch (...) { wxLogError(wxT("ibValueMetaObjectRecordDataMutableRef::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
+	catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRecordDataMutableRef::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 }
 
 void ibValueMetaObjectRecordDataMutableRef::ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const
@@ -178,7 +178,7 @@ void ibValueMetaObjectRecordDataMutableRef::ShowValueByKey(const ibUniqueKey& ke
 	}
 	catch (const ibBackendInterruptException&) {}
 	catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
-	catch (...) { wxLogError(wxT("ibValueMetaObjectRecordDataMutableRef::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
+	catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRecordDataMutableRef::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
 }
 
 // Hierarchy override — the writeable base set PLUS AddFolder, gated by the source actually having folders (a folder
@@ -237,7 +237,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand(ibActionID id
 		}
 		catch (const ibBackendInterruptException&) {}
 		catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
-		catch (...) { wxLogError(wxT("ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
+		catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}
 	ibValueMetaObjectRecordDataMutableRef::CallAsCommand(id, anchor, key, srcForm);   // Copy/Edit/Delete/MarkAsDelete
@@ -293,7 +293,7 @@ void ibValueMetaObjectRegisterData::CallAsCommand(ibActionID id, const ibUniqueK
 	}
 	catch (const ibBackendInterruptException&) {}
 	catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
-	catch (...) { wxLogError(wxT("ibValueMetaObjectRegisterData::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
+	catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRegisterData::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 }
 
 // OPEN a register record by key (double-click) — through the record manager, mirroring the eEditValue command.
@@ -323,7 +323,7 @@ void ibValueMetaObjectRegisterData::ShowValueByKey(const ibUniqueKey& key, ibBac
 		}
 		catch (const ibBackendInterruptException&) {}
 		catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
-		catch (...) { wxLogError(wxT("ibValueMetaObjectRegisterData::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
+		catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRegisterData::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}
 
@@ -333,7 +333,7 @@ void ibValueMetaObjectRegisterData::ShowValueByKey(const ibUniqueKey& key, ibBac
 	}
 	catch (const ibBackendInterruptException&) {}
 	catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
-	catch (...) { wxLogError(wxT("ibValueMetaObjectRegisterData::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
+	catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRegisterData::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
 }
 
 // SELECT value for a register — no single reference; the picker value IS the composite RECORD KEY built from the

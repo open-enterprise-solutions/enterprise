@@ -194,7 +194,7 @@ void ibDatabaseLayer::CloseResultSets()
 	DatabaseResultSetHashSet::iterator stop = m_ResultSets.end();
 	while (start != stop)
 	{
-		wxLogDebug(wxT("ResultSet NOT closed and cleaned up by the ibDatabaseLayer dtor"));
+		ibJournalInfo(wxT("db"),wxT("ResultSet NOT closed and cleaned up by the ibDatabaseLayer dtor"));
 		delete(*start++);
 	}
 	m_ResultSets.clear();
@@ -208,7 +208,7 @@ void ibDatabaseLayer::CloseStatements()
 	DatabaseStatementHashSet::iterator stop = m_Statements.end();
 	while (start != stop)
 	{
-		wxLogDebug(wxT("PreparedStatement NOT closed and cleaned up by the DatabaseLayer dtor"));
+		ibJournalInfo(wxT("db"),wxT("PreparedStatement NOT closed and cleaned up by the DatabaseLayer dtor"));
 		//delete (*start); start++;
 		delete(*start++);
 	}

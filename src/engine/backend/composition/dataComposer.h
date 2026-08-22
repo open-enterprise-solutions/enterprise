@@ -676,20 +676,29 @@ public:
 		return false;
 	}
 
-	// ⭐ DOES THIS OUTPUT ASK FOR THE ROWS THEMSELVES — a Details level in its ladder. Two things
-	// hang off the answer and they live far apart: the read must not let the DBMS fold the rows
-	// away, and the walk must expect detail nodes among the headings. Asked in one place so the two
-	// cannot disagree about what the author wrote.
+	// ⭐⭐ THE ROWS ARE NOT ASKED FOR — THEY ARE WHAT THE TOTALS ARE MADE OF. Where the groupings end,
+	// the detail record follows: it is the bottom of every fold, not an option in it (Max,
+	// 2026-08-22: "a detail record is a mandatory attribute — you built the totals, and the moment
+	// the groupings run out, the detail record follows, showing what is left under the headings
+	// above"). A total is computed FROM those rows, so a tree that dropped them kept the answer and
+	// threw away what it was an answer to.
 	//
-	// An output that groups by NOTHING is not this: it has no headings to hang rows under, its read
-	// is a flat cursor, and every row it returns is a detail row already.
+	// This used to require a `Details` level written into the ladder, and an output without one
+	// could not reach its rows AT ALL — not even on demand, because they were never read. That made
+	// the same settings mean two different results depending on a level the author may simply not
+	// have added.
+	//
+	// An output that groups by NOTHING is still not this: it has no headings to hang rows under, its
+	// read is a flat cursor, and every row it returns is a detail row already.
+	//
+	// ⚠ THE PRICE: details and the DBMS's own fold are exclusive (GROUP BY ROLLUP returns aggregated
+	// rows and no detail to hang), so the single-level server-side group page — the one that shows
+	// twenty groups without reading a million rows — no longer fires for a grouped list. If that
+	// shows up as slowness, the answer is for a DRILL to ask for one level without rows, which is a
+	// different question from what a RESULT contains; it is not a reason to make the rows optional
+	// again.
 	static bool WantsDetails(const Output& output) {
-		if (!HasGroupingFields(output))
-			return false;
-		for (const GroupNode& level : output.m_rowGroups)
-			if (level.m_kind == ibCompositionLevelKind::Details)
-				return true;
-		return false;
+		return HasGroupingFields(output);
 	}
 
 	// WHICH FIELDS AN OUTPUT SHOWS — the narrowest statement that was actually made. A level speaks

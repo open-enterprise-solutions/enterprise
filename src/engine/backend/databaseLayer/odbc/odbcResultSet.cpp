@@ -436,7 +436,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 		nReturn = m_pInterface->GetSQLGetData()(m_pODBCStatement, nField, SQL_C_BINARY, &buff, iLength, &iSize);
 		if (nReturn != SQL_SUCCESS && nReturn != SQL_SUCCESS_WITH_INFO)
 		{
-			wxLogError(wxT("Error with RunQueryWithResults - 1\n"));
+			ibJournalError(wxT("db.odbc"),wxT("Error with RunQueryWithResults - 1\n"));
 			InterpretErrorCodes(nReturn, m_pODBCStatement);
 			ThrowDatabaseException();
 		}
@@ -465,7 +465,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 			nReturn = m_pInterface->GetSQLGetData()(m_pODBCStatement, nField, SQL_C_BINARY, &buff, iLength, &iSize);
 			if (nReturn != SQL_SUCCESS && nReturn != SQL_SUCCESS_WITH_INFO)
 			{
-				wxLogError(wxT("Error with RunQueryWithResults - 2\n"));
+				ibJournalError(wxT("db.odbc"),wxT("Error with RunQueryWithResults - 2\n"));
 				InterpretErrorCodes(nReturn, m_pODBCStatement);
 				ThrowDatabaseException();
 			}

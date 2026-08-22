@@ -423,7 +423,9 @@ ibTotalField ibDataQueryBuilder::DeclareDimDotWalk(const std::vector<const ibBac
 	// result has to be told, because only this call knows both halves (see StampResult).
 	if (!path.back()->IsRawColumn())
 		m_dimObjectReads.push_back({ dimCol->GetColumnId(), alias, path.back() });
-	return ibTotalField{ dimCol, dim };                      // fold groups by dimCol's OWN unique model id
+	// The fold groups by dimCol's OWN unique model id, and the SQL names the leaf — so the field
+	// carries the path that tells them apart (see ibTotalField).
+	return ibTotalField{ dimCol, dim, path };
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::TotalByDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
@@ -766,9 +768,24 @@ ibDataQueryResult ibDataQueryBuilder::SelectAggregatePage(const ibReadPageReques
 bool ibDataQueryBuilder::TryTotalsPushdown(ibDataQueryResult& out) const
 {
 	if (m_policy != nullptr) {
-		// A policy narrows the read, and its decorator belongs to the paths that already carry it —
-		// pushing down under it would need the same check twice, in two spellings.
-		return false;
+		// ⭐⭐ A POLICY DECIDES WHAT MAY BE READ, NEVER WHICH ROAD READS IT.
+		//
+		// This used to answer `false` on the mere PRESENCE of one — and the door's default ctor pulls
+		// the session's policy, so in enterprise mode every door has one and the server-side fold
+		// could not fire for ANY report, at any setting, on any engine. Nothing said so: the refusal
+		// was ahead of the shape, ahead of the dialect, ahead of the flag (found 2026-08-22, after
+		// the flag was forced true and still nothing reached Firebird).
+		//
+		// The house already has the answer, one function down: ask ONCE, then read plainly.
+		// `CheckSelect` both authorises and NARROWS — it writes the policy's conditions into the
+		// query handed to it — so the guarded copy carries the restriction and needs no policy of its
+		// own. Same three lines as SelectTotals / Insert / Update, and the same reason: a restricted
+		// query must not re-enter the policy that restricted it.
+		ibDataQueryBuilder guarded(*this);
+		guarded.m_policy = nullptr;
+		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table))
+			return false;   // not allowed — the ordinary detail read raises it, as it always did
+		return guarded.TryTotalsPushdown(out);
 	}
 	// DETAIL ROWS WERE ASKED FOR (a level with no fields), and a server-side fold returns none —
 	// `GROUP BY ROLLUP` sends back the aggregated rows and nothing else. Refused here as well as

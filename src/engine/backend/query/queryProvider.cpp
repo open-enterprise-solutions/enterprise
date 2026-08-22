@@ -24,6 +24,8 @@
 #include "resultSource.h"                                             // ibDataResultSource — the backing ibRamTableResultSource derives
 #include "tempTableManager.h"                                         // ibTempTableManager — promote a computed leaf to a DB temp table (+ ibDbTempTableQueryable)
 
+#include "backend/diagnostics/journal.h"                              // ibJournal — the technology journal
+
 #include <map>                                                        // dot-walk join dedup + col->attr cache
 #include <functional>                                                 // std::function — reference-hierarchy parent chain-up
 #include <stdexcept>                                                  // guard for the not-yet-built multi-source composition path
@@ -277,6 +279,12 @@ ibMetaID ibBackendQueryable::GetQueryTableId() const
 // synthetics (0x50000000).
 namespace {
 const ibMetaID kSubqueryAggColumnBase = 0x60000000u;
+
+// Stand-in ids for a JOIN stitch's output columns that cannot be keyed by their own metaID, because
+// two of them share it (a self-join selects the same column through two aliases). Clear of the same
+// ranges as everything above: COUNT(*) receivers at 0x40000000, totals synthetics at 0x50000000,
+// subquery aggregates at 0x60000000.
+const ibMetaID kStitchSyntheticBase = 0x70000000u;
 
 class ibSubqueryAggColumn final : public ibRawDBColumn
 {
@@ -1199,6 +1207,25 @@ std::vector<const ibBackendQueryColumn*> ReferencedColumns(const ibDataQuerySpec
 	GatherPredicateColumns(spec.m_predicate.get(), add);   // a boolean WHERE-tree leaf rides too (RAM post-filter)
 	if (spec.m_selectExprs != nullptr)
 		for (const ibQueryColumnSelect& sc : *spec.m_selectExprs) GatherColumnExprColumns(sc.m_expr.get(), add);   // computed cols ride too
+
+	// ⭐⭐ AND THE TOTALS' OWN COLUMNS RIDE TOO. The fold that builds the levels runs OVER THIS TABLE:
+	// it reads each level's key and each resource straight out of the composed rows. A column nobody
+	// listed here never reaches them, so the level groups every row under one empty key and the
+	// resource counts rows whose values it cannot see — a figure with nothing under it to explain
+	// where it came from (Max, 2026-08-22: "the detail records have to justify where that 63 came
+	// from").
+	//
+	// It cost nothing to miss on a SINGLE source, where the fold reads the driver's own result and
+	// may ask the source for any column it likes. The moment a second source joins, the rows are
+	// composed HERE, and what was not asked for is simply not in them.
+	if (spec.m_totals != nullptr)
+		for (const ibTotalLevel& level : *spec.m_totals)
+			for (const ibTotalField& field : level.m_fields)
+				add(field.m_col);
+	if (spec.m_totalAggregates != nullptr)
+		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_totalAggregates)
+			add(a.m_col);                                  // null for COUNT(*) — `add` ignores it
+
 	CollectJoinKeys(spec.m_root, cols);
 	return cols;
 }
@@ -1392,7 +1419,31 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 	if (node->m_kind == ibQueryNode::Kind::Source) {
 		std::vector<const ibBackendQueryColumn*> mine;
 		for (const ibBackendQueryColumn* c : refCols)
-			if (node->m_queryable->OwnsColumn(c)) mine.push_back(c);
+			if (node->m_queryable->OwnsColumn(c))
+				mine.push_back(c);
+		// ⭐ WHAT THIS LEAF AGREED TO READ. A column no source claims is silently absent from the
+		// composed rows, and everything downstream then reads it as empty — a dimension that folds
+		// every row under one blank key, a figure with nothing under it to explain itself. The
+		// refusal is invisible by construction, so the journal is where it becomes visible.
+		//
+		// ⚠ ORPHANED, not merely "not mine". A column the OTHER side of the join provides is normal
+		// and says nothing; what is worth a line is a column NO leaf in the tree claims, because that
+		// one reaches nobody. And the whole list is assembled inside the gate — walking refCols twice
+		// to build strings is real work, and it must not happen when nobody is listening.
+		ibJournalIf {
+			wxString claimed, orphaned;
+			for (const ibBackendQueryColumn* c : refCols) {
+				if (node->m_queryable->OwnsColumn(c))
+					claimed += (claimed.IsEmpty() ? wxString() : wxT(", ")) + c->GetName();
+				else if (!SubtreeProvides(spec.m_root, c))
+					orphaned += (orphaned.IsEmpty() ? wxString() : wxT(", ")) + c->GetName();
+			}
+			ibJournalInfo(wxT("query.compose"), wxT("source %s: claimed [%s]%s%s"),
+				node->m_queryable->GetQueryName(),
+				claimed,
+				orphaned.IsEmpty() ? wxT("") : wxT("  ORPHANED ["),
+				orphaned.IsEmpty() ? wxT("") : (orphaned + wxT("]")));
+		}
 		std::vector<ibQueryCondition> conds = condsByName
 			? LeafConditionsByName(spec, node->m_queryable)
 			: LeafConditions(spec, node->m_queryable);
@@ -1483,6 +1534,12 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 {
 	const long rows = TC.RowCount();
 
+	// (The journal line about what was composed and what is carried out of it is written BELOW,
+	// after the carried set is complete — see the end of the column loop. Written here it reported
+	// the SELECT list alone and read as if the totals' columns had been dropped, which was true of
+	// the code for one afternoon and false of it afterwards: a diagnostic that keeps saying the old
+	// answer is worse than none.)
+
 	std::vector<long> order(static_cast<size_t>(rows));
 	for (long i = 0; i < rows; ++i) order[static_cast<size_t>(i)] = i;
 	if (!spec.m_sorts->empty())
@@ -1497,12 +1554,94 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 			return false;
 		});
 
+	// ⭐⭐ KEYED BY THE COLUMN ITSELF, the way the UNION stitch below already keys its output. The
+	// selection that reads this table asks for a cell BY COLUMN — `m_table.GetCell(row,
+	// col->GetColumnId())` — so an output keyed by a running number answers EVERY such question with
+	// nothing: add a second source to a query and its dimensions came back empty while the row count
+	// stayed right, because COUNT counts rows and never asks for a value (Max, 2026-08-22, adding a
+	// constant to a document query: "the dimensions broke"). The figure was left with nothing under
+	// it to explain where it came from, which is what detail records are FOR.
+	//
+	// The running number was not pointless: two DIFFERENT columns can share a metaID — a self-join
+	// selects `T AS a` and `T AS b`, and keying both by their own id would fold them into one cell.
+	// So the id is used where it is UNIQUE in this output, and a synthetic one stands in for the
+	// duplicates. Those keep answering by ALIAS, which is the only thing that told them apart before.
 	ibQueryRamTable TO;
 	std::vector<ibMetaID> outIds;
-	ibMetaID seq = 1;
+	std::map<ibMetaID, int> ownCount;
+	for (const auto& s : *spec.m_selectCols)
+		if (s.first != nullptr)
+			++ownCount[s.first->GetColumnId()];
+
+	ibMetaID seq = kStitchSyntheticBase;
+	std::vector<const ibBackendQueryColumn*> outCols;
 	for (const auto& s : *spec.m_selectCols) {
-		TO.AddColumn(seq, s.second, s.first->GetTypeDesc());   // output keyed by seq, named by alias
-		outIds.push_back(seq++);
+		const ibMetaID own = s.first != nullptr ? s.first->GetColumnId() : 0;
+		const ibMetaID id  = (own != 0 && ownCount[own] == 1) ? own : seq++;
+		TO.AddColumn(id, s.second, s.first->GetTypeDesc());    // named by alias, as before
+		outIds.push_back(id);
+		outCols.push_back(s.first);
+	}
+
+	// ⭐⭐ AND EVERY COLUMN THE TOTALS WILL BE ASKED FOR, whether or not the SELECT list names it.
+	// The fold runs over the RESULT of this projection, reading each level's key and each resource
+	// by column; a column the composed table holds but this list does not carry is dropped right
+	// here, and the fold then finds nothing where the value was (journal, 2026-08-22: "composed 63
+	// rows, holds [Value, Posted, Number], output wants [Value]").
+	//
+	// They can be missing from the SELECT list for a perfectly ordinary reason: a projection whose
+	// NAME a dimension or a resource already claimed is not projected twice — one name, one column,
+	// which is the rule everywhere else — so `SELECT Posted, Number … TOTALS COUNT(Number) BY Posted`
+	// projects neither of them under its own name. On a single source that cost nothing: the fold
+	// reads the driver's result and may ask it for any column. Composed rows have only what was put
+	// in them.
+	// ⚠ THE TEST IS THE ID, NOT THE POINTER. What the fold asks for is "a column keyed by this
+	// metaID"; whether some other entry happens to be the same C++ object is a different question
+	// and answers it wrongly. `SELECT a.Number AS N1, a.Number AS N2 … BY Number` puts the same
+	// pointer in twice, so both select entries take SYNTHETIC ids (the id is not unique) — and a
+	// pointer test would then see the column as "already carried" and never add it under its own id,
+	// leaving the fold with nothing and every row in one blank group.
+	auto carriesId = [&outIds](ibMetaID id) {
+		for (const ibMetaID had : outIds)
+			if (had == id)
+				return true;
+		return false;
+	};
+	auto carry = [&](const ibBackendQueryColumn* c) {
+		if (c == nullptr)
+			return;
+		const ibMetaID own = c->GetColumnId();
+		if (own != 0 && carriesId(own))
+			return;                       // its own id is already out there — the fold will find it
+		const ibMetaID id = (own != 0) ? own : seq++;
+		TO.AddColumn(id, c->GetName(), c->GetTypeDesc());
+		outIds.push_back(id);
+		outCols.push_back(c);
+	};
+	if (spec.m_totals != nullptr)
+		for (const ibTotalLevel& level : *spec.m_totals)
+			for (const ibTotalField& field : level.m_fields)
+				carry(field.m_col);
+	if (spec.m_totalAggregates != nullptr)
+		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_totalAggregates)
+			carry(a.m_col);
+
+	// ⭐ WHAT THE COMPOSED TABLE HOLDS, against what leaves it. Between the leaves claiming their
+	// columns and the fold reading them there are two silent filters — the join's own column list
+	// and this projection — and a column dropped by either is indistinguishable downstream from a
+	// column that was read and found empty.
+	ibJournalIf {
+		wxString have;
+		for (const ibQueryRamColumn& c : TC.Columns())
+			have += (have.IsEmpty() ? wxString() : wxT(", "))
+			      + wxString::Format(wxT("%s#%u"), c.m_name, static_cast<unsigned>(c.m_id));
+		wxString out;
+		for (size_t k = 0; k < outCols.size(); ++k)
+			if (outCols[k] != nullptr)
+				out += (out.IsEmpty() ? wxString() : wxT(", "))
+				     + wxString::Format(wxT("%s#%u"), outCols[k]->GetName(), static_cast<unsigned>(outIds[k]));
+		ibJournalInfo(wxT("query.stitch"), wxT("composed %ld rows, holds [%s]  carries out [%s]"),
+			rows, have, out);
 	}
 	// COMPUTED output columns (arithmetic / CASE over the JOIN) — evaluated per row off the AST below.
 	std::vector<ibMetaID> exprIds;
@@ -1523,17 +1662,31 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 	long emitted = 0;
 	for (long oi = 0; oi < rows && emitted < limit; ++oi) {
 		const long i = order[static_cast<size_t>(oi)];
+		// Every carried column, in the order `outIds` names them — the SELECT list first, then the
+		// totals' own columns appended above.
 		std::vector<ibValue> outCells;
-		outCells.reserve(spec.m_selectCols->size() + exprs.size());
-		for (const auto& sc : *spec.m_selectCols)
-			outCells.push_back(RamCell(TC, i, sc.first));
+		outCells.reserve(outCols.size() + exprs.size());
+		for (const ibBackendQueryColumn* c : outCols)
+			outCells.push_back(RamCell(TC, i, c));
 		for (const ibQueryColumnSelect& sc : exprs)
 			outCells.push_back(EvalColumnExprRow(sc.m_expr.get(), TC, i));
-		if (spec.m_distinct && !seenDistinct.insert(outCells).second)
-			continue;   // duplicate output row -> drop
+
+		// ⚠ DISTINCT IS OVER WHAT THE QUERY SELECTED, not over what the fold needs. The totals'
+		// columns ride along invisibly; letting them into the row identity would make two rows
+		// that the author's SELECT list cannot tell apart count as different, which is exactly what
+		// DISTINCT is asked to prevent.
+		if (spec.m_distinct) {
+			std::vector<ibValue> identity;
+			identity.reserve(spec.m_selectCols->size() + exprs.size());
+			identity.insert(identity.end(), outCells.begin(),
+				outCells.begin() + static_cast<long>(spec.m_selectCols->size()));
+			identity.insert(identity.end(), outCells.begin() + static_cast<long>(outCols.size()), outCells.end());
+			if (!seenDistinct.insert(identity).second)
+				continue;   // duplicate output row -> drop
+		}
 		const long r = TO.AppendRow();
 		for (size_t k = 0; k < outIds.size();  ++k) TO.SetCell(r, outIds[k],  outCells[k]);
-		for (size_t k = 0; k < exprIds.size(); ++k) TO.SetCell(r, exprIds[k], outCells[outIds.size() + k]);
+		for (size_t k = 0; k < exprIds.size(); ++k) TO.SetCell(r, exprIds[k], outCells[outCols.size() + k]);
 		++emitted;
 	}
 	return ibDataQueryResult(std::move(TO), spec.m_queryable);
@@ -2704,11 +2857,36 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 			leaf->m_values = node->m_values;   // the group keys above stay readable on the row
 			for (const ibQueryRamColumn& col : ctx.snapshot->Columns())
 				leaf->m_values[col.m_id] = ctx.snapshot->GetCell(r, col.m_id);
-			// THE RESOURCES, OVER THIS ONE ROW — which is the row's own contribution to the totals
-			// above it (a sum of one row is that row; a count of one row is one). Rolled through the
-			// same call every heading uses, so a figure on a detail line and the figure it adds up
-			// into cannot be computed two different ways.
-			ApplyAggregates(*leaf, *ctx.snapshot, std::vector<long>{ r }, *ctx.aggregates);
+			// ⭐⭐ AND NOTHING IS ROLLED ON TOP OF THEM. A detail row is the BOTTOM floor of the one
+			// column that carries two things: the figure at every heading, the row's own value here.
+			// Rolling the resources over this single row overwrote that value with the row's
+			// "contribution" — invisible for SUM, where a sum of one row IS the row, and wrong for
+			// every other function: `COUNT(Number)` put a 1 where the document's number belongs
+			// (Max, 2026-08-22: "the rows returned a number, and it should be the document number").
+			//
+			// There is nothing to compute here anyway. What a row contributes to the total above it
+			// is the value it already holds, which the loop above has just written.
+			//
+			// ⚠ EXCEPT WHERE THE ROW HOLDS NOTHING. `COUNT(*)` has no input column at all — its
+			// receiver is a synthetic id that is not in the snapshot — so the loop above cannot
+			// fill it and the parent's value is copied BEFORE the parent's own aggregates run. Left
+			// alone it came back blank on every detail row while staying in the schema: a column
+			// that is there and empty, which is the shape this whole day was spent removing. Those
+			// aggregates, and only those, are still rolled over the single row.
+			auto snapshotCarries = [&ctx](const ibBackendQueryColumn* col) {
+				if (col == nullptr)
+					return false;
+				for (const ibQueryRamColumn& c : ctx.snapshot->Columns())
+					if (c.m_id == col->GetColumnId())
+						return true;
+				return false;
+			};
+			std::vector<ibDataQueryBuilder::AggregateItem> ownless;
+			for (const ibDataQueryBuilder::AggregateItem& a : *ctx.aggregates)
+				if (!snapshotCarries(a.m_col))
+					ownless.push_back(a);
+			if (!ownless.empty())
+				ApplyAggregates(*leaf, *ctx.snapshot, std::vector<long>{ r }, ownless);
 		}
 		return;
 	}

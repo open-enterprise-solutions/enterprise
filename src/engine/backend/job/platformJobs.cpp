@@ -66,7 +66,7 @@ bool FoldTotals(ibSession* session)
 	// somebody else's (derivedStateBuilder.h).
 	const int folded = ibDerivedState::CollapseAll(snapshot, session->Holder());
 	if (folded < 0) {
-		wxLogDebug(wxT("totals fold failed"));
+		ibJournalInfo(wxT("job"),wxT("totals fold failed"));
 		return false;
 	}
 
@@ -126,7 +126,7 @@ void ibRegisterPlatformJobs()
 	if (!manager->Register(fold)) {
 		// Logged inside Register with the reason. Startup continues: housekeeping
 		// that could not register is a slightly wider read, not a broken process.
-		wxLogDebug(wxT("platform job 'totals.fold' was not registered"));
+		ibJournalInfo(wxT("job"),wxT("platform job 'totals.fold' was not registered"));
 	}
 
 	// (firebird.maintenance is NOT declared here. It registers itself from

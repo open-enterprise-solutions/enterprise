@@ -39,7 +39,7 @@ ibPreparedStatementFirebirdWrapper::~ibPreparedStatementFirebirdWrapper()
 			// the reason reach the caller. Freeing a server-side handle is cleanup and follows the
 			// project's cleanup rule: report, never throw.
 			InterpretErrorCodes();
-			wxLogError(wxT("Firebird: isc_dsql_free_statement failed (%s)"), GetErrorMessage());
+			ibJournalError(wxT("db.firebird"),wxT("Firebird: isc_dsql_free_statement failed (%s)"), GetErrorMessage());
 		}
 	}
 }
@@ -329,7 +329,7 @@ bool ibPreparedStatementFirebirdWrapper::IsSelectQuery()
 
 void ibPreparedStatementFirebirdWrapper::InterpretErrorCodes()
 {
-	wxLogDebug(wxT("FirebirdPreparesStatementWrapper::InterpretErrorCodes()\n"));
+	ibJournalInfo(wxT("db.firebird"),wxT("FirebirdPreparesStatementWrapper::InterpretErrorCodes()\n"));
 
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
 	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode));

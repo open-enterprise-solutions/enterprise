@@ -392,7 +392,7 @@ bool ibValueRecordSetObject::DeleteData()
 	// distinction nothing in the code could see and nobody reviewing it could notice. The
 	// behaviour is unchanged; what changes is that the wide case now leaves a trace.
 	if (!keyed)
-		wxLogWarning(_("Register '%s': the record set carries no key, so writing it clears every record"),
+		ibJournalWarning(wxT("register"),_("Register '%s': the record set carries no key, so writing it clears every record"),
 			m_metaObject->GetSynonym());
 
 	// A FAILED DELETE RAISES, AND IT SAYS THAT IT WAS THE DELETE.

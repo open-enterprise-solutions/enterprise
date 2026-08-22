@@ -152,10 +152,27 @@ public:
 	// --- iteration: selection = a CURSOR over the traversal -----------------------------------------
 	// s = result.Select(kind); while (s.Next()) { s.GetValue(col); s.Level(); … }
 	// The folded tree is walked PRE-ORDER (a folder, then its subtree). Built lazily on the first Next.
+	// ⭐ A VISIT WITHOUT A NODE IS NOT A VISIT. `Next()` answers "is there a row here", and the reader
+	// takes that answer literally: it reads the columns straight after. So the cursor must never
+	// stand where `Current()` has nothing to return — every column would read NULL and the walk
+	// would report a row made entirely of nothing (Max, 2026-08-22: "once the total, and the second
+	// time a null node comes"). Skipping is the invariant, not a repair: what the walk hands out is
+	// nodes, and an empty slot is not one.
+	// ⭐ …AND A REFUSAL DOES NOT MOVE THE CURSOR. `Next()` answering false means "there is no next
+	// row", not "you are now nowhere": the selection keeps standing on the last row it handed out,
+	// so reading a column after the loop gives that row's values rather than a screenful of NULLs
+	// (Max, 2026-08-22: "it should just return false, and the values stay as the last ones").
+	// Advancing past the end and reporting it was two answers to one question, and the second was
+	// indistinguishable from a real row made of nothing.
 	bool Next()
 	{
 		EnsureWalk();
-		return ++m_pos < static_cast<long>(m_visits.size());
+		for (long probe = m_pos; ++probe < static_cast<long>(m_visits.size()); )
+			if (m_visits[static_cast<size_t>(probe)] != nullptr) {
+				m_pos = probe;
+				return true;
+			}
+		return false;
 	}
 
 	// Rewind to the start — walk the SAME tree again (the folded tree is kept; only the position
@@ -220,6 +237,10 @@ public:
 	const ibQueryRamTable& Snapshot() const { return m_snapshot; }
 	ibSelectKind           GetKind()  const { return m_kind; }
 
+	// How many nodes this selection will hand out. Forces the fold, which is what the first Next()
+	// would have done anyway — so asking costs nothing that was not going to be paid.
+	long NodeCount() const { EnsureWalk(); return static_cast<long>(m_visits.size()); }
+
 private:
 	const ibSelectorTree::Node* Current() const
 	{
@@ -253,14 +274,38 @@ private:
 		// Normally the walk starts at the root's CHILDREN: the root is the fold over everything, which
 		// is a total, not a dimension value, and a report that did not ask for it would find a
 		// mysterious empty first row. Asked for, it is exactly the row the author wanted.
-		if (m_totalsOverall)
+		// ⭐⭐ OVERALL IS A LEVEL, not a row bolted on top. It is the grouping that names NO fields —
+		// "as if you had set no dimensions at all" (Max, 2026-08-22) — and a grouping by nothing has
+		// exactly ONE node covering the whole result: the tree's root. So when it is asked for, the
+		// walk visits that node and nothing else, and the first dimension level is reached the same
+		// way every other level is: by descending into the one above it.
+		//
+		// Said this way it needs no special case anywhere else. It used to be pushed IN FRONT of the
+		// first level's nodes, which put two different levels in one cursor and made a descent into
+		// the root print everything twice.
+		if (m_totalsOverall) {
 			m_visits.push_back(&m_walk->Root());
-		FlattenPreOrder(m_walk->Root(), m_visits);
+			m_pos = -1;
+			return;
+		}
+
+		// ⭐⭐ ONE LEVEL, NOT THE WHOLE TREE. A selection visits the DIRECT CHILDREN of what it was
+		// made over, and a node's own children are reached by descending into it — `s.Select()`. That
+		// is what a grouping IS: three levels are three nested loops, not one loop over everything
+		// (Max, 2026-08-22, watching the walk return the group's figure 62 and then 1, 2, 3, 4 in the
+		// same cursor: "that is not needed here — the node that unfolds the value sees those").
+		//
+		// It used to flatten the whole subtree PRE-ORDER, which put every level and every detail row
+		// into one cursor: the reader could tell them apart only by asking Level() on each visit, and
+		// a script written the way the language reads — loop the groups, loop their rows — saw the
+		// rows twice, once mixed into the outer loop.
+		//
+		// A DIRECT walk is unaffected: its tree is one flat layer of leaves under the root, so its
+		// direct children ARE the rows.
+		for (const auto& child : m_walk->Root().m_children)
+			if (child != nullptr)          // an empty slot is not a row — see Next()
+				m_visits.push_back(child.get());
 		m_pos = -1;
-	}
-	static void FlattenPreOrder(const ibSelectorTree::Node& n, std::vector<const ibSelectorTree::Node*>& out)
-	{
-		for (const auto& c : n.m_children) { out.push_back(c.get()); FlattenPreOrder(*c, out); }
 	}
 
 	ibQueryRamTable m_snapshot;                    // the raw snapshot this Selector traverses
@@ -316,6 +361,22 @@ inline ibSelector ibSelector::MakeChild(const ibValue& parentKeyValue, int child
 inline ibSelector ibSelector::Select(ibSelectKind kind) const
 {
 	const ibSelectorTree::Node* n = Current();
+
+	// ⭐ THE CHILDREN ARE ALREADY THERE, when the fold built them. Hand over the node's subtree as a
+	// tree of its own and let the sub-selection walk ITS direct children — no query, no re-fold, and
+	// it works for a fold with no live source behind it, which the re-execution below cannot serve at
+	// all. That is the ordinary case for a scripted TOTALS: everything was read once, folded once,
+	// and a descent is a move inside what is already in hand.
+	//
+	// The re-execution road stays for what it was built for: a LAZY drill, where a node is expandable
+	// but its children were deliberately not read yet.
+	if (n != nullptr && !n->m_children.empty() && m_walk != nullptr) {
+		ibSelector child(ibQueryRamTable{}, kind);
+		child.WithReadyTree(std::make_shared<ibSelectorTree>(m_walk->SubtreeOf(*n)));
+		child.m_baseLevel = m_baseLevel;   // the nodes keep their own levels; Level() stays absolute
+		return child;
+	}
+
 	if (n == nullptr || m_rowKeyCol == nullptr) return ibSelector(ibQueryRamTable{}, kind);
 	const auto it = n->m_values.find(m_rowKeyCol->GetColumnId());
 	const ibValue key = (it != n->m_values.end()) ? it->second : ibValue();

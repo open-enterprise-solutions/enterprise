@@ -1,5 +1,6 @@
 #include "firebirdLease.h"
 #include "firebirdCommon.h"
+#include "backend/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 
 #include <wx/file.h>
 #include <wx/log.h>
@@ -91,7 +92,7 @@ bool WriteLeaseFile(
 		// followers' next-read sees consistent state. Log to surface
 		// SMB-disconnect / disk-full conditions that would otherwise
 		// leave followers reading the prior generation forever.
-		wxLogWarning(wxT("ibFirebirdLease: FlushFileBuffers failed: %lu - ")
+		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLease: FlushFileBuffers failed: %lu - ")
 		             wxT("followers may see stale state until next write"),
 		             (unsigned long)GetLastError());
 	}
@@ -100,7 +101,7 @@ bool WriteLeaseFile(
 	if (lseek(fd, 0, SEEK_SET) < 0) return false;
 	ssize_t wrote = write(fd, &in, kLeaseFileSize);
 	if (fsync(fd) < 0) {
-		wxLogWarning(wxT("ibFirebirdLease: fsync failed: %d - followers ")
+		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLease: fsync failed: %d - followers ")
 		             wxT("may see stale state until next write"), errno);
 	}
 	return wrote == (ssize_t)kLeaseFileSize;
@@ -149,7 +150,7 @@ ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 		nullptr);
 	if (m_hFile == INVALID_HANDLE_VALUE) {
 		const DWORD err = GetLastError();
-		wxLogWarning(wxT("ibFirebirdLease: CreateFile(%s) failed: %lu"),
+		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLease: CreateFile(%s) failed: %lu"),
 		             m_leasePath, (unsigned long)err);
 		return AcquireResult::IOError;
 	}
@@ -179,7 +180,7 @@ ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 			m_hFile = INVALID_HANDLE_VALUE;
 			return AcquireResult::AnotherLeaderActive;
 		}
-		wxLogWarning(wxT("ibFirebirdLease: LockFileEx failed: %lu"),
+		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLease: LockFileEx failed: %lu"),
 		             (unsigned long)err);
 		CloseHandle(m_hFile);
 		m_hFile = INVALID_HANDLE_VALUE;
@@ -192,7 +193,7 @@ ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 	// honours NFS locks via lockd; samba-mounted CIFS works too.
 	m_fd = open(m_leasePath.mb_str(), O_RDWR | O_CREAT, 0644);
 	if (m_fd < 0) {
-		wxLogWarning(wxT("ibFirebirdLease: open(%s) failed: %d"),
+		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLease: open(%s) failed: %d"),
 		             m_leasePath, errno);
 		return AcquireResult::IOError;
 	}
@@ -228,7 +229,7 @@ ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 			m_fd = -1;
 			return AcquireResult::AnotherLeaderActive;
 		}
-		wxLogWarning(wxT("ibFirebirdLease: fcntl F_SETLK failed: %d"), errno);
+		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLease: fcntl F_SETLK failed: %d"), errno);
 		close(m_fd);
 		m_fd = -1;
 		return AcquireResult::IOError;

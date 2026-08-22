@@ -1,6 +1,7 @@
 #include "firebirdBlobCompression.h"
 
 #include "backend/backend_exception.h"
+#include "backend/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 
 #include <wx/log.h>
 #include <wx/mstream.h>
@@ -68,7 +69,7 @@ wxMemoryBuffer ibFirebirdBlobCompression::Wrap(const void* data, size_t size) {
 				// Stream reported a different size than we just queried —
 				// internal inconsistency, refuse to write a half-baked
 				// body. Fall through to raw branch below.
-				wxLogWarning(wxT("ibFirebirdBlobCompression::Wrap: zStream ")
+				ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdBlobCompression::Wrap: zStream ")
 				             wxT("CopyTo copied %zu/%zu bytes; falling back ")
 				             wxT("to raw"), copied, compressedSize);
 				// Truncate the partial body + flag byte back off.

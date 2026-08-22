@@ -298,6 +298,50 @@ backing-blind (a DB cursor **or** a RAM table, chosen once in `MakeProvider`). F
 | **L3-3** | **data mover** — `ibDataMover` (`query/dataMover`) dumps / restores the **rows** | **metadata** |
 | **L3-4** | **regeneration** — `ibDerivedState` (`query/derivedStateBuilder`) rebuilds a **derived** table from its source | derived state |
 
+**THE READ IS TWO STEPS, AND THE SECOND IS A CURSOR OVER ONE LEVEL.** `Execute(page)` hands back the
+RAW data (`ibDataQueryResult`); `result.Select(kind)` hands back a TRAVERSAL over it (`ibSelector`,
+`query/querySelector.h`). `kind` is `ibSelectKind` — `Direct` (the rows as they are) / `ByGroups` /
+`ByGroupsHierarchy` — and it says HOW to walk, never what to read: one read is one snapshot and every
+subtotal rolls from that snapshot, so a detail row and the total above it cannot disagree.
+
+```cpp
+ibSelector s = result.Select(ibSelectKind::ibSelectKind_ByGroups);
+while (s.Next()) {                                                   // THIS level, and no other
+    s.GetValue(col); s.Level(); s.Kind();                            // Group or Detail — asked of the NODE
+    ibSelector under = s.Select(ibSelectKind::ibSelectKind_ByGroups);  // descend INTO the visit
+    while (under.Next()) { … }
+}
+```
+
+**A selection walks ONE level** (2026-08-22). `Next()` visits the direct children of the node the
+selection was made over, and what hangs under a visit is reached by descending into it — so **three
+groupings are three nested loops**, which is what a grouping is. It used to flatten the whole subtree
+pre-order into a single cursor: a reader could tell one level from another only by asking `Level()`
+on every visit, and code written the way the language reads (loop the groups, loop their rows) saw
+the rows twice, once mixed into the outer loop. A `Direct` walk is unaffected — its tree is one flat
+layer of leaves under the root, so its direct children ARE the rows.
+
+**`Select(kind)` descends into what is already in hand.** The fold built the children, so a descent
+hands the current node's subtree over as a tree of its own (`ibSelectorTree::SubtreeOf` →
+`WithReadyTree`): no query, no re-fold, and it works for a fold with no live source behind it, which
+is the ordinary case for a scripted `TOTALS`. The RE-EXECUTION road stays for the one thing it was
+built for — a **lazy drill**, where a node is expandable but its children were deliberately not read:
+`MakeChild` re-runs the source scoped to the node's key with the ORIGINAL filter inherited, so a
+sub-selection shows the node's children under the same condition the first read admitted.
+
+Two invariants on the cursor, both learned from readers taking `Next()` literally:
+
+| invariant | why |
+|---|---|
+| a visit never has NO node — an empty slot is skipped | `Next()` answers *is there a row here*, and the caller reads columns straight after; a node-less visit would report a row made entirely of NULLs |
+| a refusal does not MOVE the cursor | `false` means *there is no next row*, not *you are now nowhere* — an exhausted selection keeps standing on the last row it returned, so reading a column after the loop gives that row's values |
+
+`Reset()` rewinds the same tree (no re-query, no re-fold). `WalkOverall()` puts the tree's ROOT in
+the walk as **the level that groups by nothing** — one node, aggregates filled, every dimension
+column NULL — after which the first dimension level is reached the way every level is, by descending
+into the one above it. The tree may also arrive ALREADY BUILT, when the DBMS folded it
+(`WithReadyTree`, `GROUP BY ROLLUP`); the walk over it is identical, which is the point.
+
 **A DOOR MAY DECLARE A NAMED QUERY** (2026-08-21). `.With(name, innerDoor)` records one; the spec
 carries the list; `ibDbTableProvider::AttachNamedQueries` lowers each through the ordinary road (its
 own spec through `BuildPageIR`) and puts the resulting relation on the SAME IR. The source that
@@ -533,6 +577,27 @@ Three front-ends, all lowering into the **one** L3 door — L4 **lives on L3** (
   **decorator** over any query (text / LINQ / composer), enforced on the L3 door. This is the
   coherence dividend: RLS is free because there is one door to gate. See
   [access-policy-rls.md](access-policy-rls.md).
+
+**AND ALL THREE HAND BACK THE SAME PAIR** — a result and a selection over it. The script surface is
+three types mirroring the two-step read (`system/value/valueQuery.h`): `Query` →
+`QueryResult` → `QuerySelect`, with the traversal named by the `QueryResultIteration` enumeration
+(`Direct` / `ByGroups` / `ByGroupsHierarchy`) and the output columns read straight off the cursor
+(`s.ColumnName`). Because a selection walks ONE level (L3 above), a walk written in the language is
+the nested loops it reads as:
+
+```
+q   = New Query(text);
+res = q.Execute();
+s   = res.Select(QueryResultIteration.ByGroups);
+while (s.Next()) {                         // the first grouping
+    d = s.Select(QueryResultIteration.ByGroups);
+    while (d.Next()) { … }                 // what hangs under this heading — its groups, or its rows
+}
+```
+
+Who does the descending is the only difference between the readers: a script writes the loops, and
+at **L5** the composer writes them for a passive driver (`ibDataDBComposer::RunOutput` recurses and
+hands each visit over as `OnGroup` / `OnDetail`, so no driver ever recurses).
 
 ### L5 — the declarative composer (`composition/`)
 Holds settings (source + filter + sort + group + TOTALS BY) and produces a query. Two realisations:

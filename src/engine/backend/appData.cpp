@@ -556,6 +556,14 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 
 			s_instance->m_dbMode = ibDatabaseMode::eFILE;
 
+			// ⭐ THE APPLICATION SAYS WHAT IT IS, into the journal that has been waiting for it since
+			// the process began. The journal's own banner can only greet — the binary, the build, the
+			// machine — because at that moment nothing has been decided yet. WHICH base, opened HOW,
+			// under WHICH run mode is the first fact worth knowing about a session, and this is the
+			// first moment it exists.
+			ibJournalInfo(wxT("appdata"), wxT("connected: file base at %s (run mode %d)"),
+				s_instance->m_strFile, static_cast<int>(runMode));
+
 			// The pool is the single owner of every connection in the
 			// process. `db` here is the master — the pool holds it as
 			// m_source for Clone() and also as the first idle entry so
@@ -653,6 +661,10 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 			s_instance->ReadEngineConfig();
 
 			s_instance->m_dbMode = ibDatabaseMode::eSERVER;
+
+			// …and the same for a server base — see the note at the file-mode site above.
+			ibJournalInfo(wxT("appdata"), wxT("connected: server base %s on %s (run mode %d)"),
+				s_instance->m_strDatabase, s_instance->m_strServer, static_cast<int>(runMode));
 
 			// Pool owns every connection. `db` becomes the master (source
 			// for Clone + first hand-out). maxSize=32 covers heartbeat +
@@ -1148,7 +1160,7 @@ bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
 {
 	wxFileInputStream fis(strFullPath);
 	if (!fis.IsOk()) {
-		wxLogError("Couldn't open the file '%s'.", strFullPath);
+		ibJournalError(wxT("appdata"),"Couldn't open the file '%s'.", strFullPath);
 		return false;
 	}
 
@@ -1199,7 +1211,7 @@ bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
 				// pouring rows into tables that were not there or were still the shape of the database
 				// being overwritten: no rows restored, no word said, and a base left half-replaced.
 				if (!activeMetaData->SaveDatabase(saveConfigFlag)) {
-					wxLogError(_("The configuration from the file could not be applied - the data was not loaded"));
+					ibJournalError(wxT("appdata"),_("The configuration from the file could not be applied - the data was not loaded"));
 					return false;
 				}
 				configLoaded = true;
@@ -1244,7 +1256,7 @@ bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
 				buffer.SetDataLen(fos.GetSize());
 
 				if (!configLoaded) {
-					wxLogError(_("The file carries data before the configuration - it cannot be loaded"));
+					ibJournalError(wxT("appdata"),_("The file carries data before the configuration - it cannot be loaded"));
 					return false;
 				}
 
@@ -1263,7 +1275,7 @@ bool ibApplicationData::SaveDatabase(const wxString& strFullPath)
 	wxFFileOutputStream out(strFullPath);
 	if (!out.IsOk())
 	{
-		wxLogError("Cannot create output file %s", strFullPath);
+		ibJournalError(wxT("appdata"),"Cannot create output file %s", strFullPath);
 		return false;
 	}
 

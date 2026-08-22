@@ -66,7 +66,7 @@ size_t ibPluginManager::LoadAll()
 			// OUR plugin when a dependency is missing or a symbol went unresolved,
 			// and that one used to vanish without a trace. Same file, same branch;
 			// only the log tells them apart afterwards.
-			wxLogDebug("Plugin candidate '%s' did not load - missing dependency or "
+			ibJournalInfo(wxT("plugin"),"Plugin candidate '%s' did not load - missing dependency or "
 				"unresolved symbol; skipped.", path);
 			continue;
 		}
@@ -85,7 +85,7 @@ size_t ibPluginManager::LoadAll()
 
 		const ibPluginInfo* info = info_fn();
 		if (info == nullptr || info->abi_version != IB_PLUGIN_ABI_VERSION) {
-			wxLogDebug("Skipping plugin '%s': ABI mismatch (got %d, expected %d)",
+			ibJournalInfo(wxT("plugin"),"Skipping plugin '%s': ABI mismatch (got %d, expected %d)",
 				path, info ? info->abi_version : -1, IB_PLUGIN_ABI_VERSION);
 			continue;
 		}
@@ -103,7 +103,7 @@ size_t ibPluginManager::LoadAll()
 		// return non-zero here, and it is then unloaded without shutdown being
 		// called: it never finished starting, so it has nothing to tear down.
 		if (init_fn && init_fn(ibPluginHostInstance()) != 0) {
-			wxLogDebug("Plugin '%s' initialize() failed", path);
+			ibJournalInfo(wxT("plugin"),"Plugin '%s' initialize() failed", path);
 			continue;
 		}
 
@@ -116,7 +116,7 @@ size_t ibPluginManager::LoadAll()
 			p.m_shutdown = reinterpret_cast<ibPluginShutdownFn>(
 				p.m_lib->GetSymbol(wxT("oes_plugin_shutdown")));
 		}
-		wxLogDebug("Loaded plugin: %s %s", info->name ? info->name : "<unnamed>",
+		ibJournalInfo(wxT("plugin"),"Loaded plugin: %s %s", info->name ? info->name : "<unnamed>",
 			info->version ? info->version : "");
 
 		m_plugins.push_back(std::move(p));

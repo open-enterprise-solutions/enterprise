@@ -202,7 +202,7 @@ void ibJobManager::HarvestFinished(ibJobEntry& e, std::vector<std::shared_ptr<ib
 		std::lock_guard<std::mutex> lk(e.m_result->m_mtx);
 		e.m_error = e.m_result->m_error;
 		if (!ok)
-			wxLogDebug(wxT("job '%s' failed: %s"), e.m_desc.m_name, e.m_error);
+			ibJournalInfo(wxT("job"),wxT("job '%s' failed: %s"), e.m_desc.m_name, e.m_error);
 	}
 
 	// Drain the future so a stray exception (one thrown by the POOL rather than by
@@ -456,14 +456,14 @@ bool ibJobManager::Launch(ibJobEntry& e)
 bool ibJobManager::Register(ibJobDescription desc)
 {
 	if (desc.m_name.IsEmpty() || !desc.m_body) {
-		wxLogDebug(wxT("job registration rejected: incomplete description ('%s')"), desc.m_name);
+		ibJournalInfo(wxT("job"),wxT("job registration rejected: incomplete description ('%s')"), desc.m_name);
 		return false;
 	}
 	// A schedule that can never match is refused HERE rather than left to be
 	// debugged as silence — an empty window, an inverted validity range or a
 	// non-positive interval all produce a job that simply never runs.
 	if (!desc.m_schedule.IsValid()) {
-		wxLogDebug(wxT("job '%s' rejected: the schedule can never match"), desc.m_name);
+		ibJournalInfo(wxT("job"),wxT("job '%s' rejected: the schedule can never match"), desc.m_name);
 		return false;
 	}
 
@@ -474,7 +474,7 @@ bool ibJobManager::Register(ibJobDescription desc)
 		if (Find(desc.m_name) != nullptr) {
 			// Refuse rather than replace: a duplicate name means a double bootstrap,
 			// and quietly keeping one copy would hide it until something runs twice.
-			wxLogDebug(wxT("job '%s' is already registered"), desc.m_name);
+			ibJournalInfo(wxT("job"),wxT("job '%s' is already registered"), desc.m_name);
 			return false;
 		}
 	}
@@ -572,7 +572,7 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 		&ib_detail::MakeSessionFactory<ibSession>);
 
 	if (!holder) {
-		wxLogDebug(wxT("job '%s': session could not be created"), desc.m_name);
+		ibJournalInfo(wxT("job"),wxT("job '%s': session could not be created"), desc.m_name);
 		return ibSessionHolder();
 	}
 
@@ -598,7 +598,7 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 			// Named a user who is not there: refuse rather than run the job
 			// anonymously. Falling back to full rights is how a scheduled job ends
 			// up seeing more than its author ever could.
-			wxLogDebug(wxT("job '%s': user %s not found - the job will not run"),
+			ibJournalInfo(wxT("job"),wxT("job '%s': user %s not found - the job will not run"),
 			           desc.m_name, desc.m_runAsUser.str());
 			return ibSessionHolder();
 		}
@@ -731,10 +731,10 @@ void ibJobManager::ThreadBody()
 			(void)Tick();
 		}
 		catch (const ibBackendException& err) {
-			wxLogDebug(wxT("job tick failed: %s"), err.GetErrorDescription());
+			ibJournalInfo(wxT("job"),wxT("job tick failed: %s"), err.GetErrorDescription());
 		}
 		catch (...) {
-			wxLogDebug(wxT("job tick failed with an unknown exception"));
+			ibJournalInfo(wxT("job"),wxT("job tick failed with an unknown exception"));
 		}
 	}
 }

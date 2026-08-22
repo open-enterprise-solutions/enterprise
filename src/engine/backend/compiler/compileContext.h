@@ -344,8 +344,8 @@ struct ibCompileContext {
 		std::vector<int>* pListB = m_listBreak[m_numDoNumber];
 		if (pListC == 0 || pListB == 0) {
 #ifdef DEBUG 
-			wxLogDebug(wxT("Error (FinishLoopList) gotoContinue=%d, gotoBreak=%d\n"), gotoContinue, gotoBreak);
-			wxLogDebug(wxT("m_numDoNumber=%d\n"), m_numDoNumber);
+			ibJournalInfo(wxT("compiler"), wxT("Error (FinishLoopList) gotoContinue=%d, gotoBreak=%d\n"), gotoContinue, gotoBreak);
+			ibJournalInfo(wxT("compiler"), wxT("m_numDoNumber=%d\n"), m_numDoNumber);
 #endif 
 			m_numDoNumber--;
 			return;

@@ -226,7 +226,7 @@ bool RunRestore(const wxString& tableName, const ibMetaData* metaData,
 			// The wire says one cell per chunk, so the reader says it too.
 			if (col > 0) {
 				if (column == nullptr) {
-					wxLogError(wxT("ibDataMover: %s has no column with id %llu — its cell is skipped"),
+					ibJournalError(wxT("query.mover"),wxT("ibDataMover: %s has no column with id %llu — its cell is skipped"),
 						tableName, static_cast<unsigned long long>(col));
 				}
 				else {
@@ -333,7 +333,7 @@ static bool RawToStatement(const ibBackendQueryColumn* col, const ibReaderMemory
 	case ibRawDBColumn::RawType::Number: {
 		ibNumber value;
 		if (!value.SetBuffer(reader))
-			wxLogError(wxT("ibDataMover: failed to read a raw number from stream"));
+			ibJournalError(wxT("query.mover"),wxT("ibDataMover: failed to read a raw number from stream"));
 		statement->SetParamNumber(position++, value);
 		break;
 	}
@@ -365,7 +365,7 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMet
 			case ibColumnRole::Number: {
 				ibNumber value;
 				if (!value.SetBuffer(reader))
-					wxLogError(wxT("ibDataMover: failed to read TYPE_NUMBER from stream"));
+					ibJournalError(wxT("query.mover"),wxT("ibDataMover: failed to read TYPE_NUMBER from stream"));
 				statement->SetParamNumber(p++, value);
 				break;
 			}

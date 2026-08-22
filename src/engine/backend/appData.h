@@ -570,6 +570,12 @@ public:
 		return s_instance != nullptr ? s_instance->m_logger.get() : nullptr;
 	}
 
+	// (The technology journal is deliberately NOT here. It lives ABOVE application data — opened by
+	// ibCrashGuard::Install, before a database is chosen or a session made — and `ibJournalInfo(...)` is
+	// declared in backend_core.h, so every file already has it. An accessor here would be a
+	// middleman that adds nothing and suggests an ownership that does not exist.
+	// See backend/diagnostics/journal.h.)
+
 	// Job manager — the schedule and the sessions behind scheduled /
 	// background work. Same nullptr-before-and-after contract as the
 	// accessors above. See backend/job/jobManager.h and docs/job-manager.md.

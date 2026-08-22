@@ -424,7 +424,7 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 		// report that would not open looked exactly like one that opened and failed later — and the
 		// failure that found this (a composer's variant nodes read as metatypes, 2026-08-20) was
 		// invisible until a probe was put here. A refusal is data, never a format string.
-		wxLogError(wxT("%s"), err.GetErrorDescription());
+		ibJournalError(wxT("metadata.report"),wxT("%s"), err.GetErrorDescription());
 		return false;
 	}
 }

@@ -75,7 +75,7 @@ void ibValueMetaObjectDocument::CallAsCommand(ibActionID id, const ibUniqueKey& 
 		// posting refused for lack of rights, and the user saw nothing but a line in the log.
 		catch (const ibBackendInterruptException&) {}   // the user stopped it — nothing to report
 		catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
-		catch (...) { wxLogError(wxT("ibValueMetaObjectDocument::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
+		catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectDocument::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}
 	ibValueMetaObjectRecordDataMutableRef::CallAsCommand(id, anchor, key, srcForm);   // Add/Copy/Edit/Delete/MarkAsDelete

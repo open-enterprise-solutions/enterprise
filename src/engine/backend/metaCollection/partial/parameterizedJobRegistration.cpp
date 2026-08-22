@@ -201,7 +201,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool 
 		// NoBase is not that failure and is not reported: this runs at bring-up, where a row
 		// declared before the connection is up has been asked nothing. Logging it would train
 		// whoever reads the log to ignore the line that matters.
-		wxLogDebug(wxT("job row '%s': the register refused the settings write"), presentation);
+		ibJournalInfo(wxT("job.register"),wxT("job row '%s': the register refused the settings write"), presentation);
 	}
 
 	// … and the row is declared ALIVE whatever its switch says, so the orphan sweep at start-up
@@ -273,7 +273,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool 
 	if (!manager->Register(std::move(desc))) {
 		// Register logs the reason itself. A row that could not be declared must not stop a
 		// configuration from opening — the failure belongs in the log, not in the user's face.
-		wxLogDebug(wxT("job row '%s' was not registered"), presentation);
+		ibJournalInfo(wxT("job.register"),wxT("job row '%s' was not registered"), presentation);
 		return true;
 	}
 
@@ -363,7 +363,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 	catch (const ibBackendException& err) {
 		// A table that cannot be read at start-up must not stop the configuration from opening —
 		// the rows are still there and re-register themselves as they are written.
-		wxLogDebug(wxT("scheduled job '%s': rows were not registered: %s"),
+		ibJournalInfo(wxT("job.register"),wxT("scheduled job '%s': rows were not registered: %s"),
 			GetJobName(), err.GetErrorDescription());
 	}
 

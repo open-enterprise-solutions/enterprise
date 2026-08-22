@@ -427,7 +427,7 @@ bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* roo
 		// has to say the same thing: `ApplyDataNode` refuses for reasons the user can act on, and
 		// answering `false` in silence makes a file that will not open indistinguishable from one
 		// that opened and failed later. A refusal is data, never a format string.
-		wxLogError(wxT("%s"), err.GetErrorDescription());
+		ibJournalError(wxT("metadata.dp"),wxT("%s"), err.GetErrorDescription());
 		return false;
 	}
 }

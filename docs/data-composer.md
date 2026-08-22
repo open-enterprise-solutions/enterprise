@@ -47,9 +47,13 @@ ibCompositionDriver — the passive output sink ("where the data goes"):
 ```
 
 - **One composer, many drivers** — the realization dictionary. A flat result
-  streams rows at level 0; a TOTALS result arrives as the folded tree's
-  pre-order walk (`ibSelector::Next()` covers every node — drivers never
-  recurse), subtotals in-place on group nodes.
+  streams rows at level 0; a TOTALS result arrives as a NESTED DESCENT over the
+  folded tree — a selection walks ONE level (`ibSelector::Next()`), and what
+  hangs under a node is reached by descending into it (`ibSelector::Select`).
+  The composer does the descending, so drivers still never recurse; subtotals
+  ride in-place on group nodes. (Until 2026-08-22 a single `Next()` loop
+  flattened the whole tree pre-order and the reader told the levels apart by
+  `Level()` — see *the walk is a nested descent* below.)
 - **`TotalBy` without a `Total` is valid** — pure grouping / hierarchy with no
   aggregate to roll (`TOTALS BY <dim>` alone). The parser and composer allow zero
   aggregates; the selector folds the dimension levels and emits group nodes only.
@@ -218,10 +222,15 @@ rows, so the query is not run. `Run()` (no argument) reads every output that has
 
 ### The node language of the driver
 
-`OnOutputBegin(kind, schema, name)` → `OnGroup(level, hasChildren, values)` /
-`OnDetail(level, values)` → `OnOutputEnd(totals)`. Stated ON TOP of the row verbs, so a driver that
-only understands rows keeps working; a group and a detail row are no longer the same sentence the
-printer has to tell apart by depth.
+`OnOutputBegin(info)` — one `ibCompositionOutputInfo`, carrying the output's kind, its OWN schema
+and its name — → `OnGroup(level, hasChildren, values)` / `OnDetail(level, values)` →
+`OnOutputEnd(totals)`. Stated ON TOP of the row verbs (each default-forwards to `OnColumns` /
+`OnRow` / `OnComplete`), so a driver that only understands rows keeps working; a group and a detail
+row are no longer the same sentence the printer has to tell apart by depth.
+
+A fourth verb is asked rather than told: `WantsGrandTotal()` — false on the base, true on
+`ibSpreadsheetComposeDriver`. It is what puts the tree's root in the walk (`ibSelector::WalkOverall`),
+and it is a READER's question, which is why it is on the driver and not in the settings.
 
 ### Detail records — a level of the ladder (2026-08-21)
 
@@ -241,24 +250,88 @@ whose fields stopped resolving loses them, and `CollapseEmptyLevels` drops it so
 cannot swallow every row. One emptiness, two opposite meanings; the node says which it is.
 
 **What it costs, and where that is paid.** A report that prints every row holds every row — that is
-what printing them means. So the read changes in exactly two ways when an output asks for details
-(`WantsDetails`): `ExecuteTotals(…, withDetails)` adds one more level with NO FIELDS to the door's
-config (`ibDataQueryBuilder::TotalsDetails`, its own verb so an accidental empty level can still be
-refused), and the server-side fold is declined — `GROUP BY ROLLUP` returns aggregated rows and would
-leave nothing to hang. `TryTotalsPushdown` refuses an empty level itself, so no other road can lose
-the rows quietly.
+what printing them means. The read carries them by adding one more level with NO FIELDS to the
+door's config (`ExecuteTotals(…, withDetails)` → `ibDataQueryBuilder::TotalsDetails`, its own verb so
+an accidental empty level can still be refused), and the server-side fold is declined in the same
+breath — `GROUP BY ROLLUP` returns aggregated rows and would leave nothing to hang.
+`CanRollupTotalsShape` refuses an empty level itself, so no other road can lose the rows quietly.
+WHO asks for that read is the part that changed on 2026-08-22 — see below.
 
 **What the fold does with it.** `FoldDimLevel` reads a fieldless level as "no group here" and hangs
 one node per source row under the last heading, marked `ibSelectorNodeKind::Detail`. The rows are
 already in the snapshot the headings were folded from, so it costs nodes, not a second read.
+Nothing is rolled on top of them: a detail node carries the row's own values, because what a row
+contributes to the total above it is the value it already holds.
 
 **How it reaches the printer.** The walk asks the NODE (`ibSelector::Kind()`) and calls
 `OnDetail(level, values)` instead of `OnGroup` — the printer is told in its own words rather than
 inferring it from the depth, which a depth cannot answer once the tree holds both.
 
-**Where the figures are printed** is the driver's business and follows one rule: a heading names the
-group, a TOTAL LINE closes it, and the grand total is the last line of the output's section. See
-report-engine.md § 6bb.
+**Where the figures are printed** is the driver's business and follows one rule, settled 2026-08-22:
+a heading carries its group's figures BESIDE ITS NAME, and only the GRAND total stands on a line of
+its own, at the bottom of the output's section. A `Total …` line under every group was tried and
+rejected — it repeats, word for word, the heading above it. See report-engine.md § 6bb.
+
+### ⭐⭐ The rows are not asked for — they are what the totals are MADE OF (2026-08-22)
+
+**`WantsDetails(output)` is now `HasGroupingFields(output)`.** An output that groups by anything at
+all READS its rows, always. A total is computed FROM them, so a tree that dropped them kept the
+answer and threw away what it was an answer to (Max: *"you built the totals, and the moment the
+groupings run out, the detail record follows, showing what is left under the headings above"*).
+
+What that replaced was worse than an option. An output with no `Details` level in its ladder could
+not reach its rows **at all** — not even on demand, because they were never read — so the same
+settings meant two different results depending on a level the author may simply never have added,
+and the figure on a heading had nothing under it to say where it came from.
+
+An output that groups by NOTHING is still not this: it has no headings to hang rows under, its read
+is the flat cursor, and every row it returns is a detail row already.
+
+**READING and PRINTING became two questions**, asked in two places on purpose:
+
+| question | who answers | what it reads |
+|---|---|---|
+| are the rows READ | `ibDataComposer::WantsDetails` (`dataComposer.h`) | the output groups by something ⇒ yes |
+| are they WRITTEN | `OutputWrites(output, kind)` (`dataComposer.cpp`, beside the walk) | the ladder names a `Details` level |
+
+The tree therefore holds every node kind, and the OUTPUT's ladder decides which kinds it writes: a
+report that never declared a detail level meets the rows in the walk and steps over them. Headings
+are what a fold is FOR, so an output always writes those. `OutputWrites` is asked BY KIND rather
+than by a yes/no flag, so the walk and the ladder speak one vocabulary — a node knows what it is
+(`ibSelectorNodeKind`), a level knows what it declares (`ibCompositionLevelKind`), and this is the
+one place the two are matched up. It lives beside the walk because it is a question about
+TRAVERSAL, not a property of the settings.
+
+⚠ **The price, stated plainly.** Details and the DBMS's own fold are exclusive, so the SINGLE-LEVEL
+SERVER-SIDE GROUP PAGE — the read that shows twenty groups of a million-row source without touching
+the rows (`outServerGroupedLevel` in `ExecuteTotals`, `m_serverGroupedLevel` on the composer) — no
+longer fires for a grouped list. The remedy is **not** to make the rows optional again: it is for a
+DRILL to ask for ONE LEVEL WITHOUT ROWS, which is a different question from what a RESULT contains,
+and it belongs to the reader that is paging rather than to the settings that describe the report.
+The phantom level below removes the exclusivity itself.
+
+### The walk is a NESTED DESCENT, not one flat loop (2026-08-22)
+
+A selection visits its OWN level, and a node's children are reached by descending into it —
+`ibSelector::Select(kind)` on the current node. `ibDataDBComposer::RunOutput` is therefore one loop
+per level, nested: walk the groups, and for each of them walk what is under it. Three groupings are
+three nested loops, which is what a grouping IS.
+
+It used to flatten the whole subtree pre-order into one cursor. The reader could tell a level from
+the one under it only by asking `Level()` on every visit, and a script written the way the language
+reads — loop the groups, loop their rows — saw the rows twice, once mixed into the outer loop.
+
+**`hiddenAbove` is gone with it.** A heading that fails its level's filter is simply not descended
+into, so nothing under it is written — which is exactly what that variable existed to say in a flat
+walk. The rule falls out of the shape instead of being carried in a flag. (What a level's filter
+does is unchanged: it HIDES, and every total above keeps the rows it was computed from — see *Where
+a filter sits decides what it does*.)
+
+**The GRAND TOTAL is a level too** — the one that groups by nothing, which is the tree's ROOT. Asked
+for by the READER (`ibCompositionDriver::WantsGrandTotal` → `ibSelector::WalkOverall`), it becomes
+the selection's ONLY visit, and the first dimension level is reached by descending into it like any
+other. It is one node with its aggregates filled and every dimension column NULL: a fold over
+everything has no group key to put there.
 
 ✅ **DECIDED (2026-08-22): there is no keyword, and there will not be one.** Not because naming is
 hard, but because the word would name one point of something continuous (Max):
@@ -273,12 +346,16 @@ dial (`ibSelectKind` on `ibSelector::Select(kind)`, `withDetails` on `ExecuteTot
 same question — *how much of the tree do you want to look at* — and it belongs to the READER,
 because one TOTALS feeds a list (headings, and children on expand) and a report (the lot, printed).
 
-🛑 **What must NOT follow from this, as the code stands today**: making details unconditional.
-Asking for them REFUSES the server-side fold (`ROLLUP` returns aggregates with no rows to hang under
-a heading — `TryTotalsPushdown`, and the gate above it), so a list that always asked would drag every
-row into memory to show ten headings — the one thing the acceptance criterion forbids (*memory grows
-by GROUPS, not by detail rows*). A list drills instead: expanding a node re-reads scoped to it
-(`RunComposerPage`'s drill scope). Paper has no expand button, so a report materialises.
+⚠ **This was written the same day as a refusal — "details must NOT become unconditional" — and the
+refusal did not hold.** The argument was the acceptance criterion (*memory grows by GROUPS, not by
+detail rows*): asking for details declines the server-side fold, so a grouped list that always asked
+would drag every row into memory to show ten headings. What it got wrong is WHOSE question that is.
+Making the read conditional on a settings node meant a total whose rows could not be reached at all,
+which is a wrong answer rather than a slow one — and the traversal question ("one level, no rows")
+is still available to the reader that actually needs it (a list's drill re-reads scoped to the
+expanded node, `RunComposerPage`'s drill scope). Kept here as the fork it was, so the same trade is
+not proposed again as new: the rows are read (above), and the phantom level below is what makes them
+free.
 
 ### ⏭ THE PHANTOM LEVEL — direction, decided 2026-08-22, NOT BUILT
 
@@ -295,6 +372,10 @@ grouping in the composer — that is me saying I want to see the detail records.
 them if you take empty groupings away? That is the whole point."*) The node is the DECLARATION; the
 phantom level is its LOWERING — the same road everything else in L5 travels, settings → text →
 engine. Nothing in the window changes.
+
+⚠ Since the rows became unconditional (above), what that node declares is that they are PRINTED —
+`OutputWrites` reads it — not that they are read. The word a person says is the same; the question
+it answers moved one step later.
 
 What "phantom" means, then, is that the level is not a grouping in the SQL sense — it groups by no
 FIELD a person named. It exists in the query all the same, because that is what carries it to the
@@ -314,9 +395,51 @@ server.
 > (invalid SQL over a grouped result). Each of them is a silently WRONG report if missed, not a slow
 > one.
 >
-> Verified live on Firebird: `Ref` → `(DeletionMark, Number)` → `Posted` over 62 documents; grand
-> total, nesting and order identical to the RAM road, the tuple level printed as one heading, and the
-> expanders present — the first time `MarkRollupFolders` had ever run.
+> 🛑 **THE FOLD REACHES THE ENGINE NOW — AND STILL CANNOT FIRE FROM A REPORT.** Step one lifted the
+> first of FOUR silent refusals, and a queue of silent refusals is indistinguishable from one: each
+> became visible only when the one above it was gone. Three are fixed, the fourth is the arc below.
+>
+> **(2) The policy decided the road.** `TryTotalsPushdown` answered false on the mere PRESENCE of an
+> access policy — and the door's default ctor pulls the session's, so in enterprise mode the fold
+> could not fire for ANY report, at any setting, on any engine. Fixed the way its neighbours already
+> did it: ask `CheckSelect` ONCE (it both authorises and NARROWS, writing the policy's conditions
+> into the query), then read plainly on the guarded copy. **A policy divides DATA; it never chooses
+> roads.**
+>
+> **(3) An empty FROM.** The fold built `ibScan(name)` unconditionally and never asked
+> `GetSourceRelation(alias)` — the answer a source that is NOT a plain table gives to "what am I read
+> from" (a register's Balance / Turnover, whose date cannot live in a view). Forced open, it rendered
+> `FROM  GROUP BY ROLLUP(…)`; Firebird answered `Token unknown - line 1, column 219: GROUP`. The
+> engine was right and the statement was ours.
+>
+> **(4) A NESTED QUERY IS A RAM TABLE — and that is the one that still stands.**
+> `ibSubqueryQueryable::IsComputedInRam()` is true, and a composition's source is ALWAYS query text
+> (`ibValueDataComposition` calls `FromText`), which becomes a nested source the moment it carries
+> settings. So **no report can push its fold to the server at all** — not because of its shape, its
+> engine or its flag, but by construction. It is the precondition for the compute-server stage rather
+> than an optimisation of it.
+>
+> 🔍 **Firebird has NEITHER `ROLLUP` NOR `GROUPING`** — measured live, twice, and the second run is
+> what settles it:
+>
+> | statement | answer |
+> |---|---|
+> | `SELECT … GROUPING(f) … GROUP BY ROLLUP(f)` | `-804 Function unknown: GROUPING` |
+> | `SELECT …            … GROUP BY ROLLUP(f)` | `-804 Function unknown: ROLLUP` |
+>
+> The first was briefly read as "then ROLLUP was accepted, because a bad keyword would be `-104` at
+> parse time". **That inference is wrong, and the trap is worth remembering:** an unknown word
+> followed by `(` parses as an ordinary FUNCTION CALL, so no syntax error occurs at all and the error
+> code cannot tell a missing keyword from a missing function — name resolution reports the FIRST
+> unknown it meets, and `GROUPING` stood earlier in the statement. FirebirdSQL PR #9029 adds ROLLUP /
+> CUBE / GROUPING SETS / GROUPING / GROUPING_ID together and is **open, not merged**, which is why
+> they are absent together.
+>
+> ⭐ Landed alongside: `ibSqlFeatures::m_grouping`, asked apart from `m_rollup` because the two do not
+> arrive together; and where GROUPING is absent the fold reads a row's LEVEL off its own keys being
+> SQL NULL. Exact here, not a heuristic: OES attributes hold typed empties and never SQL NULL, so a
+> NULL in a result can only have come from the fold. Read as an `ibValue` (the driver yields
+> `TYPE_NULL`) — the codec would have turned it into a typed empty and lost the distinction.
 >
 > ⏭ Still refused, and next in line: **a dot-walked dimension** (`Producer.Region`), which is half of
 > the reports people actually write. The reference JOIN chain already exists in

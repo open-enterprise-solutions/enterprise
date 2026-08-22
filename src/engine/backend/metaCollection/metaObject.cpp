@@ -105,7 +105,7 @@ bool ibValueMetaObject::OnCreateMetaObject(ibMetaData* metaData, int flags)
 	// analytics slots and a dimension are indistinguishable by class alone, and it is precisely a
 	// slot and a dimension that were seen holding the same id.
 #ifdef DEBUG  
-	wxLogDebug(wxT("* Create metaData object %s with id %i"),
+	ibJournalInfo(wxT("metadata"),wxT("* Create metaData object %s with id %i"),
 		GetClassName(), GetMetaID()
 	);
 #endif
@@ -404,7 +404,7 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 						else {
 							// Don't drop silently: a child the target owner cannot host is a real
 							// mismatch worth a log, not a quietly-incomplete paste.
-							wxLogWarning(wxT("PasteObject: child clsid %u not accepted by target owner - skipped"), (unsigned int)clsid);
+							ibJournalWarning(wxT("metadata"),wxT("PasteObject: child clsid %u not accepted by target owner - skipped"), (unsigned int)clsid);
 						}
 					}
 					prevReaderMemory = readerMemory;
@@ -488,7 +488,7 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 						else {
 							// Don't drop silently: a child the target owner cannot host is a real
 							// mismatch worth a log, not a quietly-incomplete paste.
-							wxLogWarning(wxT("PasteObject: child clsid %u not accepted by target owner - skipped"), (unsigned int)clsid);
+							ibJournalWarning(wxT("metadata"),wxT("PasteObject: child clsid %u not accepted by target owner - skipped"), (unsigned int)clsid);
 						}
 					}
 					prevReaderMemory = readerMemory;

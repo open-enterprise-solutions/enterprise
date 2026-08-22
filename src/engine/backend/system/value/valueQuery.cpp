@@ -5,6 +5,7 @@
 #include "valueQuery.h"
 
 #include "backend/query/queryParser.h"
+#include "backend/diagnostics/crashGuard.h"  // ibJournal — the technology journal
 #include "valueArray.h"                  // ibValueArray — a package answers with results BY POSITION
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER / SYSTEM_TYPE_REGISTER / ENUM_TYPE_REGISTER
 #include "backend/backend_exception.h"   // ibBackendCoreException — a wrong TempTablesManager is told, not ignored
@@ -301,10 +302,15 @@ bool ibValueQueryResult::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 	const ibSelectKind kind = (lSizeArray >= 1 && paParams[0] != nullptr)
 		? paParams[0]->ConvertToEnumValue<ibSelectKind>()
 		: ibSelectKind::ibSelectKind_Direct;
-	if (kind == ibSelectKind::ibSelectKind_Direct && !m_hasTotals)
+	if (kind == ibSelectKind::ibSelectKind_Direct && !m_hasTotals) {
 		pvarRetValue = new ibValueQuerySelect(std::move(m_result), m_schema);
-	else
-		pvarRetValue = new ibValueQuerySelect(m_result->Select(kind), m_schema);
+	}
+	else {
+		ibSelector top = m_result->Select(kind);
+		ibJournalInfo(wxT("query.walk"), wxT("select(%d): %ld node(s) at the first level"),
+			static_cast<int>(kind), top.NodeCount());
+		pvarRetValue = new ibValueQuerySelect(std::move(top), m_schema);
+	}
 	return true;
 }
 
@@ -390,7 +396,13 @@ bool ibValueQuerySelect::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 		const ibSelectKind kind = (lSizeArray >= 1 && paParams[0] != nullptr)
 			? paParams[0]->ConvertToEnumValue<ibSelectKind>()
 			: ibSelectKind::ibSelectKind_Direct;   // default — a direct (flat) walk of the node's children
-		pvarRetValue = new ibValueQuerySelect(m_tree->Select(kind), m_schema);
+		// ⭐ THE SHAPE OF THE WALK, in the journal: which level was descended from and how many rows
+		// came back. "It shows one value" and "it shows the last of sixty-three" look identical in a
+		// watch window, and this is the line that tells them apart without anyone guessing.
+		ibSelector sub = m_tree->Select(kind);
+		ibJournalInfo(wxT("query.walk"), wxT("descend from level %d: %ld node(s)"),
+			m_tree->Level(), sub.NodeCount());
+		pvarRetValue = new ibValueQuerySelect(std::move(sub), m_schema);
 		return true;
 	}
 

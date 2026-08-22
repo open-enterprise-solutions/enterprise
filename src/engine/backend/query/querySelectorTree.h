@@ -69,6 +69,22 @@ public:
 		return copy;
 	}
 
+	// ⭐ A SUBTREE AS A TREE OF ITS OWN — the given node becomes the ROOT, so its children are the
+	// level a walk over it visits. This is what a node's sub-selection is: the children are already
+	// folded and in hand, and re-running a query to fetch what the tree already holds would be a
+	// second answer to a question already answered (and, for a fold with no live source behind it —
+	// a scripted TOTALS — no answer at all, which is how a descent came back empty).
+	//
+	// The node keeps its own level, so Level() stays ABSOLUTE across a descent: a walk two levels
+	// down still reports 2, not 0.
+	ibSelectorTree SubtreeOf(const Node& node) const
+	{
+		ibSelectorTree copy;
+		copy.m_columns = m_columns;
+		CopyNode(node, copy.m_root);
+		return copy;
+	}
+
 	// The columns the nodes carry (names/types for rendering) — the source snapshot's columns plus
 	// the aggregate columns the fold adds.
 	void AddColumn(ibMetaID id, const wxString& name, const ibTypeDescription& type) { m_columns.push_back({ id, name, type }); }

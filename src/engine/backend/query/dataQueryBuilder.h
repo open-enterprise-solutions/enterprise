@@ -93,7 +93,21 @@ struct ibAggregateItem { ibAggregateFn m_fn; const ibBackendQueryColumn* m_col; 
                          ibQueryColumnExprPtr m_expr;
                          bool m_distinct = false; };
 // ONE FIELD of a TotalBy level — the column to roll up by + how it unfolds.
-struct ibTotalField    { const ibBackendQueryColumn* m_col; ibDimensionKind m_dim; };
+// ⭐ A LEVEL'S FIELD CARRIES ITS OWN PATH. A dot-walked dimension (`Producer.Region`) groups by a
+// SYNTHETIC column — one this door made up so the fold has a stable id to key the tree on — while
+// the SQL has to name the JOINED LEAF, which is the last segment of the path. Both are needed and
+// they are different things, so the field holds both rather than sending a reader to look the path
+// up by name in `m_dimWalks` (that list is keyed by the projection alias, which is a presentation).
+//
+// Empty path = a plain column: `m_col` is the field, and it is its own leaf.
+struct ibTotalField {
+	const ibBackendQueryColumn*              m_col;
+	ibDimensionKind                          m_dim;
+	std::vector<const ibBackendQueryColumn*> m_path;   // ref segments + leaf; empty = plain
+
+	// WHAT THE SQL NAMES. The leaf for a dot-walk, the column itself otherwise.
+	const ibBackendQueryColumn* SqlCol() const { return m_path.empty() ? m_col : m_path.back(); }
+};
 
 // One TotalBy dimension level. Levels apply IN ORDER; a level holds ONE OR MORE fields and its
 // group key is the TUPLE of their values — "by partner AND contract" is one level, not two nested

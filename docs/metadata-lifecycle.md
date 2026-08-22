@@ -393,6 +393,35 @@ catch, which is the whole argument for the line being there permanently.
 
 ---
 
+## 9a. ⭐ REGISTRATION AND STORAGE ARE DIFFERENT QUESTIONS (2026-08-22)
+
+A predefined attribute answers TWO independent questions, and conflating them cost a live defect:
+
+- **is it STORED?** — decided by the predefined LIST (`FillArrayObjectByPredefinedAttribute`), which
+  is what the physical schema is built from (`GetGenericAttributeArrayObject`);
+- **does it have an IDENTITY?** — decided by REGISTRATION, i.e. by riding the metaobject's event
+  chain: `WriteData` / `ReadData` and `OnCreate` / `OnLoad` / `OnSave` / `OnDelete` /
+  `OnBeforeRun` / `OnAfterRun` / `OnBeforeClose` / `OnAfterClose`. `OnCreateMetaObject` is where
+  `m_metaId = metaData->GenerateNewID()` happens; the rest is what keeps that id alive, saved and
+  registered at runtime.
+
+**PointInTime** — the technical, virtual attribute that assembles a moment out of a document's date
+and its reference — answered the first correctly (it is deliberately NOT in the predefined list:
+what it is built from is already stored, and storing the pair again would be two answers to one
+question) and the second **not at all**: it was in none of the ten events. So it carried metaID 0,
+and two things followed, both live and both silent:
+
+- its physical name came out as `fld0`, so any read that walked it went looking for `fld0_TYPE` and
+  the driver raised *"field not found in the resultset"* — once **per row**, swallowed by the codec's
+  guard (`columnLayout.cpp`, "I have no such value is an answer") and invisible outside a query log.
+  62 of them on a 62-row report;
+- `IsPointInTime(id)` compares against that 0, so it answered TRUE for **any** unassigned id.
+
+It is registered now, in all ten. Registering added no column — the schema is built from the list it
+stays out of — which is exactly the point: **identity is not storage.** A configuration written
+before this carries no id for it and is not repaired on load (a lazy assignment during a load is a
+migration wearing a small disguise); a base made afterwards has it from the start.
+
 ## 10. Honest remainder
 
 - **`OnSaveMetaObject` side effects break full atomicity (low severity).** The debugger

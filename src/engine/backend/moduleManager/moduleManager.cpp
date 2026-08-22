@@ -125,7 +125,7 @@ bool ibValueModuleRuntimeManager::RuntimeRegisterCommonModule(ibValueMetaObjectC
 				Compile();
 			}
 			catch (const ibBackendException& err) {
-				wxLogWarning(_("Common module '%s' failed to compile: %s"),
+				ibJournalWarning(wxT("module"),_("Common module '%s' failed to compile: %s"),
 					commonModule->GetName(), err.GetErrorDescription());
 			};
 		}
@@ -161,7 +161,7 @@ bool ibValueModuleRuntimeManager::RuntimeRenameCommonModule(ibValueMetaObjectCom
 			Compile();
 		}
 		catch (const ibBackendException& err) {
-			wxLogWarning(_("Rename of common module '%s' to '%s' left compile in failed state: %s"),
+			ibJournalWarning(wxT("module"),_("Rename of common module '%s' to '%s' left compile in failed state: %s"),
 				commonModule->GetName(), newName, err.GetErrorDescription());
 		};
 	}
@@ -248,7 +248,7 @@ bool ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 			Run(false);              // register functions; do NOT run the top-level yet
 		}
 		catch (const ibBackendException& err) {
-			wxLogWarning(_("AttachRuntime main prepare: %s"), err.GetErrorDescription());
+			ibJournalWarning(wxT("module"),_("AttachRuntime main prepare: %s"), err.GetErrorDescription());
 			return false;
 		}
 	}
@@ -275,7 +275,7 @@ bool ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 			moduleValue->Run(false);
 		}
 		catch (const ibBackendException& err) {
-			wxLogWarning(_("AttachRuntime common: %s"), err.GetErrorDescription());
+			ibJournalWarning(wxT("module"),_("AttachRuntime common: %s"), err.GetErrorDescription());
 			return false;
 		}
 	}
@@ -301,7 +301,7 @@ bool ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 			Run(true);               // execute main module top-level
 		}
 		catch (const ibBackendException& err) {
-			wxLogWarning(_("AttachRuntime main run: %s"), err.GetErrorDescription());
+			ibJournalWarning(wxT("module"),_("AttachRuntime main run: %s"), err.GetErrorDescription());
 			return false;
 		}
 	}
@@ -379,7 +379,7 @@ bool ibValueModuleManagerRuntimeConfiguration::CreateMainModule()
 			Compile();
 		}
 		catch (const ibBackendException& err) {
-			wxLogWarning(_("Global module init failed: %s"), err.GetErrorDescription());
+			ibJournalWarning(wxT("module"),_("Global module init failed: %s"), err.GetErrorDescription());
 			return false;
 		};
 	}

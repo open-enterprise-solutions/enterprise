@@ -542,6 +542,25 @@ ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputC
 	return ibQueryLowering::Execute(*m_ast, m_params, schema, page);
 }
 
+// ⭐ WHICH NODE KINDS AN OUTPUT WRITES. Asked BY KIND rather than by a yes/no flag, so the walk and
+// the ladder speak one vocabulary: a node knows what it is (ibSelectorNodeKind), a level knows what
+// it declares (ibCompositionLevelKind), and this is the one place the two are matched up.
+//
+// Headings are what a fold is FOR, so an output always writes them. Rows are written by an output
+// whose ladder names them — the level a person adds when the report should print what it counted.
+// It lives here, beside the walk, because it is a question about traversal and not a property of
+// the output; `WantsDetails` in the header answers the other question, whether they are READ, and
+// that one is now always yes.
+static bool OutputWrites(const ibDataComposer::Output& output, ibSelectorNodeKind kind)
+{
+	if (kind != ibSelectorNodeKind::Detail)
+		return true;
+	for (const ibDataComposer::GroupNode& level : output.m_rowGroups)
+		if (level.m_kind == ibCompositionLevelKind::Details)
+			return true;
+	return false;
+}
+
 bool ibDataDBComposer::LevelShows(const Output& output, int depth,
 	const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row) const
 {
@@ -589,6 +608,16 @@ bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driv
 	std::vector<ibQueryLowering::OutputColumn> schema;
 	bool hasTotals = false;
 	ibDataQueryResult result = ExecuteFor(output, schema, hasTotals, page);
+
+	// WHICH SHAPE THIS OUTPUT IS ABOUT TO BE READ IN. Three facts decide everything below — whether a
+	// page was asked for, whether the query folds, and whether the DBMS already did the folding — and
+	// a report that comes out wrong is almost always wrong about one of them.
+	ibJournalInfo(wxT("composer"), wxT("output '%s': %s, totals %s, server-grouped %s, %u columns"),
+		output.m_name,
+		paged ? wxT("paged") : wxT("whole"),
+		hasTotals ? wxT("yes") : wxT("no"),
+		m_serverGroupedLevel ? wxT("yes") : wxT("no"),
+		static_cast<unsigned>(schema.size()));
 
 	// WHAT IS COMING, said before the first row: the output's kind, its own schema and its name.
 	// Two outputs of one composition show different fields, so the schema belongs to the output and
@@ -656,7 +685,6 @@ bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driv
 		// keeps the rows it was computed from. `hiddenAbove` carries that down — what hangs under a
 		// hidden heading is hidden with it, since printing a child of an unprinted parent would put
 		// it under the wrong heading.
-		int hiddenAbove = -1;
 		ibSelector sel = result.Select(ibSelectKind::ibSelectKind_ByGroups);
 		// ⭐ THE GRAND TOTAL IS PART OF THE WALK WHEN THE READER WANTS ONE. It is the tree's root and
 		// the fold already rolled every row into it; asking for it here is what puts it in front of
@@ -664,30 +692,50 @@ bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driv
 		// first — see ibSpreadsheetComposeDriver).
 		if (driver.WantsGrandTotal())
 			sel.WalkOverall();
-		while (sel.Next()) {
-			for (size_t i = 0; i < schema.size(); ++i) {
-				const ibQueryLowering::OutputColumn& oc = schema[i];
-				row[i] = oc.m_byAlias ? sel.GetColumn(oc.m_alias) : sel.GetValue(oc.m_col);
-			}
 
-			if (hiddenAbove >= 0 && sel.Level() > hiddenAbove)
-				continue;                       // inside a hidden heading
-			hiddenAbove = -1;                   // back out at or above it — the hiding is over
+		// ⭐⭐ ONE LOOP PER LEVEL, NESTED — the shape the language itself reads: walk the groups, and
+		// for each of them walk what is under it. A selection now visits its OWN level only, so the
+		// walk descends instead of relying on a single pre-order cursor and a depth counter.
+		//
+		// The hidden-heading rule falls out of the shape rather than being carried in a variable: a
+		// heading its level's filter rejects is simply not descended into, so nothing under it is
+		// written. `hiddenAbove` existed to say that in a flat walk, and there is nothing left for it
+		// to say here.
+		std::function<void(ibSelector&)> walk = [&](ibSelector& level) {
+			while (level.Next()) {
+				for (size_t i = 0; i < schema.size(); ++i) {
+					const ibQueryLowering::OutputColumn& oc = schema[i];
+					row[i] = oc.m_byAlias ? level.GetColumn(oc.m_alias) : level.GetValue(oc.m_col);
+				}
 
-			if (!LevelShows(output, sel.Level(), schema, row)) {
-				hiddenAbove = sel.Level();
-				continue;
-			}
+				if (!LevelShows(output, level.Level(), schema, row))
+					continue;                   // hidden heading — and with it everything beneath
 			// ⭐ A HEADING OR A ROW — the NODE says which, and the driver is told in its own words.
-			// The fold produces headings for every level of the BY list and, when the output asked
-			// for them, one node per source row under the deepest one. A printer lays the two out
-			// differently, so it must not have to infer the difference from the depth — a depth
-			// cannot answer it once the tree holds both.
-			if (sel.Kind() == ibSelectorNodeKind::Detail)
-				driver.OnDetail(sel.Level(), row);
-			else
-				driver.OnGroup(sel.Level(), sel.HasChildren(), row);
-		}
+			// The fold produces headings for every level of the BY list and one node per source row
+			// under the deepest one. A printer lays the two out differently, so it must not have to
+			// infer the difference from the depth — a depth cannot answer it once the tree holds both.
+			//
+			// ⭐⭐ AND WHAT IS WRITTEN IS CHOSEN BY THE NODE'S KIND, not by whether the rows were read.
+			// The rows are ALWAYS there now — they are what the totals were made of — so an output
+			// that never declared a Details level meets them here and simply steps over them. Reading
+			// and printing are two questions: the tree holds everything, the ladder says which kinds
+			// this output writes.
+				if (level.Kind() == ibSelectorNodeKind::Detail) {
+					if (!OutputWrites(output, ibSelectorNodeKind::Detail))
+						continue;
+					driver.OnDetail(level.Level(), row);
+					continue;                   // a row has nothing under it
+				}
+
+				// A heading, and then whatever it stands over — including the GRAND TOTAL, which is
+				// a level like any other: the one that groups by nothing. Descending into it is how
+				// the first dimension level is reached when a report asked for it.
+				driver.OnGroup(level.Level(), level.HasChildren(), row);
+				ibSelector under = level.Select(ibSelectKind::ibSelectKind_ByGroups);
+				walk(under);
+			}
+		};
+		walk(sel);
 	}
 
 

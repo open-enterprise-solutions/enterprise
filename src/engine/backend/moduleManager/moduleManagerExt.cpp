@@ -147,7 +147,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 			// person recognises anyway.
 			const ibValueMetaObjectRecordData* metaObject =
 				m_objectValue != nullptr ? m_objectValue->GetMetaObject() : nullptr;
-			wxLogWarning(_("External module '%s' init failed: %s"),
+			ibJournalWarning(wxT("module"),_("External module '%s' init failed: %s"),
 				metaObject != nullptr ? metaObject->GetName() : wxString(wxEmptyString),
 				err.GetErrorDescription());
 			return false;
@@ -385,7 +385,7 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 			// with a complaint about itself.
 			const ibValueMetaObjectRecordData* metaObject =
 				m_objectValue != nullptr ? m_objectValue->GetMetaObject() : nullptr;
-			wxLogWarning(_("External module '%s' re-init failed: %s"),
+			ibJournalWarning(wxT("module"),_("External module '%s' re-init failed: %s"),
 				metaObject != nullptr ? metaObject->GetName() : wxString(wxEmptyString),
 				err.GetErrorDescription());
 			return false;

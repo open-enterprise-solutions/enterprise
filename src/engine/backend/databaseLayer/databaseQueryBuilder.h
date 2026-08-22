@@ -1001,6 +1001,7 @@ private:
 // GROUP BY ROLLUP — can the subtotal levels be folded by the SERVER, or must the result tier build
 // them? (FB5, PG yes; SQLite no.)
 BACKEND_API bool ibCanPushRollup(const ibDatabaseLayer* layer);
+BACKEND_API bool ibCanUseGrouping(const ibDatabaseLayer* layer);   // GROUPING(expr) — see ibSqlFeatures
 
 // OVER (…) — can this driver rank and run totals ITSELF? A reading that folds periods, or picks the
 // row nearest a moment, is one pass with windows and a stack of self-joins without. (FB3+, PG,

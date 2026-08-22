@@ -90,7 +90,7 @@ void ibValueMetaObjectParameterizedJob::CallAsCommand(ibActionID id, const ibUni
 		// refused for lack of rights, with nothing but a line in the log to say so.
 		catch (const ibBackendInterruptException&) {}
 		catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
-		catch (...) { wxLogError(wxT("ibValueMetaObjectParameterizedJob::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
+		catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectParameterizedJob::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}
 

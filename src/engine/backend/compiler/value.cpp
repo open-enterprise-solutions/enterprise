@@ -42,7 +42,7 @@ static inline void DebugValueEmit(const char* tag, unsigned int count) {
 	std::ostringstream os;
 	os << tag << ' ' << count
 	   << " tid=" << std::this_thread::get_id();
-	wxLogDebug(wxT("%s"), wxString::FromUTF8(os.str().c_str()));
+	ibJournalInfo(wxT("value"),wxT("%s"), wxString::FromUTF8(os.str().c_str()));
 }
 
 // OFF unless OES_TRACE_VALUES says otherwise — see utils/debugTrace.h. The counter itself keeps

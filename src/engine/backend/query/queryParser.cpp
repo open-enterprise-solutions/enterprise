@@ -281,8 +281,17 @@ ibQuerySelectPtr ibQueryParser::ParseSelectStatement()
 	}
 
 	if (AcceptKw(ibQueryKeyword::Order)) {
+		const ibQueryToken& at = Cur();
 		ExpectKw(ibQueryKeyword::By, wxT("BY"));
 		ParseOrderBy(*sel);
+
+		// ⭐ AND A TEMPORARY TABLE HAS NO ORDER EITHER — the twin of the TOTALS refusal below, and the
+		// same reason underneath it (Max): what is materialised under a name is ROWS, and the
+		// statements that read it afterwards select from a table. A table has no order to remember, so
+		// an ORDER BY written here sorts something on its way into storage and is forgotten in the
+		// same breath. Refusing beats sorting for nothing and letting the author believe otherwise.
+		if (!sel->m_intoTemp.IsEmpty())
+			ThrowQueryException(at, _("ORDER BY cannot be written with INTO: a temporary table keeps rows, not an order"));
 	}
 
 	if (AcceptKw(ibQueryKeyword::Totals)) {
@@ -435,6 +444,15 @@ ibQuerySource ibQueryParser::ParseSource()
 			ThrowQueryException(at, _("INTO belongs to a statement of a query package, not to a nested table"));
 		if (s.m_subquery->m_forUpdate)
 			ThrowQueryException(at, _("FOR UPDATE belongs to a statement, not to a nested table"));
+		// ⭐ AND NEITHER TOTALS NOR ORDER BY BELONG TO A NESTED TABLE (Max). Totals are how a RESULT
+		// is presented — a nested table is not a result, it is a source. An order inside a derived
+		// table is promised by nothing in SQL and read by nobody; worse, writing one used to keep the
+		// whole query in memory, because the subquery then could not collapse into its parent
+		// (queryRewrite, rule 2) and its source stayed a RAM-computed wrapper.
+		if (s.m_subquery->m_hasTotals)
+			ThrowQueryException(at, _("TOTALS belongs to a statement's result, not to a nested table"));
+		if (!s.m_subquery->m_orderBy.empty())
+			ThrowQueryException(at, _("ORDER BY belongs to a statement, not to a nested table"));
 	}
 	// A TABLE HANDED IN: `FROM &Goods`. The `&` is the same mark a value parameter carries, and it
 	// says the same thing — this came from outside the query. Said at the point of use, so a reader
@@ -1002,14 +1020,14 @@ ibQueryAstExprPtr ibQueryParser::ParseRanking()
 
 	ExpectPunct(wxT('('), wxT("'(' after a ranking function"));
 	if (!Cur().IsPunct(wxT(')')))
-		ThrowQueryException(tk, _("a ranking function takes no argument — write it as NAME() OVER (…)"));
+		ThrowQueryException(tk, _("a ranking function takes no argument: write it as NAME() OVER (...)"));
 	ExpectPunct(wxT(')'), wxT("')'"));
 
 	auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Func);
 	e->m_func = fn; e->m_line = tk.m_line; e->m_col = tk.m_col;
 
 	if (!Cur().IsKeyword(ibQueryKeyword::Over))
-		ThrowQueryException(tk, _("a ranking function needs OVER (…): it numbers rows within a partition"));
+		ThrowQueryException(tk, _("a ranking function needs OVER (...): it numbers rows within a partition"));
 	ParseWindowSuffix(*e);
 
 	if (e->m_over && e->m_over->m_frame != ibQueryAstFrame::Unstated)

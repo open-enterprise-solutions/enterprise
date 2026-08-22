@@ -413,7 +413,11 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	// lines its branches up BY, so the place that shows the line-up is the place the name is typed;
 	// the tab is called both things because it genuinely is both.
 	m_pages.push_back({ BuildUnionsPage(m_notebook),     _("Unions / Aliases"),  true,  false, false, false, ibQueryExclude_Unions });
-	m_pages.push_back({ BuildOrderPage(m_notebook),      _("Order"),             true,  false, false, false, ibQueryExclude_Order });
+	// ⭐ ORDER IS REFUSED FOR A TEMP TABLE TOO, exactly as Totals is below it (Max): what is
+	// materialised under a name is ROWS, and a table keeps no order — sorting on the way into storage
+	// is work thrown away in the same breath. The parser refuses it, so the tab goes rather than
+	// being left to write text the engine will reject.
+	m_pages.push_back({ BuildOrderPage(m_notebook),      _("Order"),             true,  false, false, true,  ibQueryExclude_Order });
 	// Totals is refused for a statement that makes a temp table — the parser says so, so the tab
 	// goes rather than being left to write text the engine rejects. A HOST may exclude it as well.
 	m_pages.push_back({ BuildTotalsPage(m_notebook),     _("Totals"),            true,  false, false, true,  ibQueryExclude_Totals });

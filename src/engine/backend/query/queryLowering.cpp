@@ -8,6 +8,7 @@
 #include "queryException.h"                // ibBackendQuerySourceException — L3 refuses in its own variety
 #include "queryRewrite.h"                 // ibQueryRewrite — optimizer pass (AST -> AST)
 #include "queryRender.h"                  // ibQueryOutputName — the ONE answer to "what is this field called"
+#include "backend/diagnostics/journal.h"  // ibJournal — the technology journal
 #include "queryRamTable.h"                // ibQueryRamTable — a package's temp table IS a snapshot
 #include "queryTempStore.h"               // ibQueryTempTableStore — WHO keeps the temp tables alive
 #include "tempTableQueryable.h"           // ibTempTableQueryable — a table handed in as a PARAMETER is a source
@@ -131,6 +132,16 @@ using OutputColumn = ibQueryLowering::OutputColumn;
 void ThrowQueryException(unsigned int line, unsigned int col, const wxString& msg)
 {
 	ibBackendQuerySourceException::ErrorAt(line, col, _("Query: %s (line %u, position %u)"), msg, line, col);
+}
+
+// …and the same with the message's OWN arguments, because most refusals have to name the thing they
+// are refusing. Formatting belongs here, once, and not at every callsite: the span, the wording and
+// the assembly are one decision, and spreading `wxString::Format` through the file is the same
+// decision made again in twenty places.
+template <typename... Args>
+void ThrowQueryException(unsigned int line, unsigned int col, const wxString& fmt, Args&&... args)
+{
+	ThrowQueryException(line, col, wxString::Format(fmt, std::forward<Args>(args)...));
 }
 
 ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
@@ -782,7 +793,7 @@ void RefuseUnloweredWindow(const ibQueryAstExpr& e)
 		return;
 
 	ThrowQueryException(e.m_line, e.m_col,
-		_("window functions are not executed yet: the language reads OVER (…), the query engine does not run it"));
+		_("window functions are not executed yet: the language reads OVER (...), the query engine does not run it"));
 }
 
 ibAggregateFn AggFn(ibQueryKeyword kw)
@@ -2535,6 +2546,69 @@ void CheckJoinsAreConsistent(const ibQuerySelect& ast, const std::vector<ibSourc
 	}
 }
 
+// ⭐⭐ AN AGGREGATE NAMES A FIELD OF THE SELECTION — the rule, in ONE place, because TWO doors ask it.
+// `TOTALS COUNT(Number)` over `SELECT Posted` would put a column called `Number` into a result whose
+// author never asked for one (Max, 2026-08-22, seeing it appear: "wrong, I have no Number in the
+// selection"). A LEVEL may group by anything: it adds depth and no column. An aggregate WRITES a
+// column, and a column of the result has to have been declared by the SELECT that declares it.
+//
+// Living here rather than inside the lowering is the whole point: the constructor's verdict line
+// resolves names through CheckNames and the run goes through ExecuteTotals, and a rule written into
+// only one of them is a rule the other says nothing about — which is exactly what happened, the
+// dialog cheerfully reporting "the query engine reads this query" about a query it does not.
+//
+// A selected field has TWO spellings and both are it: the alias (`Parent`) and the way the SELECT
+// wrote it (`Catalog1.Parent`), which is what the old constructor put in these lines. So the test is
+// "does some projection claim this path", by output name or by prefix. A dot-walk CONTINUES from a
+// claimed field: `Parent.Description` is claimed by `SELECT Parent`, the walk starting inside the
+// result. COUNT(*) names nothing and is always in.
+void CheckTotalsNameSelectedFields(const ibQuerySelect& ast)
+{
+	if (ast.m_totalsAggregates.empty() || ast.m_selectAll)
+		return;
+
+	std::map<wxString, const ibQueryProjection*> byOutputName;
+	{
+		int idx = 0;
+		for (const ibQueryProjection& p : ast.m_projections) {
+			if (p.m_star || !p.m_expr) continue;
+			byOutputName[OutputNameFor(ast, p, idx++)] = &p;
+		}
+	}
+
+	auto claimed = [&ast, &byOutputName](const ibQueryAstExprPtr& expr) -> bool {
+		if (!expr)
+			return false;
+		if (expr->m_kind != ibQueryAstExprKind::Column)
+			return true;                                    // an expression stands for itself, not a field
+		if (expr->m_path.empty())
+			return false;
+		if (byOutputName.find(expr->m_path.front()) != byOutputName.end())
+			return true;                                    // by the name the result calls it
+		for (const ibQueryProjection& p : ast.m_projections) {
+			if (p.m_star)
+				return true;
+			if (!p.m_expr || p.m_expr->m_kind != ibQueryAstExprKind::Column || p.m_expr->m_path.empty())
+				continue;
+			if (p.m_expr->m_path.size() > expr->m_path.size())
+				continue;
+			if (std::equal(p.m_expr->m_path.begin(), p.m_expr->m_path.end(), expr->m_path.begin(),
+			               [](const wxString& a, const wxString& b) { return a.IsSameAs(b, false); }))
+				return true;                                // spelled the way the SELECT spelled it
+		}
+		return false;
+	};
+
+	for (const ibQueryAstExprPtr& agg : ast.m_totalsAggregates) {
+		if (!agg || agg->m_kind != ibQueryAstExprKind::Func || agg->m_star || !agg->m_arg)
+			continue;
+		if (!claimed(agg->m_arg))
+			ThrowQueryException(agg->m_arg->m_line, agg->m_arg->m_col,
+				_("TOTALS aggregates \"%s\", which the selection does not carry: add it to SELECT and total over it there"),
+				ibRenderQueryExpr(*agg->m_arg));
+	}
+}
+
 void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString, ibValue>& params)
 {
 	// ⭐ JUDGE WHAT WILL RUN, NOT WHAT WAS TYPED. The execution reorders a run of INNER joins so a
@@ -2612,6 +2686,9 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 		CollectColumns(key, strict);
 	for (const ibQueryAstExprPtr& aggregate : ast.m_totalsAggregates)
 		CollectColumns(aggregate, strict);
+	// …and the aggregates answer one question the resolver cannot: whether the RESULT has a column
+	// for the figure. Asked here so the dialog's verdict and the run agree.
+	CheckTotalsNameSelectedFields(ast);
 	for (const ibQueryTotalDim& dim : ast.m_totalsBy)
 		for (const ibQueryTotalField& field : dim.m_fields)
 			CollectColumns(field.m_expr, strict);
@@ -3089,6 +3166,17 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 {
 	std::vector<PackageResult> results;
 
+	// ⭐⭐ EVERY QUERY THE PLATFORM RUNS PASSES HERE, and this is where the technology journal sees
+	// it. Not at the script's `Query.Execute()` — that door only knows the ones a person typed. A
+	// report builds its query, a dynamic list rebuilds one per page, a LINQ block records one from
+	// a lambda, a register reads its totals: none of those was ever a string, and all of them arrive
+	// at this function.
+	//
+	// So the AST is RENDERED BACK to text rather than the source being echoed. What is journalled is
+	// then what the engine is about to run — after rewriting, after the settings were folded in —
+	// which is the query a person actually needs to see when the answer looks wrong.
+	ibJournalInfo(wxT("query"), wxT("run:\n%s"), ibRenderQueryPackage(package));
+
 	// WHO KEEPS THE TABLES ALIVE. Without a store the package owns one for its own run: a single
 	// query's temp scope is RAII-bound to ONE execution, so statement 3 would never see what
 	// statement 2 left. With a store handed in (a script's TempTablesManager), the tables outlive
@@ -3157,8 +3245,23 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 		// asks by name; an INTO statement never has one (the parser refuses the pair).
 		r.m_name = ast.m_ontoName;
 		std::vector<OutputColumn> schema;
+		// ⭐⭐ WITH THE ROWS UNDER THE HEADINGS — always, on this road. A TOTALS result is levels ABOVE
+		// data, and the data is the bottom of it: three `BY` levels over a catalogue give four rows
+		// per item, the last one being the item itself (Max, 2026-08-22, on a measured result: 284
+		// items x 4 = 1136 rows). Without this the deepest heading had nothing under it and a walk
+		// that descended to the bottom found an empty selection.
+		//
+		// The COMPOSER asks per output (it knows whether that output prints rows); a hand-written
+		// query has nobody to ask, and its author, having named the levels, means the rows they stand
+		// over. Defaulting the other way made the same query text mean two different trees depending
+		// on which door it came through.
+		//
+		// ⚠ THE PRICE, PAID KNOWINGLY: details and the server-side fold are exclusive — `GROUP BY
+		// ROLLUP` returns aggregated rows and no detail to hang — so a scripted TOTALS folds in RAM.
+		// That is the same road it takes today anyway (Firebird has no ROLLUP), and the big reports
+		// go through the composer, which still chooses.
 		ibDataQueryResult read = ast.m_hasTotals
-			? ExecuteTotals(ast, params, schema)
+			? ExecuteTotals(ast, params, schema, ibReadPageRequest{}, nullptr, /*withDetails*/true)
 			: Execute(ast, params, schema);
 
 		// ⚠⚠ REGISTERED AFTER ITS OWN READ, and that is not a detail. The name travels to the
@@ -3779,9 +3882,74 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	const bool multiSource = !ast.m_joins.empty() || !ast.m_unions.empty();
 	std::map<wxString, const ibBackendQueryable*> dwJoined; int dwAliasSeq = 0;   // dot-walk join dedup (multi-source)
 
+	// ⭐⭐ THE OUTPUT NAMES — WHAT THE RESULT CALLS ITS FIELDS, built BEFORE anything in TOTALS is
+	// resolved, because TOTALS are taken OVER THE RESULT and name its fields, not the tables'.
+	//
+	// This is the alias table the Unions tab shows: with a union it is the COMMON name every branch
+	// lines up under, and with a single source it is still the name `SELECT` gave the field. A total
+	// says `BY PredefinedName`, not `BY Catalog1.PredefinedName` — the second is a path into a table
+	// that a two-branch union may not even have (Max, 2026-08-22, pointing at the Unions tab: "these
+	// names are what the totals take").
+	//
+	// It used to be built AFTER the dimension loop and served the aggregates alone, so a dimension
+	// could only ever be a source path — and the constructor compensated by writing source paths into
+	// the Totals tab, which is a shim standing in for a missing resolution.
+	std::map<wxString, const ibQueryProjection*> selectByName;
+	{
+		int idx = 0;
+		for (const ibQueryProjection& p : ast.m_projections) {
+			if (p.m_star || !p.m_expr) continue;
+			selectByName[OutputNameFor(ast, p, idx++)] = &p;
+		}
+	}
+
+	// A NAME IS THE RESULT'S FIELD FIRST. The LEADING segment — `BY Posted`, `BY Parent.Description` —
+	// is looked up among the output names and replaced by the path that field was SELECTed by, so the
+	// walk continues from there: `Parent` standing for `Catalog1.Parent` makes the second one
+	// `Catalog1.Parent.Description`, which is what the sources can answer.
+	//
+	// Left alone: a name no projection claims (it is a source field, resolved as always), and a field
+	// SELECTed as anything but a plain column — an expression has no path to walk INTO, so
+	// `BY <computed>` stays exactly the expression it was and a dot after it is a real error rather
+	// than a silently different reading.
+	// The aggregates must name fields the SELECT declared — the same rule the constructor's verdict
+	// asks, asked once, above (CheckTotalsNameSelectedFields). Here it runs before anything is built,
+	// so a query that will not hold up says so before it reads a row.
+	CheckTotalsNameSelectedFields(ast);
+
+	auto throughAlias = [&selectByName](const ibQueryAstExprPtr& expr) -> ibQueryAstExprPtr {
+		if (!expr || expr->m_kind != ibQueryAstExprKind::Column || expr->m_path.empty())
+			return expr;
+		const auto it = selectByName.find(expr->m_path.front());
+		if (it == selectByName.end() || !it->second->m_expr)
+			return expr;
+		const ibQueryAstExprPtr& stands = it->second->m_expr;
+		if (expr->m_path.size() == 1)
+			return stands;                                          // the field itself
+		if (stands->m_kind != ibQueryAstExprKind::Column)
+			return expr;                                            // nothing to walk into
+		ibQueryAstExprPtr walked = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+		walked->m_path = stands->m_path;
+		walked->m_path.insert(walked->m_path.end(), expr->m_path.begin() + 1, expr->m_path.end());
+		walked->m_line = expr->m_line; walked->m_col = expr->m_col;   // the diagnostics point at what was WRITTEN
+		return walked;
+	};
+
 	// BY OVERALL — the level above them all. Nothing to resolve and nothing to group by: the fold's
 	// root already holds the whole-result aggregates, so this only says to walk it as a row.
 	b.TotalsOverall(ast.m_totalsOverall);
+
+	// The columns the levels group by, IN LEVEL ORDER — the sort the detail read is given below, so
+	// that the rows of one group arrive together and the groups arrive in a repeatable order.
+	// ⚠ THE PATH, NOT ONLY THE LEAF. A dot-walked level's column is a SYNTHETIC one — it exists as a
+	// projection alias off a joined table (`… AS dim0`) and belongs to no table by that name. Sorting
+	// by the column POINTER renders `MainTable."dim0"`, a field the main table does not have, and the
+	// whole query dies. The path form routes the sort through the same join the projection uses.
+	struct LevelSort {
+		std::vector<const ibBackendQueryColumn*> m_path;   // dot-walk — sort through the join
+		const ibBackendQueryColumn*              m_col = nullptr;   // plain column
+	};
+	std::vector<LevelSort> levelOrder;
 
 	// The dimension levels, IN ORDER (each yields a subtotal node; the root is the grand total). They
 	// are the leading output columns (their group key at each node — read by GetValue(col)).
@@ -3798,10 +3966,25 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		if (d.m_fields.size() > 1)
 			for (const ibQueryTotalField& field : d.m_fields)
 				if (field.m_unfold != ibQueryDimUnfold::Elements)
-					ThrowQueryException(0, 0, _("a TOTALS level of several fields cannot unfold one of them through a hierarchy — give the hierarchy a level of its own"));
+					ThrowQueryException(0, 0, _("a TOTALS level of several fields cannot unfold one of them through a hierarchy: give the hierarchy a level of its own"));
 
 		for (const ibQueryTotalField& dimField : d.m_fields) {
-			const ibQueryAstExprPtr& dimExpr = dimField.m_expr;
+			// The word that was WRITTEN — kept for the level's name — and the expression it stands
+			// for, which is the SELECTed one when the word is an output field's alias.
+			const wxString                 dimWritten = (dimField.m_expr && dimField.m_expr->m_kind == ibQueryAstExprKind::Column
+			                                            && dimField.m_expr->m_path.size() == 1)
+			                                            ? dimField.m_expr->m_path.back() : wxString();
+			// ⭐ A LEVEL MAY GROUP BY A FIELD NOBODY SELECTED, and that is not a loophole — it is what
+			// levels are for. The skeleton is INVISIBLE: an unselected dimension adds DEPTH and no
+			// column, so the tree gains a tier that shows the first column again and looks, to a
+			// reader, like the same row repeated (Max, 2026-08-22, on a three-level TOTALS whose
+			// SELECT named only the first of the three fields: "physically I am not selecting all of
+			// it, and it still shapes the totals").
+			//
+			// I had a refusal here for a while. It was wrong: the selection says what is READ BACK,
+			// the levels say how it is CUT, and a cut may follow a line the reader never sees.
+			const ibQueryAstExprPtr        dimExpr    = throughAlias(dimField.m_expr);
+			const bool                     viaAlias   = dimExpr != dimField.m_expr;
 			const std::vector<const ibBackendQueryColumn*> pathCols = ResolvePath(sources, *dimExpr);   // plain col OR dot-walk path
 			const ibBackendQueryColumn* leaf = pathCols.back();
 			const ibDimensionKind dim =
@@ -3813,8 +3996,13 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// same column (Date by month, Date by day) two readable columns instead of one name answered
 			// by whichever came last. With several fields the given name belongs to the HEAD; the rest
 			// answer to their own column names, since one name cannot stand for a tuple.
+			// …and when the level was written as an OUTPUT FIELD'S name, that name wins over the
+			// leaf's: `SELECT Posted AS Done … BY Done` reads back as `Done`, which is the word the
+			// query used — the leaf is called something else and nobody asked for it.
 			const bool headField = (&dimField == &d.m_fields.front());
-			OutputColumn oc; oc.m_name = (headField && !d.m_alias.IsEmpty()) ? d.m_alias : leaf->GetName();
+			OutputColumn oc; oc.m_name = (headField && !d.m_alias.IsEmpty()) ? d.m_alias
+			                           : (viaAlias && !dimWritten.IsEmpty()) ? dimWritten
+			                                                                 : leaf->GetName();
 			oc.m_role = ibQueryLowering::ibColumnRole::Dimension;   // a TOTALS BY level
 			// WHICH level it belongs to — several fields of one level all carry the same number, so
 			// a printer can put them side by side instead of counting columns as if they were levels.
@@ -3862,6 +4050,12 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 					oc.m_col = synth.get(); oc.m_ownedCol = synth;
 				}
 			}
+			// This level's key joins the detail read's sort — by its PATH when it was reached through
+			// one, so the sort goes down the same join the projection did.
+			if (pathCols.size() > 1)
+				levelOrder.push_back(LevelSort{ pathCols, nullptr });
+			else if (oc.m_col != nullptr)
+				levelOrder.push_back(LevelSort{ {}, oc.m_col });
 			outSchema.push_back(oc);
 		}
 
@@ -3875,18 +4069,11 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	if (withDetails)
 		b.TotalsDetails();
 
-	// SELECT output-name map, so a TOTALS aggregate may name a SELECTed field (the resource pattern:
-	// SELECT Price … TOTALS SUM(Price); SELECT 1 AS test … TOTALS SUM(test)). A real column aggregates by
-	// its metaID; a COMPUTED / constant field is projected by the door and aggregated through a SYNTHETIC
-	// measure column (below) — both readable by the metaID-keyed totals fold.
-	std::map<wxString, const ibQueryProjection*> selectByName;
-	{
-		int idx = 0;
-		for (const ibQueryProjection& p : ast.m_projections) {
-			if (p.m_star || !p.m_expr) continue;
-			selectByName[OutputNameFor(ast, p, idx++)] = &p;
-		}
-	}
+	// (`selectByName` — the output-name map the aggregates read below — is built ABOVE, before the
+	// dimensions, because both clauses name the RESULT'S fields: SELECT Price … TOTALS SUM(Price),
+	// SELECT 1 AS test … TOTALS SUM(test). A real column aggregates by its metaID; a COMPUTED /
+	// constant field is projected by the door and aggregated through a SYNTHETIC measure column
+	// (below) — both readable by the metaID-keyed totals fold.)
 
 	// The TOTALS aggregate set is COMMON across all dimension levels (each level rolls them IN-PLACE, so
 	// the aggregate reads back off its own column — GetValue(col), same as a dimension).
@@ -3901,6 +4088,13 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// The later one is qualified by its FUNCTION (`SUMAmount`), which is the name a person would
 	// have written themselves, and a counter settles the rest. The FIRST claimant keeps the plain
 	// name, so nothing that reads a report by its resource's name changes.
+	// ⚠ A SELECTED FIELD AND A TOTAL OVER IT ARE ONE COLUMN, not two — deliberately. `SELECT Posted,
+	// Number … TOTALS COUNT(Number)` gives `Number` ONE slot: the fold writes the figure into it at
+	// every heading, and the detail row underneath holds the row's own value (Max, 2026-08-22: "they
+	// have the same name — the aggregate field writes its node's result, right down to the detail
+	// record"). That is what makes a total READ like the field it totals. So the SELECT names are NOT
+	// counted as taken here; only what is already in outSchema is, which is the DIMENSIONS — and a
+	// level and a measure over the same column genuinely are two different figures.
 	auto uniqueOutputName = [&outSchema](const wxString& wanted, const wxString& funcName) {
 		auto taken = [&outSchema](const wxString& name) {
 			for (const OutputColumn& used : outSchema)
@@ -3963,7 +4157,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			else if (pit != selectByName.end()) {
 				col = ResolvePath(sources, *pit->second->m_expr).back();   // a SELECTed real column, named by alias
 			}
-			else col = ResolveColumnSingle(sources, *agg->m_arg);          // a metadata attribute
+			// A selected field spelled its SOURCE way (`Catalog1.Parent`) — resolved against the
+			// sources. That it IS selected was settled above, before anything was built.
+			else col = ResolveColumnSingle(sources, *agg->m_arg);
 
 			// ⭐ A SECOND AGGREGATE OVER THE SAME COLUMN NEEDS A COLUMN OF ITS OWN. The fold rolls
 			// each one IN PLACE — into the slot keyed by its input column — so `SUM(Amount)` and
@@ -3990,13 +4186,25 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		outSchema.push_back(oc);
 	}
 
-	// ⭐ AND WHAT THE DETAIL ROWS SHOW. A TOTALS read projects the levels and the resources and
-	// nothing else — a heading has no use for the rest, and reading columns nobody prints is what
-	// this path exists to avoid. Detail rows DO have a use: what they print is the SELECTed fields,
-	// which is the list the query already carries. So when the rows were asked for, those fields are
-	// projected as well and take their place in the schema as DETAIL columns; a heading simply holds
-	// no value for them and prints an empty cell.
-	if (withDetails) {
+	// ⭐⭐ AND THE SELECTed FIELDS — ALWAYS, whether or not the rows were asked for.
+	//
+	// A column is DECLARED by the query and FILLED by the row that has one: a heading holds no single
+	// value for a field the group does not fold by, so it reads empty there, and a detail row unfolds
+	// it (Max, 2026-08-22: "the column is there; if the group has no value for it, it comes back
+	// empty, and the detail records unfold it").
+	//
+	// It used to be added only under `withDetails`, and that made the RESULT'S SCHEMA depend on the
+	// traversal — so a script walking `SELECT Posted … TOTALS COUNT(Number) BY Posted` could not name
+	// a SELECTed field at all: `selection["…"]` has nothing to look up, and "how do I read the value
+	// then" has no answer. A schema that appears and disappears is not a schema.
+	//
+	// Costs nothing extra to READ: the query already projects these fields — the door was told to
+	// select them — only the schema omitted them.
+	//
+	// ⚠ On a SERVER-side fold there are no detail rows at all, so these columns stay empty at every
+	// level. That is honest — empty because no row carries them, not because the column vanished —
+	// and it is one more argument for the phantom level, which brings the rows back there too.
+	{
 		int projectionIndex = 0;
 		for (const ibQueryProjection& p : ast.m_projections) {
 			if (p.m_star || !p.m_expr)
@@ -4093,9 +4301,50 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// the table happened to yield (Max, 2026-08-20: "I set a filter and a sort, compose the report,
 	// and it does not react").
 	//
+	// ⭐⭐ AND THE LEVELS SORT IT FIRST. A grouping is not only something PRINTED above the rows — it
+	// shapes the whole selection: rows of one group have to arrive together, and the groups have to
+	// arrive in the same order twice (Max, 2026-08-22: "the totals may not even be output, but they
+	// affect your whole selection"). The fold keeps groups in FIRST-SEEN order, so without this the
+	// order of the headings was whatever order the table happened to yield the rows in — stable
+	// enough to look right in a test and not stable at all.
+	//
+	// The levels go in BEFORE the query's own ORDER BY, which is what makes the two agree instead of
+	// fight: the grouping decides the sequence of the groups, and `ORDER BY` decides the sequence
+	// INSIDE the deepest one.
+	//
+	// ⚠ …UNLESS THE AUTHOR NAMED THE LEVEL THEMSELVES. `TOTALS … BY Period ORDER BY Period DESC` asks
+	// for descending groups, and a forced ASC in front of it wins forever — the DESC key can never
+	// fire, so the request is silently discarded. So a level whose column the query already sorts by
+	// takes the AUTHOR'S direction, and that entry is struck from the list below rather than emitted
+	// twice.
+	std::vector<bool> orderConsumed(ast.m_orderBy.size(), false);
+	for (const LevelSort& ls : levelOrder) {
+		bool ascending = true;
+		if (ls.m_col != nullptr) {
+			for (size_t oi = 0; oi < ast.m_orderBy.size(); ++oi) {
+				const ibQueryOrderItem& o = ast.m_orderBy[oi];
+				if (orderConsumed[oi] || !o.m_expr || IsComputedExprAst(*o.m_expr))
+					continue;
+				std::vector<const ibBackendQueryColumn*> oc;
+				try { oc = ResolveWhereTarget(sources, *o.m_expr, /*allowDotWalk*/true); }
+				catch (const ibBackendException&) { continue; }
+				if (oc.size() == 1 && oc.front() == ls.m_col) {
+					ascending = o.m_ascending;
+					orderConsumed[oi] = true;
+					break;
+				}
+			}
+		}
+		if (!ls.m_path.empty()) b.OrderBy(ls.m_path, ascending);
+		else                    b.OrderBy(ls.m_col,  ascending);
+	}
+
 	// Same resolution the flat path uses (PopulateBuilder): a computed / constant key becomes an
 	// expression sort, a column or dot-walk sorts by its column.
-	for (const ibQueryOrderItem& o : ast.m_orderBy) {
+	for (size_t oi = 0; oi < ast.m_orderBy.size(); ++oi) {
+		if (orderConsumed[oi])
+			continue;                       // a level already sorts by it, in the direction asked for
+		const ibQueryOrderItem& o = ast.m_orderBy[oi];
 		if (!o.m_expr)
 			continue;
 		const ibQueryAstExpr& oe = *o.m_expr;

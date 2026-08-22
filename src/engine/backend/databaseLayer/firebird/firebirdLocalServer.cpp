@@ -1,4 +1,5 @@
 #include "firebirdLocalServer.h"
+#include "backend/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 
 // OES_FB_LOCALSERVER — compile-time gate for the bitness-decoupling
 // out-of-process server path. OFF by default; the only scenario that
@@ -186,7 +187,7 @@ bool AssignChildToJob(long pid) {
 	if (!g_jobHandle) {
 		g_jobHandle = ::CreateJobObjectW(nullptr, nullptr);
 		if (!g_jobHandle) {
-			wxLogWarning(wxT("ibFirebirdLocalServer: CreateJobObject ")
+			ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLocalServer: CreateJobObject ")
 			             wxT("failed (err=%lu); orphan-protection disabled"),
 			             ::GetLastError());
 			return false;
@@ -196,7 +197,7 @@ bool AssignChildToJob(long pid) {
 		if (!::SetInformationJobObject(g_jobHandle,
 		                               JobObjectExtendedLimitInformation,
 		                               &info, sizeof(info))) {
-			wxLogWarning(wxT("ibFirebirdLocalServer: SetInformationJobObject ")
+			ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLocalServer: SetInformationJobObject ")
 			             wxT("failed (err=%lu); orphan-protection disabled"),
 			             ::GetLastError());
 			::CloseHandle(g_jobHandle);
@@ -208,7 +209,7 @@ bool AssignChildToJob(long pid) {
 	HANDLE hProc = ::OpenProcess(
 		PROCESS_SET_QUOTA | PROCESS_TERMINATE, FALSE, (DWORD)pid);
 	if (!hProc) {
-		wxLogWarning(wxT("ibFirebirdLocalServer: OpenProcess(PID %ld) failed ")
+		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLocalServer: OpenProcess(PID %ld) failed ")
 		             wxT("(err=%lu); child won't be killed on OES crash"),
 		             pid, ::GetLastError());
 		return false;
@@ -224,7 +225,7 @@ bool AssignChildToJob(long pid) {
 		// job without JOB_OBJECT_LIMIT_BREAKAWAY_OK). Nested jobs
 		// require Windows 8+; usually works. If it fails, fall back
 		// to atexit-only — orphan possible on crash.
-		wxLogWarning(wxT("ibFirebirdLocalServer: AssignProcessToJobObject ")
+		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLocalServer: AssignProcessToJobObject ")
 		             wxT("failed for PID %ld (err=%lu); child won't be ")
 		             wxT("killed on OES crash. Atexit cleanup still works."),
 		             pid, err);
@@ -252,7 +253,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 	// Locate firebird.exe in the vendored runtime dir.
 	const wxString fbDir = ibFirebirdBootstrap::GetFbRuntimeDir();
 	if (fbDir.IsEmpty()) {
-		wxLogError(wxT("ibFirebirdLocalServer: _fb/ not initialised; ")
+		ibJournalError(wxT("db.firebird"),wxT("ibFirebirdLocalServer: _fb/ not initialised; ")
 		           wxT("call ibFirebirdBootstrap::Init first."));
 		return 0;
 	}
@@ -260,7 +261,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 	wxFileName fbExeFn(fbDir, wxT("firebird.exe"));
 	const wxString fbExe = fbExeFn.GetFullPath();
 	if (!wxFileExists(fbExe)) {
-		wxLogError(wxT("ibFirebirdLocalServer: firebird.exe not found at %s. ")
+		ibJournalError(wxT("db.firebird"),wxT("ibFirebirdLocalServer: firebird.exe not found at %s. ")
 		           wxT("LocalServer mode requires the FB server binary in _fb/ ")
 		           wxT("(not vendored by default; operator must drop it in)."),
 		           fbExe);
@@ -269,7 +270,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 
 	const int port = PickFreePort();
 	if (port == 0) {
-		wxLogError(wxT("ibFirebirdLocalServer: failed to pick free port"));
+		ibJournalError(wxT("db.firebird"),wxT("ibFirebirdLocalServer: failed to pick free port"));
 		return 0;
 	}
 
@@ -311,7 +312,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 			nullptr, nullptr,
 			&si, &pi);
 		if (!ok) {
-			wxLogError(wxT("ibFirebirdLocalServer: CreateProcessW failed for %s ")
+			ibJournalError(wxT("db.firebird"),wxT("ibFirebirdLocalServer: CreateProcessW failed for %s ")
 			           wxT("(err=%lu)"), cmd, (unsigned long)::GetLastError());
 			return 0;
 		}
@@ -323,7 +324,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 		::CloseHandle(pi.hProcess);
 	}
 #else
-	wxLogError(wxT("ibFirebirdLocalServer: POSIX spawn not implemented; ")
+	ibJournalError(wxT("db.firebird"),wxT("ibFirebirdLocalServer: POSIX spawn not implemented; ")
 	           wxT("LocalServer requires Win32"));
 	return 0;
 #endif
@@ -332,7 +333,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 	// Wait for the child to bind and accept connections. 5 seconds
 	// is generous — typical bind takes <500 ms on a warm machine.
 	if (!WaitForListenReady(port, 5000)) {
-		wxLogError(wxT("ibFirebirdLocalServer: child PID %ld did not bind to ")
+		ibJournalError(wxT("db.firebird"),wxT("ibFirebirdLocalServer: child PID %ld did not bind to ")
 		           wxT("port %d within 5 s; killing"), pid, port);
 		wxKill(pid, wxSIGKILL);
 		return 0;

@@ -1124,12 +1124,17 @@ void ibDialogQueryConstructor::FillFieldSources()
 						shown = written;
 					if (shown.IsEmpty())
 						continue;
-					// ⚠ THE LABEL IS THE ALIAS; THE PATH IS THE SOURCE. The row shows what the result
-					// calls this field, and carries what the query has to WRITE to reach it — a total
-					// over `Catalog1.Parent.Description` is one the engine resolves, over
-					// `Parent.Description` it is not. (The node's path comes from m_name, its caption
-					// from m_presentation; that split is what makes both true at once.)
-					field.m_name         = written.IsEmpty() ? shown : written;
+					// ⭐ THE ALIAS IS BOTH THE LABEL AND THE PATH — a total is taken over the RESULT,
+					// and the result calls this field by its alias. With a union that is the ONLY
+					// name it has: `Catalog1.Parent` is a path into branch one, which branch two need
+					// not carry at all, while the alias is what every branch is lined up under.
+					//
+					// This row used to carry the SOURCE path, because the engine resolved a TOTALS
+					// dimension against the tables and nothing else — a shim in the dialog standing
+					// in for a missing resolution. The lowering looks the leading segment up among
+					// the output names now (queryLowering.cpp, `throughAlias`), so a dot-walk from an
+					// alias — `Parent.Description` — reaches the same column the qualified path did.
+					field.m_name         = shown;
 					field.m_presentation = shown;
 
 					// A plain column stands for a field of a table, and that field knows its type,
@@ -1152,7 +1157,16 @@ void ibDialogQueryConstructor::FillFieldSources()
 		}
 
 		const std::vector<ibQuerySource*> sources = CurrentSources();
-		const bool qualify = true;   // a bare name breaks the moment a table joins
+		// A bare name breaks the moment a table joins — everywhere the query text names a SOURCE.
+		//
+		// ⭐ EXCEPT IN TOTALS, which name the RESULT. `COUNT(Document1.Attribute2)` is a path into a
+		// table written where the result's own vocabulary belongs (Max, 2026-08-22: "you can't do
+		// that in totals") — and under a union it names a branch, which the result does not have.
+		// A total over a field the result does not carry is still allowed: it goes in by NAME, and
+		// the lowering resolves it against the sources when no output field claims it. Ambiguity
+		// between two joined tables is then said out loud by the resolver instead of being papered
+		// over here with a path nobody asked for.
+		const bool qualify = (tree != m_totalsSource);
 		for (size_t i = 0; i < sources.size(); ++i) {
 			const ibQuerySource& source = *sources[i];
 			if (source.m_name.empty() && !source.m_subquery)
@@ -1472,8 +1486,8 @@ bool ibDialogQueryConstructor::Verdict(wxString& message) const
 	const wxString unfinished = m_linkModel != nullptr ? m_linkModel->UnfinishedLink() : wxString();
 	if (!unfinished.IsEmpty()) {
 		// ⚠ ASCII ONLY IN A STRING LITERAL. The sources carry no BOM, so MSVC reads them in the
-		// system codepage: an em dash typed here reached the screen as "вЂ”". Dashes belong in
-		// comments, where nobody renders them.
+		// system codepage: an em dash typed here reaches the screen as three mojibake characters,
+		// its UTF-8 bytes read one at a time. Dashes belong in comments, where nobody renders them.
 		message = wxString::Format(
 			_("the link on '%s' has no condition: write one, or delete the link. Two tables with no "
 			  "link between them are simply multiplied."), unfinished);

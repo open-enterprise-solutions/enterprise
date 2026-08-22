@@ -63,13 +63,41 @@ enum class ibBoolForm
 };
 
 // Optional capabilities the renderer queries before choosing a form.
+//
+// ⭐⭐ EVERY FLAG HERE IS A PROMISE, AND SETTING ONE IS TAKING RESPONSIBILITY FOR IT (Max). The rule
+// is the same for all of them — window functions, CTE, ROLLUP, and whatever is added next:
+//
+//     TRUE  -> we commit. The statement goes out in that form. If the engine cannot digest it, the
+//              ENGINE says so, the driver raises, and the report DIES — and it keeps dying until
+//              somebody corrects the flag. That is the only way a wrong promise gets found.
+//     FALSE -> the tier above takes the other road (fold in memory, render the long form, refuse
+//              the construct out loud). A correct answer, arrived at differently.
+//
+// 🛑 WHAT MUST NEVER EXIST is the third behaviour: catching the engine's refusal and quietly taking
+// the other road anyway. It looks like resilience and it is the opposite — a flag that lies then
+// costs nothing to nobody, so it stays wrong for years and every report pays for it silently.
+// (`m_rollup` was exactly that until 2026-08-22: it claimed Firebird could fold, nothing ever asked,
+// and the claim went unexamined. It is measured now, and false.)
+//
+// ⚠ A refusal by a PUSH-DOWN GATE is a different thing and does not raise — it is asked on hot paths
+// and answers "no" constantly, which is normal. See queryException.h for that line.
 struct ibSqlFeatures
 {
 	bool m_window        = false;   // SUM() OVER (...)
 	bool m_cte           = false;   // WITH ... AS (...)
 	bool m_fullOuterJoin = false;
 	bool m_iLike         = false;   // case-insensitive LIKE
-	bool m_rollup        = false;   // GROUP BY ROLLUP(...) — hierarchical subtotals server-side (FB **5**+ / PG; NOT SQLite)
+	bool m_rollup        = false;   // GROUP BY ROLLUP(...) — hierarchical subtotals server-side
+	// ⭐ AND `GROUPING(expr)` SEPARATELY, because the two do not arrive together: Firebird 5 PARSES
+	// ROLLUP and has no GROUPING function (measured live 2026-08-22 — SQL error -804 "Function
+	// unknown: GROUPING", which is a PREPARE error, raised after the parser had already accepted the
+	// ROLLUP clause; an unknown keyword would have been -104 at parse time instead).
+	//
+	// The fold uses GROUPING only to learn which LEVEL a returned row belongs to. Where it is
+	// missing, the same fact is read off the key columns being SQL NULL — exact here and not a
+	// heuristic, because OES attributes hold typed empties and never SQL NULL, so a NULL in a result
+	// can only have come from the rollup itself (queryRewrite.h leans on the same invariant).
+	bool m_grouping      = false;
 
 	// INSERT … VALUES (…), (…), (…) — several rows in ONE statement.
 	//

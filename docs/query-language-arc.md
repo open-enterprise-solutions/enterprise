@@ -1660,10 +1660,10 @@ returns RAW data; a separate Selector walks it.
 ```cpp
 ibDataQueryResult result = q.Execute(req);          // raw selection (snapshot inside)
 ibSelector        s      = result.Select(kind);     // a Selector: HOW to walk
-while (s.Next()) {                                   // cursor — pre-order
+while (s.Next()) {                                   // cursor over ONE level (2026-08-22)
     s.GetValue(col);   // value on a leaf / SUBTOTAL on a group node (in-place column)
     s.Level();         // depth (0 = root); s.HasChildren(); s.GetTotal(col) = grand total
-    ibSelector sub = s.Select(kind);                 // sub-selection of the CURRENT node (recurse)
+    ibSelector sub = s.Select(kind);                 // descend: the CURRENT node's own children
 }
 ```
 
@@ -3556,6 +3556,28 @@ object prefix · type), which stops guessing. Three consequences worth naming:
 * **depth is free.** A nested table inside a nested table publishes its output the same way, because
   the wrapper of the inner one is built from ITS schema.
 
+### ⭐ A nested table has no ORDER and no TOTALS — and neither has a temp table (2026-08-22)
+
+Both are refused by the parser, beside the `INTO` / `FOR UPDATE` refusals that were already there and
+for the same stated reason: *a silent no-op in a query somebody wrote deliberately is worse than a
+refusal*. The constructor hides the two tabs to match — for a nested table, for a union branch, and
+for a statement that writes `INTO` — so nothing offers what the engine will reject.
+
+Why each is meaningless where it was written:
+
+* **TOTALS** is how a RESULT is presented, and a nested table is not a result — it is a source. A
+  temp table is not one either: what is materialised under a name is ROWS, and the statements that
+  read it afterwards select from a table, not from a hierarchy.
+* **ORDER BY** inside a derived table is promised by nothing in SQL and read by nobody. A temp table
+  keeps rows, not an order, so sorting on the way into storage is work thrown away in the same
+  breath. The one shape where an inner order would decide WHICH rows survive is `TOP`, and that is
+  refused separately.
+
+It is not only tidiness. An inner `ORDER BY` used to BLOCK the FROM-subquery flattening
+(`queryRewrite.h` rule 2), so a query that carried one kept its wrapper — and a wrapper is an
+`ibSubqueryQueryable`, which computes its rows in RAM by construction. One meaningless clause was
+enough to move a whole query off the server.
+
 ### A query that GROUPS is a query that FOLDS
 
 The next wall the same query hit, once it could be named: `Field 'fld1077_TYPE' not found in the
@@ -3915,3 +3937,85 @@ which is also the oracle the pushed-down numbers are checked against.
 
 ⚠ The lesson, written down because it repeats: half of what this arc "needed" was already in the
 tree and unconnected. Ask what exists before designing.
+
+---
+
+### Update 2026-08-22 — TOTALS: what a level is, what a column is, and how the tree is walked
+
+A day spent almost entirely on BOUNDARIES rather than mechanism: nearly everything below was
+already built and was drawing the line in the wrong place. The model that came out of it, stated
+once, because every fix here follows from it:
+
+> **The query reads ONE raw table, once. Everything else is a view over it.** `SELECT` declares what
+> is read back. `TOTALS … BY` declares how it is CUT. A selection is a FILTER over that table; a
+> descent narrows the filter. Where the groupings run out, the detail record follows — it is the
+> bottom of the fold, not an option in it, because the totals were computed FROM those rows.
+
+**A level and a column are different things, and that settles who may name what.** A LEVEL adds
+depth and no column, so `BY <field>` may name a field nobody selected: the skeleton is invisible,
+the tree simply gains a tier that shows the column above it again. An AGGREGATE writes a column, and
+a column of the result has to have been declared by the `SELECT` that declares the result — so
+`TOTALS COUNT(Number)` over `SELECT Posted` is refused, by name and position.
+
+The rule lives in `CheckTotalsNameSelectedFields` (queryLowering.cpp), ABOVE both doors: the query
+constructor's verdict line asks it through `CheckNames`, and the run asks it at the top of
+`ExecuteTotals`. Written into only the lowering, as it was for an hour, it was a rule the dialog
+said nothing about — it reported "the query engine reads this query" about a query the engine
+refuses.
+
+**Aliases are the vocabulary of totals.** The output names — the alias table the Unions tab shows,
+which under a union is the only name a field has — are built BEFORE the dimension loop and both
+clauses resolve through them (`throughAlias`). A leading segment that names an output field is
+replaced by the expression that field was selected by, so a dot-walk continues from inside the
+result: `Parent.Description` reaches what `Catalog1.Parent.Description` reaches. Both spellings of a
+selected field are it, which is what keeps queries the old constructor wrote working. The Totals tab
+now writes the alias rather than a source path (`queryConstructorFill.cpp`).
+
+**The levels sort the read.** `b.OrderBy` over the level columns, in level order, BEFORE the query's
+own `ORDER BY` — so rows of one group arrive together and the groups arrive in the same order twice.
+The fold keeps groups in first-seen order, so without this the heading order was whatever order the
+table happened to yield, and a group whose rows were not contiguous was opened again further down:
+the tail spilled out as detail rows with empty level columns.
+
+**The SELECTed fields are always in the schema** (role `Detail`), not only when the rows were asked
+for. A schema that depends on how the result will be walked is not a schema. A column is DECLARED by
+the query and FILLED by the row that has one — a heading holds no single value for a field it does
+not fold by, and reads `NULL` there.
+
+**Detail records are mandatory.** The scripted `ExecuteTotals` builds the detail level (it used to
+default to false, so a script's deepest heading had nothing under it), and `WantsDetails` in the
+composer is now `HasGroupingFields` — an output that never declared a Details level could not reach
+its rows AT ALL, not even on demand, because they were never read. Reading and PRINTING are two
+questions: the tree holds every kind of node, and the output's ladder says which kinds it writes
+(`OutputWrites`, dataComposer.cpp). The price is knowing: details and the DBMS's own fold are
+exclusive, so the single-level server-side group page no longer fires for a grouped list. Per the
+model above that is not a loss of meaning — the raw table is read either way — it is the loss of an
+optimisation layered on top of it, and the answer, if it bites, is for a DRILL to ask for one level
+without rows.
+
+**A selection walks ONE level.** `EnsureWalk` visits the DIRECT CHILDREN of what the selection was
+made over; a node's own children are reached by descending into it. Three groupings are three nested
+loops — the shape the language reads, and the shape the constructor's generated code has always
+had. It used to flatten the whole subtree pre-order, which put every level and every detail row into
+one cursor: a walk returned the group's figure and then its rows, in the same loop.
+
+**A descent uses the tree that is already built.** `ibSelector::Select` hands over the current
+node's subtree as a tree of its own (`ibSelectorTree::SubtreeOf`). The re-execution road stays for
+what it was built for — a LAZY drill, where a node is expandable but its children were deliberately
+not read. For a scripted fold there is no live source behind the tree at all, and the old path
+returned an EMPTY selector: the descent found nothing while the outer loop saw everything.
+
+**`OVERALL` is a LEVEL — the grouping that names no fields.** Grouping by nothing has exactly one
+node covering the whole result: the tree's root, aggregates filled and every dimension column
+`NULL`. So the walk visits that node and nothing else, and the first dimension level is reached the
+way every level is, by descending into the one above. It used to be a walk flag that pushed the root
+IN FRONT of the first level's nodes, which put two levels in one cursor.
+
+The composer's walk was restructured to match (nested descent). `hiddenAbove` is gone with it: a
+heading its filter rejects is simply not descended into, which is what the variable existed to say.
+
+⚠ Two mistakes worth keeping, both the same mistake. A column that came back empty on detail rows
+was read as a RULE ("a total may only name a selected field") when it was a SYMPTOM — the scripted
+fold had no detail rows at all. And a result that would not name its columns was answered with a
+`Columns` array bolted onto it, when what declares the columns is the `SELECT`. Both were mechanisms
+invented over a question that already had an owner.

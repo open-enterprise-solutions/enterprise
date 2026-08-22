@@ -403,7 +403,7 @@ void ibPreparedStatementODBC::SetParam(int nPosition, ibDatabaseParameterODBC* p
 
 void ibPreparedStatementODBC::InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr)
 {
-	wxLogDebug(wxT("ibPreparedStatementODBC::InterpretErrorCodes()\n"));
+	ibJournalInfo(wxT("db.odbc"),wxT("ibPreparedStatementODBC::InterpretErrorCodes()\n"));
 
 	//if ((nCode != SQL_SUCCESS) ) // && (nCode != SQL_SUCCESS_WITH_INFO))
 	{

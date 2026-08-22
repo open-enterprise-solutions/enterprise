@@ -150,4 +150,16 @@ private:
 #endif
 };
 
+// ⭐ ONE MORE KIND OF REFUSAL, and it deliberately raises NOTHING.
+//
+// A push-down gate ("can the DBMS fold this?") answers no on hot paths constantly — a list's fetch
+// asks on every page — and the RAM road then produces the correct answer anyway. An exception per
+// page would not be a diagnostic, it would be a cost (Max). It ROUTES; it does not raise.
+//
+// 🛑 The opposite case DOES raise, and needs nothing written for it: a dialect that ADVERTISES a
+// feature the engine lacks sends its statement, the engine rejects it, and the DRIVER raises from
+// the database family above. Setting a capability flag is taking responsibility for it, and the
+// report must die until the flag is corrected — never a quiet fall back to memory, which is how a
+// wrong flag lives for years. There is no `catch` on the fold path, and there must not be one.
+//
 #endif // __QUERY_EXCEPTION_H__

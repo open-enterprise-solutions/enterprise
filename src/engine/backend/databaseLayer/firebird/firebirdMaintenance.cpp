@@ -1,6 +1,7 @@
 #include <atomic>   // std::atomic — MSVC supplied this transitively
 #include "firebirdMaintenance.h"
 #include "firebirdInterface.h"
+#include "backend/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 
 #include <wx/filename.h>
 #include <wx/log.h>
@@ -21,7 +22,7 @@ namespace {
 void ResolveCredentials(const ibFirebirdMaintenance::ServiceConnection& conn,
                         wxString& user, wxString& pwd) {
 	if (conn.username.IsEmpty() || conn.password.IsEmpty()) {
-		wxLogWarning(wxT("ibFirebirdMaintenance: empty credentials, falling ")
+		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdMaintenance: empty credentials, falling ")
 		             wxT("back to SYSDBA/masterkey - set real creds for ")
 		             wxT("production deploys"));
 	}
@@ -196,6 +197,9 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 // wxLogSysError so a benign shutdown race never pops a modal "couldn't be removed" dialog.
 void TryRemoveTempFile(const wxString& path) {
 	if (!wxFileExists(path)) return;
+	// ⚠ NOT a logging call, and so NOT migrated to the journal: wxLogNull is a SUPPRESSION scope for
+	// wx's own internals — wxRemoveFile raises wxLogSysError from inside, and this is the only way to
+	// stop it. The one-file rule is about who WRITES log lines; silencing someone else's stays here.
 	wxLogNull noLog;
 	for (int attempt = 0; attempt < 5; ++attempt) {
 		if (wxRemoveFile(path) || !wxFileExists(path))

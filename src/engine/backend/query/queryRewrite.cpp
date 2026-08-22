@@ -217,7 +217,16 @@ bool InnerIsFlattenable(const ibQuerySelect& inner)
 {
 	if (!inner.m_joins.empty() || !inner.m_unions.empty() || inner.m_hasTotals) return false;
 	if (inner.m_distinct || !inner.m_groupBy.empty() || inner.m_having)         return false;
-	if (!inner.m_orderBy.empty())                                               return false;
+	// ⭐ A NESTED QUERY HAS NO ORDER, so an inner `ORDER BY` neither blocks the flattening nor
+	// survives it (Max: "a nested query does not support order or totals — they are not there by
+	// definition, and the constructor does not offer them either"). SQL agrees: nothing is promised
+	// about the order of a derived table's rows. The one shape where it would decide WHICH rows
+	// survive is TOP, and that is refused on the next line.
+	//
+	// This is what kept the whole read in RAM: an author's query carries an ORDER BY of its own, the
+	// composition wrapped it as a nested source, and the wrapper then refused to collapse — so the
+	// source stayed an ibSubqueryQueryable, which computes its rows in memory by construction, and no
+	// totals push-down could ever fire above it.
 	if (inner.m_top > 0)                                                        return false;   // TOP limits the inner rows — merging would lose it
 	// The statement words the inner may carry. Merging them away is the SILENT kind of wrong:
 	// ALLOWED would become a refusal the author asked not to have, FOR UPDATE would stop holding
@@ -245,6 +254,7 @@ void FlattenFrom(ibQuerySelect& s)
 	const std::shared_ptr<ibQuerySelect> innerKeep = s.m_from.m_subquery;
 	const ibQuerySelect& inner = *innerKeep;
 	if (!InnerIsFlattenable(inner)) return;
+
 
 	// Output-name -> inner column path. Empty for SELECT * (pass-through names).
 	std::map<wxString, std::vector<wxString>, NoCaseLess> aliasMap;
@@ -320,6 +330,10 @@ void FlattenFrom(ibQuerySelect& s)
 	for (ibQueryAstExprPtr& t : s.m_totalsAggregates) WalkColumns(t, subst);
 	for (ibQueryTotalDim& d : s.m_totalsBy)
 		for (ibQueryTotalField& f : d.m_fields)      WalkColumns(f.m_expr, subst);
+
+	// The inner's ORDER BY is simply gone with the wrapper, and that is correct: a nested query has
+	// no order (see InnerIsFlattenable). The order a report shows is the OUTER one — the composition's
+	// own sort setting — which is the only place it is stated.
 
 	// Outer SELECT * over an explicit inner projection = exactly the subquery's output.
 	if (s.m_selectAll && !inner.m_selectAll) {

@@ -40,15 +40,15 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeStart()
 		return !bCancel.GetBoolean();
 	}
 	catch (const ibBackendException& err) {
-		wxLogWarning(_("BeforeStart: %s"), err.GetErrorDescription());
+		ibJournalWarning(wxT("module.event"),_("BeforeStart: %s"), err.GetErrorDescription());
 		return false;
 	}
 	catch (const std::exception& err) {
-		wxLogWarning(wxT("BeforeStart: %s"), err.what());
+		ibJournalWarning(wxT("module.event"),wxT("BeforeStart: %s"), err.what());
 		return false;
 	}
 	catch (...) {
-		wxLogWarning(wxT("BeforeStart: unknown exception"));
+		ibJournalWarning(wxT("module.event"),wxT("BeforeStart: unknown exception"));
 		return false;
 	}
 }

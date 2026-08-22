@@ -286,3 +286,56 @@ TEST(QueryL2_Ddl, PlainCreateTableStillCreateTable)
 	ibDdlStatement ddl = ibCreateTable(wxT("t"), { ibDdlColumn{ wxT("k"), ibTypeInteger() } });
 	EXPECT_EQ(ibQueryRenderer(SqliteDialect()).RenderDDL(ddl).ToStdString(), "CREATE TABLE t (k INTEGER)");
 }
+
+// ===========================================================================
+// GROUP BY ROLLUP — the SPELLING, pinned without an engine.
+//
+// Nothing we ship can execute this: Firebird has no ROLLUP through 5.0 (it arrives in 6) and SQLite
+// has none at all, so PostgreSQL is the only engine that runs it today. The RENDERER does not ask
+// about the capability though — it takes the spelling from the dialect — so the text can be pinned
+// here, on any machine, with no database.
+//
+// ⭐ WHY THESE EXIST AT ALL: the RAM fold insures against a MISSING feature, not against a wrongly
+// spelled statement. An engine without ROLLUP falls back and stays correct; an engine WITH it runs
+// whatever we wrote. That second case is what these cover.
+// ===========================================================================
+
+TEST(QueryL2_Rollup, TupleLevelIsOneElement)
+{
+	// `TOTALS … BY Ref, (Del, Num), Posted` — three levels, the middle one a TUPLE. It has to render
+	// as ONE parenthesised ROLLUP element: as two bare keys it would be two nested headings, which is
+	// a different report.
+	ibQueryRelPtr from = ibScan(wxT("Doc"));
+	std::vector<ibQueryProjItem> proj = {
+		{ ibCol(wxT("Ref_RRRef")), wxT("g0_0") },
+		{ ibFunc(wxT("GROUPING"), { ibCol(wxT("Ref_RRRef")) }), wxT("grp0") },
+		{ ibFunc(wxT("SUM"), { ibCol(wxT("Amount_N")) }), wxT("total") },
+	};
+	std::vector<ibQueryExprPtr> keys = {
+		ibCol(wxT("Ref_RRRef")),
+		ibFunc(wxT(""), { ibCol(wxT("Del_B")), ibCol(wxT("Num_S")) }),   // ONE level, two fields
+		ibCol(wxT("Posted_B")),
+	};
+	ibQueryIR ir(ibAggregate(from, std::move(proj), std::move(keys), nullptr, /*rollup*/ true));
+
+	const std::string sql = Lite(ir);
+	EXPECT_NE(sql.find("GROUP BY ROLLUP(Ref_RRRef, (Del_B, Num_S), Posted_B)"), std::string::npos)
+		<< "rendered: " << sql;
+}
+
+TEST(QueryL2_Rollup, SingleScalarLevelStaysBare)
+{
+	// One scalar field per level renders BARE — `ROLLUP(A, B)`, not `ROLLUP((A), (B))`. The
+	// parenthesised form is legal SQL, but the shape that existed before must not change spelling
+	// because a rarer one became expressible.
+	ibQueryRelPtr from = ibScan(wxT("Doc"));
+	std::vector<ibQueryProjItem> proj = {
+		{ ibCol(wxT("A")), wxT("g0_0") },
+		{ ibFunc(wxT("SUM"), { ibCol(wxT("V")) }), wxT("total") },
+	};
+	std::vector<ibQueryExprPtr> keys = { ibCol(wxT("A")), ibCol(wxT("B")) };
+	ibQueryIR ir(ibAggregate(from, std::move(proj), std::move(keys), nullptr, /*rollup*/ true));
+
+	const std::string sql = Lite(ir);
+	EXPECT_NE(sql.find("GROUP BY ROLLUP(A, B)"), std::string::npos) << "rendered: " << sql;
+}

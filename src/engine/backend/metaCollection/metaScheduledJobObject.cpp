@@ -132,7 +132,7 @@ bool ibValueMetaObjectScheduledJob::RegisterJob()
 	if (!manager->Register(std::move(desc))) {
 		// Register logs the reason itself. A job that could not be declared must not stop a
 		// configuration from opening — the failure belongs in the log, not in the user's face.
-		wxLogDebug(wxT("scheduled job '%s' was not registered"), GetJobName());
+		ibJournalInfo(wxT("metadata.job"),wxT("scheduled job '%s' was not registered"), GetJobName());
 		return true;
 	}
 

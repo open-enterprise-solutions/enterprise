@@ -24,6 +24,7 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_features.m_fullOuterJoin = true;
 		d.m_features.m_iLike         = true;
 		d.m_features.m_rollup        = true;   // GROUP BY ROLLUP(...) — standard spelling
+		d.m_features.m_grouping      = true;   // …and GROUPING(expr) with it: PG has had both since 9.5
 		d.m_features.m_multiRowValues = true;  // INSERT … VALUES (…), (…)
 		// type map
 		d.m_typeBoolean       = wxT("BOOLEAN");

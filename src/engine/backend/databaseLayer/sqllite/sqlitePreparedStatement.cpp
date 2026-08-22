@@ -280,7 +280,7 @@ ibDatabaseResultSet* ibPreparedStatementSQLite::RunQueryWithResults()
 
 			if ((nReturn != SQLITE_ROW) && (nReturn != SQLITE_DONE))
 			{
-				wxLogError(wxT("Error with RunQueryWithResults\n"));
+				ibJournalError(wxT("db.sqlite"),wxT("Error with RunQueryWithResults\n"));
 				SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
 				SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(m_pDatabase)));
 				ThrowDatabaseException();
