@@ -104,9 +104,21 @@ public:
 	// An output STARTS. Default: state its schema the way the row contract always did.
 	virtual void OnOutputBegin(const ibCompositionOutputInfo& info) { OnColumns(info.m_schema); }
 
-	// A GROUP of the output — its depth, whether anything is nested under it, and its values: the
-	// level's key fields (the tuple, in the level's own order) with the resources rolled in place.
-	virtual void OnGroup(int level, bool hasChildren, const std::vector<ibValue>& values) {
+	// A GROUP of the output — its depth, its values (the level's key fields in the level's own order,
+	// with the resources rolled in place), and TWO different facts about what is under it.
+	//
+	// ⭐⭐ THEY ARE NOT THE SAME QUESTION, and one bool answering both is how the innermost heading of
+	// a printed report came out looking like a detail line. `hasChildren` is about the FOLD: does this
+	// node stand over anything at all — which is what makes it a heading, and what makes the root the
+	// grand total. `showsWhatIsUnder` is about the OUTPUT: will this output actually print what is
+	// under it — which is what an expander triangle must promise, because a triangle that opens onto
+	// nothing is worse than no triangle.
+	//
+	// They disagree exactly where it matters: a deepest heading over detail rows in an output that
+	// declares no detail level HAS children and SHOWS nothing. Read as "heading?", that printed the
+	// level untinted and unbold; read as "expandable?", a triangle would have opened onto an empty
+	// space. Each consumer takes the one it means — the list the second, the printed report the first.
+	virtual void OnGroup(int level, bool hasChildren, bool showsWhatIsUnder, const std::vector<ibValue>& values) {
 		OnRow(level, hasChildren, values);
 	}
 

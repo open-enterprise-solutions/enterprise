@@ -11,6 +11,7 @@
 #include "backend/query/dataQueryBuilder.h"   // L3 door — reference read by key / scan
 #include "backend/logger/logger.h"        // a read that FAILED is said out loud, unlike a row that is absent
 #include "backend/diagnostics/journal.h"  // every read is counted — how many there are is a measurement, not a guess
+#include "backend/utils/debugTrace.h"     // ibDebugTraceEnabled — the same gate as the hit line
 
 
 bool ibValueReferenceDataObject::ReadData(bool createData)
@@ -39,11 +40,13 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 				if (!m_metaObject->IsDataReference(object->GetMetaID()))
 					m_listObjectValue[object->GetMetaID()] = selection.GetValue(object);
 
-			// ⭐ ONE LINE PER ROW ACTUALLY READ. The register and the read window exist to make this
-			// happen once where it used to happen once per cell, and whether they do is a question a
-			// run answers: forty of these under one print means the window is not covering that path.
-			ibJournalInfo(wxT("reference"), wxT("read %s <%i>"),
-				m_objGuid.str(), static_cast<int>(m_metaObject->GetMetaID()));
+			// ⭐ ONE LINE PER ROW ACTUALLY READ — the other half of the register's measurement, paired
+			// with the "hit" line and behind the same gate for the same reason: rendering a guid and
+			// flushing a line per read costs more than the read on a list of forty.
+			static const bool s_traceRefs = ibDebugTraceEnabled("OES_TRACE_REFS");
+			if (s_traceRefs)
+				ibJournalInfo(wxT("reference"), wxT("read %s <%i>"),
+					m_objGuid.str(), static_cast<int>(m_metaObject->GetMetaID()));
 			return true;
 		}
 		return false;   // NO SUCH ROW - a legitimate answer, and the only one this returns quietly

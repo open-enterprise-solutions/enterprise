@@ -17,6 +17,7 @@
 
 #include "backend/session/session.h"   // ibSession::Current — the register lives on the session
 #include "backend/diagnostics/journal.h"   // a read refused across sessions is said out loud
+#include "backend/utils/debugTrace.h"      // ibDebugTraceEnabled — the register measurement is opt-in
 #include <unordered_map>
 #include <cstring>
 //////////////////////////////////////////////////////////////////////
@@ -109,6 +110,10 @@ std::shared_ptr<ibReferenceTable> TableOfCurrentSession(bool createIfMissing)
 	return session->Local<ibReferenceTable>(createIfMissing);
 }
 
+// Is this identity already being read further up the stack? Defined further down with the read
+// guard's own storage — the same anonymous namespace, split only by where that storage sits.
+bool IsBeingRead(const ibMetaID& metaId, const ibGuid& guid);
+
 }   // namespace
 
 ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibMetaID& id, const ibGuidImpl& objGuid)
@@ -118,6 +123,15 @@ ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibMetaID& id, const 
 	const std::shared_ptr<ibReferenceTable> table = TableOfCurrentSession(/*createIfMissing*/false);
 	if (!table)
 		return nullptr;
+	// ⚠ NOT WHILE THIS IDENTITY IS BEING READ. A row's own attribute can name the row it belongs to —
+	// a Parent pointing at itself, or A -> B -> A, the shapes ibRefReadGuard exists for. Materialising
+	// that attribute asks here, and answering with the very object doing the reading would have it
+	// store a strong pointer to itself: the count never reaches zero, the destructor never runs, and
+	// the entry never leaves this table. The register's whole claim — it holds what is alive and not
+	// one entry more — would fail on exactly the data it was written to survive.
+	if (IsBeingRead(id, objGuid))
+		return nullptr;
+
 	const auto it = table->m_live.find(ibRefKey{ id, objGuid });
 	if (it == table->m_live.end())
 		return nullptr;
@@ -126,7 +140,12 @@ ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibMetaID& id, const 
 	// reads are rows fetched, hits are asks answered by an object somebody already had. A burst with
 	// many reads and no hits means nothing was being shared and the register is buying nothing there —
 	// which is a fact worth having rather than an argument about how the mechanism ought to behave.
-	ibJournalInfo(wxT("reference"), wxT("hit %s <%i>"), ibGuid(objGuid).str(), static_cast<int>(id));
+	//
+	// ⚠ BEHIND A GATE, because this is the busiest path there is: unconditional, it renders a guid and
+	// flushes a line to disk on every hit — measuring the thing by making it slower than it was.
+	static const bool s_traceRefs = ibDebugTraceEnabled("OES_TRACE_REFS");
+	if (s_traceRefs)
+		ibJournalInfo(wxT("reference"), wxT("hit %s <%i>"), ibGuid(objGuid).str(), static_cast<int>(id));
 	return it->second;
 }
 
@@ -151,7 +170,11 @@ void ibReferenceRegistry::Remember(ibValueReferenceDataObject* ref)
 	const std::shared_ptr<ibReferenceTable> table = TableOfCurrentSession(/*createIfMissing*/true);
 	if (!table)
 		return;
-	table->m_live[ibRefKey{ ref->m_metaObject->GetMetaID(), key }] = ref;
+	// ⚠ THE FIRST ONE KEEPS THE SLOT. A second object for one identity is rare but reachable — the
+	// cycle case above builds one deliberately — and overwriting would unregister a reference that is
+	// still alive, leaving it findable by nobody and its own Forget a no-op. The newcomer simply goes
+	// unregistered, which is the ordinary state for a reference built before there was a session.
+	table->m_live.emplace(ibRefKey{ ref->m_metaObject->GetMetaID(), key }, ref);
 
 	// ⭐ THE REFERENCE KEEPS ITS OWN TABLE, not a way to find one later. A value can travel — into a
 	// background job, into another session's call — and be released there; asking "which session is
@@ -221,6 +244,12 @@ namespace {
 		~ibRefReadGuard() { if (m_pushed) --g_refReadDepth; }
 		bool Cycle() const { return m_cycle; }   // true == this identity is already being read up the stack
 	};
+
+	bool IsBeingRead(const ibMetaID& metaId, const ibGuid& guid) {
+		const std::pair<ibMetaID, ibGuid> key{ metaId, guid };
+		return std::find(g_refReadStack, g_refReadStack + g_refReadDepth, key)
+			!= g_refReadStack + g_refReadDepth;
+	}
 }
 
 
@@ -251,7 +280,7 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 	// own object, read under that session's rights. Only a raw pointer handed over lands here, and
 	// that is a defect at the handing-over — said out loud, with the object it happened on.
 	if (m_registryTable && m_registryTable.get() != TableOfCurrentSession(false).get()) {
-		ibJournalError(wxT("reference"), wxT("refused: read attempted from a session other than the one it belongs to <%i:%s>"),
+		ibJournalInfo(wxT("reference"), wxT("refused: read attempted from a session other than the one it belongs to <%i:%s>"),
 			m_metaObject->GetMetaID(), m_objGuid.str());
 		return;
 	}

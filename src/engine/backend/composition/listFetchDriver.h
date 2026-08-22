@@ -60,6 +60,13 @@ public:
 		m_rows.clear();
 	}
 
+	// A LIST TAKES THE SECOND ANSWER — see the note on ibCompositionDriver::OnGroup. What it does with
+	// the flag is draw an expander, and an expander must promise only what the output will actually
+	// show; a heading standing over rows this output does not print must not offer to open.
+	void OnGroup(int level, bool hasChildren, bool showsWhatIsUnder, const std::vector<ibValue>& values) override {
+		OnRow(level, showsWhatIsUnder, values);
+	}
+
 	void OnRow(int level, bool hasChildren, const std::vector<ibValue>& values) override {
 		Row row;
 		row.m_level = level;

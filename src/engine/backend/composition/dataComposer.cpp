@@ -692,8 +692,11 @@ bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driv
 				else
 					row[i] = oc.m_byAlias ? result.GetColumn(oc.m_alias) : result.GetValue(oc.m_col);
 			}
-			// GROUPS the server already folded — a group, said as one.
-			driver.OnGroup(1, /*hasChildren*/true, row);
+			// GROUPS the server already folded — a group, said as one. It stands over nothing HERE
+			// (the server returned the folded rows, not what went into them), so it is a heading with
+			// nothing to open: a list must not offer an expander, a printed report must still style it
+			// as the heading it is. Which is exactly why the two answers travel separately.
+			driver.OnGroup(1, /*hasChildren*/true, /*showsWhatIsUnder*/false, row);
 		}
 	}
 	else if (!hasTotals) {
@@ -798,7 +801,10 @@ bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driv
 					under.Reset();
 				}
 
-				driver.OnGroup(level.Level(), showsWhatIsUnder, row);
+				// BOTH answers travel — see ibCompositionDriver::OnGroup. HasChildren() is the fold's
+				// own fact and is what makes a heading a heading; showsWhatIsUnder is this output's
+				// promise and is what an expander may offer.
+				driver.OnGroup(level.Level(), level.HasChildren(), showsWhatIsUnder, row);
 				walk(under);
 			}
 		};
