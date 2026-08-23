@@ -43,14 +43,24 @@ void ibValueMetaObjectRecordDataMutableRef::FillSourceExplorer(ibSourceDataObjec
 		explorer.AppendColumn(a, /*enabled*/true, /*visible*/ !hidden);
 	}
 
-	// ⭐ THE MOMENT, APPENDED BY HAND — and that is the whole point of it. It is deliberately absent
-	// from the generic list (the list that becomes columns, object members and form fields), so this
-	// is the ONE place it surfaces: the field tree a query is written against.
-	//
-	// NOT VISIBLE: `visible` is what makes a field a DEFAULT COLUMN, and the moment is not something
-	// anyone wants to read in a list — it is an addressable point for a query to compare against, the
-	// same standing the reference and the deletion mark have above.
-	explorer.AppendColumn(GetPointInTime(), /*enabled*/true, /*visible*/false);
+}
+
+// A RECORDER adds one field to that: the MOMENT — appended by hand, and that is the whole point of
+// it. It is deliberately absent from the generic list (the list that becomes columns, object members
+// and form fields), so this is the ONE place it surfaces: the field tree a query is written against.
+//
+// What is appended is the moment AS A COLUMN — constructed from the date and the reference, which is
+// what the layout describes, the sort orders by and the codec reads. NOT VISIBLE: `visible` is what
+// makes a field a DEFAULT COLUMN, and the moment is not something anyone wants to read in a list —
+// it is an addressable point for a query to compare against, the same standing the reference and the
+// deletion mark have.
+void ibValueMetaObjectRecordDataRecorderRef::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	ibValueMetaObjectRecordDataMutableRef::FillSourceExplorer(explorer);
+	// Taken from the QUERYABLE, which is where a constructed column lives — the field tree then offers
+	// exactly what a query can resolve, because both come from one place.
+	if (const ibBackendQueryable* queryable = GetQueryable())
+		explorer.AppendColumn(queryable->ResolveColumnByName(GetPointInTime()->GetName()), /*enabled*/true, /*visible*/false);
 }
 
 // CATALOG variant — reference / deletion mark / data version / predefined name / parent / is-folder hidden;
@@ -79,8 +89,11 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::FillSourceExplorer(ibSource
 		explorer.AppendColumn(a, /*enabled*/true, /*visible*/ !hidden);
 	}
 
-	// Same as the flat variant above — the moment reaches the query and nothing else.
-	explorer.AppendColumn(GetPointInTime(), /*enabled*/true, /*visible*/false);
+	// ⭐ AND NO MOMENT HERE. A moment is a DATE plus the record standing at it, and a catalogue has no
+	// date — there is nothing to build one from (Max, 2026-08-23: "catalogues have no point in time").
+	// It belongs to what registers movements: a document is written AT a moment, and "everything up to
+	// this document" is the question the whole of accounting is asked in. Offering the field on a
+	// source that cannot answer it is a name that reads as empty forever.
 }
 
 // SELECT value — a record's picker value = its REFERENCE cell, read from the row's DEFAULT columns by the

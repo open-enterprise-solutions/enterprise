@@ -13,6 +13,7 @@
 #include "queryTempStore.h"               // ibQueryTempTableStore — WHO keeps the temp tables alive
 #include "tempTableQueryable.h"           // ibTempTableQueryable — a table handed in as a PARAMETER is a source
 #include "queryable.h"                    // ibBackendQueryColumn / ibQueryFilterOp
+#include "columnLayout.h"                 // ColumnFieldNames — a declared query publishes only what it can write
 #include "queryHierarchy.h"               // ibQueryHierarchyScope / ibQueryHierarchyNamedValues — «IN HIERARCHY»
 #include "queryableFactory.h"             // ibQueryableSourceDescriptor — the source that consumes its own condition
 #include "queryProvider.h"                // ibBackendQueryProvider — GetProvider().ResolveReferenceTarget (dot-walk resolution)
@@ -240,6 +241,11 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 		return nullptr;
 	}
 	if (!factory->HasNamespace(ns)) {
+		// ⭐ A KIND NOBODY REGISTERED LOOKS EXACTLY LIKE A KIND THAT DOES NOT EXIST. A metatype reaches
+		// the factory only if its own KIND registered a source descriptor (each does so in its
+		// OnAfterRun — commonObject.cpp), so a missed registration reads to the author as "there is no
+		// such thing", with nothing to distinguish the two. The journal says which it was.
+		ibJournalInfo(wxT("query.road"), wxT("source kind '%s' is not registered with this configuration"), ns);
 		ThrowQueryException(0, 0, wxString::Format(_("unknown metaobject kind '%s'"), ns));
 		return nullptr;
 	}
@@ -1211,11 +1217,11 @@ const ibMetaID kSyntheticColumnBase = 0x50000000u;
 // source count, so they restart with every execution instead of climbing forever.
 const ibMetaID kCteColumnStride = 4096;
 
-class ibSyntheticScalarColumn : public ibRawDBColumn
+class ibSyntheticScalarColumn : public ibBackendColumnRawDB
 {
 public:
 	ibSyntheticScalarColumn(const wxString& alias, ibMetaID id, RawType type = RawType::Number)
-		: ibRawDBColumn(alias, type), m_id(id) {}
+		: ibBackendColumnRawDB(alias, type), m_id(id) {}
 	ibMetaID GetColumnId() const override { return m_id; }
 private:
 	ibMetaID m_id;
@@ -1249,6 +1255,9 @@ public:
 	wxString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }   // the interface hands back a non-const ref
 	ibMetaID           GetColumnId()     const override { return m_id; }
+	// COMPUTED: it exists in the result and nowhere else — minted for an output that has no column
+	// behind it, and read back by its alias.
+	Kind               GetColumnKind()   const override { return Kind::Computed; }
 
 private:
 	wxString                  m_name;
@@ -1310,14 +1319,14 @@ void DetachSchemaFromRunSources(std::vector<OutputColumn>& schema, const ibSubqu
 // The raw read-type of a PLAIN SCALAR column (string / number / date / bool, single CLSID). Returns false
 // for a reference / enum / composite leaf — those are not single-field scalars and cannot ride a synthetic
 // raw column (a multi-type totals dimension is a separate feature).
-bool ScalarRawType(const ibBackendQueryColumn* col, ibRawDBColumn::RawType& out)
+bool ScalarRawType(const ibBackendQueryColumn* col, ibBackendColumnRawDB::RawType& out)
 {
 	const ibTypeDescription& td = col->GetTypeDesc();
 	if (td.GetClsidCount() != 1) return false;
-	if      (td.ContainType(ibValueTypes::TYPE_STRING))  out = ibRawDBColumn::RawType::String;
-	else if (td.ContainType(ibValueTypes::TYPE_NUMBER))  out = ibRawDBColumn::RawType::Number;
-	else if (td.ContainType(ibValueTypes::TYPE_DATE))    out = ibRawDBColumn::RawType::Date;
-	else if (td.ContainType(ibValueTypes::TYPE_BOOLEAN)) out = ibRawDBColumn::RawType::Boolean;
+	if      (td.ContainType(ibValueTypes::TYPE_STRING))  out = ibBackendColumnRawDB::RawType::String;
+	else if (td.ContainType(ibValueTypes::TYPE_NUMBER))  out = ibBackendColumnRawDB::RawType::Number;
+	else if (td.ContainType(ibValueTypes::TYPE_DATE))    out = ibBackendColumnRawDB::RawType::Date;
+	else if (td.ContainType(ibValueTypes::TYPE_BOOLEAN)) out = ibBackendColumnRawDB::RawType::Boolean;
 	else return false;
 	return true;
 }
@@ -1445,6 +1454,27 @@ std::shared_ptr<const ibBackendQueryable> ResolveFrom(const ibQuerySource& src,
 					conditionsOut->push_back(qualified);
 		// Non-owning share: the metadata keeps this source, nobody else may release it.
 		return std::shared_ptr<const ibBackendQueryable>(std::shared_ptr<void>(), q);
+	}
+	// ⭐⭐ AND AN ANONYMOUS NESTED SOURCE TAKES THE VERY SAME ROAD — `FROM (SELECT …) AS s` declared to
+	// the server as `WITH <name> AS (…)` and read by that name.
+	//
+	// It is the SAME question the named result answered above ("can the server read this itself?"),
+	// asked about a query that simply never got a name — so it is given one. That matters far beyond
+	// a hand-written subquery: a COMPOSITION always renders its source as a nested query
+	// (`SELECT … FROM (<the author's query>) AS AuthorQuery`, dataComposer.cpp), and a nested source
+	// is computed in RAM BY CONSTRUCTION (ibSubqueryQueryable::IsComputedInRam) — which is why no
+	// report could fold its totals server-side at any setting, on any engine, whatever its shape.
+	// Not a refusal anybody wrote: the road simply ended before the gate was ever reached.
+	//
+	// The name is SYNTHETIC rather than the source's alias: the reader still writes its own
+	// (`FROM q_sub0 AS AuthorQuery`), so nothing about how the outer query names its columns moves.
+	// Numbered off `owner`, which counts THIS run's sources and resets with it — both roads out of
+	// here push into it, so no two subqueries of one run can be handed the same name.
+	if (declareOn != nullptr) {
+		const wxString name = wxString::Format(wxT("q_sub%d"), static_cast<int>(owner.size()));
+		if (std::shared_ptr<const ibBackendQueryable> cte =
+		        DeclareNamedResultAsCte(*declareOn, name, *src.m_subquery, params, owner))
+			return cte;
 	}
 	return WrapSelectAsQueryable(*src.m_subquery, params, owner);   // FROM (SELECT …) AS alias
 }
@@ -1874,6 +1904,17 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 	return wrapped;
 }
 
+// ⭐ WHY A QUERY WENT HOME INSTEAD OF TO THE SERVER — said where the decision is made, and named.
+// Every exit below is "the rows road takes it", which is correct and invisible: the report is right
+// and the whole source came into memory to make it so. In Debug the reason is one line in the
+// journal beside the RAM read it causes; in Release the macro is the bare `return nullptr` it was.
+// Format AND arguments, and the prefix GLUED to the format rather than printed through it: adjacent
+// literals are one literal, so there is one format string and one pass. `name` is the declaration's
+// own subject, so it is filled in here and the callsite writes only its reason.
+#define CteDecline(fmt, ...) \
+	do { ibJournalInfo(wxT("query.road"), wxT("nested source '%s' not declared to the server: ") fmt, \
+	                   name, ##__VA_ARGS__); return nullptr; } while (false)
+
 // A NAMED RESULT, DECLARED ON THE READER'S DOOR (the decision is in ResolveFrom — see there).
 std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBuilder& outer,
 	const wxString& name, const ibQuerySelect& sel,
@@ -1882,7 +1923,7 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// THE ENGINE MUST BE ABLE TO READ ONE. Asked of the connected driver through L2's own question,
 	// never of its dictionary — and a driver that cannot simply sends this back to the rows road.
 	if (!ibQueryComposer::CanDeclareNamedQuery(outer.GetHolder()))
-		return nullptr;
+		CteDecline(wxT("this engine has no WITH"));
 
 	// WHAT THE SERVER CANNOT READ FOR US goes back the other way rather than being half-translated:
 	// a named query whose own source is computed in RAM (a register slice, a nested subquery, a temp
@@ -1891,21 +1932,40 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// ⚠ ASKED FIRST, BEFORE ANY WORK. The JOIN check used to sit after the inner door was built, so a
 	// named query with a join resolved its sources twice — once here and once on the rows road that
 	// then took it. A refusal costs nothing when it is the first thing said.
-	if (sel.m_hasTotals || !sel.m_unions.empty() || !sel.m_joins.empty())
-		return nullptr;
+	if (sel.m_hasTotals)          CteDecline(wxT("it has TOTALS, which is a tree and not a table"));
+	if (!sel.m_unions.empty())    CteDecline(wxT("it has a UNION (the inner door is built single-source)"));
+	if (!sel.m_joins.empty())     CteDecline(wxT("it has a JOIN (the inner door is built single-source)"));
+
+	// …AND THE WORDS A DECLARATION WOULD DROP ON THE FLOOR. Each of these is carried by the rows road
+	// and by nothing here, so taking this road with one of them written is the SILENT kind of wrong —
+	// the query still runs and answers differently:
+	//   TOP        — the limit lives on the door's terminal; a CTE built without it publishes EVERY
+	//                row, and the reader above folds a total over rows the author excluded;
+	//   FOR UPDATE — a declaration holds nothing, so the rows an author believes locked are not;
+	//   INTO       — it materialises a temp table, which is the opposite of declaring a query.
+	// (The same three the FROM-flattening rule refuses, for the same reason — queryRewrite.cpp.)
+	if (sel.m_top > 0)            CteDecline(wxT("it has TOP, whose limit a declaration would drop"));
+	if (sel.m_forUpdate)          CteDecline(wxT("it has FOR UPDATE, and a declaration holds nothing"));
+	if (!sel.m_intoTemp.IsEmpty()) CteDecline(wxT("it has INTO, which materialises rather than declares"));
 
 	std::shared_ptr<const ibBackendQueryable> qi;
 	try {
 		qi = ResolveFrom(sel.m_from, params, owner);   // its own sources — nested named results included
 	}
 	catch (const ibBackendException&) {
-		return nullptr;   // unresolvable HERE is not a refusal: the rows road resolves it the same way
+		// unresolvable HERE is not a refusal: the rows road resolves it the same way
+		CteDecline(wxT("its own source did not resolve on this road"));
 	}
-	if (qi == nullptr || qi->IsComputedInRam())
-		return nullptr;
+	if (qi == nullptr)            CteDecline(wxT("its own source did not resolve"));
+	if (qi->IsComputedInRam())
+		CteDecline(wxT("its own source '%s' is computed in RAM"), qi->GetQueryName());
 
 	ibDataQueryBuilder inner;
 	inner.From(qi, sel.m_from.m_alias);
+	// SELECT ALLOWED travels DOWN, to the door that reads the restricted source. It is the quiet form
+	// of a policy refusal — read what you may rather than raise — and the reader above cannot carry it
+	// for this source: a declared query is a NAME to it, with no policy of its own left to soften.
+	inner.Allowed(sel.m_allowed);
 
 	std::vector<OutputColumn> innerSchema;
 	// Bound by the one name a source has — see WrapSelectAsQueryable for what binding by the alias
@@ -1920,17 +1980,52 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	try {
 		PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true);
 	}
-	catch (const ibBackendException&) {
-		return nullptr;
+	catch (const ibBackendException& err) {
+		// ⚠ THE DESCRIPTION IS DATA, never the format — a message carrying a stray `%` would be read
+		// as a conversion and print whatever happened to be next (CLAUDE.md, the same rule wxLogError
+		// follows).
+		CteDecline(wxT("%s"), err.GetErrorDescription());
 	}
 
+	// ⭐ WHAT THE DECLARATION PUBLISHES IS WHAT ITS STATEMENT CAN WRITE. A column the layout gives no
+	// fields for has nothing to project, so publishing it would name something the CTE's own SELECT
+	// never wrote — which is precisely the `-206 Column unknown` this road first hit (2026-08-23).
+	//
+	// Dropped on BOTH sides by the same test (AttachNamedQueries drops it from the projection), because
+	// a published set and a select list that disagree is the shape of that error.
 	std::vector<ibCteQueryable::Field> fields;
 	fields.reserve(innerSchema.size());
-	for (const OutputColumn& oc : innerSchema)
-		fields.push_back({ oc.m_name, oc.m_type });
+	for (const OutputColumn& oc : innerSchema) {
+		// Nothing to write into a SELECT means nothing to publish — and a column whose fields belong to
+		// OTHER columns says so itself (OwnsItsFields): the MOMENT is read out of the date and the
+		// reference, which the declaration publishes under their own physical names, so declaring it
+		// too would name fields nothing wrote.
+		if (oc.m_col != nullptr && (oc.m_col->IsSyntheticColumn() || ColumnFieldNames(oc.m_col).empty()))
+			continue;
+		// …and the PHYSICAL name comes from the source column: `fld<metaID>`, unique per metatype, so
+		// the fields two sources publish cannot collide even when both are called `Ref` or
+		// `PointInTime`. Falls back to the output name where there is no column behind it (an
+		// aggregate, a computed projection) — those are already unique by their own alias.
+		fields.push_back({ oc.m_name, oc.m_col != nullptr ? oc.m_col->GetPhysicalName() : oc.m_name, oc.m_type });
+	}
 	if (fields.empty())
-		return nullptr;   // nothing to read by name
+		CteDecline(wxT("it publishes no fields to be read by name"));
 
+	// ⚠ AND EVERY PUBLISHED NAME MUST BE ITS OWN. A declaration is read BY NAME, so two outputs called
+	// the same thing are not a preference — the engine refuses the statement outright ("column X was
+	// specified multiple times"), and a reader could not have told them apart anyway.
+	//
+	// Two sources are what makes this reachable: `SELECT A.Ref, B.Ref` publishes `Ref` twice, and a
+	// column that spreads (a reference, a document's MOMENT) publishes several fields under each of
+	// those names. Today a JOIN or a UNION already sends this road back, so it cannot happen; this
+	// stands so that lifting THAT refusal cannot quietly produce an unparseable statement instead.
+	for (size_t i = 0; i < fields.size(); ++i)
+		for (size_t j = i + 1; j < fields.size(); ++j)
+			if (fields[i].m_name.IsSameAs(fields[j].m_name, false))
+				CteDecline(wxT("two outputs publish the same name '%s'"), fields[i].m_name);
+
+	ibJournalInfo(wxT("query.road"), wxT("SERVER: nested source declared as WITH %s (%u fields)"),
+	              name, static_cast<unsigned>(fields.size()));
 	outer.With(name, inner);   // …and the declaration lands on the READER's statement
 
 	// ⚠ THE IDS ARE NUMBERED FROM THE RUN, not from a counter that keeps growing. `ibMetaID` is a
@@ -1944,6 +2039,8 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	owner.push_back(source);
 	return source;
 }
+
+#undef CteDecline   // one function's word — it ends with the function
 
 // UNION — every branch (the first SELECT's core + each m_unions branch) is wrapped as a queryable and
 // stacked vertically; the trailing ORDER BY applies to the whole. The composer realizes the stack
@@ -3341,7 +3438,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 		{
 			ibQueryRamTable counted;
 			auto column = std::make_shared<ibSyntheticScalarColumn>(
-				wxT("Count"), kSyntheticColumnBase, ibRawDBColumn::RawType::Number);
+				wxT("Count"), kSyntheticColumnBase, ibBackendColumnRawDB::RawType::Number);
 			counted.AddColumn(column->GetColumnId(), wxT("Count"), ibTypeDescription());
 			const long row = counted.AppendRow();
 			counted.SetCell(row, column->GetColumnId(), ibValue(static_cast<signed int>(r.m_rowCount)));
@@ -3562,7 +3659,7 @@ ibDataQueryResult ibQueryLowering::ExecuteSourceless(const ibQuerySelect& ast,
 		const ibValue value = EvalValue(*projection.m_expr, params);
 		const wxString name = OutputNameFor(ast, projection, index++);
 
-		auto column = std::make_shared<ibSyntheticScalarColumn>(name, nextId++, ibRawDBColumn::RawType::String);
+		auto column = std::make_shared<ibSyntheticScalarColumn>(name, nextId++, ibBackendColumnRawDB::RawType::String);
 		table.AddColumn(column->GetColumnId(), name, ibTypeDescription());
 		values.push_back(value);
 
@@ -3623,7 +3720,7 @@ void ibQueryLowering::DescribeOutput(const ibQuerySelect& astIn,
 					projection.m_expr->m_path.empty() ? wxString() : projection.m_expr->m_path.back()));
 
 			const wxString name = OutputNameFor(ast, projection, index++);
-			auto column = std::make_shared<ibSyntheticScalarColumn>(name, nextId++, ibRawDBColumn::RawType::String);
+			auto column = std::make_shared<ibSyntheticScalarColumn>(name, nextId++, ibBackendColumnRawDB::RawType::String);
 
 			OutputColumn oc;
 			oc.m_name     = name;
@@ -4046,7 +4143,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				// own. Without that id the level was indistinguishable from the row's own attribute (a
 				// self-reference walks back to the SAME metaID), so two levels folded as one and the value
 				// came back empty (2026-08-20: three groupings produced one blank row).
-				ibRawDBColumn::RawType rt;
+				ibBackendColumnRawDB::RawType rt;
 				const bool scalarLeaf = ScalarRawType(leaf, rt);
 				if (!multiSource && !scalarLeaf) {
 					const wxString alias = wxString::Format(wxT("dim%u"), static_cast<unsigned>(nextSynthId - kSyntheticColumnBase));

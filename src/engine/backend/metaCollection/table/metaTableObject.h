@@ -4,7 +4,7 @@
 #include "backend/metaCollection/metaObjectComposite.h"
 #include "backend/query/queryable.h"
 #include "backend/query/queryableFactory.h"   // ibQueryableSourceDescriptor (the tabular L4 source descriptor)
-#include "backend/query/queryColumn.h"         // ibRawDBColumn — the section's owner reference, as a field
+#include "backend/query/queryColumn.h"         // ibBackendColumnRawDB — the section's owner reference, as a field
 
 #include <memory>
 
@@ -32,7 +32,7 @@ public:
 
 private:
 	const ibValueMetaObjectTableDataRef*    m_meta;
-	mutable std::unique_ptr<ibRawDBColumn>  m_ownerRef;
+	mutable std::unique_ptr<ibBackendColumnRawDB>  m_ownerRef;
 };
 
 // ibTabularSourceDescriptor — the DB-backed tabular section's L4 source descriptor. Like the

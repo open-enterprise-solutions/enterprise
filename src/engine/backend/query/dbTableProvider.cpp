@@ -143,8 +143,8 @@ ibQueryExprPtr ColumnConst(const ibBackendQueryColumn* col, const ibValue& v)
 	// with the guid's text compared 36 characters against a sixteen-byte field - no error, no empty
 	// result with a reason, just a row that is there and is never found.
 	const bool identityValued = col->IsRawColumn()
-		? (static_cast<const ibRawDBColumn*>(col)->GetRawType() == ibRawDBColumn::RawType::Guid
-			|| static_cast<const ibRawDBColumn*>(col)->GetRawType() == ibRawDBColumn::RawType::Reference)
+		? (static_cast<const ibBackendColumnRawDB*>(col)->GetRawType() == ibBackendColumnRawDB::RawType::Guid
+			|| static_cast<const ibBackendColumnRawDB*>(col)->GetRawType() == ibBackendColumnRawDB::RawType::Reference)
 		: IsReferenceValued(col);
 	if (!identityValued)
 		return ibConst(v);
@@ -385,10 +385,10 @@ ibValue ReadScalarByAlias(const ibBackendQueryColumn* col, const wxString& alias
 {
 	ibValue v;
 	if (col->IsRawColumn()) {
-		switch (static_cast<const ibRawDBColumn*>(col)->GetRawType()) {
-		case ibRawDBColumn::RawType::Number:  v = cursor.GetResultNumber(alias); break;
-		case ibRawDBColumn::RawType::Date:    v = cursor.GetResultDate(alias);   break;
-		case ibRawDBColumn::RawType::Boolean: v = cursor.GetResultBool(alias);   break;
+		switch (static_cast<const ibBackendColumnRawDB*>(col)->GetRawType()) {
+		case ibBackendColumnRawDB::RawType::Number:  v = cursor.GetResultNumber(alias); break;
+		case ibBackendColumnRawDB::RawType::Date:    v = cursor.GetResultDate(alias);   break;
+		case ibBackendColumnRawDB::RawType::Boolean: v = cursor.GetResultBool(alias);   break;
 		default:                              v = cursor.GetResultString(alias); break;   // String / Binary
 		}
 		return v;
@@ -1366,11 +1366,29 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 		else            q.From(mainTable);
 	}
 
+// ⭐⭐ RUN WHAT WAS ASSEMBLED FROM **THIS SPEC** — the statement, and the declarations it stands on.
+//
+// `q.Execute()` renders the fluent state alone, and a spec's `WITH` list is not part of it: the door
+// holds the named queries, the IR carries them, and the fluent builder never sees either. Every
+// terminal that ran the fluent state directly therefore dropped them — which nothing noticed while
+// the only declared source was a package's named result, read by the page road. It stops being
+// invisible the moment an ordinary nested source is declared instead (queryLowering ResolveFrom): the
+// engine is handed `FROM q_sub0` with nothing declaring `q_sub0`, and answers "table unknown".
+//
+// One door rather than the same three lines in five terminals: build the IR, attach what the spec
+// declared, run that. A terminal keeps saying what it assembles; this says how a spec is run.
+static ibQueryResult RunSpecStatement(const ibDataQuerySpec& spec, ibDatabaseQueryBuilder& q)
+{
+	ibQueryIR ir = q.Build();
+	ibDbTableProvider::AttachNamedQueries(spec, ir);
+	return q.ExecuteIR(ir);
+}
+
 ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spec)
 	{
 		ibDatabaseQueryBuilder q(spec.m_holder);
 		BuildAggregateQuery(spec, q);
-		return ibDataQueryResult(q.Execute(), spec.m_queryable);
+		return ibDataQueryResult(RunSpecStatement(spec, q), spec.m_queryable);
 	}
 
 // ⭐⭐ THE SAME ASSEMBLY, STOPPED ONE STEP EARLIER. `Build()` renders nothing and touches no
@@ -1481,7 +1499,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 		// Run server-side, assemble each output into the unified RAM table — keyed by the output column's
 		// model id (so GetValue(col) works) AND named by its alias (so GetColumn(alias) works). The join +
 		// the cross-table filter ran in the DBMS; only the projected result transits.
-		ibQueryResult cursor = q.Execute();
+		ibQueryResult cursor = RunSpecStatement(spec, q);
 
 		ibQueryRamTable out;
 		for (const OutPlan& p : plans)
@@ -1492,7 +1510,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 			for (const OutPlan& p : plans) {
 				ibValue v;
 				if (p.raw) v = ReadScalarByAlias(p.col, p.alias, cursor);
-				else       ibColumnCodec::ReadValue(p.prefix, p.col, p.meta, v, cursor);   // reference/enum/variant reassembly
+				else       p.col->ReadValue(p.prefix, p.meta, v, cursor);   // asked of the COLUMN — the codec is its default
 				out.SetCell(r, p.col->GetColumnId(), v);
 			}
 		}
@@ -1606,7 +1624,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteGroupLevelPage(const ibDataQuerySpec
 			q.Limit(page.m_count);   // LIMIT the GROUPS (dim is the group key) -- the page-sized level, not all groups
 
 		q.From(mainTable);           // the single physical source (a plain single-table read; the gate rejects joins)
-		return ibDataQueryResult(q.Execute(), queryable);
+		return ibDataQueryResult(RunSpecStatement(spec, q), queryable);
 	}
 
 ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuerySpec& spec)
@@ -1670,7 +1688,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 		if (spec.m_topCount > 0)
 			q.Limit(spec.m_topCount);   // SELECT TOP n + GROUP BY across the co-located join
 
-		ibQueryResult cursor = q.Execute();
+		ibQueryResult cursor = RunSpecStatement(spec, q);
 
 		// Materialise into the unified RAM table: group columns keyed by model id (read via the g<i>
 		// scalar alias), aggregates keyed by a synthetic id far from any metaID (read by their alias).
@@ -1689,7 +1707,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 			for (const GroupPlan& gp : groupPlans) {
 				ibValue v;
 				if (gp.scalar) v = ReadScalarByAlias(gp.col, gp.tag, cursor);
-				else           ibColumnCodec::ReadValue(gp.tag, gp.col, gp.meta, v, cursor);   // reference / variant group key
+				else           gp.col->ReadValue(gp.tag, gp.meta, v, cursor);   // reference / variant group key
 				out.SetCell(r, gp.col->GetColumnId(), v);
 			}
 			ibMetaID aid = aggBaseId;
@@ -1890,7 +1908,9 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 		if (page.m_count > 0)  outer = ibLimit(outer, page.m_count);
 
 		ibDatabaseQueryBuilder q(spec.m_holder);
-		ibQueryResult cursor = q.ExecuteIR(ibQueryIR(outer));
+		ibQueryIR ir(outer);
+		AttachNamedQueries(spec, ir);   // a branch may read a DECLARED name — see RunSpecStatement
+		ibQueryResult cursor = q.ExecuteIR(ir);
 
 		ibQueryRamTable out;
 		for (size_t i = 0; i < outs.size(); ++i)
@@ -1940,28 +1960,55 @@ static const std::vector<ibDataQueryBuilder::AggregateItem>& RollupAggregatesOf(
 	return spec.m_aggregates != nullptr ? *spec.m_aggregates : s_none;
 }
 
+// ⭐⭐ A REFUSAL THAT SAYS ITS OWN NAME. This gate answers a bare `false` about a dozen different
+// things, and a caller reading it learns only that the report will be slower — never why, and never
+// whether the reason is one it could fix (a sort it did not need) or one nothing can (an engine with
+// no ROLLUP). Written at the point the refusal is BORN, each one is a sentence.
+//
+// Takes a FORMAT AND ITS ARGUMENTS, like every other line in this codebase: the fact that names a
+// refusal (the column, the source, the level) is usually right there, and a door that took only a
+// finished string made each callsite build one first. The prefix stays here — one place decides how
+// a refusal reads — and the callsite writes only what is particular to it.
+//
+// ⚠ THE PREFIX IS GLUED TO THE FORMAT, not printed through it. Adjacent literals are one literal to
+// the compiler, so there is ONE format string and ONE pass — a `wxString::Format` fed into a `%s`
+// would be a format rendered by a format, which costs a string, drops the compile-time check on the
+// arguments and reads like an accident.
+//
+// Debug only, arguments included: in Release the journal call is `((void)0)` and this is `return
+// false` — which is what the gate was before.
+#define RollupDecline(fmt, ...) \
+	do { ibJournalInfo(wxT("query.road"), wxT("server fold declined: ") fmt, ##__VA_ARGS__); \
+	     return false; } while (false)
+
 bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 	{
 		// Single-source DB queryable (a multi-source totals goes through the co-located / RAM paths).
-		if (spec.m_root != nullptr && spec.m_root->m_kind != ibQueryNode::Kind::Source) return false;
+		if (spec.m_root != nullptr && spec.m_root->m_kind != ibQueryNode::Kind::Source)
+			RollupDecline(wxT("more than one source (co-located / RAM road)"));
 		const ibBackendQueryable* q = spec.m_queryable;
-		if (q == nullptr || q->IsComputedInRam())                 return false;
+		if (q == nullptr)                                         RollupDecline(wxT("no source"));
+		if (q->IsComputedInRam())
+			RollupDecline(wxT("source '%s' is computed in RAM"), q->GetQueryName());
 
 		const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
-		if (levels.empty())                                       return false;
+		if (levels.empty())                                       RollupDecline(wxT("no totals levels"));
 
 		// ⚠ A DERIVED SOURCE AND A DOT-WALK CANNOT BOTH BE HONOURED. A source that is not a table puts
 		// its own relation in the FROM (GetDerivedRelation), and the reference JOIN chain a dot-walked
 		// key rides is built over the main TABLE — there is none to hang it on. Both are fine alone;
 		// together they keep the RAM fold, which reads either.
 		if (q->GetSourceRelation(q->GetQueryTableName()) != nullptr) {
-			if (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty()) return false;
+			if (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty())
+				RollupDecline(wxT("a derived source cannot also carry a dot-walked dimension"));
 			if (spec.m_groupPaths != nullptr)
 				for (const std::vector<const ibBackendQueryColumn*>& gp : *spec.m_groupPaths)
-					if (!gp.empty())                              return false;
+					if (!gp.empty())
+						RollupDecline(wxT("a derived source cannot also carry a dot-walked group key"));
 			for (const ibTotalLevel& level : levels)
 				for (const ibTotalField& f : level.m_fields)
-					if (!f.m_path.empty())                        return false;
+					if (!f.m_path.empty())
+						RollupDecline(wxT("a derived source cannot also carry a dot-walked level field"));
 		}
 
 		// ⚠ THREE REFUSALS THAT COULD NOT BE STATED BEFORE, because a flat column list does not carry
@@ -1970,13 +2017,15 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 			// DETAIL RECORDS — a level with no fields. ROLLUP folds the rows away, so there would be
 			// nothing left to hang under the last heading. (The phantom level that WILL carry them to
 			// the server is a separate step — docs/data-composer.md § the phantom level.)
-			if (level.m_fields.empty())                           return false;
+			if (level.m_fields.empty())
+				RollupDecline(wxT("a level with no fields - detail records (the phantom level is not built)"));
 			for (const ibTotalField& f : level.m_fields) {
-				if (f.m_col == nullptr)                           return false;
+				if (f.m_col == nullptr)                           RollupDecline(wxT("a level field with no column"));
 				// A HIERARCHY UNFOLD walks the reference's parent chain — the RAM fold's
 				// AttachDimValue does that, and no GROUP BY can. Folded here it would come back as a
 				// plain grouping under a word that asked for something else.
-				if (f.m_dim != ibDimensionKind::Elements)         return false;
+				if (f.m_dim != ibDimensionKind::Elements)
+					RollupDecline(wxT("level '%s' asks for a HIERARCHY unfold"), f.m_col->GetName());
 				// A DOT-WALKED DIMENSION (`Producer.Region`) rides a reference JOIN chain, the same
 				// one a dot-walked flat key rides — allowed WHEN every non-leaf hop is a SINGLE-TARGET
 				// reference, so the chain is resolvable from metadata alone. A composite / multi-target
@@ -1985,7 +2034,8 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 					const ibBackendQueryable* walk = q;
 					for (size_t s = 0; s + 1 < f.m_path.size() && walk != nullptr; ++s)
 						walk = walk->GetProvider().ResolveReferenceTarget(walk, f.m_path[s]);
-					if (walk == nullptr)                          return false;
+					if (walk == nullptr)
+						RollupDecline(wxT("dot-walked dimension '%s' has an unresolvable hop"), f.m_col->GetName());
 				}
 			}
 		}
@@ -1997,16 +2047,20 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 		// else keeps the RAM fold, which orders the rows and then groups them in first-seen order.
 		if (spec.m_sorts != nullptr)
 			for (const ibQuerySortItem& s : *spec.m_sorts) {
-				if (s.m_expr != nullptr || !s.m_path.empty())     return false;   // computed / dot-walk sort
-				if (s.m_col == nullptr)                           return false;   // row-key sort — no such thing over groups
+				if (s.m_expr != nullptr || !s.m_path.empty())
+					RollupDecline(wxT("a computed / dot-walked sort over a folded result"));
+				if (s.m_col == nullptr)
+					RollupDecline(wxT("a row-key sort - there is no such thing over groups"));
 				bool isLevelField = false;
 				for (const ibTotalLevel& level : levels)
 					for (const ibTotalField& f : level.m_fields)
 						if (f.m_col == s.m_col) { isLevelField = true; break; }
-				if (!isLevelField)                                return false;
+				if (!isLevelField)
+					RollupDecline(wxT("sort by '%s', which no level groups by"), s.m_col->GetName());
 			}
 
-		if (!spec.m_dotWalks->empty() || !spec.m_keyIn->empty())  return false;
+		if (!spec.m_dotWalks->empty())                            RollupDecline(wxT("a dot-walked projection"));
+		if (!spec.m_keyIn->empty())                               RollupDecline(wxT("a row-key IN set"));
 
 		// A dot-walk GROUP key rides a reference JOIN chain (ExecuteRollupTotals builds it) — allowed WHEN every
 		// NON-leaf path segment is a SINGLE-TARGET reference (structurally resolvable, metadata-only, no DB). A
@@ -2017,26 +2071,29 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 				const ibBackendQueryable* walk = q;
 				for (size_t s = 0; s + 1 < gp.size() && walk != nullptr; ++s)
 					walk = walk->GetProvider().ResolveReferenceTarget(walk, gp[s]);
-				if (walk == nullptr) return false;   // an unresolvable hop -> RAM-fold
+				if (walk == nullptr)
+					RollupDecline(wxT("a dot-walked group key has an unresolvable hop"));
 			}
 		// Group keys: SCALAR or a REFERENCE / variant (a reference groups by its full spread as ONE composite
 		// ROLLUP element, reassembled on read — RunRollupTotals handles it). Aggregate inputs stay SCALAR;
 		// the null-column check for the keys is made above, where the levels are walked.
 		ColocatedLeaves one; one.push_back(q);
 		for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec))
-			if (a.m_col != nullptr && !ScalarReadable(a.m_col, one)) return false;
+			if (a.m_col != nullptr && !ScalarReadable(a.m_col, one))
+				RollupDecline(wxT("aggregate input '%s' is not a scalar column"), a.m_col->GetName());
 		return true;
 	}
 
 bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
 	{
-		if (!CanRollupTotalsShape(spec)) return false;
+		if (!CanRollupTotalsShape(spec)) return false;   // the shape said why, where it decided
 		// The connected driver must be able to fold the levels itself (PG; NOT Firebird through 5.0,
 		// NOT SQLite -> RAM). Asked of L2 rather than read off its dictionary: what a driver CAN DO is
 		// a question, and this tier has no business knowing which field carries the answer.
 		ibConnectionScope scope(spec.m_holder);
-		if (!scope) return false;
-		return ibCanPushRollup(scope.get());
+		if (!scope)                        RollupDecline(wxT("no connection to ask whether it folds"));
+		if (!ibCanPushRollup(scope.get())) RollupDecline(wxT("this engine has no GROUP BY ROLLUP"));
+		return true;
 	}
 
 // Shared ROLLUP-totals core: SELECT g<i>, GROUPING(g<i>) AS grp<i>, <agg> AS alias FROM <from>
@@ -2183,6 +2240,12 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	if (!orderKeys.empty())
 		folded = ibSort(folded, std::move(orderKeys));
 	ibQueryIR ir(folded);
+	// ⭐ …AND WHATEVER THIS STATEMENT DECLARED COMES WITH IT. The fold assembles its own IR out of the
+	// spec rather than going through BuildPageIR, so the `WITH` list had nobody to attach it: a source
+	// that is a DECLARED name (ibCteQueryable — an author's query the server reads itself) rendered as
+	// a bare `FROM q_sub0` and the engine answered "table unknown". The FROM and the declaration are
+	// one statement; whichever door writes the first writes the second.
+	ibDbTableProvider::AttachNamedQueries(spec, ir);
 	ibDatabaseQueryBuilder qb(spec.m_holder);
 	ibQueryResult cursor = qb.ExecuteIR(ir);
 
@@ -2197,7 +2260,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			for (const FieldPlan& fp : levelPlans[i].fields) {
 				ibValue v;
 				if (fp.scalar) v = ReadScalarByAlias(fp.col, fp.tag, cursor);
-				else           ibColumnCodec::ReadValue(fp.tag, fp.col, fp.meta, v, cursor);   // reference / variant reassembly
+				else           fp.col->ReadValue(fp.tag, fp.meta, v, cursor);   // reference / variant reassembly
 				values.push_back(v);
 			}
 			rr.levelValues.push_back(std::move(values));
@@ -2496,14 +2559,18 @@ bool ibDbTableProvider::CanColocateRollupTotals(const ibDataQuerySpec& spec)
 
 bool ibDbTableProvider::CanPushColocatedRollupTotals(const ibDataQuerySpec& spec)
 	{
-		if (!CanColocateRollupTotals(spec)) return false;
+		if (!CanColocateRollupTotals(spec))
+			RollupDecline(wxT("the join tree is not co-locatable for a folded read"));
 		// The connected driver must be able to fold the levels itself (FB5 / PG; NOT SQLite
 		// -> RAM). Asked of L2 rather than read off its dictionary: what a driver CAN DO is a question,
 		// and this tier has no business knowing which field carries the answer.
 		ibConnectionScope scope(spec.m_holder);
-		if (!scope) return false;
-		return ibCanPushRollup(scope.get());
+		if (!scope)                        RollupDecline(wxT("no connection to ask whether it folds"));
+		if (!ibCanPushRollup(scope.get())) RollupDecline(wxT("this engine has no GROUP BY ROLLUP"));
+		return true;
 	}
+
+#undef RollupDecline   // the gate's own word — it ends with the gate
 
 ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuerySpec& spec)
 	{
@@ -2550,39 +2617,14 @@ ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuery
 // ONLY place SetValueColumn is called.
 void BindWriteValue(ibQueryStatement& stmt, const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& v, int& pos)
 {
-	if (col->IsRawColumn()) {
-		switch (static_cast<const ibRawDBColumn*>(col)->GetRawType()) {
-			case ibRawDBColumn::RawType::String:    stmt.SetParamString(pos++, v.GetString());  break;
-			case ibRawDBColumn::RawType::Guid: {
-				// The guid's STORAGE form, which is the reference key's form — one representation, so
-				// a row key and a reference to that row are byte-comparable. The text spelling is a
-				// rendering for humans and never reaches the column.
-				//
-				// ⭐ AND THE VALUE'S OWN GUID IS TAKEN AS A GUID. It used to be read out as TEXT and
-				// parsed back here — the identity spelled into 36 characters and reassembled from them
-				// on the way to a sixteen-byte column, for no reason but that the value had no guid to
-				// ask for. It has one, and GuidOf is where that question is answered for everybody.
-				const ibReference key{ GuidOf(v) };
-				stmt.SetParamBlob(pos++, &key, sizeof(ibReference));
-				break;
-			}
-			case ibRawDBColumn::RawType::Number:    stmt.SetParamNumber(pos++, v.GetNumber());  break;
-			case ibRawDBColumn::RawType::Date:      stmt.SetParamDate  (pos++, v.GetDate());    break;
-			case ibRawDBColumn::RawType::Boolean:   stmt.SetParamBool  (pos++, v.GetBoolean()); break;
-			// Reference / Blob: UNREACHABLE today, and the old "TODO: real blob bind" was a false
-			// promise twice over. Nothing constructs a RawType::Reference column, and the only
-			// RawType::Blob producer (the register's rowData scaffold) was dropped 2026-08-02.
-			// Beyond that, ibValue has no binary tag (ibValueTypes: Empty/Bool/Number/Date/String/
-			// Null/Reffer/…), so a "real" bind has nowhere to put the bytes — giving these a proper
-			// SetParamBlob path means giving ibValue a binary kind FIRST. String is the honest
-			// degenerate binding until then.
-			case ibRawDBColumn::RawType::Reference: stmt.SetParamString(pos++, v.GetString());  break;
-			case ibRawDBColumn::RawType::Blob:      stmt.SetParamString(pos++, v.GetString());  break;
-		}
-		return;
-	}
-	ibColumnCodec::WriteValue(col, metaData, v, &stmt, pos);
+	// The column decides — a raw one binds itself (ibBackendColumnRawDB::BindValue, below), everything
+	// else is the codec's decomposition. This door stays because callers hold a column and a statement
+	// and should not have to know which of the two applies.
+	col->BindValue(stmt, metaData, v, pos);
 }
+
+// (A RAW COLUMN'S OWN READ AND BIND live in queryColumn.cpp, beside the defaults they override — what
+//  a column DOES is one file, and this one stays the provider.)
 
 // The L2-1 write CORE — buried in the provider. Identity is the WHERE section (spec conditions):
 // each condition column (a RAW uuid column, or a register's primary-key attribute) = value.
@@ -2636,7 +2678,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 
 			// COMPARED BY FIELD NAME, NOT BY COLUMN POINTER.
 			//
-			// A raw column (ibRawDBColumn — the parent row key a tabular section puts on every line)
+			// A raw column (ibBackendColumnRawDB — the parent row key a tabular section puts on every line)
 			// is handed to SetValue BY VALUE, and the door owns a COPY of each one. So the same
 			// logical column staged on two rows is two objects at two addresses, and a pointer
 			// comparison calls them different — which would refuse every tabular section with more
@@ -2701,7 +2743,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 						continue;
 					}
 				}
-				BindWriteValue(upd, wv.first, metaData, wv.second, p);
+				wv.first->BindValue(upd, metaData, wv.second, p);   // asked of the COLUMN — the codec is its default
 			}
 			// WHERE = the folded RLS predicate AND the door's OWN .Where() conditions. The conditions
 			// were dropped here before, which made `.Where(...).Update()` update by primary key alone
@@ -2735,7 +2777,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 				const std::vector<wxString> fields = ColumnFieldNames(wv.first);
 				ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 				int cp = 1;
-				BindWriteValue(capture, wv.first, metaData, wv.second, cp);
+				wv.first->BindValue(capture, metaData, wv.second, cp);
 				const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 
 				// ONE VALUE PER FIELD, EXACTLY — the bind is positional, so a column that produced a
@@ -2857,7 +2899,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		ibQueryStatement statement(l2kind, table, columns, matchKeys, spec.m_holder);
 		int position = 1;
 		for (const auto& wv : firstRow)
-			BindWriteValue(statement, wv.first, metaData, wv.second, position);
+			wv.first->BindValue(statement, metaData, wv.second, position);
 
 		// A FAILED WRITE MUST SAY WHY. `catch (...) -> -1` turned every driver error — no such table, no such
 		// column, a constraint — into a bare "false" that the object's SaveData reported as "failed to save the
@@ -3302,6 +3344,61 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 			// The inner query is read WHOLE — a page request belongs to the reader, not to what it
 			// reads: limiting the named query would silently narrow every mention of it.
 			ibQueryIR innerIR = BuildPageIR(innerSpec, ibReadPageRequest{}, innerSort);
+
+			// ⭐⭐ A DECLARED QUERY PUBLISHES NAMES, SO ITS SELECT HAS TO SPELL THEM.
+			//
+			// An ordinary read never projects: BuildPageIR renders `SELECT *` and the RESULT picks the
+			// columns apart afterwards, by column object. That is fine when the reader holds the source's
+			// own columns — and wrong for a CTE, whose reader holds ibCteQueryable's columns and writes
+			// their names into SQL. Unprojected, the declaration published `Ref` while the statement
+			// inside it published `fld1021_RRRef`, and Firebird answered `-206 Column unknown REF_RRREF`
+			// (measured 2026-08-23, the first report that ever took this road).
+			//
+			// The spread is the same one every projected read uses: a raw column is one field under its
+			// alias; a metadata column is its FULL physical spread under the alias as PREFIX
+			// (`fld1021_RRRef AS Ref_RRRef`), which is exactly what the outer query asks for when it
+			// spreads the CTE's own column of that name. One rule, both sides of the declaration.
+			if (innerSpec.m_selectCols != nullptr && !innerSpec.m_selectCols->empty()) {
+				std::vector<ibQueryProjItem> proj;
+				for (const auto& sc : *innerSpec.m_selectCols) {
+					const ibBackendQueryColumn* col = sc.first;
+					if (col == nullptr || sc.second.IsEmpty())
+						continue;   // an output with no name cannot be read by one
+					// ⚠ WHAT HAS NO FIELDS CANNOT BE PROJECTED. Asked as "what does the layout say this
+					// column is made of" rather than as a question about its type: a column with slots
+					// projects them, a column with none has nothing to write into a SELECT and is left
+					// out (DeclareNamedResultAsCte leaves it out of the published set in the same
+					// breath, so the two sides agree on what exists). This is what the `-206` was: a
+					// name in the statement that no table had a field for.
+					//
+					// The alias is the column's PHYSICAL name plus the slot's ROLE — `fld1672_D`, not
+					// `PointInTime_D`. Two reasons, and the second is why it is not the output name:
+					//   * the role, because a COMPUTED column's fields belong to OTHER columns and
+					//     share no base with it (the moment's date field is the DATE column's), so
+					//     cutting a base off the field name would cut the wrong string;
+					//   * the physical name, because it is `fld<metaID>` — unique per metatype. Two
+					//     sources both publishing `Ref` (or `PointInTime`) would otherwise write the
+					//     same alias twice, and the engine refuses the statement outright.
+					// The reader spells the same pair, since the declared column carries that physical
+					// name (ibCteQueryable::Field), so the two agree by construction.
+					// ⚠ A COLUMN WHOSE FIELDS ARE SOMEBODY ELSE'S IS NOT PROJECTED — it says so itself.
+					// The MOMENT lays out as the date's field and the reference's pair, and those two
+					// project themselves under those very names; writing them again would put one alias
+					// in the select list twice (`-104 … specified multiple times`, 2026-08-23). It needs
+					// no projection: the read assembles it from the two the statement already carries.
+					if (col->IsSyntheticColumn())
+						continue;
+
+					const wxString base = col->GetPhysicalName();
+					for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+						proj.push_back(ibQueryProjItem{ ibCol(slot.m_name),
+							slot.m_role == ibColumnRole::Raw ? base
+							                                 : base + ibFieldSuffix(slot.m_role) });
+				}
+				if (!proj.empty())
+					innerIR.m_root = ibProject(innerIR.m_root, std::move(proj));
+			}
+
 			ir.m_with.push_back({ named.m_name, innerIR.m_root });
 			// …and anything IT declared travels with it, ahead of it: an engine reads the list top to
 			// bottom, and a name must be declared before the query that mentions it.
@@ -3329,7 +3426,7 @@ void ibDbTableProvider::SetValueAttribute(const ibValueMetaObjectAttributeBase* 
 
 bool ibDbTableProvider::GetValueAttribute(const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData)
 {
-	return ibColumnCodec::ReadValue(attr, attr->GetMetaData(), retValue, result, createData);
+	return attr->ReadValue(attr->GetPhysicalName(), attr->GetMetaData(), retValue, result, createData);
 }
 
 bool ibDbTableProvider::GetValueAttribute(const wxString& fieldName, ibFieldTypes fieldType,
@@ -3403,7 +3500,7 @@ ibValue ProviderReadColumn(const ibBackendQueryColumn* col, const ibMetaData* me
 	if (col == nullptr)
 		return ibValue();
 	ibValue v;
-	ibColumnCodec::ReadValue(col, metaData, v, result);
+	col->ReadValue(col->GetPhysicalName(), metaData, v, result);
 	return v;
 }
 
@@ -3420,47 +3517,12 @@ public:
 	ibValue Value(const ibBackendQueryColumn* col) const override {
 		if (col == nullptr)
 			return ibValue();
-		if (col->IsRawColumn()) {
-			// RAW column (the row-key uuid; a balance's computed field) — read STRAIGHT off the
-			// cursor by its declared RawType, no attribute decomposition. (symmetric with the
-			// write side's BindWriteValue; this is how the row-key reads now — no GuidString.)
-			const wxString f = col->GetPhysicalName();
-			switch (static_cast<const ibRawDBColumn*>(col)->GetRawType()) {
-				case ibRawDBColumn::RawType::String:    return ibValue(m_cursor.GetResultString(f));
-				case ibRawDBColumn::RawType::Guid: {
-					// ⭐⭐ THE WRITE SIDE'S TWIN — sixteen bytes back into A GUID, and handed on AS ONE.
-					//
-					// It used to hand on the guid's TEXT, and the text is a PROJECTION: a caller that
-					// wanted the identity had to parse it back, so the same value was converted twice
-					// on every row, and nobody downstream could tell a key from any other string. The
-					// runtime guid is a type this system already has — return it, and the text stays
-					// available to whoever wants it, because that is what its GetString() answers.
-					wxMemoryBuffer bytes;
-					m_cursor.GetResultBlob(f, bytes);
-					if (bytes.GetDataLen() < sizeof(ibReference))
-						return ibValue();
-					const ibReference* key = static_cast<const ibReference*>(bytes.GetData());
-					return ibValuePtr<ibValueGuid>(new ibValueGuid(ibGuid(key->m_guid)));
-				}
-				case ibRawDBColumn::RawType::Number:    return ibValue(m_cursor.GetResultNumber(f));
-				case ibRawDBColumn::RawType::Date:      return ibValue(m_cursor.GetResultDate(f));
-				case ibRawDBColumn::RawType::Boolean:   return ibValue(m_cursor.GetResultBool(f));
-				case ibRawDBColumn::RawType::Reference: {
-					// ⭐⭐ THE BYTES ARE AN IDENTITY; THE TYPE IS METADATA. A single-target reference
-					// column stores only the row key, because which KIND of row it points at is a
-					// property of the table, not of the row. The assembly itself belongs to the CODEC
-					// — this asks the column what it points at and hands both to it.
-					wxMemoryBuffer bytes;
-					m_cursor.GetResultBlob(f, bytes);
-					return ReadSingleTargetReference(m_metaData,
-						static_cast<const ibRawDBColumn*>(col)->GetRawTarget(), bytes);
-				}
-				// Blob — still unreachable, and blocked on ibValue having no binary tag.
-				case ibRawDBColumn::RawType::Blob:      return ibValue(m_cursor.GetResultString(f));
-			}
-			return ibValue();
-		}
-		return ProviderReadColumn(col, m_metaData, m_cursor);   // metadata column — column-based assembly
+		// ONE ROAD FOR EVERY KIND — the column reads itself. This used to open with
+		// `if (col->IsRawColumn())` and repeat the raw switch (guid out of sixteen bytes, a
+		// single-target reference through its target) beside the same switch in the bind and in a
+		// second reader; each copy had to remember the same facts. A raw column now carries that
+		// itself (queryColumn.cpp), so this asks and does not test.
+		return ProviderReadColumn(col, m_metaData, m_cursor);
 	}
 
 	ibValue Column(const wxString& alias) const override { return m_cursor.GetValue(alias); }
@@ -3473,7 +3535,7 @@ public:
 		if (col == nullptr)
 			return ibValue();
 		ibValue v;
-		ibColumnCodec::ReadValue(prefix, col, m_metaData, v, m_cursor);
+		col->ReadValue(prefix, m_metaData, v, m_cursor);
 		return v;
 	}
 

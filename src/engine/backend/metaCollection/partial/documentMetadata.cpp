@@ -17,7 +17,7 @@
 //*                                      metaData                                            *
 //********************************************************************************************
 
-ibValueMetaObjectDocument::ibValueMetaObjectDocument() : ibValueMetaObjectRecordDataMutableRef()
+ibValueMetaObjectDocument::ibValueMetaObjectDocument() : ibValueMetaObjectRecordDataRecorderRef()
 {
 	// BeforeWrite — 3-arg Document-specific signature (writeMode/
 	// postingMode). The other 5 common hooks are duplicated from the
@@ -32,6 +32,7 @@ ibValueMetaObjectDocument::ibValueMetaObjectDocument() : ibValueMetaObjectRecord
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Posting"),      ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("PostingMode") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("UndoPosting"),  ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewNumber"), ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandartProcessing") });
+
 }
 
 ibValueMetaObjectDocument::~ibValueMetaObjectDocument()
@@ -130,9 +131,9 @@ ibBackendValueForm* ibValueMetaObjectDocument::GetSelectForm(const wxString& str
 wxString ibValueMetaObjectDocument::GetDataPresentation(const ibValueDataObject* objValue) const
 {
 	static ibValue vDate, vNumber;
-	if (!objValue->GetValueByMetaID((*m_propertyAttributeDate)->GetMetaID(), vDate))
+	if (!objValue->GetValueByMetaID(GetDocumentDate()->GetMetaID(), vDate))
 		return wxEmptyString;
-	if (!objValue->GetValueByMetaID((*m_propertyAttributeNumber)->GetMetaID(), vNumber))
+	if (!objValue->GetValueByMetaID(GetDocumentNumber()->GetMetaID(), vNumber))
 		return wxEmptyString;
 	return GetSynonym() << wxT(" ") << vNumber.GetString() << wxT(" ") << vDate.GetString();
 }
@@ -143,8 +144,6 @@ wxString ibValueMetaObjectDocument::GetDataPresentation(const ibValueDataObject*
 
 bool ibValueMetaObjectDocument::WriteData(ibDataNode& node) const
 {
-	node.SetProperty(m_propertyAttributeNumber->GetName(), m_propertyAttributeNumber->GetNodeValue());
-	node.SetProperty(m_propertyAttributeDate->GetName(), m_propertyAttributeDate->GetNodeValue());
 	node.SetProperty(m_propertyAttributePosted->GetName(), m_propertyAttributePosted->GetNodeValue());
 
 	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
@@ -154,15 +153,11 @@ bool ibValueMetaObjectDocument::WriteData(ibDataNode& node) const
 	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
 	node.SetValue(m_propertyDefFormSelect->GetName(), GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()).str());
 
-	node.SetProperty(m_propertyRegisterRecord->GetName(), m_propertyRegisterRecord->GetNodeValue());
-
-	return ibValueMetaObjectRecordDataMutableRef::WriteData(node);
+	return ibValueMetaObjectRecordDataRecorderRef::WriteData(node);
 }
 
 bool ibValueMetaObjectDocument::ReadData(const ibDataNode& node)
 {
-	m_propertyAttributeNumber->SetNodeValue(node.GetProperty(m_propertyAttributeNumber->GetName()));
-	m_propertyAttributeDate->SetNodeValue(node.GetProperty(m_propertyAttributeDate->GetName()));
 	m_propertyAttributePosted->SetNodeValue(node.GetProperty(m_propertyAttributePosted->GetName()));
 
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
@@ -172,9 +167,8 @@ bool ibValueMetaObjectDocument::ReadData(const ibDataNode& node)
 	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
 
-	m_propertyRegisterRecord->SetNodeValue(node.GetProperty(m_propertyRegisterRecord->GetName()));
 
-	return ibValueMetaObjectRecordDataMutableRef::ReadData(node);
+	return ibValueMetaObjectRecordDataRecorderRef::ReadData(node);
 }
 
 //***********************************************************************
@@ -183,24 +177,16 @@ bool ibValueMetaObjectDocument::ReadData(const ibDataNode& node)
 
 bool ibValueMetaObjectDocument::OnCreateMetaObject(ibMetaData* metaData, int flags)
 {
-	if (!ibValueMetaObjectRecordDataMutableRef::OnCreateMetaObject(metaData, flags))
+	if (!ibValueMetaObjectRecordDataRecorderRef::OnCreateMetaObject(metaData, flags))
 		return false;
 
-	return (*m_propertyAttributeNumber)->OnCreateMetaObject(metaData, flags) &&
-		(*m_propertyAttributeDate)->OnCreateMetaObject(metaData, flags) &&
-		(*m_propertyAttributePosted)->OnCreateMetaObject(metaData, flags) &&
+	return (*m_propertyAttributePosted)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyObjectModule)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyManagerModule)->OnCreateMetaObject(metaData, flags);
 }
 
 bool ibValueMetaObjectDocument::OnLoadMetaObject(ibMetaData* metaData)
 {
-	if (!(*m_propertyAttributeNumber)->OnLoadMetaObject(metaData))
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnLoadMetaObject(metaData))
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnLoadMetaObject(metaData))
 		return false;
 
@@ -210,17 +196,11 @@ bool ibValueMetaObjectDocument::OnLoadMetaObject(ibMetaData* metaData)
 	if (!(*m_propertyManagerModule)->OnLoadMetaObject(metaData))
 		return false;
 
-	return ibValueMetaObjectRecordDataMutableRef::OnLoadMetaObject(metaData);
+	return ibValueMetaObjectRecordDataRecorderRef::OnLoadMetaObject(metaData);
 }
 
 bool ibValueMetaObjectDocument::OnSaveMetaObject(int flags)
 {
-	if (!(*m_propertyAttributeNumber)->OnSaveMetaObject(flags))
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnSaveMetaObject(flags))
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnSaveMetaObject(flags))
 		return false;
 
@@ -230,17 +210,11 @@ bool ibValueMetaObjectDocument::OnSaveMetaObject(int flags)
 	if (!(*m_propertyManagerModule)->OnSaveMetaObject(flags))
 		return false;
 
-	return ibValueMetaObjectRecordDataMutableRef::OnSaveMetaObject(flags);
+	return ibValueMetaObjectRecordDataRecorderRef::OnSaveMetaObject(flags);
 }
 
 bool ibValueMetaObjectDocument::OnDeleteMetaObject()
 {
-	if (!(*m_propertyAttributeNumber)->OnDeleteMetaObject())
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnDeleteMetaObject())
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnDeleteMetaObject())
 		return false;
 
@@ -250,7 +224,7 @@ bool ibValueMetaObjectDocument::OnDeleteMetaObject()
 	if (!(*m_propertyManagerModule)->OnDeleteMetaObject())
 		return false;
 
-	return ibValueMetaObjectRecordDataMutableRef::OnDeleteMetaObject();
+	return ibValueMetaObjectRecordDataRecorderRef::OnDeleteMetaObject();
 }
 
 bool ibValueMetaObjectDocument::OnReloadMetaObject()
@@ -279,12 +253,6 @@ bool ibValueMetaObjectDocument::OnReloadMetaObject()
 bool ibValueMetaObjectDocument::OnBeforeRunMetaObject(int flags)
 {
 
-	if (!(*m_propertyAttributeNumber)->OnBeforeRunMetaObject(flags))
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnBeforeRunMetaObject(flags))
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnBeforeRunMetaObject(flags))
 		return false;
 
@@ -295,17 +263,11 @@ bool ibValueMetaObjectDocument::OnBeforeRunMetaObject(int flags)
 		return false;
 
 	registerSelection();
-	return ibValueMetaObjectRecordDataMutableRef::OnBeforeRunMetaObject(flags);
+	return ibValueMetaObjectRecordDataRecorderRef::OnBeforeRunMetaObject(flags);
 }
 
 bool ibValueMetaObjectDocument::OnAfterRunMetaObject(int flags)
 {
-	if (!(*m_propertyAttributeNumber)->OnAfterRunMetaObject(flags))
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnAfterRunMetaObject(flags))
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnAfterRunMetaObject(flags))
 		return false;
 
@@ -316,36 +278,20 @@ bool ibValueMetaObjectDocument::OnAfterRunMetaObject(int flags)
 		return false;
 
 
-	const ibMetaDescription& metaDesc = m_propertyRegisterRecord->GetValueAsMetaDesc();
-	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
-		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(metaDesc.GetByIdx(idx));
-		if (registerData != nullptr) {
-			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
-			wxASSERT(infoRecorder);
-			infoRecorder->GetTypeDesc().AppendMetaType((*m_propertyAttributeReference)->GetTypeDesc());
-		}
-	}
-
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
-		if (ibValueMetaObjectRecordDataMutableRef::OnAfterRunMetaObject(flags)) {
+		if (ibValueMetaObjectRecordDataRecorderRef::OnAfterRunMetaObject(flags)) {
 			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue* { return CreateObjectValue(); });
 		}
 
 		return false;
 	}
 
-	return ibValueMetaObjectRecordDataMutableRef::OnAfterRunMetaObject(flags);
+	return ibValueMetaObjectRecordDataRecorderRef::OnAfterRunMetaObject(flags);
 }
 
 bool ibValueMetaObjectDocument::OnBeforeCloseMetaObject()
 {
-	if (!(*m_propertyAttributeNumber)->OnBeforeCloseMetaObject())
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnBeforeCloseMetaObject())
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnBeforeCloseMetaObject())
 		return false;
 
@@ -356,36 +302,20 @@ bool ibValueMetaObjectDocument::OnBeforeCloseMetaObject()
 		return false;
 
 
-	const ibMetaDescription& metaDesc = m_propertyRegisterRecord->GetValueAsMetaDesc();
-	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
-		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(metaDesc.GetByIdx(idx));
-		if (registerData != nullptr) {
-			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
-			wxASSERT(infoRecorder);
-			infoRecorder->GetTypeDesc().ClearMetaType((*m_propertyAttributeReference)->GetTypeDesc());
-		}
-	}
-
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
-		if (ibValueMetaObjectRecordDataMutableRef::OnBeforeCloseMetaObject()) {
+		if (ibValueMetaObjectRecordDataRecorderRef::OnBeforeCloseMetaObject()) {
 			{ cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject()); return true; }
 		}
 
 		return false;
 	}
 
-	return ibValueMetaObjectRecordDataMutableRef::OnBeforeCloseMetaObject();
+	return ibValueMetaObjectRecordDataRecorderRef::OnBeforeCloseMetaObject();
 }
 
 bool ibValueMetaObjectDocument::OnAfterCloseMetaObject()
 {
-	if (!(*m_propertyAttributeNumber)->OnAfterCloseMetaObject())
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnAfterCloseMetaObject())
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnAfterCloseMetaObject())
 		return false;
 
@@ -397,7 +327,7 @@ bool ibValueMetaObjectDocument::OnAfterCloseMetaObject()
 
 	unregisterSelection();
 
-	return ibValueMetaObjectRecordDataMutableRef::OnAfterCloseMetaObject();
+	return ibValueMetaObjectRecordDataRecorderRef::OnAfterCloseMetaObject();
 }
 
 //***********************************************************************

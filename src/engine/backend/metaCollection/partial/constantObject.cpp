@@ -31,7 +31,7 @@ wxString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetPhys
 const ibMetaData* ibConstantQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
 std::vector<const ibBackendQueryColumn*> ibConstantQueryable::GetPrimaryKeyColumns() const {
 	// The single-row sys_const key (UPSERT match) — a RAW column, no metadata translation.
-	static const ibRawDBColumn s_recordKey(wxT("RECORD_KEY"), ibRawDBColumn::RawType::String);
+	static const ibBackendColumnRawDB s_recordKey(wxT("RECORD_KEY"), ibBackendColumnRawDB::RawType::String);
 	return { &s_recordKey };
 }
 // (value materialisation moved to ibDbTableProvider — the queryable names no attribute / L1.)
@@ -396,7 +396,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 	// the session holder, so it joins the TX that already holds this row's lock.
 	if (!ibDataQueryBuilder()
 		.From(m_metaObject->GetQueryable())
-		.SetValue(ibRawDBColumn::String(wxT("RECORD_KEY")), ibValue(wxT("6")))   // raw primary -> MATCHING
+		.SetValue(ibBackendColumnRawDB::String(wxT("RECORD_KEY")), ibValue(wxT("6")))   // raw primary -> MATCHING
 		.SetValue(m_metaObject->GetValueColumn(), m_constValue)                        // the value column
 		.Upsert()) {
 		rollback();

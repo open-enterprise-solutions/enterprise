@@ -666,6 +666,7 @@
     <ClCompile Include="metaCollection\partial\informationRegisterMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterObject.cpp" />
+    <ClCompile Include="query\queryColumn.cpp" />
     <ClCompile Include="query\dataQueryBuilder.cpp" />
     <ClCompile Include="query\queryLexer.cpp" />
     <ClCompile Include="query\queryRender.cpp" />

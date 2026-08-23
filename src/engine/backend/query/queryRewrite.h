@@ -84,7 +84,9 @@ BACKEND_API void ibQueryMoveAggregateConditionsToHaving(ibQuerySelect& select);
 //
 // The constructor SHOWS such a join as an unlinked table (no row on the Links tab) and its cell as
 // empty; the text carries the word. One shape, two honest readings.
-BACKEND_API ibQueryAstExprPtr ibQueryTrueLiteral();
+//
+// (The maker — `ibQueryTrueLiteral()` — is gone: nothing built one. What writes `ON TRUE` is the
+//  PARSER, from the keyword; only the READING side had a caller, and that is this one.)
 BACKEND_API bool ibQueryIsTrueLiteral(const ibQueryAstExprPtr& expr);
 
 // ===========================================================================

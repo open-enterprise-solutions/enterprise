@@ -9,8 +9,8 @@
 //*                                  Factory & metaData                                      *
 //********************************************************************************************
 
-class ibValueMetaObjectChartOfCharacteristicTypes : 
-	public ibValueMetaObjectRecordDataHierarchyMutableRef, 
+class ibValueMetaObjectChartOfCharacteristicTypes :
+	public ibValueMetaObjectRecordDataHierarchyMutableRef,
 	public ibBackendTypeConfigFactory {
 	public:
 private:

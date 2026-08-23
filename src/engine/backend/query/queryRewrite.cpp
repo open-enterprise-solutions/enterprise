@@ -213,10 +213,22 @@ struct NoCaseLess
 // no aggregates / grouping / having, no DISTINCT (distinct over a projection is
 // not distinct over the outer's), no JOIN / UNION / TOTALS, no ORDER BY (kept
 // conservative — the old wrapped path still serves those).
+// ⭐ WHY A NESTED SELECT STAYED NESTED. The flattening is the FIRST of the two roads out of a nested
+// source (the second is declaring it to the server as a CTE — queryLowering ResolveFrom), so what it
+// refuses decides what the next tier is even asked. Said where the refusal is made, with what it is
+// about; in Release the whole line is `((void)0)` and this is the `return false` it always was.
+#define FlattenDecline(fmt, ...) \
+	do { ibJournalInfo(wxT("query.rewrite"), wxT("nested FROM not flattened: ") fmt, ##__VA_ARGS__); \
+	     return false; } while (false)
+
 bool InnerIsFlattenable(const ibQuerySelect& inner)
 {
-	if (!inner.m_joins.empty() || !inner.m_unions.empty() || inner.m_hasTotals) return false;
-	if (inner.m_distinct || !inner.m_groupBy.empty() || inner.m_having)         return false;
+	if (!inner.m_joins.empty())    FlattenDecline(wxT("the inner query has a JOIN"));
+	if (!inner.m_unions.empty())   FlattenDecline(wxT("the inner query has a UNION"));
+	if (inner.m_hasTotals)         FlattenDecline(wxT("the inner query has TOTALS"));
+	if (inner.m_distinct)          FlattenDecline(wxT("the inner query is DISTINCT"));
+	if (!inner.m_groupBy.empty())  FlattenDecline(wxT("the inner query has a GROUP BY"));
+	if (inner.m_having)            FlattenDecline(wxT("the inner query has a HAVING"));
 	// ⭐ A NESTED QUERY HAS NO ORDER, so an inner `ORDER BY` neither blocks the flattening nor
 	// survives it (Max: "a nested query does not support order or totals — they are not there by
 	// definition, and the constructor does not offer them either"). SQL agrees: nothing is promised
@@ -227,15 +239,18 @@ bool InnerIsFlattenable(const ibQuerySelect& inner)
 	// composition wrapped it as a nested source, and the wrapper then refused to collapse — so the
 	// source stayed an ibSubqueryQueryable, which computes its rows in memory by construction, and no
 	// totals push-down could ever fire above it.
-	if (inner.m_top > 0)                                                        return false;   // TOP limits the inner rows — merging would lose it
+	if (inner.m_top > 0)           FlattenDecline(wxT("the inner query has TOP, whose limit merging would lose"));
 	// The statement words the inner may carry. Merging them away is the SILENT kind of wrong:
 	// ALLOWED would become a refusal the author asked not to have, FOR UPDATE would stop holding
 	// the rows, INTO would stop materialising anything — and the query would still run.
-	if (inner.m_allowed || inner.m_forUpdate || !inner.m_intoTemp.IsEmpty())    return false;
+	if (inner.m_allowed)           FlattenDecline(wxT("the inner query is SELECT ALLOWED"));
+	if (inner.m_forUpdate)         FlattenDecline(wxT("the inner query is FOR UPDATE"));
+	if (!inner.m_intoTemp.IsEmpty()) FlattenDecline(wxT("the inner query has INTO"));
 	if (inner.m_selectAll) return true;
 	for (const ibQueryProjection& p : inner.m_projections) {
-		if (p.m_star) return false;
-		if (!p.m_expr || p.m_expr->m_kind != ibQueryAstExprKind::Column) return false;
+		if (p.m_star)  FlattenDecline(wxT("the inner query projects a qualified star"));
+		if (!p.m_expr || p.m_expr->m_kind != ibQueryAstExprKind::Column)
+			FlattenDecline(wxT("the inner query projects an expression, not a plain column"));
 	}
 	return true;
 }
@@ -357,7 +372,13 @@ void FlattenFrom(ibQuerySelect& s)
 	// The splice. The inner FROM alias is kept — aliasMap paths may carry it as a
 	// qualifier (SELECT i.Code AS c FROM Catalog.X AS i).
 	s.m_from = inner.m_from;
+
+	// Said on this side too: a nested source that COLLAPSED never reaches the declaration road below
+	// it, so without this line its absence there reads as a refusal nobody made.
+	ibJournalInfo(wxT("query.rewrite"), wxT("nested FROM flattened into the outer select"));
 }
+
+#undef FlattenDecline   // the rule's own word — it ends with the rule
 
 //////////////////////////////////////////////////////////////////////
 // The pass — bottom-up over every SELECT scope
@@ -652,16 +673,6 @@ ibQuerySelectPtr ibQueryRewrite::ReorderJoins(const ibQuerySelect& ast)
 	ibQuerySelectPtr clone = CloneSelect(ast);
 	ReorderInnerJoins(*clone);
 	return clone;
-}
-
-ibQueryAstExprPtr ibQueryTrueLiteral()
-{
-	ibQueryAstExprPtr e = std::make_shared<ibQueryAstExpr>();
-	e->m_kind = ibQueryAstExprKind::Literal;
-	// Through the KEYWORD, exactly as the parser builds it — so the value the constructor writes and
-	// the value a typed `TRUE` produces are the same value, not two that happen to agree today.
-	e->m_literal.SetBoolean(ibQueryKeywordText(ibQueryKeyword::True));
-	return e;
 }
 
 bool ibQueryIsTrueLiteral(const ibQueryAstExprPtr& expr)

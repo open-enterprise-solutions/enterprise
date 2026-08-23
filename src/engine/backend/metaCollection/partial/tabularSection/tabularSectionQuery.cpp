@@ -8,7 +8,7 @@
 #include "backend/query/columnLayout.h"   // ibOwnerRefColumn — the owner reference, named in one place
 
 #include "backend/metaCollection/partial/commonObject.h"
-#include "backend/query/dataQueryBuilder.h"            // L3 — read + write door (From/SetValue/Where/Insert/Delete) + ibRawDBColumn
+#include "backend/query/dataQueryBuilder.h"            // L3 — read + write door (From/SetValue/Where/Insert/Delete) + ibBackendColumnRawDB
 
 // --- vended queryable — thin adapter forwarding to the tabular meta's methods ---
 // The tabular section is uuid-keyed (1 parent -> N lines), ordered by line number.
@@ -41,7 +41,7 @@ const ibBackendQueryColumn* ibTabularQueryable::OwnerRefColumn() const
 		// table contributes `uuid` as a scaffold, so the schema differ never sees this one.
 		const ibMetaID identity = m_meta != nullptr ? (m_meta->GetMetaID() | 0x20000000) : 0;
 
-		m_ownerRef.reset(new ibRawDBColumn(ibRawDBColumn::Reference(ibOwnerRefField(),
+		m_ownerRef.reset(new ibBackendColumnRawDB(ibBackendColumnRawDB::Reference(ibOwnerRefField(),
 			owner != nullptr ? reference_to_clsid(owner->GetMetaID()) : 0, wxT("Ref"), identity)));
 	}
 	return m_ownerRef.get();

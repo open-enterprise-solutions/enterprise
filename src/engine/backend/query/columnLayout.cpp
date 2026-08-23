@@ -48,10 +48,11 @@ const wxString& ibOwnerRefField()
 	return s_field;
 }
 
-ibRawDBColumn ibOwnerRefColumn()
+ibBackendColumnRawDB ibOwnerRefColumn()
 {
-	return ibRawDBColumn::Guid(ibOwnerRefField());
+	return ibBackendColumnRawDB::Guid(ibOwnerRefField());
 }
+
 
 int ibPersistedTypeTag(ibColumnRole role)
 {
@@ -69,88 +70,14 @@ int ibPersistedTypeTag(ibColumnRole role)
 	}
 }
 
-namespace {
 
-// The canonical DDL type of one primitive slot, read off the column's type qualifiers
-// (precision / scale / length / fixed / date fraction). The SAME mapping the former
-// ibValueMetaObjectAttributeBase::GetSQLTypeObject did, now expressed as L2 canonical
-// types so the dialect dictionary closes the per-DBMS spelling — no BYTEA/BLOB,
-// DATE/TIMESTAMP, CHAR/VARCHAR forks here.
-ibColumnType PrimitiveType(ibValueTypes vt, const ibTypeDescription& td)
-{
-	switch (vt) {
-	case ibValueTypes::TYPE_BOOLEAN:
-		return ibTypeBoolean();
-	case ibValueTypes::TYPE_NUMBER:
-		return ibTypeNumber(td.GetPrecision(), td.GetScale());
-	case ibValueTypes::TYPE_DATE:
-		switch (td.GetDateFraction()) {
-		case ibDateFractions::ibDateFractions_Date: return ibTypeDate(ibDatePrec::Date);
-		case ibDateFractions::ibDateFractions_Time: return ibTypeDate(ibDatePrec::Time);
-		default:                                    return ibTypeDate(ibDatePrec::DateTime);
-		}
-	case ibValueTypes::TYPE_STRING:
-		return td.GetAllowedLength() == ibAllowedLength::ibAllowedLength_Fixed
-		     ? ibTypeChar(td.GetLength())
-		     : ibTypeString(td.GetLength());
-	case ibValueTypes::TYPE_ENUM:
-		return ibTypeInteger();   // enum stored as its int ordinal
-	default:
-		return ibTypeInteger();
-	}
-}
-
-// Reached only under `col->IsRawColumn()` — the column has already SAID what it is, so the cast asks
-// for the type it CARRIES rather than deciding identity (which is the column's own answer, never a
-// cast's). Exactly one class in the tree answers that question with true (ibRawDBColumn,
-// queryColumn.h), which is what makes the static cast a statement of that fact rather than a hope.
-//
-// ⚠ IT USED TO ASK RTTI AND, ON A MISS, RETURN VARCHAR(255) — on the reasoning that "a wrong-but-valid
-// type is repairable where a throw is not". It is not repairable: this answer becomes a CREATE TABLE.
-// A column silently created as text where a number belonged is a migration, and it is discovered by
-// arithmetic failing months later. The per-column RTTI was also paid on every DDL and read layout.
-ibColumnType RawType(const ibBackendQueryColumn* col)
-{
-	wxASSERT_MSG(col != nullptr && col->IsRawColumn(),
-		wxT("RawType asked of a column that does not carry its own physical type"));
-	const auto* raw = static_cast<const ibRawDBColumn*>(col);
-	switch (raw->GetRawType()) {
-	// ⭐ THE COLUMN'S OWN WIDTH WHERE IT DECLARED ONE. A raw column that says nothing gets the old
-	// defaults; one that DOES say — an indexed digest, a totals figure carrying a resource's own
-	// precision and scale — is created as it asked. Both of those were bugs while this ignored them:
-	// VARCHAR(255) in UTF8 passes Firebird's index key ceiling by itself, and NUMERIC(18,0) under a
-	// resource declared with kopecks drops the fraction on the way in.
-	case ibRawDBColumn::RawType::String:
-		return ibTypeString(raw->GetRawLength() > 0 ? raw->GetRawLength() : 255);
-	case ibRawDBColumn::RawType::Number:
-		return ibTypeNumber(raw->GetRawLength() > 0 ? raw->GetRawLength() : 18, raw->GetRawScale());
-	case ibRawDBColumn::RawType::Reference: return ibTypeBinary(reference_size_t);   // _RRRef fixed key
-	case ibRawDBColumn::RawType::Date:    return ibTypeDate();
-	case ibRawDBColumn::RawType::Boolean: return ibTypeBoolean();
-	// ⭐⭐ THE ROW KEY IS THE SAME SIXTEEN BYTES A REFERENCE KEY IS.
-	//
-	// It used to be a guid's TEXT — 36 characters, on every row of every table, and in every index
-	// over them. The bytes were already available (a reference stores exactly this guid as
-	// _RRRef BINARY(16), on all four drivers), so the text form cost 20 bytes a row to say the same
-	// thing in a form nothing could compare against the reference key.
-	//
-	// Making them one representation is what lets a row's uuid be COMPARED with a reference to that
-	// row: a tabular section's link to its owner, a dot-walk, a join written by hand. Two spellings
-	// of one identity could never meet; one spelling meets itself.
-	case ibRawDBColumn::RawType::Guid:    return ibTypeBinary(reference_size_t);   // a raw guid field (the owner reference)
-	case ibRawDBColumn::RawType::Blob:    return ibTypeBlob();   // a register's rowData
-	}
-	return ibTypeString(255);
-}
-
-} // namespace
-
-// Two reasons, one answer. Kept here because this is where the layout decides what a column BECOMES
-// physically — so the storage fact and the "can it be compared" fact cannot drift apart.
+// Kept here because this is where the layout decides what a column BECOMES physically — so the
+// storage fact and the "can it be compared" fact cannot drift apart.
 //
 //   STORED WHOLE — a schedule, a type description: one BLOB field, and SQL compares no blobs.
-//   NOT STORED AT ALL — the MOMENT (PointInTime), which is computed and has no column behind it. It is
-//   in the field tree so a QUERY can address it, and that is the whole of what it is for.
+//   NOT STORED AT ALL — the MOMENT (PointInTime): computed from the date and the reference, with no
+//   field of its own, so there is nothing to compare either. It is in the field tree so a QUERY can
+//   address it, and a query that WRITES its fields asks the column instead (Kind::Synthetic).
 bool ibIsComparableType(const ibTypeDescription& typeDesc)
 {
 	return !typeDesc.ContainType(g_valueScheduleCLSID)
@@ -158,80 +85,17 @@ bool ibIsComparableType(const ibTypeDescription& typeDesc)
 	    && !typeDesc.ContainType(g_valuePointInTimeCLSID);
 }
 
+// THE AUTHORITY, and it now asks the COLUMN — which answers with the derivation below unless it has
+// a reason not to. Kept as a free function because that is how every tier already spells the
+// question; what changed is who owns the answer.
 std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col)
 {
-	std::vector<ibColumnSlot> slots;
-
-	// A raw column is a single physical field with its own carried type — no spread.
-	if (col->IsRawColumn()) {
-		ibColumnSlot slot;
-		slot.m_name = col->GetPhysicalName();
-		slot.m_role = ibColumnRole::Raw;
-		slot.m_type = RawType(col);
-		slots.push_back(std::move(slot));
-		return slots;
-	}
-
-	// What a VALUE here may be — not what is declared. The two differ only for a characteristic, whose
-	// declaration names a class no value carries (backend_type.h).
-	const ibTypeDescription& td = col->GetTypeValueDesc();
-	const wxString base = col->GetPhysicalName();
-
-	// A slot named off its role through the one suffix table.
-	auto makeSlot = [&](ibColumnRole role, ibColumnType type, const wxString& def, bool notNull) {
-		ibColumnSlot slot;
-		slot.m_name    = base + ibFieldSuffix(role);
-		slot.m_role    = role;
-		slot.m_type    = std::move(type);
-		slot.m_default = def;
-		slot.m_notNull = notNull;
-		return slot;
-	};
-
-	// _TYPE — the variant discriminator. Always present, DEFAULT 0 NOT NULL.
-	slots.push_back(makeSlot(ibColumnRole::Discriminator, ibTypeInteger(), wxT("0"), true));
-
-	// Primitive value slots — in the FIXED order B, N, D, S, E (load-bearing: matches the
-	// keyset anchor + the write/read bind order). Enum carries DEFAULT 0 (undefined ordinal).
-	auto pushPrim = [&](ibValueTypes vt, ibColumnRole role, const wxString& def) {
-		if (td.ContainType(vt))
-			slots.push_back(makeSlot(role, PrimitiveType(vt, td), def, false));
-	};
-	pushPrim(ibValueTypes::TYPE_BOOLEAN, ibColumnRole::Boolean, wxString());
-	pushPrim(ibValueTypes::TYPE_NUMBER,  ibColumnRole::Number,  wxString());
-	pushPrim(ibValueTypes::TYPE_DATE,    ibColumnRole::Date,    wxString());
-	pushPrim(ibValueTypes::TYPE_STRING,  ibColumnRole::String,  wxString());
-	// The enum's DEFAULT is the "no member" number, NOT zero: 0 is an ordinary member number, so a
-	// column defaulting to it hands every unfilled row a member as though someone had chosen it.
-	pushPrim(ibValueTypes::TYPE_ENUM,    ibColumnRole::Enum,    wxString::Format(wxT("%i"), emptyEnum));
-
-	// _SCH — a schedule, serialised whole. A BLOB rather than fourteen columns: what people
-	// actually filter on is WHEN THIS RUNS NEXT, and that is a date column of its own on the job
-	// row (docs/scheduled-jobs.md § 5b) — spreading the weekday mask across the table would buy
-	// a predicate nobody writes and cost an ALTER every time the schedule grows a field.
-	if (td.ContainType(g_valueScheduleCLSID))
-		slots.push_back(makeSlot(ibColumnRole::Schedule, ibTypeBlob(), wxString(), false));
-
-	// _TD — a type description, serialised whole. This is what a characteristic's own Type is: a
-	// FILTER carrying admissible types and their qualifiers, chosen from what the chart declares.
-	// Stored as one blob for the same reason the schedule is — nothing predicates on it in SQL; it
-	// is read back to narrow what a value slot will accept.
-	if (td.ContainType(g_valueTypeDescriptionCLSID))
-		slots.push_back(makeSlot(ibColumnRole::TypeDescription, ibTypeBlob(), wxString(), false));
-
-	// Reference pair — _RTRef (target clsid, BIGINT) + _RRRef (pure guid blob, fixed-width
-	// BINARY so it is indexable for the dot-walk = join). Present when ANY clsid in the type
-	// is a reference target.
-	bool hasReference = false;
-	for (const auto& clsid : td.GetClsidList())
-		if (IsReference(clsid)) { hasReference = true; break; }
-	if (hasReference) {
-		slots.push_back(makeSlot(ibColumnRole::ReferenceType, ibTypeBigInt(),                wxString(), false));
-		slots.push_back(makeSlot(ibColumnRole::ReferenceId,   ibTypeBinary(reference_size_t), wxString(), false));
-	}
-
-	return slots;
+	return col->DescribeLayout();
 }
+
+// (THE DEFAULT DERIVATION lives in queryColumn.cpp, with the other things a column DOES — together
+//  with the two helpers only it used (the primitive slot's canonical type, and a raw column's carried
+//  type). This file keeps the layout VOCABULARY and the value codec.)
 
 // A column's VALUE fields — its layout's value-role slots (every role EXCEPT the _TYPE discriminator
 // and the reference TYPE id). The ONE metadata-free authority for "which fields carry this column's
@@ -603,6 +467,10 @@ bool ibColumnCodec::ReadValue(const ibBackendQueryColumn* col, const ibMetaData*
 {
 	return ReadValue(col->GetPhysicalName(), col, metaData, retValue, result, createData);
 }
+
+// (THE DEFAULT READ / BIND live in queryColumn.cpp — what a column DOES is kept apart from the layout
+//  it HAS. Both forward to the codec above; a column that is not stored the ordinary way overrides
+//  them there.)
 
 // ==========================================================================
 // SQL fragment builders — the field spellings the hand-written query / upsert SQL used to

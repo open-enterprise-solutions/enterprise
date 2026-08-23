@@ -892,7 +892,7 @@ inline bool ibRegSplitIntoKey(ibSchemaTable& t, const ibValueMetaObjectRegisterT
 {
 	if (!split || totals == nullptr)
 		return false;
-	const ibBackendQueryColumn* shard = t.OwnRaw(ibRawDBColumn::Number(shardColumnName, totals->GetMetaID()));
+	const ibBackendQueryColumn* shard = t.OwnRaw(ibBackendColumnRawDB::Number(shardColumnName, totals->GetMetaID()));
 	t.Add(shard);
 	keyCols.push_back(shard);
 	return true;
@@ -926,7 +926,7 @@ inline const ibBackendQueryColumn* ibRegAccumulatorColumn(ibSchemaTable& t, cons
                                                           const ibValueMetaObjectAttributeBase* resource)
 {
 	const ibTypeDescription& type = resource->GetTypeDesc();
-	const ibBackendQueryColumn* c = t.OwnRaw(ibRawDBColumn::Number(name, id,
+	const ibBackendQueryColumn* c = t.OwnRaw(ibBackendColumnRawDB::Number(name, id,
 		type.GetPrecision() > 0 ? type.GetPrecision() : 18u, type.GetScale()));
 	t.Add(c);
 	return c;

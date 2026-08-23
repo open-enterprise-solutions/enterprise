@@ -16,8 +16,9 @@
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject (materialisation)
-#include "backend/query/dataQueryBuilder.h"                       // L3 write door (predefined seeding) + ibRawDBColumn
+#include "backend/query/dataQueryBuilder.h"                       // L3 write door (predefined seeding) + ibBackendColumnRawDB
 #include "backend/objCtor.h"                                      // ibCtorMetaValueType (reference-target resolution)
+#include "backend/system/value/valuePointInTime.h"                // g_valuePointInTimeCLSID — the moment column assembles one
 #include "backend/metaData.h"                                     // ibMetaData::GetTypeCtor
 #include "backend/databaseLayer/databaseQueryBuilder.h"           // ibDdlStatement / ibQueryStatement / ibQueryResult (L2)
 #include "backend/query/columnLayout.h"                           // ColumnFieldNames (column field list via ibBackendQueryColumn)
@@ -93,23 +94,8 @@ wxString ibValueMetaObjectRegisterData::GetPhysicalTableName() const
 
 // catalog / document / charts / enums — identity = the row-key column (guidName);
 // the reference attribute is the row's own key.
-const ibBackendQueryColumn* ibRecordQueryable::ResolveColumnByName(const wxString& name) const {
-	// The attribute by name AS a column (an attribute IS-A ibBackendQueryColumn). The L3
-	// surface returns a column; the DB provider static_casts it back to the attribute when
-	// it needs the field machinery — the queryable itself names no attribute on its contract.
-	return m_meta->FindObjectByFilter<ibValueMetaObjectAttributeBase>(name, { g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID, g_metaCommonAttributeColumnCLSID });
-}
-std::vector<const ibBackendQueryColumn*> ibRecordQueryable::GetColumns() const {
-	// All generic attributes (predefined + plain) — each IS-A column. Drives SELECT * of a
-	// nested subquery over this source.
-	std::vector<const ibBackendQueryColumn*> cols;
-	for (const ibValueMetaObjectAttributeBase* a : m_meta->GetGenericAttributeArrayObject())
-		cols.push_back(a);
-	return cols;
-}
-wxString ibRecordQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
-wxString ibRecordQueryable::GetQueryName()      const { return m_meta->GetName(); }
-const ibMetaData* ibRecordQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
+// (ibRecordQueryable's bodies are in commonObject.h, at the end — a template's definitions belong
+//  where whoever instantiates it can see them.)
 // The uniqueness key (UPSERT match + dot-walk self-reference + row identity) — the data-reference
 // attribute (the pure-guid self-reference blob the row stores; type is the _RTRef column). The provider reads its
 // Reference field for the join key and its fields for the match. No GetRowKeyColumn /
@@ -125,30 +111,97 @@ const ibMetaData* ibRecordQueryable::GetMetaData() const { return m_meta->GetMet
 // know (columnLayout.h § THE ROW KEY). Answering with it made the enum's ordering right and every
 // text-rendered read wrong ("unknown attribute 'Row_RRRef'"), which is how the quick choice stopped opening.
 // Whatever fixes an enum's ordering belongs at the tier that expands fields, not in what the key IS.
-std::vector<const ibBackendQueryColumn*> ibRecordQueryable::GetPrimaryKeyColumns() const {
-	const ibValueMetaObjectAttributeBase* refAttr = m_meta->GetDataReference();
-	if (refAttr == nullptr)
-		return {};
-	return { refAttr };
-}
-const ibBackendQueryColumn* ibRecordQueryable::GetHierarchyColumn() const {
-	// The metaobject knows if it is hierarchical — its CLASS is the signal (a catalog / chart IS one). It returns
-	// its parent column through a virtual, null on a flat ref. No cast — virtual dispatch down its OWN inheritance.
-	return m_meta->GetHierarchyColumn();
-}
-ibHierarchyType ibRecordQueryable::GetHierarchyType() const {
-	// Same route as the column above: the metaobject answers from its own declaration, virtual dispatch
-	// down its own inheritance, no cast. The ARRANGEMENT travels whole — each caller reads off it the
-	// distinction it needs, instead of being handed one boolean per question.
-	return m_meta->GetHierarchyType();
+// ⭐⭐ THE MOMENT READS ITSELF — the one column here that does.
+//
+// It has no field, so there is no `_TYPE` tag to dispatch on and the default read cannot describe it.
+// What it does have is the two columns it stands for: the DATE it happened at and the RECORD standing
+// there. Each is read exactly as it is read anywhere else — through its own column, by its own rules —
+// and the pair is handed to the value type, which is what knows how to be a moment.
+//
+// Nothing about moments is written in the codec, and nothing about columns is written in the value:
+// the column asks for two values, the type makes one out of them.
+ibRecorderQueryable::ibRecorderQueryable(const ibValueMetaObjectRecordDataRecorderRef* meta)
+	: ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>(meta), m_momentColumn(meta) {}
+
+// The MOMENT answers first, then the attributes: a query naming it resolves to the column that knows
+// how to build it. Without this the field tree offered a name the query could not resolve — a field
+// that exists only on screen. (The tabular section answers `Ref` the same way.)
+const ibBackendQueryColumn* ibRecorderQueryable::ResolveColumnByName(const wxString& name) const
+{
+	if (name.IsSameAs(m_momentColumn.GetName(), false))
+		return &m_momentColumn;
+	return ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>::ResolveColumnByName(name);
 }
 
-// The metaobject behind the source — the front reads its icon / presentation off it (via the dynamic list's
-// GetSourceMetaObject → GetSourceQueryable → here). Out-of-line because the metaobject type is only complete in
-// this TU (the upcast RecordDataRef → GenericData needs the full class).
-const ibValueMetaObjectGenericData* ibRecordQueryable::GetSourceMetaObject() const {
-	return m_meta;
+// …and it is a field of this source like any other, so `SELECT *` carries it. Nothing stores it, so
+// the projection writes no field for it; the READ constructs it out of the date and the reference,
+// which the same select carries anyway.
+std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetColumns() const
+{
+	std::vector<const ibBackendQueryColumn*> cols =
+		ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>::GetColumns();
+	cols.push_back(&m_momentColumn);
+	return cols;
 }
+
+// THE MOMENT LIES IN TWO OTHER COLUMNS — the date first, then the reference. Each of them already
+// describes itself (tag + value for the date; tag, metatype and identifier for the reference), so
+// this is their layouts one after the other and nothing else. Sorting by the moment then IS sorting
+// by the date and then by the identifier, through the machinery that sorts any reference by its own
+// two fields — no new rule anywhere.
+std::vector<ibColumnSlot> ibRecorderQueryable::ibBackendColumnPointInTime::DescribeLayout() const
+{
+	std::vector<ibColumnSlot> slots;
+	for (const ibBackendQueryColumn* part : { m_owner->GetDocumentDate(), m_owner->GetDataReference() }) {
+		if (part == nullptr) continue;
+		for (const ibColumnSlot& slot : DescribeColumnLayout(part)) {
+			// ⚠ WITHOUT THE PARTS' TYPE TAGS. A `_TYPE` field says WHICH of a column's admissible types
+			// a row holds — a question the moment does not have: its date is always a date and its
+			// reference always a reference, chosen when the pair was named and not per row. Carried
+			// over, the two tags would also collide under one prefix, which is what Firebird said:
+			// `-104 column POINTINTIME_TYPE was specified multiple times` (2026-08-23).
+			if (slot.m_role == ibColumnRole::Discriminator)
+				continue;
+			slots.push_back(slot);
+		}
+	}
+	return slots;
+}
+
+wxString ibRecorderQueryable::ibBackendColumnPointInTime::GetName() const { return m_owner->GetPointInTime()->GetName(); }
+wxString ibRecorderQueryable::ibBackendColumnPointInTime::GetSynonym() const { return m_owner->GetPointInTime()->GetSynonym(); }
+wxString ibRecorderQueryable::ibBackendColumnPointInTime::GetPhysicalName() const { return m_owner->GetPointInTime()->GetPhysicalName(); }
+ibMetaID ibRecorderQueryable::ibBackendColumnPointInTime::GetColumnId() const { return m_owner->GetPointInTime()->GetColumnId(); }
+ibTypeDescription& ibRecorderQueryable::ibBackendColumnPointInTime::GetTypeDesc() const { return m_owner->GetPointInTime()->GetTypeDesc(); }
+
+bool ibRecorderQueryable::ibBackendColumnPointInTime::ReadValue(const wxString& fieldName,
+	const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData) const
+{
+	const ibBackendQueryColumn* date = m_owner->GetDocumentDate();
+	const ibBackendQueryColumn* ref = m_owner->GetDataReference();
+	if (date == nullptr || ref == nullptr)
+		return false;
+
+	// ⚠ READ BY THE PARTS' OWN FIELD NAMES — `fld<date>_D`, `fld<ref>_RRRef` — because those are the
+	// only fields that exist. The moment has none of its own: nothing projects it (its layout names
+	// fields that belong to the date and the reference), and a declared query publishes those two
+	// columns physically, under exactly the same names they carry in the table. So one spelling works
+	// on both roads, and reading under this column's own name found nothing anywhere
+	// (`Field 'fld1672_D' not found in the resultset`, 2026-08-23).
+	//
+	// The two reads are the ordinary leaves: a DATE field, and a REFERENCE taking its own pair off its
+	// base name. No tag is consulted — the moment has none and needs none: what its halves are was
+	// decided when the pair was named.
+	ibValue vDate, vReference;
+	ibColumnCodec::ReadField(date->GetPhysicalName() + ibFieldSuffix(ibColumnRole::Date), ibFieldTypes_Date,
+	                         date, metaData, vDate, result, createData);
+	ibColumnCodec::ReadField(ref->GetPhysicalName(), ibFieldTypes_Reference,
+	                         ref, metaData, vReference, result, createData);
+
+	retValue = new ibValuePointInTime(vDate.GetDateTime(), vReference);
+	return true;
+}
+
 
 // The hierarchy metaobject's own parent column (a predefined attribute IS-A ibBackendQueryColumn) — defined
 // out-of-line HERE where the attribute type is complete. The record queryable (above) forwards to it. (Folder
@@ -218,4 +271,5 @@ std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetPrimaryKeyC
 		cols.push_back(dim);
 	return cols;
 }
+
 

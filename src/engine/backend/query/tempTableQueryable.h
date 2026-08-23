@@ -296,7 +296,12 @@ public:
 	// WHAT THE NAMED QUERY PUBLISHES — one entry per output field: the name it is read by and the
 	// type it holds. Both come from the inner query's own output schema, which is the only honest
 	// source for them: a CTE has no storage to ask.
-	struct Field { wxString m_name; ibTypeDescription m_type; };
+	// ⭐ TWO NAMES, and the second is what keeps a declaration collision-free. `m_name` is what a query
+	// WRITES (`Sales.PointInTime`); `m_physical` is what the fields are spelled from — and it comes
+	// from the source column, so it is `fld<metaID>`: unique per metatype by construction. Two
+	// documents joined into one declaration therefore spread into fld1672_* and fld9001_*, instead of
+	// two sets of PointInTime_* that no engine would accept.
+	struct Field { wxString m_name; wxString m_physical; ibTypeDescription m_type; };
 
 	// `firstColumnId` — the id the minted columns are numbered from. A CTE's columns stand for
 	// nothing stored, so their ids exist only to tell them apart; the caller passes a base out of the
@@ -310,7 +315,8 @@ public:
 			if (field.m_name.IsEmpty())
 				continue;   // a field with no name cannot be read back by one
 			// The name IS the physical name: a CTE exposes exactly the aliases its select wrote.
-			m_owned.push_back(std::make_shared<ibTempColumn>(field.m_name, field.m_name, field.m_type, id++));
+			m_owned.push_back(std::make_shared<ibTempColumn>(field.m_name,
+				field.m_physical.IsEmpty() ? field.m_name : field.m_physical, field.m_type, id++));
 			m_columns.push_back(m_owned.back().get());
 		}
 	}

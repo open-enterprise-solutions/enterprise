@@ -498,6 +498,17 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 		if (ir.m_lockNoWait)
 			m_out.m_sql += m_dialect.m_rowLockNoWaitSuffix;   // " NOWAIT" (PG); empty on FB/SQLite
 	}
+
+	// ⭐⭐ THE STATEMENT ITSELF, WHERE EVERY DRIVER PASSES. This is the one place an IR becomes SQL,
+	// so one line here says what was actually sent — on Firebird, PostgreSQL, SQLite and ODBC alike.
+	// The Firebird layer has always written its own; that one is about EXECUTION, this one about what
+	// the engine composed, and the pair is how a wrong answer is told apart from a wrong statement.
+	//
+	// The parameter COUNT rather than the values: a bind list is data (a password, a person's name),
+	// and a journal that a developer mails back must not carry it. The count is what a reader checks
+	// against the placeholders.
+	ibJournalInfo(wxT("query.sql"), wxT("%s   [%u params]"),
+	              m_out.m_sql, static_cast<unsigned>(m_out.m_params.size()));
 	return m_out;
 }
 
@@ -1269,6 +1280,9 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 	}
 
 	m_out.m_sql = sql;
+	// The WRITE side, said the same way as the read (above): one line per statement, values left out.
+	ibJournalInfo(wxT("query.sql"), wxT("%s   [%u params]"),
+	              m_out.m_sql, static_cast<unsigned>(m_out.m_params.size()));
 	return m_out;
 }
 

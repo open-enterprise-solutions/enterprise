@@ -301,17 +301,17 @@ static bool RawFromResult(const ibBackendQueryColumn* col, ibWriterMemory& write
 {
 	if (!col->IsRawColumn())
 		return false;
-	const ibRawDBColumn* const raw = static_cast<const ibRawDBColumn*>(col);
+	const ibBackendColumnRawDB* const raw = static_cast<const ibBackendColumnRawDB*>(col);
 	const wxString f = raw->GetPhysicalName();
 	switch (raw->GetRawType()) {
-	case ibRawDBColumn::RawType::Boolean: writer.w_u8(result.GetResultBool(f) ? 1u : 0u); break;
-	case ibRawDBColumn::RawType::Number: {
+	case ibBackendColumnRawDB::RawType::Boolean: writer.w_u8(result.GetResultBool(f) ? 1u : 0u); break;
+	case ibBackendColumnRawDB::RawType::Number: {
 		ibNumber n = result.GetResultNumber(f);
 		n.GetBuffer(writer);
 		break;
 	}
-	case ibRawDBColumn::RawType::Date:    writer.w_u64(result.GetResultDate(f).GetValue().GetValue()); break;
-	case ibRawDBColumn::RawType::String:  writer.w_stringZ(result.GetResultString(f)); break;
+	case ibBackendColumnRawDB::RawType::Date:    writer.w_u64(result.GetResultDate(f).GetValue().GetValue()); break;
+	case ibBackendColumnRawDB::RawType::String:  writer.w_stringZ(result.GetResultString(f)); break;
 	default: {   // Guid / Reference / Blob — bytes, as they are stored
 		wxMemoryBuffer buffer;
 		result.GetResultBlob(f, buffer);
@@ -327,18 +327,18 @@ static bool RawToStatement(const ibBackendQueryColumn* col, const ibReaderMemory
 {
 	if (!col->IsRawColumn())
 		return false;
-	const ibRawDBColumn* const raw = static_cast<const ibRawDBColumn*>(col);
+	const ibBackendColumnRawDB* const raw = static_cast<const ibBackendColumnRawDB*>(col);
 	switch (raw->GetRawType()) {
-	case ibRawDBColumn::RawType::Boolean: statement->SetParamBool(position++, reader.r_u8() != 0); break;
-	case ibRawDBColumn::RawType::Number: {
+	case ibBackendColumnRawDB::RawType::Boolean: statement->SetParamBool(position++, reader.r_u8() != 0); break;
+	case ibBackendColumnRawDB::RawType::Number: {
 		ibNumber value;
 		if (!value.SetBuffer(reader))
 			ibJournalError(wxT("query.mover"),wxT("ibDataMover: failed to read a raw number from stream"));
 		statement->SetParamNumber(position++, value);
 		break;
 	}
-	case ibRawDBColumn::RawType::Date:    statement->SetParamDate(position++, wxLongLong(reader.r_u64())); break;
-	case ibRawDBColumn::RawType::String:  statement->SetParamString(position++, reader.r_stringZ()); break;
+	case ibBackendColumnRawDB::RawType::Date:    statement->SetParamDate(position++, wxLongLong(reader.r_u64())); break;
+	case ibBackendColumnRawDB::RawType::String:  statement->SetParamString(position++, reader.r_stringZ()); break;
 	default: {
 		wxMemoryBuffer buffer;
 		reader.r_chunk(rt_ref_chunk, buffer);

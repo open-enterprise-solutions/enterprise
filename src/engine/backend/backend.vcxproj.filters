@@ -2224,6 +2224,9 @@
     <ClCompile Include="databaseLayer\databaseQueryBuilder.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
+    <ClCompile Include="query\queryColumn.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="query\dataQueryBuilder.cpp">
       <Filter>query</Filter>
     </ClCompile>

@@ -77,6 +77,8 @@ public:
 	wxString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
+	// COMPUTED: an expression evaluated per row, named by its alias — stored nowhere.
+	Kind               GetColumnKind()   const override { return Kind::Computed; }
 private:
 	wxString                  m_name;
 	ibMetaID                  m_id;
@@ -113,6 +115,14 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 	// every joined leaf, so the DISTINCT / sort / limit rebuilds below keep them.
 	std::vector<const ibBackendQueryColumn*> cols;
 	ibQueryRamTable rows = ComputeRowsResolved(spec, cols);
+
+	// ⭐ A COMPUTED SOURCE IS RAM BY NATURE — a register's slice / balance / turnover, a nested query,
+	// a temp we filled. Journalled all the same, and for the same reason as the folds: what a reader
+	// needs is not that this source is unusual, but how many rows it brought home before anything
+	// above it began filtering.
+	ibJournalInfo(wxT("query.road"), wxT("RAM: computed source '%s' read in memory - %ld rows"),
+	              spec.m_queryable != nullptr ? spec.m_queryable->GetQueryName() : wxString(wxT("<none>")),
+	              rows.RowCount());
 
 	// COMPUTED output columns (SELECT Qty * Price, a CASE) — evaluate the expression per row and add it as a
 	// column NAMED by its alias (the RAM analog of the DB provider projecting `expr AS alias`). Added to `cols`
@@ -286,11 +296,11 @@ const ibMetaID kSubqueryAggColumnBase = 0x60000000u;
 // subquery aggregates at 0x60000000.
 const ibMetaID kStitchSyntheticBase = 0x70000000u;
 
-class ibSubqueryAggColumn final : public ibRawDBColumn
+class ibSubqueryAggColumn final : public ibBackendColumnRawDB
 {
 public:
 	ibSubqueryAggColumn(const wxString& alias, ibMetaID id)
-		: ibRawDBColumn(alias, RawType::Number), m_id(id) {}
+		: ibBackendColumnRawDB(alias, RawType::Number), m_id(id) {}
 	ibMetaID GetColumnId() const override { return m_id; }
 private:
 	ibMetaID m_id;
@@ -598,6 +608,8 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 				t.SetCell(r, m_columns[i]->GetColumnId(), rowVals[i]);
 			if (m_top > 0 && ++emitted >= m_top) break;
 		}
+		ibJournalInfo(wxT("query.road"), wxT("RAM: nested query (aggregate) computed in memory - %ld rows"),
+		              t.RowCount());
 		return t;
 	}
 
@@ -622,6 +634,12 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 			t.SetCell(r, m_columns[i]->GetColumnId(), readCell(sel, i));
 		}
 	}
+	// ⭐ A NESTED QUERY THAT RAN HERE IS THE CTE ROAD NOT TAKEN. Since the lowering declares a nested
+	// source to the server where it can (`WITH q_sub0 AS (…)`, ResolveFrom), reaching this line means
+	// something sent it back: no `WITH` in the engine, a shape the declaration cannot carry, or a
+	// source of its own that lives in memory. The refusal itself is journalled where it is decided —
+	// this says what it cost.
+	ibJournalInfo(wxT("query.road"), wxT("RAM: nested query computed in memory - %ld rows"), t.RowCount());
 	return t;
 }
 
@@ -765,6 +783,16 @@ ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseC
 		for (const ibBackendQueryColumn* col : cols)
 			t.SetCell(r, col->GetColumnId(), sel.GetValue(col));
 	}
+	// ⭐⭐ THE LINE THAT SAYS "THESE ROWS CAME HOME". Every road that ends in our memory rather than in
+	// the DBMS passes through here, so ONE line answers the question a wrong-looking report actually
+	// raises: was this computed by the server, or did we read it all and do the work ourselves?
+	//
+	// The ROW COUNT is the point of it. "Went to RAM" is a road; 400 000 rows is a diagnosis — the
+	// composition's own acceptance criterion is that memory grows with the number of GROUPS, and this
+	// is where that is either true or visibly not. Debug only: the whole call compiles away in Release.
+	ibJournalInfo(wxT("query.road"), wxT("RAM: materialised leaf '%s' - %ld rows, %u columns"),
+	              leaf != nullptr ? leaf->GetQueryName() : wxString(wxT("<none>")),
+	              t.RowCount(), static_cast<unsigned>(cols.size()));
 	return t;
 }
 
@@ -2298,8 +2326,10 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 	// the WHOLE join + cross-table filter in ONE server-side SELECT (the DBMS does the work, only
 	// the projected scalars transit). Anything outside this shape falls through to the RAM compose
 	// below (materialise each leaf, stitch in C++). (docs/query-language-arc.md §22.1a)
-	if (ibDbTableProvider::CanColocateJoin(spec))
+	if (ibDbTableProvider::CanColocateJoin(spec)) {
+		ibJournalInfo(wxT("query.road"), wxT("SERVER: join co-located into one SELECT"));
 		return ibDbTableProvider::ExecuteColocatedJoin(spec, page);
+	}
 
 	// (computed ⋈ DB): materialise the computed leaf into a DB temp table, remap its columns onto the
 	// temp, and run the now-DB⋈DB join SERVER-SIDE. The buffers + manager live for this block, so the
@@ -2360,6 +2390,11 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 		                       "across a non-co-located JOIN is not yet supported (keep the dot-walk filter "
 		                       "to an AND-of-comparisons, or use a co-locatable join)");
 
+	// Every server-side shape above was refused: the leaves are read whole and stitched here. The
+	// per-leaf lines below say how much that cost (MaterialiseLeafToRam); this one says the road.
+	ibJournalInfo(wxT("query.road"), wxT("RAM: %s stitched in memory"),
+	              root->m_kind == ibQueryNode::Kind::Union ? wxT("union") : wxT("join"));
+
 	ibQueryRamTable composed = Compose(spec, ReferencedColumns(spec));
 	if (spec.m_predicate)
 		composed = RamFilter(composed, spec.m_predicate.get());
@@ -2398,11 +2433,24 @@ std::unique_ptr<ibTempTableManager> PromoteSingleComputed(
 		for (const ibQueryCondition& c : *spec.m_conditions)
 			if (c.m_path.empty() && !c.m_expr && c.m_col != nullptr && q->OwnsColumn(c.m_col)) ownConds.push_back(c);
 	ibQueryRamTable rows = q->ComputeRows(ownConds);
-	if (!WorthDbTemp(rows.RowCount()))
+	// The single-source twin of PromoteComputedLeaf, and it used to make the same three decisions in
+	// silence. Same words as its neighbour: what happened, to what, and how much of it there was.
+	if (!WorthDbTemp(rows.RowCount())) {
+		ibJournalInfo(wxT("query.temp"), wxT("IN MEMORY: computed source %s has %ld row(s) ")
+			wxT("- not worth a DB temp table, folding in memory"),
+			q->GetQueryName(), rows.RowCount());
 		return nullptr;
+	}
 	std::unique_ptr<ibTempTableManager> mgr = ibTempTableManager::Materialise(spec.m_holder, rows, q->GetMetaData());
-	if (!mgr)
+	if (!mgr) {
+		ibJournalInfo(wxT("query.temp"), wxT("IN MEMORY: computed source %s (%ld row(s)) ")
+			wxT("could not be written to a DB temp table, folding in memory"),
+			q->GetQueryName(), rows.RowCount());
 		return nullptr;
+	}
+	ibJournalInfo(wxT("query.temp"), wxT("IN THE DATABASE: computed source %s (%ld row(s)) ")
+		wxT("promoted to a temp table, the aggregate runs there"),
+		q->GetQueryName(), rows.RowCount());
 	const ibDbTempTableQueryable* temp = mgr->Queryable();
 	if (temp == nullptr)
 		return nullptr;
@@ -2488,6 +2536,9 @@ ibDataQueryResult ibComputedProvider::ExecuteAggregate(const ibDataQuerySpec& sp
 	ibQueryRamTable rows = ComputeRowsResolved(spec, cols);
 	if (spec.m_predicate)   // boolean WHERE (OR / NOT / IS NULL) — filter before the fold (the register can't)
 		rows = ibQueryComposer::FilterRows(rows, spec.m_predicate.get());
+	ibJournalInfo(wxT("query.road"), wxT("RAM: aggregate folded in memory over '%s' - %ld rows read"),
+	              spec.m_queryable != nullptr ? spec.m_queryable->GetQueryName() : wxString(wxT("<none>")),
+	              rows.RowCount());
 	return RamAggregate(rows, spec);
 }
 
@@ -3266,14 +3317,29 @@ ibSelectorTree ibQueryComposer::ExecuteTotals(const ibDataQuerySpec& spec)
 
 	// Push-down: a single-source totals on a ROLLUP-capable DBMS runs server-side (GROUP BY ROLLUP),
 	// the DBMS computing every subtotal level — only the aggregated rows transit, no raw detail.
-	if (IsSingleSource(spec) && ibDbTableProvider::CanPushRollupTotals(spec))
+	if (IsSingleSource(spec) && ibDbTableProvider::CanPushRollupTotals(spec)) {
+		// ⭐ SAID ON BOTH ROADS, and that is the whole value of it: a journal that speaks only when
+		// something goes to RAM cannot tell "the fold ran on the server" from "nobody journalled it".
+		// A right-looking report is consistent with either, which is exactly how the server fold once
+		// went a whole arc without executing once.
+		ibJournalInfo(wxT("query.road"), wxT("SERVER: totals folded by GROUP BY ROLLUP (single source)"));
 		return ibDbTableProvider::ExecuteRollupTotals(spec);
+	}
 
 	// Multi-source co-located JOIN on a ROLLUP-capable dialect: push GROUP BY ROLLUP server-side (the
 	// DBMS computes every subtotal level; only aggregated rows transit) instead of materialising the
 	// leaves and folding the totals tree in RAM. Same ibSelectorTree either way — perf, not correctness.
-	if (!IsSingleSource(spec) && ibDbTableProvider::CanPushColocatedRollupTotals(spec))
+	if (!IsSingleSource(spec) && ibDbTableProvider::CanPushColocatedRollupTotals(spec)) {
+		ibJournalInfo(wxT("query.road"), wxT("SERVER: totals folded by GROUP BY ROLLUP (co-located join)"));
 		return ibDbTableProvider::ExecuteColocatedRollupTotals(spec);
+	}
+
+	// …and here the fold is OURS: the detail is read whole and the tree is built in memory. Correct
+	// either way — the numbers do not depend on the road — so this line is the only thing that tells
+	// a person which one they got.
+	ibJournalInfo(wxT("query.road"), wxT("RAM: totals folded in memory (%s, %u levels)"),
+	              IsSingleSource(spec) ? wxT("single source") : wxT("composed sources"),
+	              static_cast<unsigned>(spec.m_totals != nullptr ? spec.m_totals->size() : 0));
 
 	ibQueryRamTable combined;
 	if (IsSingleSource(spec)) {
@@ -3349,7 +3415,7 @@ ibDataQueryResult& ibDataQueryResult::operator=(ibDataQueryResult&&) noexcept = 
 
 bool     ibDataQueryResult::Next()                                                     { return m_source->Next(); }
 ibValue  ibDataQueryResult::GetValue(const ibBackendQueryColumn* col)            const { return m_source->Value(col); }
-ibValue  ibDataQueryResult::GetValue(const ibRawDBColumn& rawColumn)             const { return m_source->Value(&rawColumn); }
+ibValue  ibDataQueryResult::GetValue(const ibBackendColumnRawDB& rawColumn)             const { return m_source->Value(&rawColumn); }
 ibValue  ibDataQueryResult::GetColumn(const wxString& alias)                     const { return m_source->Column(alias); }
 ibValue  ibDataQueryResult::GetColumnObject(const wxString& prefix, const ibBackendQueryColumn* col) const { return m_source->ColumnObject(prefix, col); }
 

@@ -90,7 +90,7 @@ void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
 	// Firebird's ceiling (about page_size / 4) on its own: "key size exceeds implementation
 	// restriction", with the data never even reaching it.
 	const ibBackendQueryColumn* hash =
-		table.OwnRaw(ibRawDBColumn::String(KeyHashColumnName(), hashColumnId, 32));
+		table.OwnRaw(ibBackendColumnRawDB::String(KeyHashColumnName(), hashColumnId, 32));
 	table.Add(hash);
 	table.Index(indexName, { hash }, /*unique*/ true);
 	table.m_materialize.m_keyHashColumn = KeyHashColumnName();
@@ -276,12 +276,12 @@ bool SeedRowsEqual(const ibSchemaSeedRow& a, const ibSchemaSeedRow& b)
 //
 // A DECLARED key is a different object entirely — a reference object is keyed by its own reference,
 // which is an ATTRIBUTE, and an attribute lives in the configuration, which outlives every apply. It
-// must NOT be copied: it is not an ibRawDBColumn at all, so the cast that copies one reads its memory
+// must NOT be copied: it is not an ibBackendColumnRawDB at all, so the cast that copies one reads its memory
 // as a class it never was. Both kinds arrive here as the same interface pointer, and the interface is
 // what tells them apart (IsRawColumn) — the question was already there to ask.
 struct SeedKey {
 	const ibBackendQueryColumn*    m_col = nullptr;   // bind through this
-	std::shared_ptr<ibRawDBColumn> m_owned;           // non-null only for a copied scaffold column
+	std::shared_ptr<ibBackendColumnRawDB> m_owned;           // non-null only for a copied scaffold column
 	bool IsOk() const { return m_col != nullptr; }
 };
 
@@ -292,7 +292,7 @@ SeedKey SeedKeyFor(const ibSchemaTable& t)
 	if (src == nullptr)
 		return key;   // no key — the table carries no declared rows either
 	if (src->IsRawColumn()) {
-		key.m_owned = std::make_shared<ibRawDBColumn>(*static_cast<const ibRawDBColumn*>(src));
+		key.m_owned = std::make_shared<ibBackendColumnRawDB>(*static_cast<const ibBackendColumnRawDB*>(src));
 		key.m_col   = key.m_owned.get();
 	}
 	else {

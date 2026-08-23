@@ -170,7 +170,7 @@ public:
 	void ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const override { this->m_meta->ShowValueByKey(key, srcForm); }
 };
 
-//meta object 
+//meta object
 class BACKEND_API ibValueMetaObjectRecordData
 	: public ibValueMetaObjectGenericData {
 	public:
@@ -421,22 +421,76 @@ class ibValueMetaObjectRecordDataRef;
 // A record source — a DB-family L3 queryable. It names NO attribute / L1: it returns its
 // own COLUMNS (which happen to be metaobject attributes), and the DB provider does the
 // physical materialisation by static_cast'ing those columns back to the attribute.
-class BACKEND_API ibRecordQueryable : public ibBackendQueryable {
+// ⭐ TEMPLATED ON THE METAOBJECT IT READS, for one reason: a subclass that reads a MORE SPECIFIC
+// metatype would otherwise keep a second pointer to the same object beside `m_meta`, just to have it
+// under the right type. Naming the type here means a specialisation inherits it already typed
+// (ibRecorderQueryable, below). Same arrangement as ibComputedRegisterQueryable<TReg>.
+//
+// Bodies stay in commonObjectMetaQuery.cpp — the specialisations that exist are instantiated
+// explicitly at the end of that file, so the header carries declarations only.
+// ⭐ WHERE A READING SURFACE IS DECLARED: immediately before the KIND it reads for, not in a block of
+// its own. Each kind owns one — an enumeration, a hierarchy, a recorder, a register — and reading it
+// beside its metaobject is how the pair stays legible. (The generic ibValueMetaObjectRecordDataRef
+// has none: "a reference" is a base to mix into, and it declares GetQueryable pure so a kind cannot
+// forget to name its own.)
+template <typename TMeta>
+class ibRecordQueryable : public ibBackendQueryable {
 public:
-	explicit ibRecordQueryable(const ibValueMetaObjectRecordDataRef* meta) : m_meta(meta) {}
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;   // all attributes (SELECT *)
-	virtual wxString GetQueryTableName() const override;
-	virtual wxString GetQueryName() const override;   // the metaobject's user-facing name (change ledger)
-	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { data-reference } — key authority
+	explicit ibRecordQueryable(const TMeta* meta) : m_meta(meta) {}
+
+	// The attribute by name AS a column (an attribute IS-A ibBackendQueryColumn). The L3 surface
+	// returns a column; the DB provider static_casts it back to the attribute when it needs the field
+	// machinery — the queryable itself names no attribute on its contract.
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+		return m_meta->template FindObjectByFilter<ibValueMetaObjectAttributeBase>(name,
+			{ g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID, g_metaCommonAttributeColumnCLSID });
+	}
+
+	// All generic attributes (predefined + plain) — each IS-A column. Drives SELECT * over this source.
+	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override {
+		std::vector<const ibBackendQueryColumn*> cols;
+		for (const ibValueMetaObjectAttributeBase* a : m_meta->GetGenericAttributeArrayObject())
+			cols.push_back(a);
+		return cols;
+	}
+
+	virtual wxString GetQueryTableName() const override { return m_meta->GetPhysicalTableName(); }
+	virtual wxString GetQueryName()      const override { return m_meta->GetName(); }
+	virtual const ibMetaData* GetMetaData() const override { return m_meta->GetMetaData(); }
+
+	// The uniqueness key (UPSERT match + dot-walk self-reference + row identity) — the data-reference
+	// attribute (the pure-guid self-reference blob the row stores; type is the _RTRef column). No
+	// GetRowKeyColumn / IsReferenceAttribute / GetIdentitySort — all of them derived from this one
+	// authority, and the last was retired for pretending to be a second: it answered with a SORT whose
+	// tail happened to be the key, so a source sorting by something else first handed a number to
+	// everyone who wanted identity. (docs/query-language-arc.md §22.1)
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override {
+		const ibValueMetaObjectAttributeBase* refAttr = m_meta->GetDataReference();
+		if (refAttr == nullptr)
+			return {};
+		return { refAttr };
+	}
 	// (ResolveReferenceTarget/Targets moved to ibDbTableProvider — the provider owns metadata.)
-	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override;   // the parent attribute (hierarchy key)
-	virtual ibHierarchyType GetHierarchyType() const override;                 // the arrangement — forwarded to the metaobject, same as above
-	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta (body in .cpp — the metaobject type is complete there)
-private:
-	const ibValueMetaObjectRecordDataRef* m_meta;
+
+	// The metaobject knows whether it is hierarchical — its CLASS is the signal. Virtual dispatch down
+	// its own inheritance, no cast; null on a flat ref.
+	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override { return m_meta->GetHierarchyColumn(); }
+
+	// Same route: the ARRANGEMENT travels whole, and each caller reads off it the distinction it needs
+	// instead of being handed one boolean per question.
+	virtual ibHierarchyType GetHierarchyType() const override { return m_meta->GetHierarchyType(); }
+
+	// The metaobject behind the source — the front reads its icon / presentation off it (through the
+	// dynamic list's GetSourceMetaObject → GetSourceQueryable → here).
+	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return m_meta; }
+
+protected:
+	const TMeta* m_meta;   // …already the type a specialisation needs — no second pointer beside it
 };
+
+// (NO ALIAS FOR ONE SPECIALISATION. Each KIND names the one it reads through, spelled out where it
+//  declares its descriptor — an alias for the "usual" one is a default nobody chose, and it made
+//  `friend class ibRecordQueryable` declare a NEW class instead of befriending the template.)
 
 // The source's COMMAND surface lives on the metaobjects below (record / register / constant), as plain virtual
 // methods polymorphic down their OWN inheritance. The templated source descriptor (queryableFactory.h) FORWARDS
@@ -465,8 +519,15 @@ public:
 	// (a friend) owns the navigation, built from this metaobject's primitives
 	// (FindObjectByFilter / GetPhysicalTableName / IsDataReference / guidName). L4 and the door
 	// read through GetQueryable().
-	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
-	friend class ibRecordQueryable;
+	// ⭐⭐ PURE HERE — every KIND must name its own. "A reference" has no reading surface of its own,
+	// and leaving an inherited implementation in place would let a kind forget to declare one and read
+	// through somebody else's without a word. Declared abstract, the compiler asks the question at the
+	// only moment it is cheap to answer.
+	virtual const ibBackendQueryable* GetQueryable() const override = 0;
+
+	// ⚠ THE FRIEND IS THE TEMPLATE, not a class — `friend class ibRecordQueryable` would declare a NEW
+	// class of that name beside the template (C2371, and 2800 errors behind it).
+	template <typename TMeta> friend class ibRecordQueryable;
 
 	virtual ibValueMetaObjectAttributePredefined* GetDataReference() const { return m_propertyAttributeReference->GetMetaObject(); }
 
@@ -606,9 +667,13 @@ protected:
 	ibPropertyBoolean* m_propertyQuickChoice = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryPresentation, wxT("QuickChoice"), _("Quick choice"), false);
 	ibPropertyContainer<>* m_propertyAttributeReference = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Ref"), _("Ref"), wxEmptyString, ibValue::GetIDByVT(ibValueTypes::TYPE_EMPTY)));
 
-	// the L4 source descriptor — CONTAINS the vended queryable (stable for this metaobject's
-	// life) and is registered with the factory on run / close. GetQueryable() forwards to it.
-	ibMetaCommandDescriptor<ibRecordQueryable, ibValueMetaObjectRecordDataRef> m_queryable{ this };
+	// ⭐⭐ NO SOURCE DESCRIPTOR HERE — "a reference" is a base to MIX INTO, not a readable source.
+	//
+	// The four KINDS below own one each, typed to themselves, and each registers its own with the
+	// factory: an ENUMERATION, a HIERARCHY, a RECORDER (document), a REGISTER. Declared once up here it
+	// had ONE type for everything beneath it — so a kind with its own reading surface could vend a
+	// column and watch every query resolve through the other descriptor and never see it. That is what
+	// hid the recorder's moment column (2026-08-23).
 
 protected:
 
@@ -638,6 +703,10 @@ public:
 
 	ibValueMetaObjectAttributePredefined* GetDataOrder() const { return m_propertyAttributeOrder->GetMetaObject(); }
 	bool IsDataOrder(const ibMetaID& id) const { return id == (*m_propertyAttributeOrder)->GetMetaID(); }
+
+	// THE ENUMERATION'S PAIR — its own queryable, typed to this kind, registered by this kind
+	// (OnAfterRun / OnBeforeClose in the .cpp).
+	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
 
 	//events: 
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -707,6 +776,9 @@ private:
 
 	//default attributes 
 	ibPropertyContainer<>* m_propertyAttributeOrder = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateNumber(wxT("Order"), _("Order"), wxEmptyString, 6, true));
+
+	// …and this kind's own source descriptor — typed to the ENUMERATION kind, registered by it.
+	ibMetaCommandDescriptor<ibRecordQueryable<ibValueMetaObjectRecordDataEnumRef>, ibValueMetaObjectRecordDataEnumRef> m_queryable{ this };
 };
 
 // Helper macro — emits the Read/Write/Delete role triplet + their
@@ -771,22 +843,11 @@ public:
 	ibValueMetaObjectAttributePredefined* GetDataDeletionMark() const { return m_propertyAttributeDeletionMark->GetMetaObject(); }
 	bool IsDataDeletionMark(const ibMetaID& id) const { return id == (*m_propertyAttributeDeletionMark)->GetMetaID(); }
 
-	// ⭐⭐ THE POINT IN TIME — a registered member of this layer, and of this layer only.
-	//
-	// Declared here because everything stored and editable — a catalog element, a document, a chart
-	// — sits somewhere in the data's history and can be named as a moment. An ENUMERATION value
-	// cannot: it is a name in the configuration, identical before and after every write.
-	// Enumerations derive from ibValueMetaObjectRecordDataRef directly, so they are outside this by
-	// CONSTRUCTION rather than by a check somebody has to remember to write.
-	//
-	// ⚠ IT REACHES THE QUERY AND NOTHING ELSE. Deliberately absent from
-	// FillArrayObjectByPredefinedAttribute, which is the list that becomes columns, object members
-	// and form fields — so this attribute gets no storage, appears on no form, and is not part of
-	// what a record is. It is a way to ASK, not a thing to keep: the date and the reference it is
-	// built from are already stored, and storing their pair again would be two answers to one
-	// question.
-	ibValueMetaObjectAttributePredefined* GetPointInTime() const { return m_propertyAttributePointInTime->GetMetaObject(); }
-	bool IsPointInTime(const ibMetaID& id) const { return id == (*m_propertyAttributePointInTime)->GetMetaID(); }
+	// (THE POINT IN TIME MOVED DOWN, to ibValueMetaObjectRecordDataRecorderRef — the layer that has a
+	//  DATE. It used to be declared here, and from here a catalogue inherited it: a moment is a date
+	//  plus the record standing at it, and a catalogue has no date, so what it inherited could never
+	//  be read. Recording movements and being placed in time are the same layer, which is the one
+	//  below.)
 
 	// DOCUMENT variant — reference / deletion mark / data version hidden; number / date / posted / attributes
 	// visible. Fills its columns directly by its own predicates. Body in commonObjectAction.cpp.
@@ -882,12 +943,177 @@ protected:
 	ibPropertyGeneration* m_propertyGeneration = ibPropertyObject::CreateProperty<ibPropertyGeneration>(m_categoryData, wxT("ListGeneration"), _("List generation"));
 	ibPropertyContainer<>* m_propertyAttributeDataVersion = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("DataVersion"), _("Data version"), wxEmptyString, 12, ibItemMode_Folder_Item));
 	ibPropertyContainer<>* m_propertyAttributeDeletionMark = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(wxT("DeletionMark"), _("Deletion mark"), wxEmptyString));
-	// The moment — registered like the mark above, typed as the PointInTime value. See GetPointInTime
-	// for why it never joins the predefined list.
-	ibPropertyContainer<>* m_propertyAttributePointInTime = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("PointInTime"), _("Point in time"), wxEmptyString, value_to_clsid(wxT("PointInTime"))));
 
 	// Read/Write/Delete role triplet emitted by IB_DECLARE_RWD_ROLE_TRIPLET
 	// above (in the public access region).
+};
+
+class BACKEND_API ibValueMetaObjectRecordDataRecorderRef;
+
+// ==========================================================================
+// ibRecorderQueryable — THE RECORDER'S READING SURFACE: the record queryable plus the MOMENT.
+//
+// A metaobject holds what it DECLARES, and everything it declares is physical — attributes with
+// fields behind them. A column that is CONSTRUCTED rather than stored belongs where the reading is,
+// which is here; the tabular section arranges its owner reference exactly so (ibTabularQueryable).
+//
+// So this specialises the shared ibRecordQueryable in one respect: it vends one more column beside
+// the attributes. Nothing in the shared surface knows moments exist.
+// ==========================================================================
+class BACKEND_API ibRecorderQueryable : public ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef> {
+public:
+	explicit ibRecorderQueryable(const ibValueMetaObjectRecordDataRecorderRef* meta);
+
+	// The moment answers first, then the attributes — a query naming it resolves to the column that
+	// knows how to build it. (Bodies in commonObjectMetaQuery.cpp.)
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;
+	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;
+
+	// ⭐⭐ THE MOMENT AS A COLUMN — and it reads ITSELF.
+	//
+	// There is no such thing as a "synthetic column" in general: this one is the moment and nothing
+	// else, which is why it is declared here rather than in the query tiers. Its identity is the
+	// moment attribute's (name, id, type); its VALUE is stored nowhere, so the tagged read the codec
+	// performs cannot describe it — and rather than teaching the codec about moments, the column
+	// overrides the read and assembles the value out of the date and the reference, each of which is
+	// read exactly as it is read anywhere else.
+	class BACKEND_API ibBackendColumnPointInTime : public ibBackendQueryColumn {
+	public:
+		explicit ibBackendColumnPointInTime(const ibValueMetaObjectRecordDataRecorderRef* owner) : m_owner(owner) {}
+
+		wxString GetName()         const override;
+		wxString GetSynonym()      const override;
+		wxString GetPhysicalName() const override;
+		ibMetaID GetColumnId()     const override;
+		ibTypeDescription& GetTypeDesc() const override;
+
+		// WHERE IT LIES: nowhere of its own — in the DATE, then in the REFERENCE. Answering with their
+		// layouts is what makes the existing mechanisms work on it: a sort emits date, then identifier
+		// (a reference already sorts by its own two fields), and a comparison keys on the same ones.
+		std::vector<ibColumnSlot> DescribeLayout() const override;
+
+		// …and its KIND says why: synthetic — those fields are the date's and the reference's, and
+		// they are the ones that write them.
+		Kind GetColumnKind() const override { return Kind::Synthetic; }
+
+		bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
+		               class ibValue& retValue, class ibQueryResult& result, bool createData = true) const override;
+
+		// …and it writes NOTHING. A moment is stored by storing the date and the reference, which the
+		// write already does through their own columns; binding it again would be a second answer to
+		// one question — and there are no fields here to bind it into.
+		void BindValue(class ibQueryStatement& /*statement*/, const class ibMetaData* /*metaData*/,
+		               const class ibValue& /*value*/, int& /*position*/) const override {}
+
+	private:
+		const ibValueMetaObjectRecordDataRecorderRef* m_owner;
+	};
+
+private:
+	ibBackendColumnPointInTime m_momentColumn;   // `m_meta` above is already the recorder — see the template
+};
+
+// ==========================================================================
+// ibValueMetaObjectRecordDataRecorderRef — A REF THAT RECORDS MOVEMENTS, AND THEREFORE SITS IN TIME.
+//
+// The metaobject twin of ibValueRecordDataObjectRecorderRef (the VALUE, below in this file — "ref
+// with movements": posting, the register cascade, un-posting on a deletion mark). The value side has
+// had this layer since 2026-05-25; the metaobject side never did, and its absence is what put the
+// MOMENT on the shared base, from where a catalogue inherited a field it could not build.
+//
+// It sits beside the hierarchy layer, not above it: `MutableRef` splits into what RECORDS (this) and
+// what is ARRANGED IN A TREE (…HierarchyMutableRef), and a metatype takes the one it is.
+//
+// Three things live here because they are one fact:
+//   * the DATE — when it happened;
+//   * the RECORD DESCRIPTION — which registers it writes into;
+//   * the MOMENT — the date plus the record standing at it, which is how "everything up to THIS
+//     document" is asked. It is not stored: it is CONSTRUCTED from the date and the reference
+//     (m_momentColumn), and the codec reads a point in time out of the three fields those two have.
+// ==========================================================================
+class BACKEND_API ibValueMetaObjectRecordDataRecorderRef : public ibValueMetaObjectRecordDataMutableRef {
+public:
+
+	ibMetaDescription& GetRecordDescription() const { return m_propertyRegisterRecord->GetValueAsMetaDesc(); }
+
+	// The NUMBER and the DATE — what a recorded fact is identified and placed by. They come as a pair:
+	// a document is looked up by number and ordered by date, and both are indexed for that reason.
+	ibValueMetaObjectAttributePredefined* GetDocumentNumber() const { return m_propertyAttributeNumber->GetMetaObject(); }
+	ibValueMetaObjectAttributePredefined* GetDocumentDate() const { return m_propertyAttributeDate->GetMetaObject(); }
+	bool IsDocumentDate(const ibMetaID& id) const { return id == (*m_propertyAttributeDate)->GetMetaID(); }
+
+	// ⚠ IT REACHES THE QUERY AND NOTHING ELSE. Deliberately absent from
+	// FillArrayObjectByPredefinedAttribute — the list that becomes columns, object members and form
+	// fields — so the moment gets no storage, appears on no form, and is not part of what a record is.
+	// It is a way to ASK, not a thing to keep: the date and the reference it is built from are already
+	// stored, and storing their pair again would be two answers to one question.
+	ibValueMetaObjectAttributePredefined* GetPointInTime() const { return m_propertyAttributePointInTime->GetMetaObject(); }
+	bool IsPointInTime(const ibMetaID& id) const { return id == (*m_propertyAttributePointInTime)->GetMetaID(); }
+
+	// (THE MOMENT AS A COLUMN lives in the QUERYABLE — ibRecorderQueryable, below. A metaobject holds
+	//  what it DECLARES, which is physical: the attributes and their properties. A column that is
+	//  constructed rather than stored belongs where the reading happens, the same way a tabular
+	//  section's owner reference belongs to ibTabularQueryable and not to the section metaobject.)
+
+	// The base variant plus the moment, which only this layer has.
+	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+
+	//events:
+	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags) override;
+	virtual bool OnLoadMetaObject(ibMetaData* metaData) override;
+	virtual bool OnSaveMetaObject(int flags) override;
+	virtual bool OnDeleteMetaObject() override;
+
+	virtual bool OnBeforeRunMetaObject(int flags) override;
+	virtual bool OnAfterRunMetaObject(int flags) override;
+
+	virtual bool OnBeforeCloseMetaObject() override;
+	virtual bool OnAfterCloseMetaObject() override;
+
+protected:
+
+	ibValueMetaObjectRecordDataRecorderRef();
+	virtual ~ibValueMetaObjectRecordDataRecorderRef();
+
+	// Additive contract — chains to MutableRef and adds the NUMBER and the DATE. The moment stays out,
+	// for the reason on GetPointInTime.
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		ibValueMetaObjectRecordDataMutableRef::FillArrayObjectByPredefinedAttribute(array);
+		array.push_back(m_propertyAttributeNumber->GetMetaObject());
+		array.push_back(m_propertyAttributeDate->GetMetaObject());
+		return true;
+	}
+
+	// What a search runs over — the two a person actually looks a recorded fact up by.
+	virtual bool FillArrayObjectBySearched(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		array = { m_propertyAttributeNumber->GetMetaObject(), m_propertyAttributeDate->GetMetaObject() };
+		return true;
+	}
+
+	// The "code" of a recorded fact is its NUMBER — what the picker shows and what a quick choice
+	// matches against.
+	virtual ibValueMetaObjectAttributeBase* GetAttributeForCode() const override { return m_propertyAttributeNumber->GetMetaObject(); }
+
+	//load & save metaData from DB
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
+
+protected:
+
+	ibPropertyRecord* m_propertyRegisterRecord = ibPropertyObject::CreateProperty<ibPropertyRecord>(m_categoryData, wxT("ListRegisterRecord"), _("List register record"));
+	ibPropertyContainer<>* m_propertyAttributeNumber = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("Number"), _("Number"), wxEmptyString, 11, true, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_Index));
+	ibPropertyContainer<>* m_propertyAttributeDate = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("Date"), _("Date"), wxEmptyString, ibDateFractions::ibDateFractions_DateTime, true, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_Index));
+	// The moment — registered like the date above, typed as the PointInTime value. See GetPointInTime
+	// for why it never joins the predefined list.
+	ibPropertyContainer<>* m_propertyAttributePointInTime = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("PointInTime"), _("Point in time"), wxEmptyString, value_to_clsid(wxT("PointInTime"))));
+
+	// …and this kind's own source descriptor. THIS is the queryable that vends the MOMENT beside the
+	// stored attributes — the reason the kinds have their own at all: a synthetic column belongs to a
+	// KIND, and only the descriptor of that kind can hand it out.
+	ibMetaCommandDescriptor<class ibRecorderQueryable, ibValueMetaObjectRecordDataRecorderRef> m_queryable{ this };
+
+public:
+	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
 };
 
 //meta object with reference and deletion mark and group/object type and predefined values
@@ -1211,6 +1437,13 @@ protected:
 
 	//predefinded vector
 	std::vector<wxObjectDataPtr<ibPredefinedValueObject>> m_predefinedObjectVector;
+
+	// …and this kind's own source descriptor — typed to the HIERARCHY kind, registered by it
+	// (a catalogue, a chart of accounts, a chart of characteristic types, a job all read through it).
+	ibMetaCommandDescriptor<ibRecordQueryable<ibValueMetaObjectRecordDataHierarchyMutableRef>, ibValueMetaObjectRecordDataHierarchyMutableRef> m_queryable{ this };
+
+public:
+	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
 };
 
 // ibRegisterDataQueryable — the L3 queryable for the register family (its main
@@ -2879,4 +3112,5 @@ protected:
 };
 #pragma endregion
 
-#endif 
+
+#endif

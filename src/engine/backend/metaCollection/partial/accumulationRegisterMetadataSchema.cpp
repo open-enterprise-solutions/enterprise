@@ -78,7 +78,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 			? ibRegisterType::eTurnovers : ibRegisterType::eBalances;
 		if (const ibValueMetaObjectTotals* idle = GetTotalsObject(idleKind)) {
 			ibSchemaTable& idleTable = out.Shared(idle->GetMetaID(), GetRegisterTableNameDB(idleKind));
-			idleTable.Scaffold(ibRawDBColumn::Date(periodField));
+			idleTable.Scaffold(ibBackendColumnRawDB::Date(periodField));
 			for (const auto dimension : GetDimensionArrayObject())
 				idleTable.Add(dimension);
 		}
@@ -90,7 +90,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	ibSchemaTable& t = out.Shared(totals->GetMetaID(), totalsName);
 
 	// --- structure: the period, the dimensions, and a stored pair per resource -----------------
-	const ibBackendQueryColumn* periodCol = t.Scaffold(ibRawDBColumn::Date(periodField));
+	const ibBackendQueryColumn* periodCol = t.Scaffold(ibBackendColumnRawDB::Date(periodField));
 	for (const auto dimension : GetDimensionArrayObject())
 		t.Add(dimension);   // same physical fields as the movements, so a trigger reads NEW.<field> directly
 

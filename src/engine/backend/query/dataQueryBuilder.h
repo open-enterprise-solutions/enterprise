@@ -198,7 +198,7 @@ public:
 	//   GetValue(queryable->GetPrimaryKeyColumns().front())
 	// (the raw overload takes a column by ref so a temporary works). No GetGuidString.
 	ibValue GetValue(const ibBackendQueryColumn* col) const;
-	ibValue GetValue(const ibRawDBColumn& rawColumn) const;
+	ibValue GetValue(const ibBackendColumnRawDB& rawColumn) const;
 
 	// A result column by its OUTPUT NAME — for aggregate columns (SUM/COUNT/… AS
 	// alias) that have no source column. Group columns still read via GetValue(col).
@@ -525,7 +525,7 @@ public:
 	ibDataQueryBuilder& Where(const ibBackendQueryColumn* col,
 	                          ibQueryFilterOp comparison, const ibValue& value);             // condition -> predicate (Equal/NotEqual)
 	ibDataQueryBuilder& Where(const ibBackendQueryColumn* col, const ibValue& value);        // 2-arg = equality (meta column)
-	ibDataQueryBuilder& Where(const ibRawDBColumn& rawColumn, const ibValue& value);         // direct field = value (door owns a copy)
+	ibDataQueryBuilder& Where(const ibBackendColumnRawDB& rawColumn, const ibValue& value);         // direct field = value (door owns a copy)
 	ibDataQueryBuilder& WhereLike(const ibBackendQueryColumn* col,
 	                              const ibValue& pattern);                                    // col LIKE pattern (FindByCode/Description)
 	ibDataQueryBuilder& WhereCompare(const ibBackendQueryColumn* col,
@@ -714,9 +714,9 @@ public:
 	// keyset (the primary key). The provider does the per-column physical decomposition + positional bind
 	// DEEP in L2 (ExecuteWrite builds an ibQueryStatement and calls SetValueAttribute); no field
 	// / position is ever visible here. The column is the ibBackendQueryColumn abstraction (an
-	// attribute IS one; a raw db field — ibRawDBColumn — is one too). (docs §22.1)
+	// attribute IS one; a raw db field — ibBackendColumnRawDB — is one too). (docs §22.1)
 	ibDataQueryBuilder& SetValue(const ibBackendQueryColumn* column, const ibValue& value);
-	ibDataQueryBuilder& SetValue(const ibRawDBColumn& rawColumn, const ibValue& value);   // direct field (door owns a copy)
+	ibDataQueryBuilder& SetValue(const ibBackendColumnRawDB& rawColumn, const ibValue& value);   // direct field (door owns a copy)
 
 	// ACCUMULATE instead of assign — `column = column + delta`, evaluated by the DB. UPDATE only
 	// (an INSERT has no current value to add to), and numeric single-field columns only: the point
@@ -732,7 +732,7 @@ public:
 	// values ARE IR expressions (a plain SetValue just happens to put a Const there), so this puts
 	// `Add(Col, Const)` in the same slot. No L2 change, no raw SQL.
 	ibDataQueryBuilder& AddValue(const ibBackendQueryColumn* column, const ibValue& delta);
-	ibDataQueryBuilder& AddValue(const ibRawDBColumn& rawColumn, const ibValue& delta);   // direct field (door owns a copy)
+	ibDataQueryBuilder& AddValue(const ibBackendColumnRawDB& rawColumn, const ibValue& delta);   // direct field (door owns a copy)
 
 	// CLOSE THE ROW BEING ASSEMBLED AND OPEN THE NEXT — the whole batch surface, one verb.
 	//
@@ -974,7 +974,7 @@ private:
 	// shared_ptr (not by-value vector) keeps the pointers stable across reallocation AND keeps
 	// the door COPYABLE (ibSubqueryQueryable copies the inner builder) — a copied door shares
 	// these immutable column descriptors, so the copy's stored pointers stay alive.
-	std::vector<std::shared_ptr<ibRawDBColumn>> m_ownedRawColumns;
+	std::vector<std::shared_ptr<ibBackendColumnRawDB>> m_ownedRawColumns;
 
 	// Bundle the accumulated state into the value the provider reads (a short-lived
 	// view of refs). The door builds it per terminal and hands it to the vended

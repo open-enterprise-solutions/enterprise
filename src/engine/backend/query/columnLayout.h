@@ -27,33 +27,9 @@ class ibWriterMemory;      // binary-wire writer (fileSystem/fs.h)
 // ibQueryStatement / ibQueryResult are full types from databaseQueryBuilder.h (included above) — the
 // binary codec binds/reads through the L2 statement/cursor, not raw L1 (ibPreparedStatement/-ResultSet).
 
-// The role a physical field plays in a logical column's spread (an L3 layout concept — L2 never sees it).
-enum class ibColumnRole : uint8_t {
-	Raw,             // a raw physical column — its own single field, type carried by the column
-	Discriminator,   // _TYPE  — the variant type tag
-	Boolean,         // _B
-	Number,          // _N
-	Date,            // _D
-	String,          // _S
-	Enum,            // _E
-	ReferenceType,   // _RTRef — the reference target's clsid (BIGINT)
-	ReferenceId,     // _RRRef — the reference value (pure guid blob; type is _RTRef)
-	Schedule,        // _SCH   — a JobSchedule, serialised whole (blob); see ibFieldTypes_Schedule
-	TypeDescription  // _TD    — a type description, serialised whole (blob). Same reasoning as the
-	                 //          schedule: what it carries is a SET OF ADMISSIBLE TYPES with their
-	                 //          qualifiers, and nothing filters on it in SQL — so spreading it into
-	                 //          columns would buy a predicate nobody writes and cost an ALTER every
-	                 //          time the type system grows. It is read to NARROW a value, in memory.
-};
-
-// One physical field of a logical column (the layout decomposition unit).
-struct ibColumnSlot {
-	wxString     m_name;                       // physical column name (base + suffix)
-	ibColumnRole m_role    = ibColumnRole::Raw;
-	ibColumnType m_type;                       // canonical type for DDL (MapType -> dialect SQL)
-	wxString     m_default;                    // DEFAULT clause (e.g. "0"), empty = none
-	bool         m_notNull = false;
-};
+// (ibColumnRole / ibColumnSlot moved to queryColumn.h — they describe a COLUMN's field, and the
+//  column answers with them (ibBackendQueryColumn::DescribeLayout). Declaring them here left the
+//  column having to name the struct it returns without being able to see it.)
 
 // The ONE role -> physical-suffix table. Every layer that names a composite column's physical fields
 // (the layout below, the read keyset anchor, the DDL builder, the attribute field machinery) spells the
@@ -89,7 +65,12 @@ BACKEND_API const wxString& ibOwnerRefField();
 // the filter and order pickers instead of accepting a condition nobody can execute. Asked of the TYPE,
 // not of a list of clsids at the call site — a value that starts being stored whole answers here.
 BACKEND_API bool ibIsComparableType(const ibTypeDescription& typeDesc);
-BACKEND_API ibRawDBColumn   ibOwnerRefColumn();
+
+// (A separate "is there any storage behind this type" question lived here for a day. It is gone: what
+//  a statement may WRITE is a fact about the COLUMN, not about a type — `ibBackendQueryColumn::Kind`
+//  answers it, and a Synthetic column is neither projected nor published.)
+BACKEND_API ibBackendColumnRawDB   ibOwnerRefColumn();
+
 
 // The authority. Decompose a logical column into its physical fields, derived purely
 // from (physical name, type descriptor) — NO metadata: the reference slot is gated by the

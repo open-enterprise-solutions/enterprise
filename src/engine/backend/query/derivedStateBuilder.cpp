@@ -171,7 +171,7 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 		write.From(derived.m_queryable);
 
 		if (!spec.m_periodColumn.IsEmpty())
-			write.SetValue(ibRawDBColumn::Date(spec.m_periodColumn), rows.GetColumn(spec.m_periodColumn));
+			write.SetValue(ibBackendColumnRawDB::Date(spec.m_periodColumn), rows.GetColumn(spec.m_periodColumn));
 
 		// A SPLIT table still gets ONE row per key from a rebuild — the shard exists to spread
 		// concurrent writers, and a rebuild is a single writer that already holds the consolidated
@@ -179,7 +179,7 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 		// column unset would work too (the view sums every shard, so the total is invariant), but a
 		// NULL in the unique key is a fact nobody declared.
 		if (spec.m_shards > 1)
-			write.SetValue(ibRawDBColumn::Number(ShardColumnName()), ibValue(0.0));
+			write.SetValue(ibBackendColumnRawDB::Number(ShardColumnName()), ibValue(0.0));
 		for (const ibBackendQueryColumn* k : spec.m_keys)
 			write.SetValue(k, rows.GetValue(k));
 		for (const ibSchemaDelta& d : spec.m_deltas)

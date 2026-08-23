@@ -14,7 +14,7 @@
 // retyped object is an ALTER (matched by id), and a vanished id is a DROP. (docs/query-language-arc.md)
 
 #include "backend.h"
-#include "backend/query/queryColumn.h"   // ibRawDBColumn (the snapshot OWNS its scaffold raw columns)
+#include "backend/query/queryColumn.h"   // ibBackendColumnRawDB (the snapshot OWNS its scaffold raw columns)
 #include "backend/compiler/value.h"      // ibValue — a seed row is a column-id -> value map
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"   // L2-2 — ibMaterializeSpec / ibTotalsPeriod (pulls databaseLayer.h)
 
@@ -269,7 +269,7 @@ struct ibSchemaTable
 	// The snapshot OWNS its scaffold / index raw columns (uuid, rowData) via shared_ptr — stable heap
 	// address through every move/copy of the table, so the pointers below never dangle. Live attribute
 	// columns are NOT owned (they belong to the in-memory config, valid for the save).
-	std::vector<std::shared_ptr<ibRawDBColumn>> m_ownedRaw;
+	std::vector<std::shared_ptr<ibBackendColumnRawDB>> m_ownedRaw;
 
 	// A queryable this table owns (SelfSource) — set only for a table nothing else vends one for.
 	// Empty on every table declared by a metaobject: there m_queryable points at the live config.
@@ -301,9 +301,9 @@ struct ibSchemaTable
 
 
 	// Own a raw column and return a stable pointer to it (for scaffold / index use).
-	const ibBackendQueryColumn* OwnRaw(ibRawDBColumn col)
+	const ibBackendQueryColumn* OwnRaw(ibBackendColumnRawDB col)
 	{
-		m_ownedRaw.push_back(std::make_shared<ibRawDBColumn>(std::move(col)));
+		m_ownedRaw.push_back(std::make_shared<ibBackendColumnRawDB>(std::move(col)));
 		return m_ownedRaw.back().get();
 	}
 
@@ -325,7 +325,7 @@ struct ibSchemaTable
 	}
 
 	// Add a scaffold raw column (uuid / rowData) — owned, returns the stable pointer for index use.
-	const ibBackendQueryColumn* Scaffold(ibRawDBColumn col) { const ibBackendQueryColumn* p = OwnRaw(std::move(col)); m_scaffold.push_back(p); return p; }
+	const ibBackendQueryColumn* Scaffold(ibBackendColumnRawDB col) { const ibBackendQueryColumn* p = OwnRaw(std::move(col)); m_scaffold.push_back(p); return p; }
 	// Add a logical column — keyed by the column's own model id (== metaID for an attribute), so the diff
 	// matches columns across config instances by identity.
 	ibSchemaTable& Add(const ibBackendQueryColumn* qc) { m_columns.push_back({ qc->GetColumnId(), qc }); return *this; }

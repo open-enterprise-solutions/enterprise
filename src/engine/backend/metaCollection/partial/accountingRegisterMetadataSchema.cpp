@@ -163,7 +163,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		ibSchemaTable& t = out.Shared(totals->GetMetaID(), totalsName);
 
 		// --- structure: the period, the account, its breakdown, the register's dimensions ----------
-		const ibBackendQueryColumn* periodCol = t.Scaffold(ibRawDBColumn::Date(periodField));
+		const ibBackendQueryColumn* periodCol = t.Scaffold(ibBackendColumnRawDB::Date(periodField));
 		t.Add(account);   // same physical fields as the movements, so a trigger reads NEW.<field> directly
 
 		std::vector<const ibBackendQueryColumn*> keyCols;

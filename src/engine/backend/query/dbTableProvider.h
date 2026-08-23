@@ -135,6 +135,15 @@ public:
 	static bool GetValueAttribute(const wxString& fieldName, ibFieldTypes fieldType,
 	                              const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData = true);
 
+	// The named queries the door declared (`With`), lowered into the SAME IR as `WITH … AS (…)`.
+	// Each is an ordinary spec lowered by BuildPageIR — a CTE is a query written in another place.
+	//
+	// ⚠ ASKED BY WHOEVER ASSEMBLES AN IR, which is why it is not private: the page read is not the
+	// only assembler. The ROLLUP fold builds its own statement out of the same spec, and a statement
+	// that reads a declared name without carrying the declaration is not a slower query — it is one
+	// the engine cannot parse ("table unknown"). Whoever writes the FROM owes the WITH.
+	static void AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryIR& ir);
+
 private:
 	// The GROUP BY, assembled into an L2 builder and not yet run. ONE assembly, two endings: the
 	// execute path runs it, the relation path takes its IR. Split for exactly that reason — two
@@ -145,9 +154,6 @@ private:
 	// Name-substitution lowering — spec -> L2 IR (connection-free Build()).
 	static ibQueryIR BuildPageIR(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
 	                             const std::vector<ibQuerySortItem>& effective);
-	// The named queries the door declared (`With`), lowered into the SAME IR as `WITH … AS (…)`.
-	// Each is an ordinary spec lowered by BuildPageIR — a CTE is a query written in another place.
-	static void AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryIR& ir);
 	static std::vector<ibValue> BuildExternal(const ibReadPageRequest& req, const std::vector<ibQuerySortItem>& effective);
 };
 

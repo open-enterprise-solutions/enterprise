@@ -56,7 +56,7 @@ public:
 	void AlterField(const ibColumnSlot& slot, const ibColumnSlot& prev);   // standalone type change (not batched)
 
 	// --- table / index -------------------------------------------------------------------------
-	// Create the table from LOGICAL columns (the uuid row-key / a register's rowData are ibRawDBColumn
+	// Create the table from LOGICAL columns (the uuid row-key / a register's rowData are ibBackendColumnRawDB
 	// scaffolds). Each expands through the layout tier; uniqueness/identity is enforced by indexes
 	// (CreateIndex), not a table-level PRIMARY KEY — so the structure speaks only columns.
 	void CreateTable(std::vector<const ibBackendQueryColumn*> columns);

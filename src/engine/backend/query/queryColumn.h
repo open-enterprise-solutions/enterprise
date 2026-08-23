@@ -17,6 +17,7 @@
 // implements this interface directly, no adapter.
 
 #include "backend/typeDescription.h"    // ibTypeDescription (the column's L3 type)
+#include "backend/databaseLayer/columnType.h"   // ibColumnType — the canonical type a column's field declares
 
 // ⚠ NOT <wx/icon.h> — FORWARD-DECLARED. backend.dll is GUI-free (CLAUDE.md), and this header is
 // included by every attribute metaobject, so one GUI include here reaches ~25 direct includers and
@@ -25,6 +26,36 @@
 class wxIcon;
 
 #include <vector>
+
+// The role a physical field plays in a logical column's spread (an L3 layout concept — L2 never sees
+// it). Declared HERE, with the column, because it is the column that answers with these
+// (ibBackendQueryColumn::DescribeLayout below); the layout tier reads them from this header.
+enum class ibColumnRole : uint8_t {
+	Raw,             // a raw physical column — its own single field, type carried by the column
+	Discriminator,   // _TYPE  — the variant type tag
+	Boolean,         // _B
+	Number,          // _N
+	Date,            // _D
+	String,          // _S
+	Enum,            // _E
+	ReferenceType,   // _RTRef — the reference target's clsid (BIGINT)
+	ReferenceId,     // _RRRef — the reference value (pure guid blob; type is _RTRef)
+	Schedule,        // _SCH   — a JobSchedule, serialised whole (blob); see ibFieldTypes_Schedule
+	TypeDescription  // _TD    — a type description, serialised whole (blob). Same reasoning as the
+	                 //          schedule: what it carries is a SET OF ADMISSIBLE TYPES with their
+	                 //          qualifiers, and nothing filters on it in SQL — so spreading it into
+	                 //          columns would buy a predicate nobody writes and cost an ALTER every
+	                 //          time the type system grows. It is read to NARROW a value, in memory.
+};
+
+// One physical field of a logical column (the layout decomposition unit).
+struct ibColumnSlot {
+	wxString     m_name;                       // physical column name (base + suffix)
+	ibColumnRole m_role    = ibColumnRole::Raw;
+	ibColumnType m_type;                       // canonical type for DDL (MapType -> dialect SQL)
+	wxString     m_default;                    // DEFAULT clause (e.g. "0"), empty = none
+	bool         m_notNull = false;
+};
 
 // ibFieldTypes — the persisted VARIANT TAG stored in a composite column's _TYPE field: which of
 // the column's allowed types the row actually holds. The L3 column vocabulary, shared by the
@@ -149,14 +180,70 @@ public:
 
 	// Is this a RAW (direct) physical column — addressed by its concrete field name with NO
 	// metadata translation (no TYPE/_N/_S/_RRRef expansion, no SetValueAttribute decomposition)?
-	// A metadata attribute returns false (it IS translated); ibRawDBColumn returns true. The
+	// A metadata attribute returns false (it IS translated); ibBackendColumnRawDB returns true. The
 	// provider uses this to decide: bind the value straight (raw) vs decompose it (attribute).
 	// (docs/query-language-arc.md §22)
-	virtual bool IsRawColumn() const { return false; }
+	// ⭐⭐ WHAT KIND OF COLUMN THIS IS — one question, one answer.
+	//
+	// It used to be a bit (`IsRawColumn`), and a second bit was about to be added beside it. Two bits
+	// admit a combination that means nothing (raw AND assembled), and every reader would have had to
+	// know which to ask first. A column is one of these and cannot be two:
+	//
+	//   Composite — a metadata column: `_TYPE` plus a field per admissible type, spread and reassembled
+	//               by the codec. The ordinary case, and the default;
+	//   Raw       — ONE physical field carrying its own declared type, no tag (a row key, a tabular
+	//               section's owner reference); it reads and binds itself;
+	//   Computed  — an output that exists only in a result: an aggregate, an expression, a dot-walk
+	//               leaf minted under an alias. Nothing stores it and nothing declares it — it is read
+	//               back BY NAME from the cursor;
+	//   Synthetic — NO field of its own: it is MADE of other columns, and THEY write its fields. A
+	//               document's MOMENT is the date plus the reference. It is never projected and never
+	//               published — writing those fields again puts one alias in a select list twice
+	//               (`-104 … specified multiple times`), and declaring it names a field nothing wrote
+	//               (`-206 Column unknown`); we hit both in one day. It still HAS a layout, because a
+	//               sort and a comparison are built from it, and it reads itself out of those fields.
+	enum class Kind { Composite, Raw, Computed, Synthetic };
+	virtual Kind GetColumnKind() const { return Kind::Composite; }
+
+	bool IsRawColumn()       const { return GetColumnKind() == Kind::Raw; }
+	bool IsSyntheticColumn() const { return GetColumnKind() == Kind::Synthetic; }
+
+	// ⭐⭐ HOW THIS COLUMN LIES IN THE DATABASE — the physical fields it occupies, in bind order.
+	//
+	// The default derives them from (physical name, type): `<name>_TYPE`, then a slot per primitive
+	// the type admits, then the reference pair. That is where every field spelling comes from — the
+	// DDL, the projection, the sort keys, the keyset anchor and the codec all read this one answer.
+	//
+	// A column whose data lies in OTHER columns overrides it: a document's MOMENT is the date
+	// followed by the reference, so it answers with their layouts, one after the other, and sorting
+	// by it is sorting by the date and then by the identifier — through the very machinery that
+	// already sorts a reference by its own two fields. Nothing new is taught to anybody.
+	virtual std::vector<ibColumnSlot> DescribeLayout() const;
+
+	// ⭐⭐ HOW THIS COLUMN IS READ OUT OF A RESULT — asked OF THE COLUMN, answered by the codec.
+	//
+	// The default is what every ordinary column has always done: the value codec reads the `_TYPE`
+	// tag and takes the field for it (ibColumnCodec::ReadValue, body in columnLayout.cpp). Nothing
+	// about that changes, and there is one such branch, not one per caller.
+	//
+	// What changes is WHO IS ASKED. A caller no longer names the codec; it asks the column, and a
+	// column that is not stored the ordinary way overrides this and reads itself — a synthetic column
+	// has no tag of its own and assembles its value from the columns it is made of. The default stays
+	// the default, so nothing that reads a stored column pays for the possibility.
+	virtual bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
+	                       class ibValue& retValue, class ibQueryResult& result, bool createData = true) const;
+
+	// …AND THE WRITE, THE SAME WAY. The pair belongs together: a value bound by the default lands in
+	// exactly the fields the default read takes it back out of, so a column that changes one and not
+	// the other would be storing what it cannot read. The default is the codec (BindWriteValue); a
+	// column with nothing of its own to store overrides it and binds nothing — a moment is READ out of
+	// the date and the reference and WRITTEN by writing those, which is what already happens.
+	virtual void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,
+	                       const class ibValue& value, int& position) const;
 };
 
 // ==========================================================================
-// ibRawDBColumn — a DIRECT physical column: a concrete db field named AS-IS, no metadata
+// ibBackendColumnRawDB — a DIRECT physical column: a concrete db field named AS-IS, no metadata
 // behind it and no translation. Lets the door address a real column straight (the row-key
 // uuid; a balance's computed qty_balance) through the SAME ibBackendQueryColumn interface as
 // a metadata attribute. The PHYSICAL TYPE is carried by the column itself (its RawType), so
@@ -164,7 +251,7 @@ public:
 // Slicing-safe — all state is on this base, so the door takes one by ref and owns a copy.
 // The uniqueness key is the queryable's concern, not the column's. (docs §22)
 // ==========================================================================
-class BACKEND_API ibRawDBColumn : public ibBackendQueryColumn
+class BACKEND_API ibBackendColumnRawDB : public ibBackendQueryColumn
 {
 public:
 	// How the provider binds the raw value — fixed by the concrete factory, not the value.
@@ -178,7 +265,7 @@ public:
 	// a column the schema differ can track, so it can be ADDED to or DROPPED from an existing
 	// table. A derived table's accumulating columns need that: they appear and disappear as the
 	// metaobject gains and loses resources, and without an identity the differ cannot see either.
-	ibRawDBColumn(const wxString& field, RawType type, ibMetaID modelId = 0)
+	ibBackendColumnRawDB(const wxString& field, RawType type, ibMetaID modelId = 0)
 		: m_field(field), m_type(type), m_modelId(modelId) {}
 
 	// ⭐ TWO NAMES WHERE THEY DIFFER, one where they do not. A scaffold column is its own field and
@@ -190,7 +277,7 @@ public:
 	wxString              GetPhysicalName() const override { return m_field; }
 	ibTypeDescription&    GetTypeDesc()     const override { return m_typeDesc; }   // interface returns a non-const ref
 	ibMetaID              GetColumnId()      const override { return m_modelId; }   // 0 = scaffold, never diffed
-	bool                  IsRawColumn()     const override { return true; }
+	Kind                  GetColumnKind()   const override { return Kind::Raw; }
 
 	RawType               GetRawType()      const { return m_type; }   // the provider's bind selector
 	// The declared width: a string's length, a number's PRECISION. 0 = "no reason to say", and the
@@ -205,16 +292,16 @@ public:
 	// sizes an index key from the DECLARED length times the charset's bytes-per-character, so a
 	// VARCHAR(255) in UTF8 is 1020 bytes and passes the key-size ceiling (≈ page_size / 4) on its own —
 	// "key size exceeds implementation restriction", with nothing wrong but the declaration.
-	static ibRawDBColumn String   (const wxString& field, ibMetaID id = 0, unsigned int length = 0) {
-		ibRawDBColumn col(field, RawType::String, id);
+	static ibBackendColumnRawDB String   (const wxString& field, ibMetaID id = 0, unsigned int length = 0) {
+		ibBackendColumnRawDB col(field, RawType::String, id);
 		col.m_length = length;
 		return col;
 	}
 	// The same for a number: a totals column has to carry the RESOURCE's own precision and scale, or a
 	// figure with kopecks is stored in a column that has none and the fraction is lost on the way in.
-	static ibRawDBColumn Number   (const wxString& field, ibMetaID id = 0,
+	static ibBackendColumnRawDB Number   (const wxString& field, ibMetaID id = 0,
 	                               unsigned int precision = 0, unsigned int scale = 0) {
-		ibRawDBColumn col(field, RawType::Number, id);
+		ibBackendColumnRawDB col(field, RawType::Number, id);
 		col.m_length = precision;
 		col.m_scale  = scale;
 		return col;
@@ -226,10 +313,10 @@ public:
 	// exactly one owner, so the type is known from the metadata and storing it per row would be a
 	// column repeating one constant a million times. The target rides on the column instead, and the
 	// codec reads a real reference out of the sixteen bytes it finds.
-	static ibRawDBColumn Reference(const wxString& field, const ibClassID& target = 0,
+	static ibBackendColumnRawDB Reference(const wxString& field, const ibClassID& target = 0,
 	                               const wxString& name = wxEmptyString, ibMetaID modelId = 0)
 	{
-		ibRawDBColumn col(field, RawType::Reference, modelId);
+		ibBackendColumnRawDB col(field, RawType::Reference, modelId);
 		col.m_name = name;
 		if (target != 0)
 			col.m_typeDesc.SetDefaultMetaType(target);
@@ -238,10 +325,23 @@ public:
 
 	// What this column points at — 0 when it is not a single-target reference.
 	ibClassID GetRawTarget() const { const auto& list = m_typeDesc.GetClsidList(); return list.empty() ? 0 : list.front(); }
-	static ibRawDBColumn Date     (const wxString& field, ibMetaID id = 0) { return ibRawDBColumn(field, RawType::Date, id);      }
-	static ibRawDBColumn Boolean  (const wxString& field) { return ibRawDBColumn(field, RawType::Boolean);   }
-	static ibRawDBColumn Guid     (const wxString& field) { return ibRawDBColumn(field, RawType::Guid);      }
-	static ibRawDBColumn Blob     (const wxString& field) { return ibRawDBColumn(field, RawType::Blob);      }
+
+	// ⭐⭐ AND IT READS AND WRITES ITSELF — one field, its own declared type, no `_TYPE` tag to consult.
+	//
+	// This is what the column always did; what changes is where it is written down. The rule used to
+	// live as `if (col->IsRawColumn())` at the head of the codec's bind and again at every reader that
+	// projects one — the same switch over RawType in three places, each of which had to remember that
+	// a raw guid is sixteen bytes and not thirty-six characters. Now the column answers, and a caller
+	// asks nobody what kind of column it holds. (Bodies in dbTableProvider.cpp, beside the reference
+	// assembly a single-target raw reference needs.)
+	bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
+	               class ibValue& retValue, class ibQueryResult& result, bool createData = true) const override;
+	void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,
+	               const class ibValue& value, int& position) const override;
+	static ibBackendColumnRawDB Date     (const wxString& field, ibMetaID id = 0) { return ibBackendColumnRawDB(field, RawType::Date, id);      }
+	static ibBackendColumnRawDB Boolean  (const wxString& field) { return ibBackendColumnRawDB(field, RawType::Boolean);   }
+	static ibBackendColumnRawDB Guid     (const wxString& field) { return ibBackendColumnRawDB(field, RawType::Guid);      }
+	static ibBackendColumnRawDB Blob     (const wxString& field) { return ibBackendColumnRawDB(field, RawType::Blob);      }
 
 private:
 	wxString                  m_field;

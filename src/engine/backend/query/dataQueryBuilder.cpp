@@ -192,10 +192,10 @@ ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibBackendQueryColumn* col, c
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibRawDBColumn& rawColumn, const ibValue& value)
+ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibBackendColumnRawDB& rawColumn, const ibValue& value)
 {
 	// Own a copy of the caller's temporary raw column; the condition holds a stable pointer.
-	m_ownedRawColumns.push_back(std::make_shared<ibRawDBColumn>(rawColumn));
+	m_ownedRawColumns.push_back(std::make_shared<ibBackendColumnRawDB>(rawColumn));
 	m_conditions.push_back(ibQueryCondition{ m_ownedRawColumns.back().get(), ibQueryFilterOp::Equal, value });
 	return *this;
 }
@@ -487,10 +487,10 @@ ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const ibBackendQueryColumn* col
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const ibRawDBColumn& rawColumn, const ibValue& value)
+ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const ibBackendColumnRawDB& rawColumn, const ibValue& value)
 {
 	// Own a copy of the caller's temporary raw column; the assignment holds a stable pointer.
-	m_ownedRawColumns.push_back(std::make_shared<ibRawDBColumn>(rawColumn));
+	m_ownedRawColumns.push_back(std::make_shared<ibBackendColumnRawDB>(rawColumn));
 	m_writeRows.back().emplace_back(m_ownedRawColumns.back().get(), value);
 	m_writeAdditive.back().push_back(false);
 	return *this;
@@ -503,9 +503,9 @@ ibDataQueryBuilder& ibDataQueryBuilder::AddValue(const ibBackendQueryColumn* col
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::AddValue(const ibRawDBColumn& rawColumn, const ibValue& delta)
+ibDataQueryBuilder& ibDataQueryBuilder::AddValue(const ibBackendColumnRawDB& rawColumn, const ibValue& delta)
 {
-	m_ownedRawColumns.push_back(std::make_shared<ibRawDBColumn>(rawColumn));
+	m_ownedRawColumns.push_back(std::make_shared<ibBackendColumnRawDB>(rawColumn));
 	m_writeRows.back().emplace_back(m_ownedRawColumns.back().get(), delta);
 	m_writeAdditive.back().push_back(true);
 	return *this;
@@ -654,6 +654,13 @@ ibQueryRelPtr ibDataQueryBuilder::BuildRelation() const
 	// into the query it guards, and a relation handed out unrestricted could be joined past it. The
 	// caller reads rows instead — same numbers, same restriction, one materialisation.
 	if (m_policy != nullptr || m_queryable == nullptr)
+		return nullptr;
+
+	// …AND NEITHER IS A QUERY THAT STANDS ON ITS OWN DECLARATIONS. A relation goes INSIDE somebody
+	// else's FROM, and a `WITH` cannot travel there: it belongs to the top of a statement, and this
+	// one is not the top of anything. Handing the relation over regardless would render a name whose
+	// declaration stayed behind — a statement the engine cannot parse rather than a slower plan.
+	if (!m_with.empty())
 		return nullptr;
 
 	// ⭐ WHICH LOWERING, DECIDED BY THE SHAPE OF THE QUERY — the same way the terminal endings are

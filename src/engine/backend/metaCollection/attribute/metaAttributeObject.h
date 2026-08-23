@@ -260,6 +260,7 @@ public:
 	//get type description
 	virtual ibTypeDescription& GetTypeDesc() const { return m_typeDesc; }
 
+
 	// A predefined attribute is part of the metatype's definition, so its shape is fixed by the
 	// constructor — with ONE exception. What a Parent field accepts follows the hierarchy the
 	// OWNER declares (folders, or items subordinated to items), and that is a property the user

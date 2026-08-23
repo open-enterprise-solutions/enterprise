@@ -18,7 +18,7 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
-#include "backend/query/dataQueryBuilder.h"   // L3 write/read door (From/SetValue/Where/Upsert/Delete) + ibRawDBColumn
+#include "backend/query/dataQueryBuilder.h"   // L3 write/read door (From/SetValue/Where/Upsert/Delete) + ibBackendColumnRawDB
 
 #include "backend/system/systemManager.h"
 #include "backend/backend_exception.h"

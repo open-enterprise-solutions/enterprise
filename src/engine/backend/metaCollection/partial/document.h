@@ -9,7 +9,11 @@
 //*                                  Factory & metaData                                      *
 //********************************************************************************************
 
-class ibValueMetaObjectDocument : public ibValueMetaObjectRecordDataMutableRef {
+// A DOCUMENT IS A RECORDER PLUS ONE FACT: whether it is posted. Everything else that made a document
+// a document — the number, the date, the moment it sits at, the registers it writes into — is what
+// RECORDING means, and lives on ibValueMetaObjectRecordDataRecorderRef with the value-side twin that
+// has always been there (ibValueRecordDataObjectRecorderRef).
+class ibValueMetaObjectDocument : public ibValueMetaObjectRecordDataRecorderRef {
 	public:
 private:
 	enum
@@ -35,11 +39,9 @@ private:
 
 public:
 
-	ibMetaDescription& GetRecordDescription() const { return m_propertyRegisterRecord->GetValueAsMetaDesc(); }
-
-	ibValueMetaObjectAttributePredefined* GetDocumentNumber() const { return m_propertyAttributeNumber->GetMetaObject(); }
-	ibValueMetaObjectAttributePredefined* GetDocumentDate() const { return m_propertyAttributeDate->GetMetaObject(); }
+	// (The record description, the number and the date live on the RECORDER base — see it for why.)
 	ibValueMetaObjectAttributePredefined* GetDocumentPosted() const { return m_propertyAttributePosted->GetMetaObject(); }
+
 
 	//default constructor
 	ibValueMetaObjectDocument();
@@ -86,8 +88,7 @@ public:
 	virtual void OnCreateFormObject(ibValueMetaObjectFormBase* metaForm);
 	virtual void OnRemoveMetaForm(ibValueMetaObjectFormBase* metaForm);
 
-	//get attribute code 
-	virtual ibValueMetaObjectAttributeBase* GetAttributeForCode() const { return m_propertyAttributeNumber->GetMetaObject(); }
+	// (the attribute a "code" means here — the NUMBER — is answered by the recorder base)
 
 	//create associate value 
 	virtual ibValueMetaObjectFormBase* GetDefaultFormByID(const ibFormID& id) const;
@@ -111,25 +112,11 @@ public:
 
 protected:
 
-	// Additive contract — chains to MutableRef. Document adds Number,
-	// Date, Posted (its signature trio) on top of Ref/DeletionMark/
-	// DataVersion.
+	// Additive contract — chains to the RECORDER, which already contributed the number and the date.
+	// A document adds the one fact that is its own: whether it is posted.
 	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
-		ibValueMetaObjectRecordDataMutableRef::FillArrayObjectByPredefinedAttribute(array);
-		array.push_back(m_propertyAttributeNumber->GetMetaObject());
-		array.push_back(m_propertyAttributeDate->GetMetaObject());
+		ibValueMetaObjectRecordDataRecorderRef::FillArrayObjectByPredefinedAttribute(array);
 		array.push_back(m_propertyAttributePosted->GetMetaObject());
-		return true;
-	}
-
-	//searched array 
-	virtual bool FillArrayObjectBySearched(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-
-		array = {
-			m_propertyAttributeNumber->GetMetaObject(),
-			m_propertyAttributeDate->GetMetaObject()
-		};
-
 		return true;
 	}
 
@@ -200,11 +187,9 @@ private:
 	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), &ibValueMetaObjectDocument::FillFormList);
 	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), &ibValueMetaObjectDocument::FillFormSelect);
 
-	ibPropertyRecord* m_propertyRegisterRecord = ibPropertyObject::CreateProperty<ibPropertyRecord>(m_categoryData, wxT("ListRegisterRecord"), _("List register record"));
+	// (the record description, the number and the date are the RECORDER's — see the base class)
 
 	//create default attributes
-	ibPropertyContainer<>* m_propertyAttributeNumber = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("Number"), _("Number"), wxEmptyString, 11, true, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_Index));
-	ibPropertyContainer<>* m_propertyAttributeDate = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("Date"), _("Date"), wxEmptyString, ibDateFractions::ibDateFractions_DateTime, true, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_Index));
 	ibPropertyContainer<>* m_propertyAttributePosted = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(wxT("Posted"), _("Posted"), wxEmptyString));
 
 	friend class ibValueRecordDataObjectDocument;
