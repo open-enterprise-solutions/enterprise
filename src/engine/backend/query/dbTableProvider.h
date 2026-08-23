@@ -135,8 +135,22 @@ public:
 	static bool GetValueAttribute(const wxString& fieldName, ibFieldTypes fieldType,
 	                              const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData = true);
 
+	// ⭐⭐ WOULD THIS DOOR RENDER WHOLE, IF IT WERE DECLARED? Asked BEFORE `.With(name, inner)` by the
+	// lowering that is choosing a road, and answered by the tier that would have to write the SQL.
+	//
+	// A single-source door always would. A JOINED one only when its tree co-locates — the same
+	// question the join read asks (CanColocateJoin), because it is the same rendering: the leaves
+	// become one server-side FROM. A door that would not render whole must go back to the rows road
+	// while there is still a road to go back to; declared anyway, it would leave the outer statement
+	// naming a table nothing ever wrote.
+	//
+	// ⚠ IT TAKES THE DOOR, NOT A SPEC. A door hands its own spec over and nobody else takes one —
+	// this tier is its friend, so the question can be asked here and only here.
+	static BACKEND_API bool CanDeclareAsNamedQuery(const ibDataQueryBuilder& inner);
+
 	// The named queries the door declared (`With`), lowered into the SAME IR as `WITH … AS (…)`.
-	// Each is an ordinary spec lowered by BuildPageIR — a CTE is a query written in another place.
+	// Each is an ordinary spec lowered by BuildPageIR — or, for a joined one, by the co-located
+	// join's own FROM tree: a CTE is a query written in another place, not a simpler kind of query.
 	//
 	// ⚠ ASKED BY WHOEVER ASSEMBLES AN IR, which is why it is not private: the page read is not the
 	// only assembler. The ROLLUP fold builds its own statement out of the same spec, and a statement

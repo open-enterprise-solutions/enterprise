@@ -13,7 +13,7 @@
 #include <gtest/gtest.h>
 
 #include "backend/query/columnLayout.h"   // ibFieldSuffix / ibPersistedTypeTag / DescribeColumnLayout / ColumnFieldNames / ibColumnRole / ibColumnSlot
-#include "backend/query/queryColumn.h"    // ibRawDBColumn + the ibFieldTypes_* wire tags
+#include "backend/query/queryColumn.h"    // ibBackendColumnRawDB + the ibFieldTypes_* wire tags
 
 // The role -> physical-suffix table. These suffixes are the on-disk column names AND the wire spread;
 // they must never change silently. Raw carries no suffix (the column is its own single field).
@@ -49,7 +49,7 @@ TEST(ColumnLayout, PersistedTypeTag_RoleTable)
 // the scaffold path (uuid / rowData) and the seed key resolution depend on it.
 TEST(ColumnLayout, RawColumn_SingleSlot)
 {
-	const ibRawDBColumn col = ibRawDBColumn::Guid(wxT("uuid"));
+	const ibBackendColumnRawDB col = ibBackendColumnRawDB::Guid(wxT("uuid"));
 
 	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(&col);
 	ASSERT_EQ(layout.size(), 1u);

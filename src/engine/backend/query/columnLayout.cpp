@@ -459,8 +459,8 @@ bool ibColumnCodec::ReadTaggedValue(const wxString& fieldName,
 		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc()) : ibValue();
 		return true;
 	}
-
-	return false;
+	// (No tail return: the `default` above answers every tag there is, so one here is unreachable —
+	//  and an unreachable `return false` reads as a failure mode this function does not have.)
 }
 
 bool ibColumnCodec::ReadValue(const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)

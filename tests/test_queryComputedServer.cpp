@@ -215,8 +215,8 @@ TEST_F(ComputedServerFix, Linq_WherePushesToServer)
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5), ('North', 7), ('East', 3)"));
 
-	ibRawDBColumn region = ibRawDBColumn::String(wxT("region"));   // RAW scalar -> single physical field, matches the table column
-	ibRawDBColumn qty    = ibRawDBColumn::Number(wxT("qty"));
+	ibBackendColumnRawDB region = ibBackendColumnRawDB::String(wxT("region"));   // RAW scalar -> single physical field, matches the table column
+	ibBackendColumnRawDB qty    = ibBackendColumnRawDB::Number(wxT("qty"));
 	PhysicalQ src(wxT("t"), 300);
 	src.AddCol(&region);
 	src.AddCol(&qty);
@@ -258,8 +258,8 @@ TEST_F(ComputedServerFix, In_RawColumnRendersNativeIn)
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5), ('North', 7), ('East', 3)"));
 
-	ibRawDBColumn region = ibRawDBColumn::String(wxT("region"));
-	ibRawDBColumn qty    = ibRawDBColumn::Number(wxT("qty"));
+	ibBackendColumnRawDB region = ibBackendColumnRawDB::String(wxT("region"));
+	ibBackendColumnRawDB qty    = ibBackendColumnRawDB::Number(wxT("qty"));
 	PhysicalQ src(wxT("t"), 310);
 	src.AddCol(&region);
 	src.AddCol(&qty);
@@ -288,8 +288,8 @@ TEST_F(ComputedServerFix, In_NullProbeDropped)
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), (NULL, 5), ('East', 3)"));
 
-	ibRawDBColumn region = ibRawDBColumn::String(wxT("region"));
-	ibRawDBColumn qty    = ibRawDBColumn::Number(wxT("qty"));
+	ibBackendColumnRawDB region = ibBackendColumnRawDB::String(wxT("region"));
+	ibBackendColumnRawDB qty    = ibBackendColumnRawDB::Number(wxT("qty"));
 	PhysicalQ src(wxT("t"), 311);
 	src.AddCol(&region);
 	src.AddCol(&qty);
@@ -319,8 +319,8 @@ TEST_F(ComputedServerFix, In_EmptySetReturnsNoRows)
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5), ('East', 3)"));
 
-	ibRawDBColumn region = ibRawDBColumn::String(wxT("region"));
-	ibRawDBColumn qty    = ibRawDBColumn::Number(wxT("qty"));
+	ibBackendColumnRawDB region = ibBackendColumnRawDB::String(wxT("region"));
+	ibBackendColumnRawDB qty    = ibBackendColumnRawDB::Number(wxT("qty"));
 	PhysicalQ src(wxT("t"), 312);
 	src.AddCol(&region);
 	src.AddCol(&qty);
@@ -350,8 +350,8 @@ TEST_F(ComputedServerFix, In_AllNullKeysStripToEmpty)
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5)"));
 
-	ibRawDBColumn region = ibRawDBColumn::String(wxT("region"));
-	ibRawDBColumn qty    = ibRawDBColumn::Number(wxT("qty"));
+	ibBackendColumnRawDB region = ibBackendColumnRawDB::String(wxT("region"));
+	ibBackendColumnRawDB qty    = ibBackendColumnRawDB::Number(wxT("qty"));
 	PhysicalQ src(wxT("t"), 313);
 	src.AddCol(&region);
 	src.AddCol(&qty);
@@ -427,7 +427,7 @@ TEST_F(ComputedServerFix, In_MetadataColumnFoldsCompositeEquality)
 	ASSERT_EQ(f.fields.size(), 2u) << "a string-only metadata column is expected to spread as _TYPE + _S; "
 	                                  "a different layout needs this fixture reworked";
 
-	ibRawDBColumn qty = ibRawDBColumn::Number(wxT("qty"));
+	ibBackendColumnRawDB qty = ibBackendColumnRawDB::Number(wxT("qty"));
 	PhysicalQ src(wxT("m1"), 321);
 	src.AddCol(&region);
 	src.AddCol(&qty);
@@ -459,7 +459,7 @@ TEST_F(ComputedServerFix, In_MetadataColumnEmptySetReturnsNoRows)
 		{ { wxT("North"), 10 }, { wxT("South"), 5 } });
 	ASSERT_EQ(f.fields.size(), 2u);
 
-	ibRawDBColumn qty = ibRawDBColumn::Number(wxT("qty"));
+	ibBackendColumnRawDB qty = ibBackendColumnRawDB::Number(wxT("qty"));
 	PhysicalQ src(wxT("m2"), 331);
 	src.AddCol(&region);
 	src.AddCol(&qty);

@@ -17,6 +17,7 @@
 #include "queryHierarchy.h"               // ibQueryHierarchyScope / ibQueryHierarchyNamedValues — «IN HIERARCHY»
 #include "queryableFactory.h"             // ibQueryableSourceDescriptor — the source that consumes its own condition
 #include "queryProvider.h"                // ibBackendQueryProvider — GetProvider().ResolveReferenceTarget (dot-walk resolution)
+#include "dbTableProvider.h"              // ibDbTableProvider::CanDeclareAsNamedQuery — would this door render whole?
 #include "queryableFactory.h"             // ibQueryableFactory — source-namespace resolution
 #include "backend/appData.h"              // ibApplicationData::GetQueryableFactory
 #include "backend/metaData.h"             // ibMetaData::GetSourceFactory — resolve through the query's OWN config
@@ -1419,6 +1420,14 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	const wxString& name, const ibQuerySelect& sel,
 	const std::map<wxString, ibValue>& params, ibSubqueryOwner& owner);
 
+// FROM + every JOIN into one door and one set of bindings — defined below, beside the read that
+// first needed it. A DECLARED query opens its sources exactly the same way (see
+// DeclareNamedResultAsCte): "which tables does this select read" has one answer, wherever the
+// select is going to be written.
+void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
+                     ibSubqueryOwner& owner, std::vector<ibSourceBinding>& sources, ibDataQueryBuilder& b,
+                     std::vector<ibQueryAstExprPtr>* sourceConditions);
+
 std::shared_ptr<const ibBackendQueryable> ResolveFrom(const ibQuerySource& src,
                                       const std::map<wxString, ibValue>& params,
                                       ibSubqueryOwner& owner,
@@ -1929,12 +1938,16 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// a named query whose own source is computed in RAM (a register slice, a nested subquery, a temp
 	// table we filled) has no SQL to declare, and its TOTALS is a tree, which no CTE can carry.
 	//
-	// ⚠ ASKED FIRST, BEFORE ANY WORK. The JOIN check used to sit after the inner door was built, so a
-	// named query with a join resolved its sources twice — once here and once on the rows road that
-	// then took it. A refusal costs nothing when it is the first thing said.
+	// ⚠ ASKED FIRST, BEFORE ANY WORK. A refusal costs nothing when it is the first thing said, and
+	// the rows road resolves the same sources over again after one.
 	if (sel.m_hasTotals)          CteDecline(wxT("it has TOTALS, which is a tree and not a table"));
-	if (!sel.m_unions.empty())    CteDecline(wxT("it has a UNION (the inner door is built single-source)"));
-	if (!sel.m_joins.empty())     CteDecline(wxT("it has a JOIN (the inner door is built single-source)"));
+	if (!sel.m_unions.empty())    CteDecline(wxT("it has a UNION (the inner door is built as one relation)"));
+
+	// ⭐ A JOIN IS NO LONGER REFUSED HERE, because the refusal was about the door and not about the
+	// query: this road built its inner door single-source, so a joined select had nowhere to put the
+	// second table. It builds the whole source TREE now (BuildSourceTree, the one the statement road
+	// uses), and whether that tree renders is a question for the tier that writes the SQL — asked
+	// below, once the door exists, by CanDeclareAsNamedQuery.
 
 	// …AND THE WORDS A DECLARATION WOULD DROP ON THE FLOOR. Each of these is carried by the rows road
 	// and by nothing here, so taking this road with one of them written is the SILENT kind of wrong —
@@ -1948,37 +1961,31 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	if (sel.m_forUpdate)          CteDecline(wxT("it has FOR UPDATE, and a declaration holds nothing"));
 	if (!sel.m_intoTemp.IsEmpty()) CteDecline(wxT("it has INTO, which materialises rather than declares"));
 
-	std::shared_ptr<const ibBackendQueryable> qi;
-	try {
-		qi = ResolveFrom(sel.m_from, params, owner);   // its own sources — nested named results included
-	}
-	catch (const ibBackendException&) {
-		// unresolvable HERE is not a refusal: the rows road resolves it the same way
-		CteDecline(wxT("its own source did not resolve on this road"));
-	}
-	if (qi == nullptr)            CteDecline(wxT("its own source did not resolve"));
-	if (qi->IsComputedInRam())
-		CteDecline(wxT("its own source '%s' is computed in RAM"), qi->GetQueryName());
-
 	ibDataQueryBuilder inner;
-	inner.From(qi, sel.m_from.m_alias);
 	// SELECT ALLOWED travels DOWN, to the door that reads the restricted source. It is the quiet form
 	// of a policy refusal — read what you may rather than raise — and the reader above cannot carry it
 	// for this source: a declared query is a NAME to it, with no policy of its own left to soften.
 	inner.Allowed(sel.m_allowed);
 
+	std::vector<ibSourceBinding> innerSources;
+	std::vector<ibQueryAstExprPtr> innerSourceConditions;   // conditions written INSIDE a virtual table call
 	std::vector<OutputColumn> innerSchema;
-	// Bound by the one name a source has — see WrapSelectAsQueryable for what binding by the alias
-	// alone did to an unaliased source.
-	const std::vector<ibSourceBinding> innerSources{ { ibQuerySourceName(sel.m_from), qi.get() } };
+	// ⭐ THE WHOLE SOURCE TREE, BY THE ONE BUILDER THAT BUILDS ONE. FROM plus every JOIN — a ref-path
+	// join, a cross, an ON, the alias rules, the source-name binding — is the statement road's own
+	// BuildSourceTree, so a declared query reads its sources exactly as an ordinary one does. This
+	// road used to open the FROM by hand and had no place to put a second table, which is what the
+	// blanket JOIN refusal above was really about.
+	//
 	// asSubquery — every output field is projected under an explicit alias, which is exactly what a
 	// CTE publishes and what the reader then names (`Sales.Partner`).
 	//
 	// ⚠ AND ITS REFUSAL IS A FALLBACK, NOT A FAILURE. Anything this select does that the CTE road
-	// cannot build has to leave by returning null so the rows road takes it — including whatever
-	// PopulateBuilder itself refuses, which is why it runs inside the catch.
+	// cannot build has to leave by returning null so the rows road takes it — which is why BOTH the
+	// source tree and PopulateBuilder run inside the catch: an unresolvable source is not an error
+	// here, the rows road resolves it the same way and reports it there if it is one.
 	try {
-		PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true);
+		BuildSourceTree(sel, params, owner, innerSources, inner, &innerSourceConditions);
+		PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions);
 	}
 	catch (const ibBackendException& err) {
 		// ⚠ THE DESCRIPTION IS DATA, never the format — a message carrying a stray `%` would be read
@@ -1986,6 +1993,18 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		// follows).
 		CteDecline(wxT("%s"), err.GetErrorDescription());
 	}
+	if (innerSources.empty() || innerSources.front().m_q == nullptr)
+		CteDecline(wxT("its own source did not resolve"));
+	for (const ibSourceBinding& src : innerSources)
+		if (src.m_q != nullptr && src.m_q->IsComputedInRam())
+			CteDecline(wxT("its source '%s' is computed in RAM"), src.m_q->GetQueryName());
+
+	// …AND WOULD IT RENDER? Asked of the tier that writes the SQL, because that is where the answer
+	// lives: one source always renders, a join renders when its tree co-locates. Asked HERE, while
+	// there is still a road back — after `outer.With(...)` the statement would name a table nothing
+	// wrote.
+	if (!ibDbTableProvider::CanDeclareAsNamedQuery(inner))
+		CteDecline(wxT("its source tree has no single server-side form (a join that does not co-locate)"));
 
 	// ⭐ WHAT THE DECLARATION PUBLISHES IS WHAT ITS STATEMENT CAN WRITE. A column the layout gives no
 	// fields for has nothing to project, so publishing it would name something the CTE's own SELECT

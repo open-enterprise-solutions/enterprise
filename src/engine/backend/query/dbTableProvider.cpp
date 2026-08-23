@@ -210,18 +210,23 @@ ibQueryExprPtr OrFold(ibQueryExprPtr a, ibQueryExprPtr b)
 	return ibBinOp(ibQueryBinOp::Or, a, b);
 }
 
-// Decompose a COLUMN equality into per-physical-field terms, REUSING the write decomposition:
-// SetValueColumn spreads the value across the column's fields, a capture-only statement records
-// each as a Const node. A multi-field key (composite / variant / reference dimension) thus filters
-// on ALL its fields, AND-folded. The statement is never run — a pure value sink. Column-based: the
-// field list + the spread both come off the column + the metadata context, no attribute.
+// Decompose a COLUMN equality into per-physical-field terms, REUSING the write decomposition: the
+// COLUMN spreads the value across its own fields (BindWriteValue — the one bind door), and a
+// capture-only statement records each as a Const node. A multi-field key (composite / variant /
+// reference dimension) thus filters on ALL its fields, AND-folded. The statement is never run — a
+// pure value sink.
+//
+// ⚠ ASKED OF THE COLUMN, NOT OF THE CODEC. The codec is the DEFAULT answer and not the only one: a
+// column that knows better overrides it, and the MOMENT does — it has no value tag for the codec to
+// drive off, so going straight there bound NULL into every field and the filter matched nothing.
+// (Same rule as the write path, which has gone through this door all along.)
 ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& value,
                                  const wxString& mainQual = wxEmptyString)
 {
 	std::vector<wxString> fields = ColumnFieldNames(col);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int position = 1;
-	ibColumnCodec::WriteValue(col, metaData, value, &capture, position);
+	BindWriteValue(capture, col, metaData, value, position);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 
 	ibQueryExprPtr pred;
@@ -238,13 +243,18 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 // _RRRef field) is just `field OP const`; a multi-field key compares strict on the leading fields and OP on
 // the last. Ordering references this way is consistent with an ORDER BY on the SAME field(s) — the keyset the
 // paged cursor needs. Matches the runtime's ibValue reference ordering (same metaObject -> by guid). L3/DB half.
+//
+// ⭐⭐ AND THIS IS WHAT `WHERE Moment <= &Point` IS. The moment is a date and the record standing at it, so
+// "up to this document" is exactly a lexicographic compare over the date's field and the reference's pair —
+// which its layout already names, in that order. Nothing here knows about moments: a column said what it is
+// made of and what its halves are worth, and the general rule read like the special one.
 ibQueryExprPtr DecomposeOrdered(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& value,
                                 ibQueryBinOp op, const wxString& mainQual = wxEmptyString)
 {
 	std::vector<wxString> fields = ColumnFieldNames(col);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int position = 1;
-	ibColumnCodec::WriteValue(col, metaData, value, &capture, position);
+	BindWriteValue(capture, col, metaData, value, position);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 
 	auto constAt = [&](size_t i) -> ibQueryExprPtr {
@@ -377,20 +387,25 @@ public:
 };
 
 // Read a SCALAR output column of a co-located join row off the L2-1 cursor by its projection
-// ALIAS (SELECT qual.field AS alias). The getter is chosen by the column's declared type — a
-// single projected field, no _TYPE/_RRRef spread, so this covers primitive + raw columns only
-// (reference / enum columns are excluded upstream by CanColocateJoin, which falls back to RAM).
-// Mirrors GetValueColumn's assignment style (the const-ptr operator= trap is moot for real scalars).
-ibValue ReadScalarByAlias(const ibBackendQueryColumn* col, const wxString& alias, ibQueryResult& cursor)
+// ALIAS (SELECT qual.field AS alias). A single projected field, no _TYPE/_RRRef spread, so this
+// covers primitive + raw columns only (reference / enum columns are excluded upstream by
+// CanColocateJoin, which falls back to RAM).
+//
+// ⭐ A RAW COLUMN IS ASKED, NOT DECODED HERE. It reads itself by its declared type, and the switch
+// that used to stand in this function was that same one written a second time — with a difference
+// nobody could see from the callsite: a GUID key came back as a STRING here while the column writes
+// and reads it as sixteen bytes, so an identity read through this door was not the identity the same
+// column had bound. The alias IS the field name to the cursor, which is exactly what ReadValue takes.
+//
+// The primitive branch below stays, and stays here: a metadata column projected by the co-located
+// path is ONE field under the alias, so asking the column would send it through the codec's full
+// spread and look for `<alias>_TYPE` fields the projection never wrote.
+ibValue ReadScalarByAlias(const ibBackendQueryColumn* col, const wxString& alias,
+                          const ibMetaData* metaData, ibQueryResult& cursor)
 {
 	ibValue v;
 	if (col->IsRawColumn()) {
-		switch (static_cast<const ibBackendColumnRawDB*>(col)->GetRawType()) {
-		case ibBackendColumnRawDB::RawType::Number:  v = cursor.GetResultNumber(alias); break;
-		case ibBackendColumnRawDB::RawType::Date:    v = cursor.GetResultDate(alias);   break;
-		case ibBackendColumnRawDB::RawType::Boolean: v = cursor.GetResultBool(alias);   break;
-		default:                              v = cursor.GetResultString(alias); break;   // String / Binary
-		}
+		col->ReadValue(alias, metaData, v, cursor);
 		return v;
 	}
 	const ibTypeDescription& td = col->GetTypeDesc();
@@ -1509,7 +1524,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 			const long r = out.AppendRow();
 			for (const OutPlan& p : plans) {
 				ibValue v;
-				if (p.raw) v = ReadScalarByAlias(p.col, p.alias, cursor);
+				if (p.raw) v = ReadScalarByAlias(p.col, p.alias, p.meta, cursor);
 				else       p.col->ReadValue(p.prefix, p.meta, v, cursor);   // asked of the COLUMN — the codec is its default
 				out.SetCell(r, p.col->GetColumnId(), v);
 			}
@@ -1706,7 +1721,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 			const long r = out.AppendRow();
 			for (const GroupPlan& gp : groupPlans) {
 				ibValue v;
-				if (gp.scalar) v = ReadScalarByAlias(gp.col, gp.tag, cursor);
+				if (gp.scalar) v = ReadScalarByAlias(gp.col, gp.tag, gp.meta, cursor);
 				else           gp.col->ReadValue(gp.tag, gp.meta, v, cursor);   // reference / variant group key
 				out.SetCell(r, gp.col->GetColumnId(), v);
 			}
@@ -1715,7 +1730,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 				using Fn = ibDataQueryBuilder::AggregateFn;
 				ibValue v;
 				if (a.m_fn == Fn::Min || a.m_fn == Fn::Max)
-					v = ReadScalarByAlias(a.m_col, a.m_alias, cursor);     // MIN/MAX keep the input column's type
+					v = ReadScalarByAlias(a.m_col, a.m_alias, spec.m_queryable->GetMetaData(), cursor);   // MIN/MAX keep the input column's type
 				else
 					v = cursor.GetResultNumber(a.m_alias);                 // SUM / AVG / COUNT -> number
 				out.SetCell(r, aid++, v);
@@ -1918,7 +1933,8 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 		while (cursor.Next()) {
 			const long r = out.AppendRow();
 			for (size_t i = 0; i < outs.size(); ++i)
-				out.SetCell(r, outs[i].first->GetColumnId(), ReadScalarByAlias(outs[i].first, uAlias(i), cursor));
+				out.SetCell(r, outs[i].first->GetColumnId(),
+					ReadScalarByAlias(outs[i].first, uAlias(i), spec.m_queryable->GetMetaData(), cursor));
 		}
 		return ibDataQueryResult(std::move(out), spec.m_queryable);
 	}
@@ -2259,7 +2275,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			std::vector<ibValue> values;
 			for (const FieldPlan& fp : levelPlans[i].fields) {
 				ibValue v;
-				if (fp.scalar) v = ReadScalarByAlias(fp.col, fp.tag, cursor);
+				if (fp.scalar) v = ReadScalarByAlias(fp.col, fp.tag, fp.meta, cursor);
 				else           fp.col->ReadValue(fp.tag, fp.meta, v, cursor);   // reference / variant reassembly
 				values.push_back(v);
 			}
@@ -2279,7 +2295,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 		for (const ibDataQueryBuilder::AggregateItem& a : aggregates) {
 			using Fn = ibDataQueryBuilder::AggregateFn;
 			rr.aggs.push_back((a.m_fn == Fn::Min || a.m_fn == Fn::Max)
-				? ReadScalarByAlias(a.m_col, a.m_alias, cursor)
+				? ReadScalarByAlias(a.m_col, a.m_alias, spec.m_queryable->GetMetaData(), cursor)
 				: ibValue(cursor.GetResultNumber(a.m_alias)));
 		}
 		rrows.push_back(std::move(rr));
@@ -3329,6 +3345,27 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 // Recursion is the inner query's own business: a named query that itself declares one arrives here
 // with its own list and is handed back whole. (A cycle is a query the engine refuses, and refusing
 // it there rather than counting hops here keeps one opinion about what a valid query is.)
+// ⭐⭐ AND THE SAME QUESTION, ASKED ONE STEP EARLIER. The lowering has to know BEFORE it declares a
+// query whether the declaration will render — because after it has declared one there is no road
+// back, and the statement would name a table its own text never wrote (`-206`).
+//
+// A single source always renders: that is the page read, unchanged. A JOIN renders when the tree
+// co-locates, which is the read fast path's own gate — no second opinion about what a renderable
+// join is, and no chance of the two drifting.
+bool ibDbTableProvider::CanDeclareAsNamedQuery(const ibDataQueryBuilder& inner)
+	{
+		const ibDataQuerySpec spec = inner.BuildSpec();
+		if (spec.m_queryable == nullptr)
+			return false;
+		if (spec.m_root == nullptr || spec.m_root->m_kind != ibQueryNode::Kind::Join)
+			return true;   // one source — the ordinary declared read
+		// A joined declaration is the co-located join, so it must clear that path's gate: real DB
+		// leaves, distinct tables, column keys, per-leaf conditions. The OUTPUT check is the read
+		// gate's own (CanColocateJoin), which additionally refuses aggregates and computed columns —
+		// a declaration carrying either has no server-side form here either.
+		return CanColocateJoin(spec);
+	}
+
 void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryIR& ir)
 	{
 		if (spec.m_with == nullptr || spec.m_with->empty())
@@ -3341,9 +3378,31 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 				continue;   // nothing to read — a declaration of nothing declares nothing
 			const std::vector<ibQuerySortItem> innerSort =
 				ibDataQueryBuilder::EffectiveSort(innerSpec.m_queryable, *innerSpec.m_sorts);
-			// The inner query is read WHOLE — a page request belongs to the reader, not to what it
-			// reads: limiting the named query would silently narrow every mention of it.
-			ibQueryIR innerIR = BuildPageIR(innerSpec, ibReadPageRequest{}, innerSort);
+
+			// ⭐ A JOINED DECLARATION IS THE CO-LOCATED JOIN, WRITTEN SOMEWHERE ELSE. BuildPageIR reads
+			// ONE queryable (it asks the spec for its table name), so a declaration whose door holds a
+			// join tree has to be assembled the way the join READ is: the leaves into one server-side
+			// FROM, the per-leaf conditions qualified by their own tables. Same builders, same gate —
+			// CanDeclareAsNamedQuery asked the same question before the lowering chose this road, so a
+			// tree that reaches here is one that renders.
+			//
+			// No ORDER BY on this branch: a declared query is a SET the reader orders, and a join
+			// tree has no single table to qualify a keyset against anyway.
+			ColocatedLeaves leaves;
+			ibQueryIR innerIR;
+			if (ColocatableJoinTree(innerSpec, leaves)) {
+				ibDatabaseQueryBuilder jq(innerSpec.m_holder);
+				jq.From(BuildColocatedFrom(innerSpec.m_root, leaves));
+				if (ibQueryExprPtr where = ColocatedWhere(innerSpec, leaves))
+					jq.Where(where);
+				innerIR = jq.Build();
+			}
+			else {
+				leaves.clear();
+				// The inner query is read WHOLE — a page request belongs to the reader, not to what it
+				// reads: limiting the named query would silently narrow every mention of it.
+				innerIR = BuildPageIR(innerSpec, ibReadPageRequest{}, innerSort);
+			}
 
 			// ⭐⭐ A DECLARED QUERY PUBLISHES NAMES, SO ITS SELECT HAS TO SPELL THEM.
 			//
@@ -3389,9 +3448,14 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 					if (col->IsSyntheticColumn())
 						continue;
 
+					// …and QUALIFIED BY THE LEAF THAT OWNS IT when the declaration is a join: two tables
+					// in one FROM make a bare field name ambiguous to the engine even where the two
+					// spellings differ, and the qualifier is the same one the join's own ON uses.
+					// Empty for a single-source declaration, which is the unqualified read it was.
 					const wxString base = col->GetPhysicalName();
+					const wxString qual = leaves.empty() ? wxString() : ColocatedQual(leaves, col);
 					for (const ibColumnSlot& slot : DescribeColumnLayout(col))
-						proj.push_back(ibQueryProjItem{ ibCol(slot.m_name),
+						proj.push_back(ibQueryProjItem{ ibColQ(qual, slot.m_name),
 							slot.m_role == ibColumnRole::Raw ? base
 							                                 : base + ibFieldSuffix(slot.m_role) });
 				}

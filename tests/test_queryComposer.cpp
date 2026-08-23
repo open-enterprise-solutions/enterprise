@@ -23,7 +23,7 @@
 #include "backend/query/dbTableProvider.h"   // ibDbTableProvider::CanColocate* (the gates)
 #include "backend/query/dataQueryBuilder.h"  // ibDataQuerySpec / ibQueryNode / AggregateItem
 #include "backend/query/queryable.h"         // ibBackendQueryable / ibQueryCondition
-#include "backend/query/queryColumn.h"       // ibBackendQueryColumn / ibRawDBColumn
+#include "backend/query/queryColumn.h"       // ibBackendQueryColumn / ibBackendColumnRawDB
 #include "backend/clsid.h"                    // reference_to_clsid — a reference-typed column (multi-field spread)
 
 namespace {
@@ -532,10 +532,10 @@ TEST(QueryComposerCore, EvalColumnExpr_ArithAndCase)
 
 TEST(QueryComposerGate, Join_TwoDistinctDbTables_Colocatable)
 {
-	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
-	ibRawDBColumn aOut = ibRawDBColumn::String(wxT("a_out"));
-	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
-	ibRawDBColumn bOut = ibRawDBColumn::String(wxT("b_out"));
+	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	ibBackendColumnRawDB aOut = ibBackendColumnRawDB::String(wxT("a_out"));
+	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	ibBackendColumnRawDB bOut = ibBackendColumnRawDB::String(wxT("b_out"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aOut);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bOut);
 
@@ -549,9 +549,9 @@ TEST(QueryComposerGate, Join_TwoDistinctDbTables_Colocatable)
 
 TEST(QueryComposerGate, Join_SelfJoinSameTable_NotColocatable)
 {
-	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
-	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
-	ibRawDBColumn aOut = ibRawDBColumn::String(wxT("a_out"));
+	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	ibBackendColumnRawDB aOut = ibBackendColumnRawDB::String(wxT("a_out"));
 	TestQueryable A(wxT("Same"), 1); A.AddCol(&aKey); A.AddCol(&aOut);
 	TestQueryable B(wxT("Same"), 2); B.AddCol(&bKey);   // SAME table name -> ambiguous
 
@@ -564,9 +564,9 @@ TEST(QueryComposerGate, Join_SelfJoinSameTable_NotColocatable)
 
 TEST(QueryComposerGate, Join_ComputedLeaf_NotColocatable)
 {
-	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
-	ibRawDBColumn aOut = ibRawDBColumn::String(wxT("a_out"));
-	ibRawDBColumn cKey = ibRawDBColumn::Number(wxT("c_key"));
+	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	ibBackendColumnRawDB aOut = ibBackendColumnRawDB::String(wxT("a_out"));
+	ibBackendColumnRawDB cKey = ibBackendColumnRawDB::Number(wxT("c_key"));
 	TestQueryable A(wxT("TableA"), 1);             A.AddCol(&aKey); A.AddCol(&aOut);
 	TestQueryable C(wxT("Slice"), 2, /*computed*/true); C.AddCol(&cKey);   // RAM-computed leaf
 
@@ -582,10 +582,10 @@ TEST(QueryComposerGate, Join_ColumnTheta_Colocatable)
 	// A column-to-column theta join (a_key > b_key) over two DB tables renders server-side now — the ON
 	// carries its real op, not a forced Eq. Balance-on-date / range joins ride this instead of RAM-folding.
 	// (A COMPUTED ON — a.x+1 > b.y, m_exprL set — still falls to RAM; that path is the computed-leaf gate.)
-	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
-	ibRawDBColumn aOut = ibRawDBColumn::String(wxT("a_out"));
-	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
-	ibRawDBColumn bOut = ibRawDBColumn::String(wxT("b_out"));
+	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	ibBackendColumnRawDB aOut = ibBackendColumnRawDB::String(wxT("a_out"));
+	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	ibBackendColumnRawDB bOut = ibBackendColumnRawDB::String(wxT("b_out"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aOut);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bOut);
 
@@ -603,8 +603,8 @@ TEST(QueryComposerGate, Join_ColumnTheta_Colocatable)
 
 TEST(QueryComposerGate, Union_TwoDbBranchesScalar_Colocatable)
 {
-	ibRawDBColumn aCode = ibRawDBColumn::String(wxT("code"));
-	ibRawDBColumn bCode = ibRawDBColumn::String(wxT("code"));
+	ibBackendColumnRawDB aCode = ibBackendColumnRawDB::String(wxT("code"));
+	ibBackendColumnRawDB bCode = ibBackendColumnRawDB::String(wxT("code"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aCode);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bCode);
 
@@ -621,8 +621,8 @@ TEST(QueryComposerGate, Union_TwoDbBranchesScalar_Colocatable)
 
 TEST(QueryComposerGate, Union_ComputedBranch_NotColocatableDirectly)
 {
-	ibRawDBColumn aCode = ibRawDBColumn::String(wxT("code"));
-	ibRawDBColumn cCode = ibRawDBColumn::String(wxT("code"));
+	ibBackendColumnRawDB aCode = ibBackendColumnRawDB::String(wxT("code"));
+	ibBackendColumnRawDB cCode = ibBackendColumnRawDB::String(wxT("code"));
 	TestQueryable A(wxT("TableA"), 1);             A.AddCol(&aCode);
 	TestQueryable C(wxT("Slice"), 2, /*computed*/true); C.AddCol(&cCode);
 
@@ -643,8 +643,8 @@ TEST(QueryComposerGate, Union_ComputedBranch_NotColocatableDirectly)
 // server-side union -> a boolean OR/NOT WHERE returned too many rows, and an RLS restriction leaked.
 TEST(QueryComposerGate, Union_BooleanPredicate_Colocatable)
 {
-	ibRawDBColumn aReg = ibRawDBColumn::String(wxT("region"));
-	ibRawDBColumn bReg = ibRawDBColumn::String(wxT("region"));
+	ibBackendColumnRawDB aReg = ibBackendColumnRawDB::String(wxT("region"));
+	ibBackendColumnRawDB bReg = ibBackendColumnRawDB::String(wxT("region"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aReg);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bReg);
 
@@ -667,9 +667,9 @@ TEST(QueryComposerGate, Union_SemiJoinPredicate_Colocatable)
 {
 	// An RLS restriction (semi-join on the region key) whose outer key resolves in every branch rides
 	// the co-located union server-side -- RLS on a UNION read, not just a JOIN.
-	ibRawDBColumn aReg = ibRawDBColumn::String(wxT("region"));
-	ibRawDBColumn bReg = ibRawDBColumn::String(wxT("region"));
-	ibRawDBColumn permReg = ibRawDBColumn::String(wxT("region"));
+	ibBackendColumnRawDB aReg = ibBackendColumnRawDB::String(wxT("region"));
+	ibBackendColumnRawDB bReg = ibBackendColumnRawDB::String(wxT("region"));
+	ibBackendColumnRawDB permReg = ibBackendColumnRawDB::String(wxT("region"));
 	TestQueryable A(wxT("TableA"), 1);         A.AddCol(&aReg);
 	TestQueryable B(wxT("TableB"), 2);         B.AddCol(&bReg);
 	TestQueryable P(wxT("AllowedRegions"), 3); P.AddCol(&permReg);   // permission source
@@ -691,9 +691,9 @@ TEST(QueryComposerGate, Union_SemiJoinPredicate_Colocatable)
 TEST(QueryComposerGate, Union_PredicateColMissingInBranch_NotColocatable)
 {
 	// The predicate references a column present only in branch A -> can't render over B -> RAM (applies it).
-	ibRawDBColumn aReg = ibRawDBColumn::String(wxT("region"));
-	ibRawDBColumn aExtra = ibRawDBColumn::String(wxT("extra"));
-	ibRawDBColumn bReg = ibRawDBColumn::String(wxT("region"));
+	ibBackendColumnRawDB aReg = ibBackendColumnRawDB::String(wxT("region"));
+	ibBackendColumnRawDB aExtra = ibBackendColumnRawDB::String(wxT("extra"));
+	ibBackendColumnRawDB bReg = ibBackendColumnRawDB::String(wxT("region"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aReg); A.AddCol(&aExtra);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bReg);   // no "extra"
 
@@ -713,9 +713,9 @@ TEST(QueryComposerGate, Union_PredicateColMissingInBranch_NotColocatable)
 TEST(QueryComposerGate, Union_DotWalkPredicate_NotColocatable)
 {
 	// A dot-walk predicate leaf (a reference path) needs a join the branch scan lacks -> RAM.
-	ibRawDBColumn aReg = ibRawDBColumn::String(wxT("region"));
-	ibRawDBColumn bReg = ibRawDBColumn::String(wxT("region"));
-	ibRawDBColumn refc = ibRawDBColumn::String(wxT("owner"));
+	ibBackendColumnRawDB aReg = ibBackendColumnRawDB::String(wxT("region"));
+	ibBackendColumnRawDB bReg = ibBackendColumnRawDB::String(wxT("region"));
+	ibBackendColumnRawDB refc = ibBackendColumnRawDB::String(wxT("owner"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aReg);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bReg);
 
@@ -735,10 +735,10 @@ TEST(QueryComposerGate, Union_DotWalkPredicate_NotColocatable)
 
 TEST(QueryComposerGate, Aggregate_GroupBySum_Colocatable)
 {
-	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
-	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("a_dim"));
-	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
-	ibRawDBColumn bAmt = ibRawDBColumn::Number(wxT("b_amt"));
+	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
 
@@ -764,10 +764,10 @@ TEST(QueryComposerGate, Aggregate_GroupBySum_Colocatable)
 
 TEST(QueryComposerGate, RollupTotals_JoinScalarLevels_Colocatable)
 {
-	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
-	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("a_dim"));
-	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
-	ibRawDBColumn bAmt = ibRawDBColumn::Number(wxT("b_amt"));
+	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
 
@@ -791,8 +791,8 @@ TEST(QueryComposerGate, RollupTotals_JoinScalarLevels_Colocatable)
 
 TEST(QueryComposerGate, RollupTotals_LevelsFromTotalsList_ShapeAccepted)
 {
-	ibRawDBColumn dim = ibRawDBColumn::String(wxT("dim"));
-	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
 
 	SpecBuf buf;
@@ -810,9 +810,9 @@ TEST(QueryComposerGate, RollupTotals_TupleLevel_ShapeAccepted)
 {
 	// ONE level over TWO fields — `BY (Partner, Contract)`. It is one heading, and the fold renders it
 	// as ONE composite ROLLUP element; the gate must not mistake it for two levels or refuse it.
-	ibRawDBColumn partner  = ibRawDBColumn::String(wxT("partner"));
-	ibRawDBColumn contract = ibRawDBColumn::String(wxT("contract"));
-	ibRawDBColumn amt      = ibRawDBColumn::Number(wxT("amt"));
+	ibBackendColumnRawDB partner  = ibBackendColumnRawDB::String(wxT("partner"));
+	ibBackendColumnRawDB contract = ibBackendColumnRawDB::String(wxT("contract"));
+	ibBackendColumnRawDB amt      = ibBackendColumnRawDB::Number(wxT("amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&partner); A.AddCol(&contract); A.AddCol(&amt);
 
 	SpecBuf buf;
@@ -832,8 +832,8 @@ TEST(QueryComposerGate, RollupTotals_DetailLevel_Refused)
 {
 	// A level with NO fields is the detail records. ROLLUP folds the rows away, so there would be
 	// nothing left to hang under the last heading — the RAM fold keeps them.
-	ibRawDBColumn dim = ibRawDBColumn::String(wxT("dim"));
-	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
 
 	SpecBuf buf;
@@ -851,8 +851,8 @@ TEST(QueryComposerGate, RollupTotals_HierarchyLevel_Refused)
 {
 	// A HIERARCHY unfold walks the reference's parent chain; no GROUP BY can do that, and folding it
 	// server-side would come back as a plain grouping under a word that asked for something else.
-	ibRawDBColumn dim = ibRawDBColumn::String(wxT("dim"));
-	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
 
 	SpecBuf buf;
@@ -868,8 +868,8 @@ TEST(QueryComposerGate, RollupTotals_HierarchyLevel_Refused)
 TEST(QueryComposerGate, RollupTotals_SingleSource_NotColocatable)
 {
 	// A single table is the single-source ROLLUP push (CanPushRollupTotals), NOT the co-located gate.
-	ibRawDBColumn dim = ibRawDBColumn::String(wxT("dim"));
-	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
 
 	SpecBuf buf;
@@ -890,7 +890,7 @@ TEST(QueryComposerGate, RollupTotals_SingleSource_NotColocatable)
 
 TEST(QueryComposerGate, GroupLevelPage_SingleScalarDim_Pageable)
 {
-	ibRawDBColumn dim = ibRawDBColumn::String(wxT("code"));
+	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("code"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim);
 	SpecBuf buf;
 	buf.groupBy = { &dim };                                  // one plain scalar grouping level
@@ -900,8 +900,8 @@ TEST(QueryComposerGate, GroupLevelPage_SingleScalarDim_Pageable)
 
 TEST(QueryComposerGate, GroupLevelPage_TwoLevels_NotPageable)
 {
-	ibRawDBColumn dim1 = ibRawDBColumn::String(wxT("code"));
-	ibRawDBColumn dim2 = ibRawDBColumn::String(wxT("region"));
+	ibBackendColumnRawDB dim1 = ibBackendColumnRawDB::String(wxT("code"));
+	ibBackendColumnRawDB dim2 = ibBackendColumnRawDB::String(wxT("region"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim1); A.AddCol(&dim2);
 	SpecBuf buf;
 	buf.groupBy = { &dim1, &dim2 };                          // two levels -> not a single-level drill
@@ -911,8 +911,8 @@ TEST(QueryComposerGate, GroupLevelPage_TwoLevels_NotPageable)
 
 TEST(QueryComposerGate, GroupLevelPage_DotWalkDim_NotPageable)
 {
-	ibRawDBColumn owner = ibRawDBColumn::Number(wxT("owner"));
-	ibRawDBColumn name  = ibRawDBColumn::String(wxT("name"));
+	ibBackendColumnRawDB owner = ibBackendColumnRawDB::Number(wxT("owner"));
+	ibBackendColumnRawDB name  = ibBackendColumnRawDB::String(wxT("name"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&owner); A.AddCol(&name);
 	SpecBuf buf;
 	buf.groupBy    = { &name };
@@ -923,9 +923,9 @@ TEST(QueryComposerGate, GroupLevelPage_DotWalkDim_NotPageable)
 
 TEST(QueryComposerGate, GroupLevelPage_JoinSource_NotPageable)
 {
-	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
-	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("a_dim"));
-	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
+	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey);
 	auto root = Join2(&A, &B, &aKey, &bKey);                // multi-source join tree
@@ -953,10 +953,10 @@ TEST(QueryComposerGate, GroupLevelPage_ReferenceDim_NotPageable)
 TEST(QueryComposerGate, RollupTotals_ComputedLeaf_NotColocatable)
 {
 	// A computed (RAM) leaf in the join can't co-locate -> the composer RAM-folds the totals tree.
-	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
-	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("a_dim"));
-	ibRawDBColumn cKey = ibRawDBColumn::Number(wxT("c_key"));
-	ibRawDBColumn cAmt = ibRawDBColumn::Number(wxT("c_amt"));
+	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	ibBackendColumnRawDB cKey = ibBackendColumnRawDB::Number(wxT("c_key"));
+	ibBackendColumnRawDB cAmt = ibBackendColumnRawDB::Number(wxT("c_amt"));
 	TestQueryable A(wxT("TableA"), 1);                   A.AddCol(&aKey); A.AddCol(&aDim);
 	TestQueryable C(wxT("Slice"), 2, /*computed*/ true); C.AddCol(&cKey); C.AddCol(&cAmt);
 
@@ -974,10 +974,10 @@ TEST(QueryComposerGate, RollupTotals_ComputedLeaf_NotColocatable)
 TEST(QueryComposerGate, RollupTotals_NoLevels_NotColocatable)
 {
 	// A totals query always has at least one level; an empty groupBy is not a totals shape.
-	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
-	ibRawDBColumn aOut = ibRawDBColumn::String(wxT("a_out"));
-	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
-	ibRawDBColumn bAmt = ibRawDBColumn::Number(wxT("b_amt"));
+	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	ibBackendColumnRawDB aOut = ibBackendColumnRawDB::String(wxT("a_out"));
+	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aOut);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
 
@@ -996,10 +996,10 @@ TEST(QueryComposerGate, RollupTotals_NoLevels_NotColocatable)
 // group / aggregate columns BY NAME.
 TEST(QueryComposerGate, RollupTotals_UnionScalar_Colocatable)
 {
-	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("dim"));
-	ibRawDBColumn aAmt = ibRawDBColumn::Number(wxT("amt"));
-	ibRawDBColumn bDim = ibRawDBColumn::String(wxT("dim"));
-	ibRawDBColumn bAmt = ibRawDBColumn::Number(wxT("amt"));
+	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB aAmt = ibBackendColumnRawDB::Number(wxT("amt"));
+	ibBackendColumnRawDB bDim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aDim); A.AddCol(&aAmt);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bDim); B.AddCol(&bAmt);
 
@@ -1020,10 +1020,10 @@ TEST(QueryComposerGate, RollupTotals_UnionScalar_Colocatable)
 
 TEST(QueryComposerGate, RollupTotals_UnionComputedBranch_NotColocatable)
 {
-	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("dim"));
-	ibRawDBColumn aAmt = ibRawDBColumn::Number(wxT("amt"));
-	ibRawDBColumn cDim = ibRawDBColumn::String(wxT("dim"));
-	ibRawDBColumn cAmt = ibRawDBColumn::Number(wxT("amt"));
+	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB aAmt = ibBackendColumnRawDB::Number(wxT("amt"));
+	ibBackendColumnRawDB cDim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB cAmt = ibBackendColumnRawDB::Number(wxT("amt"));
 	TestQueryable A(wxT("TableA"), 1);                   A.AddCol(&aDim); A.AddCol(&aAmt);
 	TestQueryable C(wxT("Slice"), 2, /*computed*/ true); C.AddCol(&cDim); C.AddCol(&cAmt);
 
@@ -1046,10 +1046,10 @@ TEST(QueryComposerGate, RollupTotals_UnionWithPredicate_NotColocatable)
 {
 	// A boolean WHERE tree / RLS restriction is NOT rendered on the union-branch path, so its presence
 	// forces RAM (which applies it) — a co-located UNION totals never emits an under-restricted read.
-	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("dim"));
-	ibRawDBColumn aAmt = ibRawDBColumn::Number(wxT("amt"));
-	ibRawDBColumn bDim = ibRawDBColumn::String(wxT("dim"));
-	ibRawDBColumn bAmt = ibRawDBColumn::Number(wxT("amt"));
+	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB aAmt = ibBackendColumnRawDB::Number(wxT("amt"));
+	ibBackendColumnRawDB bDim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aDim); A.AddCol(&aAmt);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bDim); B.AddCol(&bAmt);
 
@@ -1077,8 +1077,8 @@ TEST(QueryComposerGate, RollupTotals_UnionWithPredicate_NotColocatable)
 
 TEST(QueryComposerGate, RollupTotals_SingleSourceScalar_Shape)
 {
-	ibRawDBColumn dim = ibRawDBColumn::String(wxT("dim"));
-	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
 
 	SpecBuf buf;
@@ -1094,10 +1094,10 @@ TEST(QueryComposerGate, RollupTotals_SingleSourceScalar_Shape)
 TEST(QueryComposerGate, RollupTotals_MultiSource_NotSingleShape)
 {
 	// A join tree is NOT the single-source shape (it is the co-located gate's job).
-	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
-	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("a_dim"));
-	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
-	ibRawDBColumn bAmt = ibRawDBColumn::Number(wxT("b_amt"));
+	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
 	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
 
@@ -1115,8 +1115,8 @@ TEST(QueryComposerGate, RollupTotals_MultiSource_NotSingleShape)
 TEST(QueryComposerGate, RollupTotals_SingleComputed_NotShape)
 {
 	// A computed (RAM) single source (a register slice) can't push ROLLUP -> RAM fold.
-	ibRawDBColumn dim = ibRawDBColumn::String(wxT("dim"));
-	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
 	TestQueryable C(wxT("Slice"), 1, /*computed*/ true); C.AddCol(&dim); C.AddCol(&amt);
 
 	SpecBuf buf;
@@ -1698,8 +1698,8 @@ TEST(QueryComputedFilter, ConditionOnUnvendedColumnDoesNotEmptyTheResult)
 // with aggregates, the routing above it goes quietly back to reading everything.
 TEST(QueryComposerGate, GroupLevelPage_WithMeasures_StillPageable)
 {
-	ibRawDBColumn dim = ibRawDBColumn::String(wxT("code"));
-	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("code"));
+	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
 	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
 
 	SpecBuf buf;

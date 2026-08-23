@@ -202,6 +202,62 @@ bool ibRecorderQueryable::ibBackendColumnPointInTime::ReadValue(const wxString& 
 	return true;
 }
 
+// ⭐ THE WRITING SIDE OF THE SAME COLUMN — and the thing that makes `WHERE Moment <= &Point` run.
+//
+// A comparison against a metadata column is decomposed field by field (DecomposeOrdered): the fields
+// come from DescribeLayout above, and the CONSTANTS they are compared against are bound here. So the
+// moment's halves must land in the same order the layout names them — the date, then the reference's
+// pair — or the statement compares a date against a guid.
+//
+// ⚠ NOT THE CODEC'S SPREAD. It drives off a value TAG, and a moment has none: every slot would bind
+// NULL, the filter would be `unknown` for every row, and a report asking for "everything up to this
+// document" would come back empty without a word said. This is why the bind is a question for the
+// COLUMN and not for the value's type.
+//
+// A BARE DATE is a legitimate right-hand side — a moment orders with one (ibValuePointInTime::
+// CompareValueLS) — and means the instant ITSELF, before any record standing in it. That falls out of
+// the encoding rather than being special-cased: an empty reference binds type 0, which sorts ahead of
+// every real metatype, so `>= <date>` takes the whole day and `<= <date>` stops before it.
+void ibRecorderQueryable::ibBackendColumnPointInTime::BindValue(ibQueryStatement& statement,
+	const ibMetaData* /*metaData*/, const ibValue& value, int& position) const
+{
+	wxDateTime date;
+	ibValue    reference;
+	ibValuePointInTime* moment = nullptr;
+	if (value.ConvertToValue(moment) && moment != nullptr) {
+		date      = moment->m_date;
+		reference = moment->m_reference;
+	}
+	else {
+		date = value.GetDateTime();
+	}
+
+	// The reference pair, resolved once — the same two things the codec binds for a reference slot:
+	// WHICH type (the clsid, as a number) and WHICH row (the key blob). Read off the value itself.
+	ibClassID   refClsid = 0;
+	const void* refBlob  = nullptr;
+	ibValueReferenceDataObject* refData = nullptr;
+	if (IsReference(reference.GetClassType()) && reference.ConvertToValue(refData) && refData != nullptr) {
+		refClsid = reference.GetClassType();
+		refBlob  = refData->GetReferenceData();
+	}
+
+	for (const ibColumnSlot& slot : DescribeLayout()) {
+		switch (slot.m_role) {
+		case ibColumnRole::Date:          statement.SetParamDate(position++, date); break;
+		case ibColumnRole::ReferenceType: statement.SetParamNumber(position++, refClsid); break;
+		case ibColumnRole::ReferenceId:
+			if (refBlob != nullptr) statement.SetParamBlob(position++, refBlob, sizeof(ibReference));
+			else                    statement.SetParamNull(position++);
+			break;
+		// The layout is the date's slots and the reference's, and those are the roles they have.
+		// Anything else would be a field this column does not know it has, so it binds nothing
+		// rather than guessing — and the position still advances, because the field is in the list.
+		default:                          statement.SetParamNull(position++); break;
+		}
+	}
+}
+
 
 // The hierarchy metaobject's own parent column (a predefined attribute IS-A ibBackendQueryColumn) — defined
 // out-of-line HERE where the attribute type is complete. The record queryable (above) forwards to it. (Folder

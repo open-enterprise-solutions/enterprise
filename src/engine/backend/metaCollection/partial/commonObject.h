@@ -999,11 +999,12 @@ public:
 		bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
 		               class ibValue& retValue, class ibQueryResult& result, bool createData = true) const override;
 
-		// …and it writes NOTHING. A moment is stored by storing the date and the reference, which the
-		// write already does through their own columns; binding it again would be a second answer to
-		// one question — and there are no fields here to bind it into.
-		void BindValue(class ibQueryStatement& /*statement*/, const class ibMetaData* /*metaData*/,
-		               const class ibValue& /*value*/, int& /*position*/) const override {}
+		// …and it BINDS the same way: into the parts' fields, in the order the layout names them.
+		// Nothing STORES a moment — a document stores its date and its reference, and the pair is the
+		// moment — but a query WRITES one every time it compares against it (`WHERE Moment <= &Point`
+		// decomposes lexicographically over exactly these fields), and that is the value it compares.
+		void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,
+		               const class ibValue& value, int& position) const override;
 
 	private:
 		const ibValueMetaObjectRecordDataRecorderRef* m_owner;
