@@ -105,7 +105,7 @@ add_executable(oes_tests
     test_valueStructure.cpp
     test_valueGeometry.cpp
     test_metaDescription.cpp
-    test_rawDBColumn.cpp
+    test_backendColumnRawDB.cpp
     test_rowValues.cpp
     test_readerWriterMemory.cpp
     test_passwordHash.cpp

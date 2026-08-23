@@ -12,21 +12,21 @@
 #include "backend/query/queryColumn.h"    // ibBackendColumnRawDB
 #include "backend/query/columnLayout.h"   // DescribeColumnLayout / ColumnFieldNames / ibColumnRole / ibColumnSlot
 
-TEST(RawDBColumn, FactoryCarriesFieldName) {
+TEST(BackendColumnRawDB, FactoryCarriesFieldName) {
     EXPECT_EQ(ibBackendColumnRawDB::String(wxT("code")).GetName(), wxT("code"));
     EXPECT_EQ(ibBackendColumnRawDB::Number(wxT("qty")).GetName(),  wxT("qty"));
     EXPECT_EQ(ibBackendColumnRawDB::Guid(wxT("uuid")).GetName(),   wxT("uuid"));
     EXPECT_EQ(ibBackendColumnRawDB::Boolean(wxT("flag")).GetName(),wxT("flag"));
 }
 
-TEST(RawDBColumn, RawLowersToOneFieldNamedAfterItself) {
+TEST(BackendColumnRawDB, RawLowersToOneFieldNamedAfterItself) {
     const ibBackendColumnRawDB col = ibBackendColumnRawDB::String(wxT("name"));
     const std::vector<wxString> fields = ColumnFieldNames(&col);
     ASSERT_EQ(fields.size(), 1u);
     EXPECT_EQ(fields[0], wxT("name"));
 }
 
-TEST(RawDBColumn, RawLayoutSlotIsRoleRaw) {
+TEST(BackendColumnRawDB, RawLayoutSlotIsRoleRaw) {
     const ibBackendColumnRawDB col = ibBackendColumnRawDB::Number(wxT("qty"));
     const std::vector<ibColumnSlot> layout = DescribeColumnLayout(&col);
     ASSERT_EQ(layout.size(), 1u);
