@@ -40,8 +40,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 1
+
+      # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
+      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
+      # documentation; the build needs wxWidgets, so that one is initialised by name.
+      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
 
       # libgtk-3-dev: the CMake build defines __WXGTK__ and pkg-checks gtk+-3.0, so wx
       # will not configure without it. uuid-dev: under GTK, guid.cpp generates guids with
@@ -123,8 +128,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 1
+
+      # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
+      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
+      # documentation; the build needs wxWidgets, so that one is initialised by name.
+      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
 
       - uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -200,8 +210,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 1
+
+      # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
+      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
+      # documentation; the build needs wxWidgets, so that one is initialised by name.
+      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
 
       # libpq-dev on top of the usual set: the driver loads libpq at run time, so
       # the client library has to be present for the test to connect at all.
@@ -256,8 +271,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 1
+
+      # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
+      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
+      # documentation; the build needs wxWidgets, so that one is initialised by name.
+      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
 
       - name: Install build dependencies
         run: |
@@ -412,8 +432,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 1
+
+      # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
+      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
+      # documentation; the build needs wxWidgets, so that one is initialised by name.
+      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
 
       # cmake ships on the runner image; ninja does not. No GTK, no uuid-dev —
       # wx uses Cocoa here and the guid path is CoreFoundation's CFUUID.
@@ -497,8 +522,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 1
+
+      # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
+      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
+      # documentation; the build needs wxWidgets, so that one is initialised by name.
+      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
 
       - name: Install build dependencies
         run: |

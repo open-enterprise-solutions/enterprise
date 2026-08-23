@@ -2,3 +2,7 @@
 	path = src/3rdparty/wxWidgets
 	url = https://github.com/wxWidgets/wxWidgets.git
 	branch = 3.2
+[submodule "docs"]
+	path = docs
+	url = https://github.com/open-enterprise-solutions/enterprise-docs.git
+	branch = main

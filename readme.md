@@ -1,6 +1,6 @@
 # Open Enterprise Solutions (OES)
 
-OES is an open-source, cross-platform low-code enterprise application platform written in C++17, conceptually similar to 1C:Enterprise. It provides a fully integrated environment — compiler, bytecode interpreter, visual form designer, multi-database abstraction layer, and remote debugger — that allows developers to build line-of-business applications using a built-in scripting language with two syntax modes (VES, the Visual-Basic-flavoured legacy dialect, and CES, the C-flavoured default for new configurations), a rich set of 98 built-in globals (92 functions + 6 procedures), and 11 first-class business-object types (Catalog, Document, Enumeration, Constant, InformationRegister, AccumulationRegister, AccountingRegister, ChartOfAccounts, ChartOfCharacteristicTypes, DataProcessor, Report — AccountingRegister's read path is currently non-functional, see [docs/ROADMAP.md](docs/ROADMAP.md) §4.1).
+OES is a source-available, cross-platform low-code enterprise application platform written in C++17. It provides a fully integrated environment — compiler, bytecode interpreter, visual form designer, multi-database abstraction layer, and remote debugger — that allows developers to build line-of-business applications using a built-in scripting language with two syntax modes (VES, the Visual-Basic-flavoured legacy dialect, and CES, the C-flavoured default for new configurations), a rich set of 98 built-in globals (92 functions + 6 procedures), and 11 first-class business-object types (Catalog, Document, Enumeration, Constant, InformationRegister, AccumulationRegister, AccountingRegister, ChartOfAccounts, ChartOfCharacteristicTypes, DataProcessor, Report — AccountingRegister's read path is currently non-functional).
 
 ---
 
@@ -13,7 +13,10 @@ OES is an open-source, cross-platform low-code enterprise application platform w
 - **Remote TCP debugger** — client/server architecture over TCP (default port 1650); supports breakpoints, step-over, step-into, variable inspection, tooltips, and live code patching
 - **Session management** — multi-user sessions tracked in the system database; launcher, daemon, designer, enterprise, and codeRunner modes
 - **Role-based access control** — access rights on objects and operations defined in the metadata configuration
-- **LGPL 2.1 license** — can be embedded in proprietary products under the LGPL terms
+- **Source-available under PolyForm Noncommercial 1.0.0** — read it, build it, change it, run
+  it, write configurations for it, teach from it, for any noncommercial purpose. Earning from
+  it — in a business, as a service, inside a product you are paid for — needs a licence from
+  the copyright holders. See [LICENSE.md](LICENSE.md) and [NOTICE.md](NOTICE.md)
 
 ---
 
@@ -34,7 +37,7 @@ OES is an open-source, cross-platform low-code enterprise application platform w
    ```cmd
    git clone https://github.com/open-enterprise-solutions/enterprise.git
    cd enterprise
-   git submodule update --init --recursive
+   git submodule update --init --recursive src/3rdparty/wxWidgets
    ```
 3. Open `enterprise.sln` in Visual Studio.
 4. Select configuration `Debug|Win32` or `Release|x64`.
@@ -52,7 +55,7 @@ brew install cmake wxwidgets firebird-client postgresql
 # Clone and initialise submodules
 git clone https://github.com/open-enterprise-solutions/enterprise.git
 cd enterprise
-git submodule update --init --recursive
+git submodule update --init --recursive src/3rdparty/wxWidgets
 
 # Configure and build
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -72,7 +75,7 @@ sudo apt install -y build-essential cmake libwxgtk3.2-dev \
 # Clone and initialise submodules
 git clone https://github.com/open-enterprise-solutions/enterprise.git
 cd enterprise
-git submodule update --init --recursive
+git submodule update --init --recursive src/3rdparty/wxWidgets
 
 # Configure and build
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -108,7 +111,7 @@ cmake --build build --parallel
 wxWidgets 3.3.2 lives at `src/3rdparty/wxWidgets` as a git submodule. After cloning:
 
 ```bash
-git submodule update --init --recursive
+git submodule update --init --recursive src/3rdparty/wxWidgets
 ```
 
 ---
@@ -120,12 +123,11 @@ enterprise/
 ├── enterprise.sln            # MSBuild solution (10 C++ projects)
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
-├── LICENSE.md                # LGPL 2.1
-├── docs/
-│   ├── ARCHITECTURE.md       # Architecture deep-dive
-│   ├── BUILD.md              # Detailed build instructions
-│   ├── devops-playbook/
-│   └── engineering-playbook/
+├── LICENSE.md                # PolyForm Noncommercial 1.0.0 (source-available)
+├── NOTICE.md                 # third-party licences, the wx fork, the LGPL past
+├── docs/                     # PRIVATE submodule — resolves for members of the organisation
+│                             # only, and is empty for everyone else. The build never needs it,
+│                             # so links to docs/… elsewhere in this file will not open for you.
 └── src/
     ├── 3rdparty/
     │   └── wxWidgets/        # Git submodule — wxWidgets 3.3.2
@@ -167,23 +169,43 @@ enterprise/
 | Optional databases | PostgreSQL, ODBC; SQLite (tests + logging) |
 | Build (Windows) | MSBuild / Visual Studio 2019+ |
 | Build (cross-platform) | CMake ≥ 3.20 — `CMakeLists.txt` at repo root (macOS / Linux) |
-| License | LGPL 2.1 |
+| License | PolyForm Noncommercial 1.0.0 — source-available, not open source |
 
 ---
 
 ## Contributing
 
-1. Fork the repository and create a feature branch from `develop`.
-2. Follow existing naming conventions: `ib` prefix for public classes, `m_` prefix for member variables, `s_` for statics.
-3. Match the existing code style (tabs, brace placement).
-4. For new database queries use `ibPreparedStatement` instead of raw string formatting — this avoids the SQL injection patterns present in legacy code.
-5. Submit a pull request against the `develop` branch with a clear description of the change.
-6. The `master` branch is reserved for release-tagged commits.
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for what a change should
+look like and, more importantly, for what sending one means.
 
-Bug reports and feature requests are welcome via GitHub Issues.
+The short version: branch from `develop` and pull-request into it; match the code around you;
+say **why** in the commit message, because the diff already says what. And because this
+project is licensed commercially as well as noncommercially, opening a pull request includes a
+grant that lets us sublicense your contribution — you keep your copyright, we get the right to
+sell what contains it. That paragraph is the one worth reading in full before you send
+anything.
+
+Bug reports and feature requests are welcome as GitHub Issues.
 
 ---
 
 ## License
 
-OES is distributed under the **GNU Lesser General Public License version 2.1**. See [LICENSE.md](LICENSE.md) for the full text.
+OES is **source-available, not open source**, under the
+[PolyForm Noncommercial License 1.0.0](LICENSE.md). Copyright is held by Maxim Kornienko and
+Yurii Bulakh.
+
+**Free, and meant to be used:** clone it, build it, break it, change it, run it on your own
+machine, write configurations for it, teach a course from it, write a thesis about it, publish
+what you learned. No notification, no permission, no explanation owed to anyone.
+
+**Needs a licence from us:** earning from it. Running it in a business, providing a service
+with it, shipping it inside something you are paid for — and, said outright because it is what
+these sources are most likely to be taken for, forking it to ship a rival platform or lifting a
+piece of it (the query engine, the composition and reporting engine, the metadata layer) into a
+product of your own.
+
+Two things the terms above do not cover, both in [NOTICE.md](NOTICE.md): releases up to
+2026-08-22 went out under the **LGPL 2.1** and stay available under it — a licence already
+granted cannot be withdrawn — and the wxWidgets-derived widget sources remain under the
+**wxWindows Library Licence**.

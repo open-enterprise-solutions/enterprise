@@ -41,7 +41,7 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 | Build (cross-platform) | CMake — `CMakeLists.txt` at repo root; macOS / Linux build supported, Windows uses MSBuild |
 | Primary database | Firebird (embedded) |
 | Other databases | PostgreSQL (production), ODBC (CMake `OES_USE_*` opt-in, and the base an MSSQL layer derives from); SQLite is always embedded but is for **tests and logging only, never production** |
-| License | LGPL 2.1 |
+| License | PolyForm Noncommercial 1.0.0 — source-available, **not** open source (LICENSE.md). Noncommercial use is free; any commercial use needs a licence from the copyright holders. Releases up to 2026-08-22 stay under the LGPL 2.1 they were published with. The wxWidgets-derived widget sources keep the wxWindows Library Licence — see NOTICE.md |
 
 ---
 
@@ -53,7 +53,10 @@ enterprise/
 ├── Common.props             # Shared output paths and macros
 ├── ConfigurationDefs.props  # Per-configuration preprocessor defines
 ├── CLAUDE.md                # This file
-├── docs/
+├── docs/                     # ⚠ PRIVATE SUBMODULE (open-enterprise-solutions/enterprise-docs).
+│   │                         # It resolves for members of the organisation and is simply ABSENT
+│   │                         # for everyone else — the build never needs it, and CI initialises
+│   │                         # only the wxWidgets submodule. The map below is what is inside it.
 │   ├── ai-context.md         # READ FIRST if you are an AI generating metadata / scripts
 │   ├── ARCHITECTURE.md
 │   ├── BUILD.md
