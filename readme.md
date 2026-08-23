@@ -1,6 +1,6 @@
 # Open Enterprise Solutions (OES)
 
-OES is an open-source, cross-platform low-code enterprise application platform written in C++17, conceptually similar to 1C:Enterprise. It provides a fully integrated environment — compiler, bytecode interpreter, visual form designer, multi-database abstraction layer, and remote debugger — that allows developers to build line-of-business applications using a built-in scripting language with two syntax modes (VBS-style and CES-style), a rich set of 88 built-in functions, and 8 first-class business-object types (Catalog, Document, Enumeration, Constant, InformationRegister, AccumulationRegister, DataProcessor, Report).
+OES is a source-available, cross-platform low-code enterprise application platform written in C++17. It provides a fully integrated environment — compiler, bytecode interpreter, visual form designer, multi-database abstraction layer, and remote debugger — that allows developers to build line-of-business applications using a built-in scripting language with two syntax modes (VBS-style and CES-style), a rich set of 88 built-in functions, and 8 first-class business-object types (Catalog, Document, Enumeration, Constant, InformationRegister, AccumulationRegister, DataProcessor, Report).
 
 ---
 
@@ -13,7 +13,7 @@ OES is an open-source, cross-platform low-code enterprise application platform w
 - **Remote TCP debugger** — client/server architecture over TCP (default port 1650); supports breakpoints, step-over, step-into, variable inspection, tooltips, and live code patching
 - **Session management** — multi-user sessions tracked in the system database; launcher, daemon, designer, enterprise, and codeRunner modes
 - **Role-based access control** — access rights on objects and operations defined in the metadata configuration
-- **LGPL 2.1 license** — can be embedded in proprietary products under the LGPL terms
+- **Source-available under PolyForm Noncommercial 1.0.0** — read it, build it, change it, run it, write configurations for it, teach from it, for any noncommercial purpose. Earning from it — in a business, as a service, inside a product you are paid for — needs a licence from the copyright holders. See [LICENSE.md](LICENSE.md) and [NOTICE.md](NOTICE.md)
 
 ---
 
@@ -120,7 +120,8 @@ enterprise/
 ├── enterprise.sln            # MSBuild solution (9 projects)
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
-├── LICENSE.md                # LGPL 2.1
+├── LICENSE.md                # PolyForm Noncommercial 1.0.0 (source-available)
+├── NOTICE.md                 # third-party licences, the wx fork, the LGPL past
 ├── docs/
 │   ├── ARCHITECTURE.md       # Architecture deep-dive
 │   ├── BUILD.md              # Detailed build instructions
@@ -167,7 +168,7 @@ enterprise/
 | Optional databases | PostgreSQL, SQLite, MySQL, ODBC |
 | Build (Windows) | MSBuild / Visual Studio 2019+ |
 | Build (cross-platform) | CMake (planned) |
-| License | LGPL 2.1 |
+| License | PolyForm Noncommercial 1.0.0 — source-available, not open source |
 
 ---
 
@@ -186,4 +187,10 @@ Bug reports and feature requests are welcome via GitHub Issues.
 
 ## License
 
-OES is distributed under the **GNU Lesser General Public License version 2.1**. See [LICENSE.md](LICENSE.md) for the full text.
+OES is **source-available, not open source**, under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). Copyright is held by Maxim Kornienko and Yurii Bulakh.
+
+**Free, and meant to be used:** clone it, build it, break it, change it, run it on your own machine, write configurations for it, teach a course from it, write a thesis about it. No notification, no permission, no explanation owed to anyone.
+
+**Needs a licence from us:** earning from it — running it in a business, providing a service with it, shipping it inside something you are paid for, forking it to ship a rival platform, or lifting a piece of it into a product of your own.
+
+Two things those terms do not cover, both in [NOTICE.md](NOTICE.md): releases up to 2026-08-22 went out under the **LGPL 2.1** and stay available under it, and the wxWidgets-derived widget sources remain under the **wxWindows Library Licence**. Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
