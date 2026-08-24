@@ -65,7 +65,10 @@ TEST(QueryRewrite, DeMorgan_NotOverOr_BecomesAndOfInverted)
 
 TEST(QueryRewrite, NotLike_TogglesNodeNegation)
 {
-	auto sel = ParseAndRewrite(wxT("SELECT * FROM Catalog.Products WHERE NOT (Name LIKE 'a%')"));
+	// A STRING LITERAL IS DOUBLE-QUOTED. `'a%'` is a DATE literal in this dialect, and it used to
+	// parse here only because a failed date parse was ignored and left the value empty — the pattern
+	// this test names was never actually in the query it built (the lexer says so out loud now).
+	auto sel = ParseAndRewrite(wxT("SELECT * FROM Catalog.Products WHERE NOT (Name LIKE \"a%\")"));
 	EXPECT_EQ(sel->m_where->m_kind, ibQueryAstExprKind::Like);
 	EXPECT_TRUE(sel->m_where->m_negated);
 }
@@ -108,7 +111,7 @@ TEST(QueryRewrite, FlattenSimpleSubquery_MergesFromAndWhere)
 TEST(QueryRewrite, Flatten_SubstitutesAliasedDotWalk)
 {
 	auto sel = ParseAndRewrite(
-		wxT("SELECT pn FROM (SELECT Producer.Name AS pn FROM Catalog.Products) AS s WHERE pn LIKE 'a%'"));
+		wxT("SELECT pn FROM (SELECT Producer.Name AS pn FROM Catalog.Products) AS s WHERE pn LIKE \"a%\""));
 
 	EXPECT_TRUE(sel->m_from.m_subquery == nullptr);
 

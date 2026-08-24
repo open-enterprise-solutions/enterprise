@@ -78,10 +78,13 @@ ibSettingsDescription MakeSortOn(const wxString& path, bool ascending = true)
 //  1. What composes — the reader's setting, or variant ZERO
 // ===========================================================================
 
-// ⭐⭐ A SAVED SETTING IS THE WHOLE SETTING. Not "per part": what a person accepted in the window is
-// what composes, and variant zero is dropped entire (Max, 2026-08-24). The window opens ON what
-// composes, so nothing is lost by that — they saw the author's and pressed OK over it.
-TEST(ComposerSettings, InForce_UserSettingReplacesTheZerothWhole)
+// ⭐⭐ THE READER'S SETTING IS A PLACE WHERE VALUES ARE PUT, AND EACH PART ANSWERS FOR ITSELF: what
+// they put there composes, and while a part is empty the zeroth variant's composes (Max, 2026-08-25).
+//
+// 🛑 It read "a saved setting is the WHOLE setting, variant zero is dropped entire" (2026-08-24) —
+// one part of the reader's setting deciding for the other three. Under it, saving a filter alone
+// silently threw away the order the author set up.
+TEST(ComposerSettings, InForce_ReadersPartComposesOverTheZeroth)
 {
 	ibDataDBComposer composer;
 	DeclareZeroth(composer, MakeSortOn(wxT("Date")));
@@ -92,10 +95,10 @@ TEST(ComposerSettings, InForce_UserSettingReplacesTheZerothWhole)
 	ASSERT_EQ(1u, composer.GetCurrentFilterDesc().m_nodes.size());
 	EXPECT_EQ(wxT("Partner"), composer.GetCurrentFilterDesc().m_nodes[0].m_left.m_path);
 
-	// …and the zeroth's sort does NOT, because the zeroth is not what composes any more. This is
-	// what "the user setting is what composes" means, and the window's own flow is what makes it
-	// safe: it opens on a COPY of what composes, so an untouched part comes back untouched.
-	EXPECT_FALSE(composer.GetCurrentSortDesc().IsOk());
+	// …and so does the ZEROTH'S ORDER, because the reader put no order anywhere. Saying something
+	// about the filter is not saying anything about the sort.
+	ASSERT_EQ(1u, composer.GetCurrentSortDesc().m_lines.size());
+	EXPECT_EQ(wxT("Date"), composer.GetCurrentSortDesc().m_lines[0].m_path);
 }
 
 // ⭐ …WHICH IS WHY THE IMPERATIVE DOORS START FROM A COPY. A column heading clicked or `Filter()`
@@ -353,7 +356,8 @@ TEST(ComposerSettings, Sort_StatesTheReadersOrder)
 	ASSERT_EQ(1u, composer.GetUserSettingsDesc().m_sort.m_lines.size());
 	EXPECT_EQ(wxT("Code"), composer.GetUserSettingsDesc().m_sort.m_lines[0].m_path);
 
-	// …and clearing what the reader stated leaves the author's standing, as a reset does.
+	// …and taking the reader's order back out leaves the author's standing: with nothing in that part
+	// of the reader's setting, the zeroth's is what composes.
 	composer.ClearSorts();
 	ASSERT_EQ(1u, composer.SortCount());
 	ASSERT_TRUE(composer.GetSortAt(0, path, ascending));

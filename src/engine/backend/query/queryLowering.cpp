@@ -2087,12 +2087,15 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// …AND THE WORDS A DECLARATION WOULD DROP ON THE FLOOR. Each of these is carried by the rows road
 	// and by nothing here, so taking this road with one of them written is the SILENT kind of wrong —
 	// the query still runs and answers differently:
-	//   TOP        — the limit lives on the door's terminal; a CTE built without it publishes EVERY
-	//                row, and the reader above folds a total over rows the author excluded;
 	//   FOR UPDATE — a declaration holds nothing, so the rows an author believes locked are not;
 	//   INTO       — it materialises a temp table, which is the opposite of declaring a query.
-	// (The same three the FROM-flattening rule refuses, for the same reason — queryRewrite.cpp.)
-	if (sel.m_top > 0)            CteDecline(wxT("it has TOP, whose limit a declaration would drop"));
+	// (The same ones the FROM-flattening rule refuses, for the same reason — queryRewrite.cpp.)
+	//
+	// ⭐ TOP USED TO STAND HERE and no longer does. The reasoning was sound and the premise was not:
+	// "a CTE built without the limit publishes EVERY row" was true of the BUILDER, which rendered the
+	// body from an empty page request and dropped `m_topCount` on the floor — not of `WITH`, which
+	// takes a limited body in every engine that has it. The body now carries its own limit
+	// (AttachNamedQueries, both roads), so the declaration says what the author wrote.
 	if (sel.m_forUpdate)          CteDecline(wxT("it has FOR UPDATE, and a declaration holds nothing"));
 	if (!sel.m_intoTemp.IsEmpty()) CteDecline(wxT("it has INTO, which materialises rather than declares"));
 
@@ -2121,6 +2124,14 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	try {
 		BuildSourceTree(sel, params, owner, innerSources, inner, &innerSourceConditions);
 		PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions);
+		// ⭐ AND THE AUTHOR'S LIMIT IS PUT ON THE DOOR, because a declaration has no terminal to put it
+		// on. An ordinary read carries TOP in its PAGE REQUEST — the limit is asked for at the moment
+		// the rows are fetched — and a declared query is never fetched: it is written into a `WITH` and
+		// read by somebody else. Stated here, it reaches the declaration's body as a real limit
+		// (AttachNamedQueries renders it); left off, the body would publish every row while the author
+		// wrote ten, which is the silent wrong answer this used to be refused to avoid.
+		if (sel.m_top > 0)
+			inner.Top(sel.m_top);
 	}
 	catch (const ibBackendException& err) {
 		// ⚠ THE DESCRIPTION IS DATA, never the format — a message carrying a stray `%` would be read

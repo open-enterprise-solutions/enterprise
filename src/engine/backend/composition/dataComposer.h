@@ -42,7 +42,6 @@
 #include <functional>   // PruneUnresolvedSettings asks the HOST whether a path still resolves
 #include <map>
 #include <memory>
-#include <optional>    // the reader's setting either exists or does not — the presence is the type's
 #include <vector>
 
 class ibDataQueryResult;
@@ -234,77 +233,83 @@ public:
 	// name, a synonym and the setting it points at; several of them is how an author offers a choice.
 	// So the array below is the AUTHOR's, it is read for its settings, and the word stops there.
 	//
-	//     the reader's setting IsOk()  →  that is what composes
-	//     it is not set                →  `m_variants[0]`'s setting, so the report is never blank and
-	//                                     a person can just open it and run what was set up
+	// ⭐⭐ THE READER'S SETTING IS THE SAME THING A VARIANT HOLDS — an `ibSettingsDescription`, called
+	// the reader's (Max, 2026-08-25: *"you use variants, but you started a heap of fields instead of
+	// the same setting a variant has — it only needs to be called the user's"*). One type, one shape,
+	// and a variant is that setting plus a name.
 	//
-	// ⭐ NO CURSOR, AND THE PRESENCE IS PART OF THE VALUE. Clearing the reader's setting is the whole
-	// of "back to the defaults": nothing is remembered to undo.
+	// ⭐⭐ AND IT IS A PLACE WHERE VALUES ARE PUT. Empty is its ordinary state — a person who has said
+	// nothing has an empty one — and each part of it answers separately: *"while there are none, the
+	// zeroth variant of the author's setting is taken"* (Max, 2026-08-25). So a click on a column
+	// heading puts an ORDER there and says nothing about grouping, which goes on coming from the
+	// zeroth; `ClearSorts()` takes the order back out and the author's stands again.
 	//
-	// 🛑 IT ASKED `IsOk()` — "is there anything in it" standing in for "did the reader state one",
-	// and those are two different questions. A reader who empties their only section has STATED
-	// something (nothing), and the answer read as "stated nothing at all": `ClearSorts()` then
-	// `Sort("Code")` re-copied the author's order underneath and composed by two keys instead of one
-	// (CI, 2026-08-24 — the one red test out of 1545, and a live list clicks its heading exactly so).
-	//
-	// So the question is answered by the TYPE — an optional either holds the reader's setting or does
-	// not — and never by inspecting its contents. Not the parallel `bool` this arc deleted: that was a
-	// second store that could disagree with the first, while a `std::optional` has nowhere to drift.
+	// 🛑 THE SHAPE WENT WRONG THREE TIMES IN ONE NIGHT, always the same way: something OTHER than the
+	// part itself was asked whether the part had a value. `IsOk()` on the WHOLE setting, then a
+	// `std::optional` around the whole, then four optionals beside it — a heap of fields where the
+	// setting a variant already has was the answer. The part answers for the part.
 	ibDataComposer& LoadVariants(const std::vector<ibVariantDescription>& variants);
 	const std::vector<ibVariantDescription>& GetVariants() const { return m_variants; }
 
 	// ⭐⭐ WHAT COMPOSES — THE ONE FUNCTION, and it has ONE name (Max, 2026-08-24: *"there is a single
-	// function on the composer's side to get the current setting"*). The reader's when they saved
-	// one, `m_variants[0]`'s when they did not; no caller has to know there are two possible
-	// answers. (`m_variants` is never empty: the vector is born with one element.)
+	// function on the composer's side to get the current setting"*). Section by section: the reader's
+	// where they stated one, `m_variants[0]`'s where they did not — and no caller has to know there
+	// are two possible answers. (`m_variants` is never empty: the vector is born with one element.)
 	//
 	// 🛑 IT HAD TWO SPELLINGS FOR A FEW HOURS — `GetRunningSettings()` with `GetCurrentSettingsDesc()`
 	// as a one-line alias, and both were called: the frontend through one, the composition value
 	// through the other. Two names for one question is the very shape this arc spent a day deleting.
-	const ibSettingsDescription& GetCurrentSettingsDesc() const {
-		return m_userSettings ? *m_userSettings : m_variants.front().m_settings;
+	// BY VALUE — it is assembled from the four answers below and is not a stored object of its own.
+	// Every caller already takes a copy (the settings window edits one and hands it back).
+	ibSettingsDescription GetCurrentSettingsDesc() const {
+		ibSettingsDescription current;
+		current.m_filter    = GetCurrentFilterDesc();
+		current.m_sort      = GetCurrentSortDesc();
+		current.m_group     = GetCurrentGroupDesc();
+		current.m_structure = GetCurrentStructure();
+		return current;
 	}
 
-	// ⭐ THE READER PRESSED OK — their setting becomes what composes, and the zeroth is dropped. The
-	// ⏭ variant PICKER is this same call with a different source (`SetUserSettingsDesc(
+	// ⭐ THE READER PRESSED OK — their setting becomes what composes, and the zeroth is dropped
+	// ENTIRE. That is what "a saved setting is the whole setting" means, and it is the one door that
+	// states every section at once — the empty ones included: a person who cleared the sort in the
+	// window and pressed OK stated "no order", and the author's order does not come back under it.
+	// The window opens on what composes, so nothing is lost by that — they saw the author's and
+	// pressed OK over it.
+	// ⏭ The variant PICKER is this same call with a different source (`SetUserSettingsDesc(
 	// GetVariants()[n].m_settings)`), and so is restoring a saved setting at open — which is why
 	// none of the three needs a mechanism of its own.
 	ibDataComposer& SetUserSettingsDesc(const ibSettingsDescription& settings);
-	// …and where the reader has stated nothing, an EMPTY setting is the truthful answer to "what have
-	// they stated" — the question "have they stated one" is `HasUserSettings()`, not a shape test on
-	// what comes back.
-	const ibSettingsDescription& GetUserSettingsDesc() const {
-		static const ibSettingsDescription s_none;
-		return m_userSettings ? *m_userSettings : s_none;
-	}
-	bool HasUserSettings() const { return m_userSettings.has_value(); }
+	// …and it IS what composes: the same object under the name that says whose it is.
+	const ibSettingsDescription& GetUserSettingsDesc() const { return m_userSettings; }
 	// …and dropping it is the reset: `[0]` composes again.
 	ibDataComposer& ClearUserSettings();
 
-	// THE READER'S SETTING, OPENED FOR WRITING — and on the FIRST touch it starts as a copy of what
-	// composes now (Max: *"the user takes that zeroth one for themselves, adjusts it and saves it"*).
-	// Anything else would make the first sort a person states silently drop the grouping the author
-	// wrote.
-	// ⚠ WHAT COMPOSES, FOR WRITING — and the ONLY caller is the per-fetch bracket above, which puts
-	// back exactly what it took. It does NOT seed a user setting the way `UserSettings()` does: a
-	// fetch must not turn a reader who has saved nothing into one.
-	ibSettingsDescription& RunningSettings() {
-		return m_userSettings ? *m_userSettings : m_variants.front().m_settings;
-	}
-
-	ibSettingsDescription& UserSettings() {
-		if (!m_userSettings)
-			m_userSettings = m_variants.front().m_settings;
-		return *m_userSettings;
-	}
+	// THE READER'S SETTING, OPENED FOR WRITING — the imperative doors (a column heading clicked,
+	// `Sort()` from a script) state into it. It already holds the zeroth's, so stating one thing
+	// leaves everything else the report was composing on exactly where it was.
+	ibSettingsDescription& UserSettings() { return m_userSettings; }
 
 	// ⭐ WHAT IS IN FORCE — element zero's, and that is the whole of it. These stay because every
 	// reader of a setting speaks them, and because naming the question is what kept a SECOND answerer
 	// from creeping back in beside them (a flat sort store did exactly that, and everything written
 	// through the imperative doors went silent for anyone who had settings).
-	const ibFilterDescription& GetCurrentFilterDesc() const { return GetCurrentSettingsDesc().m_filter; }
-	const ibSortDescription&   GetCurrentSortDesc()   const { return GetCurrentSettingsDesc().m_sort; }
-	const ibGroupDescription&  GetCurrentGroupDesc()  const { return GetCurrentSettingsDesc().m_group; }
+	// …and its parts, each answering for itself: what the reader PUT there, and while nothing is
+	// there, the zeroth variant's (Max, 2026-08-25: *"the user setting is the place where values are
+	// put; while there are none, the zeroth variant of the author's setting is taken"*).
+	const ibFilterDescription& GetCurrentFilterDesc() const {
+		return m_userSettings.m_filter.IsOk() ? m_userSettings.m_filter : m_variants.front().m_settings.m_filter;
+	}
+	const ibSortDescription& GetCurrentSortDesc() const {
+		return m_userSettings.m_sort.IsOk() ? m_userSettings.m_sort : m_variants.front().m_settings.m_sort;
+	}
+	const ibGroupDescription& GetCurrentGroupDesc() const {
+		return m_userSettings.m_group.IsOk() ? m_userSettings.m_group : m_variants.front().m_settings.m_group;
+	}
+	const std::vector<ibOutputDescription>& GetCurrentStructure() const {
+		return !m_userSettings.m_structure.empty() ? m_userSettings.m_structure
+		                                           : m_variants.front().m_settings.m_structure;
+	}
 
 	// The three of them as one — what a SETTINGS WINDOW opens on. A reader who has set nothing opens
 	// on the zeroth (and is meant to: "I open the user settings, I expect to see the author's, I see
@@ -393,7 +398,8 @@ public:
 	// A write is somebody STATING THE ORDER NOW, so it lands in the reader's section — where it
 	// replaces the author's whole, which is the rule every part of a setting follows. Reads answer
 	// what is IN FORCE, so the arrow, the anchor and the ORDER BY cannot disagree by construction.
-	void   ClearSorts() { UserSettings().m_sort.m_lines.clear(); }
+	// ⭐ TAKES THE READER'S ORDER BACK OUT — and with nothing there, the zeroth's order composes again.
+	void   ClearSorts() { m_userSettings.m_sort.Clear(); }
 	size_t SortCount() const { return GetCurrentSortDesc().m_lines.size(); }
 	bool   GetSortAt(size_t i, wxString& path, bool& ascending) const {
 		const ibSortDescription& sort = GetCurrentSortDesc();
@@ -540,7 +546,8 @@ public:
 	// EVERY level while the drill wanted the one it was standing on.
 	struct TakenGroups {
 		std::vector<std::pair<wxString, ibQueryDimUnfold>> m_ladder;
-		ibGroupDescription                                 m_setting;
+		ibGroupDescription                                 m_setting;   // the reader's
+		ibGroupDescription                                 m_zeroth;    // …and the one it falls back to
 	};
 	TakenGroups TakeGroups() {
 		TakenGroups out;
@@ -551,15 +558,21 @@ public:
 				out.m_ladder.emplace_back(level.m_settings.m_group.m_lines.front().m_path,
 				                          level.m_settings.m_group.m_lines.front().m_kind);
 		TrimLevels(0);
-		out.m_setting = RunningSettings().m_group;
-		RunningSettings().m_group.Clear();
+		// ⭐ BOTH SIDES, because the read this brackets is the DETAIL read — every row, flat — and
+		// emptying only the reader's would let the zeroth's grouping rise into its place and group the
+		// very read that asked not to be grouped. What is taken is "whatever would have grouped this".
+		out.m_setting = m_userSettings.m_group;
+		out.m_zeroth  = m_variants.front().m_settings.m_group;
+		m_userSettings.m_group.Clear();
+		m_variants.front().m_settings.m_group.Clear();
 		return out;
 	}
 	void PutGroups(const TakenGroups& saved) {
 		TrimLevels(0);
 		for (const auto& g : saved.m_ladder)
 			AppendLevel(g.first, g.second);
-		RunningSettings().m_group = saved.m_setting;
+		m_userSettings.m_group             = saved.m_setting;
+		m_variants.front().m_settings.m_group = saved.m_zeroth;
 	}
 
 	// APPEND A LEVEL to the ladder — the ordinary "group by this, then by that". The first one fills
@@ -898,10 +911,9 @@ protected:
 
 	// …AND THE READER'S OWN — a SETTING, the same type the variants wrap. Setting a variant is
 	// setting a setting (Max, 2026-08-24), so there is one shape here and no second one to convert
-	// between. Whether anybody saved one is the OPTIONAL's own answer — not a flag beside the fact
-	// (that is a second answer to one question), and not the contents (a reader may save an empty
-	// setting on purpose, and that is a saved setting; see GetCurrentSettingsDesc).
-	std::optional<ibSettingsDescription> m_userSettings;
+	// between, and nothing beside it: no flag, no cursor, no per-section twin. Empty is its ordinary
+	// state and needs no marking — an empty part IS "the reader put nothing here".
+	ibSettingsDescription m_userSettings;
 
 	// (`m_standartSettings` DELETED — "the author's settings" was never a thing of its own. There is
 	//  the ARRAY, and `[0]` is what composes while nobody has saved a setting; a second member

@@ -704,7 +704,9 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 		// edit: a reader set a grouping's own filter, the window handed it back, and this line put
 		// the AUTHOR's structure over it on the next compose.
 		{
-			const std::vector<ibOutputDescription>& stored = composer.GetCurrentSettingsDesc().m_structure;
+			// Asked of the SECTION — the question is about the structure, so it is put to the accessor
+			// that answers it.
+			const std::vector<ibOutputDescription>& stored = composer.GetCurrentStructure();
 			if (!stored.empty()) {
 				std::vector<ibDataComposer::Output>& live = composer.Outputs();
 				live.resize(stored.size());

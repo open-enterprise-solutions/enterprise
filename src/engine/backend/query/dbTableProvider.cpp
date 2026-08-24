@@ -1430,6 +1430,9 @@ ibQueryRelPtr ibDbTableProvider::BuildAggregateRelation(const ibDataQuerySpec& s
 // Shared co-location preconditions for a JOIN-tree terminal (read OR aggregate): a colocatable join
 // tree of real DB leaves, no dot-walk / key-in (their own paths), every join key a single field.
 // The terminal gates (CanColocateJoin / CanColocateAggregate) add their output / aggregate checks.
+// Defined below, beside the read that uses it — the gate and the execution ask the same question.
+static bool CollectExprColumns(const ibQueryColumnExpr* e, std::vector<const ibBackendQueryColumn*>& into);
+
 static bool CanColocateBase(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 {
 	if (!ColocatableJoinTree(spec, leaves)) return false;
@@ -1447,9 +1450,26 @@ bool ibDbTableProvider::CanColocateJoin(const ibDataQuerySpec& spec)
 		// This is the plain READ terminal: not an aggregate, no dot-walk / key-in (those have their
 		// own paths). The multi-source output IS the explicit select list — non-empty.
 		if (!spec.m_groupBy->empty() || !spec.m_aggregates->empty()) return false;
-		// COMPUTED output columns (arithmetic / CASE) are evaluated per joined row by the RAM composer —
-		// the co-located server-side projection cannot, so a computed JOIN must take the RAM stitch path.
-		if (spec.m_selectExprs != nullptr && !spec.m_selectExprs->empty()) return false;
+		// ⭐ A COMPUTED OUTPUT NO LONGER SENDS THE WHOLE JOIN TO RAM.
+		//
+		// It used to: `Qty * Price` in the select list meant every leaf was read whole and stitched in
+		// memory, because the co-located projection had no way to write the expression. But the join
+		// is what costs — the arithmetic is one evaluation per OUTPUT row either way, and there are
+		// fewer of those than there are rows in the leaves. So the JOIN co-locates as it would have
+		// without the expression, and the expression is evaluated over the joined rows that come back
+		// (ExecuteColocatedJoin, the same evaluator the RAM road uses on the same shape).
+		//
+		// What is NOT claimed: the expression is not rendered into the server's select list — it is
+		// computed here, over what came back. Its INPUTS are projected (they have to be, or it would
+		// evaluate against absent cells), and a shape the walk does not fully understand keeps the RAM
+		// road rather than being half-served.
+		if (spec.m_selectExprs != nullptr)
+			for (const ibQueryColumnSelect& sc : *spec.m_selectExprs) {
+				std::vector<const ibBackendQueryColumn*> used;
+				if (!CollectExprColumns(sc.m_expr.get(), used)) return false;
+				for (const ibBackendQueryColumn* c : used)
+					if (ColocatedOwner(leaves, c) == nullptr) return false;   // an input no leaf owns
+			}
 		if (spec.m_selectCols->empty())                              return false;
 
 		// OUTPUTS: any column is projectable — a RAW column reads one scalar field, a metadata column its
@@ -1459,6 +1479,44 @@ bool ibDbTableProvider::CanColocateJoin(const ibDataQuerySpec& spec)
 			if (sc.first == nullptr || ColocatedOwner(leaves, sc.first) == nullptr) return false;
 		return true;
 	}
+
+// ⭐⭐ WHAT AN EXPRESSION READS — every column it touches, and whether the walk understood all of it.
+//
+// A computed output over a co-located join is evaluated on the rows that COME BACK, so those rows owe
+// it its inputs: `Qty * Price AS Total` needs Qty and Price in the projection even when nobody asked
+// to see them. The same rule the declaration writer follows one layer up, asked here of an expression
+// instead of of a query.
+//
+// It returns `false` when it meets something it does not know — a kind added later, a Case whose
+// predicate carries columns of its own. False means "do not co-locate", never "no columns": a walk
+// that quietly under-reports would project too little and evaluate against absent cells, which reads
+// as an empty value rather than as a refusal.
+static bool CollectExprColumns(const ibQueryColumnExpr* e, std::vector<const ibBackendQueryColumn*>& into)
+{
+	if (e == nullptr)
+		return true;
+	switch (e->m_kind) {
+	case ibQueryColumnExprKind::Const:
+		return true;
+	case ibQueryColumnExprKind::Column:
+		// ONE NAMED FIELD of a column is not the column's value — the evaluator reads a whole cell by
+		// column id and answers empty for a field-pinned read, so that shape does not co-locate.
+		if (e->m_col == nullptr || !e->m_field.IsEmpty())
+			return false;
+		if (std::find(into.begin(), into.end(), e->m_col) == into.end())
+			into.push_back(e->m_col);
+		return true;
+	case ibQueryColumnExprKind::Arith:
+		return CollectExprColumns(e->m_lhs.get(), into) && CollectExprColumns(e->m_rhs.get(), into);
+	case ibQueryColumnExprKind::PeriodTrunc:
+		return CollectExprColumns(e->m_lhs.get(), into);
+	case ibQueryColumnExprKind::Case:
+		// The THEN / ELSE arms are expressions and walk; the WHEN predicates are a different tree, and
+		// this does not read them — so a CASE keeps the RAM road until somebody teaches it that half.
+		return false;
+	}
+	return false;
+}
 
 ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec& spec, const ibReadPageRequest& page)
 	{
@@ -1494,6 +1552,41 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 			}
 			++oi;
 		}
+
+		// …AND THE INPUTS OF EVERY COMPUTED OUTPUT, whether or not anybody asked to see them: the
+		// expression is evaluated over the rows that come back, so they have to carry what it reads.
+		// Projected under their OWN model id (not an output alias) — that is the key the evaluator
+		// looks a cell up by — and skipped when the select list already carries them.
+		std::vector<const ibBackendQueryColumn*> exprInputs;
+		if (spec.m_selectExprs != nullptr)
+			for (const ibQueryColumnSelect& sc : *spec.m_selectExprs)
+				CollectExprColumns(sc.m_expr.get(), exprInputs);   // the gate already vouched for the walk
+		for (const ibBackendQueryColumn* c : exprInputs) {
+			const bool already = std::any_of(plans.begin(), plans.end(),
+				[&](const OutPlan& p) { return p.col == c; });
+			if (already)
+				continue;
+			// Read back exactly as an ordinary output of the same column would be — a raw column is one
+			// scalar field, a metadata column its full spread under a unique prefix. Taking the raw
+			// shortcut for both would read a composite column's FIRST field, which is its type tag.
+			const ibBackendQueryable* owner = ColocatedOwner(leaves, c);
+			const wxString    qual = owner != nullptr ? owner->GetQueryTableName() : wxString();
+			const ibMetaData* meta = owner != nullptr ? owner->GetMetaData() : nullptr;
+			const wxString    alias = wxString::Format(wxT("xin%d"), oi);
+			if (c->IsRawColumn()) {
+				projection.push_back(ibQueryProjItem{ ibCol(qual, FirstSqlFieldOfColumn(c)), alias });
+				plans.push_back({ c, alias, wxString(), meta, true });
+			}
+			else {
+				const wxString prefix = wxString::Format(wxT("ocol%d"), oi);
+				const wxString base   = c->GetPhysicalName();
+				for (const wxString& f : ColumnFieldNames(c))
+					projection.push_back(ibQueryProjItem{ ibCol(qual, f), prefix + f.Mid(base.length()) });
+				plans.push_back({ c, alias, prefix, meta, false });
+			}
+			++oi;
+		}
+
 		q.Project(std::move(projection));
 
 		if (ibQueryExprPtr where = ColocatedWhere(spec, leaves))
@@ -1502,9 +1595,21 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 		// ORDER BY — each user sort column qualified to its leaf (no keyset tail: a composed join
 		// read is one-shot, not a keyset-paged scroll).
 		for (const ibQuerySortItem& s : *spec.m_sorts) {
-			if (s.m_col == nullptr) continue;
 			ibQuerySortKey k;
-			k.m_expr = ibCol(ColocatedQual(leaves, s.m_col), FirstSqlFieldOfColumn(s.m_col));
+			// ⭐ ORDER BY <EXPRESSION> IS A SORT KEY LIKE ANY OTHER — and this loop used to drop it on the
+			// floor: `m_col == nullptr` covers both "sort by the row key" and "sort by an expression",
+			// and skipping on it threw the second away without a word. The single-source road has always
+			// lowered it (BuildSortKeys); so does this one now.
+			//
+			// UNQUALIFIED, deliberately: a co-located join's leaves are distinct tables and their fields
+			// are `fld<metaID>`, unique per metatype — the same reason the declaration writer spells them
+			// bare. (A self-join is refused by the gate, so there is no second copy of a name.)
+			if (s.m_expr)
+				k.m_expr = ibMetaIRBuilder::BuildColumnExpr(spec.m_queryable, s.m_expr);
+			else if (s.m_col != nullptr)
+				k.m_expr = ibCol(ColocatedQual(leaves, s.m_col), FirstSqlFieldOfColumn(s.m_col));
+			else
+				continue;   // the row-key sort — no such thing across a join
 			k.m_dir  = s.m_ascending ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
 			q.AddSortKey(std::move(k));
 		}
@@ -1529,6 +1634,21 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 				out.SetCell(r, p.col->GetColumnId(), v);
 			}
 		}
+
+		// ⭐ THE COMPUTED OUTPUTS, over the rows the join returned. One evaluation per OUTPUT row —
+		// which is the whole reason this shape no longer sends the join itself to RAM. Read back by
+		// GetColumn(alias); the synthetic ids are the range the RAM road already uses for the same
+		// thing, so the two roads number these columns alike.
+		if (spec.m_selectExprs != nullptr) {
+			ibMetaID exprId = 0x70000000u;
+			for (const ibQueryColumnSelect& sc : *spec.m_selectExprs) {
+				const ibMetaID id = exprId++;
+				out.AddColumn(id, sc.m_alias, ibTypeDescription());
+				for (long r = 0; r < out.RowCount(); ++r)
+					out.SetCell(r, id, ibQueryComposer::EvalColumnExpr(sc.m_expr.get(), out, r));
+			}
+		}
+
 		return ibDataQueryResult(std::move(out), spec.m_queryable);
 	}
 
@@ -3395,13 +3515,22 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 				jq.From(BuildColocatedFrom(innerSpec.m_root, leaves));
 				if (ibQueryExprPtr where = ColocatedWhere(innerSpec, leaves))
 					jq.Where(where);
+				if (innerSpec.m_topCount > 0)
+					jq.Limit(innerSpec.m_topCount);   // …on this road too — see the note on the other one
 				innerIR = jq.Build();
 			}
 			else {
 				leaves.clear();
 				// The inner query is read WHOLE — a page request belongs to the reader, not to what it
 				// reads: limiting the named query would silently narrow every mention of it.
-				innerIR = BuildPageIR(innerSpec, ibReadPageRequest{}, innerSort);
+				// ⭐ AND ITS OWN LIMIT TRAVELS WITH IT. `SELECT TOP 10 … INTO x` declares ten rows, not the
+				// table: an empty page request rendered the body unbounded, which is why a declaration was
+				// refused outright for carrying a TOP ("whose limit a declaration would drop" — it did).
+				// The limit belongs to the declared query, so it is written inside the WITH, where every
+				// engine that has WITH accepts it; nothing outside has to know the declaration was capped.
+				ibReadPageRequest innerPage;
+				innerPage.m_count = innerSpec.m_topCount;   // 0 = unbounded, as before
+				innerIR = BuildPageIR(innerSpec, innerPage, innerSort);
 			}
 
 			// ⭐⭐ A DECLARED QUERY PUBLISHES NAMES, SO ITS SELECT HAS TO SPELL THEM.
