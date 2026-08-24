@@ -1207,11 +1207,13 @@ TEST(MetaDataSerialize, AValueWithNoPackedFormIsRefused) {
 //
 // The LEFT side of a condition. It used to be three unrelated members on a
 // filter line (a path string, a leaf id, a type) plus a tree payload in the
-// dialog plus a source walker — all deriving each other. See compositionField.h.
+// dialog plus a source walker — all deriving each other.
 // ===========================================================================
 
-#include "backend/composition/compositionField.h"
-#include "backend/composition/listFilter.h"
+#include "backend/system/value/composition/valueComposerField.h"
+#include "backend/compositionDescription.h"
+#include "backend/composition/dataComposer.h"
+#include "backend/query/queryRender.h"   // ibRenderQueryExpr — the text IS the expression rendered
 
 TEST(CompositionField, IsARegisteredType) {
 	EXPECT_TRUE(ibValue::IsRegisterCtor(wxT("CompositionField")));
@@ -1282,302 +1284,140 @@ TEST(CompositionField, RoundTripsThroughANode) {
 	EXPECT_EQ(wxT("Region"), field->GetPresentation());
 }
 
-TEST(CompositionField, AFilterLineHoldsTheFieldWhole) {
-	// What the picker resolved must survive being put into a filter: adding by
-	// FIELD keeps the type and the presentation, where adding by path would
-	// rebuild a bare field from the path alone.
-	ibValuePtr<ibValueFilterList> filter(new ibValueFilterList());
-
-	ibValuePtr<ibValueCompositionField> field(new ibValueCompositionField(wxT("Amount"), wxT("Sum")));
-	field->SetTypeInfo(7, ibTypeDescription(g_valueNumberCLSID));
-
-	ibValueFilterItem* item = filter->Add(field, ibComparisonKind_Greater, ibValue(100));
-	ASSERT_NE(nullptr, item);
-
-	EXPECT_EQ(wxT("Amount"), item->GetField());
-	EXPECT_EQ(wxT("Sum"), item->GetFieldObject()->GetPresentation());
-	EXPECT_EQ(7, item->GetLeafId())
-		<< "the type the picker resolved was lost on the way in";
-	EXPECT_EQ(ibComparisonKind_Greater, item->GetComparison());
-}
-
-TEST(CompositionField, AFilterLineAcceptsAPathToo) {
-	// The ordinary script call: a path names a field, the line builds it.
-	ibValuePtr<ibValueFilterList> filter(new ibValueFilterList());
-	ibValueFilterItem* item = filter->Add(wxT("Price"), ibComparisonKind_Equal, ibValue(1));
-	ASSERT_NE(nullptr, item);
-
-	ASSERT_NE(nullptr, item->GetFieldObject());
-	EXPECT_EQ(wxT("Price"), item->GetField());
-}
-
 // ===========================================================================
-// The filter TREE — groups, and what they render into
+//  A FILTER IS A TREE OF DESCRIPTIONS — conditions and groups, as data
+// ===========================================================================
 //
-// A flat filter is an implicit AND of a list. A tree says what a list cannot:
-// `a AND (b OR c)`. See listFilter.h; the walker is in listFilter.cpp.
-// ===========================================================================
-
-#include "backend/composition/dataComposer.h"
+// ⚠ WHAT THESE TESTS USED TO BE WRITTEN AGAINST. There was a second model of a filter beside this
+// one — live `ibValueFilterGroup` / `ibValueFilterItem` objects with their own Add / AddGroup /
+// GroupChildren / Ungroup — and the window edited THOSE while the file stored these. It went under
+// the knife on 2026-08-23; the questions it was asked are the questions below, put to the one shape
+// that is left. A test that pins a removed class pins nothing (2026-08-23: a rename left 211 hits in
+// tests/ and CI fell on all three platforms — a green .sln means nothing about this tree).
 
 TEST(FilterTree, GroupsAreTheOnlyNodes) {
 	// Conditions are leaves. Only a group can hold children — which is what
 	// makes the shape a tree rather than a list of lists.
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup());
-	root->Add(ibValue(new ibValueCompositionField(wxT("Amount"))), ibComparisonKind_Greater, ibValue(100));
-	ibValueFilterGroup* inner = root->AddGroup(ibFilterGroupKind_Or);
-	ASSERT_NE(nullptr, inner);
+	ibFilterDescription filter;
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
 
-	EXPECT_EQ(2u, root->Count());
-	EXPECT_NE(nullptr, root->GetItem(0));
-	EXPECT_EQ(nullptr, root->GetGroup(0));
-	EXPECT_NE(nullptr, root->GetGroup(1));
-	EXPECT_EQ(nullptr, root->GetItem(1));
+	ASSERT_EQ(2u, filter.m_nodes.size());
+	EXPECT_EQ(ibFilterNodeKind_Condition, filter.m_nodes[0].m_kind);
+	EXPECT_TRUE(filter.m_nodes[0].m_children.empty()) << "a condition is a leaf";
+	EXPECT_EQ(ibFilterNodeKind_Group, filter.m_nodes[1].m_kind);
 }
 
-TEST(FilterTree, GroupingKeepsTheReadingOrder) {
-	// Grouping re-shapes the logic; it must not shuffle the list. The new group
-	// takes the place of the FIRST line that went into it.
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup());
-	root->Add(ibValue(new ibValueCompositionField(wxT("A"))), ibComparisonKind_Equal, ibValue(1));
-	root->Add(ibValue(new ibValueCompositionField(wxT("B"))), ibComparisonKind_Equal, ibValue(2));
-	root->Add(ibValue(new ibValueCompositionField(wxT("C"))), ibComparisonKind_Equal, ibValue(3));
+TEST(FilterTree, AGroupOwnsItsChildren) {
+	// ⭐ THE NESTING IS THE STORAGE: a group holds its children inside itself, so nothing names a
+	// parent and the two can never disagree. Copying the filter deep-copies the whole tree, which is
+	// what every window relies on — edit a copy, put it back on OK.
+	ibFilterDescription filter;
+	filter.Append(wxT("A"), ibComparisonKind_Equal, ibValue(1));
+	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
+	ibFilterDescription::Append(either.m_children, wxT("B"), ibComparisonKind_Equal, ibValue(2));
+	ibFilterDescription::Append(either.m_children, wxT("C"), ibComparisonKind_Equal, ibValue(3));
 
-	ASSERT_NE(nullptr, root->GroupChildren({ 1, 2 }, ibFilterGroupKind_Or));
+	ASSERT_EQ(2u, filter.m_nodes.size()) << "the children landed beside the group instead of inside it";
+	ASSERT_EQ(2u, filter.m_nodes[1].m_children.size());
+	EXPECT_EQ(wxT("B"), filter.m_nodes[1].m_children[0].m_left.m_path);
 
-	ASSERT_EQ(2u, root->Count());
-	ASSERT_NE(nullptr, root->GetItem(0));
-	EXPECT_EQ(wxT("A"), root->GetItem(0)->GetField()) << "the untouched line moved";
-	ASSERT_NE(nullptr, root->GetGroup(1));
-	EXPECT_EQ(2u, root->GetGroup(1)->Count());
+	const ibFilterDescription copy = filter;
+	ASSERT_EQ(2u, copy.m_nodes[1].m_children.size()) << "the copy shares the children instead of owning them";
+	EXPECT_EQ(filter, copy) << "a filter compares by what it says";
 }
 
-TEST(FilterTree, UngroupPutsTheChildrenBackWhereTheGroupStood) {
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup());
-	root->Add(ibValue(new ibValueCompositionField(wxT("A"))), ibComparisonKind_Equal, ibValue(1));
-	ibValueFilterGroup* inner = root->AddGroup(ibFilterGroupKind_Or);
-	inner->Add(ibValue(new ibValueCompositionField(wxT("B"))), ibComparisonKind_Equal, ibValue(2));
-	inner->Add(ibValue(new ibValueCompositionField(wxT("C"))), ibComparisonKind_Equal, ibValue(3));
+TEST(FilterTree, ASideIsAFieldOrAValue) {
+	// `Price > Cost` — both sides are the same shape, which is what lets a condition compare two
+	// fields and not only a field with a literal.
+	ibFilterDescription filter;
+	ibFilterNodeDescription& node = filter.Append(wxT("Price"), ibComparisonKind_Greater, ibValue());
+	node.m_right.m_path = wxT("Cost");
 
-	ASSERT_TRUE(root->UngroupChild(1));
+	EXPECT_TRUE(node.m_left.IsField());
+	EXPECT_TRUE(node.m_right.IsField());
 
-	ASSERT_EQ(3u, root->Count());
-	ASSERT_NE(nullptr, root->GetItem(1));
-	EXPECT_EQ(wxT("B"), root->GetItem(1)->GetField());
-	ASSERT_NE(nullptr, root->GetItem(2));
-	EXPECT_EQ(wxT("C"), root->GetItem(2)->GetField());
+	ibFilterDescription other;
+	ibFilterNodeDescription& literal = other.Append(wxT("Price"), ibComparisonKind_Greater, ibValue(100));
+	EXPECT_TRUE(literal.m_left.IsField());
+	EXPECT_FALSE(literal.m_right.IsField()) << "a literal side must not read as a path";
 }
 
-TEST(FilterTree, RendersNestedGroupsWithParentheses) {
-	// The reason the tree exists at all: this expression has no flat form.
-	ibDataDBComposer composer;
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup(ibFilterGroupKind_And));
-	root->Add(ibValue(new ibValueCompositionField(wxT("Amount"))), ibComparisonKind_Greater, ibValue(100));
+TEST(FilterTree, ALineHoldsWhatThePickerResolved) {
+	// What the picker resolved must survive being put into a condition: the leaf id and the type are
+	// what make the OTHER side editable, and the presentation is what a person reads.
+	ibFilterDescription filter;
+	ibFilterNodeDescription& node = filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	node.m_left.m_leafId       = 7;
+	node.m_left.m_type         = ibTypeDescription(g_valueNumberCLSID);
+	node.m_left.m_presentation = wxT("Sum");
 
-	ibValueFilterGroup* either = root->AddGroup(ibFilterGroupKind_Or);
-	either->Add(ibValue(new ibValueCompositionField(wxT("Region"))), ibComparisonKind_Equal, ibValue(wxT("north")));
-	either->Add(ibValue(new ibValueCompositionField(wxT("Region"))), ibComparisonKind_Equal, ibValue(wxT("south")));
-
-	const wxString expr = ibRenderFilterTree(composer, root);
-
-	EXPECT_TRUE(expr.Contains(wxT("Amount >")));
-	EXPECT_TRUE(expr.Contains(wxT(" AND ")));
-	EXPECT_TRUE(expr.Contains(wxT(" OR ")));
-	EXPECT_TRUE(expr.Contains(wxT("(Region =")))
-		<< "an OR group must be parenthesised inside an AND parent: " << expr.ToStdString();
-}
-
-TEST(FilterTree, AFieldOnBothSidesRendersAsTwoPaths) {
-	// `Price > Cost` — no parameter at all, because neither side is a value.
-	ibDataDBComposer composer;
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup());
-	root->Add(ibValue(new ibValueCompositionField(wxT("Price"))), ibComparisonKind_Greater,
-		ibValue(new ibValueCompositionField(wxT("Cost"))));
-
-	const wxString expr = ibRenderFilterTree(composer, root);
-	EXPECT_TRUE(expr.Contains(wxT("Price > Cost"))) << expr.ToStdString();
-	EXPECT_FALSE(expr.Contains(wxT("&"))) << "a field must render as a path, not a parameter";
-}
-
-TEST(FilterTree, AValueRendersAsAParameter) {
-	// Never inlined: that is what keeps a string value from being read as syntax.
-	ibDataDBComposer composer;
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup());
-	root->Add(ibValue(new ibValueCompositionField(wxT("Name"))), ibComparisonKind_Equal, ibValue(wxT("O'Brien AND 1=1")));
-
-	const wxString expr = ibRenderFilterTree(composer, root);
-	EXPECT_TRUE(expr.Contains(wxT("&"))) << expr.ToStdString();
-	EXPECT_FALSE(expr.Contains(wxT("O'Brien"))) << "the value leaked into the query text";
-}
-
-TEST(FilterTree, NotNegatesTheWholeGroup) {
-	ibDataDBComposer composer;
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup());
-	ibValueFilterGroup* negated = root->AddGroup(ibFilterGroupKind_Not);
-	negated->Add(ibValue(new ibValueCompositionField(wxT("Deleted"))), ibComparisonKind_Equal, ibValue(true));
-
-	const wxString expr = ibRenderFilterTree(composer, root);
-	EXPECT_TRUE(expr.Contains(wxT("NOT ("))) << expr.ToStdString();
-}
-
-TEST(FilterTree, SwitchedOffAndUnfinishedLinesSayNothing) {
-	// A line the user switched off, and a line they have not finished writing,
-	// must both vanish — not render as a comparison against nothing, which the
-	// parser would reject as a syntax error the user never wrote.
-	ibDataDBComposer composer;
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup());
-	root->Add(ibValue(new ibValueCompositionField(wxT("Amount"))), ibComparisonKind_Greater, ibValue(1), false);
-	root->Add(ibValue(new ibValueCompositionField()), ibComparisonKind_Equal, ibValue(2));
-
-	EXPECT_TRUE(ibRenderFilterTree(composer, root).IsEmpty());
+	EXPECT_EQ(wxT("Amount"), node.m_left.m_path);
+	EXPECT_EQ(7, node.m_left.m_leafId) << "the type the picker resolved was lost on the way in";
+	EXPECT_EQ(wxT("Sum"), node.m_left.m_presentation);
+	EXPECT_TRUE(node.m_left.m_type.ContainType(ibValueTypes::TYPE_NUMBER));
 }
 
 // ===========================================================================
-// The filter tree, packed and restored
-//
-// A filter outlives the dialog that wrote it: it is saved on the form and read
-// back. The tree packs itself the way every value does (the base writes the
-// type, the value writes its contents), so nesting costs nothing.
+//  …AND IT IS SAVED AS A TREE
 // ===========================================================================
 
 TEST(FilterTreePersist, ANestedTreeSurvivesTheRoundTrip) {
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup(ibFilterGroupKind_And));
-	root->Add(ibValue(new ibValueCompositionField(wxT("Amount"), wxT("Sum"))), ibComparisonKind_Greater, ibValue(100));
+	ibFilterDescription filter;
+	ibFilterNodeDescription& first = filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	first.m_left.m_presentation = wxT("Sum");
 
-	ibValueFilterGroup* either = root->AddGroup(ibFilterGroupKind_Or);
-	either->Add(ibValue(new ibValueCompositionField(wxT("Region"))), ibComparisonKind_Equal, ibValue(wxT("north")));
-	either->Add(ibValue(new ibValueCompositionField(wxT("Price"))), ibComparisonKind_Greater,
-		ibValue(new ibValueCompositionField(wxT("Cost"))));
+	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
+	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibValue(wxT("north")));
+	ibFilterNodeDescription& pair =
+		ibFilterDescription::Append(either.m_children, wxT("Price"), ibComparisonKind_Greater, ibValue());
+	pair.m_right.m_path = wxT("Cost");
 
-	ibDataNode node(root->GetClassType(), 0);
-	ASSERT_TRUE(ibValue(root).Serialize(node));
+	ibDataNode node(make_clsid("CompositionFilter", ibClassKind_None), 0);
+	ASSERT_TRUE(ibFilterDescriptionMemory::WriteNode(node, filter));
 
-	const ibValue restoredValue = ibValue::FromNode(node);
-	ibValueFilterGroup* restored = nullptr;
-	ASSERT_TRUE(const_cast<ibValue&>(restoredValue).ConvertToValue(restored));
-	ASSERT_NE(nullptr, restored);
+	ibFilterDescription restored;
+	ASSERT_TRUE(ibFilterDescriptionMemory::ReadNode(node, restored));
 
-	ASSERT_EQ(2u, restored->Count());
-	ASSERT_NE(nullptr, restored->GetItem(0));
-	EXPECT_EQ(wxT("Amount"), restored->GetItem(0)->GetField());
-	EXPECT_EQ(wxT("Sum"), restored->GetItem(0)->GetFieldObject()->GetPresentation())
+	ASSERT_EQ(2u, restored.m_nodes.size());
+	EXPECT_EQ(wxT("Amount"), restored.m_nodes[0].m_left.m_path);
+	EXPECT_EQ(wxT("Sum"), restored.m_nodes[0].m_left.m_presentation)
 		<< "the field lost its presentation on the way through";
-	EXPECT_EQ(ibComparisonKind_Greater, restored->GetItem(0)->GetComparison());
+	EXPECT_EQ(ibComparisonKind_Greater, restored.m_nodes[0].m_comparison);
 
 	// The nested group, and the field-with-field condition inside it.
-	ibValueFilterGroup* inner = restored->GetGroup(1);
-	ASSERT_NE(nullptr, inner);
-	EXPECT_EQ(ibFilterGroupKind_Or, inner->GetKind());
-	ASSERT_EQ(2u, inner->Count());
-	ASSERT_NE(nullptr, inner->GetItem(1));
-	EXPECT_NE(nullptr, inner->GetItem(1)->GetRightField())
+	ASSERT_EQ(ibFilterNodeKind_Group, restored.m_nodes[1].m_kind);
+	EXPECT_EQ(ibFilterGroupKind_Or, restored.m_nodes[1].m_groupKind);
+	ASSERT_EQ(2u, restored.m_nodes[1].m_children.size());
+	EXPECT_TRUE(restored.m_nodes[1].m_children[1].m_right.IsField())
 		<< "a field on the RIGHT came back as something else";
-}
 
-TEST(FilterTreePersist, ARestoredTreeStillRendersTheSameWay) {
-	// The point of saving it: the restored tree must mean what the saved one did.
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup(ibFilterGroupKind_And));
-	root->Add(ibValue(new ibValueCompositionField(wxT("Amount"))), ibComparisonKind_Greater, ibValue(100));
-	ibValueFilterGroup* either = root->AddGroup(ibFilterGroupKind_Or);
-	either->Add(ibValue(new ibValueCompositionField(wxT("A"))), ibComparisonKind_Equal, ibValue(1));
-	either->Add(ibValue(new ibValueCompositionField(wxT("B"))), ibComparisonKind_Equal, ibValue(2));
-
-	ibDataDBComposer before;
-	const wxString expectedExpr = ibRenderFilterTree(before, root);
-
-	ibDataNode node(root->GetClassType(), 0);
-	ASSERT_TRUE(ibValue(root).Serialize(node));
-	const ibValue restoredValue = ibValue::FromNode(node);
-	ibValueFilterGroup* restored = nullptr;
-	ASSERT_TRUE(const_cast<ibValue&>(restoredValue).ConvertToValue(restored));
-
-	ibDataDBComposer after;
-	EXPECT_EQ(expectedExpr, ibRenderFilterTree(after, restored));
-}
-
-// WHAT THE COLUMN FILTER DOES, end to end: the command adds through the flat door
-// (list.Settings.Filter.Add) and the settings form later reads the TREE. If these
-// are not the same store, the filter applies and the form shows nothing — which is
-// exactly the bug this pins.
-TEST(FilterTreePersist, TheFlatDoorWritesTheTreeTheFormReads) {
-	ibValuePtr<ibValueListSettings> settings(new ibValueListSettings());
-
-	ibValueFilterList* flat = settings->GetFilter();
-	ASSERT_NE(nullptr, flat);
-	ASSERT_NE(nullptr, flat->Add(wxT("Number"), ibComparisonKind_Equal, ibValue(wxT("0001"))));
-
-	ibValueFilterGroup* root = settings->GetFilterRoot();
-	ASSERT_NE(nullptr, root);
-	EXPECT_EQ(1u, root->Count()) << "the flat door wrote somewhere the tree cannot see";
-	ASSERT_NE(nullptr, root->GetItem(0));
-	EXPECT_EQ(wxT("Number"), root->GetItem(0)->GetField());
-
-	// STEP BY STEP, so a failure names its own half.
-	{
-		ibDataNode packed(root->GetClassType(), 0);
-		EXPECT_TRUE(ibValue(root).Serialize(packed)) << "the tree refused to pack";
-		EXPECT_EQ(1u, packed.Children().size()) << "the condition did not travel as a child node";
-		ibValueFilterGroup* copy = nullptr;
-		const ibValue restored = ibValue::FromNode(packed);
-		ASSERT_TRUE(const_cast<ibValue&>(restored).ConvertToValue(copy)) << "unpacked into something else";
-		EXPECT_EQ(1u, copy->Count()) << "the copy lost the condition";
-	}
-
-	// ...and the dialog's buffer takes a COPY of that tree (the settings form path).
-	ibValuePtr<ibValueListSettings> buffer(new ibValueListSettings());
-	ibDataDBComposer composer;
-	ibLoadSettingsFromComposer(buffer, composer, settings);
-	ASSERT_NE(nullptr, buffer->GetFilterRoot());
-	EXPECT_EQ(1u, buffer->GetFilterRoot()->Count()) << "the form opened on an empty tree";
-}
-
-TEST(FilterTreePersist, SettingsCarryTheTree) {
-	// What the form actually saves — the settings object, with the filter inside.
-	ibValuePtr<ibValueListSettings> settings(new ibValueListSettings());
-	ASSERT_NE(nullptr, settings->GetFilterRoot());
-	settings->GetFilterRoot()->Add(ibValue(new ibValueCompositionField(wxT("Number"))),
-		ibComparisonKind_Equal, ibValue(wxT("00001")));
-
-	ibDataNode node(settings->GetClassType(), 0);
-	ASSERT_TRUE(settings->WriteData(node));
-
-	ibValuePtr<ibValueListSettings> loaded(new ibValueListSettings());
-	ASSERT_TRUE(loaded->ReadData(node));
-
-	ASSERT_NE(nullptr, loaded->GetFilterRoot());
-	ASSERT_EQ(1u, loaded->GetFilterRoot()->Count());
-	ASSERT_NE(nullptr, loaded->GetFilterRoot()->GetItem(0));
-	EXPECT_EQ(wxT("Number"), loaded->GetFilterRoot()->GetItem(0)->GetField());
+	EXPECT_EQ(filter, restored) << "the whole tree, not merely the parts asked about above";
 }
 
 TEST(FilterTreePersist, ARecordWithoutATreeReadsAsAnEmptyFilter) {
-	// A settings record written before the tree existed has no such child. That
-	// is not damage — the filter was empty, and it reads back empty.
-	ibValuePtr<ibValueListSettings> loaded(new ibValueListSettings());
-	ibDataNode empty(loaded->GetClassType(), 0);
-
-	EXPECT_TRUE(loaded->ReadData(empty));
-	ASSERT_NE(nullptr, loaded->GetFilterRoot());
-	EXPECT_EQ(0u, loaded->GetFilterRoot()->Count());
+	// A record written before the tree existed has no such child. That is not damage — the filter
+	// was empty, and it reads back empty.
+	ibDataNode empty(make_clsid("CompositionFilter", ibClassKind_None), 0);
+	ibFilterDescription filter;
+	ibFilterDescriptionMemory::ReadNode(empty, filter);
+	EXPECT_FALSE(filter.IsOk());
+	EXPECT_TRUE(filter.m_nodes.empty());
 }
 
 // ===========================================================================
-// The filter tree as a query AST
-//
-// The tree's real output is an expression of the SAME shape `Restrict` compiles
-// to — one form for "a condition over a source", whoever wrote it. Text is that
-// AST rendered by the ordinary renderer, so brackets are its business.
+//  …AND THE ENGINE READS AN EXPRESSION BUILT FROM IT
 // ===========================================================================
-
-#include "backend/query/queryAst.h"
-#include "backend/query/queryRender.h"   // ibRenderQueryExpr — the one renderer every query goes through
+//
+// The expression is DERIVED and never stored: it can be run, but it cannot be edited back into the
+// lines a person wrote. It is built where it is used — ibDataComposer::BuildFilterAst.
 
 TEST(FilterAst, AConditionBecomesACompareNode) {
 	ibDataDBComposer composer;
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup());
-	root->Add(ibValue(new ibValueCompositionField(wxT("Amount"))), ibComparisonKind_Greater, ibValue(100));
+	ibFilterDescription filter;
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
 
-	const ibQueryAstExprPtr ast = ibBuildFilterAst(composer, root);
+	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
 	EXPECT_EQ(ibQueryAstExprKind::Compare, ast->m_kind);
 	EXPECT_EQ(ibQueryCompareOp::Gt, ast->m_cmp);
@@ -1597,11 +1437,10 @@ TEST(FilterAst, AConditionBecomesACompareNode) {
 
 TEST(FilterAst, ADottedPathTravelsAsSegments) {
 	ibDataDBComposer composer;
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup());
-	root->Add(ibValue(new ibValueCompositionField(wxT("Supplier.Region.Country"))),
-		ibComparisonKind_Equal, ibValue(wxT("PL")));
+	ibFilterDescription filter;
+	filter.Append(wxT("Supplier.Region.Country"), ibComparisonKind_Equal, ibValue(wxT("PL")));
 
-	const ibQueryAstExprPtr ast = ibBuildFilterAst(composer, root);
+	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr && ast->m_lhs != nullptr);
 	ASSERT_EQ(3u, ast->m_lhs->m_path.size())
 		<< "the path arrived glued together — the lowering would have to split it again";
@@ -1610,14 +1449,15 @@ TEST(FilterAst, ADottedPathTravelsAsSegments) {
 
 TEST(FilterAst, GroupsBecomeLogicalNodes) {
 	ibDataDBComposer composer;
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup(ibFilterGroupKind_And));
-	root->Add(ibValue(new ibValueCompositionField(wxT("Amount"))), ibComparisonKind_Greater, ibValue(100));
+	ibFilterDescription filter;
+	filter.m_rootKind = ibFilterGroupKind_And;
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
 
-	ibValueFilterGroup* either = root->AddGroup(ibFilterGroupKind_Or);
-	either->Add(ibValue(new ibValueCompositionField(wxT("A"))), ibComparisonKind_Equal, ibValue(1));
-	either->Add(ibValue(new ibValueCompositionField(wxT("B"))), ibComparisonKind_Equal, ibValue(2));
+	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
+	ibFilterDescription::Append(either.m_children, wxT("A"), ibComparisonKind_Equal, ibValue(1));
+	ibFilterDescription::Append(either.m_children, wxT("B"), ibComparisonKind_Equal, ibValue(2));
 
-	const ibQueryAstExprPtr ast = ibBuildFilterAst(composer, root);
+	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
 	ASSERT_EQ(ibQueryAstExprKind::Logical, ast->m_kind);
 	EXPECT_FALSE(ast->m_isOr) << "the root is an AND group";
@@ -1631,11 +1471,12 @@ TEST(FilterAst, GroupsBecomeLogicalNodes) {
 
 TEST(FilterAst, NotWrapsTheWholeGroup) {
 	ibDataDBComposer composer;
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup());
-	ibValueFilterGroup* negated = root->AddGroup(ibFilterGroupKind_Not);
-	negated->Add(ibValue(new ibValueCompositionField(wxT("Deleted"))), ibComparisonKind_Equal, ibValue(true));
+	ibFilterDescription filter;
+	ibFilterNodeDescription& negated =
+		ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Not);
+	ibFilterDescription::Append(negated.m_children, wxT("Deleted"), ibComparisonKind_Equal, ibValue(true));
 
-	const ibQueryAstExprPtr ast = ibBuildFilterAst(composer, root);
+	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
 	EXPECT_EQ(ibQueryAstExprKind::Not, ast->m_kind);
 	ASSERT_TRUE(ast->m_lhs != nullptr);
@@ -1646,96 +1487,160 @@ TEST(FilterAst, ContainsIsALikeNotAComparison) {
 	// LIKE is its own node kind — handing the lowering a comparison operator it
 	// has no meaning for would push the problem one layer down.
 	ibDataDBComposer composer;
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup());
-	root->Add(ibValue(new ibValueCompositionField(wxT("Name"))), ibComparisonKind_Contains, ibValue(wxT("ab")));
+	ibFilterDescription filter;
+	filter.Append(wxT("Name"), ibComparisonKind_Contains, ibValue(wxT("ab")));
 
-	const ibQueryAstExprPtr ast = ibBuildFilterAst(composer, root);
+	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
 	EXPECT_EQ(ibQueryAstExprKind::Like, ast->m_kind);
 }
 
-TEST(FilterAst, TheTextIsJustTheAstRendered) {
-	// One renderer for every query, so the filter never grows its own idea of
-	// where brackets go.
+TEST(FilterAst, InAndInHierarchyAreOneNodeAndAWord) {
+	// ⭐ «IN HIERARCHY» DIFFERS FROM «IN» BY THE WORD ALONE — the AST carries the unfold on the In
+	// node itself, so both comparisons reuse the one set-valued operator every driver already
+	// renders. An operator of its own would be a second way to ask what the language already asks.
 	ibDataDBComposer composer;
-	ibValuePtr<ibValueFilterGroup> root(new ibValueFilterGroup(ibFilterGroupKind_And));
-	root->Add(ibValue(new ibValueCompositionField(wxT("Amount"))), ibComparisonKind_Greater, ibValue(100));
-	ibValueFilterGroup* either = root->AddGroup(ibFilterGroupKind_Or);
-	either->Add(ibValue(new ibValueCompositionField(wxT("A"))), ibComparisonKind_Equal, ibValue(1));
-	either->Add(ibValue(new ibValueCompositionField(wxT("B"))), ibComparisonKind_Equal, ibValue(2));
 
-	ibDataDBComposer forAst;
-	const ibQueryAstExprPtr ast = ibBuildFilterAst(forAst, root);
+	ibFilterDescription plain;
+	plain.Append(wxT("Item"), ibComparisonKind_In, ibValue(wxT("x")));
+	const ibQueryAstExprPtr flat = composer.BuildFilterAst(plain);
+	ASSERT_TRUE(flat != nullptr);
+	EXPECT_EQ(ibQueryAstExprKind::In, flat->m_kind);
+	EXPECT_EQ(ibQueryDimUnfold::Elements, flat->m_unfold);
+
+	ibFilterDescription deep;
+	deep.Append(wxT("Item"), ibComparisonKind_InHierarchy, ibValue(wxT("x")));
+	const ibQueryAstExprPtr tree = composer.BuildFilterAst(deep);
+	ASSERT_TRUE(tree != nullptr);
+	EXPECT_EQ(ibQueryAstExprKind::In, tree->m_kind) << "a second node kind for one question";
+	EXPECT_EQ(ibQueryDimUnfold::Hierarchy, tree->m_unfold);
+}
+
+TEST(FilterAst, ASwitchedOffLineSaysNothing) {
+	// Not written, rather than written and then ignored: a condition switched off narrows nothing.
+	ibDataDBComposer composer;
+	ibFilterDescription filter;
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100), /*use*/ false);
+
+	EXPECT_TRUE(composer.BuildFilterAst(filter) == nullptr);
+}
+
+// …AND THE TEXT IS JUST THAT EXPRESSION RENDERED. One renderer for every query, so a filter never
+// grows its own idea of where brackets go.
+
+TEST(FilterAst, NestedGroupsRenderWithParentheses) {
+	// The reason the tree exists at all: this expression has no flat form.
+	ibDataDBComposer composer;
+	ibFilterDescription filter;
+	filter.m_rootKind = ibFilterGroupKind_And;
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+
+	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
+	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibValue(wxT("north")));
+	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibValue(wxT("south")));
+
+	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
+	const wxString expr = ibRenderQueryExpr(*ast);
 
-	EXPECT_EQ(ibRenderQueryExpr(*ast), ibRenderFilterTree(composer, root));
+	EXPECT_TRUE(expr.Contains(wxT("Amount >")));
+	EXPECT_TRUE(expr.Contains(wxT(" AND ")));
+	EXPECT_TRUE(expr.Contains(wxT(" OR ")));
+	EXPECT_TRUE(expr.Contains(wxT("(Region =")))
+		<< "an OR group must be parenthesised inside an AND parent: " << expr.ToStdString();
+}
+
+TEST(FilterAst, AFieldOnBothSidesRendersAsTwoPaths) {
+	// `Price > Cost` — no parameter at all, because neither side is a value.
+	ibDataDBComposer composer;
+	ibFilterDescription filter;
+	ibFilterNodeDescription& node = filter.Append(wxT("Price"), ibComparisonKind_Greater, ibValue());
+	node.m_right.m_path = wxT("Cost");
+
+	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
+	ASSERT_TRUE(ast != nullptr);
+	const wxString expr = ibRenderQueryExpr(*ast);
+	EXPECT_TRUE(expr.Contains(wxT("Price > Cost"))) << expr.ToStdString();
+	EXPECT_FALSE(expr.Contains(wxT("&"))) << "a field must render as a path, not a parameter";
+}
+
+TEST(FilterAst, AValueRendersAsAParameter) {
+	// The other half of the rule above: a VALUE never reaches the text — it travels as a named
+	// parameter, which is what keeps a string from being read as syntax and a date from being read
+	// in somebody's locale.
+	ibDataDBComposer composer;
+	ibFilterDescription filter;
+	filter.Append(wxT("Name"), ibComparisonKind_Equal, ibValue(wxT("O'Brien")));
+
+	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
+	ASSERT_TRUE(ast != nullptr);
+	const wxString expr = ibRenderQueryExpr(*ast);
+	EXPECT_TRUE(expr.Contains(wxT("&"))) << expr.ToStdString();
+	EXPECT_FALSE(expr.Contains(wxT("O'Brien"))) << "the value was inlined into the text";
 }
 
 // ===========================================================================
-//  The settings lists have TWO modes, and an edit must survive both
+//  THE SETTINGS — three lists, and every one of them is saved
 // ===========================================================================
 //
-// These pin the family of defects that cost three separate hunts: the dialog was written against
-// BUFFER mode (the line is an object you can reach into), and on a LIVE list there is no line
-// object at all — the store is the composer. Sort and grouping never reached the disk, an edit
-// wrote into a transient and was lost, and reading the line object on a grouping crashed.
-//
-// Buffer mode is what a test can reach without a model, and it is where SetLine's other promise
-// lives: the edited line KEEPS ITS POSITION. Order is the meaning of these lists.
+// ⚠ THE DEFECT THESE PIN: a sort or a grouping was set, saved, and gone — only the filter travelled.
+// One pair writes all three now, so adding a part is adding a line rather than remembering one.
 
-TEST(ListSettingsLines, ASortLineIsEditedInPlaceAndKeepsItsPosition) {
-	ibValuePtr<ibValueSortList> order(new ibValueSortList());
-	order->Add(wxT("Date"));
-	order->Add(wxT("Number"));
-	order->Add(wxT("Sum"));
+TEST(ListSettingsLines, ASortLineIsALineAndKeepsItsPosition) {
+	ibSortDescription order;
+	order.Append(wxT("Date"), true);
+	order.Append(wxT("Number"), true);
+	order.Append(wxT("Sum"), true);
 
-	ASSERT_TRUE(order->SetLine(1, wxT("Code"), ibSortDirection_Descending));
+	order.m_lines[1] = { wxT("Code"), false };   // edited in place — order is the meaning of this list
 
-	ASSERT_EQ(3u, order->Count());
-	EXPECT_EQ(wxT("Date"), order->GetField(0));
-	EXPECT_EQ(wxT("Code"), order->GetField(1)) << "the edit landed on the line it was made on";
-	EXPECT_EQ(wxT("Sum"),  order->GetField(2)) << "and moved nothing";
-	EXPECT_EQ(ibSortDirection_Descending, order->GetDirection(1));
+	ASSERT_EQ(3u, order.m_lines.size());
+	EXPECT_EQ(wxT("Date"), order.m_lines[0].m_path);
+	EXPECT_EQ(wxT("Code"), order.m_lines[1].m_path) << "the edit landed on the line it was made on";
+	EXPECT_EQ(wxT("Sum"),  order.m_lines[2].m_path) << "and moved nothing";
+	EXPECT_FALSE(order.m_lines[1].m_ascending);
 }
 
-TEST(ListSettingsLines, AGroupingLineKeepsItsUnfoldKindOrTakesTheNewOne) {
-	ibValuePtr<ibValueGroupList> group(new ibValueGroupList());
-	group->Add(wxT("Warehouse"));
-	group->Add(wxT("Item"), ibQueryDimUnfold::Hierarchy);
+TEST(ListSettingsLines, AGroupingLineCarriesItsUnfoldKind) {
+	// The kind is load-bearing: a hierarchy grouping IS what makes a list a tree, so dropping it
+	// reloads every tree as a flat grouping and reads as data loss.
+	ibGroupDescription group;
+	group.Append(wxT("Warehouse"));
+	group.Append(wxT("Item"), ibQueryDimUnfold::Hierarchy);
 
-	// The kind alone changes — the field stays. (This is the cell that crashed: it used to read the
-	// line OBJECT to keep the field, and on a live list that object is null.)
-	ASSERT_TRUE(group->SetLine(1, group->GetField(1), ibQueryDimUnfold::HierarchyOnly));
-	EXPECT_EQ(wxT("Item"), group->GetField(1));
-	EXPECT_EQ(ibQueryDimUnfold::HierarchyOnly, group->GetKind(1));
+	group.m_lines[1].m_kind = ibQueryDimUnfold::HierarchyOnly;   // the kind alone changes
+	EXPECT_EQ(wxT("Item"), group.m_lines[1].m_path);
+	EXPECT_EQ(ibQueryDimUnfold::HierarchyOnly, group.m_lines[1].m_kind);
 
-	// …and the field alone changes — the kind stays.
-	ASSERT_TRUE(group->SetLine(1, wxT("Producer"), group->GetKind(1)));
-	EXPECT_EQ(wxT("Producer"), group->GetField(1));
-	EXPECT_EQ(ibQueryDimUnfold::HierarchyOnly, group->GetKind(1));
-	EXPECT_EQ(2u, group->Count());
+	group.m_lines[1].m_path = wxT("Producer");                   // …and the field alone changes
+	EXPECT_EQ(wxT("Producer"), group.m_lines[1].m_path);
+	EXPECT_EQ(ibQueryDimUnfold::HierarchyOnly, group.m_lines[1].m_kind);
+	EXPECT_EQ(2u, group.m_lines.size());
 }
 
-TEST(ListSettingsLines, SettingsCarrySortAndGroupingToo) {
-	// ⚠ THE DEFECT: WriteData serialised the filter tree and nothing else, so a sort or a grouping
-	// was set, saved, and gone. It reads the three lists through the FACADE now, which is the one
-	// door both modes answer.
-	ibValuePtr<ibValueListSettings> settings(new ibValueListSettings());
-	settings->GetOrder()->Add(wxT("Date"), ibSortDirection_Descending);
-	settings->GetGroup()->Add(wxT("Warehouse"), ibQueryDimUnfold::Hierarchy);
+TEST(ListSettingsLines, SettingsCarryAllThreeParts) {
+	ibSettingsDescription settings;
+	settings.m_filter.Append(wxT("Number"), ibComparisonKind_Equal, ibValue(wxT("00001")));
+	settings.m_sort.Append(wxT("Date"), false);
+	settings.m_group.Append(wxT("Warehouse"), ibQueryDimUnfold::Hierarchy);
 
-	ibDataNode node(settings->GetClassType(), 0);
-	ASSERT_TRUE(settings->WriteData(node));
+	ibDataNode node(make_clsid("CompositionSettings", ibClassKind_None), 0);
+	ASSERT_TRUE(ibSettingsDescriptionMemory::WriteNode(node, settings));
 
-	ibValuePtr<ibValueListSettings> loaded(new ibValueListSettings());
-	ASSERT_TRUE(loaded->ReadData(node));
+	ibSettingsDescription loaded;
+	ASSERT_TRUE(ibSettingsDescriptionMemory::ReadNode(node, loaded));
 
-	ASSERT_EQ(1u, loaded->GetOrder()->Count());
-	EXPECT_EQ(wxT("Date"), loaded->GetOrder()->GetField(0));
-	EXPECT_EQ(ibSortDirection_Descending, loaded->GetOrder()->GetDirection(0));
+	ASSERT_EQ(1u, loaded.m_filter.m_nodes.size());
+	EXPECT_EQ(wxT("Number"), loaded.m_filter.m_nodes[0].m_left.m_path);
 
-	ASSERT_EQ(1u, loaded->GetGroup()->Count());
-	EXPECT_EQ(wxT("Warehouse"), loaded->GetGroup()->GetField(0));
+	ASSERT_EQ(1u, loaded.m_sort.m_lines.size());
+	EXPECT_EQ(wxT("Date"), loaded.m_sort.m_lines[0].m_path);
+	EXPECT_FALSE(loaded.m_sort.m_lines[0].m_ascending);
+
+	ASSERT_EQ(1u, loaded.m_group.m_lines.size());
+	EXPECT_EQ(wxT("Warehouse"), loaded.m_group.m_lines[0].m_path);
 	// The UNFOLD KIND travels with it — dropping it would reload every tree as a flat grouping.
-	EXPECT_EQ(ibQueryDimUnfold::Hierarchy, loaded->GetGroup()->GetKind(0));
+	EXPECT_EQ(ibQueryDimUnfold::Hierarchy, loaded.m_group.m_lines[0].m_kind);
+
+	EXPECT_EQ(settings, loaded) << "the whole of it, not merely the parts asked about above";
 }

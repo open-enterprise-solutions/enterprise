@@ -165,7 +165,7 @@ bool ibVisualEditorNotebook::ibVisualEditor::SaveForm()
 {
 	ibValueMetaObjectFormBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectFormBase>();
 
-	// Create a std::string and copy your document data in to the string    
+	// Create a std::string and copy your document data in to the string
 	if (creator != nullptr) {
 		creator->SaveFormData(m_valueForm);
 	}

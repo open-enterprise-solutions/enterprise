@@ -24,8 +24,9 @@ ibValueMetaObjectComposer::ibValueMetaObjectComposer()
 	//
 	// ⚠ Set HERE and nowhere else: at runtime a composition has no metaobject above it, so the same
 	// value stays silent by construction rather than by a flag anybody has to remember to check.
-	if (ibValueDataComposition* composition = GetComposition())
-		composition->SetAttachOwner(this);
+	// (THE ATTACH OWNER IS SET WHERE THE COMPOSITION IS BUILT — the designer tab, docViewComposer.cpp.
+	//  A metaobject DECLARES: what it holds is the DESCRIPTION, and a composition built here would
+	//  resolve its query while the configuration is still loading — the whole defect this arc removed.)
 }
 
 // ⭐ THE ANSWER TO THAT SIGNAL: the CONFIGURATION is modified. Which is where modified-ness lives

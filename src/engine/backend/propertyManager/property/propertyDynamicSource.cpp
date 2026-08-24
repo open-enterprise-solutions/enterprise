@@ -51,19 +51,27 @@ bool ibPropertyDynamicSource::GetDataValue(ibValue& pvarPropVal) const
 // are handled by the source-description path, not this scalar source id.)
 bool ibPropertyDynamicSource::ReadNodeValue(const ibDataValue& value)
 {
-	ibQueryableFactory* factory = ibDynamicSourceFactory(m_owner);
-	if (factory == nullptr)
-		return false;
+	// ⭐⭐ THE ID IS STORED AS AN ID, AND RESOLVED LATER. Reading used to resolve first —
+	// `SetQueryable(factory->ResolveById(id))` — and a source that does not resolve AT THIS MOMENT
+	// (the metatypes are not registered yet, which is ordinary during a load) came back null, which
+	// this property stores as "no source". The number was right there in the blob and was discarded.
+	//
+	// The variant resolves on demand, so nothing is lost by not resolving now — and a source that
+	// really has been deleted still answers null when it is next asked, which is the truth about it.
 	if (value.Kind() == ibDataKind::Number)
-		SetQueryable(factory->ResolveById((ibMetaID)value.AsInt()));
+		SetTableId((ibMetaID)value.AsInt());
 	return true;
 }
 
 bool ibPropertyDynamicSource::WriteNodeValue(ibDataValue& value) const
 {
-	const ibBackendQueryable* q = GetQueryable();
-	if (q == nullptr)
+	// …AND WRITTEN THE SAME WAY IT IS READ. This used to write `GetQueryable()->GetQueryTableId()`,
+	// so a list saved while its source could not be resolved right then wrote NOTHING — the same
+	// loss as the read half, from the other side. The id is what is stored; whether it resolves
+	// today is not a fact about the file.
+	const ibMetaID tableId = GetTableId();
+	if (tableId == wxNOT_FOUND)
 		return true;   // no source picked → nothing to write
-	value = ibDataValue::Int((int)q->GetQueryTableId());
+	value = ibDataValue::Int((int)tableId);
 	return true;
 }

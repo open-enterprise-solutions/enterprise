@@ -23,9 +23,6 @@
 // ibValueModelRamTreeBase::PopulateFromTree. Full type only needed in tabularModel.cpp.
 class ibSelectorTree;
 
-// Persistent runtime list-settings (Filter / Order / Group). Held by every model;
-// full type only needed in tabularModel.cpp (backend/composition/listFilter.h).
-class ibValueListSettings;
 
 // L3 navigation door a DB model vends over its own rows (the base GetSourceQueryable() return type).
 // Forward-declared here so tabularModel.h names the source-hook without pulling the query layer (no include
@@ -300,17 +297,6 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 	// because the door already serialises reads (ibDataViewModel::GuardFetch).
 	std::shared_ptr<class ibBackgroundRun> m_fetchRun;
 
-	// Persistent runtime list-settings (Filter / Order / Group), surfaced to UI / script so ANY model
-	// (value-table, tabular section, list, tree) carries filter / sort / group settings. The settings are a thin
-	// facade over the L5 composer (the store): RunComposerPage reads the composer directly every fetch; the
-	// legacy m_filterRow / m_sortOrder are abolished. Owned via ibValuePtr (refcount managed on bind/dtor).
-	//
-	// MUTABLE + built on first ASK (GetListSettings): the facade writes through the composer, and the
-	// composer is a member of the SUBCLASS — it does not exist while this base's constructor runs.
-	// That is precisely why the facade used to be handed the MODEL and resolve the store later; asked
-	// late, it can be handed the store itself.
-	mutable ibValuePtr<ibValueListSettings> m_listSettings;
-
 #pragma endregion
 
 	class ibVariantDataValueModel :
@@ -323,12 +309,6 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 	};
 
 public:
-
-	// Persistent runtime list-settings (Filter / Order / Group) carried by this model. Surfaced
-	// so UI / script can read and edit the model's filter / sort / group settings uniformly.
-	// Out-of-line: the ibValuePtr<ibValueListSettings> -> ibValueListSettings* conversion needs the COMPLETE type,
-	// which lives in listFilter.h (included by tabularModel.cpp, only forward-declared here to avoid the include cycle).
-	ibValueListSettings* GetListSettings() const;
 
 	// Wrap an ibValue into a dataview wxVariant for a FRONT-side resolver (a dot-path column's
 	// CheckedGetValue). Public so the front produces a cell value without reaching the protected
@@ -1653,6 +1633,11 @@ public:
 
 	ibRamValueStorage&       Storage()       { return m_storage; }
 	const ibRamValueStorage& Storage() const { return m_storage; }
+
+	// (NO SETTINGS FIELD HERE. A model holds nothing of the kind — what is in force lives in its
+	//  COMPOSER, which is the thing that reads. The RAM world's filter, sort and grouping are set on
+	//  that composer while the model is alive, and nothing about them is saved as a composition:
+	//  a value table, a tabular section and a record set have no query, no variants, no structure.)
 
 protected:
 	mutable ibRamValueStorage m_storage;      // OWNS the live nodes (the RAM source — the queryable analog)

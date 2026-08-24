@@ -273,7 +273,20 @@ public:
 	// now — the global (application-data) factory is empty and is a FUTURE plugin seam (the per-config factory descends
 	// to it on a resolve miss). Every entry goes THROUGH metadata: registration via RegisterSource below, resolve via
 	// this factory. Callers get the factory from the metadata they run on behalf of — never appData / active metadata.
-	class ibQueryableFactory* GetSourceFactory() const { return m_image ? m_image->SourceFactory() : nullptr; }
+	//
+	// ⭐⭐ AN EXTERNAL REPORT READS ITS HOST'S TABLES. Its own container holds only what IT declares — its
+	// attributes, its forms, its composers — and never a catalog or a register, so its factory is empty and
+	// a query written there would be offered nothing to read (Max, 2026-08-23: "it stopped seeing the
+	// tables"). Whose tables those are is a question the container already answers — GetOwner, which an
+	// external report / data processor overrides and a configuration leaves as "nobody, I am the top".
+	// Asked here, so every caller of this factory gets the same answer: the query constructor, the
+	// composer's by-name FROM, a dynamic list inside an external processor.
+	class ibQueryableFactory* GetSourceFactory() const {
+		ibMetaData* owner = nullptr;
+		if (GetOwner(owner) && owner != nullptr && owner != this)
+			return owner->GetSourceFactory();
+		return m_image ? m_image->SourceFactory() : nullptr;
+	}
 
 	// Register / unregister a metadata-backed source descriptor into THIS config's OWN factory. The metaobject calls it
 	// on run / close (GetMetaData()->RegisterSource(&m_queryable)) — each config keeps its own set of queryables. Out

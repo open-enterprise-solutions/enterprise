@@ -14,7 +14,6 @@
 #include "backend/job/jobManager.h"             // ibJobManager / ibJobTenancy — the rented run a portion reads on
 #include "backend/backend_exception.h"          // ibBackendException — a refusal to rent falls back to inline
 #include "backend/tabularModelView.h"           // ibDataViewModel / ibDataViewItem — the base view types
-#include "backend/composition/listFilter.h"    // ibValueListSettings (dialog buffer) + ibLoad/CommitSettings — settings live on the composer
 #include "backend/composition/dataComposer.h"  // ibDataComposer — IsGroupedModel reads GroupCount() off the composer
 #include "backend/uniqueKey.h"                  // ibUniqueKey — GetItemKey return (base default = no key)
 
@@ -70,33 +69,18 @@ bool ibValueModel::ibComposerNode::SetValue(const ibMetaID& id, const ibValue& v
 	return true;
 }
 
-// Out-of-line (declared in tabularModel.h): the ibValuePtr<ibValueListSettings> -> ibValueListSettings* conversion
-// needs the COMPLETE ibValueListSettings type (listFilter.h, included here), not the header's forward decl.
-//
-// ⭐ BUILT ON FIRST ASK. The facade is handed the STORE it writes through — and the store is the
-// SUBCLASS's composer, which does not exist while this base's constructor runs (GetModelComposer is
-// pure virtual there). Built here instead, the model is whole by definition: nobody can ask a model
-// for its settings before the model exists.
-ibValueListSettings* ibValueModel::GetListSettings() const
-{
-	if (m_listSettings == nullptr)
-		m_listSettings = new ibValueListSettings(GetModelComposer(), [this] { NotifyReset(); });
-
-	return m_listSettings;
-}
-
-
+// Out-of-line (declared in tabularModel.h): driving the settings in needs the COMPOSER's complete
+// type, which the header has, and the DESCRIPTION's, which it also has — but the call belongs
+// beside the rest of the model's behaviour rather than inline in a header everything includes.
 ibValueModel::ibValueModel()
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
 	m_modelProvider(nullptr)
 {
 	m_modelProvider = new ibDataViewModelProviderImpl(this);
 
-	// (The model's RUNTIME/script settings — a FACADE over the composer, so a script's
-	//  list.Settings.Filter.Add(...) writes the store IMMEDIATELY and fires this model's refresh — are
-	//  built on the first ASK, in GetListSettings above: they take the composer, and the composer is
-	//  the SUBCLASS's, so it does not exist yet here. The settings DIALOG uses its own separate BUFFER
-	//  copy (load on open, commit on OK) so the form stays transactional.)
+	// (A MODEL DEALS IN SETTINGS, and it asks nobody for them: the COMPOSER holds the one in force,
+	//  and the base forwards. The whole schema — query, main table, variants, structure — is what a
+	//  LIST is made of and is never seen from here.)
 
 	// (m_composer is POLYMORPHIC + lazily created, by which time the full subclass exists so
 	// CreateComposer picks ibDataDBComposer (DB) / ibDataRamComposer (RAM).

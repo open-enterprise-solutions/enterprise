@@ -198,12 +198,14 @@ class ibValueMetaObjectExternalReport : public ibValueMetaObjectReport {
 class ibValueRecordDataObjectReport : public ibValueRecordDataObjectExt {
 	public:
 
-	// ⏳ WHAT WILL BECOME THE MODEL FACE. A report shows what its DEFAULT composer composes, and it
-	// speaks FIRST: `Composing` is the author's chance to fill the sheet himself (taking the
-	// composer's settings if he wants them), after which the platform stands down. These two are
-	// already shaped like ibValueSpreadsheetModel's verbs — a report cannot DERIVE it until the
-	// composer comes off the cursor model, because a report object already carries the runtime once.
-	BACKEND_API bool Compose(class ibBackendSpreadsheetObject* document);
+	// ⭐⭐ A REPORT DOES NOT COMPOSE — IT REDIRECTS. Made the main view, it points at the child
+	// composition, and THAT has a model of its own (Max, 2026-08-24). So there is no Compose here,
+	// no Composing handler and no DoStandardCompose hook: an owner that forwards owns no verb.
+	//
+	// Nor are the events re-homed here — a report object has no window and no document. Done
+	// properly they belong to the BOX, TableBox / GridBox: the control drives the run and owns the
+	// sheet it goes into, so that is the only place a "before / after composing" could be caught
+	// with anything real in hand. Not built yet, and deliberately not stubbed.
 	ibValueRecordDataObjectReport(const ibValueRecordDataObjectReport& source);
 	ibValueRecordDataObjectReport(const ibValueMetaObjectReport* metaObject);
 
@@ -234,26 +236,9 @@ public:
 	BACKEND_API ibValueDataComposition* GetComposition(const ibMetaID& id) const;
 	BACKEND_API ibValueDataComposition* GetDefaultComposition() const;
 
-	//support actionData
-	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
-	virtual void CallAsAction(const ibActionID& action, ibBackendValueForm* srcForm);
-
-	// Run the report: calls the object module's Composing(StandartProcessing) handler — the
-	// report's twin of a document's Posting. COMPOSE, not generate: Generation in this tree
-	// means entering an object on the basis of another. The flag arrives TRUE ("the platform
-	// composes"); a handler that composed the result itself sets it FALSE. See
-	// dataReportAction.cpp.
-	// BACKEND_API: the gridbox's Generate raises this before composing anything itself.
-	BACKEND_API bool Composing() const;
-
-protected:
-	// The platform side of that flag — virtual so a report kind can own its standard
-	// composition. Returns false today: a standard composition needs a declared composition
-	// schema on the metaobject, and the Report metaobject has none yet (see the long note in
-	// dataReportAction.cpp). This is where that execution lands when the schema arrives.
-	virtual bool DoStandardCompose() const;
-
-public:
+	// No command surface of its own — the base already answers "no standard commands" and "nothing
+	// to run", and Compose lives on the box, which carries it whenever its source resolves to a
+	// composition. A report object resolving to its default composer IS that resolution.
 
 	// WHAT THE OBJECT PUBLISHES — its attributes and tables (the base) plus its COMPOSITIONS by
 	// name, and `Composer` for the default one.

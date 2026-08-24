@@ -20,6 +20,7 @@ bool ibValueGridBox::SetControlValue(const ibValue& varControlVal)
 		return false;
 
 	m_spreadsheetModel = model;
+
 	// The window follows the model it was given — the sheet is the model's, and a run filling it
 	// reaches the screen through the notifiers the window subscribes to here.
 	if (ibGridEditor* gridWindow = dynamic_cast<ibGridEditor*>(GetInnerWx()))

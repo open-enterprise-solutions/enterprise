@@ -229,6 +229,11 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 	dataViewColumn->SetHidden(!m_propertyVisible->GetValueAsBoolean() || sourceMissing);
 	dataViewColumn->SetSortable(sortable);
 	dataViewColumn->SetResizeable(m_propertyResizable->GetValueAsBoolean());
+	// 🛑 …AND ITS NEIGHBOUR WAS NEVER APPLIED. `Reorderable` serialised both ways and was edited in
+	// the designer, while the flag came from `wxDATAVIEW_COL_REORDERABLE` hardcoded at construction —
+	// so turning it off did nothing at all, and the two properties sitting side by side in the same
+	// category made that impossible to notice (audit, 2026-08-24).
+	dataViewColumn->SetReorderable(m_propertyReorderable->GetValueAsBoolean());
 
 	// Reflect the composer's active sort onto THIS column's header arrow (shared with the post-refresh sync).
 	dataViewColumn->SyncSortArrowFromModel();

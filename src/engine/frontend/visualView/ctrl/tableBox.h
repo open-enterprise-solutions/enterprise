@@ -149,6 +149,7 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	//get model
 	ibValueModel* GetTableModel() const { return m_tableModel; }
 
+
 	// Choice mode = this table is a VALUE PICKER (opened to return a selection to a caller). The TableBox owns
 	// this affordance (like a form owns Close / Update): when on, GetStandardCommands composes Select FIRST.
 	// The front-owned property is the SOLE source of truth — set at form-build from the source explorer's choice
@@ -419,6 +420,8 @@ private:
 
 	ibValuePtr<ibValueModel> m_tableModel;
 	ibValuePtr<ibValueModel::ibValueModelReturnLine> m_tableCurrentLine;
+
+	// (NO SETTING KEPT HERE — see the gridbox: the ACTIVE one lives on the model, in its composer.)
 };
 
 //********************************************************************************************

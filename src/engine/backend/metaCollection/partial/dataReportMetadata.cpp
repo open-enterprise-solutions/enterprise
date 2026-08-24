@@ -17,12 +17,10 @@
 
 ibValueMetaObjectReport::ibValueMetaObjectReport() : ibValueMetaObjectRecordDataExt()
 {
-	// The report's one handler, DECLARED so the designer lists it in the object module the way
-	// it lists a document's Posting — a developer picks it instead of having to know the name.
-	// The Compose standard command calls it (dataReportAction.cpp). StandartProcessing follows
-	// the Filling / SetNewNumber contract: it arrives TRUE ("the platform composes"), and a
-	// handler that built the result itself sets it FALSE.
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Composing"), ibContentHelper::eProcedureHelper, { wxT("StandartProcessing") });
+	// NO DECLARED HANDLER. A report used to offer `Composing(StandartProcessing)`, back when the
+	// object itself composed; it does not — it points at the composer it declares, and the box
+	// showing that composer runs it. Declaring a handler nothing raises is worse than none: the
+	// designer would list it, an author would write into it, and it would never be called.
 }
 
 ibValueMetaObjectReport::~ibValueMetaObjectReport()

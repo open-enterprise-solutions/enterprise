@@ -69,15 +69,15 @@ public:
 	}
 
 	// ASK THE ROW. The left side admits exactly one type — a composition field — and
-	// the right side admits whatever the chosen field lends it (GetRightTypeDescription).
+	// the right side admits whatever the chosen field lends it (the left side's type).
 	virtual ibTypeDescription& GetTypeDesc() const override {
-		const ibValueFilterItem* item = GetSelectedItem();
+		const ibFilterNodeDescription* item = GetSelectedItem();
 		if (item == nullptr)
 			m_typeDesc = ibTypeDescription();
 		else if (m_side == kFilterColLeft)
 			m_typeDesc = ibTypeDescription(g_compositionFieldCLSID);
 		else
-			m_typeDesc = item->GetRightTypeDescription();
+			m_typeDesc = item->m_left.m_type;
 		return m_typeDesc;
 	}
 
@@ -179,11 +179,11 @@ public:
 	// left-hand cell that reported the right-hand value would offer the wrong
 	// choices and then write them to the wrong place.
 	virtual bool GetControlValue(ibValue& pvarControlVal) const override {
-		if (GetSelectedGroup() != nullptr) {
+		if (GetSelectedGroup() != nullptr || GetSelectedRoot() != nullptr) {
 			pvarControlVal = GroupValue();
 			return true;
 		}
-		ibValueFilterItem* item = GetSelectedItem();
+		const ibFilterNodeDescription* item = GetSelectedItem();
 		if (item == nullptr)
 			return false;
 		pvarControlVal = SideValue(item);
@@ -191,18 +191,25 @@ public:
 	}
 
 	virtual bool SetControlValue(const ibValue& varValue = ibValue()) override {
-		if (ibValueFilterGroup* group = GetSelectedGroup()) {
-			// A GROUP HAS NOTHING TO CLEAR — its operator always has a value. An empty
-			// value here comes from the Clear button, and converting it to the
-			// enumeration RAISES ("variable type does not support this operation"),
-			// which is what crashed the form on "×" over a group row.
+		// A GROUP HAS NOTHING TO CLEAR — its operator always has a value. An empty
+		// value here comes from the Clear button, and converting it to the
+		// enumeration RAISES ("variable type does not support this operation"),
+		// which is what crashed the form on "×" over a group row.
+		if (ibFilterDescription* root = GetSelectedRoot()) {
 			if (varValue.IsEmpty())
 				return true;
-			group->SetKind(varValue.ConvertToEnumValue<ibFilterGroupKind>());
+			root->m_rootKind = varValue.ConvertToEnumValue<ibFilterGroupKind>();
 			NotifyRowChanged();
 			return true;
 		}
-		ibValueFilterItem* item = GetSelectedItem();
+		if (ibFilterNodeDescription* group = GetSelectedGroup()) {
+			if (varValue.IsEmpty())
+				return true;
+			group->m_groupKind = varValue.ConvertToEnumValue<ibFilterGroupKind>();
+			NotifyRowChanged();
+			return true;
+		}
+		ibFilterNodeDescription* item = GetSelectedItem();
 		if (item == nullptr)
 			return false;
 		// ADJUSTED TO THE CELL'S TYPE ON THE WAY IN, exactly as a text control does
@@ -244,33 +251,44 @@ private:
 	}
 
 	// The currently-selected CONDITION, or nullptr — a group row is not one, and
-	// neither is an empty selection. The row carries the value it stands for
+	// neither is an empty selection. The row resolves its PATH into the description
 	// (filterTreeModel.h), so this is a question to the row, not arithmetic on a
 	// row number: a tree has no 1-based index to reverse.
-	ibValueFilterItem* GetSelectedItem() const {
+	ibFilterNodeDescription* GetSelectedItem() const {
 		const ibDataViewItem item = EditedRow();
 		if (!item.IsOk())
 			return nullptr;
 		const ibFilterTreeNode* node = static_cast<const ibFilterTreeNode*>(item.GetID());
-		return node != nullptr ? node->GetItem() : nullptr;
+		ibFilterNodeDescription* line = node != nullptr ? node->Resolve() : nullptr;
+		return (line != nullptr && line->m_kind == ibFilterNodeKind_Condition) ? line : nullptr;
 	}
 
 	// Does THIS side hold a field right now?
 	bool HoldsField() const {
-		const ibValueFilterItem* item = GetSelectedItem();
+		const ibFilterNodeDescription* item = GetSelectedItem();
 		if (item == nullptr)
 			return false;
-		ibValueCompositionField* field = nullptr;
-		return SideValue(item).ConvertToValue(field);
+		return (m_side == kFilterColRight ? item->m_right : item->m_left).IsField();
 	}
 
-	// The selected GROUP — the other kind of row this column serves.
-	ibValueFilterGroup* GetSelectedGroup() const {
+	// The selected GROUP — the other kind of row this column serves. The ROOT is one
+	// too: its operator is the description's own, which is why the row exists.
+	ibFilterNodeDescription* GetSelectedGroup() const {
 		const ibDataViewItem item = EditedRow();
 		if (!item.IsOk() || m_side != kFilterColLeft)
 			return nullptr;
 		const ibFilterTreeNode* node = static_cast<const ibFilterTreeNode*>(item.GetID());
-		return node != nullptr ? node->GetGroup() : nullptr;
+		ibFilterNodeDescription* line = node != nullptr ? node->Resolve() : nullptr;
+		return (line != nullptr && line->m_kind == ibFilterNodeKind_Group) ? line : nullptr;
+	}
+
+	// …and the ROOT row, whose operator lives on the description itself.
+	ibFilterDescription* GetSelectedRoot() const {
+		const ibDataViewItem item = EditedRow();
+		if (!item.IsOk() || m_side != kFilterColLeft)
+			return nullptr;
+		const ibFilterTreeNode* node = static_cast<const ibFilterTreeNode*>(item.GetID());
+		return (node != nullptr && node->IsRoot()) ? m_editor->GetFilter() : nullptr;
 	}
 
 	// EVERY EDITABLE CELL OF A CONDITION IS A VALUE, and its type says how it is
@@ -281,41 +299,71 @@ private:
 	// A GROUP ROW answers with its OPERATOR in the left cell — that is the value
 	// this cell edits there, and it is why the quick choice opens on it.
 	ibValue GroupValue() const {
-		const ibValueFilterGroup* group = GetSelectedGroup();
+		if (const ibFilterDescription* root = GetSelectedRoot())
+			return ibValue::CreateEnumObject<ibValueEnumFilterGroupKind>(root->m_rootKind);
+		const ibFilterNodeDescription* group = GetSelectedGroup();
 		return group != nullptr
-			? ibValue::CreateEnumObject<ibValueEnumFilterGroupKind>(group->GetKind())
+			? ibValue::CreateEnumObject<ibValueEnumFilterGroupKind>(group->m_groupKind)
 			: ibValue();
 	}
 
-	ibValue SideValue(const ibValueFilterItem* item) const {
+	// A SIDE AS THE VALUE IT IS — a field becomes the field value the picker speaks,
+	// a literal is itself. One shape out, so the cell never asks which it got.
+	static ibValue OperandValue(const ibFilterOperandDescription& side) {
+		if (!side.IsField())
+			return side.m_value;
+		ibValueCompositionField* field = new ibValueCompositionField(side.m_path, side.m_presentation);
+		field->SetTypeInfo(side.m_leafId, side.m_type);
+		return ibValue(field);
+	}
+
+	// …and back. A field arriving on a side REPLACES it whole — path, label, and the
+	// type the picker resolved, which is what makes the other side editable.
+	static void SetOperand(ibFilterOperandDescription& side, const ibValue& value) {
+		ibValueCompositionField* field = nullptr;
+		if (value.ConvertToValue(field) && field != nullptr) {
+			side.m_path         = field->GetPath();
+			side.m_presentation = field->GetPresentation();
+			side.m_leafId       = field->GetLeafId();
+			side.m_type         = field->GetTypeDescription();
+			side.m_value        = ibValue();
+			return;
+		}
+		side = ibFilterOperandDescription();
+		side.m_value = value;
+	}
+
+	ibValue SideValue(const ibFilterNodeDescription* item) const {
 		switch (m_side) {
 		case kFilterColComparison:
-			return ibValue::CreateEnumObject<ibValueEnumComparisonKind>(item->GetComparison());
+			return ibValue::CreateEnumObject<ibValueEnumComparisonKind>(item->m_comparison);
 		case kFilterColDisplayMode:
-			return ibValue::CreateEnumObject<ibValueEnumFilterDisplayMode>(item->GetDisplayMode());
+			return ibValue::CreateEnumObject<ibValueEnumFilterDisplayMode>(item->m_display);
 		case kFilterColRight:
-			return item->GetRight();
+			return OperandValue(item->m_right);
 		default:
-			return item->GetLeft();
+			return OperandValue(item->m_left);
 		}
 	}
-	void SetSideValue(ibValueFilterItem* item, const ibValue& value) const {
+	void SetSideValue(ibFilterNodeDescription* item, const ibValue& value) const {
 		// A NEW FIELD ON THE LEFT INVALIDATES THE RIGHT. The right-hand side holds a
 		// value OF THE LEFT FIELD'S TYPE — filter by a date and the value is a date;
 		// change the field to a reference and that date means nothing, so it goes.
 		// Only when the TYPE actually changes: re-picking the same field must not
 		// wipe what the user already entered.
 		if (m_side == kFilterColLeft) {
-			const ibTypeDescription before = item->GetRightTypeDescription();
-			item->SetLeft(value);
-			const ibTypeDescription after = item->GetRightTypeDescription();
+			const ibTypeDescription before = item->m_left.m_type;
+			SetOperand(item->m_left, value);
+			const ibTypeDescription after = item->m_left.m_type;
 			// NOT EMPTY — THE TYPE'S OWN DEFAULT. An empty right-hand side reads as
 			// "nothing chosen yet", which for a Boolean is a lie: there is no third
 			// state to choose. AdjustValue answers what the type itself considers
 			// empty — False for a Boolean, an empty reference of the right kind, 0
 			// for a number — so the row is complete the moment the field is picked.
-			if (before.GetFirstClsid() != after.GetFirstClsid())
-				item->SetRight(ibValueTypeDescription::AdjustValue(after, m_editor->GetMetaData()));
+			if (before.GetFirstClsid() != after.GetFirstClsid()) {
+				item->m_right = ibFilterOperandDescription();
+				item->m_right.m_value = ibValueTypeDescription::AdjustValue(after, m_editor->GetMetaData());
+			}
 			NotifyRowChanged();
 			return;
 		}
@@ -324,10 +372,10 @@ private:
 		// THE ENUMERATION CARRIES ITS OWN VALUE BACK — the chosen member IS the
 		// kind, so nothing here maps a label or an index to a meaning.
 		case kFilterColComparison:
-			item->SetComparison(value.ConvertToEnumValue<ibComparisonKind>());
+			item->m_comparison = value.ConvertToEnumValue<ibComparisonKind>();
 			break;
 		case kFilterColDisplayMode:
-			item->SetDisplayMode(value.ConvertToEnumValue<ibFilterDisplayMode>());
+			item->m_display = value.ConvertToEnumValue<ibFilterDisplayMode>();
 			break;
 		// ⭐⭐ NORMALISED TO THE FIELD'S TYPE, like every OTHER path that writes this cell.
 		//
@@ -344,10 +392,17 @@ private:
 			// The FIELD's type decides what the value becomes — that is the whole point, so the type
 			// description leads and the written value follows it (the two-argument overload above
 			// asks only "what does this type consider empty", which is a different question).
-			item->SetRight(ibValueTypeDescription::AdjustValue(
-				item->GetRightTypeDescription(), value, m_editor->GetMetaData()));
+			//
+			// A FIELD chosen here stays a field: `Price > Cost` is the shape the two-sided condition
+			// exists for, so the operand takes whatever it was given and decides for itself.
+			{
+				ibValueCompositionField* asField = nullptr;
+				SetOperand(item->m_right, value.ConvertToValue(asField)
+					? value
+					: ibValueTypeDescription::AdjustValue(item->m_left.m_type, value, m_editor->GetMetaData()));
+			}
 			break;
-		default:              item->SetLeft(value);  break;
+		default: SetOperand(item->m_left, value); break;
 		}
 
 		NotifyRowChanged();
@@ -371,13 +426,13 @@ private:
 		// A GROUP OWNS ONE THING — its operator — and it is a FilterGroupKind value,
 		// so it is picked exactly like a comparison is: the runtime's quick choice
 		// over the registered enumeration, not a list spelled out here.
-		if (GetSelectedGroup() != nullptr) {
+		if (GetSelectedGroup() != nullptr || GetSelectedRoot() != nullptr) {
 			ibValue kind; GetControlValue(kind);
 			ibTypeControlFactory::QuickChoice(this, kind.GetClassType(), GetEditorCtrl());
 			return;
 		}
 
-		ibValueFilterItem* item = GetSelectedItem();
+		ibFilterNodeDescription* item = GetSelectedItem();
 		if (item == nullptr)
 			return;
 
@@ -433,19 +488,26 @@ private:
 	// THE SIDE THAT WAS EDITED gets the value. Writing the right-hand side no
 	// matter which cell was open is how the left one came to look inert.
 	virtual void ChoiceProcessing(ibValue& vSelected) {
-		// The group's operator comes back the same way any chosen value does.
-		if (ibValueFilterGroup* group = GetSelectedGroup()) {
-			group->SetKind(vSelected.ConvertToEnumValue<ibFilterGroupKind>());
+		// The group's operator comes back the same way any chosen value does — and the
+		// ROOT's operator lives on the description, which is the only difference.
+		if (ibFilterDescription* root = GetSelectedRoot()) {
+			root->m_rootKind = vSelected.ConvertToEnumValue<ibFilterGroupKind>();
+			NotifyRowChanged();
+			FinishSelecting();
+			return;
+		}
+		if (ibFilterNodeDescription* group = GetSelectedGroup()) {
+			group->m_groupKind = vSelected.ConvertToEnumValue<ibFilterGroupKind>();
 			NotifyRowChanged();
 			FinishSelecting();
 			return;
 		}
 
-		ibValueFilterItem* item = GetSelectedItem();
+		ibFilterNodeDescription* item = GetSelectedItem();
 		if (item == nullptr)
 			return;
 		SetSideValue(item, vSelected);
-		item->SetUse(true);
+		item->m_use = true;
 		FinishSelecting();
 	}
 
@@ -457,8 +519,8 @@ private:
 //  ibFilterEditor
 // ===========================================================================
 
-ibFilterEditor::ibFilterEditor(wxWindow* parent, ibValueListSettings* settings, ibSettingsFieldTree* fields)
-	: wxPanel(parent, wxID_ANY), m_settings(settings), m_fields(fields)
+ibFilterEditor::ibFilterEditor(wxWindow* parent, ibFilterDescription* filter, ibSettingsFieldTree* fields)
+	: wxPanel(parent, wxID_ANY), m_filter(filter), m_fieldSource(fields)
 {
 	// Draggable split: LEFT = available-fields tree (dot-walkable), RIGHT = the composed filter.
 	wxSplitterWindow* splitter = new wxSplitterWindow(this, wxID_ANY,
@@ -469,9 +531,9 @@ ibFilterEditor::ibFilterEditor(wxWindow* parent, ibValueListSettings* settings, 
 	wxPanel* leftPane = new wxPanel(splitter);
 	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
 	leftSizer->Add(new wxStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
-	m_fieldTree = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	m_fieldCtrl = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
-	leftSizer->Add(m_fieldTree, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(4));
+	leftSizer->Add(m_fieldCtrl, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(4));
 	leftPane->SetSizer(leftSizer);
 
 	// ---- RIGHT pane: the filter TREE — Use / Left / Comparison / Right / Display / Presentation ----
@@ -551,10 +613,12 @@ ibFilterEditor::ibFilterEditor(wxWindow* parent, ibValueListSettings* settings, 
 	ibDataViewColumn* valColumn = new ibDataViewColumn(_("Right value"),
 		new ibFilterValueRenderer(this, kFilterColRight), kFilterColRight, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
 	m_view->GetRootColumnGroup()->AppendColumn(valColumn);
-	ibDataViewColumn* modeColumn = new ibDataViewColumn(_("Display mode"),
+	// HELD, because a reader has no use for it — see SetAuthoring. It is the author's decision about
+	// what the reader sees, so it is not a cell the reader is offered.
+	m_columnDisplayMode = new ibDataViewColumn(_("Display mode"),
 		new ibFilterValueRenderer(this, kFilterColDisplayMode),
 		kFilterColDisplayMode, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
-	m_view->GetRootColumnGroup()->AppendColumn(modeColumn);
+	m_view->GetRootColumnGroup()->AppendColumn(m_columnDisplayMode);
 	m_view->GetRootColumnGroup()->AppendTextColumn(_("Presentation"), kFilterColPresentation,
 		wxDATAVIEW_CELL_EDITABLE, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
 	// A TREE, not a list. The control defaults to ibDataViewList — it fetches the
@@ -582,13 +646,13 @@ ibFilterEditor::ibFilterEditor(wxWindow* parent, ibValueListSettings* settings, 
 	SetSizer(panelSizer);
 
 	// Populate the available-fields tree + wire it: references expand lazily, double-click adds.
-	if (m_fields != nullptr) {
-		m_fields->Populate(m_fieldTree);
-		m_fields->Attach(m_fieldTree);
+	if (m_fieldSource != nullptr) {
+		m_fieldSource->Populate(m_fieldCtrl);
+		m_fieldSource->Attach(m_fieldCtrl);
 	}
-	m_fieldTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this](wxTreeEvent& e) { AddFilterForField(e.GetItem()); });
+	m_fieldCtrl->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this](wxTreeEvent& e) { AddFilterForField(e.GetItem()); });
 	rightPane->SetDropTarget(new ibCallbackDropTarget([this] {
-		if (m_fields != nullptr) AddFilterForField(m_fields->GetDragItem());
+		if (m_fieldSource != nullptr) AddFilterForField(m_fieldSource->GetDragItem());
 	}));
 
 	// The toolbar and the context menu raise the SAME command ids, so both roads
@@ -603,7 +667,7 @@ ibFilterEditor::ibFilterEditor(wxWindow* parent, ibValueListSettings* settings, 
 	m_toolbar->Bind(wxEVT_TOOL, &ibFilterEditor::OnFilterUngroup, this, kFilterCmdUngroup);
 
 	m_model = new ibFilterTreeModel();
-	m_model->SetRoot(GetFilterRoot());
+	m_model->SetFilter(m_filter);
 	m_view->AssociateModel(m_model);
 	m_view->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibFilterEditor::OnContextMenu, this);
 	m_view->Bind(wxEVT_DATAVIEW_ITEM_START_EDITING, &ibFilterEditor::OnStartEditing, this);
@@ -637,24 +701,32 @@ void ibFilterEditor::OnStartEditing(ibDataViewEvent& event)
 		event.Skip();
 }
 
-ibValueFilterGroup* ibFilterEditor::GetFilterRoot() const
-{
-	return m_settings != nullptr ? m_settings->GetFilterRoot() : nullptr;
-}
-
 const ibMetaData* ibFilterEditor::GetMetaData() const
 {
-	return m_fields != nullptr ? m_fields->GetMetaData() : activeMetaData;
+	return m_fieldSource != nullptr ? m_fieldSource->GetMetaData() : activeMetaData;
 }
 
 ibValueCompositionField* ibFilterEditor::ChooseField(wxWindow* parent, const wxString& held) const
 {
-	return m_fields != nullptr ? m_fields->ChooseField(parent, held) : nullptr;
+	return m_fieldSource != nullptr ? m_fieldSource->ChooseField(parent, held) : nullptr;
 }
 
-void ibFilterEditor::SetSettings(ibValueListSettings* settings)
+void ibFilterEditor::SetFilter(ibFilterDescription* filter)
 {
-	m_settings = settings;
+	m_filter = filter;
+	Reload();
+}
+
+// ⭐ WHOSE WINDOW THIS IS — see the header. The model decides what to enumerate, so it is told and
+// the tree is re-read; the DISPLAY MODE column goes with it, since a reader has no use for a choice
+// they cannot make and whose only two other values mean the same thing to them.
+void ibFilterEditor::SetAuthoring(bool authoring)
+{
+	m_authoring = authoring;
+	if (m_model != nullptr)
+		m_model->SetAuthoring(authoring);
+	if (m_columnDisplayMode != nullptr)
+		m_columnDisplayMode->SetHidden(!authoring);
 	Reload();
 }
 
@@ -670,8 +742,8 @@ void ibFilterEditor::Reload()
 
 void ibFilterEditor::ReloadFields()
 {
-	if (m_fields != nullptr)
-		m_fields->Populate(m_fieldTree);
+	if (m_fieldSource != nullptr)
+		m_fieldSource->Populate(m_fieldCtrl);
 }
 
 // OPEN ON THE ROOT, AND ON EVERY GROUP UNDER IT. A collapsed root hides the whole filter behind one
@@ -701,27 +773,29 @@ void ibFilterEditor::ExpandFilterTree()
 	openAll(rootItem);
 }
 
-void ibFilterEditor::RefreshFilterTree(const ibValue& select)
+void ibFilterEditor::RefreshFilterTree(const ibFilterPath& select)
 {
 	// A STRUCTURAL change (added, removed, grouped) is not a value change: rows
 	// appear and disappear, so the view re-reads the shape. The ROWS survive it —
-	// they are keyed by the value they stand for — which is what lets the cursor
-	// land back on the right line below.
+	// they are keyed by their PATH — which is what lets the cursor land back on the
+	// right line below.
 	if (m_model == nullptr || m_view == nullptr)
 		return;
-	// THE ROOT IS RE-STATED, not assumed: this is also the path taken when the
+	// THE FILTER IS RE-STATED, not assumed: this is also the path taken when the
 	// settings are first loaded, and at that point the page has already been built
-	// with whatever root existed then (usually none). SetRoot keeps the rows when
-	// the tree is the same one, so this costs nothing on an edit.
-	m_model->SetRoot(GetFilterRoot());
+	// with whatever filter existed then (usually none). SetFilter keeps the rows
+	// when the tree is the same one, so this costs nothing on an edit.
+	m_model->SetFilter(m_filter);
 
 	// ⚠⚠ EXPANDED ON THE NEXT TURN OF THE EVENT LOOP, not here. Expanding a row the view has not
 	// FETCHED yet is a no-op — and during a refresh (and on the very first load, before the first
 	// paint) it has not. Called inline, the root stayed shut and read as "no filter".
 	CallAfter(&ibFilterEditor::ExpandFilterTree);
 
-	// Rows only exist once fetched, so this asks AFTER the model re-read them.
-	const ibDataViewItem sel = m_model->ItemFor(select);
+	// Rows only exist once fetched, so this asks AFTER the model re-read them. An
+	// EMPTY path is the root, which is never what a command wants to land on — so
+	// "nothing to select" is said by not calling with a path at all.
+	const ibDataViewItem sel = select.empty() ? ibDataViewItem() : m_model->ItemFor(select);
 	if (sel.IsOk()) {
 		m_view->ExpandAncestors(sel);
 		m_view->Select(sel);
@@ -736,6 +810,17 @@ void ibFilterEditor::RefreshFilterTree(const ibValue& select)
 		m_onChanged();
 }
 
+// WHERE A LINE JUST APPENDED SITS — the owning group's path plus the last index.
+// Said once, because every add wants the cursor on what it added, and computing it
+// per command is how one of them ends up landing somewhere else.
+static ibFilterPath ibAppendedPath(ibFilterPath owner, const std::vector<ibFilterNodeDescription>& into)
+{
+	if (into.empty())
+		return ibFilterPath();
+	owner.push_back(into.size() - 1);
+	return owner;
+}
+
 // Add a filter row on the chosen field-tree node — its dot-path + leaf id/type come
 // straight from the node, so even a DEEP path (Supplier.Region.Country) resolves its
 // value editor. New row: default comparison Equal, empty typed value.
@@ -746,34 +831,32 @@ void ibFilterEditor::AddFilterForField(const wxTreeItemId& item)
 {
 	if (m_readOnly)
 		return;
-	// INTO THE GROUP THE USER IS STANDING IN — the selected group, or the parent
-	// of the selected condition, or the root. A new line landing at the bottom of
+	// INTO THE GROUP THE USER IS STANDING IN — the selected group, or the owner of
+	// the selected condition, or the top level. A new line landing at the bottom of
 	// the whole filter would silently mean something else than where they pointed.
-	ibValueFilterGroup* target = m_model != nullptr
-		? m_model->GetTargetGroup(m_view->GetSelection()) : nullptr;
+	const ibDataViewItem sel = m_view->GetSelection();
+	std::vector<ibFilterNodeDescription>* target = m_model != nullptr
+		? m_model->GetTargetChildren(sel) : nullptr;
 	if (target == nullptr)
 		return;
 
 	// The tree's own label is the PRESENTATION — that is what the user picked and
 	// what the filter line should read back, rather than the technical path.
-	//
-	// NOT AN ibValuePtr HERE. Wrapping the field and handing THAT to ibValue picks a different
-	// constructor than the one meant for a value object — the condition ends up holding something
-	// that is not the field, and it crashes the moment the group copies it in. The field is
-	// refcounted by the value that takes it, so the raw object is what travels.
-	ibValueCompositionField* field = ibSettingsFieldTree::FieldAt(m_fieldTree, item);
-	if (field == nullptr)
+	ibValuePtr<ibValueCompositionField> field(ibSettingsFieldTree::FieldAt(m_fieldCtrl, item));
+	if (!field)
 		return;
 
-	ibValueFilterItem* added = target->Add(ibValue(field), ibComparisonKind_Equal, ibValue(), true);
+	ibFilterNodeDescription& added = ibFilterDescription::Append(*target,
+		field->GetPath(), ibComparisonKind_Equal, ibValue(), true);
+	added.m_left.m_presentation = field->GetPresentation();
+	added.m_left.m_leafId       = field->GetLeafId();
+	added.m_left.m_type         = field->GetTypeDescription();
 	// THE FIELD IS KNOWN, SO THE VALUE'S TYPE IS KNOWN — seed the right-hand side
 	// with what that type calls empty (False for a Boolean, an empty reference of
 	// the right kind) rather than with nothing. Same rule as re-picking the field
 	// in the Left cell, so both roads leave the row in the same state.
-	if (added != nullptr)
-		added->SetRight(ibValueTypeDescription::AdjustValue(
-			added->GetRightTypeDescription(), GetMetaData()));
-	RefreshFilterTree(added != nullptr ? ibValue(added) : ibValue());
+	added.m_right.m_value = ibValueTypeDescription::AdjustValue(added.m_left.m_type, GetMetaData());
+	RefreshFilterTree(ibAppendedPath(m_model->GetTargetPath(sel), *target));
 }
 
 // A NEW LINE IS EMPTY. Taking whatever happens to be selected in the field tree
@@ -783,13 +866,14 @@ void ibFilterEditor::AddFilterForField(const wxTreeItemId& item)
 // mean what it says.
 void ibFilterEditor::OnFilterAdd(wxCommandEvent&)
 {
-	ibValueFilterGroup* target = m_model != nullptr
-		? m_model->GetTargetGroup(m_view->GetSelection()) : nullptr;
+	if (m_model == nullptr || m_view == nullptr)
+		return;
+	const ibDataViewItem sel = m_view->GetSelection();
+	std::vector<ibFilterNodeDescription>* target = m_model->GetTargetChildren(sel);
 	if (target == nullptr)
 		return;
-	ibValueFilterItem* added = target->Add(ibValue(new ibValueCompositionField()),
-		ibComparisonKind_Equal, ibValue(), true);
-	RefreshFilterTree(added != nullptr ? ibValue(added) : ibValue());
+	ibFilterDescription::Append(*target, wxEmptyString, ibComparisonKind_Equal, ibValue(), true);
+	RefreshFilterTree(ibAppendedPath(m_model->GetTargetPath(sel), *target));
 }
 
 void ibFilterEditor::OnFilterRemove(wxCommandEvent&)
@@ -803,15 +887,14 @@ void ibFilterEditor::OnFilterRemove(wxCommandEvent&)
 
 	// The ROOT is not removable — an empty filter is an empty root group, not the
 	// absence of one, and taking it away would leave nowhere to add.
-	ibValueFilterGroup* parent = m_model->GetOwnerGroup(sel);
-	if (parent == nullptr)
+	std::vector<ibFilterNodeDescription>* owner = m_model->GetOwnerChildren(sel);
+	const ibFilterPath path = m_model->GetPath(sel);
+	if (owner == nullptr || path.empty())
 		return;
 
-	ibValueFilterItem* line = m_model->GetItem(sel);
-	const ibValue child = line != nullptr ? ibValue(line) : ibValue(m_model->GetGroup(sel));
-	const size_t idx = parent->IndexOf(child);
-	if (idx < parent->Count())
-		parent->Remove(idx);
+	const size_t idx = path.back();
+	if (idx < owner->size())
+		owner->erase(owner->begin() + idx);
 
 	RefreshFilterTree();
 }
@@ -820,13 +903,14 @@ void ibFilterEditor::OnFilterAddGroup(wxCommandEvent&)
 {
 	if (m_model == nullptr || m_view == nullptr)
 		return;
-	ibValueFilterGroup* target = m_model->GetTargetGroup(m_view->GetSelection());
+	const ibDataViewItem sel = m_view->GetSelection();
+	std::vector<ibFilterNodeDescription>* target = m_model->GetTargetChildren(sel);
 	if (target == nullptr)
 		return;
 	// AND by default — the operator most groups keep, and the one the drop-down in
 	// the group's own row changes when it is not.
-	ibValueFilterGroup* added = target->AddGroup(ibFilterGroupKind_And);
-	RefreshFilterTree(added != nullptr ? ibValue(added) : ibValue());
+	ibFilterDescription::AppendGroup(*target, ibFilterGroupKind_And);
+	RefreshFilterTree(ibAppendedPath(m_model->GetTargetPath(sel), *target));
 }
 
 void ibFilterEditor::OnFilterCopy(wxCommandEvent&)
@@ -834,20 +918,22 @@ void ibFilterEditor::OnFilterCopy(wxCommandEvent&)
 	if (m_model == nullptr || m_view == nullptr)
 		return;
 	const ibDataViewItem sel = m_view->GetSelection();
-	ibValueFilterItem* source = m_model->GetItem(sel);
-	ibValueFilterGroup* target = m_model->GetTargetGroup(sel);
+	const ibFilterNodeDescription* source = m_model->GetNode(sel);
+	std::vector<ibFilterNodeDescription>* target = m_model->GetTargetChildren(sel);
 	if (source == nullptr || target == nullptr)
 		return;
 
-	// A COPY IS A NEW LINE WITH THE SAME ANSWERS — including the field object on
-	// either side, so the copy keeps the type that makes its value editable.
-	ibValueFilterItem* copy = target->Add(source->GetLeft(), source->GetComparison(),
-		source->GetRight(), source->GetUse());
-	if (copy != nullptr) {
-		copy->SetDisplayMode(source->GetDisplayMode());
-		copy->SetPresentation(source->GetPresentation());
-	}
-	RefreshFilterTree(copy != nullptr ? ibValue(copy) : ibValue());
+	// A COPY IS A NEW LINE WITH THE SAME ANSWERS — one assignment, because a node
+	// carries everything about itself, its children included. Copying it field by
+	// field is how a copy comes to be missing whatever was added last.
+	//
+	// ⚠ TAKEN BEFORE THE APPEND. `source` points INTO the vector being grown, and a
+	// push_back that reallocates leaves it dangling — the copy would then be made
+	// from freed memory, which is the kind of defect that shows up as a value that
+	// is nearly right.
+	const ibFilterNodeDescription copy = *source;
+	target->push_back(copy);
+	RefreshFilterTree(ibAppendedPath(m_model->GetTargetPath(sel), *target));
 }
 
 void ibFilterEditor::OnFilterGroupSelected(wxCommandEvent&)
@@ -858,26 +944,30 @@ void ibFilterEditor::OnFilterGroupSelected(wxCommandEvent&)
 	if (!sel.IsOk())
 		return;
 
-	// The selected line's PARENT is where the new group goes — grouping wraps
-	// lines, it does not move them somewhere else.
-	ibValueFilterGroup* parent = m_model->GetOwnerGroup(sel);
-	if (parent == nullptr)
-		parent = m_model->GetRoot();
-	if (parent == nullptr)
+	// The selected line's OWNER is where the new group goes — grouping wraps lines,
+	// it does not move them somewhere else.
+	std::vector<ibFilterNodeDescription>* owner = m_model->GetOwnerChildren(sel);
+	const ibFilterPath path = m_model->GetPath(sel);
+	if (owner == nullptr || path.empty())
 		return;
 
-	const ibValue selected = m_model->GetItem(sel) != nullptr
-		? ibValue(m_model->GetItem(sel))
-		: ibValue(m_model->GetGroup(sel));
-
-	const size_t idx = parent->IndexOf(selected);
-	if (idx >= parent->Count())
+	const size_t idx = path.back();
+	if (idx >= owner->size())
 		return;
 
-	ibValueFilterGroup* wrapper = parent->GroupChildren({ idx }, ibFilterGroupKind_And);
+	// IN PLACE OF THE LINE, holding it — so its order relative to everything else
+	// is kept, which is what "group this" means and what a push_back would lose.
+	ibFilterNodeDescription wrapper;
+	wrapper.m_kind = ibFilterNodeKind_Group;
+	wrapper.m_groupKind = ibFilterGroupKind_And;
+	wrapper.m_children.push_back((*owner)[idx]);
+	(*owner)[idx] = wrapper;
+
 	// The cursor stays on the LINE that was grouped, not on the wrapper: the user
 	// asked to put that line in a group, and it is still the line they were on.
-	RefreshFilterTree(wrapper != nullptr ? selected : ibValue());
+	ibFilterPath inside = path;
+	inside.push_back(0);
+	RefreshFilterTree(inside);
 }
 
 void ibFilterEditor::OnFilterUngroup(wxCommandEvent&)
@@ -885,49 +975,57 @@ void ibFilterEditor::OnFilterUngroup(wxCommandEvent&)
 	if (m_model == nullptr || m_view == nullptr)
 		return;
 	const ibDataViewItem sel = m_view->GetSelection();
-	ibValueFilterGroup* group = m_model->GetGroup(sel);
-	if (group == nullptr)
+	const ibFilterNodeDescription* group = m_model->GetNode(sel);
+	if (group == nullptr || group->m_kind != ibFilterNodeKind_Group)
 		return;   // only a group can be ungrouped
 
-	ibValueFilterGroup* parent = m_model->GetOwnerGroup(sel);
-	if (parent == nullptr)
-		return;   // the ROOT has no parent to lift its children into
+	std::vector<ibFilterNodeDescription>* owner = m_model->GetOwnerChildren(sel);
+	const ibFilterPath path = m_model->GetPath(sel);
+	if (owner == nullptr || path.empty())
+		return;   // the ROOT has no owner to lift its children into
 
-	for (size_t i = 0; i < parent->Count(); ++i) {
-		if (parent->GetGroup(i) == group) {
-			parent->UngroupChild(i);
-			break;
-		}
-	}
+	const size_t idx = path.back();
+	if (idx >= owner->size())
+		return;
+
+	// THE CHILDREN TAKE THE GROUP'S PLACE, in their own order — spliced in where it
+	// stood, so ungrouping is exactly the inverse of grouping and nothing jumps to
+	// the end of the list. Copied out first: the splice reallocates the vector the
+	// group itself lives in.
+	const std::vector<ibFilterNodeDescription> children = (*owner)[idx].m_children;
+	owner->erase(owner->begin() + idx);
+	owner->insert(owner->begin() + idx, children.begin(), children.end());
+
 	RefreshFilterTree();
 }
 
-// Moving belongs to the GROUP — it is the one that knows where its children sit
-// (ibValueFilterGroup::MoveChild). The editor only says which line and which way,
-// and gets back the line to put the cursor on.
-static ibValue ibMoveSelectedFilterChild(ibFilterTreeModel* model, ibDataViewCtrl* view, int delta)
+// ONE STEP, WITHIN ITS OWN LIST. A line does not change parent by moving — that
+// would change what it means without the user asking for it. The editor says which
+// line and which way, and gets back the PATH to put the cursor on.
+static ibFilterPath ibMoveSelectedFilterChild(ibFilterTreeModel* model, ibDataViewCtrl* view, int delta)
 {
 	if (model == nullptr || view == nullptr)
-		return ibValue();
+		return ibFilterPath();
 	const ibDataViewItem sel = view->GetSelection();
 	if (!sel.IsOk())
-		return ibValue();
+		return ibFilterPath();
 
-	ibValueFilterGroup* parent = model->GetOwnerGroup(sel);
-	if (parent == nullptr)
-		return ibValue();   // the root line has nowhere to move within
+	std::vector<ibFilterNodeDescription>* owner = model->GetOwnerChildren(sel);
+	ibFilterPath path = model->GetPath(sel);
+	if (owner == nullptr || path.empty())
+		return ibFilterPath();   // the root line has nowhere to move within
 
-	ibValueFilterItem* line = model->GetItem(sel);
-	const ibValue child = line != nullptr ? ibValue(line) : ibValue(model->GetGroup(sel));
-	const size_t idx = parent->IndexOf(child);
-	if (idx >= parent->Count())
-		return ibValue();
+	const size_t idx = path.back();
+	const int target = static_cast<int>(idx) + delta;
+	if (idx >= owner->size() || target < 0 || target >= static_cast<int>(owner->size()))
+		return ibFilterPath();   // already at that end
 
-	parent->MoveChild(idx, delta);
+	std::swap((*owner)[idx], (*owner)[static_cast<size_t>(target)]);
 	// THE LINE TRAVELS WITH THE CURSOR. Moving a row and leaving the selection
 	// behind reads as "nothing happened" — the next press then moves a different
 	// row, which is worse than doing nothing.
-	return child;
+	path.back() = static_cast<size_t>(target);
+	return path;
 }
 
 void ibFilterEditor::OnFilterMoveUp(wxCommandEvent&)
@@ -989,9 +1087,11 @@ void ibFilterEditor::OnContextMenu(ibDataViewEvent&)
 	// GREYED, NOT HIDDEN — a command that disappears reads as "this build cannot
 	// do that"; a greyed one reads as "not here", which is the truth.
 	const ibDataViewItem sel = m_view->GetSelection();
-	const bool isGroup = m_model != nullptr && m_model->GetGroup(sel) != nullptr;
+	// The row IS the node — one question answers both: a group can be ungrouped, a condition copied.
+	const ibFilterNodeDescription* node = m_model != nullptr ? m_model->GetNode(sel) : nullptr;
+	const bool isGroup = node != nullptr && node->m_kind == ibFilterNodeKind_Group;
 	const bool isRoot  = sel.IsOk() && m_model != nullptr && !m_model->GetParent(sel).IsOk();
-	menu.Enable(kFilterCmdCopy, m_model != nullptr && m_model->GetItem(sel) != nullptr);
+	menu.Enable(kFilterCmdCopy, node != nullptr && node->m_kind == ibFilterNodeKind_Condition);
 	menu.Enable(kFilterCmdRemove, sel.IsOk() && !isRoot);
 	menu.Enable(kFilterCmdMoveUp, sel.IsOk() && !isRoot);
 	menu.Enable(kFilterCmdMoveDown, sel.IsOk() && !isRoot);

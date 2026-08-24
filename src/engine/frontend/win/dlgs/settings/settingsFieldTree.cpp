@@ -70,7 +70,6 @@ static int ibSettingsResourceIcon(wxTreeCtrl* tree)
 static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
 	const ibSourceDataObject::ibSourceExplorer& explorer, const wxString& prefix,
 	const ibMetaData* metaData, const std::function<bool(const wxString&)>& isResource,
-	const std::function<bool(const wxString&)>& isVisible = nullptr,
 	const wxString& prefixText = wxEmptyString)
 {
 	for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
@@ -106,13 +105,6 @@ static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
 		// COLUMN'S own (a dimension, a register resource and a plain attribute each vend their own),
 		// so nothing here holds a list of kinds and a kind added tomorrow is dressed the day it
 		// registers.
-		// ⭐ MAY THIS NODE USE THE FIELD AT ALL — the available set, narrowed by whoever owns it. A
-		// LEAF the set does not name is not offered; a ROAD stays, because what it leads to may well
-		// be named (see SetVisibleTest).
-		if (isVisible && data->m_refTypes.empty() && !isVisible(data->m_path)) {
-			delete data;
-			continue;
-		}
 		const bool resource = isResource && isResource(data->m_path);
 		const int icon = resource ? ibSettingsResourceIcon(tree)
 		                          : ibSettingsFieldIcon(tree, col->GetSourceIcon());
@@ -126,8 +118,7 @@ static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
 // reference-as-source vends the target's explorer; its fields are copied into tree nodes
 // synchronously, so the temporary reference can die after.
 static void ExpandSourceFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item, const ibMetaData* metaData,
-	const std::function<bool(const wxString&)>& isResource = nullptr,
-	const std::function<bool(const wxString&)>& isVisible = nullptr)
+	const std::function<bool(const wxString&)>& isResource = nullptr)
 {
 	ibSourceFieldNode* data = dynamic_cast<ibSourceFieldNode*>(tree->GetItemData(item));
 	if (data == nullptr || data->m_refTypes.empty() || data->m_loaded || metaData == nullptr)
@@ -139,6 +130,9 @@ static void ExpandSourceFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item, co
 	// it with, and a fruitless attempt can be retried.
 	const size_t before = tree->GetChildrenCount(item, false);
 	for (const ibMetaID& target : data->m_refTypes) {
+		// Nothing is read to answer this: what the loop wants is the target's FIELDS — metadata — and
+		// the reference is only the thing that vends them. Creating one reads nothing by default
+		// (ibReferenceLoad::OnDemand), which is why the mode is not stated here.
 		ibValue refValue = ibValueReferenceDataObject::Create(metaData, target);
 		ibSourceDataObject* refObj = nullptr;
 		if (!refValue.ConvertToValue(refObj) || refObj == nullptr)
@@ -146,7 +140,7 @@ static void ExpandSourceFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item, co
 		if (const auto* refExplorer = refObj->GetSourceExplorer())
 			// NO DEPTH LIMIT. The tree unfolds LAZILY — a level exists only where the
 			// user opened it — so a self-referencing type cannot run away on its own.
-			AppendSourceFields(tree, item, *refExplorer, data->m_path, metaData, isResource, isVisible,
+			AppendSourceFields(tree, item, *refExplorer, data->m_path, metaData, isResource,
 				data->m_presentation);
 	}
 
@@ -202,7 +196,7 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 
 	if (m_source != nullptr) {
 		if (const auto* explorer = m_source->GetSourceExplorer())
-			AppendSourceFields(tree, root, *explorer, wxEmptyString, metaData, m_isResource, m_isVisible);
+			AppendSourceFields(tree, root, *explorer, wxEmptyString, metaData, m_isResource);
 		return;
 	}
 
@@ -215,12 +209,6 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 		// into what a value may be.
 		data->m_type     = field.m_type;
 		data->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(field.m_type.GetClsidList(), metaData);
-		// The same narrowing the explorer path applies — a leaf outside the available set is not
-		// offered, a road stays walkable.
-		if (m_isVisible && data->m_refTypes.empty() && !m_isVisible(data->m_path)) {
-			delete data;
-			continue;
-		}
 		const wxTreeItemId item = tree->AppendItem(root, field.m_name, 0, 0, data);
 		if (!data->m_refTypes.empty())
 			tree->AppendItem(item, wxEmptyString);   // dummy -> [+]
@@ -254,7 +242,7 @@ void ibSettingsFieldTree::SelectByPath(wxTreeCtrl* tree, const wxString& path) c
 		if (!found.IsOk())
 			return;
 		if (parts.HasMoreTokens()) {
-			ExpandSourceFieldNode(tree, found, GetMetaData(), m_isResource, m_isVisible);   // the road continues — load it
+			ExpandSourceFieldNode(tree, found, GetMetaData(), m_isResource);   // the road continues — load it
 			tree->Expand(found);
 		}
 		parent = found;
@@ -274,7 +262,7 @@ void ibSettingsFieldTree::Attach(wxTreeCtrl* tree)
 
 	// Lazily expand a reference field — the tree that fired the event is the one to expand.
 	tree->Bind(wxEVT_TREE_ITEM_EXPANDING, [this, tree](wxTreeEvent& e) {
-		ExpandSourceFieldNode(tree, e.GetItem(), GetMetaData(), m_isResource, m_isVisible);
+		ExpandSourceFieldNode(tree, e.GetItem(), GetMetaData(), m_isResource);
 		e.Skip();
 	});
 
@@ -299,8 +287,17 @@ ibValueCompositionField* ibSettingsFieldTree::FieldAt(const wxTreeCtrl* tree, co
 	if (tree == nullptr || !item.IsOk())
 		return nullptr;
 	const ibSourceFieldNode* node = dynamic_cast<ibSourceFieldNode*>(tree->GetItemData(item));
-	if (node == nullptr || node->m_leafId == wxNOT_FOUND)
-		return nullptr;   // a reference NODE is a road, not a field
+
+	// A NODE WITH NO PATH IS NOT A FIELD — the lazy-expand placeholder under a reference, which
+	// carries no data at all and is what this guard is really for.
+	//
+	// 🛑 IT TESTED THE LEAF ID. That id is the QUERYABLE COLUMN's, and a field read off a query TEXT
+	// has none — so the moment the composer's picker started from the parsed text rather than from a
+	// running source, EVERY field answered "a road, not a field" and nothing could be picked at all
+	// (Max, 2026-08-24: "cannot set a value"). Having no column id is a fact about the source, not
+	// about whether the row is a field.
+	if (node == nullptr || node->m_path.IsEmpty())
+		return nullptr;
 
 	// NOT AN ibValuePtr HERE. Wrapping the field in a smart pointer and then handing THAT to ibValue
 	// picks a different constructor than the one meant for a value object — the caller ends up
@@ -336,13 +333,18 @@ ibValueCompositionField* ibSettingsFieldTree::ChooseField(wxWindow* parent, cons
 	// the picker's tree refusing to unfold while the identical tree on the tab
 	// behind it worked — the same handler, a different window.
 	tree->Bind(wxEVT_TREE_ITEM_EXPANDING, [tree, this](wxTreeEvent& e) {
-		ExpandSourceFieldNode(tree, e.GetItem(), GetMetaData(), m_isResource, m_isVisible);
+		ExpandSourceFieldNode(tree, e.GetItem(), GetMetaData(), m_isResource);
 		e.Skip();
 	});
 	// A CLICK ON THE ARROW is not the only way in: selecting a reference loads its
 	// fields too, so the node is ready by the time the user reaches for the arrow.
+	//
+	// ⚠ AND IT COSTS WHAT IT LOOKS LIKE IT COSTS. This was suspected of being the lag and was taken
+	// out for a while; the lag was a reference reading its (non-existent) ROW to be asked what fields
+	// it has — the load default, one storey down. Filling a node is a metadata walk, which is what
+	// this was always meant to be.
 	tree->Bind(wxEVT_TREE_SEL_CHANGED, [tree, this](wxTreeEvent& e) {
-		ExpandSourceFieldNode(tree, e.GetItem(), GetMetaData(), m_isResource, m_isVisible);
+		ExpandSourceFieldNode(tree, e.GetItem(), GetMetaData(), m_isResource);
 		e.Skip();
 	});
 
@@ -358,7 +360,7 @@ ibValueCompositionField* ibSettingsFieldTree::ChooseField(wxWindow* parent, cons
 			return;
 		const ibSourceFieldNode* node = dynamic_cast<ibSourceFieldNode*>(tree->GetItemData(item));
 		if (node != nullptr && !node->m_refTypes.empty()) {
-			ExpandSourceFieldNode(tree, item, GetMetaData(), m_isResource, m_isVisible);
+			ExpandSourceFieldNode(tree, item, GetMetaData(), m_isResource);
 			tree->Expand(item);
 			return;   // a reference is a ROAD — going down it is not choosing it
 		}

@@ -2,6 +2,8 @@
 #define _COMPOSER_H__
 
 #include "frontend/docView/docView.h"
+// (NOTHING FROM THE COMPOSITION SIDE. This view neither holds a description nor runs one — it
+//  decides WHERE the editor lives and hands it the document.)
 
 // ----------------------------------------------------------------------------
 // A COMPOSER OPENS ON A TAB OF ITS OWN, like a form or a template.
@@ -35,6 +37,16 @@ public:
 	virtual bool OnClose(bool deleteWindow = true) override;
 
 private:
+
+	// (THE COMPOSITION IS GONE, and with it the last runtime object on this road. It was kept for
+	//  the questions "which fields does the query offer" and "why did it refuse" — which turned out
+	//  to be questions about a TEXT and a CONFIGURATION, answered by ibQueryFieldsOfText without
+	//  anything running. A composition is the facade the FORM road holds; a designer tab holds a
+	//  document, and the editor takes both of its answers from that.)
+
+	// (AND NO STAND-IN DESCRIPTION EITHER. This view held one so the panel always had something to
+	//  bind to; the editor reaches the description through the document now, and owns that answer —
+	//  including what to bind to when a tab was somehow opened on no composer at all.)
 
 	wxDECLARE_EVENT_TABLE();
 	wxDECLARE_DYNAMIC_CLASS(ibComposerEditView);

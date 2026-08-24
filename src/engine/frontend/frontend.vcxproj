@@ -63,7 +63,6 @@
     <ClCompile Include="propertyManager\property\advprop\advpropForm.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropGeneration.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropDataComposition.cpp" />
-    <ClCompile Include="propertyManager\property\advprop\advpropDynamicList.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSchedule.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropDynamicSource.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropHyperLink.cpp" />
@@ -100,6 +99,7 @@
     <ClCompile Include="visualView\ctrl\controlProperty.cpp" />
     <ClCompile Include="visualView\ctrl\form.cpp" />
     <ClCompile Include="visualView\ctrl\formAttribute.cpp" />
+    <ClCompile Include="visualView\ctrl\formAttributeProperty.cpp" />
     <ClCompile Include="visualView\ctrl\formCommand.cpp" />
     <ClCompile Include="visualView\ctrl\formAction.cpp" />
     <ClCompile Include="visualView\ctrl\formControl.cpp" />
@@ -528,7 +528,6 @@
     <ClInclude Include="propertyManager\property\advprop\advpropFont.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropGeneration.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropDataComposition.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropDynamicList.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropSchedule.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropDynamicSource.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropHyperLink.h" />

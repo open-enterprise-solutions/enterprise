@@ -50,7 +50,17 @@ public:
 	// this very object, and a copy handed to it would be the one the user is looking at while the
 	// saved one stayed behind. It is held by the property below — one place, which is also the one
 	// that saves it.
-	ibValueDataComposition* GetComposition() const { return m_propertyComposition->GetComposition(); }
+	// (NO LIVE COMPOSITION HERE EITHER. A metaobject DECLARES — what it has is the description below,
+	//  and that is what the designer edits and what a report copies when it opens. Whoever needs a
+	//  running composition builds one over this description and owns it themselves.)
+
+	// ⭐ WHAT IT DECLARES, AS DATA — reached STRAIGHT FROM THE METAOBJECT and managed there, the way a
+	// tabular section's value is reached in a value table: a reference to change in place, and a CONST
+	// one for whoever only reads. A report seeding its object's composition takes a COPY of this; it
+	// does not serialise one out and read it back.
+	ibCompositionDescription& GetCompositionDesc() { return m_propertyComposition->GetValueAsCompositionDesc(); }
+	const ibCompositionDescription& GetCompositionDesc() const { return m_propertyComposition->GetValueAsCompositionDesc(); }
+	void SetCompositionDesc(const ibCompositionDescription& desc) { m_propertyComposition->SetValue(desc); }
 
 	// ⚠ TWO BASES ANSWER THESE, so the metaobject's answers are named as the ones. A composer is a
 	// metaobject that ALSO wears a column face; its name, its synonym and whether it is allowed are
@@ -101,6 +111,7 @@ private:
 	// property in — and what keeps its node's CHILDREN area for metaobjects alone.
 	ibPropertyCategory*    m_categoryComposer = ibPropertyObject::CreatePropertyCategory(wxT("Composer"), _("Composer"));
 	ibPropertyComposition* m_propertyComposition = ibPropertyObject::CreateProperty<ibPropertyComposition>(m_categoryComposer, wxT("CompositionData"), _("Composition data"));
+
 
 	// Stated once, never derived: the column face answers "a composition" for every composer.
 	// Mutable because the column contract hands back a non-const reference from a const method.

@@ -617,6 +617,9 @@
     <ClCompile Include="visualView\ctrl\controlProperty.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="visualView\ctrl\formAttributeProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="visualView\ctrl\form.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
@@ -2287,6 +2290,70 @@
     </ClInclude>
     <ClInclude Include="uikit\ctrl\treeCtrl.h">
       <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="docView\templates\docViewHomePage.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropDynamicSource.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropSchedule.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\canvasWindow.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formAttribute.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formCommand.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\layerObject.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\layers\commandBar.cpp">
+      <Filter>visualView\layers</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\layers\commandReceiver.cpp">
+      <Filter>visualView\layers</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\jobSchedule\jobScheduleSettings.cpp">
+      <Filter>win\dlgs\jobSchedule</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="docView\templates\docViewHomePage.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropDynamicSource.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropSchedule.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\canvasWindow.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\formAttribute.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\formCommand.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\layerObject.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\layers\commandBar.h">
+      <Filter>visualView\layers</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\layers\commandReceiver.h">
+      <Filter>visualView\layers</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\jobSchedule\jobScheduleSettings.h">
+      <Filter>win\dlgs\jobSchedule</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -1,8 +1,9 @@
 #include "tableBox.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
-#include "backend/composition/listFilter.h"     // ibValueListSettings::GetFilter()->Add / Clear + ibComparisonKind
+#include "backend/compositionDescription.h"     // the description the quick filter writes into
 #include "backend/appData.h"
+#include "frontend/win/dlgs/settings/list/listSettings.h"   // the ONE door a model's settings are opened by
 #include "form.h"
 
 //****************************************************************************
@@ -100,7 +101,7 @@ void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendV
 	switch (lNumAction)
 	{
 	case enTableSelect:         Command_Choose(srcForm);             break;   // returns the current ReturnLine
-	case enTableFilter:         Command_ShowListSettings();          break;   // direct → control
+	case enTableFilter:         Command_ShowListSettings();          break;   // direct → the settings window
 	case enTableFilterByColumn: Command_FilterByCurrentColumn();     break;   // direct → control + L5
 	case enTableFilterClear:    Command_ClearFilter();               break;   // direct → L5
 	case enTableViewMode:       Command_ShowViewMode();              break;   // direct → control
@@ -165,16 +166,23 @@ void ibValueModelTableBox::Command_Choose(ibBackendValueForm* srcForm)
 	srcForm->NotifyChoice(selectValue);
 }
 
+// ⭐ ASKED FOR BY NAME — the settings window's own door, the same one the gridbox uses for a report.
+// It used to be reached through a method of the CONTROL, which is a widget carrying the settings
+// road inside it; the road belongs to the window that IS the settings.
 void ibValueModelTableBox::Command_ShowListSettings()
 {
-	if (auto* ctrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx()))
-		ctrl->ShowListSettings(m_tableModel);
+	// ⭐ A COPY OF THE ACTIVE SETTING GOES IN, AND ON OK IT IS SET BACK ON THE MODEL — that is the
+	// whole of it. Nothing is kept on this side: the active setting lives in the model's composer,
+	// which is not serialised by the schema (Max, 2026-08-24).
+	// …and the CONFIGURATION is handed in by the box: it knows which one it is showing, and a window
+	// that went looking would be guessing between the several that are open (Max, 2026-08-24).
+	ibDialogListSettings::ShowUserSettings(dynamic_cast<wxWindow*>(GetInnerWx()), m_tableModel, GetMetaData());
 }
 
 void ibValueModelTableBox::Command_FilterByCurrentColumn()
 {
 	auto* ctrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx());
-	if (ctrl == nullptr || m_tableModel == nullptr || m_tableModel->GetListSettings() == nullptr)
+	if (ctrl == nullptr || m_tableModel == nullptr)
 		return;
 
 	// Current row + current column come straight off the live control — the model never pulls them.
@@ -188,16 +196,33 @@ void ibValueModelTableBox::Command_FilterByCurrentColumn()
 	m_tableModel->GetValueByMetaID(sel, colId, value);      // reading a cell value is a plain data op
 	const wxString name = m_tableModel->GetColumnNameByID(colId);
 	if (!name.empty()) {
-		m_tableModel->GetListSettings()->GetFilter()->Add(name, ibComparisonKind_Equal, value);
+		// ⭐ THROUGH THE SETTINGS, NEVER THROUGH THE COMPOSER'S OWN VERBS. This control says WHAT to
+		// show; the model turns that into a read. So: take a COPY OF WHAT IS IN FORCE — the reader's
+		// where they set one, the author's where they did not (starting from the user's section alone
+		// would silently drop the author's filter the moment somebody narrowed by a column) — add the
+		// condition, and hand the whole of it back as the user's. The list's own description, what the
+		// configuration saved, is untouched.
+		ibSettingsDescription settings = m_tableModel->GetModelComposer().GetCurrentSettingsDesc();
+		settings.m_filter.Append(name, ibComparisonKind_Equal, value);
+		m_tableModel->GetModelComposer().SetUserSettingsDesc(settings);
 		m_tableModel->RefetchAll();
 	}
 }
 
 void ibValueModelTableBox::Command_ClearFilter()
 {
-	if (m_tableModel == nullptr || m_tableModel->GetListSettings() == nullptr)
+	if (m_tableModel == nullptr)
 		return;
-	m_tableModel->GetListSettings()->GetFilter()->Clear();
+	// ⭐ CLEARING THE FILTER CLEARS THE FILTER. It used to assign an EMPTY SETTING, which wipes all
+	// three sections — so a person who had set a sort and then pressed "Filter clear" lost the sort
+	// too, under a command that says nothing about sorting (Max, 2026-08-24).
+	//
+	// An empty filter, not "no user setting": whatever else the reader chose is theirs and stays. The
+	// developer's own filter comes back by the ordinary rule — an empty part falls through to the
+	// author's (GetCurrentFilterDesc).
+	ibSettingsDescription settings = m_tableModel->GetModelComposer().GetCurrentSettingsDesc();
+	settings.m_filter.Clear();
+	m_tableModel->GetModelComposer().SetUserSettingsDesc(settings);
 	m_tableModel->RefetchAll();
 }
 

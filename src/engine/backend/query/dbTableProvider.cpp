@@ -3419,6 +3419,7 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 			// spreads the CTE's own column of that name. One rule, both sides of the declaration.
 			if (innerSpec.m_selectCols != nullptr && !innerSpec.m_selectCols->empty()) {
 				std::vector<ibQueryProjItem> proj;
+				std::vector<const ibBackendQueryColumn*> projected;   // …once each — see below
 				for (const auto& sc : *innerSpec.m_selectCols) {
 					const ibBackendQueryColumn* col = sc.first;
 					if (col == nullptr || sc.second.IsEmpty())
@@ -3447,6 +3448,20 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 					// no projection: the read assembles it from the two the statement already carries.
 					if (col->IsSyntheticColumn())
 						continue;
+
+					// ⚠ …AND A COLUMN PROJECTED ONCE IS NOT PROJECTED AGAIN. The select list is a list of
+					// OUTPUTS, and two outputs may stand over ONE column — the same field asked for twice,
+					// under two names. Their aliases are built from the column's PHYSICAL name, so both
+					// spell `fld<metaID>_TYPE` and the engine refuses the statement:
+					// `-104 … column FLD1667_TYPE was specified multiple times for derived table Q_SUB0`
+					// (measured 2026-08-24, a report that would not compose).
+					//
+					// The published set is deduped by the same rule (DeclareNamedResultAsCte), so the two
+					// sides go on agreeing about what exists — which is the whole reason the synthetic
+					// test above is written in both places.
+					if (std::find(projected.begin(), projected.end(), col) != projected.end())
+						continue;
+					projected.push_back(col);
 
 					// …and QUALIFIED BY THE LEAF THAT OWNS IT when the declaration is a join: two tables
 					// in one FROM make a bare field name ambiguous to the engine even where the two

@@ -1,8 +1,14 @@
-#ifndef _COMPOSITION_FIELD_H__
-#define _COMPOSITION_FIELD_H__
+#ifndef __VALUE_COMPOSER_FIELD_H__
+#define __VALUE_COMPOSER_FIELD_H__
+
+// The FIELD a composer setting points at — the runtime value behind every condition, sort line
+// and grouping level. Part of the composer's RUNTIME surface (see valueComposerSettings.h for
+// what that surface is and why it is being rebuilt); the DATA it describes lives in
+// backend/compositionDescription.h and knows nothing about this.
 
 #include "backend/compiler/value.h"
 #include "backend/typeDescription.h"
+
 
 ////////////////////////////////////////////////////////////////////////////
 // CompositionField — a FIELD of a source, as a value
@@ -16,8 +22,8 @@
 // All four facts exist today — spread across three places that keep
 // re-deriving each other:
 //
-//   * the filter line keeps `m_field` (a string), `m_leafId` and
-//     `m_typeDescription` as three unrelated members;
+//   * the filter line keeps a path, a leaf id and a type as three unrelated
+//     members;
 //   * the settings dialog keeps `ibSourceFieldNode` — path, leaf id, type,
 //     referenced targets, "expanded yet?" — as tree payload;
 //   * `ibSourceDataObject::ibSourceExplorer` walks a source and produces the
@@ -28,20 +34,19 @@
 // condition. `field = value` and `field = otherField` stop being different
 // cases: both sides are just a value that may or may not be a field.
 //
-// It is a value in the SCRIPT too, so a configuration can build a filter
-// without touching a dialog:
+// It is a value in the SCRIPT too, so a configuration can name a field without
+// touching a dialog:
 //
-//   Filter.Add(New CompositionField("Supplier.Region"), ComparisonKind.Equal, region);
+//   New CompositionField("Supplier.Region")
 //
 // WHAT IT IS NOT. Not a query expression: `Sum(Amount) > 100` is a different
 // thing and will be its own shape when totals need it. This is the plain "one
 // field of the source", which is what a filter, a sort, a grouping, a
 // conditional-appearance rule and an access-policy restriction all point at.
-////////////////////////////////////////////////////////////////////////////
 
-// The field's own class id, named once: the type is asked for BY id now (the cell's
-// left side admits exactly this type), and a second spelling of "VL_CFLD" would be a
-// second place to keep in step with the registration at the bottom of the .cpp.
+// The field's own class id, named once: the type is asked for BY id (the cell's left side admits
+// exactly this type), and a second spelling of "VL_CFLD" would be a second place to keep in step
+// with the registration in the module.
 constexpr ibClassID g_compositionFieldCLSID = value_to_clsid("VL_CFLD");
 
 class BACKEND_API ibValueCompositionField : public ibValueDynamicMembers {
@@ -105,4 +110,4 @@ private:
 	ibTypeDescription m_typeDescription;        // the field's type — for AdjustValue / choice
 };
 
-#endif
+#endif // __VALUE_COMPOSER_FIELD_H__

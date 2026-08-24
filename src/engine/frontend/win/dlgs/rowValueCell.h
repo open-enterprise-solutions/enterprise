@@ -27,7 +27,7 @@
 #include <utility>
 
 #include "backend/tabularModelView.h"                       // ibDataViewItem
-#include "backend/composition/compositionField.h"           // ibValueCompositionField — the one value with a picker
+#include "backend/system/value/composition/valueComposerSettings.h"           // ibValueCompositionField — the one value with a picker
 #include "frontend/win/ctrls/controlTextEditor.h"
 #include "frontend/visualView/ctrl/typeControl.h"           // ibTypeControlFactory::QuickChoice
 #include "frontend/visualView/ctrl/frame.h"                 // ibControlFrame

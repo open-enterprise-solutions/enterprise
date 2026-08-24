@@ -34,7 +34,7 @@ public:
 	const ibJobScheduleDescription& GetSchedule() const { return m_schedule; }
 
 	// The designer entry: open the editor against a schedule property and write the result back on
-	// OK. Returns true when the value changed. Mirrors ibDialogListSettings::ShowListSettingsDialog.
+	// OK. Returns true when the value changed. Mirrors ibDialogListSettings::ShowUserSettings.
 	static bool ShowScheduleDialog(ibPropertySchedule* property);
 
 private:

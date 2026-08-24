@@ -305,7 +305,7 @@ public:
 
 	// The notifier is PURE PUSH now — the model tells the front WHAT CHANGED (Item* / ValueChanged / Before &
 	// AfterReset / Cleared / Resort) and nothing else. Everything it used to pull or trigger (GetSelection /
-	// GetSelections / GetDrillParent / GetCurrentModelColumn / StartEditing / ShowListSettings / ShowViewMode /
+	// GetSelections / GetDrillParent / GetCurrentModelColumn / StartEditing / ShowViewMode /
 	// Select / GetCountPerPage) is GONE: the TableBox reads the control directly (Command_* / OnItemActivated) and
 	// the control itself owns selection + page size. Commands receive the front's selection as an argument.
 

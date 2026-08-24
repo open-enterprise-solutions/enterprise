@@ -32,7 +32,12 @@ public:
 	struct Row
 	{
 		int  m_level = 0;
-		bool m_hasChildren = false;
+		// ⭐ CAN THIS ROW BE OPENED — which is NOT "does it have children". It was called
+		// `m_hasChildren` while what the driver stores in it is `showsWhatIsUnder`: the base spends a
+		// starred paragraph on those being different questions (ibCompositionDriver::OnGroup), and a
+		// heading standing over rows this output does not print HAS children and must not offer an
+		// expander. The consumers ask it to decide `isContainer`, so the name is now the question.
+		bool m_expandable = false;
 		std::map<ibMetaID, ibValue> m_values;   // by the attribute metaID
 
 		ibValue GetValue(const ibMetaID& id) const {
@@ -67,10 +72,13 @@ public:
 		OnRow(level, showsWhatIsUnder, values);
 	}
 
-	void OnRow(int level, bool hasChildren, const std::vector<ibValue>& values) override {
+	// ⚠ THE SECOND ARGUMENT IS THE BASE'S `hasChildren`, and a DETAIL row answers it truthfully with
+	// false. A GROUP row reaches here through OnGroup above, which deliberately hands over the OTHER
+	// answer — see Row::m_expandable.
+	void OnRow(int level, bool expandable, const std::vector<ibValue>& values) override {
 		Row row;
 		row.m_level = level;
-		row.m_hasChildren = hasChildren;
+		row.m_expandable = expandable;
 		for (size_t i = 0; i < m_schema.size() && i < values.size(); ++i) {
 			const ibBackendQueryColumn* col = m_schema[i].m_col;
 			if (col != nullptr)

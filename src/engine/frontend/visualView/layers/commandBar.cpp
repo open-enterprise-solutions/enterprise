@@ -15,6 +15,9 @@
 #include "backend/backend_picture.h"            // ibBackendPicture::CreatePicture — an action-command's own picture
 #include "backend/srcDataObject.h"              // ibSourceDataObject / ibSourceExplorer + IsReference — the form's data types (parameterized-command filter)
 #include "backend/typeDescription.h"            // ibTypeDescription::GetClsidList — a command's parameter type
+#include "backend/tabularModel.h"               // ibValueModel::GetModelComposer — the setting a quick filter edits
+#include "backend/composition/dataComposer.h"   // the two settings sections + GetCurrentFilterDesc
+#include "backend/compositionDescription.h"     // ibFilterNodeDescription / ibFilterDisplayMode_QuickAccess
 #include <set>                                  // std::set — the form's reference-type set
 #ifndef OES_USE_WEB
 #include <wx/menu.h>                           // wxMenu (designer layer menu)
@@ -275,6 +278,83 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 	return out;
 }
 
+// ⚠ THE TOOL-ID RANGE FOR QUICK FILTERS — below the object-command range (31000+) and the manual
+// synthetic ids (32000+), under the 32767 ceiling wxMenuItemBase asserts on. A range of its own so
+// the click can tell what it is looking at without a lookup.
+static const ibActionID g_quickFilterIdFirst = 30000;
+static const ibActionID g_quickFilterIdLast  = 30499;
+
+// THE MODEL BEHIND THIS BAR — a tablebox has one; a form's own bar and a report's do not.
+ibValueModel* ibValueCommandBar::QuickFilterModel() const
+{
+	const ibValueModelTableBox* table = dynamic_cast<const ibValueModelTableBox*>(m_owner);
+	return table != nullptr ? table->GetTableModel() : nullptr;
+}
+
+namespace {
+// HOW ONE LINE READS ON THE BAR — its own wording when a person gave it one, else «field: value».
+// The same rule the settings window and the report heading print a condition by, so one condition
+// is not worded three ways depending on where it is shown.
+wxString ibQuickFilterCaption(const ibFilterNodeDescription& node)
+{
+	if (!node.m_presentation.IsEmpty())
+		return node.m_presentation;
+	const wxString field = node.m_left.m_presentation.IsEmpty()
+		? node.m_left.m_path : node.m_left.m_presentation;
+	const wxString value = node.m_right.IsField()
+		? (node.m_right.m_presentation.IsEmpty() ? node.m_right.m_path : node.m_right.m_presentation)
+		: node.m_right.m_value.GetString();
+	// AN UNSET VALUE STILL READS AS THE FIELD IT NARROWS — a bare field name says "click me to
+	// narrow by this", which is what an unfilled quick filter is for.
+	return value.IsEmpty() ? field : field + wxT(": ") + value;
+}
+}   // namespace
+
+void ibValueCommandBar::BuildQuickFilters()
+{
+	// 🛑 NOT IN THE DESIGNER. These stand for VALUES a reader picks at runtime; in the editor they
+	// would be tools that cannot be selected, moved or bound to anything — and the bar's drop
+	// resolver would have to learn to refuse them. What the author edits is the LINE, in the
+	// settings window, where the quick-access mark is made.
+	//
+	// ⚠ THE QUESTION ITSELF IS DESKTOP-ONLY: the editor notebook class is web-excluded, so
+	// `FindVisualEditor` goes with it (frame.h). A web host has no designer, so there is nothing to
+	// ask there and the filters simply always build.
+#ifndef OES_USE_WEB
+	if (m_owner != nullptr && m_owner->FindVisualEditor() != nullptr)
+		return;
+#endif
+
+	const ibValueModel* model = QuickFilterModel();
+	if (model == nullptr)
+		return;
+
+	// THE SETTING IN FORCE — the reader's where they set one, the author's variant otherwise. Not
+	// the user section alone: a line the AUTHOR marked quick-access must reach the bar before the
+	// reader has set anything, which is the whole point of marking it.
+	const ibFilterDescription& filter = model->GetModelComposer().GetCurrentFilterDesc();
+
+	ibActionID id = g_quickFilterIdFirst;
+	for (size_t i = 0; i < filter.m_nodes.size() && id <= g_quickFilterIdLast; ++i) {
+		const ibFilterNodeDescription& node = filter.m_nodes[i];
+		// A GROUP IS NOT A QUICK FILTER — it has no value to edit, and «(A or B)» on a toolbar is a
+		// question with no answer. Only conditions, and only at the top level: a line inside a group
+		// means something only together with its siblings.
+		if (node.m_kind != ibFilterNodeKind_Condition
+		 || node.m_display != ibFilterDisplayMode_QuickAccess)
+			continue;
+		ibCommandEntry entry(id++, ibQuickFilterCaption(node), ibPictureDescription(),
+			ibRepresentation_Text);
+		entry.kind = ibCommandEntryKind_QuickFilter;
+		entry.filterLine = i;
+		m_commands.push_back(entry);
+	}
+	// A SEPARATOR ONLY WHEN SOMETHING WAS ADDED — otherwise every bar with no quick filter would
+	// open with a divider standing in front of its first real command.
+	if (!m_commands.empty())
+		m_commands.emplace_back();
+}
+
 const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 {
 	// (Re)build from scratch so toggling AutoFill stays in sync (a stale auto-filled set must not
@@ -285,6 +365,17 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 	// a named helper/param, so the manual branch fetches it per action-bound item (few in practice).
 	m_commands.clear();
 	m_autoItems.clear();   // release last round's transient object-command items before rebuilding
+
+	// ⭐⭐ THE QUICK FILTERS COME FIRST — the lines the author marked «quick access», one tool each.
+	// «Also in the list header — the ones people change daily» was the whole of that setting's spec,
+	// and it had no home: a tablebox's window IS the grid, with no strip to put editors in. It does
+	// own THIS bar, which is already rendered, already serialised, already designable — so a quick
+	// filter became a KIND OF ENTRY on it rather than a container the control does not have
+	// (Max, 2026-08-24, choosing between that and wrapping the tablebox in a panel).
+	//
+	// ⚠ NOT DESIGNABLE, and not stored here: they are read from the SETTING in force every rebuild,
+	// so marking a line quick-access is the only act, and unmarking it takes the tool away again.
+	BuildQuickFilters();
 	// A view-only form greys every DATA-MODIFYING command (Save / Post / Create / Mark-for-delete / …);
 	// read-only commands (Refresh / Filter / Sort / open) stay live. The modify flag is ALWAYS the command's own:
 	// AutoFill reads it off the action collection / the object command, a manual item off its bound command (door).
@@ -393,9 +484,103 @@ ibValueForm* ibValueCommandBarItem::GetCommandGateForm() const
 }
 
 
+// ⭐⭐ CLICKING A QUICK FILTER EDITS ITS LINE — through the SAME conversation every other value goes
+// through (ibTypeControlFactory::ChooseValue): the quick choice for a type that has one, the
+// metaobject's own selection form otherwise. A second way of picking a value is where the two start
+// to disagree — a filter cell and a form control already learned that once.
+//
+// ⭐ AND THE ANSWER LANDS IN THE READER'S SECTION, never the author's: a quick filter is somebody
+// narrowing their own list, and the line they clicked may well be one the author declared. Same act
+// and same door as «filter by this column» on the table's own menu.
+namespace {
+// The adapter the shared chooser talks to — a filter LINE pretending to be a control for the length
+// of one pick. It owns nothing and lives on the stack: get the value, put the chosen one back.
+class ibQuickFilterValueFrame : public ibControlFrame {
+public:
+	ibQuickFilterValueFrame(ibFilterNodeDescription& node, ibValueForm* form, const ibMetaData* metaData)
+		: m_node(node), m_form(form), m_metaData(metaData) {}
+
+	virtual bool GetControlValue(ibValue& value) const override { value = m_node.m_right.m_value; return true; }
+	virtual bool SetControlValue(const ibValue& value = ibValue()) override {
+		m_node.m_right.m_value = value; m_node.m_right.m_path.Clear(); return true;
+	}
+	virtual ibValueForm* GetOwnerForm() const override { return m_form; }
+	virtual ibClassID GetClassType() const override { return m_node.m_right.m_value.GetClassType(); }
+	// ⚠ THE METADATA IS HANDED IN, AND THERE IS NO FALLBACK. Several configurations are open at once
+	// (the base, a compared one, one from a file), so reaching for the "active" one would quietly
+	// answer out of somebody else's — the filter cell still does exactly that. No metadata means no
+	// ctor to ask, which is a truthful "no quick choice" rather than a guess.
+	virtual bool HasQuickChoice() const override {
+		const ibCtorAbstractType* ctor = m_metaData != nullptr
+			? m_metaData->GetAvailableCtor(m_node.m_right.m_value.GetClassType()) : nullptr;
+		return ::HasQuickChoice(ctor);
+	}
+	virtual void ChoiceProcessing(ibValue& selected) override { SetControlValue(selected); }
+	// ⚠ REF-COUNTING IS A NO-OP BY CONSTRUCTION. `ibBackendControlFrame` demands the pair because a
+	// real control is a ref-counted runtime value; this one is a STACK object that lives for exactly
+	// one modal pick and is stored by nobody, so there is no count to keep. Saying so here is what
+	// makes it concrete — the alternative would be to make a filter LINE into a runtime value.
+	virtual void ControlIncrRef() override {}
+	virtual void ControlDecrRef() override {}
+
+private:
+	ibFilterNodeDescription& m_node;
+	ibValueForm*             m_form;
+	const ibMetaData*        m_metaData;
+};
+}   // namespace
+
+bool ibValueCommandBar::ExecuteQuickFilter(const ibActionID& id, ibValueForm* form)
+{
+	if (id < g_quickFilterIdFirst || id > g_quickFilterIdLast)
+		return false;
+	ibValueModel* model = QuickFilterModel();
+	if (model == nullptr)
+		return true;   // the id was ours; there is simply nothing behind it any more
+
+	// WHICH LINE — off the entry that was built, not off the id's arithmetic: the ids are dense and
+	// the lines are not (groups and ordinary conditions are skipped).
+	size_t line = 0;
+	bool found = false;
+	for (const ibCommandEntry& entry : m_commands)
+		if (entry.kind == ibCommandEntryKind_QuickFilter && entry.id == id) {
+			line = entry.filterLine; found = true; break;
+		}
+	if (!found)
+		return true;
+
+	// ⭐ A COPY, EDITED, THEN ASSIGNED — the pattern every settings edit here follows. Editing the
+	// setting in place would be editing the AUTHOR's when the reader has set nothing of their own.
+	ibSettingsDescription settings = model->GetModelComposer().GetCurrentSettingsDesc();
+	if (line >= settings.m_filter.m_nodes.size())
+		return true;
+
+	ibQuickFilterValueFrame holder(settings.m_filter.m_nodes[line], form,
+		form != nullptr ? form->GetMetaData() : nullptr);
+	if (!ibTypeControlFactory::ChooseValue(&holder))
+		return true;   // the person closed the picker — nothing was chosen, nothing changes
+
+	// A LINE THAT NOW HAS A VALUE IS ON. Picking a value and having to tick the line as well is the
+	// second act nobody expects; clearing it is what turns the line off again.
+	settings.m_filter.m_nodes[line].m_use = !settings.m_filter.m_nodes[line].m_right.m_value.IsEmpty();
+	model->GetModelComposer().SetUserSettingsDesc(settings);
+	model->RefetchAll();
+	// …AND THE BAR RE-READS ITSELF. The tool's caption IS the line's value, so a pick that refetched
+	// the rows and left the button saying the old value would be the one place on screen still
+	// claiming the previous filter. The form's own update verb, not a private one: the same pass
+	// that redraws the grid redraws the strip above it.
+	if (form != nullptr)
+		form->UpdateForm();
+	return true;
+}
+
 void ibValueCommandBar::ExecuteCommand(const ibActionID& id, ibBackendValueForm* form)
 {
 	if (m_owner == nullptr)
+		return;
+	// THE QUICK FILTERS FIRST — they are entries on this bar with no command behind them, so the
+	// lookup below would find no item and hand the id to CallAsAction as if it were a system action.
+	if (ExecuteQuickFilter(id, m_owner->GetOwnerForm()))
 		return;
 	// A manual command carries a synthetic tool-id -> resolve the item's command-hop binding. AutoFill /
 	// standard commands have no item (FindItemByCommandId == null) -> the tool-id IS the system action.

@@ -202,4 +202,22 @@ private:
 	const ibMetaData* m_metaData = nullptr;
 };
 
+// ⭐⭐ WHAT FIELDS A QUERY TEXT OFFERS — A TEXT AND A CONFIGURATION, AND NOTHING ELSE.
+//
+// This is the whole of what "resolve the source" means for anything that edits a query rather than
+// runs one. It parses the package, takes the LAST statement — the one that produces the result, a
+// package before it being temp tables handed in as context — and asks the model above for its
+// fields.
+//
+// It lives HERE because that is the tier the question belongs to. It used to be a method on
+// ibValueDataComposition, so a settings window had to hold a RUNNING composition to ask it — a
+// runtime object with a source binding, a sheet and a fetch, borrowed from whatever host happened
+// to have one — in order to learn something the text and the configuration already answer.
+//
+// `error` takes the parser's complaint when the caller shows one. Half-typed text is not a failure:
+// it offers no fields YET, so the list comes back empty and the caller decides whether that is worth
+// saying out loud.
+BACKEND_API std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
+	const ibMetaData* metaData, wxString* error = nullptr);
+
 #endif

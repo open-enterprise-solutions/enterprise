@@ -11,16 +11,9 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibTableViewCtrl, ibDataViewCtrl);
 
 #include "backend/objCtor.h"
 
-#include "frontend/win/dlgs/settings/list/listSettings.h"   // ibDialogListSettings — the List-Settings window
-
-bool ibTableViewCtrl::ShowListSettings(ibValueModel* model)
-{
-	// Open the List-Settings window (Filter / Sort / Group) for ANY model. The dialog edits its own buffer copy
-	// of model->GetListSettings() and builds its available filter fields from the model's columns (PATH A),
-	// committing onto the model's L5 composer on OK. (This is the single filter/sort/group UI now — the old
-	// per-column ShowFilter(ibFilterRow&) dialog is gone.)
-	return ibDialogListSettings::ShowListSettingsDialog(model);
-}
+// (ShowListSettings REMOVED. A control forwarding to a window put the settings road inside a widget,
+//  so "how are a model's settings opened" had two answers. There is one door and it is asked for by
+//  name: ibDialogListSettings::ShowUserSettings.)
 
 bool ibTableViewCtrl::ShowViewMode()
 {

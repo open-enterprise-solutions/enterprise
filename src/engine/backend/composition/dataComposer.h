@@ -35,6 +35,7 @@
 #include "backend/compiler/value.h"        // ibValue — driver rows / parameters
 #include "backend/query/queryAst.h"        // ibQuerySelectPtr — the cached parse
 #include "backend/query/queryLowering.h"   // ibQueryLowering::OutputColumn (+ ibBackendQueryColumn)
+#include "backend/compositionDescription.h"   // ibFilterDescription — a level's filter is the stored one
 
 #include <wx/string.h>
 #include <algorithm>    // CollapseEmptyLevels drops the levels that lost their fields
@@ -62,19 +63,10 @@ enum class ibCompositionOutputKind
 	Table,      // levels down AND across — the cross-table
 };
 
-// ⭐ WHAT A LEVEL OF THE LADDER IS — a GROUPING or the DETAIL RECORDS (Max: a detail record IS an
-// empty grouping). The rows themselves are a level: they sit at the bottom of the ladder, under the
-// deepest heading, and the settings tree writes them as a node like any other.
-//
-// SAID WITH A TYPE, not with "the fields are empty". Emptiness happens by accident too — a level
-// whose fields stopped resolving loses them, and CollapseEmptyLevels drops it precisely so a
-// nameless heading does not swallow every row. One emptiness, two opposite meanings; the node says
-// which it is, and nothing downstream has to guess.
-enum class ibCompositionLevelKind
-{
-	Grouping,   // a heading: fold by this level's fields
-	Details,    // the rows as they are, under the level above
-};
+// (ibCompositionLevelKind MOVED to compositionDescription.h — a level's kind is part of what a level
+//  IS, so it lives with the stored shape and the composer takes it from there. It used to be declared
+//  here with the description holding "the same value as a plain number" beside it: a twin vocabulary,
+//  and the description now states it as the type it is.)
 
 // What an output tells its driver before its first row: what shape is coming and what the values
 // mean. The schema is the output's OWN — two outputs of one composition show different fields.
@@ -164,33 +156,13 @@ public:
 // One implementation, because there is one question. The RAM composer asks it per row, the walk
 // asks it per group, and a second copy of the spelling would answer one of them differently.
 BACKEND_API bool ibCompositionCompare(const ibValue& cell, const wxString& op, const ibValue& value);
+// …AND ASKED WITH THE KIND A STORED CONDITION ACTUALLY HOLDS — see the definition.
+BACKEND_API bool ibCompositionCompare(const ibValue& cell, ibComparisonKind kind, const ibValue& value);
 
-// A trivial accumulating driver — rows kept in RAM (validation / RAM-model feed).
-class BACKEND_API ibCompositionRowSink : public ibCompositionDriver
-{
-public:
-	struct Row
-	{
-		int                  m_level = 0;
-		bool                 m_hasChildren = false;
-		std::vector<ibValue> m_values;
-	};
-
-	void OnColumns(const std::vector<ibQueryLowering::OutputColumn>& schema) override {
-		m_schema = schema;
-		m_rows.clear();
-	}
-	void OnRow(int level, bool hasChildren, const std::vector<ibValue>& values) override {
-		m_rows.push_back({ level, hasChildren, values });
-	}
-
-	const std::vector<ibQueryLowering::OutputColumn>& Columns() const { return m_schema; }
-	const std::vector<Row>& Rows() const { return m_rows; }
-
-private:
-	std::vector<ibQueryLowering::OutputColumn> m_schema;
-	std::vector<Row>                           m_rows;
-};
+// (⛔ A "trivial accumulating driver" — `ibCompositionRowSink`, rows kept in RAM "for validation /
+//  the RAM-model feed" — stood here with ONE mention in the whole tree: its own declaration. The two
+//  consumers it was built for arrived as drivers of their own (`ibListFetchDriver`,
+//  `ibSpreadsheetComposeDriver`), and this was never deleted.)
 
 // ibDataComposer — the L5-1 SETTINGS store + the polymorphic Run seam. The settings vocabulary
 // (select / filter / sort / total / group) is identical for every source; only the SOURCE binding and
@@ -209,7 +181,10 @@ public:
 	// settings structures they speak about, and a name a class has not met yet is not a type. A
 	// reference to an incomplete type is all a declaration needs; the definitions follow, well
 	// before the first member that holds one by value.
-	struct GroupNode;
+	// ⭐ THE NODE IS NOT FORWARD-DECLARED ANY MORE — it is the DESCRIPTION, which this header already
+	// includes, so the alias is stated where the rest of the vocabulary is. Only the output, which is
+	// still a type of its own (it carries the driver), needs the declaration ahead of its users.
+	using GroupNode = ibLevelDescription;
 	struct Output;
 
 	virtual ~ibDataComposer() = default;
@@ -229,41 +204,122 @@ public:
 		return col != nullptr ? Select(col->GetName()) : *this;
 	}
 
-	// A filter line: `path op value`. The value travels as an auto-named &parameter (DB never inlines it;
-	// RAM resolves the path to a column and compares the row's value). `op` is the comparison spelling.
+	// ⭐⭐ A FILTER LINE — AND IT LANDS IN THE READER'S SECTION, like every other setting. `path op
+	// value`, appended to the filter in force; the value travels as an auto-named &parameter (DB
+	// never inlines it; RAM resolves the path to a column and compares the row's value).
+	//
+	// The reader's section is the one that counts whenever it says anything, and setting anything
+	// through here makes it say something (Max, 2026-08-24: "if you set a filter somewhere, it is
+	// saved into the user setting"). There is no separate store for a filter a script or a metaobject
+	// declares — a declared filter and a chosen one are the same fact, and one of them being
+	// invisible to the settings window is how they came to disagree.
 	ibDataComposer& Filter(const wxString& path, const wxString& op, const ibValue& value);
 
-	// A CONDITION THAT IS ALREADY AN AST — what a filter tree really produces
-	// (listFilter.h) and what `Restrict` compiles to. Handed over as it is, it
-	// never becomes text and never gets parsed back: the composer ANDs it into
-	// the WHERE of its own parsed query.
+	// ⭐ …AND THE ONE THING THAT IS NOT A SETTING: what a single READ is scoped to. The drilled
+	// parent's path, the primary key of a point query — the engine's own, pushed before the read and
+	// popped after it (MarkScope / RestoreScope). It is ANDed with whatever setting is in force, so
+	// drilling into a folder cannot cost the reader their filter, and it is never shown, saved or
+	// edited anywhere: nobody chose it.
+	ibDataComposer& ScopeTo(const wxString& path, const wxString& op, const ibValue& value);
+
+	// A FILTER DESCRIPTION, TURNED INTO THE CONDITION IT MEANS — the composer's own job: the lines
+	// mention VALUES, and a value reaches a query as a named &parameter, which is this object's
+	// register (AddParam). Null when the filter says nothing — every condition switched off, or none
+	// finished — and a null condition is simply no condition.
+	ibQueryAstExprPtr BuildFilterAst(const ibFilterDescription& filter) const;
+
+	// ⭐⭐⭐ A COMPOSER COMPOSES ON A **SETTING**. Nothing here executes "a variant" — a variant is not
+	// an executable thing (Max, 2026-08-24). It is a WRAPPER over a setting, and what it adds is a
+	// name, a synonym and the setting it points at; several of them is how an author offers a choice.
+	// So the array below is the AUTHOR's, it is read for its settings, and the word stops there.
 	//
-	// The round trip through text was not wrong, only pointless — rendering an
-	// expression so the parser can rebuild the same expression. It also risked
-	// being lossy in the one direction that matters: anything the renderer spells
-	// differently from what the parser accepts would fail far from its cause.
-	ibDataComposer& FilterAst(const ibQueryAstExprPtr& condition);
+	//     the reader's setting IsOk()  →  that is what composes
+	//     it is not set                →  `m_variants[0]`'s setting, so the report is never blank and
+	//                                     a person can just open it and run what was set up
+	//
+	// ⭐ NO CURSOR AND NO FLAG. "Is there a reader's setting" is the setting's OWN question —
+	// `ibSettingsDescription::IsOk()`, the same one every part of this vocabulary answers with.
+	// Clearing it is the whole of "back to the defaults": nothing is remembered to undo.
+	ibDataComposer& LoadVariants(const std::vector<ibVariantDescription>& variants);
+	const std::vector<ibVariantDescription>& GetVariants() const { return m_variants; }
+
+	// ⭐⭐ WHAT COMPOSES — THE ONE FUNCTION, and it has ONE name (Max, 2026-08-24: *"there is a single
+	// function on the composer's side to get the current setting"*). The reader's when they saved
+	// one, `m_variants[0]`'s when they did not; no caller has to know there are two possible
+	// answers. (`m_variants` is never empty: the vector is born with one element.)
+	//
+	// 🛑 IT HAD TWO SPELLINGS FOR A FEW HOURS — `GetRunningSettings()` with `GetCurrentSettingsDesc()`
+	// as a one-line alias, and both were called: the frontend through one, the composition value
+	// through the other. Two names for one question is the very shape this arc spent a day deleting.
+	const ibSettingsDescription& GetCurrentSettingsDesc() const {
+		return m_userSettings.IsOk() ? m_userSettings : m_variants.front().m_settings;
+	}
+
+	// ⭐ THE READER PRESSED OK — their setting becomes what composes, and the zeroth is dropped. The
+	// ⏭ variant PICKER is this same call with a different source (`SetUserSettingsDesc(
+	// GetVariants()[n].m_settings)`), and so is restoring a saved setting at open — which is why
+	// none of the three needs a mechanism of its own.
+	ibDataComposer& SetUserSettingsDesc(const ibSettingsDescription& settings);
+	const ibSettingsDescription& GetUserSettingsDesc() const { return m_userSettings; }
+	// …and dropping it is the reset: `[0]` composes again.
+	ibDataComposer& ClearUserSettings();
+
+	// THE READER'S SETTING, OPENED FOR WRITING — and on the FIRST touch it starts as a copy of what
+	// composes now (Max: *"the user takes that zeroth one for themselves, adjusts it and saves it"*).
+	// Anything else would make the first sort a person states silently drop the grouping the author
+	// wrote.
+	// ⚠ WHAT COMPOSES, FOR WRITING — and the ONLY caller is the per-fetch bracket above, which puts
+	// back exactly what it took. It does NOT seed a user setting the way `UserSettings()` does: a
+	// fetch must not turn a reader who has saved nothing into one.
+	ibSettingsDescription& RunningSettings() {
+		return m_userSettings.IsOk() ? m_userSettings : m_variants.front().m_settings;
+	}
+
+	ibSettingsDescription& UserSettings() {
+		if (!m_userSettings.IsOk())
+			m_userSettings = m_variants.front().m_settings;
+		return m_userSettings;
+	}
+
+	// ⭐ WHAT IS IN FORCE — element zero's, and that is the whole of it. These stay because every
+	// reader of a setting speaks them, and because naming the question is what kept a SECOND answerer
+	// from creeping back in beside them (a flat sort store did exactly that, and everything written
+	// through the imperative doors went silent for anyone who had settings).
+	const ibFilterDescription& GetCurrentFilterDesc() const { return GetCurrentSettingsDesc().m_filter; }
+	const ibSortDescription&   GetCurrentSortDesc()   const { return GetCurrentSettingsDesc().m_sort; }
+	const ibGroupDescription&  GetCurrentGroupDesc()  const { return GetCurrentSettingsDesc().m_group; }
+
+	// The three of them as one — what a SETTINGS WINDOW opens on. A reader who has set nothing opens
+	// on the zeroth (and is meant to: "I open the user settings, I expect to see the author's, I see
+	// them"), edits it, and on OK the whole of it becomes what composes. (Declared once, above.)
+
+	// (FilterAst DELETED — a door for handing over a ready condition, and in the whole tree nobody
+	//  ever went through it. What it fed was preferred over the setting in force, so had a caller
+	//  appeared it would have SILENTLY REPLACED the reader's filter rather than joining it. The
+	//  condition a filter means is built from the description at the render, where it belongs.)
 
 	// Register a value and get the &parameter NAME that carries it (without the
 	// leading &). Public because the one who BUILDS the condition is the one who
 	// knows which values it mentions — a filter tree names them as it goes.
-	wxString AddParam(const ibValue& value);
+	wxString AddParam(const ibValue& value) const;
 
 	// A sort line — DB → ORDER BY; RAM → an in-place multi-key compare, in call order.
 	ibDataComposer& Sort(const wxString& path, bool ascending = true);
 
-	// Totals: aggregates + dimension levels (DB → `TOTALS agg… BY dim…`, the folded tree). RAM grouping is a
-	// deferred follow-up; the slice-1 RAM composer ignores totals (filter + sort only).
-	ibDataComposer& Total(const wxString& func, const wxString& path);
-
-	// A RESOURCE AS AN EXPRESSION — `SUM(Amount) / COUNT(DISTINCT Doc)`, written in the query
-	// language and rendered verbatim into TOTALS.
+	// ⭐ A RESOURCE — what the composition aggregates. Rendered into the query's `TOTALS agg… BY dim…`
+	// clause, which is where the word *total* belongs: it is the QUERY LANGUAGE's keyword, not this
+	// tier's noun. Everything above the render says **resource**, the way the description
+	// (`ibResourceDescription`, `m_resources`) and the settings window already did — one concept had
+	// two vocabularies and they met in the middle of one function (audit, 2026-08-24).
 	//
-	// The two-argument form above is the DEGENERATE CASE of this one: `Total("SUM", "Amount")`
-	// renders `SUM(Amount)`, which is what an expression of that shape would render to anyway. A
-	// window offering ready aggregates writes the pair; a person writing a ratio writes this, and
-	// the composer stores both the same way — an empty function means "the text IS the expression".
-	ibDataComposer& TotalExpr(const wxString& expression) { return Total(wxEmptyString, expression); }
+	// AN EMPTY FUNCTION MEANS THE PATH IS THE EXPRESSION: `Resource("SUM", "Amount")` renders
+	// `SUM(Amount)`, and `Resource("", "SUM(Amount) / COUNT(DISTINCT Doc)")` renders itself. A window
+	// offering ready aggregates writes the pair; a person writing a ratio writes the second, and the
+	// store keeps both the same way.
+	//
+	// (`TotalExpr(expr)` DELETED — a one-line convenience for the empty-function form, with no
+	//  caller. RAM grouping is still a deferred follow-up: the RAM composer reads filter and sort.)
+	ibDataComposer& Resource(const wxString& func, const wxString& path);
 	// The grouping VID (kind): Elements / Hierarchy / HierarchyOnly — the ONE switch between a flat and a
 	// hierarchical view (lifted to L5 — the list settings carry it).
 	ibDataComposer& TotalBy(const wxString& path, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements);
@@ -274,28 +330,58 @@ public:
 	ibDataComposer& ClearSettings();   // drop select/filter/sort/totals (the source stays)
 
 	// --- facade access -------------------------------------------------------------
-	// ibValueListSettings (Filter / Order / Group) is a THIN VIEW over these — the composer is the SINGLE
+	// (Was: a runtime Filter / Order / Group object stood over these as a thin view. It is gone —
+	//  what a composition IS is its DESCRIPTION, and SetSettings above is the one way in.)
+	// The old note, kept because it still describes the read: the composer is the SINGLE
 	// settings store (Max: "the composer is the store; the external-caller wrapper writes into it; the fetch
 	// does not clear it"). The list model sets defaults in its ctor (FromSource + Sort), the UI mutates through
 	// the facade, and the fetch reads a page WITHOUT clearing — a settings change just triggers a refetch that
 	// sees the new state.
-	void   ClearFilters() { m_commonFilters.clear(); }
-	size_t FilterCount() const { return m_commonFilters.size(); }
-	// The flat reading of a filter — path, operator, value. The TREE has no such
-	// reading (that is the point of it) and is not in this list at all: it lives
-	// as an AST beside it, so a caller that wants the tree reads the tree.
-	bool   GetFilterAt(size_t i, wxString& path, wxString& op, ibValue& value) const {
-		if (i >= m_commonFilters.size()) return false;
-		path = m_commonFilters[i].m_path; op = m_commonFilters[i].m_op;
-		const auto it = m_params.find(m_commonFilters[i].m_param);
+	// ⭐⭐ THE SCOPE OF ONE FETCH — and it is the ONLY thing here that is not a setting.
+	//
+	// The filter, the sort and the grouping are all settings, all in the two sections, and setting
+	// one REPLACES what was there; where the reader's section says nothing, the author's is used
+	// (Max, 2026-08-24). This list is none of that: it is what a single READ is scoped to — the
+	// drilled parent's path, the primary key of a point query — pushed before the read and popped
+	// after it (MarkScope / RestoreScope), and ANDed with whatever setting is in force rather than
+	// standing in for it. Nobody chose it and nobody can clear it; it belongs to the fetch.
+	//
+	// 🛑 IT USED TO BE CALLED THE COMPOSITION'S FILTERS, and the settings road ran through it too —
+	// `Filter()` wrote here, so a filter a script or a metaobject declared sat in a store the
+	// settings window could neither see nor edit.
+	void   ClearScope() { m_scopeConditions.clear(); }
+	size_t ScopeCount() const { return m_scopeConditions.size(); }
+	// The reading of one — path, operator, value. A scope condition has no tree: it is one comparison
+	// the engine made up for this read, and a caller that wants the reader's FILTER reads the filter
+	// description instead.
+	bool   GetScopeAt(size_t i, wxString& path, wxString& op, ibValue& value) const {
+		if (i >= m_scopeConditions.size()) return false;
+		path = m_scopeConditions[i].m_path; op = m_scopeConditions[i].m_op;
+		const auto it = m_params.find(m_scopeConditions[i].m_param);
 		value = (it != m_params.end()) ? it->second : ibValue();
 		return true;
 	}
-	void   ClearSorts() { m_commonSorts.clear(); }
-	size_t SortCount() const { return m_commonSorts.size(); }
+	// ⭐⭐ THE ORDER IS A SETTING, AND THERE IS ONLY ONE OF IT. These three doors used to speak a FLAT
+	// STORE (`m_commonSorts`) beside the two settings sections — and the render preferred the
+	// setting, so everything written through here was DROPPED the moment the list had a sort setting
+	// of its own. Four live consequences, all of one cause (measured 2026-08-24):
+	//
+	//   * clicking a column HEADING did nothing — the arrow moved, the rows did not;
+	//   * `AddSort` from a script did nothing, the illness `AddTotal` was cured of the same day;
+	//   * `ValueTable.Sort()` did nothing;
+	//   * and the KEYSET ANCHOR was built from the flat store while the SQL ordered by the setting,
+	//     so paging read from the wrong place — the sort was the second answerer, and the two only
+	//     disagreed for the users who had settings.
+	//
+	// A write is somebody STATING THE ORDER NOW, so it lands in the reader's section — where it
+	// replaces the author's whole, which is the rule every part of a setting follows. Reads answer
+	// what is IN FORCE, so the arrow, the anchor and the ORDER BY cannot disagree by construction.
+	void   ClearSorts() { UserSettings().m_sort.m_lines.clear(); }
+	size_t SortCount() const { return GetCurrentSortDesc().m_lines.size(); }
 	bool   GetSortAt(size_t i, wxString& path, bool& ascending) const {
-		if (i >= m_commonSorts.size()) return false;
-		path = m_commonSorts[i].m_path; ascending = m_commonSorts[i].m_ascending; return true;
+		const ibSortDescription& sort = GetCurrentSortDesc();
+		if (i >= sort.m_lines.size()) return false;
+		path = sort.m_lines[i].m_path; ascending = sort.m_lines[i].m_ascending; return true;
 	}
 	// ⭐ THE GROUPING LADDER IS A CHAIN OF OUTPUTS — one level per output, nested. What an output
 	// holds in m_rowGroups is one entry PER LEVEL, and a level's own fields are grouped by their
@@ -305,11 +391,45 @@ public:
 	// grouping: Add appends a LEVEL. Composing several fields INTO one level is a different verb
 	// (GroupFieldAdd), asked for by a report and never by a list.
 	void   ClearGroups() { LevelChain().clear(); }
-	size_t GroupCount() const { return LevelChain().size(); }
+	// ⭐⭐ THE GROUPING IN FORCE — the reader's when they set one, the LADDER otherwise. **The same
+	// rule the render follows**, and that is the whole point: `RenderTextFor` writes `BY` out of
+	// `GetCurrentGroupDesc()` when it is set and out of the chain when it is not, so an answer here
+	// that came only from the chain made the MODEL and the QUERY disagree about whether the read is
+	// grouped at all.
+	//
+	// 🛑 THAT DISAGREEMENT WAS VISIBLE AS TWO SYMPTOMS AT ONCE (Max, live, 2026-08-24: "filters are
+	// kept, groupings are not… as soon as a grouping appears it stops showing anything"). The
+	// settings window writes the whole setting — filter, sort AND grouping — into the composer's
+	// user section; the filter and the sort are read back from there, and the grouping was read from
+	// a THIRD store nobody had written to. So the grouping looked unsaved, and the list emptied: the
+	// query came back folded while the model, seeing no dimensions, kept only rows at level 0 and
+	// threw every group header away.
+	//
+	// Sort and filter were brought into the sections earlier in this arc; this is the third part,
+	// and leaving it out is what made the fix look arbitrary.
+	size_t GroupCount() const {
+		const ibGroupDescription& group = GetCurrentGroupDesc();
+		return group.IsOk() ? group.m_lines.size() : LevelChain().size();
+	}
 	bool   GetGroupAt(size_t i, wxString& path, ibQueryDimUnfold& kind) const {
+		// A READER'S GROUPING IS A FLAT LIST — one field per level, which is exactly what a LIST
+		// means by grouping. (A report's level may weld several fields into one heading; that is the
+		// ladder's shape, read below.)
+		const ibGroupDescription& group = GetCurrentGroupDesc();
+		if (group.IsOk()) {
+			if (i >= group.m_lines.size() || group.m_lines[i].m_path.IsEmpty())
+				return false;
+			path = group.m_lines[i].m_path;
+			kind = group.m_lines[i].m_kind;
+			return true;
+		}
 		const std::vector<GroupNode>& chain = LevelChain();
-		if (i >= chain.size() || chain[i].m_fields.empty()) return false;
-		path = chain[i].m_fields.front().m_path; kind = chain[i].m_fields.front().m_kind; return true;
+		if (i >= chain.size() || chain[i].m_settings.m_group.m_lines.empty()) return false;
+		// THE FIRST LINE ANSWERS FOR THE LEVEL here, and that is what a LADDER means by a grouping:
+		// one level, one field. A level of several is the report's shape and is read as itself.
+		path = chain[i].m_settings.m_group.m_lines.front().m_path;
+		kind = chain[i].m_settings.m_group.m_lines.front().m_kind;
+		return true;
 	}
 
 	// THE PROJECTION, readable. Third member of this family to be write-only (filters and sorts
@@ -332,32 +452,14 @@ public:
 		return true;
 	}
 
-	// THE AGGREGATES, readable like every other setting. They were writable and not readable — the
-	// one member of this family without the triple, which is invisible while only a fetch consumes
-	// them and becomes a hole the moment a WINDOW has to show what it is folding. A report's
-	// resources are exactly that window.
-	void   ClearTotals() { m_totals.clear(); }
-	size_t TotalCount() const { return m_totals.size(); }
-	bool   GetTotalAt(size_t i, wxString& func, wxString& path) const {
-		if (i >= m_totals.size()) return false;
-		func = m_totals[i].m_func; path = m_totals[i].m_path; return true;
-	}
-	// Drop one line, keeping the order of the rest — the verb a settings window needs and the only
-	// one Clear cannot express.
-	bool   RemoveTotalAt(size_t i) {
-		if (i >= m_totals.size()) return false;
-		m_totals.erase(m_totals.begin() + i);
-		return true;
-	}
-	// CHANGE ONE LINE IN PLACE, keeping its position. A resource that can be added and removed but
-	// not EDITED sends a person round the houses to change `SUM` into `AVG`; and Remove+Add would
-	// move the line to the end, which is a different report the moment order carries meaning.
-	// An EMPTY func means the path IS the expression — the same rule the renderer follows.
-	bool   SetTotalAt(size_t i, const wxString& func, const wxString& path) {
-		if (i >= m_totals.size() || path.IsEmpty()) return false;
-		m_totals[i].m_func = func; m_totals[i].m_path = path;
-		return true;
-	}
+	// THE AGGREGATES THIS RUN ROLLS — cleared and re-stated from the description at each compose.
+	//
+	// 🛑 A READABLE TRIPLE STOOD HERE (`TotalCount` / `GetTotalAt` / `RemoveTotalAt` / `SetTotalAt`),
+	// added so a WINDOW could show what the composition folds. The window was then written against
+	// the DESCRIPTION's own `m_resources` — which is right, since that is what gets saved — and the
+	// four were left with no caller anywhere in the tree (audit, 2026-08-24). Same shape as the
+	// value object's dead settings API: built ahead of a consumer that landed somewhere else.
+	void   ClearResources() { m_resources.clear(); }
 
 	// DROP EVERY SETTING WHOSE FIELD THE SOURCE NO LONGER HAS. Returns how many went.
 	//
@@ -374,19 +476,28 @@ public:
 	// return true, because "we do not know" must never delete somebody's work.
 	int PruneUnresolvedSettings(const std::function<bool(const wxString& path)>& resolves);
 
+	// ⭐ ONE SECTION, PRUNED — the filter tree, the sort lines and the grouping lines. Both sections
+	// go through it (the reader's and the author's), because a field that stopped existing stopped
+	// existing for whoever named it. Returns how many lines went, the way the caller counts.
+	static int PruneSettingsDesc(ibSettingsDescription& settings,
+		const std::function<bool(const wxString& path)>& resolves);
+
 	// --- transient scope (per-fetch drill overlay) ---------------------------------
 	// The ONE genuinely per-fetch thing is the drill of the browsed parent (each expand fetches ITS children,
 	// so the scope can't be a persistent setting). RunComposerPage marks the scope, adds the scope Filter(s) +
 	// the level's TotalBy, runs, then restores — so the transient drill never pollutes the persistent settings.
-	struct SettingsScope { size_t sel = 0, flt = 0, srt = 0, tot = 0, tby = 0; };
+	//
+	// ⚠ THERE IS NO SORT SLOT. Nothing has ever pushed a transient ORDER BY — a drill fetches a
+	// level's children and a point query fetches one row, and neither reorders anything. The slot
+	// was here for symmetry with a flat sort store that no longer exists.
+	struct SettingsScope { size_t sel = 0, cnd = 0, res = 0, tby = 0; };
 	SettingsScope MarkScope() const {
-		return { m_commonSelected.size(), m_commonFilters.size(), m_commonSorts.size(), m_totals.size(), LevelChain().size() };
+		return { m_commonSelected.size(), m_scopeConditions.size(), m_resources.size(), LevelChain().size() };
 	}
 	void RestoreScope(const SettingsScope& s) {
 		if (m_commonSelected.size() > s.sel) m_commonSelected.resize(s.sel);
-		if (m_commonFilters.size()  > s.flt) m_commonFilters.resize(s.flt);
-		if (m_commonSorts.size()    > s.srt) m_commonSorts.resize(s.srt);
-		if (m_totals.size()   > s.tot) m_totals.resize(s.tot);
+		if (m_scopeConditions.size() > s.cnd) m_scopeConditions.resize(s.cnd);
+		if (m_resources.size() > s.res) m_resources.resize(s.res);
 		TrimLevels(s.tby);   // the ladder is a chain of outputs — trimming it cuts the chain
 	}
 
@@ -399,20 +510,39 @@ public:
 	// the browsed LIST (tabularModelDb) and not to a report: a list drills through headings and its
 	// rows ARE its detail. A report never passes through here; if one ever has to, this pair grows a
 	// kind rather than a flag saying "and there was an empty one at the end".
-	std::vector<std::pair<wxString, ibQueryDimUnfold>> TakeGroups() {
-		std::vector<std::pair<wxString, ibQueryDimUnfold>> out;
+	// ⭐⭐ AND IT TAKES THE SETTING'S GROUPING WITH IT, not just the ladder. "Take the groups out for
+	// this read" has to mean ALL of them, because the render asks the SETTING first
+	// (`GetCurrentGroupDesc()`) and falls back to the ladder — so emptying only the ladder left the
+	// query grouped while the caller had decided it was not.
+	//
+	// 🛑 TWO ANSWERERS, AND THE MODEL COULD ONLY SILENCE ONE. A LIST view ignores the grouping and
+	// shows detail records (Max, 2026-08-24) — the model knows it (`s_constIgnoreParent` → flatView)
+	// and it took the ladder out, but the setting's grouping went on rendering `TOTALS BY`. The read
+	// then came back as level-1 headings while the model kept only level 0, and every row was
+	// dropped: **the list emptied**. The drilled path had the mirror of it — the setting rendered
+	// EVERY level while the drill wanted the one it was standing on.
+	struct TakenGroups {
+		std::vector<std::pair<wxString, ibQueryDimUnfold>> m_ladder;
+		ibGroupDescription                                 m_setting;
+	};
+	TakenGroups TakeGroups() {
+		TakenGroups out;
 		// The LADDER, one entry per level — a level's head field, which is what this pair has always
 		// carried. A level composed of several fields keeps them; only the ladder travels here.
 		for (const GroupNode& level : LevelChain())
-			if (!level.m_fields.empty())
-				out.emplace_back(level.m_fields.front().m_path, level.m_fields.front().m_kind);
+			if (!level.m_settings.m_group.m_lines.empty())
+				out.m_ladder.emplace_back(level.m_settings.m_group.m_lines.front().m_path,
+				                          level.m_settings.m_group.m_lines.front().m_kind);
 		TrimLevels(0);
+		out.m_setting = RunningSettings().m_group;
+		RunningSettings().m_group.Clear();
 		return out;
 	}
-	void PutGroups(const std::vector<std::pair<wxString, ibQueryDimUnfold>>& saved) {
+	void PutGroups(const TakenGroups& saved) {
 		TrimLevels(0);
-		for (const auto& g : saved)
+		for (const auto& g : saved.m_ladder)
 			AppendLevel(g.first, g.second);
+		RunningSettings().m_group = saved.m_setting;
 	}
 
 	// APPEND A LEVEL to the ladder — the ordinary "group by this, then by that". The first one fills
@@ -420,7 +550,7 @@ public:
 	void AppendLevel(const wxString& path, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements) {
 		if (path.IsEmpty()) return;
 		GroupNode level;
-		level.m_fields.push_back({ path, kind });
+		level.m_settings.m_group.Append(path, kind);   // what a level folds by IS its grouping
 		LevelChain().push_back(std::move(level));
 	}
 
@@ -434,7 +564,7 @@ public:
 	void CollapseEmptyLevels() {
 		std::vector<GroupNode>& chain = LevelChain();
 		chain.erase(std::remove_if(chain.begin(), chain.end(), [](const GroupNode& level) {
-			return level.m_kind == ibCompositionLevelKind::Grouping && level.m_fields.empty();
+			return level.m_kind == ibCompositionLevelKind::Grouping && !level.m_settings.m_group.IsOk();
 		}), chain.end());
 	}
 
@@ -500,133 +630,60 @@ public:
 		wxString m_op;
 		wxString m_param;       // the auto-named &parameter carrying the value
 	};
-	struct SortItem
-	{
-		wxString m_path;
-		bool     m_ascending = true;
-	};
-	struct TotalItem
-	{
-		wxString m_func;
-		wxString m_path;
-	};
-	struct TotalByItem
-	{
-		wxString         m_path;
-		ibQueryDimUnfold m_kind = ibQueryDimUnfold::Elements;   // the grouping VID (Elements / Hierarchy / HierarchyOnly)
-	};
+	// ⭐ A SORT LINE HAS ONE TYPE. This was `struct SortItem { path; ascending; }` — the same pair
+	// `ibSortLineDescription` already was, under a second name, so every crossing between a stored
+	// setting and a running composer needed a copy loop that could only ever be identity.
+	using SortItem = ibSortLineDescription;
+	// ⭐⭐ A RESOURCE IS THE DESCRIPTION'S TOO — the third of these, and the last. `struct TotalItem
+	// { func; path; }` was the pair `ibResourceDescription` already was, so the resources a person
+	// wrote lived in the composer and the description's own list stayed empty: close the report, open
+	// it again, and they were gone (Max, 2026-08-24). The ALIAS went with the vocabulary: the type
+	// has a name, and a second one for it was half the reason the two words drifted apart.
+	// ⭐⭐ A LEVEL'S KEY LINE IS THE DESCRIPTION'S. It was `struct TotalByItem { path; kind; }` — the
+	// pair ibGroupLineDescription already was, under a second name, exactly as SortItem was before
+	// it. A stored level and a running one then needed a copy loop that could only ever be identity.
+	using TotalByItem = ibGroupLineDescription;
 
 public:
-	// ⭐ ONE LEVEL OF A GROUPING — a node with its own fields and its own settings (Max: "inside the
-	// row grouping there are grouping nodes, each with its own filters, sorts and fields").
+	// (GroupNode = ibLevelDescription — the alias is stated at the top of this class, with the rest
+	//  of the vocabulary, because members declared long before this point already hold one.
 	//
-	// The FIELDS are a list because a level groups by all of them TOGETHER — partner and contract in
-	// one heading — and its key is the tuple of their values (see ibQueryTotalDim). Which of them
-	// actually divide the rows is the data's answer, not a distinction stored here.
-	struct GroupNode
-	{
-		// A HEADING OR THE ROWS — see ibCompositionLevelKind. A Details node carries no fields by
-		// construction: there is nothing to group by, which is the whole of what it says.
-		ibCompositionLevelKind   m_kind = ibCompositionLevelKind::Grouping;
-		std::vector<TotalByItem> m_fields;     // the level's key, grouped as a tuple
-		// ⭐ WHAT THIS LEVEL MAY SEE — its available fields, INHERITED unless it says otherwise
-		// (Max: "you can set them anywhere, and each may have a set of its own"). This is not the
-		// same question as what it SHOWS: a level may see a field and not print it, and a level
-		// that cannot see one cannot group, filter or sort by it either.
-		bool                     m_availableAuto = true;
-		std::vector<wxString>    m_available;
-		// ⭐ AUTO — this level shows what the level above it shows. Said with a FLAG and not with an
-		// empty list, because emptiness would then mean two different things: "take them from above"
-		// and "show nothing at all". Both are legitimate answers and they have to be tellable apart.
-		bool                     m_selectedAuto = true;
-		std::vector<wxString>    m_selected;   // its OWN fields, once it stops taking them from above
-		std::vector<FilterItem>  m_filters;    // narrows THIS level — how a group with nothing in it is hidden
-		ibQueryAstExprPtr        m_filterAst;  // its tree condition, ANDed in after the parse
-		unsigned int             m_filterAstVersion = 0;
-		std::vector<SortItem>    m_sorts;      // orders THIS level
-		// ⭐ …AND THE TREE THE CONDITION WAS WRITTEN AS (Max, 2026-08-21: the sort and the filter are
-		// stored on EVERY level). The AST above is what the ENGINE reads and it is DERIVED —
-		// built from this tree, and rebuilt whenever the tree changes. This is what is SAVED and what
-		// the editor reopens on: an expression can be run but not edited back into the lines a person
-		// wrote it as, so a level whose filter travelled only as an AST came back empty.
-		//
-		// Held as a plain ibValue (the tree packs ITSELF — same road the composition's own filter
-		// takes) rather than as a typed pointer: a filter tree is a runtime value, and naming its
-		// class here would drag the whole filter header into a header everything includes.
-		ibValue                  m_filterTree;
-	};
+	//  ⭐⭐ ONE LEVEL OF A GROUPING **IS** ITS DESCRIPTION (Max, 2026-08-23: "finish it"). It carried
+	//  every field the stored level carries — its kind, what it folds by, selected/available with
+	//  their auto flags, its own filter and sort — under a second set of names, so a level had two
+	//  shapes and the designer's edits landed in the one the file never saw. What sat here beside
+	//  them was DERIVED: a flat FilterItem list nothing ever filled (Filter() writes the
+	//  composition-wide one), and the AST built from the filter with a version counter to say it was
+	//  fresh. An expression built from a description is not a second state to keep.
+	//
+	//  A node has its own settings and its own children (Max: "a grouping holds an array of filters
+	//  — nodes —, an array of groupings, of sorts, of available fields", and under it another
+	//  grouping or the detail records). WHAT IT FOLDS BY is m_settings.m_group, a LIST because a
+	//  level groups by all of its lines TOGETHER — partner and contract in one heading — and its key
+	//  is the tuple of their values (see ibQueryTotalDim). Which of them actually divide the rows is
+	//  the data's answer, not a distinction stored here.)
 
-	// ⭐ AN OUTPUT — one thing the composition PRODUCES: what to group by, what to show, what to
-	// narrow and in what order. A LIST DECLARES ONE. A REPORT DECLARES SEVERAL, and each is read
-	// and handed to the driver as a block of its own.
+	// ⭐⭐ AN OUTPUT **IS** ITS DESCRIPTION, plus the one thing that cannot be stored: WHO DRAWS IT.
+	//
+	// Everything else it used to declare — the name, the row and column groupings, selected and
+	// available with their auto flags, its own filter and sort, the source it may read — is exactly
+	// what ibOutputDescription holds, and holding it twice is how a structure edited in the designer
+	// never reached the file (Max, 2026-08-23). Stored by INHERITING the description: assigning the
+	// base part in is loading, slicing it out is saving, and neither is a copy loop that can drift.
+	//
+	// (The flat FilterItem list and the cached AST are gone with the same slip: nothing ever filled
+	//  the first — Filter() writes the composition-wide one — and the second is DERIVED from the
+	//  filter description, so it is built where it is used.)
 	//
 	// AN OUTPUT WITH NO GROUPING FIELDS IS THE DETAIL ONE — the rows as they are. That is not a
 	// second kind of output; it is this one with an empty key, which is why nothing below has to ask
 	// which of the two it is holding.
 	//
-	// The grouping fields are a LIST because a level groups by all of them TOGETHER — partner and
-	// contract in one heading — and the key is the tuple of their values (see ibQueryTotalDim).
-	//
 	// What is NOT here, deliberately: the RESOURCES. They are declared once for the whole
 	// composition and every output computes the same ones over its own rows; an output chooses which
 	// of them to SHOW through m_selected, and choosing is not the same as declaring.
-	struct Output
+	struct Output : ibOutputDescription
 	{
-		// WHAT THIS OUTPUT IS CALLED — and it is the same name a statement of the package gives its
-		// finished result with `ONTO`. The pair is deliberate and the two words are not the same
-		// thing: `INTO` makes a TEMPORARY TABLE (something later statements read), while `ONTO`
-		// NAMES A FINISHED RESULT (something an output shows). Empty is legal and ordinary: a
-		// composition with one output needs no name for it.
-		wxString                 m_name;
-
-		// ⭐ THE ROW GROUPING — the levels down the page, IN ORDER. Each is a node of its own with its
-		// own fields, its own filter, its own sort and its own selected fields (Max), so "warehouse,
-		// then item" is two entries here rather than a tree of outputs: the order IS the nesting, and
-		// a level's settings live where the level does.
-		//
-		// EMPTY means DETAIL ROWS — the rows as they are. Not a second kind of output, just this one
-		// with nothing to group by.
-		std::vector<GroupNode>   m_rowGroups;
-
-		// ⭐ THE COLUMN GROUPING — and it is what MAKES this output a cross-table (Max): with nothing
-		// here the output is an ordinary grouping down the page; with something here the grouping
-		// runs across it too, and the resources land where a row and a column meet.
-		//
-		// So the KIND is not a setting anybody switches — it is read off these (see Kind()). A
-		// separate switch beside them could disagree with them, and then one of the two would be
-		// lying about what this output is.
-		std::vector<GroupNode>   m_columnGroups;
-
-		// WHAT THIS OUTPUT MAY SEE — inherited from the composition unless it narrows it, and
-		// inherited FROM here by its levels.
-		bool                     m_availableAuto = true;
-		std::vector<wxString>    m_available;
-
-		// AUTO, the same way a level says it — the output shows what the composition shows.
-		bool                     m_selectedAuto = true;
-		std::vector<wxString>    m_selected;   // its OWN fields; empty and NOT auto = show nothing
-		std::vector<FilterItem>  m_filters;    // narrows the WHOLE output; a level narrows itself
-		ibQueryAstExprPtr        m_filterAst;  // the tree's condition, ANDed in after the parse
-		unsigned int             m_filterAstVersion = 0;
-		std::vector<SortItem>    m_sorts;      // orders the whole output
-
-		// WHAT THIS OUTPUT IS — read off its groupings, never stored beside them. A column grouping
-		// makes it a cross-table; without one it is an ordinary grouping (and with no row grouping
-		// either, that grouping is of nothing, which is how detail rows are asked for).
-		ibCompositionOutputKind Kind() const {
-			return m_columnGroups.empty() ? ibCompositionOutputKind::Grouping
-			                              : ibCompositionOutputKind::Table;
-		}
-
-		// ⭐ AN OUTPUT MAY READ SOMETHING OF ITS OWN (Max): several query packages in one report — the
-		// first output reads one thing, the second another, and both print onto the same sheet. EMPTY
-		// means it reads the composition's own source, which is the ordinary case: several outputs
-		// folding one read differently.
-		//
-		// The shared source is still read ONCE (materialised for the outputs that share it); an
-		// output with a package of its own simply runs it.
-		wxString                 m_sourceText;
-
 		// ⭐ THE DRIVER BELONGS TO THE OUTPUT (Max): whoever declares the outputs also says who draws
 		// each of them — a spreadsheet for one, a chart for another. The composer never routes and
 		// never asks what a driver understands; it hands an output's rows to the driver that output
@@ -635,7 +692,18 @@ public:
 		//
 		// NO DRIVER MEANS THE OUTPUT IS NOT READ. Nobody would take the rows, so the query is not
 		// run — which is the whole point of declaring outputs rather than producing everything.
+		//
+		// ⚠ AND IT IS THE REASON THIS TYPE EXISTS AT ALL. A driver is a live object: it cannot be
+		// saved, cannot travel to the web and has no business in a description.
 		ibCompositionDriver*     m_driver = nullptr;
+
+		// WHAT THIS OUTPUT IS — read off its groupings, never stored beside them. A column grouping
+		// makes it a cross-table; without one it is an ordinary grouping (and with no row grouping
+		// either, that grouping is of nothing, which is how detail rows are asked for).
+		ibCompositionOutputKind Kind() const {
+			return m_columnGroups.empty() ? ibCompositionOutputKind::Grouping
+			                              : ibCompositionOutputKind::Table;
+		}
 	};
 
 	// THE OUTPUTS, in the order they are produced. There is always at least one — a composition that
@@ -643,11 +711,8 @@ public:
 	std::vector<Output>&       Outputs()       { return m_outputs; }
 	const std::vector<Output>& Outputs() const { return m_outputs; }
 
-	// THE COMPOSITION-WIDE SETS, readable and writable — what a settings window edits when the
-	// REPORT itself is selected. Available is what everything below may see; selected is what it
-	// shows unless it says otherwise.
-	std::vector<wxString>&       CommonAvailable()       { return m_commonAvailable; }
-	const std::vector<wxString>& CommonAvailable() const { return m_commonAvailable; }
+	// WHAT THE WHOLE COMPOSITION SHOWS, readable and writable — what a settings window edits when the
+	// REPORT itself is selected, and what every output and node adds to.
 	std::vector<wxString>&       CommonSelected()        { return m_commonSelected; }
 	const std::vector<wxString>& CommonSelected() const  { return m_commonSelected; }
 
@@ -678,12 +743,14 @@ public:
 	// THE LADDER OF ANY OUTPUT — its row grouping, same thing one output over.
 	static const std::vector<GroupNode>& ChainFrom(const Output& head) { return head.m_rowGroups; }
 
-	// DOES THIS OUTPUT GROUP BY ANYTHING AT ALL? A level with no fields is the DETAIL records, not a
-	// dimension — so a ladder made only of those groups by nothing, and `TOTALS` must not be written
-	// for it. Asked here so the two places that decide it cannot answer differently.
+	// DOES THIS OUTPUT GROUP BY ANYTHING AT ALL? A node with an empty grouping is the DETAIL records
+	// — "the same grouping, only empty; there are no groupings there, only available fields, and
+	// those are inherited down the tree" (Max, 2026-08-23) — so an axis made only of those groups by
+	// nothing, and `TOTALS` must not be written for it. Asked here so the two places that decide it
+	// cannot answer differently.
 	static bool HasGroupingFields(const Output& output) {
 		for (const GroupNode& level : output.m_rowGroups)
-			if (!level.m_fields.empty())
+			if (level.m_settings.m_group.IsOk())
 				return true;
 		return false;
 	}
@@ -713,30 +780,52 @@ public:
 		return HasGroupingFields(output);
 	}
 
-	// WHICH FIELDS AN OUTPUT SHOWS — the narrowest statement that was actually made. A level speaks
-	// for itself, an output for its levels, and the composition for everything: asked separately,
-	// every caller would re-implement this precedence, and the copies would drift.
-	// WHAT A NODE MAY SEE — the same inheritance the selected fields follow, over a different
-	// question: available is what it CAN use (group, filter, sort, show), selected is what it DOES
-	// show. EMPTY at the top means "everything the source has", as it always did.
-	const std::vector<wxString>& AvailableFor(const Output& output) const {
-		return output.m_availableAuto ? m_commonAvailable : output.m_available;
+	// ⭐⭐ WHICH FIELDS AN OUTPUT SHOWS — EVERYTHING SAID ABOUT IT, PILED UP. The composition speaks
+	// first, the output adds to that, a node adds to the output: nobody restates the list to add one
+	// column, and nobody can silently drop what a storey above asked for (Max, 2026-08-24: "if a
+	// sub-node has additional selected fields, they are laid on top of the existing ones").
+	//
+	// 🛑 IT USED TO REPLACE. `level.m_selectedAuto ? SelectedFor(output) : level.m_selected` — so the
+	// moment a node named a field of its own, everything the report was told to show disappeared
+	// under it. That is also why the `Auto` flag existed: to say "do not replace". Under adding
+	// there is nothing to say — a node that adds nothing has an empty list — so the flag went.
+	//
+	// 🛑 AND THERE IS NO "AVAILABLE" ANY MORE. It was the same statement understood in a harder way,
+	// it had no reader on the run path, and what a person means is SELECTED: these are the fields I
+	// want to see. Asked once, here, so no caller re-implements the pile-up.
+	//
+	// By value, not by reference: what is in force is COMPOSED of several statements and is not any
+	// one of them. Duplicates are dropped — the same field named twice is named once.
+	static void AppendFields(std::vector<wxString>& into, const std::vector<wxString>& added) {
+		for (const wxString& field : added)
+			if (std::find(into.begin(), into.end(), field) == into.end())
+				into.push_back(field);
 	}
-	const std::vector<wxString>& AvailableFor(const Output& output, const GroupNode& level) const {
-		return level.m_availableAuto ? AvailableFor(output) : level.m_available;
+	std::vector<wxString> SelectedFor(const Output& output) const {
+		// 🛑 THE BASE GOES THROUGH THE SAME SIEVE. Taking it as it stands let a duplicate that was
+		// already inside it reach the SELECT list, and a derived table refuses two columns of one
+		// name: "column FLD1022_TYPE was specified multiple times for derived table Q_SUB0"
+		// (Firebird -104, measured 2026-08-24). A field named twice is named once.
+		std::vector<wxString> selected;
+		AppendFields(selected, m_commonSelected);
+		AppendFields(selected, output.m_selected);
+		// ⏭ AND THE FIELDS A NODE NAMES ARE **NOT** HERE YET — held back on 2026-08-24 to keep the
+		// diagnostic build cheap, and to be put back once the journal says whether the projection is
+		// what is actually short. The invariant is not in doubt: the inner query becomes a derived
+		// table and the outer folds over it, so anything the outer mentions — what a level groups by,
+		// orders by, filters on or shows — the inner owes.
+		return selected;
 	}
-
-	const std::vector<wxString>& SelectedFor(const Output& output) const {
-		return output.m_selectedAuto ? m_commonSelected : output.m_selected;
-	}
-	const std::vector<wxString>& SelectedFor(const Output& output, const GroupNode& level) const {
-		return level.m_selectedAuto ? SelectedFor(output) : level.m_selected;
+	std::vector<wxString> SelectedFor(const Output& output, const GroupNode& level) const {
+		std::vector<wxString> selected = SelectedFor(output);
+		AppendFields(selected, level.m_selected);
+		return selected;
 	}
 
 protected:
 	// Always non-empty (see Outputs) — the one output every composition starts with.
 	std::vector<Output>      m_outputs = std::vector<Output>(1);
-	std::vector<TotalItem>   m_totals;      // the RESOURCES — common to every output
+	std::vector<ibResourceDescription> m_resources;   // common to every output
 
 	// ⭐ THE SELECTED FIELDS OF THE COMPOSITION — what everything shows unless it says otherwise
 	// (Max: set them at the root and they spread over all the tables underneath). An output may
@@ -750,7 +839,6 @@ protected:
 	// ⭐ WHAT THE WHOLE COMPOSITION MAY SEE — the top of the available-fields inheritance. Empty
 	// means everything the source offers, which is the ordinary case; narrowing it here narrows it
 	// for every output and every level under them.
-	std::vector<wxString>    m_commonAvailable;
 
 	// ⭐ THE FILTER AND SORT THAT STAND ABOVE THE OUTPUTS (Max). What is excluded here is excluded
 	// for EVERYTHING — no output can see more than this admits — and that is the difference between
@@ -760,13 +848,55 @@ protected:
 	//   on an output      : excludes, within that output
 	//   on a level        : hides and orders, and NEVER excludes — cut the data at a level and the
 	//                       rows below it are gone, so the totals above can no longer be reconciled
-	std::vector<FilterItem>  m_commonFilters;
-	ibQueryAstExprPtr        m_commonFilterAst;
-	unsigned int             m_commonFilterAstVersion = 0;
-	std::vector<SortItem>    m_commonSorts;
+	//
+	// ⭐ WHAT ONE READ IS SCOPED TO — the ONLY thing on this composer that is not a setting, and the
+	// reason it is a list of its own. The engine pushes and pops these per fetch through MarkScope
+	// (the drilled parent's path, the primary key of a point query) and they are ANDed with whatever
+	// setting is in force, never chosen between. A setting has no such stack discipline.
+	//
+	// 🛑 IT WAS `m_commonFilters`, AND THE SETTINGS ROAD RAN THROUGH IT — `Filter()` wrote here, so a
+	// filter a script or a metaobject declared lived where the settings window could neither show it
+	// nor edit it. Everything a person or the platform states is one setting now.
+	//
+	// 🛑 `m_commonSorts` stood beside it and was not this thing at all — see ClearSorts above for the
+	// four defects that came of it. 🛑 `m_commonFilterAst` and its version counter went with it:
+	// `FilterAst()` had no caller anywhere in the tree, so the branch that preferred it was reached
+	// only with a null in hand, and the counter it bumped was a cache key for a value that was
+	// always the same. What actually invalidates the cache is the two sections, which the render
+	// already compares.
+	std::vector<FilterItem>  m_scopeConditions;
 
-	std::map<wxString, ibValue> m_params;
-	int                         m_autoParam = 0;   // auto-name counter for filter values
+	// THE USER'S SECTION — see SetUserSettingsDesc. Empty while nobody has set one, and then
+	// everything above runs on what the developer declared.
+	//
+	// ⭐ IT LIVES ON THE BASE, so it is the SAME construction for a RAM table (Max, 2026-08-23:
+	// "saved settings apply to the RAM table too"). A value table, a tabular section and a record
+	// set read through this composer exactly as a list does; nothing about a saved setting is about
+	// where the rows came from.
+	// ⭐⭐ THE VARIANTS THE AUTHOR DECLARED — a COPY of the description's array, driven in when the
+	// source is built. Always at least one element; `[0]` is what composes while the reader has set
+	// nothing (Max, 2026-08-24: *"m_variants[0] is the one that composes when there is no user
+	// setting"*).
+	std::vector<ibVariantDescription> m_variants = std::vector<ibVariantDescription>(1);
+
+	// …AND THE READER'S OWN — a SETTING, the same type the variants wrap. Setting a variant is
+	// setting a setting (Max, 2026-08-24), so there is one shape here and no second one to convert
+	// between. `IsOk()` is the whole of "has anybody saved one"; no flag stands beside it, because a
+	// flag beside a fact is a second answer to one question.
+	ibSettingsDescription    m_userSettings;
+
+	// (`m_standartSettings` DELETED — "the author's settings" was never a thing of its own. There is
+	//  the ARRAY, and `[0]` is what composes while nobody has saved a setting; a second member
+	//  holding "what the author declared" was that same element under a second name.)
+	//
+	// ⭐ THE ARRAY IS SERIALISED AND THE READER'S SETTING IS NOT. Not by this class — the composer is
+	// never written anywhere: the array's content IS the description's, loaded when the source is
+	// built and saved back through the description when an AUTHOR edits it in the designer. What a
+	// reader saves has no file and no description: it stands while the report is open and is gone
+	// with it.
+
+	mutable std::map<wxString, ibValue> m_params;   // the rendered query's own values — filled while a query is being made
+	mutable int                 m_autoParam = 0;   // auto-name counter for filter values
 
 	const class ibMetaData* m_metaData = nullptr;   // config the query resolves by-name sources against (SetMetaData)
 };
@@ -849,9 +979,18 @@ private:
 	bool BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const;
 
 	mutable wxString                             m_renderedText;   // the AST's key
-	// …and the other half of that key: the tree condition never becomes text, so
-	// the text alone would say "nothing changed" after the whole filter was rewritten.
-	mutable unsigned int                         m_renderedFilterAstVersion = 0;
+	// …and the other half: the USER's filter is built at the render, out of a section that is written by
+	// plain assignment. Nothing bumps a counter when it changes, so the key is the setting itself —
+	// which is also the honest question ("is this the same setting I rendered?").
+	// …and THE FILTER it was rendered with, which is the only other half of the key.
+	//
+	// ⭐ NOT "the variant that was rendered" — there is no such thing (Max, 2026-08-24). Everything a
+	// setting decides EXCEPT the filter ends up in the text above, so the text already answers for
+	// it; a filter TREE never becomes text — it is ANDed into the parsed WHERE — so the text alone
+	// would say "nothing changed" after somebody rewrote the whole filter. Two whole settings copies
+	// stood here while there were two sections to compare, and most of what they compared was
+	// already compared as text.
+	mutable ibFilterDescription                  m_renderedFilter;
 	mutable ibQuerySelectPtr                     m_ast;
 	mutable std::shared_ptr<ibRenderedPageCache> m_pageCache;
 	// Set by Execute when a TOTALS fetch took the server-side single-level GROUP-BY keyset page (not the detail

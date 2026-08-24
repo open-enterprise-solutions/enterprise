@@ -24,9 +24,18 @@ class BACKEND_API ibValueRecordDataObjectRef;
 // nothing, `CreateFromPtr` read without settling, `Create` read and settled — and none of the three
 // names mentioned reading at all.
 enum class ibReferenceLoad {
-	// Read nothing now; the row loads the first time somebody asks what this reference is. REQUIRED
-	// on the value-ctor path (ibCtorMetaValueTypeReference::CreateObject): reading there recurses —
-	// the row's attributes are themselves references, re-entering CreateObject -> stack overflow.
+	// ⭐⭐ THE DEFAULT: read nothing now; the row loads the first time somebody asks what this
+	// reference IS (Max, 2026-08-24: "we made every reference read nothing by default"). Creating a
+	// reference is stating an IDENTITY — this catalogue, this row — and an identity costs no query.
+	//
+	// It was `Latched` until then, so everyone paid for a read whether or not they wanted the row:
+	// the field pickers create a reference PER TARGET TYPE purely to ask what fields it has, with an
+	// EMPTY guid, and every one of those went to the database for a row that does not exist. That is
+	// what "the picker lags" was.
+	//
+	// REQUIRED on the value-ctor path (ibCtorMetaValueTypeReference::CreateObject): reading there
+	// recurses — the row's attributes are themselves references, re-entering CreateObject -> stack
+	// overflow.
 	OnDemand,
 
 	// Read the row now, but do not mark the reference settled: a later PrepareRef reads it again.
@@ -93,11 +102,11 @@ public:
 	// only ever wanted the key.
 	static ibValueReferenceDataObject* Create(const ibValueMetaObjectRecordDataRef* metaObject,
 	                                          const ibGuid& objGuid = wxNullGuid,
-	                                          ibReferenceLoad load = ibReferenceLoad::Latched);
+	                                          ibReferenceLoad load = ibReferenceLoad::OnDemand);
 
 	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, const ibMetaID& id,
 	                                          const ibGuid& objGuid = wxNullGuid,
-	                                          ibReferenceLoad load = ibReferenceLoad::Latched);
+	                                          ibReferenceLoad load = ibReferenceLoad::OnDemand);
 
 	// Reconstruct from a stored row: `refClsid` is the _RTRef target type, `ptr` the pure _RRRef guid blob.
 	// The type comes from the column (clsid -> metaObject), NOT from the key bytes.

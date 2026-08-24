@@ -1417,9 +1417,6 @@
     <ClCompile Include="metaCollection\partial\dataProcessorObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\dataReportAction.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
     <ClCompile Include="metaCollection\partial\dataReportManager.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -2261,12 +2258,6 @@
     <ClCompile Include="query\queryableFactory.cpp">
       <Filter>query</Filter>
     </ClCompile>
-    <ClCompile Include="composition\compositionField.cpp">
-      <Filter>composition</Filter>
-    </ClCompile>
-    <ClCompile Include="composition\listFilter.cpp">
-      <Filter>composition</Filter>
-    </ClCompile>
     <ClCompile Include="composition\dataComposer.cpp">
       <Filter>composition</Filter>
     </ClCompile>
@@ -2421,12 +2412,6 @@
     <ClInclude Include="query\queryableFactory.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="composition\compositionField.h">
-      <Filter>composition</Filter>
-    </ClInclude>
-    <ClInclude Include="composition\listFilter.h">
-      <Filter>composition</Filter>
-    </ClInclude>
     <ClInclude Include="composition\dataComposer.h">
       <Filter>composition</Filter>
     </ClInclude>
@@ -2450,6 +2435,91 @@
     </ClInclude>
     <ClInclude Include="system\value\valueDynamicList.h">
       <Filter>system\value</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="appEnv.cpp" />
+    <ClCompile Include="compositionDescription.cpp" />
+    <ClCompile Include="databaseLayer\preparedStatement.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="diagnostics\journal.cpp">
+      <Filter>diagnostics</Filter>
+    </ClCompile>
+    <ClCompile Include="diagnostics\leakTracker.cpp">
+      <Filter>diagnostics</Filter>
+    </ClCompile>
+    <ClCompile Include="eventDispatcher.cpp" />
+    <ClCompile Include="homePageDescription.cpp" />
+    <ClCompile Include="metaCollection\metaObjectEnum.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyDynamicList.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyDynamicSource.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\variant\variantDynamicSource.cpp">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryReadState.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="srcDataObject.cpp" />
+    <ClCompile Include="system\value\composition\valueComposerField.cpp">
+      <Filter>system\value\composition</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\composition\valueComposerSettings.cpp">
+      <Filter>system\value\composition</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueBackgroundJob.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="tabularDataObject.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="appEnv.h" />
+    <ClInclude Include="compositionDescription.h" />
+    <ClInclude Include="diagnostics\journal.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="diagnostics\leakTracker.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="eventDispatcher.h" />
+    <ClInclude Include="homePageDescription.h" />
+    <ClInclude Include="metaCollection\metaObjectEnum.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyDynamicList.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyDynamicSource.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantComposition.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantDynamicSource.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryReadState.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="srcDataObject.h" />
+    <ClInclude Include="system\value\composition\valueComposerField.h">
+      <Filter>system\value\composition</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\composition\valueComposerSettings.h">
+      <Filter>system\value\composition</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueBackgroundJob.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="tabularDataObject.h" />
+    <ClInclude Include="utils\debugTrace.h">
+      <Filter>utils</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

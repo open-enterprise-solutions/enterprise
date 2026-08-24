@@ -8,6 +8,7 @@
 #include "backend/query/queryRender.h"
 #include "backend/query/queryLexer.h"   // IsIdentifier — the language decides what a name can be
 #include "backend/query/queryParser.h"  // a field picked for a branch is read by the ENGINE
+#include "backend/query/queryRewrite.h" // ibQueryEnsureUniqueName — what to call a field with no natural name
 
 // ---------------------------------------------------------------------------
 //  The branches
@@ -94,8 +95,20 @@ void ibQueryUnionFieldModel::SetContent(ibQuerySelect* select)
 	// before it is named) was silently absent from the only place an alias can be typed. The fields
 	// that most need a name were exactly the fields you could not name. Rows are projections now,
 	// and the name is what the row SHOWS, not what makes it exist.
-	for (const ibQueryProjection& projection : m_select->m_projections)
+	// ⭐⭐ …AND A ROW WITHOUT A NAME GETS ONE, here, rather than being shown as its own text. This
+	// tab IS the output's names — a union lines its branches up BY name, a temp table's columns are
+	// these names, and the engine's duplicate check skips the empty ones, so an unnamed projection
+	// is not a display problem but a broken output waiting to be silent about it.
+	//
+	// The engine already answers what to call it: ibQueryEnsureUniqueName gives a walk its written
+	// name and an expression with no natural one `Field1`, numbered over what is already taken. So a
+	// literal projection reads `Field1` here, the way it does everywhere a field is ADDED — instead
+	// of `3`, which is not a name and cannot be referred to (Max, 2026-08-24).
+	for (ibQueryProjection& projection : m_select->m_projections) {
+		if (ibQueryOutputName(projection).IsEmpty())
+			ibQueryEnsureUniqueName(*m_select, projection);
 		m_names.push_back(ibQueryOutputName(projection));
+	}
 
 	// ⭐⭐ AND THE FIELDS ONLY A LATER BRANCH HAS — at the BOTTOM, in the order they appear.
 	//
@@ -203,13 +216,11 @@ void ibQueryUnionFieldModel::GetValueByRow(wxVariant& variant, unsigned row, uns
 		return;
 
 	if (col == kUnionColName) {
-		// A NAMED FIELD SHOWS ITS NAME. An unnamed one shows what it IS — the expression — because a
-		// blank cell in a column called "Alias" reads as "already filled in with nothing", and the
-		// author has no way to tell which row is the `1` they just added.
-		const wxString text = !m_names[row].IsEmpty()
-			? m_names[row]
-			: (row < m_select->m_projections.size() && m_select->m_projections[row].m_expr
-				? ibRenderQueryExpr(*m_select->m_projections[row].m_expr) : wxString());
+		// A FIELD SHOWS ITS NAME, and by SetContent above every field has one — including the
+		// literal that used to show as `3`. (The old fallback rendered the EXPRESSION into this
+		// cell when there was no name; that read as an alias while being something nothing could
+		// refer to. Naming it is the answer, not drawing it.)
+		const wxString text = m_names[row];
 
 		// AND ITS PICTURE, like every other field list in this window. These rows ARE fields — the
 		// output of the union — so a plain text column made them read as something else than the

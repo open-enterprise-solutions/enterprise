@@ -1,11 +1,10 @@
-#include "backend/composition/compositionField.h"
+#include "backend/system/value/composition/valueComposerField.h"
 #include "backend/serialize/dataBuilder.h"
 #include "backend/compiler/typeCtor.h"
 
 // ===========================================================================
-//  ibValueCompositionField — see compositionField.h
+//  ibValueCompositionField — see valueComposerField.h
 // ===========================================================================
-
 ibValueCompositionField::ibValueCompositionField()
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, false) {
 	m_members.Bind(this, &ibValueCompositionField::FillMembers);

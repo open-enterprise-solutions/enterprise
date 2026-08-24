@@ -5,6 +5,7 @@
 #include "frontend/win/editor/gridEditor/gridEditor.h"
 #include "backend/system/value/valueSpreadsheet.h"
 #include "backend/propertyManager/property/propertySource.h"   // the document this box shows
+#include "backend/compositionDescription.h"                    // ibSettingsDescription — the ACTIVE setting is this control's
 #include "frontend/visualView/ctrl/typeControl.h"                // ⚠ the Source property needs its owner to BE a source factory
 
 #include <memory>   // the alive token the compose hop carries back
@@ -144,6 +145,9 @@ private:
 	// walks a path to go looking for one — and therefore never needs to be written to from a const
 	// reader.
 	ibValuePtr<class ibValueSpreadsheetModel> m_spreadsheetModel;
+
+	// (NO SETTING KEPT HERE. The ACTIVE one lives on the model, in its composer; opening the settings
+	//  takes a COPY of it, the window edits the copy, and OK assigns it back — Max, 2026-08-24.)
 
 	// ⭐ "IS THIS CONTROL STILL THERE" — read by the delivery hop on the UI thread. The same token
 	// the paged dataview carries (ibDataViewCtrl::m_aliveToken), and for the same reason: a compose

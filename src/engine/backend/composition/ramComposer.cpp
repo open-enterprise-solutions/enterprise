@@ -123,24 +123,43 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 	if (m_storage == nullptr)
 		return {};
 
+	// ⭐⭐ THE USER'S SETTING IS READ HERE TOO, and that is what makes it ONE construction (Max,
+	// 2026-08-23: "saved settings apply to the RAM table as well"). A value table, a tabular section
+	// and a record set are filtered and ordered by the same setting a list is — nothing about a
+	// saved setting is about where the rows came from, and a section only the DB side honoured would
+	// have been a setting that silently did nothing on half the models.
+	// …AND IT IS THE CURRENT SETTING, not the user's section alone — a RAM table honours what its
+	// author declared exactly as a list does.
+	const ibSettingsDescription settings = GetCurrentSettingsDesc();
+
 	struct RamFilter { ibMetaID m_col; std::vector<wxString> m_tail; wxString m_op; ibValue m_value; };
 	std::vector<RamFilter> filters;
-	for (size_t i = 0; i < FilterCount(); ++i) {
+	// WHAT THIS READ IS SCOPED TO — the engine's own, ANDed with the setting below. Never the
+	// reader's filter: that is a tree, and it comes through `settings.m_filter`.
+	for (size_t i = 0; i < ScopeCount(); ++i) {
 		wxString path, op; ibValue value;
-		if (!GetFilterAt(i, path, op, value)) continue;
+		if (!GetScopeAt(i, path, op, value)) continue;
 		ibMetaID col; std::vector<wxString> tail;
 		if (!m_storage->SplitField(path, col, tail)) continue;
 		filters.push_back({ col, std::move(tail), op, value });
 	}
 	struct RamSort { ibMetaID m_col; std::vector<wxString> m_tail; bool m_ascending; };
 	std::vector<RamSort> sorts;
-	for (size_t i = 0; i < SortCount(); ++i) {
-		wxString path; bool asc = true;
-		if (!GetSortAt(i, path, asc)) continue;
+
+	// THE ORDER IN FORCE, and there is only one place it can come from. This had a SECOND road under
+	// it — a flat sort store reached when neither section said anything — and everything the
+	// imperative `Sort()` wrote went there, so a RAM table with a sort setting ignored being sorted
+	// (2026-08-24). One store now: `Sort()` writes the reader's section, which is what this reads.
+	for (const ibSortLineDescription& line : settings.m_sort.m_lines) {
 		ibMetaID col; std::vector<wxString> tail;
-		if (!m_storage->SplitField(path, col, tail)) continue;
-		sorts.push_back({ col, std::move(tail), asc });
+		if (line.m_path.IsEmpty() || !m_storage->SplitField(line.m_path, col, tail)) continue;
+		sorts.push_back({ col, std::move(tail), line.m_ascending });
 	}
+
+	// The condition this pass runs on — the filter in force, built here rather than kept: a setting
+	// is written by assignment, and what a read needs is made when a read is made. (The scope
+	// conditions above are separate and AND with it, as they do in the rendered query.)
+	const ibQueryAstExprPtr condition = BuildFilterAst(settings.m_filter);
 
 	// One pass over the rows: evaluate the filters, and stash the sort keys (so the sort reads each row's key
 	// ONCE up front, not per comparison). Reads cells straight off the storage's nodes (dot-tail hops references).
@@ -151,11 +170,11 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 	for (long r = 0; r < n; ++r) {
 		bool pass = true;
 
-		// THE TREE, when there is one — evaluated first because it is the whole
-		// condition, not one line of it.
-		if (m_commonFilterAst) {
+		// THE TREE, when there is one — evaluated first because it is the whole condition, not one
+		// line of it. The USER's filter replaces the declared one, exactly as the sort above does.
+		if (condition) {
 			bool unknown = false;
-			if (!RamEvalCondition(*m_commonFilterAst, m_storage, r, m_params, unknown))
+			if (!RamEvalCondition(*condition, m_storage, r, m_params, unknown))
 				continue;
 		}
 

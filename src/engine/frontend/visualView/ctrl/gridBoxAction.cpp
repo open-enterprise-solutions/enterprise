@@ -58,6 +58,9 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 		// COMPOSED IN THE BACKGROUND, the way a list reads its pages: a report can take seconds, and a
 		// window frozen for those seconds cannot be moved, scrolled or cancelled. The fetch belongs to
 		// the model, so this control never learns how — or whether — a run was rented.
+		// (THE SETTING IS ALREADY IN THE COMPOSER — put there when the model arrived, and replaced
+		//  when the reader accepted the settings window. Supplying it again here would be a second
+		//  place deciding what is in force.)
 		ibGridEditor* gridWindow = dynamic_cast<ibGridEditor*>(GetInnerWx());
 		if (gridWindow != nullptr)
 			gridWindow->ShowComposeProgress(true);
@@ -107,8 +110,17 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 		// THE COMPOSER'S OWN WINDOW — the one the designer opens, opened here by the person reading
 		// the report. The composer LIVES IN THE MODEL: when the model is one, it IS the settings.
 		// Through the ONE place that knows a composer is what has settings — no second cast here.
-		if (ibValueDataComposition* composition = ResolveComposition())
-			ibDialogComposerSettings::ShowComposerSettings(composition);
+		//
+		// ⭐ THROUGH THE MODEL'S OWN PAIR — the same road the list's window takes: the setting in
+		// force goes in, and what they chose is assigned back. Nothing is cast down to a composition
+		// to change a filter, and the report itself is not written.
+		//
+		// The sheet on screen stays the one that was BUILT: a report is not a list, and it is
+		// re-formed when the person says so — that is when the setting is taken into account.
+		// ⭐ A COPY OF THE ACTIVE SETTING GOES IN, AND ON OK IT IS SET BACK ON THE MODEL. Nothing is
+		// kept on this side — the active setting lives in the model's composer, which the schema does
+		// not serialise; the author's default is untouched (Max, 2026-08-24).
+		ibDialogComposerSettings::ShowUserSettings(dynamic_cast<wxWindow*>(GetInnerWx()), model);
 		break;
 	default:
 		// ⭐ ANYTHING ELSE IS THE MODEL'S OWN COMMAND — the id came out of its store, so it goes

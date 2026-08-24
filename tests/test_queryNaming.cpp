@@ -279,14 +279,17 @@ TEST(QueryComposerPrune, ASettingWhoseFieldIsGoneIsDropped)
 	});
 
 	EXPECT_EQ(3, dropped);
-	ASSERT_EQ(1u, composer.FilterCount());
+	// ⭐ READ THROUGH THE SETTING IN FORCE. `Filter()` and `Sort()` write the READER's section since
+	// 2026-08-24 — the flat stores they used to write were a second answerer the render only reached
+	// when neither section had said anything. `FilterCount` / `GetFilterAt` went with them; what
+	// counts scope conditions now is `ScopeCount`, and that is a different subject.
+	ASSERT_EQ(1u, composer.GetCurrentFilterDesc().m_nodes.size());
 	ASSERT_EQ(1u, composer.SortCount());
 	EXPECT_EQ(0u, composer.GroupCount());
 
-	wxString path, op; ibValue value;
-	ASSERT_TRUE(composer.GetFilterAt(0, path, op, value));
-	EXPECT_EQ(wxT("Code"), path);
-	EXPECT_EQ(wxT("A-1"), value.GetString()) << "the surviving line must keep its bound value";
+	const ibFilterNodeDescription& kept = composer.GetCurrentFilterDesc().m_nodes[0];
+	EXPECT_EQ(wxT("Code"), kept.m_left.m_path);
+	EXPECT_EQ(wxT("A-1"), kept.m_right.m_value.GetString()) << "the surviving line must keep its bound value";
 }
 
 TEST(QueryComposerPrune, AWalkIsJudgedByWhatItSTARTSFrom)
@@ -315,7 +318,7 @@ TEST(QueryComposerPrune, WithNoAnswerNothingIsDropped)
 	composer.Sort(wxT("AnythingElse"));
 
 	EXPECT_EQ(0, composer.PruneUnresolvedSettings(nullptr));
-	EXPECT_EQ(1u, composer.FilterCount());
+	EXPECT_EQ(1u, composer.GetCurrentFilterDesc().m_nodes.size());
 	EXPECT_EQ(1u, composer.SortCount());
 }
 
@@ -867,7 +870,7 @@ TEST(QueryComposerDetails, ADetailLevelWritesNothingIntoTheQuery)
 {
 	ibDataDBComposer composer;
 	composer.FromText(wxT("SELECT Partner, Amount FROM Document.Sales"));
-	composer.Total(wxT("SUM"), wxT("Amount"));
+	composer.Resource(wxT("SUM"), wxT("Amount"));
 	composer.TotalBy(wxT("Partner"));
 
 	const wxString grouped = composer.RenderText();

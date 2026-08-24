@@ -112,7 +112,25 @@ ibValueDynamicList::ibValueDynamicList(const ibBackendQueryable* queryable, ibDy
 	: ibValueModelCursor(), ibSourceDataObject(),
 	  m_columns(nullptr), m_view(view)
 {
-	// (No own settings buffer — the BASE model already built m_listSettings; use GetListSettings().)
+	// ⚠ THE SOURCE'S OWN CONFIGURATION FIRST, the ACTIVE one only if there is no source to ask. A
+	// queryable lives in the configuration it was created in — the edited one in the designer, the
+	// copy's own on a copy — and resolving against the active configuration there would answer with
+	// somebody else's tables.
+	//
+	// ⚠⚠ A LIST BELONGING TO A CONFIGURATION MUST NEVER FALL BACK TO THE ACTIVE ONE — it would see THE
+	// WRONG TABLES. Two configurations are open in the designer at once, and the active one is not
+	// necessarily this object's; a name resolved there answers with somebody else's metadata.
+	//
+	// The line below is INSURANCE, not the road: it catches the list CREATED IN CODE
+	// (`New DynamicList()` in a script, one a form builds), which has nowhere to take a configuration
+	// from and where exactly one is running anyway.
+	if (queryable != nullptr) {
+		if (const ibValueMetaObjectGenericData* mo = queryable->GetSourceMetaObject())
+			m_sourceMetaData = mo->GetMetaData();
+	}
+	if (m_sourceMetaData == nullptr)
+		m_sourceMetaData = activeMetaData;
+
 	if (queryable != nullptr)
 		SetSourceQueryable(queryable);   // null → set later via SetSource
 }
@@ -163,8 +181,7 @@ void ibValueDynamicList::RebuildSource()
 	// to every picker in the settings dialog. That was the gap — the composer took the text and
 	// nothing downstream knew what came out of it.
 	m_querySchema.clear();
-	m_queryError.clear();
-	if (IsArbitraryQuery() && !GetArbitraryQueryText().IsEmpty()) {
+	if (IsArbitraryQuery()) {
 		m_composer.FromText(GetArbitraryQueryText());
 
 		// The names resolve against the SOURCE's config, the same one the composer was just handed.
@@ -175,11 +192,10 @@ void ibValueDynamicList::RebuildSource()
 			if (ast)
 				ibQueryLowering::DescribeOutput(*ast, {}, m_querySchema);
 		}
-		catch (const ibBackendException& error) {
-			// AT ONCE, AND IN THE ENGINE'S WORDS. A query that cannot be described is a query that
-			// cannot be run, and finding that out when the list is first opened — in front of a user
-			// rather than its author — is the thing worth avoiding.
-			m_queryError = error.GetErrorDescription();
+		catch (const ibBackendException&) {
+			// A QUERY THAT CANNOT BE DESCRIBED HAS NO COLUMNS — that is the whole of what this road
+			// has to decide. The engine's WORDS are told to whoever can act on them: the settings
+			// window asks the text the same question and shows the answer under the editor.
 			m_querySchema.clear();
 		}
 		m_columns = new ibQuerySchemaColumns(m_querySchema);   // ibValuePtr owns
@@ -195,9 +211,9 @@ void ibValueDynamicList::RebuildSource()
 		m_composer.FromSource(queryable);
 		// (No default sort re-applied here — the metaobject sets it at CREATION as an ordinary serialised sort, so a
 		//  user can remove it and it stays removed. Was: GetPresentationSortColumn re-applied every fetch. — Max.)
-		// FromSource rebinds the source — re-commit the settings buffer onto the composer so a source
-		// change does NOT silently drop the Filter/Order/Group the user configured. The settings DATA
-		// lives on the base buffer GetListSettings() (untouched here); only the composer source changed.
+		// FromSource rebinds the source — drive the settings onto the composer again so a source change
+		// does NOT silently drop the Filter/Order/Group the user configured. The settings DATA lives in
+		// the description (untouched here); only the composer source changed.
 		RefreshComposerSettings();
 	}
 	PruneUnresolvedSettings();   // ...and a source change decides it too
@@ -259,24 +275,9 @@ wxString ibValueDynamicList::SeedArbitraryQuery() const
 	return ibRenderQuery(select);
 }
 
-// TICKING IT SEEDS, UNTICKING IT CLEARS. The flag is not a mode with its own empty state: switching
-// it on means "let me change what is read", so there is something to change; switching it off means
-// the main table alone is the read, so the text goes rather than lying in wait for the next tick.
-void ibValueDynamicList::SetArbitraryQuery(bool use)
-{
-	if (use == IsArbitraryQuery())
-		return;
-
-	m_propertyUseCustomQuery->SetValue(use);
-	if (use) {
-		if (GetArbitraryQueryText().IsEmpty())
-			m_propertyCustomQuery->SetValue(SeedArbitraryQuery());
-	}
-	else {
-		m_propertyCustomQuery->SetValue(wxEmptyString);
-	}
-	RebuildSource();   // SetValue does not fire OnPropertyChanged - the columns and the pickers follow HERE
-}
+// (⛔ `SetArbitraryQuery(bool)` STOOD HERE — "ticking it seeds, unticking it clears". It had no
+//  callers, and the flag it drove is gone: HAVING a query is what says the list runs one. The seed
+//  it wrote lives on as `SeedArbitraryQuery` for whoever offers a "start me a query" button.)
 
 // DROP THE SETTINGS WHOSE FIELD THE LIST NO LONGER HAS.
 //
@@ -305,24 +306,37 @@ void ibValueDynamicList::PruneUnresolvedSettings()
 	});
 }
 
+// ⭐ WHAT THE LIST DECLARES, PUT BACK. Rebinding the source rebuilds the composer from scratch, so
+// the settings the list itself holds have to be stated again — otherwise changing a source silently
+// dropped the filter and sort that came with the list.
 void ibValueDynamicList::RefreshComposerSettings()
 {
-	// Nothing to re-apply: GetListSettings() is now a live FACADE that writes the composer directly, and the
-	// settings DIALOG commits its own buffer onto the composer on OK. A settings/source change just refetches.
+	// ⭐ THE VARIANTS — restated after a rebind, because rebinding builds the composer from scratch.
+	// What a reader saved is a setting of its own and survives this untouched; writing the author's
+	// into that slot instead would wipe their filter every time the source was re-bound
+	// (Max, 2026-08-24).
+	GetModelComposer().LoadVariants(GetCompositionDesc().m_variants);
 	NotifyReset();
 }
 
-// Add a filter — forward the predicate to the composer under the list. The composer is the SINGLE settings
-// store (it persists the line and the fetch reads it WITHOUT clearing), so a backend-injected select predicate and
-// a user filter coexist. Same shape the presentation Sort uses in RebuildSource.
+// ⭐ ADD A FILTER — a line in the READER's setting, like every other filter there is. It used to go
+// into a flat store of the composer's own, invisible to the settings window and outranked by
+// anything saved there; a filter a script states and a filter a person types are the same fact and
+// now live in the same place (Max, 2026-08-24: "if you set a filter somewhere, it is saved into the
+// user setting").
 void ibValueDynamicList::AddFilter(const wxString& path, const wxString& op, const ibValue& value)
 {
 	m_composer.Filter(path, op, value);
 	NotifyReset();
 }
 
-// Add a sort — forward the sort line to the composer (the settings store). The metaobject sets the default sort
-// at list CREATION through here, so it becomes an ordinary serialised sort the user can later remove.
+// Add a sort — a line in the READER's setting, the same place a filter goes and the same place the
+// settings window writes. The metaobject sets the list's default order at CREATION through here, so
+// it arrives as an ordinary sort line the person can see and remove rather than a hidden default.
+//
+// 🛑 IT WENT TO A STORE THE RENDER PREFERRED THE SETTING OVER, so once a list had a sort setting the
+// order stated here was dropped — and with it the column-heading click, which goes through the same
+// door (2026-08-24).
 void ibValueDynamicList::AddSort(const wxString& path, bool ascending)
 {
 	m_composer.Sort(path, ascending);
@@ -627,25 +641,15 @@ const ibMetaData* ibValueDynamicList::GetSourceMetaData() const
 
 // --- settings surface -------------------------------------------------------
 
+// ⚠ NO Filter / Order / Group / Settings HERE FOR NOW. They vended the runtime wrapper that went
+// under the knife on 2026-08-23 (composition/listFilter.h) — a half-built second model of what the
+// list already is. What the list IS lives in its description (GetCompositionDesc); the script
+// surface over it is rebuilt over the settled structure, in
+// system/value/composition/valueComposerSettings.h. Offering a property that hands out nothing would
+// be worse than not offering it: a script would set a filter and be told nothing went wrong.
 void ibValueDynamicList::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp(wxT("Filter"),   true, false, wxNOT_FOUND);
-	helper.AppendProp(wxT("Order"),    true, false, wxNOT_FOUND);
-	helper.AppendProp(wxT("Group"),    true, false, wxNOT_FOUND);
-	helper.AppendProp(wxT("Settings"), true, false, wxNOT_FOUND);
 	helper.AppendProc(wxT("Refresh"), wxT("Refresh()"));
-}
-
-bool ibValueDynamicList::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
-{
-	ibValueListSettings* s = GetListSettings();
-	switch (lPropNum) {
-	case 0: pvarPropVal = s->GetFilter(); return true;   // Filter
-	case 1: pvarPropVal = s->GetOrder();  return true;   // Order
-	case 2: pvarPropVal = s->GetGroup();  return true;   // Group
-	case 3: pvarPropVal = s;              return true;   // Settings (the whole object)
-	}
-	return false;
 }
 
 bool ibValueDynamicList::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
@@ -664,9 +668,24 @@ bool ibValueDynamicList::CallAsProc(const long lMethodNum, ibValue** paParams, c
 // list re-applies it. The "hook" is a virtual on the property-object, not a function ptr.
 void ibValueDynamicList::OnPropertyChanged(ibProperty* property, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/)
 {
-	// Source picked, or the arbitrary-query flag / text changed — rebuild off the current source.
-	if (m_propertySource == property || m_propertyUseCustomQuery == property || m_propertyCustomQuery == property)
+	// Source picked — rebuild off it. (The query is not a property any more; the settings window
+	// writes it into the description and asks for the rebuild itself.)
+	//
+	// ⭐⭐ …AND THE ANCHOR LANDS IN THE DESCRIPTION THE MOMENT IT IS PICKED. The main table is the
+	// composition's anchor and lives THERE (Max, 2026-08-24: "the main table is the main source —
+	// everything else joins onto it"); the Source property is a VIEW of that field, the way the
+	// Query tab is a view of `m_query`. So the property answers the change and the description is
+	// written from it, once, here.
+	//
+	// 🛑 IT WAS DONE AT SERIALISE TIME, and that could not even compile: `WriteProperty` is const,
+	// so `GetCompositionDesc()` hands back a const reference there (C3892). Which was the design
+	// saying so out loud — a save must WRITE what is held, not decide it. Doing it on the change
+	// also keeps the in-memory description right between the pick and the save, where everything
+	// that asks `HasMainTable()` was reading wxNOT_FOUND.
+	if (m_propertySource == property) {
+		GetCompositionDesc().m_mainTable = m_propertySource->GetTableId();
 		RebuildSource();
+	}
 	// The source/settings changed; re-commit the settings buffer onto the composer (L5).
 	RefreshComposerSettings();
 	// Toggling DynamicRead switches the fetch path (live keyset cursor ↔ whole-list RAM snapshot). Re-drive the fetch
@@ -680,17 +699,17 @@ void ibValueDynamicList::OnPropertyChanged(ibProperty* property, const wxVariant
 // Source property + the settings (Filter/Order/Group) held OUTSIDE the property set.
 bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 {
-	// BOTH, ALWAYS. The main table is what the list IS (its commands, its icon, the value a choice
-	// hands back), and the arbitrary query is what it READS — so neither is written in place of the
-	// other. An older blob that stored only one loads with the other simply absent, which is the same
-	// state as "not set".
-	m_propertyUseCustomQuery->SetNodeValue(node.GetProperty(m_propertyUseCustomQuery->GetName()));
-	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));   // resolves the queryable from the id
-	m_propertyCustomQuery->SetNodeValue(node.GetProperty(m_propertyCustomQuery->GetName()));
-	RebuildSource();
+	// ⭐⭐ A LIST LIVES ON THE COMMON COMPOSER, DEGENERATE (Max, 2026-08-23): its main table, its
+	// query and the same filter / sort / grouping, with the structure, resources and variants a
+	// report also has left empty. So it reads through the SAME description a report does — the parts
+	// it does not use come back empty rather than being a second format.
+	ibCompositionDescriptionMemory::ReadNode(node, GetCompositionDesc());
 
-	GetListSettings()->ReadData(node);   // node → buffer; then commit buffer → composer (the store)
-	RefreshComposerSettings();
+	// ⭐ …AND THE ANCHOR IS PUT BACK ON THE WIDGET THAT SHOWS IT. The main table lives in the
+	// description (see WriteProperty); the Source property is its view, and it is filled here — as an
+	// ID, without resolving. Nothing is registered yet at load time, and resolving now is exactly
+	// what used to throw the value away (ibPropertyDynamicSource::ReadNodeValue).
+	m_propertySource->SetTableId(GetCompositionDesc().m_mainTable);
 
 	// Default view — a hidden intrinsic field (absent on an old blob → Normal, forward-compatible).
 	m_view = (ibDynamicListView)node.GetValue<s32>(wxT("View"));
@@ -703,8 +722,6 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 
 bool ibValueDynamicList::WriteProperty(ibDataNode& node) const
 {
-	node.SetProperty(m_propertyUseCustomQuery->GetName(), m_propertyUseCustomQuery->GetNodeValue());
-
 	// ⚠ THE MAIN TABLE IS REQUIRED, arbitrary query or not. The Source property's write FAILS when no
 	// queryable is picked (ibPropertyDynamicSource::WriteNodeValue) — forbid serialising an INCOMPLETE
 	// list, which without a main table would load as a grid nobody can act on: no commands, no icon,
@@ -718,16 +735,25 @@ bool ibValueDynamicList::WriteProperty(ibDataNode& node) const
 	// nothing when there is none), so the check never fired and the node went out sourceless.
 	if (m_propertySource->IsEmptyProperty())
 		return false;
-	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
 
-	// …and the query over it, when there is one.
-	node.SetProperty(m_propertyCustomQuery->GetName(), m_propertyCustomQuery->GetNodeValue());
+	// ⭐⭐ THE MAIN TABLE IS ALREADY IN THE DESCRIPTION — put there when the source was PICKED (see
+	// OnPropertyChanged), because that is when it is decided. A save writes what is held; it does
+	// not decide anything, which is also why this method can be const.
+	//
+	// 🛑 IT REACHED THE FILE THROUGH NEITHER SIDE before: this override writes the description and
+	// not the property set, and `m_mainTable` was set by no line in the tree — so the anchor a
+	// person picked was serialised nowhere at all and the list came back sourceless. Same cure as
+	// the arbitrary query: one home, and the widget reads it.
 
-	// GetListSettings() is the live FACADE over the composer (the store), so this serialises the
-	// composer's current Filter, Order AND Group — all three, through the facade's own Count/Get/Add.
-	// (It wrote the filter alone until 2026-08-07: sort and grouping live in the composer in facade
-	// mode, the buffer fields it read were empty, and a sort set on a live list never reached disk.)
-	GetListSettings()->WriteData(node);
+	// …AND THE REST GOES OUT AS THE COMMON DESCRIPTION — main table, query, and the same filter /
+	// sort / grouping a report writes. A list fills three of its fields and leaves the others empty,
+	// which is what "degenerate composer" means on disk as well as in the head.
+	if (!ibCompositionDescriptionMemory::WriteNode(node, GetCompositionDesc()))
+		return false;
+
+	// (The settings went out a SECOND time here until the description arrived — the composer's filter,
+	//  order and grouping are part of it, and writing them again beside it is how one record grows two
+	//  answers to the same question.)
 
 	// Default view — written implicitly as a hidden intrinsic field (see ibDynamicListView).
 	node.SetValue<s32>(wxT("View"), (s32)m_view);

@@ -39,6 +39,16 @@ public:
 		m_propValue = new ibVariantDataDynamicSource(queryable, m_owner);   // owner → re-resolve through ITS config factory
 	}
 
+	// ⭐ THE SOURCE AS THE ID IT IS — see the variant. Reading and writing both go through this, so a
+	// source that cannot be resolved AT THIS MOMENT is still carried: the number is the source, and
+	// resolving it is a question asked later, by whoever needs the object.
+	void SetTableId(const ibMetaID& tableId) {
+		get_cell_variant<ibVariantDataDynamicSource>()->SetTableId(tableId);
+	}
+	ibMetaID GetTableId() const {
+		return get_cell_variant<ibVariantDataDynamicSource>()->GetTableId();
+	}
+
 	// Choose the source by its registered identity — resolves the queryable into the variant.
 	void SetSource(const wxString& ns, const wxString& name);
 
@@ -51,7 +61,10 @@ public:
 	// "No source picked" is a question the property answers, not something a caller infers from a
 	// written value. WriteNodeValue succeeds either way (it simply writes nothing when there is no
 	// queryable), so testing its verdict never detected this — it read as "always set".
-	virtual bool IsEmptyProperty() const override { return GetQueryable() == nullptr; }
+	// ⭐ EMPTY MEANS NOBODY PICKED ONE — not "it does not resolve just now". Asked of the ID, because
+	// a source that is registered later is a source that WAS picked, and answering "empty" for it is
+	// what made a load drop it (see ReadNodeValue).
+	virtual bool IsEmptyProperty() const override { return GetTableId() == wxNOT_FOUND; }
 
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;

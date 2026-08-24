@@ -9,14 +9,16 @@
 #include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject
 #include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valueType.h"                 // ibValueTypeDescription::AdjustValue
-#include "backend/composition/listFilter.h"                 // ibValueListSettings (list settings form)
+#include "backend/compositionDescription.h"                 // ibCompositionDescription (list settings form)
 #include "backend/tabularModel.h"                        // ibValueModel (table-source check)
 #include "backend/typeDescription.h"                          // ibTypeDescription::GetFirstClsid (value materialise)
+#include "backend/system/systemManager.h"                    // ibValueSystemFunction::Message — the filling check reports
 #include "backend/metaData.h"                                // GetTypeCtor
 #include "backend/objCtor.h"                                 // ibCtorMetaValueType / ibCtorObjectMetaType
 #include "backend/appData.h"                                 // ibApplicationData::GetActiveMetaData (metadata fallback)
 #include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationBase : ibMetaData (upcast)
 #include "backend/clsid.h"
+#include "backend/metaCollection/metaFormObject.h"            // ibValueMetaObjectFormBase::SaveFormData — the live form back into its blob
 #include "backend/backend_core.h"                            // oes_clipboard_attribute
 #include "backend/fileSystem/fs.h"                           // ibWriterMemory / ibReaderMemory (clipboard serialize)
 #ifndef OES_USE_WEB
@@ -384,6 +386,38 @@ ibFormAttributeValue* ibValueForm::GetAttribute(unsigned int idx) const
 	return m_attributes[idx];
 }
 
+// ⭐⭐ THE FORM'S FILLING CHECK — the seam `FillCheck` was declared against and never had.
+//
+// A METAOBJECT attribute is checked at the moment its object is WRITTEN
+// (ibValueRecordDataObjectRef::SaveData). A form attribute has no such moment: it is form-local, it
+// is never saved, and nothing in the frame ever asked. So the property serialised, offered "Don't
+// check" / "Show error" in the designer, and did nothing at all (audit, 2026-08-24).
+//
+// ⭐ IT REPORTS AND RETURNS, it does not raise — and that is the difference from the object's road.
+// A save that cannot happen must fail; a form is somebody standing in front of a window, and the
+// caller decides what an unfilled field costs:
+//
+//     If Not ThisForm.CheckFilling() Then Return; EndIf;
+//
+// THE SAME WORDS as the object's road, deliberately: one sentence for one situation, so a person
+// meets the same phrasing whichever side refused.
+bool ibValueForm::CheckFilling() const
+{
+	bool filled = true;
+	for (const auto& av : m_attributes) {
+		if (av == nullptr || av->GetFillCheck() != ibFormAttributeFillCheck_ShowError)
+			continue;
+		ibValue value;
+		if (av->GetValue(value) && !value.IsEmpty())
+			continue;
+		ibValueSystemFunction::Message(
+			wxString::Format(_("""%s"" is a required field"), av->GetSynonym()),
+			ibStatusMessage::ibStatusMessage_Information);
+		filled = false;
+	}
+	return filled;
+}
+
 ibFormAttributeValue* ibValueForm::GetMainAttribute() const
 {
 	for (const auto& av : m_attributes)
@@ -592,61 +626,8 @@ void ibFormAttributeValue::Refresh()
 		AttachPropertyObject(po);
 }
 
-void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
-{
-	// The holder is what the inspector selects — forward the change to the property's REAL
-	// owner (the hidden attribute, or the held value) so each reacts to its own.
-	ibPropertyObject* owner = property != nullptr ? property->GetPropertyObject() : nullptr;
-	if (owner != nullptr && owner != this)
-		owner->OnPropertyChanged(property, oldValue, newValue);
-
-	// The attribute's Type drives the value's type: re-materialise + re-accumulate, so the
-	// inspector shows the new type's properties.
-	if (owner == static_cast<ibPropertyObject*>(&*m_attribute) && m_attribute->IsTypeProperty(property))
-		Refresh();
-
-#ifndef OES_USE_WEB
-	// EXACTLY the path a control edit takes (see controlProperty / frameProperty): route through the visual
-	// editor's ModifyProperty command. That command is the ONE place a property edit marks the form modified
-	// AND rebuilds the editor (canvas + object tree + attribute tree — a Type/source change can cascade into
-	// bindings and controls). The holder IS the inspector's selected object, so this fires once; a genuinely
-	// nested value (a value-table column) is edited as its OWN selection and bubbles via OnChildChanged instead.
-	if (ibFrontendVisualEditorNotebook* editor = ibFrontendVisualEditorNotebook::FindEditorByForm(m_attribute->GetOwnerForm()))
-		editor->ModifyProperty(property, oldValue, newValue);
-#endif
-}
-
-void ibFormAttributeValue::OnChildChanged()
-{
-	// A nested value changed (a value-table column-info edited in the inspector). The holder is the
-	// frontend end of the attach chain — re-render the bound control live. Keep bubbling up too (the
-	// base is a no-op once there is no further owner).
-	ibPropertyObject::OnChildChanged();
-
-#ifndef OES_USE_WEB
-	if (ibFrontendVisualEditorNotebook* editor = ibFrontendVisualEditorNotebook::FindEditorByForm(m_attribute->GetOwnerForm())) {
-		// 🛑 AND IT IS A MODIFICATION, not just a repaint (Max, 2026-08-20: "the same defect is in
-		// the dynamic list — when I change something it has to be able to say it changed").
-		//
-		// A property edit one function up goes through ModifyProperty, which is the one place that
-		// marks the form modified. This road had only the repaint half: editing a dynamic list's
-		// SETTINGS — a filter, a sort, a grouping — redrew the editor and left the configuration
-		// looking untouched, so Save had nothing to do and the work was gone on the next open.
-		//
-		// The DOCUMENT is asked rather than the metadata directly: ibMetaDocument::Modify delegates
-		// to ibMetaData::Modify, which is where modified-ness lives, and going through the document
-		// also lets the view put its asterisk in the tab title.
-		//
-		// ⚠ Not routed through ModifyProperty: this signal deliberately carries no property (see
-		// ibPropertyObject::OnChildChanged), and inventing one to push onto the undo stack would put
-		// a command there that cannot undo what actually changed.
-		if (ibMetaDocument* document = editor->GetEditorDocument())
-			document->Modify(true);
-
-		editor->RefreshEditor();
-	}
-#endif
-}
+// (THE PROPERTY ASPECT LIVES IN formAttributeProperty.cpp — OnPropertyChanged, OnChildChanged and
+//  the FillCheck list, the same split every control in this folder has.)
 
 bool ibFormAttributeValue::WriteProperty(ibDataNode& node) const
 {
@@ -761,13 +742,6 @@ ibSourceDataType ibFormAttributeValue::ibFormAttribute::GetSourceDataType() cons
 //*********************************************************************************************
 //*                              runtime member surface                                      *
 //*********************************************************************************************
-
-bool ibFormAttributeValue::ibFormAttribute::FillFillCheck(ibPropertyList* prop)
-{
-	prop->AppendItem(_("Don't check"), 0, wxBitmap());
-	prop->AppendItem(_("Show error"), 1, wxBitmap());
-	return true;
-}
 
 void ibFormAttributeValue::ibFormAttribute::FillMembers(ibMemberTable& helper) const
 {

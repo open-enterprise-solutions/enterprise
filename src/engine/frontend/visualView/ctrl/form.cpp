@@ -251,6 +251,9 @@ enum Func
 	enDetachIdleHandler,
 
 	enNotifyChoice,
+	// ⚠ APPENDED AT THE END, and that is not a style choice: these are INDEXES into the order the
+	// members are registered in below. Inserting one in the middle renumbers every method after it.
+	enCheckFilling,
 };
 
 void ibValueForm::FillFormMembers(ibMemberTable& helper) const
@@ -276,6 +279,9 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 	helper.AppendProc(wxT("AttachIdleHandler"), 3, wxT("AttachIdleHandler(procedureName : string, interval : number, single : boolean)"));
 	helper.AppendProc(wxT("DetachIdleHandler"), 1, wxT("DetachIdleHandler(procedureName : string)"));
 	helper.AppendProc(wxT("NotifyChoice"), 1, wxT("NotifyChoice(value)"));
+	// ⭐ IS EVERY REQUIRED ATTRIBUTE FILLED — see ibValueForm::CheckFilling. A FUNCTION, because the
+	// answer is the point: it reports what is missing and lets the caller decide to stop.
+	helper.AppendFunc(wxT("CheckFilling"), wxT("CheckFilling()"));
 
 	// Module exports AND the context binds (ThisForm.Controls / DataSource) are
 	// surfaced as the helper's tail by the descriptor's ExportThunk (autobind under
@@ -458,6 +464,9 @@ bool ibValueForm::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibVal
 		return true;
 	case enIsShown:
 		pvarRetValue = IsShown();
+		return true;
+	case enCheckFilling:
+		pvarRetValue = CheckFilling();
 		return true;
 	}
 

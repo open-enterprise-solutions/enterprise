@@ -246,7 +246,13 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 		// the factory only if its own KIND registered a source descriptor (each does so in its
 		// OnAfterRun — commonObject.cpp), so a missed registration reads to the author as "there is no
 		// such thing", with nothing to distinguish the two. The journal says which it was.
-		ibJournalInfo(wxT("query.road"), wxT("source kind '%s' is not registered with this configuration"), ns);
+		// …and WHICH source was asked for, because the kind alone cannot tell the two cases apart.
+		// A kind is registered by its metatype's own OnAfterRun, so a read that happens WHILE the
+		// configuration is still loading finds it missing and the same read succeeds seconds later
+		// (measured 2026-08-23: `ChartOfCharacteristicTypes` unregistered at 16:42:25, resolving at
+		// 16:42:28 in the same session). Naming the object says whose load order it is.
+		ibJournalInfo(wxT("query.road"), wxT("source '%s.%s': kind '%s' is not registered with this configuration"),
+		              ns, name, ns);
 		ThrowQueryException(0, 0, wxString::Format(_("unknown metaobject kind '%s'"), ns));
 		return nullptr;
 	}
@@ -466,16 +472,29 @@ const ibBackendQueryColumn* ResolveColumnSingle(const std::vector<ibSourceBindin
 		const ibBackendQueryable* q = SourceForAlias(sources, path[0]);
 		if (q != nullptr) {
 			const ibBackendQueryColumn* col = q->ResolveColumnByName(path[1]);
+			// ⭐ AND THE SOURCE IS NAMED. "unknown attribute 'PointInTime'" is true and unactionable:
+			// the author knows what they wrote, and what they need is WHICH table was asked — a
+			// document has a moment, a register or a wrapped subquery does not, and the answer to
+			// that decides whether the field or the table is the thing to change (2026-08-23).
 			if (col == nullptr)
-				ThrowQueryException(e.m_line, e.m_col, wxString::Format(_("unknown attribute '%s'"), path[1]));
+				ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+					_("unknown attribute '%s' on source '%s'"), path[1], q->GetQueryName()));
 			return col;
 		}
 		// path[0] is not an alias -> a dot-walk (Producer.Name), not allowed in this clause yet.
 	}
 	else if (path.size() == 1) {
 		const ibBackendQueryable* q = OwnerOfBareColumn(sources, path[0], e.m_line, e.m_col);   // ambiguous -> Fail
-		if (q == nullptr)
-			ThrowQueryException(e.m_line, e.m_col, wxString::Format(_("unknown attribute '%s'"), path[0]));
+		if (q == nullptr) {
+			// A BARE name belongs to NO source here, so the thing to say is which ones were asked —
+			// the reader can then see whether the table they meant is even in the query.
+			wxString asked;
+			for (const ibSourceBinding& s : sources)
+				if (s.m_q != nullptr)
+					asked += (asked.IsEmpty() ? wxT("") : wxT(", ")) + s.m_q->GetQueryName();
+			ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+				_("unknown attribute '%s': no source of this query has it (asked: %s)"), path[0], asked));
+		}
 		return q->ResolveColumnByName(path[0]);
 	}
 
@@ -542,7 +561,8 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 		for (size_t k = 0; k < path.size(); ++k) {
 			const ibBackendQueryColumn* col = cur->ResolveColumnByName(path[k]);
 			if (col == nullptr) {
-				ThrowQueryException(e.m_line, e.m_col, wxString::Format(_("unknown attribute '%s'"), path[k]));
+				ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+					_("unknown attribute '%s' on source '%s'"), path[k], cur->GetQueryName()));
 				return cols;
 			}
 			cols.push_back(col);
@@ -612,7 +632,12 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 	for (size_t k = i; k < path.size(); ++k) {
 		const ibBackendQueryColumn* col = cur->ResolveColumnByName(path[k]);
 		if (col == nullptr) {
-			ThrowQueryException(e.m_line, e.m_col, wxString::Format(_("unknown attribute '%s'"), path[k]));
+			// The source is named for the same reason as above — and here it is the one that matters
+			// most, because a WALK moves from table to table: the name that failed may belong to the
+			// third hop, and without saying where it was asked the message points at the query rather
+			// than at the step.
+			ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+				_("unknown attribute '%s' on source '%s'"), path[k], cur->GetQueryName()));
 			return {};
 		}
 		cols.push_back(col);
@@ -1682,10 +1707,16 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				oc.m_alias = alias;
 				oc.m_byAlias = true;
 			}
-			else if (e.m_kind == ibQueryAstExprKind::Value || e.m_kind == ibQueryAstExprKind::Param) {
-				// SELECT value(<Kind>.<Name>.<Member>) [AS x] / SELECT &param [AS x] — project a CONSTANT column
-				// (an empty ref / a predefined item / a bound &parameter value), resolved now. Common to tag a
-				// UNION branch or seed a constant column.
+			else if (e.m_kind == ibQueryAstExprKind::Literal || e.m_kind == ibQueryAstExprKind::Value
+			      || e.m_kind == ibQueryAstExprKind::Param) {
+				// SELECT 2 AS x / SELECT value(<Kind>.<Name>.<Member>) [AS x] / SELECT &param [AS x] — project a
+				// CONSTANT column (a plain literal / an empty ref / a predefined item / a bound &parameter value),
+				// resolved now. Common to tag a UNION branch or seed a constant column.
+				//
+				// ⭐ A PLAIN LITERAL BELONGS HERE and was the odd one out: `2 AS iuytfds` is ordinary SQL, the
+				// parser reads it, EvalValue has always answered it — and the projection alone refused, with
+				// "unsupported projection expression" on a query that is not wrong (Max, 2026-08-24: "an error
+				// that is not an error"). One kind was missing from a list of three that do the same thing.
 				b.SelectExpr(ibQueryColumnExpr::Const(EvalValue(e, params)), alias);
 				oc.m_alias = alias;
 				oc.m_byAlias = true;
@@ -2020,6 +2051,15 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		// reference, which the declaration publishes under their own physical names, so declaring it
 		// too would name fields nothing wrote.
 		if (oc.m_col != nullptr && (oc.m_col->IsSyntheticColumn() || ColumnFieldNames(oc.m_col).empty()))
+			continue;
+		// ⚠ …AND ONE COLUMN IS PUBLISHED ONCE. Two outputs may stand over the SAME column — the same
+		// field asked for twice, under two names — and both would publish its physical `fld<metaID>`
+		// spread, which is one name twice in the statement (`-104 … specified multiple times`,
+		// 2026-08-24). The projection drops the second by the same rule (AttachNamedQueries), so the
+		// published set and the select list keep saying the same thing.
+		if (oc.m_col != nullptr &&
+			std::any_of(fields.begin(), fields.end(), [&](const ibCteQueryable::Field& f) {
+				return f.m_physical.IsSameAs(oc.m_col->GetPhysicalName(), false); }))
 			continue;
 		// …and the PHYSICAL name comes from the source column: `fld<metaID>`, unique per metatype, so
 		// the fields two sources publish cannot collide even when both are called `Ref` or

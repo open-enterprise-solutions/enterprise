@@ -27,6 +27,7 @@ template <class T> class ibValuePtr;
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "backend/fileSystem/fs.h"
+#include "backend/backend_exception.h"   // ibBackendCoreException — a cell that is not what it is asked for raises
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -209,10 +210,18 @@ public:
 
 	////////////////////
 
+	// ⭐⭐ A CELL THAT IS NOT WHAT IT IS ASKED FOR RAISES. Every caller dereferences the result on the
+	// spot (`get_cell_variant<X>()->GetSomething()`), so a null is a null dereference one line later —
+	// and the assert that used to stand here is gone in Release, which is where it would happen.
+	//
+	// It IS reachable: SetValue takes any wxVariant and is called with whatever the grid announces
+	// (ibObjectInspector::ModifyProperty), and the same expression runs on the load and save paths.
+	// This tree's rule is that a failure raises rather than quietly answering something wrong.
 	template <typename cast_type = wxVariantData>
 	inline cast_type* get_cell_variant(const wxVariant& val) const {
 		cast_type* ret_type = dynamic_cast<cast_type*>(val.GetRefData());
-		wxASSERT(ret_type != nullptr);
+		if (ret_type == nullptr)
+			ibBackendCoreException::Error(_("Property '%s': its value is not of the expected kind"), GetName());
 		return ret_type;
 	}
 
@@ -526,8 +535,17 @@ public:
 	// does not own is ever touched.
 	virtual void OnPropertyRefresh() {}
 	virtual void OnPropertySelected(ibProperty* property) {}
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) { return true; }
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) {}
+	// ⭐ A CHILD THAT CHANGED TELLS ITS OWNER — the whole pair, asked and told. An object whose
+	// property changed is usually not the one anybody HOLDS: a composition, a dynamic list, a
+	// value-table column all live inside something else, and the holder is what records it. So both
+	// halves travel up the attach chain by default, and whoever cares overrides them
+	// (Max, 2026-08-24). A veto travels the same way — an owner that refuses refuses for its child.
+	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) {
+		return m_attachOwner != nullptr ? m_attachOwner->OnPropertyChanging(property, newValue) : true;
+	}
+	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) {
+		if (m_attachOwner != nullptr) m_attachOwner->OnPropertyChanged(property, oldValue, newValue);
+	}
 
 	/**
 	* ibEvent events
@@ -536,8 +554,14 @@ public:
 	virtual void OnEventCreated(ibEvent* event) {}
 	virtual void OnEventRefresh() {}
 	virtual void OnEventSelected(ibEvent* event) {}
-	virtual bool OnEventChanging(ibEvent* event, const wxVariant& newValue) { return true; }
-	virtual void OnEventChanged(ibEvent* property, const wxVariant& oldValue, const wxVariant& newValue) {}
+	// …AND AN EVENT'S PAIR TRAVELS THE SAME WAY. Said for the twin family too, so the two cannot
+	// drift: a handler written on a child is as much the holder's business as a property is.
+	virtual bool OnEventChanging(ibEvent* event, const wxVariant& newValue) {
+		return m_attachOwner != nullptr ? m_attachOwner->OnEventChanging(event, newValue) : true;
+	}
+	virtual void OnEventChanged(ibEvent* property, const wxVariant& oldValue, const wxVariant& newValue) {
+		if (m_attachOwner != nullptr) m_attachOwner->OnEventChanged(property, oldValue, newValue);
+	}
 
 	// A CHILD changed (an attached object, or one that named us its attach-owner). Mirrors wxPGProperty's
 	// ChildChanged: the parent hears it and passes it up — default bubbles along the attach-owner chain;

@@ -4,7 +4,6 @@
 #include "backend/spreadsheetModel.h"             // ibValueSpreadsheetModel — the base a composition IS
 #include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject
 #include "backend/composition/dataComposer.h"        // L5 — ibDataDBComposer
-#include "backend/composition/listFilter.h"          // ibValueListSettings
 #include "backend/propertyManager/propertyObject.h"  // ibPropertyObject — the composer IS a property object
 #include "backend/propertyManager/property/propertyDynamicSource.h"  // ibPropertyDynamicSource — the "Source" property
 #include "backend/propertyManager/property/propertyDataComposition.h" // ibPropertyDataComposition — the "Settings…" action, this type's own
@@ -29,8 +28,8 @@ constexpr ibClassID g_valueDataCompositionCLSID = value_to_clsid("VL_DCMPN");
 // the moment a source is picked — seeded from the source, then edited.
 //
 // What it shares with the list, deliberately and by reuse, not by copy:
-//   * ibValueListSettings (the ONE settings object — filter TREE, sort, grouping),
-//     held by the base model and edited by the SAME settings dialog;
+//   * ibCompositionDescription — the SAME stored shape (filter, sort, grouping,
+//     query, main table), edited by the SAME settings dialog;
 //   * the L5 composer (GetModelComposer) and the base fetch (RunComposerPage) —
 //     fetch lives ONLY in the parent;
 //   * the source descriptor, so a row still knows how to open itself.
@@ -40,10 +39,10 @@ constexpr ibClassID g_valueDataCompositionCLSID = value_to_clsid("VL_DCMPN");
 // parent column.
 //
 // ⚠ NEXT STEP, held in mind while shaping this: the grouping is a FLAT ordered
-// list today (ibValueGroupList — the same one the list uses). It becomes the
+// list today (ibGroupDescription — the same one the list uses). It becomes the
 // output TREE — a node is a table, a table carries rows and, once cross-tables
 // land, columns as well. Nothing here should assume "one flat grouping": read it
-// through GetListSettings()->GetGroup(), never cache the order.
+// out of the description, never cache the order.
 // ---------------------------------------------------------------------------
 // ⭐⭐ A COMPOSER IS A SPREADSHEET MODEL, NOT A TABLE MODEL (Max, 2026-08-20: "ibValueModelCursor is
 // rubbish here — I asked for the spreadsheet document's model; it got there by being copied from the
@@ -53,11 +52,33 @@ constexpr ibClassID g_valueDataCompositionCLSID = value_to_clsid("VL_DCMPN");
 // nodes and column collections. None of that is what a composition is. A composition READS ONCE and
 // writes a SHEET — which is exactly what ibValueSpreadsheetModel owns (its own fetch, the L5 store,
 // the Compose verb), and what a spreadsheet document is the other half of.
+// ⭐ THE PARAMETER LIST FOLLOWS THE QUERY TEXT — one spelling, over any list. `&Period` in the text
+// means there is a parameter called Period: what the text stopped naming goes (if the text put it
+// there), what it names is added, and everything a person wrote or filled in is left alone.
+//
+// FREE, because two places ask it and they hold different lists: the composition, over its own
+// description, and the settings window, over the copy of the description it is editing.
+BACKEND_API void ibSyncParametersWithQuery(std::vector<ibParameterDescription>& parameters,
+                                           const wxString& queryText);
+
 class BACKEND_API ibValueDataComposition : public ibValueSpreadsheetModel, public ibSourceDataObject, public ibPropertyObject {
 public:
 
 	// The source may be passed here — null means "set it later" (SetSource).
 	ibValueDataComposition(const ibBackendQueryable* queryable = nullptr);
+
+	// ⭐⭐ THE RUNNING COMPOSITION OVER A DESCRIPTION SOMEBODY ELSE HOLDS — and whoever wants one makes
+	// it, here, with the two things it needs: the data, and the configuration to resolve names in.
+	// A metaobject does not keep one for you (it DECLARES; what it has is the description), and a
+	// property hands none out (it STORES). The designer builds one over the current description; a
+	// report builds one over its own copy of it.
+	//
+	// ⚠ A NULL CONFIGURATION MEANS THE ACTIVE ONE, and the substitution happens HERE, in the
+	// constructor — by the time this object exists it always has one. A caller that had nothing to
+	// pass (a value built from script, a headless tool) said so by passing null; making each of them
+	// reach for the active configuration itself is the same decision written in as many places as
+	// there are callers.
+	ibValueDataComposition(ibCompositionDescription& desc, const class ibMetaData* metaData);
 	virtual ~ibValueDataComposition();
 
 	// --- source & query (L5) ------------------------------------------------
@@ -72,7 +93,11 @@ public:
 
 	// The query itself — what is READ. Always present once a source is picked; the
 	// settings dialog's first tab and the query constructor both edit this text.
-	wxString GetQueryText() const { return m_propertyQuery->GetValueAsString(); }
+	// ⭐⭐ THE QUERY IS THE DESCRIPTION'S — one truth, and the file proves it: this object serialises
+	// through ibCompositionDescriptionMemory alone, so a query kept anywhere else was simply not
+	// SAVED (Max, 2026-08-23: "the value is not written"). It used to live in a hidden property
+	// beside the description, which is two states for one fact and the second one never travelled.
+	wxString GetQueryText() const { return GetCompositionDesc().m_query; }
 	void     SetQueryText(const wxString& text);
 
 	// THE QUERY THE SOURCE WOULD WRITE FOR ITSELF — `SELECT <fields> FROM <source>`.
@@ -112,45 +137,24 @@ public:
 	// ⭐ A VARIANT IS A SNAPSHOT (Max, 2026-08-19): its own groupings, its own filter, its own
 	// sort — "as if every variant were a page of settings of its own". A person picks one and
 	// everything switches to it, so one report answers "sales" and "sales plus turnover" without
-	// being two reports. Parameters join the snapshot when the composition grows them.
+	// being two reports.
 	//
-	// 🛑 THERE IS ALWAYS AT LEAST ONE. A composition with no variant would have no settings at all,
-	// so the list starts with one and the last one cannot be removed — the invariant is held HERE,
-	// in the store, not by whichever window happens to be open.
+	// ⛔ AND THE VERBS FOR THEM LIVED HERE AND WERE NEVER CALLED — `VariantCount`, `GetVariantName`,
+	// `SetVariantName`, `GetActiveVariant`, `SetActiveVariant`, `CaptureActiveVariant`, `AddVariant`,
+	// `RemoveVariant`, plus `ApplyActiveVariant` and `LiveParameterSnapshot` behind them. The
+	// settings window was written against the DESCRIPTION instead, and says so in its own comment:
+	// *"it used to be asked of the live composition (CaptureActiveVariant)"*. The first road was
+	// left standing, ~250 lines of it (audit, 2026-08-24).
 	//
-	// The ACTIVE variant is the one the composer (the store the fetch reads) currently holds. That
-	// is what makes activation cheap and makes the settings window need no knowledge of variants
-	// beyond "capture what I edited, then switch".
-	size_t   VariantCount() const { return m_variants.size(); }
-	wxString GetVariantName(size_t idx) const;
-	bool     SetVariantName(size_t idx, const wxString& name);
-	size_t   GetActiveVariant() const { return m_activeVariant; }
-	// Make `idx` the settings the composer holds. The previous active variant is NOT captured here:
-	// a caller that has been editing says so first (CaptureActiveVariant), because only it knows
-	// whether the edits are meant to be kept.
-	bool     SetActiveVariant(size_t idx);
-	// Re-read the ACTIVE variant's snapshot FROM the composer — the settings window edits the
-	// composer, so this is how an edit reaches the variant it belongs to.
-	void     CaptureActiveVariant();
-	// ADD: empty, or a COPY of an existing variant (copyFrom = its index) — "you can add one, you
-	// can copy an existing one; it copies the groupings, filters, sorts and so on". Returns the new
-	// variant's index; it is NOT activated (the caller decides).
-	size_t   AddVariant(const wxString& name, int copyFrom = wxNOT_FOUND);
-	// REMOVE — refuses the last one. When the active variant goes, the one before it becomes active.
-	bool     RemoveVariant(size_t idx);
+	// The variants themselves are untouched — they live in the description, which is where the
+	// window edits them and where they are saved from.
 
-	// The variants as a NODE — the same door serialisation uses, so a window can snapshot the whole
-	// set on open and put it back on Cancel without knowing what is inside.
-	void WriteVariants(ibDataNode& node) const;
-	// The parameters travel with the settings — value, expression, declared type, who fills it.
-	void WriteParameters(ibDataNode& node) const;
-	void ReadParameters(const ibDataNode& node);
-	bool ReadVariants(const ibDataNode& node);
-	// THE RESOURCES — written nowhere at all before 2026-08-20, so a saved report came back without
-	// its numbers. Composition-level, beside the parameters: today one store holds them for every
-	// variant, and the file says exactly that rather than claiming a snapshot nobody takes.
-	void WriteTotals(ibDataNode& node) const;
-	void ReadTotals(const ibDataNode& node);
+	// (THE PER-PART NODE METHODS ARE GONE — WriteVariants / ReadVariants / WriteParameters /
+	//  ReadParameters / WriteTotals / ReadTotals. Each of them stated part of what a saved
+	//  composition looks like, which is now stated once in composition/compositionDescription.h;
+	//  Describe() and Apply() below are all that is left on this side. The one caller that wanted a
+	//  snapshot — the settings window, for Cancel — takes a DESCRIPTION now, which is the whole
+	//  composition rather than the variants alone.)
 
 	// --- parameters: what the query asks for, and who fills it in --------------
 	//
@@ -169,19 +173,15 @@ public:
 	// the read, and what reaches the query is a plain value — so `CurrentDate()` or a call into a
 	// common module costs nothing per row and breaks no server-side paging. (The page cache signs
 	// itself with the EVALUATED value, or "today" would be one signature all day.)
-	size_t   ParameterCount() const { return m_parameters.size(); }
-	wxString GetParameterName(size_t idx) const;
-	ibValue  GetParameterValue(size_t idx) const;
-	wxString GetParameterExpression(size_t idx) const;
-	bool     IsParameterUserSettable(size_t idx) const;
-	bool     IsParameterFromQuery(size_t idx) const;
-
-	bool SetParameterValue(size_t idx, const ibValue& value);
-	bool SetParameterExpression(size_t idx, const wxString& expression);
-	bool SetParameterUserSettable(size_t idx, bool settable);
-	// The DECLARED type — what the value is adjusted to. Empty = the expression decides.
-	const ibTypeDescription& GetParameterType(size_t idx) const;
-	bool SetParameterType(size_t idx, const ibTypeDescription& type);
+	// ⛔ AND THE TWELVE ACCESSORS OVER THEM ARE GONE (2026-08-24) — `ParameterCount`,
+	// `GetParameterName` / `Value` / `Expression` / `Type`, `IsParameterUserSettable`,
+	// `IsParameterFromQuery`, `SetParameterValue` / `Expression` / `UserSettable` / `Type`,
+	// `AddParameter`, `RemoveParameter`. Not one had a caller, and none was published to script
+	// either (`FillMembers` offers `Refresh` and `Compose`).
+	//
+	// They are not replaced by anything: the settings window edits `Parameters()` — the description —
+	// directly, the same way it edits the variants. A script surface comes back over the SETTLED
+	// structure, which is what the note at the top of this file says about Filter / Order / Group.
 	// A HAND-MADE parameter — the query may not mention it yet (it is being written), or it may be
 	// EVERY PARAMETER AND WHAT IT CURRENTLY HOLDS — the map the engine takes.
 	//
@@ -204,12 +204,7 @@ public:
 	//
 	// Const because a fetch is const — what changes is the parameter's cached value and the
 	// composer's parameter map, which are the state a run is entitled to settle.
-	void PrepareParametersForRun() const;
-	// there for a common module to read. Returns its index; an existing name is not duplicated.
-	size_t AddParameter(const wxString& name);
-	// Removes a HAND-MADE one. An auto parameter refuses: it is in the query text, and removing it
-	// here would put the list back the moment the text is re-read — a button that undoes itself.
-	bool RemoveParameter(size_t idx);
+	void PrepareParametersForRun();
 
 	// COMPOSE INTO A DOCUMENT — the report's whole act, and the reason this type exists
 	// separately from the list. It runs the composition and writes the result into a
@@ -225,22 +220,16 @@ public:
 	// an ordinary table notifies when it changes").
 	virtual bool Compose() override;
 
-	// …AND INTO A DOCUMENT SOMEBODY ELSE OWNS — the script's `Compose(Document)`. The same read and
-	// the same layout; only where the result lands differs, so there is ONE composing routine and no
-	// copy of a finished sheet afterwards.
-	bool Compose(class ibBackendSpreadsheetObject* target);
-
-	// --- the live settings, and the store behind them -------------------------
+	// --- the store the settings are driven into -------------------------------
 	//
-	// ⭐ THE SAME TYPE A LIST CARRIES, over this composition's OWN store: Filter and Sort written
-	// STRAIGHT into the composer, so a script's `Report.Composer1.Filter.Add(…)`, the settings window
-	// and the read all speak to one place. That pair is ALL the two worlds share — the fold is the
-	// composition's own and lives in its structure (Max, 2026-08-20).
-	ibValueListSettings* GetListSettings() const { return m_listSettings; }
+	// (NO LIVE SETTINGS OBJECT. There was one — the same type a list carried — and it went under the
+	//  knife with composition/listFilter.h on 2026-08-23. What a composition's filter, sort and
+	//  grouping ARE is its description (GetCompositionDesc); the composer is told, once, through
+	//  ibDataComposer::SetSettings.)
 
-	// THE STORE. Public because the settings window edits it and the facade writes through it — the
-	// shell is what a person holds, this is what it holds inside.
-	ibDataDBComposer& GetModelComposer() const { return m_composer; }
+	// (THE STORE IS THE BASE'S — every sheet model has one, and a drawn document's is simply empty.
+	//  GetModelComposer and the settings pair over it are inherited unchanged; a copy here would be
+	//  a second composer under one report.)
 
 	// ⭐⭐ AND THE READ IS RENTED — HERE, not on the base (Max, 2026-08-20: "make the async fetch just
 	// an event on the base model and let the composer override it itself"). Reading is what a
@@ -261,19 +250,37 @@ public:
 	virtual void CancelFetch() override;
 
 
-	// Add a FILTER / SORT / GROUPING programmatically — the same doors the list has,
-	// so a generated composer (a standard report form) can be set up from the backend.
-	void AddFilter(const wxString& path, const wxString& op, const ibValue& value);
-	void AddSort(const wxString& path, bool ascending = true);
-	void AddGroup(const wxString& path, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements);
+	// 🛑 `AddFilter` / `AddSort` / `AddGroup` STOOD HERE AND WROTE THE WRONG STORE. They pushed into
+	// the composer's FLAT declared lines, which the render throws away the moment the composition has
+	// settings of its own — so a script that sorted a generated report was silently ignored. Nobody
+	// called them, which is the only reason it never surfaced.
+	//
+	// The cure is the one `AddResource` below already had: write into the DESCRIPTION. They come back
+	// that way, or not at all — a door that quietly does nothing is worse than no door.
+	//
+	// (And the composer's flat lines are gone since: `Filter` and `Sort` write the reader's section,
+	//  so the road that silently swallowed them no longer exists.)
 	// A RESOURCE — the aggregate the levels fold (`SUM` over an amount, `COUNT` over a key). A
 	// grouped composition with no resource has the shape of a report and none of its numbers.
-	void AddTotal(const wxString& func, const wxString& path);
-	// …AND THE OTHER TWO ACTS ON ONE. They existed only on the STORE, so every window that changed a
-	// resource reached past the composition into it — which is precisely how a change went
-	// unannounced: the composition never learned it happened. Same door, same rule as AddTotal.
-	bool SetTotal(size_t idx, const wxString& func, const wxString& path);
-	bool RemoveTotal(size_t idx);
+	//
+	// ⭐⭐ THIS IS THE DOOR FOR CODE, and it writes into the DESCRIPTION (Max, 2026-08-24: "the
+	// runtime is a wrapper — it works on that structure and lets it be filled FROM CODE; that is what
+	// it is for, and the UI works on the structure directly"). So the two sides never meet in the
+	// middle: a script fills the description through this value, a window fills its own copy of the
+	// description, and the composer is handed the result at a run.
+	//
+	// 🛑 THEY USED TO WRITE INTO THE RUNNING COMPOSER, which is filled FROM the description — so a
+	// resource lived until the report was closed and never reached the file.
+	//
+	// ⭐ AND THEY SAY **RESOURCE**, which is what they write. They were the Total family over a store
+	// called `m_resources` — one concept in two vocabularies, crossing inside every one of these
+	// bodies. *Total* is the QUERY's word (`TOTALS agg… BY dim…`) and now lives only where the query
+	// text is rendered (audit, 2026-08-24).
+	void AddResource(const wxString& func, const wxString& path);
+	bool SetResource(size_t idx, const wxString& func, const wxString& path);
+	bool RemoveResource(size_t idx);
+	size_t ResourceCount() const { return GetCompositionDesc().m_resources.size(); }
+	bool   GetResourceAt(size_t idx, wxString& func, wxString& path) const;
 
 	// --- ibValueSpreadsheetModel --------------------------------------------
 	//
@@ -345,31 +352,84 @@ public:
 	virtual bool ReadProperty(const ibDataNode& node) override;
 	virtual bool WriteProperty(ibDataNode& node) const override;
 
+	// ⭐ THE TWO HALVES OF THE TRANSLATION, live <-> description. What a saved composition CONSISTS OF
+	// is stated once, in composition/compositionDescription.h, for a list and a report alike; these
+	// two only carry the pieces across. Public because a composition is also SAVED TO A FILE: describe
+	// it, hand the node to a provider (ibJsonProvider for JSON, ibBinaryProvider for bytes), and read
+	// it back the same way.
+	// ⚠ BY REFERENCE, always — the shape ibVariantDataAttribute::GetTypeDesc has. The description is
+	// what this composition IS, not a copy made on request: a caller edits it in place and saves it,
+	// and a returned copy would be a second answer going stale the moment it was handed over.
+	// …AND IT LIVES IN THE "Settings" PROPERTY, exactly as a list's does in its own — the value is got
+	// FROM there by reference and SET back there as an argument, the way a tabular section's value is
+	// reached in a value table. No field beside the property; one place, and it is the one that saves.
+	ibCompositionDescription& GetCompositionDesc() { return m_propertySettings->GetValueAsCompositionDesc(); }
+	const ibCompositionDescription& GetCompositionDesc() const { return m_propertySettings->GetValueAsCompositionDesc(); }
+	void SetCompositionDesc(const ibCompositionDescription& desc) { m_propertySettings->SetValue(desc); }
+
+	// ⭐⭐ THE USER'S SETTING — THE SAME PAIR A LIST CARRIES, on the same composer, because they are
+	// the same two calls (Max, 2026-08-23: "one pair, identical for reports and for lists").
+	//
+	// ⚠ WHAT DIFFERS IS WHEN IT SHOWS. A LIST re-reads at once — the caller refetches and the rows
+	// come back narrowed. A REPORT does not: its sheet is the one that was BUILT, so the setting
+	// takes effect the next time somebody composes, and then it decides the whole output — instead
+	// of the two or three tables the composer used to produce, it produces what the user set up.
+	// THE READER'S SECTION, PLAINLY — this forwards it and answers nothing else.
+	//
+	// ⭐ THE QUESTION "WHICH ONE IS IN FORCE" MOVED TO THE COMPOSER (SettingsInForce), because that is
+	// where both sections live: the author's, loaded from the schema when the source is built, and
+	// the reader's, only ever set. It used to be answered here — and then again at every window that
+	// opened one, each reaching for the description on its own when this came back empty.
+	const ibSettingsDescription& GetUserSettingsDesc() const { return m_composer.GetUserSettingsDesc(); }
+	void SetUserSettingsDesc(const ibSettingsDescription& settings) { m_composer.SetUserSettingsDesc(settings); }
+
+	// (THERE IS NO "APPLY". Everyone reads the description THROUGH THE REFERENCE above, so a change
+	//  made at runtime is already there. A COMMIT exists only on the interface side, and it is a copy
+	//  that goes back into the property and replaces the one that was there.)
+
 	// --- script member surface (Filter/Order/Group/Settings + Refresh) -------
 	void FillMembers(ibMemberTable& helper) const;
-	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 
 private:
 
+	// ⭐⭐ THE COMPOSING BODY — PRIVATE, AND THAT IS THE WHOLE OF IT (Max, 2026-08-24: "this is now
+	// just the composer's internal body, the composer decides in there"). Reading, laying out and
+	// writing the sheet is one routine; where the result LANDS is the only thing that varies, so
+	// the two public doors are both this call with a different target:
+	//
+	//   Compose()               — into the sheet this model holds, and publish it (the box's command)
+	//   CallAsProc "Compose(Doc)" — into the document the script handed over
+	//
+	// Nothing outside decides HOW it composes. Not even the settings: they are already on the
+	// composer by the time this runs, put there when the source was built or when somebody accepted
+	// the settings window. A target is a place to write, not an instruction.
+	bool Compose(class ibBackendSpreadsheetObject* target);
+
 	// Rebuild the columns + composer from the current source and query text.
 	void RebuildSource();
+
+	// ⭐⭐ ASKING IS WHAT RESOLVES — and RUNNING is the asking. Reading a description stores what a
+	// composition IS and works out nothing (§ "the refresh" in docs/description-serialization.md), so
+	// a report opened and composed straight away had a composer that had never been shown the query:
+	// "Composer: no source is set" on the FIRST Generate, and it worked on the second because opening
+	// the settings window had applied the source in between (Max, 2026-08-24: "the source is known —
+	// that is not true").
+	//
+	// The reading side of that rule was simply never written. Asked at both entrances — Compose and
+	// the paged fetch — and it does nothing when the composer is already built for this very text,
+	// which is what the marker below records.
+	void EnsureSourceBuilt();
+	wxString m_sourceBuiltFor;   // the query text RebuildSource last ran on; empty = never built
 
 	// DROP the filter / sort / grouping lines whose field the composition no longer
 	// has — by RESOLUTION after every rebuild, never by chasing the change.
 	void PruneUnresolvedSettings();
 
-	// ⭐ THE ENGINE'S COMPOSER, INSIDE THIS ONE. Two things wear the name and they nest: the value a
-	// person holds is this SHELL — settings, variants, parameters — and inside it sits the L5 store
-	// that builds the query for the driver (Max, 2026-08-20). It is NOT on the model base: filling a
-	// sheet is not the same as reading one, and a hand-filled document has no query at all.
-	//
-	// Mutable: the store is asked from const readers (a settings window reading back what it holds).
-	mutable ibDataDBComposer m_composer;
-
-	// The LIVE settings over that store — a facade, not a second copy. (The variants below hold
-	// BUFFER-mode ones: those are snapshots, which is the opposite arrangement on purpose.)
-	ibValuePtr<ibValueListSettings> m_listSettings;
+	// (THE L5 STORE MOVED TO THE BASE. Two things wear the name and they nest: the value a person
+	//  holds is this SHELL — settings, variants, parameters — and inside it sits the composer that
+	//  builds the query for the driver. That composer is every sheet model's now, empty on the ones
+	//  that never read, so this class holds nothing of its own here.)
 
 	// The rented run, KEPT so a read cannot outlive the composition that started it — the destructor
 	// waits it out. One slot: there is one sheet to fill.
@@ -387,76 +447,42 @@ private:
 	// The SOURCE config, STORED (what GetSourceMetaData returns) — captured from the
 	// picked queryable's metaobject in RebuildSource. Held so the READ never re-resolves
 	// the queryable through the owner (which walks the form → recurses). Non-owning.
+
 	const ibMetaData* m_sourceMetaData = nullptr;
+	// (THE VARIANTS ARE NOT HERE. A live vector of them stood beside desc.m_variants, holding the
+	//  structure and the parameter values while the description held the name and the settings — one
+	//  variant split across two stores, and only one of them ever reached the file, which is why a
+	//  structure edited in the designer came back the way it was. A VARIANT IS PART OF THE REPORT:
+	//  it lives in the description, whole. See ibVariantDescription.)
 
-	// THE VARIANTS THEMSELVES. Each holds a BUFFER-mode settings object — own storage, not a facade
-	// over the composer — because a snapshot that wrote through to the composer would not be a
-	// snapshot. Never empty: the constructor puts the first one in.
-	// WHAT A PARAMETER IS WORTH IN THIS VARIANT — its value and the expression that produces one.
-	// Only those two: the parameter's TYPE, whether the user may set it and whether the query asked
-	// for it are facts about the SCHEMA, the same in every variant, and a variant that carried them
-	// would be a second place stating them.
-	struct ibVariantParameter {
-		wxString m_name;
-		ibValue  m_value;
-		wxString m_expression;
-	};
-
-	struct ibCompositionVariant {
-		wxString                        m_name;
-		ibValuePtr<ibValueListSettings> m_settings;
-		// ⭐ AND ITS STRUCTURE — the outputs, their levels and the fields inside them. A variant is
-		// a whole way of showing the data, and the flat settings above cannot describe a level made
-		// of several fields, a second output, or an axis of columns. Captured when the variant is
-		// left, applied when it is entered, written to the file with the rest of it.
-		std::vector<ibDataComposer::Output> m_structure;
-		// ⭐ …AND WHAT ITS PARAMETERS WERE SET TO. "Sales for last month" and "sales for the year"
-		// are one structure and two periods, so a variant that did not carry them was not a whole
-		// way of showing the data — switching one changed the groupings and left the period behind.
-		//
-		// Held BY NAME and applied as a merge, never as a replacement of the list: the list itself
-		// is derived from the query text (SyncParametersWithQuery adds what it mentions and drops
-		// the auto ones it stopped mentioning), so a variant restoring it wholesale would resurrect
-		// parameters the query no longer asks for. A name that is no longer there is not matched.
-		std::vector<ibVariantParameter> m_parameters;
-	};
-	std::vector<ibCompositionVariant> m_variants;
-	size_t                            m_activeVariant = 0;
-
-	// Snapshot <-> composer, both directions, in one place — activation and capture are the same
-	// two doors the settings window's OK already goes through.
-	void ApplyActiveVariant();
-	// EVERY LEVEL'S CONDITION, REBUILT FROM ITS TREE. What a level SAVES is the tree a person wrote;
-	// what the engine reads is an expression derived from it. Run wherever levels arrive from
-	// outside (a file, a variant switch) — a level edited in the window commits both at once.
-	void RebuildLevelFilters();
 	// The first variant, made on construction so the invariant "there is always one" holds from the
 	// first moment rather than from the first window.
 	void EnsureVariant();
-	// WHAT THE LIVE PARAMETERS ARE WORTH, said in a variant's terms. One spelling, because three
-	// places ask the same question: the capture, a copy taken from the active variant, and the file.
-	std::vector<ibVariantParameter> LiveParameterSnapshot() const;
 
-	// A VARIANT'S PARAMETER RECORDS, to and from its node. Members rather than the file-local
-	// helpers their neighbours (WriteStructure / ReadStructure) are, for one reason: what they carry
-	// is private to this class, and a free function cannot name it.
-	static void WriteVariantParameters(ibDataNode& node, const std::vector<ibVariantParameter>& parameters);
-	static void ReadVariantParameters(const ibDataNode& node, std::vector<ibVariantParameter>& parameters);
+	// (A VARIANT'S PARAMETER RECORDS used to be written here, to and from its node. They travel
+	//  through ibParameterDescription now, like every other part — Describe() fills it, Apply()
+	//  reads it back, and what the node looks like is not this class's business any more.)
 
 	// THE PARAMETERS THEMSELVES. Kept in the order the query mentions them (that is the order a
 	// person reads them in), with hand-made ones appended after.
-	struct ibCompositionParameter {
-		wxString m_name;
-		ibValue  m_value;          // what it holds when no expression is given
-		// ⭐ THE DECLARED TYPE (Max, 2026-08-19: "add a separate Type column — look at how the type
-		// description works"). Empty means "whatever the expression produces": a parameter has no type
-		// of its own until somebody says otherwise, and then the value is adjusted to it.
-		ibTypeDescription m_type;
-		wxString m_expression;     // non-empty: evaluated before the read, and the RESULT is the value
-		bool     m_userSettable = false;   // handed to the user rather than fixed by the author
-		bool     m_fromQuery = false;      // found in the text (auto) rather than added by hand
-	};
-	mutable std::vector<ibCompositionParameter> m_parameters;   // a RUN settles the evaluated values
+	// ⭐⭐ A PARAMETER **IS** ITS DESCRIPTION. `struct ibCompositionParameter` stood here with the same
+	// six fields — name, value, declared type, expression, user-settable, came-from-the-query — and a
+	// live vector of them stood beside the description's. So a parameter existed twice and only the
+	// copy in the description was ever written: closing the report and opening it again showed none
+	// of them (Max, 2026-08-24: "the parameters have the same illness as the resources").
+	//
+	// (The DECLARED TYPE, Max 2026-08-19: "add a separate Type column — look at how the type
+	//  description works". Empty means "whatever the expression produces": a parameter has no type of
+	//  its own until somebody says otherwise, and then the value is adjusted to it.)
+	using ibCompositionParameter = ibParameterDescription;
+
+	// THE PARAMETERS THEMSELVES — in the description, where they are saved from. A RUN settles the
+	// evaluated values, which is why this is writable on a const object: asked straight of the
+	// PROPERTY, whose own accessor is const and hands back the description to work on. (That is the
+	// same reason the live vector here used to be `mutable`.)
+	std::vector<ibCompositionParameter>& Parameters() const {
+		return m_propertySettings->GetValueAsCompositionDesc().m_parameters;
+	}
 
 	// Re-read the parameters the TEXT asks for: add what is new, drop the auto ones the text no
 	// longer mentions, keep the hand-made ones and everything already filled in.
@@ -471,9 +497,6 @@ private:
 	// the list's needs no branch anywhere (Max, 2026-08-20). The frontend reaches this object
 	// through the property's owner.
 	ibPropertyDataComposition* m_propertySettings = ibPropertyObject::CreateProperty<ibPropertyDataComposition>(m_categoryComposer, wxT("Settings"), _("Settings"));
-	// The query text — ALWAYS present once a source is picked (no on/off flag: a
-	// composer without a query has nothing to compose).
-	ibPropertyString*        m_propertyQuery    = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryComposer, wxT("Query"), _("Query text"), wxEmptyString);
 };
 
 #endif // __VALUE_DATA_COMPOSITION_H__

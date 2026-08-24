@@ -34,6 +34,7 @@
     <ClCompile Include="docView\docView.cpp">                   <Filter>docView</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\control.cpp">           <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\controlProperty.cpp">   <Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\formAttributeProperty.cpp"> <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\typeControl.cpp">       <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\window.cpp">            <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\frame.cpp">             <Filter>visualView\ctrl</Filter></ClCompile>

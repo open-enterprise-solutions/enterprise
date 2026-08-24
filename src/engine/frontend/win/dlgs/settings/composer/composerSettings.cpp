@@ -12,6 +12,9 @@
 #include "frontend/win/dlgs/queryConstructor/queryConstructorInternal.h" // ibExpressionCellRenderer — the Totals tab's own cell
 #include "frontend/win/editor/codeEditor/codeEditor.h"  // the script editor behind a parameter expression
 #include "frontend/mainFrame/mainFrame.h"                // the shared editor / font-colour settings
+#include "frontend/docView/docView.h"                    // ibMetaDocument — the composer editor's document mode
+#include "backend/metaCollection/metaComposerObject.h"   // ibValueMetaObjectComposer — what a composer document was opened ON
+#include "backend/propertyManager/property/variant/variantComposition.h"  // the SNAPSHOT a Settings property stores
 #include "backend/compiler/compileCode.h"                 // the OK-time syntax check: compile, do not run
 #include "backend/compiler/compileModule.h"               // ibCompileModule — the parent a check attaches to
 #include "backend/moduleManager/moduleManager.h"          // the module manager: common functions + common modules
@@ -64,17 +67,11 @@ enum {
 	ID_GROUPFIELD_REMOVE,
 	ID_GROUPFIELD_UP,
 	ID_GROUPFIELD_DOWN,
-	// WHAT A NODE MAY SEE — its own set, or the one above it.
-	ID_AVAILABLE_ADD,
-	ID_AVAILABLE_REMOVE,
-	ID_AVAILABLE_COPY,
-	ID_AVAILABLE_AUTO,
-	ID_AVAILABLE_UP,
-	ID_AVAILABLE_DOWN,
+	// WHAT A NODE SHOWS — one set, so one triple of ids. There were two of everything here while
+	// "available" was a page of its own.
 	ID_SELECTED_ADD,
 	ID_SELECTED_REMOVE,
 	ID_SELECTED_COPY,
-	ID_SELECTED_AUTO,
 	ID_SELECTED_UP,
 	ID_SELECTED_DOWN,
 };
@@ -107,19 +104,27 @@ class ibResourceModel : public ibDataViewVirtualListModel {
 public:
 	enum { kColField = 0, kColExpression };
 
-	explicit ibResourceModel(ibValueDataComposition* composition) : m_composition(composition) { ResetFromList(); }
+	// ⭐⭐ ON THE DESCRIPTION THIS WINDOW IS EDITING — the same road the structure model takes, and
+	// asked through a callback so no copy is kept here. A resource is a LINE OF THE DESCRIPTION; it
+	// used to be read and written straight into the running composer, which is filled FROM the
+	// description at a run — so what this window showed and what was saved were two different lists,
+	// and only the composer's survived until the report was closed (Max, 2026-08-24).
+	explicit ibResourceModel(std::function<std::vector<ibResourceDescription>*()> resources)
+		: m_resources(std::move(resources)) { ResetFromList(); }
+
+	std::vector<ibResourceDescription>* List() const { return m_resources ? m_resources() : nullptr; }
 
 	void ResetFromList() {
-		Reset(m_composition != nullptr ? (unsigned int)m_composition->GetModelComposer().TotalCount() : 0u);
+		const std::vector<ibResourceDescription>* list = List();
+		Reset(list != nullptr ? (unsigned int)list->size() : 0u);
 	}
 
 	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
-		if (m_composition == nullptr)
-			return;
-		const ibDataComposer& composer = m_composition->GetModelComposer();
-		wxString func, path;
-		if (row >= composer.TotalCount() || !composer.GetTotalAt(row, func, path))
+		const std::vector<ibResourceDescription>* list = List();
+		if (list == nullptr || row >= list->size())
 			return;   // BOUNDS FIRST — a queued paint can outlive the line it was queued for
+		const wxString& func = (*list)[row].m_func;
+		const wxString& path = (*list)[row].m_path;
 
 		if (col == kColField)
 			variant = path;
@@ -134,10 +139,8 @@ public:
 	// Both land here as text, and the split is the same one the store already speaks: a FUNC and its
 	// argument, or an empty func meaning "the text is the expression".
 	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
-		if (m_composition == nullptr || col != kColExpression)
-			return false;
-		ibDataComposer& composer = m_composition->GetModelComposer();
-		if (row >= composer.TotalCount())
+		std::vector<ibResourceDescription>* list = List();
+		if (list == nullptr || col != kColExpression || row >= list->size())
 			return false;
 
 		wxString text = variant.GetString();
@@ -147,9 +150,8 @@ public:
 
 		wxString func, path;
 		if (!SplitCall(text, func, path)) { func.clear(); path = text; }
-		// Through the COMPOSITION, not the store it holds: a cell edit is a change like any other,
-		// and reaching past the composition is what kept it from being announced.
-		return m_composition->SetTotal(row, func, path);
+		(*list)[row] = { func, path };
+		return true;
 	}
 
 	// `SUM(Amount)` → { SUM, Amount }. FALSE when the text is not one plain call — a formula
@@ -174,7 +176,7 @@ public:
 	}
 
 private:
-	ibValueDataComposition* m_composition;
+	std::function<std::vector<ibResourceDescription>*()> m_resources;   // asked every time — no copy kept here
 };
 
 // THE ROW A COMMAND ACTS ON. A virtual list keys rows by (index + 1), so nothing selected answers
@@ -316,38 +318,53 @@ public:
 	// Column 0 is reserved by the fork, so these start at 1.
 	enum { kColName = 1, kColValue, kColType, kColExpression, kColUser };
 
-	explicit ibParameterModel(ibValueDataComposition* composition) : m_composition(composition) { ResetFromList(); }
+	// ⭐⭐ ON THE DESCRIPTION THIS WINDOW IS EDITING, like the resources and the structure. A parameter
+	// is a line of it (`ibParameterDescription`); it used to be read and written through the live
+	// composition, which held a second vector of its own — so what this window showed was not what
+	// was saved (Max, 2026-08-24: "the parameters have the same illness as the resources").
+	//
+	// The metadata comes along because ONE column needs it: the declared type is rendered by name.
+	ibParameterModel(std::function<std::vector<ibParameterDescription>*()> parameters,
+	                 std::function<const ibMetaData*()> metaData)
+		: m_parameters(std::move(parameters)), m_metaData(std::move(metaData)) { ResetFromList(); }
+
+	std::vector<ibParameterDescription>* List() const { return m_parameters ? m_parameters() : nullptr; }
 
 	void ResetFromList() {
-		Reset(m_composition != nullptr ? (unsigned int)m_composition->ParameterCount() : 0u);
+		const std::vector<ibParameterDescription>* list = List();
+		Reset(list != nullptr ? (unsigned int)list->size() : 0u);
 	}
 
 	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
-		if (m_composition == nullptr || row >= m_composition->ParameterCount())
+		const std::vector<ibParameterDescription>* list = List();
+		if (list == nullptr || row >= list->size())
 			return;   // BOUNDS FIRST — a queued paint can outlive the row it was queued for
+		const ibParameterDescription& parameter = (*list)[row];
 		switch (col) {
 		case kColName:
 			// AN AUTO PARAMETER SAYS SO. Not decoration: it is the difference between a row that can
 			// be renamed or removed here and one that is written in the query text.
-			variant = m_composition->IsParameterFromQuery(row)
-				? m_composition->GetParameterName(row) + wxT("  (") + _("from query") + wxT(")")
-				: m_composition->GetParameterName(row);
+			variant = parameter.m_fromQuery
+				? parameter.m_name + wxT("  (") + _("from query") + wxT(")")
+				: parameter.m_name;
 			break;
-		case kColValue:      variant = m_composition->GetParameterValue(row).GetString(); break;
-		case kColType:       variant = ibDescribeTypes(m_composition->GetParameterType(row), m_composition->GetSourceMetaData()); break;
-		case kColExpression: variant = m_composition->GetParameterExpression(row); break;
-		case kColUser:       variant = m_composition->IsParameterUserSettable(row); break;
+		case kColValue:      variant = parameter.m_value.GetString(); break;
+		case kColType:       variant = ibDescribeTypes(parameter.m_type, m_metaData ? m_metaData() : nullptr); break;
+		case kColExpression: variant = parameter.m_expression; break;
+		case kColUser:       variant = parameter.m_userSettable; break;
 		default: break;
 		}
 	}
 
 	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
-		if (m_composition == nullptr || row >= m_composition->ParameterCount())
+		std::vector<ibParameterDescription>* list = List();
+		if (list == nullptr || row >= list->size())
 			return false;
+		ibParameterDescription& parameter = (*list)[row];
 		switch (col) {
-		case kColValue:      return m_composition->SetParameterValue(row, ibValue(variant.GetString()));
-		case kColExpression: return m_composition->SetParameterExpression(row, variant.GetString());
-		case kColUser:       return m_composition->SetParameterUserSettable(row, variant.GetBool());
+		case kColValue:      parameter.m_value        = ibValue(variant.GetString()); return true;
+		case kColExpression: parameter.m_expression   = variant.GetString();          return true;
+		case kColUser:       parameter.m_userSettable = variant.GetBool();            return true;
 		default: return false;
 		}
 	}
@@ -361,7 +378,8 @@ public:
 	virtual bool IsEnabledByRow(unsigned int, unsigned int) const override { return !m_readOnly; }
 
 private:
-	ibValueDataComposition* m_composition;
+	std::function<std::vector<ibParameterDescription>*()> m_parameters;   // asked every time — no copy here
+	std::function<const ibMetaData*()>                    m_metaData;     // for the type column alone
 	bool m_readOnly = false;
 };
 // THE VARIANTS, as a dataview model over the COMPOSITION — which is where they live. The window
@@ -373,27 +391,40 @@ class ibVariantModel : public ibDataViewVirtualListModel {
 public:
 	enum { kColName = 0 };
 
-	explicit ibVariantModel(ibValueDataComposition* composition) : m_composition(composition) { ResetFromList(); }
+	// ⭐⭐ ON THE COPY THIS WINDOW EDITS, like everything else here. The variants used to be read and
+	// written through the live composition while the window held its own copy of the description —
+	// so adding one wrote it THERE, and the first commit put the copy back and took it away again.
+	// The list had already been told there were two rows, and the second had no variant behind it:
+	// a row with an empty name that nothing could do anything with (Max, 2026-08-24).
+	explicit ibVariantModel(std::function<std::vector<ibVariantDescription>*()> variants)
+		: m_variants(std::move(variants)) { ResetFromList(); }
+
+	std::vector<ibVariantDescription>* List() const { return m_variants ? m_variants() : nullptr; }
 
 	void ResetFromList() {
-		Reset(m_composition != nullptr ? (unsigned int)m_composition->VariantCount() : 0u);
+		const std::vector<ibVariantDescription>* list = List();
+		Reset(list != nullptr ? (unsigned int)list->size() : 0u);
 	}
 
 	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
-		if (m_composition == nullptr || col != kColName)
-			return;
-		if (row >= m_composition->VariantCount())
+		const std::vector<ibVariantDescription>* list = List();
+		if (list == nullptr || col != kColName || row >= list->size())
 			return;   // BOUNDS FIRST — a queued paint can outlive the variant it was queued for
-		variant = m_composition->GetVariantName(row);
+		variant = (*list)[row].m_name;
 	}
 	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
-		if (m_composition == nullptr || col != kColName)
+		std::vector<ibVariantDescription>* list = List();
+		if (list == nullptr || col != kColName || row >= list->size())
 			return false;
-		return m_composition->SetVariantName(row, variant.GetString());
+		const wxString name = variant.GetString();
+		if (name.IsEmpty())
+			return false;   // a nameless variant is unpickable — the name is how it is chosen
+		(*list)[row].m_name = name;
+		return true;
 	}
 
 private:
-	ibValueDataComposition* m_composition;
+	std::function<std::vector<ibVariantDescription>*()> m_variants;   // asked every time — no copy here
 };
 
 namespace {
@@ -459,29 +490,29 @@ public:
 	// Table / Rows / Columns will read, and the field column stays exactly what it is.
 	enum { kColNode = 1, kColField, kColKind };
 
-	explicit ibComposerStructureModel(std::function<std::vector<ibDataComposer::Output>*()> outputs)
+	explicit ibComposerStructureModel(std::function<std::vector<ibOutputDescription>*()> outputs)
 		: m_outputs(std::move(outputs)) {
 	}
 
 	// THE AXIS A ROW READS — its levels, or null where the coordinate points at nothing. Every
 	// reader goes through here, so "is there such an output / such an axis" is answered once.
-	const std::vector<ibDataComposer::GroupNode>* AxisOf(const ibStructurePos& pos) const {
-		std::vector<ibDataComposer::Output>* outputs = m_outputs ? m_outputs() : nullptr;
+	const std::vector<ibLevelDescription>* AxisOf(const ibStructurePos& pos) const {
+		std::vector<ibOutputDescription>* outputs = m_outputs ? m_outputs() : nullptr;
 		if (outputs == nullptr || pos.m_output < 0 || (size_t)pos.m_output >= outputs->size())
 			return nullptr;
-		const ibDataComposer::Output& output = (*outputs)[pos.m_output];
+		const ibOutputDescription& output = (*outputs)[pos.m_output];
 		if (pos.m_axis == 1) return &output.m_columnGroups;
 		if (pos.m_axis == 0) return &output.m_rowGroups;
 		return nullptr;
 	}
 
 	size_t OutputCount() const {
-		std::vector<ibDataComposer::Output>* outputs = m_outputs ? m_outputs() : nullptr;
+		std::vector<ibOutputDescription>* outputs = m_outputs ? m_outputs() : nullptr;
 		return outputs != nullptr ? outputs->size() : 0u;
 	}
 
 	size_t LevelCount(const ibStructurePos& pos) const {
-		const std::vector<ibDataComposer::GroupNode>* axis = AxisOf(pos);
+		const std::vector<ibLevelDescription>* axis = AxisOf(pos);
 		return axis != nullptr ? axis->size() : 0u;
 	}
 
@@ -561,10 +592,10 @@ public:
 			// WHAT THIS OUTPUT IS — read off its own fields, exactly as the engine reads it: a
 			// column axis makes it a table. Its NAME is shown beside that when it has one, since
 			// that is how a query package addresses it (ONTO).
-			std::vector<ibDataComposer::Output>* outputs = m_outputs ? m_outputs() : nullptr;
+			std::vector<ibOutputDescription>* outputs = m_outputs ? m_outputs() : nullptr;
 			if (outputs == nullptr || (size_t)pos.m_output >= outputs->size())
 				return;
-			const ibDataComposer::Output& output = (*outputs)[pos.m_output];
+			const ibOutputDescription& output = (*outputs)[pos.m_output];
 			// ⚠ NOT "Grouping" — that is what its LEVELS are called, and two rows reading the same
 			// word one under another is how a tree stops saying anything (Max, on the first run).
 			// An output is a place: what it holds is its levels, what it is called is its own.
@@ -579,10 +610,10 @@ public:
 			return;
 		}
 
-		const std::vector<ibDataComposer::GroupNode>* axis = AxisOf(pos);
+		const std::vector<ibLevelDescription>* axis = AxisOf(pos);
 		if (axis == nullptr || (size_t)pos.m_level >= axis->size())
 			return;   // BOUNDS FIRST — a queued paint can outlive the level it was queued for
-		const ibDataComposer::GroupNode& level = (*axis)[pos.m_level];
+		const ibLevelDescription& level = (*axis)[pos.m_level];
 
 		if (col == kColNode) {
 			// WHAT THIS LEVEL IS — asked of the level, not read off its emptiness. The rows are a
@@ -594,12 +625,12 @@ public:
 			// EVERY FIELD OF THE LEVEL, in order — a level groups by all of them together, so
 			// showing only the first would describe a different report. The detail level has none
 			// to show: what it prints is the rows, and the fields cell has nothing to add.
-			if (level.m_fields.empty()) {
+			if (level.m_settings.m_group.m_lines.empty()) {
 				variant = level.m_kind == ibCompositionLevelKind::Details ? wxString() : _("<detail records>");
 				return;
 			}
 			wxString fields;
-			for (const auto& field : level.m_fields) {
+			for (const auto& field : level.m_settings.m_group.m_lines) {
 				if (!fields.IsEmpty()) fields += wxT(", ");
 				fields += field.m_path;
 			}
@@ -771,7 +802,7 @@ private:
 		return raw;
 	}
 
-	std::function<std::vector<ibDataComposer::Output>*()> m_outputs;   // asked every time — no copy kept here
+	std::function<std::vector<ibOutputDescription>*()> m_outputs;   // asked every time — no copy kept here
 	mutable std::map<ibStructurePos, wxObjectDataPtr<ibStructureNode>> m_nodes;
 };
 
@@ -881,14 +912,14 @@ class ibGroupingFieldsModel : public ibDataViewModel {
 public:
 	enum { kColField = 1, kColKind };
 
-	explicit ibGroupingFieldsModel(std::function<ibDataComposer::GroupNode*()> level)
+	explicit ibGroupingFieldsModel(std::function<ibLevelDescription*()> level)
 		: m_level(std::move(level)) {
 	}
 
-	ibDataComposer::GroupNode* Level() const { return m_level ? m_level() : nullptr; }
+	ibLevelDescription* Level() const { return m_level ? m_level() : nullptr; }
 	size_t FieldCount() const {
-		const ibDataComposer::GroupNode* level = Level();
-		return level != nullptr ? level->m_fields.size() : 0u;
+		const ibLevelDescription* level = Level();
+		return level != nullptr ? level->m_settings.m_group.m_lines.size() : 0u;
 	}
 
 	void Rebuild() { Cleared(); }
@@ -902,14 +933,14 @@ public:
 	}
 
 	void GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const override {
-		const ibDataComposer::GroupNode* level = Level();
+		const ibLevelDescription* level = Level();
 		const int row = RowAt(item);
-		if (level == nullptr || row == wxNOT_FOUND || (size_t)row >= level->m_fields.size())
+		if (level == nullptr || row == wxNOT_FOUND || (size_t)row >= level->m_settings.m_group.m_lines.size())
 			return;   // BOUNDS FIRST — a queued paint can outlive the level it was queued for
 		if (col == kColField)
-			variant = level->m_fields[row].m_path;
+			variant = level->m_settings.m_group.m_lines[row].m_path;
 		else if (col == kColKind)
-			variant = ibValue::CreateEnumObject<ibValueEnumGroupKind>(level->m_fields[row].m_kind).GetString();
+			variant = ibValue::CreateEnumObject<ibValueEnumGroupKind>(level->m_settings.m_group.m_lines[row].m_kind).GetString();
 	}
 
 	// Written through the CELLS, which hand over values (a field through the picker, a kind through
@@ -938,7 +969,7 @@ private:
 		return m_rows[row].get();
 	}
 
-	std::function<ibDataComposer::GroupNode*()> m_level;
+	std::function<ibLevelDescription*()> m_level;
 	mutable std::vector<wxObjectDataPtr<ibGroupingFieldRow>> m_rows;
 };
 
@@ -971,7 +1002,7 @@ static ibRowValueCellRenderer::FieldChooser ibComposerFieldChooser(ibComposerSet
 class ibComposerGroupingDialog : public wxDialog
 {
 public:
-	ibComposerGroupingDialog(ibComposerSettingsPanel* panel, const ibDataComposer::GroupNode& seed)
+	ibComposerGroupingDialog(ibComposerSettingsPanel* panel, const ibLevelDescription& seed)
 		: wxDialog(panel, wxID_ANY, _("Grouping"), wxDefaultPosition, wxDefaultSize,
 			wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 		  m_panel(panel), m_node(seed)
@@ -996,25 +1027,25 @@ public:
 		// THE SAME MODEL THE GROUPING TAB USES, over the node being MADE rather than the one
 		// selected. It asks for its level through a callback, so handing it another level is the
 		// whole of what this dialog had to do differently.
-		m_model = new ibGroupingFieldsModel([this]() -> ibDataComposer::GroupNode* { return &m_node; });
+		m_model = new ibGroupingFieldsModel([this]() -> ibLevelDescription* { return &m_node; });
 		m_view->AssociateModel(m_model);
 
 		m_view->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Field"),
 			new ibRowValueCellRenderer(this, ibComposerFieldChooser(m_panel),
 				[this](const ibDataViewItem& row) -> ibValue {
 					const int at = m_model->RowAt(row);
-					return (at != wxNOT_FOUND && (size_t)at < m_node.m_fields.size())
-						? ibValue(new ibValueCompositionField(m_node.m_fields[at].m_path)) : ibValue();
+					return (at != wxNOT_FOUND && (size_t)at < m_node.m_settings.m_group.m_lines.size())
+						? ibValue(new ibValueCompositionField(m_node.m_settings.m_group.m_lines[at].m_path)) : ibValue();
 				},
 				[this](const ibDataViewItem& row, const ibValue& value) {
 					const int at = m_model->RowAt(row);
-					if (at == wxNOT_FOUND || (size_t)at >= m_node.m_fields.size())
+					if (at == wxNOT_FOUND || (size_t)at >= m_node.m_settings.m_group.m_lines.size())
 						return;
 					ibValueCompositionField* field = nullptr;
 					if (value.ConvertToValue(field) && field != nullptr)
-						m_node.m_fields[at].m_path = field->GetPath();
+						m_node.m_settings.m_group.m_lines[at].m_path = field->GetPath();
 					else
-						m_node.m_fields.erase(m_node.m_fields.begin() + at);   // cleared = out of the key
+						m_node.m_settings.m_group.m_lines.erase(m_node.m_settings.m_group.m_lines.begin() + at);   // cleared = out of the key
 					Refresh();
 				}),
 			ibGroupingFieldsModel::kColField, FromDIP(240), wxAlignment::wxALIGN_LEFT));
@@ -1025,22 +1056,22 @@ public:
 			new ibRowValueCellRenderer(this, ibComposerFieldChooser(m_panel),
 				[this](const ibDataViewItem& row) -> ibValue {
 					const int at = m_model->RowAt(row);
-					return (at != wxNOT_FOUND && (size_t)at < m_node.m_fields.size())
-						? ibValue::CreateEnumObject<ibValueEnumGroupKind>(m_node.m_fields[at].m_kind) : ibValue();
+					return (at != wxNOT_FOUND && (size_t)at < m_node.m_settings.m_group.m_lines.size())
+						? ibValue::CreateEnumObject<ibValueEnumGroupKind>(m_node.m_settings.m_group.m_lines[at].m_kind) : ibValue();
 				},
 				[this](const ibDataViewItem& row, const ibValue& value) {
 					const int at = m_model->RowAt(row);
-					if (at == wxNOT_FOUND || (size_t)at >= m_node.m_fields.size())
+					if (at == wxNOT_FOUND || (size_t)at >= m_node.m_settings.m_group.m_lines.size())
 						return;
 					const ibQueryDimUnfold kind = value.ConvertToEnumValue<ibQueryDimUnfold>();
-					if (kind != ibQueryDimUnfold::Elements && m_node.m_fields.size() > 1) {
+					if (kind != ibQueryDimUnfold::Elements && m_node.m_settings.m_group.m_lines.size() > 1) {
 						wxMessageBox(_("This grouping is made of several fields, and a hierarchy unfolds "
 						               "one field's parent chain.\n\nGive the hierarchy field a grouping "
 						               "of its own."),
 							GetTitle(), wxOK | wxICON_WARNING, this);
 						return;
 					}
-					m_node.m_fields[at].m_kind = kind;
+					m_node.m_settings.m_group.m_lines[at].m_kind = kind;
 					Refresh();
 				}),
 			ibGroupingFieldsModel::kColKind, FromDIP(150), wxAlignment::wxALIGN_LEFT));
@@ -1064,10 +1095,10 @@ public:
 
 	// WHAT WAS MADE — a grouping when fields were chosen, the detail records when none were. The
 	// KIND is decided here, once, so nothing downstream has to read it off the emptiness.
-	ibDataComposer::GroupNode Node() const
+	ibLevelDescription Node() const
 	{
-		ibDataComposer::GroupNode node = m_node;
-		node.m_kind = node.m_fields.empty()
+		ibLevelDescription node = m_node;
+		node.m_kind = node.m_settings.m_group.m_lines.empty()
 			? ibCompositionLevelKind::Details : ibCompositionLevelKind::Grouping;
 		return node;
 	}
@@ -1078,16 +1109,16 @@ private:
 		ibValueCompositionField* field = m_panel != nullptr ? m_panel->ChooseStructureField(this) : nullptr;
 		if (field == nullptr)
 			return;   // closed without picking
-		m_node.m_fields.push_back({ field->GetPath(), ibQueryDimUnfold::Elements });
+		m_node.m_settings.m_group.m_lines.push_back({ field->GetPath(), ibQueryDimUnfold::Elements });
 		Refresh();
 	}
 
 	void RemoveField()
 	{
 		const int at = m_model->RowAt(m_view->GetSelection());
-		if (at == wxNOT_FOUND || (size_t)at >= m_node.m_fields.size())
+		if (at == wxNOT_FOUND || (size_t)at >= m_node.m_settings.m_group.m_lines.size())
 			return;
-		m_node.m_fields.erase(m_node.m_fields.begin() + at);
+		m_node.m_settings.m_group.m_lines.erase(m_node.m_settings.m_group.m_lines.begin() + at);
 		Refresh();
 	}
 
@@ -1097,9 +1128,9 @@ private:
 	{
 		const int at = m_model->RowAt(m_view->GetSelection());
 		const int to = at + delta;
-		if (at == wxNOT_FOUND || to < 0 || (size_t)at >= m_node.m_fields.size() || (size_t)to >= m_node.m_fields.size())
+		if (at == wxNOT_FOUND || to < 0 || (size_t)at >= m_node.m_settings.m_group.m_lines.size() || (size_t)to >= m_node.m_settings.m_group.m_lines.size())
 			return;
-		std::swap(m_node.m_fields[at], m_node.m_fields[to]);
+		std::swap(m_node.m_settings.m_group.m_lines[at], m_node.m_settings.m_group.m_lines[to]);
 		Refresh();
 		const ibDataViewItem row = m_model->ItemForRow((size_t)to);
 		if (row.IsOk())
@@ -1109,7 +1140,7 @@ private:
 	void Refresh()
 	{
 		m_model->Rebuild();
-		m_hint->SetLabel(m_node.m_fields.empty()
+		m_hint->SetLabel(m_node.m_settings.m_group.m_lines.empty()
 			// ⚠ ASCII ONLY IN A UI LITERAL — this file has no BOM, so MSVC reads it as ANSI and an em
 			// dash comes out as three bytes of mojibake on screen (seen live 2026-08-21). The rule is
 			// stated at the top of the toolbars above; this line is what happens when it is forgotten.
@@ -1119,7 +1150,7 @@ private:
 	}
 
 	ibComposerSettingsPanel*  m_panel = nullptr;
-	ibDataComposer::GroupNode m_node;
+	ibLevelDescription m_node;
 	ibGroupingFieldsModel*    m_model = nullptr;
 	ibDataViewCtrl*           m_view  = nullptr;
 	wxStaticText*             m_hint  = nullptr;
@@ -1130,21 +1161,44 @@ private:
 // docViewComposer), while a composition held by a form is edited modally from the gridbox. The
 // same shape the list settings already took: content in a panel, the modal window a thin wrapper
 // around it, so the two hosts cannot drift about what a setting is.
-ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibValueDataComposition* composer)
+// THE DESIGNER'S — it edits the description's own variants, starting on the zeroth.
+ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
+	const ibMetaData* metaData)
 	: wxPanel(parent, wxID_ANY),
-	  m_composer(composer),
-	  m_settings(new ibValueListSettings()),
-	  m_fieldTree(new ibSettingsFieldTree())
+	  m_edited(edited), m_readerRoad(false),
+	  m_settings(&edited.m_variants.front().m_settings),
+	  m_metaData(metaData),
+	  m_fieldSource(new ibSettingsFieldTree())
+{
+	BuildPanel();
+}
+
+// THE READER'S — it edits the setting it was handed, and knows nothing of variants.
+ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
+	const ibMetaData* metaData, ibSettingsDescription& settings)
+	: wxPanel(parent, wxID_ANY),
+	  m_edited(edited), m_readerRoad(true),
+	  m_settings(&settings),
+	  m_metaData(metaData),
+	  m_fieldSource(new ibSettingsFieldTree())
+{
+	BuildPanel();
+}
+
+void ibComposerSettingsPanel::BuildPanel()
 {
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-	// ⭐ THE WINDOW OPENS ON WHAT THE TEXT SAYS TODAY. Describing the query is what fills the
-	// composition's column schema, and every field list in this window — the panel's trees below,
-	// the picker, the resources page — reads that schema. It is built by RebuildSource, which runs
-	// when a property changes or the attribute is read back; a composition whose text was typed and
-	// not applied has none, and the whole window then offers nothing to filter, sort or group by.
-	// Asking for it here costs one parse and makes the state the same however the window was reached.
-	if (m_composer != nullptr)
-		m_composer->ApplySource();
+	// ⭐ THE WINDOW OPENS ON WHAT THE TEXT SAYS TODAY. Every field list here — the trees below, the
+	// picker, the resources page — is the parse of the query text as it stands, so the state is the
+	// same however the window was reached and costs one parse to get.
+	//
+	// (THERE IS NOTHING TO "APPLY" ANY MORE. This used to call ApplySource on a live composition to
+	//  make it rebuild a column schema it kept; the fields are now read straight from the text, so
+	//  the schema and the moment it was built stopped being things this window has to think about.)
+	//
+	// Only the READ happens here: the trees do not exist yet, and filling them is what
+	// PopulateFieldTrees does once they do.
+	RefreshQueryFields();
 
 	// ⭐ THE NAMES A PARAMETER EXPRESSION MAY CALL, made to exist BEFORE anything can be edited.
 	//
@@ -1155,9 +1209,11 @@ ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibValueDataCo
 	// to them: from inside a cell editor that same rebuild destroys the renderer mid-call.
 	PrepareModuleContext();
 
-	// THE VARIANTS AS THEY STAND, kept so Cancel can put them back — see the Cancel binding below.
-	if (m_composer != nullptr)
-		m_composer->WriteVariants(m_openState);
+	// (NOTHING IS COPIED HERE ANY MORE. The description this window edits was handed to it BY
+	//  REFERENCE and is edited in place — the shape the designer's other editors have, where the grid
+	//  editor is given the metaobject and writes its description directly. A host that wants a
+	//  transaction holds the copy itself and hands a reference to it, which is where Cancel belongs:
+	//  it is the one who knows whether there is a Cancel at all.)
 
 
 	// THE ORDER IS THE ORDER OF THE DECISIONS (Max, 2026-08-18): first WHAT IS READ — for a
@@ -1173,14 +1229,20 @@ ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibValueDataCo
 	// The person running it configures its OUTPUT — which groupings, which filter, which order —
 	// and nothing they could do to the other three would survive as their setting.
 	//
-	// THE BUFFER AND THE FIELDS FIRST — every pane below is built over them.
+	// THE BUFFER AND THE FIELDS FIRST — every pane below is built over them. The settings arrived
+	// with the copy above; there is nothing to load out of the composer, because the description is
+	// where they live and the composer is only ever told.
 	BindFieldSource();
-	if (m_composer != nullptr && m_settings != nullptr)
-		ibLoadSettingsFromComposer(m_settings, m_composer->GetModelComposer(), m_composer->GetListSettings());
-	// ⚠ AND THE STRUCTURE, which is a buffer of its own. Loading one and not the other left the
-	// window with no outputs at all: the tree showed the report and nothing under it, and "Add
-	// grouping" had nowhere to add — it looked like a dead command rather than an empty buffer.
-	LoadStructure();
+	// ⭐⭐ AND THERE IS ALWAYS ONE OUTPUT — the engine's own rule (`ibDataComposer::Outputs`: "a
+	// composition that has been told nothing still produces its rows"), stated here because the
+	// DESCRIPTION does not carry that one until something is written into it.
+	//
+	// 🛑 WITHOUT IT EVERY STRUCTURE COMMAND REFUSED. "Add grouping" asks AxisForCommand, which answers
+	// null on an empty structure, and the window said "this composition has no output to add a
+	// grouping to" — with a variant named and selected right beside the message. A composer opened
+	// fresh could never be given its FIRST grouping, on either road (Max, 2026-08-24).
+	if (Structure().empty())
+		Structure().push_back(ibOutputDescription());
 
 	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
 	if (appData->DesignerMode()) {
@@ -1282,6 +1344,12 @@ ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibValueDataCo
 	ReloadVariants();
 	ReloadParameters();   // the page is built before the first Apply — start it on what the text already asks for
 	UpdateSettingsHeader();
+
+	// ⭐ AND THE QUERY SAYS AT ONCE WHETHER IT STILL COMPILES. The parse happened in this
+	// constructor; showing its verdict only after the first EDIT meant a composition whose stored
+	// text had gone stale — a renamed field, a table dropped — opened looking healthy and admitted
+	// nothing until somebody typed. The window knew from the start; now it says so from the start.
+	ShowQueryFault();
 }
 
 // ⭐⭐ VIEW ONLY — every verb closed, everything still READABLE (Max, 2026-08-20: "in view mode you
@@ -1343,8 +1411,29 @@ void ibComposerSettingsPanel::OnStartEditing(ibDataViewEvent& event)
 void ibComposerSettingsPanel::MarkSettingsTouched()
 {
 	m_settingsDirty = true;
-	if (m_composer != nullptr)
-		m_composer->OnChildChanged();
+	MarkModified();
+}
+
+// --- what a HOST answers ------------------------------------------------------------------------
+//
+// The metadata mode's answers, and they are the ones this panel had inline everywhere before the
+// document mode existed. Overridden whole by ibComposerEditor, which has a document to ask instead.
+
+const ibMetaData* ibComposerSettingsPanel::GetEditedMetaData() const
+{
+	return m_metaData;
+}
+
+void ibComposerSettingsPanel::MarkModified()
+{
+	// ⭐ NOTHING, ON THIS ROAD, AND THAT IS THE POINT OF THE HOOK. The metadata mode edits a
+	// description somebody else owns — the modal host's own copy, which OK writes and Cancel drops —
+	// so there is nobody here to tell. The DOCUMENT mode has a dirty bit and a Save behind it, and
+	// overrides this to set it (Max, 2026-08-24: "you set modified straight on the doc, and give
+	// whoever has none a way to override it").
+	//
+	// 🛑 IT USED TO POKE THE LIVE COMPOSITION'S OnChildChanged and hope the attach chain carried it
+	// somewhere. That is the mechanism it replaces, not a second one beside it.
 }
 
 // ⭐ WHAT "ACCEPT" MEANS, wherever the panel is hosted. Everything on screen is edited in a
@@ -1385,16 +1474,16 @@ bool ibComposerSettingsPanel::Commit()
 	}
 
 	// 🛑 ONLY IF THE BUFFER WAS ACTUALLY EDITED. Closing a designer tab IS accepting it, so this runs
-	// every time a composer is merely LOOKED at — and capturing + announcing unconditionally meant an
-	// untouched tab came back as "the configuration changed", asterisk and all (found by the final
-	// audit, 2026-08-20). Every other door announces itself where it writes; the only change this
-	// function makes on its own is landing the filter / sort / structure buffer.
-	if (m_composer != nullptr && m_settingsDirty) {
-		m_composer->CaptureActiveVariant();   // what was edited belongs to the variant it was edited in
-		m_settingsDirty = false;
-		// The signal was already raised where the edit happened (see the editors' SetOnChanged), so
-		// it is deliberately NOT raised again here.
-	}
+	// every time a composer is merely LOOKED at — and announcing unconditionally meant an untouched
+	// tab came back as "the configuration changed", asterisk and all (found by the final audit,
+	// 2026-08-20).
+	//
+	// (What used to happen here — capturing the composition into its active variant — is done inside
+	//  CommitSettings now, over the COPY: the variant a person edits is a variant of the copy, and
+	//  asking the live composition to capture itself would have captured what it held before OK.)
+	m_settingsDirty = false;
+	// The signal was already raised where the edit happened (see the editors' SetOnChanged), so it is
+	// deliberately NOT raised again here.
 
 	return true;
 }
@@ -1402,31 +1491,202 @@ bool ibComposerSettingsPanel::Commit()
 // ⭐ AND WHAT "CANCEL" MEANS. Switching variants inside this panel WRITES — the composer holds one
 // set of settings at a time, so activating another one is not a preview. The whole set is
 // snapshotted when the panel opens, and this puts it back.
-void ibComposerSettingsPanel::RestoreOpenState()
-{
-	if (m_composer != nullptr)
-		m_composer->ReadVariants(m_openState);
-}
+// ⭐⭐ THE WINDOW EDITS A COPY, AND ON SUCCESS THE COPY REPLACES THE ORIGINAL (Max, 2026-08-23).
+// That is the whole of accept and cancel: OK assigns the edited description over the composition's
+// own and lets it fill its live objects from it; Cancel simply drops the copy. There is nothing to
+// restore, because nothing was changed until the assignment — which is why this is a transaction
+// and the old snapshot-and-put-back was only an imitation of one.
+// (CommitDescription REMOVED — CommitSettings does exactly this on the designer's road, and a second
+//  method saying the same thing is a second place to keep in step.)
+
+// (RestoreOpenState DELETED — CANCEL is the copy being dropped, and that is all of it. What this
+//  window edits is a description somebody else holds, and whoever holds it decided what Cancel
+//  means: the modal host keeps a COPY and lets it die with the window, the designer's tab hands
+//  over the metaobject's own and has no Cancel at all. So the body was empty, and an empty method
+//  wired to a button is a promise that something happens there.)
 
 // ---------------------------------------------------------------------------
 //  ibDialogComposerSettings — the MODAL host: the panel plus OK / Cancel.
 // ---------------------------------------------------------------------------
 
-bool ibDialogComposerSettings::ShowComposerSettings(ibValueDataComposition* composer)
+
+// ------------------------------------------------------------------------------------------------
+// THE COMPOSER EDITOR — the document mode. Everything it adds is the pair of answers below; the
+// content, the tabs and the commit are the panel's, unchanged.
+// ------------------------------------------------------------------------------------------------
+
+// ⭐ THE CAST IS THE EDITOR'S, exactly as ibGridEditor does it: the document is what this editor was
+// given, and `ConvertMetaObjectToType` is how a document is asked what it was opened ON. Nothing is
+// handed down from the view but the document itself (Max, 2026-08-24).
+//
+// Free functions rather than methods because the BASE CONSTRUCTOR needs both answers, and a virtual
+// call during base construction dispatches to the base.
+static ibValueMetaObjectComposer* ComposerOf(ibMetaDocument* document)
 {
-	if (composer == nullptr)
-		return false;
-	wxWindow* top = (wxTheApp != nullptr) ? wxTheApp->GetTopWindow() : nullptr;
-	ibDialogComposerSettings dlg(top, composer);
-	return dlg.ShowModal() == wxID_OK;
+	return document != nullptr ? document->ConvertMetaObjectToType<ibValueMetaObjectComposer>() : nullptr;
 }
 
-ibDialogComposerSettings::ibDialogComposerSettings(wxWindow* parent, ibValueDataComposition* composer)
+static const ibMetaData* MetaDataOf(ibMetaDocument* document)
+{
+	const ibValueMetaObjectComposer* metaComposer = ComposerOf(document);
+	return metaComposer != nullptr ? metaComposer->GetMetaData() : nullptr;
+}
+
+// …AND THE DESCRIPTION IS REACHED THE SAME WAY, and edited in place — the shape ibGridEditor has,
+// where a cell write goes straight into `creator->GetSpreadsheetDesc()`. No copy travels, and the
+// view above stores nothing.
+//
+// ⚠ THE STAND-IN. A composer tab with no composer metaobject cannot happen through the document
+// manager — the template is registered against the composer metatype — but a reference has to bind
+// to something, so it binds here. Nothing written into it is ever saved, which is the truth about a
+// tab that is editing nothing.
+static ibCompositionDescription& DescOf(ibMetaDocument* document)
+{
+	static ibCompositionDescription s_noComposer;
+	ibValueMetaObjectComposer* metaComposer = ComposerOf(document);
+	return metaComposer != nullptr ? metaComposer->GetCompositionDesc() : s_noComposer;
+}
+
+// THE DOCUMENT IS THE ONLY INPUT. Both of the other two — which description is edited, and which
+// configuration it means — are reached from it here, so the view above hands over nothing else and
+// stores nothing itself.
+ibComposerEditor::ibComposerEditor(wxWindow* parent, ibMetaDocument* document)
+	: ibComposerSettingsPanel(parent, DescOf(document), MetaDataOf(document)),
+	  m_document(document)
+{
+}
+
+const ibMetaData* ibComposerEditor::GetEditedMetaData() const
+{
+	// An absent configuration is a legitimate answer, not a broken one — see the base's constructor:
+	// with nothing to ask, the primitive types are what a field can be. What it must never do is
+	// reach for the ACTIVE configuration, which in the designer is somebody else's.
+	return MetaDataOf(m_document);
+}
+
+void ibComposerEditor::MarkModified()
+{
+	// STRAIGHT ONTO THE DOCUMENT. It is the thing with a dirty bit, and the tab's Save reads it —
+	// there is no chain to walk and nothing above it to hope for.
+	if (m_document != nullptr)
+		m_document->Modify(true);
+}
+
+
+// THE AUTHOR'S ROAD, OVER A DESCRIPTION — edited in place. The caller decides whose description it
+// is (its own value, or a clone of it that Cancel simply drops), so nothing live is reached here.
+// THE READER'S ROAD — see the header. A copy of the setting in force, the window over it, and the
+// copy set back on OK. The description it stands over is the model's own, so the field lists offer
+// what this report actually reads.
+bool ibDialogComposerSettings::ShowUserSettings(wxWindow* parent, ibValueSpreadsheetModel* model)
+{
+	if (model == nullptr)
+		return false;
+
+	ibValueDataComposition* composition = dynamic_cast<ibValueDataComposition*>(model);
+	if (composition == nullptr)
+		return false;   // a drawn document describes nothing — there is no setting to arrange
+
+	// THE COPY — what Cancel drops, and what OK becomes.
+	// ⭐ WHAT IS IN FORCE — the reader's where they set one, the author's where they did not, asked
+	// per part. The composer answers it now: this used to reach for the description itself when the
+	// user's section was empty, which is the same question asked in a second place.
+	ibSettingsDescription edited = model->GetModelComposer().GetCurrentSettingsDesc();
+
+	wxWindow* top = parent != nullptr ? parent
+		: ((wxTheApp != nullptr) ? wxTheApp->GetTopWindow() : nullptr);
+
+	// 🛑 AND THE SCHEMA IS NOT HANDED OVER TO BE EDITED. It used to go in as a NON-CONST reference on
+	// this road, and the panel edits a description in place — so a reader switching, renaming, adding
+	// or deleting a VARIANT was rewriting the live composition, and Cancel undid none of it. The
+	// list's window has been const-schema since the same day; this is the mirror of it
+	// (audit, 2026-08-24).
+	//
+	// A copy, because the panel's ctor takes a mutable reference and its structure pane genuinely
+	// edits one. The composition is never written on this road — what the reader changed leaves
+	// through the two halves below.
+	// (The variants in this copy are NOT what the window edits and are never read back from: on a
+	//  reader's road the panel stands over `edited` and nothing else. The copy is here because the
+	//  panel's other pages — the query text, the resources — take a description.)
+	ibCompositionDescription shown = composition->GetCompositionDesc();
+
+	ibDialogComposerSettings dlg(top, shown, composition->GetMetaData(), edited);
+	if (dlg.ShowModal() != wxID_OK)
+		return false;
+
+	// ⭐⭐ WHAT THE WINDOW EDITED IS WHAT IS SAVED — `edited`, the very object the panel stood over.
+	// A node's settings live in its OUTPUTS, the outputs are part of a setting, and the setting is
+	// what goes back; nothing is forwarded separately and nothing is re-derived.
+	//
+	// 🛑 THIS LINE READ A SNAPSHOT TAKEN BEFORE THE DIALOG. The copy `edited` was assigned into the
+	// shown description's zeroth variant on the way IN, and the way OUT read that variant back — so
+	// every edit made in the window was thrown away and the pre-dialog state was saved over it.
+	// Seen live as *"a filter or a sort set on a NODE is never kept"* and as the structure snapping
+	// back to `<detail records>`: the nodes were not written wrong, the wrong object was written
+	// (Max, 2026-08-24).
+	model->GetModelComposer().SetUserSettingsDesc(edited);
+
+	// ⭐ …AND IT RUNS AGAIN. Setting is not showing: the composer now says something different, and
+	// the sheet on screen was built before it did. The list's window has said this since it was
+	// written (RefetchAll); this one only assigned and left, so a person accepted their settings and
+	// nothing moved until they pressed Compose (Max, 2026-08-24).
+	//
+	// Compose is the spreadsheet model's own re-read — it builds into a document of its own and
+	// publishes it, and the control is already subscribed to that sheet. A refused query raises, and
+	// it is raised on THROUGH: whoever ran this command reports engine failures the way it reports
+	// every other one.
+	model->Compose();
+	return true;
+}
+
+bool ibDialogComposerSettings::ShowComposerSettings(wxWindow* parent, ibCompositionDescription& desc,
+	const ibMetaData* metaData)
+{
+	wxWindow* top = parent != nullptr ? parent
+		: ((wxTheApp != nullptr) ? wxTheApp->GetTopWindow() : nullptr);
+
+	// WHAT IT WAS — the other half of the comparison at the close.
+	const ibCompositionDescription before = desc;
+
+	ibDialogComposerSettings dlg(top, desc, metaData);
+	if (dlg.ShowModal() != wxID_OK)
+		return false;
+
+	// Compared at the CLOSE, not per keystroke: every character typed into the query would otherwise
+	// be a version of its own.
+	return before != desc;
+}
+
+// THE SAME WINDOW OVER A BARE DESCRIPTION — edited IN PLACE, so this host keeps no copy of its own:
+// whoever handed the description in decided whether it is a clone (and therefore what Cancel drops).
+// ⭐⭐ ONE CONSTRUCTOR, OVER A SNAPSHOT — see the header. A description and the configuration its
+// names mean, edited IN PLACE, so this host keeps no copy of its own: whoever handed the description
+// in decided whether it is a clone, and that decides what Cancel drops.
+ibDialogComposerSettings::ibDialogComposerSettings(wxWindow* parent, ibCompositionDescription& desc,
+	const ibMetaData* metaData, ibSettingsDescription& settings)
 	: wxDialog(parent, wxID_ANY, _("Data composer settings"), wxDefaultPosition, wxSize(900, 620),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-	m_panel = new ibComposerSettingsPanel(this, composer);
+
+	m_panel = new ibComposerSettingsPanel(this, desc, metaData, settings);
+	BuildAround();
+}
+
+// …AND THE AUTHOR'S, over the description itself.
+ibDialogComposerSettings::ibDialogComposerSettings(wxWindow* parent, ibCompositionDescription& desc,
+	const ibMetaData* metaData)
+	: wxDialog(parent, wxID_ANY, _("Data composer settings"), wxDefaultPosition, wxSize(900, 620),
+		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+{
+	m_panel = new ibComposerSettingsPanel(this, desc, metaData);
+	BuildAround();
+}
+
+// The frame around whichever panel was built — the two ctors differ in the panel and in nothing else.
+void ibDialogComposerSettings::BuildAround()
+{
+	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 	mainSizer->Add(m_panel, 1, wxALL | wxEXPAND, FromDIP(6));
 	mainSizer->Add(CreateStdDialogButtonSizer(wxOK | wxCANCEL), 0, wxALL | wxALIGN_RIGHT, FromDIP(6));
 	SetSizer(mainSizer);
@@ -1437,11 +1697,7 @@ ibDialogComposerSettings::ibDialogComposerSettings(wxWindow* parent, ibValueData
 		EndModal(wxID_OK);
 	}, wxID_OK);
 
-	Bind(wxEVT_BUTTON, [this](wxCommandEvent& e) {
-		if (m_panel != nullptr)
-			m_panel->RestoreOpenState();
-		e.Skip();   // the dialog closes the way it always did
-	}, wxID_CANCEL);
+	// (NO CANCEL HANDLER. Dropping the copy IS the cancel — see the note where RestoreOpenState was.)
 }
 
 // ---------------------------------------------------------------------------
@@ -1469,13 +1725,28 @@ ibDialogComposerSettings::ibDialogComposerSettings(wxWindow* parent, ibValueData
 // "which fields does this composition have".
 wxWindow* ibComposerSettingsPanel::BuildOutputPage(wxWindow* parent)
 {
-	wxSplitterWindow* outer = new wxSplitterWindow(parent, wxID_ANY,
-		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
-	outer->SetMinimumPaneSize(FromDIP(120));
+	// ⭐⭐ VARIANTS ARE THE DESIGNER'S, AND A READER MUST NOT SEE THEM (Max, 2026-08-24: "variants
+	// are shown in the designer only; a run always takes the zeroth").
+	//
+	// 🛑 THE COLUMN WAS BUILT UNCONDITIONALLY, so Enterprise showed a reader the list of variants
+	// with Add / Copy / Delete over the author's templates. Seen live on an external report.
+	//
+	// 🛑🛑 AND THE FIRST CURE CRASHED — a dump the same evening, `wxSplitterWindow::DoSplit` on an
+	// assert. Dropping the PANE while keeping the SPLITTER left `SplitVertically(nullptr, inner)`:
+	// a splitter with one half is not a splitter. So the outer one is not created at all on a
+	// reader's road, and the structure with its settings band IS the page.
+	// ⭐ THE LESSON, since it is the second of its kind today: removing a thing means removing what
+	// held it, not passing null where it stood.
+	wxSplitterWindow* outer = nullptr;
+	wxWindow* variantPane = nullptr;
+	if (!m_readerRoad) {
+		outer = new wxSplitterWindow(parent, wxID_ANY,
+			wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
+		outer->SetMinimumPaneSize(FromDIP(120));
+		variantPane = BuildVariantPane(outer);
+	}
 
-	wxWindow* variantPane = BuildVariantPane(outer);
-
-	wxSplitterWindow* inner = new wxSplitterWindow(outer, wxID_ANY,
+	wxSplitterWindow* inner = new wxSplitterWindow(outer != nullptr ? (wxWindow*)outer : parent, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	inner->SetMinimumPaneSize(FromDIP(90));
 
@@ -1494,6 +1765,10 @@ wxWindow* ibComposerSettingsPanel::BuildOutputPage(wxWindow* parent)
 	// structure; the band keeps the height the user gave it.
 	inner->SetSashGravity(1.0);
 	inner->SplitHorizontally(structurePane, settingsPane, -FromDIP(230));
+
+	// A READER'S PAGE IS THE INNER ONE — no variants column, so no column to split off.
+	if (outer == nullptr)
+		return inner;
 
 	// Variants are a fixed-width column: nothing about a list of names wants more room when the
 	// window grows, so gravity 0.0 hands all of it to the centre as well.
@@ -1527,7 +1802,7 @@ wxWindow* ibComposerSettingsPanel::BuildVariantPane(wxWindow* parent)
 	m_variantView = new ibDataViewCtrl(variantPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxDV_ROW_LINES | wxDV_SINGLE | wxDV_NO_HEADER);
 	ibStyleSettingsGrid(m_variantView);
-	m_variantModel = new ibVariantModel(m_composer);
+	m_variantModel = new ibVariantModel([this] { return &m_edited.m_variants; });
 	m_variantView->AssociateModel(m_variantModel);
 	// THE NAME IS EDITABLE IN PLACE — it is the whole of a variant a person sees, and renaming it
 	// somewhere else would be a dialog for one string.
@@ -1599,12 +1874,12 @@ wxWindow* ibComposerSettingsPanel::BuildStructurePane(wxWindow* parent)
 			[this](const ibDataViewItem& row) -> ibValue {
 				// THE HEAD FIELD is what this cell edits; a level's full set is shown by the model
 				// and composed on the level's own tab, where a list of fields has room to be a list.
-				const ibDataComposer::GroupNode* level = LevelAtRow(row);
-				return (level != nullptr && !level->m_fields.empty())
-					? ibValue(new ibValueCompositionField(level->m_fields.front().m_path)) : ibValue();
+				const ibLevelDescription* level = LevelAtRow(row);
+				return (level != nullptr && !level->m_settings.m_group.m_lines.empty())
+					? ibValue(new ibValueCompositionField(level->m_settings.m_group.m_lines.front().m_path)) : ibValue();
 			},
 			[this](const ibDataViewItem& row, const ibValue& value) {
-				ibDataComposer::GroupNode* level = LevelAtRow(row);
+				ibLevelDescription* level = LevelAtRow(row);
 				if (level == nullptr)
 					return;
 				// ⚠ THE DETAIL LEVEL GROUPS BY NOTHING, and that is what it IS. A field written here
@@ -1618,14 +1893,14 @@ wxWindow* ibComposerSettingsPanel::BuildStructurePane(wxWindow* parent)
 				ibValueCompositionField* field = nullptr;
 				const bool chosen = value.ConvertToValue(field) && field != nullptr;
 				if (!chosen) {
-					if (!level->m_fields.empty())
-						level->m_fields.erase(level->m_fields.begin());
+					if (!level->m_settings.m_group.m_lines.empty())
+						level->m_settings.m_group.m_lines.erase(level->m_settings.m_group.m_lines.begin());
 				}
-				else if (level->m_fields.empty()) {
-					level->m_fields.push_back({ field->GetPath(), ibQueryDimUnfold::Elements });
+				else if (level->m_settings.m_group.m_lines.empty()) {
+					level->m_settings.m_group.m_lines.push_back({ field->GetPath(), ibQueryDimUnfold::Elements });
 				}
 				else {
-					level->m_fields.front().m_path = field->GetPath();
+					level->m_settings.m_group.m_lines.front().m_path = field->GetPath();
 				}
 				MarkSettingsTouched();
 				ReloadStructure(m_structureModel != nullptr ? m_structureModel->LevelAt(row) : wxNOT_FOUND);
@@ -1657,7 +1932,7 @@ wxWindow* ibComposerSettingsPanel::BuildStructurePane(wxWindow* parent)
 	// and asking for it every time is what keeps this window from holding a second copy.
 	// THE MODEL READS THE STRUCTURE BUFFER — the outputs themselves, not a flattened ladder. That is
 	// what lets the tree show a second output, a column axis, and a level made of several fields.
-	m_structureModel = new ibComposerStructureModel([this] { return &m_structure; });
+	m_structureModel = new ibComposerStructureModel([this] { return &Structure(); });
 	m_structureView->AssociateModel(m_structureModel);
 
 	// A DOUBLE-CLICK EDITS THE CELL under the cursor — the same gesture the settings grids use.
@@ -1717,9 +1992,9 @@ wxWindow* ibComposerSettingsPanel::BuildGroupingPage(wxWindow* parent)
 	// ⚠ ATTACH WIRES THE BEHAVIOUR, POPULATE PUTS THE FIELDS IN. Attaching alone leaves an empty
 	// pane that unfolds and drags perfectly — which is exactly how this page first shipped, with
 	// "no available fields" as the only visible symptom.
-	if (m_fieldTree) {
-		m_fieldTree->Attach(m_groupingFieldTree);
-		m_fieldTree->Populate(m_groupingFieldTree);
+	if (m_fieldSource) {
+		m_fieldSource->Attach(m_groupingFieldTree);
+		m_fieldSource->Populate(m_groupingFieldTree);
 	}
 	// ⭐ FROM THE PICKER INTO THE GROUPING, the same gesture the filter and the sort answer to:
 	// double-click a field on the left and it joins this level's elements. A reference row unfolds
@@ -1734,8 +2009,8 @@ wxWindow* ibComposerSettingsPanel::BuildGroupingPage(wxWindow* parent)
 	// pane and it joins the level's elements. The payload is nothing — what moved is what the tree
 	// has selected, which the source knows (ibCallbackDropTarget).
 	right->SetDropTarget(new ibCallbackDropTarget([this] {
-		if (m_fieldTree)
-			AddGroupingFieldFromTree(m_fieldTree->GetDragItem());
+		if (m_fieldSource)
+			AddGroupingFieldFromTree(m_fieldSource->GetDragItem());
 	}));
 	wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -1752,7 +2027,7 @@ wxWindow* ibComposerSettingsPanel::BuildGroupingPage(wxWindow* parent)
 	m_groupingView = new ibDataViewCtrl(right, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxDV_ROW_LINES | wxDV_SINGLE);
 	ibStyleSettingsGrid(m_groupingView);
-	m_groupingModel = new ibGroupingFieldsModel([this]() -> ibDataComposer::GroupNode* {
+	m_groupingModel = new ibGroupingFieldsModel([this]() -> ibLevelDescription* {
 		return CurrentLevel();   // the remembered node — this model is read DURING a selection change
 	});
 	m_groupingView->AssociateModel(m_groupingModel);
@@ -1761,21 +2036,21 @@ wxWindow* ibComposerSettingsPanel::BuildGroupingPage(wxWindow* parent)
 	m_groupingView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Field"),
 		new ibRowValueCellRenderer(this, ibComposerFieldChooser(this),
 			[this](const ibDataViewItem& row) -> ibValue {
-				ibDataComposer::GroupNode* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
+				ibLevelDescription* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
 				const int at = m_groupingModel != nullptr ? m_groupingModel->RowAt(row) : wxNOT_FOUND;
-				return (level != nullptr && at != wxNOT_FOUND && (size_t)at < level->m_fields.size())
-					? ibValue(new ibValueCompositionField(level->m_fields[at].m_path)) : ibValue();
+				return (level != nullptr && at != wxNOT_FOUND && (size_t)at < level->m_settings.m_group.m_lines.size())
+					? ibValue(new ibValueCompositionField(level->m_settings.m_group.m_lines[at].m_path)) : ibValue();
 			},
 			[this](const ibDataViewItem& row, const ibValue& value) {
-				ibDataComposer::GroupNode* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
+				ibLevelDescription* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
 				const int at = m_groupingModel != nullptr ? m_groupingModel->RowAt(row) : wxNOT_FOUND;
-				if (level == nullptr || at == wxNOT_FOUND || (size_t)at >= level->m_fields.size())
+				if (level == nullptr || at == wxNOT_FOUND || (size_t)at >= level->m_settings.m_group.m_lines.size())
 					return;
 				ibValueCompositionField* field = nullptr;
 				if (value.ConvertToValue(field) && field != nullptr)
-					level->m_fields[at].m_path = field->GetPath();
+					level->m_settings.m_group.m_lines[at].m_path = field->GetPath();
 				else
-					level->m_fields.erase(level->m_fields.begin() + at);   // cleared = removed from the key
+					level->m_settings.m_group.m_lines.erase(level->m_settings.m_group.m_lines.begin() + at);   // cleared = removed from the key
 				MarkSettingsTouched();
 				ReloadGrouping();
 				RefreshStructureText();
@@ -1787,25 +2062,25 @@ wxWindow* ibComposerSettingsPanel::BuildGroupingPage(wxWindow* parent)
 	m_groupingView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Kind"),
 		new ibRowValueCellRenderer(this, ibComposerFieldChooser(this),
 			[this](const ibDataViewItem& row) -> ibValue {
-				ibDataComposer::GroupNode* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
+				ibLevelDescription* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
 				const int at = m_groupingModel != nullptr ? m_groupingModel->RowAt(row) : wxNOT_FOUND;
-				return (level != nullptr && at != wxNOT_FOUND && (size_t)at < level->m_fields.size())
-					? ibValue::CreateEnumObject<ibValueEnumGroupKind>(level->m_fields[at].m_kind) : ibValue();
+				return (level != nullptr && at != wxNOT_FOUND && (size_t)at < level->m_settings.m_group.m_lines.size())
+					? ibValue::CreateEnumObject<ibValueEnumGroupKind>(level->m_settings.m_group.m_lines[at].m_kind) : ibValue();
 			},
 			[this](const ibDataViewItem& row, const ibValue& value) {
-				ibDataComposer::GroupNode* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
+				ibLevelDescription* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
 				const int at = m_groupingModel != nullptr ? m_groupingModel->RowAt(row) : wxNOT_FOUND;
-				if (level == nullptr || at == wxNOT_FOUND || (size_t)at >= level->m_fields.size())
+				if (level == nullptr || at == wxNOT_FOUND || (size_t)at >= level->m_settings.m_group.m_lines.size())
 					return;
 				const ibQueryDimUnfold kind = value.ConvertToEnumValue<ibQueryDimUnfold>();
-				if (kind != ibQueryDimUnfold::Elements && level->m_fields.size() > 1) {
+				if (kind != ibQueryDimUnfold::Elements && level->m_settings.m_group.m_lines.size() > 1) {
 					wxMessageBox(_("This grouping is made of several fields, and a hierarchy unfolds "
 					               "one field's parent chain.\n\nGive the hierarchy field a grouping "
 					               "of its own."),
 						_("Data composer settings"), wxOK | wxICON_WARNING, this);
 					return;
 				}
-				level->m_fields[at].m_kind = kind;
+				level->m_settings.m_group.m_lines[at].m_kind = kind;
 				MarkSettingsTouched();
 				ReloadGrouping();
 				RefreshStructureText();
@@ -1830,8 +2105,10 @@ wxWindow* ibComposerSettingsPanel::BuildGroupingPage(wxWindow* parent)
 // A set of its own, or the one above it ("Auto"). Set on the report it reaches every output; set on
 // an output it reaches its levels — that is the inheritance Max described, and the reason this is a
 // page of its own rather than a pane beside the others: it is a SETTING, not a catalogue.
-wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent, ibFieldSet set)
+wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 {
+	ibFieldSetPage& page = m_selectedPage;
+
 	wxSplitterWindow* splitter = new wxSplitterWindow(parent, wxID_ANY, wxDefaultPosition,
 		wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 
@@ -1839,32 +2116,27 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent, ibFieldSe
 	wxPanel* left = new wxPanel(splitter);
 	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
 	leftSizer->Add(new wxStaticText(left, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
-	PageOf(set).m_sourceTree = new wxTreeCtrl(left, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	page.m_sourceTree = new wxTreeCtrl(left, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_SINGLE);
-	leftSizer->Add(PageOf(set).m_sourceTree, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
+	leftSizer->Add(page.m_sourceTree, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
 	left->SetSizer(leftSizer);
-	if (m_fieldTree) {
-		m_fieldTree->Attach(PageOf(set).m_sourceTree);
-		m_fieldTree->Populate(PageOf(set).m_sourceTree);
+	if (m_fieldSource) {
+		m_fieldSource->Attach(page.m_sourceTree);
+		m_fieldSource->Populate(page.m_sourceTree);
 	}
 
-	// RIGHT — this node's own set, with the inheritance switch over it.
+	// RIGHT — what this node adds to what is shown above it.
+	//
+	// (⭐ NO "AUTO" SWITCH. It said "take the fields from above", which is what an empty list says
+	//  now that a node ADDS rather than replaces — see ibDataComposer::SelectedFor.)
 	wxPanel* right = new wxPanel(splitter);
 	wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
 
-	// ⚠ IDS ARE PER PAGE. Two pages of the same shape live in one window, and a command id they
-	// share would reach whichever of them was bound last — so the available page takes one triple
-	// and the selected page the next.
-	const bool available = set == ibFieldSet::Available;
-	const int idAdd    = available ? ID_AVAILABLE_ADD    : ID_SELECTED_ADD;
-	const int idRemove = available ? ID_AVAILABLE_REMOVE : ID_SELECTED_REMOVE;
-	const int idCopy   = available ? ID_AVAILABLE_COPY   : ID_SELECTED_COPY;
-	const int idAuto   = available ? ID_AVAILABLE_AUTO   : ID_SELECTED_AUTO;
-	const int idUp     = available ? ID_AVAILABLE_UP     : ID_SELECTED_UP;
-	const int idDown   = available ? ID_AVAILABLE_DOWN   : ID_SELECTED_DOWN;
-
-	PageOf(set).m_autoBox = new wxCheckBox(right, idAuto, _("Auto - take the fields from above"));
-	rightSizer->Add(PageOf(set).m_autoBox, 0, wxALL, FromDIP(4));
+	const int idAdd    = ID_SELECTED_ADD;
+	const int idRemove = ID_SELECTED_REMOVE;
+	const int idCopy   = ID_SELECTED_COPY;
+	const int idUp     = ID_SELECTED_UP;
+	const int idDown   = ID_SELECTED_DOWN;
 
 	wxToolBar* bar = new wxToolBar(right, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTB_FLAT | wxTB_NODIVIDER | wxTB_HORIZONTAL);
@@ -1878,29 +2150,29 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent, ibFieldSe
 	bar->Realize();
 	rightSizer->Add(bar, 0, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(4));
 
-	PageOf(set).m_view = new ibDataViewCtrl(right, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	page.m_view = new ibDataViewCtrl(right, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxDV_ROW_LINES | wxDV_SINGLE);
-	ibStyleSettingsGrid(PageOf(set).m_view);
-	PageOf(set).m_model = new ibStringListModel([this, set]() -> std::vector<wxString>* {
-		return CurrentFieldSet(set);
+	ibStyleSettingsGrid(page.m_view);
+	page.m_model = new ibStringListModel([this]() -> std::vector<wxString>* {
+		return CurrentFieldSet();
 	});
-	PageOf(set).m_view->AssociateModel(PageOf(set).m_model);
+	page.m_view->AssociateModel(page.m_model);
 	// ⭐ A LINE OF THIS LIST IS A FIELD, so it is edited the way every other field is: the shared
 	// row-value cell, which opens the SAME picker the sort and the grouping open (Max, 2026-08-21:
 	// there was no way to open the picker here as one can in the sort). Drawn as text it could only
 	// be re-made — delete the line, add another — which is a different verb for "I picked the wrong
 	// one", and one this window offers nowhere else.
-	PageOf(set).m_view->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Field"),
+	page.m_view->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Field"),
 		new ibRowValueCellRenderer(this, ibComposerFieldChooser(this),
-			[this, set](const ibDataViewItem& row) -> ibValue {
-				const std::vector<wxString>* list = CurrentFieldSet(set);
-				const int at = PageOf(set).m_model != nullptr ? PageOf(set).m_model->RowAt(row) : wxNOT_FOUND;
+			[this](const ibDataViewItem& row) -> ibValue {
+				const std::vector<wxString>* list = CurrentFieldSet();
+				const int at = m_selectedPage.m_model != nullptr ? m_selectedPage.m_model->RowAt(row) : wxNOT_FOUND;
 				return (list != nullptr && at != wxNOT_FOUND && (size_t)at < list->size())
 					? ibValue(new ibValueCompositionField((*list)[at])) : ibValue();
 			},
-			[this, set](const ibDataViewItem& row, const ibValue& value) {
-				std::vector<wxString>* list = CurrentFieldSet(set);
-				const int at = PageOf(set).m_model != nullptr ? PageOf(set).m_model->RowAt(row) : wxNOT_FOUND;
+			[this](const ibDataViewItem& row, const ibValue& value) {
+				std::vector<wxString>* list = CurrentFieldSet();
+				const int at = m_selectedPage.m_model != nullptr ? m_selectedPage.m_model->RowAt(row) : wxNOT_FOUND;
 				if (list == nullptr || at == wxNOT_FOUND || (size_t)at >= list->size())
 					return;
 				// CLEARED MEANS REMOVED — an empty line in a set of fields is not a field, and the
@@ -1914,114 +2186,96 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent, ibFieldSe
 				ReloadFieldSets();
 			}),
 		ibStringListModel::kColText, FromDIP(260), wxAlignment::wxALIGN_LEFT));
-	rightSizer->Add(PageOf(set).m_view, 1, wxEXPAND | wxALL, FromDIP(4));
+	rightSizer->Add(page.m_view, 1, wxEXPAND | wxALL, FromDIP(4));
 	right->SetSizer(rightSizer);
 
 	splitter->SplitVertically(left, right, FromDIP(220));
 	splitter->SetMinimumPaneSize(FromDIP(120));
 
-	Bind(wxEVT_TOOL, [this, set](wxCommandEvent&) { OnFieldSetAdd(set); }, idAdd);
-	Bind(wxEVT_TOOL, [this, set](wxCommandEvent&) { OnFieldSetRemove(set); }, idRemove);
-	Bind(wxEVT_TOOL, [this, set](wxCommandEvent&) { OnFieldSetCopy(set); }, idCopy);
-	Bind(wxEVT_TOOL, [this, set](wxCommandEvent&) { MoveFieldSetRow(set, -1); }, idUp);
-	Bind(wxEVT_TOOL, [this, set](wxCommandEvent&) { MoveFieldSetRow(set, +1); }, idDown);
-	Bind(wxEVT_CHECKBOX, [this, set](wxCommandEvent& e) { OnFieldSetAuto(set, e.IsChecked()); }, idAuto);
+	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { OnFieldSetAdd(); }, idAdd);
+	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { OnFieldSetRemove(); }, idRemove);
+	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { OnFieldSetCopy(); }, idCopy);
+	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveFieldSetRow(-1); }, idUp);
+	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveFieldSetRow(+1); }, idDown);
 
 	// ⭐ FROM THE TREE INTO THE LIST, by hand. Double-clicking a field on the left puts it on the
 	// right — the shortest gesture, and the one people try first; the toolbar's Add opens the same
 	// picker for whoever reaches for a button instead.
-	PageOf(set).m_sourceTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this, set](wxTreeEvent& e) {
-		AddFieldFromTree(set, e.GetItem());
+	page.m_sourceTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this](wxTreeEvent& e) {
+		AddFieldFromTree(e.GetItem());
 		e.Skip();
 	});
 	// ...and by dragging onto the list, the same gesture the filter and the sort answer to.
-	right->SetDropTarget(new ibCallbackDropTarget([this, set] {
-		if (m_fieldTree)
-			AddFieldFromTree(set, m_fieldTree->GetDragItem());
+	right->SetDropTarget(new ibCallbackDropTarget([this] {
+		if (m_fieldSource)
+			AddFieldFromTree(m_fieldSource->GetDragItem());
 	}));
 	return splitter;
 }
 
-// THE SET THAT IS BEING EDITED, and the flag that says whether it is used at all. The report has
-// no flag — it is the top, and there is nothing above it to inherit from.
-std::vector<wxString>* ibComposerSettingsPanel::CurrentFieldSet(ibFieldSet set, bool** autoFlag)
+// WHAT THE SELECTED NODE ADDS — its OWN list, never the pile. A node states what it contributes;
+// what it ends up showing is the composer's answer (SelectedFor), and showing the pile here would
+// mean a person deleting an inherited line and nothing happening.
+std::vector<wxString>* ibComposerSettingsPanel::CurrentFieldSet()
 {
-	if (autoFlag != nullptr)
-		*autoFlag = nullptr;
-
-	const bool available = set == ibFieldSet::Available;
-
-	if (ibDataComposer::GroupNode* level = CurrentLevel()) {
-		if (autoFlag != nullptr)
-			*autoFlag = available ? &level->m_availableAuto : &level->m_selectedAuto;
-		return available ? &level->m_available : &level->m_selected;
-	}
+	if (ibLevelDescription* level = CurrentLevel())
+		return &level->m_selected;
 
 	const int output = m_currentNode.m_output;
-	if (output >= 0 && (size_t)output < m_structure.size()) {
-		ibDataComposer::Output& node = m_structure[output];
-		if (autoFlag != nullptr)
-			*autoFlag = available ? &node.m_availableAuto : &node.m_selectedAuto;
-		return available ? &node.m_available : &node.m_selected;
-	}
-	// THE REPORT ITSELF — the top of the inheritance, so it has a set and no switch.
-	return available ? &m_commonAvailableBuffer : &m_commonSelectedBuffer;
+	if (output >= 0 && (size_t)output < Structure().size())
+		return &Structure()[output].m_selected;
+
+	// THE REPORT ITSELF — the bottom of the pile, which everything else adds to. The description's
+	// own set, edited in place like everything else in this window.
+	return &m_edited.m_selected;
 }
 
-void ibComposerSettingsPanel::OnFieldSetAdd(ibFieldSet set)
+void ibComposerSettingsPanel::OnFieldSetAdd()
 {
-	bool* autoFlag = nullptr;
-	std::vector<wxString>* fields = CurrentFieldSet(set, &autoFlag);
+	std::vector<wxString>* fields = CurrentFieldSet();
 	if (fields == nullptr)
 		return;
 	ibValueCompositionField* field = ChooseStructureField(this);
 	if (field == nullptr)
 		return;   // closed without picking
 
-	// ADDING A FIELD MEANS THIS NODE HAS A SET OF ITS OWN — inheriting and adding at the same time
-	// would leave two answers about where its fields come from.
-	if (autoFlag != nullptr && *autoFlag) {
-		*autoFlag = false;
-		fields->clear();
-	}
+	// ADDING IS ADDING — nothing is cleared first. A node contributes this field on top of what its
+	// output and the composition already show; it never takes over the list by naming one line.
 	fields->push_back(field->GetPath());
 	MarkSettingsTouched();
-	ReloadFieldSet(set);
+	ReloadFieldSets();
 }
 
-void ibComposerSettingsPanel::OnFieldSetRemove(ibFieldSet set)
+void ibComposerSettingsPanel::OnFieldSetRemove()
 {
-	std::vector<wxString>* fields = CurrentFieldSet(set);
-	const int at = SelectedFieldSetRow(set);
+	std::vector<wxString>* fields = CurrentFieldSet();
+	const int at = SelectedFieldSetRow();
 	if (fields == nullptr || at == wxNOT_FOUND || (size_t)at >= fields->size())
 		return;
 	fields->erase(fields->begin() + at);
 	MarkSettingsTouched();
-	ReloadFieldSet(set);
+	ReloadFieldSets();
 }
 
 // COPY A LINE — the third verb of the toolbar (Max: add, delete, copy). A field listed twice is
 // not a mistake to refuse here: the same field can be wanted under two names, and what a duplicate
 // means is the engine's answer, not this list's.
-void ibComposerSettingsPanel::OnFieldSetCopy(ibFieldSet set)
+void ibComposerSettingsPanel::OnFieldSetCopy()
 {
-	bool* autoFlag = nullptr;
-	std::vector<wxString>* fields = CurrentFieldSet(set, &autoFlag);
-	const int at = SelectedFieldSetRow(set);
+	std::vector<wxString>* fields = CurrentFieldSet();
+	const int at = SelectedFieldSetRow();
 	if (fields == nullptr || at == wxNOT_FOUND || (size_t)at >= fields->size())
 		return;
-	if (autoFlag != nullptr && *autoFlag)
-		*autoFlag = false;   // editing the list is what makes it this node's own
 	fields->insert(fields->begin() + at + 1, (*fields)[at]);
 	MarkSettingsTouched();
-	ReloadFieldSet(set);
+	ReloadFieldSets();
 }
 
 // MOVE A LINE — the set is read in order, so its order is a setting like any other.
-void ibComposerSettingsPanel::MoveFieldSetRow(ibFieldSet set, int delta)
+void ibComposerSettingsPanel::MoveFieldSetRow(int delta)
 {
-	std::vector<wxString>* fields = CurrentFieldSet(set);
-	const int at = SelectedFieldSetRow(set);
+	std::vector<wxString>* fields = CurrentFieldSet();
+	const int at = SelectedFieldSetRow();
 	if (fields == nullptr || at == wxNOT_FOUND || (size_t)at >= fields->size())
 		return;
 	const int target = at + delta;
@@ -2029,10 +2283,10 @@ void ibComposerSettingsPanel::MoveFieldSetRow(ibFieldSet set, int delta)
 		return;
 	std::swap((*fields)[at], (*fields)[target]);
 	MarkSettingsTouched();
-	ReloadFieldSet(set);
+	ReloadFieldSets();
 	// The cursor travels with the line — a move whose result you have to go and find again reads
 	// as a move that did nothing.
-	ibFieldSetPage& page = PageOf(set);
+	ibFieldSetPage& page = m_selectedPage;
 	if (page.m_view != nullptr && page.m_model != nullptr) {
 		const ibDataViewItem row = page.m_model->ItemForRow((size_t)target);
 		if (row.IsOk())
@@ -2041,86 +2295,46 @@ void ibComposerSettingsPanel::MoveFieldSetRow(ibFieldSet set, int delta)
 }
 
 // A FIELD PICKED IN THE TREE goes into the set — the same act as Add, from the other side.
-void ibComposerSettingsPanel::AddFieldFromTree(ibFieldSet set, const wxTreeItemId& item)
+void ibComposerSettingsPanel::AddFieldFromTree(const wxTreeItemId& item)
 {
-	ibFieldSetPage& page = PageOf(set);
+	ibFieldSetPage& page = m_selectedPage;
 	if (m_readOnly || page.m_sourceTree == nullptr || !item.IsOk())
 		return;
 	ibValueCompositionField* field = ibSettingsFieldTree::FieldAt(page.m_sourceTree, item);
 	if (field == nullptr)
 		return;   // a reference row is a road, not a field — double-clicking it unfolds instead
 
-	bool* autoFlag = nullptr;
-	std::vector<wxString>* fields = CurrentFieldSet(set, &autoFlag);
+	std::vector<wxString>* fields = CurrentFieldSet();
 	if (fields == nullptr)
 		return;
-	if (autoFlag != nullptr && *autoFlag) {
-		*autoFlag = false;      // editing the list is what makes it this node's own
-		fields->clear();
-	}
 	fields->push_back(field->GetPath());
 	MarkSettingsTouched();
-	ReloadFieldSet(set);
+	ReloadFieldSets();
 }
 
-int ibComposerSettingsPanel::SelectedFieldSetRow(ibFieldSet set)
+int ibComposerSettingsPanel::SelectedFieldSetRow()
 {
-	ibFieldSetPage& page = PageOf(set);
+	ibFieldSetPage& page = m_selectedPage;
 	if (page.m_view == nullptr || page.m_model == nullptr)
 		return wxNOT_FOUND;
 	const ibDataViewItem row = page.m_view->GetSelection();
 	return row.IsOk() ? page.m_model->RowAt(row) : wxNOT_FOUND;
 }
 
-void ibComposerSettingsPanel::OnFieldSetAuto(ibFieldSet set, bool checked)
-{
-	bool* autoFlag = nullptr;
-	std::vector<wxString>* fields = CurrentFieldSet(set, &autoFlag);
-	if (autoFlag == nullptr) {
-		// The report has nothing above it — the box is not offered there, and a click that got
-		// here anyway changes nothing.
-		ReloadFieldSet(set);
-		return;
-	}
-	*autoFlag = checked;
-	// TURNING AUTO OFF STARTS FROM WHAT WAS INHERITED, not from an empty list: a person who
-	// narrows a set expects to narrow the fields they were just looking at.
-	if (!*autoFlag && fields != nullptr && fields->empty()) {
-		const int output = m_currentNode.m_output;
-		const bool available = set == ibFieldSet::Available;
-		const std::vector<wxString>& fromAbove =
-			(CurrentLevel() != nullptr && output >= 0 && (size_t)output < m_structure.size())
-				? (available ? m_structure[output].m_available : m_structure[output].m_selected)
-				: (available ? m_commonAvailableBuffer : m_commonSelectedBuffer);
-		*fields = fromAbove;
-	}
-	MarkSettingsTouched();
-	ReloadFieldSet(set);
-}
+// (⭐ NO "AUTO" HANDLER. The switch it served said "take the fields from above" — and under adding,
+//  what a node states is ALWAYS on top of what is above it, so there is no other mode to switch to.
+//  Its old body had to guess what "turning it off" should start from, which is a question that no
+//  longer exists.)
 
 void ibComposerSettingsPanel::ReloadFieldSets()
 {
-	ReloadFieldSet(ibFieldSet::Available);
-	ReloadFieldSet(ibFieldSet::Selected);
-}
-
-void ibComposerSettingsPanel::ReloadFieldSet(ibFieldSet set)
-{
-	if (PageOf(set).m_model != nullptr)
-		PageOf(set).m_model->Rebuild();
-	if (PageOf(set).m_autoBox == nullptr)
-		return;
-
-	bool* autoFlag = nullptr;
-	CurrentFieldSet(set, &autoFlag);
-	// THE REPORT IS THE TOP: no inheritance switch, because there is nothing above it.
-	PageOf(set).m_autoBox->Enable(autoFlag != nullptr && !m_readOnly);
-	PageOf(set).m_autoBox->SetValue(autoFlag != nullptr && *autoFlag);
+	if (m_selectedPage.m_model != nullptr)
+		m_selectedPage.m_model->Rebuild();
 }
 
 void ibComposerSettingsPanel::OnGroupingFieldAdd(wxCommandEvent&)
 {
-	ibDataComposer::GroupNode* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
+	ibLevelDescription* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
 	if (level == nullptr) {
 		// SAID, NOT IGNORED: the page is only about a grouping, and pressing its button on the
 		// report is a reasonable thing to try.
@@ -2131,7 +2345,7 @@ void ibComposerSettingsPanel::OnGroupingFieldAdd(wxCommandEvent&)
 	ibValueCompositionField* field = ChooseStructureField(this);
 	if (field == nullptr)
 		return;   // closed without picking
-	level->m_fields.push_back({ field->GetPath(), ibQueryDimUnfold::Elements });
+	level->m_settings.m_group.m_lines.push_back({ field->GetPath(), ibQueryDimUnfold::Elements });
 	MarkSettingsTouched();
 	RefreshStructureText();
 	ReloadGrouping();
@@ -2139,25 +2353,25 @@ void ibComposerSettingsPanel::OnGroupingFieldAdd(wxCommandEvent&)
 
 void ibComposerSettingsPanel::AddGroupingFieldFromTree(const wxTreeItemId& item)
 {
-	ibDataComposer::GroupNode* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
+	ibLevelDescription* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
 	if (m_readOnly || level == nullptr || m_groupingFieldTree == nullptr || !item.IsOk())
 		return;
 	ibValueCompositionField* field = ibSettingsFieldTree::FieldAt(m_groupingFieldTree, item);
 	if (field == nullptr)
 		return;   // a reference row unfolds instead of being taken
-	level->m_fields.push_back({ field->GetPath(), ibQueryDimUnfold::Elements });
+	level->m_settings.m_group.m_lines.push_back({ field->GetPath(), ibQueryDimUnfold::Elements });
 	MarkSettingsTouched();
 	RefreshStructureText();
-	ReloadGrouping((int)level->m_fields.size() - 1);
+	ReloadGrouping((int)level->m_settings.m_group.m_lines.size() - 1);
 }
 
 void ibComposerSettingsPanel::OnGroupingFieldRemove(wxCommandEvent&)
 {
-	ibDataComposer::GroupNode* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
+	ibLevelDescription* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
 	const int at = SelectedGroupingField();
-	if (level == nullptr || at == wxNOT_FOUND || (size_t)at >= level->m_fields.size())
+	if (level == nullptr || at == wxNOT_FOUND || (size_t)at >= level->m_settings.m_group.m_lines.size())
 		return;
-	level->m_fields.erase(level->m_fields.begin() + at);
+	level->m_settings.m_group.m_lines.erase(level->m_settings.m_group.m_lines.begin() + at);
 	MarkSettingsTouched();
 	RefreshStructureText();
 	ReloadGrouping();
@@ -2165,14 +2379,14 @@ void ibComposerSettingsPanel::OnGroupingFieldRemove(wxCommandEvent&)
 
 void ibComposerSettingsPanel::MoveGroupingField(int delta)
 {
-	ibDataComposer::GroupNode* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
+	ibLevelDescription* level = m_groupingModel != nullptr ? m_groupingModel->Level() : nullptr;
 	const int at = SelectedGroupingField();
-	if (level == nullptr || at == wxNOT_FOUND || (size_t)at >= level->m_fields.size())
+	if (level == nullptr || at == wxNOT_FOUND || (size_t)at >= level->m_settings.m_group.m_lines.size())
 		return;
 	const int target = at + delta;
-	if (target < 0 || (size_t)target >= level->m_fields.size())
+	if (target < 0 || (size_t)target >= level->m_settings.m_group.m_lines.size())
 		return;
-	std::swap(level->m_fields[at], level->m_fields[target]);
+	std::swap(level->m_settings.m_group.m_lines[at], level->m_settings.m_group.m_lines[target]);
 	MarkSettingsTouched();
 	RefreshStructureText();
 	ReloadGrouping(target);
@@ -2206,7 +2420,7 @@ void ibComposerSettingsPanel::SyncGroupingPage()
 	// …AND THE DETAIL RECORDS ARE NOT ONE. That level groups by nothing by construction — a page
 	// listing the fields it groups by would be a page that can only ever be empty, and the one verb
 	// on it (add a field) would turn the rows back into a heading behind the author's back.
-	const ibDataComposer::GroupNode* level = CurrentLevel();
+	const ibLevelDescription* level = CurrentLevel();
 	const bool wanted = level != nullptr && level->m_kind != ibCompositionLevelKind::Details;
 	size_t at = m_settingsTabs->GetPageCount();
 	for (size_t i = 0; i < m_settingsTabs->GetPageCount(); ++i)
@@ -2273,29 +2487,23 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 	m_groupingPage = BuildGroupingPage(tabs);
 	tabs->AddPage(m_groupingPage, _("Grouping"), true);
 
-	// WHAT THIS NODE MAY SEE — its own page, because it is a setting and not a list of hints: set
-	// on the report it reaches every output, set on an output it reaches its levels.
-	tabs->AddPage(BuildFieldSetPage(tabs, ibFieldSet::Available), _("Available fields"), false);
-
-	// ⭐ …AND WHAT IT READS. This page was taken off as "two nearly identical lists, and the person
-	// has to work out which one they meant". The objection was right and it is answered by saying
-	// what each one ASKS, not by hiding one of them:
+	// ⭐⭐ WHAT THIS NODE SHOWS — ONE PAGE, AND THE ONLY ONE THERE EVER SHOULD HAVE BEEN.
 	//
-	//   Available — what may be REACHED here. A field it excludes cannot be grouped, filtered or
-	//               sorted by, and it does not appear in any picker (ibSettingsFieldTree).
-	//   Selected  — what is actually READ. `ibDataComposer::SelectedFor(output[, level])` composes
-	//               the query's SELECT list out of it, with the same report → output → level
-	//               inheritance and the same Auto flag.
+	// There were two, "Available" and "Selected", and the objection to them was right the first time:
+	// two nearly identical lists, and the person has to work out which they meant. It was answered by
+	// explaining the difference instead of removing it. The difference does not survive the question
+	// "what does a person want to say here" (Max, 2026-08-24: "available tells us nothing, it is the
+	// same thing understood in a harder way") — they want to say which fields they want to see, and
+	// that is this list. `ibDataComposer::SelectedFor(output[, level])` builds the query's SELECT out
+	// of it, piling the composition's, the output's and the node's own together.
 	//
-	// And that is the question only this page can answer — one the window could not answer at all.
-	// The engine has read this set from the beginning; nothing but a script could write it, so
-	// every report composed from the window projected "every column the source has": forty
-	// attributes read per row to print three.
-	tabs->AddPage(BuildFieldSetPage(tabs, ibFieldSet::Selected), _("Selected fields"), false);
+	// The other page said what MAY be reached, had no reader on the run path at all, and cost a
+	// parameter on every verb of this window to tell the two apart.
+	tabs->AddPage(BuildFieldSetPage(tabs), _("Selected fields"), false);
 
-	m_filterEditor = new ibFilterEditor(tabs, m_settings, m_fieldTree.get());
+	m_filterEditor = new ibFilterEditor(tabs, &EditedSettings().m_filter, m_fieldSource.get());
 	tabs->AddPage(m_filterEditor, _("Filter"), false);
-	m_sortEditor = new ibSortEditor(tabs, m_settings, m_fieldTree.get());
+	m_sortEditor = new ibSortEditor(tabs, &EditedSettings().m_sort, m_fieldSource.get());
 	tabs->AddPage(m_sortEditor, _("Sort"), false);
 
 	// ⭐ THESE TWO EDIT A BUFFER, so nothing they do reaches the composition until this window is
@@ -2307,6 +2515,9 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 	// ⚠ Wired from HERE, not inside the editors: they are shared with the list's world, which is
 	// left exactly as it was — an editor nobody wired behaves as it always did.
 	m_filterEditor->SetOnChanged([this] { MarkSettingsTouched(); });
+	// ⭐ WHOSE WINDOW THIS IS — the same question the list's panel asks, and the same answer: a
+	// setting handed in means a reader, and an inaccessible line is hidden from them.
+	m_filterEditor->SetAuthoring(!m_readerRoad);
 	m_sortEditor->SetOnChanged([this] { MarkSettingsTouched(); });
 	sizer->Add(tabs, 1, wxEXPAND);
 
@@ -2363,7 +2574,7 @@ wxWindow* ibComposerSettingsPanel::BuildResourcePage(wxWindow* parent)
 	m_resourceView = new ibDataViewCtrl(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxDV_ROW_LINES | wxDV_SINGLE);
 	ibStyleSettingsGrid(m_resourceView);
-	m_resourceModel = new ibResourceModel(m_composer);
+	m_resourceModel = new ibResourceModel([this] { return &m_edited.m_resources; });
 	m_resourceView->AssociateModel(m_resourceModel);
 	m_resourceView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Field"),
 		new ibDataViewTextRenderer(), ibResourceModel::kColField, FromDIP(150), wxAlignment::wxALIGN_LEFT));
@@ -2417,7 +2628,9 @@ wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent)
 	m_parameterView = new ibDataViewCtrl(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxDV_ROW_LINES | wxDV_SINGLE);
 	ibStyleSettingsGrid(m_parameterView);
-	m_parameterModel = new ibParameterModel(m_composer);
+	m_parameterModel = new ibParameterModel(
+		[this] { return &m_edited.m_parameters; },
+		[this]() -> const ibMetaData* { return GetEditedMetaData(); });
 	m_parameterView->AssociateModel(m_parameterModel);
 
 	m_parameterView->GetRootColumnGroup()->AppendTextColumn(_("Parameter"), ibParameterModel::kColName,
@@ -2498,7 +2711,7 @@ void ibComposerSettingsPanel::ReloadParameters()
 // make — whatever names did get in are what expressions are then checked against.
 void ibComposerSettingsPanel::PrepareModuleContext()
 {
-	const ibMetaData* metaData = m_composer != nullptr ? m_composer->GetMetaData() : nullptr;
+	const ibMetaData* metaData = GetEditedMetaData();
 	if (metaData == nullptr)
 		return;
 	if (ibValueModuleManager* manager = ibSession::EditModuleManagerFor(metaData))
@@ -2597,18 +2810,16 @@ bool ibComposerSettingsPanel::CheckExpression(const wxString& expression, wxStri
 wxString ibComposerSettingsPanel::CheckAllExpressions()
 {
 	wxString complaints;
-	if (m_composer == nullptr)
-		return complaints;
 
-	for (size_t i = 0; i < m_composer->ParameterCount(); ++i) {
+	for (size_t i = 0; i < m_edited.m_parameters.size(); ++i) {
 		wxString complaint;
 		// ⭐ THE OBJECT'S OWN CONFIG, through the attach chain — NOT the query's SOURCE config. A
 		// parameter expression is SCRIPT, and the names it may call are the ones the configuration
 		// this composition lives in declares; where the query reads its rows from is a different
 		// question that happens to have the same answer most of the time (Max, 2026-08-21).
-		if (CheckExpression(m_composer->GetParameterExpression(i), complaint, m_composer->GetMetaData()))
+		if (CheckExpression(m_edited.m_parameters[i].m_expression, complaint, GetEditedMetaData()))
 			continue;
-		complaints += m_composer->GetParameterName(i) + wxT(": ") + complaint + wxT("\n");
+		complaints += m_edited.m_parameters[i].m_name + wxT(": ") + complaint + wxT("\n");
 	}
 	return complaints;
 }
@@ -2616,17 +2827,20 @@ wxString ibComposerSettingsPanel::CheckAllExpressions()
 bool ibComposerSettingsPanel::EditParameterType(wxString& text)
 {
 	const int idx = SelectedParameter();
-	if (m_composer == nullptr || idx == wxNOT_FOUND)
+	if (idx == wxNOT_FOUND)
 		return false;
 
-	ibTypeDescription declared = m_composer->GetParameterType((size_t)idx);
+	if ((size_t)idx >= m_edited.m_parameters.size())
+		return false;
+	ibTypeDescription declared = m_edited.m_parameters[idx].m_type;
 	if (!ibShowTypeSelector(this, ibSelectorDataType::ibSelectorDataType_any, std::vector<ibClassID>(),
-			declared, m_composer->GetSourceMetaData(), /*allowEdit*/true, /*single*/false))
+			declared, GetEditedMetaData(), /*allowEdit*/true, /*single*/false))
 		return false;
 
-	m_composer->SetParameterType((size_t)idx, declared);
+	m_edited.m_parameters[idx].m_type = declared;
+	MarkSettingsTouched();
 	ReloadParameters();
-	text = ibDescribeTypes(declared, m_composer->GetSourceMetaData());
+	text = ibDescribeTypes(declared, GetEditedMetaData());
 	return true;
 }
 bool ibComposerSettingsPanel::EditParameterExpression(wxString& text)
@@ -2660,7 +2874,7 @@ bool ibComposerSettingsPanel::EditParameterExpression(wxString& text)
 	// OK COMPILES THE EXPRESSION — the same check the window runs on the way out, so the two cannot
 	// disagree about what is valid. A failure keeps this window open on the text that failed.
 	// The object's own config — see CheckAllExpressions: a parameter expression is script.
-	const ibMetaData* metaData = m_composer != nullptr ? m_composer->GetMetaData() : nullptr;
+	const ibMetaData* metaData = GetEditedMetaData();
 	dlg.Bind(wxEVT_BUTTON, [&dlg, editor, metaData](wxCommandEvent& e) {
 		wxString complaint;
 		if (!CheckExpression(editor->GetText(), complaint, metaData)) {
@@ -2683,8 +2897,8 @@ bool ibComposerSettingsPanel::EditParameterExpression(wxString& text)
 	// no further. The TYPE cell beside this one never had the problem because it writes the
 	// declaration itself and only hands the caption back; this one now does the same.
 	const int idx = SelectedParameter();
-	if (m_composer != nullptr && idx != wxNOT_FOUND) {
-		m_composer->SetParameterExpression(static_cast<size_t>(idx), text);
+	if (idx != wxNOT_FOUND && (size_t)idx < m_edited.m_parameters.size()) {
+		m_edited.m_parameters[idx].m_expression = text;
 		MarkSettingsTouched();
 		ReloadParameters();
 	}
@@ -2701,7 +2915,8 @@ void ibComposerSettingsPanel::OnParameterContextMenu(ibDataViewEvent& event)
 
 	const int idx = SelectedParameter();
 	// An AUTO parameter cannot be removed here — greyed rather than refusing after the click.
-	const bool removable = idx != wxNOT_FOUND && m_composer != nullptr && !m_composer->IsParameterFromQuery(idx);
+	const bool removable = idx != wxNOT_FOUND && (size_t)idx < m_edited.m_parameters.size()
+	                    && !m_edited.m_parameters[idx].m_fromQuery;
 
 	wxMenu menu;
 	ibAppendCmd(menu, ID_PARAM_ADD, _("Add parameter"), wxASCII_STR(wxART_NEW), this);
@@ -2716,12 +2931,23 @@ void ibComposerSettingsPanel::OnParameterContextMenu(ibDataViewEvent& event)
 // unnamed row would be a row nothing can use.
 void ibComposerSettingsPanel::OnParameterAdd(wxCommandEvent&)
 {
-	if (m_composer == nullptr)
-		return;
 	const wxString name = wxGetTextFromUser(_("Parameter name"), _("Add parameter"), wxEmptyString, this);
 	if (name.IsEmpty())
 		return;
-	const size_t added = m_composer->AddParameter(name);
+
+	// A NAME IS TAKEN OR IT IS NOT — the same name twice would be two rows the query cannot tell
+	// apart. An existing one is simply selected: that IS what the person asked for.
+	std::vector<ibParameterDescription>& parameters = m_edited.m_parameters;
+	size_t added = parameters.size();
+	for (size_t i = 0; i < parameters.size(); ++i)
+		if (parameters[i].m_name.IsSameAs(name, false)) { added = i; break; }
+	if (added == parameters.size()) {
+		ibParameterDescription parameter;
+		parameter.m_name = name;   // hand-made: m_fromQuery stays false, which is what makes it removable
+		parameters.push_back(std::move(parameter));
+		MarkSettingsTouched();
+	}
+
 	ReloadParameters();
 	if (m_parameterView != nullptr)
 		m_parameterView->Select(ibDataViewItem(reinterpret_cast<void*>(added + 1)));
@@ -2730,15 +2956,17 @@ void ibComposerSettingsPanel::OnParameterAdd(wxCommandEvent&)
 void ibComposerSettingsPanel::OnParameterRemove(wxCommandEvent&)
 {
 	const int idx = SelectedParameter();
-	if (m_composer == nullptr || idx == wxNOT_FOUND)
+	if (idx == wxNOT_FOUND || (size_t)idx >= m_edited.m_parameters.size())
 		return;
-	// 🛑 THE STORE REFUSES AN AUTO PARAMETER — it is in the query text. Said out loud rather than
+	// 🛑 AN AUTO PARAMETER IS NOT REMOVED HERE — it is in the query text. Said out loud rather than
 	// silently doing nothing, because the row looks exactly like a removable one.
-	if (!m_composer->RemoveParameter((size_t)idx)) {
+	if (m_edited.m_parameters[idx].m_fromQuery) {
 		wxMessageBox(_("This parameter comes from the query text. Remove it from the query instead."),
 			_("Parameters"), wxOK | wxICON_INFORMATION, this);
 		return;
 	}
+	m_edited.m_parameters.erase(m_edited.m_parameters.begin() + idx);
+	MarkSettingsTouched();
 	ReloadParameters();
 }
 wxWindow* ibComposerSettingsPanel::BuildQueryPage(wxWindow* parent)
@@ -2762,8 +2990,8 @@ wxWindow* ibComposerSettingsPanel::BuildQueryPage(wxWindow* parent)
 	// two faces.
 	m_queryText = new wxStyledTextCtrl(panel, wxID_ANY);
 	ibStyleQueryText(m_queryText);
-	if (m_composer != nullptr)
-		m_queryText->SetText(m_composer->GetQueryText());
+	// THE TEXT IS THE DESCRIPTION'S, and there is no second copy of it to fall out of step with.
+	m_queryText->SetText(m_edited.m_query);
 	// ⭐ BOUND AFTER THE FILL, deliberately: the initial SetText is not somebody typing, and a
 	// handler bound before it would report the composition as modified the instant it was opened.
 	// No flag is needed to tell the two apart — the order does it.
@@ -2790,25 +3018,12 @@ wxWindow* ibComposerSettingsPanel::BuildQueryPage(wxWindow* parent)
 //  Fields and levels
 // ---------------------------------------------------------------------------
 
-// THE LADDER IS THE PANEL'S BUFFER, not the composition's live settings.
-//
-// ⭐ ONE BUFFER, ONE COMMIT (2026-08-19). The settings panel below opens transactionally: it loads
-// Filter / Sort / Group from the composer, the user edits the copy, and OK CLEARS the composer's
-// settings and re-applies the copy. A level written straight onto the live settings would therefore
-// be wiped by that very commit — the panel would put back the ladder as it stood when the window
-// opened. Editing the same buffer is what makes the whole window one transaction, and Cancel
-// discard all of it.
-ibValueGroupList* ibComposerSettingsPanel::Levels() const
-{
-	return m_settings != nullptr ? m_settings->GetGroup() : nullptr;
-}
-
 // THE FIELD PICKER, forwarded to the one thing that knows which fields this composition offers.
 // The structure pane deliberately has no field tree of its own, so this modal picker IS the way a
 // field gets in.
 ibValueCompositionField* ibComposerSettingsPanel::ChooseStructureField(wxWindow* parent, const wxString& held)
 {
-	return m_fieldTree != nullptr ? m_fieldTree->ChooseField(parent != nullptr ? parent : this, held) : nullptr;
+	return m_fieldSource != nullptr ? m_fieldSource->ChooseField(parent != nullptr ? parent : this, held) : nullptr;
 }
 
 // WHICH FIELDS THIS COMPOSITION OFFERS — its own explorer, which is what its query resolved to.
@@ -2816,276 +3031,179 @@ void ibComposerSettingsPanel::BindFieldSource()
 {
 	// ⚠ BOTH STATEMENTS ARE GUARDED. The second one used to sit outside the `if` for want of a pair
 	// of braces — a null field tree took the source check and then dereferenced anyway.
-	if (m_fieldTree == nullptr)
+	if (m_fieldSource == nullptr)
 		return;
 
-	m_fieldTree->SetSource(m_composer, m_composer != nullptr ? m_composer->GetSourceMetaData() : nullptr);
+	// ⭐ THE FIELDS AS THE QUERY GIVES THEM — a FLAT list, which is what a parsed text has to offer.
+	// A reference among them still unfolds: what a value may BE is a question about its TYPE, and the
+	// tree asks the configuration that (see SetPlainFields). With no configuration to ask, the
+	// primitive types are all anything can be — which is a smaller window, not a broken one.
+	std::vector<ibSettingsPlainField> plain;
+	plain.reserve(m_fieldList.size());
+	for (const ibQueryConstructorField& field : m_fieldList)
+		// NO metaID — a field of a PARSED TEXT stands behind no metaobject attribute, and the type is
+		// what says whether it unfolds anyway. wxNOT_FOUND is what "there is no such id" means here.
+		plain.push_back({ field.m_name, wxNOT_FOUND, field.m_type });
+	m_fieldSource->SetPlainFields(std::move(plain), GetEditedMetaData());
 	// ⭐ AND WHICH OF THOSE FIELDS ARE RESOURCES — asked of the composition every time the tree
 	// draws, never copied into it. Being a resource is a DECLARATION this window makes on the
 	// Resources tab; a list handed over once would be a second copy, and it would still say
 	// "attribute" the moment somebody adds one (Max, 2026-08-22).
-	m_fieldTree->SetResourceTest([this](const wxString& path) {
-		if (m_composer == nullptr)
-			return false;
-		const ibDataComposer& composer = m_composer->GetModelComposer();
-		for (size_t i = 0; i < composer.TotalCount(); ++i) {
-			wxString func, resource;
-			if (composer.GetTotalAt(i, func, resource) && resource.IsSameAs(path, false))
-				return true;
-		}
-		return false;
-	});
-	// ⭐⭐ …AND WHICH OF THEM THE SELECTED NODE MAY USE AT ALL. The available set is a real
-	// narrowing — it decides what a person is offered to group, filter, sort and show by — and it
-	// is INHERITED: a level answers for itself, an output for its levels, the report for everything
-	// (ibDataComposer::AvailableFor). Asked of the composition per draw, so editing the set on the
-	// report changes what every pane below offers without anything being copied.
-	//
-	// EMPTY MEANS EVERYTHING, as it does throughout: a composition that narrows nothing offers the
-	// whole source, which is the ordinary case.
-	m_fieldTree->SetVisibleTest([this](const wxString& path) {
-		const std::vector<wxString>* allowed = AvailableForCurrentNode();
-		if (allowed == nullptr || allowed->empty())
-			return true;
-		for (const wxString& name : *allowed)
-			if (name.IsSameAs(path, false))
+	m_fieldSource->SetResourceTest([this](const wxString& path) {
+		// FROM THE DESCRIPTION — where the resources are declared and saved from. They were read off
+		// the running composer, which is filled from the description at a RUN, so before the first
+		// one every field answered "not a resource" however many had just been added.
+		for (const ibResourceDescription& resource : m_edited.m_resources)
+			if (resource.m_path.IsSameAs(path, false))
 				return true;
 		return false;
 	});
+	// (⭐ AND NOTHING NARROWS WHAT THE PICKERS OFFER. There used to be a second test here, over the
+	//  "available" set: what this node MAY be shown at all. It is gone with the set — the source
+	//  offers what it has, and choosing among that is what SELECTED says. A narrowing that only
+	//  decided which names a person could type was a rule to maintain, not an answer to anything.)
 }
 
-// WHAT THE SELECTED NODE MAY SEE — the buffer this window is editing, not the composition's live
-// copy: the two differ until Apply, and offering the live one would ignore a narrowing just made.
-// Null when there is no source of an answer at all (which reads as "everything").
-const std::vector<wxString>* ibComposerSettingsPanel::AvailableForCurrentNode() const
-{
-	const int output = m_currentNode.m_output;
-	if (output < 0 || (size_t)output >= m_structure.size())
-		return &m_commonAvailableBuffer;              // the report itself — the top of the inheritance
-
-	const ibDataComposer::Output& node = m_structure[output];
-	const int axis = m_currentNode.m_axis, level = m_currentNode.m_level;
-	const std::vector<ibDataComposer::GroupNode>& ladder = axis == 1 ? node.m_columnGroups : node.m_rowGroups;
-	if (level >= 0 && (size_t)level < ladder.size() && !ladder[level].m_availableAuto)
-		return &ladder[level].m_available;
-	return node.m_availableAuto ? &m_commonAvailableBuffer : &node.m_available;
-}
-
-// THE BUFFER ONTO THE COMPOSITION — the settings half of "accept", on its own because a VARIANT
-// SWITCH does exactly this much and no more: what was edited has to land before the store is asked
-// to hold a different set. FALSE = objected to, nothing written, stay where you are.
+// ACCEPTING WHAT IS ON SCREEN. There is no description to assign anywhere: this window edits one BY
+// REFERENCE and has been writing into it all along. What is left is the two things that only exist
+// while the window is open — the structure buffer and "which variant is in force" — and landing them
+// is what makes the description whole. FALSE = objected to, stay where you are.
 bool ibComposerSettingsPanel::CommitSettings()
 {
-	if (m_composer == nullptr || m_settings == nullptr)
-		return true;
+	if (!ValidateEditedSettings())
+		return false;
 
-	// THE SAME CHECK THE RUNTIME MAKES. A half-written line raises there; here that exception
-	// becomes a warning and the window stays open on the offending setting, instead of closing and
-	// quietly dropping it.
+	// ⭐⭐ A SETTING WAS HANDED IN: somebody is configuring THIS run, not writing the report. It is
+	// copied into the setting they gave us and the caller decides what that means — the report is
+	// left exactly as its author wrote it, and the whole session is undone later by dropping that one
+	// setting (Max, 2026-08-23: the gridbox is the other host).
+	if (m_readerRoad)
+		return true;   // …edited in place all along, and nothing about the report was touched
+
+	// (No node buffers to commit: a level's filter and sort are ON the level, inside the structure
+	//  buffer, and they landed there as they were typed.)
+	CaptureIntoActiveVariant();
+	return true;
+}
+
+// THE SAME CHECK THE RUNTIME MAKES. A half-written line raises there; here that exception becomes a
+// warning and the window stays open on the offending setting, instead of closing and quietly
+// dropping it. Its own function because TWO moments ask it: accepting the window, and LEAVING a
+// variant — the second writes nothing to the composition and still must not carry a broken line
+// into a variant nobody is looking at any more.
+bool ibComposerSettingsPanel::ValidateEditedSettings()
+{
 	try {
-		ibValidateSettings(m_settings);
+		ibValidateSettings(EditedSettings());
 	}
 	catch (const ibBackendException& err) {
 		wxMessageBox(err.GetErrorDescription(), _("Data composer settings"), wxOK | wxICON_WARNING, this);
 		return false;
 	}
-
-	// THE TREE GOES BACK TO THE COMPOSITION, not only to the store. The composer takes the filter
-	// as ONE expression, which cannot be read back out of it — so a tree committed only there is
-	// applied but invisible: the next open shows an empty Filter tab over a report that is very
-	// obviously filtered.
-	if (ibValueListSettings* live = m_composer->GetListSettings())
-		live->SetFilterRoot(m_settings->GetFilterRoot());
-	ibCommitSettingsToComposer(m_composer->GetModelComposer(), m_settings);
-
-	// THE STRUCTURE LANDS LAST — it owns the levels, and the commit above rebuilds the ladder from
-	// the flat buffer. Applied afterwards, the outputs the window edited are the final word, and a
-	// level of several fields survives a trip that the flat ladder cannot describe.
-	//
-	// The NODE buffers go into the structure first, since they are part of what it holds: a level's
-	// own filter and sort belong to the level, not to the composition.
-	CommitNodeSettings();
-	ApplyStructure();
 	return true;
 }
 
+// ⭐⭐ WHAT IS ON SCREEN BELONGS TO THE VARIANT IT WAS WRITTEN IN — over the COPY, which is the only
+// place this window edits. A variant holds the settings AND the structure, and both are in force
+// outside it while it is the active one (that is what "active" means), so landing them is what makes
+// them the variant's own.
+//
+// 🛑 IT USED TO BE ASKED OF THE LIVE COMPOSITION (`CaptureActiveVariant`), which holds what it was
+// last told — not what a person has just typed here. And the variants themselves lived there too,
+// so adding one wrote it into the composition while this window's copy knew nothing about it: the
+// next commit assigned the copy over the composition and the new variant vanished, leaving the list
+// showing a row with no variant behind it (Max, 2026-08-24: "a variant with an empty name appears").
+void ibComposerSettingsPanel::CaptureIntoActiveVariant()
+{
+	// ⭐ NOTHING TO CAPTURE. The settings ARE the active variant's and so is the structure — both are
+	// handed out by reference (`GetCompositionSettingsDesc`, `Structure`), so the editors and the
+	// structure pane have been writing into the variant all along. What stood here copied two things
+	// onto themselves (2026-08-24).
+	//
+	// The function stays because callers speak it — "keep what I edited" is a real thing to say at a
+	// variant switch — and because a future variant that is loaded lazily would land exactly here.
+}
+
 // RE-READ THE SETTINGS — another variant was activated, so the composition now holds a different
-// set and the editors have to start over on it. Same buffer object, same editors bound to it.
+// set and the editors have to start over on it. The SAME m_edited object, so the editors' pointers
+// into it stay valid; only its contents are replaced.
 void ibComposerSettingsPanel::ReloadSettings()
 {
-	if (m_composer == nullptr || m_settings == nullptr)
-		return;
-	ibLoadSettingsFromComposer(m_settings, m_composer->GetModelComposer(), m_composer->GetListSettings());
-	LoadStructure();   // the structure is a buffer of its own and is re-read with the rest
-	if (m_filterEditor != nullptr) m_filterEditor->Reload();
-	if (m_sortEditor   != nullptr) m_sortEditor->Reload();
+	// 🛑 THE COPY IS NOT RE-READ FROM THE COMPOSITION HERE. It used to be — `m_edited` was assigned
+	// the composition's description again — which was right while the composition was the store this
+	// window wrote through: a variant switch committed first, so re-reading picked the switch up.
+	//
+	// It is the copy that holds the variants now, and switching happens IN it (ActivateVariant), so
+	// re-reading would throw away everything the person has done since the window opened. What is
+	// needed is what this function is FOR: the editors and the structure buffer start again on
+	// whatever the copy now has in force.
+	// (Nothing to re-read for the structure: it is the cursor's variant's, so moving the cursor
+	//  moved it. The editors below are RE-POINTED, because a variant is a separate object: Reload
+	//  alone re-read the pointer taken when the window was built, so switching variants left the
+	//  filter and sort pages showing the FIRST one's while everything else had moved.)
+	if (Structure().empty())
+		Structure().push_back(ibOutputDescription());   // …and a variant nobody authored still gets its output
+	if (m_filterEditor != nullptr) m_filterEditor->SetFilter(&EditedSettings().m_filter);
+	if (m_sortEditor   != nullptr) m_sortEditor->SetSort(&EditedSettings().m_sort);
+	ReloadResources();
+	ReloadParameters();
 }
 
 // THE LEVEL THE REMEMBERED SELECTION POINTS AT — the one door every panel reads through, so none of
 // them has to touch the tree control while it is telling us the selection changed.
-ibDataComposer::GroupNode* ibComposerSettingsPanel::CurrentLevel()
+ibLevelDescription* ibComposerSettingsPanel::CurrentLevel()
 {
 	const int output = m_currentNode.m_output, axis = m_currentNode.m_axis,
 	          level  = m_currentNode.m_level;
-	if (output < 0 || axis < 0 || level < 0 || (size_t)output >= m_structure.size())
+	if (output < 0 || axis < 0 || level < 0 || (size_t)output >= Structure().size())
 		return nullptr;
-	std::vector<ibDataComposer::GroupNode>& ladder = axis == 1
-		? m_structure[output].m_columnGroups : m_structure[output].m_rowGroups;
+	std::vector<ibLevelDescription>& ladder = axis == 1
+		? Structure()[output].m_columnGroups : Structure()[output].m_rowGroups;
 	return (size_t)level < ladder.size() ? &ladder[level] : nullptr;
 }
 
-ibDataComposer::GroupNode* ibComposerSettingsPanel::LevelAtRow(const ibDataViewItem& row)
+ibLevelDescription* ibComposerSettingsPanel::LevelAtRow(const ibDataViewItem& row)
 {
 	if (m_structureModel == nullptr)
 		return nullptr;
 	const ibStructurePos pos = m_structureModel->PosAt(row);
-	if (!pos.IsLevel() || (size_t)pos.m_output >= m_structure.size())
+	if (!pos.IsLevel() || (size_t)pos.m_output >= Structure().size())
 		return nullptr;
-	ibDataComposer::Output& output = m_structure[pos.m_output];
-	std::vector<ibDataComposer::GroupNode>& axis = pos.m_axis == 1 ? output.m_columnGroups : output.m_rowGroups;
+	ibOutputDescription& output = Structure()[pos.m_output];
+	std::vector<ibLevelDescription>& axis = pos.m_axis == 1 ? output.m_columnGroups : output.m_rowGroups;
 	return (size_t)pos.m_level < axis.size() ? &axis[pos.m_level] : nullptr;
 }
 
-// THE BUFFER OF ONE NODE. Created on first selection and kept until the window is accepted, so
-// clicking away from a level and back finds what was written there.
-//
-// Its SORT starts from what the level holds; its FILTER starts empty, because a level's condition
-// lives in the structure as an expression and this editor speaks the value TREE — the two meet at
-// commit, where the tree is built into an expression (ibBuildFilterAst), the same way the
-// composition-wide filter has always travelled.
-ibValueListSettings* ibComposerSettingsPanel::NodeSettings(const ibNodeKey& key)
-{
-	const auto found = m_nodeSettings.find(key);
-	if (found != m_nodeSettings.end())
-		return found->second;
+// (THE PER-NODE BUFFER IS GONE, and with it the map that held it. A node's settings ARE on the node
+//  — ibLevelDescription::m_settings, the same whole the composition has — so there was nothing for a
+//  buffer to hold that the structure buffer did not already hold. It cost three keeping-in-step
+//  chores: copy in on first selection, write back at commit, and re-key every entry whenever a level
+//  was added, removed or moved. Settings travel WITH their node now, because they are part of it.)
 
-	ibValuePtr<ibValueListSettings> buffer(new ibValueListSettings());
-	const int output = key.m_output, axis = key.m_axis, level = key.m_level;
-	if ((size_t)output < m_structure.size()) {
-		std::vector<ibDataComposer::GroupNode>& ladder = axis == 1
-			? m_structure[output].m_columnGroups : m_structure[output].m_rowGroups;
-		if ((size_t)level < ladder.size() && buffer->GetOrder() != nullptr)
-			for (const auto& sort : ladder[level].m_sorts)
-				buffer->GetOrder()->Add(sort.m_path,
-					sort.m_ascending ? ibSortDirection_Ascending : ibSortDirection_Descending);
-
-		// ⭐ …AND THE FILTER OPENS ON WHAT WAS WRITTEN. The level keeps the TREE (that is what is
-		// saved and what an editor can edit); the expression beside it is derived and cannot be
-		// taken apart back into lines. Starting empty is what made a level's condition look lost
-		// every time the window was reopened.
-		if ((size_t)level < ladder.size()) {
-			ibValueFilterGroup* root = nullptr;
-			if (ladder[level].m_filterTree.ConvertToValue(root) && root != nullptr)
-				buffer->SetFilterRoot(root);
-		}
-	}
-	m_nodeSettings[key] = buffer;
-	return buffer;
-}
-
-// POINT THE SHARED EDITORS AT WHAT IS SELECTED. A LEVEL gets its own buffer; the report and an
-// output keep the composition-wide one, which is what stands above every output (Max: the topmost
-// filter and sort admit what all of them may see).
+// POINT THE SHARED EDITORS AT WHAT IS SELECTED. A LEVEL is edited in place; the report and an output
+// keep the composition-wide one, which is what stands above every output (Max: the topmost filter
+// and sort admit what all of them may see).
 void ibComposerSettingsPanel::BindNodeEditors()
 {
 	if (m_filterEditor == nullptr || m_sortEditor == nullptr)
 		return;
 
 	// READ THE REMEMBERED NODE, not the control — see m_currentNode.
-	ibValueListSettings* target = CurrentLevel() != nullptr ? NodeSettings(m_currentNode) : m_settings;
-	m_filterEditor->SetSettings(target);
-	m_sortEditor->SetSettings(target);
+	ibLevelDescription* level = CurrentLevel();
+	ibSettingsDescription& target = level != nullptr
+		? level->m_settings : EditedSettings();
+	m_filterEditor->SetFilter(&target.m_filter);
+	m_sortEditor->SetSort(&target.m_sort);
 }
 
-// EVERY NODE BUFFER BACK INTO THE STRUCTURE, before the structure itself is applied. A buffer that
-// was never opened writes nothing: it does not exist.
-void ibComposerSettingsPanel::CommitNodeSettings()
-{
-	if (m_composer == nullptr)
-		return;
-
-	for (const auto& entry : m_nodeSettings) {
-		const int output = entry.first.m_output, axis = entry.first.m_axis, level = entry.first.m_level;
-		if ((size_t)output >= m_structure.size())
-			continue;
-		std::vector<ibDataComposer::GroupNode>& ladder = axis == 1
-			? m_structure[output].m_columnGroups : m_structure[output].m_rowGroups;
-		if ((size_t)level >= ladder.size())
-			continue;
-		ibDataComposer::GroupNode& node = ladder[level];
-
-		node.m_sorts.clear();
-		if (ibValueSortList* order = entry.second->GetOrder())
-			for (size_t i = 0; i < order->Count(); ++i)
-				node.m_sorts.push_back({ order->GetField(i),
-					order->GetDirection(i) == ibSortDirection_Ascending });
-
-		// The tree becomes the expression the engine reads. A level's condition HIDES headings and
-		// never reaches the WHERE — that is decided where it is applied, not here.
-		node.m_filterAst = ibBuildFilterAst(m_composer->GetModelComposer(), entry.second->GetFilterRoot());
-		++node.m_filterAstVersion;
-		// ⭐ AND THE TREE ITSELF STAYS ON THE LEVEL — that is what is SAVED and what this window
-		// reopens on. Committing only the expression is what made a level's filter live until the
-		// window closed and no further: an expression runs, but nobody can edit it back into lines.
-		node.m_filterTree = entry.second->GetFilterRoot() != nullptr
-			? ibValue(static_cast<ibValueFilterGroup*>(entry.second->GetFilterRoot())) : ibValue();
-	}
-}
+// (CommitNodeSettings REMOVED. There is nothing to write back: the editors work on the node's own
+//  settings inside the structure buffer, so a level's filter and sort land there as they are typed
+//  and travel with the structure on accept. What it also used to do — build the level's condition
+//  into a cached expression — belongs where the condition is USED, not where it is edited.)
 
 // THE SNAPSHOT, taken whole. Copying the outputs — rather than reading them through some flattened
 // view — is what lets this window edit a level made of several fields, a second output beside the
 // first, and a column axis: all three are things a flat ladder cannot say.
-void ibComposerSettingsPanel::LoadStructure()
-{
-	m_structure.clear();
-	m_commonSelectedBuffer.clear();
-	m_commonAvailableBuffer.clear();
-	if (m_composer == nullptr)
-		return;
-	m_structure = m_composer->GetModelComposer().Outputs();
-	// ⚠ BOTH COMPOSITION-WIDE SETS travel with the structure: they are the top of the same
-	// inheritance, and editing them on the REPORT row is editing these. Only the selected one was
-	// carried, and the Available fields page is the one this window actually shows — so everything
-	// a person narrowed on the report was read from an empty buffer and written back nowhere.
-	m_commonSelectedBuffer  = m_composer->GetModelComposer().CommonSelected();
-	m_commonAvailableBuffer = m_composer->GetModelComposer().CommonAvailable();
-}
-
-// ...AND PUT BACK WHOLE, on accept. The outputs ARE the structure, so there is nothing to merge:
-// what the window holds is what the composition should have.
-//
-// ⚠ Applied AFTER the filter / sort buffer (see Commit), because that one still writes the first
-// output's own filter and sort — the two touch different fields of the same output, and the order
-// is what keeps them from overwriting each other.
-void ibComposerSettingsPanel::ApplyStructure()
-{
-	if (m_composer == nullptr || m_structure.empty())
-		return;
-
-	std::vector<ibDataComposer::Output>& live = m_composer->GetModelComposer().Outputs();
-	// The first output KEEPS the filter and sort just committed into it; everything the structure
-	// owns is replaced. A whole-vector assignment would put the buffer's (stale) filter back.
-	for (size_t i = 0; i < m_structure.size(); ++i) {
-		if (i >= live.size())
-			live.push_back(ibDataComposer::Output());
-		ibDataComposer::Output& target = live[i];
-		target.m_name          = m_structure[i].m_name;
-		target.m_rowGroups     = m_structure[i].m_rowGroups;
-		target.m_columnGroups  = m_structure[i].m_columnGroups;
-		target.m_selected      = m_structure[i].m_selected;
-		target.m_selectedAuto  = m_structure[i].m_selectedAuto;
-		target.m_available     = m_structure[i].m_available;
-		target.m_availableAuto = m_structure[i].m_availableAuto;
-	}
-	// The composition-wide sets — the top of the inheritance, edited on the report row.
-	m_composer->GetModelComposer().CommonSelected()  = m_commonSelectedBuffer;
-	m_composer->GetModelComposer().CommonAvailable() = m_commonAvailableBuffer;
-
-	// An output the window removed is removed here too — but never the first one: a composition
-	// always has at least one output, and "no outputs" is not a state anything downstream handles.
-	if (live.size() > m_structure.size())
-		live.resize(std::max<size_t>(1, m_structure.size()));
-}
 
 // RE-READ WHICH FIELDS EXIST — the query was edited on this window's Query tab, so what may be
 // filtered, sorted and grouped by is something else now.
@@ -3104,14 +3222,12 @@ void ibComposerSettingsPanel::ReloadFields()
 // so the filling is one call and both callers reach it.
 void ibComposerSettingsPanel::ReloadFieldTrees()
 {
-	if (m_fieldTree == nullptr)
+	if (m_fieldSource == nullptr)
 		return;
 	if (m_groupingFieldTree != nullptr)
-		m_fieldTree->Populate(m_groupingFieldTree);
-	if (m_availablePage.m_sourceTree != nullptr)
-		m_fieldTree->Populate(m_availablePage.m_sourceTree);
+		m_fieldSource->Populate(m_groupingFieldTree);
 	if (m_selectedPage.m_sourceTree != nullptr)
-		m_fieldTree->Populate(m_selectedPage.m_sourceTree);
+		m_fieldSource->Populate(m_selectedPage.m_sourceTree);
 }
 
 // (Out of line, so the header can forward-declare the field tree it holds by pointer.)
@@ -3126,12 +3242,20 @@ wxTreeCtrl* ibComposerSettingsPanel::CreateFieldTree(wxWindow* parent)
 // EVERY TREE, ONE WALK. Which fields the composition has is one question, so a query change
 // refreshes all of them together — a page still offering a field another page has dropped is the
 // same defect as a setting pointing at a field that is gone.
+// ⭐ THE ONE PLACE THE QUERY IS READ. Text plus configuration in, fields plus the parser's complaint
+// out — no composition, no column schema, nothing kept between calls but the answer.
+void ibComposerSettingsPanel::RefreshQueryFields()
+{
+	m_fieldList = ibQueryFieldsOfText(m_edited.m_query, GetEditedMetaData(), &m_queryFault);
+}
+
+// EVERY TREE, ONE WALK. Which fields the composition has is one question, so a query change
+// refreshes all of them together — a page still offering a field another page has dropped is the
+// same defect as a setting pointing at a field that is gone.
 void ibComposerSettingsPanel::PopulateFieldTrees()
 {
-	// ONE READ, then every tree shows it. Asking the engine once per tree would parse the query
-	// twice and could answer differently mid-edit.
-	m_fields = (m_composer != nullptr) ? m_composer->GetConstructorFields()
-	                                   : std::vector<ibQueryConstructorField>();
+	// ONE READ, then every tree shows it. Parsing once per tree would answer differently mid-edit.
+	RefreshQueryFields();
 
 	PopulateFieldTree(m_resourceFieldTree);
 }
@@ -3145,14 +3269,14 @@ const ibQueryConstructorField* ibComposerSettingsPanel::SelectedField(wxTreeCtrl
 	if (!sel.IsOk())
 		return nullptr;
 	const ibFieldItemData* data = dynamic_cast<ibFieldItemData*>(tree->GetItemData(sel));
-	if (data == nullptr || data->GetIndex() >= m_fields.size())
+	if (data == nullptr || data->GetIndex() >= m_fieldList.size())
 		return nullptr;
-	return &m_fields[data->GetIndex()];
+	return &m_fieldList[data->GetIndex()];
 }
 
 void ibComposerSettingsPanel::PopulateFieldTree(wxTreeCtrl* tree)
 {
-	if (tree == nullptr || m_composer == nullptr)
+	if (tree == nullptr)
 		return;
 
 	wxTreeItemId root = tree->GetRootItem();
@@ -3173,17 +3297,12 @@ void ibComposerSettingsPanel::PopulateFieldTree(wxTreeCtrl* tree)
 	icons->Add(resourceIcon.IsOk() ? resourceIcon : ibValue::GetIconGroup());
 	tree->AssignImageList(icons);
 
-	// WHICH PATHS ARE RESOURCES — asked of the composition, never copied: adding one changes the
+	// WHICH PATHS ARE RESOURCES — asked of the DESCRIPTION, never copied: adding one changes the
 	// picture on the next fill without anything else being told.
 	auto isResource = [this](const wxString& path) {
-		if (m_composer == nullptr)
-			return false;
-		const ibDataComposer& composer = m_composer->GetModelComposer();
-		for (size_t i = 0; i < composer.TotalCount(); ++i) {
-			wxString func, resource;
-			if (composer.GetTotalAt(i, func, resource) && resource.IsSameAs(path, false))
+		for (const ibResourceDescription& resource : m_edited.m_resources)
+			if (resource.m_path.IsSameAs(path, false))
 				return true;
-		}
 		return false;
 	};
 
@@ -3193,8 +3312,8 @@ void ibComposerSettingsPanel::PopulateFieldTree(wxTreeCtrl* tree)
 	//
 	// The row carries the field's INDEX, so a later question about the selected row (its type, its
 	// path) is answered from the field itself rather than by parsing the label back.
-	for (size_t i = 0; i < m_fields.size(); ++i) {
-		const ibQueryConstructorField& field = m_fields[i];
+	for (size_t i = 0; i < m_fieldList.size(); ++i) {
+		const ibQueryConstructorField& field = m_fieldList[i];
 		const wxString label = field.m_presentation.IsEmpty() ? field.m_name : field.m_presentation;
 		tree->AppendItem(root, label, 0, 0, new ibFieldItemData(i));   // icon 0 = attribute
 	}
@@ -3263,7 +3382,7 @@ void ibComposerSettingsPanel::OnVariantContextMenu(ibDataViewEvent& event)
 	ibAppendCmd(menu, ID_VARIANT_COPY, _("Copy variant"), wxASCII_STR(wxART_COPY), this);
 	// 🛑 The last variant stays — greyed here for the same reason it is greyed on the toolbar.
 	ibAppendCmd(menu, ID_VARIANT_REMOVE, _("Delete variant"), wxASCII_STR(wxART_DELETE), this)
-		->Enable(m_composer != nullptr && m_composer->VariantCount() > 1);
+		->Enable(m_edited.m_variants.size() > 1);
 
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnVariantAdd(e); }, ID_VARIANT_ADD);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnVariantCopy(e); }, ID_VARIANT_COPY);
@@ -3304,91 +3423,142 @@ int ibComposerSettingsPanel::SelectedVariant() const
 // the store refuses anyway, and a button that refuses silently reads as a broken button.
 void ibComposerSettingsPanel::ReloadVariants(int select)
 {
-	if (m_variantModel == nullptr || m_variantView == nullptr || m_composer == nullptr)
+	if (m_variantModel == nullptr || m_variantView == nullptr)
 		return;
 	m_variantModel->ResetFromList();
+	const size_t count = m_edited.m_variants.size();
 	if (m_variantBar != nullptr)
-		m_variantBar->EnableTool(ID_VARIANT_REMOVE, m_composer->VariantCount() > 1);
+		m_variantBar->EnableTool(ID_VARIANT_REMOVE, count > 1);
 
-	const size_t count = m_composer->VariantCount();
-	const size_t row = (select >= 0 && (size_t)select < count) ? (size_t)select : m_composer->GetActiveVariant();
+	const size_t row = (select >= 0 && (size_t)select < count) ? (size_t)select : 0;
 	// A VIRTUAL LIST KEYS ITS ROWS BY (index + 1) — the same off-by-one every list here obeys.
 	m_variantView->Select(ibDataViewItem(reinterpret_cast<void*>(row + 1)));
 }
 
-// SWITCHING IS: keep what is on screen, then load the other snapshot.
+// SWITCHING IS: keep what is on screen, then load the other one.
 //
-// ⭐ WHAT IS ON SCREEN BELONGS TO THE VARIANT BEING LEFT. The panel edits a buffer over the
-// composer, so it is committed first and the composition captures the result INTO the variant;
-// only then does the other snapshot become the composer's settings and everything re-read it.
-// Miss the capture and switching away silently discards the edit — the defect a person only finds
-// when they come back.
+// ⭐ WHAT IS ON SCREEN BELONGS TO THE VARIANT BEING LEFT, so it is captured INTO that variant before
+// another becomes the one in force. Miss the capture and switching away silently discards the edit —
+// the defect a person only finds when they come back.
+//
+// ⭐⭐ ALL OF IT ON THE COPY. A variant is part of the description, and this window edits a copy of
+// the description; asking the live composition to switch would switch something the copy is about to
+// be assigned over. Nothing is written to the composition until OK.
 void ibComposerSettingsPanel::ActivateVariant(size_t idx)
 {
 	// 🛑 VIEW ONLY — and this one WRITES, which is exactly why it needs saying. Switching variants
-	// commits the buffer, captures it into the variant being left and makes another the composer's
-	// settings; the grid stays selectable in a read-only tab, so without this a look-only session
-	// could rewrite the composition by clicking a row (found by the final audit, 2026-08-20).
+	// captures the buffer into the variant being left; the grid stays selectable in a read-only tab,
+	// so without this a look-only session could rewrite the composition by clicking a row (found by
+	// the final audit, 2026-08-20).
 	if (m_readOnly)
 		return;
-	if (m_composer == nullptr || idx >= m_composer->VariantCount())
+	if (idx >= m_edited.m_variants.size())
 		return;
-	if (idx == m_composer->GetActiveVariant())
-		return;   // already there — a selection event fires for the row we just selected ourselves
+	// ⭐ ALREADY THERE — asked of the POINTER, not of the index. It read `idx == 0` for as long as
+	// this window always edited the zeroth; the moment a click began re-pointing it, that line meant
+	// "you may never go BACK to variant zero" — the list would highlight row 0 while the pages went
+	// on editing variant 1. A guard that outlived the thing it guarded (found by reading, 2026-08-24).
+	if (m_settings == &m_edited.m_variants[idx].m_settings)
+		return;
 
 	// A HALF-WRITTEN SETTING KEEPS US HERE, and the cursor goes back to the variant it belongs to:
 	// leaving the list pointing at one variant while another is active is the lie that follows.
-	if (!CommitSettings()) {
+	if (!ValidateEditedSettings()) {
 		ReloadVariants(wxNOT_FOUND);
 		return;
 	}
-	m_composer->CaptureActiveVariant();
-	m_composer->SetActiveVariant(idx);
+	CaptureIntoActiveVariant();
+
+	// ⭐⭐ …AND THE PAGES ARE RE-POINTED AT THAT VARIANT'S SETTING. That is the whole of the switch:
+	// what this window edits is a SETTING, so going into another variant is being handed another
+	// one. The outputs come with it — they are part of a setting — so the structure follows without
+	// being carried.
+	//
+	// ⭐ AND NOTHING IS MARKED MODIFIED. Looking at another row is NAVIGATION, not an edit.
+	//
+	// 🛑 THIS IS THE DESIGNER'S ROAD ONLY. A reader has no variant list at all (Max, 2026-08-24:
+	// *"there are no selected variants on the runtime side; they exist only in the designer"*), and
+	// the guard above already returned for them — the pointer they were handed is their own setting
+	// and nothing here may move it.
+	m_settings = &m_edited.m_variants[idx].m_settings;
 
 	ReloadSettings();
 	ReloadStructure();
 	UpdateSettingsHeader();
 }
 
+// ⭐ ADD / COPY / DELETE ARE EDITS OF THE COPY, like everything else on this window. They used to go
+// through the live composition, which this window's copy is assigned over on OK — so a variant added
+// here was gone at the first commit and the list was left showing a row with nothing behind it.
 void ibComposerSettingsPanel::OnVariantAdd(wxCommandEvent&)
 {
-	if (m_composer == nullptr)
+	// WHAT IS ON SCREEN BELONGS TO THE VARIANT IT WAS WRITTEN IN — captured before another becomes
+	// the one in force, exactly as a switch does it.
+	if (!ValidateEditedSettings())
 		return;
+	CaptureIntoActiveVariant();
+
 	// A NEW VARIANT IS EMPTY, and it is named so it can be told apart before anything is in it.
-	const size_t added = m_composer->AddVariant(wxString::Format(wxT("%s %u"),
-		_("Variant"), (unsigned)(m_composer->VariantCount() + 1)));
-	ReloadVariants((int)added);
-	ActivateVariant(added);
+	ibVariantDescription added;
+	added.m_name = wxString::Format(wxT("%s %u"), _("Variant"),
+		(unsigned)(m_edited.m_variants.size() + 1));
+	m_edited.m_variants.push_back(std::move(added));
+	MarkSettingsTouched();
+
+	const size_t at = m_edited.m_variants.size() - 1;
+	ReloadVariants((int)at);
+	ActivateVariant(at);
 }
 
-// COPY — "it copies the groupings, filters, sorts and so on" (Max). The copy is made by the store,
-// through the node the settings serialise into, so it copies whatever a settings object consists of
-// today and whatever is added to it later.
+// COPY — "it copies the groupings, filters, sorts and so on" (Max), and it is ONE ASSIGNMENT of the
+// variant's description: the settings, the structure, the parameter values. (It used to be made by
+// the store through the node the settings serialise into — serialisation standing in for
+// assignment, free to differ from a real save the moment the two paths part.)
 void ibComposerSettingsPanel::OnVariantCopy(wxCommandEvent&)
 {
-	if (m_composer == nullptr)
-		return;
 	// THE ACTIVE VARIANT'S EDITS ARE PART OF WHAT IS COPIED, so they are captured first — copying a
 	// variant and getting the state it had when the window opened is the surprise worth avoiding.
-	if (!CommitSettings())
+	if (!ValidateEditedSettings())
 		return;
-	m_composer->CaptureActiveVariant();
+	CaptureIntoActiveVariant();
 
-	const size_t source = m_composer->GetActiveVariant();
-	const size_t added = m_composer->AddVariant(
-		m_composer->GetVariantName(source) + wxT(" ") + _("(copy)"), (int)source);
-	ReloadVariants((int)added);
-	ActivateVariant(added);
+	// COPY THE SELECTED ROW — the list's own selection is what "copy this one" means; there is no
+	// cursor beside it to disagree with.
+	const int selected = SelectedVariant();
+	const size_t source = (selected != wxNOT_FOUND) ? (size_t)selected : 0;
+	if (source >= m_edited.m_variants.size())
+		return;
+	ibVariantDescription added = m_edited.m_variants[source];
+	added.m_name = m_edited.m_variants[source].m_name + wxT(" ") + _("(copy)");
+	m_edited.m_variants.push_back(std::move(added));
+	MarkSettingsTouched();
+
+	const size_t at = m_edited.m_variants.size() - 1;
+	ReloadVariants((int)at);
+	ActivateVariant(at);
 }
 
 void ibComposerSettingsPanel::OnVariantRemove(wxCommandEvent&)
 {
 	const int idx = SelectedVariant();
-	if (m_composer == nullptr || idx == wxNOT_FOUND)
+	if (idx == wxNOT_FOUND || (size_t)idx >= m_edited.m_variants.size())
 		return;
-	// 🛑 THE LAST ONE STAYS — the store says no, and the button is greyed to say so first.
-	if (!m_composer->RemoveVariant((size_t)idx))
+	// 🛑 THE LAST ONE STAYS. A composition with no variant has no settings at all — the button is
+	// greyed to say so before the click, and this is the answer if it is reached anyway.
+	if (m_edited.m_variants.size() <= 1)
 		return;
+
+	m_edited.m_variants.erase(m_edited.m_variants.begin() + idx);
+	// 🛑 AND THE POINTER IS PUT BACK ON SOMETHING THAT EXISTS. An erase moves every element after it,
+	// so the setting the pages stand over would silently become a DIFFERENT variant's — or the one
+	// just deleted. The zeroth always survives (the guard above), so it is what the window falls back
+	// to, exactly as it opened.
+	//
+	// The comment that stood here said this window always edits the zeroth. That was true until the
+	// same hour's change taught a click to re-point it — a claim that outlived its premise, which is
+	// the second one of those found today (found by reading, 2026-08-24).
+	m_settings = &m_edited.m_variants.front().m_settings;
+	MarkSettingsTouched();
 
 	ReloadSettings();
 	ReloadStructure();
@@ -3440,13 +3610,13 @@ void ibComposerSettingsPanel::ReloadStructure(int selectLevel)
 		// and a level that stays hidden under a collapsed parent reads as a level that was not
 		// added — which is what "the nodes fold up" was.
 		m_structureView->Expand(m_structureModel->RootItem());
-		for (size_t out = 0; out < m_structure.size(); ++out) {
+		for (size_t out = 0; out < Structure().size(); ++out) {
 			const ibDataViewItem output = m_structureModel->ItemForOutput((int)out);
 			if (output.IsOk())
 				m_structureView->Expand(output);
 			for (int axis = 0; axis <= 1; ++axis) {
-				const std::vector<ibDataComposer::GroupNode>& ladder = axis == 1
-					? m_structure[out].m_columnGroups : m_structure[out].m_rowGroups;
+				const std::vector<ibLevelDescription>& ladder = axis == 1
+					? Structure()[out].m_columnGroups : Structure()[out].m_rowGroups;
 				for (size_t level = 0; level < ladder.size(); ++level) {
 					const ibDataViewItem item = m_structureModel->ItemForNode((int)out, axis, (int)level);
 					if (item.IsOk())
@@ -3481,11 +3651,11 @@ void ibComposerSettingsPanel::UpdateSettingsHeader()
 		return;
 
 	wxString node = _("Report");
-	if (const ibDataComposer::GroupNode* level = CurrentLevel()) {
+	if (const ibLevelDescription* level = CurrentLevel()) {
 		// EVERY FIELD OF THE LEVEL — it groups by all of them together, and a header naming only
 		// the first would describe a narrower heading than the one being edited.
 		wxString fields;
-		for (const auto& field : level->m_fields) {
+		for (const auto& field : level->m_settings.m_group.m_lines) {
 			if (!fields.IsEmpty()) fields += wxT(", ");
 			fields += field.m_path;
 		}
@@ -3510,10 +3680,10 @@ void ibComposerSettingsPanel::UpdateSettingsHeader()
 // THE NEW LEVEL GOES INNERMOST. "By warehouse, then by item" is what appending means, and moving it
 // is one keystroke — a rule about where a level lands relative to the cursor would be a second rule
 // about an order the user can already see.
-std::vector<ibDataComposer::GroupNode>* ibComposerSettingsPanel::AxisForCommand(int& at)
+std::vector<ibLevelDescription>* ibComposerSettingsPanel::AxisForCommand(int& at)
 {
 	at = wxNOT_FOUND;
-	if (m_structure.empty())
+	if (Structure().empty())
 		return nullptr;
 
 	// FROM THE REMEMBERED NODE — the same one every other panel reads, so a command and the panels
@@ -3528,15 +3698,15 @@ std::vector<ibDataComposer::GroupNode>* ibComposerSettingsPanel::AxisForCommand(
 	// asked for. The only exception is an output that has nothing in it yet — starting a second
 	// empty one beside it would produce two headings for one act.
 	if (pos.IsReport()) {
-		if (!m_structure.back().m_rowGroups.empty() || !m_structure.back().m_columnGroups.empty())
-			m_structure.push_back(ibDataComposer::Output());
+		if (!Structure().back().m_rowGroups.empty() || !Structure().back().m_columnGroups.empty())
+			Structure().push_back(ibOutputDescription());
 		// THE COMMAND MOVES THE CURSOR WITH IT — what is added lands in the output the command
 		// just chose, and the cursor has to be looking at that one, not at where it started.
-		m_currentNode = ibNodeKey((int)m_structure.size() - 1, 0, -1);
-		return &m_structure.back().m_rowGroups;
+		m_currentNode = ibNodeKey((int)Structure().size() - 1, 0, -1);
+		return &Structure().back().m_rowGroups;
 	}
 
-	const size_t output = pos.m_output >= 0 && (size_t)pos.m_output < m_structure.size()
+	const size_t output = pos.m_output >= 0 && (size_t)pos.m_output < Structure().size()
 		? (size_t)pos.m_output : 0u;
 	const bool columns = pos.m_axis == 1;
 	if (pos.IsLevel())
@@ -3544,13 +3714,13 @@ std::vector<ibDataComposer::GroupNode>* ibComposerSettingsPanel::AxisForCommand(
 	// The axis this command works on is where the cursor belongs afterwards — an output row and an
 	// axis row both mean "the rows of this output" here, and the reload lands accordingly.
 	m_currentNode = ibNodeKey((int)output, columns ? 1 : 0, at);
-	return columns ? &m_structure[output].m_columnGroups : &m_structure[output].m_rowGroups;
+	return columns ? &Structure()[output].m_columnGroups : &Structure()[output].m_rowGroups;
 }
 
 void ibComposerSettingsPanel::OnStructureAdd(wxCommandEvent&)
 {
 	int at = wxNOT_FOUND;
-	std::vector<ibDataComposer::GroupNode>* axis = AxisForCommand(at);
+	std::vector<ibLevelDescription>* axis = AxisForCommand(at);
 	if (axis == nullptr) {
 		// SAID, NOT SWALLOWED. A command that does nothing and explains nothing reads as broken,
 		// and this is the one state where it can happen: the composition has no output to add to.
@@ -3561,10 +3731,11 @@ void ibComposerSettingsPanel::OnStructureAdd(wxCommandEvent&)
 	// ⭐ A FORM, NOT A FIELD PICKER (Max). A grouping is a LIST of fields welded into one heading —
 	// asking for one field could only ever make a one-field level — and an EMPTY list is the second
 	// thing this form makes: the detail records, a node with no group but a node all the same.
-	ibComposerGroupingDialog dialog(this, ibDataComposer::GroupNode());
+	ibComposerGroupingDialog dialog(this, ibLevelDescription());
 	if (dialog.ShowModal() != wxID_OK)
 		return;
 	axis->push_back(dialog.Node());
+
 	MarkSettingsTouched();
 	ReloadStructure((int)axis->size() - 1);
 }
@@ -3579,7 +3750,7 @@ void ibComposerSettingsPanel::EditLevelInForm(const ibDataViewItem& row)
 {
 	if (m_readOnly)
 		return;
-	ibDataComposer::GroupNode* level = LevelAtRow(row);
+	ibLevelDescription* level = LevelAtRow(row);
 	if (level == nullptr)
 		return;
 
@@ -3587,11 +3758,11 @@ void ibComposerSettingsPanel::EditLevelInForm(const ibDataViewItem& row)
 	if (dialog.ShowModal() != wxID_OK)
 		return;
 
-	const ibDataComposer::GroupNode edited = dialog.Node();
+	const ibLevelDescription edited = dialog.Node();
 	// ITS OWN SETTINGS STAY ITS OWN — the form edits the fields and the kind; the filter, the sort
 	// and the selected fields of this level are not its business.
 	level->m_kind   = edited.m_kind;
-	level->m_fields = edited.m_fields;
+	level->m_settings.m_group.m_lines = edited.m_settings.m_group.m_lines;
 	MarkSettingsTouched();
 	ReloadStructure(m_structureModel != nullptr ? m_structureModel->LevelAt(row) : wxNOT_FOUND);
 	ReloadGrouping();
@@ -3599,50 +3770,40 @@ void ibComposerSettingsPanel::EditLevelInForm(const ibDataViewItem& row)
 
 void ibComposerSettingsPanel::OnStructureRemove(wxCommandEvent&)
 {
-	// AN OUTPUT IS REMOVED WHOLE — with its levels, its axes and its node buffers. Never the last
-	// one: a composition always has at least one output, and "no outputs" is not a state anything
-	// downstream handles.
+	// AN OUTPUT IS REMOVED WHOLE — with its nodes, both its axes and everything each node holds.
+	// Never the last one: a composition always has at least one output, and "no outputs" is not a
+	// state anything downstream handles.
 	// ⚠ AN AXIS ROW IS NOT THE OUTPUT — the coordinate says which it is, and it is asked (IsOutput),
 	// not re-derived from the numbers. Testing "no level" alone made Delete on the "Columns" row
 	// erase the whole output, its rows included.
 	const int selectedOutput = m_currentNode.m_output;
 	if (m_currentNode.IsOutput()
-	    && (size_t)selectedOutput < m_structure.size() && m_structure.size() > 1) {
-		m_structure.erase(m_structure.begin() + selectedOutput);
-		std::map<ibNodeKey, ibValuePtr<ibValueListSettings>> kept;
-		for (auto& entry : m_nodeSettings) {
-			const int output = entry.first.m_output;
-			if (output == selectedOutput)
-				continue;                              // its buffers go with it
-			const int shifted = output > selectedOutput ? output - 1 : output;
-			kept[ibNodeKey(shifted, entry.first.m_axis, entry.first.m_level)] = entry.second;
-		}
-		m_nodeSettings = std::move(kept);
+	    && (size_t)selectedOutput < Structure().size() && Structure().size() > 1) {
+		// (One erase, and that is the whole of it. A map of per-node settings used to be re-keyed here
+		//  — every remaining entry shifted down by one — because the settings lived beside the nodes
+		//  rather than on them. They are on them now, so they leave with what they belong to.)
+		Structure().erase(Structure().begin() + selectedOutput);
 
-		m_currentNode = ibNodeKey(std::min<int>(selectedOutput, (int)m_structure.size() - 1), -1, -1);
+		m_currentNode = ibNodeKey(std::min<int>(selectedOutput, (int)Structure().size() - 1), -1, -1);
 		MarkSettingsTouched();
 		ReloadStructure();
 		return;
 	}
 
 	int level = wxNOT_FOUND;
-	std::vector<ibDataComposer::GroupNode>* axis = AxisForCommand(level);
+	std::vector<ibLevelDescription>* axis = AxisForCommand(level);
 	if (axis == nullptr || level == wxNOT_FOUND || (size_t)level >= axis->size())
 		return;
 
 	// ⭐ REMOVING A GROUPING BREAKS THE CHAIN, so everything nested under it goes with it (Max).
 	// Pulling the deeper levels up instead would silently re-parent them: "by warehouse, then by
 	// item" would become "by item", which is a different report nobody asked for.
-	const int removedFrom = level;
 	axis->erase(axis->begin() + level, axis->end());
 
-	// The node buffers of what was removed go too — otherwise a filter written on a level that no
-	// longer exists would land on whatever level later takes that coordinate.
+	// (What each removed node held went with it. There used to be a second sweep here, dropping the
+	//  buffers of every coordinate at or below the removal — otherwise a filter written on a level
+	//  that no longer exists would land on whatever level later took that coordinate.)
 	const int output = m_currentNode.m_output, axisIndex = m_currentNode.m_axis;
-	for (auto it = m_nodeSettings.begin(); it != m_nodeSettings.end(); ) {
-		const bool sameAxis = it->first.m_output == output && it->first.m_axis == axisIndex;
-		it = (sameAxis && it->first.m_level >= removedFrom) ? m_nodeSettings.erase(it) : ++it;
-	}
 	MarkSettingsTouched();
 	// The chain now ends where the removal started, so the cursor lands on its new last level —
 	// or on the output itself when nothing is left to stand on.
@@ -3662,20 +3823,15 @@ void ibComposerSettingsPanel::MoveStructureLevel(int delta)
 	// An AXIS row is not the output — see OnStructureRemove. Moving one would move the output it
 	// hangs under, which on a cross-table is every level of both axes.
 	const int selectedOutput = m_currentNode.m_output;
-	if (m_currentNode.IsOutput() && (size_t)selectedOutput < m_structure.size()) {
+	if (m_currentNode.IsOutput() && (size_t)selectedOutput < Structure().size()) {
 		const int target = selectedOutput + delta;
-		if (target < 0 || (size_t)target >= m_structure.size())
+		if (target < 0 || (size_t)target >= Structure().size())
 			return;
-		std::swap(m_structure[selectedOutput], m_structure[target]);
-		// The node buffers travel with their outputs, or a filter written on one would stay behind
-		// and land on whatever moved into its place.
-		std::map<ibNodeKey, ibValuePtr<ibValueListSettings>> moved;
-		for (auto& entry : m_nodeSettings) {
-			const int output = entry.first.m_output;
-			const int carried = output == selectedOutput ? target : (output == target ? selectedOutput : output);
-			moved[ibNodeKey(carried, entry.first.m_axis, entry.first.m_level)] = entry.second;
-		}
-		m_nodeSettings = std::move(moved);
+		// ONE SWAP, and everything the two outputs hold swaps with them — their nodes, and each node's
+		// own settings. (A parallel map used to be re-keyed here for the same reason it was re-keyed
+		// on a removal: a filter written on one output would otherwise stay behind and land on
+		// whatever moved into its place.)
+		std::swap(Structure()[selectedOutput], Structure()[target]);
 
 		m_currentNode = ibNodeKey(target, m_currentNode.m_axis, m_currentNode.m_level);
 		MarkSettingsTouched();
@@ -3684,7 +3840,7 @@ void ibComposerSettingsPanel::MoveStructureLevel(int delta)
 	}
 
 	int level = wxNOT_FOUND;
-	std::vector<ibDataComposer::GroupNode>* axis = AxisForCommand(level);
+	std::vector<ibLevelDescription>* axis = AxisForCommand(level);
 	if (axis == nullptr || level == wxNOT_FOUND || (size_t)level >= axis->size())
 		return;
 	const int target = level + delta;
@@ -3708,16 +3864,18 @@ wxArrayString ibComposerSettingsPanel::ResourceChoices() const
 {
 	wxArrayString words;
 	const int row = SelectedResourceIndex();
-	if (m_composer == nullptr || row == wxNOT_FOUND)
+	if (row == wxNOT_FOUND || (size_t)row >= m_edited.m_resources.size())
 		return words;
 
-	wxString func, path;
-	if (!m_composer->GetModelComposer().GetTotalAt((size_t)row, func, path) || path.IsEmpty())
+	// FROM THE DESCRIPTION — the resources are declared there, and the running composer only ever
+	// held a copy of them taken at a run.
+	const wxString path = m_edited.m_resources[(size_t)row].m_path;
+	if (path.IsEmpty())
 		return words;
 
 	// THE FIELD'S TYPE is what decides, so the path is looked up among the fields this composition
 	// offers. A path that is not one of them (a hand-written expression) has no type to ask about.
-	for (const ibQueryConstructorField& field : m_fields) {
+	for (const ibQueryConstructorField& field : m_fieldList) {
 		if (!field.m_name.IsSameAs(path, false))
 			continue;
 		// THE ENGINE COMPOSES THE OFFERS: the calls this type admits over this field, DISTINCT twin
@@ -3734,11 +3892,9 @@ wxArrayString ibComposerSettingsPanel::ResourceChoices() const
 // same contract the query constructor's own cells use.
 bool ibComposerSettingsPanel::EditResourceExpression(wxString& text)
 {
-	if (m_composer == nullptr)
-		return false;
 
-	ibDialogQueryExpression editor(this, _("Resource"), m_fields, nullptr,
-		m_composer->GetSourceMetaData(), /*readOnly*/false);
+	ibDialogQueryExpression editor(this, _("Resource"), m_fieldList, nullptr,
+		GetEditedMetaData(), /*readOnly*/false);
 	editor.SetText(text);
 	if (editor.ShowModal() != wxID_OK)
 		return false;
@@ -3757,19 +3913,20 @@ void ibComposerSettingsPanel::OnAddResource(wxCommandEvent&)
 	if (m_readOnly)
 		return;
 	const ibQueryConstructorField* field = SelectedField(m_resourceFieldTree);
-	if (field == nullptr || m_composer == nullptr || field->m_name.IsEmpty())
+	if (field == nullptr || field->m_name.IsEmpty())
 		return;
 
 	const wxArrayString aggregates = ibAggregatesForField(*field);
 	// NOTHING THE ENGINE ADMITS means the field cannot be folded at all — added as a bare
 	// expression rather than wrapped in a call it would refuse.
-	m_composer->AddTotal(aggregates.IsEmpty() ? wxString() : aggregates[0], field->m_name);
+	m_edited.m_resources.push_back({ aggregates.IsEmpty() ? wxString() : aggregates[0], field->m_name });
+	MarkSettingsTouched();
 	ReloadResources();
 	// THE CURSOR FOLLOWS WHAT WAS ADDED — a row you have to go and find reads as a command that did
 	// nothing, and the Expression cell is the next thing a person reaches for.
-	if (m_resourceView != nullptr && m_composer->GetModelComposer().TotalCount() > 0)
+	if (m_resourceView != nullptr && !m_edited.m_resources.empty())
 		m_resourceView->Select(ibDataViewItem(
-			reinterpret_cast<void*>(m_composer->GetModelComposer().TotalCount())));
+			reinterpret_cast<void*>(m_edited.m_resources.size())));
 }
 
 // THE EXPRESSION EDITOR FOR THE ROW UNDER THE CURSOR — the same door the cell's "..." opens, on the
@@ -3779,15 +3936,13 @@ void ibComposerSettingsPanel::OnResourceExpression(wxCommandEvent&)
 {
 	if (m_readOnly)   // view only — see OnAddResource
 		return;
-	if (m_composer == nullptr)
-		return;
 
 	const int row = SelectedResourceIndex();
 	wxString text;
-	if (row != wxNOT_FOUND) {
-		wxString func, path;
-		if (m_composer->GetModelComposer().GetTotalAt((size_t)row, func, path))
-			text = func.IsEmpty() ? path : func + wxT("(") + path + wxT(")");
+	if (row != wxNOT_FOUND && (size_t)row < m_edited.m_resources.size()) {
+		const ibResourceDescription& resource = m_edited.m_resources[(size_t)row];
+		text = resource.m_func.IsEmpty() ? resource.m_path
+		                                 : resource.m_func + wxT("(") + resource.m_path + wxT(")");
 	}
 	else if (const ibQueryConstructorField* field = SelectedField(m_resourceFieldTree)) {
 		// A head start rather than a default: the field the cursor stands on, with the aggregate the
@@ -3804,10 +3959,12 @@ void ibComposerSettingsPanel::OnResourceExpression(wxCommandEvent&)
 	wxString func, path;
 	if (!ibResourceModel::SplitCall(text, func, path)) { func.clear(); path = text; }
 
-	if (row != wxNOT_FOUND)
-		m_composer->SetTotal((size_t)row, func, path);   // the COMPOSITION's door, not the store's — it has to hear this
+	// INTO THE COPY THIS WINDOW EDITS — the description, where a resource lives.
+	if (row != wxNOT_FOUND && (size_t)row < m_edited.m_resources.size())
+		m_edited.m_resources[row] = { func, path };
 	else
-		m_composer->AddTotal(func, path);
+		m_edited.m_resources.push_back({ func, path });
+	MarkSettingsTouched();
 	ReloadResources();
 }
 // AND THE WAY OUT OF THE READY LIST: an expression. `SUM(Amount) / COUNT(DISTINCT Doc)` is a
@@ -3825,9 +3982,10 @@ void ibComposerSettingsPanel::OnRemoveResource(wxCommandEvent&)
 	if (m_readOnly)   // view only — see OnAddResource
 		return;
 	const int idx = SelectedResourceIndex();
-	if (idx == wxNOT_FOUND || m_composer == nullptr)
+	if (idx == wxNOT_FOUND || (size_t)idx >= m_edited.m_resources.size())
 		return;
-	m_composer->RemoveTotal(static_cast<size_t>(idx));   // through the composition, so it hears the change
+	m_edited.m_resources.erase(m_edited.m_resources.begin() + idx);
+	MarkSettingsTouched();
 	ReloadResources();
 
 
@@ -3839,13 +3997,13 @@ void ibComposerSettingsPanel::OnRemoveResource(wxCommandEvent&)
 // a quietly-defaulted active one.
 void ibComposerSettingsPanel::OnBuildQuery(wxCommandEvent&)
 {
-	if (m_composer == nullptr || m_queryText == nullptr)
+	if (m_queryText == nullptr)
 		return;
 
 	wxString text = m_queryText->GetText();
 	// EXCLUDING TOTALS: a composition folds through its RESOURCES and its levels are its GROUPINGS,
 	// so a TOTALS clause in this text would be the same setting written where no window can show it.
-	if (!ibShowQueryConstructor(this, text, m_composer->GetSourceMetaData(), /*readOnly*/false,
+	if (!ibShowQueryConstructor(this, text, GetEditedMetaData(), /*readOnly*/false,
 			ibQueryExclude_Totals))
 		return;   // cancelled — the box keeps what the author had
 
@@ -3862,11 +4020,22 @@ void ibComposerSettingsPanel::OnBuildQuery(wxCommandEvent&)
 // change handler, which is why it still compares before storing.)
 void ibComposerSettingsPanel::ApplyPendingQueryText()
 {
-	if (m_composer == nullptr || m_queryText == nullptr)
+	if (m_queryText == nullptr)
 		return;
-	if (m_queryText->GetText() != m_composer->GetQueryText()) {
-		m_composer->SetQueryText(m_queryText->GetText());
+	// ⭐ THE TEXT LANDS IN THE DESCRIPTION THIS WINDOW EDITS, and that is the only place it lands.
+	// It used to be written into a live composition as well, so the ENGINE could read it — but a
+	// composition is a FACADE over a description (Max, 2026-08-24), and the fields, the parameters
+	// and the parser's complaint all come off the text itself now. One store, so nothing can hold
+	// the old one and put it back at commit.
+	if (m_queryText->GetText() != m_edited.m_query) {
+		m_edited.m_query = m_queryText->GetText();
 		m_queryDirty = true;
+		// 🛑 AND THE BUFFER NOW HAS SOMETHING TO LAND. Commit only writes the copy back when the
+		// buffer was touched, and "touched" was raised by the filter / sort / structure editors
+		// alone — so a session that edited nothing but the QUERY closed without writing it (Max,
+		// 2026-08-24: "saving the query does not work"). The text is part of the copy like
+		// everything else on this window.
+		MarkSettingsTouched();
 	}
 	if (!m_queryDirty)
 		return;
@@ -3888,10 +4057,11 @@ void ibComposerSettingsPanel::OnQueryTextChanged(wxStyledTextEvent& event)
 	const int modFlags = event.GetModificationType();
 	if ((modFlags & (wxSTC_MOD_INSERTTEXT | wxSTC_MOD_DELETETEXT)) == 0)
 		return;
-	if (m_composer == nullptr || m_queryText == nullptr || m_readOnly)
+	if (m_queryText == nullptr || m_readOnly)
 		return;
 
-	m_composer->SetQueryText(m_queryText->GetText());
+	// ONLY THE FLAG. The text is carried into the description by ApplyPendingQueryText, once per
+	// pause — a keystroke marks that there is something to carry, and nothing more.
 	m_queryDirty = true;
 }
 
@@ -3904,23 +4074,30 @@ void ibComposerSettingsPanel::OnIdleApplyQuery(wxIdleEvent& event)
 
 	if (!m_queryDirty)
 		return;
-	m_queryDirty = false;
-	RefreshFromQueryText();
+
+	// ⭐ THE TEXT FIRST, THEN WHAT FOLLOWS FROM IT — through the one door that does both, so the
+	// pause cannot refresh over a text it has not stored yet.
+	//
+	// 🛑 IT CALLED RefreshFromQueryText DIRECTLY. That was right only while a keystroke ALSO wrote
+	// the text into a live composition, which is what the refresh then read; with the text living in
+	// the description alone, refreshing without carrying it there first re-reads the PREVIOUS text —
+	// so the fields and the red line described the query as it was before the edit (Max, 2026-08-24:
+	// "it cannot refresh when the text changes").
+	ApplyPendingQueryText();
 }
 
 // EVERYTHING THAT FOLLOWS FROM THE QUERY, re-read in one place — so the idle pass, leaving the page
 // and accepting the window cannot disagree about what "the query changed" entails.
 void ibComposerSettingsPanel::RefreshFromQueryText()
 {
-	if (m_composer == nullptr)
-		return;
-
-	m_composer->ApplySource();
+	// (NOTHING TO REBUILD FIRST. This began with ApplySource on a live composition, which parsed the
+	//  text into a column schema it kept; PopulateFieldTrees below parses it straight, so the schema
+	//  and the question of whether it was up to date both stopped existing.)
 
 	// ⭐ AND THIS IS WHERE THE TEXT EDIT IS ANNOUNCED — once per pause, not once per character.
 	// SetQueryText deliberately stays silent (see it): whoever hears the signal may re-render a
 	// whole form editor, and doing that per keystroke made typing a query unusable.
-	m_composer->OnChildChanged();
+	MarkModified();
 
 	// The fields follow the text: a field added to the query is there to group by without closing
 	// anything.
@@ -3930,16 +4107,31 @@ void ibComposerSettingsPanel::RefreshFromQueryText()
 	ReloadFields();
 
 	// AND THE PARAMETERS: a new &Name in the text is a new row here, and one the text stopped asking
-	// for is gone. The list follows the query, so it is re-read where the query is applied.
+	// for is gone. The list follows the query, so it is re-read where the query is applied — over
+	// THIS window's copy, through the one spelling of that rule (valueDataComposition.h).
+	ibSyncParametersWithQuery(m_edited.m_parameters, m_edited.m_query);
 	ReloadParameters();
 
-	const wxString error = m_composer->GetQueryError();
-	if (m_queryError != nullptr) {
-		m_queryError->SetLabel(error);
-		m_queryError->Show(!error.IsEmpty());
-		if (m_queryError->GetParent() != nullptr)
-			m_queryError->GetParent()->Layout();
-	}
+	// WHAT THE PARSER SAID, taken at the same moment the fields were — PopulateFieldTrees above is
+	// what wrote it, so the line and the trees can never be describing two different texts.
+	ShowQueryFault();
+}
+
+// ⭐ THE LINE UNDER THE TEXT, said in one place because TWO moments say it: the text changing, and
+// the window OPENING.
+//
+// 🛑 IT USED TO BE SAID ONLY ON A CHANGE. So a composition whose stored query no longer compiles —
+// a field renamed in the configuration, a table gone — opened looking perfectly fine, and only
+// admitted it after somebody typed into the text or pressed OK. The window has already parsed by
+// then (the constructor reads the fields), so it KNEW and was not saying (Max, 2026-08-24).
+void ibComposerSettingsPanel::ShowQueryFault()
+{
+	if (m_queryError == nullptr)
+		return;
+	m_queryError->SetLabel(m_queryFault);
+	m_queryError->Show(!m_queryFault.IsEmpty());
+	if (m_queryError->GetParent() != nullptr)
+		m_queryError->GetParent()->Layout();
 }
 
 int ibComposerSettingsPanel::SelectedResourceIndex() const

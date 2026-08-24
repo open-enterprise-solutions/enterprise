@@ -43,7 +43,7 @@ void ibValueModelCursor::EnsureSnapshot() const
 
 		ibDataDBComposer& composer = m_composer;
 		const ibDataComposer::SettingsScope scope = composer.MarkScope();
-		const std::vector<std::pair<wxString, ibQueryDimUnfold>> savedGroups = composer.TakeGroups();   // detail read
+		const ibDataComposer::TakenGroups savedGroups = composer.TakeGroups();   // detail read
 		ibListFetchDriver driver(page);
 		try {
 			composer.Run(driver);
@@ -77,7 +77,7 @@ void ibValueModelCursor::EnsureSnapshot() const
 			const bool isFolderRow = (folderCol != nullptr) && r.GetValue(folderCol->GetColumnId()).GetBoolean();
 			const bool isContainer = isFolderRow
 			                      || q->GetHierarchyType() == ibHierarchyType::eItems
-			                      || r.m_hasChildren;
+			                      || r.m_expandable;
 			ibComposerNode* node = new ibComposerNode(r.m_values, isContainer, std::move(rowKey));
 			m_snapshot.AddValue(this, node, false);       // adopt (silent) — const-model op, no const_cast
 		}
@@ -288,7 +288,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// config OUT, render just the browsed level's TotalBy + the scope filter(s), run, then put it back.
 	ibDataDBComposer& composer = m_composer;
 	const ibDataComposer::SettingsScope scope = composer.MarkScope();
-	const std::vector<std::pair<wxString, ibQueryDimUnfold>> savedGroups = composer.TakeGroups();
+	const ibDataComposer::TakenGroups savedGroups = composer.TakeGroups();
 	// SELF-HIERARCHY is driven by the page envelope's parent scope (set above) + the provider — NOT by the
 	// composer (TOTALS BY Parent HIERARCHY grouped by the parent VALUE: it buried the items at tree level 1
 	// with only the dimension, the diagnostic log proved it). So the composer renders a PLAIN level SELECT
@@ -296,7 +296,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// grouping (Elements) drills through the composer here, layered on top of the base parent-hierarchy.
 	if (grouping && !hierarchy) {
 		for (size_t k = 0; k < depth && k < dims.size(); ++k)
-			composer.Filter(dims[k], wxT("="), parentPath[k]);
+			composer.ScopeTo(dims[k], wxT("="), parentPath[k]);
 		if (groupLevel)
 			composer.TotalBy(dims[depth], dimKinds[depth]);   // VID drives Elements / Hierarchy / HierarchyOnly
 	}
@@ -479,7 +479,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			bool isFolderRow = false;
 			if (folderCol != nullptr)
 				isFolderRow = r.GetValue(folderCol->GetColumnId()).GetBoolean();
-			const bool isContainer = grouping ? false : (isFolderRow || itemHierarchy || r.m_hasChildren);
+			const bool isContainer = grouping ? false : (isFolderRow || itemHierarchy || r.m_expandable);
 			node = new ibComposerNode(r.m_values, isContainer, std::move(rowKey));
 		}
 		out.Add(ibDataViewItem(node));   // ctor IncRefs to 2
@@ -537,10 +537,10 @@ std::map<ibMetaID, ibValue> ibValueModel::ResolveAnchorByKey(const std::vector<i
 	// TakeGroups out / PutGroups + RestoreScope back, so the persistent filter / sort / grouping are untouched.
 	ibDataComposer& composer = GetModelComposer();
 	const ibDataComposer::SettingsScope scope = composer.MarkScope();
-	const std::vector<std::pair<wxString, ibQueryDimUnfold>> savedGroups = composer.TakeGroups();
+	const ibDataComposer::TakenGroups savedGroups = composer.TakeGroups();
 	for (size_t i = 0; i < pk.size(); ++i)
 		if (pk[i] != nullptr)
-			composer.Filter(pk[i]->GetName(), wxT("="), rowKey[i]);
+			composer.ScopeTo(pk[i]->GetName(), wxT("="), rowKey[i]);
 
 	ibReadPageRequest page;
 	page.m_count      = 2;        // 1 row + the probe row RunComposerPage's envelope keeps

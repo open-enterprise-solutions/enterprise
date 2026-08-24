@@ -17,7 +17,6 @@ public:
 	}
 
 	// Open the List-Settings window (Filter / Sort / Group) for the model.
-	virtual bool ShowListSettings(class ibValueModel* model) wxOVERRIDE;
 	virtual bool ShowViewMode();
 
 private:

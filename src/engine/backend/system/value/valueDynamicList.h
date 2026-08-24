@@ -4,7 +4,7 @@
 #include "backend/tabularModel.h"                // ibValueModelCursor
 #include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject
 #include "backend/composition/dataComposer.h"        // L5 — ibDataDBComposer
-#include "backend/composition/listFilter.h"          // ibValueListSettings
+#include "backend/compositionDescription.h"   // a list is a composer — the same description
 #include "backend/propertyManager/propertyObject.h"  // ibPropertyObject — the dynamic list IS a property object
 #include "backend/propertyManager/property/propertyDynamicSource.h"  // ibPropertyDynamicSource — the "Source" property
 #include "backend/propertyManager/property/propertyDynamicList.h"  // ibPropertyDynamicList — the "Settings" → "Open" action
@@ -82,19 +82,65 @@ public:
 	// Ticking the flag GENERATES a starting query over the main table (SeedArbitraryQuery), because
 	// an empty text is not a query and a person switching this on means "let me change what is read",
 	// not "let me start from a blank page". Unticking clears it — the main table alone is the read.
-	bool     IsArbitraryQuery() const { return m_propertyUseCustomQuery->GetValueAsBoolean(); }
-	void     SetArbitraryQuery(bool use);
-	wxString GetArbitraryQueryText() const { return m_propertyCustomQuery->GetValueAsString(); }
-	void     SetArbitraryQueryText(const wxString& text) { m_propertyCustomQuery->SetValue(text); }
+	// ⭐⭐ THE LIST AS A COMPOSER — the same pair a composition has, because it IS one, degenerately:
+	// a main table, a query and the same filter / sort / grouping, with the structure, resources and
+	// variants left empty. What a saved list consists of is stated in composition/
+	// compositionDescription.h, for a report and for a list alike.
+	// ⚠ BY REFERENCE — the base rule of this family (ibTypeDescription& GetTypeDesc, ibSourceDescription&
+	// GetSourceDesc). The description IS the list's stored state; a copy handed back would go stale the
+	// moment somebody edited it, and there would be two answers to what the list is.
+	// …AND IT LIVES IN A PROPERTY, like every other piece of a list's state — not in a field beside
+	// them. That is what makes the list's serialisation the same two symmetric lines every property
+	// object has, and what lets the inspector reach the composition at all.
+	// …AND IT LIVES IN THE "Settings" PROPERTY — the one that already stands for the list's settings,
+	// now holding the composer itself rather than being a bare action. Same description a report
+	// holds; the only difference is which window opens over it.
+	// ⚠ AND IT IS THE LIST'S, NOT THE MODEL'S. A model deals in the SETTING in force, and asks its
+	// COMPOSER for it (`GetModelComposer().GetCurrentSettingsDesc()`) — there is no such pair on the
+	// model itself, and there deliberately is not: a forwarder that only re-spells one call is a
+	// second name for it;
+	// the whole composition — the query, the main table, the variants — is what a LIST is made of,
+	// so it is offered here and hidden from everything that only reads rows.
+	ibCompositionDescription& GetCompositionDesc() { return m_propertySettings->GetValueAsCompositionDesc(); }
+	const ibCompositionDescription& GetCompositionDesc() const { return m_propertySettings->GetValueAsCompositionDesc(); }
+	void SetCompositionDesc(const ibCompositionDescription& desc) { m_propertySettings->SetValue(desc); }
 
-	// THE QUERY THE MAIN TABLE WOULD WRITE FOR ITSELF — `SELECT <fields> FROM <the main table>`. The
-	// starting point when the flag goes on, and empty when there is no main table to write it over.
+	// (`GetDeclaredSettings` DELETED — a one-line alias for `GetCompositionDesc().
+	//  GetCompositionSettingsDesc()` with no caller at all, and the FOURTH name for one thing: the
+	//  author's setting was "composition settings" on the description, "standart settings" on the
+	//  composer, "declared" here and "the default this composition ships with" in prose. Three of
+	//  those are the two real doors; this one was only a synonym waiting to drift.)
+
+	// (THERE IS NO "APPLY". Everyone reads the description THROUGH THE REFERENCE above, so a change
+	//  made at runtime is already there — adding an element puts it in, and nothing has to be pushed
+	//  anywhere afterwards. A COMMIT exists only on the interface side, and it is a copy that goes
+	//  back into the property and replaces the one that was there.)
+
+	// ⭐⭐ THE QUERY BELONGS TO THE COMPOSER, and these are its face on the list (Max, 2026-08-23).
+	// What is SAVED is the composer's own field — ibCompositionDescription::m_query, the same one a
+	// report writes — so there is no second copy of the text on disk and no second format to keep in
+	// step. These stay because the inspector needs something to show and to edit; they are a view of
+	// that field, not a rival to it.
+	//
+	// ⚠ AND THE MAIN TABLE IS THE DEGENERATE CASE OF THE SAME THING: technically it is
+	// `SELECT * FROM <table>` — which is literally what SeedArbitraryQuery writes below. The id is
+	// still kept beside the text because a list takes more than rows from its table (its commands,
+	// its icon, the value a choice hands back), and none of that survives a rendered `SELECT *`.
+	// ⭐⭐ THE QUERY IS THE DESCRIPTION'S, AND THERE IS NO FLAG BESIDE IT (2026-08-24). Having a query
+	// IS "this list runs an arbitrary query" — `HasQuery()` says it, and a text and a bool that mean
+	// the same thing can only ever start disagreeing.
+	//
+	// 🛑 THEY DID. The settings window wrote `m_desc->m_query` while `RebuildSource` read the
+	// `CustomQuery` PROPERTY, and nothing bridged the two: a query typed in the window was saved and
+	// never read back. Three verbs around the flag — `SetArbitraryQuery`, `SeedArbitraryQuery`,
+	// `SetArbitraryQueryText` — had no callers at all, and `m_queryError` was write-only.
+	bool     IsArbitraryQuery() const { return GetCompositionDesc().HasQuery(); }
+	wxString GetArbitraryQueryText() const { return GetCompositionDesc().m_query; }
+
+	// THE QUERY THE MAIN TABLE WOULD WRITE FOR ITSELF — `SELECT <fields> FROM <the main table>`, a
+	// real query over the real source rather than a template with a hole in it. Kept for whoever
+	// offers "start me a query"; empty when there is no main table to write it over.
 	wxString SeedArbitraryQuery() const;
-
-	// WHY THE ARBITRARY QUERY PRODUCES NOTHING — the ENGINE's own words, empty when it resolved.
-	// (What it DOES produce is asked for as the model's columns, the way a host asks any list what
-	// it has; there was a second accessor handing out the raw schema, and nobody used it.)
-	const wxString& GetArbitraryQueryError() const { return m_queryError; }
 	// Re-apply the source (metaobject OR arbitrary query) onto the composer — the settings dialog's "Query" tab
 	// calls this after editing the flag / text (SetValue does not fire OnPropertyChanged).
 	void     ApplySource() { RebuildSource(); }
@@ -102,9 +148,12 @@ public:
 	// command interface (open a row / commands) through it. The list itself stays metadata-blind.
 	const ibQueryableSourceDescriptor* GetSourceDescriptor() const { return m_propertySource->GetDescriptor(); }
 	// (GetComposer() removed — it just forwarded to the inherited GetModelComposer(); use that directly.)
-	// (GetListSettings() removed — the settings buffer lives on the BASE model now (m_listSettings); the
-	//  duplicate m_settings is gone. Max: "doesn't this live on the base model now?".)
-	// Commit Filter/Order/Group from the buffer ONTO the composer — call on a settings change, NOT per fetch.
+	// DRIVE THE LIST'S OWN SETTINGS INTO THE COMPOSER — what it does after rebinding its source,
+	// so a source change does not silently drop the filter and sort the list declares.
+	//
+	// ⚠ ITS OWN, not "the active ones". What a particular open TABLE is running on lives on the
+	// front, and is handed to the composer there (ibDataComposer::SetSettings) at the moment of a read.
+	// This is the list itself, putting back what it declares.
 	void RefreshComposerSettings();
 
 	// Add a FILTER to the list — a predicate `path op value` fed to the composer underneath (the SINGLE
@@ -207,8 +256,8 @@ public:
 	// The list IS a property object: its Source / Settings properties surface onto the form
 	// attribute (like ibValueSizerItem) — the attribute just casts the runtime value to
 	// ibPropertyObject, knowing nothing about "a dynamic list". OnPropertyChanged is the real
-	// hook (a virtual, not a backend function-pointer). Read/WriteProperty persist the Source
-	// property PLUS the settings held on the base buffer GetListSettings() (outside the property set).
+	// hook (a virtual, not a backend function-pointer). Read/WriteProperty persist the properties,
+	// the composition description among them — there is nothing kept outside the property set.
 	// Name comes from the FACTORY: ibValue::GetClassName() resolves it by the object's own clsid
 	// (GetClassType → the registered name); no hardcoded literal, it stays only in VALUE_TYPE_REGISTER.
 	// ibPropertyObject declares GetClassName PURE on a base UNRELATED to ibValue — so it MUST be
@@ -223,7 +272,6 @@ public:
 
 	// --- script member surface (Filter/Order/Group/Settings + Refresh) ------
 	void FillMembers(ibMemberTable& helper) const;
-	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 
 private:
@@ -241,8 +289,8 @@ private:
 	// attribute renamed, a metaobject deleted.
 	void PruneUnresolvedSettings();
 
-	// The dynamic list uses the ONE base composer (GetModelComposer()) AND the ONE base settings buffer
-	// (GetListSettings() → m_listSettings) — no subclass holds its own. (The duplicate m_settings was removed.)
+	// The dynamic list uses the ONE base composer (GetModelComposer()); its SETTINGS are the
+	// description in the "Settings" property above, and there is no live object over them.
 	ibValuePtr<ibValueModelColumnCollection> m_columns;   // queryable-derived columns
 
 	// WHAT THE ARBITRARY QUERY PRODUCES, and what went wrong if it produces nothing. Rebuilt on every
@@ -252,7 +300,9 @@ private:
 	// The schema OWNS its synthetic columns (OutputColumn::m_ownedCol), so it outlives the door that
 	// resolved it — which it has to: nothing here reads rows, the columns are just being named.
 	std::vector<ibQueryLowering::OutputColumn> m_querySchema;
-	wxString                                   m_queryError;   // the ENGINE's words, verbatim; empty = it resolved
+	// (⛔ `m_queryError` STOOD HERE — the engine's verdict on the query, written in the catch and read
+	//  by an accessor that has gone with the flag. The settings window asks the same question of the
+	//  TEXT itself now (ibQueryFieldsOfText), which is where a person can act on the answer.)
 
 	// Folder-flag column for the hierarchical display (folder rows = drillable containers). Non-owning — points at
 	// the metaobject's queryable column, handed in by ibCreateHierarchyList. Null on a flat / non-folder list.
@@ -271,14 +321,11 @@ private:
 	// --- property surface — the list's properties SURFACE onto the form attribute (like
 	// ibValueSizerItem). CreateProperty right in the declaration (this / protected base).
 	// ⭐ THE INSPECTOR SHOWS SOURCE, SETTINGS AND DYNAMIC READ — and nothing else (Max, 2026-08-19).
-	// The arbitrary-query FLAG and its TEXT are edited on the settings window's Query tab, where the
-	// styled editor, the constructor button and the engine's verdict already are; a bare checkbox and
-	// a one-line string beside them are a second, worse door to the same setting. They stay
-	// properties (serialised, settable from generated code) — they are simply not offered here.
-	virtual void OnPropertyRefresh() override {
-		HideProperty(m_propertyUseCustomQuery, true);
-		HideProperty(m_propertyCustomQuery, true);
-	}
+	// The query is edited on the settings window's Query tab, where the styled editor, the
+	// constructor button and the engine's verdict already are.
+	//
+	// (Nothing is hidden here any more: the flag and the text WERE properties, hidden from the
+	//  inspector while still being serialised — the second store this class was cured of.)
 
 	// "Source" = the registered queryables; "Settings" = an "Open" action button. ---
 	ibPropertyCategory*        m_categoryList   = ibPropertyObject::CreatePropertyCategory(wxT("DynamicList"), _("Dynamic list"));
@@ -290,8 +337,9 @@ private:
 	ibPropertyDynamicList* m_propertySettings = ibPropertyObject::CreateProperty<ibPropertyDynamicList>(m_categoryList, wxT("Settings"), _("Settings"));
 	// Arbitrary-query mode: the flag switches the source from a picked metaobject to a QUERY TEXT (both serialised
 	// by ReadProperty/WriteProperty). The text is edited on the settings dialog's first "Query" tab.
-	ibPropertyBoolean* m_propertyUseCustomQuery = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryList, wxT("UseCustomQuery"), _("Arbitrary query"), false);
-	ibPropertyString*  m_propertyCustomQuery    = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryList, wxT("CustomQuery"), _("Query text"), wxEmptyString);
+	// (⛔ `UseCustomQuery` + `CustomQuery` PROPERTIES STOOD HERE — hidden from the inspector, still
+	//  serialised, and read by RebuildSource while the settings window wrote the DESCRIPTION. Two
+	//  stores for one fact, and the one that was written was not the one that was read.)
 	// DynamicRead — the safety toggle ("Dynamic data read"). TRUE (default): a live keyset cursor paged from the DB
 	// batch by batch. FALSE: the whole result set is materialised into a RAM snapshot ONCE and paged in memory (the base
 	// ibValueModelCursor::EnsureSnapshot / RunStoragePage) — the fallback for when cursor paging misbehaves, or a

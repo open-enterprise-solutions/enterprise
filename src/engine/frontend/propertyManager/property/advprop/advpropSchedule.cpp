@@ -34,7 +34,9 @@ ibPGScheduleProperty::ibPGScheduleProperty(ibPropertySchedule* property, const w
 	wxPGProperty::SetFlagRecursively(wxPGFlags::ReadOnly, true);
 	wxPGProperty::SetFlagRecursively(wxPGFlags::NoEditor, true);
 
-	wxPGProperty::SetValue(wxVariant(false, wxT("hyperLink_clicked")));
+	// THE CELL KEEPS THE VARIANT IT WAS GIVEN — the click stamps the NAME onto it rather than
+	// replacing it (propertyEditor.cpp), so there is nothing to overwrite here.
+	wxPGProperty::SetValue(value);
 }
 
 ibPGScheduleProperty::~ibPGScheduleProperty()
@@ -59,7 +61,13 @@ bool ibPGScheduleProperty::StringToValue(wxVariant& variant,
 
 void ibPGScheduleProperty::OnSetValue()
 {
-	if (wxT("hyperLink_clicked") == m_value.GetName() && m_value.GetBool()) {
+	// THE NAME IS THE CLICK — see the dynamic list's cell: the editor stamps the name onto whatever
+	// the cell carries, so testing the bool would be testing the payload instead of the signal.
+	if (wxT("hyperLink_clicked") == m_value.GetName()) {
+		// ⭐ TAKEN, SO ENDED — see the hyperlink's cell, where a name that outlived its click cost two
+		// crashes.
+		m_value.SetName(wxEmptyString);
+
 		ibPropertySchedule* property = m_scheduleProperty;
 		if (property == nullptr)
 			return;

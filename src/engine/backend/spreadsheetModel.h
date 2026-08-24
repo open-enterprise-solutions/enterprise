@@ -4,6 +4,7 @@
 #include "backend/compiler/value.h"
 #include "backend/backend_spreadsheet.h"
 #include "backend/standardCommand.h"   // ibCommandItem — the model is a command STORE, like a table's
+#include "backend/composition/dataComposer.h"   // L5 — every sheet model has one; a drawn document's is empty
 
 #include <functional>
 #include <vector>
@@ -65,6 +66,16 @@ public:
 	//   * a hand-filled DOCUMENT already IS the result — nothing to produce.
 	virtual bool Compose() = 0;
 
+	// ⭐⭐ EVERY SHEET MODEL HAS A COMPOSER — a drawn document's is simply EMPTY (Max, 2026-08-23:
+	// "just let the spreadsheet document have an empty composer, and that is all").
+	//
+	// That one sentence removes the whole reason this base used to refuse to know the query engine:
+	// the two kinds stopped differing in WHAT THEY HAVE and differ only in what is in it. A report's
+	// composer reads; a drawn document's never runs, because nothing was ever put in it. Nobody has
+	// to ask which kind they are holding, and nothing has to answer for a thing it is not.
+	ibDataDBComposer&       GetModelComposer()       { return m_composer; }
+	const ibDataDBComposer& GetModelComposer() const { return m_composer; }
+
 	// ⭐ THE MODEL IS A COMMAND STORE, exactly as a table's model is (ibValueModelTableBox merges
 	// `model->GetCommandCollection` into its own band). It only LISTS what can be done — the control
 	// lays the list out into real actions and decorates it with its own verbs, so what a source
@@ -75,10 +86,6 @@ public:
 	
 	// …and runs one of them. The id is the store's own — the control passes back what it was given.
 	virtual void CallAsModelCommand(const ibActionID& id, class ibBackendValueForm* srcForm) {}
-
-	// ⚠ NO QUERY ENGINE HERE. This base does not know ibDataDBComposer and must not: filling a sheet
-	// is not the same as READING one (Max, 2026-08-20). A composer keeps its own store inside itself
-	// — that is its business, and a hand-filled document has no query at all.
 
 	// ⭐⭐ THE FETCH IS AN EVENT HERE, NOTHING MORE (Max, 2026-08-20: "make the async fetch just an
 	// event on the base model and let the composer override it itself").
@@ -100,6 +107,10 @@ protected:
 	// The sheet itself. Held here because holding it IS what makes something a model of a spreadsheet;
 	// a composer replaces its content on every run, a hand-filled document simply keeps it.
 	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetDoc;
+
+	// …and the composer that fills it. EMPTY on a drawn document — no source, no query, nothing set
+	// — which is the honest description of a sheet somebody typed by hand.
+	ibDataDBComposer m_composer;
 };
 
 // ⚠ NO WRAPPER CLASS. Both things that show a sheet derive this base DIRECTLY — the composer and the

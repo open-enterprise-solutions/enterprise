@@ -33,6 +33,20 @@ public:
 	const ibBackendQueryable* GetQueryable() const;
 	void SetQueryable(const ibBackendQueryable* queryable);
 
+	// ⭐⭐ THE ID, KEPT AS AN ID — what READING a stored source does.
+	//
+	// 🛑 GOING THROUGH SetQueryable LOSES IT. Reading used to be
+	// `SetQueryable(factory->ResolveById(id))`, and a source that cannot be resolved AT THAT MOMENT
+	// — the metatypes are not registered yet, which is ordinary during a load — resolves to null,
+	// and null means `wxNOT_FOUND`. So the right id, just read out of the file, was thrown away and
+	// the list came back with no source at all: "I set the main table and it is not saved"
+	// (Max, 2026-08-24).
+	//
+	// Nothing has to resolve here. This variant resolves LAZILY — GetQueryable / GetDescriptor ask
+	// the factory every time — so keeping the number is keeping the source.
+	void SetTableId(const ibMetaID& tableId) { m_tableId = tableId; }
+	ibMetaID GetTableId() const { return m_tableId; }
+
 	// Resolve the chosen source's DESCRIPTOR (holder) LIVE by the same id — the parallel path to
 	// GetQueryable, so the dynamic list reaches the source's command interface. Null / never stale.
 	const ibQueryableSourceDescriptor* GetDescriptor() const;

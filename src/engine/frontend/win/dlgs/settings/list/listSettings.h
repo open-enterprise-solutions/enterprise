@@ -12,7 +12,8 @@
 
 #include <memory>
 
-#include "backend/composition/listFilter.h"
+#include "backend/compositionDescription.h"
+#include "frontend/win/dlgs/settings/settingsFieldTree.h"   // ibSettingsPlainField — a field, described
 
 // The tabs are model-driven grids, and the value cells are type-driven selectors — both live on the
 // dataview machinery below.
@@ -52,15 +53,38 @@ public:
 		Page_All    = Page_Query | Page_Filter | Page_Sort | Page_Group,
 	};
 
-	// Created ON THE BASIS of a dynamic list: reads the list's source queryable for
-	// the available fields and edits the list's settings (GetListSettings()).
-	ibListSettingsPanel(wxWindow* parent, ibValueDynamicList* list, int pages = Page_All);
+	// ⭐⭐ ON THE BASIS OF A DESCRIPTION ALONE — the only road there is. Nothing
+	// running is handed in: the caller CLONES its variant, this edits the clone in place, and on OK
+	// the caller sets the clone back as the property's value (Max, 2026-08-24). The available fields
+	// come from the query text the description carries, resolved in `metaData` — the same answer
+	// ibQueryFieldsOfText gives the composer's window.
+	//
+	// ⚠ THE QUERY IS THE TEXT ITSELF here. A dynamic list keeps "use an arbitrary query" as a
+	// property of its own, outside the description, so on this road the text's presence IS the flag.
+	// ⭐⭐ `fields` — THE FIELDS, DESCRIBED. A description that carries a query answers "what may be
+	// filtered by" out of its own text; one that carries none (a value table, a tabular section)
+	// cannot, and its fields arrive as DATA instead — name, id and type, which is all a picker ever
+	// needed (Max, 2026-08-24: "then describe them, you have everything for it").
+	//
+	// That is what keeps the runtime out of here: whoever holds the running thing says what its
+	// fields ARE, and this window is handed the answer rather than the object to ask.
+	// THE AUTHOR'S ROAD — the description is EDITED here: the query is part of what is being written.
+	ibListSettingsPanel(wxWindow* parent, ibCompositionDescription& desc, const class ibMetaData* metaData,
+		int pages = Page_All);
 
-	// Created ON THE BASIS of ANY model: edits the model's settings
-	// (GetListSettings()) and builds the available filter fields from the model's
-	// COLUMNS (PATH A — see BuildFilterFieldsFromColumns). Used when the "Filter"
-	// button is pressed on a plain table model (no dynamic-list source yet).
-	ibListSettingsPanel(wxWindow* parent, ibValueModel* model, int pages = Page_All);
+	// ⭐⭐ THE READER'S ROAD — THE SCHEMA IS THE OWNER, AND IT IS CONST. That is the whole of the
+	// guarantee (Max, 2026-08-24: "the schema as the owner, but constant — you cannot change it,
+	// only the setting"): a window holding a `const&` cannot write the configuration, and no care
+	// or convention is required for that to hold.
+	//
+	// It is read for one thing — what fields exist — and `settings` is the only thing written. A
+	// source that describes no query (a value table, a tabular section) states its fields as data
+	// instead, which is what `fields` carries.
+	ibListSettingsPanel(wxWindow* parent, const ibCompositionDescription& schema,
+		const class ibMetaData* metaData, ibSettingsDescription& settings,
+		std::vector<ibSettingsPlainField> fields = std::vector<ibSettingsPlainField>(),
+		int pages = Page_All);
+
 	~ibListSettingsPanel();   // out of line — the field tree is held by forward-declared pointer
 
 	// COMMIT THE BUFFER ONTO THE MODEL — what OK does. Separate from the dialog so an
@@ -68,8 +92,28 @@ public:
 	// refused and said why (a half-written setting): the host must stay open.
 	bool Commit();
 
+protected:
+
+	// ⭐⭐ SOMETHING CHANGED — ONE FUNCTION, and it asks whether there is a DOCUMENT behind this
+	// window (Max, 2026-08-24). With one, every edit reaches it at once and the tree lights up with
+	// its asterisk; without one — the SNAPSHOT road, opened from a property cell — nothing is marked
+	// until OK, where setting the value raises the cascade that ends at the form attribute.
+	//
+	// The composer's panel carries the same verb for the same reason, so the two windows cannot
+	// disagree about when a change counts as one.
+	virtual void MarkModified();
+
+	// ⭐ THE RED LINE UNDER THE QUERY — said on OPEN as well as on a change, the same as the
+	// composer's window. A stored query that no longer compiles is exactly the one its author needs
+	// told about before touching anything; showing it only after the first edit meant the window
+	// knew and stayed quiet.
+	void ShowQueryFault();
+
+public:
+
 	// The GROUPING — the list's own, and the one editor of the three that stayed here.
-	ibValueGroupList*  GetGroupList() const;
+	// The part of the edited copy it stands over; never null while the panel exists.
+	ibGroupDescription* GetGroupList();
 
 	// THE FIELD PICKER — the available-fields tree as a form of its own. A field is a
 	// VALUE (CompositionField), so choosing one is choosing a value: the same door a
@@ -118,22 +162,60 @@ private:
 
 	// ---- Commit ----
 
-	// The model this dialog edits. Always set (the dynamic-list ctor passes the list,
-	// which IS-A ibValueModel). The field source for the Filter "Add" picker comes
-	// from EITHER the model's columns (PATH A) OR the list's source explorer (PATH B).
-	ibValueModel*        m_model;      // the model whose composer the dialog commits to on OK
-	ibValueDynamicList*  m_list;       // non-null only on the dynamic-list path (source + composer); null for a plain model
-	ibValuePtr<ibValueListSettings> m_settings;   // the dialog's OWN transactional BUFFER (load from composer on open, commit on OK)
+	// ⭐ THE DESCRIPTION — and there is nothing running beside it: this panel holds no model and no
+	// list. Every question it used to ask them, a description answers (Max, 2026-08-24).
+	// WHAT IS READ — always set: the schema this window shows fields out of. Const, because reading
+	// is all it is for.
+	const ibCompositionDescription* m_schema = nullptr;
+
+	// WHAT IS WRITTEN — set on the AUTHOR's road only, and then it is the same object as m_schema.
+	// Null on the reader's road, which is what makes the schema unwritable there by construction.
+	ibCompositionDescription* m_desc     = nullptr;
+	const class ibMetaData*   m_metaData = nullptr;
+	// ⭐⭐ THE COPY THIS DIALOG EDITS — a transaction is a copy plus an assignment. It is a SETTING and
+	// nothing more (a model deals in settings; the whole schema is the list's own business), taken
+	// from what is in force when the window opens and handed back on OK as the USER setting. Cancel
+	// drops it: there is nothing to undo, because nothing was done.
+	//
+	// Each editor on the tabs is handed the PART of this copy it edits — the filter, the sort, the
+	// grouping — by pointer, in its constructor. There is no object in between: what they write is
+	// this setting, and what OK hands over is this setting.
+	ibSettingsDescription m_edited;
+
+	// ⭐⭐ WHAT THE EDITORS ARE POINTED AT — the setting HANDED IN when there is one, this window's own
+	// buffer otherwise.
+	//
+	// A reader's road already arrives with a copy: the box took it, and dropping it is what Cancel
+	// means there. Copying it again into `m_edited` and copying it back on OK was a third store, and
+	// the third store is where the drift lives — the same three chores the composer's panel was
+	// cured of on 2026-08-24 (load in, keep in step, write back).
+	//
+	// The AUTHOR's road has no copy of its own — it edits the description — so the buffer stays for
+	// it, and there Cancel is what the buffer is FOR.
+	ibSettingsDescription& EditedSettings() {
+		return m_settings != nullptr ? *m_settings : m_edited;
+	}
+
+	// ⭐ THE SETTING THE CALLER HANDED IN, when it handed one. `m_edited` starts as a copy of it and,
+	// on OK, is copied back — so the box that took the copy is the one that decides what to do with
+	// the result. Null: the old road, where this window read the model and assigned to it itself.
+	ibSettingsDescription* m_settings = nullptr;
+
+	// The fields, as they were described to us — used when the description carries no query to read
+	// them out of. Empty is a legitimate answer: nothing to filter by.
+	std::vector<ibSettingsPlainField> m_plainFields;
 
 	// Query tab (dynamic-list only) — the arbitrary query that lives OVER the list's main table. Edits
 	// the list's own UseCustomQuery / CustomQuery properties (not the settings buffer). Applied AT ONCE
 	// rather than on OK, because every other tab's field picker depends on it: change the query and the
 	// filters, sorts and groupings must be offering the new fields before you walk over to them.
-	wxCheckBox* m_queryUseCheck = nullptr;
+	// (⛔ THE "ARBITRARY QUERY" CHECKBOX STOOD HERE — a second spelling of "the description carries a
+	//  query". See BuildQueryPage: the two disagreed, and the text won by accident.)
 	// The arbitrary query, in the SAME styled editor the constructor uses — one language, one look.
 	class wxStyledTextCtrl* m_queryText = nullptr;
 	class wxButton* m_queryBuild = nullptr;   // opens the query constructor ON this text and writes back into it
 	class wxStaticText* m_queryError = nullptr;   // the ENGINE's verdict, verbatim; hidden when the query resolves
+	wxString            m_queryFault;             // what it said, kept so the line can be shown on open too
 
 	// Push the query onto the list and rebuild everything that depends on it (the three field trees,
 	// the error line). Called when the flag is toggled and when the editor loses focus.
@@ -146,7 +228,7 @@ private:
 
 	// WHICH FIELDS THIS THING HAS — one answer, shared by the two editors above and by
 	// this panel's own tabs (settings/settingsFieldTree.h).
-	std::unique_ptr<class ibSettingsFieldTree> m_fields;
+	std::unique_ptr<class ibSettingsFieldTree> m_fieldSource;
 
 	// Group — Field, model-driven.
 	ibDataViewCtrl* m_groupView      = nullptr;
@@ -168,17 +250,36 @@ private:
 // ---------------------------------------------------------------------------
 class ibDialogListSettings : public wxDialog {
 public:
-	ibDialogListSettings(wxWindow* parent, ibValueDynamicList* list);
-	ibDialogListSettings(wxWindow* parent, ibValueModel* model);
+	// THE AUTHOR'S ROAD — the description is edited (its query included).
+	ibDialogListSettings(wxWindow* parent, ibCompositionDescription& desc, const class ibMetaData* metaData);
 
-	// Opened by the designer property (ibPGDynamicListProperty) against the
-	// attribute's dynamic list. OK applies the edits onto the list's composer.
-	static bool ShowListSettingsDialog(ibValueDynamicList* list);
+	// THE READER'S ROAD — the schema is const, the setting is what changes. See the panel.
+	ibDialogListSettings(wxWindow* parent, const ibCompositionDescription& schema,
+		const class ibMetaData* metaData, ibSettingsDescription& settings,
+		std::vector<ibSettingsPlainField> fields = std::vector<ibSettingsPlainField>());
 
-	// General entry: open the settings window for ANY model. The filter fields come
-	// from the model's columns (PATH A). OK commits the panel's buffer onto the
-	// model's composer (ibCommitSettingsToComposer + NotifyReset).
-	static bool ShowListSettingsDialog(ibValueModel* model);
+	// ⭐⭐ THE USER'S SETTINGS OF A MODEL — ONE static door, and the composer window's twin
+	// (ibDialogComposerSettings::ShowUserSettings). The whole sequence is the model's own pair: take
+	// the setting in force, let the person change a copy of it, and on OK assign it back.
+	//
+	// ⚠ ASKED FOR BY NAME. A control used to reach this through a method OF ITS OWN
+	// (ibTableViewCtrl::ShowListSettings), which put the settings road inside a widget — so "how are
+	// a model's settings opened" had two answers, and only one of them was true.
+	//
+	// Works for ANY model: a dynamic list keeps its source-explorer field picker, anything else
+	// offers its columns.
+	// ⭐⭐ THE WHOLE SEQUENCE, AND IT LIVES HERE — take a COPY of what is in force, let the person
+	// change it, and on OK assign that copy to the model's composer. The caller says only "show the
+	// settings"; it does not carry the copy around (Max, 2026-08-24).
+	//
+	// The PANEL below is handed the copy and nothing else — no model. Whose setting it is, and what
+	// accepting it means, is this door's business; a setting is a setting, and the panel edits one.
+	static bool ShowUserSettings(wxWindow* parent, ibValueModel* model, const class ibMetaData* metaData);
+
+	// ⭐⭐ …AND THE SNAPSHOT ROAD — the one a property cell takes. It edits a composer DESCRIPTION in
+	// place and holds nothing running; the caller passes a CLONE of its variant and, on true, sets
+	// that clone back as the property's value (Max, 2026-08-24). True = the snapshot differs.
+	static bool ShowListSettings(ibCompositionDescription& desc, const class ibMetaData* metaData);
 
 	ibListSettingsPanel* GetPanel() const { return m_panel; }
 

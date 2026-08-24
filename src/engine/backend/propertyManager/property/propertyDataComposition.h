@@ -2,6 +2,7 @@
 #define __PROPERTY_DATA_COMPOSITION_H__
 
 #include "backend/propertyManager/propertyObject.h"
+#include "backend/compositionDescription.h"   // what it stores — the SAME composer a list stores
 
 // ---------------------------------------------------------------------------
 // ibPropertyDataComposition — backend half of the "data composer settings"
@@ -20,33 +21,44 @@
 // maker as well and the pair would be decided by registration order.
 // ---------------------------------------------------------------------------
 class BACKEND_API ibPropertyDataComposition : public ibProperty {
+	// ONE maker with a default — the dynamic list's shape over the same description, because a list
+	// and a report SAVE the same thing.
+	wxVariantData* CreateVariantData(ibPropertyObject* property,
+	                                 const ibCompositionDescription& val = ibCompositionDescription()) const;
 public:
 
-	// The action carries no editable scalar — seed an empty variant so the base
-	// stays well-formed; the frontend property drives the click flag.
+	// ⭐⭐ IT HOLDS A DESCRIPTION, and the action is what the inspector shows over it (2026-08-23).
+	// It used to carry an empty wxVariant and nothing else: the window edited the composition and
+	// the composition serialised itself, so "what a report's settings are" was answered in two
+	// places. It is this property's cell now, read and written by the one pair that reads and
+	// writes a composition anywhere — the very same lines the dynamic list runs.
 	ibPropertyDataComposition(ibPropertyCategory* cat, const wxString& name)
-		: ibProperty(cat, name, wxVariant())
+		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
 	ibPropertyDataComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label)
-		: ibProperty(cat, name, label, wxVariant())
+		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
 	ibPropertyDataComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
-		: ibProperty(cat, name, label, helpString, wxVariant())
+		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	// Action property — no runtime data exchange and nothing to (de)serialize on the
-	// property cell itself. What the window edits is the COMPOSITION's own state, and
-	// the composition serialises that (ReadProperty / WriteProperty).
+	// THE DESCRIPTION THIS PROPERTY STORES — by reference, the base rule of the family.
+	ibCompositionDescription& GetValueAsCompositionDesc() const;
+	void SetValue(const ibCompositionDescription& val);
+
+	// Action property — no runtime data exchange on the cell itself; the frontend property drives
+	// the click that opens the window.
 	virtual bool SetDataValue(const ibValue& /*varPropVal*/) override { return false; }
 	virtual bool GetDataValue(ibValue& /*pvarPropVal*/) const override { return false; }
 
-	virtual bool ReadNodeValue(const ibDataValue& /*value*/) override { return true; }
-	virtual bool WriteNodeValue(ibDataValue& /*value*/) const override { return true; }
+	// …AND IT SERIALISES ITSELF, in the two one-line methods every description-backed property has.
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 };
 
 #endif // __PROPERTY_DATA_COMPOSITION_H__

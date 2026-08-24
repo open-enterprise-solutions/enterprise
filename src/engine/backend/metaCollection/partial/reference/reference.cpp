@@ -458,6 +458,8 @@ bool ibValueReferenceDataObject::SetValueByMetaID(const ibMetaID& id, const ibVa
 
 bool ibValueReferenceDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
+	// THE REFERENCE FIELD ITSELF IS THE IDENTITY — answered from the key, with nothing read: asking a
+	// reference for its own Ref is asking for what it already is.
 	if (m_metaObject->IsDataReference(id)) {
 		if (!ibValueReferenceDataObject::IsEmpty()) {
 			pvarMetaVal = ibValueReferenceDataObject::Create(m_metaObject, m_objGuid);
@@ -466,6 +468,11 @@ bool ibValueReferenceDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& p
 		pvarMetaVal = ibValueReferenceDataObject::Create(m_metaObject);
 		return true;
 	}
+
+	// …ANY OTHER FIELD IS THE ROW, so this is the asking that resolves it — the same rule GetString
+	// follows above and GetPropVal follows below. The values live in the map PrepareRef fills; before
+	// it has run the map is empty, and "the field is not there" is not the truth about the object.
+	const_cast<ibValueReferenceDataObject*>(this)->PrepareRef();
 
 	auto it = m_listObjectValue.find(id);
 	//wxASSERT(it != m_listObjectValue.end());
@@ -598,6 +605,15 @@ const ibSourceExplorer* ibValueReferenceDataObject::GetSourceExplorer() const
 
 wxString ibValueReferenceDataObject::GetString() const
 {
+	// ⭐⭐ ASKING WHAT THIS REFERENCE IS *IS* THE ASKING — so the row is read here if nobody has read
+	// it yet. That is the whole of what OnDemand means, and since 2026-08-24 it is the default: a
+	// reference states an IDENTITY and costs no query until somebody wants the object behind it.
+	//
+	// 🛑 WITHOUT THIS the change would have made every reference print "Not found": the presentation
+	// read m_foundedRef, which is false until a read happens, and nothing on this path read. The
+	// reading side is where a lazy rule is finished — the writing side alone is half of it.
+	const_cast<ibValueReferenceDataObject*>(this)->PrepareRef();
+
 	if (m_newObject)
 		return wxEmptyString;
 	else if (!m_foundedRef)   // deleted, or refused by access policy — the same answer on purpose

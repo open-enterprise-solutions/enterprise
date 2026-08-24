@@ -40,6 +40,14 @@ class BACKEND_API ibDataNode;
 class BACKEND_API ibMetaData;
 class FRONTEND_API ibValueForm;
 
+// ⭐ WHAT A FORM ATTRIBUTE ASKS OF ITS FILLING. Two answers, and the picker offering them is a VIEW
+// of this — not the other way round: the property stores a number, and every caller that read that
+// number raw would be spelling "1" where it meant "show an error".
+enum ibFormAttributeFillCheck {
+	ibFormAttributeFillCheck_DontCheck = 0,
+	ibFormAttributeFillCheck_ShowError,
+};
+
 
 // -----------------------------------------------------------------------
 // ibFormAttributeValue — the form's per-attribute registry entry AND the runtime VALUE the
@@ -107,7 +115,17 @@ class FRONTEND_API ibFormAttributeValue :
 		virtual bool ReadProperty(const ibDataNode& node) override;
 		virtual bool WriteProperty(ibDataNode& node) const override;
 		void SetAttributeId(const ibMetaID& id) { m_attributeId = id; }
-		int  GetFillCheck() const { return m_propertyFillCheck->GetValueAsInteger(); }
+		// ⭐ WHAT THIS ATTRIBUTE ASKS OF ITS FILLING — and it comes back as the KIND, not as the
+		// index of a row in a picker. The list's two entries and the number they store are one fact
+		// with two spellings; a caller that has to know 1 means "show an error" is a caller reading
+		// the widget instead of the setting.
+		//
+		// 🛑 IT WAS ANSWERED BY NOBODY until 2026-08-24: the property serialised both ways and was
+		// edited in the designer, and no code anywhere asked. The seam it needed was a form-wide
+		// pass — ibValueForm::CheckFilling, which is where it is asked now.
+		ibFormAttributeFillCheck GetFillCheck() const {
+			return static_cast<ibFormAttributeFillCheck>(m_propertyFillCheck->GetValueAsInteger());
+		}
 
 	protected:
 
@@ -176,6 +194,8 @@ public:
 	ibMetaID GetId() const override { return m_attribute->GetId(); }
 	bool     IsMain() const override { return m_attribute->IsMain(); }
 	const ibTypeDescription& GetTypeDesc() const override { return m_attribute->GetTypeDesc(); }
+	// …and what it asks of its filling — read by the form's own pass (ibValueForm::CheckFilling).
+	ibFormAttributeFillCheck GetFillCheck() const { return m_attribute->GetFillCheck(); }
 
 	// The value this entry manages — kept in sync with the attribute's Type on every get/set
 	// via AdjustValue (it carries the metadata): a value whose type still matches is kept; a

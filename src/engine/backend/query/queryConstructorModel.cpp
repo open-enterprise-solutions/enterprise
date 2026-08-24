@@ -235,10 +235,20 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::FieldsOfSelect(
 
 		// …AND WHAT IT HOLDS. A projected reference stays a reference in the table it lands in, so
 		// the next statement can walk into it exactly as it could have walked into the original.
+		//
+		// ⭐ THE TYPE COMES WITH IT, and the whole field is asked for rather than just the reference
+		// clsid: one walk answers both. m_type is what a HOST does its type questions with — which
+		// aggregates fit, what the other side of a condition may be, and whether the field unfolds
+		// (ibSettingsFieldTree reads its clsid list to decide the [+]). Leaving it empty here made
+		// every field of a composition's query look like a leaf of no type at all.
 		if (projection.m_expr && projection.m_expr->m_kind == ibQueryAstExprKind::Column) {
-			field.m_referenceClsid = ReferenceOfPath(select, projection.m_expr->m_path,
-			                                         package, beforeStatement);
+			const ibQueryConstructorField of = FieldOfPath(select, projection.m_expr->m_path,
+			                                              package, beforeStatement);
+			field.m_referenceClsid = of.m_referenceClsid;
 			field.m_reference      = field.m_referenceClsid != 0;
+			field.m_type           = of.m_type;
+			if (of.m_icon.IsOk())
+				field.m_icon = of.m_icon;   // the column's own picture, when it has one
 		}
 		out.push_back(std::move(field));
 	}
@@ -486,4 +496,51 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetQualifiedFields
 	for (ibQueryConstructorField& field : out)
 		field.m_name = prefix + wxT(".") + field.m_name;
 	return out;
+}
+
+// ------------------------------------------------------------------------------------------------
+// THE FIELDS A QUERY TEXT OFFERS — see the header. Lifted out of ibValueDataComposition, which is
+// where it used to live and where it made every editor of a query hold a running one.
+// ------------------------------------------------------------------------------------------------
+
+#include "queryParser.h"                 // ibQueryParser — the text is parsed here and nowhere else
+#include "queryable.h"                   // ibSourceMetaDataScope — names resolve against THIS config
+
+std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
+	const ibMetaData* metaData, wxString* error)
+{
+	std::vector<ibQueryConstructorField> fields;
+	if (error != nullptr)
+		error->Clear();
+
+	if (text.IsEmpty())
+		return fields;
+
+	// The names resolve against the CONFIGURATION HANDED IN — never the active one, which in the
+	// designer is not necessarily this query's (two are open at once).
+	const ibSourceMetaDataScope scope(metaData);
+	try {
+		ibQueryParser parser;
+		const ibQueryPackage package = parser.ParsePackage(text);
+		if (package.m_statements.empty())
+			return fields;
+
+		// THE LAST STATEMENT is the one that produces the result — a package builds temp tables and
+		// reads them at the end, so its fields are the ones a resource or a level is written over.
+		// Earlier statements are handed in as context so a temp table's own fields resolve.
+		const size_t last = package.m_statements.size() - 1;
+		const ibQuerySelectPtr select = package.m_statements[last].m_select;
+		if (!select)
+			return fields;
+
+		const ibQueryConstructorModel model(metaData);
+		fields = model.FieldsOfSelect(*select, package, last);
+	}
+	catch (const ibBackendException& err) {
+		// Half-typed text offers nothing YET — an empty list, and the complaint only if asked for.
+		fields.clear();
+		if (error != nullptr)
+			*error = err.GetErrorDescription();
+	}
+	return fields;
 }

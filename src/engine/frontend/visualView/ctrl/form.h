@@ -283,6 +283,12 @@ public:
 	bool WriteFormCommands(ibDataNode& node) const;
 
 	unsigned int GetAttributeCount() const { return (unsigned int)m_attributes.size(); }
+
+	// ⭐⭐ IS EVERY REQUIRED ATTRIBUTE FILLED — the form's own filling check, and the seam the
+	// attribute's `FillCheck` was declared against. Messages each one that is not and answers false;
+	// it does NOT raise, because a form is somebody standing in front of a window and the caller
+	// decides what an empty field costs. Reachable from a script as `ThisForm.CheckFilling()`.
+	bool CheckFilling() const;
 	// Next free attribute id (max existing + 1) — PUBLIC so the holder's nested description can
 	// stamp itself on construction (a nested class does not inherit the enclosing class's friends).
 	ibMetaID NextAttributeId() const;

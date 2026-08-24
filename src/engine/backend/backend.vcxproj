@@ -260,8 +260,9 @@
     <ClInclude Include="composition\dataComposer.h" />
     <ClInclude Include="composition\spreadsheetComposeDriver.h" />
     <ClInclude Include="composition\listFetchDriver.h" />
-    <ClInclude Include="composition\compositionField.h" />
-    <ClInclude Include="composition\listFilter.h" />
+    <ClInclude Include="compositionDescription.h" />
+    <ClInclude Include="system\value\composition\valueComposerField.h" />
+    <ClInclude Include="system\value\composition\valueComposerSettings.h" />
     <ClInclude Include="system\value\valueComposer.h" />
     <ClInclude Include="system\value\valueQuery.h" />
     <ClInclude Include="system\value\valueQueryable.h" />
@@ -319,6 +320,7 @@
     <ClInclude Include="propertyManager\property\propertySpreadsheet.h" />
     <ClInclude Include="propertyManager\property\propertyType.h" />
     <ClInclude Include="propertyManager\property\variant\variantAction.h" />
+    <ClInclude Include="propertyManager\property\variant\variantComposition.h" />
     <ClInclude Include="propertyManager\property\variant\variantDynamicSource.h" />
     <ClInclude Include="propertyManager\property\variant\variantForm.h" />
     <ClInclude Include="propertyManager\property\variant\variantGen.h" />
@@ -637,7 +639,6 @@
     <ClCompile Include="metaCollection\partial\dataProcessorMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\dataProcessorMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\dataProcessorObject.cpp" />
-    <ClCompile Include="metaCollection\partial\dataReportAction.cpp" />
     <ClCompile Include="metaCollection\partial\dataReportManager.cpp" />
     <ClCompile Include="metaCollection\partial\dataReportMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\dataReportMetadataMenu.cpp" />
@@ -682,8 +683,9 @@
     <ClCompile Include="composition\dataComposer.cpp" />
     <ClCompile Include="composition\spreadsheetComposeDriver.cpp" />
     <ClCompile Include="composition\ramComposer.cpp" />
-    <ClCompile Include="composition\compositionField.cpp" />
-    <ClCompile Include="composition\listFilter.cpp" />
+    <ClCompile Include="compositionDescription.cpp" />
+    <ClCompile Include="system\value\composition\valueComposerField.cpp" />
+    <ClCompile Include="system\value\composition\valueComposerSettings.cpp" />
     <ClCompile Include="system\value\valueComposer.cpp" />
     <ClCompile Include="system\value\valueQuery.cpp" />
     <ClCompile Include="system\value\valueQueryable.cpp" />

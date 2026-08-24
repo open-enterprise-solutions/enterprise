@@ -804,7 +804,7 @@ public:
 
 	// Open the List-Settings window (Filter / Sort / Group) for the model. Default
 	// returns false; ibTableViewCtrl overrides it to open ibDialogListSettings.
-	virtual bool ShowListSettings(class ibValueModel* model) { return false; }
+	// (ShowListSettings removed — a control does not carry the settings road; see ibDialogListSettings.)
 	virtual bool ShowViewMode() { return false; }
 
 	virtual bool AllowMultiColumnSort(bool allow) wxOVERRIDE;

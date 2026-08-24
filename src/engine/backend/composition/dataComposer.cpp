@@ -13,6 +13,7 @@
 #include "backend/metaData.h"                 // ibMetaData::GetSourceFactory — resolve by-name sources per-config
 #include "backend/backend_exception.h"        // ibBackendCoreException
 #include "backend/query/queryReadState.h"  // ibQueryReadState — one build, one state of the data
+#include "backend/query/queryRender.h"        // ibQueryColumnFromPath — a dotted path becomes a column, once
 
 //////////////////////////////////////////////////////////////////////
 // sources
@@ -90,6 +91,26 @@ bool ibCompositionCompare(const ibValue& cell, const wxString& op, const ibValue
 	return true;   // unknown operator → do not hide anything over a line nobody can read
 }
 
+// ⭐ THE SAME COMPARISON, ASKED WITH THE KIND IT IS. A stored condition holds an ibComparisonKind,
+// not a spelling, and the string pair that used to translate between them is gone (there was an
+// inverse map that read "IN" back as Equal — see list-settings.md § 5a). So the row-side comparison
+// answers the kind directly; membership is the one that cannot be asked of a single value here, and
+// it hides nothing rather than pretending.
+bool ibCompositionCompare(const ibValue& cell, ibComparisonKind kind, const ibValue& value)
+{
+	switch (kind) {
+	case ibComparisonKind_Equal:        return cell == value;
+	case ibComparisonKind_NotEqual:     return cell != value;
+	case ibComparisonKind_Greater:      return cell >  value;
+	case ibComparisonKind_GreaterEqual: return cell >= value;
+	case ibComparisonKind_Less:         return cell <  value;
+	case ibComparisonKind_LessEqual:    return cell <= value;
+	case ibComparisonKind_Contains:     return ibCompositionCompare(cell, wxT("LIKE"),
+	                                        ibValue(wxT("%") + value.GetString() + wxT("%")));
+	default:                            return true;   // In / InHierarchy — a set is the server's question
+	}
+}
+
 //////////////////////////////////////////////////////////////////////
 // settings
 //////////////////////////////////////////////////////////////////////
@@ -101,7 +122,7 @@ ibDataComposer& ibDataComposer::Select(const wxString& nameOrPath)
 	return *this;
 }
 
-wxString ibDataComposer::AddParam(const ibValue& value)
+wxString ibDataComposer::AddParam(const ibValue& value) const
 {
 	// The value travels as an auto-named &parameter — never inlined into the
 	// text. That is what keeps a string value from being read as syntax and a
@@ -125,30 +146,209 @@ wxString ibDataComposer::AddParam(const ibValue& value)
 // The façade already guarded one of its two doors this way (ibValueSortList::Add writes the composer
 // only `if (!field.IsEmpty())`, while its buffer branch stored the empty item that later came here), and
 // a guard living in one of two doors is the shape of this defect, not its fix.
+// THE COMPARISON A SPELLING MEANS. The imperative door takes the operator as TEXT — it is what a
+// script writes and what the old flat store rendered straight into the query — while a filter line
+// holds the comparison as a KIND. One place says which is which, so a spelling nobody mapped falls
+// back to equality rather than reaching the renderer as a word it cannot spell.
+static ibComparisonKind ibComparisonFromOpText(const wxString& op)
+{
+	const wxString t = op.Strip(wxString::both).Upper();
+	if (t == wxT("<>") || t == wxT("!=")) return ibComparisonKind_NotEqual;
+	if (t == wxT(">"))                    return ibComparisonKind_Greater;
+	if (t == wxT("<"))                    return ibComparisonKind_Less;
+	if (t == wxT(">="))                   return ibComparisonKind_GreaterEqual;
+	if (t == wxT("<="))                   return ibComparisonKind_LessEqual;
+	if (t == wxT("LIKE"))                 return ibComparisonKind_Contains;
+	if (t == wxT("IN"))                   return ibComparisonKind_In;
+	if (t == wxT("IN HIERARCHY"))         return ibComparisonKind_InHierarchy;
+	return ibComparisonKind_Equal;
+}
+
+// ⭐⭐ SETTING A FILTER IS SETTING THE READER'S SETTING (Max, 2026-08-24). Not a store of its own:
+// what a script asks for, what a metaobject declares at creation and what a person types in the
+// settings window are the same fact, and they now live in the same place — so the window shows a
+// declared line, and a declared line cannot be silently outranked by a saved one.
 ibDataComposer& ibDataComposer::Filter(const wxString& path, const wxString& op, const ibValue& value)
 {
 	if (path.IsEmpty())
 		return *this;
-	m_commonFilters.push_back({ path, op, AddParam(value) });
+	UserSettings().m_filter.Append(path, ibComparisonFromOpText(op), value);
 	return *this;
 }
 
-ibDataComposer& ibDataComposer::FilterAst(const ibQueryAstExprPtr& condition)
+// …AND SCOPING A READ IS NOT. See ScopeTo in the header: the engine's own condition for ONE fetch,
+// ANDed with the setting in force and popped when the fetch is done.
+ibDataComposer& ibDataComposer::ScopeTo(const wxString& path, const wxString& op, const ibValue& value)
 {
-	m_commonFilterAst = condition;
-	++m_commonFilterAstVersion;
+	if (path.IsEmpty())
+		return *this;
+	m_scopeConditions.push_back({ path, op, AddParam(value) });
 	return *this;
 }
 
+// ===========================================================================
+//  A FILTER DESCRIPTION → THE CONDITION IT MEANS
+// ===========================================================================
+namespace {
+// A SIDE is a field or a value. A field becomes a column (its path travels as SEGMENTS — that is
+// what the lowering dot-walks to build its joins; one glued string would have to be split again);
+// a value becomes a named parameter, which is why this needs the composer at all.
+ibQueryAstExprPtr ibBuildFilterSide(const ibDataComposer& composer, const ibFilterOperandDescription& side)
+{
+	if (side.IsField())
+		return ibQueryColumnFromPath(side.m_path);
+
+	ibQueryAstExprPtr e = ibQueryAstExpr::Make(ibQueryAstExprKind::Param);
+	e->m_paramName = composer.AddParam(side.m_value);
+	return e;
+}
+
+ibQueryAstExprPtr ibBuildFilterNodes(const ibDataComposer& composer,
+	const std::vector<ibFilterNodeDescription>& nodes, ibFilterGroupKind kind);
+
+ibQueryAstExprPtr ibBuildFilterCondition(const ibDataComposer& composer, const ibFilterNodeDescription& item)
+{
+	// A HALF-WRITTEN LINE IS NOT A CONDITION — a side that is neither a bound field nor a value
+	// would narrow the list by nothing, or make the query lie. It reads as if it were not written.
+	const bool leftUnset  = !item.m_left.IsField()  && item.m_left.m_value.IsEmpty();
+	const bool rightUnset = !item.m_right.IsField() && item.m_right.m_value.IsEmpty();
+	if (leftUnset || (rightUnset && item.m_comparison != ibComparisonKind_Contains))
+		return nullptr;
+
+	// CONTAINS IS A LIKE, not a comparison — its own node kind, so the lowering can do what a LIKE
+	// needs instead of being handed an operator it has no meaning for.
+	const bool isLike = (item.m_comparison == ibComparisonKind_Contains);
+
+	// ⭐⭐ «IN HIERARCHY» IS AN *IN* CARRYING A WORD — one node kind, two comparisons.
+	//
+	// The AST already holds the unfold word on the In node (queryAst.h: `m_unfold`), and L4 resolves
+	// the subtree into the values it stands for before anything below sees it — so both comparisons
+	// reuse the whole mechanism by choosing that node, and «in hierarchy» differs from «in» by the
+	// word alone. An operator of its own would have been a second way to ask what the language asks.
+	const bool isIn = (item.m_comparison == ibComparisonKind_In
+	                || item.m_comparison == ibComparisonKind_InHierarchy);
+
+	ibQueryAstExprPtr e = ibQueryAstExpr::Make(isLike ? ibQueryAstExprKind::Like
+	                                            : isIn ? ibQueryAstExprKind::In
+	                                                   : ibQueryAstExprKind::Compare);
+	if (item.m_comparison == ibComparisonKind_InHierarchy)
+		e->m_unfold = ibQueryDimUnfold::Hierarchy;
+
+	if (!isLike && !isIn) {
+		switch (item.m_comparison) {
+		case ibComparisonKind_NotEqual:     e->m_cmp = ibQueryCompareOp::Ne; break;
+		case ibComparisonKind_Greater:      e->m_cmp = ibQueryCompareOp::Gt; break;
+		case ibComparisonKind_Less:         e->m_cmp = ibQueryCompareOp::Lt; break;
+		case ibComparisonKind_GreaterEqual: e->m_cmp = ibQueryCompareOp::Ge; break;
+		case ibComparisonKind_LessEqual:    e->m_cmp = ibQueryCompareOp::Le; break;
+		default:                            e->m_cmp = ibQueryCompareOp::Eq; break;
+		}
+	}
+
+	e->m_lhs = ibBuildFilterSide(composer, item.m_left);
+
+	// An IN takes a LIST, not a right-hand operand: one entry here, because a filter line holds one
+	// value. Where that value is itself a list (an array chosen in the cell) the lowering flattens it
+	// — the node is already the set-valued one.
+	if (isIn)
+		e->m_list.push_back(ibBuildFilterSide(composer, item.m_right));
+	else
+		e->m_rhs = ibBuildFilterSide(composer, item.m_right);
+	return e;
+}
+
+ibQueryAstExprPtr ibBuildFilterNodes(const ibDataComposer& composer,
+	const std::vector<ibFilterNodeDescription>& nodes, ibFilterGroupKind kind)
+{
+	// LEFT-FOLDED into binary Logical nodes — the AST has no n-ary AND, and the fold is what a
+	// reader expects: `a AND b AND c` groups as `(a AND b) AND c`.
+	ibQueryAstExprPtr acc;
+	for (const ibFilterNodeDescription& item : nodes) {
+		if (!item.m_use)
+			continue;   // switched off — as if it were not written
+		ibQueryAstExprPtr child = item.m_kind == ibFilterNodeKind_Group
+			? ibBuildFilterNodes(composer, item.m_children, item.m_groupKind)
+			: ibBuildFilterCondition(composer, item);
+		if (!child)
+			continue;
+		if (!acc) {
+			acc = child;
+			continue;
+		}
+		ibQueryAstExprPtr joined = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
+		joined->m_isOr = (kind == ibFilterGroupKind_Or);
+		joined->m_lhs = acc;
+		joined->m_rhs = child;
+		acc = joined;
+	}
+
+	if (!acc || kind != ibFilterGroupKind_Not)
+		return acc;
+
+	// NOT negates the WHOLE group, not its first child.
+	ibQueryAstExprPtr negated = ibQueryAstExpr::Make(ibQueryAstExprKind::Not);
+	negated->m_lhs = acc;
+	return negated;
+}
+} // namespace
+
+ibQueryAstExprPtr ibDataComposer::BuildFilterAst(const ibFilterDescription& filter) const
+{
+	return ibBuildFilterNodes(*this, filter.m_nodes, filter.m_rootKind);
+}
+
+// ⭐⭐ AN ASSIGNMENT, AND THAT IS THE WHOLE OF IT (Max, 2026-08-23, more than once: "we apply a
+// setting by plain assignment — you set the section's value, and everything that was in it before is
+// dropped by the fact that you wrote `=`").
+//
+// Nothing is cleared because there is nothing to clear: the filter, the sort and the grouping are
+// not stored twice. They ARE this setting, and the render reads them from here. A door that
+// translated a setting into some other shape is what made "clear first" necessary in the first
+// place — and the moment between the clearing and the re-filling is exactly where half of one
+// setting stood beside half of another.
+ibDataComposer& ibDataComposer::SetUserSettingsDesc(const ibSettingsDescription& settings)
+{
+	m_userSettings = settings;
+	return *this;
+}
+
+// …AND DROPPING IT IS THE RESET. `m_variants[0]`'s setting composes again, and nothing had to be
+// remembered to make that happen.
+ibDataComposer& ibDataComposer::ClearUserSettings()
+{
+	m_userSettings.Clear();
+	return *this;
+}
+
+// ⭐⭐ THE VARIANTS COME IN AS A COPY, AND THEY ONLY EVER GO OUT AS CONST (Max, 2026-08-24: *"the
+// variants are not changed through the settings — you hand them out as a constant, they are only
+// copied; the user setting is the one you take and set"*). That is why there is no mutable door to
+// an element of this array anywhere on this class: a settings window COPIES what composes, edits the
+// copy, and hands it back as the READER's setting. The author's array changes in the designer, on
+// the description, and reaches a composer only through here.
+//
+// A record can say anything; the invariant that `[0]` exists is ours.
+ibDataComposer& ibDataComposer::LoadVariants(const std::vector<ibVariantDescription>& variants)
+{
+	m_variants = variants;
+	if (m_variants.empty())
+		m_variants.emplace_back();
+	return *this;
+}
+
+// ⭐⭐ STATING THE ORDER IS SETTING THE READER'S SORT. A column heading clicked, `Sort()` from a
+// script, a value table asked to sort — all three are somebody saying "order it this way, now", and
+// that is the reader's section by definition. It used to be a flat store the render preferred the
+// setting over, so all three did nothing at all on a list that had one (see ClearSorts).
 ibDataComposer& ibDataComposer::Sort(const wxString& path, bool ascending)
 {
 	if (path.IsEmpty())
 		return *this;   // see the note above Filter
-	m_commonSorts.push_back({ path, ascending });
+	UserSettings().m_sort.Append(path, ascending);
 	return *this;
 }
 
-ibDataComposer& ibDataComposer::Total(const wxString& func, const wxString& path)
+ibDataComposer& ibDataComposer::Resource(const wxString& func, const wxString& path)
 {
 	// A RESOURCE WITH NOTHING TO AGGREGATE is the absence of one — the same rule the sort and the
 	// filter follow above. It would render `SUM()` (or a bare comma with the expression form) and
@@ -156,7 +356,7 @@ ibDataComposer& ibDataComposer::Total(const wxString& func, const wxString& path
 	// rather than as the empty setting it actually was.
 	if (path.IsEmpty())
 		return *this;
-	m_totals.push_back({ func, path });
+	m_resources.push_back({ func, path });
 	return *this;
 }
 
@@ -179,9 +379,11 @@ ibDataComposer& ibDataComposer::Parameter(const wxString& name, const ibValue& v
 ibDataComposer& ibDataComposer::ClearSettings()
 {
 	m_commonSelected.clear();
-	m_commonFilters.clear();
-	m_commonSorts.clear();
-	m_totals.clear();
+	m_scopeConditions.clear();
+	// THE FILTER AND THE ORDER ARE THE READER'S — see Filter() and Sort(). Dropping their setting
+	// altogether is what "back to the defaults" means: `m_variants[0]` composes again.
+	ClearUserSettings();
+	m_resources.clear();
 	TrimLevels(0);
 	return *this;
 }
@@ -204,15 +406,16 @@ wxString ibDataDBComposer::RenderText() const
 
 // RENDER ONE OUTPUT: its own levels, its own filter and sort, its own selected fields. The
 // RESOURCES are the composition's and every output rolls the same ones, which is why they are read
-// off `m_totals` here rather than off the output.
+// off `m_resources` here rather than off the output.
 wxString ibDataDBComposer::RenderTextFor(const Output& output) const
 {
 	// Anything asked of this read — by the composition above it or by the output itself. Miss one
 	// and the author's verbatim text is handed back unchanged, with the setting silently dropped.
 	const bool hasSettings = !SelectedFor(output).empty()
-	                       || !output.m_filters.empty() || !output.m_sorts.empty()
-	                       || !m_commonFilters.empty() || !m_commonSorts.empty()
-	                       || !m_totals.empty() || !ChainFrom(output).empty();
+	                       || output.m_settings.m_filter.IsOk() || output.m_settings.m_sort.IsOk()
+	                       || !m_scopeConditions.empty()
+	                       || !m_resources.empty() || !ChainFrom(output).empty()
+	                       || GetCurrentSettingsDesc().IsOk();   // …and whatever composes
 
 	if (!m_sourceText.IsEmpty() && !hasSettings)
 		return m_sourceText;   // the author's text, verbatim — nothing is being asked of it
@@ -343,33 +546,48 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& outpu
 			wrote = true;
 		}
 	};
-	appendFilters(m_commonFilters);
-	appendFilters(output.m_filters);
+	appendFilters(m_scopeConditions);
+	// (The output's OWN filter is a description now, and it is ANDed into the parsed AST rather than
+	//  written into the text — see RunOutput. A tree condition is never rendered and re-parsed.)
 
-	// THE ORDER: the output's own when it stated one, otherwise the composition's. A level's sort
+	// THE ORDER: the output's own when it stated one, otherwise the one in force. A level's sort
 	// orders that level's headings and is applied on the walk — it is not this clause.
-	const std::vector<SortItem>& sorts = output.m_sorts.empty() ? m_commonSorts : output.m_sorts;
-	for (size_t i = 0; i < sorts.size(); ++i) {
-		const SortItem& s = sorts[i];
-		text += (i == 0 ? wxT(" ORDER BY ") : wxT(", "));
-		text += s.m_path;
-		if (!s.m_ascending)
+	//
+	// ⭐ AND WHICHEVER IT IS, IT REPLACES THE OTHER WHOLE. A setting is one thing; taking its sort
+	// and somebody else's filter would be running on a setting nobody wrote. In force = the reader's
+	// if they set one, else the author's.
+	//
+	// 🛑 THERE WAS A THIRD ANSWERER HERE — the flat `m_commonSorts`, reached only when neither
+	// section said anything. Everything the imperative door wrote went there, so a click on a column
+	// heading was ignored the moment the list had a sort setting (2026-08-24). One store now: the
+	// door writes the reader's section, so the two cannot disagree.
+	const ibSortDescription& order = output.m_settings.m_sort.IsOk()
+		? output.m_settings.m_sort : GetCurrentSortDesc();
+	size_t written = 0;
+	for (const ibSortLineDescription& line : order.m_lines) {
+		if (line.m_path.IsEmpty())
+			continue;   // a line with no field is the absence of one — see Sort()
+		text += (written++ == 0 ? wxT(" ORDER BY ") : wxT(", "));
+		text += line.m_path;
+		if (!line.m_ascending)
 			text += wxT(" DESC");
 	}
 
 	// TOTALS [agg(path), …] BY dim [HIERARCHY], … — the aggregate list may be empty
 	// (pure grouping / hierarchy), so emit the block whenever there is either an
 	// aggregate OR a BY dimension.
-	if (!m_totals.empty() || HasGroupingFields(output)) {
+	if (!m_resources.empty() || HasGroupingFields(output) || GetCurrentGroupDesc().IsOk()) {
 		text += wxT(" TOTALS");
-		for (size_t i = 0; i < m_totals.size(); ++i) {
+		for (size_t i = 0; i < m_resources.size(); ++i) {
 			text += (i == 0 ? wxT(" ") : wxT(", "));
-			// NO FUNCTION MEANS THE TEXT IS THE EXPRESSION. `Total("SUM", "Amount")` renders
-			// `SUM(Amount)`; `TotalExpr("SUM(Amount) / COUNT(DISTINCT Doc)")` renders itself.
+			// NO FUNCTION MEANS THE TEXT IS THE EXPRESSION. `Resource("SUM", "Amount")` renders
+			// `SUM(Amount)`; `Resource("", "SUM(Amount) / COUNT(DISTINCT Doc)")` renders itself.
 			// One store, because the first is what the second would have been written as.
-			text += m_totals[i].m_func.IsEmpty()
-				? m_totals[i].m_path
-				: m_totals[i].m_func + wxT("(") + m_totals[i].m_path + wxT(")");
+			// (And *this* is the tier that says TOTALS — it is the query's keyword. Everything above
+			//  says resource; the two words used to meet in the middle of one function.)
+			text += m_resources[i].m_func.IsEmpty()
+				? m_resources[i].m_path
+				: m_resources[i].m_func + wxT("(") + m_resources[i].m_path + wxT(")");
 		}
 		// ONE LEVEL PER OUTPUT IN THE CHAIN, and a level's own fields inside it. Several fields are
 		// written in BRACKETS — `BY (Partner, Contract), Store` — which is what says they are one
@@ -377,10 +595,26 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& outpu
 		// ⚠ A LEVEL WITH NO FIELDS IS NOT A DIMENSION — it is the DETAIL records, and it has nothing
 		// to write here. Writing it anyway produced `BY ` with nothing after it and the parser
 		// refused the whole query, which the caller then saw as an empty report.
-		const std::vector<GroupNode>& chain = ChainFrom(output);
+		// ⭐ THE USER'S GROUPING REPLACES THE LADDER, whole — the same rule the filter and the sort
+		// follow, for the same reason: a setting is one thing. Their lines are one field each (a flat
+		// list cannot say "one heading of two fields"), which is exactly what a user's grouping is.
 		bool wroteBy = false;
-		for (size_t i = 0; i < chain.size(); ++i) {
-			const std::vector<TotalByItem>& fields = chain[i].m_fields;
+		if (GetCurrentGroupDesc().IsOk()) {
+			for (const ibGroupLineDescription& line : GetCurrentGroupDesc().m_lines) {
+				if (line.m_path.IsEmpty())
+					continue;   // a line with no field is the absence of one
+				text += (wroteBy ? wxT(", ") : wxT(" BY "));
+				wroteBy = true;
+				text += line.m_path;
+				if (line.m_kind == ibQueryDimUnfold::Hierarchy)
+					text += wxT(" HIERARCHY");
+				else if (line.m_kind == ibQueryDimUnfold::HierarchyOnly)
+					text += wxT(" HIERARCHYONLY");
+			}
+		}
+		const std::vector<GroupNode>& chain = ChainFrom(output);
+		for (size_t i = 0; !GetCurrentGroupDesc().IsOk() && i < chain.size(); ++i) {
+			const std::vector<TotalByItem>& fields = chain[i].m_settings.m_group.m_lines;
 			if (fields.empty())
 				continue;
 			text += (wroteBy ? wxT(", ") : wxT(" BY "));
@@ -453,31 +687,54 @@ void ibDataDBComposer::EnsureAst() const
 	// condition never becomes text, so the text alone would say "nothing changed"
 	// after the user rewrote the whole filter.
 	const wxString text = RenderText();
-	if (m_ast != nullptr && text == m_renderedText && m_commonFilterAstVersion == m_renderedFilterAstVersion)
+	if (m_ast != nullptr && text == m_renderedText && GetCurrentFilterDesc() == m_renderedFilter)
 		return;   // same query, same condition — the cached parse stands
+
+	// ⭐⭐ AND WHAT THE COMPOSER WROTE IS JOURNALLED HERE, WHERE IT IS BORN. The engine's own `query
+	// run:` line is written far downstream, AFTER the lowering — so anything that refuses on the way
+	// (an unknown attribute, a source that will not resolve) leaves a refusal in the journal with no
+	// text beside it, and a person is asked to show a query nobody ever printed (Max, 2026-08-24:
+	// *"you simply do not write the queries — an ordinary query reaches the log, a composer's does
+	// not"*).
+	//
+	// A ROAD OF ITS OWN, because it answers a different question from the engine's: this is what the
+	// SETTINGS produced, before anything rewrote or folded it. Reading the two together is what
+	// tells a rendering fault from a lowering one.
+	//
+	// ⚠ WRITTEN AFTER THE CACHE GATE, so it costs one line per CHANGE and not one per fetch: a list
+	// paging through a hundred screens renders the same text and says nothing.
+	ibJournalInfo(wxT("composer.text"), wxT("rendered:\n%s"), text);
 
 	m_ast = ibQueryParser().Parse(text);
 	if (m_ast == nullptr)
 		ibBackendCoreException::Error(_("Composer: the rendered query failed to parse"));
 
+	// ⭐ THE USER'S FILTER IS BUILT HERE, out of the section they set — and it REPLACES the
+	// composition's own condition rather than joining it. A setting is one thing: half of theirs
+	// ANDed with half of the composition's is a filter nobody wrote.
+	//
+	// Built at the render, not when the setting was assigned: assigning is assigning (the old value
+	// is thrown away by the fact of `=`), and what a query needs is made when a query is made.
+	const ibQueryAstExprPtr condition = BuildFilterAst(GetCurrentFilterDesc());
+
 	// THE TREE'S CONDITION GOES IN AS AN AST, ANDed with whatever the query text
 	// already asked for. No rendering, no re-parsing — the expression the filter
 	// built is the expression the engine lowers.
-	if (m_commonFilterAst) {
+	if (condition) {
 		if (m_ast->m_where) {
 			ibQueryAstExprPtr both = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
 			both->m_isOr = false;
 			both->m_lhs = m_ast->m_where;
-			both->m_rhs = m_commonFilterAst;
+			both->m_rhs = condition;
 			m_ast->m_where = both;
 		}
 		else {
-			m_ast->m_where = m_commonFilterAst;
+			m_ast->m_where = condition;
 		}
 	}
 
 	m_renderedText = text;
-	m_renderedFilterAstVersion = m_commonFilterAstVersion;
+	m_renderedFilter = GetCurrentFilterDesc();
 }
 
 bool ibDataDBComposer::BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const
@@ -581,6 +838,57 @@ static bool OutputWrites(const ibDataComposer::Output& output, ibSelectorNodeKin
 	return false;
 }
 
+// ⭐ A LEVEL'S FILTER HIDES, IT DOES NOT DROP (Max, the outputs arc: "a filter on the output THROWS
+// AWAY, one on a level HIDES"). So it is answered here, on the walk, against the row already read —
+// and it is answered from the stored DESCRIPTION, which is a tree of conditions and groups.
+//
+// 🛑 IT USED TO READ A FLAT LIST NOBODY FILLED. The level carried a `std::vector<FilterItem>` beside
+// its filter description, and the composer's Filter() writes the COMPOSITION-wide one — so no line
+// ever landed there and this function could only ever answer yes. A level's filter was editable,
+// saved, and did nothing.
+static bool ibLevelNodeShows(const ibFilterNodeDescription& node,
+	const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row)
+{
+	if (!node.m_use)
+		return true;   // switched off reads as if it were not written
+
+	if (node.m_kind == ibFilterNodeKind_Group) {
+		// AND is "every child agrees", OR is "some child does" — and an empty group narrows nothing,
+		// which is why the OR case starts from `false` only when it has something to ask.
+		if (node.m_children.empty())
+			return true;
+		const bool isOr = (node.m_groupKind == ibFilterGroupKind_Or);
+		for (const ibFilterNodeDescription& child : node.m_children) {
+			const bool shows = ibLevelNodeShows(child, schema, row);
+			if (isOr && shows)   return true;
+			if (!isOr && !shows) return false;
+		}
+		return !isOr;
+	}
+
+	// A CONDITION NAMES AN OUTPUT COLUMN — the same names a person picked from. A name this result
+	// does not carry cannot hide anything: it says nothing about the rows in hand, and hiding on it
+	// would be hiding for a reason nobody can see.
+	if (!node.m_left.IsField())
+		return true;
+	size_t at = schema.size();
+	for (size_t i = 0; i < schema.size(); ++i) {
+		if (schema[i].m_name.IsSameAs(node.m_left.m_path, false)
+		    || schema[i].m_alias.IsSameAs(node.m_left.m_path, false)) {
+			at = i;
+			break;
+		}
+	}
+	if (at >= schema.size() || at >= row.size())
+		return true;
+
+	// The right-hand side is a VALUE here. A field-to-field comparison is the query's business —
+	// both sides are columns and the server already answered it.
+	if (node.m_right.IsField())
+		return true;
+	return ibCompositionCompare(row[at], node.m_comparison, node.m_right.m_value);
+}
+
 bool ibDataDBComposer::LevelShows(const Output& output, int depth,
 	const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row) const
 {
@@ -590,25 +898,9 @@ bool ibDataDBComposer::LevelShows(const Output& output, int depth,
 		return true;
 
 	const GroupNode& level = output.m_rowGroups[static_cast<size_t>(depth) - 1];
-	for (const FilterItem& filter : level.m_filters) {
-		// The filter names an OUTPUT column — the same names a person picked from. A name this
-		// result does not carry cannot hide anything: it says nothing about the rows in hand, and
-		// hiding on it would be hiding for a reason nobody can see.
-		size_t at = schema.size();
-		for (size_t i = 0; i < schema.size(); ++i) {
-			if (schema[i].m_name.IsSameAs(filter.m_path, false)
-			    || schema[i].m_alias.IsSameAs(filter.m_path, false)) {
-				at = i;
-				break;
-			}
-		}
-		if (at >= schema.size() || at >= row.size())
-			continue;
-
-		const auto value = m_params.find(filter.m_param);
-		if (!ibCompositionCompare(row[at], filter.m_op, value != m_params.end() ? value->second : ibValue()))
+	for (const ibFilterNodeDescription& node : level.m_settings.m_filter.m_nodes)
+		if (!ibLevelNodeShows(node, schema, row))
 			return false;
-	}
 	return true;
 }
 
@@ -834,16 +1126,21 @@ ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
 	// The output's own tree condition, ANDed into what the text already asks — the same rule the
 	// first output follows in EnsureAst, and for the same reason: a condition built as an expression
 	// is never rendered and re-parsed.
-	if (output.m_filterAst) {
+	//
+	// ⭐ BUILT HERE, FROM THE DESCRIPTION. It used to be a cached expression carried on the output
+	// with a version counter beside it, filled in by whoever happened to edit the filter — so the
+	// condition ran or did not depending on which door the edit came through. An expression derived
+	// from stored data is made where it is used; there is nothing to keep in step.
+	if (const ibQueryAstExprPtr own = BuildFilterAst(output.m_settings.m_filter)) {
 		if (ast->m_where) {
 			ibQueryAstExprPtr both = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
 			both->m_isOr = false;
 			both->m_lhs  = ast->m_where;
-			both->m_rhs  = output.m_filterAst;
+			both->m_rhs  = own;
 			ast->m_where = both;
 		}
 		else {
-			ast->m_where = output.m_filterAst;
+			ast->m_where = own;
 		}
 	}
 
@@ -865,6 +1162,63 @@ ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
 // PruneUnresolvedSettings — the settings, re-asked rather than chased
 //////////////////////////////////////////////////////////////////////
 
+// ⭐ WHAT "GONE" MEANS FOR A SETTING — one walk, used for both sections.
+//
+// A SORT or a GROUPING line names one field: it survives or it does not. A FILTER is a TREE, so the
+// same question is asked of each side of a condition — either side may be a field (`Price > Cost`) —
+// and a GROUP is kept for as long as it still holds something. A group emptied by the pruning goes
+// with its last condition; a group the author wrote empty is not this function's business, because
+// it did not stop resolving.
+static int ibPruneFilterNodes(std::vector<ibFilterNodeDescription>& nodes,
+	const std::function<bool(const wxString&)>& resolves)
+{
+	int dropped = 0;
+	std::vector<ibFilterNodeDescription> kept;
+	for (ibFilterNodeDescription& node : nodes) {
+		if (node.m_kind == ibFilterNodeKind_Group) {
+			const size_t before = node.m_children.size();
+			dropped += ibPruneFilterNodes(node.m_children, resolves);
+			if (before > 0 && node.m_children.empty())
+				continue;   // it held conditions and holds none now — it went with them
+			kept.push_back(std::move(node));
+			continue;
+		}
+		const bool leftGone  = node.m_left.IsField()  && !resolves(node.m_left.m_path);
+		const bool rightGone = node.m_right.IsField() && !resolves(node.m_right.m_path);
+		if (leftGone || rightGone) { ++dropped; continue; }
+		kept.push_back(std::move(node));
+	}
+	if (kept.size() != nodes.size())
+		nodes = std::move(kept);
+	return dropped;
+}
+
+int ibDataComposer::PruneSettingsDesc(ibSettingsDescription& settings,
+	const std::function<bool(const wxString&)>& resolves)
+{
+	int dropped = ibPruneFilterNodes(settings.m_filter.m_nodes, resolves);
+
+	{
+		std::vector<ibSortLineDescription> kept;
+		for (const ibSortLineDescription& line : settings.m_sort.m_lines) {
+			if (!resolves(line.m_path)) { ++dropped; continue; }
+			kept.push_back(line);
+		}
+		if (kept.size() != settings.m_sort.m_lines.size())
+			settings.m_sort.m_lines = std::move(kept);
+	}
+	{
+		std::vector<ibGroupLineDescription> kept;
+		for (const ibGroupLineDescription& line : settings.m_group.m_lines) {
+			if (!resolves(line.m_path)) { ++dropped; continue; }
+			kept.push_back(line);
+		}
+		if (kept.size() != settings.m_group.m_lines.size())
+			settings.m_group.m_lines = std::move(kept);
+	}
+	return dropped;
+}
+
 int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxString&)>& resolves)
 {
 	if (!resolves)
@@ -877,15 +1231,15 @@ int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxStr
 	{
 		std::vector<FilterItem> kept;
 		std::map<wxString, ibValue> keptParams;
-		for (const FilterItem& item : m_commonFilters) {
+		for (const FilterItem& item : m_scopeConditions) {
 			if (!resolves(item.m_path)) { ++dropped; continue; }
 			const auto param = m_params.find(item.m_param);
 			if (param != m_params.end())
 				keptParams.emplace(param->first, param->second);
 			kept.push_back(item);
 		}
-		if (kept.size() != m_commonFilters.size()) {
-			m_commonFilters = std::move(kept);
+		if (kept.size() != m_scopeConditions.size()) {
+			m_scopeConditions = std::move(kept);
 			// A parameter belongs to the line that bound it; the ones whose line went are gone with
 			// it. Left behind they would be bound into a query that never mentions them.
 			for (auto it = m_params.begin(); it != m_params.end(); ) {
@@ -898,35 +1252,42 @@ int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxStr
 		}
 	}
 
-	{
-		std::vector<SortItem> kept;
-		for (const SortItem& item : m_commonSorts) {
-			if (!resolves(item.m_path)) { ++dropped; continue; }
-			kept.push_back(item);
-		}
-		if (kept.size() != m_commonSorts.size())
-			m_commonSorts = std::move(kept);
-	}
+	// (No flat sort list to walk any more — the order lives in the two sections, pruned below with
+	//  the rest of what they hold.)
 
 	// EVERY LEVEL OF THE LADDER, and every field inside it. A level that loses ALL its fields loses
 	// itself and the levels below move up — the author's deeper grouping is not what stopped
 	// resolving, so it is not what should disappear.
 	for (GroupNode& level : LevelChain()) {
+		std::vector<TotalByItem>& lines = level.m_settings.m_group.m_lines;
 		std::vector<TotalByItem> kept;
-		for (const TotalByItem& item : level.m_fields) {
+		for (const TotalByItem& item : lines) {
 			if (!resolves(item.m_path)) { ++dropped; continue; }
 			kept.push_back(item);
 		}
-		if (kept.size() != level.m_fields.size())
-			level.m_fields = std::move(kept);
+		if (kept.size() != lines.size())
+			lines = std::move(kept);
 	}
 	CollapseEmptyLevels();
 
-	// The rendered text and its cached parse are keyed by the settings — a dropped line changes both.
-	// The rendered text and its cached parse are keyed by the settings; the version is what tells the
-	// cache the tree changed when the TEXT alone would say it did not.
-	if (dropped > 0)
-		++m_commonFilterAstVersion;
+	// ⭐⭐ …AND THE TWO SETTINGS SECTIONS, which is where everything the settings window writes lives.
+	// This walked the flat store only, so the promise above — "drop every setting whose field the
+	// source no longer has" — was kept for the declared lines and broken for the reader's and the
+	// author's alike: nothing in the tree pruned an ibSettingsDescription (audit, 2026-08-24).
+	//
+	// A FILTER LINE IS NOT DROPPED BY PATH ALONE: its tree carries groups, and a group that loses its
+	// last condition is not a condition that stopped resolving. Handled by the description's own
+	// walk, so the shape stays the description's business and this only says what "gone" means.
+	// …THE READER'S SETTING AND EVERY VARIANT. A field that stopped existing stopped existing for
+	// whoever named it, and a variant nobody is composing on today is one a picker may reach
+	// tomorrow.
+	dropped += PruneSettingsDesc(m_userSettings, resolves);
+	for (ibVariantDescription& variant : m_variants)
+		dropped += PruneSettingsDesc(variant.m_settings, resolves);
 
+	// (NOTHING TO INVALIDATE BY HAND. The render's cache key is the rendered TEXT and the filter that
+	//  never becomes text, and a dropped line changes one of them by definition. The version counter
+	//  that stood here was the key for a condition handed in from outside, and nothing ever handed
+	//  one in.)
 	return dropped;
 }

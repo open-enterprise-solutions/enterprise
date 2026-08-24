@@ -14,8 +14,11 @@
 #include <memory>
 #include <vector>
 
-#include "backend/system/value/valueDataComposition.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — the variants are snapshotted on open
+#include "backend/query/queryConstructorModel.h"   // ibQueryConstructorField + ibQueryFieldsOfText — the fields a TEXT offers
+// (NO valueDataComposition.h. The panel holds no running composition; only the modal host below
+//  takes one, as a pointer, and a name is all that needs.)
+class ibValueDataComposition;
+#include "backend/compositionDescription.h"   // the snapshot Cancel puts back — a DESCRIPTION, not a node
 
 // ---------------------------------------------------------------------------
 // ibDialogComposerSettings — the DATA COMPOSER's settings, a window of its own.
@@ -74,8 +77,9 @@
 // split the list settings already took: one panel, two hosts, so nothing about what a setting IS
 // can differ between them.
 //
-// What "accept" and "cancel" mean lives on the PANEL (Commit / RestoreOpenState), because both
-// hosts have to mean the same thing by them; the buttons that raise them are the host's own.
+// What "accept" means lives on the PANEL (Commit), because both hosts have to mean the same thing
+// by it; the button that raises it is the host's own. CANCEL is the host's alone — it is the copy
+// being dropped, and each host drops a different thing.
 
 // ⭐⭐ WHERE A NODE STANDS — ONE COORDINATE, and the type ANSWERS WHAT IT IS. Four kinds of row,
 // told apart by which parts are set:
@@ -115,7 +119,46 @@ struct ibStructurePos
 class FRONTEND_API ibComposerSettingsPanel : public wxPanel {
 public:
 
-	ibComposerSettingsPanel(wxWindow* parent, ibValueDataComposition* composer);
+	// ⭐⭐ `edited` — THE DESCRIPTION THIS PANEL EDITS, BY REFERENCE, edited in place. The shape the
+	// designer's other editors have (Max, 2026-08-24: "there is your reference — ibSpreadsheetEditView"):
+	// the grid editor is handed the metaobject and writes its description directly; there is no live
+	// object in between and nothing to copy back.
+	//
+	// It used to be handed a live ibValueDataComposition and keep a COPY of its description, which
+	// the composition then had assigned over it, which the tab then copied into the metaobject —
+	// three stores for one fact. Every one of the day's defects was a step of that chain going out of
+	// step: a query text put back stale, a variant added into the composition the copy did not know
+	// about, resources written where nothing saves them.
+	//
+	// A host that wants a TRANSACTION (the modal settings window, which offers Cancel) holds the copy
+	// ITSELF and hands a reference to it — a copy plus an assignment, decided where Cancel lives.
+	//
+	// ⭐⭐ AND NOTHING RUNNING COMES IN — the inputs are a DESCRIPTION and a CONFIGURATION, which with
+	// the metaobject are the whole of what may reach a composer (Max, 2026-08-24: "the most that can
+	// leak in is the metaobject, the metadata and the composer description").
+	//
+	// ⚠ AND `metaData` IS THE CONTEXT THE SCHEMA RUNS IN — which configuration these names mean. It
+	// may be ABSENT, and that is a legitimate state rather than a broken one: with no configuration
+	// to ask, nothing can be reached — no tables, no references — and what is left is the primitive
+	// types. A smaller window, not a disabled one, which is why nothing here guards on it.
+	//
+	// 🛑 IT USED TO BE HANDED A LIVE ibValueDataComposition. That is a runtime object with a source
+	// binding, a sheet and a fetch in flight, borrowed from whoever happened to have one — so which
+	// composition this window was editing depended on the host rather than on what it was given, and
+	// the panel could not be opened at all where no such object existed.
+	// ⭐⭐ TWO CTORS, ONE PER ROAD — the shape the list's panel already has, and the reason there is no
+	// choosing inside: every page here answers one question, *what to do with the CURRENT setting*,
+	// and which setting that is belongs to the HOST (Max, 2026-08-24). The panel that picks its own
+	// subject is the panel that can pick wrong.
+	//
+	//   DESIGNER — edits the description's variants. Starts on the zeroth; clicking a variant in the
+	//              list unwraps ITS setting and drives it into the pages (ActivateVariant).
+	//   READER   — edits the setting it is handed, a COPY of `GetCurrentSettingsDesc()`. No variant
+	//              list at all: there is no such thing as a chosen variant at runtime.
+	ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
+		const class ibMetaData* metaData);
+	ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
+		const class ibMetaData* metaData, ibSettingsDescription& settings);
 	~ibComposerSettingsPanel();   // out of line — the field tree is held by forward-declared pointer
 
 	// RE-READ THE SETTINGS from the composition — what this window edits changed under it
@@ -141,9 +184,12 @@ public:
 
 	// Put what is on screen onto the composition. False = the host must stay open (a half-written
 	// setting was objected to, or a failing expression was not confirmed).
+	//
+	// ⚠ IT WRITES THE REPORT — the structure, the resources, the parameters, the query — unless the
+	// panel was handed a SETTING to edit, in which case that setting is all it touches.
 	bool Commit();
-	// Put every variant back as it stood when the panel opened — what Cancel means.
-	void RestoreOpenState();
+	// (RestoreOpenState DELETED — Cancel is the host dropping the copy it opened on, and the body
+	//  was empty. See the note at its old site in the .cpp.)
 
 	// THE FIELD PICKER, forwarded to the settings panel below — the one place that knows which
 	// fields this composition offers. Public because the structure tree reaches it through a
@@ -151,11 +197,51 @@ public:
 	// on its toolbar IS this dialog.
 	class ibValueCompositionField* ChooseStructureField(wxWindow* parent, const wxString& held = wxEmptyString);
 
+protected:
+
+	// ⭐⭐ THE TWO QUESTIONS A HOST ANSWERS, AND THE WHOLE OF WHAT A HOST IS. A composer is opened two
+	// ways (Max, 2026-08-24: "two modes — when you have a document, and when you have the metadata"),
+	// and the difference between them is not a flag on this panel: it is WHO KNOWS THESE ANSWERS.
+	// This class is the metadata mode; ibComposerEditor beside it is the document mode and gets both
+	// out of the document it holds, the shape ibGridEditor already has.
+	//
+	// ⚠ THE CONFIGURATION, NOT THE SOURCE'S. Two different questions live one letter apart:
+	//   * this one — the configuration the COMPOSER ITSELF belongs to, which is what an expression is
+	//     checked against and what a type is described in;
+	//   * GetSourceMetaData() on the composition — the configuration the QUERY resolves names in, set
+	//     in RebuildSource from whatever queryable the source turned out to be.
+	// They coincide on most roads and are not the same question, so they are not merged here.
+	virtual const class ibMetaData* GetEditedMetaData() const;
+
+	// SOMETHING BELOW ME CHANGED. The metadata mode tells the live composition, which bubbles it to
+	// its attach owner; the document mode tells the DOCUMENT, because that is what has a dirty bit
+	// and a Save behind it (ibGridEditor calls Modify(true) for exactly this reason).
+	// ⭐ AND THIS IS THE OTHER HALF OF "no runtime": the panel's own read of the query. It fills
+	// m_fieldList and m_queryFault from the text and the configuration, and it is the only place either
+	// is written.
+	void RefreshQueryFields();
+	// The red line under the query text — see the definition: said on OPEN as well as on a change,
+	// because a stored query that no longer compiles is exactly the one a person needs told about
+	// before they touch anything.
+	void ShowQueryFault();
+
+	virtual void MarkModified();
+
 private:
 
-	// THE BUFFER ONTO THE COMPOSITION — the settings half of "accept", on its own because a variant
-	// switch does exactly this much. False = objected to, nothing written.
+	// The two ctors above differ in exactly two words — which setting, and whose road — so the
+	// building itself is written once here.
+	void BuildPanel();
+
+	// THE BUFFER ONTO THE COMPOSITION — the whole of "accept": the copy lands in its active variant
+	// and is then assigned over the composition. False = objected to, nothing written.
 	bool CommitSettings();
+	// WHAT IS ON SCREEN INTO THE VARIANT IT WAS WRITTEN IN — over the COPY. Every act that changes
+	// which variant is in force does this first: accepting the window, switching, adding, copying.
+	void CaptureIntoActiveVariant();
+	// THE SETTINGS CHECK, on its own because two moments ask it: accepting the window, and LEAVING a
+	// variant (which writes nothing to the composition and still must not carry a broken line away).
+	bool ValidateEditedSettings();
 	// Point the field tree at this composition (its own explorer, which is what its query resolved to).
 	void BindFieldSource();
 
@@ -201,7 +287,7 @@ private:
 
 	// WHAT THE QUERY OFFERS, read once per rebuild and shown by every tree. Kept because a row
 	// carries an INDEX into it: the answer about a selected row comes from the field object.
-	std::vector<struct ibQueryConstructorField> m_fields;
+	std::vector<struct ibQueryConstructorField> m_fieldList;
 	void ReloadResources();
 
 
@@ -276,13 +362,62 @@ private:
 	// source is the query, so this is where a composition is actually authored.
 	void OnBuildQuery(wxCommandEvent&);
 
-	// THE LADDER THE STRUCTURE TREE EDITS — the settings PANEL's transactional buffer, not
-	// the composition's live settings. One buffer, one Commit: the panel clears and re-applies
-	// Filter / Sort / Group when this window is accepted, so a level written straight onto the
-	// live settings would be wiped by that very commit.
-	ibValueGroupList* Levels() const;
+	// ⭐⭐ NO RUNTIME OBJECT AT ALL. This panel held an ibValueDataComposition until 2026-08-24 and
+	// asked it four different sorts of question — three of which the DESCRIPTION already answered
+	// (the query text, the variants, the resources) and one which the CONFIGURATION does
+	// (ibQueryFieldsOfText: what fields the text offers, and what the parser complained about). What
+	// is left is these two members, and neither of them is running.
+	//
+	// THE CONFIGURATION THIS COMPOSER BELONGS TO — handed in, never reached for. The document mode
+	// overrides GetEditedMetaData and this stays null there, which is why every reader goes through
+	// the accessor rather than touching it.
+	const class ibMetaData* m_metaData = nullptr;
 
-	ibValueDataComposition* m_composer = nullptr;
+	// WHAT THE PARSER SAID about the query text as it stands, taken at the same moment the fields
+	// were. Half-typed text offers no fields YET and is not an error to shout about; this is what
+	// the Query tab's line shows when there IS something to say.
+	wxString m_queryFault;
+	// ⭐⭐ WHOSE ROAD THIS IS — decided by the host at construction and never again: a window cannot
+	// become somebody else's halfway through. It records ONE fact — was a setting handed in — and it
+	// is asked for the things that differ between a reader and a designer: the variants pane, the
+	// inaccessible filter lines, what accepting means.
+	//
+	// 🛑 THAT FACT USED TO BE READ OFF `m_settings == nullptr`, which is why the pointer could not
+	// also be used to say WHICH setting is being edited. One member answering two questions is how
+	// the designer ended up unable to edit any variant but the zeroth.
+	const bool m_readerRoad;
+
+	// …AND WHAT IS BEING EDITED, always valid. A reader's own setting, or — in the designer — the
+	// variant the list has selected, re-pointed as it moves (ActivateVariant).
+	ibSettingsDescription* m_settings = nullptr;
+
+	// ⭐⭐ WHAT THE FILTER / SORT / GROUPING PAGES ARE POINTED AT — the handed-in setting when there is
+	// one, the report's own otherwise.
+	//
+	// A reader's window is a COPY, all the way through: the host takes what is in force (their own if
+	// they set one, the author's if they did not), hands it here, the pages edit THAT, and on OK it
+	// becomes the composer's user setting (Max, 2026-08-24). The report is never touched on that road.
+	//
+	// 🛑 THE PAGES USED TO BE NAILED TO `m_edited.GetCompositionSettingsDesc()` REGARDLESS. So a
+	// reader opened the window on the AUTHOR's section, typed into it — scribbling over what the
+	// configuration ships — and the copy they were supposed to be editing sat untouched beside it.
+	// ⭐⭐ THE SETTING THIS PANEL EDITS — the one it was HANDED, and the ZEROTH otherwise. No index
+	// enters the question (Max, 2026-08-24: *"you get some cursor there — it should always be zero;
+	// you just take the first element, the zeroth"*).
+	//
+	// 🛑 IT ASKED A CURSOR, and a cursor is a second answer to "which setting am I editing" standing
+	// beside the first. That is how the filter editor came to show one variant's lines while the
+	// header named another.
+	ibSettingsDescription& EditedSettings() { return *m_settings; }
+	// …and the READING one, so a const caller needs no cast to ask the same question. (A `const_cast`
+	// stood here for exactly as long as it took to be seen: it was written to make a const method
+	// compile, which is never a reason for one.)
+	const ibSettingsDescription& EditedSettings() const { return *m_settings; }
+
+	// (NO VARIANT CURSOR. It stood here as "which variant this window is editing", and it was a
+	//  second answer to a question `EditedSettings()` already answers: the setting handed in, or the
+	//  zeroth. A reader is handed a COPY of what composes and edits that — the variants themselves
+	//  are const on the runtime road and are only ever copied out of.)
 
 
 	// THE VARIANTS LIVE IN THE COMPOSITION, not here: this pane is a view onto them. Where a variant
@@ -305,9 +440,15 @@ private:
 	// a composer tab opened and closed untouched wrote itself back and announced a change nobody
 	// made (found by the final audit, 2026-08-20).
 	bool                    m_settingsDirty = false;
-	// EVERY VARIANT AS IT STOOD WHEN THIS WINDOW OPENED. Switching variants writes (the composer
-	// holds one set of settings at a time), so Cancel restores this rather than nothing.
-	ibDataNode              m_openState;
+	// ⭐⭐ THE DESCRIPTION THIS WINDOW EDITS — BY REFERENCE, in place. Everything typed here lands in
+	// it: the query, the settings, the variants, the structure, the resources, the parameters.
+	//
+	// WHOSE description it is, is the HOST's decision and this panel never learns it. The designer's
+	// tab hands over the metaobject's own (the shape ibSpreadsheetEditView has, where the grid editor
+	// writes the metaobject's description directly); a modal window that offers Cancel hands over a
+	// copy IT holds and assigns that copy on OK. A transaction is a copy plus an assignment, and it
+	// is decided where Cancel lives.
+	ibCompositionDescription& m_edited;
 
 	// THE OUTPUT STRUCTURE, as a tree over the ladder: Report -> level -> level. The nesting IS
 	// the order, so the tree shows what the report will actually do rather than a flat list that
@@ -324,27 +465,39 @@ private:
 	class ibFilterEditor* m_filterEditor = nullptr;
 	class ibSortEditor*   m_sortEditor   = nullptr;
 
-	// THIS WINDOW'S OWN TRANSACTIONAL BUFFER. Loaded from the composition when the window opens,
-	// committed onto it when the window is accepted — the same rule the list's window follows over
-	// its own store. It carries the FILTER and the SORT; the structure has a buffer of its own.
-	ibValuePtr<ibValueListSettings> m_settings;
+	// (No live settings object. The window's transactional buffer IS m_edited below — the copy of
+	//  the composition's description — and each editor is handed the part of it it edits.)
 
-	// ⭐ THE STRUCTURE BUFFER — a SNAPSHOT of the composition's outputs, edited here and applied
-	// whole on accept. It is the outputs themselves (levels, their fields, their own settings), not
-	// a flattened picture of them: a level made of several fields cannot be told from two levels in
-	// a flat list, and papering over that with a "same level as the one above" flag would carry the
-	// lie straight into a saved variant.
-	std::vector<ibDataComposer::Output> m_structure;
-	void LoadStructure();    // composition -> buffer, on open and on a variant switch
-	void ApplyStructure();   // buffer -> composition, on accept
+	// ⭐⭐ THE STRUCTURE — THE ACTIVE VARIANT'S OWN, by reference. The outputs themselves (their nodes,
+	// what each folds by, each node's own settings and what unfolds under it), not a flattened
+	// picture: a node of several fields cannot be told from two nodes in a flat list.
+	//
+	// 🛑 IT WAS A COPY, loaded on open and on every variant switch and assigned back on accept — the
+	// same three chores the per-node settings map was deleted for, and they fell out of step the same
+	// way: a level added in the window went missing between OK and the next open, and the hunt for it
+	// ran through three layers before the journal said the structure had never left the buffer
+	// (2026-08-24). The window edits the description in place; this is the last piece that did not.
+	//
+	// ⚠ DESCRIPTIONS, not the composer's outputs. The driver an output carries is a live object and
+	// has no business in a window.
+	// ⭐⭐ THE OUTPUTS OF THE SETTING BEING EDITED — asked through `EditedSettings()`, which is the
+	// handed-in setting on a READER's road and the cursor's VARIANT on the designer's.
+	//
+	// 🛑 IT WENT STRAIGHT TO A VARIANT REGARDLESS, and that is a reader editing a variant — which
+	// they may not do at all (Max, 2026-08-24: *"you can only edit a variant in the designer. You go
+	// into the composer in the designer, you go into each variant and set its settings, and they
+	// accumulate in that list. You cannot change those variants' settings from the runtime"*). A
+	// reader edits THEIR setting; the outputs are part of it, so they come along by themselves.
+	std::vector<ibOutputDescription>& Structure() { return EditedSettings().m_structure; }
+	const std::vector<ibOutputDescription>& Structure() const { return EditedSettings().m_structure; }
 	// THE LEVEL A TREE ROW POINTS AT, in the buffer — null on the report, an output or an axis, and
 	// on a row whose coordinate the buffer no longer has. Every cell editor asks through here, so
 	// "which level is this row" is answered once.
-	ibDataComposer::GroupNode* LevelAtRow(const class ibDataViewItem& row);
+	ibLevelDescription* LevelAtRow(const class ibDataViewItem& row);
 
 	// ⭐ A NODE HAS ITS OWN PANELS (Max, on the first run: "the groupings have panels of their
 	// own"). The shared filter / sort editors are re-pointed at the SELECTED node's buffer instead
-	// of at one composition-wide one, which is what they were built to allow (SetSettings).
+	// of at one composition-wide one, which is what they were built to allow (SetFilter / SetSort).
 	//
 	// Keyed by the node's coordinate — the SAME type the tree names its rows with (ibStructurePos),
 	// not a second triple of numbers beside it. Created on first selection, kept until the window is
@@ -358,11 +511,14 @@ private:
 	// first click after this window learnt about nodes, 2026-08-21). The event carries the item; we
 	// keep what it said, and every reader below works from that.
 	ibNodeKey m_currentNode = ibNodeKey(-1, -1, -1);
-	ibDataComposer::GroupNode* CurrentLevel();
-	std::map<ibNodeKey, ibValuePtr<ibValueListSettings>> m_nodeSettings;
-	class ibValueListSettings* NodeSettings(const ibNodeKey& key);
+	ibLevelDescription* CurrentLevel();
+	// (NO PER-NODE BUFFER. A node's settings are ON the node — ibLevelDescription::m_settings, the
+	//  same whole the composition has — so the editors are pointed straight at the selected node's
+	//  parts and a level's filter lands as it is typed. A std::map<node, settings> used to stand
+	//  beside the structure, and it cost three chores that could each fall out of step: copy in on
+	//  first selection, write back at commit, and re-key every entry whenever a level was added,
+	//  removed or moved.)
 	void BindNodeEditors();        // point the shared editors at what is selected now
-	void CommitNodeSettings();     // node buffers -> the structure buffer, on accept
 
 	// ---- The GROUPING page — the fields ONE level groups by ---------------------
 	wxWindow* BuildGroupingPage(wxWindow* parent);
@@ -388,55 +544,47 @@ private:
 
 	// ---- TWO FIELD-SET PAGES, one shape ----------------------------------------
 	//
-	// AVAILABLE — what the node MAY see; SELECTED — what it SHOWS. Two different questions over
-	// identical machinery: a list the user fills himself, a toolbar over it, and an "Auto" switch
-	// that says "take the set from the node above". So there is ONE page builder and one set of
-	// handlers, told apart by which set they were asked for — a second copy of this would drift the
-	// day one of the two grew a button.
-	enum class ibFieldSet { Available, Selected };
-
+	// ⭐ ONE SET, AND IT IS "SELECTED" — the fields this node shows, added to what its output and the
+	// composition already show (ibDataComposer::SelectedFor).
+	//
+	// 🛑 THERE WAS A SECOND PAGE, "AVAILABLE": what a node MAY see, over identical machinery — its own
+	// list, its own toolbar, its own "Auto" switch — which is why every verb below used to carry an
+	// `ibFieldSet` telling the two apart. It answered a question nobody asked (Max, 2026-08-24:
+	// "available tells us nothing, it is the same thing understood in a harder way"), and it had no
+	// reader on the run path at all. Removing it removed the parameter with it.
 	struct ibFieldSetPage {
 		wxTreeCtrl*              m_sourceTree = nullptr;   // everything the source offers, to pick FROM
 		class ibDataViewCtrl*    m_view    = nullptr;
 		class ibStringListModel* m_model   = nullptr;
-		wxCheckBox*              m_autoBox = nullptr;
 	};
 
-	wxWindow* BuildFieldSetPage(wxWindow* parent, ibFieldSet set);
-	void OnFieldSetAdd(ibFieldSet set);
-	void OnFieldSetRemove(ibFieldSet set);
-	void OnFieldSetCopy(ibFieldSet set);
-	void OnFieldSetAuto(ibFieldSet set, bool checked);
-	void ReloadFieldSets();          // both pages follow the selection
-	void ReloadFieldSet(ibFieldSet set);
-	// The selected node's OWN set of that kind, and its Auto flag — the report has no flag, being
-	// the top of the inheritance.
-	std::vector<wxString>* CurrentFieldSet(ibFieldSet set, bool** autoFlag = nullptr);
-	int  SelectedFieldSetRow(ibFieldSet set);   // the line the cursor is on, or wxNOT_FOUND
-	void MoveFieldSetRow(ibFieldSet set, int delta);
+	wxWindow* BuildFieldSetPage(wxWindow* parent);
+	void OnFieldSetAdd();
+	void OnFieldSetRemove();
+	void OnFieldSetCopy();
+	void ReloadFieldSets();          // the page follows the selection
+	// The selected node's OWN set — what IT adds. The report's is the bottom of the pile.
+	std::vector<wxString>* CurrentFieldSet();
+	int  SelectedFieldSetRow();   // the line the cursor is on, or wxNOT_FOUND
+	void MoveFieldSetRow(int delta);
 	// Put the field a tree row stands for into the set — double-click on the left pane.
-	void AddFieldFromTree(ibFieldSet set, const class wxTreeItemId& item);
-	ibFieldSetPage& PageOf(ibFieldSet set) { return set == ibFieldSet::Available ? m_availablePage : m_selectedPage; }
+	void AddFieldFromTree(const class wxTreeItemId& item);
 
-	ibFieldSetPage m_availablePage;
 	ibFieldSetPage m_selectedPage;
-	// The composition-wide sets, buffered like the structure — applied on accept.
-	std::vector<wxString>        m_commonAvailableBuffer;
-	std::vector<wxString>        m_commonSelectedBuffer;
-	// WHAT THE SELECTED NODE MAY USE — the available set of the current node, inherited upwards
-	// (level, then output, then the composition). Read out of THIS window's buffers, because a
-	// narrowing just made has not reached the composition yet.
-	const std::vector<wxString>* AvailableForCurrentNode() const;
+	// The composition-wide set, buffered like the structure — applied on accept.
+	// (⛔ `m_commonSelectedBuffer` STOOD HERE — a copy of `m_edited.m_selected`, loaded on open and
+	//  written back on accept. The window edits the description in place; a buffer over one field of
+	//  it was the last of the three copies this panel kept.)
 	// WHICH AXIS a structure command acts on, read off what is selected: a level's own axis, the
 	// axis itself, an output's rows, or — with the report selected — the first output's rows. `at`
 	// comes back as the selected level, or -1 when the selection names no level.
-	std::vector<ibDataComposer::GroupNode>* AxisForCommand(int& at);
+	std::vector<ibLevelDescription>* AxisForCommand(int& at);
 
 	// WHICH FIELDS THIS COMPOSITION OFFERS, as the shared TREE both editors above read and the
-	// structure pane picks through (settings/settingsFieldTree.h). Distinct from m_fields below,
+	// structure pane picks through (settings/settingsFieldTree.h). Distinct from m_fieldList below,
 	// which is the flat list the RESOURCES page reads from the engine — that one carries the
 	// aggregate-fitting type, this one unfolds references.
-	std::unique_ptr<class ibSettingsFieldTree> m_fieldTree;
+	std::unique_ptr<class ibSettingsFieldTree> m_fieldSource;
 	// WHICH NODE the settings below belong to — and, until the engine holds settings per node,
 	// that they are the whole composition's.
 	wxStaticText* m_settingsHeader = nullptr;
@@ -458,17 +606,117 @@ private:
 	wxStaticText* m_queryError = nullptr;
 };
 
+// ------------------------------------------------------------------------------------------------
+// ⭐⭐ THE COMPOSER EDITOR — the DOCUMENT mode of the panel above (Max, 2026-08-24: "two modes of
+// opening a composer: when you have a document, and when you have the metadata").
+//
+// It is the same content: what a composer declares is one thing, and a setting cannot mean one
+// thing on a designer tab and another on a form. What the document adds is WHO IS ASKED — the
+// metaobject and its configuration come out of the document rather than out of a live composition,
+// and "something changed" goes to the document, which is the thing that has a dirty bit and a Save
+// behind it.
+//
+// The shape is ibGridEditor's, deliberately: that editor holds an `ibMetaDocument*` and reaches its
+// metaobject through ConvertMetaObjectToType, marking the document modified when it writes. This is
+// the same editor for the other kind of document, so it is built the same way.
+//
+// ⚠ THE DOCUMENT IS BORROWED. It outlives this panel — the view is destroyed with the tab, and the
+// document is what the tab was opened ON — so nothing here owns it and a null one is a panel that
+// simply answers nothing, exactly as the metadata mode does without a composition.
+// ------------------------------------------------------------------------------------------------
+class FRONTEND_API ibComposerEditor : public ibComposerSettingsPanel {
+public:
+
+	// ⭐ THE DOCUMENT IS THE ONLY INPUT. It answers both of the others — which description is being
+	// edited and which configuration that description means — so the view that opens this tab hands
+	// over the document and nothing else, exactly as ibSpreadsheetEditView hands ibGridEditor one.
+	// THE DESIGNER'S TAB — always the author's road: it edits the composer metaobject's own
+	// description, so there is no setting to hand in and no reader to hand one.
+	ibComposerEditor(wxWindow* parent, class ibMetaDocument* document);
+
+	class ibMetaDocument* GetDocument() const { return m_document; }
+
+protected:
+
+	// THE CONFIGURATION IS THE DOCUMENT'S — reached through its metaobject, which is what the tab was
+	// opened on. NEVER the active one: two configurations are open at once in the designer and the
+	// document knows which of them is its own (the same reason docViewComposer builds its composition
+	// over `metaComposer->GetMetaData()`).
+	virtual const class ibMetaData* GetEditedMetaData() const override;
+
+	// AND THE DIRTY BIT IS THE DOCUMENT'S. On the metadata road the signal bubbles up an attach chain
+	// and dies if nobody is above it; here there is somebody above it by construction.
+	virtual void MarkModified() override;
+
+private:
+
+	class ibMetaDocument* m_document = nullptr;
+};
+
 // The MODAL host — the panel plus OK / Cancel. Kept as the door the gridbox and the property
 // editor already call (ShowComposerSettings), so nothing outside had to learn about the split.
 class FRONTEND_API ibDialogComposerSettings : public wxDialog {
 public:
 
-	// Open the composer's settings modally.
-	static bool ShowComposerSettings(ibValueDataComposition* composer);
+	// ⭐⭐ THE USER'S SETTINGS OF A MODEL — the GRIDBOX's road, and the LIST's own window word for
+	// word (Max, 2026-08-23: "do it by analogy — you pass the model into the settings; passing the
+	// model is fine").
+	//
+	// The whole sequence goes through the model's COMPOSER: take the setting that is in force
+	// (`GetCurrentSettingsDesc`), let the person change a copy of it, and on OK assign it back
+	// (`SetUserSettingsDesc`). There is no such pair on the model itself, on purpose. The report
+	// itself is never written, and the caller never casts its way down to what kind of model it is
+	// holding — a gridbox shows a sheet, and a sheet's model answers both questions.
+	// ⭐⭐ THE READER'S ROAD — a COPY of the setting in force goes into the window, and on OK it is set
+	// back on the model. Nothing is kept anywhere else: the active setting lives in the model's
+	// composer, which the schema does not serialise, and what the author laid down is untouched
+	// (Max, 2026-08-24).
+	static bool ShowUserSettings(wxWindow* parent, class ibValueSpreadsheetModel* model);
 
-	ibDialogComposerSettings(wxWindow* parent, ibValueDataComposition* composer);
+	// ⭐⭐ ONE DOOR: A PARENT, A SNAPSHOT, AND THE CONFIGURATION ITS NAMES MEAN. Nothing running goes
+	// in, and there is no second road — both hosts hand over a description and differ only in whose
+	// it is (Max, 2026-08-24: "we work with snapshots").
+	//
+	//   * a property cell hands a CLONE of its value, and sets that clone back on true;
+	//   * the gridbox hands a COPY of the model's description, and keeps from it what its own pair
+	//     writes back — the user setting, which travels inside the snapshot.
+	//
+	// True = OK and the snapshot differs; the window edits it IN PLACE, so what Cancel drops is
+	// decided by whoever owns the description.
+	static bool ShowComposerSettings(wxWindow* parent, ibCompositionDescription& desc,
+		const class ibMetaData* metaData);
+
+	// ⭐⭐ …AND THE AUTHOR'S ROAD, for a composition EMBEDDED ON A FORM. A form attribute typed
+	// DataComposition is a small report somebody is building right there — pick a source, write the
+	// query, declare the resources — and none of that is a "setting of this run": it is what the
+	// composition IS, and it travels with the FORM (ibPropertyDataComposition already reads and
+	// writes the description, so it has been persisted all along).
+	//
+	// 🛑 THE PROPERTY INSPECTOR USED TO CALL ShowUserSettings HERE, and that window shows the Query,
+	// Resources and Parameters tabs but writes back ONLY the setting — so everything typed on them
+	// was edited, accepted and silently dropped (Max, 2026-08-24: "it has to be able to write itself
+	// too"). Two roads to one window, and the difference is WHAT IS WRITTEN.
+
+	// ⭐⭐ ONE CONSTRUCTOR, AND NOTHING RUNNING IN IT — a DESCRIPTION and the configuration its names
+	// mean, edited in place. Both roads reach this: the author's hands over a clone of a property
+	// value, the user's hands over the description of the model it was opened on. A model is a thing
+	// `ShowUserSettings` deals with, not this window.
+	//
+	// ⭐ THE MODAL HOST IS THE READER'S, always: `settings` is what it edits — a COPY of
+	// `GetCurrentSettingsDesc()` the caller took — and that setting is all that is written back. The
+	// report itself is left exactly as its author wrote it, and the variants are not shown at all.
+	ibDialogComposerSettings(wxWindow* parent, ibCompositionDescription& desc,
+		const class ibMetaData* metaData, ibSettingsDescription& settings);
+	// …and the AUTHOR's, over a description edited in place — what `ShowComposerSettings` opens when
+	// a composer is configured from the designer rather than read from.
+	ibDialogComposerSettings(wxWindow* parent, ibCompositionDescription& desc,
+		const class ibMetaData* metaData);
 
 private:
+	// (NO COPY HELD HERE ANY MORE. The window edits the description it was handed, in place — the
+	//  CALLER decides whether that is a clone, and therefore what Cancel drops. A copy of its own
+	//  would have been a third store beside the caller's and the object's.)
+	void BuildAround();   // the frame around whichever panel a ctor built
 	ibComposerSettingsPanel* m_panel = nullptr;
 };
 

@@ -25,6 +25,17 @@ class ibDataNode;   // serialize/dataBuilder.h — universal node (layer -> node
 // is the resolved display mode (picture / text / both) for THIS command; enabled greys the
 // tool out (an item's Enabled flag) without dropping it from the bar. item is
 // the source child (nullptr for an AutoFill command) — lets a designer click resolve back.
+// ⭐⭐ WHAT A BAR ENTRY IS — and there are two answers, which is why this is a KIND and not a flag.
+// A COMMAND stands for something to DO; a QUICK FILTER stands for a filter LINE the author marked
+// «quick access», and clicking it edits that line's value rather than running anything.
+//
+// The kind is asked in exactly two places — the click (which door it opens) and the caption (a
+// filter shows its value) — and nowhere else has to care, because both are entries on one bar.
+enum ibCommandEntryKind {
+	ibCommandEntryKind_Command = 0,
+	ibCommandEntryKind_QuickFilter,
+};
+
 struct ibCommandEntry {
 	ibActionID              id;
 	wxString                caption;
@@ -33,9 +44,16 @@ struct ibCommandEntry {
 	bool                    enabled;
 	ibValueCommandBarItem*  item;
 	wxBitmap                bitmap;   // the COMMAND's own live icon (from the command / gather); wins over `picture` when Ok
-	ibCommandEntry() : id(wxNOT_FOUND), representation(ibRepresentation_Auto), enabled(true), item(nullptr) {}
+	ibCommandEntryKind      kind;
+	// …and WHICH filter line, for a quick filter: its index among the top-level nodes of the
+	// setting in force. An index rather than a pointer because the settings are rebuilt under the
+	// bar (a refetch, another variant), and a pointer into a vector dies the moment one is added.
+	size_t                  filterLine;
+	ibCommandEntry() : id(wxNOT_FOUND), representation(ibRepresentation_Auto), enabled(true), item(nullptr),
+		kind(ibCommandEntryKind_Command), filterLine(0) {}
 	ibCommandEntry(const ibActionID& i, const wxString& c, const ibPictureDescription& p, ibRepresentation r, bool en = true, ibValueCommandBarItem* it = nullptr, const wxBitmap& bmp = wxNullBitmap)
-		: id(i), caption(c), picture(p), representation(r), enabled(en), item(it), bitmap(bmp) {}
+		: id(i), caption(c), picture(p), representation(r), enabled(en), item(it), bitmap(bmp),
+		  kind(ibCommandEntryKind_Command), filterLine(0) {}
 };
 
 // One CHILD command of the bar — a LEAF layer object (ibValueLayerObject), edited in the designer
@@ -225,6 +243,17 @@ public:
 	virtual bool IsEditable() const override { return true; }
 
 private:
+
+	// ⭐ THE QUICK-ACCESS FILTER LINES AS TOOLS — one per line the author marked, prepended to the
+	// bar by BuildCommands. Reads the SETTING IN FORCE every time; nothing is stored on the bar, so
+	// marking a line is the only act and unmarking it takes the tool away.
+	void BuildQuickFilters();
+	// …and the click on one: open the value chooser over that line, put the answer in the READER's
+	// setting, refetch. True when the entry was a quick filter (a command click falls through).
+	bool ExecuteQuickFilter(const ibActionID& id, class ibValueForm* form);
+	// The model whose setting the quick filters stand in for — null when this bar's owner has none
+	// (a form's own bar, a report's).
+	class ibValueModel* QuickFilterModel() const;
 
 	ibValueFrame*               m_owner = nullptr;
 	std::vector<ibCommandEntry> m_commands;

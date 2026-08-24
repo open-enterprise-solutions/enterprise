@@ -108,6 +108,7 @@ bool ibValueModelTableBox::GetControlValue(ibValue& pvarControlVal) const
 bool ibValueModelTableBox::SetControlValue(const ibValue& varControlVal)
 {
 	m_tableModel = varControlVal.ConvertToType<ibValueModel>();
+
 	return true;
 }
 
@@ -812,6 +813,11 @@ bool ibValueModelTableBox::ReadData(const ibDataNode& node)
 
 	m_propertyRowSelectionMode->SetNodeValue(node.GetProperty(m_propertyRowSelectionMode->GetName()));
 	m_propertyChoiceMode->SetNodeValue(node.GetProperty(m_propertyChoiceMode->GetName()));
+	// 🛑 THE VIEW MODE WAS MISSING FROM BOTH LISTS. It is read at build time and written back when the
+	// user switches list/tree at runtime — and then had no road to the file, so a designer's choice
+	// came back as the default on the next open (audit, 2026-08-24). Both halves are explicit lists
+	// here, so a property added to the class and not to them is silently not saved.
+	m_propertyViewMode->SetNodeValue(node.GetProperty(m_propertyViewMode->GetName()));
 
 	//events
 	m_eventSelection->SetNodeValue(node.GetProperty(m_eventSelection->GetName()));
@@ -839,6 +845,7 @@ bool ibValueModelTableBox::WriteData(ibDataNode& node) const
 
 	node.SetProperty(m_propertyRowSelectionMode->GetName(), m_propertyRowSelectionMode->GetNodeValue());
 	node.SetProperty(m_propertyChoiceMode->GetName(), m_propertyChoiceMode->GetNodeValue());
+	node.SetProperty(m_propertyViewMode->GetName(), m_propertyViewMode->GetNodeValue());   // see ReadData
 
 	//events
 	node.SetProperty(m_eventSelection->GetName(), m_eventSelection->GetNodeValue());

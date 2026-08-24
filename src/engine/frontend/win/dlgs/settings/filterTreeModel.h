@@ -1,10 +1,11 @@
-﻿#ifndef _FILTER_TREE_MODEL_H__
+#ifndef _FILTER_TREE_MODEL_H__
 #define _FILTER_TREE_MODEL_H__
 
 #include "backend/tabularModelView.h"
-#include "backend/composition/listFilter.h"
+#include "backend/compositionDescription.h"   // ibFilterDescription — the filter IS this
 
 #include <map>
+#include <vector>
 
 ////////////////////////////////////////////////////////////////////////////
 // The filter as a TREE, for the settings form
@@ -12,7 +13,17 @@
 //
 // The filter tab used to be a flat grid over a list of lines. It is a TREE now,
 // because the filter is: the root is a group, groups hold conditions and other
-// groups, and `a AND (b OR c)` has no flat form (listFilter.h).
+// groups, and `a AND (b OR c)` has no flat form.
+//
+// ⭐⭐ IT STANDS OVER THE DESCRIPTION, NOT OVER OBJECTS (2026-08-23). A filter used
+// to be a live tree of ibValueFilterGroup / ibValueFilterItem values, and this
+// model wrapped them one row per value. Those went under the knife with
+// composition/listFilter.h: the filter is DATA now — nodes in vectors, a group
+// owning its children — and a row stands for a PLACE in that data.
+//
+// A ROW IS ITS PATH. Nodes live in vectors, so a pointer to one dies the moment a
+// sibling is added; the index chain from the root does not. Resolving a row means
+// walking that chain, which is a handful of steps for a filter a person wrote.
 //
 // A GROUP ROW IS THE OPERATOR IT APPLIES. "And / Or / Not" is not decoration to
 // paint across the row — it is the one thing about a group the user changes, so
@@ -38,82 +49,95 @@ enum ibFilterTreeColumn {
 	kFilterColPresentation,
 };
 
-// One row of the tree — a condition or a group. It wraps the VALUE it stands
-// for; the model owns these and hands the same one back for the same value, so
-// selection and expansion survive a refresh.
+// The chain of child indexes from the root down to one node. Empty = the root
+// itself, which is a row like any other and the only one with no index.
+using ibFilterPath = std::vector<size_t>;
+
+// One row of the tree — a condition or a group, named by WHERE it sits. The
+// model owns these and hands the same one back for the same path, so selection
+// and expansion survive a refresh.
 class ibFilterTreeNode : public ibDataViewObject {
 public:
-	ibFilterTreeNode(const ibValue& node, ibFilterTreeNode* parent)
-		: m_node(node), m_parent(parent) {
+	ibFilterTreeNode(ibFilterDescription* filter, ibFilterPath path, ibFilterTreeNode* parent)
+		: m_filter(filter), m_path(std::move(path)), m_parent(parent) {
 	}
 
-	const ibValue& GetNode() const { return m_node; }
+	const ibFilterPath& GetPath() const { return m_path; }
+	bool IsRoot() const { return m_path.empty(); }
 
-	// EVERY ROW IS ASKED BOTH QUESTIONS on every paint, and one of the two answers
-	// is always no — so the question must be `ConvertToValue` (answers) and never
-	// `ConvertToType` (asserts, and raises "variable type does not support this
-	// operation" outside the Designer).
-	ibValueFilterItem* GetItem() const {
-		ibValueFilterItem* item = nullptr;
-		return m_node.ConvertToValue(item) ? item : nullptr;
-	}
-	ibValueFilterGroup* GetGroup() const {
-		ibValueFilterGroup* group = nullptr;
-		return m_node.ConvertToValue(group) ? group : nullptr;
-	}
+	// THE NODE THIS ROW STANDS FOR, or null when the path no longer leads
+	// anywhere — a row outliving its line for the moment between a delete and the
+	// refresh that follows it. Every caller asks and checks; there is no second
+	// road that assumes the node is there.
+	ibFilterNodeDescription* Resolve() const;
 
-	// A GROUP holds children; a condition is a leaf. That is the whole hierarchy
-	// — and it is why only a group can be a node at all.
-	virtual bool IsContainer() const override { return GetGroup() != nullptr; }
+	// The children a row owns: a group's own list, the description's top level for
+	// the root, null for a condition (which owns nothing).
+	std::vector<ibFilterNodeDescription>* Children() const;
+
+	// A GROUP holds children; a condition is a leaf. That is the whole hierarchy.
+	virtual bool IsContainer() const override { return Children() != nullptr; }
 
 	virtual ibDataViewItem GetParentItem() const override {
 		return m_parent != nullptr ? ibDataViewItem(m_parent) : ibDataViewItem();
 	}
 
 	// A row OUTLIVES the shape it was in: grouping moves it under a new group,
-	// ungrouping lifts it back. It is the SAME row — only its parent changed — so
-	// the model re-states the parent on each fetch instead of dropping the row and
-	// losing the selection with it.
+	// ungrouping lifts it back. The model re-states the parent on each fetch
+	// instead of dropping the row and losing the selection with it.
 	void SetParent(ibFilterTreeNode* parent) { m_parent = parent; }
+	void SetFilter(ibFilterDescription* filter) { m_filter = filter; }
 
 private:
-	ibValue           m_node;     // the condition or group this row stands for
-	ibFilterTreeNode* m_parent;   // owned by the model, outlives this row
+	ibFilterDescription* m_filter;   // the tree this path is read against — borrowed
+	ibFilterPath         m_path;     // where the row sits; empty = the root
+	ibFilterTreeNode*    m_parent;   // owned by the model, outlives this row
 };
 
 class ibFilterTreeModel : public ibDataViewModel {
 public:
 	ibFilterTreeModel() = default;
 
-	// The root group — the "Filter" line every other row hangs under.
-	void SetRoot(ibValueFilterGroup* root);
-	ibValueFilterGroup* GetRoot() const { return m_root; }
+	// THE FILTER THIS TREE SHOWS — borrowed, never owned. It belongs to the
+	// description the window is editing, which is a copy of the model's own; that
+	// is what makes Cancel need nothing undone.
+	void SetFilter(ibFilterDescription* filter);
+	ibFilterDescription* GetFilter() const { return m_filter; }
+
+	// ⭐ SHOW THE LINES MARKED **Inaccessible**, or leave them out — see ibFilterEditor::SetAuthoring.
+	// True is the designer, where those lines are written; false is a reader, whom they are hidden
+	// from while still being applied. The enumeration below is the only place it is asked.
+	void SetAuthoring(bool authoring) { m_authoring = authoring; }
 
 	// A STRUCTURAL change inside the SAME tree (added, deleted, moved, grouped).
-	// The rows survive it — that is the whole reason they are keyed by the value
-	// object — so this re-reads the shape without throwing away identity, and the
-	// dialog can re-select the line the user just acted on.
+	// The rows survive it — they are keyed by path — so this re-reads the shape
+	// without throwing away identity, and the dialog can re-select the line the
+	// user just acted on.
 	void Refresh();
-	// The row standing for a value, so the caller can select it. Invalid item when
-	// that value has no row yet (never fetched).
-	ibDataViewItem ItemFor(const ibValue& value) const;
+	// The row at a path, so the caller can select it. Invalid item when that path
+	// has no row yet (never fetched).
+	ibDataViewItem ItemFor(const ibFilterPath& path) const;
 	// THE ROOT'S OWN ROW, created if the view has not fetched it yet — the dialog
 	// needs it before the first paint to open the tree on it. A filter that shows
 	// one collapsed line reads as an empty filter.
 	ibDataViewItem RootItem() const;
 
-	// The value behind a row, for the dialog's own commands (add, delete, group).
-	ibValueFilterItem* GetItem(const ibDataViewItem& item) const;
-	ibValueFilterGroup* GetGroup(const ibDataViewItem& item) const;
+	// The node behind a row, for the dialog's own commands (add, delete, group).
+	// Null for the root, which stands for no node of its own.
+	ibFilterNodeDescription* GetNode(const ibDataViewItem& item) const;
+	// …and its path, which is what a command needs to delete or move it.
+	ibFilterPath GetPath(const ibDataViewItem& item) const;
 
-	// THE GROUP A ROW LIVES IN. A top-level row has NO parent row — the root group
-	// is invisible — so asking the tree for its parent answers "none", and every
-	// command that needs the owning group (delete, move, group) would give up on
-	// exactly the rows the user has most of. The root is that group.
-	ibValueFilterGroup* GetOwnerGroup(const ibDataViewItem& item) const;
-	// The group a new row should go into: the selected group itself, or the
-	// parent of the selected condition, or the root when nothing is selected.
-	ibValueFilterGroup* GetTargetGroup(const ibDataViewItem& item) const;
+	// THE LIST A ROW LIVES IN — its owning group's children, or the description's
+	// top level. Null for the root, which lives in nothing: that is what makes it
+	// undeletable and unmovable without a second rule anywhere.
+	std::vector<ibFilterNodeDescription>* GetOwnerChildren(const ibDataViewItem& item) const;
+	// The list a NEW row should go into: the selected group's own children, or
+	// those of the selected condition's owner, or the top level when nothing is
+	// selected. GetTargetPath names the same place, so a caller that has just
+	// appended can say WHERE the new line landed.
+	std::vector<ibFilterNodeDescription>* GetTargetChildren(const ibDataViewItem& item) const;
+	ibFilterPath GetTargetPath(const ibDataViewItem& item) const;
 
 	// ---- ibDataViewModel ----
 	void GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const override;
@@ -138,22 +162,16 @@ public:
 
 private:
 	bool m_readOnly = false;   // view only — see SetReadOnly
-	// One row object per value, kept alive by the model so a parent pointer
-	// stays valid and so the same value keeps the same row across refreshes.
-	ibFilterTreeNode* NodeFor(const ibValue& value, ibFilterTreeNode* parent) const;
-	// THE ROOT IS A ROW LIKE ANY OTHER, and differs in exactly two ways — it says
-	// it is the filter, and it cannot be switched off. Asked in one place so those
-	// two do not drift into three.
-	bool IsRootGroup(const ibValueFilterGroup* group) const {
-		return group != nullptr && group == static_cast<ibValueFilterGroup*>(m_root);
-	}
+	// One row object per PATH, kept alive by the model so a parent pointer stays
+	// valid and so the same place keeps the same row across refreshes.
+	ibFilterTreeNode* NodeFor(const ibFilterPath& path, ibFilterTreeNode* parent) const;
+	static wxString KeyOf(const ibFilterPath& path);
 
-	ibValuePtr<ibValueFilterGroup> m_root;
-	// Keyed by the VALUE OBJECT the row stands for (ibValue::GetRef), not by a
-	// position and not by the address of some ibValue holding it: a line that
-	// moves — grouping, drag, ungroup — must keep its row, or the selection
-	// jumps to whatever now sits where it used to be.
-	mutable std::map<const void*, wxObjectDataPtr<ibFilterTreeNode>> m_nodes;
+	ibFilterDescription* m_filter = nullptr;
+	bool m_authoring = true;   // see SetAuthoring — the designer sees the inaccessible lines
+	// Keyed by the PATH, not by an address: a node lives in a vector, and adding a
+	// sibling moves every one of them. The path is what a row IS.
+	mutable std::map<wxString, wxObjectDataPtr<ibFilterTreeNode>> m_nodes;
 	mutable std::vector<wxObjectDataPtr<ibFilterTreeNode>> m_owned;
 };
 

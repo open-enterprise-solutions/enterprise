@@ -40,20 +40,21 @@ class ibListSettingsPanel::ibGroupModel : public ibDataViewVirtualListModel {
 	ibListSettingsPanel* m_dialog;
 public:
 	explicit ibGroupModel(ibListSettingsPanel* dialog) : ibDataViewVirtualListModel(), m_dialog(dialog) {}
-	ibValueGroupList* GetGroup() const { return m_dialog->GetGroupList(); }
-	void ResetFromList() { ibValueGroupList* g = GetGroup(); Reset(g != nullptr ? (unsigned int)g->Count() : 0u); }
+	ibGroupDescription* GetGroup() const { return m_dialog->GetGroupList(); }
+	void ResetFromList() { ibGroupDescription* g = GetGroup(); Reset(g != nullptr ? (unsigned int)g->m_lines.size() : 0u); }
 	virtual void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
-		ibValueGroupList* g = GetGroup();
+		ibGroupDescription* g = GetGroup();
 		if (g == nullptr) return;
 		// BOUNDS FIRST. The view paints rows it has, the list may already have fewer
-		// (a Reset lands after the paint is queued), and GetKind / GetField index
-		// straight into the vector — reading past the end crashed on repaint.
-		if (row >= g->Count())
+		// (a Reset lands after the paint is queued) — reading past the end crashed
+		// on repaint.
+		if (row >= g->m_lines.size())
 			return;
 		if (col == eGroupField)
-			variant = g->GetFieldObject(row) != nullptr ? g->GetFieldObject(row)->GetString() : g->GetField(row);
+			variant = g->m_lines[row].m_path;
 		else if (col == eGroupKind)
-			variant = ibValue::CreateEnumObject<ibValueEnumGroupKind>(g->GetKind(row)).GetString();
+			variant = ibValue::CreateEnumObject<ibValueEnumGroupKind>(
+				g->m_lines[row].m_kind).GetString();
 	}
 	virtual bool SetValueByRow(const wxVariant&, unsigned, unsigned) override { return false; }
 };
@@ -62,24 +63,33 @@ public:
 //  Construction, buffers, and the small shared accessors
 // ===========================================================================
 
-// The two public ctors differ ONLY in how they bind the field source (m_list set or
-// not). Everything else — the tabs, load, OK binding — is identical.
-
-ibListSettingsPanel::ibListSettingsPanel(wxWindow* parent, ibValueDynamicList* list, int pages)
+// ⭐⭐ ONE CTOR, AND NOTHING RUNNING IN IT (Max, 2026-08-24: "every UI element is driven through its
+// description — why are you keeping those lists in there at all").
+//
+// This panel used to take a dynamic list, or any model, and read the runtime for four different
+// things: which tabs to offer, where the fields come from, the arbitrary query, and the setting
+// itself. Every one of those is IN the description — the query is a string it carries, the fields
+// are what parsing that string yields, the setting is handed in, and a description forbids no tab.
+// So the runtime was not a source of anything, only a second way to reach the same facts.
+//
+// `settings` is what the window EDITS; the caller took the copy and decides what accepting it means.
+ibListSettingsPanel::ibListSettingsPanel(wxWindow* parent, ibCompositionDescription& desc,
+	const ibMetaData* metaData, int pages)
 	: wxPanel(parent, wxID_ANY),
-	  m_model(list), m_list(list), m_settings(new ibValueListSettings()),
-	  m_fields(new ibSettingsFieldTree()), m_pages(pages)
+	  m_schema(&desc), m_desc(&desc), m_metaData(metaData),
+	  m_fieldSource(new ibSettingsFieldTree()), m_pages(pages)
 {
 	BuildPages();
 }
 
-// General-model ctor — same body as the dynamic-list one, but m_list stays null (no
-// arbitrary query to edit). Whether the fields come from an explorer or from flat
-// columns is BindFieldSource's business, not this one's.
-ibListSettingsPanel::ibListSettingsPanel(wxWindow* parent, ibValueModel* model, int pages)
+// ⭐⭐ THE READER'S ROAD — see the header. The schema arrives CONST and stays that way; `settings` is
+// the one thing written, and it is the caller's copy.
+ibListSettingsPanel::ibListSettingsPanel(wxWindow* parent, const ibCompositionDescription& schema,
+	const ibMetaData* metaData, ibSettingsDescription& settings,
+	std::vector<ibSettingsPlainField> fields, int pages)
 	: wxPanel(parent, wxID_ANY),
-	  m_model(model), m_list(nullptr), m_settings(new ibValueListSettings()),
-	  m_fields(new ibSettingsFieldTree()), m_pages(pages)
+	  m_schema(&schema), m_metaData(metaData), m_settings(&settings), m_plainFields(std::move(fields)),
+	  m_fieldSource(new ibSettingsFieldTree()), m_pages(pages)
 {
 	BuildPages();
 }
@@ -94,55 +104,67 @@ void ibListSettingsPanel::BuildPages()
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
 	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
-	// Tabs are GATED twice: by what the HOST asked for (m_pages) and by the model's Features
-	// (Max: "turn the flag off → the tab is hidden; the default parameters still change").
-	// Default = all on. The first available tab is the selected one.
-	const ibValueModel::Features feats = (m_model != nullptr) ? m_model->GetFeatures() : ibValueModel::Features{};
-
-	// THE QUERY TAB IS A DEVELOPER TOOL, and it exists only where there is a list to edit the
-	// query OF. Writing the source query is configuring the form, not using it — an end user
-	// opening "Filter" has no business being offered the query text.
-	if ((m_pages & Page_Query) != 0 && m_list != nullptr && appData->DesignerMode())
+	// ⭐ TABS ARE GATED BY WHAT THE HOST ASKED FOR, and by nothing else. A DESCRIPTION forbids no
+	// part of itself: every one of them is there to be written. The gate used to ask a MODEL for
+	// its Features — and a window opened without one got `Features{}`, flags zero, which reads as
+	// "everything is off": an empty notebook with an OK button over blank grey.
+	//
+	// THE QUERY TAB IS A DEVELOPER TOOL — writing the source query is configuring the form, not
+	// using it; an end user opening "Filter" has no business being offered it.
+	if ((m_pages & Page_Query) != 0 && m_desc != nullptr && appData->DesignerMode())
 		notebook->AddPage(BuildQueryPage(notebook), _("Query"), true);
 
 	// ⭐ THE TWO SHARED EDITORS. Built, not written: the composer's window builds the very same
 	// pair over its own buffer, which is the whole point of them living one level up.
-	if ((m_pages & Page_Filter) != 0 && feats.Has(ibValueModel::Features::Filters)) {
-		m_filterEditor = new ibFilterEditor(notebook, m_settings, m_fields.get());
+	//
+	// ⭐ AND THEY REPORT THE SAME WAY the composer's pair does. `MarkModified` is deliberately empty
+	// HERE (see it: a list has no document to mark), but the query-text edit already announces
+	// through it, so leaving the editors unwired made the one verb answer for some edits and not
+	// others — and the override the comment promises would have inherited that hole (audit,
+	// 2026-08-24).
+	if ((m_pages & Page_Filter) != 0) {
+		m_filterEditor = new ibFilterEditor(notebook, &EditedSettings().m_filter, m_fieldSource.get());
+		m_filterEditor->SetOnChanged([this] { MarkModified(); });
+		// ⭐ WHOSE WINDOW THIS IS. A handed-in setting means a READER opened it, and a line the
+		// author marked inaccessible is hidden from them — applied, never shown. The designer's
+		// road (no setting handed in, the description edited directly) sees everything.
+		m_filterEditor->SetAuthoring(m_settings == nullptr);
 		notebook->AddPage(m_filterEditor, _("Filter"), notebook->GetPageCount() == 0);
 	}
-	if ((m_pages & Page_Sort) != 0 && feats.Has(ibValueModel::Features::Sorting)) {
-		m_sortEditor = new ibSortEditor(notebook, m_settings, m_fields.get());
+	if ((m_pages & Page_Sort) != 0) {
+		m_sortEditor = new ibSortEditor(notebook, &EditedSettings().m_sort, m_fieldSource.get());
+		m_sortEditor->SetOnChanged([this] { MarkModified(); });
 		notebook->AddPage(m_sortEditor, _("Sort"), notebook->GetPageCount() == 0);
 	}
 	// …and the list's OWN fold, which the composer does not share: its structure is a tree of
 	// levels, not a flat ordered list (Max, 2026-08-20).
-	if ((m_pages & Page_Group) != 0 && feats.Has(ibValueModel::Features::Grouping))
+	if ((m_pages & Page_Group) != 0)
 		notebook->AddPage(BuildGroupPage(notebook), _("Group"), notebook->GetPageCount() == 0);
 
 	mainSizer->Add(notebook, 1, wxEXPAND);
 	SetSizer(mainSizer);
 
-	// Transactional open: load the edit BUFFER (m_settings) FROM the composer (the committed
-	// store) so it shows the current Filter / Sort / Group; the user edits the buffer; Commit
-	// puts it back, and a host that never commits leaves the composer untouched.
-	if (m_model != nullptr && m_settings != nullptr)
-		// THE LIVE SETTINGS TOO: a tree filter reaches the composer as one expression
-		// and cannot be read back out of it — the model still holds the tree itself.
-		ibLoadSettingsFromComposer(m_settings, m_model->GetModelComposer(), m_model->GetListSettings());
+	// ⭐ THE AUTHOR'S ROAD OPENS ON A COPY — the buffer this window can drop. A reader's road was
+	// handed one by the box and edits THAT in place, so there is nothing to copy for it.
+	//
+	// ⚠ TAKEN AFTER THE EDITORS ARE BUILT, and that is safe because they hold POINTERS INTO the
+	// buffer: assigning it fills the very structures they are standing over, and their addresses do
+	// not move.
+	if (m_settings == nullptr && m_desc != nullptr)
+		m_edited = m_desc->GetCompositionSettingsDesc();
 
 	LoadFromSettings();
 }
 
-ibValueGroupList* ibListSettingsPanel::GetGroupList() const
+ibGroupDescription* ibListSettingsPanel::GetGroupList()
 {
-	return m_settings != nullptr ? m_settings->GetGroup() : nullptr;
+	return &EditedSettings().m_group;
 }
 
 // THE FIELD PICKER, forwarded to the one thing that knows which fields exist.
 ibValueCompositionField* ibListSettingsPanel::ChooseField(wxWindow* parent, const wxString& currentPath)
 {
-	return m_fields != nullptr ? m_fields->ChooseField(parent != nullptr ? parent : this, currentPath) : nullptr;
+	return m_fieldSource != nullptr ? m_fieldSource->ChooseField(parent != nullptr ? parent : this, currentPath) : nullptr;
 }
 
 // WHERE THIS PANEL'S FIELDS COME FROM. A dynamic list and a model that IS a source describe
@@ -150,35 +172,26 @@ ibValueCompositionField* ibListSettingsPanel::ChooseField(wxWindow* parent, cons
 // has flat columns, and even those get their [+] when the type is a reference.
 void ibListSettingsPanel::BindFieldSource()
 {
-	if (m_fields == nullptr)
+	if (m_fieldSource == nullptr)
 		return;
 
 	const ibMetaData* metaData = SourceMetaData();
 
-	const ibSourceDataObject* source = (m_list != nullptr)
-		? static_cast<const ibSourceDataObject*>(m_list)
-		: dynamic_cast<const ibSourceDataObject*>(m_model);
-	if (source != nullptr && source->GetSourceExplorer() != nullptr) {
-		m_fields->SetSource(source, metaData);
+	// ⭐ A QUERY DESCRIBES ITS OWN FIELDS — the same answer the composer's window gets, from the same
+	// function: a text and a configuration, with nothing running in between.
+	if (m_schema != nullptr && m_schema->HasQuery()) {
+		std::vector<ibSettingsPlainField> plain;
+		for (const ibQueryConstructorField& field : ibQueryFieldsOfText(m_schema->m_query, metaData))
+			plain.push_back({ field.m_name, wxNOT_FOUND, field.m_type });
+		m_fieldSource->SetPlainFields(std::move(plain), metaData);
 		return;
 	}
 
-	std::vector<ibSettingsPlainField> plain;
-	if (m_model != nullptr) {
-		if (ibValueModel::ibValueModelColumnCollection* columns = m_model->GetColumnCollection()) {
-			for (unsigned int i = 0; i < columns->GetColumnCount(); ++i) {
-				const auto* col = columns->GetColumnInfo(i);
-				if (col == nullptr)
-					continue;
-				ibSettingsPlainField field;
-				field.m_name = col->GetColumnName();
-				field.m_id   = static_cast<ibMetaID>(col->GetColumnID());
-				field.m_type = col->GetColumnTypeValue();
-				plain.push_back(std::move(field));
-			}
-		}
-	}
-	m_fields->SetPlainFields(std::move(plain), metaData);
+	// ⭐ …AND WHERE THERE IS NO QUERY, THE FIELDS WERE DESCRIBED TO US. A value table or a tabular
+	// section has columns and no text; the caller states them as data and this window uses them
+	// exactly as it uses the parsed ones. It used to reach into the live model for this — the same
+	// facts, fetched through an object instead of being told.
+	m_fieldSource->SetPlainFields(m_plainFields, metaData);
 }
 
 // ===========================================================================
@@ -193,16 +206,20 @@ wxWindow* ibListSettingsPanel::BuildQueryPage(wxWindow* parent)
 	wxPanel* page = new wxPanel(parent, wxID_ANY);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
+	// ⭐ NO "ARBITRARY QUERY" BOX. Having a query IS running one — the description says so by carrying
+	// text, and a checkbox beside it was a second spelling of the same fact. They disagreed: the box
+	// was set from `HasQuery()` while the editor was enabled unconditionally, so a source with no
+	// query opened with the box CLEAR and the text editable, and typing turned the list into a
+	// query-driven one without ever ticking anything (Max, 2026-08-24).
 	wxBoxSizer* header = new wxBoxSizer(wxHORIZONTAL);
-	m_queryUseCheck = new wxCheckBox(page, wxID_ANY, _("Arbitrary query"));
-	header->Add(m_queryUseCheck, 0, wxALIGN_CENTER_VERTICAL);
+	header->Add(new wxStaticText(page, wxID_ANY, _("Query text - what this list reads")),
+		0, wxALIGN_CENTER_VERTICAL);
 	header->AddStretchSpacer();
 
 	// THE CONSTRUCTOR OPENS ON THIS VERY TEXT and writes back into it. That is the whole round trip
 	// — parse, edit, render — and wiring it here first means it is exercised against a real list
 	// from the day it exists, rather than against a mock-up.
 	m_queryBuild = new wxButton(page, wxID_ANY, _("Query constructor"));
-	m_queryBuild->Enable(false);   // meaningful only when the flag is on, like the text
 	m_queryBuild->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
 		if (m_queryText == nullptr)
 			return;
@@ -222,7 +239,6 @@ wxWindow* ibListSettingsPanel::BuildQueryPage(wxWindow* parent)
 	// the same language wearing two faces.
 	m_queryText = new wxStyledTextCtrl(page, wxID_ANY);
 	ibStyleQueryText(m_queryText);
-	m_queryText->Enable(false);   // meaningful only when the flag is on
 	sizer->Add(m_queryText, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(6));
 
 	// THE ENGINE'S OWN WORDS, under the text it is about. Shown only when there is something to say;
@@ -231,22 +247,6 @@ wxWindow* ibListSettingsPanel::BuildQueryPage(wxWindow* parent)
 	m_queryError->SetForegroundColour(*wxRED);
 	m_queryError->Hide();
 	sizer->Add(m_queryError, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(6));
-
-	// TICK IT AND A QUERY APPEARS. The list writes the starting query over its own main table
-	// (SeedArbitraryQuery) — because switching this on means "let me change what is read", and a blank
-	// page is not a starting point, it is a question about syntax. Unticking takes it away again: the
-	// main table alone is the read, and a text left lying around would come back on the next tick
-	// carrying edits nobody remembers making.
-	m_queryUseCheck->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& e) {
-		if (m_queryText  != nullptr) m_queryText->Enable(e.IsChecked());
-		if (m_queryBuild != nullptr) m_queryBuild->Enable(e.IsChecked());
-		if (m_list == nullptr)
-			return;
-		m_list->SetArbitraryQuery(e.IsChecked());
-		if (m_queryText != nullptr)
-			m_queryText->SetText(m_list->GetArbitraryQueryText());   // the seed, or empty
-		ApplyQueryToList();
-	});
 
 	// AND THE PICKERS FOLLOW THE TEXT. On leaving the editor the query is applied and every field
 	// tree in this dialog is rebuilt — so a field added to the query is there to filter, sort and
@@ -274,7 +274,7 @@ void ibListSettingsPanel::ReloadFields()
 	BindFieldSource();
 	if (m_filterEditor != nullptr) m_filterEditor->ReloadFields();
 	if (m_sortEditor   != nullptr) m_sortEditor->ReloadFields();
-	if (m_fields != nullptr) m_fields->Populate(m_groupFieldTree);
+	if (m_fieldSource != nullptr) m_fieldSource->Populate(m_groupFieldTree);
 }
 
 // APPLY THE QUERY AND REBUILD WHAT DEPENDS ON IT. One place, because "the query changed" has exactly
@@ -284,17 +284,27 @@ void ibListSettingsPanel::ReloadFields()
 // finding that out here — in front of its author — is the whole point of describing it early.
 void ibListSettingsPanel::ApplyQueryToList()
 {
-	if (m_list == nullptr || m_queryUseCheck == nullptr)
+	// ⭐ THE DESCRIPTION ROAD — the text goes into the description and the fields are re-read from it.
+	// There is no engine to ask and nothing to apply: what a query offers is what parsing it says.
+	if (m_desc != nullptr) {
+		if (m_queryText != nullptr)
+			m_desc->m_query = m_queryText->GetText();
+
+		ibQueryFieldsOfText(m_desc->m_query, SourceMetaData(), &m_queryFault);
+
+		ReloadFields();
+		ShowQueryFault();
+
+		// …AND THE CHANGE IS ANNOUNCED where it is made, exactly as the composer's window announces
+		// its own — so the two behave the same when they are attributes of a form.
+		MarkModified();
 		return;
+	}
 
-	if (m_queryText != nullptr && m_queryUseCheck->GetValue())
-		m_list->SetArbitraryQueryText(m_queryText->GetText());
-	m_list->ApplySource();
-
-	ReloadFields();   // the fields follow the text, and every tree shows the same answer
-
-	const wxString error = m_list->GetArbitraryQueryError();
+	// (NO SECOND ROAD. There was one that pushed the text into a LIVE list and asked it what the
+	//  engine thought — the description road above answers both from the text itself.)
 	if (m_queryError != nullptr) {
+		const wxString error = m_queryFault;
 		m_queryError->SetLabel(error);
 		m_queryError->Show(!error.IsEmpty());
 		if (m_queryError->GetParent() != nullptr)
@@ -335,20 +345,23 @@ wxWindow* ibListSettingsPanel::BuildGroupPage(wxWindow* parent)
 		new ibRowValueCellRenderer(this, chooser,
 			[this](const ibDataViewItem& row) -> ibValue {
 				const size_t idx = GroupIndexAt(row);
-				ibValueGroupList* g = GetGroupList();
-				return (g != nullptr && idx < g->Count()) ? ibValue(g->GetFieldObject(idx)) : ibValue();
+				ibGroupDescription* g = GetGroupList();
+				if (g == nullptr || idx >= g->m_lines.size() || g->m_lines[idx].m_path.IsEmpty())
+					return ibValue();
+				return ibValue(new ibValueCompositionField(g->m_lines[idx].m_path));
 			},
 			[this](const ibDataViewItem& row, const ibValue& value) {
-				ibValueGroupList* g = GetGroupList();
+				ibGroupDescription* g = GetGroupList();
 				const size_t idx = GroupIndexAt(row);
-				if (g == nullptr || idx >= g->Count())
+				if (g == nullptr || idx >= g->m_lines.size())
 					return;
 				// An empty value CLEARS the line's field (same reason as the sort editor).
-				// ⚠ SetLine, not Remove+Add: the second MOVES the edited line to the end, and order is the
-				// meaning of a grouping list ("by Warehouse, then by Item" is not the other report).
+				// ⚠ THE LINE IS EDITED WHERE IT STANDS, never removed and re-added: the second MOVES it
+				// to the end, and order is the meaning of a grouping list ("by Warehouse, then by Item"
+				// is not the other report).
 				ibValueCompositionField* field = nullptr;
 				const bool chosen = value.ConvertToValue(field) && field != nullptr;
-				g->SetLine(idx, chosen ? field->GetPath() : wxString(), g->GetKind(idx));
+				g->m_lines[idx].m_path = chosen ? field->GetPath() : wxString();
 				if (m_groupModel != nullptr) m_groupModel->ResetFromList();
 			}),
 		eGroupField, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));
@@ -356,28 +369,22 @@ wxWindow* ibListSettingsPanel::BuildGroupPage(wxWindow* parent)
 	m_groupView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Kind"),
 		new ibRowValueCellRenderer(this, chooser,
 			[this](const ibDataViewItem& row) -> ibValue {
-				ibValueGroupList* g = GetGroupList();
+				ibGroupDescription* g = GetGroupList();
 				const size_t idx = GroupIndexAt(row);
-				return (g != nullptr && idx < g->Count())
-					? ibValue::CreateEnumObject<ibValueEnumGroupKind>(g->GetKind(idx)) : ibValue();
+				return (g != nullptr && idx < g->m_lines.size())
+					? ibValue::CreateEnumObject<ibValueEnumGroupKind>(
+						g->m_lines[idx].m_kind)
+					: ibValue();
 			},
 			[this](const ibDataViewItem& row, const ibValue& value) {
-				ibValueGroupList* g = GetGroupList();
+				ibGroupDescription* g = GetGroupList();
 				const size_t idx = GroupIndexAt(row);
-				if (g != nullptr && idx < g->Count()) {
-					// ⚠⚠ BY PATH, NOT BY OBJECT — this line CRASHED the designer.
-					//
-					// A grouping list has two modes, and in FACADE mode (a live list, the composer is
-					// the store) there IS no line object: GetFieldObject returns null on purpose, since
-					// it used to mint one per repaint and leak it. Reading it here and handing it to
-					// Add(field, kind) dereferenced null the moment somebody changed the kind of a
-					// grouping on a real list — "added a field, switched it to HierarchyOnly, crash".
-					//
-					// GetField(idx) is the accessor BOTH modes answer, and a grouping line IS a path
-					// plus a kind — so the line is rebuilt from what it is, not from an object that
-					// only exists half the time.
-					g->SetLine(idx, g->GetField(idx), value.ConvertToEnumValue<ibQueryDimUnfold>());
-				}
+				// THE KIND ALONE CHANGES. A grouping line IS a path plus a kind, and writing the kind
+				// where it stands is the whole edit — rebuilding the line from an object that only
+				// existed half the time is what used to crash the designer here ("added a field,
+				// switched it to HierarchyOnly, crash").
+				if (g != nullptr && idx < g->m_lines.size())
+					g->m_lines[idx].m_kind = value.ConvertToEnumValue<ibQueryDimUnfold>();
 				if (m_groupModel != nullptr) m_groupModel->ResetFromList();
 			}),
 		eGroupKind, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));
@@ -419,13 +426,13 @@ wxWindow* ibListSettingsPanel::BuildGroupPage(wxWindow* parent)
 	panelSizer->Add(splitter, 1, wxEXPAND);
 	panel->SetSizer(panelSizer);
 
-	if (m_fields != nullptr) {
-		m_fields->Populate(m_groupFieldTree);
-		m_fields->Attach(m_groupFieldTree);   // unfold a reference, drag a field out
+	if (m_fieldSource != nullptr) {
+		m_fieldSource->Populate(m_groupFieldTree);
+		m_fieldSource->Attach(m_groupFieldTree);   // unfold a reference, drag a field out
 	}
 	m_groupFieldTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, &ibListSettingsPanel::OnGroupFieldActivated, this);
 	rightPane->SetDropTarget(new ibCallbackDropTarget([this] {
-		if (m_fields != nullptr) AddGroupForField(m_fields->GetDragItem());
+		if (m_fieldSource != nullptr) AddGroupForField(m_fieldSource->GetDragItem());
 	}));
 
 	m_groupView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
@@ -452,20 +459,12 @@ wxWindow* ibListSettingsPanel::BuildGroupPage(wxWindow* parent)
 
 void ibListSettingsPanel::LoadFromSettings()
 {
-	// Query tab (dynamic-list only) — load the list's arbitrary-query flag + text into the controls.
-	if (m_list != nullptr && m_queryUseCheck != nullptr) {
-		m_queryUseCheck->SetValue(m_list->IsArbitraryQuery());
-		if (m_queryText != nullptr) {
-			m_queryText->SetText(m_list->GetArbitraryQueryText());
-			m_queryText->Enable(m_list->IsArbitraryQuery());
-		}
-		if (m_queryBuild != nullptr)
-			m_queryBuild->Enable(m_list->IsArbitraryQuery());   // the constructor follows the text it edits
-	}
-	if (m_settings == nullptr)
-		return;
-	// Every editor binds straight to its buffer list (Filter / Order / Group) — just
-	// sync them to what ibLoadSettingsFromComposer put in the buffer.
+	// THE TEXT IS THE QUERY — nothing else to sync, and nothing to enable or disable by: an empty
+	// text is a list with no query of its own, which is a state and not a mode.
+	if (m_schema != nullptr && m_queryText != nullptr)
+		m_queryText->SetText(m_schema->m_query);
+	// Every editor binds straight to its part of the copy (Filter / Order / Group) —
+	// just sync them to what the copied description put there.
 	if (m_filterEditor != nullptr) m_filterEditor->Reload();
 	if (m_sortEditor   != nullptr) m_sortEditor->Reload();
 	if (m_groupModel   != nullptr) m_groupModel->ResetFromList();
@@ -473,15 +472,16 @@ void ibListSettingsPanel::LoadFromSettings()
 
 // RE-READ THE SETTINGS THEMSELVES — what the panel edits changed under it.
 //
-// ⭐ THIS IS WHAT A VARIANT SWITCH NEEDS (2026-08-19). The buffer is loaded once, in the constructor,
-// from the model's composer; picking another variant makes the composer hold a different set, and
-// the panel has to start over on it. Everything else about the panel is unchanged — same buffer
-// object, same models bound to it, so nothing has to be rebuilt or re-bound.
+// ⭐ THIS IS WHAT PICKING A VARIANT NEEDS. The setting the panel stands over is replaced wholesale,
+// and the panel has to start over on it. Everything else is unchanged — the SAME object, so the
+// buffer lists and the models bound to them stay valid; only its contents are new.
 void ibListSettingsPanel::ReloadSettings()
 {
-	if (m_model == nullptr || m_settings == nullptr)
-		return;
-	ibLoadSettingsFromComposer(m_settings, m_model->GetModelComposer(), m_model->GetListSettings());
+	if (m_settings == nullptr) {
+		if (m_desc == nullptr)
+			return;
+		m_edited = m_desc->GetCompositionSettingsDesc();
+	}
 	LoadFromSettings();
 }
 
@@ -492,18 +492,41 @@ void ibListSettingsPanel::ApplyToSettings()
 	// one: it catches a text edited and then OK'd without the editor ever losing focus.
 	ApplyQueryToList();
 	// Every editor edits its buffer list IN PLACE through its model — nothing to copy back here.
-	// The buffer is committed to the composer on OK (ibCommitSettingsToComposer).
+	// The whole copy goes back to the model on OK (SetCompositionDesc).
 }
 
 // The config metaData that resolves reference targets — the dynamic list's own, else the ACTIVE
 // config. Without a valid metaData, ConvertToMetaIds returns nothing and every field looks like a
 // leaf (no [+]) — which is exactly the "flat list" bug.
+// SOMETHING CHANGED — see the header. NOTHING HAPPENS HERE, and that is the whole answer for this
+// window: a list has no settings of its own and lives only inside an ATTRIBUTE (Max, 2026-08-24), so
+// there is no document to mark and nobody to tell mid-edit. Its modified-ness is the OK: the value
+// is set, the cascade runs, the attribute changes, and the whole snapshot lands in the composer.
+//
+// The hook stays because the composer's panel has the same verb — and because a road WITH a document
+// (a list edited on a tab of its own, if one ever appears) overrides exactly here.
+void ibListSettingsPanel::MarkModified()
+{
+}
+
+// THE RED LINE — see the header. One place, because two moments say it: the text changing, and the
+// window OPENING. The composer's window carries the identical pair.
+void ibListSettingsPanel::ShowQueryFault()
+{
+	if (m_queryError == nullptr)
+		return;
+	m_queryError->SetLabel(m_queryFault);
+	m_queryError->Show(!m_queryFault.IsEmpty());
+	if (m_queryError->GetParent() != nullptr)
+		m_queryError->GetParent()->Layout();
+}
+
 const ibMetaData* ibListSettingsPanel::SourceMetaData() const
 {
-	if (m_list != nullptr)
-		if (const ibMetaData* md = m_list->GetSourceMetaData())
-			return md;
-	return activeMetaData;
+	// ⭐ THE CONFIGURATION THIS WINDOW WAS TOLD, and never the active one: a window may be shown for a
+	// configuration that is not the one in front (there are several open at once). The caller hands
+	// it in with the settings; nothing here goes looking.
+	return m_metaData != nullptr ? m_metaData : activeMetaData;
 }
 
 // ===========================================================================
@@ -541,56 +564,60 @@ size_t ibListSettingsPanel::GroupIndexAt(const ibDataViewItem& row) const
 void ibListSettingsPanel::AddGroupForField(const wxTreeItemId& item)
 {
 	ibValuePtr<ibValueCompositionField> field(ibSettingsFieldTree::FieldAt(m_groupFieldTree, item));
-	ibValueGroupList* g = GetGroupList();
-	if (field == nullptr || g == nullptr)
+	ibGroupDescription* g = GetGroupList();
+	if (!field || g == nullptr)
 		return;
-	g->Add(field, ibQueryDimUnfold::Elements);
+	g->Append(field->GetPath(), ibQueryDimUnfold::Elements);
 	if (m_groupModel != nullptr)
 		m_groupModel->ResetFromList();
-	ibSelectLastSettingsRow(m_groupView, g->Count());
+	ibSelectLastSettingsRow(m_groupView, g->m_lines.size());
 }
 
 void ibListSettingsPanel::OnGroupAdd(wxCommandEvent&)
 {
-	ibValueGroupList* g = GetGroupList();
+	ibGroupDescription* g = GetGroupList();
 	if (g == nullptr)
 		return;
-	g->Add(wxEmptyString, ibQueryDimUnfold::Elements);
+	g->Append(wxEmptyString, ibQueryDimUnfold::Elements);
 	if (m_groupModel != nullptr)
 		m_groupModel->ResetFromList();
-	ibSelectLastSettingsRow(m_groupView, g->Count());
+	ibSelectLastSettingsRow(m_groupView, g->m_lines.size());
 }
 void ibListSettingsPanel::OnGroupFieldActivated(wxTreeEvent& e) { AddGroupForField(e.GetItem()); }
 
 void ibListSettingsPanel::OnGroupRemove(wxCommandEvent&)
 {
-	ibValueGroupList* g = GetGroupList();
+	ibGroupDescription* g = GetGroupList();
 	if (g == nullptr || m_groupView == nullptr)
 		return;
 	const ibDataViewItem& sel = m_groupView->GetSelection();
 	if (!sel.IsOk())
 		return;
-	// The list removes its own line — rebuilding the whole grouping to drop one
-	// row lost the field OBJECT each line carried (its type, its presentation) and
-	// rebuilt a bare field from the path.
+	// ONE LINE LEAVES, the rest keep their order — which is the meaning of a
+	// grouping list, so rebuilding the whole thing to drop one row is never right.
 	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based
-	if (index == 0 || !g->Remove(index - 1))
+	if (index == 0 || index > g->m_lines.size())
 		return;
+	g->m_lines.erase(g->m_lines.begin() + (index - 1));
 	if (m_groupModel != nullptr)
 		m_groupModel->ResetFromList();
 }
 
 void ibListSettingsPanel::MoveGroupLine(int delta)
 {
-	ibValueGroupList* g = GetGroupList();
+	ibGroupDescription* g = GetGroupList();
 	if (g == nullptr || m_groupView == nullptr)
 		return;
 	const ibDataViewItem& sel = m_groupView->GetSelection();
 	if (!sel.IsOk())
 		return;
 	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based
-	if (index == 0 || !g->Move(index - 1, delta))
+	if (index == 0 || index > g->m_lines.size())
 		return;
+	const int target = static_cast<int>(index - 1) + delta;
+	if (target < 0 || target >= static_cast<int>(g->m_lines.size()))
+		return;   // already at that end
+	std::swap(g->m_lines[index - 1], g->m_lines[static_cast<size_t>(target)]);
 	if (m_groupModel != nullptr)
 		m_groupModel->ResetFromList();
 	const size_t moved = (size_t)((int)index + delta);
@@ -612,43 +639,28 @@ bool ibListSettingsPanel::Commit()
 	// exception becomes a warning and the form stays open on the offending setting,
 	// instead of closing and quietly dropping it.
 	try {
-		ibValidateSettings(m_settings);
+		ibValidateSettings(EditedSettings());
 	}
 	catch (const ibBackendException& err) {
 		wxMessageBox(err.GetErrorDescription(), _("List settings"), wxOK | wxICON_WARNING, this);
 		return false;   // the host stays open — nothing is committed
 	}
 
-	if (m_model != nullptr && m_settings != nullptr) {
-		// THE TREE GOES BACK TO THE MODEL, not only to the composer. The composer
-		// takes the filter as ONE expression, which cannot be read back out of it —
-		// so a tree committed only there is applied but invisible: the next open
-		// shows an empty Filter tab over a list that is very obviously filtered.
-		// The model's settings are where the tree lives and what gets serialised.
-		if (ibValueListSettings* live = m_model->GetListSettings())
-			live->SetFilterRoot(m_settings->GetFilterRoot());
-		ibCommitSettingsToComposer(m_model->GetModelComposer(), m_settings);
-		m_model->NotifyReset();
+	// ⭐⭐ THE DESCRIPTION ROAD — the snapshot IS the composer description, so committing is one
+	// assignment into it and nothing else. Nobody is told and nothing is applied: the caller holds a
+	// CLONE, and setting that clone back as the property's value is what carries the change onward —
+	// through the grid's cycle to the form attribute, which is where modified-ness is decided
+	// (Max, 2026-08-24: "we work with snapshots, and the snapshot is the composer description").
+	// ⭐⭐ HANDED BACK, AND THAT IS ALL. The caller gave the setting; the caller decides what accepting
+	// it means — a designer road writes it into the schema it came from, a reader's road puts it into
+	// the composer's user section. This window knows neither, and it is not its business to (Max,
+	// 2026-08-24: "I pass the setting, it changes it and gives it back with an OK; then I set it on
+	// the composer myself").
+	// A reader's road edited the caller's own setting in place — there is nothing to hand back, and
+	// Cancel there means the caller drops the copy it took.
+	if (m_settings == nullptr && m_desc != nullptr)
+		m_desc->GetCompositionSettingsDesc() = m_edited;
 
-		// 🛑 AND SAY THAT IT CHANGED, which is a different statement from NotifyReset (Max,
-		// 2026-08-20). NotifyReset speaks to the VIEWS — "the rows you are showing are stale, fetch
-		// again"; this speaks UPWARD, to whoever holds this list — "what I am has changed". In the
-		// designer that holder is the form-attribute value, and it marks the form modified, which is
-		// why a filter written here used to redraw the list and still be gone on the next open.
-		//
-		// ⚠ RAISED AT COMMIT HERE, and that is right for THIS host — the list's settings are reached
-		// only through a modal OK, so a commit IS somebody's intent. The composer's panel raises it
-		// where the EDIT is made instead, because its host is a designer tab where closing is
-		// accepting: announcing at commit there would announce a tab that was only looked at.
-		// At runtime nothing is above the list and the signal simply stops.
-		//
-		// Raised on m_list, not on m_model: only a DYNAMIC LIST wears the property face this signal
-		// travels on (ibValueDynamicList is an ibPropertyObject; a plain model is not), and only a
-		// dynamic list is ever held by something that could care — a form attribute. The panel
-		// already keeps the two apart, so this needs no cast to say which case it is.
-		if (m_list != nullptr)
-			m_list->OnChildChanged();
-	}
 	return true;
 }
 
@@ -656,20 +668,38 @@ bool ibListSettingsPanel::Commit()
 //  The dialog — the panel plus OK / Cancel
 // ===========================================================================
 
-ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibValueDynamicList* list)
+// ⭐ ONE CTOR — a description, its configuration, and the setting being edited. Nothing running: see
+// the panel. `settings` null means the description's own settings section is what is edited.
+ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibCompositionDescription& desc,
+	const ibMetaData* metaData)
 	: wxDialog(parent, wxID_ANY, _("List settings"), wxDefaultPosition, wxSize(660, 450),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
-	m_panel = new ibListSettingsPanel(this, list);
+	m_panel = new ibListSettingsPanel(this, desc, metaData);
 	Build();
 }
 
-ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibValueModel* model)
+ibDialogListSettings::ibDialogListSettings(wxWindow* parent, const ibCompositionDescription& schema,
+	const ibMetaData* metaData, ibSettingsDescription& settings,
+	std::vector<ibSettingsPlainField> fields)
 	: wxDialog(parent, wxID_ANY, _("List settings"), wxDefaultPosition, wxSize(660, 450),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
-	m_panel = new ibListSettingsPanel(this, model);
+	m_panel = new ibListSettingsPanel(this, schema, metaData, settings, std::move(fields));
 	Build();
+}
+
+bool ibDialogListSettings::ShowListSettings(ibCompositionDescription& desc, const ibMetaData* metaData)
+{
+	wxWindow* top = (wxTheApp != nullptr) ? wxTheApp->GetTopWindow() : nullptr;
+
+	const ibCompositionDescription before = desc;
+
+	ibDialogListSettings dlg(top, desc, metaData);
+	if (dlg.ShowModal() != wxID_OK)
+		return false;
+
+	return before != desc;   // false = opened and closed on the same snapshot
 }
 
 void ibDialogListSettings::Build()
@@ -692,36 +722,67 @@ void ibDialogListSettings::OnOk(wxCommandEvent&)
 	EndModal(wxID_OK);
 }
 
-// ---------------------------------------------------------------------------
-//  Backend hook
-// ---------------------------------------------------------------------------
-
-bool ibDialogListSettings::ShowListSettingsDialog(ibValueDynamicList* list)
-{
-	if (list == nullptr)
-		return false;
-	wxWindow* top = (wxTheApp != nullptr) ? wxTheApp->GetTopWindow() : nullptr;
-	ibDialogListSettings dlg(top, list);
-	if (dlg.ShowModal() == wxID_OK) {
-		list->RefreshComposerSettings();   // OK -> apply the edits onto the composer (L5)
-		return true;
-	}
-	return false;
-}
-
-bool ibDialogListSettings::ShowListSettingsDialog(ibValueModel* model)
+// ⭐⭐ THE MODEL'S OWN PAIR — one static door, exactly the composer window's (Max, 2026-08-23: going
+// through the CONTROL was a lie, it was never lifted into a static of its own).
+//
+// The whole sequence, and it is the same one on both sides: take the setting in force, let the
+// person change a copy of it, and on OK assign it back. A control asks for this by name; it does not
+// carry the settings road inside itself.
+bool ibDialogListSettings::ShowUserSettings(wxWindow* parent, ibValueModel* model,
+	const ibMetaData* metaData)
 {
 	if (model == nullptr)
 		return false;
-	// A dynamic list IS-A ibValueModel: route it through the list overload so it keeps
-	// its source-explorer field picker and composer refresh. Any other model uses the
-	// flat-column field source; OnOk commits the dialog's buffer onto the model's
-	// composer (ibCommitSettingsToComposer + NotifyReset).
-	if (ibValueDynamicList* list = dynamic_cast<ibValueDynamicList*>(model))
-		return ShowListSettingsDialog(list);
 
-	wxWindow* top = (wxTheApp != nullptr) ? wxTheApp->GetTopWindow() : nullptr;
-	ibDialogListSettings dlg(top, model);
-	// OK commits the dialog's buffer onto the composer + refreshes (OnOk); Cancel leaves the composer untouched.
-	return dlg.ShowModal() == wxID_OK;
+	wxWindow* top = parent != nullptr ? parent
+		: ((wxTheApp != nullptr) ? wxTheApp->GetTopWindow() : nullptr);
+
+	// ⭐⭐ TAKE THE SETTING IN FORCE — a COPY of it: the reader's own if they have set one, the
+	// author's if they have not (GetCurrentSettingsDesc answers exactly that).
+	ibSettingsDescription edited = model->GetModelComposer().GetCurrentSettingsDesc();
+
+	// ⭐ AND DESCRIBE WHAT THE WINDOW NEEDS TO KNOW. A dynamic list has a description of its own and
+	// its query says what the fields are; anything else — a value table, a tabular section — has
+	// columns, so they are stated HERE, as data. Either way what crosses is a description, never the
+	// running object (Max, 2026-08-24).
+	// 🛑 THE SCHEMA GOES IN CONST, and that is the guarantee — made by the compiler, not by care.
+	// Opening the reader's settings cannot change what the configuration ships (Max, 2026-08-24:
+	// "if you open the settings, you must guarantee the schema does not mutate"). What the reader
+	// edits is `edited`, which is handed back and put on the composer.
+	static const ibCompositionDescription kNoSource;   // a model that describes no source of its own
+	std::vector<ibSettingsPlainField> fields;
+
+	// 🛑 AND THE COLUMNS ARE DESCRIBED FOR EVERY MODEL, not only for the ones with no description. A
+	// list whose source is a METAOBJECT carries no query text, so there is nothing to parse fields
+	// out of — its fields are its columns, and leaving them undescribed showed a catalogue's settings
+	// window with an empty "Available fields" pane while its filter already had a line in it
+	// (Max, 2026-08-24, screenshot). The panel prefers the query when there IS one.
+	ibValueDynamicList* list = dynamic_cast<ibValueDynamicList*>(model);
+	{
+		if (ibValueModel::ibValueModelColumnCollection* columns = model->GetColumnCollection()) {
+			for (unsigned int i = 0; i < columns->GetColumnCount(); ++i) {
+				const auto* col = columns->GetColumnInfo(i);
+				if (col == nullptr)
+					continue;
+				ibSettingsPlainField field;
+				field.m_name = col->GetColumnName();
+				field.m_id   = static_cast<ibMetaID>(col->GetColumnID());
+				field.m_type = col->GetColumnTypeValue();
+				fields.push_back(std::move(field));
+			}
+		}
+	}
+
+	// …and the CONFIGURATION comes from the caller. The box knows which one it is showing; a window
+	// that went looking for it would be guessing between the several that are open (Max, 2026-08-24).
+	ibDialogListSettings dlg(top, list != nullptr ? list->GetCompositionDesc() : kNoSource, metaData,
+		edited, std::move(fields));
+	if (dlg.ShowModal() != wxID_OK)
+		return false;   // …and Cancel leaves the composer exactly as it was: the copy is dropped
+
+	// …AND ON OK IT BECOMES THE COMPOSER'S USER SECTION, which is what the next open will hand back.
+	// Then the model re-reads, because a setting that is not read is not shown.
+	model->GetModelComposer().SetUserSettingsDesc(edited);
+	model->RefetchAll();
+	return true;
 }

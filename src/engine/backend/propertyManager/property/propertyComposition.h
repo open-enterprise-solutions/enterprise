@@ -2,60 +2,45 @@
 #define __PROPERTY_COMPOSITION_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/system/value/valueDataComposition.h"
+#include "backend/compositionDescription.h"
 
-// ---------------------------------------------------------------------------
-// ibPropertyComposition — the data property that HOLDS a composition, modelled
-// on ibPropertySpreadsheet (Max, 2026-08-20: "do it the way the spreadsheet
-// document does").
+// base property for "composition" — the shape ibPropertyType has over an ibTypeDescription.
 //
-// ⭐ WHY A PROPERTY AT ALL. A metaobject's node has two areas and they mean
-// different things (ibDataNode): PROPERTIES are what the object IS, CHILDREN are
-// the objects under it. A metatype that keeps its content in a property therefore
-// serialises in two symmetric lines — the template metatype's whole ReadData is
-// `SetNodeValue(node.GetProperty(name))` — and its node can never grow a child
-// that is not a metaobject. The composer used to hand its own node to the
-// composition, which writes a sub-node per variant and per parameter; those
-// landed among the metaobject children and the file stopped opening.
-//
-// The composition is a VALUE (ibValueDataComposition) and stays one: this
-// property owns it, hands it out for editing, and packs it whole on save.
-// ---------------------------------------------------------------------------
+// ⭐ A LIST AND A REPORT STAND ON THE SAME THING (Max, 2026-08-23): a dynamic list is a composer plus
+// a main table, a report is the composer alone, and a list is the DEGENERATE case — it fills three
+// fields of the description and leaves the rest empty. So there is one property, one variant and one
+// description, exactly as there is one ibPropertyType for every kind of typed field.
 class BACKEND_API ibPropertyComposition : public ibProperty {
+	// ONE maker with a default — ibPropertySpreadsheet's shape over its own description.
+	wxVariantData* CreateVariantData(ibPropertyObject* property,
+	                                 const ibCompositionDescription& val = ibCompositionDescription()) const;
 public:
 
+	ibCompositionDescription& GetValueAsCompositionDesc() const;
+	void SetValue(const ibCompositionDescription& val);
+
+	// (NO LIVE COMPOSITION HERE. A property stores a DESCRIPTION; whoever needs a running composition
+	//  builds one from it and keeps it where it belongs. A live object in the cell would be a second
+	//  state beside the stored one — the one that goes stale.)
+
 	ibPropertyComposition(ibPropertyCategory* cat, const wxString& name)
-		: ibProperty(cat, name, wxVariant()), m_composition(new ibValueDataComposition())
-	{
-	}
-
+		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label)
-		: ibProperty(cat, name, label, wxVariant()), m_composition(new ibValueDataComposition())
-	{
-	}
+		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibCompositionDescription& desc)
+		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), desc)) {}
 
-	// THE COMPOSITION ITSELF — handed out, never copied: the settings window edits this very object,
-	// and a copy given to it would be the one the user is looking at while the saved one stayed behind.
-	ibValueDataComposition* GetComposition() const { return m_composition; }
+	virtual bool IsEmptyProperty() const { return !GetValueAsCompositionDesc().IsOk(); }
 
-	// --- the script/data face ------------------------------------------------
-	// The value IS the composition; assigning one over is refused (see ibValueDataComposition:
-	// a composition is configured, not replaced).
-	virtual bool SetDataValue(const ibValue& /*varPropVal*/) override { return false; }
-	virtual bool GetDataValue(ibValue& pvarPropVal) const override {
-		pvarPropVal = m_composition;
-		return true;
-	}
+	//set/get property data
+	virtual bool SetDataValue(const ibValue& varPropVal) override;
+	virtual bool GetDataValue(ibValue& pvarPropVal) const override;
 
-	// --- serialisation -------------------------------------------------------
-	// ONE VALUE, holding the composition's own node. `ibDataValue::Child` is the node-in-a-value the
-	// property area is made of, so the composition writes whatever it likes INSIDE its own node and
-	// nothing of it reaches the metaobject's children.
+	//load & save object in control
+	// composite node value -> a Child (struct): the main table, the query, the settings, and
+	// whatever else a composition is made of — see compositionDescription.h.
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
-
-private:
-	ibValuePtr<ibValueDataComposition> m_composition;
 };
 
 #endif // __PROPERTY_COMPOSITION_H__

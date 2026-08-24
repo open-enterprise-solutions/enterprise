@@ -219,6 +219,7 @@
     <ClCompile Include="visualView\ctrl\itemsizer.cpp" />
     <ClCompile Include="visualView\ctrl\form.cpp" />
     <ClCompile Include="visualView\ctrl\formAttribute.cpp" />
+    <ClCompile Include="visualView\ctrl\formAttributeProperty.cpp" />
     <ClCompile Include="visualView\ctrl\formCommand.cpp" />
     <ClCompile Include="visualView\ctrl\formControl.cpp" />
     <ClCompile Include="visualView\ctrl\formObject.cpp" />

@@ -21,45 +21,45 @@
 enum { eOrderField = 1, eOrderDir };
 
 // ---- The model — a virtual list over the buffer's sort list (Field + editable Direction). ----
-class ibSortEditor::ibOrderModel : public ibDataViewVirtualListModel {
+class ibSortEditor::ibSortLineModel : public ibDataViewVirtualListModel {
 	ibSortEditor* m_editor;
 public:
-	explicit ibOrderModel(ibSortEditor* editor) : ibDataViewVirtualListModel(), m_editor(editor) {}
-	ibValueSortList* GetOrder() const { return m_editor->GetOrderList(); }
-	void ResetFromList() { ibValueSortList* o = GetOrder(); Reset(o != nullptr ? (unsigned int)o->Count() : 0u); }
+	explicit ibSortLineModel(ibSortEditor* editor) : ibDataViewVirtualListModel(), m_editor(editor) {}
+	// ⭐ ONE WORD FOR ONE THING. This class was `ibOrderModel` and this getter `GetOrder`, standing
+	// over `ibSortDescription` / `m_sort` / `SetSort` — the same concept under a second name, in the
+	// one file where a reader is most likely to be looking for it (audit, 2026-08-24). The tier says
+	// **sort**; *order* survives only where it must: the query's `ORDER BY`, and the node key on
+	// disk, which is an opaque key and not a name.
+	ibSortDescription* GetSortDesc() const { return m_editor->GetSort(); }
+	void ResetFromList() { ibSortDescription* o = GetSortDesc(); Reset(o != nullptr ? (unsigned int)o->m_lines.size() : 0u); }
 	virtual void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
-		ibValueSortList* o = GetOrder();
+		ibSortDescription* o = GetSortDesc();
 		if (o == nullptr) return;
 		// BOUNDS FIRST. The view paints rows it has, the list may already have fewer (a Reset lands
 		// after the paint is queued) — reading past the end crashed on repaint.
-		if (row >= o->Count())
+		if (row >= o->m_lines.size())
 			return;
-		ibValueSortItem* it = o->GetItem(row);
-		if (it == nullptr) return;
-		// EVERY COLUMN IS A VALUE PRESENTING ITSELF — the field by its readable path,
-		// the direction by its enumeration caption. No indices, no parallel lists.
+		const ibSortLineDescription& line = o->m_lines[row];
+		// EVERY COLUMN READS AS WHAT IT IS — the field by its path, the direction by
+		// its enumeration caption. No indices, no parallel lists.
 		if (col == eOrderField)
-			variant = it->GetFieldObject() != nullptr ? it->GetFieldObject()->GetString() : it->GetField();
+			variant = line.m_path;
 		else if (col == eOrderDir)
-			variant = ibValue::CreateEnumObject<ibValueEnumSortDirection>(it->GetDirection()).GetString();
+			variant = ibValue::CreateEnumObject<ibValueEnumSortDirection>(
+				line.m_ascending ? ibSortDirection_Ascending : ibSortDirection_Descending).GetString();
 	}
-	virtual bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
-		ibValueSortList* o = GetOrder();
-		if (o == nullptr) return false;
-		ibValueSortItem* it = o->GetItem(row);
-		if (it == nullptr) return false;
-		if (col == eOrderDir) {   // the Direction choice carries the ibSortDirection as its index
-			it->SetDirection(static_cast<ibSortDirection>(variant.GetLong()));
-			return true;
-		}
-		return false;
-	}
+	// ⛔ NOTHING WRITES THROUGH THIS MODEL. Both columns are drawn by ibRowValueCellRenderer, whose
+	// GetValueFromEditorCtrl returns false unconditionally — the cell hands its result to the
+	// renderer's own setter, never to the model. The body that stood here decoded a direction out of
+	// a wxVariant and could not be reached; the grouping model next door (listSettings.cpp) already
+	// says the same thing the honest way.
+	virtual bool SetValueByRow(const wxVariant&, unsigned, unsigned) override { return false; }
 };
 
 // ===========================================================================
 
-ibSortEditor::ibSortEditor(wxWindow* parent, ibValueListSettings* settings, ibSettingsFieldTree* fields)
-	: wxPanel(parent, wxID_ANY), m_settings(settings), m_fields(fields)
+ibSortEditor::ibSortEditor(wxWindow* parent, ibSortDescription* sort, ibSettingsFieldTree* fields)
+	: wxPanel(parent, wxID_ANY), m_sort(sort), m_fieldSource(fields)
 {
 	wxSplitterWindow* splitter = new wxSplitterWindow(this, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
@@ -69,9 +69,9 @@ ibSortEditor::ibSortEditor(wxWindow* parent, ibValueListSettings* settings, ibSe
 	wxPanel* leftPane = new wxPanel(splitter);
 	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
 	leftSizer->Add(new wxStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
-	m_fieldTree = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	m_fieldCtrl = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
-	leftSizer->Add(m_fieldTree, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(4));
+	leftSizer->Add(m_fieldCtrl, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(4));
 	leftPane->SetSizer(leftSizer);
 
 	// ---- RIGHT pane: the sort list — Field + editable Direction (choice), model-driven ----
@@ -83,7 +83,7 @@ ibSortEditor::ibSortEditor(wxWindow* parent, ibValueListSettings* settings, ibSe
 	// WHO KNOWS THE SOURCE opens the picker — here, the field tree this editor was handed.
 	ibRowValueCellRenderer::FieldChooser chooser =
 		[this](wxWindow* pickerParent, const wxString& held) -> ibValueCompositionField* {
-			return m_fields != nullptr ? m_fields->ChooseField(pickerParent, held) : nullptr;
+			return m_fieldSource != nullptr ? m_fieldSource->ChooseField(pickerParent, held) : nullptr;
 		};
 
 	// FIELD and DIRECTION are both VALUES of the row — a composition field and a
@@ -92,30 +92,25 @@ ibSortEditor::ibSortEditor(wxWindow* parent, ibValueListSettings* settings, ibSe
 	m_view->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Field"),
 		new ibRowValueCellRenderer(this, chooser,
 			[this](const ibDataViewItem& row) -> ibValue {
-				// ⚠ BUILT FROM THE PATH, not taken off a line object. On a live list GetItem MINTS one and
-				// hands back a raw pointer nobody owns — the cells ask this while painting, so it leaked
-				// once per repaint. A field built here is owned by the ibValue that wraps it.
-				ibValueSortList* o = GetOrderList();
+				// ⚠ BUILT FROM THE PATH. A sort LINE is a path and a direction — data — so the field
+				// the picker speaks is minted here and owned by the ibValue that wraps it.
+				ibSortDescription* o = GetSort();
 				const size_t idx = IndexAt(row);
-				if (o == nullptr || idx >= o->Count())
+				if (o == nullptr || idx >= o->m_lines.size())
 					return ibValue();
-				const wxString path = o->GetField(idx);
+				const wxString path = o->m_lines[idx].m_path;
 				return path.IsEmpty() ? ibValue() : ibValue(new ibValueCompositionField(path));
 			},
 			[this](const ibDataViewItem& row, const ibValue& value) {
-				ibValueSortList* o = GetOrderList();
+				ibSortDescription* o = GetSort();
 				const size_t idx = IndexAt(row);
-				if (o == nullptr || idx >= o->Count())
+				if (o == nullptr || idx >= o->m_lines.size())
 					return;
 				// CLEARING SENDS AN EMPTY VALUE, and an empty value fails the cast — so testing only
 				// "did it convert" made the clear button do nothing at all.
-				//
-				// ⚠ THROUGH SetLine, not through the line OBJECT. On a LIVE list there is no line
-				// object — GetItem mints a transient one — so writing into it lost the edit without
-				// a word. Same door the grouping cells use, and the same reason.
 				ibValueCompositionField* field = nullptr;
 				const bool chosen = value.ConvertToValue(field) && field != nullptr;
-				o->SetLine(idx, chosen ? field->GetPath() : wxString(), o->GetDirection(idx));
+				o->m_lines[idx].m_path = chosen ? field->GetPath() : wxString();
 				if (m_model != nullptr) m_model->ResetFromList();
 			}),
 		eOrderField, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));
@@ -123,17 +118,19 @@ ibSortEditor::ibSortEditor(wxWindow* parent, ibValueListSettings* settings, ibSe
 	m_view->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Direction"),
 		new ibRowValueCellRenderer(this, chooser,
 			[this](const ibDataViewItem& row) -> ibValue {
-				ibValueSortList* o = GetOrderList();
+				ibSortDescription* o = GetSort();
 				const size_t idx = IndexAt(row);
-				return (o != nullptr && idx < o->Count())
-					? ibValue::CreateEnumObject<ibValueEnumSortDirection>(o->GetDirection(idx))
+				return (o != nullptr && idx < o->m_lines.size())
+					? ibValue::CreateEnumObject<ibValueEnumSortDirection>(
+						o->m_lines[idx].m_ascending ? ibSortDirection_Ascending : ibSortDirection_Descending)
 					: ibValue();
 			},
 			[this](const ibDataViewItem& row, const ibValue& value) {
-				ibValueSortList* o = GetOrderList();
+				ibSortDescription* o = GetSort();
 				const size_t idx = IndexAt(row);
-				if (o != nullptr && idx < o->Count())
-					o->SetLine(idx, o->GetField(idx), value.ConvertToEnumValue<ibSortDirection>());
+				if (o != nullptr && idx < o->m_lines.size())
+					o->m_lines[idx].m_ascending =
+						value.ConvertToEnumValue<ibSortDirection>() == ibSortDirection_Ascending;
 				if (m_model != nullptr) m_model->ResetFromList();
 			}),
 		eOrderDir, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));
@@ -177,13 +174,13 @@ ibSortEditor::ibSortEditor(wxWindow* parent, ibValueListSettings* settings, ibSe
 	panelSizer->Add(splitter, 1, wxEXPAND);
 	SetSizer(panelSizer);
 
-	if (m_fields != nullptr) {
-		m_fields->Populate(m_fieldTree);
-		m_fields->Attach(m_fieldTree);   // unfold a reference, drag a field out
+	if (m_fieldSource != nullptr) {
+		m_fieldSource->Populate(m_fieldCtrl);
+		m_fieldSource->Attach(m_fieldCtrl);   // unfold a reference, drag a field out
 	}
-	m_fieldTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this](wxTreeEvent& e) { AddForField(e.GetItem()); });
+	m_fieldCtrl->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this](wxTreeEvent& e) { AddForField(e.GetItem()); });
 	rightPane->SetDropTarget(new ibCallbackDropTarget([this] {
-		if (m_fields != nullptr) AddForField(m_fields->GetDragItem());
+		if (m_fieldSource != nullptr) AddForField(m_fieldSource->GetDragItem());
 	}));
 
 	// DOUBLE CLICK OPENS THE EDITOR — the grid sends an ACTIVATE for it, and without
@@ -194,7 +191,7 @@ ibSortEditor::ibSortEditor(wxWindow* parent, ibValueListSettings* settings, ibSe
 		e.Skip();
 	});
 
-	m_model = new ibOrderModel(this);
+	m_model = new ibSortLineModel(this);
 	m_view->AssociateModel(m_model);
 	m_view->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibSortEditor::OnContextMenu, this);
 	m_view->Bind(wxEVT_DATAVIEW_ITEM_START_EDITING, &ibSortEditor::OnStartEditing, this);
@@ -208,9 +205,9 @@ ibSortEditor::ibSortEditor(wxWindow* parent, ibValueListSettings* settings, ibSe
 	m_model->ResetFromList();
 }
 
-void ibSortEditor::SetSettings(ibValueListSettings* settings)
+void ibSortEditor::SetSort(ibSortDescription* sort)
 {
-	m_settings = settings;
+	m_sort = sort;
 	Reload();
 }
 
@@ -235,8 +232,8 @@ void ibSortEditor::RefreshLines()
 
 void ibSortEditor::ReloadFields()
 {
-	if (m_fields != nullptr)
-		m_fields->Populate(m_fieldTree);
+	if (m_fieldSource != nullptr)
+		m_fieldSource->Populate(m_fieldCtrl);
 }
 
 // THE ROW'S INDEX, which is what an EDIT needs. A virtual-list row id is 1-based.
@@ -256,42 +253,42 @@ void ibSortEditor::AddForField(const wxTreeItemId& item)
 		return;
 	// THE FIELD THE TREE RESOLVED, whole: adding by path alone would rebuild a bare
 	// field and lose the readable path and the type behind it.
-	ibValuePtr<ibValueCompositionField> field(ibSettingsFieldTree::FieldAt(m_fieldTree, item));
-	ibValueSortList* o = GetOrderList();
-	if (field == nullptr || o == nullptr)
+	ibValuePtr<ibValueCompositionField> field(ibSettingsFieldTree::FieldAt(m_fieldCtrl, item));
+	ibSortDescription* o = GetSort();
+	if (!field || o == nullptr)
 		return;
-	if (ibValueSortItem* line = o->Add(field->GetPath()))
-		line->SetField(field);
+	o->Append(field->GetPath(), true);
 	RefreshLines();
-	ibSelectLastSettingsRow(m_view, o->Count());
+	ibSelectLastSettingsRow(m_view, o->m_lines.size());
 }
 
 // A NEW LINE IS EMPTY — the field is chosen in the row, by hand. Taking whatever is
 // selected in the field tree conjures a line the user did not ask for.
 void ibSortEditor::OnAdd(wxCommandEvent&)
 {
-	ibValueSortList* o = GetOrderList();
+	ibSortDescription* o = GetSort();
 	if (o == nullptr)
 		return;
-	o->Add(wxEmptyString, ibSortDirection_Ascending);
+	o->Append(wxEmptyString, true);
 	RefreshLines();
-	ibSelectLastSettingsRow(m_view, o->Count());
+	ibSelectLastSettingsRow(m_view, o->m_lines.size());
 }
 
 void ibSortEditor::OnRemove(wxCommandEvent&)
 {
-	// THE LIST REMOVES ITS OWN LINE. Rebuilding the whole sort order to drop one
-	// row was how this used to work — and it lost everything the line carried that
-	// a rebuild could not spell back (the field object, its resolved type).
-	ibValueSortList* o = GetOrderList();
+	// ONE LINE LEAVES, the rest stay where they are. Rebuilding the whole sort order
+	// to drop one row was how this used to work — and it lost whatever a rebuild
+	// could not spell back.
+	ibSortDescription* o = GetSort();
 	if (o == nullptr || m_view == nullptr)
 		return;
 	const ibDataViewItem& sel = m_view->GetSelection();
 	if (!sel.IsOk())
 		return;
 	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based
-	if (index == 0 || !o->Remove(index - 1))
+	if (index == 0 || index > o->m_lines.size())
 		return;
+	o->m_lines.erase(o->m_lines.begin() + (index - 1));
 	RefreshLines();
 }
 
@@ -299,15 +296,19 @@ void ibSortEditor::OnRemove(wxCommandEvent&)
 // not something the user emulates by deleting and re-adding in the right sequence.
 void ibSortEditor::MoveLine(int delta)
 {
-	ibValueSortList* o = GetOrderList();
+	ibSortDescription* o = GetSort();
 	if (o == nullptr || m_view == nullptr)
 		return;
 	const ibDataViewItem& sel = m_view->GetSelection();
 	if (!sel.IsOk())
 		return;
 	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based
-	if (index == 0 || !o->Move(index - 1, delta))
+	if (index == 0 || index > o->m_lines.size())
 		return;
+	const int target = static_cast<int>(index - 1) + delta;
+	if (target < 0 || target >= static_cast<int>(o->m_lines.size()))
+		return;   // already at that end
+	std::swap(o->m_lines[index - 1], o->m_lines[static_cast<size_t>(target)]);
 	RefreshLines();
 	// The row travelled — the cursor goes with it, or the next press moves a
 	// different line.
