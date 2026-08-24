@@ -103,11 +103,36 @@ std::vector<ibColumnSlot> ibBackendQueryColumn::DescribeLayout() const
 	std::vector<ibColumnSlot> slots;
 
 	// A raw column is a single physical field with its own carried type — no spread.
+	// ⭐⭐ ONE FIELD, AND THE KIND SAYS SO. A RAW column carries its own declared type in one physical
+	// field; a COMPUTED one exists only in a result — an aggregate, an expression, a dot-walk leaf
+	// minted under an alias — and is read back BY NAME from the cursor, which is one field too. The
+	// kind's own definition says as much (queryColumn.h); the layout simply did not ask.
+	//
+	// 🛑 A COMPUTED COLUMN SPREAD LIKE A COMPOSITE, so everything downstream went looking for fields
+	// nobody wrote. `34 AS YTFDS` grouped in a report produced *"Field 'YTFDS_TYPE' not found in the
+	// resultset"* once per row read — the reader asking for a variant tag that a constant cannot have
+	// (measured from the journal, 2026-08-24). The declaration published the name and the statement
+	// wrote one column; only the layout believed there were four.
 	if (IsRawColumn()) {
 		ibColumnSlot slot;
 		slot.m_name = GetPhysicalName();
 		slot.m_role = ibColumnRole::Raw;
 		slot.m_type = RawTypeOf(this);
+		slots.push_back(std::move(slot));
+		return slots;
+	}
+
+	// …AND A COMPUTED ONE IS THE SAME SHAPE WITH NO TYPE. One field, read by name — but NOT
+	// `RawTypeOf`: that answer becomes a `CREATE TABLE`, and it is asked of a column that declared a
+	// physical type. Nothing declares a computed output, so it HAS none, and its own assert says so
+	// (caught the first run after this branch was written, 2026-08-24 — the guard doing its job).
+	//
+	// The empty type is the honest answer here: this layout is read for the FIELD NAMES — a
+	// projection, a published set, a sort key — never to create anything.
+	if (GetColumnKind() == Kind::Computed) {
+		ibColumnSlot slot;
+		slot.m_name = GetPhysicalName();
+		slot.m_role = ibColumnRole::Raw;
 		slots.push_back(std::move(slot));
 		return slots;
 	}

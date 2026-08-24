@@ -316,7 +316,7 @@ ibDataComposer& ibDataComposer::SetUserSettingsDesc(const ibSettingsDescription&
 // remembered to make that happen.
 ibDataComposer& ibDataComposer::ClearUserSettings()
 {
-	m_userSettings.Clear();
+	m_userSettings.reset();   // …DROPPED, not emptied: an empty setting is one a reader saved
 	return *this;
 }
 
@@ -1281,7 +1281,8 @@ int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxStr
 	// …THE READER'S SETTING AND EVERY VARIANT. A field that stopped existing stopped existing for
 	// whoever named it, and a variant nobody is composing on today is one a picker may reach
 	// tomorrow.
-	dropped += PruneSettingsDesc(m_userSettings, resolves);
+	if (m_userSettings)
+		dropped += PruneSettingsDesc(*m_userSettings, resolves);
 	for (ibVariantDescription& variant : m_variants)
 		dropped += PruneSettingsDesc(variant.m_settings, resolves);
 

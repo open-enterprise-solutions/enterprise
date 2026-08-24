@@ -421,6 +421,25 @@ bool ibColumnCodec::ReadValue(const wxString& fieldName,
 bool ibColumnCodec::ReadTaggedValue(const wxString& fieldName,
 	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
 {
+	// ⭐ A COMPUTED OUTPUT HAS ONE FIELD AND NO TAG BESIDE IT.
+	//
+	// `15 AS x`, `a * b AS y` — the expression is projected under its alias and nothing declares a
+	// `_TYPE` next to it (DescribeLayout emits the single slot, queryColumn.cpp). So the tag cannot be
+	// READ here; it comes from what the output IS — the type the lowering gave the schema when it
+	// resolved the expression.
+	//
+	// Without this the read asked for a discriminator that was never projected, the driver answered
+	// "field not found", and ReadValue below turned that into an empty cell — silently, 496 times in
+	// one report (Max, 2026-08-24: a computed field is a legitimate grouping key).
+	//
+	// Gated on the type being KNOWN: an output the lowering could not type yet keeps the old road
+	// rather than being read as a type nobody vouched for.
+	if (col != nullptr && col->GetColumnKind() == ibBackendQueryColumn::Kind::Computed
+	    && col->GetTypeDesc().GetClsidCount() == 1) {
+		const ibFieldTypes tag = ibColumnSpread::TagForValueType(ibValue::GetVTByID(col->GetTypeDesc().GetByIdx(0)));
+		return ReadField(fieldName, tag, col, metaData, retValue, result, createData);
+	}
+
 	ibFieldTypes fieldType =
 		static_cast<ibFieldTypes>(result.GetResultInt(fieldName + ibFieldSuffix(ibColumnRole::Discriminator)));
 

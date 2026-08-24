@@ -35,8 +35,15 @@ public:
 	// with the generated table, and it must not drift), everybody who shows or resolves a field asks
 	// for the ordinary one.
 	ibTempColumn(const wxString& name, const wxString& physical,
-	             const ibTypeDescription& type, ibMetaID modelId, const wxString& synonym = wxEmptyString)
-		: m_name(name), m_physical(physical), m_type(type), m_modelId(modelId), m_synonym(synonym) {}
+	             const ibTypeDescription& type, ibMetaID modelId, const wxString& synonym = wxEmptyString,
+	             Kind kind = Kind::Composite)
+		: m_name(name), m_physical(physical), m_type(type), m_modelId(modelId), m_synonym(synonym),
+		  m_kind(kind) {}
+
+	// ⭐ A TEMP TABLE'S COLUMN IS COMPOSITE — it has real fields and spreads into them. A DECLARED
+	// query's may not: an output with no column behind it is COMPUTED, one field read by name, and
+	// saying so is what stops the reader looking for a `_TYPE` a constant cannot have.
+	Kind GetColumnKind() const override { return m_kind; }
 
 	wxString           GetName()         const override { return m_name; }
 	wxString           GetPhysicalName() const override { return m_physical; }
@@ -59,6 +66,7 @@ private:
 	mutable ibTypeDescription m_type;     // mutable: GetTypeDesc() is const but returns a non-const ref
 	ibMetaID                  m_modelId;
 	wxString                  m_synonym;    // empty = the name
+	Kind                      m_kind = Kind::Composite;   // see GetColumnKind
 };
 
 class ibTempTableQueryable : public ibBackendQueryable
@@ -301,7 +309,16 @@ public:
 	// from the source column, so it is `fld<metaID>`: unique per metatype by construction. Two
 	// documents joined into one declaration therefore spread into fld1672_* and fld9001_*, instead of
 	// two sets of PointInTime_* that no engine would accept.
-	struct Field { wxString m_name; wxString m_physical; ibTypeDescription m_type; };
+	// ⭐ …AND WHAT KIND OF COLUMN IT IS. A field over a real column spreads the way that column does;
+	// one over an EXPRESSION is `Computed` — a single field read by name — because that is exactly
+	// what the declaration's own SELECT wrote for it. Getting this wrong is not a preference: the
+	// reader then hunts for a `_TYPE` the statement never carried.
+	struct Field {
+		wxString                    m_name;
+		wxString                    m_physical;
+		ibTypeDescription           m_type;
+		ibBackendQueryColumn::Kind  m_kind = ibBackendQueryColumn::Kind::Composite;
+	};
 
 	// `firstColumnId` — the id the minted columns are numbered from. A CTE's columns stand for
 	// nothing stored, so their ids exist only to tell them apart; the caller passes a base out of the
@@ -316,7 +333,8 @@ public:
 				continue;   // a field with no name cannot be read back by one
 			// The name IS the physical name: a CTE exposes exactly the aliases its select wrote.
 			m_owned.push_back(std::make_shared<ibTempColumn>(field.m_name,
-				field.m_physical.IsEmpty() ? field.m_name : field.m_physical, field.m_type, id++));
+				field.m_physical.IsEmpty() ? field.m_name : field.m_physical, field.m_type, id++,
+				wxEmptyString, field.m_kind));
 			m_columns.push_back(m_owned.back().get());
 		}
 	}

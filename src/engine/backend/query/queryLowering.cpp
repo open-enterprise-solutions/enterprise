@@ -1291,6 +1291,99 @@ private:
 	ibMetaID                  m_id;
 };
 
+// ⭐ WHAT A COMPUTED OUTPUT HOLDS — the type an expression ANSWERS WITH.
+//
+// A column brings its type with it; an expression has to be asked. Nobody was asking, so every
+// computed output went out untyped, and untyped is not a small gap: the CTE publishes this type to
+// whoever selects from it, and the value codec has nothing else to read the field back BY — a
+// computed output is one field with no `_TYPE` beside it, so an untyped one degrades to an empty
+// cell (Max, 2026-08-24: a constant is a legitimate grouping key, and so is a CASE).
+//
+// The rule is one line long: ANSWER ONLY WHERE THE ANSWER IS CERTAIN. A type that is merely
+// plausible is worse than none — the empty description keeps the old road, a wrong one is read as
+// a value nobody vouched for. So mixed arithmetic, disagreeing CASE arms and everything not listed
+// return {} on purpose.
+static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
+	const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
+{
+	const ibTypeDescription number(g_valueNumberCLSID);
+
+	switch (e.m_kind) {
+	case ibQueryAstExprKind::Literal:
+	case ibQueryAstExprKind::Value:
+	case ibQueryAstExprKind::Param: {
+		// Resolved right here — the value knows what it is (a number, a string, an empty reference),
+		// because the lexer typed it on the way in (SetNumber / SetString / SetDate, queryLexer.cpp).
+		// UNDEFINED is not a type, though: it is what a value holds when nobody put anything in it, so
+		// it answers "no single type" rather than naming one — otherwise the codec would confidently
+		// read a field as the empty tag.
+		const ibValue value = EvalValue(e, params);
+		return value.GetType() == ibValueTypes::TYPE_EMPTY
+		     ? ibTypeDescription() : ibTypeDescription(value.GetClassType());
+	}
+
+	case ibQueryAstExprKind::Column: {
+		// The LEAF of the path is what the output holds — the same answer the projection branches give.
+		const std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, e);
+		return cols.empty() ? ibTypeDescription() : cols.back()->GetTypeDesc();
+	}
+
+	case ibQueryAstExprKind::Arith: {
+		if (!e.m_lhs || !e.m_rhs)
+			return ibTypeDescription();
+		const ibTypeDescription l = TypeOfExpr(sources, *e.m_lhs, params);
+		const ibTypeDescription r = TypeOfExpr(sources, *e.m_rhs, params);
+		const bool lNum = l.GetClsidCount() == 1 && l.ContainType(ibValueTypes::TYPE_NUMBER);
+		const bool rNum = r.GetClsidCount() == 1 && r.ContainType(ibValueTypes::TYPE_NUMBER);
+		if (lNum && rNum)
+			return number;
+		// A date SHIFTED by a number is still a date; a date TIMES anything is not a date, and two
+		// dates subtracted are not one either — neither is claimed here.
+		const bool shift = e.m_arith == ibQueryArithOp::Add || e.m_arith == ibQueryArithOp::Sub;
+		if (shift && l.GetClsidCount() == 1 && l.ContainType(ibValueTypes::TYPE_DATE) && rNum)
+			return l;
+		return ibTypeDescription();
+	}
+
+	case ibQueryAstExprKind::Case: {
+		// The arms ARE the output. They agree or there is no single answer — a CASE that yields a
+		// number on one branch and a string on another is a column of two types, which is a
+		// composite, which this is not.
+		ibTypeDescription agreed;
+		bool first = true;
+		auto fold = [&](const ibQueryAstExprPtr& arm) {
+			if (!arm)
+				return;
+			const ibTypeDescription t = TypeOfExpr(sources, *arm, params);
+			if (first) { agreed = t; first = false; }
+			else if (agreed.GetClsidList() != t.GetClsidList()) { agreed = ibTypeDescription(); }
+		};
+		for (const std::pair<ibQueryAstExprPtr, ibQueryAstExprPtr>& c : e.m_cases)
+			fold(c.second);
+		fold(e.m_else);
+		return agreed;
+	}
+
+	case ibQueryAstExprKind::Func:
+		// COUNT is a count; SUM / AVG fold numbers into a number. MIN / MAX yield one of the values
+		// they compared, so they answer with the argument's own type.
+		switch (e.m_func) {
+		case ibQueryKeyword::Count:
+		case ibQueryKeyword::Sum:
+		case ibQueryKeyword::Avg:
+			return number;
+		case ibQueryKeyword::Min:
+		case ibQueryKeyword::Max:
+			return e.m_arg ? TypeOfExpr(sources, *e.m_arg, params) : ibTypeDescription();
+		default:
+			return ibTypeDescription();
+		}
+
+	default:
+		return ibTypeDescription();
+	}
+}
+
 // ⭐⭐ THE SCHEMA OUTLIVES THE DOOR, SO IT MAY NOT POINT INTO IT.
 //
 // A subquery wrapper is built for ONE run and owns the columns it publishes; `subOwners` releases
@@ -1600,6 +1693,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 					else
 						b.Aggregate(AggFn(e.m_func), argCols, alias, e.m_distinctArg);
 				}
+				oc.m_type = TypeOfExpr(sources, e, params);   // a fold answers too: COUNT/SUM/AVG a number, MIN/MAX the argument's own
 				oc.m_alias = alias;
 				oc.m_byAlias = true;
 			}
@@ -1704,6 +1798,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				// A computed column over a COMPUTED source evaluates in RAM (ibComputedProvider::ExecuteRead —
 				// EvalColumnExprRow per row, projected under the alias). Over aggregates it stays unsupported (above).
 				b.SelectExpr(BuildColumnExprFromAst(sources, e, params), alias);
+				oc.m_type = TypeOfExpr(sources, e, params);   // what the expression answers with — see TypeOfExpr
 				oc.m_alias = alias;
 				oc.m_byAlias = true;
 			}
@@ -1717,7 +1812,16 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				// parser reads it, EvalValue has always answered it — and the projection alone refused, with
 				// "unsupported projection expression" on a query that is not wrong (Max, 2026-08-24: "an error
 				// that is not an error"). One kind was missing from a list of three that do the same thing.
+				//
+				// ⭐ AND IT CARRIES ITS TYPE. The value is resolved right here, so the output has no
+				// excuse to be untyped: `15 AS x` IS a number and says so. Everything downstream reads
+				// the schema — the CTE publishes this type to whoever selects from it, and the value
+				// codec needs it to read the field back (a computed output has ONE field and no `_TYPE`
+				// beside it, so the tag can only come from what the output IS). Left empty, the read
+				// asks for a discriminator that was never projected and degrades to an empty cell —
+				// silently, 496 times per report (Max, 2026-08-24).
 				b.SelectExpr(ibQueryColumnExpr::Const(EvalValue(e, params)), alias);
+				oc.m_type = TypeOfExpr(sources, e, params);
 				oc.m_alias = alias;
 				oc.m_byAlias = true;
 			}
@@ -2057,15 +2161,45 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		// spread, which is one name twice in the statement (`-104 … specified multiple times`,
 		// 2026-08-24). The projection drops the second by the same rule (AttachNamedQueries), so the
 		// published set and the select list keep saying the same thing.
-		if (oc.m_col != nullptr &&
-			std::any_of(fields.begin(), fields.end(), [&](const ibCteQueryable::Field& f) {
-				return f.m_physical.IsSameAs(oc.m_col->GetPhysicalName(), false); }))
+		// ⭐ …AND "ONCE" IS COUNTED BY THE NAME IT IS READ BY. Two outputs over one column under two
+		// aliases are two things — the outer query may fold by either — and only the same NAME twice
+		// is one thing said twice. Deduped by the column alone, the second alias vanished from the
+		// published set while the outer went on naming it (`unknown attribute 'Attribute21'`).
+		if (std::any_of(fields.begin(), fields.end(), [&](const ibCteQueryable::Field& f) {
+				return f.m_name.IsSameAs(oc.m_name, false); }))
 			continue;
+		// A REPEATED COLUMN gets its spelling from the OUTPUT NAME: `fld<metaID>` is already taken by
+		// the first projection of it, and one alias written twice is the `-104` this rule guards.
+		// AttachNamedQueries writes exactly this, so the declaration and the statement agree.
+		const bool repeated = oc.m_col != nullptr &&
+			std::any_of(fields.begin(), fields.end(), [&](const ibCteQueryable::Field& f) {
+				return f.m_physical.IsSameAs(oc.m_col->GetPhysicalName(), false); });
 		// …and the PHYSICAL name comes from the source column: `fld<metaID>`, unique per metatype, so
 		// the fields two sources publish cannot collide even when both are called `Ref` or
 		// `PointInTime`. Falls back to the output name where there is no column behind it (an
 		// aggregate, a computed projection) — those are already unique by their own alias.
-		fields.push_back({ oc.m_name, oc.m_col != nullptr ? oc.m_col->GetPhysicalName() : oc.m_name, oc.m_type });
+		// …AND THE KIND IS ASKED OF THE COLUMN, NOT INFERRED FROM HAVING ONE.
+		//
+		// 🛑 It read `m_col != nullptr ? Composite : Computed` — which was true only while a computed
+		// output had no column at all. Every output is given one now (giveIdentity mints a synthetic
+		// for the ones nothing backs), so the test answered "Composite" for all of them, and the
+		// declared field spread into role fields the statement never wrote: `-206 Column unknown
+		// YTFDS_N` the moment a person sorted by a computed field (Max, 2026-08-24).
+		//
+		// The column already answers it — `ibSyntheticOutputColumn` says Computed. And the question is
+		// asked NARROWLY, as "does this output spread?": the declared field is an `ibTempColumn`, so
+		// carrying a source column's kind across verbatim would have it claim to be a RAW DB column
+		// (which a reader casts to one) or the MOMENT (whose fields are other columns'). Everything
+		// that spreads is Composite here, exactly as before; only the computed output is not.
+		//
+		// A repeated alias is still the column it came from and spreads exactly as the first
+		// projection does.
+		const bool computed = oc.m_col == nullptr
+			|| oc.m_col->GetColumnKind() == ibBackendQueryColumn::Kind::Computed;
+		fields.push_back({ oc.m_name,
+			(oc.m_col != nullptr && !repeated) ? oc.m_col->GetPhysicalName() : oc.m_name, oc.m_type,
+			computed ? ibBackendQueryColumn::Kind::Computed
+			         : ibBackendQueryColumn::Kind::Composite });
 	}
 	if (fields.empty())
 		CteDecline(wxT("it publishes no fields to be read by name"));

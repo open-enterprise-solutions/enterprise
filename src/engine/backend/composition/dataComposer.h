@@ -42,6 +42,7 @@
 #include <functional>   // PruneUnresolvedSettings asks the HOST whether a path still resolves
 #include <map>
 #include <memory>
+#include <optional>    // the reader's setting either exists or does not — the presence is the type's
 #include <vector>
 
 class ibDataQueryResult;
@@ -237,9 +238,18 @@ public:
 	//     it is not set                →  `m_variants[0]`'s setting, so the report is never blank and
 	//                                     a person can just open it and run what was set up
 	//
-	// ⭐ NO CURSOR AND NO FLAG. "Is there a reader's setting" is the setting's OWN question —
-	// `ibSettingsDescription::IsOk()`, the same one every part of this vocabulary answers with.
-	// Clearing it is the whole of "back to the defaults": nothing is remembered to undo.
+	// ⭐ NO CURSOR, AND THE PRESENCE IS PART OF THE VALUE. Clearing the reader's setting is the whole
+	// of "back to the defaults": nothing is remembered to undo.
+	//
+	// 🛑 IT ASKED `IsOk()` — "is there anything in it" standing in for "did the reader state one",
+	// and those are two different questions. A reader who empties their only section has STATED
+	// something (nothing), and the answer read as "stated nothing at all": `ClearSorts()` then
+	// `Sort("Code")` re-copied the author's order underneath and composed by two keys instead of one
+	// (CI, 2026-08-24 — the one red test out of 1545, and a live list clicks its heading exactly so).
+	//
+	// So the question is answered by the TYPE — an optional either holds the reader's setting or does
+	// not — and never by inspecting its contents. Not the parallel `bool` this arc deleted: that was a
+	// second store that could disagree with the first, while a `std::optional` has nowhere to drift.
 	ibDataComposer& LoadVariants(const std::vector<ibVariantDescription>& variants);
 	const std::vector<ibVariantDescription>& GetVariants() const { return m_variants; }
 
@@ -252,7 +262,7 @@ public:
 	// as a one-line alias, and both were called: the frontend through one, the composition value
 	// through the other. Two names for one question is the very shape this arc spent a day deleting.
 	const ibSettingsDescription& GetCurrentSettingsDesc() const {
-		return m_userSettings.IsOk() ? m_userSettings : m_variants.front().m_settings;
+		return m_userSettings ? *m_userSettings : m_variants.front().m_settings;
 	}
 
 	// ⭐ THE READER PRESSED OK — their setting becomes what composes, and the zeroth is dropped. The
@@ -260,7 +270,14 @@ public:
 	// GetVariants()[n].m_settings)`), and so is restoring a saved setting at open — which is why
 	// none of the three needs a mechanism of its own.
 	ibDataComposer& SetUserSettingsDesc(const ibSettingsDescription& settings);
-	const ibSettingsDescription& GetUserSettingsDesc() const { return m_userSettings; }
+	// …and where the reader has stated nothing, an EMPTY setting is the truthful answer to "what have
+	// they stated" — the question "have they stated one" is `HasUserSettings()`, not a shape test on
+	// what comes back.
+	const ibSettingsDescription& GetUserSettingsDesc() const {
+		static const ibSettingsDescription s_none;
+		return m_userSettings ? *m_userSettings : s_none;
+	}
+	bool HasUserSettings() const { return m_userSettings.has_value(); }
 	// …and dropping it is the reset: `[0]` composes again.
 	ibDataComposer& ClearUserSettings();
 
@@ -272,13 +289,13 @@ public:
 	// back exactly what it took. It does NOT seed a user setting the way `UserSettings()` does: a
 	// fetch must not turn a reader who has saved nothing into one.
 	ibSettingsDescription& RunningSettings() {
-		return m_userSettings.IsOk() ? m_userSettings : m_variants.front().m_settings;
+		return m_userSettings ? *m_userSettings : m_variants.front().m_settings;
 	}
 
 	ibSettingsDescription& UserSettings() {
-		if (!m_userSettings.IsOk())
+		if (!m_userSettings)
 			m_userSettings = m_variants.front().m_settings;
-		return m_userSettings;
+		return *m_userSettings;
 	}
 
 	// ⭐ WHAT IS IN FORCE — element zero's, and that is the whole of it. These stay because every
@@ -881,9 +898,10 @@ protected:
 
 	// …AND THE READER'S OWN — a SETTING, the same type the variants wrap. Setting a variant is
 	// setting a setting (Max, 2026-08-24), so there is one shape here and no second one to convert
-	// between. `IsOk()` is the whole of "has anybody saved one"; no flag stands beside it, because a
-	// flag beside a fact is a second answer to one question.
-	ibSettingsDescription    m_userSettings;
+	// between. Whether anybody saved one is the OPTIONAL's own answer — not a flag beside the fact
+	// (that is a second answer to one question), and not the contents (a reader may save an empty
+	// setting on purpose, and that is a saved setting; see GetCurrentSettingsDesc).
+	std::optional<ibSettingsDescription> m_userSettings;
 
 	// (`m_standartSettings` DELETED — "the author's settings" was never a thing of its own. There is
 	//  the ARRAY, and `[0]` is what composes while nobody has saved a setting; a second member

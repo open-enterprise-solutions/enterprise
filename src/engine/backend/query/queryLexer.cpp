@@ -278,22 +278,38 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 				t.m_text = sOrig;          // preserve case for metaobject / attribute resolution
 			}
 		}
+		// ⭐ THE SETTERS ANSWER — AND THE ANSWER WAS BEING DROPPED.
+		//
+		// SetNumber / SetString / SetDate return bool: the parse IS the check (ibNumber::FromString and
+		// friends). On failure they Reset() the value, so an ignored `false` does not leave the literal
+		// alone — it leaves it EMPTY, and the query runs with an empty constant where the text says 15.
+		// Silently: nothing downstream can tell "the author wrote nothing" from "the author wrote
+		// something this could not read". The token knows its own text and position, so it refuses here.
 		else if (IsNumber()) {
 			sUpper.clear(); GetNumber(&sUpper);
 			t.m_kind = ibQueryTokenKind::Number;
-			t.m_literal.SetNumber(sUpper);
+			if (!t.m_literal.SetNumber(sUpper))
+				ibBackendQuerySourceException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
+					_("Query: '%s' is not a valid number at line %u (position %u)"),
+					sUpper, GetCurrentLine() + 1, GetCurrentPos());
 			t.m_text = sUpper;
 		}
 		else if (IsString()) {
 			sUpper.clear(); GetString(&sUpper);
 			t.m_kind = ibQueryTokenKind::String;
-			t.m_literal.SetString(sUpper);
+			if (!t.m_literal.SetString(sUpper))
+				ibBackendQuerySourceException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
+					_("Query: a string literal could not be read at line %u (position %u)"),
+					GetCurrentLine() + 1, GetCurrentPos());
 			t.m_text = sUpper;
 		}
 		else if (IsDate()) {
 			sUpper.clear(); GetDate(&sUpper);
 			t.m_kind = ibQueryTokenKind::Date;
-			t.m_literal.SetDate(sUpper);
+			if (!t.m_literal.SetDate(sUpper))
+				ibBackendQuerySourceException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
+					_("Query: '%s' is not a valid date at line %u (position %u)"),
+					sUpper, GetCurrentLine() + 1, GetCurrentPos());
 			t.m_text = sUpper;
 		}
 		else if (IsByte(wxT('&'))) {           // &Name — a query parameter

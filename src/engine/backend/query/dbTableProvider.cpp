@@ -3417,13 +3417,42 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 			// alias; a metadata column is its FULL physical spread under the alias as PREFIX
 			// (`fld1021_RRRef AS Ref_RRRef`), which is exactly what the outer query asks for when it
 			// spreads the CTE's own column of that name. One rule, both sides of the declaration.
-			if (innerSpec.m_selectCols != nullptr && !innerSpec.m_selectCols->empty()) {
+			//
+			// 🛑⭐ AND THE OUTPUTS LIVE IN **TWO** LISTS. A door records a plain read in `m_selectCols`
+			// and a computed one in `m_selectExprs` — two lists because they are written differently,
+			// and this loop knew only the first. So `34 AS YTFDS` was PUBLISHED (the publisher walks the
+			// output SCHEMA, where both kinds stand side by side) and never WRITTEN: ten fields declared,
+			// nine spelled. The reader then asked for a name the statement had not written — first
+			// silently, as `Field 'YTFDS_TYPE' not found` per row, and then out loud the moment a person
+			// sorted by it: `-206 Column unknown YTFDS_N` (Max, 2026-08-24).
+			//
+			// The two halves of a declaration must agree about WHAT EXISTS, and agreeing means walking
+			// the same outputs — not the same-looking list.
+			const bool hasExprs = innerSpec.m_selectExprs != nullptr && !innerSpec.m_selectExprs->empty();
+			if ((innerSpec.m_selectCols != nullptr && !innerSpec.m_selectCols->empty()) || hasExprs) {
 				std::vector<ibQueryProjItem> proj;
-				std::vector<const ibBackendQueryColumn*> projected;   // …once each — see below
-				for (const auto& sc : *innerSpec.m_selectCols) {
+				std::vector<const ibBackendQueryColumn*> projected;      // …once each — see below
+				std::vector<wxString>                    projectedNames;  // …under each NAME once — see below
+				const std::vector<std::pair<const ibBackendQueryColumn*, wxString>> noCols;
+				for (const auto& sc : (innerSpec.m_selectCols != nullptr ? *innerSpec.m_selectCols : noCols)) {
 					const ibBackendQueryColumn* col = sc.first;
-					if (col == nullptr || sc.second.IsEmpty())
+					if (sc.second.IsEmpty())
 						continue;   // an output with no name cannot be read by one
+
+					// ⭐⭐ A COMPUTED OUTPUT IS SELECTED BY ITS NAME. `34 AS YTFDS`, `Amount * Rate AS X`,
+					// anything the author wrote as an expression: it has no COLUMN behind it, and the
+					// relation this projection wraps has ALREADY computed it under that very alias — so
+					// the way to keep it is to name it, not to rebuild it.
+					//
+					// 🛑 IT WAS DROPPED HERE while the declaration went on PUBLISHING it (the publisher's
+					// guards all pass for a null column), so the two halves disagreed about what exists —
+					// the one thing both of their comments swear cannot happen. The reader then looked
+					// for a name the statement never wrote: *"Field 'YTFDS_TYPE' not found in the
+					// resultset"*, eight times per compose (measured 2026-08-24).
+					if (col == nullptr) {
+						proj.push_back(ibQueryProjItem{ ibColQ(wxString(), sc.second), sc.second });
+						continue;
+					}
 					// ⚠ WHAT HAS NO FIELDS CANNOT BE PROJECTED. Asked as "what does the layout say this
 					// column is made of" rather than as a question about its type: a column with slots
 					// projects them, a column with none has nothing to write into a SELECT and is left
@@ -3459,21 +3488,60 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 					// The published set is deduped by the same rule (DeclareNamedResultAsCte), so the two
 					// sides go on agreeing about what exists — which is the whole reason the synthetic
 					// test above is written in both places.
-					if (std::find(projected.begin(), projected.end(), col) != projected.end())
+					// ⭐ …AND "AGAIN" MEANS UNDER THE SAME NAME. One column may legitimately be projected
+					// TWICE under two aliases (`Attribute2`, and `Attribute2 AS Attribute21`) — those are
+					// two outputs, and the outer query may fold by either. What must not happen is the
+					// same output written twice, which is the `-104` this guard was added for.
+					//
+					// 🛑 IT DEDUPED BY THE COLUMN ALONE, so the second alias was silently dropped from
+					// the select list — and from the published set by its twin — while the outer query
+					// went on naming it: *"unknown attribute 'Attribute21' on source 'q_sub0'"*, a report
+					// that would not compose (measured 2026-08-24).
+					const bool repeated = std::find(projected.begin(), projected.end(), col) != projected.end();
+					if (repeated && std::find(projectedNames.begin(), projectedNames.end(), sc.second) != projectedNames.end())
 						continue;
 					projected.push_back(col);
+					projectedNames.push_back(sc.second);
 
 					// …and QUALIFIED BY THE LEAF THAT OWNS IT when the declaration is a join: two tables
 					// in one FROM make a bare field name ambiguous to the engine even where the two
 					// spellings differ, and the qualifier is the same one the join's own ON uses.
 					// Empty for a single-source declaration, which is the unqualified read it was.
-					const wxString base = col->GetPhysicalName();
+					//
+					// ⭐ A REPEATED COLUMN SPELLS ITS ALIAS FROM THE OUTPUT NAME, not from `fld<metaID>`:
+					// the physical name is already taken by the first projection of it, and two items of
+					// one name is the very refusal above. The publisher declares the same spelling for it,
+					// so the two sides keep agreeing.
+					const wxString base = repeated ? sc.second : col->GetPhysicalName();
 					const wxString qual = leaves.empty() ? wxString() : ColocatedQual(leaves, col);
 					for (const ibColumnSlot& slot : DescribeColumnLayout(col))
 						proj.push_back(ibQueryProjItem{ ibColQ(qual, slot.m_name),
 							slot.m_role == ibColumnRole::Raw ? base
 							                                 : base + ibFieldSuffix(slot.m_role) });
 				}
+
+				// …AND THE COMPUTED OUTPUTS ARE **EVALUATED** HERE, not named.
+				//
+				// 🛑 Naming them was the first attempt and it refused one layer deeper: `-206 Column
+				// unknown YTFDS` INSIDE the declaration (measured 2026-08-25). The premise was wrong —
+				// the relation this wraps has not computed anything, because an ordinary read renders
+				// `SELECT *` and the computed columns only ever enter a projection that someone writes.
+				// This IS that projection, so it owes the expression itself.
+				//
+				// Lowered exactly as the ordinary projected read lowers it (BuildColumnExpr AS the
+				// alias) — one way of writing a computed column, wherever it is written.
+				if (hasExprs) {
+					for (const ibQueryColumnSelect& se : *innerSpec.m_selectExprs) {
+						if (se.m_alias.IsEmpty())
+							continue;   // an output with no name cannot be read by one
+						if (std::find(projectedNames.begin(), projectedNames.end(), se.m_alias) != projectedNames.end())
+							continue;
+						projectedNames.push_back(se.m_alias);
+						proj.push_back(ibQueryProjItem{
+							ibMetaIRBuilder::BuildColumnExpr(innerSpec.m_queryable, se.m_expr), se.m_alias });
+					}
+				}
+
 				if (!proj.empty())
 					innerIR.m_root = ibProject(innerIR.m_root, std::move(proj));
 			}
