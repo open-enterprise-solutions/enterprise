@@ -37,6 +37,10 @@
 #include "backend/query/queryLowering.h"   // ibQueryLowering::OutputColumn (+ ibBackendQueryColumn)
 #include "backend/compositionDescription.h"   // ibFilterDescription — a level's filter is the stored one
 
+// A LEVEL'S ORDER IS THE SELECTION'S — declared, not included: querySelector.h drags the whole query
+// tier in, and a header that only NAMES the key needs the name (the walk itself is in the .cpp).
+struct ibSelectorSort;
+
 #include <wx/string.h>
 #include <algorithm>    // CollapseEmptyLevels drops the levels that lost their fields
 #include <functional>   // PruneUnresolvedSettings asks the HOST whether a path still resolves
@@ -988,6 +992,16 @@ private:
 	// rows stay in every total above it. A depth with no level of its own shows everything.
 	bool LevelShows(const Output& output, int depth,
 		const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row) const;
+
+	// …AND IN WHAT ORDER DOES IT HAND THEM OVER? The twin of LevelShows, and the half a level's
+	// settings carried without anybody reading it: the window writes a sort onto the node a person
+	// selected, and the walk went on visiting headings in fold order.
+	//
+	// The two are twins for a reason — both are the DISPLAY half of a setting. A level's filter does
+	// not reach the WHERE and a level's sort does not reach the ORDER BY, because both are about how
+	// one level is presented while the figures above it stay computed from every row.
+	std::vector<ibSelectorSort> LevelOrder(const Output& output, int depth,
+		const std::vector<ibQueryLowering::OutputColumn>& schema) const;
 
 public:
 

@@ -3744,6 +3744,12 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 					// project themselves under those very names; writing them again would put one alias
 					// in the select list twice (`-104 … specified multiple times`, 2026-08-23). It needs
 					// no projection: the read assembles it from the two the statement already carries.
+					//
+					// ⭐ …BUT IT IS STILL PUBLISHED. Not projected and not published are two different
+					// answers, and giving the second one here is what made a declared moment vanish:
+					// `unknown attribute 'PointInTime' on source 'q_sub0'`. DeclareNamedResultAsCte
+					// publishes the COLUMN ITSELF once its parts are in this select list — so the outer
+					// query may name it, and reading it lands on these very fields.
 					if (col->IsSyntheticColumn())
 						continue;
 

@@ -566,13 +566,49 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& outpu
 	const ibSortDescription& order = output.m_settings.m_sort.IsOk()
 		? output.m_settings.m_sort : GetCurrentSortDesc();
 	size_t written = 0;
-	for (const ibSortLineDescription& line : order.m_lines) {
-		if (line.m_path.IsEmpty())
-			continue;   // a line with no field is the absence of one — see Sort()
+	std::vector<wxString> sorted;   // what this clause already names — a key written twice is refused
+	auto writeKey = [&](const wxString& path, bool ascending) {
+		if (path.IsEmpty())
+			return;   // a line with no field is the absence of one — see Sort()
+		for (const wxString& already : sorted)
+			if (already.IsSameAs(path, false))
+				return;
+		sorted.push_back(path);
 		text += (written++ == 0 ? wxT(" ORDER BY ") : wxT(", "));
-		text += line.m_path;
-		if (!line.m_ascending)
+		text += path;
+		if (!ascending)
 			text += wxT(" DESC");
+	};
+	for (const ibSortLineDescription& line : order.m_lines)
+		writeKey(line.m_path, line.m_ascending);
+
+	// ⭐⭐ AND A LEVEL'S OWN SORT COMES HERE TOO — when its key is a FIELD.
+	//
+	// 🛑 It was answered on the WALK, beside the level's filter, and for a filter that is right: the
+	// fold has run, and hiding a heading changes nothing above it. A SORT is not like that. A heading
+	// carries the level's key and the figures rolled into it — and nothing else — so ordering the
+	// headings by an ordinary field (a document's date, its moment, `Ref.Anything`) had nothing to
+	// read and left the order exactly as it was (Max, 2026-08-25, over documents in identifier
+	// order: *"по обычной дате тоже не сортирует"*).
+	//
+	// The fold keeps a group where its FIRST ROW is, so the honest way to order headings by a field
+	// of the rows is to order the ROWS by it. That is this clause. The levels' keys follow it
+	// (queryLowering) as the tie-break, so the grouping still holds together.
+	//
+	// ⚠ IN LEVEL ORDER, outer first: the keys are read in the order they are written, so an outer
+	// level's sort decides the sequence of its headings and an inner one only arranges what sits
+	// under each of them — which is what a ladder of settings means.
+	//
+	// A key that names a RESOURCE stays out: an aggregate does not exist on the detail read, and it
+	// is the one thing a heading DOES carry — so it is ordered on the walk instead (LevelOrder).
+	for (const GroupNode& level : output.m_rowGroups) {
+		for (const ibSortLineDescription& line : level.m_settings.m_sort.m_lines) {
+			bool isResource = false;
+			for (const ibResourceDescription& resource : m_resources)
+				if (resource.m_path.IsSameAs(line.m_path, false)) { isResource = true; break; }
+			if (!isResource)
+				writeKey(line.m_path, line.m_ascending);
+		}
 	}
 
 	// TOTALS [agg(path), …] BY dim [HIERARCHY], … — the aggregate list may be empty
@@ -906,6 +942,47 @@ bool ibDataDBComposer::LevelShows(const Output& output, int depth,
 	return true;
 }
 
+// ⭐⭐ THE ORDER ONE LEVEL'S HEADINGS COME IN — and it is read the same way its filter is, off the
+// level a person set it on.
+//
+// 🛑 IT WAS PROMISED AND NEVER WRITTEN. The settings window points its sort editor at the SELECTED
+// node (composerSettings.cpp), so a sort set on a grouping was stored, serialised and carried
+// through variants — and the walk read only the filter, so nothing about it ever showed. The
+// comment beside the query's ORDER BY said this was "applied on the walk"; this is that.
+//
+// A key names an output the same way a filter's left side does: by the name a person picked from.
+// One that this result does not carry orders nothing — the same answer the filter gives, and for
+// the same reason: a report with a stale line still prints.
+std::vector<ibSelectorSort> ibDataDBComposer::LevelOrder(const Output& output, int depth,
+	const std::vector<ibQueryLowering::OutputColumn>& schema) const
+{
+	std::vector<ibSelectorSort> keys;
+	// Depth 0 is the grand total — one node, and one node has no order. Past the last level there is
+	// no level to have stated one.
+	if (depth <= 0 || static_cast<size_t>(depth) > output.m_rowGroups.size())
+		return keys;
+
+	const GroupNode& level = output.m_rowGroups[static_cast<size_t>(depth) - 1];
+	for (const ibSortLineDescription& line : level.m_settings.m_sort.m_lines) {
+		if (line.m_path.IsEmpty())
+			continue;   // a line with no field is the absence of one — same rule as the output's sort
+		for (const ibQueryLowering::OutputColumn& oc : schema) {
+			if (!oc.m_name.IsSameAs(line.m_path, false) && !oc.m_alias.IsSameAs(line.m_path, false))
+				continue;
+			// ⭐ READ THE NODE THE WAY THE WALK READS IT. An aggregate is reached by its alias and a
+			// field by its column — the very choice the row-filling loop makes — so "sort the groups
+			// by their total" needs no separate road: it is the same key, spelled the other way.
+			ibSelectorSort key;
+			if (oc.m_byAlias) key.m_alias = oc.m_alias;
+			else              key.m_col   = oc.m_col;
+			key.m_ascending = line.m_ascending;
+			keys.push_back(key);
+			break;
+		}
+	}
+	return keys;
+}
+
 bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 {
 	// ⭐⭐ ONE BUILD, ONE STATE OF THE DATA. A composition is not one query — it is a dozen: the source
@@ -1039,6 +1116,12 @@ bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driv
 		// first — see ibSpreadsheetComposeDriver).
 		if (driver.WantsGrandTotal())
 			sel.WalkOverall();
+		else
+			// ⭐ AND THE FIRST LEVEL'S OWN ORDER, stated before the first Next() so the fold is walked
+			// in it rather than re-sorted after. Asked for the grand total, this selection holds ONE
+			// node — the root — and its children get their order on the descent below, like every
+			// other level's.
+			sel.OrderBy(LevelOrder(output, 1, schema));
 
 		// ⭐⭐ ONE LOOP PER LEVEL, NESTED — the shape the language itself reads: walk the groups, and
 		// for each of them walk what is under it. A selection now visits its OWN level only, so the
@@ -1083,6 +1166,11 @@ bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driv
 				// a triangle that opens onto nothing is worse than no triangle. So the flag asks the
 				// same question the writing does.
 				ibSelector under = level.Select(ibSelectKind::ibSelectKind_ByGroups);
+				// ⭐ EACH LEVEL IN ITS OWN ORDER, and the depth is the CHILDREN's, not this heading's.
+				// Stated on the descent rather than inherited: a sort belongs to the level whose
+				// headings it arranges, and carrying this one down would arrange the next level by a
+				// key its author never wrote there (ibSelector::OrderBy).
+				under.OrderBy(LevelOrder(output, level.Level() + 1, schema));
 
 				// Asked by LOOKING: step onto the first child, read what kind it is, and rewind. The
 				// selection is already folded, so this costs a pointer move — and it is the only way

@@ -313,11 +313,27 @@ public:
 	// one over an EXPRESSION is `Computed` — a single field read by name — because that is exactly
 	// what the declaration's own SELECT wrote for it. Getting this wrong is not a preference: the
 	// reader then hunts for a `_TYPE` the statement never carried.
+	// ⭐⭐ …OR THE SOURCE'S OWN COLUMN, HANDED OVER RATHER THAN MINTED. A SYNTHETIC column — the
+	// document's MOMENT — has no field of its own: it is read out of the date and the reference, and
+	// those two ARE published, under their own physical names. Minting a `PointInTime` field for it
+	// would name a field the SELECT never wrote (`-206`), so the declaration publishes THE COLUMN
+	// ITSELF: it already knows how to read itself out of the fields the statement carries.
+	//
+	// 🛑 IT WAS DROPPED INSTEAD, and the moment then did not exist outside the declaration:
+	// `unknown attribute 'PointInTime' on source 'q_sub0'` when a report grouped by it, and — worse,
+	// because nothing was raised — a column that simply vanished from the output when it did not.
+	// "What to write into the SELECT" and "what may be named from outside" are two questions; a
+	// synthetic column answers NOTHING to the first and its own name to the second.
+	//
+	// Non-owning, like every metadata column a query holds: it belongs to the metaobject and outlives
+	// the run (the same rule ibSubqueryQueryable states for the columns it publishes but did not
+	// allocate).
 	struct Field {
 		wxString                    m_name;
 		wxString                    m_physical;
 		ibTypeDescription           m_type;
 		ibBackendQueryColumn::Kind  m_kind = ibBackendQueryColumn::Kind::Composite;
+		const ibBackendQueryColumn* m_borrowed = nullptr;   // published as-is; the four above are then unused
 	};
 
 	// `firstColumnId` — the id the minted columns are numbered from. A CTE's columns stand for
@@ -329,6 +345,13 @@ public:
 	{
 		ibMetaID id = firstColumnId;
 		for (const Field& field : fields) {
+			if (field.m_borrowed != nullptr) {
+				// Published as it stands — its id, its type and its layout are the source's, which is
+				// what makes it readable at all: the fields it names are the ones the SELECT wrote for
+				// the columns it is made of.
+				m_columns.push_back(field.m_borrowed);
+				continue;
+			}
 			if (field.m_name.IsEmpty())
 				continue;   // a field with no name cannot be read back by one
 			// The name IS the physical name: a CTE exposes exactly the aliases its select wrote.

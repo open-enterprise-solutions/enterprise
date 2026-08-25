@@ -620,6 +620,12 @@ TEST(QueryRender, TotalsRoundTrip) {
 	ExpectRoundTrip(wxT("SELECT Date, Price FROM Catalog.Products TOTALS SUM(Price) BY Date PERIODS(Month)"));
 	ExpectRoundTrip(wxT("SELECT Date, Price FROM Catalog.Products "
 	                    "TOTALS SUM(Price) BY Date PERIODS(Day, &From, &To) AS Period"));
+	// ⭐ AN UPPER BOUND WITH NO LOWER ONE — "up to here, starting wherever the data does". The comma
+	// holds the empty place, which is what the renderer writes and what the constructor's periodicity
+	// panel composes; if this form did not parse, setting only a `To` in the form would be refused
+	// while the same text hand-written would run.
+	ExpectRoundTrip(wxT("SELECT Date, Price FROM Catalog.Products "
+	                    "TOTALS SUM(Price) BY Date PERIODS(Month, , &To)"));
 	// The level's NAME survives the trip — written with AS, so the render cannot be read back as a
 	// second dimension.
 	ExpectRoundTrip(wxT("SELECT Owner, Price FROM Catalog.Products TOTALS SUM(Price) BY Owner AS Seller"));

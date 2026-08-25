@@ -23,7 +23,24 @@
 #include "queryProvider.h"      // ibQueryComposer::BuildHierarchyTree / BuildTotalsTree
 #include "dataQueryBuilder.h"   // ibDataQueryBuilder + ibSelectKind + ibDimensionKind + AggregateItem
 
+#include <algorithm>           // stable_sort — a level's own order over the nodes it hands out
+
 class ibDatabaseConnectionHolder;   // sub-selection recipe holds it by pointer (Select(kind) only)
+
+// ⭐⭐ THE ORDER ONE LEVEL COMES IN — and it belongs HERE because a selection is what holds a level.
+//
+// A level's sort is not the query's ORDER BY: the rows were already read and folded, and what is
+// being ordered is the HEADINGS of one level — the nodes this selection hands out. Asking the query
+// again would order the rows a second time and still leave the headings in fold order.
+//
+// A node is read two ways (GetValue by column, GetColumn by an aggregate's alias), so a key names
+// itself the same two ways: sorting a level by one of its own fields, and sorting it by a figure
+// ("the biggest customer first"), are one question with two spellings of the key.
+struct ibSelectorSort {
+	const ibBackendQueryColumn* m_col   = nullptr;   // a source column…
+	wxString                    m_alias;             // …or an aggregate's alias
+	bool                        m_ascending = true;
+};
 
 class ibSelector
 {
@@ -197,6 +214,23 @@ public:
 	// resets, no re-query, no re-fold).
 	void Reset() { m_pos = -1; }
 
+	// ⭐ THE ORDER THIS SELECTION HANDS ITS NODES OUT IN — a level's own sort, and nothing deeper.
+	//
+	// NOT inherited by a descent. `s.Select()` makes the selection over a node's children, and those
+	// children are the NEXT level, which has a sort of its own (or none). Carrying this one down
+	// would order a level by a key its author set for the one above it — the same class of mistake as
+	// a filter that leaks a level down, and the caller states each level's order as it descends.
+	//
+	// Stated after the walk was built, it re-orders what is already there rather than refolding: the
+	// nodes are the fold's, this only decides the sequence they are visited in.
+	void OrderBy(std::vector<ibSelectorSort> keys)
+	{
+		m_order = std::move(keys);
+		if (!m_visits.empty())
+			ApplyOrder();
+		m_pos = -1;   // a new order means the walk starts over — a position in the old one means nothing
+	}
+
 	// ⭐ READ THE ROWS NOW, and be done with the cursor.
 	//
 	// The fold is otherwise lazy — the first Next() builds it — and a selection that nobody has
@@ -329,6 +363,55 @@ private:
 		return m_viewNode != nullptr ? *m_viewNode : m_walk->Root();
 	}
 
+	// A NODE'S VALUE FOR A SORT KEY — the same two readings the walker uses (GetValue / GetColumn),
+	// asked of a node that is not the current one. Absent = the runtime's NULL, so a level whose
+	// nodes do not carry the key sorts as "all equal" rather than as an error: the key may name a
+	// figure this level does not roll up, and a report with a stray sort line still prints.
+	ibValue NodeValueFor(const ibSelectorTree::Node* node, const ibSelectorSort& key) const
+	{
+		if (node == nullptr)
+			return ibValue(ibValueTypes::TYPE_NULL);
+		ibMetaID id = 0;
+		if (key.m_col != nullptr)
+			id = key.m_col->GetColumnId();
+		else if (m_walk) {
+			for (const ibQueryRamColumn& c : m_walk->Columns())
+				if (c.m_name == key.m_alias) { id = c.m_id; break; }
+		}
+		if (id == 0)
+			return ibValue(ibValueTypes::TYPE_NULL);
+
+		// ⚠ A HEADING CARRIES ITS KEY AND ITS FIGURES — AND NOTHING ELSE. Every other column of the
+		// rows lives on the DETAIL nodes, and a report that never declared a details level has none
+		// of those at all. So this answers for the key of the level and for an aggregate, and says
+		// NULL for anything else — which is why a sort by an ordinary FIELD does not come here: it is
+		// stated as the order the detail is READ in, and the group then stands where its first row
+		// does (dataComposer, AppendSettingsClauses).
+		const auto it = node->m_values.find(id);
+		return it != node->m_values.end() ? it->second : ibValue(ibValueTypes::TYPE_NULL);
+	}
+
+	// ⭐ ONE COMPARISON FOR THE WHOLE HOUSE. The keys are compared by the same function a RAM ORDER BY
+	// compares rows with (ibQueryComposer::RamSortCompareKey) — a second answer to "which of these two
+	// values comes first" is how a level's headings and the rows under them start disagreeing.
+	//
+	// STABLE, so nodes the sort cannot tell apart keep the order the fold gave them — which is the
+	// order the rows arrived in, and the only one anybody can predict.
+	void ApplyOrder() const
+	{
+		if (m_order.empty() || m_visits.size() < 2)
+			return;
+		std::stable_sort(m_visits.begin(), m_visits.end(),
+			[this](const ibSelectorTree::Node* a, const ibSelectorTree::Node* b) {
+				for (const ibSelectorSort& key : m_order) {
+					const int c = ibQueryComposer::RamSortCompareKey(
+						NodeValueFor(a, key), NodeValueFor(b, key), key.m_ascending);
+					if (c != 0) return c < 0;
+				}
+				return false;
+			});
+	}
+
 	void EnsureWalk() const
 	{
 		// A VIEW is already built — it is somebody else's tree, entered at a node. Nothing to fold,
@@ -339,6 +422,7 @@ private:
 			for (const auto& child : m_viewNode->m_children)
 				if (child != nullptr)
 					m_visits.push_back(child.get());
+			ApplyOrder();
 			m_pos = -1;
 			return;
 		}
@@ -381,6 +465,7 @@ private:
 		for (const auto& child : WalkRoot().m_children)
 			if (child != nullptr)          // an empty slot is not a row — see Next()
 				m_visits.push_back(child.get());
+		ApplyOrder();
 		m_pos = -1;
 	}
 
@@ -421,6 +506,9 @@ private:
 	const ibSelectorTree::Node*                      m_viewNode = nullptr;
 	mutable std::vector<const ibSelectorTree::Node*>  m_visits;  // pre-order visit order
 	mutable long                                      m_pos = -1;
+	// THE LEVEL'S OWN ORDER — empty = fold order, which is the order the rows arrived in. Not mutable
+	// and not lazy: it is stated, not derived, and a descent starts without one (see OrderBy).
+	std::vector<ibSelectorSort>                       m_order;
 };
 
 // --- out-of-line inline bodies (need ibDataQueryResult::Select complete) --------------------------

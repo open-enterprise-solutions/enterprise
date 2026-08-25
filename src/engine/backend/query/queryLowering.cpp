@@ -2160,13 +2160,24 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// a published set and a select list that disagree is the shape of that error.
 	std::vector<ibCteQueryable::Field> fields;
 	fields.reserve(innerSchema.size());
+	// Every physical field this declaration actually writes, so the synthetic columns below can be
+	// asked the only question that decides them: are the fields you are made of in here?
+	std::vector<wxString> writtenFields;
+	std::vector<const OutputColumn*> synthetic;
 	for (const OutputColumn& oc : innerSchema) {
-		// Nothing to write into a SELECT means nothing to publish — and a column whose fields belong to
-		// OTHER columns says so itself (OwnsItsFields): the MOMENT is read out of the date and the
-		// reference, which the declaration publishes under their own physical names, so declaring it
-		// too would name fields nothing wrote.
-		if (oc.m_col != nullptr && (oc.m_col->IsSyntheticColumn() || ColumnFieldNames(oc.m_col).empty()))
+		// Nothing to write into a SELECT means nothing to publish.
+		if (oc.m_col != nullptr && !oc.m_col->IsSyntheticColumn() && ColumnFieldNames(oc.m_col).empty())
 			continue;
+		// ⭐ A SYNTHETIC COLUMN IS NOT WRITTEN, BUT IT IS PUBLISHED — the two are different questions,
+		// and answering the second with the first is what made the MOMENT disappear. It has no field
+		// of its own (its layout names the date's and the reference's), so the projection leaves it
+		// out — AttachNamedQueries does that, and must go on doing it. The declared TABLE, though, is
+		// read by name, and the name is exactly what a report groups or sorts by. Held back to a
+		// second pass, because "are its parts written" cannot be answered until they all are.
+		if (oc.m_col != nullptr && oc.m_col->IsSyntheticColumn()) {
+			synthetic.push_back(&oc);
+			continue;
+		}
 		// ⚠ …AND ONE COLUMN IS PUBLISHED ONCE. Two outputs may stand over the SAME column — the same
 		// field asked for twice, under two names — and both would publish its physical `fld<metaID>`
 		// spread, which is one name twice in the statement (`-104 … specified multiple times`,
@@ -2211,7 +2222,41 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 			(oc.m_col != nullptr && !repeated) ? oc.m_col->GetPhysicalName() : oc.m_name, oc.m_type,
 			computed ? ibBackendQueryColumn::Kind::Computed
 			         : ibBackendQueryColumn::Kind::Composite });
+		// What this output really puts in the statement — the spread of the column behind it. A
+		// repeated alias writes the SAME fields under its own name, so it adds nothing here.
+		if (oc.m_col != nullptr && !repeated)
+			for (const wxString& f : ColumnFieldNames(oc.m_col))
+				writtenFields.push_back(f);
 	}
+
+	// …AND NOW THE SYNTHETIC ONES, each published only if every field it reads itself out of is in
+	// the statement. A moment over a declaration that projected the date but not the reference would
+	// resolve by name and then read half of itself — the silent kind of wrong this road has already
+	// paid for once.
+	for (const OutputColumn* oc : synthetic) {
+		// ⚠ UNDER ITS OWN NAME ONLY. The column IS the published one, so what a reader may call it is
+		// what the column calls itself; an output that renamed it (`PointInTime AS Moment`) would be
+		// published under a name it does not answer to, which is worse than not publishing it.
+		if (oc->m_col == nullptr || !oc->m_name.IsSameAs(oc->m_col->GetName(), false))
+			continue;
+		const std::vector<wxString> parts = ColumnFieldNames(oc->m_col);
+		if (parts.empty())
+			continue;
+		const bool allWritten = std::all_of(parts.begin(), parts.end(), [&](const wxString& p) {
+			return std::any_of(writtenFields.begin(), writtenFields.end(),
+				[&](const wxString& w) { return w.IsSameAs(p, false); });
+		});
+		if (!allWritten)
+			continue;
+		if (std::any_of(fields.begin(), fields.end(), [&](const ibCteQueryable::Field& f) {
+				return f.m_name.IsSameAs(oc->m_name, false); }))
+			continue;
+		ibCteQueryable::Field borrowed;
+		borrowed.m_name     = oc->m_name;
+		borrowed.m_borrowed = oc->m_col;
+		fields.push_back(borrowed);
+	}
+
 	if (fields.empty())
 		CteDecline(wxT("it publishes no fields to be read by name"));
 
@@ -4667,29 +4712,45 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// takes the AUTHOR'S direction, and that entry is struck from the list below rather than emitted
 	// twice.
 	std::vector<bool> orderConsumed(ast.m_orderBy.size(), false);
-	for (const LevelSort& ls : levelOrder) {
-		bool ascending = true;
-		if (ls.m_col != nullptr) {
-			for (size_t oi = 0; oi < ast.m_orderBy.size(); ++oi) {
-				const ibQueryOrderItem& o = ast.m_orderBy[oi];
-				if (orderConsumed[oi] || !o.m_expr || IsComputedExprAst(*o.m_expr))
-					continue;
-				std::vector<const ibBackendQueryColumn*> oc;
-				try { oc = ResolveWhereTarget(sources, *o.m_expr, /*allowDotWalk*/true); }
-				catch (const ibBackendException&) { continue; }
-				if (oc.size() == 1 && oc.front() == ls.m_col) {
-					ascending = o.m_ascending;
-					orderConsumed[oi] = true;
-					break;
-				}
+	std::vector<bool> levelAscending(levelOrder.size(), true);
+	for (size_t li = 0; li < levelOrder.size(); ++li) {
+		const LevelSort& ls = levelOrder[li];
+		if (ls.m_col == nullptr)
+			continue;
+		for (size_t oi = 0; oi < ast.m_orderBy.size(); ++oi) {
+			const ibQueryOrderItem& o = ast.m_orderBy[oi];
+			if (orderConsumed[oi] || !o.m_expr || IsComputedExprAst(*o.m_expr))
+				continue;
+			std::vector<const ibBackendQueryColumn*> oc;
+			try { oc = ResolveWhereTarget(sources, *o.m_expr, /*allowDotWalk*/true); }
+			catch (const ibBackendException&) { continue; }
+			if (oc.size() == 1 && oc.front() == ls.m_col) {
+				levelAscending[li] = o.m_ascending;
+				orderConsumed[oi]  = true;
+				break;
 			}
 		}
-		if (!ls.m_path.empty()) b.OrderBy(ls.m_path, ascending);
-		else                    b.OrderBy(ls.m_col,  ascending);
 	}
 
-	// Same resolution the flat path uses (PopulateBuilder): a computed / constant key becomes an
-	// expression sort, a column or dot-walk sorts by its column.
+	// ⭐⭐ THE AUTHOR'S SORT GOES FIRST, AND THAT IS WHAT DECIDES THE ORDER OF THE GROUPS.
+	//
+	// 🛑 The levels used to be emitted ahead of it, on the reasoning that "a grouping decides the
+	// sequence of the groups and ORDER BY decides the sequence inside the deepest one". That is true
+	// of a grouping's KEY and false of everything else a person may sort by — and the difference is
+	// the whole feature. Grouped by Ref and sorted by the moment, the reading came back ordered by
+	// the reference's GUID: the level's key stood in front, and the moment could only ever break ties
+	// INSIDE a group of one row. The setting did nothing, at any grain (Max, 2026-08-25, watching a
+	// report of documents come out in identifier order: *"it does not react to this"*).
+	//
+	// The fold keeps groups in FIRST-SEEN order, so ordering the DETAIL by what the author asked for
+	// is exactly what orders the groups by it: the group appears where its first row does. Sorting by
+	// a document's moment therefore lists the documents by moment, which is what the words mean.
+	//
+	// The level keys still follow, and they still matter: they are the tie-break that keeps a group's
+	// rows together when the author's key does not tell them apart, and they keep the order
+	// REPEATABLE — two runs of the same query hand the groups over in the same sequence. A level
+	// whose column the author already named is not emitted twice; it takes their direction (above)
+	// and rides in its own place.
 	for (size_t oi = 0; oi < ast.m_orderBy.size(); ++oi) {
 		if (orderConsumed[oi])
 			continue;                       // a level already sorts by it, in the direction asked for
@@ -4709,6 +4770,31 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			continue;
 		if (cols.size() > 1) b.OrderBy(cols, o.m_ascending);
 		else                 b.OrderBy(cols[0], o.m_ascending);
+	}
+
+	// …AND THEN THE LEVELS. Behind the author's keys, where they are the tie-break rather than the
+	// verdict: rows the sort cannot tell apart still arrive grouped, and the sequence stays the same
+	// from one run to the next. With no sort written at all these are the whole order, exactly as
+	// they were.
+	for (size_t li = 0; li < levelOrder.size(); ++li) {
+		const LevelSort& ls = levelOrder[li];
+		if (!ls.m_path.empty()) b.OrderBy(ls.m_path, levelAscending[li]);
+		else                    b.OrderBy(ls.m_col,  levelAscending[li]);
+	}
+
+	// ⭐ SAID IN THE JOURNAL, AS TWO NUMBERS — because "the sort does not react" is a complaint about
+	// this line and nothing else, and the two roads it could have taken look identical from outside.
+	// How many of the author's keys survived resolution, and how many level keys follow them: a sort
+	// that resolved to nothing prints 0 and names itself, instead of leaving a person to compare
+	// GUIDs by eye.
+	{
+		size_t authorKeys = 0;
+		for (size_t oi = 0; oi < ast.m_orderBy.size(); ++oi)
+			if (!orderConsumed[oi])
+				++authorKeys;
+		ibJournalInfo(wxT("query.order"),
+			wxT("totals: %u author key(s) first, then %u level key(s)"),
+			static_cast<unsigned>(authorKeys), static_cast<unsigned>(levelOrder.size()));
 	}
 
 	ibReadPageRequest topPage;

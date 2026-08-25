@@ -24,6 +24,7 @@
 #include "backend/query/dataQueryBuilder.h"  // ibDataQuerySpec / ibQueryNode / AggregateItem
 #include "backend/query/queryable.h"         // ibBackendQueryable / ibQueryCondition
 #include "backend/query/queryColumn.h"       // ibBackendQueryColumn / ibBackendColumnRawDB
+#include "backend/query/tempTableQueryable.h" // ibCteQueryable — what a declared query publishes
 #include "backend/clsid.h"                    // reference_to_clsid — a reference-typed column (multi-field spread)
 
 namespace {
@@ -1382,6 +1383,151 @@ TEST(QuerySelector, Exhausted_KeepsTheLastRow)
 	while (sel.Next()) {}
 	EXPECT_FALSE(sel.Next());                               // still refuses, idempotently
 	EXPECT_EQ(sel.GetValue(&keyCol).GetString(), wxT("5")); // …and still stands on E3
+}
+
+// ===========================================================================
+// A LEVEL'S OWN ORDER — the half of a level's settings nothing used to read.
+//
+// A report's window writes a sort onto the grouping a person selected, and the walk visited the
+// headings in fold order regardless. The order belongs to the selection because the selection is
+// what holds one level's nodes; a query's ORDER BY cannot say it — those rows were folded already.
+// ===========================================================================
+
+namespace {
+
+const ibMetaID REGION_ID = 11, PRODUCT_ID = 12, GAMT_ID = 13;
+
+// North(5) / South(10) / North(3) — two headings, and the smaller one arrives FIRST, so fold order
+// and "biggest figure first" are different sequences and a test can tell them apart.
+ibQueryRamTable GroupDetail()
+{
+	ibQueryRamTable d;
+	d.AddColumn(REGION_ID,  wxT("region"),  kNoType);
+	d.AddColumn(PRODUCT_ID, wxT("product"), kNoType);
+	d.AddColumn(GAMT_ID,    wxT("amount"),  kNoType);
+	auto add = [&](const wxString& region, const wxString& product, long amt) {
+		const long r = d.AppendRow();
+		d.SetCell(r, REGION_ID,  ibValue(region));
+		d.SetCell(r, PRODUCT_ID, ibValue(product));
+		d.SetCell(r, GAMT_ID,    ibValue(ibNumber(amt)));
+	};
+	add(wxT("North"), wxT("Apple"), 3);
+	add(wxT("South"), wxT("Pear"),  10);
+	add(wxT("North"), wxT("Pear"),  5);
+	return d;
+}
+
+} // namespace
+
+TEST(QuerySelector, WithNoOrderStatedALevelKeepsFoldOrder)
+{
+	TestCol regionCol(wxT("region"), REGION_ID), amtCol(wxT("amount"), GAMT_ID);
+	ibSelector sel(GroupDetail(), ibSelectKind::ibSelectKind_ByGroups);
+	sel.ByGroups({ &regionCol }).Aggregating({ SumOf(&amtCol) });
+
+	ASSERT_TRUE(sel.Next());
+	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("North"));   // the order the rows arrived in
+}
+
+// ⭐ SORTING A LEVEL BY ITS FIGURE — "the biggest customer first", the sort a report is most often
+// given. The key is the aggregate's own column, read exactly as the walk reads it.
+TEST(QuerySelector, ALevelHandsItsHeadingsOutInItsOwnOrder)
+{
+	TestCol regionCol(wxT("region"), REGION_ID), amtCol(wxT("amount"), GAMT_ID);
+	ibSelector sel(GroupDetail(), ibSelectKind::ibSelectKind_ByGroups);
+	sel.ByGroups({ &regionCol }).Aggregating({ SumOf(&amtCol) });
+	sel.OrderBy({ { &amtCol, wxString(), /*ascending*/ false } });
+
+	ASSERT_TRUE(sel.Next());
+	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("South"));   // 10 …
+	ASSERT_TRUE(sel.Next());
+	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("North"));   // … before 8
+	EXPECT_FALSE(sel.Next());
+}
+
+// ⚠ AND A KEY NO HEADING CARRIES ORDERS NOTHING. A group node holds the level's key and the figures
+// rolled into it — `product` belongs to the rows, and a report without a details level has no row
+// nodes at all. So this sort is a no-op HERE, and it is not a gap: a sort by an ordinary field is
+// stated as the order the DETAIL is read in, and the group then stands where its first row does
+// (dataComposer::AppendSettingsClauses). Pinned so the two roads cannot quietly both try.
+TEST(QuerySelector, AKeyNoHeadingCarriesLeavesTheOrderAlone)
+{
+	TestCol regionCol(wxT("region"), REGION_ID), productCol(wxT("product"), PRODUCT_ID),
+	        amtCol(wxT("amount"), GAMT_ID);
+	ibSelector sel(GroupDetail(), ibSelectKind::ibSelectKind_ByGroups);
+	sel.ByGroups({ &regionCol }).Aggregating({ SumOf(&amtCol) });
+	sel.OrderBy({ { &productCol, wxString(), /*ascending*/ false } });
+
+	ASSERT_TRUE(sel.Next());
+	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("North"));   // fold order, untouched
+}
+
+// ⭐ …AND IT STOPS AT THE LEVEL THAT STATED IT. A descent is the NEXT level, which has an order of
+// its own or none — inheriting would arrange it by a key its author wrote one level up.
+TEST(QuerySelector, AnOrderIsNotInheritedByADescent)
+{
+	TestCol regionCol(wxT("region"), REGION_ID), productCol(wxT("product"), PRODUCT_ID),
+	        amtCol(wxT("amount"), GAMT_ID);
+	ibSelector sel(GroupDetail(), ibSelectKind::ibSelectKind_ByGroups);
+	sel.ByGroups({ &regionCol, &productCol }).Aggregating({ SumOf(&amtCol) });
+	sel.OrderBy({ { &amtCol, wxString(), /*ascending*/ false } });
+
+	ASSERT_TRUE(sel.Next());
+	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("South"));   // the stated order holds here…
+
+	ASSERT_TRUE(sel.Next());
+	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("North"));
+	ibSelector under = sel.Select(ibSelectKind::ibSelectKind_ByGroups);
+	// …and North's products come in FOLD order: Apple(3) arrived first, Pear(5) second. The parent's
+	// key would have put Pear first, so the two sequences genuinely disagree — which is the only way
+	// this test can tell inheriting from not inheriting.
+	ASSERT_TRUE(under.Next());
+	EXPECT_EQ(under.GetValue(&productCol).GetString(), wxT("Apple"));
+	ASSERT_TRUE(under.Next());
+	EXPECT_EQ(under.GetValue(&productCol).GetString(), wxT("Pear"));
+}
+
+// ===========================================================================
+// ibCteQueryable — WHAT A DECLARED QUERY PUBLISHES
+//
+// Most of it is minted: one field per output, named by the alias the select wrote. A SYNTHETIC
+// column is the exception — the document's MOMENT has no field of its own, so it is handed over as
+// it stands and reads itself out of the fields its parts wrote.
+// ===========================================================================
+
+TEST(CteQueryable, MintsAFieldPerOutput)
+{
+	std::vector<ibCteQueryable::Field> fields(1);
+	fields[0].m_name     = wxT("Date");
+	fields[0].m_physical = wxT("fld1025");
+
+	const ibCteQueryable cte(wxT("q_sub0"), fields, 0x60000000);
+	ASSERT_EQ(cte.GetColumns().size(), 1u);
+	const ibBackendQueryColumn* date = cte.ResolveColumnByName(wxT("Date"));
+	ASSERT_NE(date, nullptr);
+	EXPECT_EQ(date->GetPhysicalName(), wxT("fld1025"));
+	EXPECT_NE(cte.ShareColumn(date), nullptr);        // minted here, so this wrapper can keep it alive
+}
+
+// ⭐ A BORROWED COLUMN IS THE SOURCE'S OWN — same pointer, same id, same layout. This is how the
+// MOMENT survives a declaration: it is not written into the SELECT (its fields are the date's and
+// the reference's, already there), but it IS named from outside, which is what a report groups by.
+TEST(CteQueryable, PublishesABorrowedColumnAsItself)
+{
+	TestCol moment(wxT("PointInTime"), 77);
+	std::vector<ibCteQueryable::Field> fields(2);
+	fields[0].m_name     = wxT("Date");
+	fields[0].m_physical = wxT("fld1025");
+	fields[1].m_name     = wxT("PointInTime");
+	fields[1].m_borrowed = &moment;
+
+	const ibCteQueryable cte(wxT("q_sub0"), fields, 0x60000000);
+	ASSERT_EQ(cte.GetColumns().size(), 2u);
+	const ibBackendQueryColumn* found = cte.ResolveColumnByName(wxT("PointInTime"));
+	ASSERT_EQ(found, &moment);                        // the very column, not a copy of its name
+	// …and NOT this wrapper's storage: it belongs to the metaobject and outlives the run, so the
+	// declaration must not offer to keep it alive.
+	EXPECT_EQ(cte.ShareColumn(found), nullptr);
 }
 
 // ===========================================================================
