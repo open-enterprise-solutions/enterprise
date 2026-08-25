@@ -164,8 +164,8 @@ public:
 	// stays until it is removed. Nobody has to keep two lists in step.
 	//
 	// ⭐ AND TWO ORTHOGONAL QUESTIONS ABOUT EACH — kept apart from the first day, because folding
-	// them into one field is exactly how 1C ends up with "value / available to user / include in
-	// settings" and nobody can say which overrides which:
+	// them into one field is exactly how a settings panel ends up with "value / available to user /
+	// include in settings" and nobody can say which overrides which:
 	//   * WHAT FILLS IT — a fixed value, or an EXPRESSION evaluated before the query runs.
 	//   * WHO FILLS IT — the author fixes it, or it is handed to the user (quick settings).
 	//

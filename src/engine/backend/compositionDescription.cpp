@@ -71,6 +71,7 @@ const wxString  kFilterNode     = wxT("Filter");
 // WHAT THE LEVEL IS — a grouping or the detail records. Absent in a file written before detail
 // levels existed, and absence reads back as Grouping, which is what every level in such a file is.
 const wxString  kLevelKindName  = wxT("LevelKind");
+const wxString  kOutputKindName = wxT("OutputKind");
 // WHAT UNFOLDS UNDER A NODE — written INSIDE it, so where a node is written is which node it belongs
 // to. The axes on an output (Rows / Columns) are the same shape at the top; this is every storey below.
 const wxString  kChildrenNode   = wxT("Children");
@@ -186,6 +187,10 @@ void ReadLevels(const ibDataNode& parent, const wxString& name, std::vector<ibLe
 bool ibOutputDescriptionMemory::WriteNode(ibDataNode& node, const ibOutputDescription& output)
 {
 	node.SetValue<wxString>(kVariantName, output.m_name);
+	// ⭐ AND WHAT IT IS. Stored because it is a DECISION — "add grouping" or "add table" — and a
+	// table that has not been filled in yet is empty on both axes: read back off the content, it
+	// would come up a grouping and the person's second axis would have nowhere to go.
+	node.SetValue<s32>(kOutputKindName, static_cast<s32>(output.m_kind));
 	WriteFieldList(node, kSelectedNode, output.m_selected);
 	// ITS SETTINGS, written the way a level writes them — one storey up, same shape, same pair.
 	ibSettingsDescriptionMemory::WriteNode(node, output.m_settings);
@@ -204,6 +209,12 @@ bool ibOutputDescriptionMemory::ReadNode(const ibDataNode& node, ibOutputDescrip
 	ibSettingsDescriptionMemory::ReadNode(node, output.m_settings, metaData);
 	ReadLevels(node, kRowsNode, output.m_rowGroups, metaData);
 	ReadLevels(node, kColumnsNode, output.m_columnGroups, metaData);
+	// ⚠ A RECORD WRITTEN BEFORE THE KIND EXISTED reads back 0 — Grouping — and that is right for
+	// every one of them except a table, which could not be authored then. So the content answers
+	// where the record is silent: a stored column axis means a table, whatever the number says.
+	output.m_kind = static_cast<ibCompositionOutputKind>(node.GetValue<s32>(kOutputKindName));
+	if (output.m_kind == ibCompositionOutputKind::Grouping && !output.m_columnGroups.empty())
+		output.m_kind = ibCompositionOutputKind::Table;
 	return true;
 }
 
@@ -294,6 +305,10 @@ const wxChar* const kTextName     = wxT("Text");
 // namespace, so the collision is a compile error rather than a subtle mix-up — but the reason the
 // two names exist is worth saying: a grouping LINE's unfold and a LEVEL's kind are not one thing.
 const wxChar* const kGroupKindName = wxT("Kind");
+// BY PERIODS — the three parts of one answer, written only when the line has one (see the writer).
+const wxChar* const kPeriodUnitName = wxT("PeriodUnit");
+const wxChar* const kPeriodFromName = wxT("PeriodFrom");
+const wxChar* const kPeriodToName   = wxT("PeriodTo");
 
 // THE LIST'S OWN HALF — the main table, written only when there is one.
 const wxChar* const kMainTableName = wxT("MainTable");
@@ -464,6 +479,12 @@ bool ibGroupDescriptionMemory::ReadNode(const ibDataNode& node, ibGroupDescripti
 		if (field.IsEmpty())
 			continue;
 		group.Append(field, static_cast<ibQueryDimUnfold>(line.GetValue<s32>(kGroupKindName)));
+		// AND ITS PERIODICITY, when it has one. A record written before this existed has no unit,
+		// which reads back as "not by periods" — the same answer the member's own IsOk gives.
+		ibGroupPeriodsDescription& periods = group.m_lines.back().m_periods;
+		periods.m_unit = line.GetValue<wxString>(kPeriodUnitName);
+		periods.m_from = line.GetValue<wxString>(kPeriodFromName);
+		periods.m_to   = line.GetValue<wxString>(kPeriodToName);
 	}
 	return true;
 }
@@ -479,6 +500,15 @@ bool ibGroupDescriptionMemory::WriteNode(ibDataNode& node, const ibGroupDescript
 		ibDataNode& line = sub.AddChild(g_groupNodeClsid, static_cast<ibMetaID>(i));
 		line.SetValue<wxString>(kFieldName, group.m_lines[i].m_path);
 		line.SetValue<s32>(kGroupKindName, static_cast<s32>(group.m_lines[i].m_kind));
+		// ⭐ THE PERIODICITY, WRITTEN ONLY WHEN THERE IS ONE — three empty properties on every
+		// ordinary grouping line would be three ways for a file to look different without meaning
+		// anything different, and equality is what "modified" is decided by.
+		const ibGroupPeriodsDescription& periods = group.m_lines[i].m_periods;
+		if (periods.IsOk()) {
+			line.SetValue<wxString>(kPeriodUnitName, periods.m_unit);
+			if (!periods.m_from.IsEmpty()) line.SetValue<wxString>(kPeriodFromName, periods.m_from);
+			if (!periods.m_to.IsEmpty())   line.SetValue<wxString>(kPeriodToName, periods.m_to);
+		}
 	}
 	return true;
 }

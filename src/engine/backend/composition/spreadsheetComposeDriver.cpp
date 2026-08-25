@@ -53,6 +53,97 @@ wxColour ibGroupFillForLevel(int level)
 
 } // namespace
 
+// ⭐ THE SHAPE IS ASKED FOR ONCE, HERE, and everything downstream reads the answer off these three
+// members rather than working it out again. The axis of a column is the OUTPUT INFO's answer
+// (AxisOf) and not a comparison this file makes: a printer that re-derived it would be a second
+// place holding the same rule, and the two drift.
+void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& info)
+{
+	// ⭐ THE SECOND FOLD IS NOT A SECOND OUTPUT. It is the same table, read again by its column keys
+	// to get the totals the first fold could not carry — so nothing is cleared, no section begins,
+	// no header is written, and what arrives lands in the totals row instead of a new grid.
+	//
+	// Told, not deduced: `flipped.Kind()` is Grouping (its column axis was emptied to make it the
+	// ladder), and an output that genuinely has no column axis looks exactly the same from here.
+	if (info.m_columnTotals) {
+		m_columnTotalsPass = true;
+		m_colPath.clear();
+		m_columnTotalCells.clear();
+		m_columnTotalSubtotals.clear();
+		return;
+	}
+	m_columnTotalsPass = false;
+	m_rowLevels = info.m_rowLevels;
+	m_colLevels = 0;
+	m_measureAt.clear();
+	m_colPath.clear();
+	m_colKeys.clear();
+	m_colSubtotalKeys.clear();
+	m_crossRows.clear();
+
+	std::vector<int> columnDepths;
+	for (size_t i = 0; i < info.m_schema.size(); ++i) {
+		switch (info.AxisOf(info.m_schema[i])) {
+		case ibCompositionAxis::Columns:
+			// COUNT LEVELS, NOT COLUMNS. A level may group by several fields, so counting entries
+			// here would make a two-field column heading look like two levels deep — the same slip
+			// that once dropped the last row level off the page.
+			if (std::find(columnDepths.begin(), columnDepths.end(), info.m_schema[i].m_level) == columnDepths.end())
+				columnDepths.push_back(info.m_schema[i].m_level);
+			break;
+		case ibCompositionAxis::None:
+			if (info.m_schema[i].m_role == ibQueryLowering::ibColumnRole::Measure)
+				m_measureAt.push_back(i);
+			break;
+		default:
+			break;
+		}
+	}
+	m_colLevels = columnDepths.size();
+
+	// ⭐ AND THE TABLE LAYOUT IS ONLY TAKEN WHEN THERE IS SOMETHING TO LAY OUT ACROSS. An output with
+	// no column axis is the ordinary report, printed as it arrives — the streaming path is not a
+	// fallback here, it is the right answer for the shape that has a known width.
+	m_cross = (m_colLevels > 0) && (info.m_kind == ibCompositionOutputKind::Table);
+	m_schema = info.m_schema;
+	// ⭐ AND THE OUTPUT'S NAME IS TAKEN, which is the whole reason it travels. It was written by the
+	// composer and read by nobody (audit § C8, "write-only"), so a report of two outputs printed two
+	// blocks of figures with nothing to say which was which — and naming them is exactly what the
+	// structure window offers a person to do.
+	m_outputName = info.m_name;
+
+	OnColumns(info.m_schema);
+}
+
+// ⭐ WHICH HEADING THIS IS, asked of the walk instead of read off `hasChildren`. A row heading with
+// no columns under it and a column heading are both "a node with children"; only the depth and the
+// seam say which, and the seam is what OnOutputBegin was told.
+void ibSpreadsheetComposeDriver::OnGroup(int level, bool hasChildren, bool /*showsWhatIsUnder*/,
+	const std::vector<ibValue>& values)
+{
+	if (!m_cross) {
+		OnRow(level, hasChildren, values);   // the ordinary report, printed as it arrives
+		return;
+	}
+	OnCrossHeading(level, values);
+}
+
+// ⚠ A DETAIL RECORD HAS NO PLACE IN A CELL. A cell is where two headings meet and holds what was
+// COMPUTED there; a detail record is one of the rows that was computed FROM. Printing it into the
+// grid would put a row where a figure belongs, and printing it under the table would be a second
+// report stapled to the first.
+//
+// So a table drops them, deliberately and visibly (the journal says how many). The reader who wants
+// them asks for the ordinary grouping, which is the output that shows them.
+void ibSpreadsheetComposeDriver::OnDetail(int level, const std::vector<ibValue>& values)
+{
+	if (!m_cross) {
+		OnRow(level, false, values);
+		return;
+	}
+	++m_crossDetailsDropped;
+}
+
 void ibSpreadsheetComposeDriver::OnColumns(const std::vector<ibQueryLowering::OutputColumn>& schema)
 {
 	if (m_document == nullptr)
@@ -89,6 +180,20 @@ void ibSpreadsheetComposeDriver::OnColumns(const std::vector<ibQueryLowering::Ou
 			gap->SetCellValue(0, 0, wxEmptyString);
 			m_document->PutArea(gap, 0);
 		}
+	}
+
+	// ⭐ A TABLE HAS NO WIDTH YET. Its columns are the DISTINCT column keys, and the first of them
+	// has not arrived — so there is nothing to lay out, nothing to head, and nothing to freeze. All
+	// of it is written by WriteCrossTable, where the width is finally known.
+	//
+	// The section above it still happened: clearing, and the gap after a previous output, are about
+	// where this output STARTS, which is known now and stops being knowable later — and so is
+	// WHETHER THIS IS THE FIRST section, which is what decides the freeze. Carried rather than
+	// re-derived at print time: "is this the first section" asked a second way is exactly the fault
+	// the flag above exists to prevent.
+	if (m_cross) {
+		m_crossFirstSection = firstSection;
+		return;
 	}
 
 	// ⭐⭐ THE LAYOUT IS THE REPORT'S, NOT THE QUERY'S. A schema is a list of columns; a report is
@@ -147,7 +252,7 @@ void ibSpreadsheetComposeDriver::OnColumns(const std::vector<ibQueryLowering::Ou
 		}
 	}
 	m_columnCount = next;
-	m_widest.assign(static_cast<size_t>(m_columnCount), 0);
+	WidenTo(m_columnCount, firstSection);
 
 	// HAS THIS OUTPUT ANY FIGURES? The grand-total row (depth 0) carries no dimension value — it
 	// stands for everything — so with no measures it has nothing at all to say, and printing it
@@ -160,6 +265,7 @@ void ibSpreadsheetComposeDriver::OnColumns(const std::vector<ibQueryLowering::Ou
 	// over every output would say the same thing three times on one page.
 	if (firstSection)
 		WriteHeading();
+	WriteOutputCaption();
 
 	// THE HEADER IS AS TALL AS THE DIMENSIONS ARE DEEP: one line per level, each naming its own
 	// level, stacked in the same column they will be read in. A measure names itself on the first
@@ -198,6 +304,35 @@ void ibSpreadsheetComposeDriver::OnColumns(const std::vector<ibQueryLowering::Ou
 
 // THE HEADING — title, then one line per parameter. Written across the table's whole width (a merged
 // cell), because a title that stops at the first column reads as a value of that column.
+// See the header: the widths are the SHEET's, so they are cleared once per composition and only
+// ever grow after that.
+void ibSpreadsheetComposeDriver::WidenTo(int columns, bool firstSection)
+{
+	const size_t want = static_cast<size_t>(std::max(0, columns));
+	if (firstSection)
+		m_widest.assign(want, 0);
+	else if (m_widest.size() < want)
+		m_widest.resize(want, 0);
+}
+
+// ⭐ THE OUTPUT NAMES ITSELF over its own block — under the report's heading and above its own
+// column titles, because it captions one block and the heading captions the page. Written the same
+// way for both layouts, so a table and a grouping are captioned by one rule and neither has its own.
+//
+// An output nobody named prints nothing at all: a blank caption line reads as a row that failed.
+void ibSpreadsheetComposeDriver::WriteOutputCaption()
+{
+	if (m_document == nullptr || m_outputName.IsEmpty())
+		return;
+
+	wxObjectDataPtr<ibBackendSpreadsheetObject> caption(new ibBackendSpreadsheetObject());
+	caption->SetCellValue(0, 0, m_outputName);
+	wxFont font = s_defaultSpreadsheetFont;
+	font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
+	caption->SetCellFont(0, 0, font);
+	m_document->PutArea(caption, 0);
+}
+
 void ibSpreadsheetComposeDriver::WriteHeading()
 {
 	if (m_title.IsEmpty() && m_headerLines.empty())
@@ -377,10 +512,595 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 	++m_rowsWritten;
 }
 
+// ===========================================================================
+//  The cross-table — walked into a rectangle, printed when its width is known
+// ===========================================================================
+
+namespace {
+
+// THE VALUES ONE LEVEL OWNS. A level may group by several fields; they are welded into one heading,
+// so all of them belong to it and none of them to the levels above (which are already written).
+std::vector<ibValue> ibValuesOfLevel(const std::vector<ibQueryLowering::OutputColumn>& schema,
+	const std::vector<ibValue>& values, int dimLevel)
+{
+	std::vector<ibValue> own;
+	for (size_t i = 0; i < schema.size() && i < values.size(); ++i)
+		if (schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension && schema[i].m_level == dimLevel)
+			own.push_back(values[i]);
+	return own;
+}
+
+// What one level of a key reads as in a header cell — its fields, side by side, because they are
+// one heading and not several.
+wxString ibHeadingText(const std::vector<ibValue>& values)
+{
+	wxString text;
+	for (const ibValue& value : values) {
+		if (!text.IsEmpty())
+			text += wxT(" ");
+		text += value.GetString();
+	}
+	return text;
+}
+
+} // namespace
+
+size_t ibSpreadsheetComposeDriver::ColumnKeyIndex(const CrossKey& key)
+{
+	for (size_t i = 0; i < m_colKeys.size(); ++i)
+		if (m_colKeys[i] == key)
+			return i;
+	m_colKeys.push_back(key);
+	return m_colKeys.size() - 1;
+}
+
+void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const std::vector<ibValue>& values)
+{
+	// THE FIGURES, PULLED OUT BY ROLE. A table stores measures, never the row as it arrived: its
+	// cells are laid out per measure, and a row holds the dimension slots too. (The streaming layout
+	// keeps the whole row and reads it through `m_layout` — the same values, a different question,
+	// which is why the two do not share a member.)
+	std::vector<ibValue> measures;
+	measures.reserve(m_measureAt.size());
+	for (const size_t at : m_measureAt)
+		measures.push_back(at < values.size() ? values[at] : ibValue());
+
+	// THE ROOT IS THE GRAND TOTAL, exactly as in the streaming layout — the walk is pre-order, so it
+	// arrives first and is printed last. On the second fold it is the SAME total over the same rows,
+	// so it is not taken twice.
+	if (level <= 0) {
+		if (!m_columnTotalsPass) {
+			m_crossGrandTotal = measures;
+			m_hasGrandTotal   = true;
+		}
+		return;
+	}
+
+	// ⭐ THE SECOND FOLD HAS NO ROW AXIS AT ALL — its whole ladder is the column keys, so every depth
+	// is a column depth and the seam does not apply. The key is built exactly as on the first pass,
+	// which is what makes the two agree about which column a figure belongs to.
+	if (m_columnTotalsPass) {
+		if (m_colPath.size() >= static_cast<size_t>(level))
+			m_colPath.resize(static_cast<size_t>(level) - 1);
+		m_colPath.push_back(ibValuesOfLevel(m_schema, values, level - 1));
+		// AN UPPER LEVEL TOTALS A PREFIX — and the bottom line needs that figure too, because the
+		// table has a column for it (see BuildColumnSlots). Same walk, same key, one level shallower.
+		if (static_cast<size_t>(level) != m_colLevels) {
+			for (std::pair<CrossKey, std::vector<ibValue>>& kept : m_columnTotalSubtotals)
+				if (kept.first == m_colPath) { kept.second = measures; return; }
+			m_columnTotalSubtotals.emplace_back(m_colPath, measures);
+			return;
+		}
+		// ⚠ A KEY THIS PASS FOUND AND THE FIRST DID NOT gets no column: the grid is as wide as the
+		// table, and a total under a column nobody has is a figure with no heading over it. It can
+		// only happen if the two reads saw different data, which the build's one snapshot prevents.
+		for (size_t i = 0; i < m_colKeys.size(); ++i)
+			if (m_colKeys[i] == m_colPath) {
+				m_columnTotalCells[i] = measures;
+				break;
+			}
+		return;
+	}
+
+	const size_t depth = static_cast<size_t>(level);
+
+	// A ROW HEADING. Its own figures ARE the row's total — the fold already computed them at this
+	// node, so a table gets its row totals for nothing and needs no second pass for them.
+	if (depth <= m_rowLevels) {
+		m_colPath.clear();   // out of the columns of the row before: a new heading starts a new sweep
+		CrossRow row;
+		row.m_level    = level;
+		row.m_heading  = ibValuesOfLevel(m_schema, values, level - 1);
+		row.m_measures = measures;
+		m_crossRows.push_back(row);
+		return;
+	}
+
+	// A COLUMN HEADING, under the row heading that is open. Its depth INSIDE the column axis says
+	// how much of the current key it replaces — everything from here down is new.
+	const size_t inColumns = depth - m_rowLevels;             // 1-based within the column axis
+	if (m_colPath.size() >= inColumns)
+		m_colPath.resize(inColumns - 1);
+	m_colPath.push_back(ibValuesOfLevel(m_schema, values, level - 1));
+
+	if (m_crossRows.empty())
+		return;   // a column with no row above it has nowhere to land — not a shape the fold produces
+
+	// ⭐ THE DEEPEST COLUMN HEADING IS A CELL; THE ONES ABOVE IT ARE SUBTOTALS. A column axis of
+	// Warehouse then Month has a figure per month AND a figure per warehouse, and the fold already
+	// computed both — the upper node carries its own. They are kept under their PREFIX key, which is
+	// what a subtotal is: the answer for everything that starts this way.
+	if (inColumns == m_colLevels) {
+		m_crossRows.back().m_cells[ColumnKeyIndex(m_colPath)] = measures;
+		return;
+	}
+	std::vector<std::pair<CrossKey, std::vector<ibValue>>>& held = m_crossRows.back().m_subtotals;
+	for (std::pair<CrossKey, std::vector<ibValue>>& kept : held)
+		if (kept.first == m_colPath) { kept.second = measures; return; }
+	held.emplace_back(m_colPath, measures);
+	// AND THE PREFIX IS REMEMBERED FOR THE WHOLE TABLE, so a subtotal column exists even where the
+	// row that first showed it has nothing else — the grid is one width for every row.
+	if (std::find(m_colSubtotalKeys.begin(), m_colSubtotalKeys.end(), m_colPath) == m_colSubtotalKeys.end())
+		m_colSubtotalKeys.push_back(m_colPath);
+}
+
+// ⭐⭐ THE WHOLE TABLE, WRITTEN ONCE, WHEN ITS WIDTH IS FINALLY KNOWN.
+//
+// The layout: the row headings on the left, then one BLOCK PER COLUMN KEY (a column per measure
+// inside it), then the row total. The header is as tall as the column axis is deep, plus a line of
+// measure names when there is more than one — because with two measures a single line would say
+// "Warehouse A" over two figures and never say which is which.
+//
+// ⭐ AND THE UPPER HEADER LINES ARE MERGED AND MADE FOLDABLE — the same outline the rows have had
+// since 2026-08-19, turned on its side. `AddColGroup` is what `PutArea` does for rows, so this is
+// the mechanism that was already there rather than a second one (grid: ibGridColOutlineWindow).
+// ⭐⭐ THE COLUMNS, IN THE ORDER THEY PRINT. The keys in the order they were first seen, and after
+// each upper heading — the moment the next key stops sharing its prefix — that heading's own total.
+//
+// Deepest first when several close at once: `Warehouse/Dec` followed by `Store/Jan` closes the month
+// group inside Warehouse and then Warehouse itself, and a total printed the other way round would
+// put the wider figure inside the narrower one.
+//
+// ⚠ A PREFIX GETS A COLUMN ONLY IF SOMETHING TOTALLED IT (m_colSubtotalKeys). With a single-level
+// column axis nothing does, and this returns exactly the keys — which is why the common table is
+// laid out the same as before there were subtotals at all.
+std::vector<ibSpreadsheetComposeDriver::ColumnSlot> ibSpreadsheetComposeDriver::BuildColumnSlots() const
+{
+	std::vector<ColumnSlot> slots;
+	slots.reserve(m_colKeys.size() + m_colSubtotalKeys.size());
+
+	const auto totalled = [this](const CrossKey& prefix) {
+		return std::find(m_colSubtotalKeys.begin(), m_colSubtotalKeys.end(), prefix) != m_colSubtotalKeys.end();
+	};
+
+	for (size_t i = 0; i < m_colKeys.size(); ++i) {
+		// ⭐⭐ A HEADING'S TOTAL IS ITS FIRST COLUMN, and that is what makes the fold possible at all.
+		//
+		// A row group folds because the group HAS a row of its own — its heading — which stays behind
+		// when the children are hidden. A column group has no column of its own: its heading lives in
+		// a merged cell ABOVE the children and collapses with them. Its total column IS that missing
+		// column: expanded it shows what the group adds up to, collapsed it is all that is left, and
+		// the fold marker sits on it.
+		//
+		// Read off the reference report Max found (2026-08-26): two collapsed periods show exactly one
+		// column each, carrying the period's total, and the expanded one shows its total followed by
+		// its single shop — a duplicate figure, and the whole reason it earns a column.
+		//
+		// 🛑 SO IT IS PRINTED EVEN OVER A SINGLE CHILD, which reads as a repeat until the group is
+		// collapsed. Both readings were tried in one night: totals last (the children first, "the
+		// order a report reads down the page") and no total over one child ("the group shows it
+		// anyway") — and each left a group nothing could fold.
+		for (size_t depth = 1; depth < m_colLevels; ++depth) {
+			if (depth > m_colKeys[i].size())
+				break;
+			const CrossKey prefix(m_colKeys[i].begin(), m_colKeys[i].begin() + depth);
+			// OPENED = this is the first key, or the one before it did not start this way.
+			bool opened = (i == 0);
+			if (!opened) {
+				const CrossKey& previous = m_colKeys[i - 1];
+				opened = previous.size() < depth
+					|| !std::equal(prefix.begin(), prefix.end(), previous.begin());
+			}
+			if (!opened || !totalled(prefix))
+				continue;
+			ColumnSlot sub;
+			sub.m_key      = prefix;
+			sub.m_subtotal = true;
+			slots.push_back(sub);
+		}
+
+		ColumnSlot slot;
+		slot.m_key = m_colKeys[i];
+		slot.m_at  = i;
+		slots.push_back(slot);
+	}
+	return slots;
+}
+
+void ibSpreadsheetComposeDriver::WriteCrossTable()
+{
+	// HOW WIDE THE ROW-HEADING AREA IS — the widest row level, exactly as the streaming layout
+	// measures it: a level's fields are welded side by side, so the area fits the widest heading.
+	size_t rowDimWidth = 0;
+	{
+		std::map<int, size_t> perLevel;
+		for (const ibQueryLowering::OutputColumn& column : m_schema)
+			if (column.m_role == ibQueryLowering::ibColumnRole::Dimension
+			    && column.m_level >= 0 && static_cast<size_t>(column.m_level) < m_rowLevels)
+				rowDimWidth = std::max(rowDimWidth, ++perLevel[column.m_level]);
+	}
+	const std::vector<ColumnSlot> slots = BuildColumnSlots();
+
+	const int dimWidth  = static_cast<int>(std::max<size_t>(rowDimWidth, 1));
+	const int measures  = static_cast<int>(m_measureAt.size());
+	const int keys      = static_cast<int>(slots.size());
+	const int perKey    = std::max(measures, 1);   // a table with no resources still has one column per key
+	const int totalCols = dimWidth + keys * perKey + (measures > 0 ? measures : 0);
+
+	m_columnCount = totalCols;
+	m_dimWidth    = dimWidth;
+	WidenTo(m_columnCount, m_crossFirstSection);
+
+	// The report's own heading spans the table, so it is written now — the width it needs is the
+	// number just worked out, and before this moment there was none. The output's caption follows
+	// it, in that order: the report is what this page IS, the output is one block of it.
+	if (m_crossFirstSection)
+		WriteHeading();
+	WriteOutputCaption();
+
+	// ---- the header -------------------------------------------------------
+	const int headerRows = static_cast<int>(m_colLevels) + (measures > 1 ? 1 : 0);
+	wxObjectDataPtr<ibBackendSpreadsheetObject> header(new ibBackendSpreadsheetObject());
+	// WHICH HEADER CELLS A MERGE COVERS — kept as it is built, because "is this cell somebody else's"
+	// is not a question the document can be asked afterwards without reading its spans back out.
+	std::vector<std::vector<bool>> covered(static_cast<size_t>(std::max(1, headerRows)),
+		std::vector<bool>(static_cast<size_t>(std::max(1, totalCols)), false));
+	const auto mergeAt = [&](int row, int col, int rowSpan, int colSpan) {
+		if (rowSpan <= 1 && colSpan <= 1)
+			return;
+		header->SetCellSize(row, col, rowSpan, colSpan);
+		for (int r = row; r < row + rowSpan && r < std::max(1, headerRows); ++r)
+			for (int c = col; c < col + colSpan && c < totalCols; ++c)
+				if (r != row || c != col)
+					covered[static_cast<size_t>(r)][static_cast<size_t>(c)] = true;
+	};
+
+	// ⭐ THE ROW HEADINGS SHARE ONE COLUMN, SO THEIR NAMES SHARE ONE CELL. Every row level is read
+	// down the same column — that is what the indent is for — so the caption over it has to name all
+	// of them, joined: `Ref / YTFDS`.
+	//
+	// 🛑 IT WROTE THEM BY THEIR POSITION WITHIN THEIR OWN LEVEL, which is the right rule for the
+	// LAYOUT (a level of two fields takes two columns) and the wrong one for the CAPTION: level 0's
+	// first field and level 1's first field are both "column 0", so each level overwrote the one
+	// above and the header showed the DEEPEST name alone (Max, 2026-08-26: "the group heading is not
+	// shown").
+	{
+		std::map<int, wxString> caption;   // column within the dimension area -> its names, joined
+		std::map<int, int> filled;
+		for (const ibQueryLowering::OutputColumn& column : m_schema) {
+			if (column.m_role != ibQueryLowering::ibColumnRole::Dimension
+			    || column.m_level < 0 || static_cast<size_t>(column.m_level) >= m_rowLevels)
+				continue;
+			const int col = filled[column.m_level]++;
+			if (col >= dimWidth)
+				continue;
+			wxString& into = caption[col];
+			if (!into.IsEmpty())
+				into += wxT(" / ");
+			into += column.m_name;
+		}
+		for (const std::pair<const int, wxString>& named : caption) {
+			header->SetCellValue(std::max(0, headerRows - 1), named.first, named.second);
+			if (static_cast<size_t>(named.first) < m_widest.size())
+				m_widest[static_cast<size_t>(named.first)] =
+					std::max(m_widest[static_cast<size_t>(named.first)], named.second.length());
+		}
+	}
+
+	// ⭐⭐ A COLUMN NAMES ITSELF ON ITS OWN LINE, AND ONLY THERE. The heading of a level is printed
+	// over that level's TOTAL column — stretched down to the measures — and the children that follow
+	// carry only their own names. Read off a reference report Max showed (2026-08-25): the responsible
+	// person stands over their total, and above each of their orders the upper line is BLANK.
+	//
+	// 🛑 IT WAS A MERGE ACROSS THE WHOLE RUN, which said the same thing a second way: "Warehouse"
+	// spread over its months AND its total. That reads well until two headings sit side by side —
+	// then the run and the totals disagree about where one ends, and the fold markers with them.
+	// A node states what it adds up to and then breaks itself down; that is the whole rule.
+	// ⭐⭐ A HEADING COVERS ITS WHOLE GROUP — its own total AND every child under it (Max, 2026-08-25:
+	// "the grouping has to run to the END; it must include all the groupings under it, and they open
+	// up beneath it"). So each line of the header is a run of slots that agree down to that level,
+	// merged into one cell; the levels below break that run into its parts.
+	//
+	// 🛑 I HAD IT NAMING ONLY ITS OWN TOTAL COLUMN, read off that screenshot — and that is a
+	// different statement: it leaves the children with nothing above them, so nothing on the page
+	// says whose they are. The reference has the heading over the whole band; the total is simply
+	// the first column INSIDE it.
+	for (size_t depthAt = 0; depthAt < m_colLevels; ++depthAt) {
+		size_t runStart = 0;
+		while (runStart < slots.size()) {
+			size_t runEnd = runStart;
+			while (runEnd + 1 < slots.size()) {
+				const CrossKey& a = slots[runStart].m_key;
+				const CrossKey& b = slots[runEnd + 1].m_key;
+				bool same = true;
+				for (size_t f = 0; f <= depthAt && same; ++f)
+					same = (f < a.size() && f < b.size() && a[f] == b[f]);
+				if (!same)
+					break;
+				++runEnd;
+			}
+			const int  first = dimWidth + static_cast<int>(runStart) * perKey;
+			const int  span  = static_cast<int>(runEnd - runStart + 1) * perKey;
+			const CrossKey& key = slots[runStart].m_key;
+			// The level's value where the key reaches this deep; where it stops, this slot is the
+			// TOTAL of the level above — and that is the word its own line carries.
+			const wxString text = (depthAt < key.size()) ? ibHeadingText(key[depthAt])
+				: (slots[runStart].m_subtotal && depthAt == key.size() ? wxString(wxT("Total")) : wxString());
+
+			if (!text.IsEmpty()) {
+				header->SetCellValue(static_cast<int>(depthAt), first, text);
+				if (static_cast<size_t>(first) < m_widest.size())
+					m_widest[static_cast<size_t>(first)] =
+						std::max(m_widest[static_cast<size_t>(first)], text.length());
+			}
+			if (span > 1)
+				mergeAt(static_cast<int>(depthAt), first, 1, span);
+			runStart = runEnd + 1;
+		}
+	}
+
+	// ⭐⭐ AND THE FOLD MARKS, STATED THE WAY A ROW STATES ITS OWN (Max, 2026-08-25: "add the groups
+	// the way you did for rows"). A row says only how DEEP it is — `PutArea(row, level)` — and the
+	// grid works out what folds what. So a column says the same: one entry per column, carrying its
+	// depth, and `ibGrid::NormalizeColGroups` shapes them into bands.
+	//
+	// That reads directly off the layout, because the layout already has the shape the normaliser
+	// expects: a heading's own total column comes FIRST and its children follow, deeper. The band it
+	// makes is "everything under this heading", and the heading itself stays visible — which is what
+	// a collapsed warehouse should look like.
+	//
+	// 🛑 IT USED TO HAND OVER FINISHED RANGES, reaching into the description for AddColGroup. That
+	// worked only because nothing else ever produced column groups: the normaliser for them did not
+	// exist, and a producer that stated depths — the way every row producer does — got one fold per
+	// heading over itself and nothing else.
+	// ⭐⭐ A BAND IS "THIS HEADING'S CHILDREN", AND ITS TOTAL STAYS. Now that the total CLOSES a group
+	// rather than opening it, there is no line before the band to hang the button on — so the range
+	// is stated finished, with the marker on its own first column (`m_head`). That is also what
+	// collapsing should leave behind: the children fold away and the figure that sums them remains.
+	//
+	// 🛑 THE DEPTH-PER-COLUMN FORM CANNOT SAY THIS. `NormalizeColGroups` reads a list of headings and
+	// folds what FOLLOWS each of them, which is only true while the heading comes first; fed this
+	// order it would hand every total the NEXT group's children. The normaliser now steps aside when
+	// a range says where its marker is (see it).
+	// ⭐⭐ A FOLD BELONGS TO A HEADING THAT HAS CHILDREN — not to one that has a TOTAL. The two were
+	// tied together while the total was what stayed visible on collapse; the reference report shows
+	// otherwise (Max, 2026-08-26): its date headings fold, and there is not a total column in sight.
+	// So the band is worked out from the KEYS, and what stays behind is the group's first child —
+	// the column the marker sits on, and the only one that can carry it.
+	// ⭐⭐ WHAT FOLDS IS THE CHILDREN; WHAT STAYS IS THE GROUP'S TOTAL COLUMN. A subtotal slot opens
+	// its group, so it is both the anchor for the marker and the one column a collapsed group shows
+	// — which is exactly what the reference does: a collapsed period is one column carrying its own
+	// figure (Max, 2026-08-26).
+	for (size_t s = 0; s < slots.size(); ++s) {
+		if (!slots[s].m_subtotal)
+			continue;
+		const CrossKey& prefix = slots[s].m_key;
+
+		// Everything after it that still starts with its key is what it folds.
+		size_t last = s;
+		for (size_t k = s + 1; k < slots.size(); ++k) {
+			const CrossKey& other = slots[k].m_key;
+			if (other.size() < prefix.size()
+			    || !std::equal(prefix.begin(), prefix.end(), other.begin()))
+				break;
+			last = k;
+		}
+		if (last == s)
+			continue;   // a total with nothing under it folds nothing
+
+		const int head = dimWidth + static_cast<int>(s) * perKey;
+		m_document->GetSpreadsheetDesc().AddColGroup(
+			static_cast<unsigned>(head + perKey),                              // the children
+			static_cast<unsigned>(dimWidth + static_cast<int>(last + 1) * perKey - 1),
+			static_cast<unsigned>(prefix.size()), /*collapsed*/false, /*head*/head);
+	}
+
+	// The measure names, when there is more than one — otherwise the key above says it all.
+	if (measures > 1) {
+		for (int k = 0; k < keys; ++k)
+			for (int m = 0; m < measures; ++m) {
+				const int col = dimWidth + k * perKey + m;
+				const wxString name = m_schema[m_measureAt[static_cast<size_t>(m)]].m_name;
+				header->SetCellValue(headerRows - 1, col, name);
+				if (static_cast<size_t>(col) < m_widest.size())
+					m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], name.length());
+			}
+	}
+
+	// THE ROW TOTAL closes the table on the right. It is not a column key — it is what the row adds
+	// up to — so it stands outside the key blocks and outside their folds.
+	if (measures > 0) {
+		const int first = dimWidth + keys * perKey;
+		header->SetCellValue(0, first, wxT("Total"));
+		if (measures > 1)
+			mergeAt(0, first, static_cast<int>(m_colLevels), measures);
+		if (static_cast<size_t>(first) < m_widest.size())
+			m_widest[static_cast<size_t>(first)] = std::max<size_t>(m_widest[static_cast<size_t>(first)], 5);
+	}
+
+	// 🛑 TINT THE MAIN CELLS ONLY — NEVER THE ONES A MERGE COVERS. Touching a cell CREATES it in the
+	// description, and the grid then loads it and asks for its size; a cell that some merge already
+	// covers is marked with a negative span, and setting a size on it trips
+	// `ibGrid::SetCellSize: setting cell size that is already part of another cell` — an int 3 in a
+	// Debug build, at LOAD time, long after the report was composed (dump 2026-08-25 22:26, cell 2,2).
+	//
+	// This is the first place in the tree where a merged header and a full-width tint meet: the
+	// streaming layout tints everything and merges nothing, the report heading merges and tints
+	// nothing. A merged cell paints its whole span from its main cell anyway, so skipping the covered
+	// ones costs nothing on screen.
+	for (int row = 0; row < std::max(1, headerRows); ++row)
+		for (int col = 0; col < totalCols; ++col)
+			if (!covered[static_cast<size_t>(row)][static_cast<size_t>(col)])
+				header->SetCellBackgroundColour(row, col, kHeaderFill);
+	m_document->PutArea(header, 0);
+	// THE FIRST SECTION ONLY — freezing again would pin everything printed so far and the sheet
+	// stops scrolling (see OnColumns).
+	if (m_crossFirstSection)
+		m_document->SetRowFreeze(m_document->GetNumberRows());
+
+	// ---- the rows ---------------------------------------------------------
+	for (const CrossRow& source : m_crossRows) {
+		wxObjectDataPtr<ibBackendSpreadsheetObject> row(new ibBackendSpreadsheetObject());
+
+		// The heading, indented by its depth — the same indent the streaming layout uses, so a
+		// nested row heading reads the same in both shapes.
+		for (size_t f = 0; f < source.m_heading.size() && static_cast<int>(f) < dimWidth; ++f) {
+			wxString text = source.m_heading[f].GetString();
+			if (f == 0)
+				text = wxString(wxT(' '), source.m_level * kIndentPerLevel) + text;
+			row->SetCellValue(0, static_cast<int>(f), text);
+			if (!source.m_heading[f].IsEmpty()) {
+				const wxString name = wxString::Format(wxT("Cell_%d"), static_cast<int>(f));
+				row->SetParameter(name, source.m_heading[f]);
+				row->SetCellDetailsParameter(0, static_cast<int>(f), name);
+			}
+			if (f < m_widest.size())
+				m_widest[f] = std::max(m_widest[f], text.length());
+		}
+
+		// THE CELLS. A pair that never occurred writes nothing — an empty cell is what "this never
+		// happened" looks like, and a zero would state a measurement nobody made.
+		auto writeFigures = [&](int firstCol, const std::vector<ibValue>& figures) {
+			for (size_t m = 0; m < figures.size() && static_cast<int>(m) < std::max(measures, 1); ++m) {
+				const int col = firstCol + static_cast<int>(m);
+				if (col >= totalCols)
+					break;
+				const wxString text = figures[m].GetString();
+				row->SetCellValue(0, col, text);
+				if (figures[m].GetType() == ibValueTypes::TYPE_NUMBER)
+					row->SetCellAlignment(0, col, wxALIGN_RIGHT, wxALIGN_CENTER);
+				if (!figures[m].IsEmpty()) {
+					const wxString name = wxString::Format(wxT("Cell_%d"), col);
+					row->SetParameter(name, figures[m]);
+					row->SetCellDetailsParameter(0, col, name);
+				}
+				if (static_cast<size_t>(col) < m_widest.size())
+					m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], text.length());
+			}
+		};
+		// BY SLOT, because a slot is what a column IS — a key's figures, or an upper heading's own.
+		for (size_t s = 0; s < slots.size(); ++s) {
+			const int at = dimWidth + static_cast<int>(s) * perKey;
+			if (!slots[s].m_subtotal) {
+				const auto cell = source.m_cells.find(slots[s].m_at);
+				if (cell != source.m_cells.end())
+					writeFigures(at, cell->second);
+				continue;
+			}
+			for (const std::pair<CrossKey, std::vector<ibValue>>& kept : source.m_subtotals)
+				if (kept.first == slots[s].m_key) { writeFigures(at, kept.second); break; }
+		}
+		if (measures > 0)
+			writeFigures(dimWidth + keys * perKey, source.m_measures);
+
+		const wxColour fill = ibGroupFillForLevel(source.m_level);
+		wxFont font = s_defaultSpreadsheetFont;
+		font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
+		for (int col = 0; col < totalCols; ++col) {
+			row->SetCellBackgroundColour(0, col, fill);
+			row->SetCellFont(0, col, font);
+		}
+		m_document->PutArea(row, static_cast<unsigned int>(std::max(0, source.m_level)));
+		++m_rowsWritten;
+	}
+
+	// ---- the bottom line: what each column adds up to, and the grand total in the corner --------
+	//
+	// ⭐ ONE ROW, NOT TWO. The column totals and the grand total are the same sentence — "and
+	// altogether" — read across and then closed at the right. A separate grand-total line under
+	// them would repeat the corner figure a row lower with nothing new to say.
+	if (!m_columnTotalCells.empty() || m_hasGrandTotal) {
+		wxObjectDataPtr<ibBackendSpreadsheetObject> totals(new ibBackendSpreadsheetObject());
+		totals->SetCellValue(0, 0, wxT("Total"));
+
+		int wrote = 0;   // …and how many cells this line actually filled — see the journal below
+		auto writeAt = [&](int firstCol, const std::vector<ibValue>& figures) {
+			for (size_t m = 0; m < figures.size() && static_cast<int>(m) < std::max(measures, 1); ++m) {
+				++wrote;
+				const int col = firstCol + static_cast<int>(m);
+				if (col >= totalCols)
+					break;
+				const wxString text = figures[m].GetString();
+				totals->SetCellValue(0, col, text);
+				if (figures[m].GetType() == ibValueTypes::TYPE_NUMBER)
+					totals->SetCellAlignment(0, col, wxALIGN_RIGHT, wxALIGN_CENTER);
+				if (static_cast<size_t>(col) < m_widest.size())
+					m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], text.length());
+			}
+		};
+		for (size_t s = 0; s < slots.size(); ++s) {
+			const int at = dimWidth + static_cast<int>(s) * perKey;
+			if (!slots[s].m_subtotal) {
+				const auto cell = m_columnTotalCells.find(slots[s].m_at);
+				if (cell != m_columnTotalCells.end())
+					writeAt(at, cell->second);
+				continue;
+			}
+			for (const std::pair<CrossKey, std::vector<ibValue>>& kept : m_columnTotalSubtotals)
+				if (kept.first == slots[s].m_key) { writeAt(at, kept.second); break; }
+		}
+		if (m_hasGrandTotal && measures > 0)
+			writeAt(dimWidth + keys * perKey, m_crossGrandTotal);
+
+		wxFont font = s_defaultSpreadsheetFont;
+		font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
+		for (int col = 0; col < totalCols; ++col) {
+			totals->SetCellBackgroundColour(0, col, kHeaderFill);
+			totals->SetCellFont(0, col, font);
+		}
+		m_document->PutArea(totals, 0);
+		++m_rowsWritten;
+		// ⚠ WHAT THE BOTTOM LINE ACTUALLY FILLED. It is not enough to know that the second fold
+		// returned figures — they still have to LAND, and a figure whose key does not match a slot
+		// lands nowhere and says nothing about it. Journalled because that gap is invisible on screen:
+		// an empty totals row looks exactly like a report that had no totals to show.
+		ibJournalInfo(wxT("composer.cross"), wxT("totals row: %d cell(s) from %u key total(s) + %u subtotal(s) over %d slot(s)"),
+			wrote, static_cast<unsigned>(m_columnTotalCells.size()),
+			static_cast<unsigned>(m_columnTotalSubtotals.size()), static_cast<int>(slots.size()));
+	}
+	m_hasGrandTotal = false;
+	m_crossGrandTotal.clear();
+
+	// ⚠ WHAT THE TABLE COULD NOT HOLD, said out loud. A table has no place for detail records — a
+	// cell holds what was computed, not what it was computed from — and a report that silently
+	// discards rows is indistinguishable from one that had none to discard.
+	ibJournalInfo(wxT("composer.cross"), wxT("%d row heading(s) x %d column key(s), %d measure(s); %d column total(s), %d detail row(s) dropped"),
+		static_cast<int>(m_crossRows.size()), keys, measures,
+		static_cast<int>(m_columnTotalCells.size()), m_crossDetailsDropped);
+	m_crossDetailsDropped = 0;
+	m_columnTotalCells.clear();
+	m_columnTotalSubtotals.clear();
+	m_columnTotalsPass = false;   // the table is printed; whatever comes next is its own output
+
+	// ⚠ EVERY COLUMN OF THE SHEET, not of this output. A narrower output would otherwise leave the
+	// columns past its own edge at whatever the previous one set — and, worse, re-set the shared
+	// ones to its own shorter text (see WidenTo).
+	for (size_t col = 0; col < m_widest.size(); ++col) {
+		const int width = static_cast<int>(m_widest[col]) * kPixelsPerChar + kCellPadding;
+		m_document->SetColSize(static_cast<int>(col), std::min(std::max(width, kMinColWidth), kMaxColWidth));
+	}
+	m_document->EnableEditing(false);
+}
+
 void ibSpreadsheetComposeDriver::OnComplete(bool /*totals*/)
 {
 	if (m_document == nullptr)
 		return;
+
+	if (m_cross) {
+		WriteCrossTable();
+		return;
+	}
 
 	// THE GRAND TOTAL, at the bottom of the section it belongs to — written through the same total
 	// line every group closes with, so a report has ONE shape of total row. The flag is cleared: the
@@ -395,9 +1115,12 @@ void ibSpreadsheetComposeDriver::OnComplete(bool /*totals*/)
 	// EACH COLUMN AS WIDE AS WHAT IT HOLDS. A composed report has nobody to drag a border, and a
 	// clipped value reads as a different value. Character count × an average glyph, clamped: never
 	// narrower than the default, never so wide that one long string pushes the rest off-screen.
-	for (int col = 0; col < m_columnCount && static_cast<size_t>(col) < m_widest.size(); ++col) {
-		const int width = static_cast<int>(m_widest[static_cast<size_t>(col)]) * kPixelsPerChar + kCellPadding;
-		m_document->SetColSize(col, std::min(std::max(width, kMinColWidth), kMaxColWidth));
+	// ⚠ EVERY COLUMN OF THE SHEET, not of this output. A narrower output would otherwise leave the
+	// columns past its own edge at whatever the previous one set — and, worse, re-set the shared
+	// ones to its own shorter text (see WidenTo).
+	for (size_t col = 0; col < m_widest.size(); ++col) {
+		const int width = static_cast<int>(m_widest[col]) * kPixelsPerChar + kCellPadding;
+		m_document->SetColSize(static_cast<int>(col), std::min(std::max(width, kMinColWidth), kMaxColWidth));
 	}
 
 	// 🔒 A REPORT IS READ, NOT EDITED (Max, 2026-08-19: "by default the table comes up read-only, to

@@ -1229,6 +1229,13 @@ struct ibGridCellGroup {
 	int  m_end   = -1;
 	int  m_level = 1;     // >= 1; 0 reserved for "not a group"
 	bool m_collapsed = false;
+	// ⭐ WHERE THE MARKER SITS — the FIRST line of the heading this group hangs off, not the last one.
+	// The two are the same thing for a row (a heading is one row), and they are not for a COLUMN: a
+	// heading there is a whole block, one column per measure, so "the line before the group" is the
+	// block's END and the button landed on its right edge (Max, 2026-08-25: "the plus belongs at the
+	// START of the grouping, not at the end"). The normaliser knows the heading it shaped a group
+	// from; nothing downstream can recover it, so it is carried.
+	int  m_head  = -1;    // -1 = not stated; the marker falls back to the line before m_start
 };
 
 // ----------------------------------------------------------------------------
@@ -2635,7 +2642,17 @@ public:
 	// Called after groups arrive (loaded with a document, or appended one by one); rebuilding from
 	// the raw list is what keeps the two roads to the same answer.
 	void NormalizeRowGroups();
-	int  AddColGroup(int first, int last, int level = 1, bool collapsed = false);
+	// ⭐ THE SAME THING TURNED ON ITS SIDE. A column that heads nothing is a leaf and gets no marker;
+	// one that heads something folds the run of deeper columns that follows it. Written as its own
+	// function rather than one with an axis argument: the two lists are two members, and a function
+	// that took "which axis" would spend its body choosing between them.
+	//
+	// 🛑 IT DID NOT EXIST, and that is why a column outline only ever worked when somebody handed it
+	// exact RANGES. Groups arriving the way ROW groups arrive — one entry per heading, with its level
+	// — were left as they came: every heading folded itself and nothing else. Found while giving a
+	// cross-table's headings their folds (Max, 2026-08-25: "add the groups the way you did for rows").
+	void NormalizeColGroups();
+	int  AddColGroup(int first, int last, int level = 1, bool collapsed = false, int head = -1);
 	void DeleteRowGroup(int idx);
 	void DeleteColGroup(int idx);
 	int  GetRowGroupCount() const { return (int)m_rowGroupAt.size(); }

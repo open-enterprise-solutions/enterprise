@@ -10937,10 +10937,10 @@ int ibGrid::AddRowGroup(int first, int last, int level, bool collapsed)
 	return (int)m_rowGroupAt.size() - 1;
 }
 
-int ibGrid::AddColGroup(int first, int last, int level, bool collapsed)
+int ibGrid::AddColGroup(int first, int last, int level, bool collapsed, int head)
 {
 	ibGridCellGroup g; g.m_start = first; g.m_end = last;
-	g.m_level = wxMax(1, level); g.m_collapsed = collapsed;
+	g.m_level = wxMax(1, level); g.m_collapsed = collapsed; g.m_head = head;
 	m_colGroupAt.push_back(g);
 	if (collapsed) for (int c = first; c <= last; ++c) HideCol(c);
 	return (int)m_colGroupAt.size() - 1;
@@ -10973,11 +10973,53 @@ void ibGrid::NormalizeRowGroups()
 		g.m_end       = end;
 		g.m_level     = head.m_level;
 		g.m_collapsed = head.m_collapsed;
+		g.m_head      = head.m_start;     // the heading's FIRST row — the same rule as the columns'
 		shaped.push_back(g);
 	}
 
 	m_rowGroupAt.swap(shaped);
 
+}
+
+// The twin of the above, across instead of down — same rule, same reason, and the columns of a
+// cross-table are the first thing that needed it (see the header).
+void ibGrid::NormalizeColGroups()
+{
+	if (m_colGroupAt.empty())
+		return;
+
+	// ⚠ A PRODUCER THAT ALREADY SAID WHERE ITS MARKER GOES HAS ALREADY SAID WHAT ITS RANGE IS. The
+	// shaping below turns "headings with a depth" into bands, and that reading only holds while the
+	// heading comes BEFORE what it folds. A cross-table's column totals close their groups instead,
+	// so its ranges arrive finished (m_head set) and must be left exactly as they are.
+	for (const ibGridCellGroup& g : m_colGroupAt)
+		if (g.m_head >= 0)
+			return;
+
+	std::vector<ibGridCellGroup> shaped;
+	shaped.reserve(m_colGroupAt.size());
+
+	for (size_t i = 0; i < m_colGroupAt.size(); ++i) {
+		const ibGridCellGroup& head = m_colGroupAt[i];
+
+		// How far the deeper run after this column reaches — that run IS what this column folds.
+		int end = head.m_end;
+		for (size_t j = i + 1; j < m_colGroupAt.size() && m_colGroupAt[j].m_level > head.m_level; ++j)
+			end = m_colGroupAt[j].m_end;
+
+		if (end <= head.m_end)
+			continue;   // a leaf: nothing deeper follows, so there is nothing to fold and no marker
+
+		ibGridCellGroup g;
+		g.m_start     = head.m_end + 1;   // the heading stays visible; its children are what collapse
+		g.m_end       = end;
+		g.m_level     = head.m_level;
+		g.m_collapsed = head.m_collapsed;
+		g.m_head      = head.m_start;     // …and the marker goes at the heading's FIRST column
+		shaped.push_back(g);
+	}
+
+	m_colGroupAt.swap(shaped);
 }
 
 void ibGrid::DeleteRowGroup(int idx)
@@ -11034,6 +11076,22 @@ void ibGrid::SetColGroupCollapsed(int idx, bool collapsed)
 	for (int c = g.m_start; c <= g.m_end; ++c) {
 		if (collapsed) HideCol(c); else ShowCol(c);
 	}
+
+	// ⭐ EXPANDING AN OUTER GROUP DOES NOT EXPAND WHAT IS FOLDED INSIDE IT — the rows' rule, turned
+	// on its side (see SetRowGroupCollapsed). The columns just shown include the ones belonging to
+	// nested groups that are still collapsed; showing those would undo a fold the person made on
+	// purpose, and the nested marker would then say "+" over columns that are plainly visible.
+	if (!collapsed) {
+		for (const ibGridCellGroup& nested : m_colGroupAt) {
+			if (!nested.m_collapsed || &nested == &g)
+				continue;
+			if (nested.m_start < g.m_start || nested.m_end > g.m_end)
+				continue;   // not inside this one
+			for (int c = nested.m_start; c <= nested.m_end; ++c)
+				HideCol(c);
+		}
+	}
+
 	if (m_colOutlineWin) m_colOutlineWin->Refresh();
 	if (m_colFrozenOutlineWin) m_colFrozenOutlineWin->Refresh();
 }
@@ -11067,8 +11125,27 @@ static const int kOutlineBtnInset = 3;
 static const int kOutlineBtnMinSize = 7;
 // Space taken per nesting level along the outline axis, at 100%.
 static const int kOutlineLevelStep = 18;
+// ⭐⭐ THE MARKER IS ONE SQUARE, THE SAME ON BOTH AXES. Without a ceiling each axis takes as much as
+// its own lane allows, and the two stop matching the moment the cells differ: a report's rows are
+// tight (a 15px row leaves 9), a report's columns are wide (nothing to trim, so the full 12). Side
+// by side that reads as two different controls doing one job (Max, 2026-08-25: "the +/- is not the
+// right size — bring it to the rows").
+//
+// The cell still TRIMS it — that rule is the rows' own and it is right (Max, 2026-08-20: a fixed
+// square spills over a short row and gets lost in a tall one). The ceiling only stops a marker from
+// growing past its twin, which is what makes them look like the same button.
+static const int kOutlineBtnMaxSize = 10;
 // The pane's trailing margin, at 100%.
 static const int kOutlineMargin = 4;
+
+// HOW BIG THE MARKER IS — asked once, so the two axes cannot answer differently. `laneExtent` is the
+// band its level owns, `cellExtent` the row's height or the column's width it sits against.
+static int ibOutlineButtonExtent(int laneExtent, int cellExtent)
+{
+	const int fromLane = laneExtent - kOutlineBtnInset * 2;
+	const int fromCell = cellExtent - kOutlineBtnInset * 2;
+	return wxMax(kOutlineBtnMinSize, wxMin(wxMin(fromLane, fromCell), kOutlineBtnMaxSize));
+}
 
 // ⭐ THE OUTLINE PANE ZOOMS WITH THE SHEET. Its geometry is read against ROW positions
 // (GetRowTop / GetRowHeight), which are scaled — so a pane sized from raw constants drifts away
@@ -11108,7 +11185,8 @@ wxRect ibGrid::GetRowGroupButtonRect(int idx) const
 	// A group that starts at row 0 has no heading above it (a document may be grouped from its very
 	// first row) — there the button stays on the group's own first row, which is the only row it can
 	// be drawn against.
-	const int headingRow = (g.m_start > 0) ? g.m_start - 1 : g.m_start;
+	const int headingRow = (g.m_head >= 0) ? g.m_head
+		: ((g.m_start > 0) ? g.m_start - 1 : g.m_start);
 	// 🛑 A GROUP FOLDED INSIDE ANOTHER ONE IS GONE, MARKER AND ALL. Collapsing an outer group hides
 	// the rows under it — including the headings of the groups NESTED in it — and a button drawn
 	// against a hidden row has nowhere to sit: it collapses onto the outer group's own line and
@@ -11121,8 +11199,7 @@ wxRect ibGrid::GetRowGroupButtonRect(int idx) const
 	// LANE too, so a deep level's marker never crosses into its neighbour's.
 	const int rowTop    = self->GetRowTop(headingRow, zoom);
 	const int rowHeight = self->GetRowHeight(headingRow, zoom);
-	const int size      = wxMax(kOutlineBtnMinSize,
-		wxMin(rowHeight - kOutlineBtnInset * 2, step - kOutlineBtnInset * 2));
+	const int size      = ibOutlineButtonExtent(step, rowHeight);
 	const int x         = lane + wxMax(0, (step - size) / 2);
 	const int y         = rowTop + wxMax(0, (rowHeight - size) / 2);
 	return wxRect(x, y, size, size);
@@ -11132,17 +11209,31 @@ wxRect ibGrid::GetColGroupButtonRect(int idx) const
 {
 	if (idx < 0 || (size_t)idx >= m_colGroupAt.size()) return wxRect();
 	const ibGridCellGroup& g = m_colGroupAt[idx];
+	// 🛑 A GROUP WHOSE COLUMNS NO LONGER EXIST HAS NO BUTTON — the row pane learned this after a
+	// re-compose crashed it, and the column pane never did: asking for the geometry of a column that
+	// is not there is the same question with the same answer. An empty rect draws nothing and
+	// hit-tests nothing, which is the truth about a range with no columns behind it.
+	if (g.m_start >= GetNumberCols() || g.m_end >= GetNumberCols()) return wxRect();
 	ibGrid* self = const_cast<ibGrid*>(this);
 	const float zoom = self->GetGridZoom();
 	const int step = ibCalcGridScale(kOutlineLevelStep, zoom);
 	const int lane = (g.m_level - 1) * step;
-	// The column that OPENS the group carries the button — see GetRowGroupButtonRect.
-	const int headingCol = (g.m_start > 0) ? g.m_start - 1 : g.m_start;
+	// The column that OPENS the group carries the button — see GetRowGroupButtonRect. Its heading is
+	// a BLOCK (one column per measure), so the marker goes on the block's first column, which is
+	// what m_head remembers; the line before m_start is that block's last column.
+	const int headingCol = (g.m_head >= 0) ? g.m_head
+		: ((g.m_start > 0) ? g.m_start - 1 : g.m_start);
+	// 🛑 …AND A GROUP FOLDED INSIDE ANOTHER ONE IS GONE, MARKER AND ALL. Collapsing an outer group
+	// hides the columns under it — including the headings of the groups nested in it — so a button
+	// drawn against a hidden column has nowhere to sit and ends up on the outer group's own line,
+	// offering to expand something nobody can see. The rows were fixed on 2026-08-20; the columns
+	// are the same rule, and Max asked for the same behaviour (2026-08-25).
+	if (!IsColShown(headingCol)) return wxRect();
 	const int colLeft  = self->GetColLeft(headingCol, zoom);
 	const int colWidth = self->GetColWidth(headingCol, zoom);
-	// Sized from the cell, floored, and bounded by its lane — the row pane's rule, turned sideways.
-	const int size     = wxMax(kOutlineBtnMinSize,
-		wxMin(colWidth - kOutlineBtnInset * 2, step - kOutlineBtnInset * 2));
+	// Sized by the SAME function the rows use — the two markers are one control doing one job, and
+	// two copies of a formula are how they stopped looking like it.
+	const int size     = ibOutlineButtonExtent(step, colWidth);
 	const int x        = colLeft + wxMax(0, (colWidth - size) / 2);
 	const int y        = lane + wxMax(0, (step - size) / 2);
 	return wxRect(x, y, size, size);
@@ -11218,6 +11309,7 @@ void ibGrid::DrawColOutline(wxDC& dc)
 	for (size_t i = 0; i < m_colGroupAt.size(); ++i) {
 		const ibGridCellGroup& g = m_colGroupAt[i];
 		if (g.m_collapsed) continue;
+		if (g.m_end >= GetNumberCols()) continue;   // stale range — see GetColGroupButtonRect
 		const wxRect btn = GetColGroupButtonRect((int)i);
 		if (btn.IsEmpty()) continue;
 		const int railY = btn.y + btn.height / 2;

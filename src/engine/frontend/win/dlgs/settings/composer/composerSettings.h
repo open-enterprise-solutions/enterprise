@@ -197,6 +197,16 @@ public:
 	// on its toolbar IS this dialog.
 	class ibValueCompositionField* ChooseStructureField(wxWindow* parent, const wxString& held = wxEmptyString);
 
+	// ⭐ CAN THIS FIELD BE GROUPED BY PERIODS? Asked of the panel because it is the one that read the
+	// query and knows what the fields ARE — and asked as the QUESTION rather than by handing out the
+	// field list, so no caller re-implements what "a date" means.
+	//
+	// ⭐ IT IS "CONTAINS A DATE", NOT "IS A DATE" (Max, 2026-08-25). A composite field that may hold
+	// a date can be grouped by periods on the rows where it does; refusing it would be stricter than
+	// the engine. And a path this window cannot resolve answers YES: unknown means "cannot say no",
+	// which is the same rule the query constructor's own gate follows.
+	bool StructureFieldIsDated(const wxString& path) const;
+
 protected:
 
 	// ⭐⭐ THE TWO QUESTIONS A HOST ANSWERS, AND THE WHOLE OF WHAT A HOST IS. A composer is opened two
@@ -307,6 +317,10 @@ private:
 	// ⭐ OPEN THE GROUPING FORM and add what it made as the innermost level — a grouping of one or
 	// more fields, or, with none chosen, the detail records (a node with no group, but a node).
 	void OnStructureAdd(wxCommandEvent&);
+	// ADD AN OUTPUT OF THE OTHER SHAPE — a table, which opens with its two undeletable axes. Not a
+	// second way to add a level: it says which SHAPE is being started, and a level is the same thing
+	// on either axis of it.
+	void OnStructureAddTable(wxCommandEvent&);
 	// …and the same form over an EXISTING level — what the "…" on its Field cell opens.
 	void EditLevelInForm(const class ibDataViewItem& row);
 	void OnStructureRemove(wxCommandEvent&);

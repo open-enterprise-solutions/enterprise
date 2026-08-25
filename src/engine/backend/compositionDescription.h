@@ -239,13 +239,42 @@ struct ibSortDescription {
 // A grouping line carries its UNFOLD kind, and that is load-bearing: a hierarchy
 // grouping IS what makes a list a tree, so dropping the kind reloads every tree
 // as a flat grouping and reads as data loss.
+// ⭐⭐ GROUPED BY PERIODS — the stored twin of `ibQueryTotalPeriods` (queryAst.h), which is what the
+// query text already says: `BY <field> PERIODS(Month, &From, &To)`. Same three parts, one shape, so
+// the settings window and the query constructor cannot mean different things by one word.
+//
+// ⭐ THE BOUNDS ARE TEXT HERE, and that is the difference from the AST, not an omission: a
+// description is written to a file, and an expression tree is not. What a person types is a
+// parameter — `&From` — or a literal, and it becomes an expression when the level is rendered.
+//
+// ⭐ AND "IS THERE PERIODICITY" IS ASKED OF THE UNIT, not of a flag beside it. A unit with no
+// periodicity is nothing, and periodicity with no unit is impossible — so the content IS the
+// answer, the way a filter operand is a field exactly when it has a path.
+struct ibGroupPeriodsDescription {
+	wxString m_unit;   // the word — the same vocabulary ibPeriodUnits() offers, verbatim
+	wxString m_from;   // empty = the earliest period in the data
+	wxString m_to;     // empty = the latest
+
+	bool IsOk() const { return !m_unit.IsEmpty(); }
+	void Clear() { m_unit.clear(); m_from.clear(); m_to.clear(); }
+	bool operator==(const ibGroupPeriodsDescription& o) const {
+		return m_unit == o.m_unit && m_from == o.m_from && m_to == o.m_to;
+	}
+	bool operator!=(const ibGroupPeriodsDescription& o) const { return !(*this == o); }
+};
+
 struct ibGroupLineDescription {
 	wxString            m_path;
 	// ⭐ THE UNFOLD, AS THE TYPE IT IS. It was a bare int "the enum value, as the plain number it
 	// is" — and a number is what every reader then had to cast back, which is the shape of a type
 	// that was never stated. Only the SERIALISER writes it as a number, which is what a file is.
 	ibQueryDimUnfold m_kind = ibQueryDimUnfold::Elements;
-	bool operator==(const ibGroupLineDescription& o) const { return m_path == o.m_path && m_kind == o.m_kind; }
+	// Set = this line is grouped BY PERIODS. Beside the unfold rather than inside it: a hierarchy is
+	// how a REFERENCE opens up, periods are how a DATE does, and the two never meet on one field.
+	ibGroupPeriodsDescription m_periods;
+	bool operator==(const ibGroupLineDescription& o) const {
+		return m_path == o.m_path && m_kind == o.m_kind && m_periods == o.m_periods;
+	}
 	bool operator!=(const ibGroupLineDescription& o) const { return !(*this == o); }
 };
 
@@ -356,6 +385,23 @@ enum class ibCompositionLevelKind
 	Details,    // the rows as they are, under the level above
 };
 
+// ⭐⭐ WHAT AN OUTPUT IS — levels down the page, or levels down AND across it.
+//
+// ⚠ AND IT IS STORED, which it did not use to be: `Kind()` read it off `m_columnGroups.empty()`,
+// and that was right for exactly as long as the kind meant "has it been filled in". It stopped
+// being right the day a person could ADD A TABLE (Max, 2026-08-25: the structure gets "add
+// grouping" and "add table"; a table opens with two undeletable nodes, Rows and Columns). A table
+// that was just added is empty on BOTH axes and is a table all the same — the kind became what
+// somebody DECIDED, and a decision is not derivable from what has been typed since.
+//
+// It lives here for the reason the level kind does: it is part of what an output IS, so it belongs
+// with the stored shape rather than beside it.
+enum class ibCompositionOutputKind
+{
+	Grouping,   // levels one under another; a level with no fields is its detail rows
+	Table,      // levels down AND across — the cross-table
+};
+
 // ⭐⭐ ONE NODE OF AN OUTPUT — a grouping, or the detail records. What Max drew, 2026-08-23:
 //
 //     output 1        (arrays of filters, sorts, available fields)
@@ -414,6 +460,9 @@ struct ibLevelDescription {
 // One output — what a report SHOWS: its rows, its columns, and what it reads.
 struct ibOutputDescription {
 	wxString                           m_name;
+	// WHAT THIS OUTPUT IS — decided when it was added, not read back off what has been filled in
+	// since. See ibCompositionOutputKind for why this one fact cannot be derived.
+	ibCompositionOutputKind            m_kind = ibCompositionOutputKind::Grouping;
 	// (`m_sourceText` DELETED — a per-output query of its own. It was written to the file, read back
 	//  and compared for equality, with NO PRODUCER AND NO CONSUMER anywhere in the tree: nothing
 	//  ever set it and nothing ever asked. A composition reads ONE source and folds it several ways,
@@ -434,6 +483,7 @@ struct ibOutputDescription {
 
 	bool operator==(const ibOutputDescription& o) const {
 		return m_name == o.m_name
+		    && m_kind == o.m_kind
 		    && m_selected == o.m_selected
 		    && m_settings == o.m_settings
 		    && m_rowGroups == o.m_rowGroups && m_columnGroups == o.m_columnGroups;

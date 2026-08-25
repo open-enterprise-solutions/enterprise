@@ -907,6 +907,94 @@ TEST(QueryComposerDetails, AnOutputWithNoGroupingIsNotADetailsRequest)
 	EXPECT_FALSE(ibDataComposer::HasGroupingFields(composer.Root()));
 }
 
+// ===========================================================================
+//  The cross-table — one fold, two axes
+// ===========================================================================
+
+// ⭐⭐ A CROSS-TABLE IS ONE `TOTALS BY`, ROWS FIRST. Both axes fold together and the server returns
+// one row per intersection, which is what a cell IS. Nothing in the text says "cross": the shape
+// comes out of the ORDER the keys were written in.
+TEST(QueryComposerCross, BothAxesFoldInOneTotalsRowsFirst)
+{
+	ibDataDBComposer composer;
+	composer.FromText(wxT("SELECT Partner, Warehouse, Amount FROM Document.Sales"));
+	composer.Resource(wxT("SUM"), wxT("Amount"));
+
+	ibDataComposer::GroupNode rows;
+	rows.m_settings.m_group.Append(wxT("Partner"));
+	composer.Root().m_rowGroups.push_back(rows);
+
+	ibDataComposer::GroupNode columns;
+	columns.m_settings.m_group.Append(wxT("Warehouse"));
+	composer.Root().m_columnGroups.push_back(columns);
+
+	const wxString text = composer.RenderText();
+	EXPECT_TRUE(text.Contains(wxT("TOTALS"))) << text;
+	// One BY, both keys, rows before columns — a table transposed would be the same numbers in the
+	// wrong place, with nothing in the answer to say which was meant.
+	EXPECT_TRUE(text.Contains(wxT("BY Partner, Warehouse"))) << text;
+	EXPECT_EQ(ibCompositionOutputKind::Table, composer.Root().Kind());
+}
+
+// ⭐ A TABLE GROUPED ONLY ACROSS THE PAGE IS STILL GROUPED. The gate that decides whether TOTALS is
+// written at all used to look down the page only, so this output rendered with no TOTALS — an empty
+// report, with the grouping plainly on screen.
+TEST(QueryComposerCross, AGroupingOnTheColumnAxisAloneStillWritesTotals)
+{
+	ibDataDBComposer composer;
+	composer.FromText(wxT("SELECT Warehouse, Amount FROM Document.Sales"));
+	composer.Resource(wxT("SUM"), wxT("Amount"));
+
+	ibDataComposer::GroupNode columns;
+	columns.m_settings.m_group.Append(wxT("Warehouse"));
+	composer.Root().m_columnGroups.push_back(columns);
+
+	EXPECT_TRUE(ibDataComposer::HasGroupingFields(composer.Root()));
+	const wxString text = composer.RenderText();
+	EXPECT_TRUE(text.Contains(wxT("BY Warehouse"))) << text;
+	EXPECT_FALSE(text.Contains(wxT("BY OVERALL"))) << text;
+}
+
+// ⭐ WHICH AXIS A HEADING READS ALONG is asked of the output info, never worked out from the depth
+// by each printer in turn. A dimension's depth alone cannot tell the third row heading from the
+// first column heading — the seam between them is what the composer knows and the schema does not.
+TEST(QueryComposerCross, TheOutputInfoClassifiesAHeadingByItsAxis)
+{
+	ibCompositionOutputInfo info;
+	info.m_rowLevels = 2;   // two headings down the page, everything deeper reads across
+
+	ibQueryLowering::OutputColumn first;
+	first.m_role = ibQueryLowering::ibColumnRole::Dimension;
+	first.m_level = 0;
+	ibQueryLowering::OutputColumn third;
+	third.m_role = ibQueryLowering::ibColumnRole::Dimension;
+	third.m_level = 2;
+	ibQueryLowering::OutputColumn measure;
+	measure.m_role = ibQueryLowering::ibColumnRole::Measure;
+
+	EXPECT_EQ(ibCompositionAxis::Rows,    info.AxisOf(first));
+	EXPECT_EQ(ibCompositionAxis::Columns, info.AxisOf(third));
+	// A measure belongs to no axis — it is what stands where the two meet.
+	EXPECT_EQ(ibCompositionAxis::None,    info.AxisOf(measure));
+}
+
+// A LEVEL WITH NO FIELDS IS THE DETAIL RECORDS and writes no key, so it must not move the seam. It
+// did in the first draft — `m_rowGroups.size()` counted it — and one row heading printed across the
+// page.
+TEST(QueryComposerCross, ADetailLevelDoesNotMoveTheSeamBetweenTheAxes)
+{
+	ibDataComposer::Output output;
+	ibDataComposer::GroupNode rows;
+	rows.m_settings.m_group.Append(wxT("Partner"));
+	output.m_rowGroups.push_back(rows);
+	ibDataComposer::GroupNode details;
+	details.m_kind = ibCompositionLevelKind::Details;
+	output.m_rowGroups.push_back(details);
+
+	EXPECT_EQ(2u, output.m_rowGroups.size());
+	EXPECT_EQ(1u, ibDataComposer::DimensionCount(output.m_rowGroups));
+}
+
 // ⚠ AND THE DETAIL LEVEL SURVIVES A TIDY-UP. A level that LOST its fields is dropped — it would
 // fold every row it sees into one nameless heading — and the two emptinesses must not be confused:
 // one is a setting that stopped resolving, the other is a setting the author wrote.
@@ -928,4 +1016,40 @@ TEST(QueryComposerDetails, CollapsingEmptyLevelsKeepsTheDetailOne)
 	ASSERT_EQ(2u, composer.Root().m_rowGroups.size());
 	EXPECT_EQ(ibCompositionLevelKind::Grouping, composer.Root().m_rowGroups[0].m_kind);
 	EXPECT_EQ(ibCompositionLevelKind::Details,  composer.Root().m_rowGroups[1].m_kind);
+}
+
+// ⭐⭐ AND THE PERIODICITY REACHES THE QUERY. A level set to periods in the settings window is
+// written into the text the same way a person would type it — the composer is the reader of that
+// setting, and without it the strip would be one more thing that saves and means nothing.
+TEST(QueryComposerCross, ALevelsPeriodicityIsWrittenIntoTheText)
+{
+	ibDataDBComposer composer;
+	composer.FromText(wxT("SELECT Date, Amount FROM Document.Sales"));
+	composer.Resource(wxT("SUM"), wxT("Amount"));
+
+	ibDataComposer::GroupNode level;
+	level.m_settings.m_group.Append(wxT("Date"));
+	level.m_settings.m_group.m_lines[0].m_periods.m_unit = wxT("Month");
+	composer.Root().m_rowGroups.push_back(level);
+
+	const wxString text = composer.RenderText();
+	EXPECT_TRUE(text.Contains(wxT("BY Date PERIODS(Month)"))) << text;
+}
+
+// ⚠ A BOUND LEFT OUT KEEPS ITS POSITION — `PERIODS(Month, , &To)`. Filling it in would be the writer
+// answering a question the person left open.
+TEST(QueryComposerCross, AnUnstatedLowerBoundKeepsItsPlace)
+{
+	ibDataDBComposer composer;
+	composer.FromText(wxT("SELECT Date, Amount FROM Document.Sales"));
+	composer.Resource(wxT("SUM"), wxT("Amount"));
+
+	ibDataComposer::GroupNode level;
+	level.m_settings.m_group.Append(wxT("Date"));
+	level.m_settings.m_group.m_lines[0].m_periods.m_unit = wxT("Month");
+	level.m_settings.m_group.m_lines[0].m_periods.m_to   = wxT("&To");
+	composer.Root().m_rowGroups.push_back(level);
+
+	const wxString text = composer.RenderText();
+	EXPECT_TRUE(text.Contains(wxT("PERIODS(Month, , &To)"))) << text;
 }

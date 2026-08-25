@@ -4314,6 +4314,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		const ibBackendQueryColumn*              m_col = nullptr;   // plain column
 	};
 	std::vector<LevelSort> levelOrder;
+	// The columns the LEVELS group by — collected as they resolve, spent where the aggregates are
+	// built (a level's key and an aggregate cannot share one slot).
+	std::set<const ibBackendQueryColumn*> levelCols;
 
 	// The dimension levels, IN ORDER (each yields a subtotal node; the root is the grand total). They
 	// are the leading output columns (their group key at each node — read by GetValue(col)).
@@ -4453,6 +4456,13 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			outSchema.push_back(oc);
 		}
 
+		// ⭐ WHICH SLOTS THE LEVELS HAVE CLAIMED. The fold writes a level's KEY into the slot of the
+		// column it groups by, so that slot is answered for before any aggregate runs — see where
+		// this set is used, a few lines down, together with the columns already aggregated.
+		for (const ibTotalField& field : level.m_fields)
+			if (field.m_col != nullptr)
+				levelCols.insert(field.m_col);
+
 		b.TotalByLevel(std::move(level));   // the level goes in WHOLE, after all its fields resolved
 	}
 
@@ -4498,7 +4508,13 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		};
 		if (!taken(wanted))
 			return wanted;
-		const wxString qualified = funcName + wanted;
+		// ⭐ THE QUALIFIER IS A WORD, NOT A KEYWORD. `ibQueryKeywordText` shouts — `COUNT` — because
+		// that is how the LANGUAGE spells it, and gluing it on produced `COUNTDate`, which is what a
+		// person then reads in the report header and writes in `res["COUNTDate"]` (Max, 2026-08-25:
+		// "the name is stupid"). An output name is read by people, so the qualifier is written the
+		// way a name is written: `CountDate`, `SumAmount`.
+		const wxString qualified =
+			funcName.Left(1).Upper() + funcName.Mid(1).Lower() + wanted;
 		if (!taken(qualified))
 			return qualified;
 		for (int seq = 2; ; ++seq) {
@@ -4514,6 +4530,17 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// projected a second time under a synthetic alias, which gives it a column, and therefore a
 	// slot, of its own.
 	std::set<const ibBackendQueryColumn*> aggregatedCols;
+
+	// ⭐⭐ …AND A COLUMN THE REPORT GROUPS BY IS SPOKEN FOR TOO — by the LEVEL, which wrote its key
+	// into that slot before any aggregate ran. Same collision, same cure, and it is the same set
+	// because it is the same question: "is this column's slot already somebody's answer?"
+	//
+	// 🛑 IT COST A WHOLE CROSS-TABLE TO FIND. `TOTALS COUNT(Number) BY Number` folded correctly and
+	// then the count landed on top of every key, so all the column headings came back as "1" and the
+	// table collapsed to one column (Max, 2026-08-25: "бред"). The key is the older answer — it says
+	// what the group IS — so the aggregate is the one that moves, exactly as the second aggregate
+	// over one column already moves.
+	aggregatedCols.insert(levelCols.begin(), levelCols.end());
 
 	for (const ibQueryAstExprPtr& agg : ast.m_totalsAggregates) {
 		if (!agg || agg->m_kind != ibQueryAstExprKind::Func)
@@ -4563,11 +4590,20 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// The repeat is PROJECTED AGAIN under a synthetic alias, through the same road a computed
 			// resource already takes: a projection of its own gives it a column of its own, and a
 			// column of its own is a slot of its own. The first claimant is untouched.
-			if (col != nullptr && !aggregatedCols.insert(col).second) {
+			// ⚠ AND ONLY A SCALAR CAN TAKE THIS ROAD. The second projection is ONE column, so a
+			// reference — which is a spread of several fields — cannot be re-projected this way; such
+			// an aggregate keeps rolling in place, exactly as it did before there was a second road
+			// at all. (Better a shared slot than a column the reader cannot read.)
+			ibBackendColumnRawDB::RawType aggRaw = ibBackendColumnRawDB::RawType::Number;
+			if (col != nullptr && ScalarRawType(col, aggRaw) && !aggregatedCols.insert(col).second) {
 				const wxString alias = wxString::Format(wxT("agg%u"),
 					static_cast<unsigned>(nextSynthId - kSyntheticColumnBase));
 				b.SelectExpr(BuildColumnExprFromAst(sources, *agg->m_arg, params), alias);
-				owned = std::make_shared<ibSyntheticScalarColumn>(alias, nextSynthId++);
+				// ⭐ CARRYING THE INPUT'S TYPE. The synthetic column defaults to Number, and a default
+				// is not a reading: `COUNT(Date)` projected `fld1025_D` and then read it as a number,
+				// which the driver answers with "Invalid field type" — the whole report, for a column
+				// nobody looked at (Max, 2026-08-25, on `TOTALS COUNT(Number), COUNT(Date) BY (Ref, Date)`).
+				owned = std::make_shared<ibSyntheticScalarColumn>(alias, nextSynthId++, aggRaw);
 				col   = owned.get();
 			}
 		}

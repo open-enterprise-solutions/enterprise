@@ -349,3 +349,344 @@ TEST(SpreadsheetCompose, NoPerGroupTotalLine_TheHeadingCarriesTheFigures)
 	EXPECT_EQ(wxT("100"), doc->GetCellValue(1, 1));   // the heading's own figure
 	EXPECT_EQ(3, driver.GetRowsWritten());            // heading + two rows, and nothing else
 }
+
+// ===========================================================================
+//  The cross-table — the same driver, laid out the other way
+// ===========================================================================
+
+namespace {
+
+// A table's schema: row headings, column headings, and what stands where they meet. The AXIS is not
+// in the schema — it is the OUTPUT INFO's answer, read off `m_rowLevels` — so a cross schema is an
+// ordinary schema whose deeper dimensions happen to read across the page.
+ibCompositionOutputInfo CrossInfo(const std::vector<ibQueryLowering::OutputColumn>& schema, size_t rowLevels)
+{
+	ibCompositionOutputInfo info;
+	info.m_kind      = ibCompositionOutputKind::Table;
+	info.m_schema    = schema;
+	info.m_rowLevels = rowLevels;
+	return info;
+}
+
+} // namespace
+
+// ⭐⭐ A TABLE IS PRINTED WHEN ITS WIDTH IS KNOWN, and not before. The walk arrives row heading first,
+// then the column headings under it; the second row introduces a column key the first never had, and
+// the header still has to carry it — which is the whole reason a table cannot stream.
+TEST(SpreadsheetCross, AColumnKeySeenLateStillGetsItsColumn)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	// Partner reads down the page (level 0), Warehouse across it (level 1).
+	driver.OnOutputBegin(CrossInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) }, 1));
+
+	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(30) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(30) });
+
+	driver.OnGroup(1, true, false, { ibValue(wxT("Beta")), ibValue(), ibValue(70) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(70) });   // a key nobody saw before
+
+	driver.OnComplete(true);
+
+	// The header names both keys, in the order they were first seen, and closes with the row total.
+	EXPECT_EQ(wxT("North"), doc->GetCellValue(0, 1));
+	EXPECT_EQ(wxT("South"), doc->GetCellValue(0, 2));
+	EXPECT_EQ(wxT("Total"), doc->GetCellValue(0, 3));
+
+	// Alpha bought in the North only; the cell where it meets the South stays EMPTY. A zero there
+	// would state a measurement nobody made.
+	EXPECT_EQ(wxT("Alpha"), doc->GetCellValue(1, 0).Trim(false));
+	EXPECT_EQ(wxT("30"), doc->GetCellValue(1, 1));
+	EXPECT_EQ(wxT(""),   doc->GetCellValue(1, 2));
+	EXPECT_EQ(wxT("30"), doc->GetCellValue(1, 3));   // …and its row total is its own figure
+
+	EXPECT_EQ(wxT(""),   doc->GetCellValue(2, 1));
+	EXPECT_EQ(wxT("70"), doc->GetCellValue(2, 2));
+	EXPECT_EQ(2, driver.GetRowsWritten());
+}
+
+// ⭐ THE ROW'S TOTAL COSTS NOTHING. The fold already computed the figures at the row heading, so a
+// table gets its right-hand column out of what the walk hands over and needs no second pass for it.
+TEST(SpreadsheetCross, TheRowHeadingsOwnFiguresAreTheRowTotal)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(CrossInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) }, 1));
+	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(100) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
+	driver.OnComplete(true);
+
+	EXPECT_EQ(wxT("60"),  doc->GetCellValue(1, 1));
+	EXPECT_EQ(wxT("40"),  doc->GetCellValue(1, 2));
+	EXPECT_EQ(wxT("100"), doc->GetCellValue(1, 3));
+}
+
+// ⚠ A DETAIL RECORD HAS NO CELL TO STAND IN. A cell holds what was COMPUTED where two headings meet;
+// a detail record is one of the rows it was computed FROM. The table drops them — and says so.
+TEST(SpreadsheetCross, DetailRecordsAreNotPrintedIntoTheGrid)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(CrossInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) }, 1));
+	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(30) });
+	driver.OnGroup(2, true, false, { ibValue(), ibValue(wxT("North")), ibValue(30) });
+	driver.OnDetail(3, { ibValue(), ibValue(), ibValue(30) });
+	driver.OnComplete(true);
+
+	EXPECT_EQ(1, driver.GetRowsWritten());   // the heading, and nothing under it
+}
+
+// ⭐ AN OUTPUT WITH NO COLUMN AXIS IS THE ORDINARY REPORT, printed as it arrives. The table layout is
+// not a fallback and not a mode a report can drift into — it is taken only when there is something
+// to lay out across the page.
+TEST(SpreadsheetCross, WithNoColumnAxisTheStreamingLayoutIsUsed)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	ibCompositionOutputInfo info;
+	info.m_kind      = ibCompositionOutputKind::Grouping;
+	info.m_schema    = { Dim(wxT("Partner"), 0), Measure(wxT("Amount")) };
+	info.m_rowLevels = 1;
+	driver.OnOutputBegin(info);
+
+	// The header is written straight away, which is exactly what a table cannot do.
+	EXPECT_EQ(wxT("Partner"), doc->GetCellValue(0, 0));
+
+	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnComplete(true);
+	EXPECT_EQ(1, driver.GetRowsWritten());
+}
+
+// ⭐⭐ THE COLUMN TOTALS ARRIVE AS A SECOND FOLD, through the same calls, and land in the bottom row
+// under the columns they belong to. The first fold cannot carry them: its keys nest rows-then-
+// columns, and "the columns alone" is not a prefix of that order.
+//
+// The corner is the grand total — one sentence read across and closed at the right, not two rows
+// saying the same thing.
+TEST(SpreadsheetCross, ColumnTotalsArriveAsASecondFoldAndCloseTheTable)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	const std::vector<ibQueryLowering::OutputColumn> schema =
+		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) };
+
+	// The driver asks for them — that is what makes the composition read twice.
+	EXPECT_TRUE(driver.WantsColumnTotals());
+
+	driver.OnOutputBegin(CrossInfo(schema, 1));
+	driver.OnGroup(0, true, false, { ibValue(), ibValue(), ibValue(100) });          // the grand total
+	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(60) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
+	driver.OnGroup(1, true, false, { ibValue(wxT("Beta")), ibValue(), ibValue(40) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
+
+	// …and the second pass: the same output folded by its column keys alone. It announces itself,
+	// because "a table folded by its columns" and "an output with no row axis" look identical.
+	ibCompositionOutputInfo totalsPass = CrossInfo(schema, 1);
+	totalsPass.m_columnTotals = true;
+	driver.OnOutputBegin(totalsPass);
+	driver.OnGroup(1, true, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
+	driver.OnGroup(1, true, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
+
+	driver.OnComplete(true);
+
+	// Header, Alpha, Beta, then the bottom line.
+	EXPECT_EQ(wxT("Total"), doc->GetCellValue(3, 0));
+	EXPECT_EQ(wxT("60"),    doc->GetCellValue(3, 1));
+	EXPECT_EQ(wxT("40"),    doc->GetCellValue(3, 2));
+	EXPECT_EQ(wxT("100"),   doc->GetCellValue(3, 3));   // the corner
+}
+
+// ⚠ THE SECOND FOLD MUST NOT START A SECTION. It is the same table read again — clearing the sheet
+// there would erase the very grid the totals belong under.
+TEST(SpreadsheetCross, TheSecondFoldDoesNotClearWhatTheFirstPrinted)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	const std::vector<ibQueryLowering::OutputColumn> schema =
+		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) };
+
+	driver.OnOutputBegin(CrossInfo(schema, 1));
+	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(60) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
+
+	ibCompositionOutputInfo totalsPass = CrossInfo(schema, 1);
+	totalsPass.m_columnTotals = true;
+	driver.OnOutputBegin(totalsPass);
+	driver.OnGroup(1, true, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
+
+	driver.OnComplete(true);
+
+	EXPECT_EQ(wxT("North"), doc->GetCellValue(0, 1));            // the header still stands
+	EXPECT_EQ(wxT("Alpha"), doc->GetCellValue(1, 0).Trim(false));
+	EXPECT_EQ(wxT("60"),    doc->GetCellValue(2, 1));            // …and the totals row under it
+}
+
+// ⭐ AN OUTPUT NAMES ITSELF over its own block. The name travelled from the composer to the driver
+// and was read by nobody (audit § C8) — so a report of two outputs printed two blocks of figures
+// with nothing to say which was which.
+TEST(SpreadsheetCompose, AnOutputPrintsItsOwnName)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	ibCompositionOutputInfo info;
+	info.m_schema    = { Dim(wxT("Partner"), 0), Measure(wxT("Amount")) };
+	info.m_rowLevels = 1;
+	info.m_name      = wxT("By partner");
+	driver.OnOutputBegin(info);
+	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnComplete(true);
+
+	EXPECT_EQ(wxT("By partner"), doc->GetCellValue(0, 0));   // the caption, above its header
+	EXPECT_EQ(wxT("Partner"),    doc->GetCellValue(1, 0));
+}
+
+// ⭐⭐ A COLUMN AXIS DEEPER THAN ONE LEVEL GETS SUBTOTAL COLUMNS. Warehouse then Month: a figure per
+// month, and after the last month of a warehouse, that warehouse's own — which the fold already
+// computed at the upper node and which would otherwise be thrown away.
+TEST(SpreadsheetCross, AnUpperColumnHeadingGetsItsOwnTotalColumn)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(CrossInfo(
+		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Dim(wxT("Month"), 2), Measure(wxT("Amount")) }, 1));
+
+	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(), ibValue(100) });
+	driver.OnGroup(2, true, false, { ibValue(), ibValue(wxT("North")), ibValue(), ibValue(70) });
+	driver.OnGroup(3, false, false, { ibValue(), ibValue(), ibValue(wxT("Jan")), ibValue(30) });
+	driver.OnGroup(3, false, false, { ibValue(), ibValue(), ibValue(wxT("Feb")), ibValue(40) });
+	driver.OnGroup(2, true, false, { ibValue(), ibValue(wxT("South")), ibValue(), ibValue(30) });
+	driver.OnGroup(3, false, false, { ibValue(), ibValue(), ibValue(wxT("Jan")), ibValue(30) });
+
+	driver.OnComplete(true);
+
+	// ⭐ A HEADING'S TOTAL CLOSES IT (Max, 2026-08-26) — the children first, the figure that sums them
+	// after, the way a printed report reads down the page:
+	// Columns: Jan, Feb, [North total], Jan, [South total], then the row total.
+	//   dim=0    1    2        3         4         5              6
+	EXPECT_EQ(wxT("70"),  doc->GetCellValue(2, 1)) << "North's own figure, BEFORE its months";
+	EXPECT_EQ(wxT("30"),  doc->GetCellValue(2, 2));
+	EXPECT_EQ(wxT("40"),  doc->GetCellValue(2, 3));
+	EXPECT_EQ(wxT("30"),  doc->GetCellValue(2, 4)) << "South's own figure";
+	EXPECT_EQ(wxT("30"),  doc->GetCellValue(2, 5));
+	EXPECT_EQ(wxT("100"), doc->GetCellValue(2, 6)) << "and the row total closes the table";
+
+	// ⭐ THE HEADING COVERS ITS WHOLE GROUP — its total and its months — so the page says whose the
+	// months are. It is written on the run's first column and merged across the rest (Max: "the
+	// grouping has to run to the end").
+	EXPECT_EQ(wxT("North"), doc->GetCellValue(0, 1));
+	EXPECT_EQ(wxT("Total"), doc->GetCellValue(1, 1)) << "its total is the FIRST column inside it";
+	EXPECT_EQ(wxT("Jan"),   doc->GetCellValue(1, 2));
+	EXPECT_EQ(wxT("Feb"),   doc->GetCellValue(1, 3));
+	EXPECT_EQ(wxT("South"), doc->GetCellValue(0, 4));
+}
+
+// ⚠ AND A SINGLE-LEVEL COLUMN AXIS IS LAID OUT EXACTLY AS BEFORE — nothing totals a prefix, so no
+// prefix gets a column. The common table must not pay for the deep one.
+TEST(SpreadsheetCross, OneColumnLevelGetsNoSubtotalColumns)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(CrossInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) }, 1));
+	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(70) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(30) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
+	driver.OnComplete(true);
+
+	EXPECT_EQ(wxT("North"), doc->GetCellValue(0, 1));
+	EXPECT_EQ(wxT("South"), doc->GetCellValue(0, 2));
+	EXPECT_EQ(wxT("Total"), doc->GetCellValue(0, 3));   // the ROW total, immediately after the keys
+	EXPECT_EQ(wxT("30"), doc->GetCellValue(1, 1));
+	EXPECT_EQ(wxT("40"), doc->GetCellValue(1, 2));
+	EXPECT_EQ(wxT("70"), doc->GetCellValue(1, 3));
+}
+
+// ⭐⭐ WIDTHS BELONG TO THE SHEET, NOT TO THE OUTPUT. Two outputs print onto one sheet, so column 0
+// is the SAME column for both and has to fit whichever of them puts more there.
+//
+// 🛑 IT WAS RESET PER OUTPUT (`m_widest.assign(...)` in OnColumns), so a second, narrower report
+// re-sized the shared columns to its own text and the first report's values were clipped in place —
+// silently, since nothing about a too-narrow column says it is too narrow.
+TEST(SpreadsheetCompose, ASecondOutputDoesNotShrinkTheFirstsColumns)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	// First output: a long value in column 0.
+	driver.OnColumns({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) });
+	driver.OnGroup(1, true, false, { ibValue(wxT("A very long partner name indeed")), ibValue(10) });
+	driver.OnComplete(true);
+	const int afterFirst = doc->GetColSize(0);
+
+	// Second output onto the same sheet: a short value in the same column.
+	driver.OnColumns({ Dim(wxT("X"), 0), Measure(wxT("N")) });
+	driver.OnGroup(1, true, false, { ibValue(wxT("ab")), ibValue(1) });
+	driver.OnComplete(true);
+
+	EXPECT_EQ(afterFirst, doc->GetColSize(0))
+		<< "the shared column must still fit the widest text any output put in it";
+}
+
+// …and a LATER output that needs MORE room gets it: the sheet grows, it does not merely hold.
+TEST(SpreadsheetCompose, ASecondOutputWidensAColumnWhenItNeedsMore)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnColumns({ Dim(wxT("P"), 0), Measure(wxT("A")) });
+	driver.OnGroup(1, true, false, { ibValue(wxT("ab")), ibValue(1) });
+	driver.OnComplete(true);
+	const int afterFirst = doc->GetColSize(0);
+
+	driver.OnColumns({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) });
+	driver.OnGroup(1, true, false, { ibValue(wxT("A very long partner name indeed")), ibValue(10) });
+	driver.OnComplete(true);
+
+	EXPECT_GT(doc->GetColSize(0), afterFirst);
+}
+
+// ⭐⭐ A GROUP'S TOTAL COLUMN IS PRINTED EVEN OVER A SINGLE CHILD, and the reason is the fold: it is
+// the group's OWN column — the one thing left on screen when its children are hidden — because a
+// column group, unlike a row group, has no heading line of its own to stay behind on.
+//
+// 🛑 Both other readings were tried on 2026-08-26 and both broke the fold: the total after its
+// children ("the order a report reads down the page"), and no total over a single child ("the group
+// shows it anyway"). The reference report settles it — a collapsed period shows exactly one column,
+// carrying its own figure, single child or not.
+TEST(SpreadsheetCross, EveryHeadingGetsItsOwnTotalColumnEvenOverOneChild)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(CrossInfo(
+		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Dim(wxT("Month"), 2), Measure(wxT("Amount")) }, 1));
+
+	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(), ibValue(100) });
+	// North has TWO months, South has ONE — both get a total column all the same.
+	driver.OnGroup(2, true, false, { ibValue(), ibValue(wxT("North")), ibValue(), ibValue(70) });
+	driver.OnGroup(3, false, false, { ibValue(), ibValue(), ibValue(wxT("Jan")), ibValue(30) });
+	driver.OnGroup(3, false, false, { ibValue(), ibValue(), ibValue(wxT("Feb")), ibValue(40) });
+	driver.OnGroup(2, true, false, { ibValue(), ibValue(wxT("South")), ibValue(), ibValue(30) });
+	driver.OnGroup(3, false, false, { ibValue(), ibValue(), ibValue(wxT("Jan")), ibValue(30) });
+
+	driver.OnComplete(true);
+
+	// Columns: [North total], Jan, Feb, [South total], Jan, then the row total.
+	//   dim=0        1         2    3        4          5         6
+	EXPECT_EQ(wxT("70"),  doc->GetCellValue(2, 1)) << "North opens with what it adds up to";
+	EXPECT_EQ(wxT("30"),  doc->GetCellValue(2, 2));
+	EXPECT_EQ(wxT("40"),  doc->GetCellValue(2, 3));
+	EXPECT_EQ(wxT("30"),  doc->GetCellValue(2, 4)) << "South's total — the same figure as its one child";
+	EXPECT_EQ(wxT("30"),  doc->GetCellValue(2, 5));
+	EXPECT_EQ(wxT("100"), doc->GetCellValue(2, 6)) << "and the row total closes the table";
+}

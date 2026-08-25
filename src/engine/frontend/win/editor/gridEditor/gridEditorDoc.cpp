@@ -1,6 +1,37 @@
 #include "gridEditor.h"
 #include "frontend/win/ctrls/grid/gridextprivate.h"
 
+namespace {
+
+// ⭐⭐ APPLY A CELL'S SPAN, UNLESS AN EARLIER MERGE ALREADY COVERS THAT CELL.
+//
+// The description has no notion of "covered": `ibSpreadsheetDescription::SetCellSize` stamps the
+// MAIN cell and nothing else, while the grid marks every cell a merge covers with a non-positive
+// span. So a document carrying both a merge and the cells underneath it walks straight into
+// `ibGrid::SetCellSize: setting cell size that is already part of another cell` — an assert, i.e. an
+// int 3, at LOAD time, long after whatever produced the document has finished.
+//
+// 🛑 AND SUCH A DOCUMENT IS THE ORDINARY CASE, not a malformed one: `PutArea` copies an area as a
+// RECTANGLE — GetOrCreateCell for every row × col — so every cell under a merge is materialised at
+// 1×1 by the copy itself. A report heading never hit it because its area is one column wide; a
+// cross-table's header is the first thing in the tree that merges INSIDE a wide area (dumps
+// 2026-08-25 22:26 and 22:44, both on cell 2,2).
+//
+// Asked HERE, at the point of failure and once for all four load paths: the loader is what knows the
+// grid's state, and teaching every producer which of its cells not to touch would be the same rule
+// spelled out in as many places as there are producers.
+void GridApplyCellSpan(ibGrid& grid, int row, int col, int rowSpan, int colSpan)
+{
+	if (rowSpan < 0 || colSpan < 0)
+		return;   // the description's own "this one is covered", where a writer states it
+	int haveRows = 1, haveCols = 1;
+	grid.GetCellSize(row, col, &haveRows, &haveCols);
+	if (haveRows >= 1 && haveCols >= 1)
+		grid.SetCellSize(row, col, rowSpan, colSpan, false);
+}
+
+} // namespace
+
 bool ibGridEditor::AssociatibDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc)
 {
 	if (m_spreadsheetObject != doc) {
@@ -56,8 +87,7 @@ bool ibGridEditor::LoadDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 				ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
 				attr->SetAlignment(cell->m_alignHorz, cell->m_alignVert);
 
-				if (cell->m_row_size >= 0 && cell->m_col_size >= 0)
-					SetCellSize(row, col, cell->m_row_size, cell->m_col_size, false);
+				GridApplyCellSpan(*this, row, col, cell->m_row_size, cell->m_col_size);
 
 				attr->SetTextOrient(cell->m_textOrient);
 				attr->SetFont(cell->m_font);
@@ -128,8 +158,11 @@ bool ibGridEditor::LoadDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 		for (int idx = 0; idx < spreadsheetDesc.GetGroupNumberCols(); idx++) {
 			const ibSpreadsheetGroupDescription* g = spreadsheetDesc.GetColGroupByIdx(idx);
 			if (g == nullptr) continue;
-			AddColGroup((int)g->m_start, (int)g->m_end, (int)g->m_level, g->m_collapsed);
+			AddColGroup((int)g->m_start, (int)g->m_end, (int)g->m_level, g->m_collapsed, g->m_head);
 		}
+		// …and the COLUMNS mean their levels the same way. This line was missing, so a column outline
+		// only ever worked when its producer handed it exact ranges — see ibGrid::NormalizeColGroups.
+		NormalizeColGroups();
 
 		m_rowBrakeAt.Clear();
 
@@ -219,8 +252,7 @@ void ibGridEditor::PutDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>
 			ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(maxRowBrake + row, col);
 			attr->SetAlignment(cell->m_alignHorz, cell->m_alignVert);
 
-			if (cell->m_row_size >= 0 && cell->m_col_size >= 0)
-				SetCellSize(maxRowBrake + row, col, cell->m_row_size, cell->m_col_size, false);
+			GridApplyCellSpan(*this, maxRowBrake + row, col, cell->m_row_size, cell->m_col_size);
 
 			attr->SetTextOrient(cell->m_textOrient);
 			attr->SetFont(cell->m_font);
@@ -291,8 +323,7 @@ void ibGridEditor::JoinDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 			ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, maxColBrake + col);
 			attr->SetAlignment(cell->m_alignHorz, cell->m_alignVert);
 
-			if (cell->m_row_size >= 0 && cell->m_col_size >= 0)
-				SetCellSize(row, maxColBrake + col, cell->m_row_size, cell->m_col_size, false);
+			GridApplyCellSpan(*this, row, maxColBrake + col, cell->m_row_size, cell->m_col_size);
 
 			attr->SetTextOrient(cell->m_textOrient);
 			attr->SetFont(cell->m_font);
@@ -370,8 +401,7 @@ bool ibGridEditor::LoadSpreadsheet(const ibSpreadsheetDescription& spreadsheetDe
 				ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
 				attr->SetAlignment(cell->m_alignHorz, cell->m_alignVert);
 
-				if (cell->m_row_size >= 0 && cell->m_col_size >= 0)
-					SetCellSize(row, col, cell->m_row_size, cell->m_col_size, false);
+				GridApplyCellSpan(*this, row, col, cell->m_row_size, cell->m_col_size);
 
 				attr->SetTextOrient(cell->m_textOrient);
 				attr->SetFont(cell->m_font);
@@ -452,8 +482,11 @@ bool ibGridEditor::LoadSpreadsheet(const ibSpreadsheetDescription& spreadsheetDe
 		for (int idx = 0; idx < spreadsheetDesc.GetGroupNumberCols(); idx++) {
 			const ibSpreadsheetGroupDescription* g = spreadsheetDesc.GetColGroupByIdx(idx);
 			if (g == nullptr) continue;
-			AddColGroup((int)g->m_start, (int)g->m_end, (int)g->m_level, g->m_collapsed);
+			AddColGroup((int)g->m_start, (int)g->m_end, (int)g->m_level, g->m_collapsed, g->m_head);
 		}
+		// …and the COLUMNS mean their levels the same way. This line was missing, so a column outline
+		// only ever worked when its producer handed it exact ranges — see ibGrid::NormalizeColGroups.
+		NormalizeColGroups();
 
 		m_rowBrakeAt.Clear();
 

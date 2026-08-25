@@ -10,6 +10,7 @@
 #include "frontend/win/dlgs/queryConstructor/queryExpressionDialog.h" // the resource expression editor
 #include "frontend/win/dlgs/typeSelector.h"              // the product.s type picker — a parameter declares its type
 #include "frontend/win/dlgs/queryConstructor/queryConstructorInternal.h" // ibExpressionCellRenderer — the Totals tab's own cell
+#include "backend/query/queryable.h"                        // ibPeriodUnits — the engine's own list of period words
 #include "frontend/win/editor/codeEditor/codeEditor.h"  // the script editor behind a parameter expression
 #include "frontend/mainFrame/mainFrame.h"                // the shared editor / font-colour settings
 #include "frontend/docView/docView.h"                    // ibMetaDocument — the composer editor's document mode
@@ -53,6 +54,10 @@ enum {
 	// none of them, which is the detail records. A second command for the empty case would be a
 	// second way to make one node.
 	ID_LEVEL_ADD,
+	// ⭐ AND A SECOND VERB THAT ADDS AN OUTPUT OF THE OTHER SHAPE — a TABLE, which opens with two
+	// undeletable nodes, Rows and Columns (Max, 2026-08-25). It is not a second way to make a level:
+	// a level is the same thing on either axis, and this says which SHAPE is being started.
+	ID_TABLE_ADD,
 	ID_LEVEL_REMOVE,
 	ID_LEVEL_UP,
 	ID_LEVEL_DOWN,
@@ -518,9 +523,17 @@ public:
 
 	// A CROSS-TABLE SHOWS ITS TWO AXES as rows of their own; a plain grouping shows its levels
 	// straight under the output, because naming an axis that has no counterpart says nothing.
+	//
+	// 🛑 IT ASKED THE CONTENT — `LevelCount(columns) > 0` — and that answered "has a column heading
+	// been added yet", which is a different question. A table is added EMPTY and its two nodes are
+	// undeletable (Max, 2026-08-25), so the axes have to be there before anything is in them: asked
+	// of the content, a fresh table showed as a plain grouping and there was nowhere to add the
+	// first column heading. The kind is what somebody decided; it is stored, and this reads it.
 	bool HasTwoAxes(int output) const {
-		ibStructurePos columns; columns.m_output = output; columns.m_axis = 1;
-		return LevelCount(columns) > 0;
+		std::vector<ibOutputDescription>* outputs = m_outputs ? m_outputs() : nullptr;
+		if (outputs == nullptr || output < 0 || (size_t)output >= outputs->size())
+			return false;
+		return (*outputs)[output].m_kind == ibCompositionOutputKind::Table;
 	}
 
 	// RE-READ THE STRUCTURE. Rows are pooled by coordinate, so they survive a rebuild; what changes
@@ -1078,6 +1091,61 @@ public:
 
 		sizer->Add(m_view, 1, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(4));
 
+		// ⭐⭐ BY PERIODS — the strip the query constructor's Totals tab already has, on the form that
+		// makes a level here. Same three parts (`PERIODS(unit, from, to)`), same gate: it is HIDDEN,
+		// not greyed, when the selected line is not a date (Max, 2026-08-25: "if the row is not a
+		// date, the whole strip is not shown at all"). Greying it would say "there is something here
+		// for you, but not now", which for a field that can never be a period is not true.
+		m_periodPane = new wxPanel(this, wxID_ANY);
+		{
+			wxBoxSizer* strip = new wxBoxSizer(wxHORIZONTAL);
+			m_byPeriods = new wxCheckBox(m_periodPane, wxID_ANY, _("By periods"));
+			strip->Add(m_byPeriods, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(6));
+
+			// THE UNITS ARE THE ENGINE'S OWN LIST — `ibPeriodUnits()` (query/queryable.h), the same
+			// vocabulary the lowering reads and the query constructor offers. A list typed out here
+			// would be a second copy of the words, and it would be right until one of them changed.
+			m_periodUnit = new wxChoice(m_periodPane, wxID_ANY);
+			for (const std::pair<ibTotalsPeriod, wxString>& unit : ibPeriodUnits())
+				m_periodUnit->Append(unit.second);
+			strip->Add(m_periodUnit, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(10));
+
+			// THE BOUNDS ARE OPTIONAL and are typed as they are meant: `&From` — a parameter — or a
+			// literal. Left empty they mean "from the data", which is what the renderer writes back.
+			//
+			// 🛑 wxTE_PROCESS_ENTER IS NOT DECORATION — it is what makes Enter reach this control at
+			// all, and wx checks it: binding wxEVT_TEXT_ENTER to a field without the style trips an
+			// assert inside wxTextCtrlBase::OnDynamicBind, which in a Debug build is an int 3 in the
+			// dialog's CONSTRUCTOR. Dropped on the way over from the query constructor's strip (which
+			// has it), the whole "Add grouping" command died with the window (dump 2026-08-25 22:18).
+			const auto addBound = [&](const wxString& label, wxTextCtrl*& field) {
+				strip->Add(new wxStaticText(m_periodPane, wxID_ANY, label), 0,
+					wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(4));
+				field = new wxTextCtrl(m_periodPane, wxID_ANY, wxEmptyString,
+					wxDefaultPosition, FromDIP(wxSize(90, -1)), wxTE_PROCESS_ENTER);
+				field->SetToolTip(_("A parameter (&From) or a literal date. Empty = from the data.\n"
+				                    "A bound does not filter rows - it says which periods to show."));
+				strip->Add(field, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(10));
+			};
+			addBound(_("From:"), m_periodFrom);
+			addBound(_("To:"), m_periodTo);
+
+			m_periodPane->SetSizer(strip);
+		}
+		sizer->Add(m_periodPane, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, FromDIP(4));
+		m_periodPane->Hide();
+
+		m_byPeriods->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { ApplyPeriods(); });
+		m_periodUnit->Bind(wxEVT_CHOICE, [this](wxCommandEvent&) { ApplyPeriods(); });
+		// ⚠ COMMITTED ON LEAVING THE FIELD, not on every keystroke: a bound is half-typed most of the
+		// time it is being typed. (`ChangeValue` in FillPeriods raises no event, so filling the strip
+		// never reads back as an edit — the fault that made the constructor's strip fight the user.)
+		for (wxTextCtrl* bound : { m_periodFrom, m_periodTo }) {
+			bound->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& e) { ApplyPeriods(); e.Skip(); });
+			bound->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&) { ApplyPeriods(); });
+		}
+		m_view->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, [this](ibDataViewEvent&) { FillPeriods(); });
+
 		// WHAT AN EMPTY LIST MEANS, said where the list is empty. Not a warning — it is one of the
 		// two things this form makes, and a person should not have to know it in advance.
 		m_hint = new wxStaticText(this, wxID_ANY, wxEmptyString);
@@ -1146,7 +1214,73 @@ private:
 			// stated at the top of the toolbars above; this line is what happens when it is forgotten.
 			? _("No fields: this node prints the DETAIL RECORDS - the rows under the grouping above it.")
 			: _("The fields of one grouping are printed side by side, on one heading."));
+		FillPeriods();
 		Layout();
+	}
+
+	// THE STRIP, FILLED FROM THE SELECTED LINE — or hidden, when that line is not a date and never
+	// could be a period. Shown/hidden rather than enabled/disabled: see where it is built.
+	void FillPeriods()
+	{
+		const int at = m_model != nullptr ? m_model->RowAt(m_view->GetSelection()) : wxNOT_FOUND;
+		std::vector<ibGroupLineDescription>& lines = m_node.m_settings.m_group.m_lines;
+		const bool onLine = at != wxNOT_FOUND && (size_t)at < lines.size();
+		const bool applies = onLine && m_panel != nullptr
+			&& m_panel->StructureFieldIsDated(lines[(size_t)at].m_path);
+
+		if (m_periodPane->IsShown() != applies) {
+			m_periodPane->Show(applies);
+			// ⚠ LAYOUT MOVES WINDOWS, IT DOES NOT PAINT. Without the repaint the pixels the strip
+			// appears over keep whatever was drawn there — which came out as the labels of this strip
+			// reading the text of the control that used to sit at those coordinates (seen live in the
+			// query constructor, 2026-08-25).
+			Layout();
+			// ⚠ QUALIFIED. This class has a `Refresh()` of its own — rebuilding the field list — so
+			// the unqualified name is THAT one, and asking it to repaint would rebuild, refill and
+			// land back here: a loop, not a redraw. (The hidden-name trap: a member of this name
+			// hides every wxWindow overload.)
+			wxDialog::Refresh(true);
+			wxDialog::Update();
+		}
+		if (!applies)
+			return;
+
+		const ibGroupPeriodsDescription& periods = lines[(size_t)at].m_periods;
+		m_byPeriods->SetValue(periods.IsOk());
+		const int unitAt = periods.IsOk() ? m_periodUnit->FindString(periods.m_unit) : wxNOT_FOUND;
+		m_periodUnit->SetSelection(unitAt != wxNOT_FOUND ? unitAt : 0);
+		// ChangeValue, not SetValue: filling the strip is not an edit of it.
+		m_periodFrom->ChangeValue(periods.m_from);
+		m_periodTo->ChangeValue(periods.m_to);
+
+		m_periodUnit->Enable(periods.IsOk());
+		m_periodFrom->Enable(periods.IsOk());
+		m_periodTo->Enable(periods.IsOk());
+	}
+
+	// …AND BACK ONTO THE LINE. Unchecking clears all three: "not by periods" is the absence of the
+	// answer, not a unit remembered in case it comes back.
+	void ApplyPeriods()
+	{
+		const int at = m_model != nullptr ? m_model->RowAt(m_view->GetSelection()) : wxNOT_FOUND;
+		std::vector<ibGroupLineDescription>& lines = m_node.m_settings.m_group.m_lines;
+		if (at == wxNOT_FOUND || (size_t)at >= lines.size() || !m_periodPane->IsShown())
+			return;
+
+		ibGroupPeriodsDescription& periods = lines[(size_t)at].m_periods;
+		if (!m_byPeriods->GetValue()) {
+			periods.Clear();
+		}
+		else {
+			const int unitAt = m_periodUnit->GetSelection();
+			periods.m_unit = unitAt != wxNOT_FOUND
+				? m_periodUnit->GetString(unitAt) : ibPeriodUnits().front().second;
+			periods.m_from = m_periodFrom->GetValue().Trim(true).Trim(false);
+			periods.m_to   = m_periodTo->GetValue().Trim(true).Trim(false);
+		}
+		m_periodUnit->Enable(periods.IsOk());
+		m_periodFrom->Enable(periods.IsOk());
+		m_periodTo->Enable(periods.IsOk());
 	}
 
 	ibComposerSettingsPanel*  m_panel = nullptr;
@@ -1154,6 +1288,12 @@ private:
 	ibGroupingFieldsModel*    m_model = nullptr;
 	ibDataViewCtrl*           m_view  = nullptr;
 	wxStaticText*             m_hint  = nullptr;
+	// The BY PERIODS strip — one panel, so it is shown and hidden as one thing.
+	wxPanel*                  m_periodPane = nullptr;
+	wxCheckBox*               m_byPeriods  = nullptr;
+	wxChoice*                 m_periodUnit = nullptr;
+	wxTextCtrl*               m_periodFrom = nullptr;
+	wxTextCtrl*               m_periodTo   = nullptr;
 };
 
 // ⭐ THE SETTINGS ARE A PANEL, AND THE DIALOG IS ONE OF ITS HOSTS. A composer declared in the
@@ -1288,6 +1428,7 @@ void ibComposerSettingsPanel::BuildPanel()
 	// THE STRUCTURE VERBS. Raised from its toolbar; each is a no-op when the cursor is on the
 	// Report node, because a level command has nothing to act on there.
 	Bind(wxEVT_TOOL, &ibComposerSettingsPanel::OnStructureAdd, this, ID_LEVEL_ADD);
+	Bind(wxEVT_TOOL, &ibComposerSettingsPanel::OnStructureAddTable, this, ID_TABLE_ADD);
 	Bind(wxEVT_TOOL, &ibComposerSettingsPanel::OnStructureRemove, this, ID_LEVEL_REMOVE);
 	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveStructureLevel(-1); }, ID_LEVEL_UP);
 	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveStructureLevel(+1); }, ID_LEVEL_DOWN);
@@ -1842,6 +1983,9 @@ wxWindow* ibComposerSettingsPanel::BuildStructurePane(wxWindow* parent)
 	// ⚠ ASCII ONLY IN UI LITERALS — this file has no BOM (see the query page below).
 	bar->AddTool(ID_LEVEL_ADD, _("Add grouping"),
 		ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add grouping"));
+	// …AND THE OTHER SHAPE, beside it: a table, which arrives with its two axes already there.
+	bar->AddTool(ID_TABLE_ADD, _("Add table"),
+		ibSettingsArt(wxASCII_STR(wxART_LIST_VIEW), this), _("Add table (rows and columns)"));
 	bar->AddTool(ID_LEVEL_REMOVE, _("Delete"),
 		ibSettingsArt(wxASCII_STR(wxART_DELETE), this), _("Delete"));
 	bar->AddSeparator();
@@ -3026,6 +3170,18 @@ ibValueCompositionField* ibComposerSettingsPanel::ChooseStructureField(wxWindow*
 	return m_fieldSource != nullptr ? m_fieldSource->ChooseField(parent != nullptr ? parent : this, held) : nullptr;
 }
 
+// See the header for why this is a question and not a list, and why "contains" rather than "is".
+bool ibComposerSettingsPanel::StructureFieldIsDated(const wxString& path) const
+{
+	if (path.IsEmpty())
+		return false;   // no field named yet — there is nothing to offer periodicity ON
+	for (const ibQueryConstructorField& field : m_fieldList)
+		if (field.m_name.IsSameAs(path, false))
+			return !field.m_type.IsOk() || field.m_type.ContainType(g_valueDateCLSID);
+	// A dot-walk, or a field of a source this window has not read: unknown, so not refused.
+	return true;
+}
+
 // WHICH FIELDS THIS COMPOSITION OFFERS — its own explorer, which is what its query resolved to.
 void ibComposerSettingsPanel::BindFieldSource()
 {
@@ -3351,10 +3507,16 @@ void ibComposerSettingsPanel::OnStructureContextMenu(ibDataViewEvent& event)
 
 	const bool onLevel = SelectedLevel() != wxNOT_FOUND;
 	// An OUTPUT can be moved and deleted as well — its position is the order it prints in.
-	const bool onOutput = m_currentNode.m_output >= 0 && m_currentNode.m_level < 0;
+	//
+	// 🛑 AND AN AXIS IS NOT AN OUTPUT. "No level" alone is true on the Rows and Columns rows too, so
+	// Delete stood ENABLED there and did nothing when pressed — OnStructureRemove asks IsOutput()
+	// and correctly refused. A command that is offered and then silently declines is worse than one
+	// that is greyed: the axes of a table are UNDELETABLE (Max, 2026-08-25), and the menu says so.
+	const bool onOutput = m_currentNode.IsOutput();
 
 	wxMenu menu;
 	ibAppendCmd(menu, ID_LEVEL_ADD, _("Add grouping"), wxASCII_STR(wxART_NEW), this);
+	ibAppendCmd(menu, ID_TABLE_ADD, _("Add table"), wxASCII_STR(wxART_LIST_VIEW), this);
 	ibAppendCmd(menu, ID_LEVEL_REMOVE, _("Delete"), wxASCII_STR(wxART_DELETE), this)
 		->Enable(onLevel || onOutput);
 	menu.AppendSeparator();
@@ -3364,6 +3526,7 @@ void ibComposerSettingsPanel::OnStructureContextMenu(ibDataViewEvent& event)
 		->Enable(onLevel || onOutput);
 
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnStructureAdd(e); }, ID_LEVEL_ADD);
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnStructureAddTable(e); }, ID_TABLE_ADD);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnStructureRemove(e); }, ID_LEVEL_REMOVE);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)   { MoveStructureLevel(-1); }, ID_LEVEL_UP);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)   { MoveStructureLevel(+1); }, ID_LEVEL_DOWN);
@@ -3738,6 +3901,36 @@ void ibComposerSettingsPanel::OnStructureAdd(wxCommandEvent&)
 
 	MarkSettingsTouched();
 	ReloadStructure((int)axis->size() - 1);
+}
+
+// ⭐⭐ ADD A TABLE — an output of the other shape, which is not a level and never lands inside one.
+//
+// A table opens with BOTH ITS AXES, and they are undeletable: "table (output) — rows (undeletable),
+// columns (undeletable), and the groupings hang off each" (Max, 2026-08-25). Nothing is created for
+// them here, because an axis is not a thing to create — it is the pair of level lists an output of
+// this KIND has. Saying the kind is the whole act.
+//
+// ⚠ AND IT IS ALWAYS A NEW OUTPUT — the one exception being a last output nobody has put anything
+// in, exactly as adding a grouping on the report node reuses it. Turning a FILLED grouping into a
+// table would silently move its levels onto the rows axis of a shape the person did not ask for.
+void ibComposerSettingsPanel::OnStructureAddTable(wxCommandEvent&)
+{
+	if (m_readOnly)
+		return;
+
+	const bool lastIsUntouched = !Structure().empty()
+		&& Structure().back().m_kind == ibCompositionOutputKind::Grouping
+		&& Structure().back().m_rowGroups.empty() && Structure().back().m_columnGroups.empty();
+	if (!lastIsUntouched)
+		Structure().push_back(ibOutputDescription());
+
+	Structure().back().m_kind = ibCompositionOutputKind::Table;
+
+	// THE CURSOR FOLLOWS THE COMMAND, onto the ROWS of what was just made — the next thing a person
+	// does is add a heading, and that is where the first one goes.
+	m_currentNode = ibNodeKey((int)Structure().size() - 1, 0, -1);
+	MarkSettingsTouched();
+	ReloadStructure();
 }
 
 // ⭐ EDIT AN EXISTING LEVEL IN THE SAME FORM THAT MADE IT — what the "..." on its Field cell opens.

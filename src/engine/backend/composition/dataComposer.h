@@ -61,16 +61,26 @@ class ibBackendQueryColumn;
 // axis, points along the other, a resource where they meet — and differs in being DRAWN as a
 // picture. Drawing is the driver's business, so a chart is an output with a chart driver, not a
 // kind of its own; adding one here would be a name for a difference that lives elsewhere.
-enum class ibCompositionOutputKind
-{
-	Grouping,   // levels one under another; a level with no fields is its detail rows
-	Table,      // levels down AND across — the cross-table
-};
+// (ibCompositionOutputKind MOVED to compositionDescription.h on 2026-08-25, for the same reason the
+//  level kind moved: it stopped being read off the content and became something a person DECIDES —
+//  "add grouping" or "add table" — so it is part of the stored shape and the composer takes it from
+//  there. A table just added is empty on both axes and is a table all the same.)
 
 // (ibCompositionLevelKind MOVED to compositionDescription.h — a level's kind is part of what a level
 //  IS, so it lives with the stored shape and the composer takes it from there. It used to be declared
 //  here with the description holding "the same value as a plain number" beside it: a twin vocabulary,
 //  and the description now states it as the type it is.)
+
+// WHICH WAY A DIMENSION READS. Down the page or across it — the only thing a cross-table's printer
+// needs that a grouping's printer does not, and the one thing the schema cannot say on its own: L4
+// hands back a dimension's DEPTH (`m_dimLevel`), and depth alone cannot tell the third row heading
+// from the first column heading.
+enum class ibCompositionAxis
+{
+	None,      // not a dimension at all — a measure or a detail field
+	Rows,      // a heading down the page
+	Columns,   // a heading across it
+};
 
 // What an output tells its driver before its first row: what shape is coming and what the values
 // mean. The schema is the output's OWN — two outputs of one composition show different fields.
@@ -79,6 +89,27 @@ struct ibCompositionOutputInfo
 	ibCompositionOutputKind                    m_kind = ibCompositionOutputKind::Grouping;
 	std::vector<ibQueryLowering::OutputColumn> m_schema;
 	wxString                                   m_name;   // what the output is called, when it is
+
+	// HOW MANY OF THE DIMENSIONS ARE THE ROWS'. Both axes fold in one `TOTALS BY`, rows first (see
+	// AppendSettingsClauses), so this is the seam between them and nothing else marks it.
+	size_t                                     m_rowLevels = 0;
+
+	// IS THIS THE COLUMN-TOTALS PASS? The second fold of a cross-table (see WantsColumnTotals) reads
+	// the same output folded by its column keys alone, and arrives through the same calls — so the
+	// driver is told which pass it is in rather than having to tell from the shape. It cannot: "a
+	// table folded by its columns only" is also what a legitimate output with no row axis looks like.
+	bool                                       m_columnTotals = false;
+
+	// ⭐ AND IT IS ASKED, NOT PUBLISHED AS A NUMBER TO COMPARE AGAINST. The driver's question is
+	// "which axis is this column?", so that is what it gets — handing it the seam and letting every
+	// printer write `column.m_level < info.m_rowLevels` is the same rule spelled out in as many
+	// places as there are drivers, and it is wrong in all of them the day a third axis exists.
+	ibCompositionAxis AxisOf(const ibQueryLowering::OutputColumn& column) const {
+		if (column.m_role != ibQueryLowering::ibColumnRole::Dimension || column.m_level < 0)
+			return ibCompositionAxis::None;
+		return (static_cast<size_t>(column.m_level) < m_rowLevels)
+			? ibCompositionAxis::Rows : ibCompositionAxis::Columns;
+	}
 };
 
 // The OUTPUT DRIVER — the passive sink the composer writes the walked result into.
@@ -123,8 +154,15 @@ public:
 		OnRow(level, false, values);
 	}
 
-	// The output ENDED. `totals` — it produced a folded tree rather than flat rows.
-	virtual void OnOutputEnd(bool totals) { OnComplete(totals); }
+	// (⛔ NO `OnOutputEnd`. It took the same argument as `OnComplete`, said the same thing, and every
+	//  driver that ever answered answered the second one — so the pair was not a base verb with a
+	//  richer twin (which is what OnOutputBegin/OnColumns and OnGroup/OnRow are), it was one verb
+	//  spelled twice. Audit, docs/composer-arc-queue.md § C8: nothing overrode it, ever.
+	//
+	//  ⚠ AND THAT IS THE TEST FOR THE REST OF THIS VOCABULARY, since it is easy to over-apply: a
+	//  second verb earns its place when it CARRIES MORE — a kind and a schema rather than a schema,
+	//  a heading or a detail rather than a row. When both carry the same, one of them is a synonym,
+	//  and a synonym in a virtual is a second thing to keep in step for nothing.)
 
 	// The output schema (projection order) — before any row.
 	virtual void OnColumns(const std::vector<ibQueryLowering::OutputColumn>& schema) = 0;
@@ -145,6 +183,21 @@ public:
 	// change what the list reads. (When the settings grow an explicit "grand totals" switch of their
 	// own, this is the seam it lands on.)
 	virtual bool WantsGrandTotal() const { return false; }
+
+	// ⭐⭐ …AND WHETHER IT WANTS THE COLUMN TOTALS, which is the same kind of question and the reason
+	// this is a predicate rather than a verb: the reader says what it needs, and the answer arrives
+	// through the calls it already understands.
+	//
+	// A CROSS-TABLE NEEDS A SECOND FOLD AND THERE IS NO WAY AROUND IT. The keys fold rows-then-
+	// columns, so every prefix of that order has a subtotal — the grand total, and each row's — and
+	// "the columns alone" is not a prefix of it. The other order would hand back the column totals
+	// and lose the rows'. One tree cannot hold both, and computing them here from the cells would be
+	// wrong for every measure that is not a sum: an average of averages is not the average, and a
+	// count of distinct values cannot be added up at all.
+	//
+	// So the composition reads a second time, folding by the column keys only. It is paid for by the
+	// reader that asked — a list never does, a report does only when its output is a table.
+	virtual bool WantsColumnTotals() const { return false; }
 
 	// The page ENVELOPE — a paged driver (the list fetch: a stack object built per
 	// Get*Fetch call carrying direction / anchor / count) fills the request and
@@ -596,10 +649,10 @@ public:
 	// so it stays exactly where the author put it — dropping it here would delete a setting nobody
 	// touched, and the rows under the last heading would silently stop being printed.
 	void CollapseEmptyLevels() {
-		std::vector<GroupNode>& chain = LevelChain();
-		chain.erase(std::remove_if(chain.begin(), chain.end(), [](const GroupNode& level) {
-			return level.m_kind == ibCompositionLevelKind::Grouping && !level.m_settings.m_group.IsOk();
-		}), chain.end());
+		for (std::vector<GroupNode>* chain : { &Root().m_rowGroups, &Root().m_columnGroups })
+			chain->erase(std::remove_if(chain->begin(), chain->end(), [](const GroupNode& level) {
+				return level.m_kind == ibCompositionLevelKind::Grouping && !level.m_settings.m_group.IsOk();
+			}), chain->end());
 	}
 
 	// ⚠ NO "AppendDetails" VERB. A detail level is a level with no fields, and it is made where every
@@ -633,7 +686,7 @@ public:
 	virtual bool Run(ibCompositionDriver& /*driver*/) { return false; }
 
 	// READ ONE OUTPUT and hand its rows to `driver` in the node language (OnOutputBegin / OnGroup /
-	// OnDetail / OnOutputEnd). The realisation decides HOW — rendered text for the DB composer, the
+	// OnDetail / OnComplete). The realisation decides HOW — rendered text for the DB composer, the
 	// live rows for the RAM one.
 	virtual bool RunOutput(const Output& /*output*/, ibCompositionDriver& /*driver*/) { return false; }
 
@@ -649,9 +702,29 @@ public:
 		for (Output& output : m_outputs) {
 			if (output.m_driver == nullptr)
 				continue;
+			if (!Declares(output))
+				continue;   // nothing was said about it — see below
 			read = RunOutput(output, *output.m_driver) || read;
 		}
 		return read;
+	}
+
+	// ⭐⭐ DOES THIS OUTPUT DECLARE ANYTHING? A composition is born with one output and keeps it, so a
+	// structure a person built beside it leaves that first one standing with nothing in it — no
+	// levels on either axis, not a table, no fields of its own. The settings tree does not show such
+	// a row (it has no children); printing it anyway put a stray block of grand totals above the
+	// report, and a person looking at the structure had nothing to click to make it go away (Max,
+	// 2026-08-25: "what is that rubbish at the top, there is no output there").
+	//
+	// ⚠ THE LONE OUTPUT IS NOT THAT CASE and must still print. A composition nobody structured is
+	// exactly one empty output, and it means "the rows as they are" — which is what every list and
+	// every plain report is. Emptiness only reads as "not declared" when something else WAS.
+	bool Declares(const Output& output) const {
+		if (m_outputs.size() == 1)
+			return true;
+		return !output.m_rowGroups.empty() || !output.m_columnGroups.empty()
+			|| output.Kind() == ibCompositionOutputKind::Table
+			|| !output.m_selected.empty();
 	}
 
 public:
@@ -731,13 +804,18 @@ public:
 		// saved, cannot travel to the web and has no business in a description.
 		ibCompositionDriver*     m_driver = nullptr;
 
-		// WHAT THIS OUTPUT IS — read off its groupings, never stored beside them. A column grouping
-		// makes it a cross-table; without one it is an ordinary grouping (and with no row grouping
-		// either, that grouping is of nothing, which is how detail rows are asked for).
-		ibCompositionOutputKind Kind() const {
-			return m_columnGroups.empty() ? ibCompositionOutputKind::Grouping
-			                              : ibCompositionOutputKind::Table;
-		}
+		// WHAT THIS OUTPUT IS — the decision, not a reading of what has been filled in.
+		//
+		// 🛑 IT USED TO BE DERIVED: `m_columnGroups.empty() ? Grouping : Table`, and that was right
+		// while the kind meant "has a column axis been filled in". It stopped being right the moment
+		// a person could ADD A TABLE and get one that is empty on both axes — the structure tree
+		// would have shown it as a plain grouping, with nowhere to put the first column heading.
+		//
+		// ⚠ A TABLE WITH NO COLUMN AXIS FILLED IN IS STILL A TABLE, and that is the whole point of
+		// storing it: the axes are undeletable nodes of a table, so they exist before anything is in
+		// them (Max, 2026-08-25). What reads the CONTENT is the printer, which asks whether there is
+		// anything to lay out across the page — a different question, asked where it is answerable.
+		ibCompositionOutputKind Kind() const { return m_kind; }
 	};
 
 	// THE OUTPUTS, in the order they are produced. There is always at least one — a composition that
@@ -782,11 +860,44 @@ public:
 	// those are inherited down the tree" (Max, 2026-08-23) — so an axis made only of those groups by
 	// nothing, and `TOTALS` must not be written for it. Asked here so the two places that decide it
 	// cannot answer differently.
+	// ⭐ BOTH AXES, for the reason the type has one level and no second set of anything: a table
+	// whose only grouping stands across the page is grouped, and a gate that looked down the page
+	// only would have written no TOTALS for it — an empty report, with the setting plainly on screen.
 	static bool HasGroupingFields(const Output& output) {
-		for (const GroupNode& level : output.m_rowGroups)
-			if (level.m_settings.m_group.IsOk())
-				return true;
+		for (const std::vector<GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups })
+			for (const GroupNode& level : *axis)
+				if (level.m_settings.m_group.IsOk())
+					return true;
 		return false;
+	}
+
+	// ⭐ THE LEVEL AT A WALK DEPTH, wherever it lives. The fold nests rows then columns (see
+	// AppendSettingsClauses), so a depth past the last row level is a COLUMN level — and asking
+	// `m_rowGroups[depth - 1]` there falls off the end and answers "no filter, no order", which is
+	// the silent yes again: a cross-table's columns would hide and sort by nothing at all.
+	//
+	// Depth 0 is the grand total and belongs to no level; past the last level of either axis there
+	// is nothing, and both are the same nullptr because both mean "nobody stated anything here".
+	static const GroupNode* LevelAt(const Output& output, int depth) {
+		if (depth <= 0)
+			return nullptr;
+		size_t at = static_cast<size_t>(depth) - 1;
+		if (at < output.m_rowGroups.size())
+			return &output.m_rowGroups[at];
+		at -= output.m_rowGroups.size();
+		return (at < output.m_columnGroups.size()) ? &output.m_columnGroups[at] : nullptr;
+	}
+
+	// HOW MANY DIMENSIONS AN AXIS CONTRIBUTES — and it counts levels that actually WRITE A KEY, not
+	// levels. A level with no fields is the detail records: it writes no `BY` (see
+	// AppendSettingsClauses) and never becomes a dimension, so counting it here would move the seam
+	// between the axes by one and print a row heading across the page.
+	static size_t DimensionCount(const std::vector<GroupNode>& axis) {
+		size_t count = 0;
+		for (const GroupNode& level : axis)
+			if (level.m_settings.m_group.IsOk())
+				++count;
+		return count;
 	}
 
 	// ⭐⭐ THE ROWS ARE NOT ASKED FOR — THEY ARE WHAT THE TOTALS ARE MADE OF. Where the groupings end,
@@ -843,16 +954,57 @@ public:
 		std::vector<wxString> selected;
 		AppendFields(selected, m_commonSelected);
 		AppendFields(selected, output.m_selected);
-		// ⏭ AND THE FIELDS A NODE NAMES ARE **NOT** HERE YET — held back on 2026-08-24 to keep the
-		// diagnostic build cheap, and to be put back once the journal says whether the projection is
-		// what is actually short. The invariant is not in doubt: the inner query becomes a derived
-		// table and the outer folds over it, so anything the outer mentions — what a level groups by,
-		// orders by, filters on or shows — the inner owes.
+		// WHAT A NODE NAMES IS **NOT** HERE — deliberately. This is what the report SHOWS down to the
+		// output, and a node's own fields are what IT shows; the two below are the other two
+		// questions, asked in the two places that have them.
 		return selected;
 	}
 	std::vector<wxString> SelectedFor(const Output& output, const GroupNode& level) const {
 		std::vector<wxString> selected = SelectedFor(output);
 		AppendFields(selected, level.m_selected);
+		return selected;
+	}
+
+	// ⭐⭐ WHAT THE READ OWES — every name anything above it will ask for BY NAME, which is NOT the
+	// same list as what the report shows. A level hides on a field, orders on a field and selects
+	// fields of its own, and each of those is answered off the row already in hand. A name the read
+	// did not fetch cannot be answered on.
+	//
+	// 🛑 AND THE ANSWER IS NOT AN ERROR — IT IS A SILENT YES. That is why nothing showed: a level
+	// filter that cannot find its column hides nothing (see ibLevelNodeShows), a sort key missing
+	// from the schema orders nothing (LevelOrder), and a field a node selected simply never arrives.
+	// The setting stays on screen, saves, travels through variants, and means nothing.
+	//
+	// (Held back on 2026-08-24 to keep the diagnostic build cheap. The invariant was never in doubt
+	//  and stood written beside it: the inner query becomes a derived table and the outer folds over
+	//  it, so anything the outer mentions, the inner owes.)
+	//
+	// ⭐ BOTH AXES, because a level is the same thing on either one — a cross-table's columns hide,
+	// order and select exactly as its rows do. A projection that knew only about rows would be a
+	// second place to remember when the other axis lands, and it would be remembered late.
+	static void AppendFilterFields(std::vector<wxString>& into, const ibFilterNodeDescription& node) {
+		if (node.m_kind == ibFilterNodeKind_Group) {
+			for (const ibFilterNodeDescription& child : node.m_children)
+				AppendFilterFields(into, child);
+			return;
+		}
+		// A SWITCHED-OFF LINE STILL OWES ITS COLUMN. `m_use` is a checkbox on a line that is already
+		// written; turning it back on must not need a re-read to start meaning something.
+		if (node.m_left.IsField())  AppendFields(into, { node.m_left.m_path });
+		if (node.m_right.IsField()) AppendFields(into, { node.m_right.m_path });
+	}
+	std::vector<wxString> ProjectionFor(const Output& output) const {
+		std::vector<wxString> selected = SelectedFor(output);
+		for (const std::vector<GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups }) {
+			for (const GroupNode& level : *axis) {
+				AppendFields(selected, level.m_selected);
+				for (const ibFilterNodeDescription& node : level.m_settings.m_filter.m_nodes)
+					AppendFilterFields(selected, node);
+				for (const ibSortLineDescription& line : level.m_settings.m_sort.m_lines)
+					if (!line.m_path.IsEmpty())
+						AppendFields(selected, { line.m_path });
+			}
+		}
 		return selected;
 	}
 
@@ -973,7 +1125,16 @@ public:
 
 	// Read one output — see the base declaration. The first output rides the cached parse (a list
 	// re-reads it on every page); any other renders and parses on the spot.
+	//
+	// It is the passes plus the ending: a table asked for its column totals is folded a second time,
+	// and the output ends once, after both (see the body).
 	bool RunOutput(const Output& output, ibCompositionDriver& driver) override;
+
+	// ONE FOLD OF ONE OUTPUT, handed to the driver in the node language. `columnTotals` says which
+	// pass this is — the driver is told rather than left to guess, because a table folded by its
+	// columns alone is indistinguishable from an output that simply has no row axis.
+	bool RunOutputPass(const Output& output, ibCompositionDriver& driver,
+		bool columnTotals, bool& hasTotalsOut);
 
 	// Execute for ONE output: the cached parse for the first, a fresh render + parse for any other.
 	ibDataQueryResult ExecuteFor(const Output& output, std::vector<ibQueryLowering::OutputColumn>& schema,

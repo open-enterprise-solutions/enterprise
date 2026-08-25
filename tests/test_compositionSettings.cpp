@@ -216,6 +216,88 @@ TEST(ComposerSettings, Selected_FieldNamedTwiceIsNamedOnce)
 	EXPECT_EQ(wxT("Code"), selected[0]);
 }
 
+// ⭐⭐ WHAT THE READ OWES IS NOT WHAT THE REPORT SHOWS. A level hides on a field, orders on a field
+// and selects fields of its own — all three answered off the row already read — so all three are
+// owed by the projection even though only the third is ever printed.
+//
+// 🛑 THE MISS WAS SILENT AND THAT IS THE POINT: a filter whose column is not in the schema hides
+// nothing, a sort key not in the schema orders nothing. The setting stayed on screen and stopped
+// meaning anything, which is why this is asserted rather than watched for.
+TEST(ComposerSettings, Projection_OwesWhatEveryLevelNamesByName)
+{
+	ibDataDBComposer composer;
+	composer.CommonSelected() = { wxT("Code") };
+
+	ibDataComposer::Output& output = composer.Outputs().front();
+	output.m_selected = { wxT("Date") };
+
+	ibDataComposer::GroupNode level;
+	level.m_kind = ibCompositionLevelKind::Grouping;
+	level.m_settings.m_group.Append(wxT("Partner"));
+	level.m_selected = { wxT("Partner.Region") };                       // shown by the level
+	level.m_settings.m_filter.Append(wxT("Partner.IsActive"),
+		ibComparisonKind_Equal, ibValue(true));                         // hidden on by the level
+	level.m_settings.m_sort.Append(wxT("Partner.Rating"), /*ascending*/false);   // ordered on
+	output.m_rowGroups.push_back(level);
+
+	// What the report shows down to the output is unchanged — the level's fields are the LEVEL's.
+	const std::vector<wxString> shown = composer.SelectedFor(output);
+	ASSERT_EQ(2u, shown.size());
+	EXPECT_EQ(wxT("Code"), shown[0]);
+	EXPECT_EQ(wxT("Date"), shown[1]);
+
+	// What the read owes carries all three, in the order they were said.
+	const std::vector<wxString> owed = composer.ProjectionFor(output);
+	ASSERT_EQ(5u, owed.size());
+	EXPECT_EQ(wxT("Code"), owed[0]);
+	EXPECT_EQ(wxT("Date"), owed[1]);
+	EXPECT_EQ(wxT("Partner.Region"), owed[2]);
+	EXPECT_EQ(wxT("Partner.IsActive"), owed[3]);
+	EXPECT_EQ(wxT("Partner.Rating"), owed[4]);
+}
+
+// A SWITCHED-OFF LINE STILL OWES ITS COLUMN — `m_use` is a checkbox on a line already written, and
+// turning it back on must not need a re-read to start meaning something.
+TEST(ComposerSettings, Projection_OwesTheColumnOfASwitchedOffLine)
+{
+	ibDataDBComposer composer;
+	ibDataComposer::Output& output = composer.Outputs().front();
+
+	ibDataComposer::GroupNode level;
+	level.m_settings.m_filter.Append(wxT("Partner.IsActive"),
+		ibComparisonKind_Equal, ibValue(true), /*use*/false);
+	output.m_rowGroups.push_back(level);
+
+	const std::vector<wxString> owed = composer.ProjectionFor(output);
+	ASSERT_EQ(1u, owed.size());
+	EXPECT_EQ(wxT("Partner.IsActive"), owed[0]);
+}
+
+// ⭐ A LEVEL IS THE SAME THING ON EITHER AXIS. The columns of a cross-table hide, order and select
+// exactly as its rows do, so the projection asks both — and asks them before there is anything to
+// print across, because a read that owes only what it can already draw is a second thing to
+// remember later.
+TEST(ComposerSettings, Projection_AsksTheColumnAxisToo)
+{
+	ibDataDBComposer composer;
+	ibDataComposer::Output& output = composer.Outputs().front();
+
+	ibDataComposer::GroupNode rows;
+	rows.m_settings.m_group.Append(wxT("Partner"));
+	rows.m_selected = { wxT("Partner.Region") };
+	output.m_rowGroups.push_back(rows);
+
+	ibDataComposer::GroupNode columns;
+	columns.m_settings.m_group.Append(wxT("Warehouse"));
+	columns.m_selected = { wxT("Warehouse.Kind") };
+	output.m_columnGroups.push_back(columns);
+
+	const std::vector<wxString> owed = composer.ProjectionFor(output);
+	ASSERT_EQ(2u, owed.size());
+	EXPECT_EQ(wxT("Partner.Region"), owed[0]);
+	EXPECT_EQ(wxT("Warehouse.Kind"), owed[1]);
+}
+
 // ===========================================================================
 //  6-7. The description — round trip and equality
 // ===========================================================================
@@ -404,4 +486,151 @@ TEST(ComposerSettings, Scope_IsNotASettingAndPopsBack)
 	composer.RestoreScope(scope);
 	EXPECT_EQ(0u, composer.ScopeCount());
 	EXPECT_EQ(1u, composer.GetUserSettingsDesc().m_filter.m_nodes.size());
+}
+
+// ⭐⭐ WHAT AN OUTPUT IS, IS A DECISION AND IS STORED. It used to be read off the content —
+// `m_columnGroups.empty() ? Grouping : Table` — which answered "has a column axis been filled in",
+// a different question. A table is ADDED empty and its two axes are undeletable, so it has to be a
+// table before anything is in it.
+TEST(CompositionDescription, AnEmptyTableIsStillATable)
+{
+	ibCompositionDescription written;
+	written.m_variants[0].m_name = wxT("Main");
+
+	ibOutputDescription table;
+	table.m_kind = ibCompositionOutputKind::Table;   // added, not yet filled in
+	written.m_variants[0].m_settings.m_structure.push_back(table);
+
+	ibDataNode node;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::WriteNode(node, written));
+
+	ibCompositionDescription read;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::ReadNode(node, read));
+
+	ASSERT_EQ(1u, read.m_variants[0].m_settings.m_structure.size());
+	const ibOutputDescription& back = read.m_variants[0].m_settings.m_structure[0];
+	EXPECT_EQ(ibCompositionOutputKind::Table, back.m_kind);
+	EXPECT_TRUE(back.m_rowGroups.empty());
+	EXPECT_TRUE(back.m_columnGroups.empty());
+}
+
+// ⚠ A RECORD WRITTEN BEFORE THE KIND EXISTED reads back 0 — Grouping — and that is right for every
+// output that could be authored then, except one: a table could not be SAID, but its column axis
+// could be stored. So the content answers where the record is silent.
+TEST(CompositionDescription, AnOlderRecordWithColumnsReadsBackAsATable)
+{
+	ibCompositionDescription written;
+	written.m_variants[0].m_name = wxT("Main");
+
+	ibOutputDescription output;                       // kind left at Grouping, as an old file has it
+	ibLevelDescription columns;
+	columns.m_settings.m_group.Append(wxT("Warehouse"));
+	output.m_columnGroups.push_back(columns);
+	written.m_variants[0].m_settings.m_structure.push_back(output);
+
+	ibDataNode node;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::WriteNode(node, written));
+	// …and the stored kind is scrubbed, standing in for a file that never had the property.
+	ibCompositionDescription read;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::ReadNode(node, read));
+
+	EXPECT_EQ(ibCompositionOutputKind::Table,
+		read.m_variants[0].m_settings.m_structure[0].m_kind);
+}
+
+// A GROUPING STAYS A GROUPING. The rescue above must not fire on the ordinary output — it keys on a
+// stored COLUMN axis, which a grouping never has.
+TEST(CompositionDescription, AnOutputWithNoColumnAxisStaysAGrouping)
+{
+	ibCompositionDescription written;
+	written.m_variants[0].m_name = wxT("Main");
+
+	ibOutputDescription output;
+	ibLevelDescription rows;
+	rows.m_settings.m_group.Append(wxT("Partner"));
+	output.m_rowGroups.push_back(rows);
+	written.m_variants[0].m_settings.m_structure.push_back(output);
+
+	ibDataNode node;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::WriteNode(node, written));
+	ibCompositionDescription read;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::ReadNode(node, read));
+
+	EXPECT_EQ(ibCompositionOutputKind::Grouping,
+		read.m_variants[0].m_settings.m_structure[0].m_kind);
+}
+
+// ⭐⭐ A LEVEL CAN BE GROUPED BY PERIODS FROM THE SETTINGS WINDOW, and it is the same three parts the
+// query text says: `BY <field> PERIODS(unit, from, to)`. Stored as TEXT, because a description goes
+// to a file and an expression tree does not — what a person types is `&From`, a parameter.
+TEST(ComposerSettings, Periods_AreStoredOnTheGroupingLine)
+{
+	ibCompositionDescription written;
+	written.m_variants[0].m_name = wxT("Main");
+
+	ibOutputDescription output;
+	ibLevelDescription level;
+	level.m_settings.m_group.Append(wxT("Date"));
+	level.m_settings.m_group.m_lines[0].m_periods.m_unit = wxT("Month");
+	level.m_settings.m_group.m_lines[0].m_periods.m_to   = wxT("&To");   // no lower bound stated
+	output.m_rowGroups.push_back(level);
+	written.m_variants[0].m_settings.m_structure.push_back(output);
+
+	ibDataNode node;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::WriteNode(node, written));
+	ibCompositionDescription read;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::ReadNode(node, read));
+
+	const ibGroupPeriodsDescription& back =
+		read.m_variants[0].m_settings.m_structure[0].m_rowGroups[0].m_settings.m_group.m_lines[0].m_periods;
+	EXPECT_TRUE(back.IsOk());
+	EXPECT_EQ(wxT("Month"), back.m_unit);
+	EXPECT_TRUE(back.m_from.IsEmpty()) << "a bound nobody stated stays unstated";
+	EXPECT_EQ(wxT("&To"), back.m_to);
+}
+
+// AN ORDINARY GROUPING LINE HAS NO PERIODICITY, and "is there any" is asked of the unit — a unit
+// with no periodicity is nothing, and periodicity with no unit is impossible.
+TEST(ComposerSettings, Periods_AnOrdinaryLineHasNone)
+{
+	ibGroupDescription group;
+	group.Append(wxT("Partner"));
+	EXPECT_FALSE(group.m_lines[0].m_periods.IsOk());
+}
+
+// ⭐⭐ AN OUTPUT NOBODY DECLARED ANYTHING ABOUT IS NOT PRINTED — because the settings tree does not
+// show it either, and the two must agree. A composition is born with one output and keeps it, so a
+// structure built beside it leaves that first one empty; printing it put a stray block of grand
+// totals above the report, with nothing in the structure a person could click to remove it.
+TEST(ComposerSettings, AnUndeclaredOutputIsNotRead)
+{
+	ibDataDBComposer composer;
+	composer.Outputs().resize(2);
+
+	ibDataComposer::GroupNode level;
+	level.m_settings.m_group.Append(wxT("Partner"));
+	composer.Outputs()[1].m_rowGroups.push_back(level);
+
+	EXPECT_FALSE(composer.Declares(composer.Outputs()[0])) << "empty, and something else was declared";
+	EXPECT_TRUE(composer.Declares(composer.Outputs()[1]));
+}
+
+// …AND THE LONE OUTPUT IS NOT THAT CASE. A composition nobody structured IS one empty output, and it
+// means "the rows as they are" — every list and every plain report.
+TEST(ComposerSettings, TheLoneEmptyOutputStillReads)
+{
+	ibDataDBComposer composer;
+	ASSERT_EQ(1u, composer.Outputs().size());
+	EXPECT_TRUE(composer.Declares(composer.Outputs().front()));
+}
+
+// A TABLE JUST ADDED IS EMPTY ON BOTH AXES and is still an output somebody declared — the kind is
+// what says so, which is why it is stored (see AnEmptyTableIsStillATable).
+TEST(ComposerSettings, AnEmptyTableCountsAsDeclared)
+{
+	ibDataDBComposer composer;
+	composer.Outputs().resize(2);
+	composer.Outputs()[1].m_kind = ibCompositionOutputKind::Table;
+
+	EXPECT_TRUE(composer.Declares(composer.Outputs()[1]));
 }

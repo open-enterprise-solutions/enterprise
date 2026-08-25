@@ -14,6 +14,7 @@
 #include "backend/backend_exception.h"        // ibBackendCoreException
 #include "backend/query/queryReadState.h"  // ibQueryReadState — one build, one state of the data
 #include "backend/query/queryRender.h"        // ibQueryColumnFromPath — a dotted path becomes a column, once
+#include "backend/query/queryKeywords.h"      // ibQueryKeywordText — a grouping line is written in the query's own words
 
 //////////////////////////////////////////////////////////////////////
 // sources
@@ -413,7 +414,7 @@ wxString ibDataDBComposer::RenderTextFor(const Output& output) const
 {
 	// Anything asked of this read — by the composition above it or by the output itself. Miss one
 	// and the author's verbatim text is handed back unchanged, with the setting silently dropped.
-	const bool hasSettings = !SelectedFor(output).empty()
+	const bool hasSettings = !ProjectionFor(output).empty()
 	                       || output.m_settings.m_filter.IsOk() || output.m_settings.m_sort.IsOk()
 	                       || !m_scopeConditions.empty()
 	                       || !m_resources.empty() || !ChainFrom(output).empty()
@@ -442,7 +443,7 @@ wxString ibDataDBComposer::RenderTextFor(const Output& output) const
 	// to pick from (a dynamic list vends them as its column collection) — the same names, both sides.
 	if (!m_sourceText.IsEmpty()) {
 		wxString authorProj;
-		for (const wxString& name : SelectedFor(output)) {
+		for (const wxString& name : ProjectionFor(output)) {
 			if (!authorProj.IsEmpty())
 				authorProj += wxT(", ");
 			authorProj += name;
@@ -467,8 +468,9 @@ wxString ibDataDBComposer::RenderTextFor(const Output& output) const
 
 	// --- the projection -------------------------------------------------------
 	wxString proj;
-	if (!SelectedFor(output).empty()) {
-		for (const wxString& name : SelectedFor(output)) {
+	const std::vector<wxString> projected = ProjectionFor(output);
+	if (!projected.empty()) {
+		for (const wxString& name : projected) {
 			if (!proj.IsEmpty())
 				proj += wxT(", ");
 			proj += name;
@@ -527,6 +529,33 @@ wxString ibDataDBComposer::RenderTextFor(const Output& output) const
 // WHERE / ORDER BY / TOTALS — the settings, written the same way whichever source they stand over.
 // A composed source and an author's query differ in their FROM and in nothing else: the filter a
 // person set is the same filter, and two spellings of it would be two chances to drift.
+// ⭐ ONE GROUPING LINE, WRITTEN AS THE QUERY SAYS IT — `<path> [HIERARCHY] [PERIODS(unit, from, to)]`.
+//
+// The FORM is `ibRenderTotalField`'s (queryRender.cpp) and this is the same sentence written from
+// the stored side: a description holds the bounds as TEXT (a description goes to a file, an
+// expression tree does not), so there is nothing to render them from — they are already what the
+// author typed, usually `&Parameter`.
+//
+// ⚠ A BOUND LEFT OUT MEANS "FROM THE DATA" and keeps its position: `PERIODS(Month, , &To)`. Filling
+// one in would be this writer answering a question the person left open.
+static void ibAppendGroupLine(wxString& text, const ibGroupLineDescription& line)
+{
+	text += line.m_path;
+	if (line.m_kind == ibQueryDimUnfold::Hierarchy)
+		text += wxT(" ") + ibQueryKeywordText(ibQueryKeyword::Hierarchy);
+	else if (line.m_kind == ibQueryDimUnfold::HierarchyOnly)
+		text += wxT(" ") + ibQueryKeywordText(ibQueryKeyword::HierarchyOnly);
+
+	if (!line.m_periods.IsOk())
+		return;
+	text += wxT(" ") + ibQueryKeywordText(ibQueryKeyword::Periods) + wxT("(") + line.m_periods.m_unit;
+	if (!line.m_periods.m_from.IsEmpty())
+		text += wxT(", ") + line.m_periods.m_from;
+	if (!line.m_periods.m_to.IsEmpty())
+		text += (line.m_periods.m_from.IsEmpty() ? wxT(", , ") : wxT(", ")) + line.m_periods.m_to;
+	text += wxT(")");
+}
+
 void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& output) const
 {
 	// ⭐ WHERE A FILTER SITS DECIDES WHAT IT DOES (Max):
@@ -601,13 +630,18 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& outpu
 	//
 	// A key that names a RESOURCE stays out: an aggregate does not exist on the detail read, and it
 	// is the one thing a heading DOES carry — so it is ordered on the walk instead (LevelOrder).
-	for (const GroupNode& level : output.m_rowGroups) {
-		for (const ibSortLineDescription& line : level.m_settings.m_sort.m_lines) {
-			bool isResource = false;
-			for (const ibResourceDescription& resource : m_resources)
-				if (resource.m_path.IsSameAs(line.m_path, false)) { isResource = true; break; }
-			if (!isResource)
-				writeKey(line.m_path, line.m_ascending);
+	//
+	// BOTH AXES, in the order they fold: a column heading is ordered by a field exactly as a row
+	// heading is, and it is the same read that has to come back sorted.
+	for (const std::vector<GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups }) {
+		for (const GroupNode& level : *axis) {
+			for (const ibSortLineDescription& line : level.m_settings.m_sort.m_lines) {
+				bool isResource = false;
+				for (const ibResourceDescription& resource : m_resources)
+					if (resource.m_path.IsSameAs(line.m_path, false)) { isResource = true; break; }
+				if (!isResource)
+					writeKey(line.m_path, line.m_ascending);
+			}
 		}
 	}
 
@@ -643,34 +677,39 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& outpu
 					continue;   // a line with no field is the absence of one
 				text += (wroteBy ? wxT(", ") : wxT(" BY "));
 				wroteBy = true;
-				text += line.m_path;
-				if (line.m_kind == ibQueryDimUnfold::Hierarchy)
-					text += wxT(" HIERARCHY");
-				else if (line.m_kind == ibQueryDimUnfold::HierarchyOnly)
-					text += wxT(" HIERARCHYONLY");
+				ibAppendGroupLine(text, line);
 			}
 		}
-		const std::vector<GroupNode>& chain = ChainFrom(output);
-		for (size_t i = 0; !GetCurrentGroupDesc().IsOk() && i < chain.size(); ++i) {
-			const std::vector<TotalByItem>& fields = chain[i].m_settings.m_group.m_lines;
-			if (fields.empty())
-				continue;
-			text += (wroteBy ? wxT(", ") : wxT(" BY "));
-			wroteBy = true;
-			const bool bracketed = fields.size() > 1;
-			if (bracketed)
-				text += wxT("(");
-			for (size_t f = 0; f < fields.size(); ++f) {
-				if (f > 0)
-					text += wxT(", ");
-				text += fields[f].m_path;
-				if (fields[f].m_kind == ibQueryDimUnfold::Hierarchy)
-					text += wxT(" HIERARCHY");
-				else if (fields[f].m_kind == ibQueryDimUnfold::HierarchyOnly)
-					text += wxT(" HIERARCHYONLY");
+		const auto writeAxis = [&](const std::vector<GroupNode>& axis) {
+			for (size_t i = 0; i < axis.size(); ++i) {
+				const std::vector<TotalByItem>& fields = axis[i].m_settings.m_group.m_lines;
+				if (fields.empty())
+					continue;
+				text += (wroteBy ? wxT(", ") : wxT(" BY "));
+				wroteBy = true;
+				const bool bracketed = fields.size() > 1;
+				if (bracketed)
+					text += wxT("(");
+				for (size_t f = 0; f < fields.size(); ++f) {
+					if (f > 0)
+						text += wxT(", ");
+					ibAppendGroupLine(text, fields[f]);
+				}
+				if (bracketed)
+					text += wxT(")");
 			}
-			if (bracketed)
-				text += wxT(")");
+		};
+		// ⭐⭐ A CROSS-TABLE IS ONE FOLD, NOT TWO. Both axes' keys go into the SAME `BY`, rows first
+		// and columns under them, and the server returns one row per intersection — which is exactly
+		// what a cell IS. Nothing here knows the word "cross": the shape appears because the keys
+		// were written in an order, and the printer reads that order back off `m_rowGroups.size()`.
+		//
+		// ROWS FIRST because the fold nests: a cell stands where a row key has already been chosen,
+		// so the row keys are the outer ones. Writing columns first would give a table transposed —
+		// the same numbers, in the wrong place, with nothing to say which was meant.
+		if (!GetCurrentGroupDesc().IsOk()) {
+			writeAxis(output.m_rowGroups);
+			writeAxis(output.m_columnGroups);
 		}
 
 		// ⭐⭐ RESOURCES WITH NO GROUPING ARE A GRAND TOTAL — `TOTALS COUNT(x) BY OVERALL`, which is
@@ -870,9 +909,13 @@ static bool OutputWrites(const ibDataComposer::Output& output, ibSelectorNodeKin
 {
 	if (kind != ibSelectorNodeKind::Detail)
 		return true;
-	for (const ibDataComposer::GroupNode& level : output.m_rowGroups)
-		if (level.m_kind == ibCompositionLevelKind::Details)
-			return true;
+	// EITHER AXIS MAY NAME THEM (Max, 2026-08-25: "detail records can be on the rows as well as on
+	// the groupings"). A table whose columns end in detail records is asking for its resources laid
+	// out across the page, which is the plainest cross-table there is.
+	for (const std::vector<ibDataComposer::GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups })
+		for (const ibDataComposer::GroupNode& level : *axis)
+			if (level.m_kind == ibCompositionLevelKind::Details)
+				return true;
 	return false;
 }
 
@@ -930,12 +973,13 @@ static bool ibLevelNodeShows(const ibFilterNodeDescription& node,
 bool ibDataDBComposer::LevelShows(const Output& output, int depth,
 	const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row) const
 {
-	// Depth 0 is the grand total and belongs to no level; past the last level there is nothing left
-	// to hide by.
-	if (depth <= 0 || static_cast<size_t>(depth) > output.m_rowGroups.size())
+	// Depth 0 is the grand total and belongs to no level; past the last level of either axis there
+	// is nothing left to hide by.
+	const GroupNode* found = LevelAt(output, depth);
+	if (found == nullptr)
 		return true;
 
-	const GroupNode& level = output.m_rowGroups[static_cast<size_t>(depth) - 1];
+	const GroupNode& level = *found;
 	for (const ibFilterNodeDescription& node : level.m_settings.m_filter.m_nodes)
 		if (!ibLevelNodeShows(node, schema, row))
 			return false;
@@ -957,12 +1001,13 @@ std::vector<ibSelectorSort> ibDataDBComposer::LevelOrder(const Output& output, i
 	const std::vector<ibQueryLowering::OutputColumn>& schema) const
 {
 	std::vector<ibSelectorSort> keys;
-	// Depth 0 is the grand total — one node, and one node has no order. Past the last level there is
-	// no level to have stated one.
-	if (depth <= 0 || static_cast<size_t>(depth) > output.m_rowGroups.size())
+	// Depth 0 is the grand total — one node, and one node has no order. Past the last level of
+	// either axis there is no level to have stated one.
+	const GroupNode* found = LevelAt(output, depth);
+	if (found == nullptr)
 		return keys;
 
-	const GroupNode& level = output.m_rowGroups[static_cast<size_t>(depth) - 1];
+	const GroupNode& level = *found;
 	for (const ibSortLineDescription& line : level.m_settings.m_sort.m_lines) {
 		if (line.m_path.IsEmpty())
 			continue;   // a line with no field is the absence of one — same rule as the output's sort
@@ -1013,7 +1058,37 @@ bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 	return RunOutput(Root(), driver);
 }
 
+// ⭐⭐ ONE OUTPUT, ONE OR TWO FOLDS. A grouping is read once. A cross-table whose reader asks for the
+// column totals is read TWICE — the second time folded by its column keys alone — because the two
+// sets of subtotals cannot come out of one tree: rows-then-columns gives the grand total and every
+// row's, and "the columns alone" is not a prefix of that order. See WantsColumnTotals for why they
+// are not computed from the cells instead.
+//
+// The end of the output is said ONCE, here, after whatever passes it took. A pass that announced its
+// own end would have the printer close the table before its last line arrived.
 bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driver)
+{
+	bool hasTotals = false;
+	const bool read = RunOutputPass(output, driver, /*columnTotals*/false, hasTotals);
+
+	if (read && driver.WantsColumnTotals()
+	    && output.Kind() == ibCompositionOutputKind::Table && !output.m_columnGroups.empty()) {
+		// THE SAME OUTPUT, TURNED ON ITS SIDE — its column axis becomes the ladder and there is no
+		// axis across. Everything else it says (its filter, its sort, the fields it shows) travels
+		// unchanged, because the question is the same question asked down a different key.
+		Output flipped = output;
+		flipped.m_rowGroups = output.m_columnGroups;
+		flipped.m_columnGroups.clear();
+		bool foldedAgain = false;
+		RunOutputPass(flipped, driver, /*columnTotals*/true, foldedAgain);
+	}
+
+	driver.OnComplete(hasTotals);
+	return read;
+}
+
+bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& driver,
+	bool columnTotals, bool& hasTotalsOut)
 {
 	// ONE READ PER REFERENCE — and nothing declared here to arrange it. The reference knows whether it
 	// has read (its own initialised flag), and there is one of it per identity per session, so forty
@@ -1047,6 +1122,23 @@ bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driv
 	info.m_kind   = output.Kind();   // read off its fields — a column grouping is what makes it a cross-table
 	info.m_schema = schema;
 	info.m_name   = output.m_name;
+	// WHERE THE ROWS' DIMENSIONS END — the same count the clause writer wrote them by, asked the
+	// same way, so the two can never disagree about which heading belongs where.
+	//
+	// ⚠ A USER'S GROUPING FLATTENS THE TABLE, and honestly so: it REPLACES the ladder whole (the
+	// rule every setting follows), and a flat list of lines cannot say "these read across the page".
+	// So everything it names is the rows', and the report a person re-grouped by hand comes back a
+	// plain grouping — which is what they asked for by stating one list.
+	info.m_columnTotals = columnTotals;
+	info.m_rowLevels = GetCurrentGroupDesc().IsOk()
+		? [&] {
+			size_t named = 0;
+			for (const ibGroupLineDescription& line : GetCurrentGroupDesc().m_lines)
+				if (!line.m_path.IsEmpty())
+					++named;
+			return named;
+		}()
+		: DimensionCount(output.m_rowGroups);
 	driver.OnOutputBegin(info);
 
 	std::vector<ibValue> row(schema.size());
@@ -1193,8 +1285,7 @@ bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driv
 		walk(sel);
 	}
 
-
-	driver.OnOutputEnd(hasTotals);
+	hasTotalsOut = hasTotals;
 	return true;
 }
 
@@ -1348,15 +1439,18 @@ int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxStr
 	// EVERY LEVEL OF THE LADDER, and every field inside it. A level that loses ALL its fields loses
 	// itself and the levels below move up — the author's deeper grouping is not what stopped
 	// resolving, so it is not what should disappear.
-	for (GroupNode& level : LevelChain()) {
-		std::vector<TotalByItem>& lines = level.m_settings.m_group.m_lines;
-		std::vector<TotalByItem> kept;
-		for (const TotalByItem& item : lines) {
-			if (!resolves(item.m_path)) { ++dropped; continue; }
-			kept.push_back(item);
+	// BOTH AXES: a field that stopped existing stopped existing whichever way its heading reads.
+	for (std::vector<GroupNode>* axis : { &Root().m_rowGroups, &Root().m_columnGroups }) {
+		for (GroupNode& level : *axis) {
+			std::vector<TotalByItem>& lines = level.m_settings.m_group.m_lines;
+			std::vector<TotalByItem> kept;
+			for (const TotalByItem& item : lines) {
+				if (!resolves(item.m_path)) { ++dropped; continue; }
+				kept.push_back(item);
+			}
+			if (kept.size() != lines.size())
+				lines = std::move(kept);
 		}
-		if (kept.size() != lines.size())
-			lines = std::move(kept);
 	}
 	CollapseEmptyLevels();
 

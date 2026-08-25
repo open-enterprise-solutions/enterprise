@@ -218,12 +218,21 @@ struct ibSpreadsheetAreaDescription {
 // Outline grouping description — orthogonal to labels.
 struct ibSpreadsheetGroupDescription {
 	ibSpreadsheetGroupDescription(unsigned int start, unsigned int end,
-		unsigned int level = 1, bool collapsed = false)
-		: m_start(start), m_end(end), m_level(level), m_collapsed(collapsed) {}
+		unsigned int level = 1, bool collapsed = false, int head = -1)
+		: m_start(start), m_end(end), m_level(level), m_collapsed(collapsed), m_head(head) {}
 
 	unsigned int m_start, m_end;
 	unsigned int m_level;
 	bool m_collapsed;
+	// ⭐⭐ WHERE THE MARKER SITS, when the producer already knows. Left at -1 the grid works it out
+	// (the line before the range — see ibGrid::NormalizeRowGroups), which is right for a document
+	// whose groups arrive as HEADINGS with a depth each.
+	//
+	// A cross-table's columns do not arrive that way: a heading's TOTAL closes its group rather than
+	// opening it (Max, 2026-08-26), so there is no line before the range to hang the button on — the
+	// marker belongs on the group's own FIRST column. Stated here, the range is taken as final and
+	// the normaliser leaves it alone.
+	int m_head = -1;
 };
 
 struct ibSpreadsheetRowSizeDescription
@@ -425,8 +434,9 @@ struct ibSpreadsheetDescription {
 	void AddRowGroup(unsigned int start, unsigned int end, unsigned int level = 1, bool collapsed = false) {
 		m_rowGroupAt.emplace_back(start, end, level, collapsed);
 	}
-	void AddColGroup(unsigned int start, unsigned int end, unsigned int level = 1, bool collapsed = false) {
-		m_colGroupAt.emplace_back(start, end, level, collapsed);
+	void AddColGroup(unsigned int start, unsigned int end, unsigned int level = 1, bool collapsed = false,
+		int head = -1) {
+		m_colGroupAt.emplace_back(start, end, level, collapsed, head);
 	}
 	int GetGroupNumberRows() const { return (int)m_rowGroupAt.size(); }
 	int GetGroupNumberCols() const { return (int)m_colGroupAt.size(); }
