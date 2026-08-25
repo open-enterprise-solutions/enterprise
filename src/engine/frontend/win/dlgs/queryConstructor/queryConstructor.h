@@ -363,6 +363,17 @@ private:
 	void OnEditTotalsDimension(wxCommandEvent&);      // the same editor, over the dimension expression
 	void OnMoveTotalsDimension(int delta);            // levels apply in order — the order is the setting
 	void OnRemoveTotalsLine(wxCommandEvent&);         // the selected DIMENSION line
+
+	// ⭐ THE PERIODICITY PANEL, both directions — the selected level fills it, and editing it writes
+	// the level back. THROUGH THE LANGUAGE: the panel composes the field's TEXT and hands it to
+	// ibQueryParser::ParseTotalsField, the same pair the cell above it reads and writes by. A second
+	// road into `m_periods` would be a second answer to "what does this field say".
+	void FillTotalsPeriods();          // level -> panel (and the panel's enabled-ness)
+	void ApplyTotalsPeriods();         // panel -> level
+	// Only a DATE can be read by periods (Max) — a period is a scale on the calendar, and a level
+	// keyed by anything else has none. Asked of the field's own type, which the model already
+	// carries (ibQueryConstructorField::m_type), never of a list of field names kept here.
+	bool LevelIsDated(const ibQueryTotalDim& dim) const;
 	// (No OnCycleUnfold: the unfold is a registered enumeration, so its cell is a CHOICE over the
 	// three words the language has — not a button pressed three times to get back where you were.)
 
@@ -624,6 +635,23 @@ private:
 	class ibDataViewCtrl* m_totalsDimensions = nullptr;   // Grouping field | Totals kind | Alias
 	class ibQueryGridModel* m_totalsDimensionModel = nullptr;
 	wxCheckBox*  m_grandTotals = nullptr;   // what the root of a totals tree IS — see BuildTotalsPage
+	// ⭐ THE SELECTED LEVEL'S PERIODICITY, stated with a mouse. It belongs to ONE level, so it sits
+	// under the grid and follows the selection — the same place, and the same reading, a person is
+	// used to: a switch, the unit, and the two bounds that may be left open.
+	// ⭐ THE WHOLE STRIP IS HIDDEN where it does not apply, not greyed (Max): a level keyed by
+	// something that is not a date has no periodicity to speak of, and a row of dead controls under
+	// the grid says "this exists for you and is switched off", which is a different and untrue thing.
+	class wxPanel* m_periodPane = nullptr;
+	wxCheckBox*  m_byPeriods   = nullptr;
+	class wxChoice*   m_periodUnit = nullptr;   // the ten words, taken from ibPeriodUnits() — never a second list
+	class wxTextCtrl* m_periodFrom = nullptr;   // an expression: a parameter, a date. Empty = from the data
+	class wxTextCtrl* m_periodTo   = nullptr;
+	// ⭐ DID ANYBODY TYPE IN THEM? The bounds commit on losing focus, and a focus change is not an
+	// edit — a click through the tab would otherwise rewrite the level on every pass. Asked of the
+	// EDIT EVENT rather than by comparing what the panel would write against what the level says:
+	// that comparison ran through two separate renderings of the same thing, and two renderings
+	// drift. `ChangeValue` (how the panel fills itself) raises no event, so filling never sets it.
+	bool m_periodBoundsEdited = false;
 	class ibDataViewCtrl*          m_unions          = nullptr;   // the branches
 	class ibQueryUnionModel*       m_unionModel      = nullptr;
 	class ibDataViewCtrl*          m_unionFields     = nullptr;   // the field map across branches

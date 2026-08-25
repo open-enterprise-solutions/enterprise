@@ -1356,6 +1356,77 @@ void ibDialogQueryConstructor::FillTotals()
 		m_grandTotals->SetValue(select != nullptr && select->m_totalsOverall);
 		m_grandTotals->Enable(!m_readOnly && select != nullptr);
 	}
+	FillTotalsPeriods();
+}
+
+// ⭐ THE PERIODICITY PANEL SHOWS THE SELECTED LEVEL, and shows it whole — the unit and both bounds,
+// written back exactly as far as the query wrote them. A panel that showed less than the field says
+// would lose the rest the first time somebody touched it, which is the mistake the CELL above it
+// already made once (see its reader: it used to render the expression alone).
+void ibDialogQueryConstructor::FillTotalsPeriods()
+{
+	if (m_byPeriods == nullptr || m_periodUnit == nullptr
+	    || m_periodFrom == nullptr || m_periodTo == nullptr)
+		return;
+
+	const ibQuerySelect* select = Current();
+	const long row = SelectedRow(m_totalsDimensions, m_totalsDimensionModel);
+	const ibQueryTotalDim* dim = select != nullptr && row >= 0
+	                             && static_cast<size_t>(row) < select->m_totalsBy.size()
+		? &select->m_totalsBy[static_cast<size_t>(row)] : nullptr;
+
+	// A LEVEL OF SEVERAL FIELDS HAS NO SCALE — the same refusal the cell makes, made here by simply
+	// not offering the switch. And a level keyed by something that is not a date has no calendar.
+	const bool applies = dim != nullptr && dim->IsSingleField() && LevelIsDated(*dim);
+	const ibQueryTotalField* head = dim != nullptr ? dim->Head() : nullptr;
+	const ibQueryTotalPeriods* periods = head != nullptr ? head->m_periods.get() : nullptr;
+
+	// ⭐⭐ TAKEN AWAY, NOT DIMMED (Max). Where a level is not a date there is no such setting at all,
+	// and a row of grey controls says the opposite — "this is yours and you have it switched off".
+	// A DATE level is an ordinary grouping like any other; the strip is only what lets a person make
+	// it a periodic one.
+	if (m_periodPane != nullptr && m_periodPane->IsShown() != applies) {
+		m_periodPane->Show(applies);
+		// The strip takes room, so the pane around it has to be laid out again — otherwise the grid
+		// keeps the gap where the row used to be.
+		if (wxWindow* holder = m_periodPane->GetParent())
+			holder->Layout();
+	}
+
+	m_byPeriods->Enable(!m_readOnly && applies);
+	m_byPeriods->SetValue(periods != nullptr);
+
+	// The unit: what the field says, or Month for a level about to be given one — the period a report
+	// is asked for more often than any other, so the common case is one click.
+	int at = -1;
+	const std::vector<std::pair<ibTotalsPeriod, wxString>>& units = ibPeriodUnits();
+	for (size_t i = 0; i < units.size(); ++i) {
+		const bool match = periods != nullptr
+			? units[i].second.IsSameAs(periods->m_unit, false)
+			: units[i].first == ibTotalsPeriod::Month;
+		if (match) { at = static_cast<int>(i); break; }
+	}
+	m_periodUnit->SetSelection(at);
+
+	// ChangeValue, not SetValue: filling the panel is not somebody typing in it, and the difference
+	// is exactly the edit event the commit rule below depends on.
+	m_periodFrom->ChangeValue(periods != nullptr && periods->m_from
+		? ibRenderQueryExpr(*periods->m_from) : wxString());
+	m_periodTo->ChangeValue(periods != nullptr && periods->m_to
+		? ibRenderQueryExpr(*periods->m_to) : wxString());
+	// …and what stands in them now came from the level, so there is nothing of a person's in there
+	// to commit. (A pending edit is committed by the focus leaving the field, which happens before a
+	// click reaches the grid — so switching levels mid-typing lands on the level being left.)
+	m_periodBoundsEdited = false;
+
+	// The unit and the bounds only mean anything once the switch is on — off, they are what the
+	// level WOULD be read by, and offering them would suggest the level already is. (The bounds are
+	// PARAMETERS more often than dates — `&PeriodStart` — and both are optional: left empty, the
+	// range is the data's own first and last period.)
+	const bool live = !m_readOnly && applies && periods != nullptr;
+	m_periodUnit->Enable(live);
+	m_periodFrom->Enable(live);
+	m_periodTo->Enable(live);
 }
 
 void ibDialogQueryConstructor::FillUnions()

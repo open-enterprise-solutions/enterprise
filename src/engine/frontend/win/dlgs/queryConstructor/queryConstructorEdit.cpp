@@ -2297,6 +2297,116 @@ void ibDialogQueryConstructor::OnMoveTotalsDimension(int delta)
 
 // EDIT THE DIMENSION — the same expression editor. A level is an expression like any other; the
 // kind and the name beside it are typed in their own cells.
+// ⭐⭐ ONLY A DATE HAS PERIODS — and "has" is CONTAINS (Max): a field whose type merely INCLUDES a
+// date among its kinds can be read by periods, because the rows that carry a date are the ones a
+// calendar scale is about. Asked of the field's own type, which the model already carries; a list of
+// field names kept here would be a second answer to a question the metadata already answers.
+//
+// Unknown type = allowed, the same line the join-suggestion code takes: do not pretend to know
+// better than the engine, which refuses in its own words if it comes to that.
+bool ibDialogQueryConstructor::LevelIsDated(const ibQueryTotalDim& dim) const
+{
+	const ibQueryTotalField* head = dim.Head();
+	if (head == nullptr || !head->m_expr)
+		return false;
+	// A computed level (`YEAR(Date) * 100 + …`) is not asked: its type is the engine's to work out,
+	// and a panel that guessed would offer periodicity where the engine may refuse it.
+	if (head->m_expr->m_kind != ibQueryAstExprKind::Column || head->m_expr->m_path.empty())
+		return false;
+
+	const ibQuerySelect* select = Current();
+	if (select == nullptr)
+		return false;
+
+	const ibSourceMetaDataScope resolveAgainst(m_metaData);
+	const ibQueryConstructorField field =
+		m_model.FieldOfPath(*select, head->m_expr->m_path, m_package, m_statement);
+	return !field.m_type.IsOk() || field.m_type.ContainType(g_valueDateCLSID);
+}
+
+// THE PANEL WRITES THE LEVEL THE WAY A PERSON WOULD HAVE TYPED IT: the field is composed as TEXT and
+// read back by ibQueryParser::ParseTotalsField — the same pair the cell above edits by. Reaching into
+// `m_periods` directly would be a second road into one field, and the two would drift the first time
+// the language grew a word.
+void ibDialogQueryConstructor::ApplyTotalsPeriods()
+{
+	if (!CanEdit() || m_byPeriods == nullptr || m_periodUnit == nullptr
+	    || m_periodFrom == nullptr || m_periodTo == nullptr)
+		return;
+
+	ibQuerySelect* select = Current();
+	const long row = SelectedRow(m_totalsDimensions, m_totalsDimensionModel);
+	if (select == nullptr || row < 0 || static_cast<size_t>(row) >= select->m_totalsBy.size())
+		return;
+
+	ibQueryTotalDim& dim = select->m_totalsBy[static_cast<size_t>(row)];
+	const ibQueryTotalField* head = dim.Head();
+	if (!dim.IsSingleField() || head == nullptr || !head->m_expr)
+		return;
+
+	const bool wanted = m_byPeriods->GetValue();
+	// Switched off over a level that never had a periodicity: there is nothing to remove, and
+	// rewriting the field to say the same thing would be a change nobody made. (WHETHER anything was
+	// typed in the bounds is answered where the typing happens — see m_periodBoundsEdited.)
+	if (!wanted && head->m_periods == nullptr)
+		return;
+
+	wxString text = ibRenderQueryExpr(*head->m_expr);
+	if (wanted) {
+		// ⚠ NO UNFOLD BESIDE A PERIODICITY. A hierarchy walks a parent chain and a period walks a
+		// calendar; the engine refuses the pair, so the panel does not write one — turning periods ON
+		// is what drops it, and turning them off restores what the level had.
+		const int at = m_periodUnit->GetSelection();
+		const wxString unit = at >= 0 && static_cast<size_t>(at) < ibPeriodUnits().size()
+			? ibPeriodUnits()[static_cast<size_t>(at)].second
+			: ibPeriodUnitWord(ibTotalsPeriod::Month);
+
+		wxString from = m_periodFrom->GetValue(); from.Trim(true).Trim(false);
+		wxString to   = m_periodTo->GetValue();   to.Trim(true).Trim(false);
+
+		text += wxT(" ") + ibQueryKeywordText(ibQueryKeyword::Periods) + wxT("(") + unit;
+		// A bound left out is "from the data", so it is written as ABSENT rather than as a guess —
+		// and an upper bound with no lower one keeps the comma that holds its place, exactly as the
+		// renderer writes it.
+		if (!from.IsEmpty())     text += wxT(", ") + from;
+		else if (!to.IsEmpty())  text += wxT(", ");
+		if (!to.IsEmpty())       text += wxT(", ") + to;
+		text += wxT(")");
+	}
+	else if (head->m_unfold == ibQueryDimUnfold::Hierarchy
+	      || head->m_unfold == ibQueryDimUnfold::HierarchyOnly) {
+		text += wxT(" ") + ibQueryKeywordText(head->m_unfold == ibQueryDimUnfold::Hierarchy
+			? ibQueryKeyword::Hierarchy : ibQueryKeyword::HierarchyOnly);
+	}
+
+	try {
+		ibQueryParser parser;
+		ibQueryTotalField parsed = parser.ParseTotalsField(text);
+		dim.m_fields.clear();
+		dim.m_fields.push_back(std::move(parsed));
+		// A LEVEL WITH A PERIODICITY IS A TOTALS QUERY, exactly as a level is — the same rule the
+		// grand-totals box follows, so ticking the box is enough to have asked for one.
+		select->m_hasTotals = true;
+	}
+	catch (const ibBackendException& error) {
+		// The engine's own words, and then the panel goes back to what the level actually says — a
+		// refused edit must not leave the window describing a query that does not exist.
+		ShowEngineError(error.GetErrorDescription());
+		FillTotalsPeriods();
+		return;
+	}
+	FillAll();
+
+	// ⚠ AND THE CARET GOES BACK ON THE LEVEL. FillAll refills every model, and a virtual model's
+	// refill is a Reset — which clears the selection. The panel belongs to the SELECTED level, so
+	// without this the first click into it would be the last one that worked: the box would tick,
+	// the level would lose its selection, and everything below would go grey.
+	if (m_totalsDimensions != nullptr && m_totalsDimensionModel != nullptr
+	    && static_cast<size_t>(row) < select->m_totalsBy.size())
+		m_totalsDimensions->Select(m_totalsDimensionModel->GetItem(static_cast<unsigned int>(row)));
+	FillTotalsPeriods();
+}
+
 void ibDialogQueryConstructor::OnEditTotalsDimension(wxCommandEvent&)
 {
 	if (!CanEdit())

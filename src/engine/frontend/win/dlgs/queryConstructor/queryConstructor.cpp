@@ -1730,6 +1730,79 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		FillAll();
 	});
 	dims->Add(m_grandTotals, 0, wxLEFT | wxBOTTOM, FromDIP(6));
+
+	// ⭐⭐ BY PERIODS — the level's periodicity, said with a mouse.
+	//
+	// It belongs to ONE level, so it stands under the grid and follows the selection: the switch,
+	// the unit, and the two bounds. That is where a person expects it, and it is also the only shape
+	// that is honest — a column in the grid would have to hold three answers in one cell.
+	//
+	// ⚠ THE BOUNDS DO NOT FILTER. They say which periods to REPORT — a quiet month inside them is
+	// padded in, a month outside them that has rows is still shown. Left empty, the data's own first
+	// and last periods are the range, which is why they are ordinary empty fields and not dates
+	// pre-filled with something plausible.
+	//
+	// ⚠ AND ONLY A DATE HAS PERIODS. The panel greys out for a level keyed by anything else, asked
+	// of the field's TYPE rather than of its name (see LevelIsDated) — and for a level of several
+	// fields, which has no single scale to walk.
+	// ONE PANE, so the strip can be TAKEN AWAY rather than dimmed. A level keyed by something that is
+	// not a date has no periodicity at all, and dead controls under the grid would announce a setting
+	// that does not exist for it (Max).
+	m_periodPane = new wxPanel(dimPane);
+	wxBoxSizer* periodRow = new wxBoxSizer(wxHORIZONTAL);
+	m_byPeriods = new wxCheckBox(m_periodPane, wxID_ANY, _("By periods"));
+	m_byPeriods->SetToolTip(_("Group this level by calendar periods, and report every period in the "
+	                          "range — including the ones nothing happened in."));
+	m_byPeriods->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { ApplyTotalsPeriods(); });
+	periodRow->Add(m_byPeriods, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(6));
+
+	periodRow->Add(new wxStaticText(m_periodPane, wxID_ANY, _("Period:")),
+		0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(12));
+	m_periodUnit = new wxChoice(m_periodPane, wxID_ANY);
+	// THE TEN WORDS THE LANGUAGE HAS, read out of the one table that holds them. A list typed in
+	// here would be a second vocabulary, and the day one of them is renamed the two disagree.
+	for (const std::pair<ibTotalsPeriod, wxString>& unit : ibPeriodUnits())
+		m_periodUnit->Append(unit.second);
+	m_periodUnit->Bind(wxEVT_CHOICE, [this](wxCommandEvent&) { ApplyTotalsPeriods(); });
+	periodRow->Add(m_periodUnit, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(4));
+
+	// The bounds are EXPRESSIONS — `&PeriodStart` is what an author writes far more often than a
+	// literal date, and both are read by the same parser the field itself goes through.
+	auto addBound = [&](const wxString& label, wxTextCtrl*& field, const wxString& tip) {
+		periodRow->Add(new wxStaticText(m_periodPane, wxID_ANY, label),
+			0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(12));
+		field = new wxTextCtrl(m_periodPane, wxID_ANY, wxEmptyString, wxDefaultPosition,
+			wxSize(FromDIP(150), -1), wxTE_PROCESS_ENTER);
+		field->SetToolTip(tip);
+		// Committed on leaving the field or on Enter, never per keystroke: each commit re-parses the
+		// whole field, and a half-typed `&Peri` is not an error yet.
+		//
+		// ⭐ AND ONLY IF SOMETHING WAS TYPED. The edit event is what says so — the panel fills itself
+		// with ChangeValue, which raises none, so this flag is true exactly when a person put it
+		// there. A focus change on its own is not an edit and must write nothing.
+		field->Bind(wxEVT_TEXT, [this](wxCommandEvent& event) { m_periodBoundsEdited = true; event.Skip(); });
+		field->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& event) {
+			if (m_periodBoundsEdited) { m_periodBoundsEdited = false; ApplyTotalsPeriods(); }
+			event.Skip();
+		});
+		field->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&) {
+			if (m_periodBoundsEdited) { m_periodBoundsEdited = false; ApplyTotalsPeriods(); }
+		});
+		periodRow->Add(field, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(4));
+	};
+	addBound(_("From:"), m_periodFrom,
+		_("Report periods from this moment. Empty = from the earliest period in the data.\n"
+		  "A bound does not filter rows — it says which periods to show."));
+	addBound(_("To:"), m_periodTo,
+		_("Report periods up to this moment. Empty = to the latest period in the data."));
+	m_periodPane->SetSizer(periodRow);
+	m_periodPane->Hide();   // shown by FillTotalsPeriods, once there is a dated level selected
+	dims->Add(m_periodPane, 0, wxEXPAND | wxBOTTOM, FromDIP(4));
+
+	// The panel belongs to whichever level is selected, so it is refilled when that changes.
+	m_totalsDimensions->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED,
+		[this](ibDataViewEvent& event) { FillTotalsPeriods(); event.Skip(); });
+
 	dimRow->Add(dims, 1, wxEXPAND);
 	dimPane->SetSizer(dimRow);
 
