@@ -100,13 +100,34 @@ struct ibAggregateItem { ibAggregateFn m_fn; const ibBackendQueryColumn* m_col; 
 // up by name in `m_dimWalks` (that list is keyed by the projection alias, which is a presentation).
 //
 // Empty path = a plain column: `m_col` is the field, and it is its own leaf.
+// ⭐⭐ BY PERIODS — the field is read as a CALENDAR PERIOD, and the level is PADDED.
+//
+// Two statements, one word: the key is the field TRUNCATED to the unit (`PeriodTrunc`, the same
+// expression a register's periodised turnovers group by — one truncation in the house, agreeing
+// between SQL and RAM to the day), and every period BETWEEN THE BOUNDS gets a node whether or not
+// the data has one. The padding is the point: a month with no movements is the very row a reader is
+// looking at when they ask why nothing was sold.
+//
+// The bounds are OPTIONAL and empty means "from the data" — the first and last period actually read.
+// Which is the only honest default: with no bounds and no rows there is no series to pad.
+struct ibTotalPeriods {
+	ibTotalsPeriod m_unit = ibTotalsPeriod::Month;
+	ibValue        m_from;   // empty = the earliest period the data holds
+	ibValue        m_to;     // empty = the latest
+};
+
 struct ibTotalField {
 	const ibBackendQueryColumn*              m_col;
 	ibDimensionKind                          m_dim;
 	std::vector<const ibBackendQueryColumn*> m_path;   // ref segments + leaf; empty = plain
+	// Set = this field groups BY PERIODS. Held as a share rather than a flag beside a unit: the unit
+	// and the bounds are ONE answer, and a field either has it or has nothing to say about periods.
+	std::shared_ptr<ibTotalPeriods>          m_periods;
 
 	// WHAT THE SQL NAMES. The leaf for a dot-walk, the column itself otherwise.
 	const ibBackendQueryColumn* SqlCol() const { return m_path.empty() ? m_col : m_path.back(); }
+	// …AND HOW IT IS READ. Asked, not inferred from a null test at each of the four places that care.
+	bool ByPeriods() const { return m_periods != nullptr; }
 };
 
 // One TotalBy dimension level. Levels apply IN ORDER; a level holds ONE OR MORE fields and its
@@ -268,7 +289,13 @@ private:
 	// interface. The selection NEVER branches on which: it forwards to the source.
 	// DB and RAM stay fully separate (two source classes in the .cpp), and no
 	// consumer — not even this class — learns the backing. (docs §22.4d)
-	std::unique_ptr<ibDataResultSource> m_source;
+	//
+	// ⭐ SHARED, because Select() hands the ROWS to the selection rather than a copy of them. A fold
+	// that streams reads this very cursor — one physical scan, read once, by whoever asks first — and
+	// the result stays usable (and safe) after handing it over instead of being left with a dangling
+	// half of itself. There is still only ONE position: the rows are read once, which is what
+	// "the selection consumes the result" always meant.
+	std::shared_ptr<ibDataResultSource> m_source;
 	std::vector<const ibBackendQueryColumn*> m_matColumns;   // columns a Select(mode) drains into the snapshot
 	// Co-ownership of the sources built for the query (AdoptSources) — every column pointer above
 	// lives inside one of them, so they stay valid for exactly as long as this result does.

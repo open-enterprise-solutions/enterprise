@@ -339,10 +339,15 @@ struct ibByteCode {
 		// L4-2 LINQ pushdown — the lambda body recorded as the L4 query AST
 		// (compiler/lambdaQueryAst.*), set ONLY for a single-parameter
 		// lambda whose body is a translatable single expression; null = the
-		// pipeline runs in RAM (the always-correct floor). Deliberately NOT
-		// serialised into the AOT cache: on a cache hit the AST is absent and
-		// the pushdown silently degrades to RAM — correctness is unaffected,
-		// so the AOT format needs no bump. (docs/query-language-arc.md §23.5)
+		// pipeline runs in RAM (the always-correct floor).
+		//
+		// !! THIS USED TO SAY THE AST IS "deliberately NOT serialised into the AOT
+		// cache", and that it therefore degrades to RAM on a cache hit. It IS
+		// serialised: v14 added it (`AstSerializable` gates what can travel,
+		// `WriteLambdaAst` / `ReadLambdaAst` carry it), and the format is at v20.
+		// The stale sentence read as a DESIGN REASON, which is the worst kind of
+		// wrong comment: it argued for a behaviour the code had stopped having.
+		// (docs/query-language-arc.md 23.5)
 		std::shared_ptr<struct ibQueryAstExpr> m_lambdaExprAst;
 
 		ibByteFunction() = default;

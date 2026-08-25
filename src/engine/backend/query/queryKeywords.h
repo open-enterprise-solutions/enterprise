@@ -48,7 +48,11 @@ enum class ibQueryKeyword
 	// the dimension VID: Hierarchy (folders + items) / HierarchyOnly (folders only) / Elements (flat, default)
 	// OVERALL — the level ABOVE every dimension: one row folding the whole result. Written first in
 	// the BY list (`TOTALS SUM(x) BY OVERALL, Warehouse`), because that is where it sits.
-	Totals, Hierarchy, HierarchyOnly, Elements, Overall,
+	// PERIODS(<unit>[, <from>, <to>]) — a level field read as a CALENDAR PERIOD: the values are
+	// truncated to the unit, and the level is PADDED so a period nothing happened in still gets its
+	// row (which is the whole point — a chart with a gap where a quiet month was is a wrong chart).
+	// It sits where the unfold sits, after the field, because it says how that field is READ.
+	Totals, Hierarchy, HierarchyOnly, Elements, Overall, Periods,
 
 	// joins
 	Join, Inner, Left, Right, Full, Outer, On,

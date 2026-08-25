@@ -40,6 +40,7 @@ static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 	{ ibQueryKeyword::HierarchyOnly,wxT("HIERARCHYONLY") },
 	{ ibQueryKeyword::Elements, wxT("ELEMENTS") },
 	{ ibQueryKeyword::Overall,  wxT("OVERALL")  },
+	{ ibQueryKeyword::Periods,  wxT("PERIODS")  },
 	{ ibQueryKeyword::Join,     wxT("JOIN")     },
 	{ ibQueryKeyword::Inner,    wxT("INNER")    },
 	{ ibQueryKeyword::Left,     wxT("LEFT")     },

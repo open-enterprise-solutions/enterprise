@@ -18,6 +18,7 @@
 // (docs/query-language-arc.md §22.1b)
 
 #include "queryRamTable.h"      // ibQueryRamTable (the snapshot, held BY VALUE — move-only)
+#include "queryRowCursor.h"     // ibQueryRowCursor — the rows as they arrive (what the group folds read)
 #include "querySelectorTree.h"  // ibSelectorTree (the folded tree) + ibSelectorTree::Node
 #include "queryProvider.h"      // ibQueryComposer::BuildHierarchyTree / BuildTotalsTree
 #include "dataQueryBuilder.h"   // ibDataQueryBuilder + ibSelectKind + ibDimensionKind + AggregateItem
@@ -30,6 +31,13 @@ public:
 	// Takes OWNERSHIP of the snapshot (move-only). `kind` is the TRAVERSAL (AXIS 1), default Direct.
 	explicit ibSelector(ibQueryRamTable&& snapshot, ibSelectKind kind = ibSelectKind::ibSelectKind_Direct)
 		: m_snapshot(std::move(snapshot)), m_kind(kind) {}
+
+	// ⭐ …OR OF A CURSOR, which is how a READ arrives: result.Select(kind) hands the rows over
+	// unread, and a fold that streams (the group folds — see ibQueryComposer::BuildDimensionTree)
+	// never materialises them at all. A fold that must address every row drains the cursor once, and
+	// then this selection holds a snapshot exactly as it always did.
+	explicit ibSelector(std::unique_ptr<ibQueryRowCursor> rows, ibSelectKind kind = ibSelectKind::ibSelectKind_Direct)
+		: m_rows(std::move(rows)), m_kind(kind) {}
 
 	// Fold by parent-ref (a reference dimension): rowKeyCol = the row's data-reference, parentKeyCol =
 	// its parent attribute (link by _RRRef identity). `dim` (AXIS 2) = how the dimension unfolds.
@@ -119,6 +127,20 @@ public:
 		if (m_kind == ibSelectKind::ibSelectKind_Direct)
 			return BuildFlat();
 
+		// ⭐⭐ THE STREAMING ROAD — the ordinary report, and the reason the rows travel as a cursor.
+		// The dimension fold reads them one at a time (it drains the cursor itself, and says so, for
+		// the reference-hierarchy levels that cannot be folded in one pass), so nothing here holds the
+		// detail. The self-hierarchy fast path below is row-KEYED — a row IS a node there — so it
+		// takes the snapshot road, which is the same cost by construction.
+		if (m_rows && !SelfHierarchyFold() && (!m_totalLevels.empty() || m_totalsOverall)) {
+			ibSelectorTree folded = ibQueryComposer::BuildDimensionTree(*m_rows, m_totalLevels, m_aggregates,
+			                                                            m_holder, m_queryable);
+			m_rows.reset();   // read once, and a spent cursor must not read back as rows
+			return folded;
+		}
+
+		EnsureSnapshot();   // every fold below addresses rows by index — drain the cursor once
+
 		// ⚠ OVERALL ALONE IS STILL A TOTALS FOLD. `TOTALS COUNT(x) BY OVERALL` asks for one row over
 		// everything and names no dimension — so the levels are empty, and without this the walk fell
 		// through to the manual/unit-test fallback below and folded by a null column. The dimension
@@ -128,11 +150,7 @@ public:
 			// Self-hierarchy fast path: a SINGLE Hierarchy level on the source's OWN parent column is
 			// ROW-keyed (each catalog row is a node) — that is BuildHierarchyTree, rowKey from the
 			// queryable (already in the snapshot), NO extra query.
-			// ONE FIELD, because a hierarchy unfolds a single parent chain: a level keyed by a tuple
-			// has no one chain to walk, and it takes the general road below.
-			if (m_totalLevels.size() == 1 && m_totalLevels[0].IsSingleField()
-			    && m_totalLevels[0].HeadDim() != ibDimensionKind::Elements && m_queryable != nullptr
-			    && m_totalLevels[0].HeadCol() == m_queryable->GetHierarchyColumn()) {
+			if (SelfHierarchyFold()) {
 				const std::vector<const ibBackendQueryColumn*> keys = m_queryable->GetPrimaryKeyColumns();
 				if (!keys.empty() && keys.front() != nullptr)
 					return ibQueryComposer::BuildHierarchyTree(m_snapshot, keys.front(), m_totalLevels[0].HeadCol(),
@@ -178,6 +196,15 @@ public:
 	// Rewind to the start — walk the SAME tree again (the folded tree is kept; only the position
 	// resets, no re-query, no re-fold).
 	void Reset() { m_pos = -1; }
+
+	// ⭐ READ THE ROWS NOW, and be done with the cursor.
+	//
+	// The fold is otherwise lazy — the first Next() builds it — and a selection that nobody has
+	// walked yet is sitting on an OPEN read while the caller goes off and does the next thing on the
+	// same connection. That is a state this house has paid for before (docs: the read-state arc), and
+	// it is not what the streaming fold is for: the point is not to read LATER, it is not to KEEP.
+	// So result.Select() folds here, in one pass, and releases the rows.
+	void ReadRows() const { EnsureWalk(); }
 
 	// Current visit's value for a column (s.<col>) / for an aggregate alias. A column NOT carried at
 	// this level (a detail field on an upper grouping node — not yet unfolded) yields the runtime's
@@ -234,7 +261,10 @@ public:
 	// WithSource() + a parent-ref fold; empty Selector otherwise (no DB hit). Defined below.
 	ibSelector Select(ibSelectKind kind = ibSelectKind::ibSelectKind_Direct) const;
 
-	const ibQueryRamTable& Snapshot() const { return m_snapshot; }
+	// THE ROWS AS A TABLE — draining the cursor first if nothing has needed them all at once yet.
+	// Holding the whole detail is what the cursor exists to avoid, so this is for the callers that
+	// genuinely want the table (a test, a fold that addresses rows by index) and it pays for it here.
+	const ibQueryRamTable& Snapshot() const { EnsureSnapshot(); return m_snapshot; }
 	ibSelectKind           GetKind()  const { return m_kind; }
 
 	// How many nodes this selection will hand out. Forces the fold, which is what the first Next()
@@ -247,17 +277,44 @@ private:
 		return (m_pos >= 0 && m_pos < static_cast<long>(m_visits.size())) ? m_visits[static_cast<size_t>(m_pos)] : nullptr;
 	}
 
-	// Direct fold — each snapshot row becomes a leaf node under the root (no subtotals, no nesting).
+	// ⭐ IS THIS THE ROW-KEYED SELF-HIERARCHY FOLD? A SINGLE Hierarchy / HierarchyOnly level on the
+	// source's OWN parent column, where each row of the source IS a node. ONE FIELD, because a
+	// hierarchy unfolds a single parent chain: a level keyed by a tuple has no one chain to walk.
+	// Asked in one place — the fold below reads it, and so does the choice of road above it.
+	bool SelfHierarchyFold() const
+	{
+		return m_totalLevels.size() == 1 && m_totalLevels[0].IsSingleField()
+		    && m_totalLevels[0].HeadDim() != ibDimensionKind::Elements && m_queryable != nullptr
+		    && m_totalLevels[0].HeadCol() == m_queryable->GetHierarchyColumn();
+	}
+
+	// THE ROWS, HOWEVER THIS SELECTION HOLDS THEM — a live cursor when one was handed over, the
+	// snapshot read as one otherwise. Everything below reads rows through this, so no fold has to
+	// know which of the two it got.
+	void EnsureSnapshot() const
+	{
+		if (m_rows) {
+			m_snapshot = ibDrainToRamTable(*m_rows);
+			m_rows.reset();
+		}
+	}
+
+	// Direct fold — each row becomes a leaf node under the root (no subtotals, no nesting). Straight
+	// off the cursor when there is one: a flat walk holds a node per row either way, and draining
+	// into a table first would hold every row TWICE.
 	ibSelectorTree BuildFlat() const
 	{
+		ibRamTableCursor own(m_snapshot);
+		ibQueryRowCursor& rows = m_rows ? *m_rows : static_cast<ibQueryRowCursor&>(own);
+
 		ibSelectorTree t;
-		for (const ibQueryRamColumn& c : m_snapshot.Columns()) t.AddColumn(c.m_id, c.m_name, c.m_type);
-		const long n = m_snapshot.RowCount();
-		for (long r = 0; r < n; ++r) {
+		for (const ibQueryRamColumn& c : rows.Columns()) t.AddColumn(c.m_id, c.m_name, c.m_type);
+		while (rows.Next()) {
 			ibSelectorTree::Node* leaf = t.Root().AddChild(1);
-			for (const ibQueryRamColumn& c : m_snapshot.Columns())
-				leaf->m_values[c.m_id] = m_snapshot.GetCell(r, c.m_id);
+			for (const ibQueryRamColumn& c : rows.Columns())
+				leaf->m_values[c.m_id] = rows.Get(c.m_id);
 		}
+		m_rows.reset();   // the rows are in the tree now — a spent cursor must not read back as rows
 		return t;
 	}
 
@@ -327,7 +384,11 @@ private:
 		m_pos = -1;
 	}
 
-	ibQueryRamTable m_snapshot;                    // the raw snapshot this Selector traverses
+	// THE ROWS — as a live cursor while nobody has needed them all at once, as a snapshot after a
+	// fold that does. Mutable for the same reason m_walk is: both are the lazy build, and Build() is
+	// const because ASKING a selection what it holds must not read as changing it.
+	mutable std::unique_ptr<ibQueryRowCursor> m_rows;
+	mutable ibQueryRamTable m_snapshot;            // the raw snapshot this Selector traverses (drained on demand)
 	ibSelectKind    m_kind;                        // AXIS 1 — traversal
 	ibDimensionKind m_dimKind = ibDimensionKind::Hierarchy;  // AXIS 2 — dimension unfold (for ByGroupsHierarchy)
 	const ibBackendQueryColumn* m_rowKeyCol    = nullptr;   // parent-ref fold
@@ -383,6 +444,7 @@ inline ibSelector ibSelector::MakeChild(const ibValue& parentKeyValue, int child
 	     .Aggregating(m_aggregates)
 	     .WithSource(m_holder, m_queryable, m_selectCols, m_conditions);
 	child.m_baseLevel = childBaseLevel;
+	child.ReadRows();   // configured — so fold it now and let go of the read (see ReadRows)
 	return child;
 }
 

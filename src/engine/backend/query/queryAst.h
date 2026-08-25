@@ -211,10 +211,35 @@ struct ibQueryAstWindow
 // ONE FIELD of a TOTALS-BY level: the dimension column + how it unfolds. The unfold belongs to
 // the FIELD, not to the level — a level may group by a reference unfolded through its hierarchy
 // and by a plain column beside it.
+// ⭐⭐ PERIODS(<unit>[, <from>, <to>]) — the field is read as a CALENDAR PERIOD.
+//
+// `TOTALS SUM(Quantity) BY Period PERIODS(Month, &From, &To)`. Two things follow from that word and
+// they are one idea: the level's key is the field TRUNCATED to the unit, and the level is PADDED —
+// a month nothing happened in still gets its row. The padding is the reason the word exists at all:
+// a report or a chart drawn from rows that only exist where something happened has a hole exactly
+// where the reader is looking for a zero.
+//
+// The UNIT stays a WORD (Day / Month / Quarter / …) — the same vocabulary a register's `Turnovers`
+// call takes, read back by the same reader. A periodicity is said in a call, not stored in a field,
+// and one vocabulary for it is what keeps the two sayable in one language.
+//
+// The BOUNDS are OPTIONAL: given, the series is padded to them; left out, it is padded between the
+// first and last period the data actually holds. Which is the honest default — with no bounds and
+// no data there is no series to speak of.
+struct ibQueryTotalPeriods
+{
+	wxString          m_unit;   // the word, verbatim — the lowering reads it (it owns that vocabulary)
+	ibQueryAstExprPtr m_from;   // optional — null = the earliest period in the data
+	ibQueryAstExprPtr m_to;     // optional — null = the latest
+};
+
 struct ibQueryTotalField
 {
 	ibQueryAstExprPtr   m_expr;                                  // dimension column path
 	ibQueryDimUnfold m_unfold = ibQueryDimUnfold::Elements;
+	// Set = this field is grouped BY PERIODS. A shared_ptr rather than a flag beside a unit: the
+	// three parts are one answer, and a field either has that answer or has nothing to say.
+	std::shared_ptr<ibQueryTotalPeriods> m_periods;
 };
 
 // One TOTALS-BY level. Levels apply IN ORDER (each yields a subtotal node; the root is the grand

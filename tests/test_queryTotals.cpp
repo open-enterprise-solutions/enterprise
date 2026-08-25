@@ -18,6 +18,7 @@
 
 #include "backend/query/queryProvider.h"   // ibQueryComposer::BuildTotalsTree + ibQueryRamTable + ibDataQueryBuilder
 #include "backend/query/queryColumn.h"     // ibBackendQueryColumn (the test column)
+#include "backend/query/queryRowCursor.h"  // ibQueryRowCursor — the fold's input (the streaming tests below)
 
 namespace {
 
@@ -396,4 +397,220 @@ TEST(QueryTotals, TwoAggregatesOverOneColumnNeedTwoColumns)
 		EXPECT_TRUE(NumEq(north.m_values.at(AMOUNT_AGAIN),  2));
 		EXPECT_TRUE(NumEq(tree.Root().m_values.at(AMOUNT), 22));   // and the grand total is still whole
 	}
+}
+
+// ============================================================================================
+// THE STREAMING FOLD — the acceptance criterion, stated as a test.
+//
+// The fold takes a CURSOR (queryRowCursor.h), and the point of that is what it does NOT do: hold
+// the detail. So the rows here come from a GENERATOR that stores nothing — there is no table to
+// fold, and if the fold needed one it could not get it. What it may hold is the tree, and the tree
+// is groups.
+// ============================================================================================
+
+namespace {
+
+// Rows out of thin air: `count` rows cycling over R regions x P products, amount = 1 each. Stores
+// nothing but its position, and counts how many times it was read — a fold that walked the rows
+// twice would say so here.
+class GeneratedRows : public ibQueryRowCursor {
+public:
+	GeneratedRows(long count, long regions, long products, ibMetaID region, ibMetaID product, ibMetaID amount)
+		: m_count(count), m_regions(regions), m_products(products)
+		, m_region(region), m_product(product), m_amount(amount)
+	{
+		m_columns.push_back(ibQueryRamColumn{ region,  wxT("region"),  ibTypeDescription() });
+		m_columns.push_back(ibQueryRamColumn{ product, wxT("product"), ibTypeDescription() });
+		m_columns.push_back(ibQueryRamColumn{ amount,  wxT("amount"),  ibTypeDescription() });
+	}
+
+	bool Next() override { ++m_reads; return ++m_row < m_count; }
+
+	ibValue Get(ibMetaID id) const override
+	{
+		if (id == m_region)  return ibValue(wxString::Format(wxT("R%ld"), m_row % m_regions));
+		if (id == m_product) return ibValue(wxString::Format(wxT("P%ld"), m_row % m_products));
+		if (id == m_amount)  return ibValue(ibNumber(1L));
+		return ibValue();
+	}
+
+	const std::vector<ibQueryRamColumn>& Columns() const override { return m_columns; }
+
+	long Reads() const { return m_reads; }
+
+private:
+	long     m_count, m_regions, m_products;
+	ibMetaID m_region, m_product, m_amount;
+	long     m_row   = -1;
+	long     m_reads = 0;
+	std::vector<ibQueryRamColumn> m_columns;
+};
+
+} // namespace
+
+// 100 000 rows, 12 groups. The tree is right, the rows were read ONCE, and nothing but the tree
+// (and the generator's one row index) ever existed.
+TEST(QueryTotals, StreamingFoldHoldsGroupsNotRows)
+{
+	const ibMetaID REGION = 1, PRODUCT = 2, AMOUNT = 3;
+	const long ROWS = 100000, REGIONS = 3, PRODUCTS = 4;
+
+	GeneratedRows rows(ROWS, REGIONS, PRODUCTS, REGION, PRODUCT, AMOUNT);
+	TestCol region(wxT("region"), REGION), product(wxT("product"), PRODUCT), amount(wxT("amount"), AMOUNT);
+
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+	ibDataQueryBuilder::AggregateItem rowCount;      // COUNT(*) — its receiver is synthetic
+	rowCount.m_fn = ibDataQueryBuilder::AggregateFn::Count; rowCount.m_col = nullptr; rowCount.m_alias = wxT("rows");
+
+	const std::vector<const ibBackendQueryColumn*> groups = { &region, &product };
+	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(rows, groups, { sum, rowCount });
+
+	EXPECT_EQ(rows.Reads(), ROWS + 1);                      // every row once, plus the Next() that ended it
+
+	const ibSelectorTree::Node& root = tree.Root();
+	EXPECT_TRUE(NumEq(root.m_values.at(AMOUNT), ROWS));     // the grand total is the whole read
+	ASSERT_EQ(root.m_children.size(), static_cast<size_t>(REGIONS));
+
+	// 3 regions x 4 products, and the region / product cycles are coprime-free here (12 pairs, each
+	// hit ROWS/12 times) — what matters is that the SHAPE is groups, not rows.
+	long leaves = 0, folded = 0;
+	for (const auto& r : root.m_children) {
+		EXPECT_TRUE(r->m_hasChildren);
+		for (const auto& p : r->m_children) {
+			++leaves;
+			folded += p->m_values.at(AMOUNT).GetInteger();
+			EXPECT_TRUE(p->m_children.empty());             // no detail level was asked for — no rows in the tree
+		}
+	}
+	EXPECT_EQ(folded, ROWS);                                // every row landed in exactly one leaf group
+	EXPECT_LE(leaves, REGIONS * PRODUCTS);
+}
+
+// The same rows through the DIMENSION fold (the road a report takes), with a DETAIL level under the
+// grouping: the rows now DO appear as nodes — because the report asked to print them — and the
+// figures above them are unchanged. Small row count: this one deliberately holds rows.
+TEST(QueryTotals, StreamingFoldStampsDetailRowsFromACursor)
+{
+	const ibMetaID REGION = 1, PRODUCT = 2, AMOUNT = 3;
+	GeneratedRows rows(6, 2, 3, REGION, PRODUCT, AMOUNT);
+	TestCol region(wxT("region"), REGION), amount(wxT("amount"), AMOUNT);
+
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+
+	std::vector<ibTotalLevel> levels;
+	levels.push_back(ibTotalLevel::One(&region, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel{});                       // detail records — a level with no fields
+
+	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(rows, levels, { sum }, nullptr, nullptr);
+
+	const ibSelectorTree::Node& root = tree.Root();
+	EXPECT_TRUE(NumEq(root.m_values.at(AMOUNT), 6));
+	ASSERT_EQ(root.m_children.size(), 2u);                  // R0, R1
+	const ibSelectorTree::Node& first = *root.m_children[0];
+	EXPECT_EQ(first.m_kind, ibSelectorNodeKind::Group);
+	EXPECT_TRUE(NumEq(first.m_values.at(AMOUNT), 3));
+	ASSERT_EQ(first.m_children.size(), 3u);                 // one node per ROW under the heading
+	for (const auto& row : first.m_children) {
+		EXPECT_EQ(row->m_kind, ibSelectorNodeKind::Detail);
+		EXPECT_TRUE(NumEq(row->m_values.at(AMOUNT), 1));    // the row's own value, not its contribution
+		EXPECT_EQ(row->m_values.at(REGION).GetString().ToStdString(), "R0");   // the key above stays readable
+	}
+}
+
+// ============================================================================================
+// BY … PERIODS(unit[, from, to]) — the level is grouped by the period containing the value AND
+// padded, so a month nothing happened in still gets its row. The padding is the reason the word
+// exists: a chart with a hole where a quiet month was is a wrong chart.
+// ============================================================================================
+
+namespace {
+
+ibValue Moment(int year, int month, int day)
+{
+	return ibValue(wxDateTime(static_cast<wxDateTime::wxDateTime_t>(day),
+	                          static_cast<wxDateTime::Month>(month - 1), year, 12, 0, 0));
+}
+
+int MonthOf(const ibValue& v) { return static_cast<int>(v.GetDateTime().GetMonth()) + 1; }
+
+} // namespace
+
+TEST(QueryTotals, PeriodsLevelGroupsByMonthAndPadsTheQuietOne)
+{
+	const ibMetaID PERIOD = 1, AMOUNT = 2;
+
+	// January twice, MARCH once — February is the month nothing happened in.
+	ibQueryRamTable detail;
+	detail.AddColumn(PERIOD, wxT("period"), ibTypeDescription());
+	detail.AddColumn(AMOUNT, wxT("amount"), ibTypeDescription());
+	auto add = [&](const ibValue& when, long amount) {
+		const long row = detail.AppendRow();
+		detail.SetCell(row, PERIOD, when);
+		detail.SetCell(row, AMOUNT, ibValue(ibNumber(amount)));
+	};
+	add(Moment(2026, 1, 3),  10);
+	add(Moment(2026, 1, 28),  5);
+	add(Moment(2026, 3, 9),   7);
+
+	TestCol period(wxT("period"), PERIOD), amount(wxT("amount"), AMOUNT);
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+
+	ibTotalLevel level = ibTotalLevel::One(&period, ibDimensionKind::Elements);
+	level.m_fields.front().m_periods = std::make_shared<ibTotalPeriods>();
+	level.m_fields.front().m_periods->m_unit = ibTotalsPeriod::Month;   // no bounds — pad between first and last
+
+	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, { level }, { sum }, nullptr, nullptr);
+
+	const ibSelectorTree::Node& root = tree.Root();
+	EXPECT_TRUE(NumEq(root.m_values.at(AMOUNT), 22));            // the grand total counts every row
+	ASSERT_EQ(root.m_children.size(), 3u);                       // Jan, Feb (padded), Mar
+
+	EXPECT_EQ(MonthOf(root.m_children[0]->m_values.at(PERIOD)), 1);
+	EXPECT_TRUE(NumEq(root.m_children[0]->m_values.at(AMOUNT), 15));   // 10 + 5, both truncated to January
+
+	// THE QUIET MONTH. It is a row, and its figure is nought — which is the number the reader came
+	// for, and the one a chart needs to draw a line through.
+	EXPECT_EQ(MonthOf(root.m_children[1]->m_values.at(PERIOD)), 2);
+	EXPECT_TRUE(NumEq(root.m_children[1]->m_values.at(AMOUNT), 0));
+	EXPECT_TRUE(root.m_children[1]->m_children.empty());
+	EXPECT_FALSE(root.m_children[1]->m_hasChildren);
+
+	EXPECT_EQ(MonthOf(root.m_children[2]->m_values.at(PERIOD)), 3);
+	EXPECT_TRUE(NumEq(root.m_children[2]->m_values.at(AMOUNT), 7));
+}
+
+TEST(QueryTotals, PeriodsBoundsPadOutwardsAndNeverFilter)
+{
+	const ibMetaID PERIOD = 1, AMOUNT = 2;
+
+	ibQueryRamTable detail;
+	detail.AddColumn(PERIOD, wxT("period"), ibTypeDescription());
+	detail.AddColumn(AMOUNT, wxT("amount"), ibTypeDescription());
+	const long row = detail.AppendRow();
+	detail.SetCell(row, PERIOD, Moment(2026, 5, 4));
+	detail.SetCell(row, AMOUNT, ibValue(ibNumber(9L)));
+
+	TestCol period(wxT("period"), PERIOD), amount(wxT("amount"), AMOUNT);
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+
+	ibTotalLevel level = ibTotalLevel::One(&period, ibDimensionKind::Elements);
+	level.m_fields.front().m_periods = std::make_shared<ibTotalPeriods>();
+	level.m_fields.front().m_periods->m_unit = ibTotalsPeriod::Month;
+	level.m_fields.front().m_periods->m_from = Moment(2026, 3, 1);   // BEFORE the only row
+	level.m_fields.front().m_periods->m_to   = Moment(2026, 6, 30);  // …and after it
+
+	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, { level }, { sum }, nullptr, nullptr);
+
+	const ibSelectorTree::Node& root = tree.Root();
+	ASSERT_EQ(root.m_children.size(), 4u);                       // March, April, May, June
+	EXPECT_EQ(MonthOf(root.m_children[0]->m_values.at(PERIOD)), 3);
+	EXPECT_TRUE(NumEq(root.m_children[0]->m_values.at(AMOUNT), 0));
+	EXPECT_EQ(MonthOf(root.m_children[2]->m_values.at(PERIOD)), 5);
+	EXPECT_TRUE(NumEq(root.m_children[2]->m_values.at(AMOUNT), 9));   // the month that has the row
+	EXPECT_EQ(MonthOf(root.m_children[3]->m_values.at(PERIOD)), 6);
+	EXPECT_TRUE(NumEq(root.m_values.at(AMOUNT), 9));             // padding adds rows, never figures
 }

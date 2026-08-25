@@ -794,13 +794,12 @@ bool ibDataQueryBuilder::TryTotalsPushdown(ibDataQueryResult& out) const
 			return false;   // not allowed — the ordinary detail read raises it, as it always did
 		return guarded.TryTotalsPushdown(out);
 	}
-	// DETAIL ROWS WERE ASKED FOR (a level with no fields), and a server-side fold returns none —
-	// `GROUP BY ROLLUP` sends back the aggregated rows and nothing else. Refused here as well as
-	// upstream, so a caller that stamps the level through some other road cannot lose the rows
-	// quietly: the answer would look right and be missing everything under the last heading.
-	for (const ibTotalLevel& level : m_totals)
-		if (level.m_fields.empty())
-			return false;
+	// ⭐ DETAIL ROWS MAY BE ASKED FOR NOW. A level with no fields used to be refused here outright —
+	// `GROUP BY ROLLUP` folds the rows away, so the answer would have looked right and been missing
+	// everything under the last heading. It travels as the PHANTOM LEVEL instead (the row's own
+	// identity as the deepest group key, dbTableProvider.cpp), and whether THAT is possible for this
+	// source is a question for the tier that knows — the same one asked below. This file states no
+	// opinion about it, which is why the check that used to live here is gone rather than moved.
 
 	// ⚠ WHETHER it pushes down is asked of the COMPOSER, not decided here: this file deliberately
 	// knows no L2 and no provider internals, and "can this dialect fold levels" is exactly such a

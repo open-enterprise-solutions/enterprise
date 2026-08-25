@@ -53,6 +53,9 @@ public:
 	TestQueryable(const wxString& table, ibMetaID metaId, bool computed = false)
 		: m_table(table), m_metaId(metaId), m_computed(computed) {}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
+	// ROW IDENTITY — what the phantom level groups by (a real source answers with its reference, or a
+	// register with recorder + line number). Absent by default: a source that has none.
+	void SetKey(const ibBackendQueryColumn* c) { m_keys.push_back(c); }
 
 	wxString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()    const override { return m_metaId; }
@@ -76,11 +79,13 @@ public:
 		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
 		return false;
 	}
+	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return m_keys; }
 private:
 	wxString m_table;
 	ibMetaID m_metaId;
 	bool     m_computed;
 	std::vector<const ibBackendQueryColumn*> m_cols;
+	std::vector<const ibBackendQueryColumn*> m_keys;
 };
 
 // A computed (RAM) queryable that RECORDS what the composer pushed into its ComputeRows, and then
@@ -828,17 +833,63 @@ TEST(QueryComposerGate, RollupTotals_TupleLevel_ShapeAccepted)
 	EXPECT_TRUE(ibDbTableProvider::CanRollupTotalsShape(spec));
 }
 
-TEST(QueryComposerGate, RollupTotals_DetailLevel_Refused)
+TEST(QueryComposerGate, RollupTotals_DetailLevelWithoutRowIdentity_Refused)
 {
-	// A level with NO fields is the detail records. ROLLUP folds the rows away, so there would be
-	// nothing left to hang under the last heading — the RAM fold keeps them.
+	// A level with NO fields is the detail records, and they travel as the PHANTOM LEVEL — the row's
+	// own identity as the deepest group key. A source with no identity has nothing to group by, and
+	// grouping by "the row" without a key would fold equal rows into one: the RAM fold keeps them,
+	// where a row is a row because it was read as one.
 	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
 	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);   // no SetKey — no identity
 
 	SpecBuf buf;
 	buf.totals.push_back(ibTotalLevel::One(&dim, ibDimensionKind::Elements));
 	buf.totals.push_back(ibTotalLevel{});                                      // the detail level
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	buf.totalAggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+
+	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));
+}
+
+TEST(QueryComposerGate, RollupTotals_DetailLevelOverKeyedSource_ShapeAccepted)
+{
+	// THE PHANTOM LEVEL. The same report over a source that HAS a row identity goes to the server:
+	// ROLLUP(dim, <identity>) returns the grand total, the dim headings AND the rows themselves in
+	// one pass — which is the whole point of it, and what the RAM road pays detail-row memory for.
+	ibBackendColumnRawDB key = ibBackendColumnRawDB::String(wxT("rowkey"));
+	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&key); A.AddCol(&dim); A.AddCol(&amt);
+	A.SetKey(&key);
+
+	SpecBuf buf;
+	buf.totals.push_back(ibTotalLevel::One(&dim, ibDimensionKind::Elements));
+	buf.totals.push_back(ibTotalLevel{});                                      // the detail level
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	buf.totalAggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+
+	EXPECT_TRUE(ibDbTableProvider::CanRollupTotalsShape(spec));
+}
+
+TEST(QueryComposerGate, RollupTotals_DetailLevelNotLast_Refused)
+{
+	// The rows are the BOTTOM. A grouping BELOW a detail level would group rows by something they
+	// were already split by — the composition does not produce it and the phantom level cannot say
+	// it, so the gate refuses rather than lowering something else than what was asked.
+	ibBackendColumnRawDB key = ibBackendColumnRawDB::String(wxT("rowkey"));
+	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
+	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&key); A.AddCol(&dim); A.AddCol(&amt);
+	A.SetKey(&key);
+
+	SpecBuf buf;
+	buf.totals.push_back(ibTotalLevel{});                                      // detail level FIRST
+	buf.totals.push_back(ibTotalLevel::One(&dim, ibDimensionKind::Elements));
 	ibDataQueryBuilder::AggregateItem sum;
 	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
 	buf.totalAggs = { sum };

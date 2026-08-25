@@ -243,6 +243,7 @@
     <ClInclude Include="query\structureBuilder.h" />
     <ClInclude Include="query\tempTableManager.h" />
     <ClInclude Include="query\queryRamTable.h" />
+    <ClInclude Include="query\queryRowCursor.h" />
     <ClInclude Include="query\queryKeywords.h" />
     <ClInclude Include="query\queryLexer.h" />
     <ClInclude Include="query\queryAst.h" />

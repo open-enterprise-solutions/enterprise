@@ -91,26 +91,12 @@ inline ibRegBound ibReadRegisterBound(const ibValue& given)
 //
 // Shared rather than accumulation-only: an accounting register reports turnovers by month by the
 // same words, and a second copy is how two registers come to disagree about what "Quarter" means.
-inline const std::vector<std::pair<ibTotalsPeriod, wxString>>& ibRegisterUnits()
-{
-	static const std::vector<std::pair<ibTotalsPeriod, wxString>> s_units = {
-		{ ibTotalsPeriod::Second,   wxT("Second")   }, { ibTotalsPeriod::Minute,   wxT("Minute")   },
-		{ ibTotalsPeriod::Hour,     wxT("Hour")     }, { ibTotalsPeriod::Day,      wxT("Day")      },
-		{ ibTotalsPeriod::Week,     wxT("Week")     }, { ibTotalsPeriod::TenDays,  wxT("TenDays")  },
-		{ ibTotalsPeriod::Month,    wxT("Month")    }, { ibTotalsPeriod::Quarter,  wxT("Quarter")  },
-		{ ibTotalsPeriod::HalfYear, wxT("HalfYear") }, { ibTotalsPeriod::Year,     wxT("Year")     },
-	};
-	return s_units;
-}
-
-// The word a unit is written as — a lookup in that one table, not a second switch over it.
-inline wxString ibRegisterUnitWord(ibTotalsPeriod unit)
-{
-	for (const std::pair<ibTotalsPeriod, wxString>& u : ibRegisterUnits())
-		if (u.first == unit)
-			return u.second;
-	return wxString();
-}
+// ⭐ THE TABLE MOVED, THE NAMES STAYED. It lives beside the expression that truncates by these
+// units now (ibPeriodUnits, query/queryable.h), because a TOTALS level says a periodicity too —
+// `BY Period PERIODS(Month, …)` — and the register was never the only one asking. These two remain
+// as the register's own spelling of the same question.
+inline const std::vector<std::pair<ibTotalsPeriod, wxString>>& ibRegisterUnits() { return ibPeriodUnits(); }
+inline wxString ibRegisterUnitWord(ibTotalsPeriod unit) { return ibPeriodUnitWord(unit); }
 
 // ⭐⭐ WHAT THE READING WAS ASKED TO FOLD BY — the WORD's MEANING, decided once.
 //

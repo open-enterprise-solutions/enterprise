@@ -19,6 +19,7 @@
 
 #include "queryProvider.h"                                            // ibBackendQueryProvider / ibComputedProvider (+ dataQueryBuilder.h, queryable.h)
 #include "queryRamTable.h"                                            // ibQueryRamTable — L3's raw flat snapshot (names no runtime type but ibValue)
+#include "queryRowCursor.h"                                           // ibQueryRow / ibQueryRowCursor — what a fold reads (one pass, no table)
 #include "querySelector.h"                                            // ibSelector — result.Select(mode) hands the drained snapshot to it
 #include "dbTableProvider.h"                                          // ibDbTableProvider (vended by GetProvider) + ibRenderedPageCache (NewPageCache)
 #include "resultSource.h"                                             // ibDataResultSource — the backing ibRamTableResultSource derives
@@ -65,6 +66,10 @@ ibQueryRamTable ComputeRowsResolved(const ibDataQuerySpec& spec,
                                     std::vector<const ibBackendQueryColumn*>& present);
 // Per-row RAM evaluation of a computed (arithmetic / CASE) expression — defined below; forward-declared
 // here so the computed read / WHERE / aggregate paths above can evaluate SELECT / WHERE / SUM expressions.
+// It takes a ROW, whoever holds it (a materialised table's row, a streaming cursor's current row): the
+// evaluation reads the current row and nothing else, so it names nothing bigger. The (table, index)
+// spelling stays for the paths that address rows by index.
+ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRow& row);
 ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRamTable& t, long row);
 
 // A synthetic output column for a computed SELECT expression (Qty * Price AS x) over a computed source:
@@ -796,6 +801,53 @@ ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseC
 	return t;
 }
 
+// ⭐ THE SAME READ, NOT MATERIALISED — a leaf read through its own provider and handed over as a
+// CURSOR. Same source, same pushed-down conditions, same columns as MaterialiseLeafToRam above; the
+// difference is that the rows are never all in hand, which is the whole of what a totals fold needs.
+// It owns the query and the result, so the cursor may outlive the expression that made it.
+class ibLeafRowCursor : public ibQueryRowCursor
+{
+public:
+	ibLeafRowCursor(const ibBackendQueryable* leaf, ibDatabaseConnectionHolder* holder,
+	                const std::vector<ibQueryCondition>& conds,
+	                const std::vector<const ibBackendQueryColumn*>& cols)
+		: m_query(holder), m_cols(cols)
+	{
+		for (const ibBackendQueryColumn* col : cols)
+			if (col != nullptr)
+				m_columns.push_back(ibQueryRamColumn{ col->GetColumnId(), col->GetName(), col->GetTypeDesc() });
+
+		m_query.From(leaf);
+		for (const ibQueryCondition& c : conds)
+			m_query.Where(c);   // VERBATIM — rebuilding from (col, op, value) drops m_values / m_path / m_expr
+		ibReadPageRequest page; page.m_count = 0;   // every matching row
+		m_result = std::make_unique<ibDataQueryResult>(m_query.Execute(page));
+		ibJournalInfo(wxT("query.road"), wxT("STREAM: reading leaf '%s' - %u columns, rows not held"),
+		              leaf != nullptr ? leaf->GetQueryName() : wxString(wxT("<none>")),
+		              static_cast<unsigned>(m_columns.size()));
+	}
+
+	bool Next() override { return m_result != nullptr && m_result->Next(); }
+
+	ibValue Get(ibMetaID id) const override
+	{
+		if (m_result == nullptr)
+			return ibValue();
+		for (const ibBackendQueryColumn* col : m_cols)
+			if (col != nullptr && col->GetColumnId() == id)
+				return m_result->GetValue(col);
+		return ibValue();
+	}
+
+	const std::vector<ibQueryRamColumn>& Columns() const override { return m_columns; }
+
+private:
+	ibDataQueryBuilder                       m_query;    // outlives the result it produced
+	std::unique_ptr<ibDataQueryResult>       m_result;
+	std::vector<const ibBackendQueryColumn*> m_cols;
+	std::vector<ibQueryRamColumn>            m_columns;
+};
+
 // Leaf materialisation entry for the composer's join/union/totals. Deliberately RAM:
 // temping a leaf pays only when the JOIN itself goes server-side, and the server-side
 // promotions live ABOVE this level — PromoteComputedLeaf (computed ⋈ DB) and
@@ -1048,12 +1100,12 @@ bool RamIsNullValue(const ibValue& v)
 	return v.IsNull();
 }
 
-RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRamTable& t, long row)
+RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRow& row)
 {
 	// A COMPUTED lhs (WHERE Qty * Price > 100, a CASE) evaluates its expression per row; else read the column.
 	ibValue cell;
-	if (c.m_expr)                cell = EvalColumnExprRow(c.m_expr.get(), t, row);
-	else if (c.m_col != nullptr) cell = t.GetCell(row, c.m_col->GetColumnId());
+	if (c.m_expr)                cell = EvalColumnExprRow(c.m_expr.get(), row);
+	else if (c.m_col != nullptr) cell = row.Get(c.m_col);
 	else                         return RamTri::False;
 	// SET-valued `In` — handled BEFORE the scalar null guard below, which would read the unset m_value as
 	// NULL and answer UNKNOWN for every row. Semantics match SQL: a NULL probe is UNKNOWN, an empty set is
@@ -1081,16 +1133,16 @@ RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRamTable& t, long row
 	return res ? RamTri::True : RamTri::False;
 }
 
-RamTri RamEvalPredicate(const ibQueryPredicate* p, const ibQueryRamTable& t, long row)
+RamTri RamEvalPredicate(const ibQueryPredicate* p, const ibQueryRow& row)
 {
 	if (p == nullptr) return RamTri::True;
 	switch (p->m_kind) {
 		case ibQueryPredicateKind::Leaf:
-			return RamEvalLeaf(p->m_leaf, t, row);
+			return RamEvalLeaf(p->m_leaf, row);
 		case ibQueryPredicateKind::And: {
 			RamTri acc = RamTri::True;                          // FALSE dominates; else UNKNOWN if any
 			for (const auto& c : p->m_children) {
-				const RamTri r = RamEvalPredicate(c.get(), t, row);
+				const RamTri r = RamEvalPredicate(c.get(), row);
 				if (r == RamTri::False)   return RamTri::False;
 				if (r == RamTri::Unknown) acc = RamTri::Unknown;
 			}
@@ -1099,7 +1151,7 @@ RamTri RamEvalPredicate(const ibQueryPredicate* p, const ibQueryRamTable& t, lon
 		case ibQueryPredicateKind::Or: {
 			RamTri acc = RamTri::False;                         // TRUE dominates; else UNKNOWN if any
 			for (const auto& c : p->m_children) {
-				const RamTri r = RamEvalPredicate(c.get(), t, row);
+				const RamTri r = RamEvalPredicate(c.get(), row);
 				if (r == RamTri::True)    return RamTri::True;
 				if (r == RamTri::Unknown) acc = RamTri::Unknown;
 			}
@@ -1107,15 +1159,24 @@ RamTri RamEvalPredicate(const ibQueryPredicate* p, const ibQueryRamTable& t, lon
 		}
 		case ibQueryPredicateKind::Not:
 			return p->m_children.empty() ? RamTri::True
-			                             : RamTriNot(RamEvalPredicate(p->m_children.front().get(), t, row));
+			                             : RamTriNot(RamEvalPredicate(p->m_children.front().get(), row));
 		case ibQueryPredicateKind::IsNull: {
 			// IS NULL / IS NOT NULL are DEFINITE (never UNKNOWN).
 			if (p->m_col == nullptr) return RamTri::False;
-			const bool isNull = RamIsNullValue(t.GetCell(row, p->m_col->GetColumnId()));
+			const bool isNull = RamIsNullValue(row.Get(p->m_col));
 			return (p->m_negated ? !isNull : isNull) ? RamTri::True : RamTri::False;
 		}
 	}
 	return RamTri::True;
+}
+
+// THE SAME QUESTION, ASKED OF A TABLE ROW. Every caller that holds the whole materialised table
+// (the composed JOIN filter, the RAM sort / limit rebuilds) says (table, index) and always did; the
+// evaluation itself never wanted more than the row, so that is what it takes now and this is the
+// one line that turns the pair into one.
+RamTri RamEvalPredicate(const ibQueryPredicate* p, const ibQueryRamTable& t, long row)
+{
+	return RamEvalPredicate(p, ibRamTableRow(t, row));
 }
 
 // RAM-filterable = every leaf is a PLAIN column (no dot-walk path). A dot-walk leaf needs a join the
@@ -1162,7 +1223,7 @@ ibQueryRamTable RamFilter(const ibQueryRamTable& src, const ibQueryPredicate* pr
 // A computed column is SQL-pushed for a single source; over a JOIN the leaves materialise to RAM, so
 // the expression is evaluated per joined row here off the column-based AST (Column / Const / Arith /
 // Case — the CASE reuses the boolean predicate evaluator). Pure — unit-testable via EvalColumnExpr.
-ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRamTable& t, long row)
+ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRow& row)
 {
 	if (e == nullptr) return ibValue();
 	switch (e->m_kind) {
@@ -1175,11 +1236,11 @@ ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRamTable& t, 
 			// evaluator, the read took the join / multi-source road and the reading has to be split
 			// differently, which is a defect to be told about rather than a case to fake.
 			wxASSERT_MSG(e->m_field.IsEmpty(), wxT("a per-field column expression cannot be evaluated over a RAM row"));
-			return e->m_col != nullptr && e->m_field.IsEmpty() ? t.GetCell(row, e->m_col->GetColumnId()) : ibValue();
+			return e->m_col != nullptr && e->m_field.IsEmpty() ? row.Get(e->m_col) : ibValue();
 		case ibQueryColumnExprKind::Const:  return e->m_const;
 		case ibQueryColumnExprKind::Arith: {
-			const ibNumber a = EvalColumnExprRow(e->m_lhs.get(), t, row).GetNumber();
-			const ibNumber b = EvalColumnExprRow(e->m_rhs.get(), t, row).GetNumber();
+			const ibNumber a = EvalColumnExprRow(e->m_lhs.get(), row).GetNumber();
+			const ibNumber b = EvalColumnExprRow(e->m_rhs.get(), row).GetNumber();
 			switch (e->m_arith) {
 				case ibQueryColumnArithOp::Add: return ibValue(a + b);
 				case ibQueryColumnArithOp::Sub: return ibValue(a - b);
@@ -1191,18 +1252,24 @@ ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRamTable& t, 
 		}
 		case ibQueryColumnExprKind::Case: {
 			for (const auto& wt : e->m_cases)
-				if (RamEvalPredicate(wt.first.get(), t, row) == RamTri::True) return EvalColumnExprRow(wt.second.get(), t, row);
-			return e->m_else ? EvalColumnExprRow(e->m_else.get(), t, row) : ibValue();
+				if (RamEvalPredicate(wt.first.get(), row) == RamTri::True) return EvalColumnExprRow(wt.second.get(), row);
+			return e->m_else ? EvalColumnExprRow(e->m_else.get(), row) : ibValue();
 		}
 		case ibQueryColumnExprKind::PeriodTrunc: {
 			// The RAM twin of the SQL truncation. It must agree with the dialect's expression to the
 			// day, or a query answers differently depending on whether it happened to co-locate — so
 			// this walks the calendar rather than approximating (no "30-day month" arithmetic).
-			const ibValue v = EvalColumnExprRow(e->m_lhs.get(), t, row);
+			const ibValue v = EvalColumnExprRow(e->m_lhs.get(), row);
 			return ibValue(ibTruncateToPeriod(v.GetDateTime(), e->m_periodUnit));
 		}
 	}
 	return ibValue();
+}
+
+// The (table, index) spelling — see the note on RamEvalPredicate's twin above.
+ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRamTable& t, long row)
+{
+	return EvalColumnExprRow(e, ibRamTableRow(t, row));
 }
 
 // Every source column an expression reads (so it rides into the composed table).
@@ -1828,52 +1895,88 @@ std::vector<const ibBackendQueryColumn*> AggregateRefCols(const ibDataQuerySpec&
 	return cols;
 }
 
-// One aggregate over the rows of a bucket (column read by GetColumnId). COUNT and a null
-// column => row count; SUM/AVG over the number value; MIN/MAX by ibValue compare.
-ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRamTable& TC, const std::vector<long>& idx)
+// ⭐⭐ AN AGGREGATE IS AN ACCUMULATOR — it always was, and holding the rows was how it hid.
+//
+// SUM, COUNT, AVG, MIN, MAX all fold one row at a time and forget it; the only reason this used to
+// take a bucket (a table + a list of row indices) is that the rows happened to be lying there. Said
+// as a state that rows are FED into, the same arithmetic serves BOTH folds: the one that already has
+// its rows (a composed JOIN result — AggregateOne below feeds them in a loop) and the streaming one,
+// which never holds a row longer than the moment it reads it.
+//
+// One statement of the semantics, and it is the awkward half that makes this matter: every column
+// aggregate IGNORES NULL operands (SQL), COUNT(col) counts non-null rows, AVG divides by the
+// non-null count, MIN/MAX skip NULL, and DISTINCT folds each different VALUE once — keyed by the
+// value's identity, never by its presentation (two references display the same string far more
+// often than they are the same reference, and a display-keyed count would quietly merge them).
+// Two copies of that is two answers waiting to disagree.
+struct ibAggAcc
 {
-	using Fn = ibDataQueryBuilder::AggregateFn;
-	// COUNT(*) — no source column AND no computed input — counts every row in the bucket.
-	if (a.m_col == nullptr && !a.m_expr)
-		return ibValue(ibNumber(static_cast<long>(idx.size())));
+	ibNumber m_sum{ 0 };
+	long     m_n     = 0;      // operands folded (non-null, DISTINCT-filtered) — COUNT / the AVG divisor
+	long     m_rows  = 0;      // rows fed, null or not — COUNT(*), which counts rows and not values
+	ibValue  m_best;
+	bool     m_have  = false;
+	// DISTINCT only — the one place memory grows with the DATA rather than with the groups, and it
+	// grows with the number of DIFFERENT VALUES in a group, which is what DISTINCT means.
+	std::unordered_set<ibValue, ibValueHash, ibValueEqual> m_seen;
 
-	// Every column aggregate IGNORES NULL operands (SQL semantics): COUNT(col) counts
-	// non-null rows, SUM/AVG fold only non-null (AVG divides by the non-null count),
-	// MIN/MAX skip NULL. A NULL row no longer inflates the result or wins MIN.
-	// DISTINCT — count each different VALUE once. Keyed by the value's identity, never by its
-	// presentation: two references display the same string far more often than they are the same
-	// reference, and a display-keyed count would quietly merge them.
-	std::unordered_set<ibValue, ibValueHash, ibValueEqual> seen;
-
-	ibNumber sum(0); long n = 0; ibValue best; bool have = false;
-	for (long i : idx) {
+	void Feed(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRow& row)
+	{
+		using Fn = ibDataQueryBuilder::AggregateFn;
+		++m_rows;
+		// COUNT(*) — no source column AND no computed input — counts the row itself; there is no value to read.
+		if (a.m_col == nullptr && !a.m_expr)
+			return;
 		// A COMPUTED aggregate input (SUM(Qty * Price), MAX(CASE …)) evaluates its expression per row;
 		// a plain input reads its source column. Same RAM expr evaluator the JOIN stitch uses.
-		const ibValue v = a.m_expr ? EvalColumnExprRow(a.m_expr.get(), TC, i) : RamCell(TC, i, a.m_col);
+		const ibValue v = a.m_expr ? EvalColumnExprRow(a.m_expr.get(), row) : row.Get(a.m_col);
 		if (RamIsNullValue(v))
-			continue;
-		if (a.m_distinct && !seen.insert(v).second)
-			continue;   // already folded this value
+			return;
+		if (a.m_distinct && !m_seen.insert(v).second)
+			return;   // already folded this value
 		switch (a.m_fn) {
-		case Fn::Count:             ++n; break;
-		case Fn::Sum: case Fn::Avg: sum = sum + v.GetNumber(); ++n; break;
-		case Fn::Min: if (!have || v < best) { best = v; have = true; } break;
-		case Fn::Max: if (!have || v > best) { best = v; have = true; } break;
+		case Fn::Count:             ++m_n; break;
+		case Fn::Sum: case Fn::Avg: m_sum = m_sum + v.GetNumber(); ++m_n; break;
+		case Fn::Min: if (!m_have || v < m_best) { m_best = v; m_have = true; } break;
+		case Fn::Max: if (!m_have || v > m_best) { m_best = v; m_have = true; } break;
 		default: break;
 		}
 	}
-	switch (a.m_fn) {
-	case Fn::Count: return ibValue(ibNumber(static_cast<long>(n)));
-	case Fn::Sum: return ibValue(sum);
-	case Fn::Avg: return n > 0 ? ibValue(sum / ibNumber(static_cast<long>(n))) : ibValue();
-	case Fn::Min: case Fn::Max: return best;
-	default: return ibValue();
+
+	ibValue Result(const ibDataQueryBuilder::AggregateItem& a) const
+	{
+		using Fn = ibDataQueryBuilder::AggregateFn;
+		switch (a.m_fn) {
+		case Fn::Count: return ibValue(ibNumber((a.m_col == nullptr && !a.m_expr) ? m_rows : m_n));
+		case Fn::Sum: return ibValue(m_sum);
+		case Fn::Avg: return m_n > 0 ? ibValue(m_sum / ibNumber(m_n)) : ibValue();
+		case Fn::Min: case Fn::Max: return m_best;
+		default: return ibValue();
+		}
 	}
+};
+
+// One aggregate over the rows of a bucket — the accumulator above, fed the rows the caller already
+// holds. (column read by GetColumnId.)
+ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRamTable& TC, const std::vector<long>& idx)
+{
+	ibAggAcc acc;
+	for (long i : idx)
+		acc.Feed(a, ibRamTableRow(TC, i));
+	return acc.Result(a);
 }
 
 // Receiver id for a COUNT(*) aggregate (no source column): a synthetic id far from any real metaID,
 // keyed by the aggregate's position, read back by GetColumn(alias). Column aggregates roll in-place.
 const ibMetaID kAggSyntheticBase = 0x40000000u;
+
+// WHERE AN AGGREGATE'S FIGURE LANDS — its OWN column when it has one, its synthetic receiver
+// otherwise. Asked in one place because both folds (bucketed and streaming) write the same slots,
+// and a second answer to this is a figure that reads back under a different name than it was written.
+ibMetaID AggSlotId(const std::vector<ibDataQueryBuilder::AggregateItem>& aggs, size_t i)
+{
+	return aggs[i].m_col != nullptr ? aggs[i].m_col->GetColumnId() : (kAggSyntheticBase + static_cast<ibMetaID>(i));
+}
 
 // Roll the aggregates over `rows` and write each onto the node: a COLUMN aggregate IN-PLACE into its
 // own column (a.m_col) — so it reads as the row value on a leaf and the SUBTOTAL on a group node
@@ -1881,11 +1984,8 @@ const ibMetaID kAggSyntheticBase = 0x40000000u;
 void ApplyAggregates(ibSelectorTree::Node& node, const ibQueryRamTable& TC, const std::vector<long>& rows,
                      const std::vector<ibDataQueryBuilder::AggregateItem>& aggs)
 {
-	for (size_t i = 0; i < aggs.size(); ++i) {
-		const ibDataQueryBuilder::AggregateItem& a = aggs[i];
-		const ibMetaID id = (a.m_col != nullptr) ? a.m_col->GetColumnId() : (kAggSyntheticBase + static_cast<ibMetaID>(i));
-		node.m_values[id] = AggregateOne(a, TC, rows);
-	}
+	for (size_t i = 0; i < aggs.size(); ++i)
+		node.m_values[AggSlotId(aggs, i)] = AggregateOne(aggs[i], TC, rows);
 }
 
 // Add the synthetic receiver COLUMNS for COUNT(*) aggregates to a tree (column aggregates need none —
@@ -2116,39 +2216,8 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 	return ibDataQueryResult(std::move(TO), spec.m_queryable);
 }
 
-// Multi-level totals fold (hierarchical totals): a node holds the aggregates over its rows; recurse a
-// subtotal node per distinct value of groupFields[level], carrying the group-key path
-// down. Root (level 0) = grand total. (docs/query-language-arc.md §22.1b)
-void FoldTotals(ibSelectorTree::Node& node, const ibQueryRamTable& TC, const std::vector<long>& rows,
-                const std::vector<const ibBackendQueryColumn*>& groupFields,
-                const std::vector<ibDataQueryBuilder::AggregateItem>& aggs, size_t level,
-                const std::map<ibMetaID, ibValue>& keys)
-{
-	node.m_values = keys;
-	ApplyAggregates(node, TC, rows, aggs);   // subtotals IN-PLACE in each aggregate's own column
-	if (level >= groupFields.size())
-		return;
-
-	// BUCKETED BY THE VALUE ITSELF (ibValueHash / ibValueEqual, value.h). Keying
-	// by GetHashKey() cost a text conversion per row — and forced a THIRD
-	// container, `keyVal`, whose only job was to map the string back to the value
-	// it came from. With the value as the key there is nothing to map back.
-	std::vector<ibValue> order;                                        // first-seen group order
-	std::unordered_map<ibValue, std::vector<long>, ibValueHash, ibValueEqual> buckets;
-	for (long i : rows) {
-		const ibValue v = RamCell(TC, i, groupFields[level]);
-		const auto it = buckets.find(v);
-		if (it == buckets.end()) { order.push_back(v); buckets.emplace(v, std::vector<long>{ i }); }
-		else it->second.push_back(i);
-	}
-	for (const ibValue& k : order) {
-		ibSelectorTree::Node* child = node.AddChild(static_cast<int>(level) + 1);
-		std::map<ibMetaID, ibValue> childKeys = keys;
-		childKeys[groupFields[level]->GetColumnId()] = k;
-		FoldTotals(*child, TC, buckets[k], groupFields, aggs, level + 1, childKeys);
-	}
-	node.m_hasChildren = !node.m_children.empty();   // eager build -> has children == populated
-}
+// (The recursive multi-level totals fold that stood here is gone: it bucketed the rows level by
+// level to build what one streaming descent builds — see ibStreamingFold, further down.)
 
 // Promote a (computed-leaf ⋈ DB-leaf) join to server-side: materialise the COMPUTED leaf (register
 // slice / balance / subquery / temp) into a DB temp table, then the join is DB⋈DB and the co-located
@@ -2655,26 +2724,334 @@ ibDataQueryResult ibQueryComposer::ExecuteAggregate(const ibDataQuerySpec& spec)
 	return RamAggregate(Compose(spec, AggregateRefCols(spec)), spec);
 }
 
+namespace {
+
+// ⭐ WHAT A LEVEL FIELD CONTRIBUTES TO THE KEY — its cell, or the START OF THE PERIOD containing it
+// when the field is read BY PERIODS. `ibTruncateToPeriod` is the RAM twin of the expression the SQL
+// road groups by, walking the calendar rather than approximating it — so a row lands in the same
+// bucket whichever road read it, which is the only way two roads may exist at all.
+ibValue LevelKeyValue(const ibTotalField& field, const ibQueryRow& row)
+{
+	const ibValue v = row.Get(field.m_col);
+	if (!field.ByPeriods() || v.GetType() != TYPE_DATE)
+		return v;
+	return ibValue(ibTruncateToPeriod(v.GetDateTime(), field.m_periods->m_unit));
+}
+
+// ⭐⭐ THE STREAMING FOLD — rows in, tree out, ONE PASS, and nothing kept but the tree.
+//
+// The recursive fold this replaces bucketed the rows level by level: a vector of row indices per
+// group, per level, over a snapshot that was itself the whole detail. It read every row exactly once
+// per level and never looked back, which is to say it never needed any of it — the shape was there
+// because the rows were.
+//
+// Fed a row at a time, the same tree comes out of ONE descent: the row's key at each level names the
+// node it belongs to (opened on first sight, so groups keep first-seen order exactly as before), and
+// every node on the path takes the row into its ACCUMULATORS. Memory is then a function of the
+// number of GROUPS — the composition's acceptance criterion — and the detail rows are never all in
+// hand at once.
+//
+// Two nodes are NOT held here: a DETAIL leaf (a level with no fields is one node per row — the
+// report asked to print the rows, so it is paying for rows on purpose) and the tree itself.
+class ibStreamingFold
+{
+public:
+	ibStreamingFold(ibSelectorTree& tree, const std::vector<ibTotalLevel>& levels,
+	                const std::vector<ibDataQueryBuilder::AggregateItem>& aggs,
+	                const std::vector<ibQueryRamColumn>& rowColumns)
+		: m_levels(levels), m_aggs(aggs), m_rowColumns(rowColumns)
+	{
+		m_pool.push_back(FoldNode{ &tree.Root(), std::vector<ibAggAcc>(aggs.size()), {} });   // the root IS the grand total
+	}
+
+	void Feed(const ibQueryRow& row)
+	{
+		std::size_t cur = 0;
+		FeedNode(cur, row);                                   // the grand total takes every row
+		for (std::size_t li = 0; li < m_levels.size(); ++li) {
+			const ibTotalLevel& level = m_levels[li];
+			// A LEVEL WITH NO FIELDS IS THE DETAIL RECORDS — grouping by nothing makes no group at
+			// all, so what hangs here is the row itself. Nothing follows it: the rows are the bottom.
+			if (level.m_fields.empty()) {
+				AddDetail(cur, row);
+				return;
+			}
+			ibLevelKey key;
+			key.reserve(level.m_fields.size());
+			for (const ibTotalField& field : level.m_fields)
+				key.push_back(LevelKeyValue(field, row));      // one field is the degenerate one-element key
+			cur = Child(cur, std::move(key), level, static_cast<int>(li) + 1);
+			FeedNode(cur, row);
+		}
+	}
+
+	// ⭐ THE FIGURES ARE WRITTEN WHEN THE LAST ROW HAS BEEN READ. An accumulator IS the subtotal
+	// while it is still being fed, and asking it earlier would be asking a question whose answer is
+	// not in yet. In-place in each aggregate's OWN column, exactly as ApplyAggregates writes them —
+	// so a figure reads as the row value on a leaf and as the subtotal on a heading.
+	void Finish()
+	{
+		for (FoldNode& n : m_pool) {
+			for (std::size_t i = 0; i < m_aggs.size(); ++i)
+				n.m_node->m_values[AggSlotId(m_aggs, i)] = n.m_accs[i].Result(m_aggs[i]);
+			n.m_node->m_hasChildren = !n.m_node->m_children.empty();
+		}
+	}
+
+	// THE NUMBER OF GROUPS — what the journal prints beside the number of rows, because that pair is
+	// the acceptance criterion stated as two numbers.
+	long NodeCount() const { return static_cast<long>(m_pool.size()); }
+
+private:
+	// A node under construction: the tree node it already is, one accumulator per aggregate, and the
+	// children it has opened, by their level key. Pool indices rather than pointers — the pool grows
+	// as the tree does, and an index survives that.
+	struct FoldNode {
+		ibSelectorTree::Node* m_node = nullptr;
+		std::vector<ibAggAcc> m_accs;
+		std::unordered_map<ibLevelKey, std::size_t, ibLevelKeyHash, ibLevelKeyEqual> m_children;
+	};
+
+	void FeedNode(std::size_t idx, const ibQueryRow& row)
+	{
+		std::vector<ibAggAcc>& accs = m_pool[idx].m_accs;
+		for (std::size_t i = 0; i < m_aggs.size(); ++i)
+			accs[i].Feed(m_aggs[i], row);
+	}
+
+	std::size_t Child(std::size_t parent, ibLevelKey&& key, const ibTotalLevel& level, int childLevel)
+	{
+		const auto it = m_pool[parent].m_children.find(key);
+		if (it != m_pool[parent].m_children.end())
+			return it->second;
+
+		ibSelectorTree::Node* parentNode = m_pool[parent].m_node;
+		ibSelectorTree::Node* child      = parentNode->AddChild(childLevel);
+		// A SUBGROUP inherits the grouping fields available from the levels above, so a display column
+		// that dot-walks an ancestor dimension resolves in the subgroup header too. Only the KEYS are
+		// there to inherit at this point — the figures are written at the end, by Finish().
+		child->m_values = parentNode->m_values;
+		for (std::size_t i = 0; i < level.m_fields.size() && i < key.size(); ++i)
+			child->m_values[level.m_fields[i].m_col->GetColumnId()] = key[i];
+
+		const std::size_t idx = m_pool.size();
+		m_pool.push_back(FoldNode{ child, std::vector<ibAggAcc>(m_aggs.size()), {} });
+		m_pool[parent].m_children.emplace(std::move(key), idx);
+		return idx;
+	}
+
+	void AddDetail(std::size_t parent, const ibQueryRow& row)
+	{
+		ibSelectorTree::Node* parentNode = m_pool[parent].m_node;
+		ibSelectorTree::Node* leaf       = parentNode->AddChild(parentNode->m_level + 1);
+		leaf->m_kind   = ibSelectorNodeKind::Detail;
+		leaf->m_values = parentNode->m_values;                 // the group keys above stay readable on the row
+		for (const ibQueryRamColumn& col : m_rowColumns)
+			leaf->m_values[col.m_id] = row.Get(col.m_id);
+
+		// ⚠ AND NOTHING IS ROLLED ON TOP OF THEM — a detail row's figure is the value it already
+		// holds, which the loop above has just written; rolling COUNT over the single row would put a
+		// 1 where the document's number belongs. EXCEPT where the row holds nothing to write: COUNT(*)
+		// has no input column at all, so its receiver is filled here or comes back blank.
+		for (std::size_t i = 0; i < m_aggs.size(); ++i) {
+			if (RowCarries(m_aggs[i].m_col))
+				continue;
+			ibAggAcc one;
+			one.Feed(m_aggs[i], row);
+			leaf->m_values[AggSlotId(m_aggs, i)] = one.Result(m_aggs[i]);
+		}
+	}
+
+	bool RowCarries(const ibBackendQueryColumn* col) const
+	{
+		if (col == nullptr)
+			return false;
+		for (const ibQueryRamColumn& c : m_rowColumns)
+			if (c.m_id == col->GetColumnId())
+				return true;
+		return false;
+	}
+
+	const std::vector<ibTotalLevel>&                      m_levels;
+	const std::vector<ibDataQueryBuilder::AggregateItem>& m_aggs;
+	const std::vector<ibQueryRamColumn>&                  m_rowColumns;   // what a DETAIL row writes
+	std::vector<FoldNode>                                 m_pool;
+};
+
+// --- PERIODS: the padding ---------------------------------------------------------------------
+// A period nothing happened in has no row to come back, and that missing row is exactly what the
+// reader is looking at. So after the fold — EITHER fold, ours or the DBMS's — the periodic levels
+// are filled in: every unit between the bounds gets a node, and the ones the data produced stay
+// where they are.
+//
+// It is a pass over NODES, not rows: a year by months adds at most twelve, and it costs the same
+// whether they were folded here or on the server. Which is why it lives in one place and both roads
+// end with it.
+
+// The figure an EMPTY period reports. A sum or a count of nothing IS nought — that is the number a
+// chart needs and the one a reader expects on a quiet month. A MIN / MAX / AVG of nothing is not a
+// number at all, and writing 0 there would be inventing a smallest value that never existed.
+ibValue EmptyPeriodFigure(const ibDataQueryBuilder::AggregateItem& a)
+{
+	using Fn = ibDataQueryBuilder::AggregateFn;
+	return (a.m_fn == Fn::Sum || a.m_fn == Fn::Count) ? ibValue(ibNumber(0L)) : ibValue();
+}
+
+// Fill in the missing periods among ONE node's children. The children carry the period in `id`;
+// bounds that were written win, and where they were not the series runs between the first and the
+// last period the data holds — the honest default, since with no bounds and no rows there is no
+// series at all.
+void PadPeriodChildren(ibSelectorTree::Node& parent, const ibTotalField& field, int childLevel,
+                       const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates)
+{
+	const ibMetaID id = field.m_col->GetColumnId();
+	const ibTotalPeriods& periods = *field.m_periods;
+
+	std::map<wxDateTime, ibSelectorTree::Node*> have;   // ordered by the moment itself
+	for (const std::unique_ptr<ibSelectorTree::Node>& child : parent.m_children) {
+		if (child == nullptr) continue;
+		const auto it = child->m_values.find(id);
+		if (it == child->m_values.end() || it->second.GetType() != TYPE_DATE) return;   // not a period level after all
+		have[it->second.GetDateTime()] = child.get();
+	}
+
+	wxDateTime from = !periods.m_from.IsEmpty() ? ibTruncateToPeriod(periods.m_from.GetDateTime(), periods.m_unit)
+	                                            : (have.empty() ? wxDateTime() : have.begin()->first);
+	wxDateTime to   = !periods.m_to.IsEmpty()   ? ibTruncateToPeriod(periods.m_to.GetDateTime(),   periods.m_unit)
+	                                            : (have.empty() ? wxDateTime() : have.rbegin()->first);
+	if (!from.IsValid() || !to.IsValid() || from > to)
+		return;                                        // nothing to pad between — and saying so is not a failure
+
+	// ⚠ THE BOUNDS PAD, THEY DO NOT FILTER. A period OUTSIDE them that the data produced is still a
+	// period that happened; dropping it here would turn a display setting into a silent WHERE.
+	std::map<wxDateTime, ibSelectorTree::Node*> series = have;
+	std::vector<std::unique_ptr<ibSelectorTree::Node>> made;
+	for (wxDateTime t = from; t <= to; t = ibNextPeriodStart(t, periods.m_unit)) {
+		if (series.find(t) != series.end())
+			continue;
+		auto node = std::make_unique<ibSelectorTree::Node>();
+		node->m_level  = childLevel;
+		node->m_values = parent.m_values;              // the keys above stay readable, as on any node
+		node->m_values[id] = ibValue(t);
+		for (size_t i = 0; i < aggregates.size(); ++i)
+			node->m_values[AggSlotId(aggregates, i)] = EmptyPeriodFigure(aggregates[i]);
+		series[t] = node.get();
+		made.push_back(std::move(node));
+	}
+	if (made.empty())
+		return;
+
+	// Rebuild the child list along the SERIES, keeping the direction the data came in: a report that
+	// reads newest-first must not have its filled months arrive ascending in the middle of it.
+	const bool descending = parent.m_children.size() > 1 && have.size() > 1
+	                     && parent.m_children.front() != nullptr && parent.m_children.back() != nullptr
+	                     && parent.m_children.front()->m_values.count(id) && parent.m_children.back()->m_values.count(id)
+	                     && parent.m_children.front()->m_values.at(id).GetDateTime()
+	                        > parent.m_children.back()->m_values.at(id).GetDateTime();
+
+	std::map<ibSelectorTree::Node*, std::unique_ptr<ibSelectorTree::Node>> owned;
+	for (std::unique_ptr<ibSelectorTree::Node>& child : parent.m_children)
+		if (child != nullptr) { ibSelectorTree::Node* raw = child.get(); owned[raw] = std::move(child); }
+	for (std::unique_ptr<ibSelectorTree::Node>& node : made) { ibSelectorTree::Node* raw = node.get(); owned[raw] = std::move(node); }
+
+	parent.m_children.clear();
+	parent.m_children.reserve(series.size());
+	auto take = [&owned, &parent](ibSelectorTree::Node* raw) {
+		const auto it = owned.find(raw);
+		if (it != owned.end() && it->second)          // an empty slot is not a row — see ibSelector::Next
+			parent.m_children.push_back(std::move(it->second));
+	};
+	if (descending) for (auto it = series.rbegin(); it != series.rend(); ++it) take(it->second);
+	else            for (auto it = series.begin();  it != series.end();  ++it) take(it->second);
+	parent.m_hasChildren = !parent.m_children.empty();
+}
+
+// Walk to the nodes whose CHILDREN are the given level, and pad each one's children.
+void PadLevel(ibSelectorTree::Node& node, int depth, int levelIndex, const ibTotalField& field,
+              const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates)
+{
+	if (depth == levelIndex) {
+		PadPeriodChildren(node, field, depth + 1, aggregates);
+		return;
+	}
+	for (const std::unique_ptr<ibSelectorTree::Node>& child : node.m_children)
+		if (child != nullptr)
+			PadLevel(*child, depth + 1, levelIndex, field, aggregates);
+}
+
+// A HIERARCHY UNFOLD IS NOT A ONE-PASS FOLD. It arranges the level's VALUES into the target
+// catalog's parent chain — a shape known only once every value has been seen, and one that hangs
+// the rows themselves under a folder (Hierarchy). So those folds keep reading a whole table, and
+// this is the question that says which road a set of levels takes.
+bool LevelsUnfoldHierarchy(const std::vector<ibTotalLevel>& levels)
+{
+	for (const ibTotalLevel& level : levels)
+		for (const ibTotalField& field : level.m_fields)
+			if (field.m_dim != ibDimensionKind::Elements)
+				return true;
+	return false;
+}
+
+} // namespace
+
+// ⭐⭐ FILL IN THE PERIODS NOBODY REPORTED — the second half of what `BY … PERIODS(unit, …)` means.
+//
+// Both folds end here, and they must: the DBMS returns the periods it HAS, and so does the RAM fold;
+// neither can invent the quiet month, because neither is looking at a calendar. This is the pass
+// that does, and it works on the finished tree, so there is exactly one statement of what padding
+// means whichever road produced the tree.
+void ibQueryComposer::PadPeriodLevels(ibSelectorTree& tree, const std::vector<ibTotalLevel>& levels,
+                                      const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates)
+{
+	for (size_t li = 0; li < levels.size(); ++li) {
+		// ONE FIELD, because a period is a scale and a tuple has none: `BY (Period, Warehouse)
+		// PERIODS(Month)` would ask for the months of each warehouse, which is a different report
+		// (and one the author can write as two levels). Refused where it is written; ignored here.
+		if (!levels[li].IsSingleField() || !levels[li].m_fields.front().ByPeriods())
+			continue;
+		PadLevel(tree.Root(), 0, static_cast<int>(li), levels[li].m_fields.front(), aggregates);
+	}
+}
+
 // totals fold over a combined row set -> a RAW totals TREE (L3's own ibQueryRamTable). L3
 // stops here — flat-vs-hierarchical rendering is the runtime's call. Group columns keyed by
 // GetColumnId; aggregates by a synthetic id (read by alias). Grand total = the root (level
 // 0). Pure (no DB) — exposed so the fold is unit-testable directly. (docs §22.1b)
-ibSelectorTree ibQueryComposer::BuildTotalsTree(const ibQueryRamTable& detail,
+//
+// ⭐ IT TAKES A CURSOR. One pass, no table: every group column is a one-field level, so this is the
+// streaming fold with the levels spelled the flat way. (The snapshot overload below is the same
+// call with the table handed over as a cursor — see queryRowCursor.h.)
+ibSelectorTree ibQueryComposer::BuildTotalsTree(ibQueryRowCursor& rows,
 		const std::vector<const ibBackendQueryColumn*>& groupFields,
 		const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates)
 {
-	const long n = detail.RowCount();
-	std::vector<long> all; all.reserve(static_cast<size_t>(n));
-	for (long i = 0; i < n; ++i) all.push_back(i);
-
 	ibSelectorTree tree;
 	for (const ibBackendQueryColumn* g : groupFields)
 		tree.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
 	for (const ibDataQueryBuilder::AggregateItem& a : aggregates)   // aggregate column = its OWN source column
 		if (a.m_col != nullptr) tree.AddColumn(a.m_col->GetColumnId(), a.m_col->GetName(), a.m_col->GetTypeDesc());
 	AddSyntheticAggColumns(tree, aggregates);                       // + COUNT(*) receivers
-	FoldTotals(tree.Root(), detail, all, groupFields, aggregates, 0, {});
+
+	std::vector<ibTotalLevel> levels;
+	levels.reserve(groupFields.size());
+	for (const ibBackendQueryColumn* g : groupFields)
+		levels.push_back(ibTotalLevel::One(g, ibDimensionKind::Elements));
+
+	ibStreamingFold fold(tree, levels, aggregates, rows.Columns());
+	long read = 0;
+	while (rows.Next()) { fold.Feed(rows); ++read; }
+	fold.Finish();
+	ibJournalInfo(wxT("query.road"), wxT("STREAM: totals folded %ld rows into %ld nodes (%u levels)"),
+	              read, fold.NodeCount(), static_cast<unsigned>(levels.size()));
 	return tree;   // raw — the runtime decides flat vs. hierarchical
+}
+
+ibSelectorTree ibQueryComposer::BuildTotalsTree(const ibQueryRamTable& detail,
+		const std::vector<const ibBackendQueryColumn*>& groupFields,
+		const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates)
+{
+	ibRamTableCursor rows(detail);
+	return BuildTotalsTree(rows, groupFields, aggregates);
 }
 
 // RECURSIVE hierarchy fold (parent-ref). From a WHOLE materialised detail table -> the Node tree the
@@ -3019,7 +3396,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 		ibLevelKey key;
 		key.reserve(level.m_fields.size());
 		for (const ibTotalField& field : level.m_fields)
-			key.push_back(ctx.snapshot->GetCell(r, field.m_col->GetColumnId()));
+			key.push_back(LevelKeyValue(field, ibRamTableRow(*ctx.snapshot, r)));   // truncated when the field is BY PERIODS
 
 		const auto it = byKey.find(key);
 		if (it == byKey.end()) {
@@ -3051,6 +3428,41 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 
 } // namespace
 
+// ⭐⭐ THE COMPOSITION'S OWN FOLD, TAKING A CURSOR. This is the road every report travels, so this is
+// where "memory grows with the number of GROUPS" is either true or not.
+//
+// One pass builds the whole tree when the levels group by VALUES — which is what a report's levels
+// do. The exception says its own name: a level that unfolds a reference HIERARCHY arranges its
+// values into the target catalog's parent chain, a shape that is not known until every value has
+// been seen (and, in Hierarchy, hangs the rows themselves under their folder). That fold reads a
+// whole table, so the cursor is drained into one and the road is journalled — the answer is the
+// same either way, and the only thing at stake is what it costs.
+ibSelectorTree ibQueryComposer::BuildDimensionTree(ibQueryRowCursor& rows,
+		const std::vector<ibTotalLevel>& levels, const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+		ibDatabaseConnectionHolder* holder, const ibBackendQueryable* source)
+{
+	if (LevelsUnfoldHierarchy(levels)) {
+		ibQueryRamTable snapshot = ibDrainToRamTable(rows);
+		ibJournalInfo(wxT("query.road"), wxT("RAM: drained %ld detail rows - a level unfolds a reference hierarchy"),
+		              snapshot.RowCount());
+		return BuildDimensionTree(snapshot, levels, aggregates, holder, source);
+	}
+
+	ibSelectorTree tree;
+	for (const ibQueryRamColumn& col : rows.Columns())
+		tree.AddColumn(col.m_id, col.m_name, col.m_type);
+	AddSyntheticAggColumns(tree, aggregates);
+
+	ibStreamingFold fold(tree, levels, aggregates, rows.Columns());
+	long read = 0;
+	while (rows.Next()) { fold.Feed(rows); ++read; }
+	fold.Finish();
+	PadPeriodLevels(tree, levels, aggregates);   // the quiet months, which no fold can produce
+	ibJournalInfo(wxT("query.road"), wxT("STREAM: folded %ld rows into %ld nodes (%u levels)"),
+	              read, fold.NodeCount(), static_cast<unsigned>(levels.size()));
+	return tree;
+}
+
 ibSelectorTree ibQueryComposer::BuildDimensionTree(const ibQueryRamTable& snapshot,
 		const std::vector<ibTotalLevel>& levels, const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
 		ibDatabaseConnectionHolder* holder, const ibBackendQueryable* source)
@@ -3067,6 +3479,7 @@ ibSelectorTree ibQueryComposer::BuildDimensionTree(const ibQueryRamTable& snapsh
 	FoldDimLevel(ctx, &tree.Root(), all, 0);
 	tree.Root().m_hasChildren = !tree.Root().m_children.empty();
 	ApplyAggregates(tree.Root(), snapshot, all, aggregates);   // grand total in-place
+	PadPeriodLevels(tree, levels, aggregates);                 // …and the periods nothing happened in
 	return tree;
 }
 
@@ -3341,15 +3754,19 @@ ibSelectorTree ibQueryComposer::ExecuteTotals(const ibDataQuerySpec& spec)
 	              IsSingleSource(spec) ? wxT("single source") : wxT("composed sources"),
 	              static_cast<unsigned>(spec.m_totals != nullptr ? spec.m_totals->size() : 0));
 
-	ibQueryRamTable combined;
 	if (IsSingleSource(spec)) {
-		// Materialise the source's group + sum columns, unfiltered by page.
+		// ⭐ READ AND FOLD IN ONE PASS. The source's group + sum columns, unfiltered by page, straight
+		// off the cursor: the fold takes the rows as they arrive and keeps only the tree. This road
+		// used to materialise the whole detail first — the one thing a totals read must not do.
 		std::vector<const ibBackendQueryColumn*> cols = *spec.m_groupBy;
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
 			if (a.m_col != nullptr) cols.push_back(a.m_col);
-		combined = MaterialiseLeaf(spec.m_queryable, spec.m_holder,
-		                           LeafConditions(spec, spec.m_queryable), cols);
-	} else {
+		ibLeafRowCursor rows(spec.m_queryable, spec.m_holder, LeafConditions(spec, spec.m_queryable), cols);
+		return BuildTotalsTree(rows, *spec.m_groupBy, *spec.m_aggregates);
+	}
+
+	ibQueryRamTable combined;
+	{
 		const ibQueryNode* root = spec.m_root;
 		const bool ok = root != nullptr &&
 		                ((root->m_kind == ibQueryNode::Kind::Union && !root->m_parts.empty()) ||
@@ -3405,7 +3822,7 @@ private:
 // ==========================================================================
 
 ibDataQueryResult::ibDataQueryResult(ibQueryRamTable&& ramTable, const ibBackendQueryable* queryable)
-	: m_source(std::make_unique<ibRamTableResultSource>(std::move(ramTable), queryable))
+	: m_source(std::make_shared<ibRamTableResultSource>(std::move(ramTable), queryable))
 {
 }
 
@@ -3460,13 +3877,67 @@ void ibDataQueryResult::SetSource(ibDatabaseConnectionHolder* holder, const ibBa
 	m_ownedSources  = std::move(owned);
 }
 
-// selection = result.Select(mode). Drain the cursor ONCE into a flat snapshot (the stamped
-// materialise-columns) and hand it to an ibSelector — which folds it per the mode (flat / hierarchy
-// / hierarchy-only) polymorphically; the caller sees one interface, never the backing or the form.
+namespace {
+
+// ⭐⭐ THE RESULT'S ROWS, HANDED OVER AS A CURSOR — and this is where "the fold takes a cursor"
+// stops being an abstraction and becomes one fewer copy of the detail.
+//
+// Select() used to DRAIN the backing into an ibQueryRamTable right here: every row of the read,
+// materialised, before the fold had seen any of it. A report over a register with a million
+// movements held a million rows to print forty headings.
+//
+// The plan the door stamped travels with it — WHICH columns (m_matColumns) and HOW each is read
+// (m_objectReads: a dot-walked dimension is a reference / enum / composite projected as a whole
+// SPREAD under an alias prefix, so asking for the column itself would find nothing and the level
+// would fold every row into one empty group).
+class ibResultRowCursor : public ibQueryRowCursor
+{
+public:
+	ibResultRowCursor(std::shared_ptr<ibDataResultSource> source,
+	                  const std::vector<const ibBackendQueryColumn*>& cols,
+	                  std::map<ibMetaID, std::pair<wxString, const ibBackendQueryColumn*>> objectReads)
+		: m_source(std::move(source)), m_objectReads(std::move(objectReads))
+	{
+		for (const ibBackendQueryColumn* c : cols)
+			if (c != nullptr) {
+				m_columns.push_back(ibQueryRamColumn{ c->GetColumnId(), c->GetName(), c->GetTypeDesc() });
+				m_cols.push_back(c);
+			}
+	}
+
+	bool Next() override { return m_source != nullptr && m_source->Next(); }
+
+	ibValue Get(ibMetaID id) const override
+	{
+		if (m_source == nullptr)
+			return ibValue();
+		const auto objectRead = m_objectReads.find(id);
+		if (objectRead != m_objectReads.end())
+			return m_source->ColumnObject(objectRead->second.first, objectRead->second.second);
+		for (const ibBackendQueryColumn* c : m_cols)
+			if (c->GetColumnId() == id)
+				return m_source->Value(c);
+		return ibValue();
+	}
+
+	const std::vector<ibQueryRamColumn>& Columns() const override { return m_columns; }
+
+private:
+	std::shared_ptr<ibDataResultSource>      m_source;    // shared with the result it came from — ONE scan
+	std::vector<const ibBackendQueryColumn*> m_cols;      // the columns as the backing reads them
+	std::vector<ibQueryRamColumn>            m_columns;   // …and as the tree declares them
+	std::map<ibMetaID, std::pair<wxString, const ibBackendQueryColumn*>> m_objectReads;
+};
+
+} // namespace
+
+// selection = result.Select(mode). The rows go to the ibSelector AS A CURSOR — it folds them per the
+// mode (streamed for the group folds, drained into a table for the ones that need every row
+// addressable), and the caller sees one interface, never the backing or the form.
 ibSelector ibDataQueryResult::Select(ibSelectKind mode)
 {
 	// ⭐ THE DBMS MAY HAVE FOLDED IT ALREADY. When the totals were pushed down (GROUP BY ROLLUP), the
-	// tree is complete and there is no cursor of detail rows to drain — draining one here would read
+	// tree is complete and there is no cursor of detail rows to read — reading one here would fetch
 	// exactly the rows the push-down exists to leave in the database.
 	if (m_readyTree) {
 		ibSelector s(ibQueryRamTable(), mode);
@@ -3475,28 +3946,17 @@ ibSelector ibDataQueryResult::Select(ibSelectKind mode)
 		return s;
 	}
 
-	ibQueryRamTable snapshot;
-	for (const ibBackendQueryColumn* c : m_matColumns)
-		if (c != nullptr) snapshot.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
+	std::map<ibMetaID, std::pair<wxString, const ibBackendQueryColumn*>> objectReads;
+	for (const auto& kv : m_objectReads)
+		objectReads.emplace(kv.first, std::make_pair(kv.second.m_prefix, kv.second.m_leaf));
 
-	while (Next()) {
-		const long r = snapshot.AppendRow();
-		for (const ibBackendQueryColumn* c : m_matColumns) {
-			if (c == nullptr)
-				continue;
-			// A DOT-WALKED DIMENSION READS AS AN OBJECT, not as a field. Its leaf is a reference /
-			// enum / composite projected as a whole spread under an alias prefix, so asking for the
-			// column itself finds nothing and the level folds every row into one empty group. The
-			// pair was stamped by the door, which is the only place that knows it (see m_objectReads).
-			const auto objectRead = m_objectReads.find(c->GetColumnId());
-			snapshot.SetCell(r, c->GetColumnId(), objectRead != m_objectReads.end()
-				? m_source->ColumnObject(objectRead->second.m_prefix, objectRead->second.m_leaf)
-				: m_source->Value(c));
-		}
-	}
-	ibSelector s(std::move(snapshot), mode);
+	ibSelector s(std::make_unique<ibResultRowCursor>(m_source, m_matColumns, std::move(objectReads)), mode);
 	s.WithTotals(m_totalLevels, m_totalAggregates, m_totalsOverall);            // fold by the door's TotalBy config
 	s.WithSource(m_srcHolder, m_srcQueryable, m_srcSelectCols, m_srcConditions);  // enable lazy sub-selections
+	// ⚠ AND IT IS NOT FOLDED HERE. A selection is configured AFTER it is made — MakeChild adds
+	// ByParentRef / ByGroups / Aggregating to what this hands back — so folding at this point would
+	// fold by a configuration that is not complete yet, and the settings arriving next would have
+	// nothing left to change. Whoever finishes configuring is the one who says ReadRows().
 	return s;
 }
 

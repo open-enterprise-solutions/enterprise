@@ -1401,8 +1401,14 @@ bool ibCanPushRollup(const ibDatabaseLayer* layer)
 	return layer != nullptr && layer->GetDialect().m_features.m_rollup;
 }
 
-// DOES IT HAVE `GROUPING(expr)` — asked apart from ROLLUP, because Firebird 5 has the one and not
-// the other. Where the answer is no, the fold reads a row's level off its NULL keys instead.
+// DOES IT HAVE `GROUPING(expr)` — asked APART from ROLLUP, because the two are separate facts about
+// a dialect and nothing here may assume an engine that folds also has the function. Where the answer
+// is no, the fold reads a row's level off its NULL keys instead.
+//
+// ⚠ It said "Firebird 5 has the one and not the other", and that was wrong in a way worth naming:
+// the Firebird driver sets BOTH flags false (PR #9029 adds ROLLUP / CUBE / GROUPING SETS / GROUPING
+// together and is still open), and a comment claiming a capability is exactly how a road gets
+// declared working without ever executing. Ask the dialect; do not remember what an engine "has".
 bool ibCanUseGrouping(const ibDatabaseLayer* layer)
 {
 	return layer != nullptr && layer->GetDialect().m_features.m_grouping;

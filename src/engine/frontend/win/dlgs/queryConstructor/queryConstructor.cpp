@@ -1524,11 +1524,16 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			// THE LEVEL'S FIELDS, AS A LIST. A level groups by all of them together, so the cell shows
 			// them the way the query text spells them inside its brackets — one field is the same
 			// reading with a list of one.
+			//
+			// ⭐ AND IT SHOWS THE WHOLE FIELD, not the column part of it. `Period PERIODS(Month, &A,
+			// &B)` used to appear here as `Period`: the cell rendered the expression alone, so what
+			// the query said was invisible in the form — and the writer below, rebuilding the level
+			// from what it saw, dropped it. A cell that shows less than it edits loses the rest.
 			wxString fields;
 			for (const ibQueryTotalField& field : dim.m_fields) {
 				if (!field.m_expr) continue;
 				if (!fields.IsEmpty()) fields += wxT(", ");
-				fields += ibRenderQueryExpr(*field.m_expr);
+				fields += ibRenderTotalField(field);
 			}
 			return fields;
 		}
@@ -1604,17 +1609,17 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			return true;
 		}
 		try {
-			// THE WHOLE LEVEL IS REWRITTEN FROM THE CELL — one field or several. The head keeps the
-			// unfold it had (the cell beside this one edits that); fields added here are plain, which
-			// is the only reading a level of several fields has.
+			// THE WHOLE LEVEL IS REWRITTEN FROM THE CELL — one field or several. Read through the
+			// LANGUAGE (ParseTotalsField), so a field says here everything it may say in a query:
+			// the column, the unfold, and PERIODS with its unit and bounds. Picking out only the
+			// expression — which is what this did — meant every edit of this cell quietly threw away
+			// whatever else the author had written.
 			const std::vector<wxString> pieces = ibSplitLevelFields(text);
 			std::vector<ibQueryTotalField> parsed;
 			ibQueryParser parser;
 			for (const wxString& piece : pieces) {
 				if (piece.IsEmpty()) continue;
-				ibQueryTotalField field;
-				field.m_expr = parser.ParseExpression(piece);
-				parsed.push_back(std::move(field));
+				parsed.push_back(parser.ParseTotalsField(piece));
 			}
 			if (parsed.empty())
 				return false;                       // an empty cell removes nothing — the toolbar does that
@@ -1628,9 +1633,23 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 						_("Query constructor"), wxOK | wxICON_WARNING, this);
 					return false;
 				}
+				// …and the same for PERIODS, which the engine refuses for a reason of the same shape:
+				// a period is a SCALE, and a key made of several fields has none to pad along.
+				for (const ibQueryTotalField& field : parsed)
+					if (field.m_periods) {
+						wxMessageBox(_("A level of several fields cannot be read by periods: a period "
+						               "is a scale, and a key made of several fields has none.\n\n"
+						               "Give the period a level of its own."),
+							_("Query constructor"), wxOK | wxICON_WARNING, this);
+						return false;
+					}
 			}
+			// THE UNFOLD IS INHERITED ONLY WHERE THE TEXT DID NOT STATE ONE. The cell beside this one
+			// edits it, so a field typed plainly keeps what that cell says; a field typed WITH a word
+			// (`Store HIERARCHY`) says it here, and what the author wrote wins over what was there.
 			else if (const ibQueryTotalField* head = dim.Head()) {
-				parsed.front().m_unfold = head->m_unfold;
+				if (parsed.front().m_unfold == ibQueryDimUnfold::Elements && !parsed.front().m_periods)
+					parsed.front().m_unfold = head->m_unfold;
 			}
 			dim.m_fields = std::move(parsed);
 		}

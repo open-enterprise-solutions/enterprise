@@ -3,7 +3,9 @@
 
 // Firebird's housekeeping as a system job. TWO functions, and nothing else:
 //
-//   Register() — put it on the schedule. Called from firebirdDatabaseLayer::Open,
+//   Register() — put it on the schedule. Called from the STARTUP SEQUENCE (ibApplicationData,
+//                appData.cpp) rather than from firebirdDatabaseLayer::Open, which this line
+//                named until the registration moved,
 //                and only in Standalone role: under leader mode our own spawned
 //                firebird.exe holds the .fdb over TCP, and the backup/restore
 //                cycle's atomic rename would hit a sharing violation on Windows

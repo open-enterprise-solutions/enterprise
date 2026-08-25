@@ -29,8 +29,10 @@
 //
 // A `dynamic_cast` inside IS the match: it answers "is this mine?" and yields the typed
 // pointer in one step, so the backend needs no type key of its own. It also matches by
-// HIERARCHY, which a typeid/type_index table cannot: ibPropertyEnum<T> has 22
-// instantiations, and one Register taking ibPropertyEnumBase* covers them all.
+// HIERARCHY, which a typeid/type_index table cannot: ibPropertyEnum<T> has two dozen-odd
+// instantiations, and one Register taking ibPropertyEnumBase* covers them all. (The count
+// is deliberately not written as a number here: it was 22 for long enough to become wrong,
+// and a figure nobody recounts is a claim that rots in place.)
 class ibPropertyRegistry {
 
 	// Pull the backend property type out of the maker's parameter: T -> its operator(),

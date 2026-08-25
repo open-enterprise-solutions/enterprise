@@ -36,7 +36,7 @@ bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, wxString& reaso
 	//
 	// New rule: any other designer row visible in the snapshot vetoes
 	// the new designer. If the owner is dead, sweep DELETEs its stale
-	// row within ~kStaleCutoffSec (≈30s); user can retry after that.
+	// row within ~kStaleCutoffSec (10s = 10 heartbeats); user can retry after that.
 	const auto snap       = m_registry->GetClusterSnapshot();
 	const wxString& ownId = session.GetId();
 	for (unsigned int i = 0; i < snap.GetSessionCount(); ++i) {

@@ -129,8 +129,9 @@ void ibRegisterPlatformJobs()
 		ibJournalInfo(wxT("job"),wxT("platform job 'totals.fold' was not registered"));
 	}
 
-	// (firebird.maintenance is NOT declared here. It registers itself from
-	// ibFirebirdMaintenanceJob::Arm, i.e. when a Standalone Firebird is
+	// (The Firebird housekeeping jobs — firebird.sweep / firebird.backup — are NOT declared here.
+	// They are registered by the startup sequence (ibFirebirdMaintenanceScheduler::Register from
+	// appData.cpp), i.e. when a Standalone Firebird is
 	// actually open — the only moment at which that work is possible at all.
 	// Declaring it here too would be a second place deciding the same thing; the
 	// manager refuses a duplicate name anyway, so the two would silently race to

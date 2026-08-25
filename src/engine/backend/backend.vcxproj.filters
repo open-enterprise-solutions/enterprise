@@ -2372,6 +2372,9 @@
     <ClInclude Include="query\queryRamTable.h">
       <Filter>query</Filter>
     </ClInclude>
+    <ClInclude Include="query\queryRowCursor.h">
+      <Filter>query</Filter>
+    </ClInclude>
     <ClInclude Include="query\queryKeywords.h">
       <Filter>query</Filter>
     </ClInclude>

@@ -81,8 +81,9 @@ ibValueFunction* LambdaOf(ibValue** args, long n)
 	return dynamic_cast<ibValueFunction*>(args[0]->GetRef());
 }
 
-// The recorded body AST of a lambda; null = not recorded (untranslatable body,
-// a multi-parameter lambda, or an AOT-cache hit where the AST is not persisted).
+// The recorded body AST of a lambda; null = not recorded (an untranslatable body or a
+// multi-parameter lambda). An AOT-cache hit is NOT one of the reasons any more: the AST travels in
+// the cache since format v14 (byteCodeAOT.cpp), and the line that named it here outlived that fact.
 std::shared_ptr<ibQueryAstExpr> AstOf(const ibValueFunction* fn)
 {
 	if (fn == nullptr)

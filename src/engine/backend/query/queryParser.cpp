@@ -563,6 +563,57 @@ void ibQueryParser::ParseOrderBy(ibQuerySelect& sel)
 	} while (AcceptPunct(wxT(',')));
 }
 
+// ONE FIELD OF A TOTALS LEVEL — the field itself and how it is READ. Its own function because the
+// QUERY CONSTRUCTOR edits a level's fields as text and must read them back exactly as the language
+// does: a form that parsed "the column part" with its own code would accept what the language
+// refuses, and — as it did — silently drop what it did not know how to read.
+ibQueryTotalField ibQueryParser::ParseTotalField()
+{
+	ibQueryTotalField f;
+	f.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+	f.m_expr->m_path = ParseDottedName();
+	// The unfold is the FIELD's — a level may unfold one of its fields through a hierarchy and take
+	// the next one flat.
+	if (AcceptKw(ibQueryKeyword::HierarchyOnly))     f.m_unfold = ibQueryDimUnfold::HierarchyOnly;
+	else if (AcceptKw(ibQueryKeyword::Hierarchy))    f.m_unfold = ibQueryDimUnfold::Hierarchy;
+	else if (AcceptKw(ibQueryKeyword::Elements))     f.m_unfold = ibQueryDimUnfold::Elements;
+	// …and PERIODS is read in the same place, for the same reason: it says how the field is READ.
+	// `BY Period PERIODS(Month, &From, &To)` — the unit is a bare word (the vocabulary belongs to the
+	// lowering, which already reads it for a register's Turnovers), and the two bounds are optional.
+	else if (AcceptKw(ibQueryKeyword::Periods)) {
+		ExpectPunct(wxT('('), wxT("'(' after PERIODS"));
+		auto periods = std::make_shared<ibQueryTotalPeriods>();
+		if (Cur().m_kind != ibQueryTokenKind::Ident && Cur().m_kind != ibQueryTokenKind::Keyword)
+			ThrowQueryException(Cur(), _("expected the period unit (Day / Month / Quarter / Year ...) in PERIODS"));
+		periods->m_unit = Next().m_text;
+		// The bounds, when written. Either may be left out — an empty slot reads as "from the data",
+		// the same way an omitted argument does in a virtual-table call.
+		if (AcceptPunct(wxT(','))) {
+			if (!Cur().IsPunct(wxT(',')) && !Cur().IsPunct(wxT(')')))
+				periods->m_from = ParseAddSub();
+			if (AcceptPunct(wxT(',')) && !Cur().IsPunct(wxT(')')))
+				periods->m_to = ParseAddSub();
+		}
+		ExpectPunct(wxT(')'), wxT("')' after the arguments of PERIODS"));
+		f.m_periods = std::move(periods);
+	}
+	return f;
+}
+
+// The same thing from a piece of TEXT — the constructor's cell, one field per call. Same lexer, same
+// parser, same refusals; nothing about a level field is spelled twice.
+ibQueryTotalField ibQueryParser::ParseTotalsField(const wxString& fieldText)
+{
+	ibQueryLexer lexer;
+	m_toks = lexer.Tokenize(fieldText);
+	m_pos  = 0;
+
+	ibQueryTotalField f = ParseTotalField();
+	if (!Cur().IsEnd())
+		ThrowQueryException(Cur(), _("unexpected text after the level field"));
+	return f;
+}
+
 void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 {
 	// TOTALS [aggregate {',' aggregate}] BY totalDim {',' totalDim}
@@ -600,15 +651,7 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 		// field needs no bracket, so every query written before this parses exactly as it did.
 		const bool bracketed = AcceptPunct(wxT('('));
 		do {
-			ibQueryTotalField f;
-			f.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
-			f.m_expr->m_path = ParseDottedName();
-			// The unfold is the FIELD's — a level may unfold one of its fields through a hierarchy
-			// and take the next one flat.
-			if (AcceptKw(ibQueryKeyword::HierarchyOnly))     f.m_unfold = ibQueryDimUnfold::HierarchyOnly;
-			else if (AcceptKw(ibQueryKeyword::Hierarchy))    f.m_unfold = ibQueryDimUnfold::Hierarchy;
-			else if (AcceptKw(ibQueryKeyword::Elements))     f.m_unfold = ibQueryDimUnfold::Elements;
-			d.m_fields.push_back(std::move(f));
+			d.m_fields.push_back(ParseTotalField());
 		} while (bracketed && AcceptPunct(wxT(',')));
 		if (bracketed)
 			ExpectPunct(wxT(')'), wxT("')' after the fields of one TOTALS level"));

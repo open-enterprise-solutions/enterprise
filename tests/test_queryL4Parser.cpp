@@ -225,6 +225,73 @@ TEST(QueryL4Parser, TotalsLevelOverSeveralFields)
 	EXPECT_EQ(sel->m_totalsBy[1].Head()->m_expr->m_path[0], wxT("Store"));
 }
 
+// BY … PERIODS(unit[, from, to]) — read where the unfold is read, because it says the same KIND of
+// thing: how that field is read. The unit is a bare word (the lowering owns that vocabulary, the
+// same one a register's Turnovers argument is read by) and both bounds are optional.
+TEST(QueryL4Parser, TotalsLevelByPeriods)
+{
+	auto sel = Parse(wxT("SELECT Amount FROM Document.Sales "
+	                     "TOTALS SUM(Amount) BY Date PERIODS(Month, &From, &To) AS Period, Store"));
+	ASSERT_EQ(sel->m_totalsBy.size(), 2u);
+
+	const ibQueryTotalField* head = sel->m_totalsBy[0].Head();
+	ASSERT_TRUE(head != nullptr);
+	EXPECT_EQ(head->m_expr->m_path[0], wxT("Date"));
+	ASSERT_TRUE(head->m_periods != nullptr);
+	EXPECT_EQ(head->m_periods->m_unit, wxT("Month"));
+	ASSERT_TRUE(head->m_periods->m_from != nullptr);
+	ASSERT_TRUE(head->m_periods->m_to   != nullptr);
+	EXPECT_EQ(sel->m_totalsBy[0].m_alias, wxT("Period"));     // the level still names itself
+
+	// …and the plain level beside it is untouched: nothing about PERIODS changes how the list reads.
+	ASSERT_TRUE(sel->m_totalsBy[1].Head() != nullptr);
+	EXPECT_TRUE(sel->m_totalsBy[1].Head()->m_periods == nullptr);
+}
+
+// ONE LEVEL FIELD FROM TEXT, and back. The query constructor edits a level's fields as text, so it
+// reads them through the LANGUAGE and writes them through the RENDERER — the pair below is what
+// keeps a form from quietly dropping what it does not recognise (it did: a hand-written PERIODS was
+// invisible in the grid, and the next edit of that cell threw it away).
+TEST(QueryL4Parser, TotalsFieldFromTextRoundTrips)
+{
+	ibQueryParser parser;
+
+	const ibQueryTotalField plain = parser.ParseTotalsField(wxT("Store"));
+	EXPECT_EQ(plain.m_unfold, ibQueryDimUnfold::Elements);
+	EXPECT_TRUE(plain.m_periods == nullptr);
+	EXPECT_EQ(ibRenderTotalField(plain), wxT("Store"));
+
+	const ibQueryTotalField unfolded = parser.ParseTotalsField(wxT("Store HIERARCHY"));
+	EXPECT_EQ(unfolded.m_unfold, ibQueryDimUnfold::Hierarchy);
+	EXPECT_EQ(ibRenderTotalField(unfolded), wxT("Store HIERARCHY"));
+
+	const ibQueryTotalField periodic = parser.ParseTotalsField(wxT("Period PERIODS(Month, &From, &To)"));
+	ASSERT_TRUE(periodic.m_periods != nullptr);
+	EXPECT_EQ(periodic.m_periods->m_unit, wxT("Month"));
+	EXPECT_EQ(ibRenderTotalField(periodic), wxT("Period PERIODS(Month, &From, &To)"));
+
+	// …and the unwritten bound stays unwritten: an empty slot means "from the data", so putting one
+	// back would be the renderer answering for the author.
+	const ibQueryTotalField bare = parser.ParseTotalsField(wxT("Period PERIODS(Day)"));
+	EXPECT_EQ(ibRenderTotalField(bare), wxT("Period PERIODS(Day)"));
+
+	// Text the language does not accept is refused, not half-read.
+	EXPECT_THROW(parser.ParseTotalsField(wxT("Period PERIODS(Month) AND")), ibBackendException);
+}
+
+// The bounds are OPTIONAL — `PERIODS(Month)` alone is the whole of it, and the series is then padded
+// between the first and the last period the data holds.
+TEST(QueryL4Parser, TotalsPeriodsWithoutBounds)
+{
+	auto sel = Parse(wxT("SELECT Amount FROM Document.Sales TOTALS SUM(Amount) BY Date PERIODS(Day)"));
+	ASSERT_EQ(sel->m_totalsBy.size(), 1u);
+	const ibQueryTotalField* head = sel->m_totalsBy[0].Head();
+	ASSERT_TRUE(head != nullptr && head->m_periods != nullptr);
+	EXPECT_EQ(head->m_periods->m_unit, wxT("Day"));
+	EXPECT_TRUE(head->m_periods->m_from == nullptr);
+	EXPECT_TRUE(head->m_periods->m_to   == nullptr);
+}
+
 // ONTO NAMES A RESULT — and it is the pair to INTO, not a synonym: INTO makes a temporary table and
 // hands back a row count, ONTO names the result that comes back. A reader then asks for "Sales"
 // instead of "the third statement", which is the one thing a position cannot survive: inserting a
@@ -548,6 +615,11 @@ TEST(QueryRender, CaseRoundTrips) {
 TEST(QueryRender, TotalsRoundTrip) {
 	ExpectRoundTrip(wxT("SELECT Owner, Price FROM Catalog.Products TOTALS SUM(Price) BY Owner"));
 	ExpectRoundTrip(wxT("SELECT Owner, Price FROM Catalog.Products TOTALS SUM(Price) BY Owner HIERARCHY"));
+	// PERIODS survives with exactly as many arguments as were written — a bound left out means
+	// "from the data", and spelling one back would be the renderer answering for the author.
+	ExpectRoundTrip(wxT("SELECT Date, Price FROM Catalog.Products TOTALS SUM(Price) BY Date PERIODS(Month)"));
+	ExpectRoundTrip(wxT("SELECT Date, Price FROM Catalog.Products "
+	                    "TOTALS SUM(Price) BY Date PERIODS(Day, &From, &To) AS Period"));
 	// The level's NAME survives the trip — written with AS, so the render cannot be read back as a
 	// second dimension.
 	ExpectRoundTrip(wxT("SELECT Owner, Price FROM Catalog.Products TOTALS SUM(Price) BY Owner AS Seller"));

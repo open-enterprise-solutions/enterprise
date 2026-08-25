@@ -4287,6 +4287,15 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				if (field.m_unfold != ibQueryDimUnfold::Elements)
 					ThrowQueryException(0, 0, _("a TOTALS level of several fields cannot unfold one of them through a hierarchy: give the hierarchy a level of its own"));
 
+		// …AND NEITHER CAN IT BE READ BY PERIODS. A period is a SCALE, and the padding that makes the
+		// word worth having fills the gaps ALONG it; a key made of several fields has no scale, and
+		// "every month of every warehouse" is a different report — one the author writes as two
+		// levels. Refused where it is written rather than quietly dropping the word later.
+		if (d.m_fields.size() > 1)
+			for (const ibQueryTotalField& field : d.m_fields)
+				if (field.m_periods)
+					ThrowQueryException(0, 0, _("a TOTALS level of several fields cannot be read BY PERIODS: give the period a level of its own"));
+
 		for (const ibQueryTotalField& dimField : d.m_fields) {
 			// The word that was WRITTEN — kept for the level's name — and the expression it stands
 			// for, which is the SELECTed one when the word is an output field's alias.
@@ -4326,8 +4335,29 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// WHICH level it belongs to — several fields of one level all carry the same number, so
 			// a printer can put them side by side instead of counting columns as if they were levels.
 			oc.m_level = (int)(&d - &ast.m_totalsBy.front());
+			// ⭐ PERIODS(<unit>[, <from>, <to>]) — read HERE, because this tier owns the vocabulary
+			// (ibReadPeriodUnit, the same one a register's Turnovers argument is read by) and the
+			// bounds are ordinary expressions that have to be evaluated to values before the fold
+			// can pad anything with them. A hierarchy unfold and a period are two different readings
+			// of one field, so asking for both is refused where it is written.
+			std::shared_ptr<ibTotalPeriods> periods;
+			if (dimField.m_periods) {
+				if (dim != ibDimensionKind::Elements)
+					ThrowQueryException(0, 0, _("a TOTALS level field cannot be read both through a hierarchy and by periods"));
+				periods = std::make_shared<ibTotalPeriods>();
+				if (!ibReadPeriodUnit(dimField.m_periods->m_unit, periods->m_unit))
+					ThrowQueryException(0, 0,
+						_("'%s' is not a period unit: Second, Minute, Hour, Day, Week, TenDays, Month, Quarter, HalfYear, Year"),
+						dimField.m_periods->m_unit);
+				// A bound left out stays EMPTY, and empty is its own answer: pad between the first
+				// and the last period the data holds. Written, it is an ordinary expression —
+				// a literal or a parameter — read by the same evaluator every other bound uses.
+				if (dimField.m_periods->m_from) periods->m_from = EvalValue(*dimField.m_periods->m_from, params);
+				if (dimField.m_periods->m_to)   periods->m_to   = EvalValue(*dimField.m_periods->m_to,   params);
+			}
+
 			if (pathCols.size() == 1) {
-				level.m_fields.push_back(ibTotalField{ leaf, dim });   // plain dimension — group by the column's own metaID
+				level.m_fields.push_back(ibTotalField{ leaf, dim, {}, periods });   // plain dimension — group by the column's own metaID
 				oc.m_col = leaf;
 			}
 			else {

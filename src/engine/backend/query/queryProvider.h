@@ -18,6 +18,7 @@
 
 #include "dataQueryBuilder.h"   // ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibRenderedPageCache (all L2-free)
 #include "querySelectorTree.h"  // ibSelectorTree — the folded node tree the totals/hierarchy entries return
+#include "queryRowCursor.h"     // ibQueryRowCursor — what the folds READ (one pass over the detail rows)
 
 // (ibDbTableProvider — the BIG DB provider + its static GET/WRITE template — lives in its own
 // L2-coupled dbTableProvider.h; this header stays deliberately L2-free.)
@@ -148,7 +149,15 @@ public:
 	// composer for the same reason the fold is — this is an L2 fact, and the tier that owns the
 	// answer answers it, so the lowering never names a dialect.
 	static bool              CanDeclareNamedQuery(ibDatabaseConnectionHolder* holder = nullptr);
-	// The totals fold in isolation: detail SNAPSHOT -> subtotal tree. Pure (no DB) — unit-testable.
+	// ⭐ The totals fold in isolation: detail ROWS -> subtotal tree, in ONE PASS. It takes a CURSOR
+	// because that is all a fold ever reads — every row once, in arrival order — and taking the whole
+	// materialised detail instead is what made a report's memory a function of the number of ROWS.
+	// Now it is a function of the number of GROUPS (docs/data-composer.md, the acceptance criterion).
+	// Pure (no DB) — unit-testable. The snapshot overload is the same call with the table handed over
+	// as a cursor (ibRamTableCursor), for the callers that already hold their rows.
+	static ibSelectorTree    BuildTotalsTree(ibQueryRowCursor& rows,
+	                                         const std::vector<const ibBackendQueryColumn*>& groupFields,
+	                                         const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates);
 	static ibSelectorTree    BuildTotalsTree(const ibQueryRamTable& detail,
 	                                         const std::vector<const ibBackendQueryColumn*>& groupFields,
 	                                         const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates);
@@ -178,11 +187,27 @@ public:
 	// (target catalog parent-map, materialised through the door), and the NEXT level recurses inside
 	// each value's own rows. Subtotals roll in-place at every node. Value-keyed (each level groups by
 	// VALUE) — the catalog's OWN row-keyed hierarchy stays BuildHierarchyTree. (docs §22.1b)
+	// ⭐ …AND THE SAME ONE PASS. A level that unfolds a reference HIERARCHY is the exception and says
+	// so: its shape is not known until every value has been seen, so that fold drains the cursor into
+	// a table (and journals that it did). Everything else — the ordinary report — streams.
+	static ibSelectorTree    BuildDimensionTree(ibQueryRowCursor& rows,
+	                                             const std::vector<ibTotalLevel>& levels,
+	                                             const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+	                                             ibDatabaseConnectionHolder* holder,
+	                                             const ibBackendQueryable* source);
 	static ibSelectorTree    BuildDimensionTree(const ibQueryRamTable& snapshot,
 	                                             const std::vector<ibTotalLevel>& levels,
 	                                             const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
 	                                             ibDatabaseConnectionHolder* holder,
 	                                             const ibBackendQueryable* source);
+	// ⭐ FILL IN THE PERIODS NOBODY REPORTED. `BY <field> PERIODS(Month, &From, &To)` asks for two
+	// things: group by the period containing the value (the folds do that), and give every period
+	// between the bounds a row whether or not anything happened in it (this does). No fold can — a
+	// fold sees the rows it was given, and the missing month is precisely the one that produced none.
+	// Both roads end here, so padding means one thing whichever of them built the tree. Bounds left
+	// empty pad between the first and last period the data holds; they never FILTER.
+	static void              PadPeriodLevels(ibSelectorTree& tree, const std::vector<ibTotalLevel>& levels,
+	                                         const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates);
 	// Join two materialised tables on (onLeft <onOp> onRight), emitting outCols (each tagged by side in
 	// fromLeft). onOp == Eq is the hash-join fast path; any other op is a nested-loop theta join. The RAM
 	// JOIN core, pure (no DB) — unit-testable.

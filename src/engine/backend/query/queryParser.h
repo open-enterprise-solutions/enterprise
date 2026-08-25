@@ -66,6 +66,11 @@ public:
 	// parser, same errors: a free-typed predicate is read by the engine, never by a
 	// hand-rolled mini-checker beside it.
 	ibQueryAstExprPtr ParseExpression(const wxString& exprText);
+	// ONE FIELD OF A TOTALS LEVEL from text — `Date`, `Store HIERARCHY`, `Period PERIODS(Month, &A, &B)`.
+	// For the query constructor, which edits a level's fields as text: it reads them back through the
+	// LANGUAGE instead of picking out the part it recognises, so nothing a query may say is lost by
+	// passing through the form.
+	ibQueryTotalField ParseTotalsField(const wxString& fieldText);
 
 private:
 	std::vector<ibQueryToken> m_toks;
@@ -99,6 +104,7 @@ private:
 	void                       ParseJoins(ibQuerySelect& sel);
 	void                       ParseOrderBy(ibQuerySelect& sel);
 	void                       ParseTotals(ibQuerySelect& sel);
+	ibQueryTotalField          ParseTotalField();   // one field + how it is read (unfold / PERIODS)
 	// `firstMayBeKeyword` — the caller has ALREADY consumed a dot, so this path is a CONTINUATION and
 	// its first segment obeys the after-a-dot rule like every later one (CAST(x AS T).Order).
 	std::vector<wxString>      ParseDottedName(bool firstMayBeKeyword = false);

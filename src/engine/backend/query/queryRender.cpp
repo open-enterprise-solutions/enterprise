@@ -470,13 +470,7 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 				fields.reserve(dim.m_fields.size());
 				for (const ibQueryTotalField& field : dim.m_fields) {
 					if (!field.m_expr) continue;
-					wxString one = RenderExpr(*field.m_expr);
-					// Elements is the default unfold — written only when it is not.
-					if (field.m_unfold == ibQueryDimUnfold::Hierarchy)
-						one += wxT(" ") + Kw(ibQueryKeyword::Hierarchy);
-					else if (field.m_unfold == ibQueryDimUnfold::HierarchyOnly)
-						one += wxT(" ") + Kw(ibQueryKeyword::HierarchyOnly);
-					fields.push_back(one);
+					fields.push_back(ibRenderTotalField(field));
 				}
 				if (fields.empty()) continue;
 				// SEVERAL FIELDS ARE BRACKETED, one field is not. The bracket is the only thing that
@@ -614,6 +608,33 @@ wxString ibQuerySourceLabel(const ibQuerySource& source)
 	if (!name.IsEmpty())
 		return name;
 	return source.m_subquery ? wxString(_("(nested table)")) : wxString();
+}
+
+// ONE LEVEL FIELD, WRITTEN THE WAY THE LANGUAGE WRITES IT. Used by the query text above and by the
+// constructor's cell, which is the whole reason it is a function: the two must agree, and they
+// agree by being the same code rather than by looking similar.
+wxString ibRenderTotalField(const ibQueryTotalField& field)
+{
+	if (!field.m_expr)
+		return wxEmptyString;
+
+	wxString one = ibRenderQueryExpr(*field.m_expr);
+	// Elements is the default unfold — written only when it is not.
+	if (field.m_unfold == ibQueryDimUnfold::Hierarchy)
+		one += wxT(" ") + ibQueryKeywordText(ibQueryKeyword::Hierarchy);
+	else if (field.m_unfold == ibQueryDimUnfold::HierarchyOnly)
+		one += wxT(" ") + ibQueryKeywordText(ibQueryKeyword::HierarchyOnly);
+	// PERIODS(unit[, from[, to]]) — written back exactly as far as it was written: a bound that was
+	// left out means "from the data", and spelling one in its place would be this renderer answering
+	// a question the author left open.
+	if (field.m_periods) {
+		one += wxT(" ") + ibQueryKeywordText(ibQueryKeyword::Periods) + wxT("(") + field.m_periods->m_unit;
+		if (field.m_periods->m_from) one += wxT(", ") + ibRenderQueryExpr(*field.m_periods->m_from);
+		if (field.m_periods->m_to)   one += (field.m_periods->m_from ? wxT(", ") : wxT(", , "))
+		                                  + ibRenderQueryExpr(*field.m_periods->m_to);
+		one += wxT(")");
+	}
+	return one;
 }
 
 wxString ibQueryDimensionName(const ibQueryTotalDim& dim)

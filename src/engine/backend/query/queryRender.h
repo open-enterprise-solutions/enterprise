@@ -93,6 +93,13 @@ BACKEND_API wxString ibQuerySourceLabel(const ibQuerySource& source);
 // the first's. Written out in the grid and in the lowering before this.
 BACKEND_API wxString ibQueryDimensionName(const ibQueryTotalDim& dim);
 
+// ONE FIELD OF A TOTALS LEVEL, WRITTEN OUT — the field plus how it is read (`Store HIERARCHY`,
+// `Period PERIODS(Month, &From, &To)`). The query text is written through it and so is the
+// constructor's cell, which is the point: what a cell SHOWS is what the language would write, so
+// nothing the query said goes missing on the way to the form and back (it did — a hand-written
+// PERIODS was invisible in the grid and the next edit of that cell dropped it).
+BACKEND_API wxString ibRenderTotalField(const ibQueryTotalField& field);
+
 // THE INVERSE OF RENDERING A COLUMN: a dotted path (`Catalog1.Owner.Code`) as the AST node a query
 // carries. Six places in the constructor were splitting that string by hand, five of them with the
 // identical loop — and every host that builds a query without typing it needs the same thing (the

@@ -26,7 +26,7 @@
 #include <map>            // dot-walk join dedup
 #include <unordered_map>  // ROLLUP node index — keyed by the group values themselves
 #include <vector>
-#include <algorithm>    // stable_sort — ROLLUP rows by level for parent-before-child tree assembly
+#include <algorithm>    // std::find / std::remove — column-list housekeeping (the ROLLUP rows are no longer sorted here: the server orders them)
 #include <stdexcept>    // std::logic_error — the un-co-locatable WHERE-tree guard (BuildColocatedPredicate)
 #include <functional>   // std::function — the recursive dot-walk predicate-tree lowering in BuildPageIR
 
@@ -2096,6 +2096,47 @@ static const std::vector<ibDataQueryBuilder::AggregateItem>& RollupAggregatesOf(
 	return spec.m_aggregates != nullptr ? *spec.m_aggregates : s_none;
 }
 
+// ⭐⭐ THE PHANTOM LEVEL — what a DETAIL level becomes on the way to the server.
+//
+// "A detail record is an empty grouping": the composition declares a level with no fields and the
+// RAM fold answers with one node per row. A `GROUP BY` cannot answer that — it folds the rows away,
+// which is exactly why the server road used to refuse a report that asked for its rows.
+//
+// Unless the grouping is by the ROW ITSELF. Group by a key that is unique per row and every group
+// holds exactly one row, so the deepest set of ROLLUP(dimensions…, <row identity>) IS the detail —
+// headings, subtotals, grand total and rows come back from ONE pass, and nothing is materialised
+// here to produce them (Max: "they cannot be materialised, they have to come in pages, and that is
+// what ROLLUP(dimensions…, key) is").
+//
+// The identity is the primary key PLUS everything the row prints: the projected columns are
+// functionally dependent on the key, so adding them to the group changes no row and no figure, and
+// it is what lets them be READ (a column not grouped and not aggregated cannot be projected at all).
+// Which is also why a source with no primary key has no phantom level — the gate keeps it on the RAM
+// road, where a row is a row because it was read as one.
+//
+// Asked BY THE GATE as well as by the fold, and that is deliberate: "can this report go to the
+// server" and "what does its detail level group by" are the same question read twice.
+static ibTotalLevel PhantomLevel(const ibDataQuerySpec& spec)
+{
+	ibTotalLevel level;
+	auto add = [&level](const ibBackendQueryColumn* col) {
+		if (col == nullptr)
+			return;
+		for (const ibTotalField& have : level.m_fields)
+			if (have.m_col == col)
+				return;
+		level.m_fields.push_back(ibTotalField{ col, ibDimensionKind::Elements });
+	};
+
+	if (spec.m_queryable != nullptr)
+		for (const ibBackendQueryColumn* key : spec.m_queryable->GetPrimaryKeyColumns())
+			add(key);
+	if (spec.m_selectCols != nullptr)
+		for (const auto& sel : *spec.m_selectCols)
+			add(sel.first);
+	return level;
+}
+
 // ⭐⭐ A REFUSAL THAT SAYS ITS OWN NAME. This gate answers a bare `false` about a dozen different
 // things, and a caller reading it learns only that the report will be slower — never why, and never
 // whether the reason is one it could fix (a sort it did not need) or one nothing can (an engine with
@@ -2149,14 +2190,44 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 
 		// ⚠ THREE REFUSALS THAT COULD NOT BE STATED BEFORE, because a flat column list does not carry
 		// what they ask about. Each is a SILENT wrong answer if it is missed, not a slow one:
-		for (const ibTotalLevel& level : levels) {
-			// DETAIL RECORDS — a level with no fields. ROLLUP folds the rows away, so there would be
-			// nothing left to hang under the last heading. (The phantom level that WILL carry them to
-			// the server is a separate step — docs/data-composer.md § the phantom level.)
-			if (level.m_fields.empty())
-				RollupDecline(wxT("a level with no fields - detail records (the phantom level is not built)"));
+		for (size_t li = 0; li < levels.size(); ++li) {
+			const ibTotalLevel& level = levels[li];
+			// ⭐ DETAIL RECORDS — a level with no fields — travel as the PHANTOM LEVEL: the row's own
+			// identity as the deepest group key, so ROLLUP returns the rows along with the headings
+			// instead of folding them away. Two things have to hold, and each says its own name.
+			if (level.m_fields.empty()) {
+				// The rows are the BOTTOM. A grouping below a detail level would be a grouping of
+				// rows by something they were already split by — the composition does not produce it,
+				// and the phantom level could not express it.
+				if (li + 1 != levels.size())
+					RollupDecline(wxT("a level with no fields that is not the last - detail records are the bottom"));
+				// …AND THERE HAS TO BE AN IDENTITY TO GROUP BY. Without a primary key (a register, a
+				// temp table) grouping by "the row" would fold equal rows into one, silently losing
+				// the duplicates — so those stay on the RAM road, where a row is a row because it was
+				// read as one.
+				if (PhantomLevel(spec).m_fields.empty())
+					RollupDecline(wxT("detail records over '%s', which has no row identity to group by"),
+					              q->GetQueryName());
+				// …AND EVERY PRINTED COLUMN HAS TO BE GROUPABLE. A COMPUTED projection (Qty * Price)
+				// is not part of the row's identity and cannot ride in the GROUP BY, so the detail
+				// rows would come back missing exactly the column the author computed. The RAM fold
+				// evaluates it per row and prints it, so that is where such a report belongs.
+				if (spec.m_selectExprs != nullptr && !spec.m_selectExprs->empty())
+					RollupDecline(wxT("detail records beside a computed projection"));
+				continue;   // its fields are the phantom's, checked as they are built
+			}
 			for (const ibTotalField& f : level.m_fields) {
 				if (f.m_col == nullptr)                           RollupDecline(wxT("a level field with no column"));
+				// BY PERIODS groups by a TRUNCATION of the field, and a truncation is a scalar
+				// expression over a scalar column — there is no truncating a reference's spread.
+				// The RAM fold answers such a level by reading the value and truncating it there.
+				if (f.ByPeriods()) {
+					ColocatedLeaves one; one.push_back(q);
+					if (!f.m_path.empty())
+						RollupDecline(wxT("a dot-walked field read BY PERIODS"));
+					if (!f.m_col->IsRawColumn() && !ScalarReadable(f.m_col, one))
+						RollupDecline(wxT("field '%s' is read BY PERIODS but is not a scalar column"), f.m_col->GetName());
+				}
 				// A HIERARCHY UNFOLD walks the reference's parent chain — the RAM fold's
 				// AttachDimValue does that, and no GROUP BY can. Folded here it would come back as a
 				// plain grouping under a word that asked for something else.
@@ -2288,8 +2359,22 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	// this level, on an engine with no GROUPING(): a level that the rollup folded away comes back
 	// SQL NULL in its own keys. Exact here — OES attributes hold typed empties and never SQL NULL, so
 	// a NULL in a result can only have come from the fold (see ibSqlFeatures::m_grouping).
-	struct LevelPlan { std::vector<FieldPlan> fields; wxString firstAlias; };
-	const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
+	// The EXPRESSION for that same field rides along, because the ORDER BY below says the same thing
+	// to the server and an ORDER BY cannot lean on a projection alias inside an expression.
+	struct LevelPlan { std::vector<FieldPlan> fields; wxString firstAlias; ibQueryExprPtr firstExpr; };
+	std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
+
+	// A DETAIL level (no fields) is lowered to the phantom level — the row's own identity as a group
+	// key. Its nodes are stamped Detail when the tree is assembled: they are rows, and only the node
+	// knows which of the two a visit is. (The gate guarantees there is an identity to group by.)
+	int detailLevel = -1;
+	for (size_t i = 0; i < levels.size(); ++i)
+		if (levels[i].m_fields.empty()) {
+			levels[i]   = PhantomLevel(spec);
+			detailLevel = static_cast<int>(i);
+			ibJournalInfo(wxT("query.road"), wxT("SERVER: detail records lowered to the phantom level (%u identity fields)"),
+			              static_cast<unsigned>(levels[i].m_fields.size()));
+		}
 
 	std::vector<LevelPlan>       levelPlans;
 	std::vector<ibQueryProjItem> projection;
@@ -2314,8 +2399,17 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 
 			if (ki.scalar) {
 				const wxString       galias = wxString::Format(wxT("g%d_%d"), li, fi);
-				const ibQueryExprPtr gexpr  = colExpr(g);
-				if (!firstField) firstField = colExpr(g);
+				// ⭐ BY PERIODS — the key is the START OF THE PERIOD containing the value, so the
+				// element grouped by and the field projected are both the truncation. The dialect
+				// spells PeriodTrunc its own way, and `ibTruncateToPeriod` is the RAM twin of the
+				// very same definition — which is what lets a row land in the same bucket whichever
+				// road read it.
+				auto keyExpr = [&](void) {
+					const ibQueryExprPtr raw = colExpr(g);
+					return field.ByPeriods() ? ibPeriodTrunc(raw, field.m_periods->m_unit) : raw;
+				};
+				const ibQueryExprPtr gexpr  = keyExpr();
+				if (!firstField) firstField = keyExpr();
 				element.push_back(gexpr);
 				projection.push_back(ibQueryProjItem{ gexpr, galias });
 				if (plan.firstAlias.IsEmpty()) plan.firstAlias = galias;
@@ -2350,6 +2444,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 		if (hasGrouping)
 			projection.push_back(ibQueryProjItem{ ibFunc(wxT("GROUPING"), { firstField }), grpalias });
 		groupingAliases.push_back(grpalias);
+		plan.firstExpr = firstField;
 		levelPlans.push_back(std::move(plan));
 		++li;
 	}
@@ -2372,9 +2467,32 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	// THE ORDER IS THE QUERY'S, and it is stated ONCE — where the composition states it. The fold does
 	// not decide anything about order and does not derive a second one from the levels: it carries
 	// what it was handed (empty = the query asked for no order, and then neither does the fold).
+	//
+	// ⭐⭐ WHAT IT DOES ASK FOR IS PARENTS BEFORE CHILDREN — which is not an order over the DATA but
+	// over the LEVELS, and the difference is why it can be said here without contradicting the line
+	// above. A ROLLUP result is levels interleaved: the grand total, the subtotals, the leaves, in
+	// whatever order the engine happened to emit them. The tree needs each node's parent to exist by
+	// the time the node arrives, and that used to be arranged by BUFFERING EVERY FOLDED ROW and
+	// stable_sorting it by level here — the one place a server-side fold still held its whole answer.
+	//
+	// Said as a sort key, it costs nothing and the buffer goes away: a level the rollup folded away
+	// comes back NULL in its own key, so `CASE WHEN <key> IS NULL THEN 0 ELSE 1 END` ascending puts
+	// every folded level ahead of the level below it. It is the SAME fact the row reader below uses
+	// to work out a row's level, and it is spelled without GROUPING() so that an engine which folds
+	// but has no GROUPING() gets the same guarantee. The query's own keys follow, deciding the order
+	// WITHIN a level exactly as before.
+	std::vector<ibQuerySortKey> parentsFirst;
+	for (const LevelPlan& plan : levelPlans)
+		if (plan.firstExpr)
+			parentsFirst.push_back(ibQuerySortKey{
+				ibCase({ { ibIsNull(plan.firstExpr), ibConst(ibValue(ibNumber(0L))) } }, ibConst(ibValue(ibNumber(1L)))),
+				ibQuerySortDir::Asc });
+	for (ibQuerySortKey& key : orderKeys)
+		parentsFirst.push_back(std::move(key));
+
 	ibQueryRelPtr folded = ibAggregate(from, std::move(projection), std::move(groupKeys), having, /*rollup*/ true);
-	if (!orderKeys.empty())
-		folded = ibSort(folded, std::move(orderKeys));
+	if (!parentsFirst.empty())
+		folded = ibSort(folded, std::move(parentsFirst));
 	ibQueryIR ir(folded);
 	// ⭐ …AND WHATEVER THIS STATEMENT DECLARED COMES WITH IT. The fold assembles its own IR out of the
 	// spec rather than going through BuildPageIR, so the `WITH` list had nobody to attach it: a source
@@ -2385,10 +2503,45 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	ibDatabaseQueryBuilder qb(spec.m_holder);
 	ibQueryResult cursor = qb.ExecuteIR(ir);
 
+	// Assemble the tree AS THE ROWS ARRIVE. Columns = group cols + aggregates IN-PLACE in their own
+	// source columns.
+	ibSelectorTree tree;
+	for (const ibTotalLevel& level : levels)
+		for (const ibTotalField& field : level.m_fields)
+			if (field.m_col != nullptr)
+				tree.AddColumn(field.m_col->GetColumnId(), field.m_col->GetName(), field.m_col->GetTypeDesc());
+	for (const ibDataQueryBuilder::AggregateItem& a : aggregates)
+		if (a.m_col != nullptr) tree.AddColumn(a.m_col->GetColumnId(), a.m_col->GetName(), a.m_col->GetTypeDesc());
+
+	// KEYED BY THE VALUES, NOT BY A STRING BUILT FROM THEM.
+	//
+	// This used to fold each level through GetHashKey() and glue the results with \x1f: per row, per
+	// level, a text conversion (a number goes through ToString, a reference through
+	// wxString::Format) plus the concatenation — and twice over, since the parent key is the same
+	// prefix built again. The std::map then compared those strings character by character.
+	//
+	// A group key IS a sequence of values, so it is one here: ibValueSeqHash / ibValueSeqEqual
+	// (value.h) hash and compare the values themselves, the same policy the LINQ join and group-by
+	// indexes use. The parent key stops being a second string and becomes the prefix it always was —
+	// the key minus its last element.
+	//
+	// ⭐ A LEVEL CONTRIBUTES AS MANY VALUES AS IT HAS FIELDS, so the parent key is the key minus the
+	// LAST LEVEL, not minus one value. With a tuple level, "minus one" would have pointed at a key
+	// that belongs to nobody, and every node under it would have been re-parented onto the root.
+	//
+	// ⭐ …AND ONLY NODES THAT CAN HAVE CHILDREN GO IN IT. The map is what the fold holds, so what it
+	// holds is a function of the GROUPS. A row at the deepest level is nobody's parent — with the
+	// phantom level below the dimensions those rows ARE the detail records, and keeping them here
+	// would put the whole detail back in memory to answer a question nobody asks.
+	std::unordered_map<std::vector<ibValue>, ibSelectorTree::Node*,
+	                   ibValueSeqHash, ibValueSeqEqual> nodes;
+	nodes[std::vector<ibValue>()] = &tree.Root();
+
 	// Read every ROLLUP row: the values of each LEVEL's fields, its aggregate values, and its LEVEL
-	// depth (= count of GROUPING=0 elements — for ROLLUP they are always a prefix).
+	// depth (= count of GROUPING=0 elements — for ROLLUP they are always a prefix). The server was
+	// asked for parents-before-children (see the sort keys above), so a row's parent is always
+	// already in the map by the time the row is read.
 	struct RRow { std::vector<std::vector<ibValue>> levelValues; std::vector<ibValue> aggs; int level; };
-	std::vector<RRow> rrows;
 	while (cursor.Next()) {
 		RRow rr; rr.level = 0;
 		for (size_t i = 0; i < levelPlans.size(); ++i) {
@@ -2418,42 +2571,8 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 				? ReadScalarByAlias(a.m_col, a.m_alias, spec.m_queryable->GetMetaData(), cursor)
 				: ibValue(cursor.GetResultNumber(a.m_alias)));
 		}
-		rrows.push_back(std::move(rr));
-	}
 
-	// Assemble the tree. Columns = group cols + aggregates IN-PLACE in their own source columns.
-	ibSelectorTree tree;
-	for (const ibTotalLevel& level : levels)
-		for (const ibTotalField& field : level.m_fields)
-			if (field.m_col != nullptr)
-				tree.AddColumn(field.m_col->GetColumnId(), field.m_col->GetName(), field.m_col->GetTypeDesc());
-	for (const ibDataQueryBuilder::AggregateItem& a : aggregates)
-		if (a.m_col != nullptr) tree.AddColumn(a.m_col->GetColumnId(), a.m_col->GetName(), a.m_col->GetTypeDesc());
-
-	// Parent-before-child: process by level ascending (a level-L node's level-(L-1) parent must
-	// exist). The grand total (level 0) is the root.
-	std::stable_sort(rrows.begin(), rrows.end(), [](const RRow& a, const RRow& b) { return a.level < b.level; });
-	// KEYED BY THE VALUES, NOT BY A STRING BUILT FROM THEM.
-	//
-	// This used to fold each level through GetHashKey() and glue the results with
-	// \x1f: per row, per level, a text conversion (a number goes through
-	// ToString, a reference through wxString::Format) plus the concatenation —
-	// and twice over, since the parent key is the same prefix built again. The
-	// std::map then compared those strings character by character.
-	//
-	// A group key IS a sequence of values, so it is one here: ibValueSeqHash /
-	// ibValueSeqEqual (value.h) hash and compare the values themselves, the same
-	// policy the LINQ join and group-by indexes use. The parent key stops being a
-	// second string and becomes the prefix it always was — the key minus its last
-	// element.
-	//
-	// ⭐ A LEVEL CONTRIBUTES AS MANY VALUES AS IT HAS FIELDS, so the parent key is the key minus the
-	// LAST LEVEL, not minus one value. With a tuple level, "minus one" would have pointed at a key
-	// that belongs to nobody, and every node under it would have been re-parented onto the root.
-	std::unordered_map<std::vector<ibValue>, ibSelectorTree::Node*,
-	                   ibValueSeqHash, ibValueSeqEqual> nodes;
-	nodes[std::vector<ibValue>()] = &tree.Root();
-	for (const RRow& rr : rrows) {
+		// --- this row becomes its node, here, while the cursor stands on it ---------------------
 		const size_t level = static_cast<size_t>(rr.level);
 		std::vector<ibValue> key;
 		for (size_t i = 0; i < level && i < rr.levelValues.size(); ++i)
@@ -2469,17 +2588,38 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			const auto pit = nodes.find(parentKey);
 			ibSelectorTree::Node* parent = (pit != nodes.end()) ? pit->second : &tree.Root();
 			node = parent->AddChild(rr.level);
+			// A ROW OR A HEADING — said by the node, because only the node knows. The phantom level's
+			// nodes are the detail records the composition asked for.
+			if (detailLevel >= 0 && rr.level == detailLevel + 1)
+				node->m_kind = ibSelectorNodeKind::Detail;
 			for (size_t i = 0; i < level && i < levels.size(); ++i)
 				for (size_t f = 0; f < levels[i].m_fields.size() && f < rr.levelValues[i].size(); ++f)
 					if (const ibBackendQueryColumn* gc = levels[i].m_fields[f].m_col)
 						node->m_values[gc->GetColumnId()] = rr.levelValues[i][f];
-			nodes[std::move(key)] = node;
+			// Only a node that can still have children is worth remembering — see the map's note.
+			if (level < levels.size())
+				nodes[std::move(key)] = node;
 		}
-		for (size_t i = 0; i < rr.aggs.size() && i < aggregates.size(); ++i)
-			if (const ibBackendQueryColumn* ac = aggregates[i].m_col)
-				node->m_values[ac->GetColumnId()] = rr.aggs[i];   // IN-PLACE in the aggregate's own column
+		for (size_t i = 0; i < rr.aggs.size() && i < aggregates.size(); ++i) {
+			const ibBackendQueryColumn* ac = aggregates[i].m_col;
+			if (ac == nullptr)
+				continue;
+			// ⚠ AND NOTHING IS ROLLED OVER A DETAIL ROW THAT ALREADY HOLDS ITS VALUE. The figure
+			// column carries two things — the subtotal at a heading, the row's own value on a row —
+			// and on the phantom level the row's value is right there, read as part of its identity.
+			// Overwriting it with the aggregate OF THAT ONE ROW is invisible for SUM (a sum of one
+			// row is the row) and wrong for every other function: COUNT(Number) would print a 1
+			// where the document's number belongs. Same rule the RAM fold states, same reason.
+			if (node->m_kind == ibSelectorNodeKind::Detail && node->m_values.find(ac->GetColumnId()) != node->m_values.end())
+				continue;
+			node->m_values[ac->GetColumnId()] = rr.aggs[i];   // IN-PLACE in the aggregate's own column
+		}
 	}
 	MarkRollupFolders(tree.Root());
+	// …AND THE PERIODS THE SERVER HAD NOTHING TO REPORT FOR. A `GROUP BY` returns the periods that
+	// have rows; the quiet month is missing by construction, on this road exactly as on the RAM one.
+	// One statement of what padding means, applied to whichever tree came out.
+	ibQueryComposer::PadPeriodLevels(tree, levels, aggregates);
 	return tree;
 }
 
@@ -3825,6 +3965,6 @@ private:
 // ibDataQueryResult — the DB-cursor backing ctor (the RAM ctor + dtor / move / accessors live in
 // queryProvider.cpp, where the RAM source is). The selection hides which backing it holds.
 ibDataQueryResult::ibDataQueryResult(ibQueryResult&& cursor, const ibBackendQueryable* queryable)
-	: m_source(std::make_unique<ibDbResultSource>(std::move(cursor), queryable))
+	: m_source(std::make_shared<ibDbResultSource>(std::move(cursor), queryable))
 {
 }
