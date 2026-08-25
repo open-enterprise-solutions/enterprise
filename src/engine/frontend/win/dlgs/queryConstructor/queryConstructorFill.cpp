@@ -1389,8 +1389,19 @@ void ibDialogQueryConstructor::FillTotalsPeriods()
 		m_periodPane->Show(applies);
 		// The strip takes room, so the pane around it has to be laid out again — otherwise the grid
 		// keeps the gap where the row used to be.
-		if (wxWindow* holder = m_periodPane->GetParent())
+		//
+		// ⚠ AND REPAINTED, not merely re-laid-out. A control that appears where another one was
+		// drawn inherits whatever pixels were left there: the two bound labels came up reading
+		// "Grand totals" — the checkbox that had been sitting at those coordinates a moment earlier
+		// (Max, 2026-08-25, screenshot). Layout moves windows; only a refresh makes the area behind
+		// them the pane's own again.
+		if (wxWindow* holder = m_periodPane->GetParent()) {
 			holder->Layout();
+			holder->Refresh();
+			holder->Update();
+		}
+		if (applies)
+			m_periodPane->Layout();   // …and the strip arranges its own row once it has a size
 	}
 
 	m_byPeriods->Enable(!m_readOnly && applies);
