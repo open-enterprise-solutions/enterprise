@@ -177,7 +177,13 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 				retTable.SetByName(row, figures[i].second, values[i]);
 		}
 	}
-	catch (...) {}
+	// 🛑 A BALANCE THAT COULD NOT BE READ IS NOT A BALANCE OF ZERO. Swallowed, this handed back the
+	// rows gathered before the fault — figures under a register's name that reconcile to nothing,
+	// with nothing said anywhere. The reading says what happened; the caller decides what it means.
+	catch (const ibBackendException& err) {
+		ibJournalError(wxT("register.totals"), wxT("balance read failed: %s"), err.GetErrorDescription());
+		throw;
+	}
 
 	return retTable;
 }
@@ -207,6 +213,22 @@ ibQueryRamTable ibTurnoverQueryable::ComputeRows(const std::vector<ibQueryCondit
 ibQueryRamTable ibBalanceAndTurnoverQueryable::ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const
 {
 	return m_reg->ComputeBalanceAndTurnover(m_begin, m_end, m_fold, m_filter);
+}
+
+// WHICH ROAD for a turnover — and A PERIOD IS NOT A REASON TO LEAVE THE SERVER, which it was until
+// now. Broken into periods a turnover is still a plain sum: the truncated period joins the keys in
+// the GROUP BY and each period's figures are that period's own rows added up. Nothing looks outside
+// its own row, which is exactly what the balance below cannot say — and being the harder case, the
+// balance is what got a server road first. The easy one stayed in memory behind a single `||`.
+bool ibTurnoverQueryable::IsComputedInRam() const
+{
+	if (m_reg == nullptr || !m_reg->HasMaterializedViews())
+		return true;    // nothing stored to read — the live aggregation IS the reading
+
+	if (m_fold.FromMovements())
+		return true;    // a recorder is not a calendar interval; no rolled-up total carries one
+
+	return false;       // whole or periodised: one GROUP BY, and the surface answers it
 }
 
 // WHICH ROAD, and every clause of it is a different question — kept as separate returns rather than
@@ -337,7 +359,13 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 				retTable.SetByName(row, figures[i], values[i]);
 		}
 	}
-	catch (...) {}
+	// Same rule as the balance above, and it is the ORACLE saying it: a parity test measures the
+	// materialised road against this one, so a fault read as "no turnovers" would report the two
+	// roads as disagreeing about the figures rather than as one of them being unable to answer.
+	catch (const ibBackendException& err) {
+		ibJournalError(wxT("register.totals"), wxT("turnover read failed: %s"), err.GetErrorDescription());
+		throw;
+	}
 
 	return retTable;
 }
@@ -447,7 +475,14 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 					row[slots[i].m_turnover] = sel.GetColumn(resources[i]->GetName() + ibRegFigure::Turnover).GetNumber();
 			}
 		}
-		catch (...) {}
+		// 🛑 THE WORST OF THE FOUR TO SWALLOW. This step is the seed the whole fold rolls forward
+		// from, so a fault read as "no openings" does not produce an empty answer — it produces a
+		// complete one in which every key starts at zero. Every period after it is then wrong by the
+		// same amount, and the report still adds up.
+		catch (const ibBackendException& err) {
+			ibJournalError(wxT("register.totals"), wxT("opening balances failed: %s"), err.GetErrorDescription());
+			throw;
+		}
 	}
 
 	// --- 2. RECEIPT / EXPENSE inside the interval, per key and truncated period -----------------
@@ -489,7 +524,12 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 				}
 			}
 		}
-		catch (...) {}
+		// The movement inside the interval. Read as nothing, it says every period was quiet — and the
+		// balances still roll forward through them, so the answer looks like a register nobody wrote to.
+		catch (const ibBackendException& err) {
+			ibJournalError(wxT("register.totals"), wxT("period figures failed: %s"), err.GetErrorDescription());
+			throw;
+		}
 	}
 
 	// --- 3. roll the openings forward through the periods --------------------------------------
@@ -671,8 +711,12 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const wxString& alias) cons
 	if (IsComputedInRam())
 		return nullptr;
 
-	// Turnovers need no fold — the surface already holds them per period. The interval and the
-	// filter ARE the read.
+	// ⭐⭐ THE SURFACE HOLDS ROWS PER PERIOD; THE ANSWER IS PER KEY. Those are different things, and
+	// reading the first as if it were the second is how "turnovers need no fold" read for a while —
+	// an interval spanning four months came back as four rows for one key, each a quarter of the
+	// figure, with nothing raised. The RAM oracle (ComputeTurnover) has always grouped and summed;
+	// so does the accounting register's own turnover reading. This is the third of three, saying it
+	// the same way.
 	ibMaterializeReadSpec r;
 	r.m_view         = m_reg->GetTurnoverViewName();
 	// ⭐⭐ A REVERSAL LEAVES NOTHING TO REPORT. `+10` then `-10` on the same key folds every figure to
@@ -695,6 +739,15 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const wxString& alias) cons
 	r.m_keyColumns   = ReadKeys(m_reg);
 	r.m_filters      = ReadFilters(m_reg, m_filter);
 
+	// ⭐ THE GRAIN — what one row of the answer is, and the only thing a periodicity changes here.
+	// The period joins the keys in the GROUP BY, truncated when a calendar unit was named and as it
+	// stands when the register's own period was. No window: each period's figures are that period's
+	// rows and no others, which is why this reading has no reason to leave the server at any grain.
+	if (m_fold.HasPeriod()) {
+		r.m_grain      = m_fold.IsCalendar() ? ibMaterializeGrain::Calendar : ibMaterializeGrain::StoredPeriod;
+		r.m_periodUnit = m_fold.m_unit;
+	}
+
 	// ⭐ EITHER END MAY REACH BELOW THE GRAIN — "turnovers between this document and that one" is
 	// the question, and both ends of it name a moment. Ask for whole days and the stored rows answer
 	// alone; ask for noon-to-noon and only the two partial ends come from the movements.
@@ -706,10 +759,14 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const wxString& alias) cons
 		ibValueMetaObjectAccumulationRegister::ibViewShape::Turnovers);
 
 	const bool withSign = (m_reg->GetRegisterType() == ibRegisterType::eBalances);
+	// SUMMED, AND ONLY OVER THE INTERVAL. `InRange` rather than a WHERE because the arm cut already
+	// decides which rows each half of the union contributes; the bound belongs to the FIGURE, and a
+	// row that falls outside adds a zero to its group rather than removing the group. Whatever is
+	// then all zeros is dropped by m_dropZeroRows, which needs the aggregate to exist at all.
 	auto passThrough = [&](const wxString& logical) {
 		const wxString field = ibRegPhysicalOf(view, logical);
 		if (!field.IsEmpty())
-			r.m_columns.push_back({ field, field, wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::Always, false });
+			r.m_columns.push_back({ field, field, wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
 	};
 	for (const auto res : m_reg->GetResourceArrayObject()) {
 		if (res == nullptr)

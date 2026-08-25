@@ -653,6 +653,61 @@ TEST(MaterializeRead, PeriodisedLowerBoundIsAppliedOutsideTheWindow) {
     EXPECT_GT(lower, window);
 }
 
+// ⭐ THE OTHER PERIODISED READING, AND IT IS THE PLAIN ONE. A turnover looks at no row outside its
+// own period, so breaking the interval into months costs a GROUP BY and nothing more — no window,
+// no accumulation, nothing an engine might not have. That is why routing this reading by "was a
+// periodicity asked for" was the wrong question: it sent the cheap case to RAM and kept the
+// expensive one, the running balance above, on the server.
+TEST(MaterializeRead, PeriodisedTurnoverIsAGroupByAndNoWindow) {
+    ibMaterializeReadSpec r = ReadFixture();
+    r.m_grain        = ibMaterializeGrain::Calendar;
+    r.m_periodUnit   = ibTotalsPeriod::Month;
+    r.m_dropZeroRows = true;
+    r.m_columns = {
+        { wxT("Qty_Receipt"),  wxT("qty_in"),   wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+        { wxT("Qty_Expense"),  wxT("qty_out"),  wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+        { wxT("Qty_Turnover"), wxT("qty_turn"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+    };
+    const wxString sql = ReadSql(r);
+
+    // The SQL travels with every failure: a shape test that only says "false" makes the reader
+    // guess which of the four clauses moved.
+    const std::string shown = sql.ToStdString();
+    EXPECT_FALSE(sql.Contains(wxT("OVER (")))          << shown;   // nothing accumulates across periods
+    EXPECT_TRUE(sql.Contains(wxT("GROUP BY wh")))      << shown;   // the key...
+    EXPECT_TRUE(sql.Contains(wxT("strftime('%Y-%m-01")))<< shown;  // ...and the month beside it
+    // An all-zero period is not a turnover — and the test is written against `<> ?` rather than
+    // `<> 0` because a READ binds its constants: the zero travels as a parameter. (The view-side
+    // test next door does say `<> 0` — a view's text has nowhere to bind, so it inlines. Two
+    // spellings of one rule, and the difference is which tier writes the statement.)
+    EXPECT_TRUE(sql.Contains(wxT("Qty_Receipt <> ?")))  << shown;
+    EXPECT_TRUE(sql.Contains(wxT(" OR ")))              << shown;   // ANY figure non-zero, never all
+    // …and it is tested OUTSIDE the grouping, over the finished rows: the periodised read has an
+    // outer layer, and that is where a figure is an ordinary column.
+    EXPECT_TRUE(sql.Contains(wxT("_acc")))              << shown;
+    // The figures are SUMMED — the fold this whole reading exists for.
+    EXPECT_TRUE(sql.Contains(wxT("CAST(SUM(")))         << shown;
+}
+
+// ⭐ AND WITH NO PERIODICITY IT IS ONE ROW PER KEY. The surface stores a row per period, so a read
+// that does not fold reports the interval spread across however many periods it spans — four months
+// of one key as four rows, each holding a quarter of the figure, and nothing raised. The RAM oracle
+// (ComputeTurnover) has always grouped and summed; this is the same answer from the other road.
+TEST(MaterializeRead, AnUnperiodisedTurnoverFoldsTheWholeInterval) {
+    ibMaterializeReadSpec r = ReadFixture();   // m_grain stays Whole
+    r.m_columns = {
+        { wxT("Qty_Turnover"), wxT("qty_turn"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+    };
+    const wxString sql = ReadSql(r);
+
+    EXPECT_TRUE(sql.Contains(wxT("SUM(")));
+    EXPECT_TRUE(sql.Contains(wxT("GROUP BY wh")));
+    EXPECT_FALSE(sql.Contains(wxT("OVER (")));
+    // No period column in the answer either: a reading with no periodicity carries no date, and the
+    // field gate (ibRegisterFoldOffersColumn) tells the query's author exactly the same thing.
+    EXPECT_FALSE(sql.Contains(wxT("AS period_")));
+}
+
 // 🛑 A running form in a reading that reports no periods is refused, not read as a plain sum. Read
 // that way it would return the interval's total under the name of an opening balance.
 TEST(MaterializeRead, RunningFormWithoutAGrainIsRefused) {

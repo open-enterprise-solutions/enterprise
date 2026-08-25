@@ -561,15 +561,12 @@ public:
 		: ibAccumulationTotalsQueryable(reg, ibViewShape::Turnovers),
 		  m_begin(begin), m_end(end), m_filter(filter), m_fold(fold) {}
 
-	// The materialised surface holds turnovers at the STORED grain, so an unperiodised read IS the
-	// view. A PERIODISED one folds over a different key and is served by the live path, which groups
-	// by the truncated period — the same routing BalanceAndTurnovers makes, and for the same reason:
-	// accepting the parameter and answering at the wrong grain would return a plausible wrong number.
-	//
-	// Safe to route now because a companion navigates through its VIEW'S SHAPE on both roads
-	// (NavigationSource) and the RAM table is seeded from that same shape — so the columns a query
-	// names are there whichever road the read takes.
-	virtual bool IsComputedInRam() const override { return !m_fold.IsWholeInterval() || !m_reg->HasMaterializedViews(); }
+	// WHICH ROAD — beside the neighbour's, because the two answer the same question and this is the
+	// SHORTER answer: a turnover looks at no row outside its own period, so a periodicity costs it a
+	// GROUP BY and nothing else. (The periodicity used to be a reason to compute in RAM here, which
+	// is how the easy case stayed in memory while the hard one — the running balance next door —
+	// already ran on the server.)
+	virtual bool IsComputedInRam() const override;
 	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
 
 	// ⭐⭐ A COLUMN THE GRANULARITY DOES NOT PRODUCE IS NOT A COLUMN OF THIS READING.
