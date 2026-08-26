@@ -3,6 +3,7 @@
 
 #include "frontend/docView/docView.h"
 #include "frontend/win/editor/gridEditor/gridEditor.h"
+#include "backend/sheetFormat/sheetFormat.h"   // which formats this document can be saved as
 
 // ----------------------------------------------------------------------------
 // Edit form classes
@@ -75,6 +76,13 @@ public:
 	ibSpreadsheetFileDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument = wxObjectDataPtr<ibBackendSpreadsheetObject>(new ibBackendSpreadsheetObject)) : ibSpreadsheetDocument(), m_spreadSheetDocument(spreadSheetDocument) { m_childDoc = false; }
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
+
+	// ⭐ SAVE AS OFFERS EVERY FORMAT THAT CAN BE WRITTEN — our own file, an Excel
+	// workbook, a Word document — because the registry says so, not because this
+	// class lists them (backend/sheetFormat/). Open offers fewer: the same registry,
+	// asked the other way, leaves out what it cannot read.
+	virtual wxString GetSaveFilter() const override { return ibSheetFormatSaveFilter(); }
+
 	virtual bool OnNewDocument() override {
 
 		// notice that there is no need to either reset nor even check the

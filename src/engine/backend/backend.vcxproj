@@ -65,6 +65,10 @@
     <ClInclude Include="job\jobSchedule.h" />
     <ClInclude Include="settings\settingsStorage.h" />
     <ClInclude Include="settings\settingsComposer.h" />
+    <ClInclude Include="sheetFormat\sheetFormat.h" />
+    <ClInclude Include="sheetFormat\sheetFormatXlsx.h" />
+    <ClInclude Include="sheetFormat\sheetFormatNative.h" />
+    <ClInclude Include="sheetFormat\sheetFormatDocx.h" />
     <ClInclude Include="system\value\valueBackgroundJob.h" />
     <ClInclude Include="backend_core.h" />
     <ClInclude Include="backend_mainFrame.h" />
@@ -432,6 +436,11 @@
     <ClCompile Include="query\queryable.cpp" />
     <ClCompile Include="settings\settingsStorage.cpp" />
     <ClCompile Include="settings\settingsComposer.cpp" />
+    <ClCompile Include="sheetFormat\sheetFormat.cpp" />
+    <ClCompile Include="sheetFormat\sheetFormatNative.cpp" />
+    <ClCompile Include="sheetFormat\sheetFormatDocx.cpp" />
+    <ClCompile Include="sheetFormat\sheetFormatXlsxRead.cpp" />
+    <ClCompile Include="sheetFormat\sheetFormatXlsxWrite.cpp" />
     <ClCompile Include="system\value\valueBackgroundJob.cpp" />
     <ClCompile Include="backend_core.cpp" />
     <ClCompile Include="backend_mainFrame.cpp" />

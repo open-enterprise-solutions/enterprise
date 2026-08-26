@@ -44,6 +44,7 @@
 #include <wx/scopeguard.h>
 #include <memory>
 #include "backend/fileKind.h"   // extensions live in one table, not at each call site
+#include "backend/sheetFormat/sheetFormat.h"   // …and the foreign tables the spreadsheet template also opens
 
 wxIMPLEMENT_ABSTRACT_CLASS(ibDocTemplate, wxObject);
 
@@ -300,8 +301,17 @@ void ibDocManager::RegisterDefaultTemplates()
 		CLASSINFO(ibTextFileDocument), CLASSINFO(ibTextEditView),
 		ibTEMPLATE_VISIBLE);
 
+	// ⭐⭐ EVERY TABLE FORMAT, OURS INCLUDED — asked, not assembled. `.oxl` and an Excel workbook
+	// are both entries in the same registry (backend/sheetFormat/), each put there by its own file,
+	// so this line does not change when a third one lands.
+	//
+	// 🛑 IT USED TO GLUE THE MASK TOGETHER HERE, looping over the formats and appending our own
+	// extension to them — the habit fileKind.h exists to end (a list assembled at the point of use
+	// forgets the next entry). What it buys: File → Open takes an .xlsx and shows it in THIS editor,
+	// and Save as offers our format and Excel side by side, the document deciding which by the name
+	// it is given (ibBackendSpreadsheetObject::LoadFromFile / SaveToFile).
 	AddDocTemplate(g_metaTemplateCLSID,
-		_("Spreadsheet document"), ibFileMask(ibFileKind::Table), ibFileExtension(ibFileKind::Table),
+		_("Spreadsheet document"), ibSheetFormatMask(), ibSheetFormatExtensions(),
 		_("Spreadsheet Doc"), _("Spreadsheet View"),
 		CLASSINFO(ibSpreadsheetFileDocument), CLASSINFO(ibSpreadsheetEditView),
 		ibTEMPLATE_VISIBLE);

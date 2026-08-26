@@ -824,6 +824,18 @@
     <ClInclude Include="settings\settingsComposer.h">
       <Filter>settings</Filter>
     </ClInclude>
+    <ClInclude Include="sheetFormat\sheetFormat.h">
+      <Filter>sheetFormat</Filter>
+    </ClInclude>
+    <ClInclude Include="sheetFormat\sheetFormatXlsx.h">
+      <Filter>sheetFormat</Filter>
+    </ClInclude>
+    <ClInclude Include="sheetFormat\sheetFormatNative.h">
+      <Filter>sheetFormat</Filter>
+    </ClInclude>
+    <ClInclude Include="sheetFormat\sheetFormatDocx.h">
+      <Filter>sheetFormat</Filter>
+    </ClInclude>
     <ClInclude Include="utils\passwordHash.hpp">
       <Filter>utils</Filter>
     </ClInclude>
@@ -1948,6 +1960,21 @@
     <ClCompile Include="settings\settingsComposer.cpp">
       <Filter>settings</Filter>
     </ClCompile>
+    <ClCompile Include="sheetFormat\sheetFormat.cpp">
+      <Filter>sheetFormat</Filter>
+    </ClCompile>
+    <ClCompile Include="sheetFormat\sheetFormatNative.cpp">
+      <Filter>sheetFormat</Filter>
+    </ClCompile>
+    <ClCompile Include="sheetFormat\sheetFormatDocx.cpp">
+      <Filter>sheetFormat</Filter>
+    </ClCompile>
+    <ClCompile Include="sheetFormat\sheetFormatXlsxRead.cpp">
+      <Filter>sheetFormat</Filter>
+    </ClCompile>
+    <ClCompile Include="sheetFormat\sheetFormatXlsxWrite.cpp">
+      <Filter>sheetFormat</Filter>
+    </ClCompile>
     <ClCompile Include="utils\passwordHash.cpp">
       <Filter>utils</Filter>
     </ClCompile>
@@ -2117,6 +2144,9 @@
     </Filter>
     <Filter Include="settings">
       <UniqueIdentifier>{3f7b2c5d-8e14-4a6b-9c02-5d8e7a1b3c4f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="sheetFormat">
+      <UniqueIdentifier>{8c1d4a92-6f30-4b7e-a58d-2e94c07b6a15}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

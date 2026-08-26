@@ -195,6 +195,16 @@ public:
     virtual void SetDocumentTemplate(ibDocTemplate *temp)
         { m_documentTemplate = temp; }
 
+    // ⭐ WHAT THIS DOCUMENT CAN BE SAVED AS — a wxFileSelector filter, or empty to
+    // let the TEMPLATES answer (which is what every document did before this hook
+    // and what most still do).
+    //
+    // It exists because a document can be written in more ways than it can be
+    // opened: a spreadsheet reads our own file and an Excel workbook, and writes
+    // those two plus Word — the formats are registered in the backend
+    // (backend/sheetFormat/) and the document simply forwards their list.
+    virtual wxString GetSaveFilter() const { return wxEmptyString; }
+
     virtual wxString GetUserReadableName() const;
 
     // Return type is ibFrontendWindow* — wxWindow on desktop, ibWebWindow on

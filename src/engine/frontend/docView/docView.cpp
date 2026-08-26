@@ -392,40 +392,50 @@ bool ibDocument::SaveAs()
     if (!docTemplate)
         return false;
 
-#ifdef wxHAS_MULTIPLE_FILEDLG_FILTERS
-    wxString filter = docTemplate->GetDescription() + wxT(" (") +
-        docTemplate->GetFileFilter() + wxT(")|") +
-        docTemplate->GetFileFilter();
+    // ⭐⭐ WHAT THIS DOCUMENT CAN BE SAVED AS IS THE DOCUMENT'S ANSWER (GetSaveFilter).
+    // A spreadsheet writes itself as our own file, as an Excel workbook or as a Word
+    // document, and only it knows that — the TEMPLATE knows one extension, the one it
+    // was registered under. A document that has nothing of its own to say answers
+    // empty and the templates decide, exactly as before.
+    wxString filter = GetSaveFilter();
 
-    // Now see if there are some other template with identical view and document
-    // classes, whose filters may also be used.
-    if (docTemplate->GetViewClassInfo() && docTemplate->GetDocClassInfo())
+    if (filter.empty())
     {
-        wxList::compatibility_iterator
-            node = docTemplate->GetDocumentManager()->GetTemplates().GetFirst();
-        while (node)
+#ifdef wxHAS_MULTIPLE_FILEDLG_FILTERS
+        filter = docTemplate->GetDescription() + wxT(" (") +
+            docTemplate->GetFileFilter() + wxT(")|") +
+            docTemplate->GetFileFilter();
+
+        // Now see if there are some other template with identical view and document
+        // classes, whose filters may also be used.
+        if (docTemplate->GetViewClassInfo() && docTemplate->GetDocClassInfo())
         {
-            ibDocTemplate *t = (ibDocTemplate*) node->GetData();
-
-            if (t->IsVisible() && t != docTemplate &&
-                t->GetViewClassInfo() == docTemplate->GetViewClassInfo() &&
-                t->GetDocClassInfo() == docTemplate->GetDocClassInfo())
+            wxList::compatibility_iterator
+                node = docTemplate->GetDocumentManager()->GetTemplates().GetFirst();
+            while (node)
             {
-                // add a '|' to separate this filter from the previous one
-                if ( !filter.empty() )
-                    filter << wxT('|');
+                ibDocTemplate *t = (ibDocTemplate*) node->GetData();
 
-                filter << t->GetDescription()
-                       << wxT(" (") << t->GetFileFilter() << wxT(") |")
-                       << t->GetFileFilter();
+                if (t->IsVisible() && t != docTemplate &&
+                    t->GetViewClassInfo() == docTemplate->GetViewClassInfo() &&
+                    t->GetDocClassInfo() == docTemplate->GetDocClassInfo())
+                {
+                    // add a '|' to separate this filter from the previous one
+                    if ( !filter.empty() )
+                        filter << wxT('|');
+
+                    filter << t->GetDescription()
+                           << wxT(" (") << t->GetFileFilter() << wxT(") |")
+                           << t->GetFileFilter();
+                }
+
+                node = node->GetNext();
             }
-
-            node = node->GetNext();
         }
-    }
 #else
-    wxString filter = docTemplate->GetFileFilter() ;
+        filter = docTemplate->GetFileFilter();
 #endif
+    }
 
     wxString defaultDir = docTemplate->GetDirectory();
     if ( defaultDir.empty() )

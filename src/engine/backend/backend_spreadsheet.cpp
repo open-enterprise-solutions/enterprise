@@ -1,5 +1,6 @@
 #include "backend_spreadsheet.h"
 #include "backend/fileSystem/fs.h"
+#include "backend/sheetFormat/sheetFormat.h"   // a table that came from somewhere else (Excel today)
 
 #define spreadsheetNotify \
 	for (auto notify : m_spreadsheetNotifiers) notify
@@ -557,55 +558,36 @@ bool ibBackendSpreadsheetObject::OpenCellDetailsParameter(int row, int col) cons
 
 #include <fstream>
 
+// ⭐⭐ WHICH FORMAT READS THIS NAME — one question, and OUR OWN LAYOUT IS ONE OF THE
+// ANSWERS (backend/sheetFormat/). There is no "ours or theirs" branch here, and that
+// is the point: `.oxl` and an Excel workbook are two entries in one registry, so a
+// third format changes neither this function nor the file dialog that offers them.
+//
+// ⚠ THE READER FILLS A COPY and this document is replaced only once it succeeded: a
+// caller told `false` must be free to keep the document it had.
 bool ibBackendSpreadsheetObject::LoadFromFile(const wxString& strFileName)
 {
-	std::ifstream in(strFileName.ToStdString(), std::ios::in | std::ios::binary);
+	const ibSheetFormat* format = ibSheetFormatFor(strFileName);
+	if (format == nullptr)
+		return false;   // a name nothing here reads — said plainly, not guessed at
 
-	if (!in.is_open())
+	ibSpreadsheetDescription read;
+	if (!format->Read(strFileName, read))
 		return false;
 
-	//go to end
-	in.seekg(0, in.end);
-	//get size of file
-	std::streamsize fsize = in.tellg();
-	//go to beginning
-	in.seekg(0, in.beg);
-
-	wxMemoryBuffer tempBuffer(fsize);
-	in.read((char*)tempBuffer.GetWriteBuf(fsize), fsize);
-
-	ibReaderMemory readerData(tempBuffer.GetData(), tempBuffer.GetBufSize());
-
-	if (readerData.eof())
-		return false;
-
-	in.close();
-
-	return ibSpreadsheetDescriptionMemory::LoadData(readerData, m_spreadsheetDesc);
+	m_spreadsheetDesc = read;
+	return true;
 }
 
 bool ibBackendSpreadsheetObject::SaveToFile(const wxString& strFileName)
 {
-	//common data
-	ibWriterMemory writerData;
-
-	if (!ibSpreadsheetDescriptionMemory::SaveData(writerData, m_spreadsheetDesc))
+	// …and the same question on the way out: the name a person chose in the Save
+	// dialog is what says which format they meant.
+	const ibSheetFormat* format = ibSheetFormatFor(strFileName);
+	if (format == nullptr)
 		return false;
 
-	std::ofstream datafile;
-	// Opening a stream by WIDE path is an MSVC extension — libstdc++ has no such overload,
-	// and its filesystem::path template does not accept a wstring either. Keep the wide path
-	// on Windows (a non-ASCII directory needs it: the narrow overload there goes through the
-	// ANSI code page) and hand POSIX the UTF-8 bytes, which is what its filenames are.
-#ifdef __WXMSW__
-	datafile.open(strFileName.ToStdWstring(), std::ios::binary);
-#else
-	datafile.open(static_cast<const char*>(strFileName.utf8_str()), std::ios::binary);
-#endif
-	datafile.write(reinterpret_cast <char*> (writerData.pointer()), writerData.size());
-	datafile.close();
-
-	return true;
+	return format->Write(strFileName, m_spreadsheetDesc);
 }
 
 #pragma endregion 
