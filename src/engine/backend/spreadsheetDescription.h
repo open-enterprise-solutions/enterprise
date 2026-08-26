@@ -461,16 +461,22 @@ struct ibSpreadsheetDescription {
 	// ------ row and col formatting
 	//
 
+	// ⚠ BY ADDRESS, NOT BY SCANNING — the same treatment the cells got above, and for the same
+	// reason. A sheet read from an .xlsx workbook calls this once per row (Excel writes `ht` on
+	// every one), and a scan per call made READING a file quadratic in its rows. Drawing pays it
+	// too: GetRowSize is asked for every visible line, every paint.
 	void SetRowSize(int row, int height = 0) {
 
-		auto iterator = std::find_if(m_rowHeightAt.begin(),
-			m_rowHeightAt.end(), [row](const auto& value) { return row == value.m_row; });
+		if (row < 0)
+			return;
 
-		if (iterator != m_rowHeightAt.end()) {
-			iterator->m_height = height;
+		const auto iterator = m_rowSizeIndex.find(static_cast<unsigned int>(row));
+		if (iterator != m_rowSizeIndex.end()) {
+			m_rowHeightAt[iterator->second].m_height = height;
 			return;
 		}
 
+		m_rowSizeIndex.emplace(static_cast<unsigned int>(row), m_rowHeightAt.size());
 		m_rowHeightAt.emplace_back(row, height);
 	}
 
@@ -482,14 +488,16 @@ struct ibSpreadsheetDescription {
 
 	void SetColSize(int col, int width = 0) {
 
-		auto iterator = std::find_if(m_colWidthAt.begin(),
-			m_colWidthAt.end(), [col](const auto& value) { return col == value.m_col; });
+		if (col < 0)
+			return;
 
-		if (iterator != m_colWidthAt.end()) {
-			iterator->m_width = width;
+		const auto iterator = m_colSizeIndex.find(static_cast<unsigned int>(col));
+		if (iterator != m_colSizeIndex.end()) {
+			m_colWidthAt[iterator->second].m_width = width;
 			return;
 		}
 
+		m_colSizeIndex.emplace(static_cast<unsigned int>(col), m_colWidthAt.size());
 		m_colWidthAt.emplace_back(col, width);
 	}
 
@@ -500,11 +508,12 @@ struct ibSpreadsheetDescription {
 	}
 
 	int GetRowSize(int row) const {
-		auto iterator = std::find_if(m_rowHeightAt.begin(),
-			m_rowHeightAt.end(), [row](const auto& value) { return row == value.m_row; });
+		if (row < 0)
+			return s_defaultRowHeight;
 
-		if (iterator != m_rowHeightAt.end())
-			return iterator->m_height;
+		const auto iterator = m_rowSizeIndex.find(static_cast<unsigned int>(row));
+		if (iterator != m_rowSizeIndex.end())
+			return m_rowHeightAt[iterator->second].m_height;
 
 		return s_defaultRowHeight;
 	}
@@ -512,11 +521,12 @@ struct ibSpreadsheetDescription {
 	bool IsRowShown(int row) const { return GetRowSize(row) != 0; }
 
 	int GetColSize(int col) const {
-		auto iterator = std::find_if(m_colWidthAt.begin(),
-			m_colWidthAt.end(), [col](const auto& value) { return col == value.m_col; });
+		if (col < 0)
+			return s_defaultColWidth;
 
-		if (iterator != m_colWidthAt.end())
-			return iterator->m_width;
+		const auto iterator = m_colSizeIndex.find(static_cast<unsigned int>(col));
+		if (iterator != m_colSizeIndex.end())
+			return m_colWidthAt[iterator->second].m_width;
 
 		return s_defaultColWidth;
 	}
@@ -847,11 +857,18 @@ private:
 	// default font
 	wxFont m_labelFont;
 
-	//size row 
+	//size row
 	std::vector <ibSpreadsheetRowSizeDescription> m_rowHeightAt;
 
-	//size col 
+	//size col
 	std::vector <ibSpreadsheetColSizeDescription> m_colWidthAt;
+
+	// WHERE each declared size is, keyed by the line it belongs to — the same arrangement as
+	// m_cellIndex below, kept in step by SetRowSize / SetColSize, which are the only two doors
+	// that add one. The vectors still OWN the entries in insertion order, which the serializer
+	// and GetRowSizeByIdx read by position.
+	std::unordered_map<unsigned int, size_t> m_rowSizeIndex;
+	std::unordered_map<unsigned int, size_t> m_colSizeIndex;
 
 	//cell
 	std::vector<ibSpreadsheetCellDescription> m_cellAt;

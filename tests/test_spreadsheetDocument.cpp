@@ -294,6 +294,39 @@ TEST(SpreadsheetDocument, RowAndColSize_RoundTrip)
 	EXPECT_EQ(120, doc->GetColSize(0));
 }
 
+// Sizes are found through an index by address (see spreadsheetDescription.h) while the vector
+// keeps them in insertion order. This pins the two staying in step: setting the same line twice
+// must REPLACE, not append, and reading by position must still see what was written.
+TEST(SpreadsheetDocument, RowAndColSize_SetTwiceReplacesRatherThanAppends)
+{
+	auto doc = MakeDocument();
+
+	doc->SetRowSize(5, 40);
+	doc->SetRowSize(2, 30);
+	doc->SetRowSize(5, 60);          // the same line again — must not become a second entry
+
+	doc->SetColSize(3, 120);
+	doc->SetColSize(3, 90);
+
+	const ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	EXPECT_EQ(2, desc.GetSizeNumberRows());
+	EXPECT_EQ(1, desc.GetSizeNumberCols());
+
+	EXPECT_EQ(60, doc->GetRowSize(5));
+	EXPECT_EQ(30, doc->GetRowSize(2));
+	EXPECT_EQ(90, doc->GetColSize(3));
+
+	// Insertion order, which the serializer reads by position: row 5 was declared first.
+	ASSERT_NE(nullptr, desc.GetRowSizeByIdx(0));
+	ASSERT_NE(nullptr, desc.GetRowSizeByIdx(1));
+	EXPECT_EQ(5u, desc.GetRowSizeByIdx(0)->m_row);
+	EXPECT_EQ(60u, desc.GetRowSizeByIdx(0)->m_height);
+	EXPECT_EQ(2u, desc.GetRowSizeByIdx(1)->m_row);
+
+	// A line nobody declared answers the default rather than the neighbour's size.
+	EXPECT_NE(60, doc->GetRowSize(4));
+}
+
 // ---------------------------------------------------------------------------
 //  Outline groups — what makes a composed report fold
 // ---------------------------------------------------------------------------

@@ -184,11 +184,46 @@ class FRONTEND_API ibGridEditor : public ibGrid {
 			wxCHECK_MSG((row >= 0 && row < GetNumberRows()) &&
 				(col >= 0 && col < GetNumberCols()),
 				true,
-				wxT("invalid row or column index in ibGridStringTable"));
+				wxT("invalid row or column index in ibGridEditorStringTable::IsEmptyCell"));
+
+			// 🛑 A ROW THE TABLE HAS IS NOT A ROW THAT HAS ITS COLUMNS. AppendRows leaves the new
+			// row an empty wxArrayString when m_numCols is 0, and the fill is deferred — so
+			// m_data[row] can hold fewer entries than the table reports columns. GetValue and
+			// SetValue both guard exactly this (see their bodies); IsEmptyCell did not, and it is
+			// the one the content scan walks over EVERY cell of the sheet with. A logical column
+			// with no entry behind it holds nothing, which is what "empty" means.
+			if (col >= static_cast<int>(m_data[row].GetCount()))
+				return true;
 
 			const ibSpreadsheetFillType type = GetTypeString(row, col);
 			return type == ibSpreadsheetFillType_StrText || type == ibSpreadsheetFillType_StrTemplate ?
 				ibBackendLocalization::IsEmptyLocalizationString(m_data[row][col]) : m_data[row][col].IsEmpty();
+		}
+
+		// ⭐ WHERE THE CONTENT ENDS — a question for the TABLE, because the table is where content
+		// lives. The endless sheet asks it before trimming itself back, i.e. on every scroll EVENT
+		// (three per wheel notch), so it cannot be a walk over the sheet: at twenty thousand rows
+		// the walk is a visible stall.
+		//
+		// 🛑 AND IT IS NOT INVALIDATED BY A LIST OF CALLERS. Everything that can move the edge —
+		// a value written, rows or columns inserted or deleted, the table cleared — passes through
+		// THIS class, so the answer is kept where the change happens and a door added later cannot
+		// forget to say so. Same arrangement as ibGridLineSizes in gridext.h.
+		//
+		// ⭐ MAINTAINED where the new answer is knowable, dropped only where it is not: writing
+		// into a row past the edge MOVES the edge (no walk), and growing the sheet does not move it
+		// at all — which matters, because the endless sheet grows on the very event that asks.
+		// Clearing the cell that IS the edge is the one case nothing short of a walk can answer.
+		int GetLastContentRow() {
+			if (m_lastContentRow == kExtentUnknown)
+				RebuildContentExtent();
+			return m_lastContentRow;
+		}
+
+		int GetLastContentCol() {
+			if (m_lastContentCol == kExtentUnknown)
+				RebuildContentExtent();
+			return m_lastContentCol;
 		}
 
 		virtual bool CanGetValueAs(int row, int col, const wxString& typeName)
@@ -275,6 +310,11 @@ class FRONTEND_API ibGridEditor : public ibGrid {
 				else if (type == ibSpreadsheetFillType_StrParameter) {
 					ibGridStringTable::SetValue(row, col, s);
 				}
+
+				// The cell now holds something else than it did — which is the only way a WRITE can
+				// move where the content ends. Asked of the cell rather than of `s`, because empty
+				// is not the same question for a localisation string as for a parameter.
+				NoteContentAt(row, col);
 			}
 		}
 
@@ -368,7 +408,92 @@ class FRONTEND_API ibGridEditor : public ibGrid {
 			return stringUtils::IntToStr(col + 1);
 		}
 
+		// ------ the structural doors: everything below keeps the content edge honest ------
+		//
+		// Appending is NOT here on purpose. Rows and columns grown at the far end are empty, so
+		// the edge does not move — and the endless sheet grows exactly while it is asking, so
+		// dropping the answer there would put the walk back on every scroll.
+
+		void Clear() override {
+			ibGridStringTable::Clear();
+			m_lastContentRow = m_lastContentCol = -1;   // known, not unknown: there is nothing anywhere
+		}
+
+		bool InsertRows(size_t pos = 0, size_t numRows = 1) override {
+			if (!ibGridStringTable::InsertRows(pos, numRows))
+				return false;
+			// Everything at or below the insert point moved down by that much, the edge with it.
+			if (m_lastContentRow >= 0 && static_cast<int>(pos) <= m_lastContentRow)
+				m_lastContentRow += static_cast<int>(numRows);
+			return true;
+		}
+
+		bool InsertCols(size_t pos = 0, size_t numCols = 1) override {
+			if (!ibGridStringTable::InsertCols(pos, numCols))
+				return false;
+			if (m_lastContentCol >= 0 && static_cast<int>(pos) <= m_lastContentCol)
+				m_lastContentCol += static_cast<int>(numCols);
+			return true;
+		}
+
+		bool DeleteRows(size_t pos = 0, size_t numRows = 1) override {
+			// Reaching into content is the case nothing short of a walk can answer — what was cut
+			// may have BEEN the edge. Cutting the empty tail past it changes nothing.
+			const bool touchesContent = m_lastContentRow < 0 || static_cast<int>(pos) <= m_lastContentRow;
+			if (!ibGridStringTable::DeleteRows(pos, numRows))
+				return false;
+			if (touchesContent)
+				DropContentExtent();
+			return true;
+		}
+
+		bool DeleteCols(size_t pos = 0, size_t numCols = 1) override {
+			const bool touchesContent = m_lastContentCol < 0 || static_cast<int>(pos) <= m_lastContentCol;
+			if (!ibGridStringTable::DeleteCols(pos, numCols))
+				return false;
+			if (touchesContent)
+				DropContentExtent();
+			return true;
+		}
+
 	private:
+
+		// -2, because -1 is a real answer: "nothing anywhere, the sheet may shrink freely".
+		static const int kExtentUnknown = -2;
+
+		void DropContentExtent() { m_lastContentRow = m_lastContentCol = kExtentUnknown; }
+
+		// A cell was written. Something put where nothing was moves the edge out; nothing put
+		// where the edge WAS is the one case that needs the walk back.
+		void NoteContentAt(int row, int col) {
+			if (!IsEmptyCell(row, col)) {
+				if (m_lastContentRow != kExtentUnknown && row > m_lastContentRow) m_lastContentRow = row;
+				if (m_lastContentCol != kExtentUnknown && col > m_lastContentCol) m_lastContentCol = col;
+			}
+			else if (row == m_lastContentRow || col == m_lastContentCol) {
+				DropContentExtent();
+			}
+		}
+
+		// One pass answers BOTH edges — the caller asks for the row and the column together
+		// (trimming does), and a second walk for the second answer is the same walk twice.
+		void RebuildContentExtent() {
+			int lastRow = -1, lastCol = -1;
+			const int rows = GetNumberRows(), cols = GetNumberCols();
+			for (int row = 0; row < rows; row++) {
+				for (int col = 0; col < cols; col++) {
+					if (IsEmptyCell(row, col))
+						continue;
+					lastRow = row;
+					if (col > lastCol) lastCol = col;
+				}
+			}
+			m_lastContentRow = lastRow;
+			m_lastContentCol = lastCol;
+		}
+
+		int m_lastContentRow = kExtentUnknown;
+		int m_lastContentCol = kExtentUnknown;
 
 		ibSpreadsheetFillType GetTypeString(int row, int col) const {
 
@@ -546,7 +671,29 @@ public:
 
 	class ibGridEditorPrintout* CreatePrintout() const;
 
+	// ⭐⭐ WHERE THE SHEET'S CONTENT ENDS — the last row (column) that holds anything.
+	//
+	// 🛑 THE ENDLESS SHEET MUST NOT EAT DATA. Scrolling down grows the sheet and
+	// scrolling back up trims what it grew; the trim used to stop at the last PAGE
+	// BREAK, which is zero in a document that has none — so a file opened from disk
+	// (an Excel workbook with a single sheet, say) had its rows deleted the moment
+	// somebody scrolled back up. What was added for the view may be taken away;
+	// what a person's file brought may not.
+	//
+	// The TABLE keeps this answer — it is asked three times per wheel notch, and it is the
+	// table that every write and every insert goes through. Not const, because the first
+	// question after a change is what re-derives it.
+	int GetLastContentRow();
+	int GetLastContentCol();
+
 protected:
+
+	// The table is an ibGridEditorStringTable by construction: this editor sets its own in the
+	// constructor and at every load, and nothing else ever calls SetTable on it. One cast, in
+	// one place, rather than one at each question.
+	ibGridEditorStringTable* GetEditorTable() const {
+		return static_cast<ibGridEditorStringTable*>(ibGrid::GetTable());
+	}
 
 	void GetCellDetailsParameter(int row, int col, wxString& s) const;
 	void SetCellDetailsParameter(int row, int col, const wxString& s);

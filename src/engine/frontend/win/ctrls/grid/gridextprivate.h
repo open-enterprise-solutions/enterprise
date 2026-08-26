@@ -277,6 +277,13 @@ public:
 			name)
 	{
 		m_owner = owner;
+
+		// (⛔ NO wxBG_STYLE_PAINT HERE. Tried 2026-08-26 and REVERTED the same minute: it is only
+		//  true of the CELL window, which paints its whole rectangle itself (DrawGridSpace). The
+		//  label / area / outline strips paint their ITEMS and let the system fill everything around
+		//  them — the space below the last row, the strip's own margins. Denied that fill they
+		//  showed an uninitialised buffer: black bands across the headings. Whoever tries this again
+		//  must give each strip its own Clear() first, in its own colour.)
 	}
 
 	virtual wxWindow* GetMainWindowOfCompositeControl() wxOVERRIDE { return m_owner; }

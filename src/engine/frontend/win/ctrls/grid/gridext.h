@@ -2418,11 +2418,11 @@ public:
 
 	ibGridSizesInfo GetColSizes() const
 	{
-		return ibGridSizesInfo(GetDefaultColSize(), m_colWidths);
+		return ibGridSizesInfo(GetDefaultColSize(), m_colWidths.Sizes());
 	}
 	ibGridSizesInfo GetRowSizes() const
 	{
-		return ibGridSizesInfo(GetDefaultRowSize(), m_rowHeights);
+		return ibGridSizesInfo(GetDefaultRowSize(), m_rowHeights.Sizes());
 	}
 
 	void SetColSizes(const ibGridSizesInfo& sizeInfo);
@@ -2675,6 +2675,17 @@ public:
 	bool GridColOutlineEnabled() const { return !m_colGroupAt.empty(); }
 	int  GetRowOutlineSize() const;
 	int  GetColOutlineSize() const;
+
+	// ⭐⭐ WHERE THE CELLS BEGIN — the width of everything left of them and the height of everything
+	// above them, in this grid's client coordinates. THREE strips, and the list of them was written
+	// out at every place that needed it: the window layout had all three, the mouse-event translation
+	// had two, and Refresh(rect) had two and a sign error besides.
+	//
+	// 🛑 THAT COST A REAL DEFECT. Missing the OUTLINE strip meant a click was translated as if the
+	// group buttons were not there — so on a report WITH groupings (and only then: the strip is zero
+	// wide without them) the coordinate landed a column or two off, and pressing one cell selected a
+	// neighbour. A list of terms repeated in three places does not stay the same list.
+	wxPoint GetGridOrigin() const;
 	void DrawRowOutline(wxDC& dc);
 	void DrawColOutline(wxDC& dc);
 	int  HitTestRowOutlineButton(const wxPoint& pt) const;
@@ -3030,21 +3041,108 @@ protected:
 	// NB: *never* access m_row/col arrays directly because they are created
 	//     on demand, *always* use accessor functions instead!
 
+	// ⭐⭐ WHERE A ROW STARTS IS A SUM, AND A SUM IS WORTH KEEPING.
+	//
+	// `GetRowTop(row)` used to add up every height from zero on every call, and CellToRect calls it
+	// (and its column twin) for EVERY cell it paints. A screenful is a thousand cells, so a report
+	// scrolled to its five-thousandth row spent millions of additions per frame — and the cost grew
+	// the further down a person went, which is exactly what "it gets heavier as I scroll" is.
+	//
+	// The prefix sums existed already (m_rowBottoms / m_colRights) and were REBUILT FROM SCRATCH on
+	// every call, so the binary search that PosToLinePos does — the one that turns a mouse position
+	// into a row, on every move — paid O(n) to set up its O(log n).
+	//
+	// 🛑 AND THE CACHE IS NOT INVALIDATED BY A LIST OF CALLERS. There are a dozen places that change
+	// a size (set one, insert, append, remove, clear, rescale on zoom) and a list of them is a list
+	// that drifts — the exact defect this file already carries elsewhere. So the SIZES AND THEIR
+	// SUMS ARE ONE OBJECT: nothing can change a size except through this type, and everything that
+	// changes one drops the sums. The scale is part of what the cache was built FOR, so a zoom
+	// invalidates it by not matching rather than by anybody remembering to say so.
+	class ibGridLineSizes
+	{
+	public:
+		// --- reading, the wxArrayInt surface the grid already speaks -------------
+		bool     IsEmpty() const { return m_sizes.IsEmpty(); }
+		bool     empty()   const { return m_sizes.empty(); }
+		size_t   Count()   const { return m_sizes.GetCount(); }
+		size_t   size()    const { return m_sizes.size(); }
+		int      operator[](size_t idx) const { return m_sizes[idx]; }
+		wxArrayInt::const_iterator begin() const { return m_sizes.begin(); }
+		wxArrayInt::const_iterator end()   const { return m_sizes.end(); }
+
+		// The sizes as a plain array — for the few callers that hand the whole set somewhere else
+		// (ibGridSizesInfo). Read-only on purpose: a caller holding a copy cannot change what this
+		// object's sums were built from.
+		const wxArrayInt& Sizes() const { return m_sizes; }
+
+		// --- writing: every door drops the sums ----------------------------------
+		void Clear()                        { m_sizes.Empty(); Drop(); }
+		void Empty()                        { Clear(); }   // the wxArrayInt spelling, kept for call sites
+		void Alloc(size_t n)                { m_sizes.Alloc(n); }
+		void Add(int value, size_t n = 1)   { m_sizes.Add(value, n); Drop(); }
+		void Insert(int v, size_t pos, size_t n = 1) { m_sizes.Insert(v, pos, n); Drop(); }
+		void RemoveAt(size_t pos, size_t n = 1)      { m_sizes.RemoveAt(pos, n); Drop(); }
+		void Set(size_t idx, int value)     { m_sizes[idx] = value; Drop(); }
+
+		// --- the sums --------------------------------------------------------------
+		// Ends()[i] is where line i finishes; the start of line i is Ends()[i-1] (0 for the first).
+		// A hidden line (negative size) adds nothing and shares its neighbour's edge, which is what
+		// the hand-written loops did.
+		const wxArrayInt& Ends(float scale) const
+		{
+			if (!m_endsValid || m_endsScale != scale)
+				Rebuild(scale);
+			return m_ends;
+		}
+
+		int StartOf(int line, float scale) const
+		{
+			if (line <= 0)
+				return 0;
+			const wxArrayInt& ends = Ends(scale);
+			const size_t at = static_cast<size_t>(line) - 1;
+			return at < ends.GetCount() ? ends[at] : (ends.IsEmpty() ? 0 : ends.Last());
+		}
+
+		int EndOf(int line, float scale) const
+		{
+			if (line < 0)
+				return 0;
+			const wxArrayInt& ends = Ends(scale);
+			const size_t at = static_cast<size_t>(line);
+			return at < ends.GetCount() ? ends[at] : (ends.IsEmpty() ? 0 : ends.Last());
+		}
+
+	private:
+		void Drop() const { m_endsValid = false; }
+		void Rebuild(float scale) const;
+
+		wxArrayInt m_sizes;
+
+		mutable wxArrayInt m_ends;
+		mutable float      m_endsScale = 0.0f;
+		mutable bool       m_endsValid = false;
+	};
+
+	// (⛔ NO "COLLAPSE THE NOTCH INTO ONE Scroll()" HERE. Tried 2026-08-26 and reverted within the
+	//  minute: wxScrollHelperBase turns one notch into LinesPerAction scroll EVENTS, and scrolling
+	//  by hand instead skips them — but ibGridEditor::OnScroll listens to exactly those events, and
+	//  that is where the endless sheet grows its rows. Scrolling worked and the sheet stopped ending
+	//  anywhere. Whatever replaces the three steps must still SEND a scroll event, not just move.)
+
 	// init the m_rowHeights/Bottoms arrays with default values
 	void InitRowHeights();
 
 	int        m_defaultRowHeight;
 	int        m_minAcceptableRowHeight;
-	wxArrayInt m_rowHeights;
-	mutable wxArrayInt m_rowBottoms;
+	ibGridLineSizes m_rowHeights;
 
 	// init the m_colWidths/Rights arrays
 	void InitColWidths();
 
 	int        m_defaultColWidth;
 	int        m_minAcceptableColWidth;
-	wxArrayInt m_colWidths;
-	mutable wxArrayInt m_colRights;
+	ibGridLineSizes m_colWidths;
 
 	int m_sortCol;
 	bool m_sortIsAscending;

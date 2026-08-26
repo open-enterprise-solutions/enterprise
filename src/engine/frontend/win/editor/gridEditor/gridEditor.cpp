@@ -167,6 +167,27 @@ void ibGridEditor::MergeCells()
 	ibGrid::ForceRefresh();
 }
 
+// ⭐ WHERE THE CONTENT ENDS — asked before the endless sheet trims itself, so it can
+// take back the rows it grew and nothing else. See the header for what it cost not to
+// ask: a workbook opened from disk was cut down to the visible window the first time
+// somebody scrolled back up.
+//
+// ⭐ THE TABLE ANSWERS IT, not this walk. Trimming happens on every scroll EVENT — three
+// per wheel notch — and a walk over twenty thousand rows three times a notch is a visible
+// stall. The table is where the content is and where every door that changes it lives, so
+// it keeps the answer instead of the sheet re-deriving it (see ibGridEditorStringTable).
+int ibGridEditor::GetLastContentRow()
+{
+	ibGridEditorStringTable* table = GetEditorTable();
+	return table != nullptr ? table->GetLastContentRow() : -1;
+}
+
+int ibGridEditor::GetLastContentCol()
+{
+	ibGridEditorStringTable* table = GetEditorTable();
+	return table != nullptr ? table->GetLastContentCol() : -1;
+}
+
 void ibGridEditor::DockTable()
 {
 	if (!ibGrid::IsEditable())
@@ -401,10 +422,14 @@ void ibGridEditor::OnKeyDown(wxKeyEvent& event)
 			}
 		}
 		else if (scroll < 0 && code == WXK_UP) {
-			if (y0 > GetMaxRowBrake() && y0 != 0) ibGrid::DeleteRows(ibGrid::GetNumberRows() - 1);
+			// …and the same floor when the trim comes from the keyboard: what the view
+			// grew may be taken back, what the document brought may not.
+			if (y0 > wxMax(GetMaxRowBrake(), GetLastContentRow()) && y0 != 0)
+				ibGrid::DeleteRows(ibGrid::GetNumberRows() - 1);
 		}
 		else if (scroll < 0 && code == WXK_LEFT) {
-			if (x0 > GetMaxColBrake() && x0 != 0) ibGrid::DeleteCols(ibGrid::GetNumberCols() - 1);
+			if (x0 > wxMax(GetMaxColBrake(), GetLastContentCol()) && x0 != 0)
+				ibGrid::DeleteCols(ibGrid::GetNumberCols() - 1);
 		}
 	}
 
@@ -860,19 +885,37 @@ void ibGridEditor::OnScroll(wxScrollWinEvent& event)
 			ibGrid::SetScrollPos(wxOrientation::wxHORIZONTAL, (sx + scroll) / ux);
 		}
 	}
+	// ⭐⭐ TRIMMED IN ONE CALL, NOT ONE ROW AT A TIME — the same lesson the append side
+	//    (…and never below the content — see GetLastContentRow.)
+	// above already learned ("a single AppendRows() per scroll produced visible jerks"),
+	// and the delete side had kept the loop.
+	//
+	// 🛑 WHAT THE LOOP COST. Every DeleteRows() is a table message: the grid redimensions,
+	// rebuilds its whole cell-attribute map (the map is keyed by coordinates, so a shift
+	// re-keys every entry into a fresh copy) and recomputes the scrollbars. That is
+	// per-sheet work paid per ROW — open a file with tens of thousands of rows, scroll up
+	// once, and the trim runs it thirty thousand times over (Max, 2026-08-26: the profiler
+	// caught it inside UpdateAttrRowsOrCols and AdjustScrollbars, reached from here).
 	else if (scroll < 0 && event.GetOrientation() == wxOrientation::wxVERTICAL) {
-		const int y = ibGrid::YToRow(sy + h + scroll, true) + 1;
-		if (y0 > GetMaxRowBrake() && y0 != 0) {
-			for (int row = ibGrid::GetNumberRows(); row > y; row--)
-				ibGrid::DeleteRows(row - 1);
+		// NEVER ABOVE WHAT IS FILLED IN — the page break is a floor for the printed
+		// layout, the content is a floor for the DATA, and a file that brought its own
+		// rows has no breaks at all.
+		const int floor = wxMax(GetMaxRowBrake(), GetLastContentRow());
+		const int y = wxMax(ibGrid::YToRow(sy + h + scroll, true) + 1, floor + 1);
+		if (y0 > floor && y0 != 0) {
+			const int extraRows = ibGrid::GetNumberRows() - y;
+			if (extraRows > 0)
+				ibGrid::DeleteRows(y, extraRows);
 			ibGrid::SetScrollPos(wxOrientation::wxVERTICAL, (sy + scroll) / uy);
 		}
 	}
 	else if (scroll < 0 && event.GetOrientation() == wxOrientation::wxHORIZONTAL) {
-		const int x = ibGrid::XToCol(sx + w + scroll, true);
-		if (x0 > GetMaxColBrake() && x0 != 0) {
-			for (int col = ibGrid::GetNumberCols(); col > x; col--)
-				ibGrid::DeleteCols(col - 1);
+		const int floor = wxMax(GetMaxColBrake(), GetLastContentCol());
+		const int x = wxMax(ibGrid::XToCol(sx + w + scroll, true), floor + 1);
+		if (x0 > floor && x0 != 0) {
+			const int extraCols = ibGrid::GetNumberCols() - x;
+			if (extraCols > 0)
+				ibGrid::DeleteCols(x, extraCols);
 			ibGrid::SetScrollPos(wxOrientation::wxHORIZONTAL, (sx + scroll) / ux);
 		}
 	}
