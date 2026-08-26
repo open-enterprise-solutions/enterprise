@@ -25,6 +25,12 @@ enum ibSpreadsheetModelCommand
 	// COMPOSITION exactly as the two above are: it reads by a setting, and a variant is a setting
 	// somebody named.
 	ibSpreadsheetModelCommand_Variants,
+	// ⭐ THE READER'S OWN — the settings THEY saved, and TWO verbs rather than one menu (Max,
+	// 2026-08-26): saving asks WHERE to put what is in force, restoring asks WHICH one to put on.
+	// They are opposite acts and a person reaches for one of them knowing which; a single button
+	// would make them choose the act inside the menu instead of before opening it.
+	ibSpreadsheetModelCommand_RestoreSettings,
+	ibSpreadsheetModelCommand_SaveSettings,
 };
 
 // ⭐⭐ THE SPREADSHEET MODEL — ABSTRACT, and the centre of everything a gridbox does, exactly the

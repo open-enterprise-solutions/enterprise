@@ -383,6 +383,12 @@ public:
 	const ibSettingsDescription& GetUserSettingsDesc() const { return m_composer.GetUserSettingsDesc(); }
 	void SetUserSettingsDesc(const ibSettingsDescription& settings) { m_composer.SetUserSettingsDesc(settings); }
 
+	// (⛔ NO SAVED-SETTINGS ADDRESS HERE. It stood here as `m_settingsOwner` and it
+	//  was the wrong storey: what a person arranges belongs to the CONTROL they
+	//  arranged it on, and the control is what knows its own guid, its own form and
+	//  the moment it was opened. Max, 2026-08-26: *"you do not need to keep that
+	//  form anywhere but in the controls"*. The composition just composes.)
+
 	// (THERE IS NO "APPLY". Everyone reads the description THROUGH THE REFERENCE above, so a change
 	//  made at runtime is already there. A COMMIT exists only on the interface side, and it is a copy
 	//  that goes back into the property and replaces the one that was there.)
@@ -497,6 +503,14 @@ private:
 	// the list's needs no branch anywhere (Max, 2026-08-20). The frontend reaches this object
 	// through the property's owner.
 	ibPropertyDataComposition* m_propertySettings = ibPropertyObject::CreateProperty<ibPropertyDataComposition>(m_categoryComposer, wxT("Settings"), _("Settings"));
+
+	// WHICH COMPOSER'S SETTINGS THE BASE HOLDS FOR THIS ONE. Empty on a composition
+	// built in code or in the designer — those save nothing, which is right: there
+	// is no reader whose settings they would be.
+	//
+	// NOT SERIALISED, deliberately. It is an identity, not a setting: it is stated
+	// again every time the object is prepared, and a copy of the description carried
+	// into another composer must not arrive claiming to be that composer.
 };
 
 #endif // __VALUE_DATA_COMPOSITION_H__

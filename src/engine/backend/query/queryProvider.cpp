@@ -223,17 +223,10 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 	return ibDataQueryResult(std::move(rows), spec.m_queryable);
 }
 
-// ==========================================================================
-// ibBackendQueryable::GetProvider — the DB DEFAULT. A queryable vends its engine; the
-// record / register / constant / tabular families are physical DB tables, so they all
-// share one STATELESS static DB provider. Computed queryables override this
-// (ibComputedRegisterQueryable in queryable.h) to vend a static ibComputedProvider. (docs §22.4)
-// ==========================================================================
-ibBackendQueryProvider& ibBackendQueryable::GetProvider() const
-{
-	static ibDbTableProvider s_dbProvider;   // stateless — the spec carries every per-query value
-	return s_dbProvider;
-}
+// (THE QUERYABLE'S OWN BODIES MOVED OUT — GetProvider, ResolveColumnByName and the two projections
+//  of its metaobject now live in queryable.cpp, beside their header, the way a column's do in
+//  queryColumn.cpp. This file is the COMPOSER and the computed providers; a base class answering
+//  "which metaobject stands behind me" was findable here only by knowing it happened to be here.)
 
 // The shared stateless computed (RAM) provider — vended by ibComputedRegisterQueryable (in
 // queryable.h, which may not name the concrete ibComputedProvider) and the temp / subquery
@@ -242,41 +235,6 @@ ibBackendQueryProvider& ibComputedProviderInstance()
 {
 	static ibComputedProvider s_computedProvider;
 	return s_computedProvider;
-}
-
-// Default: the base has no metadata to resolve a name against, so it owns no columns.
-// Every concrete source (record / register / constant / tabular = attribute-by-name;
-// temp / subquery = own column lookup) OVERRIDES this; the base is a null fallback.
-const ibBackendQueryColumn* ibBackendQueryable::ResolveColumnByName(const wxString& /*name*/) const
-{
-	return nullptr;
-}
-
-// ⭐⭐ THE METAOBJECT IS ASKED ONCE, AND ITS GUID AND ID ARE READ OFF IT.
-//
-// These two used to be pure virtuals of their own, and every metaobject-backed source implemented
-// both with the same two lines — `m_meta->GetGuid()`, `m_meta->GetMetaID()`. Three questions, one
-// fact: "which metaobject stands behind this source". A source with none (temp / subquery /
-// computed) answered a hand-written empty, which is precisely what falling through to no metaobject
-// says by itself.
-//
-// The cost of the duplicate is not the typing. A projection published beside the thing it projects
-// invites a consumer to reach for whichever is nearest, and the two drift the moment one is
-// overridden and the other forgotten — the same shape that let a SORT stand in for a KEY until an
-// enumeration reordered itself and every reader of that key read a number.
-//
-// GetQueryTableName stays virtual on purpose: the PHYSICAL table is a different fact, and a temp
-// source has one without a metaobject anywhere.
-ibGuid ibBackendQueryable::GetQueryTableGuid() const
-{
-	const ibValueMetaObjectGenericData* const meta = GetSourceMetaObject();
-	return meta != nullptr ? meta->GetGuid() : wxNullGuid;
-}
-
-ibMetaID ibBackendQueryable::GetQueryTableId() const
-{
-	const ibValueMetaObjectGenericData* const meta = GetSourceMetaObject();
-	return meta != nullptr ? meta->GetMetaID() : 0;
 }
 
 // ==========================================================================

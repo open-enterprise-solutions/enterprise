@@ -163,6 +163,56 @@ void ibApplicationData::CreateTableJob()
 	}
 }
 
+// sys_settings — ONE ROW PER SAVED SETTING: a packed runtime value under an address of
+// category + object + name + user. What a person arranged on a form or on a list stops
+// dying with the window that arranged it.
+//
+// ⚠ THE PRIMARY KEY IS A HASH OF THE ADDRESS, not the address itself, and that is a fact
+// about the DDL renderer rather than about settings: PRIMARY KEY is spelled per COLUMN, so
+// four key columns would emit four of them and no driver would take the CREATE. sys_lock
+// answered the same question the same way — keyHash for the lookup, the readable parts
+// beside it. Here they also carry the "everything this user saved for that object" query,
+// which is what the index is for.
+//
+// The payload's format is NOT this table's business: binaryData is a NODE written through
+// ibBinaryProvider, and it changes when what it carries changes without a word of DDL.
+// Deliberately no "version" column for the same reason — the node format carries its own,
+// and a second one here would be a version of nothing.
+//
+// 🛑 AND WHEN THIS SCHEMA CHANGES, IT MAY NOT BE DROPPED AND REBUILT. sys_job and
+// sys_bytecode_cache are migrated that way and are right to be: a job's settings re-seed from
+// its declaration and a cache recomputes, so nothing a person did is in them. THIS table is the
+// opposite — every row is something somebody arranged and asked to keep, and it exists nowhere
+// else. A schema change here is ADD COLUMN (nullable, read as absent by an older row), never a
+// DROP. That is not an alpha-vs-release distinction; it is what the table holds.
+void ibApplicationData::CreateTableSettings()
+{
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(settings_table)) {
+
+		q.Execute(ibCreateTable(settings_table, {
+			{ wxT("entryKey"),   ibTypeString(64),  false, true,  wxEmptyString },   // SHA-256 hex of the four parts below
+			{ wxT("category"),   ibTypeInteger(),   true,  false, wxEmptyString },   // ibSettingsCategory, BY NUMBER
+			{ wxT("objectKey"),  ibTypeString(128), true,  false, wxEmptyString },   // metaobject guid, or a name of the caller's own
+			// NOT NULL with a default: "this object has only one setting" and "this row is
+			// everybody's" get ONE spelling each, decided by the column rather than by whoever
+			// wrote the row. A nullable key column has two (NULL and ''), and they agree only as
+			// long as every reader remembers to make them agree — while the hash above already
+			// took the empty string as its input.
+			{ wxT("settingKey"), ibTypeString(128), true,  false, wxT("''") },       // which setting of that object; '' = the only one
+			{ wxT("userKey"),    ibTypeString(36),  true,  false, wxT("''") },       // whose; '' = shared by everybody
+			{ wxT("changed"),    ibTypeDate(),      true,  false, wxEmptyString },
+			{ wxT("dataSize"),   ibTypeInteger(),   true,  false, wxEmptyString },
+			{ wxT("binaryData"), ibTypeBlob(),      true,  false, wxEmptyString },   // the packed value; BYTEA on PostgreSQL via the TYPE-MAP
+		}));
+		// The readable address, for "everything this user saved about that object" — the query an
+		// administrator's "reset this person's settings" and a form's own cleanup both make. The
+		// index rides with the just-created table, so no "if not exists" (which Firebird rejects).
+		q.Execute(ibCreateIndex(settings_table, wxT("settings_index_1"),
+			{ wxT("category"), wxT("objectKey"), wxT("userKey") }));
+	}
+}
+
 // sys_job schema move — the key went from the display NAME to the job's stable key, and the table
 // gained its settings columns (active / schedule) on 2026-08-04.
 //

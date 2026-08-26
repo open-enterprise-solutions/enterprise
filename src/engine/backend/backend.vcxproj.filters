@@ -818,6 +818,12 @@
     <ClInclude Include="job\jobSchedule.h">
       <Filter>job</Filter>
     </ClInclude>
+    <ClInclude Include="settings\settingsStorage.h">
+      <Filter>settings</Filter>
+    </ClInclude>
+    <ClInclude Include="settings\settingsComposer.h">
+      <Filter>settings</Filter>
+    </ClInclude>
     <ClInclude Include="utils\passwordHash.hpp">
       <Filter>utils</Filter>
     </ClInclude>
@@ -1936,6 +1942,12 @@
     <ClCompile Include="job\jobScheduleRules.cpp">
       <Filter>job</Filter>
     </ClCompile>
+    <ClCompile Include="settings\settingsStorage.cpp">
+      <Filter>settings</Filter>
+    </ClCompile>
+    <ClCompile Include="settings\settingsComposer.cpp">
+      <Filter>settings</Filter>
+    </ClCompile>
     <ClCompile Include="utils\passwordHash.cpp">
       <Filter>utils</Filter>
     </ClCompile>
@@ -2102,6 +2114,9 @@
     </Filter>
     <Filter Include="job">
       <UniqueIdentifier>{9a1e4c7b-2d6f-4a3e-b8c5-7d1f2a4e6b9c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="settings">
+      <UniqueIdentifier>{3f7b2c5d-8e14-4a6b-9c02-5d8e7a1b3c4f}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -2283,6 +2298,9 @@
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="query\queryProvider.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryable.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\dbTableProvider.cpp">

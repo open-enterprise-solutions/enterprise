@@ -12,6 +12,10 @@
 #include "backend/system/value/valueTable.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaData.h"                 // FindAnyObjectByFilter (dot-path metaID -> name)
+#include "frontend/win/dlgs/settings/savedSettings.h"   // the setting marked "restore on open" goes on here
+#include "backend/settings/settingsComposer.h"          // ibSettingsCategory — which shelf these settings sit on
+#include "formAttribute.h"                              // the attribute this box is bound to — its source IS the address
+#include "backend/srcDataObject.h"                      // …and the source answers with the guid of what it reads
 #include "backend/appData.h"
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -342,6 +346,29 @@ void ibValueModelTableBox::CreateTable(bool recreateModel) {
 	}
 }
 
+// ⭐ THE ADDRESS OF THIS LIST'S SAVED SETTINGS — asked of the ATTRIBUTE this box is bound to, through
+// its own source. The source object answers with the guid of the metaobject it reads
+// (ibBackendQueryable::GetQueryTableGuid), so "my settings for the Products list" is one address
+// wherever that list is opened, and redrawing the control does not lose them.
+ibGuid ibValueModelTableBox::SettingsObjectKey() const
+{
+	if (m_formOwner == nullptr || m_propertySource->IsEmptyProperty())
+		return wxNullGuid;
+
+	// The HEAD of the binding is the form's attribute — the deeper hops are how it walked from there.
+	const ibFormAttributeValue* attribute = m_formOwner->FindAttributeById(GetSourceDesc().GetFirst());
+	if (attribute == nullptr)
+		return wxNullGuid;
+
+	const ibSourceDataObject* source = attribute->GetSourceValue();
+	if (source == nullptr)
+		return wxNullGuid;   // an attribute holding no source shows nothing to configure
+
+	// THE SOURCE'S OWN IDENTITY — for anything that reads a table it IS the metaobject's guid, which
+	// is what the queryable answers with (ibBackendQueryable::GetQueryTableGuid).
+	return source->GetGuid();
+}
+
 void ibValueModelTableBox::CreateModel(bool recreateModel)
 {
 	if (!m_propertySource->IsEmptyProperty()) {
@@ -599,6 +626,17 @@ void ibValueModelTableBox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxpar
 		AutoBindNewSource(this);
 
 	if (dataViewCtrl != nullptr) ibValueModelTableBox::CreateModel();
+
+	// ⭐⭐ AND THE SETTING MARKED "restore on open" GOES ON — right after the model is in place, which
+	// is the one moment that happens once per opened window (Max, 2026-08-26). Addressed by the
+	// BINDING's leaf, under the list's own category — the settings belong to what is shown, so the
+	// box may be redrawn without losing them.
+	//
+	// ⚠ NOT IN THE DESIGNER: there the box is a picture of itself, and the person drawing the form
+	// is not the reader whose settings these are.
+	if (visualHost != nullptr && !visualHost->IsDesignerHost() && m_tableModel != nullptr)
+		ibDialogSavedSettings::ApplyDefault(m_tableModel->GetModelComposer(), ibSettingsCategory::List,
+			SettingsObjectKey(), GetMetaData());
 
 	// NO auto-first-column here. AddColumn() injects a column INTO the bound value-table (m_tableModel's
 	// collection), so auto-calling it on every designer create/drop polluted the value-table attribute with a

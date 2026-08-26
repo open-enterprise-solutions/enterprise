@@ -4,6 +4,8 @@
 #include "backend/compositionDescription.h"     // the description the quick filter writes into
 #include "backend/appData.h"
 #include "frontend/win/dlgs/settings/list/listSettings.h"   // the ONE door a model's settings are opened by
+#include "frontend/win/dlgs/settings/composer/composerSettings.h"   // the saved-settings shelf — shared with the report's world
+#include "backend/settings/settingsComposer.h"              // ibSettingsCategory — which shelf a list's settings sit on
 #include "form.h"
 
 //****************************************************************************
@@ -21,6 +23,12 @@ enum
 	enTableFilterByColumn,
 	enTableFilterClear,
 	enTableViewMode,
+	// ⭐ THE READER'S OWN SETTINGS — a LIST HAS THEM TOO (Max, 2026-08-26). Not the variants question,
+	// which a list legitimately has none of: a variant is something the AUTHOR named in the
+	// configuration, while these are what THIS person arranged and chose to keep. They live under
+	// their own category, addressed by this control's guid rather than by a composer's.
+	enTableSettingsRestore,
+	enTableSettingsSave,
 };
 
 ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardCommands(const ibFormID& formType)
@@ -67,6 +75,13 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 	actionData.AddAction(wxT("FilterByColumn"), _("Filter by column"), g_picFilterSetCLSID, false, enTableFilterByColumn).SetModify(false);
 	actionData.AddAction(wxT("FilterClear"), _("Filter clear"), g_picFilterClearCLSID, false, enTableFilterClear).SetModify(false);
 
+	// …and the shelf: what this person kept, and where to put what they have now. Two verbs, because
+	// they are opposite acts and a person reaches for one of them knowing which. View-state, like
+	// everything in this band — a saved setting narrows what is READ and stores nothing of the data.
+	actionData.AddSeparator();
+	actionData.AddAction(wxT("RestoreSettings"), _("Restore settings"), g_picSelectCLSID, false, enTableSettingsRestore).SetModify(false);
+	actionData.AddAction(wxT("SaveSettings"), _("Save settings"), g_picSaveCLSID, false, enTableSettingsSave).SetModify(false);
+
 	actionData.AddSeparator();
 	actionData.AddAction(wxT("ViewMode"), _("View mode"), g_picHierarchyCLSID, false, enTableViewMode).SetModify(false);
 
@@ -111,6 +126,8 @@ void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendV
 	case enTableFilterByColumn: Command_FilterByCurrentColumn();     break;   // direct → control + L5
 	case enTableFilterClear:    Command_ClearFilter();               break;   // direct → L5
 	case enTableViewMode:       Command_ShowViewMode();              break;   // direct → control
+	case enTableSettingsRestore: Command_ShowSavedSettings(/*restore*/true);  break;
+	case enTableSettingsSave:    Command_ShowSavedSettings(/*restore*/false); break;
 	default:
 		// The model runs its command against the current ROW as-is (its Edit id has the eStartEditingFlag bit baked
 		// in, so its own `case eEditValue` matches — a list opens the object form, a value-table does nothing there).
@@ -183,6 +200,35 @@ void ibValueModelTableBox::Command_ShowListSettings()
 	// …and the CONFIGURATION is handed in by the box: it knows which one it is showing, and a window
 	// that went looking would be guessing between the several that are open (Max, 2026-08-24).
 	ibDialogListSettings::ShowUserSettings(dynamic_cast<wxWindow*>(GetInnerWx()), m_tableModel, GetMetaData());
+}
+
+// ⭐⭐ THE SAME SHELF A REPORT HAS, addressed the same way: by the LEAF OF THE BINDING, so the
+// settings belong to what is shown rather than to the widget showing it. They live in a category of
+// their own, so a list's "Sales" and a report's can never be the same row (Max, 2026-08-26).
+//
+// The window and the two verbs are the composer's; nothing here is a second implementation. Which
+// verb is which is the argument: restore asks WHICH one to put on, save asks WHERE to put what is in
+// force.
+void ibValueModelTableBox::Command_ShowSavedSettings(bool restore)
+{
+	if (m_tableModel == nullptr)
+		return;
+
+	wxWindow* over = dynamic_cast<wxWindow*>(GetInnerWx());
+	const wxString objectKey = SettingsObjectKey();
+
+	if (restore) {
+		if (ibDialogComposerSettings::ShowRestoreSettings(over, m_tableModel->GetModelComposer(),
+				ibSettingsCategory::List, objectKey, GetMetaData()))
+			// ⚠ A LIST IS NOT A REPORT: it re-reads AT ONCE. The report's sheet stays the one that was
+			// built until somebody says Compose; here the rows on screen are the answer to the setting
+			// that was just replaced, so leaving them would show the previous setting's rows.
+			m_tableModel->RefetchAll();
+		return;
+	}
+
+	ibDialogComposerSettings::ShowSavedSettings(over, m_tableModel->GetModelComposer(),
+		ibSettingsCategory::List, objectKey, GetMetaData());
 }
 
 void ibValueModelTableBox::Command_FilterByCurrentColumn()

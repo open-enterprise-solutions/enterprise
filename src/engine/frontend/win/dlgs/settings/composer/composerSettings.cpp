@@ -5,6 +5,8 @@
 #include "frontend/win/dlgs/settings/settingsFilterEditor.h"   // SHARED with the list's world
 #include "frontend/win/dlgs/settings/settingsSortEditor.h"     // …and so is this one
 #include "frontend/win/dlgs/settings/settingsStyle.h"          // how a settings surface LOOKS — said once, for both worlds
+#include "frontend/win/dlgs/settings/savedSettings.h"          // the shelf window — shared with the list's world
+#include "backend/settings/settingsComposer.h"                 // saving / restoring a composer's settings
 #include "frontend/win/dlgs/callbackDropTarget.h"              // dropping a field onto a list — the same-process drag
 #include "frontend/win/dlgs/queryConstructor/queryConstructor.h" // the Query tab's constructor button
 #include "frontend/win/dlgs/queryConstructor/queryExpressionDialog.h" // the resource expression editor
@@ -38,6 +40,7 @@
 #include <wx/toolbar.h>
 #include <wx/artprov.h>
 #include <wx/menu.h>
+#include <wx/choicdlg.h>  // wxGetSingleChoiceIndex — which saved setting to rename / drop
 #include <wx/stc/stc.h>   // wxStyledTextCtrl — the query editor
 #include <wx/dnd.h>       // wxDropSource / wxTextDataObject — the drag half
 
@@ -1815,6 +1818,33 @@ bool ibDialogComposerSettings::PickVariant(wxWindow* parent, ibDataComposer& com
 	// …AND THAT IS THE WHOLE ACT. The same call the settings window makes on OK.
 	composer.SetUserSettingsDesc(variants[at].m_settings);
 	return true;
+}
+
+// ⭐⭐ SAVE — the question is WHERE TO PUT what is in force. The shelf itself, plus a place that is
+// not on it yet: saving over an entry is an ordinary act once you have saved before, so it is one
+// gesture rather than a name typed again exactly as before.
+bool ibDialogComposerSettings::ShowSavedSettings(wxWindow* parent, ibDataComposer& composer,
+                                                 ibSettingsCategory category, const ibGuid& objectKey,
+                                                 const ibMetaData* metaData)
+{
+	// ⭐ THE SAME SHELF, opened for the other act. It used to be a MENU here and a window there —
+	// two surfaces over one set of entries, and the menu had no room for the mark a person wants to
+	// set while they are saving (Max, 2026-08-26: *"beside it there is a button, set as the main
+	// one"*). One window, and the mode decides which button is the main one.
+	return ibDialogSavedSettings::Show(parent, composer, ibDialogSavedSettings::Mode::Save,
+		category, objectKey, metaData);
+}
+
+// ⭐⭐ THE OTHER BUTTON — WHICH ONE TO PUT ON. A WINDOW rather than a menu, because this is where
+// the shelf is kept as well as read: the entries with the default one in BOLD, and the verbs that
+// act on whichever is selected (restore, mark as the one to restore on open, rename, delete).
+// Picking an entry IS SetUserSettingsDesc — the same act as picking a variant.
+bool ibDialogComposerSettings::ShowRestoreSettings(wxWindow* parent, ibDataComposer& composer,
+                                                   ibSettingsCategory category, const ibGuid& objectKey,
+                                                   const ibMetaData* metaData)
+{
+	return ibDialogSavedSettings::Show(parent, composer, ibDialogSavedSettings::Mode::Restore,
+		category, objectKey, metaData);
 }
 
 bool ibDialogComposerSettings::ShowUserSettings(wxWindow* parent, ibValueSpreadsheetModel* model)

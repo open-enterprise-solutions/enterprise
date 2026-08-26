@@ -19,6 +19,9 @@
 //  takes one, as a pointer, and a name is all that needs.)
 class ibValueDataComposition;
 #include "backend/compositionDescription.h"   // the snapshot Cancel puts back — a DESCRIPTION, not a node
+// WHICH SHELF a saved setting sits on — an argument of the shelf's door below, so the same menu
+// serves a report and a list. (The storage itself is the backend's; only the word travels here.)
+enum class ibSettingsCategory : int;
 
 // ---------------------------------------------------------------------------
 // ibDialogComposerSettings — the DATA COMPOSER's settings, a window of its own.
@@ -708,6 +711,36 @@ public:
 	// Returns true when something was picked; the CALLER decides what to do about it — a report
 	// shows the sheet that was built and is re-formed when the person says so.
 	static bool ShowVariantPicker(wxWindow* parent, class ibValueSpreadsheetModel* model);
+
+	// ⭐⭐ THE READER'S OWN SHELF — the settings THIS person saved, kept in the base. One menu: what
+	// they have saved (picking one restores it), and below it the three verbs that change the shelf
+	// itself — save what is in force under a name, rename one, drop one.
+	//
+	// ⭐⭐ AND A LIST GOES THROUGH THE VERY SAME DOOR (Max, 2026-08-26: *"a list can have saved
+	// settings too"*) — which is why this takes a COMPOSER and an ADDRESS rather than a report's
+	// model. The two differ only in where their rows live: a report's under the composer the
+	// configuration declares, a list's under the control on the form, and the CATEGORY is what keeps
+	// the two vocabularies from ever meeting. Everything else — the menu, the verbs, the restore —
+	// is one piece of code.
+	//
+	// Restoring ends in SetUserSettingsDesc, so from the composer down there is no difference
+	// between a setting that came from a variant, from this shelf, or from the settings window.
+	//
+	// Returns true when something changed (restored, saved, renamed, removed).
+	static bool ShowSavedSettings(wxWindow* parent, class ibDataComposer& composer,
+	                              ibSettingsCategory category, const ibGuid& objectKey,
+	                              const class ibMetaData* metaData);
+
+	// …and RESTORE, the other half: which of the saved ones to put on. A window, because the shelf
+	// is kept here too — the default entry in bold, and rename / delete / "restore on open" acting
+	// on whichever is selected.
+	static bool ShowRestoreSettings(wxWindow* parent, class ibDataComposer& composer,
+	                                ibSettingsCategory category, const ibGuid& objectKey,
+	                                const class ibMetaData* metaData);
+
+	// (⛔ NO MODEL-SHAPED TWINS. They existed to cast a model down to a composition for its address —
+	//  and the address belongs to the CONTROL, which already has both halves in hand: the composer
+	//  off the base model, its own guid for the key. Max, 2026-08-26: *"why are you casting?"*)
 
 private:
 	// The picker itself — over the composer, which is all it needs.

@@ -43,6 +43,9 @@
     <ClCompile Include="win\dlgs\settings\settingsFieldTree.cpp">
       <Filter>win\dlgs\settings</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\settings\savedSettings.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\settings\settingsFilterEditor.cpp">
       <Filter>win\dlgs\settings</Filter>
     </ClCompile>
@@ -1076,6 +1079,9 @@
       <Filter>win\dlgs\settings</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\settings\settingsFieldTree.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\savedSettings.h">
       <Filter>win\dlgs\settings</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\settings\settingsFilterEditor.h">

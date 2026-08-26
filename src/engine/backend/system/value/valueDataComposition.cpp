@@ -23,6 +23,7 @@
 #include "backend/system/value/valueSpreadsheet.h"   // ibValueSpreadsheetDocument — the script-side document
 #include "backend/value_cast.h"                      // CastValue — the script argument to its type
 #include "backend/job/jobManager.h"                  // ibJobManager / ibBackgroundRun — the rented read
+#include "backend/settings/settingsComposer.h"       // the reader's saved settings — and the one marked for open
 
 namespace {
 
@@ -208,6 +209,12 @@ void ibValueDataComposition::RebuildSource()
 			m_sourceBuiltFor = seed;   // what this build is for, now that the text is the seed
 		}
 	}
+
+	// (⛔ THE DEFAULT IS NOT PUT ON HERE. It stood here for an hour and it was the wrong storey: a
+	//  rebuild happens whenever the source or the query text changes, so it needed a "only once"
+	//  flag to be safe — and a flag guarding a call is the shape of a call in the wrong place. The
+	//  moment that happens ONCE is when a CONTROL is handed its model, which is also where the
+	//  address comes from for a list. See ibValueGridBox / ibValueModelTableBox OnCreated.)
 
 	m_querySchema.clear();
 	m_queryError.clear();
@@ -851,6 +858,7 @@ void ibValueDataComposition::GetCommandCollection(const ibFormID& formType, std:
 	// COMPOSE changes what is SHOWN, not what is stored — live even on a view-only form.
 	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_Compose, wxT("Compose"), _("Compose"),
 		ibPictureDescription(g_picGenerateCLSID), true).SetModify(false));
+	commands.push_back(ibCommandItem());   // separator — "show it" is not "arrange it"
 	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_Settings, wxT("Settings"), _("Settings"),
 		ibPictureDescription(g_picStructureCLSID), false).SetModify(false));
 	// ⭐ AND THE VARIANTS — the settings the author NAMED, offered as a menu. A verb of the
@@ -859,8 +867,24 @@ void ibValueDataComposition::GetCommandCollection(const ibFormID& formType, std:
 	// it stays live on a view-only form.
 	// …AND IT SHOWS ITS NAME, like Compose does: a tick-mark icon alone says nothing about what will
 	// happen, and this is a verb a person looks for by word (Max, 2026-08-26).
+	// …AND THE AUTHOR'S VARIANTS STAND APART FROM THE SETTINGS WINDOW TOO (Max, 2026-08-26). Four
+	// groups, four questions: what the report SHOWS (compose) · how it is ARRANGED right now
+	// (settings) · which of the AUTHOR's arrangements to take (variants) · what THIS person kept
+	// (restore, save). A bar of seven equal buttons makes a reader find the one they want by reading
+	// all seven.
+	commands.push_back(ibCommandItem());   // separator — the author's named arrangements are their own group
 	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_Variants, wxT("Variants"), _("Variants"),
 		ibPictureDescription(g_picSelectCLSID), true).SetModify(false));
+
+	commands.push_back(ibCommandItem());   // separator — …and the reader's own shelf is another
+
+	// ⭐ …AND THE READER'S OWN, beside the author's. Same shape, different shelf: a variant ships
+	// with the configuration, a saved setting is what THIS person arranged and kept. Both show what
+	// is READ — nothing in the base's data changes — so they stay live on a view-only form.
+	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_RestoreSettings, wxT("RestoreSettings"), _("Restore settings"),
+		ibPictureDescription(g_picSelectCLSID), true).SetModify(false));
+	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_SaveSettings, wxT("SaveSettings"), _("Save settings"),
+		ibPictureDescription(g_picSaveCLSID), true).SetModify(false));
 
 	// …then whatever the SOURCE offers, after a rule.
 	if (const ibQueryableSourceDescriptor* holder = GetSourceDescriptor()) {

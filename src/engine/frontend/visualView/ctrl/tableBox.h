@@ -333,6 +333,16 @@ protected:
 	
 	void Command_FilterByCurrentColumn();
 	void Command_ShowListSettings();
+	// The reader's own saved settings — restore one, or save what is in force. Both open the
+	// composer world's shelf, under the List category.
+	void Command_ShowSavedSettings(bool restore);
+
+	// ⭐ WHERE THIS LIST'S SAVED SETTINGS LIVE — the guid of the METAOBJECT behind the attribute this
+	// box is bound to, asked of the attribute's own source (Max, 2026-08-26: *"the unique identifier
+	// of the attribute it is bound to, from the source — it is there"*). Not the control's guid: the
+	// settings belong to what is shown, so the box may be redrawn without losing them. Empty when
+	// nothing is bound, and then there is no shelf.
+	ibGuid SettingsObjectKey() const;
 	void Command_ClearFilter();
 
 	void Command_ShowViewMode();

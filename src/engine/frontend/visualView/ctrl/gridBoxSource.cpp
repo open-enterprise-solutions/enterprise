@@ -7,6 +7,7 @@
 #include "backend/system/value/valueDataComposition.h"   // the source that turns this box into a report
 #include "backend/spreadsheetModel.h"   // ibValueSpreadsheetModel — the ONE question this control is moving to
 #include "backend/metaCollection/partial/dataReport.h"   // ⏳ interim: until the composer derives the model
+#include "backend/metaData.h"                            // GuidByMetaId — a binding's leaf as a stable guid
 #include <algorithm>                                     // std::find — the picker takes each attribute once
 
 const ibMetaData* ibValueGridBox::GetMetaData() const
@@ -151,6 +152,26 @@ void ibValueGridBox::RefreshModel()
 	ibValueSpreadsheetModel* held = m_spreadsheetModel;
 	if (dynamic_cast<ibValueSpreadsheetDocument*>(held) == nullptr)
 		SetControlValue(ibValuePtr<ibValueSpreadsheetDocument>(new ibValueSpreadsheetDocument()));
+}
+
+// ⭐ WHERE THIS BOX'S SAVED SETTINGS LIVE — the LEAF of its binding, as a stable guid. For a report
+// form that leaf is the COMPOSER, and a composer is a metaobject with a guid of its own; the
+// translation is the one every serialised binding in the tree already uses, because a metaID is
+// configuration-local and a guid is not.
+//
+// ⚠ NOT the source object's guid: a composition answers with the guid of the TABLE it reads, so two
+// different reports over one table would silently share one person's shelf.
+ibGuid ibValueGridBox::SettingsObjectKey() const
+{
+	const ibMetaData* metaData = GetMetaData();
+	if (metaData == nullptr || m_propertySource->IsEmptyProperty())
+		return wxNullGuid;
+
+	const ibSourceId leaf = m_propertySource->GetValueAsSourceDesc().GetLeaf();
+	if (leaf == wxNOT_FOUND)
+		return wxNullGuid;
+
+	return metaData->GuidByMetaId(leaf);
 }
 
 ibValueDataComposition* ibValueGridBox::ResolveComposition() const

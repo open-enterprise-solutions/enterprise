@@ -63,6 +63,8 @@
     <ClInclude Include="job\jobManager.h" />
     <ClInclude Include="job\platformJobs.h" />
     <ClInclude Include="job\jobSchedule.h" />
+    <ClInclude Include="settings\settingsStorage.h" />
+    <ClInclude Include="settings\settingsComposer.h" />
     <ClInclude Include="system\value\valueBackgroundJob.h" />
     <ClInclude Include="backend_core.h" />
     <ClInclude Include="backend_mainFrame.h" />
@@ -427,6 +429,9 @@
     <ClCompile Include="job\platformJobs.cpp" />
     <ClCompile Include="job\jobSchedule.cpp" />
     <ClCompile Include="job\jobScheduleRules.cpp" />
+    <ClCompile Include="query\queryable.cpp" />
+    <ClCompile Include="settings\settingsStorage.cpp" />
+    <ClCompile Include="settings\settingsComposer.cpp" />
     <ClCompile Include="system\value\valueBackgroundJob.cpp" />
     <ClCompile Include="backend_core.cpp" />
     <ClCompile Include="backend_mainFrame.cpp" />

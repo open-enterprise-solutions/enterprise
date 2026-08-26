@@ -1,6 +1,7 @@
 #include "gridBox.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/system/value/valueDataComposition.h"   // the source that turns this box into a report
+#include "frontend/win/dlgs/settings/savedSettings.h"    // the setting marked "restore on open" goes on here
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -101,6 +102,20 @@ void ibValueGridBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualH
 	// to state twice.
 	if (firstCreated)
 		AutoBindNewSource(this);
+
+	// ⭐⭐ AND THE SETTING MARKED "restore on open" IS PUT ON — HERE, BEFORE THE COMPOSE, because the
+	// compose below must read by it. This is the moment a control has been handed its model (Max,
+	// 2026-08-26: *"it fires when you assign the model, or on the created event — it happens once
+	// anyway"*), and it is the FRONT's job: the back has no idea a window opened.
+	//
+	// ⚠ NOT IN THE DESIGNER, for the same reason the compose is not: there the box is a picture of
+	// itself, and a person drawing a form is not a reader whose settings these are.
+	// ⭐ THE ADDRESS COMES FROM THE BINDING — the leaf of this box's source path, which for a report is
+	// the COMPOSER's metaID. What a person arranged belongs to what is shown, not to the widget: the
+	// box can be deleted and drawn again and the shelf is still theirs.
+	if (visualHost != nullptr && !visualHost->IsDesignerHost() && m_spreadsheetModel)
+		ibDialogSavedSettings::ApplyDefault(m_spreadsheetModel->GetModelComposer(),
+			ibSettingsCategory::Composer, SettingsObjectKey(), GetMetaData());
 
 	// ⭐⭐ COMPOSE ON OPEN — here, at CREATION, and nowhere else. This is the one moment that happens
 	// once per opened window: `Update` runs again for every re-render, property edit and resize, and

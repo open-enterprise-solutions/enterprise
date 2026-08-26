@@ -20,6 +20,7 @@
 #include "backend/lock/lockManager.h"
 #include "backend/job/jobManager.h"           // ibJobManager (owned via GetJobManager)
 #include "backend/job/platformJobs.h"         // the engine's own jobs, declared when a database opens
+#include "backend/settings/settingsStorage.h" // ibSettingsStorage (owned via GetSettingsStorage)
 
 #include "backend/backend_exception.h"        // ibBackendCoreException — a build with no driver says so
 #include "backend/utils/passwordHash.hpp"
@@ -187,6 +188,7 @@ ibApplicationData::ibApplicationData(ibRunMode runMode) :
 	m_queryableFactory(std::unique_ptr<ibQueryableFactory>(new ibQueryableFactory(ib::AppDataCtorToken{}))),
 	m_sessionRegistry(std::unique_ptr<ibSessionRegistry>(new ibSessionRegistry(ib::AppDataCtorToken{}, PickWorkerCount(runMode)))),
 	m_jobManager(std::unique_ptr<ibJobManager>(new ibJobManager(ib::AppDataCtorToken{}))),
+	m_settingsStorage(std::unique_ptr<ibSettingsStorage>(new ibSettingsStorage(ib::AppDataCtorToken{}))),
 	m_dbMode(ibDatabaseMode::eNONE),
 	m_locale_lang(wxLanguage::wxLANGUAGE_UNKNOWN)
 {
@@ -595,6 +597,8 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			ibApplicationData::CreateTableJob();
 			// … and its settings columns, for a base created before jobs had any.
 			ibApplicationData::MigrateTableJob();
+			// sys_settings — what people saved on their forms and their lists.
+			ibApplicationData::CreateTableSettings();
 
 			if (!SetLocaleAppDataEnv(strLocale))
 				return false;
@@ -697,6 +701,8 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 			ibApplicationData::CreateTableLock();
 			ibApplicationData::CreateTableJob();
 			ibApplicationData::MigrateTableJob();
+			// sys_settings — what people saved on their forms and their lists.
+			ibApplicationData::CreateTableSettings();
 
 			// LAST IN THE TABLE BLOCK, for the reason spelled out in the file branch: declaring a
 			// job READS sys_job, so nothing may declare one before every table it touches exists.

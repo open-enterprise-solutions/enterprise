@@ -132,6 +132,14 @@ private:
 	// built, the window is created, the Source is set.
 	void RefreshModel();
 
+	// ⭐ WHERE THIS REPORT'S SAVED SETTINGS LIVE — the guid of the COMPOSER this box is bound to,
+	// taken from the leaf of its binding (Max, 2026-08-26: *"the unique identifier of the attribute
+	// it is bound to, from the source"*). Not the source object's guid: that is the guid of the
+	// TABLE the report reads, so two different reports over one table would share one shelf. And not
+	// the control's: the settings belong to what is shown, so the box may be redrawn without losing
+	// them. Empty when nothing is bound, and then there is no shelf.
+	ibGuid SettingsObjectKey() const;
+
 	// The settings behind the box — a composer HAS them, a plain sheet has none. The one place that
 	// knows which of the two is which.
 	class ibValueDataComposition* ResolveComposition() const;

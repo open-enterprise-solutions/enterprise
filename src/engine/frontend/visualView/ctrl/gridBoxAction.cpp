@@ -7,6 +7,7 @@
 #include "backend/system/value/valueDataComposition.h"   // the composition the Generate verb runs
 #include "backend/spreadsheetModel.h"   // the model this control is moving onto
 #include "frontend/win/dlgs/settings/composer/composerSettings.h"  // the Settings verb opens the composition's own window
+#include "backend/settings/settingsComposer.h"            // ibSettingsCategory — which shelf a report's settings sit on
 #include "frontend/win/editor/gridEditor/gridPrintout.h"
 
 // (No ids of its own any more: the verbs are the MODEL's and their ids are named there —
@@ -128,6 +129,22 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 		// list, and it is re-formed when the person says so (Compose), which is when the setting is
 		// taken into account.
 		ibDialogComposerSettings::ShowVariantPicker(dynamic_cast<wxWindow*>(GetInnerWx()), model);
+		break;
+	case ibSpreadsheetModelCommand_RestoreSettings:
+		// ⭐ THE READER'S OWN SHELF — which of the settings THEY kept to put on. Ends in the same
+		// single call as the variant picker above (SetUserSettingsDesc), so a restored setting and a
+		// chosen variant are indistinguishable from here down. The sheet on screen stays the one that
+		// was BUILT — a report is re-formed when the person says Compose.
+		//
+		// ⭐ ADDRESSED BY THE BINDING'S LEAF — the composer's metaID for a report. The composer itself
+		// comes off the base model, so nothing is cast anywhere.
+		ibDialogComposerSettings::ShowRestoreSettings(dynamic_cast<wxWindow*>(GetInnerWx()),
+			model->GetModelComposer(), ibSettingsCategory::Composer, SettingsObjectKey(), GetMetaData());
+		break;
+	case ibSpreadsheetModelCommand_SaveSettings:
+		// …and the opposite act: where to put what is in force.
+		ibDialogComposerSettings::ShowSavedSettings(dynamic_cast<wxWindow*>(GetInnerWx()),
+			model->GetModelComposer(), ibSettingsCategory::Composer, SettingsObjectKey(), GetMetaData());
 		break;
 	default:
 		// ⭐ ANYTHING ELSE IS THE MODEL'S OWN COMMAND — the id came out of its store, so it goes
