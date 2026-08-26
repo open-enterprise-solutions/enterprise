@@ -595,6 +595,30 @@ void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 		// fight it. Drop it before either branch runs.
 		m_pagedRestoreFocusOffset = -1;
 	}
+
+	// ⭐⭐ WHAT `ScrollTo` TAKES IS A ROW OF THE SCROLLING AREA, AND FROZEN ROWS ARE NOT IN IT.
+	//
+	// In Hierarchical view the breadcrumb rows are FROZEN — `m_countFrozenHierarchicalRows` is set
+	// to the chain's depth, and they are painted by their own window above the scrolling one. The
+	// four branches below all position by ABSOLUTE row (`crumbCount + …`), which was right while
+	// the crumbs scrolled with everything else and became wrong the day they were frozen: the
+	// scroll then lands `frozen` rows further down than asked.
+	//
+	// Measured, not guessed (2026-08-26, and the same lesson as the backfill jump of 08-15 — when
+	// every layer reads correctly, the numbers decide):
+	//     crumbs=1 frozen=1 backfilled=0 → ScrollTo(1) → firstVis went 1 → 2
+	//     crumbs=0 frozen=0 backfilled=0 → ScrollTo(0) → firstVis stayed 0
+	// i.e. one row of drift per level of depth, on every refresh, which is what "it jumps about"
+	// looks like inside a folder.
+	//
+	// Stated ONCE, here, rather than corrected in each branch: every one of them means "put THIS
+	// row at the top", and this is the translation from the row they name to the number the scroll
+	// speaks.
+	const int frozenRows = wxMax(0, m_countFrozenHierarchicalRows);
+	const auto scrollToRow = [this, frozenRows](int absoluteRow) {
+		ScrollTo(wxMax(0, absoluteRow - frozenRows), -1);
+	};
+
 	// ALREADY CENTRED — the rows above the cursor came back with the page
 	// (m_backfill), so the row is sitting mid-viewport in this very frame. Pulling
 	// a backward portion on top of that would prepend rows a second time and slide
@@ -610,7 +634,7 @@ void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 		const int viewport   = GetCountPerPage();
 		const int above      = static_cast<int>(req.m_backfilled);
 		const int top        = crumbCount + wxMax(0, above - (viewport > 1 ? viewport / 2 : 0));
-		ScrollTo(top, -1);
+		scrollToRow(top);
 	}
 	else if (restoreFromSelection && m_pagedHasMoreBwd) {
 		// Reset scroll-Y to items[0]=focus position BEFORE backward
@@ -626,7 +650,7 @@ void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 		// (= focus row after prepend) and centres the viewport on
 		// focus, which is the "anchor-in-middle" UX intent.
 		const int crumbCount = static_cast<int>(m_topParentChain.GetCount());
-				ScrollTo(crumbCount, -1);
+				scrollToRow(crumbCount);
 				PagedFetchBackward(batch);
 	}
 	else if (!restoreFromSelection && restore.IsOk()) {
@@ -663,7 +687,7 @@ void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 		// the same read reports; it was simply not carried over here when the backfill
 		// was added, and the comment kept describing the world before it.
 		const int crumbCount = static_cast<int>(m_topParentChain.GetCount());
-				ScrollTo(crumbCount + static_cast<int>(req.m_backfilled), -1);
+				scrollToRow(crumbCount + static_cast<int>(req.m_backfilled));
 		if (m_pagedHasMoreBwd) {
 						PagedFetchBackward(batch);
 		}
@@ -689,7 +713,7 @@ void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 		// re-ordered, or past its end. That is the jump. Cold open reaches here
 		// too and is already at zero, so this costs it nothing.
 		const int crumbCount = static_cast<int>(m_topParentChain.GetCount());
-		ScrollTo(crumbCount, -1);
+		scrollToRow(crumbCount);
 	}
 
 	// THE BLIND STRETCH ENDS HERE. The tree stands, the focus is placed, the
