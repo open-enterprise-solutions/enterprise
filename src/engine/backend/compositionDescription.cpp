@@ -574,6 +574,7 @@ bool ibCompositionDescriptionMemory::ReadNode(const ibDataNode& node, ibComposit
 
 	ibParameterDescriptionMemory::ReadNode(node, composition.m_parameters);
 	ibResourceDescriptionMemory::ReadNode(node, composition.m_resources);
+	ibSelectDescriptionMemory::ReadNode(node, composition.m_selects);
 
 	// WHAT THE COMPOSITION SHOWS — the bottom of the pile every output and level adds to. Absent from
 	// a record written before 2026-08-24, and the helper clears before it reads, so such a record
@@ -597,6 +598,7 @@ bool ibCompositionDescriptionMemory::WriteNode(ibDataNode& node, const ibComposi
 
 	ibParameterDescriptionMemory::WriteNode(node, composition.m_parameters, /*full*/true);
 	ibResourceDescriptionMemory::WriteNode(node, composition.m_resources);
+	ibSelectDescriptionMemory::WriteNode(node, composition.m_selects);
 
 	// …AND IT IS WRITTEN, which is the whole point of moving it here. It lived in the RUNNING composer
 	// (`ibDataComposer::m_commonSelected`) with no road to the file at all, so a person who chose what
@@ -625,6 +627,24 @@ const wxString  kParamType       = wxT("Type");
 constexpr ibClassID g_resourceNodeClsid = make_clsid("CompositionResource", ibClassKind_None);
 const wxString  kResourceFunc = wxT("Func");
 const wxString  kResourcePath = wxT("Path");
+const wxString  kResourceAlias = wxT("Alias");
+
+// THE PACKAGES — a node per select somebody has said something about, each holding its own field
+// entries. The fields themselves are not stored: they are whatever the select projects, so a list
+// of them here would be a copy that goes stale the moment the text is edited.
+//
+// ⚠ ITS OWN CLSID, not the one the plain field LISTS use (g_fieldNodeClsid, one file up): those
+// nodes carry a path and nothing else, and a reader walking children by class must not meet two
+// different records answering to one name.
+constexpr ibClassID g_selectNodeClsid    = make_clsid("CompositionSelect", ibClassKind_None);
+const wxString  kSelectId   = wxT("Id");
+const wxString  kSelectName = wxT("Name");
+
+constexpr ibClassID g_fieldInfoNodeClsid = make_clsid("CompositionFieldInfo", ibClassKind_None);
+const wxString  kFieldInfoPath     = wxT("Path");
+const wxString  kFieldInfoName     = wxT("Name");
+const wxString  kFieldInfoTitle    = wxT("Title");
+const wxString  kFieldInfoUseTitle = wxT("UseTitle");
 } // namespace
 
 bool ibParameterDescriptionMemory::ReadNode(const ibDataNode& node,
@@ -673,6 +693,64 @@ bool ibParameterDescriptionMemory::WriteNode(ibDataNode& node,
 	return true;
 }
 
+// ⭐ A NAME READ OUT LOUD — see the header. The rule is the one a person applies without thinking:
+// a capital starts a word, unless it stands INSIDE a run of capitals (`IDNumber` → "ID Number", not
+// "I D Number" — the run ends where a lower-case letter follows).
+//
+// A name already written for a reader — one that holds a space — comes back untouched, which is
+// what makes this safe to apply everywhere rather than only where it was noticed to help.
+wxString ibTitleFromName(const wxString& name)
+{
+	if (name.IsEmpty() || name.Find(wxT(' ')) != wxNOT_FOUND)
+		return name;
+
+	wxString title;
+	title.reserve(name.length() + 4);
+	for (size_t i = 0; i < name.length(); ++i) {
+		const wxUniChar ch   = name[i];
+		const wxUniChar prev = i > 0 ? name[i - 1] : wxUniChar(0);
+		const wxUniChar next = i + 1 < name.length() ? name[i + 1] : wxUniChar(0);
+		const bool startsWord = i > 0 && wxIsupper(ch)
+			&& (!wxIsupper(prev) || (next != 0 && wxIslower(next)));
+		if (startsWord)
+			title += wxT(' ');
+		title += ch;
+	}
+	return title;
+}
+
+wxString ibNameFromPath(const wxString& path)
+{
+	const int dot = path.Find(wxT('.'), /*fromEnd*/true);
+	return dot == wxNOT_FOUND ? path : path.Mid(dot + 1);
+}
+
+const ibSelectDescription* ibSelectOfPath(const std::vector<ibSelectDescription>& selects, const wxString& path)
+{
+	const int dot = path.Find(wxT('.'), /*fromEnd*/true);
+	if (dot != wxNOT_FOUND) {
+		// THE QUALIFIER — matched by IDENTITY first and by name second (ibSelectDescription::Matches).
+		// Today every stored path carries a name, because a path is the text that goes into the
+		// query; asked this way, the day a path carries an id instead, nothing here changes.
+		const wxString qualifier = path.Left(dot);
+		for (const ibSelectDescription& select : selects)
+			if (select.Matches(qualifier))
+				return &select;
+	}
+	// UNQUALIFIED CAN ONLY MEAN THE ONE THERE IS — which is precisely why a second select makes the
+	// name compulsory: with two of them an unqualified path names nothing in particular.
+	return selects.size() == 1 ? &selects.front() : nullptr;
+}
+
+wxString ibTitleForPath(const std::vector<ibSelectDescription>& selects, const wxString& path)
+{
+	const wxString leaf = ibNameFromPath(path);
+	if (const ibSelectDescription* select = ibSelectOfPath(selects, path))
+		if (const ibFieldDescription* field = select->Find(leaf))
+			return field->TitleInForce();
+	return ibTitleFromName(leaf);
+}
+
 // ===========================================================================
 //  Resources — the aggregates the levels fold
 // ===========================================================================
@@ -685,7 +763,14 @@ bool ibResourceDescriptionMemory::ReadNode(const ibDataNode& node, std::vector<i
 		const wxString path = child.GetValue<wxString>(kResourcePath);
 		if (path.IsEmpty())
 			continue;
-		resources.push_back({ child.GetValue<wxString>(kResourceFunc), path });
+		// The alias is OPTIONAL and absence reads back as absence — a file written before resources
+		// could be named holds no such key and means "name it after the argument", which is what an
+		// empty alias says.
+		ibResourceDescription resource;
+		resource.m_func  = child.GetValue<wxString>(kResourceFunc);
+		resource.m_path  = path;
+		resource.m_alias = child.GetValue<wxString>(kResourceAlias);
+		resources.push_back(std::move(resource));
 	}
 	return true;
 }
@@ -698,6 +783,100 @@ bool ibResourceDescriptionMemory::WriteNode(ibDataNode& node, const std::vector<
 		ibDataNode& sub = node.AddChild(g_resourceNodeClsid, static_cast<ibMetaID>(i));
 		sub.SetValue<wxString>(kResourceFunc, resources[i].m_func);   // empty = the path IS the expression
 		sub.SetValue<wxString>(kResourcePath, resources[i].m_path);
+		if (!resources[i].m_alias.IsEmpty())
+			sub.SetValue<wxString>(kResourceAlias, resources[i].m_alias);
+	}
+	return true;
+}
+
+// ===========================================================================
+//  Fields — what each of them is called
+// ===========================================================================
+namespace {
+
+// The field entries of ONE select — read and written under its own node, which is what keeps two
+// selects' identically-named fields apart.
+void ReadSelectFields(const ibDataNode& node, std::vector<ibFieldDescription>& fields)
+{
+	fields.clear();
+	for (const ibDataNode& child : node.Children()) {
+		if (child.GetClsid() != g_fieldInfoNodeClsid)
+			continue;
+		const wxString path = child.GetValue<wxString>(kFieldInfoPath);
+		if (path.IsEmpty())
+			continue;   // an entry about no field is not an entry
+		ibFieldDescription field;
+		field.m_path     = path;
+		field.m_name     = child.GetValue<wxString>(kFieldInfoName);
+		field.m_useTitle = child.GetValue<bool>(kFieldInfoUseTitle);
+		field.m_title    = child.GetValue<wxString>(kFieldInfoTitle);
+		fields.push_back(std::move(field));
+	}
+}
+
+// DOES THIS FIELD SAY ANYTHING BEYOND ITS OWN NAME? A title nobody took over and a name that is the
+// path's own leaf are both "nothing was said" — and writing them would freeze a caption that is
+// supposed to keep following the name.
+bool SaysAnything(const ibFieldDescription& field)
+{
+	return !field.m_path.IsEmpty() && (field.m_useTitle || !field.m_name.IsEmpty());
+}
+
+bool SaysAnything(const std::vector<ibFieldDescription>& fields)
+{
+	for (const ibFieldDescription& field : fields)
+		if (SaysAnything(field))
+			return true;
+	return false;
+}
+
+void WriteSelectFields(ibDataNode& node, const std::vector<ibFieldDescription>& fields)
+{
+	for (size_t i = 0; i < fields.size(); ++i) {
+		if (!SaysAnything(fields[i]))
+			continue;
+		ibDataNode& sub = node.AddChild(g_fieldInfoNodeClsid, static_cast<ibMetaID>(i));
+		sub.SetValue<wxString>(kFieldInfoPath, fields[i].m_path);
+		if (!fields[i].m_name.IsEmpty())
+			sub.SetValue<wxString>(kFieldInfoName, fields[i].m_name);
+		if (fields[i].m_useTitle) {
+			sub.SetValue<bool>(kFieldInfoUseTitle, true);
+			sub.SetValue<wxString>(kFieldInfoTitle, fields[i].m_title);
+		}
+	}
+}
+
+} // namespace
+
+bool ibSelectDescriptionMemory::ReadNode(const ibDataNode& node, std::vector<ibSelectDescription>& selects)
+{
+	selects.clear();
+	for (const ibDataNode& child : node.Children()) {
+		if (child.GetClsid() != g_selectNodeClsid)
+			continue;
+		ibSelectDescription select;
+		select.m_id   = child.GetValue<wxString>(kSelectId);
+		select.m_name = child.GetValue<wxString>(kSelectName);
+		ReadSelectFields(child, select.m_fields);
+		selects.push_back(std::move(select));
+	}
+	return true;
+}
+
+bool ibSelectDescriptionMemory::WriteNode(ibDataNode& node, const std::vector<ibSelectDescription>& selects)
+{
+	for (size_t i = 0; i < selects.size(); ++i) {
+		// ⚠ A SELECT THAT SAID NOTHING IS NOT WRITTEN — it is not a fact about the report, it is the
+		// absence of one, and the selects themselves live in the query text. What IS written stays
+		// written: an id, once minted, is what every path refers to.
+		if (selects[i].m_name.IsEmpty() && !SaysAnything(selects[i].m_fields))
+			continue;
+		ibDataNode& sub = node.AddChild(g_selectNodeClsid, static_cast<ibMetaID>(i));
+		if (!selects[i].m_id.IsEmpty())
+			sub.SetValue<wxString>(kSelectId, selects[i].m_id);
+		if (!selects[i].m_name.IsEmpty())
+			sub.SetValue<wxString>(kSelectName, selects[i].m_name);
+		WriteSelectFields(sub, selects[i].m_fields);
 	}
 	return true;
 }

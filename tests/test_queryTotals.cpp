@@ -614,3 +614,152 @@ TEST(QueryTotals, PeriodsBoundsPadOutwardsAndNeverFilter)
 	EXPECT_EQ(MonthOf(root.m_children[3]->m_values.at(PERIOD)), 6);
 	EXPECT_TRUE(NumEq(root.m_values.at(AMOUNT), 9));             // padding adds rows, never figures
 }
+
+// ===========================================================================
+//  A CROSS-TABLE — one fold, and every heading carries its own column branch
+// ===========================================================================
+
+// ⭐⭐ THE CELLS HANG UNDER EVERY ROW HEADING, NOT ONLY UNDER THE DEEPEST ONE.
+//
+// 🛑 They used to be the TAIL of one chain — rows, then columns — so only the innermost row heading
+// ever stood over them. A table with two row groupings printed its figures against the inner
+// heading and left the outer one blank (Max, 2026-08-26: "if one more grouping appears, it shows no
+// totals above"). An outer heading's cells are a fold over a SUBSET of the keys — its own prefix and
+// the columns, skipping what is between — and a subset is not a prefix of the nesting order.
+//
+// …AND THE ROOT IS A HEADING TOO, which is what makes its cells the COLUMN TOTALS. That is the
+// second fold this replaced: the same figures, read once.
+//
+//   region/store/product: North/S1/Apple 10 · North/S1/Pear 3 · North/S2/Apple 5 · South/S1/Apple 7
+TEST(QueryTotals, CrossTableHangsTheColumnsUnderEveryRowHeading)
+{
+	const ibMetaID REGION = 1, STORE = 2, PRODUCT = 3, AMOUNT = 4;
+
+	ibQueryRamTable detail;
+	detail.AddColumn(REGION,  wxT("region"),  ibTypeDescription());
+	detail.AddColumn(STORE,   wxT("store"),   ibTypeDescription());
+	detail.AddColumn(PRODUCT, wxT("product"), ibTypeDescription());
+	detail.AddColumn(AMOUNT,  wxT("amount"),  ibTypeDescription());
+	auto add = [&](const wxString& r, const wxString& s, const wxString& p, long a) {
+		const long row = detail.AppendRow();
+		detail.SetCell(row, REGION,  ibValue(r));
+		detail.SetCell(row, STORE,   ibValue(s));
+		detail.SetCell(row, PRODUCT, ibValue(p));
+		detail.SetCell(row, AMOUNT,  ibValue(ibNumber(a)));
+	};
+	add(wxT("North"), wxT("S1"), wxT("Apple"), 10);
+	add(wxT("North"), wxT("S1"), wxT("Pear"),   3);
+	add(wxT("North"), wxT("S2"), wxT("Apple"),  5);
+	add(wxT("South"), wxT("S1"), wxT("Apple"),  7);
+
+	TestCol region(wxT("region"), REGION), store(wxT("store"), STORE),
+	        product(wxT("product"), PRODUCT), amount(wxT("amount"), AMOUNT);
+
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+
+	// TWO ROW LEVELS AND ONE COLUMN LEVEL — the axis is stated ON the level, which is the only thing
+	// that tells this fold from an ordinary three-level grouping.
+	std::vector<ibTotalLevel> levels;
+	levels.push_back(ibTotalLevel::One(&region,  ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(&store,   ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(&product, ibDimensionKind::Elements));
+	levels.back().m_axis = ibTotalsAxis::Columns;
+
+	// THE STREAMING ROAD — the one every report travels (a cursor, one pass, no snapshot).
+	ibRamTableCursor cursor(detail);
+	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(cursor, levels, { sum }, nullptr, nullptr);
+
+	const ibSelectorTree::Node& root = tree.Root();
+	EXPECT_TRUE(NumEq(root.m_values.at(AMOUNT), 25));
+
+	// THE CELLS COME FIRST, the sub-headings after: a pre-order walk is the only thing that says
+	// whose cells these are, so the order is part of the answer.
+	ASSERT_EQ(root.m_children.size(), 4u);                       // Apple, Pear, North, South
+	EXPECT_EQ(root.m_children[0]->m_values.at(PRODUCT).GetString().ToStdString(), "Apple");
+	EXPECT_TRUE(NumEq(root.m_children[0]->m_values.at(AMOUNT), 22));   // the COLUMN TOTAL
+	EXPECT_EQ(root.m_children[1]->m_values.at(PRODUCT).GetString().ToStdString(), "Pear");
+	EXPECT_TRUE(NumEq(root.m_children[1]->m_values.at(AMOUNT), 3));
+	// A column key is numbered by its LEVEL, wherever it hangs — that is what tells it from a row.
+	EXPECT_EQ(root.m_children[0]->m_level, 3);
+
+	const ibSelectorTree::Node& north = *root.m_children[2];
+	EXPECT_EQ(north.m_values.at(REGION).GetString().ToStdString(), "North");
+	EXPECT_EQ(north.m_level, 1);
+	EXPECT_TRUE(NumEq(north.m_values.at(AMOUNT), 18));
+
+	// ⭐ THE OUTER HEADING'S OWN CELLS — the thing that was missing. `North x Apple` skips the store
+	// level entirely, which is exactly why no single chain could produce it.
+	ASSERT_EQ(north.m_children.size(), 4u);                      // Apple, Pear, S1, S2
+	EXPECT_EQ(north.m_children[0]->m_values.at(PRODUCT).GetString().ToStdString(), "Apple");
+	EXPECT_TRUE(NumEq(north.m_children[0]->m_values.at(AMOUNT), 15));   // 10 + 5, across both stores
+	EXPECT_EQ(north.m_children[1]->m_values.at(PRODUCT).GetString().ToStdString(), "Pear");
+	EXPECT_TRUE(NumEq(north.m_children[1]->m_values.at(AMOUNT), 3));
+
+	// …and the inner heading keeps the cells it always had.
+	const ibSelectorTree::Node& s1 = *north.m_children[2];
+	EXPECT_EQ(s1.m_values.at(STORE).GetString().ToStdString(), "S1");
+	EXPECT_EQ(s1.m_level, 2);
+	ASSERT_EQ(s1.m_children.size(), 2u);
+	EXPECT_TRUE(NumEq(s1.m_children[0]->m_values.at(AMOUNT), 10));
+	EXPECT_TRUE(NumEq(s1.m_children[1]->m_values.at(AMOUNT), 3));
+
+	const ibSelectorTree::Node& s2 = *north.m_children[3];
+	ASSERT_EQ(s2.m_children.size(), 1u);                         // S2 sold no pears — no cell, not a zero
+	EXPECT_TRUE(NumEq(s2.m_children[0]->m_values.at(AMOUNT), 5));
+}
+
+// ⭐ A DETAIL RECORD IN A TABLE IS A ROW OF IT — it hangs under the last ROW heading (not inside a
+// cell) and carries a cell of its own. The level stays LAST in the config; WHERE it hangs is the
+// fold's answer, and its number is past the last dimension so no column key shares it.
+TEST(QueryTotals, CrossTableDetailRecordsHangUnderTheRowHeadingWithTheirOwnCells)
+{
+	const ibMetaID REGION = 1, PRODUCT = 2, AMOUNT = 3;
+
+	ibQueryRamTable detail;
+	detail.AddColumn(REGION,  wxT("region"),  ibTypeDescription());
+	detail.AddColumn(PRODUCT, wxT("product"), ibTypeDescription());
+	detail.AddColumn(AMOUNT,  wxT("amount"),  ibTypeDescription());
+	auto add = [&](const wxString& r, const wxString& p, long a) {
+		const long row = detail.AppendRow();
+		detail.SetCell(row, REGION,  ibValue(r));
+		detail.SetCell(row, PRODUCT, ibValue(p));
+		detail.SetCell(row, AMOUNT,  ibValue(ibNumber(a)));
+	};
+	add(wxT("North"), wxT("Apple"), 10);
+	add(wxT("North"), wxT("Pear"),   3);
+
+	TestCol region(wxT("region"), REGION), product(wxT("product"), PRODUCT), amount(wxT("amount"), AMOUNT);
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+
+	std::vector<ibTotalLevel> levels;
+	levels.push_back(ibTotalLevel::One(&region,  ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(&product, ibDimensionKind::Elements));
+	levels.back().m_axis = ibTotalsAxis::Columns;
+	levels.push_back(ibTotalLevel{});   // …and the rows themselves — LAST in the config, always
+
+	ibRamTableCursor cursor(detail);
+	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(cursor, levels, { sum }, nullptr, nullptr);
+
+	const ibSelectorTree::Node& north = *tree.Root().m_children[2];   // after the root's two cells
+	EXPECT_EQ(north.m_values.at(REGION).GetString().ToStdString(), "North");
+
+	// Apple, Pear (its cells), then the two records — cells first, so a reader knows whose they are.
+	ASSERT_EQ(north.m_children.size(), 4u);
+	EXPECT_EQ(north.m_children[0]->m_kind, ibSelectorNodeKind::Group);
+	EXPECT_EQ(north.m_children[1]->m_kind, ibSelectorNodeKind::Group);
+
+	const ibSelectorTree::Node& first = *north.m_children[2];
+	EXPECT_EQ(first.m_kind, ibSelectorNodeKind::Detail);
+	EXPECT_EQ(first.m_level, 3);                                  // past the last dimension
+	EXPECT_TRUE(NumEq(first.m_values.at(AMOUNT), 10));            // its OWN value, not a subtotal
+	ASSERT_EQ(first.m_children.size(), 1u);                       // …and one cell: its own column
+	EXPECT_EQ(first.m_children[0]->m_values.at(PRODUCT).GetString().ToStdString(), "Apple");
+	EXPECT_EQ(first.m_children[0]->m_level, 2);
+
+	const ibSelectorTree::Node& second = *north.m_children[3];
+	EXPECT_EQ(second.m_kind, ibSelectorNodeKind::Detail);
+	ASSERT_EQ(second.m_children.size(), 1u);
+	EXPECT_EQ(second.m_children[0]->m_values.at(PRODUCT).GetString().ToStdString(), "Pear");
+}

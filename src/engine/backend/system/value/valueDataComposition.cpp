@@ -686,6 +686,12 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 		for (const ibResourceDescription& resource : desc.m_resources)
 			composer.Resource(resource.m_func, resource.m_path);
 
+		// ⭐ …AND WHAT THE QUERY'S SELECTS SAY ABOUT THEIR FIELDS, from the same place and for the
+		// same reason. A title belongs to a FIELD, a field belongs to a SELECT, and everything that
+		// names one — a resource, a level, a printed column — reads it through the path
+		// (ibTitleForPath). Empty is the ordinary state: only what somebody said is carried.
+		composer.Selects() = desc.m_selects;
+
 		// ⭐ AND WHAT THE WHOLE COMPOSITION SHOWS, from the same place and for the same reason — the
 		// bottom of the pile every output and node adds to (SelectedFor).
 		//

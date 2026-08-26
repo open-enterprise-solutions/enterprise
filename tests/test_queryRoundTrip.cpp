@@ -363,7 +363,15 @@ public:
 			s->m_totalsOverall = Chance(2);
 			const unsigned int aggs = Below(3);
 			for (unsigned int i = 0; i < aggs; ++i)
-				s->m_totalsAggregates.push_back(SimpleAggregate());
+			{
+				ibQueryTotalAggregate resource;
+				resource.m_expr = SimpleAggregate();
+				// …AND SOMETIMES A NAME. `TOTALS SUM(x) AS Qty` is exactly the kind of word a round
+				// trip drops: the figure still comes back, under a name nobody asked for.
+				if (Chance(3))
+					resource.m_alias = wxString::Format(wxT("Res%u"), i);
+				s->m_totalsAggregates.push_back(std::move(resource));
+			}
 			const unsigned int dims = s->m_totalsOverall ? Below(3) : 1 + Below(2);
 			for (unsigned int d = 0; d < dims; ++d) {
 				ibQueryTotalDim dim;

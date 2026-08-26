@@ -2761,27 +2761,80 @@ public:
 	                const std::vector<ibQueryRamColumn>& rowColumns)
 		: m_levels(levels), m_aggs(aggs), m_rowColumns(rowColumns)
 	{
-		m_pool.push_back(FoldNode{ &tree.Root(), std::vector<ibAggAcc>(aggs.size()), {} });   // the root IS the grand total
+		// WHERE THE PAGE STOPS AND THE PAGE-WIDTH STARTS — asked of the levels, which say which way
+		// they read. Everything from here on is a column key of a cross-table.
+		// ⚠ THE DETAIL LEVEL COUNTS HERE TOO. A column axis made of NOTHING BUT records — "the
+		// resources laid out across the page, one column per row" — starts at that level, and
+		// skipping it because it has no fields would leave the axis unfound.
+		m_across = m_levels.size();
+		for (std::size_t li = 0; li < m_levels.size(); ++li)
+			if (m_levels[li].m_axis == ibTotalsAxis::Columns) { m_across = li; break; }
+		// THE DETAIL LEVEL IS LAST IN THE CONFIG, and it says which way it reads like every other
+		// level: down the page it is a LINE of the report, across it each record is a COLUMN of its
+		// own. Asked once, here, rather than by every loop below re-testing "is this the empty one".
+		m_details = !m_levels.empty() && m_levels.back().m_fields.empty();
+		m_detailsAcross = m_details && m_levels.back().m_axis == ibTotalsAxis::Columns;
+		m_pool.push_back(FoldNode{ &tree.Root(), std::vector<ibAggAcc>(aggs.size()), {}, {}, 0 });   // the root IS the grand total
 	}
 
 	void Feed(const ibQueryRow& row)
 	{
 		std::size_t cur = 0;
 		FeedNode(cur, row);                                   // the grand total takes every row
-		for (std::size_t li = 0; li < m_levels.size(); ++li) {
+
+		// ⭐⭐ AND THE COLUMNS HANG UNDER THE GRAND TOTAL TOO — which is what "what does this column
+		// add up to" IS. The root is a heading like any other; the only thing that made its cells
+		// special was that nothing produced them.
+		//
+		// 🛑 THEY USED TO BE A SECOND FOLD — the whole output read again, by its column keys alone,
+		// with a flag telling the driver which pass it was in. The reason given was that the two sets
+		// of subtotals "cannot come out of one tree", and that was true only while the tree was ONE
+		// CHAIN: rows-then-columns has no node standing for "the columns alone". Now every heading
+		// carries its own column branch, and the root is the heading over everything.
+		FeedAcross(cur, row);
+
+		for (std::size_t li = 0; li < m_across; ++li) {
 			const ibTotalLevel& level = m_levels[li];
-			// A LEVEL WITH NO FIELDS IS THE DETAIL RECORDS — grouping by nothing makes no group at
-			// all, so what hangs here is the row itself. Nothing follows it: the rows are the bottom.
-			if (level.m_fields.empty()) {
-				AddDetail(cur, row);
-				return;
-			}
+			if (level.m_fields.empty())
+				break;   // the detail level — handled below, where the row axis ends
 			ibLevelKey key;
 			key.reserve(level.m_fields.size());
 			for (const ibTotalField& field : level.m_fields)
 				key.push_back(LevelKeyValue(field, row));      // one field is the degenerate one-element key
-			cur = Child(cur, std::move(key), level, static_cast<int>(li) + 1);
+			cur = Child(cur, std::move(key), level, static_cast<int>(li) + 1, /*across*/false);
 			FeedNode(cur, row);
+
+			// ⭐⭐ AND THE COLUMNS HANG UNDER EVERY ROW HEADING, not only under the deepest one.
+			//
+			// 🛑 THEY USED TO HANG UNDER THE LAST ROW LEVEL ALONE, because the fold was one chain and
+			// the column keys were simply its tail. So a table with two row groupings printed its
+			// figures against the INNER heading and left the outer one blank (Max, 2026-08-26: "if
+			// one more grouping appears, it shows no totals above"). The cells of an outer heading
+			// are a fold over a SUBSET of the keys — the row prefix and the columns, skipping what
+			// is between — and a subset is not a prefix, so no single chain can carry it.
+			//
+			// It costs a walk down the column axis per row heading the row belongs to, and holds
+			// `headings × column keys` nodes. Memory is still counted in GROUPS, which is the whole
+			// criterion of the reports arc.
+			FeedAcross(cur, row);
+		}
+
+		// ⭐ AND THE ROW ITSELF, under the last ROW heading — not under the last heading of all. In an
+		// ordinary report those are the same node and this reads exactly as it always did; in a table
+		// the columns stand ACROSS the detail row, which is what makes it a line of the table with
+		// cells beside it rather than something hanging inside one cell.
+		//
+		// Its LEVEL is the one past the last dimension — the number it has always had — so a printer
+		// that lays rows out by depth is told nothing new, and no column key shares a number with it.
+		if (m_details && !m_detailsAcross) {
+			const std::size_t leaf = AddDetail(cur, row, static_cast<int>(m_levels.size()));
+			if (leaf != kNoNode) {
+				// ⚠ AND IT IS FED LIKE A HEADING — one row's worth. Without this its accumulators
+				// stay empty and Finish writes a zero into the very total that is supposed to say
+				// what this record contributed.
+				FeedNode(leaf, row);
+				FeedAcross(leaf, row);
+			}
 		}
 	}
 
@@ -2789,6 +2842,16 @@ public:
 	// while it is still being fed, and asking it earlier would be asking a question whose answer is
 	// not in yet. In-place in each aggregate's OWN column, exactly as ApplyAggregates writes them —
 	// so a figure reads as the row value on a leaf and as the subtotal on a heading.
+	// ⭐⭐ …AND A DETAIL ROW IN A TABLE IS FIGURED LIKE ANY OTHER HEADING. In an ordinary report a
+	// record and a measure share ONE column, so the record shows its own value there — `COUNT(Number)`
+	// printing 1 where the document's number belongs is the defect that rule exists for. A TABLE has
+	// a column per measure and a total at the right, and there a record is "a sub-group of one row"
+	// (Max, 2026-08-26): its cells and its row total are FIGURES — COUNT is 1, SUM is the value —
+	// not the row's fields spilled into the totals column.
+	//
+	// The two cases separate themselves and need no flag: a record is only ever POOLED when there is
+	// a column axis (see AddDetail), so this loop reaches exactly the records that are laid out as
+	// headings and never touches the ones that share their column with a measure.
 	void Finish()
 	{
 		for (FoldNode& n : m_pool) {
@@ -2806,11 +2869,46 @@ private:
 	// A node under construction: the tree node it already is, one accumulator per aggregate, and the
 	// children it has opened, by their level key. Pool indices rather than pointers — the pool grows
 	// as the tree does, and an index survives that.
+	//
+	// ⭐ TWO MAPS, because a heading in a table opens children of two kinds and their keys are values
+	// of DIFFERENT fields: "True" as a row key and "True" as a column key are not the same child.
+	// One map would have merged them silently — the worst kind of agreement.
 	struct FoldNode {
 		ibSelectorTree::Node* m_node = nullptr;
 		std::vector<ibAggAcc> m_accs;
 		std::unordered_map<ibLevelKey, std::size_t, ibLevelKeyHash, ibLevelKeyEqual> m_children;
+		std::unordered_map<ibLevelKey, std::size_t, ibLevelKeyHash, ibLevelKeyEqual> m_acrossChildren;
+		std::size_t           m_acrossCount = 0;   // cells written so far — where the next one is inserted
 	};
+
+	static constexpr std::size_t kNoNode = static_cast<std::size_t>(-1);
+
+	// THE CELLS OF ONE HEADING — the column axis walked from the heading down, feeding a node per
+	// level so an upper column level keeps its own subtotal exactly as it always did.
+	void FeedAcross(std::size_t heading, const ibQueryRow& row)
+	{
+		std::size_t cur = heading;
+		for (std::size_t li = m_across; li < m_levels.size(); ++li) {
+			const ibTotalLevel& level = m_levels[li];
+			if (level.m_fields.empty()) {
+				// ⭐ THE RECORDS, ACROSS THE PAGE — each one a column of its own, which is what a
+				// detail level declared on the COLUMN axis asks for. Nothing groups here and nothing
+				// follows: a record is the end of an axis whichever way that axis reads.
+				if (m_detailsAcross) {
+					const std::size_t leaf = AddDetail(cur, row, static_cast<int>(m_levels.size()));
+					if (leaf != kNoNode)
+						FeedNode(leaf, row);
+				}
+				break;
+			}
+			ibLevelKey key;
+			key.reserve(level.m_fields.size());
+			for (const ibTotalField& field : level.m_fields)
+				key.push_back(LevelKeyValue(field, row));
+			cur = Child(cur, std::move(key), level, static_cast<int>(li) + 1, /*across*/ li == m_across);
+			FeedNode(cur, row);
+		}
+	}
 
 	void FeedNode(std::size_t idx, const ibQueryRow& row)
 	{
@@ -2819,14 +2917,19 @@ private:
 			accs[i].Feed(m_aggs[i], row);
 	}
 
-	std::size_t Child(std::size_t parent, ibLevelKey&& key, const ibTotalLevel& level, int childLevel)
+	std::size_t Child(std::size_t parent, ibLevelKey&& key, const ibTotalLevel& level, int childLevel, bool across)
 	{
-		const auto it = m_pool[parent].m_children.find(key);
-		if (it != m_pool[parent].m_children.end())
+		auto& opened = across ? m_pool[parent].m_acrossChildren : m_pool[parent].m_children;
+		const auto it = opened.find(key);
+		if (it != opened.end())
 			return it->second;
 
 		ibSelectorTree::Node* parentNode = m_pool[parent].m_node;
-		ibSelectorTree::Node* child      = parentNode->AddChild(childLevel);
+		// THE CELLS FIRST, THE SUB-HEADINGS AFTER — see Node::InsertChild. A walk is pre-order, and
+		// that order is the only thing that says which heading a cell stands beside.
+		ibSelectorTree::Node* child      = across
+			? parentNode->InsertChild(m_pool[parent].m_acrossCount++, childLevel)
+			: parentNode->AddChild(childLevel);
 		// A SUBGROUP inherits the grouping fields available from the levels above, so a display column
 		// that dot-walks an ancestor dimension resolves in the subgroup header too. Only the KEYS are
 		// there to inherit at this point — the figures are written at the end, by Finish().
@@ -2836,14 +2939,19 @@ private:
 
 		const std::size_t idx = m_pool.size();
 		m_pool.push_back(FoldNode{ child, std::vector<ibAggAcc>(m_aggs.size()), {} });
-		m_pool[parent].m_children.emplace(std::move(key), idx);
+		// ⚠ RE-READ THE POOL ENTRY: the push_back above may have reallocated, and a reference taken
+		// before it points into the old buffer.
+		(across ? m_pool[parent].m_acrossChildren : m_pool[parent].m_children).emplace(std::move(key), idx);
 		return idx;
 	}
 
-	void AddDetail(std::size_t parent, const ibQueryRow& row)
+	// ⭐ A DETAIL ROW IS A NODE LIKE ANY OTHER NOW — it is returned, because a table hangs its cells
+	// under it. It still opens no map of children: what stands across it is opened by FeedAcross,
+	// and nothing groups below a row.
+	std::size_t AddDetail(std::size_t parent, const ibQueryRow& row, int childLevel)
 	{
 		ibSelectorTree::Node* parentNode = m_pool[parent].m_node;
-		ibSelectorTree::Node* leaf       = parentNode->AddChild(parentNode->m_level + 1);
+		ibSelectorTree::Node* leaf       = parentNode->AddChild(childLevel);
 		leaf->m_kind   = ibSelectorNodeKind::Detail;
 		leaf->m_values = parentNode->m_values;                 // the group keys above stay readable on the row
 		for (const ibQueryRamColumn& col : m_rowColumns)
@@ -2860,6 +2968,16 @@ private:
 			one.Feed(m_aggs[i], row);
 			leaf->m_values[AggSlotId(m_aggs, i)] = one.Result(m_aggs[i]);
 		}
+
+		// ⚠ IN THE POOL ONLY WHERE SOMETHING HANGS UNDER IT — a table's cells do, an ordinary
+		// report's rows do not. A pool entry costs an accumulator per aggregate, and a report reads
+		// as many detail rows as the source has: paying that per ROW is exactly the memory the
+		// streaming fold exists to not spend (the arc's criterion is groups, not rows).
+		if (m_across >= m_levels.size())
+			return kNoNode;
+		const std::size_t idx = m_pool.size();
+		m_pool.push_back(FoldNode{ leaf, std::vector<ibAggAcc>(m_aggs.size()), {} });
+		return idx;   // …and from here on it is a heading like any other — see Finish
 	}
 
 	bool RowCarries(const ibBackendQueryColumn* col) const
@@ -2876,6 +2994,9 @@ private:
 	const std::vector<ibDataQueryBuilder::AggregateItem>& m_aggs;
 	const std::vector<ibQueryRamColumn>&                  m_rowColumns;   // what a DETAIL row writes
 	std::vector<FoldNode>                                 m_pool;
+	std::size_t                                           m_across = 0;   // the first level that reads ACROSS
+	bool                                                  m_details = false;        // the last level is the rows
+	bool                                                  m_detailsAcross = false;  // …and it reads across the page
 };
 
 // --- PERIODS: the padding ---------------------------------------------------------------------
@@ -2907,9 +3028,16 @@ void PadPeriodChildren(ibSelectorTree::Node& parent, const ibTotalField& field, 
 	const ibMetaID id = field.m_col->GetColumnId();
 	const ibTotalPeriods& periods = *field.m_periods;
 
+	// ⚠ THE CHILDREN OF THIS LEVEL, and only those. A heading in a CROSS-TABLE stands over children
+	// of two kinds — the sub-headings under it and the cells across it — and a cell knows nothing
+	// about the period this level pads. Taken by their LEVEL, which is the one thing that says
+	// which of them this call is about; without it the first cell answered "not a period level
+	// after all" and the quiet months were silently never filled in.
 	std::map<wxDateTime, ibSelectorTree::Node*> have;   // ordered by the moment itself
+	std::vector<ibSelectorTree::Node*>          others; // …the ones this level does not speak for
 	for (const std::unique_ptr<ibSelectorTree::Node>& child : parent.m_children) {
 		if (child == nullptr) continue;
+		if (child->m_level != childLevel) { others.push_back(child.get()); continue; }
 		const auto it = child->m_values.find(id);
 		if (it == child->m_values.end() || it->second.GetType() != TYPE_DATE) return;   // not a period level after all
 		have[it->second.GetDateTime()] = child.get();
@@ -2955,28 +3083,38 @@ void PadPeriodChildren(ibSelectorTree::Node& parent, const ibTotalField& field, 
 	for (std::unique_ptr<ibSelectorTree::Node>& node : made) { ibSelectorTree::Node* raw = node.get(); owned[raw] = std::move(node); }
 
 	parent.m_children.clear();
-	parent.m_children.reserve(series.size());
+	parent.m_children.reserve(series.size() + others.size());
 	auto take = [&owned, &parent](ibSelectorTree::Node* raw) {
 		const auto it = owned.find(raw);
 		if (it != owned.end() && it->second)          // an empty slot is not a row — see ibSelector::Next
 			parent.m_children.push_back(std::move(it->second));
 	};
+	// ⚠ THE OTHERS KEEP THEIR PLACE AT THE FRONT — a heading's cells are written before its
+	// sub-headings, and a pre-order reader is what that order is for.
+	for (ibSelectorTree::Node* raw : others)
+		take(raw);
 	if (descending) for (auto it = series.rbegin(); it != series.rend(); ++it) take(it->second);
 	else            for (auto it = series.begin();  it != series.end();  ++it) take(it->second);
 	parent.m_hasChildren = !parent.m_children.empty();
 }
 
 // Walk to the nodes whose CHILDREN are the given level, and pad each one's children.
-void PadLevel(ibSelectorTree::Node& node, int depth, int levelIndex, const ibTotalField& field,
+//
+// ⚠ BY LEVEL, NOT BY DEPTH. They were the same number while a fold was one chain; in a CROSS-TABLE
+// they are not — a column key hangs directly under whichever row heading it belongs to, so a node
+// two steps down may be level 3. The node says which level it is, so that is what is asked.
+void PadLevel(ibSelectorTree::Node& node, int levelIndex, const ibTotalField& field,
               const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates)
 {
-	if (depth == levelIndex) {
-		PadPeriodChildren(node, field, depth + 1, aggregates);
-		return;
-	}
+	const int childLevel = levelIndex + 1;
 	for (const std::unique_ptr<ibSelectorTree::Node>& child : node.m_children)
-		if (child != nullptr)
-			PadLevel(*child, depth + 1, levelIndex, field, aggregates);
+		if (child != nullptr && child->m_level == childLevel) {
+			PadPeriodChildren(node, field, childLevel, aggregates);
+			return;   // this node's children ARE the level — nothing deeper here belongs to it
+		}
+	for (const std::unique_ptr<ibSelectorTree::Node>& child : node.m_children)
+		if (child != nullptr && child->m_kind != ibSelectorNodeKind::Detail)
+			PadLevel(*child, levelIndex, field, aggregates);
 }
 
 // A HIERARCHY UNFOLD IS NOT A ONE-PASS FOLD. It arranges the level's VALUES into the target
@@ -3009,7 +3147,7 @@ void ibQueryComposer::PadPeriodLevels(ibSelectorTree& tree, const std::vector<ib
 		// (and one the author can write as two levels). Refused where it is written; ignored here.
 		if (!levels[li].IsSingleField() || !levels[li].m_fields.front().ByPeriods())
 			continue;
-		PadLevel(tree.Root(), 0, static_cast<int>(li), levels[li].m_fields.front(), aggregates);
+		PadLevel(tree.Root(), static_cast<int>(li), levels[li].m_fields.front(), aggregates);
 	}
 }
 
@@ -3237,6 +3375,11 @@ struct DimCtx {
 	const std::vector<ibDataQueryBuilder::AggregateItem>* aggregates;
 	ibDatabaseConnectionHolder*                           holder;
 	const ibBackendQueryable*                             source;
+	// WHERE THE PAGE STOPS AND THE PAGE-WIDTH STARTS — the same seam the streaming fold reads off
+	// the levels (ibStreamingFold). This road is taken when a level unfolds a HIERARCHY, and a
+	// cross-table grouped by a hierarchy is still a cross-table.
+	size_t                                                across = 0;
+	bool                                                  details = false;   // the last level is the rows
 };
 
 // Parent-map (value-key -> parent value-key) for a level field: the target catalog of the reference
@@ -3261,20 +3404,35 @@ ibValueParentMap ParentMapForField(const DimCtx& ctx, const ibBackendQueryColumn
 	return pm;
 }
 
-void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vector<long>& rows, size_t levelIdx);
+// `across` — this call is building the COLUMN branch of a cross-table: the levels past the seam,
+// hung under one row heading. Everything else is the ordinary walk down the page.
+void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vector<long>& rows, size_t levelIdx,
+                  bool across = false);
+
+// ⭐ THE CELLS OF ONE HEADING — the column axis, folded under the heading that is being built. Called
+// for EVERY row heading rather than only the deepest, because an outer heading's cells are a fold
+// over a SUBSET of the keys (its own prefix and the columns), and a subset is not a prefix of the
+// nesting order — no single chain can carry it. Same rule, same reason as ibStreamingFold::FeedAcross.
+void FoldAcross(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vector<long>& rows)
+{
+	if (ctx.across < ctx.levels->size())
+		FoldDimLevel(ctx, node, rows, ctx.across, /*across*/true);
+}
 
 // Attach one value of a Hierarchy level under `parent`: sub-values (hierarchy depth) + the NEXT level
 // inside this value's own rows (Hierarchy only). Returns the value-subtree's rows (for the subtotal).
 std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent, size_t levelIdx,
 	const ibValue& valueKey,
 	const ibRowsByValue& byVal,
-	const ibRefChildren& childrenOf, ibValueSeen& visited)
+	const ibRefChildren& childrenOf, ibValueSeen& visited, bool across = false)
 {
 	if (IsNoKey(valueKey) || visited[valueKey]) return {};
 	visited[valueKey] = 1;
 	const ibTotalLevel& level = (*ctx.levels)[levelIdx];
 
-	ibSelectorTree::Node* node = parent->AddChild(parent->m_level + 1);
+	// ⚠ THE LEVEL'S NUMBER, not the depth under the parent: a hierarchy nests VALUES inside one
+	// level, so every folder and every item here belongs to the same level and must say so.
+	ibSelectorTree::Node* node = parent->AddChild(static_cast<int>(levelIdx) + 1);
 	node->m_values = parent->m_values;   // inherit the grouping fields available from the levels above (same rule as the Elements branch)
 	// A hierarchy level is single-field by construction (FoldDimLevel routes it here only then), so
 	// its key is the head field's value.
@@ -3288,10 +3446,20 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 	const auto cit = childrenOf.find(valueKey);          // sub-values (deeper in the catalog hierarchy)
 	if (cit != childrenOf.end())
 		for (const ibValue& childKey : cit->second) {
-			std::vector<long> kr = AttachDimValue(ctx, node, levelIdx, childKey, byVal, childrenOf, visited);
+			std::vector<long> kr = AttachDimValue(ctx, node, levelIdx, childKey, byVal, childrenOf, visited, across);
 			subtree.insert(subtree.end(), kr.begin(), kr.end());
 		}
-	FoldDimLevel(ctx, node, ownRows, levelIdx + 1);      // next level inside this value's own rows
+	FoldDimLevel(ctx, node, ownRows, levelIdx + 1, across);   // next level inside this value's own rows
+
+	// ⭐ AND THE CELLS OF THIS HEADING — over its WHOLE subtree, which is what its own figures are
+	// computed from (ApplyAggregates below reads the same rows). A folder of a hierarchy stands for
+	// everything under it, so its row of cells has to say the same thing its total does.
+	//
+	// Built last and inserted FIRST (FoldDimLevel's across pass inserts rather than appends): the
+	// subtree is not known until the children have been walked, while a pre-order reader needs the
+	// cells before the sub-headings to tell whose they are.
+	if (!across)
+		FoldAcross(ctx, node, subtree);
 	node->m_hasChildren = !node->m_children.empty();
 	ApplyAggregates(*node, *ctx.snapshot, subtree, *ctx.aggregates);
 	return subtree;
@@ -3299,9 +3467,20 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 
 // Fold `rows` at `levelIdx` under `node`: group by the level field, then either flat groups (Elements)
 // or the field's reference hierarchy (Hierarchy/HierarchyOnly). Recurses the next level inside.
-void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vector<long>& rows, size_t levelIdx)
+void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vector<long>& rows, size_t levelIdx,
+                  bool across)
 {
 	if (levelIdx >= ctx.levels->size()) return;          // leaf level reached
+
+	// ⭐ WHERE THE ROWS END. Down the page the ladder stops at the seam — everything past it reads
+	// ACROSS, and those levels are walked by FoldAcross under each heading, not by falling into them
+	// here. What still hangs below a heading is the DETAIL level, which is last in the config and
+	// reads down the page like every other row level (ibDataQueryBuilder::TotalsDetails).
+	if (!across && levelIdx >= ctx.across) {
+		if (!ctx.details)
+			return;
+		levelIdx = ctx.levels->size() - 1;
+	}
 	const ibTotalLevel& level = (*ctx.levels)[levelIdx];
 
 	// ⭐⭐ A LEVEL WITH NO FIELDS IS THE DETAIL RECORDS. Grouping by nothing does not make one group
@@ -3316,8 +3495,13 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 	// row holds every row, which is what printing every row means. The server-side fold is refused
 	// upstream when details are asked for, since ROLLUP returns no rows to hang.)
 	if (level.m_fields.empty()) {
+		if (across)
+			return;   // nothing groups here, and there are no detail records across the page
 		for (long r : rows) {
-			ibSelectorTree::Node* leaf = node->AddChild(node->m_level + 1);
+			// ⚠ NUMBERED PAST THE LAST DIMENSION, not "one deeper than the heading it hangs under".
+			// In a table it hangs under the last ROW heading while the column keys are numbered on
+			// past it, and two nodes sharing a number is exactly what a printer cannot untangle.
+			ibSelectorTree::Node* leaf = node->AddChild(static_cast<int>(ctx.levels->size()));
 			leaf->m_kind = ibSelectorNodeKind::Detail;
 			leaf->m_values = node->m_values;   // the group keys above stay readable on the row
 			for (const ibQueryRamColumn& col : ctx.snapshot->Columns())
@@ -3346,12 +3530,24 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 						return true;
 				return false;
 			};
-			std::vector<ibDataQueryBuilder::AggregateItem> ownless;
+			// ⭐⭐ IN A TABLE A RECORD IS FIGURED LIKE A HEADING — "a sub-group of one row" (Max,
+			// 2026-08-26): every measure is rolled over its single row, so a cell and the row total
+			// hold FIGURES (COUNT is 1, SUM is the value). The rule above — a record shows its own
+			// value — belongs to the ordinary report, where a record and a measure SHARE one column;
+			// a table gives each measure a column of its own and there is nothing to share.
+			//
+			// Told apart by the same fact everywhere else uses: is there a column axis at all.
+			const bool inATable = ctx.across < ctx.levels->size();
+			std::vector<ibDataQueryBuilder::AggregateItem> rolled;
 			for (const ibDataQueryBuilder::AggregateItem& a : *ctx.aggregates)
-				if (!snapshotCarries(a.m_col))
-					ownless.push_back(a);
-			if (!ownless.empty())
-				ApplyAggregates(*leaf, *ctx.snapshot, std::vector<long>{ r }, ownless);
+				if (inATable || !snapshotCarries(a.m_col))
+					rolled.push_back(a);
+			if (!rolled.empty())
+				ApplyAggregates(*leaf, *ctx.snapshot, std::vector<long>{ r }, rolled);
+
+			// …AND ITS CELLS — its own column groups, exactly as a heading has them.
+			FoldAcross(ctx, leaf, std::vector<long>{ r });
+			leaf->m_hasChildren = !leaf->m_children.empty();
 		}
 		return;
 	}
@@ -3383,7 +3579,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 		const auto rit = childrenOf.find(ibValue());
 		if (rit != childrenOf.end())
 			for (const ibValue& rootKey : rit->second)
-				AttachDimValue(ctx, node, levelIdx, rootKey, byVal, childrenOf, visited);
+				AttachDimValue(ctx, node, levelIdx, rootKey, byVal, childrenOf, visited, across);
 		return;
 	}
 
@@ -3408,8 +3604,18 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 		}
 	}
 
+	// ⚠ THE LEVEL'S NUMBER, NOT THE DEPTH BELOW THIS NODE. Down the page the two agree; across it
+	// they do not — a column key hangs directly under whichever row heading it belongs to, and its
+	// number has to say WHICH LEVEL it is so the schema and the tree keep meaning the same thing.
+	const int childLevel = static_cast<int>(levelIdx) + 1;
+	// …and cells are INSERTED before the sub-headings a previous pass may already have added, so a
+	// pre-order reader meets a heading's own cells before anything nested under it.
+	std::size_t insertAt = 0;
+
 	for (const ibLevelKey& key : order) {
-		ibSelectorTree::Node* child = node->AddChild(node->m_level + 1);
+		ibSelectorTree::Node* child = across
+			? node->InsertChild(insertAt++, childLevel)
+			: node->AddChild(childLevel);
 		// A SUBGROUP inherits the grouping fields AVAILABLE from the levels above (Max) — copy the parent
 		// group's stamped dimension values down, then add this level's own. So a display column that
 		// dot-walks an ANCESTOR dimension's reference (e.g. the parent grouped by Reference, this level by
@@ -3420,7 +3626,10 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 			child->m_values[level.m_fields[i].m_col->GetColumnId()] = key[i];   // every field of the key IS a value
 
 		const std::vector<long>& own = byKey[key];
-		FoldDimLevel(ctx, child, own, levelIdx + 1);        // next level inside
+		FoldDimLevel(ctx, child, own, levelIdx + 1, across);   // next level inside
+		// ⭐ AND THE CELLS OF THIS HEADING — under EVERY row heading, not only the deepest (FoldAcross).
+		if (!across)
+			FoldAcross(ctx, child, own);
 		child->m_hasChildren = !child->m_children.empty();
 		ApplyAggregates(*child, *ctx.snapshot, own, *ctx.aggregates);
 	}
@@ -3475,8 +3684,19 @@ ibSelectorTree ibQueryComposer::BuildDimensionTree(const ibQueryRamTable& snapsh
 	std::vector<long> all; all.reserve(static_cast<size_t>(snapshot.RowCount()));
 	for (long r = 0; r < snapshot.RowCount(); ++r) all.push_back(r);
 
-	const DimCtx ctx{ &snapshot, &levels, &aggregates, holder, source };
+	// THE SEAM AND THE ROWS — asked of the levels, exactly as the streaming fold asks (the two roads
+	// must fold the same shape; which one a query takes depends only on whether a level unfolds a
+	// hierarchy).
+	DimCtx ctx{ &snapshot, &levels, &aggregates, holder, source };
+	ctx.across = levels.size();
+	for (size_t li = 0; li < levels.size(); ++li)
+		if (levels[li].m_axis == ibTotalsAxis::Columns) { ctx.across = li; break; }
+	ctx.details = !levels.empty() && levels.back().m_fields.empty();
+
 	FoldDimLevel(ctx, &tree.Root(), all, 0);
+	// …AND THE ROOT'S OWN CELLS — the column totals, which are the cells of the heading over
+	// everything (see ibStreamingFold::Feed for why this replaced a second fold).
+	FoldAcross(ctx, &tree.Root(), all);
 	tree.Root().m_hasChildren = !tree.Root().m_children.empty();
 	ApplyAggregates(tree.Root(), snapshot, all, aggregates);   // grand total in-place
 	PadPeriodLevels(tree, levels, aggregates);                 // …and the periods nothing happened in

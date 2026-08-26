@@ -62,8 +62,8 @@ ibQuerySelectPtr CloneSelect(const ibQuerySelect& s)
 		index = CloneExpr(index);
 	for (ibQueryOrderItem& o : c->m_orderBy)
 		o.m_expr = CloneExpr(o.m_expr);
-	for (ibQueryAstExprPtr& t : c->m_totalsAggregates)
-		t = CloneExpr(t);
+	for (ibQueryTotalAggregate& t : c->m_totalsAggregates)
+		t.m_expr = CloneExpr(t.m_expr);
 	for (ibQueryTotalDim& d : c->m_totalsBy)
 		for (ibQueryTotalField& f : d.m_fields)
 			f.m_expr = CloneExpr(f.m_expr);
@@ -310,7 +310,7 @@ void FlattenFrom(ibQuerySelect& s)
 		for (ibQueryAstExprPtr& g : s.m_groupBy)          WalkColumns(g, checkRef);
 		WalkColumns(s.m_having, checkRef);
 		for (ibQueryOrderItem& o : s.m_orderBy)           WalkColumns(o.m_expr, checkRef);
-		for (ibQueryAstExprPtr& t : s.m_totalsAggregates) WalkColumns(t, checkRef);
+		for (ibQueryTotalAggregate& t : s.m_totalsAggregates) WalkColumns(t.m_expr, checkRef);
 		for (ibQueryTotalDim& d : s.m_totalsBy)
 			for (ibQueryTotalField& f : d.m_fields)       WalkColumns(f.m_expr, checkRef);
 		if (outOfScope) return;
@@ -342,7 +342,7 @@ void FlattenFrom(ibQuerySelect& s)
 	for (ibQueryAstExprPtr& g : s.m_groupBy)        WalkColumns(g, subst);
 	WalkColumns(s.m_having, subst);
 	for (ibQueryOrderItem& o : s.m_orderBy)         WalkColumns(o.m_expr, subst);
-	for (ibQueryAstExprPtr& t : s.m_totalsAggregates) WalkColumns(t, subst);
+	for (ibQueryTotalAggregate& t : s.m_totalsAggregates) WalkColumns(t.m_expr, subst);
 	for (ibQueryTotalDim& d : s.m_totalsBy)
 		for (ibQueryTotalField& f : d.m_fields)      WalkColumns(f.m_expr, subst);
 

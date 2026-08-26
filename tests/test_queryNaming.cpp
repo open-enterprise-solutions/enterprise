@@ -850,7 +850,7 @@ TEST(QueryDistinctAggregate, ItWorksInTotalsToo)
 	ASSERT_NE(nullptr, select);
 	EXPECT_TRUE(select->m_totalsOverall);
 	ASSERT_EQ(1u, select->m_totalsAggregates.size());
-	EXPECT_TRUE(select->m_totalsAggregates[0]->m_distinctArg);
+	EXPECT_TRUE(select->m_totalsAggregates[0].m_expr->m_distinctArg);
 
 	const wxString written = ibRenderQuery(*select);
 	EXPECT_EQ(written, ibRenderQuery(*Parse(written)));
@@ -927,6 +927,10 @@ TEST(QueryComposerCross, BothAxesFoldInOneTotalsRowsFirst)
 	ibDataComposer::GroupNode columns;
 	columns.m_settings.m_group.Append(wxT("Warehouse"));
 	composer.Root().m_columnGroups.push_back(columns);
+	// ⚠ AND THE OUTPUT SAYS WHAT IT IS. The kind is STORED, not read off the axes (Output::Kind) —
+	// an empty table is a legitimate thing to have declared, so FILLING a column axis is not what
+	// makes an output a table. Whoever declares one says so; here that is the test.
+	composer.Root().m_kind = ibCompositionOutputKind::Table;
 
 	const wxString text = composer.RenderText();
 	EXPECT_TRUE(text.Contains(wxT("TOTALS"))) << text;

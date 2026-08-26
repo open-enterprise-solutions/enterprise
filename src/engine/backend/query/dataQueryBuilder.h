@@ -130,12 +130,43 @@ struct ibTotalField {
 	bool ByPeriods() const { return m_periods != nullptr; }
 };
 
+// ⭐⭐ WHICH WAY A LEVEL READS — down the page or across it. A cross-table is ONE fold whose keys
+// were written rows-first (see the composer's AppendSettingsClauses), and until now the shape was
+// carried OUTSIDE the config, as a count the printer kept: "the first N levels are the rows". A
+// count beside a list is a second statement about it, and the fold — which is where the shape
+// actually has to be built — had no way to ask.
+//
+// So the LEVEL says it. Absence reads as Rows, which is what every level of every ordinary report
+// is, so nothing written before this means anything different.
+enum class ibTotalsAxis {
+	Rows,       // a heading down the page
+	Columns,    // a heading across it — a cross-table's column key
+};
+
+// ⭐⭐ HOW A CALLER IS LAYING THE LEVELS OUT — said as a WHOLE, because its parts are not independent
+// and a number alone cannot say it.
+//
+// 🛑 IT WAS ONE `size_t rowLevels`, and zero meant two opposite things: "no column axis at all" (an
+// ordinary report) and "everything reads across" (a table whose rows axis is empty — perfectly
+// legitimate: the columns group and the rows are just the records). Under that reading the second
+// case was folded as an ordinary report, so a table whose columns were its groupings produced no
+// column keys and no records at all (Max, 2026-08-26 — his structure was Columns: Attribute2 →
+// Attribute21 → Detail records, with Rows empty).
+struct ibTotalsLayout {
+	size_t       m_rowLevels   = 0;      // how many of the levels read DOWN the page
+	bool         m_hasColumns  = false;  // …and whether anything reads ACROSS it at all
+	// WHICH WAY THE DETAIL RECORDS READ. A record is a line of the table down the page, and a column
+	// of its own across it (Max: "exactly as in the rows, so in the columns").
+	ibTotalsAxis m_detailsAxis = ibTotalsAxis::Rows;
+};
+
 // One TotalBy dimension level. Levels apply IN ORDER; a level holds ONE OR MORE fields and its
 // group key is the TUPLE of their values — "by partner AND contract" is one level, not two nested
 // ones, and a field that repeats what the key already says simply adds no rows.
 struct ibTotalLevel
 {
 	std::vector<ibTotalField> m_fields;
+	ibTotalsAxis              m_axis = ibTotalsAxis::Rows;
 
 	// THE HEAD — the first field. The gates that only make sense over ONE field (the hierarchy
 	// unfold, the server-side group-level page) ask through here and check IsSingleField first.
@@ -691,7 +722,7 @@ public:
 	ibDataQueryBuilder& TotalByLevel(ibTotalLevel level);
 	// THE DETAIL RECORDS — the source rows, hung under the deepest heading. Its own verb rather than
 	// an empty level handed to the call above, which drops one on purpose (see the .cpp).
-	ibDataQueryBuilder& TotalsDetails();
+	ibDataQueryBuilder& TotalsDetails(ibTotalsAxis axis = ibTotalsAxis::Rows);
 	// One totals dimension level of a single field — the field to roll up by + how it unfolds.
 	ibDataQueryBuilder& TotalBy(const ibBackendQueryColumn* col, ibDimensionKind dim);
 	ibDataQueryBuilder& TotalBy(const std::vector<const ibBackendQueryColumn*>& path, ibDimensionKind dim);   // dot-walk dimension

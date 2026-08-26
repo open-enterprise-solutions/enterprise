@@ -52,6 +52,10 @@ public:
 	struct OutputColumn
 	{
 		wxString                    m_name;             // script-visible output name
+		// (⚠ AND NO TITLE HERE. What a column is CALLED belongs to the composition, not to the query:
+		//  this tier names columns so they can be READ BACK — uniquely, in one word — while a title
+		//  is written for a person, may repeat, and is a setting an author edits. It is held in the
+		//  composition's own description and answered by ibCompositionOutputInfo::TitleOf.)
 		// ⭐ WHICH LEVEL A DIMENSION BELONGS TO — 0 for the first `BY` level, 1 for the next, and -1
 		// for anything that is not a dimension.
 		//
@@ -319,12 +323,19 @@ public:
 	// them. Two things follow from it and nothing else does — the config gets one more level with NO
 	// FIELDS (which is what the fold reads as "the rows themselves"), and the server-side fold is
 	// refused, since `GROUP BY ROLLUP` returns aggregated rows and no detail to hang.
+	// ⭐ `layout` — HOW THE CALLER IS LAYING THE LEVELS OUT (ibTotalsLayout): how many read down the
+	// page, whether anything reads across it, and which way the records read. Everything past the
+	// row levels is stamped as a column level (ibTotalsAxis) — which is what lets the fold hang the
+	// cells under EVERY row heading instead of under the deepest one alone. Asked of the READ for
+	// the same reason `withDetails` is: the text of a cross-table is an ordinary TOTALS whose keys
+	// were written rows-first, and the shape belongs to whoever is laying it out.
 	static ibDataQueryResult ExecuteTotals(const ibQuerySelect& ast,
 	                                       const std::map<wxString, ibValue>& params,
 	                                       std::vector<OutputColumn>& outSchema,
 	                                       const ibReadPageRequest& page = ibReadPageRequest{},
 	                                       bool* outServerGroupedLevel = nullptr,
-	                                       bool withDetails = false);
+	                                       bool withDetails = false,
+	                                       const ibTotalsLayout& layout = ibTotalsLayout{});
 
 	// === L4-2 (LINQ pushdown) — recorded-lambda lowering against ONE source ===
 	// The lambda recorder (compiler/lambdaQueryAst.*) emits the same

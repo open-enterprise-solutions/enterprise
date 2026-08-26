@@ -249,6 +249,24 @@ struct ibQueryTotalField
 // Contract)` is a SINGLE level asking "partner and contract together", not two nested ones. Which
 // of the fields add rows is the DATA's answer, not a distinction the engine draws — a partner's own
 // attribute repeats the key it depends on and yields nothing new, a contract genuinely divides it.
+// ⭐⭐ ONE RESOURCE OF A TOTALS — the figure and the name it is read back under. The TWIN of
+// ibQueryTotalDim below, and it exists for the same reason: a totals tree is read BY NAME, and a
+// name the engine derived from the argument is a guess about what the author meant.
+//
+// 🛑 THE AGGREGATE USED TO TRAVEL BARE, and the name was worked out in the lowering: `COUNT(Number)`
+// reads back as `Number`, qualified to `CountNumber` when a LEVEL already claims that name. Which is
+// how a cross-table grouped by Number came to head its figures "CountNumber" — a word nobody wrote,
+// standing where the reader expects the name of their resource (Max, 2026-08-26: "it should be
+// Number at minimum"). A derived name is a fallback; it is not an answer, and it must not out-vote
+// one the author gave.
+struct ibQueryTotalAggregate
+{
+	ibQueryAstExprPtr m_expr;    // the aggregate call — SUM(x), COUNT(DISTINCT y), …
+	// AS name. Empty = derive it (the argument's own name), which is what every query written
+	// before this says and what a person means when they do not name the column.
+	wxString          m_alias;
+};
+
 struct ibQueryTotalDim
 {
 	std::vector<ibQueryTotalField> m_fields;                     // one or more; empty only mid-build
@@ -317,7 +335,7 @@ struct ibQuerySelect
 	// every level, m_totalsBy are the dimension levels in order. Distinct from the
 	// flat GROUP BY above. (docs/query-language-arc.md §22.1b)
 	bool                           m_hasTotals = false;
-	std::vector<ibQueryAstExprPtr>    m_totalsAggregates;      // SUM(x), MAX(y), … (aggregate Func nodes)
+	std::vector<ibQueryTotalAggregate> m_totalsAggregates;     // SUM(x) [AS name], MAX(y), …
 	std::vector<ibQueryTotalDim>   m_totalsBy;              // dimension levels (in order)
 	// OVERALL — the level above every dimension: ONE row folding the whole result.
 	//

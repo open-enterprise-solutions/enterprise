@@ -452,8 +452,17 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 	if (select.m_hasTotals) {
 		std::vector<wxString> aggregates;
 		aggregates.reserve(select.m_totalsAggregates.size());
-		for (const auto& aggregate : select.m_totalsAggregates)
-			if (aggregate) aggregates.push_back(RenderExpr(*aggregate));
+		for (const auto& aggregate : select.m_totalsAggregates) {
+			if (!aggregate.m_expr)
+				continue;
+			// …AND THE NAME IT WAS GIVEN. Written back exactly as a level's alias is: a rendered
+			// query that dropped it would rename the column the moment the text made a round trip,
+			// and the report reading `res["Qty"]` would find nothing.
+			wxString written = RenderExpr(*aggregate.m_expr);
+			if (!aggregate.m_alias.IsEmpty())
+				written += wxT(" ") + Kw(ibQueryKeyword::As) + wxT(" ") + aggregate.m_alias;
+			aggregates.push_back(written);
+		}
 
 		out += wxT("\n") + pad + Kw(ibQueryKeyword::Totals);
 		if (!aggregates.empty())

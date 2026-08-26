@@ -56,10 +56,8 @@ public:
 	// bottom").
 	virtual bool WantsGrandTotal() const override { return true; }
 
-	// …AND A TABLE IS CLOSED BY THE COLUMN TOTALS, for the same reason it is closed by the grand one:
-	// a printed report shows what its columns add up to. The composition pays for the second fold
-	// only when the output actually is a table — a plain grouping never asks.
-	virtual bool WantsColumnTotals() const override { return true; }
+	// (…AND A TABLE IS STILL CLOSED BY THE COLUMN TOTALS, but nothing has to be ASKED for them any
+	//  more: they are the cells of the root heading and arrive with the rest of the fold.)
 
 	// ⭐ WHAT SHAPE IS COMING, asked before the first row. A cross-table is not a different KIND of
 	// drawing — it is the same sheet, the same cells, the same bindings, laid out the other way — so
@@ -107,6 +105,27 @@ private:
 	// (a composed report has no author to drag a border, and a value clipped to the default width
 	// reads as a different value).
 	std::vector<size_t>         m_widest;
+
+	// WHAT IS WRITTEN OVER EACH COLUMN — one per schema entry, handed over by the composition
+	// (ibCompositionOutputInfo::TitleOf). NOT the query's column name: that one is what a script
+	// looks the column up by and may have been qualified to stay unique, and a reader should never
+	// meet the qualification.
+	std::vector<wxString>       m_titles;
+
+	// …ASKED, never indexed into: a schema and a list beside it can always disagree about length,
+	// and the answer where they do is the column's own name.
+	//
+	// ⚠ AGAINST THE SCHEMA IN HAND, because OnColumns can be entered with one this driver has not
+	// been told about: the whole layout is derived from the schema PASSED to it, and a caller that
+	// lays out columns without announcing an output (a bare header, every test that does exactly
+	// that) has no titles here at all. Reading the member instead printed a header of empty cells —
+	// the column names simply vanished.
+	wxString ColumnTitle(size_t column, const std::vector<ibQueryLowering::OutputColumn>& schema) const {
+		if (column < m_titles.size() && !m_titles[column].IsEmpty())
+			return m_titles[column];
+		return column < schema.size() ? schema[column].m_name : wxString();
+	}
+	wxString ColumnTitle(size_t column) const { return ColumnTitle(column, m_schema); }
 
 	// WHERE EACH SCHEMA ENTRY LANDS — the sheet column per schema index (-1 = not written). See
 	// OnColumns for why the layout is by ROLE rather than by schema order.
@@ -184,6 +203,12 @@ private:
 		// reference and a date that is a throw in the middle of printing. Prefixes are few (one per
 		// upper heading) and are found by walking, which needs only equality.
 		std::vector<std::pair<CrossKey, std::vector<ibValue>>> m_subtotals;
+		// IS THIS LINE A RECORD RATHER THAN A HEADING? A detail row lays out exactly like a heading
+		// — its own line, its cells across it — and differs only in how it is DRESSED: no bold, the
+		// faint fill every detail row on a printed report has. Said as a fact of the row, because
+		// the depth cannot answer it: a detail sits one past the last dimension, and so does the
+		// first column key.
+		bool                 m_detail = false;
 	};
 
 	// ⭐ ONE COLUMN OF THE PRINTED TABLE — either a column KEY, or the SUBTOTAL of an upper heading
@@ -222,18 +247,20 @@ private:
 	// heading is not the heading going away.
 	std::vector<CrossKey> m_colSubtotalKeys;
 	std::vector<CrossRow> m_crossRows;
-	// How many detail records a table dropped. Counted, not ignored: a report that quietly discards
-	// rows is indistinguishable from one that never read them, and the journal is where that
-	// difference belongs.
-	int m_crossDetailsDropped = 0;
+	// DO THE RECORDS READ ACROSS THE PAGE? Told by the output (ibCompositionOutputInfo::m_detailsAxis),
+	// because a node says it IS a record and never says which axis it belongs to.
+	bool m_detailsAcross = false;
+	// How many detail records a table printed as lines of its own. Journalled beside the headings
+	// and the keys, because "the rows did not come out" is a complaint about exactly this number —
+	// and it reads the same whether the ladder never declared them or the walk never reached them.
+	int m_crossDetailRows = 0;
 	// Was this table the first section on the sheet? Answered where the section began, because by
 	// the time it prints, the answer has stopped being visible.
 	bool m_crossFirstSection = false;
 
-	// THE SECOND FOLD — the column totals (see ibCompositionDriver::WantsColumnTotals). The flag is
-	// set from the output info rather than worked out, and the cells land in the bottom row of the
-	// table by the same column key the first pass built.
-	bool m_columnTotalsPass = false;
+	// THE BOTTOM LINE — what each column adds up to. They arrive as the cells of the ROOT heading,
+	// before the first row (OnCrossHeading), so the column order is settled by the totals and every
+	// row afterwards lands in a column that already exists.
 	std::map<size_t, std::vector<ibValue>> m_columnTotalCells;
 	// …and the bottom line's figures for the SUBTOTAL columns — the same prefixes, one level up.
 	std::vector<std::pair<CrossKey, std::vector<ibValue>>> m_columnTotalSubtotals;

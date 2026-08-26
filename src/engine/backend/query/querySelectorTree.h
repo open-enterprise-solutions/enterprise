@@ -39,6 +39,20 @@ public:
 		ibSelectorNodeKind                 m_kind = ibSelectorNodeKind::Group;
 
 		Node* AddChild(int level) { m_children.push_back(std::make_unique<Node>()); m_children.back()->m_level = level; return m_children.back().get(); }
+
+		// ⭐ A CHILD AT A POSITION — what a CROSS-TABLE needs and an ordinary report never asks for.
+		// A heading in a table stands over two different kinds of children: the cells that read
+		// ACROSS it and the headings that read UNDER it. A pre-order walk is the only thing that
+		// says which heading a cell belongs to, so the cells have to come first — and they are
+		// discovered as the rows arrive, interleaved with the sub-headings. Inserting keeps the two
+		// blocks apart without a second list on the node or a second question for the walk.
+		Node* InsertChild(std::size_t at, int level) {
+			if (at > m_children.size())
+				at = m_children.size();
+			auto it = m_children.insert(m_children.begin() + static_cast<std::ptrdiff_t>(at), std::make_unique<Node>());
+			(*it)->m_level = level;
+			return it->get();
+		}
 	};
 
 	// Move-only (owns nodes via unique_ptr) — same rationale as ibQueryRamTable: the BACKEND_API

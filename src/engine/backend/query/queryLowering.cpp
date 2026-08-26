@@ -2954,7 +2954,8 @@ void CheckTotalsNameSelectedFields(const ibQuerySelect& ast)
 		return false;
 	};
 
-	for (const ibQueryAstExprPtr& agg : ast.m_totalsAggregates) {
+	for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates) {
+		const ibQueryAstExprPtr& agg = resource.m_expr;
 		if (!agg || agg->m_kind != ibQueryAstExprKind::Func || agg->m_star || !agg->m_arg)
 			continue;
 		if (!claimed(agg->m_arg))
@@ -3039,8 +3040,8 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 	CollectColumns(ast.m_having, strict);
 	for (const ibQueryAstExprPtr& key : ast.m_groupBy)
 		CollectColumns(key, strict);
-	for (const ibQueryAstExprPtr& aggregate : ast.m_totalsAggregates)
-		CollectColumns(aggregate, strict);
+	for (const ibQueryTotalAggregate& aggregate : ast.m_totalsAggregates)
+		CollectColumns(aggregate.m_expr, strict);
 	// …and the aggregates answer one question the resolver cannot: whether the RESULT has a column
 	// for the figure. Asked here so the dialog's verdict and the run agree.
 	//
@@ -3268,7 +3269,7 @@ int PruneSelect(ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
 		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); }), ast.m_indexBy.end());
 
 	ast.m_totalsAggregates.erase(std::remove_if(ast.m_totalsAggregates.begin(), ast.m_totalsAggregates.end(),
-		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); }), ast.m_totalsAggregates.end());
+		[&](const ibQueryTotalAggregate& r) { return gone(StillResolves(sources, r.m_expr)); }), ast.m_totalsAggregates.end());
 
 	// A LEVEL LOSES THE FIELDS THAT NO LONGER RESOLVE, and only then, having none left, loses itself.
 	// Dropping the whole level because one of its fields died would take the grouping away over a
@@ -4075,7 +4076,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
                                                  std::vector<OutputColumn>& outSchema,
                                                  const ibReadPageRequest& page,
                                                  bool* outServerGroupedLevel,
-                                                 bool withDetails)
+                                                 bool withDetails,
+                                                 const ibTotalsLayout& layout)
 {
 	// Same optimizer pass as Execute — the totals path benefits from a flattened FROM
 	// and a normalized WHERE the same way. (queryRewrite.h)
@@ -4179,7 +4181,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 					projectionNames.push_back(OutputNameFor(ast, p, idx++));
 		}
 
-		for (const ibQueryAstExprPtr& agg : ast.m_totalsAggregates) {
+		for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates) {
+			const ibQueryAstExprPtr& agg = resource.m_expr;
 			if (!agg || agg->m_kind != ibQueryAstExprKind::Func) { measuresArePlain = false; break; }
 			// A WINDOWED measure is not "not plain" — it is not executable at all yet, and the fold path
 			// below is where that is said out loud. Leave it to the fold rather than refusing here, so
@@ -4189,7 +4192,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			PagedMeasure m;
 			m.m_fn       = AggFn(agg->m_func);
 			m.m_distinct = agg->m_distinctArg;
-			m.m_name     = agg->m_star
+			// THE NAME THE AUTHOR GAVE IT, and only failing that the one derived from the argument.
+			m.m_name     = !resource.m_alias.IsEmpty() ? resource.m_alias
+				: agg->m_star
 				? ibQueryKeywordText(agg->m_func)
 				: (agg->m_arg && !agg->m_arg->m_path.empty() ? agg->m_arg->m_path.back() : ibQueryKeywordText(agg->m_func));
 
@@ -4320,11 +4325,35 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 	// The dimension levels, IN ORDER (each yields a subtotal node; the root is the grand total). They
 	// are the leading output columns (their group key at each node — read by GetValue(col)).
+	size_t levelIndex = 0;
 	for (const ibQueryTotalDim& d : ast.m_totalsBy) {
 		// ONE LEVEL, ONE OR MORE FIELDS — grouped by the TUPLE of them. Each field resolves exactly as
 		// a lone dimension always did (plain column or dot-walk); what changed is that they are
 		// collected into one level instead of each becoming a level of its own.
 		ibTotalLevel level;
+
+		// …AND WHICH WAY IT READS. `rowLevels` is the caller's own layout — a cross-table's row axis
+		// — and everything past it stands across the page. Stamped ON the level, so the fold and
+		// anything else downstream ask the level rather than re-deriving a seam from a count that
+		// travelled separately (see ibTotalsAxis).
+		// ⚠ ASKED OF THE LAYOUT, NOT OF A COUNT. `rowLevels == 0` is a legitimate table — one whose
+		// rows axis is empty, so every level reads across — and it is also every ordinary report.
+		// `m_hasColumns` is what tells them apart; deriving it from the count folded the first case
+		// as the second and produced a table with no columns and no records at all.
+		if (layout.m_hasColumns && levelIndex >= layout.m_rowLevels) {
+			level.m_axis = ibTotalsAxis::Columns;
+
+			// ⚠ AND A COLUMN AXIS DOES NOT UNFOLD A HIERARCHY. A hierarchy nests values INSIDE one
+			// level — folders standing over items — and a table's columns are a flat run of keys,
+			// one block of cells each: there is nowhere for a folder to nest ACROSS the page. Said
+			// here, where the shape is decided, rather than folded into something plausible and
+			// printed as a table whose columns do not line up.
+			for (const ibQueryTotalField& field : d.m_fields)
+				if (field.m_unfold != ibQueryDimUnfold::Elements)
+					ThrowQueryException(0, 0,
+						_("a level that reads ACROSS the page cannot unfold a hierarchy: a table's columns are a flat run of keys"));
+		}
+		++levelIndex;
 
 		// A HIERARCHY UNFOLD walks one parent chain, and a key made of several fields has no single
 		// chain to walk. Refused HERE, where the query says it, rather than folded into something
@@ -4471,7 +4500,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// the deepest heading. Nothing else in this function changes: the same read, the same schema,
 	// one extra level in the config.
 	if (withDetails)
-		b.TotalsDetails();
+		b.TotalsDetails(layout.m_detailsAxis);
 
 	// (`selectByName` — the output-name map the aggregates read below — is built ABOVE, before the
 	// dimensions, because both clauses name the RESULT'S fields: SELECT Price … TOTALS SUM(Price),
@@ -4542,7 +4571,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// over one column already moves.
 	aggregatedCols.insert(levelCols.begin(), levelCols.end());
 
-	for (const ibQueryAstExprPtr& agg : ast.m_totalsAggregates) {
+	for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates) {
+		const ibQueryAstExprPtr& agg = resource.m_expr;
 		if (!agg || agg->m_kind != ibQueryAstExprKind::Func)
 			ThrowQueryException(0, 0, _("TOTALS expects aggregate functions (SUM/COUNT/MIN/MAX/AVG)"));
 		RefuseUnloweredWindow(*agg);
@@ -4552,7 +4582,27 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		const wxString wantedName = agg->m_star
 			? ibQueryKeywordText(agg->m_func)
 			: (agg->m_arg && !agg->m_arg->m_path.empty() ? agg->m_arg->m_path.back() : ibQueryKeywordText(agg->m_func));
-		const wxString outName = uniqueOutputName(wantedName, ibQueryKeywordText(agg->m_func));
+
+		// ⭐⭐ A NAME THE AUTHOR WROTE IS NOT A CANDIDATE — IT IS THE ANSWER. The qualifier below
+		// exists to settle a name the ENGINE derived; applying it to `AS Qty` would rename the very
+		// thing the author named, and `res["Qty"]` would then find nothing (the report reads the
+		// figure back by the name it was given).
+		//
+		// So a collision with an alias is REFUSED, out loud, instead of being papered over: two
+		// columns answering to one name is a query that cannot be read back, and the author is the
+		// only one who can decide which name to change.
+		wxString outName;
+		if (!resource.m_alias.IsEmpty()) {
+			for (const OutputColumn& used : outSchema)
+				if (used.m_name.IsSameAs(resource.m_alias, false))
+					ThrowQueryException(agg->m_line, agg->m_col,
+						_("TOTALS names the resource \"%s\", and a grouping level already answers to that name: give one of them another alias"),
+						resource.m_alias);
+			outName = resource.m_alias;
+		}
+		else {
+			outName = uniqueOutputName(wantedName, ibQueryKeywordText(agg->m_func));
+		}
 
 		const ibBackendQueryColumn*           col   = nullptr;   // the column the fold aggregates by metaID
 		std::shared_ptr<ibBackendQueryColumn> owned;             // set only for a synthetic computed measure

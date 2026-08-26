@@ -634,3 +634,122 @@ TEST(ComposerSettings, AnEmptyTableCountsAsDeclared)
 
 	EXPECT_TRUE(composer.Declares(composer.Outputs()[1]));
 }
+
+// ===========================================================================
+//  The selects, and what a field is CALLED
+// ===========================================================================
+
+// ⭐⭐ A NAME IS FOR THE LANGUAGE, A TITLE IS FOR A READER. Nobody should have to type the second one
+// out to get a report that can be read, so it is generated from the first: the capitals are where
+// the words are (Max, 2026-08-26).
+TEST(CompositionFields, ATitleIsGeneratedFromTheNameUntilSomebodySaysOtherwise)
+{
+	EXPECT_EQ(wxT("Data Version"), ibTitleFromName(wxT("DataVersion")));
+	EXPECT_EQ(wxT("Number"),       ibTitleFromName(wxT("Number")));
+	// A RUN OF CAPITALS IS ONE WORD — `IDNumber` is "ID Number", not "I D Number".
+	EXPECT_EQ(wxT("ID Number"),    ibTitleFromName(wxT("IDNumber")));
+	// …and something already written for a reader is left exactly as it is.
+	EXPECT_EQ(wxT("Already Said"), ibTitleFromName(wxT("Already Said")));
+	EXPECT_TRUE(ibTitleFromName(wxEmptyString).IsEmpty());
+}
+
+// ⭐ WHAT IS STORED IS THE DELTA. A query and its selects say everything by themselves; the table
+// holds only what somebody added to that (Max: "so as not to clog the table"). So a description
+// nobody touched writes nothing, and an untouched field is still titled.
+TEST(CompositionFields, AnUntouchedCompositionStoresNothingAndStillTitlesItsFields)
+{
+	ibCompositionDescription composition;
+	EXPECT_TRUE(composition.m_selects.empty());
+	EXPECT_EQ(wxT("Data Version"), composition.TitleForPath(wxT("DataVersion")));
+	// A PATH IS READ BY ITS LEAF — the walk to a field is not part of what the field is called.
+	EXPECT_EQ(wxT("Contract"), composition.TitleForPath(wxT("Partner.Contract")));
+
+	ibDataNode node;
+	ibCompositionDescriptionMemory::WriteNode(node, composition);
+	ibCompositionDescription read;
+	ibCompositionDescriptionMemory::ReadNode(node, read);
+	EXPECT_TRUE(read.m_selects.empty());   // nothing was said, so nothing was written
+}
+
+// …AND WHAT WAS SAID SURVIVES, under the select that said it.
+TEST(CompositionFields, ATitleSomebodySetIsStoredAndReadBack)
+{
+	ibCompositionDescription composition;
+	ibSelectDescription select;
+	select.m_id = ibSelectDescription::NewId();
+	ibFieldDescription field;
+	field.m_path     = wxT("DataVersion");
+	field.m_useTitle = true;
+	field.m_title    = wxT("Version of the record");
+	select.m_fields.push_back(field);
+	composition.m_selects.push_back(select);
+
+	EXPECT_EQ(wxT("Version of the record"), composition.TitleForPath(wxT("DataVersion")));
+
+	ibDataNode node;
+	ibCompositionDescriptionMemory::WriteNode(node, composition);
+	ibCompositionDescription read;
+	ibCompositionDescriptionMemory::ReadNode(node, read);
+
+	ASSERT_EQ(1u, read.m_selects.size());
+	EXPECT_EQ(select.m_id, read.m_selects.front().m_id);          // the identity is what paths refer to
+	EXPECT_EQ(wxT("Version of the record"), read.TitleForPath(wxT("DataVersion")));
+}
+
+// ⭐⭐ TWO SELECTS MAKE THE NAME COMPULSORY — that is the whole job of `ONTO`. With one select an
+// unqualified path can only mean it; with two it names nothing in particular, and the field falls
+// back to being titled by its own name rather than picking up a stranger's caption.
+TEST(CompositionFields, AnUnqualifiedPathNamesNothingOnceThereAreTwoSelects)
+{
+	ibCompositionDescription composition;
+
+	ibSelectDescription sales;
+	sales.m_id   = ibSelectDescription::NewId();
+	sales.m_name = wxT("Sales");
+	ibFieldDescription qty;
+	qty.m_path = wxT("Qty"); qty.m_useTitle = true; qty.m_title = wxT("Sold");
+	sales.m_fields.push_back(qty);
+
+	ibSelectDescription stock;
+	stock.m_id   = ibSelectDescription::NewId();
+	stock.m_name = wxT("Stock");
+	ibFieldDescription onHand;
+	onHand.m_path = wxT("Qty"); onHand.m_useTitle = true; onHand.m_title = wxT("On hand");
+	stock.m_fields.push_back(onHand);
+
+	composition.m_selects.push_back(sales);
+	composition.m_selects.push_back(stock);
+
+	// The SAME word in two selects is two fields, and each keeps its own caption.
+	EXPECT_EQ(wxT("Sold"),    composition.TitleForPath(wxT("Sales.Qty")));
+	EXPECT_EQ(wxT("On hand"), composition.TitleForPath(wxT("Stock.Qty")));
+	// …and unqualified, it is neither: the name read out loud, not a guess between them.
+	EXPECT_EQ(wxT("Qty"),     composition.TitleForPath(wxT("Qty")));
+
+	// ⭐ A QUALIFIER IS MATCHED BY IDENTITY FIRST — so a path that carries the id finds its select
+	// whatever the select is currently called. That is the property a rename has to preserve.
+	EXPECT_EQ(wxT("Sold"), composition.TitleForPath(sales.m_id + wxT(".Qty")));
+}
+
+// ⭐⭐ A RENAME IS ONE WRITE, and everything that referred to the select BY ID still does. The name
+// is what the select is rendered with; the id is what it IS.
+//
+// ⚠ WHAT THIS DOES NOT YET COVER: a path stored as TEXT still says the old name, because that text
+// is what goes into the query. Closing that is its own arc — see RenameSelect.
+TEST(CompositionFields, RenamingASelectKeepsEveryReferenceThatHoldsItsId)
+{
+	ibCompositionDescription composition;
+	ibSelectDescription sales;
+	sales.m_id   = ibSelectDescription::NewId();
+	sales.m_name = wxT("Sales");
+	ibFieldDescription qty;
+	qty.m_path = wxT("Qty"); qty.m_useTitle = true; qty.m_title = wxT("Sold");
+	sales.m_fields.push_back(qty);
+	composition.m_selects.push_back(sales);
+
+	ASSERT_TRUE(composition.RenameSelect(sales.m_id, wxT("Turnover")));
+
+	EXPECT_EQ(wxT("Sold"), composition.TitleForPath(sales.m_id + wxT(".Qty")));   // by identity — unchanged
+	EXPECT_EQ(wxT("Sold"), composition.TitleForPath(wxT("Turnover.Qty")));        // …and by the new word
+	EXPECT_FALSE(composition.RenameSelect(ibSelectDescription::NewId(), wxT("Nobody")));
+}

@@ -2143,7 +2143,7 @@ void ibDialogQueryConstructor::OnAddTotalsAggregate(wxCommandEvent&)
 		if (!aggregate)
 			continue;
 		select->m_hasTotals = true;
-		select->m_totalsAggregates.push_back(aggregate);
+		select->m_totalsAggregates.push_back(ibQueryTotalAggregate{ aggregate, wxString() });
 		added = true;
 	}
 	if (added)
@@ -2162,7 +2162,7 @@ void ibDialogQueryConstructor::OnEditTotalsAggregate(wxCommandEvent&)
 		return;
 
 	ibDialogQueryExpression dialog(this, _("Totals"), AvailableFields(),
-		select->m_totalsAggregates[index], m_metaData, m_readOnly);
+		select->m_totalsAggregates[index].m_expr, m_metaData, m_readOnly);
 	if (dialog.ShowModal() != wxID_OK)
 		return;
 
@@ -2174,7 +2174,8 @@ void ibDialogQueryConstructor::OnEditTotalsAggregate(wxCommandEvent&)
 			select->m_hasTotals = false;
 	}
 	else {
-		select->m_totalsAggregates[index] = edited;
+		// THE EXPRESSION CHANGES, THE NAME STAYS — the editor edits a figure, not what it is called.
+		select->m_totalsAggregates[index].m_expr = edited;
 	}
 	FillAll();
 }

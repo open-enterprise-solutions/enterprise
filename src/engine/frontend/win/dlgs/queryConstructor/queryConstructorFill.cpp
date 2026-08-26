@@ -454,8 +454,8 @@ void queryctor::ibQueryRenameSourceReferences(ibQuerySelect& select, const wxStr
 		ibQueryRenameMentioned(order.m_expr, from, to);
 	for (ibQueryAstExprPtr& key : select.m_indexBy)
 		ibQueryRenameMentioned(key, from, to);
-	for (ibQueryAstExprPtr& aggregate : select.m_totalsAggregates)
-		ibQueryRenameMentioned(aggregate, from, to);
+	for (ibQueryTotalAggregate& aggregate : select.m_totalsAggregates)
+		ibQueryRenameMentioned(aggregate.m_expr, from, to);
 	for (ibQueryTotalDim& dimension : select.m_totalsBy)
 		for (ibQueryTotalField& field : dimension.m_fields)
 			ibQueryRenameMentioned(field.m_expr, from, to);
@@ -669,7 +669,12 @@ void queryctor::ibQueryDropMissingFields(ibQuerySelect& select, const wxString& 
 	};
 	dropExprs(select.m_groupBy);
 	dropExprs(select.m_indexBy);
-	dropExprs(select.m_totalsAggregates);
+	// A RESOURCE IS AN EXPRESSION PLUS ITS NAME, so it is dropped by asking the expression — the
+	// name has nothing to say about whether the field it totals still exists.
+	select.m_totalsAggregates.erase(
+		std::remove_if(select.m_totalsAggregates.begin(), select.m_totalsAggregates.end(),
+			[&](const ibQueryTotalAggregate& r) { return lost(r.m_expr); }),
+		select.m_totalsAggregates.end());
 
 	select.m_orderBy.erase(
 		std::remove_if(select.m_orderBy.begin(), select.m_orderBy.end(),
@@ -724,7 +729,10 @@ void queryctor::ibQueryDropSourceReferences(ibQuerySelect& select, const wxStrin
 	};
 	dropExprs(select.m_groupBy);
 	dropExprs(select.m_indexBy);
-	dropExprs(select.m_totalsAggregates);
+	select.m_totalsAggregates.erase(
+		std::remove_if(select.m_totalsAggregates.begin(), select.m_totalsAggregates.end(),
+			[&](const ibQueryTotalAggregate& r) { return mentions(r.m_expr); }),
+		select.m_totalsAggregates.end());
 
 	select.m_orderBy.erase(
 		std::remove_if(select.m_orderBy.begin(), select.m_orderBy.end(),

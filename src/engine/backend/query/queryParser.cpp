@@ -626,7 +626,20 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 		do {
 			if (!IsAggregateKw(Cur()))
 				ThrowQueryException(Cur(), _("expected an aggregate function (SUM/COUNT/MIN/MAX/AVG) or BY in TOTALS"));
-			sel.m_totalsAggregates.push_back(ParseAggregate());
+			ibQueryTotalAggregate resource;
+			resource.m_expr = ParseAggregate();
+			// [AS] alias — the name the FIGURE answers to, written exactly where a level writes its
+			// own (see the BY loop below): after the thing it names, with AS optional. One rule for
+			// both halves of a TOTALS, because both are columns of the same result.
+			if (AcceptKw(ibQueryKeyword::As)) {
+				if (Cur().m_kind != ibQueryTokenKind::Ident)
+					ThrowQueryException(Cur(), _("expected an alias name after AS"));
+				resource.m_alias = Next().m_text;
+			}
+			else if (Cur().m_kind == ibQueryTokenKind::Ident) {
+				resource.m_alias = Next().m_text;
+			}
+			sel.m_totalsAggregates.push_back(std::move(resource));
 		} while (AcceptPunct(wxT(',')));
 
 		ExpectKw(ibQueryKeyword::By, wxT("BY in TOTALS"));

@@ -660,6 +660,12 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& outpu
 			text += m_resources[i].m_func.IsEmpty()
 				? m_resources[i].m_path
 				: m_resources[i].m_func + wxT("(") + m_resources[i].m_path + wxT(")");
+			// ⭐ AND THE NAME IT WAS GIVEN, through the language rather than beside it. The query text
+			// is the one seam between the composition and the engine (the composer is a tier ABOVE
+			// this text), so a resource's name travels the way a level's does — as `AS name`. Nothing
+			// downstream has to be told about resources at all.
+			if (!m_resources[i].m_alias.IsEmpty())
+				text += wxT(" AS ") + m_resources[i].m_alias;
 		}
 		// ONE LEVEL PER OUTPUT IN THE CHAIN, and a level's own fields inside it. Several fields are
 		// written in BRACKETS — `BY (Partner, Contract), Store` — which is what says they are one
@@ -882,7 +888,7 @@ ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputC
 		const bool wholeResult = (page.m_count == 0);
 		bool serverGrouped = false;
 		ibDataQueryResult r = ibQueryLowering::ExecuteTotals(*m_ast, m_params, schema, page, &serverGrouped,
-			wholeResult && WantsDetails(Root()));
+			wholeResult && WantsDetails(Root()), LayoutFor(Root()));
 		m_serverGroupedLevel = serverGrouped;
 		return r;
 	}
@@ -970,12 +976,12 @@ static bool ibLevelNodeShows(const ibFilterNodeDescription& node,
 	return ibCompositionCompare(row[at], node.m_comparison, node.m_right.m_value);
 }
 
-bool ibDataDBComposer::LevelShows(const Output& output, int depth,
+bool ibDataDBComposer::LevelShows(const Output& output, int depth, ibSelectorNodeKind kind,
 	const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row) const
 {
 	// Depth 0 is the grand total and belongs to no level; past the last level of either axis there
 	// is nothing left to hide by.
-	const GroupNode* found = LevelAt(output, depth);
+	const GroupNode* found = LevelAt(output, depth, kind);
 	if (found == nullptr)
 		return true;
 
@@ -1058,37 +1064,27 @@ bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 	return RunOutput(Root(), driver);
 }
 
-// ⭐⭐ ONE OUTPUT, ONE OR TWO FOLDS. A grouping is read once. A cross-table whose reader asks for the
-// column totals is read TWICE — the second time folded by its column keys alone — because the two
-// sets of subtotals cannot come out of one tree: rows-then-columns gives the grand total and every
-// row's, and "the columns alone" is not a prefix of that order. See WantsColumnTotals for why they
-// are not computed from the cells instead.
+// ⭐⭐ ONE OUTPUT, ONE FOLD — including a cross-table's.
 //
-// The end of the output is said ONCE, here, after whatever passes it took. A pass that announced its
-// own end would have the printer close the table before its last line arrived.
+// 🛑 IT USED TO BE TWO. A table was read a second time, folded by its column keys alone, to get the
+// figures the bottom line needs; the reason written here was that the two sets of subtotals "cannot
+// come out of one tree — rows-then-columns gives the grand total and every row's, and the columns
+// alone is not a prefix of that order". That was true of the tree as it was BUILT, not of the
+// question: a column total is the cells of the heading over EVERYTHING, and once every heading
+// carries its own column branch (ibStreamingFold::FeedAcross) the root carries one too.
+//
+// What the second pass cost was not only a read: the two folds had to agree about which column a
+// figure belonged to, and "a key the second pass found and the first did not" was a case that had
+// to be written down and silently dropped. One tree, one answer, no such case.
 bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driver)
 {
 	bool hasTotals = false;
-	const bool read = RunOutputPass(output, driver, /*columnTotals*/false, hasTotals);
-
-	if (read && driver.WantsColumnTotals()
-	    && output.Kind() == ibCompositionOutputKind::Table && !output.m_columnGroups.empty()) {
-		// THE SAME OUTPUT, TURNED ON ITS SIDE — its column axis becomes the ladder and there is no
-		// axis across. Everything else it says (its filter, its sort, the fields it shows) travels
-		// unchanged, because the question is the same question asked down a different key.
-		Output flipped = output;
-		flipped.m_rowGroups = output.m_columnGroups;
-		flipped.m_columnGroups.clear();
-		bool foldedAgain = false;
-		RunOutputPass(flipped, driver, /*columnTotals*/true, foldedAgain);
-	}
-
+	const bool read = RunOutputPass(output, driver, hasTotals);
 	driver.OnComplete(hasTotals);
 	return read;
 }
 
-bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& driver,
-	bool columnTotals, bool& hasTotalsOut)
+bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& driver, bool& hasTotalsOut)
 {
 	// ONE READ PER REFERENCE — and nothing declared here to arrange it. The reference knows whether it
 	// has read (its own initialised flag), and there is one of it per identity per session, so forty
@@ -1129,7 +1125,48 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// rule every setting follows), and a flat list of lines cannot say "these read across the page".
 	// So everything it names is the rows', and the report a person re-grouped by hand comes back a
 	// plain grouping — which is what they asked for by stating one list.
-	info.m_columnTotals = columnTotals;
+	// ⭐⭐ WHAT EACH COLUMN IS CALLED — worked out HERE, where the fields are known, and read by every
+	// driver off one answer (ibCompositionOutputInfo::TitleOf).
+	//
+	// A column of the result carries a NAME the query gave it; what stands over it on the page comes
+	// from the FIELD it is a reading of, and which field that is depends on the column's ROLE:
+	//
+	//   * a MEASURE is a reading of the field it aggregates — the resources are declared in order,
+	//     so the k-th measure column is the k-th resource, and its title is its ARGUMENT's. Which is
+	//     why `COUNT(Number)` is headed "Number" and never "CountNumber": the qualification the NAME
+	//     needed to stay unique is not something a reader should ever meet (Max, 2026-08-26).
+	//   * a DIMENSION is a reading of the field its level groups by — several fields to a level, in
+	//     the order the level states them, which is the order their columns arrive in.
+	//   * anything else is a projected field, named after itself.
+	info.m_titles.assign(schema.size(), wxString());
+	{
+		size_t measure = 0;
+		std::map<int, size_t> filledInLevel;   // level -> how many of its fields are already titled
+		for (size_t i = 0; i < schema.size(); ++i) {
+			switch (schema[i].m_role) {
+			case ibQueryLowering::ibColumnRole::Measure:
+				if (measure < m_resources.size())
+					info.m_titles[i] = TitleForPath(m_resources[measure].m_path);
+				++measure;
+				break;
+			case ibQueryLowering::ibColumnRole::Dimension: {
+				const GroupNode* level = LevelAt(output, schema[i].m_level + 1);
+				const size_t at = filledInLevel[schema[i].m_level]++;
+				if (level != nullptr && at < level->m_settings.m_group.m_lines.size())
+					info.m_titles[i] = TitleForPath(level->m_settings.m_group.m_lines[at].m_path);
+				break;
+			}
+			default:
+				break;
+			}
+			// WHATEVER IS LEFT IS TITLED BY ITS OWN NAME — a projected field, or a column whose field
+			// could not be found (a user's own grouping replaces the ladder, and then there is no
+			// level to ask). Said here rather than left empty, so TitleOf never has to guess.
+			if (info.m_titles[i].IsEmpty())
+				info.m_titles[i] = ibTitleFromName(schema[i].m_name);
+		}
+	}
+	info.m_detailsAxis = DetailAxisOf(output);
 	info.m_rowLevels = GetCurrentGroupDesc().IsOk()
 		? [&] {
 			size_t named = 0;
@@ -1230,7 +1267,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 					row[i] = oc.m_byAlias ? level.GetColumn(oc.m_alias) : level.GetValue(oc.m_col);
 				}
 
-				if (!LevelShows(output, level.Level(), schema, row))
+				if (!LevelShows(output, level.Level(), level.Kind(), schema, row))
 					continue;                   // hidden heading — and with it everything beneath
 			// ⭐ A HEADING OR A ROW — the NODE says which, and the driver is told in its own words.
 			// The fold produces headings for every level of the BY list and one node per source row
@@ -1246,7 +1283,16 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 					if (!OutputWrites(output, ibSelectorNodeKind::Detail))
 						continue;
 					driver.OnDetail(level.Level(), row);
-					continue;                   // a row has nothing under it
+					// ⭐ A ROW HAS NOTHING UNDER IT — DOWN THE PAGE. In a TABLE the column keys stand
+					// across it, and those cells are its children: the fold hangs them there so a
+					// detail record is a line of the table with figures beside it rather than
+					// something inside one cell (Max, 2026-08-26). An ordinary report's rows have no
+					// children at all, so this walk simply finds none.
+					if (level.HasChildren()) {
+						ibSelector cells = level.Select(ibSelectKind::ibSelectKind_ByGroups);
+						walk(cells);
+					}
+					continue;
 				}
 
 				// A heading, and then whatever it stands over — including the GRAND TOTAL, which is
@@ -1335,7 +1381,7 @@ ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
 	// answer, wherever it is asked from.
 	return hasTotals
 		? ibQueryLowering::ExecuteTotals(*ast, m_params, schema, page, nullptr,
-			page.m_count == 0 && WantsDetails(output))
+			page.m_count == 0 && WantsDetails(output), LayoutFor(output))
 		: ibQueryLowering::Execute(*ast, m_params, schema, page);
 }
 

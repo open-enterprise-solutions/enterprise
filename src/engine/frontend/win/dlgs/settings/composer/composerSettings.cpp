@@ -107,7 +107,7 @@ private:
 // Read straight from the composer, which is the store: the window keeps no copy of what it shows.
 class ibResourceModel : public ibDataViewVirtualListModel {
 public:
-	enum { kColField = 0, kColExpression };
+	enum { kColField = 0, kColExpression, kColAlias };
 
 	// ⭐⭐ ON THE DESCRIPTION THIS WINDOW IS EDITING — the same road the structure model takes, and
 	// asked through a callback so no copy is kept here. A resource is a LINE OF THE DESCRIPTION; it
@@ -136,6 +136,11 @@ public:
 		else if (col == kColExpression)
 			// No function means the text IS the expression — the same rule the renderer follows.
 			variant = func.IsEmpty() ? path : func + wxT("(") + path + wxT(")");
+		else if (col == kColAlias)
+			// ⚠ SHOWN EMPTY WHEN THERE IS NONE, not filled in with the name it would get. A hint in
+			// an editable cell becomes a real value on the first click through it — the very trap
+			// the level's alias cell documents one file over.
+			variant = (*list)[row].m_alias;
 	}
 
 	// ⭐ THE EXPRESSION IS EDITED IN THE CELL, the way the query constructor's Totals tab edits its
@@ -145,17 +150,30 @@ public:
 	// argument, or an empty func meaning "the text is the expression".
 	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
 		std::vector<ibResourceDescription>* list = List();
-		if (list == nullptr || col != kColExpression || row >= list->size())
+		if (list == nullptr || row >= list->size())
 			return false;
 
 		wxString text = variant.GetString();
 		text.Trim(true).Trim(false);
+
+		// THE NAME IS TYPED, NOT PARSED — and clearing it is a legitimate edit: the figure goes back
+		// to being named after its argument. So an empty cell is stored here, unlike an empty
+		// EXPRESSION, which is not a resource at all.
+		if (col == kColAlias) {
+			(*list)[row].m_alias = text;
+			return true;
+		}
+		if (col != kColExpression)
+			return false;
 		if (text.IsEmpty())
 			return false;   // a resource with no expression is not a resource — and empty would read as "delete"
 
 		wxString func, path;
 		if (!SplitCall(text, func, path)) { func.clear(); path = text; }
-		(*list)[row] = { func, path };
+		// THE NAME SURVIVES AN EDIT OF THE FIGURE. Rewriting the whole line would drop it, and a
+		// person changing SUM to COUNT is not renaming their column.
+		(*list)[row].m_func = func;
+		(*list)[row].m_path = path;
 		return true;
 	}
 
@@ -2738,6 +2756,12 @@ wxWindow* ibComposerSettingsPanel::BuildResourcePage(wxWindow* parent)
 			[this](wxString& text) -> bool { return EditResourceExpression(text); },
 			wxDATAVIEW_CELL_EDITABLE),
 		ibResourceModel::kColExpression, FromDIP(260), wxAlignment::wxALIGN_LEFT));
+	// ⭐ AND WHAT THE FIGURE IS CALLED ON THE REPORT. Empty means "after its argument", which is what
+	// `SUM(Amount)` reads as — and the cell is where a person overrules that, instead of discovering
+	// a name the engine invented to dodge a collision with a grouping (Max, 2026-08-26).
+	m_resourceView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Alias"),
+		new ibDataViewTextRenderer(ibDataViewTextRenderer::GetDefaultType(), wxDATAVIEW_CELL_EDITABLE),
+		ibResourceModel::kColAlias, FromDIP(140), wxAlignment::wxALIGN_LEFT));
 	right->Add(m_resourceView, 1, wxALL | wxEXPAND, FromDIP(4));
 	rightPane->SetSizer(right);
 
@@ -4112,7 +4136,7 @@ void ibComposerSettingsPanel::OnAddResource(wxCommandEvent&)
 	const wxArrayString aggregates = ibAggregatesForField(*field);
 	// NOTHING THE ENGINE ADMITS means the field cannot be folded at all — added as a bare
 	// expression rather than wrapped in a call it would refuse.
-	m_edited.m_resources.push_back({ aggregates.IsEmpty() ? wxString() : aggregates[0], field->m_name });
+	m_edited.m_resources.push_back({ aggregates.IsEmpty() ? wxString() : aggregates[0], field->m_name, wxString() });
 	MarkSettingsTouched();
 	ReloadResources();
 	// THE CURSOR FOLLOWS WHAT WAS ADDED — a row you have to go and find reads as a command that did
@@ -4153,10 +4177,13 @@ void ibComposerSettingsPanel::OnResourceExpression(wxCommandEvent&)
 	if (!ibResourceModel::SplitCall(text, func, path)) { func.clear(); path = text; }
 
 	// INTO THE COPY THIS WINDOW EDITS — the description, where a resource lives.
-	if (row != wxNOT_FOUND && (size_t)row < m_edited.m_resources.size())
-		m_edited.m_resources[row] = { func, path };
+	if (row != wxNOT_FOUND && (size_t)row < m_edited.m_resources.size()) {
+		// THE FIGURE IS EDITED, THE NAME STAYS — this editor is about the expression.
+		m_edited.m_resources[row].m_func = func;
+		m_edited.m_resources[row].m_path = path;
+	}
 	else
-		m_edited.m_resources.push_back({ func, path });
+		m_edited.m_resources.push_back({ func, path, wxString() });
 	MarkSettingsTouched();
 	ReloadResources();
 }

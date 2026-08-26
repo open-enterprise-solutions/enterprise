@@ -90,15 +90,38 @@ struct ibCompositionOutputInfo
 	std::vector<ibQueryLowering::OutputColumn> m_schema;
 	wxString                                   m_name;   // what the output is called, when it is
 
+	// ⭐⭐ WHAT EACH COLUMN IS CALLED, one entry per schema column. The QUERY names its columns so
+	// they can be read back — uniquely, one word, sometimes qualified to stay apart (`CountNumber`
+	// where a level already answers to `Number`). A REPORT is read by a person, and this is what
+	// they see over the column.
+	//
+	// Filled by the composition, because a title is the composition's own entity: it comes from the
+	// FIELD a column stands for (ibCompositionDescription::TitleForPath), and a resource reaches its
+	// field through the path it aggregates — `COUNT(Number)` is titled by `Number`, function and all
+	// qualification left out of it (Max, 2026-08-26).
+	std::vector<wxString>                      m_titles;
+
+	// …AND IT IS ASKED, not indexed into — a schema and a list beside it can always disagree about
+	// length, and the answer where they do is the column's own name.
+	wxString TitleOf(size_t column) const {
+		if (column < m_titles.size() && !m_titles[column].IsEmpty())
+			return m_titles[column];
+		return column < m_schema.size() ? m_schema[column].m_name : wxString();
+	}
+
 	// HOW MANY OF THE DIMENSIONS ARE THE ROWS'. Both axes fold in one `TOTALS BY`, rows first (see
 	// AppendSettingsClauses), so this is the seam between them and nothing else marks it.
 	size_t                                     m_rowLevels = 0;
 
-	// IS THIS THE COLUMN-TOTALS PASS? The second fold of a cross-table (see WantsColumnTotals) reads
-	// the same output folded by its column keys alone, and arrives through the same calls — so the
-	// driver is told which pass it is in rather than having to tell from the shape. It cannot: "a
-	// table folded by its columns only" is also what a legitimate output with no row axis looks like.
-	bool                                       m_columnTotals = false;
+	// (⚠ AND THERE IS NO "WHICH PASS IS THIS" ANY MORE. A cross-table used to be folded twice and the
+	//  driver had to be told which fold it was hearing. The column totals are the cells of the
+	//  heading over everything, and the fold builds them with the rest — see RunOutput.)
+
+	// ⭐ WHICH WAY THE DETAIL RECORDS READ. Down the page each record is a LINE of the table; across
+	// it each record is a COLUMN of its own (Max, 2026-08-26: "exactly as a detail record is in the
+	// rows, so in the columns"). A printer cannot tell from the node — a record says it is a record,
+	// not where it belongs — and the depth cannot say it either, so the output says it.
+	ibTotalsAxis                               m_detailsAxis = ibTotalsAxis::Rows;
 
 	// ⭐ AND IT IS ASKED, NOT PUBLISHED AS A NUMBER TO COMPARE AGAINST. The driver's question is
 	// "which axis is this column?", so that is what it gets — handing it the seam and letting every
@@ -184,20 +207,12 @@ public:
 	// own, this is the seam it lands on.)
 	virtual bool WantsGrandTotal() const { return false; }
 
-	// ⭐⭐ …AND WHETHER IT WANTS THE COLUMN TOTALS, which is the same kind of question and the reason
-	// this is a predicate rather than a verb: the reader says what it needs, and the answer arrives
-	// through the calls it already understands.
-	//
-	// A CROSS-TABLE NEEDS A SECOND FOLD AND THERE IS NO WAY AROUND IT. The keys fold rows-then-
-	// columns, so every prefix of that order has a subtotal — the grand total, and each row's — and
-	// "the columns alone" is not a prefix of it. The other order would hand back the column totals
-	// and lose the rows'. One tree cannot hold both, and computing them here from the cells would be
-	// wrong for every measure that is not a sum: an average of averages is not the average, and a
-	// count of distinct values cannot be added up at all.
-	//
-	// So the composition reads a second time, folding by the column keys only. It is paid for by the
-	// reader that asked — a list never does, a report does only when its output is a table.
-	virtual bool WantsColumnTotals() const { return false; }
+	// (⚠ AND NO `WantsColumnTotals`. It used to buy a SECOND FOLD of the whole output, on the
+	//  argument that "one tree cannot hold both" sets of subtotals — the rows' and the columns'.
+	//  One CHAIN cannot; a tree whose every heading carries its own column branch holds both, and
+	//  the column totals are simply the branch under the root. The figures are still never computed
+	//  FROM the cells — an average of averages is not the average — they are folded, like all the
+	//  others, from the rows.)
 
 	// The page ENVELOPE — a paged driver (the list fetch: a stack object built per
 	// Get*Fetch call carrying direction / anchor / count) fills the request and
@@ -828,6 +843,16 @@ public:
 	std::vector<wxString>&       CommonSelected()        { return m_commonSelected; }
 	const std::vector<wxString>& CommonSelected() const  { return m_commonSelected; }
 
+	// WHAT THE QUERY'S SELECTS SAY ABOUT THEIR FIELDS — filled from the description at a run, the
+	// same road the resources and the selected fields take. A DELTA, always: a select nobody has
+	// said anything about is not here at all (Max, 2026-08-26).
+	std::vector<ibSelectDescription>&       Selects()       { return m_selects; }
+	const std::vector<ibSelectDescription>& Selects() const { return m_selects; }
+
+	// THE TITLE IN FORCE FOR A PATH — through the SAME function the description answers with, so the
+	// two cannot drift (ibTitleForPath).
+	wxString TitleForPath(const wxString& path) const { return ibTitleForPath(m_selects, path); }
+
 	// ⚠ THE OUTPUTS AND THEIR LEVELS ARE EDITED WHERE THEY ARE HELD — `Outputs()` hands over the
 	// vector, and the settings window builds a node whole (several fields, a kind, its own filter
 	// and sort) before it lands. Verbs that made a one-field level or an empty output stood here for
@@ -878,14 +903,55 @@ public:
 	//
 	// Depth 0 is the grand total and belongs to no level; past the last level of either axis there
 	// is nothing, and both are the same nullptr because both mean "nobody stated anything here".
-	static const GroupNode* LevelAt(const Output& output, int depth) {
+	// 🛑 AND IT COUNTS THE LEVELS THAT WRITE A KEY, because those are the ones a DEPTH counts. The
+	// ladder may also hold the DETAIL level, which writes no `BY` and gets no depth of its own from
+	// the fold — so indexing the axis as it is written slid every level past it by one: a column
+	// key's depth landed on the detail node, and the column level's own filter and sort were read
+	// off the wrong node (silently, which is how "the setting does nothing" always looks).
+	//
+	// The detail level is reached by ASKING FOR IT (DetailLevelOf), because a node that is a record
+	// says so with its kind — it does not have to be found by counting.
+	static const GroupNode* LevelAt(const Output& output, int depth,
+	                                ibSelectorNodeKind kind = ibSelectorNodeKind::Group) {
+		// A RECORD SAYS WHAT IT IS, so it is not looked for by counting — see DetailLevelOf.
+		if (kind == ibSelectorNodeKind::Detail)
+			return DetailLevelOf(output);
 		if (depth <= 0)
 			return nullptr;
 		size_t at = static_cast<size_t>(depth) - 1;
-		if (at < output.m_rowGroups.size())
-			return &output.m_rowGroups[at];
-		at -= output.m_rowGroups.size();
-		return (at < output.m_columnGroups.size()) ? &output.m_columnGroups[at] : nullptr;
+		for (const std::vector<GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups })
+			for (const GroupNode& level : *axis) {
+				if (!level.m_settings.m_group.IsOk())
+					continue;              // the detail records — no key, no depth
+				if (at == 0)
+					return &level;
+				--at;
+			}
+		return nullptr;
+	}
+
+	// THE LEVEL THE ROWS THEMSELVES BELONG TO, wherever the author put it. Either axis may declare
+	// it (a table's columns may end in detail records), and there is at most one that matters: the
+	// first one found is the one the walk is standing on.
+	static const GroupNode* DetailLevelOf(const Output& output) {
+		for (const std::vector<GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups })
+			for (const GroupNode& level : *axis)
+				if (level.m_kind == ibCompositionLevelKind::Details)
+					return &level;
+		return nullptr;
+	}
+
+	// ⭐ …AND WHICH WAY THAT LEVEL READS. A record declared on the COLUMN axis is a column of its
+	// own — "exactly as a detail record is in the rows, so in the columns" (Max, 2026-08-26) — and
+	// the fold has to be told, because the level itself is written last either way.
+	//
+	// Rows when nobody declared one: the records are read regardless (they are what the totals are
+	// made of), and down the page is where a report puts them.
+	static ibTotalsAxis DetailAxisOf(const Output& output) {
+		for (const GroupNode& level : output.m_columnGroups)
+			if (level.m_kind == ibCompositionLevelKind::Details)
+				return ibTotalsAxis::Columns;
+		return ibTotalsAxis::Rows;
 	}
 
 	// HOW MANY DIMENSIONS AN AXIS CONTRIBUTES — and it counts levels that actually WRITE A KEY, not
@@ -924,6 +990,35 @@ public:
 	static bool WantsDetails(const Output& output) {
 		return HasGroupingFields(output);
 	}
+
+	// ⭐⭐ HOW MANY LEVELS READ DOWN THE PAGE — the one place the seam of a cross-table is decided,
+	// and the number the FOLD is told (ibQueryLowering::ExecuteTotals) so the cells hang under every
+	// row heading. Zero means nothing reads across: an ordinary report, or a table whose settings
+	// were re-grouped by hand (a flat list of lines cannot say "these read across the page", so
+	// everything it names is the rows' — the same rule AppendSettingsClauses follows).
+	size_t RowLevelsFor(const Output& output) const {
+		if (GetCurrentGroupDesc().IsOk() || output.m_columnGroups.empty())
+			return 0;
+		return DimensionCount(output.m_rowGroups);
+	}
+
+	// ⭐⭐ THE WHOLE LAYOUT, as one answer (ibTotalsLayout). The count alone could not say it: an
+	// output whose ROWS axis is empty and whose COLUMNS carry everything is a legitimate table —
+	// "the resources laid out across the page" — and it counts zero row levels, exactly like an
+	// ordinary report. `m_hasColumns` is the fact that tells them apart, and it is a fact about the
+	// STRUCTURE, not about a number.
+	ibTotalsLayout LayoutFor(const Output& output) const {
+		ibTotalsLayout layout;
+		layout.m_hasColumns  = !GetCurrentGroupDesc().IsOk() && !output.m_columnGroups.empty();
+		layout.m_rowLevels   = layout.m_hasColumns ? DimensionCount(output.m_rowGroups) : 0;
+		layout.m_detailsAxis = DetailAxisOf(output);
+		return layout;
+	}
+
+	// (AND THE DETAIL LEVEL DOES NOT MOVE THIS SEAM. It is written LAST in the fold's config and
+	//  numbered past the last dimension, so a column key's level means the same whether or not the
+	//  rows were read — see ibDataQueryBuilder::TotalsDetails. Where it HANGS is another question,
+	//  and it is the fold's: under the last ROW heading, with the columns standing across it.)
 
 	// ⭐⭐ WHICH FIELDS AN OUTPUT SHOWS — EVERYTHING SAID ABOUT IT, PILED UP. The composition speaks
 	// first, the output adds to that, a node adds to the output: nobody restates the list to add one
@@ -1012,6 +1107,10 @@ protected:
 	// Always non-empty (see Outputs) — the one output every composition starts with.
 	std::vector<Output>      m_outputs = std::vector<Output>(1);
 	std::vector<ibResourceDescription> m_resources;   // common to every output
+	// THE QUERY'S SELECTS, and what has been said about their fields — a delta, not a copy of the
+	// schema. Common to every output, like the resources and for the same reason: a field is one
+	// field however many outputs print it.
+	std::vector<ibSelectDescription>   m_selects;
 
 	// ⭐ THE SELECTED FIELDS OF THE COMPOSITION — what everything shows unless it says otherwise
 	// (Max: set them at the root and they spread over all the tables underneath). An output may
@@ -1126,15 +1225,11 @@ public:
 	// Read one output — see the base declaration. The first output rides the cached parse (a list
 	// re-reads it on every page); any other renders and parses on the spot.
 	//
-	// It is the passes plus the ending: a table asked for its column totals is folded a second time,
-	// and the output ends once, after both (see the body).
+	// One fold and the ending — a table's column totals come out of the same tree now (see the body).
 	bool RunOutput(const Output& output, ibCompositionDriver& driver) override;
 
-	// ONE FOLD OF ONE OUTPUT, handed to the driver in the node language. `columnTotals` says which
-	// pass this is — the driver is told rather than left to guess, because a table folded by its
-	// columns alone is indistinguishable from an output that simply has no row axis.
-	bool RunOutputPass(const Output& output, ibCompositionDriver& driver,
-		bool columnTotals, bool& hasTotalsOut);
+	// ONE FOLD OF ONE OUTPUT, handed to the driver in the node language.
+	bool RunOutputPass(const Output& output, ibCompositionDriver& driver, bool& hasTotalsOut);
 
 	// Execute for ONE output: the cached parse for the first, a fresh render + parse for any other.
 	ibDataQueryResult ExecuteFor(const Output& output, std::vector<ibQueryLowering::OutputColumn>& schema,
@@ -1151,7 +1246,10 @@ private:
 	// This is the display half of a filter, and the reason a level's filter never reaches the WHERE:
 	// a heading nobody wants to look at (an empty recorder, an opening balance) is hidden, while its
 	// rows stay in every total above it. A depth with no level of its own shows everything.
-	bool LevelShows(const Output& output, int depth,
+	//
+	// ⚠ AND THE NODE'S KIND TRAVELS WITH THE DEPTH: a RECORD's level is not found by counting, since
+	// it writes no key and has no depth of its own (see LevelAt).
+	bool LevelShows(const Output& output, int depth, ibSelectorNodeKind kind,
 		const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row) const;
 
 	// …AND IN WHAT ORDER DOES IT HAND THEM OVER? The twin of LevelShows, and the half a level's

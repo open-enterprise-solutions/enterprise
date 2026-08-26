@@ -65,6 +65,15 @@ ibQueryLowering::OutputColumn Measure(const wxString& name) {
 	return c;
 }
 
+// A PROJECTED FIELD — what a DETAIL row says about itself. Not a dimension and not a figure, which
+// is exactly the role the lowering stamps on everything a query merely selects.
+ibQueryLowering::OutputColumn Detail(const wxString& name) {
+	ibQueryLowering::OutputColumn c;
+	c.m_name = name;
+	c.m_role = ibQueryLowering::ibColumnRole::Detail;
+	return c;
+}
+
 } // namespace
 
 // A document nobody wrote into is empty — and it is also the CONTROL for the leak
@@ -424,20 +433,33 @@ TEST(SpreadsheetCross, TheRowHeadingsOwnFiguresAreTheRowTotal)
 	EXPECT_EQ(wxT("100"), doc->GetCellValue(1, 3));
 }
 
-// ⚠ A DETAIL RECORD HAS NO CELL TO STAND IN. A cell holds what was COMPUTED where two headings meet;
-// a detail record is one of the rows it was computed FROM. The table drops them — and says so.
-TEST(SpreadsheetCross, DetailRecordsAreNotPrintedIntoTheGrid)
+// ⭐⭐ A DETAIL RECORD IS A LINE OF THE TABLE, WITH CELLS ACROSS IT (Max, 2026-08-26: "its own line,
+// cells by the columns").
+//
+// 🛑 IT USED TO BE DROPPED, on the argument that "a cell holds what was computed, not what it was
+// computed from". That answered a question nobody asked: a detail record was never going INTO a
+// cell — it is a ROW, and what stands across a row are its columns. What made the argument look
+// right was the fold's shape, which put the detail level after the column keys.
+TEST(SpreadsheetCross, ADetailRecordIsALineOfTheTableWithItsOwnCells)
 {
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnOutputBegin(CrossInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) }, 1));
-	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(30) });
-	driver.OnGroup(2, true, false, { ibValue(), ibValue(wxT("North")), ibValue(30) });
-	driver.OnDetail(3, { ibValue(), ibValue(), ibValue(30) });
+	const std::vector<ibQueryLowering::OutputColumn> schema =
+		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")), Detail(wxT("Doc")) };
+
+	driver.OnOutputBegin(CrossInfo(schema, 1));
+	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(30), ibValue() });
+	driver.OnGroup(2, true, false, { ibValue(), ibValue(wxT("North")), ibValue(30), ibValue() });
+	// The record hangs under the ROW heading and carries a cell of its own — its level is past the
+	// last dimension, which is how it is told from a column key.
+	driver.OnDetail(3, { ibValue(), ibValue(), ibValue(30), ibValue(wxT("Inv-7")) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(30), ibValue() });
 	driver.OnComplete(true);
 
-	EXPECT_EQ(1, driver.GetRowsWritten());   // the heading, and nothing under it
+	EXPECT_EQ(2, driver.GetRowsWritten());                       // the heading AND the record
+	EXPECT_EQ(wxT("Inv-7"), doc->GetCellValue(2, 0).Trim(false));  // what the record says, on the left
+	EXPECT_EQ(wxT("30"),    doc->GetCellValue(2, 1));              // …and its figure under its column
 }
 
 // ⭐ AN OUTPUT WITH NO COLUMN AXIS IS THE ORDINARY REPORT, printed as it arrives. The table layout is
@@ -462,13 +484,14 @@ TEST(SpreadsheetCross, WithNoColumnAxisTheStreamingLayoutIsUsed)
 	EXPECT_EQ(1, driver.GetRowsWritten());
 }
 
-// ⭐⭐ THE COLUMN TOTALS ARRIVE AS A SECOND FOLD, through the same calls, and land in the bottom row
-// under the columns they belong to. The first fold cannot carry them: its keys nest rows-then-
-// columns, and "the columns alone" is not a prefix of that order.
+// ⭐⭐ THE COLUMN TOTALS ARE THE ROOT'S CELLS, and they land in the bottom row under the columns they
+// belong to. They used to cost a SECOND FOLD of the whole output, on the argument that one tree
+// could not hold both sets of subtotals — true of one chain, not of a tree where every heading
+// carries its own column branch.
 //
 // The corner is the grand total — one sentence read across and closed at the right, not two rows
 // saying the same thing.
-TEST(SpreadsheetCross, ColumnTotalsArriveAsASecondFoldAndCloseTheTable)
+TEST(SpreadsheetCross, ColumnTotalsComeFromTheRootAndCloseTheTable)
 {
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
@@ -476,23 +499,18 @@ TEST(SpreadsheetCross, ColumnTotalsArriveAsASecondFoldAndCloseTheTable)
 	const std::vector<ibQueryLowering::OutputColumn> schema =
 		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) };
 
-	// The driver asks for them — that is what makes the composition read twice.
-	EXPECT_TRUE(driver.WantsColumnTotals());
-
 	driver.OnOutputBegin(CrossInfo(schema, 1));
 	driver.OnGroup(0, true, false, { ibValue(), ibValue(), ibValue(100) });          // the grand total
+	// ⭐ ITS CELLS COME NEXT — the column totals. The fold hangs the column branch under EVERY
+	// heading, and the root is the heading over everything, so what each column adds up to arrives
+	// with the rest of the tree instead of costing a second read of the whole output.
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
+
 	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(60) });
 	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
 	driver.OnGroup(1, true, false, { ibValue(wxT("Beta")), ibValue(), ibValue(40) });
 	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
-
-	// …and the second pass: the same output folded by its column keys alone. It announces itself,
-	// because "a table folded by its columns" and "an output with no row axis" look identical.
-	ibCompositionOutputInfo totalsPass = CrossInfo(schema, 1);
-	totalsPass.m_columnTotals = true;
-	driver.OnOutputBegin(totalsPass);
-	driver.OnGroup(1, true, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
-	driver.OnGroup(1, true, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
 
 	driver.OnComplete(true);
 
@@ -503,9 +521,11 @@ TEST(SpreadsheetCross, ColumnTotalsArriveAsASecondFoldAndCloseTheTable)
 	EXPECT_EQ(wxT("100"),   doc->GetCellValue(3, 3));   // the corner
 }
 
-// ⚠ THE SECOND FOLD MUST NOT START A SECTION. It is the same table read again — clearing the sheet
-// there would erase the very grid the totals belong under.
-TEST(SpreadsheetCross, TheSecondFoldDoesNotClearWhatTheFirstPrinted)
+// ⭐⭐ THE TOTALS SETTLE THE COLUMN ORDER. They are the ROOT's cells, so they arrive before any row
+// — and every column key is therefore numbered before a row can ask for it. A row that meets the
+// keys in a different order (its own second key first) still lands in the columns the header
+// announced, which is the whole reason the table is one width for every line.
+TEST(SpreadsheetCross, TheColumnTotalsSettleTheOrderOfTheColumns)
 {
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
@@ -514,19 +534,22 @@ TEST(SpreadsheetCross, TheSecondFoldDoesNotClearWhatTheFirstPrinted)
 		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) };
 
 	driver.OnOutputBegin(CrossInfo(schema, 1));
-	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(60) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
+	driver.OnGroup(0, true, false, { ibValue(), ibValue(), ibValue(100) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });   // …the root's cells
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
 
-	ibCompositionOutputInfo totalsPass = CrossInfo(schema, 1);
-	totalsPass.m_columnTotals = true;
-	driver.OnOutputBegin(totalsPass);
-	driver.OnGroup(1, true, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
+	// The only row meets South FIRST — and South is still the second column.
+	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(100) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
+	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
 
 	driver.OnComplete(true);
 
-	EXPECT_EQ(wxT("North"), doc->GetCellValue(0, 1));            // the header still stands
+	EXPECT_EQ(wxT("North"), doc->GetCellValue(0, 1));
+	EXPECT_EQ(wxT("South"), doc->GetCellValue(0, 2));
 	EXPECT_EQ(wxT("Alpha"), doc->GetCellValue(1, 0).Trim(false));
-	EXPECT_EQ(wxT("60"),    doc->GetCellValue(2, 1));            // …and the totals row under it
+	EXPECT_EQ(wxT("60"),    doc->GetCellValue(1, 1));   // North's figure under North
+	EXPECT_EQ(wxT("40"),    doc->GetCellValue(1, 2));   // …and South's under South
 }
 
 // ⭐ AN OUTPUT NAMES ITSELF over its own block. The name travelled from the composer to the driver

@@ -392,9 +392,23 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalByLevel(ibTotalLevel level)
 // downstream, two intents upstream, and no way to mistake the second for the first.
 //
 // Goes LAST, always — there is nothing to group below the rows.
-ibDataQueryBuilder& ibDataQueryBuilder::TotalsDetails()
+//
+// ⚠ LAST IN THE CONFIG IS NOT THE SAME AS DEEPEST IN THE TREE. In a cross-table the rows read down
+// the page and the column keys stand across them, so a detail record hangs under the last ROW
+// heading and carries cells of its own (Max, 2026-08-26: "its own line, cells by the columns").
+// Where it hangs is the FOLD's answer — it is the one that knows which way each level reads — and
+// keeping the level itself last is what makes every level's NUMBER mean the same thing it always
+// did: the position of the dimension it belongs to, which is what the result's schema is numbered
+// by too.
+// ⭐ AND IT SAYS WHICH WAY IT READS, like every other level. Detail records are legitimate on BOTH
+// axes (Max, 2026-08-25 and again 2026-08-26: "exactly as a detail record is in the rows, so in the
+// columns"): down the page each record is a LINE of the table; across it each record is a COLUMN of
+// its own. One level, one word of difference, and the fold hangs it accordingly.
+ibDataQueryBuilder& ibDataQueryBuilder::TotalsDetails(ibTotalsAxis axis)
 {
-	m_totals.push_back(ibTotalLevel{});
+	ibTotalLevel level;
+	level.m_axis = axis;
+	m_totals.push_back(std::move(level));
 	return *this;
 }
 

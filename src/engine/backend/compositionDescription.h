@@ -8,6 +8,7 @@
 #include "backend/backend_core.h"     // ibMetaID, wxNOT_FOUND, ibClassID
 #include "backend/compiler/value.h"   // ibValue — a filter's right-hand side travels as one
 #include "backend/typeDescription.h"  // ibTypeDescription — the sibling description a parameter declares
+#include "backend/guid.h"             // ibGuid — the stable key a select is identified by
 // ⭐ THE UNFOLD IS THE LANGUAGE'S OWN WORD, and this header exists so every tier can name it without
 // dragging a tier down (query/queryUnfold.h). A twin enum here would be a second vocabulary for one
 // fact — and it WAS one: the runtime enumeration is registered over ibQueryDimUnfold, so a window
@@ -341,14 +342,155 @@ struct ibParameterDescription {
 	bool operator!=(const ibParameterDescription& o) const { return !(*this == o); }
 };
 
+// ⭐⭐ THE TITLE A NAME IMPLIES — `DataVersion` → "Data Version", `Number` → "Number". A name is
+// written for the language (one word, no spaces); a title is written for a reader, and nobody
+// should have to type one out to get a report that can be read (Max, 2026-08-26: "if the title is
+// not given, it is generated from the name — the capitals are where the spaces go").
+//
+// Here, in the composition's own vocabulary, because a title IS a composition's word: the query
+// tier below knows names and aliases and has no business inventing captions.
+BACKEND_API wxString ibTitleFromName(const wxString& name);
+
+// THE NAME A PATH IMPLIES — its last segment. `Partner.Contract` is the field "Contract"; the walk
+// to it belongs to the path, not to what the field is called.
+BACKEND_API wxString ibNameFromPath(const wxString& path);
+
 // --- RESOURCE --------------------------------------------------------------
 // An aggregate the levels fold. `m_func` empty means the path IS the whole expression.
 struct ibResourceDescription {
 	wxString m_func;
 	wxString m_path;
-	bool operator==(const ibResourceDescription& o) const { return m_func == o.m_func && m_path == o.m_path; }
+	// ⭐ THE NAME THE FIGURE IS READ BACK UNDER — `res["Qty"]`, the twin of a level's alias, which
+	// this language already has. It travels INTO the query (`TOTALS SUM(Amount) AS Qty`), because a
+	// name is what the query tier deals in. Empty = the engine names it after the argument.
+	wxString m_alias;
+
+	// (⚠ AND NO TITLE HERE. A resource is BUILT ON A FIELD — `SUM(Amount)` is a reading of Amount —
+	//  so what it is called comes from that field, through m_path (Max, 2026-08-26: "a resource
+	//  refers to a field; it is the field that should hold the title, and the resource reaches it
+	//  through the field"). A caption of its own would be a second place to say one thing, and the
+	//  two would drift the first time a person renamed the field.)
+	bool operator==(const ibResourceDescription& o) const {
+		return m_func == o.m_func && m_path == o.m_path && m_alias == o.m_alias;
+	}
 	bool operator!=(const ibResourceDescription& o) const { return !(*this == o); }
 };
+
+// ⭐⭐ A FIELD OF THE COMPOSITION, AND WHAT IT IS CALLED. This is the entity a resource, a grouping
+// level and a printed column all REFER TO — they name a path, and the path is this. So the title
+// lives here, once, and everything that mentions the field reads the same answer.
+//
+// TWO MEMBERS, because "no title" and "an empty title" are different answers, and because the
+// generated one has to stay live: until somebody says otherwise, the caption follows the name. Which
+// is what `m_useTitle` says — a person took it over.
+// THREE THINGS, AND THEY ARE THREE (Max, 2026-08-26):
+//   * the PATH TO THE DATA — where the value comes from, qualified by the named package when two
+//     of them offer the same word. That is the whole job of `ONTO`: it settles a clash of names,
+//     nothing else.
+//   * the NAME — the short word everything else says: a resource names a field, a level groups by
+//     one, a script reads one back.
+//   * the TITLE — what a person reads. Generated from the name until somebody takes it over.
+// (A role — opening balance, closing balance — is expected to join them; it is the same table.)
+struct ibFieldDescription {
+	wxString m_path;
+	// Empty = the name IS the path's last segment, which is the ordinary case and is why nothing
+	// has to be written down for nearly every field of nearly every report.
+	wxString m_name;
+	bool     m_useTitle = false;
+	wxString m_title;
+	// (⏭ AND ITS ROLE — opening balance, closing balance — and its periodicity, which is what this
+	//  table is FOR beyond captions: an output can then say "this figure is the opening balance"
+	//  instead of the report re-deriving it from a name (Max, 2026-08-26). One entry per field,
+	//  whatever ends up being said about it; the readers all come through here already.)
+
+	// THE NAME IN FORCE — what was written down, else the PATH itself: a name is assembled as the
+	// package's name plus the field's (`Sales.Qty`), and that assembly IS the path (Max, 2026-08-26).
+	// Asked rather than read off the member, because absence means something and every caller would
+	// otherwise re-state it.
+	wxString NameInForce() const { return m_name.IsEmpty() ? m_path : m_name; }
+
+	// …AND WHAT A READER SEES. What a person took over, else the field's own name read out loud.
+	wxString TitleInForce() const {
+		return m_useTitle ? m_title : ibTitleFromName(ibNameFromPath(NameInForce()));
+	}
+
+	bool operator==(const ibFieldDescription& o) const {
+		return m_path == o.m_path && m_name == o.m_name
+		    && m_useTitle == o.m_useTitle && m_title == o.m_title;
+	}
+	bool operator!=(const ibFieldDescription& o) const { return !(*this == o); }
+};
+
+// ⭐⭐ ONE SELECT OF THE QUERY, AND WHAT ITS FIELDS ARE CALLED (Max, 2026-08-26: "you are storing the
+// SELECTs — each of them has its own description inside").
+//
+// A composition's query is a package of selects. `ONTO <name>` names one of them, and the name is
+// what qualifies a path when two selects offer the same word — that is the whole job of the keyword:
+// it settles a clash of names, nothing else. Which is why the fields live HERE and not in one flat
+// table on the composition: two selects may both have a `Qty`, and they are two fields.
+//
+// ⚠ NAMED AFTER WHAT IT IS, NOT AFTER THE KEYWORD THAT NAMES IT. `OntoDescription` was the first
+// spelling and it describes only the case where somebody wrote `ONTO`: a select exists — and needs
+// an entry — whether or not it has been named.
+//
+// ⭐ AND THE IDENTITY IS NOT THE NAME. A select exists whether or not anybody named it, so it
+// carries an id that never changes, and the name is written ON that id — rename it and every path
+// that referred to it still refers to it, because they refer by identity and the name is what they
+// are RENDERED with (Max: "you change the value at the input and everything downstream sees the new
+// name"). With one select a name is optional; with two it is required, because without it neither
+// can be addressed. (Both rules are the settings window's to enforce.)
+struct ibSelectDescription {
+	// Stable, opaque, and never shown — the thing a path actually points at. Empty on a record that
+	// predates this, which is exactly the ONE unnamed select a composition starts with.
+	wxString m_id;
+	// The word `ONTO` gave it. Empty = unnamed, which is legitimate while it is the only one.
+	wxString m_name;
+	// What its fields are called — only the ones somebody has said something about. The fields
+	// themselves are whatever the select projects, so listing them here would be a copy that goes
+	// stale the moment the text is edited.
+	std::vector<ibFieldDescription> m_fields;
+
+	// A KEY NOBODY EVER READS OUT — made in one place so "how is identity minted" has one answer.
+	static wxString NewId() { return ibGuid(ibGuid::newGuid()).str(); }
+
+	// ⭐ IS THIS THE SELECT SOMETHING MEANT? Asked by IDENTITY first and by name second, which is the
+	// order the whole design rests on: the id is what a reference IS, the name is what it is written
+	// with. A caller holding an id keeps its select across a rename; one holding a name is looking at
+	// text, and text is what a rename changes.
+	bool Matches(const wxString& idOrName) const {
+		if (!m_id.IsEmpty() && m_id.IsSameAs(idOrName, false))
+			return true;
+		return !m_name.IsEmpty() && m_name.IsSameAs(idOrName, false);
+	}
+
+	bool operator==(const ibSelectDescription& o) const {
+		return m_id == o.m_id && m_name == o.m_name && m_fields == o.m_fields;
+	}
+	bool operator!=(const ibSelectDescription& o) const { return !(*this == o); }
+
+	// THE FIELD AN UNQUALIFIED NAME MEANS, inside this select. Null when nobody has said anything
+	// about it — which is the ordinary case and not an error: its title is then its name.
+	const ibFieldDescription* Find(const wxString& name) const {
+		for (const ibFieldDescription& field : m_fields)
+			if (ibNameFromPath(field.NameInForce()).IsSameAs(name, false))
+				return &field;
+		return nullptr;
+	}
+};
+
+// WHICH SELECT A PATH SPEAKS OF — the one it names, or the only one there is. Null when neither
+// answers, which is exactly what an unqualified path means once a second select exists.
+BACKEND_API const ibSelectDescription* ibSelectOfPath(const std::vector<ibSelectDescription>& selects,
+                                                      const wxString& path);
+
+// ⭐ THE TITLE IN FORCE FOR A PATH — ONE function, so the description and the running composer
+// cannot answer differently (they hold the same selects; they must not each work out what a column
+// is called). What a person set, else the field's name read out loud.
+//
+// ⚠ A PATH NOBODY HAS AN ENTRY FOR IS NOT AN ERROR — it is the ordinary case, and it is also what a
+// field that has GONE looks like. Either way the answer is its name, so a report whose query lost a
+// column still prints: the schema degrades field by field, never as a whole.
+BACKEND_API wxString ibTitleForPath(const std::vector<ibSelectDescription>& selects, const wxString& path);
 
 // --- STRUCTURE -------------------------------------------------------------
 // ⭐⭐ THE WHOLE STRUCTURE LIVES HERE, in its own types. It used to be described with the composer's
@@ -564,6 +706,55 @@ struct ibCompositionDescription {
 	std::vector<ibParameterDescription> m_parameters;
 	std::vector<ibResourceDescription>  m_resources;
 
+	// ⭐⭐ THE SELECTS OF THE QUERY — one entry each, holding what ITS fields are called. This is the
+	// section every other one points into: a resource names a field, a level groups by one, a column
+	// prints one, and each of them says a path that is resolved HERE.
+	//
+	// Empty is the ordinary state, and it means exactly what it says: nobody has named anything, so
+	// every field is titled by its name. It is also where a field's role — opening balance, closing
+	// balance — and, later, its translation will go.
+	std::vector<ibSelectDescription>    m_selects;
+
+	// THE TITLE IN FORCE FOR A PATH — the one door, so a printer, a header and a chart cannot answer
+	// differently. What a person set, else the name read out loud (ibTitleFromName).
+	//
+	// The path may be QUALIFIED by a package (`Sales.Qty`) or bare (`Qty`). Qualified, it names the
+	// package that says so; bare, it can only mean the one package there is — which is precisely why
+	// a second package makes the name compulsory.
+	//
+	// ⚠ A PATH NOBODY HAS AN ENTRY FOR IS NOT AN ERROR — it is the ordinary case, and it is also
+	// what a field that has GONE looks like. Either way the answer is its name, so a report whose
+	// query lost a column still prints: the schema degrades field by field, never as a whole.
+	wxString TitleForPath(const wxString& path) const { return ibTitleForPath(m_selects, path); }
+
+	// THE SELECT AN ID NAMES — the door a caller uses when it holds identity rather than text.
+	ibSelectDescription* SelectById(const wxString& id) {
+		if (id.IsEmpty())
+			return nullptr;
+		for (ibSelectDescription& select : m_selects)
+			if (select.m_id.IsSameAs(id, false))
+				return &select;
+		return nullptr;
+	}
+
+	// ⭐⭐ RENAMING A SELECT IS ONE WRITE — the point of an identity that is not a name. The entry
+	// keeps its id, so everything that refers to it BY ID still does; what changes is the word it is
+	// rendered with.
+	//
+	// ⏭ AND THE PATHS IN THE SETTINGS ARE NOT THERE YET. A grouping, a resource and a sort store a
+	// path as TEXT (`Sales.Qty`) because that same text is what goes into the query, so today they
+	// refer to a select by its NAME and a rename would have to rewrite every one of them — the very
+	// chase this design exists to avoid. Closing that means storing the qualifier as an ID and
+	// RENDERING the name at the moment the query text is written; it is an arc of its own, and it
+	// starts here, at the one place a rename passes through.
+	bool RenameSelect(const wxString& id, const wxString& name) {
+		ibSelectDescription* select = SelectById(id);
+		if (select == nullptr)
+			return false;
+		select->m_name = name;
+		return true;
+	}
+
 	// ⭐⭐ THE VARIANTS, AND THERE IS ALWAYS ONE. A composition with no variant would have nowhere to
 	// keep its settings, so the vector starts with one — the same trick `ibDataComposer::m_outputs`
 	// uses, and for the same reason: an invariant held by CONSTRUCTION needs no window to remember it.
@@ -645,6 +836,7 @@ struct ibCompositionDescription {
 		    //  comparing them again here would be comparing one fact twice)
 		    && m_parameters == o.m_parameters
 		    && m_resources == o.m_resources
+		    && m_selects == o.m_selects
 		    && m_variants == o.m_variants
 		    // …AND THE COMPOSITION-WIDE SETS. A property asks this to tell "changed" from "the same",
 		    // so a member left out of here is a member whose edit leaves the configuration looking
@@ -763,6 +955,14 @@ class BACKEND_API ibResourceDescriptionMemory {
 public:
 	static bool ReadNode(const ibDataNode& node, std::vector<ibResourceDescription>& resources);
 	static bool WriteNode(ibDataNode& node, const std::vector<ibResourceDescription>& resources);
+};
+
+// THE PACKAGES — the query's selects, each with what its own fields are called. Written only where
+// somebody said something, so an untouched composition adds nothing to its file.
+class BACKEND_API ibSelectDescriptionMemory {
+public:
+	static bool ReadNode(const ibDataNode& node, std::vector<ibSelectDescription>& selects);
+	static bool WriteNode(ibDataNode& node, const std::vector<ibSelectDescription>& selects);
 };
 
 // THE VARIANTS — each its own node, carrying settings + structure + its own parameter values.

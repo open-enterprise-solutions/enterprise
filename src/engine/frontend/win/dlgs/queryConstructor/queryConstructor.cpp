@@ -1829,9 +1829,13 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	m_totalsAggregateModel = new ibQueryGridModel();
 	m_totalsAggregateModel->SetReader([this](unsigned int row, unsigned int col) -> wxString {
 		const ibQuerySelect* select = Current();
-		if (select == nullptr || row >= select->m_totalsAggregates.size() || !select->m_totalsAggregates[row])
+		if (select == nullptr || row >= select->m_totalsAggregates.size() || !select->m_totalsAggregates[row].m_expr)
 			return wxEmptyString;
-		const ibQueryAstExpr& expr = *select->m_totalsAggregates[row];
+		const ibQueryTotalAggregate& resource = select->m_totalsAggregates[row];
+		const ibQueryAstExpr& expr = *resource.m_expr;
+		// THE NAME THE FIGURE IS READ BACK UNDER — its own column, exactly as a level has one.
+		if (col == kGridCol3)
+			return resource.m_alias;
 		if (col == kGridCol2)
 			return ibRenderQueryExpr(expr);
 		// The field the total is OVER — the argument, which is what a person looks down this column for.
@@ -1843,18 +1847,26 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		ibQuerySelect* select = Current();
 		if (!CanEdit() || select == nullptr || row >= select->m_totalsAggregates.size())
 			return false;
+		// THE NAME IS NOT AN EXPRESSION — it is typed, trimmed and stored. Empty clears it, and the
+		// figure goes back to being named after its argument (the engine's own fallback).
+		if (col == kGridCol3) {
+			wxString alias = text;
+			alias.Trim(true).Trim(false);
+			select->m_totalsAggregates[row].m_alias = alias;
+			return true;
+		}
 		// Typing over the FIELD keeps the function that was there; typing over the EXPRESSION replaces
 		// the whole call. Either way the engine's parser is what reads it.
 		wxString source = text;
 		if (col == kGridCol1) {
-			const ibQueryAstExprPtr& current = select->m_totalsAggregates[row];
+			const ibQueryAstExprPtr& current = select->m_totalsAggregates[row].m_expr;
 			const ibQueryKeyword func = current && current->m_kind == ibQueryAstExprKind::Func
 				? current->m_func : ibQueryKeyword::Sum;
 			source = ibQueryKeywordText(func) + wxT("(") + text + wxT(")");
 		}
 		try {
 			ibQueryParser parser;
-			select->m_totalsAggregates[row] = parser.ParseExpression(source);
+			select->m_totalsAggregates[row].m_expr = parser.ParseExpression(source);
 		}
 		catch (const ibBackendException& error) {
 			ShowEngineError(error.GetErrorDescription());
@@ -1868,7 +1880,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	m_totalsAggregateModel->SetIconReader([this](unsigned int row) -> wxIcon {
 		const ibQuerySelect* select = Current();
 		if (select == nullptr || row >= select->m_totalsAggregates.size()) return wxNullIcon;
-		const ibQueryAstExprPtr& expr = select->m_totalsAggregates[row];
+		const ibQueryAstExprPtr& expr = select->m_totalsAggregates[row].m_expr;
 		return expr ? IconOfExpr(expr->m_arg) : wxNullIcon;
 	});
 	m_totalsAggregates->GetRootColumnGroup()->AppendColumn(IconColumn(_("Totals field"), kGridCol1, FromDIP(240)));
@@ -1890,7 +1902,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			if (select == nullptr || row < 0 || static_cast<size_t>(row) >= select->m_totalsAggregates.size())
 				return words;
 
-			const ibQueryAstExprPtr& current = select->m_totalsAggregates[row];
+			const ibQueryAstExprPtr& current = select->m_totalsAggregates[row].m_expr;
 			if (!current)
 				return words;
 			// THE FIELD THIS TOTAL IS OVER — the argument of the call, or the whole expression when it
@@ -1926,6 +1938,10 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		},
 		m_readOnly ? wxDATAVIEW_CELL_INERT : wxDATAVIEW_CELL_EDITABLE),
 		kGridCol2, FromDIP(320), wxAlignment::wxALIGN_LEFT));
+	// ⭐ AND THE NAME THE FIGURE ANSWERS TO — the same column a LEVEL has, in the same place, because
+	// it is the same question: what is this column of the result called. Left empty the engine names
+	// it after the argument, which is what every query written before this meant.
+	m_totalsAggregates->GetRootColumnGroup()->AppendColumn(TextColumn(_("Alias"), kGridCol3, FromDIP(160), true));
 	// …AND THE WAY OUT OF THE LIST IS THE "...", not the double-click.
 	//
 	// ⚠ THIS BINDING USED TO OPEN THE DIALOG, and that is why the "..." could not be reached: MakeGrid

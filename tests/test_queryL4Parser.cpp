@@ -176,9 +176,11 @@ TEST(QueryL4Parser, TotalsByDimensions)
 	                     "TOTALS SUM(Amount), MAX(Date) BY Client, Store Hierarchy"));
 	EXPECT_TRUE(sel->m_hasTotals);
 	ASSERT_EQ(sel->m_totalsAggregates.size(), 2u);
-	EXPECT_EQ(sel->m_totalsAggregates[0]->m_func, ibQueryKeyword::Sum);
-	EXPECT_EQ(sel->m_totalsAggregates[0]->m_arg->m_path[0], wxT("Amount"));
-	EXPECT_EQ(sel->m_totalsAggregates[1]->m_func, ibQueryKeyword::Max);
+	EXPECT_EQ(sel->m_totalsAggregates[0].m_expr->m_func, ibQueryKeyword::Sum);
+	EXPECT_EQ(sel->m_totalsAggregates[0].m_expr->m_arg->m_path[0], wxT("Amount"));
+	EXPECT_EQ(sel->m_totalsAggregates[1].m_expr->m_func, ibQueryKeyword::Max);
+	// A RESOURCE NOBODY NAMED carries no alias — the engine names it after its argument.
+	EXPECT_TRUE(sel->m_totalsAggregates[0].m_alias.IsEmpty());
 	ASSERT_EQ(sel->m_totalsBy.size(), 2u);
 	ASSERT_EQ(sel->m_totalsBy[0].m_fields.size(), 1u);                       // a bare dimension is a level of ONE field
 	EXPECT_EQ(sel->m_totalsBy[0].Head()->m_expr->m_path[0], wxT("Client"));
