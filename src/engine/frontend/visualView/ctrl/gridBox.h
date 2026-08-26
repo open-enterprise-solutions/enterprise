@@ -158,6 +158,52 @@ private:
 
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
 	ibPropertySource*   m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, wxT("Source"), _("Source"));
+
+	// ⭐⭐ COMPOSE ON OPEN — the report builds itself as the control is created, with no press of
+	// Compose (Max, 2026-08-26). A report normally waits because the reader sets its parameters
+	// first and a read fired before that reads the wrong thing; but a report put on a DESKTOP, or
+	// opened already answered, has nothing left to be asked, and the button is then a step that
+	// means nothing.
+	//
+	// ⚠ A PROPERTY OF THE CONTROL, not of the schema. What to read is the composition's business;
+	// WHEN to read it on screen is this window's, and the two were nearly merged — putting it in the
+	// description would have leaked a form's behaviour into the data layer (Max caught it).
+	//
+	// ⚠ AND IT FIRES AT CREATION, ONCE. Not on every Update: a re-render, a property edit, a resize
+	// all pass through there, and a report that re-read itself on each of them would be reading the
+	// database because a window moved.
+	ibPropertyBoolean*  m_propertyComposeOnOpen = ibPropertyObject::CreateProperty<ibPropertyBoolean>(
+		m_categoryData, wxT("ComposeOnOpen"), _("Compose on open"), wxT(""), false);
+
+	// ⭐⭐ DETAIL PROCESSING — the first event this control has ever had, and it is named after the
+	// QUESTION rather than after the gesture that asks it (Max, 2026-08-26: "there is no such event
+	// as left-click and right-click; you simply call it detail processing").
+	//
+	// A printed sheet is not a picture: every figure was COMPOSED from something, and clicking one
+	// is how a person asks what from. The cell already carries its value — the composer stamps
+	// `SetParameter` + `SetCellDetailsParameter` on every heading, cell and total — and the click
+	// ended in `OpenCellDetailsParameter` → `ibValue::ShowValue`. What was missing was the FORK: a
+	// report saying what a click means in it. So this is not a new mechanism; it is the question
+	// asked one step before the answer that already existed.
+	//
+	// ⚠ THE MOUSE BUTTON IS NOT PART OF IT. The RIGHT button belongs to copy / paste and cannot be
+	// taken over (Max), so detail lives on the LEFT one — and the day it moves elsewhere, a handler
+	// written against "detail processing" still means what it meant.
+	//
+	// ⚠ `StandardProcessing` cleared takes the default away entirely: no menu, no value opened. The
+	// row and the column travel because a handler doing its own thing must know WHICH cell was hit.
+	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
+	ibEventControl*     m_eventOnDetailProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent,
+		wxT("OnDetailProcessing"), _("On detail processing"), _("When a cell is clicked — before its value is opened or detailed"),
+		wxArrayString{ wxT("Control"), wxT("Row"), wxT("Column"), wxT("StandardProcessing") });
+
+	// The grid's own click, forwarded to the event above. Bound where the window is made, the way
+	// the tablebox binds its dataview events.
+	void OnCellLeftClick(class ibGridEvent& event);
+
+	// …and what the menu's second entry does: a NEW report over a copy of this one's schema, opened
+	// as its own form. See the body — a form cannot be copied, a composition can.
+	void ShowCellDetail(int row, int col);
 };
 
 #endif

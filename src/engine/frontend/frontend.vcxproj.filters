@@ -668,6 +668,9 @@
     <ClCompile Include="visualView\ctrl\gridBoxAction.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBoxEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="visualView\ctrl\gridBoxProperty.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>

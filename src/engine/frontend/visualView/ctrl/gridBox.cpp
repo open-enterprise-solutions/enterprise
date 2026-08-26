@@ -77,6 +77,20 @@ wxObject* ibValueGridBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	if (m_spreadsheetModel)
 		gridWindow->LoadDocument(m_spreadsheetModel->GetSpreadsheetDocument());
 
+	// ⭐⭐ THE CELL CLICKS, BROUGHT OUT TO THE RUNTIME. The editor window has always caught them — a
+	// DOUBLE left click opens the cell's value, a right click raises the popup — but it handled them
+	// INSIDE itself, so a report could not say anything about its own figures (Max, 2026-08-26:
+	// "the editor knows how to catch all this; you need to bring it out to the runtime").
+	//
+	// ⚠ THE SAME EVENTS THE EDITOR TAKES, not neighbouring ones: left is DCLICK, because that is
+	// what "open the value" is bound to and what a person means by clicking a figure twice. Bound
+	// dynamically, which wx searches BEFORE the static table — so this control is asked first and
+	// `event.Skip()` is what lets the editor do the rest.
+	//
+	// Bound where the window is MADE, so a window rebuilt on its own (a re-render, a designer
+	// preview) comes back listening.
+	gridWindow->Bind(wxEVT_GRID_CELL_LEFT_DCLICK, &ibValueGridBox::OnCellLeftClick, this);
+
 	return gridWindow;
 }
 
@@ -87,6 +101,19 @@ void ibValueGridBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualH
 	// to state twice.
 	if (firstCreated)
 		AutoBindNewSource(this);
+
+	// ⭐⭐ COMPOSE ON OPEN — here, at CREATION, and nowhere else. This is the one moment that happens
+	// once per opened window: `Update` runs again for every re-render, property edit and resize, and
+	// a report re-reading the database because a window moved is not a feature.
+	//
+	// ⚠ NOT IN THE DESIGNER. There the box is a picture of itself — running the report while
+	// somebody is drawing the form would read live data into an editor, and slowly.
+	//
+	// Through the control's own command rather than the model's verb, so it takes exactly the road
+	// the button takes: the progress indicator, the background read, the failure message.
+	if (visualHost != nullptr && !visualHost->IsDesignerHost()
+	    && m_propertyComposeOnOpen->GetValueAsBoolean())
+		CallAsAction(ibSpreadsheetModelCommand_Compose, GetOwnerForm());
 }
 
 void ibValueGridBox::OnSelected(wxObject* wxobject)

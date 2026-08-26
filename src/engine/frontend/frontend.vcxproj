@@ -116,6 +116,7 @@
     <ClCompile Include="visualView\ctrl\gauge_res.cpp" />
     <ClCompile Include="visualView\ctrl\gridBox.cpp" />
     <ClCompile Include="visualView\ctrl\gridBoxAction.cpp" />
+    <ClCompile Include="visualView\ctrl\gridBoxEvent.cpp" />
     <ClCompile Include="visualView\ctrl\gridBoxProperty.cpp" />
     <ClCompile Include="visualView\ctrl\gridBoxSource.cpp" />
     <ClCompile Include="visualView\ctrl\gridBox_res.cpp" />
