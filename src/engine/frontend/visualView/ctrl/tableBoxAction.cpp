@@ -58,6 +58,12 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 	//    live in a view-only form (only the model's Add / Delete / Copy row greys out).
 	actionData.AddSeparator();
 	actionData.AddAction(wxT("Filter"), _("Filter"), g_picFilterCLSID, false, enTableFilter).SetModify(false);
+	// (⚠ NO VARIANTS HERE, and it is a fact about the ENTITY rather than a gap in this band. A
+	//  variant is a setting the AUTHOR named and put in the configuration, and there is nowhere to
+	//  name one for a list: the variants are edited in the composition's own window, which is the
+	//  report's. A list's setting is what the reader themselves narrowed to, and there is one of it.
+	//  Max, 2026-08-26, arriving at it while the button was being built: "for a report it is needed,
+	//  truly" — so the verb lives on the composition and not on every control that shows rows.)
 	actionData.AddAction(wxT("FilterByColumn"), _("Filter by column"), g_picFilterSetCLSID, false, enTableFilterByColumn).SetModify(false);
 	actionData.AddAction(wxT("FilterClear"), _("Filter clear"), g_picFilterClearCLSID, false, enTableFilterClear).SetModify(false);
 

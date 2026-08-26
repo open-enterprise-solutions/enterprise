@@ -1737,6 +1737,86 @@ void ibComposerEditor::MarkModified()
 // THE READER'S ROAD — see the header. A copy of the setting in force, the window over it, and the
 // copy set back on OK. The description it stands over is the model's own, so the field lists offer
 // what this report actually reads.
+// THE DOOR — a model goes in, its composer answers. See the header for why it is a REPORT's model.
+bool ibDialogComposerSettings::ShowVariantPicker(wxWindow* parent, ibValueSpreadsheetModel* model)
+{
+	if (model == nullptr)
+		return false;
+
+	// 🛑 THE VARIANTS REACH THE COMPOSER LAZILY, and asking without saying so read an empty list.
+	// `LoadVariants` is called from `RebuildSource` / `RefreshComposerSettings` — that is, when the
+	// source is rebuilt or a setting changes — so a report that has just been opened has its
+	// variants in the DESCRIPTION and not yet in the composer. The first press showed nothing and
+	// the second one worked, which is what "you have to click twice" means (Max, 2026-08-26).
+	//
+	// ⭐ Restated rather than reached around: the model has a verb for exactly this — the same one
+	// the settings window relies on — so the picker asks it to bring the composer up to date and
+	// then reads the composer, as it should. Reading the description directly here would be a
+	// second road to the same fact, and the two would drift.
+	if (ibValueDataComposition* composition = dynamic_cast<ibValueDataComposition*>(model))
+		composition->RefreshComposerSettings();
+
+	return PickVariant(parent, model->GetModelComposer());
+}
+
+// ⭐⭐ THE VARIANT PICKER — the menu, and picking IS setting a setting. See the header for why this
+// needs nothing of its own.
+bool ibDialogComposerSettings::PickVariant(wxWindow* parent, ibDataComposer& composer)
+{
+	const std::vector<ibVariantDescription>& variants = composer.GetVariants();
+
+	// 🛑 A COMMAND THAT ANSWERS NOTHING IS WORSE THAN ONE THAT IS GREYED OUT. This refused to open at
+	// all when there was "nothing to pick between" — one unnamed variant, which is what a report
+	// nobody has structured has — so the button was there, it was live, and pressing it did nothing
+	// whatsoever (Max, 2026-08-26: "the button does not work"). Whether the list is worth choosing
+	// from is the READER's judgement, and the menu is where they make it: one entry, ticked, says
+	// "this is all there is" — which is an answer.
+	if (variants.empty())
+		return false;   // …and this cannot happen: the vector is born with one element
+
+	wxWindow* over = parent != nullptr ? parent
+		: ((wxTheApp != nullptr) ? wxTheApp->GetTopWindow() : nullptr);
+	if (over == nullptr)
+		return false;
+
+	const int base = wxID_HIGHEST + 1;
+	wxMenu menu;
+	for (size_t i = 0; i < variants.size(); ++i) {
+		// WHAT THE PICKER SHOWS — the synonym, else the name, else its place in the list. The last is
+		// not a caption anybody wrote; it is what an unnamed variant HAS, and a blank line in a menu
+		// cannot be clicked with any confidence.
+		wxString caption = variants[i].m_synonym;
+		if (caption.IsEmpty()) caption = variants[i].m_name;
+		if (caption.IsEmpty()) caption = wxString::Format(_("Variant %u"), static_cast<unsigned>(i + 1));
+
+		// ⭐ AND THE ONE IN FORCE IS TICKED — by COMPARING the settings, because there is no stored
+		// "active variant" to read. That is not a gap: at runtime there is only the setting that
+		// composes, and a variant is where it may have come from. Compared, the tick says the truth
+		// even after the reader edited the setting themselves — it simply stops matching.
+		//
+		// 🛑 AGAINST WHAT COMPOSES, not against the READER's section. Asked of the user's setting,
+		// nothing was ticked until they had picked something — and what composes at that moment is
+		// variant ZERO, by the rule that an empty section reads as the zeroth's. So the menu opened
+		// claiming no variant was in force while one plainly was (Max, 2026-08-26: "why is the flag
+		// not lit on the main variant to begin with?").
+		wxMenuItem* item = menu.AppendCheckItem(base + static_cast<int>(i), caption);
+		if (item != nullptr && composer.GetCurrentSettingsDesc() == variants[i].m_settings)
+			item->Check(true);
+	}
+
+	const int picked = over->GetPopupMenuSelectionFromUser(menu);
+	if (picked == wxID_NONE)
+		return false;   // closed without choosing — nothing changes
+
+	const size_t at = static_cast<size_t>(picked - base);
+	if (at >= variants.size())
+		return false;
+
+	// …AND THAT IS THE WHOLE ACT. The same call the settings window makes on OK.
+	composer.SetUserSettingsDesc(variants[at].m_settings);
+	return true;
+}
+
 bool ibDialogComposerSettings::ShowUserSettings(wxWindow* parent, ibValueSpreadsheetModel* model)
 {
 	if (model == nullptr)

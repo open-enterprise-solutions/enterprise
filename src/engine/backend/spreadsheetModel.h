@@ -20,6 +20,11 @@ enum ibSpreadsheetModelCommand
 {
 	ibSpreadsheetModelCommand_Compose = 21000,
 	ibSpreadsheetModelCommand_Settings,
+	// ⭐ THE VARIANTS — the ones the author named, offered as a menu. Picking one IS setting the
+	// reader's setting (ibDialogComposerSettings::ShowVariantPicker), so this is a verb of the
+	// COMPOSITION exactly as the two above are: it reads by a setting, and a variant is a setting
+	// somebody named.
+	ibSpreadsheetModelCommand_Variants,
 };
 
 // ⭐⭐ THE SPREADSHEET MODEL — ABSTRACT, and the centre of everything a gridbox does, exactly the

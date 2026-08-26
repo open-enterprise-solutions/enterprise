@@ -122,6 +122,13 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 		// not serialise; the author's default is untouched (Max, 2026-08-24).
 		ibDialogComposerSettings::ShowUserSettings(dynamic_cast<wxWindow*>(GetInnerWx()), model);
 		break;
+	case ibSpreadsheetModelCommand_Variants:
+		// ⭐ THE SAME ACT AS PRESSING OK IN THAT WINDOW, said in one gesture: the variant's setting
+		// becomes the reader's. The sheet on screen stays the one that was BUILT — a report is not a
+		// list, and it is re-formed when the person says so (Compose), which is when the setting is
+		// taken into account.
+		ibDialogComposerSettings::ShowVariantPicker(dynamic_cast<wxWindow*>(GetInnerWx()), model);
+		break;
 	default:
 		// ⭐ ANYTHING ELSE IS THE MODEL'S OWN COMMAND — the id came out of its store, so it goes
 		// straight back there. Same rule the tablebox follows: this control's ids are its own (high

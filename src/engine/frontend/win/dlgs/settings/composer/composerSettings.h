@@ -687,6 +687,33 @@ public:
 	// (Max, 2026-08-24).
 	static bool ShowUserSettings(wxWindow* parent, class ibValueSpreadsheetModel* model);
 
+	// ⭐⭐ THE VARIANT PICKER — a menu of what the author named, and picking one IS setting a setting
+	// (Max, 2026-08-26: "you press it on a list or a report, the variants drop down, and you just
+	// pick — it is the same as if you had set a user setting").
+	//
+	// It needs no mechanism of its own, and that is the whole point: a variant is a WRAPPER over a
+	// setting, so this call is `SetUserSettingsDesc(variants[n].m_settings)` and nothing else. There
+	// is no stored "active variant" to keep in step — at runtime there is no chosen variant at all,
+	// only the setting that composes.
+	//
+	// ⚠ THE MODEL GOES IN, and the variants are reached through ITS composer (Max, 2026-08-26) — the
+	// same shape `ShowUserSettings` has, so a caller hands over what it is holding and never reaches
+	// into it.
+	//
+	// ⭐ A REPORT'S MODEL, and only that. A variant is a setting the AUTHOR named and left in the
+	// configuration, and they are edited in THIS window — the composition's. A list has no such
+	// door and no such thing: its setting is whatever the reader narrowed to, and there is one of
+	// it (Max, 2026-08-26: *"for a report it is needed, truly"*).
+	//
+	// Returns true when something was picked; the CALLER decides what to do about it — a report
+	// shows the sheet that was built and is re-formed when the person says so.
+	static bool ShowVariantPicker(wxWindow* parent, class ibValueSpreadsheetModel* model);
+
+private:
+	// The picker itself — over the composer, which is all it needs.
+	static bool PickVariant(wxWindow* parent, class ibDataComposer& composer);
+public:
+
 	// ⭐⭐ ONE DOOR: A PARENT, A SNAPSHOT, AND THE CONFIGURATION ITS NAMES MEAN. Nothing running goes
 	// in, and there is no second road — both hosts hand over a description and differ only in whose
 	// it is (Max, 2026-08-24: "we work with snapshots").

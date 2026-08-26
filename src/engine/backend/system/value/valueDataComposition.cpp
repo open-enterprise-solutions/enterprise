@@ -853,6 +853,14 @@ void ibValueDataComposition::GetCommandCollection(const ibFormID& formType, std:
 		ibPictureDescription(g_picGenerateCLSID), true).SetModify(false));
 	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_Settings, wxT("Settings"), _("Settings"),
 		ibPictureDescription(g_picStructureCLSID), false).SetModify(false));
+	// ⭐ AND THE VARIANTS — the settings the author NAMED, offered as a menu. A verb of the
+	// composition like the two above: picking one sets the reader's setting and nothing is stored
+	// as "the active variant" (ibDialogComposerSettings::ShowVariantPicker). Shows what is READ, so
+	// it stays live on a view-only form.
+	// …AND IT SHOWS ITS NAME, like Compose does: a tick-mark icon alone says nothing about what will
+	// happen, and this is a verb a person looks for by word (Max, 2026-08-26).
+	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_Variants, wxT("Variants"), _("Variants"),
+		ibPictureDescription(g_picSelectCLSID), true).SetModify(false));
 
 	// …then whatever the SOURCE offers, after a rule.
 	if (const ibQueryableSourceDescriptor* holder = GetSourceDescriptor()) {
