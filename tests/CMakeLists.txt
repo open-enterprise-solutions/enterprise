@@ -156,7 +156,27 @@ set_target_properties(oes_tests PROPERTIES
 # Register with CTest
 # ---------------------------------------------------------------------------
 include(GoogleTest)
-gtest_discover_tests(oes_tests)
+
+# ⭐⭐ ONE DISCOVERY TIMEOUT FOR EVERY SUITE, and it is not 5 seconds.
+#
+# `gtest_discover_tests` runs the freshly linked executable to list its tests, and CMake's default
+# allows it 5 seconds. On 2026-08-26 that budget ran out for `oes_string_tests` on a Windows runner
+# and the BUILD failed — empty output, "Process terminated due to timeout" — on a commit that had
+# touched neither the tests nor anything they link.
+#
+# ⚠ THE FAILURE LOOKS LIKE A BROKEN TEST AND IS NOT ONE. Nothing ran; the list was being asked for.
+#
+# The five seconds are a budget for the MACHINE, not for the program: listing that same suite takes
+# 0.02 s locally, and it is a runner building 1550 targets — with a freshly written binary being
+# scanned before its first run — that eats the rest. The suites that link `backend` start heavier
+# still, journal and all. So the number has to cover the worst machine, not the fastest program,
+# and it belongs here, at the one place every suite is registered through, rather than repeated at
+# nine call sites — where the tenth would be written without it.
+function(oes_discover_tests target)
+    gtest_discover_tests(${target} DISCOVERY_TIMEOUT 120)
+endfunction()
+
+oes_discover_tests(oes_tests)
 
 # ---------------------------------------------------------------------------
 # Lightweight string-layer tests — ibString/fstring only.
@@ -194,7 +214,7 @@ set_target_properties(oes_string_tests PROPERTIES
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
 )
 
-gtest_discover_tests(oes_string_tests)
+oes_discover_tests(oes_string_tests)
 
 # ---------------------------------------------------------------------------
 # Standalone ИТОГИ-tree test — backend + gtest only, no other test TUs (so it
@@ -227,7 +247,7 @@ set_target_properties(oes_query_totals_test PROPERTIES
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
 )
 
-gtest_discover_tests(oes_query_totals_test)
+oes_discover_tests(oes_query_totals_test)
 
 # ---------------------------------------------------------------------------
 # Standalone DB/RAM parity test — backend + gtest only (isolated, like the
@@ -260,7 +280,7 @@ set_target_properties(oes_query_parity_test PROPERTIES
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
 )
 
-gtest_discover_tests(oes_query_parity_test)
+oes_discover_tests(oes_query_parity_test)
 
 # ---------------------------------------------------------------------------
 # Standalone JOIN parity test — RAM join core vs a live in-memory SQLite JOIN
@@ -292,7 +312,7 @@ set_target_properties(oes_query_join_parity_test PROPERTIES
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
 )
 
-gtest_discover_tests(oes_query_join_parity_test)
+oes_discover_tests(oes_query_join_parity_test)
 
 # ---------------------------------------------------------------------------
 # Temp-DB round-trip on the embedded SQLite driver (INTEGRATION scope). Brings
@@ -327,7 +347,7 @@ set_target_properties(oes_temp_db_sqlite_test PROPERTIES
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
 )
 
-gtest_discover_tests(oes_temp_db_sqlite_test)
+oes_discover_tests(oes_temp_db_sqlite_test)
 
 # ---------------------------------------------------------------------------
 # Rented background runs (ibJobTenancy::Tenant) — integration scope.
@@ -364,7 +384,7 @@ set_target_properties(oes_job_tenancy_test PROPERTIES
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
 )
 
-gtest_discover_tests(oes_job_tenancy_test)
+oes_discover_tests(oes_job_tenancy_test)
 
 # ---------------------------------------------------------------------------
 # Frontend GUI harness — STEP 1. Links the DESKTOP frontend.dll (real wx
@@ -414,7 +434,7 @@ set_target_properties(oes_frontend_runtime_test PROPERTIES
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
 )
 
-gtest_discover_tests(oes_frontend_runtime_test)
+oes_discover_tests(oes_frontend_runtime_test)
 
 # ---------------------------------------------------------------------------
 # PostgreSQL dialect — EXECUTED against a real server (integration scope).
@@ -458,5 +478,5 @@ if(OES_USE_POSTGRESQL)
         INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
     )
 
-    gtest_discover_tests(oes_pg_dialect_test)
+    oes_discover_tests(oes_pg_dialect_test)
 endif()
