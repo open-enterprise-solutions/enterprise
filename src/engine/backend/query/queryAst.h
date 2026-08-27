@@ -265,6 +265,26 @@ struct ibQueryTotalAggregate
 	// AS name. Empty = derive it (the argument's own name), which is what every query written
 	// before this says and what a person means when they do not name the column.
 	wxString          m_alias;
+
+	// ⭐⭐ `OVER <level>` — THE AREA THIS FIGURE IS COMPUTED OVER, and the whole of what the other
+	// systems spell as "evaluate an expression in the context of a grouping".
+	//
+	// Empty = the ordinary aggregate: its area comes FROM THE LADDER, so it means one thing on each
+	// heading and follows whatever grouping the reader set. Named = the figure is computed over that
+	// level and is CONSTANT inside it — a share's denominator, a group's own total read from a row
+	// below it.
+	//
+	// ⚠ THIS IS NOT A WINDOW OVER ROWS. `TOTALS` runs AFTER the ladder has sorted the rows into
+	// levels, so an aggregate here folds NODES: `COUNT(x) OVER Item` answers "how many warehouses
+	// has this item", not "how many rows" — a question the row storey cannot even ask, having no
+	// nodes yet. That is why the area names a LEVEL and not a list of fields (fields describe an
+	// area one storey down, in the selection, where `OVER (PARTITION BY …)` lives).
+	//
+	// A branch QUALIFIES the level (`ByCharacteristic.Characteristic`) where two branches carry
+	// levels of the same name — the role a table name plays before a column. A branch alone is not
+	// an area: `SPLIT` does not narrow the rows, so "the total over a branch" is the total of the
+	// node it hangs from. (docs/query-language-arc.md §27)
+	wxString          m_scope;
 };
 
 struct ibQueryTotalDim

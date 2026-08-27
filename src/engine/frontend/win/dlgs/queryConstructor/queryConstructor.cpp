@@ -1046,6 +1046,21 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 		if (col == kGridCol1)
 			return projection.m_expr->m_star ? wxString(wxT("*"))
 				: (projection.m_expr->m_arg ? ibRenderQueryExpr(*projection.m_expr->m_arg) : wxString());
+		// ⭐⭐ …AND OVER WHAT IT IS COMPUTED. Here the grouping is the QUERY's own (GROUP BY), so this
+		// is a window in the plainest sense: the DBMS folds the rows, then computes this over the
+		// folded ones. `RANK() OVER (ORDER BY SUM(x) DESC)` — the place of a group — is an ordinary
+		// query on the server, no tree involved.
+		if (col == kGridCol3) {
+			if (!projection.m_expr->m_over)
+				return wxEmptyString;
+			wxString over;
+			for (const ibQueryAstExprPtr& key : projection.m_expr->m_over->m_partitionBy) {
+				if (!key) continue;
+				if (!over.IsEmpty()) over += wxT(", ");
+				over += ibRenderQueryExpr(*key);
+			}
+			return over;
+		}
 		// The MODIFIER IS PART OF WHAT THIS CELL SAYS. Showing the bare word over
 		// `COUNT(DISTINCT Board)` would let the row read as a plain count — and picking any value in
 		// the dropdown would then quietly agree with the lie.
@@ -2029,9 +2044,10 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			return wxEmptyString;
 		const ibQueryTotalAggregate& resource = select->m_totalsAggregates[row];
 		const ibQueryAstExpr& expr = *resource.m_expr;
-		// THE NAME THE FIGURE IS READ BACK UNDER — its own column, exactly as a level has one.
+		// ⭐ OVER WHAT THE FIGURE IS COMPUTED. Empty reads as empty on purpose: the absence IS the
+		// ordinary answer ("the area comes from the groupings"), not an unfilled setting.
 		if (col == kGridCol3)
-			return resource.m_alias;
+			return resource.m_scope;
 		if (col == kGridCol2)
 			return ibRenderQueryExpr(expr);
 		// The field the total is OVER — the argument, which is what a person looks down this column for.
@@ -2043,12 +2059,13 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		ibQuerySelect* select = Current();
 		if (!CanEdit() || select == nullptr || row >= select->m_totalsAggregates.size())
 			return false;
-		// THE NAME IS NOT AN EXPRESSION — it is typed, trimmed and stored. Empty clears it, and the
-		// figure goes back to being named after its argument (the engine's own fallback).
+		// ⭐ THE AREA IS A NAME, NOT AN EXPRESSION — the level this figure is computed over. Stored as
+		// typed; whether such a grouping exists is the ENGINE's judgement (the lowering refuses an
+		// unknown one by name), so this cell does not grow a second opinion about it.
 		if (col == kGridCol3) {
-			wxString alias = text;
-			alias.Trim(true).Trim(false);
-			select->m_totalsAggregates[row].m_alias = alias;
+			wxString scope = text;
+			scope.Trim(true).Trim(false);
+			select->m_totalsAggregates[row].m_scope = scope;
 			return true;
 		}
 		// Typing over the FIELD keeps the function that was there; typing over the EXPRESSION replaces
@@ -2079,7 +2096,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		const ibQueryAstExprPtr& expr = select->m_totalsAggregates[row].m_expr;
 		return expr ? IconOfExpr(expr->m_arg) : wxNullIcon;
 	});
-	m_totalsAggregates->GetRootColumnGroup()->AppendColumn(IconColumn(_("Totals field"), kGridCol1, FromDIP(240)));
+	m_totalsAggregates->GetRootColumnGroup()->AppendColumn(IconColumn(_("Totals field"), kGridCol1, FromDIP(150)));
 	// ⭐ READY EXPRESSIONS TO PICK FROM, AND THE EDITOR FOR EVERYTHING ELSE.
 	//
 	// A totals expression is nearly always one of four calls over the field on this row, so the cell
@@ -2124,8 +2141,10 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		},
 		// "..." - the arbitrary-expression editor over what the cell currently holds.
 		[this](wxString& text) {
+			// ⚠ NO WINDOW CALLS HERE — this cell writes a TOTALS figure, which folds nodes and takes
+			// aggregates only. The area such a figure is computed over is the neighbouring column.
 			ibDialogQueryExpression editor(this, _("Totals"), AvailableFields(), nullptr,
-				m_metaData, m_readOnly);
+				m_metaData, m_readOnly, /*allowWindows*/false);
 			editor.SetText(text);
 			if (editor.ShowModal() != wxID_OK)
 				return false;
@@ -2133,11 +2152,36 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			return true;
 		},
 		m_readOnly ? wxDATAVIEW_CELL_INERT : wxDATAVIEW_CELL_EDITABLE),
-		kGridCol2, FromDIP(320), wxAlignment::wxALIGN_LEFT));
+		kGridCol2, FromDIP(200), wxAlignment::wxALIGN_LEFT));
 	// ⭐ AND THE NAME THE FIGURE ANSWERS TO — the same column a LEVEL has, in the same place, because
 	// it is the same question: what is this column of the result called. Left empty the engine names
 	// it after the argument, which is what every query written before this meant.
-	m_totalsAggregates->GetRootColumnGroup()->AppendColumn(TextColumn(_("Alias"), kGridCol3, FromDIP(160), true));
+	// ⛔ NO "ALIAS" COLUMN HERE ANY MORE. A column of the result is NAMED WHERE COLUMNS ARE NAMED —
+	// in the selection, and on the Unions / Aliases tab, which is the one place that name is settled
+	// for every united selection at once. A second name written beside the figure was a duplicate of
+	// it: two places saying one thing, and the drift starts the day somebody renames the field
+	// (Max, 2026-08-27: "it takes the alias from where the union is — and it is unclear why one was
+	// started here as well").
+	//
+	// ⚠ THE LANGUAGE STILL READS `TOTALS SUM(x) AS Name` — a query written before this keeps its name
+	// and keeps working. What is gone is the SECOND DOOR to it, not the word.
+	// ⭐⭐ …AND OVER WHAT THE FIGURE IS COMPUTED — the level it belongs to, picked from the groupings
+	// THIS query already declares. That is the whole of what other systems reach through an
+	// expression evaluated "in the context of a grouping", and here it is one cell.
+	//
+	// The list is asked of the model beside it, so there is no second place where groupings are
+	// enumerated and nothing to keep in step: add a level below, and it is offered here at once.
+	// Empty is a legitimate choice and the first one — it means "the area comes from the ladder",
+	// which is what every totals written before this said.
+	// Two ways in, one meaning — the same pair every other cell of this window offers: the LIST for
+	// the level you already know the name of, and the "..." for the TREE, where the separators are
+	// nodes and their levels hang inside them. A flat list can spell `Splitter1.Level`; it cannot
+	// show that the level lives in that separator, and picking an area IS picking a place.
+	m_totalsAggregates->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Computed over"),
+		new ibExpressionCellRenderer([this]() -> wxArrayString { return TotalsScopeChoices(); },
+			[this](wxString& text) { return PickTotalsScope(text); },
+			m_readOnly ? wxDATAVIEW_CELL_INERT : wxDATAVIEW_CELL_EDITABLE),
+		kGridCol3, FromDIP(150), wxAlignment::wxALIGN_LEFT));
 	// …AND THE WAY OUT OF THE LIST IS THE "...", not the double-click.
 	//
 	// ⚠ THIS BINDING USED TO OPEN THE DIALOG, and that is why the "..." could not be reached: MakeGrid

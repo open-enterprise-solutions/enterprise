@@ -310,7 +310,30 @@ struct ibSemiJoinExists
 // without its author naming an engine — and so a totals REBUILD can group the movements by
 // exactly the expression the maintenance trigger keys rows with. Two paths, one definition; a
 // second notion of "start of the month" would silently split rows the trigger had merged.
-enum class ibQueryColumnExprKind { Column, Const, Arith, Case, PeriodTrunc };
+// ⭐⭐ `WindowAgg` — AN AGGREGATE OVER AN AREA OF ITS OWN, computed by the SERVER.
+//
+// This is the one figure of a report the DBMS can compute even where the FOLD cannot be pushed down:
+// `SUM(x) OVER (PARTITION BY <the levels above it>)` returns a value per ROW, so it needs neither
+// ROLLUP nor GROUPING SETS — and windows are on in every engine we speak to (Firebird FB3+,
+// PostgreSQL, SQLite 3.25+), while ROLLUP is PostgreSQL alone.
+//
+// Inside its area the value is CONSTANT, which is what makes it usable on a heading: the node folds
+// it with MIN and gets the value itself back. (docs/query-language-arc.md §27)
+enum class ibQueryColumnExprKind { Column, Const, Arith, Case, PeriodTrunc, WindowAgg };
+
+// ⭐ THE CALL A WINDOW MAKES — named as a CONCEPT here, spelled by the provider, exactly as
+// ibTotalsPeriod is. The five folds and the three ranking calls sit in one enum because they differ
+// only in whether they take an input, which the expression already says by having one or not.
+enum class ibQueryWindowFn { Sum, Count, Min, Max, Avg, RowNumber, Rank, DenseRank };
+
+// …AND WHICH ROWS OF THE PARTITION IT FOLDS. Three answers and no more — the grammar offers exactly
+// these, and inventing a fourth here would promise what the engines are not asked for.
+//
+//   Whole   — the partition entire: the denominator of a share.
+//   Rows    — from its start through THIS row, counted one by one: a running total.
+//   Range   — the same, but every row sharing this one's sort key contributes, so three movements
+//             stamped with one period are one period's worth of stock, in any order.
+enum class ibQueryWindowFrame { Whole, Rows, Range };
 enum class ibQueryColumnArithOp { Add, Sub, Mul, Div, Mod };
 
 // ⭐⭐ THE PERIOD UNITS, AS WORDS — one table, beside the expression that truncates by them.
@@ -375,6 +398,25 @@ struct ibQueryColumnExpr
 	// expression names the CONCEPT, the dialect owns the spelling.
 	ibTotalsPeriod              m_periodUnit = ibTotalsPeriod::Month;
 
+	// WindowAgg — the call applied to m_lhs, partitioned by m_partition, ordered by m_windowOrder.
+	//
+	// ⭐ THE CALL, AS A CONCEPT — the provider spells it, exactly as it spells a period truncation.
+	// A ranking call takes no input, and that is said by m_lhs being null rather than by a flag.
+	//
+	// 🛑 It was a wxString holding "SUM" / "ROW_NUMBER" for an hour, and that was a leak upward: the
+	// word happened to be the same in the language and in SQL, which is a coincidence and not a
+	// licence for this tier to carry the DBMS's spelling (Max, 2026-08-27: "no leaks between the
+	// storeys").
+	ibQueryWindowFn                       m_windowFn = ibQueryWindowFn::Sum;
+	// An EMPTY partition is legitimate and means the whole result — the figure over everything, which
+	// is what "the share of the report" is measured against.
+	std::vector<ibQueryColumnExprPtr>     m_partition;
+	// …and the ORDER within the partition, which is what makes "up to this row" mean anything. Empty
+	// = the fold takes the partition whole, which is what a plain total over an area is.
+	std::vector<std::pair<ibQueryColumnExprPtr, bool>> m_windowOrder;   // expression + ascending
+	// The frame — this tier's own enum, mapped to the engine's by the provider (same leak, same fix).
+	ibQueryWindowFrame                    m_windowFrame = ibQueryWindowFrame::Whole;
+
 	// ⭐⭐ ONE FIELD OF A COMPOSITE COLUMN, NAMED. A plain Col() reduces to the column's FIRST value
 	// field, which is the right answer for everything that has one value — a number, a date, a
 	// reference read as a whole. It is the wrong answer for a column whose value is spread across
@@ -392,6 +434,22 @@ struct ibQueryColumnExpr
 	static ibQueryColumnExprPtr Col(const ibBackendQueryColumn* col) {
 		auto e = std::make_shared<ibQueryColumnExpr>();
 		e->m_kind = ibQueryColumnExprKind::Column; e->m_col = col; return e;
+	}
+	// ⭐ `SUM(<arg>) OVER (PARTITION BY <partition>)` — see the note on the kind. The function is the
+	// door's own enum, so nothing here re-spells what an aggregate is called; the partition is the
+	// PREFIX of levels the figure belongs to, which the lowering derives from the area's ADDRESS.
+	static ibQueryColumnExprPtr WindowAgg(ibQueryWindowFn fn, ibQueryColumnExprPtr arg,
+	                                      std::vector<ibQueryColumnExprPtr> partition,
+	                                      std::vector<std::pair<ibQueryColumnExprPtr, bool>> order = {},
+	                                      ibQueryWindowFrame frame = ibQueryWindowFrame::Whole) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::WindowAgg;
+		e->m_windowFn = fn;
+		e->m_lhs = std::move(arg);
+		e->m_partition = std::move(partition);
+		e->m_windowOrder = std::move(order);
+		e->m_windowFrame = frame;
+		return e;
 	}
 	static ibQueryColumnExprPtr Const(const ibValue& v) {
 		auto e = std::make_shared<ibQueryColumnExpr>();

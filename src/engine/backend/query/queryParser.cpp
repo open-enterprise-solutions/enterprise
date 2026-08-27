@@ -642,7 +642,51 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 			if (!IsAggregateKw(Cur()))
 				ThrowQueryException(Cur(), _("expected an aggregate function (SUM/COUNT/MIN/MAX/AVG) or BY in TOTALS"));
 			ibQueryTotalAggregate resource;
-			resource.m_expr = ParseAggregate();
+			resource.m_expr = ParseAggregate(/*allowWindow*/false);   // OVER here names the AREA — read below
+			// ⭐⭐ `OVER <level>` — over WHAT this figure is computed, read right after the call and
+			// before the name, because it is part of what the figure IS rather than of what it is
+			// called. A level of a branch is addressed through it: `OVER ByCharacteristic.Series`.
+			//
+			// ⚠ NOT the `OVER (…)` of a window: that one is a modifier of a call in the SELECTION and
+			// partitions ROWS. Here we are past the ladder, among NODES, so what follows is the name
+			// of a level — never a list of fields. Told apart by the very next token: a bracket is a
+			// window, a name is a level, and a window is not legal in this position at all.
+			// ⭐ ONE NAME, OR SEVERAL IN BRACKETS. The window in the constructor ticks groupings, and a
+			// person may tick more than one — `OVER (Item, Warehouse)` is then the area, read exactly
+			// as it is written. A single name needs no brackets, which is the common case and stays
+			// short.
+			if (AcceptKw(ibQueryKeyword::Over)) {
+				const bool bracketed = AcceptPunct(wxT('('));
+				// ⭐ A GROUPING MAY BE NAMED AFTER A KEYWORD — the same rule, and the same reason, as
+				// a totals FIELD (see ParseTotalField): a constant's attribute is literally `Value`,
+				// and `VALUE` is a word of this language. An area names a grouping, so it inherits the
+				// rule; `OVER (Posted, Value)` died as "expected a name" without it (Max, live,
+				// 2026-08-27). The words that structure the clause here are `AS` and `BY`.
+				const auto nameHere = [this]() -> wxString {
+					if (Cur().m_kind == ibQueryTokenKind::Ident)
+						return Next().m_text;
+					if (Cur().m_kind == ibQueryTokenKind::Keyword
+					    && Cur().m_keyword != ibQueryKeyword::As && Cur().m_keyword != ibQueryKeyword::By)
+						return Next().m_text;
+					return wxString();
+				};
+				do {
+					wxString one = nameHere();
+					if (one.IsEmpty())
+						ThrowQueryException(Cur(), _("expected a grouping name after OVER: the level this figure is computed over"));
+					if (AcceptPunct(wxT('.'))) {      // <branch>.<level> — the branch qualifies the level
+						const wxString level = nameHere();
+						if (level.IsEmpty())
+							ThrowQueryException(Cur(), _("expected a grouping name after the branch name in OVER"));
+						one += wxT(".") + level;
+					}
+					if (!resource.m_scope.IsEmpty())
+						resource.m_scope += wxT(", ");
+					resource.m_scope += one;
+				} while (bracketed && AcceptPunct(wxT(',')));
+				if (bracketed)
+					ExpectPunct(wxT(')'), wxT("')' closing the OVER list"));
+			}
 			// [AS] alias — the name the FIGURE answers to, written exactly where a level writes its
 			// own (see the BY loop below): after the thing it names, with AS optional. One rule for
 			// both halves of a TOTALS, because both are columns of the same result.
@@ -1098,7 +1142,7 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	return nullptr;   // unreachable — Fail always throws
 }
 
-ibQueryAstExprPtr ibQueryParser::ParseAggregate()
+ibQueryAstExprPtr ibQueryParser::ParseAggregate(bool allowWindow)
 {
 	const ibQueryToken& tk = Cur();
 	const ibQueryKeyword fn = tk.m_keyword;
@@ -1128,7 +1172,8 @@ ibQueryAstExprPtr ibQueryParser::ParseAggregate()
 	}
 
 	ExpectPunct(wxT(')'), wxT("')'"));
-	ParseWindowSuffix(*e);   // …OVER (…) — the call folds a PARTITION instead of a group
+	if (allowWindow)
+		ParseWindowSuffix(*e);   // …OVER (…) — the call folds a PARTITION instead of a group
 	return e;
 }
 
@@ -1143,21 +1188,48 @@ ibQueryAstExprPtr ibQueryParser::ParseRanking()
 	++m_pos;
 
 	ExpectPunct(wxT('('), wxT("'(' after a ranking function"));
-	if (!Cur().IsPunct(wxT(')')))
-		ThrowQueryException(tk, _("a ranking function takes no argument: write it as NAME() OVER (...)"));
-	ExpectPunct(wxT(')'), wxT("')'"));
 
 	auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Func);
 	e->m_func = fn; e->m_line = tk.m_line; e->m_col = tk.m_col;
 
-	if (!Cur().IsKeyword(ibQueryKeyword::Over))
-		ThrowQueryException(tk, _("a ranking function needs OVER (...): it numbers rows within a partition"));
-	ParseWindowSuffix(*e);
+	// ⭐⭐ THE KEY MAY BE THE ARGUMENT — `RANK(Turnover DESC)`.
+	//
+	// A rank needs an ORDER: without one there is nothing to be first at. Written the SQL way that
+	// order lives inside `OVER (…)`, and the author has to spell two clauses to say one thing — while
+	// the AREA is already said beside the cell, in "computed over". So the argument names what the
+	// place is measured by, and the engine assembles the window out of the two halves (Max,
+	// 2026-08-27: "can we do without OVER and ORDER BY altogether?").
+	//
+	// The long form still parses — `RANK() OVER (Item ORDER BY Turnover DESC)` — and is what a
+	// hand-written query, a frame, or an order of several keys needs.
+	if (!Cur().IsPunct(wxT(')'))) {
+		auto window = std::make_shared<ibQueryAstWindow>();
+		do {
+			ibQueryOrderItem key;
+			key.m_expr = ParseAddSub();
+			if (AcceptKw(ibQueryKeyword::Desc))     key.m_ascending = false;
+			else if (AcceptKw(ibQueryKeyword::Asc)) key.m_ascending = true;
+			window->m_orderBy.push_back(key);
+		} while (AcceptPunct(wxT(',')));
+		e->m_over = window;   // the partition, if any, arrives from the area beside it
+	}
+	ExpectPunct(wxT(')'), wxT("')'"));
+
+	// …AND THE LONG FORM, where it is written. It may add the partition (and, written by hand, the
+	// order this call did not carry in its brackets).
+	if (Cur().IsKeyword(ibQueryKeyword::Over)) {
+		const std::vector<ibQueryOrderItem> already = e->m_over ? e->m_over->m_orderBy
+		                                                        : std::vector<ibQueryOrderItem>();
+		e->m_over.reset();
+		ParseWindowSuffix(*e);
+		if (e->m_over && e->m_over->m_orderBy.empty())
+			e->m_over->m_orderBy = already;      // the argument's key, kept when OVER states none
+	}
 
 	if (e->m_over && e->m_over->m_frame != ibQueryAstFrame::Unstated)
 		ThrowQueryException(tk, _("a ranking function takes no ROWS / RANGE: it numbers rows, it does not fold them"));
-	if (e->m_over && e->m_over->m_orderBy.empty())
-		ThrowQueryException(tk, _("a ranking function needs an ORDER BY inside its OVER: without one there is no order to number by"));
+	if (!e->m_over || e->m_over->m_orderBy.empty())
+		ThrowQueryException(tk, _("a ranking function needs the field its place is measured by: RANK(Field DESC), or an ORDER BY inside OVER"));
 	return e;
 }
 
@@ -1172,16 +1244,45 @@ ibQueryAstExprPtr ibQueryParser::ParseRanking()
 // ones. What ROWS and RANGE mean is stated once, in queryKeywords.h.
 void ibQueryParser::ParseWindowSuffix(ibQueryAstExpr& call)
 {
-	if (!AcceptKw(ibQueryKeyword::Over))
+	// ⭐⭐ `OVER` MEANS TWO DIFFERENT THINGS, AND THE NEXT TOKEN SAYS WHICH.
+	//
+	// A BRACKET opens a window over ROWS — this suffix, a modifier of a call in the selection. A NAME
+	// is the AREA of a TOTALS figure (`TOTALS SUM(x) OVER Item`), which is read one storey up, among
+	// nodes, by whoever is parsing the totals.
+	//
+	// So a name is not ours and must be left where it stands: swallowing the word here and then
+	// demanding a bracket refused the very query the constructor writes (Max, live, 2026-08-27:
+	// "expected '(' after OVER" on `COUNT(Number) OVER Posted`).
+	if (!Cur().IsKeyword(ibQueryKeyword::Over))
 		return;
+	// ⚠ AND THE STOREY IS SETTLED BY THE CALLER, not guessed from what follows: this suffix is only
+	// reached from the SELECTION (ParseAggregate's `allowWindow`), where `OVER` always opens a window.
+	// In TOTALS the same word names the figure's AREA and is read there.
+	if (!Peek().IsPunct(wxT('(')))
+		return;                                  // `OVER <name>` is not a window — leave the word alone
+	Next();                                      // …and only now is the word ours
 
 	const ibQueryToken& open = Cur();
 	ExpectPunct(wxT('('), wxT("'(' after OVER"));
 
 	auto window = std::make_shared<ibQueryAstWindow>();
 
+	// ⭐⭐ `PARTITION BY` IS OPTIONAL — everything before `ORDER BY` inside the bracket IS the
+	// partition, and saying so twice adds nothing:
+	//
+	//     SUM(Amount) OVER (Item)                      -- the share's denominator
+	//     RANK()      OVER (Item ORDER BY Amount DESC) -- the place within an item
+	//     SUM(Amount) OVER (Item ORDER BY Date ROWS)   -- running, within an item
+	//
+	// The full SQL spelling still parses — somebody arriving from SQL writes what they know and gets
+	// the same query. This is the same economy the totals' area already makes: the words that carry
+	// no meaning of their own are the ones to drop.
 	if (AcceptKw(ibQueryKeyword::Partition)) {
 		ExpectKw(ibQueryKeyword::By, wxT("BY after PARTITION"));
+		do { window->m_partitionBy.push_back(ParseAddSub()); } while (AcceptPunct(wxT(',')));
+	}
+	else if (!Cur().IsKeyword(ibQueryKeyword::Order) && !Cur().IsPunct(wxT(')'))) {
+		// A bare list — the short form. `OVER ()` stays legitimate and means the whole result.
 		do { window->m_partitionBy.push_back(ParseAddSub()); } while (AcceptPunct(wxT(',')));
 	}
 

@@ -116,7 +116,12 @@ private:
 	ibQueryAstExprPtr             ParseAddSub();      // + - (lower precedence)
 	ibQueryAstExprPtr             ParseMulDiv();      // * / % (higher precedence)
 	ibQueryAstExprPtr             ParsePrimary();
-	ibQueryAstExprPtr             ParseAggregate();   // SUM/COUNT/... ( ... ) [OVER (...)]
+	// SUM/COUNT/... ( ... ) [OVER (...)]
+	//
+	// ⭐ `allowWindow` — WHICH STOREY IS ASKING. In the SELECTION a call may carry a window over rows,
+	// and `OVER (` opens it. In TOTALS the same word means the figure's AREA — a level of the ladder —
+	// and is read by whoever parses the totals; swallowing it here would leave them nothing.
+	ibQueryAstExprPtr             ParseAggregate(bool allowWindow = true);
 	ibQueryAstExprPtr             ParseRanking();     // ROW_NUMBER/RANK/DENSE_RANK () OVER ( ... )
 	void                          ParseWindowSuffix(ibQueryAstExpr& call);   // the optional OVER (...) after a call
 	ibQueryAstExprPtr             ParseValueConstant();// VALUE( <Kind>.<Name>.<Member> ) — literal reference constant

@@ -983,3 +983,73 @@ TEST(QueryTotals, EveryBranchWalksOneFoldWithoutRereadingTheCursor)
 	// ⭐ THE POINT OF THE WHOLE ARC, as a number: the second branch cost the source nothing.
 	EXPECT_EQ(cursor->Reads(), readsAfterFold);
 }
+
+// ============================================================================================
+// ⭐⭐ `OVER <level>` — A FIGURE THAT BELONGS TO ONE GROUPING (docs §27)
+//
+// An aggregate with an area is folded like any other — every node already holds its roll-up of the
+// rows beneath it — and one pass then decides which of those numbers is the answer: the one at the
+// named level. On that level it stands, below it is carried unchanged (inside the area the figure IS
+// constant, which is what lets a detail row show a share's denominator), above it there is none.
+//
+// ⚠ ABOVE IT THE VALUE IS ABSENT, NOT ZERO. A zero joins sums as an addend and divides as a
+// denominator; an absent value reads back as the runtime's NULL — "no such figure here".
+// ============================================================================================
+TEST(QueryTotals, AggregateOverALevelStandsThereAndIsCarriedDown)
+{
+	const ibMetaID ITEM = 1, WAREHOUSE = 2, AMOUNT = 3;
+
+	// Bolt/Central 10, Bolt/North 15, Bolt/Central 5, Nut/Central 20  → Bolt = 30, Nut = 20
+	ibQueryRamTable detail;
+	detail.AddColumn(ITEM,      wxT("item"),      ibTypeDescription());
+	detail.AddColumn(WAREHOUSE, wxT("warehouse"), ibTypeDescription());
+	detail.AddColumn(AMOUNT,    wxT("amount"),    ibTypeDescription());
+	const auto add = [&](const wxString& item, const wxString& house, long amount) {
+		const long r = detail.AppendRow();
+		detail.SetCell(r, ITEM,      ibValue(item));
+		detail.SetCell(r, WAREHOUSE, ibValue(house));
+		detail.SetCell(r, AMOUNT,    ibValue(ibNumber(amount)));
+	};
+	add(wxT("Bolt"), wxT("Central"), 10);
+	add(wxT("Bolt"), wxT("North"),   15);
+	add(wxT("Bolt"), wxT("Central"),  5);
+	add(wxT("Nut"),  wxT("Central"), 20);
+
+	TestCol item(wxT("item"), ITEM), warehouse(wxT("warehouse"), WAREHOUSE), amount(wxT("amount"), AMOUNT);
+
+	ibDataQueryBuilder::AggregateItem plain;   // area from the ladder — one figure per heading
+	plain.m_fn = ibDataQueryBuilder::AggregateFn::Sum; plain.m_col = &amount; plain.m_alias = wxT("total");
+	ibDataQueryBuilder::AggregateItem overItem;   // …and one that belongs to the item level
+	overItem.m_fn = ibDataQueryBuilder::AggregateFn::Sum; overItem.m_col = &amount;
+	overItem.m_alias = wxT("inItem");
+	overItem.m_scopeDepth = 1;                    // the first rung — Item
+
+	const std::vector<ibTotalLevel> levels{
+		ibTotalLevel::One(&item,      ibDimensionKind::Elements),
+		ibTotalLevel::One(&warehouse, ibDimensionKind::Elements),
+	};
+	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { plain, overItem },
+	                                                               nullptr, nullptr);
+
+	// The two aggregates land in slots of their own; the scoped one shares the amount column, so it
+	// is read by the SECOND slot (see AggSlotId — a repeated column takes a synthetic receiver).
+	const ibSelectorTree::Node& root = tree.Root();
+
+	// ABOVE THE AREA — the grand total has no such figure at all.
+	ASSERT_EQ(root.m_children.size(), 2u);
+	const ibSelectorTree::Node& bolt = *root.m_children[0];
+	EXPECT_TRUE(NumEq(bolt.m_values.at(AMOUNT), 30));       // the ladder aggregate: the item's own total
+
+	// ON THE AREA — the figure is the item's total…
+	// …and BELOW it every warehouse of that item carries the SAME number, which is the whole point:
+	// a share's denominator has to be readable where the numerator is.
+	ASSERT_EQ(bolt.m_children.size(), 2u);
+	for (const auto& house : bolt.m_children) {
+		ASSERT_NE(house, nullptr);
+		EXPECT_TRUE(NumEq(house->m_values.at(AMOUNT), 15));  // Central 10+5, North 15 — its own total
+	}
+
+	// The second item is untouched by the first one's area — each node carries ITS OWN.
+	const ibSelectorTree::Node& nut = *root.m_children[1];
+	EXPECT_TRUE(NumEq(nut.m_values.at(AMOUNT), 20));
+}

@@ -1245,3 +1245,61 @@ TEST(QueryL4Parser, TotalsSplitWithoutByIsRefused)
 	EXPECT_THROW(Parse(wxT("SELECT Item FROM Document.Sales TOTALS SUM(Amount) BY Item SPLIT Characteristic")),
 	             ibBackendException);
 }
+
+// ============================================================================================
+// ⭐⭐ `TOTALS SUM(x) OVER <level>` — the figure that belongs to ONE grouping (§27)
+//
+// This is our answer to "evaluate this expression in the context of a grouping": not a second
+// language inside a string, but an ordinary aggregate whose AREA is named. It reads after the call
+// and before the name, because it is part of what the figure IS rather than of what it is called.
+// ============================================================================================
+
+TEST(QueryL4Parser, TotalsAggregateOverALevel)
+{
+	auto sel = Parse(wxT("SELECT Item, Warehouse, Amount FROM Document.Sales "
+	                     "TOTALS SUM(Amount), SUM(Amount) OVER Item AS InItem BY Item, Warehouse"));
+	ASSERT_EQ(sel->m_totalsAggregates.size(), 2u);
+	EXPECT_TRUE(sel->m_totalsAggregates[0].m_scope.IsEmpty());   // area from the ladder
+	EXPECT_EQ(sel->m_totalsAggregates[1].m_scope, wxT("Item"));
+	EXPECT_EQ(sel->m_totalsAggregates[1].m_alias, wxT("InItem"));
+}
+
+// A BRANCH QUALIFIES THE LEVEL, where two of them carry a level of the same name — the role a table
+// name plays before a column. The branch alone is not an area: SPLIT does not narrow the rows.
+TEST(QueryL4Parser, TotalsAggregateOverAQualifiedLevel)
+{
+	auto sel = Parse(wxT("SELECT Item, Amount FROM Document.Sales "
+	                     "TOTALS SUM(Amount) OVER ByCharacteristic.Characteristic BY Item "
+	                     "SPLIT ByCharacteristic BY Characteristic "
+	                     "SPLIT BySeries BY Series"));
+	ASSERT_EQ(sel->m_totalsAggregates.size(), 1u);
+	EXPECT_EQ(sel->m_totalsAggregates[0].m_scope, wxT("ByCharacteristic.Characteristic"));
+}
+
+// …AND IT SURVIVES THE TEXT. The constructor edits what the render writes, so an area dropped on the
+// way out would silently turn every such figure back into a ladder aggregate — a query that runs and
+// answers a different question.
+TEST(QueryL4Parser, TotalsAggregateOverRoundTrips)
+{
+	const wxString source = wxT("SELECT Item, Warehouse, Amount FROM Document.Sales "
+	                            "TOTALS SUM(Amount), SUM(Amount) OVER Item AS InItem "
+	                            "BY Item, Warehouse");
+	const wxString written = ibRenderQuery(*Parse(source));
+	EXPECT_TRUE(written.Contains(wxT("OVER Item"))) << written.ToStdString();
+
+	auto again = Parse(written);
+	ASSERT_EQ(again->m_totalsAggregates.size(), 2u);
+	EXPECT_EQ(again->m_totalsAggregates[1].m_scope, wxT("Item"));
+	EXPECT_EQ(again->m_totalsAggregates[1].m_alias, wxT("InItem"));
+	EXPECT_EQ(ibRenderQuery(*again), written);   // a second trip changes nothing
+}
+
+// ⚠ `OVER` HERE TAKES A NAME, NEVER A BRACKET. A window partitions ROWS and lives in the SELECT;
+// TOTALS runs after the ladder and folds NODES, so what follows is the name of a level. Refused
+// where it is written rather than lowered into something plausible.
+TEST(QueryL4Parser, TotalsAggregateOverAPartitionIsRefused)
+{
+	EXPECT_THROW(Parse(wxT("SELECT Item, Amount FROM Document.Sales "
+	                       "TOTALS SUM(Amount) OVER (PARTITION BY Item) BY Item")),
+	             ibBackendException);
+}

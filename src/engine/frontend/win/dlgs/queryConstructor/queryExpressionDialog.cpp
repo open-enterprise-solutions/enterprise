@@ -47,12 +47,13 @@ public:
 ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxString& title,
                                                  const std::vector<ibQueryConstructorField>& fields,
                                                  const ibQueryAstExprPtr& existing,
-                                                 const ibMetaData* metaData, bool readOnly)
+                                                 const ibMetaData* metaData, bool readOnly, bool allowWindows)
 	: wxDialog(parent, wxID_ANY, title.IsEmpty() ? _("Arbitrary expression") : title,
 		wxDefaultPosition, wxSize(820, 560), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	, m_fields(fields)
 	, m_metaData(metaData)
 	, m_readOnly(readOnly)
+	, m_allowWindows(allowWindows)
 	, m_model(metaData)   // the same config the fields came from — so a reference can be walked here too
 {
 	// The same picture the constructor wears: this window writes the same language, one level down.
@@ -263,6 +264,7 @@ void ibDialogQueryExpression::FillLanguageTree()
 	// ANSWERS WITH SOMETHING ELSE (a value, in an expression). Filed where each is used, so the two
 	// are chosen apart rather than confused by proximity.
 	leaf(functions, Kw(ibQueryKeyword::IsNull) + wxT("(, )"), Kw(ibQueryKeyword::IsNull) + wxT("(, )"));
+
 
 	const wxTreeItemId operators = group(_("Operators"));
 	// Comparison glyphs are punctuation — the lexer reads them from characters, not a table, so

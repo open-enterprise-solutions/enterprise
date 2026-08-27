@@ -311,6 +311,23 @@ ibQueryBinOp JoinOpToBinOp(ibJoinCompareOp op)
 }
 
 // Aggregate function -> SQL name.
+// …and the same job for a WINDOW's call, which has three more members than the folds — the ranking
+// functions. One table, in the tier that owns SQL spelling.
+wxString WindowFnName(ibQueryWindowFn fn)
+{
+	switch (fn) {
+	case ibQueryWindowFn::Sum:       return wxT("SUM");
+	case ibQueryWindowFn::Count:     return wxT("COUNT");
+	case ibQueryWindowFn::Min:       return wxT("MIN");
+	case ibQueryWindowFn::Max:       return wxT("MAX");
+	case ibQueryWindowFn::Avg:       return wxT("AVG");
+	case ibQueryWindowFn::RowNumber: return wxT("ROW_NUMBER");
+	case ibQueryWindowFn::Rank:      return wxT("RANK");
+	case ibQueryWindowFn::DenseRank: return wxT("DENSE_RANK");
+	}
+	return wxT("SUM");
+}
+
 wxString AggregateFnName(ibDataQueryBuilder::AggregateFn fn)
 {
 	switch (fn) {
@@ -981,6 +998,34 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 		// spelling. Nothing engine-specific reaches this far up, which is the point: a totals rebuild
 		// groups the movements by the very expression the maintenance trigger keys rows with.
 		return ibPeriodTrunc(BuildColumnExpr(queryable, expr->m_lhs, mainQual), expr->m_periodUnit);
+
+	case ibQueryColumnExprKind::WindowAgg: {
+		// ⭐⭐ THE ONE FIGURE OF A REPORT THE SERVER CAN COMPUTE WITHOUT A PUSH-DOWN OF THE FOLD.
+		// `SUM(x) OVER (PARTITION BY <levels above it>)` returns a value per ROW, so no ROLLUP and no
+		// GROUPING SETS are involved — and the clause is spelled by the one renderer every driver
+		// already shares (ibRenderOverClause). An EMPTY partition is `OVER ()`: the whole result,
+		// which is what a share of the report is measured against.
+		// ⚠ A RANKING CALL TAKES NO ARGUMENT — `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()` — and that is
+		// carried by the absence of one rather than by a flag: an expression with nothing to fold
+		// simply has no input, and the same code writes both families.
+		std::vector<ibQueryExprPtr> args;
+		if (const ibQueryExprPtr arg = BuildColumnExpr(queryable, expr->m_lhs, mainQual))
+			args.push_back(arg);
+		ibQueryWindow window;
+		for (const ibQueryColumnExprPtr& key : expr->m_partition)
+			if (const ibQueryExprPtr k = BuildColumnExpr(queryable, key, mainQual))
+				window.m_partitionBy.push_back(k);
+		for (const auto& key : expr->m_windowOrder)
+			if (const ibQueryExprPtr k = BuildColumnExpr(queryable, key.first, mainQual))
+				window.m_orderBy.push_back(ibQuerySortKey{ k, key.second ? ibQuerySortDir::Asc
+				                                                         : ibQuerySortDir::Desc });
+		// ⭐ THE CONCEPT IS SPELLED HERE, and nowhere above. L3 names the call and the frame in its own
+		// words; what they are written as belongs to this tier, exactly as a period truncation does.
+		window.m_frame = expr->m_windowFrame == ibQueryWindowFrame::Rows  ? ibQueryFrame::RowsThroughCurrent
+		               : expr->m_windowFrame == ibQueryWindowFrame::Range ? ibQueryFrame::RangeThroughPeers
+		                                                                  : ibQueryFrame::NoFrame;
+		return ibWindowed(ibFunc(WindowFnName(expr->m_windowFn), std::move(args)), std::move(window));
+	}
 	}
 	return nullptr;
 }

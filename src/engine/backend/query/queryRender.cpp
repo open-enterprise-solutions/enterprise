@@ -461,6 +461,17 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 			// query that dropped it would rename the column the moment the text made a round trip,
 			// and the report reading `res["Qty"]` would find nothing.
 			wxString written = RenderExpr(*aggregate.m_expr);
+			// …AND WHAT IT IS COMPUTED OVER, written back in the same place it was read: after the
+			// call, before the name. Dropped here, a query that made a round trip through text would
+			// come back with every figure folded by the ladder — running, and answering a different
+			// question than the one that was asked.
+			// Several ticked groupings are written in BRACKETS — `OVER (Item, Warehouse)` — which is
+			// what says they are ONE area rather than the first of them followed by something else.
+			// A single name keeps the bare spelling, which is the common case.
+			if (!aggregate.m_scope.IsEmpty())
+				written += wxT(" ") + Kw(ibQueryKeyword::Over) + wxT(" ")
+				         + (aggregate.m_scope.Contains(wxT(",")) ? wxT("(") + aggregate.m_scope + wxT(")")
+				                                                 : aggregate.m_scope);
 			if (!aggregate.m_alias.IsEmpty())
 				written += wxT(" ") + Kw(ibQueryKeyword::As) + wxT(" ") + aggregate.m_alias;
 			aggregates.push_back(written);

@@ -311,6 +311,10 @@ private:
 	// WHAT THE RESOURCE CELL OFFERS for the row under the cursor — the ready calls the engine admits
 	// over that row's field, and the editor behind "..." for everything else.
 	wxArrayString ResourceChoices() const;
+	// …and the groupings a resource may be computed OVER — this composition's own, see the body.
+	wxArrayString         ResourceScopeChoices() const;      // for the quick list in the cell
+	std::vector<wxString> ResourceScopeNames() const;        // …and for the ticked tree behind "..."
+	std::vector<wxString> ResourceScopeSeparators() const;
 	bool EditResourceExpression(wxString& text);
 
 	// ---- The output structure — the one editor this window owns ----------------

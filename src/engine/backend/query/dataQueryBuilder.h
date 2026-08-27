@@ -91,7 +91,27 @@ using ibWriteRow = std::vector<std::pair<const ibBackendQueryColumn*, ibValue>>;
 struct ibAggregateItem { ibAggregateFn m_fn; const ibBackendQueryColumn* m_col; wxString m_alias;
                          std::vector<const ibBackendQueryColumn*> m_path;
                          ibQueryColumnExprPtr m_expr;
-                         bool m_distinct = false; };
+                         bool m_distinct = false;
+                         // ⭐⭐ THE AREA THIS FIGURE IS COMPUTED OVER — `TOTALS SUM(x) OVER Item`.
+                         //
+                         // Zero = the ordinary aggregate, whose area is the LADDER: it means one
+                         // thing on each heading and follows the reader's grouping. Set = the figure
+                         // belongs to ONE level and is constant inside it, which is what a share's
+                         // denominator is, and what other systems reach through an expression
+                         // evaluated "in the context of a grouping".
+                         //
+                         // ⚠ NOT a window over rows. TOTALS folds NODES (it runs after the ladder),
+                         // so `COUNT(x) OVER Item` counts an item's WAREHOUSES. A window over rows
+                         // lives in the SELECT and is a different field entirely (ibQueryExpr::m_over).
+                         //
+                         // The branch is part of the address: the same depth in two branches is two
+                         // different places. Null branch = the common ladder.
+                         std::shared_ptr<struct ibTotalBranch> m_scopeBranch;
+                         int m_scopeDepth = 0;
+                         // …and the column the figure is read back through when the SERVER computed
+                         // it (a window projected under an alias of its own). Owned here because
+                         // nothing else outlives the read it belongs to.
+                         std::shared_ptr<ibBackendQueryColumn> m_ownedReceiver; };
 // ONE FIELD of a TotalBy level — the column to roll up by + how it unfolds.
 // ⭐ A LEVEL'S FIELD CARRIES ITS OWN PATH. A dot-walked dimension (`Producer.Region`) groups by a
 // SYNTHETIC column — one this door made up so the fold has a stable id to key the tree on — while
@@ -716,6 +736,29 @@ public:
 	// BuildColumnExpr. Single-source DB aggregates only (gated at the L4 lowering).
 	ibDataQueryBuilder& Aggregate(AggregateFn fn, const ibQueryColumnExprPtr& expr, const wxString& alias,
 		bool distinct = false);
+	// ⭐⭐ …AND WHICH LEVEL AN ALREADY-DECLARED AGGREGATE IS COMPUTED OVER — `TOTALS SUM(x) OVER Item`.
+	//
+	// Stated separately rather than as a fourth parameter on each of the three Aggregate overloads:
+	// an area is a property of the figure, not of how its input was spelled, and threading it through
+	// all three would have said the same thing in three places. Addressed BY ALIAS, which is the name
+	// the figure is read back under and therefore the one thing every overload agrees on.
+	//
+	// depth = the level's rung (1 = the first level of the ladder), branch = which ladder — null is
+	// the common one. Together they are an ADDRESS, and the fields it stands for are derivable from
+	// it, which is what leaves the push-down road open (the same address is `PARTITION BY <prefix>`).
+	ibDataQueryBuilder& AggregateOver(const wxString& alias, std::shared_ptr<ibTotalBranch> branch, int depth);
+
+	// …AND THE COLUMN THE FIGURE IS READ BACK THROUGH, when the SERVER computed it. The window is
+	// projected under an alias of its own, so the value must not land on the column it was computed
+	// FROM — this hands the aggregate a receiver, and the fold then reads it there.
+	ibDataQueryBuilder& AggregateReceiver(const wxString& alias, std::shared_ptr<ibBackendQueryColumn> receiver);
+
+	// ⭐ CAN THIS READ'S ENGINE COMPUTE A WINDOW? Asked of the connection THIS door was built on —
+	// never of the active database. Several are open at once (the base, a comparison, one from a
+	// file), and "the active one" is not necessarily mine: reaching for it is how a query comes to
+	// be judged by the capabilities of somebody else's engine.
+	bool CanPushWindow() const;
+
 	ibDataQueryBuilder& Sum  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Sum,   col,     alias); }
 	ibDataQueryBuilder& Min  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Min,   col,     alias); }
 	ibDataQueryBuilder& Max  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Max,   col,     alias); }

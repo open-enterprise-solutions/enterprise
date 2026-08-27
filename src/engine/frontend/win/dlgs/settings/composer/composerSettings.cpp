@@ -1,3 +1,4 @@
+#include <wx/tokenzr.h>   // an area may name several groupings, comma-separated
 #include "frontend/win/dlgs/settings/composer/composerSettings.h"
 
 #include "backend/srcDataObject.h"                 // ibSourceExplorer — the available fields
@@ -110,15 +111,20 @@ private:
 // Read straight from the composer, which is the store: the window keeps no copy of what it shows.
 class ibResourceModel : public ibDataViewVirtualListModel {
 public:
-	enum { kColField = 0, kColExpression, kColAlias };
+	enum { kColField = 0, kColExpression, kColAlias, kColScope };
 
 	// ⭐⭐ ON THE DESCRIPTION THIS WINDOW IS EDITING — the same road the structure model takes, and
 	// asked through a callback so no copy is kept here. A resource is a LINE OF THE DESCRIPTION; it
 	// used to be read and written straight into the running composer, which is filled FROM the
 	// description at a run — so what this window showed and what was saved were two different lists,
 	// and only the composer's survived until the report was closed (Max, 2026-08-24).
-	explicit ibResourceModel(std::function<std::vector<ibResourceDescription>*()> resources)
-		: m_resources(std::move(resources)) { ResetFromList(); }
+	// ⭐ `groupings` — WHAT AN AREA MAY NAME, asked the same way and for the same reason: the window
+	// keeps no copy, so adding a grouping is visible here at once. Used to REFUSE a name that names
+	// nothing, at the moment it is typed — a report whose resource points at a grouping that is not
+	// there comes back empty, and "empty" is the least useful thing a report can say.
+	explicit ibResourceModel(std::function<std::vector<ibResourceDescription>*()> resources,
+	                         std::function<std::vector<wxString>()> groupings = nullptr)
+		: m_resources(std::move(resources)), m_groupings(std::move(groupings)) { ResetFromList(); }
 
 	std::vector<ibResourceDescription>* List() const { return m_resources ? m_resources() : nullptr; }
 
@@ -144,6 +150,12 @@ public:
 			// an editable cell becomes a real value on the first click through it — the very trap
 			// the level's alias cell documents one file over.
 			variant = (*list)[row].m_alias;
+		else if (col == kColScope)
+			// ⭐⭐ OVER WHICH GROUPING THIS FIGURE IS COMPUTED — the composition's half of the same
+			// question the query constructor asks in its own "computed over" column. Empty is the
+			// ordinary answer and is shown empty: the area then comes from the ladder, and the figure
+			// means one thing on each heading, exactly as every resource did before this existed.
+			variant = (*list)[row].m_scope;
 	}
 
 	// ⭐ THE EXPRESSION IS EDITED IN THE CELL, the way the query constructor's Totals tab edits its
@@ -164,6 +176,37 @@ public:
 		// EXPRESSION, which is not a resource at all.
 		if (col == kColAlias) {
 			(*list)[row].m_alias = text;
+			return true;
+		}
+		// …AND THE AREA IS A NAME TOO — a grouping of this composition, or several separated by
+		// commas. Stored as given; whether such a grouping exists is the ENGINE's judgement (the
+		// lowering refuses an unknown one by name), so this cell grows no second opinion about it.
+		// Clearing it is a legitimate edit: the figure goes back to folding by the ladder.
+		if (col == kColScope) {
+			// ⭐⭐ AND IT IS CHECKED HERE, AS IT IS TYPED. Empty is legitimate — the figure goes back to
+			// folding by the ladder — but a NAME must name a grouping this composition declares.
+			// Left unchecked, a misspelt area is discovered by the reader, in front of a report that
+			// shows nothing (Max, 2026-08-27: "when I put a wrong name nothing checks it at all").
+			if (!text.IsEmpty() && m_groupings) {
+				const std::vector<wxString> known = m_groupings();
+				wxStringTokenizer names(text, wxT(","));
+				while (names.HasMoreTokens()) {
+					wxString one = names.GetNextToken();
+					one.Trim(true).Trim(false);
+					if (one.IsEmpty())
+						continue;
+					bool found = false;
+					for (const wxString& had : known)
+						if (had.IsSameAs(one, false)) { found = true; break; }
+					if (!found) {
+						wxMessageBox(wxString::Format(
+							_("\"%s\" is not a grouping of this report: a figure can only be computed over one of its own groupings."),
+							one), _("Computed over"), wxOK | wxICON_WARNING);
+						return false;   // the cell keeps what it had — nothing silently wrong is stored
+					}
+				}
+			}
+			(*list)[row].m_scope = text;
 			return true;
 		}
 		if (col != kColExpression)
@@ -203,6 +246,7 @@ public:
 
 private:
 	std::function<std::vector<ibResourceDescription>*()> m_resources;   // asked every time — no copy kept here
+	std::function<std::vector<wxString>()>               m_groupings;   // …and what an area may name (see the ctor)
 };
 
 // THE ROW A COMMAND ACTS ON. A virtual list keys rows by (index + 1), so nothing selected answers
@@ -2851,7 +2895,8 @@ wxWindow* ibComposerSettingsPanel::BuildResourcePage(wxWindow* parent)
 	m_resourceView = new ibDataViewCtrl(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxDV_ROW_LINES | wxDV_SINGLE);
 	ibStyleSettingsGrid(m_resourceView);
-	m_resourceModel = new ibResourceModel([this] { return &m_edited.m_resources; });
+	m_resourceModel = new ibResourceModel([this] { return &m_edited.m_resources; },
+	                                      [this] { return ResourceScopeNames(); });
 	m_resourceView->AssociateModel(m_resourceModel);
 	m_resourceView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Field"),
 		new ibDataViewTextRenderer(), ibResourceModel::kColField, FromDIP(150), wxAlignment::wxALIGN_LEFT));
@@ -2874,9 +2919,32 @@ wxWindow* ibComposerSettingsPanel::BuildResourcePage(wxWindow* parent)
 	// ⭐ AND WHAT THE FIGURE IS CALLED ON THE REPORT. Empty means "after its argument", which is what
 	// `SUM(Amount)` reads as — and the cell is where a person overrules that, instead of discovering
 	// a name the engine invented to dodge a collision with a grouping (Max, 2026-08-26).
-	m_resourceView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Alias"),
-		new ibDataViewTextRenderer(ibDataViewTextRenderer::GetDefaultType(), wxDATAVIEW_CELL_EDITABLE),
-		ibResourceModel::kColAlias, FromDIP(140), wxAlignment::wxALIGN_LEFT));
+	// ⛔ NO "ALIAS" COLUMN. A column of the result is NAMED WHERE COLUMNS ARE NAMED — in the selection
+	// — and the figure is read back under the name of the field it is a reading of. A second name
+	// written beside the resource was a duplicate of that one, and duplicates drift the day somebody
+	// renames the field (Max, 2026-08-27, on the same column in the query constructor and then here).
+	//
+	// ⚠ The stored alias is untouched: `ibResourceDescription::m_alias` still travels as `AS name`,
+	// so a report that has one keeps it and keeps working. What is gone is the second door to it.
+	// ⭐⭐ …AND OVER WHICH GROUPING IT IS COMPUTED — the reason all of this was built. A resource
+	// normally folds by the ladder and means one figure per heading; named a grouping, it is computed
+	// there and stays constant inside it, which is how a share gets its denominator and how a group
+	// reads its neighbour's total.
+	//
+	// The choices are THIS composition's own groupings, so nothing can be named that the report does
+	// not declare — and picking is one gesture, as everywhere else in this window.
+	// THE SAME PICKER THE CONSTRUCTOR USES — the ticked tree, where a separator is a node and its
+	// levels hang inside it. A dropdown was the first shape of this cell and it was wrong for the
+	// question: choosing an area is choosing PLACES, possibly several, and a flat list can neither
+	// show where a level lives nor let two be marked (Max, 2026-08-27).
+	m_resourceView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Computed over"),
+		new queryctor::ibExpressionCellRenderer(
+			[this]() -> wxArrayString { return ResourceScopeChoices(); },
+			[this](wxString& text) -> bool {
+				return ibPickGroupingScope(this, ResourceScopeNames(), ResourceScopeSeparators(), text);
+			},
+			wxDATAVIEW_CELL_EDITABLE),
+		ibResourceModel::kColScope, FromDIP(160), wxAlignment::wxALIGN_LEFT));
 	right->Add(m_resourceView, 1, wxALL | wxEXPAND, FromDIP(4));
 	rightPane->SetSizer(right);
 
@@ -4192,6 +4260,45 @@ void ibComposerSettingsPanel::MoveStructureLevel(int delta)
 // field, whole and ready to pick. Empty when the row's expression is not a plain call over a field
 // (a ratio has no "which aggregate" to ask about), and the cell then behaves as a free text box
 // with the editor behind "...".
+// ⭐⭐ THE GROUPINGS THIS COMPOSITION DECLARES — what a resource's area may name, and nothing else.
+//
+// Read off the structure itself, so the list is the report's own: add a grouping and it is offered
+// at once, remove one and it stops being. The empty line comes first and is not a placeholder — no
+// area IS the ordinary answer, and it is the way back to it.
+//
+// ⚠ THE SAME NAMES THE ENGINE RESOLVES BY. A level is addressed by its PATH here (that is what the
+// composition stores and what the rendered `TOTALS … BY` writes), so what is picked is what the
+// lowering will find (docs/query-language-arc.md §27).
+std::vector<wxString> ibComposerSettingsPanel::ResourceScopeNames() const
+{
+	std::vector<wxString> names;
+	for (const ibOutputDescription& output : Structure())
+		for (const std::vector<ibLevelDescription>* axis : { &output.m_rowGroups, &output.m_columnGroups })
+			for (const ibLevelDescription& level : *axis)
+				for (const ibGroupLineDescription& line : level.m_settings.m_group.m_lines)
+					if (!line.m_path.IsEmpty()
+					    && std::find(names.begin(), names.end(), line.m_path) == names.end())
+						names.push_back(line.m_path);
+	return names;
+}
+
+// ⚠ A COMPOSITION HAS NO SEPARATORS OF ITS OWN — `SPLIT` is a shape of the QUERY, and a composition
+// says the same thing by having several OUTPUTS. So nothing here is a node, and the tree comes out
+// flat; the picker draws whatever it is given.
+std::vector<wxString> ibComposerSettingsPanel::ResourceScopeSeparators() const
+{
+	return {};
+}
+
+wxArrayString ibComposerSettingsPanel::ResourceScopeChoices() const
+{
+	wxArrayString words;
+	words.Add(wxEmptyString);   // the ladder — the ordinary case, and the way back to it
+	for (const wxString& name : ResourceScopeNames())
+		words.Add(name);
+	return words;
+}
+
 wxArrayString ibComposerSettingsPanel::ResourceChoices() const
 {
 	wxArrayString words;

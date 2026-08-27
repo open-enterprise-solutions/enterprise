@@ -352,6 +352,49 @@ ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
 	return *this;
 }
 
+// ⭐ THE AREA, STATED ON AN AGGREGATE THAT IS ALREADY THERE — see the declaration for why it is not
+// a parameter of the three Aggregate overloads. Applied to the LAST aggregate answering to this
+// alias, which is the one just declared; an alias nobody claimed is left alone rather than raising,
+// because the caller that resolves the name has already refused what it could not resolve.
+ibDataQueryBuilder& ibDataQueryBuilder::AggregateOver(const wxString& alias,
+	std::shared_ptr<ibTotalBranch> branch, int depth)
+{
+	std::vector<AggregateItem>& into = m_aggInTotals ? m_totalAggregates : m_aggregates;
+	for (auto it = into.rbegin(); it != into.rend(); ++it)
+		if (it->m_alias.IsSameAs(alias, false)) {
+			it->m_scopeBranch = std::move(branch);
+			it->m_scopeDepth  = depth;
+			break;
+		}
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::AggregateReceiver(const wxString& alias,
+	std::shared_ptr<ibBackendQueryColumn> receiver)
+{
+	std::vector<AggregateItem>& into = m_aggInTotals ? m_totalAggregates : m_aggregates;
+	for (auto it = into.rbegin(); it != into.rend(); ++it)
+		if (it->m_alias.IsSameAs(alias, false)) {
+			it->m_ownedReceiver = receiver;      // the door keeps it alive for as long as the read
+			it->m_col           = receiver.get();
+			it->m_fn            = AggregateFn::Min;   // constant inside the area, so MIN of it IS it
+			break;
+		}
+	return *this;
+}
+
+// See the declaration: asked of THIS door's connection, never of the active database.
+bool ibDataQueryBuilder::CanPushWindow() const
+{
+	if (m_holder == nullptr)
+		return false;
+	// ⚠ ASKED OF THE LAYER ITSELF, not through L2-1's helper: this door deliberately does not include
+	// the SQL tier (see the file's includes). The fact wanted here is a property of the ENGINE, which
+	// the layer publishes, and the helper below is only the same read spelled once for the renderer.
+	const std::shared_ptr<ibDatabaseLayer> layer = m_holder->EnsureConnection();
+	return layer != nullptr && layer->GetDialect().m_features.m_window;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
 	const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias, bool distinct)
 {

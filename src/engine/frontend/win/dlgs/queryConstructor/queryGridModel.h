@@ -34,6 +34,7 @@ enum ibQueryGridColumn {
 	kGridCol1 = 1,
 	kGridCol2,
 	kGridCol3,
+	kGridCol4,   // the totals aggregates' fourth: over which grouping the figure is computed
 };
 
 class ibQueryGridModel : public ibDataViewVirtualListModel

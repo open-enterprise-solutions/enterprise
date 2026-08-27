@@ -1220,6 +1220,15 @@ ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRow& row)
 			const ibValue v = EvalColumnExprRow(e->m_lhs.get(), row);
 			return ibValue(ibTruncateToPeriod(v.GetDateTime(), e->m_periodUnit));
 		}
+		case ibQueryColumnExprKind::WindowAgg:
+			// ⭐ A WINDOW CANNOT BE EVALUATED ON ONE ROW, and that is a fact about the thing rather than
+			// a gap here: its value is a fold over the PARTITION this row belongs to, so a row alone
+			// does not carry the answer. The expression is built only where the engine computes it
+			// (ibDataQueryBuilder::CanPushWindow), and where it does not, the FOLD produces the figure
+			// from the tree and no such expression exists. Reaching this point means one was built for
+			// a read that then took the RAM road — worth being told about, not worth faking.
+			wxFAIL_MSG(wxT("a window aggregate has no value on a single row — it belongs to the server road"));
+			return ibValue();
 	}
 	return ibValue();
 }
@@ -1243,6 +1252,15 @@ void GatherColumnExprColumns(const ibQueryColumnExpr* e, const std::function<voi
 			GatherColumnExprColumns(e->m_else.get(), add);
 			break;
 		case ibQueryColumnExprKind::PeriodTrunc: GatherColumnExprColumns(e->m_lhs.get(), add); break;
+		// ⭐ THE PARTITION COUNTS TOO. A window names its input AND the levels it is computed over, and
+		// every one of those columns has to reach the read — a partition key nobody projected is a
+		// query that cannot be built. (Missing here, the figure would have come back partitioned by
+		// nothing, which is a plausible number and the wrong one.)
+		case ibQueryColumnExprKind::WindowAgg:
+			GatherColumnExprColumns(e->m_lhs.get(), add);
+			for (const ibQueryColumnExprPtr& key : e->m_partition)
+				GatherColumnExprColumns(key.get(), add);
+			break;
 	}
 }
 
@@ -1944,6 +1962,55 @@ void ApplyAggregates(ibSelectorTree::Node& node, const ibQueryRamTable& TC, cons
 {
 	for (size_t i = 0; i < aggs.size(); ++i)
 		node.m_values[AggSlotId(aggs, i)] = AggregateOne(aggs[i], TC, rows);
+}
+
+// ⭐⭐ THE FIGURES THAT BELONG TO ONE LEVEL — `TOTALS SUM(x) OVER Item`.
+//
+// An aggregate with an area is folded exactly like any other: every node on the path already holds
+// its own roll-up of the rows beneath it. What makes it different is only WHICH of those numbers is
+// the answer — the one computed at the named level. So this is a single pass over the finished tree
+// rather than a second kind of fold:
+//
+//   * ON that level — keep what is there;
+//   * BELOW it — carry that value down, unchanged. Inside the area the figure IS constant, which is
+//     what lets a detail row show the share's denominator;
+//   * ABOVE it, or in another branch — ERASE it. Several values live up there and any one of them
+//     would be a lie. ⚠ Erased, NOT zeroed: a zero joins sums as an addend and divides as a
+//     denominator, while an absent value reads back as the runtime's NULL — "no such figure here".
+//
+// Done after the fold, so both roads (streaming and snapshot) get it from one place, and so a tree
+// the DBMS folded would be treated the same the day the push-down learns to bring one.
+void ApplyScopedAggregates(ibSelectorTree& tree, const std::vector<ibDataQueryBuilder::AggregateItem>& aggs)
+{
+	for (size_t i = 0; i < aggs.size(); ++i) {
+		const ibDataQueryBuilder::AggregateItem& agg = aggs[i];
+		if (agg.m_scopeDepth <= 0)
+			continue;                                   // area comes from the ladder — nothing to fix up
+		const ibMetaID slot = AggSlotId(aggs, i);
+		const wxString branch = agg.m_scopeBranch ? agg.m_scopeBranch->m_name : wxString();
+
+		// `carried` = the value of the nearest ancestor that WAS the area, or null while above it.
+		const std::function<void(ibSelectorTree::Node&, const ibValue*)> walk =
+			[&](ibSelectorTree::Node& node, const ibValue* carried) {
+				const ibValue* pass = carried;
+				if (carried != nullptr) {
+					node.m_values[slot] = *carried;     // below the area — the area's own figure
+				}
+				else if (node.m_level == agg.m_scopeDepth && node.m_branch.IsSameAs(branch, false)
+				         && node.m_kind != ibSelectorNodeKind::Branch) {
+					const auto it = node.m_values.find(slot);
+					if (it != node.m_values.end())
+						pass = &it->second;             // this IS the area — keep it, hand it down
+				}
+				else {
+					node.m_values.erase(slot);          // above it, or another branch: no such figure
+				}
+				for (const std::unique_ptr<ibSelectorTree::Node>& child : node.m_children)
+					if (child != nullptr)
+						walk(*child, pass);
+			};
+		walk(tree.Root(), nullptr);
+	}
 }
 
 // Add the synthetic receiver COLUMNS for COUNT(*) aggregates to a tree (column aggregates need none —
@@ -3820,6 +3887,7 @@ ibSelectorTree ibQueryComposer::BuildDimensionTree(ibQueryRowCursor& rows,
 	while (rows.Next()) { fold.Feed(rows); ++read; }
 	fold.Finish();
 	PadPeriodLevels(tree, levels, aggregates);   // the quiet months, which no fold can produce
+	ApplyScopedAggregates(tree, aggregates);     // …and the figures that belong to ONE level (OVER)
 	ibJournalInfo(wxT("query.road"), wxT("STREAM: folded %ld rows into %ld nodes (%u levels)"),
 	              read, fold.NodeCount(), static_cast<unsigned>(levels.size()));
 	return tree;
@@ -3853,6 +3921,7 @@ ibSelectorTree ibQueryComposer::BuildDimensionTree(const ibQueryRamTable& snapsh
 	tree.Root().m_hasChildren = !tree.Root().m_children.empty();
 	ApplyAggregates(tree.Root(), snapshot, all, aggregates);   // grand total in-place
 	PadPeriodLevels(tree, levels, aggregates);                 // …and the periods nothing happened in
+	ApplyScopedAggregates(tree, aggregates);                   // …and the figures that belong to ONE level
 	return tree;
 }
 

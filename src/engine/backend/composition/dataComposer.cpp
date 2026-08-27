@@ -711,6 +711,12 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const std::vector<c
 			// is the one seam between the composition and the engine (the composer is a tier ABOVE
 			// this text), so a resource's name travels the way a level's does — as `AS name`. Nothing
 			// downstream has to be told about resources at all.
+			// ⭐ …AND OVER WHAT, written before the name exactly as the language reads it. A resource
+			// with an area is the composition's answer to "evaluate this in the context of a
+			// grouping": it names a level of this very report, and the engine folds the figure there
+			// instead of at every heading.
+			if (!m_resources[i].m_scope.IsEmpty())
+				text += wxT(" OVER ") + m_resources[i].m_scope;
 			if (!m_resources[i].m_alias.IsEmpty())
 				text += wxT(" AS ") + m_resources[i].m_alias;
 		}

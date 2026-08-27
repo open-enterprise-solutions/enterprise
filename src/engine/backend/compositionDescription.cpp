@@ -628,6 +628,10 @@ constexpr ibClassID g_resourceNodeClsid = make_clsid("CompositionResource", ibCl
 const wxString  kResourceFunc = wxT("Func");
 const wxString  kResourcePath = wxT("Path");
 const wxString  kResourceAlias = wxT("Alias");
+// The grouping this figure is computed over (`OVER Item`). Optional, and absence reads back as
+// absence: every settings file written before areas existed holds no such key and means "the area
+// comes from the ladder", which is exactly what an empty scope says.
+const wxString  kResourceScope = wxT("Scope");
 
 // THE PACKAGES — a node per select somebody has said something about, each holding its own field
 // entries. The fields themselves are not stored: they are whatever the select projects, so a list
@@ -770,6 +774,7 @@ bool ibResourceDescriptionMemory::ReadNode(const ibDataNode& node, std::vector<i
 		resource.m_func  = child.GetValue<wxString>(kResourceFunc);
 		resource.m_path  = path;
 		resource.m_alias = child.GetValue<wxString>(kResourceAlias);
+		resource.m_scope = child.GetValue<wxString>(kResourceScope);
 		resources.push_back(std::move(resource));
 	}
 	return true;
@@ -785,6 +790,8 @@ bool ibResourceDescriptionMemory::WriteNode(ibDataNode& node, const std::vector<
 		sub.SetValue<wxString>(kResourcePath, resources[i].m_path);
 		if (!resources[i].m_alias.IsEmpty())
 			sub.SetValue<wxString>(kResourceAlias, resources[i].m_alias);
+		if (!resources[i].m_scope.IsEmpty())
+			sub.SetValue<wxString>(kResourceScope, resources[i].m_scope);
 	}
 	return true;
 }

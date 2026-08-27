@@ -29,6 +29,7 @@
 // prune passes; MSVC hands <algorithm> over transitively and GCC/Clang do not, so the Windows build
 // stayed green while the other three CI jobs could not compile it. See docs/portability.md.
 #include <algorithm>
+#include <wx/tokenzr.h>   // the OVER area may name several groupings, comma-separated
 #include <set>          // the aggregate inputs already claimed in one TOTALS clause
 
 // --- the AUXILIARY per-query temp-source registry (decl in queryable.h) ------------
@@ -837,6 +838,23 @@ void RefuseUnloweredWindow(const ibQueryAstExpr& e)
 		_("window functions are not executed yet: the language reads OVER (...), the query engine does not run it"));
 }
 
+// The language's word -> the tier's concept. Twin of AggFn, with the three ranking calls the folds
+// do not have; the SQL spelling of either is the provider's business.
+ibQueryWindowFn WindowFnOf(ibQueryKeyword kw)
+{
+	switch (kw) {
+	case ibQueryKeyword::Sum:       return ibQueryWindowFn::Sum;
+	case ibQueryKeyword::Count:     return ibQueryWindowFn::Count;
+	case ibQueryKeyword::Min:       return ibQueryWindowFn::Min;
+	case ibQueryKeyword::Max:       return ibQueryWindowFn::Max;
+	case ibQueryKeyword::Avg:       return ibQueryWindowFn::Avg;
+	case ibQueryKeyword::RowNumber: return ibQueryWindowFn::RowNumber;
+	case ibQueryKeyword::Rank:      return ibQueryWindowFn::Rank;
+	case ibQueryKeyword::DenseRank: return ibQueryWindowFn::DenseRank;
+	default:                        return ibQueryWindowFn::Count;
+	}
+}
+
 ibAggregateFn AggFn(ibQueryKeyword kw)
 {
 	switch (kw) {
@@ -885,6 +903,8 @@ std::vector<const ibBackendQueryColumn*> ResolveWhereTarget(const std::vector<ib
                                                             const ibQueryAstExpr& e, bool allowDotWalk);   // defined below
 
 ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& sources,
+                                            const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
+ibQueryColumnExprPtr BuildWindowExprFromAst(const std::vector<ibSourceBinding>& sources,
                                             const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
 
 // Is this AST expression a COMPUTED WHERE / aggregate-input lhs (arithmetic or CASE)?
@@ -1186,6 +1206,41 @@ bool IsFlatAndWhere(const ibQueryAstExpr& e)
 // Build an L3 computed-column expression (ibQueryColumnExpr) from an AST expression — arithmetic, CASE,
 // a plain column, a literal, or a &parameter. The provider lowers it to the L2 IR and projects it AS an
 // alias. Plain columns only (no dot-walk inside a computed expression yet). Single source.
+// ⭐⭐ `SUM(x) OVER (PARTITION BY … ORDER BY … ROWS)` — the AST's windowed call, as an L3 expression
+// the provider spells through the one clause writer every driver shares.
+//
+// The FUNCTION IS ITS NAME and one name serves both families: the language writes `SUM` / `COUNT` /
+// `MIN` / `MAX` / `AVG` and `ROW_NUMBER` / `RANK` / `DENSE_RANK` exactly as SQL does, so nothing is
+// translated here. A ranking call takes no argument, and that is carried by the absence of one.
+//
+// ⚠ THE FRAME IS TWO WORDS AND NO MORE, and the mapping is a decision rather than a detail: `ROWS`
+// counts rows one by one through this one, `RANGE` lets every row sharing this one's sort key
+// contribute (three movements stamped with the same period are one period's worth of stock, in any
+// order). Unstated means the partition WHOLE — which is what the denominator of a share is.
+ibQueryColumnExprPtr BuildWindowExprFromAst(const std::vector<ibSourceBinding>& sources,
+                                            const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
+{
+	std::vector<ibQueryColumnExprPtr> partition;
+	std::vector<std::pair<ibQueryColumnExprPtr, bool>> order;
+	ibQueryWindowFrame frame = ibQueryWindowFrame::Whole;
+	if (e.m_over) {
+		for (const ibQueryAstExprPtr& key : e.m_over->m_partitionBy)
+			if (key) partition.push_back(BuildColumnExprFromAst(sources, *key, params));
+		for (const ibQueryOrderItem& key : e.m_over->m_orderBy)
+			if (key.m_expr) order.emplace_back(BuildColumnExprFromAst(sources, *key.m_expr, params), key.m_ascending);
+		frame = e.m_over->m_frame == ibQueryAstFrame::Rows  ? ibQueryWindowFrame::Rows
+		      : e.m_over->m_frame == ibQueryAstFrame::Range ? ibQueryWindowFrame::Range
+		                                                    : ibQueryWindowFrame::Whole;
+	}
+	// The input, where there is one. `COUNT(*)` and the ranking calls have none.
+	ibQueryColumnExprPtr arg;
+	if (!e.m_star && e.m_arg && !ibIsRankingKeyword(e.m_func))
+		arg = BuildColumnExprFromAst(sources, *e.m_arg, params);
+
+	return ibQueryColumnExpr::WindowAgg(WindowFnOf(e.m_func), std::move(arg), std::move(partition),
+	                                    std::move(order), frame);
+}
+
 ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& sources,
                                             const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
 {
@@ -1667,6 +1722,25 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			const wxString alias = OutputNameFor(ast, p, idx++);
 			OutputColumn oc;
 			oc.m_name = alias;
+
+			// ⭐⭐ A WINDOWED CALL IS A PROJECTED EXPRESSION, NOT AN AGGREGATE. `SUM(x) OVER (…)` folds
+			// nothing away — it returns a value on every row — so it goes into the selection as a
+			// computed column, and the engine that computes it is the SERVER.
+			//
+			// This is where the refusal used to stand. It was honest while there was no road: an
+			// aggregate travelled to the door as an ibAggregateItem, which had no window on it, and
+			// dropping the OVER would have reported a plain total under the name of a running one.
+			// The road exists now (ibQueryColumnExprKind::WindowAgg → ibRenderOverClause), so the
+			// refusal narrows to the one case that still cannot be honoured: an engine without windows.
+			if (e.m_kind == ibQueryAstExprKind::Func && (e.m_over || ibIsRankingKeyword(e.m_func))) {
+				if (!b.CanPushWindow())
+					ThrowQueryException(e.m_line, e.m_col,
+						_("this database does not compute window functions - OVER (...) cannot be run here"));
+				b.SelectExpr(BuildWindowExprFromAst(sources, e, params), alias);
+				oc.m_alias = alias; oc.m_byAlias = true;   // read back by name — a computed column
+				outSchema.push_back(oc);
+				continue;
+			}
 
 			if (e.m_kind == ibQueryAstExprKind::Func) {
 				RefuseUnloweredWindow(e);
@@ -2917,6 +2991,56 @@ void CheckJoinsAreConsistent(const ibQuerySelect& ast, const std::vector<ibSourc
 // "does some projection claim this path", by output name or by prefix. A dot-walk CONTINUES from a
 // claimed field: `Parent.Description` is claimed by `SELECT Parent`, the walk starting inside the
 // result. COUNT(*) names nothing and is always in.
+// ⭐⭐ `OVER <name>` NAMES A GROUPING OF THIS VERY QUERY — checked HERE, where the window verifies a
+// query, and not only when it runs. A misspelt area is the easiest mistake to make in the totals
+// grid (a name typed by hand, or one that survived a grouping being renamed), and finding it at
+// composition time means finding it in front of a report that shows nothing.
+//
+// The names are the ones the lowering resolves by: a level's alias, else its head field's name,
+// qualified by the separator for the levels that sit on one.
+void CheckTotalsScopeNames(const ibQuerySelect& ast)
+{
+	std::vector<wxString> known;
+	const auto nameOf = [](const ibQueryTotalDim& level) -> wxString {
+		if (!level.m_alias.IsEmpty())
+			return level.m_alias;
+		const ibQueryTotalField* head = level.Head();
+		return head != nullptr && head->m_expr != nullptr && !head->m_expr->m_path.empty()
+			? head->m_expr->m_path.back() : wxString();
+	};
+	for (const ibQueryTotalDim& level : ast.m_totalsBy)
+		if (const wxString name = nameOf(level); !name.IsEmpty())
+			known.push_back(name);
+	for (const ibQueryTotalSplit& node : ast.m_totalsSplits)
+		for (const ibQueryTotalDim& level : node.m_levels) {
+			const wxString name = nameOf(level);
+			if (name.IsEmpty())
+				continue;
+			known.push_back(name);
+			if (!node.m_name.IsEmpty())
+				known.push_back(node.m_name + wxT(".") + name);
+		}
+
+	for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates) {
+		if (resource.m_scope.IsEmpty())
+			continue;
+		wxStringTokenizer names(resource.m_scope, wxT(","));
+		while (names.HasMoreTokens()) {
+			wxString one = names.GetNextToken();
+			one.Trim(true).Trim(false);
+			if (one.IsEmpty())
+				continue;
+			bool found = false;
+			for (const wxString& had : known)
+				if (had.IsSameAs(one, false)) { found = true; break; }
+			if (!found)
+				ThrowQueryException(0, 0,
+					_("OVER \"%s\": this query groups by nothing of that name: name one of its own groupings, qualified by the separator (Separator.Grouping) where it sits on one"),
+					one);
+		}
+	}
+}
+
 void CheckTotalsNameSelectedFields(const ibQuerySelect& ast)
 {
 	if (ast.m_totalsAggregates.empty() || ast.m_selectAll)
@@ -3054,6 +3178,7 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 	// query the engine runs — the same false complaint, arrived at from the other side.
 	const ibQuerySelectPtr asRun = ibQueryRewrite::Rewrite(astAsWritten);
 	CheckTotalsNameSelectedFields(asRun ? *asRun : ast);
+	CheckTotalsScopeNames(ast);   // …and that every OVER names a grouping this query declares
 	for (const ibQueryTotalDim& dim : ast.m_totalsBy)
 		for (const ibQueryTotalField& field : dim.m_fields)
 			CollectColumns(field.m_expr, strict);
@@ -4350,6 +4475,23 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// The dimension levels, IN ORDER (each yields a subtotal node; the root is the grand total). They
 	// are the leading output columns (their group key at each node — read by GetValue(col)).
 	size_t levelIndex = 0;
+	// ⭐ WHERE A LEVEL CAN BE ADDRESSED FROM — filled as the levels are lowered, read by the
+	// aggregates below (`OVER <level>`). See the note at the registration site.
+	// ⭐ The address, AND the columns it stands for. Both are derived from the levels at the same
+	// moment and neither is guessed later: the address is what the FOLD needs (which node carries the
+	// figure), the prefix is what the SERVER needs (`PARTITION BY <these>`). Deriving the prefix later
+	// would mean re-walking the ladder with the branch rules in hand — a second reading of one thing.
+	struct ibScopeAddress {
+		wxString                                 m_name;
+		std::shared_ptr<ibTotalBranch>           m_branch;
+		int                                      m_depth = 0;
+		std::vector<const ibBackendQueryColumn*> m_prefix;   // the levels from the root down to it
+	};
+	std::vector<ibScopeAddress> scopeByName;   // a handful of levels — a list, matched case-insensitively
+	// The ladder being walked, as columns: the common part, then whatever branch is open. Cut back to
+	// the common part at every branch boundary, exactly as the depth counter is.
+	std::vector<const ibBackendQueryColumn*> prefixCols;
+	size_t commonPrefixCols = 0;
 	// ⭐⭐ …AND A BRANCH CONTINUES THE COMMON LADDER RATHER THAN THE LIST. A level's number is its
 	// DEPTH — which is what the fold builds (a fork spends no level, so two branches stand at the
 	// same depth however many of them there are) and what every reader asks by: the composer names a
@@ -4393,10 +4535,13 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			if (withDetails && branch != nullptr)
 				b.TotalsDetails(layout.m_detailsAxis, branch);
 			// THE COMMON LADDER ENDED HERE — its length is what every branch starts from (see above).
-			if (branch == nullptr)
-				commonLevels = levelIndex;
+			if (branch == nullptr) {
+				commonLevels     = levelIndex;
+				commonPrefixCols = prefixCols.size();
+			}
 			branch     = entry.second;
 			levelIndex = commonLevels;
+			prefixCols.resize(commonPrefixCols);   // …and so does the prefix a branch's levels extend
 		}
 
 		// ONE LEVEL, ONE OR MORE FIELDS — grouped by the TUPLE of them. Each field resolves exactly as
@@ -4404,6 +4549,17 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		// collected into one level instead of each becoming a level of its own.
 		ibTotalLevel level;
 		level.m_branch = branch;
+
+		// ⭐⭐ THE LEVEL'S ADDRESS, REGISTERED UNDER ITS NAME — so `TOTALS SUM(x) OVER Item` can be
+		// resolved below, where the aggregates are built. An ADDRESS (branch + depth) rather than the
+		// fields themselves, deliberately: the fields are a PROJECTION of it and can be derived at any
+		// moment, while the address cannot be recovered from a list of fields. That is what keeps the
+		// push-down road open — the same address spells `PARTITION BY <the prefix's fields>`, which
+		// every one of our engines runs (windows are on in Firebird, PostgreSQL and SQLite alike,
+		// unlike ROLLUP).
+		//
+		// Registered under BOTH spellings — see where it happens, below, once this level's columns are
+		// resolved: the address and the prefix are written together or not at all.
 
 		// …AND WHICH WAY IT READS. `rowLevels` is the caller's own layout — a cross-table's row axis
 		// — and everything past it stands across the page. Stamped ON the level, so the fold and
@@ -4577,6 +4733,34 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			if (field.m_col != nullptr)
 				levelCols.insert(field.m_col);
 
+		// ⭐⭐ THE LEVEL CAN NOW BE ADDRESSED — its columns are resolved, so the address and the prefix
+		// it stands for are written in one place. Under BOTH spellings: the bare name, and qualified
+		// by the branch, so a level stays addressable when two branches carry one of the same name.
+		//
+		// The PREFIX is the ladder down to and including this level — exactly the `PARTITION BY` that
+		// computes this figure on the server, which is why it is captured here rather than rebuilt
+		// later from the address.
+		for (const ibTotalField& field : level.m_fields)
+			if (field.m_col != nullptr)
+				prefixCols.push_back(field.m_col);
+		{
+			wxString levelName = d.m_alias;
+			if (levelName.IsEmpty() && d.Head() != nullptr && d.Head()->m_expr != nullptr
+			    && !d.Head()->m_expr->m_path.empty())
+				levelName = d.Head()->m_expr->m_path.back();
+			if (!levelName.IsEmpty()) {
+				const int depth = static_cast<int>(levelIndex);   // already advanced past this level
+				bool taken = false;
+				for (const ibScopeAddress& had : scopeByName)
+					if (had.m_name.IsSameAs(levelName, false)) { taken = true; break; }
+				if (!taken)                                       // first wins; a duplicate needs qualifying
+					scopeByName.push_back(ibScopeAddress{ levelName, branch, depth, prefixCols });
+				if (branch != nullptr && !branch->m_name.IsEmpty())
+					scopeByName.push_back(ibScopeAddress{ branch->m_name + wxT(".") + levelName,
+					                                     branch, depth, prefixCols });
+			}
+		}
+
 		b.TotalByLevel(std::move(level));   // the level goes in WHOLE, after all its fields resolved
 	}
 
@@ -4745,6 +4929,68 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			}
 		}
 		b.Aggregate(AggFn(agg->m_func), col, outName, agg->m_distinctArg);   // in-place — rolls into its own column (named for read-back)
+
+		// ⭐⭐ …AND OVER WHAT, when the author said so. The name is resolved against the levels that
+		// were just lowered, so it can only mean a grouping this very query declares.
+		//
+		// 🛑 AN UNKNOWN NAME IS REFUSED, LOUDLY. Folding by the ladder instead would answer a
+		// different question in silence — a share against the wrong denominator reconciles to
+		// nothing and reads as bad data, not as a missing feature. (The same reasoning as the
+		// window refusal a few lines up.)
+		if (!resource.m_scope.IsEmpty()) {
+			// ⭐ ONE NAME OR SEVERAL — the constructor ticks groupings, and several ticks are ONE area.
+			// The DEEPEST of them decides where the figure stands (a node of that level carries it),
+			// and their columns together are what the server partitions by.
+			const ibScopeAddress* found = nullptr;
+			std::vector<const ibBackendQueryColumn*> scopeCols;
+			wxStringTokenizer names(resource.m_scope, wxT(","));
+			while (names.HasMoreTokens()) {
+				wxString one = names.GetNextToken();
+				one.Trim(true).Trim(false);
+				if (one.IsEmpty())
+					continue;
+				const ibScopeAddress* at = nullptr;
+				for (const ibScopeAddress& address : scopeByName)
+					if (address.m_name.IsSameAs(one, false)) { at = &address; break; }
+				if (at == nullptr)
+					ThrowQueryException(0, 0,
+						_("OVER \"%s\": this TOTALS declares no such grouping: name a level of its own BY, qualifying it with the branch (Branch.Level) where two branches carry one name"),
+						one);
+				if (found == nullptr || at->m_depth > found->m_depth)
+					found = at;                     // the deepest ticked level is where the figure lives
+				for (const ibBackendQueryColumn* c : at->m_prefix)
+					if (std::find(scopeCols.begin(), scopeCols.end(), c) == scopeCols.end())
+						scopeCols.push_back(c);
+			}
+			if (found == nullptr)
+				ThrowQueryException(0, 0, _("OVER: no grouping was named"));
+			b.AggregateOver(outName, found->m_branch, found->m_depth);
+
+			// ⭐⭐ …AND THE SERVER COMPUTES IT, where the engine has windows. `SUM(x) OVER (PARTITION BY
+			// <the prefix>)` is an ordinary output column — a value per ROW — so this needs neither
+			// ROLLUP nor GROUPING SETS, and it therefore works on Firebird too, where the ladder's own
+			// fold must stay in memory for good.
+			//
+			// The figure then reaches the node through MIN rather than through its own function, and
+			// that is exact rather than approximate: inside its area the value is CONSTANT, so the
+			// minimum of it IS it. Above the area the pass over the tree erases the column anyway
+			// (ApplyScopedAggregates), so no wrong number can survive there either.
+			ibBackendColumnRawDB::RawType overRaw = ibBackendColumnRawDB::RawType::Number;
+			if (col != nullptr && ScalarRawType(col, overRaw) && b.CanPushWindow()) {
+				std::vector<ibQueryColumnExprPtr> partition;
+				for (const ibBackendQueryColumn* key : scopeCols)
+					partition.push_back(ibQueryColumnExpr::Col(key));
+				const wxString windowAlias = wxString::Format(wxT("over%u"),
+					static_cast<unsigned>(nextSynthId - kSyntheticColumnBase));
+				b.SelectExpr(ibQueryColumnExpr::WindowAgg(WindowFnOf(agg->m_func),
+				                                          ibQueryColumnExpr::Col(col), std::move(partition)),
+				             windowAlias);
+				// The receiver the fold reads it back through — a column of its own, so the figure does
+				// not land on top of the one it was computed from.
+				b.AggregateReceiver(outName,
+					std::make_shared<ibSyntheticScalarColumn>(windowAlias, nextSynthId++, overRaw));
+			}
+		}
 
 		OutputColumn oc; oc.m_name = outName;
 		oc.m_role = ibQueryLowering::ibColumnRole::Measure;   // a TOTALS aggregate — the report's resource

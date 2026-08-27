@@ -293,6 +293,14 @@ private:
 	// THE TABLES THIS ROW MAY JOIN — the query's live sources, minus the one already chosen on the
 	// other side. `leftSide` says which cell is asking.
 	wxArrayString LinkTableChoices(bool leftSide) const;
+	// ⭐ THE GROUPINGS A TOTALS FIGURE CAN BE COMPUTED OVER — this query's own levels, the ones on
+	// separators QUALIFIED by the separator's name (`Splitter1.Characteristic`), and an empty line
+	// first, which is the ordinary answer: the area comes from the ladder.
+	wxArrayString TotalsScopeChoices() const;
+	// …and the same choice AS A TREE, where the separators are nodes and their levels hang inside
+	// them. Opened by the cell's "..." — a flat list can spell `Splitter1.Level` but cannot show
+	// where that level lives.
+	bool PickTotalsScope(wxString& text);
 	// ADD A LINK BY HAND. Until now a link existed only because a table was added — so joining a
 	// table already in the query, or writing a second condition between the same pair, had no verb.
 	void OnAddLink(wxCommandEvent&);
@@ -724,6 +732,18 @@ FRONTEND_API bool ibShowQueryConstructorFor(wxWindow* parent, ibQuerySelectPtr& 
 // table, and the ENGINE's font and colours. Shared, because there is more than one such pane (the
 // constructor's text, the expression editor's) and two of them styled separately would drift into
 // two different-looking editors for one language.
+// ⭐⭐ PICK THE GROUPINGS A FIGURE IS COMPUTED OVER — the ticked tree, shared by the two windows that
+// ask this question: the query constructor's Totals tab and the composer's resources.
+//
+// One control, one gesture, one place to change them: `groupings` is what to show (a separator's
+// levels come as "Separator.Level"), `separators` marks which of those lines are separators — shown
+// as nodes and not tickable, since a branch does not narrow the rows and cannot be an area. `inOut`
+// carries the current answer in and the new one out, comma-separated. False = cancelled.
+FRONTEND_API bool ibPickGroupingScope(wxWindow* parent,
+                                      const std::vector<wxString>& groupings,
+                                      const std::vector<wxString>& separators,
+                                      wxString& inOut);
+
 FRONTEND_API void ibStyleQueryText(class wxStyledTextCtrl* text);
 
 // The indicator `&name` is painted with. An INDICATOR and not a style, because the lexer owns the

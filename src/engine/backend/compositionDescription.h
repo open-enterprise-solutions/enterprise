@@ -365,13 +365,25 @@ struct ibResourceDescription {
 	// name is what the query tier deals in. Empty = the engine names it after the argument.
 	wxString m_alias;
 
+	// ⭐⭐ OVER WHAT IT IS COMPUTED — the name of a grouping this composition declares, or empty.
+	//
+	// Empty is the ordinary resource: its area is the LADDER, so it means one figure on each heading
+	// and follows whatever the reader re-grouped. Named, the figure belongs to that level and is
+	// constant inside it — which is how a share gets its denominator, and what other systems reach
+	// through an expression evaluated "in the context of a grouping".
+	//
+	// Travels INTO the query as `TOTALS SUM(Amount) OVER Item`, like everything else this tier says:
+	// the text is the one seam downward, and nothing below has to be told about resources. A branch
+	// qualifies the name where two of them carry a level of the same name (`Branch.Level`).
+	wxString m_scope;
+
 	// (⚠ AND NO TITLE HERE. A resource is BUILT ON A FIELD — `SUM(Amount)` is a reading of Amount —
 	//  so what it is called comes from that field, through m_path (Max, 2026-08-26: "a resource
 	//  refers to a field; it is the field that should hold the title, and the resource reaches it
 	//  through the field"). A caption of its own would be a second place to say one thing, and the
 	//  two would drift the first time a person renamed the field.)
 	bool operator==(const ibResourceDescription& o) const {
-		return m_func == o.m_func && m_path == o.m_path && m_alias == o.m_alias;
+		return m_func == o.m_func && m_path == o.m_path && m_alias == o.m_alias && m_scope == o.m_scope;
 	}
 	bool operator!=(const ibResourceDescription& o) const { return !(*this == o); }
 };
