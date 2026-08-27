@@ -3495,8 +3495,11 @@ ibValueParentMap ParentMapForField(const DimCtx& ctx, const ibBackendQueryColumn
 
 // `across` — this call is building the COLUMN branch of a cross-table: the levels past the seam,
 // hung under one row heading. Everything else is the ordinary walk down the page.
+// ⭐ `branch` — WHICH LADDER THIS DESCENT IS ON. Null is the common one, which is every report
+// without `SPLIT`. Carried rather than read off the node, because a branch has an IDENTITY (the
+// shared ibTotalBranch) and two nameless ones must not fold into each other.
 void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vector<long>& rows, size_t levelIdx,
-                  bool across = false);
+                  bool across = false, const ibTotalBranch* branch = nullptr);
 
 // ⭐ THE CELLS OF ONE HEADING — the column axis, folded under the heading that is being built. Called
 // for EVERY row heading rather than only the deepest, because an outer heading's cells are a fold
@@ -3513,7 +3516,8 @@ void FoldAcross(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vector
 std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent, size_t levelIdx,
 	const ibValue& valueKey,
 	const ibRowsByValue& byVal,
-	const ibRefChildren& childrenOf, ibValueSeen& visited, bool across = false)
+	const ibRefChildren& childrenOf, ibValueSeen& visited, bool across = false,
+	const ibTotalBranch* branch = nullptr)
 {
 	if (IsNoKey(valueKey) || visited[valueKey]) return {};
 	visited[valueKey] = 1;
@@ -3523,6 +3527,7 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 	// level, so every folder and every item here belongs to the same level and must say so.
 	ibSelectorTree::Node* node = parent->AddChild(static_cast<int>(levelIdx) + 1);
 	node->m_values = parent->m_values;   // inherit the grouping fields available from the levels above (same rule as the Elements branch)
+	node->m_branch = parent->m_branch;   // …and the branch it stands in, inherited exactly as the keys are
 	// A hierarchy level is single-field by construction (FoldDimLevel routes it here only then), so
 	// its key is the head field's value.
 	node->m_values[level.HeadCol()->GetColumnId()] = valueKey;   // the key IS the value
@@ -3535,10 +3540,10 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 	const auto cit = childrenOf.find(valueKey);          // sub-values (deeper in the catalog hierarchy)
 	if (cit != childrenOf.end())
 		for (const ibValue& childKey : cit->second) {
-			std::vector<long> kr = AttachDimValue(ctx, node, levelIdx, childKey, byVal, childrenOf, visited, across);
+			std::vector<long> kr = AttachDimValue(ctx, node, levelIdx, childKey, byVal, childrenOf, visited, across, branch);
 			subtree.insert(subtree.end(), kr.begin(), kr.end());
 		}
-	FoldDimLevel(ctx, node, ownRows, levelIdx + 1, across);   // next level inside this value's own rows
+	FoldDimLevel(ctx, node, ownRows, levelIdx + 1, across, branch);   // next level inside this value's own rows, same ladder
 
 	// ⭐ AND THE CELLS OF THIS HEADING — over its WHOLE subtree, which is what its own figures are
 	// computed from (ApplyAggregates below reads the same rows). A folder of a hierarchy stands for
@@ -3557,9 +3562,52 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 // Fold `rows` at `levelIdx` under `node`: group by the level field, then either flat groups (Elements)
 // or the field's reference hierarchy (Hierarchy/HierarchyOnly). Recurses the next level inside.
 void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vector<long>& rows, size_t levelIdx,
-                  bool across)
+                  bool across, const ibTotalBranch* branch)
 {
 	if (levelIdx >= ctx.levels->size()) return;          // leaf level reached
+
+	// ⭐⭐ WHERE THE LADDER FORKS — the snapshot road's half of `SPLIT`.
+	//
+	// 🛑 THE TWO ROADS MUST FOLD THE SAME SHAPE (the note over BuildDimensionTree says so), and for a
+	// while only one of them knew about branches: the streaming fold cuts the levels into sections
+	// and opens a fork per section, while this one walked the flat list and quietly folded every
+	// branch as one deeper ladder. It is not only a test's problem — this road is the one a query
+	// takes whenever a level UNFOLDS A HIERARCHY, so a report that split its totals and grouped by a
+	// hierarchy lost its branches with nothing said (found by CI, 2026-08-27).
+	//
+	// The rule is the fold's, not the walk's: levels of one branch stand together, a fork carries no
+	// key and spends no level, and every branch that starts here is fed THE SAME rows.
+	if (!across) {
+		const ibTotalBranch* here = (*ctx.levels)[levelIdx].m_branch.get();
+		if (here != branch) {
+			// Inside a branch and the next level belongs to another one: this section has ended.
+			if (branch != nullptr)
+				return;
+			// On the common ladder and a branch begins: open one fork per section, side by side.
+			for (size_t at = levelIdx; at < ctx.levels->size(); ) {
+				const ibTotalBranch* section = (*ctx.levels)[at].m_branch.get();
+				size_t end = at;
+				while (end < ctx.levels->size() && (*ctx.levels)[end].m_branch.get() == section)
+					++end;
+				if (section == nullptr) {   // a common level after a branch — cannot happen, but do not eat it
+					FoldDimLevel(ctx, node, rows, at, across, nullptr);
+					break;
+				}
+				// AT THE PARENT'S OWN DEPTH — same rule as ibStreamingFold::BranchChild, so two
+				// branches stand at one depth however many levels stood above them.
+				ibSelectorTree::Node* fork = node->AddChild(node->m_level);
+				fork->m_kind   = ibSelectorNodeKind::Branch;
+				fork->m_values = node->m_values;      // the keys above stay readable inside the branch
+				fork->m_branch = section->m_name.IsEmpty() ? node->m_branch : section->m_name;
+				FoldDimLevel(ctx, fork, rows, at, across, section);
+				FoldAcross(ctx, fork, rows);
+				fork->m_hasChildren = !fork->m_children.empty();
+				ApplyAggregates(*fork, *ctx.snapshot, rows, *ctx.aggregates);   // the heading's own figure
+				at = end;
+			}
+			return;
+		}
+	}
 
 	// ⭐ WHERE THE ROWS END. Down the page the ladder stops at the seam — everything past it reads
 	// ACROSS, and those levels are walked by FoldAcross under each heading, not by falling into them
@@ -3593,6 +3641,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 			ibSelectorTree::Node* leaf = node->AddChild(static_cast<int>(ctx.levels->size()));
 			leaf->m_kind = ibSelectorNodeKind::Detail;
 			leaf->m_values = node->m_values;   // the group keys above stay readable on the row
+			leaf->m_branch = node->m_branch;   // …and whose branch it is read on
 			for (const ibQueryRamColumn& col : ctx.snapshot->Columns())
 				leaf->m_values[col.m_id] = ctx.snapshot->GetCell(r, col.m_id);
 			// ⭐⭐ AND NOTHING IS ROLLED ON TOP OF THEM. A detail row is the BOTTOM floor of the one
@@ -3668,7 +3717,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 		const auto rit = childrenOf.find(ibValue());
 		if (rit != childrenOf.end())
 			for (const ibValue& rootKey : rit->second)
-				AttachDimValue(ctx, node, levelIdx, rootKey, byVal, childrenOf, visited, across);
+				AttachDimValue(ctx, node, levelIdx, rootKey, byVal, childrenOf, visited, across, branch);
 		return;
 	}
 
@@ -3711,11 +3760,12 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 		// Reference.DataVersion) resolves against the inherited value in the subgroup header, not just at the
 		// top level. Aggregates are (re)stamped by ApplyAggregates below, so inheriting them is harmless.
 		child->m_values = node->m_values;
+		child->m_branch = node->m_branch;   // …and which branch it stands in — a fact about the NODE
 		for (std::size_t i = 0; i < level.m_fields.size(); ++i)
 			child->m_values[level.m_fields[i].m_col->GetColumnId()] = key[i];   // every field of the key IS a value
 
 		const std::vector<long>& own = byKey[key];
-		FoldDimLevel(ctx, child, own, levelIdx + 1, across);   // next level inside
+		FoldDimLevel(ctx, child, own, levelIdx + 1, across, branch);   // next level inside, same ladder
 		// ⭐ AND THE CELLS OF THIS HEADING — under EVERY row heading, not only the deepest (FoldAcross).
 		if (!across)
 			FoldAcross(ctx, child, own);
