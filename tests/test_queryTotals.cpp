@@ -19,6 +19,7 @@
 #include "backend/query/queryProvider.h"   // ibQueryComposer::BuildTotalsTree + ibQueryRamTable + ibDataQueryBuilder
 #include "backend/query/queryColumn.h"     // ibBackendQueryColumn (the test column)
 #include "backend/query/queryRowCursor.h"  // ibQueryRowCursor — the fold's input (the streaming tests below)
+#include "backend/query/querySelector.h"   // ibSelector — the WALK, which is where the branch tests read from
 
 namespace {
 
