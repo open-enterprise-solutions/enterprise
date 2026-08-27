@@ -35,6 +35,7 @@
 #include "backend/compiler/value.h"        // ibValue — driver rows / parameters
 #include "backend/query/queryAst.h"        // ibQuerySelectPtr — the cached parse
 #include "backend/query/queryLowering.h"   // ibQueryLowering::OutputColumn (+ ibBackendQueryColumn)
+#include "backend/query/queryTempStore.h"  // ibQueryTempTableStore — what the preparing statements made
 #include "backend/compositionDescription.h"   // ibFilterDescription — a level's filter is the stored one
 
 // A LEVEL'S ORDER IS THE SELECTION'S — declared, not included: querySelector.h drags the whole query
@@ -1401,6 +1402,42 @@ private:
 	void EnsureAst() const;
 	bool BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const;
 
+	// ⭐⭐ THE AUTHOR'S TEXT, SPLIT INTO WHAT PREPARES AND WHAT IS READ — the seam that lets a
+	// composition stand over a PACKAGE (docs/query-language-arc.md § 24.4b).
+	//
+	// One query is read as a nested source, as it always was: `FROM (<the text>) AS AuthorQuery`.
+	// A package is not — a `;` inside brackets is not a query — so its statements stay AHEAD of the
+	// composer's own select, and what that select reads FROM is:
+	//
+	//   * the selections the `LINK` section relates, joined as it says, when there is one;
+	//   * else the LAST statement as a nested source — the one that produces the result, which is
+	//     already what the field list offers a person to pick from (ibQueryFieldsOfText).
+	//
+	// So the composer goes on writing TEXT and nothing below it learns a new road: what it writes
+	// is simply a package whose last statement is the one carrying the settings.
+	void SplitSourceText() const;
+
+	// ⭐⭐ RUN WHAT PREPARES — the package's `INTO` statements, once per source text, into a store
+	// this composer owns for the whole of that text's life.
+	//
+	// Max, 2026-08-27: *"INTO is not in the link and should not be — INTO is for the ONTO
+	// selections, they can use it there."* The two words are not rivals: a `LINK` relates NAMES, and
+	// the selections it names may read a table an earlier statement MADE. So the tables have to be
+	// standing before anything is lowered — a named selection is declared to the server as `WITH`,
+	// and what is inside it resolves then.
+	//
+	// ONCE PER TEXT, not per fetch or per output: a report reads several outputs and a list pages,
+	// and rebuilding the tables under each of them would be the same work again for the same rows —
+	// and, worse, would pull the ground out from under a shared read that is still open. The signal
+	// that a run is starting is `FromText`, which every compose calls.
+	void EnsureTempTables() const;
+
+	// TEXT -> THE STATEMENT THAT CARRIES THE SETTINGS, with the package's own named results beside
+	// it. All three execution roads write text the same way, so they read it back the same way too.
+	// `package` owns the statements `named` points into — both must outlive the lowering call.
+	ibQuerySelectPtr ParseComposed(const wxString& text, ibQueryPackage& package,
+	                               std::map<wxString, const ibQuerySelect*>& named) const;
+
 	mutable wxString                             m_renderedText;   // the AST's key
 	// …and the other half: the USER's filter is built at the render, out of a section that is written by
 	// plain assignment. Nothing bumps a counter when it changes, so the key is the setting itself —
@@ -1415,6 +1452,25 @@ private:
 	// already compared as text.
 	mutable ibFilterDescription                  m_renderedFilter;
 	mutable ibQuerySelectPtr                     m_ast;
+	// …AND WHAT STANDS BEHIND IT. `m_ast` is the LAST statement of what this composer wrote; the
+	// package holds the statements before it (which is what keeps the selects `m_astNamed` points at
+	// alive), and the map is the scope the lowering resolves `FROM Sales` through.
+	mutable ibQueryPackage                       m_astPackage;
+	mutable std::map<wxString, const ibQuerySelect*> m_astNamed;
+
+	// The author's text as SplitSourceText worked it out, and the text it was worked out FROM —
+	// which is the whole cache key: the split is a function of that text and of nothing else.
+	mutable wxString                             m_splitOfText;
+	mutable wxString                             m_sourcePreamble;   // the statements that prepare (empty for a plain query)
+	mutable wxString                             m_sourceFrom;       // what the composer's own SELECT reads FROM
+	mutable ibQueryPackage                       m_sourcePackage;    // …and the whole of it, parsed — where the INTO statements are found
+
+	// THE TABLES THE PREPARING STATEMENTS MADE, and the registry the lowering resolves names
+	// through: this composer's own transient sources PLUS those tables. One map, because a scope
+	// REPLACES the one under it — two nested ibTempSourceScopes would hide the composer's own.
+	mutable ibQueryTempTableStore                   m_temps;
+	mutable std::map<wxString, const ibBackendQueryable*> m_runSources;
+	mutable bool                                    m_tempsReady = false;
 	mutable std::shared_ptr<ibRenderedPageCache> m_pageCache;
 	// Set by Execute when a TOTALS fetch took the server-side single-level GROUP-BY keyset page (not the detail
 	// read + fold): Run then emits the flat groups at level 1 without ByGroups. (docs: group-level paging)

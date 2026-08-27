@@ -1057,3 +1057,133 @@ TEST(QueryComposerCross, AnUnstatedLowerBoundKeepsItsPlace)
 	const wxString text = composer.RenderText();
 	EXPECT_TRUE(text.Contains(wxT("PERIODS(Month, , &To)"))) << text;
 }
+
+// ===========================================================================
+//  A COMPOSITION OVER A PACKAGE — where the settings land (2026-08-27)
+// ===========================================================================
+
+// ⭐⭐ THE SEAM THAT WAS MISSING. Everything a composition over "data sets" needs was already
+// built — the language names results (`ONTO`) and relates them (`LINK`), the lowering declares each
+// to the server as `WITH`, the field list already parsed the text as a package. What had no answer
+// was WHERE THE SETTINGS GO, and the composer parsed its text with the single-statement door, so a
+// package authored in the constructor failed at run with a syntax error.
+//
+// The answer: over what the package PRODUCES. The statements that prepare stay in front; the
+// composer's own select reads the selections the links relate, and carries the filter, the totals
+// and the order as it always did.
+TEST(QueryComposerPackage, SettingsStandOverTheLinkedSelections)
+{
+	ibDataDBComposer composer;
+	composer.FromText(
+		wxT("SELECT Item, Amount ONTO Sales FROM Document.Sales\n")
+		wxT(";\n")
+		wxT("SELECT Item, Qty ONTO Plan FROM Document.Plan\n")
+		wxT(";\n")
+		wxT("LINK Sales LEFT JOIN Plan ON Sales.Item = Plan.Item"));
+	composer.Resource(wxT("SUM"), wxT("Sales.Amount"));
+	composer.TotalBy(wxT("Sales.Item"));
+
+	const wxString text = composer.RenderText();
+
+	// The preparing statements stand in front, as statements…
+	EXPECT_TRUE(text.Contains(wxT("ONTO Sales"))) << text;
+	EXPECT_TRUE(text.Contains(wxT("ONTO Plan")))  << text;
+	// …the composer's own select reads them, joined exactly as the link said…
+	EXPECT_TRUE(text.Contains(wxT("FROM Sales")))      << text;
+	EXPECT_TRUE(text.Contains(wxT("LEFT JOIN Plan")))  << text;
+	// …and the settings are written over THAT.
+	EXPECT_TRUE(text.Contains(wxT("TOTALS")))          << text;
+	EXPECT_TRUE(text.Contains(wxT("BY Sales.Item")))   << text;
+
+	// ⚠ THE LINK SECTION IS NOT WRITTEN TWICE. It has BECOME the FROM above; leaving it in as well
+	// would relate the selections a second time.
+	EXPECT_FALSE(text.Contains(wxT("LINK "))) << text;
+
+	// AND WHAT COMES OUT IS A QUERY THE ENGINE READS — the whole point of the composer writing text.
+	EXPECT_NO_THROW(ibQueryParser().ParsePackage(text)) << text;
+}
+
+// ⚠ A PACKAGE IS NEVER HANDED BACK VERBATIM, settings or no settings. The verbatim road means
+// "nothing is being asked of this text" — true of one query, false of a package: the `LINK` section
+// is not a statement, so whoever parses the text afterwards takes its last SELECT and the relations
+// are silently gone. A smaller answer, quietly, is the one kind of wrong this composer must not be.
+TEST(QueryComposerPackage, ALinkedPackageIsStoodOnEvenWithNoSettings)
+{
+	const wxString source =
+		wxT("SELECT Item ONTO Sales FROM Document.Sales\n")
+		wxT(";\n")
+		wxT("SELECT Item ONTO Plan FROM Document.Plan\n")
+		wxT(";\n")
+		wxT("LINK Sales JOIN Plan ON Sales.Item = Plan.Item");
+
+	ibDataDBComposer composer;
+	composer.FromText(source);
+
+	const wxString text = composer.RenderText();
+	EXPECT_NE(text, source)                       << text;
+	EXPECT_TRUE(text.Contains(wxT("JOIN Plan")))  << text;
+}
+
+// NO LINKS, SEVERAL STATEMENTS: the LAST one produces the result. Not a new rule — it is the one
+// the field list has always followed (ibQueryFieldsOfText), and now the read follows the same one.
+TEST(QueryComposerPackage, WithoutLinksTheLastStatementIsWhatIsRead)
+{
+	ibDataDBComposer composer;
+	composer.FromText(
+		wxT("SELECT Item, Amount ONTO Sales FROM Document.Sales\n")
+		wxT(";\n")
+		wxT("SELECT Item, Amount FROM Sales WHERE Amount > 0"));
+	composer.Resource(wxT("SUM"), wxT("Amount"));
+
+	const wxString text = composer.RenderText();
+	EXPECT_TRUE(text.Contains(wxT("ONTO Sales")))    << text;   // the preparing statement, in front
+	EXPECT_TRUE(text.Contains(wxT("AS AuthorQuery"))) << text;  // the result, read as a nested source
+	EXPECT_TRUE(text.Contains(wxT("TOTALS")))         << text;
+	EXPECT_NO_THROW(ibQueryParser().ParsePackage(text)) << text;
+}
+
+// ⭐⭐ `INTO` IS PREPARATION, AND IT IS NOT A RIVAL TO `ONTO` (Max, 2026-08-27: *"INTO is not in the
+// link and should not be — INTO is for the ONTO selections, they can use it there"*). A package may
+// use both at once: a statement MAKES a table, a named selection READS it, and the link relates the
+// named selections. So a temp table is not refused and is not renamed away — it stays a statement in
+// front, and the run makes it before anything is lowered (EnsureTempTables).
+TEST(QueryComposerPackage, ATemporaryTableStaysAStatementThatPrepares)
+{
+	ibDataDBComposer composer;
+	composer.FromText(
+		wxT("SELECT Item, Amount INTO Tmp FROM Document.Sales\n")
+		wxT(";\n")
+		wxT("SELECT Item, Amount ONTO Sales FROM Tmp\n")
+		wxT(";\n")
+		wxT("SELECT Item, Qty ONTO Plan FROM Document.Plan\n")
+		wxT(";\n")
+		wxT("LINK Sales JOIN Plan ON Sales.Item = Plan.Item"));
+	composer.Resource(wxT("SUM"), wxT("Sales.Amount"));
+
+	const wxString text = composer.RenderText();
+
+	// The preparing statement is there, spelled as itself…
+	EXPECT_TRUE(text.Contains(wxT("INTO Tmp")))  << text;
+	// …the selection that uses it reads it by name…
+	EXPECT_TRUE(text.Contains(wxT("FROM Tmp")))  << text;
+	// …and what the composition stands on is the linked selections, not the table.
+	EXPECT_TRUE(text.Contains(wxT("FROM Sales")))   << text;
+	EXPECT_TRUE(text.Contains(wxT("JOIN Plan")))    << text;
+	EXPECT_TRUE(text.Contains(wxT("TOTALS")))       << text;
+	EXPECT_NO_THROW(ibQueryParser().ParsePackage(text)) << text;
+}
+
+// …AND A STATEMENT THAT IS NEITHER is still refused: it makes nothing and nothing can read it, so a
+// package quietly carrying one answers with a whole selection missing.
+TEST(QueryComposerPackage, AnUnnamedSelectionAmongSeveralIsRefused)
+{
+	ibDataDBComposer composer;
+	composer.FromText(
+		wxT("SELECT Item FROM Document.Sales\n")
+		wxT(";\n")
+		wxT("SELECT Item ONTO Plan FROM Document.Plan\n")
+		wxT(";\n")
+		wxT("LINK Plan JOIN Plan ON Plan.Item = Plan.Item"));
+
+	EXPECT_THROW(composer.RenderText(), ibBackendException);
+}

@@ -3666,6 +3666,191 @@ ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result,
 
 } // namespace
 
+// ⭐⭐ WHAT PREPARES, RUN — see the header. The COMPOSER's road: it lowers ONE statement of its own
+// and needs the tables the statements before it MAKE to be standing when it does.
+//
+// ⚠ `INTO` AND `ONTO` ARE NOT TWO SPELLINGS OF ONE THING (Max, 2026-08-27: *"INTO is not in the
+// link, and it should not be"*). A named result is a QUERY — the lowering declares it to the server
+// and nothing runs early; a temp table is ROWS, and rows exist only once somebody has drained them.
+// That is why a link relates names and never tables, and why this function executes one of the two
+// and passes the other by.
+void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
+	const std::map<wxString, ibValue>& params,
+	ibQueryTempTableStore& store,
+	std::map<wxString, const ibBackendQueryable*>& sources)
+{
+	// The names declared SO FAR — a preparing statement may read a selection named above it, which
+	// is an ordinary thing to write and costs nothing here (the lowering resolves it).
+	std::map<wxString, const ibQuerySelect*> named;
+	ibNamedResultScope namedScope(named);
+
+	for (const ibQueryAstStatement& statement : package.m_statements) {
+
+		if (statement.IsDrop()) {
+			// Releasing EARLY — said out loud instead of left to scope, exactly as a package does.
+			if (!store.Drop(statement.m_dropTemp))
+				ThrowQueryException(0, 0, wxString::Format(
+					_("temporary table '%s' does not exist"), statement.m_dropTemp));
+			sources.erase(statement.m_dropTemp);   // …and out of the registry with it, not left dangling
+			continue;
+		}
+
+		if (!statement.m_select)
+			continue;
+		const ibQuerySelect& ast = *statement.m_select;
+
+		if (ast.m_intoTemp.IsEmpty()) {
+			// NOT RUN. A named result is read where it is used; an unnamed statement prepares
+			// nothing and is nobody's source — running either here would be work for no reader.
+			//
+			// ⚠ Registered AFTER it is passed, for the reason ExecutePackage states at length: a
+			// name visible while its own statement is lowered resolves to itself, without end.
+			if (!ast.m_ontoName.IsEmpty() && !named.emplace(ast.m_ontoName.Lower(), statement.m_select.get()).second)
+				ThrowQueryException(0, 0, wxString::Format(
+					_("two statements of this package name their result '%s'"), ast.m_ontoName));
+			continue;
+		}
+
+		if (store.Has(ast.m_intoTemp))
+			ThrowQueryException(0, 0, wxString::Format(
+				_("temporary table '%s' already exists"), ast.m_intoTemp));
+
+		std::vector<OutputColumn> schema;
+		ibDataQueryResult read = ast.m_hasTotals
+			? ExecuteTotals(ast, params, schema, ibReadPageRequest{}, nullptr, /*withDetails*/true)
+			: Execute(ast, params, schema);
+
+		ibQueryRamTable snapshot = DrainIntoSnapshot(read, schema);
+		const long rows = snapshot.RowCount();
+
+		// INDEX BY — the columns the store builds a lookup over, named as the OUTPUT names, because
+		// that is what the statements after it select by.
+		std::vector<wxString> indexed;
+		for (const ibQueryAstExprPtr& column : ast.m_indexBy)
+			if (column && !column->m_path.empty())
+				indexed.push_back(column->m_path.back());
+
+		store.Put(ast.m_intoTemp, std::move(snapshot), indexed);
+
+		// ⭐ AND INTO THE REGISTRY THE SCOPE IS OPEN OVER, so the next statement — and the query this
+		// was all prepared for — resolve the name straight to the table.
+		const auto made = store.Sources().find(ast.m_intoTemp);
+		if (made != store.Sources().end())
+			sources[made->first] = made->second;
+
+		ibJournalInfo(wxT("query"), wxT("prepared '%s': %ld rows"), ast.m_intoTemp, rows);
+	}
+}
+
+// ⭐⭐ THE PLACEMENT — see the header. `LINK` declares relations as a SET; a query needs a TREE, and
+// working the tree out is this function's whole job. It answers for BOTH readers of it: the package
+// running here, and the COMPOSER writing its settings over a linked package as text.
+ibQueryLowering::FromTree ibQueryLowering::PlacePackageLinks(
+	const std::vector<ibQueryPackageLink>& links, const std::vector<wxString>& declared)
+{
+	FromTree tree;
+
+	auto isDeclared = [&declared](const wxString& name) {
+		for (const wxString& had : declared)
+			if (had.IsSameAs(name, false))
+				return true;
+		return false;
+	};
+
+	// A HALF-FILLED ROW SAYS NOTHING YET — the author opened it and has not written it, which is
+	// an ordinary state of the window and not a mistake.
+	//
+	// ⚠ A NAME THIS PACKAGE DOES NOT DECLARE IS A MISTAKE, and it is said out loud: skipping it
+	// quietly runs a DIFFERENT query — one link fewer — and hands back numbers nobody can explain.
+	// Everywhere else in this lowering an unknown name raises; a link is no exception.
+	std::vector<const ibQueryPackageLink*> pending;
+	for (const ibQueryPackageLink& link : links) {
+		if (link.m_left.IsEmpty() || link.m_right.IsEmpty() || !link.m_on)
+			continue;
+		for (const wxString& side : { link.m_left, link.m_right })
+			if (!isDeclared(side))
+				ThrowQueryException(0, 0, wxString::Format(
+					_("the link names '%s', which is not a result this package names"), side));
+		pending.push_back(&link);
+	}
+	if (pending.empty())
+		return tree;
+
+	std::vector<wxString> present;
+	auto reads = [&present](const wxString& name) {
+		for (const wxString& had : present)
+			if (had.IsSameAs(name, false))
+				return true;
+		return false;
+	};
+
+	// THE LINKS ARE A GRAPH, NOT A LIST, so they are placed until nothing else can be placed —
+	// not in one pass down the vector. Written in any order, `[A-B, C-D, B-C]` is one chain; a
+	// single pass drops the middle link (neither side placed yet when it is read) and D never
+	// enters the query at all, silently.
+	while (!pending.empty()) {
+		bool placed = false;
+		for (size_t i = 0; i < pending.size(); ) {
+			const ibQueryPackageLink& link = *pending[i];
+
+			if (present.empty()) {
+				tree.m_head = link.m_left;
+				present.push_back(link.m_left);
+			}
+			const bool hasLeft  = reads(link.m_left);
+			const bool hasRight = reads(link.m_right);
+
+			if (!hasLeft && !hasRight) { ++i; continue; }   // nothing to hang it off YET
+
+			// ⭐ BOTH SIDES ALREADY IN — this is a SECOND condition between two selections that
+			// are already joined, and it must not be dropped: dropping it widens the result by
+			// exactly the rows the author wrote it to exclude. It is ANDed into the step that
+			// brought the later of them in.
+			if (hasLeft && hasRight) {
+				for (JoinStep& step : tree.m_steps) {
+					if (!step.m_name.IsSameAs(link.m_left, false) && !step.m_name.IsSameAs(link.m_right, false))
+						continue;
+					if (step.m_on) {
+						ibQueryAstExprPtr both = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
+						both->m_isOr = false;
+						both->m_lhs  = step.m_on;
+						both->m_rhs  = link.m_on;
+						step.m_on    = both;
+					}
+					else {
+						step.m_on = link.m_on;
+					}
+					break;
+				}
+				pending.erase(pending.begin() + i);
+				placed = true;
+				continue;
+			}
+
+			JoinStep step;
+			step.m_name = hasLeft ? link.m_right : link.m_left;
+			step.m_kind = link.m_kind;
+			// SHARED, not copied: whoever lowers this rewrites a deep clone of what it is given, so
+			// nothing downstream can reach back into the author's link.
+			step.m_on   = link.m_on;
+			present.push_back(step.m_name);
+			tree.m_steps.push_back(std::move(step));
+			pending.erase(pending.begin() + i);
+			placed = true;
+		}
+
+		// ⚠ NOTHING MOVED AND SOMETHING IS LEFT: what remains relates selections this query does
+		// not reach — a second, disconnected group. Joining it in would be a cross product
+		// nobody asked for, so the package says so instead.
+		if (!placed) {
+			ThrowQueryException(0, 0, wxString::Format(
+				_("the link between '%s' and '%s' relates selections this package does not join to the rest"),
+				pending.front()->m_left, pending.front()->m_right));
+		}
+	}
+	return tree;
+}
+
 std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 	const ibQueryPackage& package, const std::map<wxString, ibValue>& params,
 	ibQueryTempTableStore* store)
@@ -3859,21 +4044,13 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 	if (!package.m_links.empty() && !named.empty()) {
 		ibNamedResultScope namedScope(named);
 
-		// A HALF-FILLED ROW SAYS NOTHING YET — the author opened it and has not written it, which is
-		// an ordinary state of the window and not a mistake.
-		//
-		// ⚠ A NAME THIS PACKAGE DOES NOT DECLARE IS A MISTAKE, and it is said out loud: skipping it
-		// quietly runs a DIFFERENT query — one link fewer — and hands back numbers nobody can explain.
-		// Everywhere else in this lowering an unknown name raises; a link is no exception.
-		auto usable = [&named](const ibQueryPackageLink& link) {
-			if (link.m_left.IsEmpty() || link.m_right.IsEmpty() || !link.m_on)
-				return false;
-			for (const wxString& side : { link.m_left, link.m_right })
-				if (named.find(side.Lower()) == named.end())
-					ThrowQueryException(0, 0, wxString::Format(
-						_("the link names '%s', which is not a result this package names"), side));
-			return true;
-		};
+		// WHERE EACH SELECTION STANDS — worked out by the placer, which is also what the COMPOSER
+		// asks when it writes its settings over a linked package. One answer to one question.
+		std::vector<wxString> declared;
+		for (const auto& entry : named)
+			declared.push_back(entry.first);
+		const FromTree tree = PlacePackageLinks(package.m_links, declared);
+
 		auto asSource = [](const wxString& name) {
 			ibQuerySource source;
 			source.m_name.push_back(name);
@@ -3887,82 +4064,18 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 		ibQuerySelect final;
 		std::vector<wxString> present;
 
-		// THE LINKS ARE A GRAPH, NOT A LIST, so they are placed until nothing else can be placed —
-		// not in one pass down the vector. Written in any order, `[A-B, C-D, B-C]` is one chain; a
-		// single pass drops the middle link (neither side placed yet when it is read) and D never
-		// enters the query at all, silently.
-		std::vector<const ibQueryPackageLink*> pending;
-		for (const ibQueryPackageLink& link : package.m_links)
-			if (usable(link))
-				pending.push_back(&link);
-
-		auto reads = [&present](const wxString& name) {
-			for (const wxString& had : present)
-				if (had.IsSameAs(name, false))
-					return true;
-			return false;
-		};
-
-		while (!pending.empty()) {
-			bool placed = false;
-			for (size_t i = 0; i < pending.size(); ) {
-				const ibQueryPackageLink& link = *pending[i];
-
-				if (present.empty()) {
-					final.m_from = asSource(link.m_left);
-					present.push_back(link.m_left);
-				}
-				const bool hasLeft  = reads(link.m_left);
-				const bool hasRight = reads(link.m_right);
-
-				if (!hasLeft && !hasRight) { ++i; continue; }   // nothing to hang it off YET
-
-				// ⭐ BOTH SIDES ALREADY IN — this is a SECOND condition between two selections that
-				// are already joined, and it must not be dropped: dropping it widens the result by
-				// exactly the rows the author wrote it to exclude. It is ANDed into the join that
-				// relates them.
-				if (hasLeft && hasRight) {
-					for (ibQueryAstJoin& join : final.m_joins) {
-						const wxString joined = ibQuerySourceName(join.m_source);
-						if (!joined.IsSameAs(link.m_left, false) && !joined.IsSameAs(link.m_right, false))
-							continue;
-						if (join.m_on) {
-							ibQueryAstExprPtr both = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
-							both->m_isOr = false;
-							both->m_lhs  = join.m_on;
-							both->m_rhs  = link.m_on;
-							join.m_on    = both;
-						}
-						else {
-							join.m_on = link.m_on;
-						}
-						break;
-					}
-					pending.erase(pending.begin() + i);
-					placed = true;
-					continue;
-				}
-
-				const wxString& missing = hasLeft ? link.m_right : link.m_left;
+		if (!tree.m_head.IsEmpty()) {
+			final.m_from = asSource(tree.m_head);
+			present.push_back(tree.m_head);
+			for (const JoinStep& step : tree.m_steps) {
 				ibQueryAstJoin join;
-				join.m_source = asSource(missing);
-				join.m_kind   = link.m_kind;
+				join.m_source = asSource(step.m_name);
+				join.m_kind   = step.m_kind;
 				// SHARED, not copied: the lowering rewrites a deep clone of whatever it is given, so
 				// nothing downstream can reach back into the author's link.
-				join.m_on     = link.m_on;
+				join.m_on     = step.m_on;
 				final.m_joins.push_back(std::move(join));
-				present.push_back(missing);
-				pending.erase(pending.begin() + i);
-				placed = true;
-			}
-
-			// ⚠ NOTHING MOVED AND SOMETHING IS LEFT: what remains relates selections this query does
-			// not reach — a second, disconnected group. Joining it in would be a cross product
-			// nobody asked for, so the package says so instead.
-			if (!placed) {
-				ThrowQueryException(0, 0, wxString::Format(
-					_("the link between '%s' and '%s' relates selections this package does not join to the rest"),
-					pending.front()->m_left, pending.front()->m_right));
+				present.push_back(step.m_name);
 			}
 		}
 
@@ -4975,8 +5088,15 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// that is exact rather than approximate: inside its area the value is CONSTANT, so the
 			// minimum of it IS it. Above the area the pass over the tree erases the column anyway
 			// (ApplyScopedAggregates), so no wrong number can survive there either.
+			// ⚠ AND WHETHER IT GOT ONE DECIDES HOW IT IS READ BACK. Without a receiver the figure is
+			// folded here, and it CANNOT land in its source column — that column is the ladder
+			// aggregate's (`SUM(Cost)` and `SUM(Cost) OVER Item` name the same one), and the area's
+			// value carried down would overwrite every subtotal beneath it. So the fold gives it a
+			// slot of its own (AggNeedsOwnSlot) and it is published BY ALIAS, exactly as COUNT(*) is.
+			bool serverComputes = false;
 			ibBackendColumnRawDB::RawType overRaw = ibBackendColumnRawDB::RawType::Number;
 			if (col != nullptr && ScalarRawType(col, overRaw) && b.CanPushWindow()) {
+				serverComputes = true;
 				std::vector<ibQueryColumnExprPtr> partition;
 				for (const ibBackendQueryColumn* key : scopeCols)
 					partition.push_back(ibQueryColumnExpr::Col(key));
@@ -4990,12 +5110,14 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				b.AggregateReceiver(outName,
 					std::make_shared<ibSyntheticScalarColumn>(windowAlias, nextSynthId++, overRaw));
 			}
+			if (!serverComputes)
+				col = nullptr;   // folded here, into a slot of its own — so it is read by NAME
 		}
 
 		OutputColumn oc; oc.m_name = outName;
 		oc.m_role = ibQueryLowering::ibColumnRole::Measure;   // a TOTALS aggregate — the report's resource
 		if (col != nullptr) { oc.m_col = col; oc.m_ownedCol = owned; }   // real OR synthetic column — keyed by metaID
-		else { oc.m_alias = outName; oc.m_byAlias = true; }              // COUNT(*) — synthetic receiver, read by name
+		else { oc.m_alias = outName; oc.m_byAlias = true; }              // COUNT(*), or an area folded here — read by name
 		outSchema.push_back(oc);
 	}
 

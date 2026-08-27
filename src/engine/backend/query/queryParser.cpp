@@ -92,19 +92,25 @@ ibQueryPackage ibQueryParser::ParsePackage(const wxString& queryText)
 		return package;
 
 	for (;;) {
-		// ⭐⭐ A PACKAGE-LEVEL LINK, written where a statement would be: `JOIN T1 AND T2 ON …`.
+		// ⭐⭐ A PACKAGE-LEVEL LINK, written where a statement would be:
+		// `LINK Sales LEFT JOIN Plan ON …`.
 		//
-		// It relates two NAMED results of this package and belongs to the package, not to any
+		// It relates the NAMED results of this package and belongs to the package, not to any
 		// statement — nothing is added to anybody's FROM and nothing is materialised (Max,
 		// 2026-08-21: mark two selections as named and set the links between them, and that is all).
-		//
-		// ⭐ NO NEW WORD. The position decides: at statement level a query begins with SELECT or
-		// DROP, so a JOIN standing there can only be this. Inventing a keyword would take a name
-		// away from every configuration that has an attribute called by it.
-		if (Cur().IsKeyword(ibQueryKeyword::Join)    || Cur().IsKeyword(ibQueryKeyword::Inner)
-		 || Cur().IsKeyword(ibQueryKeyword::Left)    || Cur().IsKeyword(ibQueryKeyword::Right)
-		 || Cur().IsKeyword(ibQueryKeyword::Full)) {
-			package.m_links.push_back(ParsePackageLink());
+		if (Cur().IsKeyword(ibQueryKeyword::Link)) {
+			for (ibQueryPackageLink& link : ParsePackageLinks())
+				package.m_links.push_back(std::move(link));
+		}
+		// ⚠ …AND THE FORM IT REPLACED IS REFUSED OUT LOUD. `JOIN A AND B ON …` standing here was the
+		// first spelling (recognised by position, no keyword); read on today it would parse as a
+		// statement that begins with JOIN, and the message would be about a missing SELECT. A person
+		// with such a text is told what to write instead.
+		else if (Cur().IsKeyword(ibQueryKeyword::Join)  || Cur().IsKeyword(ibQueryKeyword::Inner)
+		      || Cur().IsKeyword(ibQueryKeyword::Left)  || Cur().IsKeyword(ibQueryKeyword::Right)
+		      || Cur().IsKeyword(ibQueryKeyword::Full)) {
+			ThrowQueryException(Cur(), _("a link between named results is written as "
+				"LINK <name> JOIN <name> ON <condition>"));
 		}
 		else {
 			package.m_statements.push_back(ParseStatement());
@@ -138,37 +144,66 @@ ibQueryAstExprPtr ibQueryParser::ParseExpression(const wxString& exprText)
 	return expr;
 }
 
-// A PACKAGE-LEVEL LINK — `[INNER|LEFT|RIGHT|FULL] JOIN <name> AND <name> ON <condition>`.
-//
-// Both sides are NAMES a statement gave its result with `ONTO`; the condition is an ordinary
-// expression over their fields. The kind is spelled exactly as it is inside a query, because it
-// means exactly the same thing.
-ibQueryPackageLink ibQueryParser::ParsePackageLink()
+// THE KIND OF A JOIN — `[INNER|LEFT|RIGHT|FULL] JOIN`, the one ladder both readers of it climb.
+// False when the next token starts no join at all, which is how a loop over joins ends.
+bool ibQueryParser::ParseJoinKind(ibQueryJoinKindAst& kind)
 {
-	ibQueryPackageLink link;
+	if      (AcceptKw(ibQueryKeyword::Inner)) {                                   ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Inner; }
+	else if (AcceptKw(ibQueryKeyword::Left))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Left;  }
+	else if (AcceptKw(ibQueryKeyword::Right)) { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Right; }
+	else if (AcceptKw(ibQueryKeyword::Full))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Full;  }
+	else if (AcceptKw(ibQueryKeyword::Join))  {                                                                               kind = ibQueryJoinKindAst::Inner; }
+	else
+		return false;
+	return true;
+}
 
-	if      (AcceptKw(ibQueryKeyword::Inner)) { ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); link.m_kind = ibQueryJoinKindAst::Inner; }
-	else if (AcceptKw(ibQueryKeyword::Left))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); link.m_kind = ibQueryJoinKindAst::Left;  }
-	else if (AcceptKw(ibQueryKeyword::Right)) { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); link.m_kind = ibQueryJoinKindAst::Right; }
-	else if (AcceptKw(ibQueryKeyword::Full))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); link.m_kind = ibQueryJoinKindAst::Full;  }
-	else                                      { ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); link.m_kind = ibQueryJoinKindAst::Inner; }
+// ⭐⭐ A PACKAGE-LEVEL LINK SECTION — `LINK <name> [<kind>] JOIN <name> ON <condition> [ … ]`.
+//
+// Every name is one a statement gave its result with `ONTO`; each condition is an ordinary
+// expression over the two sides' fields. THE RELATION IS WRITTEN THE WAY THIS LANGUAGE WRITES EVERY
+// OTHER RELATION — the same kinds, the same `ON`, and a chain when there are several sources to
+// relate. That is the whole reason the word in front exists (Max, 2026-08-27, on reading the old
+// form): `JOIN A AND B ON …` needed the `AND` only because both names stood after one JOIN, and a
+// package link therefore looked like nothing else in the language.
+//
+// ⚠ THE CHAIN IS FLATTENED INTO PAIRS, and no shape is lost by it: the FINAL query's FROM tree is
+// built by the lowering out of these pairs, placed until nothing else can be placed
+// (ExecutePackage). What each pair says is "these two are related, thus" — which is all the placer
+// asks. The head is carried as the left of every link in the chain, so a later condition may name
+// any selection already in it.
+std::vector<ibQueryPackageLink> ibQueryParser::ParsePackageLinks()
+{
+	std::vector<ibQueryPackageLink> links;
+
+	ExpectKw(ibQueryKeyword::Link, wxT("LINK"));
 
 	if (Cur().m_kind != ibQueryTokenKind::Ident)
-		ThrowQueryException(Cur(), _("expected the name of a selection after JOIN"));
-	link.m_left = Next().m_text;
+		ThrowQueryException(Cur(), _("expected the name of a selection after LINK"));
+	const wxString head = Next().m_text;
 
-	ExpectKw(ibQueryKeyword::And, wxT("AND"));
+	for (;;) {
+		ibQueryPackageLink link;
+		link.m_left = head;
+		if (!ParseJoinKind(link.m_kind)) {
+			if (links.empty())
+				ThrowQueryException(Cur(), _("expected JOIN after the first selection of a LINK"));
+			break;
+		}
 
-	if (Cur().m_kind != ibQueryTokenKind::Ident)
-		ThrowQueryException(Cur(), _("expected the name of the second selection after AND"));
-	link.m_right = Next().m_text;
+		if (Cur().m_kind != ibQueryTokenKind::Ident)
+			ThrowQueryException(Cur(), _("expected the name of a selection after JOIN"));
+		link.m_right = Next().m_text;
 
-	// The condition is optional in the AST — a link may be declared and not written yet, which is
-	// what the constructor's empty row is — but in TEXT it has to be there: a package that says two
-	// selections are related without saying how says nothing.
-	ExpectKw(ibQueryKeyword::On, wxT("ON"));
-	link.m_on = ParsePredicate();
-	return link;
+		// The condition is optional in the AST — a link may be declared and not written yet, which is
+		// what the constructor's empty row is — but in TEXT it has to be there: a package that says two
+		// selections are related without saying how says nothing.
+		ExpectKw(ibQueryKeyword::On, wxT("ON"));
+		link.m_on = ParsePredicate();
+		links.push_back(std::move(link));
+	}
+
+	return links;
 }
 
 // One statement of a package. DROP releases a temp table the package made earlier; anything
@@ -525,12 +560,8 @@ void ibQueryParser::ParseJoins(ibQuerySelect& sel)
 		}
 
 		ibQueryJoinKindAst kind;
-		if      (AcceptKw(ibQueryKeyword::Inner)) {                                   ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Inner; }
-		else if (AcceptKw(ibQueryKeyword::Left))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Left;  }
-		else if (AcceptKw(ibQueryKeyword::Right)) { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Right; }
-		else if (AcceptKw(ibQueryKeyword::Full))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Full;  }
-		else if (AcceptKw(ibQueryKeyword::Join))  {                                                                               kind = ibQueryJoinKindAst::Inner; }
-		else break;
+		if (!ParseJoinKind(kind))
+			break;
 
 		ibQueryAstJoin j;
 		j.m_kind = kind;

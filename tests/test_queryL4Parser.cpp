@@ -1070,9 +1070,42 @@ TEST(QueryL4Parser, Window_RankingWithoutOverIsRefused)
 	EXPECT_THROW(Parse(wxT("SELECT ROW_NUMBER() FROM Document.Sales")), ibBackendException);
 }
 
-TEST(QueryL4Parser, Window_RankingWithArgumentIsRefused)
+// ⭐⭐ THE ARGUMENT OF A RANKING CALL IS ITS KEY — `RANK(Amount DESC)` (Max, 2026-08-27: *"can we do
+// without OVER and ORDER BY altogether?"*). A rank needs an order or it is first at nothing; written
+// the SQL way that order lives inside `OVER (…)` and the author spells two clauses to say one thing,
+// while the AREA is already stated beside the cell. So the short form says the key and the engine
+// assembles the window out of the two halves.
+//
+// ⛔ THIS TEST PINNED THE OPPOSITE — that an argument is REFUSED — which was the rule until the short
+// form was built, later the same day. It went on asserting the old one and CI failed on the arc that
+// changed the language. A test that survives the rule it was written for is not a regression guard;
+// it is a second opinion about what the language says.
+TEST(QueryL4Parser, Window_RankingTakesItsKeyAsTheArgument)
 {
-	EXPECT_THROW(Parse(wxT("SELECT RANK(Amount) OVER (ORDER BY Amount) FROM Document.Sales")), ibBackendException);
+	auto sel = Parse(wxT("SELECT RANK(Amount DESC) FROM Document.Sales"));
+	ASSERT_TRUE(sel != nullptr);
+	const ibQueryAstExpr& call = *sel->m_projections[0].m_expr;
+	EXPECT_EQ(call.m_func, ibQueryKeyword::Rank);
+	ASSERT_TRUE(call.m_over != nullptr);
+	ASSERT_EQ(call.m_over->m_orderBy.size(), 1u);
+	EXPECT_FALSE(call.m_over->m_orderBy[0].m_ascending);
+	EXPECT_EQ(call.m_over->m_frame, ibQueryAstFrame::Unstated);   // a ranking call has no frame
+
+	// …AND THE LONG FORM STILL COMPOSES WITH IT: an explicit OVER may add the partition, and when it
+	// states no order of its own the argument's key is kept.
+	auto both = Parse(wxT("SELECT RANK(Amount) OVER (PARTITION BY Region) FROM Document.Sales"));
+	ASSERT_TRUE(both != nullptr);
+	const ibQueryAstExpr& call2 = *both->m_projections[0].m_expr;
+	ASSERT_TRUE(call2.m_over != nullptr);
+	ASSERT_EQ(call2.m_over->m_orderBy.size(), 1u);
+	EXPECT_EQ(call2.m_over->m_partitionBy.size(), 1u);
+}
+
+// …and what a ranking call still refuses: a FRAME. It numbers rows, it does not fold them.
+TEST(QueryL4Parser, Window_RankingWithAFrameIsRefused)
+{
+	EXPECT_THROW(Parse(wxT("SELECT RANK(Amount) OVER (ORDER BY Amount ROWS) FROM Document.Sales")),
+	             ibBackendException);
 }
 
 // A frame is a position in an ORDER; without one it is about nothing, and quietly ignoring it is how
@@ -1091,14 +1124,18 @@ TEST(QueryL4Parser, Window_FrameWithoutOrderIsRefused)
 // them — nothing else. So the link is not a statement and lives in no statement: it is the
 // PACKAGE's, and the text spells it where a statement stands.
 //
-// NO NEW KEYWORD. A statement begins with SELECT or DROP, so a JOIN standing at that position can
-// only be a package link — the position decides, and no configuration loses an identifier.
+// ⭐⭐ AND IT IS SPELLED `LINK <name> JOIN <name> ON …` (Max, 2026-08-27). The first form was
+// recognised by POSITION with no keyword at all — a bare top-level `JOIN A AND B ON …` — to avoid
+// taking the word away from configurations with an attribute called `Link`. At the START OF A
+// STATEMENT no name can stand, so nothing was ever at stake; and the word pays for itself by
+// letting the relation be written the way this language writes every relation, `AND` and all its
+// second spelling gone.
 TEST(QueryL4Parser, PackageLinkRelatesTwoNamedSelections)
 {
 	auto package = ibQueryParser().ParsePackage(
 		wxT("SELECT Partner, Amount ONTO Sales FROM Document.Sales;")
 		wxT("SELECT Partner, Paid ONTO Payments FROM Document.Payments;")
-		wxT("JOIN Sales AND Payments ON Sales.Partner = Payments.Partner"));
+		wxT("LINK Sales JOIN Payments ON Sales.Partner = Payments.Partner"));
 
 	// The two statements stayed statements — the link did not become one of them…
 	ASSERT_EQ(package.m_statements.size(), 2u);
@@ -1116,10 +1153,10 @@ TEST(QueryL4Parser, PackageLinkRelatesTwoNamedSelections)
 
 	// AND IT COMES BACK OUT THE WAY IT WENT IN — the same contract as everything else in this language.
 	const wxString written = ibRenderQueryPackage(package);
-	// The layout is the renderer.s (a keyword per line, its operands indented); what this test
-	// pins is that the link is THERE and reads back as the same link.
-	EXPECT_TRUE(written.Contains(wxT("JOIN"))) << written.ToStdString();
-	EXPECT_TRUE(written.Contains(wxT("AND Payments"))) << written.ToStdString();
+	// The layout is the renderer's (the head once, a line per relation); what this test pins is that
+	// the link is THERE and reads back as the same link.
+	EXPECT_TRUE(written.Contains(wxT("LINK Sales"))) << written.ToStdString();
+	EXPECT_TRUE(written.Contains(wxT("JOIN Payments"))) << written.ToStdString();
 	const ibQueryPackage again = ibQueryParser().ParsePackage(written);
 	ASSERT_EQ(again.m_links.size(), 1u);
 	EXPECT_EQ(again.m_links.front().m_left,  wxT("Sales"));
@@ -1133,15 +1170,53 @@ TEST(QueryL4Parser, PackageLinkCarriesItsJoinKind)
 	auto package = ibQueryParser().ParsePackage(
 		wxT("SELECT Partner ONTO Sales FROM Document.Sales;")
 		wxT("SELECT Partner ONTO Plan FROM Document.Plan;")
-		wxT("LEFT JOIN Sales AND Plan ON Sales.Partner = Plan.Partner"));
+		wxT("LINK Sales LEFT JOIN Plan ON Sales.Partner = Plan.Partner"));
 	ASSERT_EQ(package.m_links.size(), 1u);
 	EXPECT_EQ(package.m_links.front().m_kind, ibQueryJoinKindAst::Left);
 
 	// Rendered back with the same word, and read back as the same kind.
 	const wxString written = ibRenderQueryPackage(package);
-	EXPECT_TRUE(written.Contains(wxT("LEFT JOIN"))) << written.ToStdString();
-	EXPECT_TRUE(written.Contains(wxT("AND Plan"))) << written.ToStdString();
+	EXPECT_TRUE(written.Contains(wxT("LEFT JOIN Plan"))) << written.ToStdString();
 	EXPECT_EQ(ibQueryParser().ParsePackage(written).m_links.front().m_kind, ibQueryJoinKindAst::Left);
+}
+
+// ⭐⭐ A CHAIN — one head, several relations, which is what the word in front made writable: `LINK A
+// LEFT JOIN B ON … JOIN C ON …` is the FROM tree of the package's final query, written by the
+// author instead of assembled from a list of pairs.
+//
+// It is FLATTENED into pairs, and nothing is lost by that: the lowering builds the final FROM out of
+// the pairs, placing each where a side of it is already present. The head is carried as the left of
+// every link in the chain, so a later condition may name any selection already placed — here the
+// third relates to the SECOND, and the package still joins as one.
+TEST(QueryL4Parser, PackageLinkChainsOffOneHead)
+{
+	const wxString text =
+		wxT("SELECT Item ONTO Sales FROM Document.Sales;")
+		wxT("SELECT Item ONTO Plan FROM Document.Plan;")
+		wxT("SELECT Item ONTO Stock FROM AccumulationRegister.Stock;")
+		wxT("LINK Sales LEFT JOIN Plan ON Sales.Item = Plan.Item")
+		wxT("           JOIN Stock ON Stock.Item = Plan.Item");
+
+	auto package = ibQueryParser().ParsePackage(text);
+	ASSERT_EQ(package.m_statements.size(), 3u);
+	ASSERT_EQ(package.m_links.size(), 2u);
+
+	EXPECT_EQ(package.m_links[0].m_left,  wxT("Sales"));
+	EXPECT_EQ(package.m_links[0].m_right, wxT("Plan"));
+	EXPECT_EQ(package.m_links[0].m_kind,  ibQueryJoinKindAst::Left);
+	EXPECT_EQ(package.m_links[1].m_left,  wxT("Sales"));   // the HEAD, not the previous right
+	EXPECT_EQ(package.m_links[1].m_right, wxT("Stock"));
+	EXPECT_EQ(package.m_links[1].m_kind,  ibQueryJoinKindAst::Inner);
+
+	// ONE SECTION COMES BACK OUT — a chain is written as a chain, not as two LINKs off the same name.
+	const wxString written = ibRenderQueryPackage(package);
+	EXPECT_TRUE(written.Contains(wxT("LINK Sales")))     << written.ToStdString();
+	EXPECT_TRUE(written.Contains(wxT("LEFT JOIN Plan"))) << written.ToStdString();
+	EXPECT_TRUE(written.Contains(wxT("JOIN Stock")))     << written.ToStdString();
+	EXPECT_EQ(written.find(wxT("LINK ")), written.rfind(wxT("LINK "))) << written.ToStdString();
+	const ibQueryPackage again = ibQueryParser().ParsePackage(written);
+	ASSERT_EQ(again.m_links.size(), 2u);
+	EXPECT_EQ(again.m_links[1].m_right, wxT("Stock"));
 }
 
 // A LINK NAMES TWO SELECTIONS AND SAYS HOW THEY MEET — all three parts are required in TEXT. A
@@ -1150,10 +1225,28 @@ TEST(QueryL4Parser, PackageLinkWithoutAConditionIsRefused)
 {
 	EXPECT_THROW(ibQueryParser().ParsePackage(
 		wxT("SELECT Partner ONTO Sales FROM Document.Sales;")
-		wxT("JOIN Sales AND Payments")), ibBackendException);
+		wxT("LINK Sales JOIN Payments")), ibBackendException);
 	EXPECT_THROW(ibQueryParser().ParsePackage(
 		wxT("SELECT Partner ONTO Sales FROM Document.Sales;")
-		wxT("JOIN Sales ON Sales.Partner = Payments.Partner")), ibBackendException);
+		wxT("LINK Sales ON Sales.Partner = Payments.Partner")), ibBackendException);
+}
+
+// ⚠ AND THE FORM THIS ONE REPLACED IS REFUSED WHERE IT STANDS. A bare top-level JOIN was the first
+// spelling of a package link (2026-08-21); read on today it would be a statement beginning with
+// JOIN, and the complaint would be about a missing SELECT — true, and no help at all to whoever
+// wrote the old form. The message says what to write instead.
+TEST(QueryL4Parser, TheOldBarePackageJoinIsRefusedWithASentence)
+{
+	try {
+		ibQueryParser().ParsePackage(
+			wxT("SELECT Partner ONTO Sales FROM Document.Sales;")
+			wxT("JOIN Sales AND Payments ON Sales.Partner = Payments.Partner"));
+		FAIL() << "the old package-link form parsed";
+	}
+	catch (const ibBackendException& err) {
+		EXPECT_TRUE(err.GetErrorDescription().Contains(wxT("LINK")))
+			<< err.GetErrorDescription().ToStdString();
+	}
 }
 
 // ⭐⭐ `SPLIT` — WHERE THE LADDER OF LEVELS STOPS BEING ONE.

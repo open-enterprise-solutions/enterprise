@@ -139,9 +139,15 @@ void ibDialogQueryConstructor::FillAll()
 	// is the whole of it — no bookkeeping, no per-grid code. A row that the edit removed is not
 	// re-selected: the count is asked first, because selecting a row that no longer exists is how a
 	// grid starts answering questions about nothing.
+	// ⚠ AND THE SELECTION-LINKS GRID IS ONE OF THEM. It was added a fortnight after this list and did
+	// not join it, so it alone lost its row on every edit — which from outside is "it saves every
+	// other time" (Max, 2026-08-27, on a filled link row): the click after an edit spends itself
+	// re-selecting the row the Reset deselected, and only the one after that edits. A grid missing
+	// from here has no symptom of its own; it inherits this one.
 	ibDataViewCtrl* const grids[] = {
 		m_fields, m_links, m_conditions, m_grouping, m_aggregates, m_order,
 		m_indexFields, m_totalsAggregates, m_totalsDimensions, m_unions, m_unionFields,
+		m_selectionLinks,
 	};
 	std::vector<ibDataViewItem> kept;
 	kept.reserve(WXSIZEOF(grids));

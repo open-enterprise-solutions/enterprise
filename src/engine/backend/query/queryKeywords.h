@@ -39,6 +39,27 @@ enum class ibQueryKeyword
 	// not the same thing: INTO makes a table for later statements to read, ONTO names the result a
 	// reader asks for BY NAME instead of by its position in the package.
 	Onto,
+	// LINK <name> [INNER|LEFT|RIGHT|FULL] JOIN <name> ON <condition> [ … ] — a relation BETWEEN two
+	// results this package named, written where a statement is written.
+	//
+	// ⭐⭐ IT IS AN OPERATOR OF THE PACKAGE, and that is what the word was missing (Max, 2026-08-27:
+	// *"we have an operator that drops a temporary table — and LINK is the operator that relates"*).
+	// The package has four of them and they are the whole of its vocabulary: `INTO` makes, `DROP`
+	// releases, `ONTO` names, `LINK` relates. A relation that was recognised by position alone was
+	// the only one of the four with nothing to call it.
+	//
+	// ⭐ A WORD HERE COSTS NOTHING, and that is why there is one. The link used to be recognised by
+	// POSITION alone (a top-level `JOIN A AND B ON …`, since a statement can only begin with SELECT
+	// or DROP) — to avoid taking a name away from every configuration that has an attribute called
+	// `Link`. But at the START OF A STATEMENT no name can stand in the first place, so nothing is
+	// taken: the reasoning applied to words read where a FIELD may be, and this is not one of those
+	// positions (Max, 2026-08-27).
+	//
+	// ⭐⭐ AND THE WORD PAYS FOR ITSELF BY REMOVING A SPELLING. With `LINK` in front, the relation is
+	// written the way this language writes every other relation — `A LEFT JOIN B ON …`, a chain of
+	// them if there are several. The old form needed `AND` between the two names for no reason but
+	// syntax (both stood after one JOIN), so a package link did not look like a join anywhere else.
+	Link,
 	// INDEX BY … — the columns a materialised temp table is indexed by
 	Index,
 	// FOR UPDATE — the select HOLDS the rows it returned until the transaction ends

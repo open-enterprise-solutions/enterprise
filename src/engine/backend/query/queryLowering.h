@@ -270,6 +270,49 @@ public:
 	                                                 const std::map<wxString, ibValue>& params,
 	                                                 class ibQueryTempTableStore* store = nullptr);
 
+	// ⭐⭐ WHERE EACH LINKED SELECTION STANDS IN THE FINAL QUERY — the placement, and the ONE answer
+	// to it. `LINK` declares relations as a SET, in whatever order they were written; what a query
+	// needs is a FROM TREE, which is an order. Working that out twice — once to run the package,
+	// once to write the composer's text over it — is two answers to a question with one right one,
+	// and they would drift the first time either side learnt something (a second condition between
+	// the same pair, say).
+	//
+	// `declared` — the names this package gave its results. A link naming anything else raises:
+	// skipping it quietly runs a DIFFERENT query, one link fewer, and hands back numbers nobody can
+	// explain. A HALF-FILLED link is not an error — it is a row somebody opened in the window and
+	// has not written — and it is left out.
+	//
+	// Empty head = nothing to place (no usable link).
+	struct JoinStep
+	{
+		wxString           m_name;   // the selection joined at this step
+		ibQueryJoinKindAst m_kind = ibQueryJoinKindAst::Inner;
+		ibQueryAstExprPtr  m_on;     // the condition, ANDed if two links relate the same pair
+	};
+	struct FromTree
+	{
+		wxString              m_head;    // the selection the tree starts from
+		std::vector<JoinStep> m_steps;   // …and what hangs off it, in the order it must be written
+	};
+	static FromTree PlacePackageLinks(const std::vector<ibQueryPackageLink>& links,
+	                                  const std::vector<wxString>& declared);
+
+	// ⭐⭐ RUN WHAT PREPARES, AND ONLY THAT — every `INTO` statement of this package, in order, into
+	// `store`. Nothing else is executed and nothing is returned.
+	//
+	// It exists for the COMPOSER, which does not run a package: it lowers ONE statement (its own,
+	// carrying the settings) and needs whatever the statements before it MAKE to be there when it
+	// does. A named result (`ONTO`) needs no run at all — the lowering declares it to the server —
+	// but a temp table is rows, and rows have to be drained before anybody can read them.
+	//
+	// `sources` — the registry an ibTempSourceScope is already installed over. Each table is added
+	// to it as it is made (and a DROP takes one back out), so the statement after sees it, which is
+	// the batch contract. The caller opens the scope; this fills it.
+	static void PreparePackage(const ibQueryPackage& package,
+	                           const std::map<wxString, ibValue>& params,
+	                           class ibQueryTempTableStore& store,
+	                           std::map<wxString, const ibBackendQueryable*>& sources);
+
 	// The PAGED read — the same lowering with an external page ENVELOPE (anchor /
 	// direction / count) threaded into the door's terminal. This is how a paged
 	// consumer (the L5 list driver) cursors a query WITHOUT any grammar change; a

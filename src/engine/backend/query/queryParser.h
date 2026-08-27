@@ -9,7 +9,10 @@
 // names stay as strings; resolution is the lowering's job (queryLowering).
 //
 // Grammar (EN canon; keywords are locale-table driven — queryKeywords.h):
-//   package  := statement { ';' statement }            (a trailing ';' is allowed)
+//   package  := item { ';' item }                      (a trailing ';' is allowed)
+//   item     := statement | link
+//   link     := LINK name { [INNER|LEFT|RIGHT|FULL] JOIN name ON predicate }
+//                                                      (the names are ONTO names — see §24.3)
 //   statement:= DROP name
 //             | selectCore { UNION [ALL] selectCore } [ORDER BY orderList] [TOTALS …] [FOR UPDATE]
 //   selectCore := SELECT [ALLOWED] [TOP n] [DISTINCT] selList [INTO name] FROM source { join }
@@ -93,9 +96,12 @@ private:
 
 	// --- productions -----------------------------------------------------
 	ibQueryAstStatement           ParseStatement();         // one package statement: a DROP or a full SELECT
-	// A package-level LINK between two named results: `JOIN T1 AND T2 ON …`. Recognised by POSITION
-	// (a statement begins with SELECT or DROP), so the language gains no new word.
-	ibQueryPackageLink            ParsePackageLink();
+	// A package-level LINK SECTION — `LINK T1 LEFT JOIN T2 ON … JOIN T3 ON …`. One word, then the
+	// relation spelled as this language spells every relation; a chain yields one link per JOIN.
+	std::vector<ibQueryPackageLink> ParsePackageLinks();
+	// `[INNER|LEFT|RIGHT|FULL] JOIN` — read by a select's join list and by a package link alike,
+	// because it is the same phrase. False = the next token starts no join.
+	bool                          ParseJoinKind(ibQueryJoinKindAst& kind);
 	ibQuerySelectPtr           ParseSelectStatement();   // a full SELECT (+ UNION branches + trailing ORDER/TOTALS)
 	ibQuerySelectPtr           ParseSelectCore();        // one SELECT body up to HAVING (a UNION branch)
 	void                       ParseSelectList(ibQuerySelect& sel);

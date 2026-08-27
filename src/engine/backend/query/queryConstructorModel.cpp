@@ -505,6 +505,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetQualifiedFields
 
 #include "queryParser.h"                 // ibQueryParser — the text is parsed here and nowhere else
 #include "queryable.h"                   // ibSourceMetaDataScope — names resolve against THIS config
+#include "queryLowering.h"               // PlacePackageLinks — where a linked selection stands, asked ONCE
 
 std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
 	const ibMetaData* metaData, wxString* error)
@@ -524,6 +525,51 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
 		const ibQueryPackage package = parser.ParsePackage(text);
 		if (package.m_statements.empty())
 			return fields;
+
+		// ⭐⭐ A LINKED PACKAGE OFFERS EVERY RELATED SELECTION'S FIELDS, QUALIFIED BY ITS NAME.
+		//
+		// There is no "last statement" to read when the statements are related: what the composition
+		// stands on is the FINAL query, whose sources ARE the named selections
+		// (docs/query-language-arc.md § 24.4b). So the fields are the union of theirs, written the
+		// way a path over two selections has to be written — `Sales.Qty` — which is the very job
+		// `ONTO` exists for: settling a clash of names, nothing else.
+		//
+		// ⚠ AND ONLY THE SELECTIONS THE LINKS ACTUALLY PLACED. One that relates to nothing is not in
+		// the final query, so offering its fields would offer a path that cannot resolve.
+		if (!package.m_links.empty()) {
+			std::vector<wxString> declared;
+			for (const ibQueryAstStatement& statement : package.m_statements)
+				if (statement.m_select && !statement.m_select->m_ontoName.IsEmpty())
+					declared.push_back(statement.m_select->m_ontoName);
+
+			const ibQueryLowering::FromTree tree =
+				ibQueryLowering::PlacePackageLinks(package.m_links, declared);
+
+			std::vector<wxString> placed;
+			if (!tree.m_head.IsEmpty()) {
+				placed.push_back(tree.m_head);
+				for (const ibQueryLowering::JoinStep& step : tree.m_steps)
+					placed.push_back(step.m_name);
+			}
+
+			const ibQueryConstructorModel model(metaData);
+			for (const wxString& name : placed) {
+				for (size_t i = 0; i < package.m_statements.size(); ++i) {
+					const ibQuerySelectPtr select = package.m_statements[i].m_select;
+					if (!select || !select->m_ontoName.IsSameAs(name, false))
+						continue;
+					// RESOLVED AS OF ITS MAKER, like every other named result (GetFields).
+					for (ibQueryConstructorField field : model.FieldsOfSelect(*select, package, i)) {
+						field.m_source = name;
+						field.m_name   = name + wxT(".") + field.m_name;
+						fields.push_back(std::move(field));
+					}
+					break;
+				}
+			}
+			if (!fields.empty())
+				return fields;
+		}
 
 		// THE LAST STATEMENT is the one that produces the result — a package builds temp tables and
 		// reads them at the end, so its fields are the ones a resource or a level is written over.

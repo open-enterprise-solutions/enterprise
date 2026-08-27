@@ -37,6 +37,9 @@ ibDataDBComposer& ibDataDBComposer::FromSource(const wxString& ns, const wxStrin
 	m_sourceText.Clear();
 	m_sources.clear();
 	m_directSources.clear();   // a transient registry belongs to ONE source set — reset it in lock-step
+	m_temps.Close();           // …and so do the tables a previous text's statements prepared
+	m_runSources.clear();
+	m_tempsReady = false;
 	m_sources.push_back({ ns, name });
 	return *this;
 }
@@ -50,6 +53,9 @@ ibDataDBComposer& ibDataDBComposer::FromSource(const ibBackendQueryable* queryab
 	m_sourceText.Clear();
 	m_sources.clear();
 	m_directSources.clear();
+	m_temps.Close();
+	m_runSources.clear();
+	m_tempsReady = false;
 
 	// Source the LIVE queryable DIRECTLY through the auxiliary per-query registry: register it under an
 	// auto-numbered per-query name (t0, t1, …) and render "FROM Temp.t0"; ResolveSource hands it straight
@@ -73,6 +79,13 @@ ibDataDBComposer& ibDataDBComposer::FromText(const wxString& text)
 {
 	m_sourceText = text;
 	m_sources.clear();
+	// ⭐ AND THIS IS WHERE A RUN STARTS. Every compose calls it, so it is the honest moment to let go
+	// of what the LAST run prepared: a temp table holds ROWS, and rows read a minute ago are not an
+	// answer to a report being asked again now. (Handing the same text back does not save them — the
+	// question is not "is it the same query" but "is it the same reading of the data".)
+	m_temps.Close();
+	m_runSources.clear();
+	m_tempsReady = false;
 	return *this;
 }
 
@@ -438,8 +451,15 @@ wxString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 	                       || !m_resources.empty() || !ChainFrom(output).empty()
 	                       || GetCurrentSettingsDesc().IsOk();   // …and whatever composes
 
-	if (!m_sourceText.IsEmpty() && !hasSettings)
-		return m_sourceText;   // the author's text, verbatim — nothing is being asked of it
+	// ⚠ THE VERBATIM ROAD IS FOR ONE QUERY ONLY. Handing a PACKAGE back untouched reads as "nothing
+	// was asked of it", and something was: the `LINK` section is not a statement, so whoever parses
+	// the text afterwards takes its last SELECT and the relations are silently gone — a smaller
+	// answer, quietly. A package is therefore always stood on (SplitSourceText), settings or not.
+	if (!m_sourceText.IsEmpty()) {
+		SplitSourceText();
+		if (!hasSettings && m_sourcePreamble.IsEmpty())
+			return m_sourceText;   // the author's text, verbatim — nothing is being asked of it
+	}
 
 	// ⭐ SETTINGS OVER AN AUTHOR'S QUERY — the seam this used to refuse.
 	//
@@ -466,11 +486,20 @@ wxString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 				authorProj += wxT(", ");
 			authorProj += name;
 		}
+		// ⭐ …AND A PACKAGE IS NOT WRAPPED, IT IS STOOD ON. `(SELECT …; SELECT …)` is not a query, so
+		// the statements that PREPARE stay ahead of the composer's own select and what it reads FROM
+		// is what the package produces — the linked selections, or its last statement. See
+		// SplitSourceText: this is the only line that has to know there is a difference.
+		SplitSourceText();
+
 		// No explicit selection: everything the nested query yields. `*` and not a reflected list,
 		// because the nested query's columns are ITS business — asking what they are would mean
 		// resolving the text here, and the lowering is about to do that anyway.
-		wxString text = wxT("SELECT ") + (authorProj.IsEmpty() ? wxString(wxT("*")) : authorProj)
-			+ wxT("\nFROM (") + m_sourceText + wxT(") AS ") + kAuthorQuerySource;
+		wxString text;
+		if (!m_sourcePreamble.IsEmpty())
+			text = m_sourcePreamble + wxT("\n;\n");
+		text += wxT("SELECT ") + (authorProj.IsEmpty() ? wxString(wxT("*")) : authorProj)
+			+ wxT("\nFROM ") + m_sourceFrom;
 		AppendSettingsClauses(text, outputs);
 		return text;
 	}
@@ -853,6 +882,178 @@ wxString ValueSig(const ibValue& v)
 
 } // namespace
 
+// ⭐⭐ THE AUTHOR'S TEXT, SPLIT — see the header. This is the whole of what a composition over a
+// PACKAGE needed: everything else was already built (the language names results and relates them,
+// the lowering declares them to the server as `WITH`, the field list already reads the package).
+// What was missing was one honest answer to "and where do the SETTINGS go", and it is: over what
+// the package PRODUCES, with everything that prepares it left standing in front.
+void ibDataDBComposer::SplitSourceText() const
+{
+	if (m_splitOfText == m_sourceText && !m_sourceFrom.IsEmpty())
+		return;
+
+	m_splitOfText = m_sourceText;
+	m_sourcePreamble.Clear();
+	m_sourcePackage = ibQueryPackage();
+	// THE TABLES BELONGED TO THE OLD TEXT. A split that has been worked out again is a different
+	// query, and rows prepared for the previous one are not an answer to this one.
+	m_temps.Close();
+	m_tempsReady = false;
+	// THE ONE-QUERY ROAD IS THE DEFAULT AND ALSO THE FALLBACK: half-typed text does not parse, and a
+	// RENDER is not where a person is told about a syntax error. EnsureAst parses next and says it
+	// there — at the position, in the parser's own words.
+	m_sourceFrom = wxT("(") + m_sourceText + wxT(") AS ") + kAuthorQuerySource;
+
+	ibQueryPackage package;
+	try { package = ibQueryParser().ParsePackage(m_sourceText); }
+	catch (const ibBackendException&) { return; }
+
+	if (package.m_statements.size() <= 1 && package.m_links.empty())
+		return;   // one query and nothing related — a nested source, exactly as before
+
+	// LINKS AND NO STATEMENTS AT ALL — a text somebody is halfway through. There is no result to
+	// stand on, so nothing is split; the read parses the text and complains in the parser's words.
+	if (package.m_statements.empty())
+		return;
+
+	// ⭐⭐ A TEMP TABLE IS PREPARATION, NOT A RIVAL TO A NAME (Max, 2026-08-27: *"INTO is not in the
+	// link and should not be — INTO is for the ONTO selections, they can use it there"*). The two
+	// words do different work and the package uses both at once: `INTO` makes rows the statements
+	// after it READ, and the selections that read them are the ones a `LINK` relates. So nothing is
+	// refused here — the preparing statements are run before the read (EnsureTempTables), and by the
+	// time a named selection is declared to the server its table is standing.
+	//
+	// The statements stay in the text either way: what a person sees is the package they wrote plus
+	// the one statement the composer adds.
+	m_sourcePackage = package;
+
+	// EVERY STATEMENT THAT IS NOT PREPARATION HAS TO BE NAMED (Max, 2026-08-26: one query — a name
+	// is optional; two and more — every one of them needs a name). Not a rule of style: a statement
+	// nothing can address is never read, and a package quietly carrying one produces an answer with
+	// a whole selection missing from it. An `INTO` statement is exempt BY DEFINITION — the name it
+	// carries is its table's, and that is what the ones after it address it by.
+	const size_t last = package.m_statements.size() - 1;
+	for (size_t i = 0; i < package.m_statements.size(); ++i) {
+		const ibQuerySelectPtr select = package.m_statements[i].m_select;
+		if (select == nullptr || !select->m_ontoName.IsEmpty() || !select->m_intoTemp.IsEmpty())
+			continue;
+		if (i == last && package.m_links.empty())
+			continue;   // …the one exception: with no links the LAST statement IS the result
+		ibBackendCoreException::Error(
+			_("Composer: a query of several selections has one that is neither named nor a temporary "
+			  "table. Name it with ONTO — without a name nothing can read it, and it is left out of "
+			  "the answer."));
+	}
+
+	// A PACKAGE'S STATEMENTS ALL STAY IN FRONT when the links say how they meet: each of them is a
+	// SOURCE of the composer's own select, resolved through the named-result scope (as `WITH` where
+	// the engine reads a named query). Nothing is materialised and nothing is executed twice.
+	if (!package.m_links.empty()) {
+		std::vector<wxString> declared;
+		for (const ibQueryAstStatement& statement : package.m_statements)
+			if (statement.m_select != nullptr && !statement.m_select->m_ontoName.IsEmpty())
+				declared.push_back(statement.m_select->m_ontoName);
+
+		// ⭐ PLACED BY THE ENGINE'S OWN PLACER, not by a second reading of the links here. `LINK`
+		// declares relations as a set; which of them stands where in the FROM is one question with
+		// one answer, and ibQueryLowering::PlacePackageLinks is it.
+		const ibQueryLowering::FromTree tree =
+			ibQueryLowering::PlacePackageLinks(package.m_links, declared);
+
+		// NOTHING USABLE WAS WRITTEN YET — every link is a row somebody opened and left. That is an
+		// ordinary state of the window, so it falls through to the road below and the package reads
+		// its last statement; it must NOT fall back to wrapping the whole text, which would put a
+		// `LINK` section inside brackets and fail as a syntax error nobody caused.
+		if (!tree.m_head.IsEmpty()) {
+			m_sourceFrom = tree.m_head;
+			for (const ibQueryLowering::JoinStep& step : tree.m_steps) {
+				wxString kind;
+				switch (step.m_kind) {
+				case ibQueryJoinKindAst::Left:  kind = ibQueryKeywordText(ibQueryKeyword::Left)  + wxT(" "); break;
+				case ibQueryJoinKindAst::Right: kind = ibQueryKeywordText(ibQueryKeyword::Right) + wxT(" "); break;
+				case ibQueryJoinKindAst::Full:  kind = ibQueryKeywordText(ibQueryKeyword::Full)  + wxT(" "); break;
+				default: break;
+				}
+				m_sourceFrom += wxT("\n\t") + kind + ibQueryKeywordText(ibQueryKeyword::Join)
+				              + wxT(" ") + step.m_name
+				              + wxT(" ") + ibQueryKeywordText(ibQueryKeyword::On)
+				              + wxT(" ") + (step.m_on ? ibRenderQueryExpr(*step.m_on) : wxString());
+			}
+			// EVERY STATEMENT STAYS IN FRONT: each is a SOURCE of the select above, resolved through
+			// the named-result scope. Rendered from the package WITHOUT its links — they have just
+			// become the FROM, and writing them twice would relate the selections a second time.
+			ibQueryPackage related;
+			related.m_statements = package.m_statements;
+			m_sourcePreamble = ibRenderQueryPackage(related);
+			return;
+		}
+	}
+
+	// THE LAST STATEMENT PRODUCES THE RESULT — not a new rule but the one already in force, since it
+	// is the statement the field list offers a person to pick from (ibQueryFieldsOfText). It is read
+	// as a nested source, exactly as a lone query is.
+	const ibQuerySelectPtr result = package.m_statements[last].m_select;
+	if (result == nullptr)
+		return;
+
+	ibQueryPackage prepared;
+	prepared.m_statements.assign(package.m_statements.begin(), package.m_statements.begin() + last);
+	m_sourcePreamble = ibRenderQueryPackage(prepared);
+
+	// ⚠ WITHOUT ITS OWN `ONTO`. The name is what a LATER statement reads the result by, and there is
+	// none: this select is about to stand inside the composer's FROM under the composer's own alias.
+	ibQuerySelect readAsSource = *result;
+	readAsSource.m_ontoName.Clear();
+	m_sourceFrom = wxT("(") + ibRenderQuery(readAsSource) + wxT(") AS ") + kAuthorQuerySource;
+}
+
+// ⭐⭐ WHAT PREPARES, RUN ONCE — see the header.
+void ibDataDBComposer::EnsureTempTables() const
+{
+	if (m_tempsReady)
+		return;
+
+	// The registry every read of this composer resolves through. Its OWN transient sources are
+	// always in it (a RAM table handed in by the host); the prepared tables join them.
+	m_runSources = m_directSources;
+	m_tempsReady = true;
+
+	bool prepares = false;
+	for (const ibQueryAstStatement& statement : m_sourcePackage.m_statements)
+		if (statement.m_select != nullptr && !statement.m_select->m_intoTemp.IsEmpty()) {
+			prepares = true;
+			break;
+		}
+	if (!prepares)
+		return;   // nothing to make — which is every composition that does not write INTO
+
+	// The scope is opened HERE and holds a POINTER to the map, so each table is visible to the
+	// statement after it — that is the batch contract, and PreparePackage fills the map as it goes.
+	ibSourceMetaDataScope mdScope(m_metaData);
+	ibTempSourceScope     tempScope(m_runSources);
+	ibQueryLowering::PreparePackage(m_sourcePackage, m_params, m_temps, m_runSources);
+}
+
+// TEXT -> the statement that carries the settings, and the named results standing behind it.
+ibQuerySelectPtr ibDataDBComposer::ParseComposed(const wxString& text, ibQueryPackage& package,
+	std::map<wxString, const ibQuerySelect*>& named) const
+{
+	package = ibQueryParser().ParsePackage(text);
+	named.clear();
+	if (package.m_statements.empty())
+		return nullptr;
+
+	// EVERY STATEMENT BUT THE LAST IS A NAMED RESULT — this text is what THIS composer wrote
+	// (SplitSourceText), so there is nothing else it can be: the preamble is exactly the selections
+	// the final statement reads, and the final statement is the one carrying the settings.
+	for (size_t i = 0; i + 1 < package.m_statements.size(); ++i) {
+		const ibQuerySelectPtr select = package.m_statements[i].m_select;
+		if (select != nullptr && !select->m_ontoName.IsEmpty())
+			named.emplace(select->m_ontoName.Lower(), select.get());
+	}
+	return package.m_statements.back().m_select;
+}
+
 void ibDataDBComposer::EnsureAst() const
 {
 	// The cache key is the rendered text PLUS the tree condition's version: that
@@ -877,7 +1078,7 @@ void ibDataDBComposer::EnsureAst() const
 	// paging through a hundred screens renders the same text and says nothing.
 	ibJournalInfo(wxT("composer.text"), wxT("rendered:\n%s"), text);
 
-	m_ast = ibQueryParser().Parse(text);
+	m_ast = ParseComposed(text, m_astPackage, m_astNamed);
 	if (m_ast == nullptr)
 		ibBackendCoreException::Error(_("Composer: the rendered query failed to parse"));
 
@@ -935,10 +1136,19 @@ ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputC
 	// lowering resolves the rendered "FROM Temp.t0" directly to the registered queryable. Source
 	// resolution happens entirely inside the lowering call below, so this scope covers it; the
 	// returned result holds the queryable already bound (no re-resolution during the row walk).
-	ibTempSourceScope tempScope(m_directSources);
+	// ⭐ THE PREPARED TABLES ARE PART OF THE REGISTRY, and they are made before the first read of
+	// this text — a named selection is declared to the server as `WITH`, and what stands inside it
+	// resolves at that moment (Max: INTO is for the ONTO selections to use).
+	EnsureTempTables();
+	ibTempSourceScope tempScope(m_runSources);
 	// Thread THIS query's config into the lowering (parallel to the temp-source scope) — ResolveSource resolves a
 	// by-name metaobject source against it, not the global factory.
 	ibSourceMetaDataScope mdScope(m_metaData);
+	// ⭐ …AND THE SELECTIONS THIS COMPOSER'S QUERY NAMED, for the same reason and by the same means: a
+	// `FROM Sales` in the statement below is a NAMED RESULT, and the lowering decides per source
+	// whether to declare it to the server (`WITH Sales AS (…)`) or take its rows. Empty for a
+	// composition over one query, which is every composition that names nothing.
+	ibNamedResultScope namedScope(m_astNamed);
 
 	hasTotals = m_ast->m_hasTotals;
 	m_serverGroupedLevel = false;
@@ -1544,7 +1754,9 @@ ibDataQueryResult* ibDataDBComposer::SharedReadFor(const Output& output,
 		// already lowered — `query.sql` shows SQL, where a fold in memory cannot appear by
 		// construction — so without this line the branch road had no readable form anywhere.
 		ibJournalInfo(wxT("composer.text"), wxT("shared read rendered:\n%s"), text);
-		ibQuerySelectPtr ast = ibQueryParser().Parse(text);
+		ibQueryPackage package;
+		std::map<wxString, const ibQuerySelect*> named;
+		ibQuerySelectPtr ast = ParseComposed(text, package, named);
 		if (ast == nullptr)
 			ibBackendCoreException::Error(_("Composer: the rendered query of the shared read failed to parse"));
 
@@ -1556,8 +1768,10 @@ ibDataQueryResult* ibDataDBComposer::SharedReadFor(const Output& output,
 		// per branch.
 		AndWhere(*ast, BuildFilterAst(GetCurrentFilterDesc()));
 
-		ibTempSourceScope     tempScope(m_directSources);
+		EnsureTempTables();
+		ibTempSourceScope     tempScope(m_runSources);
 		ibSourceMetaDataScope mdScope(m_metaData);
+		ibNamedResultScope    namedScope(named);   // the package's own selections, as in Execute
 
 		std::vector<ibQueryLowering::OutputColumn> shared;
 		// ⚠ NO PAGE HERE. A shared read serves a REPORT — several tables of one sheet — and a page is
@@ -1679,7 +1893,9 @@ ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
 		return Execute(schema, hasTotals, page);
 
 	const wxString text = RenderTextFor(output);
-	ibQuerySelectPtr ast = ibQueryParser().Parse(text);
+	ibQueryPackage package;
+	std::map<wxString, const ibQuerySelect*> named;
+	ibQuerySelectPtr ast = ParseComposed(text, package, named);
 	if (ast == nullptr)
 		ibBackendCoreException::Error(_("Composer: the rendered query of an output failed to parse"));
 
@@ -1693,8 +1909,10 @@ ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
 	// from stored data is made where it is used; there is nothing to keep in step.
 	AndWhere(*ast, BuildFilterAst(output.m_settings.m_filter));
 
-	ibTempSourceScope     tempScope(m_directSources);
+	EnsureTempTables();
+	ibTempSourceScope     tempScope(m_runSources);
 	ibSourceMetaDataScope mdScope(m_metaData);
+	ibNamedResultScope    namedScope(named);   // the package's own selections, as in Execute
 
 	hasTotals = ast->m_hasTotals;
 	m_serverGroupedLevel = false;   // group-level paging belongs to the paged list, not to a report's output

@@ -1946,12 +1946,36 @@ ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRa
 // keyed by the aggregate's position, read back by GetColumn(alias). Column aggregates roll in-place.
 const ibMetaID kAggSyntheticBase = 0x40000000u;
 
-// WHERE AN AGGREGATE'S FIGURE LANDS — its OWN column when it has one, its synthetic receiver
+// ⭐⭐ DOES THIS AGGREGATE NEED A SLOT OF ITS OWN — i.e. one that is not its source column's?
+//
+// Two reasons, and they are the same reason seen twice: THERE IS NOTHING TO ROLL IN PLACE INTO.
+//
+//   * COUNT(*) has no source column at all;
+//   * an aggregate with an AREA that did not get a receiver — folded here rather than by the server.
+//     Its figure is NOT the column's roll-up: ApplyScopedAggregates keeps it at the named level and
+//     CARRIES IT DOWN, so writing it in place overwrites the column under the whole area. A detail
+//     row then shows its item's 30 where its own 15 belongs (CI, 2026-08-27), and if a ladder
+//     aggregate names that column too, its every subtotal goes the same way.
+//
+// ⚠ The lowering already re-projects a repeated column so two aggregates do not share a slot — but
+// only when it is SCALAR (a reference cannot be re-projected as one column), and only through that
+// one road: this seam is public and takes the items it is handed. The rule belongs where the slot is
+// decided, not with whoever happened to build the list.
+//
+// ⚠ ASKED ONCE, so the slot and the COLUMN declared for it (AddSyntheticAggColumns) cannot disagree:
+// a figure declared under one name and written under another reads back as nothing at all.
+bool AggNeedsOwnSlot(const ibDataQueryBuilder::AggregateItem& agg)
+{
+	return agg.m_col == nullptr || (agg.m_scopeDepth > 0 && agg.m_ownedReceiver == nullptr);
+}
+
+// WHERE AN AGGREGATE'S FIGURE LANDS — its OWN column when it rolls in place, its synthetic receiver
 // otherwise. Asked in one place because both folds (bucketed and streaming) write the same slots,
 // and a second answer to this is a figure that reads back under a different name than it was written.
 ibMetaID AggSlotId(const std::vector<ibDataQueryBuilder::AggregateItem>& aggs, size_t i)
 {
-	return aggs[i].m_col != nullptr ? aggs[i].m_col->GetColumnId() : (kAggSyntheticBase + static_cast<ibMetaID>(i));
+	return AggNeedsOwnSlot(aggs[i]) ? (kAggSyntheticBase + static_cast<ibMetaID>(i))
+	                                : aggs[i].m_col->GetColumnId();
 }
 
 // Roll the aggregates over `rows` and write each onto the node: a COLUMN aggregate IN-PLACE into its
@@ -2013,13 +2037,14 @@ void ApplyScopedAggregates(ibSelectorTree& tree, const std::vector<ibDataQueryBu
 	}
 }
 
-// Add the synthetic receiver COLUMNS for COUNT(*) aggregates to a tree (column aggregates need none —
-// their own column is already present). Read back by GetColumn(alias).
+// Add the synthetic receiver COLUMNS to a tree — one for every aggregate that does not roll into a
+// column of its own (AggNeedsOwnSlot: a COUNT(*), or an area folded here for want of windows). An
+// aggregate that DOES roll in place needs none: its column is already present. Read by GetColumn(alias).
 void AddSyntheticAggColumns(ibSelectorTree& tree, const std::vector<ibDataQueryBuilder::AggregateItem>& aggs)
 {
 	for (size_t i = 0; i < aggs.size(); ++i)
-		if (aggs[i].m_col == nullptr)
-			tree.AddColumn(kAggSyntheticBase + static_cast<ibMetaID>(i), aggs[i].m_alias, ibTypeDescription());
+		if (AggNeedsOwnSlot(aggs[i]))
+			tree.AddColumn(AggSlotId(aggs, i), aggs[i].m_alias, ibTypeDescription());
 }
 
 // CellKey is GONE. Hierarchy linking keys by the VALUE itself now (ibValueHash / ibValueEqual,

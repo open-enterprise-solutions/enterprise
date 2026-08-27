@@ -877,7 +877,8 @@ wxWindow* ibDialogQueryConstructor::BuildLinksPage(wxWindow* parent)
 //
 // A link INSIDE a query is still an ordinary JOIN and still lives on the Links tab. This is the
 // other thing — a relation the package declares between two of its results — and the text spells it
-// where a statement would stand: `JOIN T1 AND T2 ON …` (no new keyword; the position decides).
+// where a statement would stand: `LINK T1 LEFT JOIN T2 ON …`, several relations off one head
+// written as a chain.
 //
 // The grid is the same five cells a join is read through, so nothing had to be learnt to use it.
 //
