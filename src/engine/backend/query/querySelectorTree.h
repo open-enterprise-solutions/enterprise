@@ -20,7 +20,18 @@
 // totals, a row carries the values it was read with — so the node SAYS which it is instead of
 // leaving the reader to infer it from the depth, which is exactly what a depth cannot answer once
 // the tree has both.
-enum class ibSelectorNodeKind { Group, Detail };
+// ⭐⭐ …AND A THIRD, WHICH CARRIES NOTHING: a BRANCH. `TOTALS … BY Item SPLIT Characteristic SPLIT
+// Series` sends the same rows two ways at once, and the branch node is where a ladder stops being
+// one. It holds no key and no figure — it is the FORK itself, named so a reader can ask for one
+// side by name.
+//
+// ⚠ IT IS TRANSPARENT TO A PLAIN WALK, and that is what keeps every existing reader working: asked
+// for what is under a heading without naming a branch, the walk goes through the branches IN ORDER
+// — the first one whole, then the next (Max, 2026-08-27: you walk INTO the split, finish it, and
+// then go on to the following one). So a script that never heard of branches still sees every group there is,
+// which is the honest answer; naming one narrows to it. Same shape as OVERALL: the node exists
+// either way, and being SEEN is a question for the walk, not for the fold.
+enum class ibSelectorNodeKind { Group, Detail, Branch };
 
 class BACKEND_API ibSelectorTree
 {
@@ -37,6 +48,10 @@ public:
 		std::vector<std::unique_ptr<Node>> m_children;
 		bool                               m_hasChildren = false;
 		ibSelectorNodeKind                 m_kind = ibSelectorNodeKind::Group;
+		// WHAT THIS BRANCH IS CALLED — `SPLIT … ONTO ByCharacteristic`, and empty on every other kind
+		// of node. A branch written without a name is read by position, so the absence is an answer
+		// rather than a gap: there is nothing to ask for it by.
+		wxString                           m_branch;
 
 		Node* AddChild(int level) { m_children.push_back(std::make_unique<Node>()); m_children.back()->m_level = level; return m_children.back().get(); }
 
@@ -113,6 +128,7 @@ private:
 		to.m_level       = from.m_level;
 		to.m_hasChildren = from.m_hasChildren;
 		to.m_kind        = from.m_kind;
+		to.m_branch      = from.m_branch;   // …a copy of a node stands in the same branch the original did
 		to.m_children.clear();
 		to.m_children.reserve(from.m_children.size());
 		for (const std::unique_ptr<Node>& child : from.m_children) {

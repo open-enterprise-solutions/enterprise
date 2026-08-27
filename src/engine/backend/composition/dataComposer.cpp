@@ -15,6 +15,7 @@
 #include "backend/query/queryReadState.h"  // ibQueryReadState — one build, one state of the data
 #include "backend/query/queryRender.h"        // ibQueryColumnFromPath — a dotted path becomes a column, once
 #include "backend/query/queryKeywords.h"      // ibQueryKeywordText — a grouping line is written in the query's own words
+#include "backend/query/queryLexer.h"         // ibQueryLexer::IsIdentifier — what a NAME is, asked of the tier that defines it
 
 //////////////////////////////////////////////////////////////////////
 // sources
@@ -410,8 +411,25 @@ wxString ibDataDBComposer::RenderText() const
 // RENDER ONE OUTPUT: its own levels, its own filter and sort, its own selected fields. The
 // RESOURCES are the composition's and every output rolls the same ones, which is why they are read
 // off `m_resources` here rather than off the output.
-wxString ibDataDBComposer::RenderTextFor(const Output& output) const
+wxString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outputs) const
 {
+	// The settings that are not a ladder belong to all of them alike — see AppendSettingsClauses.
+	const Output& output = *outputs.front();
+
+	// ⭐ EVERY BRANCH'S FIELDS, ONCE. One read has one projection, so what it publishes is the UNION
+	// of what the branches asked for; each of them prints its own out of that (SchemaFor). Deduped by
+	// NAME, because two outputs naming the same field are naming one column — projecting it twice
+	// would publish two columns answering to one name, and a reader would get whichever came first.
+	std::vector<wxString> projected;
+	for (const Output* out : outputs) {
+		for (const wxString& name : ProjectionFor(*out)) {
+			bool already = false;
+			for (const wxString& have : projected)
+				if (have.IsSameAs(name, false)) { already = true; break; }
+			if (!already)
+				projected.push_back(name);
+		}
+	}
 	// Anything asked of this read — by the composition above it or by the output itself. Miss one
 	// and the author's verbatim text is handed back unchanged, with the setting silently dropped.
 	const bool hasSettings = !ProjectionFor(output).empty()
@@ -453,7 +471,7 @@ wxString ibDataDBComposer::RenderTextFor(const Output& output) const
 		// resolving the text here, and the lowering is about to do that anyway.
 		wxString text = wxT("SELECT ") + (authorProj.IsEmpty() ? wxString(wxT("*")) : authorProj)
 			+ wxT("\nFROM (") + m_sourceText + wxT(") AS ") + kAuthorQuerySource;
-		AppendSettingsClauses(text, output);
+		AppendSettingsClauses(text, outputs);
 		return text;
 	}
 
@@ -467,8 +485,9 @@ wxString ibDataDBComposer::RenderTextFor(const Output& output) const
 	// / hierarchy with no rolled aggregate (a list grouped by a field).
 
 	// --- the projection -------------------------------------------------------
+	// (`projected` was worked out at the top: the UNION of what every branch asks for, deduped by
+	//  name. One read has one projection, whether it serves one output or several.)
 	wxString proj;
-	const std::vector<wxString> projected = ProjectionFor(output);
 	if (!projected.empty()) {
 		for (const wxString& name : projected) {
 			if (!proj.IsEmpty())
@@ -522,7 +541,7 @@ wxString ibDataDBComposer::RenderTextFor(const Output& output) const
 	for (size_t i = 1; i < m_sources.size(); ++i)
 		text += wxT(" JOIN ") + m_sources[i].m_namespace + wxT(".") + m_sources[i].m_name;
 
-	AppendSettingsClauses(text, output);
+	AppendSettingsClauses(text, outputs);
 	return text;
 }
 
@@ -556,8 +575,36 @@ static void ibAppendGroupLine(wxString& text, const ibGroupLineDescription& line
 	text += wxT(")");
 }
 
-void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& output) const
+// ⭐⭐ THE OUTPUTS THIS TEXT IS WRITTEN FOR — one of them in the ordinary case, several when they
+// share the read as BRANCHES. ONE list and not "an output plus the others": the first output is not
+// a different kind of thing from the rest, and saying it twice would leave two places to disagree
+// about which of them the WHERE and the ORDER BY came from (Max, 2026-08-27, on the first shape of
+// this: why does it take the array of outputs AND an output of its own?).
+//
+// Everything that is NOT a ladder — the scope filter, the order, the resources — is shared by
+// construction: outputs only ever share a read when those already agree (BranchableOutputs), so
+// they are read off the first and no branch can quietly carry its own.
+// ⭐ ONE CONDITION INTO A QUERY — declared where the two roads a setting travels are described.
+// A null condition is the ordinary case (nothing was filtered) and must read as "leave it alone",
+// so every caller can hand over whatever BuildFilterAst gave it without asking first.
+void ibDataDBComposer::AndWhere(ibQuerySelect& ast, const ibQueryAstExprPtr& condition)
 {
+	if (condition == nullptr)
+		return;
+	if (ast.m_where == nullptr) {
+		ast.m_where = condition;
+		return;
+	}
+	ibQueryAstExprPtr both = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
+	both->m_isOr = false;
+	both->m_lhs  = ast.m_where;
+	both->m_rhs  = condition;
+	ast.m_where  = both;
+}
+
+void ibDataDBComposer::AppendSettingsClauses(wxString& text, const std::vector<const Output*>& outputs) const
+{
+	const Output& output = *outputs.front();
 	// ⭐ WHERE A FILTER SITS DECIDES WHAT IT DOES (Max):
 	//
 	//   * ON THE OUTPUT — it REMOVES ROWS. This is the report's subject ("only this warehouse"), and
@@ -618,7 +665,7 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& outpu
 	// carries the level's key and the figures rolled into it — and nothing else — so ordering the
 	// headings by an ordinary field (a document's date, its moment, `Ref.Anything`) had nothing to
 	// read and left the order exactly as it was (Max, 2026-08-25, over documents in identifier
-	// order: *"по обычной дате тоже не сортирует"*).
+	// order: *"an ordinary date does not sort them either"*).
 	//
 	// The fold keeps a group where its FIRST ROW is, so the honest way to order headings by a field
 	// of the rows is to order the ROWS by it. That is this clause. The levels' keys follow it
@@ -677,6 +724,9 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& outpu
 		// follow, for the same reason: a setting is one thing. Their lines are one field each (a flat
 		// list cannot say "one heading of two fields"), which is exactly what a user's grouping is.
 		bool wroteBy = false;
+		// A level written straight after `SPLIT` needs no separator — the word IS the separator, and
+		// a comma there would read back as one more level of the ladder above.
+		bool afterSplit = false;
 		if (GetCurrentGroupDesc().IsOk()) {
 			for (const ibGroupLineDescription& line : GetCurrentGroupDesc().m_lines) {
 				if (line.m_path.IsEmpty())
@@ -691,7 +741,8 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& outpu
 				const std::vector<TotalByItem>& fields = axis[i].m_settings.m_group.m_lines;
 				if (fields.empty())
 					continue;
-				text += (wroteBy ? wxT(", ") : wxT(" BY "));
+				if (afterSplit)  afterSplit = false;                    // the word already separated it
+				else             text += (wroteBy ? wxT(", ") : wxT(" BY "));
 				wroteBy = true;
 				const bool bracketed = fields.size() > 1;
 				if (bracketed)
@@ -714,8 +765,40 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const Output& outpu
 		// so the row keys are the outer ones. Writing columns first would give a table transposed —
 		// the same numbers, in the wrong place, with nothing to say which was meant.
 		if (!GetCurrentGroupDesc().IsOk()) {
-			writeAxis(output.m_rowGroups);
-			writeAxis(output.m_columnGroups);
+			if (outputs.size() == 1) {
+				writeAxis(output.m_rowGroups);
+				writeAxis(output.m_columnGroups);
+			}
+			else {
+				// ⭐⭐ EVERY OUTPUT IS A BRANCH OF ONE READ. A report's tables sit on the same source
+				// and differ only in how they fold it — which is exactly what `SPLIT` says. Nothing
+				// stands above them, so the branches fork at the grand total: the outputs are
+				// siblings, not one nested inside another.
+				//
+				// ⚠ THE BRANCH IS NAMED AFTER THE OUTPUT, and there is no second name anywhere. The
+				// walk asks for a branch by that name (RunOutputPass), so an output and its branch
+				// cannot drift apart — there is only the one name to drift.
+				for (size_t at = 0; at < outputs.size(); ++at) {
+					const Output* branch = outputs[at];
+					// `SPLIT <name> BY <levels>` — the node is named where it is opened, and the name
+					// is the OUTPUT's (or the one derived from its position when it never got one).
+					// Asked through BranchNameFor, which the WALK asks too, so the two cannot spell it
+					// differently and an output can never lose its own branch.
+					// ⚠ THE CLAUSE'S OWN `BY` COMES FIRST, even when the ladder opens with a node.
+					// The grammar is `TOTALS <resources> BY <ladder>`, and a ladder may begin with a
+					// SPLIT — but the `BY` that introduces the whole clause is still required. Writing
+					// the first node without it produced `TOTALS COUNT(Number) SPLIT Output1 BY …`
+					// and the parser stopped exactly there ("expected BY in TOTALS", live 2026-08-27).
+					text += (wroteBy ? wxT(" ") : wxT(" BY "));
+					text += ibQueryKeywordText(ibQueryKeyword::Split) + wxT(" ")
+					      + BranchNameFor(*branch, at) + wxT(" ")
+					      + ibQueryKeywordText(ibQueryKeyword::By) + wxT(" ");
+					wroteBy    = true;
+					afterSplit = true;
+					writeAxis(branch->m_rowGroups);
+					writeAxis(branch->m_columnGroups);
+				}
+			}
 		}
 
 		// ⭐⭐ RESOURCES WITH NO GROUPING ARE A GRAND TOTAL — `TOTALS COUNT(x) BY OVERALL`, which is
@@ -803,18 +886,7 @@ void ibDataDBComposer::EnsureAst() const
 	// THE TREE'S CONDITION GOES IN AS AN AST, ANDed with whatever the query text
 	// already asked for. No rendering, no re-parsing — the expression the filter
 	// built is the expression the engine lowers.
-	if (condition) {
-		if (m_ast->m_where) {
-			ibQueryAstExprPtr both = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
-			both->m_isOr = false;
-			both->m_lhs = m_ast->m_where;
-			both->m_rhs = condition;
-			m_ast->m_where = both;
-		}
-		else {
-			m_ast->m_where = condition;
-		}
-	}
+	AndWhere(*m_ast, condition);
 
 	m_renderedText = text;
 	m_renderedFilter = GetCurrentFilterDesc();
@@ -1080,7 +1152,11 @@ bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driv
 {
 	bool hasTotals = false;
 	const bool read = RunOutputPass(output, driver, hasTotals);
-	driver.OnComplete(hasTotals);
+	driver.OnOutputEnd(hasTotals);
+	// …and if this was the last branch of a shared read, the rows are done with — see
+	// ReleaseSharedRead. Here rather than deeper in, because the walk is finished only once the
+	// output has ENDED, and that is the event this function owns.
+	ReleaseSharedRead(output);
 	return read;
 }
 
@@ -1099,7 +1175,17 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 
 	std::vector<ibQueryLowering::OutputColumn> schema;
 	bool hasTotals = false;
-	ibDataQueryResult result = ExecuteFor(output, schema, hasTotals, page);
+	// ⭐⭐ ONE READ, OR MY OWN. Where the outputs fold the same rows they were rendered as BRANCHES of
+	// a single query and executed once — this output then walks its branch of what is already in
+	// hand. Where they could not (an output with a filter of its own, a sort of its own, no name to
+	// be addressed by), it reads for itself exactly as it always did.
+	std::unique_ptr<ibDataQueryResult> own;
+	ibDataQueryResult* shared = SharedReadFor(output, schema, hasTotals);
+	if (shared == nullptr) {
+		own    = std::make_unique<ibDataQueryResult>(ExecuteFor(output, schema, hasTotals, page));
+		shared = own.get();
+	}
+	ibDataQueryResult& result = *shared;
 
 	// WHICH SHAPE THIS OUTPUT IS ABOUT TO BE READ IN. Three facts decide everything below — whether a
 	// page was asked for, whether the query folds, and whether the DBMS already did the folding — and
@@ -1178,6 +1264,11 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		: DimensionCount(output.m_rowGroups);
 	driver.OnOutputBegin(info);
 
+	// ⭐ WHERE THE ROWS END AND THE PAGE-WIDTH BEGINS — the same number the clause writer wrote the
+	// keys by, and the one the walk below classifies each heading with. Asked once, here, so no
+	// consumer has to re-derive an axis from a depth.
+	const int rowLevels = static_cast<int>(info.m_rowLevels);
+
 	std::vector<ibValue> row(schema.size());
 	if (m_serverGroupedLevel) {
 		// Server-paged GROUPS (one grouping level, keyset-paged by the DB) — already grouped, so emit each as a
@@ -1196,7 +1287,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			// (the server returned the folded rows, not what went into them), so it is a heading with
 			// nothing to open: a list must not offer an expander, a printed report must still style it
 			// as the heading it is. Which is exactly why the two answers travel separately.
-			driver.OnGroup(1, /*hasChildren*/true, /*showsWhatIsUnder*/false, row);
+			driver.OnGroupBegin(1, ibSelectorNodeKind::Group, /*hasChildren*/true, /*showsWhatIsUnder*/false, row);
 		}
 	}
 	else if (!hasTotals) {
@@ -1226,7 +1317,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			// with no grouping fields is for. Said as a detail rather than as a level-0 group,
 			// because a printer lays the two out differently and should not have to infer which
 			// it got from the depth.
-			driver.OnDetail(0, row);
+			driver.OnRow(0, row);
 		}
 	}
 	else {
@@ -1238,7 +1329,13 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		// keeps the rows it was computed from. `hiddenAbove` carries that down — what hangs under a
 		// hidden heading is hidden with it, since printing a child of an unprinted parent would put
 		// it under the wrong heading.
-		ibSelector sel = result.Select(ibSelectKind::ibSelectKind_ByGroups);
+		// ⭐ AND IT WALKS ITS OWN BRANCH of the shared fold, asked for by the SAME name the render
+		// wrote (`SPLIT <name> BY …`) — both go through BranchNameFor, so an output cannot end up
+		// asking for a branch nobody wrote. Reading alone, there are no branches to choose between
+		// and the walk is the plain one.
+		ibSelector sel = ReadsAsBranch(output)
+			? result.Select(ibSelectKind::ibSelectKind_ByGroups, BranchNameFor(output, BranchIndexOf(output)))
+			: result.Select(ibSelectKind::ibSelectKind_ByGroups);
 		// ⭐ THE GRAND TOTAL IS PART OF THE WALK WHEN THE READER WANTS ONE. It is the tree's root and
 		// the fold already rolled every row into it; asking for it here is what puts it in front of
 		// the driver, which prints it at the BOTTOM of the section (a pre-order walk hands it over
@@ -1282,7 +1379,12 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				if (level.Kind() == ibSelectorNodeKind::Detail) {
 					if (!OutputWrites(output, ibSelectorNodeKind::Detail))
 						continue;
-					driver.OnDetail(level.Level(), row);
+					// A RECORD, and which way IT reads is the same question asked of the same seam:
+					// down the page it is a line, across it a column of its own.
+					if (level.Level() > rowLevels)
+						driver.OnColumn(level.Level(), ibSelectorNodeKind::Detail, row);
+					else
+						driver.OnRow(level.Level(), row);
 					// ⭐ A ROW HAS NOTHING UNDER IT — DOWN THE PAGE. In a TABLE the column keys stand
 					// across it, and those cells are its children: the fold hangs them there so a
 					// detail record is a line of the table with figures beside it rather than
@@ -1321,11 +1423,35 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 					under.Reset();
 				}
 
-				// BOTH answers travel — see ibCompositionDriver::OnGroup. HasChildren() is the fold's
-				// own fact and is what makes a heading a heading; showsWhatIsUnder is this output's
-				// promise and is what an expander may offer.
-				driver.OnGroup(level.Level(), level.HasChildren(), showsWhatIsUnder, row);
+				// BOTH answers travel — see ibCompositionDriver::OnGroupBegin. HasChildren() is the
+				// fold's own fact and is what makes a heading a heading; showsWhatIsUnder is this
+				// output's promise and is what an expander may offer.
+				//
+				// ⭐ AND WHICH WAY IT READS is settled HERE, where the axis is known: a heading past
+				// the row levels stands ACROSS the page. The driver used to work that out from a
+				// depth and a count handed to it separately — two facts to keep in step for one
+				// answer this walk already has.
+				if (level.Level() > rowLevels)
+					driver.OnColumn(level.Level(), level.Kind(), row);
+				else
+					driver.OnGroupBegin(level.Level(), level.Kind(), level.HasChildren(), showsWhatIsUnder, row);
+
+				// ⚠ THIS HEADING'S OWN VALUES, TAKEN BEFORE THE DESCENT. `row` is ONE buffer for the
+				// whole walk — filled at each visit and reused by the nested walk below — so by the
+				// time the descent returns it holds the LAST row that was read, not this heading.
+				// Read straight from it, the closing event printed the last detail record's values
+				// into the grand-total line (seen live, 2026-08-27: the document number and its date
+				// standing where the totals belong).
+				//
+				// Copied only for the headings that will be closed, so an ordinary report pays one
+				// vector per heading and a detail-heavy one pays nothing extra.
+				const std::vector<ibValue> mine = level.Level() <= rowLevels ? row : std::vector<ibValue>();
 				walk(under);
+				// ⭐⭐ …AND THE HEADING CLOSES, with the figures it ended up with. Everything under it
+				// has been written by now, which is the whole difference between this and the event
+				// that opened it — and it is where a total belongs on the page.
+				if (level.Level() <= rowLevels)
+					driver.OnGroupEnd(level.Level(), mine);
 			}
 		};
 		walk(sel);
@@ -1339,8 +1465,209 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 // page, and re-parsing per page is what that cache exists to avoid. Any other output renders and
 // parses on the spot: keying one cache by which output asked would be a second question for it to
 // answer, and outputs past the first are read once per composition, not once per scroll.
+// ⭐⭐ WHICH OUTPUTS CAN BE READ TOGETHER. They share a read when they differ ONLY in how they fold
+// it — same source, same WHERE, same ORDER BY — because one read has one of each of those.
+//
+// So an output with a filter of its own stays alone (its filter is ANDed into the text and would
+// narrow everybody else's rows), and so does one that sorts by a field of its own. What is left —
+// outputs that state only their groupings — is the ordinary report with several tables in it, which
+// is exactly the case that used to cost one query apiece.
+std::vector<const ibDataComposer::Output*> ibDataDBComposer::BranchableOutputs() const
+{
+	std::vector<const Output*> together;
+	for (const Output& output : Outputs()) {
+		if (output.m_driver == nullptr || !Declares(output))
+			continue;
+		if (output.m_settings.m_filter.IsOk() || output.m_settings.m_sort.IsOk())
+			return {};   // one output reads on its own terms — then nobody shares, and no read is built
+		if (!HasGroupingFields(output))
+			return {};   // a branch with no levels would render `SPLIT` with nothing after it
+		// ⚠ A BRANCH IS ADDRESSED BY NAME, so the name has to be one the query can spell. An output
+		// called "Sales for the year" is not renamed behind a person's back — it simply reads alone.
+		// Asked of the LEXER, which owns the definition of a name — a second set of rules written
+		// here would disagree with it the day either changed.
+		// ⚠ AN OUTPUT THAT WAS NEVER NAMED STILL FOLDS. Its branch is addressed by a name derived
+		// from its POSITION (BranchNameFor) — nothing stored, nothing migrated. Refused is only a
+		// name that exists and cannot be spelled as an identifier.
+		if (!output.m_name.IsEmpty() && !ibQueryLexer::IsIdentifier(output.m_name))
+			return {};
+		// ⭐⭐ …AND THEY MUST BE ASKING THE READ FOR THE SAME THING. A branch chooses how the rows are
+		// FOLDED; everything the READ itself is asked — whether the detail records travel with the
+		// totals, and how the levels lay out down and across the page — has ONE answer for all of
+		// them. So outputs that answer differently are not branches of one read: they read apart,
+		// exactly as an output with a filter of its own does.
+		//
+		// 🛑 Written because the first output's answer silently became everyone's: `withDetails` was
+		// a constant `true` at the read below, and both tables came out with a line per document
+		// under them — 125 blank rows nobody had asked for (Max, live, 2026-08-27).
+		if (!together.empty()) {
+			const Output& first = *together.front();
+			const ibTotalsLayout a = LayoutFor(output), b = LayoutFor(first);
+			if (WantsDetails(output) != WantsDetails(first) ||
+			    a.m_rowLevels != b.m_rowLevels || a.m_hasColumns != b.m_hasColumns ||
+			    a.m_detailsAxis != b.m_detailsAxis)
+				return {};
+		}
+		together.push_back(&output);
+	}
+	// ONE OUTPUT IS NOT A SHARED READ. It is the ordinary road, and taking the branch road for it
+	// would spend a `SPLIT` to say what a plain ladder already says.
+	return together.size() >= 2 ? together : std::vector<const Output*>{};
+}
+
+// ⭐⭐ THE SHARED READ, BUILT BY WHOEVER ASKS FIRST. Returns the read this output should walk, or
+// null when it reads for itself.
+//
+// There is no "the run is starting" hook and there does not need to be one: the outputs are visited
+// in order, so the first branch to arrive builds the read and every later one finds it. The last of
+// them lets it go (ReleaseSharedRead, called where the output ends) — a composition left on screen
+// must not sit on an open cursor.
+ibDataQueryResult* ibDataDBComposer::SharedReadFor(const Output& output,
+	std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals)
+{
+	if (m_sharedRead == nullptr && m_sharedBranches.empty()) {
+		const std::vector<const Output*> together = BranchableOutputs();
+		if (together.empty())
+			return nullptr;   // nobody shares — and nothing is built, so nothing has to be released
+
+		const wxString text = RenderTextFor(together);
+		// ⭐ AND IT IS PRINTED, like every other query this composer writes. The shared read is the
+		// ONE text in the house that carries `SPLIT`, and it was the one text nobody could see: the
+		// journal's `composer.text` is written in EnsureAst, which is the single-output road (Max,
+		// 2026-08-27, reading the log: not one occurrence of the word). Everything below it is
+		// already lowered — `query.sql` shows SQL, where a fold in memory cannot appear by
+		// construction — so without this line the branch road had no readable form anywhere.
+		ibJournalInfo(wxT("composer.text"), wxT("shared read rendered:\n%s"), text);
+		ibQuerySelectPtr ast = ibQueryParser().Parse(text);
+		if (ast == nullptr)
+			ibBackendCoreException::Error(_("Composer: the rendered query of the shared read failed to parse"));
+
+		// ⭐⭐ …AND THE FILTER IN FORCE, which the text does not carry (see AndWhere). It is the
+		// REPORT'S own — "applies to every output" — and a read shared by every output is exactly
+		// where it belongs: one condition, decided at the top, and nothing below can see more than
+		// it admits. The branches have no filters of their own to add — an output that states one
+		// reads alone (BranchableOutputs), which is why there is a single call here and not one
+		// per branch.
+		AndWhere(*ast, BuildFilterAst(GetCurrentFilterDesc()));
+
+		ibTempSourceScope     tempScope(m_directSources);
+		ibSourceMetaDataScope mdScope(m_metaData);
+
+		std::vector<ibQueryLowering::OutputColumn> shared;
+		// ⚠ NO PAGE HERE. A shared read serves a REPORT — several tables of one sheet — and a page is
+		// a question a list asks about ONE ladder. A paged output never reaches this road at all
+		// (a list has one output and no branches to share with).
+		// ⭐ THE DETAILS AND THE LAYOUT ARE ASKED, NOT DECIDED — of the outputs themselves, exactly as
+		// the single-output road asks (`WantsDetails(output)` / `LayoutFor(output)` at ExecuteFor).
+		// Any of them will do: BranchableOutputs let them share only because they agree on both.
+		ibDataQueryResult read = ibQueryLowering::ExecuteTotals(*ast, m_params, shared, ibReadPageRequest{},
+			nullptr, WantsDetails(*together.front()), LayoutFor(*together.front()));
+
+		m_sharedRead     = std::make_shared<ibDataQueryResult>(std::move(read));
+		m_sharedSchema   = std::move(shared);
+		m_sharedBranches = together;
+		m_branchesServed = 0;
+		// THE PAIR OF NUMBERS THIS IS JUDGED BY: one read, this many outputs out of it.
+		ibJournalInfo(wxT("composer"), wxT("shared read: %u outputs read as branches of one query, %u columns"),
+			static_cast<unsigned>(m_sharedBranches.size()), static_cast<unsigned>(m_sharedSchema.size()));
+	}
+
+	if (!ReadsAsBranch(output))
+		return nullptr;
+
+	schema    = SchemaFor(output, m_sharedSchema);
+	hasTotals = true;   // a shared read is a TOTALS read by construction — every branch is a ladder
+	return m_sharedRead.get();
+}
+
+// …AND LET IT GO once every branch has had it. Counted rather than guessed, because "the last
+// output" is not the same as "the last branch": an output that reads alone sits between them.
+void ibDataDBComposer::ReleaseSharedRead(const Output& output)
+{
+	if (!ReadsAsBranch(output))
+		return;
+	if (++m_branchesServed < m_sharedBranches.size())
+		return;
+	m_sharedRead.reset();
+	m_sharedSchema.clear();
+	m_sharedBranches.clear();
+	m_branchesServed = 0;
+}
+
+// THE NAME A BRANCH ANSWERS TO. Given, or made from where the output stands — see the declaration.
+// Both sides of the run derive it here: the render writes it into `SPLIT <name> BY …`, the walk asks
+// for it. One function, so they cannot spell it differently.
+wxString ibDataDBComposer::BranchNameFor(const Output& output, size_t at) const
+{
+	return output.m_name.IsEmpty() ? wxString::Format(wxT("Output%u"), static_cast<unsigned>(at) + 1)
+	                               : output.m_name;
+}
+
+// WHERE THIS OUTPUT STANDS AMONG THE BRANCHES OF THE SHARED READ — the position its derived name is
+// made from. Asked of the SAME list the render walked, so the two agree by construction.
+size_t ibDataDBComposer::BranchIndexOf(const Output& output) const
+{
+	for (size_t at = 0; at < m_sharedBranches.size(); ++at)
+		if (m_sharedBranches[at] == &output)
+			return at;
+	return 0;
+}
+
+bool ibDataDBComposer::ReadsAsBranch(const Output& output) const
+{
+	for (const Output* branch : m_sharedBranches)
+		if (branch == &output)
+			return true;
+	return false;
+}
+
+// ⭐ THE COLUMNS THIS OUTPUT SHOWS, out of what the shared read publishes. One read publishes every
+// branch's keys; a branch prints its OWN — otherwise every table on the sheet would carry an empty
+// column for each of its neighbours' headings.
+//
+// Matched by NAME, which is how the composer already reads a schema everywhere else (a level's sort,
+// a level's filter): the settings speak paths, and a path is what the query named the column.
+std::vector<ibQueryLowering::OutputColumn> ibDataDBComposer::SchemaFor(const Output& output,
+	const std::vector<ibQueryLowering::OutputColumn>& shared) const
+{
+	// What this output names: its levels' fields, the resources (which every output rolls), and
+	// whatever it selected outright.
+	std::vector<wxString> mine;
+	const auto take = [&mine](const wxString& path) {
+		if (path.IsEmpty())
+			return;
+		for (const wxString& have : mine)
+			if (have.IsSameAs(path, false))
+				return;
+		mine.push_back(path);
+	};
+	for (const std::vector<GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups })
+		for (const GroupNode& level : *axis)
+			for (const TotalByItem& field : level.m_settings.m_group.m_lines)
+				take(field.m_path);
+	for (const ibResourceDescription& resource : m_resources) {
+		take(resource.m_path);
+		take(resource.m_alias);
+	}
+	for (const wxString& name : ProjectionFor(output))
+		take(name);
+
+	std::vector<ibQueryLowering::OutputColumn> schema;
+	for (const ibQueryLowering::OutputColumn& column : shared) {
+		bool wanted = false;
+		for (const wxString& path : mine)
+			if (column.m_name.IsSameAs(path, false) || column.m_alias.IsSameAs(path, false)) { wanted = true; break; }
+		if (wanted)
+			schema.push_back(column);
+	}
+	// A BRANCH THAT MATCHED NOTHING KEEPS THE WHOLE SCHEMA rather than printing an empty table: the
+	// names come from settings a person edits, and a report that silently loses every column is a
+	// worse answer than one that shows a column too many.
+	return schema.empty() ? shared : schema;
+}
+
 ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
-	std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals, const ibReadPageRequest& page) const
+	std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals, const ibReadPageRequest& page)
 {
 	if (&output == &Root())
 		return Execute(schema, hasTotals, page);
@@ -1358,18 +1685,7 @@ ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
 	// with a version counter beside it, filled in by whoever happened to edit the filter — so the
 	// condition ran or did not depending on which door the edit came through. An expression derived
 	// from stored data is made where it is used; there is nothing to keep in step.
-	if (const ibQueryAstExprPtr own = BuildFilterAst(output.m_settings.m_filter)) {
-		if (ast->m_where) {
-			ibQueryAstExprPtr both = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
-			both->m_isOr = false;
-			both->m_lhs  = ast->m_where;
-			both->m_rhs  = own;
-			ast->m_where = both;
-		}
-		else {
-			ast->m_where = own;
-		}
-	}
+	AndWhere(*ast, BuildFilterAst(output.m_settings.m_filter));
 
 	ibTempSourceScope     tempScope(m_directSources);
 	ibSourceMetaDataScope mdScope(m_metaData);

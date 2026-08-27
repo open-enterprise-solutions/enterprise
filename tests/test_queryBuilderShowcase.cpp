@@ -269,7 +269,7 @@ TEST(QueryBuilderShowcase, RefJoin_DialectIndependent)
 	EXPECT_EQ(pg, sl);
 }
 
-// Virtual-table join — "Справочник ⋈ СрезПоследних". The slice's
+// Virtual-table join — "Catalog ⋈ SliceLast". The slice's
 // "MAX(period) GROUP BY dim" inner aggregate becomes a derived-table FROM source
 // (ibSubquery), joined LEFT so a catalog row with no slice row still appears. The
 // ibQueryRelPtr Join() overload composes a non-table right source.

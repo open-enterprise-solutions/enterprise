@@ -57,6 +57,7 @@
 
 // The links grid is an ibDataViewCtrl with its own model — cells edited IN PLACE.
 #include "frontend/win/ctrls/dataview/dataview.h"
+#include "queryGridModel.h"   // ibTotalsRow — which NODE a row of the totals grid belongs to
 
 class ibMetaData;
 
@@ -360,6 +361,10 @@ private:
 	void OnEditTotalsAggregate(wxCommandEvent&);      // the arbitrary-expression editor, over this line
 	void OnRemoveTotalsAggregate(wxCommandEvent&);
 	void OnAddTotalsDimension(wxCommandEvent&);
+	// ⭐ ADD A SEPARATOR — a visible node of the totals (`SPLIT`). Groupings are then hung on it the
+	// same way they are hung on the hidden node every report has; it is named `Splitter1`, `Splitter2`
+	// … so it can be addressed the moment it exists, and the name cell renames it.
+	void OnAddTotalsSplit(wxCommandEvent&);
 	void OnEditTotalsDimension(wxCommandEvent&);      // the same editor, over the dimension expression
 	void OnMoveTotalsDimension(int delta);            // levels apply in order — the order is the setting
 	void OnRemoveTotalsLine(wxCommandEvent&);         // the selected DIMENSION line
@@ -369,6 +374,33 @@ private:
 	// ibQueryParser::ParseTotalsField, the same pair the cell above it reads and writes by. A second
 	// road into `m_periods` would be a second answer to "what does this field say".
 	void FillTotalsPeriods();          // level -> panel (and the panel's enabled-ness)
+	// ⭐⭐ WHAT THE CARET IS ON — a level of the hidden node, a separator, or a level hung on one.
+	// Asked of the TREE (a separator is a node and its groupings are its children), so there is no
+	// row map to keep in step with the AST.
+	ibTotalsRow SelectedTotalsAt() const;
+	// WHERE A NEW GROUPING GOES — the node the caret is on, or the hidden one when nothing is picked.
+	// Adding to "wherever the caret is" is what makes a separator usable with a mouse.
+	int SelectedTotalsNode() const;
+	// ⭐⭐ ADD THE PICKED FIELDS TO ONE NAMED NODE. The node is passed IN rather than read off the
+	// caret, because a DROP knows where it landed and the caret does not follow a drop soon enough:
+	// selecting the row under the pointer and then asking "which node is selected" answered with the
+	// node that had been selected BEFORE, so everything dropped went into whatever separator was last
+	// clicked (Max, 2026-08-27).
+	void AddTotalsFieldsTo(int node);
+	// ⭐ CARRIED WITH THE MOUSE — a row of this grid dragged within it. The payload is the row's
+	// COORDINATE and nothing else; the mark is what tells it from a FIELD dragged in from the tree.
+	static const wxChar* const kTotalsDragMark;
+	static ibTotalsRow ParseTotalsDrag(const wxString& text);
+	// Move one level onto the node the pointer was over. Dropped on nothing = the hidden node, which
+	// is what "drag it out of the separator" means.
+	void MoveTotalsLevelTo(const ibTotalsRow& from, const ibTotalsRow& onto);
+	// ⭐⭐ IS THIS FIELD ALREADY REACHABLE HERE? A level is reached through the levels ABOVE it — the
+	// common ladder, then the node's own — so the same field twice on one path groups nothing: every
+	// heading would hold the single value it already stands under. Asked before a field is added or
+	// moved in, never after.
+	bool TotalsFieldAlreadyThere(int node, const wxString& name, const ibQueryTotalDim* except = nullptr) const;
+	// The levels of a node, whichever node it is — the hidden one's live on the select itself.
+	std::vector<ibQueryTotalDim>* LevelsOfNode(ibQuerySelect* select, int node) const;
 	void ApplyTotalsPeriods();         // panel -> level
 	// Only a DATE can be read by periods (Max) — a period is a scale on the calendar, and a level
 	// keyed by anything else has none. Asked of the field's own type, which the model already
@@ -633,7 +665,7 @@ private:
 	class ibDataViewCtrl* m_totalsAggregates = nullptr;   // Totals field | Expression
 	class ibQueryGridModel* m_totalsAggregateModel = nullptr;
 	class ibDataViewCtrl* m_totalsDimensions = nullptr;   // Grouping field | Totals kind | Alias
-	class ibQueryGridModel* m_totalsDimensionModel = nullptr;
+	class ibQueryTotalsTreeModel* m_totalsDimensionModel = nullptr;   // a TREE: a separator is a node, its groupings are its children
 	wxCheckBox*  m_grandTotals = nullptr;   // what the root of a totals tree IS — see BuildTotalsPage
 	// ⭐ THE SELECTED LEVEL'S PERIODICITY, stated with a mouse. It belongs to ONE level, so it sits
 	// under the grid and follows the selection — the same place, and the same reading, a person is

@@ -151,50 +151,90 @@ class BACKEND_API ibCompositionDriver
 public:
 	virtual ~ibCompositionDriver() = default;
 
-	// An output STARTS. Default: state its schema the way the row contract always did.
-	virtual void OnOutputBegin(const ibCompositionOutputInfo& info) { OnColumns(info.m_schema); }
-
-	// A GROUP of the output — its depth, its values (the level's key fields in the level's own order,
-	// with the resources rolled in place), and TWO different facts about what is under it.
+	// ⭐⭐ THE VOCABULARY, IN THE ORDER IT IS SPOKEN. An OUTPUT begins and ends, a GROUP begins and
+	// ends, and between them rows and columns are written. Declared in that order too, so reading the
+	// class is reading one sentence:
 	//
-	// ⭐⭐ THEY ARE NOT THE SAME QUESTION, and one bool answering both is how the innermost heading of
-	// a printed report came out looking like a detail line. `hasChildren` is about the FOLD: does this
-	// node stand over anything at all — which is what makes it a heading, and what makes the root the
-	// grand total. `showsWhatIsUnder` is about the OUTPUT: will this output actually print what is
-	// under it — which is what an expander triangle must promise, because a triangle that opens onto
-	// nothing is worse than no triangle.
+	//     OnOutputBegin(info)                     an output starts — its kind, its schema, its name
+	//       OnGroupBegin(level, kind, …)          a heading OPENS — a grouping, or a fork of the totals
+	//         OnRow(level, values)                a row is written — DOWN the page
+	//         OnColumn(level, kind, values)       a column is written — ACROSS it (a cross-table)
+	//       OnGroupEnd(level, values)             …and the heading CLOSES, its figures final
+	//     OnOutputEnd(totals)                     the output is finished
 	//
-	// They disagree exactly where it matters: a deepest heading over detail rows in an output that
-	// declares no detail level HAS children and SHOWS nothing. Read as "heading?", that printed the
-	// level untinted and unbold; read as "expandable?", a triangle would have opened onto an empty
-	// space. Each consumer takes the one it means — the list the second, the printed report the first.
-	virtual void OnGroup(int level, bool hasChildren, bool showsWhatIsUnder, const std::vector<ibValue>& values) {
-		OnRow(level, hasChildren, values);
-	}
-
-	// A DETAIL row — a row as it is, under the level that asked for it. It is never a folder.
-	virtual void OnDetail(int level, const std::vector<ibValue>& values) {
-		OnRow(level, false, values);
-	}
-
-	// (⛔ NO `OnOutputEnd`. It took the same argument as `OnComplete`, said the same thing, and every
-	//  driver that ever answered answered the second one — so the pair was not a base verb with a
-	//  richer twin (which is what OnOutputBegin/OnColumns and OnGroup/OnRow are), it was one verb
-	//  spelled twice. Audit, docs/composer-arc-queue.md § C8: nothing overrode it, ever.
+	// ⭐ A HEADING IS A PAIR, not a row that happens to be bold. It opens, things are written under
+	// it, and it closes — the only reading under which a total may be printed where a reader looks
+	// for it (at the bottom) without anybody stashing it in a field between two events.
 	//
-	//  ⚠ AND THAT IS THE TEST FOR THE REST OF THIS VOCABULARY, since it is easy to over-apply: a
-	//  second verb earns its place when it CARRIES MORE — a kind and a schema rather than a schema,
-	//  a heading or a detail rather than a row. When both carry the same, one of them is a synonym,
-	//  and a synonym in a virtual is a second thing to keep in step for nothing.)
+	// ⭐ ROW AND COLUMN ARE TWO VERBS, and that is earned rather than habitual: a row is written down
+	// the page and a column across it — different coordinates, different widths, a different act. The
+	// AXIS is a fact the WALK holds (a level says which way it reads), so it is handed over rather
+	// than re-derived by every driver out of a depth and a count it was told separately.
+	//
+	// 🛑 WHAT THIS REPLACED, and why: `OnGroup` / `OnDetail` were a base verb (`OnRow`) with two
+	// richer twins, and what a heading carried over a record was its KIND — which is a TYPE, not a
+	// second function. Two verbs meant every driver answered one question twice, and the day a third
+	// kind arrived (a BRANCH, once the totals could fork) both would have had to learn it. Meanwhile
+	// `OnOutputBegin` … `OnComplete` was not a pair at all — one name says "an output is starting",
+	// the other "something finished" — and nothing said a GROUP had ended, which is exactly the event
+	// the grand total needed. (Max, 2026-08-27: a detail record and a row are the same thing — what a
+	// grouping adds is a KIND; and the events should read as "on handling a row", "on handling a
+	// column".)
+	//
+	// ⚠ THE TEST FOR ADDING TO THIS VOCABULARY, since it is easy to over-apply: a verb earns its
+	// place when it CARRIES MORE — an opening rather than a closing, a column rather than a row. When
+	// two carry the same, one of them is a synonym, and a synonym in a virtual is a second thing to
+	// keep in step for nothing. (`OnColumns` went that way: "which columns" is part of "an output is
+	// starting", and the schema rides on the info.)
 
-	// The output schema (projection order) — before any row.
-	virtual void OnColumns(const std::vector<ibQueryLowering::OutputColumn>& schema) = 0;
+	// An output STARTS — its schema, its kind and its name arrive with it.
+	virtual void OnOutputBegin(const ibCompositionOutputInfo& info) = 0;
 
-	// One row / tree node. `values` follow the schema order.
-	virtual void OnRow(int level, bool hasChildren, const std::vector<ibValue>& values) = 0;
+	// ⭐⭐ A HEADING OPENS. `values` follow the schema order — the level's key fields, with the
+	// resources rolled in place.
+	//
+	//   * `kind`  — what this heading IS: a GROUPING, or a BRANCH of the totals (`SPLIT`), which
+	//               groups the OUTPUT rather than the values. The node says it; a printer must never
+	//               infer it from the depth, which cannot answer once a tree holds both.
+	//   * `hasChildren`      — the FOLD's fact: does this node stand over anything at all. That is
+	//                          what makes a heading a heading, and the root the grand total.
+	//   * `showsWhatIsUnder` — the OUTPUT's promise: will what is under it actually be printed. An
+	//                          expander may be offered only on this one, because a triangle opening
+	//                          onto nothing is worse than no triangle.
+	//
+	// ⚠ THE LAST TWO ARE NOT ONE QUESTION, and one bool answering both is how the innermost heading
+	// of a printed report once came out looking like a detail line: a deepest heading over records,
+	// in an output that declares no detail level, HAS children and SHOWS nothing. Each consumer takes
+	// the one it means — a list the second, a printed report the first.
+	virtual void OnGroupBegin(int level, ibSelectorNodeKind kind, bool hasChildren,
+	                          bool showsWhatIsUnder, const std::vector<ibValue>& values) = 0;
 
-	// The walk finished. `totals` — the result was a folded TOTALS tree.
-	virtual void OnComplete(bool totals) {}
+	// A ROW — a detail record, written down the page under whatever opened above it. It carries no
+	// kind: a row is a row, and what makes a heading different is that it is a PAIR.
+	virtual void OnRow(int level, const std::vector<ibValue>& values) = 0;
+
+	// A COLUMN of a cross-table — a heading that reads ACROSS the page, or a record laid out as a
+	// column of its own. Default: nothing, because a driver that draws no table has nowhere across to
+	// write (a list is rows, and rows only).
+	virtual void OnColumn(int /*level*/, ibSelectorNodeKind /*kind*/, const std::vector<ibValue>& /*values*/) {}
+
+	// A HEADING CLOSES — every row and column under it has been written, so its figures are final and
+	// its section can be ended. This is where a total that belongs at the BOTTOM goes. Default:
+	// nothing, for the readers that draw a heading as it opens and never look back.
+	virtual void OnGroupEnd(int /*level*/, const std::vector<ibValue>& /*values*/) {}
+
+	// The output is FINISHED. `totals` — the result was a folded TOTALS tree.
+	virtual void OnOutputEnd(bool /*totals*/) {}
+
+	// =====================================================================================
+	// WHAT THIS DRIVER ASKS OF THE WALK — not events, and kept apart from them on purpose.
+	//
+	// Everything above is the walk TELLING the driver what it just wrote. Everything here is the
+	// driver telling the walk what to hand it in the first place: a page rather than everything, the
+	// grand total or not. They read as one list only if you do not look — one group is called when
+	// something happened, the other is asked BEFORE anything does (Max, 2026-08-27: WantsGrandTotal
+	// reads as a FLAG — "what is supported" — rather than as an event).
+	// =====================================================================================
 
 	// ⭐ DOES THIS DRIVER WANT THE GRAND TOTAL? The fold computes it either way — the root of the
 	// folded tree holds the whole result's resources — so this is a question about the READER, not
@@ -704,6 +744,12 @@ public:
 	// OnDetail / OnComplete). The realisation decides HOW — rendered text for the DB composer, the
 	// live rows for the RAM one.
 	virtual bool RunOutput(const Output& /*output*/, ibCompositionDriver& /*driver*/) { return false; }
+
+	// THE RUN'S OWN BRACKETS — see Run(). A realisation that can read several outputs at once builds
+	// that read in BeginRun and lets it go in EndRun; the RAM composer needs neither and says so by
+	// not overriding them.
+	virtual void BeginRun() {}
+	virtual void EndRun()   {}
 
 	// ⭐ RUN — load the outputs, then run ONCE and every driver gets filled (Max). Outputs are read
 	// in declared order, each into the driver it was given. An output with NO DRIVER is not read at
@@ -1220,7 +1266,22 @@ public:
 	wxString RenderText() const;
 	// The same rendering for ONE output — its levels, its filter, its sort, its selected fields.
 	// RenderText is this over the first output, which is the only one a list has.
-	wxString RenderTextFor(const Output& output) const;
+	// ⭐ ONE OUTPUT OR SEVERAL — the same render either way. Several are written as BRANCHES of one
+	// query, so what a report with three tables sends to the engine is one text, and what a list
+	// sends is that text with a single ladder in it. There is no second renderer for the shared case.
+	wxString RenderTextFor(const std::vector<const Output*>& outputs) const;
+	wxString RenderTextFor(const Output& output) const { return RenderTextFor(std::vector<const Output*>{ &output }); }
+
+	// ⭐⭐ A SETTING REACHES THE READ BY ONE OF TWO ROADS, and this is the second one. A sort and the
+	// composition's scope are WRITTEN INTO THE TEXT (AppendSettingsClauses); a FILTER is built as an
+	// expression and ANDed into the parsed query — never rendered, never re-parsed, because a tree
+	// condition put through text and back is a condition retyped by a machine.
+	//
+	// 🛑 SO A NEW WAY OF READING MUST TAKE BOTH. The shared read rendered the text, parsed it, and
+	// stopped — and the report's own filter, the one a person sets at the very top and by which
+	// "everything below reads only this", quietly did nothing (Max, live, 2026-08-27). Written here
+	// once, so the next road cannot take one half and miss the other.
+	static void AndWhere(ibQuerySelect& ast, const ibQueryAstExprPtr& condition);
 
 	// Read one output — see the base declaration. The first output rides the cached parse (a list
 	// re-reads it on every page); any other renders and parses on the spot.
@@ -1233,12 +1294,71 @@ public:
 
 	// Execute for ONE output: the cached parse for the first, a fresh render + parse for any other.
 	ibDataQueryResult ExecuteFor(const Output& output, std::vector<ibQueryLowering::OutputColumn>& schema,
-		bool& hasTotals, const ibReadPageRequest& page) const;
+		bool& hasTotals, const ibReadPageRequest& page);
 
 private:
+	// ⭐⭐ WHICH OUTPUTS CAN BE READ TOGETHER — the question that decides whether a composition costs
+	// one query or N.
+	//
+	// They share a read when they differ only in HOW THEY FOLD it: same source, same WHERE, same
+	// ORDER BY. So an output with a filter of its own is out (its filter is ANDed into the text and
+	// would narrow everyone else's rows), and so is one with a sort of its own by a FIELD (one read
+	// has one order). What is left — outputs that state only their groupings — is the ordinary case,
+	// and it is exactly what a report with several tables in it looks like.
+	//
+	// ⚠ AND IT NEEDS A NAME TO BE ADDRESSED BY. A branch is walked by the name it was given
+	// (`SPLIT … ONTO <name>`), so an output whose name is not a plain identifier reads alone rather
+	// than being silently renamed into something the query can spell.
+	std::vector<const Output*> BranchableOutputs() const;
+	// ⭐⭐ THE NAME A BRANCH IS ADDRESSED BY — the output's own, or one made up from its POSITION.
+	//
+	// 🛑 REQUIRING A STORED NAME QUIETLY DISABLED THE WHOLE THING. Outputs saved before they were
+	// ever named carry an empty one (seen live 2026-08-27: `output ''` beside `output 'Output2'` in
+	// the journal), so the shared read was refused and every composition went on reading once per
+	// output — the mechanism built, collected and never engaged.
+	//
+	// A branch needs a name only to be ASKED FOR, and the asking happens twice in one run: the
+	// render writes it, the walk repeats it. So an unnamed output gets `Output<n>` derived from where
+	// it stands, and both sides derive it the same way — nothing is stored, nothing is migrated, and
+	// a report saved last year folds like one made today.
+	wxString BranchNameFor(const Output& output, size_t at) const;
+	// …and where it stands among the shared read's branches, which is what that name is made from.
+	size_t BranchIndexOf(const Output& output) const;
+	// The read this output should walk — built on first ask, null when it reads for itself.
+	ibDataQueryResult* SharedReadFor(const Output& output,
+		std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals);
+	// …and released when the last branch has been served.
+	void ReleaseSharedRead(const Output& output);
+	// Is this output one of the branches of the shared read? (Null / empty share = nobody is.)
+	bool ReadsAsBranch(const Output& output) const;
+	// ⭐ THE COLUMNS THIS OUTPUT ACTUALLY SHOWS, out of the shared read's schema. One read publishes
+	// every branch's keys; a branch prints its OWN — otherwise each table on the sheet would carry an
+	// empty column for every heading of its neighbours.
+	std::vector<ibQueryLowering::OutputColumn> SchemaFor(const Output& output,
+		const std::vector<ibQueryLowering::OutputColumn>& shared) const;
+
+	// ⭐ THE SHARED READ, BUILT BY WHOEVER NEEDS IT FIRST and released by the last branch that used
+	// it. There is no "the run is starting" hook and there does not need to be one: the outputs are
+	// read in order, so the first branch to ask builds it and the last to be served lets it go.
+	// (Max, 2026-08-27: the driver already has the events for an output beginning and ending — a
+	// second set of brackets on the composer would say the same thing again.)
+	//
+	// ⚠ NOT `mutable`, and the const went off ExecuteFor instead. Building a read CHANGES this
+	// composer — it opens a cursor and remembers it — so the honest thing is to say so in the
+	// signature. `mutable` would have kept a const method that quietly does not behave like one,
+	// which is a lie told to the compiler to avoid rewording one declaration.
+	std::shared_ptr<ibDataQueryResult>         m_sharedRead;
+	std::vector<ibQueryLowering::OutputColumn> m_sharedSchema;
+	std::vector<const Output*>                 m_sharedBranches;
+	size_t                                     m_branchesServed = 0;
+
 	// WHERE / ORDER BY / TOTALS — appended the same way over a composed source and over an author's
 	// query, because they ARE the same settings.
-	void AppendSettingsClauses(wxString& text, const Output& output) const;
+	// ONE LIST, however many there are: a single output writes its levels as it always did, and
+	// several write `BY SPLIT … ONTO <name>` apiece. The settings that are not a ladder — the scope
+	// filter, the order — come off the first, which is sound precisely because outputs share a read
+	// only when they agree about them.
+	void AppendSettingsClauses(wxString& text, const std::vector<const Output*>& outputs) const;
 
 	// DOES THE LEVEL AT `depth` SHOW THIS HEADING? `depth` is the walk's own (1 = the first
 	// grouping), and only THAT level's filter is asked — the ones above have already had their say.

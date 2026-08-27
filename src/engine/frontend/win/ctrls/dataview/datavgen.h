@@ -1162,7 +1162,7 @@ public:     // utility functions not part of the API
 		// too, and it produced unreadable rows on its own. The fit no longer squeezes at all
 		// (it stretches or it scrolls), so the only thing that narrows a column now is the
 		// user dragging one, and they may narrow the rest as far as they like: a column pared
-		// down to "С…" is a choice, and 1C allows exactly that.
+		// down to a single truncated glyph is a choice, and platforms of this kind allow it.
 		int minimum = 0;
 	};
 	// The ranges, left to right, with what each asks for.

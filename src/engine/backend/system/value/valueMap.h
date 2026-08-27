@@ -40,7 +40,7 @@ private:
 	// TWO KINDS OF KEY, TWO RULES, and neither renders the value to text:
 	//
 	//   a STRING key folds case — a script reaches a field by name and does not care how it was
-	//   typed (`Структура.Имя` and `структура.имя` are one field). The fold runs once per LOOKUP
+	//   typed (`Structure.Name` and `structure.name` are one field). The fold runs once per LOOKUP
 	//   while hashing; inside a bucket the comparison decides most candidates on length alone and
 	//   folds only the characters that differ.
 	//

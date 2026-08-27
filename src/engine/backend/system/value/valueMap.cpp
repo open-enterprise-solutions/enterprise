@@ -28,7 +28,7 @@ inline wchar_t FoldChar(const wchar_t c)
 // TWO KINDS OF KEY, TWO RULES — and both are the value's own, with nothing rendered on the way.
 //
 //   a STRING key folds case, because a script reaches a field by name and does not care how it was
-//   typed (`Структура.Имя` and `структура.имя` are one field). The fold happens ONCE, here, and the
+//   typed (`Structure.Name` and `structure.name` are one field). The fold happens ONCE, here, and the
 //   result is kept beside the entry (m_fold); a comparison is then a plain string compare.
 //
 //   anything else compares AS A VALUE — ibValue's own ordering, so a reference matches by its guid

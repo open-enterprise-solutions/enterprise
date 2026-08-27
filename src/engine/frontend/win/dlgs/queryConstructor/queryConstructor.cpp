@@ -1505,6 +1505,11 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 
 	wxBoxSizer* dims = new wxBoxSizer(wxVERTICAL);
 	wxToolBar* dimBar = MakeToolBar(dimPane);
+	// ⭐⭐ ADD A SEPARATOR — a NODE the groupings are hung on. Without one the tab behaves exactly as
+	// it always has (one hidden node, one ladder); with one, the levels added after it land on it,
+	// and a report reads each node as a selection of its own.
+	AddTool(dimBar, _("Add separator"), wxART_NEW, [this](wxCommandEvent& e) { OnAddTotalsSplit(e); });
+	dimBar->AddSeparator();
 	AddTool(dimBar, _("Edit"),   wxART_EDIT, [this](wxCommandEvent& e) { OnEditTotalsDimension(e); });
 	AddTool(dimBar, _("Delete"), wxART_DELETE,    [this](wxCommandEvent& e) { OnRemoveTotalsLine(e); });
 	dimBar->AddSeparator();
@@ -1514,12 +1519,41 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	dims->Add(dimBar, 0, wxEXPAND);
 
 	// THREE COLUMNS, all typed into: the field, how it unfolds, and the name the level answers to.
-	m_totalsDimensionModel = new ibQueryGridModel();
-	m_totalsDimensionModel->SetReader([this](unsigned int row, unsigned int col) -> wxString {
+	m_totalsDimensionModel = new ibQueryTotalsTreeModel();
+	// HOW MANY ROWS HANG WHERE — the tree asks these two and builds itself; the dialog answers out of
+	// the AST, so there is no second copy of the ladder anywhere.
+	m_totalsDimensionModel->SetNodeCount([this]() -> int {
 		const ibQuerySelect* select = Current();
-		if (select == nullptr || row >= select->m_totalsBy.size())
+		return select != nullptr ? static_cast<int>(select->m_totalsSplits.size()) : 0;
+	});
+	m_totalsDimensionModel->SetLevelsOf([this](int node) -> int {
+		const std::vector<ibQueryTotalDim>* levels =
+			LevelsOfNode(const_cast<ibQuerySelect*>(Current()), node);
+		return levels != nullptr ? static_cast<int>(levels->size()) : 0;
+	});
+	m_totalsDimensionModel->SetReader([this](const ibTotalsRow& at, unsigned int col) -> wxString {
+		const ibQuerySelect* select = Current();
+		if (select == nullptr)
 			return wxEmptyString;
-		const ibQueryTotalDim& dim = select->m_totalsBy[row];
+
+		// ⭐ A SEPARATOR'S OWN LINE. It says what it IS in the field cell, unfolds nothing (a node is
+		// not keyed by a value, so the totals-kind cell has nothing to show), and carries its NAME in
+		// the alias cell — which is the cell a person renames it in.
+		if (at.IsNodeHeader()) {
+			if (col == kGridCol1)
+				return ibQueryKeywordText(ibQueryKeyword::Split);
+			if (col == kGridCol2)
+				return wxEmptyString;
+			return static_cast<size_t>(at.m_node) < select->m_totalsSplits.size()
+				? select->m_totalsSplits[at.m_node].m_name : wxString();
+		}
+
+		const std::vector<ibQueryTotalDim>* levels =
+			const_cast<ibDialogQueryConstructor*>(this)->LevelsOfNode(const_cast<ibQuerySelect*>(select), at.m_node);
+		if (levels == nullptr || static_cast<size_t>(at.m_level) >= levels->size())
+			return wxEmptyString;
+		const ibQueryTotalDim& dim = (*levels)[at.m_level];
+
 		if (col == kGridCol1) {
 			// THE LEVEL'S FIELDS, AS A LIST. A level groups by all of them together, so the cell shows
 			// them the way the query text spells them inside its brackets — one field is the same
@@ -1545,11 +1579,39 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		// where the result will in fact have a name.
 		return ibQueryDimensionName(dim);
 	});
-	m_totalsDimensionModel->SetWriter([this](unsigned int row, unsigned int col, const wxString& text) -> bool {
+	m_totalsDimensionModel->SetWriter([this](const ibTotalsRow& at, unsigned int col, const wxString& text) -> bool {
 		ibQuerySelect* select = Current();
-		if (!CanEdit() || select == nullptr || row >= select->m_totalsBy.size())
+		if (!CanEdit() || select == nullptr)
 			return false;
-		ibQueryTotalDim& dim = select->m_totalsBy[row];
+
+		// RENAMING A SEPARATOR — the alias cell is its name, and the other two are not its to write:
+		// what a node IS does not change, and it unfolds nothing.
+		if (at.IsNodeHeader()) {
+			if (col != kGridCol3 || static_cast<size_t>(at.m_node) >= select->m_totalsSplits.size())
+				return false;
+			wxString name = text;
+			name.Trim(true).Trim(false);
+			if (!name.IsEmpty() && !AcceptName(name, _("separator name")))
+				return false;
+			// UNIQUE AMONG THE SEPARATORS, because that is what a reader addresses them by: two nodes
+			// with one name leaves one of them unreachable and the query says nothing about it.
+			for (size_t other = 0; other < select->m_totalsSplits.size(); ++other) {
+				if (other == static_cast<size_t>(at.m_node) || name.IsEmpty())
+					continue;
+				if (select->m_totalsSplits[other].m_name.IsSameAs(name, false)) {
+					wxMessageBox(wxString::Format(_("A separator called '%s' is already there."), name),
+						_("Query constructor"), wxOK | wxICON_WARNING, this);
+					return false;
+				}
+			}
+			select->m_totalsSplits[at.m_node].m_name = name;
+			return true;
+		}
+
+		std::vector<ibQueryTotalDim>* levels = LevelsOfNode(select, at.m_node);
+		if (levels == nullptr || static_cast<size_t>(at.m_level) >= levels->size())
+			return false;
+		ibQueryTotalDim& dim = (*levels)[at.m_level];
 		if (col == kGridCol2) {
 			// THE LANGUAGE'S OWN THREE WORDS, matched against the keyword table rather than against a
 			// second list of them kept here.
@@ -1588,13 +1650,25 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			if (!alias.IsEmpty() && !AcceptName(alias, _("totals level name")))
 				return false;
 
-			// UNIQUE AMONG THE LEVELS, checked as it is typed. Levels are read back BY NAME — that is
-			// the whole reason a level has one — so two the same make one of them unreachable, and
-			// the query says nothing about it.
-			for (size_t i = 0; i < select->m_totalsBy.size(); ++i) {
-				if (i == row || alias.IsEmpty())
+			// ⭐⭐ UNIQUE WHERE IT IS READ FROM — which is the hidden node's levels PLUS this node's,
+			// and never a neighbouring node's.
+			//
+			// A walk reaches a level by descending: the levels above the node, then the node's own.
+			// Two separators may therefore both group by Item and each roll its own totals — that is
+			// the whole reason a person adds the second one (Max, 2026-08-27). Checked across ALL
+			// levels, as it used to be, that legitimate query was refused by the window while the
+			// engine ran it perfectly well.
+			std::vector<const ibQueryTotalDim*> reachable;
+			for (const ibQueryTotalDim& above : select->m_totalsBy)
+				reachable.push_back(&above);
+			if (at.m_node != wxNOT_FOUND && static_cast<size_t>(at.m_node) < select->m_totalsSplits.size())
+				for (const ibQueryTotalDim& mine : select->m_totalsSplits[at.m_node].m_levels)
+					reachable.push_back(&mine);
+
+			for (const ibQueryTotalDim* otherPtr : reachable) {
+				if (otherPtr == &dim || alias.IsEmpty())
 					continue;
-				const ibQueryTotalDim& other = select->m_totalsBy[i];
+				const ibQueryTotalDim& other = *otherPtr;
 				const wxString otherName = ibQueryDimensionName(other);
 				if (otherName.IsSameAs(alias, false)) {
 					wxMessageBox(wxString::Format(
@@ -1659,7 +1733,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		}
 		return true;
 	});
-	m_totalsDimensions = MakeGrid(dimPane, m_totalsDimensionModel, [this] { FillAll(); });
+	m_totalsDimensions = MakeTreeGrid(dimPane, m_totalsDimensionModel, [this] { FillAll(); });
 	AttachContextMenu(m_totalsDimensions, dimBar);
 	// ⚠⚠ THE WIDTHS ADD UP TO LESS THAN THE PANE, and that is the whole bug behind "the ALIAS cell
 	// will not open". The three columns came to more than the grid is wide, so the LAST one hung off
@@ -1673,11 +1747,17 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	// The picture and the choice renderer are back: neither was ever the cause, and taking them out
 	// cost a working cell for a guess. (Sorry, Max — that one was mine.)
 	m_totalsDimensionModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
-	m_totalsDimensionModel->SetIconReader([this](unsigned int row) -> wxIcon {
+	m_totalsDimensionModel->SetIconReader([this](const ibTotalsRow& at) -> wxIcon {
+		// A SEPARATOR IS NOT A FIELD, so it carries no field picture — what it is is said in the cell
+		// itself (`SPLIT`), and borrowing a field's icon would draw it as one more grouping.
+		if (!at.IsLevel())
+			return wxNullIcon;
 		const ibQuerySelect* select = Current();
+		const std::vector<ibQueryTotalDim>* levels =
+			const_cast<ibDialogQueryConstructor*>(this)->LevelsOfNode(const_cast<ibQuerySelect*>(select), at.m_node);
 		// The icon is the HEAD field's — a level of several fields shows what it leads with.
-		const ibQueryTotalField* head = select != nullptr && row < select->m_totalsBy.size()
-			? select->m_totalsBy[row].Head() : nullptr;
+		const ibQueryTotalField* head = levels != nullptr && static_cast<size_t>(at.m_level) < levels->size()
+			? (*levels)[at.m_level].Head() : nullptr;
 		return head != nullptr ? IconOfExpr(head->m_expr) : wxNullIcon;
 	});
 	m_totalsDimensions->GetRootColumnGroup()->AppendColumn(IconColumn(_("Grouping field"), kGridCol1, FromDIP(250)));
@@ -1686,6 +1766,18 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	m_totalsDimensions->GetRootColumnGroup()->AppendColumn(ChoiceColumn(_("Totals kind"), kGridCol2, FromDIP(130),
 		{ ibQueryKeyword::Elements, ibQueryKeyword::Hierarchy, ibQueryKeyword::HierarchyOnly }));
 	m_totalsDimensions->GetRootColumnGroup()->AppendColumn(TextColumn(_("Alias"), kGridCol3, FromDIP(160), true));
+
+	// ⭐⭐ AND IT IS DRAWN AS A TREE — a separator is a node and its groupings are its children.
+	//
+	// 🛑 THE MODEL IS NOT ENOUGH. The view draws a LIST until it is told otherwise, whatever the
+	// model answers about parents and containers: a separator came out as one more flat row with no
+	// expander and nothing under it, which reads as "the tree does not work" and is really "nobody
+	// asked for a tree" (Max, 2026-08-27). Two calls say it: the view MODE, and which column carries
+	// the expander.
+	m_totalsDimensions->SetViewMode(ibDataViewTree);
+	if (m_totalsDimensions->GetColumnCount() > 0)
+		m_totalsDimensions->SetExpanderColumn(m_totalsDimensions->GetColumn(0));
+
 	// ⚠⚠ AND A DOOR THAT DOES NOT DEPEND ON THE GRID'S EDITING MACHINERY AT ALL.
 	//
 	// Five attempts went into making this one cell open in place (the column from the event, the
@@ -1699,7 +1791,110 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	// it is the SAME write, through the same model.
 	// (No handler on the activation here. The control opens an editable cell BY ITSELF — that is
 	// what it was doing before, and what a handler that consumed the event took away. See MakeGrid.)
-	m_totalsDimensions->SetDropTarget(new ibCallbackDropTarget([this] { wxCommandEvent e; OnAddTotalsDimension(e); }));
+	// ⭐⭐ DROPPED ON A SEPARATOR, IT LANDS ON THAT SEPARATOR. The drop carries WHERE it happened, so
+	// the row under the cursor decides which node the field is hung on — pick the separator with the
+	// mouse and the field goes into it, exactly as dragging onto a folder puts a file in the folder
+	// (Max, 2026-08-27).
+	//
+	// Done by moving the CARET to the row that was dropped on, and then adding as the toolbar does:
+	// "add to the node the caret is on" is one rule, and the drop is one more way of saying where the
+	// caret should be. A second road into "which node" would be a second thing to keep in step.
+	m_totalsDimensions->SetDropTarget(new ibCallbackDropTarget(
+		[this](wxCoord x, wxCoord y, const wxString& text) -> bool {
+			ibDataViewItem      target;
+			ibDataViewColumn*   column = nullptr;
+			m_totalsDimensions->HitTest(wxPoint(x, y), target, column);
+
+			// ⭐⭐ A ROW OF THIS GRID, DRAGGED WITHIN IT — the payload says so and carries WHERE IT
+			// CAME FROM. Everything else dropped here is a FIELD from the tree on the left, which is
+			// the case this target has always served; the two are told apart by the mark, not by
+			// guessing at the text.
+			if (text.StartsWith(kTotalsDragMark)) {
+				const ibTotalsRow from = ParseTotalsDrag(text);
+				const ibTotalsRow onto = target.IsOk() ? ibQueryTotalsTreeModel::AtOf(target) : ibTotalsRow();
+				MoveTotalsLevelTo(from, onto);
+				return true;
+			}
+
+			// A FIELD FROM THE TREE — into the node the pointer was over: a separator's own row means
+			// that separator, an ordinary row means the node THAT row hangs on, and empty space means
+			// the common ladder. Named outright rather than through the caret, which does not follow
+			// a drop in time to be asked.
+			const ibTotalsRow onto = target.IsOk() ? ibQueryTotalsTreeModel::AtOf(target) : ibTotalsRow();
+			AddTotalsFieldsTo(onto.m_node);
+			return true;
+		}));
+
+	// ⭐ AND THE GRID IS A DRAG SOURCE, so a grouping can be carried onto a separator with the mouse
+	// — the same two moves the arrows make, aimed with the pointer instead. The payload is the row's
+	// COORDINATE (which node, which level), because that is what the drop needs and nothing else.
+	//
+	// ⚠ A SEPARATOR IS NOT DRAGGED THIS WAY. Its place among the nodes is what the arrows set; a
+	// node dropped INTO another node would have to mean something (nesting) that this shape does not
+	// have.
+#if wxUSE_DRAG_AND_DROP && wxUSE_UNICODE
+	// ⚠ THE GRID'S OWN DRAG, NOT A TEXT DROP TARGET. Once a dataview is a drag SOURCE it handles the
+	// drop itself and reports it through its own events — a `wxDropTarget` set on the window is not
+	// what gets asked, so a drag begun here simply went nowhere (seen live, 2026-08-27: the row
+	// followed the pointer and nothing happened when it was let go). The text target stays for
+	// fields dragged in from the tree, which is a drop from OUTSIDE this control.
+	m_totalsDimensions->EnableDragSource(wxDF_UNICODETEXT);
+	m_totalsDimensions->EnableDropTarget(wxDF_UNICODETEXT);
+
+	m_totalsDimensions->Bind(wxEVT_DATAVIEW_ITEM_BEGIN_DRAG, [this](ibDataViewEvent& event) {
+		const ibTotalsRow at = ibQueryTotalsTreeModel::AtOf(event.GetItem());
+		if (!CanEdit() || !at.IsLevel()) {
+			event.Veto();   // a separator keeps its place — the arrows set that
+			return;
+		}
+		event.SetDataObject(new wxTextDataObject(
+			wxString::Format(wxT("%s%d:%d"), kTotalsDragMark, at.m_node, at.m_level)));
+		event.SetDragFlags(wxDrag_AllowMove);
+	});
+
+	m_totalsDimensions->Bind(wxEVT_DATAVIEW_ITEM_DROP_POSSIBLE, [](ibDataViewEvent& event) {
+		if (event.GetDataFormat() != wxDF_UNICODETEXT) {
+			event.Veto();
+			return;
+		}
+		// ⚠ COPY, NOT MOVE — and this is what the crossed-out cursor was about. The field tree starts
+		// its drag as `wxDrag_CopyOnly` (OnFieldTreeBeginDrag), so asking for a MOVE effect is asking
+		// the source for something it refused to allow, and the system forbids the drop outright: the
+		// pointer says "not here" over a grid that was perfectly willing to take it (Max, 2026-08-27).
+		//
+		// The effect changes nothing about what happens on our side: a level dragged within the grid
+		// is removed from its old node by the handler itself, whatever the drag was labelled.
+		event.SetDropEffect(wxDragCopy);
+	});
+
+	m_totalsDimensions->Bind(wxEVT_DATAVIEW_ITEM_DROP, [this](ibDataViewEvent& event) {
+		if (event.GetDataFormat() != wxDF_UNICODETEXT) {
+			event.Veto();
+			return;
+		}
+		wxTextDataObject carried;
+		carried.SetData(wxDF_UNICODETEXT, event.GetDataSize(), event.GetDataBuffer());
+		const wxString text = carried.GetText();
+
+		// WHERE IT LANDED — the row under the pointer. Dropped on nothing at all, it is the common
+		// ladder, which is what dragging a grouping out of a separator means.
+		const ibDataViewItem target = event.GetItem();
+		const ibTotalsRow    onto   = target.IsOk() ? ibQueryTotalsTreeModel::AtOf(target) : ibTotalsRow();
+
+		// ⭐⭐ BOTH DROPS ARRIVE HERE, and they are told apart by the MARK the payload carries.
+		//
+		// 🛑 THEY DID NOT USED TO. Fields dragged from the tree came through a `wxDropTarget` set on
+		// the window — until this grid became a drag SOURCE, at which point the control took the drop
+		// over and that target stopped being asked at all. Dragging a field in silently stopped
+		// working while double-clicking still added it, which is exactly the shape of "the mouse does
+		// not work" (Max, 2026-08-27). One handler, two payloads: our own rows carry the mark, and
+		// anything else is a field from the tree.
+		if (text.StartsWith(kTotalsDragMark))
+			MoveTotalsLevelTo(ParseTotalsDrag(text), onto);
+		else
+			AddTotalsFieldsTo(onto.m_node);
+	});
+#endif
 	dims->Add(m_totalsDimensions, 1, wxEXPAND | wxALL, FromDIP(3));
 
 	// GRAND TOTALS — stated, and stated truly. Our totals tree HAS a root and the root IS the grand
@@ -1799,7 +1994,8 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	m_periodPane->Hide();   // shown by FillTotalsPeriods, once there is a dated level selected
 	dims->Add(m_periodPane, 0, wxEXPAND | wxBOTTOM, FromDIP(4));
 
-	// The panel belongs to whichever level is selected, so it is refilled when that changes.
+
+	// The panels belong to whichever level is selected, so they are refilled when that changes.
 	m_totalsDimensions->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED,
 		[this](ibDataViewEvent& event) { FillTotalsPeriods(); event.Skip(); });
 
@@ -2016,7 +2212,7 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
 	right->Add(new wxStaticText(rightPane, wxID_ANY,
 		// ⚠ ASCII ONLY IN THIS FILE'S LITERALS. It is UTF-8 without a BOM and MSVC reads it in the
-		// system codepage, so an em dash typed here reaches the screen as "вЂ". The move glyphs
+		// system codepage, so an em dash typed here reaches the screen as mojibake. The move glyphs
 		// taught this once; a dash in a sentence is the same trap wearing different clothes.
 		_("The first column is the field's ALIAS: what the result calls it, and what every branch "
 		  "is lined up by. Type over it to rename the output field.")),

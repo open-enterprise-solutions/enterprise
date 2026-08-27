@@ -404,10 +404,11 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalByLevel(ibTotalLevel level)
 // axes (Max, 2026-08-25 and again 2026-08-26: "exactly as a detail record is in the rows, so in the
 // columns"): down the page each record is a LINE of the table; across it each record is a COLUMN of
 // its own. One level, one word of difference, and the fold hangs it accordingly.
-ibDataQueryBuilder& ibDataQueryBuilder::TotalsDetails(ibTotalsAxis axis)
+ibDataQueryBuilder& ibDataQueryBuilder::TotalsDetails(ibTotalsAxis axis, std::shared_ptr<ibTotalBranch> branch)
 {
 	ibTotalLevel level;
-	level.m_axis = axis;
+	level.m_axis   = axis;
+	level.m_branch = std::move(branch);   // null = the common ladder, which is every report without SPLIT
 	m_totals.push_back(std::move(level));
 	return *this;
 }

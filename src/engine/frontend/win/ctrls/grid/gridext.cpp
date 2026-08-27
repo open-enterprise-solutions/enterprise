@@ -2422,8 +2422,8 @@ void ibGridRowAreaWindow::OnMouseWheel(wxMouseEvent& event)
 	// 🛑 IT WAS TAKEN OFF ON 2026-08-26 AND PUT BACK THE SAME HOUR. The reasoning for removing it
 	// was that a Thaw repaints the whole grid while ScrollWindow would only fill in the newly
 	// exposed strip — true as far as it goes, and WRONG about which is cheaper here: with the three
-	// paints let through, the drawing visibly lagged behind the wheel ("отрисовка догоняет
-	// колёсико"). One whole repaint beats three partial ones on this sheet. Measure before touching
+	// paints let through, the drawing visibly lagged behind the wheel (it trailed the scroll,
+	// catching up after it). One whole repaint beats three partial ones on this sheet. Measure before touching
 	// this again — the argument that sounds right has already lost to the wheel once.
 	m_owner->Freeze();
 
@@ -2484,8 +2484,8 @@ void ibGridRowLabelWindow::OnMouseWheel(wxMouseEvent& event)
 	// 🛑 IT WAS TAKEN OFF ON 2026-08-26 AND PUT BACK THE SAME HOUR. The reasoning for removing it
 	// was that a Thaw repaints the whole grid while ScrollWindow would only fill in the newly
 	// exposed strip — true as far as it goes, and WRONG about which is cheaper here: with the three
-	// paints let through, the drawing visibly lagged behind the wheel ("отрисовка догоняет
-	// колёсико"). One whole repaint beats three partial ones on this sheet. Measure before touching
+	// paints let through, the drawing visibly lagged behind the wheel (it trailed the scroll,
+	// catching up after it). One whole repaint beats three partial ones on this sheet. Measure before touching
 	// this again — the argument that sounds right has already lost to the wheel once.
 	m_owner->Freeze();
 
@@ -2551,8 +2551,8 @@ void ibGridColAreaWindow::OnMouseWheel(wxMouseEvent& event)
 	// 🛑 IT WAS TAKEN OFF ON 2026-08-26 AND PUT BACK THE SAME HOUR. The reasoning for removing it
 	// was that a Thaw repaints the whole grid while ScrollWindow would only fill in the newly
 	// exposed strip — true as far as it goes, and WRONG about which is cheaper here: with the three
-	// paints let through, the drawing visibly lagged behind the wheel ("отрисовка догоняет
-	// колёсико"). One whole repaint beats three partial ones on this sheet. Measure before touching
+	// paints let through, the drawing visibly lagged behind the wheel (it trailed the scroll,
+	// catching up after it). One whole repaint beats three partial ones on this sheet. Measure before touching
 	// this again — the argument that sounds right has already lost to the wheel once.
 	m_owner->Freeze();
 
@@ -2616,8 +2616,8 @@ void ibGridColLabelWindow::OnMouseWheel(wxMouseEvent& event)
 	// 🛑 IT WAS TAKEN OFF ON 2026-08-26 AND PUT BACK THE SAME HOUR. The reasoning for removing it
 	// was that a Thaw repaints the whole grid while ScrollWindow would only fill in the newly
 	// exposed strip — true as far as it goes, and WRONG about which is cheaper here: with the three
-	// paints let through, the drawing visibly lagged behind the wheel ("отрисовка догоняет
-	// колёсико"). One whole repaint beats three partial ones on this sheet. Measure before touching
+	// paints let through, the drawing visibly lagged behind the wheel (it trailed the scroll,
+	// catching up after it). One whole repaint beats three partial ones on this sheet. Measure before touching
 	// this again — the argument that sounds right has already lost to the wheel once.
 	m_owner->Freeze();
 
@@ -2759,8 +2759,8 @@ void ibGridCornerLabelWindow::OnMouseWheel(wxMouseEvent& event)
 	// 🛑 IT WAS TAKEN OFF ON 2026-08-26 AND PUT BACK THE SAME HOUR. The reasoning for removing it
 	// was that a Thaw repaints the whole grid while ScrollWindow would only fill in the newly
 	// exposed strip — true as far as it goes, and WRONG about which is cheaper here: with the three
-	// paints let through, the drawing visibly lagged behind the wheel ("отрисовка догоняет
-	// колёсико"). One whole repaint beats three partial ones on this sheet. Measure before touching
+	// paints let through, the drawing visibly lagged behind the wheel (it trailed the scroll,
+	// catching up after it). One whole repaint beats three partial ones on this sheet. Measure before touching
 	// this again — the argument that sounds right has already lost to the wheel once.
 	m_owner->Freeze();
 
@@ -3145,8 +3145,8 @@ void ibGridWindow::OnMouseWheel(wxMouseEvent& event)
 	// 🛑 IT WAS TAKEN OFF ON 2026-08-26 AND PUT BACK THE SAME HOUR. The reasoning for removing it
 	// was that a Thaw repaints the whole grid while ScrollWindow would only fill in the newly
 	// exposed strip — true as far as it goes, and WRONG about which is cheaper here: with the three
-	// paints let through, the drawing visibly lagged behind the wheel ("отрисовка догоняет
-	// колёсико"). One whole repaint beats three partial ones on this sheet. Measure before touching
+	// paints let through, the drawing visibly lagged behind the wheel (it trailed the scroll,
+	// catching up after it). One whole repaint beats three partial ones on this sheet. Measure before touching
 	// this again — the argument that sounds right has already lost to the wheel once.
 	m_owner->Freeze();
 

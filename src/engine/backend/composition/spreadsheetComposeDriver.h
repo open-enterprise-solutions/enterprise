@@ -65,21 +65,15 @@ public:
 	// other thing: a picture, and that is a driver question. See the note in valueDataComposition.)
 	virtual void OnOutputBegin(const ibCompositionOutputInfo& info) override;
 
-	virtual void OnColumns(const std::vector<ibQueryLowering::OutputColumn>& schema) override;
-	virtual void OnRow(int level, bool hasChildren, const std::vector<ibValue>& values) override;
-	virtual void OnComplete(bool totals) override;
-
-	// ⭐⭐ A HEADING AND A DETAIL RECORD ARE DIFFERENT THINGS IN A TABLE, and the walk already says
-	// which is which — so these are overridden rather than guessed at from `hasChildren` inside
-	// OnRow. (Audit, docs/composer-arc-queue.md: no driver overrode any node verb and the base read
-	// only the schema. A cross-table is the first reader the vocabulary has: a cell stands where two
-	// headings meet, and a detail record stands under no column key at all.)
-	//
-	// Both fall straight through to the streaming path when the output has no column axis — the
-	// ordinary report is unchanged, down to the order the cells are written in.
-	virtual void OnGroup(int level, bool hasChildren, bool showsWhatIsUnder,
-		const std::vector<ibValue>& values) override;
-	virtual void OnDetail(int level, const std::vector<ibValue>& values) override;
+	// ⭐⭐ THE FOUR THAT DRAW — a heading opens, rows and columns are written under it, the heading
+	// closes. With no column axis everything falls through to the streaming path, so the ordinary
+	// report is unchanged down to the order the cells are written in.
+	virtual void OnGroupBegin(int level, ibSelectorNodeKind kind, bool hasChildren,
+		bool showsWhatIsUnder, const std::vector<ibValue>& values) override;
+	virtual void OnRow(int level, const std::vector<ibValue>& values) override;
+	virtual void OnColumn(int level, ibSelectorNodeKind kind, const std::vector<ibValue>& values) override;
+	virtual void OnGroupEnd(int level, const std::vector<ibValue>& values) override;
+	virtual void OnOutputEnd(bool totals) override;
 
 	// How many rows the walk printed under the heading — 0 means the composition produced nothing,
 	// which is a legitimate answer and NOT an error (the caller decides what to say).
@@ -222,6 +216,15 @@ private:
 	};
 
 	void OnCrossHeading(int level, const std::vector<ibValue>& values);
+	// The STREAMING layout's row — an ordinary report's heading or record, printed as it arrives.
+	// Split off from the event when the kind started travelling on it: the dispatch is one question
+	// ("which layout is this output in"), the printing is another.
+	void PrintRow(int level, bool hasChildren, const std::vector<ibValue>& values);
+	// …and a DETAIL record in the cross layout — its own line, with the cells across it.
+	void PrintCrossDetail(int level, const std::vector<ibValue>& values);
+	// The output's columns, taken as the output begins. Not an event of its own any more: "which
+	// columns" is part of "an output is starting", and two verbs for it were two places to answer.
+	void TakeSchema(const std::vector<ibQueryLowering::OutputColumn>& schema);
 	void WriteCrossTable();
 	// THE COLUMNS IN PRINTING ORDER — the keys as they came, with each upper heading's subtotal
 	// inserted where that heading ends. Built once per table, because the header and every row have

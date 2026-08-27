@@ -60,22 +60,30 @@ public:
 		return true;
 	}
 
-	void OnColumns(const std::vector<ibQueryLowering::OutputColumn>& schema) override {
-		m_schema = schema;
+	// THE OUTPUT STARTS, and its schema arrives with it — a list keeps the columns it is about to be
+	// given rows for. (It never draws a second output: a list HAS one, and says so at the call.)
+	void OnOutputBegin(const ibCompositionOutputInfo& info) override {
+		m_schema = info.m_schema;
 		m_rows.clear();
 	}
 
-	// A LIST TAKES THE SECOND ANSWER — see the note on ibCompositionDriver::OnGroup. What it does with
-	// the flag is draw an expander, and an expander must promise only what the output will actually
+	// ⭐ A LIST TAKES THE SECOND ANSWER — `showsWhatIsUnder`, never `hasChildren`. What it does with
+	// the flag is draw an EXPANDER, and an expander may promise only what the output will actually
 	// show; a heading standing over rows this output does not print must not offer to open.
-	void OnGroup(int level, bool hasChildren, bool showsWhatIsUnder, const std::vector<ibValue>& values) override {
-		OnRow(level, showsWhatIsUnder, values);
+	void OnGroupBegin(int level, ibSelectorNodeKind /*kind*/, bool /*hasChildren*/,
+	                  bool showsWhatIsUnder, const std::vector<ibValue>& values) override {
+		Append(level, showsWhatIsUnder, values);
 	}
 
-	// ⚠ THE SECOND ARGUMENT IS THE BASE'S `hasChildren`, and a DETAIL row answers it truthfully with
-	// false. A GROUP row reaches here through OnGroup above, which deliberately hands over the OTHER
-	// answer — see Row::m_expandable.
-	void OnRow(int level, bool expandable, const std::vector<ibValue>& values) override {
+	// A RECORD OPENS NOTHING, so it offers no expander — the truthful answer, not a default.
+	void OnRow(int level, const std::vector<ibValue>& values) override { Append(level, false, values); }
+
+	// (⛔ NO OnGroupEnd HERE, and that is a fact about a list rather than an omission: a list draws a
+	//  heading as a LINE, and what a closing event is for is putting a total underneath — which a
+	//  list has no place for. The default does nothing, which is exactly right.)
+
+private:
+	void Append(int level, bool expandable, const std::vector<ibValue>& values) {
 		Row row;
 		row.m_level = level;
 		row.m_expandable = expandable;
@@ -87,6 +95,7 @@ public:
 		m_rows.push_back(std::move(row));
 	}
 
+public:
 	std::vector<Row>& Rows() { return m_rows; }
 	const std::vector<Row>& Rows() const { return m_rows; }
 

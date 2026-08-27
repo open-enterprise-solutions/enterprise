@@ -118,6 +118,18 @@ public:
 	std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
 };
 
+// ⭐ ONE FOLD'S WHOLE ORDER — the levels it groups by and the figures it rolls, which is everything
+// that distinguishes one output of a composition from another once they read the same rows.
+//
+// It holds them BY VALUE rather than pointing at the caller's: the folds outlive the loop that
+// assembles them, and a fold reading a level list that has since been rebuilt is the kind of defect
+// that shows up as a wrong number rather than a crash. Copying is a handful of pointers per level.
+struct ibFoldRequest
+{
+	std::vector<ibTotalLevel>                      m_levels;
+	std::vector<ibDataQueryBuilder::AggregateItem> m_aggregates;
+};
+
 // ==========================================================================
 // ibQueryComposer — the L3 ENGINE over the relational TREE (ibQueryNode). The door is
 // blind to single-vs-multi source: it hands the composer the spec and the composer

@@ -9,7 +9,7 @@
 //*                                                                                          *
 //*       A KIND is an element of the chart of characteristic types; the VALUE it admits is  *
 //*       that chart's own composition. Two different things, and the interface says so in   *
-//*       two different words — "вид аналитики" and "аналитика".                             *
+//*       two different words — "dimension KIND" and "dimension".                            *
 //********************************************************************************************
 
 // DB-BACKED, therefore ibValueMetaObjectTableDataRef and not the shared base. The base is abstract

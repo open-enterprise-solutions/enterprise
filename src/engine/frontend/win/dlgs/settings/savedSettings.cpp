@@ -81,7 +81,8 @@ ibDialogSavedSettings::ibDialogSavedSettings(wxWindow* parent, ibDataComposer& c
 	if (m_mode == Mode::Save) {
 		// ⚠ ASCII "..." IN A LITERAL, not the "…" character. This file has no BOM and MSVC reads a
 		// BOM-less source in the system codepage, so a UTF-8 ellipsis reaches the button as mojibake
-		// ("NewвЂ¦" on screen). Every other button in the tree spells it with three dots for the same
+		// (the button reads as "New" followed by three mojibake bytes). Every other button in the
+		// tree spells it with three dots for the same
 		// reason — comments may hold anything, literals may not.
 		m_btnNew = new wxButton(this, wxID_ANY, _("New..."));
 		buttons->Add(m_btnNew, 0, wxEXPAND | wxBOTTOM, FromDIP(4));

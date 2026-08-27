@@ -52,7 +52,11 @@ enum class ibQueryKeyword
 	// truncated to the unit, and the level is PADDED so a period nothing happened in still gets its
 	// row (which is the whole point — a chart with a gap where a quiet month was is a wrong chart).
 	// It sits where the unfold sits, after the field, because it says how that field is READ.
-	Totals, Hierarchy, HierarchyOnly, Elements, Overall, Periods,
+	// SPLIT — where the ladder of levels stops being ONE. The levels before it are common to
+	// everything that follows; each SPLIT opens a branch that folds the SAME rows its own way, with
+	// its own order of groupings and its own selection. It is not a second query: the rows are read
+	// once and every branch is fed from that one walk.
+	Totals, Hierarchy, HierarchyOnly, Elements, Overall, Periods, Split,
 
 	// joins
 	Join, Inner, Left, Right, Full, Outer, On,

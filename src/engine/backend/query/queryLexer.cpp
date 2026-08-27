@@ -41,6 +41,7 @@ static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 	{ ibQueryKeyword::Elements, wxT("ELEMENTS") },
 	{ ibQueryKeyword::Overall,  wxT("OVERALL")  },
 	{ ibQueryKeyword::Periods,  wxT("PERIODS")  },
+	{ ibQueryKeyword::Split,    wxT("SPLIT")    },
 	{ ibQueryKeyword::Join,     wxT("JOIN")     },
 	{ ibQueryKeyword::Inner,    wxT("INNER")    },
 	{ ibQueryKeyword::Left,     wxT("LEFT")     },

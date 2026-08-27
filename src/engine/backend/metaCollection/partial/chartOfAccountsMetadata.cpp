@@ -73,8 +73,8 @@ ibSourceDataObject* ibValueMetaObjectChartOfAccounts::CreateSourceObject(const i
 	case eFormFolder: return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
 	// ⭐ SORTED BY CODE, not by description. In a catalog the code is a serial number and the name is what
 	// a person reads, so the name is the order. In a chart of accounts the CODE IS THE ACCOUNT — "51",
-	// "60.01" — and its order is the plan itself: sorted by name, 51 lands between "Материалы" and
-	// "Налоги" and the chart stops reading as a chart.
+	// "60.01" — and its order is the plan itself: sorted by name, 51 lands between two unrelated
+	// account names and the chart stops reading as a chart.
 	case eFormList: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetAttributeForCode());   // migrated onto the universal dynamic list (hierarchy via queryable)
 	case eFormSelect: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetAttributeForCode(), ibDynamicListView_Choice);   // select front-driven — choice mode
 	case eFormFolderSelect: return ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetAttributeForCode(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true

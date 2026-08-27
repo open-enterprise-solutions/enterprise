@@ -410,6 +410,21 @@ inline ibDataViewCtrl* MakeGrid(wxWindow* parent, ibQueryGridModel* model, std::
 	return grid;
 }
 
+// ⭐ THE SAME GRID, OVER A TREE. The totals are the one pane in this window whose rows are NESTED —
+// a separator is a node and its groupings are its children — so it takes the tree model instead of
+// the flat one. Everything else about it is unchanged: same row lines, same single selection, same
+// edit-on-activate.
+inline ibDataViewCtrl* MakeTreeGrid(wxWindow* parent, ibQueryTotalsTreeModel* model,
+	std::function<void()> onChanged)
+{
+	ibDataViewCtrl* grid = new ibDataViewCtrl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		wxDV_ROW_LINES | wxDV_SINGLE);
+	model->SetOnChanged(std::move(onChanged));
+	grid->AssociateModel(model);
+	EditOnActivate(grid);
+	return grid;
+}
+
 } // namespace queryctor
 
 #endif

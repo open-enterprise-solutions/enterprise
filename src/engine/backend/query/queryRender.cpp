@@ -6,6 +6,8 @@
 
 #include "queryKeywords.h"
 
+#include <set>   // which levels open a branch — read while the BY list is joined
+
 #include "backend/compiler/value.h"
 
 namespace {
@@ -468,23 +470,19 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 		if (!aggregates.empty())
 			out += wxT("\n") + item + Join(aggregates, itemSep);
 
-		if (!select.m_totalsBy.empty() || select.m_totalsOverall) {
-			std::vector<wxString> dims;
-			dims.reserve(select.m_totalsBy.size() + 1);
-			// FIRST, because that is where it sits — above every dimension.
-			if (select.m_totalsOverall)
-				dims.push_back(Kw(ibQueryKeyword::Overall));
-			for (const auto& dim : select.m_totalsBy) {
+		if (!select.m_totalsBy.empty() || !select.m_totalsSplits.empty() || select.m_totalsOverall) {
+			// ONE LEVEL, WRITTEN. Several fields are BRACKETED, one field is not: the bracket is the
+			// only thing that tells a level of two fields from two levels when the text is read back,
+			// and writing it around a lone field would change the spelling of every existing query.
+			const auto levelText = [](const ibQueryTotalDim& dim) {
 				std::vector<wxString> fields;
 				fields.reserve(dim.m_fields.size());
 				for (const ibQueryTotalField& field : dim.m_fields) {
 					if (!field.m_expr) continue;
 					fields.push_back(ibRenderTotalField(field));
 				}
-				if (fields.empty()) continue;
-				// SEVERAL FIELDS ARE BRACKETED, one field is not. The bracket is the only thing that
-				// tells a level of two fields from two levels when the text is read back; writing it
-				// around a lone field would change the spelling of every query that already exists.
+				if (fields.empty())
+					return wxString();
 				wxString text = fields.size() == 1
 					? fields.front()
 					: wxT("(") + Join(fields, wxT(", ")) + wxT(")");
@@ -492,9 +490,58 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 				// cannot be confused with the next dimension in the list.
 				if (!dim.m_alias.IsEmpty())
 					text += wxT(" ") + Kw(ibQueryKeyword::As) + wxT(" ") + dim.m_alias;
-				dims.push_back(text);
+				return text;
+			};
+
+			// THE HIDDEN NODE FIRST — its levels are what every report has always written — and then
+			// one `SPLIT` per visible node, each with its own ladder and its own name.
+			//
+			// 🛑 THE RENDERER IS WRITTEN THE SAME DAY THE GRAMMAR IS. `PERIODS` went into the language
+			// and not into here, so the constructor's cell showed a level SHORTER than what it edited
+			// and the first edit silently dropped the periodicity. A cell that shows less than it
+			// edits loses the rest.
+			wxString byList;
+			const auto append = [&byList, &item, &itemSep](const wxString& text, bool startsNode) {
+				if (byList.IsEmpty())
+					byList = text;
+				else if (startsNode)
+					byList += wxT("\n") + item + text;   // a node is not the next item of a list
+				else
+					byList += itemSep + text;
+			};
+
+			// FIRST, because that is where it sits — above every dimension.
+			if (select.m_totalsOverall)
+				append(Kw(ibQueryKeyword::Overall), false);
+			for (const ibQueryTotalDim& dim : select.m_totalsBy) {
+				const wxString text = levelText(dim);
+				if (!text.IsEmpty())
+					append(text, false);
 			}
-			out += wxT("\n") + pad + Kw(ibQueryKeyword::By) + wxT("\n") + item + Join(dims, itemSep);
+			for (const ibQueryTotalSplit& node : select.m_totalsSplits) {
+				// ⚠ A NODE WITH NOTHING ON IT WRITES NOTHING. It is a legitimate state while somebody
+				// is building the query (added, not filled yet), and `SPLIT` with no level after it
+				// is not a sentence this grammar has.
+				std::vector<wxString> levels;
+				for (const ibQueryTotalDim& dim : node.m_levels) {
+					const wxString text = levelText(dim);
+					if (!text.IsEmpty())
+						levels.push_back(text);
+				}
+				if (levels.empty())
+					continue;
+				// `SPLIT <name> BY <levels>` — the node is named where it is OPENED, so a reader knows
+				// whose block this is before reading the ladder. An unnamed node writes `SPLIT BY …`,
+				// which is what says the name was left out.
+				wxString text = Kw(ibQueryKeyword::Split) + wxT(" ");
+				if (!node.m_name.IsEmpty())
+					text += node.m_name + wxT(" ");
+				text += Kw(ibQueryKeyword::By) + wxT(" ") + Join(levels, wxT(", "));
+				append(text, true);
+			}
+
+			if (!byList.IsEmpty())
+				out += wxT("\n") + pad + Kw(ibQueryKeyword::By) + wxT("\n") + item + byList;
 		}
 	}
 

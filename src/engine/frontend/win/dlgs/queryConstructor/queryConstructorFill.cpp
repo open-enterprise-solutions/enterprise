@@ -1355,9 +1355,26 @@ void ibDialogQueryConstructor::FillTotals()
 	if (m_totalsAggregateModel != nullptr)
 		m_totalsAggregateModel->SetRowCount(select == nullptr ? 0u
 			: static_cast<unsigned int>(select->m_totalsAggregates.size()));
-	if (m_totalsDimensionModel != nullptr)
-		m_totalsDimensionModel->SetRowCount(select == nullptr ? 0u
-			: static_cast<unsigned int>(select->m_totalsBy.size()));
+	// THE GRID SHOWS EVERY NODE, one flat list: the hidden node's levels first, then each separator's
+	// THE TREE RE-READS THE LADDER. A separator is a node and its groupings are its children, so the
+	// model asks the dialog how many of each there are (SetNodeCount / SetLevelsOf) rather than being
+	// handed a row count — nothing here has to know how the tree will lay them out.
+	if (m_totalsDimensionModel != nullptr) {
+		m_totalsDimensionModel->Rebuild();
+
+		// ⭐⭐ AND THE SEPARATORS STAY OPEN. A rebuild is a Cleared(), which collapses everything —
+		// so every arrow press folded the node shut and the level that had just moved went out of
+		// sight, which reads as "the arrows do not work" (Max, 2026-08-27).
+		//
+		// Opened unconditionally rather than remembered-and-restored: a separator exists to show what
+		// is hung on it, there are a handful of them, and "which ones were open" is state nobody
+		// asked to keep.
+		if (m_totalsDimensions != nullptr && select != nullptr) {
+			for (size_t node = 0; node < select->m_totalsSplits.size(); ++node)
+				m_totalsDimensions->Expand(m_totalsDimensionModel->ItemFor(
+					ibTotalsRow{ static_cast<int>(node), wxNOT_FOUND }, nullptr));
+		}
+	}
 	// THE BOX SAYS WHAT THE QUERY SAYS — including when the query arrived as TEXT. A query typed
 	// with `BY OVERALL` has to show its box ticked, or the tab is describing a different query.
 	if (m_grandTotals != nullptr) {
@@ -1378,10 +1395,14 @@ void ibDialogQueryConstructor::FillTotalsPeriods()
 		return;
 
 	const ibQuerySelect* select = Current();
-	const long row = SelectedRow(m_totalsDimensions, m_totalsDimensionModel);
-	const ibQueryTotalDim* dim = select != nullptr && row >= 0
-	                             && static_cast<size_t>(row) < select->m_totalsBy.size()
-		? &select->m_totalsBy[static_cast<size_t>(row)] : nullptr;
+	// THE LEVEL THE CARET IS ON, whichever node it hangs on — a separator's levels have periodicity
+	// exactly as the hidden node's do. A separator itself has none: it is not keyed by a value.
+	const ibTotalsRow at = SelectedTotalsAt();
+	const std::vector<ibQueryTotalDim>* levels =
+		const_cast<ibDialogQueryConstructor*>(this)->LevelsOfNode(const_cast<ibQuerySelect*>(select), at.m_node);
+	const ibQueryTotalDim* dim = select != nullptr && at.IsLevel() && levels != nullptr
+	                             && static_cast<size_t>(at.m_level) < levels->size()
+		? &(*levels)[static_cast<size_t>(at.m_level)] : nullptr;
 
 	// A LEVEL OF SEVERAL FIELDS HAS NO SCALE — the same refusal the cell makes, made here by simply
 	// not offering the switch. And a level keyed by something that is not a date has no calendar.
@@ -1417,15 +1438,15 @@ void ibDialogQueryConstructor::FillTotalsPeriods()
 
 	// The unit: what the field says, or Month for a level about to be given one — the period a report
 	// is asked for more often than any other, so the common case is one click.
-	int at = -1;
+	int unitAt = -1;
 	const std::vector<std::pair<ibTotalsPeriod, wxString>>& units = ibPeriodUnits();
 	for (size_t i = 0; i < units.size(); ++i) {
 		const bool match = periods != nullptr
 			? units[i].second.IsSameAs(periods->m_unit, false)
 			: units[i].first == ibTotalsPeriod::Month;
-		if (match) { at = static_cast<int>(i); break; }
+		if (match) { unitAt = static_cast<int>(i); break; }
 	}
-	m_periodUnit->SetSelection(at);
+	m_periodUnit->SetSelection(unitAt);
 
 	// ChangeValue, not SetValue: filling the panel is not somebody typing in it, and the difference
 	// is exactly the edit event the commit rule below depends on.
@@ -1632,3 +1653,37 @@ void ibDialogQueryConstructor::ShowEngineVerdict()
 	m_status->Refresh();
 }
 
+
+// ⭐⭐ WHAT THE CARET IS ON, asked of the TREE. A separator is a node and its groupings are its
+// children, so the answer is a coordinate — which node, and which level of it — rather than a row
+// number that would change meaning the moment a node above collapses or expands.
+ibTotalsRow ibDialogQueryConstructor::SelectedTotalsAt() const
+{
+	if (m_totalsDimensions == nullptr)
+		return ibTotalsRow();
+	const ibDataViewItem item = m_totalsDimensions->GetSelection();
+	if (!item.IsOk())
+		return ibTotalsRow();
+	return ibQueryTotalsTreeModel::AtOf(item);
+}
+
+// WHERE A NEW GROUPING GOES — the node the caret is on, or the hidden node when nothing is picked.
+// This is what makes a separator usable with a mouse: click it (or anything under it) and the next
+// field you add lands there.
+int ibDialogQueryConstructor::SelectedTotalsNode() const
+{
+	return SelectedTotalsAt().m_node;
+}
+
+// THE LEVELS OF ONE NODE — the hidden node's live on the select itself, a separator's on the
+// separator. One accessor, so nothing below has to branch on which kind of node it is holding.
+std::vector<ibQueryTotalDim>* ibDialogQueryConstructor::LevelsOfNode(ibQuerySelect* select, int node) const
+{
+	if (select == nullptr)
+		return nullptr;
+	if (node == wxNOT_FOUND)
+		return &select->m_totalsBy;
+	if (node < 0 || static_cast<size_t>(node) >= select->m_totalsSplits.size())
+		return nullptr;
+	return &select->m_totalsSplits[static_cast<size_t>(node)].m_levels;
+}

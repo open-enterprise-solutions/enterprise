@@ -287,6 +287,25 @@ struct ibQueryTotalDim
 	bool IsSingleField() const { return m_fields.size() == 1; }
 };
 
+// ⭐⭐ A NODE THE GROUPINGS SIT ON — `SPLIT … ONTO <name>`.
+//
+// One of these has always existed and was simply never named: the levels of `ibQuerySelect::m_totalsBy`
+// hang on the HIDDEN node every report has. A split is the same thing made visible — it takes a name,
+// groupings are hung on it, and the rows are folded down it exactly as they are down the hidden one.
+//
+// So the same fold runs once per node over ONE read of the source: common levels first, then each
+// node's own ladder. Two nodes may group by the SAME field, each with its own totals underneath —
+// which is the whole reason a person adds a second one.
+struct ibQueryTotalSplit
+{
+	// What a reader asks this node by (`Selection.Select(ByGroups, "ByCharacteristic")`). Empty: the
+	// node still folds, it is simply read by position — which is all an unnamed one can be asked for.
+	wxString                     m_name;
+	// Its groupings, in order. EMPTY IS LEGITIMATE and means "added, nothing hung on it yet": the
+	// node is there to be filled, and a node with nothing on it writes nothing into the query text.
+	std::vector<ibQueryTotalDim> m_levels;
+};
+
 // The whole SELECT statement.
 struct ibQuerySelect
 {
@@ -337,6 +356,20 @@ struct ibQuerySelect
 	bool                           m_hasTotals = false;
 	std::vector<ibQueryTotalAggregate> m_totalsAggregates;     // SUM(x) [AS name], MAX(y), …
 	std::vector<ibQueryTotalDim>   m_totalsBy;              // dimension levels (in order)
+	// ⭐⭐ THE VISIBLE NODES — `SPLIT`. There has always been a node here: `m_totalsBy` above is the
+	// levels of the one every report has, and nobody had to name it because there was only ever one.
+	// A `SPLIT` is a node of exactly that kind, only visible: it carries a name, and groupings sit on
+	// it the same way they sit on the hidden one (Max, 2026-08-27).
+	//
+	// Held as a LIST BESIDE the hidden node's levels rather than as a flag on a level, because that
+	// is what it is — a query with no SPLIT has an empty list here and is untouched in every other
+	// respect. It also makes an EMPTY node expressible, which is what "add a separator, then hang
+	// groupings on it" needs: a node with no levels yet simply writes nothing into the text.
+	//
+	// ⚠ THE SAME FIELD MAY BE GROUPED IN TWO NODES, and that is the point of them: two splits may
+	// each group by Item and roll their own totals underneath. Uniqueness of a grouping field is a
+	// question INSIDE a node, never across them.
+	std::vector<ibQueryTotalSplit> m_totalsSplits;
 	// OVERALL — the level above every dimension: ONE row folding the whole result.
 	//
 	// ⚠ A FLAG, NOT A LEVEL IN THE LIST ABOVE, and deliberately. A dimension level is a column and a

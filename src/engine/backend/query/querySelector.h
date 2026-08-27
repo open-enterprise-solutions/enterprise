@@ -110,6 +110,11 @@ public:
 	// walk.
 	ibSelector& WalkOverall(bool on = true) { m_totalsOverall = on; return *this; }
 
+	// ⭐ WALK ONE BRANCH OF THE FORK — `SPLIT … ONTO <name>`. Said the same way OVERALL is, and for
+	// the same reason: nothing is folded differently, this only decides WHICH of what was folded
+	// this selection hands out. Empty (the default) walks every branch in order.
+	ibSelector& WalkBranch(const wxString& branch) { m_branch = branch; return *this; }
+
 	// EAGER fold: the whole snapshot → the node tree per the TRAVERSAL kind. Subtotals from THIS snapshot.
 	//   Direct            → flat: each row a leaf node;
 	//   ByGroups / ByGroupsHierarchy → fold by the TotalBy LEVELS (in order). A SINGLE Hierarchy /
@@ -240,6 +245,12 @@ public:
 	// So result.Select() folds here, in one pass, and releases the rows.
 	void ReadRows() const { EnsureWalk(); }
 
+	// ⭐ …AND THE TREE IT FOLDED THEM INTO, handed back so it can be folded ONCE for several walks.
+	// A cursor is spent by the first scan, so a second selection over the same read has nothing left
+	// to fetch — which is exactly what the branches of a shared read are (ibDataQueryResult::Select
+	// (kind, branch)): one query, one fold, one tree, and each branch walking its own part of it.
+	std::shared_ptr<ibSelectorTree> FoldedTree() const { EnsureWalk(); return m_walk; }
+
 	// Current visit's value for a column (s.<col>) / for an aggregate alias. A column NOT carried at
 	// this level (a detail field on an upper grouping node — not yet unfolded) yields the runtime's
 	// explicit NULL, not a default-empty value, so "no value at this level" reads as NULL.
@@ -294,6 +305,12 @@ public:
 	// the tree on demand — each sub-level its own query, Level() continuing DEEPER. Requires
 	// WithSource() + a parent-ref fold; empty Selector otherwise (no DB hit). Defined below.
 	ibSelector Select(ibSelectKind kind = ibSelectKind::ibSelectKind_Direct) const;
+
+	// ⭐ …AND ONE BRANCH OF WHAT IS UNDER IT — `SPLIT … ONTO ByCharacteristic`, asked for by that
+	// name. The SAME walk, narrowed to one fork: everything else about the descent is unchanged,
+	// which is why this is an argument and not a second kind of selection. Named nothing, the walk
+	// goes through every branch in order — see CollectVisits.
+	ibSelector Select(ibSelectKind kind, const wxString& branch) const;
 
 	// THE ROWS AS A TABLE — draining the cursor first if nothing has needed them all at once yet.
 	// Holding the whole detail is what the cursor exists to avoid, so this is for the callers that
@@ -419,9 +436,7 @@ private:
 		if (m_viewNode != nullptr) {
 			if (!m_visits.empty() || m_pos != -1)
 				return;                    // already prepared
-			for (const auto& child : m_viewNode->m_children)
-				if (child != nullptr)
-					m_visits.push_back(child.get());
+			CollectVisits(*m_viewNode);
 			ApplyOrder();
 			m_pos = -1;
 			return;
@@ -462,11 +477,46 @@ private:
 		//
 		// A DIRECT walk is unaffected: its tree is one flat layer of leaves under the root, so its
 		// direct children ARE the rows.
-		for (const auto& child : WalkRoot().m_children)
-			if (child != nullptr)          // an empty slot is not a row — see Next()
-				m_visits.push_back(child.get());
+		CollectVisits(WalkRoot());
 		ApplyOrder();
 		m_pos = -1;
+	}
+
+	// ⭐⭐ THE CHILDREN OF ONE NODE — and a FORK is walked THROUGH, not walked ON.
+	//
+	// `SPLIT` puts a branch node between a heading and the levels under it. Asked for what is under
+	// the heading without naming a branch, this goes through the forks in order: the first branch
+	// whole, then the next (Max, 2026-08-27). So a reader that never heard of branches — every
+	// script and every driver written before them — still sees every group there is, rather than
+	// stopping at a node that carries no key and no figure of its own.
+	//
+	// Name one and it is the only one this selection walks: `Select(ByGroups, "ByCharacteristic")`
+	// is the same walk, narrowed. A name nobody answers to yields an EMPTY selection rather than
+	// quietly falling back to all of them — asking for a branch that is not there is a mistake worth
+	// seeing, and the empty walk is where it shows.
+	void CollectVisits(const ibSelectorTree::Node& parent) const
+	{
+		for (const auto& child : parent.m_children) {
+			if (child == nullptr)          // an empty slot is not a row — see Next()
+				continue;
+			if (child->m_kind == ibSelectorNodeKind::Branch) {
+				if (!m_branch.IsEmpty() && !child->m_branch.IsSameAs(m_branch, false))
+					continue;              // a branch was named, and this is not it
+				CollectVisits(*child);     // the fork itself is not a visit — what is under it is
+				continue;
+			}
+			// ⚠ NAMED A BRANCH, SO ONLY THAT BRANCH. Where a heading holds both records of its own
+			// and forks under them, asking for one branch must not also hand back the records that
+			// stand beside it — they belong to the ladder above, not to the branch.
+			//
+			// ⭐ ASKED OF THE NODE, which carries the branch it stands in (the fold stamps it down
+			// the whole subtree, not on the fork alone). So this reads the same at any depth: the
+			// walk that has already descended past a fork still knows whose nodes these are, which
+			// is what a DESCENT inside a branch needs — and it is the ordinary case, since a report
+			// that prints a grand total enters at the root and walks down from there.
+			if (m_branch.IsEmpty() || child->m_branch.IsSameAs(m_branch, false))
+				m_visits.push_back(child.get());
+		}
 	}
 
 	// THE ROWS — as a live cursor while nobody has needed them all at once, as a snapshot after a
@@ -504,6 +554,10 @@ private:
 	// own root; set = it walks that node's children, and its "grand total" is that node's figures.
 	// The tree is kept alive by the shared pointer beside it, so the parent may be gone.
 	const ibSelectorTree::Node*                      m_viewNode = nullptr;
+	// WHICH BRANCH THIS SELECTION WALKS — empty = all of them, in order, the forks walked through.
+	// It is state of the SELECTION and not of the tree: two readers may descend into one heading and
+	// take different branches of it, and the tree they share knows nothing about either.
+	wxString                                         m_branch;
 	mutable std::vector<const ibSelectorTree::Node*>  m_visits;  // pre-order visit order
 	mutable long                                      m_pos = -1;
 	// THE LEVEL'S OWN ORDER — empty = fold order, which is the order the rows arrived in. Not mutable
@@ -559,6 +613,10 @@ inline ibSelector ibSelector::Select(ibSelectKind kind) const
 		child.m_walk     = m_walk;      // the same tree, kept alive by the pointer
 		child.m_viewNode = n;           // …entered here
 		child.m_baseLevel = m_baseLevel;   // the nodes keep their own levels; Level() stays absolute
+		// ⭐ AND IT STAYS IN THE SAME BRANCH. A descent goes DEEPER along the road it is already on —
+		// walking one branch and then descending into everything would be two different walks under
+		// one name. Dropped here, a report's every table printed every table's headings.
+		child.m_branch   = m_branch;
 		return child;
 	}
 
@@ -566,6 +624,19 @@ inline ibSelector ibSelector::Select(ibSelectKind kind) const
 	const auto it = n->m_values.find(m_rowKeyCol->GetColumnId());
 	const ibValue key = (it != n->m_values.end()) ? it->second : ibValue();
 	return MakeChild(key, n->m_level + m_baseLevel, kind);          // children continue DEEPER
+}
+
+// ONE BRANCH OF THE DESCENT. The descent itself is the one above — the branch is carried on the
+// selection it produces and read where the visits are gathered, so nothing here duplicates it.
+//
+// ⚠ IT REACHES THE VIEW ROAD ONLY, and honestly so: a LAZY drill re-executes a query for a node's
+// children, and a query that has not been run has no branches to choose between yet. Branches come
+// out of a fold, so they are addressable exactly where a fold has happened.
+inline ibSelector ibSelector::Select(ibSelectKind kind, const wxString& branch) const
+{
+	ibSelector child = Select(kind);
+	child.m_branch = branch;
+	return child;
 }
 
 #endif // __QUERY_SELECTOR_H__

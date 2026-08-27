@@ -545,7 +545,7 @@ TEST_F(TempDbSqliteFix, RlsSemiJoin_RestrictsDelete)
 		<< "the RLS semi-join scoped the DELETE to permitted rows — unpermitted rows survive (write-enforced)";
 }
 
-// Several joins on one restriction (Max: "а несколько джоинов переваривать будет?"). Each AddSemiJoin
+// Several joins on one restriction (Max: "and will it digest several joins?"). Each AddSemiJoin
 // AND-folds its EXISTS into m_predicate, so a row must satisfy EVERY semi-join — and each is still a
 // FILTER, so the intersection never multiplies. (docs/access-policy-rls.md — the tree rides every path)
 TEST_F(TempDbSqliteFix, RlsSemiJoin_MultipleJoinsCompose)

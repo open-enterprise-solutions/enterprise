@@ -1155,3 +1155,93 @@ TEST(QueryL4Parser, PackageLinkWithoutAConditionIsRefused)
 		wxT("SELECT Partner ONTO Sales FROM Document.Sales;")
 		wxT("JOIN Sales ON Sales.Partner = Payments.Partner")), ibBackendException);
 }
+
+// ⭐⭐ `SPLIT` — WHERE THE LADDER OF LEVELS STOPS BEING ONE.
+//
+// The levels before it are common; each SPLIT opens a branch that folds the SAME rows its own way
+// (Max, 2026-08-27: common totals by item, one grouping going off by characteristic and another by
+// series, each with a selection of its own). The comma keeps its old meaning exactly, which is
+// what lets every query written before this parse unchanged.
+TEST(QueryL4Parser, TotalsSplitOpensBranches)
+{
+	auto sel = Parse(wxT("SELECT Item, Amount FROM Document.Sales "
+	                     "TOTALS SUM(Amount) BY Item "
+	                     "SPLIT ByCharacteristic BY Characteristic "
+	                     "SPLIT BySeries BY Series, Store"));
+	// THE HIDDEN NODE keeps what was written before the first SPLIT — untouched, and the only thing
+	// a report without SPLIT ever has.
+	ASSERT_EQ(sel->m_totalsBy.size(), 1u);
+	EXPECT_EQ(sel->m_totalsBy[0].Head()->m_expr->m_path[0], wxT("Item"));
+
+	// …and each SPLIT is a VISIBLE node of its own, named where it is opened and carrying its own ladder.
+	ASSERT_EQ(sel->m_totalsSplits.size(), 2u);
+	EXPECT_EQ(sel->m_totalsSplits[0].m_name, wxT("ByCharacteristic"));
+	ASSERT_EQ(sel->m_totalsSplits[0].m_levels.size(), 1u);
+	EXPECT_EQ(sel->m_totalsSplits[0].m_levels[0].Head()->m_expr->m_path[0], wxT("Characteristic"));
+
+	// A COMMA INSIDE A NODE IS STILL A COMMA — `Store` continues the ladder `Series` began rather
+	// than opening a third node.
+	EXPECT_EQ(sel->m_totalsSplits[1].m_name, wxT("BySeries"));
+	ASSERT_EQ(sel->m_totalsSplits[1].m_levels.size(), 2u);
+	EXPECT_EQ(sel->m_totalsSplits[1].m_levels[0].Head()->m_expr->m_path[0], wxT("Series"));
+	EXPECT_EQ(sel->m_totalsSplits[1].m_levels[1].Head()->m_expr->m_path[0], wxT("Store"));
+}
+
+// A QUERY MAY OPEN ONE AT ONCE — nothing on the hidden node, every visible node hanging off the
+// grand total.
+TEST(QueryL4Parser, TotalsSplitWithNothingInCommon)
+{
+	auto sel = Parse(wxT("SELECT Item, Amount FROM Document.Sales "
+	                     "TOTALS SUM(Amount) BY SPLIT BY Item SPLIT BY Store"));
+	EXPECT_TRUE(sel->m_totalsBy.empty());            // the hidden node carries nothing
+	ASSERT_EQ(sel->m_totalsSplits.size(), 2u);
+	EXPECT_EQ(sel->m_totalsSplits[0].m_levels.size(), 1u);
+	EXPECT_EQ(sel->m_totalsSplits[1].m_levels.size(), 1u);
+}
+
+// ⭐ THE WORD SURVIVES THE ROUND TRIP — and this is the half that was forgotten when PERIODS went
+// into the language: a cell that shows less than it edits loses the rest on the first edit.
+TEST(QueryL4Parser, TotalsSplitRoundTrips)
+{
+	const wxString text = wxT("SELECT Item, Amount FROM Document.Sales "
+	                          "TOTALS SUM(Amount) BY Item "
+	                          "SPLIT ByCharacteristic BY Characteristic "
+	                          "SPLIT BySeries BY Series");
+	const wxString written = ibRenderQuery(*Parse(text));
+	EXPECT_TRUE(written.Contains(wxT("SPLIT"))) << written.ToStdString();
+	EXPECT_TRUE(written.Contains(wxT("SPLIT ByCharacteristic BY"))) << written.ToStdString();
+
+	// …and read back the same, which is the property the constructor rests on: what it shows is
+	// what it edits.
+	auto again = Parse(written);
+	ASSERT_EQ(again->m_totalsBy.size(), 1u);          // the hidden node
+	ASSERT_EQ(again->m_totalsSplits.size(), 2u);      // …and the two visible ones
+	EXPECT_EQ(again->m_totalsSplits[0].m_name, wxT("ByCharacteristic"));
+	EXPECT_EQ(again->m_totalsSplits[1].m_name, wxT("BySeries"));
+	EXPECT_EQ(ibRenderQuery(*again), written);   // a second trip changes nothing
+}
+
+// ⭐ A NODE MAY BE LEFT UNNAMED — `SPLIT BY …`, read by position. `BY` straight after the word is
+// what says the name was left out, so the two forms need nothing but the next token to tell apart.
+TEST(QueryL4Parser, TotalsSplitWithoutAName)
+{
+	auto sel = Parse(wxT("SELECT Item, Amount FROM Document.Sales "
+	                     "TOTALS SUM(Amount) BY Item SPLIT BY Characteristic"));
+	ASSERT_EQ(sel->m_totalsSplits.size(), 1u);
+	EXPECT_TRUE(sel->m_totalsSplits[0].m_name.IsEmpty());
+	ASSERT_EQ(sel->m_totalsSplits[0].m_levels.size(), 1u);
+	EXPECT_EQ(sel->m_totalsSplits[0].m_levels[0].Head()->m_expr->m_path[0], wxT("Characteristic"));
+
+	// …and it round-trips as it was written, name absent and all.
+	const wxString written = ibRenderQuery(*sel);
+	EXPECT_TRUE(written.Contains(wxT("SPLIT BY"))) << written.ToStdString();
+	EXPECT_EQ(ibRenderQuery(*Parse(written)), written);
+}
+
+// `SPLIT` NEEDS ITS `BY`. The word opens a node and the ladder follows it; without the keyword there
+// is nothing to say where the name ended and the groupings began.
+TEST(QueryL4Parser, TotalsSplitWithoutByIsRefused)
+{
+	EXPECT_THROW(Parse(wxT("SELECT Item FROM Document.Sales TOTALS SUM(Amount) BY Item SPLIT Characteristic")),
+	             ibBackendException);
+}

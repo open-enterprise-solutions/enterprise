@@ -2714,6 +2714,25 @@ ibValue LevelKeyValue(const ibTotalField& field, const ibQueryRow& row)
 class ibStreamingFold
 {
 public:
+	// ⭐ ONE LADDER OF LEVELS — the common ones, or one branch's. Everything the fold used to ask of
+	// the whole list is asked of this instead, which is what lets a branch be a cross-table of its
+	// own: where the columns start and whether the last level is the records are facts about a
+	// LADDER, and a branch is one.
+	struct Section {
+		const ibTotalBranch* m_branch = nullptr;   // null = the common ladder
+		std::size_t m_from = 0, m_to = 0;          // its levels, as a half-open range of m_levels
+		std::size_t m_across = 0;                  // the first of them that reads ACROSS the page
+		std::size_t m_depth  = 1;                  // the DEPTH its first level stands at
+		bool        m_details = false;             // its last level is the records…
+		bool        m_detailsAcross = false;       // …and they read across rather than down
+
+		// ⚠ DEPTH IS COUNTED WITHIN THE LADDER, not by position in the flat list. Two branches begin
+		// at the same place, so their first levels must carry the same number — otherwise the second
+		// branch would print one rung deeper than the first for no reason a reader could see.
+		int DepthOf(std::size_t li) const { return static_cast<int>(m_depth + (li - m_from)); }
+		int DepthOfDetails() const { return static_cast<int>(m_depth + (m_to - m_from) - 1); }
+	};
+
 	ibStreamingFold(ibSelectorTree& tree, const std::vector<ibTotalLevel>& levels,
 	                const std::vector<ibDataQueryBuilder::AggregateItem>& aggs,
 	                const std::vector<ibQueryRamColumn>& rowColumns)
@@ -2724,14 +2743,50 @@ public:
 		// ⚠ THE DETAIL LEVEL COUNTS HERE TOO. A column axis made of NOTHING BUT records — "the
 		// resources laid out across the page, one column per row" — starts at that level, and
 		// skipping it because it has no fields would leave the axis unfound.
-		m_across = m_levels.size();
-		for (std::size_t li = 0; li < m_levels.size(); ++li)
-			if (m_levels[li].m_axis == ibTotalsAxis::Columns) { m_across = li; break; }
-		// THE DETAIL LEVEL IS LAST IN THE CONFIG, and it says which way it reads like every other
-		// level: down the page it is a LINE of the report, across it each record is a COLUMN of its
-		// own. Asked once, here, rather than by every loop below re-testing "is this the empty one".
-		m_details = !m_levels.empty() && m_levels.back().m_fields.empty();
-		m_detailsAcross = m_details && m_levels.back().m_axis == ibTotalsAxis::Columns;
+		// ⭐⭐ THE LEVELS FALL INTO SECTIONS, AND A REPORT WITHOUT `SPLIT` HAS EXACTLY ONE. A section is
+		// a ladder: the levels that fold one after another under a shared head. Written without
+		// branches — every report there has ever been — the whole list is that one section and every
+		// question below is asked of it, so nothing about the old road changes shape.
+		//
+		// `SPLIT` opens the next one. The common levels come first (they carry no branch), and each
+		// branch's levels follow as a section of their own — which is what lets the same rows be
+		// folded by characteristic on one side and by series on the other.
+		for (std::size_t li = 0; li < m_levels.size(); ++li) {
+			const ibTotalBranch* branch = m_levels[li].m_branch.get();
+			if (m_sections.empty() || branch != m_sections.back().m_branch)
+				m_sections.push_back(Section{ branch, li, li });
+			m_sections.back().m_to = li + 1;
+		}
+		// ⚠ THE COMMON SECTION EXISTS EVEN WHEN NOTHING IS COMMON. A query may fork straight away —
+		// `TOTALS SUM(x) BY SPLIT Item SPLIT Unit`, no shared level at all — and there the first
+		// section found above is already a BRANCH. Read as the common ladder it would make branch one
+		// the trunk and hang branch two INSIDE it, which is the opposite of what was asked. So an
+		// empty common section is put in front: every branch then forks from the root, where they all
+		// belong. (An empty list — `TOTALS BY OVERALL` — lands here too, and one empty section is
+		// exactly right for it.)
+		if (m_sections.empty() || m_sections.front().m_branch != nullptr)
+			m_sections.insert(m_sections.begin(), Section{ nullptr, 0, 0 });
+
+		// EACH SECTION READS ITSELF THE SAME WAY THE WHOLE LIST USED TO. Where the page stops and the
+		// page-width starts, and whether the last level is the records: both are facts about a
+		// LADDER, and a branch is a ladder — so a branch may be a cross-table of its own, which is
+		// the point of asking this per section rather than once for the query.
+		//
+		// ⚠ THE DETAIL LEVEL COUNTS TOWARDS THE COLUMN AXIS TOO. A column axis made of NOTHING BUT
+		// records — "the resources laid out across the page, one column per row" — starts at that
+		// level, and skipping it because it has no fields would leave the axis unfound.
+		for (Section& s : m_sections) {
+			s.m_across = s.m_to;
+			for (std::size_t li = s.m_from; li < s.m_to; ++li)
+				if (m_levels[li].m_axis == ibTotalsAxis::Columns) { s.m_across = li; break; }
+			s.m_details       = s.m_to > s.m_from && m_levels[s.m_to - 1].m_fields.empty();
+			s.m_detailsAcross = s.m_details && m_levels[s.m_to - 1].m_axis == ibTotalsAxis::Columns;
+		}
+		// EVERY BRANCH BEGINS WHERE THE COMMON LADDER ENDED, so they all start at one depth — the
+		// number of common ROW levels plus one. The common section itself starts at 1, which is the
+		// number its first level has always carried.
+		for (std::size_t si = 1; si < m_sections.size(); ++si)
+			m_sections[si].m_depth = 1 + (m_sections.front().m_across - m_sections.front().m_from);
 		m_pool.push_back(FoldNode{ &tree.Root(), std::vector<ibAggAcc>(aggs.size()), {}, {}, 0 });   // the root IS the grand total
 	}
 
@@ -2749,9 +2804,32 @@ public:
 		// of subtotals "cannot come out of one tree", and that was true only while the tree was ONE
 		// CHAIN: rows-then-columns has no node standing for "the columns alone". Now every heading
 		// carries its own column branch, and the root is the heading over everything.
-		FeedAcross(cur, row);
+		FeedAcross(cur, row, m_sections.front());
 
-		for (std::size_t li = 0; li < m_across; ++li) {
+		// THE COMMON LADDER — the levels written before the first `SPLIT`, which in a report that has
+		// none is all of them. This is the whole of what Feed used to do.
+		cur = FeedLadder(cur, row, m_sections.front());
+
+		// ⭐⭐ …AND THEN EACH BRANCH, FROM THE NODE THE COMMON LADDER ENDED ON. The same row goes down
+		// every branch: that is what `SPLIT` says — one read, folded several ways, each with its own
+		// order of groupings (Max, 2026-08-27). A report with no branches does not enter this loop.
+		for (std::size_t bi = 1; bi < m_sections.size(); ++bi) {
+			const std::size_t fork = BranchChild(cur, bi);
+			// FED LIKE THE HEADING IT STANDS UNDER, and for the same reason a detail leaf is: a fork
+			// covers exactly the rows its parent does, so its figure is the parent's. Left unfed it
+			// would report a nought — a total that reconciles to nothing, sitting where a reader who
+			// walks into the branch would find it.
+			FeedNode(fork, row);
+			FeedLadder(fork, row, m_sections[bi]);
+		}
+	}
+
+	// ⭐ ONE LADDER, FED FROM `cur` DOWN — the levels of one section, in order, each opening the node
+	// its key names and taking the row into it. Returns the node the last ROW level opened, because
+	// that is what the records hang under and what a branch forks from.
+	std::size_t FeedLadder(std::size_t cur, const ibQueryRow& row, const Section& section)
+	{
+		for (std::size_t li = section.m_from; li < section.m_across; ++li) {
 			const ibTotalLevel& level = m_levels[li];
 			if (level.m_fields.empty())
 				break;   // the detail level — handled below, where the row axis ends
@@ -2759,7 +2837,7 @@ public:
 			key.reserve(level.m_fields.size());
 			for (const ibTotalField& field : level.m_fields)
 				key.push_back(LevelKeyValue(field, row));      // one field is the degenerate one-element key
-			cur = Child(cur, std::move(key), level, static_cast<int>(li) + 1, /*across*/false);
+			cur = Child(cur, std::move(key), level, section.DepthOf(li), /*across*/false);
 			FeedNode(cur, row);
 
 			// ⭐⭐ AND THE COLUMNS HANG UNDER EVERY ROW HEADING, not only under the deepest one.
@@ -2774,7 +2852,7 @@ public:
 			// It costs a walk down the column axis per row heading the row belongs to, and holds
 			// `headings × column keys` nodes. Memory is still counted in GROUPS, which is the whole
 			// criterion of the reports arc.
-			FeedAcross(cur, row);
+			FeedAcross(cur, row, section);
 		}
 
 		// ⭐ AND THE ROW ITSELF, under the last ROW heading — not under the last heading of all. In an
@@ -2782,18 +2860,25 @@ public:
 		// the columns stand ACROSS the detail row, which is what makes it a line of the table with
 		// cells beside it rather than something hanging inside one cell.
 		//
-		// Its LEVEL is the one past the last dimension — the number it has always had — so a printer
-		// that lays rows out by depth is told nothing new, and no column key shares a number with it.
-		if (m_details && !m_detailsAcross) {
-			const std::size_t leaf = AddDetail(cur, row, static_cast<int>(m_levels.size()));
+		// Its LEVEL is the one past the last dimension of THIS ladder — the number it has always had
+		// in a report with one — so a printer that lays rows out by depth is told nothing new, and no
+		// column key shares a number with it.
+		//
+		// ⚠ THE RECORDS BELONG TO THE BRANCH THAT ASKED FOR THEM. Two branches that both declare a
+		// detail level both get the row, each under its own headings — the same fact shown in two
+		// cuts, which is what a split IS. A branch that declared none holds no records and pays for
+		// none.
+		if (section.m_details && !section.m_detailsAcross) {
+			const std::size_t leaf = AddDetail(cur, row, section.DepthOfDetails(), section);
 			if (leaf != kNoNode) {
 				// ⚠ AND IT IS FED LIKE A HEADING — one row's worth. Without this its accumulators
 				// stay empty and Finish writes a zero into the very total that is supposed to say
 				// what this record contributed.
 				FeedNode(leaf, row);
-				FeedAcross(leaf, row);
+				FeedAcross(leaf, row, section);
 			}
 		}
+		return cur;
 	}
 
 	// ⭐ THE FIGURES ARE WRITTEN WHEN THE LAST ROW HAS BEEN READ. An accumulator IS the subtotal
@@ -2837,23 +2922,28 @@ private:
 		std::unordered_map<ibLevelKey, std::size_t, ibLevelKeyHash, ibLevelKeyEqual> m_children;
 		std::unordered_map<ibLevelKey, std::size_t, ibLevelKeyHash, ibLevelKeyEqual> m_acrossChildren;
 		std::size_t           m_acrossCount = 0;   // cells written so far — where the next one is inserted
+		// THE FORKS THIS HEADING HAS OPENED, by section. Not a map, because a branch is not reached by
+		// a KEY — it is named by the query and there is a fixed handful of them. Left EMPTY until the
+		// first fork is opened, so a report without `SPLIT` carries nothing extra per node.
+		std::vector<std::size_t> m_branchChildren;
 	};
+
 
 	static constexpr std::size_t kNoNode = static_cast<std::size_t>(-1);
 
 	// THE CELLS OF ONE HEADING — the column axis walked from the heading down, feeding a node per
 	// level so an upper column level keeps its own subtotal exactly as it always did.
-	void FeedAcross(std::size_t heading, const ibQueryRow& row)
+	void FeedAcross(std::size_t heading, const ibQueryRow& row, const Section& section)
 	{
 		std::size_t cur = heading;
-		for (std::size_t li = m_across; li < m_levels.size(); ++li) {
+		for (std::size_t li = section.m_across; li < section.m_to; ++li) {
 			const ibTotalLevel& level = m_levels[li];
 			if (level.m_fields.empty()) {
 				// ⭐ THE RECORDS, ACROSS THE PAGE — each one a column of its own, which is what a
 				// detail level declared on the COLUMN axis asks for. Nothing groups here and nothing
 				// follows: a record is the end of an axis whichever way that axis reads.
-				if (m_detailsAcross) {
-					const std::size_t leaf = AddDetail(cur, row, static_cast<int>(m_levels.size()));
+				if (section.m_detailsAcross) {
+					const std::size_t leaf = AddDetail(cur, row, section.DepthOfDetails(), section);
 					if (leaf != kNoNode)
 						FeedNode(leaf, row);
 				}
@@ -2863,9 +2953,42 @@ private:
 			key.reserve(level.m_fields.size());
 			for (const ibTotalField& field : level.m_fields)
 				key.push_back(LevelKeyValue(field, row));
-			cur = Child(cur, std::move(key), level, static_cast<int>(li) + 1, /*across*/ li == m_across);
+			cur = Child(cur, std::move(key), level, section.DepthOf(li), /*across*/ li == section.m_across);
 			FeedNode(cur, row);
 		}
+	}
+
+	// ⭐⭐ THE FORK ITSELF — the node a branch's ladder hangs from, opened on the heading the common
+	// levels ended on. It carries no key and no figure: what it says is "from here the rows go
+	// another way", and a walk that was not told which way goes through them in order.
+	//
+	// Opened ONCE per heading and remembered by branch, exactly as a level's child is remembered by
+	// its key — a heading meets every row that belongs to it, and the second row must find the fork
+	// the first one made rather than start a second copy of it.
+	std::size_t BranchChild(std::size_t parent, std::size_t branch)
+	{
+		std::vector<std::size_t>& opened = m_pool[parent].m_branchChildren;
+		if (opened.empty())
+			opened.assign(m_sections.size(), kNoNode);
+		if (opened[branch] != kNoNode)
+			return opened[branch];
+
+		ibSelectorTree::Node* parentNode = m_pool[parent].m_node;
+		// AT THE PARENT'S OWN DEPTH — the fork is not a level, so it must not spend one. What hangs
+		// under it is numbered as though it hung under the heading itself, which is what keeps two
+		// branches at the SAME depth however many levels stand above them.
+		ibSelectorTree::Node* node = parentNode->AddChild(parentNode->m_level);
+		node->m_kind   = ibSelectorNodeKind::Branch;
+		node->m_values = parentNode->m_values;   // the keys above stay readable inside the branch
+		node->m_branch = parentNode->m_branch;   // …and so does the branch above, until this fork names its own
+		if (const ibTotalBranch* named = m_sections[branch].m_branch)
+			node->m_branch = named->m_name;
+
+		const std::size_t idx = m_pool.size();
+		m_pool.push_back(FoldNode{ node, std::vector<ibAggAcc>(m_aggs.size()), {}, {}, 0 });
+		// ⚠ RE-READ THE POOL ENTRY — the push_back above may have reallocated (same trap as Child).
+		m_pool[parent].m_branchChildren[branch] = idx;
+		return idx;
 	}
 
 	void FeedNode(std::size_t idx, const ibQueryRow& row)
@@ -2892,6 +3015,12 @@ private:
 		// that dot-walks an ancestor dimension resolves in the subgroup header too. Only the KEYS are
 		// there to inherit at this point — the figures are written at the end, by Finish().
 		child->m_values = parentNode->m_values;
+		// ⭐ …AND WHICH BRANCH IT STANDS IN, inherited exactly as the keys above are. A branch is a
+		// FACT ABOUT THE NODE — "the rows went this way to reach me" — and not a state of whoever is
+		// walking: stamped only on the fork, a walk that had descended past it could no longer tell
+		// whose nodes it was looking at, and every output printed every branch's headings (Max, live,
+		// 2026-08-27: 125 rows of its own followed by 125 blank ones belonging to the other table).
+		child->m_branch = parentNode->m_branch;
 		for (std::size_t i = 0; i < level.m_fields.size() && i < key.size(); ++i)
 			child->m_values[level.m_fields[i].m_col->GetColumnId()] = key[i];
 
@@ -2906,12 +3035,13 @@ private:
 	// ⭐ A DETAIL ROW IS A NODE LIKE ANY OTHER NOW — it is returned, because a table hangs its cells
 	// under it. It still opens no map of children: what stands across it is opened by FeedAcross,
 	// and nothing groups below a row.
-	std::size_t AddDetail(std::size_t parent, const ibQueryRow& row, int childLevel)
+	std::size_t AddDetail(std::size_t parent, const ibQueryRow& row, int childLevel, const Section& section)
 	{
 		ibSelectorTree::Node* parentNode = m_pool[parent].m_node;
 		ibSelectorTree::Node* leaf       = parentNode->AddChild(childLevel);
 		leaf->m_kind   = ibSelectorNodeKind::Detail;
 		leaf->m_values = parentNode->m_values;                 // the group keys above stay readable on the row
+		leaf->m_branch = parentNode->m_branch;                 // …and whose branch it is read on (see Child)
 		for (const ibQueryRamColumn& col : m_rowColumns)
 			leaf->m_values[col.m_id] = row.Get(col.m_id);
 
@@ -2931,7 +3061,7 @@ private:
 		// report's rows do not. A pool entry costs an accumulator per aggregate, and a report reads
 		// as many detail rows as the source has: paying that per ROW is exactly the memory the
 		// streaming fold exists to not spend (the arc's criterion is groups, not rows).
-		if (m_across >= m_levels.size())
+		if (section.m_across >= section.m_to)
 			return kNoNode;
 		const std::size_t idx = m_pool.size();
 		m_pool.push_back(FoldNode{ leaf, std::vector<ibAggAcc>(m_aggs.size()), {} });
@@ -2952,9 +3082,10 @@ private:
 	const std::vector<ibDataQueryBuilder::AggregateItem>& m_aggs;
 	const std::vector<ibQueryRamColumn>&                  m_rowColumns;   // what a DETAIL row writes
 	std::vector<FoldNode>                                 m_pool;
-	std::size_t                                           m_across = 0;   // the first level that reads ACROSS
-	bool                                                  m_details = false;        // the last level is the rows
-	bool                                                  m_detailsAcross = false;  // …and it reads across the page
+	// THE LADDERS THIS FOLD BUILDS — one without `SPLIT`, and then one per branch. What used to be
+	// three fields about "the levels" now belongs to each section, because with branches there is no
+	// longer a single answer to "where do the columns start".
+	std::vector<Section>                                  m_sections;
 };
 
 // --- PERIODS: the padding ---------------------------------------------------------------------
@@ -4135,6 +4266,32 @@ ibSelector ibDataQueryResult::Select(ibSelectKind mode)
 	// ByParentRef / ByGroups / Aggregating to what this hands back — so folding at this point would
 	// fold by a configuration that is not complete yet, and the settings arriving next would have
 	// nothing left to change. Whoever finishes configuring is the one who says ReadRows().
+	return s;
+}
+
+// ONE BRANCH OF THE SAME FOLD. The read, the fold and the tree are the ones above — only the WALK
+// is narrowed, which is why this is a line and not a second Select: a branch is not another result.
+ibSelector ibDataQueryResult::Select(ibSelectKind mode, const wxString& branch)
+{
+	// ⭐⭐ FOLDED ONCE, WALKED MANY TIMES. The branches share the fold as well as the read: the rows
+	// come as a cursor, so the SECOND branch to ask would scan a cursor the first one already drank
+	// dry — live, that surfaced as "Error retrieving Next record" from the driver the moment a
+	// composition's second output started (2026-08-27).
+	//
+	// The fold happens on a selection of its own, thrown away straight after, because a selection
+	// builds its tree and its VISITS together (EnsureWalk) and the visits depend on things the
+	// caller states afterwards — the branch, WalkOverall, the level's OrderBy. Folding on the
+	// branch's own selection would freeze a walk configured only half way.
+	if (m_readyTree == nullptr && m_branchTree == nullptr) {
+		ibSelector fold = Select(mode);
+		fold.ReadRows();                  // one pass over the cursor, and it is released here
+		m_branchTree = fold.FoldedTree();
+	}
+
+	ibSelector s = Select(mode);
+	s.WalkBranch(branch);
+	if (m_branchTree != nullptr)
+		s.WithReadyTree(m_branchTree);    // hands over a Clone(), so one branch's walk cannot disturb another's
 	return s;
 }
 

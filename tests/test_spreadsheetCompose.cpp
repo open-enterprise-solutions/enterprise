@@ -40,6 +40,17 @@ std::vector<ibQueryLowering::OutputColumn> Schema() {
 	return { Col(wxT("Partner")), Col(wxT("Amount")) };
 }
 
+// ⭐ AN OUTPUT IS ANNOUNCED WITH ITS SCHEMA — there is no separate "here are the columns" event any
+// more, because which columns an output has is part of that output starting. The titles default to
+// the column names, which is what the composer fills in when nothing overrode them.
+ibCompositionOutputInfo SchemaInfo(std::vector<ibQueryLowering::OutputColumn> schema) {
+	ibCompositionOutputInfo info;
+	info.m_schema = std::move(schema);
+	for (const ibQueryLowering::OutputColumn& column : info.m_schema)
+		info.m_titles.push_back(column.m_name);
+	return info;
+}
+
 // A document the driver writes into. wxObjectDataPtr because the spreadsheet
 // object is ref-counted.
 wxObjectDataPtr<ibBackendSpreadsheetObject> MakeDocument() {
@@ -92,9 +103,9 @@ TEST(SpreadsheetCompose, NoHeading_ColumnTitlesOnFirstRow)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns(Schema());
-	driver.OnRow(0, false, { ibValue(wxT("Alpha")), ibValue(10) });
-	driver.OnComplete(false);
+	driver.OnOutputBegin(SchemaInfo(Schema()));
+	driver.OnRow(0, { ibValue(wxT("Alpha")), ibValue(10) });
+	driver.OnOutputEnd(false);
 
 	EXPECT_EQ(wxT("Partner"), doc->GetCellValue(0, 0));
 	EXPECT_EQ(wxT("Amount"), doc->GetCellValue(0, 1));
@@ -111,9 +122,9 @@ TEST(SpreadsheetCompose, Heading_PushesTableDownWithOneBlankRow)
 	driver.SetTitle(wxT("Gross profit by partner"));
 	driver.AddHeaderLine(wxT("Period >= 01.01.2011"));
 
-	driver.OnColumns(Schema());
-	driver.OnRow(0, false, { ibValue(wxT("Alpha")), ibValue(10) });
-	driver.OnComplete(false);
+	driver.OnOutputBegin(SchemaInfo(Schema()));
+	driver.OnRow(0, { ibValue(wxT("Alpha")), ibValue(10) });
+	driver.OnOutputEnd(false);
 
 	EXPECT_EQ(wxT("Gross profit by partner"), doc->GetCellValue(0, 0));
 	EXPECT_EQ(wxT("Period >= 01.01.2011"), doc->GetCellValue(1, 0));
@@ -132,10 +143,10 @@ TEST(SpreadsheetCompose, DeeperLevel_IsIndentedInTheDimensionColumn)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns({ Dim(wxT("Partner"), 0), Dim(wxT("Product"), 1), Measure(wxT("Amount")) });
-	driver.OnRow(1, true,  { ibValue(wxT("Group")), ibValue(),             ibValue(100) });
-	driver.OnRow(2, false, { ibValue(),             ibValue(wxT("Leaf")), ibValue(40)  });
-	driver.OnComplete(true);
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Product"), 1), Measure(wxT("Amount")) }));
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, true,  { ibValue(wxT("Group")), ibValue(),             ibValue(100) });
+	driver.OnRow(2, { ibValue(),             ibValue(wxT("Leaf")), ibValue(40)  });
+	driver.OnOutputEnd(true);
 
 	// Two heading lines (one per level), then the rows.
 	EXPECT_TRUE(doc->GetCellValue(2, 0).EndsWith(wxT("Group")));
@@ -153,10 +164,10 @@ TEST(SpreadsheetCompose, EveryNonEmptyCell_CarriesItsValue)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns(Schema());
-	driver.OnRow(0, false, { ibValue(wxT("Alpha")), ibValue(10) });
-	driver.OnRow(0, false, { ibValue(), ibValue(20) });
-	driver.OnComplete(false);
+	driver.OnOutputBegin(SchemaInfo(Schema()));
+	driver.OnRow(0, { ibValue(wxT("Alpha")), ibValue(10) });
+	driver.OnRow(0, { ibValue(), ibValue(20) });
+	driver.OnOutputEnd(false);
 
 	wxString details;
 	doc->GetCellDetailsParameter(1, 0, details);
@@ -180,17 +191,17 @@ TEST(SpreadsheetCompose, SecondCompose_ReplacesTheFirst)
 	auto doc = MakeDocument();
 	{
 		ibSpreadsheetComposeDriver driver(doc.get());
-		driver.OnColumns(Schema());
-		driver.OnRow(0, false, { ibValue(wxT("Alpha")), ibValue(10) });
-		driver.OnRow(0, false, { ibValue(wxT("Beta")), ibValue(20) });
-		driver.OnComplete(false);
+		driver.OnOutputBegin(SchemaInfo(Schema()));
+		driver.OnRow(0, { ibValue(wxT("Alpha")), ibValue(10) });
+		driver.OnRow(0, { ibValue(wxT("Beta")), ibValue(20) });
+		driver.OnOutputEnd(false);
 		EXPECT_EQ(2, driver.GetRowsWritten());
 	}
 
 	ibSpreadsheetComposeDriver again(doc.get());
-	again.OnColumns(Schema());
-	again.OnRow(0, false, { ibValue(wxT("Gamma")), ibValue(30) });
-	again.OnComplete(false);
+	again.OnOutputBegin(SchemaInfo(Schema()));
+	again.OnRow(0, { ibValue(wxT("Gamma")), ibValue(30) });
+	again.OnOutputEnd(false);
 
 	EXPECT_EQ(1, again.GetRowsWritten());
 	EXPECT_EQ(wxT("Gamma"), doc->GetCellValue(1, 0));
@@ -206,13 +217,13 @@ TEST(SpreadsheetCompose, SecondOutput_PrintsBelowTheFirstAfterAGap)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns(Schema());
-	driver.OnRow(0, false, { ibValue(wxT("Alpha")), ibValue(10) });
-	driver.OnComplete(false);
+	driver.OnOutputBegin(SchemaInfo(Schema()));
+	driver.OnRow(0, { ibValue(wxT("Alpha")), ibValue(10) });
+	driver.OnOutputEnd(false);
 
-	driver.OnColumns(Schema());
-	driver.OnRow(0, false, { ibValue(wxT("Gamma")), ibValue(30) });
-	driver.OnComplete(false);
+	driver.OnOutputBegin(SchemaInfo(Schema()));
+	driver.OnRow(0, { ibValue(wxT("Gamma")), ibValue(30) });
+	driver.OnOutputEnd(false);
 
 	// The first section stayed where it was.
 	EXPECT_EQ(wxT("Partner"), doc->GetCellValue(0, 0));
@@ -238,10 +249,10 @@ TEST(SpreadsheetCompose, DimensionsShareOneColumn_MeasuresGetTheirOwn)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns({ Dim(wxT("Partner"), 0), Dim(wxT("Product"), 1), Measure(wxT("Amount")) });
-	driver.OnRow(1, true,  { ibValue(wxT("Alpha")), ibValue(),               ibValue(100) });
-	driver.OnRow(2, false, { ibValue(),             ibValue(wxT("Widget")), ibValue(40)  });
-	driver.OnComplete(true);
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Product"), 1), Measure(wxT("Amount")) }));
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, true,  { ibValue(wxT("Alpha")), ibValue(),               ibValue(100) });
+	driver.OnRow(2, { ibValue(),             ibValue(wxT("Widget")), ibValue(40)  });
+	driver.OnOutputEnd(true);
 
 	// Two heading lines — one per level, in the column they are read in.
 	EXPECT_EQ(wxT("Partner"), doc->GetCellValue(0, 0));
@@ -262,10 +273,10 @@ TEST(SpreadsheetCompose, RowLevels_BecomeOutlineGroups)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) });
-	driver.OnRow(1, true,  { ibValue(wxT("Alpha")), ibValue(100) });
-	driver.OnRow(2, false, { ibValue(wxT("Widget")), ibValue(40) });
-	driver.OnComplete(true);
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) }));
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, true,  { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnRow(2, { ibValue(wxT("Widget")), ibValue(40) });
+	driver.OnOutputEnd(true);
 
 	// The document carries the levels as groups — one per heading that has something under it.
 	EXPECT_GT(doc->GetSpreadsheetDesc().GetGroupNumberRows(), 0);
@@ -281,9 +292,9 @@ TEST(SpreadsheetCompose, ComposedDocument_IsReadOnly)
 
 	EXPECT_TRUE(doc->IsEditable());   // a fresh document is a sheet somebody may fill in
 
-	driver.OnColumns(Schema());
-	driver.OnRow(0, false, { ibValue(wxT("Alpha")), ibValue(10) });
-	driver.OnComplete(false);
+	driver.OnOutputBegin(SchemaInfo(Schema()));
+	driver.OnRow(0, { ibValue(wxT("Alpha")), ibValue(10) });
+	driver.OnOutputEnd(false);
 
 	EXPECT_FALSE(doc->IsEditable());
 }
@@ -295,9 +306,9 @@ TEST(SpreadsheetCompose, Columns_AreSizedFromTheirContent)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns(Schema());
-	driver.OnRow(0, false, { ibValue(wxT("a name long enough to need more than the default width")), ibValue(10) });
-	driver.OnComplete(false);
+	driver.OnOutputBegin(SchemaInfo(Schema()));
+	driver.OnRow(0, { ibValue(wxT("a name long enough to need more than the default width")), ibValue(10) });
+	driver.OnOutputEnd(false);
 
 	EXPECT_GT(doc->GetColSize(0), doc->GetColSize(1));
 }
@@ -311,11 +322,11 @@ TEST(SpreadsheetCompose, GrandTotal_ArrivesFirstAndIsPrintedLast)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) });
-	driver.OnRow(0, true,  { ibValue(),             ibValue(140) });   // the root — everything
-	driver.OnRow(1, true,  { ibValue(wxT("Alpha")), ibValue(100) });
-	driver.OnRow(1, true,  { ibValue(wxT("Beta")),  ibValue(40)  });
-	driver.OnComplete(true);
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) }));
+	driver.OnGroupBegin(0, ibSelectorNodeKind::Group, true, true,  { ibValue(),             ibValue(140) });   // the root — everything
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, true,  { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, true,  { ibValue(wxT("Beta")),  ibValue(40)  });
+	driver.OnOutputEnd(true);
 
 	// Row 0 is the header; the two groups follow; the total closes the section.
 	EXPECT_EQ(wxT("Partner"), doc->GetCellValue(0, 0));
@@ -333,9 +344,9 @@ TEST(SpreadsheetCompose, GrandTotalWithNoDimensions_WritesFiguresOnly)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns({ Measure(wxT("Amount")), Measure(wxT("Count")) });
-	driver.OnRow(0, true, { ibValue(140), ibValue(2) });
-	driver.OnComplete(true);
+	driver.OnOutputBegin(SchemaInfo({ Measure(wxT("Amount")), Measure(wxT("Count")) }));
+	driver.OnGroupBegin(0, ibSelectorNodeKind::Group, true, true, { ibValue(140), ibValue(2) });
+	driver.OnOutputEnd(true);
 
 	EXPECT_EQ(wxT("140"), doc->GetCellValue(1, 0));
 	EXPECT_EQ(wxT("2"),   doc->GetCellValue(1, 1));
@@ -349,11 +360,11 @@ TEST(SpreadsheetCompose, NoPerGroupTotalLine_TheHeadingCarriesTheFigures)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) });
-	driver.OnRow(1, true,  { ibValue(wxT("Alpha")), ibValue(100) });
-	driver.OnRow(2, false, { ibValue(),             ibValue(60)  });
-	driver.OnRow(2, false, { ibValue(),             ibValue(40)  });
-	driver.OnComplete(true);
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) }));
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, true,  { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnRow(2, { ibValue(),             ibValue(60)  });
+	driver.OnRow(2, { ibValue(),             ibValue(40)  });
+	driver.OnOutputEnd(true);
 
 	EXPECT_EQ(wxT("100"), doc->GetCellValue(1, 1));   // the heading's own figure
 	EXPECT_EQ(3, driver.GetRowsWritten());            // heading + two rows, and nothing else
@@ -390,13 +401,13 @@ TEST(SpreadsheetCross, AColumnKeySeenLateStillGetsItsColumn)
 	// Partner reads down the page (level 0), Warehouse across it (level 1).
 	driver.OnOutputBegin(CrossInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) }, 1));
 
-	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(30) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(30) });
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(30) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("North")), ibValue(30) });
 
-	driver.OnGroup(1, true, false, { ibValue(wxT("Beta")), ibValue(), ibValue(70) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(70) });   // a key nobody saw before
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Beta")), ibValue(), ibValue(70) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("South")), ibValue(70) });   // a key nobody saw before
 
-	driver.OnComplete(true);
+	driver.OnOutputEnd(true);
 
 	// The header names both keys, in the order they were first seen, and closes with the row total.
 	EXPECT_EQ(wxT("North"), doc->GetCellValue(0, 1));
@@ -423,10 +434,10 @@ TEST(SpreadsheetCross, TheRowHeadingsOwnFiguresAreTheRowTotal)
 	ibSpreadsheetComposeDriver driver(doc.get());
 
 	driver.OnOutputBegin(CrossInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) }, 1));
-	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(100) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
-	driver.OnComplete(true);
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(100) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
+	driver.OnOutputEnd(true);
 
 	EXPECT_EQ(wxT("60"),  doc->GetCellValue(1, 1));
 	EXPECT_EQ(wxT("40"),  doc->GetCellValue(1, 2));
@@ -449,13 +460,13 @@ TEST(SpreadsheetCross, ADetailRecordIsALineOfTheTableWithItsOwnCells)
 		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")), Detail(wxT("Doc")) };
 
 	driver.OnOutputBegin(CrossInfo(schema, 1));
-	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(30), ibValue() });
-	driver.OnGroup(2, true, false, { ibValue(), ibValue(wxT("North")), ibValue(30), ibValue() });
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(30), ibValue() });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, true, false, { ibValue(), ibValue(wxT("North")), ibValue(30), ibValue() });
 	// The record hangs under the ROW heading and carries a cell of its own — its level is past the
 	// last dimension, which is how it is told from a column key.
-	driver.OnDetail(3, { ibValue(), ibValue(), ibValue(30), ibValue(wxT("Inv-7")) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(30), ibValue() });
-	driver.OnComplete(true);
+	driver.OnRow(3, { ibValue(), ibValue(), ibValue(30), ibValue(wxT("Inv-7")) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("North")), ibValue(30), ibValue() });
+	driver.OnOutputEnd(true);
 
 	EXPECT_EQ(2, driver.GetRowsWritten());                       // the heading AND the record
 	EXPECT_EQ(wxT("Inv-7"), doc->GetCellValue(2, 0).Trim(false));  // what the record says, on the left
@@ -479,8 +490,8 @@ TEST(SpreadsheetCross, WithNoColumnAxisTheStreamingLayoutIsUsed)
 	// The header is written straight away, which is exactly what a table cannot do.
 	EXPECT_EQ(wxT("Partner"), doc->GetCellValue(0, 0));
 
-	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(100) });
-	driver.OnComplete(true);
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnOutputEnd(true);
 	EXPECT_EQ(1, driver.GetRowsWritten());
 }
 
@@ -500,19 +511,19 @@ TEST(SpreadsheetCross, ColumnTotalsComeFromTheRootAndCloseTheTable)
 		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) };
 
 	driver.OnOutputBegin(CrossInfo(schema, 1));
-	driver.OnGroup(0, true, false, { ibValue(), ibValue(), ibValue(100) });          // the grand total
+	driver.OnGroupBegin(0, ibSelectorNodeKind::Group, true, false, { ibValue(), ibValue(), ibValue(100) });          // the grand total
 	// ⭐ ITS CELLS COME NEXT — the column totals. The fold hangs the column branch under EVERY
 	// heading, and the root is the heading over everything, so what each column adds up to arrives
 	// with the rest of the tree instead of costing a second read of the whole output.
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
 
-	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(60) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
-	driver.OnGroup(1, true, false, { ibValue(wxT("Beta")), ibValue(), ibValue(40) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(60) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Beta")), ibValue(), ibValue(40) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
 
-	driver.OnComplete(true);
+	driver.OnOutputEnd(true);
 
 	// Header, Alpha, Beta, then the bottom line.
 	EXPECT_EQ(wxT("Total"), doc->GetCellValue(3, 0));
@@ -534,16 +545,16 @@ TEST(SpreadsheetCross, TheColumnTotalsSettleTheOrderOfTheColumns)
 		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) };
 
 	driver.OnOutputBegin(CrossInfo(schema, 1));
-	driver.OnGroup(0, true, false, { ibValue(), ibValue(), ibValue(100) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });   // …the root's cells
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
+	driver.OnGroupBegin(0, ibSelectorNodeKind::Group, true, false, { ibValue(), ibValue(), ibValue(100) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });   // …the root's cells
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
 
 	// The only row meets South FIRST — and South is still the second column.
-	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(100) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(100) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("North")), ibValue(60) });
 
-	driver.OnComplete(true);
+	driver.OnOutputEnd(true);
 
 	EXPECT_EQ(wxT("North"), doc->GetCellValue(0, 1));
 	EXPECT_EQ(wxT("South"), doc->GetCellValue(0, 2));
@@ -565,8 +576,8 @@ TEST(SpreadsheetCompose, AnOutputPrintsItsOwnName)
 	info.m_rowLevels = 1;
 	info.m_name      = wxT("By partner");
 	driver.OnOutputBegin(info);
-	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(100) });
-	driver.OnComplete(true);
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnOutputEnd(true);
 
 	EXPECT_EQ(wxT("By partner"), doc->GetCellValue(0, 0));   // the caption, above its header
 	EXPECT_EQ(wxT("Partner"),    doc->GetCellValue(1, 0));
@@ -583,14 +594,14 @@ TEST(SpreadsheetCross, AnUpperColumnHeadingGetsItsOwnTotalColumn)
 	driver.OnOutputBegin(CrossInfo(
 		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Dim(wxT("Month"), 2), Measure(wxT("Amount")) }, 1));
 
-	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(), ibValue(100) });
-	driver.OnGroup(2, true, false, { ibValue(), ibValue(wxT("North")), ibValue(), ibValue(70) });
-	driver.OnGroup(3, false, false, { ibValue(), ibValue(), ibValue(wxT("Jan")), ibValue(30) });
-	driver.OnGroup(3, false, false, { ibValue(), ibValue(), ibValue(wxT("Feb")), ibValue(40) });
-	driver.OnGroup(2, true, false, { ibValue(), ibValue(wxT("South")), ibValue(), ibValue(30) });
-	driver.OnGroup(3, false, false, { ibValue(), ibValue(), ibValue(wxT("Jan")), ibValue(30) });
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(), ibValue(100) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, true, false, { ibValue(), ibValue(wxT("North")), ibValue(), ibValue(70) });
+	driver.OnGroupBegin(3, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(), ibValue(wxT("Jan")), ibValue(30) });
+	driver.OnGroupBegin(3, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(), ibValue(wxT("Feb")), ibValue(40) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, true, false, { ibValue(), ibValue(wxT("South")), ibValue(), ibValue(30) });
+	driver.OnGroupBegin(3, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(), ibValue(wxT("Jan")), ibValue(30) });
 
-	driver.OnComplete(true);
+	driver.OnOutputEnd(true);
 
 	// ⭐ A HEADING'S TOTAL CLOSES IT (Max, 2026-08-26) — the children first, the figure that sums them
 	// after, the way a printed report reads down the page:
@@ -621,10 +632,10 @@ TEST(SpreadsheetCross, OneColumnLevelGetsNoSubtotalColumns)
 	ibSpreadsheetComposeDriver driver(doc.get());
 
 	driver.OnOutputBegin(CrossInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) }, 1));
-	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(70) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("North")), ibValue(30) });
-	driver.OnGroup(2, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
-	driver.OnComplete(true);
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(70) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("North")), ibValue(30) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("South")), ibValue(40) });
+	driver.OnOutputEnd(true);
 
 	EXPECT_EQ(wxT("North"), doc->GetCellValue(0, 1));
 	EXPECT_EQ(wxT("South"), doc->GetCellValue(0, 2));
@@ -646,15 +657,15 @@ TEST(SpreadsheetCompose, ASecondOutputDoesNotShrinkTheFirstsColumns)
 	ibSpreadsheetComposeDriver driver(doc.get());
 
 	// First output: a long value in column 0.
-	driver.OnColumns({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) });
-	driver.OnGroup(1, true, false, { ibValue(wxT("A very long partner name indeed")), ibValue(10) });
-	driver.OnComplete(true);
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) }));
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("A very long partner name indeed")), ibValue(10) });
+	driver.OnOutputEnd(true);
 	const int afterFirst = doc->GetColSize(0);
 
 	// Second output onto the same sheet: a short value in the same column.
-	driver.OnColumns({ Dim(wxT("X"), 0), Measure(wxT("N")) });
-	driver.OnGroup(1, true, false, { ibValue(wxT("ab")), ibValue(1) });
-	driver.OnComplete(true);
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("X"), 0), Measure(wxT("N")) }));
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("ab")), ibValue(1) });
+	driver.OnOutputEnd(true);
 
 	EXPECT_EQ(afterFirst, doc->GetColSize(0))
 		<< "the shared column must still fit the widest text any output put in it";
@@ -666,14 +677,14 @@ TEST(SpreadsheetCompose, ASecondOutputWidensAColumnWhenItNeedsMore)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	driver.OnColumns({ Dim(wxT("P"), 0), Measure(wxT("A")) });
-	driver.OnGroup(1, true, false, { ibValue(wxT("ab")), ibValue(1) });
-	driver.OnComplete(true);
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("P"), 0), Measure(wxT("A")) }));
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("ab")), ibValue(1) });
+	driver.OnOutputEnd(true);
 	const int afterFirst = doc->GetColSize(0);
 
-	driver.OnColumns({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) });
-	driver.OnGroup(1, true, false, { ibValue(wxT("A very long partner name indeed")), ibValue(10) });
-	driver.OnComplete(true);
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) }));
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("A very long partner name indeed")), ibValue(10) });
+	driver.OnOutputEnd(true);
 
 	EXPECT_GT(doc->GetColSize(0), afterFirst);
 }
@@ -694,15 +705,15 @@ TEST(SpreadsheetCross, EveryHeadingGetsItsOwnTotalColumnEvenOverOneChild)
 	driver.OnOutputBegin(CrossInfo(
 		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Dim(wxT("Month"), 2), Measure(wxT("Amount")) }, 1));
 
-	driver.OnGroup(1, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(), ibValue(100) });
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(), ibValue(100) });
 	// North has TWO months, South has ONE — both get a total column all the same.
-	driver.OnGroup(2, true, false, { ibValue(), ibValue(wxT("North")), ibValue(), ibValue(70) });
-	driver.OnGroup(3, false, false, { ibValue(), ibValue(), ibValue(wxT("Jan")), ibValue(30) });
-	driver.OnGroup(3, false, false, { ibValue(), ibValue(), ibValue(wxT("Feb")), ibValue(40) });
-	driver.OnGroup(2, true, false, { ibValue(), ibValue(wxT("South")), ibValue(), ibValue(30) });
-	driver.OnGroup(3, false, false, { ibValue(), ibValue(), ibValue(wxT("Jan")), ibValue(30) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, true, false, { ibValue(), ibValue(wxT("North")), ibValue(), ibValue(70) });
+	driver.OnGroupBegin(3, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(), ibValue(wxT("Jan")), ibValue(30) });
+	driver.OnGroupBegin(3, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(), ibValue(wxT("Feb")), ibValue(40) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, true, false, { ibValue(), ibValue(wxT("South")), ibValue(), ibValue(30) });
+	driver.OnGroupBegin(3, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(), ibValue(wxT("Jan")), ibValue(30) });
 
-	driver.OnComplete(true);
+	driver.OnOutputEnd(true);
 
 	// Columns: [North total], Jan, Feb, [South total], Jan, then the row total.
 	//   dim=0        1         2    3        4          5         6

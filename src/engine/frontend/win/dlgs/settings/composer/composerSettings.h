@@ -507,6 +507,15 @@ private:
 	// reader edits THEIR setting; the outputs are part of it, so they come along by themselves.
 	std::vector<ibOutputDescription>& Structure() { return EditedSettings().m_structure; }
 	const std::vector<ibOutputDescription>& Structure() const { return EditedSettings().m_structure; }
+
+	// ⭐⭐ ADD AN OUTPUT — AND NAME IT. Every output gets `Output1`, `Output2` … at birth, because a
+	// name is not decoration here: the composer reads several outputs as BRANCHES of one query
+	// (`SPLIT <name> BY …`) and asks for each branch BY THAT NAME. An output with no name cannot be
+	// addressed, so it is left out of the shared read and quietly costs a query of its own — the
+	// mechanism looked built and never once engaged (found 2026-08-27, before it ever ran).
+	//
+	// The first free number, so adding after a rename never produces two of the same.
+	ibOutputDescription& AddOutput();
 	// THE LEVEL A TREE ROW POINTS AT, in the buffer — null on the report, an output or an axis, and
 	// on a row whose coordinate the buffer no longer has. Every cell editor asks through here, so
 	// "which level is this row" is answered once.

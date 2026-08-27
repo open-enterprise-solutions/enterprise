@@ -763,3 +763,222 @@ TEST(QueryTotals, CrossTableDetailRecordsHangUnderTheRowHeadingWithTheirOwnCells
 	ASSERT_EQ(second.m_children.size(), 1u);
 	EXPECT_EQ(second.m_children[0]->m_values.at(PRODUCT).GetString().ToStdString(), "Pear");
 }
+
+// ⭐⭐ `SPLIT` — ONE READ, FOLDED SEVERAL WAYS. The common levels fold as they always did; where the
+// ladder forks, the SAME row walks down every branch (Max, 2026-08-27: "the data comes from one
+// common set, and each of them has a selection of its own").
+//
+// What the tree must show: under the common heading a FORK per branch — carrying no key of its own —
+// and under each fork that branch's own headings, each holding the figures of the rows that reached
+// it. The branch total equals the heading's, because a branch sees exactly the rows its parent does.
+TEST(QueryTotals, SplitFoldsTheSameRowsDownEveryBranch)
+{
+	const ibMetaID ITEM = 1, CHARACTERISTIC = 2, SERIES = 3, AMOUNT = 4;
+
+	ibQueryRamTable detail;
+	detail.AddColumn(ITEM,           wxT("item"),   ibTypeDescription());
+	detail.AddColumn(CHARACTERISTIC, wxT("charac"), ibTypeDescription());
+	detail.AddColumn(SERIES,         wxT("series"), ibTypeDescription());
+	detail.AddColumn(AMOUNT,         wxT("amount"), ibTypeDescription());
+	auto add = [&](const wxString& i, const wxString& c, const wxString& s, long a) {
+		const long row = detail.AppendRow();
+		detail.SetCell(row, ITEM,           ibValue(i));
+		detail.SetCell(row, CHARACTERISTIC, ibValue(c));
+		detail.SetCell(row, SERIES,         ibValue(s));
+		detail.SetCell(row, AMOUNT,         ibValue(ibNumber(a)));
+	};
+	add(wxT("Bolt"), wxT("M8"), wxT("A"), 10);
+	add(wxT("Bolt"), wxT("M8"), wxT("B"),  5);
+	add(wxT("Bolt"), wxT("M6"), wxT("A"),  4);
+
+	TestCol item(wxT("item"), ITEM), charac(wxT("charac"), CHARACTERISTIC),
+	        series(wxT("series"), SERIES), amount(wxT("amount"), AMOUNT);
+
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn    = ibDataQueryBuilder::AggregateFn::Sum;
+	sum.m_col   = &amount;
+	sum.m_alias = wxT("total");
+
+	// BY item SPLIT charac ONTO ByCharacteristic SPLIT series ONTO BySeries
+	auto byCharacteristic = std::make_shared<ibTotalBranch>();
+	byCharacteristic->m_name = wxT("ByCharacteristic");
+	auto bySeries = std::make_shared<ibTotalBranch>();
+	bySeries->m_name = wxT("BySeries");
+
+	std::vector<ibTotalLevel> levels;
+	levels.push_back(ibTotalLevel::One(&item, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(&charac, ibDimensionKind::Elements));
+	levels.back().m_branch = byCharacteristic;
+	levels.push_back(ibTotalLevel::One(&series, ibDimensionKind::Elements));
+	levels.back().m_branch = bySeries;
+
+	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
+
+	const ibMetaID AGG0 = AMOUNT;
+	const ibSelectorTree::Node& root = tree.Root();
+	EXPECT_TRUE(NumEq(root.m_values.at(AGG0), 19));
+	ASSERT_EQ(root.m_children.size(), 1u);                 // one common heading: Bolt
+
+	const ibSelectorTree::Node& bolt = *root.m_children[0];
+	EXPECT_EQ(bolt.m_kind, ibSelectorNodeKind::Group);
+	EXPECT_TRUE(NumEq(bolt.m_values.at(AGG0), 19));
+	ASSERT_EQ(bolt.m_children.size(), 2u);                 // …and TWO forks under it, one per branch
+
+	// THE FORK CARRIES ITS NAME AND NOTHING ELSE — no key of its own, and the same figure as the
+	// heading it stands under, because it covers exactly those rows.
+	const ibSelectorTree::Node& forkChar = *bolt.m_children[0];
+	EXPECT_EQ(forkChar.m_kind, ibSelectorNodeKind::Branch);
+	EXPECT_EQ(forkChar.m_branch, wxT("ByCharacteristic"));
+	EXPECT_TRUE(NumEq(forkChar.m_values.at(AGG0), 19));
+	EXPECT_EQ(forkChar.m_level, bolt.m_level);             // a fork spends no level
+
+	// Branch one groups by characteristic: M8 = 15, M6 = 4.
+	ASSERT_EQ(forkChar.m_children.size(), 2u);
+	EXPECT_TRUE(NumEq(forkChar.m_children[0]->m_values.at(AGG0), 15));
+	EXPECT_TRUE(NumEq(forkChar.m_children[1]->m_values.at(AGG0), 4));
+
+	// Branch two groups the SAME rows by series: A = 14, B = 5.
+	const ibSelectorTree::Node& forkSeries = *bolt.m_children[1];
+	EXPECT_EQ(forkSeries.m_kind, ibSelectorNodeKind::Branch);
+	EXPECT_EQ(forkSeries.m_branch, wxT("BySeries"));
+	ASSERT_EQ(forkSeries.m_children.size(), 2u);
+	EXPECT_TRUE(NumEq(forkSeries.m_children[0]->m_values.at(AGG0), 14));
+	EXPECT_TRUE(NumEq(forkSeries.m_children[1]->m_values.at(AGG0), 5));
+
+	// ⭐ BOTH BRANCHES STAND AT THE SAME DEPTH. They begin in the same place, so the second must not
+	// print one rung deeper than the first — which is what counting depth by position in the flat
+	// level list would have done.
+	EXPECT_EQ(forkChar.m_children[0]->m_level, forkSeries.m_children[0]->m_level);
+}
+
+// ⚠ NOTHING COMMON ABOVE THEM — `BY SPLIT a SPLIT b`. Every branch then forks from the GRAND TOTAL.
+// Read as "the first section is the common one" this would make branch one the trunk and hang branch
+// two inside it, which is the opposite of what was asked.
+TEST(QueryTotals, SplitWithNothingInCommonForksAtTheRoot)
+{
+	const ibMetaID ITEM = 1, STORE = 2, AMOUNT = 3;
+
+	ibQueryRamTable detail;
+	detail.AddColumn(ITEM,   wxT("item"),   ibTypeDescription());
+	detail.AddColumn(STORE,  wxT("store"),  ibTypeDescription());
+	detail.AddColumn(AMOUNT, wxT("amount"), ibTypeDescription());
+	auto add = [&](const wxString& i, const wxString& s, long a) {
+		const long row = detail.AppendRow();
+		detail.SetCell(row, ITEM,   ibValue(i));
+		detail.SetCell(row, STORE,  ibValue(s));
+		detail.SetCell(row, AMOUNT, ibValue(ibNumber(a)));
+	};
+	add(wxT("Bolt"), wxT("Main"), 10);
+	add(wxT("Nut"),  wxT("Main"),  5);
+
+	TestCol item(wxT("item"), ITEM), store(wxT("store"), STORE), amount(wxT("amount"), AMOUNT);
+
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn  = ibDataQueryBuilder::AggregateFn::Sum;
+	sum.m_col = &amount;
+
+	auto byItem  = std::make_shared<ibTotalBranch>();
+	auto byStore = std::make_shared<ibTotalBranch>();
+
+	std::vector<ibTotalLevel> levels;
+	levels.push_back(ibTotalLevel::One(&item, ibDimensionKind::Elements));
+	levels.back().m_branch = byItem;
+	levels.push_back(ibTotalLevel::One(&store, ibDimensionKind::Elements));
+	levels.back().m_branch = byStore;
+
+	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
+
+	const ibSelectorTree::Node& root = tree.Root();
+	ASSERT_EQ(root.m_children.size(), 2u);                 // two forks, side by side, not nested
+	EXPECT_EQ(root.m_children[0]->m_kind, ibSelectorNodeKind::Branch);
+	EXPECT_EQ(root.m_children[1]->m_kind, ibSelectorNodeKind::Branch);
+	EXPECT_EQ(root.m_children[0]->m_children.size(), 2u);  // by item: Bolt, Nut
+	EXPECT_EQ(root.m_children[1]->m_children.size(), 1u);  // by store: Main
+}
+
+// ⭐ AND A REPORT WITHOUT `SPLIT` IS UNTOUCHED — the levels are one ladder, no fork is opened, and
+// the tree is the one this suite has been pinning all along. Stated as a test because "the old road
+// is unchanged" is a claim, and a claim about behaviour belongs here rather than in a comment.
+TEST(QueryTotals, WithoutSplitTheTreeHasNoForks)
+{
+	const ibMetaID REGION = 1, AMOUNT = 2;
+
+	ibQueryRamTable detail;
+	detail.AddColumn(REGION, wxT("region"), ibTypeDescription());
+	detail.AddColumn(AMOUNT, wxT("amount"), ibTypeDescription());
+	const long row = detail.AppendRow();
+	detail.SetCell(row, REGION, ibValue(wxT("North")));
+	detail.SetCell(row, AMOUNT, ibValue(ibNumber(7L)));
+
+	TestCol region(wxT("region"), REGION), amount(wxT("amount"), AMOUNT);
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn  = ibDataQueryBuilder::AggregateFn::Sum;
+	sum.m_col = &amount;
+
+	const std::vector<ibTotalLevel> levels{ ibTotalLevel::One(&region, ibDimensionKind::Elements) };
+	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
+
+	ASSERT_EQ(tree.Root().m_children.size(), 1u);
+	EXPECT_EQ(tree.Root().m_children[0]->m_kind, ibSelectorNodeKind::Group);
+	EXPECT_TRUE(tree.Root().m_children[0]->m_branch.IsEmpty());
+	EXPECT_EQ(tree.Root().m_children[0]->m_level, 1);
+}
+
+// ⭐⭐ ONE CURSOR, ONE FOLD, N WALKS — the half of `SPLIT` that lives on the READING side.
+//
+// The branches share the READ, and the rows arrive as a cursor: a cursor is spent by the first scan,
+// so a second selection made over the same read finds nothing left to fetch. Live, that came back as
+// the driver's "Error retrieving Next record" the moment a composition's second output started
+// (2026-08-27) — the fold was right, the tree was right, and the second reader was handed a drained
+// cursor. So the fold happens ONCE and the tree is handed on: this pins that the second walk reads
+// its branch WITHOUT touching the cursor again.
+TEST(QueryTotals, EveryBranchWalksOneFoldWithoutRereadingTheCursor)
+{
+	const ibMetaID REGION = 1, PRODUCT = 2, AMOUNT = 3;
+	const long ROWS = 12, REGIONS = 2, PRODUCTS = 3;
+
+	TestCol region(wxT("region"), REGION), product(wxT("product"), PRODUCT), amount(wxT("amount"), AMOUNT);
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+
+	// BY <nothing common> SPLIT ByRegion BY region SPLIT ByProduct BY product
+	auto byRegion  = std::make_shared<ibTotalBranch>();
+	byRegion->m_name = wxT("ByRegion");
+	auto byProduct = std::make_shared<ibTotalBranch>();
+	byProduct->m_name = wxT("ByProduct");
+
+	std::vector<ibTotalLevel> levels;
+	levels.push_back(ibTotalLevel::One(&region, ibDimensionKind::Elements));
+	levels.back().m_branch = byRegion;
+	levels.push_back(ibTotalLevel::One(&product, ibDimensionKind::Elements));
+	levels.back().m_branch = byProduct;
+
+	auto rows = std::make_unique<GeneratedRows>(ROWS, REGIONS, PRODUCTS, REGION, PRODUCT, AMOUNT);
+	GeneratedRows* cursor = rows.get();
+
+	// THE FOLD — one pass, exactly as the shared read does it before handing the tree to the branches.
+	ibSelector fold(std::move(rows), ibSelectKind::ibSelectKind_ByGroups);
+	fold.WithTotals(levels, { sum }, false);
+	fold.ReadRows();
+	const std::shared_ptr<ibSelectorTree> tree = fold.FoldedTree();
+	ASSERT_NE(tree, nullptr);
+	const long readsAfterFold = cursor->Reads();
+	EXPECT_EQ(readsAfterFold, ROWS + 1);                    // every row once, plus the Next() that ended it
+
+	// …AND EACH BRANCH WALKS IT. No cursor is given to either — the tree is the whole answer.
+	const auto walk = [&](const wxString& branch) {
+		ibSelector s(ibQueryRamTable(), ibSelectKind::ibSelectKind_ByGroups);
+		s.WithTotals(levels, { sum }, false);
+		s.WithReadyTree(tree);
+		s.WalkBranch(branch);
+		long seen = 0;
+		while (s.Next()) ++seen;
+		return seen;
+	};
+
+	EXPECT_EQ(walk(wxT("ByRegion")),  static_cast<long>(REGIONS));    // R0, R1
+	EXPECT_EQ(walk(wxT("ByProduct")), static_cast<long>(PRODUCTS));   // P0, P1, P2
+
+	// ⭐ THE POINT OF THE WHOLE ARC, as a number: the second branch cost the source nothing.
+	EXPECT_EQ(cursor->Reads(), readsAfterFold);
+}

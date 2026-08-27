@@ -118,20 +118,51 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 	// structure window offers a person to do.
 	m_outputName = info.m_name;
 
-	OnColumns(info.m_schema);
+	TakeSchema(info.m_schema);
 }
 
 // ⭐ WHICH HEADING THIS IS, asked of the walk instead of read off `hasChildren`. A row heading with
 // no columns under it and a column heading are both "a node with children"; only the depth and the
 // seam say which, and the seam is what OnOutputBegin was told.
-void ibSpreadsheetComposeDriver::OnGroup(int level, bool hasChildren, bool /*showsWhatIsUnder*/,
-	const std::vector<ibValue>& values)
+void ibSpreadsheetComposeDriver::OnGroupBegin(int level, ibSelectorNodeKind /*kind*/, bool hasChildren,
+	bool /*showsWhatIsUnder*/, const std::vector<ibValue>& values)
 {
 	if (!m_cross) {
-		OnRow(level, hasChildren, values);   // the ordinary report, printed as it arrives
+		PrintRow(level, hasChildren, values);   // the ordinary report, printed as it arrives
 		return;
 	}
 	OnCrossHeading(level, values);
+}
+
+// A COLUMN — a heading that reads ACROSS the page. The walk says so now (it knows each level's
+// axis), where this driver used to work it out from the depth and the row-level count it had been
+// told separately. Same drawing, one fewer thing to keep in step.
+void ibSpreadsheetComposeDriver::OnColumn(int level, ibSelectorNodeKind kind,
+	const std::vector<ibValue>& values)
+{
+	if (!m_cross)
+		return;   // no column axis in this output — there is nowhere across to write
+	if (kind == ibSelectorNodeKind::Detail)
+		PrintCrossDetail(level, values);
+	else
+		OnCrossHeading(level, values);
+}
+
+// ⭐⭐ A HEADING IS CLOSED — everything under it has been written, so its figures are final.
+//
+// 🛑 THIS IS WHERE THE GRAND TOTAL BELONGS, and the lack of it is why the total used to be stashed
+// in a field: a pre-order walk hands the root over FIRST, so printing it as it arrived put the sum
+// of everything above the first group, where a reader looks for column titles (Max, 2026-08-21:
+// "the totals must always be at the end"). Closing the root IS the end of the section, so the line
+// goes here and nothing has to be remembered between two events.
+void ibSpreadsheetComposeDriver::OnGroupEnd(int level, const std::vector<ibValue>& values)
+{
+	if (m_document == nullptr || m_cross)
+		return;   // a table writes its totals with the table itself (WriteCrossTable)
+	if (level != 0 || !m_hasMeasures)
+		return;   // only the root carries the grand total, and only where there are figures to show
+	WriteTotalLine(0, values, /*grand*/true);
+	m_hasGrandTotal = false;   // …written here, so the end of the output has nothing left to do
 }
 
 // ⭐⭐ A DETAIL RECORD IS A LINE OF THE TABLE, WITH CELLS ACROSS IT (Max, 2026-08-26: "its own line,
@@ -147,12 +178,17 @@ void ibSpreadsheetComposeDriver::OnGroup(int level, bool hasChildren, bool /*sho
 //
 // Its own values go where a heading's do: down the leftmost area, one line, indented past the last
 // grouping. Empty ones are skipped — a record is identified by what it says, not by its blanks.
-void ibSpreadsheetComposeDriver::OnDetail(int level, const std::vector<ibValue>& values)
+void ibSpreadsheetComposeDriver::OnRow(int level, const std::vector<ibValue>& values)
 {
 	if (!m_cross) {
-		OnRow(level, false, values);
+		PrintRow(level, false, values);
 		return;
 	}
+	PrintCrossDetail(level, values);
+}
+
+void ibSpreadsheetComposeDriver::PrintCrossDetail(int level, const std::vector<ibValue>& values)
+{
 
 	// ITS FIGURES, pulled out by role — the same as for a heading, because in a table a record IS
 	// figured like one: COUNT is 1, SUM is the value (see ibStreamingFold::Finish).
@@ -212,7 +248,7 @@ void ibSpreadsheetComposeDriver::OnDetail(int level, const std::vector<ibValue>&
 	++m_crossDetailRows;
 }
 
-void ibSpreadsheetComposeDriver::OnColumns(const std::vector<ibQueryLowering::OutputColumn>& schema)
+void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::OutputColumn>& schema)
 {
 	if (m_document == nullptr)
 		return;
@@ -431,7 +467,7 @@ void ibSpreadsheetComposeDriver::WriteHeading()
 	m_document->PutArea(heading, 0);
 }
 
-void ibSpreadsheetComposeDriver::OnRow(int level, bool hasChildren, const std::vector<ibValue>& values)
+void ibSpreadsheetComposeDriver::PrintRow(int level, bool hasChildren, const std::vector<ibValue>& values)
 {
 	if (m_document == nullptr)
 		return;
@@ -753,7 +789,7 @@ std::vector<ibSpreadsheetComposeDriver::ColumnSlot> ibSpreadsheetComposeDriver::
 	// column axis is made of GROUPINGS, because the fold walks them nested. It stops holding the
 	// moment the deepest column level is the RECORDS: those arrive in the order the rows were read,
 	// so two groups interleave, each opens many times, and its heading is printed over every fragment
-	// (Max, 2026-08-26, looking at "вапрорлаві" repeating across the header: "isn't that a
+	// (Max, 2026-08-26, looking at one typed-in value repeating across the header: "isn't that a
 	// duplicate?"). It was not a duplicate — it was one group torn into pieces.
 	//
 	// The order of the GROUPS themselves is still first-seen, level by level: nothing is sorted by
@@ -1215,7 +1251,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	m_document->EnableEditing(false);
 }
 
-void ibSpreadsheetComposeDriver::OnComplete(bool /*totals*/)
+void ibSpreadsheetComposeDriver::OnOutputEnd(bool /*totals*/)
 {
 	if (m_document == nullptr)
 		return;

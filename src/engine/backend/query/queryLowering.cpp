@@ -3281,7 +3281,23 @@ int PruneSelect(ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
 	ast.m_totalsBy.erase(std::remove_if(ast.m_totalsBy.begin(), ast.m_totalsBy.end(),
 		[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }), ast.m_totalsBy.end());
 
-	if (ast.m_totalsAggregates.empty() && ast.m_totalsBy.empty() && !ast.m_totalsOverall)
+	// ⚠ THE NODES ARE PRUNED THE SAME WAY — a level whose field stopped resolving goes, and a node
+	// left with nothing goes with it. Skipped here, a removed attribute would live on inside a
+	// `SPLIT` and take the whole query down on the next run, which is exactly what this pass exists
+	// to prevent.
+	for (ibQueryTotalSplit& node : ast.m_totalsSplits) {
+		for (ibQueryTotalDim& d : node.m_levels)
+			d.m_fields.erase(std::remove_if(d.m_fields.begin(), d.m_fields.end(),
+				[&](const ibQueryTotalField& f) { return gone(StillResolves(sources, f.m_expr)); }), d.m_fields.end());
+		node.m_levels.erase(std::remove_if(node.m_levels.begin(), node.m_levels.end(),
+			[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }), node.m_levels.end());
+	}
+
+	bool nodesHoldLevels = false;
+	for (const ibQueryTotalSplit& node : ast.m_totalsSplits)
+		if (!node.m_levels.empty()) { nodesHoldLevels = true; break; }
+
+	if (ast.m_totalsAggregates.empty() && ast.m_totalsBy.empty() && !nodesHoldLevels && !ast.m_totalsOverall)
 		ast.m_hasTotals = false;   // TOTALS with nothing in it is not a TOTALS
 
 	// A JOIN's condition goes, not the join: the join IS a source, and an empty ON means "join by
@@ -4086,7 +4102,15 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 	// OVERALL ON ITS OWN IS A WHOLE TOTALS QUERY — one row folding everything, no dimensions. So
 	// what is refused is a TOTALS asking for no level at all, not a TOTALS with no dimension.
-	if (ast.m_totalsBy.empty() && !ast.m_totalsOverall)
+	// ⚠ AND THE NODES COUNT. A query may put every level on `SPLIT` nodes and leave the common ladder
+	// empty (`TOTALS SUM(x) BY SPLIT A BY …`), which is a perfectly ordinary report with two tables —
+	// asked only of `m_totalsBy` this refused it outright, because the levels were somewhere the
+	// question did not look (live, 2026-08-27).
+	bool anyNodeLevels = false;
+	for (const ibQueryTotalSplit& node : ast.m_totalsSplits)
+		if (!node.m_levels.empty()) { anyNodeLevels = true; break; }
+
+	if (ast.m_totalsBy.empty() && !anyNodeLevels && !ast.m_totalsOverall)
 		ThrowQueryException(0, 0, _("TOTALS needs at least one BY dimension, or BY OVERALL"));
 	// TOP + TOTALS — the limit caps the DETAIL rows the fold runs over (the first n by ORDER BY), NOT the
 	// subtotal tree. Applied as the page count on the detail read at the terminal below.
@@ -4326,11 +4350,60 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// The dimension levels, IN ORDER (each yields a subtotal node; the root is the grand total). They
 	// are the leading output columns (their group key at each node — read by GetValue(col)).
 	size_t levelIndex = 0;
-	for (const ibQueryTotalDim& d : ast.m_totalsBy) {
+	// ⭐⭐ …AND A BRANCH CONTINUES THE COMMON LADDER RATHER THAN THE LIST. A level's number is its
+	// DEPTH — which is what the fold builds (a fork spends no level, so two branches stand at the
+	// same depth however many of them there are) and what every reader asks by: the composer names a
+	// column's title by looking up `LevelAt(output, m_level + 1)` IN ITS OWN OUTPUT.
+	//
+	// 🛑 Counted straight through all the nodes, the second branch is off by however many levels the
+	// first one had: its first grouping asked for level 2 and got the second one's field, and its
+	// last asked for a level that is not there (Max, live, 2026-08-27, on a report whose second table
+	// printed `Posted` twice and lost `Ref`: the first part overwrites the second).
+	size_t commonLevels = 0;
+	// ⭐⭐ WHERE THE TEXT SAYS "STARTS A BRANCH", THE FOLD NEEDS "BELONGS TO ONE" — and this is where
+	// the one becomes the other. A query is written forwards, so `SPLIT` marks the level that opens
+	// a branch; a fold asks each level which ladder it is on. One object per branch, shared by its
+	// levels, so belonging is IDENTITY and no index has to be kept in step with the list.
+	// ⭐⭐ EVERY NODE'S LEVELS, IN ORDER — the hidden node first (`m_totalsBy`, which is what a report
+	// without SPLIT has), then each visible one. Flattened into ONE list here because that is what a
+	// fold reads: each level says which node it belongs to, and levels of one node stand together.
+	std::vector<std::pair<const ibQueryTotalDim*, std::shared_ptr<ibTotalBranch>>> ordered;
+	for (const ibQueryTotalDim& d : ast.m_totalsBy)
+		ordered.emplace_back(&d, nullptr);   // null = the hidden node
+	for (const ibQueryTotalSplit& split : ast.m_totalsSplits) {
+		if (split.m_levels.empty())
+			continue;   // added, nothing hung on it yet — it says nothing and folds nothing
+		auto branch = std::make_shared<ibTotalBranch>();
+		branch->m_name = split.m_name;
+		for (const ibQueryTotalDim& d : split.m_levels)
+			ordered.emplace_back(&d, branch);
+	}
+
+	std::shared_ptr<ibTotalBranch> branch;   // the node whose levels are being lowered
+	for (const auto& entry : ordered) {
+		const ibQueryTotalDim& d = *entry.first;
+		if (entry.second != branch) {
+			// ⭐ THE LADDER THAT ENDS HERE TAKES ITS OWN RECORDS FIRST — while it is still the last one
+			// declared, because the fold cuts the level list into ladders by neighbourhood.
+			//
+			// ⚠ THE HIDDEN NODE IS EXEMPT, and that is the whole of the rule: records close a ladder
+			// that ENDS, and the hidden one does not end where a SPLIT begins — it continues, as every
+			// visible node. Given records there they would hang beside the nodes, under no heading a
+			// reader asked for.
+			if (withDetails && branch != nullptr)
+				b.TotalsDetails(layout.m_detailsAxis, branch);
+			// THE COMMON LADDER ENDED HERE — its length is what every branch starts from (see above).
+			if (branch == nullptr)
+				commonLevels = levelIndex;
+			branch     = entry.second;
+			levelIndex = commonLevels;
+		}
+
 		// ONE LEVEL, ONE OR MORE FIELDS — grouped by the TUPLE of them. Each field resolves exactly as
 		// a lone dimension always did (plain column or dot-walk); what changed is that they are
 		// collected into one level instead of each becoming a level of its own.
 		ibTotalLevel level;
+		level.m_branch = branch;
 
 		// …AND WHICH WAY IT READS. `rowLevels` is the caller's own layout — a cross-table's row axis
 		// — and everything past it stands across the page. Stamped ON the level, so the fold and
@@ -4411,7 +4484,19 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			oc.m_role = ibQueryLowering::ibColumnRole::Dimension;   // a TOTALS BY level
 			// WHICH level it belongs to — several fields of one level all carry the same number, so
 			// a printer can put them side by side instead of counting columns as if they were levels.
-			oc.m_level = (int)(&d - &ast.m_totalsBy.front());
+			// 🛑 IT USED TO BE POINTER ARITHMETIC — `&d - &ast.m_totalsBy.front()`. That held only while
+			// every level lived in that one vector: with `SPLIT` the levels are walked from a list
+			// built out of the common ladder AND the nodes, so subtracting inside a different vector
+			// is meaningless, and an empty common ladder (a report whose groupings all sit on nodes)
+			// asserts outright — `front() called on empty vector`, live 2026-08-27.
+			//
+			// The counter this loop already keeps says the same thing without asking where the level
+			// is stored, which is the point: a level's NUMBER is its position in the walk.
+			//
+			// ⚠ MINUS ONE, because `levelIndex` has already been advanced past this level by the axis
+			// decision above — the number wanted here is the one this level was given, not the one
+			// the next will get.
+			oc.m_level = static_cast<int>(levelIndex) - 1;
 			// ⭐ PERIODS(<unit>[, <from>, <to>]) — read HERE, because this tier owns the vocabulary
 			// (ibReadPeriodUnit, the same one a register's Turnovers argument is read by) and the
 			// bounds are ordinary expressions that have to be evaluated to values before the fold
@@ -4499,8 +4584,10 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// fold reads that as "no group here — the rows themselves" and hangs a detail node per row under
 	// the deepest heading. Nothing else in this function changes: the same read, the same schema,
 	// one extra level in the config.
+	// …AND THE LAST LADDER, which the loop above could not see the end of. Without branches `branch`
+	// is null and this is the single call it has always been — the records of the one ladder there is.
 	if (withDetails)
-		b.TotalsDetails(layout.m_detailsAxis);
+		b.TotalsDetails(layout.m_detailsAxis, branch);
 
 	// (`selectByName` — the output-name map the aggregates read below — is built ABOVE, before the
 	// dimensions, because both clauses name the RESULT'S fields: SELECT Price … TOTALS SUM(Price),
@@ -4566,7 +4653,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	//
 	// 🛑 IT COST A WHOLE CROSS-TABLE TO FIND. `TOTALS COUNT(Number) BY Number` folded correctly and
 	// then the count landed on top of every key, so all the column headings came back as "1" and the
-	// table collapsed to one column (Max, 2026-08-25: "бред"). The key is the older answer — it says
+	// table collapsed to one column (Max, 2026-08-25, in one word: nonsense). The key is the older answer — it says
 	// what the group IS — so the aggregate is the one that moves, exactly as the second aggregate
 	// over one column already moves.
 	aggregatedCols.insert(levelCols.begin(), levelCols.end());

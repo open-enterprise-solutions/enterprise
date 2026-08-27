@@ -94,7 +94,7 @@ TEST(ValueContainer, ConstructFromMap) {
 // requires a string, and it raises on anything else — so none of this applies
 // there). TWO RULES, by the kind of key:
 //
-//   a STRING key folds case — `Имя` and `имя` are one field, which is how a
+//   a STRING key folds case — `Name` and `name` are one field, which is how a
 //   script reaches a structure's members.
 //   anything else is compared AS A VALUE: a number by its magnitude, a
 //   reference by its guid.

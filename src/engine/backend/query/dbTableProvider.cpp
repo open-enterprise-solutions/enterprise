@@ -2171,6 +2171,21 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 		const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
 		if (levels.empty())                                       RollupDecline(wxT("no totals levels"));
 
+		// 🛑⭐ BRANCHES ARE NOT A LADDER, AND `ROLLUP` ONLY KNOWS LADDERS. `ROLLUP(a, b, c)` is the
+		// prefixes of ONE list; a `SPLIT` asks for several lists that share a head — which SQL spells
+		// `GROUPING SETS`, not `ROLLUP`. Handed to ROLLUP as the flat list it is stored as, the
+		// branches would come back as levels NESTED inside one another: a report that runs, prints
+		// headings in an order nobody asked for, and reconciles to nothing.
+		//
+		// So this refuses, loudly and by name, and the RAM fold answers — where a branch is a fork
+		// and the shape is right. ⏭ AND THIS IS THE PLACE THE PUSH-DOWN GOES: the sets are exactly
+		// "the common prefix + each branch's own prefixes", which `GROUPING SETS` states directly.
+		// Engines are already asked whether they have it (ibSqlFeatures::m_grouping), and Firebird —
+		// which has neither it nor ROLLUP — keeps the RAM road either way.
+		for (const ibTotalLevel& level : levels)
+			if (level.m_branch != nullptr)
+				RollupDecline(wxT("the totals fork (SPLIT) - ROLLUP states one ladder, and branches need GROUPING SETS"));
+
 		// ⚠ A DERIVED SOURCE AND A DOT-WALK CANNOT BOTH BE HONOURED. A source that is not a table puts
 		// its own relation in the FROM (GetDerivedRelation), and the reference JOIN chain a dot-walked
 		// key rides is built over the main TABLE — there is none to hang it on. Both are fine alone;

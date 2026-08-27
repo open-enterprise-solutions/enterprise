@@ -375,7 +375,9 @@ void ibValueQuerySelect::FillMembers(ibMemberTable& helper) const
 	helper.AppendFunc(wxT("Next"),        wxT("Next()"));                    // advance the cursor
 	helper.AppendFunc(wxT("Reset"),       wxT("Reset()"));                   // rewind (grouped selection)
 	helper.AppendFunc(wxT("HasChildren"), wxT("HasChildren()"));             // current node is an expandable folder
-	helper.AppendFunc(wxT("Select"),   1, wxT("Select(method?)"));           // descend into the node's child sub-selection
+	// …and WHICH BRANCH, where the totals forked (SPLIT). Both optional: no method is a flat walk, no
+	// branch is every branch in order.
+	helper.AppendFunc(wxT("Select"),   2, wxT("Select(method?, branch?)")); // descend into the node's child sub-selection
 	helper.AppendFunc(wxT("Total"),    1, wxT("Total(name : string)"));      // grand total over the whole result
 	helper.AppendFunc(wxT("Level"),       wxT("Level()"));                   // node depth (0 = grand total / flat row)
 
@@ -409,12 +411,18 @@ bool ibValueQuerySelect::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 		const ibSelectKind kind = (lSizeArray >= 1 && paParams[0] != nullptr)
 			? paParams[0]->ConvertToEnumValue<ibSelectKind>()
 			: ibSelectKind::ibSelectKind_Direct;   // default — a direct (flat) walk of the node's children
+		// ⭐⭐ …AND WHICH BRANCH OF IT — `Select(ByGroups, "ByCharacteristic")`, where the totals
+		// forked (`SPLIT`). Named nothing, the walk goes THROUGH the forks in order and hands back
+		// every group there is, which is what every script written before branches asks for and gets.
+		const wxString branch = (lSizeArray >= 2 && paParams[1] != nullptr)
+			? paParams[1]->GetString() : wxString();
 		// ⭐ THE SHAPE OF THE WALK, in the journal: which level was descended from and how many rows
 		// came back. "It shows one value" and "it shows the last of sixty-three" look identical in a
 		// watch window, and this is the line that tells them apart without anyone guessing.
-		ibSelector sub = m_tree->Select(kind);
-		ibJournalInfo(wxT("query.walk"), wxT("descend from level %d: %ld node(s)"),
-			m_tree->Level(), sub.NodeCount());
+		ibSelector sub = branch.IsEmpty() ? m_tree->Select(kind) : m_tree->Select(kind, branch);
+		const wxString into = branch.IsEmpty() ? wxString() : wxT(" into branch '") + branch + wxT("'");
+		ibJournalInfo(wxT("query.walk"), wxT("descend from level %d%s: %ld node(s)"),
+			m_tree->Level(), into, sub.NodeCount());
 		pvarRetValue = new ibValueQuerySelect(std::move(sub), m_schema, m_snapshot);
 		return true;
 	}

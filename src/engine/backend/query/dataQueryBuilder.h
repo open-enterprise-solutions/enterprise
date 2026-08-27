@@ -160,6 +160,25 @@ struct ibTotalsLayout {
 	ibTotalsAxis m_detailsAxis = ibTotalsAxis::Rows;
 };
 
+// ⭐⭐ WHERE A LADDER STOPS BEING ONE — `TOTALS … BY Item SPLIT Characteristic SPLIT Series`.
+//
+// Under a shared head the levels may go SEVERAL ways at once: the same rows, folded by characteristic
+// on one side and by series on the other, each with its own order of groupings and its own selection
+// (Max, 2026-08-27). A branch is not another query — the rows are read once and every branch is fed
+// from that one walk, which is what makes this a fold and not a second read.
+//
+// ⚠ A BRANCH IS NOT AN AXIS. Which way a level reads (down the page or across it) is `m_axis` and
+// stays the level's own business, so a branch may itself be a cross-table — the two questions are
+// orthogonal and neither replaces the other.
+//
+// IT HAS AN IDENTITY, and the name is written ON it: branches are told apart by BEING the same
+// branch (the levels of one share this object), never by comparing what they are called. A branch
+// with no name is read by position, which is all an unnamed one is ever asked for.
+struct ibTotalBranch
+{
+	wxString m_name;   // `SPLIT … ONTO ByCharacteristic` — empty = read by position
+};
+
 // One TotalBy dimension level. Levels apply IN ORDER; a level holds ONE OR MORE fields and its
 // group key is the TUPLE of their values — "by partner AND contract" is one level, not two nested
 // ones, and a field that repeats what the key already says simply adds no rows.
@@ -167,6 +186,13 @@ struct ibTotalLevel
 {
 	std::vector<ibTotalField> m_fields;
 	ibTotalsAxis              m_axis = ibTotalsAxis::Rows;
+	// WHICH BRANCH THIS LEVEL BELONGS TO — null = the common ladder, which is every level of every
+	// report written before there were branches.
+	//
+	// Held as a SHARE rather than an index beside the list, for the same reason `m_periods` is one:
+	// an index is a second statement about the list and goes stale the moment a level moves, while a
+	// share IS the belonging. The levels of one branch hold one object, so "same branch" is identity.
+	std::shared_ptr<ibTotalBranch> m_branch;
 
 	// THE HEAD — the first field. The gates that only make sense over ONE field (the hierarchy
 	// unfold, the server-side group-level page) ask through here and check IsSingleField first.
@@ -267,6 +293,10 @@ public:
 	// Aggregating). Consumes the result (the cursor is drained). Defined where ibSelector is complete.
 	// (docs/query-language-arc.md §22.1b)
 	ibSelector Select(ibSelectKind kind = ibSelectKind::ibSelectKind_Direct);
+	// ⭐ …AND ONE BRANCH OF THE FOLD — where the totals forked (`SPLIT … ONTO <name>`), the walk that
+	// hands out only that branch. One READ, several branches: this is how a composition gives each
+	// of its outputs its own fold without reading the source again for any of them.
+	ibSelector Select(ibSelectKind kind, const wxString& branch);
 
 	// The door stamps the columns a later Select(mode) must materialise (its Select() output list +
 	// aggregate inputs) — so the snapshot carries exactly what the fold reads. No-op for the working
@@ -343,6 +373,13 @@ private:
 	bool                         m_totalsOverall = false;    // walk the tree's ROOT as a row (BY OVERALL)
 	// Set when the DBMS folded the levels itself — see SetReadyTree.
 	std::shared_ptr<class ibSelectorTree> m_readyTree;
+	// ⭐ …AND SET WHEN *WE* FOLDED THEM, on the first branch of a shared read. The rows arrive as a
+	// CURSOR, and a cursor is spent by the first scan — so the second output of a composition asked
+	// a drained read for more rows and got the driver's "Error retrieving Next record" (2026-08-27,
+	// live). One read means one FOLD as well: the first branch builds the tree, every later branch
+	// walks the same one. Distinct from m_readyTree, which says the DBMS folded it and no cursor
+	// ever existed.
+	std::shared_ptr<class ibSelectorTree> m_branchTree;
 	// source recipe (for lazy sub-selections + reference-dimension resolution)
 	ibDatabaseConnectionHolder*  m_srcHolder    = nullptr;
 	const ibBackendQueryable*    m_srcQueryable = nullptr;
@@ -722,7 +759,17 @@ public:
 	ibDataQueryBuilder& TotalByLevel(ibTotalLevel level);
 	// THE DETAIL RECORDS — the source rows, hung under the deepest heading. Its own verb rather than
 	// an empty level handed to the call above, which drops one on purpose (see the .cpp).
-	ibDataQueryBuilder& TotalsDetails(ibTotalsAxis axis = ibTotalsAxis::Rows);
+	//
+	// ⭐⭐ AND THEY BELONG TO A LADDER, not to the query. Where the totals fork, each branch has
+	// records of its own (Max, 2026-08-27: each branch has detail records of its OWN) — the same source row
+	// printed under this branch's headings and under that one's, which is what two cuts of one read
+	// means. So the branch is named here, and the level lands in ITS ladder.
+	//
+	// ⚠ ORDER MATTERS, and it is the caller's to keep: the records must be declared while their own
+	// branch is the last one declared, because the fold cuts the level list into ladders BY
+	// NEIGHBOURHOOD. Declared after every branch instead, they would each start a ladder of their own.
+	ibDataQueryBuilder& TotalsDetails(ibTotalsAxis axis = ibTotalsAxis::Rows,
+		std::shared_ptr<ibTotalBranch> branch = nullptr);
 	// One totals dimension level of a single field — the field to roll up by + how it unfolds.
 	ibDataQueryBuilder& TotalBy(const ibBackendQueryColumn* col, ibDimensionKind dim);
 	ibDataQueryBuilder& TotalBy(const std::vector<const ibBackendQueryColumn*>& path, ibDimensionKind dim);   // dot-walk dimension

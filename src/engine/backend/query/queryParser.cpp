@@ -571,7 +571,22 @@ ibQueryTotalField ibQueryParser::ParseTotalField()
 {
 	ibQueryTotalField f;
 	f.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
-	f.m_expr->m_path = ParseDottedName();
+	// ⭐⭐ A FIELD MAY BE CALLED AFTER A KEYWORD, and here that is not ambiguity — it is an ATTRIBUTE
+	// NAME. A constant's attribute is literally `Value`, and `VALUE` is a keyword of this language
+	// (the `value()` metaobject constant), so `BY Value` died as "expected a name" while
+	// `SELECT Constant1.Value` parsed — after a dot a keyword is already read as a name (Max,
+	// 2026-08-27, screenshot).
+	//
+	// ⚠ EXCEPT THE WORDS THAT ARE SERVICE WORDS *HERE*. `Hierarchy`, `Elements`, `Periods` modify
+	// the field that precedes them, `Split` / `Onto` / `As` / `Overall` structure the clause: read as
+	// names they would silently change what an existing query means. Everything else is just a word
+	// somebody named a column with.
+	const ibQueryKeyword ahead = Cur().m_kind == ibQueryTokenKind::Keyword ? Cur().m_keyword : ibQueryKeyword::None;
+	const bool serviceHere = ahead == ibQueryKeyword::Hierarchy || ahead == ibQueryKeyword::HierarchyOnly
+	                      || ahead == ibQueryKeyword::Elements  || ahead == ibQueryKeyword::Periods
+	                      || ahead == ibQueryKeyword::Split     || ahead == ibQueryKeyword::Onto
+	                      || ahead == ibQueryKeyword::As        || ahead == ibQueryKeyword::Overall;
+	f.m_expr->m_path = ParseDottedName(/*firstMayBeKeyword*/ !serviceHere);
 	// The unfold is the FIELD's — a level may unfold one of its fields through a hierarchy and take
 	// the next one flat.
 	if (AcceptKw(ibQueryKeyword::HierarchyOnly))     f.m_unfold = ibQueryDimUnfold::HierarchyOnly;
@@ -656,6 +671,48 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 			return;
 	}
 
+	// ⭐⭐ WHERE THE LADDER FORKS. `SPLIT` between two levels says the second one does not continue
+	// the first — it opens a branch that folds the same rows its own way. The comma keeps its old
+	// meaning exactly (one level after another), so every query written before this parses as it did.
+	//
+	// The branch's NAME is written where a statement writes one, at the end of what it names:
+	// `SPLIT Item, Characteristic ONTO ByItem`. It lands on the level that OPENED the branch, which
+	// is where the rest of the engine looks for it — and the head is remembered here rather than
+	// searched for backwards later.
+	// ⭐⭐ WHICH NODE THE LEVELS ARE LANDING ON. Null = the HIDDEN node every report has, whose levels
+	// are `m_totalsBy`; a `SPLIT` opens a visible one and everything after it hangs on that until the
+	// next `SPLIT`. One pointer, moved as the text is read forwards — which is exactly how the text
+	// says it.
+	// ⚠ AN INDEX, NOT A POINTER: opening the next node grows the vector, and a pointer taken into it
+	// before that would be left dangling by the reallocation.
+	int    nodeAt = wxNOT_FOUND;                   // wxNOT_FOUND = the hidden node
+	bool   more = false;                           // …a comma continues the ladder, SPLIT opens a node
+
+	// ⭐⭐ `SPLIT <name> BY <levels>` — the node is NAMED WHERE IT IS OPENED, and then its groupings
+	// follow. Written the other way round (`SPLIT <levels> ONTO <name>`) a reader had to reach the
+	// end of the ladder to learn whose block they had been reading, and a node with nothing on it yet
+	// — a legitimate state while a query is being built — had nowhere to carry a name at all.
+	//
+	// ⚠ THE NAME IS OPTIONAL, and `BY` is what says it was left out: `SPLIT BY Characteristic` opens
+	// a node nobody named. Nothing has to be guessed from what a word looks like — a keyword cannot
+	// be a name here, so the two forms are told apart by the token that follows the word.
+	//
+	// An unnamed node folds exactly like a named one; it is simply read BY POSITION, which is all a
+	// reader can ask of something with nothing to call it.
+	const auto openNode = [this, &sel, &nodeAt]() {
+		ibQueryTotalSplit node;
+		if (Cur().m_kind == ibQueryTokenKind::Ident)
+			node.m_name = Next().m_text;
+		ExpectKw(ibQueryKeyword::By, wxT("BY after SPLIT"));
+		sel.m_totalsSplits.push_back(std::move(node));
+		nodeAt = static_cast<int>(sel.m_totalsSplits.size()) - 1;
+	};
+
+	// A QUERY MAY OPEN ONE AT ONCE — `BY SPLIT Item SPLIT Unit`, with nothing on the hidden node.
+	// Then every node hangs off the grand total, which is the honest reading of "nothing in common".
+	if (AcceptKw(ibQueryKeyword::Split))
+		openNode();
+
 	do {
 		ibQueryTotalDim d;
 
@@ -679,8 +736,19 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 		else if (Cur().m_kind == ibQueryTokenKind::Ident) {
 			d.m_alias = Next().m_text;
 		}
-		sel.m_totalsBy.push_back(std::move(d));
-	} while (AcceptPunct(wxT(',')));
+		// ONTO THE NODE IN HAND — the visible one if a SPLIT opened it, the hidden one otherwise.
+		if (nodeAt != wxNOT_FOUND) sel.m_totalsSplits[nodeAt].m_levels.push_back(std::move(d));
+		else                       sel.m_totalsBy.push_back(std::move(d));
+
+		// A COMMA CONTINUES THIS NODE'S LADDER; `SPLIT` OPENS THE NEXT NODE. Two ways to go on, and
+		// they mean different things — which is exactly why the word exists (a bracket could not say
+		// it: the brackets are taken by a level of several fields).
+		more = AcceptPunct(wxT(','));
+		if (!more && AcceptKw(ibQueryKeyword::Split)) {
+			openNode();
+			more = true;
+		}
+	} while (more);
 }
 
 std::vector<wxString> ibQueryParser::ParseDottedName(bool firstMayBeKeyword)

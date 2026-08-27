@@ -2216,15 +2216,188 @@ void ibDialogQueryConstructor::OnAddTotalsDimension(wxCommandEvent&)
 	// EACH PICKED FIELD IS A LEVEL OF ITS OWN, which is what picking several in the tree has always
 	// meant here. Grouping two fields INTO one level is said in the level's cell, by writing them as
 	// a list — the toolbar adds levels, the cell composes one.
+	// ⭐⭐ ADDED FIELDS GO TO THE TOP — the common ladder — whatever happens to be selected.
+	//
+	// Putting them on the selected node was the obvious reading and the wrong one: a separator is
+	// selected for all sorts of reasons (it was just added, it was renamed, something under it was
+	// being looked at), and a field quietly landing inside it is the window deciding for the person.
+	// Hanging a grouping on a separator is a DELIBERATE act, and the way to say it is to drop the
+	// field ON that separator — pointing at it is the whole of the intent (Max, 2026-08-27).
+	AddTotalsFieldsTo(wxNOT_FOUND);
+}
+
+// ⭐⭐ IS THIS FIELD ALREADY REACHABLE ON THIS PATH? A level is reached by descending through the
+// levels ABOVE it — the common ladder first, then the node's own — so the same field twice on one
+// path splits nothing: every heading below would hold the single value it already stands under, one
+// child per parent, which reads as a broken report rather than as a setting.
+//
+// ⚠ ACROSS NODES IT IS NOT A DUPLICATE. Two separators may each group by Item and roll their own
+// totals — that is the whole reason a second one gets added — so only the common ladder and THIS
+// node are consulted.
+bool ibDialogQueryConstructor::TotalsFieldAlreadyThere(int node, const wxString& name,
+	const ibQueryTotalDim* except) const
+{
+	const ibQuerySelect* select = Current();
+	if (select == nullptr || name.IsEmpty())
+		return false;
+
+	const auto holdsIt = [&name, except](const std::vector<ibQueryTotalDim>& levels) {
+		for (const ibQueryTotalDim& level : levels)
+			if (&level != except && ibQueryDimensionName(level).IsSameAs(name, false))
+				return true;
+		return false;
+	};
+
+	if (holdsIt(select->m_totalsBy))
+		return true;
+	if (node != wxNOT_FOUND && static_cast<size_t>(node) < select->m_totalsSplits.size())
+		return holdsIt(select->m_totalsSplits[node].m_levels);
+	return false;
+}
+
+void ibDialogQueryConstructor::AddTotalsFieldsTo(int node)
+{
+	if (!CanEdit())
+		return;
+	ibQuerySelect* select = Current();
+	if (select == nullptr)
+		return;
+
+	std::vector<wxString> fields = SelectedFieldsOf(m_totalsSource);
+	if (fields.empty()) {
+		const wxString asked = ChooseField(_("Grouping level"));
+		if (asked.IsEmpty())
+			return;
+		fields.push_back(asked);
+	}
+
+	std::vector<ibQueryTotalDim>* levels = LevelsOfNode(select, node);
+	if (levels == nullptr)
+		return;
+
 	for (const wxString& field : fields) {
 		ibQueryTotalDim dimension;
 		ibQueryTotalField dimField;
 		dimField.m_expr = ibQueryColumnFromPath(field);
 		dimension.m_fields.push_back(std::move(dimField));
-		select->m_totalsBy.push_back(std::move(dimension));
+		// ⚠ NOT TWICE ON ONE PATH — silently, because a person dropping a field they already have
+		// asked for nothing new, and a dialog saying so on every drop is noise. (Between two nodes it
+		// is not a duplicate at all and lands normally.)
+		if (TotalsFieldAlreadyThere(node, ibQueryDimensionName(dimension)))
+			continue;
+		levels->push_back(std::move(dimension));
 	}
 	select->m_hasTotals = true;
 	FillAll();
+}
+
+// ⭐⭐ A LEVEL CARRIED WITH THE MOUSE — dropped on a separator it joins it, dropped on an ordinary
+// row it joins THAT row's node, dropped on nothing it goes back to the common ladder.
+//
+// The node comes from what the pointer was over, never from the selection: a drop knows where it
+// landed, and asking the caret answers with wherever it happened to be standing.
+void ibDialogQueryConstructor::MoveTotalsLevelTo(const ibTotalsRow& from, const ibTotalsRow& onto)
+{
+	if (!CanEdit() || !from.IsLevel())
+		return;
+	ibQuerySelect* select = Current();
+	std::vector<ibQueryTotalDim>* source = LevelsOfNode(select, from.m_node);
+	if (select == nullptr || source == nullptr || static_cast<size_t>(from.m_level) >= source->size())
+		return;
+
+	// The TARGET node — a separator's own row means the separator itself; any other row means the
+	// node that row hangs on; nothing under the pointer means the common ladder.
+	const int node = onto.m_level == wxNOT_FOUND && onto.m_node == wxNOT_FOUND ? wxNOT_FOUND : onto.m_node;
+	if (node == from.m_node)
+		return;   // dropped where it already is
+
+	std::vector<ibQueryTotalDim>* into = LevelsOfNode(select, node);
+	if (into == nullptr)
+		return;
+
+	// ⚠ ASKED BEFORE THE MOVE, and about the level ITSELF (`except`), so a level is never found to
+	// duplicate itself on the way out of its own node.
+	const wxString name = ibQueryDimensionName((*source)[from.m_level]);
+	if (TotalsFieldAlreadyThere(node, name, &(*source)[from.m_level]))
+		return;
+
+	ibQueryTotalDim moved = std::move((*source)[from.m_level]);
+	source->erase(source->begin() + from.m_level);
+	into->push_back(std::move(moved));
+
+	// …and a field that came up into the common ladder leaves the nodes — same rule as the arrows.
+	if (node == wxNOT_FOUND) {
+		for (ibQueryTotalSplit& split : select->m_totalsSplits)
+			for (size_t level = split.m_levels.size(); level-- > 0; )
+				if (ibQueryDimensionName(split.m_levels[level]).IsSameAs(name, false))
+					split.m_levels.erase(split.m_levels.begin() + level);
+	}
+
+	FillAll();
+	if (m_totalsDimensions != nullptr && m_totalsDimensionModel != nullptr)
+		m_totalsDimensions->Select(m_totalsDimensionModel->ItemFor(
+			ibTotalsRow{ node, static_cast<int>(into->size()) - 1 }, nullptr));
+}
+
+// The mark that says "this drag came from this grid", and the coordinate behind it.
+const wxChar* const ibDialogQueryConstructor::kTotalsDragMark = wxT("#totals-move:");
+
+ibTotalsRow ibDialogQueryConstructor::ParseTotalsDrag(const wxString& text)
+{
+	ibTotalsRow at;
+	wxString rest = text.Mid(wxString(kTotalsDragMark).length());
+	const wxString node = rest.BeforeFirst(wxT(':'));
+	const wxString level = rest.AfterFirst(wxT(':'));
+	long value = 0;
+	if (node.ToLong(&value))  at.m_node  = static_cast<int>(value);
+	if (level.ToLong(&value)) at.m_level = static_cast<int>(value);
+	return at;
+}
+
+// ⭐⭐ ADD A SEPARATOR — a visible node of the totals.
+//
+// The hidden node has always been there (its levels are `m_totalsBy`); this adds one beside it, and
+// groupings are then hung on it exactly the same way. Added EMPTY on purpose: a person adds the node
+// first and fills it after, which is why an empty node is a legitimate state and simply writes
+// nothing into the query text until something is on it.
+//
+// It is NAMED AT BIRTH — `Splitter1`, `Splitter2` — because a node is addressed by name (a report's
+// walk asks for it, a script asks for it), and something added with no name would have to be named
+// before it could be used for anything. The name lands in the ALIAS cell, where it is renamed.
+void ibDialogQueryConstructor::OnAddTotalsSplit(wxCommandEvent&)
+{
+	if (!CanEdit())
+		return;
+
+	ibQuerySelect* select = Current();
+	if (select == nullptr)
+		return;
+
+	// The first free `SplitterN` — counted past whatever is already there, including names a person
+	// typed, so adding never produces a duplicate that would then be refused on rename.
+	wxString name;
+	for (int at = static_cast<int>(select->m_totalsSplits.size()) + 1; ; ++at) {
+		name = wxString::Format(wxT("Splitter%d"), at);
+		bool taken = false;
+		for (const ibQueryTotalSplit& node : select->m_totalsSplits)
+			if (node.m_name.IsSameAs(name, false)) { taken = true; break; }
+		if (!taken)
+			break;
+	}
+
+	ibQueryTotalSplit node;
+	node.m_name = name;
+	select->m_totalsSplits.push_back(std::move(node));
+	select->m_hasTotals = true;
+	FillAll();
+
+	// …AND THE CARET GOES ON IT, so the next field added lands where a person just asked for it
+	// rather than back on the hidden node. Addressed by COORDINATE, which the tree hands back the
+	// same row for however it happens to be laid out.
+	if (m_totalsDimensions != nullptr && m_totalsDimensionModel != nullptr) {
+		const int added = static_cast<int>(select->m_totalsSplits.size()) - 1;
+		m_totalsDimensions->Select(m_totalsDimensionModel->ItemFor(ibTotalsRow{ added, wxNOT_FOUND }, nullptr));
+	}
 }
 
 void ibDialogQueryConstructor::OnRemoveTotalsLine(wxCommandEvent&)
@@ -2239,10 +2412,23 @@ void ibDialogQueryConstructor::OnRemoveTotalsLine(wxCommandEvent&)
 	// THE DIMENSION LINE. The aggregates have a delete of their own now that they have a grid of
 	// their own — one verb reaching into whichever pane happened to have a selection was how a
 	// delete on one side removed a line from the other.
-	const long dimension = SelectedRow(m_totalsDimensions, m_totalsDimensionModel);
-	if (dimension < 0 || static_cast<size_t>(dimension) >= select->m_totalsBy.size())
-		return;
-	select->m_totalsBy.erase(select->m_totalsBy.begin() + dimension);
+	const ibTotalsRow at = SelectedTotalsAt();
+	if (at.m_node == wxNOT_FOUND && at.m_level == wxNOT_FOUND)
+		return;   // nothing picked — the hidden node itself is not a row
+
+	// ⭐ DELETING A SEPARATOR TAKES ITS GROUP WITH IT (Max, 2026-08-27). The levels hung on it belong
+	// to it — there is nowhere for them to go, and quietly moving them onto the hidden node would
+	// change the report into a different one without anybody asking for it.
+	if (at.IsNodeHeader()) {
+		if (static_cast<size_t>(at.m_node) < select->m_totalsSplits.size())
+			select->m_totalsSplits.erase(select->m_totalsSplits.begin() + at.m_node);
+	}
+	else {
+		std::vector<ibQueryTotalDim>* levels = LevelsOfNode(select, at.m_node);
+		if (levels == nullptr || static_cast<size_t>(at.m_level) >= levels->size())
+			return;
+		levels->erase(levels->begin() + at.m_level);
+	}
 
 	DropTotalsIfLevelless(*select);
 	FillAll();
@@ -2264,6 +2450,14 @@ void ibDialogQueryConstructor::DropTotalsIfLevelless(ibQuerySelect& select)
 	// query that still has a level to count on, so the measures stay — the mirror of the guard on
 	// adding one, and it has to read the same way or removing a dimension would silently throw away
 	// totals the query can perfectly well produce.
+	// ⚠ A SEPARATOR'S LEVELS COUNT TOO. They are levels of the query like any other — hung on a
+	// visible node instead of the hidden one — so a report whose groupings all live under separators
+	// has plenty to count its measures on, and dropping the totals there would throw away a perfectly
+	// good query.
+	for (const ibQueryTotalSplit& node : select.m_totalsSplits)
+		if (!node.m_levels.empty())
+			return;
+
 	if (!select.m_totalsBy.empty() || select.m_totalsOverall)
 		return;
 
@@ -2283,16 +2477,77 @@ void ibDialogQueryConstructor::OnMoveTotalsDimension(int delta)
 	if (!CanEdit())
 		return;
 	ibQuerySelect* select = Current();
-	const long index = SelectedRow(m_totalsDimensions, m_totalsDimensionModel);
-	const long target = index + delta;
-	if (select == nullptr || index < 0 || target < 0
-	    || static_cast<size_t>(index) >= select->m_totalsBy.size()
-	    || static_cast<size_t>(target) >= select->m_totalsBy.size())
+	const ibTotalsRow at = SelectedTotalsAt();
+	if (select == nullptr)
 		return;
 
-	std::swap(select->m_totalsBy[index], select->m_totalsBy[target]);
+	// ⭐⭐ A SEPARATOR MOVES TOO — with its whole group, because the group IS the separator's. The
+	// order of the nodes is the order the report prints them in, so arranging them is arranging the
+	// report (Max, 2026-08-27). Moving the node moves everything hung on it; nothing is re-parented.
+	if (at.IsNodeHeader()) {
+		const int from = at.m_node;
+		const int to   = from + delta;
+		if (from < 0 || to < 0 || static_cast<size_t>(from) >= select->m_totalsSplits.size()
+		    || static_cast<size_t>(to) >= select->m_totalsSplits.size())
+			return;
+		std::swap(select->m_totalsSplits[from], select->m_totalsSplits[to]);
+		FillAll();
+		if (m_totalsDimensions != nullptr && m_totalsDimensionModel != nullptr)
+			m_totalsDimensions->Select(m_totalsDimensionModel->ItemFor(ibTotalsRow{ to, wxNOT_FOUND }, nullptr));
+		return;
+	}
+
+	if (!at.IsLevel())
+		return;
+
+	std::vector<ibQueryTotalDim>* levels = LevelsOfNode(select, at.m_node);
+	if (levels == nullptr || static_cast<size_t>(at.m_level) >= levels->size())
+		return;
+
+	// ⭐⭐ THE ARROWS ONLY REORDER — inside the node the level already belongs to.
+	//
+	// 🛑 THEY USED TO CARRY IT ACROSS: past the end of one node into the start of the next. That is
+	// two different acts under one button — "put this before that" and "this belongs to a different
+	// cut now" — and the second one belongs to the MOUSE, where a person says which node they mean by
+	// pointing at it (Max, 2026-08-27: the arrows do not move things between nodes, they change the
+	// position of what is already there). At the edge they now simply do nothing, which is what an
+	// order-changing button should do when there is nowhere left to go.
+	const size_t level = static_cast<size_t>(at.m_level);
+
+	// WHERE IT ENDED UP — filled by whichever branch below did the moving, so the caret can follow it
+	// afterwards without anybody re-deriving it from row arithmetic.
+	ibTotalsRow landed = at;
+
+	if (delta < 0 && level > 0) {
+		std::swap((*levels)[level], (*levels)[level - 1]);
+		landed.m_level = at.m_level - 1;
+	}
+	else if (delta > 0 && level + 1 < levels->size()) {
+		std::swap((*levels)[level], (*levels)[level + 1]);
+		landed.m_level = at.m_level + 1;
+	}
+	else {
+		// ⚠ AT THE EDGE OF ITS OWN LIST — nothing happens, and that is the honest answer rather than a
+		// missing feature. The separators CONTINUE the common ladder, so they always stand below it:
+		// a common level cannot be pushed under a node, because below a node there is no "common"
+		// left, only what is inside each branch (Max, 2026-08-27: the splits come after the
+		// dimensions — the common ones on top, the splits underneath, and only splits move among
+		// splits). Moving a level INTO a node is the mouse's job, where the node is named by pointing
+		// at it.
+		return;
+	}
+
+	// (Nothing changes NODE here any more — the arrows reorder within one, so the "a field that came
+	//  up into the common ladder leaves the nodes" rule lives where a level actually changes node:
+	//  MoveTotalsLevelTo, which is what the mouse calls.)
+
 	FillAll();
-	m_totalsDimensions->Select(m_totalsDimensionModel->GetItem(static_cast<unsigned int>(target)));
+
+	// ⭐ THE CARET FOLLOWS WHAT MOVED, by COORDINATE. Inside a node it is the neighbouring level; a
+	// move across nodes lands at the end of the one above or at the start of the one below — worked
+	// out from where it went rather than from a row number, which a tree does not keep still.
+	if (m_totalsDimensions != nullptr && m_totalsDimensionModel != nullptr)
+		m_totalsDimensions->Select(m_totalsDimensionModel->ItemFor(landed, nullptr));
 }
 
 
@@ -2336,11 +2591,15 @@ void ibDialogQueryConstructor::ApplyTotalsPeriods()
 		return;
 
 	ibQuerySelect* select = Current();
-	const long row = SelectedRow(m_totalsDimensions, m_totalsDimensionModel);
-	if (select == nullptr || row < 0 || static_cast<size_t>(row) >= select->m_totalsBy.size())
+	// THE LEVEL THE CARET IS ON — whichever node it hangs on. A periodicity is a property of a
+	// FIELD, so it applies to a level of a separator exactly as it does to one of the hidden node.
+	const ibTotalsRow at = SelectedTotalsAt();
+	std::vector<ibQueryTotalDim>* levels = LevelsOfNode(select, at.m_node);
+	if (select == nullptr || !at.IsLevel() || levels == nullptr
+	    || static_cast<size_t>(at.m_level) >= levels->size())
 		return;
 
-	ibQueryTotalDim& dim = select->m_totalsBy[static_cast<size_t>(row)];
+	ibQueryTotalDim& dim = (*levels)[static_cast<size_t>(at.m_level)];
 	const ibQueryTotalField* head = dim.Head();
 	if (!dim.IsSingleField() || head == nullptr || !head->m_expr)
 		return;
@@ -2357,9 +2616,9 @@ void ibDialogQueryConstructor::ApplyTotalsPeriods()
 		// ⚠ NO UNFOLD BESIDE A PERIODICITY. A hierarchy walks a parent chain and a period walks a
 		// calendar; the engine refuses the pair, so the panel does not write one — turning periods ON
 		// is what drops it, and turning them off restores what the level had.
-		const int at = m_periodUnit->GetSelection();
-		const wxString unit = at >= 0 && static_cast<size_t>(at) < ibPeriodUnits().size()
-			? ibPeriodUnits()[static_cast<size_t>(at)].second
+		const int unitAt = m_periodUnit->GetSelection();
+		const wxString unit = unitAt >= 0 && static_cast<size_t>(unitAt) < ibPeriodUnits().size()
+			? ibPeriodUnits()[static_cast<size_t>(unitAt)].second
 			: ibPeriodUnitWord(ibTotalsPeriod::Month);
 
 		wxString from = m_periodFrom->GetValue(); from.Trim(true).Trim(false);
@@ -2402,9 +2661,8 @@ void ibDialogQueryConstructor::ApplyTotalsPeriods()
 	// refill is a Reset — which clears the selection. The panel belongs to the SELECTED level, so
 	// without this the first click into it would be the last one that worked: the box would tick,
 	// the level would lose its selection, and everything below would go grey.
-	if (m_totalsDimensions != nullptr && m_totalsDimensionModel != nullptr
-	    && static_cast<size_t>(row) < select->m_totalsBy.size())
-		m_totalsDimensions->Select(m_totalsDimensionModel->GetItem(static_cast<unsigned int>(row)));
+	if (m_totalsDimensions != nullptr && m_totalsDimensionModel != nullptr)
+		m_totalsDimensions->Select(m_totalsDimensionModel->ItemFor(at, nullptr));
 	FillTotalsPeriods();
 }
 
@@ -2413,14 +2671,16 @@ void ibDialogQueryConstructor::OnEditTotalsDimension(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 	ibQuerySelect* select = Current();
-	const long index = SelectedRow(m_totalsDimensions, m_totalsDimensionModel);
-	if (select == nullptr || index < 0 || static_cast<size_t>(index) >= select->m_totalsBy.size())
-		return;
+	const ibTotalsRow at = SelectedTotalsAt();
+	std::vector<ibQueryTotalDim>* levels = LevelsOfNode(select, at.m_node);
+	if (select == nullptr || !at.IsLevel() || levels == nullptr
+	    || static_cast<size_t>(at.m_level) >= levels->size())
+		return;   // a separator has no expression to edit — what it holds is a name
 
 	// THE EXPRESSION EDITOR EDITS ONE EXPRESSION, so it opens on the level's HEAD field. A level of
 	// several fields is composed in its cell, where they are written as a list; here the head is
 	// what the editor was raised for.
-	ibQueryTotalField* head = select->m_totalsBy[index].Head();
+	ibQueryTotalField* head = (*levels)[static_cast<size_t>(at.m_level)].Head();
 	ibDialogQueryExpression dialog(this, _("Grouping level"), AvailableFields(),
 		head != nullptr ? head->m_expr : ibQueryAstExprPtr(), m_metaData, m_readOnly);
 	if (dialog.ShowModal() != wxID_OK)
@@ -2428,10 +2688,11 @@ void ibDialogQueryConstructor::OnEditTotalsDimension(wxCommandEvent&)
 
 	ibQueryAstExprPtr edited = dialog.GetExpression();
 	if (!edited) {
-		select->m_totalsBy.erase(select->m_totalsBy.begin() + index);
+		// AN EMPTIED EXPRESSION REMOVES THE LEVEL — from whichever node it hung on.
+		levels->erase(levels->begin() + at.m_level);
 		DropTotalsIfLevelless(*select);
 	}
-	else if (ibQueryTotalField* editedHead = select->m_totalsBy[index].Head()) {
+	else if (ibQueryTotalField* editedHead = (*levels)[static_cast<size_t>(at.m_level)].Head()) {
 		editedHead->m_expr = edited;
 	}
 	FillAll();

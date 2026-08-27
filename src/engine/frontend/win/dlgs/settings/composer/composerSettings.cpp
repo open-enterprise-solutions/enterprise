@@ -327,8 +327,8 @@ private:
 	wxString  m_text;
 };
 // THE PARAMETERS, as a dataview model over the COMPOSITION — which owns them. Four columns, because
-// a parameter answers four separate questions and folding any two of them into one caption is how
-// 1C ends up with a page nobody can read:
+// a parameter answers four separate questions, and folding any two of them into one caption is how
+// a settings page ends up unreadable:
 //
 //   Name        — what the query calls it (`&Period`). Editable only for a hand-made one: an auto
 //                 parameter is named by the TEXT, and renaming it here would just be a rename the
@@ -634,7 +634,12 @@ public:
 			// word one under another is how a tree stops saying anything (Max, on the first run).
 			// An output is a place: what it holds is its levels, what it is called is its own.
 			const wxString kind = HasTwoAxes(pos.m_output) ? _("Table") : _("Output");
-			variant = output.m_name.IsEmpty() ? kind : kind + wxT(" — ") + output.m_name;
+			// ⚠ ASCII IN THE SEPARATOR, deliberately. This file has no BOM, so MSVC reads a UTF-8
+			// em-dash in a literal as ANSI bytes and the row came out with mojibake between the two
+			// names, `Output ??? Output2` (seen
+			// live once outputs started carrying names, 2026-08-27). Anything a person must READ goes
+			// through _() and the message catalogue; punctuation written in code stays ASCII.
+			variant = output.m_name.IsEmpty() ? kind : kind + wxT(" - ") + output.m_name;
 			return;
 		}
 
@@ -1403,7 +1408,7 @@ void ibComposerSettingsPanel::BuildPanel()
 	// grouping to" — with a variant named and selected right beside the message. A composer opened
 	// fresh could never be given its FIRST grouping, on either road (Max, 2026-08-24).
 	if (Structure().empty())
-		Structure().push_back(ibOutputDescription());
+		AddOutput();
 
 	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
 	if (appData->DesignerMode()) {
@@ -3432,7 +3437,7 @@ void ibComposerSettingsPanel::ReloadSettings()
 	//  alone re-read the pointer taken when the window was built, so switching variants left the
 	//  filter and sort pages showing the FIRST one's while everything else had moved.)
 	if (Structure().empty())
-		Structure().push_back(ibOutputDescription());   // …and a variant nobody authored still gets its output
+		AddOutput();   // …and a variant nobody authored still gets its output
 	if (m_filterEditor != nullptr) m_filterEditor->SetFilter(&EditedSettings().m_filter);
 	if (m_sortEditor   != nullptr) m_sortEditor->SetSort(&EditedSettings().m_sort);
 	ReloadResources();
@@ -3996,7 +4001,7 @@ std::vector<ibLevelDescription>* ibComposerSettingsPanel::AxisForCommand(int& at
 	// empty one beside it would produce two headings for one act.
 	if (pos.IsReport()) {
 		if (!Structure().back().m_rowGroups.empty() || !Structure().back().m_columnGroups.empty())
-			Structure().push_back(ibOutputDescription());
+			AddOutput();
 		// THE COMMAND MOVES THE CURSOR WITH IT — what is added lands in the output the command
 		// just chose, and the cursor has to be looking at that one, not at where it started.
 		m_currentNode = ibNodeKey((int)Structure().size() - 1, 0, -1);
@@ -4056,7 +4061,7 @@ void ibComposerSettingsPanel::OnStructureAddTable(wxCommandEvent&)
 		&& Structure().back().m_kind == ibCompositionOutputKind::Grouping
 		&& Structure().back().m_rowGroups.empty() && Structure().back().m_columnGroups.empty();
 	if (!lastIsUntouched)
-		Structure().push_back(ibOutputDescription());
+		AddOutput();
 
 	Structure().back().m_kind = ibCompositionOutputKind::Table;
 
@@ -4467,4 +4472,25 @@ void ibComposerSettingsPanel::ShowQueryFault()
 int ibComposerSettingsPanel::SelectedResourceIndex() const
 {
 	return ibSelectedRow(m_resourceView);
+}
+
+// ⭐⭐ AN OUTPUT IS BORN WITH A NAME — see the declaration for why it is not decoration: the composer
+// addresses a branch of the shared read by exactly this name, and a nameless output falls out of
+// that read and costs a query of its own.
+ibOutputDescription& ibComposerSettingsPanel::AddOutput()
+{
+	wxString name;
+	for (size_t at = Structure().size() + 1; ; ++at) {
+		name = wxString::Format(wxT("Output%u"), static_cast<unsigned>(at));
+		bool taken = false;
+		for (const ibOutputDescription& output : Structure())
+			if (output.m_name.IsSameAs(name, false)) { taken = true; break; }
+		if (!taken)
+			break;
+	}
+
+	ibOutputDescription added;
+	added.m_name = name;
+	Structure().push_back(std::move(added));
+	return Structure().back();
 }
