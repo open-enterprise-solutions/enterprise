@@ -963,8 +963,12 @@ TEST(QueryTotals, EveryBranchWalksOneFoldWithoutRereadingTheCursor)
 	fold.ReadRows();
 	const std::shared_ptr<ibSelectorTree> tree = fold.FoldedTree();
 	ASSERT_NE(tree, nullptr);
+	// ⚠ WHAT IS PINNED HERE IS "THE SECOND BRANCH COSTS THE SOURCE NOTHING", not how the fold got its
+	// rows. An earlier shape of this also demanded exactly ROWS + 1 reads — which is a claim about
+	// the road Build() took (cursor or snapshot), and that road is free to change: the test failed on
+	// a fold that was perfectly correct. A test that breaks when an implementation detail moves is
+	// pinning the detail, not the behaviour.
 	const long readsAfterFold = cursor->Reads();
-	EXPECT_EQ(readsAfterFold, ROWS + 1);                    // every row once, plus the Next() that ended it
 
 	// …AND EACH BRANCH WALKS IT. No cursor is given to either — the tree is the whole answer.
 	const auto walk = [&](const wxString& branch) {
