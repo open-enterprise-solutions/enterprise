@@ -73,6 +73,25 @@ struct ibCompositionOutputInfo
 		return column < m_schema.size() ? m_schema[column].m_name : wxString();
 	}
 
+	// ⭐⭐ AND THE FIELD ITSELF — the path each column is a reading of, one entry per schema column.
+	//
+	// The title above is computed FROM this path and handed over alone, which is enough for anything
+	// that only PRINTS the column. A reader that has to act on the field — a details parameter,
+	// which becomes a grouping and a filter line — needs the path, and both are written with paths
+	// (ibGroupDescription::Append, ibFilterDescription::Append). Handed only the title it would have
+	// to hunt the path back through the resources and the levels: the same answer computed twice, by
+	// the tier that knows it least.
+	//
+	// Empty where a column stands for no field of the composition — a projected column, or one whose
+	// level a user's own grouping replaced. Empty means "cannot say", and a reader treats it as a
+	// cell with nothing to follow rather than guessing a path out of the name.
+	std::vector<wxString>                      m_paths;
+
+	// …ASKED, like the title, and for the same reason.
+	wxString PathOf(size_t column) const {
+		return column < m_paths.size() ? m_paths[column] : wxString();
+	}
+
 	// HOW MANY OF THE DIMENSIONS ARE THE ROWS'. Both axes fold in one `TOTALS BY`, rows first (see
 	// AppendSettingsClauses), so this is the seam between them and nothing else marks it.
 	size_t                                     m_rowLevels = 0;

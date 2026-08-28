@@ -121,6 +121,38 @@ private:
 	}
 	wxString ColumnTitle(size_t column) const { return ColumnTitle(column, m_schema); }
 
+	// ⭐ WHAT FIELD EACH COLUMN IS A READING OF — taken beside the titles and never printed. This is
+	// what a cell's DETAILS PARAMETER is stamped with: a title is written for a person and may
+	// repeat, while a path is what a grouping and a filter line are written with, and the detail is
+	// going to write both.
+	std::vector<wxString>       m_paths;
+	wxString ColumnPath(size_t column) const {
+		return column < m_paths.size() ? m_paths[column] : wxString();
+	}
+
+	// ⭐⭐ WHAT A CELL WAS COMPOSED FROM, PACKED WHERE IT IS WRITTEN. The value a figure shows and
+	// the headings it stands under are both known HERE and nowhere afterwards: the sheet keeps rows,
+	// not the tree they were folded from. So the parameter a cell is bound to stops being the bare
+	// value and becomes the value WITH its links — same name in the cell, more under it.
+	//
+	// ⭐ TWO LINKS, because a cell of a table has two headings over it — its row and its column. A
+	// grouping's cell passes one and the second stays empty, which is the truth about a report that
+	// only reads down the page.
+	ibValue PackDetails(size_t column, const ibValue& value,
+		const ibValue& under, const ibValue& alsoUnder = ibValue()) const;
+
+	// THE CHAIN A ROW OF THIS DEPTH HANGS UNDER — the heading one level up, empty at the top.
+	ibValue ChainAbove(int level) const;
+	// …AND THE DEEPEST HEADING STILL OPEN, whatever depth the walk gave the row asking. A RECORD has
+	// no heading of its own, so its depth says nothing about what it stands under — see PrintRow.
+	ibValue DeepestChain() const;
+	// …and this row's own chain, kept for the rows below it. A pre-order walk never comes back to a
+	// level it has left, so everything deeper is dropped here instead of being checked for later.
+	void KeepChain(int level, const ibValue& chain);
+	// One entry per depth walked. Values rather than pointers: the links have to survive PutArea,
+	// which re-keys every parameter it copies.
+	std::vector<ibValue>        m_chainAtLevel;
+
 	// WHERE EACH SCHEMA ENTRY LANDS — the sheet column per schema index (-1 = not written). See
 	// OnColumns for why the layout is by ROLE rather than by schema order.
 	std::vector<int>            m_layout;
@@ -230,6 +262,10 @@ private:
 	// inserted where that heading ends. Built once per table, because the header and every row have
 	// to agree about which column is which.
 	std::vector<ColumnSlot> BuildColumnSlots() const;
+	// A COLUMN KEY'S OWN CHAIN — one link per column level, each under the one above it. Built per
+	// SLOT before the rows are written: every cell of a column stands under the same headings, so
+	// building it per cell would be that chain rebuilt once per row.
+	ibValue ChainOfColumnKey(const CrossKey& key) const;
 	// The schema, kept because a table's header is written at the END — when the width is finally
 	// known — and by then the walk is over.
 	std::vector<ibQueryLowering::OutputColumn> m_schema;

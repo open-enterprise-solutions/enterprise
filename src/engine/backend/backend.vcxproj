@@ -371,6 +371,7 @@
     <ClInclude Include="system\value\valueBoundary.h" />
     <ClInclude Include="system\value\valueSize.h" />
     <ClInclude Include="system\value\valueSpreadsheet.h" />
+    <ClInclude Include="system\value\valueSpreadsheetDetails.h" />
     <ClInclude Include="system\value\valueDatabase.h" />
     <ClInclude Include="system\value\valueTable.h" />
     <ClInclude Include="system\value\valueType.h" />
@@ -835,6 +836,7 @@
     <ClCompile Include="system\value\valueBoundary.cpp" />
     <ClCompile Include="system\value\valueSize.cpp" />
     <ClCompile Include="system\value\valueSpreadsheet.cpp" />
+    <ClCompile Include="system\value\valueSpreadsheetDetails.cpp" />
     <ClCompile Include="system\value\valueDatabaseLayer.cpp" />
     <ClCompile Include="system\value\valueSpreadsheetCell.cpp" />
     <ClCompile Include="system\value\valueTable.cpp" />

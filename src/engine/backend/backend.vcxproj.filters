@@ -735,6 +735,9 @@
     <ClInclude Include="system\value\valueSpreadsheet.h">
       <Filter>system\value</Filter>
     </ClInclude>
+    <ClInclude Include="system\value\valueSpreadsheetDetails.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
     <ClInclude Include="spreadsheetDescription.h" />
     <ClInclude Include="spreadsheetModel.h" />
     <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h">
@@ -1852,6 +1855,9 @@
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueSpreadsheet.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueSpreadsheetDetails.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="backend_spreadsheet.cpp" />

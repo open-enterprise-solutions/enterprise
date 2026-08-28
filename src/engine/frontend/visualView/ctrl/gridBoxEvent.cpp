@@ -1,7 +1,47 @@
 #include "gridBox.h"
 #include "backend/system/value/valueDataComposition.h"   // the schema a detail copies
+#include "backend/system/value/valueSpreadsheetDetails.h" // …and what the clicked cell was composed from
 #include "backend/metadataReport.h"                       // the in-memory external report
 #include "backend/metaCollection/metaComposerObject.h"    // …and the composer metaobject it declares
+
+#include <algorithm>
+
+namespace {
+
+// ⭐⭐ A GROUPING THE CONTEXT ALREADY PINS HAS NOTHING TO SHOW. A detail is the report minus the
+// groupings, keeping the ones it is being broken down BY (Max, 2026-08-26) — and which those are is
+// not a question anybody has to be asked: the cell's chain fixes its own levels to one value each,
+// so a heading over them would print that one value and fold nothing. What is left below is exactly
+// what the reader has not seen yet.
+//
+// ⚠ THE CHILDREN ARE LIFTED, NOT DROPPED WITH IT. A level that goes away takes its place in the
+// ladder with it, not the levels underneath — those are the breakdown being asked for.
+void ibDropPinnedLevels(std::vector<ibLevelDescription>& levels,
+	const std::vector<ibValueSpreadsheetDetails::ibSpreadsheetDetailsField>& context)
+{
+	for (size_t at = 0; at < levels.size(); ) {
+		ibDropPinnedLevels(levels[at].m_children, context);
+
+		const std::vector<ibGroupLineDescription>& lines = levels[at].m_settings.m_group.m_lines;
+		const bool pinned = !lines.empty() &&
+			std::all_of(lines.begin(), lines.end(), [&context](const ibGroupLineDescription& line) {
+				return std::any_of(context.begin(), context.end(),
+					[&line](const ibValueSpreadsheetDetails::ibSpreadsheetDetailsField& field) {
+						return field.m_path == line.m_path;
+					});
+			});
+		if (!pinned) {
+			++at;
+			continue;
+		}
+
+		std::vector<ibLevelDescription> children = levels[at].m_children;
+		levels.erase(levels.begin() + at);
+		levels.insert(levels.begin() + at, children.begin(), children.end());
+	}
+}
+
+}   // namespace
 
 
 //***********************************************************************
@@ -65,9 +105,15 @@ void ibValueGridBox::OnCellLeftClick(ibGridEvent& event)
 			static_cast<ibValueSpreadsheetModel*>(m_spreadsheetModel)) != nullptr);
 
 	switch (grid->GetPopupMenuSelectionFromUser(menu)) {
-	case idOpenValue:
-		document->OpenCellDetailsParameter(event.GetRow(), event.GetCol());
+	// ⭐ OPENING IS THE VALUE'S OWN, and the runtime does it: the cell is asked what it is bound to
+	// and that value is shown. The document used to have a verb for this, which was the same two
+	// lines with a door in front of them — and the door belonged to the value, not to the sheet.
+	case idOpenValue: {
+		ibValue bound;
+		if (document->GetParameter(detailsParameter, bound))
+			bound.ShowValue();
 		break;
+	}
 	case idShowDetail:
 		ShowCellDetail(event.GetRow(), event.GetCol());
 		break;
@@ -121,11 +167,91 @@ void ibValueGridBox::ShowCellDetail(int row, int col)
 	composer->OnLoadMetaObject(detailMeta);
 
 	// THE SCHEMA, WHOLE — query, parameters with the values the reader entered, resources, fields.
-	// ⏭ What still has to happen here is the DETAIL itself: the field clicked becomes the single
-	// grouping and the cell's context becomes the filter. That needs the cell to know what it was
-	// built from, which it does not yet — so for now this opens the same report over the same data,
-	// which is the half that can be proved today.
-	composer->SetCompositionDesc(composition->GetCompositionDesc());
+	ibCompositionDescription detailDesc = composition->GetCompositionDesc();
+
+	// ⭐⭐ …AND NARROWED TO THE CELL THAT WAS CLICKED. The figure was composed under a chain of
+	// headings, the composer wrote that chain into the cell, and here it is read back: every link is
+	// a condition, and a grouping the conditions already pin has nothing left to show.
+	//
+	// THE BASIS IS WHAT THE READER IS LOOKING AT — the author's variant with the reader's own
+	// sections laid over it, part by part, which is the rule a run follows. A detail built on the
+	// author's settings alone while the reader had changed the report would answer about a report
+	// nobody has on screen.
+	std::vector<ibValueSpreadsheetDetails::ibSpreadsheetDetailsField> context;
+	wxObjectDataPtr<ibBackendSpreadsheetObject> document = composition->GetSpreadsheetDocument();
+	if (document != nullptr) {
+		wxString bound;
+		document->GetCellDetailsParameter(row, col, bound);
+		ibValue cellValue;   // held, not a temporary — From returns a pointer INTO it
+		if (!bound.IsEmpty() && document->GetParameter(bound, cellValue)) {
+			if (ibValueSpreadsheetDetails* details = ibValueSpreadsheetDetails::From(cellValue))
+				details->CollectContext(context);
+		}
+	}
+	if (!context.empty()) {
+		// ⭐⭐ SECTION BY SECTION, AND `IsOk` IS ASKED OF THE PART. A reader who set only a filter has
+		// user settings that "are ok" and no structure at all — taken whole, that would hand the
+		// detail a report with no outputs, which composes nothing. Each part falls back to the
+		// author's on its own, which is the same rule a run follows.
+		ibSettingsDescription narrowed = detailDesc.GetCompositionSettingsDesc();
+		const ibSettingsDescription& reader = composition->GetUserSettingsDesc();
+		if (reader.m_filter.IsOk())      narrowed.m_filter = reader.m_filter;
+		if (reader.m_sort.IsOk())        narrowed.m_sort = reader.m_sort;
+		if (!reader.m_structure.empty()) narrowed.m_structure = reader.m_structure;
+		if (!reader.m_selected.empty())  narrowed.m_selected = reader.m_selected;
+
+		// ⭐ AND THE CELL'S OWN CONTEXT IS ADDED TO IT — one condition per link, ANDed onto whatever
+		// filter was already in force. Replacing it would answer about a different report: the
+		// figure that was clicked was measured under the reader's filter too.
+		//
+		// 🛑 AND IT MUST **AND**, WHICH THE ROOT DOES NOT ALWAYS DO. A filter whose root joins with
+		// OR would take the cell's context as an ALTERNATIVE to the reader's conditions — a detail
+		// showing MORE than the report it was opened from, which is the one thing it can never be.
+		// So an OR root is pushed down into a group of its own and the root becomes an AND: the same
+		// filter, said in a way the context can be added to.
+		if (narrowed.m_filter.m_rootKind != ibFilterGroupKind_And && narrowed.m_filter.IsOk()) {
+			ibFilterNodeDescription kept;
+			kept.m_kind = ibFilterNodeKind_Group;
+			kept.m_groupKind = narrowed.m_filter.m_rootKind;
+			kept.m_children = narrowed.m_filter.m_nodes;
+			narrowed.m_filter.m_nodes.assign(1, kept);
+		}
+		narrowed.m_filter.m_rootKind = ibFilterGroupKind_And;
+
+		// ⭐⭐ AND A CONDITION IS NOT A PATH AND A VALUE — IT IS A FIELD, WITH ITS SCHEMA. The window
+		// draws the left cell as the field it holds and the right one THROUGH THE LEFT'S TYPE
+		// (`AdjustValue(item->m_left.m_type, …)`), so a line carrying only a path and a value is a
+		// line with nothing to draw: both cells come up blank and the value cannot be edited either.
+		// A condition a person adds is filled in by the picker (see settingsFilterEditor's Add) —
+		// one added from here has to say the same three things.
+		//
+		// ⭐ THE TYPE IS ASKED OF THE COMPOSITION, never worked out here: `GetConstructorFields` is
+		// the same list the picker itself is built from, so there is one answer to "what does this
+		// query offer" and a detail's line and a typed line are the same object.
+		//
+		// (⚠ NO LEAF ID, deliberately: a field of a PARSED TEXT stands behind no metaobject
+		//  attribute, and the picker passes wxNOT_FOUND for exactly that reason.)
+		const std::vector<ibQueryConstructorField> offered = composition->GetConstructorFields();
+		for (const ibValueSpreadsheetDetails::ibSpreadsheetDetailsField& field : context) {
+			ibFilterNodeDescription& line =
+				narrowed.m_filter.Append(field.m_path, ibComparisonKind_Equal, field.m_value);
+			line.m_left.m_presentation = detailDesc.TitleForPath(field.m_path);
+			for (const ibQueryConstructorField& known : offered) {
+				if (!known.m_name.IsSameAs(field.m_path, false))
+					continue;
+				line.m_left.m_type = known.m_type;
+				if (line.m_left.m_presentation.IsEmpty())
+					line.m_left.m_presentation = known.m_presentation;
+				break;
+			}
+		}
+		for (ibOutputDescription& output : narrowed.m_structure) {
+			ibDropPinnedLevels(output.m_rowGroups, context);
+			ibDropPinnedLevels(output.m_columnGroups, context);
+		}
+		detailDesc.GetCompositionSettingsDesc() = narrowed;
+	}
+	composer->SetCompositionDesc(detailDesc);
 
 	if (!detailMeta->RunDatabase()) {
 		wxDELETE(detailMeta);

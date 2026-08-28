@@ -25,6 +25,7 @@
 #include <gtest/gtest.h>
 
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"
+#include "backend/system/value/valueSpreadsheetDetails.h"   // what a composed cell is bound to
 
 namespace {
 
@@ -46,8 +47,13 @@ std::vector<ibQueryLowering::OutputColumn> Schema() {
 ibCompositionOutputInfo SchemaInfo(std::vector<ibQueryLowering::OutputColumn> schema) {
 	ibCompositionOutputInfo info;
 	info.m_schema = std::move(schema);
-	for (const ibQueryLowering::OutputColumn& column : info.m_schema)
+	for (const ibQueryLowering::OutputColumn& column : info.m_schema) {
 		info.m_titles.push_back(column.m_name);
+		// …AND THE FIELD ITSELF, which is what a cell's details parameter is stamped with. Here the
+		// path and the name are the same word; in a composition they are not, which is precisely why
+		// the driver is handed both.
+		info.m_paths.push_back(column.m_name);
+	}
 	return info;
 }
 
@@ -178,6 +184,71 @@ TEST(SpreadsheetCompose, EveryNonEmptyCell_CarriesItsValue)
 	// …and an EMPTY value binds nothing: there is no value behind that cell at all.
 	doc->GetCellDetailsParameter(2, 0, details);
 	EXPECT_TRUE(details.IsEmpty());
+}
+
+// ⭐⭐ …AND IT CARRIES WHAT IT STOOD UNDER. A figure was composed under a heading, and the only place
+// that is knowable is here — the sheet keeps rows, not the tree they were folded from. So the cell
+// is bound to the value WRAPPED: the same value to anything that reads it, plus the links a detail
+// follows back (Max, 2026-08-28).
+TEST(SpreadsheetCompose, AFigureIsLinkedToItsHeading)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) }));
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, true, { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnOutputEnd(true);
+
+	wxString name;
+	doc->GetCellDetailsParameter(1, 1, name);   // the figure's own cell
+	ASSERT_FALSE(name.IsEmpty());
+
+	ibValue bound = doc->GetParameter(name);   // held: From returns a pointer INTO it
+	ibValueSpreadsheetDetails* figure = ibValueSpreadsheetDetails::From(bound);
+	ASSERT_TRUE(figure != nullptr);
+	EXPECT_EQ(wxT("Amount"), figure->GetPath());
+	EXPECT_TRUE(figure->GetRole() == ibQueryLowering::ibColumnRole::Measure);
+	// OUTSIDE, IT IS THE VALUE IT WRAPS — which is what keeps `[Cell_1]` and "Open value" unchanged.
+	EXPECT_EQ(wxT("100"), figure->GetString());
+
+	ASSERT_EQ(size_t(1), figure->GetParents().size());
+	ibValueSpreadsheetDetails* heading =
+		ibValueSpreadsheetDetails::From(figure->GetParents().front());
+	ASSERT_TRUE(heading != nullptr);
+	EXPECT_EQ(wxT("Partner"), heading->GetPath());
+
+	// ⭐ THE CONTEXT IS THE ASCENT, DIMENSIONS ONLY. A figure is what was measured, never something
+	// to filter by — so the breakdown of this cell is "Partner = Alpha" and nothing else.
+	std::vector<ibValueSpreadsheetDetails::ibSpreadsheetDetailsField> context;
+	figure->CollectContext(context);
+	ASSERT_EQ(size_t(1), context.size());
+	EXPECT_EQ(wxT("Partner"), context.front().m_path);
+	EXPECT_EQ(wxT("Alpha"), context.front().m_value.GetString());
+}
+
+// ⭐ A HEADING IS PART OF ITS OWN CONTEXT — the same walk, and the ROLE is what decides rather than
+// the caller: click the figure and you get the heading, click the heading and you get itself.
+TEST(SpreadsheetCompose, AHeadingIsItsOwnContext)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) }));
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, true, { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnOutputEnd(true);
+
+	wxString name;
+	doc->GetCellDetailsParameter(1, 0, name);
+	ASSERT_FALSE(name.IsEmpty());
+
+	ibValue bound = doc->GetParameter(name);
+	ibValueSpreadsheetDetails* heading = ibValueSpreadsheetDetails::From(bound);
+	ASSERT_TRUE(heading != nullptr);
+
+	std::vector<ibValueSpreadsheetDetails::ibSpreadsheetDetailsField> context;
+	heading->CollectContext(context);
+	ASSERT_EQ(size_t(1), context.size());
+	EXPECT_EQ(wxT("Partner"), context.front().m_path);
 }
 
 // COMPOSING TWICE REPLACES. Changing a filter and pressing Generate again is the
@@ -385,6 +456,8 @@ ibCompositionOutputInfo CrossInfo(const std::vector<ibQueryLowering::OutputColum
 	info.m_kind      = ibCompositionOutputKind::Table;
 	info.m_schema    = schema;
 	info.m_rowLevels = rowLevels;
+	for (const ibQueryLowering::OutputColumn& column : info.m_schema)
+		info.m_paths.push_back(column.m_name);
 	return info;
 }
 
@@ -424,6 +497,39 @@ TEST(SpreadsheetCross, AColumnKeySeenLateStillGetsItsColumn)
 	EXPECT_EQ(wxT(""),   doc->GetCellValue(2, 1));
 	EXPECT_EQ(wxT("70"), doc->GetCellValue(2, 2));
 	EXPECT_EQ(2, driver.GetRowsWritten());
+}
+
+// ⭐⭐ A CELL OF A TABLE STANDS UNDER TWO HEADINGS — its row and its column — and that is the one
+// place the ascent forks. Both links, or the breakdown of a figure would quietly drop one of the two
+// things that made it: "Alpha, in the North" is what that 30 is, and either half alone is a
+// different number.
+TEST(SpreadsheetCross, ACellIsLinkedToBothItsHeadings)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(CrossInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) }, 1));
+	driver.OnGroupBegin(1, ibSelectorNodeKind::Group, true, false, { ibValue(wxT("Alpha")), ibValue(), ibValue(30) });
+	driver.OnGroupBegin(2, ibSelectorNodeKind::Group, false, false, { ibValue(), ibValue(wxT("North")), ibValue(30) });
+	driver.OnOutputEnd(true);
+
+	wxString name;
+	doc->GetCellDetailsParameter(1, 1, name);   // where Alpha meets the North
+	ASSERT_FALSE(name.IsEmpty());
+
+	ibValue bound = doc->GetParameter(name);
+	ibValueSpreadsheetDetails* cell = ibValueSpreadsheetDetails::From(bound);
+	ASSERT_TRUE(cell != nullptr);
+	EXPECT_EQ(size_t(2), cell->GetParents().size());
+
+	// The context reads as the cell does: this row, in this column.
+	std::vector<ibValueSpreadsheetDetails::ibSpreadsheetDetailsField> context;
+	cell->CollectContext(context);
+	ASSERT_EQ(size_t(2), context.size());
+	EXPECT_EQ(wxT("Partner"), context[0].m_path);
+	EXPECT_EQ(wxT("Alpha"), context[0].m_value.GetString());
+	EXPECT_EQ(wxT("Warehouse"), context[1].m_path);
+	EXPECT_EQ(wxT("North"), context[1].m_value.GetString());
 }
 
 // ⭐ THE ROW'S TOTAL COSTS NOTHING. The fold already computed the figures at the row heading, so a

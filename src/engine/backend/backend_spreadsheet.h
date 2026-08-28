@@ -232,7 +232,6 @@ public:
 	void GetCellDetailsParameter(int row, int col, wxString& s) const { m_spreadsheetDesc.GetCellDetailsParameter(row, col, s); }
 	void SetCellDetailsParameter(int row, int col, const wxString& s);
 
-	bool OpenCellDetailsParameter(int row, int col) const;
 
 #pragma region __fs_h__
 

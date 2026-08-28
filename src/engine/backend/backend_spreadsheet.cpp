@@ -537,22 +537,10 @@ void ibBackendSpreadsheetObject::SetCellDetailsParameter(int row, int col, const
 	m_spreadsheetDesc.SetCellDetailsParameter(row, col, s);
 }
 
-bool ibBackendSpreadsheetObject::OpenCellDetailsParameter(int row, int col) const
-{
-	const ibSpreadsheetCellDescription* cellDesc = m_spreadsheetDesc.GetCell(row, col);
-	if (cellDesc == nullptr)
-		return false;
-
-	const wxString& detailsParameter = cellDesc->m_detailsParameter;
-
-	ibValue valueParam;
-	if (!detailsParameter.IsEmpty() && GetParameter(detailsParameter, valueParam)) {
-		valueParam.ShowValue();
-		return true;
-	}
-
-	return false;
-}
+// (⚠ NO `OpenCellDetailsParameter` HERE ANY MORE. Opening a value is the RUNTIME's — a caller asks
+//  the cell what it is bound to and shows that value, which is the two lines this verb wrapped. A
+//  sheet that also knew how to open things was a door in front of a door, and the door belonged to
+//  the value: `ibValue::ShowValue` resolves through references and wrappers on its own.)
 
 #pragma region __fs_h__
 

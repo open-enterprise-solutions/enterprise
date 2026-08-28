@@ -360,22 +360,31 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	//   * a DIMENSION is a reading of the field its level groups by — several fields to a level, in
 	//     the order the level states them, which is the order their columns arrive in.
 	//   * anything else is a projected field, named after itself.
+	// ⭐ AND THE PATH IT WAS TITLED FROM travels with it. The field is found here, once, to work the
+	// title out; handing over only the title made every reader that needs the FIELD — the details
+	// parameter of a composed cell, which becomes a grouping and a filter — search it back out of
+	// the resources and the levels by name.
 	info.m_titles.assign(schema.size(), wxString());
+	info.m_paths.assign(schema.size(), wxString());
 	{
 		size_t measure = 0;
 		std::map<int, size_t> filledInLevel;   // level -> how many of its fields are already titled
 		for (size_t i = 0; i < schema.size(); ++i) {
 			switch (schema[i].m_role) {
 			case ibQueryLowering::ibColumnRole::Measure:
-				if (measure < m_resources.size())
-					info.m_titles[i] = TitleForPath(m_resources[measure].m_path);
+				if (measure < m_resources.size()) {
+					info.m_paths[i] = m_resources[measure].m_path;
+					info.m_titles[i] = TitleForPath(info.m_paths[i]);
+				}
 				++measure;
 				break;
 			case ibQueryLowering::ibColumnRole::Dimension: {
 				const GroupNode* level = LevelAt(output, schema[i].m_level + 1);
 				const size_t at = filledInLevel[schema[i].m_level]++;
-				if (level != nullptr && at < level->m_settings.m_group.m_lines.size())
-					info.m_titles[i] = TitleForPath(level->m_settings.m_group.m_lines[at].m_path);
+				if (level != nullptr && at < level->m_settings.m_group.m_lines.size()) {
+					info.m_paths[i] = level->m_settings.m_group.m_lines[at].m_path;
+					info.m_titles[i] = TitleForPath(info.m_paths[i]);
+				}
 				break;
 			}
 			default:
@@ -386,6 +395,24 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			// level to ask). Said here rather than left empty, so TitleOf never has to guess.
 			if (info.m_titles[i].IsEmpty())
 				info.m_titles[i] = ibTitleFromName(schema[i].m_name);
+			// ⭐⭐ …AND THE PATH FALLS BACK THE SAME WAY, which is the half that was missing. Over a
+			// PARSED QUERY a field's path IS its name — that is the identity the picker writes into a
+			// grouping line and the one `GetConstructorFields` hands a window — so a column whose
+			// level could not be asked still says what it is a reading of.
+			//
+			// 🛑 IT WAS LEFT EMPTY, AND AN EMPTY PATH IS A SILENT REFUSAL: a cell composed under a
+			// heading whose level could not be asked carried no field, so its details wrapper had
+			// nothing to be followed by, so a detail opened as an unnarrowed copy of the report —
+			// indistinguishable from one that worked. And "the level cannot be asked" is not the rare
+			// case: it is EVERY report whose reader arranged their own groupings.
+			//
+			// ⚠ NOT FOR A MEASURE. Its name is the one the query had to QUALIFY to keep unique
+			// (`CountNumber` where a level already answers to `Number`), and that word is not a field
+			// anybody can filter or group by. A measure with no resource behind it stays pathless,
+			// which is the truth about it.
+			if (info.m_paths[i].IsEmpty()
+				&& schema[i].m_role != ibQueryLowering::ibColumnRole::Measure)
+				info.m_paths[i] = schema[i].m_name;
 		}
 	}
 	info.m_detailsAxis = DetailAxisOf(output);

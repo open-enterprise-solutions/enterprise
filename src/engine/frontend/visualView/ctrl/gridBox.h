@@ -190,7 +190,7 @@ private:
 	// A printed sheet is not a picture: every figure was COMPOSED from something, and clicking one
 	// is how a person asks what from. The cell already carries its value — the composer stamps
 	// `SetParameter` + `SetCellDetailsParameter` on every heading, cell and total — and the click
-	// ended in `OpenCellDetailsParameter` → `ibValue::ShowValue`. What was missing was the FORK: a
+	// ended in `ibValue::ShowValue`, the runtime's own door. What was missing was the FORK: a
 	// report saying what a click means in it. So this is not a new mechanism; it is the question
 	// asked one step before the answer that already existed.
 	//

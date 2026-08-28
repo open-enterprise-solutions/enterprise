@@ -1,4 +1,5 @@
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"
+#include "backend/system/value/valueSpreadsheetDetails.h"   // what a cell is stamped with — value + its links
 
 #include <algorithm>   // std::min — MSVC drags it in transitively, libstdc++ does not
 #include <map>         // the per-level field counts the dimension layout is built from
@@ -148,6 +149,16 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 	m_titles.reserve(info.m_schema.size());
 	for (size_t i = 0; i < info.m_schema.size(); ++i)
 		m_titles.push_back(info.TitleOf(i));
+	// …AND WHAT EACH COLUMN IS A READING OF, for the cells rather than for the header. Asked the
+	// same way and taken here for the same reason: the info does not outlive this call, and a table
+	// binds its cells long after it.
+	m_paths.clear();
+	m_paths.reserve(info.m_schema.size());
+	for (size_t i = 0; i < info.m_schema.size(); ++i)
+		m_paths.push_back(info.PathOf(i));
+	// AN OUTPUT STARTS ITS OWN DESCENT. Outputs share the sheet, not their trees: a cell of the
+	// second report standing under a heading of the first would be a link nobody can follow back.
+	m_chainAtLevel.clear();
 	// ⭐ AND THE OUTPUT'S NAME IS TAKEN, which is the whole reason it travels. It was written by the
 	// composer and read by nobody (audit § C8, "write-only"), so a report of two outputs printed two
 	// blocks of figures with nothing to say which was which — and naming them is exactly what the
@@ -580,6 +591,55 @@ void ibSpreadsheetComposeDriver::WriteHeading()
 	m_document->PutArea(heading, 0);
 }
 
+// ⭐⭐ THE VALUE, PACKED WITH WHAT IT STOOD UNDER. A cell used to be bound to the bare value; it is
+// bound to the same value wrapped, and the wrapper is what makes a click answerable: from the field
+// clicked the reader takes the parent and works out what the figure was (Max, 2026-08-28).
+//
+// ⚠ UNWRAPPED FIRST, always. A value can reach here already packed — a row printed through the
+// total line, a figure carried from one area into another — and wrapping a wrapper would build a
+// chain out of the same fact stated twice.
+ibValue ibSpreadsheetComposeDriver::PackDetails(size_t column, const ibValue& value,
+	const ibValue& under, const ibValue& alsoUnder) const
+{
+	const ibQueryLowering::ibColumnRole role = column < m_schema.size()
+		? m_schema[column].m_role : ibQueryLowering::ibColumnRole::Detail;
+
+
+	ibValueSpreadsheetDetails* details = new ibValueSpreadsheetDetails(
+		ColumnPath(column), role, ibValueSpreadsheetDetails::Unwrap(value));
+	details->LinkTo(under);
+	details->LinkTo(alsoUnder);   // …the column heading, in a table; empty in a grouping
+	return ibValue(details);
+}
+
+ibValue ibSpreadsheetComposeDriver::ChainAbove(int level) const
+{
+	const size_t depth = level > 0 ? static_cast<size_t>(level) : 0;
+	if (depth == 0 || depth - 1 >= m_chainAtLevel.size())
+		return ibValue();   // the top of this output — a row that stands under nothing
+	return m_chainAtLevel[depth - 1];
+}
+
+ibValue ibSpreadsheetComposeDriver::DeepestChain() const
+{
+	for (size_t at = m_chainAtLevel.size(); at > 0; --at)
+		if (!m_chainAtLevel[at - 1].IsEmpty())
+			return m_chainAtLevel[at - 1];
+	return ibValue();
+}
+
+void ibSpreadsheetComposeDriver::KeepChain(int level, const ibValue& chain)
+{
+	const size_t depth = level > 0 ? static_cast<size_t>(level) : 0;
+	if (m_chainAtLevel.size() <= depth)
+		m_chainAtLevel.resize(depth + 1);
+	m_chainAtLevel[depth] = chain;
+	// …AND NOTHING DEEPER IS IN SCOPE. A pre-order walk never returns to a level it has left, so a
+	// chain kept below this one belongs to a branch already printed — dropped here rather than
+	// guarded against at every read.
+	m_chainAtLevel.resize(depth + 1);
+}
+
 void ibSpreadsheetComposeDriver::PrintRow(int level, bool hasChildren, const std::vector<ibValue>& values)
 {
 	if (m_document == nullptr)
@@ -613,6 +673,37 @@ void ibSpreadsheetComposeDriver::PrintRow(int level, bool hasChildren, const std
 
 	wxObjectDataPtr<ibBackendSpreadsheetObject> row(new ibBackendSpreadsheetObject());
 
+	// ⭐⭐ THE ROW'S OWN CHAIN, BUILT BEFORE ANYTHING IS WRITTEN — every figure of this row hangs
+	// under this row's heading, and a figure cannot link to a wrapper that does not exist yet.
+	//
+	// A level may group by several fields; they are one heading, so they link one under the next and
+	// the first links under the level above. Read upwards that is one context ("this region, this
+	// city"), which is exactly what the detail filters by.
+	std::vector<ibValue> packed(values.size());
+	ibValue chain = ChainAbove(level);
+	bool ownHeading = false;   // did this row state a dimension of its own?
+	for (size_t i = 0; i < values.size() && i < m_layout.size(); ++i) {
+		if (m_layout[i] < 0 || values[i].IsEmpty())
+			continue;
+		if (i >= m_dimLevel.size() || m_dimLevel[i] < 0 || static_cast<size_t>(m_dimLevel[i]) != ownDim)
+			continue;   // not a heading of THIS level — the levels above are already linked
+		chain = PackDetails(i, values[i], chain);
+		packed[i] = chain;
+		ownHeading = true;
+	}
+	// ⭐⭐ A ROW WITH NO HEADING OF ITS OWN BELONGS TO THE HEADING IT WAS PRINTED UNDER — the deepest
+	// one still open. Its DEPTH cannot answer that: the ladder numbers a records node by its own
+	// rung, and the flat road hands every row over at level 0 (dataComposerRun, OnRow(0, row)) — so
+	// a record read by depth hangs off whatever happens to be one line above it, which at level 0 is
+	// nothing at all. That is a cell that cannot be followed back, and it looks exactly like a
+	// working one.
+	if (!ownHeading) {
+		const ibValue open = DeepestChain();
+		if (!open.IsEmpty())
+			chain = open;
+	}
+	KeepChain(level, chain);
+
 	for (size_t i = 0; i < values.size() && i < m_layout.size(); ++i) {
 		const int col = m_layout[i];
 		if (col < 0)
@@ -633,13 +724,17 @@ void ibSpreadsheetComposeDriver::PrintRow(int level, bool hasChildren, const std
 		row->SetCellValue(0, col, text);
 
 		// A CELL CARRIES ITS VALUE, and WHAT that means is the value's own business: the click ends in
-		// ibValue::ShowValue (OpenCellDetailsParameter), and a value with nothing to show simply shows
+		// ibValue::ShowValue, and a value with nothing to show simply shows
 		// nothing. Asking here which types are "openable" would be a second, poorer answer to a
 		// question the value already answers (Max, 2026-08-19). The parameter travels with the area —
 		// PutArea re-keys it into the document — so the binding survives the move.
+		//
+		// ⭐ …AND IT CARRIES WHAT IT STOOD UNDER. A heading is bound to the wrapper built for it
+		// above; everything else on the row — its figures, a record's own fields — hangs under the
+		// row's chain, which is what the click reads back.
 		if (!value.IsEmpty()) {
 			const wxString name = wxString::Format(wxT("Cell_%d"), col);
-			row->SetParameter(name, value);
+			row->SetParameter(name, packed[i].IsEmpty() ? PackDetails(i, value, chain) : packed[i]);
 			row->SetCellDetailsParameter(0, col, name);
 		}
 
@@ -718,9 +813,12 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 		const ibValue& value = values[i];
 		const wxString text = value.GetString();
 		row->SetCellValue(0, col, text);
+		// ⭐ THE GRAND TOTAL STANDS UNDER NOTHING — it is the figure over everything, so its cells are
+		// packed with no links at all. A click on it still opens the value; there is simply no
+		// context to break down by, which is the truth about that line.
 		if (!value.IsEmpty()) {
 			const wxString name = wxString::Format(wxT("Cell_%d"), col);
-			row->SetParameter(name, value);
+			row->SetParameter(name, PackDetails(i, value, ibValue()));
 			row->SetCellDetailsParameter(0, col, name);
 		}
 		if (value.GetType() == ibValueTypes::TYPE_NUMBER)
@@ -759,6 +857,18 @@ std::vector<ibValue> ibValuesOfLevel(const std::vector<ibQueryLowering::OutputCo
 	for (size_t i = 0; i < schema.size() && i < values.size(); ++i)
 		if (schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension && schema[i].m_level == dimLevel)
 			own.push_back(values[i]);
+	return own;
+}
+
+// …AND WHICH COLUMNS THOSE WERE, in the same order. The values above travel on their own — a key
+// keeps figures, not schema indices — so when a cell has to say WHAT FIELD its value is a reading
+// of, this is what maps the n-th value of a level back to the column it came from.
+std::vector<size_t> ibColumnsOfLevel(const std::vector<ibQueryLowering::OutputColumn>& schema, int dimLevel)
+{
+	std::vector<size_t> own;
+	for (size_t i = 0; i < schema.size(); ++i)
+		if (schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension && schema[i].m_level == dimLevel)
+			own.push_back(i);
 	return own;
 }
 
@@ -992,6 +1102,23 @@ std::vector<ibSpreadsheetComposeDriver::ColumnSlot> ibSpreadsheetComposeDriver::
 	return slots;
 }
 
+// ⭐ A COLUMN, AS SOMETHING TO FOLLOW BACK. The key holds figures per level and nothing about the
+// fields they were read from, so the columns of each level are asked for here and the values are
+// matched to them by position — the same order both were built in (ibValuesOfLevel).
+ibValue ibSpreadsheetComposeDriver::ChainOfColumnKey(const CrossKey& key) const
+{
+	ibValue chain;
+	for (size_t depth = 0; depth < key.size(); ++depth) {
+		const std::vector<size_t> at = ibColumnsOfLevel(m_schema, static_cast<int>(m_rowLevels + depth));
+		for (size_t f = 0; f < key[depth].size(); ++f) {
+			if (key[depth][f].IsEmpty())
+				continue;
+			chain = PackDetails(f < at.size() ? at[f] : m_schema.size(), key[depth][f], chain);
+		}
+	}
+	return chain;
+}
+
 void ibSpreadsheetComposeDriver::WriteCrossTable()
 {
 	// HOW WIDE THE ROW-HEADING AREA IS — the widest row level, exactly as the streaming layout
@@ -1011,6 +1138,13 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				rowDimWidth = std::max(rowDimWidth, line.m_heading.size());
 	}
 	const std::vector<ColumnSlot> slots = BuildColumnSlots();
+
+	// …AND WHAT EACH COLUMN STANDS UNDER, once per column rather than once per cell. A subtotal slot
+	// chains its PREFIX — which is what it totals, and what a click on it should break down by.
+	std::vector<ibValue> slotChain(slots.size());
+	for (size_t s = 0; s < slots.size(); ++s)
+		slotChain[s] = ChainOfColumnKey(slots[s].m_subtotal ? slots[s].m_key
+			: (slots[s].m_at < m_colKeys.size() ? m_colKeys[slots[s].m_at] : CrossKey()));
 
 	const int dimWidth  = static_cast<int>(std::max<size_t>(rowDimWidth, 1));
 	const int measures  = static_cast<int>(m_measureAt.size());
@@ -1246,6 +1380,12 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	for (const CrossRow& source : m_crossRows) {
 		wxObjectDataPtr<ibBackendSpreadsheetObject> row(new ibBackendSpreadsheetObject());
 
+		// ⭐ THE ROW'S CHAIN — its own heading fields, one under the next, under the heading above it.
+		// The same ladder the streaming layout builds, kept in the same place, so a cell of a table
+		// and a cell of a grouping are followed back the same way.
+		const std::vector<size_t> headingAt = ibColumnsOfLevel(m_schema, source.m_level - 1);
+		ibValue rowChain = ChainAbove(source.m_level);
+
 		// The heading, indented by its depth — the same indent the streaming layout uses, so a
 		// nested row heading reads the same in both shapes.
 		for (size_t f = 0; f < source.m_heading.size() && static_cast<int>(f) < dimWidth; ++f) {
@@ -1255,16 +1395,19 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			row->SetCellValue(0, static_cast<int>(f), text);
 			if (!source.m_heading[f].IsEmpty()) {
 				const wxString name = wxString::Format(wxT("Cell_%d"), static_cast<int>(f));
-				row->SetParameter(name, source.m_heading[f]);
+				rowChain = PackDetails(f < headingAt.size() ? headingAt[f] : m_schema.size(),
+					source.m_heading[f], rowChain);
+				row->SetParameter(name, rowChain);
 				row->SetCellDetailsParameter(0, static_cast<int>(f), name);
 			}
 			if (f < m_widest.size())
 				m_widest[f] = std::max(m_widest[f], text.length());
 		}
+		KeepChain(source.m_level, rowChain);
 
 		// THE CELLS. A pair that never occurred writes nothing — an empty cell is what "this never
 		// happened" looks like, and a zero would state a measurement nobody made.
-		auto writeFigures = [&](int firstCol, const std::vector<ibValue>& figures) {
+		auto writeFigures = [&](int firstCol, const std::vector<ibValue>& figures, const ibValue& colChain) {
 			for (size_t m = 0; m < figures.size() && static_cast<int>(m) < std::max(measures, 1); ++m) {
 				const int col = firstCol + static_cast<int>(m);
 				if (col >= totalCols)
@@ -1273,9 +1416,14 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				row->SetCellValue(0, col, text);
 				if (figures[m].GetType() == ibValueTypes::TYPE_NUMBER)
 					row->SetCellAlignment(0, col, wxALIGN_RIGHT, wxALIGN_CENTER);
+				// ⭐ A CELL OF A TABLE STANDS UNDER TWO HEADINGS — its row and its column — and that
+				// is the whole difference between a table's figure and a grouping's. Both links, or
+				// the breakdown of a cell would silently drop one of the two things that made it.
 				if (!figures[m].IsEmpty()) {
 					const wxString name = wxString::Format(wxT("Cell_%d"), col);
-					row->SetParameter(name, figures[m]);
+					row->SetParameter(name, PackDetails(
+						m < m_measureAt.size() ? m_measureAt[m] : m_schema.size(),
+						figures[m], rowChain, colChain));
 					row->SetCellDetailsParameter(0, col, name);
 				}
 				if (static_cast<size_t>(col) < m_widest.size())
@@ -1288,14 +1436,16 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			if (!slots[s].m_subtotal) {
 				const auto cell = source.m_cells.find(slots[s].m_at);
 				if (cell != source.m_cells.end())
-					writeFigures(at, cell->second);
+					writeFigures(at, cell->second, slotChain[s]);
 				continue;
 			}
 			for (const std::pair<CrossKey, std::vector<ibValue>>& kept : source.m_subtotals)
-				if (kept.first == slots[s].m_key) { writeFigures(at, kept.second); break; }
+				if (kept.first == slots[s].m_key) { writeFigures(at, kept.second, slotChain[s]); break; }
 		}
+		// THE ROW TOTAL stands under the ROW only — it is what this heading adds up to across every
+		// column, so naming one of them would be a link that is not true.
 		if (measures > 0)
-			writeFigures(dimWidth + keys * perKey, source.m_measures);
+			writeFigures(dimWidth + keys * perKey, source.m_measures, ibValue());
 
 		// A HEADING IS TINTED BY ITS LEVEL AND BOLD; A RECORD IS NEITHER — same rule the streaming
 		// layout follows (OnRow), so a table and a grouping dress their lines alike.
@@ -1321,7 +1471,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		totals->SetCellValue(0, 0, wxT("Total"));
 
 		int wrote = 0;   // …and how many cells this line actually filled — see the journal below
-		auto writeAt = [&](int firstCol, const std::vector<ibValue>& figures) {
+		auto writeAt = [&](int firstCol, const std::vector<ibValue>& figures, const ibValue& colChain) {
 			for (size_t m = 0; m < figures.size() && static_cast<int>(m) < std::max(measures, 1); ++m) {
 				++wrote;
 				const int col = firstCol + static_cast<int>(m);
@@ -1331,6 +1481,16 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				totals->SetCellValue(0, col, text);
 				if (figures[m].GetType() == ibValueTypes::TYPE_NUMBER)
 					totals->SetCellAlignment(0, col, wxALIGN_RIGHT, wxALIGN_CENTER);
+				// ⭐ THE BOTTOM LINE IS FOLLOWABLE TOO, and under its COLUMN only: a column total is
+				// that column over every row, so it breaks down by the column heading and by nothing
+				// on the row axis. (The corner figure is under neither — it is everything.)
+				if (!figures[m].IsEmpty()) {
+					const wxString name = wxString::Format(wxT("Cell_%d"), col);
+					totals->SetParameter(name, PackDetails(
+						m < m_measureAt.size() ? m_measureAt[m] : m_schema.size(),
+						figures[m], colChain));
+					totals->SetCellDetailsParameter(0, col, name);
+				}
 				if (static_cast<size_t>(col) < m_widest.size())
 					m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], text.length());
 			}
@@ -1340,14 +1500,14 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			if (!slots[s].m_subtotal) {
 				const auto cell = m_columnTotalCells.find(slots[s].m_at);
 				if (cell != m_columnTotalCells.end())
-					writeAt(at, cell->second);
+					writeAt(at, cell->second, slotChain[s]);
 				continue;
 			}
 			for (const std::pair<CrossKey, std::vector<ibValue>>& kept : m_columnTotalSubtotals)
-				if (kept.first == slots[s].m_key) { writeAt(at, kept.second); break; }
+				if (kept.first == slots[s].m_key) { writeAt(at, kept.second, slotChain[s]); break; }
 		}
 		if (m_hasGrandTotal && measures > 0)
-			writeAt(dimWidth + keys * perKey, m_crossGrandTotal);
+			writeAt(dimWidth + keys * perKey, m_crossGrandTotal, ibValue());
 
 		wxFont font = s_defaultSpreadsheetFont;
 		font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);

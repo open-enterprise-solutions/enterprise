@@ -289,8 +289,15 @@ void ibGridEditor::SetCellDetailsParameter(const ibGridBlockCoords& coords, cons
 
 void ibGridEditor::OnMouseLeftDown(ibGridEvent& event)
 {
-	if (m_spreadsheetObject != nullptr && !IsEditable())
-		m_spreadsheetObject->OpenCellDetailsParameter(event.GetRow(), event.GetCol());
+	// A CELL BOUND TO A VALUE OPENS IT — asked of the sheet, opened by the runtime. Which window a
+	// value has is the value's own business, so there is nothing here to decide.
+	if (m_spreadsheetObject != nullptr && !IsEditable()) {
+		wxString bound;
+		m_spreadsheetObject->GetCellDetailsParameter(event.GetRow(), event.GetCol(), bound);
+		ibValue boundValue;
+		if (!bound.IsEmpty() && m_spreadsheetObject->GetParameter(bound, boundValue))
+			boundValue.ShowValue();
+	}
 
 	event.Skip();
 }
