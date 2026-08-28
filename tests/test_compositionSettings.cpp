@@ -65,6 +65,18 @@ void DeclareZeroth(ibDataDBComposer& composer, const ibSettingsDescription& sett
 	composer.LoadVariants({ zeroth });
 }
 
+// ⭐ A SELECTED FIELD IS A ROW, NOT A STRING (2026-08-27). The table has a second kind of row —
+// `Auto`, which is what "take the storey above" IS and has a POSITION among the fields — so a plain
+// list of paths no longer says what a table holds. These tests state ordinary fields, so they say
+// so once, here, rather than nine times.
+std::vector<ibSelectedFieldDescription> Fields(std::initializer_list<wxString> paths)
+{
+	std::vector<ibSelectedFieldDescription> rows;
+	for (const wxString& path : paths)
+		rows.push_back(ibSelectedFieldDescription::Field(path));
+	return rows;
+}
+
 ibSettingsDescription MakeSortOn(const wxString& path, bool ascending = true)
 {
 	ibSettingsDescription settings;
@@ -183,13 +195,18 @@ TEST(ComposerSettings, RestatingTheAuthorDoesNotTouchTheReader)
 //  4-5. Selected fields — the pile, and the dedupe behind -104
 // ===========================================================================
 
-TEST(ComposerSettings, Selected_PilesUpCompositionThenOutput)
+// ⭐⭐ THE PILE IS WHAT `Auto` MEANS, AND IT HAS A POSITION (2026-08-27). It used to be unconditional
+// — every storey added to the one above it, and there was no way to say otherwise. Now the table
+// says it: an `Auto` ROW stands where the inherited fields come in, so a node can put what it
+// inherits before, after or between its own.
+TEST(ComposerSettings, Selected_AutoTakesTheStoreyAboveAtItsOwnPosition)
 {
 	ibDataDBComposer composer;
-	composer.CommonSelected() = { wxT("Code"), wxT("Description") };
+	composer.CommonSelected() = Fields({ wxT("Code"), wxT("Description") });
 
 	ibDataComposer::Output& output = composer.Outputs().front();
-	output.m_selected = { wxT("Date") };
+	output.m_selected = { ibSelectedFieldDescription::Auto(),
+	                      ibSelectedFieldDescription::Field(wxT("Date")) };
 
 	const std::vector<wxString> selected = composer.SelectedFor(output);
 
@@ -201,6 +218,36 @@ TEST(ComposerSettings, Selected_PilesUpCompositionThenOutput)
 	EXPECT_EQ(wxT("Date"), selected[2]);
 }
 
+// ⭐⭐ …AND TAKING THE ROW OUT STATES A COMPOSITION OF ONE'S OWN. That is the whole of "hide what is
+// above me": the node shows its own fields and nothing else, and its children then inherit from IT
+// (Max, 2026-08-27). It is also where the saving is — the fields nobody shows do not reach the
+// SELECT: *"the main thing we must end up with is that we shrink the SELECT itself"*.
+TEST(ComposerSettings, Selected_WithoutAutoANodeStatesItsOwnComposition)
+{
+	ibDataDBComposer composer;
+	composer.CommonSelected() = Fields({ wxT("Code"), wxT("Description") });
+
+	ibDataComposer::Output& output = composer.Outputs().front();
+	output.m_selected = Fields({ wxT("Date") });
+
+	const std::vector<wxString> selected = composer.SelectedFor(output);
+	ASSERT_EQ(1u, selected.size());
+	EXPECT_EQ(wxT("Date"), selected[0]);
+}
+
+// ⚠ AND AN EMPTY TABLE INHERITS. Saying nothing is not the same as saying "nothing" — a node nobody
+// has touched shows what the storey above shows, which is the state every node starts in.
+TEST(ComposerSettings, Selected_AnUntouchedTableInherits)
+{
+	ibDataDBComposer composer;
+	composer.CommonSelected() = Fields({ wxT("Code"), wxT("Description") });
+
+	const std::vector<wxString> selected = composer.SelectedFor(composer.Outputs().front());
+	ASSERT_EQ(2u, selected.size());
+	EXPECT_EQ(wxT("Code"), selected[0]);
+	EXPECT_EQ(wxT("Description"), selected[1]);
+}
+
 TEST(ComposerSettings, Selected_FieldNamedTwiceIsNamedOnce)
 {
 	ibDataDBComposer composer;
@@ -208,8 +255,8 @@ TEST(ComposerSettings, Selected_FieldNamedTwiceIsNamedOnce)
 	// The same field on both storeys — and once in the base list itself, which is the case that
 	// reached the server: "column FLD1022_TYPE was specified multiple times for derived table
 	// Q_SUB0" (Firebird -104, measured 2026-08-24).
-	composer.CommonSelected() = { wxT("Code"), wxT("Code") };
-	composer.Outputs().front().m_selected = { wxT("Code") };
+	composer.CommonSelected() = Fields({ wxT("Code"), wxT("Code") });
+	composer.Outputs().front().m_selected = Fields({ wxT("Code") });
 
 	const std::vector<wxString> selected = composer.SelectedFor(composer.Outputs().front());
 	ASSERT_EQ(1u, selected.size());
@@ -226,15 +273,16 @@ TEST(ComposerSettings, Selected_FieldNamedTwiceIsNamedOnce)
 TEST(ComposerSettings, Projection_OwesWhatEveryLevelNamesByName)
 {
 	ibDataDBComposer composer;
-	composer.CommonSelected() = { wxT("Code") };
+	composer.CommonSelected() = Fields({ wxT("Code") });
 
 	ibDataComposer::Output& output = composer.Outputs().front();
-	output.m_selected = { wxT("Date") };
+	output.m_selected = { ibSelectedFieldDescription::Auto(),           // …and the report's own before it
+	                      ibSelectedFieldDescription::Field(wxT("Date")) };
 
 	ibDataComposer::GroupNode level;
 	level.m_kind = ibCompositionLevelKind::Grouping;
 	level.m_settings.m_group.Append(wxT("Partner"));
-	level.m_selected = { wxT("Partner.Region") };                       // shown by the level
+	level.m_selected = Fields({ wxT("Partner.Region") });               // shown by the level
 	level.m_settings.m_filter.Append(wxT("Partner.IsActive"),
 		ibComparisonKind_Equal, ibValue(true));                         // hidden on by the level
 	level.m_settings.m_sort.Append(wxT("Partner.Rating"), /*ascending*/false);   // ordered on
@@ -284,12 +332,12 @@ TEST(ComposerSettings, Projection_AsksTheColumnAxisToo)
 
 	ibDataComposer::GroupNode rows;
 	rows.m_settings.m_group.Append(wxT("Partner"));
-	rows.m_selected = { wxT("Partner.Region") };
+	rows.m_selected = Fields({ wxT("Partner.Region") });
 	output.m_rowGroups.push_back(rows);
 
 	ibDataComposer::GroupNode columns;
 	columns.m_settings.m_group.Append(wxT("Warehouse"));
-	columns.m_selected = { wxT("Warehouse.Kind") };
+	columns.m_selected = Fields({ wxT("Warehouse.Kind") });
 	output.m_columnGroups.push_back(columns);
 
 	const std::vector<wxString> owed = composer.ProjectionFor(output);
@@ -306,7 +354,7 @@ TEST(CompositionDescription, RoundTrip_KeepsVariantStructure)
 {
 	ibCompositionDescription written;
 	written.m_query = wxT("SELECT Code FROM Catalog.Products");
-	written.m_selected = { wxT("Code") };
+	written.m_selected = Fields({ wxT("Code") });
 
 	// ⭐ THE AUTHOR'S SETTINGS ARE VARIANT ZERO, and a composition is born with it — so this fills
 	// the one that is there rather than adding a second (Max, 2026-08-24). Pushing made the report
@@ -357,7 +405,7 @@ TEST(CompositionDescription, Equality_NoticesAChangedStructure)
 
 	// …and the composition-wide selected set is in it too, for the same reason.
 	ibCompositionDescription narrowed = before;
-	narrowed.m_selected = { wxT("Code") };
+	narrowed.m_selected = Fields({ wxT("Code") });
 	EXPECT_TRUE(before != narrowed);
 }
 

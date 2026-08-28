@@ -890,10 +890,15 @@ TEST(QueryComposerDetails, ADetailLevelWritesNothingIntoTheQuery)
 	EXPECT_TRUE(ibDataComposer::WantsDetails(composer.Root()));
 }
 
-// AN OUTPUT THAT GROUPS BY NOTHING is not "details under a heading" — it has no heading to hang
-// them under, its read is a flat cursor and every row it returns is a detail row already. So the
-// question answers NO there, and the totals read is not asked for something it need not do.
-TEST(QueryComposerDetails, AnOutputWithNoGroupingIsNotADetailsRequest)
+// AN OUTPUT THAT GROUPS BY NOTHING asks for nothing special while nobody has said otherwise — its
+// read is a flat cursor and every row it returns is a detail row already.
+//
+// 🛑 BUT PUTTING A DETAIL LEVEL THERE IS SAYING OTHERWISE, and this test pinned the opposite: the
+// reasoning was "there is no heading to hang them under". That reasoning is exactly what made a
+// detail level under an ungrouped output do nothing at all on screen (Max, 2026-08-27) — a person
+// who added the level asked for the records, and the grand total still comes back over them
+// (*"we can output detail records. That is normal. And get the overall total too"*).
+TEST(QueryComposerDetails, AnUngroupedOutputWantsDetailsOnlyWhenAskedTo)
 {
 	ibDataDBComposer composer;
 	composer.FromText(wxT("SELECT Partner, Amount FROM Document.Sales"));
@@ -903,8 +908,8 @@ TEST(QueryComposerDetails, AnOutputWithNoGroupingIsNotADetailsRequest)
 	ibDataComposer::GroupNode details;
 	details.m_kind = ibCompositionLevelKind::Details;
 	composer.Root().m_rowGroups.push_back(details);
-	EXPECT_FALSE(ibDataComposer::WantsDetails(composer.Root()));
-	EXPECT_FALSE(ibDataComposer::HasGroupingFields(composer.Root()));
+	EXPECT_TRUE(ibDataComposer::WantsDetails(composer.Root()));
+	EXPECT_FALSE(ibDataComposer::HasGroupingFields(composer.Root()));   // still nothing to fold BY
 }
 
 // ===========================================================================

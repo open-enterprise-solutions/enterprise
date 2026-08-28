@@ -24,7 +24,7 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/composition/spreadsheetComposeDriver.h"
+#include "backend/composition/drivers/spreadsheetComposeDriver.h"
 
 namespace {
 

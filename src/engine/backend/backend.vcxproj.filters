@@ -1992,6 +1992,9 @@
     <Filter Include="composition">
       <UniqueIdentifier>{8f4d2a17-6c3e-4b9a-a52d-7e90c41f55b2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="composition\drivers">
+      <UniqueIdentifier>{3b6a91d4-52c7-4e18-9f0a-2d84e6b71c39}</UniqueIdentifier>
+    </Filter>
     <Filter Include="debugger">
       <UniqueIdentifier>{e7188396-0035-47b0-b863-be1ec229b525}</UniqueIdentifier>
     </Filter>
@@ -2306,8 +2309,11 @@
     <ClCompile Include="composition\dataComposer.cpp">
       <Filter>composition</Filter>
     </ClCompile>
-    <ClCompile Include="composition\spreadsheetComposeDriver.cpp">
+    <ClCompile Include="composition\dataComposerRun.cpp">
       <Filter>composition</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\drivers\spreadsheetComposeDriver.cpp">
+      <Filter>composition\drivers</Filter>
     </ClCompile>
     <ClCompile Include="composition\ramComposer.cpp">
       <Filter>composition</Filter>
@@ -2466,11 +2472,17 @@
     <ClInclude Include="composition\dataComposer.h">
       <Filter>composition</Filter>
     </ClInclude>
-    <ClInclude Include="composition\spreadsheetComposeDriver.h">
+    <ClInclude Include="composition\dataComposerInternal.h">
       <Filter>composition</Filter>
     </ClInclude>
-    <ClInclude Include="composition\listFetchDriver.h">
-      <Filter>composition</Filter>
+    <ClInclude Include="composition\drivers\compositionDriver.h">
+      <Filter>composition\drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\drivers\spreadsheetComposeDriver.h">
+      <Filter>composition\drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\drivers\listFetchDriver.h">
+      <Filter>composition\drivers</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueComposer.h">
       <Filter>system\value</Filter>
