@@ -61,6 +61,17 @@ constexpr ibClassID g_valueDataCompositionCLSID = value_to_clsid("VL_DCMPN");
 BACKEND_API void ibSyncParametersWithQuery(std::vector<ibParameterDescription>& parameters,
                                            const wxString& queryText);
 
+// …and the same rule over EVERY text the composition writes — the query body plus each resource
+// expression. A `&Rate` in a resource declares a parameter as much as one in the body does, and a
+// parameter the texts still name cannot be removed by hand (m_fromQuery).
+BACKEND_API void ibSyncParametersWithTexts(std::vector<ibParameterDescription>& parameters,
+                                           const std::vector<wxString>& texts);
+
+// ⭐ THE WHOLE DESCRIPTION, ASKED ONCE. Both callers hold one — the composition its own, the window
+// the copy it is editing — so which texts count is answered HERE and not twice at the two call
+// sites, where the second one would sooner or later count something different.
+BACKEND_API void ibSyncParameters(class ibCompositionDescription& composition);
+
 class BACKEND_API ibValueDataComposition : public ibValueSpreadsheetModel, public ibSourceDataObject, public ibPropertyObject {
 public:
 
@@ -191,9 +202,15 @@ public:
 	// is an answer, and the SHAPE of the result never depends on it.
 	std::map<wxString, ibValue> ParameterValues() const;
 
-	// EVALUATE THE EXPRESSIONS — once, before the read. `Evaluate` is the language.s own door, so a
-	// parameter may hold a call into a common module; the RESULT decides the parameter.s type.
-	void EvaluateParameters() const;
+	// ⭐⭐ WHAT THE RUN IS GIVEN — the same names, with the expressions EVALUATED and the declarations
+	// built into live references. `Evaluate` is the language's own door, so a parameter may hold a
+	// call into a common module; the RESULT decides the parameter's type.
+	//
+	// ⚠ IT RETURNS THEM. Nothing is written back into the description: a description is DATA, and an
+	// evaluated parameter is runtime — a reference with a session behind it. Writing runtime into a
+	// structure that is saved with the configuration is what made a later load fail on a value it had
+	// written itself (Max, 2026-08-29: "there is no runtime in a description, at all").
+	std::map<wxString, ibValue> EvaluatedParameterValues() const;
 
 	// ⭐ SETTLE THE PARAMETERS AT THE MOMENT THE QUERY RUNS (Max, 2026-08-19: "at the moment you
 	// execute the query, if there is an expression there, you evaluate it through our script — quite

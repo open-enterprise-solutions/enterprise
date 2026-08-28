@@ -7,6 +7,7 @@
 // description of the same family). Nothing from the composer, nothing from the model.
 #include "backend/backend_core.h"     // ibMetaID, wxNOT_FOUND, ibClassID
 #include "backend/compiler/value.h"   // ibValue — a filter's right-hand side travels as one
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — a stored value is a BLOB, never a runtime value
 #include "backend/typeDescription.h"  // ibTypeDescription — the sibling description a parameter declares
 #include "backend/guid.h"             // ibGuid — the stable key a select is identified by
 // ⭐ THE UNFOLD IS THE LANGUAGE'S OWN WORD, and this header exists so every tier can name it without
@@ -341,6 +342,21 @@ struct ibSettingsDescription {
 	// the bodies that touch it — which is why the three functions below are defined further down.
 	std::vector<struct ibSelectedFieldDescription> m_selected;
 
+	// ⭐⭐ …AND THE PARAMETER VALUES THE READER FILLED IN — for exactly the reason the fields above
+	// have their own table. The author declares a parameter and ticks "For user"; the person running
+	// the report puts a value beside it, and that value is part of what THEY set (Max, 2026-08-29:
+	// "if I leave it for the user, a tab appears, they choose a value next to that parameter, and it
+	// goes into the query when the composition happens").
+	//
+	// 🛑 IT HAD NOWHERE TO GO. The parameters live on the COMPOSITION — the author's half — and the
+	// reader's window edits a copy of that which the caller drops, keeping only this setting. So the
+	// value was typed into an object about to be thrown away, with nothing raised anywhere: the same
+	// hole the selected fields had, one page along.
+	//
+	// Only the NAME and the stored value travel: what a parameter IS — its type, its expression, who
+	// may fill it in — is the author's declaration and stays there.
+	std::vector<struct ibParameterDescription> m_parameters;
+
 	// NOTHING SET AT ALL — which is a state of its own, not an accident, and the ONE question that
 	// answers "has anybody saved a setting": a composer whose reader has not runs on `m_variants[0]`.
 	bool IsOk() const;
@@ -357,16 +373,38 @@ struct ibSettingsDescription {
 struct ibParameterDescription {
 	wxString         m_name;
 	wxString         m_expression;
-	ibValue          m_value;
+
+	// ⭐⭐ THE VALUE IS A BLOB — the packed form, and nothing else (Max, 2026-08-29: "m_value is a
+	// blob"; "the schema is just a store of the values we serialised").
+	//
+	// A description is DATA. A live `ibValue` here is runtime the moment somebody puts a reference in
+	// it: a session behind it, a register of identities, a row to read. And a description is read
+	// while the configuration is still LOADING — metaobject by metaobject — so building that runtime
+	// there asks for a type three branches away that does not exist yet, and the load dies on a value
+	// it wrote itself ("Unknown value type '<id>' in the data").
+	//
+	// So the store keeps what was written, and the runtime value is built FROM it at execution, by
+	// whoever is running the composition, against the configuration it runs in — ibStoredValue /
+	// ibStoreValue below.
+	ibDataNode       m_value;
+
 	ibTypeDescription m_type;
 	bool             m_userSettable = false;
 	bool             m_fromQuery    = false;
 	bool operator==(const ibParameterDescription& o) const {
+		// ⭐ THE VALUE IS COMPARED AS THE NODE IT IS. Nothing is built to answer it: what a store holds
+		// is what was written, and two writings that say the same thing are the same value.
 		return m_name == o.m_name && m_expression == o.m_expression && m_value == o.m_value
 		    && m_userSettable == o.m_userSettable && m_fromQuery == o.m_fromQuery;
 	}
 	bool operator!=(const ibParameterDescription& o) const { return !(*this == o); }
 };
+
+// ⭐ THE TWO DOORS BETWEEN A STORE AND A RUNTIME VALUE — the only places where one becomes the other.
+// Reading needs the configuration the value is read against (references and enum members are built
+// by the metadata, not by the value factory); writing needs nothing, a value packs itself.
+BACKEND_API ibValue ibStoredValue(const ibDataNode& stored, const class ibMetaData* metaData);
+BACKEND_API void    ibStoreValue(ibDataNode& stored, const ibValue& value);
 
 // ⭐⭐ THE TITLE A NAME IMPLIES — `DataVersion` → "Data Version", `Number` → "Number". A name is
 // written for the language (one word, no spaces); a title is written for a reader, and nobody
@@ -752,14 +790,16 @@ struct ibOutputDescription {
 // every output has its own groupings, sorts, its own fields and its own filters"* (Max, 2026-08-24).
 inline bool ibSettingsDescription::IsOk() const {
 	return m_filter.IsOk() || m_sort.IsOk() || m_group.IsOk() || !m_structure.empty()
-	    || !m_selected.empty();
+	    || !m_selected.empty() || !m_parameters.empty();
 }
 inline void ibSettingsDescription::Clear() {
 	m_filter.Clear(); m_sort.Clear(); m_group.Clear(); m_structure.clear(); m_selected.clear();
+	m_parameters.clear();
 }
 inline bool ibSettingsDescription::operator==(const ibSettingsDescription& o) const {
 	return m_filter == o.m_filter && m_sort == o.m_sort && m_group == o.m_group
-	    && m_structure == o.m_structure && m_selected == o.m_selected;
+	    && m_structure == o.m_structure && m_selected == o.m_selected
+	    && m_parameters == o.m_parameters;
 }
 
 // --- VARIANT ---------------------------------------------------------------

@@ -49,6 +49,78 @@
 // with the registration in the module.
 constexpr ibClassID g_compositionFieldCLSID = value_to_clsid("VL_CFLD");
 
+////////////////////////////////////////////////////////////////////////////
+// CompositionPredefinedValue — the DESIGNER'S way of saying "one of the declared values"
+////////////////////////////////////////////////////////////////////////////
+//
+// ⭐⭐ A TECHNICAL TYPE, AND ITS WHOLE JOB IS TO STAND IN A TYPE LIST. A parameter that admits
+// `CatalogRef.Banks, Date` asks two different questions: a DATE is typed in, and a reference — with
+// no data behind it while the configuration is being written — is one of the values the
+// configuration DECLARES. Listing every admitted reference type beside `Date` says the first half of
+// that badly and the second half not at all.
+//
+// So the references collapse into ONE entry: choose it, and the declared values of every admitted
+// reference type are offered together (Max, 2026-08-28: "such a technical type is introduced
+// precisely so that all those references can be selected by it").
+//
+// ⚠ IT IS NEVER STORED. What lands in the parameter is a real reference — type + guid, which
+// serialises and resolves at run time like any other. This type exists so the QUESTION can be asked,
+// and it is registered for the same reason a word is: so it has a name to show.
+// ⚠ SYSTEM — nobody writes `New CompositionPredefinedValue`. It is VENDED by the tier that owns it:
+// the designer's window makes one when a declared value is chosen, and the composition store builds
+// it back when it reads its own blob (ibStoredValue). The value factory is not that road.
+constexpr ibClassID g_compositionPredefinedCLSID = system_to_clsid("VL_CPRV");
+
+// ⭐⭐ AND IT IS WHAT GETS STORED — A DECLARATION, NOT A LIVE REFERENCE.
+//
+// A reference object is RUNTIME: it belongs to a session, it has a register of its own, it reads
+// rows. Putting one into a description means creating runtime while a configuration is being
+// LOADED — the type it names may be three branches away and not exist yet, and the load dies on a
+// value that was saved perfectly well (Max, 2026-08-28: "the runtime must not leak in; the runtime
+// is made at execution").
+//
+// So what the designer writes is what it is: the metaobject this names and which of its declared
+// values — two plain fields, read and written like any other data. The RUNTIME reference is built
+// from them at execution, by whoever is running the composition, against the configuration it runs
+// in (ibMaterializeCompositionValue below).
+class BACKEND_API ibValueCompositionPredefined : public ibValue {
+public:
+	ibValueCompositionPredefined() : ibValue(ibValueTypes::TYPE_VALUE, true) {}
+	ibValueCompositionPredefined(const ibMetaID& metaId, const ibGuid& guid, const wxString& written)
+		: ibValue(ibValueTypes::TYPE_VALUE, true), m_metaId(metaId), m_guid(guid), m_written(written) {
+	}
+
+	virtual ibClassID GetClassType() const override { return g_compositionPredefinedCLSID; }
+
+	// WHAT A PERSON READS IN THE CELL — `CatalogRef.Goods.Chair`, as it was written. Held rather than
+	// recomputed: the name is what the designer chose, and it must read the same before there is any
+	// configuration to ask.
+	virtual wxString GetString() const override { return m_written; }
+
+	// ⚠ AN EMPTY REFERENCE IS NOT AN EMPTY VALUE. `CatalogRef.Goods.EmptyRef` is a value of that type
+	// and a legitimate thing to store — saying otherwise made it skipped on the way to the store, and
+	// the cell came back blank (journal, 2026-08-29: `store: '…EmptyRef' empty=1 packed=0`). Empty
+	// here means only "this declaration names nothing at all".
+	virtual bool IsEmpty() const override { return m_metaId == wxNOT_FOUND && m_written.IsEmpty(); }
+
+	ibMetaID GetMetaId() const { return m_metaId; }
+	const ibGuid& GetGuid() const { return m_guid; }
+
+protected:
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
+
+private:
+	ibMetaID m_metaId = wxNOT_FOUND;   // the metaobject the value belongs to
+	ibGuid   m_guid;                   // which of its declared values — empty = the empty reference
+	wxString m_written;                // how it reads: `CatalogRef.Goods.Chair`
+};
+
+// ⭐ THE RUNTIME IS MADE HERE AND NOWHERE EARLIER. A declaration becomes a live reference against the
+// configuration handed in; anything else is already a value and comes back untouched. Called where a
+// composition is EXECUTED — the parameters are worked out, the query is filled in.
+BACKEND_API ibValue ibMaterializeCompositionValue(const ibValue& stored, const class ibMetaData* metaData);
+
 class BACKEND_API ibValueCompositionField : public ibValueDynamicMembers {
 public:
 	enum Prop { enPath = 0, enPresentation };

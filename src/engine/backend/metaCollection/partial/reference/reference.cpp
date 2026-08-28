@@ -10,6 +10,7 @@
 #include "backend/objCtor.h"   // ibCtorMetaValueType::GetMetaTypeCtor / ibCtorObjectMetaType_Reference — ConvertToMetaIds
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
+#include "backend/appData.h"   // DesignerMode — a reference being WRITTEN is type + guid, not a row
 
 #include <vector>
 #include <algorithm>
@@ -605,6 +606,14 @@ const ibSourceExplorer* ibValueReferenceDataObject::GetSourceExplorer() const
 
 wxString ibValueReferenceDataObject::GetString() const
 {
+	// ⭐⭐ IN THE DESIGNER A REFERENCE IS A TYPE AND A GUID, AND NOTHING ELSE — "what matters to the
+	// designer is that the reference has a guid, and that's it" (Max, 2026-08-28). There is no row to
+	// read and none is wanted, so the metaobject is asked straight away: it turns the guid into the
+	// form the configuration declares it in. PrepareRef and the found / not-found answers below are
+	// statements about DATA, which is not what a reference stands for while one is being WRITTEN.
+	if (appData->DesignerMode())
+		return m_metaObject->GetDataPresentation(this);
+
 	// ⭐⭐ ASKING WHAT THIS REFERENCE IS *IS* THE ASKING — so the row is read here if nobody has read
 	// it yet. That is the whole of what OnDemand means, and since 2026-08-24 it is the default: a
 	// reference states an IDENTITY and costs no query until somebody wants the object behind it.

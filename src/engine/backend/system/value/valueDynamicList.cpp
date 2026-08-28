@@ -710,7 +710,9 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 	// query and the same filter / sort / grouping, with the structure, resources and variants a
 	// report also has left empty. So it reads through the SAME description a report does — the parts
 	// it does not use come back empty rather than being a second format.
-	ibCompositionDescriptionMemory::ReadNode(node, GetCompositionDesc());
+	// …against its own configuration, like a report's (valueDataComposition.cpp): a saved filter
+	// compares against references, and only the metadata can build those.
+	ibCompositionDescriptionMemory::ReadNode(node, GetCompositionDesc(), GetSourceMetaData());
 
 	// ⭐ …AND THE ANCHOR IS PUT BACK ON THE WIDGET THAT SHOWS IT. The main table lives in the
 	// description (see WriteProperty); the Source property is its view, and it is filled here — as an

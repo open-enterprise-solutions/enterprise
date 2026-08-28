@@ -261,7 +261,15 @@ private:
 	wxWindow* BuildOutputPage(wxWindow* parent);    // variants | structure / settings
 	wxWindow* BuildResourcePage(wxWindow* parent);  // WHAT THE LEVELS FOLD — the aggregates
 	wxWindow* BuildQueryPage(wxWindow* parent);     // developer only — what is READ
-	wxWindow* BuildParameterPage(wxWindow* parent);  // WHAT THE QUERY ASKS FOR — and how each behaves
+	// WHAT THE QUERY ASKS FOR — and how each behaves. `forReader` builds the RUNTIME face of the same
+	// page: only the parameters the author offered ("For user"), read by their presentation, with the
+	// value beside it and nothing else.
+	wxWindow* BuildParameterPage(wxWindow* parent, bool forReader = false);
+
+	// WHOSE VALUE IS IN FORCE for one parameter, and where a new one is written. On the reader's road
+	// the value belongs to their SETTING; on the author's it is the composition's own. See the .cpp.
+	const class ibDataNode& StoredParameterValue(const wxString& name) const;
+	class ibDataNode&       WritableParameterValue(const wxString& name);
 
 	// ---- Parameters — the query's own asks, plus hand-made ones ---------------
 	void OnParameterAdd(wxCommandEvent&);
@@ -565,9 +573,14 @@ private:
 	void AddGroupingFieldFromTree(const class wxTreeItemId& item);
 	// The Grouping page belongs to a GROUPING — taken off the notebook where there is none.
 	void SyncGroupingPage();
+	// …and the reader's parameters page, put on at the ROOT and taken off everywhere else — a
+	// parameter belongs to the composition, not to a node under it. See the .cpp.
+	void SyncParameterPage();
 
 	class wxNotebook*           m_settingsTabs  = nullptr;
 	wxWindow*                   m_groupingPage  = nullptr;
+	// The reader's parameters page — built once on that road, put on the notebook at the root only.
+	wxWindow*                   m_readerParameterPage = nullptr;
 	wxTreeCtrl*                 m_groupingFieldTree = nullptr;   // available fields, the shared tree's view
 	class ibDataViewCtrl*       m_groupingView  = nullptr;
 	class ibGroupingFieldsModel* m_groupingModel = nullptr;

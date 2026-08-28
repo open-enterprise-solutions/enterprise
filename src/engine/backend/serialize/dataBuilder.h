@@ -87,6 +87,13 @@ public:
 	const std::shared_ptr<ibDataNode>& AsChild() const { Expect(ibDataKind::Child); return m_child; }
 	const std::vector<ibDataValue>&  AsArray()  const { Expect(ibDataKind::Array);  return m_array; }
 
+	// ⭐ TWO PACKED VALUES ARE THE SAME VALUE WHEN THEIR NODES SAY THE SAME THING. A stored value is
+	// compared HERE rather than by building both back into runtime objects and asking them: what a
+	// store holds is bytes, and bytes are what "did this change" is about (Max, 2026-08-29: "you can
+	// compare the node — that is how you check the value for equality").
+	bool operator==(const ibDataValue& other) const;
+	bool operator!=(const ibDataValue& other) const { return !(*this == other); }
+
 private:
 	void Expect(ibDataKind expected) const; // throws ibBackendException on kind mismatch
 
@@ -211,6 +218,12 @@ public:
 		return ibDataValue();
 	}
 	const std::vector<std::pair<wxString, ibDataValue>>& Properties() const { return m_props; }
+
+	// …and the same question one storey up: two nodes are equal when their type, identity, fields,
+	// properties, raw block and children all are. The read cursors are not state — they are where the
+	// last optimistic lookup stopped — so they take no part in it.
+	bool operator==(const ibDataNode& other) const;
+	bool operator!=(const ibDataNode& other) const { return !(*this == other); }
 
 	// --- transitional opaque data ----------------------------------------
 	// The not-yet-decomposed remainder of this node (today: the eDataBlock

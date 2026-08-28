@@ -25,7 +25,11 @@ void ibPropertyDataComposition::SetValue(const ibCompositionDescription& val) {
 // and so is what a list saves — so the pair that reads and writes one is the pair that runs here.
 bool ibPropertyDataComposition::ReadNodeValue(const ibDataValue& value)
 {
-	return ibCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc());
+	// …AND THE CONFIGURATION IT IS READ AGAINST — see ibPropertyComposition::ReadNodeValue for what
+	// goes wrong without it, and why the owner is taken CONST here.
+	const ibPropertyObject* owner = m_owner;
+	return ibCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
+		owner != nullptr ? owner->GetMetaData() : nullptr);
 }
 
 bool ibPropertyDataComposition::WriteNodeValue(ibDataValue& value) const

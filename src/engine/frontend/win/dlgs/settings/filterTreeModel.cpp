@@ -276,11 +276,25 @@ bool ibFilterTreeModel::SetValue(const wxVariant& variant, const ibDataViewItem&
 	// refusing it here is what made the right-hand side impossible to change by
 	// hand. The text is adjusted to the type the LEFT field lends before it lands,
 	// so "12" becomes a number and a date becomes a date.
-	case kFilterColRight:
+	case kFilterColRight: {
+		// ⭐⭐ …BUT ONLY WHERE THE TEXT IS THE VALUE. On a REFERENCE side the cell's text is a
+		// PRESENTATION — "Document1 00000000016 18.08.2026" — and adjusting it to the reference type
+		// yields the EMPTY reference: the value is wiped by the very act of leaving the cell. Which is
+		// what happens the moment the "…" opens the selection form: the grid finishes editing, hands
+		// the text down here, and the form then opens standing on nothing (Max, 2026-08-29: "I press
+		// the three dots and the value is already cleared").
+		//
+		// A reference is CHOSEN, and the choice writes the value itself (ChoiceProcessing → the
+		// operand). So the text is taken for the types that are typed in, and ignored for the rest.
+		const ibClassID declared = line->m_left.m_type.GetFirstClsid();
+		if (line->m_left.m_type.GetClsidCount() == 1 && !IsPrimitive(declared))
+			return false;
+
 		line->m_right.m_path.clear();   // typing a value is choosing a value, not a field
 		line->m_right.m_value = ibValueTypeDescription::AdjustValue(
 			line->m_left.m_type, ibValue(variant.GetString()));
 		return true;
+	}
 	// The comparison and the display mode are written by their own editor — the
 	// quick choice over their enumeration — not as text through here.
 	// THE TWO SIDES ARE NOT EDITED AS TEXT otherwise. They are a field picked from

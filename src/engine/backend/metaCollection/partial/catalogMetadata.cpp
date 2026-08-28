@@ -66,6 +66,7 @@ ibValueManagerDataObject* ibValueMetaObjectCatalog::CreateManagerDataObjectValue
 }
 
 #include "backend/appData.h"
+#include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
 
 ibValueRecordDataObjectHierarchyRef* ibValueMetaObjectCatalog::CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid) const
 {
@@ -159,6 +160,18 @@ ibBackendValueForm* ibValueMetaObjectCatalog::GetFolderSelectForm(const wxString
 
 wxString ibValueMetaObjectCatalog::GetDataPresentation(const ibValueDataObject* objValue) const
 {
+	// ⭐⭐ IN THE DESIGNER A CATALOG REFERENCE IS A DECLARATION — there is no row to describe, and what
+	// it says is what the configuration declares: the empty reference, or one of the predefined
+	// values, written as `CatalogRef.Goods.Chair`.
+	if (appData->DesignerMode()) {
+		const wxString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
+		if (!empty.IsEmpty())
+			return empty;
+		for (const auto& item : GetPredefinedValueArray())
+			if (item && item->GetPredefinedGuid() == objValue->GetGuid())
+				return ibDeclaredTypeName(this) + wxT(".") + item->GetPredefinedName();
+	}
+
 	static ibValue vDescription;
 	if (objValue->GetValueByMetaID((*m_propertyAttributeDescription)->GetMetaID(), vDescription))
 		return vDescription.GetString();

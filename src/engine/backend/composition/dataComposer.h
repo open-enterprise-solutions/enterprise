@@ -168,6 +168,13 @@ public:
 		current.m_group     = GetCurrentGroupDesc();
 		current.m_structure = GetCurrentStructure();
 		current.m_selected  = GetCurrentSelectedDesc();
+		// ⭐ …AND THE VALUES THE READER FILLED IN. Assembled from the parts like everything else here:
+		// left out, a value chosen on the Parameters page was written into the setting, handed back on
+		// OK — and then the window reopened on a setting assembled WITHOUT it, so it read as never
+		// saved (Max, 2026-08-29: "I press OK and it does not keep the value; I reopen and it is
+		// empty"). No fallback beside it: what the reader put there is theirs, and where they put
+		// nothing the author's declaration answers at the run, per name.
+		current.m_parameters = m_userSettings.m_parameters;
 		return current;
 	}
 
@@ -217,6 +224,14 @@ public:
 	const std::vector<ibSelectedFieldDescription>& GetCurrentSelectedDesc() const {
 		return !m_userSettings.m_selected.empty() ? m_userSettings.m_selected
 		                                          : m_variants.front().m_settings.m_selected;
+	}
+
+	// ⭐⭐ …AND WHAT THE READER PUT IN THE PARAMETERS. Not "theirs or the author's" wholesale, like the
+	// four above: a parameter is answered ONE AT A TIME, because the author declares every parameter
+	// and the reader fills in only the ones offered to them ("For user"). So this is what they filled
+	// in, and the caller asks it BY NAME beside the author's own value (Max, 2026-08-29).
+	const std::vector<ibParameterDescription>& GetUserParameters() const {
+		return m_userSettings.m_parameters;
 	}
 
 	// The three of them as one — what a SETTINGS WINDOW opens on. A reader who has set nothing opens

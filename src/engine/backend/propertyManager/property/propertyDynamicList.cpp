@@ -26,7 +26,11 @@ void ibPropertyDynamicList::SetValue(const ibCompositionDescription& val) {
 // the same one a report saves — so the pair that reads and writes one is the pair that runs here.
 bool ibPropertyDynamicList::ReadNodeValue(const ibDataValue& value)
 {
-	return ibCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc());
+	// …and the same door, for the same reason: a list's saved filter compares against references.
+	// CONST owner — the non-const GetMetaData overload answers null (see ibPropertyComposition).
+	const ibPropertyObject* owner = m_owner;
+	return ibCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
+		owner != nullptr ? owner->GetMetaData() : nullptr);
 }
 
 bool ibPropertyDynamicList::WriteNodeValue(ibDataValue& value) const

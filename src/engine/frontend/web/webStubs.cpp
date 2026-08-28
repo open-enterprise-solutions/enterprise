@@ -71,3 +71,16 @@ bool ibShowTypeSelector(wxWindow*, ibSelectorDataType, const std::vector<ibClass
 {
 	return false;
 }
+
+// -----------------------------------------------------------------------------
+// ibShowPredefinedSelector — the DESIGNER's window for choosing a value a configuration declares
+// (win/dlgs/selectPredefined). There is no designer on the web, and it is a modal wx dialog besides;
+// refusing is the honest answer, and the caller reads false the same way it reads a Cancel.
+// -----------------------------------------------------------------------------
+
+#include "frontend/win/dlgs/selectPredefined.h"
+
+bool ibShowPredefinedSelector(ibControlFrame*, const ibTypeDescription&, const ibMetaData*, wxWindow*)
+{
+	return false;
+}

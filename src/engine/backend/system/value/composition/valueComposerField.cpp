@@ -1,6 +1,8 @@
 #include "backend/system/value/composition/valueComposerField.h"
 #include "backend/serialize/dataBuilder.h"
 #include "backend/compiler/typeCtor.h"
+#include "backend/metaData.h"                                        // the configuration a declaration is built against
+#include "backend/metaCollection/partial/reference/reference.h"      // …and what it is built INTO, at execution
 
 // ===========================================================================
 //  ibValueCompositionField — see valueComposerField.h
@@ -91,8 +93,52 @@ bool ibValueCompositionField::DoDeserialize(const ibDataNode& node) {
 	return true;
 }
 
+////////////////////////////////////////////////////////////////////////////
+// CompositionPredefinedValue — the declaration, and where it becomes runtime
+////////////////////////////////////////////////////////////////////////////
+
+namespace {
+const wxString kPredefinedMetaId = wxT("m");    // the same two field names a reference packs itself
+const wxString kPredefinedGuid   = wxT("g");    // with — this IS that pair, held rather than resolved
+const wxString kPredefinedText   = wxT("t");
+}
+
+bool ibValueCompositionPredefined::DoSerialize(ibDataNode& node) const
+{
+	node.SetValue(kPredefinedMetaId, (s32)m_metaId);
+	node.SetValue(kPredefinedGuid, m_guid.str());
+	node.SetValue(kPredefinedText, m_written);
+	return true;
+}
+
+bool ibValueCompositionPredefined::DoDeserialize(const ibDataNode& node)
+{
+	m_metaId  = (ibMetaID)node.GetValue<s32>(kPredefinedMetaId);
+	m_guid    = ibGuid(node.GetValue<wxString>(kPredefinedGuid));
+	m_written = node.GetValue<wxString>(kPredefinedText);
+	return true;
+}
+
+ibValue ibMaterializeCompositionValue(const ibValue& stored, const ibMetaData* metaData)
+{
+	ibValueCompositionPredefined* declared = nullptr;
+	if (!stored.ConvertToValue(declared) || declared == nullptr || metaData == nullptr)
+		return stored;   // not a declaration, or nothing to build it against
+
+	// ⭐ AND HERE THE RUNTIME IS MADE — with a composer already running and every metaobject in place,
+	// which is the only moment a reference can be built truthfully.
+	ibValueReferenceDataObject* reference = ibValueReferenceDataObject::Create(
+		metaData, declared->GetMetaId(), declared->GetGuid(), ibReferenceLoad::OnDemand);
+	return reference != nullptr ? ibValue(reference) : stored;
+}
+
 //**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************
 
 VALUE_TYPE_REGISTER(ibValueCompositionField, "CompositionField", g_compositionFieldCLSID);
+
+// ⭐ REGISTERED TO BE NAMED, not to be created — the designer's type list renders whatever the
+// registry can name, and this entry is how "one of the declared values" gets a line there beside
+// Date and Number. Nobody writes `New` of it: it is vended by the tier that owns it.
+SYSTEM_TYPE_REGISTER(ibValueCompositionPredefined, "CompositionPredefinedValue", g_compositionPredefinedCLSID);

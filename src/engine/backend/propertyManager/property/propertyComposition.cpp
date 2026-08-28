@@ -35,8 +35,14 @@ bool ibPropertyComposition::GetDataValue(ibValue& pvarPropVal) const
 	// THE OWNER'S CONFIGURATION — a property on a metaobject belongs to the one that metaobject lives
 	// in (the edited one in the designer, the copy's own on a copy). A null one is a legitimate
 	// answer here and the composition knows what to do with it.
+	//
+	// ⚠ THE OWNER IS TAKEN CONST. A const METHOD makes the pointer const, not what it points at, so
+	// `m_owner->GetMetaData()` still picked the non-const overload — the one that asserts and answers
+	// null (propertyObject.h). The configuration was being handed over as "none" from a line written
+	// to hand it over.
+	const ibPropertyObject* owner = m_owner;
 	pvarPropVal = new ibValueDataComposition(GetValueAsCompositionDesc(),
-	                                         m_owner != nullptr ? m_owner->GetMetaData() : nullptr);
+	                                         owner != nullptr ? owner->GetMetaData() : nullptr);
 	return true;
 }
 
@@ -44,7 +50,17 @@ bool ibPropertyComposition::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyComposition::ReadNodeValue(const ibDataValue& value)
 {
-	return ibCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc());
+	// ⚠ THE SAME DOOR THE GETTER ABOVE HANDS OVER. What is read back holds references and enum
+	// members — a filter's right side, a parameter's value — and those types exist only in the
+	// configuration's own registry: without it the value factory raises "Unknown value type '<id>'"
+	// on a record saved perfectly well, the id being a metaobject's (Max, 2026-08-28).
+	//
+	// ⚠⚠ THROUGH A CONST OWNER. `GetMetaData` has two overloads and only the CONST one answers — the
+	// other asserts and returns null (propertyObject.h) — so from a non-const method like this one
+	// the door came back empty and the read failed exactly as if it had never been handed in.
+	const ibPropertyObject* owner = m_owner;
+	return ibCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
+		owner != nullptr ? owner->GetMetaData() : nullptr);
 }
 
 bool ibPropertyComposition::WriteNodeValue(ibDataValue& value) const

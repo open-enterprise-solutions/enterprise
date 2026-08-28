@@ -1,4 +1,4 @@
-////////////////////////////////////////////////////////////////////////////
+﻿////////////////////////////////////////////////////////////////////////////
 //	Description : THE ONE PLACE A COMPOSITION IS READ AND WRITTEN
 ////////////////////////////////////////////////////////////////////////////
 //
@@ -22,6 +22,8 @@
 #include "backend/metaData.h"                      // ibMetaData::Deserialize — the door a caller HANDS IN
 
 #include "backend/backend_exception.h"             // ibBackendCoreException — a setting that cannot apply is refused
+#include "backend/compiler/valueSerialization.h"    // ibReadNodeType — whose value is in this node
+#include "backend/system/value/composition/valueComposerField.h"   // the declared value this tier vends
 
 #include <algorithm>                               // std::find — is this value one the field admits?
 
@@ -321,6 +323,38 @@ namespace {
 ibValue ReadStoredValue(const ibDataNode& node, const ibMetaData* metaData) {
 	return metaData != nullptr ? metaData->Deserialize(node) : ibValue::FromNode(node);
 }
+} // namespace
+
+// THE TWO DOORS — see compositionDescription.h. A stored node becomes a value only when somebody
+// asks, with the configuration to ask against; a value becomes a node by packing itself.
+ibValue ibStoredValue(const ibDataNode& stored, const ibMetaData* metaData)
+{
+	// NOTHING WAS STORED = an empty value, not a failure. A value writes its type into a field of the
+	// node, so a node with no fields is a value nobody ever put there.
+	if (stored.Fields().empty())
+		return ibValue();
+
+	// ⭐⭐ ITS OWN VALUE, BUILT BY ITS OWNER. `CompositionPredefinedValue` is a SYSTEM type — the value
+	// factory does not create those, and nothing writes `New` of it. It belongs to this tier: the
+	// designer's window makes one when a declared value is chosen, and here is where the store makes
+	// it back out of what it kept. Everything else goes through the configuration's own door.
+	if (ibReadNodeType(stored) == g_compositionPredefinedCLSID) {
+		ibValueCompositionPredefined* declared = new ibValueCompositionPredefined();
+		declared->Deserialize(stored);
+		return ibValue(declared);
+	}
+
+	return ReadStoredValue(stored, metaData);
+}
+
+void ibStoreValue(ibDataNode& stored, const ibValue& value)
+{
+	stored = ibDataNode();
+	if (!value.IsEmpty())
+		value.Serialize(stored);
+}
+
+namespace {
 
 // ⚠ AN OPAQUE KEY, NOT A NAME. The tier says **sort** everywhere (ibSortDescription, m_sort,
 // SetSort); this string is what the bytes on disk already say, and renaming it would make every
@@ -585,12 +619,17 @@ bool ibSettingsDescriptionMemory::ReadNode(const ibDataNode& node, ibSettingsDes
 	// ⭐ AND THE FIELDS THE READER CHOSE — a setting like the three above. Absent from every record
 	// written before 2026-08-28, and absence is a legitimate answer: nothing was chosen.
 	ReadSelectedList(node, kSelectedFieldsNode, settings.m_selected);
+	// ⭐ …AND THE VALUES THE READER FILLED IN. Only the parameters the author offered them ever land
+	// here, and only the name and the packed value travel: the declaration stays with the author.
+	ibParameterDescriptionMemory::ReadNode(node, settings.m_parameters, metaData);
 	return ok;
 }
 
 bool ibSettingsDescriptionMemory::WriteNode(ibDataNode& node, const ibSettingsDescription& settings)
 {
 	WriteSelectedList(node, kSelectedFieldsNode, settings.m_selected);   // see ReadNode
+	// …and the reader's parameter values, written as a VARIANT's are: name and value, no declaration.
+	ibParameterDescriptionMemory::WriteNode(node, settings.m_parameters, /*full*/false);
 	return ibFilterDescriptionMemory::WriteNode(node, settings.m_filter)
 		&& ibSortDescriptionMemory::WriteNode(node, settings.m_sort)
 		&& ibGroupDescriptionMemory::WriteNode(node, settings.m_group)
@@ -623,7 +662,11 @@ bool ibCompositionDescriptionMemory::ReadNode(const ibDataNode& node, ibComposit
 	if (composition.m_variants.empty())
 		composition.m_variants.emplace_back();   // a record can say anything; the invariant is ours
 
-	ibParameterDescriptionMemory::ReadNode(node, composition.m_parameters);
+	// ⚠ AND THE DOOR GOES IN HERE TOO. A parameter holds references and enum members like a filter's
+	// right side does; read without the configuration they are read against, the value factory raises
+	// "Unknown value type '<id>' in the data" on a composition that was saved perfectly well — the id
+	// being a metaobject's, which only the metadata knows how to build (Max, 2026-08-28).
+	ibParameterDescriptionMemory::ReadNode(node, composition.m_parameters, metaData);
 	ibResourceDescriptionMemory::ReadNode(node, composition.m_resources);
 	ibSelectDescriptionMemory::ReadNode(node, composition.m_selects);
 
@@ -716,8 +759,14 @@ bool ibParameterDescriptionMemory::ReadNode(const ibDataNode& node,
 		parameter.m_expression   = child.GetValue<wxString>(kParamExpression);
 		parameter.m_userSettable = child.GetValue<s32>(kParamUser) != 0;
 		parameter.m_fromQuery    = child.GetValue<s32>(kParamFromQuery) != 0;
+		// ⭐⭐ THE NODE IS TAKEN AS IT IS. Nothing is built here: a parameter's value is a BLOB in this
+		// tier, and it is read into a runtime value by whoever runs the composition, against the
+		// configuration it runs in. Building one here made a reference — a runtime object — in the
+		// middle of a configuration load, where the type it names may still be three branches away
+		// (Max, 2026-08-29: "the schema keeps the serialised node, and the runtime reads it and
+		// writes it back itself").
 		if (const ibDataNode* value = child.FindChild(kParamValue))
-			parameter.m_value = ibValue::FromNode(*value);
+			parameter.m_value = *value;
 		ibTypeDescriptionMemory::ReadNode(child.GetProperty(kParamType), parameter.m_type, metaData);
 		read.push_back(parameter);
 	}
@@ -734,9 +783,9 @@ bool ibParameterDescriptionMemory::WriteNode(ibDataNode& node,
 		ibDataNode& sub = node.AddChild(g_parameterNodeClsid, static_cast<ibMetaID>(i));
 		sub.SetValue<wxString>(kParamName, parameter.m_name);
 		sub.SetValue<wxString>(kParamExpression, parameter.m_expression);
-		// THE VALUE PACKS ITSELF — the same door every value serialises through, so a reference
-		// travels as a reference rather than as the text it happens to render as.
-		parameter.m_value.Serialize(sub.Child(kParamValue));
+		// …AND GOES BACK AS IT IS. It was packed by whoever put it there — the designer choosing a
+		// declared value, the runtime writing one back — so writing is copying, byte for byte.
+		sub.Child(kParamValue) = parameter.m_value;
 		if (!full)
 			continue;   // a VARIANT keeps only what it owns — see the header
 		sub.SetValue<s32>(kParamUser, parameter.m_userSettable ? 1 : 0);

@@ -20,6 +20,7 @@
 #include "backend/metadataConfiguration.h"           // ibMetaDataConfigurationBase (GetSourceMetaData)
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"   // the OUTPUT — composition → document
 #include "backend/system/value/composition/valueComposerSettings.h"   // ibValueEnumComparisonKind — a condition's word
+#include "backend/system/value/composition/valueComposerField.h"      // a declared value becomes runtime here
 #include "backend/system/value/valueSpreadsheet.h"   // ibValueSpreadsheetDocument — the script-side document
 #include "backend/value_cast.h"                      // CastValue — the script argument to its type
 #include "backend/job/jobManager.h"                  // ibJobManager / ibBackgroundRun — the rented read
@@ -427,7 +428,23 @@ void ibValueDataComposition::EnsureVariant()
 // parameters the text declared, and wrote its own list back over them.
 void ibSyncParametersWithQuery(std::vector<ibParameterDescription>& parameters, const wxString& queryText)
 {
-	const std::vector<wxString> named = ibQueryLexer::ParamNames(queryText);
+	ibSyncParametersWithTexts(parameters, { queryText });
+}
+
+// ⭐⭐ …AND THE QUERY IS NOT THE ONLY TEXT THE COMPOSITION WRITES. A resource is an EXPRESSION —
+// `COUNT(Date) * &Rate` — and it goes into the query beside everything else, so a `&Rate` there
+// declares a parameter exactly as one in the body does (Max, 2026-08-28: "or I add parameters in the
+// query body itself — those must land there too"). One rule over ALL the texts rather than one rule
+// per place, which is how the second place ends up behaving differently from the first.
+void ibSyncParametersWithTexts(std::vector<ibParameterDescription>& parameters,
+	const std::vector<wxString>& texts)
+{
+	std::vector<wxString> named;
+	for (const wxString& text : texts)
+		for (const wxString& name : ibQueryLexer::ParamNames(text))
+			if (std::find_if(named.begin(), named.end(),
+					[&name](const wxString& seen) { return seen.IsSameAs(name, false); }) == named.end())
+				named.push_back(name);
 
 	// 1) Drop the AUTO ones the text no longer asks for.
 	parameters.erase(
@@ -456,9 +473,23 @@ void ibSyncParametersWithQuery(std::vector<ibParameterDescription>& parameters, 
 	}
 }
 
+// WHICH TEXTS COUNT — the query body, and every resource expression. A resource may carry a
+// condition of its own ("in a resource I can add some condition too" — Max, 2026-08-28), and what it
+// names with `&` is a parameter of this composition like any other.
+void ibSyncParameters(ibCompositionDescription& composition)
+{
+	std::vector<wxString> texts;
+	texts.push_back(composition.m_query);
+	for (const ibResourceDescription& resource : composition.m_resources) {
+		texts.push_back(resource.m_path);
+		texts.push_back(resource.m_func);   // the function half can hold one just as well
+	}
+	ibSyncParametersWithTexts(composition.m_parameters, texts);
+}
+
 void ibValueDataComposition::SyncParametersWithQuery()
 {
-	ibSyncParametersWithQuery(Parameters(), GetQueryText());
+	ibSyncParameters(GetCompositionDesc());
 }
 
 
@@ -487,19 +518,25 @@ void ibValueDataComposition::SyncParametersWithQuery()
 // not a script — nothing is executing, the context stack is empty, and the call returns false
 // without a word (the same silence that made the syntax check pass everything). So when there is no
 // current frame, the root module's own is used: its ProcUnit, its bytecode, its names.
-static ibValue ibEvaluateInRoot(const wxString& expression)
+// ⭐⭐ AND IT SAYS WHETHER IT WORKED. `ibProcUnit::Evaluate` is the DEBUGGER'S door: on any failure it
+// swallows the exception, writes the reason INTO the result as `<error: …>` and returns false —
+// which is right for a watch row and silent everywhere else. A report took the "result", adjusted it
+// to the parameter's declared type (an error string adjusted to a date is an EMPTY date) and
+// composed on nothing, saying nothing (Max, 2026-08-28: "an expression with an error — it did not
+// even show there was an error").
+//
+// `produced` still carries the reason on failure, so the caller has something to show.
+static bool ibEvaluateInRoot(const wxString& expression, ibValue& produced)
 {
+	produced = ibValue();
 	if (expression.IsEmpty())
-		return ibValue();
+		return true;   // nothing to evaluate is not a failure
 
 	auto* state = ibSession::GetPUState();
 	ibRunContext* current = state != nullptr ? state->GetCurrentRunContext() : nullptr;
 
-	ibValue produced;
-	if (current != nullptr) {
-		ibProcUnit::Evaluate(expression, current, produced, false);
-		return produced;
-	}
+	if (current != nullptr)
+		return ibProcUnit::Evaluate(expression, current, produced, false);
 
 	// NO FRAME OF OUR OWN — borrow the root module's. The context is a frame descriptor: it carries
 	// the ProcUnit whose bytecode the expression is compiled against, which is exactly what "attached
@@ -508,20 +545,56 @@ static ibValue ibEvaluateInRoot(const wxString& expression)
 	ibValueModuleManagerRuntimeConfiguration* root = session != nullptr ? session->GetManagerModule() : nullptr;
 	const auto rootUnit = root != nullptr ? root->GetProcUnit() : nullptr;
 	if (!rootUnit)
-		return produced;   // no runtime at all (Designer): nothing to evaluate against, and nothing invented
+		return true;   // no runtime at all (Designer): nothing to evaluate against, and nothing invented
 
 	ibRunContext rootFrame;
 	rootFrame.SetProcUnit(rootUnit.get());
-	ibProcUnit::Evaluate(expression, &rootFrame, produced, false);
-	return produced;
+	return ibProcUnit::Evaluate(expression, &rootFrame, produced, false);
 }
-void ibValueDataComposition::EvaluateParameters() const
+// ⭐⭐ WHAT A RUN IS GIVEN — WORKED OUT HERE AND KEPT HERE. Nothing is written back into the
+// description: a description is DATA, and an evaluated parameter is a runtime value — a reference
+// with a session behind it, the result of an expression. Writing them into the description put
+// runtime into a structure that is saved with the configuration and read back while the next load is
+// still building its tree, which is where "Unknown value type '<id>'" came from (Max, 2026-08-29:
+// "there is no runtime in a description, at all").
+//
+// So the run gets a map of its own, made fresh, and the description stays exactly what the author
+// wrote.
+std::map<wxString, ibValue> ibValueDataComposition::EvaluatedParameterValues() const
 {
-	for (ibCompositionParameter& parameter : Parameters()) {
-		if (parameter.m_expression.IsEmpty())
+	std::map<wxString, ibValue> values;
+
+	for (const ibCompositionParameter& parameter : Parameters()) {
+		if (parameter.m_name.IsEmpty())
 			continue;
 
-		const ibValue produced = ibEvaluateInRoot(parameter.m_expression);
+		// ⭐⭐ THE READER'S VALUE WINS, PARAMETER BY PARAMETER. The author declares every parameter and
+		// offers some of them ("For user"); what the person running the report put beside one of those
+		// is what the query is given. Asked by NAME rather than section-wide, because a reader who
+		// filled in a period said nothing about any other parameter (Max, 2026-08-29).
+		const ibDataNode* stored = &parameter.m_value;
+		for (const ibParameterDescription& theirs : GetModelComposer().GetUserParameters())
+			if (theirs.m_name.IsSameAs(parameter.m_name, false)) { stored = &theirs.m_value; break; }
+
+		// ⭐ AND HERE THE STORED NODE BECOMES A RUNTIME VALUE. The schema holds what was written; the
+		// composer is running by now, with every metaobject in place, which is the moment a reference
+		// can be built truthfully — and the only moment it should be built at all.
+		ibValue value = ibStoredValue(*stored, GetSourceMetaData());
+
+		if (parameter.m_expression.IsEmpty()) {
+			values[parameter.m_name] = value;
+			continue;
+		}
+
+		// ⭐⭐ A BROKEN EXPRESSION STOPS THE READ AND SAYS SO. It used to produce nothing and be
+		// adjusted into an empty value, so a report composed on a parameter nobody had filled in and
+		// looked exactly like one with no data. What the reader gets now is the engine's own words,
+		// under the name of the parameter that could not be worked out.
+		ibValue produced;
+		if (!ibEvaluateInRoot(parameter.m_expression, produced)) {
+			ibBackendCoreException::Error(_("Parameter '%s' could not be evaluated: %s"),
+				parameter.m_name, produced.GetString());
+		}
 
 		// THE TYPE COMES FROM WHAT WAS PRODUCED. An empty result leaves the parameter empty — that is
 		// an answer too, and forcing a type onto nothing would invent one.
@@ -531,10 +604,12 @@ void ibValueDataComposition::EvaluateParameters() const
 		if (target.GetClsidCount() == 0 && !produced.IsEmpty())
 			target.SetDefaultMetaType(produced.GetClassType());
 
-		parameter.m_value = target.GetClsidCount() > 0
+		values[parameter.m_name] = target.GetClsidCount() > 0
 			? ibValueTypeDescription::AdjustValue(target, produced, GetSourceMetaData())
 			: produced;
 	}
+
+	return values;
 }
 std::map<wxString, ibValue> ibValueDataComposition::ParameterValues() const
 {
@@ -542,10 +617,14 @@ std::map<wxString, ibValue> ibValueDataComposition::ParameterValues() const
 	for (const ibCompositionParameter& parameter : Parameters()) {
 		if (parameter.m_name.IsEmpty())
 			continue;
-		// AN EXPRESSION IS NOT EVALUATED HERE (that happens before the read, once — see Compose):
-		// for describing the query the value it will produce is irrelevant, only that the name IS
-		// answered. Until evaluation lands, an expression reads as its current value.
-		values[parameter.m_name] = parameter.m_value;
+		// AN EXPRESSION IS NOT EVALUATED HERE (that happens at the run — see
+		// EvaluatedParameterValues): for describing the query the value it will produce is
+		// irrelevant, only that the name IS answered.
+		//
+		// ⭐ THE STORED NODE IS READ, because describing asks what TYPE stands behind the name and a
+		// packed node answers nothing. The description is not touched by it — the value goes into
+		// this map and no further.
+		values[parameter.m_name] = ibStoredValue(parameter.m_value, GetSourceMetaData());
 	}
 	return values;
 }
@@ -555,8 +634,7 @@ std::map<wxString, ibValue> ibValueDataComposition::ParameterValues() const
 // given" is settled in exactly one place.
 void ibValueDataComposition::PrepareParametersForRun()
 {
-	EvaluateParameters();
-	for (const auto& parameter : ParameterValues())
+	for (const auto& parameter : EvaluatedParameterValues())
 		GetModelComposer().Parameter(parameter.first, parameter.second);
 }
 
@@ -1046,7 +1124,10 @@ bool ibValueDataComposition::ReadProperty(const ibDataNode& node)
 	// ⚠ AND NOTHING IS SYNCHRONISED HERE EITHER. If getting the composition needed something to be
 	// brought up to date on the side first, the split would not be a split at all — asking is the
 	// whole of it (Max). What the TEXT asks for is added by the refresh, at the asking.
-	return ibCompositionDescriptionMemory::ReadNode(node, GetCompositionDesc());
+	// ⚠ AGAINST ITS OWN CONFIGURATION — the one this composition was made with. The values inside a
+	// saved composition (a filter's right side, a parameter) are references and enum members, and
+	// those are built by the metadata, not by the value factory.
+	return ibCompositionDescriptionMemory::ReadNode(node, GetCompositionDesc(), GetSourceMetaData());
 }
 
 // …AND THE OTHER HALF OF THE TRANSLATION: a description becomes live objects. Nothing here reads a

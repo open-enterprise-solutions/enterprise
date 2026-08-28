@@ -24,6 +24,7 @@
 #include "backend/moduleManager/moduleManager.h"          // the module manager: common functions + common modules
 #include "backend/session/session.h"                      // EditModuleManagerFor — designer or runtime, one seam
 #include "backend/appData.h"                              // the ACTIVE configuration, when the composition names none
+#include "backend/system/value/composition/valueComposerField.h"   // a declaration becomes a value for the reader
 #include "backend/metaData.h"                             // the compile cache the parent module comes from
 #include "backend/metadataConfiguration.h"                // ibMetaDataConfigurationBase — the active configuration IS one
 #include "backend/moduleInfo.h"                           // ibRuntimeModuleDataObject::GetCompileModule
@@ -397,6 +398,27 @@ public:
 	// was saved (Max, 2026-08-24: "the parameters have the same illness as the resources").
 	//
 	// The metadata comes along because ONE column needs it: the declared type is rendered by name.
+	// ⭐⭐ THE READER SEES ONLY WHAT WAS OFFERED TO THEM. "For user" is the author saying which
+	// parameters a person filling in a report may set; the rest are the composition's own business.
+	// Set this and the list holds only those, in the order they are declared (Max, 2026-08-28).
+	void ShowOnlyUserSettable(bool only) { m_onlyUser = only; ResetFromList(); }
+
+	// …and WHOSE value the Value column shows. Unset = the author's own line, which is what the
+	// designer's page reads; set = the window answers ("the reader's where they set one").
+	void SetValueSource(std::function<ibValue(const wxString&)> valueOf) { m_valueOf = std::move(valueOf); }
+
+	// VIEW ROW → PARAMETER. Not the same number once the list is filtered, and this is the ONE place
+	// that knows the difference — the page's cells ask through ParameterAt below.
+	size_t IndexAt(unsigned int row) const {
+		return (row < m_rows.size()) ? m_rows[row] : (size_t)-1;
+	}
+	int ParameterAt(const ibDataViewItem& item) const {
+		if (!item.IsOk())
+			return wxNOT_FOUND;
+		const size_t at = IndexAt(GetRow(item));
+		return at == (size_t)-1 ? wxNOT_FOUND : (int)at;
+	}
+
 	ibParameterModel(std::function<std::vector<ibParameterDescription>*()> parameters,
 	                 std::function<const ibMetaData*()> metaData)
 		: m_parameters(std::move(parameters)), m_metaData(std::move(metaData)) { ResetFromList(); }
@@ -405,23 +427,43 @@ public:
 
 	void ResetFromList() {
 		const std::vector<ibParameterDescription>* list = List();
-		Reset(list != nullptr ? (unsigned int)list->size() : 0u);
+		m_rows.clear();
+		for (size_t i = 0; list != nullptr && i < list->size(); ++i)
+			if (!m_onlyUser || (*list)[i].m_userSettable)
+				m_rows.push_back(i);
+		Reset((unsigned int)m_rows.size());
 	}
 
 	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
 		const std::vector<ibParameterDescription>* list = List();
-		if (list == nullptr || row >= list->size())
+		const size_t at = IndexAt(row);
+		if (list == nullptr || at >= list->size())
 			return;   // BOUNDS FIRST — a queued paint can outlive the row it was queued for
-		const ibParameterDescription& parameter = (*list)[row];
+		const ibParameterDescription& parameter = (*list)[at];
 		switch (col) {
 		case kColName:
+			// ⭐ THE READER IS SHOWN THE PRESENTATION, not the technical name: `PeriodFrom` is written
+			// for the query, "Period From" is written for a person, and the page a person fills in is
+			// the one that owes them the second (Max, 2026-08-28). The author's page keeps the name —
+			// it is what the query text says, and that is what has to match there.
+			if (m_onlyUser) {
+				variant = ibTitleFromName(parameter.m_name);
+				break;
+			}
 			// AN AUTO PARAMETER SAYS SO. Not decoration: it is the difference between a row that can
 			// be renamed or removed here and one that is written in the query text.
 			variant = parameter.m_fromQuery
 				? parameter.m_name + wxT("  (") + _("from query") + wxT(")")
 				: parameter.m_name;
 			break;
-		case kColValue:      variant = parameter.m_value.GetString(); break;
+		// ⭐⭐ WHOSE VALUE IS IN FORCE — asked of the window, not read off the author's line. On the
+		// reader's road what they filled in lives in THEIR setting; the author's line is the default
+		// behind it. Reading the line straight is why a value chosen on that page was written, stored
+		// and never seen: the cell painted the author's empty node (Max, 2026-08-29: "the entry does
+		// not work, the cell is always empty").
+		case kColValue:      variant = m_valueOf ? m_valueOf(parameter.m_name).GetString()
+			: ibStoredValue(parameter.m_value, m_metaData ? m_metaData() : nullptr).GetString();
+			break;
 		case kColType:       variant = ibDescribeTypes(parameter.m_type, m_metaData ? m_metaData() : nullptr); break;
 		case kColExpression: variant = parameter.m_expression; break;
 		case kColUser:       variant = parameter.m_userSettable; break;
@@ -431,11 +473,16 @@ public:
 
 	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
 		std::vector<ibParameterDescription>* list = List();
-		if (list == nullptr || row >= list->size())
+		const size_t at = IndexAt(row);
+		if (list == nullptr || at >= list->size())
 			return false;
-		ibParameterDescription& parameter = (*list)[row];
+		ibParameterDescription& parameter = (*list)[at];
 		switch (col) {
-		case kColValue:      parameter.m_value        = ibValue(variant.GetString()); return true;
+		// ⚠ THE VALUE IS NOT WRITTEN THROUGH THE MODEL. It is a value of a DECLARED type — a reference,
+		// a date, a number — and the cell writes it shaped by that declaration. Taking the cell's TEXT
+		// here would quietly turn `CatalogRef.Goods.Chair` into the string that renders it; the column
+		// was a text one once, and this line is what is left of that.
+		case kColValue:      return false;
 		case kColExpression: parameter.m_expression   = variant.GetString();          return true;
 		case kColUser:       parameter.m_userSettable = variant.GetBool();            return true;
 		default: return false;
@@ -454,6 +501,9 @@ private:
 	std::function<std::vector<ibParameterDescription>*()> m_parameters;   // asked every time — no copy here
 	std::function<const ibMetaData*()>                    m_metaData;     // for the type column alone
 	bool m_readOnly = false;
+	bool m_onlyUser = false;              // the reader's page — see ShowOnlyUserSettable
+	std::vector<size_t> m_rows;           // view row → parameter, rebuilt by ResetFromList
+	std::function<ibValue(const wxString&)> m_valueOf;   // whose value the Value column shows
 };
 // THE VARIANTS, as a dataview model over the COMPOSITION — which is where they live. The window
 // keeps no list of its own: a variant is a snapshot the composition owns, and a copy of the names
@@ -1473,6 +1523,7 @@ void ibComposerSettingsPanel::BuildPanel()
 		notebook->AddPage(BuildParameterPage(notebook), _("Parameters"), false);
 	}
 	notebook->AddPage(BuildOutputPage(notebook), _("Output"), notebook->GetPageCount() == 0);
+
 	mainSizer->Add(notebook, 1, wxALL | wxEXPAND, FromDIP(6));
 
 	// LEAVING THE QUERY PAGE APPLIES IT. The query IS the composition's source: everything on every
@@ -2815,9 +2866,43 @@ void ibComposerSettingsPanel::SyncGroupingPage()
 	}
 }
 
+// SHOW THE READER'S PARAMETERS ONLY AT THE ROOT — the same shape as the grouping page above, and for
+// the same reason: a page that can do nothing where it stands invites a click that does nothing.
+//
+// A parameter is the COMPOSITION's: it is put into the query once and every output reads through it.
+// So the page belongs to the report row and to no node under it.
+void ibComposerSettingsPanel::SyncParameterPage()
+{
+	if (m_settingsTabs == nullptr || m_readerParameterPage == nullptr)
+		return;
+
+	const bool anyForReader = std::any_of(m_edited.m_parameters.begin(), m_edited.m_parameters.end(),
+		[](const ibParameterDescription& parameter) { return parameter.m_userSettable; });
+	const bool wanted = anyForReader && m_currentNode.IsReport();
+
+	size_t at = m_settingsTabs->GetPageCount();
+	for (size_t i = 0; i < m_settingsTabs->GetPageCount(); ++i)
+		if (m_settingsTabs->GetPage(i) == m_readerParameterPage) { at = i; break; }
+	const bool shown = at < m_settingsTabs->GetPageCount();
+
+	if (wanted == shown)
+		return;
+	if (wanted) {
+		m_settingsTabs->InsertPage(0, m_readerParameterPage, _("Parameters"), true);
+		m_readerParameterPage->Show();
+		if (m_parameterModel != nullptr)
+			m_parameterModel->ResetFromList();
+	}
+	else {
+		m_settingsTabs->RemovePage(at);   // REMOVE, not Delete — the page is ours and comes back
+		m_readerParameterPage->Hide();
+	}
+}
+
 void ibComposerSettingsPanel::ReloadGrouping(int select)
 {
 	SyncGroupingPage();
+	SyncParameterPage();
 	if (m_groupingModel == nullptr || m_groupingView == nullptr)
 		return;
 	m_groupingModel->Rebuild();
@@ -2862,6 +2947,19 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 	// than left standing empty, which reads as a page that is broken.
 	m_groupingPage = BuildGroupingPage(tabs);
 	tabs->AddPage(m_groupingPage, _("Grouping"), true);
+
+	// ⭐⭐ …AND THE READER'S PARAMETERS, HERE — beside the selected fields and the filter, because a
+	// value the reader fills in is one of the things they SET, exactly like those. It stands FIRST of
+	// them: what the report is asked for comes before how it is arranged.
+	//
+	// ⚠ ONLY AT THE ROOT, and only when the author offered anything. A parameter belongs to the
+	// COMPOSITION — it goes into the query once, for every output at once — so it is not a page a
+	// node has; and with nothing marked "For user" there is nothing to ask about, so the tab is not
+	// there at all (Max, 2026-08-29). Put on and taken off by SyncParameterPage, like the grouping.
+	if (m_readerRoad) {
+		m_readerParameterPage = BuildParameterPage(tabs, /*forReader*/true);
+		m_readerParameterPage->Hide();   // SyncParameterPage puts it on where it belongs
+	}
 
 	// ⭐⭐ WHAT THIS NODE SHOWS — ONE PAGE, AND THE ONLY ONE THERE EVER SHOULD HAVE BEEN.
 	//
@@ -3000,6 +3098,24 @@ wxWindow* ibComposerSettingsPanel::BuildResourcePage(wxWindow* parent)
 			},
 			wxDATAVIEW_CELL_EDITABLE),
 		ibResourceModel::kColScope, FromDIP(160), wxAlignment::wxALIGN_LEFT));
+	// ⭐⭐ A RESOURCE IS ONE OF THE TEXTS THAT DECLARE PARAMETERS — `COUNT(Date) * &Rate` — so the
+	// parameters follow it exactly as they follow the query body (ibSyncParameters). Typed straight
+	// into the cell, nothing was re-reading them and the row never appeared (Max, 2026-08-29: "when I
+	// enter a parameter in a resource, no synchronisation happens").
+	//
+	// ⚠ QUEUED, because this event is sent BEFORE the model is written: reading the description here
+	// would ask about the text before the one just typed (the same order the parameter page's own
+	// check had to be written around).
+	m_resourceView->Bind(wxEVT_DATAVIEW_ITEM_EDITING_DONE, [this](ibDataViewEvent& event) {
+		event.Skip();
+		if (event.IsEditCancelled())
+			return;
+		CallAfter([this] {
+			ibSyncParameters(m_edited);
+			ReloadParameters();
+			});
+		});
+
 	right->Add(m_resourceView, 1, wxALL | wxEXPAND, FromDIP(4));
 	rightPane->SetSizer(right);
 
@@ -3016,20 +3132,28 @@ wxWindow* ibComposerSettingsPanel::BuildResourcePage(wxWindow* parent)
 // A parameter can also be added by hand — for a common module to read, or because the text is still
 // being written — and only a hand-made one can be renamed or removed here (an auto one is named by
 // the query, and removing it would last exactly until the next re-parse).
-wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent)
+// ⭐⭐ TWO PAGES, ONE PAGE BUILDER. The AUTHOR declares parameters — their name, type, expression and
+// who fills each one in; the READER fills in the ones offered to them, and has no business with the
+// other four columns or with adding and removing rows. Same grid, same cell, same description: what
+// differs is which rows are shown and how much of each (Max, 2026-08-28: "when you mark a setting
+// for the user, a Parameters tab appears last, and there you set the value — its presentation and
+// its value").
+wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent, bool forReader)
 {
 	wxPanel* panel = new wxPanel(parent);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
-	wxToolBar* bar = m_parameterBar = new wxToolBar(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
-	bar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
-	bar->AddTool(ID_PARAM_ADD, _("Add"),
-		ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add parameter"));
-	bar->AddTool(ID_PARAM_REMOVE, _("Delete"),
-		ibSettingsArt(wxASCII_STR(wxART_DELETE), this), _("Delete parameter"));
-	bar->Realize();
-	sizer->Add(bar, 0, wxLEFT | wxRIGHT | wxTOP | wxEXPAND, FromDIP(4));
+	if (!forReader) {
+		wxToolBar* bar = m_parameterBar = new wxToolBar(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+			wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+		bar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
+		bar->AddTool(ID_PARAM_ADD, _("Add"),
+			ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add parameter"));
+		bar->AddTool(ID_PARAM_REMOVE, _("Delete"),
+			ibSettingsArt(wxASCII_STR(wxART_DELETE), this), _("Delete parameter"));
+		bar->Realize();
+		sizer->Add(bar, 0, wxLEFT | wxRIGHT | wxTOP | wxEXPAND, FromDIP(4));
+	}
 
 	m_parameterView = new ibDataViewCtrl(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxDV_ROW_LINES | wxDV_SINGLE);
@@ -3037,12 +3161,72 @@ wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent)
 	m_parameterModel = new ibParameterModel(
 		[this] { return &m_edited.m_parameters; },
 		[this]() -> const ibMetaData* { return GetEditedMetaData(); });
+	m_parameterModel->ShowOnlyUserSettable(forReader);
+	// THE CELL AND THE COLUMN READ THE SAME THING — see the getter below: what is in force for this
+	// parameter, materialised for the reader and left as the declaration for the author.
+	m_parameterModel->SetValueSource([this](const wxString& name) -> ibValue {
+		const ibValue held = ibStoredValue(StoredParameterValue(name), GetEditedMetaData());
+		return appData->DesignerMode() ? held : ibMaterializeCompositionValue(held, GetEditedMetaData());
+		});
 	m_parameterView->AssociateModel(m_parameterModel);
 
 	m_parameterView->GetRootColumnGroup()->AppendTextColumn(_("Parameter"), ibParameterModel::kColName,
 		wxDATAVIEW_CELL_INERT, FromDIP(170), wxAlignment::wxALIGN_LEFT);
-	m_parameterView->GetRootColumnGroup()->AppendTextColumn(_("Value"), ibParameterModel::kColValue,
-		wxDATAVIEW_CELL_EDITABLE, FromDIP(160), wxAlignment::wxALIGN_LEFT);
+	// ⭐⭐ THE VALUE IS CHOSEN, NOT TYPED. A parameter holds a VALUE of a declared type — a date, a
+	// reference — and a text column can only take letters: there was no way to put a reference in at
+	// all (Max, 2026-08-28: "and how am I supposed to change it?"). This is the same cell the filter
+	// and the sort lines are edited through, told where the row's declared type comes from, so the
+	// "…" walks the one route: settle the type, then choose a value of it — which in the designer is
+	// the predefined-value form.
+	ibRowValueCellRenderer* valueCell = new ibRowValueCellRenderer(this,
+		ibComposerFieldChooser(this),
+		// ⭐ THE CELL WORKS IN VALUES, THE DESCRIPTION IN NODES — and the pair of doors between them is
+		// the same one the runtime uses (ibStoredValue / ibStoreValue). A window is a place where a
+		// value is chosen and shown; the store keeps what was written.
+		[this](const ibDataViewItem& row) -> ibValue {
+			const int at = (m_parameterModel != nullptr) ? m_parameterModel->ParameterAt(row) : wxNOT_FOUND;
+			if (at == wxNOT_FOUND || (size_t)at >= m_edited.m_parameters.size())
+				return ibValue();
+
+			// ⭐⭐ THE READER'S OWN VALUE WHERE THEY SET ONE, the author's otherwise — the same rule the
+			// filter and the sort follow, asked per PARAMETER because that is the grain a person fills
+			// them in at.
+			const ibValue held = ibStoredValue(
+				StoredParameterValue(m_edited.m_parameters[at].m_name), GetEditedMetaData());
+
+			// ⭐⭐ THE READER SEES A VALUE, THE AUTHOR SEES A DECLARATION. What the designer wrote is
+			// `CatalogRef.Goods.Chair` — a declaration, and that is exactly what the author should read
+			// back. At RUN TIME the same parameter is a DEFAULT somebody may replace, so it is shown as
+			// the thing itself, in its ordinary presentation, and changed through the ordinary choice
+			// (Max, 2026-08-29: "the runtime digests what the designer set — it sees a predefined value
+			// as the default, in a normal presentation, and can change it with its own interface").
+			return appData->DesignerMode()
+				? held : ibMaterializeCompositionValue(held, GetEditedMetaData());
+		},
+		[this](const ibDataViewItem& row, const ibValue& value) {
+			const int at = (m_parameterModel != nullptr) ? m_parameterModel->ParameterAt(row) : wxNOT_FOUND;
+			if (at == wxNOT_FOUND || (size_t)at >= m_edited.m_parameters.size())
+				return;
+			ibStoreValue(WritableParameterValue(m_edited.m_parameters[at].m_name), value);
+			MarkSettingsTouched();
+		});
+	valueCell->SetTypeSource([this](const ibDataViewItem& row) -> ibTypeDescription {
+		const int at = (m_parameterModel != nullptr) ? m_parameterModel->ParameterAt(row) : wxNOT_FOUND;
+		return (at != wxNOT_FOUND && (size_t)at < m_edited.m_parameters.size())
+			? m_edited.m_parameters[at].m_type : ibTypeDescription();
+	},
+		[this]() -> const ibMetaData* { return GetEditedMetaData(); });
+	m_parameterView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Value"),
+		valueCell, ibParameterModel::kColValue, FromDIP(160), wxAlignment::wxALIGN_LEFT));
+	// ⭐ AND THAT IS THE WHOLE OF THE READER'S PAGE: what the parameter is called, and what it holds.
+	// The three columns below are the DECLARATION — how the value is worked out, what it may be, and
+	// who fills it in — and those are the author's answers, already given.
+	if (forReader) {
+		sizer->Add(m_parameterView, 1, wxALL | wxEXPAND, FromDIP(4));
+		panel->SetSizer(sizer);
+		return panel;
+	}
+
 	// THE EXPRESSION IS EVALUATED BEFORE THE READ and its result becomes the value — which is why a
 	// call into a common module is legitimate here and a scripted FIELD is not: this runs once.
 	// One line in the cell, and "..." opens the same text with room to write it.
@@ -3065,6 +3249,43 @@ wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent)
 	sizer->Add(m_parameterView, 1, wxALL | wxEXPAND, FromDIP(4));
 	panel->SetSizer(sizer);
 
+	// ⭐⭐ THE EXPRESSION IS CHECKED WHERE IT IS WRITTEN — when the cell stops being edited, not only
+	// on the way out of the window. A person types a name, the focus leaves, and by then it is known
+	// whether that name exists; saying so a screen later, when the tab closes, is saying it to
+	// somebody who has moved on (Max, 2026-08-28: "the focus leaves — at that moment it should ask
+	// me: there is an error, are you sure you want to leave?").
+	//
+	// It ASKS rather than refuses, like the window's own check: a half-written expression is a
+	// legitimate thing to leave behind. "No" puts the person back in the cell they were writing —
+	// queued, because the grid is still finishing the edit that brought us here.
+	// ⚠⚠ THE TEXT COMES FROM THE EVENT, NOT FROM THE BUFFER. This event is sent BEFORE the model is
+	// written (DoHandleEditingDone: the value lands only `if (value && event.IsAllowed())`), so the
+	// description still holds the PREVIOUS expression here — checking it there asked about the text
+	// before the one just typed, which is the desync. And because the write has not happened yet,
+	// refusing is one call: VETO, and nothing was stored. No second edit is started and no queued
+	// re-entry into the grid — the event already carries both the answer and the say.
+	m_parameterView->Bind(wxEVT_DATAVIEW_ITEM_EDITING_DONE, [this](ibDataViewEvent& event) {
+		event.Skip();
+		const ibDataViewColumn* column = event.GetDataViewColumn();
+		if (column == nullptr || column->GetModelColumn() != ibParameterModel::kColExpression
+			|| event.IsEditCancelled())
+			return;   // Esc, or another column — nothing was said to check
+
+		wxString complaint;
+		if (CheckExpression(event.GetValue().GetString(), complaint, GetEditedMetaData()))
+			return;
+
+		// It ASKS rather than refuses, like the window's own check on the way out: a half-written
+		// expression is a legitimate thing to leave behind. "No" drops what was typed and the cell
+		// keeps the expression it had.
+		const int answer = wxMessageBox(
+			_("The expression has an error:") + wxT("\n\n") + complaint + wxT("\n\n")
+				+ _("Leave it as it is?"),
+			_("Data composer settings"), wxYES_NO | wxICON_WARNING, this);
+		if (answer != wxYES)
+			event.Veto();
+		});
+
 	// RIGHT-CLICK OFFERS WHAT THE TOOLBAR OFFERS — every list in this window answers the right hand.
 	m_parameterView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibComposerSettingsPanel::OnParameterContextMenu, this);
 	m_parameterView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
@@ -3080,9 +3301,52 @@ wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent)
 //  Parameter commands
 // ---------------------------------------------------------------------------
 
+// ⭐⭐ WHOSE VALUE IS IN FORCE FOR THIS PARAMETER — the reader's where they set one, the author's
+// otherwise. Asked per NAME: the author declares them all and offers some, and a person who filled
+// in a period said nothing about anything else (Max, 2026-08-29).
+//
+// ⚠ ON THE AUTHOR'S ROAD THERE IS NO SECOND ANSWER — the composition IS what is being written.
+const ibDataNode& ibComposerSettingsPanel::StoredParameterValue(const wxString& name) const
+{
+	if (m_readerRoad) {
+		for (const ibParameterDescription& theirs : EditedSettings().m_parameters)
+			if (theirs.m_name.IsSameAs(name, false))
+				return theirs.m_value;
+	}
+	for (const ibParameterDescription& declared : m_edited.m_parameters)
+		if (declared.m_name.IsSameAs(name, false))
+			return declared.m_value;
+
+	static const ibDataNode s_nothing;
+	return s_nothing;
+}
+
+// …AND WHERE A NEW VALUE GOES. The reader writes into their own setting — the composition is the
+// author's and is not touched on that road — adding the line the first time they fill one in.
+ibDataNode& ibComposerSettingsPanel::WritableParameterValue(const wxString& name)
+{
+	std::vector<ibParameterDescription>& into =
+		m_readerRoad ? EditedSettings().m_parameters : m_edited.m_parameters;
+
+	for (ibParameterDescription& parameter : into)
+		if (parameter.m_name.IsSameAs(name, false))
+			return parameter.m_value;
+
+	ibParameterDescription added;
+	added.m_name = name;   // the NAME and the value: what a parameter IS stays with the author
+	into.push_back(std::move(added));
+	return into.back().m_value;
+}
+
 int ibComposerSettingsPanel::SelectedParameter() const
 {
-	return ibSelectedRow(m_parameterView);
+	// THROUGH THE MODEL'S OWN MAPPING — the reader's page shows only the parameters offered to them,
+	// so the row on screen and the parameter in the description are not the same number there.
+	const int row = ibSelectedRow(m_parameterView);
+	if (row == wxNOT_FOUND || m_parameterModel == nullptr)
+		return row;
+	const size_t at = m_parameterModel->IndexAt((unsigned int)row);
+	return at == (size_t)-1 ? wxNOT_FOUND : (int)at;
 }
 
 void ibComposerSettingsPanel::ReloadParameters()
@@ -3149,10 +3413,13 @@ bool ibComposerSettingsPanel::CheckExpression(const wxString& expression, wxStri
 		return true;   // no expression is not an error
 
 	try {
+		// Named once: the wrapper is written with it and its locals are read back by it.
+		static const wxString kCheckFunctionName = wxT("__checkExpression");
+
 		const bool braces = ibCompileCode::GetCodeStyle() == CODE_CES;
 		const wxString wrapped = braces
-			? wxT("function __checkExpression() { return ") + expression + wxT("; }")
-			: wxT("Function __checkExpression() Return ") + expression + wxT("; EndFunction");
+			? wxT("function ") + kCheckFunctionName + wxT("() { return ") + expression + wxT("; }")
+			: wxT("Function ") + kCheckFunctionName + wxT("() Return ") + expression + wxT("; EndFunction");
 
 		ibCompileCode check;
 
@@ -3200,6 +3467,26 @@ bool ibComposerSettingsPanel::CheckExpression(const wxString& expression, wxStri
 		// would pass or fail for reasons nobody can see from here.
 
 		check.Compile(wrapped);
+
+		// ⭐⭐ COMPILING IS NOT ENOUGH — A NAME NOBODY DECLARES COMPILES FINE. The language resolves an
+		// unknown identifier to a LOCAL SLOT (compileCode.cpp: "regular var / not found → GetVariable's
+		// frame-slot emission"), which is right for a script that goes on to assign it and wrong for a
+		// one-line expression: `венгшщ` compiled, said nothing, and produced an empty value at read
+		// time (Max, 2026-08-28: "the expression is not checked here").
+		//
+		// This wrapper declares nothing and takes no parameters, so EVERY named local in it is a name
+		// that resolved to nothing. Temps never reach this list (byteCode.h: "Temps are filtered out
+		// at the mirror site"), so the list is exactly the unknown names.
+		for (const auto& function : check.m_cByteCode.m_listFunc) {
+			if (!function.m_strRealName.IsSameAs(kCheckFunctionName, false))
+				continue;
+			for (const ibByteCode::ibByteCodeVarInfo& local : function.m_listLocals) {
+				if (!local.IsLocal())
+					continue;
+				complaint = wxString::Format(_("Unknown name: %s"), local.m_strRealName);
+				return false;
+			}
+		}
 	}
 	catch (const ibBackendException& error) {
 		complaint = error.GetErrorDescription();
@@ -3238,10 +3525,20 @@ bool ibComposerSettingsPanel::EditParameterType(wxString& text)
 
 	if ((size_t)idx >= m_edited.m_parameters.size())
 		return false;
+	// ⭐ THE REFERENCE FILTER, as asked (Max, 2026-08-28).
 	ibTypeDescription declared = m_edited.m_parameters[idx].m_type;
-	if (!ibShowTypeSelector(this, ibSelectorDataType::ibSelectorDataType_any, std::vector<ibClassID>(),
+	if (!ibShowTypeSelector(this, ibSelectorDataType::ibSelectorDataType_reference, std::vector<ibClassID>(),
 			declared, GetEditedMetaData(), /*allowEdit*/true, /*single*/false))
 		return false;
+
+	// ⭐ A NEW TYPE BRINGS ITS OWN EMPTY VALUE. What a parameter holds is a value OF its declared type,
+	// so the moment the declaration changes the old value belongs to something else. `AdjustValue`
+	// already says what a declaration holds when it holds nothing: the empty value of a SINGLE type —
+	// the empty reference of that catalog, an empty string — and undefined for a composite one, which
+	// is exactly the difference (Max, 2026-08-28). The rule is the product's, not this window's.
+	if (m_edited.m_parameters[idx].m_type != declared)
+		ibStoreValue(m_edited.m_parameters[idx].m_value,
+			ibValueTypeDescription::AdjustValue(declared, GetEditedMetaData()));
 
 	m_edited.m_parameters[idx].m_type = declared;
 	MarkSettingsTouched();
@@ -3350,6 +3647,11 @@ void ibComposerSettingsPanel::OnParameterAdd(wxCommandEvent&)
 	if (added == parameters.size()) {
 		ibParameterDescription parameter;
 		parameter.m_name = name;   // hand-made: m_fromQuery stays false, which is what makes it removable
+		// ⭐ A NEW PARAMETER IS A STRING — declared from the first moment, so the value cell is usable
+		// straight away and the person types into it (Max, 2026-08-28). The LENGTH is not spelled out
+		// here: AppendMetaType already answers "String means String(10)" for every type description in
+		// the product, so a second statement of it would be a second place to keep in step.
+		parameter.m_type.AppendMetaType(ibValueTypes::TYPE_STRING);
 		parameters.push_back(std::move(parameter));
 		MarkSettingsTouched();
 	}
@@ -3745,6 +4047,12 @@ void ibComposerSettingsPanel::ReloadResources()
 	// THE MODEL IS THE COMPOSER — reset re-reads it. Nothing is copied into the window.
 	if (m_resourceModel != nullptr)
 		m_resourceModel->ResetFromList();
+
+	// ⭐ AND THE PARAMETERS FOLLOW THE RESOURCES TOO. A resource expression is one of the texts that
+	// declare parameters (`COUNT(Date) * &Rate`), so re-reading the resources re-reads them — the same
+	// rule the query text has always had, said in one place for both (ibSyncParameters).
+	ibSyncParameters(m_edited);
+	ReloadParameters();
 }
 
 
@@ -4606,7 +4914,7 @@ void ibComposerSettingsPanel::RefreshFromQueryText()
 	// AND THE PARAMETERS: a new &Name in the text is a new row here, and one the text stopped asking
 	// for is gone. The list follows the query, so it is re-read where the query is applied — over
 	// THIS window's copy, through the one spelling of that rule (valueDataComposition.h).
-	ibSyncParametersWithQuery(m_edited.m_parameters, m_edited.m_query);
+	ibSyncParameters(m_edited);
 	ReloadParameters();
 
 	// WHAT THE PARSER SAID, taken at the same moment the fields were — PopulateFieldTrees above is

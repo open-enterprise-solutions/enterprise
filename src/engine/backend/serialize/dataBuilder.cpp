@@ -7,6 +7,8 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/backend_exception.h"   // ibBackendCoreException — kind-mismatch throw
 
+#include <cstring>                       // std::memcmp — two packed values compared as bytes
+
 ////////////////////////////////////////////////////////////////////////////
 // ibDataValue — typed factories
 ////////////////////////////////////////////////////////////////////////////
@@ -16,6 +18,46 @@ void ibDataValue::Expect(ibDataKind expected) const {
 	if (m_kind != ibDataKind::Empty && m_kind != expected)
 		ibBackendCoreException::Error(_("ibDataValue: wrong value kind (expected %d, got %d)"),
 			(int)expected, (int)m_kind);
+}
+
+// ⭐⭐ EQUALITY OF PACKED VALUES — see the header. A schema lives entirely on serialisation, so "is
+// this the same value" is a question about what was written, answered without building anything.
+bool ibDataValue::operator==(const ibDataValue& other) const
+{
+	if (m_kind != other.m_kind)
+		return false;
+
+	switch (m_kind) {
+	case ibDataKind::Empty:  return true;
+	case ibDataKind::String: return m_text == other.m_text;
+	case ibDataKind::Bool:   return m_bool == other.m_bool;
+	case ibDataKind::Number: return m_number == other.m_number;
+	case ibDataKind::Date:   return m_date == other.m_date;
+	case ibDataKind::Binary:
+		return m_binary.GetDataLen() == other.m_binary.GetDataLen()
+			&& (m_binary.GetDataLen() == 0
+				|| std::memcmp(m_binary.GetData(), other.m_binary.GetData(), m_binary.GetDataLen()) == 0);
+	case ibDataKind::Child:
+		// Two nodes, or two absences — a child held by pointer is compared by what it HOLDS.
+		if (!m_child || !other.m_child)
+			return !m_child && !other.m_child;
+		return *m_child == *other.m_child;
+	case ibDataKind::Array:  return m_array == other.m_array;
+	}
+	return false;
+}
+
+bool ibDataNode::operator==(const ibDataNode& other) const
+{
+	if (m_clsid != other.m_clsid || m_metaId != other.m_metaId)
+		return false;
+	if (m_fields != other.m_fields || m_props != other.m_props)
+		return false;
+	if (m_rawData.GetDataLen() != other.m_rawData.GetDataLen()
+		|| (m_rawData.GetDataLen() != 0
+			&& std::memcmp(m_rawData.GetData(), other.m_rawData.GetData(), m_rawData.GetDataLen()) != 0))
+		return false;
+	return m_children == other.m_children;
 }
 
 ibDataValue ibDataValue::String(const wxString& text) {

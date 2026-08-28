@@ -9,13 +9,20 @@
 #include <wx/timectrl.h>
 #include <wx/popupwin.h>
 
+
+#include <map>
+
 #include "frontend/win/ctrls/dynamicBorder.h"
 #include "frontend/visualView/ctrl/frame.h"
 #include "frontend/win/dlgs/typeSelector.h"          // the shared type picker — second caller
 #include "backend/system/value/valueType.h"          // ibValueTypeDescription / g_valueTypeDescriptionCLSID
 #include "backend/metaCollection/partial/chartOfCharacteristicTypes.h"   // the CONTOUR that narrows the picker
+#include "backend/metaCollection/partial/reference/reference.h"          // a reference built on a predefined guid
+#include "frontend/win/dlgs/selectPredefined.h"      // the designer's declared-value window — one call, no widgets here
 
-// See typeControl.h — the single Select-button route.
+#include "backend/appData.h"                                             // DesignerMode — the two roads part here
+#include "backend/system/systemManager.h"                                // Message — "nothing is declared" is an answer
+
 bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 	const ibValueMetaObject* choiceForm, wxWindow* parent)
 {
@@ -31,6 +38,22 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 	// type, and overridden outright by a cell that already knows (a filter's left
 	// side is always a field).
 	if (current.GetType() == ibValueTypes::TYPE_EMPTY) {
+
+		// ⭐⭐ …EXCEPT IN THE DESIGNER, WHERE THE TWO QUESTIONS ARE ONE WINDOW. Settling the type
+		// through the picker and then choosing a value of it costs two clicks and two modals — and
+		// the modal below destroys the editor, which is why the type choice has to end the call. The
+		// designer's own window asks BOTH on its two pages, so an empty cell reaches a value in one
+		// click ("I want to press the three dots and click the empty reference, or pick a predefined
+		// value there" — Max, 2026-08-28).
+		//
+		// ⚠ THE DECLARATION GOES STRAIGHT IN. Whether anything referenceable is admitted is the
+		// WINDOW's question — it answers `false` for a declaration with none, and the road below
+		// carries on unchanged. Deciding it here as well would be the same test in two places, and
+		// the one that could drift is this one.
+		if (appData->DesignerMode()
+			&& ibShowPredefinedSelector(ownerValue, factory->GetTypeDesc(), factory->GetMetaData(), parent))
+			return true;
+
 		const ibClassID clsid = factory->GetDataType();
 		const ibMetaData* metaData = factory->GetMetaData();
 		if (clsid == 0 || metaData == nullptr || !metaData->IsRegisterCtor(clsid))
@@ -91,15 +114,48 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 		return false;
 	}
 
+	const ibMetaData* metaData = factory->GetMetaData();
+
+	// ⭐⭐ IN THE DESIGNER EVERY REFERENCE WALKS THE ONE FORM — an ENUMERATION included. The quick
+	// choice below drops a list of the enum's members under the cell, which is the RUNTIME answer:
+	// there it is a value chosen from a small closed set. While a configuration is being written the
+	// same question is "which declared value is this", and it is asked the same way for a catalog, a
+	// document and an enumeration — one window, one habit (Max, 2026-08-28: "the designer has no
+	// separate drop-down for enums").
+	//
+	// The declaration goes in as it is; whether it admits a reference at all is worked out THERE,
+	// from the very structure being handed over. A cell that declares nothing is standing on the type
+	// it already holds, so that is what it offers.
+	if (appData->DesignerMode()) {
+		const ibTypeDescription& declared = factory->GetTypeDesc();
+		if (ibShowPredefinedSelector(ownerValue,
+				declared.GetClsidList().empty() ? ibTypeDescription(clsid) : declared, metaData, parent))
+			return true;
+	}
+
 	if (ibTypeControlFactory::QuickChoice(ownerValue, clsid, parent))
 		return true;
 
-	const ibMetaData* metaData = factory->GetMetaData();
 	const ibCtorMetaValueType* so = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
 	if (so != nullptr && so->GetMetaTypeCtor() == ibCtorObjectMetaType_Reference) {
-		if (const ibValueMetaObject* metaObject = so->GetMetaObject())
+		if (const ibValueMetaObject* metaObject = so->GetMetaObject()) {
+			// ⭐⭐ TWO MODES, AND THE DESIGNER IS THE OTHER ONE. At run time a reference is chosen from
+			// the DATA — the metaobject's own selection form, which is what the line below opens. In the
+			// designer there is no data yet, so that form has nothing to show and the button did
+			// nothing at all (Max, 2026-08-28: "in the designer such a form has to be made, because
+			// right now nothing opens there").
+			//
+			// What a configuration CAN offer while it is being written is what it DECLARES: its
+			// predefined values. So the same "…" opens them instead — the type is already settled by
+			// this point, and the choice is which of that type's declared values this is.
+			//
+			// The type the window offers is what the CELL declares; a cell that declares nothing —
+			// a form control bound to one attribute — is already standing on its type, so the value
+			// it holds is the whole offer. Asked ABOVE, before the quick choice, so an enumeration
+			// takes this road too.
 			return metaObject->ProcessChoice(ownerValue,
 				choiceForm != nullptr ? choiceForm->GetName() : wxString(), factory->GetSelectMode());
+		}
 	}
 	return false;
 }

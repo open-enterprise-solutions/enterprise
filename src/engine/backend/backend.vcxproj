@@ -278,6 +278,7 @@
     <ClInclude Include="system\value\valueDataComposition.h" />
     <ClInclude Include="system\value\valueDynamicList.h" />
     <ClInclude Include="metaCollection\partial\commonObject.h" />
+    <ClInclude Include="metaCollection\partial\declaredPresentation.h" />
     <ClInclude Include="metaCollection\partial\reference\reference.h" />
     <ClInclude Include="metaCollection\partial\selector\objectSelector.h" />
     <ClInclude Include="metaCollection\partial\tabularSection\tabularSection.h" />
