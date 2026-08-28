@@ -89,6 +89,7 @@ enterprise/
 │   ├── spreadsheet-document.md # the SERVER-side document — cells, parameters, areas, notifiers
 │   ├── spreadsheet-editor.md # the grid behind templates and report output
 │   ├── sheet-formats.md      # reading/writing foreign tables — xlsx in and out, docx out, the registry
+│   ├── printing.md           # Print / Print Preview — the two roads, pagination, what is NOT built
 │   ├── system-functions.md   # the global script API — 92 functions + 6 procedures
 │   ├── database-modes.md     # file vs server base — where each puts its artefacts
 │   ├── debugger-architecture.md # TCP transport, why the debuggee is the server
