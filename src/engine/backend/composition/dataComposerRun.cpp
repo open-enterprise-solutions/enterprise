@@ -952,8 +952,19 @@ static int ibPruneFilterNodes(std::vector<ibFilterNodeDescription>& nodes,
 		if (leftGone || rightGone) { ++dropped; continue; }
 		kept.push_back(std::move(node));
 	}
-	if (kept.size() != nodes.size())
-		nodes = std::move(kept);
+	// 🛑 UNCONDITIONALLY, AND THAT IS THE WHOLE BUG THIS ONCE HAD. The loop MOVES every node it
+	// keeps into `kept`, so by the time this line is reached `nodes` holds moved-from elements —
+	// their wxString and their ibValue have already gone. Assigning back only when something was
+	// dropped therefore GUTTED every condition on the ordinary path where nothing is dropped: the
+	// node count stayed right, `m_use` and the comparison survived (an int and a bool do not care
+	// about a move), and the field and the value came back EMPTY.
+	//
+	// ⭐ AND THAT IS WHY IT LOOKED INTERMITTENT: a run that actually pruned something took the
+	// assignment and left the survivors whole, so the same click worked or did not depending on
+	// whether some OTHER setting had stopped resolving (Max, 2026-08-28: "out of four tries it
+	// worked once"). A conditional write over moved-from state is not an optimisation — the
+	// condition it was guarding is precisely when the write is needed.
+	nodes = std::move(kept);
 	return dropped;
 }
 
@@ -962,14 +973,19 @@ int ibDataComposer::PruneSettingsDesc(ibSettingsDescription& settings,
 {
 	int dropped = ibPruneFilterNodes(settings.m_filter.m_nodes, resolves);
 
+	// ⚠ ASSIGNED UNCONDITIONALLY, like the filter above and for the same reason. These two build
+	// `kept` by COPY, so skipping the write would merely be pointless here rather than wrong — but
+	// "safe as long as nobody moves" is a mine with no compiler behind it: the day somebody swaps
+	// the copy for a std::move to save an allocation, the guard turns into the defect the filter
+	// walk had (moved-from lines kept in place). The write costs a pointer swap; the guard was
+	// saving nothing worth the shape.
 	{
 		std::vector<ibSortLineDescription> kept;
 		for (const ibSortLineDescription& line : settings.m_sort.m_lines) {
 			if (!resolves(line.m_path)) { ++dropped; continue; }
 			kept.push_back(line);
 		}
-		if (kept.size() != settings.m_sort.m_lines.size())
-			settings.m_sort.m_lines = std::move(kept);
+		settings.m_sort.m_lines = std::move(kept);
 	}
 	{
 		std::vector<ibGroupLineDescription> kept;
@@ -977,8 +993,7 @@ int ibDataComposer::PruneSettingsDesc(ibSettingsDescription& settings,
 			if (!resolves(line.m_path)) { ++dropped; continue; }
 			kept.push_back(line);
 		}
-		if (kept.size() != settings.m_group.m_lines.size())
-			settings.m_group.m_lines = std::move(kept);
+		settings.m_group.m_lines = std::move(kept);
 	}
 	return dropped;
 }
@@ -1002,8 +1017,11 @@ int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxStr
 				keptParams.emplace(param->first, param->second);
 			kept.push_back(item);
 		}
-		if (kept.size() != m_scopeConditions.size()) {
-			m_scopeConditions = std::move(kept);
+		// THE LIST IS WRITTEN BACK EITHER WAY; only the parameter sweep below is worth guarding, and
+		// it is guarded by the ANSWER rather than by a comparison against a list that has just moved.
+		const bool anyDropped = kept.size() != m_scopeConditions.size();
+		m_scopeConditions = std::move(kept);
+		if (anyDropped) {
 			// A parameter belongs to the line that bound it; the ones whose line went are gone with
 			// it. Left behind they would be bound into a query that never mentions them.
 			for (auto it = m_params.begin(); it != m_params.end(); ) {
@@ -1031,8 +1049,7 @@ int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxStr
 				if (!resolves(item.m_path)) { ++dropped; continue; }
 				kept.push_back(item);
 			}
-			if (kept.size() != lines.size())
-				lines = std::move(kept);
+			lines = std::move(kept);
 		}
 	}
 	CollapseEmptyLevels();
