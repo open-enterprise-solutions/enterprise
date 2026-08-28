@@ -220,9 +220,26 @@ ibQueryExprPtr OrFold(ibQueryExprPtr a, ibQueryExprPtr b)
 // column that knows better overrides it, and the MOMENT does — it has no value tag for the codec to
 // drive off, so going straight there bound NULL into every field and the filter matched nothing.
 // (Same rule as the write path, which has gone through this door all along.)
+// ⭐⭐ A COMPUTED OUTPUT IS ONE FIELD HOLDING THE VALUE ITSELF — `34 AS YTFDS`, `a * b AS y`. Nothing
+// declares a `_TYPE` beside it (DescribeColumnLayout emits the single Raw slot, queryColumn.cpp), so
+// the WRITE SPREAD and the FIELD LIST part company here: the spread opens with the discriminator,
+// the list has no slot for one, and the tag lands in the value's own field — `YTFDS = 2`, where 2 is
+// the tag of a number and the number itself is bound nowhere. The count still matches the
+// placeholders, so nothing complains: the filter simply never matches, on a column a person is
+// perfectly entitled to filter by (Max, 2026-08-28, live).
+bool IsComputedColumn(const ibBackendQueryColumn* col)
+{
+	return col != nullptr && col->GetColumnKind() == ibBackendQueryColumn::Kind::Computed;
+}
+
 ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& value,
                                  const wxString& mainQual = wxEmptyString)
 {
+	// …so it is compared as what it is: one field against the value. ColumnConst rather than a bare
+	// const, because the general encoding still applies — an identity-valued expression is bytes.
+	if (IsComputedColumn(col))
+		return ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, FirstSqlFieldOfColumn(col)), ColumnConst(col, value));
+
 	std::vector<wxString> fields = ColumnFieldNames(col);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int position = 1;
@@ -251,6 +268,12 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 ibQueryExprPtr DecomposeOrdered(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& value,
                                 ibQueryBinOp op, const wxString& mainQual = wxEmptyString)
 {
+	// ONE FIELD, ONE COMPARISON — see the note over DecomposeEquality. There is no lexicographic
+	// order to walk when a column has a single field, and the discriminator that would have led it
+	// does not exist.
+	if (IsComputedColumn(col))
+		return ibBinOp(op, ibColQ(mainQual, FirstSqlFieldOfColumn(col)), ColumnConst(col, value));
+
 	std::vector<wxString> fields = ColumnFieldNames(col);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int position = 1;
