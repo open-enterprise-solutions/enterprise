@@ -34,6 +34,42 @@ const wxColour kHeaderFill(0xD4, 0xE4, 0xD4);
 const wxColour kGroupFillOuter(0xE2, 0xEE, 0xE2);
 const wxColour kGroupFillInner(0xF0, 0xF7, 0xF0);
 
+// ⭐⭐ THE GRID — what makes a printed report a TABLE rather than tinted stripes. A column is read
+// DOWNWARD, and the eye needs to know where it ends sideways; a tint says "a level starts here" and
+// says nothing at all about where a column is.
+//
+// ⚠ EVERY ROW IS CLOSED — verticals AND a line under it (Max, 2026-08-28: *"note that there is no
+// line between the items"*). I left the horizontals out at first, reasoning that a line under every
+// row would fight the tint; it does not — the tint is a FILL and the line is an EDGE, and a table
+// whose rows run into one another is read by following a colour rather than a row.
+//
+// It also puts the bottom of the frame where it belongs. Drawn by the TOTAL row, as it was for an
+// hour, the frame simply had no bottom whenever a report declared no resources — an edge that
+// depends on whether some row happened to be there is not an edge.
+const wxColour kGridLine(0xA8, 0xB8, 0xA8);
+
+ibSpreadsheetBorderDescription GridPen()
+{
+	ibSpreadsheetBorderDescription pen;
+	pen.m_style  = wxPENSTYLE_SOLID;
+	pen.m_colour = kGridLine;
+	pen.m_width  = 1;
+	return pen;
+}
+
+// ONE CELL'S SHARE OF THE GRID — its verticals always, its horizontals when it is on an edge. Both
+// the header and the rows draw through here, so the table cannot come out with two kinds of line.
+void BoxCell(ibBackendSpreadsheetObject& area, int row, int col, bool top, bool bottom)
+{
+	const ibSpreadsheetBorderDescription pen = GridPen();
+	area.SetCellBorderLeft(row, col, pen);
+	area.SetCellBorderRight(row, col, pen);
+	if (top)
+		area.SetCellBorderTop(row, col, pen);
+	if (bottom)
+		area.SetCellBorderBottom(row, col, pen);
+}
+
 // A DETAIL ROW IS NOT BLANK PAPER. Left untinted it comes out pure white between the tinted group
 // rows, and pure white is the loudest thing on a page of soft greens — the eye lands on the last
 // row instead of on the structure (Max, 2026-08-19: "the last row stands out all white; give it
@@ -394,12 +430,35 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::O
 		deepestLevel = std::max(deepestLevel, level + 1);
 	const int headerRows = std::max(1, deepestLevel);
 	wxObjectDataPtr<ibBackendSpreadsheetObject> header(new ibBackendSpreadsheetObject());
+	// ⭐⭐ A COLUMN THAT SAYS ONE THING SAYS IT OVER THE WHOLE HEIGHT (Max, 2026-08-28: *"make the
+	// cells merge when they are in the same space… and centre them"*, and then *"use the room
+	// sensibly — if a resource or an extra field lands with emptiness above it, let it use that
+	// place"*).
+	//
+	// The header is as tall as the groupings are deep, because the dimension column has to carry
+	// `Ref` over `Date` — one line per LEVEL. Every OTHER column has a single title and nothing to
+	// say on the remaining lines, and left alone it sits on its own line with blank cells over or
+	// under it, which reads as a column whose heading went missing.
+	//
+	// ⚠ THE QUESTION IS "HOW MANY THINGS DOES THIS COLUMN SAY", not "which role is it". Asking the
+	// role would answer the resources only, and the emptiness is not theirs alone: a dimension that
+	// exists at the second level but not at the first has the SAME blank cell, just above instead of
+	// below. Counting the captions covers both, and covers whichever new case is next by construction.
+	std::vector<int> captions(static_cast<size_t>(std::max(0, m_columnCount)), 0);
+	for (size_t i = 0; i < schema.size(); ++i)
+		if (m_layout[i] >= 0)
+			++captions[static_cast<size_t>(m_layout[i])];
+
+	// Which columns took the whole height as one cell — their borders are drawn once, on the outside,
+	// or a row-by-row rule would be ruled straight through the middle of them.
+	std::vector<bool> merged(static_cast<size_t>(std::max(0, m_columnCount)), false);
 	for (size_t i = 0; i < schema.size(); ++i) {
 		const int col = m_layout[i];
 		if (col < 0)
 			continue;
+		const bool alone = captions[static_cast<size_t>(col)] == 1 && headerRows > 1;
 		int row = 0;
-		if (schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension)
+		if (!alone && schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension)
 			row = std::max(0, m_dimLevel[i]);   // one header line per LEVEL, not per dimension column
 		// WHAT A PERSON READS OVER THE COLUMN — the composition's title for it. The query's NAME is
 		// what a script looks the column up by and may have been qualified to stay unique; the
@@ -407,10 +466,50 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::O
 		const wxString caption = ColumnTitle(i, schema);
 		header->SetCellValue(row, col, caption);
 		m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], caption.length());
+
+		if (alone) {
+			header->SetCellSize(row, col, headerRows, 1);
+			header->SetCellAlignment(row, col, wxALIGN_LEFT, wxALIGN_CENTER);
+			merged[static_cast<size_t>(col)] = true;
+		}
 	}
-	for (int row = 0; row < headerRows; ++row)
-		for (int col = 0; col < m_columnCount; ++col)
+	// 🛑 THE TINT SKIPS WHAT A MERGE COVERS. Touching a cell CREATES it in the description, the grid
+	// then loads it and asks for its size, and a cell already inside somebody's span carries a negative
+	// one — `ibGrid::SetCellSize: setting cell size that is already part of another cell`, an int 3 at
+	// LOAD time, far from here (the cross layout hit this on 2026-08-25 and says so at its own tint).
+	// A merged cell paints its whole span from its main cell, so skipping them costs nothing on screen.
+	for (int col = 0; col < m_columnCount; ++col) {
+		const int rows = merged[static_cast<size_t>(col)] ? 1 : headerRows;
+		for (int row = 0; row < rows; ++row)
 			header->SetCellBackgroundColour(row, col, kHeaderFill);
+	}
+
+	// ⭐⭐ THE HEADER IS BOXED, and the rest of the table hangs off its lines. A report is read as a
+	// TABLE — the eye follows a column down and needs to know where that column ends sideways — and
+	// a tint alone does not draw an edge (Max, 2026-08-28, on a reference report: *"I want borders,
+	// so they neatly mark the start and the end"*).
+	//
+	// ⚠ AND EVERY LINE OF IT IS CLOSED, not just the last. A header is one line per grouping LEVEL —
+	// `Ref` over `Date` — and without a rule between them the two titles run together into one tall
+	// cell, so a reader cannot tell which caption belongs to which level (Max, 2026-08-28: *"lines
+	// should also be between the groupings in the header"*).
+	//
+	// ⚠ AND BOTH SIDES OF AN INNER EDGE ARE DRAWN. The header is ONE area of several rows, and an
+	// edge inside it is shared by two cells — the bottom of the line above and the top of the one
+	// below. Setting only the bottom left it undrawn (measured live), so each row states both: the
+	// data rows do not need this because each of them is an area of its own, where the edge is on
+	// the outside.
+	//
+	// ⚠ AND A MERGED COLUMN IS BOXED ONCE. Its cell IS the whole height, so the row-by-row rule would
+	// be asking for an edge in the middle of a single cell — the very line the merge exists to remove.
+	for (int col = 0; col < m_columnCount; ++col) {
+		if (merged[static_cast<size_t>(col)]) {
+			BoxCell(*header, 0, col, /*top*/ true, /*bottom*/ true);
+			continue;
+		}
+		for (int row = 0; row < headerRows; ++row)
+			BoxCell(*header, row, col, /*top*/ true, /*bottom*/ true);
+	}
 
 	m_document->PutArea(header, 0);
 
@@ -564,6 +663,16 @@ void ibSpreadsheetComposeDriver::PrintRow(int level, bool hasChildren, const std
 		row->SetCellBackgroundColour(0, col, fill);
 		if (hasChildren)
 			row->SetCellFont(0, col, font);
+		// …and its share of the grid: the verticals that carry a column down the page, and the lines
+		// that close the row at both ends.
+		//
+		// ⚠ IT STATES ITS OWN TOP, and the reason is the merged header above it. A merged cell is asked
+		// for a bottom edge on its MAIN cell, and the grid draws that edge under the main cell's row —
+		// which for a span is a line inside itself, not the underside of the header. So the columns that
+		// merged lost the rule between the header and the first row while the unmerged one kept it (Max,
+		// 2026-08-28, with R6C4 selected: *"there is no line"*, Top: None). Every horizontal edge is now
+		// stated by the side that is never merged.
+		BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true);
 	}
 
 	// ⭐ AND THE ONLY POSITIONAL THING THIS DRIVER SAYS: how deep the row is. Where it lands, how far
@@ -628,6 +737,7 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 	for (int col = 0; col < m_columnCount; ++col) {
 		row->SetCellBackgroundColour(0, col, fill);
 		row->SetCellFont(0, col, font);
+		BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true);   // closed like every other row, both ends
 	}
 
 	m_document->PutArea(row, static_cast<unsigned int>(std::max(0, level)));
@@ -961,8 +1071,16 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				into += wxT(" / ");
 			into += ColumnTitle(i);
 		}
+		// ⭐ AND IT TAKES THE WHOLE HEIGHT. The column keys stack above — one line per column level —
+		// while this caption has one line to say and used to say it on the LAST of them, leaving blank
+		// cells over a heading that names the entire left side of the table (Max, 2026-08-28: *"if a
+		// field lands with emptiness above it, let it use that place"*).
 		for (const std::pair<const int, wxString>& named : caption) {
-			header->SetCellValue(std::max(0, headerRows - 1), named.first, named.second);
+			header->SetCellValue(0, named.first, named.second);
+			if (headerRows > 1) {
+				mergeAt(0, named.first, headerRows, 1);
+				header->SetCellAlignment(0, named.first, wxALIGN_LEFT, wxALIGN_CENTER);
+			}
 			if (static_cast<size_t>(named.first) < m_widest.size())
 				m_widest[static_cast<size_t>(named.first)] =
 					std::max(m_widest[static_cast<size_t>(named.first)], named.second.length());
@@ -1095,7 +1213,11 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		const int first = dimWidth + keys * perKey;
 		header->SetCellValue(0, first, wxT("Total"));
 		if (measures > 1)
-			mergeAt(0, first, static_cast<int>(m_colLevels), measures);
+			mergeAt(0, first, static_cast<int>(m_colLevels), measures);   // the measure names go underneath
+		else if (headerRows > 1) {
+			mergeAt(0, first, headerRows, 1);   // nothing goes underneath, so the word takes the height
+			header->SetCellAlignment(0, first, wxALIGN_LEFT, wxALIGN_CENTER);
+		}
 		if (static_cast<size_t>(first) < m_widest.size())
 			m_widest[static_cast<size_t>(first)] = std::max<size_t>(m_widest[static_cast<size_t>(first)], 5);
 	}
