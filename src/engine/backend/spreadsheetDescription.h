@@ -672,9 +672,49 @@ struct ibSpreadsheetDescription {
 		return 0;
 	}
 
+	// ⭐⭐ A SPAN IS TWO FACTS, NOT ONE. The main cell holds how far it reaches, and every cell it
+	// covers holds the NEGATIVE offset back to the main one — the convention `GetSize` already reads
+	// ("covered by a multi-span cell") and the only way "is this cell somebody else's" can be asked
+	// of the DOCUMENT at all.
+	//
+	// 🛑 ONLY THE MAIN CELL WAS EVER WRITTEN. So the document answered "an ordinary cell" for the
+	// covered ones, and printing — which asks the document, not the grid — drew each of them as a
+	// cell of its own: its own fill and its own rules, straight through the middle of the merged one
+	// (Max, 2026-08-28: "the glitch with the merged cells"). The grid never showed it because a grid
+	// works its own coverage out from the same call; nobody else could.
 	void SetCellSize(int row, int col, int num_rows, int num_cols) {
 		ibSpreadsheetCellDescription* cell = GetOrCreateCell(row, col);
-		if (cell != nullptr) cell->SetSize(num_rows, num_cols);
+		if (cell == nullptr)
+			return;
+
+		// ⭐ THE GRID'S OWN MECHANISM, not a second one: release what the old span held, then mark what
+		// the new one covers with `row - j, col - i` — see `wxGrid::SetCellSize`. Both steps only for
+		// real spans, because a size of 0 or less is how a cell says it is somebody else's, and this
+		// door is for stating a span rather than for editing that statement.
+		int wasRows = 1, wasCols = 1;
+		cell->GetSize(&wasRows, &wasCols);
+
+		if (wasRows > 1 || wasCols > 1) {
+			for (int r = row; r < row + wasRows; r++)
+				for (int c = col; c < col + wasCols; c++)
+					if (r != row || c != col) {
+						ibSpreadsheetCellDescription* covered = GetOrCreateCell(r, c);
+						if (covered != nullptr)
+							covered->SetSize(1, 1);
+					}
+		}
+
+		cell->SetSize(num_rows, num_cols);
+
+		if ((num_rows > 1 || num_cols > 1) && num_rows >= 1 && num_cols >= 1) {
+			for (int r = row; r < row + num_rows; r++)
+				for (int c = col; c < col + num_cols; c++)
+					if (r != row || c != col) {
+						ibSpreadsheetCellDescription* covered = GetOrCreateCell(r, c);
+						if (covered != nullptr)
+							covered->SetSize(row - r, col - c);   // …the way back to whoever owns it
+					}
+		}
 	}
 
 	ibSpreadsheetCellDescription::ibFitMode GetCellFitMode(int row, int col) {

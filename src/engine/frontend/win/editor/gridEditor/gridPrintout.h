@@ -58,6 +58,14 @@ protected:
 	static void DrawTextInRectangle(wxDC& dc, const wxString& strValue, wxRect& rect, const wxFont& font, const wxColour& fontClr, int horizAlign = wxALIGN_LEFT, int vertAlign = wxALIGN_TOP, int textOrientation = wxHORIZONTAL);
 	static wxArrayString GetTextLines(wxDC& dc, const wxString& data, const wxFont& font, const wxRect& rect);
 
+	// WHAT THE CELL SAYS — the one place that turns a stored value into the text on paper.
+	wxString CellText(int row, int col) const;
+
+	// WHERE A PAGE MAY BREAK — the row/column asked for, or the start of the merged block it fell
+	// inside of. A break has to be a place where nothing is torn in half.
+	int RowBreakAt(int row) const;
+	int ColBreakAt(int col) const;
+
 private:
 
 	wxObjectDataPtr<ibBackendSpreadsheetObject> m_doc;

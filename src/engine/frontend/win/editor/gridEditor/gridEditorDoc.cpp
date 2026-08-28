@@ -5,11 +5,14 @@ namespace {
 
 // ⭐⭐ APPLY A CELL'S SPAN, UNLESS AN EARLIER MERGE ALREADY COVERS THAT CELL.
 //
-// The description has no notion of "covered": `ibSpreadsheetDescription::SetCellSize` stamps the
-// MAIN cell and nothing else, while the grid marks every cell a merge covers with a non-positive
-// span. So a document carrying both a merge and the cells underneath it walks straight into
+// A cell a merge covers must not be given a span of its own, or the grid stops on
 // `ibGrid::SetCellSize: setting cell size that is already part of another cell` — an assert, i.e. an
 // int 3, at LOAD time, long after whatever produced the document has finished.
+//
+// Since 2026-08-28 the description states coverage itself — `SetCellSize` stamps the negative offset
+// back to the main cell on everything under it — so most covered cells now say so and are skipped on
+// the first line below. The rest of this still stands: a document written before that says nothing,
+// and the ORDER a rectangle is copied in means a covered cell can be reached before its owner.
 //
 // 🛑 AND SUCH A DOCUMENT IS THE ORDINARY CASE, not a malformed one: `PutArea` copies an area as a
 // RECTANGLE — GetOrCreateCell for every row × col — so every cell under a merge is materialised at

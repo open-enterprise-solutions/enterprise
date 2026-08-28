@@ -70,6 +70,53 @@ int ibGridEditorPrintout::GetStyle() const
 	return m_style;
 }
 
+// ⭐⭐ PRINT ASKS THE DOCUMENT THE SAME QUESTION THE SCREEN ASKS (Max, 2026-08-28: *"print must
+// simply get the same thing the render gets"*). The document holds the translation too, and it
+// knows how to hand out the string — `ComputeStringValueFromParameters` is that door, and the
+// notifier that fills the grid goes through it (gridEditorDoc, `SetValueAsCustom`).
+//
+// 🛑 PRINTING DID NOT. It called the translator itself, on the RAW cell value, and threw the answer
+// away — and that answer is `false` for anything that is not a localisation envelope, in which case
+// the translator CLEARS the string. So every cell printed as nothing while the same cell on screen
+// read fine: fills and rules on paper, not one character of text.
+wxString ibGridEditorPrintout::CellText(int row, int col) const
+{
+	return m_doc->ComputeStringValueFromParameters(
+		m_doc->GetCellValue(row, col), m_doc->GetCellFillType(row, col));
+}
+
+// ⭐⭐ A PAGE BREAK MAY NOT FALL INSIDE A MERGED CELL (Max, 2026-08-28: *"you have a merged cell and
+// it somehow carries it over, tears it"*). The pagination measured row heights and knew nothing
+// about spans, so a break could land in the middle of one — and then the sheet showed the damage
+// twice: the main cell drew its whole height past the bottom of its page, and on the NEXT page its
+// remaining rows are `CellSpan_Inside`, which the drawing loop skips entirely. A blank band.
+//
+// A covered cell carries the NEGATIVE offset to the cell that owns it (wxGrid's convention), so the
+// place the break belongs is simply that owner: the whole block moves to the next page.
+int ibGridEditorPrintout::RowBreakAt(int row) const
+{
+	int highest = row;
+	for (int col = 0; col < m_doc->GetNumberCols(); col++) {
+		int cell_rows = 0, cell_cols = 0;
+		if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_Inside
+		    && row + cell_rows < highest)
+			highest = row + cell_rows;
+	}
+	return highest;
+}
+
+int ibGridEditorPrintout::ColBreakAt(int col) const
+{
+	int leftmost = col;
+	for (int row = 0; row < m_doc->GetNumberRows(); row++) {
+		int cell_rows = 0, cell_cols = 0;
+		if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_Inside
+		    && col + cell_cols < leftmost)
+			leftmost = col + cell_cols;
+	}
+	return leftmost;
+}
+
 bool ibGridEditorPrintout::OnPrintPage(int page)
 {
 	wxDC* dc = GetDC();
@@ -87,9 +134,11 @@ bool ibGridEditorPrintout::OnPrintPage(int page)
 	return DrawPage(dc, page);
 }
 
+// ⚠ THE PAGE HAS TO EXIST. This said yes to any number at all, while `DrawPage` indexes
+// `m_colsPerPage` by it without a check — the bound was stated in one place and trusted in another.
 bool ibGridEditorPrintout::HasPage(int page)
 {
-	return true;
+	return page >= m_minPage && page <= m_maxPage;
 }
 
 void ibGridEditorPrintout::GetPageInfo(int* minPage, int* maxPage, int* selPageFrom, int* selPageTo)
@@ -193,16 +242,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 				int horz, vert;
 				m_doc->GetCellAlignment(row, col, &horz, &vert);
 
-				wxString result;
-				if (m_doc->GetCellFillType(row, col) != ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter){
-					ibBackendLocalization::GetTranslateGetRawLocText(m_doc->GetLangCode(),
-						m_doc->GetCellValue(row, col), result);
-				}
-				else {
-					m_doc->GetCellValue(row, col, result);
-				}
-
-				DrawTextInRectangle(*dc, result,
+				DrawTextInRectangle(*dc, CellText(row, col),
 					rect,
 					m_doc->GetCellFont(row, col),
 					m_doc->GetCellTextColour(row, col),
@@ -221,16 +261,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 				int horz, vert;
 				m_doc->GetCellAlignment(row, col, &horz, &vert);
 
-				wxString result;
-				if (m_doc->GetCellFillType(row, col) != ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
-					ibBackendLocalization::GetTranslateGetRawLocText(m_doc->GetLangCode(),
-						m_doc->GetCellValue(row, col), result);
-				}
-				else {
-					m_doc->GetCellValue(row, col, result);
-				}
-
-				DrawTextInRectangle(*dc, result,
+				DrawTextInRectangle(*dc, CellText(row, col),
 					rect,
 					m_doc->GetCellFont(row, col),
 					m_doc->GetCellTextColour(row, col),
@@ -338,6 +369,9 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 void ibGridEditorPrintout::OnPreparePrinting()
 {
 	wxDC* dc = GetDC();
+	if (dc == nullptr)
+		return;   // …as OnPrintPage already checks; this dereferenced it regardless
+
 	CalculateScale(dc);
 	m_overallScale = m_screenScale * m_userScale;
 
@@ -360,16 +394,26 @@ void ibGridEditorPrintout::OnPreparePrinting()
 		widthCount = m_doc->GetRowLabelSize();
 
 	for (int i = 0; i < m_doc->GetMaxColBrake(); i++) {
-		widthCount += m_doc->GetColSize(i);
-		if ((widthCount >= m_maxWidth) ||
-			(m_colsPerPage.Last() != i && m_doc->IsColBrake(i))) {
-			m_colsPerPage.Add(i);
-			if (m_showRlAlways)
-				widthCount = m_doc->GetRowLabelSize();
-			else
-				widthCount = 0;
-			i--;
+		const int size = m_doc->GetColSize(i);
+		const bool overflows = (widthCount + size) > m_maxWidth;
+		const bool asked = m_colsPerPage.Last() != i && m_doc->IsColBrake(i);
+
+		if (overflows || asked) {
+			// Not here if that tears a merged cell — the block goes over whole.
+			const int at = ColBreakAt(i);
+
+			// ⚠ AND ONLY IF THE BREAK MOVES. A column wider than the whole sheet overflows the moment
+			// it starts, so breaking before it puts it at the head of the next page where it overflows
+			// again — the old loop added the same index forever and the page array grew without end.
+			// A column that cannot share a page gets one to itself.
+			if (at > m_colsPerPage.Last()) {
+				m_colsPerPage.Add(at);
+				widthCount = m_showRlAlways ? m_doc->GetRowLabelSize() : 0;
+				i = at - 1;         // …and the walk resumes AT the break
+				continue;
+			}
 		}
+		widthCount += size;
 	}
 
 	//Calculate pager per rows
@@ -380,16 +424,20 @@ void ibGridEditorPrintout::OnPreparePrinting()
 		heightCount = m_doc->GetColLabelSize();
 
 	for (int i = 0; i < m_doc->GetMaxRowBrake(); i++) {
-		heightCount += m_doc->GetRowSize(i);
-		if ((heightCount >= m_maxHeight) ||
-			(m_rowsPerPage.Last() != i && m_doc->IsRowBrake(i))) {
-			m_rowsPerPage.Add(i);
-			if (m_showClAlways)
-				heightCount = m_doc->GetColLabelSize();
-			else
-				heightCount = 0;
-			i--;
+		const int size = m_doc->GetRowSize(i);
+		const bool overflows = (heightCount + size) > m_maxHeight;
+		const bool asked = m_rowsPerPage.Last() != i && m_doc->IsRowBrake(i);
+
+		if (overflows || asked) {
+			const int at = RowBreakAt(i);
+			if (at > m_rowsPerPage.Last()) {
+				m_rowsPerPage.Add(at);
+				heightCount = m_showClAlways ? m_doc->GetColLabelSize() : 0;
+				i = at - 1;
+				continue;
+			}
 		}
+		heightCount += size;
 	}
 
 	m_maxPage = m_rowsPerPage.GetCount() * m_colsPerPage.GetCount();
