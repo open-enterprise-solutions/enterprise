@@ -505,8 +505,12 @@ ibGridCellAttr* ibGridCellAttr::Clone() const
 		attr->SetBorderRight(m_borderRight.m_style, m_borderRight.m_colour, m_borderRight.m_width);
 	if (HasBorderTop())
 		attr->SetBorderTop(m_borderTop.m_style, m_borderTop.m_colour, m_borderTop.m_width);
+	// ⚠ ITS OWN STYLE AND COLOUR. This read them off `m_borderTop` while taking the bottom's width —
+	// so a cell whose two horizontal borders differ drew the bottom one in the top one's colour, and
+	// a cell with a bottom border but NO top border got the top's TRANSPARENT style, which
+	// `DrawCellBorder` skips outright: the border was set, and simply never appeared.
 	if (HasBorderBottom())
-		attr->SetBorderBottom(m_borderTop.m_style, m_borderTop.m_colour, m_borderBottom.m_width);
+		attr->SetBorderBottom(m_borderBottom.m_style, m_borderBottom.m_colour, m_borderBottom.m_width);
 
 	attr->SetSize(m_sizeRows, m_sizeCols);
 
@@ -555,8 +559,10 @@ void ibGridCellAttr::MergeWith(ibGridCellAttr* mergefrom)
 		SetBorderRight(mergefrom->m_borderRight.m_style, mergefrom->m_borderRight.m_colour, mergefrom->m_borderRight.m_width);
 	if (!HasBorderTop() && mergefrom->HasBorderTop())
 		SetBorderTop(mergefrom->m_borderTop.m_style, mergefrom->m_borderTop.m_colour, mergefrom->m_borderTop.m_width);
+	// …and here too: the bottom took the TOP's style and colour, so a merged-in bottom border came
+	// out in the wrong colour, or did not come out at all when the source had no top border.
 	if (!HasBorderBottom() && mergefrom->HasBorderBottom())
-		SetBorderBottom(mergefrom->m_borderTop.m_style, mergefrom->m_borderTop.m_colour, mergefrom->m_borderBottom.m_width);
+		SetBorderBottom(mergefrom->m_borderBottom.m_style, mergefrom->m_borderBottom.m_colour, mergefrom->m_borderBottom.m_width);
 
 	if (!HasSize() && mergefrom->HasSize())
 		mergefrom->GetSize(&m_sizeRows, &m_sizeCols);
