@@ -211,7 +211,18 @@ private:
 
 	// …and what the menu's second entry does: a NEW report over a copy of this one's schema, opened
 	// as its own form. See the body — a form cannot be copied, a composition can.
-	void ShowCellDetail(int row, int col);
+	// ⭐ BY A FIELD, OR BY WHAT IS LEFT. An empty path is the reader saying "break this down" without
+	// naming a field: the detail then keeps whatever groupings its own context has not already pinned
+	// to one value, which is the answer in the ordinary case. A NAMED path is the reader asking for a
+	// field of their own — it becomes the single grouping, and the context stays the filter.
+	//
+	// Both live in gridBoxDetail.cpp — the click is one thing, the composition it opens is another.
+	void ShowCellDetail(int row, int col, const wxString& byPath = wxEmptyString);
+
+	// …and WHICH fields this cell can be broken down by: appends the submenu, ids running from
+	// `firstId`, and returns the paths index-aligned with them. Empty = nothing worth offering, and
+	// then nothing is appended.
+	std::vector<wxString> AppendDetailByMenu(wxMenu& menu, int firstId, int row, int col) const;
 };
 
 #endif
