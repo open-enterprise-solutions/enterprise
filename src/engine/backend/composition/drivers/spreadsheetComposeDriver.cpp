@@ -1366,10 +1366,19 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	// streaming layout tints everything and merges nothing, the report heading merges and tints
 	// nothing. A merged cell paints its whole span from its main cell anyway, so skipping the covered
 	// ones costs nothing on screen.
+	// ⭐ AND ITS SHARE OF THE GRID, on the same terms as the tint. A table was drawn with fills and
+	// weight alone, so nothing separated one column of figures from the next — the one shape where
+	// that matters most, since a table is read ACROSS. Boxed through the same call the streaming
+	// layout uses, so a report and a table cannot come out with two kinds of line.
+	//
+	// ⚠ COVERED CELLS ARE SKIPPED HERE TOO — a merged heading paints and draws its whole span from
+	// its main cell, and touching what a span covers is what trips the grid's own size check.
 	for (int row = 0; row < std::max(1, headerRows); ++row)
 		for (int col = 0; col < totalCols; ++col)
-			if (!covered[static_cast<size_t>(row)][static_cast<size_t>(col)])
+			if (!covered[static_cast<size_t>(row)][static_cast<size_t>(col)]) {
 				header->SetCellBackgroundColour(row, col, kHeaderFill);
+				BoxCell(*header, row, col, /*top*/ true, /*bottom*/ true);
+			}
 	m_document->PutArea(header, 0);
 	// THE FIRST SECTION ONLY — freezing again would pin everything printed so far and the sheet
 	// stops scrolling (see OnColumns).
@@ -1456,6 +1465,9 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			row->SetCellBackgroundColour(0, col, fill);
 			if (!source.m_detail)
 				row->SetCellFont(0, col, font);
+			// …and closed at both ends, like every row of a grouping: each line is an area of its own,
+			// so the horizontal edge is on its outside and belongs to it.
+			BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true);
 		}
 		m_document->PutArea(row, static_cast<unsigned int>(std::max(0, source.m_level)));
 		++m_rowsWritten;
@@ -1514,6 +1526,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		for (int col = 0; col < totalCols; ++col) {
 			totals->SetCellBackgroundColour(0, col, kHeaderFill);
 			totals->SetCellFont(0, col, font);
+			BoxCell(*totals, 0, col, /*top*/ true, /*bottom*/ true);   // the line that closes the table
 		}
 		m_document->PutArea(totals, 0);
 		++m_rowsWritten;
