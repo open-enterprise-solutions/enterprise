@@ -402,7 +402,12 @@ ibGridCellAutoWrapStringRenderer::GetTextLines(ibGrid& grid,
 	const wxRect& rect,
 	int row, int col)
 {
-	dc.SetFont(attr.GetFont());
+	// ⚠ THE FONT THE WRAPPING IS MEASURED WITH HAS TO BE THE FONT IT WILL BE DRAWN WITH. This read
+	// the unscaled one while measuring against `rect`, which IS scaled — so at 200% twice as many
+	// words were fitted onto a line as would actually fit, and at 50% the text broke early. The two
+	// sides of the same renderer already pass the zoom (Draw and GetBestSize); this was the one that
+	// did not.
+	dc.SetFont(attr.GetFont(grid.GetGridZoom()));
 	const wxCoord maxWidth = rect.GetWidth();
 
 	// Transform logical lines into physical ones, wrapping the longer ones.

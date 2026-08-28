@@ -7509,11 +7509,22 @@ void ibGrid::DrawCellBorder(wxDC& dc, const ibGridCellCoords& coords, const wxRe
 	if (GetColWidth(coords.GetCol()) <= 0 || GetRowHeight(coords.GetRow()) <= 0)
 		return;
 
-	//draw border  
+	// ⭐⭐ A BORDER'S WIDTH IS A LENGTH ON THE SHEET, so it belongs in the same units as everything
+	// else the sheet is measured in. Every position here is scaled by the zoom while the widths were
+	// not, so at 225% a table grew to more than twice its size with its rules still one pixel thick —
+	// the drawing came apart the further one zoomed, and no single value for a width could be right
+	// at two zooms at once.
+	//
+	// ⚠ NEVER BELOW ONE. A line that rounds away at a small zoom is a line the reader cannot see.
+	const auto scaledWidth = [this](int width) {
+		return wxMax(1, ibCalcGridScale(width, GetGridZoom()));
+	};
+
+	//draw border
 	ibGridCellBorder borderLeft = attr->GetBorderLeft();
 	if (borderLeft.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT)
 	{
-		dc.SetPen(wxPen(borderLeft.m_colour, borderLeft.m_width, borderLeft.m_style));
+		dc.SetPen(wxPen(borderLeft.m_colour, scaledWidth(borderLeft.m_width), borderLeft.m_style));
 
 		if (m_gridLinesEnabled)
 			dc.DrawLine(rect.GetLeft() - 1, rect.GetTop() - 1,
@@ -7529,7 +7540,7 @@ void ibGrid::DrawCellBorder(wxDC& dc, const ibGridCellCoords& coords, const wxRe
 		// ⚠ ITS OWN COLOUR. This read borderLeft.m_colour with borderRight's width and style — so a
 		// cell whose two vertical borders differ drew the right one in the left one's colour, and a
 		// cell with only a right border drew it in whatever the (transparent, unused) left one said.
-		dc.SetPen(wxPen(borderRight.m_colour, borderRight.m_width, borderRight.m_style));
+		dc.SetPen(wxPen(borderRight.m_colour, scaledWidth(borderRight.m_width), borderRight.m_style));
 		if (m_gridLinesEnabled)
 			dc.DrawLine(rect.GetRight() + 1, rect.GetTop() - 1,
 				rect.GetRight() + 1, rect.GetBottom() + 1);
@@ -7541,7 +7552,7 @@ void ibGrid::DrawCellBorder(wxDC& dc, const ibGridCellCoords& coords, const wxRe
 	ibGridCellBorder borderTop = attr->GetBorderTop();
 	if (borderTop.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT)
 	{
-		dc.SetPen(wxPen(borderTop.m_colour, borderTop.m_width, borderTop.m_style));
+		dc.SetPen(wxPen(borderTop.m_colour, scaledWidth(borderTop.m_width), borderTop.m_style));
 		if (m_gridLinesEnabled)
 			dc.DrawLine(rect.GetLeft() - 1, rect.GetTop() - 1,
 				rect.GetRight() + 1, rect.GetTop() - 1);
@@ -7553,7 +7564,7 @@ void ibGrid::DrawCellBorder(wxDC& dc, const ibGridCellCoords& coords, const wxRe
 	ibGridCellBorder borderBottom = attr->GetBorderBottom();
 	if (borderBottom.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT)
 	{
-		dc.SetPen(wxPen(borderBottom.m_colour, borderBottom.m_width, borderBottom.m_style));
+		dc.SetPen(wxPen(borderBottom.m_colour, scaledWidth(borderBottom.m_width), borderBottom.m_style));
 		if (m_gridLinesEnabled)
 			dc.DrawLine(rect.GetLeft() - 1, rect.GetBottom() + 1,
 				rect.GetRight() + 1, rect.GetBottom() + 1);
@@ -7591,34 +7602,59 @@ void ibGrid::DrawCellHighlight(wxDC& dc, int row, int col, const ibGridCellAttr*
 
 	wxRect rect = CellToRect(row, col);
 
+	// ⭐ THE FRAME IS PART OF THE SHEET, so its thickness is measured in the sheet's units. Left as a
+	// flat 2 it stayed two pixels while the table it surrounds grew by more than twice — and no one
+	// value for it can be right at two zooms at once, which is why the frame read as too heavy at one
+	// scale and too thin at another. The page-break marks are NOT scaled with it: those are the
+	// window's own annotation, not something drawn on the sheet.
+	const int framePenWidth = wxMax(1, ibCalcGridScale(2, GetGridZoom()));
+
+	// ⚠ AND A FLAT CAP, now that the width is not fixed. A wide pen ends in a ROUND cap by default,
+	// which reaches about half its width PAST the endpoint — the ends of the four sides then stick
+	// out of the corners as little stubs. At a fixed 2px that was a pixel and the coordinates below
+	// were tuned around it; as soon as the width follows the zoom it is no longer a pixel. The line
+	// has to stop where it is told to stop.
+	wxPen framePen(*wxBLACK, framePenWidth, wxPENSTYLE_SOLID);
+	framePen.SetCap(wxCAP_BUTT);
+
 	////////////////////////////////////////////////////////////////////////
 	// Draw selected lines
 
+	// ⚠ AND THE ENDS STOP AT THE CELL. Each of these ran a pixel PAST its corner — a cure for the
+	// round cap, which used to eat that pixel back. With a butt cap nothing eats it, and the overshoot
+	// shows as a stub poking out of every corner (Max, 2026-08-28: "stubs and sticks"). A side runs
+	// the cell's own edge, end to end: neighbouring cells of one block still meet, because each runs
+	// its FULL side.
 	if (!IsInSelection(row, col - 1))
 	{
-		dc.SetPen({ *wxBLACK, 2, wxPENSTYLE_SOLID });
-		dc.DrawLine(rect.GetLeft(), rect.GetTop() - 1,
-			rect.GetLeft(), rect.GetBottom());
+		dc.SetPen(framePen);
+		dc.DrawLine(rect.GetLeft(), rect.GetTop(),
+			rect.GetLeft(), rect.GetBottom() + 1);
 	}
 
 	if (!IsInSelection(row, col + cellCols))
 	{
-		dc.SetPen({ *wxBLACK, 2, wxPENSTYLE_SOLID });
-		dc.DrawLine(rect.GetRight() + 1, rect.GetTop() - 1,
-			rect.GetRight() + 1, rect.GetBottom());
+		dc.SetPen(framePen);
+		dc.DrawLine(rect.GetRight() + 1, rect.GetTop(),
+			rect.GetRight() + 1, rect.GetBottom() + 1);
 	}
 
+	// ⭐ THE HORIZONTALS ARE THE ONES TO ADJUST, NOT THE VERTICALS. They ran a unit longer at each
+	// end — a leftover from fitting corners under a round cap — and that overhang is what made the
+	// left side READ as thinner than the rest: the verticals were right all along, the horizontals
+	// stuck out past them (Max, 2026-08-28: "you need to change the two top lines, they are drawn one
+	// too long — that is the solution"). Each now spans exactly its own side.
 	if (!IsInSelection(row - 1, col))
 	{
-		dc.SetPen({ *wxBLACK, 2, wxPENSTYLE_SOLID });
-		dc.DrawLine(rect.GetLeft() - 1, rect.GetTop(),
+		dc.SetPen(framePen);
+		dc.DrawLine(rect.GetLeft(), rect.GetTop(),
 			rect.GetRight() + 1, rect.GetTop());
 	}
 
 	if (!IsInSelection(row + cellRows, col))
 	{
-		dc.SetPen({ *wxBLACK, 2, wxPENSTYLE_SOLID });
-		dc.DrawLine(rect.GetLeft() - 1, rect.GetBottom(),
+		dc.SetPen(framePen);
+		dc.DrawLine(rect.GetLeft(), rect.GetBottom(),
 			rect.GetRight() + 1, rect.GetBottom());
 	}
 
