@@ -163,7 +163,12 @@ protected:
 		}
 		// The identifier, for whoever needs it as such.
 		const wxString& GetEnumMemberName() const { return m_name; }
-		virtual ibNumber GetNumber() const override { return m_value; }
+		// ⚠ CAST, NOT AN IMPLICIT CONVERSION — the same one IsEmpty above already writes. A member
+		// number is a number, but only an UNSCOPED enum says so on its own: a scoped one
+		// (`enum class`) converts to nothing implicitly, so this line was what refused to register a
+		// scoped enumeration in the runtime at all — and refused it in the template, where the
+		// enumeration itself is fine.
+		virtual ibNumber GetNumber() const override { return static_cast<long>(m_value); }
 
 	private:
 		wxString m_name;
