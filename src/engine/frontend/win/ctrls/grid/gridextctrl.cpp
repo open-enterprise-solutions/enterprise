@@ -696,8 +696,12 @@ void ibGridCellStringRenderer::Draw(ibGrid& grid,
 		if (overflowCols > 0) // redraw overflow cells w/ proper hilight
 		{
 			hAlign = wxALIGN_LEFT; // if oveflowed then it's left aligned
+			// 🛑 THE SEGMENTS START AT THE NEIGHBOUR'S OWN EDGE. `rect` is the TEXT rect — inflated by
+			// one at the top of this method — so `rect.x + rectCell.width` lands one pixel INSIDE the
+			// first overflow column, and that pixel's worth of text is never drawn: the same hole as
+			// the `- 1`s below, at the first boundary.
 			wxRect clip = rect;
-			clip.x += rectCell.width;
+			clip.x = rectCell.x + rectCell.width;
 			// draw each overflow cell individually
 			int col_end = col + cell_cols + overflowCols;
 			if (col_end >= grid.GetNumberCols())
@@ -708,7 +712,20 @@ void ibGridCellStringRenderer::Draw(ibGrid& grid,
 				ibGridCellCoords coords(row, i);
 				grid.DrawCell(dc, coords);
 
-				clip.width = grid.GetColSize(i, grid.GetGridZoom()) - 1;
+				// 🛑⭐ THE WHOLE COLUMN, NOT ONE PIXEL SHORT OF IT. Overflowing text is drawn in
+				// SEGMENTS, one per column it runs across, each clipped to that column — so the
+				// segments have to TILE. Clipped to `size - 1` they do not: one pixel of text at every
+				// column boundary was never painted, and the background showing through it reads as a
+				// thin white line lying across the text (Max, 2026-08-28: "the line is still there,
+				// where the letter is"). It is not a line at all — it is a hole.
+				//
+				// ⚠ AND THE ADVANCE HAD THE SAME `- 1`, so every following segment started a pixel
+				// early: the holes were the visible half, a creeping misalignment the other.
+				//
+				// (The pixel was being left for the grid LINE at the boundary — which the line does not
+				//  need: it is drawn AFTER the cells and paints that pixel itself. All the gap did was
+				//  take a slice out of the text.)
+				clip.width = grid.GetColSize(i, grid.GetGridZoom());
 				wxDCClipper clipper(dc, clip);
 
 				SetTextColoursAndFont(grid, attr, dc,
@@ -717,7 +734,7 @@ void ibGridCellStringRenderer::Draw(ibGrid& grid,
 				grid.GetCellValue(row, col, m_cacheString);
 				grid.DrawTextRectangle(dc, m_cacheString,
 					rect, hAlign, vAlign);
-				clip.x += grid.GetColSize(i, grid.GetGridZoom()) - 1;
+				clip.x += grid.GetColSize(i, grid.GetGridZoom());
 			}
 
 			rect = rectCell;

@@ -2807,6 +2807,11 @@ void ibGridWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 
 	ibGridCellCacheArray storage;
 
+	// 🛑 THE GRID CANNOT BE DRAWN FIRST, and it was tried (2026-08-28): every cell paints its own
+	// background SOLID over its whole rect (ibGridCellRenderer::Draw), so lines laid down before the
+	// cells are erased by them — the sheet came up with no grid at all. The lines go after the cells,
+	// and what must survive them says so afterwards: the sheet's own borders (DrawBorder) and the
+	// selection's outline (DrawHighlight), both below.
 	m_owner->DrawGridSpace(dc, this);
 	m_owner->DrawGridCellArea(dc, dirtyCells, storage);
 	m_owner->DrawAllGridWindowLines(dc, reg, this);
@@ -7303,8 +7308,13 @@ bool ibGrid::SetCurrentCell(const ibGridCellCoords& coords)
 			wxClientDC prevDc(prevGridWindow);
 			PrepareDCFor(prevDc, prevGridWindow);
 
+			// ⭐ THE SAME ORDER AS THE PAINT — cells, lines, and the selection's outline back on top.
+			// This is the OTHER road into drawing (moving the current cell repaints the one it left,
+			// straight onto a client DC) and it drew no outline at all, so every step of the cursor
+			// left the grid lying across the block's frame.
 			DrawGridCellArea(prevDc, cells);
 			DrawAllGridWindowLines(prevDc, r, prevGridWindow);
+			DrawHighlight(prevDc, cells);
 
 			if (prevGridWindow->GetType() != ibGridWindow::ibGridWindowNormal)
 				DrawFrozenBorder(prevDc, prevGridWindow);
@@ -7417,7 +7427,18 @@ void ibGrid::DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGr
 							ibGridCellCoords cell(row + l, j);
 							const wxLongLong_t key = keyOf(cell);
 
-							if (exposed.count(key) == 0 && queued.insert(key).second)
+							// 🛑⭐ QUEUED EVEN WHEN IT IS EXPOSED — and that is the whole point of the
+							// late pass. The paint is CELL BY CELL: the owner draws its text across the
+							// empty cells to its right, and each of those cells then paints its own
+							// background over what it finds there. On a full repaint the owner is
+							// exposed too, so it was drawn EARLY — before the neighbours that erase it
+							// — and skipping it here left a white stripe lying across the text
+							// (Max, 2026-08-28: "the rendering is cell by cell").
+							//
+							// Drawing it again in the late pass costs one cell and is idempotent; the
+							// `queued` set is what keeps it to ONE extra draw however many empty
+							// neighbours ask for it.
+							if (queued.insert(key).second)
 								redrawCells.Add(cell);
 						}
 						break;
@@ -7625,18 +7646,31 @@ void ibGrid::DrawCellHighlight(wxDC& dc, int row, int col, const ibGridCellAttr*
 	// shows as a stub poking out of every corner (Max, 2026-08-28: "stubs and sticks"). A side runs
 	// the cell's own edge, end to end: neighbouring cells of one block still meet, because each runs
 	// its FULL side.
+	// 🛑⭐ AND A SIDE REACHES ITS NEIGHBOUR, or the block's edge comes out DOTTED. Cell rects do not
+	// tile: between two of them lies the pixel the grid line occupies, and a stripe drawn to
+	// `GetBottom() + 1` stops one short of it. Every row boundary down a tall block therefore left a
+	// one-pixel hole, and the background showing through them read as the grid lying over the frame
+	// (Max, 2026-08-28: "it does not cover the grid"). Nothing lay over it — the stripe was never
+	// there.
+	//
+	// ⚠ ONLY WHERE THE BLOCK CONTINUES. Reaching past the last cell would put the stub back outside
+	// the frame — the overshoot this morning's fix removed — so the extra pixel is taken exactly when
+	// the neighbour on that side is part of the same selection.
+	const int downEnd  = rect.GetBottom() + (IsInSelection(row + cellRows, col) ? 2 : 1);
+	const int rightEnd = rect.GetRight()  + (IsInSelection(row, col + cellCols) ? 2 : 1);
+
 	if (!IsInSelection(row, col - 1))
 	{
 		dc.SetPen(framePen);
 		dc.DrawLine(rect.GetLeft(), rect.GetTop(),
-			rect.GetLeft(), rect.GetBottom() + 1);
+			rect.GetLeft(), downEnd);
 	}
 
 	if (!IsInSelection(row, col + cellCols))
 	{
 		dc.SetPen(framePen);
 		dc.DrawLine(rect.GetRight() + 1, rect.GetTop(),
-			rect.GetRight() + 1, rect.GetBottom() + 1);
+			rect.GetRight() + 1, downEnd);
 	}
 
 	// ⭐ THE HORIZONTALS ARE THE ONES TO ADJUST, NOT THE VERTICALS. They ran a unit longer at each
@@ -7648,14 +7682,14 @@ void ibGrid::DrawCellHighlight(wxDC& dc, int row, int col, const ibGridCellAttr*
 	{
 		dc.SetPen(framePen);
 		dc.DrawLine(rect.GetLeft(), rect.GetTop(),
-			rect.GetRight() + 1, rect.GetTop());
+			rightEnd, rect.GetTop());
 	}
 
 	if (!IsInSelection(row + cellRows, col))
 	{
 		dc.SetPen(framePen);
 		dc.DrawLine(rect.GetLeft(), rect.GetBottom(),
-			rect.GetRight() + 1, rect.GetBottom());
+			rightEnd, rect.GetBottom());
 	}
 
 }
@@ -7730,6 +7764,30 @@ void ibGrid::DrawHighlight(wxDC& dc, const ibGridCellCoordsArray& cells)
 		return;
 	}
 
+	// (⚠ NO FILL HERE. Painting the block again — over the pixel each cell leaves to its neighbour —
+	//  takes the grid away INSIDE the selection, and it belongs there: a selected block still reads
+	//  as cells (Max, 2026-08-28: "now there are no grid lines inside"). Tried twice, reverted twice;
+	//  what this pass draws is the OUTLINE and nothing else.)
+
+	// ⭐⭐ AND THE OUTLINE OF A NEIGHBOUR IS RESTATED TOO — the same rule the sheet's own borders
+	// follow (see DrawBorder). A block's right-hand stripe is drawn at `rect.GetRight() + 1`, which is
+	// the FIRST PIXEL OF THE NEXT CELL: repaint that neighbour and the stripe goes with it, and
+	// nobody draws it again, because the neighbour is not in the selection. Along a tall block that
+	// reads as a dotted side — a stripe with a bite taken out of it at every row that happened to be
+	// repainted (Max, 2026-08-28: "on the stripes down the sides the grid lands and you see dots").
+	//
+	// Whoever owns a pixel this paint covered gets their outline drawn: it is the same line in the
+	// same place, and drawing it twice is invisible.
+	const auto frameOf = [&](int row, int col) {
+		if (row < 0 || col < 0 || row >= m_numRows || col >= m_numCols)
+			return;
+		const ibGridCellCoords neighbour(row, col);
+		if (m_currentCellCoords == neighbour || (m_selection && m_selection->IsInSelection(neighbour))) {
+			ibGridCellAttrPtr attr = GetCellAttrPtr(neighbour);
+			DrawCellHighlight(dc, row, col, attr.get());
+		}
+	};
+
 	// if the active cell was repainted, repaint its highlight too because it
 	// might have been damaged by the grid lines
 	size_t count = cells.GetCount();
@@ -7741,6 +7799,9 @@ void ibGrid::DrawHighlight(wxDC& dc, const ibGridCellCoordsArray& cells)
 			ibGridCellAttrPtr attr = GetCellAttrPtr(cell);
 			DrawCellHighlight(dc, cell.GetRow(), cell.GetCol(), attr.get());
 		}
+
+		frameOf(cell.GetRow(), cell.GetCol() - 1);   // its right stripe is our left pixel
+		frameOf(cell.GetRow() - 1, cell.GetCol());   // its bottom stripe is our top pixel
 	}
 }
 
