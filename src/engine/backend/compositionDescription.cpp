@@ -58,6 +58,12 @@ const wxString  kStructureNode  = wxT("Structure");
 const wxString  kRowsNode       = wxT("Rows");
 const wxString  kColumnsNode    = wxT("Columns");
 const wxString  kSelectedNode   = wxT("Selected");
+// ⚠ THE READER'S OWN TABLE NEEDS A NAME OF ITS OWN. A LEVEL writes two things into one node — its
+// own selected fields (`kSelectedNode`) and its settings, through the settings pair — so if the
+// settings wrote their table under the same name, the two would land on top of each other. Today a
+// level's settings carry no fields and nothing collides; a name apart is what keeps that true when
+// somebody fills them.
+const wxString  kSelectedFieldsNode = wxT("SelectedFields");
 const wxString  kPathName       = wxT("Path");
 const wxString  kKindName       = wxT("Kind");
 // A LEVEL'S OWN SORT AND FILTER — written inside the level, because that is where they belong.
@@ -102,6 +108,47 @@ void ReadFieldList(const ibDataNode& node, const wxString& name, std::vector<wxS
 			list.push_back(child.GetValue<wxString>(kPathName));
 }
 
+// ⭐⭐ THE SELECTED-FIELDS TABLE — the same node shape as a plain field list, plus the row's KIND.
+//
+// ⚠ AND THE KIND IS WRITTEN ONLY WHEN IT IS NOT A FIELD. Everything saved before this is a list of
+// paths, and a path with no kind beside it IS a field — so old settings read back unchanged, and a
+// table of ordinary fields keeps writing exactly what it wrote before. `Auto` carries no path: it
+// names nothing, it says WHERE what the storey above chose lands.
+void WriteSelectedList(ibDataNode& node, const wxString& name,
+                       const std::vector<ibSelectedFieldDescription>& list)
+{
+	if (list.empty())
+		return;   // an empty table writes nothing — absence reads back as absence, and absence inherits
+	ibDataNode& sub = node.Child(name);
+	for (size_t i = 0; i < list.size(); ++i) {
+		ibDataNode& row = sub.AddChild(g_fieldNodeClsid, static_cast<ibMetaID>(i));
+		row.SetValue<wxString>(kPathName, list[i].m_path);
+		// ⚠ `kKindName` is spelled on a node of ANOTHER class above (a filter group's); a field node
+		// has no kind of its own, so the word is free here and means what it says.
+		if (list[i].m_kind != ibSelectedFieldKind_Field)
+			row.SetValue<s32>(kKindName, static_cast<s32>(list[i].m_kind));
+	}
+}
+
+void ReadSelectedList(const ibDataNode& node, const wxString& name,
+                      std::vector<ibSelectedFieldDescription>& list)
+{
+	list.clear();
+	const ibDataNode* sub = node.FindChild(name);
+	if (sub == nullptr)
+		return;
+	for (const ibDataNode& child : sub->Children()) {
+		if (child.GetClsid() != g_fieldNodeClsid)
+			continue;
+		ibSelectedFieldDescription row;
+		// A record that predates the kind has none — and it is a FIELD, which is what every one of
+		// them was. (ibDataNode answers a missing value with the type's default, and 0 IS Field.)
+		row.m_kind = static_cast<ibSelectedFieldKind>(child.GetValue<s32>(kKindName));
+		row.m_path = child.GetValue<wxString>(kPathName);
+		list.push_back(std::move(row));
+	}
+}
+
 } // namespace
 
 // (A LEVEL'S FIELD had a pair of its own here, writing {path, unfold} into a node. What a level
@@ -115,7 +162,7 @@ void ReadFieldList(const ibDataNode& node, const wxString& name, std::vector<wxS
 bool ibLevelDescriptionMemory::WriteNode(ibDataNode& node, const ibLevelDescription& level)
 {
 	node.SetValue<s32>(kLevelKindName, static_cast<s32>(level.m_kind));
-	WriteFieldList(node, kSelectedNode, level.m_selected);
+	WriteSelectedList(node, kSelectedNode, level.m_selected);
 
 	// ⭐ ITS SETTINGS LIVE WHERE THE LEVEL DOES (Max), so they are written INSIDE it — through the ONE
 	// pair that knows the whole shape. All three parts are LISTS: a filter that is a tree of many
@@ -138,7 +185,7 @@ bool ibLevelDescriptionMemory::WriteNode(ibDataNode& node, const ibLevelDescript
 bool ibLevelDescriptionMemory::ReadNode(const ibDataNode& node, ibLevelDescription& level, const ibMetaData* metaData)
 {
 	level.m_kind = static_cast<ibCompositionLevelKind>(node.GetValue<s32>(kLevelKindName));
-	ReadFieldList(node, kSelectedNode, level.m_selected);
+	ReadSelectedList(node, kSelectedNode, level.m_selected);
 
 	// ITS SETTINGS, back the way they were written — through the one pair. The filter comes back as
 	// the LINES it is; the expression the engine runs is built from them once the composer is in
@@ -191,7 +238,7 @@ bool ibOutputDescriptionMemory::WriteNode(ibDataNode& node, const ibOutputDescri
 	// table that has not been filled in yet is empty on both axes: read back off the content, it
 	// would come up a grouping and the person's second axis would have nowhere to go.
 	node.SetValue<s32>(kOutputKindName, static_cast<s32>(output.m_kind));
-	WriteFieldList(node, kSelectedNode, output.m_selected);
+	WriteSelectedList(node, kSelectedNode, output.m_selected);
 	// ITS SETTINGS, written the way a level writes them — one storey up, same shape, same pair.
 	ibSettingsDescriptionMemory::WriteNode(node, output.m_settings);
 	// AND ITS TWO AXES. A grouping output has rows; a TABLE has rows AND columns, and that is the
@@ -205,7 +252,7 @@ bool ibOutputDescriptionMemory::ReadNode(const ibDataNode& node, ibOutputDescrip
 {
 	output.m_name          = node.GetValue<wxString>(kVariantName);
 	// (The "Source" property an older record carries is READ BY NOBODY — see ibOutputDescription.)
-	ReadFieldList(node, kSelectedNode, output.m_selected);
+	ReadSelectedList(node, kSelectedNode, output.m_selected);
 	ibSettingsDescriptionMemory::ReadNode(node, output.m_settings, metaData);
 	ReadLevels(node, kRowsNode, output.m_rowGroups, metaData);
 	ReadLevels(node, kColumnsNode, output.m_columnGroups, metaData);
@@ -535,11 +582,15 @@ bool ibSettingsDescriptionMemory::ReadNode(const ibDataNode& node, ibSettingsDes
 		&& ibSortDescriptionMemory::ReadNode(node, settings.m_sort)
 		&& ibGroupDescriptionMemory::ReadNode(node, settings.m_group);
 	ibStructureDescriptionMemory::ReadNode(node, settings.m_structure, metaData);
+	// ⭐ AND THE FIELDS THE READER CHOSE — a setting like the three above. Absent from every record
+	// written before 2026-08-28, and absence is a legitimate answer: nothing was chosen.
+	ReadSelectedList(node, kSelectedFieldsNode, settings.m_selected);
 	return ok;
 }
 
 bool ibSettingsDescriptionMemory::WriteNode(ibDataNode& node, const ibSettingsDescription& settings)
 {
+	WriteSelectedList(node, kSelectedFieldsNode, settings.m_selected);   // see ReadNode
 	return ibFilterDescriptionMemory::WriteNode(node, settings.m_filter)
 		&& ibSortDescriptionMemory::WriteNode(node, settings.m_sort)
 		&& ibGroupDescriptionMemory::WriteNode(node, settings.m_group)
@@ -579,7 +630,7 @@ bool ibCompositionDescriptionMemory::ReadNode(const ibDataNode& node, ibComposit
 	// WHAT THE COMPOSITION SHOWS — the bottom of the pile every output and level adds to. Absent from
 	// a record written before 2026-08-24, and the helper clears before it reads, so such a record
 	// comes back empty — which is exactly what "said nothing" IS.
-	ReadFieldList(node, kSelectedNode, composition.m_selected);
+	ReadSelectedList(node, kSelectedNode, composition.m_selected);
 	return true;
 }
 
@@ -604,7 +655,7 @@ bool ibCompositionDescriptionMemory::WriteNode(ibDataNode& node, const ibComposi
 	// (`ibDataComposer::m_commonSelected`) with no road to the file at all, so a person who chose what
 	// the report shows lost it the moment the report closed — the same defect the resources had, one
 	// field over.
-	WriteFieldList(node, kSelectedNode, composition.m_selected);
+	WriteSelectedList(node, kSelectedNode, composition.m_selected);
 	return true;
 }
 

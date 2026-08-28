@@ -31,7 +31,7 @@
 //     the move. Plain numbers and strings are not bound: nothing to open.
 // ---------------------------------------------------------------------------
 
-#include "backend/composition/dataComposer.h"
+#include "backend/composition/drivers/compositionDriver.h"   // a DRIVER needs the contract, not the composer
 #include "backend/backend_spreadsheet.h"
 
 #include <map>      // a cross row's cells are sparse — column key index -> figures

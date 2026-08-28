@@ -79,6 +79,9 @@ enum {
 	// WHAT A NODE SHOWS — one set, so one triple of ids. There were two of everything here while
 	// "available" was a page of its own.
 	ID_SELECTED_ADD,
+	// …AND THE `Auto` ROW, which is added rather than switched on: it is a row of this table like
+	// any other, and what it says is WHERE everything the storey above chose lands.
+	ID_SELECTED_AUTO,
 	ID_SELECTED_REMOVE,
 	ID_SELECTED_COPY,
 	ID_SELECTED_UP,
@@ -701,7 +704,7 @@ public:
 		if (col == kColNode) {
 			// WHAT THIS LEVEL IS — asked of the level, not read off its emptiness. The rows are a
 			// level of their own kind, and the row says so where a person looks for it.
-			variant = level.m_kind == ibCompositionLevelKind::Details ? _("Detail records") : _("Grouping");
+			variant = level.IsDetailRecords() ? _("Detail records") : _("Grouping");
 			return;
 		}
 		if (col == kColField) {
@@ -709,7 +712,7 @@ public:
 			// showing only the first would describe a different report. The detail level has none
 			// to show: what it prints is the rows, and the fields cell has nothing to add.
 			if (level.m_settings.m_group.m_lines.empty()) {
-				variant = level.m_kind == ibCompositionLevelKind::Details ? wxString() : _("<detail records>");
+				variant = wxString();   // the records name no field — the Structure cell above already says so
 				return;
 			}
 			wxString fields;
@@ -903,14 +906,18 @@ private:
 // A PLAIN LIST OF PATHS, as a model — what the available-fields page shows. One column, no
 // children, rows pooled by position; the list itself is asked for through a callback, so the page
 // follows the selection instead of holding whichever node was selected when it was built.
-class ibStringListModel : public ibDataViewModel {
+// ⭐ THE SELECTED-FIELDS TABLE, and a row of it is not a string any more: it is a FIELD or the
+// `Auto` row that says where everything the storey above chose lands (2026-08-28). Named for what
+// it lists rather than for the C++ type it used to hold.
+class ibSelectedListModel : public ibDataViewModel {
 public:
 	enum { kColText = 1 };
 
-	explicit ibStringListModel(std::function<std::vector<wxString>*()> list) : m_list(std::move(list)) {}
+	explicit ibSelectedListModel(std::function<std::vector<ibSelectedFieldDescription>*()> list)
+		: m_list(std::move(list)) {}
 
-	std::vector<wxString>* List() const { return m_list ? m_list() : nullptr; }
-	size_t Count() const { const std::vector<wxString>* list = List(); return list != nullptr ? list->size() : 0u; }
+	std::vector<ibSelectedFieldDescription>* List() const { return m_list ? m_list() : nullptr; }
+	size_t Count() const { const std::vector<ibSelectedFieldDescription>* list = List(); return list != nullptr ? list->size() : 0u; }
 	void Rebuild() { Cleared(); }
 
 	int RowAt(const ibDataViewItem& item) const;
@@ -927,11 +934,11 @@ private:
 	class Row;
 	Row* RowFor(size_t row) const;
 
-	std::function<std::vector<wxString>*()> m_list;
-	mutable std::vector<wxObjectDataPtr<class ibStringListModel::Row>> m_rows;
+	std::function<std::vector<ibSelectedFieldDescription>*()> m_list;
+	mutable std::vector<wxObjectDataPtr<class ibSelectedListModel::Row>> m_rows;
 };
 
-class ibStringListModel::Row : public ibDataViewObject {
+class ibSelectedListModel::Row : public ibDataViewObject {
 public:
 	explicit Row(size_t row) : m_row(row) {}
 	size_t GetRow() const { return m_row; }
@@ -941,34 +948,37 @@ private:
 	size_t m_row;
 };
 
-ibStringListModel::Row* ibStringListModel::RowFor(size_t row) const
+ibSelectedListModel::Row* ibSelectedListModel::RowFor(size_t row) const
 {
 	while (m_rows.size() <= row)
 		m_rows.push_back(wxObjectDataPtr<Row>(new Row(m_rows.size())));
 	return m_rows[row].get();
 }
 
-int ibStringListModel::RowAt(const ibDataViewItem& item) const
+int ibSelectedListModel::RowAt(const ibDataViewItem& item) const
 {
 	const Row* row = static_cast<const Row*>(item.GetID());
 	return row != nullptr ? (int)row->GetRow() : wxNOT_FOUND;
 }
 
-ibDataViewItem ibStringListModel::ItemForRow(size_t row) const
+ibDataViewItem ibSelectedListModel::ItemForRow(size_t row) const
 {
 	return row < Count() ? ibDataViewItem(RowFor(row)) : ibDataViewItem();
 }
 
-void ibStringListModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
+void ibSelectedListModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
 {
-	const std::vector<wxString>* list = List();
+	const std::vector<ibSelectedFieldDescription>* list = List();
 	const int row = RowAt(item);
 	if (list == nullptr || row == wxNOT_FOUND || (size_t)row >= list->size() || col != kColText)
 		return;
-	variant = (*list)[row];
+	// ⭐ THE `Auto` ROW READS AS WHAT IT IS. It names no field — it says "everything the storey above
+	// chose, here" — so it is drawn as the word rather than as a blank line, which is what an empty
+	// path would look like and is a different thing entirely.
+	variant = (*list)[row].IsAuto() ? _("<Auto>") : (*list)[row].m_path;
 }
 
-unsigned int ibStringListModel::GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem&,
+unsigned int ibSelectedListModel::GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem&,
 	int, ibDataViewItemArray& out) const
 {
 	if (parent.IsOk())
@@ -2206,7 +2216,7 @@ wxWindow* ibComposerSettingsPanel::BuildStructurePane(wxWindow* parent)
 				// ⚠ THE DETAIL LEVEL GROUPS BY NOTHING, and that is what it IS. A field written here
 				// would turn the rows into a heading without anybody asking for one, so the cell
 				// stays silent on it — deleting the level is how it stops being there.
-				if (level->m_kind == ibCompositionLevelKind::Details)
+				if (level->IsDetailRecords())
 					return;
 				// An empty value CLEARS the head field — which leaves the level with none, and a
 				// level with no fields IS the detail records. The rest of its fields stay where
@@ -2446,10 +2456,13 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 		m_fieldSource->Populate(page.m_sourceTree);
 	}
 
-	// RIGHT — what this node adds to what is shown above it.
+	// RIGHT — what this node shows.
 	//
-	// (⭐ NO "AUTO" SWITCH. It said "take the fields from above", which is what an empty list says
-	//  now that a node ADDS rather than replaces — see ibDataComposer::SelectedFor.)
+	// ⭐ THE `Auto` ROW IS BACK, AND IT IS A ROW (2026-08-28). It was a SWITCH once, removed when a
+	// node started adding instead of replacing — a flag that could only mean "do not replace" has
+	// nothing to say once nothing replaces. What returns is the choice itself, in the table: it
+	// stands where the inherited fields land, and taking it out is how a node states its whole
+	// composition by hand. A flag could not say WHERE.
 	wxPanel* right = new wxPanel(splitter);
 	wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -2462,6 +2475,8 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 	wxToolBar* bar = new wxToolBar(right, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTB_FLAT | wxTB_NODIVIDER | wxTB_HORIZONTAL);
 	bar->AddTool(idAdd, _("Add field"), ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add field"));
+	bar->AddTool(ID_SELECTED_AUTO, _("Add «Auto»"), ibSettingsArt(wxASCII_STR(wxART_GO_DIR_UP), this),
+		_("Everything the level above shows, in this place"));
 	bar->AddTool(idRemove, _("Delete"), ibSettingsArt(wxASCII_STR(wxART_DELETE), this), _("Delete"));
 	bar->AddTool(idCopy, _("Copy"), ibSettingsArt(wxASCII_STR(wxART_COPY), this), _("Copy"));
 	bar->AddSeparator();
@@ -2474,7 +2489,7 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 	page.m_view = new ibDataViewCtrl(right, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxDV_ROW_LINES | wxDV_SINGLE);
 	ibStyleSettingsGrid(page.m_view);
-	page.m_model = new ibStringListModel([this]() -> std::vector<wxString>* {
+	page.m_model = new ibSelectedListModel([this]() -> std::vector<ibSelectedFieldDescription>* {
 		return CurrentFieldSet();
 	});
 	page.m_view->AssociateModel(page.m_model);
@@ -2486,13 +2501,16 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 	page.m_view->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Field"),
 		new ibRowValueCellRenderer(this, ibComposerFieldChooser(this),
 			[this](const ibDataViewItem& row) -> ibValue {
-				const std::vector<wxString>* list = CurrentFieldSet();
+				const std::vector<ibSelectedFieldDescription>* list = CurrentFieldSet();
 				const int at = m_selectedPage.m_model != nullptr ? m_selectedPage.m_model->RowAt(row) : wxNOT_FOUND;
-				return (list != nullptr && at != wxNOT_FOUND && (size_t)at < list->size())
-					? ibValue(new ibValueCompositionField((*list)[at])) : ibValue();
+				// ⚠ THE `Auto` ROW IS NOT A FIELD and opens no picker: it names nothing, so there is
+				// nothing to pick. It is added and removed as a row, which is the whole of editing it.
+				return (list != nullptr && at != wxNOT_FOUND && (size_t)at < list->size()
+				        && !(*list)[at].IsAuto())
+					? ibValue(new ibValueCompositionField((*list)[at].m_path)) : ibValue();
 			},
 			[this](const ibDataViewItem& row, const ibValue& value) {
-				std::vector<wxString>* list = CurrentFieldSet();
+				std::vector<ibSelectedFieldDescription>* list = CurrentFieldSet();
 				const int at = m_selectedPage.m_model != nullptr ? m_selectedPage.m_model->RowAt(row) : wxNOT_FOUND;
 				if (list == nullptr || at == wxNOT_FOUND || (size_t)at >= list->size())
 					return;
@@ -2500,13 +2518,13 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 				// "×" beside the picker is the only place that says so.
 				ibValueCompositionField* field = nullptr;
 				if (value.ConvertToValue(field) && field != nullptr)
-					(*list)[at] = field->GetPath();
+					(*list)[at] = ibSelectedFieldDescription::Field(field->GetPath());
 				else
 					list->erase(list->begin() + at);
 				MarkSettingsTouched();
 				ReloadFieldSets();
 			}),
-		ibStringListModel::kColText, FromDIP(260), wxAlignment::wxALIGN_LEFT));
+		ibSelectedListModel::kColText, FromDIP(260), wxAlignment::wxALIGN_LEFT));
 	rightSizer->Add(page.m_view, 1, wxEXPAND | wxALL, FromDIP(4));
 	right->SetSizer(rightSizer);
 
@@ -2514,6 +2532,7 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 	splitter->SetMinimumPaneSize(FromDIP(120));
 
 	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { OnFieldSetAdd(); }, idAdd);
+	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { OnFieldSetAuto(); }, ID_SELECTED_AUTO);
 	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { OnFieldSetRemove(); }, idRemove);
 	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { OnFieldSetCopy(); }, idCopy);
 	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveFieldSetRow(-1); }, idUp);
@@ -2537,7 +2556,7 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 // WHAT THE SELECTED NODE ADDS — its OWN list, never the pile. A node states what it contributes;
 // what it ends up showing is the composer's answer (SelectedFor), and showing the pile here would
 // mean a person deleting an inherited line and nothing happening.
-std::vector<wxString>* ibComposerSettingsPanel::CurrentFieldSet()
+std::vector<ibSelectedFieldDescription>* ibComposerSettingsPanel::CurrentFieldSet()
 {
 	if (ibLevelDescription* level = CurrentLevel())
 		return &level->m_selected;
@@ -2546,14 +2565,24 @@ std::vector<wxString>* ibComposerSettingsPanel::CurrentFieldSet()
 	if (output >= 0 && (size_t)output < Structure().size())
 		return &Structure()[output].m_selected;
 
-	// THE REPORT ITSELF — the bottom of the pile, which everything else adds to. The description's
-	// own set, edited in place like everything else in this window.
+	// ⭐⭐ THE REPORT ROW — and WHOSE table it is depends on which road this window is on.
+	//
+	// 🛑 IT WAS ALWAYS THE COMPOSITION'S, and on the READER road that is an object about to be
+	// dropped: the caller keeps only the SETTING, so a person chose their columns, pressed OK and
+	// lost them — no error, nothing written, nothing said (Max, 2026-08-28, live: "I set the selected
+	// fields, pressed OK, they were not saved").
+	//
+	// The reader edits the SETTING's own table, which is saved with the rest of what they set; the
+	// author edits the composition's, which is the report itself. The same division the filter and
+	// the sort have had all along — this one part simply never got it.
+	if (m_readerRoad)
+		return &EditedSettings().m_selected;
 	return &m_edited.m_selected;
 }
 
 void ibComposerSettingsPanel::OnFieldSetAdd()
 {
-	std::vector<wxString>* fields = CurrentFieldSet();
+	std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
 	if (fields == nullptr)
 		return;
 	ibValueCompositionField* field = ChooseStructureField(this);
@@ -2562,14 +2591,35 @@ void ibComposerSettingsPanel::OnFieldSetAdd()
 
 	// ADDING IS ADDING — nothing is cleared first. A node contributes this field on top of what its
 	// output and the composition already show; it never takes over the list by naming one line.
-	fields->push_back(field->GetPath());
+	fields->push_back(ibSelectedFieldDescription::Field(field->GetPath()));
+	MarkSettingsTouched();
+	ReloadFieldSets();
+}
+
+// ⭐⭐ THE `Auto` ROW — added like any other row, and there is at most ONE of it: two would say
+// "everything from above, twice", and the second one contributes nothing the first did not.
+//
+// It goes in at the CURSOR when there is one, because its position is its whole meaning: above the
+// node's own fields the inherited ones come first, below them they come last.
+void ibComposerSettingsPanel::OnFieldSetAuto()
+{
+	std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
+	if (fields == nullptr)
+		return;
+	if (ibSelectedInherits(*fields))
+		return;   // it is already there, and one is all it can mean
+
+	const int at = SelectedFieldSetRow();
+	const size_t where = (at == wxNOT_FOUND || (size_t)at > fields->size())
+		? fields->size() : (size_t)at;
+	fields->insert(fields->begin() + where, ibSelectedFieldDescription::Auto());
 	MarkSettingsTouched();
 	ReloadFieldSets();
 }
 
 void ibComposerSettingsPanel::OnFieldSetRemove()
 {
-	std::vector<wxString>* fields = CurrentFieldSet();
+	std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
 	const int at = SelectedFieldSetRow();
 	if (fields == nullptr || at == wxNOT_FOUND || (size_t)at >= fields->size())
 		return;
@@ -2583,7 +2633,7 @@ void ibComposerSettingsPanel::OnFieldSetRemove()
 // means is the engine's answer, not this list's.
 void ibComposerSettingsPanel::OnFieldSetCopy()
 {
-	std::vector<wxString>* fields = CurrentFieldSet();
+	std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
 	const int at = SelectedFieldSetRow();
 	if (fields == nullptr || at == wxNOT_FOUND || (size_t)at >= fields->size())
 		return;
@@ -2595,7 +2645,7 @@ void ibComposerSettingsPanel::OnFieldSetCopy()
 // MOVE A LINE — the set is read in order, so its order is a setting like any other.
 void ibComposerSettingsPanel::MoveFieldSetRow(int delta)
 {
-	std::vector<wxString>* fields = CurrentFieldSet();
+	std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
 	const int at = SelectedFieldSetRow();
 	if (fields == nullptr || at == wxNOT_FOUND || (size_t)at >= fields->size())
 		return;
@@ -2625,10 +2675,10 @@ void ibComposerSettingsPanel::AddFieldFromTree(const wxTreeItemId& item)
 	if (field == nullptr)
 		return;   // a reference row is a road, not a field — double-clicking it unfolds instead
 
-	std::vector<wxString>* fields = CurrentFieldSet();
+	std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
 	if (fields == nullptr)
 		return;
-	fields->push_back(field->GetPath());
+	fields->push_back(ibSelectedFieldDescription::Field(field->GetPath()));
 	MarkSettingsTouched();
 	ReloadFieldSets();
 }
@@ -2741,6 +2791,11 @@ void ibComposerSettingsPanel::SyncGroupingPage()
 	// …AND THE DETAIL RECORDS ARE NOT ONE. That level groups by nothing by construction — a page
 	// listing the fields it groups by would be a page that can only ever be empty, and the one verb
 	// on it (add a field) would turn the rows back into a heading behind the author's back.
+	// ⚠ AND THIS ONE ASKS THE KIND, not `IsDetailRecords()` — the ONE place where the two differ on
+	// purpose. A level somebody just added has no fields yet, so it IS the records to the engine;
+	// hiding its grouping page would leave nowhere to type the first field, and the level could
+	// never stop being the records. The page goes only for a node DECLARED as records, which is a
+	// decision, not an empty list.
 	const ibLevelDescription* level = CurrentLevel();
 	const bool wanted = level != nullptr && level->m_kind != ibCompositionLevelKind::Details;
 	size_t at = m_settingsTabs->GetPageCount();

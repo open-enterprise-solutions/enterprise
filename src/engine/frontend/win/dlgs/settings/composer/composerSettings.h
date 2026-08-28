@@ -585,16 +585,18 @@ private:
 	struct ibFieldSetPage {
 		wxTreeCtrl*              m_sourceTree = nullptr;   // everything the source offers, to pick FROM
 		class ibDataViewCtrl*    m_view    = nullptr;
-		class ibStringListModel* m_model   = nullptr;
+		class ibSelectedListModel* m_model = nullptr;
 	};
 
 	wxWindow* BuildFieldSetPage(wxWindow* parent);
 	void OnFieldSetAdd();
+	// The `Auto` row — where everything the storey above shows lands. At most one per table.
+	void OnFieldSetAuto();
 	void OnFieldSetRemove();
 	void OnFieldSetCopy();
 	void ReloadFieldSets();          // the page follows the selection
 	// The selected node's OWN set — what IT adds. The report's is the bottom of the pile.
-	std::vector<wxString>* CurrentFieldSet();
+	std::vector<ibSelectedFieldDescription>* CurrentFieldSet();
 	int  SelectedFieldSetRow();   // the line the cursor is on, or wxNOT_FOUND
 	void MoveFieldSetRow(int delta);
 	// Put the field a tree row stands for into the set — double-click on the left pane.

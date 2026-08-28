@@ -1162,15 +1162,30 @@ TEST(QueryComposerPackage, ATemporaryTableStaysAStatementThatPrepares)
 
 	const wxString text = composer.RenderText();
 
-	// The preparing statement is there, spelled as itself…
-	EXPECT_TRUE(text.Contains(wxT("INTO Tmp")))  << text;
+	// ⚠ READ BACK, NOT SPELLED OUT. The renderer puts a source on a line of its own — `FROM\n\tTmp`
+	// — so `Contains("FROM Tmp")` pinned the LAYOUT and broke on it, while the behaviour it was
+	// written for never changed (CI, 2026-08-28). What this test is about is which statement reads
+	// what, and that is a question the parser answers.
+	const ibQueryPackage back = ibQueryParser().ParsePackage(text);
+	ASSERT_EQ(back.m_statements.size(), 4u);   // three of the author's, plus the composer's own
+
+	// The preparing statement is there and still makes its table…
+	ASSERT_TRUE(back.m_statements[0].m_select != nullptr);
+	EXPECT_EQ(back.m_statements[0].m_select->m_intoTemp, wxT("Tmp"));
 	// …the selection that uses it reads it by name…
-	EXPECT_TRUE(text.Contains(wxT("FROM Tmp")))  << text;
-	// …and what the composition stands on is the linked selections, not the table.
-	EXPECT_TRUE(text.Contains(wxT("FROM Sales")))   << text;
-	EXPECT_TRUE(text.Contains(wxT("JOIN Plan")))    << text;
-	EXPECT_TRUE(text.Contains(wxT("TOTALS")))       << text;
-	EXPECT_NO_THROW(ibQueryParser().ParsePackage(text)) << text;
+	ASSERT_TRUE(back.m_statements[1].m_select != nullptr);
+	ASSERT_FALSE(back.m_statements[1].m_select->m_from.m_name.empty());
+	EXPECT_EQ(back.m_statements[1].m_select->m_from.m_name.back(), wxT("Tmp"));
+
+	// …and what the composition stands on is the LINKED SELECTIONS, not the table: the last
+	// statement is the composer's own, it reads Sales, joins Plan, and carries the totals.
+	const ibQuerySelectPtr composed = back.m_statements.back().m_select;
+	ASSERT_TRUE(composed != nullptr);
+	ASSERT_FALSE(composed->m_from.m_name.empty());
+	EXPECT_EQ(composed->m_from.m_name.back(), wxT("Sales"));
+	ASSERT_EQ(composed->m_joins.size(), 1u);
+	EXPECT_EQ(composed->m_joins[0].m_source.m_name.back(), wxT("Plan"));
+	EXPECT_TRUE(composed->m_hasTotals) << text;
 }
 
 // …AND A STATEMENT THAT IS NEITHER is still refused: it makes nothing and nothing can read it, so a

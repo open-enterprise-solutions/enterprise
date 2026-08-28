@@ -118,7 +118,7 @@ bool RamEvalCondition(const ibQueryAstExpr& expr, const ibRamValueStorage* stora
 
 } // namespace
 
-std::vector<long> ibDataRamComposer::ComputeOrder() const
+std::vector<long> ibDataRamComposer::ComputeOrder()
 {
 	if (m_storage == nullptr)
 		return {};

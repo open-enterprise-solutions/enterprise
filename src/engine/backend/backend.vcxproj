@@ -265,8 +265,10 @@
     <ClInclude Include="compiler\lambdaQueryAst.h" />
     <ClInclude Include="query\queryableFactory.h" />
     <ClInclude Include="composition\dataComposer.h" />
-    <ClInclude Include="composition\spreadsheetComposeDriver.h" />
-    <ClInclude Include="composition\listFetchDriver.h" />
+    <ClInclude Include="composition\drivers\compositionDriver.h" />
+    <ClInclude Include="composition\dataComposerInternal.h" />
+    <ClInclude Include="composition\drivers\spreadsheetComposeDriver.h" />
+    <ClInclude Include="composition\drivers\listFetchDriver.h" />
     <ClInclude Include="compositionDescription.h" />
     <ClInclude Include="system\value\composition\valueComposerField.h" />
     <ClInclude Include="system\value\composition\valueComposerSettings.h" />
@@ -696,7 +698,8 @@
     <ClCompile Include="compiler\lambdaQueryAst.cpp" />
     <ClCompile Include="query\queryableFactory.cpp" />
     <ClCompile Include="composition\dataComposer.cpp" />
-    <ClCompile Include="composition\spreadsheetComposeDriver.cpp" />
+    <ClCompile Include="composition\dataComposerRun.cpp" />
+    <ClCompile Include="composition\drivers\spreadsheetComposeDriver.cpp" />
     <ClCompile Include="composition\ramComposer.cpp" />
     <ClCompile Include="compositionDescription.cpp" />
     <ClCompile Include="system\value\composition\valueComposerField.cpp" />

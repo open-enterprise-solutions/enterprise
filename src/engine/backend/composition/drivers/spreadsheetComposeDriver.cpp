@@ -1,4 +1,4 @@
-#include "backend/composition/spreadsheetComposeDriver.h"
+#include "backend/composition/drivers/spreadsheetComposeDriver.h"
 
 #include <algorithm>   // std::min — MSVC drags it in transitively, libstdc++ does not
 #include <map>         // the per-level field counts the dimension layout is built from
@@ -342,6 +342,14 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::O
 	// the first FIGURE with the word "Total".
 	m_dimWidth = anyDimension ? static_cast<int>(widestLevel) : 0;
 
+	// ⭐⭐ THE RESOURCES STAND LAST, ALWAYS (Max, 2026-08-28). They used to take their column in
+	// SCHEMA order alongside the fields, so `COUNT(Number)` landed second — between two fields —
+	// and the figures a reader scans were scattered through the text ones.
+	//
+	// Two passes, and the reason is that the order of a REPORT is not the order of a query: the
+	// schema is the order the columns were produced in, while a sheet reads left to right as
+	// "what this row is" and then "what it adds up to". Sorting the schema itself would be the
+	// same fact stated twice — the layout is the report's, and this is where it is decided.
 	for (size_t i = 0; i < schema.size(); ++i) {
 		switch (schema[i].m_role) {
 		case ibQueryLowering::ibColumnRole::Dimension: {
@@ -350,11 +358,17 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::O
 			m_layout[i] = dimBase + filledInLevel[level]++;   // its place INSIDE its own level
 			break;
 		}
+		case ibQueryLowering::ibColumnRole::Measure:
+			break;                           // …placed in the second pass, to the right of everything
 		default:
-			m_layout[i] = next++;            // a measure or a detail — one column each
+			m_layout[i] = next++;            // a detail — one column each, in the order it was asked for
 			break;
 		}
 	}
+	// …and the figures after them, in the order the resources were declared.
+	for (size_t i = 0; i < schema.size(); ++i)
+		if (schema[i].m_role == ibQueryLowering::ibColumnRole::Measure)
+			m_layout[i] = next++;
 	m_columnCount = next;
 	WidenTo(m_columnCount, firstSection);
 

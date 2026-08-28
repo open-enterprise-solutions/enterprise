@@ -18,7 +18,7 @@
 #include "backend/srcDataObject.h"                   // ibSourceExplorer
 #include "backend/serialize/dataBuilder.h"           // ibDataNode (object-level save/load)
 #include "backend/metadataConfiguration.h"           // ibMetaDataConfigurationBase (GetSourceMetaData)
-#include "backend/composition/spreadsheetComposeDriver.h"   // the OUTPUT — composition → document
+#include "backend/composition/drivers/spreadsheetComposeDriver.h"   // the OUTPUT — composition → document
 #include "backend/system/value/composition/valueComposerSettings.h"   // ibValueEnumComparisonKind — a condition's word
 #include "backend/system/value/valueSpreadsheet.h"   // ibValueSpreadsheetDocument — the script-side document
 #include "backend/value_cast.h"                      // CastValue — the script argument to its type

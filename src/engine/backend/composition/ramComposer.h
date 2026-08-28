@@ -37,7 +37,9 @@ public:
 	// order (index i ↔ storage node i). The model (RunComposerPage) windows this by the browsed anchor and
 	// returns the LIVE nodes — the node IS the storage row. NO driver walk, NO SQL — the base Run() default (a
 	// no-op) is inherited, so L5-2 is fully self-contained. slice-1: filter + sort, flat.
-	std::vector<long> ComputeOrder() const;
+	// ⚠ NOT const: it builds the filter in force, and BUILDING a condition registers the values it
+	// compares against (ibDataComposer::AddParam). The const was covering that write.
+	std::vector<long> ComputeOrder();
 
 private:
 	const ibRamValueStorage* m_storage = nullptr;   // the RAM value-storage (NON-owning; owned by the model)

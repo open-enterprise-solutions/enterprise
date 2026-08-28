@@ -21,7 +21,7 @@
 //   m_composer.Run(p);             // render -> parse -> lower -> walk
 //   for (auto& row : p.Rows()) …   // the rows out
 
-#include "backend/composition/dataComposer.h"
+#include "backend/composition/drivers/compositionDriver.h"   // a DRIVER needs the contract, not the composer
 #include "backend/query/dataQueryBuilder.h"   // ibReadPageRequest — held by value
 
 #include <map>

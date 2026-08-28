@@ -131,6 +131,13 @@ ibValueDynamicList::ibValueDynamicList(const ibBackendQueryable* queryable, ibDy
 	if (m_sourceMetaData == nullptr)
 		m_sourceMetaData = activeMetaData;
 
+	// ⭐⭐ A LIST'S COLUMNS ARE ITS SOURCE'S, and that is said ONCE, here (Max, 2026-08-28). It chose
+	// them by choosing the source, so "nothing selected" can only mean "everything the source has" —
+	// the opposite of what it means for a REPORT, where the columns are what a person deliberately
+	// put in the selected fields. See ibDataComposer::ReadsEveryField: it is not a preference, it is
+	// which of the two questions this composition asks, and only the host knows.
+	m_composer.SetReadsEveryField(true);
+
 	if (queryable != nullptr)
 		SetSourceQueryable(queryable);   // null → set later via SetSource
 }

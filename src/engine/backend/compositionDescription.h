@@ -93,6 +93,15 @@ enum ibFilterGroupKind {
 	ibFilterGroupKind_Not,      // negates the AND of its children
 };
 
+// ⭐⭐ WHAT ONE ROW OF A SELECTED-FIELDS TABLE IS. A FIELD — or `Auto`, which stands for *everything
+// the storey above chose, HERE*.
+//
+// ⚠ APPENDED, NEVER INSERTED, like every other kind in this file: the row is serialised BY NUMBER.
+enum ibSelectedFieldKind {
+	ibSelectedFieldKind_Field = 0,
+	ibSelectedFieldKind_Auto,
+};
+
 // HOW A USER MEETS A CONDITION. A property of the SETTING, not of the data: the same condition is
 // applied either way; this says whether the user is offered it, and where.
 enum ibFilterDisplayMode {
@@ -315,6 +324,23 @@ struct ibSettingsDescription {
 	// bodies that touch it.
 	std::vector<struct ibOutputDescription> m_structure;
 
+	// ⭐⭐ …AND THE FIELDS, for the same reason as the three above: "I want to see these columns" is a
+	// setting a READER makes, exactly like a filter or a sort (Max, 2026-08-28).
+	//
+	// 🛑 IT HAD NOWHERE TO GO. The root row of the settings tree is the COMPOSITION, so its field
+	// table was `ibCompositionDescription::m_selected` — the AUTHOR's half. On the reader road the
+	// window edits a copy of the composition and the caller keeps only the SETTING, so a person
+	// chose their columns, pressed OK and lost them, with nothing raised anywhere: the edit landed
+	// in an object that was about to be dropped.
+	//
+	// The chain is now four storeys, each the same table with the same `Auto` row:
+	//   composition (the author) → THIS (the reader) → output → node.
+	//
+	// ⚠ THE ELEMENT TYPE IS STILL INCOMPLETE HERE, and named as `struct …` for exactly the reason
+	// `m_structure` above is: std::vector allows an incomplete element for a MEMBER, though not for
+	// the bodies that touch it — which is why the three functions below are defined further down.
+	std::vector<struct ibSelectedFieldDescription> m_selected;
+
 	// NOTHING SET AT ALL — which is a state of its own, not an accident, and the ONE question that
 	// answers "has anybody saved a setting": a composer whose reader has not runs on `m_variants[0]`.
 	bool IsOk() const;
@@ -504,6 +530,60 @@ BACKEND_API const ibSelectDescription* ibSelectOfPath(const std::vector<ibSelect
 // column still prints: the schema degrades field by field, never as a whole.
 BACKEND_API wxString ibTitleForPath(const std::vector<ibSelectDescription>& selects, const wxString& path);
 
+// ⭐⭐ AND `Auto` IS A ROW, NOT A FLAG. It stands for everything the storey above chose, and it
+// stands SOMEWHERE: a row has a position, so the inherited fields can sit before this node's own,
+// after them, or between them. A boolean "inherit" could not say where. Take the row out and the
+// node defines its whole composition by hand — which is the thing that could not be said at all
+// while inheritance was a blind pile-up.
+//
+// 🛑 A FLAG BY THIS NAME EXISTED AND WAS REMOVED on 2026-08-24 (`m_selectedAuto`), and it is not
+// what is coming back. Then, inheritance REPLACED, and the flag existed to say "do not replace";
+// when replacing became adding, the flag had nothing left to mean and went. What returns is the
+// choice itself — with a place in the list.
+//
+// ⭐ AND THIS IS WHAT OPTIMISES THE QUERY. The selected fields decide what takes part in the
+// selection, so a field nobody named is not read, not fetched and not rendered: the report gets
+// simpler for free (Max: "we get the report simplified for nothing").
+struct ibSelectedFieldDescription {
+	ibSelectedFieldKind m_kind = ibSelectedFieldKind_Field;
+	wxString            m_path;   // the field; empty for Auto, which names nothing
+
+	bool IsAuto() const { return m_kind == ibSelectedFieldKind_Auto; }
+
+	static ibSelectedFieldDescription Field(const wxString& path) {
+		ibSelectedFieldDescription row;
+		row.m_path = path;
+		return row;
+	}
+	static ibSelectedFieldDescription Auto() {
+		ibSelectedFieldDescription row;
+		row.m_kind = ibSelectedFieldKind_Auto;
+		return row;
+	}
+
+	bool operator==(const ibSelectedFieldDescription& o) const {
+		return m_kind == o.m_kind && m_path == o.m_path;
+	}
+	bool operator!=(const ibSelectedFieldDescription& o) const { return !(*this == o); }
+};
+
+// THE LIST AS A WHOLE — asked rather than walked, because "does this inherit" is one question and
+// every reader of it would otherwise spell the search itself.
+inline bool ibSelectedInherits(const std::vector<ibSelectedFieldDescription>& rows) {
+	for (const ibSelectedFieldDescription& row : rows)
+		if (row.IsAuto())
+			return true;
+	return false;
+}
+
+// ⚠ AN EMPTY LIST INHERITS. Saying nothing is not the same as saying "nothing": a node that has
+// never been touched shows what the storey above shows, and that is the state every node starts in.
+// Refusing to inherit is a thing somebody DOES — they take the Auto row out — and taking a row out
+// of an empty table is not possible, which is exactly why empty cannot mean it.
+inline bool ibSelectedInheritsOrIsEmpty(const std::vector<ibSelectedFieldDescription>& rows) {
+	return rows.empty() || ibSelectedInherits(rows);
+}
+
 // --- STRUCTURE -------------------------------------------------------------
 // ⭐⭐ THE WHOLE STRUCTURE LIVES HERE, in its own types. It used to be described with the composer's
 // (ibDataComposer::Output / GroupNode), and that was the rule broken: a description is the BOTTOM of
@@ -580,9 +660,10 @@ struct ibLevelDescription {
 	// want to see, and they are what actually reaches the nodes. A second set saying what one COULD
 	// have selected had no reader on the run path and no answer a person needed.
 	//
-	// …and the `Auto` flag went with it. Under adding, "inherit" is "I add nothing", which an empty
-	// list already says: a flag that cannot mean anything else is a second spelling of empty.
-	std::vector<wxString>           m_selected;
+	// ⭐ …AND `Auto` IS A ROW OF THIS TABLE (2026-08-28). It says where the storey above lands; take
+	// it out and this node states its whole composition itself. See ibSelectedFieldDescription for
+	// why that is a row and not the flag this once had.
+	std::vector<ibSelectedFieldDescription> m_selected;
 
 	// ⭐⭐ A NODE HAS SETTINGS — THE WHOLE OF THEM. Not one condition and one order: the SAME
 	// ibSettingsDescription the composition itself has, one storey down. WHAT THIS NODE GROUPS BY IS
@@ -604,6 +685,25 @@ struct ibLevelDescription {
 	// complete where the vector is USED, and std::vector is specified to allow it.
 	std::vector<ibLevelDescription> m_children;
 
+	// ⭐⭐ IS THIS LEVEL THE DETAIL RECORDS — asked HERE, of the level itself, because it is a question
+	// about a level and nothing else (Max, 2026-08-28: *"what worries me is that three places check
+	// the same thing"*).
+	//
+	// A level with NO GROUPING FIELDS is the records: it writes no `BY`, it folds nothing, and what
+	// it prints is the rows under the heading above it. The KIND says the same thing deliberately —
+	// it is how a person adds a records node before typing anything into it — so either answer is
+	// yes, and one of them being absent is not a no.
+	//
+	// 🛑 IT WAS ASKED IN FOUR PLACES AND MEANT TWO THINGS. The settings window called a fieldless
+	// level "the detail records" in its Field cell; the engine looked only at the kind
+	// (`DetailLevelOf`, `DetailAxisOf`, `OutputWrites`, `WantsDetails`). So the window promised rows
+	// and the read never asked for them — and when the read was taught the new rule, the walk still
+	// held the old one and printed a single total line over 125 invisible records. Two of the three
+	// were fixed at a time, twice, which is what a question with several homes does.
+	bool IsDetailRecords() const {
+		return m_kind == ibCompositionLevelKind::Details || m_settings.m_group.m_lines.empty();
+	}
+
 	bool operator==(const ibLevelDescription& o) const {
 		return m_kind == o.m_kind && m_selected == o.m_selected
 		    && m_settings == o.m_settings && m_children == o.m_children;
@@ -622,9 +722,10 @@ struct ibOutputDescription {
 	//  ever set it and nothing ever asked. A composition reads ONE source and folds it several ways,
 	//  which is what an output is; a second source would be a second composition. The composer's own
 	//  `m_sourceText` is a different member and is the author's verbatim query — that one is live.)
-	// What this output shows, ADDED to what the composition says — see ibLevelDescription. Empty is
-	// the ordinary case: an output that adds nothing shows what the composition selected.
-	std::vector<wxString>              m_selected;
+	// What this output shows — the same table a level has, and read by the same rule: an `Auto` row
+	// is where the COMPOSITION's choice lands, and an output with no such row states its own
+	// composition whole. Empty is the ordinary case and it inherits.
+	std::vector<ibSelectedFieldDescription> m_selected;
 	// AN OUTPUT HAS SETTINGS TOO — filters and sorts. Its m_group stays empty and that
 	// is the difference between the two storeys: an output does not fold, its NODES do. They were
 	// missing here entirely while a level had two thirds of them, so an output-wide filter or sort
@@ -650,14 +751,15 @@ struct ibOutputDescription {
 // the shape of the thing, not an accident of the file: *"the output is defined by the settings, and
 // every output has its own groupings, sorts, its own fields and its own filters"* (Max, 2026-08-24).
 inline bool ibSettingsDescription::IsOk() const {
-	return m_filter.IsOk() || m_sort.IsOk() || m_group.IsOk() || !m_structure.empty();
+	return m_filter.IsOk() || m_sort.IsOk() || m_group.IsOk() || !m_structure.empty()
+	    || !m_selected.empty();
 }
 inline void ibSettingsDescription::Clear() {
-	m_filter.Clear(); m_sort.Clear(); m_group.Clear(); m_structure.clear();
+	m_filter.Clear(); m_sort.Clear(); m_group.Clear(); m_structure.clear(); m_selected.clear();
 }
 inline bool ibSettingsDescription::operator==(const ibSettingsDescription& o) const {
 	return m_filter == o.m_filter && m_sort == o.m_sort && m_group == o.m_group
-	    && m_structure == o.m_structure;
+	    && m_structure == o.m_structure && m_selected == o.m_selected;
 }
 
 // --- VARIANT ---------------------------------------------------------------
@@ -789,10 +891,14 @@ struct ibCompositionDescription {
 	//  filters"* (Max, 2026-08-24). So a variant that names a setting names its outputs with it, and
 	//  the reader who saves one saves theirs.)
 
-	// ⭐ WHAT THE WHOLE COMPOSITION SHOWS — the BOTTOM of the pile an output adds to and a node adds
-	// to again. It lived on the running composer alone, so what a person set on the Report row was
-	// read from a buffer and written back nowhere permanent.
-	std::vector<wxString>               m_selected;
+	// ⭐ WHAT THE WHOLE COMPOSITION SHOWS — the BOTTOM of the chain an output resolves against and a
+	// node resolves against again. It lived on the running composer alone, so what a person set on
+	// the Report row was read from a buffer and written back nowhere permanent.
+	//
+	// ⚠ AN `Auto` ROW HERE STANDS FOR NOTHING — there is no storey above the composition — so it is
+	// simply skipped. Kept legal rather than refused: a table is a table, and a row that means
+	// "everything above" in a place with nothing above is empty, not wrong.
+	std::vector<ibSelectedFieldDescription> m_selected;
 
 	// (THE ACTIVE SETTINGS ARE NOT HERE. What a read runs on is a COPY the live object holds — the
 	//  composer, or the model behind a tablebox — taken once from these and driven in as the basis
