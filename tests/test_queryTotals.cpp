@@ -425,7 +425,7 @@ public:
 		m_columns.push_back(ibQueryRamColumn{ amount,  wxT("amount"),  ibTypeDescription() });
 	}
 
-	bool Next() override { ++m_reads; return ++m_row < m_count; }
+	bool Next() override { ++(*m_reads); return ++m_row < m_count; }
 
 	ibValue Get(ibMetaID id) const override
 	{
@@ -437,13 +437,20 @@ public:
 
 	const std::vector<ibQueryRamColumn>& Columns() const override { return m_columns; }
 
-	long Reads() const { return m_reads; }
+	long Reads() const { return *m_reads; }
+
+	// ⚠ THE COUNT HAS TO OUTLIVE THE CURSOR. A selector that has folded LETS ITS ROWS GO, on purpose
+	// — `m_rows.reset()`, "a spent cursor must not read back as rows" — so a test that hands its
+	// cursor over owns nothing afterwards and may not ask the cursor anything. Reading it anyway
+	// answered 13 on Windows, out of freed memory that still happened to hold it, and 94374832001712
+	// on Linux (CI, 2026-08-28). Whoever wants the number keeps this, and it stays true either way.
+	std::shared_ptr<long> Counter() const { return m_reads; }
 
 private:
 	long     m_count, m_regions, m_products;
 	ibMetaID m_region, m_product, m_amount;
 	long     m_row   = -1;
-	long     m_reads = 0;
+	std::shared_ptr<long> m_reads = std::make_shared<long>(0);
 	std::vector<ibQueryRamColumn> m_columns;
 };
 
@@ -955,7 +962,7 @@ TEST(QueryTotals, EveryBranchWalksOneFoldWithoutRereadingTheCursor)
 	levels.back().m_branch = byProduct;
 
 	auto rows = std::make_unique<GeneratedRows>(ROWS, REGIONS, PRODUCTS, REGION, PRODUCT, AMOUNT);
-	GeneratedRows* cursor = rows.get();
+	const std::shared_ptr<long> reads = rows->Counter();   // …kept, because the cursor will not be (see it)
 
 	// THE FOLD — one pass, exactly as the shared read does it before handing the tree to the branches.
 	ibSelector fold(std::move(rows), ibSelectKind::ibSelectKind_ByGroups);
@@ -968,7 +975,7 @@ TEST(QueryTotals, EveryBranchWalksOneFoldWithoutRereadingTheCursor)
 	// the road Build() took (cursor or snapshot), and that road is free to change: the test failed on
 	// a fold that was perfectly correct. A test that breaks when an implementation detail moves is
 	// pinning the detail, not the behaviour.
-	const long readsAfterFold = cursor->Reads();
+	const long readsAfterFold = *reads;
 
 	// …AND EACH BRANCH WALKS IT. No cursor is given to either — the tree is the whole answer.
 	const auto walk = [&](const wxString& branch) {
@@ -985,7 +992,7 @@ TEST(QueryTotals, EveryBranchWalksOneFoldWithoutRereadingTheCursor)
 	EXPECT_EQ(walk(wxT("ByProduct")), static_cast<long>(PRODUCTS));   // P0, P1, P2
 
 	// ⭐ THE POINT OF THE WHOLE ARC, as a number: the second branch cost the source nothing.
-	EXPECT_EQ(cursor->Reads(), readsAfterFold);
+	EXPECT_EQ(*reads, readsAfterFold);
 }
 
 // ============================================================================================
