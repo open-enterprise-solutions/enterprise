@@ -685,19 +685,27 @@ bool ibGridSelection::ExtendCurrentBlock(const ibGridCellCoords& blockStart,
 		return false;
 
 	// Update View.
+	//
+	// ⭐⭐ THE WHOLE OF BOTH BLOCKS, not the difference between them. The symmetric difference is the
+	// right answer for the FILL — only cells that joined or left the selection change colour — and
+	// the wrong one for the FRAME: a cell that stops being on the edge has to be repainted to LOSE
+	// its line, and such a cell is inside both blocks, so it is in neither part of the difference.
+	// Left alone it keeps the old outline until something else happens to invalidate it, which is
+	// why the frame looked wrong DURING a drag and correct the moment the mouse was released — the
+	// release repaints everything (Max, 2026-08-28).
+	//
+	// It costs no more than it has to: RefreshBlock turns the block into a device rectangle and the
+	// window clips it, so the price is one screen, not the size of the selection.
 	if (!m_grid->GetBatchCount())
 	{
-		ibGridBlockDiffResult refreshBlocks = block.SymDifference(newBlock);
-		for (int i = 0; i < 4; ++i)
-		{
-			const ibGridBlockCoords& refreshBlock = refreshBlocks.m_parts[i];
+		const int top    = wxMin(block.GetTopRow(),    newBlock.GetTopRow());
+		const int left   = wxMin(block.GetLeftCol(),   newBlock.GetLeftCol());
+		const int bottom = wxMax(block.GetBottomRow(), newBlock.GetBottomRow());
+		const int right  = wxMax(block.GetRightCol(),  newBlock.GetRightCol());
 
-			if (!refreshBlock)
-				continue;
-
-			m_grid->RefreshBlock(wxMax(refreshBlock.GetTopRow() - 1, 0), wxMax(refreshBlock.GetLeftCol() - 1, 0),
-				wxMin(refreshBlock.GetBottomRow() + 1, m_grid->GetNumberRows() - 1), wxMin(refreshBlock.GetRightCol() + 1, m_grid->GetNumberCols() - 1));
-		}
+		m_grid->RefreshBlock(wxMax(top - 1, 0), wxMax(left - 1, 0),
+			wxMin(bottom + 1, m_grid->GetNumberRows() - 1),
+			wxMin(right + 1, m_grid->GetNumberCols() - 1));
 	}
 
 	// Update the current block in place.

@@ -5345,39 +5345,116 @@ ibGrid::DoGridCellDrag(wxMouseEvent& event,
 		ibGridCellCoords blockStart(rowStart, colStart);
 		ibGridCellCoords blockEnd(rowEnd, colEnd);
 
-		for (int row = rowStart; row <= rowEnd; row++)
-		{
-			for (int col = colStart; col <= colEnd; col++)
+		// ⭐⭐ A DRAG NEVER CUTS A MERGED CELL IN HALF: whatever it reaches into, it takes whole.
+		//
+		// 🛑 IT SKIPPED THE CELLS THAT NEEDED IT MOST. `!= CellSpan_Inside` walked past every COVERED
+		// cell — and a covered cell is exactly how a merge that starts ABOVE or to the LEFT of the
+		// block appears inside it. Its owner was never asked about, so the block never grew backwards;
+		// the "start" arithmetic below it only ever re-derived the row a Main cell already sat on.
+		// Dragging upward into the lower half of a merged cell therefore selected that half.
+		//
+		// 🛑 AND IT WAS ONE PASS OVER THE ORIGINAL RANGE. Swallowing a merge MOVES an edge, and the
+		// moved edge can land inside another merge that the first pass never looked at (Max,
+		// 2026-08-28: "because you select it, it shifts, and you touch one more merged cell"). So the
+		// walk repeats over the CURRENT block until a whole pass adds nothing — the block is grown to
+		// a closure, not widened once.
+		// ⚠ AND ONLY THE FOUR EDGES ARE WALKED, not the area. This runs on EVERY mouse-move of a drag,
+		// so an area walk costs width × height per event — and repeating it makes that worse, not
+		// better. It is also unnecessary: a merge that reaches outside the block has to cross one of
+		// its boundaries, and a span is contiguous, so it owns a cell ON the boundary line it crosses.
+		// A merge that lies wholly inside asks for nothing. Edges answer the same question in
+		// width + height.
+		const auto swallow = [&](int row, int col, bool& grew) {
+			if (row < 0 || row >= m_numRows || col < 0 || col >= m_numCols)
+				return;
+
+			int cell_rows, cell_cols;
+			const CellSpan span = GetCellSize(row, col, &cell_rows, &cell_cols);
+			if (span == CellSpan::CellSpan_None)
+				return;                     // an ordinary cell asks for nothing
+
+			// Whoever owns this cell — itself, or the main cell a covered one points back to.
+			int main_row = row, main_col = col;
+			if (span == CellSpan::CellSpan_Inside)
 			{
-				int cell_rows, cell_cols;
-				if (GetCellSize(row, col, &cell_rows, &cell_cols) != CellSpan::CellSpan_Inside)
-				{
-					int end_row = row + cell_rows - 1;
-					int end_col = col + cell_cols - 1;
+				main_row = row + cell_rows;
+				main_col = col + cell_cols;
+				GetCellSize(main_row, main_col, &cell_rows, &cell_cols);
+			}
 
-					if (end_row > blockEnd.GetRow())
-						blockEnd.SetRow(end_row);
+			if (cell_rows < 1) cell_rows = 1;
+			if (cell_cols < 1) cell_cols = 1;
 
-					if (end_col > blockEnd.GetCol())
-						blockEnd.SetCol(end_col);
+			if (main_row + cell_rows - 1 > blockEnd.GetRow())
+			{
+				blockEnd.SetRow(main_row + cell_rows - 1);
+				grew = true;
+			}
 
-					int cell_start_rows, cell_start_cols;
-					GetCellSize(end_row, end_col, &cell_start_rows, &cell_start_cols);
+			if (main_col + cell_cols - 1 > blockEnd.GetCol())
+			{
+				blockEnd.SetCol(main_col + cell_cols - 1);
+				grew = true;
+			}
 
-					int start_row = end_row + cell_start_rows;
-					int start_col = end_col + cell_start_cols;
+			if (main_row < blockStart.GetRow())
+			{
+				blockStart.SetRow(main_row);
+				grew = true;
+			}
 
-					if (start_row < blockStart.GetRow())
-						blockStart.SetRow(start_row);
+			if (main_col < blockStart.GetCol())
+			{
+				blockStart.SetCol(main_col);
+				grew = true;
+			}
+		};
 
-					if (start_col < blockStart.GetCol())
-						blockStart.SetCol(start_col);
-				}
+		bool grew = true;
+		while (grew)
+		{
+			grew = false;
+
+			const int fromRow = blockStart.GetRow(), toRow = blockEnd.GetRow();
+			const int fromCol = blockStart.GetCol(), toCol = blockEnd.GetCol();
+
+			for (int col = fromCol; col <= toCol; col++)
+			{
+				swallow(fromRow, col, grew);
+				swallow(toRow, col, grew);
+			}
+
+			for (int row = fromRow; row <= toRow; row++)
+			{
+				swallow(row, fromCol, grew);
+				swallow(row, toCol, grew);
 			}
 		}
 
-		m_selection->ExtendCurrentBlock(blockStart,
-			blockEnd,
+		// ⭐⭐ THE ANCHOR GOES FIRST, ALWAYS — and that is what makes a drag able to come BACK.
+		//
+		// `ExtendCurrentBlock` works out which side of the current block to move by matching the
+		// first corner against the block's top / bottom (and left / right): the corner it is given
+		// is the one that does NOT move. When neither matches it falls through to a branch that only
+		// UNIONS — the selection can then grow and never shrink again.
+		//
+		// 🛑 min/max LOSES THAT. The rectangle above is correct as a rectangle, but the moment the
+		// cursor goes above (or left of) the anchor, the two corners swap roles: the "start" becomes
+		// the moving end, nothing matches, and pulling the mouse back no longer gives anything up
+		// (Max, 2026-08-28: "I move it forward, and I cannot come back"). The corners are therefore
+		// handed over by ROLE — the anchor's side of the grown block first, the cursor's side second.
+		const bool anchorAtTop  = m_currentCellCoords.GetRow() <= coords.GetRow();
+		const bool anchorAtLeft = m_currentCellCoords.GetCol() <= coords.GetCol();
+
+		const ibGridCellCoords anchorCorner(
+			anchorAtTop  ? blockStart.GetRow() : blockEnd.GetRow(),
+			anchorAtLeft ? blockStart.GetCol() : blockEnd.GetCol());
+		const ibGridCellCoords cursorCorner(
+			anchorAtTop  ? blockEnd.GetRow() : blockStart.GetRow(),
+			anchorAtLeft ? blockEnd.GetCol() : blockStart.GetCol());
+
+		m_selection->ExtendCurrentBlock(anchorCorner,
+			cursorCorner,
 			event,
 			wxEVT_GRID_RANGE_SELECTING);
 	}
@@ -7356,6 +7433,7 @@ void ibGrid::DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGr
 		DrawCell(dc, redrawCells[i], entry);
 		storage.Add(entry);
 	}
+
 }
 
 void ibGrid::DrawGridSpace(wxDC& dc, ibGridWindow* gridWindow)
@@ -7488,10 +7566,27 @@ void ibGrid::DrawCellHighlight(wxDC& dc, int row, int col, const ibGridCellAttr*
 	// for now, I just draw a thinner border than for the other ones, but
 	// it doesn't look really good
 
+	// ⭐⭐ THE OUTLINE IS THE BLOCK'S, SO ITS NEIGHBOURS ARE THE BLOCK'S TOO. A merged cell is drawn
+	// from its MAIN cell and `CellToRect` gives the whole span — but each edge was then decided by
+	// looking one cell away from the cell that was PASSED IN. For a merge that is a cell INSIDE
+	// itself: `col + 1` of a three-column block is its own second column, which is in the selection
+	// whenever the block is, so the right edge was simply never drawn (Max, 2026-08-28: "a thin line
+	// instead of a thick one"). The same for the bottom of anything that spans rows.
+	//
+	// ⚠ AND ONLY THE MAIN CELL DRAWS IT. Every covered cell answers with the same whole-block rect,
+	// so each of them re-drew the frame — four times over for a 2×2 — each time deciding its edges
+	// from its own position. Drawing the same line twice is invisible; deciding it twice is not.
+	int cellRows = 1, cellCols = 1;
+	const CellSpan span = GetCellSize(row, col, &cellRows, &cellCols);
+	if (span == CellSpan_Inside)
+		return;   // …its owner draws the whole of it
+	if (cellRows < 1) cellRows = 1;
+	if (cellCols < 1) cellCols = 1;
+
 	wxRect rect = CellToRect(row, col);
 
 	////////////////////////////////////////////////////////////////////////
-	// Draw selected lines 
+	// Draw selected lines
 
 	if (!IsInSelection(row, col - 1))
 	{
@@ -7500,7 +7595,7 @@ void ibGrid::DrawCellHighlight(wxDC& dc, int row, int col, const ibGridCellAttr*
 			rect.GetLeft(), rect.GetBottom());
 	}
 
-	if (!IsInSelection(row, col + 1)) // !!!
+	if (!IsInSelection(row, col + cellCols))
 	{
 		dc.SetPen({ *wxBLACK, 2, wxPENSTYLE_SOLID });
 		dc.DrawLine(rect.GetRight() + 1, rect.GetTop() - 1,
@@ -7514,7 +7609,7 @@ void ibGrid::DrawCellHighlight(wxDC& dc, int row, int col, const ibGridCellAttr*
 			rect.GetRight() + 1, rect.GetTop());
 	}
 
-	if (!IsInSelection(row + 1, col)) // !!!
+	if (!IsInSelection(row + cellRows, col))
 	{
 		dc.SetPen({ *wxBLACK, 2, wxPENSTYLE_SOLID });
 		dc.DrawLine(rect.GetLeft() - 1, rect.GetBottom(),
@@ -7538,10 +7633,28 @@ wxPen ibGrid::GetColGridLinePen(int WXUNUSED(col))
 	return GetDefaultGridLinePen();
 }
 
+// ⭐⭐ A CELL'S BORDER LINE DOES NOT ALWAYS LIVE IN THAT CELL. With the sheet's grid lines switched
+// off — which is how a report is drawn, so that only the borders it states are seen — `DrawCellBorder`
+// puts the right border at `rect.GetRight() + 1` and the bottom one at `rect.GetBottom() + 1`: the
+// first pixel of the NEXT cell. So painting a cell covers two of its neighbours' lines, and if those
+// neighbours were not painted too, nobody draws them again — the line is gone until something
+// unrelated invalidates its owner (Max, 2026-08-28, on a selection: "it takes more than it should
+// and clears the neighbouring area, it swallows the line").
+//
+// Asked HERE, of the pass whose subject IS borders, and per cell: whoever owns a pixel this paint
+// covered gets its border drawn. Their contents are untouched — only the line is restated — and
+// drawing the same line twice is invisible, so nothing has to be tracked.
 void ibGrid::DrawBorder(wxDC& dc, const ibGridCellCacheArray& storage)
 {
-	// if the active cell was repainted, repaint its highlight too because it
-	// might have been damaged by the grid lines
+	const auto borderOf = [&](int row, int col) {
+		if (row < 0 || col < 0)
+			return;
+
+		const ibGridCellAttrPtr attr = GetCellAttrPtr(row, col);
+		if (attr && attr->HasAnyBorder())
+			DrawCellBorder(dc, ibGridCellCoords(row, col), CellToRect(row, col), attr.get());
+	};
+
 	size_t count = storage.GetCount();
 	for (size_t n = 0; n < count; n++)
 	{
@@ -7552,6 +7665,9 @@ void ibGrid::DrawBorder(wxDC& dc, const ibGridCellCacheArray& storage)
 		{
 			DrawCellBorder(dc, cache.m_coords, cache.m_rect, attr.get());
 		}
+
+		borderOf(cache.m_coords.GetRow(), cache.m_coords.GetCol() - 1);   // its right border is our left pixel
+		borderOf(cache.m_coords.GetRow() - 1, cache.m_coords.GetCol());   // its bottom border is our top pixel
 	}
 }
 
