@@ -209,7 +209,13 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 		// into what a value may be.
 		data->m_type     = field.m_type;
 		data->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(field.m_type.GetClsidList(), metaData);
-		const wxTreeItemId item = tree->AppendItem(root, field.m_name, 0, 0, data);
+		// ⭐ A RESOURCE WEARS THE RESOURCE PICTURE HERE TOO. The question was asked on the explorer
+		// road above and NOT on this one — and this is the road a composition over a QUERY takes, so
+		// on every report standing on author's text a resource looked like a plain field (Max,
+		// 2026-08-29: "I do not see even minimally that it is a resource").
+		const int icon = (m_isResource && m_isResource(data->m_path))
+			? ibSettingsResourceIcon(tree) : 0;
+		const wxTreeItemId item = tree->AppendItem(root, field.m_name, icon, icon, data);
 		if (!data->m_refTypes.empty())
 			tree->AppendItem(item, wxEmptyString);   // dummy -> [+]
 	}

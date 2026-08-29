@@ -605,8 +605,13 @@ std::vector<wxString> ibDataComposer::SelectedFor(const Output& output) const
 	//
 	// THE COMPOSITION SPEAKS FIRST, and it has nothing above it: an `Auto` row there stands for
 	// nothing and simply contributes nothing.
+	// ⚠ …AND THE AUTHOR'S OWN TABLE IS THE SAFETY NET, NOT A FLOOR UNDER THE READER. While nobody has
+	// set anything it is what the report shows; once a reader HAS a setting, theirs answers — and an
+	// empty table of theirs means empty. Seeding the pile with the author's rows made "I removed the
+	// columns" unsayable: an empty reader storey inherits what it is piled on (Max, 2026-08-29).
 	std::vector<wxString> base;
-	ibComposerResolveSelected(base, m_commonSelected, {});
+	if (!ReaderHasSetting())
+		ibComposerResolveSelected(base, m_commonSelected, {});
 
 	// ⚠ ASKED OF THE PART, not of the whole setting: GetCurrentSettingsDesc assembles a COPY of every
 	// section, and this is called once per output and again for the projection.
@@ -623,6 +628,27 @@ std::vector<wxString> ibDataComposer::SelectedFor(const Output& output) const
 std::vector<wxString> ibDataComposer::SelectedFor(const Output& output, const GroupNode& level) const
 {
 	return ibComposerSelectedUnder(SelectedFor(output), level);
+}
+
+// ⭐ WHAT IS SHOWN — the same walk as the projection below, minus what is only READ. A filter and a
+// sort名 fields the query must fetch; a report does not print them for that.
+static void CollectShown(std::vector<wxString>& into, const std::vector<wxString>& above,
+                         const ibDataComposer::GroupNode& level)
+{
+	const std::vector<wxString> here = ibComposerSelectedUnder(above, level);
+	ibDataComposer::AppendFields(into, here);
+	for (const ibDataComposer::GroupNode& child : level.m_children)
+		CollectShown(into, here, child);
+}
+
+std::vector<wxString> ibDataComposer::ShownFor(const Output& output) const
+{
+	const std::vector<wxString> atOutput = SelectedFor(output);
+	std::vector<wxString> shown = atOutput;
+	for (const std::vector<GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups })
+		for (const GroupNode& level : *axis)
+			CollectShown(shown, atOutput, level);
+	return shown;
 }
 
 std::vector<wxString> ibDataComposer::ProjectionFor(const Output& output) const

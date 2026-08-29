@@ -126,6 +126,9 @@ private:
 	// repeat, while a path is what a grouping and a filter line are written with, and the detail is
 	// going to write both.
 	std::vector<wxString>       m_paths;
+	// Which schema columns are shown at all — a projected field fetched only for a filter or a sort
+	// takes no column. See ibCompositionOutputInfo::m_shown.
+	std::vector<bool>           m_shown;
 	wxString ColumnPath(size_t column) const {
 		return column < m_paths.size() ? m_paths[column] : wxString();
 	}

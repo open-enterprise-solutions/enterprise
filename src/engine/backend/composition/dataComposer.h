@@ -205,25 +205,42 @@ public:
 	// …and its parts, each answering for itself: what the reader PUT there, and while nothing is
 	// there, the zeroth variant's (Max, 2026-08-25: *"the user setting is the place where values are
 	// put; while there are none, the zeroth variant of the author's setting is taken"*).
+	// ⭐⭐ THE READER'S SETTING, ONCE THERE IS ONE, ANSWERS EVERY PART — the empty ones included. The
+	// author's is the FALLBACK, and it falls back as a whole: while nobody has set anything, the
+	// zeroth variant composes (Max, 2026-08-29: *"the presence of a user setting decides the outputs
+	// too; if somebody deliberately removed the selected fields in the user setting, that is how they
+	// meant it to output. The author's exists as a safety net"*).
+	//
+	// 🛑 IT WAS ASKED PART BY PART — `theirs.IsOk() ? theirs : the author's` — so an EMPTY part of a
+	// setting that plainly exists read as "nothing was said" and the author's came back under it.
+	// A reader who cleared the selected fields got the author's columns; one who cleared the sort got
+	// the author's order. Emptiness cannot mean both "not set" and "set to nothing", and the setting's
+	// own existence is what tells them apart.
+	//
+	// ⚠ NOTHING IS LOST BY IT: the window opens on what is in force (this), so a reader who has no
+	// setting yet starts from a COPY of the author's and OK writes the whole of it back. The only way
+	// a part of a user setting is empty is that somebody emptied it.
+	bool ReaderHasSetting() const { return m_userSettings.IsOk(); }
+
 	const ibFilterDescription& GetCurrentFilterDesc() const {
-		return m_userSettings.m_filter.IsOk() ? m_userSettings.m_filter : m_variants.front().m_settings.m_filter;
+		return ReaderHasSetting() ? m_userSettings.m_filter : m_variants.front().m_settings.m_filter;
 	}
 	const ibSortDescription& GetCurrentSortDesc() const {
-		return m_userSettings.m_sort.IsOk() ? m_userSettings.m_sort : m_variants.front().m_settings.m_sort;
+		return ReaderHasSetting() ? m_userSettings.m_sort : m_variants.front().m_settings.m_sort;
 	}
 	const ibGroupDescription& GetCurrentGroupDesc() const {
-		return m_userSettings.m_group.IsOk() ? m_userSettings.m_group : m_variants.front().m_settings.m_group;
+		return ReaderHasSetting() ? m_userSettings.m_group : m_variants.front().m_settings.m_group;
 	}
 	const std::vector<ibOutputDescription>& GetCurrentStructure() const {
-		return !m_userSettings.m_structure.empty() ? m_userSettings.m_structure
-		                                           : m_variants.front().m_settings.m_structure;
+		return ReaderHasSetting() ? m_userSettings.m_structure
+		                          : m_variants.front().m_settings.m_structure;
 	}
 	// ⭐ …AND THE FIELDS THE READER CHOSE, asked the same way as its four neighbours: theirs when
 	// they said anything, the zeroth variant's when they did not. Answered PER PART, because that is
 	// the rule the whole section follows — a person who chose columns said nothing about the sort.
 	const std::vector<ibSelectedFieldDescription>& GetCurrentSelectedDesc() const {
-		return !m_userSettings.m_selected.empty() ? m_userSettings.m_selected
-		                                          : m_variants.front().m_settings.m_selected;
+		return ReaderHasSetting() ? m_userSettings.m_selected
+		                          : m_variants.front().m_settings.m_selected;
 	}
 
 	// ⭐⭐ …AND WHAT THE READER PUT IN THE PARAMETERS. Not "theirs or the author's" wholesale, like the
@@ -989,6 +1006,10 @@ public:
 
 	// WHAT THE READ OWES — asked by the tests, so it is stated here; the body is in the module.
 	std::vector<wxString> ProjectionFor(const Output& output) const;
+
+	// …and what is SHOWN out of it: the same walk without the fields a filter and a sort merely need.
+	// The read is the union, the print is what somebody chose — see the driver's `m_shown`.
+	std::vector<wxString> ShownFor(const Output& output) const;
 
 protected:
 	// Always non-empty (see Outputs) — the one output every composition starts with.

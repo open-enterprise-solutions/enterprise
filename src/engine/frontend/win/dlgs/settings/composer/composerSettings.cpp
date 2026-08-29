@@ -4035,7 +4035,12 @@ void ibComposerSettingsPanel::PopulateFieldTree(wxTreeCtrl* tree)
 	for (size_t i = 0; i < m_fieldList.size(); ++i) {
 		const ibQueryConstructorField& field = m_fieldList[i];
 		const wxString label = field.m_presentation.IsEmpty() ? field.m_name : field.m_presentation;
-		tree->AppendItem(root, label, 0, 0, new ibFieldItemData(i));   // icon 0 = attribute
+		// ⭐ …AND THE PICTURE SAYS WHICH IT IS. The predicate above was written and then not asked:
+		// every node went on with the attribute icon, so a field already declared as a resource looked
+		// exactly like one that was not — on the very page where resources are declared (found by
+		// Max's question, 2026-08-29: "does it work?").
+		const int icon = isResource(field.m_name) ? 1 : 0;   // 0 = attribute, 1 = resource
+		tree->AppendItem(root, label, icon, icon, new ibFieldItemData(i));
 	}
 }
 

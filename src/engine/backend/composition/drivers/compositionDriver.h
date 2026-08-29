@@ -92,6 +92,23 @@ struct ibCompositionOutputInfo
 		return column < m_paths.size() ? m_paths[column] : wxString();
 	}
 
+	// ⭐⭐ AND WHETHER THE COLUMN IS SHOWN AT ALL — one entry per schema column.
+	//
+	// Reading and showing are two questions over one query: the read fetches everything ANY node
+	// needs, the fields a filter and a sort stand on included, and what is PRINTED is what somebody
+	// chose. Without this the driver laid a column out for every column of the schema, so a report
+	// that selected nothing still grew headed, empty columns for the fields it merely filtered by
+	// (Max, 2026-08-29: "I have already set a user setting where it is empty — it must blank the
+	// columns even if they were there").
+	//
+	// A DIMENSION and a MEASURE are always shown — a heading prints its key and a fold prints its
+	// figure — so only projected fields are ever false here.
+	std::vector<bool>                          m_shown;
+
+	bool ShowsColumn(size_t column) const {
+		return column >= m_shown.size() || m_shown[column];
+	}
+
 	// HOW MANY OF THE DIMENSIONS ARE THE ROWS'. Both axes fold in one `TOTALS BY`, rows first (see
 	// AppendSettingsClauses), so this is the seam between them and nothing else marks it.
 	size_t                                     m_rowLevels = 0;

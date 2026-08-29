@@ -415,6 +415,24 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				info.m_paths[i] = schema[i].m_name;
 		}
 	}
+	// ⭐⭐ WHICH COLUMNS ARE SHOWN AT ALL — the union of what the output and every node under it shows.
+	// A projected field nobody chose gets no column: it was fetched because a filter or a sort stands
+	// on it, and a report that shows nothing extra must not grow a headed, empty column for it (Max,
+	// 2026-08-29). Dimensions and measures are always shown — a heading prints its key, a fold prints
+	// its figure.
+	{
+		const std::vector<wxString> shown = ShownFor(output);
+		info.m_shown.assign(schema.size(), true);
+		for (size_t i = 0; i < schema.size(); ++i) {
+			if (schema[i].m_role != ibQueryLowering::ibColumnRole::Detail)
+				continue;
+			bool shows = false;
+			for (const wxString& name : shown)
+				if (ibComposerColumnAnswersTo(schema[i], name)) { shows = true; break; }
+			info.m_shown[i] = shows;
+		}
+	}
+
 	info.m_detailsAxis = DetailAxisOf(output);
 	info.m_rowLevels = GetCurrentGroupDesc().IsOk()
 		? [&] {
@@ -581,10 +599,25 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				// not print its own key is not a heading. Asked by ROLE, because a level NUMBER is
 				// the fold's own counting and does not have to agree with the walk's depth — which
 				// is exactly how the key came to be blanked in the first place.
-				for (size_t i = 0; !everyField && !shownHere.empty() && i < schema.size(); ++i) {
+				// ⭐⭐ AND AN EMPTY SELECTION IS AN ANSWER, NOT A MISSING ONE. This ran only when
+				// something had been chosen, so a report that names no field printed EVERY column the
+				// read had to fetch — the fields a filter or a sort needs are in the projection, and
+				// they arrived on the sheet beside the grouping (Max, 2026-08-29: "I said only the
+				// grouping by Ref, there are no selected fields — where does it take these from?").
+				//
+				// Reading and showing are two questions: what is fetched is the union of what every
+				// node needs, what is PRINTED is what this node was told to show. Nothing told = the
+				// grouping's key and the figures, and a field appears when somebody adds it.
+				for (size_t i = 0; !everyField && i < schema.size(); ++i) {
 					const ibQueryLowering::OutputColumn& oc = schema[i];
 					if (oc.m_role == ibQueryLowering::ibColumnRole::Dimension)
 						continue;               // a heading's key — printed because it IS the grouping
+					// ⭐ …AND A RESOURCE IS ALWAYS PRINTED. It was declared on purpose ("I have to add
+					// those fields deliberately"), it is the figure the fold exists for, and it is not
+					// named in the selected-fields table at all — so a table that says nothing about it
+					// is not a table that hides it.
+					if (oc.m_role == ibQueryLowering::ibColumnRole::Measure)
+						continue;
 					// ⚠ ASKED, NOT COMPARED — a path and an output name are spelled differently for
 					// every dot-walk. See ibComposerColumnAnswersTo.
 					bool shows = false;

@@ -156,6 +156,9 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 	m_paths.reserve(info.m_schema.size());
 	for (size_t i = 0; i < info.m_schema.size(); ++i)
 		m_paths.push_back(info.PathOf(i));
+	// …AND WHICH OF THEM ARE SHOWN, taken here for the same reason as the two above: the layout is
+	// decided later and the info does not outlive this call.
+	m_shown = info.m_shown;
 	// AN OUTPUT STARTS ITS OWN DESCENT. Outputs share the sheet, not their trees: a cell of the
 	// second report standing under a heading of the first would be a link nobody can follow back.
 	m_chainAtLevel.clear();
@@ -408,6 +411,11 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::O
 		case ibQueryLowering::ibColumnRole::Measure:
 			break;                           // …placed in the second pass, to the right of everything
 		default:
+			// ⚠ …AND ONLY IF IT IS SHOWN. A projected field the read had to fetch for a filter or a
+			// sort takes no column at all — it is not blanked, it is absent, header and width with it
+			// (see ibCompositionOutputInfo::m_shown).
+			if (!m_shown.empty() && i < m_shown.size() && !m_shown[i])
+				break;
 			m_layout[i] = next++;            // a detail — one column each, in the order it was asked for
 			break;
 		}
