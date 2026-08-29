@@ -346,6 +346,9 @@ protected:
 	void Command_ClearFilter();
 
 	void Command_ShowViewMode();
+	// ⭐ WHAT IS ON THE SCREEN, AS A DOCUMENT: the composition in force, printed by the report's own sheet
+	// driver into a spreadsheet document, which is then shown. See the body.
+	void Command_OutputList();
 
 #ifndef OES_USE_WEB
 	//events — wxDataView-bound, desktop only
@@ -558,6 +561,9 @@ public:
 	// The column's FULL binding path (tablebox prefix + the column's own field id(s)); the
 	// tablebox strips its own prefix to get the row-relative tail it walks per row.
 	const std::vector<ibSourceHop>& GetSourcePath() const { return m_propertySource->GetValueAsPath(); }
+	// (THE BINDING WHOLE — `GetSourceDesc()`, and it is NOT declared here: the column already has it, as
+	//  ibBackendTypeSourceFactory's own pure virtual. A second one differing only in return type is not an
+	//  override, it is a redefinition — the verb was already there under the name I was about to give it.)
 
 	// The column's bound source as a composer FIELD — its dotted NAME (e.g. "Product.SKU"), row-relative to
 	// the bound table. Universal: whatever addresses a column by field (sort, filter, group) uses it. Straight

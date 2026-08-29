@@ -73,9 +73,6 @@ public:
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return nullptr; }
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
-	//descriptions...
-	wxString GetDataPresentation(const ibValueDataObject* objValue) const;
-
 	//prepare menu for item
 	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);

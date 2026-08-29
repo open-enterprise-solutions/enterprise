@@ -139,8 +139,7 @@ public:
 	virtual ibBackendValueForm* GetFolderSelectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
 #pragma endregion
 
-	//descriptions...
-	wxString GetDataPresentation(const ibValueDataObject* objValue) const;
+	//descriptions...
 
 	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }

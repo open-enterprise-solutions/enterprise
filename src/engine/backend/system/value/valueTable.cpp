@@ -116,15 +116,13 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 		Clear();
 		return true;
 	case enSort: {
-		// Sort goes through L5 — NOT an in-memory CompareRow loop (Max: sorting must live on L5, not a loop).
-		// Set the composer's ORDER BY (over this table's RAM queryable) by column NAME, then refetch; the
-		// composer renders the sorted view. m_sortOrder / RamTableBase::Sort are gone.
-		const wxString colName = paParams[0]->GetString();
-		if (m_tableColumnCollection->GetColumnByName(colName) == nullptr)
+		// ONE MEANING OF "SORT" for this table: the script's Sort() re-seats the rows, exactly as the two
+		// order commands do. A script that sorts a table and then walks it must walk it sorted.
+		ibDataViewColumnItem column;
+		column.m_name = paParams[0]->GetString();
+		if (m_tableColumnCollection->GetColumnByName(column.m_name) == nullptr)
 			return false;
-		m_composer.ClearSorts();
-		m_composer.Sort(colName, lSizeArray > 0 ? paParams[1]->GetBoolean() : true);
-		NotifyReset();
+		SortValue(column, lSizeArray > 0 ? paParams[1]->GetBoolean() : true);
 		return true;
 	}
 	}
@@ -197,6 +195,18 @@ void ibValueModelTable::OnPropertyChanged(ibProperty* /*property*/, const wxVari
 
 bool ibValueModelTable::WriteProperty(ibDataNode& node) const
 {
+	// ⭐⭐ THE TABLE'S OWN IDENTITY, WRITTEN DOWN. It is minted in the ctor, so an unserialised table gets
+	// a fresh one every run — and anything that ADDRESSES the table by it then addresses a different
+	// table each time. Saved settings are exactly that: the shelf is keyed by what is shown, so a reader
+	// who kept an arrangement for this table found the shelf empty on the next open, the entry still
+	// sitting under last run's guid (Max, 2026-08-29: *"you write this guid there, and when it is read it
+	// is restored from there, and it stands stable"*).
+	//
+	// It rides with the COLUMNS because it is a fact about the same thing they are — what the designer
+	// declared. A table created in a SCRIPT is never written, keeps the minted one, and is unaddressable
+	// by design: nobody declared it, so nobody can have kept anything for it.
+	node.SetProp(wxT("Guid"), m_guid.GetGuid());
+
 	// One child node per column; the column-info serializes ITSELF through the unified property mechanism
 	// (its own WriteProperty — Name / Caption / Type via each property's GetNodeValue, + id / width). No
 	// hand-rolled field writing / ibTypeDescriptionMemory here — the same path ibFormAttribute uses.
@@ -211,6 +221,13 @@ bool ibValueModelTable::WriteProperty(ibDataNode& node) const
 
 bool ibValueModelTable::ReadProperty(const ibDataNode& node)
 {
+	// …AND TAKEN BACK, so the table is the same table it was last time. Kept ONLY when something was
+	// written: a configuration saved before this existed carries no guid, and overwriting the minted one
+	// with a null would give every such table one shared address — which is worse than a fresh one.
+	const ibGuid stored = node.GetProp<ibGuid>(wxT("Guid"));
+	if (stored.isValid())
+		m_guid = stored;
+
 	// Rebuild the column collection from the serialized child nodes. Clear first so a re-read stays
 	// idempotent; add an empty column, then let it read ITSELF back through its property serialization (no
 	// rows exist yet, so AddColumn's per-row cell-fill is a no-op).
@@ -408,6 +425,30 @@ bool ibValueModelTable::ibValueModelTableReturnLine::GetPropVal(const long lProp
 
 //**********************************************************************
 
+namespace {
+// A filter line DETERMINES a value only when it SAYS one: an equality, switched on, on a plain column (a
+// dotted path walks into a reference — there is no cell of this table to write it into), against a literal
+// rather than another field. `>` / `LIKE` / `IN` narrow without deciding, and an OR-group decides nothing at
+// all — so neither contributes, and an OR is not walked into.
+void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes,
+	std::vector<std::pair<wxString, ibValue>>& out)
+{
+	for (const ibFilterNodeDescription& node : nodes) {
+		if (!node.m_use)
+			continue;
+		if (node.m_kind == ibFilterNodeKind_Group) {
+			if (node.m_groupKind == ibFilterGroupKind_And)
+				ibCollectFilterDefaults(node.m_children, out);
+			continue;
+		}
+		if (node.m_comparison != ibComparisonKind_Equal) continue;
+		if (!node.m_left.IsField() || node.m_right.IsField()) continue;
+		if (node.m_left.m_path.Find(wxT('.')) != wxNOT_FOUND) continue;
+		out.emplace_back(node.m_left.m_path, node.m_right.m_value);
+	}
+}
+}   // namespace
+
 long ibValueModelTable::AppendRow(unsigned int before, const ibDataViewItem& contextRow)
 {
 	ibComposerNode* rowData = new ibComposerNode();
@@ -417,9 +458,10 @@ long ibValueModelTable::AppendRow(unsigned int before, const ibDataViewItem& con
 		);
 	}
 
-	// Grouped add: the new row inherits the current group's dimension values (read each grouping dim off the
-	// FRONT-passed context row — the selected row), so it lands INSIDE the group instead of losing the grouping
-	// value. No context / ungrouped → no dims → no-op; a dotted (reference-walk) dim is skipped. (NOT tabular-section-only.)
+	// Grouped add: the new row inherits the dimension values of the group the user is INSIDE — the drilled-into
+	// folder the front passes as the context — so it lands in that group instead of losing the value. At the
+	// ROOT it inherits nothing and therefore forms an empty group of its own, which a person can step into and
+	// fill; filling it re-folds the view on the spot. Ungrouped → no dims → no-op; a dotted dim is skipped.
 	if (ibComposerNode* ctx = GetViewData<ibComposerNode>(contextRow)) {
 		for (size_t i = 0; i < GetModelComposer().GroupCount(); ++i) {
 			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
@@ -430,11 +472,62 @@ long ibValueModelTable::AppendRow(unsigned int before, const ibDataViewItem& con
 		}
 	}
 
+	// ⭐⭐ …AND WHAT THE FILTER IN FORCE HAS ALREADY DECIDED. Not a convenience: the new row is empty, the filter
+	// does not pass it, and the RAM composer drops it from the order in the same breath — the row a person just
+	// added is gone before they see it. Filled HERE, before the notify, so the first order computed after the
+	// insert already contains the row. Adjusted to the COLUMN's type, like every other cell of this table.
+	std::vector<std::pair<wxString, ibValue>> defaults;
+	ibCollectFilterDefaults(GetModelComposer().GetCurrentFilterDesc().m_nodes, defaults);
+	for (const std::pair<wxString, ibValue>& one : defaults) {
+		const ibMetaID col = GetColumnIDByName(one.first);
+		if (col != wxNOT_FOUND)
+			rowData->AppendTableValue(col,
+				ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnType(col), one.second));
+	}
+
 	// Insert AFTER the active row when AddValue passes a position (before > 0); before == 0 → append at the bottom
 	// (the script Add() path). Mirrors the tabular section so both editable tables place a new row the same way.
 	if (before > 0)
 		return ibValueModelStorage::Insert(rowData, before, !ibBackendException::IsEvalMode());
 	return ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
+}
+
+void ibValueModelTable::SortValue(const ibDataViewColumnItem& column, bool ascending)
+{
+	if (!column.IsOk() || ibBackendException::IsEvalMode())
+		return;
+
+	// ⭐⭐ A SORT CHANGES THE DATA — the rows are re-seated, and that is the order the table then IS (Max,
+	// 2026-08-29: moving and sorting change the rows physically; a filter, a grouping or a setting is a layer
+	// ABOVE them and dies with the window). The composer's own sort is dropped again at the end: the rows now
+	// SIT in this order, and a read-order left on top would go on answering over them.
+	//
+	// L5-2 says WHAT the order is — nothing here compares — and the rows are then placed into it with the
+	// storage's own move. Sorting lives on L5, not in a loop.
+	ibDataRamComposer& composer = GetModelComposer();
+	composer.ClearSorts();
+	composer.Sort(column.m_name, ascending);
+	Storage().SetColumns(GetColumnCollection());
+	const std::vector<long> order = composer.ComputeOrder();
+	composer.ClearSorts();
+
+	// The rows in their new sequence, taken BEFORE anything moves — every move shifts the indices under it.
+	std::vector<ibComposerNode*> seated;
+	seated.reserve(order.size());
+	for (const long index : order)
+		if (ibComposerNode* node = Storage().GetNode(index))
+			seated.push_back(node);
+
+	// ⚠ Rows a FILTER hides are not in the order, so they come to rest AFTER the sorted ones, keeping their
+	// own relative order among themselves. Sorting what is shown cannot avoid saying something about what is not.
+	for (size_t position = 0; position < seated.size(); ++position) {
+		const long current = Storage().IndexOf(seated[position]);
+		if (current >= 0 && current != static_cast<long>(position))
+			Storage().MoveValue(this, seated[position],
+				static_cast<int>(static_cast<long>(position) - current), /*notify*/ false);
+	}
+
+	NotifyReset();
 }
 
 void ibValueModelTable::EditRow(const ibDataViewItem& row)

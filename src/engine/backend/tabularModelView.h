@@ -249,15 +249,9 @@ private:
 	Mode              m_mode = Mode::Empty;
 };
 
-// The rows a source command runs against, carried FRONT -> model (TableBox -> the model's CallAsCommand).
-// m_selection = the actually-selected row (empty when nothing is selected). m_anchor = where the user stands
-// in the tree (the current / top node), the fallback a CREATE command uses when there is no selection so a
-// new element lands in the browsed folder. A flat model (value table / tabular) reads m_selection ONLY; the
-// hierarchy model uses m_selection ?: m_anchor for the parent. Destructive commands never touch m_anchor.
-struct ibDataViewCommandContext {
-	ibDataViewItem m_selection;
-	ibDataViewItem m_anchor;
-};
+// (THE COMMAND CONTEXT — what a command runs against — lives in tabularModel.h, with the models that read
+//  it: it carries a COLUMN now, and a column is a source description, which this header has no business
+//  pulling in.)
 
 // Out-of-class definitions: inline so the body lives in the header.
 // Need ibDataViewItem complete before returning it.

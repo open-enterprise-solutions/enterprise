@@ -217,12 +217,19 @@ ibQueryAstExprPtr ibBuildFilterNodes(ibDataComposer& composer,
 
 ibQueryAstExprPtr ibBuildFilterCondition(ibDataComposer& composer, const ibFilterNodeDescription& item)
 {
-	// A HALF-WRITTEN LINE IS NOT A CONDITION — a side that is neither a bound field nor a value
-	// would narrow the list by nothing, or make the query lie. It reads as if it were not written.
-	const bool leftUnset  = !item.m_left.IsField()  && item.m_left.m_value.IsEmpty();
-	const bool rightUnset = !item.m_right.IsField() && item.m_right.m_value.IsEmpty();
-	if (leftUnset || (rightUnset && item.m_comparison != ibComparisonKind_Contains))
-		return nullptr;
+	// ⭐⭐ EVERYTHING THAT WAS PASSED IS SUBSTITUTED, AND THE ONLY SWITCH IS THE LINE'S OWN (Max,
+	// 2026-08-29: *"whatever value we pass must be substituted — the one exception is the `use` flag
+	// standing at false. Empty or not empty makes no difference: we can filter BY an empty value"*, and
+	// then: *"Undefined can be in a filter too — you substitute everything"*). `m_use` is read by the
+	// caller (ibBuildFilterNodes); nothing here judges what somebody chose.
+	//
+	// 🛑 THIS USED TO THROW LINES AWAY BY THE VALUE, and by the wrong predicate at that: it asked
+	// `IsEmpty()`, which for a BOOLEAN is `false`, for a NUMBER is zero and for a STRING is the empty one
+	// (value.cpp). So `Flag = False`, `Quantity = 0`, `Description = ""` and `Counterparty = <empty>` were
+	// all discarded as unwritten — everywhere in the product, silently, and indistinguishable from a
+	// filter that simply matched nothing. Two questions had one answer: "did somebody write this line"
+	// and "is the value they wrote falsy". Only the first one is anybody's business here, and the line
+	// answers it itself.
 
 	// CONTAINS IS A LIKE, not a comparison — its own node kind, so the lowering can do what a LIKE
 	// needs instead of being handed an operator it has no meaning for.
@@ -318,6 +325,7 @@ ibQueryAstExprPtr ibDataComposer::BuildFilterAst(const ibFilterDescription& filt
 ibDataComposer& ibDataComposer::SetUserSettingsDesc(const ibSettingsDescription& settings)
 {
 	m_userSettings = settings;
+	m_readerHasSetting   = true;   // …and from now on this setting answers for every part, empty ones included
 	return *this;
 }
 
@@ -328,6 +336,7 @@ ibDataComposer& ibDataComposer::ClearUserSettings()
 	// …EMPTIED, which IS the reset: with nothing in it, every part comes from the zeroth again.
 	// Nothing is remembered to undo, and there is no second mechanism.
 	m_userSettings.Clear();
+	m_readerHasSetting = false;   // …and there is no reader's setting again, which is what "reset" means
 	return *this;
 }
 
@@ -572,6 +581,83 @@ static void CollectProjection(std::vector<wxString>& into, const std::vector<wxS
 // "exactly as a detail record is in the rows, so in the columns" (Max, 2026-08-26) — and the fold
 // has to be told, because the level itself is written last either way. Rows when nobody declared
 // one: the records are read regardless, and down the page is where a report puts them.
+// ⭐⭐ THE LADDER, DERIVED FROM THE SETTING — see the declaration for why it lives here and not in the
+// widget that used to build it.
+void ibDataComposer::BuildPrintLevels(bool tree, const ibBackendQueryable* source)
+{
+	if (!tree) {
+		// A FLAT VIEW IS A FLAT READ, and it wins over a stored grouping — the same rule the model's
+		// own paging follows (a flat List view passes the ignore-parent sentinel and the grouping is
+		// off). Said once, here, so the two roads cannot answer it differently.
+		ibSettingsDescription flat = GetCurrentSettingsDesc();
+		flat.m_group.Clear();
+		SetUserSettingsDesc(flat);
+		TrimLevels(0);
+		return;
+	}
+
+	// AN AUTHOR'S LADDER STANDS AS IT IS. A report declares its levels; this is for a composition
+	// whose structure lives in a SETTING, which is what a list is.
+	if (!LevelChain().empty())
+		return;
+
+	// WHAT THE SOURCE CALLS ITS OWN ROW, and whether it has a tree at all. Both are facts about the
+	// source, so both are asked of it — a widget cannot know them and should never have been asked.
+	wxString identity;
+	bool     hasTree = false;
+	if (source != nullptr) {
+		const std::vector<const ibBackendQueryColumn*> key = source->GetPrimaryKeyColumns();
+		if (key.size() == 1 && key.front() != nullptr) {
+			identity = key.front()->GetName();
+			hasTree  = source->GetHierarchyColumn() != nullptr;
+		}
+	}
+
+	// ⭐⭐ A TREE RUNG IS A RUNG — ANY NUMBER OF THEM, IN ANY ORDER. A rung unfolds ITS OWN reference, so
+	// a counterparty tree with a goods tree inside each of them is two recursions that never meet: each
+	// stands on a different field (Max, 2026-08-29: *"we can output several hierarchies, and the order does
+	// not matter"*).
+	//
+	// 🛑 TWO RULES WERE PROPOSED HERE AND BOTH ARE WRONG, which is worth keeping so neither comes back:
+	//   * "the tree is always LAST" — a working report of the same shape refutes it: counterparty → goods
+	//     (tree) → period, the tree in the MIDDLE with an ordinary grouping hanging off its concrete elements.
+	//   * "there is only ONE tree" — I argued it from "a row nests one way", which is true only of two rungs
+	//     over the SAME field. Over two different references there is no conflict at all.
+	// What is genuinely impossible is the same field twice — a level repeated is a fold repeated — and that
+	// is checked below, where the source's own tree is offered.
+	bool identityNamed = false;
+	for (const ibGroupLineDescription& line : GetCurrentGroupDesc().m_lines) {
+		if (line.m_path.IsEmpty())
+			continue;
+		AppendLevel(line.m_path, line.m_kind);
+		identityNamed = identityNamed || (!identity.IsEmpty() && line.m_path == identity);
+	}
+
+	// ⭐ THE TREE IS A LEVEL OVER THE ROW'S OWN REFERENCE, and it stands BESIDE a grouping rather
+	// than instead of one: the groupings a person set fold first, the source's own tree inside each.
+	// …only where there IS a tree, and only if that field is not already the deepest level — a level
+	// repeated is a fold repeated.
+	if (hasTree && !identityNamed && !identity.IsEmpty())
+		AppendLevel(identity, ibQueryDimUnfold::Hierarchy);
+
+	if (LevelChain().empty())
+		return;   // nothing folded — every row is a record already, and a ladder of one records level is not one
+
+	// ⭐⭐ …AND A LEVEL OF RECORDS AT THE BOTTOM. Headings are what a fold is FOR, so an output always
+	// writes them; ROWS are written only by an output whose ladder NAMES them.
+	//
+	// 🛑 A RULE OF MY OWN STOOD HERE AND IS REMOVED. It skipped this level whenever the deepest rung
+	// grouped by the row's identity, reasoning that such a node IS the row and a record under it prints
+	// the same line twice. The reasoning is right and the PLACE is wrong: the fold already states it,
+	// per level, where it can SEE the level's key (`keyIsTheRow`, queryProvider.cpp). Being a second
+	// answer it was also a worse one — it fired on spellings the fold does not, and emptied every
+	// heading of its own fields. Two builds, two wrong shapes, no gain (Max, 2026-08-29: *"roll them
+	// back, they carry no value"*).
+	GroupNode records;
+	records.m_kind = ibCompositionLevelKind::Details;
+	LevelChain().push_back(std::move(records));
+}
+
 ibTotalsAxis ibDataComposer::DetailAxisOf(const Output& output)
 {
 	for (const GroupNode& level : output.m_columnGroups)
@@ -631,7 +717,7 @@ std::vector<wxString> ibDataComposer::SelectedFor(const Output& output, const Gr
 }
 
 // ⭐ WHAT IS SHOWN — the same walk as the projection below, minus what is only READ. A filter and a
-// sort名 fields the query must fetch; a report does not print them for that.
+// sort name fields the query must fetch; a report does not print them for that.
 static void CollectShown(std::vector<wxString>& into, const std::vector<wxString>& above,
                          const ibDataComposer::GroupNode& level)
 {

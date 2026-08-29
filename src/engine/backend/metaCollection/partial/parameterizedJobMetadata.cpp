@@ -127,14 +127,6 @@ ibBackendValueForm* ibValueMetaObjectParameterizedJob::GetFolderSelectForm(const
 }
 #pragma endregion
 
-wxString ibValueMetaObjectParameterizedJob::GetDataPresentation(const ibValueDataObject* objValue) const
-{
-	static ibValue vDescription;
-	if (objValue->GetValueByMetaID((*m_propertyAttributeDescription)->GetMetaID(), vDescription))
-		return vDescription.GetString();
-	return wxEmptyString;
-}
-
 //***********************************************************************
 //*                           read & save events                        *
 //***********************************************************************

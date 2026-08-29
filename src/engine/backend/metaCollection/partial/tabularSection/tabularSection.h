@@ -194,33 +194,69 @@ public:
 	virtual bool SetValueByRow(const wxVariant& variant,
 		const ibDataViewItem& row, unsigned int col) override;
 
+	// ⭐⭐ THE NUMBER A PERSON READS — the row's place in WHAT IS SHOWN, 1-based; 0 when the row is not shown
+	// (a group header, a row outside the filter, a row of another table). It says how the rows stand one
+	// after another right now, and it must read 1, 2, 3, 4, 5, 6 however the order has been played with
+	// (Max, 2026-08-29).
+	//
+	// 🛑 It used to be the STORAGE index. Truthful about the data and wrong on the screen: under a sort it
+	// came out jumbled — 1,2,3,4,6,5 — and under a filter it counted rows nobody could see. The stored line
+	// number is still the storage order (that is what SaveData writes); this column is simply not that.
+	//
+	// The display order is the composer's, so it is asked of the composer — and cached against the VIEW
+	// GENERATION, because it is asked once per painted cell and the answer only moves when the view does.
+	long DisplayNumberOf(const ibDataViewItem& row) const;
+
 	virtual bool AutoCreateColumn() const { return false; }
 	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const {
 		return ibValueModel::EditableLine(item, col) && !m_metaTable->IsNumberLine(col);
 	}
 
 
-	void AddValue(const ibDataViewItem& row);
+	// `row` = WHERE it goes (the selection); `anchor` = the group it is INSIDE, whose dimensions it inherits.
+	// Empty anchor (the root of a hierarchical view) = inherits nothing and forms its own empty group.
+	void AddValue(const ibDataViewItem& row, const ibDataViewItem& anchor = ibDataViewItem());
 	virtual void CopyValue(const ibDataViewItem& row);
 	void EditValue(const ibDataViewItem& row);
 	virtual void DeleteValue(const ibDataViewItem& row);
+	// VIRTUAL for the same reason Copy and Delete are: a section that belongs to a REFERENCE object has to
+	// mark that object modified, and the base has no object to mark. The bodies are one line each — the RAM
+	// base's physical call — and the Ref subclass wraps them.
+	virtual void MoveValue(const ibDataViewItem& row, int delta);
+	virtual void SortValue(const ibDataViewColumnItem& column, bool ascending);
 
 	// Command store (ibStandardCommandTabular): a tabular section defines its OWN Add / Copy / Edit / Delete and runs
 	// them by id on the front-passed row (no shared base set — each model ships its own).
-	enum { eAddValue = 1, eCopyValue, eEditValue = 3 | eStartEditingFlag, eDeleteValue = 4 };   // Edit's id carries the front-edit flag
+	enum { eAddValue = 1, eCopyValue, eEditValue = 3 | eStartEditingFlag, eDeleteValue = 4,
+		eMoveUpValue = 5, eMoveDownValue, eSortAscValue, eSortDescValue };   // Edit's id carries the front-edit flag
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override {
 		commands.emplace_back(eAddValue,    wxT("Add"),    _("Add"),    g_picAddCLSID,    true);
 		commands.emplace_back(eCopyValue,    wxT("Copy"),   _("Copy"),   g_picCopyCLSID);
 		commands.emplace_back(eEditValue,    wxT("Edit"),   _("Edit"),   g_picEditCLSID);
 		commands.emplace_back(eDeleteValue,  wxT("Delete"), _("Delete"), g_picDeleteCLSID);
+		commands.emplace_back();   // separator — what follows is about the ORDER, not about the rows
+		commands.emplace_back(eMoveUpValue,   wxT("MoveUp"),   _("Move up"),   g_picMoveUpCLSID);
+		commands.emplace_back(eMoveDownValue, wxT("MoveDown"), _("Move down"), g_picMoveDownCLSID);
+		// …and a separator BETWEEN THE TWO PAIRS: moving is done BY HAND to one row, ordering is done BY
+		// A COLUMN to all of them — two questions, two groups.
+		commands.emplace_back();
+		// All four keep the DEFAULT modify flag (Max, 2026-08-29): in a view-only form they show and grey out.
+		commands.emplace_back(eSortAscValue,  wxT("SortAsc"),  _("Sort ascending"),  g_picSortAscCLSID);
+		commands.emplace_back(eSortDescValue, wxT("SortDesc"), _("Sort descending"), g_picSortDescCLSID);
 	}
 	// Flat tabular section: no hierarchy, so only the SELECTED row matters — m_anchor is ignored.
 	virtual void CallAsCommand(const ibActionID& lNumAction, const ibDataViewCommandContext& ctx, ibBackendValueForm* srcForm) override {
 		switch (lNumAction) {
-		case eAddValue:    AddValue(ctx.m_selection);    break;
+		case eAddValue:    AddValue(ctx.m_selection, ctx.m_anchor);   break;   // where it goes · what it inherits
 		case eCopyValue:   CopyValue(ctx.m_selection);   break;
 		case eEditValue:   EditValue(ctx.m_selection);   break;   // no-op on the backend; Edit's id carries eStartEditingFlag → the FRONT opens the real inline editor
 		case eDeleteValue: DeleteValue(ctx.m_selection); break;
+		// The four order verbs — through this class's own virtuals, so a section owned by a reference object
+		// can mark it modified, exactly as Copy and Delete do.
+		case eMoveUpValue:   MoveValue(ctx.m_selection, -1); break;
+		case eMoveDownValue: MoveValue(ctx.m_selection, +1); break;
+		case eSortAscValue:  SortValue(ctx.m_column, true);  break;
+		case eSortDescValue: SortValue(ctx.m_column, false); break;
 		}
 	}
 
@@ -261,6 +297,11 @@ protected:
 
 	bool m_readOnly;
 
+	// The display order, as of the view generation it was read at — see DisplayNumberOf.
+	mutable std::vector<long> m_displayOrder;
+	mutable uint32_t          m_displayOrderGeneration = 0;
+	mutable bool              m_displayOrderRead = false;
+
 	const ibValueMetaObjectTableData* m_metaTable;
 
 	ibValueDataObject* m_objectValue;
@@ -289,6 +330,12 @@ class BACKEND_API ibValueTabularSectionDataObjectRef : public ibValueTabularSect
 
 	virtual void CopyValue(const ibDataViewItem& row);
 	virtual void DeleteValue(const ibDataViewItem& row);
+	// ⭐ ORDERING ROWS IS A DATA CHANGE, so the object they belong to is modified by it — exactly as by an
+	// add, a copy or a delete. Both verbs re-seat the rows physically, and the row order is what the write
+	// stores (SaveData numbers by it), so a document sorted or re-ordered and then closed unsaved would
+	// have lost a real edit without ever saying it had one (Max, 2026-08-29).
+	virtual void MoveValue(const ibDataViewItem& row, int delta) override;
+	virtual void SortValue(const ibDataViewColumnItem& column, bool ascending) override;
 
 	//append new row
 	virtual long AppendRow(unsigned int before = 0, const ibDataViewItem& contextRow = ibDataViewItem());

@@ -32,6 +32,13 @@ public:
 	struct Row
 	{
 		int  m_level = 0;
+		// ⭐⭐ …AND HOW DEEP INSIDE THAT RUNG. A rung that unfolds a hierarchy recurses WITHIN itself, so
+		// two facts are needed to say where a heading stands and one of them used to be dropped here on
+		// the grounds that "a list draws its own tree from the nodes it is handed". That was true while
+		// the tree came from a lazy parent-scope drill; it stops being true the moment a list and a
+		// report are one construction, because then the list's tree is the FOLD's tree and its depth is
+		// this number (Max, 2026-08-29: *"the report and the list give the same result under groupings"*).
+		int  m_indent = 0;
 		// ⭐ CAN THIS ROW BE OPENED — which is NOT "does it have children". It was called
 		// `m_hasChildren` while what the driver stores in it is `showsWhatIsUnder`: the base spends a
 		// starred paragraph on those being different questions (ibCompositionDriver::OnGroup), and a
@@ -70,22 +77,24 @@ public:
 	// ⭐ A LIST TAKES THE SECOND ANSWER — `showsWhatIsUnder`, never `hasChildren`. What it does with
 	// the flag is draw an EXPANDER, and an expander may promise only what the output will actually
 	// show; a heading standing over rows this output does not print must not offer to open.
-	void OnGroupBegin(int level, ibSelectorNodeKind /*kind*/, bool /*hasChildren*/,
-	                  bool showsWhatIsUnder, const std::vector<ibValue>& values) override {
-		Append(level, showsWhatIsUnder, values);
+	virtual void OnGroupBegin(const ibCompositionLine& line, const std::vector<ibValue>& values) override {
+		Append(line.m_level, line.m_indent, line.m_showsWhatIsUnder, values);
 	}
 
 	// A RECORD OPENS NOTHING, so it offers no expander — the truthful answer, not a default.
-	void OnRow(int level, const std::vector<ibValue>& values) override { Append(level, false, values); }
+	virtual void OnRow(const ibCompositionLine& line, const std::vector<ibValue>& values) override {
+		Append(line.m_level, line.m_indent, false, values);
+	}
 
 	// (⛔ NO OnGroupEnd HERE, and that is a fact about a list rather than an omission: a list draws a
 	//  heading as a LINE, and what a closing event is for is putting a total underneath — which a
 	//  list has no place for. The default does nothing, which is exactly right.)
 
 private:
-	void Append(int level, bool expandable, const std::vector<ibValue>& values) {
+	void Append(int level, int indent, bool expandable, const std::vector<ibValue>& values) {
 		Row row;
 		row.m_level = level;
+		row.m_indent = indent;
 		row.m_expandable = expandable;
 		for (size_t i = 0; i < m_schema.size() && i < values.size(); ++i) {
 			const ibBackendQueryColumn* col = m_schema[i].m_col;

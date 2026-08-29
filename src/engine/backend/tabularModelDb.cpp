@@ -129,35 +129,52 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// passes an empty/real parent → grouping is ON. Populating dims in a flat view drove groupLevel=true there,
 	// so a flat List of a grouped source ran a TOTALS read that returned the whole tree pre-order → level-0-only
 	// trim left zero rows → "everything disappears". Gating on !flatView keeps the flat list flat.
+	// ⭐⭐ THE RUNGS COME OFF THE LADDER — THE SAME ONE THE SHEET IS PRINTED BY (Max, 2026-08-29:
+	// *"bring the two roads together"*). They used to be read straight off `GroupCount()`, which is the
+	// SETTING, while the sheet read a LADDER built somewhere else — one state, two constructions, and
+	// every difference downstream followed from that. `BuildPrintLevels` is now the only place a ladder
+	// is made, and both roads ask it.
+	//
+	// ⚠ ONLY THE TREE BRANCH IS ASKED FOR HERE. Its flat branch CLEARS the reader's grouping, which is
+	// right for a copy printed once and destructive on the live composer a list reads through — so a
+	// flat view simply takes no rungs, exactly as it did before.
 	std::vector<wxString>         dims;
 	std::vector<ibQueryDimUnfold> dimKinds;
 	if (!flatView) {
-		for (size_t i = 0; i < m_composer.GroupCount(); ++i) {
-			wxString f; ibQueryDimUnfold k = ibQueryDimUnfold::Elements;
-			if (m_composer.GetGroupAt(i, f, k) && !f.IsEmpty()) {
-				dims.push_back(f);
-				dimKinds.push_back(k);
-			}
+		// DERIVED, SO DERIVED AFRESH. The ladder is a reading of the setting, and the setting changes under a
+		// list all the time — a person edits the grouping and fetches again. `BuildPrintLevels` leaves an
+		// existing ladder alone (an author's report declares its own), so without the trim the first fetch's
+		// ladder would outlive the setting it was read from and answer for a grouping nobody has any more.
+		m_composer.TrimLevels(0);
+		m_composer.BuildPrintLevels(true, q);
+		for (const ibDataComposer::GroupNode& level : m_composer.LevelChain()) {
+			// The records level ends the rungs — it names no field, and what stands under the last
+			// heading is rows, not another level.
+			if (level.m_settings.m_group.m_lines.empty())
+				break;
+			const ibGroupLineDescription& line = level.m_settings.m_group.m_lines.front();
+			if (line.m_path.IsEmpty())
+				break;
+			dims.push_back(line.m_path);
+			dimKinds.push_back(line.m_kind);
 		}
 	}
 
 	// The already-drilled dimension values (the scope) — read from the browsed parent node's group path.
 	// GetViewData is a static_cast, so guard on a real, ok parent node.
 	std::vector<ibValue> parentPath;
+	// ⭐⭐ …AND WHERE IT STANDS INSIDE THAT RUNG. A rung that unfolds a hierarchy recurses WITHIN itself:
+	// a folder and its contents are the SAME rung and differ only by a step inwards. So "which rung" and
+	// "how deep in its tree" are two questions, and the browsed node answers both separately.
+	std::vector<ibValue> parentSub;
 	if (!dims.empty() && parent.IsOk() && !flatView)
-		if (const ibComposerNode* pnode = GetViewData<ibComposerNode>(parent))
+		if (const ibComposerNode* pnode = GetViewData<ibComposerNode>(parent)) {
 			parentPath = pnode->GetGroupPath();
+			parentSub  = pnode->GetSubPath();
+		}
 	const size_t depth      = parentPath.size();
 	const bool   grouping   = !dims.empty();
 
-	// SELF-HIERARCHY is a PROPERTY OF THE QUERYABLE (it carries a hierarchy / parent column): the source is
-	// INHERENTLY a tree (a folder catalog / chart of accounts), so with NO user grouping it shows the parent
-	// tree, each row a DETAIL folder node whose children are rows parented on it. GROUPING-REPLACES-TREE rule (the
-	// user's spec): a user grouping REPLACES the inherent folder tree — the folder tree shows ONLY when no grouping
-	// is configured. So a user grouping switches hierarchy OFF (`!grouping`), and groupLevel then drives the flat-scan +
-	// TotalBy path a non-hierarchical document takes: the catalog is grouped by the field, folders no longer
-	// special. hierarchy is ON only in a Tree/Hierarchical view (not flatView) of a source with a hierarchy
-	// column AND with no grouping configured.
 	// ⭐ WALKING A TREE IS ASKED OF THE ARRANGEMENT, not of the parent column. `GetHierarchyColumn()`
 	// answers "is there a parent to walk up", which THREE arrangements say yes to — including
 	// `eSubordination`, where the parent is ordinary data and the list is meant to stay flat. Asked
@@ -166,13 +183,46 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	const ibHierarchyType arrangement = q->GetHierarchyType();
 	const bool browsable = arrangement == ibHierarchyType::eItems
 	                    || arrangement == ibHierarchyType::eFoldersAndItems;
-	const bool hierarchy = browsable && q->GetHierarchyColumn() != nullptr && !flatView && !grouping;
-	const bool groupLevel = grouping && !hierarchy && depth < dims.size();
+
+	// ⭐⭐ WHICH RUNG IS BROWSED, AND HOW A PAGE OF IT IS SERVED — asked of the LADDER, not of two
+	// mutually-exclusive flags.
+	//
+	// 🛑 THE PAIR IT REPLACES CARRIED A RULE THAT IS NOW WRONG: *"a user grouping REPLACES the inherent
+	// folder tree — the tree shows ONLY when no grouping is configured"* (`hierarchy = … && !grouping`).
+	// So "group by a field, and inside each group show the catalog's own tree" was not merely unbuilt,
+	// it was UNSAYABLE — and the sheet, which builds a ladder, said it happily. That is the divergence
+	// itself (Max, 2026-08-29: *"the list shows the hierarchy and the report does not — that is
+	// nonsense"*).
+	//
+	// A rung unfolds a tree when it SAYS SO — `Hierarchy` / `HierarchyOnly` — over the row's own
+	// identity. Anything else is an ordinary grouping rung. Nothing is mutually exclusive any more:
+	// the tree is one rung among the others, and it may stand under them.
+	//
+	// ⚠ AND OVER THE IDENTITY, not over any reference a person happened to pick: the parent-scope
+	// reader below walks the SOURCE's own hierarchy column, so a `Hierarchy` rung over some other
+	// reference is not something it can serve — it stays an ordinary grouping rung.
+	wxString identity;
+	{
+		const std::vector<const ibBackendQueryColumn*> key = q->GetPrimaryKeyColumns();
+		if (key.size() == 1 && key.front() != nullptr)
+			identity = key.front()->GetName();
+	}
+	const bool atRung = depth < dims.size();
+	const bool treeRung = atRung && !identity.IsEmpty() && dims[depth] == identity
+	                   && (dimKinds[depth] == ibQueryDimUnfold::Hierarchy
+	                    || dimKinds[depth] == ibQueryDimUnfold::HierarchyOnly);
+
+	const bool hierarchy  = treeRung && browsable && q->GetHierarchyColumn() != nullptr && !flatView;
+	const bool groupLevel = atRung && !hierarchy;
 
 	ibValue hierParentKey;       // the browsed folder's self-reference (scope for its children)
 	bool    hierHasParent = false;
+	// ⚠ …AND ONLY FROM A ROW. Entering a GROUP heading puts the reader at the TOP of the tree inside that
+	// group, not inside a folder — the heading has no reference of its own to scope children by, and reading
+	// one off it would scope the tree by a dimension value. Drilling a FOLDER is the other case, and now that
+	// a folder carries its group's scope the two are told apart by what the node IS.
 	if (hierarchy && parent.IsOk())
-		if (const ibComposerNode* pnode = GetViewData<ibComposerNode>(parent)) {
+		if (const ibComposerNode* pnode = GetViewData<ibComposerNode>(parent); pnode != nullptr && !pnode->IsGroup()) {
 			const std::vector<const ibBackendQueryColumn*> keyCols = q->GetPrimaryKeyColumns();
 			if (!keyCols.empty() && keyCols.front() != nullptr) {
 				pnode->GetValue(keyCols.front()->GetColumnId(), hierParentKey);
@@ -230,7 +280,14 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		// group's OWN dim value (the tail of its group path). The server GROUP-BY page keysets dim >/< this value;
 		// the detail sort/PK tail (else) is a detail-read cursor. (docs: group-level paging)
 		if (groupLevel) {
-			if (a != nullptr && !a->GetGroupPath().empty())
+			// ⭐ AND ON A NESTED RUNG THE ANCHOR IS ITS STEP, NOT ITS RUNG. A folder INSIDE a rung does not
+			// extend the rung's path — its place is the sub-chain — so looking for it in the group path
+			// found nothing, the window restarted at the top and the first page came back a second time
+			// (Max, 2026-08-30: *"almost, but it doubles"*). Two facts, and the question must be put to
+			// the one that holds the answer.
+			if (a != nullptr && !a->GetSubPath().empty())
+				page.m_anchorSortValues.push_back(a->GetSubPath().back());
+			else if (a != nullptr && !a->GetGroupPath().empty())
 				page.m_anchorSortValues.push_back(a->GetGroupPath().back());
 		}
 		else {
@@ -288,6 +345,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// config OUT, render just the browsed level's TotalBy + the scope filter(s), run, then put it back.
 	ibDataDBComposer& composer = m_composer;
 	const ibDataComposer::SettingsScope scope = composer.MarkScope();
+
 	const ibDataComposer::TakenGroups savedGroups = composer.TakeGroups();
 	// SELF-HIERARCHY is driven by the page envelope's parent scope (set above) + the provider — NOT by the
 	// composer (TOTALS BY Parent HIERARCHY grouped by the parent VALUE: it buried the items at tree level 1
@@ -295,6 +353,8 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// (TakeGroups dropped the grouping) and the provider scopes it to the parent. Only an EXPLICIT user
 	// grouping (Elements) drills through the composer here, layered on top of the base parent-hierarchy.
 	if (grouping && !hierarchy) {
+		// THE MODEL SAYS WHERE THE READER STANDS — this rung, this value. (What that means for the read
+		// is the engine's question; the operator is not chosen here.)
 		for (size_t k = 0; k < depth && k < dims.size(); ++k)
 			composer.ScopeTo(dims[k], wxT("="), parentPath[k]);
 		if (groupLevel)
@@ -323,6 +383,10 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// order. A GROUP level is NOT page-sized (TOTALS fold the whole level, ignoring the envelope), so leave every
 	// row: it windows on the client below, where ibComputePageWindow handles the direction and count itself.
 	std::vector<ibListFetchDriver::Row>& rows = driver.Rows();
+	// ⚠ A WINDOWED READ WAS NEVER PAGE-SIZED — the fold is eager, so there is no +1 probe to trim and no
+	// reversed page to flip; doing either would drop a real row off the level. (That the whole result is
+	// read to serve one level is the honest cost of this step, and the next one — the fold taking a
+	// count — is what pays it back.)
 	if (!groupLevel) {
 		if (static_cast<int>(rows.size()) > count && count > 0)
 			rows.pop_back();                       // drop the +1 probe
@@ -404,7 +468,30 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// the window transfers the kept ones into `out` (and frees the rest).
 	std::vector<ibComposerNode*> groupNodes;
 	out.Alloc(rows.size());
+
+	// ⭐⭐⭐ A HIERARCHY RUNG IS READ BY ITS STEP, NOT ONLY BY ITS RUNG. The fold nests a folder and its
+	// contents at ONE level and separates them by `m_indent`; a reader that filters by level alone gets
+	// the folder and everything inside it as SIBLINGS — which is exactly what the list showed while the
+	// sheet, which honours the indent, drew the tree correctly (Max, 2026-08-30: *"hierarchical catalog
+	// values are not linked to each other"*, with both windows side by side).
+	//
+	// So this level takes the rows one step in from where the reader stands, and only those under the
+	// branch they opened. `hasKids` is read by LOOKING AHEAD — a node has sub-values when the next row
+	// steps further in — because that is the one thing a pre-order stream says for free.
+	// (⚠ NOT `treeRung` — that one is the SOURCE's own tree, served by the parent-scope reader. This is
+	//  any rung whose unfold nests values, including one over another catalog's reference.)
+	const bool nestedRung = groupLevel && depth < dimKinds.size()
+		&& (dimKinds[depth] == ibQueryDimUnfold::Hierarchy
+		 || dimKinds[depth] == ibQueryDimUnfold::HierarchyOnly);
+	std::vector<bool> hasKids(rows.size(), false);
+	if (nestedRung)
+		for (size_t i = 0; i + 1 < rows.size(); ++i)
+			hasKids[i] = rows[i + 1].m_indent > rows[i].m_indent;
+	std::vector<ibValue> subChain;      // the folder chain of this rung, rebuilt as the pre-order goes by
+	size_t rowAt = static_cast<size_t>(-1);
+
 	for (const ibListFetchDriver::Row& r : rows) {
+		++rowAt;
 		// LAZY drill: a TOTALS result arrives pre-order over EVERY level, but the paged control wants only the
 		// CURRENT scope's TOP level per fetch — deeper rows load when the user drills into a node. The TOP level
 		// is NOT the same number for the two shapes: BuildDimensionTree folds from Root (m_level 0), so the first
@@ -414,6 +501,26 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		// "disappeared". Keep level 1 for a group fetch, level 0 for a flat/detail one.
 		if (r.m_level != (groupLevel ? 1 : 0))
 			continue;
+
+		// …AND ON A TREE RUNG, THE STEP DECIDES TOO: the chain is rebuilt as the pre-order passes, and a
+		// row is this level's only when it stands one step in from the reader and under their branch.
+		bool ownKids = false;
+		if (nestedRung) {
+			const size_t step = r.m_indent > 0 ? static_cast<size_t>(r.m_indent) : 0;
+			ibValue own = (groupDimCol != ibMetaID(wxNOT_FOUND)) ? r.GetValue(groupDimCol) : ibValue();
+			if (subChain.size() > step)
+				subChain.resize(step);
+			subChain.push_back(own);
+			if (step != parentSub.size())
+				continue;                       // another step of the same rung
+			bool under = true;
+			for (size_t k = 0; k < parentSub.size() && k < subChain.size(); ++k)
+				if (!(subChain[k] == parentSub[k])) { under = false; break; }
+			if (!under)
+				continue;                       // another branch of this rung
+			ownKids = rowAt < hasKids.size() && hasKids[rowAt];
+		}
+
 		ibComposerNode* node = nullptr;
 		if (groupLevel) {
 			// A GROUP node: its identity / scope is the parent path + THIS group's own dimension value, and it
@@ -456,9 +563,20 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 					values.emplace(ancId, parentPath[k]);
 			}
 			std::vector<ibValue> groupPath = parentPath;
-			if (groupDimCol != wxNOT_FOUND)
+			std::vector<ibValue> subPath;
+			if (nestedRung && ownKids) {
+				// ⭐ A FOLDER OF THIS RUNG — opening it stays on the rung and steps one further in, so the
+				// rung's scope does NOT grow and the step does. Grown instead, the drill would have asked
+				// for the NEXT grouping and the folder's contents would never be reached.
+				subPath = subChain;
+			}
+			else if (groupDimCol != wxNOT_FOUND) {
+				// A LEAF of this rung (or an ordinary grouping value) — opening it moves to what stands
+				// under this rung: the next grouping, or the records.
 				groupPath.push_back(dimValue);
-			groupNodes.push_back(new ibComposerNode(values, groupPath, /*container*/ groupDimCol != wxNOT_FOUND));
+			}
+			groupNodes.push_back(new ibComposerNode(values, groupPath,
+				/*container*/ groupDimCol != ibMetaID(wxNOT_FOUND), subPath));
 			continue;   // collected — the client window (below) transfers the on-page groups into `out`
 		}
 		else {
@@ -470,17 +588,24 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			rowKey.reserve(keyCols.size());
 			for (const ibBackendQueryColumn* kc : keyCols)
 				if (kc != nullptr) rowKey.push_back(r.GetValue(kc->GetColumnId()));
-			// A grouped DETAIL row is a LEAF. Under the grouping-replaces-tree rule a user grouping REPLACES the inherent folder
-			// tree (hierarchy is OFF whenever grouping is on), so a folder that lands inside a group is a plain
-			// grouped item — NOT drillable. Marking it a container by folderCol re-offered a folder expander whose
-			// drill re-entered RunComposerPage with an empty group path (depth 0) → groupLevel fired again → the
-			// whole grouping tree nested under the folder ("infinite" re-grouping). Only a non-grouped hierarchy /
-			// flat fetch honours folderCol / hasChildren for containerness.
+			// A grouped DETAIL row is a LEAF: a folder that lands inside a grouping is a plain grouped item and
+			// is NOT drillable. Marking it a container by folderCol re-offered a folder expander whose drill
+			// re-entered RunComposerPage with an empty group path (depth 0) → groupLevel fired again → the whole
+			// grouping tree nested under the folder ("infinite" re-grouping).
+			//
+			// ⭐ ASKED OF THE RUNG BEING SERVED, not of "is anything grouped". The tree is now a RUNG of the
+			// ladder, so `grouping` is true whenever a catalog shows its tree — and read the old way that turned
+			// every folder in every catalog into a leaf. What decides is which rung produced this row: a TREE
+			// rung's rows are folders and items, a grouping's are leaves.
 			bool isFolderRow = false;
 			if (folderCol != nullptr)
 				isFolderRow = r.GetValue(folderCol->GetColumnId()).GetBoolean();
-			const bool isContainer = grouping ? false : (isFolderRow || itemHierarchy || r.m_expandable);
-			node = new ibComposerNode(r.m_values, isContainer, std::move(rowKey));
+			const bool isContainer = (hierarchy || !grouping)
+				? (isFolderRow || itemHierarchy || r.m_expandable) : false;
+			// ⭐ AND IT CARRIES WHERE IT STANDS. A row fetched inside a group belongs to that group, and
+			// drilling it must re-enter at the rung it was found on — not at the top. Without the scope the
+			// drill came back with an empty path, depth 0, and the whole grouping tree re-grew under the folder.
+			node = new ibComposerNode(r.m_values, isContainer, std::move(rowKey), parentPath);
 		}
 		out.Add(ibDataViewItem(node));   // ctor IncRefs to 2
 		node->DecRef();                  // -> `out` owns exactly one reference per row
@@ -497,10 +622,15 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		long p = -1;
 		if (anchor.IsOk())
 			if (const ibComposerNode* anode = GetViewData<ibComposerNode>(anchor)) {
-				const std::vector<ibValue>& apath = anode->GetGroupPath();
+				// …asked of whichever fact holds this node's place: its step inside the rung when it has
+				// one (a folder), its rung path otherwise. Asked only of the path, a folder was never
+				// found here either and the window restarted — the same doubling, one place further on.
+				const bool byStep = !anode->GetSubPath().empty();
+				const std::vector<ibValue>& apath = byStep ? anode->GetSubPath() : anode->GetGroupPath();
 				if (!apath.empty())
 					for (size_t k = 0; k < groupNodes.size(); ++k) {
-						const std::vector<ibValue>& gp = groupNodes[k]->GetGroupPath();
+						const std::vector<ibValue>& gp = byStep
+							? groupNodes[k]->GetSubPath() : groupNodes[k]->GetGroupPath();
 						if (!gp.empty() && gp.back() == apath.back()) { p = static_cast<long>(k); break; }
 					}
 			}
@@ -515,6 +645,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	}
 
 	for (size_t i = 0; i < out.GetCount(); ++i) SetItemParent(out[i], parent);
+
 	return fetched;
 }
 

@@ -43,22 +43,53 @@ public:
 
 	virtual void CancelEditing() {
 
+		// FIRST THE EDITOR DIES, THEN THE FORM IS REFRESHED — the same order as FinishEditing below, and
+		// the same reason: RefreshForm raises the script's `refreshDisplay`, and a handler there may
+		// rebuild anything it likes, including the window the live editor is parented to.
+		ibDataViewCustomRenderer::CancelEditing();
+
 		if (m_tableBoxColumn != nullptr) {
 			ibValueForm* valueForm = m_tableBoxColumn->GetOwnerForm();
 			if (valueForm != nullptr) valueForm->RefreshForm();
 		}
-
-		ibDataViewCustomRenderer::CancelEditing();
 	}
 
 	virtual bool FinishEditing() {
 
+		// 🛑 FIRST THE EDITOR DIES, THEN THE FORM IS REFRESHED. The refresh below used to run HERE, before
+		// the base — while the edit control was still alive and its value not yet written. RefreshForm
+		// raises the script's `refreshDisplay`, and a handler there may rebuild anything, the very window
+		// the editor is parented to included; the next Edit then reached
+		// `wxCHECK_MSG(parent, …)` in wxWindow::CreateUsingMSWClass through CreateEditorCtrl with nothing
+		// to parent to (dump 2026-08-29, Max's own reading: *"the control dies first, and the refresh
+		// fires after"*).
+		//
+		// The base DESTROYS THE EDIT CONTROL first and only then hands the value on, so everything that
+		// rebuilds anything belongs after it — and there is exactly one such place now.
+		const bool finished = ibDataViewCustomRenderer::FinishEditing();
+
 		if (m_tableBoxColumn != nullptr) {
 			ibValueForm* valueForm = m_tableBoxColumn->GetOwnerForm();
 			if (valueForm != nullptr) valueForm->RefreshForm();
 		}
 
-		return ibDataViewCustomRenderer::FinishEditing();
+		// ⭐⭐ A ROW EDITED OUT OF THE FILTER MUST LEAVE THE LIST, and THIS is the moment to say so. The
+		// write itself only REPAINTS the row — ValueChanged is the narrow notify and the model's
+		// RowValueChanged bumps the view generation without re-reading — so a cell changed to something the
+		// filter no longer passes stayed on screen until something else happened to read again. The simplest
+		// true answer is to read again (Max, 2026-08-29).
+		//
+		// ⚠ ONLY WHEN THERE IS A FILTER: an edit in a table that hides nothing has nothing to reconsider,
+		// and must not pay for a read.
+		if (finished && m_tableBoxColumn != nullptr) {
+			if (ibValueModelTableBox* owner = m_tableBoxColumn->GetOwner()) {
+				ibValueModel* model = owner->GetTableModel();
+				if (model != nullptr && model->GetModelComposer().GetCurrentFilterDesc().IsOk())
+					model->RefetchAll();
+			}
+		}
+
+		return finished;
 	}
 
 	// A dot-path OR a foreign-root (header) column is read-only — its value is resolved through the

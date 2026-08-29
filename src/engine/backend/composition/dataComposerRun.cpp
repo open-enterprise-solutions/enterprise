@@ -450,6 +450,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// consumer has to re-derive an axis from a depth.
 	const int rowLevels = static_cast<int>(info.m_rowLevels);
 
+
 	std::vector<ibValue> row(schema.size());
 	if (serverGrouped) {
 		// Server-paged GROUPS (one grouping level, keyset-paged by the DB) — already grouped, so emit each as a
@@ -468,7 +469,10 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			// (the server returned the folded rows, not what went into them), so it is a heading with
 			// nothing to open: a list must not offer an expander, a printed report must still style it
 			// as the heading it is. Which is exactly why the two answers travel separately.
-			driver.OnGroupBegin(1, ibSelectorNodeKind::Group, /*hasChildren*/true, /*showsWhatIsUnder*/false, row);
+			ibCompositionLine head;
+			head.m_level = 1;
+			head.m_hasChildren = true;
+			driver.OnGroupBegin(head, row);
 		}
 	}
 	else if (!hasTotals) {
@@ -498,7 +502,9 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			// with no grouping fields is for. Said as a detail rather than as a level-0 group,
 			// because a printer lays the two out differently and should not have to infer which
 			// it got from the depth.
-			driver.OnRow(0, row);
+			ibCompositionLine flat;
+			flat.m_kind = ibSelectorNodeKind::Detail;
+			driver.OnRow(flat, row);
 		}
 	}
 	else {
@@ -560,6 +566,21 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 
 				if (!LevelShows(output, level.Level(), level.Kind(), schema, row))
 					continue;                   // hidden heading — and with it everything beneath
+
+				// ⭐⭐ THE RUNG AND THE PAGE ARE TWO NUMBERS. Everything the LADDER is asked — which
+				// settings apply, which sort, whether this is a row heading or a column one — is asked by
+				// `Level()`, the rung. What a PRINTER draws is how far in the line stands, and inside a
+				// level that unfolds a hierarchy those differ: a sub-folder is the same rung as its folder
+				// and one step further in (ibSelectorTree::Node::m_indent).
+				//
+				// Built here, at the one place that speaks to the driver, so no printer has to know a
+				// hierarchy exists and no lookup has to guard against a rung nobody declared. The two
+				// numbers travel side by side — a printer draws by `Page()` and asks the schema by the
+				// rung, and neither can be recovered once they are added together.
+				ibCompositionLine line;
+				line.m_level  = level.Level();
+				line.m_indent = level.Indent();
+				line.m_kind   = level.Kind();
 
 				// WHAT THIS NODE SHOWS — its own table resolved against what stood above it.
 				const GroupNode* here = LevelAt(output, level.Level(), level.Kind());
@@ -652,9 +673,9 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 					// The axis of a record is its own fact and is already answered: DetailAxisOf, on
 					// the output, carried here in the info the driver was handed.
 					if (info.m_detailsAxis == ibTotalsAxis::Columns)
-						driver.OnColumn(level.Level(), ibSelectorNodeKind::Detail, row);
+						driver.OnColumn(line.Page(), ibSelectorNodeKind::Detail, row);
 					else
-						driver.OnRow(level.Level(), row);
+						driver.OnRow(line, row);
 					// ⭐ A ROW HAS NOTHING UNDER IT — DOWN THE PAGE. In a TABLE the column keys stand
 					// across it, and those cells are its children: the fold hangs them there so a
 					// detail record is a line of the table with figures beside it rather than
@@ -676,22 +697,31 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				// a triangle that opens onto nothing is worse than no triangle. So the flag asks the
 				// same question the writing does.
 				ibSelector under = level.Select(ibSelectKind::ibSelectKind_ByGroups);
-				// ⭐ EACH LEVEL IN ITS OWN ORDER, and the depth is the CHILDREN's, not this heading's.
-				// Stated on the descent rather than inherited: a sort belongs to the level whose
-				// headings it arranges, and carrying this one down would arrange the next level by a
-				// key its author never wrote there (ibSelector::OrderBy).
-				under.OrderBy(LevelOrder(output, level.Level() + 1, schema));
 
 				// Asked by LOOKING: step onto the first child, read what kind it is, and rewind. The
 				// selection is already folded, so this costs a pointer move — and it is the only way
 				// to know, because a heading two levels up stands over headings while the deepest one
 				// stands over rows, and nothing on the node itself says which.
+				//
+				// ⚠ AND THE SAME LOOK ANSWERS WHICH RUNG THEY STAND ON. Under an ordinary heading the
+				// children are the next level; under a heading of a level that UNFOLDS A HIERARCHY they
+				// are sub-values of the SAME one — the recursion happens inside the rung. Counted as
+				// `Level() + 1`, a sub-folder would have been arranged by the sort of a level nobody
+				// wrote it for.
 				bool showsWhatIsUnder = false;
+				int  childRung = level.Level() + 1;
 				if (under.Next()) {
 					showsWhatIsUnder = under.Kind() != ibSelectorNodeKind::Detail
 						|| OutputWrites(output, ibSelectorNodeKind::Detail);
+					childRung = under.Level();
 					under.Reset();
 				}
+
+				// ⭐ EACH LEVEL IN ITS OWN ORDER, and the rung is the CHILDREN's, not this heading's.
+				// Stated on the descent rather than inherited: a sort belongs to the level whose
+				// headings it arranges, and carrying this one down would arrange the next level by a
+				// key its author never wrote there (ibSelector::OrderBy).
+				under.OrderBy(LevelOrder(output, childRung, schema));
 
 				// BOTH answers travel — see ibCompositionDriver::OnGroupBegin. HasChildren() is the
 				// fold's own fact and is what makes a heading a heading; showsWhatIsUnder is this
@@ -701,10 +731,12 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				// the row levels stands ACROSS the page. The driver used to work that out from a
 				// depth and a count handed to it separately — two facts to keep in step for one
 				// answer this walk already has.
+				line.m_hasChildren      = level.HasChildren();
+				line.m_showsWhatIsUnder = showsWhatIsUnder;
 				if (level.Level() > rowLevels)
-					driver.OnColumn(level.Level(), level.Kind(), row);
+					driver.OnColumn(line.Page(), level.Kind(), row);
 				else
-					driver.OnGroupBegin(level.Level(), level.Kind(), level.HasChildren(), showsWhatIsUnder, row);
+					driver.OnGroupBegin(line, row);
 
 				// ⚠ THIS HEADING'S OWN VALUES, TAKEN BEFORE THE DESCENT. `row` is ONE buffer for the
 				// whole walk — filled at each visit and reused by the nested walk below — so by the
@@ -721,7 +753,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				// has been written by now, which is the whole difference between this and the event
 				// that opened it — and it is where a total belongs on the page.
 				if (level.Level() <= rowLevels)
-					driver.OnGroupEnd(level.Level(), mine);
+					driver.OnGroupEnd(line.Page(), mine);
 			}
 		};
 		// THE WALK STARTS WITH THE OUTPUT'S OWN SET — the composition resolved, then the output's

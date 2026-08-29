@@ -82,26 +82,6 @@ ibBackendValueForm* ibValueMetaObjectEnumeration::GetSelectForm(const wxString& 
 }
 #pragma endregion
 
-wxString ibValueMetaObjectEnumeration::GetDataPresentation(const ibValueDataObject* objValue) const
-{
-	// ⭐ AN ENUMERATION MEMBER IS DECLARED, NOT STORED — so in the designer it reads as it is written,
-	// `EnumRef.Kinds.Retail`, and at run time as the synonym a person put on it.
-	const bool designer = appData->DesignerMode();
-	if (designer) {
-		const wxString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
-		if (!empty.IsEmpty())
-			return empty;
-	}
-
-	for (auto obj : GetEnumObjectArray()) {
-		if (objValue->GetGuid() == obj->GetGuid()) {
-			return designer
-				? ibDeclaredTypeName(this) + wxT(".") + obj->GetName()
-				: obj->GetSynonym();
-		}
-	}
-	return wxEmptyString;
-}
 
 //***************************************************************************
 //*                       Save & load metaData                              *

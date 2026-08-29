@@ -214,6 +214,8 @@ void ibValueModelTableBox::OnItemEditingDone(ibDataViewEvent& event)
 
 void ibValueModelTableBox::OnItemValueChanged(ibDataViewEvent& event)
 {
+	// (A row edited OUT OF THE FILTER leaves the list — but not from here. The renderer's FinishEditing is
+	//  where an edit is over, and it is the one moment where a re-read is safe: see tableBoxColumnRenderer.h.)
 	event.Skip();
 }
 

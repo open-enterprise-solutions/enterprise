@@ -30,8 +30,8 @@
 // re-fetch selection identity. NO write-back source / backing index any more — a DB grid is READ-ONLY (editing
 // is via the object form), and a RAM list edits its LIVE storage rows directly (it never makes these copies).
 ibValueModel::ibComposerNode::ibComposerNode(const std::map<ibMetaID, ibValue>& values,
-	bool container, std::vector<ibValue> rowKey)
-	: m_valueTable(nullptr), m_rowKey(std::move(rowKey)),
+	bool container, std::vector<ibValue> rowKey, std::vector<ibValue> scope)
+	: m_valueTable(nullptr), m_groupPath(std::move(scope)), m_rowKey(std::move(rowKey)),
 	  m_container(container), m_selfContained(true)
 {
 	for (const auto& kv : values)
@@ -46,8 +46,9 @@ ibValueModel::ibComposerNode::ibComposerNode(std::vector<ibValue> rowKey)
 
 // GROUP-drill row: the dimension-value path root->this + the drillable container flag.
 ibValueModel::ibComposerNode::ibComposerNode(const std::map<ibMetaID, ibValue>& values,
-	const std::vector<ibValue>& groupPath, bool container)
-	: m_valueTable(nullptr), m_groupPath(groupPath), m_container(container), m_selfContained(true)
+	const std::vector<ibValue>& groupPath, bool container, std::vector<ibValue> subPath)
+	: m_valueTable(nullptr), m_groupPath(groupPath), m_subPath(std::move(subPath)), m_heading(true),
+	  m_container(container), m_selfContained(true)
 {
 	for (const auto& kv : values)
 		AppendTableValue(kv.first, kv.second);

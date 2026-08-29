@@ -274,6 +274,10 @@ public:
 	}
 
 	int  Level()       const { const ibSelectorTree::Node* n = Current(); return n ? n->m_level + m_baseLevel : 0; }  // absolute depth
+	// ⭐ HOW DEEP INSIDE THAT LEVEL — the hierarchy step, 0 everywhere else. The RUNG (`Level()`) is what
+	// the settings, the sort and the schema are asked by; a printer that draws an outline wants the two
+	// added. See ibSelectorTree::Node::m_indent.
+	int  Indent()      const { const ibSelectorTree::Node* n = Current(); return n ? n->m_indent : 0; }
 	bool HasChildren() const { const ibSelectorTree::Node* n = Current(); return n ? n->m_hasChildren : false; }      // expandable (folder)
 	// A HEADING OR A ROW — asked of the node, never guessed from the depth. A fold with a detail
 	// level yields both in one walk, and only the node knows which of the two this visit is.

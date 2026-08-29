@@ -29,6 +29,15 @@ constexpr ibPictureID g_picFilterCLSID = picture_to_clsid("PC_FLTER");
 constexpr ibPictureID g_picFilterSetCLSID = picture_to_clsid("PC_FLTES");
 constexpr ibPictureID g_picFilterClearCLSID = picture_to_clsid("PC_FLTEC");
 
+// THE ROW-ORDER VERBS — move a row by hand, or order every row by one column. Only a table that OWNS
+// its rows has them (a RAM table); a cursor's order comes from the read, and there is nothing to move.
+// Art: the two arrows are the frontend's own 32px block arrows downscaled to 16; the two sort icons are
+// drawn in the same two colours the 32px sort art uses.
+constexpr ibPictureID g_picMoveUpCLSID = picture_to_clsid("PC_MVEUP");
+constexpr ibPictureID g_picMoveDownCLSID = picture_to_clsid("PC_MVEDN");
+constexpr ibPictureID g_picSortAscCLSID = picture_to_clsid("PC_SRTAS");
+constexpr ibPictureID g_picSortDescCLSID = picture_to_clsid("PC_SRTDS");
+
 constexpr ibPictureID g_picCloneCLSID = picture_to_clsid("PC_CLONE");
 constexpr ibPictureID g_picSaveCLSID = picture_to_clsid("PC_SAVE");
 constexpr ibPictureID g_picPostCLSID = picture_to_clsid("PC_POST");

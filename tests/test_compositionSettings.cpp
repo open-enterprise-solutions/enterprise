@@ -90,13 +90,22 @@ ibSettingsDescription MakeSortOn(const wxString& path, bool ascending = true)
 //  1. What composes — the reader's setting, or variant ZERO
 // ===========================================================================
 
-// ⭐⭐ THE READER'S SETTING IS A PLACE WHERE VALUES ARE PUT, AND EACH PART ANSWERS FOR ITSELF: what
-// they put there composes, and while a part is empty the zeroth variant's composes (Max, 2026-08-25).
+// ⭐⭐ A READER'S SETTING, ONCE THERE IS ONE, ANSWERS EVERY PART — THE EMPTY ONES INCLUDED. The
+// author's is the fallback and it falls back AS A WHOLE: while nobody has set anything, the zeroth
+// variant composes (Max, 2026-08-29: *"the presence of a user setting decides the outputs too; if
+// somebody deliberately removed the selected fields, that is how they meant it to output. The
+// author's exists as a safety net"*).
 //
-// 🛑 It read "a saved setting is the WHOLE setting, variant zero is dropped entire" (2026-08-24) —
-// one part of the reader's setting deciding for the other three. Under it, saving a filter alone
-// silently threw away the order the author set up.
-TEST(ComposerSettings, InForce_ReadersPartComposesOverTheZeroth)
+// 🛑 It read "each part answers for itself" (2026-08-25) — `theirs.IsOk() ? theirs : the author's`,
+// asked part by part. Under it a reader who CLEARED the selected fields got the author's columns
+// back and one who cleared the sort got the author's order: emptiness cannot mean both "not set"
+// and "set to nothing", and the setting's own existence is what tells the two apart.
+//
+// ⚠ Nothing is lost by it — the settings window opens on what is IN FORCE, so a reader with no
+// setting yet starts from a copy of the author's and OK writes the whole of it back. The only way a
+// part of a user setting is empty is that somebody emptied it. The imperative doors do the same at
+// their first write; the next test is that.
+TEST(ComposerSettings, InForce_ReadersSettingAnswersEveryPart)
 {
 	ibDataDBComposer composer;
 	DeclareZeroth(composer, MakeSortOn(wxT("Date")));
@@ -107,8 +116,18 @@ TEST(ComposerSettings, InForce_ReadersPartComposesOverTheZeroth)
 	ASSERT_EQ(1u, composer.GetCurrentFilterDesc().m_nodes.size());
 	EXPECT_EQ(wxT("Partner"), composer.GetCurrentFilterDesc().m_nodes[0].m_left.m_path);
 
-	// …and so does the ZEROTH'S ORDER, because the reader put no order anywhere. Saying something
-	// about the filter is not saying anything about the sort.
+	// …and their EMPTY order composes too: this setting is what they set, whole. The author's `Date`
+	// does not come back under it.
+	EXPECT_EQ(0u, composer.GetCurrentSortDesc().m_lines.size())
+		<< "a setting that exists answers for the sort as well — empty means empty";
+}
+
+// …and with NO setting of the reader's, the author's whole setting composes — the safety net.
+TEST(ComposerSettings, InForce_WithNoReaderSettingTheZerothComposes)
+{
+	ibDataDBComposer composer;
+	DeclareZeroth(composer, MakeSortOn(wxT("Date")));
+
 	ASSERT_EQ(1u, composer.GetCurrentSortDesc().m_lines.size());
 	EXPECT_EQ(wxT("Date"), composer.GetCurrentSortDesc().m_lines[0].m_path);
 }
@@ -486,9 +505,16 @@ TEST(ComposerSettings, Sort_StatesTheReadersOrder)
 	ASSERT_EQ(1u, composer.GetUserSettingsDesc().m_sort.m_lines.size());
 	EXPECT_EQ(wxT("Code"), composer.GetUserSettingsDesc().m_sort.m_lines[0].m_path);
 
-	// …and taking the reader's order back out leaves the author's standing: with nothing in that part
-	// of the reader's setting, the zeroth's is what composes.
+	// ⭐⭐ …AND EMPTYING IT AGAIN MEANS **NO ORDER**, not the author's back. A reader who has a setting
+	// has one for every part, empty ones included — clearing the order is them saying they want none,
+	// and the developer's `Date` creeping back under it would be the engine overruling them.
 	composer.ClearSorts();
+	EXPECT_EQ(0u, composer.SortCount())
+		<< "a reader with a setting has one for the sort too — emptied means empty";
+
+	// The author's comes back by DROPPING the reader's setting, which is what a reset is. That is a
+	// different act from emptying a part of it, and it has its own door.
+	composer.ClearUserSettings();
 	ASSERT_EQ(1u, composer.SortCount());
 	ASSERT_TRUE(composer.GetSortAt(0, path, ascending));
 	EXPECT_EQ(wxT("Date"), path);

@@ -246,6 +246,56 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 	BindWriteValue(capture, col, metaData, value, position);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 
+	// ⭐⭐ AN EMPTY REFERENCE HAS TWO SPELLINGS IN A COLUMN, AND EQUALITY MUST ACCEPT BOTH — the same
+	// reading `BuildParentRefPredicate` already applies at the ROOT of a hierarchy, where the note
+	// spells it out: the zero-guid SENTINEL written by the paths that store an empty reference, and SQL
+	// NULL in a row whose field was never written (a column added by a restructuring, a row older than
+	// the column). `NULL = <blob>` is UNKNOWN, not false, so a plain equality silently hides them.
+	//
+	// 🛑 IT WAS TRUE ONE FUNCTION ABOVE AND FALSE HERE, and the same fault came back wearing another
+	// name: a list grouped by a reference attribute made a "not set" group, and opening it scoped the
+	// read with `Attribute3 = <empty>` and found nothing at all — the rows exist, they are in the
+	// group, and the drill into it is empty (Max, 2026-08-30: *"the value gets torn at that moment and
+	// does not land where it should — the engine itself must handle this"*).
+	//
+	// Said HERE, in the one place a metadata-column equality is built, so nobody above has to know that
+	// "empty" is spelled two ways — no `IN HIERARCHY` dodge in a widget, no special case in a fetch.
+	// ⚠ AND "EMPTY" ARRIVES IN A THIRD SPELLING TOO — an UNDEFINED value, carrying no reference at all.
+	// A fold names its "not set" node with one (`ibValue()`), a script writes `= Undefined`, and both
+	// mean the rows whose reference is unset. Read only as "is this an empty reference" the test missed
+	// them, so a list drilled into its own "not set" group and found nothing while a real folder worked
+	// (Max, 2026-08-30: *"the problem is exactly the empty element — it gets lost somewhere"*). Asked of
+	// the COLUMN: on a reference-valued column an undefined value can only mean unset.
+	// ⭐ ASKED THROUGH THE VALUE'S OWN PREDICATE, ONCE. "Not filled" already means all three spellings —
+	// `ibValueSystemFunction::ValueIsFilled` is written as `!IsEmpty()` and says so: Undefined, NULL, and
+	// an EMPTY reference (type chosen, no guid). So there is nothing to convert and no second reading to
+	// keep in step; the column says the question is about a reference, the value answers it.
+	const bool emptyReference = IsReferenceValued(col) && value.IsEmpty();
+
+	// ⭐⭐⭐ "NOT FILLED" IS A FACT ABOUT THE IDENTITY, NOT ABOUT THE TYPE. A reference spreads over
+	// several physical fields — the type discriminators and the key — and an equality over ALL of them
+	// cannot ask this question: a typed-but-unset attribute keeps its TYPE in the row while the value
+	// being compared has none, so the type field alone makes the whole `AND` false and the row is never
+	// found (Max, 2026-08-30: *"an empty reference simply does not match by type"*, and, on the node
+	// that stays empty: *"here the empty value is torn"*).
+	//
+	// So it asks the one thing it means: the KEY is absent — SQL NULL in a row whose field was never
+	// written, or the zero-guid sentinel written by the paths that store an empty reference explicitly.
+	// The identity field is taken from the column's own LAYOUT, by role, never by name.
+	//
+	// This is the same predicate `BuildParentRefPredicate` uses for the ROOT of a hierarchy, where the
+	// note already spells out both spellings; it was true there and false everywhere else.
+	if (emptyReference) {
+		const wxString idField = ReferenceFieldOf(col);
+		if (!idField.IsEmpty()) {
+			const ibReference emptyKey{ ibGuidImpl{} };
+			return OrFold(
+				ibIsNull(ibColQ(mainQual, idField), false),
+				ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, idField),
+				        ibConstBlob(&emptyKey, sizeof(ibReference))));
+		}
+	}
+
 	ibQueryExprPtr pred;
 	for (size_t i = 0; i < fields.size(); ++i) {
 		ibQueryExprPtr c = (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue());

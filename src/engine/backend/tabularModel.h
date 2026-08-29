@@ -11,6 +11,7 @@
 #include "backend/system/value/valueType.h"
 
 #include "backend/standardCommand.h"
+#include "backend/sourceDescription.h"   // ibSourceDescription — the command context carries a COLUMN, and a column IS one
 #include "backend/tabularDataObject.h"   // ibTabularDataObject — ibValueModel IS one (the table hop gate)
 
 // L5-1 declarative composer — held BY VALUE (mutable ibDataDBComposer m_composer). The cycle that used to
@@ -36,6 +37,31 @@ class ibRamValueStorage;
 
 // The row identity key returned by GetItemKey (value.h → uniqueKey.h pulled in tabularModel.cpp / the model .cpp's).
 class ibUniqueKey;
+
+// WHERE THE CURSOR STANDS ACROSS — the column, as much of one as a command needs, and it is NOT an id.
+// A column may be bound to a HOP — a dotted path walked through a reference ("Product.Vendor.Name") — and a
+// sort or a filter is written against THE PATH; an id names only the storage cell that path starts at, and
+// ordering by it would order by the reference instead of by what the column shows (Max, 2026-08-29).
+// Empty name = the control has no current column, and a by-column verb has nothing to mean.
+struct ibDataViewColumnItem {
+	wxString            m_name;      // the column as a composer FIELD — its dotted name, hops included
+	wxString            m_synonym;   // …what a person reads on its header
+	ibSourceDescription m_source;    // …and WHERE it reads from: the id path, with each hop's pinned type
+
+	bool IsOk() const { return !m_name.IsEmpty(); }
+};
+
+// The rows a source command runs against, carried FRONT -> model (TableBox -> the model's CallAsCommand).
+// m_selection = the actually-selected row (empty when nothing is selected). m_anchor = where the user stands
+// in the tree (the current / top node), the fallback a CREATE command uses when there is no selection so a
+// new element lands in the browsed folder. A flat model (value table / tabular) reads m_selection ONLY; the
+// hierarchy model uses m_selection ?: m_anchor for the parent. Destructive commands never touch m_anchor.
+// m_column is where the cursor stands ACROSS — what the by-column verbs (filter, sort) are written against.
+struct ibDataViewCommandContext {
+	ibDataViewItem       m_selection;
+	ibDataViewItem       m_anchor;
+	ibDataViewColumnItem m_column;
+};
 
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -907,15 +933,25 @@ public:
 		virtual bool IsEqualTo(const ibDataViewObject& other) const override {
 			const ibComposerNode* o = dynamic_cast<const ibComposerNode*>(&other);
 			if (o == nullptr) return false;
-			const bool lhsGroup = !m_groupPath.empty();
-			const bool rhsGroup = !o->m_groupPath.empty();
-			if (lhsGroup || rhsGroup)
-				return lhsGroup == rhsGroup && m_groupPath == o->m_groupPath;
+			if (m_heading || o->m_heading)
+				return m_heading == o->m_heading
+				    && m_groupPath == o->m_groupPath && m_subPath == o->m_subPath;
 			// A RAM live row survives selection by its STABLE POINTER (same storage row across re-fetch), so the
 			// value-map fallback is rarely consulted for it; a DB-list copy node identifies by its primary-key
 			// row-key (a guid reference compares BY GUID, so a FindRowValue stub matches a freshly-fetched row).
-			if (!m_rowKey.empty() && !o->m_rowKey.empty())
-				return m_rowKey == o->m_rowKey;
+			//
+			// ⚠ …AND BY WHERE IT STANDS. One catalog element may appear under SEVERAL groups (the folder
+			// skeleton is printed once per group), so the row-key alone stopped being an identity the
+			// moment a tree could live inside a grouping: two rows with one key and two scopes are two rows on
+			// the screen, and selection would jump between them.
+			if (!m_rowKey.empty() && !o->m_rowKey.empty()) {
+				// ⚠ …EXCEPT AGAINST A RESTORE STUB, which knows ONLY the key — it was built to navigate to
+				// a row, not to say which group that row was seen in. Comparing scopes against it would
+				// fail every restore in a grouped list, which is the selection quietly jumping to the top.
+				if (IsKeyOnlyAnchor() || o->IsKeyOnlyAnchor())
+					return m_rowKey == o->m_rowKey;
+				return m_rowKey == o->m_rowKey && m_groupPath == o->m_groupPath;
+			}
 			return m_nodeValues == o->m_nodeValues;
 		}
 
@@ -932,7 +968,8 @@ public:
 
 		ibComposerNode(const ibComposerNode& tableRow) :
 			m_valueTable(tableRow.m_valueTable), m_nodeValues(tableRow.m_nodeValues),
-			m_groupPath(tableRow.m_groupPath), m_rowKey(tableRow.m_rowKey),
+			m_groupPath(tableRow.m_groupPath), m_subPath(tableRow.m_subPath),
+			m_heading(tableRow.m_heading), m_rowKey(tableRow.m_rowKey),
 			m_container(tableRow.m_container), m_selfContained(tableRow.m_selfContained) {
 		}
 
@@ -941,28 +978,59 @@ public:
 		// `container` = the driver row's hasChildren (a drillable folder in a parent-ref tree — the SAME node
 		// serves a flat list AND a hierarchy); `rowKey` = the source's primary-key values (DB-list identity /
 		// FindRowValue match key). Self-contained copy (IsAttached -> true; the fetch is const, no const_cast).
+		// ⭐ `scope` = the rungs it stands under, and it is what makes a folder inside a grouping possible: the
+		// node carries where it is without claiming to be a heading. Empty for an ungrouped list.
 		explicit ibComposerNode(const std::map<ibMetaID, ibValue>& values,
-			bool container = false, std::vector<ibValue> rowKey = {});
+			bool container = false, std::vector<ibValue> rowKey = {},
+			std::vector<ibValue> scope = {});
 		// STUB row (FindRowValue selection-restore): carries ONLY the row-key the caller navigates to, so the
 		// control matches it against a freshly-fetched row by row-key.
 		explicit ibComposerNode(std::vector<ibValue> rowKey);
 		// GROUP-drill row (RunComposerPage grouping branch): the dimension-value path root->this (so children
 		// re-fetch scoped, dim==value per drilled level) + a container flag so the view renders it drillable.
-		ibComposerNode(const std::map<ibMetaID, ibValue>& values, const std::vector<ibValue>& groupPath, bool container);
+		// `subPath` = the folder chain inside a hierarchy rung; empty for an ordinary grouping heading.
+		ibComposerNode(const std::map<ibMetaID, ibValue>& values, const std::vector<ibValue>& groupPath, bool container,
+			std::vector<ibValue> subPath = {});
 
-		// Dimension-value path root->this for a GROUP node (empty for a detail row); RunComposerPage reads the
-		// browsed parent's path to scope the next level's fetch (dim==value per already-drilled level).
+		// ⭐⭐ WHERE THIS NODE STANDS — the dimension values of the rungs above it, root->this. A GROUP node's
+		// own value is the last of them; a ROW's path is the scope it was fetched under and stops above it.
+		// RunComposerPage reads the browsed parent's path to scope the next fetch (dim == value per drilled rung).
+		//
+		// 🛑 IT USED TO ANSWER TWO QUESTIONS — "where am I" AND "am I a heading" — and the second one is what
+		// made a tree inside a grouping impossible to express: a folder standing inside a group must CARRY
+		// that scope (so drilling it re-enters at the right rung) while being a ROW, not a heading. One
+		// member, two questions, so saying the first forced the second. Same shape as the sheet's rung-vs-indent
+		// (one number for "which level's settings" and "how far to indent"), and the same cure: two facts.
 		const std::vector<ibValue>& GetGroupPath() const { return m_groupPath; }
-		bool IsGroup() const { return !m_groupPath.empty(); }
+		bool IsGroup() const { return m_heading; }
+
+		// ⭐⭐ …AND WHERE IT STANDS **INSIDE** ITS RUNG. A rung that unfolds a hierarchy recurses within
+		// itself — a folder holds folders, all of them the same rung — so "which rung" and "how deep in
+		// its tree" are two facts, exactly as they are on the printed sheet (rung vs indent). The rung is
+		// counted by `m_groupPath`, which a folder does NOT extend: a folder is structure, so drilling it
+		// stays on the rung, while an ELEMENT carries its value there and drilling it moves to the next.
+		//
+		// 🛑 WITHOUT THIS a tree over a field OTHER than the source's own reference showed its top level
+		// and then jumped to the next grouping when opened — the sub-folders were unreachable, because
+		// descending was the only thing a single number could mean.
+		const std::vector<ibValue>& GetSubPath() const { return m_subPath; }
 
 		// GROUP caption (self-described, model-free): the node folds by a dimension VALUE — hand back that value's
 		// PRESENTATION so the front paints it as the spanning group caption. The node's OWN (deepest) dimension
 		// value is m_groupPath.back(); a detail / key-only node has no group path → false (base default), so the
 		// front keeps per-column rendering.
 		virtual bool GetGroupCaption(wxString& caption) const override {
-			if (m_groupPath.empty())
+			if (!m_heading)
 				return false;
-			caption = m_groupPath.back().GetString();
+			// ⭐ THE CAPTION IS THIS NODE'S OWN VALUE, and it lives in whichever of the two facts holds
+			// its place: a FOLDER inside a rung does not extend the rung's path — its position is the
+			// sub-chain — so read only the path, such a node had no caption at all and the front drew its
+			// value as an ordinary cell in its own column instead of a heading across the row (Max,
+			// 2026-08-30, from the rendering: *"it does not see it as a grouping — it is not at the front"*).
+			const std::vector<ibValue>& own = !m_subPath.empty() ? m_subPath : m_groupPath;
+			if (own.empty())
+				return false;
+			caption = own.back().GetString();
 			return true;
 		}
 
@@ -1177,7 +1245,9 @@ public:
 		// The COMPOSER reads these to lay out the flat / hierarchical display slice.
 		std::vector<ibComposerNode*> m_children;
 		// --- composer-fetch identity (set by the composer ctors; inert on a plain RAM storage row) ------------
-		std::vector<ibValue> m_groupPath;                         // GROUP node: dimension values root->this; empty for a detail row
+		std::vector<ibValue> m_groupPath;                         // WHERE it stands: the rungs above it, root->this (a heading's own value is the last)
+		std::vector<ibValue> m_subPath;                           // …and how deep INSIDE its rung: the folder chain of a hierarchy rung
+		bool                 m_heading = false;                   // WHAT it is: a grouping's heading, as opposed to a row standing under one
 		std::vector<ibValue> m_rowKey;                            // DB-list / stub identity: source primary-key value(s)
 		bool m_container = false;                                 // drillable group level / folder — OR'd with !m_children.empty()
 		bool m_selfContained = false;                             // composer copy (value copies, m_valueTable null) — IsAttached -> true
@@ -1508,6 +1578,28 @@ public:
 	}
 	void Reserve(long n) { m_root.m_children.reserve(m_root.m_children.size() + static_cast<size_t>(n)); }
 
+	// RE-SEAT ONE ROW — the only physical re-order there is, and only a table that OWNS its rows can have
+	// it (a cursor's order comes from the read). `delta` is signed and CLAMPED, so a row already at the
+	// top ignores an up-move instead of wrapping to the bottom. Nothing is created or dropped — the node
+	// keeps its refcount and its identity, which is what lets the view put the cursor back on it: the RAM
+	// focus restore matches by NODE POINTER, so the cursor travels WITH the row that moved.
+	bool MoveValue(const ibValueModel* model, Row* node, int delta, bool notify = true) {
+		std::vector<Row*>& kids = m_root.m_children;
+		const long from = IndexOf(node);
+		if (from == wxNOT_FOUND || delta == 0)
+			return false;
+		long to = from + delta;
+		if (to < 0) to = 0;
+		if (to >= RowCount()) to = RowCount() - 1;
+		if (to == from)
+			return false;
+		kids.erase(kids.begin() + from);
+		kids.insert(kids.begin() + to, node);
+		model->NotifyStructuralChange(notify);
+		return true;
+	}
+
+
 private:
 	mutable Row                                         m_root;              // the root — its children ARE the rows
 	mutable ibValueModel::ibValueModelColumnCollection* m_columns = nullptr; // the model's columns (re-pointed per fetch)
@@ -1618,6 +1710,17 @@ public:
 	long Insert(ibComposerNode* node, unsigned int row, bool notify = true)     { return m_storage.InsertValue(this, node, row, notify); }
 	bool Remove(ibComposerNode*& node, bool notify = true)                      { return m_storage.RemoveValue(this, node, notify); }
 	void Clear(bool notify = true)                                               { m_storage.Clear(this, notify); }
+	// MOVING A ROW BY HAND **IS** THE ORDER — so it takes the question away from whatever else was
+	// answering it. Under a sort the stored order is not what is shown, and a move would change the data
+	// while the row stayed exactly where the sort puts it: a command that does nothing, twice over. So the
+	// sort in force is dropped in the same act, and says so — the header arrow goes with the same refresh.
+	bool Move(ibComposerNode* node, int delta, bool notify = true) {
+		if (!m_storage.MoveValue(this, node, delta, /*notify*/ false))
+			return false;
+		m_composer.ClearSorts();
+		NotifyStructuralChange(notify);
+		return true;
+	}
 	void ClearRange(unsigned long from, unsigned long to, bool notify = true)    { m_storage.ClearRange(this, from, to, notify); }
 	void Reserve(long n = 1)                                                     { m_storage.Reserve(n); }
 
@@ -1633,6 +1736,45 @@ public:
 
 	ibRamValueStorage&       Storage()       { return m_storage; }
 	const ibRamValueStorage& Storage() const { return m_storage; }
+
+	// ⭐ THE ROW-ORDER VERBS — move a row by hand, or order the rows by the column the cursor is on. THE
+	// WORK LIVES HERE, on the RAM base, and only the work: every table that owns its rows declares those
+	// commands itself, head-on, in its OWN enum and its OWN switch, and the case bodies call straight down
+	// here (Max, 2026-08-29). No id band of the base's, no dispatcher of the base's, nothing virtual — this
+	// class exists to technically carry the two verbs out. It could not sit any higher either: a cursor is
+	// base data, its order comes from the read and there is nothing there to move.
+
+	// Re-seat ONE row (delta = -1 up / +1 down). The displayed item IS the live storage node, but it is
+	// asked through the bridge anyway — the same door Copy and Delete use, so a row that is not this
+	// table's simply resolves to nothing.
+	void MoveRow(const ibDataViewItem& row, int delta) {
+		ibComposerNode* node = StorageRowOf(row);
+		if (node != nullptr)
+			Move(node, delta);
+	}
+
+	// ORDER THE ROWS BY ONE COLUMN — through L5-2, NOT a compare loop (Max: sorting lives on L5). ONE sort
+	// at a time: it is the answer to "in what order are the rows read", and a second answer would only be
+	// the previous one still standing. BY THE COLUMN'S NAME, hops and all — that dotted name is what the
+	// composer splits and walks, the same string a header click and the by-column filter commit.
+	bool SortRows(const ibDataViewColumnItem& column, bool ascending) {
+		if (!column.IsOk())
+			return false;
+		m_composer.ClearSorts();
+		m_composer.Sort(column.m_name, ascending);
+		NotifyReset();
+		return true;
+	}
+
+	// The name door — what the script's Sort("Column") says. A plain column of this table, no hop: it must
+	// be one of ours, and then it resolves to the one road above.
+	bool SortRows(const wxString& colName, bool ascending) {
+		if (GetColumnIDByName(colName) == wxNOT_FOUND)
+			return false;
+		ibDataViewColumnItem column;
+		column.m_name = colName;
+		return SortRows(column, ascending);
+	}
 
 	// (NO SETTINGS FIELD HERE. A model holds nothing of the kind — what is in force lives in its
 	//  COMPOSER, which is the thing that reads. The RAM world's filter, sort and grouping are set on

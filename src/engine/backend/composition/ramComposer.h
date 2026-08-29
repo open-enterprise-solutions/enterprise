@@ -41,6 +41,22 @@ public:
 	// compares against (ibDataComposer::AddParam). The const was covering that write.
 	std::vector<long> ComputeOrder();
 
+	// ⭐⭐ THE DRIVER WALK, FOR RAM. A driver does not care where rows come from — it is handed a schema and
+	// then rows — so a table of values prints onto a sheet exactly as a query does; only the source differs,
+	// and here it is a degenerate table rather than a database (Max, 2026-08-29).
+	//
+	// 🛑 IT USED TO INHERIT THE BASE'S NO-OP. The RAM display path is ComputeOrder + the live nodes windowed
+	// on the model side, so nothing ever needed a walk — and anything that wanted the composition PRINTED
+	// (output list, and search after it) got an empty answer from a table that plainly had rows.
+	//
+	// Flat: one output, the selected fields as Detail columns, the rows in the order in force. Grouping is
+	// the model's own doing on the display side (RunStoragePage folds the levels) and is not repeated here.
+	virtual bool Run(ibCompositionDriver& driver) override;
+
+	// …and a copy of itself — see ibDataComposer::Clone. The storage pointer rides along: a copy reads the
+	// SAME rows, which is the whole point of taking one.
+	virtual ibDataRamComposer* Clone() const override { return new ibDataRamComposer(*this); }
+
 private:
 	const ibRamValueStorage* m_storage = nullptr;   // the RAM value-storage (NON-owning; owned by the model)
 };

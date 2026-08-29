@@ -2825,10 +2825,12 @@ public:
 		int DepthOfDetails() const { return static_cast<int>(m_depth + (m_to - m_from) - 1); }
 	};
 
+	// `identity` = the column that IS the row (the source's single reference key), 0 when it has none.
+	// The snapshot fold reads it off the source into its DimCtx; this one is told, for the same use.
 	ibStreamingFold(ibSelectorTree& tree, const std::vector<ibTotalLevel>& levels,
 	                const std::vector<ibDataQueryBuilder::AggregateItem>& aggs,
-	                const std::vector<ibQueryRamColumn>& rowColumns)
-		: m_levels(levels), m_aggs(aggs), m_rowColumns(rowColumns)
+	                const std::vector<ibQueryRamColumn>& rowColumns, ibMetaID identity = 0)
+		: m_levels(levels), m_aggs(aggs), m_rowColumns(rowColumns), m_identity(identity)
 	{
 		// WHERE THE PAGE STOPS AND THE PAGE-WIDTH STARTS — asked of the levels, which say which way
 		// they read. Everything from here on is a column key of a cross-table.
@@ -2921,6 +2923,17 @@ public:
 	// that is what the records hang under and what a branch forks from.
 	std::size_t FeedLadder(std::size_t cur, const ibQueryRow& row, const Section& section)
 	{
+		// 🛑⭐⭐ "A LEVEL KEYED BY THE ROW'S IDENTITY **IS** THE ROW" WAS TRIED HERE AND TAKEN OUT AGAIN.
+		// It stamped the row's fields onto such a heading and stopped the descent under it, and the
+		// result is worth remembering: the sheet printed 72 lines that each looked exactly like a
+		// detail record, so the groupings became INVISIBLE — a heading that carries a row is not
+		// distinguishable from a row (Max, 2026-08-29: *"I set a grouping by reference and one by data
+		// version; I expect to see the first, the second, and the third — the detail records. Right
+		// now I see nothing except the detail records"*).
+		//
+		// The ladder is read LITERALLY: what a person names is what they get, one heading per rung and
+		// the records at the bottom. A rung that happens to hold one row is still a rung — "it holds
+		// one row" is a fact about the data, not permission to delete a level the user configured.
 		for (std::size_t li = section.m_from; li < section.m_across; ++li) {
 			const ibTotalLevel& level = m_levels[li];
 			if (level.m_fields.empty())
@@ -2931,6 +2944,7 @@ public:
 				key.push_back(LevelKeyValue(field, row));      // one field is the degenerate one-element key
 			cur = Child(cur, std::move(key), level, section.DepthOf(li), /*across*/false);
 			FeedNode(cur, row);
+
 
 			// ⭐⭐ AND THE COLUMNS HANG UNDER EVERY ROW HEADING, not only under the deepest one.
 			//
@@ -2945,6 +2959,12 @@ public:
 			// `headings × column keys` nodes. Memory is still counted in GROUPS, which is the whole
 			// criterion of the reports arc.
 			FeedAcross(cur, row, section);
+
+			// ⚠ NOTHING IS SKIPPED HERE. Every rung the ladder names is folded, and the records under
+			// the last one — which is what the LIST does, one rung per fetch, the next when a node is
+			// opened. A sheet that stopped early had rungs the list plainly showed, and the two roads
+			// giving one answer is the whole requirement (Max, 2026-08-29: *"I need the result for
+			// lists and the result for report tables to be the same"*).
 		}
 
 		// ⭐ AND THE ROW ITSELF, under the last ROW heading — not under the last heading of all. In an
@@ -2960,6 +2980,11 @@ public:
 		// detail level both get the row, each under its own headings — the same fact shown in two
 		// cuts, which is what a split IS. A branch that declared none holds no records and pays for
 		// none.
+		// ⭐⭐ AND THE RECORDS ARE ALWAYS THERE. A list gets them for nothing — it drills to the rows —
+		// so a report is the same read with the records level added, unconditionally. Every rule that
+		// tried to decide when they were "redundant" produced a second universe: the list showed rows
+		// the sheet did not (Max, 2026-08-30: *"for the report the detail records are simply always
+		// added"*, and *"you have two universes right now"*).
 		if (section.m_details && !section.m_detailsAcross) {
 			const std::size_t leaf = AddDetail(cur, row, section.DepthOfDetails(), section);
 			if (leaf != kNoNode) {
@@ -3173,6 +3198,7 @@ private:
 	const std::vector<ibTotalLevel>&                      m_levels;
 	const std::vector<ibDataQueryBuilder::AggregateItem>& m_aggs;
 	const std::vector<ibQueryRamColumn>&                  m_rowColumns;   // what a DETAIL row writes
+	ibMetaID                                              m_identity = 0; // …and the column that IS the row
 	std::vector<FoldNode>                                 m_pool;
 	// THE LADDERS THIS FOLD BUILDS — one without `SPLIT`, and then one per branch. What used to be
 	// three fields about "the levels" now belongs to each section, because with branches there is no
@@ -3561,6 +3587,10 @@ struct DimCtx {
 	// cross-table grouped by a hierarchy is still a cross-table.
 	size_t                                                across = 0;
 	bool                                                  details = false;   // the last level is the rows
+	// ⭐ THE COLUMN THAT IS THE ROW'S IDENTITY — the source's reference key, 0 when it has none (a RAM
+	// table, a join). A level grouped BY it holds one row per group by construction, so its headings are
+	// the rows themselves; see AttachDimValue. Read once, here, rather than per node.
+	ibMetaID                                              identity = 0;
 };
 
 // Parent-map (value-key -> parent value-key) for a level field: the target catalog of the reference
@@ -3595,7 +3625,7 @@ ibValueParentMap ParentMapForField(const DimCtx& ctx, const ibBackendQueryColumn
 // begin in the same place, so their first levels must carry the same number — computed from the flat
 // list, the second branch printed one rung deeper for no reason a reader could see.
 void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vector<long>& rows, size_t levelIdx,
-                  bool across = false, const ibTotalBranch* branch = nullptr, int depth = 1);
+                  bool across = false, const ibTotalBranch* branch = nullptr, int depth = 1, int indent = 0);
 
 // ⭐ THE CELLS OF ONE HEADING — the column axis, folded under the heading that is being built. Called
 // for EVERY row heading rather than only the deepest, because an outer heading's cells are a fold
@@ -3613,7 +3643,7 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 	const ibValue& valueKey,
 	const ibRowsByValue& byVal,
 	const ibRefChildren& childrenOf, ibValueSeen& visited, bool across = false,
-	const ibTotalBranch* branch = nullptr, int depth = 1)
+	const ibTotalBranch* branch = nullptr, int depth = 1, int indent = 0)
 {
 	if (IsNoKey(valueKey) || visited[valueKey]) return {};
 	visited[valueKey] = 1;
@@ -3622,6 +3652,7 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 	// ⚠ THE LEVEL'S NUMBER, not the depth under the parent: a hierarchy nests VALUES inside one
 	// level, so every folder and every item here belongs to the same level and must say so.
 	ibSelectorTree::Node* node = parent->AddChild(depth);
+	node->m_indent = indent;             // …and how far inside that level it stands — the hierarchy step
 	node->m_values = parent->m_values;   // inherit the grouping fields available from the levels above (same rule as the Elements branch)
 	node->m_branch = parent->m_branch;   // …and the branch it stands in, inherited exactly as the keys are
 	// A hierarchy level is single-field by construction (FoldDimLevel routes it here only then), so
@@ -3632,16 +3663,65 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 	const auto rit = byVal.find(valueKey);
 	if (rit != byVal.end()) ownRows = rit->second;
 
+	// ⭐⭐ A LEVEL KEYED BY THE ROW'S OWN IDENTITY **IS** THE ROW, so the node carries the row's fields.
+	// Grouping a catalog by its Reference and unfolding the hierarchy is how a TREE is written — the
+	// shape of the list on the screen — and there every line is an element, drawn at its own depth. The
+	// key determines the row completely (that is what an identity is), so every column it was read with
+	// belongs on this node just as it would on a detail record.
+	//
+	// 🛑 Without it a tree could only be printed by grouping over the PARENT, and that reading loses
+	// exactly what it is asked for: a folder holding no elements is nobody's parent and never appears, a
+	// folder's own Code and Description are not the key and print blank, and every element needs a second
+	// node under its own heading (Max, 2026-08-29: *"the hierarchy has to be output over the Reference"*).
+	//
+	// Asked of the SOURCE, not of the row count: "this level's key is the identity" is a fact about the
+	// query, true for every node of the level at once. A group that merely happens to hold one row is a
+	// different thing entirely and is left alone — a field that appears only where a group came out
+	// single would be worse than one that never appears.
+	//
+	// ⚠ AND A NODE WITH NO ROW OF ITS OWN IS CLEARED, not left inheriting. A folder is pulled into the
+	// tree by `chainUp` whenever something UNDER it matched, so under a filter it can stand there with no
+	// row behind it — and the values it inherited from its parent are that parent's, not a blank. Left
+	// alone it would print its parent's Code and Description as if they were its own, which is worse than
+	// printing nothing: a wrong line reads as data.
+	if (ctx.identity != 0 && ctx.identity == level.HeadCol()->GetColumnId()) {
+		for (const ibQueryRamColumn& col : ctx.snapshot->Columns())
+			node->m_values[col.m_id] = ownRows.empty()
+				? ibValue()
+				: ctx.snapshot->GetCell(ownRows.front(), col.m_id);
+		node->m_values[level.HeadCol()->GetColumnId()] = valueKey;   // …its own key survives either way
+	}
+
 	std::vector<long> subtree = ownRows;
 	const auto cit = childrenOf.find(valueKey);          // sub-values (deeper in the catalog hierarchy)
 	if (cit != childrenOf.end())
 		for (const ibValue& childKey : cit->second) {
-			std::vector<long> kr = AttachDimValue(ctx, node, levelIdx, childKey, byVal, childrenOf, visited, across, branch, depth);
+			// ⭐ A SUB-VALUE KEEPS THE RUNG AND TAKES ONE MORE STEP IN. The level is the ladder's and does
+			// not move; the indentation is the tree's and does (Max, 2026-08-29: *"if there is a sub-folder
+			// it has to add one"*).
+			std::vector<long> kr = AttachDimValue(ctx, node, levelIdx, childKey, byVal, childrenOf, visited, across, branch, depth, indent + 1);
 			subtree.insert(subtree.end(), kr.begin(), kr.end());
 		}
 	// A hierarchy nests VALUES inside ONE level, so a sub-value keeps this level's depth; the NEXT
-	// level goes one deeper.
-	FoldDimLevel(ctx, node, ownRows, levelIdx + 1, across, branch, depth + 1);
+	// level goes one deeper — and stands where this value stands, not where the level began.
+	//
+	// ⭐⭐ …AND THE NEXT LEVEL GOES INSIDE THIS VALUE'S OWN ROWS — EXCEPT THE RECORDS, UNDER A RUNG
+	// WHOSE KEY IS THE ROW ITSELF.
+	//
+	// 🛑 BOTH WIDER RULES WERE TRIED AND BOTH WERE WRONG, which is why the narrow one is written out:
+	//   * stop the whole descent — the second grouping a person set then vanished from the sheet while
+	//     the list still reached it by drilling (*"the groupings work in the list, the report does not
+	//     see them"*);
+	//   * stop nothing — a tree over the reference then printed every element TWICE, bold heading and
+	//     plain row, one under the other (*"the hierarchy doubles"*).
+	// What is degenerate is only the RECORDS level: this node already IS that row, fields and all. A
+	// further GROUPING is a different question and is folded as asked.
+	const bool keyIsTheRow = ctx.identity != 0 && level.HeadCol() != nullptr
+		&& ctx.identity == level.HeadCol()->GetColumnId();
+	const bool nextIsDetails = (levelIdx + 1 >= ctx.levels->size())
+		|| (*ctx.levels)[levelIdx + 1].m_fields.empty();
+	if (!(keyIsTheRow && nextIsDetails))
+		FoldDimLevel(ctx, node, ownRows, levelIdx + 1, across, branch, depth + 1, indent);
 
 	// ⭐ AND THE CELLS OF THIS HEADING — over its WHOLE subtree, which is what its own figures are
 	// computed from (ApplyAggregates below reads the same rows). A folder of a hierarchy stands for
@@ -3660,7 +3740,7 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 // Fold `rows` at `levelIdx` under `node`: group by the level field, then either flat groups (Elements)
 // or the field's reference hierarchy (Hierarchy/HierarchyOnly). Recurses the next level inside.
 void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vector<long>& rows, size_t levelIdx,
-                  bool across, const ibTotalBranch* branch, int depth)
+                  bool across, const ibTotalBranch* branch, int depth, int indent)
 {
 	if (levelIdx >= ctx.levels->size()) return;          // leaf level reached
 
@@ -3688,12 +3768,13 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 				while (end < ctx.levels->size() && (*ctx.levels)[end].m_branch.get() == section)
 					++end;
 				if (section == nullptr) {   // a common level after a branch — cannot happen, but do not eat it
-					FoldDimLevel(ctx, node, rows, at, across, nullptr, depth);
+					FoldDimLevel(ctx, node, rows, at, across, nullptr, depth, indent);
 					break;
 				}
 				// AT THE PARENT'S OWN DEPTH — same rule as ibStreamingFold::BranchChild, so two
 				// branches stand at one depth however many levels stood above them.
 				ibSelectorTree::Node* fork = node->AddChild(node->m_level);
+				fork->m_indent = indent;              // …and inside whatever hierarchy step it was opened in
 				fork->m_kind   = ibSelectorNodeKind::Branch;
 				fork->m_values = node->m_values;      // the keys above stay readable inside the branch
 				fork->m_branch = section->m_name.IsEmpty() ? node->m_branch : section->m_name;
@@ -3701,7 +3782,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 				// had without the fork. A fork spends none of its own (it is opened at the parent's
 				// depth above), so the branches stand level with each other however many of them there
 				// are. Counted from the flat list instead, branch two printed a rung deeper.
-				FoldDimLevel(ctx, fork, rows, at, across, section, depth);
+				FoldDimLevel(ctx, fork, rows, at, across, section, depth, indent);
 				FoldAcross(ctx, fork, rows);
 				fork->m_hasChildren = !fork->m_children.empty();
 				ApplyAggregates(*fork, *ctx.snapshot, rows, *ctx.aggregates);   // the heading's own figure
@@ -3745,6 +3826,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 			// so the old number is kept where there are no branches at all.
 			ibSelectorTree::Node* leaf = node->AddChild(
 				branch != nullptr ? depth : static_cast<int>(ctx.levels->size()));
+			leaf->m_indent = indent;           // …standing wherever the heading above it stands in its tree
 			leaf->m_kind = ibSelectorNodeKind::Detail;
 			leaf->m_values = node->m_values;   // the group keys above stay readable on the row
 			leaf->m_branch = node->m_branch;   // …and whose branch it is read on
@@ -3799,15 +3881,55 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 	// A HIERARCHY UNFOLD walks ONE parent chain, so it is a single-field level's answer — there is no
 	// one chain to walk for a key made of several fields. The lowering refuses that combination where
 	// it is written, so this reads the head field and never has to blend the two readings.
-	if (level.IsSingleField() && level.HeadDim() != ibDimensionKind::Elements) {
+	//
+	// ⭐⭐ …AND ONLY WHERE THERE IS A CHAIN TO WALK. The unfold is a REQUEST — "read this field down its
+	// parent chain" — and a request is answered by what the data can do, not by the word alone. A
+	// document has no parent column; a catalog nobody has filled a parent in is the same thing said with
+	// data. Either way the chain is one link long, and a level that unfolds a chain of one link IS an
+	// ordinary grouping (Max, 2026-08-29: *"there cannot be levels there by definition — it is one level,
+	// because there is no hierarchy at all"*).
+	//
+	// 🛑 Taken on the WORD, the fold went down the hierarchy road expecting a tree and had none: it built
+	// roots, walked for children that could not exist, and handed the printer a shape that a flat source
+	// cannot have — rows spread across seven levels where one was possible. The mess is not in what it
+	// then did; it is in having entered at all (Max: *"you expect a hierarchy and you have a flat one"*).
+	//
+	// The parent map is read FIRST and its emptiness IS the answer, so this asks the same authority the
+	// walk would have asked anyway and costs nothing extra.
+	const ibValueParentMap parentOf = (level.IsSingleField() && level.HeadDim() != ibDimensionKind::Elements)
+		? ParentMapForField(ctx, level.HeadCol())
+		: ibValueParentMap{};
+
+	if (level.IsSingleField() && level.HeadDim() != ibDimensionKind::Elements && !parentOf.empty()) {
 		// Grouped by the VALUE, in first-seen order. `valOf` is gone with the string key — it only ever
 		// mapped a rendered key back to the value it was rendered from.
-		ibRowsByValue byVal;
-		for (long r : rows)
-			byVal[ctx.snapshot->GetCell(r, level.HeadCol()->GetColumnId())].push_back(r);
+		//
+		// 🛑⭐⭐ …AND FIRST-SEEN ORDER HAS TO BE KEPT SOMEWHERE, because the bucket map is UNORDERED. The
+		// Elements branch below has always carried its own `order` vector for exactly this reason; this
+		// branch walked `byVal` itself, so the tree came out in HASH order and the read's `ORDER BY` — the
+		// author's sort, the level keys, everything the query was careful to state — was thrown away at the
+		// last step. Nothing said so: the rows were all there, in an order with no name (Max, 2026-08-29:
+		// *"a strange sort, but it does print everything now"*).
+		//
+		// The fold's rule everywhere else is *a group stands where its FIRST ROW stood*, and that is all
+		// this restores: the keys in arrival order, and the walk below started from them.
+		ibRowsByValue          byVal;
+		std::vector<ibValue>   keyOrder;
+		keyOrder.reserve(rows.size());
+		for (long r : rows) {
+			const ibValue key = ctx.snapshot->GetCell(r, level.HeadCol()->GetColumnId());
+			auto it = byVal.find(key);
+			if (it == byVal.end()) {
+				keyOrder.push_back(key);
+				byVal.emplace(key, std::vector<long>{ r });
+			}
+			else {
+				it->second.push_back(r);
+			}
+		}
 
-		// Hierarchy / HierarchyOnly — arrange the values into the catalog's parent-ref tree.
-		const ibValueParentMap parentOf = ParentMapForField(ctx, level.HeadCol());
+		// Hierarchy / HierarchyOnly — arrange the values into the catalog's parent-ref tree. (`parentOf`
+		// was read above the branch: its emptiness is what decides whether this road is taken at all.)
 		ibRefChildren childrenOf;
 		ibValueSeen   seen;
 		std::function<void(const ibValue&)> chainUp = [&](const ibValue& key) {
@@ -3815,15 +3937,104 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 			seen[key] = 1;
 			const auto pit = parentOf.find(key);
 			const ibValue par = (pit != parentOf.end()) ? pit->second : ibValue();
-			childrenOf[par].push_back(key);
+			// ⭐⭐ "NO PARENT" ARRIVES AS TWO DIFFERENT VALUES, AND THE ROOT BUCKET IS ONE. A key the
+			// parent-map does not mention gives a default `ibValue()`; a key it DOES mention as
+			// top-level gives an EMPTY REFERENCE — a reference value with a null guid, which is not
+			// equal to `ibValue()` and hashes elsewhere. `IsNoKey` already reads both as "root", so
+			// they are filed under the same key here; the roots are looked up under `ibValue()` below.
+			//
+			// 🛑 Filed under whatever came, a hierarchical catalog lost its whole tree: every top-level
+			// element went into the empty-REFERENCE bucket, the root lookup read the empty-VALUE one and
+			// found nobody, and the only node that survived was the one whose parent happened to be
+			// missing from the map altogether. One node out of five rows — which is exactly what the
+			// walk saw (Max, 2026-08-29: the hierarchical sheet came out blank, twice).
+			childrenOf[IsNoKey(par) ? ibValue() : par].push_back(key);
 			chainUp(par);
 		};
-		for (const auto& kv : byVal) chainUp(kv.first);
+		// ⭐⭐ …AND A KEY STANDS WHERE ITS OWN ROW STOOD, NOT WHERE ITS FIRST CHILD DID. `chainUp` walks
+		// UPWARD, so filing straight from it puts a folder in its parent's list the moment the first row
+		// UNDER it is met — and a folder whose contents sort early jumped to the front while its own row
+		// sat further down the read. Two passes say it properly:
+		//
+		//   1. every key that HAS a row, in the order the rows arrived — the fold's rule everywhere else;
+		//   2. only then the ancestors that have NO row of their own (pulled in by a filter that kept a
+		//      child and dropped the folder). They have nothing to be ordered by, so they follow.
+		for (const ibValue& key : keyOrder) {
+			if (IsNoKey(key) || seen[key])
+				continue;
+			seen[key] = 1;
+			const auto pit = parentOf.find(key);
+			const ibValue par = (pit != parentOf.end()) ? pit->second : ibValue();
+			childrenOf[IsNoKey(par) ? ibValue() : par].push_back(key);
+		}
+		for (const ibValue& key : keyOrder) {
+			const auto pit = parentOf.find(key);
+			if (pit != parentOf.end())
+				chainUp(pit->second);
+		}
 		ibValueSeen visited;
 		const auto rit = childrenOf.find(ibValue());
 		if (rit != childrenOf.end())
 			for (const ibValue& rootKey : rit->second)
-				AttachDimValue(ctx, node, levelIdx, rootKey, byVal, childrenOf, visited, across, branch, depth);
+				AttachDimValue(ctx, node, levelIdx, rootKey, byVal, childrenOf, visited, across, branch, depth, indent);
+
+		// ⭐⭐ …AND THE ROWS THAT HAVE NO KEY AT THIS LEVEL BELONG TO THE NODE ITSELF. Grouping a catalog by
+		// its PARENT makes "no parent" a real group — it means the TOP LEVEL — and `chainUp` refuses such a
+		// key at the door (it is what ends the walk up the chain), so those rows had no heading to hang
+		// under and simply vanished: a catalog printed one folder and lost every element standing beside it
+		// (Max, 2026-08-29). They are not a heading either — the top level of a tree has no caption — so
+		// they go where they belong, straight under the node this level is being built on, at the same
+		// depth. The next level inside them still runs, so a sub-grouping under a top-level row keeps working.
+		//
+		// ⚠ AND ONE LEVEL SHALLOWER, which is the whole of what "belonging to the node" means here. A
+		// heading stands at `depth` and its own rows one deeper; rows that belong to the NODE stand where
+		// the headings do. Passed `depth`, they came out alongside a heading's children and the sheet drew
+		// them INSIDE the last folder — the indentation said they were its contents (Max, 2026-08-29:
+		// *"the levels are broken"*).
+		// ⭐⭐ AN EMPTY VALUE IS A VALUE, AND ITS ROWS ARE A GROUP LIKE ANY OTHER — "not set" is what a
+		// person calls it, and it gets a heading of its own at this rung.
+		//
+		// 🛑 THEY USED TO HANG ON THE NODE ITSELF, headingless, and that cost BOTH roads at once. On the
+		// sheet seventy documents printed as bare rows under someone else's heading. In the LIST they
+		// vanished outright: a fetch returns the nodes OF ITS RUNG, and rows attached to the rung above
+		// are numbered past the last dimension — so the list showed one group and lost seventy-one rows
+		// (Max, 2026-08-30: *"and the rows disappear altogether"*). Losing rows is the worst answer a
+		// list can give, and it came from a special case that need not exist.
+		//
+		// ⚠ THIS IS NOT THE "NO PARENT" SENTINEL. `IsNoKey` reads two different facts through one
+		// spelling: a row whose VALUE at this level is empty (data — a group), and a key with no PARENT
+		// (structure — the root of the tree, filed in `childrenOf[ibValue()]` above). Only the first is
+		// changed here; the parent-map root bucket is untouched.
+		// ⭐⭐ …AND THE REMAINDER GOES ON IT. `visited` says which keys the walk down the roots actually
+		// reached; whatever it did not is a row the tree has no place for — a value whose parent chain
+		// the map does not reach, or one that simply has no value at this level. Read together they are
+		// one thing: everything not hanging anywhere hangs HERE (Max, 2026-08-30: *"you just need to
+		// hang the remainder of the values onto the empty element"*).
+		//
+		// 🛑 THE ALTERNATIVE IS SILENT LOSS, and that is what it was: a fetch returns the nodes of its
+		// rung, so rows attached nowhere are rows nobody can reach — a list showed one group and lost
+		// seventy-one rows. A fold's contract is that every row it was given is somewhere in the tree it
+		// returns; a row that is in none of the nodes is a row the fold ate.
+		std::vector<long> orphaned;
+		for (const ibValue& key : keyOrder) {
+			if (!IsNoKey(key) && visited[key])
+				continue;                                   // attached under its own folder chain
+			const auto bit = byVal.find(key);
+			if (bit != byVal.end())
+				orphaned.insert(orphaned.end(), bit->second.begin(), bit->second.end());
+		}
+		if (!orphaned.empty()) {
+			ibSelectorTree::Node* empty = node->AddChild(depth);
+			empty->m_indent = indent;
+			empty->m_values = node->m_values;   // the rungs above stay readable on this heading
+			empty->m_branch = node->m_branch;
+			empty->m_values[level.HeadCol()->GetColumnId()] = ibValue();   // …and its own key, which is empty
+			FoldDimLevel(ctx, empty, orphaned, levelIdx + 1, across, branch, depth + 1, indent);
+			if (!across)
+				FoldAcross(ctx, empty, orphaned);
+			empty->m_hasChildren = !empty->m_children.empty();
+			ApplyAggregates(*empty, *ctx.snapshot, orphaned, *ctx.aggregates);
+		}
 		return;
 	}
 
@@ -3860,6 +4071,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 		ibSelectorTree::Node* child = across
 			? node->InsertChild(insertAt++, childLevel)
 			: node->AddChild(childLevel);
+		child->m_indent = indent;   // …inside whatever hierarchy step the level above it stands in
 		// A SUBGROUP inherits the grouping fields AVAILABLE from the levels above (Max) — copy the parent
 		// group's stamped dimension values down, then add this level's own. So a display column that
 		// dot-walks an ANCESTOR dimension's reference (e.g. the parent grouped by Reference, this level by
@@ -3871,7 +4083,54 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 			child->m_values[level.m_fields[i].m_col->GetColumnId()] = key[i];   // every field of the key IS a value
 
 		const std::vector<long>& own = byKey[key];
-		FoldDimLevel(ctx, child, own, levelIdx + 1, across, branch, depth + 1);   // next level inside, same ladder, one deeper
+
+		// ⭐⭐ A LEVEL KEYED BY THE ROW'S OWN IDENTITY **IS** THE ROW — the same rule AttachDimValue
+		// states, and it belongs to the LEVEL rather than to either branch. A field can be grouped by
+		// with any unfold, and which branch that takes is not the grouping's business: a HIERARCHY
+		// unfold over a source with no parent column (a document grouped by its own reference) is an
+		// ordinary grouping by the time it gets here, and the heading came out holding nothing but the
+		// reference while a record printed the same document again underneath (Max, 2026-08-29, live).
+		//
+		// ⭐⭐ AND IT IS A RECORD, NOT A HEADING WEARING A RECORD'S FIELDS. A node has ONE STATUS: either it
+		// is a GROUPING — a key, a caption drawn across the line, figures — or it is a ROW, which is its own
+		// values in its own columns. Stamped onto a Group node the row's fields made it both at once, and a
+		// printer that draws both draws them on top of each other: the reference's presentation over the
+		// number, in one cell (Max, 2026-08-29: *"you hand back a row that is in two statuses at the same
+		// time — hierarchy and grouping"*).
+		//
+		// ⚠ AND ONLY THE SOURCE'S OWN TABLE IS READ THIS WAY. Grouping a document by a CATALOG it refers to
+		// stays an ordinary grouping, hierarchy unfold or not — the catalog's folders are headings and the
+		// documents hang under them. It is the MAIN TABLE, grouped by its own reference, that turns into
+		// records, and that is what lets a list show every field on the line (Max, 2026-08-29).
+		//
+		// There is nothing below such a node — the group and the row are one thing here — so the next level
+		// is not entered and the figures are not rolled over it: a record shows what it holds, exactly as
+		// the detail branch above says.
+		// ⭐⭐ A LEVEL KEYED BY THE ROW'S OWN IDENTITY **IS** THE ROW, so the node carries the row's fields.
+		// Its key tells one row from another, so every group holds exactly one — and a heading that stands
+		// for one row may as well show it. Asked of the SOURCE, not of the row count: a group that merely
+		// happens to hold one row is a different thing and is left alone.
+		// 🛑⭐⭐ AND IT IS TAKEN OUT AGAIN, FOR THE `Elements` SPELLING. Stamping the row's fields onto
+		// such a heading made it indistinguishable from a record, so the groupings a person had set
+		// went INVISIBLE — 72 lines that all read as detail rows — and stopping the descent under it
+		// dropped every rung below, which the LIST still showed by drilling into the node. Both halves
+		// of the rule cost more than they saved (Max, 2026-08-29: *"I set a grouping by reference and
+		// one by data version; I expect the first, the second and the third"* and *"the list keeps
+		// diverging from the report"*).
+		//
+		// A rung that happens to hold one row is still a rung: "it holds one row" is a fact about the
+		// data, not permission to delete a level somebody configured. The LADDER IS READ LITERALLY —
+		// one heading per rung, records at the bottom — which is exactly what the list draws, and one
+		// answer for both roads is the requirement.
+		//
+		// ⚠ AND AN ORDINARY RUNG IS AN ORDINARY RUNG, whatever its key happens to be. The "a level keyed
+		// by the row's identity IS the row" rule belongs to the TREE — `AttachDimValue`, where a node
+		// genuinely stands for one element and the tree itself is the display — and it was tried here
+		// as well, twice. Both times it took away what a person had asked for: a document list grouped
+		// by its own reference printed headings and NO detail records (Max, 2026-08-30: *"the problem
+		// is that in documents the detail records are not printed"*). A group holding one row is still
+		// a group, and the rows under it are still the rows.
+		FoldDimLevel(ctx, child, own, levelIdx + 1, across, branch, depth + 1, indent);   // next level inside, same ladder, one deeper
 		// ⭐ AND THE CELLS OF THIS HEADING — under EVERY row heading, not only the deepest (FoldAcross).
 		if (!across)
 			FoldAcross(ctx, child, own);
@@ -3907,7 +4166,15 @@ ibSelectorTree ibQueryComposer::BuildDimensionTree(ibQueryRowCursor& rows,
 		tree.AddColumn(col.m_id, col.m_name, col.m_type);
 	AddSyntheticAggColumns(tree, aggregates);
 
-	ibStreamingFold fold(tree, levels, aggregates, rows.Columns());
+	// …AND WHICH COLUMN IS THE ROW'S IDENTITY. The parameter arrived here all along and only the
+	// SNAPSHOT road read it, so an ordinary grouping — which streams — folded without ever knowing.
+	ibMetaID identity = 0;
+	if (source != nullptr) {
+		const std::vector<const ibBackendQueryColumn*> keys = source->GetPrimaryKeyColumns();
+		if (keys.size() == 1 && keys.front() != nullptr)
+			identity = keys.front()->GetColumnId();
+	}
+	ibStreamingFold fold(tree, levels, aggregates, rows.Columns(), identity);
 	long read = 0;
 	while (rows.Next()) { fold.Feed(rows); ++read; }
 	fold.Finish();
@@ -3938,6 +4205,13 @@ ibSelectorTree ibQueryComposer::BuildDimensionTree(const ibQueryRamTable& snapsh
 	for (size_t li = 0; li < levels.size(); ++li)
 		if (levels[li].m_axis == ibTotalsAxis::Columns) { ctx.across = li; break; }
 	ctx.details = !levels.empty() && levels.back().m_fields.empty();
+	// …AND WHICH COLUMN IS THE ROW'S IDENTITY, asked of the source once. A level grouped by it holds one
+	// row per group by construction, and its headings ARE those rows (AttachDimValue).
+	if (source != nullptr) {
+		const std::vector<const ibBackendQueryColumn*> keys = source->GetPrimaryKeyColumns();
+		if (keys.size() == 1 && keys.front() != nullptr)
+			ctx.identity = keys.front()->GetColumnId();
+	}
 
 	FoldDimLevel(ctx, &tree.Root(), all, 0);
 	// …AND THE ROOT'S OWN CELLS — the column totals, which are the cells of the heading over

@@ -111,11 +111,12 @@ bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem&
 bool ibValueTabularSectionDataObjectBase::GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const
 {
 	if (m_metaTable->IsNumberLine(id)) {
-		// A GROUP header carries no storage line number (it is synthetic, not in the storage) — leave the N
-		// column blank rather than a bogus "0" (GetRow → wxNOT_FOUND). Its dimension value shows in the grouped column.
-		const ibComposerNode* numNode = GetViewData<ibComposerNode>(item);
-		if (numNode != nullptr && numNode->IsGroup()) { pvarMetaVal = ibValue(); return true; }
-		pvarMetaVal = ibValue(ibNumber(static_cast<int>(GetRow(item) + 1)));
+		// The SAME number the display reads — the row's place in what is shown (DisplayNumberOf). A group
+		// header is synthetic and carries none; a row outside the filter is shown nowhere and carries none.
+		// Both answer empty rather than a bogus "0".
+		const long number = DisplayNumberOf(item);
+		if (number <= 0) { pvarMetaVal = ibValue(); return true; }
+		pvarMetaVal = ibValue(ibNumber(static_cast<int>(number)));
 		return true;
 	}
 
@@ -452,6 +453,30 @@ ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollec
 {
 }
 
+namespace {
+// A filter line DETERMINES a value only when it SAYS one: an equality, switched on, on a plain column (a
+// dotted path walks into a reference — there is no cell of this table to write it into), against a literal
+// rather than another field. `>` / `LIKE` / `IN` narrow without deciding, and an OR-group decides nothing at
+// all — so neither contributes, and an OR is not walked into.
+void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes,
+	std::vector<std::pair<wxString, ibValue>>& out)
+{
+	for (const ibFilterNodeDescription& node : nodes) {
+		if (!node.m_use)
+			continue;
+		if (node.m_kind == ibFilterNodeKind_Group) {
+			if (node.m_groupKind == ibFilterGroupKind_And)
+				ibCollectFilterDefaults(node.m_children, out);
+			continue;
+		}
+		if (node.m_comparison != ibComparisonKind_Equal) continue;
+		if (!node.m_left.IsField() || node.m_right.IsField()) continue;
+		if (node.m_left.m_path.Find(wxT('.')) != wxNOT_FOUND) continue;
+		out.emplace_back(node.m_left.m_path, node.m_right.m_value);
+	}
+}
+}   // namespace
+
 long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before, const ibDataViewItem& contextRow)
 {
 	ibComposerNode* rowData = new ibComposerNode();
@@ -460,9 +485,12 @@ long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before, const i
 			rowData->AppendTableValue(object->GetMetaID(), object->CreateValue());
 	}
 
-	// Grouped add: the new row inherits the current group's dimension values (read each grouping dim off the
-	// FRONT-passed context row — the selected row), so it lands INSIDE the group instead of losing the grouping
-	// value. No context / ungrouped → no dims → no-op; a dotted (reference-walk) dim is skipped.
+	// Grouped add: the new row inherits the dimension values of the group the user is INSIDE — the drilled-into
+	// folder, which the front passes as the context — so it lands in that group instead of losing the value.
+	// ⭐ AND AT THE ROOT IT INHERITS NOTHING, which is the point: standing at the top of a hierarchical view,
+	// a new row starts with its dimensions EMPTY and therefore forms a group of its own, empty, that a person
+	// can step into and fill (Max, 2026-08-29). Filling it re-folds the view on the spot, because a cell edit
+	// bumps the view generation. No context / ungrouped → no dims → no-op; a dotted dim is skipped.
 	if (ibComposerNode* ctx = GetViewData<ibComposerNode>(contextRow)) {
 		for (size_t i = 0; i < GetModelComposer().GroupCount(); ++i) {
 			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
@@ -471,6 +499,19 @@ long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before, const i
 			if (col != wxNOT_FOUND)
 				rowData->AppendTableValue(col, ctx->GetTableValue(col));
 		}
+	}
+
+	// ⭐⭐ …AND WHAT THE FILTER IN FORCE HAS ALREADY DECIDED. This is not a convenience: the new row is empty,
+	// the filter does not pass it, and the RAM composer drops it from the order in the same breath — the row a
+	// person just added is gone before they see it (Max, 2026-08-29: *"it has to supply the value already,
+	// because it falls out at once"*). So it is filled HERE, before the notify, and the first order computed
+	// after the insert already contains the row.
+	std::vector<std::pair<wxString, ibValue>> defaults;
+	ibCollectFilterDefaults(GetModelComposer().GetCurrentFilterDesc().m_nodes, defaults);
+	for (const std::pair<wxString, ibValue>& one : defaults) {
+		const ibMetaID col = GetColumnIDByName(one.first);
+		if (col != wxNOT_FOUND)
+			rowData->AppendTableValue(col, one.second);
 	}
 
 	if (before > 0)

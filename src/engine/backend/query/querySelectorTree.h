@@ -45,6 +45,16 @@ public:
 	{
 		Row                                m_values;
 		int                                m_level = 0;
+		// ⭐⭐ HOW DEEP INSIDE ITS OWN LEVEL IT STANDS — 0 for every node of an ordinary grouping, and the
+		// hierarchy depth for a level that UNFOLDS one. A hierarchy nests VALUES within a single rung of
+		// the ladder: a sub-folder is the SAME level as its folder (the settings, the sort and the schema
+		// all belong to the rung) and yet stands one step further in on the page.
+		//
+		// 🛑 One number cannot say both, and it was being asked both. Made to grow, a sub-folder moved to a
+		// rung nobody declared; left alone, it printed flush with its parent — which is what a person sees
+		// as broken levels (Max, 2026-08-29: *"a sub-folder has to add one"*). The RUNG is `m_level`; the
+		// PAGE is the two added together, and only the printer adds them.
+		int                                m_indent = 0;
 		std::vector<std::unique_ptr<Node>> m_children;
 		bool                               m_hasChildren = false;
 		ibSelectorNodeKind                 m_kind = ibSelectorNodeKind::Group;
@@ -126,6 +136,7 @@ private:
 	{
 		to.m_values      = from.m_values;
 		to.m_level       = from.m_level;
+		to.m_indent      = from.m_indent;   // …and how deep inside its level it stands travels with it
 		to.m_hasChildren = from.m_hasChildren;
 		to.m_kind        = from.m_kind;
 		to.m_branch      = from.m_branch;   // …a copy of a node stands in the same branch the original did

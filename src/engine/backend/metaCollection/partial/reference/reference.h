@@ -142,13 +142,15 @@ public:
 	// (type + guid) is what dedup / merge rely on. Out-of-line (reference.cpp): m_metaObject is incomplete here.
 	virtual int CompareValueLS(const ibValue& cParam) const override;
 
-	//operator '=='
-	virtual bool CompareValueEQ(const ibValue& cParam) const {
-		ibValueReferenceDataObject* rhs = dynamic_cast<ibValueReferenceDataObject*>(cParam.GetRef());
-		if (rhs != nullptr)
-			return m_metaObject == rhs->m_metaObject && m_objGuid == rhs->m_objGuid;
-		return false;
-	}
+	// ⭐⭐ EQUALITY IS THE ORDER'S OWN ANSWER, not a second opinion about it. The invariant this class is
+	// written to — `LS == 0` exactly when two references are the same one — was being kept by THREE
+	// separate implementations staying in step by hand: the order, this, and `!=` below, each with its
+	// own cast and its own idea of what "same" means. Said once, it cannot drift, and the two operators
+	// stop paying for a cast of their own.
+	//
+	// 🛑 That drift is not hypothetical — it is exactly the shape that cost 2026-08-29: the order said
+	// "equal" where it meant "not comparable", and every hash container in the house believed it.
+	virtual bool CompareValueEQ(const ibValue& cParam) const override { return CompareValueLS(cParam) == 0; }
 
 	// Hashes by the GUID — the order's FIRST key, and the whole of identity for a
 	// reference that points at something. The type is deliberately left out: it
@@ -170,13 +172,8 @@ public:
 		return (size_t)h;
 	}
 
-	//operator '!='
-	virtual bool CompareValueNE(const ibValue& cParam) const {
-		ibValueReferenceDataObject* rhs = dynamic_cast<ibValueReferenceDataObject*>(cParam.GetRef());
-		if (rhs != nullptr)
-			return m_metaObject != rhs->m_metaObject || m_objGuid != rhs->m_objGuid;
-		return true;
-	}
+	//operator '!=' — the same one answer, negated. Never a third telling of it.
+	virtual bool CompareValueNE(const ibValue& cParam) const override { return CompareValueLS(cParam) != 0; }
 
 	virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const;
 

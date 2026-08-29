@@ -1,4 +1,13 @@
 #include "tableBox.h"
+#include "tableBoxColumnRenderer.h"             // ibDataViewColumnObject — the current column carries its control
+#include "backend/composition/drivers/spreadsheetComposeDriver.h"   // the SAME driver a report's sheet is drawn by
+#include "backend/backend_spreadsheet.h"        // ibBackendSpreadsheetObject — the document the list is printed into
+#include "backend/session/session.h"            // ibSession::CurrentFrame — the door a finished document is shown through
+#include "backend/system/systemManager.h"       // ibValueSystemFunction::Message — the platform's own way to speak
+#include "backend/backend_mainFrame.h"          // ibBackendDocFrame — ShowSpreadsheetDocument lives on it
+#include "backend/composition/ramComposer.h"    // ibDataRamComposer — the composer a table of values prints through
+#include <memory>
+#include <wx/choicdlg.h>
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
 #include "backend/compositionDescription.h"     // the description the quick filter writes into
@@ -29,6 +38,10 @@ enum
 	// their own category, addressed by this control's guid rather than by a composer's.
 	enTableSettingsRestore,
 	enTableSettingsSave,
+	// ⭐⭐ OUTPUT LIST — what is on the screen, as a spreadsheet document. A verb of the TABLE, so every
+	// list and every table of values has it for nothing (Max, 2026-08-29). It READS: the same rows, the
+	// same filter, the same sort and the same groupings, printed the way a report is.
+	enTableOutputList,
 };
 
 ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardCommands(const ibFormID& formType)
@@ -82,6 +95,13 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 	actionData.AddAction(wxT("RestoreSettings"), _("Restore settings"), g_picSelectCLSID, false, enTableSettingsRestore).SetModify(false);
 	actionData.AddAction(wxT("SaveSettings"), _("Save settings"), g_picSaveCLSID, false, enTableSettingsSave).SetModify(false);
 
+	// ⭐⭐ …AND WHAT IS ON THE SCREEN, AS A DOCUMENT. Every list and every table of values gets this for
+	// nothing, because it asks the composition already in force — the same rows, the same filter, the same
+	// order, the same groupings — and prints them the way a report is printed (Max, 2026-08-29). It READS,
+	// so it stays live in a view-only form.
+	actionData.AddSeparator();
+	actionData.AddAction(wxT("OutputList"), _("Output list"), g_picPrintCLSID, false, enTableOutputList).SetModify(false);
+
 	actionData.AddSeparator();
 	actionData.AddAction(wxT("ViewMode"), _("View mode"), g_picHierarchyCLSID, false, enTableViewMode).SetModify(false);
 
@@ -117,6 +137,20 @@ void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendV
 		default:
 			break;   // flat list — no anchor
 		}
+
+		// …and the COLUMN the cursor stands on, read exactly where the by-column FILTER reads it
+		// (Command_FilterByCurrentColumn). It travels as the column itself — name, synonym and the source
+		// description — never as a number: a column bound to a HOP ("Product.Vendor") is a whole path, and
+		// its name is the dotted field a sort is written against.
+		if (ibDataViewColumn* const current = ctrl->GetCurrentColumn()) {
+			if (auto* const columnObject = dynamic_cast<ibDataViewColumnObject*>(current)) {
+				if (ibValueModelTableBoxColumn* const columnControl = columnObject->GetControl()) {
+					ctx.m_column.m_name = columnControl->GetSourceFieldName();
+					ctx.m_column.m_synonym = columnControl->GetCaption();
+					ctx.m_column.m_source = columnControl->GetSourceDesc();
+				}
+			}
+		}
 	}
 
 	switch (lNumAction)
@@ -128,6 +162,7 @@ void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendV
 	case enTableViewMode:       Command_ShowViewMode();              break;   // direct → control
 	case enTableSettingsRestore: Command_ShowSavedSettings(/*restore*/true);  break;
 	case enTableSettingsSave:    Command_ShowSavedSettings(/*restore*/false); break;
+	case enTableOutputList:      Command_OutputList();                        break;   // → a spreadsheet document
 	default:
 		// The model runs its command against the current ROW as-is (its Edit id has the eStartEditingFlag bit baked
 		// in, so its own `case eEditValue` matches — a list opens the object form, a value-table does nothing there).
@@ -269,13 +304,184 @@ void ibValueModelTableBox::Command_ClearFilter()
 	// three sections — so a person who had set a sort and then pressed "Filter clear" lost the sort
 	// too, under a command that says nothing about sorting (Max, 2026-08-24).
 	//
-	// An empty filter, not "no user setting": whatever else the reader chose is theirs and stays. The
-	// developer's own filter comes back by the ordinary rule — an empty part falls through to the
-	// author's (GetCurrentFilterDesc).
+	// An empty filter, not "no user setting": whatever else the reader chose is theirs and stays.
+	// ⚠ And an empty filter is an ANSWER — the author's does NOT come back under it (2026-08-29: a
+	// setting that exists answers every part). "Clear the filter" means no filter, which is what the
+	// person pressing it asked for; going back to the developer's is `ClearUserSettings`, a different
+	// verb that drops the setting whole.
 	ibSettingsDescription settings = m_tableModel->GetModelComposer().GetCurrentSettingsDesc();
 	settings.m_filter.Clear();
 	m_tableModel->GetModelComposer().SetUserSettingsDesc(settings);
 	m_tableModel->RefetchAll();
+}
+
+// ⭐⭐ WHAT IS ON THE SCREEN, AS A DOCUMENT — «Output list».
+//
+// The whole feature is a JOINING, not an engine: the list already HAS a composition (its filter, its order,
+// its groupings), a composition already knows how to print itself onto a sheet (the report's own
+// ibSpreadsheetComposeDriver), and a finished sheet already knows how to be shown (ShowSpreadsheetDocument).
+// This asks the first, hands it to the second and gives the result to the third.
+//
+// ⭐ A COMPOSER OF ITS OWN, seeded from what is in force (Max, 2026-08-29: *"take the settings that exist and
+// drive them into your own separate composer"*). The list goes on reading while this one runs, and a second
+// pass over the LIST's composer would be a second reader of one object — it registers parameters while it
+// builds a filter, and the list fetches on another thread.
+//
+// ⭐ AND THE COLUMNS ARE ASKED. The sheet repeats the box's own column layout, so what it may repeat is what
+// the box shows; a person ticks off the ones they want and the rest take no column at all (the driver reads
+// ibCompositionOutputInfo::m_shown, which is what the selected-fields table becomes).
+void ibValueModelTableBox::Command_OutputList()
+{
+	if (m_tableModel == nullptr)
+		return;
+
+	// The columns this box shows, in the order it shows them — the layout the sheet repeats. Walked, not
+	// looped: a column may sit inside a column GROUP, and groups nest (the same walk CreateTable makes).
+	std::vector<ibValueModelTableBoxColumn*> columns;
+	std::function<void(const ibValueFrame*)> walk = [&](const ibValueFrame* parent) {
+		if (parent == nullptr)
+			return;
+		for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
+			ibValueFrame* child = parent->GetChild(idx);
+			if (child == nullptr)
+				continue;
+			if (ibValueModelTableBoxColumn* column = dynamic_cast<ibValueModelTableBoxColumn*>(child))
+				columns.push_back(column);
+			else if (dynamic_cast<ibValueModelTableBoxColumnGroup*>(child) != nullptr)
+				walk(child);
+		}
+	};
+	walk(this);
+
+	wxArrayString names;
+	std::vector<ibValueModelTableBoxColumn*> offered;
+	for (ibValueModelTableBoxColumn* column : columns) {
+		if (column == nullptr || !column->GetVisibleColumn() || column->GetSourceFieldName().IsEmpty())
+			continue;   // a hidden column is not on the screen; a column bound to nothing has no field to print
+		names.Add(column->GetCaption().IsEmpty() ? column->GetSourceFieldName() : column->GetCaption());
+		offered.push_back(column);
+	}
+	if (offered.empty())
+		return;
+
+	wxWindow* const over = dynamic_cast<wxWindow*>(GetInnerWx());
+	wxMultiChoiceDialog chooser(over, _("Which columns do you want to see?"), _("Output list"), names);
+	wxArrayInt all;
+	for (size_t i = 0; i < offered.size(); ++i) all.Add(static_cast<int>(i));
+	chooser.SetSelections(all);   // everything shown, ticked — the answer most people want is the default
+	if (chooser.ShowModal() != wxID_OK)
+		return;
+	const wxArrayInt chosen = chooser.GetSelections();
+	if (chosen.IsEmpty())
+		return;
+
+	// The settings in force, with the chosen columns as the fields to print.
+	ibSettingsDescription settings = m_tableModel->GetModelComposer().GetCurrentSettingsDesc();
+	settings.m_selected.clear();
+	for (const int index : chosen)
+		settings.m_selected.push_back(
+			ibSelectedFieldDescription::Field(offered[static_cast<size_t>(index)]->GetSourceFieldName()));
+
+
+	// ⭐⭐ A COPY OF THE LIST'S OWN COMPOSER, and that is more faithful than building one (Max, 2026-08-29:
+	// *"we can just copy the composer that exists and give it a new output"*). A settings description is not
+	// the whole of what a list is reading: the GROUPING LADDER set imperatively (AddGroup / ClearGroups)
+	// lives in the composer's own store, not in the setting, so a composer assembled from the setting alone
+	// would print without a grouping the screen plainly shows. The copy carries everything — the source it
+	// is bound to included, which is why the kind is asked for and nothing is re-bound.
+	//
+	// ⚠ …AND TWO THINGS IT MUST NOT INHERIT: the DRIVERS on its outputs (they point at whatever the original
+	// was last printed into) and the per-read scope with its registered parameters (the engine's own
+	// condition for ONE fetch — the folder somebody drilled into). Cleared here, so the copy is what the
+	// list READS and nothing of how it happened to be reading it.
+	std::unique_ptr<ibDataComposer> own(m_tableModel->GetModelComposer().Clone());
+	if (!own)
+		return;
+
+	for (ibDataComposer::Output& output : own->Outputs())
+		output.m_driver = nullptr;
+	own->ClearScope();
+
+	// ⭐⭐ …AND THE GROUPING BECOMES A LADDER OF LEVELS. A LIST does not need one: it draws its own tree and
+	// reads a level at a time as somebody drills, so its grouping lives in the SETTING and the ladder stays
+	// empty. A SHEET is not drilled — it is printed whole — and the driver lays out headings and the rows
+	// under them from the LEVELS. With none, the read folded by the setting and the sheet got one column of
+	// headings and no detail records at all (Max, 2026-08-29: *"it seems to output the grouping, and the
+	// detail records do not appear"*).
+	//
+	// `WantsDetails` asks the ladder too, so without this the rows were not merely unprinted — they were
+	// never read. One level per grouping line, in order, through the ordinary door.
+	// ⭐⭐ THE VIEW MODE DECIDES, AND IT WINS OVER A STORED GROUPING — the same rule the model's own read
+	// follows (a flat List view passes the ignore-parent sentinel, and the grouping is off: *"the user set
+	// the Flat view → a flat table, even with a grouping configured"*). So a box showing a FLAT list prints
+	// a flat list — every row a detail record — whatever the setting still holds (Max, 2026-08-29).
+	//
+	// ⭐ ASKED OF BOTH, IN THE RIGHT ORDER. The `ViewMode` PROPERTY is what the runtime sets — that is what
+	// it was put there for — and the live CONTROL is what a person is actually looking at. They cannot
+	// disagree for longer than one refresh (OnUpdated pushes the property onto the control, OnViewSet pushes
+	// a person's switch back onto the property), so the control wins where there is one and the property
+	// answers where there is not — the web front, which has no wxDVC at all.
+	bool flatView = (m_propertyViewMode->GetValueAsEnum() == ibDataViewList);
+	if (auto* const viewCtrl = dynamic_cast<ibDataViewCtrl*>(GetInnerWx()))
+		flatView = (viewCtrl->GetViewMode() == ibDataViewList);
+
+	// ⭐⭐ …AND THE FOLDER SOMEBODY IS STANDING IN IS THE DELIMITER. Drilled into a group and pressed
+	// «output list» means that group — not the whole catalog (Max, 2026-08-29). It goes in as a FILTER LINE
+	// on the copy's settings, not as a scope: a scope is the engine's own condition for one fetch, while
+	// this is the person's own answer to "what am I looking at", and it must survive the whole print.
+	//
+	// `InHierarchy` rather than `=`: membership that walks DOWN, so the sub-folders under the one they
+	// opened come with their contents instead of standing empty.
+	if (!flatView) {
+		if (auto* const viewCtrl = dynamic_cast<ibDataViewCtrl*>(GetInnerWx())) {
+			const ibDataViewItem drilled = viewCtrl->GetDrillHierarchyItem();
+			if (drilled.IsOk())
+				if (const ibBackendQueryable* const queryable = m_tableModel->GetSourceQueryable()) {
+					// …stated over the REFERENCE, like the hierarchy level above: "this row is inside that
+					// folder" is a fact about the row, and the engine walks the parent map to answer it.
+					const std::vector<const ibBackendQueryColumn*> key = queryable->GetPrimaryKeyColumns();
+					if (!key.empty() && key.front() != nullptr) {
+						ibValuePtr<ibValueModel::ibValueModelReturnLine> folder(m_tableModel->GetRowAt(drilled));
+						if (folder != nullptr)
+							settings.m_filter.Append(key.front()->GetName(),
+								ibComparisonKind_InHierarchy, folder->GetSelectValue());
+					}
+				}
+		}
+	}
+
+	// The setting is put on AFTER the view mode has had its say — it is what the read composes on, so
+	// clearing the grouping in the copy above and then assigning the old one back would undo it.
+	own->SetUserSettingsDesc(settings);
+
+	// ⭐⭐ …AND THE LADDER IS ASKED FOR, NOT ASSEMBLED HERE. Everything that used to stand in this place —
+	// the row's identity, whether the source has a tree, which grouping becomes which level, where the
+	// records go — is a question about the COMPOSITION and its SOURCE, and this widget knows neither. It
+	// answered them anyway, and the report answered them differently, which is how one state came to print
+	// two different sheets (Max, 2026-08-29: *"our job is to bring these two paths together"*, and:
+	// *"one serious divergence and everything falls apart"*).
+	//
+	// What is passed is what only the box knows: whether a person is looking at a tree or at a flat table.
+	own->BuildPrintLevels(!flatView, m_tableModel->GetSourceQueryable());
+
+	// The sheet is titled by the FORM it was output from — that is what a person will call this page a
+	// week later; the control's own name means nothing outside the designer.
+	const wxString title = m_formOwner != nullptr && !m_formOwner->GetCaption().IsEmpty()
+		? m_formOwner->GetCaption() : wxString(_("List"));
+
+	wxObjectDataPtr<ibBackendSpreadsheetObject> sheet(new ibBackendSpreadsheetObject());
+	ibSpreadsheetComposeDriver driver(sheet.get());
+	driver.SetTitle(title);
+
+	// The ONE-DRIVER entrance — "the short way in for a caller holding a single driver — a list", which is
+	// exactly what this is. A list has one output and says so at the call.
+	if (!own->Run(driver)) {
+		ibValueSystemFunction::Message(_("The list could not be output"), ibStatusMessage::ibStatusMessage_Warning);
+		return;
+	}
+
+	if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
+		frame->ShowSpreadsheetDocument(title, sheet);
 }
 
 void ibValueModelTableBox::Command_ShowViewMode()

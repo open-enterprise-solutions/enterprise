@@ -118,14 +118,19 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 	// So the flat toggle always wins over a stored grouping. No dims → the flat live-node path below. slice:
 	// Elements grouping; a dot-tail dim groups by the walked value.
 	const bool flatView = (parent == s_constIgnoreParent);
-	std::vector<std::pair<ibMetaID, std::vector<wxString>>> dims;
+	struct RamDim {
+		ibMetaID              m_col = ibMetaID(wxNOT_FOUND);
+		std::vector<wxString> m_tail;
+	};
+	std::vector<RamDim> dims;
 	if (!flatView) {
 		for (size_t i = 0; i < composer.GroupCount(); ++i) {
 			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
 			if (!composer.GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
-			ibMetaID head; std::vector<wxString> tail;
-			if (storage.SplitField(field, head, tail))
-				dims.emplace_back(head, std::move(tail));
+			RamDim dim;
+			if (!storage.SplitField(field, dim.m_col, dim.m_tail))
+				continue;
+			dims.push_back(std::move(dim));
 		}
 	}
 
@@ -166,7 +171,7 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 	for (const long idx : ord) {
 		bool inScope = true;
 		for (size_t k = 0; k < depth && k < dims.size(); ++k) {
-			const ibValue v = storage.ResolveField(idx, dims[k].first, dims[k].second);
+			const ibValue v = storage.ResolveField(idx, dims[k].m_col, dims[k].m_tail);
 			if (!(v == parentPath[k])) { inScope = false; break; }
 		}
 		if (inScope) scoped.push_back(idx);
@@ -195,8 +200,8 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 
 	// ---- GROUP level: one synthetic group node per DISTINCT value of dims[depth] among the scoped rows, in the
 	//      (already sorted) scoped order. Each carries the parent path + its own dim value + a container flag ----
-	const ibMetaID dimCol = dims[depth].first;
-	const std::vector<wxString>& dimTail = dims[depth].second;
+	const ibMetaID dimCol = dims[depth].m_col;
+	const std::vector<wxString>& dimTail = dims[depth].m_tail;
 	std::vector<ibValue> groupValues;
 	for (const long idx : scoped) {
 		const ibValue v = storage.ResolveField(idx, dimCol, dimTail);
@@ -226,7 +231,7 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 		// parent path holds each ancestor value keyed positionally, dims[k] is its column. (Mirrors the DB
 		// FoldDimLevel inherit.)
 		for (size_t k = 0; k < depth && k < dims.size() && k < parentPath.size(); ++k)
-			vals[dims[k].first] = parentPath[k];
+			vals[dims[k].m_col] = parentPath[k];
 		vals[dimCol] = gv;                                  // stamp the group's own dim value (the group label cell)
 		std::vector<ibValue> groupPath = parentPath;
 		groupPath.push_back(gv);

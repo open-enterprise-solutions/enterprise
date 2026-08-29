@@ -129,25 +129,6 @@ ibBackendValueForm* ibValueMetaObjectDocument::GetSelectForm(const wxString& str
 }
 #pragma endregion
 
-wxString ibValueMetaObjectDocument::GetDataPresentation(const ibValueDataObject* objValue) const
-{
-	// ⭐ A DOCUMENT DECLARES NO VALUES — its only declared reference is the empty one, which is still
-	// a legitimate thing to write in a setting ("documents open too — a document just has only the
-	// reference"). Anything else names a row, and a row is presented below.
-	if (appData->DesignerMode()) {
-		const wxString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
-		if (!empty.IsEmpty())
-			return empty;
-	}
-
-	static ibValue vDate, vNumber;
-	if (!objValue->GetValueByMetaID(GetDocumentDate()->GetMetaID(), vDate))
-		return wxEmptyString;
-	if (!objValue->GetValueByMetaID(GetDocumentNumber()->GetMetaID(), vNumber))
-		return wxEmptyString;
-	return GetSynonym() << wxT(" ") << vNumber.GetString() << wxT(" ") << vDate.GetString();
-}
-
 //***************************************************************************
 //*                       Save & load metaData                              *
 //***************************************************************************

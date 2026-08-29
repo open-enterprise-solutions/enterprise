@@ -68,9 +68,8 @@ public:
 	// ⭐⭐ THE FOUR THAT DRAW — a heading opens, rows and columns are written under it, the heading
 	// closes. With no column axis everything falls through to the streaming path, so the ordinary
 	// report is unchanged down to the order the cells are written in.
-	virtual void OnGroupBegin(int level, ibSelectorNodeKind kind, bool hasChildren,
-		bool showsWhatIsUnder, const std::vector<ibValue>& values) override;
-	virtual void OnRow(int level, const std::vector<ibValue>& values) override;
+	virtual void OnGroupBegin(const ibCompositionLine& line, const std::vector<ibValue>& values) override;
+	virtual void OnRow(const ibCompositionLine& line, const std::vector<ibValue>& values) override;
 	virtual void OnColumn(int level, ibSelectorNodeKind kind, const std::vector<ibValue>& values) override;
 	virtual void OnGroupEnd(int level, const std::vector<ibValue>& values) override;
 	virtual void OnOutputEnd(bool totals) override;
@@ -254,7 +253,7 @@ private:
 	// The STREAMING layout's row — an ordinary report's heading or record, printed as it arrives.
 	// Split off from the event when the kind started travelling on it: the dispatch is one question
 	// ("which layout is this output in"), the printing is another.
-	void PrintRow(int level, bool hasChildren, const std::vector<ibValue>& values);
+	void PrintRow(const ibCompositionLine& line, const std::vector<ibValue>& values);
 	// …and a DETAIL record in the cross layout — its own line, with the cells across it.
 	void PrintCrossDetail(int level, const std::vector<ibValue>& values);
 	// The output's columns, taken as the output begins. Not an event of its own any more: "which

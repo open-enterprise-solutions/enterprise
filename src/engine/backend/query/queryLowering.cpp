@@ -4476,7 +4476,36 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			pagedMeasures.push_back(m);
 		}
 
-		if (pathCols.size() == 1 && measuresArePlain) {   // plain scalar dim (no dot-walk expansion -> single-column keyset ORDER BY)
+		// ⭐⭐ …AND THE AUTHOR'S SORT MUST BE THE DIMENSION, or this path may not be taken (Max,
+		// 2026-08-29, watching a list grouped by Ref and sorted by Number come back in neither order).
+		//
+		// 🛑 THIS BRANCH NEVER LOOKED AT `m_orderBy` AT ALL. It emits GROUP BY + the keyset over the
+		// DIMENSION and nothing else, so a sort on any other field was dropped on the floor — silently,
+		// and in the one place where silence is indistinguishable from "the database decided". The
+		// journal shows it plainly: `ORDER BY Number TOTALS BY Ref` rendered, and the SQL that came out
+		// carried `GROUP BY` with NO `ORDER BY` whatever. A setting a person had made did nothing.
+		//
+		// It cannot simply be emitted either: under a server fold a column that is neither a grouping
+		// key nor an aggregate does not exist to order by. Ordering the GROUPS by it means aggregating
+		// it (`MIN` ascending, `MAX` descending) — a real feature, and not this branch's.
+		//
+		// So the branch declines, and the FOLD below does it: it reads the detail rows and orders THEM
+		// by what the author asked for, which puts each group where its first row lands — the mechanism
+		// stated at "THE AUTHOR'S SORT GOES FIRST" further down. The cost is the one this whole branch
+		// exists to avoid, a detail read to show a page of groups; paying it is strictly better than
+		// answering in an order nobody asked for.
+		bool sortIsTheDimension = true;
+		if (pathCols.size() == 1 && pathCols.back() != nullptr) {
+			for (const ibQueryOrderItem& o : ast.m_orderBy) {
+				if (!o.m_expr || IsComputedExprAst(*o.m_expr)) { sortIsTheDimension = false; break; }
+				std::vector<const ibBackendQueryColumn*> orderCols;
+				try { orderCols = ResolveWhereTarget(sources, *o.m_expr, /*allowDotWalk*/true); }
+				catch (const ibBackendException&) { sortIsTheDimension = false; break; }
+				if (orderCols.size() != 1 || orderCols.front() != pathCols.back()) { sortIsTheDimension = false; break; }
+			}
+		}
+
+		if (pathCols.size() == 1 && measuresArePlain && sortIsTheDimension) {   // plain scalar dim (no dot-walk expansion -> single-column keyset ORDER BY)
 			const ibBackendQueryColumn* leaf = pathCols.back();
 			b.GroupBy(leaf);
 			OutputColumn oc; oc.m_name = leaf->GetName(); oc.m_col = leaf;

@@ -150,24 +150,6 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderSelect
 }
 #pragma endregion
 
-wxString ibValueMetaObjectChartOfCharacteristicTypes::GetDataPresentation(const ibValueDataObject* objValue) const
-{
-	// In the designer: the declared form — the empty reference, or a predefined characteristic by name.
-	if (appData->DesignerMode()) {
-		const wxString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
-		if (!empty.IsEmpty())
-			return empty;
-		for (const auto& item : GetPredefinedValueArray())
-			if (item && item->GetPredefinedGuid() == objValue->GetGuid())
-				return ibDeclaredTypeName(this) + wxT(".") + item->GetPredefinedName();
-	}
-
-	static ibValue vDescription;
-	if (objValue->GetValueByMetaID((*m_propertyAttributeDescription)->GetMetaID(), vDescription))
-		return vDescription.GetString();
-	return wxEmptyString;
-}
-
 //***************************************************************************
 //*                       Save & load metaData                              *
 //***************************************************************************

@@ -49,6 +49,18 @@ static const wxString s_filterSet_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYA
 static const wxString s_filterClear_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsTAAALEwEAmpwYAAABKUlEQVR4nGPoLl34nxLMACKunX3z/87VTyRhkB6wAf2VS2qmNK76euXMK6I1Xz37+v+0pjVf+ioXtzGAACmGYGiGAWIMwamZGEMIasZnCNGaYaCvanEtLJr6iuf9Xxld+P+wu/e7Y05OP487O9857uzceMzCgpMBH+guXfj/9oU3/08nZ/4/7uyMiZ2cjuE1pLt04f+LXTPBiu9Pnvz/alERmA2inyxbBjOoAa8Bp8KjwQqv5Of///X+/f/7U6aA6aslJTADbuM14LibO9zJ9yZO/P//37//D2bMQPbGD7wGnAiNRHXB1KkoLjjm5HQLpwE95YuT1sQU/cIXBsecnOpxGgACU1K6DPb4hf/AGgvOzkcJRiUIbPOI5jvs6tYKCjBoOgDR9TDNAPr79cnZV6CMAAAAAElFTkSuQmCC";
 
 /* PNG */
+static const wxString s_moveUp_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGNSURBVDhPY2DAAzxKNrV6lqzvQhcnCrgVrqmL7zv7P6H/3H/3orWN6PJ4gUv+mrqY7pP/O7Z++N+57cP/+N7T/90KVjejq8MKYJrbt7z737/rMxi3b3n/P673FGFDUDTv/vy/e/sHMAaxCRriVryuLq739P+ObR/+T9jzFa4Zhifs+QL2TkLfmf8eRetRDfEq2dAa23vmf8vm9/97dn753775LYYB7Zvf/O/Z+fl/6+b3/0GB61W+oZOBgYGRwa9iS55/7a4vQfW7P4Q07H4XWLP9fVjjnn8gQ3p3fgJjEBskFlCzDawGpDagZudXv4qtRQxeJVskInvOiLgVrhSySJ4tZBI1TSmwZvu7zm0f4QaA2CCDjeJmKIPUgNRG1u8X8arfIoHiFRDQc+3mDqrd+RbdgKC6ne+0QqfwoKvHADZR0wRxGQCyHV09Bhg8BnRt//S/f/cXMAaxSTRgx+f2rZ/+d+/4DMYgdlDdji9EGeCfv17Av3LLvZDGfe9AtoIwiO1ftfWed8UWQXT1ALZdb4MEJiVXAAAAAElFTkSuQmCC";
+
+/* PNG */
+static const wxString s_moveDown_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGOSURBVDhPY2BAA/756wX8KrfcCW7c9zaobicYg9h+VVvveldsEURXjwFsoqYJBtXu+Ny+9dP/7h2fwRjEDqrb8cUiebYQunoMADFg59vuHZ/+9+/+AsYgdlDdznckGdC57eP/3p2fwBjEHkIG6Ll2c+MyQCt0Cg+6egbfyo3iAW0nhW0ylwrqRk0TNIuZpBhYs/0dugGBNdvfm6XMUgSpAakN6b0iBNLL4FO5KduvZsfnoLrd74Mbdr8NqNn+LrRxz7/2zW/hBoDYIDGQHEhNcN2u9/41Oz/7VW7NB7vCs2Rjc2zvmf8tm9//79n5+X/75jf/u7d/QMEgMZBc6+b3/+P6zv73LNvYzsDwnxHuFdfidTVxvaf/d2778H/Cnq8YBoDEurZ9/J/Qf+a/e9HaRqRQQADnwlU1sd0n/7dvefe/f/dnuOb+XZ//d2x9/z+u99R/14LV2DXDALIhfbs+k6YZBmCGdGz9APYSSZphwK1wTV18/9n/CRPO/nfF5WdCwKNkQ6tn2YYOdHFkAADz32/vcPuhXQAAAABJRU5ErkJggg==";
+
+/* PNG */
+static const wxString s_sortAsc_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAFVSURBVDhPY2CgAmCMmVMakLigIjFpcU1S7NxyG3QF6MCndH14SOExTjCnvr6eKWZ26ZvcrR3/C3b2/o+bU7YBXQMy8CvfZhjUdOCvb+VWV7AAyIC42SWbExZW3UhZVncjfk5pG7omZOBbseVAZPf5/76VWzaiyxEE/lVbEkJbj/z3r9nx37921x//mq26IHHGmNnFvvELK2LjZpfExMwqicMWFoHFO8X8qrY+Dqzf88+vauv/kJbD//0qN89ECYOMtc1gjC0sQstX8ftXbTHwqdhUHdp67L9f1Zb7fpXbtFDCIHZ26XUQxhcWvtVbIsM6Tv33rdp8FV2OKOBbtSUhrP0kyAXXQ0NXMYPEkMKgPAaCcYcFhgHYwgBfWGA1AD0M8IUFhgGkAmwGYAkD3GHhU7klPWbidVAaeE4wDLCFhW/tVuuQ5qOL/Sq3tIH04g0DfGEBAwBSUzc21/lbpwAAAABJRU5ErkJggg==";
+
+/* PNG */
+static const wxString s_sortDesc_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAFySURBVDhPY2CgAmCMmVMakLigIjFmTkkCNpy0uCYpdm65DUixb8UOlaDmw8l+VZsDGRj+MzLU19czxcwufZO7teN/xtpmrLhgZ+//uDllG0AG+FVvTY2ZcO2/b9WWp6Ghq5jBBsTNLtmcsLDqRuzs0uvYcMqyuhvxc0rbwC6o3hYf1n7yv1/VlutgA4gB9vX2LCCLQGzfqi0J6AYwxswu9o1fWBEbN7s8BhknLq2Ji59VZoFsGIYB+MIA2e94DcAVBsh+x2kAPoDsdxjwrtocBzFg8zWYGEYYYPN7aP0qtrSZZ1h9KjYlggzwrdx8wydtExfWMMDq9+qNin7V2y74V+946l+z439gw75fvpVbpmMNA2x+BwG/ys0zwztO/fer3PI/uOngf7/KbSHoasAAm99BwKN+G59f9bYnYW3HQV64xABVAw8DbH5HB94Vm6Ojei/896/amgIWQA4DbH7HBnwqN80MLN4pBuYghwEuv+MDAFB4QRw55GhfAAAAAElFTkSuQmCC";
+
+/* PNG */
 static const wxString s_clone_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAm0lEQVR4nGNgwAIquuf8x4Vr++dfwaYHBYAUfvr1HwODxHvmrv5fO2H+BQZyDfj2/cf/vrlr/tX2Qw2pwOPciYs2YBgAAl++ff/fPXvlv9r+BcfBBmADEOeu+T95ySYUA9AxAz4DwM6dt+b/5MUbcXqJAZ8BMOf2zF71f8aKraQbUIGGSTIAHYwa8B9nYiPJAJzpnmIDiMXYDAAAz6z0FuXt04MAAAAASUVORK5CYII=";
 
 /* PNG */
@@ -114,6 +126,11 @@ void RegisterAllBackendPicture()
 	::RegisterBackendPicture(wxT("Filter"), g_picFilterCLSID, s_filter_16_png);
 	::RegisterBackendPicture(wxT("FilterSet"), g_picFilterSetCLSID, s_filterSet_16_png);
 	::RegisterBackendPicture(wxT("FilterClear"), g_picFilterClearCLSID, s_filterClear_16_png);
+
+	::RegisterBackendPicture(wxT("MoveUp"), g_picMoveUpCLSID, s_moveUp_16_png);
+	::RegisterBackendPicture(wxT("MoveDown"), g_picMoveDownCLSID, s_moveDown_16_png);
+	::RegisterBackendPicture(wxT("SortAsc"), g_picSortAscCLSID, s_sortAsc_16_png);
+	::RegisterBackendPicture(wxT("SortDesc"), g_picSortDescCLSID, s_sortDesc_16_png);
 
 	::RegisterBackendPicture(wxT("Clone"), g_picCloneCLSID, s_clone_16_png);
 	::RegisterBackendPicture(wxT("Save"), g_picSaveCLSID, s_save_16_png);

@@ -138,6 +138,35 @@ protected:
 			return true;
 		}
 
+		// ⭐⭐ ORDERED BY THE MEMBER, NOT BY ITS TEXT (Max, 2026-08-29). Sorting a column of an enumeration
+		// must follow the order the enumeration DECLARES — "Wholesale, Retail" is the author's sequence and
+		// it carries meaning, while the alphabet of the presentations is an accident of the words and moves
+		// the moment they are translated.
+		//
+		// 🛑 Only the ORDER was still text. The `==` family above has always answered by the member, so a
+		// filter on an enum column agreed with the data while a SORT of the same column did not — one value,
+		// two orders. `<` is the primitive the rest of the family is stated over (see value.h), so this one
+		// override turns `>`, `<=` and `>=` with it.
+		//
+		// ⚠ NOTHING CHOSEN SORTS FIRST, and by the same rule rather than by an exception: the empty
+		// enumeration is written in the NEGATIVE range (see IsEmpty below), so it simply is the smallest
+		// member. A cell holding no enumeration AT ALL is not this — it is TYPE_EMPTY and the base answers
+		// for it, also first.
+		//
+		// A comparand that is not an enumeration of this kind is left to the base: what orders a mixed
+		// column is its kind ranking, and this override has nothing truer to say about it.
+		virtual int CompareValueLS(const ibValue& cParam) const override {
+			ibValueEnumerationVariant<valType>* compareEnumeration = dynamic_cast<ibValueEnumerationVariant<valType> *>(cParam.GetRef());
+			if (compareEnumeration)
+				return m_value < compareEnumeration->m_value ? -1 : (compareEnumeration->m_value < m_value ? 1 : 0);
+			ibValueEnumeration<valType>* compareEnumerationOwner = dynamic_cast<ibValueEnumeration<valType> *>(cParam.GetRef());
+			if (compareEnumerationOwner) {
+				const valType there = compareEnumerationOwner->GetEnumValue();
+				return m_value < there ? -1 : (there < m_value ? 1 : 0);
+			}
+			return ibValue::CompareValueLS(cParam);
+		}
+
 		//get type id
 		virtual ibClassID GetClassType() const override { return m_clsid; }
 

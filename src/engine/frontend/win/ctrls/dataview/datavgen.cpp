@@ -2495,18 +2495,25 @@ bool ibDataViewCtrl::ItemDeleted(const ibDataViewItem& parent,
 
 			m_selection.OnItemsDeleted(itemRow, itemsDeleted);
 
-			// Move focus UP: the row above the deleted one becomes
-			// active.  If we deleted the topmost (itemRow == 0), fall
-			// back to the row that slid up into position 0.  Use the
-			// public Select(item) helper.
+			// THE CURSOR LANDS ON THE ROW THAT TOOK THE DELETED ONE'S PLACE — the NEXT row, which has
+			// just slid up into `itemRow`; only a deleted LAST row falls back to the one above it.  It
+			// used to always step up, so deleting several rows in a row walked the cursor backwards
+			// through the table (Max, 2026-08-29: "it should shift to the next element").
 			const long total = static_cast<long>(GetRowCount());
 			long newCurrent = -1;
 			if (total > 0) {
-				newCurrent = (itemRow > 0) ? (itemRow - 1) : 0;
+				newCurrent = (itemRow < total) ? itemRow : (total - 1);
 			}
 			if (newCurrent >= 0) {
 				const ibDataViewItem newItem = GetItemByRow(static_cast<unsigned>(newCurrent));
-				if (newItem.IsOk()) Select(newItem);
+				if (newItem.IsOk()) {
+					Select(newItem);
+					// …AND SAY SO.  Select() is programmatic and fires nothing, so the engine's current
+					// line stayed on the row that had just been deleted: the table looked as if it had
+					// no current row at all — a choice "…", an Add or a second Delete found nothing to
+					// run against until the user clicked a row by hand.
+					SendSelectionChangedEvent(newItem);
+				}
 			}
 		}
 	}
@@ -7476,7 +7483,14 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 				state |= wxDATAVIEW_CELL_SELECTED;
 
 			cell->SetState(state);
-			const bool hasValue = cell->PrepareForItem(model, dataitem, col->GetModelColumn());
+			// ⭐⭐ A GROUP ROW IS ITS CAPTION, ACROSS THE WHOLE LINE — the drawing this control was given a
+			// model door for (ibDataViewItem::GetGroupCaption). The node says "I am a grouping and this is
+			// what I read as", and the row is that sentence: no per-column cells underneath it, so nothing
+			// can be painted twice in one place (Max, 2026-08-29: *"it must write across the whole row"* —
+			// and the defect this started from was the reference drawn twice, the caption over its column).
+			wxString grpCaptionProbe;
+			const bool isGroupRow = !IsVirtualList() && dataitem.GetGroupCaption(grpCaptionProbe);
+			const bool hasValue = !isGroupRow && cell->PrepareForItem(model, dataitem, col->GetModelColumn());
 
 			// draw the background
 			if (!selected)
@@ -7591,21 +7605,17 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 				const ibDataViewItem gitem = gnode->GetItem();
 				const int capX = grpCaptionColX + FromDIP(PADDING_RIGHTLEFT)
 					+ GetIndent() * gnode->GetIndentLevel() + grpExpanderWidth;
-				// Right edge = the LEFT x of the first column (after the expander) that resolves a value of its own.
-				int rightX = GetEndOfLastCol();
-				int cx = 0;
-				for (unsigned int i = 0; i < GetColumnCount(); i++)
-				{
-					ibDataViewColumn* c = GetColumn(i);
-					if (c->IsHidden()) continue;
-					if (c != expander && cx >= capX && c->GetRenderer() != NULL
-					    && c->GetRenderer()->PrepareForItem(model, gitem, c->GetModelColumn()))
-					{
-						rightX = cx;
-						break;
-					}
-					cx += c->GetWidth();
-				}
+				// ⭐⭐ AND IT RUNS TO THE END OF THE ROW. A grouping is ONE line saying what it groups by —
+				// that is what this pass exists for and what the model's door was added for
+				// (ibDataViewItem::GetGroupCaption). No cell is drawn under it (see `isGroupRow` in the
+				// cell loop above), so there is nothing for the caption to cover and nothing to stop at.
+				//
+				// 🛑 It used to stop at the first column whose renderer merely AGREED to draw — true of an
+				// empty cell as much as of a full one — so a group came out clipped to one column's width
+				// like an ordinary cell, and where the cell did carry the same value it was painted twice,
+				// one on top of the other (Max, 2026-08-29: the reference rendered twice; *"it must write
+				// across the whole row"*).
+				const int rightX = GetEndOfLastCol();
 				if (rightX > capX)
 				{
 					const bool sel = m_selection.IsSelected(item);

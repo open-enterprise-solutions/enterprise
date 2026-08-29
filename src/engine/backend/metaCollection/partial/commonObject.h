@@ -632,15 +632,41 @@ public:
 	virtual ibBackendValueForm* GetSelectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const = 0;
 #pragma endregion 
 
-	//descriptions...
-	virtual wxString GetDataPresentation(const ibValueDataObject* objValue) const = 0;
+	// ⭐⭐ HOW A METATYPE'S OWN VALUES ARE READ, AND HOW THEY ARE ORDERED. Two questions of one kind: both
+	// are facts about the METATYPE, and both are answered where the metatype lives rather than by whoever
+	// happens to be holding one of its values.
+	//
+	// ⭐⭐ THE FIRST ANSWERS WHETHER THERE IS ONE, SEPARATELY FROM WHAT IT SAYS. `false` means this
+	// metatype has nothing to show for that value; `true` with an empty `out` means the presentation IS
+	// empty, which is a different fact and a legitimate one.
+	//
+	// 🛑 Returning a bare string made those two the same answer, and the caller then had to guess — the
+	// very shape that cost the whole of 2026-08-29 elsewhere: a comparison that said "equal" when it
+	// meant "I don't know", and a filter that dropped a line because its value was falsy. One value
+	// carrying two meanings is a defect wherever it appears.
+	virtual bool GenerateDataDesc(const ibValueDataObject* objValue, wxString& out) const = 0;
+
+	// ⚠ PURE, like its neighbour, so no family can forget to say. "I have no order of my own" is an
+	// ANSWER — `return 0` — and the caller then settles it by IDENTITY, which is the only comparison
+	// allowed to end at 0. A catalog says exactly that; an ENUMERATION does not, because its members are
+	// a sequence the author wrote down and the platform keeps as data.
+	//
+	// 🛑 This used to be asked INSIDE the reference value: a `dynamic_cast` to the enumeration metaobject
+	// and a reach for its `Order` attribute, sitting in a class that has no business knowing what an
+	// enumeration is — and the next metatype with a sequence of its own would have joined the same chain
+	// (Max, 2026-08-29: *"like I did with the presentation — then you have no casts at all"*).
+	//
+	// ⚠ NEVER A DATABASE READ. A comparison runs per pair in every sort; the reference only asks this
+	// once both rows are already in hand, and an override must not go looking for more.
+	virtual int CompareDataValues(const ibValueDataObject* lhs, const ibValueDataObject* rhs) const = 0;
 
 	//special functions for DB
 	virtual wxString GetPhysicalTableName() const;
 
 protected:
 
-	//get default form 
+
+	//get default form
 	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Create)
@@ -707,6 +733,19 @@ public:
 	// THE ENUMERATION'S PAIR — its own queryable, typed to this kind, registered by this kind
 	// (OnAfterRun / OnBeforeClose in the .cpp).
 	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
+
+	//descriptions...
+	//
+	// ⭐⭐ AN ENUMERATION MEMBER IS DECLARED, NOT STORED — it reads as the configuration writes it in the
+	// designer and as the synonym a person put on it at run time.
+	virtual bool GenerateDataDesc(const ibValueDataObject* objValue, wxString& out) const override;
+
+	// ⭐⭐ …AND IT HAS AN ORDER OF ITS OWN, which is the whole point of this override: the members are a
+	// SEQUENCE the author wrote down — "Wholesale, Retail" means something in that order — and the
+	// platform keeps it as DATA, in the predefined `Order` attribute this class owns. By the guid the
+	// members came out in an order nobody chose; by their text they would follow the alphabet of the
+	// presentations, which moves when they are translated.
+	virtual int CompareDataValues(const ibValueDataObject* lhs, const ibValueDataObject* rhs) const override;
 
 	//events: 
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -1071,6 +1110,15 @@ public:
 	virtual bool OnBeforeCloseMetaObject() override;
 	virtual bool OnAfterCloseMetaObject() override;
 
+	//descriptions...
+	//
+	// ⭐ A RECORDED FACT READS AS ITS NUMBER AND ITS MOMENT — which is exactly the pair this class owns,
+	// so the sentence belongs here and not in each metatype that records one.
+	virtual bool GenerateDataDesc(const ibValueDataObject* objValue, wxString& out) const override;
+
+	// …and it has no order of its own: two records are told apart by identity.
+	virtual int CompareDataValues(const ibValueDataObject* lhs, const ibValueDataObject* rhs) const override;
+
 protected:
 
 	ibValueMetaObjectRecordDataRecorderRef();
@@ -1301,6 +1349,24 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 	virtual bool OnBeforeCloseMetaObject();
 	virtual bool OnAfterCloseMetaObject();
+
+	//descriptions...
+	//
+	// ⭐⭐ HOW A ROW OF ANY OF THEM READS — ONE implementation, here, because it was one sentence copied
+	// three times. A catalog, a chart of accounts and a chart of characteristic types all say the same
+	// thing: in the designer the DECLARED form (the empty reference, or a predefined value written as
+	// `CatalogRef.Goods.Chair`), and at run time the row's own `Description` — the very attribute this
+	// class owns. Three copies meant three places to fix and three chances to drift; the families that
+	// genuinely read differently (a document by number and date, an enumeration by its member) say so on
+	// THEIR base, which is what a base is for (Max, 2026-08-29: *"it is duplicated in all of them except
+	// the base classes — it can be left in the base"*, and *"we require it of the base metadata — base
+	// enumeration, base hierarchy, base document — and each overrides it at its own level"*).
+	virtual bool GenerateDataDesc(const ibValueDataObject* objValue, wxString& out) const override;
+
+	// …and no order of its own: the rows of a catalog, a chart of accounts or a chart of characteristic
+	// types are told apart by identity.
+	virtual int CompareDataValues(const ibValueDataObject* lhs, const ibValueDataObject* rhs) const override;
+
 
 	//is predefined value?
 	bool HasPredefinedValue(const ibGuid& valueGuid) const { return FindPredefinedValue(valueGuid) != nullptr; }

@@ -343,20 +343,74 @@ m_initializedRef(false), m_metaObject(metaObject), m_reference_impl(nullptr), m_
 // metaID) and GetValueHash (the guid's bytes) — the same (metaID + guid) the database keys by, said
 // once, in the two methods every hash container already asks. See the note in reference.h.
 
-// Ordering: GUID first, then TYPE (metaID) as the tiebreak — see the header. m_metaObject is complete in this
-// TU, so GetMetaID() resolves. The tiebreak only fires on equal guids (in practice: empty references, which all
-// share the all-zero guid), keeping LS==0 exactly when CompareValueEQ is true.
+// ⭐⭐ THREE QUESTIONS, ASKED IN ORDER, AND ONLY ONE OF THEM MAY ANSWER "THE SAME":
+//
+//   1. is the other side a reference AT ALL      → if not, they are ordered by KIND and never equal;
+//   2. do they belong to a SEQUENCE the author declared (an enumeration's `Order`) → follow it;
+//   3. otherwise the IDENTITY order — guid, then the metaID as the tiebreak.
+//
+// ⚠ THE INVARIANT THE WHOLE FUNCTION IS WRITTEN TO: `LS == 0` exactly when the two are THE SAME
+// reference. `ibValueEqual` is literally `CompareValueLS(b) == 0` (value.h), so every hash container in
+// the house — a grouping, a join, a fold's children — takes its notion of "same" from here.
 int ibValueReferenceDataObject::CompareValueLS(const ibValue& cParam) const
 {
-	ibValueReferenceDataObject* rhs = dynamic_cast<ibValueReferenceDataObject*>(cParam.GetRef());
-	if (rhs == nullptr)
-		return 0;
-	if (m_objGuid < rhs->m_objGuid) return -1;
-	if (rhs->m_objGuid < m_objGuid) return 1;
+	// ⭐⭐ THE CHEAP QUESTION FIRST, AND IT IS EXACT: the KIND is in the clsid, in its top byte, so
+	// `IsReference` is a shift and a compare — no metadata, no RTTI (clsid.h). A comparison runs once per
+	// pair in every sort, group and dedup there is, and the common mismatch is a reference against an
+	// EMPTY value, which is what every parent lookup in a hierarchy fold does.
+	//
+	// (⚠ `ibValue::IsReference()` is a different question and would not do: it asks whether the value
+	//  holds a pointer to another value, which a table, a structure and an array all answer yes to.)
+	//
+	// ⭐⭐ AND WHAT ANSWERS FOR A DIFFERENT KIND IS THE BASE — the house has ONE order across kinds
+	// (`KindRank`, value.cpp), which already ranks an empty value and a NULL below everything with a
+	// payload. Inventing a second one here would be a second answer to a settled question.
+	//
+	// 🛑 This step used to `return 0`, and 0 from an ORDER means "the same value". Every reference
+	// therefore compared EQUAL to every non-reference it was ever measured against — visible only where
+	// the two land in one hash BUCKET, which is why it hid for so long and then surfaced looking like
+	// anything but a comparison: a hierarchy fold keys children by the parent VALUE, the roots live under
+	// an EMPTY one, and `childrenOf.find(<a reference>)` found THE ROOT BUCKET. The last root then "had"
+	// every root as its children and they were re-attached a step deeper, so elements the fold had filed
+	// at the top level came out nested under an ordinary element that is nobody's folder (Max,
+	// 2026-08-29: *"00000005 somehow became a group"*). The tree was built from correct parents and
+	// wrecked by a lookup.
+	// (⚠ QUALIFIED: unqualified, `IsReference` finds this class's own inherited member — the OTHER
+	//  question — and the compiler stops at the arity rather than at the meaning.)
+	if (!::IsReference(cParam.GetClassType()))
+		return ibValue::CompareValueLS(cParam);
+
+	// ⭐ AND THEN THE CAST IS STATIC, because the question it used to answer has already been answered.
+	// A Reference-kinded clsid is produced by this class and by nothing else (`GetClassType` above builds
+	// it constructively from the metaID), so the kind byte IS the proof of type — `dynamic_cast` would
+	// walk the RTTI graph to re-derive a fact the previous line already has.
+	ibValueReferenceDataObject* const rhs =
+		static_cast<ibValueReferenceDataObject*>(cParam.GetRef());
+	// …and there is nothing to test at run time: a Reference-kinded value HAS its object. Said as an
+	// assertion because it is an invariant, not a case — a branch here would be dead code pretending to
+	// handle something that cannot happen, and the day it did happen it would hide it instead.
+	wxASSERT(rhs != nullptr);
+
+	// 2. TWO METATYPES HAVE NO COMMON ORDER — they are told apart by the TYPE, and that question belongs
+	// to nobody's metaobject. (`m_metaObject` is complete in this TU, so `GetMetaID()` resolves.)
 	const ibMetaID lm = m_metaObject      != nullptr ? m_metaObject->GetMetaID()      : 0;
 	const ibMetaID rm = rhs->m_metaObject != nullptr ? rhs->m_metaObject->GetMetaID() : 0;
-	if (lm < rm) return -1;
-	if (rm < lm) return 1;
+	if (lm != rm)
+		return lm < rm ? -1 : 1;
+
+	// 3. WITHIN ONE METATYPE, THE METATYPE DECIDES. Everything a comparison can know about the DATA is
+	// the metaobject's own business: an enumeration follows the sequence its author declared, a catalog
+	// says identity, and this class never learns which is which (`CompareDataValues`, commonObject.h).
+	//
+	// ⚠ THE ONE PRECONDITION THAT STAYS HERE IS THE REFERENCE'S OWN: a comparison must never become a
+	// database read — a sort would do it thousands of times — so the metatype is asked only when both
+	// rows are already in hand. `m_initializedRef` is a fact about this object, not about its kind.
+	// Unread, the identity is all that is honestly known, and the guid is exactly that.
+	if (m_metaObject != nullptr && m_initializedRef && rhs->m_initializedRef)
+		return m_metaObject->CompareDataValues(this, rhs);
+
+	if (m_objGuid < rhs->m_objGuid) return -1;
+	if (rhs->m_objGuid < m_objGuid) return 1;
 	return 0;   // same guid AND same type -> the same reference
 }
 
@@ -571,12 +625,19 @@ ibValueRecordDataObjectRef* ibValueReferenceDataObject::GetObject() const
 
 #include "backend/objCtor.h"
 
+// ⭐⭐ A DYNAMIC VALUE'S CLSID IS CONSTRUCTIVE — kind plus metaID, and both are already in hand. There is
+// nothing to look up: `reference_to_clsid(metaID)` IS the id the registry would have handed back, by the
+// same construction that put it there (`make_clsid_dynamic`, clsid.h).
+//
+// 🛑 It used to walk to the class registry for it — `GetTypeCtor(...)->GetClassType()` — which made the
+// cheapest question in the engine expensive. And it IS the cheapest question: the KIND lives in the top
+// byte of the id, so `IsReference(clsid)` is a shift and a compare, no metadata and no RTTI. Anything
+// that wants to know "is this a reference" before paying for a cast asks that (Max, 2026-08-29).
 ibClassID ibValueReferenceDataObject::GetClassType() const
 {
-	const ibCtorMetaValueType* clsFactory =
-		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
-	wxASSERT(clsFactory);
-	return clsFactory->GetClassType();
+	return m_metaObject != nullptr
+		? reference_to_clsid(m_metaObject->GetMetaID())
+		: ibClassID(0);
 }
 
 const ibValueMetaObjectGenericData* ibValueReferenceDataObject::GetSourceMetaObject() const
@@ -611,8 +672,10 @@ wxString ibValueReferenceDataObject::GetString() const
 	// read and none is wanted, so the metaobject is asked straight away: it turns the guid into the
 	// form the configuration declares it in. PrepareRef and the found / not-found answers below are
 	// statements about DATA, which is not what a reference stands for while one is being WRITTEN.
-	if (appData->DesignerMode())
-		return m_metaObject->GetDataPresentation(this);
+	if (appData->DesignerMode()) {
+		wxString declared;
+		return m_metaObject->GenerateDataDesc(this, declared) ? declared : wxString();
+	}
 
 	// ⭐⭐ ASKING WHAT THIS REFERENCE IS *IS* THE ASKING — so the row is read here if nobody has read
 	// it yet. That is the whole of what OnDemand means, and since 2026-08-24 it is the default: a
@@ -629,7 +692,8 @@ wxString ibValueReferenceDataObject::GetString() const
 		return wxString::Format(wxT("%s <%i:%s>"), _("Not found"), m_metaObject->GetMetaID(), m_objGuid.str());
 
 	wxASSERT(m_metaObject);
-	return m_metaObject->GetDataPresentation(this);
+	wxString desc;
+	return m_metaObject->GenerateDataDesc(this, desc) ? desc : wxString();
 }
 
 wxString ibValueReferenceDataObject::GetClassName() const

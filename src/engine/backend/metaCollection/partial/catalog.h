@@ -87,7 +87,6 @@ public:
 #pragma endregion
 
 	//descriptions...
-	wxString GetDataPresentation(const ibValueDataObject* objValue) const;
 
 	//get module object in compose object 
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }

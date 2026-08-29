@@ -109,7 +109,8 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 				if (it != m_listObjectValue.end() && it->second.GetString().Contains(findData))
 					return true;
 			}
-			return m_metaObject->GetDataPresentation(this).Contains(findData);
+			wxString desc;
+			return m_metaObject->GenerateDataDesc(this, desc) && desc.Contains(findData);
 		}
 
 		//get metaData from object

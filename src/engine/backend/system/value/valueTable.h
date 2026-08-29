@@ -293,35 +293,55 @@ public:
 	ibValueModelTable(const ibValueModelTable& val);
 	virtual ~ibValueModelTable();
 
-	void AddValue(const ibDataViewItem& row) {
-		// Insert AFTER the active row (user on row 3 + Add → new row at 4, focus follows via the ItemInserted
-		// handler's Select). No active row → append at the bottom. (Mirrors the tabular section.)
+	// Two different questions, and the front answers both: WHERE it goes is the selection (user on row 3 + Add
+	// → new row at 4, focus follows via the ItemInserted handler's Select); WHAT it inherits is the group the
+	// user is INSIDE — the anchor. An empty anchor (the root of a hierarchical view) inherits nothing, so the
+	// row forms an empty group of its own. (Mirrors the tabular section.)
+	void AddValue(const ibDataViewItem& row, const ibDataViewItem& anchor = ibDataViewItem()) {
 		const long idx = StorageIndexOf(row);   // displayed item is a composer copy → storage index via bridge
-		if (idx >= 0) AppendRow(idx + 1, row);
-		else          AppendRow(0, row);
+		if (idx >= 0) AppendRow(idx + 1, anchor);
+		else          AppendRow(0, anchor);
 	}
 
 	void CopyValue(const ibDataViewItem& row) { CopyRow(row); }
 	void EditValue(const ibDataViewItem& row) { EditRow(row); }
 	void DeleteValue(const ibDataViewItem& row) { DeleteRow(row); }
+	// PHYSICAL — the rows are re-seated, and that is the order the table then IS. See the body.
+	void SortValue(const ibDataViewColumnItem& column, bool ascending);
 
 	// Command store (ibStandardCommandTabular): a table of values defines its OWN Add / Copy / Edit / Delete and runs
 	// them by id on the front-passed row (no shared base set — each model ships its own).
-	enum { eAddValue = 1, eCopyValue, eEditValue = 3 | eStartEditingFlag, eDeleteValue = 4 };   // Edit's id carries the front-edit flag
+	enum { eAddValue = 1, eCopyValue, eEditValue = 3 | eStartEditingFlag, eDeleteValue = 4,
+		eMoveUpValue = 5, eMoveDownValue, eSortAscValue, eSortDescValue };   // Edit's id carries the front-edit flag
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override {
 		commands.emplace_back(eAddValue,    wxT("Add"),    _("Add"),    g_picAddCLSID,    true);
 		commands.emplace_back(eCopyValue,    wxT("Copy"),   _("Copy"),   g_picCopyCLSID);
 		commands.emplace_back(eEditValue,    wxT("Edit"),   _("Edit"),   g_picEditCLSID);
 		commands.emplace_back(eDeleteValue,  wxT("Delete"), _("Delete"), g_picDeleteCLSID);
+		commands.emplace_back();   // separator — what follows is about the ORDER, not about the rows
+		commands.emplace_back(eMoveUpValue,   wxT("MoveUp"),   _("Move up"),   g_picMoveUpCLSID);
+		commands.emplace_back(eMoveDownValue, wxT("MoveDown"), _("Move down"), g_picMoveDownCLSID);
+		// …and a separator BETWEEN THE TWO PAIRS (Max, 2026-08-29): moving is done BY HAND to one row,
+		// ordering is done BY A COLUMN to all of them. Two questions, two groups — four equal buttons in
+		// a row would make a person read all four to find the one they meant.
+		commands.emplace_back();
+		// All four keep the DEFAULT modify flag (Max, 2026-08-29): in a view-only form they show and grey out.
+		commands.emplace_back(eSortAscValue,  wxT("SortAsc"),  _("Sort ascending"),  g_picSortAscCLSID);
+		commands.emplace_back(eSortDescValue, wxT("SortDesc"), _("Sort descending"), g_picSortDescCLSID);
 	}
 
 	// Flat table: no hierarchy, so only the SELECTED row matters — m_anchor (the tree-browse fallback) is ignored.
 	virtual void CallAsCommand(const ibActionID& lNumAction, const ibDataViewCommandContext& ctx, ibBackendValueForm* srcForm) override {
 		switch (lNumAction) {
-		case eAddValue:    AddValue(ctx.m_selection);    break;
+		case eAddValue:    AddValue(ctx.m_selection, ctx.m_anchor);   break;   // where it goes · what it inherits
 		case eCopyValue:   CopyValue(ctx.m_selection);   break;
 		case eEditValue:   EditValue(ctx.m_selection);   break;   // no-op on the backend; Edit's id carries eStartEditingFlag → the FRONT opens the real inline editor
 		case eDeleteValue: DeleteValue(ctx.m_selection); break;
+		// The four order verbs, run straight against the RAM base's physical calls — no dispatcher of its own.
+		case eMoveUpValue:   MoveRow(ctx.m_selection, -1); break;
+		case eMoveDownValue: MoveRow(ctx.m_selection, +1); break;
+		case eSortAscValue:  SortValue(ctx.m_column, true);  break;
+		case eSortDescValue: SortValue(ctx.m_column, false); break;
 		}
 	}
 
@@ -360,6 +380,8 @@ public:
 	void CopyRow(const ibDataViewItem& row);
 	void EditRow(const ibDataViewItem& row);
 	void DeleteRow(const ibDataViewItem& row);
+	// (MoveRow / SortRows are NOT here — they live on ibValueModelStorage: ordering rows is something every
+	//  table that owns its rows can do, and the script's Sort() reaches the very same one.)
 
 	// A fresh table object built from the live one — `Clone` in the ordinary C++ sense, the same
 	// sense a database layer or a drag item uses it in. It no longer collides with anything: the

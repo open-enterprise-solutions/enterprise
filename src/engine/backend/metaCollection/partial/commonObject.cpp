@@ -12,6 +12,7 @@
 #include "backend/serialize/dataBuilder.h"   // node serialization (WriteData / ReadData)
 
 #include "backend/metaCollection/partial/reference/reference.h"
+#include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
 
 //***********************************************************************
 //*								 metaData                               *
@@ -156,6 +157,26 @@ bool ibValueMetaObjectRecordData::OnAfterCloseMetaObject()
 {
 	return ibValueMetaObject::OnAfterCloseMetaObject();
 }
+
+namespace {
+
+// THE ORDER EVERY METATYPE FALLS BACK ON — its rows' own IDENTITY. Both sides belong to one metatype by
+// the time it is asked (the reference checks), so the guid alone tells them apart, and two equal guids
+// ARE the same row.
+//
+// ⚠ FILE-LOCAL, not a member: it needs nothing but what a data object already hands out, and every
+// caller is in this file. A protected helper on the base would have put it in a WIDE header for three
+// call sites that never leave here.
+int ibCompareByIdentity(const ibValueDataObject* lhs, const ibValueDataObject* rhs)
+{
+	if (lhs == nullptr || rhs == nullptr)
+		return 0;
+	if (lhs->GetGuid() < rhs->GetGuid()) return -1;
+	if (rhs->GetGuid() < lhs->GetGuid()) return 1;
+	return 0;   // the same row
+}
+
+} // namespace
 
 //***********************************************************************
 //*						ibValueMetaObjectRecordDataExt					*
@@ -488,6 +509,58 @@ bool ibValueMetaObjectRecordDataEnumRef::OnAfterCloseMetaObject()
 	return ibValueMetaObjectRecordDataRef::OnAfterCloseMetaObject();
 }
 
+// ⭐ AN ENUMERATION MEMBER IS DECLARED, NOT STORED — in the designer it reads as it is written,
+// `EnumRef.Kinds.Retail`, and at run time as the synonym a person put on it. A guid that names no
+// member is `false`: there is nothing to read, which is not the same as reading as nothing.
+bool ibValueMetaObjectRecordDataEnumRef::GenerateDataDesc(const ibValueDataObject* objValue,
+	wxString& out) const
+{
+	if (objValue == nullptr)
+		return false;
+
+	const bool designer = appData->DesignerMode();
+	if (designer) {
+		const wxString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
+		if (!empty.IsEmpty()) {
+			out = empty;
+			return true;
+		}
+	}
+
+	for (auto obj : GetEnumObjectArray()) {
+		if (obj != nullptr && objValue->GetGuid() == obj->GetGuid()) {
+			out = designer
+				? ibDeclaredTypeName(this) + wxT(".") + obj->GetName()
+				: obj->GetSynonym();
+			return true;
+		}
+	}
+	return false;
+}
+
+// …AND ITS ORDER, WHICH IS THE ONE THE AUTHOR DECLARED. Read off the predefined `Order` attribute — the
+// very field the enumeration's own list is built with (`ibCreateList(GetQueryable(), GetDataOrder())`) —
+// so a sorted column, a grouping and that list all agree without anyone restating the sequence.
+//
+// ⚠ NO READ HAPPENS HERE. The caller (ibValueReferenceDataObject::CompareValueLS) asks only when both
+// rows are already in hand; a value it cannot find falls through to identity rather than fetching one.
+int ibValueMetaObjectRecordDataEnumRef::CompareDataValues(const ibValueDataObject* lhs,
+	const ibValueDataObject* rhs) const
+{
+	const ibValueMetaObjectAttributePredefined* const order = GetDataOrder();
+	if (lhs == nullptr || rhs == nullptr || order == nullptr)
+		return ibCompareByIdentity(lhs, rhs);
+	ibValue here, there;
+	if (!lhs->GetValueByMetaID(order->GetMetaID(), here)
+		|| !rhs->GetValueByMetaID(order->GetMetaID(), there))
+		return ibCompareByIdentity(lhs, rhs);
+	// Equal order is not "the same member" — two members declared at one position is not a thing — so the
+	// identity step settles it, and it is the only one allowed to end at 0.
+	const int byOrder = here.CompareValueLS(there);
+	return byOrder != 0 ? byOrder : ibCompareByIdentity(lhs, rhs);
+}
+
+
 //***********************************************************************
 //*						ibValueMetaObjectRecordDataMutableRef					*
 //***********************************************************************
@@ -782,6 +855,42 @@ bool ibValueMetaObjectRecordDataRecorderRef::OnAfterCloseMetaObject()
 	return ibValueMetaObjectRecordDataMutableRef::OnAfterCloseMetaObject();
 }
 
+// A RECORDED FACT READS AS ITS NUMBER AND ITS MOMENT — the pair this class owns.
+//
+// ⭐ A DOCUMENT DECLARES NO VALUES: its only declared reference is the EMPTY one, which is still a
+// legitimate thing to write in a setting ("documents open too — a document just has only the
+// reference"). Anything else names a row, and a row reads as number + date.
+bool ibValueMetaObjectRecordDataRecorderRef::GenerateDataDesc(const ibValueDataObject* objValue,
+	wxString& out) const
+{
+	if (objValue == nullptr)
+		return false;
+
+	if (appData->DesignerMode()) {
+		const wxString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
+		if (!empty.IsEmpty()) {
+			out = empty;
+			return true;
+		}
+	}
+
+	ibValue vDate, vNumber;
+	if (!objValue->GetValueByMetaID(GetDocumentDate()->GetMetaID(), vDate))
+		return false;
+	if (!objValue->GetValueByMetaID(GetDocumentNumber()->GetMetaID(), vNumber))
+		return false;
+	out = GetSynonym() + wxT(" ") + vNumber.GetString() + wxT(" ") + vDate.GetString();
+	return true;
+}
+
+// …and no order of its own: two records are told apart by identity.
+int ibValueMetaObjectRecordDataRecorderRef::CompareDataValues(const ibValueDataObject* lhs,
+	const ibValueDataObject* rhs) const
+{
+	return ibCompareByIdentity(lhs, rhs);
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////
 
 ibValueRecordDataObjectRef* ibValueMetaObjectRecordDataMutableRef::CreateObjectValue() const
@@ -847,6 +956,48 @@ ibValueMetaObjectRecordDataHierarchyMutableRef::~ibValueMetaObjectRecordDataHier
 	//wxDELETE(m_propertyAttributeDescription);
 	//wxDELETE(m_propertyAttributeParent);
 	//wxDELETE(m_propertyAttributeIsFolder);
+}
+
+// HOW A ROW OF THIS FAMILY READS — see the declaration for why it lives here and not three times over.
+bool ibValueMetaObjectRecordDataHierarchyMutableRef::GenerateDataDesc(const ibValueDataObject* objValue,
+	wxString& out) const
+{
+	if (objValue == nullptr)
+		return false;
+
+	// ⭐⭐ IN THE DESIGNER A REFERENCE IS A DECLARATION — there is no row to describe, and what it says is
+	// what the configuration declares: the empty reference, or one of the predefined values, written as
+	// `CatalogRef.Goods.Chair`.
+	if (appData->DesignerMode()) {
+		const wxString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
+		if (!empty.IsEmpty()) {
+			out = empty;
+			return true;
+		}
+		for (const auto& item : GetPredefinedValueArray())
+			if (item != nullptr && item->GetPredefinedGuid() == objValue->GetGuid()) {
+				out = ibDeclaredTypeName(this) + wxT(".") + item->GetPredefinedName();
+				return true;
+			}
+	}
+
+	// …and at run time the row's own Description. TRUE even when it comes back EMPTY: a row whose
+	// description nobody filled in HAS a presentation and it is blank. `false` is kept for "there is
+	// nothing here to read at all".
+	ibValue vDescription;
+	if (objValue->GetValueByMetaID((*m_propertyAttributeDescription)->GetMetaID(), vDescription)) {
+		out = vDescription.GetString();
+		return true;
+	}
+	return false;
+}
+
+// …and no order of its own: the rows of a catalog, a chart of accounts or a chart of characteristic
+// types are told apart by identity.
+int ibValueMetaObjectRecordDataHierarchyMutableRef::CompareDataValues(const ibValueDataObject* lhs,
+	const ibValueDataObject* rhs) const
+{
+	return ibCompareByIdentity(lhs, rhs);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2271,7 +2422,10 @@ wxString ibValueRecordDataObjectRef::GetClassName() const
 
 wxString ibValueRecordDataObjectRef::GetString() const
 {
-	return m_metaObject->GetDataPresentation(this);
+	// …and a metatype that has nothing to say leaves the string empty, which is its own answer.
+	wxString desc;
+	m_metaObject->GenerateDataDesc(this, desc);
+	return desc;
 }
 
 const ibSourceExplorer* ibValueRecordDataObjectRef::GetSourceExplorer() const

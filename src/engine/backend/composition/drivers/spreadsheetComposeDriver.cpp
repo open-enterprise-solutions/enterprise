@@ -174,14 +174,13 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 // ⭐ WHICH HEADING THIS IS, asked of the walk instead of read off `hasChildren`. A row heading with
 // no columns under it and a column heading are both "a node with children"; only the depth and the
 // seam say which, and the seam is what OnOutputBegin was told.
-void ibSpreadsheetComposeDriver::OnGroupBegin(int level, ibSelectorNodeKind /*kind*/, bool hasChildren,
-	bool /*showsWhatIsUnder*/, const std::vector<ibValue>& values)
+void ibSpreadsheetComposeDriver::OnGroupBegin(const ibCompositionLine& line, const std::vector<ibValue>& values)
 {
 	if (!m_cross) {
-		PrintRow(level, hasChildren, values);   // the ordinary report, printed as it arrives
+		PrintRow(line, values);   // the ordinary report, printed as it arrives
 		return;
 	}
-	OnCrossHeading(level, values);
+	OnCrossHeading(line.m_level, values);
 }
 
 // A COLUMN — a heading that reads ACROSS the page. The walk says so now (it knows each level's
@@ -228,13 +227,13 @@ void ibSpreadsheetComposeDriver::OnGroupEnd(int level, const std::vector<ibValue
 //
 // Its own values go where a heading's do: down the leftmost area, one line, indented past the last
 // grouping. Empty ones are skipped — a record is identified by what it says, not by its blanks.
-void ibSpreadsheetComposeDriver::OnRow(int level, const std::vector<ibValue>& values)
+void ibSpreadsheetComposeDriver::OnRow(const ibCompositionLine& line, const std::vector<ibValue>& values)
 {
 	if (!m_cross) {
-		PrintRow(level, false, values);
+		PrintRow(line, values);
 		return;
 	}
-	PrintCrossDetail(level, values);
+	PrintCrossDetail(line.m_level, values);
 }
 
 void ibSpreadsheetComposeDriver::PrintCrossDetail(int level, const std::vector<ibValue>& values)
@@ -648,10 +647,24 @@ void ibSpreadsheetComposeDriver::KeepChain(int level, const ibValue& chain)
 	m_chainAtLevel.resize(depth + 1);
 }
 
-void ibSpreadsheetComposeDriver::PrintRow(int level, bool hasChildren, const std::vector<ibValue>& values)
+// ⭐⭐ TWO NUMBERS, TWO QUESTIONS. `level` is the RUNG — it says WHICH grouping this line carries, and
+// that is what decides whose key goes in which column (`ownDim` below). `indent` is the step INSIDE that
+// rung, which only a hierarchy has. Where the line is DRAWN — its indent text and the document's own fold
+// level — is the two added; what it IS remains the rung.
+//
+// 🛑 Given the sum alone this function answered both from it, and a tree two steps deep broke both at
+// once: a nested folder came out as "level 2" where one dimension exists, so `ownDim` pointed at a
+// dimension nobody declared and the key was written to no column, while PutArea folded the line INTO the
+// one above as though it were the next grouping (Max, 2026-08-29: the nested element with an empty
+// reference, and row 5 counted as a group).
+void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const std::vector<ibValue>& values)
 {
 	if (m_document == nullptr)
 		return;
+	const int  level = line.m_level;   // what it IS — the rung, and so which dimension it carries
+	const int  page  = line.Page();    // where it is DRAWN — the rung plus the hierarchy step
+	// A RECORD OPENS NOTHING, whatever the fold recorded on the node it came from.
+	const bool hasChildren = line.m_kind != ibSelectorNodeKind::Detail && line.m_hasChildren;
 
 	// THE GRAND TOTAL IS A ROW ONLY IF THERE IS A TOTAL. Depth 0 is the level above every heading:
 	// it holds no dimension value, so with no measures declared it prints an empty tinted line
@@ -720,14 +733,28 @@ void ibSpreadsheetComposeDriver::PrintRow(int level, bool hasChildren, const std
 		const bool isDimension = i < m_dimLevel.size() && m_dimLevel[i] >= 0;
 		// EVERY FIELD OF THIS LEVEL, and only this level's. They are welded into one heading, so
 		// they all go on this row, side by side; the levels above are already written above.
-		if (isDimension && static_cast<size_t>(m_dimLevel[i]) != ownDim)
+		//
+		// ⭐⭐ …AND A RECORD OF A LIST KEEPS ITS OWN, THE GROUPED ONES INCLUDED. Suppressing them is a
+		// REPORT's rule and it is a good one THERE: a grouping's name repeated down every one of its
+		// rows is noise beside the figures the eye is scanning. Where there are no figures there is no
+		// noise to spare a reader — there is a TABLE, and a row of a table with a hole where its own
+		// field belongs is not a row of anything (Max, 2026-08-29, on the tabular section and again on
+		// the document list: *"the same way they lie in the table"*).
+		//
+		// ⭐ ASKED OF THE MEASURES, not of a flag saying "this is a list". The difference between the
+		// two is not something a caller has to declare — a composition that folds has resources and one
+		// that does not is a listing, and that is already on the schema. One question, both roads, and
+		// nothing to keep in step.
+		const bool keepsOwnDimensions =
+			line.m_kind == ibSelectorNodeKind::Detail && !m_hasMeasures;
+		if (isDimension && !keepsOwnDimensions && static_cast<size_t>(m_dimLevel[i]) != ownDim)
 			continue;
 
 		const ibValue& value = values[i];
 		wxString text = value.GetString();
 		// The indent rides on the FIRST field of the level — the column the grouping is read down.
-		if (isDimension && level > 0 && m_layout[i] == 0)
-			text = wxString(wxT(' '), level * kIndentPerLevel) + text;
+		if (isDimension && page > 0 && m_layout[i] == 0)
+			text = wxString(wxT(' '), page * kIndentPerLevel) + text;
 
 		row->SetCellValue(0, col, text);
 
@@ -778,10 +805,11 @@ void ibSpreadsheetComposeDriver::PrintRow(int level, bool hasChildren, const std
 		BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true);
 	}
 
-	// ⭐ AND THE ONLY POSITIONAL THING THIS DRIVER SAYS: how deep the row is. Where it lands, how far
-	// the group it opens reaches, which line carries the fold marker — all of that follows from the
-	// order the rows arrived in, and belongs to the document and the grid.
-	m_document->PutArea(row, static_cast<unsigned int>(std::max(0, level)));
+	// ⭐ AND THE ONLY POSITIONAL THING THIS DRIVER SAYS: how deep the row is DRAWN — the rung plus the
+	// hierarchy step. Where it lands, how far the group it opens reaches, which line carries the fold
+	// marker — all of that follows from the order the rows arrived in, and belongs to the document and
+	// the grid.
+	m_document->PutArea(row, static_cast<unsigned int>(std::max(0, page)));
 	++m_rowsWritten;
 }
 

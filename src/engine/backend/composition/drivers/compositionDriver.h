@@ -146,6 +146,36 @@ struct ibCompositionOutputInfo
 // keeps working untouched, and one that wants to know whether a row was a GROUP or a DETAIL
 // overrides the pair. That distinction is the one the old contract could not carry: a group and a
 // detail row arrived as the same sentence, and the printer had to guess from the level.
+// ⭐⭐ WHAT A LINE IS — said once, as a thing, rather than as six arguments in a row. The list had
+// grown to where the reader counts commas to find out which `int` is which, and two of them were
+// numbers of the same kind standing next to each other — which is exactly how they came to be added
+// together at the callsite and could never be told apart again.
+//
+//   * `m_level`  — the RUNG of the ladder: WHICH grouping this line carries. That is what says whose
+//                  key belongs in which column, and what the settings and the sort are asked by.
+//   * `m_indent` — how far INSIDE that rung it stands. A hierarchy recurses within one level, so a
+//                  sub-folder is the same rung one step further in; everything else is 0.
+//   * `Page()`   — where the line is DRAWN, which is the two added. A printer indents and folds by
+//                  this; nothing else may.
+//
+// 🛑 Handed the sum alone, a printer answers both questions from it and gets both wrong as soon as a
+// tree goes deeper than one step: a nested folder arrives as "level 2" where a single dimension
+// exists, so its key is written to no column at all, and the sheet folds it INTO the line above as
+// though it were the next grouping (Max, 2026-08-29, live: the nested element with an empty
+// reference, and row 5 counted as a group).
+struct ibCompositionLine {
+	int                m_level  = 0;
+	int                m_indent = 0;
+	ibSelectorNodeKind m_kind = ibSelectorNodeKind::Group;
+	// The FOLD's fact: does this node stand over anything at all.
+	bool               m_hasChildren = false;
+	// …and the OUTPUT's promise: will what is under it actually be printed. Not the same question —
+	// see the note on OnGroupBegin.
+	bool               m_showsWhatIsUnder = false;
+
+	int Page() const { return m_level + m_indent; }
+};
+
 class BACKEND_API ibCompositionDriver
 {
 public:
@@ -206,12 +236,11 @@ public:
 	// of a printed report once came out looking like a detail line: a deepest heading over records,
 	// in an output that declares no detail level, HAS children and SHOWS nothing. Each consumer takes
 	// the one it means — a list the second, a printed report the first.
-	virtual void OnGroupBegin(int level, ibSelectorNodeKind kind, bool hasChildren,
-	                          bool showsWhatIsUnder, const std::vector<ibValue>& values) = 0;
+	virtual void OnGroupBegin(const ibCompositionLine& line, const std::vector<ibValue>& values) = 0;
 
 	// A ROW — a detail record, written down the page under whatever opened above it. It carries no
 	// kind: a row is a row, and what makes a heading different is that it is a PAIR.
-	virtual void OnRow(int level, const std::vector<ibValue>& values) = 0;
+	virtual void OnRow(const ibCompositionLine& line, const std::vector<ibValue>& values) = 0;
 
 	// A COLUMN of a cross-table — a heading that reads ACROSS the page, or a record laid out as a
 	// column of its own. Default: nothing, because a driver that draws no table has nowhere across to

@@ -196,7 +196,26 @@ public:
 	// THE READER'S SETTING, OPENED FOR WRITING — the imperative doors (a column heading clicked,
 	// `Sort()` from a script) state into it. It already holds the zeroth's, so stating one thing
 	// leaves everything else the report was composing on exactly where it was.
-	ibSettingsDescription& UserSettings() { return m_userSettings; }
+	//
+	// 🛑 …AND IT DID NOT. The sentence above was the INTENT and never the code: the doors wrote into
+	// an EMPTY user setting, which cost nothing while each part still fell back on its own. Once the
+	// setting answers for every part (ReaderHasSetting), the first imperative write silently threw
+	// away the author's other four — click a heading and the developer's filter is gone. So the copy
+	// is made HERE, at the first write, out of what is in force; after that the setting is the
+	// reader's and it is complete. (`ComposerSettings.InForce_StatingOneThingKeepsTheRest` says it.)
+	//
+	// ⚠ SEEDED ONCE, AND "ONCE" IS REMEMBERED RATHER THAN READ OFF THE CONTENT. Asked as *is the
+	// setting non-empty*, the seed ran again the moment a door emptied it — so `ClearSorts()` followed
+	// by `Sort()` brought the author's order back and appended the clicked column under it, two lines
+	// where the click meant one. That is the same confusion this class names two paragraphs down:
+	// emptiness cannot mean both "not set" and "set to nothing".
+	ibSettingsDescription& UserSettings() {
+		if (!m_readerHasSetting) {
+			m_userSettings     = GetCurrentSettingsDesc();
+			m_readerHasSetting = true;
+		}
+		return m_userSettings;
+	}
 
 	// ⭐ WHAT IS IN FORCE — element zero's, and that is the whole of it. These stay because every
 	// reader of a setting speaks them, and because naming the question is what kept a SECOND answerer
@@ -220,7 +239,12 @@ public:
 	// ⚠ NOTHING IS LOST BY IT: the window opens on what is in force (this), so a reader who has no
 	// setting yet starts from a COPY of the author's and OK writes the whole of it back. The only way
 	// a part of a user setting is empty is that somebody emptied it.
-	bool ReaderHasSetting() const { return m_userSettings.IsOk(); }
+	//
+	// 🛑 AND IT IS A FACT, NOT A MEASUREMENT OF THE CONTENT. `m_userSettings.IsOk()` answers "is there
+	// anything in it", which is the OTHER question — the one the paragraph above says must not be
+	// confused with this one. A reader who empties their order still HAS a setting, and a composer
+	// nobody has touched does not; only ClearUserSettings() takes it away again.
+	bool ReaderHasSetting() const { return m_readerHasSetting; }
 
 	const ibFilterDescription& GetCurrentFilterDesc() const {
 		return ReaderHasSetting() ? m_userSettings.m_filter : m_variants.front().m_settings.m_filter;
@@ -338,8 +362,15 @@ public:
 	// A write is somebody STATING THE ORDER NOW, so it lands in the reader's section — where it
 	// replaces the author's whole, which is the rule every part of a setting follows. Reads answer
 	// what is IN FORCE, so the arrow, the anchor and the ORDER BY cannot disagree by construction.
-	// ⭐ TAKES THE READER'S ORDER BACK OUT — and with nothing there, the zeroth's order composes again.
-	void   ClearSorts() { m_userSettings.m_sort.Clear(); }
+	// ⭐ TAKES THE READER'S ORDER BACK OUT — and it goes through the SAME door a write does, for the
+	// same reason: it is a statement about the setting, so it must not be made against an empty one.
+	// A heading click is `ClearSorts()` then `Sort()`; clearing the bare member left the setting
+	// absent, and the seed then happened INSIDE Sort — bringing the author's order back and appending
+	// the clicked column under it, two lines where the click meant one.
+	// ⚠ And with a setting in force, an emptied order means NO order — the zeroth's does not return.
+	// That is the whole rule since 2026-08-29: a setting that exists answers every part, empty ones
+	// included. Only a reader with no setting at all still composes on the author's.
+	void   ClearSorts() { UserSettings().m_sort.Clear(); }
 	size_t SortCount() const { return GetCurrentSortDesc().m_lines.size(); }
 	bool   GetSortAt(size_t i, wxString& path, bool& ascending) const {
 		const ibSortDescription& sort = GetCurrentSortDesc();
@@ -490,18 +521,21 @@ public:
 	// dropped: **the list emptied**. The drilled path had the mirror of it — the setting rendered
 	// EVERY level while the drill wanted the one it was standing on.
 	struct TakenGroups {
-		std::vector<std::pair<wxString, ibQueryDimUnfold>> m_ladder;
+		// ⭐⭐ THE LADDER ITSELF, NOT A RETELLING OF IT. It used to travel as one (field, unfold) pair
+		// per level — and a DETAIL level names no field, so it fell out of the pair and never came
+		// back. One list fetch brackets its read with Take/Put, so after the first one the composer had
+		// silently lost its records level: the sheet printed from a ladder of headings only, the fold
+		// built 71 records and the walk skipped every one of them (`writes records no`, measured).
+		//
+		// A save that cannot restore what it saved is not a save. The nodes are copied whole.
+		std::vector<GroupNode>                             m_ladder;
 		ibGroupDescription                                 m_setting;   // the reader's
 		ibGroupDescription                                 m_zeroth;    // …and the one it falls back to
 	};
 	TakenGroups TakeGroups() {
 		TakenGroups out;
-		// The LADDER, one entry per level — a level's head field, which is what this pair has always
-		// carried. A level composed of several fields keeps them; only the ladder travels here.
-		for (const GroupNode& level : LevelChain())
-			if (!level.m_settings.m_group.m_lines.empty())
-				out.m_ladder.emplace_back(level.m_settings.m_group.m_lines.front().m_path,
-				                          level.m_settings.m_group.m_lines.front().m_kind);
+		// The LADDER, whole — every level as it stands, the records level included.
+		out.m_ladder = LevelChain();
 		TrimLevels(0);
 		// ⭐ BOTH SIDES, because the read this brackets is the DETAIL read — every row, flat — and
 		// emptying only the reader's would let the zeroth's grouping rise into its place and group the
@@ -514,8 +548,7 @@ public:
 	}
 	void PutGroups(const TakenGroups& saved) {
 		TrimLevels(0);
-		for (const auto& g : saved.m_ladder)
-			AppendLevel(g.first, g.second);
+		LevelChain() = saved.m_ladder;   // …put back exactly what was taken
 		m_userSettings.m_group             = saved.m_setting;
 		m_variants.front().m_settings.m_group = saved.m_zeroth;
 	}
@@ -556,6 +589,33 @@ public:
 			chain.resize(levels);
 	}
 
+	// ⭐⭐ THE LADDER THIS COMPOSITION WILL BE PRINTED BY — built HERE, once, out of what the
+	// composition already holds: the groupings in force, its source's own tree, and the records at
+	// the bottom. `tree` is the one thing it cannot know — whether the reader is looking at a tree
+	// or at a flat table — and that is a parameter, not a decision.
+	//
+	// 🛑⭐⭐ IT USED TO BE ASSEMBLED BY THE WIDGET, and that is where TWO ROADS out of one state came
+	// from (Max, 2026-08-29: *"our job is to bring these two paths together, at least far enough
+	// that they do not diverge badly"*). Measured, the same list and the same setting gave:
+	//
+	//     the grid  — ladder 1 level,  writes records no   → 71 headings, 0 records
+	//     the sheet — ladder 2 levels, writes records yes  → 72 headings, 71 records
+	//
+	// Same composer, same settings, two ladders — because each road built its own, under conditions
+	// of its own. Every difference downstream (does a heading open, is a row written, what does the
+	// walk call a record) followed from that one split.
+	//
+	// ⚠ WHAT IT IS NOT: a second store for the grouping. The setting stays the authority; this
+	// derives the ladder FROM it, every time it is asked, and nothing is remembered between roads.
+	//
+	// ⭐ `source` IS HANDED OVER, not looked up. The ladder needs two facts about the thing being
+	// read — what it calls its own row, and whether it has a tree — and the caller is holding it
+	// already. A `PrimarySource()` of the composer's own was written first and thrown away: with a
+	// FROM, its JOINs and a map of transient tables in hand, "which of these is THE source" has no
+	// answer that is not a guess, and a guess in that shape is a defect waiting for the second
+	// source to arrive (Max, 2026-08-29: *"that primary source already looks like rubbish"*).
+	void BuildPrintLevels(bool tree, const class ibBackendQueryable* source = nullptr);
+
 	// --- output -------------------------------------------------------------------
 
 	// The config this query runs ON BEHALF OF — threaded into the lowering so a by-name metaobject source resolves
@@ -572,6 +632,26 @@ public:
 	// that a `SetDriver` filled — a whole second way to say where the output goes, and nobody ever
 	// used it. Every caller has the driver in hand at the point of the call.
 	virtual bool Run(ibCompositionDriver& /*driver*/) { return false; }
+
+	// ⭐⭐ A COPY OF ITSELF, MADE BY THE ONE WHO KNOWS WHAT IT IS. A caller that wants to read the same
+	// thing a second time — «output list» prints what the screen is showing — must not run over the LIVE
+	// composer: it registers parameters while it builds a filter, and the model it belongs to is reading on
+	// another thread. So it takes a copy.
+	//
+	// 🛑 AND IT CANNOT ASK WHICH KIND TO COPY. The TableBox is handed a composer and is never told whether
+	// there is a database behind it or a table in memory (Max, 2026-08-29) — asking would put the one
+	// question this whole split exists to remove back into the tier furthest from the answer. The composer
+	// answers it instead, which is the only place it is free.
+	//
+	// A copy carries the WHOLE reading state, and that is the point: the settings, the outputs, and the
+	// grouping LADDER that was set imperatively and lives in no description. What it must not carry — the
+	// drivers its outputs point at, the per-read scope — is the caller's to clear, because only the caller
+	// knows what the copy is for.
+	//
+	// ⚠ PURE, deliberately (Max, 2026-08-29). A default returning null would be a kind of composer that
+	// silently cannot be copied, and the caller — which by construction does not know which kind it holds —
+	// would have no way to tell that from a failure. Every realisation answers, or it does not compile.
+	virtual ibDataComposer* Clone() const = 0;
 
 	// READ ONE OUTPUT and hand its rows to `driver` in the node language (OnOutputBegin / OnGroup /
 	// OnDetail / OnComplete). The realisation decides HOW — rendered text for the DB composer, the
@@ -1081,6 +1161,18 @@ protected:
 	// state and needs no marking — an empty part IS "the reader put nothing here".
 	ibSettingsDescription m_userSettings;
 
+	// ⭐⭐ …AND WHETHER THERE IS ONE AT ALL, which the content cannot say. "Nobody has stated a
+	// setting" and "somebody stated one and emptied it" are two different states of the world that
+	// look identical in the data — a reader who clears their order has said *no order*, and the
+	// author's must not creep back under it, while a composer nobody has touched composes on the
+	// author's entirely. One bit, set by SetUserSettingsDesc and by the first imperative write, taken
+	// away only by ClearUserSettings.
+	//
+	// 🛑 It was derived from `m_userSettings.IsOk()`, and the derivation broke exactly where the two
+	// states differ: emptying the last part of a setting made the setting vanish, so the next write
+	// seeded from the author again (ComposerSettings.Sort_StatesTheReadersOrder caught it).
+	bool                  m_readerHasSetting = false;
+
 	// (`m_standartSettings` DELETED — "the author's settings" was never a thing of its own. There is
 	//  the ARRAY, and `[0]` is what composes while nobody has saved a setting; a second member
 	//  holding "what the author declared" was that same element under a second name.)
@@ -1276,6 +1368,23 @@ public:
 
 	// The full cycle into the given driver.
 	bool Run(ibCompositionDriver& driver) override;
+
+	// ⭐⭐ A CLONE IS A COMPOSER THAT READS THE SAME THING — never a bit-copy of the machinery that was
+	// reading it. Written by hand because the difference is the point: what carries over is the
+	// DECLARATION (the sources, and everything the base holds — settings, variants, outputs), while the
+	// three caches are left fresh. They are HOW a read happened, not what it reads: a prepared temp-table
+	// store owns its tables and is not copyable at all, a shared read belongs to the branch that took it,
+	// and a rendered query and a page cache are keyed to a state the copy has not been in.
+	ibDataDBComposer() = default;   // …still the ordinary way in — declaring the copy suppresses it
+	ibDataDBComposer(const ibDataDBComposer& other)
+		: ibDataComposer(other),
+		  m_sourceText(other.m_sourceText),
+		  m_sources(other.m_sources),
+		  m_directSources(other.m_directSources) {}
+
+	// …and a copy of itself — see ibDataComposer::Clone. Covariant, so a caller that already knows it holds
+	// a DB composer gets one back without a cast.
+	virtual ibDataDBComposer* Clone() const override { return new ibDataDBComposer(*this); }
 
 private:
 	// The composer owns its CACHES — the consumer stays dumb:
