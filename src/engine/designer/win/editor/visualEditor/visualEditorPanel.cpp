@@ -16,7 +16,7 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditor() :
 
 ibVisualEditorNotebook::ibVisualEditor::ibVisualEditor(ibMetaDocument* document, wxWindow* parent, int id) :
 	wxPanel(parent, id),
-	m_document(document), m_visualEditor(nullptr), m_cmdProc(new ibCommandProcessor()), m_valueForm(nullptr)
+	m_cmdProc(new ibCommandProcessor()), m_valueForm(nullptr), m_visualEditor(nullptr), m_document(document)
 {
 	CreateWideGui();
 }

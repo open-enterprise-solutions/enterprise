@@ -16,7 +16,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorTree, ibMetaTreeBase);
 #define ICON_SIZE 16
 
 ibDataProcessorTree::ibDataProcessorTree(ibMetaDocument* docParent, wxWindow* parent, wxWindowID id)
-	: ibMetaTreeBase(docParent, parent, id), m_metaData(nullptr), m_initialized(false)
+	: ibMetaTreeBase(docParent, parent, id)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -60,7 +60,7 @@ ibDataProcessorTree::ibDataProcessorTree(ibMetaDocument* docParent, wxWindow* pa
 	bSizerValue->Add(m_commentValue, 1, wxALL | wxEXPAND, 1);
 	m_commentValue->Connect(wxEVT_TEXT, wxCommandEventHandler(ibDataProcessorTree::OnEditCaptionComment), nullptr, this);
 
-	m_defaultFormValue = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, NULL, 0);
+	m_defaultFormValue = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 	m_defaultFormValue->AppendString(_("<not selected>"));
 	m_defaultFormValue->SetSelection(0);
 

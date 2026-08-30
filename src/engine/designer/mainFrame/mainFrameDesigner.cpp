@@ -37,9 +37,9 @@ ibFrontendMainFrameDesigner::ibFrontendMainFrameDesigner(ibSessionHolder&& holde
 	m_metaWindow(nullptr),
 
 	m_outputWindow(new ibOutputWindow(this, wxID_ANY)),
-	m_localWindow(new ibLocalWindow(this, wxID_ANY)),
 	m_stackWindow(new ibStackWindow(this, wxID_ANY)),
-	m_watchWindow(new ibWatchWindow(this, wxID_ANY))
+	m_watchWindow(new ibWatchWindow(this, wxID_ANY)),
+	m_localWindow(new ibLocalWindow(this, wxID_ANY))
 {
 	m_docManager = new ibDocManagerDesigner;
 }

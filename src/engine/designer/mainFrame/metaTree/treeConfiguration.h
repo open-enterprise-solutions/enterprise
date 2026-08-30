@@ -27,9 +27,12 @@ public:
 		~ibEventsOff() { m_window->SetEvtHandlerEnabled(true); }
 	};
 
-	ibMetaTreeBase() : wxPanel(), m_docParent(nullptr), m_searchTree(nullptr), m_bReadOnly(false) {}
-	ibMetaTreeBase(wxWindow* parent, int id = wxID_ANY) : wxPanel(parent, id), m_docParent(nullptr), m_bReadOnly(false) {}
-	ibMetaTreeBase(ibMetaDocument* docParent, wxWindow* parent, int id = wxID_ANY) : wxPanel(parent, id), m_docParent(docParent), m_searchTree(nullptr), m_bReadOnly(false) {}
+	// The three members carry their defaults at the DECLARATION (see m_searchTree below), so a ctor
+	// states only what it is TOLD — which is also why the (wxWindow*, int) form can no longer differ
+	// from its neighbours by forgetting one.
+	ibMetaTreeBase() : wxPanel() {}
+	ibMetaTreeBase(wxWindow* parent, int id = wxID_ANY) : wxPanel(parent, id) {}
+	ibMetaTreeBase(ibMetaDocument* docParent, wxWindow* parent, int id = wxID_ANY) : wxPanel(parent, id), m_docParent(docParent) {}
 
 	virtual ibFormID SelectFormType(ibValueMetaObjectForm* metaObject) const;
 	virtual void Activate();
@@ -75,7 +78,7 @@ protected:
 		public ibTreeDataMetaItem, public ibTreeDataClassIdentifier {
 	public:
 		wxTreeItemClsidMetaData(const ibClassID& clsid, ibValueMetaObject* metaObject) :
-			ibTreeDataClassIdentifier(clsid), ibTreeDataMetaItem(metaObject)
+			ibTreeDataMetaItem(metaObject), ibTreeDataClassIdentifier(clsid)
 		{
 		}
 	};

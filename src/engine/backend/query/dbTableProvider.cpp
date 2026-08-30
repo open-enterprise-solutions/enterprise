@@ -1632,6 +1632,12 @@ static bool CollectExprColumns(const ibQueryColumnExpr* e, std::vector<const ibB
 		// The THEN / ELSE arms are expressions and walk; the WHEN predicates are a different tree, and
 		// this does not read them — so a CASE keeps the RAM road until somebody teaches it that half.
 		return false;
+	case ibQueryColumnExprKind::WindowAgg:
+		// A window is computed over a PARTITION of the finished result, so its value is not a reading
+		// of this row's cells and co-locating the join would not make it available any earlier. Said
+		// here rather than left to the fallthrough: the refusal is a decision, and a reader who meets
+		// a missing case cannot tell one from an oversight.
+		return false;
 	}
 	return false;
 }

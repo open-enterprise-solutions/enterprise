@@ -75,8 +75,8 @@ class ibSubSystemWindow : public wxWindow {
 
 		ibSubSystemButton(ibSubSystemWindow* mainWindow, wxWindowID id, const ibValueMetaObjectSection* object)
 			: wxControl(mainWindow, id, wxDefaultPosition, wxDefaultSize, wxNO_BORDER),
-			m_mainWindow(mainWindow), m_bitmap(object->GetPictureAsBitmap()), m_metaObject(object), m_popupWindow(nullptr),
-			m_eventType(wxEVT_BUTTON) {
+			m_metaObject(object), m_popupWindow(nullptr),
+			m_mainWindow(mainWindow), m_bitmap(object->GetPictureAsBitmap()), m_eventType(wxEVT_BUTTON) {
 
 			m_baseColour = wxSystemSettings::GetColour(wxSYS_COLOUR_3DFACE);
 			m_highlightColour = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);

@@ -1435,9 +1435,9 @@ private:
 ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
 	const ibMetaData* metaData)
 	: wxPanel(parent, wxID_ANY),
-	  m_edited(edited), m_readerRoad(false),
+	  m_metaData(metaData), m_readerRoad(false),
 	  m_settings(&edited.m_variants.front().m_settings),
-	  m_metaData(metaData),
+	  m_edited(edited),
 	  m_fieldSource(new ibSettingsFieldTree())
 {
 	BuildPanel();
@@ -1447,9 +1447,9 @@ ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibComposition
 ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
 	const ibMetaData* metaData, ibSettingsDescription& settings)
 	: wxPanel(parent, wxID_ANY),
-	  m_edited(edited), m_readerRoad(true),
+	  m_metaData(metaData), m_readerRoad(true),
 	  m_settings(&settings),
-	  m_metaData(metaData),
+	  m_edited(edited),
 	  m_fieldSource(new ibSettingsFieldTree())
 {
 	BuildPanel();

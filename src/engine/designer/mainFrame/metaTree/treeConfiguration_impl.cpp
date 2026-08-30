@@ -124,7 +124,7 @@ bool ibMetaTreeBase::CloseObjectForm(ibValueMetaObject* obj)
 
 	//not found in the list of existing ones
 	if (foundedDoc != nullptr) {
-		objectInspector->SelectObject(obj, this);
+		objectInspector->SelectObject(obj);
 		if (foundedDoc->Close()) {
 			// Delete the child document by deleting all its views.
 			return foundedDoc->DeleteAllViews();

@@ -70,7 +70,7 @@ BACKEND_API void ibSyncParametersWithTexts(std::vector<ibParameterDescription>& 
 // ⭐ THE WHOLE DESCRIPTION, ASKED ONCE. Both callers hold one — the composition its own, the window
 // the copy it is editing — so which texts count is answered HERE and not twice at the two call
 // sites, where the second one would sooner or later count something different.
-BACKEND_API void ibSyncParameters(class ibCompositionDescription& composition);
+BACKEND_API void ibSyncParameters(struct ibCompositionDescription& composition);
 
 class BACKEND_API ibValueDataComposition : public ibValueSpreadsheetModel, public ibSourceDataObject, public ibPropertyObject {
 public:

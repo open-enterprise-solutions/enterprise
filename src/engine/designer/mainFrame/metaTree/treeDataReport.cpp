@@ -18,7 +18,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibDataReportTree, ibMetaTreeBase);
 #define ICON_SIZE 16
 
 ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, wxWindowID id)
-	: ibMetaTreeBase(docParent, parent, id), m_metaData(nullptr), m_initialized(false)
+	: ibMetaTreeBase(docParent, parent, id)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -70,7 +70,7 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 	bSizerValue->Add(m_commentValue, 1, wxALL | wxEXPAND, 1);
 	m_commentValue->Connect(wxEVT_TEXT, wxCommandEventHandler(ibDataReportTree::OnEditCaptionComment), nullptr, this);
 
-	m_defaultFormValue = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, NULL, 0);
+	m_defaultFormValue = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 	m_defaultFormValue->AppendString(_("<not selected>"));
 	m_defaultFormValue->SetSelection(0);
 
@@ -78,7 +78,7 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 
 	bSizerValue->Add(m_defaultFormValue, 1, wxALL | wxEXPAND, 1);
 
-	m_defaultComposerValue = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, NULL, 0);
+	m_defaultComposerValue = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 	m_defaultComposerValue->AppendString(_("<not selected>"));
 	m_defaultComposerValue->SetSelection(0);
 
