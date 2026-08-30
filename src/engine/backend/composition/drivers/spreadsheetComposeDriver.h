@@ -70,8 +70,8 @@ public:
 	// report is unchanged down to the order the cells are written in.
 	virtual void OnGroupBegin(const ibCompositionLine& line, const std::vector<ibValue>& values) override;
 	virtual void OnRow(const ibCompositionLine& line, const std::vector<ibValue>& values) override;
-	virtual void OnColumn(int level, ibSelectorNodeKind kind, const std::vector<ibValue>& values) override;
-	virtual void OnGroupEnd(int level, const std::vector<ibValue>& values) override;
+	virtual void OnColumn(const ibCompositionLine& line, const std::vector<ibValue>& values) override;
+	virtual void OnGroupEnd(const ibCompositionLine& line, const std::vector<ibValue>& values) override;
 	virtual void OnOutputEnd(bool totals) override;
 
 	// How many rows the walk printed under the heading — 0 means the composition produced nothing,

@@ -463,6 +463,100 @@ TEST(SpreadsheetCompose, NoPerGroupTotalLine_TheHeadingCarriesTheFigures)
 }
 
 // ===========================================================================
+//  Closing a heading — the fourth verb, and the one that carries the grand total
+// ===========================================================================
+
+namespace {
+
+// A line that stands on a rung AND some way into that rung's own tree. `HeadAt` leaves the indent at
+// zero, which is every case the tests had until the two questions were told apart.
+ibCompositionLine HeadAt(int level, int indent, ibSelectorNodeKind kind, bool hasChildren) {
+	ibCompositionLine line = HeadAt(level, kind, hasChildren, false);
+	line.m_indent = indent;
+	return line;
+}
+
+} // namespace
+
+// ⭐⭐ THE GRAND TOTAL IS WRITTEN WHEN THE ROOT CLOSES, and exactly once. A pre-order walk hands the
+// root over FIRST, so the sum of everything arrives before the first group — printed where it
+// arrives it would sit above the column titles. It is held and written by the closing event, which
+// is the end of the section a reader looks at.
+TEST(SpreadsheetCompose, ClosingTheRoot_WritesTheGrandTotalOnce)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) }));
+	driver.OnGroupBegin(HeadAt(0, ibSelectorNodeKind::Group, true, true), { ibValue(), ibValue(100) });
+	driver.OnGroupBegin(HeadAt(1, ibSelectorNodeKind::Group, true, true), { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnRow(RowAt(2), { ibValue(), ibValue(100) });
+
+	const int beforeClose = driver.GetRowsWritten();
+	driver.OnGroupEnd(HeadAt(0, ibSelectorNodeKind::Group, true, true), { ibValue(), ibValue(100) });
+	EXPECT_EQ(beforeClose + 1, driver.GetRowsWritten());   // the total line, written on the close
+
+	// …and the output ending does not write it a second time: the close cleared the flag the
+	// fallback in OnOutputEnd reads.
+	const int afterClose = driver.GetRowsWritten();
+	driver.OnOutputEnd(true);
+	EXPECT_EQ(afterClose, driver.GetRowsWritten());
+}
+
+// ⭐⭐ "IS THIS THE ROOT" IS A QUESTION ABOUT THE RUNG, NOT ABOUT WHERE THE NODE IS DRAWN. A rung
+// that unfolds a hierarchy recurses within itself, so a folder two steps inside the first rung is
+// still rung ZERO and its PAGE is two.
+//
+// 🛑 THIS IS THE DIVERGENCE THE LINE WAS BROUGHT IN TO END. `OnGroupEnd` took a bare `int`, and the
+// two callers filled it differently — the walk passed `Page()`, the RAM composer passed `m_level`.
+// They agree wherever the indent is zero, which is everywhere anybody had looked. Handed the whole
+// line, the driver asks the question it means.
+TEST(SpreadsheetCompose, AnIndentedRootIsStillTheRoot)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) }));
+	driver.OnGroupBegin(HeadAt(0, ibSelectorNodeKind::Group, true, true), { ibValue(), ibValue(70) });
+	driver.OnRow(RowAt(1), { ibValue(wxT("Alpha")), ibValue(70) });
+
+	const int before = driver.GetRowsWritten();
+	driver.OnGroupEnd(HeadAt(0, /*indent*/2, ibSelectorNodeKind::Group, true), { ibValue(), ibValue(70) });
+	EXPECT_EQ(before + 1, driver.GetRowsWritten());   // read by the RUNG, so the indent changes nothing
+}
+
+// …and closing anything that is not the root writes nothing: a group's figures are already beside
+// its name on the heading, so a line repeating them under it says the same thing twice.
+TEST(SpreadsheetCompose, ClosingAGroupBelowTheRoot_WritesNothing)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) }));
+	driver.OnGroupBegin(HeadAt(1, ibSelectorNodeKind::Group, true, true), { ibValue(wxT("Alpha")), ibValue(40) });
+	driver.OnRow(RowAt(2), { ibValue(), ibValue(40) });
+
+	const int before = driver.GetRowsWritten();
+	driver.OnGroupEnd(HeadAt(1, ibSelectorNodeKind::Group, true, true), { ibValue(wxT("Alpha")), ibValue(40) });
+	EXPECT_EQ(before, driver.GetRowsWritten());
+}
+
+// A grouping output has no column axis, so a column event has nowhere across to write and is a
+// no-op — which is what keeps an ordinary report unaffected by a walk that reads both ways.
+TEST(SpreadsheetCompose, AColumnWithNoTableIsIgnored)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(SchemaInfo({ Dim(wxT("Partner"), 0), Measure(wxT("Amount")) }));
+	driver.OnRow(RowAt(1), { ibValue(wxT("Alpha")), ibValue(10) });
+
+	const int before = driver.GetRowsWritten();
+	driver.OnColumn(HeadAt(2, ibSelectorNodeKind::Group, false, false), { ibValue(), ibValue(10) });
+	EXPECT_EQ(before, driver.GetRowsWritten());
+}
+
+// ===========================================================================
 //  The cross-table — the same driver, laid out the other way
 // ===========================================================================
 
@@ -850,4 +944,55 @@ TEST(SpreadsheetCross, EveryHeadingGetsItsOwnTotalColumnEvenOverOneChild)
 	EXPECT_EQ(wxT("30"),  doc->GetCellValue(2, 4)) << "South's total — the same figure as its one child";
 	EXPECT_EQ(wxT("30"),  doc->GetCellValue(2, 5));
 	EXPECT_EQ(wxT("100"), doc->GetCellValue(2, 6)) << "and the row total closes the table";
+}
+
+// ⭐⭐ A COLUMN EVENT IS ROUTED BY THE LINE'S OWN KIND. `OnColumn` used to be handed the kind as a
+// separate argument, so the caller decided what the driver was about to be told — and the two
+// callers of it filled the level beside it on different scales (`Page()` here, `m_level` from the
+// heading road). Handed the line, the driver reads both off one fact.
+//
+// A heading fed through OnColumn lays out a column of the table exactly as one fed through
+// OnGroupBegin does — the two roads meet in OnCrossHeading, which is the point of converging them.
+// ⚠ ASSERTED AS AN EQUIVALENCE, not against coordinates. Where a cross-table's cells land is the
+// LAYOUT's business and it is pinned by the tests above; what this one is about is that the two
+// roads into `OnCrossHeading` agree. Written against absolute cells it asserted the layout a second
+// time — and got it wrong, which is a test failing over its own assumption rather than over the
+// code (2026-08-30).
+TEST(SpreadsheetCross, AColumnHeadingFedThroughOnColumn_LandsWhereOnGroupBeginPutsIt)
+{
+	const auto compose = [](bool throughOnColumn, ibBackendSpreadsheetObject* into) {
+		ibSpreadsheetComposeDriver driver(into);
+
+		// Partner reads down the page (level 0), Warehouse across it (level 1).
+		driver.OnOutputBegin(CrossInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) }, 1));
+		driver.OnGroupBegin(HeadAt(1, ibSelectorNodeKind::Group, true, false), { ibValue(wxT("Alpha")), ibValue(), ibValue(50) });
+
+		const ibCompositionLine north = HeadAt(2, ibSelectorNodeKind::Group, false, false);
+		const ibCompositionLine south = HeadAt(2, ibSelectorNodeKind::Group, false, false);
+		const std::vector<ibValue> northRow{ ibValue(), ibValue(wxT("North")), ibValue(20) };
+		const std::vector<ibValue> southRow{ ibValue(), ibValue(wxT("South")), ibValue(30) };
+
+		if (throughOnColumn) {
+			driver.OnColumn(north, northRow);
+			driver.OnColumn(south, southRow);
+		}
+		else {
+			driver.OnGroupBegin(north, northRow);
+			driver.OnGroupBegin(south, southRow);
+		}
+		driver.OnOutputEnd(true);
+	};
+
+	auto viaGroup  = MakeDocument();
+	auto viaColumn = MakeDocument();
+	compose(false, viaGroup.get());
+	compose(true,  viaColumn.get());
+
+	ASSERT_EQ(viaGroup->GetNumberRows(), viaColumn->GetNumberRows());
+	ASSERT_EQ(viaGroup->GetNumberCols(), viaColumn->GetNumberCols());
+
+	for (int row = 0; row <= viaGroup->GetNumberRows(); row++)
+		for (int col = 0; col <= viaGroup->GetNumberCols(); col++)
+			EXPECT_EQ(viaGroup->GetCellValue(row, col), viaColumn->GetCellValue(row, col))
+				<< "cell " << row << ',' << col << " differs between the two roads";
 }

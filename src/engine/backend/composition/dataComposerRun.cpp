@@ -673,7 +673,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 					// The axis of a record is its own fact and is already answered: DetailAxisOf, on
 					// the output, carried here in the info the driver was handed.
 					if (info.m_detailsAxis == ibTotalsAxis::Columns)
-						driver.OnColumn(line.Page(), ibSelectorNodeKind::Detail, row);
+						driver.OnColumn(line, row);
 					else
 						driver.OnRow(line, row);
 					// ⭐ A ROW HAS NOTHING UNDER IT — DOWN THE PAGE. In a TABLE the column keys stand
@@ -734,7 +734,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				line.m_hasChildren      = level.HasChildren();
 				line.m_showsWhatIsUnder = showsWhatIsUnder;
 				if (level.Level() > rowLevels)
-					driver.OnColumn(line.Page(), level.Kind(), row);
+					driver.OnColumn(line, row);
 				else
 					driver.OnGroupBegin(line, row);
 
@@ -753,7 +753,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				// has been written by now, which is the whole difference between this and the event
 				// that opened it — and it is where a total belongs on the page.
 				if (level.Level() <= rowLevels)
-					driver.OnGroupEnd(line.Page(), mine);
+					driver.OnGroupEnd(line, mine);
 			}
 		};
 		// THE WALK STARTS WITH THE OUTPUT'S OWN SET — the composition resolved, then the output's

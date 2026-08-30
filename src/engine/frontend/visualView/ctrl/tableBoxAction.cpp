@@ -12,6 +12,7 @@
 #include "backend/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
 #include "backend/compositionDescription.h"     // the description the quick filter writes into
 #include "backend/appData.h"
+#include "backend/diagnostics/journal.h"        // the probe on where the output list thinks it stands
 #include "frontend/win/dlgs/settings/list/listSettings.h"   // the ONE door a model's settings are opened by
 #include "frontend/win/dlgs/settings/composer/composerSettings.h"   // the saved-settings shelf — shared with the report's world
 #include "backend/settings/settingsComposer.h"              // ibSettingsCategory — which shelf a list's settings sit on
@@ -432,10 +433,71 @@ void ibValueModelTableBox::Command_OutputList()
 	//
 	// `InHierarchy` rather than `=`: membership that walks DOWN, so the sub-folders under the one they
 	// opened come with their contents instead of standing empty.
+	// ⭐⭐ …AND A GROUP SOMEBODY HAS OPENED IS THE DELIMITER TOO. "Where am I" was asked of ONE road —
+	// the hierarchical-drill crumb, which `SetTopParent` fills when a person walks into a FOLDER. A
+	// tree of GROUPINGS sets no crumb (it is empty in List and Tree mode by definition), so standing
+	// inside a group and pressing «output list» printed the whole table from the root and folded it
+	// afresh: the list was reading `WHERE Attribute4 = <group> TOTALS BY Attribute3` and the sheet
+	// rendered `TOTALS BY Attribute4, Attribute3` with no WHERE at all (journal, 2026-08-30).
+	//
+	// Hence "it works on catalogs" — a catalog folder IS the crumb road — and hence Max's reading of
+	// the sheet: *"the value is wrong… when you enter a group you should print the top element once
+	// and expand the current one fully"*.
+	//
+	// ⭐ THE NODE ALREADY KNOWS. A row of this model IS an ibComposerNode (`ibDataViewItem(this)`),
+	// and a node carries the rungs it stands under — root → itself. One equality per rung, against
+	// the grouping line of the same depth, and the rows come out matched by the filter exactly as the
+	// hierarchy shows them (Max: *"they will simply match by the filter"*). The levels above print
+	// once as the top; the level you are in expands.
 	if (!flatView) {
 		if (auto* const viewCtrl = dynamic_cast<ibDataViewCtrl*>(GetInnerWx())) {
+
+			// 🛑 THE ENGINE'S SCOPE CANNOT BE ASKED HERE, and a probe proved it: it read 0 conditions
+			// while the fetch a second earlier carried both. The model overlays the scope for ONE fetch
+			// and takes it straight back (`MarkScope` … restore, tabularModelDb.cpp) — the right tier,
+			// the wrong moment.
+			//
+			// ⭐ WHAT SURVIVES IS THE NODE. The model builds that very scope out of the browsed node's
+			// GROUP PATH (`pnode->GetGroupPath()`), so the path IS the position, and it lasts as long as
+			// the tree does. One equality per rung, against the grouping line of the same depth: the
+			// levels above print once as the top, the level you stand in expands, and the rows come out
+			// matched by the filter exactly as the hierarchy shows them.
+			// ⭐ THE BOX ALREADY HOLDS THE CURRENT ROW — `m_tableCurrentLine`, kept in step with the
+			// selection — so the widget is not asked for it (Max, 2026-08-30: *"the current row you can
+			// get from the box itself"*). One holder of that fact, and the print reads the same one
+			// every other command on this band reads.
+			const ibValueModel::ibValueModelReturnLine* const line = GetCurrentLine();
+			const ibDataViewItem where = line != nullptr ? line->GetLineItem() : ibDataViewItem();
+			const ibComposerNode* const node = m_tableModel->GetViewData<ibComposerNode>(where);
+			const std::vector<ibValue> path = node != nullptr ? node->GetGroupPath() : std::vector<ibValue>();
+			const std::vector<ibGroupLineDescription>& rungs = settings.m_group.m_lines;
+
+			size_t fixed = 0;
+			for (size_t at = 0; at < path.size() && at < rungs.size(); ++at) {
+				if (rungs[at].m_path.IsEmpty())
+					continue;
+				settings.m_filter.Append(rungs[at].m_path, ibComparisonKind_Equal, path[at]);
+				fixed++;
+			}
+
+			// The probe separates the ways this comes back empty, because they want different answers:
+			// no current item, an item that is not a node, and a node standing at the root.
+			ibJournalInfo(wxT("ui.list"),
+				wxT("output list: item %s, node %s, %u rung(s) deep, %u grouping line(s), %u filter(s)"),
+				where.IsOk() ? wxT("ok") : wxT("none"), node != nullptr ? wxT("yes") : wxT("no"),
+				(unsigned)path.size(), (unsigned)rungs.size(), (unsigned)fixed);
+
+			// 🛑 …AND ONLY WHEN WHAT WE ARE INSIDE IS A ROW. `InHierarchy` below is stated over the
+			// source's PRIMARY KEY — "this document is inside that folder" — so the value handed to it
+			// has to be a row of this source. A GROUPING heading is not: its value is an attribute
+			// (`Attribute4`), and `Ref InHierarchy <an Attribute4>` matches nothing at all, which is why
+			// drilling into a grouped tree printed an empty sheet rather than a wrong one (Max,
+			// 2026-08-30: *"as soon as the hierarchical view appears it stops outputting anything"*).
+			//
+			// A node that IS a row says so — it carries the source's key. A heading carries none.
 			const ibDataViewItem drilled = viewCtrl->GetDrillHierarchyItem();
-			if (drilled.IsOk())
+			const ibComposerNode* const inside = m_tableModel->GetViewData<ibComposerNode>(drilled);
+			if (drilled.IsOk() && inside != nullptr && !inside->GetRowKey().empty())
 				if (const ibBackendQueryable* const queryable = m_tableModel->GetSourceQueryable()) {
 					// …stated over the REFERENCE, like the hierarchy level above: "this row is inside that
 					// folder" is a fact about the row, and the engine walks the parent map to answer it.

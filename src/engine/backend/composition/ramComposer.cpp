@@ -425,7 +425,7 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 			const std::vector<ibValue> key = keyValuesOf(parts[at].front());
 			driver.OnGroupBegin(line, key);
 			walk(parts[at], level + 1);
-			driver.OnGroupEnd(line.m_level, key);
+			driver.OnGroupEnd(line, key);
 		}
 	};
 	walk(order, 0);

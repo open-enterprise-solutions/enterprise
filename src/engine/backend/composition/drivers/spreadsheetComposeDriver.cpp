@@ -186,15 +186,17 @@ void ibSpreadsheetComposeDriver::OnGroupBegin(const ibCompositionLine& line, con
 // A COLUMN — a heading that reads ACROSS the page. The walk says so now (it knows each level's
 // axis), where this driver used to work it out from the depth and the row-level count it had been
 // told separately. Same drawing, one fewer thing to keep in step.
-void ibSpreadsheetComposeDriver::OnColumn(int level, ibSelectorNodeKind kind,
+void ibSpreadsheetComposeDriver::OnColumn(const ibCompositionLine& line,
 	const std::vector<ibValue>& values)
 {
 	if (!m_cross)
 		return;   // no column axis in this output — there is nowhere across to write
-	if (kind == ibSelectorNodeKind::Detail)
-		PrintCrossDetail(level, values);
+	// WHERE IT IS DRAWN across the sheet — the rung plus the step into its tree, the same number the
+	// row axis lays out by. (It was `line.Page()` computed at the callsite; the line states it now.)
+	if (line.m_kind == ibSelectorNodeKind::Detail)
+		PrintCrossDetail(line.Page(), values);
 	else
-		OnCrossHeading(level, values);
+		OnCrossHeading(line.Page(), values);
 }
 
 // ⭐⭐ A HEADING IS CLOSED — everything under it has been written, so its figures are final.
@@ -204,11 +206,15 @@ void ibSpreadsheetComposeDriver::OnColumn(int level, ibSelectorNodeKind kind,
 // of everything above the first group, where a reader looks for column titles (Max, 2026-08-21:
 // "the totals must always be at the end"). Closing the root IS the end of the section, so the line
 // goes here and nothing has to be remembered between two events.
-void ibSpreadsheetComposeDriver::OnGroupEnd(int level, const std::vector<ibValue>& values)
+void ibSpreadsheetComposeDriver::OnGroupEnd(const ibCompositionLine& line, const std::vector<ibValue>& values)
 {
 	if (m_document == nullptr || m_cross)
 		return;   // a table writes its totals with the table itself (WriteCrossTable)
-	if (level != 0 || !m_hasMeasures)
+	// ⭐ "IS THIS THE ROOT" IS A QUESTION ABOUT THE RUNG, not about where the node is drawn — a folder
+	// deep inside the first rung is still rung zero, and its page number is not. The two callers used
+	// to disagree on exactly this (`Page()` from the walk, `m_level` from the RAM composer); they agree
+	// wherever indent is zero, which is why nothing has shown it yet.
+	if (line.m_level != 0 || !m_hasMeasures)
 		return;   // only the root carries the grand total, and only where there are figures to show
 	WriteTotalLine(0, values, /*grand*/true);
 	m_hasGrandTotal = false;   // …written here, so the end of the output has nothing left to do

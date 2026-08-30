@@ -245,12 +245,27 @@ public:
 	// A COLUMN of a cross-table — a heading that reads ACROSS the page, or a record laid out as a
 	// column of its own. Default: nothing, because a driver that draws no table has nowhere across to
 	// write (a list is rows, and rows only).
-	virtual void OnColumn(int /*level*/, ibSelectorNodeKind /*kind*/, const std::vector<ibValue>& /*values*/) {}
+	virtual void OnColumn(const ibCompositionLine& /*line*/, const std::vector<ibValue>& /*values*/) {}
 
 	// A HEADING CLOSES — every row and column under it has been written, so its figures are final and
 	// its section can be ended. This is where a total that belongs at the BOTTOM goes. Default:
 	// nothing, for the readers that draw a heading as it opens and never look back.
-	virtual void OnGroupEnd(int /*level*/, const std::vector<ibValue>& /*values*/) {}
+	virtual void OnGroupEnd(const ibCompositionLine& /*line*/, const std::vector<ibValue>& /*values*/) {}
+
+	// ⭐⭐ ALL FOUR TAKE THE LINE, and that is the point of having one. A line answers three questions
+	// about a node — which RUNG it stands on, how far INTO that rung's tree it is, and what KIND it is
+	// — and they are not derivable from one another. Handed over as loose numbers, each verb had to be
+	// told which of them it was getting, and every caller decided for itself.
+	//
+	// 🛑 AND THEY DECIDED DIFFERENTLY. `OnGroupEnd` was passed `line.Page()` by the walk
+	// (dataComposerRun) and `line.m_level` by the RAM composer — two different numbers into one
+	// parameter, agreeing only where indent happens to be zero, which is everywhere it has been looked
+	// at so far and nowhere it has not. The same for `OnColumn`: the cross heading reached it as
+	// `Page()` here and as `m_level` from `OnGroupBegin`, so one helper was reading two scales.
+	//
+	// With the line handed over whole, the DRIVER asks the question it actually means — "is this the
+	// root" is about the rung, "where do I draw it" is about the page — and a caller cannot answer it
+	// on the driver's behalf, correctly or otherwise.
 
 	// The output is FINISHED. `totals` — the result was a folded TOTALS tree.
 	virtual void OnOutputEnd(bool /*totals*/) {}
