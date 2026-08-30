@@ -22,6 +22,7 @@
 #include <wx/zipstrm.h>
 #include <wx/sstream.h>
 
+#include <algorithm>
 #include <map>
 #include <vector>
 
@@ -79,23 +80,70 @@ wxString ArgbOf(const wxColour& colour)
 // so "1 234" or "12%" stay text rather than becoming a silently different value.
 bool NumberOf(const wxString& text, double& value)
 {
-	return !text.IsEmpty() && text.ToCDouble(&value);
+	if (text.IsEmpty())
+		return false;
+
+	// ⭐⭐ A LEADING ZERO MEANS IT IS NOT A NUMBER. `00000000001` parses perfectly and is not one: the
+	// zeros are part of the VALUE, and written as a number it reaches Excel as `1`, right-aligned, with
+	// the document it names no longer findable by its number (Max, 2026-08-30, from the opened sheet).
+	//
+	// Every identifier a business system prints looks like this — document numbers, codes, article
+	// numbers, account numbers — so the rule is about a whole CLASS of columns, not about one column.
+	// A single `0` is still zero; a leading `+`/`-` is stepped over first.
+	size_t at = 0;
+	if (text[at] == wxT('+') || text[at] == wxT('-'))
+		at++;
+	if (at + 1 < text.length() && text[at] == wxT('0') && text[at + 1] != wxT('.') && text[at + 1] != wxT(','))
+		return false;
+
+	return text.ToCDouble(&value);
+}
+
+// ⭐ EXCEL NAMES A LINE, WE DESCRIBE ONE — a pen style and a width against a closed
+// vocabulary of nine names. Both halves are read, because "dotted" and "thick" are
+// different answers to different questions and a cell can say both.
+wxString BorderStyleOf(const ibSpreadsheetBorderDescription& border)
+{
+	const bool heavy = border.m_width >= 3;
+	const bool bold  = border.m_width == 2;
+
+	switch (border.m_style) {
+	case wxPENSTYLE_TRANSPARENT: return wxEmptyString;
+	case wxPENSTYLE_DOT:         return bold || heavy ? wxT("mediumDashDotDot") : wxT("dotted");
+	case wxPENSTYLE_SHORT_DASH:
+	case wxPENSTYLE_LONG_DASH:   return bold || heavy ? wxT("mediumDashed") : wxT("dashed");
+	case wxPENSTYLE_DOT_DASH:    return bold || heavy ? wxT("mediumDashDot") : wxT("dashDot");
+	default: break;
+	}
+	return heavy ? wxT("thick") : (bold ? wxT("medium") : wxT("thin"));
 }
 
 // The style of one cell, as the small set of things Excel keeps per cell. Cells
 // that look alike share one entry — a sheet has thousands of cells and a handful
 // of looks.
+//
+// ⭐⭐ EVERY PROPERTY THE CELL INSPECTOR SHOWS TRAVELS (Max, 2026-08-30: *"these
+// properties must move over"*, over the panel: alignment, orientation, font,
+// background, text colour, four borders and their colour). The two it does not
+// carry are the two that are not a LOOK at all: `Fill type` and `Details parameter`
+// are what a TEMPLATE says about where a cell's text comes from — there is no
+// template on the far side, only the text the fill produced.
 struct CellStyle {
 	wxString m_fontFace;
 	int      m_fontSize = 8;
 	bool     m_bold = false;
 	bool     m_italic = false;
+	bool     m_underlined = false;
+	bool     m_struck = false;
 	wxString m_textColour;    // ARGB, empty = automatic
 	wxString m_fillColour;    // ARGB, empty = none
 	wxString m_alignHorz;     // "", "center", "right"
 	wxString m_alignVert;     // "", "center", "bottom"
-	bool     m_borders[4] = { false, false, false, false };   // left, right, top, bottom
-	wxString m_borderColour;
+	int      m_rotation = 0;  // degrees, 90 = the vertical orientation
+	bool     m_wrapText = false;
+	bool     m_locked = false;
+	wxString m_borderStyle[4];   // left, right, top, bottom — empty = no edge
+	wxString m_borderColour[4];
 
 	bool operator<(const CellStyle& o) const
 	{
@@ -103,13 +151,19 @@ struct CellStyle {
 		if (m_fontSize != o.m_fontSize)         return m_fontSize < o.m_fontSize;
 		if (m_bold != o.m_bold)                 return m_bold < o.m_bold;
 		if (m_italic != o.m_italic)             return m_italic < o.m_italic;
+		if (m_underlined != o.m_underlined)     return m_underlined < o.m_underlined;
+		if (m_struck != o.m_struck)             return m_struck < o.m_struck;
 		if (m_textColour != o.m_textColour)     return m_textColour < o.m_textColour;
 		if (m_fillColour != o.m_fillColour)     return m_fillColour < o.m_fillColour;
 		if (m_alignHorz != o.m_alignHorz)       return m_alignHorz < o.m_alignHorz;
 		if (m_alignVert != o.m_alignVert)       return m_alignVert < o.m_alignVert;
-		if (m_borderColour != o.m_borderColour) return m_borderColour < o.m_borderColour;
-		for (int i = 0; i < 4; i++)
-			if (m_borders[i] != o.m_borders[i]) return m_borders[i] < o.m_borders[i];
+		if (m_rotation != o.m_rotation)         return m_rotation < o.m_rotation;
+		if (m_wrapText != o.m_wrapText)         return m_wrapText < o.m_wrapText;
+		if (m_locked != o.m_locked)             return m_locked < o.m_locked;
+		for (int i = 0; i < 4; i++) {
+			if (m_borderStyle[i] != o.m_borderStyle[i])   return m_borderStyle[i] < o.m_borderStyle[i];
+			if (m_borderColour[i] != o.m_borderColour[i]) return m_borderColour[i] < o.m_borderColour[i];
+		}
 		return false;
 	}
 };
@@ -120,10 +174,12 @@ CellStyle StyleOf(const ibSpreadsheetCellDescription& cell)
 
 	const wxFont& font = cell.m_font;
 	if (font.IsOk()) {
-		style.m_fontFace = font.GetFaceName();
-		style.m_fontSize = font.GetPointSize();
-		style.m_bold     = font.GetWeight() >= wxFONTWEIGHT_BOLD;
-		style.m_italic   = font.GetStyle() == wxFONTSTYLE_ITALIC;
+		style.m_fontFace   = font.GetFaceName();
+		style.m_fontSize   = font.GetPointSize();
+		style.m_bold       = font.GetWeight() >= wxFONTWEIGHT_BOLD;
+		style.m_italic     = font.GetStyle() == wxFONTSTYLE_ITALIC;
+		style.m_underlined = font.GetUnderlined();
+		style.m_struck     = font.GetStrikethrough();
 	}
 
 	if (cell.m_textColour.IsOk())
@@ -143,14 +199,31 @@ CellStyle StyleOf(const ibSpreadsheetCellDescription& cell)
 	default: break;
 	}
 
-	// FOUR EDGES, one flag each: Excel's border styles are its own vocabulary and a
-	// thin line is what every one of ours renders as there. The COLOUR is carried,
-	// because that is what a person notices.
+	// TEXT ORIENTATION — ours is a direction, Excel's is an ANGLE, and the direction we
+	// have is the angle it calls 90.
+	if (cell.m_textOrient == wxVERTICAL)
+		style.m_rotation = 90;
+
+	// ⚠ FIT MODE IS CARRIED AS THE NEAREST TRUE THING, and it is not the same thing.
+	// `Overflow` is exactly Excel's default — text spills right while the neighbour is
+	// empty. `Clip` and the three ellipsize modes all mean "the text stays inside its
+	// cell", and the only way Excel says that is `wrapText`, which keeps it inside by
+	// WRAPPING rather than by cutting. So the boundary survives the trip and the manner
+	// of cutting does not; the alternative was to drop the property entirely.
+	style.m_wrapText = cell.m_fitMode != ibSpreadsheetCellDescription::Mode_Overflow;
+
+	// READ-ONLY is Excel's `locked`, which only bites once a sheet is protected — ours is
+	// not, so this carries the fact rather than enforcing it, and a round trip keeps it.
+	style.m_locked = cell.m_isReadOnly;
+
+	// FOUR EDGES, each with its own line and its own colour — the inspector offers one
+	// colour for all four, the model holds one per edge, and the wider of the two is what
+	// is written.
 	for (int i = 0; i < 4; i++) {
 		const ibSpreadsheetBorderDescription& border = cell.m_borderAt[i];
-		style.m_borders[i] = border.m_style != wxPENSTYLE_TRANSPARENT;
-		if (style.m_borders[i] && style.m_borderColour.IsEmpty())
-			style.m_borderColour = ArgbOf(border.m_colour);
+		style.m_borderStyle[i] = BorderStyleOf(border);
+		if (!style.m_borderStyle[i].IsEmpty())
+			style.m_borderColour[i] = ArgbOf(border.m_colour);
 	}
 
 	return style;
@@ -218,8 +291,10 @@ wxString Styles(const std::vector<CellStyle>& styles)
 	for (const CellStyle& style : styles) {
 		xml += wxT("<font>");
 		xml += wxString::Format(wxT("<sz val=\"%d\"/>"), style.m_fontSize > 0 ? style.m_fontSize : 11);
-		if (style.m_bold)   xml += wxT("<b/>");
-		if (style.m_italic) xml += wxT("<i/>");
+		if (style.m_bold)       xml += wxT("<b/>");
+		if (style.m_italic)     xml += wxT("<i/>");
+		if (style.m_underlined) xml += wxT("<u/>");
+		if (style.m_struck)     xml += wxT("<strike/>");
 		if (!style.m_textColour.IsEmpty())
 			xml += wxString::Format(wxT("<color rgb=\"%s\"/>"), style.m_textColour);
 		xml += wxString::Format(wxT("<name val=\"%s\"/>"),
@@ -246,13 +321,14 @@ wxString Styles(const std::vector<CellStyle>& styles)
 	xml += wxString::Format(wxT("<borders count=\"%u\">"), static_cast<unsigned>(styles.size() + 1));
 	xml += wxT("<border><left/><right/><top/><bottom/><diagonal/></border>");
 	for (const CellStyle& style : styles) {
-		const wxString colour = style.m_borderColour.IsEmpty() ? wxT("FF000000") : style.m_borderColour;
 		const wxChar* const names[4] = { wxT("left"), wxT("right"), wxT("top"), wxT("bottom") };
 		xml += wxT("<border>");
 		for (int i = 0; i < 4; i++) {
-			if (style.m_borders[i])
-				xml += wxString::Format(wxT("<%s style=\"thin\"><color rgb=\"%s\"/></%s>"),
-					names[i], colour, names[i]);
+			if (!style.m_borderStyle[i].IsEmpty())
+				xml += wxString::Format(wxT("<%s style=\"%s\"><color rgb=\"%s\"/></%s>"),
+					names[i], style.m_borderStyle[i],
+					style.m_borderColour[i].IsEmpty() ? wxT("FF000000") : style.m_borderColour[i],
+					names[i]);
 			else
 				xml += wxString::Format(wxT("<%s/>"), names[i]);
 		}
@@ -272,13 +348,32 @@ wxString Styles(const std::vector<CellStyle>& styles)
 			wxT(" applyFont=\"1\" applyFill=\"1\" applyBorder=\"1\""),
 			at, at + 1, at);
 
-		if (!style.m_alignHorz.IsEmpty() || !style.m_alignVert.IsEmpty()) {
-			xml += wxT(" applyAlignment=\"1\"><alignment");
-			if (!style.m_alignHorz.IsEmpty())
-				xml += wxString::Format(wxT(" horizontal=\"%s\""), style.m_alignHorz);
-			if (!style.m_alignVert.IsEmpty())
-				xml += wxString::Format(wxT(" vertical=\"%s\""), style.m_alignVert);
-			xml += wxT("/></xf>");
+		// ⚠ THE `apply*` FLAGS ARE NOT DECORATION — an `<alignment>` written without
+		// `applyAlignment="1"` is present in the file and ignored by Excel, which is the
+		// worst of the three possible outcomes: it looks written and behaves unwritten.
+		const bool hasAlign = !style.m_alignHorz.IsEmpty() || !style.m_alignVert.IsEmpty()
+			|| style.m_rotation != 0 || style.m_wrapText;
+
+		if (hasAlign)      xml += wxT(" applyAlignment=\"1\"");
+		if (style.m_locked) xml += wxT(" applyProtection=\"1\"");
+
+		if (hasAlign || style.m_locked) {
+			xml += wxT(">");
+			if (hasAlign) {
+				xml += wxT("<alignment");
+				if (!style.m_alignHorz.IsEmpty())
+					xml += wxString::Format(wxT(" horizontal=\"%s\""), style.m_alignHorz);
+				if (!style.m_alignVert.IsEmpty())
+					xml += wxString::Format(wxT(" vertical=\"%s\""), style.m_alignVert);
+				if (style.m_rotation != 0)
+					xml += wxString::Format(wxT(" textRotation=\"%d\""), style.m_rotation);
+				if (style.m_wrapText)
+					xml += wxT(" wrapText=\"1\"");
+				xml += wxT("/>");
+			}
+			if (style.m_locked)
+				xml += wxT("<protection locked=\"1\"/>");
+			xml += wxT("</xf>");
 		}
 		else {
 			xml += wxT("/>");
@@ -315,27 +410,33 @@ bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescr
 	wxString body = wxT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
 		wxT("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
 
-	// COLUMN WIDTHS — Excel counts them in characters, we in pixels; the ratio it
-	// uses for the default font is 7 pixels to the character.
 	const int numCols = sheet.GetNumberCols();
 	const int numRows = sheet.GetNumberRows();
 
-	if (sheet.GetSizeNumberCols() > 0) {
-		body += wxT("<cols>");
-		for (int col = 0; col <= numCols; col++) {
-			const int width = sheet.GetColSize(col);
-			if (width == s_defaultColWidth)
-				continue;
-			body += wxString::Format(
-				wxT("<col min=\"%d\" max=\"%d\" width=\"%.2f\" customWidth=\"1\"%s/>"),
-				col + 1, col + 1, width / 7.0,
-				width == 0 ? wxT(" hidden=\"1\"") : wxT(""));
-		}
-		body += wxT("</cols>");
-	}
+	// ⭐⭐ THE OUTLINE BUTTON BELONGS TO THE LINE ABOVE ITS GROUP, and Excel assumes the opposite.
+	// Its default is `summaryBelow` — the group's heading is the line AFTER the range, so the +/-
+	// lands at the FOOT of every group (Max, 2026-08-30: *"the plus is at the end"*). Ours is a
+	// report: the heading comes FIRST and the detail hangs under it, which is what `flatten` below
+	// already says when it marks `group.m_start - 1` as the collapsed line.
+	//
+	// So the sheet is told which way it reads, once, instead of every group being shifted by one to
+	// fit the other convention — the same fact, said where it belongs. `sheetPr` is the FIRST child
+	// the schema allows, before `sheetViews`.
+	body += wxT("<sheetPr><outlinePr summaryBelow=\"0\" summaryRight=\"0\"/></sheetPr>");
 
-	// ⚠ FROZEN PANES GO BEFORE THE DATA — sheetView is ordered by the schema, and a
-	// file that puts it after <sheetData> does not open.
+	// ⭐⭐ FROZEN PANES FIRST — the worksheet's children are ORDERED BY THE SCHEMA, and `sheetViews`
+	// stands before `cols`: `sheetPr → dimension → sheetViews → sheetFormatPr → cols → sheetData`.
+	//
+	// 🛑 IT WAS APPENDED AFTER THE COLUMNS, and Excel does not report a misplaced element — it
+	// declares the whole PART unreadable, throws `/xl/worksheets/sheet1.xml` away and rebuilds an
+	// empty one: "Excel was able to open the file by repairing or removing the unreadable content."
+	// Everything the sheet carried went with it — fills, fonts, borders, merges — which reads as "the
+	// styles are not being written" while styles.xml is sitting in the archive, complete and correct
+	// (Max, 2026-08-30: *"make the fill, the font, the borders be written into the Excel file"* —
+	// they were; the part holding them was being discarded).
+	//
+	// ⚠ AND THE POSITION IS REPORTED USELESSLY: the document is written as ONE line, so every error
+	// Excel finds is "line 1", whatever it is. The order is checked by reading the schema, not the log.
 	if (sheet.GetRowFreeze() > 0 || sheet.GetColFreeze() > 0) {
 		const wxString topLeft = CellRef(sheet.GetRowFreeze(), sheet.GetColFreeze());
 		wxString pane = wxT("<pane");
@@ -343,7 +444,97 @@ bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescr
 		if (sheet.GetRowFreeze() > 0) pane += wxString::Format(wxT(" ySplit=\"%d\""), sheet.GetRowFreeze());
 		pane += wxString::Format(wxT(" topLeftCell=\"%s\" activePane=\"bottomRight\" state=\"frozen\"/>"), topLeft);
 
-		body = body + wxT("<sheetViews><sheetView workbookViewId=\"0\">") + pane + wxT("</sheetView></sheetViews>");
+		body += wxT("<sheetViews><sheetView workbookViewId=\"0\">") + pane + wxT("</sheetView></sheetViews>");
+	}
+
+	// ⭐⭐ THE GROUPINGS TRAVEL — Excel calls them an OUTLINE and says the same thing a different way:
+	// we hold a RANGE with a depth (`AddRowGroup(start, end, level)`), it holds the depth ON EACH LINE
+	// (`outlineLevel`) and works the ranges out from the runs. So the ranges are flattened here, once,
+	// into a level per row and per column (Max, 2026-08-30: *"we have groupings now — Excel supports
+	// them too; teach it to carry them"*).
+	//
+	// A COLLAPSED group is two more facts and both are needed or the sheet opens wrong: the lines
+	// inside it are `hidden`, and the SUMMARY line — the one before the range, where the button sits —
+	// is `collapsed`. Written without the second, Excel shows a folded group with no way to open it.
+	std::vector<int>  rowLevel(static_cast<size_t>(numRows) + 2, 0), colLevel(static_cast<size_t>(numCols) + 2, 0);
+	std::vector<bool> rowHidden(rowLevel.size(), false), colHidden(colLevel.size(), false);
+	std::vector<bool> rowCollapsed(rowLevel.size(), false), colCollapsed(colLevel.size(), false);
+	int maxRowLevel = 0, maxColLevel = 0;
+
+	const auto flatten = [](const ibSpreadsheetGroupDescription& group, std::vector<int>& level,
+	                        std::vector<bool>& hidden, std::vector<bool>& collapsed, int& deepest) {
+		for (unsigned int at = group.m_start; at <= group.m_end && at + 1 < level.size(); at++) {
+			level[at] = std::max<int>(level[at], static_cast<int>(group.m_level));
+			deepest   = std::max<int>(deepest, level[at]);
+			if (group.m_collapsed)
+				hidden[at] = true;
+		}
+		// …and the summary line, which stands BEFORE the range — the same line the grid hangs the
+		// button on (ibGrid::NormalizeRowGroups).
+		if (group.m_collapsed && group.m_start > 0 && group.m_start - 1 < collapsed.size())
+			collapsed[group.m_start - 1] = true;
+	};
+
+	for (int i = 0; i < sheet.GetGroupNumberRows(); i++)
+		if (const ibSpreadsheetGroupDescription* group = sheet.GetRowGroupByIdx(i))
+			flatten(*group, rowLevel, rowHidden, rowCollapsed, maxRowLevel);
+	for (int i = 0; i < sheet.GetGroupNumberCols(); i++)
+		if (const ibSpreadsheetGroupDescription* group = sheet.GetColGroupByIdx(i))
+			flatten(*group, colLevel, colHidden, colCollapsed, maxColLevel);
+
+	// ⭐⭐ THE SHEET DECLARES ITS OWN DEFAULTS, and that is what makes the two programs agree about a
+	// size. Excel's default row is 15 POINTS and ours is 15 — the same number in a different unit
+	// (Max, 2026-08-30: *"the cell height is 15, yes — but the grid and Excel see them differently"*).
+	//
+	// ⭐ SO THE UNITS ARE TREATED AS THE SAME ONE, because at the default they already are: what both
+	// numbers mean is ONE LINE OF THE DEFAULT FONT — 15px of an 8pt face here, 15pt of an 11pt face
+	// there. Converted by 72/96 instead, a row of ours came out at 11.25 while every row that had no
+	// height of its own stayed at Excel's 15, so a sheet ended up with two different "defaults" in it.
+	// Written 1:1 against a declared default, a row twice the default height is twice it in both.
+	//
+	// ⚠ AND IT IS WRITTEN UNCONDITIONALLY: the anchor is needed whether or not the sheet has an
+	// outline. Without it the numbers are read against Excel's defaults rather than against ours.
+	body += wxString::Format(
+		wxT("<sheetFormatPr defaultRowHeight=\"%d\" defaultColWidth=\"%.2f\" outlineLevelRow=\"%d\" outlineLevelCol=\"%d\"/>"),
+		s_defaultRowHeight, s_defaultColWidth / 7.0, maxRowLevel, maxColLevel);
+
+	// COLUMN WIDTHS — Excel counts them in characters, we in pixels; the ratio it
+	// uses for the default font is 7 pixels to the character.
+
+	// ⚠ AND A COLUMN IS WRITTEN FOR EITHER REASON — a width of its own OR a place in the outline. Kept
+	// on the width alone, a grouped column of ordinary width had no `<col>` to carry its level and the
+	// grouping stopped at the sheet's edge.
+	//
+	// ⚠ AN EMPTY `<cols/>` IS INVALID — the element requires at least one child — so the entries are
+	// built first and the container is written only if there are any.
+	{
+		wxString cols;
+		for (int col = 0; col <= numCols; col++) {
+			const int width = sheet.GetColSize(col);
+			const int level = (static_cast<size_t>(col) < colLevel.size()) ? colLevel[col] : 0;
+			const bool sized = (width != s_defaultColWidth);
+			if (!sized && level == 0)
+				continue;
+
+			// ⭐ A HIDDEN COLUMN IS A ZERO WIDTH HERE — that is what «Hide» does in the editor
+			// (`ibGridEditor::OnHideCell` → `SetColSize(col, 0)`) — and it is `hidden` there. Said as a
+			// width of nothing it depends on the reader's mood; said as the flag it is what it means.
+			const bool hidden = (sized && width == 0)
+				|| (static_cast<size_t>(col) < colHidden.size() && colHidden[col]);
+
+			cols += wxString::Format(wxT("<col min=\"%d\" max=\"%d\""), col + 1, col + 1);
+			if (sized && width > 0)
+				cols += wxString::Format(wxT(" width=\"%.2f\" customWidth=\"1\""), width / 7.0);
+			if (level > 0)
+				cols += wxString::Format(wxT(" outlineLevel=\"%d\""), level);
+			if (hidden)
+				cols += wxT(" hidden=\"1\"");
+			if (static_cast<size_t>(col) < colCollapsed.size() && colCollapsed[col])
+				cols += wxT(" collapsed=\"1\"");
+			cols += wxT("/>");
+		}
+		if (!cols.IsEmpty())
+			body += wxT("<cols>") + cols + wxT("</cols>");
 	}
 
 	body += wxT("<sheetData>");
@@ -389,12 +580,20 @@ bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescr
 
 		const int height = sheet.GetRowSize(row);
 		wxString rowTag = wxString::Format(wxT("<row r=\"%d\""), row + 1);
-		if (height != s_defaultRowHeight) {
-			// Excel keeps row height in POINTS, the screen in pixels: 72 to 96.
-			rowTag += wxString::Format(wxT(" ht=\"%.2f\" customHeight=\"1\""), height * 0.75);
-			if (height == 0)
-				rowTag += wxT(" hidden=\"1\"");
-		}
+		// The height goes across as it stands, against the default declared in `sheetFormatPr` above.
+		// A height of ZERO is how «Hide» is stored here, so it is written as the flag rather than as
+		// a height of nothing.
+		if (height != s_defaultRowHeight && height > 0)
+			rowTag += wxString::Format(wxT(" ht=\"%d\" customHeight=\"1\""), height);
+		// …AND ITS PLACE IN THE OUTLINE — the depth, whether it is folded away inside a closed group,
+		// and whether it is the summary line that opens one.
+		const int level = (static_cast<size_t>(row) < rowLevel.size()) ? rowLevel[row] : 0;
+		if (level > 0)
+			rowTag += wxString::Format(wxT(" outlineLevel=\"%d\""), level);
+		if (height == 0 || (static_cast<size_t>(row) < rowHidden.size() && rowHidden[row]))
+			rowTag += wxT(" hidden=\"1\"");
+		if (static_cast<size_t>(row) < rowCollapsed.size() && rowCollapsed[row])
+			rowTag += wxT(" collapsed=\"1\"");
 		rowTag += wxT(">");
 
 		body += rowTag + cells + wxT("</row>");
