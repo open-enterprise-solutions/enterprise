@@ -5,6 +5,7 @@
 
 #include "form.h"
 #include "formAttribute.h"
+#include "frontend/settings/formSettings.h"   // the person's own arrangement, replayed on open
 #include "backend/appData.h"
 #include "backend/system/value/valueJob.h"   // g_valueScheduleCLSID — a schedule requisite builds as static text
 #include "backend/system/value/valueDataComposition.h"   // g_valueDataCompositionCLSID — a composition builds as a gridbox
@@ -316,12 +317,31 @@ const ibValueMetaObjectModuleBase* ibValueForm::GetMetaForCompile() const
 
 bool ibValueForm::InitializeFormModule()
 {
-	if (m_metaFormObject != nullptr) {
+	// ⭐⭐ THE PERSON'S OWN ARRANGEMENT GOES ON HERE — after the control tree exists and BEFORE the
+	// module runs. That order is the point: the author's form is the base, the person's arrangement
+	// is laid over it, and the module has the LAST word. A module hides a control because of a right
+	// or a value, and a preference saved months ago must not overrule that.
+	//
+	// Read from the base every time, never cached: the same person may be in another session and
+	// have changed it there (frontend/settings/formSettings.h).
+	//
+	// 🛑 AND IT STANDS OUTSIDE THE `m_metaFormObject` BLOCK, which is where it was first put and
+	// where it never ran: a form GENERATED from its source has no metaobject, so that whole block is
+	// skipped — and generated forms are exactly the ones this is for. Saving worked (the dialog
+	// calls it straight), restoring never happened, and the two are far enough apart that it read as
+	// "the setting is not being saved".
+	//
+	// ⚠ BUT AFTER THE RIGHT TO SEE THE FORM AT ALL, which is why that check is hoisted out of the
+	// block below and stands first: a person who may not open this form must not have anything
+	// rearranged for them on the way to being refused.
+	if (m_metaFormObject != nullptr && !m_metaFormObject->AccessRight_Show()) {
+		ibBackendAccessException::Error();
+		return false;
+	}
 
-		if (!m_metaFormObject->AccessRight_Show()) {
-			ibBackendAccessException::Error();
-			return false;
-		}
+	ibRestoreFormSettings(this);
+
+	if (m_metaFormObject != nullptr) {
 
 		// Parent is already wired in InitializeForm(). BindVariable +
 		// InitializeRuntime lazily create compile module / ProcUnit

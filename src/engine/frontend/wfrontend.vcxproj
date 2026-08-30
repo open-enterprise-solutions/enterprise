@@ -222,6 +222,7 @@
     <ClCompile Include="visualView\ctrl\formAttributeProperty.cpp" />
     <ClCompile Include="visualView\ctrl\formCommand.cpp" />
     <ClCompile Include="visualView\ctrl\formControl.cpp" />
+    <ClCompile Include="settings\formSettings.cpp" />
     <ClCompile Include="visualView\ctrl\formObject.cpp" />
     <ClCompile Include="visualView\ctrl\formVisualHost.cpp" />
     <ClCompile Include="visualView\ctrl\frameEvent.cpp" />

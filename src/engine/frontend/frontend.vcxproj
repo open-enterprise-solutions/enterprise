@@ -334,6 +334,7 @@
     <ClCompile Include="win\dlgs\settings\filterTreeModel.cpp" />
     <ClCompile Include="win\dlgs\settings\list\listSettings.cpp" />
     <ClCompile Include="win\dlgs\settings\settingsFieldTree.cpp" />
+    <ClCompile Include="settings\formSettings.cpp" />
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp" />
     <ClCompile Include="win\dlgs\settings\settingsFilterEditor.cpp" />
     <ClCompile Include="win\dlgs\settings\settingsSortEditor.cpp" />
@@ -731,6 +732,7 @@
     <ClInclude Include="win\dlgs\settings\filterTreeModel.h" />
     <ClInclude Include="win\dlgs\settings\list\listSettings.h" />
     <ClInclude Include="win\dlgs\settings\settingsFieldTree.h" />
+    <ClInclude Include="settings\formSettings.h" />
     <ClInclude Include="win\dlgs\settings\savedSettings.h" />
     <ClInclude Include="win\dlgs\settings\settingsFilterEditor.h" />
     <ClInclude Include="win\dlgs\settings\settingsSortEditor.h" />

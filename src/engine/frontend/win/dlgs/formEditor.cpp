@@ -1,6 +1,7 @@
 ﻿#include "formEditor.h"
 #include "backend/compiler/value.h"
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
+#include "frontend/settings/formSettings.h"   // the setting this window saves and clears
 
 enum {
 	WXOES_PROPERTY_GRID = wxID_HIGHEST + 1001
@@ -9,6 +10,19 @@ enum {
 enum {
 	MENU_MOVE_UP = wxID_HIGHEST + 2000,
 	MENU_MOVE_DOWN
+};
+
+// ⭐ THE TWO ACTS THIS WINDOW GAINED. Ids only — the buttons themselves are locals in the
+// constructor and the handler finds them by id, so the dialog's header does not grow a member for
+// each one and every translation unit that includes it is left alone.
+enum {
+	BUTTON_SAVE_SETTING = wxID_HIGHEST + 3000,
+	BUTTON_RESET_SETTING,
+	// ⭐ WHERE THE WINDOW SAYS WHAT HAPPENED. Saving used to succeed in silence: the person pressed
+	// it, nothing moved, so they pressed OK next — and read the closing window as "Save closes the
+	// form" (Max, 2026-08-30). A line of text beside the buttons costs no click, which a message box
+	// on every save would.
+	LABEL_SETTING_STATUS
 };
 
 #pragma region __command_h__
@@ -47,6 +61,13 @@ private:
 	int m_newPos;
 };
 #pragma endregion 
+
+// What the window says about the setting, without a box to dismiss.
+static void SetSettingStatus(wxWindow* dialog, const wxString& text)
+{
+	if (wxWindow* label = dialog->FindWindow(LABEL_SETTING_STATUS))
+		label->SetLabel(text);
+}
 
 #define ICON_SIZE 16
 
@@ -154,6 +175,8 @@ EVT_UPDATE_UI(wxID_ANY, ibDialogFormEditor::OnUpdateEvent)
 EVT_BUTTON(wxID_OK, ibDialogFormEditor::OnButtonEvent)
 EVT_BUTTON(wxID_CANCEL, ibDialogFormEditor::OnButtonEvent)
 EVT_BUTTON(wxID_APPLY, ibDialogFormEditor::OnButtonEvent)
+EVT_BUTTON(BUTTON_SAVE_SETTING, ibDialogFormEditor::OnButtonEvent)
+EVT_BUTTON(BUTTON_RESET_SETTING, ibDialogFormEditor::OnButtonEvent)
 
 EVT_MENU(MENU_MOVE_UP, ibDialogFormEditor::OnMenuEvent)
 EVT_MENU(MENU_MOVE_DOWN, ibDialogFormEditor::OnMenuEvent)
@@ -203,6 +226,23 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 
 	m_propertyGridManager->SendSizeEvent();
 
+	// ⭐ SAVE AND RESTORE-THE-DEFAULT STAND ON THE LEFT, away from OK / Apply / Cancel — they are not
+	// about this window's edit at all. OK applies what was just changed; these two decide whether the
+	// arrangement outlives the window (frontend/settings/formSettings.h).
+	wxBoxSizer* settingSizer = new wxBoxSizer(wxHORIZONTAL);
+	settingSizer->Add(new wxButton(this, BUTTON_SAVE_SETTING, _("Save setting")),
+		0, wxALL, FromDIP(5));
+	settingSizer->Add(new wxButton(this, BUTTON_RESET_SETTING, _("Restore default setting")),
+		0, wxALL, FromDIP(5));
+	settingSizer->Add(new wxStaticText(this, LABEL_SETTING_STATUS, wxEmptyString),
+		1, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(5));
+	commonSizer->Add(settingSizer, 0, wxEXPAND, FromDIP(5));
+
+	// ⭐ THE BUTTON ITSELF SAYS WHETHER THERE IS ANYTHING TO UNDO — asked once here and again after
+	// each act, never from OnUpdateUI: this is a read from the base, and update-ui fires constantly.
+	if (wxWindow* reset = FindWindow(BUTTON_RESET_SETTING))
+		reset->Enable(ibHasFormSettings(m_owner));
+
 	m_sdbSizer = new wxStdDialogButtonSizer();
 	m_sdbSizerOK = new wxButton(this, wxID_OK);
 	m_sdbSizer->AddButton(m_sdbSizerOK);
@@ -227,7 +267,14 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 
 void ibDialogFormEditor::OnUpdateEvent(wxUpdateUIEvent& event)
 {
-	if (event.GetId() == wxID_APPLY)
+	// ⭐ A BUTTON THAT HAS NOTHING TO DO IS GREY. Apply and Save both act on the queue, so both are
+	// alive exactly while there is something in it (Max, 2026-08-30) — and Save applies the queue
+	// itself, so a person never has to press Apply first.
+	//
+	// (Restore-the-default is enabled from the BASE instead — whether a setting exists is a read,
+	// and update-ui fires far too often to ask the base here. It is set at construction and after
+	// each act.)
+	if (event.GetId() == wxID_APPLY || event.GetId() == BUTTON_SAVE_SETTING)
 		event.Enable(m_cmdArray.size() > 0);
 }
 
@@ -248,6 +295,60 @@ void ibDialogFormEditor::OnMenuEvent(wxCommandEvent& e)
 
 void ibDialogFormEditor::OnButtonEvent(wxCommandEvent& e)
 {
+	// ⭐⭐ SAVE MEANS "THE FORM AS IT STANDS", so whatever is queued is applied first — a person who
+	// pressed Save without pressing Apply meant the arrangement they are looking at, not the one
+	// before their last edit.
+	if (e.GetId() == BUTTON_SAVE_SETTING) {
+		for (auto& cmd : m_cmdArray)
+			cmd->Execute();
+		m_owner->UpdateForm();
+		m_cmdArray.clear();
+		RebuildTree();
+
+		switch (ibSaveFormSettings(m_owner)) {
+		case ibFormSettingsResult::Ok:
+			// ⭐ SAID WHERE THE PERSON IS LOOKING, not in a box they have to dismiss. The window
+			// stays open, which is the other half of the confusion: Save is not a way out of here.
+			SetSettingStatus(this, _("Setting saved."));
+			if (wxWindow* reset = FindWindow(BUTTON_RESET_SETTING))
+				reset->Enable(true);
+			break;
+		case ibFormSettingsResult::NoAddress:
+			// Not a failure — a statement about this form. One built from its source rather than
+			// declared in the configuration has no metaobject, so there is nothing to key a setting
+			// by, and trying again will never help.
+			wxMessageBox(_("This form is generated from its data and cannot keep a setting of its own."),
+				_("Change form"), wxOK | wxICON_INFORMATION, this);
+			break;
+		case ibFormSettingsResult::NoStorage:
+			wxMessageBox(_("Settings are not available in this session."),
+				_("Change form"), wxOK | wxICON_INFORMATION, this);
+			break;
+		default:
+			wxMessageBox(_("The form setting could not be saved."),
+				_("Change form"), wxOK | wxICON_WARNING, this);
+			break;
+		}
+		return;
+	}
+
+	// ⭐ RESTORE THE DEFAULT — drop the row and the form comes back the way the engine laid it out.
+	// ⚠ SAID OUT LOUD that it takes effect on the next open: the controls on screen still carry what
+	// was applied to them, and a person who saw nothing happen would press it again.
+	// ⭐ NO "THERE IS NOTHING TO RESET" BOX — the button is grey when there is nothing, which says the
+	// same thing before the press instead of after it.
+	if (e.GetId() == BUTTON_RESET_SETTING) {
+		if (ibResetFormSettings(m_owner) == ibFormSettingsResult::Ok) {
+			SetSettingStatus(this, _("Setting cleared — the default layout returns on the next open."));
+			if (wxWindow* reset = FindWindow(BUTTON_RESET_SETTING))
+				reset->Enable(false);
+		}
+		else {
+			wxMessageBox(_("The form setting could not be cleared."), _("Change form"), wxOK | wxICON_WARNING, this);
+		}
+		return;
+	}
+
 	if (e.GetId() == wxID_OK || e.GetId() == wxID_APPLY) {
 		for (auto& cmd : m_cmdArray) {
 			cmd->Execute();
