@@ -79,12 +79,23 @@ public:
 		// filter no longer passes stayed on screen until something else happened to read again. The simplest
 		// true answer is to read again (Max, 2026-08-29).
 		//
-		// ⚠ ONLY WHEN THERE IS A FILTER: an edit in a table that hides nothing has nothing to reconsider,
-		// and must not pay for a read.
+		// 🛑⭐⭐ AND THERE IS NO CONDITION ON IT. There was one — "only when there is a filter" — and it
+		// was wrong twice for the same reason: a FILTER decides whether a row belongs, a GROUPING
+		// decides where it belongs, and a SORT decides that too. Each miss looked different from the
+		// outside (a row that would not leave; a row that stayed under a heading it had left while its
+		// cell already showed the new value — *"it updates strangely"*, Max, 2026-08-30) and each was
+		// the same defect: a caller guessing, on the composer's behalf, whether the composer cares.
+		//
+		// The third condition would have been the sort, and the fourth whatever arranges rows next.
+		// So the rule is the one an edit actually justifies — the edit is over, READ AGAIN — and what
+		// that means is the composer's to decide (Max: *"I suggest removing this check altogether"*).
+		//
+		// ⚠ It is not free and it is not expensive: for a tabular section this recomputes an order in
+		// memory, and a DB list's grid is read-only here — a real edit there goes through the object
+		// form and its own notify.
 		if (finished && m_tableBoxColumn != nullptr) {
 			if (ibValueModelTableBox* owner = m_tableBoxColumn->GetOwner()) {
-				ibValueModel* model = owner->GetTableModel();
-				if (model != nullptr && model->GetModelComposer().GetCurrentFilterDesc().IsOk())
+				if (ibValueModel* model = owner->GetTableModel())
 					model->RefetchAll();
 			}
 		}
