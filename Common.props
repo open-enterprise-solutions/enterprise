@@ -3,6 +3,32 @@
   <ImportGroup Label="PropertySheets">
     <Import Project="$(SolutionDir)ConfigurationDefs.props" />
   </ImportGroup>
+
+  <!-- THE COMPILER IS 64-BIT, WHATEVER IT IS BUILDING.
+       PreferredToolArchitecture picks the HOST binary of the toolchain, not the target: with it,
+       both the Win32 and the Win64 configuration are compiled by …\bin\HostX64\<target>\cl.exe.
+       The target is untouched - a Win32 build still produces 32-bit output.
+
+       Left unset, MSBuild picks the host per project and the solution ends up running BOTH: a
+       machine building Win32 showed eight HostX86 cl.exe beside eleven HostX64 ones. The 32-bit
+       host is capped near 3 GB of address space, which is what makes a large translation unit fail
+       with an out-of-memory error the 64-bit host compiles without noticing - and it is slower for
+       no reason on a machine that has the memory.
+
+       Declared HERE because "by default" means the project says it, not the person invoking the
+       build: a flag on one command line is right for whoever remembers to pass it.
+
+       WARNING - THE HOST IS PART OF THE INCREMENTALITY KEY, so the FIRST build after this lands is
+       a full one. MSBuild writes VCToolArchitecture=Native64Bit|Native32Bit into
+       intermediate\<Plat>\<Cfg>\<project>\<project>.tlog\<project>.lastbuildstate, beside the
+       toolset and the platform, and a build whose host differs declares everything out of date.
+       That is exactly why this belongs in the project rather than on a command line: passing it by
+       hand made every ALTERNATION with Visual Studio a full rebuild, in both directions. One
+       rebuild now, none afterwards. (Read that file first whenever a build is inexplicably full -
+       the whole key is one line.) -->
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
   <PropertyGroup Label="UserMacros" Condition="'$(Platform)'=='Win32'">
     <oesPlatform>Win32</oesPlatform>
   </PropertyGroup>

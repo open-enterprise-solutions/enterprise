@@ -59,6 +59,24 @@ They live in:
 The per-file notices are authoritative; the table is a map, not a substitute. See
 `docs/wx-fork.md` (private) for what was changed and why.
 
+## Icons
+
+Two icons in the designer come from **[icons8](https://icons8.com)** and are used under its
+free tier, which requires attribution:
+
+| Icon | Where it is used | Source |
+|---|---|---|
+| *switch host* | the start page — tab, menu item, workspace editor | icons8 |
+| *ai* | the assistant — tab and menu item | icons8 |
+
+Both are downscaled to 16px and embedded as base64 in
+`src/engine/backend/picturePredefined.cpp`, where each carries a comment pointing here.
+
+⚠ This section was missing until 2026-08-31 even though the code had said for months that the
+credit "is kept in the docs" — the note existed, the attribution did not. It is here rather
+than in the private `docs` submodule for the reason that matters: an obligation to a third
+party has to survive somebody not having access to the documentation.
+
 ## Documentation
 
 The design documentation moved to a private repository on 2026-08-23 and is attached here
