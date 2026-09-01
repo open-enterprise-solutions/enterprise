@@ -78,9 +78,9 @@ void ibMcpSchemaArgument(ibDataNode& properties, const wxString& name,
 
 void ibMcpTool::ibMcpArgument::Declare(ibDataNode& schema) const
 {
-	// SetField, not SetValue: this runs once per ARGUMENT, and appending would publish the same
-	// `type: "object"` as many times as the tool has arguments — see ibDataNode::SetField.
-	schema.SetField(kSchemaType, ibDataValue::String(kSchemaObject));
+	// (the frame — `type: "object"` — is written by DescribeInput, which owns it: an argument
+	//  cannot be the one to say that its tool takes an object, or a tool with no arguments says
+	//  nothing at all. See the note there.)
 
 	// 🛑 FOUND-OR-MADE, and it has to be said out loud: ibDataNode::Child ALWAYS MAKES A FRESH ONE.
 	// It is the SAVE half of the Child/FindChild pair — "a fresh composite sub-node under `name`,
@@ -158,7 +158,7 @@ bool ibMcpTool::ibMcpArgument::Flag(const ibDataNode& params) const
 const ibMcpTool::ibMcpArgument& ibMcpIdArgument()
 {
 	static const ibMcpTool::ibMcpArgument s_id(wxT("id"), ibMcpTool::ibMcpArgument::Kind::Whole,
-		_("The object, as NodeId — metadata_list and metadata_get give it. It survives a rename, "
+		_("The object, as NodeId - metadata_list and metadata_get give it. It survives a rename, "
 		  "which a name does not."), /*required*/ true);
 	return s_id;
 }
@@ -191,6 +191,19 @@ const std::vector<ibMcpTool::ibMcpArgument>& ibMcpTool::Arguments() const
 
 void ibMcpTool::DescribeInput(ibDataNode& schema) const
 {
+	// ⭐ THE FRAME BELONGS TO THE TOOL, NOT TO ITS ARGUMENTS. It used to be written by
+	// ibMcpArgument::Declare, which is fine for every tool that HAS an argument and wrong for
+	// every tool that does not: with nothing to declare, nothing ran, and the tool published an
+	// EMPTY node — not `{"type":"object"}`, but no schema at all. A machine caller reading the
+	// tool list is then told the shape of the call by nothing (`chat_take`, CI 2026-09-02).
+	//
+	// A verb taking no arguments is an ordinary shape and says so: an object schema with no
+	// `properties`, which is exactly "an object, and I ask nothing of it". `properties` is
+	// deliberately NOT created empty here — its ABSENCE is what the undeclared-argument gate
+	// reads as "this tool has no opinion", and an empty one would start refusing arguments a
+	// hand-written Call may still read.
+	schema.SetField(kSchemaType, ibDataValue::String(kSchemaObject));
+
 	for (const ibMcpArgument& argument : Arguments())
 		argument.Declare(schema);
 }
@@ -906,7 +919,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		const ibDataValue held = property->GetNodeValue();
 
 		refusal = wxString::Format(
-			_("'%s' would not take that value. It holds a %s — send one of that shape, or read "
+			_("'%s' would not take that value. It holds a %s - send one of that shape, or read "
 			  "metadata_properties for what it has now."), name, KindOf(held));
 		return false;
 	}

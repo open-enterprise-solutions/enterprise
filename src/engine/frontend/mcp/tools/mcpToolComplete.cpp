@@ -38,7 +38,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgId()
 {
 	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
-		_("The module this text belongs to, as NodeId — metadata_get on the owning object "
+		_("The module this text belongs to, as NodeId - metadata_get on the owning object "
 			  "lists its modules. The module decides what names are in scope."), /*required*/ true);
 	return s_a;
 }
@@ -53,7 +53,7 @@ const ibArg& ArgText()
 const ibArg& ArgPosition()
 {
 	static const ibArg s_a(wxT("position"), ibArg::Kind::Whole,
-		_("Character offset to stand at — normally just after the dot you want completed."), /*required*/ true);
+		_("Character offset to stand at - normally just after the dot you want completed."), /*required*/ true);
 	return s_a;
 }
 
@@ -74,7 +74,7 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return _("What may be written at a given place in a module — the same list the editor "
+		return _("What may be written at a given place in a module - the same list the editor "
 			"shows after a dot. Send the text you are about to write and the offset you are "
 			"standing at (just after the dot), and the answer is what that expression actually "
 			"offers: its methods with their call form, and its properties.\n\n"

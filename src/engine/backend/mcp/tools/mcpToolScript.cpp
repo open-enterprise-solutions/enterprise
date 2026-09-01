@@ -16,7 +16,7 @@ namespace {
 
 using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgText() { static const ibArg a(wxT("text"), ibArg::Kind::Text, _("The module text to compile."), true); return a; }
-const ibArg& ArgModule() { static const ibArg a(wxT("module"), ibArg::Kind::Text, _("The name the messages are written against — pass the name of the module being edited so the report reads the way the designer's would. Optional.")); return a; }
+const ibArg& ArgModule() { static const ibArg a(wxT("module"), ibArg::Kind::Text, _("The name the messages are written against - pass the name of the module being edited so the report reads the way the designer's would. Optional.")); return a; }
 
 ibDataValue DiagnosticsOf(const std::vector<ibDiagnostic>& diagnostics)
 {

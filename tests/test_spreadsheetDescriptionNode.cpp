@@ -40,12 +40,18 @@ void FillCell(ibSpreadsheetCellDescription& cell)
 	cell.m_alignVert = wxALIGN_BOTTOM;
 	cell.m_textOrient = wxVERTICAL;
 
-	// An explicit point size and face name: the container the string form goes
-	// through falls back to wxNORMAL_FONT (a stock GUI object) for a size <= 0,
-	// and a console test has no stock objects.
-	cell.m_font = wxFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC,
-		wxFONTWEIGHT_BOLD, false, wxT("Arial"));
-
+	// 🛑 NO FONT IS BUILT HERE, and that is the whole difference between this file
+	// and its siblings. A wxFont is a TOOLKIT object: constructing one asks GTK for
+	// a font map, and a console test has neither a wxApp nor a display, so on Linux
+	// this crashed the process (SEGFAULT, "GLib-GObject-WARNING: invalid (NULL)
+	// pointer instance" — CI, 2026-09-02). test_spreadsheetDocument.cpp goes as far
+	// as stubbing SetCellFont out entirely for the same reason; this file's own
+	// header promises "no window, no wxApp" and then broke that promise.
+	//
+	// ⚠ SO THE FONT IS NOT COVERED HERE. The node writer emits it only when it
+	// differs from the sheet default (spreadsheetDescription.cpp), and that branch
+	// belongs to a suite that has a toolkit under it — the GUI tests CI runs in a
+	// job of its own. What is pinned below is the shape the two classes OWN.
 	cell.m_backgroundColour = wxColour(10, 20, 30);
 	cell.m_textColour = wxColour(200, 100, 50);
 
@@ -72,8 +78,7 @@ void FillSheet(ibSpreadsheetDescription& sheet)
 	sheet.SetCellValue(0, 0, wxT("Invoice"));
 	sheet.SetCellSize(0, 0, 1, 3);                      // a merged title
 	sheet.SetCellAlignment(0, 0, wxALIGN_CENTER, wxALIGN_CENTER);
-	sheet.SetCellFont(0, 0, wxFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC,
-		wxFONTWEIGHT_BOLD, false, wxT("Arial")));
+	// (no SetCellFont — see FillCell for why a toolkit object has no place here)
 
 	sheet.SetCellValue(1, 0, wxT("[Partner]"));
 	sheet.SetCellFillType(1, 0, ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate);
@@ -143,15 +148,7 @@ TEST(SpreadsheetCellDescriptionMemory, WriteNodeReadNode_EverySetField_RoundTrip
 	EXPECT_EQ(source.m_alignVert, target.m_alignVert);
 	EXPECT_EQ(source.m_textOrient, target.m_textOrient);
 
-	// The font, by the attributes the string form actually carries — compared
-	// against the SOURCE rather than against literals, so a platform that names
-	// or classifies a face its own way cannot make a round-trip test fail.
-	EXPECT_EQ(source.m_font.GetPointSize(), target.m_font.GetPointSize());
-	EXPECT_EQ(source.m_font.GetFaceName(), target.m_font.GetFaceName());
-	EXPECT_EQ(source.m_font.GetStyle(), target.m_font.GetStyle());
-	EXPECT_EQ(source.m_font.GetWeight(), target.m_font.GetWeight());
-	EXPECT_EQ(source.m_font.GetUnderlined(), target.m_font.GetUnderlined());
-	EXPECT_NE(s_defaultSpreadsheetFont.GetPointSize(), target.m_font.GetPointSize());
+	// (the font is deliberately not exercised here — see FillCell)
 
 	// the colours, exactly — an unset colour stays unset, so a set one has to
 	// come back as itself rather than as today's desktop theme
@@ -184,7 +181,6 @@ TEST(SpreadsheetCellDescriptionMemory, WriteNodeReadNode_ComparesEqualByTheTypes
 {
 	ibSpreadsheetCellDescription source(3, 4);
 	FillCell(source);
-	source.m_font = s_defaultSpreadsheetFont;
 
 	ibDataValue value;
 	ASSERT_TRUE(ibSpreadsheetCellDescriptionMemory::WriteNode(value, source));
@@ -240,24 +236,39 @@ TEST(SpreadsheetCellDescriptionMemory, WriteNode_ADefaultCell_WritesNothingButSt
 	EXPECT_FALSE(target.m_textColour.IsOk());
 }
 
-// ⚠ STATED, NOT ENDORSED. The cell's own operator== does not look at the TEXT,
-// the fit mode or the read-only flag — and the SHEET's comparison is built on
-// it, so two sheets differing only in what their cells SAY compare equal. This
-// is why the round-trip assertions above name those three fields explicitly
-// instead of leaning on ==.
-TEST(SpreadsheetCellDescription, Equality_DoesNotLookAtValueFitModeOrReadOnly)
+// The cell compares by EVERYTHING it carries - the text, the fit mode and the
+// read-only flag included - and the SHEET's comparison is built on it, so two
+// sheets differing in any one cell field are different sheets.
+//
+// 🛑 THIS TEST SAID THE OPPOSITE UNTIL 2026-09-02, and said it in a comment
+// beginning "stated, not endorsed": it claimed the operator ignored those three
+// fields and asserted two cells differing only in them were EQUAL. Nothing
+// disagreed, because the .sln does not compile the tests and this file had never
+// been run anywhere - the first machine to execute it was CI, on the push. A
+// test written from a belief about code, rather than from the code, pins the
+// belief.
+TEST(SpreadsheetCellDescription, Equality_LooksAtEveryFieldTheCellCarries)
 {
 	ibSpreadsheetCellDescription first(2, 2);
 	ibSpreadsheetCellDescription second(2, 2);
 
+	EXPECT_TRUE(first == second);   // same position, nothing set - the same cell
+
 	first.m_value = wxT("Alpha");
 	second.m_value = wxT("Beta");
-	first.m_fitMode = ibSpreadsheetCellDescription::Mode_Clip;
-	first.m_isReadOnly = true;
+	EXPECT_FALSE(first == second);
 
+	second.m_value = wxT("Alpha");
 	EXPECT_TRUE(first == second);
 
-	// …while a field it DOES look at separates them.
+	first.m_fitMode = ibSpreadsheetCellDescription::Mode_Clip;
+	EXPECT_FALSE(first == second);
+
+	second.m_fitMode = ibSpreadsheetCellDescription::Mode_Clip;
+	first.m_isReadOnly = true;
+	EXPECT_FALSE(first == second);
+
+	second.m_isReadOnly = true;
 	second.m_detailsParameter = wxT("Ref");
 	EXPECT_FALSE(first == second);
 }
@@ -327,9 +338,8 @@ TEST(SpreadsheetDescriptionMemory, WriteNodeReadNode_WholeSheet_RoundTrips)
 	const ibSpreadsheetCellDescription* titledSource = source.GetCell(0, 0);
 	ASSERT_NE(nullptr, titled);
 	ASSERT_NE(nullptr, titledSource);
-	EXPECT_EQ(titledSource->m_font.GetPointSize(), titled->m_font.GetPointSize());
-	EXPECT_EQ(titledSource->m_font.GetFaceName(), titled->m_font.GetFaceName());
-	EXPECT_EQ(titledSource->m_font.GetWeight(), titled->m_font.GetWeight());
+	EXPECT_EQ(titledSource->m_alignHorz, titled->m_alignHorz);
+	EXPECT_EQ(titledSource->m_alignVert, titled->m_alignVert);
 
 	// ---- areas
 	ASSERT_EQ(2, target.GetAreaNumberRows());

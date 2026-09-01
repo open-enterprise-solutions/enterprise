@@ -583,7 +583,7 @@ bool ibQueryUnionFieldModel::SetValueByRow(const wxVariant& variant, unsigned ro
 		}
 		if (!renamed)
 			return refuse(wxString::Format(
-				_("'%s' is not a field of any branch any more — reopen the tab"), previous));
+				_("'%s' is not a field of any branch any more - reopen the tab"), previous));
 	}
 	m_names[row] = name;
 	if (m_onChanged)

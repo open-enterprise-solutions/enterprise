@@ -95,7 +95,7 @@ const ibArg& ArgId()
 		// ⚠ THE MODULE'S, NOT ITS OWNER'S — the one question a caller actually has here, and the
 		// sentence used to answer it with "the same one module_write takes", inside module_write.
 		// metadata_properties on the object names it: ObjectModule / ManagerModule carry their own id.
-		_("The MODULE's NodeId — not the object's. metadata_properties on the owner answers with it: "
+		_("The MODULE's NodeId - not the object's. metadata_properties on the owner answers with it: "
 		  "ObjectModule and ManagerModule each carry an id of their own."), /*required*/ true);
 	return s_a;
 }
@@ -118,7 +118,7 @@ const ibArg& ArgReplace()
 const ibArg& ArgText()
 {
 	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
-		_("The whole module text. Write it in the syntax form this configuration uses — "
+		_("The whole module text. Write it in the syntax form this configuration uses - "
 			  "help_search answers which one that is."), /*required*/ true);
 	return s_a;
 }
@@ -261,7 +261,7 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return _("Write the text of a module — a document's object module, a common module, a "
+		return _("Write the text of a module - a document's object module, a common module, a "
 			"manager module. The text is compiled afterwards IN ITS OWN CONTEXT and the "
 			"diagnostics come back, so a mistake is known immediately. The text is kept either "
 			"way, exactly as it would be if a person typed it.");

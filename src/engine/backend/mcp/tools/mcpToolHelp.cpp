@@ -70,7 +70,7 @@ std::shared_ptr<const ibHelpCorpus> Corpus(wxString& refusal)
 	// whose errors are readable, rather than nothing at all.
 	std::shared_ptr<const ibHelpCorpus> corpus = service->GetCorpus();
 	if (corpus && corpus->EntryCount() == 0) {
-		refusal = _("The syntax helper corpus is empty — nothing was loaded for this locale.");
+		refusal = _("The syntax helper corpus is empty - nothing was loaded for this locale.");
 		return nullptr;
 	}
 
@@ -114,7 +114,7 @@ const ibArg& ArgQuery()
 const ibArg& ArgLimit()
 {
 	static const ibArg s_a(wxT("limit"), ibArg::Kind::Whole,
-		_("How many at most. Defaults to 40 — a search that answers more than that is a "
+		_("How many at most. Defaults to 40 - a search that answers more than that is a "
 			  "search that should have been narrower."));
 	return s_a;
 }
@@ -122,7 +122,7 @@ const ibArg& ArgLimit()
 const ibArg& ArgId()
 {
 	static const ibArg s_a(wxT("id"), ibArg::Kind::Text,
-		_("The entry's id, as help_search returned it — for example 'fn.Message' or "
+		_("The entry's id, as help_search returned it - for example 'fn.Message' or "
 			  "'meth.Catalog.Goods.Write'."), /*required*/ true);
 	return s_a;
 }

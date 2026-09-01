@@ -8,7 +8,7 @@ void ibDatabaseParameterFirebird::RequireParameterBuffer() const
 	if (m_pParameter != nullptr && m_pParameter->sqldata != nullptr)
 		return;
 	ibBackendCoreException::Error(
-		_("Firebird: parameter buffer is not allocated (the prepared statement has no such parameter) — the table structure is likely out of date"));
+		_("Firebird: parameter buffer is not allocated (the prepared statement has no such parameter) - the table structure is likely out of date"));
 }
 
 // ctor

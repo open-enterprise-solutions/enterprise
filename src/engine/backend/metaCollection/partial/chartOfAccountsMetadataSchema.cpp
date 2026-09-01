@@ -73,7 +73,7 @@ void ibValueMetaObjectChartOfAccounts::ContributeTables(ibSchemaSnapshot& out) c
 
 			if (report != nullptr)
 				report->AppendError(wxString::Format(
-					_("%s: %i account(s) hold more than %i analytics — remove the extra kinds from them before lowering the limit"),
+					_("%s: %i account(s) hold more than %i analytics - remove the extra kinds from them before lowering the limit"),
 					chartName, overfull, (int)ceiling));
 			return false;
 		};

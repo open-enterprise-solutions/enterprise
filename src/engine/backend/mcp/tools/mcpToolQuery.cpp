@@ -200,7 +200,7 @@ public:
 
 		if (fields.empty()) {
 			refusal = wxString::Format(
-				_("'%s' answers with no fields — check the path with query_sources."), path);
+				_("'%s' answers with no fields - check the path with query_sources."), path);
 			return false;
 		}
 

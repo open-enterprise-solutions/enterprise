@@ -202,7 +202,7 @@ private:
 	// row and the column travel because a handler doing its own thing must know WHICH cell was hit.
 	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
 	ibEventControl*     m_eventOnDetailProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent,
-		wxT("OnDetailProcessing"), _("On detail processing"), _("When a cell is clicked — before its value is opened or detailed"),
+		wxT("OnDetailProcessing"), _("On detail processing"), _("When a cell is clicked - before its value is opened or detailed"),
 		wxArrayString{ wxT("Control"), wxT("Row"), wxT("Column"), wxT("StandardProcessing") });
 
 	// The grid's own click, forwarded to the event above. Bound where the window is made, the way

@@ -89,14 +89,14 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgProperty()
 {
 	static const ibArg s_property(wxT("property"), ibArg::Kind::Text,
-		_("The property's name, spelled as metadata_get shows it — 'Type', 'Synonym', 'Comment'…"),
+		_("The property's name, spelled as metadata_get shows it - 'Type', 'Synonym', 'Comment'..."),
 		/*required*/ true);
 	return s_property;
 }
 const ibArg& ArgAcceptsId()
 {
 	static const ibArg s_id(wxT("id"), ibArg::Kind::Whole,
-		_("An existing object, as NodeId — what IT holds and what it is still missing. Omit for "
+		_("An existing object, as NodeId - what IT holds and what it is still missing. Omit for "
 		  "the configuration root, or pass `kind` instead to ask about a kind."));
 	return s_id;
 }
@@ -104,7 +104,7 @@ const ibArg& ArgAcceptsId()
 const ibArg& ArgAcceptsKind()
 {
 	static const ibArg s_kind(wxT("kind"), ibArg::Kind::Text,
-		_("A KIND, spelled the way a script writes it — Catalog, Document, Attribute. Answers what "
+		_("A KIND, spelled the way a script writes it - Catalog, Document, Attribute. Answers what "
 		  "one of those would hold BEFORE you make one: an empty one is built where it would live, "
 		  "asked, and dropped, so nothing is created in the configuration. Metadata is built "
 		  "tree-wise, so a kind that lives INSIDE something needs `parent_id` — an attribute under "
@@ -167,7 +167,7 @@ const ibArg& ArgId()
 const ibArg& ArgParentId()
 {
 	static const ibArg s_a(wxT("parent_id"), ibArg::Kind::Whole,
-		_("Where it goes, as NodeId from a previous answer — a catalog's id to add an "
+		_("Where it goes, as NodeId from a previous answer - a catalog's id to add an "
 			  "attribute to it. Omit for a top-level object."));
 	return s_a;
 }
@@ -182,7 +182,7 @@ const ibArg& ArgName()
 const ibArg& ArgNote()
 {
 	static const ibArg s_a(wxT("note"), ibArg::Kind::Text,
-		_("Why this object exists and what was decided — markdown, for whoever builds the "
+		_("Why this object exists and what was decided - markdown, for whoever builds the "
 			  "configuration next. Write it AS you create: the reasons are never cheaper to "
 			  "record than now."));
 	return s_a;
@@ -198,7 +198,7 @@ const ibArg& ArgHelp()
 const ibArg& ArgProperties()
 {
 	static const ibArg s_a(wxT("properties"), ibArg::Kind::Node,
-		_("Properties to set on the new object, by name — {\"FormType\": \"Object form\"}. "
+		_("Properties to set on the new object, by name - {\"FormType\": \"Object form\"}. "
 			  "Each is placed the way metadata_set places it, so a property with a closed set "
 			  "takes one of its words. The answer lists every property the object has, with what "
 			  "each accepts, so one call is enough to learn the rest. Passing any of these also "
@@ -241,28 +241,28 @@ const ibArg& ArgTypeShape()
 const ibArg& ArgLength()
 {
 	static const ibArg s_a(wxT("length"), ibArg::Kind::Whole,
-		_("For String — how many characters. Default 10."));
+		_("For String - how many characters. Default 10."));
 	return s_a;
 }
 
 const ibArg& ArgPrecision()
 {
 	static const ibArg s_a(wxT("precision"), ibArg::Kind::Whole,
-		_("For Number — total digits. Default 10."));
+		_("For Number - total digits. Default 10."));
 	return s_a;
 }
 
 const ibArg& ArgScale()
 {
 	static const ibArg s_a(wxT("scale"), ibArg::Kind::Whole,
-		_("For Number — digits after the point. Default 0."));
+		_("For Number - digits after the point. Default 0."));
 	return s_a;
 }
 
 const ibArg& ArgTypeId()
 {
 	static const ibArg s_a(wxT("typeId"), ibArg::Kind::Whole,
-		_("The type's id instead of its name — steadier, because a reference type's NAME "
+		_("The type's id instead of its name - steadier, because a reference type's NAME "
 			  "contains the object's name and a rename breaks it. type_list gives both."));
 	return s_a;
 }
@@ -847,7 +847,7 @@ public:
 		if (!complaints.empty()) {
 			result.AddField(wxT("incomplete"), ibDataValue::Array(complaints));
 			result.SetValue(wxT("nextStep"),
-				_("The object exists but is not finished — the lines above are the platform's own "
+				_("The object exists but is not finished - the lines above are the platform's own "
 				  "words about what it is still missing."));
 		}
 
@@ -859,7 +859,7 @@ public:
 		else {
 			result.AddField(wxT("described"), ibDataValue::Bool(false));
 			result.SetValue(wxT("note"),
-				_("Created, but it cannot describe itself yet — usually because it is not "
+				_("Created, but it cannot describe itself yet - usually because it is not "
 				  "complete. Use the id above to fill it in."));
 		}
 
@@ -906,7 +906,7 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return _("What can be added inside — attributes, tabular sections, dimensions, resources — "
+		return _("What can be added inside - attributes, tabular sections, dimensions, resources - "
 			"with the properties it holds, and, for an existing object, what it is still missing "
 			"to be valid. Ask it of a KIND before creating anything (an empty one is built, asked "
 			"and dropped, so nothing is added to the configuration), or of an OBJECT by id. Ask "
@@ -1004,7 +1004,7 @@ public:
 			// place.
 			if (sample == nullptr) {
 				refusal = wxString::Format(
-					_("'%s' does not go inside '%s'. Metadata is built tree-wise — a catalog first, "
+					_("'%s' does not go inside '%s'. Metadata is built tree-wise - a catalog first, "
 					  "then the attributes on it — so name the parent it would live under with "
 					  "`parent_id`, and this will answer for it there."),
 					askedKind, root->GetName());
@@ -1254,7 +1254,7 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return _("Set one property of a metadata object — an attribute's type, a string's length, "
+		return _("Set one property of a metadata object - an attribute's type, a string's length, "
 			"a register dimension's type, a synonym. Read the object with metadata_get first: "
 			"the answer shows every property by name and what it currently holds, and a value "
 			"you send back has the shape you saw there.");
@@ -1465,7 +1465,7 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return _("Give an attribute, a dimension or a resource its type — in words: String with a "
+		return _("Give an attribute, a dimension or a resource its type - in words: String with a "
 			"length, Number with precision and scale, Date, Boolean, or a reference such as "
 			"CatalogRef.Goods. type_list shows what names exist.");
 	}

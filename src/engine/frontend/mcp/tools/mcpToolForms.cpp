@@ -1085,7 +1085,7 @@ public:
 		const s32 wanted = (s32)ArgControl().Whole(params);
 
 		if (!ArgControl().Given(params)) {
-			refusal = _("Which control? form_bind needs the control's id — form_get lists them.");
+			refusal = _("Which control? form_bind needs the control's id - form_get lists them.");
 			form->DecrRef();
 			return false;
 		}

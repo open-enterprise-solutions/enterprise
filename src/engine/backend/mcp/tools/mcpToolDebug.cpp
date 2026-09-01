@@ -427,7 +427,7 @@ public:
 				// request by a pointer into the asking window's own row and nothing without a
 				// window could use it. The question now carries who asked, so it can.
 				refusal = wxString::Format(
-					_("'%s' did not answer with its parts. It may have none — debug_state says "
+					_("'%s' did not answer with its parts. It may have none - debug_state says "
 					  "which locals do — or the runtime did not answer in time."), expression);
 				return false;
 			}

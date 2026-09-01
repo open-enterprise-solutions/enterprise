@@ -2526,7 +2526,7 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 	wxToolBar* bar = new wxToolBar(right, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTB_FLAT | wxTB_NODIVIDER | wxTB_HORIZONTAL);
 	bar->AddTool(idAdd, _("Add field"), ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add field"));
-	bar->AddTool(ID_SELECTED_AUTO, _("Add «Auto»"), ibSettingsArt(wxASCII_STR(wxART_GO_DIR_UP), this),
+	bar->AddTool(ID_SELECTED_AUTO, _("Add \"Auto\""), ibSettingsArt(wxASCII_STR(wxART_GO_DIR_UP), this),
 		_("Everything the level above shows, in this place"));
 	bar->AddTool(idRemove, _("Delete"), ibSettingsArt(wxASCII_STR(wxART_DELETE), this), _("Delete"));
 	bar->AddTool(idCopy, _("Copy"), ibSettingsArt(wxASCII_STR(wxART_COPY), this), _("Copy"));

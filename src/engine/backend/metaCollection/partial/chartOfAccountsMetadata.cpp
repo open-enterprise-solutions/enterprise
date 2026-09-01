@@ -251,7 +251,7 @@ bool ibValueMetaObjectChartOfAccounts::OnSaveMetaObject(int flags)
 	// found while saving interrupts the work instead of describing it. The save still refuses.
 	if (m_propertyChartOfCharacteristicTypes->IsEmptyProperty()) {
 		ibValueSystemFunction::Message(
-			wxString::Format(_("%s: a chart of characteristic types is required — the account dimension kinds are elements of it"), GetName()),
+			wxString::Format(_("%s: a chart of characteristic types is required - the account dimension kinds are elements of it"), GetName()),
 			ibStatusMessage::ibStatusMessage_Error);
 		return false;
 	}

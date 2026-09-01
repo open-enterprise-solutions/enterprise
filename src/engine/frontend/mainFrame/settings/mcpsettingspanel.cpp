@@ -26,7 +26,7 @@ ibPanelMcpSettings::ibPanelMcpSettings(wxWindow* parent, int id, wxPoint pos, wx
 	// SAID PLAINLY, because a person deciding this is deciding how much to hand
 	// over — and the honest answer is "everything you can do here".
 	wxStaticText* what = new wxStaticText(this, wxID_ANY,
-		_("A connected assistant can read the configuration, check syntax and add objects — "
+		_("A connected assistant can read the configuration, check syntax and add objects - "
 		  "as you, with your rights. It runs only while your session is open."),
 		wxDefaultPosition, wxDefaultSize, 0);
 	what->Wrap(420);

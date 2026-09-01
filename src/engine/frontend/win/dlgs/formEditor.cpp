@@ -339,7 +339,7 @@ void ibDialogFormEditor::OnButtonEvent(wxCommandEvent& e)
 	// same thing before the press instead of after it.
 	if (e.GetId() == BUTTON_RESET_SETTING) {
 		if (ibResetFormSettings(m_owner) == ibFormSettingsResult::Ok) {
-			SetSettingStatus(this, _("Setting cleared — the default layout returns on the next open."));
+			SetSettingStatus(this, _("Setting cleared - the default layout returns on the next open."));
 			if (wxWindow* reset = FindWindow(BUTTON_RESET_SETTING))
 				reset->Enable(false);
 		}

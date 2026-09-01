@@ -187,7 +187,7 @@ bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node, bool resetId)
 		// nobody reads; the refusal names the id, and the id says which writer it was.
 		if (!IsMetadata(childNode.GetClsid()))
 			ibBackendCoreException::Error(
-				_("Node of '%s' holds a child that is not metadata (class id %lld) — a metaobject's "
+				_("Node of '%s' holds a child that is not metadata (class id %lld) - a metaobject's "
 				  "children ARE metaobjects; its own data belongs in a named sub-node"),
 				GetName(), (long long)childNode.GetClsid());
 

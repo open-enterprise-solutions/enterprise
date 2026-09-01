@@ -68,7 +68,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgName()
 {
 	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
-		_("The type's name as type_list gives it — 'Array', 'Structure', 'ValueTable'…"), /*required*/ true);
+		_("The type's name as type_list gives it - 'Array', 'Structure', 'ValueTable'..."), /*required*/ true);
 	return s_a;
 }
 
@@ -293,7 +293,7 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return _("The pipeline operations a query written as a chain may use — Where, Select, "
+		return _("The pipeline operations a query written as a chain may use - Where, Select, "
 			"GroupBy, Join and the rest — each with one line saying what it does and what shape "
 			"of function it takes. This is the whole set; anything else is not one.");
 	}

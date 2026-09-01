@@ -48,7 +48,7 @@ const ibArg& ArgLast()
 const ibArg& ArgText()
 {
 	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
-		_("What to say. Markdown: a heading, a list, a fenced snippet — the emphasis you "
+		_("What to say. Markdown: a heading, a list, a fenced snippet - the emphasis you "
 			  "choose is the emphasis they see."), /*required*/ true);
 	return s_a;
 }
@@ -118,7 +118,7 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return _("Say something to the person at the designer — it appears in their assistant "
+		return _("Say something to the person at the designer - it appears in their assistant "
 			"window. Write for a person: what you did and what you propose, not the shape of "
 			"the calls you made. Markdown is rendered.");
 	}
