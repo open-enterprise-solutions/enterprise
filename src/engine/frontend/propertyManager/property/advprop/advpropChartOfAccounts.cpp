@@ -22,29 +22,21 @@ public:
 	ibPropertyChartOfAccountsLoader()
 	{
 		ibPropertyRegistry::Register([](ibPropertyChartOfAccounts* prop) -> wxPGProperty* {
-			return new ibPGChartOfAccountsProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+			ibPropertyChoiceList choices;
+			prop->GetValueList(choices);
+			return new ibPGChartOfAccountsProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue(), choices);
 		});
 	}
 }g_chartOfAccountsLoader;
 
 #include "backend/metaData.h"
 
-void ibPGChartOfAccountsProperty::FillByClsid(const ibClassID& clsid)
-{
-	const ibValueMetaObjectGenericData* metaGenericData = dynamic_cast<const ibValueMetaObjectGenericData*>(m_ownerProperty);
-	if (metaGenericData != nullptr) {
-		const ibMetaData* metaData = metaGenericData->GetMetaData();
-		wxASSERT(metaData);
-		for (auto metaOwner : metaData->GetAnyArrayObject(clsid)) {
-			m_choices.Add(metaOwner->GetName(), metaOwner->GetIcon(), metaOwner->GetMetaID());
-		}
-	}
-}
-
-ibPGChartOfAccountsProperty::ibPGChartOfAccountsProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value)
+ibPGChartOfAccountsProperty::ibPGChartOfAccountsProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value,
+	const ibPropertyChoiceList& choices)
 	: wxPGProperty(label, strName), m_ownerProperty(property)
 {
-	FillByClsid(g_metaChartOfAccountsCLSID);
+	for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
+		m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
 
 	//m_flags |= wxPGFlags::ReadOnly;
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.

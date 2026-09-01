@@ -20,10 +20,10 @@ class ibInterfaceEditor : public wxWindow {
 
 	ibValueMetaObject* m_metaInterface;
 
-	class wxTreeItemMetaData : public wxTreeItemData {
+	class ibTreeItemObject : public wxTreeItemData {
 		ibInterfaceObject* m_metaObject; // element type
 	public:
-		wxTreeItemMetaData(ibInterfaceObject* metaObject) : m_metaObject(metaObject) {}
+		ibTreeItemObject(ibInterfaceObject* metaObject) : m_metaObject(metaObject) {}
 		ibInterfaceObject* GetMetaObject() const { return m_metaObject; }
 	};
 
@@ -48,7 +48,7 @@ private:
 		const int imageIndex = imageList->Add(metaObject->GetIcon());
 		// Bare NAME (GetName) — the item already sits UNDER its type group ("Documents" / "Data processors" / …), so the
 		// metatype-qualified GetFullName ("Document.Document1") just repeats the group. Mirrors the role editor's tree.
-		wxTreeItemId createItem = m_interfaceCtrl->AppendItem(parent, metaObject->GetName(), imageIndex, imageIndex, new wxTreeItemMetaData(metaObject));
+		wxTreeItemId createItem = m_interfaceCtrl->AppendItem(parent, metaObject->GetName(), imageIndex, imageIndex, new ibTreeItemObject(metaObject));
 		m_interfaceCtrl->SetItemState(createItem,
 			metaObject->IsSetInterface(m_metaInterface->GetMetaID()) ?
 			metaObject->IsEditable() ? ibCheckTree::CHECKED : ibCheckTree::CHECKED_DISABLED :
@@ -73,7 +73,7 @@ public:
 		// rebuild here, and each keeps its row (the check state itself is re-read from the metaobject either way).
 		m_keepSelObj = nullptr;
 		if (const wxTreeItemId sel = m_interfaceCtrl->GetSelection(); sel.IsOk())
-			if (const wxTreeItemMetaData* d = dynamic_cast<wxTreeItemMetaData*>(m_interfaceCtrl->GetItemData(sel)))
+			if (const ibTreeItemObject* d = dynamic_cast<ibTreeItemObject*>(m_interfaceCtrl->GetItemData(sel)))
 				m_keepSelObj = d->GetMetaObject();
 		m_keepSelNode = wxTreeItemId();
 

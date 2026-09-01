@@ -3,7 +3,9 @@
 
 #include "backend/propertyManager/propertyManager.h"
 
-#include "backend/backend_metatree.h"
+#include <vector>   // ibMetaMenuItem arrives as a vector of these — see CollectContextMenu
+
+#include "backend/backend_form.h"
 #include "backend/metaCtor.h"
 
 #include "backend/restructureInfo.h"
@@ -16,8 +18,11 @@
 
 //*******************************************************************************
 class BACKEND_API ibMetaData;
+class BACKEND_API ibValueMetaObject;
 class BACKEND_API ibDataNode;   // serialize/dataBuilder.h — universal structure node
 class BACKEND_API ibDataValue;  // serialize/dataBuilder.h — a node value (Child for a nested object)
+//*******************************************************************************
+
 //*******************************************************************************
 //*                          define commom clsid                                *
 //*******************************************************************************
@@ -154,7 +159,63 @@ enum metaObjectFlags {
 
 #define metaDefaultFlag metaCanSaveFlag
 
-class ibSchemaSnapshot;   // structure snapshot — ContributeTables declares this object's tables into it
+// WHAT KIND OF THING AN ITEM OPENS — and the LINE between groups follows from it.
+//
+// ⭐ Max, 2026-09-01: *"the argument is a vector of these, separated by kind."* The metaobject used
+// to append a separator itself — `defaultMenu->AppendSeparator()` — which is a drawing instruction
+// living in the backend: it said WHERE TO PUT A LINE. It says what its entries ARE now, and whoever
+// draws puts a line wherever the kind changes.
+//
+// ⚠ AND THAT REPRODUCES THE OLD MENUS EXACTLY. Every internal separator in the twenty-two menus this
+// replaced fell on a kind change and nowhere else — modules, then the object, then a modal editor.
+// The trailing one was never about the items at all: it was the boundary to the tree's own
+// New / Edit / Remove block, which is the tree's to draw.
+enum class ibMetaMenuKind {
+	Module,   // a module — the code editors group together
+	Object,   // a metaobject, this one or another
+	Editor,   // a modal editor over this object, with no metaobject of its own
+};
+
+// ONE THING A METAOBJECT OFFERS TO OPEN — see ibValueMetaObject::CollectContextMenu.
+//
+// Max, 2026-09-01, naming the unit: *"name, caption, id, metaobject."*
+struct ibMetaMenuItem {
+
+	ibMetaMenuKind     m_kind = ibMetaMenuKind::Object;
+
+	// ⭐ A NAME IS NOT A CAPTION, and both are here for the same reason they are on a select field
+	// (ibSelectDescription): the NAME is what a script or the assistant addresses — stable, English,
+	// never translated — and the CAPTION is what a person reads, which is translated and may be
+	// reworded any day. One field for both means either the assistant addresses a translation or the
+	// person reads an identifier.
+	wxString           m_name;                   // "ObjectModule"
+	wxString           m_caption;                // "Open object module"
+
+	// The remainder — see ProcessCommand. An item with an id and no metaobject stands for one of the
+	// two modal editors that have no metaobject to name. wxNOT_FOUND otherwise.
+	int                m_id = wxNOT_FOUND;
+
+	ibValueMetaObject* m_metaObject = nullptr;   // what "open" means here
+
+	// ⭐ THE PICTURE IS ASKED OF THE METAOBJECT, OR GIVEN BY HAND (Max, 2026-09-01). An item that
+	// names one has nothing to state — GetIcon() is right there and cannot go stale; an item that
+	// names none says which picture it wants, so an icon is never lost for want of somewhere to put
+	// it. Empty means "ask the metaobject", which is the ordinary case.
+	ibClassID          m_picture = 0;
+
+	ibMetaMenuItem() = default;
+
+	// The id is optional here and required on the editor form below: an item that names a
+	// metaobject is opened BY the caller and needs no number, while one that stands for a modal
+	// editor has nothing but its number. It is given anyway where a caller has to pick ONE item
+	// out of the list — a toolbar button with a single meaning — because matching the name would
+	// be matching a string.
+	ibMetaMenuItem(ibMetaMenuKind kind, const wxString& name, const wxString& caption,
+		ibValueMetaObject* metaObject, const ibClassID& picture = 0, int id = wxNOT_FOUND)
+		: m_kind(kind), m_name(name), m_caption(caption), m_id(id), m_metaObject(metaObject), m_picture(picture) {}
+	ibMetaMenuItem(const wxString& name, const wxString& caption, int id, const ibClassID& picture = 0)
+		: m_kind(ibMetaMenuKind::Editor), m_name(name), m_caption(caption), m_id(id), m_picture(picture) {}
+};
 
 class BACKEND_API ibValueMetaObject :
 
@@ -233,8 +294,23 @@ public:
 	wxString GetComment() const { return m_propertyComment->GetValueAsString(); }
 	void SetComment(const wxString& comment) { m_propertyComment->SetValue(comment); }
 
+	// ⭐ TWO TEXTS, TWO AUDIENCES, AND THAT IS WHY THERE ARE TWO.
+	//
+	// HELP is what the PERSON USING THE APPLICATION reads — the F1 text. It answers "what is this
+	// and what do I put in it", it is written in their words, and it ships with the product.
+	//
+	// NOTES are the ENGINEERING INTENT — why this object exists, what it was decided to be, what
+	// was tried and rejected. Markdown, written and read by whoever is building the configuration
+	// (a developer, or the assistant), and read FIRST when work resumes: without it the modelling
+	// drifts between sessions, because the reasons live only in whoever was there.
+	//
+	// Folding them into one field would force one of the two to be written wrong: user help
+	// carrying design arguments, or design notes shipped to a user who wanted to know what to type.
 	wxString GetHelpContent() const { return m_strHelpContent; }
 	void SetHelpContent(const wxString& strHelpContent) { m_strHelpContent = strHelpContent; }
+
+	wxString GetNoteContent() const { return m_strNoteContent; }
+	void SetNoteContent(const wxString& strNoteContent) { m_strNoteContent = strNoteContent; }
 
 	virtual void SetMetaData(ibMetaData* metaData) { m_metaData = metaData; }
 	virtual const ibMetaData* GetMetaData() const override { return m_metaData; }
@@ -268,7 +344,6 @@ public:
 
 	operator ibMetaID() const { return m_metaId; }
 
-	ibBackendMetadataTree* GetMetaDataTree() const;
 
 public:
 
@@ -505,8 +580,38 @@ public:
 	virtual bool OnBeforeCloseMetaObject() { return true; }
 	virtual bool OnAfterCloseMetaObject();
 
-	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu) { return false; }
+	// ⭐⭐ WHAT THIS METAOBJECT OFFERS TO OPEN — SAID AS DATA, DRAWN BY WHOEVER HAS A SCREEN.
+	//
+	// Max, 2026-09-01: *"you pass it a structure — the metaobject, its caption, its picture, a
+	// separator between them — and you get data out. Opening you can do yourself, right there."*
+	//
+	// It used to be `PrepareContextMenu(wxMenu*)`: the metaobject built a WIDGET, in a header the
+	// whole backend includes, against the two-DLL rule that says backend.dll names no GUI. And the
+	// answer came back as `ProcessCommand(unsigned int id)` — a bare number whose meaning only the
+	// object that emitted it knew.
+	//
+	// 🛑 AND THE NUMBERS WERE A HAND-KEPT LIST THAT HAD ALREADY FIRED. Twenty enumerations, nearly
+	// every one of them starting at 19000, unique only WITHIN one metaobject — see ID_METATREE_LAST
+	// in treeConfiguration.h, where two appended entries landed on top of Insert and Replace and
+	// asking for Help opened the "replace report" file dialog. Two enums, no compiler on earth to
+	// notice. With the item carrying the metaobject there is no number to collide: the ids are
+	// handed out by the ONE place that draws the menu, in order, and thrown away with it.
+	//
+	// The census that decided the shape: of 39 branches across 22 metaobjects, 35 were
+	// `OpenObjectForm(<a metaobject>)` and nothing else. The remaining 4 are the two modal editors
+	// below, which have no metaobject to name — see ibMetaMenuItem.
+	//
+	// Returns TRUE when the standard tree commands — New / Edit / Remove / Properties — do NOT apply
+	// to this row (the configuration root, a common-attribute copy: neither can be created or
+	// deleted where it sits). It is not "I drew my own menu"; it never was.
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) { return false; }
+
+	// ⚠ THE REMAINDER, AND IT IS TWO. `EditPredefinedValues` and `EditHomePage` open a MODAL DIALOG
+	// rather than a document, so there is no metaobject for an item to carry — the module in
+	// "open object module" is a real metaobject, which is exactly why it needs no verb of its own.
+	// Those two surfaces have no identity, and giving them one is a metatype decision, not a
+	// refactor. Until it is made, these four entries keep a command id, and the ids live in ONE
+	// enum on the tree instead of twenty in the backend.
 	virtual void ProcessCommand(unsigned int id) {}
 
 	//check is empty
@@ -534,9 +639,21 @@ public:
 	*/
 	bool ChangeChildPosition(ibValueMetaObject* obj, unsigned int pos);
 
-	//copy & paste object 
-	bool CopyObject(ibWriterMemory& writer) const;
-	bool PasteObject(ibReaderMemory& reader);
+	// ⭐⭐ COPY & PASTE ARE NOT HERE ANY MORE — they are ibMetaData::CopyMetaObject and
+	// ibMetaData::PasteMetaObject (Max, 2026-09-01: *"take them out of there altogether and move
+	// them over to the metadata"*).
+	//
+	// They were public methods of the object, and so a paste was a thing an OBJECT did to itself
+	// while reaching back for the metadata on its first line to create every child. Ten call sites
+	// each made a shell by hand, filled it, announced the result or forgot to, and removed it on
+	// failure or forgot that too. All of that is one of the five doors the metadata owns — create,
+	// rename, copy, paste, remove — each raising its own event, and there is no longer a way round
+	// them, because there is no longer a method here to call.
+	//
+	// The friendship is what the walkers need: they read m_metaGuid / m_metaCopyGuid, mark the
+	// paste, walk m_children and run the per-aspect halves (CopyProperty / PasteProperty,
+	// Save/LoadInterface, Save/LoadRole) that stay the object's own.
+	friend class ibMetaData;
 
 #pragma region __array_h__
 
@@ -587,7 +704,7 @@ public:
 	// call on the common object). A TABLE-bearing object overrides to Add its table(s) — including nested
 	// tabular sections — and does NOT recurse (its children are attributes/forms, not tables). A non-table
 	// container (folder / common) keeps this default and just descends.
-	virtual void ContributeTables(ibSchemaSnapshot& out) const {
+	virtual void ContributeTables(class ibSchemaSnapshot& out) const {
 		for (unsigned int i = 0; i < GetChildCount(); i++)
 			if (ibValueMetaObject* child = GetChild(i))
 				child->ContributeTables(out);
@@ -814,6 +931,7 @@ protected:
 	ibMetaData* m_metaData;
 
 	wxString m_strHelpContent;
+	wxString m_strNoteContent;  // the engineering intent, in markdown — see the accessors above
 
 protected:
 

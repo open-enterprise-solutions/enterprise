@@ -6,10 +6,6 @@
 class ibValueMetaObjectEnumeration : public ibValueMetaObjectRecordDataEnumRef {
 	public:
 
-	enum
-	{
-		ID_METATREE_OPEN_MANAGER = 19000,
-	};
 
 	enum
 	{
@@ -74,8 +70,7 @@ public:
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 protected:
 

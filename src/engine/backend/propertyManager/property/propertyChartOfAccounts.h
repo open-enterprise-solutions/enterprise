@@ -12,6 +12,9 @@ public:
 	ibMetaDescription& GetValueAsMetaDesc() const;
 	void SetValue(const ibMetaDescription& val);
 
+	// WHICH CHART OF ACCOUNTS. Exactly one — said as a value now, not only in prose.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
+
 	ibPropertyChartOfAccounts(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyChartOfAccounts(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyChartOfAccounts(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}

@@ -288,6 +288,12 @@ ibClassID ibValue::GetIDByVT(const ibValueTypes& valueType)
 
 ibCtorAbstractType* ibValue::GetAvailableCtor(const wxString& className)
 {
+	// ⭐ AN EMPTY NAME IS NOT A LOOKUP. Nothing is registered under one, so asking is meaningless —
+	// and the answer to a meaningless question is the same null a missing name gets, decided HERE
+	// rather than by whatever the registry happens to do with "" (Max, 2026-09-01).
+	if (className.IsEmpty())
+		return nullptr;
+
 	return CtorRegistry() != nullptr ? CtorRegistry()->Find(className) : nullptr;
 }
 

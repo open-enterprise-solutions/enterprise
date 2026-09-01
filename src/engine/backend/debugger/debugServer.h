@@ -196,7 +196,6 @@ private:
 	static ibDebuggerServer* ms_debugServer;
 
 	std::atomic<bool> m_bUseDebug;
-	std::atomic<bool> m_bDoLoop;
 	std::atomic<bool> m_bDebugStopLine;
 
 	unsigned int m_numCurrentNumberStopContext;

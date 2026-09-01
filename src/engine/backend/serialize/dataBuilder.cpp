@@ -142,6 +142,17 @@ const ibDataNode* ibDataNode::FindChild(const wxString& name) const {
 	return nullptr;
 }
 
+// The same lookup for a writer that means to KEEP FILLING a sub-node it may already have made —
+// Child() would replace it. No cast: the value holds a shared_ptr to a node that was never const,
+// so the pointer inside it comes out non-const on its own.
+ibDataNode* ibDataNode::FindChild(const wxString& name) {
+	if (const ibDataValue* v = FindProperty(name)) {
+		if (const std::shared_ptr<ibDataNode>& c = v->AsChild())
+			return c.get();
+	}
+	return nullptr;
+}
+
 ////////////////////////////////////////////////////////////////////////////
 // ibBinaryProvider — internal OWNED format (see the header for the layout).
 // Block ids are a binary-format detail (they live here, not on the node).

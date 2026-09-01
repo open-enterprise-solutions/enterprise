@@ -63,15 +63,28 @@ public:
 		return true;
 	}
 
-	// copy & paste — the module rides its WHOLE node (code + guid). On PASTE reset the module's guid to a fresh
-	// one: a module caches its compiled bytecode BY guid (sys_bytecode_cache / g_byteCodeRegistry), so a copied
-	// document's module must NOT keep the source guid — otherwise it shares the original's cache row and loads
-	// the wrong owner's bytecode -> "Binding type mismatch for 'ThisObject'". (An ordinary metaobject re-homes
-	// its bindings BY guid so it adopts the source guid; a module has no re-homed hops, so a fresh id is safe.)
+	// copy & paste — the module rides its WHOLE node (code + guid + ID). LoadNode is a full
+	// deserialization, so the module ADOPTS both identities off the payload; a paste has to hand
+	// back both, and ResetAll is the verb that does.
+	//
+	// The guid, because a module caches its compiled bytecode BY guid (sys_bytecode_cache /
+	// g_byteCodeRegistry): keeping the source's shares the original's cache row and loads the wrong
+	// owner's bytecode -> "Binding type mismatch for 'ThisObject'".
+	//
+	// ⚠ AND THE ID, which was the half left behind. A copied document's modules kept the SOURCE's
+	// metaIDs — two objects in one configuration answering to the same number, with the copy
+	// shadowed: ibFindMetaObjectById returned the original for both. It is not cosmetic, because
+	// the physical column is named `fld<id>` (see ibMetaData::GenerateNewID, which never re-issues
+	// one for exactly that reason). Found 2026-08-31 by copying a document through metadata_copy
+	// and reading the ids back — the designer's own Ctrl+C / Ctrl+V walks this same road.
+	//
+	// Both are safe to reset for the same reason: an ordinary metaobject re-homes its bindings BY
+	// guid so it must adopt the source's, while a module has no re-homed hops and nothing addresses
+	// it by either identity — the module storage holds pointers, not keys.
 	virtual bool PasteNodeValue(const ibDataValue& value) override {
 		const std::shared_ptr<ibDataNode>& child = value.AsChild();
 		if (child) m_metaObject->LoadNode(*child);
-		m_metaObject->ResetGuid();
+		m_metaObject->ResetAll();
 		return true;
 	}
 
@@ -105,9 +118,11 @@ class BACKEND_API ibValueMetaObjectModuleBase : public ibValueMetaObject {
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterCloseMetaObject();
 
-	//set module code 
+	//set module code
 	virtual void SetModuleText(const wxString& moduleText) = 0;
 	virtual wxString GetModuleText() const = 0;
+
+
 
 	//set default procedures
 	void SetDefaultProcedure(const wxString& procName, const ibContentHelper& contentHelper, std::vector<wxString> args = {});
@@ -183,10 +198,6 @@ private:
 class BACKEND_API ibValueMetaObjectCommonModule : public ibValueMetaObjectModuleBase {
 	public:
 private:
-	enum
-	{
-		ID_METATREE_OPEN_MODULE = 19000,
-	};
 
 public:
 
@@ -219,8 +230,7 @@ public:
 	virtual wxString GetModuleText() const { return m_propertyModule->GetValueAsString(); }
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 	// check gm
 	virtual bool IsGlobalModule() const {

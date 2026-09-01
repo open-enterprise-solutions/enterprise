@@ -20,8 +20,6 @@ class BACKEND_API ibValueMetaObjectConfiguration : public ibValueMetaObject {
 
 	enum
 	{
-		ID_METATREE_OPEN_INIT_MODULE = 19000,
-		ID_METATREE_OPEN_SESSION_MODULE,
 		ID_METATREE_EDIT_HOME_PAGE,
 	};
 
@@ -116,7 +114,7 @@ public:
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 	virtual void ProcessCommand(unsigned int id);
 
 	//create function 

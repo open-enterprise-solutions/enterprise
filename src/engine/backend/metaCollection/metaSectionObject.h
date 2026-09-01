@@ -14,10 +14,6 @@ class BACKEND_API ibValueMetaObjectSection : public ibValueMetaObject, public ib
 
 protected:
 
-	enum
-	{
-		ID_METATREE_OPEN_INTERFACE = 19000,
-	};
 
 public:
 
@@ -45,8 +41,7 @@ public:
 	static wxIcon GetIconGroup();
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 #pragma region __array_h__
 

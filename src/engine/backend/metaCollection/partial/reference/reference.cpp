@@ -286,7 +286,24 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 	// serialisation, where it travels as type + guid and is REBUILT on the far side as that session's
 	// own object, read under that session's rights. Only a raw pointer handed over lands here, and
 	// that is a defect at the handing-over — said out loud, with the object it happened on.
-	if (m_registryTable && m_registryTable.get() != TableOfCurrentSession(false).get()) {
+	// ⭐⭐ NO SESSION AT ALL IS A TENANT, AND A TENANT MAY READ.
+	//
+	// A rented read (ibJobManager::StartBackground with ibJobTenancy::Tenant — a list page, a
+	// background reading) runs on its own thread and deliberately has NO session: it takes no
+	// registry row, passes no policy, starts no runtime. So `Current()` answers null there, and the
+	// absence IS the signature — nothing else needs to be asked and no flag has to be carried.
+	//
+	// 🛑 THE GUARD CONFLATED THAT WITH THE DEFECT IT WAS WRITTEN FOR. Both cases fail the same
+	// comparison, so a tenant reading a perfectly ordinary reference was refused — and refused
+	// SILENTLY, leaving the value unread. Two hundred and seven of them in one composition
+	// (measured 2026-08-31), and what a person saw was an empty report with no error anywhere.
+	//
+	// The distinction is between "nobody's turn" and "somebody else's": a tenant is entitled to the
+	// data — that is what it was minted to fetch — while a DIFFERENT live session holding this
+	// object means a raw pointer crossed a boundary, and that is still worth saying out loud.
+	const std::shared_ptr<ibReferenceTable> current = TableOfCurrentSession(false);
+
+	if (m_registryTable && current && m_registryTable.get() != current.get()) {
 		ibJournalInfo(wxT("reference"), wxT("refused: read attempted from a session other than the one it belongs to <%i:%s>"),
 			m_metaObject->GetMetaID(), m_objGuid.str());
 		return;

@@ -5,9 +5,8 @@
 
 wxVariantData* ibPropertyChartOfAccounts::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
 {
-	const ibValueMetaObjectGenericData* propFactory = dynamic_cast<const ibValueMetaObjectGenericData*>(property);
-	if (propFactory == nullptr) return nullptr;
-	return new ibVariantDataOwner(propFactory, typeDesc);
+	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
+	return new ibVariantDataOwner(property, typeDesc);
 }
 
 ibMetaDescription& ibPropertyChartOfAccounts::GetValueAsMetaDesc() const {
@@ -17,6 +16,12 @@ ibMetaDescription& ibPropertyChartOfAccounts::GetValueAsMetaDesc() const {
 void ibPropertyChartOfAccounts::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// The charts of accounts in this configuration. The list used to sit in advpropChartOfAccounts.cpp.
+ibPropertyChoiceMode ibPropertyChartOfAccounts::GetValueList(ibPropertyChoiceList& list)
+{
+	return CreateValueList(list, ibPropertyChoiceMode::Single, { g_metaChartOfAccountsCLSID });
 }
 
 bool ibPropertyChartOfAccounts::SetDataValue(const ibValue& varPropVal) { return false; }

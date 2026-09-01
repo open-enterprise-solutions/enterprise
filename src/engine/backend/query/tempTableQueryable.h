@@ -236,19 +236,28 @@ private:
 // context, because a totals table's dimensions are real attribute columns (a reference dimension is a
 // field spread), so reconstructing their values takes the same machinery any other table's read does.
 //
-// NO primary key is reported, deliberately. The base default (empty) is what we want: it makes an
-// UPDATE key off the door's own .Where() conditions instead of a key match, which is exactly how a
-// caller addresses ONE physical row of a split key (period + dimensions + shard). Reporting a key
-// here would silently widen every write.
+// ⭐ IT KNOWS ITS OWN KEY, because the schema that declared the table hands it over — the very list
+// the unique index is built from (ibDeclareDerivedKey). A derived table used to report none, which
+// left an upsert with nothing to match on and the statement came out as `MATCHING ()`: a
+// configuration could not be applied at all. Everything that needed the key then composed one out of
+// the parts it could see (a period here, a shard column found by name there), which is three copies
+// of one fact and two ways for them to disagree.
+//
+// An UPDATE is unaffected by this: it matches on the key columns it actually WRITES, and the door's
+// own .Where() always applies — so the shard fold, which writes only the accumulating columns and
+// pins one physical row by Where, addresses exactly the row it did before.
 // ==========================================================================
 class ibSchemaTableQueryable : public ibBackendQueryable
 {
 public:
 	ibSchemaTableQueryable(wxString tableName, ibMetaID tableId,
 	                       std::vector<const ibBackendQueryColumn*> columns,
-	                       const ibMetaData* metaData = nullptr)
+	                       const ibMetaData* metaData = nullptr,
+	                       std::vector<const ibBackendQueryColumn*> keyColumns = {})
 		: m_tableName(std::move(tableName)), m_tableGuid(wxNewUniqueGuid), m_tableId(tableId)
-		, m_columns(std::move(columns)), m_metaData(metaData) {}
+		, m_columns(std::move(columns)), m_metaData(metaData), m_keyColumns(std::move(keyColumns)) {}
+
+	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return m_keyColumns; }
 
 	wxString          GetQueryTableName() const override { return m_tableName; }
 	ibGuid            GetQueryTableGuid() const override { return m_tableGuid; }
@@ -277,6 +286,7 @@ private:
 	ibMetaID                                 m_tableId;
 	std::vector<const ibBackendQueryColumn*> m_columns;    // NOT owned — the schema table / the config own them
 	const ibMetaData*                        m_metaData;   // reference / enum reconstruction context
+	std::vector<const ibBackendQueryColumn*> m_keyColumns; // what makes a row unique — the declared key
 };
 
 // ==========================================================================

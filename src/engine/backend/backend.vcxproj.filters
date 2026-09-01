@@ -5,7 +5,6 @@
     <ClInclude Include="backend_form.h" />
     <ClInclude Include="metaCtor.h" />
     <ClInclude Include="metaData.h" />
-    <ClInclude Include="backend_metatree.h" />
     <ClInclude Include="objCtor.h" />
     <ClInclude Include="debugger\debugClient.h">
       <Filter>debugger</Filter>

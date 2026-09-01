@@ -6,19 +6,9 @@
 #include "metaModuleObject.h"
 #include "backend/metaData.h"
 
-bool ibValueMetaObjectCommonModule::PrepareContextMenu(wxMenu *defaultMenu)
+bool ibValueMetaObjectCommonModule::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	wxMenuItem *menuItem = defaultMenu->Append(ID_METATREE_OPEN_MODULE, _("Open module"));
-	menuItem->SetBitmap(GetIcon());
-	defaultMenu->AppendSeparator();
+	items.emplace_back(ibMetaMenuKind::Module, wxT("Module"), _("Open module"), this);
 	return false;
 }
 
-void ibValueMetaObjectCommonModule::ProcessCommand(unsigned int id)
-{
-	ibBackendMetadataTree *metaTree = m_metaData->GetMetaTree();
-	wxASSERT(metaTree);
-
-	if (id == ID_METATREE_OPEN_MODULE)
-		metaTree->OpenObjectForm(this);
-}

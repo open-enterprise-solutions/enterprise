@@ -12,6 +12,10 @@ public:
 	ibMetaDescription& GetValueAsMetaDesc() const;
 	void SetValue(const ibMetaDescription& val);
 
+	// WHICH CHART OF CHARACTERISTIC TYPES. The comment above already says "exactly one, by what it
+	// is, not by a setting" — this is that same sentence in a form the gate can read.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
+
 	ibPropertyChartOfCharacteristicTypes(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyChartOfCharacteristicTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyChartOfCharacteristicTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}

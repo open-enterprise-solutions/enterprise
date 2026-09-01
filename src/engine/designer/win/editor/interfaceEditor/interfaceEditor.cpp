@@ -31,7 +31,7 @@ ibInterfaceEditor::ibInterfaceEditor(wxWindow* parent,
 
 void ibInterfaceEditor::OnCheckItem(wxTreeEvent& event)
 {
-	wxTreeItemMetaData* data = dynamic_cast<wxTreeItemMetaData*>(
+	ibTreeItemObject* data = dynamic_cast<ibTreeItemObject*>(
 		m_interfaceCtrl->GetItemData(event.GetItem())
 		);
 	if (data != nullptr) {
@@ -69,7 +69,7 @@ void ibInterfaceEditor::InitInterface()
 
 	wxImageList* imageList = m_interfaceCtrl->GetImageList();
 	int imageIndex = imageList->Add(typeCtor->GetClassIcon());
-	m_treeMETADATA = m_interfaceCtrl->AddRoot(_("Configuration"), imageIndex, imageIndex, new wxTreeItemMetaData(activeMetaData->GetCommonMetaObject()));
+	m_treeMETADATA = m_interfaceCtrl->AddRoot(_("Configuration"), imageIndex, imageIndex, new ibTreeItemObject(activeMetaData->GetCommonMetaObject()));
 
 	m_interfaceCtrl->SetItemBold(m_treeMETADATA);
 }

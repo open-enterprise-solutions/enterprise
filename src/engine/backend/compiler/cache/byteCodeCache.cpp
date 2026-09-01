@@ -13,6 +13,7 @@
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: descriptor pilot
 #include "backend/fileSystem/fs.h"
+#include "backend/diagnostics/journal.h"   // ibJournal — an invalidation that did NOT happen must say so
 #include "backend/guid.h"
 
 // Descriptor (ibRuntimeModuleDataObject) AOT-cache DAO, migrated onto the L2
@@ -85,6 +86,13 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configMd5)
 			{ wxT("bc_blob"),          ibConstBlob(blob.GetData(),
 			                                       static_cast<size_t>(blob.GetDataLen())) },
 		}));
+
+		// THE OTHER HALF OF THE PAIR — see Load. Names the descriptor, the digest this row is written
+		// under, and the bytecode's own version guid, so a row that is later TAKEN can be traced back
+		// to the moment it was made. One line per save: a cache whose contents cannot be accounted for
+		// is where "it ran the previous text" hides, and that costs a crash rather than a wrong answer.
+		ibJournalInfo(wxT("bytecode.cache"), wxT("save %s md5=%s ver=%s bytes=%u"),
+			descIdStr, configMd5, bcVerStr, (unsigned)blob.GetDataLen());
 	}
 	catch (...) { return false; }
 	return true;
@@ -118,7 +126,22 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxStri
 				{ { ibCol(wxT("bc_blob")), wxEmptyString } }));
 
 		ibQueryResult res = q.ExecuteIR(ir);   // RAII: closes cursor + statement
-		if (res.Next()) {
+
+		// WHY A ROW IS TAKEN. The key is meant to make a stale row unfindable: a save recomputes the
+		// configuration's digest, and every row written under the previous one falls out of reach.
+		// One got through anyway on 2026-09-01 — bytecode carrying a frame number this engine's
+		// chain never had, and emptying the table cured it — so the question worth being able to ask
+		// is not what the key GUARDS but why a lookup MATCHED.
+		//
+		// One line per lookup: the descriptor, the digest asked for, and whether it hit. Read beside
+		// the Save line it separates the three readings — the digest never changed, the two doors
+		// disagree about it, or a stale blob was written under a fresh one.
+		const bool hit = res.Next();
+
+		ibJournalInfo(wxT("bytecode.cache"), wxT("load %s md5=%s -> %s"),
+			wxString(descId), configMd5, hit ? wxT("HIT") : wxT("miss"));
+
+		if (hit) {
 			// The blob is read through the RESULT's own typed accessor, BY NAME. It used to borrow the
 			// raw driver cursor and read field 1 — an L2-1 leak by the header's own words, and the last
 			// caller of it, so the hatch is gone with this line. By name rather than by position for
@@ -138,8 +161,26 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxStri
 
 void ibByteCodeCache::Invalidate(const ibGuid& descId)
 {
-	if (db_query == nullptr) return;
-	if (!db_query->TableExists(bytecode_cache_table)) return;
+	// ⭐⭐ IT MAY DECLINE, BUT IT MAY NOT DO SO IN SILENCE.
+	//
+	// Three ways out of this function do nothing: no database handle, no table yet, and an exception
+	// on the way. All three are legitimate — but each leaves a row holding bytecode compiled from
+	// text that no longer exists, and a stale blob does not fail politely. It carries the previous
+	// text's variable table, so a frame reference past the end of the chain reads the debug heap's
+	// fence instead of a frame and the process dies (`Document.GoodsIssue.ObjectModule`, 2026-08-31
+	// — found from a crash dump, because nothing anywhere had said a word).
+	//
+	// 🛑 THE WORD "HYGIENE" WAS DOING REAL DAMAGE HERE. It is true that correctness rests on the
+	// cache KEY rather than on this call — and it is exactly the kind of true sentence that makes a
+	// silent no-op look acceptable. Whether the key alone is enough is a question one has to be able
+	// to ASK, and nobody could: this was the only place that knew, and it said nothing.
+	if (db_query == nullptr) {
+		ibJournalWarning(wxT("bytecode.cache"),
+			wxT("invalidate skipped for '%s': no database connection"), wxString(descId));
+		return;
+	}
+
+	if (!db_query->TableExists(bytecode_cache_table)) return;   // nothing cached yet — nothing stale
 
 	wxASSERT(descId.isValid());
 
@@ -149,7 +190,14 @@ void ibByteCodeCache::Invalidate(const ibGuid& descId)
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")),
 			        ibConst(ibValue(wxString(descId))))));
 	}
-	catch (...) { /* best-effort — Invalidate is hygiene, not correctness */ }
+	catch (const ibBackendException& err) {
+		ibJournalWarning(wxT("bytecode.cache"),
+			wxT("invalidate failed for '%s': %s"), wxString(descId), err.GetErrorDescription());
+	}
+	catch (...) {
+		ibJournalWarning(wxT("bytecode.cache"),
+			wxT("invalidate failed for '%s'"), wxString(descId));
+	}
 }
 
 void ibByteCodeCache::InvalidateAll()

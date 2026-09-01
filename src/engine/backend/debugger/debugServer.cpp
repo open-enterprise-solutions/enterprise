@@ -68,7 +68,7 @@ bool EvalInParkedSession(const wxString& expr, ibValue& vResult, bool compileBlo
 } // namespace
 
 ibDebuggerServer::ibDebuggerServer() :
-	m_bUseDebug(false), m_bDoLoop(false), m_bDebugStopLine(false),
+	m_bUseDebug(false), m_bDebugStopLine(false),
 	m_numCurrentNumberStopContext(0),
 	m_socketConnectionThread(nullptr)
 {
@@ -351,7 +351,10 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 			return !dbg->m_debugLoop.load(std::memory_order_acquire);
 		});
 	}
-	dbg->m_debugLoop = false;
+
+	// (No store here. The loop above exits only once the flag already reads false, and the ONE
+	// authoritative clear is the one below, inside the lock, published together with the run-context
+	// pointer — an unsynchronised write beside it could only make the pair disagree.)
 
 	// Symmetric leave — front rotation happens automatically: the next
 	// parked session (if any) becomes the new active target for any
@@ -432,20 +435,25 @@ void ibDebuggerServer::EnterDebugger(ibRunContext* runContext, const ibByteUnit&
 
 		if (byteCode.m_numLine != numPrevLine) {
 
-			m_bDoLoop = false;
+			// ⭐ A LOCAL, and it always was one. It lived on the server as an atomic member, and
+			// five command handlers wrote it — every one of those writes landed on a value this
+			// line clears before anybody reads it, so they said nothing. What actually parks and
+			// wakes a stopped worker is the per-session ibDebugSession::m_debugLoop and its
+			// condition variable; this is only "does THIS opcode stop", asked and answered here.
+			bool doLoop = false;
 
-			//step into 
+			//step into
 			if (m_bDebugStopLine && byteCode.m_numLine >= 0)
 			{
 				m_bDebugStopLine = false;
-				m_bDoLoop = true;
+				doLoop = true;
 			}
 			// step through
 			else if (auto* st = ibSession::GetPUState();
 				st && m_numCurrentNumberStopContext && m_numCurrentNumberStopContext >= st->GetCountRunContext() && byteCode.m_numLine >= 0)
 			{
 				m_numCurrentNumberStopContext = st->GetCountRunContext();
-				m_bDoLoop = true;
+				doLoop = true;
 			}
 			else
 			{
@@ -458,12 +466,12 @@ void ibDebuggerServer::EnterDebugger(ibRunContext* runContext, const ibByteUnit&
 						auto list_current_breakpoint_iterator = std::find(
 							list_current_breakpoint.begin(), list_current_breakpoint.end(), byteCode.m_numLine);
 
-						m_bDoLoop = list_current_breakpoint_iterator != list_current_breakpoint.end();
+						doLoop = list_current_breakpoint_iterator != list_current_breakpoint.end();
 					}
 				}
 			}
 
-			if (m_bDoLoop)
+			if (doLoop)
 				DoDebugLoop(byteCode.m_strFileName, byteCode.m_strDocPath, byteCode.m_numLine + 1, runContext);
 		}
 
@@ -1063,16 +1071,21 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		}
 	}
 	else if (commandFromClient == CommandId_AddExpression) {
+		// ⭐ WHO ASKED — carried through untouched. The server does not know what a listener is and
+		// has no use for this; it exists so the ANSWER can find its way back to the one window that
+		// wanted it, instead of reaching every window and being sorted out there by guesswork.
+		wxString strAsker;      commandReader.r_stringZ(strAsker);
 		wxString strExpression; commandReader.r_stringZ(strExpression);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 		unsigned long long id = commandReader.r_u64();
-#else 
+#else
 		unsigned int id = commandReader.r_u32();
-#endif 
+#endif
 		ibWriterMemory commandChannel;
 
 		commandChannel.w_u16(CommandId_SetExpressions);
-		commandChannel.w_u32(1); // first elements 
+		commandChannel.w_stringZ(strAsker);
+		commandChannel.w_u32(1); // first elements
 
 		if (ms_debugServer->IsDebugLooped()) {
 			ibValue vResult;
@@ -1121,18 +1134,21 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		}
 	}
 	else if (commandFromClient == CommandId_ExpandExpression) {
+		wxString strAsker;   // carried through — see CommandId_AddExpression
+		commandReader.r_stringZ(strAsker);
 		wxString strExpression;
 		commandReader.r_stringZ(strExpression);
 		if (ms_debugServer->IsDebugLooped()) {
 			ibValue vResult;
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 			unsigned long long id = commandReader.r_u64();
-#else 
+#else
 			unsigned int id = commandReader.r_u32();
 #endif
 			if (EvalInParkedSession(strExpression, vResult, false)) {
 				ibWriterMemory commandChannel;
 				commandChannel.w_u16(CommandId_ExpandExpression);
+				commandChannel.w_stringZ(strAsker);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 				commandChannel.w_u64(id);
 #else
@@ -1225,17 +1241,31 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		commandReader.r_stringZ(strModuleName);
 		commandReader.r_stringZ(strExpression);
 		if (ms_debugServer->IsDebugLooped()) {
+
+			// ⭐⭐ ALWAYS ANSWER. A request that cannot be worked out is still a request, and the
+			// answer to it is "no" — not silence.
+			//
+			// 🛑 THE SEND USED TO SIT INSIDE `if (EvalInParkedSession(...))`, so an expression the
+			// runtime could not evaluate produced NOTHING on the wire. For a person hovering in the
+			// designer that is a tooltip that never appears — indistinguishable from hovering over
+			// something that has no value. For a caller that WAITS for the reply it is a timeout,
+			// and "could not be evaluated" arrives as "the runtime did not answer in time", which
+			// points at the connection instead of at the expression (2026-09-01, stopped inside
+			// Posting: `1 + 2 * 3` timed out exactly like a broken link).
 			ibValue vResult;
-			if (EvalInParkedSession(strExpression, vResult, false)) {
-				ibWriterMemory commandChannel;
-				commandChannel.w_u16(CommandId_EvalToolTip);
-				commandChannel.w_stringZ(strFileName);
-				commandChannel.w_stringZ(strModuleName);
-				commandChannel.w_stringZ(strExpression);
-				commandChannel.w_stringZ(vResult.GetString());
-				if (ms_debugServer->IsDebugLooped()) {
-					SendCommand(commandChannel.pointer(), commandChannel.size());
-				}
+			const bool evaluated = EvalInParkedSession(strExpression, vResult, false);
+
+			ibWriterMemory commandChannel;
+			commandChannel.w_u16(CommandId_EvalToolTip);
+			commandChannel.w_stringZ(strFileName);
+			commandChannel.w_stringZ(strModuleName);
+			commandChannel.w_stringZ(strExpression);
+			commandChannel.w_stringZ(evaluated
+				? vResult.GetString()
+				: _("<cannot be evaluated here>"));
+
+			if (ms_debugServer->IsDebugLooped()) {
+				SendCommand(commandChannel.pointer(), commandChannel.size());
 			}
 		}
 	}
@@ -1314,14 +1344,12 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 	else if (commandFromClient == CommandId_Continue) {
 		wxString sid; commandReader.r_stringZ(sid);
 		ms_debugServer->m_bDebugStopLine = false;
-		ms_debugServer->m_bDoLoop = false;
 		ms_debugServer->WakeDebugSession(sid);
 	}
 	else if (commandFromClient == CommandId_StepInto) {
 		wxString sid; commandReader.r_stringZ(sid);
 		if (ms_debugServer->IsDebugLooped()) {
 			ms_debugServer->m_bDebugStopLine = true;
-			ms_debugServer->m_bDoLoop = false;
 			ms_debugServer->WakeDebugSession(sid);
 		}
 	}
@@ -1330,7 +1358,6 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		if (ms_debugServer->IsDebugLooped()) {
 			auto* puState = ibSession::GetPUState();
 			ms_debugServer->m_numCurrentNumberStopContext = puState ? puState->GetCountRunContext() : 0;
-			ms_debugServer->m_bDoLoop = false;
 			ms_debugServer->WakeDebugSession(sid);
 		}
 	}
@@ -1363,16 +1390,14 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 	}
 	else if (commandFromClient == CommandId_Detach) {
 
-		ms_debugServer->m_bUseDebug =
-			ms_debugServer->m_bDoLoop = false;
+		ms_debugServer->m_bUseDebug = false;
 		ms_debugServer->WakeAllDebugSessions();
 
 		ibDebuggerServerConnection::Disconnect();
 	}
 	else if (commandFromClient == CommandId_Destroy) {
 
-		ms_debugServer->m_bUseDebug =
-			ms_debugServer->m_bDoLoop = false;
+		ms_debugServer->m_bUseDebug = false;
 		ms_debugServer->WakeAllDebugSessions();
 
 		ibDebuggerServerConnection::Disconnect();

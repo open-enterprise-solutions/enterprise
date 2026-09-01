@@ -40,7 +40,6 @@
 #include "backend/query/queryKeywords.h"   // the ACTIVE keyword table — the one spelling of a keyword, and the highlighter's word set
 #include "backend/backend_exception.h"
 #include "backend/metaData.h"
-#include "backend/backend_metatree.h"   // ibBackendMetadataTree::IsEditable — where "read-only" is already answered
 #include "artProvider/artProvider.h"    // wxART_FRONTEND — the product's own pictures, asked for first
 
 #include <wx/sizer.h>

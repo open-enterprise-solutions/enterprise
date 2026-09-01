@@ -253,11 +253,10 @@ bool ibDialogQueryConstructor::IsMetaDataReadOnly(const ibMetaData* metaData)
 	if (metaData == nullptr)
 		return false;   // no config in play (a runtime list's own query) — nothing forbids editing it
 
-	// The DESIGNER question, asked where it is already answered: a configuration loaded read-only
-	// says so through its tree. No tree = a runtime host with no designer surface, which does not
-	// make a query unreadable.
-	const ibBackendMetadataTree* const tree = metaData->GetMetaTree();
-	return tree != nullptr && !tree->IsEditable();
+	// The DESIGNER question, asked where it is already answered — OF THE CONFIGURATION. Read-only is
+	// a fact about the configuration, not about who happens to be showing it, so it is kept there
+	// and nobody is asked back (metaData.h, SetReadOnly).
+	return !metaData->IsEditable();
 }
 
 // ===========================================================================

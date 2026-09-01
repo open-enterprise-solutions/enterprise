@@ -41,23 +41,55 @@ bool ibCommandDescriptionMemory::SaveData(ibWriterMemory& writer, const ibComman
 }
 
 ////////////////////////////////////////////////////////////////////////
-// node form — Binary blob. The byte reader / writer is contained here, not in the property.
+// node form — A STRUCTURE, like everything else that has parts.
+//
+// ⭐ WHAT A CONTROL IS WIRED TO IS SOMETHING TO READ. This travelled as an opaque
+// Binary block, which is the tail of the migration onto the node rather than a
+// decision: a node exists so every provider renders the same value without
+// knowing what it means, and a blob defeats exactly that — the JSON view of a
+// form showed a base64 smear where "which command does this button run" was.
+//
+// A command reference is a PATH, the same shape a source binding is: hops to walk,
+// plus the item type for the object-item commands (Default for a real command).
+//
+// ⚠ NO FALLBACK TO THE BLOB, deliberately (Max, 2026-08-30: the binary form is a
+// remnant and is not supported). A format with two shapes is a format that will
+// drift. LoadData / SaveData below stay — they serve the clipboard's own
+// transient form, which never reaches a stored file.
+
+namespace {
+
+const wxChar* const kHopsField = wxT("hops");
+const wxChar* const kTypeField = wxT("commandType");
+
+} // namespace
 
 bool ibCommandDescriptionMemory::ReadNode(const ibDataValue& value, ibCommandDescription& cmdDesc)
 {
-	const wxMemoryBuffer& data = value.AsBinary();
-	if (data.GetDataLen()) {
-		ibReaderMemory reader(data);
-		return LoadData(reader, cmdDesc);
+	const std::shared_ptr<ibDataNode>& node = value.AsChild();
+	if (!node)
+		return true;   // wired to nothing — an ordinary state
+
+	if (const ibDataValue* hops = node->FindField(kHopsField)) {
+		for (const ibDataValue& hop : hops->AsArray())
+			cmdDesc.AppendCommand((ibMetaID)hop.AsInt());
 	}
+
+	cmdDesc.SetCommandType((ibInterfaceCommandType)node->GetValue<s32>(kTypeField));
 	return true;
 }
 
 bool ibCommandDescriptionMemory::WriteNode(ibDataValue& value, const ibCommandDescription& cmdDesc)
 {
-	ibWriterMemory writer;
-	if (!SaveData(writer, cmdDesc))
-		return false;
-	value = ibDataValue::Binary(writer.buffer());
+	std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+
+	std::vector<ibDataValue> hops;
+	for (const ibCommandHop& hop : cmdDesc.GetPath())
+		hops.push_back(ibDataValue::Int((s64)hop.m_id));
+
+	node->AddField(kHopsField, ibDataValue::Array(hops));
+	node->AddField(kTypeField, ibDataValue::Int((s64)cmdDesc.GetCommandType()));
+
+	value = ibDataValue::Child(node);
 	return true;
 }

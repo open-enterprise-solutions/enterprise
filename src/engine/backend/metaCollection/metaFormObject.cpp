@@ -8,7 +8,6 @@
 #include "backend/metaData.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/appData.h"
-#include "backend/backend_metatree.h"
 #include "backend/system/systemManager.h"
 
 // ibDeferredForm impl — defined here where ibValueMetaObjectGenericData
@@ -280,30 +279,17 @@ bool ibValueMetaObjectForm::OnCreateMetaObject(ibMetaData* metaData, int flags)
 
 	if ((flags & newObjectFlag) != 0) {
 
-		ibValueMetaObjectGenericData* metaObject = dynamic_cast<ibValueMetaObjectGenericData*>(m_parent);
-
-		wxASSERT(metaObject);
-
-		ibFormID res = wxNOT_FOUND;
-		if (metaData != nullptr) {
-			ibBackendMetadataTree* metaTree = metaData->GetMetaTree();
-			if (metaTree != nullptr) {
-				res = metaTree->SelectFormType(this);
-			}
-		}
-		if (res != wxNOT_FOUND) {
-			m_properyFormType->SetValue(res);
-		}
-		else {
-			return false;
-		}
-		metaObject->OnCreateFormObject(this);
-		if (metaData != nullptr) {
-			ibBackendMetadataTree* metaTree = metaData->GetMetaTree();
-			if (metaTree != nullptr) {
-				metaTree->UpdateChoiceSelection();
-			}
-		}
+		// ⭐⭐ IT NO LONGER ASKS ANYBODY. This used to call SelectFormType — the engine putting a
+		// DIALOG in the middle of a create and waiting on a person, so a host with nobody to ask
+		// could not make a form at all, and a create could be undone by somebody closing a window.
+		//
+		// The form is made, and its KIND is set afterwards by whoever knows it: a tool passes it in
+		// `properties`, and the designer's tree hears the creation notice, asks the person, and
+		// writes the answer in through the ordinary property door. One road, two ways of arriving
+		// at the value.
+		//
+		// ⚠ The layout is laid out by the OWNER once the kind is known, so that moved with it —
+		// building it here would build it against a kind nobody had chosen yet.
 	}
 
 	return true;

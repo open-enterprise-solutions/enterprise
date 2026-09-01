@@ -144,7 +144,11 @@ const ibMaterializationDialect& ibDatabaseLayerPostgres::MaterializationDialect(
 		m.m_deltaTargetAlias  = wxT("{table}");     // ON CONFLICT names the target by table name
 		m.m_deltaSourceAlias  = wxT("excluded");
 		m.m_deltaUpdateItem   = wxT("{col} = {target}.{col} + {source}.{col}");
-		m.m_deltaKeyMatchItem = wxT("{target}.{col} = {source}.{col}");   // unused by ON CONFLICT — rendered, not spent
+		// NULL-safe like the default, though ON CONFLICT never spends it: leaving a plain `=` here
+		// would be a trap for whoever makes this template used (PostgreSQL 15 has MERGE), and the
+		// defect it causes — an empty key column matching nothing and inserting a duplicate — costs
+		// a write, not a warning. See databaseLayer.h.
+		m.m_deltaKeyMatchItem = wxT("{target}.{col} IS NOT DISTINCT FROM {source}.{col}");   // unused by ON CONFLICT — rendered, not spent
 		// THE KEY HASH. Thirty-two segments is a ceiling few keys reach, so this is the spare tyre
 		// rather than the road — but ON CONFLICT names its target by COLUMN LIST, so if a key ever does
 		// pass the ceiling the conflict target has to become this column and the engine must be able to

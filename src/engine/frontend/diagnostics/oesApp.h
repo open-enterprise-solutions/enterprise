@@ -109,15 +109,27 @@ public:
 		// running (recoverable); false escalates to OnUnhandledException.
 		// ibBackendException is the only "show and continue" class —
 		// known business / DB error. Everything else lets the loop unwind.
-		const wxString exe = GetExeName();
 		try {
 			throw;
 		}
 		catch (const ibBackendException& e) {
+			// ⭐⭐ THE LAST RESORT SPEAKS ONLY WHEN NOBODY HAS. A script failure is reported where it
+			// happens — ProcessError names the module, the line, the source text and the call stack —
+			// and then keeps propagating, which is how it arrives here. Reporting it again said the
+			// same thing in the poorest of the available words: the bare sentence, no module, no line.
+			//
+			// ⚠ AND THE TWO CALLS BELOW WERE THEMSELVES A PAIR. ibJournalError at Error severity IS a
+			// dialog — the journal echoes at the severity it was given precisely so a migrated
+			// wxLogError callsite keeps its window (journal.cpp) — so the wxMessageBox beside it
+			// showed one sentence twice from one catch. Three windows, one failure.
+			if (e.IsErrorHandled()) {
+				// The record is still written; it is the WINDOW that would be the duplicate.
+				ibJournalInfo(wxT("app"), wxT("already reported, loop continues: %s"),
+					e.GetErrorDescription());
+				return true;
+			}
+
 			ibJournalError(wxT("app"), wxT("%s"), e.GetErrorDescription());
-			wxMessageBox(e.GetErrorDescription(),
-				wxT("OES ") + exe,
-				wxOK | wxICON_ERROR);
 			return true;
 		}
 		catch (const std::exception& e) {

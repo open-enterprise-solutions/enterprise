@@ -29,12 +29,13 @@
 // — and that is an event with a repair of its own (ibDerivedState::Regenerate), not a reason to stand
 // a check beside every read.
 //
-// ⏳ FOUR OF THE FIVE still assemble their rows in RAM (ComputeRows). `Turnovers` does not: it
-// overrides GetSourceRelation and fills the neighbour's read spec, so its aggregation runs on the
-// server — per CALL, behind the gates in ibAcctTurnoverQueryable::CanReadOnServer(), which default to
-// NO. Until the other four follow, the grain rule is stated TWICE — here as a predicate over the
-// view's two arms (ArmCutAtMoment / ArmCutOverRange) and in the shared ibRegFillArmCut for the spec
-// (arc § 8.3 / § 8.3a).
+// ⏳ ALL FIVE READINGS now override GetSourceRelation and fill the neighbour's read spec, so an
+// aggregation runs on the server whenever that call's own gates (CanReadOnServer) say the stored
+// surface can hold every question in it. The RAM road stays for the rest — a driver with no
+// materialised views, a breakdown asked for BY KIND, a fold finer than the stored grain — which is
+// why the grain rule is still stated TWICE: here as a predicate over the view's two arms
+// (ArmCutAtMoment / ArmCutOverRange) and in the shared ibRegFillArmCut for the spec (arc § 8.3 /
+// § 8.3a). Both roads are live, so that is duplication and not residue.
 //
 // ⛔ AND THE SUBTREE WALK IS NOT HERE ANY MORE. «In hierarchy» is a word of the LANGUAGE now
 // (`Account IN HIERARCHY (&Accounts)`), and the walk that resolves it — plus the map saying which
@@ -51,6 +52,7 @@
 
 #include "accountingRegister.h"
 #include "chartOfAccounts.h"
+#include "backend/metaCollection/table/metaTableObject.h"   // ibTabularQueryable — the section as a source (OwnerRefColumn)
 #include "reference/reference.h"                                   // ibValueReferenceDataObject — reading what an ACCOUNT declares
 
 #include "backend/query/dataQueryBuilder.h"                        // L3 door — From(source).Select() / SelectAggregate()
@@ -823,7 +825,9 @@ using ibAcctIndex   = std::unordered_map<ibAcctKey, size_t, ibValueSeqHash, ibVa
 // GetHashKey and then keying a std::map by the resulting text.
 using ibAcctTypeCache    = std::unordered_map<ibValue, int, ibValueHash, ibValueEqual>;
 using ibAcctKindSet      = std::unordered_set<ibValue, ibValueHash, ibValueEqual>;
-using ibAcctSummaryCache = std::unordered_map<ibValue, ibAcctKindSet, ibValueHash, ibValueEqual>;
+// Account -> the dimension kinds it keeps SUMMARY ONLY. Read whole, in one go (see
+// SummaryOnlyKindsByAccount): a map of an answer, not a cache of one.
+using ibAcctSummaryMap = std::unordered_map<ibValue, ibAcctKindSet, ibValueHash, ibValueEqual>;
 
 // ⭐⭐ ONE PASS OF A READING — which account column the rows are grouped by, which side's slots the
 // breakdown is read from, and which figure the sums land in.
@@ -904,21 +908,21 @@ wxString FigureName(const ibValueMetaObjectAttributeBase* resource, const wxStri
 // for years without ever asking (GetAccountType had no callers at all).
 // Declared here, defined below beside the flag it reads: the fold needs it, and the fold reads better
 // next to the key it is folding than at the bottom of the file.
-const ibAcctKindSet& SummaryOnlyKindsOf(const ibValue& account,
-                                             ibAcctSummaryCache& cache);
+ibAcctSummaryMap SummaryOnlyKindsByAccount(const ibValueMetaObjectChartOfAccounts* chart);
 
 // Drop the turnovers-only breakdowns out of a BALANCE key and merge whatever rows then coincide.
 //
 // ⚠ MERGED, NOT JUST BLANKED. Two rows that differed only by a settlement document are ONE balance row
 // once that breakdown is gone, and leaving them side by side would report the same balance twice — a
 // report that adds up to double.
-void FoldOutSummaryOnly(const std::vector<ibAcctKeyLayout>& layouts,
+void FoldOutSummaryOnly(const ibValueMetaObjectChartOfAccounts* chart,
+                        const std::vector<ibAcctKeyLayout>& layouts,
                         ibAcctRowList& rows)
 {
 	if (layouts.empty() || rows.empty())
 		return;
 
-	ibAcctSummaryCache summaryOnlyCache;
+	const ibAcctSummaryMap summaryOnlyByAccount = SummaryOnlyKindsByAccount(chart);
 
 	ibAcctRowList merged;
 	ibAcctIndex index;
@@ -934,7 +938,9 @@ void FoldOutSummaryOnly(const std::vector<ibAcctKeyLayout>& layouts,
 			continue;
 		}
 
-		const ibAcctKindSet& summaryOnly = SummaryOnlyKindsOf(row.m_key.front(), summaryOnlyCache);
+		static const ibAcctKindSet s_none;
+		const auto foundKinds = summaryOnlyByAccount.find(row.m_key.front());
+		const ibAcctKindSet& summaryOnly = foundKinds != summaryOnlyByAccount.end() ? foundKinds->second : s_none;
 
 		// The key is [account] then, per breakdown column, either (kind, value) or just the value —
 		// the same order it was built in.
@@ -1014,46 +1020,77 @@ int AccountTypeOf(const ibValue& account, ibAcctTypeCache& cache)
 // Storage is untouched: a movement carries all its slots regardless. The flag changes only how the
 // data is READ, which is why a user may flip it in enterprise mode and nothing breaks — no column
 // appears or disappears and no stored row is reinterpreted.
-const ibAcctKindSet& SummaryOnlyKindsOf(const ibValue& account,
-                                             ibAcctSummaryCache& cache)
+// ⭐⭐ THE CHART ARRIVES AS METADATA, NOT OUT OF THE VALUE.
+//
+// Which chart this is, and which of its columns carry the kind and the flag, are facts of the
+// CONFIGURATION — the caller is a totals reading and holds them already. Digging them out of the
+// runtime account value meant asking a reference for its metaobject in order to learn something the
+// register had known all along, and it put a runtime object on the path of a question that has none.
+// ⭐⭐ ONE READING, NOT ONE PER ACCOUNT — WHICH IS WHY THERE IS NO CACHE.
+//
+// A cache exists to make a repeated expensive answer cheap. The answer stopped being expensive the
+// moment it became a query, and it stopped being repeated the moment the query could bring every
+// account's rows home at once: the whole table is a handful of rows per account, and a totals
+// reading wants all of them anyway. So this returns the MAP, built once, and the callers look up
+// in it — no lazy filling, no per-account round trip, nothing to invalidate.
+ibAcctSummaryMap SummaryOnlyKindsByAccount(const ibValueMetaObjectChartOfAccounts* chart)
 {
-	static const ibAcctKindSet s_none;
+	ibAcctSummaryMap byAccount;
 
-	if (account.IsEmpty())
-		return s_none;
+	if (chart == nullptr)
+		return byAccount;
 
-	const ibValue& key = account;
-	const auto found = cache.find(key);
-	if (found != cache.end())
-		return found->second;
-
-	ibAcctKindSet kinds;
-
-	ibValueReferenceDataObject* reference = nullptr;
-	if (account.ConvertToValue(reference) && reference != nullptr) {
-		const ibValueMetaObjectChartOfAccounts* chart = nullptr;
-		if (reference->GetMetaObject()->ConvertToValue(chart) && chart != nullptr) {
+	{
+		{
 			const ibValueMetaObjectAccountDimensionKindsTable* table = chart->GetAccountDimensionKindsTable();
 			if (table != nullptr) {
-				// The account's own card — the flag is a row of its kinds table, i.e. data. Held in an
-				// ibValue so the loaded object is released with it: GetObject CREATES one.
-				ibValue holder = reference->GetObject();
-				ibValueRecordDataObjectRef* object = nullptr;
-				if (holder.ConvertToValue(object) && object != nullptr) {
-					ibValueModel* rows = object->GetTableByMetaID(table->GetMetaID());
-					const ibValueMetaObjectAttributeBase* kindColumn    = table->GetAccountDimensionKind();
-					const ibValueMetaObjectAttributeBase* summaryColumn = table->GetSummaryOnly();
-					if (rows != nullptr && kindColumn != nullptr && summaryColumn != nullptr) {
-						for (long row = 0; row < rows->GetRowCount(); row++) {
-							const ibDataViewItem item = rows->GetItem(row);
-							ibValue summaryOnly;
-							rows->GetValueByMetaID(item, summaryColumn->GetMetaID(), summaryOnly);
-							if (!summaryOnly.GetBoolean())
+				// ⭐⭐ THE FLAG IS DATA, SO IT IS READ AS DATA.
+				//
+				// 🛑 This used to open the account's CARD — `reference->GetObject()` — to reach one
+				// checkbox on one row of its kinds table. Opening a card is not a read: it creates a
+				// runtime object, which needs a module manager, which needs a session. A rented read
+				// (a list page, a background composition) deliberately has none, so the assert fired
+				// there and a totals reading could not run at all (measured 2026-09-01).
+				//
+				// ⭐ And the cost was wrong even where it worked: a card materialised PER ACCOUNT,
+				// with its modules and its whole attribute set, to answer a question the table
+				// answers by itself. The section is an ordinary query source — it is what
+				// `ChartOfAccounts.<chart>.AccountDimensionKinds` names — so this asks it.
+				const ibValueMetaObjectAttributeBase* kindColumn    = table->GetAccountDimensionKind();
+				const ibValueMetaObjectAttributeBase* summaryColumn = table->GetSummaryOnly();
+				const ibBackendQueryable* rows = table->GetQueryable();
+
+				if (rows != nullptr && kindColumn != nullptr && summaryColumn != nullptr) {
+
+					const ibTabularQueryable* section = dynamic_cast<const ibTabularQueryable*>(rows);
+					const ibBackendQueryColumn* ownerCol = section != nullptr ? section->OwnerRefColumn() : nullptr;
+					const ibBackendQueryColumn* kindCol    = ColumnOn(rows, kindColumn);
+					const ibBackendQueryColumn* summaryCol = ColumnOn(rows, summaryColumn);
+
+					if (ownerCol != nullptr && kindCol != nullptr && summaryCol != nullptr) {
+						ibDataQueryBuilder b;
+						b.From(rows);
+						// ⚠ NOT FILTERED BY THE CALLER'S RIGHTS, for the same reason the readings above
+						// are not: which slots a total keeps is a property of the chart, not of who is
+						// looking, and a key that narrows per user is a key that disagrees with itself.
+						b.WithAccessPolicy(nullptr);
+						b.Select(ownerCol,   wxT("Account"));
+						b.Select(kindCol,    kindColumn->GetName());
+						b.Select(summaryCol, summaryColumn->GetName());
+
+						// ⚠ NO FILTER, DELIBERATELY. Narrowing to one account is what made this a call
+						// per account; the whole table is what a totals reading ends up needing, and
+						// asking for it once costs one statement instead of one per row of the report.
+						ibDataQueryResult sel = b.Execute(ibReadPageRequest{});
+						while (sel.Next()) {
+							if (!sel.GetValue(summaryCol).GetBoolean())
 								continue;
-							ibValue kind;
-							rows->GetValueByMetaID(item, kindColumn->GetMetaID(), kind);
-							if (!kind.IsEmpty())
-								kinds.insert(kind);
+							const ibValue kind = sel.GetValue(kindCol);
+							if (kind.IsEmpty())
+								continue;
+							const ibValue owner = sel.GetValue(ownerCol);
+							if (!owner.IsEmpty())
+								byAccount[owner].insert(kind);
 						}
 					}
 				}
@@ -1061,8 +1098,7 @@ const ibAcctKindSet& SummaryOnlyKindsOf(const ibValue& account,
 		}
 	}
 
-	// Placed once and read back from where it landed — the account is looked up, not looked up twice.
-	return cache.emplace(key, std::move(kinds)).first->second;
+	return byAccount;
 }
 
 // Fold one pair of figures by the account's type. Applied at READ time, which is why declining to fold
@@ -1552,6 +1588,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 			for (const auto& figure : figures) {
 				ibValue& cell = row.m_figures[figure.first];
 				const ibValue arriving = sel.GetColumn(figure.first);
+
 				cell = cell.IsEmpty() ? arriving : ibValue(cell.GetNumber() + arriving.GetNumber());
 			}
 		}
@@ -1562,7 +1599,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 	// ⭐ A BALANCE IS NOT KEPT ALONG EVERY BREAKDOWN. The kinds an account marks "turnovers only" leave
 	// the key here, and the rows that then coincide are merged — otherwise the same balance would be
 	// reported once per settlement document that touched it.
-	FoldOutSummaryOnly(layouts, rows);
+	FoldOutSummaryOnly(GetChartOfAccounts(), layouts, rows);
 
 	// ⭐ AND NOW THE ACCOUNT SPEAKS. Up to here both sides were computed and kept apart, which is the
 	// only honest way to compute them; the fold is a projection applied at READ time, per account, by
@@ -1804,6 +1841,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 			for (const auto& figure : figures) {
 				ibValue& cell = row.m_figures[figure.first];
 				const ibValue arriving = sel.GetColumn(figure.first);
+
 				cell = cell.IsEmpty() ? arriving : ibValue(cell.GetNumber() + arriving.GetNumber());
 			}
 		}
@@ -1902,6 +1940,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 	for (const auto dimension : dimensions) keyColumns.push_back(dimension->GetName());
 
 	ibAcctRowList rows;
+
 	ibDataQueryResult sel = b.SelectAggregate();
 	while (sel.Next()) {
 		std::vector<ibValue> key;
@@ -2122,11 +2161,13 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// kind column and reports it under that column's own alias. Spelling `<name>Kind` out here a second
 	// time is how the question came to be asked of a column the shape did not publish — no error, no
 	// row, just a flag that never fired.
-	ibAcctSummaryCache summaryOnlyCache;
+	const ibAcctSummaryMap summaryOnlyByAccount = SummaryOnlyKindsByAccount(GetChartOfAccounts());
 	const auto standsOnTurnoversOnly = [&](const ibQueryRamTable& table, long row) {
+		static const ibAcctKindSet s_none;
 		const ibValue account = GetRegisterAccount() != nullptr
 			? cellByName(table, row, GetRegisterAccount()->GetName()) : ibValue();
-		const ibAcctKindSet& summaryOnly = SummaryOnlyKindsOf(account, summaryOnlyCache);
+		const auto foundKinds = summaryOnlyByAccount.find(account);
+		const ibAcctKindSet& summaryOnly = foundKinds != summaryOnlyByAccount.end() ? foundKinds->second : s_none;
 		if (summaryOnly.empty())
 			return false;
 

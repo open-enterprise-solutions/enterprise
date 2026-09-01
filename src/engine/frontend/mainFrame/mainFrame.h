@@ -39,6 +39,9 @@ class FRONTEND_API ibFrontendMainFrame :
 	public ibDocParentFrameAnyBase {
 public:
 
+	// The message record and its notifier live on ibBackendMainFrame, where
+	// Message() itself is declared — see the note there.
+
 	virtual wxMenu* GetDefaultMenu(int idMenu) const { return nullptr; }
 
 	virtual void CreateGUI() = 0;
@@ -261,6 +264,9 @@ protected:
 	};
 
 	static ibFrontendMainFrame* s_instance;
+
+	// Mutable because a window reports without changing — BackendError is const,
+	// and recording is part of reporting rather than a change to the window.
 
 	ibObjectInspector* m_objectInspector;
 

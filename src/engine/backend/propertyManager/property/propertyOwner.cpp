@@ -7,10 +7,8 @@
 
 wxVariantData* ibPropertyOwner::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
 {
-	const ibValueMetaObjectGenericData* propFactory = dynamic_cast<const ibValueMetaObjectGenericData*>(property);
-	if (propFactory == nullptr)
-		return nullptr;
-	return new ibVariantDataOwner(propFactory, typeDesc);
+	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
+	return new ibVariantDataOwner(property, typeDesc);
 }
 
 ibMetaDescription& ibPropertyOwner::GetValueAsMetaDesc() const {
@@ -20,6 +18,12 @@ ibMetaDescription& ibPropertyOwner::GetValueAsMetaDesc() const {
 void ibPropertyOwner::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// A catalog is owned by a catalog. The list used to sit in advpropOwner.cpp's constructor.
+ibPropertyChoiceMode ibPropertyOwner::GetValueList(ibPropertyChoiceList& list)
+{
+	return CreateValueList(list, ibPropertyChoiceMode::Mult, { g_metaCatalogCLSID });
 }
 
 //base property for "owner"

@@ -120,6 +120,7 @@ void ibFrontendMainFrameDesigner::CreateMetadataPane()
 
 	m_metaWindow = new ibConfigurationTree(this, wxID_ANY);
 
+
 	wxAuiPaneInfo paneInfo;
 	paneInfo.Name(wxAUI_PANE_METADATA);
 	paneInfo.CloseButton(false);

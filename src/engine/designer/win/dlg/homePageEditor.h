@@ -4,7 +4,7 @@
 // Home-page workspace editor — the designer surface of ibHomePageDescription.
 //
 // Reached from the config root's context menu ("Open home page workspace"), through the same
-// seam the predefined-values editor uses: the metaobject asks (ibBackendMetadataTree::
+// seam the predefined-values editor uses: the metaobject asks (ibMetaDataNotifier::
 // EditHomePage), the designer owns the dialog.
 //
 // What it edits is deliberately small: which forms the start page shows, in which column, in

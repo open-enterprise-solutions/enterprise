@@ -330,37 +330,19 @@ wxPGProperty* ibObjectInspector::GetEvent(ibEvent* event) const
 	return result;
 }
 
+// ⭐ THROUGH THE BACKEND'S DOOR — ibPropertyGate::SetValue, which is the four steps that used to be
+// written out here. They were the authority, and being written HERE meant a caller with no
+// inspector (the MCP server) had to carry its own copy of them. Same sequence, one home, and the
+// selection is what this window contributes: the property being edited may belong to a nested child
+// the selection only accumulates, so `asked` and the property's owner are not always the same.
 bool ibObjectInspector::ModifyProperty(ibProperty* prop, const wxVariant& newValue)
 {
-	const wxVariant oldValue = prop->GetValue();
-	if (m_currentSel->OnPropertyChanging(prop, newValue)) {
-		prop->SetValue(newValue);
-		m_currentSel->OnPropertyChanged(prop, oldValue, newValue);
-		// Raise the change from the property's REAL owner — which may be a NESTED child the inspected holder only
-		// ACCUMULATES (a dynamic list under a form-attribute holder: m_currentSel is the holder, but the edited
-		// Source belongs to the list). Call the OWNER's own OnChildChanged so the CHILD initialises its reaction
-		// and then bubbles up the attach chain to the holder. A self-refreshing owner (a control) has no attach
-		// owner, so the bubble stops and this is a no-op for it.
-		if (ibPropertyObject* owner = prop->GetPropertyObject())
-			owner->OnChildChanged();
-		return true;
-	}
-	return false;
+	return ibPropertyGate::SetValue(m_currentSel, prop, newValue);
 }
 
 bool ibObjectInspector::ModifyEvent(ibEvent* event, const wxVariant& newValue)
 {
-	const wxVariant oldValue = event->GetValue();
-	if (m_currentSel->OnEventChanging(event, newValue)) {
-		event->SetValue(newValue);
-		m_currentSel->OnEventChanged(event, oldValue, newValue);
-		// Same as a property edit: raise it from the event's REAL owner so a nested child initialises + bubbles
-		// up the attach chain to a frontend holder that re-renders.
-		if (ibPropertyObject* owner = event->GetPropertyObject())
-			owner->OnChildChanged();
-		return true;
-	}
-	return false;
+	return ibPropertyGate::SetEvent(m_currentSel, event, newValue);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

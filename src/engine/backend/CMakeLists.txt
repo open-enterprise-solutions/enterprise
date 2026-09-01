@@ -72,6 +72,8 @@ target_include_directories(backend
         "${CMAKE_SOURCE_DIR}"
         "${CMAKE_SOURCE_DIR}/src"
         "${CMAKE_SOURCE_DIR}/src/engine"
+        # The MCP server's transport — header-only, included by mcpServer.cpp alone.
+        "${CMAKE_SOURCE_DIR}/src/3rdparty/cpp-httplib"
         # Embedded database engine headers
         "${CMAKE_CURRENT_SOURCE_DIR}/databaseLayer/sqllite/engine"
 )

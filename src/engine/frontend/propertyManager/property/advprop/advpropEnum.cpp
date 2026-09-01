@@ -16,7 +16,10 @@ public:
 		// a base swallows anything derived from it, so concrete makers must be tried first.
 		ibPropertyRegistry::Register([](ibPropertyEnumBase* prop) -> wxPGProperty* {
 			wxPGChoices ch;
-			const ibPropertyChoiceList choices = prop->GetEnumList();
+			// Through the family's verb, not the enum's own: the same call serves every property
+			// that offers choices, so this editor stops knowing it is looking at an enumeration.
+			ibPropertyChoiceList choices;
+			prop->GetValueList(choices);
 			for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
 				ch.Add(choices.GetLabel(idx), choices.GetId(idx));
 			return new wxEnumProperty(prop->GetLabel(), prop->GetName(), ch, prop->GetValueAsInteger());

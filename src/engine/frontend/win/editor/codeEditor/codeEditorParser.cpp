@@ -125,10 +125,31 @@ bool ibParserModule::ParseModule(const wxString& sModule)
 			// KEY_FUNCTION / KEY_PROCEDURE bumps depth, every
 			// KEY_ENDFUNCTION / KEY_ENDPROCEDURE drops it.
 			if (IsNextDelimeter('(')) {
+
+				// ⚠ BOTH BODY FORMS, for the reason written at the named walk below: a CES lambda
+				// closes with `}` and has no EndFunction to find, so the keyword-only walk ran to
+				// the end of the module and took every later declaration with it. Whichever
+				// terminator actually appears ends the skip; a VES body never opens a brace, so its
+				// behaviour is unchanged.
 				int depth = 1;
+				int braces = 0;
+				bool inBraces = false;
+
 				while (m_cursor < (m_listLexem.size() - 1)) {
+
 					const ibLexem& nl = m_listLexem[m_cursor + 1];
-					if (nl.m_lexType == KEYWORD) {
+
+					if (nl.m_lexType == DELIMITER && nl.m_numData == '{') {
+						braces++;
+						inBraces = true;
+					}
+					else if (inBraces && nl.m_lexType == DELIMITER && nl.m_numData == '}') {
+						if (--braces == 0) {
+							(void)ExpectLexem(); // consume the matching brace
+							break;
+						}
+					}
+					else if (nl.m_lexType == KEYWORD) {
 						if (nl.m_numData == KEY_FUNCTION || nl.m_numData == KEY_PROCEDURE) {
 							depth++;
 						}
@@ -235,6 +256,40 @@ bool ibParserModule::ParseModule(const wxString& sModule)
 			// could only happen if a programmer wrote `Function` in a
 			// declaration mid-body (which CompileBlock rejected anyway);
 			// with anonymous lambdas as expressions it's now legitimate.
+			// ⭐⭐ IN CES THE BODY IS BRACES, AND THE WALK BELOW KNOWS ONLY `EndProcedure`.
+			//
+			// 🛑 So in a c-style configuration — which this platform now DEFAULTS to — the search for
+			// the end never found one: it consumed the rest of the module, `m_lineEnd` was never
+			// assigned (it stayed equal to `m_lineStart`), and every declaration after the first was
+			// swallowed with it. The code editor's function navigator, the function searcher and the
+			// visual editor's notebook all read this list, so all three showed exactly ONE entry per
+			// module (found 2026-09-01, through module_outline: two procedures in, one out).
+			//
+			// The two forms are told apart by what follows the header, which is where they differ.
+			if (IsNextDelimeter('{')) {
+
+				int braces = 0;
+				while (m_cursor < (m_listLexem.size() - 1)) {
+
+					const ibLexem& next = m_listLexem[m_cursor + 1];
+
+					if (next.m_lexType == DELIMITER && next.m_numData == '{')
+						braces++;
+					else if (next.m_lexType == DELIMITER && next.m_numData == '}') {
+						if (--braces == 0) {
+							data.m_lineEnd = next.m_numLine;
+							(void)ExpectLexem();   // consume the matching brace
+							break;
+						}
+					}
+
+					(void)ExpectLexem();
+				}
+
+				m_content.push_back(data);
+				continue;
+			}
+
 			int depth = 1;
 			while (m_cursor < (m_listLexem.size() - 1)) {
 

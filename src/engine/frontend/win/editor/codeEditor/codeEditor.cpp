@@ -576,7 +576,19 @@ bool ibCodeEditor::SyntaxControl(bool throwMessage) const
 	ibRuntimeModuleDataObject* dataRef = nullptr;
 	auto* cc = metaData->GetCompileCache();
 	if (cc && cc->FindCompileModule(metaObject, dataRef)) {
+
+		// A DESCRIPTOR THAT ANSWERS THE LOOKUP CARRIES A MODULE — that is the invariant, and it is
+		// established where the descriptor is built (ibValueCommandDataObject's ctor calls
+		// EnsureCompileModule, as every other registering side does through its first Bind…).
+		// A null here is a REGISTERING SIDE THAT DID NOT WIRE ITS MODULE, so it is asserted rather
+		// than tolerated: returning "no errors" for a module nobody compiled would report a pass
+		// that never happened.
+		//
+		// 2026-08-31: an access violation on this line, pressing Syntax over a command module.
+		// Commands were the first metatype to register a descriptor without wiring one.
 		ibCompileModule* compileModule = dataRef->GetCompileModule();
+		wxASSERT(compileModule);
+
 		try {
 			if (compileModule->Compile()) {
 				if (throwMessage)

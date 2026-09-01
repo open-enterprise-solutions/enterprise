@@ -9,6 +9,8 @@
 #include "backend/debugger/debugClient.h"
 #include "backend/fileSystem/fs.h"
 
+#include <functional>
+
 BEGIN_EVENT_TABLE(ibWatchWindow, ibWatchCtrl)
 EVT_TREE_BEGIN_LABEL_EDIT(wxID_ANY, ibWatchWindow::OnBeginLabelEdit)
 EVT_TREE_END_LABEL_EDIT(wxID_ANY, ibWatchWindow::OnEndLabelEdit)
@@ -59,6 +61,13 @@ void ibWatchWindow::SetVariable(const ibWatchWindowData& watchData)
 
 		const wxTreeItemId& item = watchData.GetItem(i);
 
+		// The id is a pointer into THIS window's tree, and it is safe to use because the answer
+		// reached us at all: a question now carries who asked it, and the bridge lets through only
+		// its own (ibDebuggerClientBridgeDesigner::OnSetVariable). An id from another listener no
+		// longer arrives here to be sorted out by resemblance.
+		if (!item.IsOk())
+			continue;
+
 		SetItemText(item, 1, watchData.GetValue(i));
 		SetItemText(item, 2, watchData.GetType(i));
 
@@ -80,6 +89,9 @@ void ibWatchWindow::SetVariable(const ibWatchWindowData& watchData)
 void ibWatchWindow::SetExpanded(const ibWatchWindowData& watchData)
 {
 	const wxTreeItemId& item = watchData.GetItem();
+
+	if (!item.IsOk())
+		return;
 
 	m_updating = true;
 	Freeze();
@@ -110,11 +122,11 @@ void ibWatchWindow::UpdateItem(const wxTreeItemId& item)
 
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 	if (!expression.IsEmpty())
-		debugClient->AddExpression(expression, reinterpret_cast<u64>(item.GetID()));
-#else 
+		debugClient->AddExpression(expression, reinterpret_cast<u64>(item.GetID()), debugClient->BridgeId());
+#else
 	if (!expression.IsEmpty())
-		debugClient->AddExpression(expression, reinterpret_cast<u32>(item.GetID()));
-#endif 
+		debugClient->AddExpression(expression, reinterpret_cast<u32>(item.GetID()), debugClient->BridgeId());
+#endif
 
 	DeleteChildren(item);
 
@@ -309,13 +321,13 @@ void ibWatchWindow::OnItemExpanding(wxTreeEvent& event)
 
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 	if (!m_updating) {
-		debugClient->ExpandExpression(expression, reinterpret_cast<u64>(item.GetID()));
+		debugClient->ExpandExpression(expression, reinterpret_cast<u64>(item.GetID()), debugClient->BridgeId());
 	}
-#else 
+#else
 	if (!m_updating) {
-		debugClient->ExpandExpression(expression, reinterpret_cast<u32>(item.GetID()));
+		debugClient->ExpandExpression(expression, reinterpret_cast<u32>(item.GetID()), debugClient->BridgeId());
 	}
-#endif 
+#endif
 
 	if (!m_updating)
 		event.Veto();

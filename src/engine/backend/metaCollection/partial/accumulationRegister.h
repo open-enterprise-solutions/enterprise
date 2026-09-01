@@ -110,11 +110,6 @@ private:
 		return formList;
 	}
 
-	enum
-	{
-		ID_METATREE_OPEN_MODULE = 19000,
-		ID_METATREE_OPEN_MANAGER = 19001,
-	};
 
 	//private:
 		//ibValueMetaObjectAttributePredefined* m_attributibRecordType = ibValueMetaObjectCompositeData::CreateSpecialType(wxT("recordType"), _("Record type"), wxEmptyString, g_enumRecordTypeCLSID, false, ibValueEnumAccumulationRegisterRecordType::CreateDefEnumValue());
@@ -348,8 +343,7 @@ public:
 #pragma endregion
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 	/**
 	* Property events
@@ -528,6 +522,34 @@ public:
 	// Materialised => the ordinary PHYSICAL provider, so the source behaves like any relation.
 	virtual ibBackendQueryProvider& GetProvider() const override;
 
+	// ⭐ WHAT MAKES ONE ROW OF TOTALS THE SAME ROW. The totals surface is asked this like any other
+	// source — the upsert that maintains the table matches on it — and it must answer for ITSELF:
+	// a totals row is not identified the way a movement is. A movement is recorder + line + period;
+	// a total is PERIOD + DIMENSIONS, which is precisely what a total means, the folded value of
+	// every movement sharing them.
+	//
+	// 🛑 Left unanswered, the base returned an empty list, the renderer built `MATCHING ()`, and
+	// Firebird refused the statement — so a configuration that merely added a dimension could not
+	// be applied at all.
+	//
+	// ⚠ Resources are NOT here: they are what is being accumulated. Keying on a value would make
+	// every new amount a new row instead of adding to one.
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override
+	{
+		std::vector<const ibBackendQueryColumn*> cols;
+
+		if (m_reg == nullptr)
+			return cols;
+
+		if (m_reg->HasPeriod() && m_reg->GetRegisterPeriod() != nullptr)
+			cols.push_back(m_reg->GetRegisterPeriod());
+
+		for (auto* dimension : m_reg->GetGenericDimensionArrayObject())
+			cols.push_back(dimension);
+
+		return cols;
+	}
+
 protected:
 	ibViewShape m_shape;
 };
@@ -541,6 +563,15 @@ public:
 
 	virtual bool IsComputedInRam() const override { return !m_reg->HasMaterializedViews(); }
 	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
+
+	// ⚠ NO KEY OF ITS OWN. A balance reads the SAME materialised table the totals surface keys —
+	// stored per period (the grain is a day), so a row there is period + dimensions and nothing
+	// else. The as-of date narrows which rows are read; it does not change what a row is.
+	//
+	// (Written here because the temptation was real and wrong: the information register's SLICE is
+	// keyed by dimensions alone, and carrying that across to a balance by analogy would key this
+	// surface without its period — folding every day into one row of valid SQL and wrong numbers.
+	// The two look alike and are not: a slice has no stored table behind it.)
 
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 private:

@@ -483,6 +483,14 @@ void ibValueSystemFunction::Message(const wxString& strMessage, ibStatusMessage 
 	if (ibBackendException::IsEvalMode())
 		return;
 
+	// ⭐ NOTHING IS INTERCEPTED HERE, deliberately. A message needs to be readable
+	// by more than the person looking at the pane — but the place to keep it is
+	// the FRAME it is already handed to, which records it as data on the way to
+	// the window (ibFrontendMainFrameDesigner::Message). A collector here would be
+	// a second road to the same fact, and second roads diverge: this one would
+	// have missed everything the debugger reports, which never passes through
+	// here at all.
+	//
 	// Frame is responsible for thread safety. Web's ibWebFrame::Message
 	// queues under a mutex; desktop's eventual override (if it ever
 	// touches wx UI) must marshal to the main thread itself. The old

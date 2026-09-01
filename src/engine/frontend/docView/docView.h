@@ -129,6 +129,27 @@ public:
     void SetTitle(const wxString& title) { m_documentTitle = title; }
     wxString GetTitle() const { return m_documentTitle; }
 
+    // ⭐⭐ WHAT MAKES THIS DOCUMENT THE SAME DOCUMENT — asked by the manager before it opens
+    // anything, so a second Open on something already on screen RAISES it instead of building a
+    // rival copy of it (Max, 2026-09-01: *"the manager should open the form WITH A CHECK… and it
+    // should all go through the manager"*).
+    //
+    // ⚠ THE GUID, NOT A NAME (Max's own correction, the same day). A name is unique enough to open
+    // by and it MOVES: a rename between the open and the second open makes one document look like
+    // two. The guid is what the object is, for as long as it exists. A path cannot serve either —
+    // a metaobject inside a configuration has no file, which is why FindDocumentByPath never
+    // answers about one.
+    //
+    // ⚠ A STRING, ALWAYS (Max, 2026-09-01: *"an identifier is always a string"*). A guid is what a
+    // METAOBJECT happens to be identified by; a document opened from disk is identified by its
+    // path, and a generated one by something else again. Text is the currency all of them can be
+    // said in — and ibGuid converts to it on its own, so the caller writes GetGuid() and nothing
+    // in between has to know that is what it was.
+    //
+    // Empty for a document with no identity of this kind: the manager reads that as "no answer"
+    // rather than as a match, so two anonymous documents are never mistaken for each other.
+    virtual wxString GetUniqueIdentifier() const { return wxEmptyString; }
+
     void SetDocumentName(const wxString& name) { m_documentTypeName = name; }
     wxString GetDocumentName() const { return m_documentTypeName; }
 
@@ -262,6 +283,14 @@ public:
     // base's m_documentParent / m_childDocuments directly because we own them;
     // the historical wxDocument private-member kludge is gone with the fork.
     virtual void SetDocParent(ibDocument* docParent);
+
+    // ⭐ AN OWNER ANSWERS ABOUT ITS OWN. The editors a navigator opens are OWNED by the document
+    // holding that configuration and never join the manager's list, so "is it already open here?"
+    // is a question for THIS document — the manager's own search answers about the manager's own
+    // documents and cannot see these (Max, 2026-09-01: *"split the search by parent from the search
+    // by name"* — they are two questions, and one function with an optional parent made them look
+    // like one).
+    ibDocument* FindChildDocument(const wxString& identifier) const;
 
 protected:
     wxList                m_documentViews;
@@ -449,6 +478,20 @@ public:
 
     ibDocument* FindDocumentByPath(const wxString& path) const;
 
+    // ⭐ THE SAME QUESTION FOR THINGS THAT HAVE NO FILE. FindDocumentByPath answers for documents
+    // opened FROM DISK; everything inside a configuration — a form, a module, an object editor —
+    // has an identity and no path, and was therefore invisible to the only "is it already open"
+    // check there was. See ibDocument::GetUniqueIdentifier.
+    //
+    // ⭐⭐ IS THIS OBJECT ALREADY ON SCREEN, and in which document — the ONE question the world
+    // outside this class asks, and the only one of the four below that is public.
+    //
+    // ⚠ THE OBJECT IS THE WHOLE ARGUMENT. Its identity and its owner both follow from it, worked
+    // out in one place, so they cannot disagree — and no caller has to carry "on whose behalf",
+    // which is a thing every future call site would have to get right (Max, 2026-09-01, on seeing
+    // five new methods here: *"I do not much like it"* — the other three went private).
+    ibMetaDocument* FindOpenDocument(ibValueMetaObject* metaObject) const;
+
     ibDocument *GetCurrentDocument() const;
 
     void SetMaxDocsOpen(int n) { m_maxDocsOpen = n; }
@@ -548,15 +591,18 @@ public:
                         wxClassInfo* docClassInfo,
                         wxClassInfo* viewClassInfo);
 
-    static ibMetaDocument* OpenObjectForm(ibValueMetaObject* metaObject,
-                                       long flags = ibDOC_NEW);
-    static ibMetaDocument* OpenObjectForm(ibValueMetaObject* metaObject,
-                                       ibMetaDocument* docParent,
-                                       long flags = ibDOC_NEW);
-
-    ibMetaDocument* OpenForm(ibValueMetaObject* metaObject,
-                             ibMetaDocument* docParent,
-                             long flags);
+    // ⭐⭐ A METAOBJECT OPENS BY ITS CLSID, THROUGH THE TEMPLATE REGISTERED FOR IT — the same
+    // mechanism an external data processor opens by, and a module, and a form: AddDocTemplate above
+    // says which document and view a clsid gets, and this makes one.
+    //
+    // 🛑 A SECOND NAME STOOD OVER IT — two static `OpenObjectForm` overloads that forwarded here and
+    // did nothing else (Max, 2026-09-01: *"take OpenObjectForm out of the doc manager"*).
+    // 🛑 AND A `docParent` ARGUMENT NOBODY COULD FILL RIGHT. Of the two callers in the tree, one
+    // passed the navigator's own document and the other a plain nullptr — and the first is exactly
+    // what FindMetaDataDocument works out from the object anyway. Asking every caller to carry "on
+    // whose behalf" is a mechanism that has to be right in every future call site (Max,
+    // 2026-09-01), for an answer the object already contains.
+    ibMetaDocument* OpenForm(ibValueMetaObject* metaObject, long flags = ibDOC_NEW);
 
     ibMetaDocTemplate* FindMetaTemplate(const ibClassID& clsid) const;
     ibDocTemplate*     FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const;
@@ -591,6 +637,24 @@ public:
     void RegisterDefaultTemplates();
 
 protected:
+    // ---- the halves FindOpenDocument(metaObject) is made of --------------------------------
+    // Separate because they are separate questions — the manager answers about ITS OWN documents,
+    // an owner answers about its children (ibDocument::FindChildDocument) — and private because
+    // nothing outside has ever needed to ask either one on its own.
+
+    // The manager's own list, by the document's declared identity. No cast: a document that has no
+    // identity of this kind answers with an empty string and simply never matches.
+    ibDocument* FindDocumentByIdentifier(const wxString& identifier) const;
+
+    // Mine first, then the owner's editors.
+    ibDocument* FindOpenDocument(const wxString& identifier, const ibDocument* docParent) const;
+
+    // WHICH DOCUMENT IS SHOWING THIS CONFIGURATION — null for the one the main window holds, which
+    // has no document at all. This is the owner an editor is opened under; getting it wrong puts
+    // the editor in the manager's top level instead of under its navigator, and every later "is it
+    // open?" then looks in the wrong place.
+    class ibMetaDataDocument* FindMetaDataDocument(const class ibMetaData* metaData) const;
+
     virtual void OnMRUFileNotExist(unsigned n, const wxString& filename);
     void DoOpenMRUFile(unsigned n);
 #if wxUSE_PRINTING_ARCHITECTURE
@@ -1038,6 +1102,11 @@ public:
 
 	wxString GetModuleName() const;
 
+	// The metaobject's guid IS this document's identity — see ibDocument::GetUniqueIdentifier.
+	virtual wxString GetUniqueIdentifier() const override {
+		return m_metaObject != nullptr ? m_metaObject->GetGuid().str() : wxEmptyString;
+	}
+
 	ibMetaDocument(ibMetaDocument* docParent = nullptr);
 	virtual ~ibMetaDocument() = default;
 
@@ -1073,6 +1142,36 @@ public:
 		return result;
 	}
 
+	// ⭐ …AND THE OTHER WAY: A CHILD SAYS WHO OWNS IT. The pair of GetChild above, and the one that
+	// was missing — every caller that wanted a parent reached into the base's m_documentParent and
+	// cast it by hand (Max, 2026-09-01: *"children must be able to return their parent themselves"*).
+	ibMetaDocument* GetParent() const {
+		return static_cast<ibMetaDocument*>(m_documentParent);
+	}
+
+	// ⭐⭐ WHICH TREE SHOWS THIS DOCUMENT — asked of the DOCUMENT, because the document is what has
+	// both (Max, 2026-09-01, choosing between this and broadcasting through the metadata's watchers).
+	// It sits HERE, at ibMetaDocument, and not one level down at ibMetaDataDocument: an editor — a
+	// form, a module — is opened from a tree too, and it is an ibMetaDocument.
+	//
+	// 🛑 IT USED TO BE `metaData->GetMetaTree()`, on the engine: the backend handing a viewer back to
+	// whoever asked, which is how ibMetaData came to know that a watcher has ROWS in it. And it
+	// answered with the FIRST watcher, so with two windows open on one configuration it silently
+	// picked one. A document has exactly one tree, and knows it.
+	//
+	// ⭐ AN EDITOR HAS NO TREE OF ITS OWN — IT ASKS THE DOCUMENT IT WAS OPENED FROM. A form or a
+	// module document was created with the navigator's document as its parent, so the default walks
+	// UP until someone answers; the designer's documents override and end the walk with their own
+	// tree, covariantly typed. Nobody casts anything, anywhere.
+	//
+	// ⚠ NULL IS A REAL ANSWER, not a missing one: the thick client opens the same documents and
+	// shows no tree at all, and the walk ends at a parentless document.
+	virtual class ibMetaTreeAbstract* GetMetaTree() const {
+		ibMetaDocument* owner = GetParent();
+		return owner != nullptr ? owner->GetMetaTree() : nullptr;
+	}
+
+
 protected:
 
 	ibValueMetaObject* m_metaObject;	// current metadata object
@@ -1092,6 +1191,42 @@ public:
 	virtual void SetCurrentLine(int lineBreakpoint, bool setBreakpoint) = 0;
 	virtual void SetToolTip(const wxString& resultStr) = 0;
 	virtual void ShowAutoComplete(const struct ibDebugAutoCompleteData& debugData) = 0;
+};
+
+// ⭐⭐ A METADATA TREE, ABSTRACTLY — the navigator, or the tree inside an external data processor or
+// report. Not a window: an INTERFACE, declared here and implemented in the designer, the same shape
+// as the one above it, so this side can say something to a tree without knowing that a tree happens
+// to be a wxPanel in another module.
+//
+// These four are exactly what is asked of a tree from elsewhere — the debugger's bridge, the output
+// pane, a closing editor: take the focus, show me this object, tell me which editor is showing it,
+// show me this module at this line.
+//
+// 🛑 IT USED TO BE `ibBackendMetadataTree` ON THE ENGINE — the same list, but held by ibMetaData, so
+// the backend knew a watcher has rows in it and answered "the tree" with whichever watcher happened
+// to be first. Here it is answered by the DOCUMENT that has one (ibMetaDataDocument::GetMetaTree),
+// and a window that has none simply says nothing.
+class FRONTEND_API ibMetaTreeAbstract {
+public:
+
+	virtual ~ibMetaTreeAbstract() = default;
+
+	// Become the window somebody is working in.
+	virtual void Activate() = 0;
+
+	// Show this metaobject — raising the editor that is already open rather than asking for a
+	// second one, which is the half every caller that went round a tree was missing.
+	virtual bool OpenObjectForm(ibValueMetaObject* metaObject) = 0;
+
+	// …and which editor that is, or null when nobody is looking at it.
+	virtual ibMetaDocument* GetDocument(ibValueMetaObject* metaObject) const = 0;
+
+	// WHOSE metadata this tree is showing. The debugger arrives with a module NAME off the wire and
+	// has to find the object it belongs to, so it needs the container, not just the rows.
+	virtual class ibMetaData* GetMetaData() const = 0;
+
+	// Show this module at this line. `setRunLine` is what tells the debugger's arrow from a jump.
+	virtual void EditModule(const ibGuid& moduleName, int line, bool setRunLine = true) = 0;
 };
 
 #include <wx/aui/auibar.h>

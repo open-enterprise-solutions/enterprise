@@ -154,8 +154,22 @@ struct ibSpreadsheetCellDescription {
 		return *this;
 	}
 
+	// ⚠ WHAT A CELL SAYS IS PART OF WHAT A CELL IS.
+	//
+	// This compared fourteen things and not m_value, m_fitMode or m_isReadOnly — so two sheets
+	// differing only in what was WRITTEN in them compared equal. The one thing a person looks at
+	// was the one thing equality ignored, and every caller built on top inherited that: the
+	// description's own operator== is this one in a loop, and ibVariantDataSpreadsheet::Eq is how
+	// wxVariant answers "did this change" about a template.
+	//
+	// It was found by writing a test for the round trip and discovering the assertion could not
+	// fail (2026-08-31). Nothing was losing data at the time — the grid's own "did the text
+	// change" check compares the strings directly — but an equality that skips the content is
+	// wrong by its own name, and the first caller to trust it would have been told something
+	// false with nothing to notice.
 	bool operator == (const ibSpreadsheetCellDescription& rhs) const {
 		return m_row == rhs.m_row && m_col == rhs.m_col
+			&& m_value == rhs.m_value
 			&& m_alignHorz == rhs.m_alignHorz
 			&& m_alignVert == rhs.m_alignVert
 			&& m_textOrient == rhs.m_textOrient
@@ -164,6 +178,8 @@ struct ibSpreadsheetCellDescription {
 			&& m_textColour == rhs.m_textColour
 			&& m_borderAt[0] == rhs.m_borderAt[0] && m_borderAt[1] == rhs.m_borderAt[1] && m_borderAt[2] == rhs.m_borderAt[2] && m_borderAt[3] == rhs.m_borderAt[3]
 			&& m_row_size == rhs.m_row_size && m_col_size == rhs.m_col_size
+			&& m_fitMode == rhs.m_fitMode
+			&& m_isReadOnly == rhs.m_isReadOnly
 			&& m_fillSetType == rhs.m_fillSetType
 			&& m_detailsParameter == rhs.m_detailsParameter;
 	}
@@ -196,9 +212,17 @@ struct ibSpreadsheetCellDescription {
 
 class BACKEND_API ibSpreadsheetCellDescriptionMemory {
 public:
-	//load & save object in control 
+	//load & save object in control
 	static bool LoadData(class ibReaderMemory& reader, ibSpreadsheetCellDescription& spreadsheetDesc);
 	static bool SaveData(class ibWriterMemory& writer, const ibSpreadsheetCellDescription& spreadsheetDesc);
+
+	// ⭐ THE CELL DESCRIBES ITSELF — in the node form exactly as in the byte form
+	// above. The sheet writes the cells' POSITIONS and asks each cell for its own
+	// contents; it does not reach into a cell's fields, any more than the byte
+	// writer does. A part that cannot say what it is forces its container to know,
+	// and the container then has to be edited every time the part gains a field.
+	static bool ReadNode(const class ibDataValue& value, ibSpreadsheetCellDescription& spreadsheetDesc);
+	static bool WriteNode(class ibDataValue& value, const ibSpreadsheetCellDescription& spreadsheetDesc);
 };
 
 struct ibSpreadsheetAreaDescription {
@@ -221,6 +245,16 @@ struct ibSpreadsheetGroupDescription {
 		unsigned int level = 1, bool collapsed = false, int head = -1)
 		: m_start(start), m_end(end), m_level(level), m_collapsed(collapsed), m_head(head) {}
 
+	// A group is its range, its depth, whether it opens folded and where its marker sits — all of
+	// it, because all of it is stored and all of it changes what a person sees.
+	bool operator == (const ibSpreadsheetGroupDescription& rhs) const {
+		return m_start == rhs.m_start && m_end == rhs.m_end
+			&& m_level == rhs.m_level
+			&& m_collapsed == rhs.m_collapsed
+			&& m_head == rhs.m_head;
+	}
+	bool operator != (const ibSpreadsheetGroupDescription& rhs) const { return !(*this == rhs); }
+
 	unsigned int m_start, m_end;
 	unsigned int m_level;
 	bool m_collapsed;
@@ -239,6 +273,11 @@ struct ibSpreadsheetRowSizeDescription
 {
 	ibSpreadsheetRowSizeDescription(unsigned int row, unsigned int height = 0) : m_row(row), m_height(height) {}
 
+	bool operator == (const ibSpreadsheetRowSizeDescription& rhs) const {
+		return m_row == rhs.m_row && m_height == rhs.m_height;
+	}
+	bool operator != (const ibSpreadsheetRowSizeDescription& rhs) const { return !(*this == rhs); }
+
 	unsigned int m_row;
 	unsigned int m_height = 0;
 };
@@ -246,6 +285,11 @@ struct ibSpreadsheetRowSizeDescription
 struct ibSpreadsheetColSizeDescription
 {
 	ibSpreadsheetColSizeDescription(unsigned int col, unsigned int width = 0) : m_col(col), m_width(width) {}
+
+	bool operator == (const ibSpreadsheetColSizeDescription& rhs) const {
+		return m_col == rhs.m_col && m_width == rhs.m_width;
+	}
+	bool operator != (const ibSpreadsheetColSizeDescription& rhs) const { return !(*this == rhs); }
 
 	unsigned int m_col;
 	unsigned int m_width = 0;
@@ -446,6 +490,21 @@ struct ibSpreadsheetDescription {
 	const ibSpreadsheetGroupDescription* GetColGroupByIdx(size_t idx) const {
 		return idx < m_colGroupAt.size() ? &m_colGroupAt[idx] : nullptr;
 	}
+	// ⭐ ONE GROUP OFF, beside the ClearAll. A break can be withdrawn singly (DeleteRowBrake) and a
+	// group could only be wiped wholesale, so folding a stretch was a decision with no way back
+	// short of losing every other fold on the sheet. Matched by START and END — that pair is what
+	// a group IS; level and collapsed are things it carries, not what identifies it.
+	void DeleteRowGroup(unsigned int start, unsigned int end) {
+		m_rowGroupAt.erase(std::remove_if(m_rowGroupAt.begin(), m_rowGroupAt.end(),
+			[start, end](const ibSpreadsheetGroupDescription& g) {
+				return g.m_start == start && g.m_end == end; }), m_rowGroupAt.end());
+	}
+	void DeleteColGroup(unsigned int start, unsigned int end) {
+		m_colGroupAt.erase(std::remove_if(m_colGroupAt.begin(), m_colGroupAt.end(),
+			[start, end](const ibSpreadsheetGroupDescription& g) {
+				return g.m_start == start && g.m_end == end; }), m_colGroupAt.end());
+	}
+
 	void ClearRowGroups() { m_rowGroupAt.clear(); }
 	void ClearColGroups() { m_colGroupAt.clear(); }
 
@@ -886,6 +945,23 @@ struct ibSpreadsheetDescription {
 			return false;
 
 		if (m_rowBrakeAt != rhs.m_rowBrakeAt || m_colBrakeAt != rhs.m_colBrakeAt)
+			return false;
+
+		// ⚠ SIZES AND GROUPS COUNT TOO — they were both missing.
+		//
+		// A row's height and a column's width are stored, serialised and looked at; two sheets
+		// laid out differently were compared equal because only their contents were asked about.
+		// And the outline groups had a worse consequence: they gained a serialised form only this
+		// week, and a round-trip assertion built on this operator would have stayed GREEN if they
+		// were dropped again — an equality that cannot see a field cannot protect it.
+		//
+		// The index maps beside these vectors are not compared: they are where-to-look, rebuilt
+		// from the vectors, and two sheets that agree on every size agree whatever their maps
+		// happen to hold. Same reasoning as the read cursors in ibDataNode.
+		if (m_rowHeightAt != rhs.m_rowHeightAt || m_colWidthAt != rhs.m_colWidthAt)
+			return false;
+
+		if (m_rowGroupAt != rhs.m_rowGroupAt || m_colGroupAt != rhs.m_colGroupAt)
 			return false;
 
 		return m_freezeRow == rhs.m_freezeRow &&

@@ -112,10 +112,6 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnSortItem(wxCommandEvent& ev
 	m_ownerTree->SortItem(); event.Skip();
 }
 
-void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCommandItem(wxCommandEvent& event)
-{
-	m_ownerTree->CommandItem(event.GetId()); event.Skip();
-}
 
 #include <wx/clipbrd.h>
 #include "clipboardLock.h"   // the Open/Close pair, taken as a guard — one mechanism, all three trees
@@ -131,10 +127,12 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCopyItem(wxCommandEvent& ev
 	if (clipboard.IsOpen()) {
 
 		ibValueMetaObject* metaObject = m_ownerTree->GetMetaObject(item);
-		if (metaObject != nullptr) {
+		ibMetaData* const metaData = m_ownerTree->GetMetaData();
+
+		if (metaObject != nullptr && metaData != nullptr) {
 
 			ibWriterMemory dataWritter;
-			if (metaObject->CopyObject(dataWritter)) {
+			if (metaData->CopyMetaObject(metaObject, dataWritter)) {
 
 				wxDataObjectComposite* composite_object = new wxDataObjectComposite;
 				wxCustomDataObject* custom_object = new wxCustomDataObject(oes_clipboard_metadata);
@@ -172,24 +170,15 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnPasteItem(wxCommandEvent& e
 		wxCustomDataObject data(oes_clipboard_metadata);
 		if (wxTheClipboard->GetData(data)) {
 
-			ibValueMetaObject* metaObject = m_ownerTree->NewItem(
-				m_ownerTree->GetClassIdentifier(),
-				m_ownerTree->GetMetaIdentifier(),
-				false
-			);
-
-			if (metaObject != nullptr) {
+			// ⭐ WHERE IT GOES AND WHAT GOES THERE — see the twin in treeConfigurationEvent.cpp.
+			// The shell, the read, the announcement that draws the row and the cleanup after a bad
+			// payload are the paste's, not the caller's.
+			if (ibMetaData* metaData = m_ownerTree->GetMetaData()) {
 				ibReaderMemory reader(data.GetData(), data.GetDataSize());
-				// FillItem used to run UNCONDITIONALLY here — the one tree of the three that put a
-				// half-pasted object into the navigator. Now the rule is the same everywhere: a
-				// paste that failed leaves nothing behind, in the tree or in the metadata.
-				if (metaObject->PasteObject(reader)) {
-					m_ownerTree->FillItem(metaObject, item, true, false);
-					objectInspector->SelectObject(metaObject);
-				}
-				else if (ibMetaData* metaData = m_ownerTree->GetMetaData()) {
-					metaData->RemoveMetaObject(metaObject);
-				}
+				metaData->PasteMetaObject(
+					m_ownerTree->GetClassIdentifier(),
+					m_ownerTree->GetMetaIdentifier(),
+					reader);
 			}
 		}
 	}
@@ -232,7 +221,7 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnSelected(wxTreeEvent& event
 void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCollapsing(wxTreeEvent& event)
 {
 	if (GetRootItem() != event.GetItem()) {
-		m_ownerTree->Collapse(); event.Skip();
+		m_ownerTree->Collapse(event.GetItem()); event.Skip();
 	}
 	else {
 		event.Veto();
@@ -241,5 +230,5 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCollapsing(wxTreeEvent& eve
 
 void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnExpanding(wxTreeEvent& event)
 {
-	m_ownerTree->Expand(); event.Skip();
+	m_ownerTree->Expand(event.GetItem()); event.Skip();
 }

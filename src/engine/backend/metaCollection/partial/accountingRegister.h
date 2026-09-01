@@ -291,13 +291,48 @@ private:
 		return formList;
 	}
 
-	enum
-	{
-		ID_METATREE_OPEN_MODULE = 19000,
-		ID_METATREE_OPEN_MANAGER = 19001,
-	};
 
 public:
+
+	// ⭐⭐ WHAT THE TABLE HAS IS NOT WHAT IS OFFERED, and RecordType is where the two part company.
+	//
+	// The column ALWAYS exists — see FillArrayObjectByPredefinedAttribute below for why: a column
+	// that follows the correspondence checkbox takes its data with it when the box is unticked.
+	// That decision is about STORAGE and it stands.
+	//
+	// 🛑 But it leaked into every reading. RecordType says WHICH SIDE a one-sided row is; a
+	// correspondence row names BOTH accounts, so the question does not arise — and the register's
+	// own comment already says such a row "leaves RecordType empty". An unanswered enumeration is
+	// not blank on screen, though: its default is a real member, so the list showed **Debit** on a
+	// row that has both a debit and a credit account, and a query or a form would hand the same
+	// word to anyone who asked. A meaningless field displayed as a made choice.
+	//
+	// So it is dropped from the OFFERED set — the one queries, forms and the runtime object read —
+	// while the schema keeps its column. The seam for this already existed and was simply not used:
+	// GetPredefinedAttributeArrayObject answers the schema, GetGenericAttributeArrayObject answers
+	// everyone else.
+	// ⚠ THE `using` IS NOT DECORATION. Declaring one overload here hides EVERY base overload of the
+	// name, and the no-argument form is what almost every caller uses — without this line the tree
+	// stops compiling at the first `GetGenericAttributeArrayObject()`. The base carries the same
+	// line for the same reason.
+	using ibValueMetaObjectRegisterData::GetGenericAttributeArrayObject;
+
+	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const override
+	{
+		ibValueMetaObjectRegisterData::GetGenericAttributeArrayObject(array);
+
+		if (!IsCorrespondence())
+			return array;
+
+		ibValueMetaObjectAttributeBase* side = GetRegisterRecordType();
+
+		for (auto it = array.begin(); it != array.end(); ++it) {
+			if (*it == side) { array.erase(it); break; }
+		}
+
+		return array;
+	}
 
 	// Predefined attribute accessors
 	ibValueMetaObjectAttributePredefined* GetRegisterRecordType() const {
@@ -723,8 +758,7 @@ public:
 #pragma endregion
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 	/**
 	* Property events
@@ -965,10 +999,11 @@ private:
 // a query may name — is one answer, written once. (The accumulation register learned this the hard
 // way: three copies of that answer, and the navigation swung with the road on one of them.)
 //
-// Every one of them is computed in RAM today, because this register has no materialised surface yet.
-// That is a property of the READING, not of its interface: when the totals bundle lands (§7 of the
-// arc, "two guarded accumulations"), a reading overrides GetSourceRelation and becomes a derived table
-// on the server, and nothing above it changes — the same columns, the same rows, the same numbers.
+// Whether a reading is computed in RAM or on the server is a property of the READING and of the
+// CALL, never of this interface: each one overrides GetSourceRelation and becomes a derived table on
+// the server when its own gates say the stored surface can answer, and nothing above it changes —
+// the same columns, the same rows, the same numbers. All five do so today; the paragraph that stood
+// here said none of them did, which stopped being true when the totals bundle landed.
 class BACKEND_API ibAcctTotalsQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectAccountingRegister> {
 public:
 	ibAcctTotalsQueryable(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape,
@@ -976,6 +1011,22 @@ public:
 	                      const ibValue& condition = ibValue())
 		: ibComputedRegisterQueryable(reg), m_shape(shape), m_kindsDr(kindsDr), m_kindsCr(kindsCr),
 		  m_condition(condition) {}
+
+	// 🛑 NO KEY HERE, AND THE REASON IS STRUCTURAL RATHER THAN AN OMISSION.
+	//
+	// A totals row of an accounting register is period + ACCOUNT + each account-dimension slot with
+	// its kind + the register's dimensions — that is what the schema keys the table by. But there
+	// are TWO totals tables, debit and credit (accountingRegisterMetadataSchema.cpp declares them
+	// with declareSide(creditSide)), and each keys on ITS OWN side's account and slots.
+	//
+	// This surface does not know which side it is: ibAcctShape says Balance / Turnovers /
+	// DrCrTurnovers / Records — the READING, not the side. So a key written here would have to
+	// guess a side, and guessing wrong produces a valid statement that folds one side's rows onto
+	// the other's: right SQL, wrong ledger, nothing to notice.
+	//
+	// Until the side is part of what this surface knows, an empty answer is the honest one — the
+	// upsert guard in databaseQueryBuilder refuses in words and names the table, which is a loud
+	// failure instead of a quiet miscount.
 
 	// The condition as it arrived. Its DIMENSION half is already a predicate (m_filter on each
 	// reading); its ACCOUNT-DIMENSION half is a question about the slots and is built per pass, where
@@ -1008,7 +1059,12 @@ public:
 	// the driver maintains it at all, the shape is one table (correspondence keeps two, one per
 	// side), the breakdown was not asked for BY KIND (that needs the slot CASE), and the fold is not
 	// finer than the stored grain. Anything else is a plausible wrong number, so it takes the RAM road.
-	virtual bool CanReadOnServer() const { return false; }
+	//
+	// ⭐ PURE. It carried `return false` while the totals bundle did not exist and no reading could
+	// answer anything else. All five answer for themselves now, so the default is never the answer —
+	// and a default of "no" is the one that hides a missing override: a new reading would quietly
+	// take the RAM road forever, correct and slow, with nothing saying why.
+	virtual bool CanReadOnServer() const = 0;
 
 	// The two answers that follow from it. Computed in RAM unless this call can go to the server; and
 	// then the ordinary PHYSICAL provider, so the source behaves like any other relation.
@@ -1163,6 +1219,33 @@ public:
 	// which is exactly what the Record granularity names. Nothing is folded, so nothing is dropped.
 	virtual ibRegFold Fold() const override {
 		ibRegFold fold; fold.m_kind = ibRegGranularity::Record; return fold;
+	}
+
+	// 🛑 AND ITS KEY IS THE MOVEMENT'S, NOT THE TOTALS'. This derives from ibAcctTotalsQueryable and
+	// would otherwise inherit period + account + slots + dimensions — the identity of a FOLDED row,
+	// which is exactly what this surface does not produce. Two movement lines of one document can
+	// carry the same account and the same dimensions; what tells them apart is the document and the
+	// line number, and nothing else does.
+	//
+	// The same three ibRegisterDataQueryable uses for a register with a recorder. Said here because
+	// the surface is asked, and this surface answers differently from the one above it.
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override
+	{
+		std::vector<const ibBackendQueryColumn*> cols;
+
+		if (m_reg == nullptr)
+			return cols;
+
+		if (m_reg->GetRegisterRecorder() != nullptr)
+			cols.push_back(m_reg->GetRegisterRecorder());
+
+		if (m_reg->GetRegisterLineNumber() != nullptr)
+			cols.push_back(m_reg->GetRegisterLineNumber());
+
+		if (m_reg->GetRegisterPeriod() != nullptr)
+			cols.push_back(m_reg->GetRegisterPeriod());
+
+		return cols;
 	}
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 

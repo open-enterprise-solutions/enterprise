@@ -836,10 +836,38 @@ private:
 // It was written out at a dozen sites across the three surface builders, and the caption was the
 // part every one of them forgot — so a period column headed `Period` where the register's own form
 // says "Date of movement".
+// ⭐⭐ THE COLUMN SAYS WHAT IT IS; ITS NAME IS NOT ASKED TO CARRY THAT.
+//
+// A derived surface stores a single-field attribute as ONE column (`fld1124_D` — the period), and a
+// multi-field one as its whole spread (`fld1199_TYPE`, `fld1199_RTRef`, `fld1199_RRRef` — an
+// account, a recorder). Those are two different shapes, and this one helper publishes both.
+//
+// 🛑 IT USED TO PUBLISH THEM ALIKE — always naming the column after `ibRegValueField`, the first
+// VALUE field. For a single-field attribute that is the whole column and it was right. For a
+// REFERENCE it named the column `fld1199_RTRef` while still declaring it composite, so the reader
+// spread it a second time and asked the database for `fld1199_RTRef_RRRef`: a role suffix applied
+// twice, `-206 Column unknown`, every reference key of the read at once. Measured 2026-08-31 from a
+// trial balance, and invisible until then because only reference-typed attributes reach it.
+//
+// ⭐ So the shape is DECLARED rather than inferred from the spelling:
+//   · several fields -> a COMPOSITE column named by the attribute's own base name, whose spread is
+//     exactly the field list the surface declared (both come from DescribeColumnLayout);
+//   · one field      -> a column that IS that field, said with the kind, which is what stops a
+//     reader looking for a `_TYPE` the table does not have.
+// Neither case leaves the name meaning something the reader has to work out.
 inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* attribute)
 {
-	return ibTempColumn(attribute->GetName(), ibRegValueField(attribute),
-	                    attribute->GetTypeDesc(), attribute->GetMetaID(), attribute->GetSynonym());
+	// [0] is the _TYPE tag; anything past [1] means the value itself needs more than one field.
+	const std::vector<wxString> fields = ColumnFieldNames(attribute);
+	const bool spreads = fields.size() > 2;
+
+	return spreads
+		? ibTempColumn(attribute->GetName(), attribute->GetPhysicalName(),
+		               attribute->GetTypeDesc(), attribute->GetMetaID(), attribute->GetSynonym(),
+		               ibBackendQueryColumn::Kind::Composite)
+		: ibTempColumn(attribute->GetName(), ibRegValueField(attribute),
+		               attribute->GetTypeDesc(), attribute->GetMetaID(), attribute->GetSynonym(),
+		               ibBackendQueryColumn::Kind::Computed);
 }
 
 // ============================================================================
@@ -926,12 +954,17 @@ inline const ibBackendQueryColumn* ibRegAccumulatorColumn(ibSchemaTable& t, cons
 // schema it describes; called AFTER every column exists, which is the one thing a caller can get
 // wrong here. The physical TABLE deliberately, never a view: a view sums the shards away, and the
 // fold's whole business is the individual shard rows underneath.
-inline void ibRegSelfSourceFromDeclaration(ibSchemaTable& t, const ibMetaData* metaData)
+// `keyCols` is what makes a row of this table unique — THE SAME LIST handed to ibDeclareDerivedKey,
+// so the unique index and every write that has to identify a row read one declaration. Passing it
+// here is why nothing downstream has to compose a key out of parts or look a column up by name.
+inline void ibRegSelfSourceFromDeclaration(ibSchemaTable& t, const ibMetaData* metaData,
+                                           std::vector<const ibBackendQueryColumn*> keyCols)
 {
 	std::vector<const ibBackendQueryColumn*> sourceColumns = t.m_scaffold;
 	for (const ibSchemaColumn& c : t.m_columns)
 		sourceColumns.push_back(c.m_column);
-	t.SelfSource(std::make_shared<ibSchemaTableQueryable>(t.m_name, t.m_id, std::move(sourceColumns), metaData));
+	t.SelfSource(std::make_shared<ibSchemaTableQueryable>(t.m_name, t.m_id, std::move(sourceColumns),
+	                                                      metaData, std::move(keyCols)));
 }
 
 // ⭐⭐ THE ROWS A READING RETURNED, AS THE VALUE TABLE A SCRIPT GETS BACK — AND THE COLUMNS ARE THE

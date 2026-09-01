@@ -16,8 +16,6 @@ class ibValueMetaObjectChartOfCharacteristicTypes :
 private:
 	enum
 	{
-		ID_METATREE_OPEN_MODULE = 19000,
-		ID_METATREE_OPEN_MANAGER = 19001,
 		ID_METATREE_EDIT_PREDEFINED = 19002,
 	};
 
@@ -152,7 +150,7 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 	virtual void ProcessCommand(unsigned int id);
 
 private:

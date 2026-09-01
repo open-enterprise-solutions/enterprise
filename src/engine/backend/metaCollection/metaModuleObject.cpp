@@ -33,6 +33,12 @@ bool ibValueMetaObjectModuleBase::OnLoadMetaObject(ibMetaData* metaData)
 
 bool ibValueMetaObjectModuleBase::OnSaveMetaObject(int flags)
 {
+	// ⚠ ON THE DATABASE APPLY, AND DELIBERATELY NOT ON A PLAIN SAVE. A working variant is stored
+	// for the designer's own sake; the running application never reads it, so the cached blob has
+	// not diverged from anything and dropping it would discard a row that is still true. The
+	// configuration the runtime reads changes at the APPLY — restructuring and all — and that is
+	// the moment the two can disagree.
+	//
 	//save debugger client offset
 	if ((flags & saveConfigFlag) != 0 && appData->DesignerMode()) {
 		const wxString& strBuffer = GetModuleText();
@@ -42,8 +48,7 @@ bool ibValueMetaObjectModuleBase::OnSaveMetaObject(int flags)
 		// just persisted new source text. Drop the row so the next
 		// runtime session that compiles this module refreshes the
 		// blob via the cache-miss path in
-		// ibRuntimeModuleDataObject::Compile. Best-effort; if the
-		// table doesn't exist yet the call is a no-op.
+		// ibRuntimeModuleDataObject::Compile.
 		ibByteCodeCache::Invalidate(GetGuid());
 	}
 

@@ -5,9 +5,8 @@
 
 wxVariantData* ibPropertyChartOfCharacteristicTypes::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
 {
-	const ibValueMetaObjectGenericData* propFactory = dynamic_cast<const ibValueMetaObjectGenericData*>(property);
-	if (propFactory == nullptr) return nullptr;
-	return new ibVariantDataOwner(propFactory, typeDesc);
+	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
+	return new ibVariantDataOwner(property, typeDesc);
 }
 
 ibMetaDescription& ibPropertyChartOfCharacteristicTypes::GetValueAsMetaDesc() const {
@@ -17,6 +16,13 @@ ibMetaDescription& ibPropertyChartOfCharacteristicTypes::GetValueAsMetaDesc() co
 void ibPropertyChartOfCharacteristicTypes::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// The charts of characteristic types in this configuration. The list used to sit in
+// advpropChartOfCharacteristicTypes.cpp — where a chart of accounts could not reach it.
+ibPropertyChoiceMode ibPropertyChartOfCharacteristicTypes::GetValueList(ibPropertyChoiceList& list)
+{
+	return CreateValueList(list, ibPropertyChoiceMode::Single, { g_metaChartOfCharacteristicTypesCLSID });
 }
 
 bool ibPropertyChartOfCharacteristicTypes::SetDataValue(const ibValue& varPropVal) { return false; }

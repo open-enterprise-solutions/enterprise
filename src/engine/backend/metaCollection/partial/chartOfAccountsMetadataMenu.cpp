@@ -6,25 +6,17 @@
 #include "chartOfAccounts.h"
 #include "backend/metaData.h"
 
-bool ibValueMetaObjectChartOfAccounts::PrepareContextMenu(wxMenu* defaultMenu)
+bool ibValueMetaObjectChartOfAccounts::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	wxMenuItem* menuItem = nullptr;
-	menuItem = defaultMenu->Append(ID_METATREE_OPEN_MODULE, _("Open object module"));
-	menuItem->SetBitmap((*m_propertyObjectModule)->GetIcon());
-	menuItem = defaultMenu->Append(ID_METATREE_OPEN_MANAGER, _("Open manager module"));
-	menuItem->SetBitmap((*m_propertyManagerModule)->GetIcon());
-	defaultMenu->AppendSeparator();
-	menuItem = defaultMenu->Append(ID_METATREE_EDIT_PREDEFINED, _("Open predefined values"));
-	menuItem->SetBitmap(ibBackendPicture::GetPicture(g_metaAttributeCLSID));
-	defaultMenu->AppendSeparator();
+	items.emplace_back(ibMetaMenuKind::Module, wxT("ObjectModule"), _("Open object module"), m_propertyObjectModule->GetMetaObject());
+	items.emplace_back(ibMetaMenuKind::Module, wxT("ManagerModule"), _("Open manager module"), m_propertyManagerModule->GetMetaObject());
+	items.emplace_back(wxT("PredefinedValues"), _("Open predefined values"), ID_METATREE_EDIT_PREDEFINED, g_metaAttributeCLSID);
 	return false;
 }
 
+// The remainder — a MODAL editor, which has no metaobject for an item to name.
 void ibValueMetaObjectChartOfAccounts::ProcessCommand(unsigned int id)
 {
-	ibBackendMetadataTree* metaTree = m_metaData->GetMetaTree();
-	wxASSERT(metaTree);
-	if (id == ID_METATREE_OPEN_MODULE) metaTree->OpenObjectForm(m_propertyObjectModule->GetMetaObject());
-	else if (id == ID_METATREE_OPEN_MANAGER) metaTree->OpenObjectForm(m_propertyManagerModule->GetMetaObject());
-	else if (id == ID_METATREE_EDIT_PREDEFINED) metaTree->EditPredefinedValues(this);
+	if (id == ID_METATREE_EDIT_PREDEFINED)
+		m_metaData->EditPredefinedValues(this);
 }

@@ -21,31 +21,21 @@ public:
     ibPropertyRecordLoader()
     {
 		ibPropertyRegistry::Register([](ibPropertyRecord* prop) -> wxPGProperty* {
-			return new ibPGRecordProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+			ibPropertyChoiceList choices;
+			prop->GetValueList(choices);
+			return new ibPGRecordProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue(), choices);
 		});
     }
 }g_recordLoader;
 
-void ibPGRecordProperty::FillByClsid(const ibClassID& clsid)
-{
-    const ibValueMetaObjectGenericData* metaGenericData = dynamic_cast<const ibValueMetaObjectGenericData*>(m_ownerProperty);
-    if (metaGenericData != nullptr) {
-        const ibMetaData* metaData = metaGenericData->GetMetaData();
-        wxASSERT(metaData);
-        for (auto metaRecorder : metaData->GetAnyArrayObject(clsid)) {
-            ibValueMetaObjectRegisterData* registerData = dynamic_cast<ibValueMetaObjectRegisterData*>(metaRecorder);
-            if (registerData == nullptr || !registerData->HasRecorder()) continue;
-            m_choices.Add(registerData->GetName(), registerData->GetIcon(), registerData->GetMetaID());
-        }
-    }
-}
-
-ibPGRecordProperty::ibPGRecordProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value)
+ibPGRecordProperty::ibPGRecordProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value,
+	const ibPropertyChoiceList& choices)
     : wxPGProperty(label, strName), m_ownerProperty(property)
 {
-    FillByClsid(g_metaInformationRegisterCLSID);
-    FillByClsid(g_metaAccumulationRegisterCLSID);
-    FillByClsid(g_metaAccountingRegisterCLSID);
+    // The classes AND the has-a-recorder rule both moved into ibPropertyRecord::GetValueList, so the
+    // list here is the same one every other caller now sees.
+    for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
+        m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
 
     //m_flags |= wxPGFlags::ReadOnly;
     m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.

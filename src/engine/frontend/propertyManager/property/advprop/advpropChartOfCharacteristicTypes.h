@@ -3,6 +3,7 @@
 
 #include <wx/propgrid/propgrid.h>
 #include "backend/backend_type.h"
+#include "backend/propertyManager/propertyObject.h"   // ibPropertyChoiceList — the property's own answer
 
 class BACKEND_API ibPropertyObject;
 
@@ -11,13 +12,16 @@ class BACKEND_API ibPropertyObject;
 // -----------------------------------------------------------------------
 
 class ibPGChartOfCharacteristicTypesProperty : public wxPGProperty {
-	void FillByClsid(const ibClassID& clsid);
 public:
 
 	const ibPropertyObject* GetPropertyObject() const { return m_ownerProperty; }
 
+	// ⭐ THE CHOICES ARRIVE, they are no longer worked out here. This class used to hold its own
+	// FillByClsid over a hardcoded clsid — one of five identical copies across this folder, and the
+	// only place in the product that knew what may fill a relationship. The property answers now.
 	ibPGChartOfCharacteristicTypesProperty(const ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant);
+		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant,
+		const ibPropertyChoiceList& choices = ibPropertyChoiceList());
 
 	virtual wxString ValueToString(wxVariant& value,
 		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;

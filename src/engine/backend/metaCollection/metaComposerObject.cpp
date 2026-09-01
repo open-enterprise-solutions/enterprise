@@ -6,7 +6,6 @@
 #include "backend/metaData.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type node data
 #include "backend/metaCollection/partial/dataReport.h"   // the owner told about its default composer
-#include "backend/backend_metatree.h"   // ibBackendMetadataTree — the header's choice hears about a new composer
 
 ibValueMetaObjectComposer::ibValueMetaObjectComposer()
 	: ibValueMetaObject()
@@ -60,15 +59,10 @@ bool ibValueMetaObjectComposer::OnCreateMetaObject(ibMetaData* metaData, int fla
 		if (auto* report = dynamic_cast<ibValueMetaObjectReport*>(m_parent))
 			report->OnCreateComposerObject(this);
 
-		// ⭐ AND THE HEADER'S CHOICE IS TOLD FROM HERE, exactly where the form metatype tells it
-		// (ibValueMetaObjectForm::OnCreateMetaObject). Hanging it on the tree's create command
-		// covers ONE road — paste, undo and the second tree each need their own copy of it, and
-		// that is how a list of composers ends up stale in one window and fresh in another. The
-		// metatype knows it was born; every road goes through here.
-		if (metaData != nullptr) {
-			if (ibBackendMetadataTree* metaTree = metaData->GetMetaTree())
-				metaTree->UpdateChoiceSelection();
-		}
+		// 🛑 THE HEADER'S CHOICE IS NOT TOLD FROM HERE ANY MORE. The reasoning was right — hanging
+		// it on the tree's create command covers ONE road, and paste, undo and the second tree each
+		// need their own copy — but the `Created` stage is what covers every road now, and a watcher
+		// answers it by refreshing its own lists. Saying it here as well was the same act twice.
 	}
 
 	return true;

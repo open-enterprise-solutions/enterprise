@@ -38,6 +38,14 @@ public:
 	void SetExpanded(const ibWatchWindowData& watchData);
 
 	/**
+	* Is this row one of ours? The watch protocol carries the requester's own
+	* wxTreeItemId as the watch id, so an answer meant for somebody else attached
+	* to the same debugger arrives here as an address this window never created.
+	* Walked rather than remembered: the tree is a handful of rows, and a second
+	* set kept in step would be one more thing to keep in step.
+	*/
+
+	/**
 	* Updates the value for the express in the index spot in the list.
 	*/
 	void UpdateItem(const wxTreeItemId& item);

@@ -124,28 +124,76 @@ private:
 // seam does not allow (wxObject* is the most derived type backend may name — §4 of
 // docs/property-system.md) and which dragged propgrid into every backend TU. The data
 // was already ours; only the conversion sat on the wrong side.
+// HOW MANY OF THE CHOICES MAY BE HELD AT ONCE. Today this is folklore: the chart-of-characteristic-
+// types property states "exactly one" in a comment while its editor is a multi-select tree, and a
+// caller has no way to find out which is true. Said as a value, it is checkable — and a gate that
+// knows it no longer needs per-call flags telling it whether to replace or to add.
+enum class ibPropertyChoiceMode {
+	None,     // not chosen from a list at all — a string, a number, a date. The default.
+	Single,   // exactly one of them
+	Mult,     // any number of them, the value being the set
+};
+
 class BACKEND_API ibPropertyChoiceList {
 
+	// ⭐ FOUR THINGS, AND EACH ANSWERS A DIFFERENT QUESTION.
+	//
+	//   id       — WHICH ONE THIS IS. A long, always: an enumeration member's number, a metaobject's
+	//              metaID. It is what a wxPGChoices entry carries, what a dialog reads back, and the
+	//              steady way for a caller to point at a choice — words are two vocabularies and a
+	//              translation apart, a number is not.
+	//   name     — what it is called in code. This is what a script writes and what a caller names.
+	//   synonym  — what it is called to a person. Empty when there is nothing better than the name.
+	//   value    — WHAT THE PROPERTY BECOMES if this one is chosen.
+	//
+	// ⭐⭐ THE ID IS A NUMBER AND THE VALUE IS A VARIANT, and they are not the same fact. The number
+	// says WHICH; the variant is the thing itself, and for most of these families what physically
+	// hides inside it is a DESCRIPTION — a metadescription for a relationship, a schema or a
+	// composer for what comes next. No integer stands for those, and no consumer should have to
+	// rebuild one from a number it was handed: it takes the value and places it.
+	//
+	// ⚠ NAME AND SYNONYM ARE NOT ONE FIELD either. One travels into code and must not be translated;
+	// the other is for reading and may be. Folding them left a caller unable to write what it had
+	// just been shown, or showing a person an identifier.
 	struct ibPropertyChoiceItem {
-		ibPropertyChoiceItem(const wxString& label, long id, const wxBitmap& bmp)
-			: m_label(label), m_id(id), m_bmp(bmp) {}
-		wxString m_label;
-		long m_id;
-		wxBitmap m_bmp;
+		ibPropertyChoiceItem(long id, const wxString& name, const wxString& synonym,
+			const wxVariant& value, const wxBitmap& bmp)
+			: m_id(id), m_name(name), m_synonym(synonym), m_value(value), m_bmp(bmp) {}
+		long      m_id;
+		wxString  m_name;
+		wxString  m_synonym;
+		wxVariant m_value;
+		wxBitmap  m_bmp;
 	};
 
 	std::vector<ibPropertyChoiceItem> m_items;
 
 public:
 
-	void Add(const wxString& label, long id, const wxBitmap& bmp = wxNullBitmap) {
-		m_items.emplace_back(label, id, bmp);
+	// The plain form — a number IS the value, which is what an enumeration and a list offer.
+	void Add(const wxString& name, long id, const wxBitmap& bmp = wxNullBitmap) {
+		m_items.emplace_back(id, name, wxEmptyString, wxVariant(id), bmp);
+	}
+
+	// The full form — the number says which, the variant is what to place.
+	void Add(long id, const wxString& name, const wxString& synonym,
+		const wxVariant& value, const wxBitmap& bmp = wxNullBitmap) {
+		m_items.emplace_back(id, name, synonym, value, bmp);
 	}
 
 	unsigned int GetCount() const { return (unsigned int)m_items.size(); }
-	wxString GetLabel(unsigned int idx) const { return m_items[idx].m_label; }
 	long GetId(unsigned int idx) const { return m_items[idx].m_id; }
+	wxString GetName(unsigned int idx) const { return m_items[idx].m_name; }
+	wxString GetSynonym(unsigned int idx) const { return m_items[idx].m_synonym; }
+	const wxVariant& GetValue(unsigned int idx) const { return m_items[idx].m_value; }
 	const wxBitmap& GetBitmap(unsigned int idx) const { return m_items[idx].m_bmp; }
+
+
+	// The label a person reads: the synonym when there is one, the name otherwise. One place, so
+	// every reader falls back the same way.
+	wxString GetLabel(unsigned int idx) const {
+		return m_items[idx].m_synonym.IsEmpty() ? m_items[idx].m_name : m_items[idx].m_synonym;
+	}
 };
 
 class BACKEND_API ibBackendProperty {
@@ -210,6 +258,24 @@ public:
 
 	////////////////////
 
+	// ⭐ AND THE PROBE FORM — "are you this?", answering null when the answer is no.
+	//
+	// The pair is `Get` and `Find`, the way this tree names them everywhere else: Get is for a shape
+	// that is KNOWN, and a value that is not it is a defect worth raising over; Find is for a SEARCH,
+	// where "no" is an ordinary answer. A caller walking every property of an object asking which one
+	// holds a type description, or which ones are relationships, gets a no from most of them — and
+	// with only the raising form it had to reach past the accessor and cast the variant by hand,
+	// which is the recognising-from-outside this whole property contract exists to remove.
+	template <typename cast_type = wxVariantData>
+	inline cast_type* find_cell_variant(const wxVariant& val) const {
+		return dynamic_cast<cast_type*>(val.GetRefData());
+	}
+
+	template <typename cast_type = wxVariantData>
+	inline cast_type* find_cell_variant() const {
+		return find_cell_variant<cast_type>(m_propValue);
+	}
+
 	// ⭐⭐ A CELL THAT IS NOT WHAT IT IS ASKED FOR RAISES. Every caller dereferences the result on the
 	// spot (`get_cell_variant<X>()->GetSomething()`), so a null is a null dereference one line later —
 	// and the assert that used to stand here is gone in Release, which is where it would happen.
@@ -219,7 +285,7 @@ public:
 	// This tree's rule is that a failure raises rather than quietly answering something wrong.
 	template <typename cast_type = wxVariantData>
 	inline cast_type* get_cell_variant(const wxVariant& val) const {
-		cast_type* ret_type = dynamic_cast<cast_type*>(val.GetRefData());
+		cast_type* ret_type = find_cell_variant<cast_type>(val);
 		if (ret_type == nullptr)
 			ibBackendCoreException::Error(_("Property '%s': its value is not of the expected kind"), GetName());
 		return ret_type;
@@ -234,6 +300,63 @@ public:
 
 	virtual bool IsOk() const { return !m_propValue.IsNull(); }
 	virtual bool IsEmptyProperty() const { return false; }
+
+	// ⭐⭐ WHAT MAY I BE SET TO — the one question that is universal, and the only one worth putting
+	// here. Every property already carries its value as a wxVariant; what nothing could ask was the
+	// set of values that variant is ALLOWED to take. An enumeration's set is fixed by its type; a
+	// list's is filled by the metaobject that owns the property; a relationship's is every metaobject
+	// of the classes that may fill it. Three different sources, one question.
+	//
+	// Empty is the honest answer for a string, a number, a date — most properties — and costs them
+	// nothing.
+	//
+	// 🛑 THE PARTICULAR CASE MUST NOT COME UP HERE. An earlier attempt put `GetMetaDescription` on
+	// this class: an ibMetaDescription is what ONE family happens to keep INSIDE its variant, and
+	// hoisting it made every property in the system answer a question about a shape five of them
+	// have. The variant is already the common currency — it is comparable, it is assignable, and it
+	// is what the object inspector has always moved around. Nothing above needs to see through it.
+	// ⭐⭐ WHAT MAY I BE SET TO. Named after ibPropertyList::GetValueList, which is where this shape
+	// already existed and worked — the same question, so this is that mechanism moved down rather
+	// than a second one beside it.
+	//
+	// ⭐ ONE CALL ANSWERS BOTH HALVES. It fills the list and RETURNS THE MODE, so "what may I be set
+	// to" and "how many of them at once" cannot be asked separately and cannot disagree. `None` is
+	// itself the answer "not chosen from a list at all" — there is no second boolean saying whether
+	// the list is meaningful.
+	//
+	// None by default, which is most properties — a string, a number, a date — and costs them
+	// nothing.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) { return ibPropertyChoiceMode::None; }
+
+
+protected:
+
+	// ⭐ THE ANSWER FOR A RELATIONSHIP, BUILT ONCE, HERE. Every property whose choices are OTHER
+	// METAOBJECTS answers the same way: take the classes that may fill it, walk them, and carry each
+	// one's variant out with it. Five properties do that, and the walk used to be written five times
+	// in the FRONT — in the constructors of five wxPGProperty editors, where nothing headless could
+	// reach it and where the clsid list, a fact about the property, was kept.
+	//
+	// `mode` is what the caller returns: this function does not decide whether one or several are
+	// allowed, the property does.
+	//
+	// `accept` narrows the classes when belonging to one is not enough — a document posts only to
+	// registers that HAVE A RECORDER, a rule that lived inside one of those front-side fill loops and
+	// would have been lost bringing the classes down, leaving a list wider than the designer's own.
+	//
+	// ⚠ A PLAIN FUNCTION POINTER, so a captureless lambda goes straight in with no std::function
+	// between them — and nothing is added to the base for the properties that have no such rule.
+	//
+	// ⚠ IT TAKES A PROPERTY OBJECT, NOT A METAOBJECT. A candidate IS one, and saying so keeps this
+	// header inside its own world: the property system has no business naming a metaCollection type
+	// to express "one of the things I might be set to". The property that has a rule knows what it
+	// is looking at and narrows it there.
+	ibPropertyChoiceMode CreateValueList(ibPropertyChoiceList& list, ibPropertyChoiceMode mode,
+		const std::initializer_list<ibClassID> classes,
+		bool (*accept)(const ibPropertyObject*) = nullptr);
+
+public:
+
 
 
 	// Property <-> node value — the ONLY per-property serialization (no byte SaveData/LoadData
@@ -844,6 +967,44 @@ protected:
 	propertyType* m_parent = nullptr;
 	vectorType m_children;
 };
+
+///////////////////////////////////////////////////////////////////////////////
+
+// ⭐⭐ THE ONE DOOR A VALUE GOES THROUGH — the same one a mouse click uses.
+//
+// Setting a property is four steps, not one: ask the owner (it may veto), set, tell the owner what
+// changed with the value it had, and tell the property's REAL owner that a child changed. Miss any
+// of them and the object is never told its own property moved — a binding updates one of its two
+// sides, an owner that would have refused is never asked, a nested child never initialises. The
+// configuration comes out looking edited and behaving as though it were not.
+//
+// 🛑 IT EXISTED TWICE. `ibObjectInspector::ModifyProperty` in the FRONT was the authority, and the
+// MCP server carried a second copy of the same sequence because it has no inspector to call. Two
+// copies of a four-step sequence are four chances to drop a step, and only one of them would have
+// been noticed — the one a person can see.
+//
+// ⚠ `asked` IS NOT ALWAYS THE PROPERTY'S OWNER, which is why it is a parameter rather than derived
+// here. The inspector asks the SELECTED object: the property being edited may belong to a nested
+// child the selection merely accumulates (a dynamic list under a form-attribute holder — the
+// selection is the holder, the edited Source belongs to the list). A caller with no selection
+// passes the property's own owner and gets the ordinary behaviour.
+//
+// ⚠ STEP 4 LOOKS REDUNDANT AND IS NOT: step 3 travels up the attach chain, step 4 starts at the
+// property's ACTUAL owner so the child initialises before the bubble reaches the holder.
+namespace ibPropertyGate {
+
+	// `refusal` is OPTIONAL: a caller that only wants to know whether it went through passes
+	// nothing. The inspector is one — a person watching the grid sees the value not change, and a
+	// sentence has nowhere to go. A caller answering someone else (the MCP server) wants the words.
+	BACKEND_API bool SetValue(ibPropertyObject* asked, ibProperty* property,
+		const wxVariant& newValue, wxString* refusal = nullptr);
+
+	// THE TWIN, AND IT IS A TWIN ON PURPOSE. An event is an ibBackendProperty like a property is,
+	// and ibPropertyObject declares OnEventChanging / OnEventChanged beside the property pair for
+	// exactly this reason. The only difference is WHICH pair is asked.
+	BACKEND_API bool SetEvent(ibPropertyObject* asked, ibEvent* event,
+		const wxVariant& newValue, wxString* refusal = nullptr);
+}
 
 #include "backend/compiler/value.h"
 

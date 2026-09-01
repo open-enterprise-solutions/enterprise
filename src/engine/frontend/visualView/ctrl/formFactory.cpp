@@ -7,12 +7,21 @@
 #include <string>
 #include <unordered_set>
 
+// 🛑 THE ASSERT STAYS — IT IS THE TRIPWIRE FOR OUR OWN CALLERS. A name coming from the palette or
+// from a form resource IS an invariant, and a typo there must stop the developer.
+//
+// What went is the line AFTER it: `objectSingle->GetTypeControlName()` dereferenced the very null
+// the assert had just complained about, so a release build died where a debug build merely
+// grumbled. It died for real over a string that arrived from OUTSIDE — `form_accepts` called with
+// no `class` reached here with an empty one and took the designer with it (dump designer_25968,
+// 2026-09-01). Outside names are validated at the door they arrive through; here they only have to
+// not be fatal.
 inline wxString GetClassType(const wxString& className)
 {
 	const ibCtorControlTypeBase* objectSingle =
 		dynamic_cast<const ibCtorControlTypeBase*>(ibValue::GetAvailableCtor(className));
 	wxASSERT(objectSingle);
-	return objectSingle->GetTypeControlName();
+	return objectSingle != nullptr ? objectSingle->GetTypeControlName() : wxEmptyString;
 }
 
 inline void SetDefaultLayoutProperties(ibValueSizerItem* sizerItem)
@@ -157,7 +166,15 @@ void ibValueForm::ResolveNameConflict(ibValueFrame* control)
 ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame* controlParent)
 {
 	ibValueFrame* object = nullptr;
+
+	// No name at all is not a typo to trip the assert on — it is nothing asked for, and the answer
+	// is the same null every unbuildable control gets. The caller already has the wording for it.
+	if (className.IsEmpty())
+		return nullptr;
+
 	wxString classType = ::GetClassType(className);
+	if (classType.IsEmpty())
+		return nullptr;
 
 	if (controlParent) {
 		//FIXME! This is a patch to avoid creating the menubar, statusbar and

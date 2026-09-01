@@ -660,14 +660,84 @@ bool ibValueForm::CloseForm(bool force)
 	return true;
 }
 
+#ifndef OES_USE_WEB
+#include "frontend/docView/templates/docViewHelp.h"
+#endif
+
 void ibValueForm::HelpForm()
 {
 #ifndef OES_USE_WEB
-	// Modal message box — desktop-only. Web would surface help through
-	// an HTTP response instead; wiring is deferred.
-	wxMessageBox(
-		_("Help will appear here sometime, but not today.")
-	);
+	// ⭐ THE TEXT IS THE OBJECT'S OWN. Every metaobject carries help
+	// (ibValueMetaObject::GetHelpContent), written in the designer's tree; this is the reading
+	// end of it. Asked of the object the form is FOR — "what is this document" is a question
+	// about the document, not about the form showing it.
+	const ibValueMetaObjectGenericData* metaObject = GetMetaObject();
+
+	const wxString help = metaObject != nullptr
+		? metaObject->GetHelpContent() : wxEmptyString;
+
+	// NOTHING WRITTEN IS AN ANSWER, and a better one than an empty tab: an empty window leaves a
+	// person wondering whether the help failed to load.
+	if (help.IsEmpty()) {
+		wxMessageBox(_("Nothing has been written about this yet."),
+			wxTheApp->GetAppDisplayName(), wxOK | wxCENTRE | wxICON_INFORMATION);
+		return;
+	}
+
+	ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
+
+	// ⚠ NOT `docManager` — that name is a MACRO (docView.h) expanding to the singleton accessor,
+	// so a local of that name is a redefinition rather than a variable. Asked of the OWNING
+	// document anyway, which is the right question: the help belongs in the same manager as the
+	// form it is about, not in whichever one happens to be current.
+	ibDocManager* const documents = ownerDocForm != nullptr
+		? ownerDocForm->GetDocumentManager() : nullptr;
+
+	if (documents == nullptr)
+		return;
+
+	// ⭐ A TAB, AND A CHILD OF THE FORM THAT ASKED — help is read BESIDE the thing it is about,
+	// where a modal box would have to be dismissed before it could be acted on. Being a child
+	// means ibDocument's cascade closes it when that form closes, so help tabs cannot pile up
+	// behind a workspace somebody has moved on from.
+	ibHelpFileDocument* doc = documents->CreateDocument<ibHelpFileDocument>();
+	if (doc == nullptr)
+		return;
+
+	doc->SetDocParent(ownerDocForm);
+	doc->SetTitle(metaObject != nullptr
+		? wxString::Format(_("Help: %s"), metaObject->GetSynonym()) : _("Help"));
+
+	documents->AddDocument(doc);
+
+	// READ-ONLY: this is the user's copy of what a developer wrote, and the view already honours
+	// the flag (docViewHelp.cpp). Editing happens in the designer, on the object.
+	if (!doc->OnCreate(wxEmptyString, ibDOC_READONLY)) {
+		doc->DeleteAllViews();
+		return;
+	}
+
+	if (ibTextEditor* text = doc->GetTextCtrl()) {
+		// ⚠ WRITTEN WITH THE READ-ONLY LIFTED, then put back. A styled text control refuses to be
+		// filled while it is read-only, so the text would silently not arrive — the guard has to
+		// be opened by whoever is legitimately writing and closed again behind them.
+		text->SetReadOnly(false);
+		text->SetText(help);
+		text->SetReadOnly(true);
+		text->EmptyUndoBuffer();
+	}
+
+	// 🛑 NOBODY EDITED THIS, so it must not be carried as an edit. Filling the control marks the
+	// document modified — the ordinary signal, arriving here for the wrong reason — and a modified
+	// FILE document with no filename asks to be saved on close, which opens a file dialog over a
+	// tab the person only meant to read. Said after the text is in, because that is what raised it.
+	//
+	// ⚠ The read-only flag stops at the VIEW (docViewHelp.cpp: SetReadOnly(flags == ibDOC_READONLY));
+	// the DOCUMENT never learns it, so it cannot refuse the prompt on its own. Stating it here is
+	// exact rather than general — this is the only read-only file document — but the flag belongs
+	// on the document eventually, and that is a wide header.
+	doc->Modify(false);
+	doc->SetDocumentSaved(true);
 #endif
 }
 

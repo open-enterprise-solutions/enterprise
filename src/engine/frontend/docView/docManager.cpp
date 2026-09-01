@@ -501,20 +501,30 @@ ibDocTemplate* ibDocManager::FindTemplateByDocClassInfo(const wxClassInfo* class
 // (sessions own their tabs through ibWebFrame::m_tabs, not the manager).
 // ----------------------------------------------------------------------------
 
-ibMetaDocument* ibDocManager::OpenObjectForm(ibValueMetaObject* metaObject, long flags)
+ibMetaDocument* ibDocManager::OpenForm(ibValueMetaObject* metaObject, long flags)
 {
-	return docManager->OpenForm(metaObject, nullptr, flags);
-}
+	// ⭐⭐ WHOSE IT IS, WORKED OUT HERE (Max, 2026-09-01: *"from outside it is simply opening a form,
+	// and inside it finds out whose it is"*). A caller holding a metaobject — a property link, a
+	// tool, a menu item — has no business knowing that an editor of an external data processor
+	// belongs under that processor's document while one of the open configuration belongs to the
+	// manager itself. It knows WHAT to open; the owner follows from the object.
+	ibMetaDocument* docParent = FindMetaDataDocument(metaObject->GetMetaData());
 
-ibMetaDocument* ibDocManager::OpenObjectForm(ibValueMetaObject* metaObject,
-                                          ibMetaDocument* docParent, long flags)
-{
-	return docManager->OpenForm(metaObject, docParent, flags);
-}
+	// ⭐⭐ ALREADY OPEN? THEN RAISE IT. This opened UNCONDITIONALLY, so the second Open on the same
+	// module built a rival document over the first: two editors of one text, each unaware of the
+	// other's edits, and whichever was saved last won. It is what made the property panel's Open
+	// links look like they "worked once" — they worked every time, and every time made another one.
+	//
+	// ⚠ THE CHECK BELONGS HERE, in the manager, and not in the tree that used to do this by hand
+	// (Max, 2026-09-01: *"before, it all went through the tree; now let it all go through the
+	// manager"*). Every road that opens a metaobject arrives at this function — the navigator, a
+	// property link, the debugger stopping on a line, a tool — and a check written at one of them
+	// is a check the other three do without.
+	if (ibMetaDocument* already = FindOpenDocument(metaObject)) {
+		already->Activate();
+		return already;
+	}
 
-ibMetaDocument* ibDocManager::OpenForm(ibValueMetaObject* metaObject,
-                                       ibMetaDocument* docParent, long flags)
-{
 	ibMetaDocTemplate* docTemplate = FindMetaTemplate(metaObject->GetClassType());
 	if (docTemplate == nullptr)
 		return nullptr;

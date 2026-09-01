@@ -25,11 +25,6 @@ public:
 class BACKEND_API ibValueMetaObjectRole : public ibValueMetaObject {
 	public:
 protected:
-	enum
-	{
-		ID_METATREE_OPEN_ROLE = 19000,
-		ID_METATREE_OPEN_MODULE,
-	};
 public:
 
 	ibValueMetaObjectRole(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
@@ -62,8 +57,7 @@ public:
 	virtual bool OnAfterCloseMetaObject();
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 protected:
 

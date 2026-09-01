@@ -199,6 +199,27 @@ public:
 	void AddField(const wxString& name, const ibDataValue& value) {
 		m_fields.emplace_back(name, value);
 	}
+
+	// ⭐ REPLACE-OR-ADD, for a node that is a VIEW rather than a record. AddField appends, which is
+	// right for a blob written once in order — reading it back finds the first and nothing repeats a
+	// name. A node rendered as JSON is a different thing: a repeated key is invalid there, and a
+	// lenient reader keeps whichever it saw last.
+	//
+	// 🛑 IT SHOWED. An MCP tool's schema is built argument BY argument, each declaring `type:
+	// "object"` and each appending to `required` — so a seven-argument tool published seven `type`
+	// keys and two `required` arrays, and a strict client would have taken the wrong one of them
+	// (found 2026-09-01, reading a schema back off the running server).
+	void SetField(const wxString& name, const ibDataValue& value) {
+
+		for (std::pair<wxString, ibDataValue>& field : m_fields) {
+			if (field.first == name) {
+				field.second = value;
+				return;
+			}
+		}
+
+		m_fields.emplace_back(name, value);
+	}
 	// Optimistic-cursor lookup: try m_cursor first (write-order fast path),
 	// else search from it. Returns nullptr (cursor unmoved) when the name is
 	// absent — a new field against an old blob defaults, never errors.
@@ -242,6 +263,16 @@ public:
 	// The Child value lives in the PROPERTIES area.
 	ibDataNode&       Child(const wxString& name);              // create (save)
 	const ibDataNode* FindChild(const wxString& name) const;   // read (load)
+
+	// ⚠ AND THE ONE THAT KEEPS ADDING TO A SUB-NODE THAT MAY ALREADY BE THERE. `Child` is the SAVE
+	// half and always makes a FRESH node, which is right when a writer fills a sub-node once and
+	// wrong the moment two writers contribute to the same one — the second silently threw away the
+	// first (the MCP schema published one argument per tool that way, 2026-09-01).
+	//
+	// Written as an overload rather than left to the caller, because the alternative is a
+	// const_cast at every such site: a non-const node handing back a const pointer to its own child
+	// is the accident, not the rule.
+	ibDataNode* FindChild(const wxString& name);
 
 	// --- metaobject children (recursion over the object tree) ------------
 	ibDataNode& AddChild(ibClassID clsid, ibMetaID metaId) {

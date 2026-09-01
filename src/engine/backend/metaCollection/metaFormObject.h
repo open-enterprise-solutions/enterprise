@@ -46,10 +46,6 @@ class BACKEND_API ibValueMetaObjectFormBase : public ibValueMetaObjectModuleBase
 	public:
 private:
 
-	enum
-	{
-		ID_METATREE_OPEN_FORM = 19000,
-	};
 
 public:
 
@@ -114,8 +110,7 @@ public:
 	virtual ibFormID GetTypeForm() const = 0;
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 };
 
 // -----------------------------------------------------------------------

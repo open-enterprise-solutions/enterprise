@@ -9,12 +9,12 @@
 #include <vector>
 
 #include "backend/moduleManager/moduleManager.h"
+#include "backend/backend_form.h"      // ibFormID, ibBackendMetaDocument — what a notifier is told about
 #include "backend/value_ptr.h"
 #include "backend/ctorRegistry.h"
 #include "backend/restructureInfo.h"   // ibRestructureInfo — per-metadata restructure ledger (member below)
 
 ///////////////////////////////////////////////////////////////////////////////
-class BACKEND_API ibBackendMetadataTree;
 class BACKEND_API ibValueMetaObjectCommonModule;
 class BACKEND_API ibValueMetaObjectModuleBase;
 class BACKEND_API ibValueMetaObjectGenericData;
@@ -22,6 +22,166 @@ class BACKEND_API ibValueMetaObjectFormBase;
 ///////////////////////////////////////////////////////////////////////////////
 class BACKEND_API ibCtorMetaValueType;
 class BACKEND_API ibMetaData;
+///////////////////////////////////////////////////////////////////////////////
+
+// ⭐⭐ THE SUBSCRIPTION TO A METADATA — and it lives beside the thing it subscribes to.
+//
+// Max, 2026-09-01: *"ibBackendMetadataTree will be called the notifier and live in the file with
+// the metadata."* It was `ibBackendMetadataTree` in a header of its own, and both halves of that
+// were wrong. It is not a TREE — a tree is one of the things that can hold one, and the engine has
+// no business knowing that. And it is not somewhere else — a subscription is only meaningful next
+// to what it subscribes to, and putting it here is what let ibMetaData stop forward-declaring it.
+//
+// ⚠ THE DIRECTION IS THE WHOLE POINT. Nothing is ever READ out of a notifier: the metadata is
+// changed, and everyone watching is TOLD. A host with nobody watching — a fully server-side one,
+// which has no tree at all — has an empty list and loses nothing by it.
+//
+// ⚠ AND IT STAYS GUI-FREE. Nothing below names a window, a dialog or a wx control: a DECISION
+// arrives as a std::function and an OUTCOME leaves as words. A designer answers with a dialog, an
+// MCP tool answers from an argument, and neither fact is visible from in here.
+class BACKEND_API ibMetaDataNotifier {
+public:
+
+	virtual ~ibMetaDataNotifier() {}
+
+	// ⭐⭐ IS THIS THE ASSISTANT — and it is not a preference, it is what makes the assistant a PEER
+	// of the person rather than a special case (Max, 2026-09-01: *"we give you the chance to fill it
+	// in first and then there is no check… two notifiers register, and we need you to always get it
+	// first"*).
+	//
+	// A create can arrive UNFINISHED — a form that does not yet know which kind it is — and the
+	// designer's answer to that is to ASK: a modal wizard, right for a click, impossible for a tool.
+	// Whoever FILLS the gap must be told before whoever would ASK about it. So the assistant answers
+	// from its arguments, and by the time the tree hears the same stage the form already knows what
+	// it is and there is nothing left to ask.
+	//
+	// 🛑 THE ALTERNATIVE WAS A SOURCE CHECK — an id on the broadcast, or a flag saying "a tool is
+	// acting", tested by everything that would open a dialog. Built and taken out within the hour:
+	// it makes every asking site carry a question about who called it, forever, and the sixty-first
+	// site forgets to. Being told in the right ORDER removes the question instead of answering it.
+	virtual bool IsAssistant() const { return false; }
+
+	// =========================================================================================
+	//  1. THE TWO SIGNALS — said outward, answered by nobody
+	// =========================================================================================
+	//
+	// ⚠ THE DIRECTION IS THE WHOLE POINT, and these two are it. Nothing is READ out of a notifier:
+	// the metadata changed, and everyone watching is TOLD. The last method that returned an answer
+	// the engine then acted on was `SelectFormType` — *"which kind of form is this?"*, asked in the
+	// middle of creating a form, with the create refused if the person closed the dialog. That is the
+	// engine reaching into a viewer for a decision, and it could not run where there is none.
+	//
+	// 🛑 AND NOTHING CARRIES STATE EITHER. `Modify(bool)` and `SetReadOnly(bool)` were here and are
+	// not (Max, 2026-09-01: *"we set the flag and the notifier broadcasts — I do not know that there
+	// is any point"*): both handed a watcher a COPY of state the metadata already keeps, and a copy
+	// has a moment of being wrong. A watcher is told THAT it changed and reads WHAT it is -
+	// `IsModified()`, `IsEditable()`, right there on the object that is the authority for them.
+
+	// ⭐⭐ THE CONFIGURATION IS NO LONGER WHAT YOU LAST READ — the coarse one.
+	//
+	// ibMetaData says it from Modify(), which every door that changes anything already ends in. So
+	// the engine never reaches for a viewer: whoever is watching put itself on the list.
+	//
+	// 🛑 THREE SIGNALS WERE TRIED FIRST and removed the same day: created / renamed / removed, each
+	// carrying the object. That made the ENGINE describe an edit to something whose whole job is to
+	// re-read, and it tied "something changed" to "a designer exists". A watcher knows how to refresh
+	// itself; the only thing it cannot know is WHEN, and that is all this says.
+	//
+	// ⚠ BOTH DIRECTIONS COME THROUGH IT. A save resets the modified flag without changing a row,
+	// and a watcher's chrome has to follow — so `Modify(false)` is as much a change as `true`.
+	//
+	// ⚠ It arrives on the thread that made the change. A watcher with a window marshals to its own
+	// thread — the engine does not, because it does not know there is a window.
+	virtual void MetaDataChanged() {}
+
+	// ⭐⭐ ONE SIGNAL WITH A STAGE, not a verb per occasion — the fine one.
+	//
+	// A metaobject already passes through named stages of its own — OnCreate / OnLoad / OnSave /
+	// OnBeforeRun / OnAfterRun / OnBeforeClose / OnAfterClose / OnDelete / OnRename / OnReload — and a
+	// watcher wants exactly those. Giving the notifier one method per occasion produced three in a
+	// morning and would have produced ten; Max, 2026-09-01: *"just move this whole pair over there,
+	// and then all the events collapse by themselves."*
+	//
+	// So the stage is an ARGUMENT. Everything a watcher used to be told through a verb of its own
+	// arrives here, and adding a stage to the platform adds nothing to this class.
+	//
+	// ⭐ THE ENGINE STATES A FACT AND 🛑S. What a watcher does with it is its own: the designer's
+	// tree asks a person which kind a new form is and writes the answer in, closes the editors of an
+	// object that is going away, re-reads itself when the shape changed. None of that can refuse the
+	// stage — by the time this arrives the thing has already happened.
+	//
+	// ⭐ THE PAIRS ARE THE POINT. A container is read in and eventually let go; it is brought to
+	// life and eventually torn down; an object is made and eventually removed. A stage with no
+	// opposite is usually one that was noticed rather than designed.
+	//
+	//     Loaded  ↔ Closed      the tree exists / the tree is going
+	//     Run     ↔ Closed      it is alive (modules registered, types available)
+	//     Created ↔ Removed     one object
+	//     Saved                   written out — no opposite, and correctly so
+	//     Renamed / Edited        edits to something that already exists
+	enum class ibMetaStage {
+		// ⭐⭐ CREATED IS THE RESULT — one object, finished, said once (Max, 2026-09-01: *"Created
+		// IS the result, do not reinvent the wheel"*). Not the moment the shell appears: the moment
+		// every phase has run, every child has grown and the name is the one that was actually free.
+		//
+		// ⚠ THE CHILDREN INSIDE IT DO NOT SPEAK. A paste grows a whole subtree, and each node of it
+		// is made with `runObject == false` — the flag that already says *this is not a result, it
+		// is a part of one* — so none of them announce (Max: *"the children inside must not clog
+		// the channel saying they were created — nobody can see them anyway"*). One object asked
+		// for, one announcement, and a watcher may act on it fully: draw the row, take the person
+		// to it, read its properties.
+		Created,
+
+		Loaded,      // read in from a file or the database
+		Run,         // …and brought to life — every ctor registered, every reference resolved
+		Saved,
+		Renamed,     // the name is already the new one
+		Removed,     // …and it is gone: said LAST, when the teardown ran and nothing refused it
+		Closed,      // the whole container is going — sent BEFORE the teardown, for the same reason
+		Edited,      // a property on it was written — the fine-grained one
+
+		// STAR2 A RESTRUCTURE IS THE ONE THING SOMEBODY ELSE CAN START UNDER YOU. Max, 2026-09-01:
+		// *"the one who calls has the exclusive right to SEE the changes; everyone else is just sent
+		// a notification that something is happening — you do not need it for yourself, because you
+		// know you started it, but you do need to know when someone started it besides you."*
+		//
+		// So the ledger goes to the CALLER, through `decide` (metadataConfiguration.h), and these two
+		// go to everyone: a designer learns the assistant applied, the assistant learns the person
+		// at the keyboard did. The initiator hears its own and ignores them, which costs nothing.
+		Applying,    // the database is being restructured — do not read it until one of the next two
+		Applied,     // …and it now runs this configuration
+		// …and it does not. TWO OCCASIONS, and they are the same fact from either end: an APPLY that
+		// declined, refused or threw (the transaction was rolled back), and a deliberate ROLLBACK —
+		// the configuration taken back from the database on purpose. Either way what is in memory
+		// after it is the database's copy and not what the person had been editing, so a watcher
+		// holding anything of the old one is holding freed memory.
+		Reverted,
+	};
+
+	virtual void MetaObjectChanged(ibMetaStage stage, class ibValueMetaObject* object) {}
+
+	// =========================================================================================
+	//  2. THE TWO MODAL EDITORS — the named remainder
+	// =========================================================================================
+	//
+	// ⚠ THEY ARE HERE BECAUSE WHAT THEY OPEN IS NOT A METAOBJECT. Everything else a metaobject
+	// offers to open is named by an ibMetaMenuItem and opened by whoever has the windows — "open
+	// object module" needs no verb because a module IS a metaobject. Predefined values and the start
+	// page are surfaces with no identity of their own, so there is nothing for an item to carry and a
+	// verb is what is left.
+	//
+	// Giving them an identity is a metatype decision, not a refactor. Until it is made, these two
+	// stay — and they are the whole reason this section is not empty.
+
+#pragma region __predefined_values_h__
+	virtual void EditPredefinedValues(class ibValueMetaObjectRecordDataHierarchyMutableRef* obj) {}
+#pragma endregion
+
+#pragma region __home_page_h__
+	virtual void EditHomePage(class ibValueMetaObjectConfiguration* obj) {}
+#pragma endregion
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 
 // Module-storage skeleton — list of common-module descriptors that
@@ -245,8 +405,7 @@ class BACKEND_API ibMetaData {
 public:
 
 	ibMetaData() :
-		m_metaModify(false),
-		m_metaTree(nullptr) {
+		m_metaModify(false) {
 	}
 
 	virtual ~ibMetaData() {}
@@ -314,10 +473,19 @@ public:
 	//  ibMetaDataConfigurationBase::GetRestructureInfo(), which pulls the ACTIVE config's ledger.)
 
 	virtual bool IsModified() const { return m_metaModify; }
+
+	// ⭐⭐ THE ONE BROADCAST. Every door that changes the configuration already ends here —
+	// CreateMetaObject, RenameMetaObject, RemoveMetaObject, every property write — so this is where
+	// "it is no longer what you last read" is known, and it is said to EVERY watcher rather than to
+	// a tree the engine had to know about.
+	// ⚠ BOTH DIRECTIONS SAY THE SAME THING — *it is not what you last read*. A save resets the flag
+	// and a watcher's chrome has to follow, so `false` is as much a change as `true`; what the flag
+	// now IS gets asked (IsModified), never carried.
 	virtual void Modify(bool modify = true) {
-		if (m_metaTree != nullptr)
-			m_metaTree->Modify(modify);
+
 		m_metaModify = modify;
+
+		SayToNotifiers([](ibMetaDataNotifier* watching) { watching->MetaDataChanged(); });
 	}
 
 	virtual void SetVersion(const ibVersionID& version) = 0;
@@ -441,9 +609,103 @@ public:
 	//Check is full access 
 	virtual bool IsFullAccess() const { return true; }
 
-	//associate this metaData with the designer's metadata tree (null outside the designer)
-	virtual ibBackendMetadataTree* GetMetaTree() const { return m_metaTree; }
-	virtual void SetMetaTree(ibBackendMetadataTree* metaTree) { m_metaTree = metaTree; }
+	// ⭐⭐ THE WATCHERS ARE A LIST, AND THERE IS NO WAY TO ASK FOR ONE OF THEM.
+	//
+	// One configuration is watched by more than one thing — the designer's own navigator and
+	// whatever the assistant has open — and until 2026-09-01 installing a second put out the first,
+	// exactly as the debugger's single bridge once did (debugger-architecture.md § 8.1).
+	//
+	// 🛑 `GetMetaTree()` IS GONE, and its absence is the repair rather than a side effect of it
+	// (Max, 2026-09-01: *"that will not exist"*). While it existed, sixty-odd sites wrote
+	// `metaData->GetMetaTree()->DoSomething()` — which reaches the FIRST watcher, silently leaves
+	// every other one showing the old state, and does nothing at all in a process that has none.
+	// Every one of those is now a verb ON THE METADATA, below, that says what it means: do this
+	// wherever this configuration is being looked at.
+	//
+	// ⭐ THE WATCHER PUTS ITSELF ON. The direction is the whole repair (Max, 2026-09-01: *"the other
+	// way round — you change something through the runtime, the tree SUBSCRIBED to the broadcast,
+	// and it gets the notification"*). A tree subscribes when it is given a metadata and comes off
+	// both when it is given another and when it dies — the two moments a subscription can outlive
+	// what it points at.
+	void AddNotifier(ibMetaDataNotifier* notifier) {
+		if (notifier != nullptr)
+			m_notifiers.push_back(notifier);
+	}
+
+	void RemoveNotifier(ibMetaDataNotifier* notifier) {
+		m_notifiers.erase(
+			std::remove(m_notifiers.begin(), m_notifiers.end(), notifier), m_notifiers.end());
+	}
+
+	// ⭐⭐ TWO PASSES: THE ASSISTANT, THEN EVERYONE ELSE. See ibMetaDataNotifier::IsAssistant for why
+	// — whoever FILLS a gap has to be told before whoever would ASK a person about it, and then the
+	// second pass finds nothing left to ask.
+	//
+	// ⚠ WRITTEN ONCE, HERE. Five broadcasts went through five identical loops, and a rule kept in
+	// five places is a rule the sixth broadcast is written without.
+	template <class _Say>
+	void SayToNotifiers(_Say say) const {
+
+		for (ibMetaDataNotifier* watching : m_notifiers)
+			if (watching->IsAssistant())
+				say(watching);
+
+		for (ibMetaDataNotifier* watching : m_notifiers)
+			if (!watching->IsAssistant())
+				say(watching);
+	}
+
+	// ⭐⭐ WHAT IS LEFT TO SAY OUTWARD, AFTER THE AUDIT OF 2026-09-01 — and how little it is, is the
+	// result. Seventeen methods went to seven, and every one that went followed the same reading:
+	//
+	//   • A ROUND TRIP. `OpenObjectForm`, `Activate` and the debugger's four were called BY the UI
+	//     and forwarded back INTO the UI, with the engine in the middle knowing what a form, a
+	//     focus and a run line are. Each now happens where it starts — the menu item carries the
+	//     metaobject (ibMetaMenuItem), the window has the navigator, the debugger has its bridge.
+	//   • A CARRIED BOOL. `Modify(bool)` and `SetReadOnly(bool)` told a watcher state the metadata
+	//     already keeps. A copy has a moment of being wrong; `IsModified()` and `IsEditable()` do
+	//     not. The watcher is told THAT it changed and reads WHAT it is.
+	//   • A SECOND ROAD. `UpdateChoiceSelection` was called explicitly AND by the stage handler;
+	//     `CloseObjectForm` / `CloseMetaObject` did what `Removed` and `Closed` already say.
+	//
+	// ⚠ WHAT REMAINS IS TWO SIGNALS, THREE QUESTIONS AND TWO MODAL EDITORS. The signals are below;
+	// the questions can refuse in words; the editors are the named remainder — they open a DIALOG
+	// over a surface that is not a metaobject, which is the whole reason they still need a verb.
+
+
+	void EditPredefinedValues(class ibValueMetaObjectRecordDataHierarchyMutableRef* object) {
+		SayToNotifiers([object](ibMetaDataNotifier* watching) { watching->EditPredefinedValues(object); });
+	}
+
+	void EditHomePage(class ibValueMetaObjectConfiguration* object) {
+		SayToNotifiers([object](ibMetaDataNotifier* watching) { watching->EditHomePage(object); });
+	}
+
+	// ⭐⭐ READ-ONLY IS STATE, NOT A QUESTION — and this is where it lives now.
+	//
+	// It was a flag on each watcher, and `IsEditable` then asked the watchers back. That is a
+	// pull, and a wrong one: whether a configuration may be EDITED is a fact about the
+	// configuration, not about who happens to be showing it. Two views of one configuration
+	// disagreeing about it is not a state that means anything.
+	//
+	// So the metadata keeps it, and the watchers are TOLD — they need it for their own chrome
+	// (greyed toolbars, a refused drag), but nobody is asked for it any more.
+	void SetReadOnly(bool readOnly = true) {
+		m_metaReadOnly = readOnly;
+		SayToNotifiers([](ibMetaDataNotifier* watching) { watching->MetaDataChanged(); });
+	}
+
+	// ⭐ ONE STAGE, STATED TO EVERYONE WATCHING — see the note on the notifier. Every occasion a
+	// watcher used to be told about through a verb of its own comes through here.
+	void MetaObjectStage(ibMetaDataNotifier::ibMetaStage stage, class ibValueMetaObject* object) {
+		SayToNotifiers([stage, object](ibMetaDataNotifier* watching) {
+			watching->MetaObjectChanged(stage, object);
+		});
+	}
+
+
+	// Answered from what the metadata KNOWS — nobody is asked. See SetReadOnly above.
+	bool IsEditable() const { return !m_metaReadOnly; }
 
 	//run/close 
 	virtual bool RunDatabase(int flags = defaultFlag) = 0;
@@ -453,8 +715,35 @@ public:
 	ibValueMetaObject* CreateMetaObject(const ibClassID& clsid,
 		ibValueMetaObject* parentMetaObj, bool runObject = true);
 
+	// ⭐⭐ THE OTHER WAY AN OBJECT COMES INTO A CONFIGURATION, AND IT IS A DOOR OF THE METADATA TOO
+	// (Max, 2026-09-01: *"the job is to make ONE door, so that the metadata has one entry point —
+	// that is where the door is"*).
+	//
+	// A paste is a create whose contents arrive from a payload: the shell is made the quiet way
+	// (runObject == false — a part, not a result), filled, and announced ONCE, here, when there is
+	// something true to announce. That announcement used to be made by ibValueMetaObject::PasteObject
+	// — a method of the OBJECT speaking on the metadata's behalf, which is the asymmetry this
+	// removes: `Created` now leaves ibMetaData and nowhere else.
+	//
+	// ⚠ AND A PASTE THAT FAILS LEAVES NOTHING BEHIND. Every call site carried that rule as its own
+	// two lines and one of them forgot, so a bad payload left a half-object standing in the
+	// configuration, invisible and saved with it. The rule belongs to the door.
+	ibValueMetaObject* PasteMetaObject(const ibClassID& clsid,
+		ibValueMetaObject* parentMetaObj, class ibReaderMemory& reader);
+
+	// …and its opposite. Nothing is announced by a copy — nothing in the configuration changed —
+	// but it stands here beside the paste because the pair is the door: ibValueMetaObject's own
+	// CopyObject / PasteObject are PROTECTED, and this class is the friend that may call them
+	// (Max, 2026-09-01: *"copy and paste on the metaobject become protected and only the metadata
+	// sees them — you reach them THROUGH the metadata"*). A caller cannot go round the door by
+	// accident, because there is no longer a way to.
+	bool CopyMetaObject(const ibValueMetaObject* object, class ibWriterMemory& writer) const;
+
 	bool RenameMetaObject(ibValueMetaObject* object, const wxString& newName);
-	void RemoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* objParent = nullptr);
+	// Answers whether it went. It was void, so a refusal — a close phase that said no, a read-only
+	// configuration — was indistinguishable from a delete that happened, and the caller reported
+	// success either way.
+	bool RemoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* objParent = nullptr);
 
 #pragma region __array_h__
 
@@ -663,6 +952,11 @@ protected:
 
 	bool m_metaModify;
 
+	// Whether this configuration may be edited at all — a fact about IT, not about whoever is
+	// showing it. See SetReadOnly. Default false: a metadata nobody has restricted is editable,
+	// which is what the old per-tree flag defaulted to as well.
+	bool m_metaReadOnly = false;
+
 	// --- the runtime-image IS the open state ---
 	// No image (m_image == nullptr) == CLOSED; a live image == OPEN. A config run
 	// builds the image and either keeps it (success) or drops it (failure ⇒ the load
@@ -723,7 +1017,11 @@ protected:
 	std::atomic<unsigned int> m_factoryCtorCountChanges = 0;
 
 private:
-	ibBackendMetadataTree* m_metaTree;
+
+	// ⭐⭐ THE WATCHERS, AND THERE IS MORE THAN ONE. Not owned: each puts itself on in its own
+	// lifetime and takes itself off before it dies — the same arrangement the debugger's bridges
+	// have, and the only one in which nobody has to outlive anybody.
+	std::vector<ibMetaDataNotifier*> m_notifiers;
 };
 
 #endif 

@@ -60,10 +60,59 @@ bool ibValueMetaObjectCommand::OnBeforeRunMetaObject(int flags)
 	return ibValueMetaObject::OnBeforeRunMetaObject(flags);
 }
 
+// ⭐ THE COMMAND'S MODULE, MADE CHECKABLE.
+//
+// Eleven metatypes register a compile module with the designer's cache here — object modules,
+// manager modules, record modules, forms, common modules. A command did not, and the consequence
+// was quiet: ibCheckModule found no compile module and answered Unreachable, so the designer's
+// Syntax button and every tool over it reported "nothing wrong" about a module that had never been
+// compiled. An empty diagnostics list from an unchecked module is not a pass — which is exactly why
+// ibScriptCheckAnswer carries the outcome separately (scriptCheck.h).
+//
+// The thing to compile against already existed: ibValueCommandDataObject is the command's own
+// runtime descriptor, and GetMetaForCompile already names the command module as its target. It was
+// only ever built transiently by Execute, so the designer never had one. Nothing new is written
+// here — the missing half was the registration.
+//
+// Found 2026-08-31 writing a print command through the tools: module_write answered
+// `"checked": false`.
+bool ibValueMetaObjectCommand::OnAfterRunMetaObject(int flags)
+{
+	if (!(*m_propertyCommandModule)->OnAfterRunMetaObject(flags))
+		return false;
+
+	// Designer kinds only — a runtime configuration has no compile cache, and asking for one is how
+	// the callsites in this tree decide, rather than by testing the mode.
+	if (auto* cc = m_metaData->GetCompileCache()) {
+
+		if (!ibValueMetaObject::OnAfterRunMetaObject(flags))
+			return false;
+
+		return cc->AddCompileModule(m_propertyCommandModule->GetMetaObject(),
+			[this]() -> ibValue* { return new ibValueCommandDataObject(this); });
+	}
+
+	return ibValueMetaObject::OnAfterRunMetaObject(flags);
+}
+
+// ⚠ THE OTHER HALF OF OnAfterRunMetaObject. Registering into the compile cache without withdrawing
+// leaves an entry keyed by a FREED module metaobject, holding a std::function that captured a freed
+// command — and the address can be handed out again, at which point a lookup resolves the stale
+// entry and the rebuilder constructs against dead memory.
+//
+// Twelve metatypes pair these two calls by hand (documentMetadata.cpp, constantMetadata.cpp,
+// catalogMetadata.cpp, metaFormObject.cpp, informationRegisterMetadata.cpp, …). This one was
+// written with only the adding half. That a pairing kept by hand in thirteen places had exactly one
+// place forget it is the argument for the cache owning the invariant itself — a registration that
+// returns a token, or an entry that cannot outlive the metaobject that made it.
 bool ibValueMetaObjectCommand::OnBeforeCloseMetaObject()
 {
 	if (!(*m_propertyCommandModule)->OnBeforeCloseMetaObject())
 		return false;
+
+	if (auto* cc = m_metaData->GetCompileCache())
+		cc->RemoveCompileModule(m_propertyCommandModule->GetMetaObject());
+
 	return ibValueMetaObject::OnBeforeCloseMetaObject();
 }
 
@@ -149,6 +198,14 @@ ibValueCommandDataObject::ibValueCommandDataObject(const ibValueMetaObjectComman
 	// — the SAME sequence a constant / record object uses to run its own module (constantObject.cpp).
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
+
+	// ⚠ WIRE THE COMPILE MODULE EXPLICITLY. It is normally lazy-created by the first Bind… call, and
+	// a command binds NOTHING — CommandParameter / ExecuteParameters are the handler's ARGUMENTS,
+	// not context variables — so m_compileModule stayed null and GetCompileModule() answered
+	// nothing. In designer mode InitializeRuntime and Compile below both skip, so nothing else
+	// would have wired it either: the descriptor existed with no module to compile, and the
+	// designer's Syntax button walked straight into it.
+	EnsureCompileModule();
 
 	InitializeRuntime();
 	try {

@@ -56,6 +56,7 @@ ibConfigurationTree::ibConfigurationTree(wxWindow* parent, int id)
 	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue panel
 	//Create main tree
 	m_metaTreeCtrl = new ibMetaTreeCtrl(this);
+	m_treeCtrl = m_metaTreeCtrl;   // the base holds the control — see ibMetaTreeBase
 	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 247, 240));  // #FAF7F0 cream tree (matches editor)
 
 	//set image list
@@ -99,6 +100,7 @@ ibConfigurationTree::ibConfigurationTree(ibMetaDocument* docParent, wxWindow* pa
 	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue panel
 	//Create main tree
 	m_metaTreeCtrl = new ibMetaTreeCtrl(this);
+	m_treeCtrl = m_metaTreeCtrl;   // the base holds the control — see ibMetaTreeBase
 	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 247, 240));  // #FAF7F0 cream tree (matches editor)
 
 	//set image list
@@ -126,7 +128,6 @@ ibConfigurationTree::ibConfigurationTree(ibMetaDocument* docParent, wxWindow* pa
 
 ibConfigurationTree::~ibConfigurationTree()
 {
-	if (m_metaData != nullptr) m_metaData->SetMetaTree(nullptr);
 
 	// The default constructor leaves both of these null and is reachable through the RTTI factory,
 	// so the teardown asks before it unbinds.
@@ -207,6 +208,10 @@ EVT_KILL_FOCUS(ibConfigurationTree::ibMetaTreeCtrl::OnSetFocus)
 
 EVT_MENU(wxID_COPY, ibConfigurationTree::ibMetaTreeCtrl::OnCopyItem)
 EVT_MENU(wxID_PASTE, ibConfigurationTree::ibMetaTreeCtrl::OnPasteItem)
+
+// …and the two texts, right after them — the place in the menu they occupy.
+EVT_MENU(ID_METATREE_HELP, ibConfigurationTree::ibMetaTreeCtrl::OnEditHelp)
+EVT_MENU(ID_METATREE_NOTES, ibConfigurationTree::ibMetaTreeCtrl::OnEditNotes)
 
 wxEND_EVENT_TABLE()
 

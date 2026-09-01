@@ -455,19 +455,21 @@ void ibConfigCompareView::ApplyAdd(const ibMetaDiffRecord& rec, bool pull)
 	ibValueMetaObject* targetParent = FindTargetParent(rec, pull);
 	if (targetParent == nullptr) return;
 
-	ibWriterMemory writer;
-	if (!source->CopyObject(writer)) return;
-	ibReaderMemory reader(writer.pointer(), writer.size());
-
 	ibMetaData* meta = targetParent->GetMetaData();
 	if (meta == nullptr) return;
-	ibValueMetaObject* newObj = meta->CreateMetaObject(
-		source->GetClassType(), targetParent, /*runObject*/ false);
-	if (newObj == nullptr) return;
 
-	if (newObj->PasteObject(reader)) {
+	// ⚠ COPIED THROUGH THE SOURCE'S OWN METADATA, pasted through the TARGET'S. A compare holds two
+	// configurations open at once and they are not the same object — which is the whole reason the
+	// door is asked for rather than reached for.
+	ibMetaData* sourceMeta = source->GetMetaData();
+	if (sourceMeta == nullptr) return;
+
+	ibWriterMemory writer;
+	if (!sourceMeta->CopyMetaObject(source, writer)) return;
+	ibReaderMemory reader(writer.pointer(), writer.size());
+
+	if (ibValueMetaObject* newObj = meta->PasteMetaObject(source->GetClassType(), targetParent, reader))
 		newObj->SetCommonGuid(source->GetGuid());
-	}
 }
 
 void ibConfigCompareView::ApplyDelete(const ibMetaDiffRecord& rec, bool pull)
@@ -488,18 +490,23 @@ void ibConfigCompareView::ApplyReplace(const ibMetaDiffRecord& rec, bool pull)
 	ibMetaData* meta = target->GetMetaData();
 	if (meta == nullptr || parent == nullptr) return;
 
+	// The source lives in the OTHER configuration — see ApplyAdd.
+	ibMetaData* sourceMeta = source->GetMetaData();
+	if (sourceMeta == nullptr) return;
+
 	ibWriterMemory writer;
-	if (!source->CopyObject(writer)) return;
+	if (!sourceMeta->CopyMetaObject(source, writer)) return;
 	ibReaderMemory reader(writer.pointer(), writer.size());
 	const ibGuid    sourceGuid  = source->GetGuid();
 	const ibClassID sourceClsid = source->GetClassType();
 
-	meta->RemoveMetaObject(target, parent);
+	// ⚠ THE REPLACE STOPS IF THE DELETE DID. It used to go on and paste the replacement beside an
+	// object that refused to go, leaving both — now that the door answers, the answer is read.
+	if (!meta->RemoveMetaObject(target, parent))
+		return;
 
-	ibValueMetaObject* newObj = meta->CreateMetaObject(
-		sourceClsid, parent, /*runObject*/ false);
-	if (newObj == nullptr) return;
-	if (newObj->PasteObject(reader)) newObj->SetCommonGuid(sourceGuid);
+	if (ibValueMetaObject* newObj = meta->PasteMetaObject(sourceClsid, parent, reader))
+		newObj->SetCommonGuid(sourceGuid);
 }
 
 bool ibConfigCompareView::HasOnlyInAncestor(int recordIndex) const

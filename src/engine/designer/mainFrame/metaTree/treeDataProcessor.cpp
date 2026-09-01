@@ -79,6 +79,7 @@ ibDataProcessorTree::ibDataProcessorTree(ibMetaDocument* docParent, wxWindow* pa
 	// Card-style depth — panel powder-blue, tree cream (matches editor).
 	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue panel
 	m_metaTreeCtrl = new ibDataProcessorTreeCtrl(sbSizerTree->GetStaticBox(), this);
+	m_treeCtrl = m_metaTreeCtrl;   // the base holds the control — see ibMetaTreeBase
 	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 247, 240));  // #FAF7F0 cream tree
 
 	//set image list
@@ -128,11 +129,6 @@ ibDataProcessorTree::ibDataProcessorTree(ibMetaDocument* docParent, wxWindow* pa
 
 ibDataProcessorTree::~ibDataProcessorTree()
 {
-	// LET GO OF THE BACK-POINTER. Load() stored this panel in the metadata (SetMetaTree), and the
-	// backend calls through it — ibMetaData::Modify does, and so does the doc/view Activate path.
-	// The configuration tree has always cleared it here; both copies did not.
-	if (m_metaData != nullptr)
-		m_metaData->SetMetaTree(nullptr);
 
 	// ASK BEFORE TEARING DOWN. The default constructor is reachable through wxCreateDynamicObject
 	// and leaves every control null; the configuration tree guards exactly this, the twins did not.
@@ -228,7 +224,24 @@ void ibDataProcessorTree::OnButtonModuleClicked(wxCommandEvent& event)
 {
 	ibValueMetaObjectDataProcessor* dataProcessor = m_metaData->GetDataProcessor();
 	wxASSERT(dataProcessor);
-	dataProcessor->ProcessCommand(ibValueMetaObjectDataProcessor::ID_METATREE_OPEN_MODULE);
+
+	// ⭐ TAKEN FROM THE STRUCTURE THE OBJECT ALREADY OFFERS. The context menu is a vector of
+	// ibMetaMenuItem, and every item NAMES what it is and carries the metaobject to open — so the
+	// button that has exactly one meaning asks for that name and opens what comes back.
+	//
+	// 🛑 It read the module off a getter that answers CONST and cast the const away to open it.
+	// The cast was the tell: the object was being reached for behind its own door, when the door
+	// hands the same object over non-const because handing it over is what it is for.
+	std::vector<ibMetaMenuItem> items;
+	dataProcessor->CollectContextMenu(items);
+
+	for (const ibMetaMenuItem& item : items) {
+		if (item.m_id == ibValueMetaObjectDataProcessor::ID_METATREE_OPEN_MODULE
+			&& item.m_metaObject != nullptr) {
+			OpenObjectForm(item.m_metaObject);
+			break;
+		}
+	}
 }
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorTree::ibDataProcessorTreeCtrl, wxTreeCtrl);

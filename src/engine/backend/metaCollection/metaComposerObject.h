@@ -36,10 +36,6 @@
 // asks the walk for the leaf's type first (Max, 2026-08-20).
 class BACKEND_API ibValueMetaObjectComposer : public ibValueMetaObject, public ibBackendSourceColumn {
 protected:
-	enum
-	{
-		ID_METATREE_OPEN_COMPOSER = 19000,
-	};
 
 public:
 
@@ -93,8 +89,7 @@ public:
 	virtual bool OnAfterCloseMetaObject();
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 	//read & write
 	virtual bool ReadData(const ibDataNode& node) override;

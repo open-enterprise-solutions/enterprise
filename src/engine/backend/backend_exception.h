@@ -163,6 +163,13 @@ public:
 	// emitted. Defining the body in .cpp guarantees the export.
 	const wxString GetErrorDescription() const;
 
+	// ⭐ HAS THE PERSON ALREADY BEEN TOLD? Nothing new is remembered here — m_errorHandled is set
+	// the moment ProcessError reports, and rides the rethrow. It was simply never READABLE from
+	// outside, so every outer handler reported again (three windows for one script failure,
+	// 2026-09-01). Not to be confused with IsErrorOutputProcessing(), which asks whether a report
+	// is on screen RIGHT NOW and is false again by the time the exception reaches the main loop.
+	bool IsErrorHandled() const { return m_errorHandled; }
+
 	//error from proc unit/compile module
 	static void ProcessError(const ibBackendException& err, const struct ibByteUnit& error);
 	static void ProcessError(const wxString& strFileName,

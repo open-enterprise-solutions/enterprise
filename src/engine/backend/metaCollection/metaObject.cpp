@@ -36,13 +36,6 @@ void ibValueMetaObject::ResetId()
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-ibBackendMetadataTree* ibValueMetaObject::GetMetaDataTree() const
-{
-	return m_metaData ? m_metaData->GetMetaTree() : nullptr;
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-
 bool ibValueMetaObject::BuildNewName()
 {
 	const wxString& strName = GetName(); bool foundedName = false;
@@ -64,7 +57,22 @@ bool ibValueMetaObject::BuildNewName()
 		size_t length = metaPrevName.length();
 		while (length >= 0 && stringUtils::IsDigit(metaPrevName[--length]));
 		const wxString& metaName = m_metaData->GetNewName(GetClassType(), GetParent(), metaPrevName.Left(length + 1));
-		SetName(metaName);
+
+		// ⭐ THROUGH THE RENAME DOOR, not through SetName (Max, 2026-09-01: *"the name change should
+		// probably go through rename"*). SetName only writes the field; RenameMetaObject is the whole
+		// act — it runs OnRenameMetaObject, which brings the rest of the configuration into step with
+		// a name that is about to be taken (a common attribute rewrites its copies, a common module is
+		// re-keyed in the module storage), and it ANNOUNCES the change.
+		//
+		// 🛑 THAT ANNOUNCEMENT IS WHAT WAS MISSING. A paste says `Created` from inside
+		// CreateMetaObject — before the copied data is read and before this runs — so a watcher drew
+		// the row under the name NewItem handed out, and the bump to `Warehouse1` arrived through
+		// SetName, which tells nobody (Max: *"the value is set, but the tree shows the primary name"*).
+		//
+		// ⚠ The uniqueness test inside cannot refuse this one: GetNewName has just built a name that
+		// nothing else carries.
+		m_metaData->RenameMetaObject(this, metaName);
+
 		const wxString& metaPrevSynonym = m_propertySynonym->GetValueAsString();
 		const wxString& metaSynonym = metaPrevSynonym.Length() > 0 ? stringUtils::GenerateSynonym(metaName) : wxString(wxEmptyString);
 		SetSynonym(metaSynonym);
@@ -128,9 +136,12 @@ bool ibValueMetaObject::OnDeleteMetaObject()
 
 bool ibValueMetaObject::OnAfterCloseMetaObject()
 {
-	ibBackendMetadataTree* const metaTree = m_metaData->GetMetaTree();
-	if (metaTree != nullptr)
-		metaTree->CloseMetaObject(this);
+	// 🛑 THE EDITORS ARE NOT CLOSED HERE ANY MORE, and they never needed to be. This hook runs on
+	// two roads, and BOTH of them already say so: a deleted object broadcasts `Removed` one call
+	// earlier (ibMetaData::RemoveMetaObject) and a watcher shuts what it was showing of it; a whole
+	// container being let go broadcasts `Closed` before the teardown starts. Closing per NODE was a
+	// third road to the same state — it ran once for every object in a configuration on the way out,
+	// to do what one signal does once.
 	return true;
 }
 
@@ -165,10 +176,6 @@ ibRoleUserInfo ibValueMetaObject::GetUserRoleInfo() const
 	return roleInfo;
 }
 
-#define	headerBlock 0x002330
-#define	dataBlock 0x002350
-#define	childBlock 0x002370
-
 bool ibValueMetaObject::Init()
 {
 	// always false
@@ -202,12 +209,10 @@ bool ibValueMetaObject::IsEditable() const
 	if (!IsEnabled() || IsDeleted())
 		return false;
 
-	ibBackendMetadataTree* const metaTree = m_metaData->GetMetaTree();
-	if (metaTree != nullptr)
-		return metaTree->IsEditable();
-
-	return m_parent != nullptr ?
-		m_parent->IsEditable() : true;
+	// Asked of the metadata, which asks everyone watching — any one that can edit is enough, and
+	// nobody watching means nothing restricts it. The walk up to the parent is gone with the same
+	// change: it was the fallback for "no tree installed", and an empty list already answers that.
+	return m_metaData != nullptr ? m_metaData->IsEditable() : true;
 }
 
 bool ibValueMetaObject::CompareObject(const ibValueMetaObject* compareObject) const
@@ -252,266 +257,6 @@ bool ibValueMetaObject::CompareObject(const ibValueMetaObject* compareObject) co
 #pragma endregion 
 
 	return ibControlComparator::CompareObject(this, compareObject);
-}
-
-bool ibValueMetaObject::CopyObject(ibWriterMemory& writer) const
-{
-#pragma region _copy_guard_h_
-
-	class ibControlCopyGuard {
-
-		static void Generate(const ibValueMetaObject* copyObject) {
-			for (unsigned int idx = 0; idx < copyObject->GetChildCount(); idx++)
-				Generate(copyObject->GetChild(idx));
-			copyObject->m_metaCopyGuid = wxNewUniqueGuid;
-		}
-
-		static void Erase(const ibValueMetaObject* copyObject) {
-			for (unsigned int idx = 0; idx < copyObject->GetChildCount(); idx++)
-				Erase(copyObject->GetChild(idx));
-			copyObject->m_metaCopyGuid = wxNullGuid;
-		}
-
-	public:
-
-		ibControlCopyGuard(const ibValueMetaObject* copyObject) : m_copyObject(copyObject) { Generate(m_copyObject); }
-		~ibControlCopyGuard() { Erase(m_copyObject); }
-
-	protected:
-		const ibValueMetaObject* m_copyObject = nullptr;
-	};
-
-	ibControlCopyGuard controlCopyGuard(this);
-
-#pragma endregion 
-
-	wxASSERT(m_metaCopyGuid.isValid());
-
-#pragma region _copy_fill_h_
-
-	class ibControlMemoryWriter {
-	public:
-
-		static bool CopyObject(const ibValueMetaObject* copyObject, ibWriterMemory& writer)
-		{
-			ibWriterMemory writerHeaderMemory;
-			writerHeaderMemory.w_s32(copyObject->m_metaData->GetVersion());
-			writerHeaderMemory.w_stringZ(copyObject->m_metaCopyGuid);
-			// NO CLASS ID IN THE HEADER, deliberately. A paste is a MERGE BY NAME (see
-			// ibPropertyObject::PasteProperty): the TARGET's class is decided by where the paste
-			// lands, and the payload only supplies values for the properties the two share —
-			// pasting a Document onto a Constant is a legitimate request, not a mismatch to refuse.
-			// A class id here would only tempt the next reader to compare and reject.
-			writer.w_chunk(headerBlock, writerHeaderMemory.pointer(), writerHeaderMemory.size());
-
-			ibWriterMemory writerChildMemory;
-
-			for (ibValueMetaObject* object : copyObject->m_children) {
-
-				if (!copyObject->FilterChild(object->GetClassType()))
-					continue;
-				if (object->IsDeleted())
-					continue;
-				ibWriterMemory writerMemory;
-				if (!CopyObject(object, writerMemory))
-					return false;
-
-				writerChildMemory.w_chunk(object->GetClassType(), writerMemory.pointer(), writerMemory.size());
-			}
-
-			writer.w_chunk(childBlock, writerChildMemory.pointer(), writerChildMemory.size());
-
-			ibWriterMemory writerDataMemory;
-			
-			if (!copyObject->CopyProperty(writerDataMemory))
-				return false;
-
-			if (!copyObject->SaveInterface(writerDataMemory))
-				return false;
-
-			if (!copyObject->SaveRole(writerDataMemory))
-				return false;
-
-			writer.w_chunk(dataBlock, writerDataMemory.pointer(), writerDataMemory.size());
-			return true;
-		}
-	};
-
-#pragma endregion 
-
-	return ibControlMemoryWriter::CopyObject(this, writer);
-}
-
-bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
-{
-#pragma region _paste_fill_h_
-
-	class ibControlMemoryReader {
-
-		static bool PasteObject(ibValueMetaObject* pasteObject, ibReaderMemory& reader)
-		{
-			ibMetaData* metaData = pasteObject->GetMetaData();
-
-			std::shared_ptr <ibReaderMemory>readerHeaderMemory(reader.open_chunk(headerBlock));
-
-			/*const ibVersionID& version =*/ readerHeaderMemory->r_s32();
-			pasteObject->m_metaGuid = readerHeaderMemory->r_stringZ();
-
-			// MARK the pasted object as pasted — its paste-guid equals its own guid (the source copy-guid it was
-			// created under). IsPasteMode() then holds while the tree runs, so a form re-loaded here re-homes its
-			// source hops onto this NEW object via GetIdByGuid; the OUTER guard clears the mark on exit. This mirrors
-			// ibControlCopyGuard on the copy side. No new flag — the existing paste-guid IS the mark.
-			pasteObject->m_metaPasteGuid = pasteObject->m_metaGuid;
-
-			// Running initialization AS A PASTE (pasteObjectFlag, NOT onlyLoadFlag): a pasted object is a NEW object,
-			// so its RUN event must register its queryable source — exactly like a fresh create (newObjectFlag) does.
-			// onlyLoadFlag gates the queryable registration OFF (the load-only pass), which left a copied catalog /
-			// register unregistered → its source descriptor was unresolvable ("the source cannot see it"). — Max.
-			if (!pasteObject->OnBeforeRunMetaObject(pasteObjectFlag))
-				return false;
-
-
-			std::shared_ptr <ibReaderMemory>readerDataMemory(reader.open_chunk(dataBlock));
-
-			if (!pasteObject->PasteProperty(*readerDataMemory))
-				return false;
-
-			pasteObject->BuildNewName();
-
-			pasteObject->LoadInterface(*readerDataMemory);
-			pasteObject->LoadRole(*readerDataMemory);
-
-			if (!pasteObject->OnAfterRunMetaObject(pasteObjectFlag))
-				return false;
-
-			std::shared_ptr <ibReaderMemory> readerChildMemory(reader.open_chunk(childBlock));
-			if (readerChildMemory != nullptr) {
-				ibReaderMemory* prevReaderMemory = nullptr;
-				do {
-					ibClassID clsid = 0;
-					ibReaderMemory* readerMemory = readerChildMemory->open_chunk_iterator(clsid, &*prevReaderMemory);
-					if (readerMemory == nullptr)
-						break;
-					if (clsid > 0) {
-						ibValueMetaObject* metaObject = metaData->CreateMetaObject(clsid, pasteObject, false);
-						if (metaObject != nullptr) {
-							if (!PasteObject(metaObject, *readerMemory)) {
-								// THE PARENT ALREADY OWNS IT — AddChild took the owning reference inside
-								// CreateMetaObject. wxDELETE frees the object behind the owner's back and
-								// leaves the owning vector holding a dangling pointer it releases again
-								// later. Same door CreateMetaObject's own failure path uses.
-								pasteObject->RemoveChild(metaObject);
-								return false;
-							}
-						}
-						else {
-							// Don't drop silently: a child the target owner cannot host is a real
-							// mismatch worth a log, not a quietly-incomplete paste.
-							ibJournalWarning(wxT("metadata"),wxT("PasteObject: child clsid %u not accepted by target owner - skipped"), (unsigned int)clsid);
-						}
-					}
-					prevReaderMemory = readerMemory;
-				} while (true);
-			}
-			
-			return true;
-		}
-
-	public:
-
-		// Recursively clear the paste marks once the whole tree is pasted, run and its forms re-homed — the mirror of
-		// ibControlCopyGuard::Erase. RAII from the public PasteObject.
-		static void ErasePasteGuid(const ibValueMetaObject* pasteObject) {
-			for (unsigned int idx = 0; idx < pasteObject->GetChildCount(); idx++)
-				ErasePasteGuid(pasteObject->GetChild(idx));
-			pasteObject->m_metaPasteGuid = wxNullGuid;
-		}
-
-		static bool PasteAndRunObject(ibValueMetaObject* pasteObject, ibReaderMemory& reader)
-		{
-			ibMetaData* metaData = pasteObject->GetMetaData();
-
-			std::shared_ptr <ibReaderMemory>readerHeaderMemory(reader.open_chunk(headerBlock));
-
-			/*const ibVersionID& version =*/ readerHeaderMemory->r_s32();
-			/*pasteObject->m_metaGuid =*/ readerHeaderMemory->r_stringZ();
-
-			// MARK the ROOT as pasted too — the SAME two-level rule the copy side already follows. On copy,
-			// ibControlCopyGuard::Generate stamps the whole subtree ROOT + children, so IsCopyMode() holds and the
-			// form writes its blob in COPY format (per-hop guid/kind tags). On paste, only the recursive CHILD
-			// PasteObject stamps its objects; this ROOT entry did not — so a form copied AS PART OF a whole
-			// metaobject (a child) re-homed fine, but a form copied DIRECTLY (a common form, or a form within a
-			// group) — which arrives HERE as the root — had IsPasteMode() == false and read its COPY-format blob as
-			// RAW: the reader mis-parses the hop layout and drops the source-hop paths (and the attribute section).
-			// Keep the root's OWN m_metaGuid (it is the paste TARGET's identity — the source guid read above is
-			// intentionally discarded, unlike a child which adopts it); the mark only has to be valid for the whole
-			// run so LoadControl routes to PasteNode, and the OUTER ibControlPasteGuard clears it on exit.
-			pasteObject->m_metaPasteGuid = pasteObject->m_metaGuid;
-
-			// Running initialization AS A PASTE (pasteObjectFlag, NOT onlyLoadFlag): a pasted object is a NEW object,
-			// so its RUN event must register its queryable source — exactly like a fresh create (newObjectFlag) does.
-			// onlyLoadFlag gates the queryable registration OFF (the load-only pass), which left a copied catalog /
-			// register unregistered → its source descriptor was unresolvable ("the source cannot see it"). — Max.
-			if (!pasteObject->OnBeforeRunMetaObject(pasteObjectFlag))
-				return false;
-
-			std::shared_ptr <ibReaderMemory>readerDataMemory(reader.open_chunk(dataBlock));
-
-			if (!pasteObject->PasteProperty(*readerDataMemory))
-				return false;
-
-			pasteObject->BuildNewName();
-
-			pasteObject->LoadInterface(*readerDataMemory);
-			pasteObject->LoadRole(*readerDataMemory);
-
-			if (!pasteObject->OnAfterRunMetaObject(pasteObjectFlag))
-				return false;
-
-			std::shared_ptr <ibReaderMemory> readerChildMemory(reader.open_chunk(childBlock));
-			if (readerChildMemory != nullptr) {
-				ibReaderMemory* prevReaderMemory = nullptr;
-				do {
-					ibClassID clsid = 0;
-					ibReaderMemory* readerMemory = readerChildMemory->open_chunk_iterator(clsid, &*prevReaderMemory);
-					if (readerMemory == nullptr)
-						break;
-					if (clsid > 0) {
-						ibValueMetaObject* metaObject = metaData->CreateMetaObject(clsid, pasteObject, false);
-						if (metaObject != nullptr) {
-							if (!PasteObject(metaObject, *readerMemory)) {
-								// THE PARENT ALREADY OWNS IT — AddChild took the owning reference inside
-								// CreateMetaObject. wxDELETE frees the object behind the owner's back and
-								// leaves the owning vector holding a dangling pointer it releases again
-								// later. Same door CreateMetaObject's own failure path uses.
-								pasteObject->RemoveChild(metaObject);
-								return false;
-							}
-						}
-						else {
-							// Don't drop silently: a child the target owner cannot host is a real
-							// mismatch worth a log, not a quietly-incomplete paste.
-							ibJournalWarning(wxT("metadata"),wxT("PasteObject: child clsid %u not accepted by target owner - skipped"), (unsigned int)clsid);
-						}
-					}
-					prevReaderMemory = readerMemory;
-				} while (true);
-			}
-
-			return pasteObject->OnReloadMetaObject();
-		}
-	};
-
-#pragma endregion
-
-	// RAII: whatever the outcome, clear the paste marks once the whole tree is pasted, run and its forms re-homed —
-	// the mirror of ibControlCopyGuard erasing the copy marks after CopyObject.
-	struct ibControlPasteGuard {
-		const ibValueMetaObject* m_pasteObject;
-		~ibControlPasteGuard() { ibControlMemoryReader::ErasePasteGuid(m_pasteObject); }
-	} pasteGuard{ this };
-
-	return ibControlMemoryReader::PasteAndRunObject(this, reader);
 }
 
 void ibValueMetaObject::SetName(const wxString& strName)

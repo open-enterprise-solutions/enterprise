@@ -131,9 +131,23 @@ bool ibVisualEditorNotebook::ibVisualEditor::LoadForm()
 	auto* cc = metaData->GetCompileCache();
 	if (!cc || !cc->FindCompileModule(creator, m_valueForm)) {
 		m_valueForm = new ibValueForm(creator, nullptr);
-		if (!creator->LoadFormData(m_valueForm)) {
+
+		// ⭐⭐ EMPTY IS NOT BROKEN — IT IS NEW, and it is built from its kind. The RUNTIME has said
+		// so all along (ibValueMetaObjectFormBase::CreateAndBuildForm: *load what is stored, or
+		// BuildForm when there is nothing stored*); the editor had only the first half and read the
+		// second state as a failure.
+		//
+		// 🛑 SO A FORM THAT HAD NEVER BEEN OPENED COULD NOT BE OPENED. It ran perfectly — the
+		// runtime built it — and the designer answered *"its stored data is missing or
+		// unreadable"*, which is a sentence about corruption said about a form that is merely new
+		// (Max, 2026-09-01, opening one made through a tool: *"when you add through the platform
+		// there is a form builder, it builds it for you"* — there is, and this road did not use it).
+		if (creator->GetFormData().IsEmpty()) {
+			m_valueForm->BuildForm(creator->GetTypeForm());
+		}
+		else if (!creator->LoadFormData(m_valueForm)) {
 			wxDELETE(m_valueForm);
-			ibJournalWarning(wxT("designer"), _("Form editor: the form \"%s\" could not be loaded (its stored data is missing or unreadable)."),
+			ibJournalWarning(wxT("designer"), _("Form editor: the form \"%s\" could not be loaded (its stored data is unreadable)."),
 				creator->GetName().c_str());
 			return false;
 		}

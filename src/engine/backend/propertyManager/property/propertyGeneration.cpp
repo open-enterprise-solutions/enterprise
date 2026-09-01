@@ -7,10 +7,8 @@
 
 wxVariantData* ibPropertyGeneration::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
 {
-	const ibValueMetaObjectGenericData* propFactory = dynamic_cast<const ibValueMetaObjectGenericData*>(property);
-	if (propFactory == nullptr)
-		return nullptr;
-	return new ibVariantDataGeneration(propFactory, typeDesc);
+	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
+	return new ibVariantDataGeneration(property, typeDesc);
 }
 
 ibMetaDescription& ibPropertyGeneration::GetValueAsMetaDesc() const {
@@ -20,6 +18,16 @@ ibMetaDescription& ibPropertyGeneration::GetValueAsMetaDesc() const {
 void ibPropertyGeneration::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// Everything a document can be generated into. The list used to sit in advpropGeneration.cpp.
+ibPropertyChoiceMode ibPropertyGeneration::GetValueList(ibPropertyChoiceList& list)
+{
+	return CreateValueList(list, ibPropertyChoiceMode::Mult, {
+		g_metaCatalogCLSID,
+		g_metaDocumentCLSID,
+		g_metaChartOfCharacteristicTypesCLSID,
+		g_metaChartOfAccountsCLSID });
 }
 
 //base property for "generation"

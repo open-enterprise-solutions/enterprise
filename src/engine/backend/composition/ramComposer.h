@@ -14,7 +14,6 @@
 // model's job. See docs/ram-composer-decoupling.md.
 //
 // ComputeOrder is defined out-of-line in ramComposer.cpp (it reads the storage's node API).
-// Run is NOT overridden — the base ibDataComposer::Run no-op is inherited (see below).
 
 #include "backend/composition/dataComposer.h"   // ibDataComposer
 
@@ -35,8 +34,8 @@ public:
 
 	// The ONLY output: filter + sort (+ group later) the storage's nodes → their STORAGE indices in display
 	// order (index i ↔ storage node i). The model (RunComposerPage) windows this by the browsed anchor and
-	// returns the LIVE nodes — the node IS the storage row. NO driver walk, NO SQL — the base Run() default (a
-	// no-op) is inherited, so L5-2 is fully self-contained. slice-1: filter + sort, flat.
+	// returns the LIVE nodes — the node IS the storage row. NO SQL on this road, so L5-2 stays
+	// self-contained; PRINTING the same composition goes through Run below. slice-1: filter + sort, flat.
 	// ⚠ NOT const: it builds the filter in force, and BUILDING a condition registers the values it
 	// compares against (ibDataComposer::AddParam). The const was covering that write.
 	std::vector<long> ComputeOrder();

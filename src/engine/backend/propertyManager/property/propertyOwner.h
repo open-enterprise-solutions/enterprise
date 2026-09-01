@@ -11,6 +11,10 @@ public:
 	ibMetaDescription& GetValueAsMetaDesc() const;
 	void SetValue(const ibMetaDescription& val);
 
+	// WHICH METAOBJECTS MAY OWN THIS ONE — catalogs. The clsid list used to live in the FRONT, in
+	// the property editor's constructor, which is why nothing headless could answer the question.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
+
 	ibPropertyOwner(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyOwner(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyOwner(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}

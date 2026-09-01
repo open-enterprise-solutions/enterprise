@@ -251,6 +251,9 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 
 	// Success — keep the image (LoadGuard.Commit): its presence IS the open state.
 	load.Commit();
+	// ⭐ ALIVE — said after Commit, because a run that did not survive its own phases never
+	// happened. The mirror of Closed below.
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Run, GetCommonMetaObject());
 	return true;
 }
 
@@ -263,6 +266,12 @@ bool ibMetaDataConfigurationFile::CloseDatabase(int flags)
 	wxASSERT(IsConfigOpen());
 	if (!IsConfigOpen())
 		return true;
+
+	// ⭐⭐ THE WHOLE CONTAINER IS GOING — said BEFORE the teardown, for the same reason `Removed`
+	// is: a watcher's business with this is to shut what it is showing OF the tree, and after
+	// CloseSubtree there is nothing left to find. This one signal replaces the per-NODE close
+	// that used to run inside every object's OnAfterCloseMetaObject.
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Closed, GetCommonMetaObject());
 
 	//if (!ExitMainModule((flags & forceCloseFlag) != 0))
 	//	return false;
@@ -405,6 +414,11 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	// IncrRefs the fresh one; the local `fresh` drops its own ref at scope exit, so
 	// m_commonObject ends as the sole owner. No manual refcount.
 	m_commonObject = fresh;
+
+	// ⭐ AND EVERYONE WATCHING IS TOLD IT IS READ IN — the stage a tree answers by drawing the
+	// whole thing. Said HERE rather than by each caller of the load, because there are several
+	// (a file, the database, a fresh root) and a stage nobody sends is a stage that does not exist.
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Loaded, GetCommonMetaObject());
 	return true;
 }
 
@@ -695,6 +709,10 @@ bool ibMetaDataConfigurationFile::SaveCommonTree(const ibClassID& clsid, ibWrite
 	ibWriterMemory metaWriter;
 	metaWriter.w_chunk((u64)builder.Root().GetMetaId(), innerWriter.pointer(), innerWriter.size());
 	writerData.w_chunk((u64)builder.Root().GetClsid(), metaWriter.pointer(), metaWriter.size());
+
+	// ⭐ …and that it has been written out. A watcher shows this as "no longer modified"; nothing
+	// in the tree changed, which is why this is a stage of its own and not MetaDataChanged.
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Saved, GetCommonMetaObject());
 	return true;
 }
 
@@ -705,3 +723,157 @@ bool ibMetaDataConfigurationStorage::DeleteCommonTree(const ibClassID& clsid)
 }
 
 
+
+//**************************************************************************************************
+//*      the three configuration verbs — see the note in metadataConfiguration.h                   *
+//**************************************************************************************************
+
+bool ibMetaDataConfigurationBase::SaveConfiguration(wxString& refusal)
+{
+	if (!IsEditable()) {
+		refusal = _("This configuration is open for reading only.");
+		return false;
+	}
+
+	try {
+		// THE DISKETTE IS ONE CALL. It persists the configuration so it survives a re-login and leaves
+		// the LIVE one alone — that is what applying is for, and they are two buttons because they are
+		// two intentions.
+		if (!SaveDatabase()) {
+			refusal = _("Failed to save the configuration.");
+			return false;
+		}
+	}
+	catch (const ibBackendException& e) {
+		refusal = e.GetErrorDescription();
+		return false;
+	}
+
+	return true;
+}
+
+bool ibMetaDataConfigurationBase::ApplyConfiguration(wxString& refusal,
+	const std::function<bool(const ibRestructureInfo&)>& decide)
+{
+	if (!IsEditable()) {
+		refusal = _("This configuration is open for reading only.");
+		return false;
+	}
+
+	try {
+		// 1 — the configuration itself
+		if (!SaveDatabase()) {
+			refusal = _("Failed to save the configuration.");
+			return false;
+		}
+
+		// 2 — open the apply, AND SAY SO. Whoever asked for this knows already; whoever did NOT is the
+		// reason the signal exists — the schema is about to move under them.
+		//
+		// ⭐⭐ THE ANSWER COMES BACK EITHER WAY (Max, 2026-09-01: *"you still get the event that says
+		// the configuration was updated, or was not updated, and you cannot interrupt it — it is simply
+		// a notification that arrives"*). A watcher that stopped reading on `Applying` has to be let go
+		// on BOTH branches, so the pair is closed by a guard rather than by remembering to say it at
+		// each of the exits below — two of which are throws.
+		//
+		// ⚠ WHAT CHANGED GOES TO THE CALLER ONLY, through `decide`. These two carry the configuration
+		// root and nothing else: a watcher that did not start this has no business reading a ledger it
+		// cannot act on, and re-reading is the only thing it can do about the news.
+		struct ibApplyOutcome {
+			ibMetaDataConfigurationBase* const m_config;
+			bool m_applied = false;
+			~ibApplyOutcome() {
+				m_config->MetaObjectStage(m_applied
+					? ibMetaDataNotifier::ibMetaStage::Applied
+					: ibMetaDataNotifier::ibMetaStage::Reverted, m_config->GetCommonMetaObject());
+			}
+		} outcome{ this };
+
+		MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Applying, GetCommonMetaObject());
+
+		if (!OnBeforeSaveDatabase(saveConfigFlag)) {
+			refusal = _("The update could not be started.");
+			return false;
+		}
+
+		// 3 — do it; the restructure ledger fills here
+		const bool saved = OnSaveDatabase(saveConfigFlag);
+
+		// 4 — ⭐ THE ONE MOMENT "NO" IS FREE, and it belongs to WHOEVER CALLED. The ledger is
+		// complete and the transaction is still open, which is why the designer can show it and be
+		// answered — and why an assistant answers from an argument instead. A caller that declines gets
+		// everything rolled back and keeps the ledger it declined: a real pass, not a rehearsal
+		// (schemaSnapshot.h explains why the differ has no rehearsal mode).
+		//
+		// ⚠ THE DATABASE IS HELD WHILE THIS RUNS. It must answer at once — a dialog is the outer
+		// limit, and anything that asks back over a socket holds the base open while it waits.
+		const bool declined = saved && decide
+			&& !decide(ibMetaDataConfigurationBase::GetRestructureInfo());
+
+		// 5 — commit or roll back. Reached on BOTH branches: this is what closes the transaction, so a
+		// path that skipped it would leave the database open.
+		if (!OnAfterSaveDatabase(declined || !saved, saveConfigFlag) || !saved) {
+			refusal = _("Failed to update the database.");
+			return false;
+		}
+
+		// A DECLINE IS NOT A FAILURE — it did exactly what was asked. Reported apart from one, or a
+		// caller cannot tell whether to fix something or simply to say yes.
+		if (declined) {
+			refusal = _("Rolled back - nothing was applied.");
+			return false;
+		}
+
+		// …and it is done. Said by the guard on the way out, so `Applied` cannot arrive for an apply
+		// that did not happen — which is the whole value of it to a watcher that did not start it.
+		outcome.m_applied = true;
+	}
+	catch (const ibBackendException& e) {
+		// OnSaveDatabase self-rolls-back and releases exclusive on a thrown DDL error (its own
+		// try/catch), so there is no transaction left open here — only a message to carry out.
+		refusal = e.GetErrorDescription();
+		return false;
+	}
+	catch (const std::exception& e) {
+		refusal = wxString::FromUTF8(e.what());
+		return false;
+	}
+
+	return true;
+}
+
+bool ibMetaDataConfigurationBase::RollbackConfiguration(wxString& refusal)
+{
+	if (!IsEditable()) {
+		refusal = _("This configuration is open for reading only.");
+		return false;
+	}
+
+	if (!RollbackDatabase()) {
+		refusal = _("The configuration could not be taken back from the database.");
+		return false;
+	}
+
+	// ⭐⭐ AND NOW EVERYONE IS TOLD IT IS READ IN AGAIN.
+	//
+	// 🛑 THIS USED TO SAY NOTHING, on the reasoning that RollbackDatabase closes, clears, loads and
+	// runs — so each of those four announces its own stage and a navigator rebuilds because it
+	// HEARD. Every step of that is true and the result was still an empty tree: the rows went with
+	// the clear and nothing put them back (Max, 2026-09-01: *"the tree clears, the event is there,
+	// it just does not refill — press the × in the search box and the tree comes back"*, which is
+	// the proof that the metadata was fine and only the signal was missing).
+	//
+	// A ROLLBACK IS ONE ACT, and this is the verb that knows it finished. Relying on the stages of
+	// its parts means relying on every one of those paths to have kept its announce — and one of
+	// them has not.
+	//
+	// ⚠ Harmless if a part did announce: the stage a tree answers by re-reading is idempotent, and
+	// a second full read costs one draw.
+	//
+	// ⭐ AND IT IS ITS OWN STAGE. `Reverted` says what actually happened — this configuration is the
+	// database's again — where `Run` would only say that something is running, which was already
+	// true a moment before. A watcher that wants to tell a rollback from an ordinary load can;
+	// one that does not care answers them the same way, which the navigator does.
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Reverted, GetCommonMetaObject());
+	return true;
+}

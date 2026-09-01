@@ -191,7 +191,10 @@ const ibMaterializationDialect& ibDatabaseLayerFirebird::MaterializationDialect(
 		// Firebird takes a bare column name on the left — a `t.col = …` there is a syntax error,
 		// and the parser reports it at the following token rather than at the qualifier.
 		m.m_deltaUpdateItem     = wxT("{col} = {target}.{col} + {source}.{col}");
-		m.m_deltaKeyMatchItem   = wxT("{target}.{col} = {source}.{col}");
+		// NULL-safe — see the note on the default in databaseLayer.h. Firebird is the engine that
+		// actually SPENDS this template (its delta is a MERGE), so it is the one where a plain `=`
+		// turned an empty dimension into a duplicate-key refusal on every write.
+		m.m_deltaKeyMatchItem   = wxT("{target}.{col} IS NOT DISTINCT FROM {source}.{col}");
 
 		// THE KEY HASH — an identity for a key the sixteen-segment index cannot hold.
 		//

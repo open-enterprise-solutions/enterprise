@@ -21,29 +21,21 @@ public:
 	ibPropertyOwnerLoader()
 	{
 		ibPropertyRegistry::Register([](ibPropertyOwner* prop) -> wxPGProperty* {
-			return new ibPGOwnerProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+			ibPropertyChoiceList choices;
+			prop->GetValueList(choices);
+			return new ibPGOwnerProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue(), choices);
 		});
 	}
 }g_ownerLoader;
 
 #include "backend/metaData.h"
 
-void ibPGOwnerProperty::FillByClsid(const ibClassID& clsid)
-{
-	const ibValueMetaObjectGenericData* metaGenericData = dynamic_cast<const ibValueMetaObjectGenericData*>(m_ownerProperty);
-	if (metaGenericData != nullptr) {
-		const ibMetaData* metaData = metaGenericData->GetMetaData();
-		wxASSERT(metaData);
-		for (auto metaOwner : metaData->GetAnyArrayObject(clsid)) {
-			m_choices.Add(metaOwner->GetName(), metaOwner->GetIcon(), metaOwner->GetMetaID());
-		}
-	}
-}
-
-ibPGOwnerProperty::ibPGOwnerProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value)
+ibPGOwnerProperty::ibPGOwnerProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value,
+	const ibPropertyChoiceList& choices)
 	: wxPGProperty(label, strName), m_ownerProperty(property)
 {
-	FillByClsid(g_metaCatalogCLSID);
+	for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
+		m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
 
 	//m_flags |= wxPGFlags::ReadOnly;
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.

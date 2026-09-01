@@ -5,9 +5,130 @@
 
 #include "propertyObject.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataValue — property node serialization
+#include "backend/metaData.h"                                        // GetAnyArrayObject — the candidates
+#include "backend/propertyManager/property/variant/variantOwner.h"   // the variant a relationship holds
 
 #define propBlock 0x00023456
 #define eventBlock 0x00023457
+
+namespace ibPropertyGate {
+
+// Said once, so neither verb below repeats the null check at every place it has something to say.
+static void Refuse(wxString* refusal, const wxString& text)
+{
+	if (refusal != nullptr)
+		*refusal = text;
+}
+
+bool SetValue(ibPropertyObject* asked, ibProperty* property, const wxVariant& newValue, wxString* refusal)
+{
+	if (property == nullptr)
+		return false;
+
+	// The property's own owner when no selection was named — a caller outside an editor has one
+	// object in hand and no notion of "what is selected".
+	if (asked == nullptr)
+		asked = property->GetPropertyObject();
+
+	if (asked == nullptr) {
+		Refuse(refusal, wxString::Format(
+			_("'%s' belongs to nothing that could accept a change."), property->GetName()));
+		return false;
+	}
+
+	const wxVariant oldValue = property->GetValue();
+
+	// A VETO IS AN ANSWER, not a failure — an object refusing a value knows something the caller
+	// does not, and it is the same refusal a person meets in the inspector.
+	if (!asked->OnPropertyChanging(property, newValue)) {
+		Refuse(refusal, wxString::Format(
+			_("'%s' would not accept that value - the object refused the change."),
+			property->GetName()));
+		return false;
+	}
+
+	property->SetValue(newValue);
+	asked->OnPropertyChanged(property, oldValue, newValue);
+
+	// FROM THE PROPERTY'S REAL OWNER, which may be a nested child the asked object only accumulates.
+	if (ibPropertyObject* owner = property->GetPropertyObject())
+		owner->OnChildChanged();
+
+	return true;
+}
+
+bool SetEvent(ibPropertyObject* asked, ibEvent* event, const wxVariant& newValue, wxString* refusal)
+{
+	if (event == nullptr)
+		return false;
+
+	if (asked == nullptr)
+		asked = event->GetPropertyObject();
+
+	if (asked == nullptr) {
+		Refuse(refusal, wxString::Format(
+			_("'%s' belongs to nothing that could accept a handler."), event->GetName()));
+		return false;
+	}
+
+	const wxVariant oldValue = event->GetValue();
+
+	if (!asked->OnEventChanging(event, newValue)) {
+		Refuse(refusal, wxString::Format(
+			_("'%s' would not accept that handler - the object refused the change."),
+			event->GetName()));
+		return false;
+	}
+
+	event->SetValue(newValue);
+	asked->OnEventChanged(event, oldValue, newValue);
+
+	if (ibPropertyObject* owner = event->GetPropertyObject())
+		owner->OnChildChanged();
+
+	return true;
+}
+
+} // namespace ibPropertyGate
+
+ibPropertyChoiceMode ibBackendProperty::CreateValueList(ibPropertyChoiceList& list,
+	ibPropertyChoiceMode mode, const std::initializer_list<ibClassID> classes,
+	bool (*accept)(const ibPropertyObject*))
+{
+	// ⚠ THE CONST OWNER, deliberately. GetMetaData has an overload pair and the non-const one is a
+	// wxFAIL unless a subclass overrode it — reading through the const handle is both the working
+	// road and the honest one: listing what a property MAY hold changes nothing.
+	//
+	// No dynamic_cast: the owner answers GetMetaData virtually. It used to be cast to
+	// ibValueMetaObjectGenericData first, which is the narrower type nobody here needed.
+	const ibPropertyObject* owner = m_owner;
+	const ibMetaData* metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+	if (metaData == nullptr)
+		return ibPropertyChoiceMode::None;
+
+	for (const ibValueMetaObject* object : metaData->GetAnyArrayObject(classes)) {
+
+		if (accept != nullptr && !accept(object))
+			continue;
+
+		// ⭐ THE VARIANT IS BUILT WHILE LISTING, so a caller that picked an item has nothing left to
+		// work out: it places this. One metaID per choice, because one choice is one relationship —
+		// a Mult property composes the set out of the ones that were picked.
+		// ⭐ THE NUMBER SAYS WHICH, THE VARIANT IS WHAT TO PLACE. The metaID identifies the candidate
+		// — a wxPGChoices entry carries it and a caller points at it by that. The value is the
+		// METADESCRIPTION, built here while listing, so whoever picked this item places it as it
+		// stands and nothing downstream has to turn a number back into a relationship.
+		list.Add((long)object->GetMetaID(), object->GetName(), object->GetSynonym(),
+			wxVariant(new ibVariantDataOwner(owner, ibMetaDescription(object->GetMetaID()))),
+			object->GetIcon());
+	}
+
+	// THE MODE EVEN WHEN THE LIST CAME OUT EMPTY. "There is nothing of that kind in this
+	// configuration yet" is a real answer — it is what a caller sees before the first chart of
+	// accounts exists — and it is NOT "this property is not chosen from a list". Collapsing the two
+	// would make an empty configuration look like an unsupported property.
+	return mode;
+}
 
 ////////////////////////////////////////////////////////////////////////
 

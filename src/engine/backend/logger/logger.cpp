@@ -1,5 +1,6 @@
 #include "backend/logger/logger.h"
 
+#include "backend/logger/loggerDiagnosticSink.h"
 #include "backend/logger/loggerQueue.h"
 #include "backend/logger/loggerSink.h"
 #include "backend/logger/loggerSinkSqlite.h"
@@ -24,10 +25,19 @@ ibLogger::ibLogger(const wxString& dir,
     m_sink  = std::make_shared<ibLoggerSinkSqlite>(dir);
     m_writer = std::make_unique<ibLoggerWriter>(m_queue, m_sink, maxBatch, maxWaitMs);
     m_writer->Start();
+
+    // Last, and only once the writer is running: from here on a runtime failure
+    // anywhere in the engine leaves a row in the journal without anyone at the
+    // failing site having to remember to write one.
+    m_diagnosticSink = std::make_unique<ibLoggerDiagnosticSink>(this);
 }
 
 ibLogger::~ibLogger()
 {
+    // Unsubscribe before anything below is torn down — a diagnostic published
+    // during shutdown must not find a logger whose writer has already stopped.
+    m_diagnosticSink.reset();
+
     // Stop daily sweep first — it doesn't touch the writer/sink but does
     // open .olg files, which would race with sink Close otherwise.
     {

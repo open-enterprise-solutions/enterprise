@@ -7,10 +7,8 @@
 
 wxVariantData* ibPropertyRecord::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
 {
-	const ibValueMetaObjectGenericData* propFactory = dynamic_cast<const ibValueMetaObjectGenericData*>(property);
-	if (propFactory == nullptr)
-		return nullptr;
-	return new ibVariantDataRecord(propFactory, typeDesc);
+	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
+	return new ibVariantDataRecord(property, typeDesc);
 }
 
 ibMetaDescription& ibPropertyRecord::GetValueAsMetaDesc() const {
@@ -24,6 +22,23 @@ ibMetaDescription& ibPropertyRecord::GetValueAsMetaDesc(const wxVariant& val) co
 void ibPropertyRecord::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// Every kind of register a document can post to. The list used to sit in advpropRecord.cpp.
+ibPropertyChoiceMode ibPropertyRecord::GetValueList(ibPropertyChoiceList& list)
+{
+	return CreateValueList(list, ibPropertyChoiceMode::Mult, {
+			g_metaInformationRegisterCLSID,
+			g_metaAccumulationRegisterCLSID,
+			g_metaAccountingRegisterCLSID },
+		// ONLY A REGISTER WITH A RECORDER. A document posts by recording itself as the recorder; a
+		// register that has none cannot hold its movements, so offering it would be offering an
+		// impossible binding. This rule was inside the front editor's fill loop and would have been
+		// lost by moving only the classes down.
+		[](const ibPropertyObject* object) {
+			const ibValueMetaObjectRegisterData* reg = dynamic_cast<const ibValueMetaObjectRegisterData*>(object);
+			return reg != nullptr && reg->HasRecorder();
+		});
 }
 
 //base property for "record"

@@ -49,12 +49,6 @@
 class ibValueMetaObjectParameterizedJob : public ibValueMetaObjectRecordDataHierarchyMutableRef {
 	public:
 private:
-	enum
-	{
-		ID_METATREE_OPEN_MODULE = 19300,
-		ID_METATREE_OPEN_MANAGER = 19301,
-		ID_METATREE_RUN_JOB = 19302,
-	};
 
 	enum
 	{
@@ -189,8 +183,7 @@ public:
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 protected:
 

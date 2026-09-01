@@ -356,8 +356,10 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// Declared BY a metaobject but not one itself, so nothing else vends a queryable for it — and
 		// both L3-4 operations (regeneration, the shard fold) gate on exactly that, returning success
 		// having touched nothing when it is absent. Built from the table's OWN declaration, after every
-		// column exists, so the source cannot drift from the schema it describes.
-		ibRegSelfSourceFromDeclaration(t, GetMetaData());
+		// column exists, so the source cannot drift from the schema it describes. It is handed
+		// `keyCols` — the same list the unique index is built from — so the table answers for its
+		// own identity and no writer has to reassemble one out of the parts it can see.
+		ibRegSelfSourceFromDeclaration(t, GetMetaData(), keyCols);
 
 		// --- the read view --------------------------------------------------------------------------
 		// TURNOVERS per period, per key. There is no balance VIEW: a balance is this surface folded up
@@ -468,12 +470,26 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetTurnoverViewQu
 	// The figures. `add` spells BOTH names from one suffix — `AmountTurnoverDr` for a query to write,
 	// `Amount_Dr` for the table to keep — so the pair cannot drift.
 	const auto addFigure = [&](const ibValueMetaObjectAttributeBase* resource, bool credit) {
+		// ⭐⭐ THE NAME THE VIEW EXPOSES, WHICH IS THE ONLY ONE THIS SOURCE CAN ASK FOR.
+		//
+		// The figure is STORED as `fld1217_N_Dr` and the view publishes it under the alias
+		// `AmountTurnoverDr` (see v.m_columns above — alias from the resource's name, reading the
+		// stored column). This queryable is built over the VIEW, so the stored spelling is not a
+		// name it can use: the relation being read simply has no such column.
+		//
+		// 🛑 It carried the stored one, and the path had never been walked to find out — a report
+		// over this register failed earlier on a doubled suffix and never reached the name. Both
+		// halves of that are fixed here: ONE spelling, and the kind that says it is one field
+		// (`-206 FLD1217_N_DR`, then `FLD1217_N_DR_N`, measured 2026-08-31).
+		const wxString figureName =
+			resource->GetName() + ibRegSidedFigure(ibRegFigure::Turnover, credit);
+
 		columns.push_back(ibTempColumn(
-			resource->GetName() + ibRegSidedFigure(ibRegFigure::Turnover, credit),
-			ibRegValueField(resource) + (credit ? wxT("_Cr") : wxT("_Dr")),
+			figureName, figureName,
 			resource->GetTypeDesc(), synthetic++,
 			// …and the caption, from the same pair the name is built from.
-			ibRegFigureColumnCaption(resource->GetSynonym(), ibRegSidedCaption(ibRegFigure::Turnover, credit))));
+			ibRegFigureColumnCaption(resource->GetSynonym(), ibRegSidedCaption(ibRegFigure::Turnover, credit)),
+			ibBackendQueryColumn::Kind::Computed));
 	};
 
 	for (const auto resource : GetResourceArrayObject()) {

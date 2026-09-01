@@ -164,6 +164,20 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// restructuring that emitted it down with it. The comparison is written out for that reason, and
 	// the cost of getting it wrong is asymmetric: nothing READS wrong, the APPLY does not finish.
 	ibRegGuardInForce(m, GetRegisterActive());
+
+	// THE DIMENSIONS, AND ONLY THEY. `Key` names the parts of the identity that are read off a
+	// movement row VERBATIM — the period and the shard are declared by `Period()` and `Split()`
+	// above precisely because neither is: the period is a truncation of the movement's instant to
+	// the stored grain, and the shard is an expression over the connection. The movements table has
+	// no shard column at all.
+	//
+	// So the three are held apart on purpose, and whoever needs the WHOLE key composes it in this
+	// order — period, dimensions, shard. `KeyColumnValues` (databaseMaterializeBuilder.cpp) does
+	// exactly that for the trigger, and the rebuild does the same for its upsert.
+	//
+	// 🛑 Handing `keyCols` here instead — the table's whole key, right for the unique index below —
+	// emitted each of those two twice: `NEW.shard_` (a column that does not exist, so CREATE TRIGGER
+	// failed and took the restructuring with it) and the period once truncated and once raw.
 	for (const auto dimension : GetDimensionArrayObject())
 		m.Key(dimension);
 
@@ -238,7 +252,10 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// scaffold period plus every logical column — so the source cannot drift from the schema it
 	// describes. The physical TABLE, deliberately, not one of the views below: a view sums the
 	// shards away, and the fold's whole business is the individual shard rows underneath.
-	ibRegSelfSourceFromDeclaration(t, GetMetaData());
+	//
+	// It is handed `keyCols` — the same list the unique index above is built from — so the table
+	// answers for its own identity and nothing downstream has to reassemble one.
+	ibRegSelfSourceFromDeclaration(t, GetMetaData(), keyCols);
 
 	// --- the read views, composed from L2-2 primitives ------------------------------------------
 	// TURNOVERS — per period: what came in, what went out, and the net.

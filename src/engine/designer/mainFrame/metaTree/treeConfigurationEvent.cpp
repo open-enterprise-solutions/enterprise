@@ -123,22 +123,27 @@ void ibConfigurationTree::ibMetaTreeCtrl::OnEndDrag(wxTreeEvent& event) {
 		if (!item.IsOk())
 			return;
 
-		ibValueMetaObject* createdMetaObject = m_ownerTree->NewItem(
-			m_ownerTree->GetClassIdentifier(item),
-			m_ownerTree->GetMetaIdentifier(item),
-			false
-		);
+		ibMetaData* const metaData = m_ownerTree->GetMetaData();
+		if (metaData == nullptr)
+			return;
 
-		if (createdMetaObject != nullptr) {
+		ibWriterMemory dataWritter;
+		if (metaData->CopyMetaObject(metaSrcObject, dataWritter)) {
 
-			ibWriterMemory dataWritter;
-			if (metaSrcObject->CopyObject(dataWritter)) {
+			// ⭐ ONE DOOR, AND IT IS THE METADATA'S. Making the shell, reading the payload into it,
+			// announcing the result and taking it away again if the payload was bad were four steps
+			// written out here; all four belong to the paste and are now inside it. What comes back
+			// is the finished object, or nothing.
+			//
+			// The row is not drawn here either — the Created stage brings it back, which also
+			// selects it, which is what moves the object inspector. Doing any of that here as well
+			// would be the second road.
+			ibReaderMemory reader(dataWritter.pointer(), dataWritter.size());
 
-				ibReaderMemory reader(dataWritter.pointer(), dataWritter.size());
-				if (createdMetaObject->PasteObject(reader)) {
-					m_ownerTree->FillItem(createdMetaObject, item);
-				}
-			}
+			metaData->PasteMetaObject(
+				m_ownerTree->GetClassIdentifier(item),
+				m_ownerTree->GetMetaIdentifier(item),
+				reader);
 		}
 	}
 
@@ -221,11 +226,6 @@ void ibConfigurationTree::ibMetaTreeCtrl::OnSaveItem(wxCommandEvent& event)
 	event.Skip();
 }
 
-void ibConfigurationTree::ibMetaTreeCtrl::OnCommandItem(wxCommandEvent& event)
-{
-	m_ownerTree->CommandItem(event.GetId());
-	event.Skip();
-}
 
 #include <wx/clipbrd.h>
 #include "clipboardLock.h"   // the Open/Close pair, taken as a guard — one mechanism, all three trees
@@ -241,10 +241,12 @@ void ibConfigurationTree::ibMetaTreeCtrl::OnCopyItem(wxCommandEvent& event)
 	if (clipboard.IsOpen()) {
 
 		ibValueMetaObject* metaObject = m_ownerTree->GetMetaObject(item);
-		if (metaObject != nullptr) {
+		ibMetaData* const metaData = m_ownerTree->GetMetaData();
+
+		if (metaObject != nullptr && metaData != nullptr) {
 
 			ibWriterMemory dataWritter;
-			if (metaObject->CopyObject(dataWritter)) {
+			if (metaData->CopyMetaObject(metaObject, dataWritter)) {
 
 				wxDataObjectComposite* composite_object = new wxDataObjectComposite;
 				wxCustomDataObject* custom_object = new wxCustomDataObject(oes_clipboard_metadata);
@@ -283,24 +285,15 @@ void ibConfigurationTree::ibMetaTreeCtrl::OnPasteItem(wxCommandEvent& event)
 
 		if (wxTheClipboard->GetData(data)) {
 
-			ibValueMetaObject* metaObject = m_ownerTree->NewItem(
-				m_ownerTree->GetClassIdentifier(),
-				m_ownerTree->GetMetaIdentifier(),
-				false
-			);
-
-			if (metaObject != nullptr) {
+			// ⭐ WHERE IT GOES, AND WHAT GOES THERE — the two things a paste is, and nothing else is
+			// written out here any more. The shell, the read, the announcement that draws the row
+			// and the cleanup of a payload that turned out to be bad all live behind the door.
+			if (ibMetaData* metaData = m_ownerTree->GetMetaData()) {
 				ibReaderMemory reader(data.GetData(), data.GetDataSize());
-				// A PASTE THAT FAILED LEAVES NOTHING BEHIND. The metaobject was already created in
-				// the metadata by NewItem, so a bad payload used to leave it there — unshown when
-				// FillItem was skipped, and saved into the configuration all the same.
-				if (metaObject->PasteObject(reader)) {
-					m_ownerTree->FillItem(metaObject, item, true, false);
-					objectInspector->SelectObject(metaObject);
-				}
-				else if (ibMetaData* metaData = m_ownerTree->GetMetaData()) {
-					metaData->RemoveMetaObject(metaObject);
-				}
+				metaData->PasteMetaObject(
+					m_ownerTree->GetClassIdentifier(),
+					m_ownerTree->GetMetaIdentifier(),
+					reader);
 			}
 		}
 	}
@@ -371,7 +364,7 @@ void ibConfigurationTree::ibMetaTreeCtrl::OnSelected(wxTreeEvent& event)
 void ibConfigurationTree::ibMetaTreeCtrl::OnCollapsing(wxTreeEvent& event)
 {
 	if (GetRootItem() != event.GetItem()) {
-		m_ownerTree->Collapse(); event.Skip();
+		m_ownerTree->Collapse(event.GetItem()); event.Skip();
 	}
 	else {
 		event.Veto();
@@ -380,5 +373,59 @@ void ibConfigurationTree::ibMetaTreeCtrl::OnCollapsing(wxTreeEvent& event)
 
 void ibConfigurationTree::ibMetaTreeCtrl::OnExpanding(wxTreeEvent& event)
 {
-	m_ownerTree->Expand(); event.Skip();
+	m_ownerTree->Expand(event.GetItem()); event.Skip();
+}
+
+#include "win/dlg/textEditor.h"
+#include "backend/metaCollection/metaObject.h"
+
+// The two texts a metaobject carries. One dialog serves both — the caption is what differs, and
+// the object is asked for its own text rather than a copy being kept anywhere.
+//
+// Written back ONLY on OK and ONLY when it actually changed: marking a configuration modified
+// because somebody opened a note and closed it is how a save prompt appears for no reason, and a
+// prompt that appears for no reason is one a person learns to dismiss without reading.
+static void EditOneText(ibConfigurationTree* tree, ibValueMetaObject* metaObject,
+	wxWindow* parent, bool help)
+{
+	if (tree == nullptr || metaObject == nullptr)
+		return;
+
+	const wxString before = help ? metaObject->GetHelpContent() : metaObject->GetNoteContent();
+
+	ibDialogTextEditor dlg(parent,
+		help ? _("Help information") : _("Technical information"),
+		metaObject->GetName(), before);
+
+	if (dlg.ShowModal() != wxID_OK)
+		return;
+
+	const wxString after = dlg.GetText();
+	if (after == before)
+		return;
+
+	if (help) metaObject->SetHelpContent(after);
+	else      metaObject->SetNoteContent(after);
+
+	tree->Modify(true);
+}
+
+// The selection is asked of the CONTROL and resolved by the TREE — the same two lines OnCopyItem
+// uses, because it is the same question.
+void ibConfigurationTree::ibMetaTreeCtrl::OnEditHelp(wxCommandEvent& event)
+{
+	const wxTreeItemId& item = GetSelection();
+	if (item.IsOk())
+		EditOneText(m_ownerTree, m_ownerTree->GetMetaObject(item), this, /*help*/ true);
+
+	event.Skip();
+}
+
+void ibConfigurationTree::ibMetaTreeCtrl::OnEditNotes(wxCommandEvent& event)
+{
+	const wxTreeItemId& item = GetSelection();
+	if (item.IsOk())
+		EditOneText(m_ownerTree, m_ownerTree->GetMetaObject(item), this, /*help*/ false);
+
+	event.Skip();
 }

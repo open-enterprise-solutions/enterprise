@@ -34,6 +34,7 @@
     <ClInclude Include="logger\logger.h" />
     <ClInclude Include="logger\loggerEntry.h" />
     <ClInclude Include="logger\loggerQueue.h" />
+    <ClInclude Include="logger\loggerDiagnosticSink.h" />
     <ClInclude Include="logger\loggerReader.h" />
     <ClInclude Include="logger\loggerSink.h" />
     <ClInclude Include="logger\loggerSinkSqlite.h" />
@@ -61,6 +62,11 @@
     <ClInclude Include="lock\lockKeyHash.h" />
     <ClInclude Include="lock\lockManager.h" />
     <ClInclude Include="job\jobManager.h" />
+    <ClInclude Include="mcp\mcpClipboard.h" />
+    <ClInclude Include="mcp\mcpMessage.h" />
+    <ClInclude Include="mcp\mcpServer.h" />
+    <ClInclude Include="mcp\mcpDebugBridge.h" />
+    <ClInclude Include="mcp\mcpTool.h" />
     <ClInclude Include="job\platformJobs.h" />
     <ClInclude Include="job\jobSchedule.h" />
     <ClInclude Include="settings\settingsStorage.h" />
@@ -88,6 +94,7 @@
     <ClInclude Include="compiler\compileContext.h" />
     <ClInclude Include="compiler\compileContextLinqData.h" />
     <ClInclude Include="compiler\compileModule.h" />
+    <ClInclude Include="compiler\scriptCheck.h" />
     <ClInclude Include="compiler\enumFactory.h" />
     <ClInclude Include="compiler\enumUnit.h" />
     <ClInclude Include="compiler\procContext.h" />
@@ -198,6 +205,7 @@
     <ClInclude Include="metaCollection\metaSpreadsheetObject.h" />
     <ClInclude Include="metaCollection\metaModuleObject.h" />
     <ClInclude Include="metaCollection\metaDiff.h" />
+    <ClInclude Include="metaCollection\metaIntrospect.h" />
     <ClInclude Include="metaCollection\metaObject.h" />
     <ClInclude Include="metaCollection\metaObjectMetadata.h" />
     <ClInclude Include="metaCollection\metaObjectEnum.h" />
@@ -289,7 +297,6 @@
     <ClInclude Include="metadataConfiguration.h" />
     <ClInclude Include="metadataDataProcessor.h" />
     <ClInclude Include="metadataReport.h" />
-    <ClInclude Include="backend_metatree.h" />
     <ClInclude Include="moduleInfo.h" />
     <ClInclude Include="moduleManager\moduleManager.h" />
     <ClInclude Include="moduleManager\moduleManagerExt.h" />
@@ -405,6 +412,7 @@
     <ClCompile Include="syntaxHelper\helpResolver.cpp" />
     <ClCompile Include="syntaxHelper\helpService.cpp" />
     <ClCompile Include="logger\logger.cpp" />
+    <ClCompile Include="logger\loggerDiagnosticSink.cpp" />
     <ClCompile Include="logger\loggerQueue.cpp" />
     <ClCompile Include="logger\loggerReader.cpp" />
     <ClCompile Include="logger\loggerSinkSqlite.cpp" />
@@ -432,6 +440,36 @@
     <ClCompile Include="lock\lockKeyHash.cpp" />
     <ClCompile Include="lock\lockManager.cpp" />
     <ClCompile Include="job\jobManager.cpp" />
+    <ClCompile Include="mcp\mcpClipboard.cpp" />
+    <ClCompile Include="mcp\mcpMessage.cpp" />
+    <ClCompile Include="mcp\mcpServer.cpp" />
+    <ClCompile Include="mcp\mcpTool.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolChat.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolClipboard.cpp" />
+    <ClCompile Include="mcp\mcpDebugBridge.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolDebug.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolApp.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolLocks.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolModule.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolHelp.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolJournal.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolSession.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolMetadata.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolNotes.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolPatterns.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolPicture.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolEnvelope.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolPredefined.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolQuery.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolReport.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolSheet.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolRoles.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolDatabase.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolSection.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolPlatform.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolBind.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolScript.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolLanguage.cpp" />
     <ClCompile Include="job\jobBackground.cpp" />
     <ClCompile Include="job\jobRegister.cpp" />
     <ClCompile Include="job\platformJobs.cpp" />
@@ -471,6 +509,7 @@
     <ClCompile Include="compiler\compileCode.cpp" />
     <ClCompile Include="compiler\compileContext.cpp" />
     <ClCompile Include="compiler\compileModule.cpp" />
+    <ClCompile Include="compiler\scriptCheck.cpp" />
     <ClCompile Include="compiler\enumUnit.cpp" />
     <ClCompile Include="compiler\enumFactory.cpp" />
     <ClCompile Include="compiler\procContext.cpp" />
@@ -578,6 +617,7 @@
     <ClCompile Include="metaCollection\metaModuleObjectProperty.cpp" />
     <ClCompile Include="metaCollection\metaModuleObject_res.cpp" />
     <ClCompile Include="metaCollection\metaDiff.cpp" />
+    <ClCompile Include="metaCollection\metaIntrospect.cpp" />
     <ClCompile Include="metaCollection\metaObject.cpp" />
     <ClCompile Include="metaCollection\metaObjectSerialize.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadata.cpp" />
@@ -1335,7 +1375,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);$(oesSrcDir)include;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)cpp-httplib;$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);$(oesSrcDir)include;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -1356,7 +1396,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)cpp-httplib;$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/Gw /bigobj %(AdditionalOptions)</AdditionalOptions>
@@ -1379,7 +1419,7 @@
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)cpp-httplib;$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -1406,7 +1446,7 @@
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)cpp-httplib;$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>

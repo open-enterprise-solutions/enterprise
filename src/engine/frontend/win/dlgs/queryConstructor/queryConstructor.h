@@ -115,7 +115,7 @@ public:
 	                         int exclude = ibQueryExclude_None);
 
 	// Does this configuration allow its structure to be changed? The answer lives on the metadata's
-	// own tree (ibBackendMetadataTree::IsEditable) — the same question the designer asks before it
+	// own configuration (ibMetaData::IsEditable) — the same question the designer asks before it
 	// lets anything be edited, so the constructor inherits the answer instead of inventing one.
 	// No tree at all = a runtime host with no designer surface, which does not make a query
 	// unreadable — so: editable.

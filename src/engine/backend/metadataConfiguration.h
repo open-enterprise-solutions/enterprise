@@ -104,6 +104,30 @@ public:
 	//get config type 
 	virtual ibConfigType GetConfigType() const = 0;
 
+	// ==========================================================================================
+	//  THE THREE CONFIGURATION VERBS - a configuration saves, applies and rolls back ITSELF
+	// ==========================================================================================
+	//
+	// STAR2 Max, 2026-09-01: *"the one who calls it has the exclusive right to interrupt it."* They
+	// used to sit on ibMetaDataNotifier, and ibMetaData looped over the watchers until one said yes -
+	// which is the engine READING AN ANSWER OUT OF A VIEWER, the one shape this whole day removed.
+	// It survived because it was written down as "a question" rather than as what it was: a pull.
+	//
+	// STAR AND THE EXCLUSIVE RIGHT WAS ALREADY IN THE SIGNATURE. `decide` arrives WITH the call, so
+	// only the caller can decline - by construction, with no rule about whose answer wins. Everyone
+	// else is merely TOLD, through the stages the phases already broadcast: Closed then Loaded then
+	// Run for a rollback, Saved for a save. A watcher answers nothing.
+	//
+	// STOP AND THERE WAS NOTHING OF A TREE IN THEM. The comment that kept them on the notifier said
+	// they were "wrapped in the two things only a tree-and-documents host can do - flush the open
+	// editors first, reload the navigator afterwards". The code did neither: three bodies of
+	// `m_metaData->...`, a read-only guard, and an exception turned into words. The rollback's one
+	// exception - an explicit `Load()` - is what the Loaded stage now does by itself.
+	virtual bool SaveConfiguration(wxString& refusal);
+	virtual bool ApplyConfiguration(wxString& refusal,
+		const std::function<bool(const class ibRestructureInfo&)>& decide = {});
+	virtual bool RollbackConfiguration(wxString& refusal);
+
 	//special delete and create 
 	virtual bool ReCreateDatabase() { return false; }
 
@@ -333,6 +357,7 @@ public:
 
 	//rollback to config db
 	virtual bool RollbackDatabase();
+
 
 	//load/save data form buffer (table rows + sequence — goes through the
 	// saved baseline, so it stays on Storage; config metadata seam lives on

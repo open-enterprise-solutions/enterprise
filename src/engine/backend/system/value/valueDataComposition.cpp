@@ -526,7 +526,8 @@ void ibValueDataComposition::SyncParametersWithQuery()
 // even show there was an error").
 //
 // `produced` still carries the reason on failure, so the caller has something to show.
-static bool ibEvaluateInRoot(const wxString& expression, ibValue& produced)
+static bool ibEvaluateInRoot(const wxString& expression, ibValue& produced,
+	const ibMetaData* metaData)
 {
 	produced = ibValue();
 	if (expression.IsEmpty())
@@ -543,9 +544,25 @@ static bool ibEvaluateInRoot(const wxString& expression, ibValue& produced)
 	// to the root" means.
 	ibSession* session = ibSession::Current();
 	ibValueModuleManagerRuntimeConfiguration* root = session != nullptr ? session->GetManagerModule() : nullptr;
-	const auto rootUnit = root != nullptr ? root->GetProcUnit() : nullptr;
+	auto rootUnit = root != nullptr ? root->GetProcUnit() : nullptr;
+
+	// ⭐⭐ AND IN THE DESIGNER THE ROOT IS THE EDIT MANAGER. There is no runtime root there, and this
+	// used to answer "true, nothing produced" — success with an empty value, which the caller cannot
+	// tell from an expression that legitimately evaluated to nothing. So a composer's parameter
+	// expression was silently ignored for everyone building a report, which is precisely where it is
+	// written (Max, 2026-09-01, pointing at it: *"look at how the expression in a report works —
+	// there is exactly the same problem"*).
+	//
+	// ibSession::GetEditModuleManager is the seam for this: the manager whose context a module
+	// compiled against THIS configuration parents to — the Designer's lightweight one, the session's
+	// root at runtime. The same door script checking was just given.
+	if (!rootUnit) {
+		if (ibValueModuleManager* editManager = ibSession::EditModuleManagerFor(metaData))
+			rootUnit = editManager->GetProcUnit();
+	}
+
 	if (!rootUnit)
-		return true;   // no runtime at all (Designer): nothing to evaluate against, and nothing invented
+		return true;   // no context at all — nothing to evaluate against, and nothing invented
 
 	ibRunContext rootFrame;
 	rootFrame.SetProcUnit(rootUnit.get());
@@ -591,7 +608,7 @@ std::map<wxString, ibValue> ibValueDataComposition::EvaluatedParameterValues() c
 		// looked exactly like one with no data. What the reader gets now is the engine's own words,
 		// under the name of the parameter that could not be worked out.
 		ibValue produced;
-		if (!ibEvaluateInRoot(parameter.m_expression, produced)) {
+		if (!ibEvaluateInRoot(parameter.m_expression, produced, GetSourceMetaData())) {
 			ibBackendCoreException::Error(_("Parameter '%s' could not be evaluated: %s"),
 				parameter.m_name, produced.GetString());
 		}

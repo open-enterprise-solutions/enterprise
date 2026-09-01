@@ -32,10 +32,10 @@ class ibCommonAttributeCompositionEditor : public wxWindow {
 	// The declaration being edited.
 	ibValueMetaObjectCommonAttribute* m_metaCommonAttribute;
 
-	class wxTreeItemMetaData : public wxTreeItemData {
+	class ibTreeItemObject : public wxTreeItemData {
 		ibValueMetaObject* m_metaObject;
 	public:
-		wxTreeItemMetaData(ibValueMetaObject* metaObject) : m_metaObject(metaObject) {}
+		ibTreeItemObject(ibValueMetaObject* metaObject) : m_metaObject(metaObject) {}
 		ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	};
 
@@ -67,7 +67,7 @@ public:
 	void RefreshComposition() {
 		m_keepSelObj = nullptr;
 		if (const wxTreeItemId sel = m_compositionCtrl->GetSelection(); sel.IsOk())
-			if (const wxTreeItemMetaData* d = dynamic_cast<wxTreeItemMetaData*>(m_compositionCtrl->GetItemData(sel)))
+			if (const ibTreeItemObject* d = dynamic_cast<ibTreeItemObject*>(m_compositionCtrl->GetItemData(sel)))
 				m_keepSelObj = d->GetMetaObject();
 		m_keepSelNode = wxTreeItemId();
 

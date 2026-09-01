@@ -66,11 +66,6 @@ private:
 		return formList;
 	}
 
-	enum
-	{
-		ID_METATREE_OPEN_MODULE = 19000,
-		ID_METATREE_OPEN_MANAGER = 19001,
-	};
 
 public:
 	class ibValueMetaObjectRecordManager : public ibValueMetaObject {
@@ -141,8 +136,7 @@ public:
 #pragma endregion
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 	/**
 	* Property events
@@ -319,6 +313,39 @@ public:
 	// could be changed without the other, and the chain quietly defaulted to `<=` for anything it did
 	// not recognise — so a typo in one of them produced a wrong slice rather than an error.
 	virtual ibSliceEnd End() const = 0;
+
+	// ⭐ WHAT MAKES ONE ROW THE SAME ROW — three shapes, and the register says which it is.
+	//
+	//   subordinate to a recorder : period + line number + recorder,  then dimensions
+	//   periodic, independent     : period,                           then dimensions
+	//   non-periodic              :                                   dimensions alone
+	//
+	// 🛑 ASKED, NOT ASSUMED. Periodicity and WriteMode are settings — an information register can
+	// be any of these, and the key is a different list in each. Writing one of them flat is how two
+	// documents' rows fold into one, or how every moment of a periodic register collapses onto the
+	// last: valid SQL, wrong data, nothing to notice.
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override
+	{
+		std::vector<const ibBackendQueryColumn*> cols;
+
+		if (m_reg == nullptr)
+			return cols;
+
+		if (m_reg->HasRecorder()) {
+			if (m_reg->GetRegisterPeriod()     != nullptr) cols.push_back(m_reg->GetRegisterPeriod());
+			if (m_reg->GetRegisterLineNumber() != nullptr) cols.push_back(m_reg->GetRegisterLineNumber());
+			if (m_reg->GetRegisterRecorder()   != nullptr) cols.push_back(m_reg->GetRegisterRecorder());
+		}
+		else if (m_reg->HasPeriod() && m_reg->GetRegisterPeriod() != nullptr) {
+			cols.push_back(m_reg->GetRegisterPeriod());
+		}
+
+		for (auto* dimension : m_reg->GetDimensionArrayObject())
+			if (dimension != nullptr)
+				cols.push_back(dimension);
+
+		return cols;
+	}
 
 	// the slice's rows — computed from the ctor filters through the register's ComputeSlice.
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;

@@ -7,19 +7,9 @@
 
 // "Open composer" — the same gesture a template and a form answer to, and it opens the settings
 // window that already exists (query / resources / output), not a second editor of its own.
-bool ibValueMetaObjectComposer::PrepareContextMenu(wxMenu* defaultMenu)
+bool ibValueMetaObjectComposer::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	wxMenuItem* menuItem = defaultMenu->Append(ID_METATREE_OPEN_COMPOSER, _("Open data composer"));
-	menuItem->SetBitmap(GetIcon());
-	defaultMenu->AppendSeparator();
+	items.emplace_back(ibMetaMenuKind::Object, wxT("Composer"), _("Open data composer"), this);
 	return false;
 }
 
-void ibValueMetaObjectComposer::ProcessCommand(unsigned int id)
-{
-	ibBackendMetadataTree* metaTree = m_metaData->GetMetaTree();
-	wxASSERT(metaTree);
-
-	if (id == ID_METATREE_OPEN_COMPOSER)
-		metaTree->OpenObjectForm(this);
-}

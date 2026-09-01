@@ -713,10 +713,32 @@ void ibValueModelCursor::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, 
 	if (node == nullptr)
 		return;
 
+	const ibBackendQueryable* q = GetSourceQueryable();
+	const std::vector<const ibBackendQueryColumn*> keyCols =
+		q != nullptr ? q->GetPrimaryKeyColumns() : std::vector<const ibBackendQueryColumn*>();
+
+	// THE ROW'S OWN IDENTITY COLUMN, needed by BOTH shapes below — the folder walk keys its point
+	// lookups by it, and the grouped shape has to be able to RECOGNISE it (see there).
+	const ibMetaID rowKeyCol = (!keyCols.empty() && keyCols.front() != nullptr)
+		? keyCols.front()->GetColumnId() : wxNOT_FOUND;
+
 	// GROUPED (grouping is on): the ancestors are the GROUP levels, NOT folders — the folder tree is replaced. Build
 	// one group crumb per dimension, each carrying the group PATH root→this (the row's value for dims[0..i]); deepest
 	// last built, emitted FIRST so out[0] is the immediate (innermost) group the row sits directly in.
 	if (m_composer.GroupCount() > 0) {
+
+		// ⭐ A RESTORE STUB HAS NO CELLS, so asking it for a dimension answers TYPE_EMPTY every time —
+		// and an empty crumb is not merely blank, it MOVES THE READ: the page is fetched under it, the
+		// scope comes back `<dim> = <nothing>`, and the list shows one empty folder row and no data.
+		// The folder walk below has always resolved a stub by its key; this shape never learned to,
+		// which is the same state reached by two roads with only one of them taught. Resolve ONCE,
+		// here, and every dimension below reads from a row that can answer. (2026-09-01: adding an
+		// element at the root of a hierarchical catalog — the one moment a list positions on a
+		// key-only node.)
+		std::map<ibMetaID, ibValue> resolved;
+		if (node->IsKeyOnlyAnchor() && !node->GetRowKey().empty())
+			resolved = ResolveAnchorByKey(node->GetRowKey());
+
 		std::vector<ibValue> groupPath;
 		std::vector<ibComposerNode*> crumbs;
 		for (size_t i = 0; i < m_composer.GroupCount(); ++i) {
@@ -724,28 +746,45 @@ void ibValueModelCursor::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, 
 			if (!m_composer.GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
 			const ibMetaID dimCol = GetColumnIDByName(field);
 			if (dimCol == wxNOT_FOUND) continue;
+
+			// ⭐⭐ A FOLD ON THE ROW'S OWN KEY IS THE HIERARCHY, NOT A GROUPING. `GroupCount()` answers
+			// from the composition's LEVEL CHAIN when no user grouping is set, and a hierarchical list's
+			// level is the self-hierarchy fold — its field is `Ref`, the row's own identity. Read as an
+			// ordinary grouping it produces a crumb meaning "drill into this row", which is not an
+			// ancestor of anything: a row is not its own parent. The ancestors of a self-hierarchy row
+			// are its FOLDERS, and the walk below is what answers that — so this contributes nothing and
+			// lets it. (Skipped rather than refused: a list may genuinely group by other dimensions too,
+			// and those crumbs stay valid.)
+			if (rowKeyCol != wxNOT_FOUND && dimCol == rowKeyCol) continue;
+
 			ibValue dimVal;
 			node->GetValue(dimCol, dimVal);
+			if (dimVal.IsEmpty()) {
+				const auto it = resolved.find(dimCol);
+				if (it != resolved.end()) dimVal = it->second;
+			}
+
 			groupPath.push_back(dimVal);
 			std::map<ibMetaID, ibValue> vals;
 			vals[dimCol] = dimVal;                                       // the group's own label cell
 			crumbs.push_back(new ibComposerNode(vals, groupPath, /*container*/true));   // groupPath copied
 		}
-		for (size_t i = crumbs.size(); i > 0; --i) {                    // deepest → shallowest into out
-			out.Add(ibDataViewItem(crumbs[i - 1]));
-			crumbs[i - 1]->DecRef();
+		if (!crumbs.empty()) {
+			for (size_t i = crumbs.size(); i > 0; --i) {                // deepest → shallowest into out
+				out.Add(ibDataViewItem(crumbs[i - 1]));
+				crumbs[i - 1]->DecRef();
+			}
+			return;
 		}
-		return;
+		// Nothing here was a grouping after all — fall through and answer as a folder hierarchy.
 	}
 
-	const ibBackendQueryable* q = GetSourceQueryable();
 	if (q == nullptr)
 		return;
 	const ibBackendQueryColumn* hierCol = q->GetHierarchyColumn();
 	if (hierCol == nullptr)
 		return;   // not a hierarchical source — no ancestors to walk
-	const std::vector<const ibBackendQueryColumn*> keyCols = q->GetPrimaryKeyColumns();
-	if (keyCols.empty() || keyCols.front() == nullptr)
+	if (rowKeyCol == wxNOT_FOUND)
 		return;
 	const ibMetaID hCol = hierCol->GetColumnId();
 

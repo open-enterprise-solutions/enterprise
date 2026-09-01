@@ -362,14 +362,16 @@ void ibDebuggerClient::RemoveAllBreakpoint()
 }
 
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned long long id)
-#else 
-void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned int id)
-#endif 
+void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned long long id, const wxString& asker)
+#else
+void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned int id, const wxString& asker)
+#endif
 {
 	ibWriterMemory commandChannel;
 
 	commandChannel.w_u16(CommandId_AddExpression);
+	// WHO ASKED — written here, echoed back with the answer, read by nobody in between.
+	commandChannel.w_stringZ(asker);
 	commandChannel.w_stringZ(strExpression);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 	commandChannel.w_u64(id);
@@ -384,14 +386,15 @@ void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned int
 }
 
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned long long id)
+void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned long long id, const wxString& asker)
 #else
-void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned int id)
-#endif 
+void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned int id, const wxString& asker)
+#endif
 {
 	ibWriterMemory commandChannel;
 
 	commandChannel.w_u16(CommandId_ExpandExpression);
+	commandChannel.w_stringZ(asker);   // see AddExpression
 	commandChannel.w_stringZ(strExpression);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 	commandChannel.w_u64(id);
@@ -867,7 +870,9 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		);
 	}
 	else if (commandFromServer == CommandId_SetExpressions) {
+		wxString strAsker; commandReader.r_stringZ(strAsker);
 		unsigned int countExpression = commandReader.r_u32(); ibWatchWindowData watchData;
+		watchData.SetBridgeId(ibGuid(strAsker));
 		for (unsigned int i = 0; i < countExpression; i++) {
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 			const wxTreeItemId& item = reinterpret_cast<void*>(commandReader.r_u64());
@@ -893,12 +898,15 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		);
 	}
 	else if (commandFromServer == CommandId_ExpandExpression) {
+		wxString strAsker; commandReader.r_stringZ(strAsker);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 		ibWatchWindowData watchData(wxTreeItemId(reinterpret_cast<void*>(commandReader.r_u64())));
 #else
 		ibWatchWindowData watchData(wxTreeItemId(reinterpret_cast<void*>(commandReader.r_u32())));
 #endif
-		//generate event 
+		watchData.SetBridgeId(ibGuid(strAsker));
+
+		//generate event
 		unsigned int attributeCount = commandReader.r_u32();
 		for (unsigned int i = 0; i < attributeCount; i++) {
 			wxString strName, strValue, strType;

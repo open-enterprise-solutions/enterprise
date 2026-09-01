@@ -33,7 +33,7 @@ ibPGHyperLinkProperty::~ibPGHyperLinkProperty()
 {
 }
 
-wxString ibPGHyperLinkProperty::ValueToString( wxVariant& value, wxPGPropValFormatFlags flags ) const
+wxString ibPGHyperLinkProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
 {
 	return _("Open");
 }
@@ -46,6 +46,7 @@ bool ibPGHyperLinkProperty::StringToValue(wxVariant& variant,
 }
 
 #include "backend/metaData.h"
+#include "frontend/docView/docView.h"   // docManager — the door that opens a metaobject
 
 void ibPGHyperLinkProperty::OnSetValue()
 {
@@ -59,31 +60,25 @@ void ibPGHyperLinkProperty::OnSetValue()
 
 		ibValueMetaObject* metaObject = dynamic_cast<ibValueMetaObject*>(m_ownerProperty);
 		if (metaObject != nullptr) {
-			// ⭐⭐ THE ID AND THE CONFIGURATION CROSS THE HOP, NOT THE OBJECT. A deferred call runs after
-			// the click has been dispatched, and between the two a metaobject can be deleted or the
-			// configuration reloaded — a raw pointer captured here would then be read after it died
-			// (audit, 2026-08-24; the same family as the two designer dumps this cell already carries a
-			// note about, and the name-stamp fix cured the repeat firing, not this).
-			//
-			// An id is a fact that outlives objects: it is re-resolved on the other side, and a
-			// metaobject that has gone simply is not found.
-			ibMetaData* metaData = metaObject->GetMetaData();
-			const ibMetaID metaId = metaObject->GetMetaID();
-			if (metaData != nullptr) {
-				wxTheApp->CallAfter(
-					[metaData, metaId]() {
-						// ASKED OF THE CONFIGURATION ITSELF — `ibMetaData::FindAnyObjectByFilter` is the
-						// same walk the root would do, one call earlier. Going through
-						// `GetCommonMetaObject()` bought nothing and needed its result narrowed to the
-						// configuration class, which is not what that accessor hands back.
-						ibValueMetaObject* found = metaData->FindAnyObjectByFilter(metaId);
-						if (found == nullptr)
-							return;   // deleted or reloaded while the click was in flight
-						ibBackendMetadataTree* metaTree = metaData->GetMetaTree();
-						if (metaTree != nullptr) metaTree->OpenObjectForm(found);
-					}
-				);
-			}
+
+			// ⚠ DEFERRED, because the click is still being dispatched: opening a document from
+			// inside the grid's own event tears down the cell that is handling it.
+			wxTheApp->CallAfter(
+				[metaObject]() {
+
+					// ⭐⭐ JUST OPEN IT. Whose it is — the document holding that configuration, or
+					// nobody's when it is the one the main window shows — is worked out INSIDE
+					// OpenForm, from the object itself (Max, 2026-09-01: *"it is a very complicated
+					// mechanism otherwise — you would have to track everywhere on whose behalf it
+					// was opened"*).
+					//
+					// 🛑 It used to pass no owner and mean it, so a module of an external data
+					// processor landed in the manager's top level instead of under that processor's
+					// document. The editor appeared, which is why it looked right; everything asked
+					// afterwards was wrong, because "is this already open?" is asked of the owner.
+					docManager->OpenForm(metaObject, ibDOC_NEW);
+				}
+			);
 		}
 	}
 }

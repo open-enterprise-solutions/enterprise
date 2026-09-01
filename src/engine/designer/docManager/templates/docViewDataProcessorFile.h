@@ -9,6 +9,7 @@ class ibDataProcessorEditView : public ibMetaView
 {
 	ibDataProcessorTree* m_metaTree;
 
+
 public:
 
 	ibDataProcessorEditView() : ibMetaView() {}

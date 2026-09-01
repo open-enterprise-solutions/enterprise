@@ -22,17 +22,17 @@ class ibRoleEditor : public wxSplitterWindow {
 
 	ibValueMetaObject* m_metaRole;
 
-	class wxTreeItemMetaData : public wxTreeItemData {
+	class ibTreeItemObject : public wxTreeItemData {
 		ibAccessObject* m_metaObject; // element type
 	public:
-		wxTreeItemMetaData(ibAccessObject* metaObject) : m_metaObject(metaObject) {}
+		ibTreeItemObject(ibAccessObject* metaObject) : m_metaObject(metaObject) {}
 		ibAccessObject* GetMetaObject() const { return m_metaObject; }
 	};
 
-	class wxTreeItemRoleData : public wxTreeItemMetaData {
+	class wxTreeItemRoleData : public ibTreeItemObject {
 		ibRole* m_role; // element type
 	public:
-		wxTreeItemRoleData(ibRole* role) : wxTreeItemMetaData(role->GetRoleObject()), m_role(role) {}
+		wxTreeItemRoleData(ibRole* role) : ibTreeItemObject(role->GetRoleObject()), m_role(role) {}
 		ibRole* GetRole() const { return m_role; }
 	};
 
@@ -57,7 +57,7 @@ private:
 		wxImageList* imageList = m_roleCtrl->GetImageList();
 		wxASSERT(imageList);
 		const int imageIndex = imageList->Add(metaObject->GetIcon());
-		const wxTreeItemId item = m_roleCtrl->AppendItem(parent, metaObject->GetName(), imageIndex, imageIndex, new wxTreeItemMetaData(metaObject));
+		const wxTreeItemId item = m_roleCtrl->AppendItem(parent, metaObject->GetName(), imageIndex, imageIndex, new ibTreeItemObject(metaObject));
 		if (metaObject == m_keepSelObj)   // the row that was selected before this rebuild — remember it for restore
 			m_keepSelNode = item;
 		return item;
@@ -78,7 +78,7 @@ public:
 		// doc (OnCheckItem), so only OTHER open role editors rebuild here, and each keeps its row.
 		m_keepSelObj = nullptr;
 		if (const wxTreeItemId sel = m_roleCtrl->GetSelection(); sel.IsOk())
-			if (const wxTreeItemMetaData* d = dynamic_cast<wxTreeItemMetaData*>(m_roleCtrl->GetItemData(sel)))
+			if (const ibTreeItemObject* d = dynamic_cast<ibTreeItemObject*>(m_roleCtrl->GetItemData(sel)))
 				m_keepSelObj = d->GetMetaObject();
 		m_keepSelNode = wxTreeItemId();
 

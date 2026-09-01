@@ -1,25 +1,20 @@
 #ifndef __RECORD_VARIANT_H__
 #define __RECORD_VARIANT_H__
 
-#include "backend/metaData.h"
+#include "backend/propertyManager/property/variant/variantMetaDesc.h"
 
-class BACKEND_API ibVariantDataRecord : public wxVariantData {
+class BACKEND_API ibVariantDataRecord : public ibVariantDataMetaDesc {
 	wxString MakeString() const;
 public:
 
-	ibMetaDescription& GetMetaDesc() { return m_metaDesc; }
-	const ibMetaDescription& GetMetaDesc() const { return m_metaDesc; }
-
 	ibValue GetDataValue() const;
 
-	ibVariantDataRecord(const ibValueMetaObjectGenericData* prop, const ibMetaDescription& typeDesc) : wxVariantData(), m_ownerProperty(prop), m_metaDesc(typeDesc) {}
-	ibVariantDataRecord(const ibVariantDataRecord &src) : wxVariantData(), m_ownerProperty(src.m_ownerProperty), m_metaDesc(src.m_metaDesc) {}
+	ibVariantDataRecord(const ibPropertyObject* prop, const ibMetaDescription& typeDesc) : ibVariantDataMetaDesc(prop, typeDesc) {}
+	ibVariantDataRecord(const ibVariantDataRecord &src) : ibVariantDataMetaDesc(src.m_ownerProperty, src.m_metaDesc) {}
 
 	virtual ibVariantDataRecord* Clone() const {
 		return new ibVariantDataRecord(*this);
 	}
-
-	bool Eq(wxVariantData& data) const { return true; }
 
 #if wxUSE_STD_IOSTREAM
 	virtual bool Write(wxSTD ostream& str) const {
@@ -33,10 +28,6 @@ public:
 	}
 
 	virtual wxString GetType() const { return wxT("ibVariantDataRecord"); }
-
-protected:
-	const ibValueMetaObjectGenericData* m_ownerProperty;
-	ibMetaDescription m_metaDesc;
 };
 
 #endif // !_DOCUMENT_VARIANT_

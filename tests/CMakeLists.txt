@@ -54,6 +54,7 @@ add_executable(oes_tests
     test_dbTaxonomy.cpp
     test_gitService.cpp
     test_metadataSerialize.cpp
+    test_metadataPasteIdentity.cpp
     test_propertySerialized.cpp
     test_metadataTree.cpp
     test_commonAttribute.cpp
@@ -67,8 +68,11 @@ add_executable(oes_tests
     test_queryL2.cpp
     test_queryComposer.cpp
     test_compositionSettings.cpp
+    test_mcpMessage.cpp
+    test_mcpToolContract.cpp
     test_spreadsheetCompose.cpp
     test_spreadsheetDocument.cpp
+    test_spreadsheetDescriptionNode.cpp
     bench_spreadsheet.cpp
     test_queryAccessPolicy.cpp
     test_queryParity.cpp

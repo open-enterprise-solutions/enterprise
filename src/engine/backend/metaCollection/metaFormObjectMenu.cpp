@@ -6,19 +6,9 @@
 #include "metaFormObject.h"
 #include "backend/metaData.h"
 
-bool ibValueMetaObjectFormBase::PrepareContextMenu(wxMenu *defaultMenu)
+bool ibValueMetaObjectFormBase::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	wxMenuItem *menuItem = defaultMenu->Append(ID_METATREE_OPEN_FORM, _("Open form"));
-	menuItem->SetBitmap(GetIcon());
-	defaultMenu->AppendSeparator();
+	items.emplace_back(ibMetaMenuKind::Object, wxT("Form"), _("Open form"), this);
 	return false;
 }
 
-void ibValueMetaObjectFormBase::ProcessCommand(unsigned int id)
-{
-	ibBackendMetadataTree *metaTree = m_metaData->GetMetaTree();
-	wxASSERT(metaTree);
-
-	if (id == ID_METATREE_OPEN_FORM)
-		metaTree->OpenObjectForm(this);
-}

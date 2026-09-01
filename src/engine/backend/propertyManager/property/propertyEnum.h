@@ -30,6 +30,14 @@ public:
 	// needed them inside GetPGProperty).
 	virtual ibPropertyChoiceList GetEnumList() const = 0;
 
+	// THE SAME QUESTION THE FAMILY ASKS — an enumeration's answer is fixed by its type, which is why
+	// it had a name of its own and why nothing generic could reach it. One word for it now; the
+	// type-fixed list stays where it belongs, above.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override {
+		list = GetEnumList();
+		return ibPropertyChoiceMode::Single;
+	}
+
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal) = 0;
 	virtual bool GetDataValue(ibValue& pvarPropVal) const = 0;

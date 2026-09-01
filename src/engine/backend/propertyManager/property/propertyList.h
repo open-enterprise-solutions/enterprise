@@ -13,18 +13,20 @@ public:
 	//
 	// NOT const: the functor REFILLS m_listPropValue, so this mutates. The const here was
 	// a lie the old code paid for with a const_cast on `this`.
-	ibPropertyChoiceList GetValueList() {
-		ibPropertyChoiceList constants;
+	// ⭐ THE ONE THAT GAVE THE BASE ITS SHAPE. This worked, and it worked here alone — an enumeration
+	// answered the same question under another name, and a relationship could not be asked at all.
+	// Now it is the family's own verb and this is one member of it.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override {
 		if (!m_functor->Invoke(this))
-			return constants;
+			return ibPropertyChoiceMode::None;
 		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
-			constants.Add(
+			list.Add(
 				m_listPropValue.GetItemLabel(idx),
 				m_listPropValue.GetItemId(idx),
 				m_listPropValue.GetItemBitmap(idx)
 			);
 		}
-		return constants;
+		return ibPropertyChoiceMode::Single;
 	}
 
 private:

@@ -166,6 +166,11 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 	// 3. WRITE the aggregate back. Upsert, not insert: a trigger firing concurrently during the
 	//    rebuild would otherwise collide on the key, and upsert also makes a retried rebuild
 	//    idempotent.
+	//
+	// WHAT MAKES A ROW THE SAME ROW is the TABLE's answer, not this function's: the derived table
+	// carries the key the schema declared it with (ibRegSelfSourceFromDeclaration), so the upsert
+	// matches on it the way every ordinary table's does. Composing one here — out of the period, the
+	// keys and a shard column looked up by name — was a second copy of a fact already stated.
 	while (rows.Next()) {
 		ibDataQueryBuilder write = SystemQuery(holder);
 		write.From(derived.m_queryable);
@@ -180,6 +185,8 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 		// NULL in the unique key is a fact nobody declared.
 		if (spec.m_shards > 1)
 			write.SetValue(ibBackendColumnRawDB::Number(ShardColumnName()), ibValue(0.0));
+		// The period and the shard are set above, each once, from their own names — `m_keys` holds
+		// neither, so nothing here can put the same physical column into the statement twice.
 		for (const ibBackendQueryColumn* k : spec.m_keys)
 			write.SetValue(k, rows.GetValue(k));
 		for (const ibSchemaDelta& d : spec.m_deltas)

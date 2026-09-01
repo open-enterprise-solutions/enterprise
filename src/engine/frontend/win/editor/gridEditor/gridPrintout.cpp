@@ -393,6 +393,21 @@ void ibGridEditorPrintout::OnPreparePrinting()
 	if (m_showRl || m_showRlAlways)
 		widthCount = m_doc->GetRowLabelSize();
 
+	// ⚠ THE BOUND IS LOAD-BEARING TWICE, and the second job is the one that is easy to miss.
+	//
+	// It looks like the same misuse as ibBackendSpreadsheetObject::GetAreaByName — a page break
+	// standing in for the sheet's width — and it is NOT. `m_colBrakeAt` holds two different kinds
+	// of thing: real page breaks (AddColBrake) and an EXTENT MARKER written by SetColBrake, which
+	// overwrites the list's maximum. PutArea stamps that marker on every put
+	// (backend_spreadsheet.cpp), and so does typing a value into a cell (gridext.cpp:9241,
+	// "set new brake pos"). So the maximum of this list is the end of the CONTENT, and stopping
+	// before it is how the marker is kept from paginating.
+	//
+	// Widening this to GetNumberCols() therefore breaks a page at the last column of every sheet:
+	// a one-page report printed as four (2026-08-31 — changed, caught in audit, reverted).
+	// IsColBrake below cannot tell the two kinds apart, which is the real defect; curing it means
+	// giving the extent a field of its own on ibSpreadsheetDescription so this list holds only
+	// breaks. Until then the bound stays as it is, deliberately.
 	for (int i = 0; i < m_doc->GetMaxColBrake(); i++) {
 		const int size = m_doc->GetColSize(i);
 		const bool overflows = (widthCount + size) > m_maxWidth;
@@ -423,6 +438,7 @@ void ibGridEditorPrintout::OnPreparePrinting()
 	if (m_showCl || m_showClAlways)
 		heightCount = m_doc->GetColLabelSize();
 
+	// Same reasoning down the page — see the note on the column pass above.
 	for (int i = 0; i < m_doc->GetMaxRowBrake(); i++) {
 		const int size = m_doc->GetRowSize(i);
 		const bool overflows = (heightCount + size) > m_maxHeight;

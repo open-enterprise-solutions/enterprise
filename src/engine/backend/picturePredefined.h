@@ -60,4 +60,8 @@ constexpr ibPictureID g_picAuthenticationCLSID = picture_to_clsid("PC_ATTON");
 // Art: icons8 ("switch host"), downscaled to 16px — see the note in picturePredefined.cpp.
 constexpr ibPictureID g_picHomePageCLSID = picture_to_clsid("PC_HOMEP");
 
+// The assistant — its tab and its menu item. One window, one icon.
+// Art: icons8 ("ai"), downscaled from 96px — see the note in picturePredefined.cpp.
+constexpr ibPictureID g_picAssistantCLSID = picture_to_clsid("PC_ASSIS");
+
 #endif 

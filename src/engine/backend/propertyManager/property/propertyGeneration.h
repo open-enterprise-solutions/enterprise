@@ -12,6 +12,10 @@ public:
 	ibMetaDescription& GetValueAsMetaDesc() const;
 	void SetValue(const ibMetaDescription& val);
 
+	// WHAT THIS ONE MAY BE GENERATED INTO — catalogs, documents, charts of characteristic types and
+	// charts of accounts.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
+
 
 	ibPropertyGeneration(ibPropertyCategory* cat, const wxString& name)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject()))

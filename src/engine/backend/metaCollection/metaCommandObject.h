@@ -110,8 +110,7 @@ public:
 
 	// designer context menu — "Open command module" opens the handler module's code editor (metaCommandObjectMenu.cpp),
 	// exactly as a common module / object opens its module.
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu) override;
-	virtual void ProcessCommand(unsigned int id) override;
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
 	// ibBackendCommandItem — a command OVERRIDES the global call: run the handler, not open a form.
 	virtual bool Execute(ibInterfaceCommandType cmdType, ibBackendValueForm* srcForm, ibValue* commandParameter) const override;
@@ -122,12 +121,15 @@ public:
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 	virtual bool OnBeforeRunMetaObject(int flags);
+	// ⭐ WHERE THE COMMAND'S MODULE BECOMES CHECKABLE — see the .cpp. Every other
+	// metatype registers its module with the designer's compile cache here; a
+	// command did not, so nothing could compile it.
+	virtual bool OnAfterRunMetaObject(int flags);
 	virtual bool OnBeforeCloseMetaObject();
 	virtual bool OnAfterCloseMetaObject();
 
 protected:
 
-	enum { ID_METATREE_OPEN_COMMAND_MODULE = 19100 };
 
 	// required by ibBackendCommandItem, but a command overrides Execute and never opens a form.
 	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType /*cmdType*/ = ibInterfaceCommandType::ibInterfaceCommandType_Default) const override { return nullptr; }

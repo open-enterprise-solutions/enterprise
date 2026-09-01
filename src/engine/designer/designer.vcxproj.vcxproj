@@ -197,9 +197,12 @@
     <ClCompile Include="docManager\templates\docViewModuleEditor.cpp" />
     <ClCompile Include="docManager\templates\docViewComposer.cpp" />
     <ClCompile Include="docManager\templates\docViewRole.cpp" />
+    <ClCompile Include="docManager\templates\docViewAssistant.cpp" />
     <ClCompile Include="docManager\templates\docViewConfigCompare.cpp" />
     <ClCompile Include="mainApp.cpp" />
     <ClCompile Include="mainAppEvent.cpp" />
+    <ClCompile Include="mcp\mcpDesignerMessages.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolMessages.cpp" />
     <ClCompile Include="mainFrame\configCompare\configCompareModel.cpp" />
     <ClCompile Include="mainFrame\debugger\debugClientImpl.cpp" />
     <ClCompile Include="mainFrame\local\localWindow.cpp" />
@@ -225,6 +228,7 @@
     <ClCompile Include="win\ctrl\menuBar.cpp" />
     <ClCompile Include="win\dlg\debugItem\debugItem.cpp" />
     <ClCompile Include="win\dlg\homePageEditor.cpp" />
+    <ClCompile Include="win\dlg\textEditor.cpp" />
     <ClCompile Include="win\dlg\predefinedEditor.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp" />
     <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp" />
@@ -252,6 +256,7 @@
     <ClInclude Include="docManager\templates\docViewModuleEditor.h" />
     <ClInclude Include="docManager\templates\docViewComposer.h" />
     <ClInclude Include="docManager\templates\docViewRole.h" />
+    <ClInclude Include="docManager\templates\docViewAssistant.h" />
     <ClInclude Include="docManager\templates\docViewConfigCompare.h" />
     <ClInclude Include="mainApp.h" />
     <ClInclude Include="mainFrame\configCompare\configCompareModel.h" />
@@ -272,6 +277,7 @@
     <ClInclude Include="win\ctrl\menuBar.h" />
     <ClInclude Include="win\dlg\debugItem\debugItem.h" />
     <ClInclude Include="win\dlg\homePageEditor.h" />
+    <ClInclude Include="win\dlg\textEditor.h" />
     <ClInclude Include="win\dlg\predefinedEditor.h" />
     <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h" />
     <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h" />

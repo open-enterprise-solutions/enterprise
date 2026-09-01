@@ -14,22 +14,41 @@
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — universal structure bridge (BuildDataNode/ApplyDataNode)
 
 
+namespace {
+
+// ⭐ THE TAGS, WRITTEN ONCE. Every intrinsic below is spelled in SaveNode and spelled AGAIN in
+// LoadNode, and nothing but attention was keeping the two spellings equal — a name changed on one
+// side reads back empty on the other, silently, for every configuration already saved. Named here
+// they are one thing, and a rename is one edit the compiler checks.
+const wxString kTagGuid        = wxT("Guid");
+const wxString kTagId          = wxT("Id");
+const wxString kTagDeleted     = wxT("Deleted");
+const wxString kTagHelp        = wxT("Help");
+const wxString kTagNote        = wxT("Note");
+const wxString kTagPredefined  = wxT("NodePredefined");
+const wxString kTagInterface   = wxT("Interface");
+const wxString kTagRoles       = wxT("Roles");
+const wxString kTagComposition = wxT("Composition");
+
+} // namespace
+
 // SaveNode — write this object into the node. Common header (intrinsics → fields,
 // editable values → props, interface/roles), then per-type WriteData. Every value
 // is in its REAL form, so a JSON view shows `"Name": "Price"`, not a base64 blob.
 bool ibValueMetaObject::SaveNode(ibDataNode& node) const
 {
 	// intrinsics → fields
-	node.SetValue(wxT("Guid"), m_metaGuid);
-	node.SetValue(wxT("Id"), (s32)m_metaId);
-	node.SetValue(wxT("Deleted"), IsDeleted());
-	node.SetValue(wxT("Help"), m_strHelpContent);
+	node.SetValue(kTagGuid, m_metaGuid);
+	node.SetValue(kTagId, (s32)m_metaId);
+	node.SetValue(kTagDeleted, IsDeleted());
+	node.SetValue(kTagHelp, m_strHelpContent);
+	node.SetValue(kTagNote, m_strNoteContent);
 
 	// system marker — a predefined (engine-created) object, so a consumer (the AI)
 	// can tell it apart from a user-defined one. Only emitted when set; not read back
 	// (the flag is re-derived on construction).
 	if (IsPinnedToParent())
-		node.SetValue(wxT("NodePredefined"), true);
+		node.SetValue(kTagPredefined, true);
 
 	// editable property values → props (owner names them inline; the property yields the value)
 	node.SetProperty(m_propertyName->GetName(),    m_propertyName->GetNodeValue());
@@ -40,18 +59,18 @@ bool ibValueMetaObject::SaveNode(ibDataNode& node) const
 	ibWriterMemory interfaceWriter;
 	if (!SaveInterface(interfaceWriter))
 		return false;
-	node.SetValue(wxT("Interface"), interfaceWriter.buffer());
+	node.SetValue(kTagInterface, interfaceWriter.buffer());
 
 	ibWriterMemory roleWriter;
 	if (!SaveRole(roleWriter))
 		return false;
-	node.SetValue(wxT("Roles"), roleWriter.buffer());
+	node.SetValue(kTagRoles, roleWriter.buffer());
 
 	// composition — its own field, beside interface and roles rather than inside either
 	ibWriterMemory compositionWriter;
 	if (!SaveComposition(compositionWriter))
 		return false;
-	node.SetValue(wxT("Composition"), compositionWriter.buffer());
+	node.SetValue(kTagComposition, compositionWriter.buffer());
 
 	return WriteData(node);
 }
@@ -60,11 +79,12 @@ bool ibValueMetaObject::SaveNode(ibDataNode& node) const
 bool ibValueMetaObject::LoadNode(const ibDataNode& node)
 {
 	// intrinsics ← fields
-	m_metaGuid = node.GetValue<ibGuid>(wxT("Guid"));
-	m_metaId = (ibMetaID)node.GetValue<s32>(wxT("Id"));
-	if (node.GetValue<bool>(wxT("Deleted")))
+	m_metaGuid = node.GetValue<ibGuid>(kTagGuid);
+	m_metaId = (ibMetaID)node.GetValue<s32>(kTagId);
+	if (node.GetValue<bool>(kTagDeleted))
 		MarkAsDeleted();
-	m_strHelpContent = node.GetValue<wxString>(wxT("Help"));
+	m_strHelpContent = node.GetValue<wxString>(kTagHelp);
+	m_strNoteContent = node.GetValue<wxString>(kTagNote);
 
 	// editable property values ← props (owner names them inline; the property takes the value)
 	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
@@ -72,19 +92,19 @@ bool ibValueMetaObject::LoadNode(const ibDataNode& node)
 	m_propertyComment->SetNodeValue(node.GetProperty(m_propertyComment->GetName()));
 
 	// interface / roles ← fields
-	wxMemoryBuffer interfaceBuf = node.GetValue<wxMemoryBuffer>(wxT("Interface"));
+	wxMemoryBuffer interfaceBuf = node.GetValue<wxMemoryBuffer>(kTagInterface);
 	if (interfaceBuf.GetDataLen()) {
 		ibReaderMemory reader(interfaceBuf);
 		if (!LoadInterface(reader))
 			return false;
 	}
-	wxMemoryBuffer roleBuf = node.GetValue<wxMemoryBuffer>(wxT("Roles"));
+	wxMemoryBuffer roleBuf = node.GetValue<wxMemoryBuffer>(kTagRoles);
 	if (roleBuf.GetDataLen()) {
 		ibReaderMemory reader(roleBuf);
 		if (!LoadRole(reader))
 			return false;
 	}
-	wxMemoryBuffer compositionBuf = node.GetValue<wxMemoryBuffer>(wxT("Composition"));
+	wxMemoryBuffer compositionBuf = node.GetValue<wxMemoryBuffer>(kTagComposition);
 	if (compositionBuf.GetDataLen()) {
 		ibReaderMemory reader(compositionBuf);
 		if (!LoadComposition(reader))

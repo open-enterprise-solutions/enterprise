@@ -24,6 +24,13 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 {
 	ibSpreadsheetDescription spreadsheetDesc;
 
+	// ⭐ THE SAME RULE AS GetAreaByName BELOW, and for the same reason: the free side of a
+	// half-specified range is bounded by the sheet's CONTENT, never by its page breaks. See the
+	// long note there — this is the coordinate-taking twin of that function and carried the same
+	// defect, so both are fixed together rather than one being left to be found again.
+	const int lastRow = wxMax(0, m_spreadsheetDesc.GetNumberRows() - 1);
+	const int lastCol = wxMax(0, m_spreadsheetDesc.GetNumberCols() - 1);
+
 	if (rowLeft >= 0 && colTop >= 0 && rowRight > 0 && colBottom > 0) {
 		for (int row = rowLeft; row < rowRight; row++) {
 			for (int col = colTop; col < colBottom; col++) {
@@ -39,15 +46,27 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 		for (int col = colTop; col < colBottom; col++)
 			spreadsheetDesc.SetColSize(col - colTop, m_spreadsheetDesc.GetColSize(col));
 
-		spreadsheetDesc.SetRowBrake(rowLeft - rowRight);
-		spreadsheetDesc.SetColBrake(colTop - colBottom);
+		// ⚠ THE FRAGMENT'S OWN LAST INDEX — subtracted the right way round, and −1 because this
+		// function's range is EXCLUSIVE (`row < rowRight`) while the marker is an index.
+		// It used to read `rowLeft - rowRight`, which is NEGATIVE whenever the range is non-empty:
+		// the fragment shipped with a stored break at, say, −3. Inert for pagination, since no loop
+		// counter matches a negative, but it made GetMaxRowBrake() answer a negative number, kept
+		// IsEmptySpreadsheet() from ever being true for such a fragment, and was serialised.
+		// GetAreaByName states the same fact correctly (`m_end - m_start`), so the two halves of
+		// one file disagreed.
+		spreadsheetDesc.SetRowBrake(wxMax(0, rowRight - rowLeft - 1));
+		spreadsheetDesc.SetColBrake(wxMax(0, colBottom - colTop - 1));
 	}
 	else if (rowLeft >= 0 && colTop < 0 && rowRight > 0 && colBottom < 0)
 	{
+		// Rows given, columns not: the whole width of what is written.
 		for (int row = rowLeft; row < rowRight; row++) {
-			for (int col = 0; col < GetMaxColBrake(); col++) {
+			for (int col = 0; col <= lastCol; col++) {
+				// ⚠ NOT `col - colTop`. colTop is the ABSENCE marker (-1) on this branch, so
+				// subtracting it shifted every cell one column to the right — a sentinel used as
+				// an origin. The origin is 0 here, because the columns were not narrowed.
 				ibSpreadsheetCellDescription* cell =
-					spreadsheetDesc.GetOrCreateCell(row - rowLeft, col - colTop);
+					spreadsheetDesc.GetOrCreateCell(row - rowLeft, col);
 				cell->SetCell(m_spreadsheetDesc.GetCell(row, col));
 			}
 		}
@@ -55,29 +74,32 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 		for (int row = rowLeft; row < rowRight; row++)
 			spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
 
-		for (int col = 0; col < GetMaxColBrake(); col++)
+		for (int col = 0; col <= lastCol; col++)
 			spreadsheetDesc.SetColSize(col, m_spreadsheetDesc.GetColSize(col));
 
-		spreadsheetDesc.SetRowBrake(rowLeft - rowRight);
-		spreadsheetDesc.SetColBrake(GetMaxColBrake());
+		// Its own last row (exclusive range → −1); the column side is the sheet's, unnarrowed.
+		spreadsheetDesc.SetRowBrake(wxMax(0, rowRight - rowLeft - 1));
+		spreadsheetDesc.SetColBrake(lastCol);
 	}
 	else if (rowLeft < 0 && colTop >= 0 && rowRight < 0 && colBottom > 0) {
-		for (int row = 0; row < GetMaxRowBrake(); row++) {
+		// Columns given, rows not: the whole height of what is written.
+		for (int row = 0; row <= lastRow; row++) {
 			for (int col = colTop; col < colBottom; col++) {
+				// ⚠ NOT `row - rowLeft` — rowLeft is the absence marker here, same trap, other axis.
 				ibSpreadsheetCellDescription* cell =
-					spreadsheetDesc.GetOrCreateCell(row - rowLeft, col - colTop);
+					spreadsheetDesc.GetOrCreateCell(row, col - colTop);
 				cell->SetCell(m_spreadsheetDesc.GetCell(row, col));
 			}
 		}
 
-		for (int row = 0; row < GetMaxRowBrake(); row++)
+		for (int row = 0; row <= lastRow; row++)
 			spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = colTop; col < colBottom; col++)
 			spreadsheetDesc.SetColSize(col - colTop, m_spreadsheetDesc.GetColSize(col));
 
-		spreadsheetDesc.SetRowBrake(GetMaxRowBrake());
-		spreadsheetDesc.SetColBrake(colTop - colBottom);
+		spreadsheetDesc.SetRowBrake(lastRow);
+		spreadsheetDesc.SetColBrake(wxMax(0, colBottom - colTop - 1));
 	}
 
 	return spreadsheetDesc;
@@ -89,6 +111,21 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 	const ibSpreadsheetAreaDescription* c = m_spreadsheetDesc.GetColAreaByName(strAreaTopName);
 
 	ibSpreadsheetDescription spreadsheetDesc;
+
+	// ⭐ HOW WIDE (AND HOW TALL) THE SHEET IS — asked of its CONTENT, not of its page breaks.
+	//
+	// The two asymmetric branches below used to bound the free side by GetMaxColBrake() /
+	// GetMaxRowBrake(), which is the position of the last PAGE BREAK and returns 0 when the sheet
+	// declares none. A break says where the PAPER ends; it knows nothing about how many columns
+	// were written. So a template built without one yielded areas exactly ONE column wide, and
+	// since every cell of a printed form lives to the right of column 0, every area came out
+	// structurally right and completely empty — the correct number of rows, no content.
+	//
+	// The giveaway was that the receiving side already measures the other way: PutArea walks
+	// doc->GetNumberCols(), the real extent. One width, two roads, disagreeing at the ends of a
+	// single operation. (2026-08-31, an empty print form.)
+	const int lastRow = wxMax(0, m_spreadsheetDesc.GetNumberRows() - 1);
+	const int lastCol = wxMax(0, m_spreadsheetDesc.GetNumberCols() - 1);
 
 	if (r != nullptr && c != nullptr) {
 		for (int row = r->m_start; row <= (int)r->m_end; row++) {
@@ -109,8 +146,9 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 		spreadsheetDesc.SetColBrake(c->m_end - c->m_start);
 	}
 	else if (r != nullptr) {
+		// A ROW AREA IS AS WIDE AS THE SHEET. Nothing bounds it on the free side but the content.
 		for (int row = r->m_start; row <= (int)r->m_end; row++) {
-			for (int col = 0; col <= GetMaxColBrake(); col++) {
+			for (int col = 0; col <= lastCol; col++) {
 				ibSpreadsheetCellDescription* cell =
 					spreadsheetDesc.GetOrCreateCell(row - r->m_start, col);
 				cell->SetCell(m_spreadsheetDesc.GetCell(row, col));
@@ -120,14 +158,18 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 		for (int row = r->m_start; row <= (int)r->m_end; row++)
 			spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
 
-		for (int col = 0; col <= GetMaxColBrake(); col++)
+		for (int col = 0; col <= lastCol; col++)
 			spreadsheetDesc.SetColSize(col, m_spreadsheetDesc.GetColSize(col));
 
+		// The fragment's own edges, the way the symmetric branch above states them — its last row
+		// and its last column. Passing the SOURCE's break through put the mark at column 0 on a
+		// sheet that declared none, which is a page break drawn before the first column.
 		spreadsheetDesc.SetRowBrake(r->m_end - r->m_start);
-		spreadsheetDesc.SetColBrake(GetMaxColBrake());
+		spreadsheetDesc.SetColBrake(lastCol);
 	}
 	else if (c != nullptr) {
-		for (int row = 0; row <= GetMaxRowBrake(); row++) {
+		// …and a COLUMN area is as tall as the sheet. Same rule, other axis.
+		for (int row = 0; row <= lastRow; row++) {
 			for (int col = c->m_start; col <= (int)c->m_end; col++) {
 				ibSpreadsheetCellDescription* cell =
 					spreadsheetDesc.GetOrCreateCell(row, col - c->m_start);
@@ -135,13 +177,13 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 			}
 		}
 
-		for (int row = 0; row <= GetMaxRowBrake(); row++)
+		for (int row = 0; row <= lastRow; row++)
 			spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = c->m_start; col <= (int)c->m_end; col++)
 			spreadsheetDesc.SetColSize(col - c->m_start, m_spreadsheetDesc.GetColSize(col));
 
-		spreadsheetDesc.SetRowBrake(GetMaxRowBrake());
+		spreadsheetDesc.SetRowBrake(lastRow);
 		spreadsheetDesc.SetColBrake(c->m_end - c->m_start);
 	}
 

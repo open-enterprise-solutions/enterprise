@@ -118,7 +118,9 @@ const ibMaterializationDialect& ibDatabaseLayerSQLite::MaterializationDialect()
 		m.m_deltaTargetAlias  = wxT("{table}");     // ON CONFLICT names the target by table name
 		m.m_deltaSourceAlias  = wxT("excluded");
 		m.m_deltaUpdateItem   = wxT("{col} = {target}.{col} + {source}.{col}");
-		m.m_deltaKeyMatchItem = wxT("{target}.{col} = {source}.{col}");   // unused by ON CONFLICT — rendered, not spent
+		// NULL-safe like the default — SQLite spells it `IS`, which is the same operator under
+		// another name. Unused by ON CONFLICT, kept true so it is not a trap. See databaseLayer.h.
+		m.m_deltaKeyMatchItem = wxT("{target}.{col} IS {source}.{col}");   // unused by ON CONFLICT — rendered, not spent
 		m.m_totalsTableSuffix = wxEmptyString;       // no fillfactor concept (single writer anyway)
 		m.m_connectionIdExpr  = wxEmptyString;       // single writer => no contention to split; shards are meaningless, not missing
 		return m;

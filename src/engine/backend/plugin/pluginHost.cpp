@@ -13,14 +13,10 @@
 #include "backend/plugin/pluginApi.h"   // ibPluginHost — the C struct this file fills in
 
 #include "backend/backend_diagnostic.h"
-#include "backend/backend_exception.h"
-#include "backend/compiler/compileCode.h"
-#include "backend/fileSystem/fs.h"            // ibWriterMemory — the JSON sink
+#include "backend/compiler/scriptCheck.h"           // ibCheckScript — the door this window opens
 #include "backend/metaData.h"
-#include "backend/objCtor.h"                 // ibCtorMetaValueType — full type, for the JSON type resolver
+#include "backend/metaCollection/metaIntrospect.h"  // ibListMetaObjects / ibDescribeMetaObject
 #include "backend/metadataConfiguration.h"
-#include "backend/serialize/dataBuilder.h"    // ibDataNode
-#include "backend/serialize/jsonProvider.h"
 
 #include <cstring>
 
@@ -42,36 +38,11 @@ class ibPluginScriptImpl : public ibPluginScript {
 public:
 	std::vector<ibDiagnostic> Check(const wxString& text, const wxString& moduleName) const override
 	{
-		// A LOCAL SINK, not a member: Check may be called from several threads
-		// (a language service serving an editor and a build step at once), and
-		// a shared collector would mix their answers.
-		class Collector : public ibDiagnosticSink {
-		public:
-			void OnDiagnostic(const ibDiagnostic& diagnostic) override { m_found.push_back(diagnostic); }
-			std::vector<ibDiagnostic> m_found;
-		} collector;
-
-		ibDiagnostics::Subscribe(&collector);
-
-		try {
-			// COMPILED AND DISCARDED. The compiler is constructed here and dies
-			// here: nothing is registered, no module is replaced, the open
-			// configuration never learns this happened.
-			ibCompileCode compiler(moduleName, wxT("check"), false);
-			compiler.Compile(text);
-		}
-		catch (const ibBackendException&) {
-			// The refusal is already IN the collector — DoSetError publishes the
-			// record and then throws. Nothing to add here.
-		}
-		catch (...) {
-			// Anything else means the compiler failed in a way it does not
-			// describe; better an empty answer than a plugin taking the process
-			// down through a DLL boundary.
-		}
-
-		ibDiagnostics::Unsubscribe(&collector);
-		return collector.m_found;
+		// A WINDOW, NOT THE MECHANISM. The body used to live here, which made
+		// this boundary the owner of the compile-and-report door; it has a
+		// second consumer now (the MCP server in the core), so it moved next to
+		// the compiler and both call the one door.
+		return ibCheckScript(text, moduleName);
 	}
 };
 
@@ -87,81 +58,15 @@ public:
 
 	std::vector<wxString> List(const wxString& kind) const override
 	{
-		std::vector<wxString> names;
-
-		const ibClassID clsid = ResolveKind(kind);
-		if (clsid == 0)
-			return names;
-
-		for (const ibValueMetaObject* object : activeMetaData->GetAnyArrayObject<ibValueMetaObject>(clsid))
-			if (object != nullptr)
-				names.push_back(object->GetName());
-
-		return names;
+		// The plugin has no configuration of its own to name, so the window
+		// answers about the active one — see metaCollection/metaIntrospect.h for
+		// why the mechanism itself refuses to make that assumption.
+		return ibListMetaObjects(activeMetaData, kind);
 	}
 
 	wxString Describe(const wxString& kind, const wxString& name) const override
 	{
-		const ibClassID clsid = ResolveKind(kind);
-		if (clsid == 0)
-			return wxEmptyString;
-
-		ibValueMetaObject* found = nullptr;
-		for (ibValueMetaObject* object : activeMetaData->GetAnyArrayObject<ibValueMetaObject>(clsid)) {
-			if (object != nullptr && object->GetName() == name) {
-				found = object;
-				break;
-			}
-		}
-
-		if (found == nullptr)
-			return wxEmptyString;
-
-		// The SAME node tree the binary format serialises, rendered as JSON:
-		// one description of the object, two ways of writing it down. The type
-		// resolver turns config-specific class ids back into portable names
-		// ("CatalogRef.Goods"), which is the half that makes the answer
-		// readable by anything other than this process.
-		ibDataNode node;
-		if (!found->BuildDataNode(node))
-			return wxEmptyString;
-
-		ibJsonProvider provider;
-		provider.SetTypeResolver([](ibClassID clsid) -> wxString {
-			const ibCtorMetaValueType* typeCtor = activeMetaData != nullptr
-				? activeMetaData->GetTypeCtor(clsid) : nullptr;
-			return typeCtor != nullptr ? typeCtor->GetClassName() : wxString();
-		});
-
-		ibWriterMemory writer;
-		if (!provider.Write(node, writer))
-			return wxEmptyString;
-
-		return wxString::FromUTF8(reinterpret_cast<const char*>(writer.pointer()), writer.size());
-	}
-
-private:
-
-	// KIND NAME → CLASS ID, through the one registry every metatype registers
-	// itself in (METADATA_TYPE_REGISTER → ibValue::RegisterCtor). So "Catalog"
-	// here is the same "Catalog" a configuration writes, by construction rather
-	// than by a table somebody has to keep in step.
-	//
-	// Returns 0 when there is no configuration open, the name is unknown, or the
-	// name belongs to something that is not a metatype (a value class, a
-	// control) — asking for "Array" must not return every array in the tree.
-	static ibClassID ResolveKind(const wxString& kind)
-	{
-		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
-			return 0;
-
-		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(kind);
-		if (ctor == nullptr)
-			return 0;
-		if (ctor->GetObjectTypeCtor() != ibCtorObjectType::ibCtorObjectType_object_metadata)
-			return 0;
-
-		return ctor->GetClassType();
+		return ibDescribeMetaObject(activeMetaData, kind, name);
 	}
 };
 

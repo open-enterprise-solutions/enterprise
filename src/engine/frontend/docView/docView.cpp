@@ -1526,6 +1526,73 @@ ibDocument* ibDocManager::FindDocumentByPath(const wxString& path) const
     return nullptr;
 }
 
+ibDocument* ibDocument::FindChildDocument(const wxString& identifier) const
+{
+    if ( identifier.empty() )
+        return nullptr;
+
+    for ( ibDocument* child : m_childDocuments )
+        if ( child != nullptr && child->GetUniqueIdentifier() == identifier )
+            return child;
+
+    return nullptr;
+}
+
+ibDocument* ibDocManager::FindDocumentByIdentifier(const wxString& identifier) const
+{
+    if ( identifier.empty() )
+        return nullptr;
+
+    // ⚠ THROUGH THE TYPED VIEW, not over m_docs with a wxStaticCast at every step. The list is a
+    // wxList of wxObject and every walk of it used to open with a cast; GetDocumentsVector is that
+    // cast, done once (Max, 2026-09-01: *"I do not like that there are so many casts"*).
+    for ( ibDocument* doc : GetDocumentsVector() )
+        if ( doc != nullptr && doc->GetUniqueIdentifier() == identifier )
+            return doc;
+
+    return nullptr;
+}
+
+ibMetaDataDocument* ibDocManager::FindMetaDataDocument(const ibMetaData* metaData) const
+{
+    if ( metaData == nullptr )
+        return nullptr;
+
+    // ONE NARROWING, and it is the real kind: a heterogeneous list asked for a subtype. The rest of
+    // the casts around this question were the wxList walk, and they are gone with it.
+    for ( ibDocument* doc : GetDocumentsVector() )
+    {
+        ibMetaDataDocument * const metaDoc = dynamic_cast<ibMetaDataDocument*>(doc);
+
+        if ( metaDoc != nullptr && metaDoc->GetMetaData() == metaData )
+            return metaDoc;
+    }
+    return nullptr;
+}
+
+ibDocument* ibDocManager::FindOpenDocument(const wxString& identifier,
+                                           const ibDocument* docParent) const
+{
+    // MINE FIRST — a document opened without an owner joins this list, and that is the ordinary case.
+    if ( ibDocument* found = FindDocumentByIdentifier(identifier) )
+        return found;
+
+    // …THEN THE OWNER'S. Editors opened from a navigator belong to the document holding that
+    // configuration and are not in the list above, so without this half the answer is "not open"
+    // about most of what is on screen.
+    return docParent != nullptr ? docParent->FindChildDocument(identifier) : nullptr;
+}
+
+ibMetaDocument* ibDocManager::FindOpenDocument(ibValueMetaObject* metaObject) const
+{
+    if ( metaObject == nullptr )
+        return nullptr;
+
+    return dynamic_cast<ibMetaDocument*>(
+        FindOpenDocument(metaObject->GetGuid(),
+                         FindMetaDataDocument(metaObject->GetMetaData())));
+}
+
 ibDocument *ibDocManager::CreateDocument(const wxString& pathOrig, long flags)
 {
     // this ought to be const but SelectDocumentType/Path() are not
@@ -2604,24 +2671,26 @@ bool ibMetaDocument::OnCloseDocument()
 	}
 #endif
 
-	ibBackendMetadataTree* metaTree =
-		m_metaObject != nullptr ? m_metaObject->GetMetaDataTree() : nullptr;
-
 #ifndef OES_USE_WEB
-	// objectInspector is the designer's property panel (not in wfrontend.dll)
-	// and Activate() would bring its tree-ctrl into focus. Neither is
-	// meaningful on web, so the selection/activation side-effect is skipped.
+	// objectInspector is the designer's property panel (not in wfrontend.dll) and the navigator is
+	// the designer's too. Neither is meaningful on web, so both are skipped there.
 	//
 	// Clear the inspector UNCONDITIONALLY before DeleteContents() tears this document's contents down. The
 	// panel may still be showing an object that dies with this document — e.g. a tablebox column holding a
 	// raw back-pointer to the form we're about to delete; its next repaint would reach through a dangling
 	// pointer (use-after-free — the inspector paints a corpse). This is the ONE global close point, so every
-	// editor kind (form / module / document) drops its inspector content here. Then re-focus the metaTree.
+	// editor kind (form / module / document) drops its inspector content here.
+	//
+	// ⭐ THEN THE FOCUS GOES BACK TO THE TREE THIS EDITOR CAME FROM — asked of the DOCUMENT, which is
+	// the one thing that has both. An editor has no tree of its own and forwards the question to the
+	// document it was opened from (ibMetaDocument::GetMetaTree), so this one line covers every kind.
+	//
+	// 🛑 IT USED TO BE `m_metaObject->GetMetaDataTree()`: the ENGINE handing a viewer back to the UI,
+	// through a door that no longer exists.
 	objectInspector->SelectObject(nullptr);
-	if (metaTree != nullptr)
+
+	if (ibMetaTreeAbstract* metaTree = GetMetaTree())
 		metaTree->Activate();
-#else
-	(void)metaTree;
 #endif
 
 	// Tell all views that we're about to close

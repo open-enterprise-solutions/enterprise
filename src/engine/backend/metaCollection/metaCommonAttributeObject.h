@@ -39,10 +39,6 @@
 class BACKEND_API ibValueMetaObjectCommonAttribute : public ibValueMetaObjectAttribute {
 	protected:
 
-	enum
-	{
-		ID_METATREE_OPEN_COMPOSITION = 19100,
-	};
 
 	public:
 
@@ -54,8 +50,7 @@ class BACKEND_API ibValueMetaObjectCommonAttribute : public ibValueMetaObjectAtt
 	static wxIcon GetIconGroup();
 
 	// Context menu — "Open composition", the same gesture a section offers for its own.
-	virtual bool PrepareContextMenu(class wxMenu* defaultMenu) override;
-	virtual void ProcessCommand(unsigned int id) override;
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
 	// THE COMPOSITION, asked of the objects rather than kept here. Returns the
 	// metaobjects that are checked into this declaration.
@@ -106,10 +101,6 @@ class BACKEND_API ibValueMetaObjectCommonAttribute : public ibValueMetaObjectAtt
 class BACKEND_API ibValueMetaObjectCommonAttributeColumn : public ibValueMetaObjectAttribute {
 	protected:
 
-	enum
-	{
-		ID_METATREE_OPEN_SOURCE = 19110,
-	};
 
 	public:
 
@@ -175,8 +166,7 @@ class BACKEND_API ibValueMetaObjectCommonAttributeColumn : public ibValueMetaObj
 	void AllowRemoval() { m_removalAllowed = true; }
 
 	// The designer offers no New / Remove on a copy — only a jump to where it is edited.
-	virtual bool PrepareContextMenu(class wxMenu* defaultMenu) override;
-	virtual void ProcessCommand(unsigned int id) override;
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
 	virtual bool OnLoadMetaObject(class ibMetaData* metaData) override;
 	// BOUND HERE, not on load. Load walks the tree in stored order, so an object can be

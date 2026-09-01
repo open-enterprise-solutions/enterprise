@@ -41,6 +41,9 @@
     <ClCompile Include="mainFrame\objinspect\objinspect.cpp" />
     <ClCompile Include="mainFrame\settings\editorsettings.cpp" />
     <ClCompile Include="mainFrame\settings\editorsettingspanel.cpp" />
+    <ClCompile Include="mainFrame\settings\mcpsettingspanel.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolComplete.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolForms.cpp" />
     <ClCompile Include="mainFrame\settings\fontcolorsettings.cpp" />
     <ClCompile Include="mainFrame\settings\fontcolorsettingspanel.cpp" />
     <ClCompile Include="mainFrame\settings\keybinder.cpp" />
@@ -517,6 +520,7 @@
     <ClInclude Include="mainFrame\objinspect\objinspect.h" />
     <ClInclude Include="mainFrame\settings\editorsettings.h" />
     <ClInclude Include="mainFrame\settings\editorsettingspanel.h" />
+    <ClInclude Include="mainFrame\settings\mcpsettingspanel.h" />
     <ClInclude Include="mainFrame\settings\fontcolorsettings.h" />
     <ClInclude Include="mainFrame\settings\fontcolorsettingspanel.h" />
     <ClInclude Include="mainFrame\settings\keybinder.h" />

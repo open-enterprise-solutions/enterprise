@@ -527,7 +527,18 @@ struct ibMaterializationDialect
 	// One accumulate item, comma-joined into {update}. Placeholders: {target} {source} {col}.
 	wxString m_deltaUpdateItem   = wxT("{col} = {target}.{col} + {source}.{col}");
 	// One key-equality item, AND-joined into {keyMatch}. Same placeholders.
-	wxString m_deltaKeyMatchItem = wxT("{target}.{col} = {source}.{col}");
+	// ⭐⭐ NULL-SAFE, AND THE INDEX IS WHY. A key column may legitimately be empty — a register
+	// dimension nobody filled in stores NULL in all three of its physical fields — and plain `=`
+	// answers UNKNOWN when both sides are NULL, not TRUE. The MERGE then never matches the row that
+	// IS there, falls into WHEN NOT MATCHED, and INSERTs a duplicate.
+	//
+	// 🛑 Which the unique index refuses, because IT treats those NULLs as equal:
+	//   "attempt to store duplicate value in unique index ACCUMULATIONREGISTER…_BALANCETOTALS_PK …
+	//    FLD1155_TYPE = NULL, FLD1155_RTREF = NULL, FLD1155_RRREF = NULL"
+	// — seen live 2026-08-31 on a movement whose Characteristic was left empty. Two notions of
+	// equality over one key: the index's and the ON clause's. The statement is written from the same
+	// key list the index is built from, so the COMPARISON has to come from there too.
+	wxString m_deltaKeyMatchItem = wxT("{target}.{col} IS NOT DISTINCT FROM {source}.{col}");
 
 	// How the two sides are named inside the items above. PG / SQLite: the target is the
 	// table itself and the incoming row is "excluded". Firebird's MERGE binds both to

@@ -3,6 +3,8 @@
 
 #include <wx/thread.h>
 #include <atomic>   // std::atomic<short> m_number_connection_attempts (MSVC pulled it in transitively)
+#include <memory>   // the adapter owns its bridges
+#include <vector>
 
 // Lifecycle: owned by ibMetaDataConfigurationStorage as a unique_ptr
 // field (private ctor + friend). Same cache-pointer pattern as
@@ -17,14 +19,31 @@ class BACKEND_API ibDebuggerClient {
 	class BACKEND_API ibDebuggerClientAdapter : public wxEvtHandler {
 	public:
 
-		ibDebuggerClientAdapter() : m_debugBridge(nullptr) {}
+		ibDebuggerClientAdapter() {}
+
+		// THE BRIDGE IS A LIST. There was one, and one is why the IDE's windows
+		// and anything else watching the same session were mutually exclusive:
+		// installing a second put out the first. A debugging session has as many
+		// listeners as there are things looking at it — the IDE's windows, the
+		// assistant — and none of them is the privileged one.
+		//
+		// The adapter OWNS every bridge in the list: they are handed over with
+		// `new` and destroyed here, which is what the single-bridge version did
+		// and the only arrangement in which nobody has to outlive anybody.
 		void SetBridge(ibDebuggerClientBridge* bridge) {
-			if (m_debugBridge != nullptr)
-				wxDELETE(m_debugBridge);
-			m_debugBridge = bridge;
+			m_debugBridges.clear();
+			AddBridge(bridge);
 		}
-		ibDebuggerClientBridge* GetBridge() const { return m_debugBridge; }
-		virtual ~ibDebuggerClientAdapter() { wxDELETE(m_debugBridge); }
+		void AddBridge(ibDebuggerClientBridge* bridge);
+		void RemoveBridge(ibDebuggerClientBridge* bridge);
+
+		// The first one installed — the IDE's, in the process that has one. Kept
+		// because callers ask "is anybody bridged", not "which".
+		ibDebuggerClientBridge* GetBridge() const {
+			return m_debugBridges.empty() ? nullptr : m_debugBridges.front().get();
+		}
+
+		virtual ~ibDebuggerClientAdapter() {}
 
 		//commands 
 		void OnSessionStart(wxSocketClient* sock);
@@ -44,7 +63,7 @@ class BACKEND_API ibDebuggerClient {
 		void OnSetExpanded(const ibWatchWindowData& data);
 
 	private:
-		ibDebuggerClientBridge* m_debugBridge;
+		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
 	};
 
 	class BACKEND_API ibDebuggerClientConnection : public wxThread {
@@ -151,6 +170,18 @@ public:
 
 	void SetBridge(ibDebuggerClientBridge* bridge) { m_adapter->SetBridge(bridge); }
 
+	// The identity a listener stamps on the questions it asks, so its answers come back to it and
+	// to nobody else. Empty when nothing is bridged, which is also when nothing can be asked.
+	wxString BridgeId() const {
+		const ibDebuggerClientBridge* bridge = m_adapter != nullptr ? m_adapter->GetBridge() : nullptr;
+		return bridge != nullptr ? bridge->GetBridgeId() : wxString();
+	}
+
+	// Ride along on a session somebody else is driving — see the note on the
+	// adapter. Not owned: whoever adds one removes it before it dies.
+	void AddBridge(ibDebuggerClientBridge* bridge) { m_adapter->AddBridge(bridge); }
+	void RemoveBridge(ibDebuggerClientBridge* bridge) { m_adapter->RemoveBridge(bridge); }
+
 	virtual ~ibDebuggerClient();
 
 	// Process-wide cache. Hot-path readers (codeEditor, watchWindow,
@@ -240,14 +271,23 @@ public:
 		return m_listConnection.size();
 	}
 
+	// ⭐⭐ A WATCH QUESTION CARRIES WHO ASKED IT, IN THE PACKET.
+	//
+	// The `id` is a handle in the asker's own world (a row of the designer's tree), so an answer
+	// says WHICH ROW and, on its own, nothing about WHOSE — and every listener used to receive
+	// every answer and guess. The asker's identity therefore travels with the question and comes
+	// back with the answer; nothing is remembered on either side, so there is no map to keep in
+	// step with rows appearing and going away.
+	//
+	// The runtime does not read it. It echoes it back exactly as it echoes the id.
 	//special public function:
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-	void AddExpression(const wxString& strExpression, unsigned long long id);
-	void ExpandExpression(const wxString& strExpression, unsigned long long id);
+	void AddExpression(const wxString& strExpression, unsigned long long id, const wxString& asker);
+	void ExpandExpression(const wxString& strExpression, unsigned long long id, const wxString& asker);
 	void RemoveExpression(unsigned long long id);
-#else 
-	void AddExpression(wxString strExpression, unsigned int id);
-	void ExpandExpression(wxString strExpression, unsigned int id);
+#else
+	void AddExpression(wxString strExpression, unsigned int id, const wxString& asker);
+	void ExpandExpression(wxString strExpression, unsigned int id, const wxString& asker);
 	void RemoveExpression(unsigned int id);
 #endif 
 

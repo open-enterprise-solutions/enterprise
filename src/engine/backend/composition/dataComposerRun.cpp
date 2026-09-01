@@ -14,6 +14,7 @@
 #include "dataComposerInternal.h"
 
 #include "backend/query/queryParser.h"        // ibQueryParser — text -> AST
+#include "backend/diagnostics/journal.h"      // ibJournal — what each output was read as, and the shared read
 #include "backend/query/queryable.h"          // ibBackendQueryable / ibBackendQueryColumn
 #include "backend/query/queryableFactory.h"   // the source factory — the column dictionary
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryResult / ibSelectKind
@@ -231,6 +232,7 @@ std::vector<ibSelectorSort> ibDataDBComposer::LevelOrder(const Output& output, i
 			if (oc.m_byAlias) key.m_alias = oc.m_alias;
 			else              key.m_col   = oc.m_col;
 			key.m_ascending = line.m_ascending;
+
 			keys.push_back(key);
 			break;
 		}

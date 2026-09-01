@@ -86,6 +86,7 @@ ibValue& ResolveWriteOuter(int slot, int idx, ibValue*** pppArrayList, bool bDel
 			_("Attempt to write to a constant value (const index %d, at opcode %ld)"),
 			idx, lAtOpcode);
 	}
+
 	auto* row = ResolveOuterFrame(slot, pppArrayList, bDelta);
 	if (row == nullptr || *row == nullptr || (*row)[idx] == nullptr) {
 		ibBackendCoreException::Error(
@@ -319,7 +320,25 @@ void ibProcUnit::BuildScopeChain(ibValue** localScope)
 	m_ppArrayCode = new ibProcUnit * [nParentCount + 1];
 	m_ppArrayCode[0] = this;
 
-	m_pppArrayList = new ibValue * *[nParentCount + 2];
+	// ⭐⭐ ONE ROW MORE THAN THERE ARE FRAMES, AND IT IS NULL — a terminator (Max, 2026-09-01:
+	// *"can we put a null at array + 1?"*).
+	//
+	// 🛑 A SLOT PAST THE END USED TO READ THE HEAP. ResolveOuterFrame indexes this array by the
+	// frame number the BYTECODE asked for and hands the row on; the guard after it tests `*row` for
+	// null. Past the end lies the debug allocator's fill, 0xFDFDFDFD — which is not null, so the
+	// guard passed it and the next read landed at 0xFDFDFDFD + idx*4. That is the fault address in
+	// the dump of this date, to the byte: frame 3, index 42, read at 0xFDFDFEA5, in a unit whose
+	// chain has two frames.
+	//
+	// With a null terminator the first step past the end meets the guard instead of the heap, and
+	// the engine says which frame and which variable were asked for.
+	//
+	// ⚠ IT GUARDS ONE STEP, not any distance: a frame number two past the end still reads whatever
+	// is there. The real bound is the count, and the real defect is upstream — the compiler emitting
+	// a frame index that this chain never had.
+	m_pppArrayList = new ibValue * *[nParentCount + 3];
+	m_pppArrayList[nParentCount + 2] = nullptr;
+
 	m_pppArrayList[0] = localScope;
 	m_pppArrayList[1] = localScope;//start with 1, because 0 means local context
 

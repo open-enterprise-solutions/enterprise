@@ -22,29 +22,24 @@ public:
 	ibPropertyChartOfCharacteristicTypesLoader()
 	{
 		ibPropertyRegistry::Register([](ibPropertyChartOfCharacteristicTypes* prop) -> wxPGProperty* {
-			return new ibPGChartOfCharacteristicTypesProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+			ibPropertyChoiceList choices;
+			prop->GetValueList(choices);
+			return new ibPGChartOfCharacteristicTypesProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue(), choices);
 		});
 	}
 }g_chartOfCharacteristicTypesLoader;
 
 #include "backend/metaData.h"
 
-void ibPGChartOfCharacteristicTypesProperty::FillByClsid(const ibClassID& clsid)
-{
-	const ibValueMetaObjectGenericData* metaGenericData = dynamic_cast<const ibValueMetaObjectGenericData*>(m_ownerProperty);
-	if (metaGenericData != nullptr) {
-		const ibMetaData* metaData = metaGenericData->GetMetaData();
-		wxASSERT(metaData);
-		for (auto metaOwner : metaData->GetAnyArrayObject(clsid)) {
-			m_choices.Add(metaOwner->GetName(), metaOwner->GetIcon(), metaOwner->GetMetaID());
-		}
-	}
-}
-
-ibPGChartOfCharacteristicTypesProperty::ibPGChartOfCharacteristicTypesProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value)
+ibPGChartOfCharacteristicTypesProperty::ibPGChartOfCharacteristicTypesProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value,
+	const ibPropertyChoiceList& choices)
 	: wxPGProperty(label, strName), m_ownerProperty(property)
 {
-	FillByClsid(g_metaChartOfCharacteristicTypesCLSID);
+	// What the property said may fill it — walked once, here, instead of being rediscovered from a
+	// clsid this class had no business holding.
+	//
+	for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
+		m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
 
 	//m_flags |= wxPGFlags::ReadOnly;
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.

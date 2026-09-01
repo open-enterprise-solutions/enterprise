@@ -16,6 +16,7 @@
 // ibFieldTypes (the wire tag) now comes from query/queryColumn.h — the codec no longer depends on
 // the attribute header (metaAttributeObject.h), only on the shared L3 column vocabulary.
 
+
 #include <map>
 
 // The single role -> suffix table (see columnLayout.h). Built once; an unknown role
@@ -38,6 +39,34 @@ const wxString& ibFieldSuffix(ibColumnRole role)
 	static const wxString s_empty;
 	const auto it = s_suffix.find(role);
 	return it != s_suffix.end() ? it->second : s_empty;
+}
+
+wxString ibSqlAliasOf(const wxString& outputName)
+{
+	// THE PREFIX IS A NAMESPACE, NOT AN ESCAPE.
+	//
+	// These names are written INSIDE a projection of ours — a nested select, a declared query's body
+	// — so they are ours to spell, all of them, and they are spelled in that projection's own
+	// namespace. The prefix says where the name lives. That a prefixed word can no longer collide
+	// with SQL's vocabulary is a CONSEQUENCE of saying so, not the purpose.
+	//
+	// 🛑 THE FIRST VERSION TESTED A WORD LIST and prefixed only on a hit. Two things were wrong with
+	// it, and the second is the serious one:
+	//   · the list is a guess — it has to be right for four dialects and stay right as each adds
+	//     keywords, and nothing tells you it is incomplete;
+	//   · a name that changed only for `Date` meant the writer/reader split was exercised almost
+	//     never, so a reader that forgot to ask here would work for every query but one and fail
+	//     SILENTLY there — an empty value, not a refusal. Prefixing everything makes the same
+	//     mistake break loudly, on the first query anyone runs.
+	//
+	// ⭐ INJECTIVE, so distinct outputs stay distinct: `Date` -> `out_Date`, and an output actually
+	// named `out_Date` -> `out_out_Date`. Stable, so the writer and the reader agree by computing it
+	// rather than by passing the spelling between them.
+	// An unnamed output has nothing to qualify — it is read by position, not by name.
+	if (outputName.IsEmpty())
+		return outputName;
+
+	return wxT("out_") + outputName;
 }
 
 const wxString& ibOwnerRefField()

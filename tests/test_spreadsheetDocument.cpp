@@ -556,3 +556,372 @@ TEST(SpreadsheetDocument, EachDocument_HasItsOwnGuid)
 	auto second = MakeDocument();
 	EXPECT_NE(first->GetDocGuid(), second->GetDocGuid());
 }
+
+// ---------------------------------------------------------------------------
+//  Taking an area — HOW WIDE IT IS
+//
+//  ⭐ THE FREE SIDE OF A HALF-SPECIFIED AREA IS BOUNDED BY THE CONTENT, never by
+//  the page breaks. Both doors below (by name, by coordinates) used to ask
+//  GetMaxColBrake() / GetMaxRowBrake() for it — the position of the last PAGE
+//  BREAK, which is 0 on a sheet that declares none. A break says where the PAPER
+//  ends and knows nothing about how many columns were written, so a template
+//  authored without one yielded areas exactly ONE column wide; and since every
+//  cell of a printed form lives to the right of column 0, the area came back
+//  structurally correct — the right number of rows — and completely empty.
+//
+//  The receiving side already measured the other way (PutArea walks
+//  GetNumberCols()), so one width had two roads that disagreed at the ends of a
+//  single operation. (2026-08-31, an empty print form.)
+//
+//  ⚠ THE TWO DOORS DISAGREE ON ONE THING, DELIBERATELY: GetAreaByName's declared
+//  band INCLUDES both ends, GetArea's range is EXCLUSIVE on the right
+//  (`row < rowRight`). Rows 1..10 is `AddRowArea(name, 1, 10)` there and
+//  `GetArea(1, 11)` here. Each test below respects its own convention.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+wxString CellText(int row, int col) {
+	return wxString::Format(wxT("r%dc%d"), row, col);
+}
+
+// A print form the way a real one is built: a margin row and a margin column
+// nobody writes into, content in rows 1..10 across columns 1..12, and NO page
+// break declared anywhere — a template is authored by placing cells, not by
+// saying where the paper ends. Extent: 11 rows, 13 columns.
+wxObjectDataPtr<ibBackendSpreadsheetObject> MakePrintForm() {
+	auto doc = MakeDocument();
+	for (int row = 1; row <= 10; row++)
+		for (int col = 1; col <= 12; col++)
+			doc->SetCellValue(row, col, CellText(row, col));
+	return doc;
+}
+
+// Ten written rows in column 0 — a known extent for the break verbs to clamp against.
+wxObjectDataPtr<ibBackendSpreadsheetObject> MakeSheetOfRows(int count) {
+	auto doc = MakeDocument();
+	for (int row = 0; row < count; row++)
+		doc->SetCellValue(row, 0, CellText(row, 0));
+	return doc;
+}
+
+} // namespace
+
+// THE ASSERTION THE DEFECT NEEDED: the cells, at named coordinates — not just a
+// fragment with the right number of rows.
+TEST(SpreadsheetDocument, GetAreaByName_RowAreaWithNoPageBreak_CarriesEveryColumn)
+{
+	auto doc = MakePrintForm();
+	doc->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+
+	const ibSpreadsheetDescription area = doc->GetAreaByName(wxT("Detail"));
+
+	// Ten rows tall — the declaration includes both ends…
+	EXPECT_EQ(10, area.GetNumberRows());
+	// …and as wide as what is WRITTEN: thirteen columns, 0..12.
+	EXPECT_EQ(13, doc->GetNumberCols());
+	EXPECT_EQ(13, area.GetNumberCols());
+
+	EXPECT_EQ(10 * 13, area.GetCellCount());
+	EXPECT_EQ(CellText(1, 1),   area.GetCellValue(0, 1));
+	EXPECT_EQ(CellText(1, 12),  area.GetCellValue(0, 12));
+	EXPECT_EQ(CellText(10, 1),  area.GetCellValue(9, 1));
+	EXPECT_EQ(CellText(10, 12), area.GetCellValue(9, 12));
+
+	// Column 0 is the form's left margin — nobody wrote there, and lifting the
+	// area must not invent content for it either.
+	EXPECT_TRUE(area.GetCellValue(0, 0).IsEmpty());
+
+	EXPECT_FALSE(area.IsEmptySpreadsheet());
+}
+
+// The fragment marks ITS OWN edges, re-origined at (0,0). Passing the source's
+// through put the column mark at 0 on a sheet that declared no break — a page
+// break drawn before the first column.
+TEST(SpreadsheetDocument, GetAreaByName_RowArea_MarksItsOwnEdgesNotTheSources)
+{
+	auto doc = MakePrintForm();
+	doc->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+
+	const ibSpreadsheetDescription area = doc->GetAreaByName(wxT("Detail"));
+
+	EXPECT_LE(0, area.GetMaxRowBrake());
+	EXPECT_LE(0, area.GetMaxColBrake());
+	EXPECT_EQ(area.GetNumberRows() - 1, area.GetMaxRowBrake());
+	EXPECT_EQ(area.GetNumberCols() - 1, area.GetMaxColBrake());
+}
+
+// …AND A DECLARED BREAK MUST NOT BECOME AUTHORITATIVE AGAIN. A sheet with a page
+// break yields exactly the area the same sheet without one does.
+TEST(SpreadsheetDocument, GetAreaByName_WithAColumnBreakDeclared_TakesTheSameFullWidth)
+{
+	auto plain = MakePrintForm();
+	plain->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+
+	auto broken = MakePrintForm();
+	broken->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+	broken->AddColBrake(4);                       // the PAPER ends after column 4…
+
+	const ibSpreadsheetDescription plainArea  = plain->GetAreaByName(wxT("Detail"));
+	const ibSpreadsheetDescription brokenArea = broken->GetAreaByName(wxT("Detail"));
+
+	// …and the AREA does not: a break is about paper, a width is about content.
+	EXPECT_EQ(13, brokenArea.GetNumberCols());
+	EXPECT_EQ(10 * 13, brokenArea.GetCellCount());
+	EXPECT_EQ(CellText(1, 12), brokenArea.GetCellValue(0, 12));
+
+	// The source's break is not carried either — the fragment marks its own edge.
+	EXPECT_FALSE(brokenArea.IsColBrake(4));
+	EXPECT_EQ(12, brokenArea.GetMaxColBrake());
+
+	// Declaring a break changed nothing at all about what the area IS.
+	EXPECT_TRUE(brokenArea == plainArea);
+}
+
+// The other axis of the same rule: a COLUMN area is as tall as the content.
+TEST(SpreadsheetDocument, GetAreaByName_ColumnArea_IsAsTallAsTheContent)
+{
+	auto doc = MakePrintForm();
+	doc->GetSpreadsheetDesc().AddColArea(wxT("Money"), 2, 5);
+
+	// The row name is left empty — no row area answers to it, so only the column
+	// side is narrowed.
+	const ibSpreadsheetDescription area = doc->GetAreaByName(wxT(""), wxT("Money"));
+
+	EXPECT_EQ(11, area.GetNumberRows());   // rows 0..10 — the sheet's own height
+	EXPECT_EQ(4, area.GetNumberCols());    // columns 2..5, re-origined at 0
+	EXPECT_EQ(CellText(1, 2),  area.GetCellValue(1, 0));
+	EXPECT_EQ(CellText(10, 5), area.GetCellValue(10, 3));
+
+	EXPECT_EQ(area.GetNumberRows() - 1, area.GetMaxRowBrake());
+	EXPECT_EQ(area.GetNumberCols() - 1, area.GetMaxColBrake());
+}
+
+// Both axes named: the rectangle, and nothing free to be got wrong.
+TEST(SpreadsheetDocument, GetAreaByName_BothAxesNamed_TakesTheRectangle)
+{
+	auto doc = MakePrintForm();
+	doc->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+	doc->GetSpreadsheetDesc().AddColArea(wxT("Money"), 2, 5);
+
+	const ibSpreadsheetDescription area = doc->GetAreaByName(wxT("Detail"), wxT("Money"));
+
+	EXPECT_EQ(10, area.GetNumberRows());
+	EXPECT_EQ(4, area.GetNumberCols());
+	EXPECT_EQ(CellText(1, 2),  area.GetCellValue(0, 0));
+	EXPECT_EQ(CellText(10, 5), area.GetCellValue(9, 3));
+	EXPECT_EQ(9, area.GetMaxRowBrake());
+	EXPECT_EQ(3, area.GetMaxColBrake());
+}
+
+// A name nobody declared yields nothing at all — not a one-column ghost.
+TEST(SpreadsheetDocument, GetAreaByName_UnknownName_YieldsAnEmptyFragment)
+{
+	auto doc = MakePrintForm();
+	doc->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+
+	const ibSpreadsheetDescription area = doc->GetAreaByName(wxT("Nobody"));
+
+	EXPECT_TRUE(area.IsEmptySpreadsheet());
+	EXPECT_EQ(0, area.GetCellCount());
+	EXPECT_EQ(0, area.GetNumberRows());
+	EXPECT_EQ(0, area.GetNumberCols());
+}
+
+// ---------------------------------------------------------------------------
+//  …and the coordinate-taking twin, which carried the same defects
+// ---------------------------------------------------------------------------
+
+TEST(SpreadsheetDocument, GetArea_RowsOnly_TakesTheFullWidthWithContent)
+{
+	auto doc = MakePrintForm();
+
+	// EXCLUSIVE on the right — rows 1..10 is written `1, 11` here.
+	const ibSpreadsheetDescription area = doc->GetArea(1, 11, -1, -1);
+
+	EXPECT_EQ(10, area.GetNumberRows());
+	EXPECT_EQ(13, area.GetNumberCols());
+	EXPECT_EQ(10 * 13, area.GetCellCount());
+
+	// ⚠ The origin on this branch is 0, NOT `-colTop`. colTop is the ABSENCE
+	// marker (-1) here, and subtracting it shifted every cell one column right —
+	// a sentinel used as an origin.
+	EXPECT_EQ(CellText(1, 1),   area.GetCellValue(0, 1));
+	EXPECT_EQ(CellText(10, 12), area.GetCellValue(9, 12));
+	EXPECT_TRUE(area.GetCellValue(0, 0).IsEmpty());
+}
+
+TEST(SpreadsheetDocument, GetArea_ColumnsOnly_TakesTheFullHeightWithContent)
+{
+	auto doc = MakePrintForm();
+
+	const ibSpreadsheetDescription area = doc->GetArea(-1, -1, 1, 5);
+
+	EXPECT_EQ(11, area.GetNumberRows());   // rows 0..10 — the sheet's own height
+	EXPECT_EQ(4, area.GetNumberCols());    // columns 1..4, exclusive right
+
+	// rowLeft is the absence marker on this branch — the same trap, other axis.
+	EXPECT_EQ(CellText(1, 1),  area.GetCellValue(1, 0));
+	EXPECT_EQ(CellText(10, 4), area.GetCellValue(10, 3));
+
+	EXPECT_EQ(area.GetNumberRows() - 1, area.GetMaxRowBrake());
+	EXPECT_EQ(area.GetNumberCols() - 1, area.GetMaxColBrake());
+}
+
+// ⚠ THE FRAGMENT'S MARK IS AN INDEX INTO THE FRAGMENT, and therefore never
+// negative. It used to be computed the other way round (`rowLeft - rowRight`),
+// so a three-row fragment shipped with a stored break at −3: inert for
+// pagination (no loop counter matches a negative), but GetMaxRowBrake() answered
+// a negative number, IsEmptySpreadsheet() could never be true for such a
+// fragment, and the value was serialised.
+TEST(SpreadsheetDocument, GetArea_FullyBounded_MarksANonNegativeEdgeOfItsOwn)
+{
+	auto doc = MakePrintForm();
+
+	const ibSpreadsheetDescription area = doc->GetArea(1, 4, 1, 5);
+
+	EXPECT_EQ(3, area.GetNumberRows());
+	EXPECT_EQ(4, area.GetNumberCols());
+	EXPECT_EQ(CellText(1, 1), area.GetCellValue(0, 0));
+	EXPECT_EQ(CellText(3, 4), area.GetCellValue(2, 3));
+
+	EXPECT_LE(0, area.GetMaxRowBrake());
+	EXPECT_LE(0, area.GetMaxColBrake());
+	EXPECT_EQ(area.GetNumberRows() - 1, area.GetMaxRowBrake());
+	EXPECT_EQ(area.GetNumberCols() - 1, area.GetMaxColBrake());
+}
+
+// ⭐ ONE BAND, TWO DOORS, ONE ANSWER. The halves of the file disagreed once; this
+// is the assertion that says they may not again.
+TEST(SpreadsheetDocument, GetArea_AndGetAreaByName_DescribeTheSameBandIdentically)
+{
+	auto doc = MakePrintForm();
+	doc->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+
+	const ibSpreadsheetDescription byName   = doc->GetAreaByName(wxT("Detail"));
+	const ibSpreadsheetDescription byCoords = doc->GetArea(1, 11, -1, -1);   // exclusive right
+
+	EXPECT_EQ(byName.GetNumberRows(),  byCoords.GetNumberRows());
+	EXPECT_EQ(byName.GetNumberCols(),  byCoords.GetNumberCols());
+	EXPECT_EQ(byName.GetCellCount(),   byCoords.GetCellCount());
+	EXPECT_EQ(byName.GetMaxRowBrake(), byCoords.GetMaxRowBrake());
+	EXPECT_EQ(byName.GetMaxColBrake(), byCoords.GetMaxColBrake());
+	EXPECT_EQ(byName.GetCellValue(0, 1), byCoords.GetCellValue(0, 1));
+
+	EXPECT_TRUE(byName == byCoords);
+}
+
+// ---------------------------------------------------------------------------
+//  Print breaks — Add and Set are DIFFERENT VERBS
+//
+//  🛑 THESE TESTS STATE WHAT THE CODE DOES, not what the names suggest. A change
+//  made on a reading of the name alone nearly shipped on 2026-08-31, so the
+//  behaviour is written down plainly: SetRowBrake is an EXTENT MARKER — it
+//  OVERWRITES the list's maximum element (or appends when the list is empty),
+//  the value it writes is derived from the list's LAST element clamped to the
+//  sheet's last line, and the argument only RAISES that value. It is what
+//  GetArea / GetAreaByName call to stamp a fragment's own edge; it is not a way
+//  to place a page break at a given line — AddRowBrake is.
+// ---------------------------------------------------------------------------
+
+TEST(SpreadsheetDescription, SetRowBrake_OnAnEmptyList_AppendsTheGivenRow)
+{
+	auto doc = MakeSheetOfRows(10);
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+
+	desc.SetRowBrake(4);
+
+	EXPECT_EQ(1, desc.GetBrakeNumberRows());
+	EXPECT_TRUE(desc.IsRowBrake(4));
+	EXPECT_EQ(4, desc.GetMaxRowBrake());
+}
+
+TEST(SpreadsheetDescription, SetRowBrake_OnANonEmptyList_OverwritesTheMaximumInsteadOfAppending)
+{
+	auto doc = MakeSheetOfRows(10);
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+
+	desc.SetRowBrake(2);
+	desc.SetRowBrake(6);
+
+	EXPECT_EQ(1, desc.GetBrakeNumberRows());   // still ONE entry, not two
+	EXPECT_FALSE(desc.IsRowBrake(2));          // the previous one is gone
+	EXPECT_TRUE(desc.IsRowBrake(6));
+}
+
+TEST(SpreadsheetDescription, AddRowBrake_AndSetRowBrake_AreDifferentVerbs)
+{
+	auto doc = MakeSheetOfRows(10);
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+
+	desc.AddRowBrake(2);
+	desc.AddRowBrake(6);
+	EXPECT_EQ(2, desc.GetBrakeNumberRows());   // Add PLACES a break
+
+	desc.SetRowBrake(8);
+	EXPECT_EQ(2, desc.GetBrakeNumberRows());   // Set never places one
+
+	EXPECT_TRUE(desc.IsRowBrake(2));           // the lower break is untouched…
+	EXPECT_FALSE(desc.IsRowBrake(6));          // …the highest one was rewritten
+	EXPECT_TRUE(desc.IsRowBrake(8));
+}
+
+// ⚠ IT CAN DESTROY A BREAK A PERSON PLACED, and it does not necessarily write the
+// line it was handed: the value comes from the list's LAST entry, the argument
+// only raises it, and it lands on the MAXIMUM entry wherever that sits.
+TEST(SpreadsheetDescription, SetRowBrake_WhenTheMaximumIsNotTheLastEntry_DropsThatBreakAndIgnoresItsArgument)
+{
+	auto doc = MakeSheetOfRows(10);
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+
+	desc.AddRowBrake(8);
+	desc.AddRowBrake(3);
+
+	desc.SetRowBrake(1);
+
+	EXPECT_EQ(2, desc.GetBrakeNumberRows());
+	EXPECT_FALSE(desc.IsRowBrake(8));   // the page break a person put at row 8 — gone
+	EXPECT_FALSE(desc.IsRowBrake(1));   // …and row 1, the argument, was never written
+	EXPECT_TRUE(desc.IsRowBrake(3));
+	EXPECT_EQ(3, desc.GetMaxRowBrake());
+}
+
+// …and it is an EXTENT marker: a break beyond the last written line is pulled
+// back to it. That is the verb's actual job.
+TEST(SpreadsheetDescription, SetRowBrake_WithABreakPastTheContent_ClampsItToTheLastWrittenRow)
+{
+	auto doc = MakeSheetOfRows(5);
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	ASSERT_EQ(5, desc.GetNumberRows());
+
+	desc.AddRowBrake(9);      // beyond anything written
+	desc.SetRowBrake(0);
+
+	EXPECT_EQ(1, desc.GetBrakeNumberRows());
+	EXPECT_FALSE(desc.IsRowBrake(9));
+	EXPECT_TRUE(desc.IsRowBrake(4));   // the last written row
+	EXPECT_EQ(4, desc.GetMaxRowBrake());
+}
+
+// The column twin, same shape and the same two facts in one go.
+TEST(SpreadsheetDescription, SetColBrake_OverwritesTheMaximumAndClampsToTheContent)
+{
+	auto doc = MakeDocument();
+	for (int col = 0; col < 5; col++)
+		doc->SetCellValue(0, col, CellText(0, col));
+
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	ASSERT_EQ(5, desc.GetNumberCols());
+
+	desc.SetColBrake(2);
+	EXPECT_EQ(1, desc.GetBrakeNumberCols());
+	EXPECT_TRUE(desc.IsColBrake(2));
+
+	desc.AddColBrake(9);
+	desc.SetColBrake(0);
+
+	EXPECT_EQ(2, desc.GetBrakeNumberCols());
+	EXPECT_FALSE(desc.IsColBrake(9));   // clamped back to the last written column
+	EXPECT_TRUE(desc.IsColBrake(2));    // the other entry is untouched
+	EXPECT_EQ(4, desc.GetMaxColBrake());
+}

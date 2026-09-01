@@ -7,6 +7,7 @@
 #include "backend/utils/md5.hpp"
 #include "backend/appData.h"
 #include "backend/logger/logger.h"
+#include "backend/diagnostics/journal.h"   // ibJournal — the apply writes WHAT changed, not only that it did
 #include "backend/backend_exception.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -297,6 +298,37 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 			: (fullApply ? wxT("applied") : wxT("saved"));
 		ibLog->Audit(wxT("metadata"), evt,
 		             wxString::Format(wxT("flags=0x%X"), flags));
+	}
+
+	// ⭐⭐ …AND WHAT ACTUALLY CHANGED, not only that something did.
+	//
+	// The audit above records the EVENT and the flags, which answers "was there an apply" and
+	// nothing else. The account of the change — every CREATE / ALTER / DROP, every column added or
+	// removed, every warning raised on the way — is sitting right here in the restructure ledger,
+	// and until now it was read by the apply dialog and by `config_apply`'s result and then thrown
+	// away. So an apply made from the designer's own button left NO trace of its content anywhere:
+	// the technology journal showed the fact and not the substance (Max, 2026-08-31: "I updated the
+	// database, it shows nothing").
+	//
+	// Written HERE rather than at either caller because both roads pass through it — the button and
+	// the tool — and a record that exists only on one of them is the kind of gap that is discovered
+	// from a crash dump later.
+	if (const ibRestructureInfo& ledger = ibMetaDataConfigurationBase::GetRestructureInfo();
+		ledger.Count() > 0) {
+
+		ibJournalInfo(wxT("metadata.apply"), wxT("%s: %u change(s)%s%s"),
+			roolback ? wxT("rolled back") : wxT("applied"),
+			(unsigned)ledger.Count(),
+			ledger.HasWarnings() ? wxT(", with warnings") : wxT(""),
+			ledger.HasErrors()   ? wxT(", with errors")   : wxT(""));
+
+		for (const ibRestructureInfo::Entry& entry : ledger) {
+			switch (entry.type) {
+			case ibRestructure::error:   ibJournalError  (wxT("metadata.apply"), wxT("%s"), entry.descr); break;
+			case ibRestructure::warning: ibJournalWarning(wxT("metadata.apply"), wxT("%s"), entry.descr); break;
+			default:                     ibJournalInfo   (wxT("metadata.apply"), wxT("%s"), entry.descr); break;
+			}
+		}
 	}
 
 	// The L3-2 builder OWNS the close of the restructuring transaction: rollback if asked, else commit the

@@ -16,8 +16,6 @@ class ibValueMetaObjectChartOfAccounts : public ibValueMetaObjectRecordDataHiera
 private:
 	enum
 	{
-		ID_METATREE_OPEN_MODULE = 19000,
-		ID_METATREE_OPEN_MANAGER = 19001,
 		ID_METATREE_EDIT_PREDEFINED = 19002,
 	};
 
@@ -139,7 +137,8 @@ public:
 	virtual ibBackendValueForm* GetFolderSelectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
 #pragma endregion
 
-	//descriptions...
+	//descriptions...
+
 
 	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
@@ -211,7 +210,7 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 	virtual void ProcessCommand(unsigned int id);
 
 private:

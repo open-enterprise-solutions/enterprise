@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainFrameDesigner.h"
+#include "backend/picturePredefined.h"   // the assistant's icon, from the picture registry
 
 //********************************************************************************
 //*                                Hotkey support                                *
@@ -191,6 +192,19 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	menuItem = m_menuAdministration->Append(wxID_DESIGNER_DATABASE_CLEAR, _("Clear database"));
 	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
 
+	m_menuAdministration->AppendSeparator();
+	// ASSISTANT ACCESS. No AccessRight gate of its own: what a connected
+	// assistant may do is exactly what THIS person may do — it works inside their
+	// session — so a second permission to keep in step would be one that could
+	// disagree with the first. The label says which way the switch will go.
+	//
+	// ⭐ STARTING AND STOPPING LIVES IN THE SETTINGS, not here. It is one switch a person touches
+	// rarely, and it was costing a permanent line in a menu that has to stay readable — while the
+	// page where the address, the key and the whole setup already are is exactly where somebody
+	// goes when they want to change any of it. One place for the server, not two.
+	menuItem = m_menuAdministration->Append(wxID_APPLICATION_MCP_ASSISTANT, _("Assistant window"));
+	menuItem->SetBitmap(ibBackendPicture::GetPicture(g_picAssistantCLSID));
+
 	m_frameMenuBar->Append(m_menuAdministration, _("Administration"));
 
 	m_menuSetting = new wxMenu;
@@ -230,6 +244,8 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnUsers, this, wxID_APPLICATION_USERS);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnActiveUsers, this, wxID_APPLICATION_ACTIVE_USERS);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnAuditLog, this, wxID_APPLICATION_AUDIT_LOG);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnMcpAssistant, this, wxID_APPLICATION_MCP_ASSISTANT);
+	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateMcpAssistant, this, wxID_APPLICATION_MCP_ASSISTANT);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConnection, this, wxID_APPLICATION_CONNECTION);
 
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnLoadDatabase, this, wxID_DESIGNER_DATABASE_LOAD_FROM_FILE);

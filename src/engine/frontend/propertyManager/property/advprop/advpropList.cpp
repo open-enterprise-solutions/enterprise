@@ -19,7 +19,9 @@ public:
 	ibPropertyListLoader()
 	{
 		ibPropertyRegistry::Register([](ibPropertyList* prop) -> wxPGProperty* {
-			return new ibPGListProperty(prop->GetLabel(), prop->GetName(), prop->GetValueList(),
+			ibPropertyChoiceList choices;
+			prop->GetValueList(choices);
+			return new ibPGListProperty(prop->GetLabel(), prop->GetName(), choices,
 				prop->GetValueAsInteger());
 		});
 	}

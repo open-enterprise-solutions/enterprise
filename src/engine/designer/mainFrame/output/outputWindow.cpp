@@ -132,6 +132,18 @@ void ibOutputWindow::SharedOutput(const wxString& strMessage, ibStatusMessage st
 	const wxString& strFileName, const wxString& strDocPath,
 	int currLine)
 {
+	// ⭐⭐ SHOWN AND RECORDED IN ONE PLACE — because they are one act.
+	//
+	// Every caller used to spell both: `ibDesignerMessages::Report({…})` and then the output call,
+	// side by side, four times over in the designer's frame. Two roads to one event means each new
+	// message site has to remember both, and the half that gets forgotten fails quietly — a message
+	// on the pane that no listener ever hears, or a message delivered to a listener that the person
+	// in front of the screen never sees.
+	//
+	// It belongs HERE because this is the narrow point every visible message already passes through
+	// (OutputError delegates to it, so nothing is recorded twice).
+	ibDesignerMessages::Report({ strMessage, status, strDocPath, currLine, false });
+
 	int beforeAppendPosition = GetInsertionPoint();
 	int beforeAppendLastPosition = GetLastPosition();
 
@@ -199,30 +211,26 @@ void ibOutputWindow::OnDoubleClick(wxMouseEvent& event)
 
 			auto code = pair.second;
 
+			// ⭐ A LINE IN THE OUTPUT NAMES A MODULE and the container it belongs to. Which tree
+			// shows that container is the DOCUMENT's answer for a file, and the main form's
+			// navigator for the open configuration; the tree does the rest.
+			//
+			// 🛑 IT USED TO GO `metaData->GetMetaTree()` — the engine handing a viewer back to the
+			// UI that asked for it. That door is gone.
 			if (code.m_fileName.IsEmpty()) {
-				ibBackendMetadataTree* metaTree = activeMetaData->GetMetaTree();
-				wxASSERT(metaTree);
-				metaTree->EditModule(code.m_docPath, code.m_currLine, false);
+				if (mainFrame != nullptr && mainFrame->GetMetaWindow() != nullptr)
+					mainFrame->GetMetaWindow()->EditModule(code.m_docPath, code.m_currLine, false);
 			}
+			else if (docManager != nullptr) {
+				ibDocument* fileDoc = docManager->FindDocumentByPath(code.m_fileName);
+				// The error names a place, so the place has to be reachable even if nobody had that
+				// file open.
+				if (fileDoc == nullptr)
+					fileDoc = docManager->CreateDocument(code.m_fileName, ibDOC_SILENT);
 
-			if (!code.m_fileName.IsEmpty()) {
-				ibMetaDataDocument* foundedDoc = dynamic_cast<ibMetaDataDocument*>(
-					docManager->FindDocumentByPath(code.m_fileName)
-					);
-
-				if (foundedDoc == nullptr) {
-					foundedDoc = dynamic_cast<ibMetaDataDocument*>(
-						docManager->CreateDocument(code.m_fileName, ibDOC_SILENT)
-						);
-				}
-
-				if (foundedDoc != nullptr) {
-					ibMetaData* metadata = foundedDoc->GetMetaData();
-					wxASSERT(metadata);
-					ibBackendMetadataTree* metaTree = metadata->GetMetaTree();
-					wxASSERT(metaTree);
-					metaTree->EditModule(code.m_docPath, code.m_currLine, false);
-				}
+				if (const ibMetaDataDocument* metaDoc = dynamic_cast<ibMetaDataDocument*>(fileDoc))
+					if (ibMetaTreeAbstract* metaTree = metaDoc->GetMetaTree())
+						metaTree->EditModule(code.m_docPath, code.m_currLine, false);
 			}
 			break;
 		}
@@ -256,14 +264,22 @@ void ibOutputWindow::OnContextMenu(wxContextMenuEvent& event)
 	//event.Skip();
 }
 
-void ibOutputWindow::OnClearOutput(wxCommandEvent& event)
+void ibOutputWindow::ClearOutput()
 {
+	// The record goes with the pane — see the note in the header. Whoever clears what is shown means
+	// the messages, not the pixels.
+	ibDesignerMessages::Clear();
+
 	m_listCodeInfo.clear();
 
 	SetEditable(true);
 	wxStyledTextCtrl::ClearAll();
 	SetEditable(false);
+}
 
+void ibOutputWindow::OnClearOutput(wxCommandEvent& event)
+{
+	ClearOutput();
 	event.Skip();
 }
 

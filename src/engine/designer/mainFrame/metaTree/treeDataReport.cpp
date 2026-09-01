@@ -97,6 +97,7 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 	// Card-style depth — panel powder-blue, tree cream (matches editor).
 	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue panel
 	m_metaTreeCtrl = new ibDataReportTreeCtrl(sbSizerTree->GetStaticBox(), this);
+	m_treeCtrl = m_metaTreeCtrl;   // the base holds the control — see ibMetaTreeBase
 	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 247, 240));  // #FAF7F0 cream tree
 
 	//set image list
@@ -143,9 +144,6 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 
 ibDataReportTree::~ibDataReportTree()
 {
-	// LET GO OF THE BACK-POINTER — see the twin note in treeDataProcessor.cpp.
-	if (m_metaData != nullptr)
-		m_metaData->SetMetaTree(nullptr);
 
 	// ASK BEFORE TEARING DOWN. The default constructor is reachable through wxCreateDynamicObject
 	// and leaves every control null; the configuration tree guards exactly this, the twins did not.
@@ -256,7 +254,19 @@ void ibDataReportTree::OnButtonModuleClicked(wxCommandEvent& event)
 {
 	ibValueMetaObjectReport* report = m_metaData->GetReport();
 	wxASSERT(report);
-	report->ProcessCommand(ibValueMetaObjectReport::ID_METATREE_OPEN_MODULE);
+
+	// ⭐ TAKEN FROM THE STRUCTURE — see the twin in treeDataProcessor.cpp. The item names itself and
+	// carries the metaobject; no getter to reach past and no const to cast away.
+	std::vector<ibMetaMenuItem> items;
+	report->CollectContextMenu(items);
+
+	for (const ibMetaMenuItem& item : items) {
+		if (item.m_id == ibValueMetaObjectReport::ID_METATREE_OPEN_MODULE
+			&& item.m_metaObject != nullptr) {
+			OpenObjectForm(item.m_metaObject);
+			break;
+		}
+	}
 }
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibDataReportTree::ibDataReportTreeCtrl, wxTreeCtrl);

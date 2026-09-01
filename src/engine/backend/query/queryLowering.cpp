@@ -2055,6 +2055,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			continue;
 		}
 		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, oe, allowOrderDotWalk);
+
 		if (cols.size() > 1) b.OrderBy(cols, o.m_ascending);
 		else                 b.OrderBy(cols[0], o.m_ascending);
 	}
@@ -2292,13 +2293,31 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		// projection does.
 		const bool computed = oc.m_col == nullptr
 			|| oc.m_col->GetColumnKind() == ibBackendQueryColumn::Kind::Computed;
+
+		// ⭐⭐ AN OUTPUT READ BY ALIAS IS SPELLED BY ITS ALIAS — physical name included.
+		//
+		// A DOT-WALK output (`Product.Parent AS ProductGroup`) has a column behind it, but that column
+		// belongs to the JOINED table, not to this query's source: the statement writes it under the
+		// alias (`ProductGroup_RRRef`), because that is the only name the walk has out here. Publishing
+		// it as `fld<metaID>` said the leaf's own name instead, and then the two halves disagreed:
+		// the declaration promised FLD1012_RRREF, the SELECT wrote ProductGroup_RRRef, and an outer
+		// ORDER BY over it answered `-206 Column unknown FLD1012_RRREF` (2026-08-31).
+		//
+		// ⚠ AND THE ALIAS IS THE UNIQUE ONE. Two walks that end on the SAME leaf — `Ref.Date` and
+		// `Recorder.Date` — carry one physical name between them and would be written twice
+		// (`-104 … specified multiple times`); their aliases are different by construction, because an
+		// author cannot name two outputs alike.
+		const bool spelledByAlias = oc.m_byAlias && !oc.m_alias.IsEmpty();
+
 		fields.push_back({ oc.m_name,
-			(oc.m_col != nullptr && !repeated) ? oc.m_col->GetPhysicalName() : oc.m_name, oc.m_type,
+			spelledByAlias ? ibSqlAliasOf(oc.m_alias)   // …in the STATEMENT's spelling, which is what was written
+			               : ((oc.m_col != nullptr && !repeated) ? oc.m_col->GetPhysicalName() : oc.m_name),
+			oc.m_type,
 			computed ? ibBackendQueryColumn::Kind::Computed
 			         : ibBackendQueryColumn::Kind::Composite });
 		// What this output really puts in the statement — the spread of the column behind it. A
 		// repeated alias writes the SAME fields under its own name, so it adds nothing here.
-		if (oc.m_col != nullptr && !repeated)
+		if (oc.m_col != nullptr && !repeated && !spelledByAlias)
 			for (const wxString& f : ColumnFieldNames(oc.m_col))
 				writtenFields.push_back(f);
 	}
@@ -4608,6 +4627,16 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	struct LevelSort {
 		std::vector<const ibBackendQueryColumn*> m_path;   // dot-walk — sort through the join
 		const ibBackendQueryColumn*              m_col = nullptr;   // plain column
+
+		// ⭐⭐ …OR THE OUTPUT'S NAME, when the level groups by something READ BY ALIAS.
+		//
+		// A dot-walk output (`Product.Parent AS ProductGroup`) resolves to the walk's LEAF, and that
+		// column belongs to the joined table — sorting by the pointer names it as `fld<metaID>` on a
+		// source that has no such field (`-206 Column unknown FLD1012_RRREF`, 2026-08-31). Out here
+		// the value exists under the OUTPUT's own name, so the name is what to sort by; it is
+		// resolved against the query's source at the moment the sort is spent, which is the first
+		// point where that source is known.
+		wxString                                 m_name;
 	};
 	std::vector<LevelSort> levelOrder;
 	// The columns the LEVELS group by — collected as they resolve, spent where the aggregates are
@@ -4862,9 +4891,11 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// This level's key joins the detail read's sort — by its PATH when it was reached through
 			// one, so the sort goes down the same join the projection did.
 			if (pathCols.size() > 1)
-				levelOrder.push_back(LevelSort{ pathCols, nullptr });
+				levelOrder.push_back(LevelSort{ pathCols, nullptr, wxString() });
+			else if (oc.m_byAlias && !oc.m_name.IsEmpty())
+				levelOrder.push_back(LevelSort{ {}, nullptr, oc.m_name });   // read by alias — sort by the NAME
 			else if (oc.m_col != nullptr)
-				levelOrder.push_back(LevelSort{ {}, oc.m_col });
+				levelOrder.push_back(LevelSort{ {}, oc.m_col, wxString() });
 			outSchema.push_back(oc);
 		}
 
@@ -5338,6 +5369,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, oe, /*allowDotWalk*/true);
 		if (cols.empty())
 			continue;
+
 		if (cols.size() > 1) b.OrderBy(cols, o.m_ascending);
 		else                 b.OrderBy(cols[0], o.m_ascending);
 	}
@@ -5348,8 +5380,29 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// they were.
 	for (size_t li = 0; li < levelOrder.size(); ++li) {
 		const LevelSort& ls = levelOrder[li];
-		if (!ls.m_path.empty()) b.OrderBy(ls.m_path, levelAscending[li]);
-		else                    b.OrderBy(ls.m_col,  levelAscending[li]);
+
+		if (!ls.m_path.empty()) {
+			b.OrderBy(ls.m_path, levelAscending[li]);
+			continue;
+		}
+
+		// ⭐ BY NAME — resolved against the source this read actually has, which is the declared query
+		// (`q_sub0`) and not the table the walk ended on. See the note on LevelSort::m_name.
+		if (!ls.m_name.IsEmpty()) {
+			const ibBackendQueryable* src = b.GetPrimarySource();
+			if (const ibBackendQueryColumn* named = src != nullptr ? src->ResolveColumnByName(ls.m_name) : nullptr) {
+				b.OrderBy(named, levelAscending[li]);
+				continue;
+			}
+			// Nothing of that name out here — say so rather than sort by something else. A level whose
+			// key the source does not publish is a defect in the declaration, not a preference.
+			ibJournalInfo(wxT("query.road"),
+				wxT("level sort '%s' is not published by the source it reads - the level is left unsorted"),
+				ls.m_name);
+			continue;
+		}
+
+		b.OrderBy(ls.m_col, levelAscending[li]);
 	}
 
 	// ⭐ SAID IN THE JOURNAL, AS TWO NUMBERS — because "the sort does not react" is a complaint about

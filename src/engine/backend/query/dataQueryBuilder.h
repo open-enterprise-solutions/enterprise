@@ -474,6 +474,13 @@ struct ibQueryNode
 	// Parallel to m_parts: true = this branch was attached with UNION ALL (keep duplicates).
 	// A plain-UNION branch (false) DEDUPES the accumulated rows at its operator — SQL semantics
 	// (left-assoc: A UNION B UNION ALL C dedupes after B, keeps C's duplicates). parts[0] = true.
+	//
+	// ⭐ ONE FLAG PER PART, BY CONSTRUCTION — not by convention. Both places that ever grow a Union
+	// push the part and the flag in the same breath (ibDataQueryBuilder::Union), and the one place
+	// that rebuilds a Union copies the flags whole and emits exactly one part per input part or
+	// abandons the rebuild (PromoteUnionBranches). Nothing erases, resizes or clears either vector.
+	// So readers index this directly: the "flag might be missing" guard three of them carried was
+	// guarding against a shape no producer can make.
 	std::vector<bool> m_partAll;
 
 	static std::shared_ptr<ibQueryNode> Source(const ibBackendQueryable* q, const wxString& alias = wxEmptyString) {

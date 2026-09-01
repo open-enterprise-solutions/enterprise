@@ -63,6 +63,16 @@ enum class ibSettingsCategory : int {
 	// to restore when the object is merely opened. A pointer is a different KIND of thing from a
 	// setting, so it lives on its own shelf, and the storage still stores nothing but nodes.
 	Default,
+	// ⭐ THE PLATFORM ITSELF IS A TENANT. The MCP server's settings — whether it listens, and where —
+	// belong to A PERSON IN A BASE, not to the installation: every developer who opens the designer
+	// configures their own server, and two of them on one machine are two servers on two ports. The
+	// user half of the address already says exactly that, so this is a saved setting like any other
+	// rather than a file beside the executable. Its object key is the server's own well-known id:
+	// what is configured here is the platform, not something in the tree.
+	//
+	// ⚠ APPENDED, as the rule above requires — taken in the middle it would have re-read every
+	// Default row as this one.
+	Mcp,
 };
 
 // THE ADDRESS OF ONE SETTING. Four parts, each a question of its own, because a

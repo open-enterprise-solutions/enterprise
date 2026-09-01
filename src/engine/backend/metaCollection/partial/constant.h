@@ -153,10 +153,6 @@ class BACKEND_API ibValueMetaObjectConstant :
 
 
 protected:
-	enum
-	{
-		ID_METATREE_OPEN_CONSTANT_MANAGER = 19000,
-	};
 
 public:
 
@@ -239,8 +235,7 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 private:
 

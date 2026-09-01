@@ -228,9 +228,22 @@ struct ibWatchWindowData {
 
 	std::vector<ibWatchWindowItem> m_listExpression;
 
+	// ⭐⭐ WHO ASKED FOR THIS. `m_item` above is a handle in the ASKER's own world — a row of its
+	// tree — so an answer is only meaningful to the listener that produced it, and every other one
+	// must let it pass.
+	//
+	// ⚠ A STRING, not the guid type. This header is the protocol's vocabulary and is included
+	// everywhere the debugger is; it carries what goes over the wire, and over the wire this is
+	// text. Naming the type here would drag the guid header behind it into every one of them for a
+	// value nothing on this side takes apart.
+	wxString m_bridgeId;
+
 public:
 
 	ibWatchWindowData(const wxTreeItemId& item = nullptr) : m_item(item) {}
+
+	const wxString& GetBridgeId() const { return m_bridgeId; }
+	void SetBridgeId(const wxString& id) { m_bridgeId = id; }
 
 	wxTreeItemId GetItem() const {
 		return m_item;

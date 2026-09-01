@@ -19,6 +19,7 @@
 #include "backend/logger/loggerSweep.h"
 #include "backend/lock/lockManager.h"
 #include "backend/job/jobManager.h"           // ibJobManager (owned via GetJobManager)
+#include "backend/mcp/mcpServer.h"            // ibMcpServer (owned via GetMcpServer)
 #include "backend/job/platformJobs.h"         // the engine's own jobs, declared when a database opens
 #include "backend/settings/settingsStorage.h" // ibSettingsStorage (owned via GetSettingsStorage)
 
@@ -188,6 +189,7 @@ ibApplicationData::ibApplicationData(ibRunMode runMode) :
 	m_queryableFactory(std::unique_ptr<ibQueryableFactory>(new ibQueryableFactory(ib::AppDataCtorToken{}))),
 	m_sessionRegistry(std::unique_ptr<ibSessionRegistry>(new ibSessionRegistry(ib::AppDataCtorToken{}, PickWorkerCount(runMode)))),
 	m_jobManager(std::unique_ptr<ibJobManager>(new ibJobManager(ib::AppDataCtorToken{}))),
+	m_mcpServer(std::unique_ptr<ibMcpServer>(new ibMcpServer(ib::AppDataCtorToken{}))),
 	m_settingsStorage(std::unique_ptr<ibSettingsStorage>(new ibSettingsStorage(ib::AppDataCtorToken{}))),
 	m_dbMode(ibDatabaseMode::eNONE),
 	m_locale_lang(wxLanguage::wxLANGUAGE_UNKNOWN)
@@ -321,6 +323,12 @@ void ibApplicationData::WireSessionEvents()
 			// the part where it stopped being lone.
 			registry->SetFallback(s);
 		}
+		// A PERSON'S OWN MCP SERVER, read the moment they are let in — the
+		// settings are keyed by user, so opening the designer is when "whose
+		// server is this" gets its answer. Nothing saved yet is a cold start,
+		// not a failure: the defaults stand, and the defaults are off.
+		if (m_mcpServer) m_mcpServer->LoadSettings(s);
+
 		// Enable per-session debug context iff this process was started
 		// with --debug. Marks the session as debugged so ibProcUnit's
 		// breakpoint dispatch + DoDebugLoop's CV wait route through the
@@ -419,6 +427,11 @@ ibApplicationData::~ibApplicationData()
 	//    WaitForServiceCompletion, 2026-05-26 and -05-29); that thread is gone,
 	//    and this order is what keeps its replacement honest.
 	if (m_jobManager) m_jobManager->Stop();
+
+	// Same reasoning one line up: the listener works in the name of a session and
+	// touches metadata on every exchange, so it is joined BEFORE anything it can
+	// reach starts going away.
+	if (m_mcpServer) m_mcpServer->Stop();
 
 	// 1. activeMetaData — OnDestroy may save state, close compile
 	//    caches, run cascading detach; those paths still want db_query.
@@ -889,6 +902,13 @@ void ibApplicationData::ReadEngineConfig()
 
 	wxFileConfig fc(wxT(""), wxT(""), wxT(""), strConfigFile);
 	fc.Read(wxT("Locale"), &m_configInfo.m_strLocale);
+
+	// (THE MCP SERVER'S SETTINGS ARE NOT HERE. They belong to a PERSON in a
+	//  BASE — the server is started from an authenticated designer session and
+	//  has nothing to say before one exists — so they live in sys_settings with
+	//  every other saved setting, under their own category. See
+	//  ibMcpServer::LoadSettings. A copy in this file would be a second road,
+	//  and the two would disagree the first time somebody edited the page.)
 }
 
 #pragma endregion 

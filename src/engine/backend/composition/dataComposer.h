@@ -624,14 +624,21 @@ public:
 	ibDataComposer& SetMetaData(const class ibMetaData* metaData) { m_metaData = metaData; return *this; }
 	const class ibMetaData* GetMetaData() const { return m_metaData; }
 
-	// The driver-walk seam — the DB composer renders + walks the query to the driver. The RAM composer does NOT
-	// use it (the list display calls ComputeOrder + returns the LIVE nodes), so the base default is a no-op and
-	// ibDataRamComposer does not override it — L5-2 is self-contained, NO tie to L5-1 (SQL) / L4-1 (text).
+	// The driver-walk seam. A driver does not care where rows come from — it is handed a schema and
+	// then rows — so both composers answer it: the DB one renders and walks its query, the RAM one
+	// walks its table of values.
+	//
+	// ⭐ PURE, because there is no sensible default. It carried a `return false` no-op for the RAM
+	// composer, which was said to have no use for a walk (its list display calls ComputeOrder and
+	// returns the LIVE nodes) — and then anything that wanted the composition PRINTED got an empty
+	// answer from a table that plainly had rows (fixed 2026-08-29, ramComposer.cpp). A default that
+	// silently answers "nothing here" is how a missing override reads as an empty result instead of
+	// as the compile error it should be.
 	//
 	// ONE Run, AND IT TAKES ITS DRIVER. There was a second, no-argument one over a stored driver
 	// that a `SetDriver` filled — a whole second way to say where the output goes, and nobody ever
 	// used it. Every caller has the driver in hand at the point of the call.
-	virtual bool Run(ibCompositionDriver& /*driver*/) { return false; }
+	virtual bool Run(ibCompositionDriver& driver) = 0;
 
 	// ⭐⭐ A COPY OF ITSELF, MADE BY THE ONE WHO KNOWS WHAT IT IS. A caller that wants to read the same
 	// thing a second time — «output list» prints what the screen is showing — must not run over the LIVE

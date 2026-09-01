@@ -32,7 +32,7 @@ ibCommonAttributeCompositionEditor::ibCommonAttributeCompositionEditor(wxWindow*
 
 void ibCommonAttributeCompositionEditor::OnCheckItem(wxTreeEvent& event)
 {
-	wxTreeItemMetaData* data = dynamic_cast<wxTreeItemMetaData*>(
+	ibTreeItemObject* data = dynamic_cast<ibTreeItemObject*>(
 		m_compositionCtrl->GetItemData(event.GetItem())
 		);
 
@@ -114,7 +114,7 @@ wxTreeItemId ibCommonAttributeCompositionEditor::AppendItem(const wxTreeItemId& 
 	const int imageIndex = imageList->Add(metaObject->GetIcon());
 
 	const wxTreeItemId createItem = m_compositionCtrl->AppendItem(
-		parent, metaObject->GetName(), imageIndex, imageIndex, new wxTreeItemMetaData(metaObject));
+		parent, metaObject->GetName(), imageIndex, imageIndex, new ibTreeItemObject(metaObject));
 
 	const bool carried = m_metaCommonAttribute != nullptr
 		&& m_metaCommonAttribute->IsCompositionObject(metaObject);

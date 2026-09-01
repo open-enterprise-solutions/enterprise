@@ -37,6 +37,34 @@ class ibWriterMemory;      // binary-wire writer (fileSystem/fs.h)
 // Raw -> empty (the column is its own field, no suffix).
 BACKEND_API const wxString& ibFieldSuffix(ibColumnRole role);
 
+// ⭐⭐ WHAT THE STATEMENT CALLS AN OUTPUT — as opposed to what the AUTHOR calls it.
+//
+// An output is named by the person who wrote the query (`… AS Date`), but where that name is
+// WRITTEN is inside a projection of ours — a nested select, a declared query's body — and names
+// there belong to that projection's namespace. So the engine spells them: `Date` is written
+// `out_Date`. `ibQueryOutputName` (queryRender.h) answers what the QUERY calls a field; this
+// answers what the STATEMENT does.
+//
+// ⭐ EVERY ALIAS, NOT THE AWKWARD ONES. The prefix is a namespace, so it is unconditional; that a
+// prefixed word can no longer collide with SQL's vocabulary (`AS Date` -> `-104 Token unknown`,
+// Firebird, measured 2026-08-31) falls out of that rather than motivating it. Conditional escaping
+// was the first version and was worse in a way that matters: it left this split exercised almost
+// never, so a reader that forgot to ask here would work everywhere but one query and fail there
+// SILENTLY — an unmatched name reads as an absent column, not as an error. Unconditional makes that
+// mistake break on the first query instead.
+//
+// ⚠ NOT SOLVED BY QUOTING EITHER. Identifier quotes are off by decision, not omission — in Firebird
+// a quoted name becomes case-sensitive while the schema is written unquoted (m_identQuoteOpen,
+// databaseLayer.h), so quoting trades a refusal for a name that no longer matches itself.
+//
+// ⭐ THE AUTHOR'S NAME SURVIVES UNTOUCHED wherever a person reads it — the composition's title, the
+// constructor's cell, the column header, and the name an outer query calls this output by. Only the
+// spelling inside the statement moves.
+//
+// ⭐ ASKED AT BOTH ENDS. Whatever writes `AS <x>` and whatever reads that column back off the cursor
+// go through here, so writer and reader cannot drift apart.
+BACKEND_API wxString ibSqlAliasOf(const wxString& outputName);
+
 // ⭐⭐ THE OWNER REFERENCE OF A TABULAR SECTION'S LINE — sixteen bytes naming the row's OWNER.
 //
 // It was called the ROW KEY, and once that was true: every table carried a scaffold column

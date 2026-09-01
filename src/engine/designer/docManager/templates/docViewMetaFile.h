@@ -21,6 +21,7 @@ protected:
 
 	ibConfigurationTree* m_metaTree;
 
+
 	wxDECLARE_DYNAMIC_CLASS(ibMetadataEditView);
 };
 

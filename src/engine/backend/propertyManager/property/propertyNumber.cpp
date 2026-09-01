@@ -35,14 +35,24 @@ bool ibPropertyNumber::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
+// ⭐ A NUMBER GOES IN AS A NUMBER. It used to travel as the buffer ibNumber packs
+// itself into — which is exact and unreadable, and unnecessary: the node HAS a
+// Number payload and it is ibNumber itself, so nothing is rounded, nothing is
+// narrowed, and a value with two hundred fractional digits survives intact
+// (Max, 2026-08-30: *"we do not care how it is stored — as a number, and however
+// huge it is we will still read it"*).
+//
+// What this buys is that the JSON view of a property shows the number instead of
+// base64. That is the whole of the migration onto the node, said once more.
+
 bool ibPropertyNumber::ReadNodeValue(const ibDataValue& value)
 {
-	GetValueAsNumber().SetBuffer(value.AsBinary());
+	GetValueAsNumber() = value.AsNumber();
 	return true;
 }
 
 bool ibPropertyNumber::WriteNodeValue(ibDataValue& value) const
 {
-	value = ibDataValue::Binary(GetValueAsNumber().GetBuffer());
+	value = ibDataValue::Number(GetValueAsNumber());
 	return true;
 }

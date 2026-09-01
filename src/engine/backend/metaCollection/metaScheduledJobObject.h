@@ -68,8 +68,7 @@ public:
 
 	// designer context menu — "Open job module" opens the handler's code editor, exactly as a
 	// common module or a command does.
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu) override;
-	virtual void ProcessCommand(unsigned int id) override;
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
 	//lifecycle — forward to the inner module (its own registration), then our own with the manager
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -89,7 +88,6 @@ public:
 
 protected:
 
-	enum { ID_METATREE_OPEN_JOB_MODULE = 19200 };
 
 	virtual bool ReadData(const ibDataNode& node) override;
 	virtual bool WriteData(ibDataNode& node) const override;

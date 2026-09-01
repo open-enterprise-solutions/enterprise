@@ -948,9 +948,28 @@ void ibDataQueryBuilder::RaiseIfKeyedRewriteMissed(long affected) const
 	if (!m_conditions.empty() || m_predicate)
 		return;                       // a narrowed rewrite: an empty set is an answer, not a miss
 
+	// ⭐ AND IT NAMES THE ROW. "Not found by its key" without the key is a sentence one can only
+	// answer by attaching a debugger: the statement is in the journal but its BOUND VALUES are not,
+	// so the one fact that separates "this row is gone" from "we are asking with the wrong key" was
+	// missing from the only place that had it in hand (2026-09-01 — a document whose row had just
+	// been inserted in the same session refused its own rewrite, and nothing on either side could
+	// say whether the two keys were the same key).
+	wxString strKey;
+	if (m_queryable != nullptr && !m_writeRows.empty()) {
+		for (const ibBackendQueryColumn* keyCol : m_queryable->GetPrimaryKeyColumns()) {
+			if (keyCol == nullptr) continue;
+			for (const auto& assigned : m_writeRows.front()) {
+				if (assigned.first != keyCol) continue;
+				if (!strKey.IsEmpty()) strKey += wxT(", ");
+				strKey += assigned.second.GetString();
+			}
+		}
+	}
+
 	ibBackendCoreException::Error(
-		_("'%s': the row to rewrite was not found by its key - nothing was written"),
-		m_queryable != nullptr ? m_queryable->GetQueryName() : wxString(wxT("?")));
+		_("'%s': the row to rewrite was not found by its key%s - nothing was written"),
+		m_queryable != nullptr ? m_queryable->GetQueryName() : wxString(wxT("?")),
+		strKey.IsEmpty() ? wxString() : wxT(" ") + strKey);
 }
 
 bool ibDataQueryBuilder::Update() const

@@ -122,6 +122,12 @@ private:
     std::condition_variable           m_sweepCv;
     std::atomic<bool>                 m_sweepStop{false};
     int                               m_sweepRetentionDays = 0;
+
+    // Subscribes to the diagnostics bus for as long as the logger lives, so a
+    // script that fails at execution leaves a row behind. Declared LAST so it
+    // is destroyed FIRST — unsubscribing before the queue and sink it writes
+    // through go away.
+    std::unique_ptr<class ibLoggerDiagnosticSink> m_diagnosticSink;
 };
 
 #endif

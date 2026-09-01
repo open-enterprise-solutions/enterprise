@@ -6,10 +6,6 @@
 class BACKEND_API ibValueMetaObjectSpreadsheetBase : public ibValueMetaObject {
 	public:
 protected:
-	enum
-	{
-		ID_METATREE_OPEN_TEMPLATE = 19000,
-	};
 
 public:
 
@@ -26,8 +22,7 @@ public:
 	virtual bool OnAfterCloseMetaObject();
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 };
 
 class BACKEND_API ibValueMetaObjectSpreadsheet : public ibValueMetaObjectSpreadsheetBase {

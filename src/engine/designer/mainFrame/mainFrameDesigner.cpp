@@ -5,6 +5,7 @@
 
 #include "mainFrameDesigner.h"
 #include "backend/debugger/debugClient.h"
+#include "backend/mcp/mcpServer.h"   // …and the assistant, which comes up with the window
 
 #include <wx/config.h>
 #include <wx/fileconf.h>
@@ -229,6 +230,31 @@ bool ibFrontendMainFrameDesigner::Show(bool show)
 		if (!outputWindow->IsEmpty()) {
 			outputWindow->SetFocus();
 		}
+
+		// ⭐ THE ASSISTANT COMES UP WITH THE DESIGNER, when it is switched on.
+		//
+		// The setting already said so: `m_enabled` means "assistant access is on", and pressing
+		// Start afterwards was asking the same question twice — a switch that has to be re-thrown
+		// at every launch is a switch that does not mean what it says.
+		//
+		// HERE, and not in the constructor: Start needs a SESSION and a loaded configuration, and
+		// neither exists until the base Show has run CreateGUI, EnsureRuntime and AllowRun. Show
+		// returning true is exactly the statement that all three are done.
+		//
+		// ⚠ A REFUSAL IS NOT FATAL AND IS NOT SILENT. The port may be taken by a designer already
+		// open on another base, which is an ordinary thing to happen and no reason to hold up the
+		// window — so it is said in the output pane and the designer carries on. Nothing here
+		// starts a server the settings did not ask for: Start refuses on its own when the access
+		// is switched off, and that refusal is not worth showing at every launch.
+		if (ibMcpServer* server = ibApplicationData::GetMcpServer()) {
+			if (server->GetSettings().m_enabled && !server->IsRunning()) {
+
+				wxString refusal;
+				if (!server->Start(GetSession(), refusal) && !refusal.IsEmpty())
+					outputWindow->OutputWarning(refusal);
+			}
+		}
+
 		return true;
 	}
 

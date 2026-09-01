@@ -186,6 +186,9 @@ bool ibMetaDataReport::RunDatabase(int flags)
 			return false;
 
 		load.Commit();
+		// ⭐ ALIVE — said after Commit, because a run that did not survive its own phases never
+		// happened. The mirror of Closed below.
+		MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Run, GetCommonMetaObject());
 		return true;
 	}
 
@@ -206,6 +209,12 @@ bool ibMetaDataReport::CloseDatabase(int flags)
 	wxASSERT(IsConfigOpen());
 	if (!IsConfigOpen())
 		return true;
+
+	// ⭐⭐ THE WHOLE CONTAINER IS GOING — said BEFORE the teardown, for the same reason `Removed`
+	// is: a watcher's business with this is to shut what it is showing OF the tree, and after
+	// CloseSubtree there is nothing left to find. This one signal replaces the per-NODE close
+	// that used to run inside every object's OnAfterCloseMetaObject.
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Closed, GetCommonMetaObject());
 
 	if (!ExitMainModule((flags & forceCloseFlag) != 0))
 		return false;
@@ -417,6 +426,11 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 	provider.Read(*readerMetaMemory, rootNode);
 	try {
 		root->ApplyDataNode(rootNode, resetId);
+
+		// ⭐ AND EVERYONE WATCHING IS TOLD IT IS READ IN — the stage a tree answers by drawing the
+		// whole thing. Said HERE rather than by each caller of the load, because there are several
+		// (a file, the database, a fresh root) and a stage nobody sends is a stage that does not exist.
+		MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Loaded, GetCommonMetaObject());
 		return true;
 	}
 	catch (const ibBackendException& err) {
@@ -458,6 +472,10 @@ bool ibMetaDataReport::SaveCommonTree(const ibClassID& clsid, ibWriterMemory& wr
 	ibWriterMemory metaWriter;
 	metaWriter.w_chunk((u64)builder.Root().GetMetaId(), innerWriter.pointer(), innerWriter.size());
 	writerData.w_chunk((u64)clsid, metaWriter.pointer(), metaWriter.size());
+
+	// ⭐ …and that it has been written out. A watcher shows this as "no longer modified"; nothing
+	// in the tree changed, which is why this is a stage of its own and not MetaDataChanged.
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Saved, GetCommonMetaObject());
 	return true;
 }
 

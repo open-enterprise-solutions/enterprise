@@ -20,6 +20,7 @@
 #include "templates/docViewRole.h"
 #include "templates/docViewComposer.h"   // a composer opens on a tab, like a form or a template
 #include "templates/docViewConfigCompare.h"
+#include "templates/docViewAssistant.h"
 
 //files
 #include "templates/docViewDataProcessorFile.h"
@@ -54,6 +55,8 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	// Tools — invisible template, opened through CreateDocument<T>().
 	AddDocTemplate(g_toolConfigCompareCLSID,
 		CLASSINFO(ibConfigCompareDocument), CLASSINFO(ibConfigCompareView));
+	AddDocTemplate(g_toolAssistantCLSID,
+		CLASSINFO(ibAssistantDocument), CLASSINFO(ibAssistantView));
 
 	//advanced object
 	AddDocTemplate(g_metaModuleCLSID, CLASSINFO(ibModuleEditDocument), CLASSINFO(ibModuleEditView));

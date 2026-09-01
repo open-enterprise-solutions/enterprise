@@ -102,6 +102,11 @@ static const wxString s_hierarchy_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYA
    the same way the ttmath credit is kept. */
 static const wxString s_homePage_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGuSURBVDhPpZPdK0NxGMfPrT9D/gRl5c6d/8CFIZoLCp0mrUQpMjtGbji0Y+R4GWteLijOXmyjzHsjlgvvmzINly589d2ynFNT8tSn8/R9eW5+HUH47wwtblevxq9lNXr1J9hhV1AjV+otgNOPHOcALgFcGKBG7zvHDrsCr1EIPwG7L8BMJIH+mQ1I85oOavSYYZYddnUHomlgIXgM1bcBz5qmgxo9Zgoe0B6Bk/sMCg09Zgoe8CeBg+u0sZcfesz8euDo5sXYyw+9Xw8EU0AkkULyOYNU+lUHNXrM6A54YndyAsDeGxB7B3bSQCj5iVDKQPIz6zGz95p7VnYFSdXGF/cvMKnFc/jP4A6cZ7+KFs9i1KaDcaycXMKhauNCvdWuNHePoaFd0lEn9sPc2puF+7deIzrQZR+CS51ErWhXBItVKm7rkU2NtmGTxTZYWlHVUlJe2VjSN+qd8wbOQLhTo9dkGyk1W4dNZptssnRKxbr/QnR6ily+yMDsesyt+MIPm4f3INxn1/fd9ESns0hX+jkd9qky13J0SfGFvRPe0NTo/JZMuFOjx4yx96/5Ag7nnLGj5JMFAAAAAElFTkSuQmCC";
 
+/* PNG — the assistant (its tab and its menu item).
+   Art: icons8 "ai" (icons8.com), 96px original downscaled to 16px. Same free tier as the start
+   page above, so the same obligation: the credit is kept in the docs, not only here. */
+static const wxString s_assistant_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAIASURBVDhPY2DAAv7b27OcTSq2QxcnGpzI6vK/Xrb0//6smTbockSBDTmrdx1quPJ/cf6+5ehyBMGS3N3+S8ov/J9Qcfl/V+21P42lZ2zR1eAEqwt2+88rO/+po/ba//z6i/+zOu/8T2+/+Sqt9aozulo4OJOWxnoyo8V9Z96KjSvLTv3vqbn2P6vx0v+wzmv/vXqu//ed/PB/aN/d/8ntN1eW1p53XBW6ihnFgNvJ2Q6Pymb+P1lz5P+M0nP/y2sv/I9qv/rftf/mf/Opd/+bTLvz32HK/f8J8779r+h+8r+9/Jw+igFn0tK4jmVPiNpUuP3g7Job/0ubr/8P7rz633bS7f8as+//V1n88r/l3Of/fSfc253acjm4vv4KG4oByGBKxYXYiqbr3yN77vx3mHjzv+H85/915j39YDr9fiC6Wpygovp8aFbXvf9+/Xf+u0x79Nem76oLuhqCoLT23M6SGV//h7deXoYut6To8JbFuftl0MVRQFfJWY+elvt/K2rPmSKLLyg63ni09uT/wznTVm0yrudClkMB/xkYGCfk7deB8adkXeFZlr/7wJHqw//3ZU7//6yw4//TipT77yeFKKLqxAFWrfrPvC53tduJ7MlnnhW0/n9SmPH0VUN05L+VIZzoavGC+6GhEu9q0948aQ4jPWBh4Fm/iyYyHwAK8/sgvMvEOwAAAABJRU5ErkJggg==";
+
 #pragma endregion
 
 void RegisterAllBackendPicture()
@@ -142,6 +147,7 @@ void RegisterAllBackendPicture()
 	::RegisterBackendPicture(wxT("Hierarchy"), g_picHierarchyCLSID, s_hierarchy_16_png);
 
 	::RegisterBackendPicture(wxT("HomePage"), g_picHomePageCLSID, s_homePage_16_png);
+	::RegisterBackendPicture(wxT("Assistant"), g_picAssistantCLSID, s_assistant_16_png);
 
 	::RegisterBackendPicture(wxT("User"), g_picUserCLSID, s_user_16_png);
 	::RegisterBackendPicture(wxT("UserActive"), g_picUserActiveCLSID, s_activeUser_16_png);

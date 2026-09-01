@@ -91,7 +91,7 @@ void ibRoleEditor::OnCheckItem(wxTreeEvent& event)
 }
 
 void ibRoleEditor::OnSelectedItem(wxTreeEvent& event) {
-	wxTreeItemMetaData* data = dynamic_cast<wxTreeItemMetaData*>(
+	ibTreeItemObject* data = dynamic_cast<ibTreeItemObject*>(
 		m_roleCtrl->GetItemData(event.GetItem())
 		);
 	m_checkCtrl->Freeze();
@@ -140,7 +140,7 @@ void ibRoleEditor::InitRole()
 	wxImageList* imageList = m_roleCtrl->GetImageList();
 	int imageIndex = imageList->Add(typeCtor->GetClassIcon());
 	m_treeMETADATA = m_roleCtrl->AddRoot(_("Configuration"), imageIndex, imageIndex,
-		new wxTreeItemMetaData(activeMetaData->GetCommonMetaObject()));
+		new ibTreeItemObject(activeMetaData->GetCommonMetaObject()));
 
 	m_roleCtrl->SetItemBold(m_treeMETADATA);
 }

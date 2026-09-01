@@ -9,6 +9,7 @@ class ibReportEditView : public ibMetaView
 {
 	ibDataReportTree* m_metaTree;
 
+
 public:
 
 	ibReportEditView() : ibMetaView() {}

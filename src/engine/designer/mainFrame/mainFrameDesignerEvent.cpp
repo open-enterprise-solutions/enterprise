@@ -1,4 +1,4 @@
-////////////////////////////////////////////////////////////////////////////
+﻿////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko, wxwidgets community
 //	Description : main frame window
 ////////////////////////////////////////////////////////////////////////////
@@ -112,6 +112,8 @@ int CountOtherLiveSessions()
 #include "frontend/mainFrame/settings/keybinderdialog.h" 
 #include "frontend/mainFrame/settings/fontcolorsettingspanel.h"
 #include "frontend/mainFrame/settings/editorsettingspanel.h"
+#include "frontend/mainFrame/settings/mcpsettingspanel.h"
+#include "backend/mcp/mcpServer.h"   // the page edits ITS value, and it owns where that is kept
 
 #include "frontend/win/dlgs/applyChange.h"
 
@@ -192,7 +194,7 @@ static void LaunchWebDebug(wxWindow* parent, bool withDebug)
 	// URL prefix and port are derived by wes itself (from --file/--db
 	// basename and OS-picked ephemeral port). Manifest handshake reports
 	// the real URL back and opens the browser — no guessing here.
-	// withDebug=true → wes spawns with --debug so its debugServer comes
+	// withDebug=true в†’ wes spawns with --debug so its debugServer comes
 	// up; the designer's debugClient then attaches via the manifest's
 	// pid/host (out-of-band of the manifest itself — debug-server still
 	// listens on defaultDebuggerPort+offset).
@@ -285,8 +287,15 @@ void ibFrontendMainFrameDesigner::OnOpenConfiguration(wxCommandEvent& event)
 	}
 }
 
+// ⭐ THE MENU REDIRECTS; THE WORK IS THE TREE'S. ibConfigurationTree implements the three
+// configuration verbs of ibMetaDataNotifier, so this window and the assistant reach the same
+// function — this handler contributes only the message box, which is the one thing a tool has no
+// use for.
 void ibFrontendMainFrameDesigner::OnRollbackConfiguration(wxCommandEvent& event)
 {
+	// ⚠ THE OPEN EDITORS GO FIRST, and that is this window's own business — a rollback replaces
+	// the metaobjects wholesale, so an editor left open afterwards is looking at freed memory.
+	// One of them refusing to close ends it here, before anything has been touched.
 	objectInspector->SelectObject(nullptr);
 
 	wxAuiMDIClientWindow* client_window = GetClientWindow();
@@ -294,30 +303,38 @@ void ibFrontendMainFrameDesigner::OnRollbackConfiguration(wxCommandEvent& event)
 
 	client_window->Freeze();
 
-	bool success = true;
-	wxAuiMDIChildFrame* pActiveChild = nullptr;
-	while ((pActiveChild = GetActiveChild()) != nullptr) {
-		if (!pActiveChild->Close()) {
-			// it refused to close, don't close the remaining ones either
-			success = false;
+	bool closed = true;
+	wxAuiMDIChildFrame* child = nullptr;
+	while ((child = GetActiveChild()) != nullptr) {
+		if (!child->Close()) {
+			closed = false;   // it refused — leave the rest open too
 			break;
 		}
 	}
 
-	success = success && activeMetaData->RollbackDatabase()
-		&& m_metaWindow->Load();
-
 	client_window->Thaw();
 
-	if (success) {
+	if (!closed)
+		return;
+
+	wxString refusal;
+
+	if (m_metaWindow->GetMetaData()->RollbackConfiguration(refusal)) {
 		objectInspector->SelectObject(activeMetaData->GetCommonMetaObject());
 		wxMessageBox(_("Successfully rolled back to database configuration!"), wxTheApp->GetAppDisplayName(), wxOK | wxCENTRE, this);
+	}
+	else if (!refusal.IsEmpty()) {
+		// The old code said nothing at all on failure — a button that quietly does nothing reads
+		// as a button that worked.
+		wxMessageBox(refusal, wxTheApp->GetAppDisplayName(), wxOK | wxCENTRE | wxICON_WARNING, this);
 	}
 }
 
 void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& event)
 {
-	bool canSave = true;
+	// ⭐ WHAT STAYS HERE IS THE ASKING. The work is ApplyConfiguration, which the assistant calls
+	// too — one road for the doing. What differs is only who answers the questions, and a person
+	// answers them in dialogs.
 	if (debugClient->HasConnections()) {
 		if (wxMessageBox(
 			_("To update the database configuration you need stop debugging.\nDo you want to continue?"), wxTheApp->GetAppDisplayName(),
@@ -327,115 +344,57 @@ void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& event)
 		debugClient->Stop(true);
 	}
 
-	for (auto& doc : m_docManager->GetDocumentsVector()) {
-
-		if (!canSave)
+	// WHO ELSE IS IN HERE, AND DOES IT MATTER? Asked BEFORE the apply opens its transaction, so a
+	// refusal costs nothing and there is nothing to roll back. Two facts decide it: whether anyone
+	// else is connected, and whether this apply would touch the DATABASE at all. A change that lives
+	// in modules and forms moves no table under anybody - it can go in while people work, and they
+	// meet it when they next log in. A change that writes DDL cannot, and the honest answer then is
+	// not an error but a choice: wait for them to leave and retry, or cancel and go clear them out.
+	while (true) {
+		const int others = CountOtherLiveSessions();
+		if (others == 0)
 			break;
 
-		canSave = doc->OnSaveModified();
-	}
-
-	// DB calls below can throw ibDatabaseLayerException (constraint
-	// violation on schema change, deadlock, lost connection mid-DDL).
-	// Pre-2026-05-26 the layer swallowed and only set m_strErrorMessage;
-	// now an unhandled throw would unwind through the wx event handler
-	// into wxApp::OnUnhandledException → debug-report dialog with no
-	// user-readable text. Wrap both stages so save / update DDL errors
-	// land in a proper message box with the backend error chain.
-	try {
-		// stage one - save database
-		if (canSave && !activeMetaData->SaveDatabase()) {
-
-			for (const auto& entry : ibMetaDataConfigurationBase::GetRestructureInfo()) {
-				if (entry.type == ibRestructure::error)
-					outputWindow->OutputError(entry.descr);
-			}
-
-			ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
-				_("Failed to save database!"));
-
-			return;
-		}
-
-		// WHO ELSE IS IN HERE, AND DOES IT MATTER? Asked BEFORE the apply opens its transaction, so a
-		// refusal costs nothing and there is nothing to roll back. Two facts decide it: whether anyone
-		// else is connected, and whether this apply would touch the DATABASE at all. A change that lives
-		// in modules and forms moves no table under anybody — it can go in while people work, and they
-		// meet it when they next log in. A change that writes DDL cannot, and the honest answer then is
-		// not an error but a choice: wait for them to leave and retry, or cancel and go clear them out.
-		//
-		// Nobody else connected — nothing to ask; straight on, exactly as before.
-		while (canSave) {
-			const int others = CountOtherLiveSessions();
-			if (others == 0)
-				break;
-
-			// The buttons SAY what they do — "Yes / No" on a question this consequential leaves the user
-			// deciding what "no" meant. wxMessageBox cannot relabel, hence the dialog object.
-			// (ASCII only in these literals: the file compiles as ANSI, so a typographic dash reached the
-			// dialog as mojibake - its UTF-8 bytes shown one per character.)
-			if (activeMetaData->IsDynamicUpdateAvailable()) {
-				wxMessageDialog dlg(this,
-					wxString::Format(
-						_("%d other session(s) are connected.\n\n"
-						  "This update changes no database structure, so it can be applied dynamically. "
-						  "Connected users keep working and pick the new configuration up when they log in again."),
-						others),
-					wxTheApp->GetAppDisplayName(), wxYES_NO | wxCANCEL | wxCENTRE | wxICON_QUESTION);
-				dlg.SetYesNoCancelLabels(_("Update dynamically"), _("Try again"), _("Cancel"));
-				const int answer = dlg.ShowModal();
-				if (answer == wxID_YES) break;               // go ahead, no exclusive will be asked for
-				if (answer == wxID_NO)  continue;            // re-count: they may have left by now
-				canSave = false;                             // cancelled
-				break;
-			}
-
+		// The buttons SAY what they do - "Yes / No" on a question this consequential leaves the user
+		// deciding what "no" meant. wxMessageBox cannot relabel, hence the dialog object.
+		if (activeMetaData->IsDynamicUpdateAvailable()) {
 			wxMessageDialog dlg(this,
 				wxString::Format(
 					_("%d other session(s) are connected.\n\n"
-					  "This update changes the database structure, which requires exclusive mode. "
-					  "It cannot be applied dynamically."),
+					  "This update changes no database structure, so it can be applied dynamically. "
+					  "Connected users keep working and pick the new configuration up when they log in again."),
 					others),
-				wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_EXCLAMATION);
-			dlg.SetYesNoLabels(_("Try again"), _("Cancel"));
-			if (dlg.ShowModal() == wxID_YES)
-				continue;                                    // re-count and ask again
-			canSave = false;
-			break;
+				wxTheApp->GetAppDisplayName(), wxYES_NO | wxCANCEL | wxCENTRE | wxICON_QUESTION);
+			dlg.SetYesNoCancelLabels(_("Update dynamically"), _("Try again"), _("Cancel"));
+			const int answer = dlg.ShowModal();
+			if (answer == wxID_YES) break;               // go ahead, no exclusive will be asked for
+			if (answer == wxID_NO)  continue;            // re-count: they may have left by now
+			return;                                      // cancelled
 		}
 
-		// stage two - update database
-		if (canSave && activeMetaData->OnBeforeSaveDatabase(saveConfigFlag)) {
-
-			bool roolback = false, success = true;
-
-			if (activeMetaData->OnSaveDatabase(saveConfigFlag)) {
-				roolback = !ibDialogApplyChange::ShowApplyChange(ibMetaDataConfigurationBase::GetRestructureInfo(), this);
-			}
-			else {
-				success = false;
-			}
-
-			success = activeMetaData->OnAfterSaveDatabase(roolback || !success, saveConfigFlag);
-
-			if (!success) {
-				ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
-					_("Failed to update database!"));
-			}
-		}
+		wxMessageDialog dlg(this,
+			wxString::Format(
+				_("%d other session(s) are connected.\n\n"
+				  "This update changes the database structure, which requires exclusive mode. "
+				  "It cannot be applied dynamically."),
+				others),
+			wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_EXCLAMATION);
+		dlg.SetYesNoLabels(_("Try again"), _("Cancel"));
+		if (dlg.ShowModal() == wxID_YES)
+			continue;                                    // re-count and ask again
+		return;
 	}
-	catch (const ibBackendException& e) {
-		// OnSaveDatabase self-rolls-back + releases exclusive on a thrown DDL error
-		// (see its try/catch), so here we only surface the message.
-		ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
-			_("Configuration update was aborted by a backend error."),
-			e.GetErrorDescription());
-	}
-	catch (const std::exception& e) {
-		ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
-			_("Configuration update was aborted by an internal error."),
-			wxString::FromUTF8(e.what()));
-	}
+
+	// …and the last question is the ledger itself, shown where it has always been shown.
+	wxString refusal;
+
+	const bool applied = m_metaWindow->GetMetaData()->ApplyConfiguration(refusal,
+		[this](const ibRestructureInfo& info) {
+			return ibDialogApplyChange::ShowApplyChange(info, this);
+		});
+
+	if (!applied && !refusal.IsEmpty())
+		ShowBackendErrorChain(this, wxMessageBoxCaptionStr, refusal);
 }
 
 void ibFrontendMainFrameDesigner::OnLoadDatabase(wxCommandEvent& event)
@@ -652,7 +611,7 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		// "write current's changes into the DB config in memory". That
 		// mutation never gets persisted unless the user runs "Update
 		// database configuration" afterwards, so we don't expose Push
-		// here (no save callback → view hides the Push entry).
+		// here (no save callback в†’ view hides the Push entry).
 		if (docManager != nullptr) {
 			auto* doc = docManager->CreateDocument<ibConfigCompareDocument>();
 			if (doc != nullptr) {
@@ -773,8 +732,28 @@ void ibFrontendMainFrameDesigner::OnToolsSettings(wxCommandEvent& event)
 	ibPanelEditorSettings* editorSettings = dialog.GetEditorSettingsPanel();
 	editorSettings->SetSettings(m_editorSettings);
 
+	// ASSISTANT ACCESS. Unlike the pages above, this one is not the frame's own
+	// state kept in an options file — it belongs to the PERSON in this base, so
+	// it is read from and written back to the server that owns it.
+	ibPanelMcpSettings* mcpSettings = dialog.GetMcpSettingsPanel();
+	ibMcpServer* mcpServer = ibApplicationData::GetMcpServer();
+	if (mcpServer != nullptr) {
+		mcpSettings->SetSettings(mcpServer->GetSettings());
+		mcpSettings->SetEndpoint(mcpServer->GetEndpoint());
+	}
+
 	if (dialog.ShowModal() == wxID_OK)
 	{
+		if (mcpServer != nullptr) {
+			// Configure first, save second, both from the one value the page
+			// holds — so what is written down and what is in force cannot differ.
+			// A running server is NOT moved by this: it keeps the address it took
+			// until somebody stops and starts it, which is the only way a page can
+			// say one thing while a client talks to another and be caught at it.
+			mcpServer->Configure(mcpSettings->GetSettings());
+			mcpServer->SaveSettings(ibSession::Current());
+		}
+
 		m_keyBinder.ClearCommands();
 
 		for (unsigned int i = 0; i < keyBinder->GetNumCommands(); ++i) {
@@ -797,6 +776,69 @@ void ibFrontendMainFrameDesigner::OnToolsSettings(wxCommandEvent& event)
 	}
 
 	SaveOptions();
+}
+
+//********************************************************************************
+//*                              Assistant access                                *
+//********************************************************************************
+
+// 🛑 STARTING AND STOPPING USED TO BE HERE, and it answered with a message box naming the address
+// — which was the best a menu item could do and still not enough: the address alone is not what a
+// client needs, and a box that has been dismissed cannot be read again. Both now live on the
+// settings page, beside the key and the ready-made command, where the answer stays on screen and
+// can be copied. Nothing was added to do it; the same two calls simply moved to where the person
+// already is.
+
+// ⭐ THE WINDOW IS ONLY A WINDOW ONTO A RUNNING SERVER. With nothing listening it has nothing to
+// show and nothing to send to: what a person typed would sit in a queue no client can ever collect,
+// which reads as being ignored rather than as being switched off.
+//
+// ⚠ AND THIS IS THE OPPOSITE CALL FROM THE ONE THAT USED TO BE HERE. The old Start/Stop item was
+// deliberately left ENABLED when it could not start, so its refusal could explain WHY — greying it
+// would have hidden the only sentence that helped. That reasoning does not carry over: this item
+// performs no action that could explain itself, so an enabled one leads to an empty window and no
+// sentence at all. Where the answer is in the settings page, the menu says nothing by being grey.
+void ibFrontendMainFrameDesigner::OnUpdateMcpAssistant(wxUpdateUIEvent& event)
+{
+	const ibMcpServer* server = ibApplicationData::GetMcpServer();
+
+	event.Enable(server != nullptr && server->IsRunning());
+}
+
+#include "docManager/templates/docViewAssistant.h"
+#include "backend/picturePredefined.h"   // the assistant's own icon, from the picture registry
+
+void ibFrontendMainFrameDesigner::OnMcpAssistant(wxCommandEvent& WXUNUSED(event))
+{
+	// A TAB, not a dialog — same road the registration journal takes, so it
+	// stays open beside the work it is about.
+	if (docManager == nullptr)
+		return;
+
+	// ⭐ ONE ASSISTANT WINDOW, AND THE MENU ITEM MEANS "SHOW ME IT". A second tab is not a second
+	// assistant — there is one server and one conversation — so two of them would show the same
+	// exchange in two places and leave a person wondering which is current.
+	//
+	// The same shape OnOpenConfiguration uses above: walk what is open, and let the document
+	// bring ITSELF forward. Reaching for the view and activating it by hand would be a second way
+	// of doing what Activate() already is.
+	for (auto& open : docManager->GetDocumentsVector()) {
+		if (ibAssistantDocument* already = wxDynamicCast(open, ibAssistantDocument)) {
+			already->Activate();
+			return;
+		}
+	}
+
+	ibAssistantDocument* doc = docManager->CreateDocument<ibAssistantDocument>();
+	if (doc == nullptr)
+		return;
+
+	doc->SetTitle(_("Assistant"));
+	doc->SetIcon(ibBackendPicture::GetPictureAsIcon(g_picAssistantCLSID));
+	docManager->AddDocument(doc);
+
+	if (!doc->OnCreate(wxEmptyString, 0))
+		doc->DeleteAllViews();
 }
 
 #include "frontend/win/dlgs/userList.h"

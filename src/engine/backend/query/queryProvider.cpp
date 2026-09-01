@@ -23,6 +23,7 @@
 #include "querySelector.h"                                            // ibSelector — result.Select(mode) hands the drained snapshot to it
 #include "dbTableProvider.h"                                          // ibDbTableProvider (vended by GetProvider) + ibRenderedPageCache (NewPageCache)
 #include "resultSource.h"                                             // ibDataResultSource — the backing ibRamTableResultSource derives
+#include "columnLayout.h"                                             // ibSqlAliasOf — what the STATEMENT calls an output, vs what its author does
 #include "tempTableManager.h"                                         // ibTempTableManager — promote a computed leaf to a DB temp table (+ ibDbTempTableQueryable)
 
 #include "backend/diagnostics/journal.h"                              // ibJournal — the technology journal
@@ -386,7 +387,7 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 			m_ownedColumns.push_back(col);
 			m_columns.push_back(col.get());
 			m_readFrom.push_back(nullptr);
-			m_readAlias.push_back(a.m_alias);
+			m_readAlias.push_back(ibSqlAliasOf(a.m_alias));   // name = the author's, read key = the statement's
 		}
 		m_readPrefix.assign(m_columns.size(), wxEmptyString);
 		return;
@@ -428,7 +429,12 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		m_ownedColumns.push_back(col);
 		m_columns.push_back(col.get());
 		m_readFrom.push_back(nullptr);
-		m_readAlias.push_back(walk.m_alias);
+		// ⚠ THE NAME AND THE READ KEY ARE TWO NAMES. The column answers to what the AUTHOR called it
+		// (above) — that is what an outer query names — while the value is fetched by what the
+		// STATEMENT called it, which differs whenever the author's word is SQL's word (ibSqlAliasOf).
+		// Reading by the author's name there would find no such field and yield an empty value in
+		// silence, which is the failure this split exists to prevent.
+		m_readAlias.push_back(ibSqlAliasOf(walk.m_alias));
 	}
 
 	// ⭐ AND THE COMPUTED ONES — arithmetic, CASE. A third list, a third way in, and the same rule:
@@ -445,7 +451,7 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		m_ownedColumns.push_back(col);
 		m_columns.push_back(col.get());
 		m_readFrom.push_back(nullptr);
-		m_readAlias.push_back(computed.m_alias);
+		m_readAlias.push_back(ibSqlAliasOf(computed.m_alias));   // name = the author's, read key = the statement's
 	}
 
 	m_readPrefix.assign(m_columns.size(), wxEmptyString);   // derived here: no schema, so no spread to reassemble
@@ -497,7 +503,7 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		m_ownedColumns.push_back(col);
 		m_columns.push_back(col.get());
 		m_readFrom.push_back(out.m_col);
-		m_readAlias.push_back(out.m_objectPrefix.IsEmpty() ? out.m_alias : wxString());
+		m_readAlias.push_back(out.m_objectPrefix.IsEmpty() ? ibSqlAliasOf(out.m_alias) : wxString());
 		m_readPrefix.push_back(out.m_objectPrefix);
 	}
 }
@@ -1816,9 +1822,8 @@ ibQueryRamTable RamUnion(const ibDataQuerySpec& spec, const ibQueryNode* unionNo
 		ibQueryComposer::AppendUnionBranch(TO, TP, outCols, branchCols);
 
 		// Plain UNION (not ALL) dedupes the ACCUMULATED rows at its operator — SQL left-assoc
-		// semantics (A UNION B UNION ALL C dedupes after B, keeps C's duplicates). A missing
-		// flag (a node built before the flag existed) reads as ALL — the historic behaviour.
-		const bool keepDups = pi >= unionNode->m_partAll.size() || unionNode->m_partAll[pi];
+		// semantics (A UNION B UNION ALL C dedupes after B, keeps C's duplicates).
+		const bool keepDups = unionNode->m_partAll[pi];
 		if (pi > 0 && !keepDups)
 			TO = ibQueryComposer::DedupeRows(TO, outCols);
 	}

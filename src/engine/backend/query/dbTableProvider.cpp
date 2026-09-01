@@ -12,6 +12,7 @@
 #include "dbTableProvider.h"   // ibDbTableProvider + ibRenderedPageCache (+ queryProvider.h / databaseQueryBuilder.h / metaAttributeObject.h)
 #include "dataQueryBuilder.h"  // ibDataQueryBuilder::EffectiveSort / ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibDotWalkColumn
 #include "resultSource.h"      // ibDataResultSource — the selection backing ibDbResultSource derives
+#include "backend/diagnostics/journal.h"   // ibJournal — why a server fold was declined, and what was lowered
 #include "columnLayout.h"      // the column-layout tier: DescribeColumnLayout + ibColumnCodec (value codec) + HasReference
 #include "queryException.h"    // ibBackendQueryException — L3-L5 varieties (it used to arrive through the DB header)
 
@@ -1475,7 +1476,8 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 				args.push_back(ibMetaIRBuilder::BuildColumnExpr(queryable, a.m_expr, mainQual));
 			else
 				args.push_back(a.m_col != nullptr ? qualCol(qual, FirstSqlFieldOfColumn(a.m_col)) : ibCol(wxT("*")));
-			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct), a.m_alias });
+			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct),
+				ibSqlAliasOf(a.m_alias) });   // the STATEMENT's spelling — the author's name may be SQL's word
 		}
 		q.Project(std::move(projection));
 
@@ -1863,7 +1865,8 @@ ibDataQueryResult ibDbTableProvider::ExecuteGroupLevelPage(const ibDataQuerySpec
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
 			std::vector<ibQueryExprPtr> args;
 			args.push_back(a.m_col != nullptr ? ibCol(FirstSqlFieldOfColumn(a.m_col)) : ibCol(wxT("*")));
-			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct), a.m_alias });
+			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct),
+				ibSqlAliasOf(a.m_alias) });   // the STATEMENT's spelling — the author's name may be SQL's word
 		}
 		q.Project(std::move(projection));
 
@@ -1930,7 +1933,8 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
 			std::vector<ibQueryExprPtr> args;
 			args.push_back(a.m_col != nullptr ? ibCol(qual(a.m_col), FirstSqlFieldOfColumn(a.m_col)) : ibCol(wxT("*")));
-			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct), a.m_alias });
+			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct),
+				ibSqlAliasOf(a.m_alias) });   // the STATEMENT's spelling — the author's name may be SQL's word
 		}
 		q.Project(std::move(projection));
 
@@ -1973,10 +1977,13 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 			for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
 				using Fn = ibDataQueryBuilder::AggregateFn;
 				ibValue v;
+				// …asked of the cursor under the name the STATEMENT wrote (ibSqlAliasOf), while the
+				// column above keeps the name its author gave it.
+				const wxString aggAlias = ibSqlAliasOf(a.m_alias);
 				if (a.m_fn == Fn::Min || a.m_fn == Fn::Max)
-					v = ReadScalarByAlias(a.m_col, a.m_alias, spec.m_queryable->GetMetaData(), cursor);   // MIN/MAX keep the input column's type
+					v = ReadScalarByAlias(a.m_col, aggAlias, spec.m_queryable->GetMetaData(), cursor);   // MIN/MAX keep the input column's type
 				else
-					v = cursor.GetResultNumber(a.m_alias);                 // SUM / AVG / COUNT -> number
+					v = cursor.GetResultNumber(aggAlias);                  // SUM / AVG / COUNT -> number
 				out.SetCell(r, aid++, v);
 			}
 		}
@@ -2124,6 +2131,14 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 			const ibBackendQueryable* q = root->m_parts[pi]->m_queryable;
 			ibQueryRelPtr rel = ibScan(q->GetQueryTableName());
 
+			// ⚠ THESE TWO GUARDS ARE LIVE — do not read them as the pair in BuildUnionRollupFrom,
+			// which the rollup gate makes unreachable. THIS path's gate (CanColocateUnion) checks
+			// m_selectCols and m_predicate and never walks m_conditions at all, so a condition that
+			// does not resolve arrives here for real.
+			//
+			// 🛑 And dropping one is an UNDER-RESTRICTED READ — more rows than were asked for, which
+			// is the quiet kind of wrong. The right answer is to send this shape to RAM instead;
+			// left standing so the skip is at least visible in one place when that is done.
 			std::vector<ibQueryCondition> conds;
 			for (const ibQueryCondition& c : *spec.m_conditions) {
 				if (c.m_col == nullptr) continue;
@@ -2132,8 +2147,8 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 				ibQueryCondition nc = c; nc.m_col = bc; conds.push_back(nc);
 			}
 			// Flat conditions AND the full boolean WHERE tree + RLS semi-join (m_predicate) pushed into
-			// THIS branch (columns resolved BY NAME; the gate guarantees they resolve) -> RLS rides the
-			// UNION read server-side, and a boolean OR/NOT/IS NULL WHERE is no longer silently dropped.
+			// THIS branch (columns resolved BY NAME) -> RLS rides the UNION read server-side, and a
+			// boolean OR/NOT/IS NULL WHERE is no longer silently dropped.
 			ibQueryExprPtr where = ibMetaIRBuilder::BuildFilterPredicate(q, conds, wxString());
 			where = AndFold(where, BuildBranchPredicate(spec.m_predicate, q));
 			if (where)
@@ -2146,7 +2161,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 			}
 			rel = ibProject(rel, std::move(proj));
 
-			const bool keepDups = pi >= root->m_partAll.size() || root->m_partAll[pi];   // missing flag = ALL (back-compat)
+			const bool keepDups = root->m_partAll[pi];
 			unionRel = unionRel ? (keepDups ? ibUnionAll(unionRel, rel) : ibUnion(unionRel, rel)) : rel;
 		}
 
@@ -2591,7 +2606,8 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	for (const ibDataQueryBuilder::AggregateItem& a : aggregates) {
 		std::vector<ibQueryExprPtr> args;
 		args.push_back(a.m_col != nullptr ? colExpr(a.m_col) : ibCol(wxT("*")));
-		projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct), a.m_alias });
+		projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct),
+			ibSqlAliasOf(a.m_alias) });
 	}
 
 	ibQueryExprPtr having;
@@ -2706,9 +2722,10 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 		}
 		for (const ibDataQueryBuilder::AggregateItem& a : aggregates) {
 			using Fn = ibDataQueryBuilder::AggregateFn;
+			const wxString aggAlias = ibSqlAliasOf(a.m_alias);   // …off the cursor by what was written
 			rr.aggs.push_back((a.m_fn == Fn::Min || a.m_fn == Fn::Max)
-				? ReadScalarByAlias(a.m_col, a.m_alias, spec.m_queryable->GetMetaData(), cursor)
-				: ibValue(cursor.GetResultNumber(a.m_alias)));
+				? ReadScalarByAlias(a.m_col, aggAlias, spec.m_queryable->GetMetaData(), cursor)
+				: ibValue(cursor.GetResultNumber(aggAlias)));
 		}
 
 		// --- this row becomes its node, here, while the cursor stands on it ---------------------
@@ -2899,12 +2916,16 @@ static ibQueryRelPtr BuildUnionRollupFrom(const ibDataQuerySpec& spec,
 		ibQueryRelPtr rel = ibScan(q->GetQueryTableName());
 
 		// Flat WHERE, resolved per branch by name (m_predicate is gated off -> RLS goes RAM).
+		// Both facts come from the gate, which walks every condition: a null column is refused
+		// outright (a row-key over a union is nonsensical) and okEveryBranch requires the column to
+		// resolve in EVERY branch. The two `continue`s that stood here were a second, weaker
+		// spelling of that — and a weaker one that silently DROPPED a condition, which reads an
+		// under-restricted table rather than declining to.
 		std::vector<ibQueryCondition> conds;
 		for (const ibQueryCondition& c : *spec.m_conditions) {
-			if (c.m_col == nullptr) continue;
-			const ibBackendQueryColumn* bc = q->ResolveColumnByName(c.m_col->GetName());
-			if (bc == nullptr) continue;
-			ibQueryCondition nc = c; nc.m_col = bc; conds.push_back(nc);
+			ibQueryCondition nc = c;
+			nc.m_col = q->ResolveColumnByName(c.m_col->GetName());   // gate-guaranteed non-null
+			conds.push_back(nc);
 		}
 		if (ibQueryExprPtr pred = ibMetaIRBuilder::BuildFilterPredicate(q, conds, wxString()))
 			rel = ibFilter(rel, pred);
@@ -2916,7 +2937,7 @@ static ibQueryRelPtr BuildUnionRollupFrom(const ibDataQuerySpec& spec,
 		}
 		rel = ibProject(rel, std::move(proj));
 
-		const bool keepDups = pi >= root->m_partAll.size() || root->m_partAll[pi];   // missing flag = ALL (back-compat)
+		const bool keepDups = root->m_partAll[pi];
 		unionRel = unionRel ? (keepDups ? ibUnionAll(unionRel, rel) : ibUnion(unionRel, rel)) : rel;
 	}
 	return ibSubquery(unionRel, wxT("u"));
@@ -3122,10 +3143,34 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		// register's recorder+line+period / period+dimensions. NOT the uuid (that stays the read
 		// keyset / DELETE key, a second link key until cleaned). The conflict target needs a unique
 		// index on these fields — see CreateAndUpdateTableDB. Not scanned off the values.
+		// ⭐ THE QUERYABLE ANSWERS. Every table says what makes a row of it the same row, the derived
+		// (totals) table included — it is handed the key it was declared with. Nothing above needs a
+		// channel to tell the door what it is writing into.
 		std::vector<wxString> matchKeys;
-		if (kind == WriteKind::Upsert || kind == WriteKind::Update)
-			for (const ibBackendQueryColumn* col : spec.m_queryable->GetPrimaryKeyColumns())
+		if (kind == WriteKind::Upsert || kind == WriteKind::Update) {
+
+			for (const ibBackendQueryColumn* col : spec.m_queryable->GetPrimaryKeyColumns()) {
+
+				// ⭐ AN UPDATE MATCHES ONLY ON WHAT IT WRITES. The match key becomes the statement's
+				// WHERE, and its values come from the assignment list — so naming a column the caller
+				// never set is a bind with nothing behind it. A partial rewrite addresses its row by
+				// the door's own .Where() instead, which is applied either way, and that is exactly
+				// how the shard fold reaches ONE physical row of a split key while writing only the
+				// accumulating columns.
+				//
+				// An UPSERT is the other case: it has no WHERE at all, so it needs the whole key, and
+				// a writer that does not set every key column is producing a row it cannot identify.
+				if (kind == WriteKind::Update && !firstRow.empty()) {
+					bool written = false;
+					for (const auto& wv : firstRow)
+						if (wv.first == col) { written = true; break; }
+					if (!written)
+						continue;
+				}
+
 				for (const wxString& f : ColumnFieldNames(col)) matchKeys.push_back(f);
+			}
+		}
 
 		if (kind == WriteKind::Update) {
 			// REWRITE — ONE guarded UPDATE: SET the columns, WHERE the primary key AND the folded RLS
@@ -3437,12 +3482,17 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				if (fp.size() < 2) continue;
 				const ibBackendQueryColumn* leaf = fp.back();
 
+				// The statement's own spelling of this output — the author's word stays the author's
+				// (dw.m_alias is what the query and the composition call it); this is what goes into the
+				// SQL, and what the read below asks the result set for. See ibSqlAliasOf.
+				const wxString alias = ibSqlAliasOf(dw.m_alias);
+
 				// COMPOSITE reference ANYWHERE in the path + a SCALAR leaf -> ONE COALESCE expression. THIS is
 				// the register Recorder case: a recorder is a composite of MANY document types (15+) and the
 				// pulled field exists on only one — the walk joins ONLY the types that have it and COALESCEs.
 				// nullptr for a pure single-target path or a non-scalar leaf (handled below).
 				if (ibQueryExprPtr e = pathCompositeScalarExpr(fp)) {
-					projection.push_back(ibQueryProjItem{ e, dw.m_alias });
+					projection.push_back(ibQueryProjItem{ e, alias });
 					continue;
 				}
 
@@ -3453,12 +3503,12 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					if (resolvePath(fp, a, tq) && tq != nullptr) {
 						if (ibQueryExprPtr empty = scalarEmpty(leaf)) {
 							ibQueryExprPtr colE = ibCol(a, FirstSqlFieldOfColumn(leaf));
-							projection.push_back(ibQueryProjItem{ ibCase({ { ibIsNull(colE), empty } }, colE), dw.m_alias });
+							projection.push_back(ibQueryProjItem{ ibCase({ { ibIsNull(colE), empty } }, colE), alias });
 						}
 						else {
 							const wxString    base = leaf->GetPhysicalName();
 							for (const wxString& f : ColumnFieldNames(leaf))
-								projection.push_back(ibQueryProjItem{ ibCol(a, f), dw.m_alias + f.Mid(base.length()) });
+								projection.push_back(ibQueryProjItem{ ibCol(a, f), alias + f.Mid(base.length()) });
 						}
 						continue;
 					}
@@ -3526,14 +3576,15 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 						if (args.empty()) continue;
 						projection.push_back(ibQueryProjItem{
 							args.size() == 1 ? args.front() : ibFunc(wxT("COALESCE"), args),
-							dw.m_alias + suffix });
+							alias + suffix });
 					}
 				}
 			}
 			// computed columns (arithmetic / CASE) — lower the L3 expression tree, project AS its alias.
 			if (hasComputed)
 				for (const ibQueryColumnSelect& sc : *spec.m_selectExprs)
-					projection.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainQual), sc.m_alias });
+					projection.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainQual),
+						ibSqlAliasOf(sc.m_alias) });
 
 			// dot-walk TOTALS dimensions — join the path, project the leaf's SCALAR value under the dimension's
 			// DISTINCT alias (dw.m_alias), so it never clashes with the main table's same-named field on a
@@ -3544,6 +3595,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					wxString a; const ibBackendQueryable* tq = nullptr;
 					if (!resolvePath(dw.m_path, a, tq) || tq == nullptr) continue;
 					const ibBackendQueryColumn* leaf = dw.m_path.back();
+					const wxString alias = ibSqlAliasOf(dw.m_alias);   // the statement's spelling — see above
 
 					// ⭐ A NON-SCALAR LEAF IS NOT ONE FIELD. A reference / enum / composite dimension
 					// (group by Parent, by Ref.Ref) is stored as a SPREAD, so it is projected the way
@@ -3553,14 +3605,14 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					if (!leaf->IsRawColumn()) {
 						const wxString base = leaf->GetPhysicalName();
 						for (const wxString& f : ColumnFieldNames(leaf))
-							projection.push_back(ibQueryProjItem{ ibCol(a, f), dw.m_alias + f.Mid(base.length()) });
+							projection.push_back(ibQueryProjItem{ ibCol(a, f), alias + f.Mid(base.length()) });
 						continue;
 					}
 
 					ibQueryExprPtr colE  = ibCol(a, FirstSqlFieldOfColumn(leaf));
 					ibQueryExprPtr empty = scalarEmpty(leaf);   // typed empty for an empty / broken parent ref
 					projection.push_back(ibQueryProjItem{
-						empty ? ibCase({ { ibIsNull(colE), empty } }, colE) : colE, dw.m_alias });
+						empty ? ibCase({ { ibIsNull(colE), empty } }, colE) : colE, alias });
 				}
 
 			// path WHERE — qualified by the leaf's join alias; BuildConditionExpr on the TARGET queryable
@@ -3952,7 +4004,67 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 							continue;
 						projectedNames.push_back(se.m_alias);
 						proj.push_back(ibQueryProjItem{
-							ibMetaIRBuilder::BuildColumnExpr(innerSpec.m_queryable, se.m_expr), se.m_alias });
+							ibMetaIRBuilder::BuildColumnExpr(innerSpec.m_queryable, se.m_expr),
+							ibSqlAliasOf(se.m_alias) });
+					}
+				}
+
+				// …AND THE OUTPUTS LIVE IN **THREE** LISTS, NOT TWO.
+				//
+				// 🛑 The note above records finding the second (`m_selectExprs`) after a computed output
+				// was published and never written. There is a third — `m_dotWalks`, where SelectPath
+				// records `Product.Parent AS ProductGroup` — and this loop did not know it either. So a
+				// declaration over a query with dot-walk outputs published them and wrote NONE of them:
+				// the relation joined `Catalog1005 AS dw2` for the walk and the SELECT list carried
+				// four of the query's eight outputs. Sorting by one answered
+				// `-206 Column unknown FLD1012_RRREF` (measured 2026-08-31); the rest — Date, Partner,
+				// Warehouse — were simply absent, which nothing raised.
+				//
+				// ⭐ AND THEY ARE **LIFTED**, NOT RE-DERIVED — because BuildPageIR has already written
+				// them, correctly, a few hundred lines up (the `resolvePath` projection): a walked field
+				// is `dw2.fld1012_RRRef AS ProductGroup_RRRef` — qualified by the join the walk made,
+				// spread over a reference leaf, wrapped in the typed-empty CASE for a scalar one. None of
+				// that can be reconstructed from the alias alone.
+				//
+				// 🛑 I RE-DERIVED IT FIRST, and it refused exactly as the note above says it must:
+				// `Date_TYPE AS Date_TYPE` names a column no table has, `-206 Column unknown DATE_TYPE`
+				// (measured 2026-08-31) — the same shape as the `YTFDS` refusal recorded there six days
+				// earlier, for the same reason. This projection owes the EXPRESSION; naming works only
+				// for a column of the relation itself, which a walked field is not.
+				//
+				// ⚠ SO PROJECT OVER ITS **SOURCE**, not over it. Two stacked projections render as one
+				// SELECT — the outer list wins and the inner is dropped — which is how the walked fields
+				// went missing to begin with. Taking the items out and then reading from underneath says
+				// the same thing the renderer would do, in the open.
+				if (innerSpec.m_dotWalks != nullptr && !innerSpec.m_dotWalks->empty()
+					&& innerIR.m_root != nullptr && innerIR.m_root->m_kind == ibQueryRelKind::Project) {
+
+					const auto belongsToWalk = [&](const wxString& alias) {
+						return std::any_of(innerSpec.m_dotWalks->begin(), innerSpec.m_dotWalks->end(),
+							[&](const ibDotWalkColumn& dw) {
+								// …matched against the SQL spelling, because that is the name the item
+								// that was written carries (ibSqlAliasOf).
+								const wxString sqlAlias = ibSqlAliasOf(dw.m_alias);
+								return !sqlAlias.IsEmpty()
+									&& (alias.IsSameAs(sqlAlias, false)
+										|| alias.StartsWith(sqlAlias + wxT("_")));
+							});
+					};
+
+					std::vector<ibQueryProjItem> lifted;
+					for (const ibQueryProjItem& item : innerIR.m_root->m_projection) {
+						// The `*` item carries no alias — this projection enumerates instead of it.
+						if (item.m_alias.IsEmpty() || !belongsToWalk(item.m_alias))
+							continue;
+						if (std::find(projectedNames.begin(), projectedNames.end(), item.m_alias) != projectedNames.end())
+							continue;
+						projectedNames.push_back(item.m_alias);
+						lifted.push_back(item);
+					}
+
+					if (!lifted.empty()) {
+						proj.insert(proj.end(), lifted.begin(), lifted.end());
+						innerIR.m_root = innerIR.m_root->m_input;   // read from under the projection we just emptied
 					}
 				}
 
@@ -4086,7 +4198,19 @@ public:
 		return ProviderReadColumn(col, m_metaData, m_cursor);
 	}
 
-	ibValue Column(const wxString& alias) const override { return m_cursor.GetValue(alias); }
+	// ⭐⭐ ASKED OF THE CURSOR, SO ASKED BY THE STATEMENT'S SPELLING.
+	//
+	// An output is named by its author (`AmountTurnoverDr`) and written under the projection's own
+	// namespace (`out_AmountTurnoverDr`, see ibSqlAliasOf). This reader talks to the DATABASE, so it
+	// must use the second; the RAM-backed twin (queryProvider.cpp) holds columns under the author's
+	// name and correctly uses the first. One name each, decided by who is being asked.
+	//
+	// 🛑 THIS IS THE READER THE PREFIX FORGOT, and the failure was the silent kind it was introduced
+	// to make loud: an accounting turnovers read got its row from the cursor, asked for the figure by
+	// the author's name, received EMPTY, and the row — now carrying no figures at all — was dropped.
+	// The report composed, with no error anywhere, and showed nothing (measured 2026-08-31 against a
+	// base where Firebird returns the row for that very statement).
+	ibValue Column(const wxString& alias) const override { return m_cursor.GetValue(ibSqlAliasOf(alias)); }
 
 	// A dot-walk leaf that is a reference / enum / composite is projected as its FULL field spread under
 	// `prefix` (<prefix>_TYPE/_RTRef/_RRRef/…) — reassemble the object value off those fields, exactly as a
@@ -4096,7 +4220,10 @@ public:
 		if (col == nullptr)
 			return ibValue();
 		ibValue v;
-		col->ReadValue(prefix, m_metaData, v, m_cursor);
+		// …and the PREFIX is the statement's too, for the same reason as Column() above: the fields
+		// being reassembled were written as `<sql alias>_TYPE / _RTRef / _RRRef`, so asking the cursor
+		// under the author's prefix finds none of them and reassembles an empty value in silence.
+		col->ReadValue(ibSqlAliasOf(prefix), m_metaData, v, m_cursor);
 		return v;
 	}
 

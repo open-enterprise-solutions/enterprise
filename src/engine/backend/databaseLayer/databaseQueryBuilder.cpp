@@ -1238,6 +1238,26 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 			values  += sep + RenderExpr(dml.m_assignments[i].m_value);   // pushes a bind param
 		}
 
+		// 🛑 AN UPSERT WITH NO KEY IS NOT AN UPSERT. Every dialect's template puts the key columns
+		// in parentheses — MATCHING (…), ON CONFLICT (…) — so an empty list renders as `MATCHING ()`
+		// and the database rejects it: Firebird answers "Token unknown - line 1, column 335, )",
+		// a message that names a character position in generated text nobody has in front of them.
+		//
+		// The renderer is the one place that KNOWS the statement is meaningless before it is sent,
+		// and it was sending it anyway. Refused here, in the platform's own words, naming the
+		// table — which points at the CALLER that failed to say what identifies a row, instead of
+		// leaving a person to count columns in a string.
+		//
+		// ⚠ Not defaulting to "all columns" or falling back to a plain INSERT: both would write
+		// something, and an upsert whose identity was never stated has no correct behaviour to
+		// guess at. Silence here would be a duplicate row nobody notices.
+		if (dml.m_matchKeys.empty())
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+				wxString::Format(
+					_("An upsert into '%s' names no key columns, so there is nothing to match a "
+					  "row by. Whatever built this statement did not say what identifies a row."),
+					dml.m_table));
+
 		wxString keys;
 		for (size_t i = 0; i < dml.m_matchKeys.size(); ++i)
 			keys += (i ? wxT(", ") : wxT("")) + QuoteIdent(dml.m_matchKeys[i]);
