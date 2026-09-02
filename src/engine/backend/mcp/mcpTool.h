@@ -80,6 +80,12 @@ public:
 
 		const wxString& Name() const { return m_name; }
 
+		// WHAT SHAPE IT WAS DECLARED AS, and the closed set of words when it has one. Read by the
+		// gate that holds the published schema to its word (ibMcpArgumentFault) — a declaration
+		// nothing enforces is not a contract, it is a claim the caller acts on.
+		Kind KindOf() const { return m_kind; }
+		const std::vector<wxString>& Values() const { return m_values; }
+
 		// WHAT IT IS FOR, in the caller's words. Read by the finder, which searches a tool by
 		// everything it says about itself: half of what a verb does is said in its arguments and
 		// nowhere else, and a finder blind to them knows the tool less well than its own answer does.
@@ -315,6 +321,35 @@ BACKEND_API size_t ibMcpWordsFound(const wxString& haystack, const wxString& que
 // implementations of "what is missing" would answer differently within a week.
 BACKEND_API void ibMcpComposerComplaints(const class ibCompositionDescription& composition,
 	std::vector<wxString>& missing);
+
+// ⭐⭐ WHICH REQUIRED ARGUMENT DID NOT COME — empty when they all did. Asked OF THE ARGUMENTS, not of
+// the published schema: ibMcpArgument is where `required` is stated, and `Given()` is the same
+// both-areas lookup a tool's own body uses, so "present" means the same on both sides of the gate.
+//
+// 🛑 `IsRequired()` WAS DECLARED, PUBLISHED AND READ BY NOBODY, so a call arriving without one
+// reached the tool with an empty string where a name should be: `report_output` added a nameless
+// output and answered success, `form_accepts` took the designer down (2026-09-01).
+//
+// ⚠ IT LIVED IN THE SERVER until 2026-09-02 — where it was first needed, not where it belongs. Two
+// costs, and the second is why it moved: the transport owned a rule about arguments, and a test
+// could not call it, so the suite's third question compared the schema with itself while its NAME
+// promised it checked the refusal.
+BACKEND_API wxString ibMcpMissingArgument(const class ibMcpTool* tool, const ibDataNode& arguments);
+
+// ⭐⭐ IS WHAT ARRIVED WHAT THE SCHEMA SAID IT WOULD BE? Empty when every declared argument that came
+// matches its own declaration; otherwise the sentence to refuse with.
+//
+// 🛑 THE SCHEMA WAS A CLAIM NOBODY HELD ANYONE TO. A tool publishes `type: integer`, `type: object`,
+// `enum: [equal, notEqual, …]` — and nothing checked any of it, while the readers answer with a
+// DEFAULT for the wrong shape: `Whole()` gives 0 for "abc", `Flag()` gives false for "true",
+// `Text()` gives empty for an object. So a caller that mistyped an argument was not refused; it was
+// answered about id 0, or about a module cleared by an empty text. One instance of this was fixed
+// where it hurt (module_write checks its own text); the CLASS is closed here, once, for every tool
+// and every tool to come — the same reasoning that put the undeclared-name gate in the server.
+//
+// ⚠ THE SHAPE, NOT THE MEANING. Whether a string names a real metatype stays the tool's business —
+// it knows, and this does not. What is checked is only what the schema itself declared.
+BACKEND_API wxString ibMcpArgumentFault(const class ibMcpTool* tool, const ibDataNode& arguments);
 
 // ⭐ THE FIRST LINE THAT NAMES SOMETHING, as a WHOLE WORD — for an answer that says where a hit is
 // rather than only that there was one. A caller judges a hit by the line and fetches only what

@@ -435,6 +435,119 @@ size_t ibMcpWordsFound(const wxString& haystack, const wxString& query, size_t* 
 	return found;
 }
 
+wxString ibMcpMissingArgument(const ibMcpTool* tool, const ibDataNode& arguments)
+{
+	if (tool == nullptr)
+		return wxEmptyString;
+
+	// ⚠ ASKED OF THE ARGUMENTS THEMSELVES, not of the published schema — ibMcpTool::ibMcpArgument
+	// is where `required` is stated, and Given() is the same both-areas lookup the tool's own body
+	// uses, so "present" means here exactly what it means there.
+	for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
+		if (argument.IsRequired() && !argument.Given(arguments))
+			return argument.Name();
+	}
+
+	return wxEmptyString;
+}
+
+wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
+{
+	if (tool == nullptr)
+		return wxEmptyString;
+
+	// What the caller was TOLD each shape is called, so the refusal speaks the schema's words
+	// rather than the enum's.
+	const auto shapeWord = [](ibMcpTool::ibMcpArgument::Kind kind) -> wxString {
+		switch (kind) {
+			case ibMcpTool::ibMcpArgument::Kind::Whole: return wxT("integer");
+			case ibMcpTool::ibMcpArgument::Kind::Flag:  return wxT("boolean");
+			case ibMcpTool::ibMcpArgument::Kind::Many:  return wxT("array");
+			case ibMcpTool::ibMcpArgument::Kind::Node:  return wxT("object");
+			default: break;
+		}
+		return wxT("string");
+	};
+
+	const auto arrived = [](const ibDataValue* value, const ibDataNode* child) -> wxString {
+		if (child != nullptr)
+			return wxT("an object");
+		if (value == nullptr)
+			return wxT("nothing");
+		switch (value->Kind()) {
+			case ibDataKind::String: return wxT("a string");
+			case ibDataKind::Number: return wxT("a number");
+			case ibDataKind::Bool:   return wxT("a boolean");
+			case ibDataKind::Array:  return wxT("an array");
+			case ibDataKind::Child:  return wxT("an object");
+			default: break;
+		}
+		return wxT("an empty value");
+	};
+
+	for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
+
+		const ibDataValue* value = arguments.FindField(argument.Name());
+		const ibDataNode*  child = arguments.FindChild(argument.Name());
+
+		// ABSENT IS NOT THIS GATE'S BUSINESS — a required one that never came is answered by
+		// ibMcpMissingArgument, in its own words.
+		if (value == nullptr && child == nullptr)
+			continue;
+
+		const ibMcpTool::ibMcpArgument::Kind kind = argument.KindOf();
+		bool fits = true;
+
+		switch (kind) {
+			case ibMcpTool::ibMcpArgument::Kind::Whole:
+				fits = child == nullptr && value != nullptr && value->Kind() == ibDataKind::Number;
+				break;
+			case ibMcpTool::ibMcpArgument::Kind::Flag:
+				fits = child == nullptr && value != nullptr && value->Kind() == ibDataKind::Bool;
+				break;
+			case ibMcpTool::ibMcpArgument::Kind::Many:
+				fits = child == nullptr && value != nullptr && value->Kind() == ibDataKind::Array;
+				break;
+			case ibMcpTool::ibMcpArgument::Kind::Node:
+				// A node may arrive either way — as a child, or as a value carrying one.
+				fits = child != nullptr || (value != nullptr && value->Kind() == ibDataKind::Child);
+				break;
+			default:
+				fits = child == nullptr && value != nullptr && value->Kind() == ibDataKind::String;
+				break;
+		}
+
+		if (!fits) {
+			return wxString::Format(
+				_("'%s' takes %s for '%s', and %s came. Nothing was done."),
+				tool->GetName(), shapeWord(kind), argument.Name(), arrived(value, child));
+		}
+
+		// ⭐ AND A CLOSED SET IS CLOSED. `enum` is published in the schema, and a word outside it
+		// used to reach the tool, where each one decided for itself what to do about it — some
+		// refused, some took a default and carried on with a choice nobody made.
+		if (argument.Values().empty() || value == nullptr || value->Kind() != ibDataKind::String)
+			continue;
+
+		const wxString said = value->AsString();
+		bool known = false;
+		wxString allowed;
+
+		for (const wxString& word : argument.Values()) {
+			known = known || word.IsSameAs(said, false);
+			allowed += (allowed.IsEmpty() ? wxString() : wxT(", ")) + word;
+		}
+
+		if (!known) {
+			return wxString::Format(
+				_("'%s' is not one of the words '%s' takes for '%s'. It takes: %s. Nothing was done."),
+				said, tool->GetName(), argument.Name(), allowed);
+		}
+	}
+
+	return wxEmptyString;
+}
+
 wxString ibMcpLineNaming(const wxString& text, const wxString& name)
 {
 	if (text.IsEmpty() || name.IsEmpty())

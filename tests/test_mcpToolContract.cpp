@@ -38,6 +38,7 @@
 
 #include <map>
 #include <set>
+#include <algorithm>   // the refusal must name one of the tool's OWN required arguments
 
 namespace {
 
@@ -350,6 +351,99 @@ TEST(McpToolContract, EveryToolName_IsSpelledTheWayTheProtocolSpellsThem)
 			<< "'" << name.ToStdString() << "' names no family";
 		EXPECT_FALSE(name.StartsWith(wxT("_")));
 		EXPECT_FALSE(name.EndsWith(wxT("_")));
+	}
+}
+
+//---------------------------------------------------------------------------
+// the schema is held to its word — for every tool, by walking the registry
+//---------------------------------------------------------------------------
+//
+// 🛑⭐⭐ A SWEEP IS A SESSION; THIS IS A SUITE. Driving all ninety-odd tools by hand on 2026-09-01
+// found real defects — a required argument nobody checked, a tool that crashed the designer with
+// empty hands — and left nothing behind that would find the NEXT one. The registry enumerates
+// itself, so the questions can be asked of every tool that exists and every tool added later,
+// which is the only thing that keeps ninety-six honest when they become a hundred and fifty.
+
+TEST(McpToolContract, EveryRequiredArgument_IsRefusedWhenItDoesNotCome)
+{
+	// The gate that answers this is ibMcpMissingArgument (mcpTool.cpp), and it is CALLED here:
+	// a tool that declares something required must not be reachable without it. `form_accepts` reached the control factory with an empty name, tripped an assert
+	// and took the designer down (2026-09-01) — the class, not that one tool.
+	for (const ibMcpTool* tool : ibMcpTools()) {
+
+		const std::vector<wxString> required = RequiredArguments(SchemaOf(tool));
+		if (required.empty())
+			continue;
+
+		// THE GATE ITSELF, not the schema compared with itself. An earlier version of this test
+		// checked that every required name is also declared — true, and not what the name of the
+		// test promises. The gate could not be called then: it was `static` inside the server.
+		const ibDataNode emptyHands;
+
+		EXPECT_FALSE(ibMcpMissingArgument(tool, emptyHands).IsEmpty())
+			<< tool->GetName().ToStdString()
+			<< " declares a required argument and is reachable with empty hands";
+
+		// …and it names ONE OF ITS OWN, so the refusal a caller reads points at something they can
+		// send rather than at a name from somewhere else.
+		const wxString named = ibMcpMissingArgument(tool, emptyHands);
+		EXPECT_TRUE(std::find(required.begin(), required.end(), named) != required.end())
+			<< tool->GetName().ToStdString() << " refuses by naming '" << named.ToStdString()
+			<< "', which is not among the arguments it publishes as required";
+	}
+}
+
+TEST(McpToolContract, EveryArgument_IsHeldToTheShapeItPublishes)
+{
+	// ⭐ THE READERS ANSWER WITH A DEFAULT FOR THE WRONG SHAPE — `Whole()` gives 0, `Flag()` gives
+	// false, `Text()` gives empty — so an argument of the wrong kind used to reach the tool as a
+	// plausible value nobody sent. Asked of every declared argument of every tool.
+	for (const ibMcpTool* tool : ibMcpTools()) {
+		for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
+
+			using Kind = ibMcpTool::ibMcpArgument::Kind;
+
+			// A string where the schema says integer / boolean / array / object.
+			if (argument.KindOf() == Kind::Text)
+				continue;
+
+			ibDataNode wrong;
+			wrong.SetValue(argument.Name(), wxString(wxT("plainly a string")));
+
+			EXPECT_FALSE(ibMcpArgumentFault(tool, wrong).IsEmpty())
+				<< tool->GetName().ToStdString() << "'s '" << argument.Name().ToStdString()
+				<< "' is published as something other than a string and took one";
+		}
+	}
+}
+
+TEST(McpToolContract, EveryClosedSet_RefusesAWordOutsideIt)
+{
+	// `enum` is published in the schema; a word outside it used to reach the tool, where each one
+	// decided for itself — some refused, some took a default and carried on with a choice nobody
+	// made. Asked of every argument that declares a set.
+	for (const ibMcpTool* tool : ibMcpTools()) {
+		for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
+
+			if (argument.Values().empty())
+				continue;
+
+			ibDataNode outside;
+			outside.SetValue(argument.Name(), wxString(wxT("no-tool-declares-this-word")));
+
+			EXPECT_FALSE(ibMcpArgumentFault(tool, outside).IsEmpty())
+				<< tool->GetName().ToStdString() << "'s '" << argument.Name().ToStdString()
+				<< "' publishes a closed set and took a word from outside it";
+
+			// …and the words it DOES publish are taken, or the set is a wall rather than a contract.
+			for (const wxString& word : argument.Values()) {
+				ibDataNode inside;
+				inside.SetValue(argument.Name(), word);
+				EXPECT_TRUE(ibMcpArgumentFault(tool, inside).IsEmpty())
+					<< tool->GetName().ToStdString() << " refuses '" << word.ToStdString()
+					<< "', which it publishes as one of the words it takes";
+			}
+		}
 	}
 }
 

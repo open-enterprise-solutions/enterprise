@@ -1203,41 +1203,13 @@ static wxString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const wxString& giv
 	return names;
 }
 
-//---------------------------------------------------------------------------
-// a required argument that never came
-//---------------------------------------------------------------------------
-//
-// 🛑 `IsRequired()` WAS DECLARED, PUBLISHED AND READ BY NOBODY. Every tool marks its required
-// arguments, the schema carries them in its `required` array, the caller is told — and nothing
-// checked. So a call arriving without one reached the tool's body with an empty string where a
-// name should be, and what happened next was the tool's own business:
-//
-//   • `report_output` with NO arguments at all answered `added: true, output: ""` and put a
-//     nameless node into somebody's report;
-//   • `form_accepts` without `class` reached the control factory with an empty name, tripped an
-//     assert and took the designer down with it (dump designer_25968).
-//
-// Both are the same hole, and both were found in one sweep on 2026-09-01. The gate belongs beside
-// the undeclared-name one, for the same reason that one is here: a check written per tool is a
-// check the sixty-first tool is written without.
-//
-// Returns the first required name that did not arrive, or empty when they all did.
-//
-static wxString ibMcpMissingArgument(const ibMcpTool* tool, const ibDataNode& arguments)
-{
-	if (tool == nullptr)
-		return wxEmptyString;
-
-	// ⚠ ASKED OF THE ARGUMENTS THEMSELVES, not of the published schema — ibMcpTool::ibMcpArgument
-	// is where `required` is stated, and Given() is the same both-areas lookup the tool's own body
-	// uses, so "present" means here exactly what it means there.
-	for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
-		if (argument.IsRequired() && !argument.Given(arguments))
-			return argument.Name();
-	}
-
-	return wxEmptyString;
-}
+// (⛔ THE MISSING-ARGUMENT GATE MOVED OUT OF THIS FILE — to mcpTool.cpp, beside ibMcpArgumentFault.
+//  By its own note it is asked OF THE ARGUMENTS rather than of the published schema, and
+//  ibMcpArgument is where `required` is stated: it was living in the transport by accident of
+//  where it was first needed. Two consequences, one of them the reason it moved: a test could not
+//  call it — `static` in a .cpp — so the suite's third question could only compare the schema with
+//  itself while its NAME promised it checked the refusal. A test whose body does not do what its
+//  name says is the same defect the suite exists to catch, one floor up.)
 
 //---------------------------------------------------------------------------
 // the protocol
@@ -1694,12 +1666,13 @@ wxString BuildOrientation()
 		<< wxT(". It gates what the platform allows; raising it is the developer's own decision ")
 		<< wxT("and is itself the migration - never change it on their behalf.\n\n");
 
-	out << wxT("THE CONFIGURATION holds:");
-
-	for (const auto& kind : census)
-		out << wxT("\n ") << kind.second << wxT(" ") << kind.first;
-
-	out << wxT("\n\n");
+	// ⛔ THE CENSUS USED TO BE SPELLED OUT HERE — "8 Catalogs, 3 Documents, 2 Registers…" — and it is
+	// the clearest example of what does NOT belong in a text paid for on every connection: it is
+	// CONSULTABLE. `metadata_tree {depth: 1}` answers it exactly, on demand, in the caller's own
+	// moment of needing it. What stays is the pointer, because knowing WHERE to ask is the part
+	// nobody can look up.
+	out << wxT("WHAT IS IN IT: `metadata_tree` with depth 1 is the map - the objects and their ids, ")
+		<< wxT("without the predefined attributes that make up most of a deeper walk.\n\n");
 
 	// THE STARTING POINT, before any detail. A reader who has this needs far less of the rest.
 	if (!direction.IsEmpty()) {
@@ -1728,22 +1701,15 @@ wxString BuildOrientation()
 			<< wxT("see the standing instruction below.\n\n");
 	}
 	else if (!notes.empty()) {
-		out << wxT("WHAT WAS LEARNED BUILDING IT - the technical notes carried by the objects ")
-			<< wxT("themselves. Read them before proposing anything: a configuration records ")
-			<< wxT("what was built and never why.\n\n");
-
-		size_t spent = 0;
-
-		for (const auto& note : notes) {
-
-			if (spent + note.second.length() > kOrientationNotesLimit) {
-				out << wxT("\n[...] More than fits here. `note_read` gives all of them.\n");
-				break;
-			}
-
-			out << wxT("--- ") << note.first << wxT(" ---\n") << note.second << wxT("\n\n");
-			spent += note.second.length();
-		}
+		// ⛔ THE NOTES THEMSELVES ARE NO LONGER PASTED IN. They were, up to a limit, with a "[...]
+		// more than fits here" when they overflowed — which is the shape of something that does not
+		// belong in a handshake: it is paid for by every connection, it is TRUNCATED anyway, and a
+		// verb already answers it in full at the moment of asking. What cannot be looked up is that
+		// they EXIST and are worth reading before proposing anything, so that is what stays.
+		out << wxT("WHAT WAS LEARNED BUILDING IT: ") << (int)notes.size()
+			<< wxT(" object(s) carry technical notes - why a thing exists, which shape was chosen, ")
+			<< wxT("what was rejected. `note_read` gives them, whole. Read them before proposing ")
+			<< wxT("anything: a configuration records what was built and never why.\n\n");
 	}
 
 	// ⭐ THE DISCIPLINE TRAVELS WITH THE SERVER, not with whoever happens to remember it. Every
@@ -1755,40 +1721,20 @@ wxString BuildOrientation()
 		<< wxT("whole - how it is put together, the conventions it follows, where the next ")
 		<< wxT("arrival should look, a direction taken or decided against. It is read FIRST, ")
 		<< wxT("before any object is opened.\n")
-		<< wxT(" * EACH OBJECT carries its OWN specifics, written while you are working on that ")
-		<< wxT("object: why it exists, which shape was chosen, what was rejected, what a later ")
-		<< wxT("reader could not work out from the object itself. `note_write` ")
-		<< wxT("{id, target: \"notes\", text}. Anything in the tree can carry them.\n")
-		<< wxT("Putting an object's specifics on the root instead breaks BOTH ends: the person ")
-		<< wxT("who opened that object never meets the note, because nobody re-reads the root ")
-		<< wxT("looking for it, and the root swells until it is no longer the thing anyone reads ")
-		<< wxT("first. Write it where it is true, as you go - not gathered up at the end.\n")
-		<< wxT("The OTHER text, target: \"help\", is what the person USING the application reads ")
-		<< wxT("on F1 - different reader, different words, do not mix them.\n")
-		<< wxT(" * THE THIRD SURFACE IS `Comment`, one line, and every object in the tree has one ")
-		<< wxT("- an attribute, a tabular section, a dimension, not only the top-level objects. It ")
-		<< wxT("answers the smallest question there is: WHY DOES THIS EXIST AT ALL. Whoever opens ")
-		<< wxT("the object meets it in the property list beside the name, and metadata_tree and ")
-		<< wxT("metadata_get answer with it, so one read of the map shows what everything is FOR ")
-		<< wxT("without opening anything. Written with `metadata_set` {id, property: \"Comment\", ")
-		<< wxT("value}. Optional, and cheap: a sentence like \"which warehouse the line is being ")
-		<< wxT("written off from\" costs nothing and saves the next reader a walk through the code. ")
-		<< wxT("It is also where a marker belongs when you need one - a probe you intend to delete, ")
-		<< wxT("something half-built you are coming back to - because you will read it back on the ")
-		<< wxT("next tree, and nothing else in the map distinguishes a real object from a leftover ")
-		<< wxT("one. Mark what you create for a trial as you create it, and SELECTING them again is ")
-		<< wxT("one metadata_tree afterwards: the comment arrives with the node, so the sweep that ")
-		<< wxT("cleans up is the same call as the one that found them.\n")
-		<< wxT("NAME ANOTHER OBJECT AS A LINK, never as a bare word. These texts are Markdown, so ")
-		<< wxT("write `[Goods](oes:1005)` - the target carries the identity (the `id` every tool ")
-		<< wxT("here reports, or the object's guid), and the visible text carries THE NAME IT HAD ")
-		<< wxT("WHEN THIS WAS WRITTEN.\n")
-		<< wxT("Both halves earn their place. Prose that says \"see the Goods catalogue\" points ")
-		<< wxT("at nothing once that catalogue is renamed, and nothing warns anyone - the ")
-		<< wxT("sentence still reads perfectly. An id alone resolves but tells a reader nothing ")
-		<< wxT("they recognise. Together the reference stays resolvable to what the object IS, ")
-		<< wxT("while the text preserves what it was CALLED - which is often the thing that makes ")
-		<< wxT("an old note make sense at all.\n\n");
+		<< wxT(" * EACH OBJECT carries its OWN specifics, written while you work on it: why it ")
+		<< wxT("exists, which shape was chosen, what was rejected. `note_write` {id, target: ")
+		<< wxT("\"notes\", text}. Put them on the object, not on the root - the person who opens ")
+		<< wxT("that object never re-reads the root looking for them.\n")
+		<< wxT(" * `target: \"help\"` is the OTHER text: what the person USING the application ")
+		<< wxT("reads on F1. Different reader, different words.\n")
+		<< wxT(" * `Comment` is the third surface - one line, on every node including attributes ")
+		<< wxT("and dimensions, answering WHY DOES THIS EXIST AT ALL. It rides along with ")
+		<< wxT("metadata_tree, so one read of the map shows what everything is for; it is also ")
+		<< wxT("where to mark something you built for a trial and mean to remove. `metadata_set` ")
+		<< wxT("{id, property: \"Comment\", value}.\n")
+		<< wxT("NAME ANOTHER OBJECT AS A LINK: these texts are Markdown, so write ")
+		<< wxT("`[Goods](oes:1005)` - the target keeps the identity through a rename, the visible ")
+		<< wxT("text keeps the name it had when you wrote it.\n\n");
 
 	// ⭐⭐ POINTED AT, NOT INLINED — and this is the line that decides how big this text can get.
 	//
@@ -2197,6 +2143,15 @@ wxString ibMcpServer::Answer(const wxString& request)
 					!missing.IsEmpty()) {
 					refusal = wxString::Format(
 						_("'%s' needs '%s', and it did not come. Nothing was done."), name, missing);
+				}
+				// …AND THE THIRD HALF OF THE SAME GATE: an argument that came in the wrong SHAPE, or
+				// a word outside the closed set the schema publishes. The name gate and the missing
+				// gate both stop a call that cannot work; this one stops a call that would work on
+				// something the caller did not mean — `id: "abc"` read as id 0, a `comparison` word
+				// nobody declared taken as the default. See ibMcpArgumentFault.
+				else if (const wxString fault = ibMcpArgumentFault(tool, arguments);
+					!fault.IsEmpty()) {
+					refusal = fault;
 				}
 				else {
 					ok = RunTool(tool, arguments, payload, refusal);
