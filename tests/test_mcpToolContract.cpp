@@ -385,10 +385,14 @@ TEST(McpSearch, AWordIsMetAtItsStem_SoTheFormOfTheNounDoesNotDecide)
 	const wxString text = wxT("Distribution of overheads by a base, lot by lot.");
 
 	EXPECT_GT(ibMcpWordsFound(text, wxT("distributing"), nullptr), 0u);
-	EXPECT_GT(ibMcpWordsFound(text, wxT("lots"), nullptr), 0u);
+	EXPECT_GT(ibMcpWordsFound(text, wxT("bases"), nullptr), 0u);
 
-	// Three letters would let `set` reach half of everything, so the floor is four: `over` is a
-	// stem of "overheads" and matches, `ove` is never tried on its own.
+	// ⚠ AND HERE IS WHERE IT STOPS, which is worth pinning as much as where it works. The floor is
+	// FOUR characters, so `lots` is tried as itself and never shortened to `lot` — the text says
+	// "lot by lot" and this finds nothing. Three would fix that plural and let `set` reach half of
+	// everything, which is not a search. Written down because the first version of this test
+	// asserted the nicer story and the code was right (2026-09-02).
+	EXPECT_EQ(ibMcpWordsFound(text, wxT("lots"), nullptr), 0u);
 	EXPECT_EQ(ibMcpWordsFound(text, wxT("ova"), nullptr), 0u);
 }
 

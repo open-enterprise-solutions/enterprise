@@ -85,6 +85,22 @@ ibGridEditor::ibGridEditor(ibMetaDocument* document,
 	m_defaultColWidth = s_defaultColWidth;
 	m_defaultRowHeight = s_defaultRowHeight;
 
+	// 🛑⭐⭐ A DOCUMENT'S SIZES ARE DATA, NOT A GESTURE — so the grid's minimum does not apply to
+	// them. `SetColSize` SILENTLY RETURNS below GetColMinimalAcceptableWidth (15 px, from the
+	// widget's own defaults), which is right for a person dragging an edge — nobody means to make a
+	// column two pixels wide with the mouse — and wrong for a layout that says two pixels because
+	// it means them.
+	//
+	// ⭐ MEASURED on an imported invoice (2026-09-02): the blank is drawn on a FINE GRID, columns of
+	// two to four characters, and five of them landed under the threshold. Each was dropped in
+	// silence and kept the default 70 px, so the page came out 1232 px wide where the workbook says
+	// 943 — a third too wide, with no error anywhere. Half-columns are ordinary in a printed form
+	// (Max: *"a legitimate situation - the grid itself is what blocks it"*).
+	//
+	// Zero stays special: it is how a hidden row or column is expressed, here and in xlsx alike.
+	ibGrid::SetColMinimalAcceptableWidth(1);
+	ibGrid::SetRowMinimalAcceptableHeight(1);
+
 	// Grid
 	ibGrid::EnableEditing(true);
 	ibGrid::EnableGridLines(true);

@@ -345,26 +345,29 @@ const wxRegEx* CompiledQuery(const wxString& query)
 	// ⚠ PER THREAD. Tools run on the main thread or on the delivery thread depending on what they
 	// need, and a shared cache here would be two searches writing one pointer. A regular
 	// expression compiles in microseconds, so a second copy costs nothing worth measuring.
+	//
+	// ⚠ AND THE OBJECT IS HELD BY VALUE, not through a pointer. A heap block that lives to the end
+	// of the process is reported by the CRT as a leak, and a leak line in a test run is a false
+	// alarm that never goes away — measured the first time these ran (2026-09-02: 32 bytes,
+	// dumped after the last test passed).
 	static thread_local wxString s_source;
-	static thread_local std::unique_ptr<wxRegEx> s_compiled;
+	static thread_local wxRegEx s_regex;
 	static thread_local bool s_tried = false;
+	static thread_local bool s_valid = false;
 
 	if (!s_tried || s_source != query) {
 
 		s_source = query;
 		s_tried = true;
-		s_compiled.reset();
 
 		// A pattern that does not compile is an ordinary outcome here — the caller wrote words
 		// that happen to hold a bracket — so it must not reach the log the person is reading.
 		wxLogNull quiet;
 
-		std::unique_ptr<wxRegEx> fresh = std::make_unique<wxRegEx>();
-		if (fresh->Compile(query, wxRE_ADVANCED | wxRE_ICASE))
-			s_compiled = std::move(fresh);
+		s_valid = s_regex.Compile(query, wxRE_ADVANCED | wxRE_ICASE);
 	}
 
-	return s_compiled.get();
+	return s_valid ? &s_regex : nullptr;
 }
 
 } // namespace
