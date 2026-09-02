@@ -16,6 +16,7 @@
 
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
+#include "backend/system/systemManager.h"   // Message — the standard door to whoever is watching
 
 #include "backend/fileSystem/fs.h"
 #if _USE_NET_COMPRESSOR == 1
@@ -289,12 +290,41 @@ std::map<unsigned int, int>::iterator ibDebuggerClient::ResolveOriginalLine(
 	return list_module_offset.find(startLine);
 }
 
-bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned int line)
+// 🛑⭐⭐ THE REASON GOES TO WHOEVER ASKED, and it used to go to a MODAL BOX instead.
+//
+// A breakpoint on a line the running application does not have is a refusal with a real cause —
+// the module was edited and not applied, so the runtime's copy has different lines. That cause was
+// shown as `wxMessageBox` from inside the engine, which is wrong three times over: backend.dll is
+// GUI-free by rule; a modal blocks the designer until a person clicks it; and a caller that is not
+// a person — an assistant over MCP — got back a bare `false` and had to guess, while the sentence
+// explaining it stood on somebody else's screen (measured 2026-09-02: the box appeared in front of
+// Max, the tool answered "the debugger did not accept it", and the two never met).
+//
+// Now the sentence travels with the answer and the caller decides what to do with it: the code
+// editor shows it, the tool returns it.
+bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned int line,
+	wxString* refusal)
 {
 	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
 	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
 	if (itOffset == list_module_offset.end() || line != (itOffset->first + itOffset->second)) {
-		wxMessageBox(_("Cannot set breakpoint in unsaved copy!"));
+
+		const wxString said =
+			_("The running application does not have this line: the module has been edited "
+			  "and not applied, so its copy is a different text. Apply the configuration, "
+			  "or set the breakpoint on a line both copies share.");
+
+		// ⭐ AND WHEN NOBODY ASKED FOR THE REASON, IT GOES OUT THE STANDARD DOOR — the platform's own
+		// `Message`, which already knows how to reach whoever is on the other side: it asks the
+		// SESSION for its frame, and a web client's frame queues while a desktop one shows
+		// (systemManagerFunc.cpp). Reaching for the frame here would be that same code written a
+		// second time, minus the eval-mode guard that keeps autocomplete from talking out loud
+		// (Max, 2026-09-02: *"the standard message function knows how to deliver to the client"*).
+		if (refusal != nullptr)
+			*refusal = said;
+		else
+			ibValueSystemFunction::Message(said, ibStatusMessage::ibStatusMessage_Error);
+
 		return false;
 	}
 	std::map<unsigned int, int>& list_breakpoint = m_listBreakpoint[strModuleName];
@@ -345,20 +375,36 @@ bool ibDebuggerClient::RemoveBreakpoint(const wxString& strModuleName, unsigned 
 
 #include "backend/backend_mainFrame.h"
 
-void ibDebuggerClient::RemoveAllBreakpoint()
+// 🛑 THE SAME LEFTOVER, ONE FLOOR ALONG — and this one showed a person a C++ SIGNATURE. "Error in :
+// void ibDebuggerClient::RemoveAllBreakpoint()", in a modal box: untranslatable, telling the reader
+// nothing they can act on, and blocking the window until it is clicked. Whoever it was written for
+// was reading a debugger's own source, not using the product.
+//
+// It says what failed and what that means for them, through the standard door, and the outcome
+// comes back to the caller instead of only to a screen.
+bool ibDebuggerClient::RemoveAllBreakpoint(wxString* refusal)
 {
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_DeleteAllBreakpoints);
 	SendCommand(commandChannel.pointer(), commandChannel.size());
+
 	if (RemoveAllBreakpointInDB()) {
 		m_listBreakpoint.clear();
 		if (auto* frame = ibSession::CurrentFrame())
 			frame->RefreshFrame();
+		return true;
 	}
-	else {
-		if (auto* frame = ibSession::CurrentFrame())
-			frame->ShowModalMessage("Error in : void ibDebuggerClient::RemoveAllBreakpoint()", wxT("RemoveAllBreakpoint"), wxOK | wxCENTRE);
-	}
+
+	const wxString said =
+		_("The breakpoints could not be cleared: the store they are kept in did not accept the "
+		  "change. They are still set, and the running application still has them.");
+
+	if (refusal != nullptr)
+		*refusal = said;
+	else
+		ibValueSystemFunction::Message(said, ibStatusMessage::ibStatusMessage_Error);
+
+	return false;
 }
 
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
@@ -444,6 +490,21 @@ void ibDebuggerClient::EvaluateToolTip(const wxString& strFileName, const wxStri
 		commandChannel.w_stringZ(strFileName);
 		commandChannel.w_stringZ(strModuleName);
 		commandChannel.w_stringZ(strExpression);
+		SendCommand(commandChannel.pointer(), commandChannel.size());
+	}
+}
+
+// ⭐⭐ AND IT RUNS AS THE PERSON WHO GAVE ACCESS — their session, their rights, their data, their
+// open forms (Max, 2026-09-02). That is the whole advantage: the situation being investigated is
+// reproduced where it actually happens, not in a copy that behaves nearly the same. What makes it
+// safe to do that in somebody's live session is the other half — the transaction the far end wraps
+// it in, which is rolled back whatever the code does.
+void ibDebuggerClient::RunSandbox(const wxString& code)
+{
+	if (ibDebuggerClient::IsEnterLoop()) {
+		ibWriterMemory commandChannel;
+		commandChannel.w_u16(CommandId_RunSandbox);
+		commandChannel.w_stringZ(code);
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
 }
@@ -827,6 +888,27 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 				&ibDebuggerClient::ibDebuggerClientAdapter::OnSetToolTip, data, resultStr
 			);
 		}
+	}
+	else if (commandFromServer == CommandId_EvalMessage) {
+
+		wxString message;
+		commandReader.r_stringZ(message);
+
+		ms_debugClient->CallAfter(
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnEvalMessage, message
+		);
+	}
+	else if (commandFromServer == CommandId_RunSandbox) {
+
+		const bool ran = commandReader.r_u8() != 0;
+
+		wxString answer, json;
+		commandReader.r_stringZ(answer);
+		commandReader.r_stringZ(json);
+
+		ms_debugClient->CallAfter(
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult, ran, answer, json
+		);
 	}
 	else if (commandFromServer == CommandId_EvalAutocomplete) {
 

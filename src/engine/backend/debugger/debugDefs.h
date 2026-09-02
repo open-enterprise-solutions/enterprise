@@ -69,7 +69,32 @@ enum CommandId
 	CommandId_EvalToolTip = 27,
 	CommandId_EvalAutocomplete = 28,
 
-	CommandId_MessageFromServer = 29 // When catch error in enterprise mode
+	CommandId_MessageFromServer = 29, // When catch error in enterprise mode
+
+	// ⭐⭐ ARBITRARY CODE, RUN AND THEN UNDONE. The runtime is stopped at a breakpoint with its
+	// session, its data and its OPEN FORMS — everything an experiment needs — and the one thing
+	// missing was permission to change anything, because a change is permanent and the base is
+	// somebody's. A transaction that always rolls back removes the permanence, and with it the
+	// reason to refuse (Max, 2026-09-02: *"an isolated environment - you write test data through
+	// the debugger, take the measurement, and it rolls back automatically; the mechanism is built
+	// right in"*).
+	//
+	// Not a new evaluator: `ibProcUnit::Evaluate` already compiles a BLOCK rather than an
+	// expression when asked to (`compileBlock`), and the tooltip road has been carrying answers
+	// back since before this. What is new here is the transaction around it and nothing else.
+	CommandId_RunSandbox = 30,
+
+	// ⭐⭐ WHAT CODE PRINTS WHILE IT IS BEING EVALUATED — a channel of its own, and that is the
+	// point. `Message` returns at its first line when the process is in EVAL MODE
+	// (ibBackendException::IsEvalMode), which is right: a watch expression, an autocomplete probe
+	// and a tooltip must not talk to the person, or hovering over a variable would fill their
+	// window. The sandbox is evaluation too — so everything it printed went nowhere at all.
+	//
+	// Sending those lines up the ORDINARY message road instead would work and would also mean
+	// every message of a running application storms the debugger (Max, 2026-09-02, weighing it).
+	// So they travel apart: the assistant that asked for the run reads them, the designer drops
+	// them, and the person is shown whatever the assistant decides is worth showing.
+	CommandId_EvalMessage = 31
 };
 
 enum ConnectionType {

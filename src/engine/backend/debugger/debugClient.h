@@ -62,6 +62,15 @@ class BACKEND_API ibDebuggerClient {
 		void OnSetVariable(const ibWatchWindowData& data);
 		void OnSetExpanded(const ibWatchWindowData& data);
 
+		// A line printed by EVALUATED code — a sandbox, a watch expression. Its own road, read by
+		// whoever asked for the evaluation and shown to nobody else.
+		void OnEvalMessage(const wxString& message);
+
+		// What the sandbox did — ran or failed, what it answered with, and the RESULT VALUE as
+		// text when it could be written (empty when the value cannot travel, which is not a
+		// failure of the run).
+		void OnSandboxResult(bool ran, const wxString& answer, const wxString& json);
+
 	private:
 		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
 	};
@@ -296,6 +305,10 @@ public:
 	//evaluate for tooltip
 	void EvaluateToolTip(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression);
 
+	// Arbitrary code, run in the stopped runtime inside a transaction the far end always rolls
+	// back. The answer arrives as OnSandboxResult.
+	void RunSandbox(const wxString& code);
+
 	//support calc strExpression in debugloop
 	void EvaluateAutocomplete(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression, const wxString& keyWord, int currline);
 
@@ -319,9 +332,14 @@ public:
 
 	bool SaveAllBreakpoints();
 
-	bool ToggleBreakpoint(const wxString& strModuleName, unsigned int line);
+	// `refusal`, when given, comes back carrying WHY it was refused — the engine states the reason
+	// and the caller decides whether that is a dialog, a log line or an answer over a socket.
+	bool ToggleBreakpoint(const wxString& strModuleName, unsigned int line,
+		wxString* refusal = nullptr);
 	bool RemoveBreakpoint(const wxString& strModuleName, unsigned int line);
-	void RemoveAllBreakpoint();
+	// Same shape as ToggleBreakpoint: the reason travels to whoever asked, or is said through the
+	// platform's own Message when nobody did.
+	bool RemoveAllBreakpoint(wxString* refusal = nullptr);
 
 	bool HasConnections() const {
 
@@ -357,6 +375,23 @@ public:
 	void CallAfter(void (T::* method)(T1 x1, T2 x2), P1 x1, P2 x2) {
 		if (m_adapter != nullptr) {
 			wxQueueEvent(m_adapter, new wxAsyncMethodCallEvent2<T, T1, T2>(static_cast<T*>(m_adapter), method, x1, x2));
+		}
+	}
+
+	// ⭐ THREE, BECAUSE A THREE-ARGUMENT ANSWER TURNED UP. wx supplies the event classes for none,
+	// one and two arguments and stops there, so this one is expressed through the FUNCTOR form —
+	// the same queue, the same handler, the arguments copied into the closure exactly as the
+	// numbered versions copy them into their event. Written here rather than at the callsite so a
+	// fourth caller finds an overload instead of inventing a lambda of its own.
+	template <typename T, typename T1, typename T2, typename T3,
+	          typename P1, typename P2, typename P3>
+	void CallAfter(void (T::* method)(T1 x1, T2 x2, T3 x3), P1 x1, P2 x2, P3 x3) {
+		if (m_adapter != nullptr) {
+			T* const target = static_cast<T*>(m_adapter);
+			std::function<void()> call = [target, method, x1, x2, x3]() {
+				(target->*method)(x1, x2, x3); };
+			wxQueueEvent(m_adapter,
+				new wxAsyncMethodCallEventFunctor<std::function<void()> >(m_adapter, call));
 		}
 	}
 

@@ -82,6 +82,13 @@ public:
 	// printable form. Same road the watch window uses.
 	bool Unfold(const wxString& expression, std::vector<Local>& members, int timeoutMs = 3000);
 
+	// ⭐⭐ CODE, NOT AN EXPRESSION — run in the stopped runtime and then UNDONE. The far end wraps it
+	// in a transaction it always rolls back, so the base the person is using is not changed by an
+	// experiment run inside their own session. Longer by default than an evaluation: this may write
+	// documents, post them and read them back, which is work rather than a lookup.
+	bool Sandbox(const wxString& code, bool& ran, wxString& answer, wxString& json,
+		std::vector<wxString>& printed, int timeoutMs = 30000);
+
 	// Forgets the stop. Called when the runtime is told to continue, so a stale
 	// stack cannot be read back as the current one.
 	void Running();
@@ -98,6 +105,8 @@ public:
 	void OnSetLocalVariable(const ibLocalWindowData& watchData) override;
 	void OnSetVariable(const ibWatchWindowData& watchData) override;
 	void OnSetExpanded(const ibWatchWindowData& watchData) override;
+	void OnEvalMessage(const wxString& message) override;
+	void OnSandboxResult(bool ran, const wxString& answer, const wxString& json) override;
 
 private:
 
@@ -117,11 +126,14 @@ private:
 	// meaningfully answer anyway. Two kinds because the runtime answers them
 	// through two different events, and mixing them would let a tooltip satisfy
 	// a request for structure.
-	enum class Pending { None, Value, Members };
+	enum class Pending { None, Value, Members, Sandbox };
 
 	std::condition_variable m_answered;
 	Pending                 m_pending = Pending::None;
 	wxString                m_answer;
+	bool                    m_sandboxRan = false;   // …and whether the sandbox got as far as running
+	wxString                m_sandboxJson;          // …and its result AS A VALUE, when it could travel
+	std::vector<wxString>   m_sandboxPrinted;       // …and every line it printed while it ran
 	std::vector<Local>      m_members;
 	unsigned long long      m_nextWatchId = 1;
 };

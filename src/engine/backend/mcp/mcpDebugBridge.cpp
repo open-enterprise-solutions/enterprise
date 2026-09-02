@@ -114,6 +114,49 @@ bool ibMcpDebugBridge::Evaluate(const wxString& expression, wxString& answer, in
 	return arrived;
 }
 
+bool ibMcpDebugBridge::Sandbox(const wxString& code, bool& ran, wxString& answer, wxString& json,
+	std::vector<wxString>& printed, int timeoutMs)
+{
+	ran = false;
+	answer.Clear();
+	json.Clear();
+	printed.clear();
+
+	if (debugClient == nullptr)
+		return false;
+
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if (!m_stop.m_stopped)
+			return false;       // the runtime has to be parked: that is where the session is
+		m_pending = Pending::Sandbox;
+		m_answer.Clear();
+		m_sandboxJson.Clear();
+		m_sandboxPrinted.clear();
+		m_sandboxRan = false;
+	}
+
+	debugClient->RunSandbox(code);
+
+	std::unique_lock<std::mutex> lock(m_mutex);
+	const bool arrived = m_answered.wait_for(lock,
+		std::chrono::milliseconds(timeoutMs),
+		[this]() { return m_pending == Pending::None; });
+
+	if (arrived) {
+		ran = m_sandboxRan;
+		answer = m_answer;
+		json = m_sandboxJson;
+	}
+
+	// HANDED OVER EITHER WAY. A run that timed out still printed whatever it printed before it
+	// stopped, and those lines are the only account of how far it got.
+	printed = m_sandboxPrinted;
+
+	m_pending = Pending::None;
+	return arrived;
+}
+
 bool ibMcpDebugBridge::Unfold(const wxString& expression, std::vector<Local>& members, int timeoutMs)
 {
 	members.clear();
@@ -240,6 +283,11 @@ void ibMcpDebugBridge::OnMessageFromServer(const ibDebugLineData& data, const wx
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		m_stop.m_message = message;
+
+		// (⛔ AN ORDINARY MESSAGE IS NOT A SANDBOX'S OUTPUT. What a sandbox prints comes up the EVAL
+		//  channel — OnEvalMessage below — because evaluated code is silent to the window by
+		//  design. Collecting here would gather whatever the application happened to say at the
+		//  same moment and call it the run's result.)
 	}
 	Announce(wxT("debugger: ") + message);
 }
@@ -251,6 +299,32 @@ void ibMcpDebugBridge::OnSetToolTip(const ibDebugExpressionData& data, const wxS
 		if (m_pending != Pending::Value)
 			return;             // nobody asked — a tooltip the developer hovered
 		m_answer = resultStr;
+		m_pending = Pending::None;
+	}
+	m_answered.notify_all();
+}
+
+// ⭐⭐ WHAT EVALUATED CODE PRINTED. This is the sandbox's own voice: a block returns no value of
+// its own, so printing is how it hands anything back, and `Message(SerializeValue(x))` carries a
+// whole structure through here. Kept while a run is pending, so the answer to THAT run is what it
+// printed and not whatever else was said meanwhile.
+void ibMcpDebugBridge::OnEvalMessage(const wxString& message)
+{
+	std::lock_guard<std::mutex> lock(m_mutex);
+
+	if (m_pending == Pending::Sandbox)
+		m_sandboxPrinted.push_back(message);
+}
+
+void ibMcpDebugBridge::OnSandboxResult(bool ran, const wxString& answer, const wxString& json)
+{
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if (m_pending != Pending::Sandbox)
+			return;             // nobody is waiting — a late answer to a request that timed out
+		m_sandboxRan = ran;
+		m_answer = answer;
+		m_sandboxJson = json;
 		m_pending = Pending::None;
 	}
 	m_answered.notify_all();

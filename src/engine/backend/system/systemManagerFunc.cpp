@@ -18,6 +18,11 @@
 
 #include "systemManagerEnum.h"
 
+#include "backend/serialize/jsonProvider.h"          // a value as text — the two verbs below
+#include "backend/metaCollection/metaIntrospect.h"   // …and the type names the writing needs
+
+#include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
+
 //--- Basic:
 bool ibValueSystemFunction::Boolean(const ibValue& cValue)
 {
@@ -480,8 +485,23 @@ ibBackendValueForm* ibValueSystemFunction::ActiveWindow()
 //--- Special:
 void ibValueSystemFunction::Message(const wxString& strMessage, ibStatusMessage status)
 {
-	if (ibBackendException::IsEvalMode())
+	// 🛑⭐⭐ IN EVAL MODE IT USED TO GO NOWHERE, AND THAT IS WHY A SANDBOX PRINTED INTO SILENCE.
+	// Returning here is right for what eval mode was built for — a watch expression, a tooltip, an
+	// autocomplete probe must not talk to the person, or hovering over a variable would fill their
+	// window with its own evaluation. The sandbox is evaluation by the same machinery, so its
+	// `Message` calls hit this line and stopped (measured 2026-09-02: nothing arrived anywhere,
+	// and I blamed a dead channel that turned out to be innocent).
+	//
+	// ⭐ SO THEY LEAVE BY A CHANNEL OF THEIR OWN — the results of a sandbox, read by whoever asked
+	// for it and dropped by the designer. The person is debugging their own work and has no reason
+	// to read somebody else's probe; the assistant cannot see into that run any other way.
+	if (ibBackendException::IsEvalMode()) {
+
+		if (debugServer != nullptr && debugServer->IsDebugging())
+			debugServer->SendEvalMessage(strMessage);
+
 		return;
+	}
 
 	// ⭐ NOTHING IS INTERCEPTED HERE, deliberately. A message needs to be readable
 	// by more than the person looking at the pane — but the place to keep it is
@@ -498,12 +518,35 @@ void ibValueSystemFunction::Message(const wxString& strMessage, ibStatusMessage 
 	// per-session worker thread on web.
 	if (auto* frame = ibSession::CurrentFrame())
 		frame->Message(strMessage, status);
+
+	// ⭐⭐ AND UP THE DEBUG CHANNEL, WHEN SOMEBODY IS ATTACHED. The road has been there all along —
+	// `CommandId_MessageFromServer`, which the designer parses and hands to every bridge on it —
+	// and nothing ever sent one: SendErrorToClient had no callers at all (measured 2026-09-02,
+	// looking for why a sandbox's printed lines never arrived). What a running application says is
+	// exactly what somebody debugging it needs to read, and they are not sitting in front of its
+	// window.
+	//
+	// (⛔ AN ORDINARY MESSAGE DOES NOT GO UP THE DEBUG CHANNEL. It was sent there for one build, and
+	//  the objection is the right one: every line a running application says would storm whoever is
+	//  attached, to tell them things they can already see in the window in front of them. Only
+	//  EVALUATED code takes the channel — above — because that is the output nobody can see
+	//  otherwise.)
 }
 
 void ibValueSystemFunction::Alert(const wxString& strMessage) //Alert
 {
-	if (ibBackendException::IsEvalMode())
+	// ⭐ A DIALOG THAT CANNOT OPEN STILL SAID SOMETHING. Evaluated code raising an alert gets no
+	// window — correctly: a probe must not stop the person's session with a box they did not ask
+	// for. But the TEXT is the whole content of that alert, and it is exactly what whoever ran the
+	// code needs to read, so it goes up the eval channel MARKED for what it was: a modal the code
+	// tried to open (Max, 2026-09-02).
+	if (ibBackendException::IsEvalMode()) {
+
+		if (debugServer != nullptr && debugServer->IsDebugging())
+			debugServer->SendEvalMessage(wxT("(alert, not shown) ") + strMessage);
+
 		return;
+	}
 
 	// Frontend-owned: frame knows whether to pop a wx-modal (desktop)
 	// or emit a toast/HTTP notification (web). ShowModalMessage on web
@@ -515,7 +558,15 @@ void ibValueSystemFunction::Alert(const wxString& strMessage) //Alert
 
 ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMode mode)//Question
 {
+	// …AND THE SAME FOR A QUESTION, whose answer nobody can give here: the code gets the empty
+	// return code it always got, and the person who ran it learns that the code STOPPED TO ASK —
+	// which is often the finding itself, since a question in the middle of a calculation is why
+	// the calculation never finished.
 	if (ibBackendException::IsEvalMode()) {
+
+		if (debugServer != nullptr && debugServer->IsDebugging())
+			debugServer->SendEvalMessage(wxT("(question, not asked) ") + strMessage);
+
 		return new ibValueEnumQuestionReturnCode();
 	}
 
@@ -626,6 +677,72 @@ bool ibValueSystemFunction::IsNull(const ibValue& cData)
 bool ibValueSystemFunction::ValueIsFilled(const ibValue& cData)
 {
 	return !cData.IsEmpty();
+}
+
+// ⭐⭐ A VALUE, AS TEXT — WRITTEN WHERE THE VALUE IS. Everything under this was already built: a
+// value packs itself into an ibDataNode, the configuration's door adds the types only it can make
+// (references, enum members), and a provider writes that node as JSON. What was missing is the one
+// thing that matters in practice — a way to ask for it FROM SCRIPT, at the line where the value
+// exists (Max, 2026-09-02: *"the point is that you write it as a CALL — you have a selection there
+// and you see straight away what it is made of"*).
+//
+// Printing answers what a value LOOKS like; this answers what it IS. A structure survives the trip,
+// which is the difference between reading a report and reading a sentence about one. Coverage grows
+// with the types: whatever learns to pack itself is in here the day it does, with nothing to add.
+wxString ibValueSystemFunction::SerializeValue(const ibValue& cData)
+{
+	// THE CONFIGURATION IS THE RUNNING ONE — the same one every other function in this file asks
+	// for. A value's references mean nothing without it: their types exist in its registry alone.
+	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
+		ibBackendCoreException::Error(_("There is no open configuration to write this value against"));
+
+	ibDataNode node;
+	activeMetaData->Serialize(cData, node);   // raises on a value that cannot travel
+
+	ibJsonProvider provider;
+	provider.SetTypeResolver(ibMetaTypeResolver(activeMetaData));
+
+	ibWriterMemory writer;
+	if (!provider.Write(node, writer))
+		ibBackendCoreException::Error(_("This value could not be written as JSON"));
+
+	return wxString::FromUTF8(reinterpret_cast<const char*>(writer.pointer()), writer.size());
+}
+
+// …AND BACK, which is the half that lets a value be MADE from outside. Text arrives — typed by
+// hand, produced by the function above, sent in over the debugger's sandbox — and becomes a value
+// this configuration understands.
+//
+// ⚠ NOT EVERY WRITING SURVIVES THE RETURN TRIP. The JSON view is a rendering: a date becomes an
+// ISO string, a type description is written out by name, and fields and properties flatten into one
+// set (serialize/jsonProvider.h says so in its own words). What comes back is what the text can
+// carry, so a value that must return EXACTLY as it left travels as the binary form instead. Said
+// here rather than discovered: a lossy round trip that nobody warned about is read as a defect in
+// whatever used it next.
+ibValue ibValueSystemFunction::DeserializeValue(const wxString& strJson)
+{
+	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
+		ibBackendCoreException::Error(_("There is no open configuration to read this value against"));
+
+	ibJsonProvider provider;
+	provider.SetTypeLookup([](const wxString& name) -> ibClassID {
+		return activeMetaData != nullptr
+			? activeMetaData->GetIDObjectFromString(name) : ibClassID(0); });
+
+	// ⚠ THE BUFFER OUTLIVES THE READER, deliberately — a reader BORROWS its bytes (fs.h), and
+	// handing it a temporary leaves it reading freed memory.
+	const wxScopedCharBuffer utf8 = strJson.utf8_str();
+
+	wxMemoryBuffer bytes;
+	bytes.AppendData(utf8.data(), utf8.length());
+
+	ibReaderMemory reader(bytes);
+
+	ibDataNode node;
+	if (!provider.Read(reader, node))
+		ibBackendCoreException::Error(_("This text is not JSON a value can be read from"));
+
+	return activeMetaData->Deserialize(node);
 }
 
 ibValue ibValueSystemFunction::Evaluate(const wxString& strExpression)

@@ -99,6 +99,26 @@ public:
 	static bool IsEmptyValue(const ibValue& cData);
 	static bool IsNull(const ibValue& cData);
 	static bool ValueIsFilled(const ibValue& cData);
+
+	// ⭐⭐ A RUNTIME VALUE AS TEXT, AND BACK. The engine has packed values into an ibDataNode for a
+	// while (value.h `Serialize` / `Deserialize`, ibMetaData's door for the types only a
+	// configuration has), and a provider has been able to write that node as JSON — but nothing in
+	// the LANGUAGE could ask for either, so the whole road was reachable from C++ alone.
+	//
+	// These two open it: a script hands over any value it holds and gets text it can print, store,
+	// send or compare — and hands text back to get the value again. What it buys beyond printing:
+	// a structure survives the trip (a printed form does not), and an assistant on the other end of
+	// the debugger's sandbox can BUILD a value by writing JSON, which is the only way to construct
+	// one from outside the process (Max, 2026-09-02: *"as a bonus, with these you can create
+	// runtime values just by passing JSON"*).
+	static wxString SerializeValue(const ibValue& cData);
+	static ibValue  DeserializeValue(const wxString& strJson);
+
+	// (⛔ NO MESSAGE CAPTURE HERE. Getting the lines a run printed is not a new mechanism: the
+	//  debug channel already carries messages from a running application to whoever is attached —
+	//  `CommandId_MessageFromServer`, sent by ibDebuggerServer::SendErrorToClient. It looked like
+	//  it did not work because that sender was called from NOWHERE. A road with no writer, not a
+	//  missing road: Message hands them to it below.)
 	static ibValue Evaluate(const wxString& expression);
 	static void Execute(const wxString& sCode);
 	static wxString Format(ibValue& cData, const wxString& fmt = wxEmptyString);

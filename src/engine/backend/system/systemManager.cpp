@@ -115,7 +115,12 @@ enum
 	// silently re-point every later method at the wrong case.
 	enRunScheduledJobs,
 	enRunJob,
-	enRunBackground
+	enRunBackground,
+	//--- Value as text: appended after the jobs for the same reason they were appended after
+	// everything else — the ordinal IS the method index, so a new name goes at the END or every
+	// later case answers to the wrong verb.
+	enSerializeValue,
+	enDeserializeValue
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -230,6 +235,9 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("RunScheduledJobs"), wxT("RunScheduledJobs()"));
 	helper.AppendFunc(wxT("RunJob"), 1, wxT("RunJob(name : string)"));
 	helper.AppendFunc(wxT("RunBackground"), 2, wxT("RunBackground(procedure : string, args : array)"));
+	//--- …and value-as-text last, matching the enSerializeValue / enDeserializeValue tail above.
+	helper.AppendFunc(wxT("SerializeValue"), 1, wxT("SerializeValue(value : any)"));
+	helper.AppendFunc(wxT("DeserializeValue"), 1, wxT("DeserializeValue(json : string)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -332,6 +340,8 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			pvarRetValue = RunBackground(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1] : nullptr);
 			return true;
+		case enSerializeValue: pvarRetValue = SerializeValue(*paParams[0]); return true;
+		case enDeserializeValue: pvarRetValue = DeserializeValue(paParams[0]->GetString()); return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

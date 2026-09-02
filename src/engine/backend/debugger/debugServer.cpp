@@ -20,6 +20,8 @@
 #include "backend/session/workerPool.h"
 
 #include "backend/fileSystem/fs.h"
+#include "backend/system/systemManager.h"     // Message — the person is told before code runs
+#include "backend/databaseLayer/databaseLayer.h"   // …and the transaction that undoes it
 #if _USE_NET_COMPRESSOR == 1
 #include "utils/fs/lz/lzhuf.h"
 #endif
@@ -477,6 +479,21 @@ void ibDebuggerServer::EnterDebugger(ibRunContext* runContext, const ibByteUnit&
 
 		numPrevLine = byteCode.m_numLine;
 	}
+}
+
+void ibDebuggerServer::SendEvalMessage(const wxString& strMessage)
+{
+	// ⚠ NO LAZY CreateServer HERE. The error road below opens one when none is running, because an
+	// error is worth reaching a developer for; an evaluation that nobody is watching simply has
+	// nowhere to go, and opening a socket to say so would be worse than silence.
+	if (m_socketConnectionThread == nullptr || !m_socketConnectionThread->IsConnected() || !m_bUseDebug)
+		return;
+
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_EvalMessage);
+	commandChannel.w_stringZ(strMessage);
+
+	SendCommand(commandChannel.pointer(), commandChannel.size());
 }
 
 void ibDebuggerServer::SendErrorToClient(const wxString& strFileName,
@@ -1240,10 +1257,17 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		commandReader.r_stringZ(strFileName);
 		commandReader.r_stringZ(strModuleName);
 		commandReader.r_stringZ(strExpression);
-		if (ms_debugServer->IsDebugLooped()) {
-
-			// ⭐⭐ ALWAYS ANSWER. A request that cannot be worked out is still a request, and the
-			// answer to it is "no" — not silence.
+		{
+			// 🛑⭐⭐ AND THE GATE ITSELF USED TO SWALLOW. "Always answer" was applied INSIDE
+			// `if (IsDebugLooped())` and not to the gate around it, so a request arriving when the
+			// runtime is not parked — or when the debug thread cannot resolve which session is
+			// parked — produced nothing at all. Measured 2026-09-02: stopped in `BeforeStart`,
+			// both `debug_evaluate` and the new sandbox timed out identically, and a timeout says
+			// "the connection is broken" about a runtime that was answering `continue` perfectly.
+			//
+			// The same fix, one level up: work it out if it can be worked out, say so if it cannot,
+			// and send either way. A gate that decides whether to REPLY is a gate that turns every
+			// state it does not like into a broken link.
 			//
 			// 🛑 THE SEND USED TO SIT INSIDE `if (EvalInParkedSession(...))`, so an expression the
 			// runtime could not evaluate produced NOTHING on the wire. For a person hovering in the
@@ -1253,7 +1277,8 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			// points at the connection instead of at the expression (2026-09-01, stopped inside
 			// Posting: `1 + 2 * 3` timed out exactly like a broken link).
 			ibValue vResult;
-			const bool evaluated = EvalInParkedSession(strExpression, vResult, false);
+			const bool parked = ms_debugServer->IsDebugLooped();
+			const bool evaluated = parked && EvalInParkedSession(strExpression, vResult, false);
 
 			ibWriterMemory commandChannel;
 			commandChannel.w_u16(CommandId_EvalToolTip);
@@ -1262,11 +1287,210 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			commandChannel.w_stringZ(strExpression);
 			commandChannel.w_stringZ(evaluated
 				? vResult.GetString()
-				: _("<cannot be evaluated here>"));
+				: (parked ? _("<cannot be evaluated here>")
+				          : _("<the runtime is not parked at a breakpoint>")));
 
-			if (ms_debugServer->IsDebugLooped()) {
-				SendCommand(commandChannel.pointer(), commandChannel.size());
+			SendCommand(commandChannel.pointer(), commandChannel.size());
+		}
+	}
+	// 🛑⭐⭐ THE SANDBOX. Arbitrary code, run in the stopped runtime, INSIDE A TRANSACTION THAT IS
+	// ALWAYS ROLLED BACK — the point is to change nothing (Max, 2026-09-02: *"the most important
+	// thing is not to change the data"*).
+	//
+	// ⭐ THE ROLLBACK IS NOT A PROMISE, IT IS THE ARITHMETIC OF THE TRANSACTION COUNTER. A script
+	// that opens and commits its own transaction inside this one only moves the depth 1→2→1; the
+	// real DoCommit fires at the outermost level and the outermost level here is a RollBack. So
+	// even code that deliberately commits is undone — which is what makes this safe to point at a
+	// base that belongs to somebody.
+	//
+	// ⚠ AND THE PERSON IS TOLD, in their own window, before it runs. Somebody watching an
+	// application they are using is entitled to know that code they did not write is executing in
+	// it; an assistant working silently inside somebody's session is the thing this must never be.
+	else if (commandFromClient == CommandId_RunSandbox) {
+
+		wxString code;
+		commandReader.r_stringZ(code);
+
+		// ⚠ ANSWERED EVEN WHEN IT CANNOT RUN — see the note on the evaluation above. A caller that
+		// waits deserves a sentence, and "not parked" is a sentence it can act on; silence is one
+		// it can only time out on.
+		if (!ms_debugServer->IsDebugLooped()) {
+
+			ibWriterMemory refused;
+			refused.w_u16(CommandId_RunSandbox);
+			refused.w_u8(0);
+			refused.w_stringZ(_("The runtime is not parked at a breakpoint, so there is no session and "
+				"no frame for the code to run in. Nothing was run and nothing was changed."));
+			refused.w_stringZ(wxEmptyString);   // …and no value, for the same reason
+
+			SendCommand(refused.pointer(), refused.size());
+		}
+		else {
+
+			// 🛑⭐ TOLD FROM THE APPLICATION'S OWN THREAD, NOT FROM THIS ONE. This runs on the debug
+			// thread; `Message` reaches the frame, and a desktop frame draws — touching a window
+			// from a thread that does not own it hangs where it does not crash, and the caller
+			// waiting for the sandbox's answer sees a timeout with no clue why (measured
+			// 2026-09-02: `debug_evaluate` answered `4` from this very stop while the sandbox, one
+			// branch along, timed out — the difference was these two lines).
+			//
+			// Handed to the main thread and forgotten: the person is being told something, not
+			// asked, so nothing here has any reason to wait for it.
+			const auto tell = [](const wxString& text, ibStatusMessage status) {
+				if (wxTheApp != nullptr)
+					wxTheApp->CallAfter([text, status]() {
+						ibValueSystemFunction::Message(text, status); });
+			};
+
+			tell(_("An assistant is running code here in a sandbox - nothing it writes is kept."),
+				ibStatusMessage::ibStatusMessage_Information);
+
+			// …AND WHAT IT WAS. A person who is told that "code is running" and not WHICH code has
+			// been told the alarming half and none of the useful one; they are sitting in front of
+			// the window it runs in, and this is what lets them follow along rather than wonder.
+			tell(code, ibStatusMessage::ibStatusMessage_Information);
+
+			wxString answer, json;
+			bool ran = false;
+
+			// 🛑⭐⭐ THE TRANSACTION BELONGS TO THE PARKED SESSION'S OWN CONNECTION, and taking it on
+			// `db_query` was wrong twice over. A session owns ONE connection (session.h: *"session
+			// has one conn"*), and that is the one the code about to run will write through;
+			// `db_query` resolves to the CALLING THREAD's holder, which here is the debug thread —
+			// a different connection entirely. So the rollback would have covered nothing the
+			// script did, which is the failure mode this whole verb exists to prevent, and it is
+			// SILENT: the experiment appears to work and the base keeps the writes.
+			//
+			// It also explains the hang that found it: asking the pool for a second connection to a
+			// file base, while the parked worker holds the first, waits out the checkout timeout —
+			// thirty seconds, exactly the length of the caller's wait (2026-09-02).
+			std::shared_ptr<ibDatabaseLayer> layer;
+
+			try {
+				ibSession* parked = ibSession::Current();
+				if (parked != nullptr)
+					layer = parked->EnsureConnection();
 			}
+			catch (...) {
+				layer = nullptr;
+			}
+
+			if (layer == nullptr) {
+				answer = _("The parked session has no open connection, so there is nothing to run the "
+					"code against and no transaction to undo it with. Nothing was run.");
+			}
+			else {
+				// ⚠ THE ROLLBACK IS OUTSIDE EVERY EXIT. A throw is the LIKELY end of a piece of code
+				// somebody is testing, and a transaction left open by a failed experiment would hold
+				// locks on a live base until the application closed.
+				layer->BeginTransaction();
+
+				try {
+					ibValue vResult;
+
+					// (⛔ NOTHING IS COLLECTED HERE. What the code prints goes up the debug channel
+					//  as it happens — Message hands every line to SendErrorToClient now — so it
+					//  arrives at the caller BEFORE this reply does, in the order it was printed.
+					//  Gathering it a second time into this answer would be the same fact on two
+					//  roads, and two roads diverge.)
+					ran = EvalInParkedSession(code, vResult, /*compileBlock*/ true);
+
+					// 🛑 THE REASON IS IN THE VALUE, and it was being thrown away. A failed
+					// evaluation writes `<error: …>` into the result slot rather than raising
+					// (procUnit.cpp, so the watch row can show it) — so reading the result only on
+					// success meant every refusal arrived as an empty answer, and "it did not
+					// compile" was indistinguishable from "it ran and produced nothing"
+					// (measured 2026-09-02, first live run: `2 + 2;` came back blank).
+					if (!ran) {
+						answer = vResult.GetString();
+
+						// ⭐ AND THE COMPILER'S OWN WORDS BESIDE IT. The value slot carries a
+						// generic `<error: compile failed>` when the compile aborted before it
+						// could describe itself; the description is where every other failure in
+						// this process leaves it — GetLastError, which is exactly what the watch
+						// channel sends (SendExpressions, above). Without it a caller is told THAT
+						// their code did not compile and never WHY, which is a round trip they
+						// cannot make on their own (measured 2026-09-02: `SerializeValue(42)`
+						// compiled in the designer and failed here, with nothing to say why).
+						const wxString said = ibBackendException::GetLastError();
+						if (!said.IsEmpty())
+							answer = answer.IsEmpty() ? said : (answer + wxT(" ") + said);
+					}
+
+					if (ran) {
+						answer = vResult.GetString();
+
+						// ⭐⭐ AND THE VALUE ITSELF, NOT ONLY HOW IT PRINTS. A printed form is what a
+						// person reads; a caller on the other end of this socket wants the thing it
+						// is made of — a selection's columns, a structure's fields — and now the
+						// language has a verb for exactly that (Max, 2026-09-02: *"instead of
+						// Message you just output the JSON value and take it apart on your side"*).
+						//
+						// ⚠ FAILING TO SERIALIZE IS NOT FAILING TO RUN. Plenty of values cannot
+						// travel (IsTransferable says so), and the run they came from was still a
+						// success — so this is tried separately and its failure costs the JSON
+						// field, nothing else.
+						try {
+							json = ibValueSystemFunction::SerializeValue(vResult);
+						}
+						catch (...) {
+							json.Clear();
+						}
+					}
+				}
+				catch (const ibBackendException& err) {
+					answer = err.GetErrorDescription();
+				}
+				catch (...) {
+					answer = _("The code failed with something that carries no description.");
+				}
+
+				try {
+					layer->RollBack();
+				}
+				catch (...) {
+					// A rollback that cannot run is not something the caller can act on, and saying
+					// nothing about the RESULT because of it would be worse.
+				}
+
+				// (⛔ NO LOCALS ARE RE-SENT. The frame's variables travel with the stop and the
+				//  watch window keeps them; the code's OWN variables live in the eval's shim frame
+				//  and never appear there, so a second send would repeat what the caller has and
+				//  still miss what it asked for — Max, 2026-09-02, weighing this exact addition.
+				//  What the code wants seen, it prints, and that lands in the window as it runs.)
+			}
+
+			// ⭐⭐ AND THE PERSON SEES HOW IT ENDED, not only that it started. Announcing the start
+			// and then going quiet is the worst of both: they know something ran in their session
+			// and have no idea what came of it (Max, 2026-09-02: *"show the user at least your
+			// intermediate results, so they can see something is happening"*).
+			//
+			// The work in between shows itself: `Message` inside the code lands in this window as
+			// it runs, live — which is how a caller narrates a long experiment rather than
+			// producing one silent answer at the end.
+			{
+				const wxString shown = answer.length() > 500
+					? answer.Left(497) + wxT("...") : answer;
+
+				tell(ran
+					? wxString::Format(
+						_("The sandbox finished and everything it wrote was rolled back. %s"), shown)
+					: wxString::Format(_("The sandbox stopped: %s"), shown),
+					ran ? ibStatusMessage::ibStatusMessage_Information
+					    : ibStatusMessage::ibStatusMessage_Error);
+			}
+
+			// ⚠ THE OUTCOME IS A NUMBER, NOT THE WORD "ok". A flag spelled as a string is compared as
+			// a string at the other end, and a comparison by TEXT is one a rename, a translation or
+			// a typo silently inverts — the wire says whether it ran, and one byte says it exactly.
+			ibWriterMemory commandChannel;
+			commandChannel.w_u16(CommandId_RunSandbox);
+			commandChannel.w_u8(ran ? 1 : 0);
+			commandChannel.w_stringZ(answer);
+			commandChannel.w_stringZ(json);   // the value itself, when it could be written
+
+			if (ms_debugServer->IsDebugLooped())
+				SendCommand(commandChannel.pointer(), commandChannel.size());
 		}
 	}
 	else if (commandFromClient == CommandId_SetStack) {

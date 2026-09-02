@@ -145,11 +145,30 @@ public:
 	void EnterDebugger(ibRunContext* runContext, const struct ibByteUnit& byteCode, long& numPrevLine);
 	void SendErrorToClient(const wxString& strFileName, const wxString& strDocPath, unsigned int numLine, const wxString& strErrorMessage);
 
+	// ⭐ WHAT EVALUATED CODE PRINTED — up the eval channel, to whoever asked for the evaluation.
+	//
+	// Separate from the error road above on purpose, and not only to keep the volume down: the
+	// person at the designer is debugging their own work and has no reason to read what somebody
+	// else's sandbox is printing, while the assistant that ran it has no other way to see it — it
+	// is not their window (Max, 2026-09-02: *"I do not need to see those messages; you do, because
+	// you write them in the sandbox and I have no access to the sandbox"*).
+	//
+	// Never opens a connection: unlike an error, an evaluation is not worth a listening socket.
+	void SendEvalMessage(const wxString& strMessage);
+
 	// "Is the debug-thread-current session parked in DoDebugLoop?" Resolves
 	// the per-session m_debugLoop via ibSession::Current() (body in .cpp —
 	// the header only forward-declares ibSession). Advisory fast-path for the
 	// command handlers; EvalInParkedSession re-checks authoritatively.
 	bool IsDebugLooped() const;
+
+	// ⭐ IS ANYBODY WATCHING THIS RUN AT ALL — asked before handing anything to the debug channel.
+	//
+	// 🛑 IT MATTERS BECAUSE SendErrorToClient CREATES THE SERVER when there is no connection thread
+	// yet, and waits while it does. That is right for the one caller it had (an error, where
+	// reaching the developer is worth the cost) and wrong for a caller on the ordinary path: every
+	// `Message` in an application nobody is debugging would try to open a listening socket.
+	bool IsDebugging() const { return m_bUseDebug; }
 
 protected:
 

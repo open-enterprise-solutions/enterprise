@@ -45,6 +45,17 @@ public:
 	virtual void OnSetVariable(const ibWatchWindowData& watchData) = 0;
 	virtual void OnSetExpanded(const ibWatchWindowData& watchData) = 0;
 
+	// ⚠ NOT PURE, AND DECLARED LAST. Every other method here is required of a bridge because every
+	// bridge shows it; the sandbox is asked for by one caller and is nothing to a window that never
+	// runs code. Made pure, it would have broken every implementer to add a method most of them
+	// would leave empty — and appending rather than inserting keeps the vtable slots below it where
+	// a partially built DLL expects them.
+	virtual void OnSandboxResult(bool ran, const wxString& answer, const wxString& json) {}
+
+	// A line printed by evaluated code. Not shown to the person: the designer drops these, and
+	// whoever asked for the evaluation reads them.
+	virtual void OnEvalMessage(const wxString& message) {}
+
 private:
 	// Its own, from birth. Nothing hands it in, so two bridges cannot be given the same one and a
 	// bridge cannot be created without one.

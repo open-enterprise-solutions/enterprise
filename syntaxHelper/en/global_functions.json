@@ -1815,6 +1815,48 @@
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [],
       "reviewed": false
+    },
+    {
+      "id": "fn.SerializeValue",
+      "name_local": "SerializeValue",
+      "name_en": "SerializeValue",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "SerializeValue(value : any)",
+      "description": "Turns a runtime value into text (JSON). Printing a value answers what it LOOKS like; this answers what it IS MADE OF, so a structure survives being written down: a selection, a record set, a document object, an array. Use it where the value exists - beside the line that built it - to see what is inside it, to store it, to compare two of them, or to send one somewhere. What can be written grows with the types: whatever learns to pack itself is covered the day it does.",
+      "syntax_block": "SerializeValue(value : any)",
+      "parameters": "value - any value this configuration can hold.",
+      "return_descr": "The value as JSON text. Raises when the value cannot travel (IsTransferable) or when no configuration is open - the types a reference names live in the configuration's own registry.",
+      "example": "Selection = Query.Execute().Select();\nWhile Selection.Next() Do\n\tMessage(SerializeValue(Selection));\nEndDo;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "fn.DeserializeValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "fn.DeserializeValue",
+      "name_local": "DeserializeValue",
+      "name_en": "DeserializeValue",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "DeserializeValue(json : string)",
+      "description": "Reads text written by SerializeValue back into a runtime value - and, with it, BUILDS a value from JSON that was written by hand or arrived from outside. That is the only way to construct one without script: text in, value out. NOT every writing survives the return trip: the JSON view is a rendering, so a date is an ISO string and some shapes flatten. Where a value has to come back exactly as it left, keep the binary form.",
+      "syntax_block": "DeserializeValue(json : string)",
+      "parameters": "json - text as SerializeValue writes it.",
+      "return_descr": "The value the text describes. Raises when the text is not JSON a value can be read from, when it names a type this configuration does not have, or when no configuration is open.",
+      "example": "Value = DeserializeValue(\"{\\\"type\\\":\\\"Number\\\",\\\"value\\\":42}\");",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "fn.SerializeValue"
+      ],
+      "reviewed": false
     }
   ]
 }
