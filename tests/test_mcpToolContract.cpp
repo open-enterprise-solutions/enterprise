@@ -155,6 +155,46 @@ TEST(McpToolContract, EveryTool_PublishesAnObjectSchema)
 	}
 }
 
+// 🛑 THE ENVELOPE'S OWN SCHEMA, because everything else is behind it.
+//
+// `mcp_call` declared `arguments` as a STRING while the server reads it as a NODE
+// (ibMcpServer::Answer → `given->FindChild("arguments")`). A client that believes the schema it is
+// handed — which is what a correct one does — encoded the arguments as JSON text, FindChild saw
+// nothing, and every tool answered about its own first required argument: "chat_say needs 'text',
+// and it did not come", of a call that carried it. Not one verb was reachable, and the refusal
+// pointed at the letter while the fault was in the envelope (found on the first connection of the
+// first session, 2026-09-02).
+//
+// Pinned by NAME here, alone among these tests, because this is not a rule every tool owes its
+// caller — it is the single door they all arrive through, and its two arguments have exactly one
+// correct shape each.
+TEST(McpToolContract, TheEnvelope_TakesItsArgumentsAsAnObject)
+{
+	const ibMcpTool* envelope = ibFindMcpTool(wxT("mcp_call"));
+	ASSERT_NE(envelope, nullptr) << "the envelope every deferred tool is called through is missing";
+
+	const ibDataNode schema = SchemaOf(envelope);
+	const ibDataNode* properties = schema.FindChild(wxT("properties"));
+	ASSERT_NE(properties, nullptr);
+
+	const ibDataNode* arguments = properties->FindChild(wxT("arguments"));
+	ASSERT_NE(arguments, nullptr) << "mcp_call declares no `arguments`";
+
+	const ibDataValue* type = arguments->FindField(wxT("type"));
+	ASSERT_NE(type, nullptr);
+	EXPECT_EQ(type->AsString(), wxT("object"))
+		<< "mcp_call's `arguments` is read with FindChild and must be declared an object";
+
+	// And the name beside it is a plain name, not a structure — the other half of the pair, so a
+	// fix to one cannot silently take the other with it.
+	const ibDataNode* target = properties->FindChild(wxT("tool"));
+	ASSERT_NE(target, nullptr) << "mcp_call declares no `tool`";
+
+	const ibDataValue* targetType = target->FindField(wxT("type"));
+	ASSERT_NE(targetType, nullptr);
+	EXPECT_EQ(targetType->AsString(), wxT("string"));
+}
+
 TEST(McpToolContract, EveryRequiredArgument_IsAlsoDeclared)
 {
 	// ⭐ THE ONE THAT MATTERS MOST. A schema that REQUIRES a name it never
@@ -311,6 +351,61 @@ TEST(McpToolContract, EveryToolName_IsSpelledTheWayTheProtocolSpellsThem)
 		EXPECT_FALSE(name.StartsWith(wxT("_")));
 		EXPECT_FALSE(name.EndsWith(wxT("_")));
 	}
+}
+
+//---------------------------------------------------------------------------
+// how a query is matched — the one rule both finders share
+//---------------------------------------------------------------------------
+//
+// ⭐ WHAT IS PINNED HERE IS THE COUNT, not a verdict. Requiring every word to land is what made
+// live questions answer nothing — "moved back and forth" found no passage though transfers are
+// written up in full — and nothing is the one answer a finder must not give lightly: it reads as
+// "this platform has no such thing", and the caller goes and builds it by hand.
+
+TEST(McpSearch, AWordTooMany_NarrowsTheAnswerInsteadOfErasingIt)
+{
+	const wxString text = wxT("Stock is moved between warehouses with a transfer document.");
+
+	size_t asked = 0;
+
+	// Everything landed — the caller asked precisely, and precision still wins.
+	EXPECT_EQ(ibMcpWordsFound(text, wxT("moved warehouses"), &asked), 2u);
+	EXPECT_EQ(asked, 2u);
+
+	// One word of theirs is not ours. The old rule answered 0 here, which is the defect.
+	EXPECT_EQ(ibMcpWordsFound(text, wxT("stock moved back and forth"), &asked), 2u);
+	EXPECT_EQ(asked, 5u);
+
+	// Nothing of it is here at all — and THAT is still an honest nothing.
+	EXPECT_EQ(ibMcpWordsFound(text, wxT("payroll vacation"), nullptr), 0u);
+}
+
+TEST(McpSearch, AWordIsMetAtItsStem_SoTheFormOfTheNounDoesNotDecide)
+{
+	const wxString text = wxT("Distribution of overheads by a base, lot by lot.");
+
+	EXPECT_GT(ibMcpWordsFound(text, wxT("distributing"), nullptr), 0u);
+	EXPECT_GT(ibMcpWordsFound(text, wxT("lots"), nullptr), 0u);
+
+	// Three letters would let `set` reach half of everything, so the floor is four: `over` is a
+	// stem of "overheads" and matches, `ove` is never tried on its own.
+	EXPECT_EQ(ibMcpWordsFound(text, wxT("ova"), nullptr), 0u);
+}
+
+TEST(McpSearch, APatternIsReadAsOne_ButAnOrdinaryBracketIsNot)
+{
+	const wxString text = wxT("Write-off by FIFO takes the oldest lot first.");
+
+	EXPECT_TRUE(ibMcpIsRegex(wxT("lot|batch|fifo")));
+	EXPECT_GT(ibMcpWordsFound(text, wxT("lot|batch|fifo"), nullptr), 0u);
+	EXPECT_EQ(ibMcpWordsFound(text, wxT("payroll|vacation"), nullptr), 0u);
+
+	// ⚠ THE CASE THAT DECIDED WHERE THE LINE IS. Nearly any sentence compiles as a pattern, and
+	// "cost adjustment (RAUZ)" read as one matches nothing — the brackets silently became
+	// grouping. Ordinary punctuation must therefore not switch modes.
+	EXPECT_FALSE(ibMcpIsRegex(wxT("cost adjustment (RAUZ)")));
+	EXPECT_FALSE(ibMcpIsRegex(wxT("how much is left?")));
+	EXPECT_FALSE(ibMcpIsRegex(wxT("Catalog.Warehouses")));
 }
 
 //---------------------------------------------------------------------------

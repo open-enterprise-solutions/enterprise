@@ -273,6 +273,59 @@ TEST(SpreadsheetCellDescription, Equality_LooksAtEveryFieldTheCellCarries)
 	EXPECT_FALSE(first == second);
 }
 
+// 🛑 A CELL POINTER MUST SURVIVE THE NEXT CELL BEING MADE, and for a long time it did not.
+//
+// GetOrCreateCell hands out a pointer INTO the container the cells live in. While that was a
+// `std::vector`, creating one more cell moved all of them, and every pointer taken before that
+// moment pointed at freed memory — writing through one corrupted the heap. It is not a mistake a
+// caller can avoid: SetCellSize is built on exactly this order, taking the owner cell, creating
+// the cells the merge covers, then writing the span back through the first pointer. `sheet_cell`
+// with a colSpan on an empty template killed the designer that way (2026-09-02).
+//
+// So the invariant is pinned here rather than the two callers being made careful: the address of a
+// cell does not change, and what was written through it is still there afterwards.
+TEST(SpreadsheetDescription, GetOrCreateCell_APointerStaysGoodWhenMoreCellsAreMade)
+{
+	ibSpreadsheetDescription sheet;
+
+	ibSpreadsheetCellDescription* first = sheet.GetOrCreateCell(1, 1);
+	ASSERT_NE(first, nullptr);
+	first->m_value = wxT("Header");
+
+	// Enough to force any growth strategy to relocate several times over.
+	for (int row = 1; row <= 8; row++)
+		for (int col = 1; col <= 8; col++)
+			sheet.GetOrCreateCell(row, col);
+
+	EXPECT_EQ(sheet.GetOrCreateCell(1, 1), first)
+		<< "the cell moved - a pointer taken earlier is now dangling";
+	EXPECT_EQ(first->m_value, wxT("Header"))
+		<< "the cell survived as an address but not as a value";
+}
+
+// AND THE MERGE ITSELF, which is the caller that met it first. A span over cells that do not exist
+// yet creates them, and the owner's own span is written after that.
+TEST(SpreadsheetDescription, SetCellSize_SpanningIntoUnmadeCells_KeepsTheOwnersSpan)
+{
+	ibSpreadsheetDescription sheet;
+
+	ibSpreadsheetCellDescription* owner = sheet.GetOrCreateCell(1, 1);
+	ASSERT_NE(owner, nullptr);
+
+	sheet.SetCellSize(1, 1, 1, 6);   // one cell becomes six - five of them made right here
+
+	int rows = 1, cols = 1;
+	sheet.GetOrCreateCell(1, 1)->GetSize(&rows, &cols);
+
+	EXPECT_EQ(rows, 1);
+	EXPECT_EQ(cols, 6) << "the span was written through a pointer taken before the cells were made";
+
+	// And what the span covers points back at its owner, which is how the grid finds it.
+	int coveredRows = 1, coveredCols = 1;
+	sheet.GetOrCreateCell(1, 3)->GetSize(&coveredRows, &coveredCols);
+	EXPECT_EQ(coveredCols, -2) << "a covered cell says where its owner is, as a negative offset";
+}
+
 // ---------------------------------------------------------------------------
 //  The SHEET — positions, bands, freeze; the cells answer for themselves
 // ---------------------------------------------------------------------------
