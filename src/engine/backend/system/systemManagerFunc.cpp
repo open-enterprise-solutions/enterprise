@@ -39,6 +39,35 @@ wxLongLong_t ibValueSystemFunction::Date(const ibValue& cValue)
 	return cValue.GetDate();
 }
 
+wxLongLong_t ibValueSystemFunction::Date(int year, int month, int day, int hour, int minute, int second)
+{
+	// REFUSED RATHER THAN ROLLED OVER. wxDateTime happily takes a 13th month and answers with
+	// January of the next year — a date nobody wrote, in a figure somebody will reconcile against.
+	// The month is named because that is the one people get wrong by writing the day first.
+	if (month < 1 || month > 12)
+		ibBackendCoreException::Error(_("Date: '%s' is not a month"), wxString::Format(wxT("%d"), month));
+
+	if (year < 1 || year > 9999)
+		ibBackendCoreException::Error(_("Date: '%s' is not a year"), wxString::Format(wxT("%d"), year));
+
+	const wxDateTime::Month wxMonth = static_cast<wxDateTime::Month>(wxDateTime::Jan + (month - 1));
+
+	if (day < 1 || day > (int)wxDateTime::GetNumberOfDays(wxMonth, year))
+		ibBackendCoreException::Error(_("Date: %s has no day %s"),
+			wxDateTime::GetMonthName(wxMonth) + wxString::Format(wxT(" %d"), year),
+			wxString::Format(wxT("%d"), day));
+
+	if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59)
+		ibBackendCoreException::Error(_("Date: '%s' is not a time of day"),
+			wxString::Format(wxT("%d:%02d:%02d"), hour, minute, second));
+
+	const wxDateTime built(static_cast<unsigned short>(day), wxMonth, year,
+		static_cast<unsigned short>(hour), static_cast<unsigned short>(minute),
+		static_cast<unsigned short>(second));
+
+	return built.GetValue().GetValue();
+}
+
 wxString ibValueSystemFunction::String(const ibValue& cValue)
 {
 	return cValue.GetString();

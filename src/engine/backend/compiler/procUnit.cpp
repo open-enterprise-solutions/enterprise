@@ -1164,9 +1164,9 @@ start_label:
 				// compile-time GetNParams.
 				{
 					if (paramCount < cRunContext.m_lParamCount)
-						Raise(ERROR_MANY_PARAMS, funcName, funcName);
+						Raise(ERROR_MANY_PARAMS, funcName);
 					else if (paramCount == wxNOT_FOUND && cRunContext.m_lParamCount == 0)
-						Raise(ERROR_MANY_PARAMS, funcName, funcName);
+						Raise(ERROR_MANY_PARAMS, funcName);
 				}
 
 				//load parameters

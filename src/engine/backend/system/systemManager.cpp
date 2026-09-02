@@ -129,7 +129,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	//--- Basic:
 	helper.AppendFunc(wxT("Boolean"), 1, wxT("Boolean(value : any)"));
 	helper.AppendFunc(wxT("Number"), 1, wxT("Number(value: any)"));
-	helper.AppendFunc(wxT("Date"), 1, wxT("Date(value: any)"));
+	helper.AppendFunc(wxT("Date"), 6, wxT("Date(value: any) | Date(year, month, day[, hour, minute, second])"));
 	helper.AppendFunc(wxT("String"), 1, wxT("String(value: any)"));
 	//--- Math:
 	helper.AppendFunc(wxT("Round"), 3, wxT("Round(num : number, number, roundMode)"));
@@ -242,6 +242,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 
 #include "backend/compiler/enumUnit.h"
 #include "backend/system/value/valueGuid.h"
+#include "backend/backend_exception.h"   // a call this dispatcher itself refuses (Date with two arguments)
 
 #include "backend/appData.h"
 
@@ -253,7 +254,23 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			//--- Basic:
 		case enBoolean: pvarRetValue = Boolean(*paParams[0]); return true;
 		case enNumber: pvarRetValue = Number(*paParams[0]); return true;
-		case enDate: pvarRetValue = Date(*paParams[0]); return true;
+		// ONE ARGUMENT CONVERTS, THREE OR MORE BUILD. Two is neither, and is refused by name rather
+		// than read as a year with a stray month — see the calendar form in systemManagerFunc.cpp.
+		case enDate:
+			if (lSizeArray >= 3)
+				pvarRetValue = Date((int)paParams[0]->GetInteger(), (int)paParams[1]->GetInteger(),
+					(int)paParams[2]->GetInteger(),
+					lSizeArray > 3 ? (int)paParams[3]->GetInteger() : 0,
+					lSizeArray > 4 ? (int)paParams[4]->GetInteger() : 0,
+					lSizeArray > 5 ? (int)paParams[5]->GetInteger() : 0);
+			else if (lSizeArray == 2)
+				ibBackendCoreException::Error(
+					_("Date takes one value to convert, or a year, a month and a day"));
+			else if (lSizeArray == 1)
+				pvarRetValue = Date(*paParams[0]);
+			else
+				pvarRetValue = ibValue(ibValueTypes::TYPE_DATE);
+			return true;
 		case enString: pvarRetValue = String(*paParams[0]); return true;
 			//--- Math:
 		case enRound: pvarRetValue = Round(*paParams[0],

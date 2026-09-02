@@ -1246,7 +1246,7 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 
 	if (numRealCount > numDefCount) {
 		m_numCurrentCompile = callFunction->m_numError;
-		SetError(ERROR_MANY_PARAMS);// too many parameters
+		SetError(ERROR_MANY_PARAMS, foundedFunc->m_strRealName);
 		return false;
 	}
 
@@ -1303,7 +1303,7 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 		if (defaultValue) {
 			if (foundedFunc->m_listParam[i].m_puValue.m_numArray == DEF_VAR_SKIP) {
 				m_numCurrentCompile = callFunction->m_numError;
-				SetError(ERROR_FEW_PARAMS);	// too few parameters
+				SetError(ERROR_FEW_PARAMS, foundedFunc->m_strRealName);
 				return false;
 			}
 			paramCode.m_numOper = OPER_SETCONST;	// default values
@@ -4043,7 +4043,7 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 				return ibParamUnit();
 			}
 			if (listParam.size() > foundedFunc->m_listParam.size()) {
-				SetError(ERROR_MANY_PARAMS); // too many parameters
+				SetError(ERROR_MANY_PARAMS, foundedFunc->m_strRealName);
 				return ibParamUnit();
 			}
 
@@ -5081,7 +5081,10 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	}
 	else {
 		m_numCurrentCompile--;
-		SetError(ERROR_EXPRESSION);
+		// …and the same here: the token that could not start an expression, named. An identifier
+		// carries its own text; a delimiter is the character itself.
+		SetError(ERROR_EXPRESSION, lex.m_strData.IsEmpty()
+			? wxString::Format(wxT("%c"), wxUniChar(lex.m_numData)) : lex.m_strData);
 		return ibParamUnit();
 	}
 
@@ -5158,9 +5161,33 @@ delimOperation:
 				}
 				else if (next_lex.m_numData == '=') {
 					SetOper(OPER_EQ);
+
+					// ⭐⭐ `==` IS THE ONE SLIP EVERY C-TRAINED HAND MAKES HERE, and this is the only
+					// place that KNOWS it was made: the first `=` has just been read as the comparison,
+					// so a second one against it can be nothing else. Left to fall through, the doubled
+					// sign reaches the far end of the expression parser as "a token that cannot start
+					// an expression" and is reported as a bare `=` — true, and no help at all: the
+					// author is looking at the line they wrote and the message names a character that
+					// is in it twice.
+					//
+					// Braces and semicolons say C to a reader, so the assumption arrives with them; the
+					// language compares with a single `=`. Say WHICH spelling is meant, not merely that
+					// something is wrong (measured over MCP, 2026-09-02 — it cost a full round of
+					// bisecting a five-line block to find).
+					if (IsNextDelimeter('=')) {
+						SetError(ERROR_EXPRESSION, wxString(
+							_("'==' is not an operator here - comparison is written with a single '='")));
+						return ibParamUnit();
+					}
 				}
 				else {
-					SetError(ERROR_EXPRESSION);
+					// ⭐ SAY WHAT WAS FOUND. The message is "Error in expression:\n%s" and both raises
+					// of it passed nothing, so an author read a sentence that ends in a colon —
+					// promising the detail and then withholding it. Here the detail is the whole
+					// answer: `a == b` reaches this branch because comparison in this language is a
+					// single `=`, and a caller who writes the other spelling gets a compile error
+					// that names no operator, no token and nothing to change (measured 2026-09-02).
+					SetError(ERROR_EXPRESSION, wxUniChar(next_lex.m_numData));
 					return ibParamUnit();
 				}
 

@@ -50,12 +50,12 @@
         "global_context",
         "global_functions"
       ],
-      "signature": "Date(value: any)",
-      "description": "",
-      "syntax_block": "Date(value: any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "Date(value) | Date(year, month, day[, hour, minute, second])",
+      "description": "Two different questions under one name. With ONE argument it CONVERTS what it is given: a string in '20260902104525' or '02.09.2026 10:45:25' form, or a number read as seconds since 1970. With THREE OR MORE it BUILDS a date from calendar parts, which is how a date somebody knows is written. Two arguments are refused: a year and a month with no day is not a date.",
+      "syntax_block": "Date(value) | Date(year, month, day[, hour, minute, second])",
+      "parameters": "year — 1..9999; month — 1..12; day — a day that exists in that month of that year; hour, minute, second — optional, midnight when omitted. A part outside its range is refused by name rather than rolled over into the next month.",
+      "return_descr": "Date",
+      "example": "Date(2026, 9, 2)\nDate(2026, 9, 2, 10, 45, 25)\nDate(\"20260902104525\")",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [],
       "reviewed": false

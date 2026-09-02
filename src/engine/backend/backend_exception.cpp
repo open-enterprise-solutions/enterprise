@@ -149,8 +149,13 @@ static wxString gs_listErrorString[] =
 	_("Procedure or function not detected (%s)"),//ERROR_CALL_FUNCTION
 	_("Variable with the specified name is already defined (%s)"),//ERROR_DEF_VARIABLE
 	_("A procedure or function with the specified name is already defined (%s)"),//ERROR_DEF_FUNCTION
-	_("Too many parameters"),//ERROR_MANY_PARAMS
-	_("Not enough parameters"),//ERROR_FEW_PARAMS
+	// ⭐ NAME THE CALL. Both of these used to say only that a count was wrong, in a module with a
+	// hundred calls in it — and the runtime callsite was ALREADY handing over the function's name,
+	// which the message then threw away because it had nowhere to put it. An author reading "Too
+	// many parameters" has to find the call themselves; measured on a live session, the first guess
+	// was the wrong construct entirely (2026-09-02).
+	_("Too many parameters passed to '%s'"),//ERROR_MANY_PARAMS
+	_("Not enough parameters passed to '%s'"),//ERROR_FEW_PARAMS
 	_("Var is not found (%s)"),//ERROR_VAR_NOT_FOUND
 	_("Unexpected program code termination"),//ERROR_END_PROGRAM
 	_("This module may contain only definitions of procedures and functions"), //ERROR_ONLY_FUNCTION

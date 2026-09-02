@@ -50,12 +50,12 @@
         "global_context",
         "global_functions"
       ],
-      "signature": "Date(value: any)",
-      "description": "",
-      "syntax_block": "Date(value: any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "Date(value) | Date(year, month, day[, hour, minute, second])",
+      "description": "Два разных вопроса под одним именем. С ОДНИМ аргументом функция ПРЕОБРАЗУЕТ то, что ей дали: строку вида '20260902104525' или '02.09.2026 10:45:25', либо число, прочитанное как секунды с 1970 года. С ТРЕМЯ И БОЛЕЕ — СОБИРАЕТ дату из частей календаря, как её пишет человек. Два аргумента отвергаются: год с месяцем без дня — не дата.",
+      "syntax_block": "Date(value) | Date(year, month, day[, hour, minute, second])",
+      "parameters": "year — 1..9999; month — 1..12; day — день, который существует в этом месяце этого года; hour, minute, second — необязательные, при отсутствии полночь. Часть вне диапазона отвергается по имени, а не переносится в следующий месяц.",
+      "return_descr": "Дата",
+      "example": "Date(2026, 9, 2)\nDate(2026, 9, 2, 10, 45, 25)\nDate(\"20260902104525\")",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [],
       "reviewed": false
