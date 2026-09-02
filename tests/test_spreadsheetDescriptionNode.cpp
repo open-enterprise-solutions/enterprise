@@ -40,18 +40,20 @@ void FillCell(ibSpreadsheetCellDescription& cell)
 	cell.m_alignVert = wxALIGN_BOTTOM;
 	cell.m_textOrient = wxVERTICAL;
 
-	// 🛑 NO FONT IS BUILT HERE, and that is the whole difference between this file
-	// and its siblings. A wxFont is a TOOLKIT object: constructing one asks GTK for
-	// a font map, and a console test has neither a wxApp nor a display, so on Linux
-	// this crashed the process (SEGFAULT, "GLib-GObject-WARNING: invalid (NULL)
-	// pointer instance" — CI, 2026-09-02). test_spreadsheetDocument.cpp goes as far
-	// as stubbing SetCellFont out entirely for the same reason; this file's own
-	// header promises "no window, no wxApp" and then broke that promise.
+	// 🛑 NO FONT IS SET HERE, and the reason is not the one this comment used to give.
+	// CONSTRUCTING a wxFont is harmless without a display — every one of the 1752 tests
+	// builds s_defaultSpreadsheetFont at start-up. COMPARING two of them is not:
+	// wxFontBase::operator== asks GetPixelSize(), and that opens a wxScreenDC to measure
+	// the glyphs. The node writer used to ask exactly that ("is this still the default
+	// font?"), so six round-trip tests died inside GTK while the ones that wrote no cell
+	// passed (SEGFAULT, "GLib-GObject-WARNING: invalid (NULL) pointer instance" — CI,
+	// 2026-09-02). The cure was on the writing side: a cell now carries NO font until
+	// somebody sets one, and an unset font is simply not written.
 	//
-	// ⚠ SO THE FONT IS NOT COVERED HERE. The node writer emits it only when it
-	// differs from the sheet default (spreadsheetDescription.cpp), and that branch
-	// belongs to a suite that has a toolkit under it — the GUI tests CI runs in a
-	// job of its own. What is pinned below is the shape the two classes OWN.
+	// ⚠ WHAT A SET FONT LOOKS LIKE ON THE WIRE is still not covered here — that wants a
+	// suite with a toolkit under it, the GUI job CI runs on its own. What is pinned below
+	// is the shape the two classes OWN, and the rule itself is pinned in
+	// WriteNode_ACellWithNoFont_WritesNone.
 	cell.m_backgroundColour = wxColour(10, 20, 30);
 	cell.m_textColour = wxColour(200, 100, 50);
 
@@ -148,7 +150,8 @@ TEST(SpreadsheetCellDescriptionMemory, WriteNodeReadNode_EverySetField_RoundTrip
 	EXPECT_EQ(source.m_alignVert, target.m_alignVert);
 	EXPECT_EQ(source.m_textOrient, target.m_textOrient);
 
-	// (the font is deliberately not exercised here — see FillCell)
+	// (a SET font is deliberately not exercised here — see FillCell)
+	EXPECT_FALSE(target.m_font.IsOk());
 
 	// the colours, exactly — an unset colour stays unset, so a set one has to
 	// come back as itself rather than as today's desktop theme
@@ -234,6 +237,32 @@ TEST(SpreadsheetCellDescriptionMemory, WriteNode_ADefaultCell_WritesNothingButSt
 	EXPECT_EQ(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, target.m_fillSetType);
 	EXPECT_FALSE(target.m_backgroundColour.IsOk());   // unset stays UNSET
 	EXPECT_FALSE(target.m_textColour.IsOk());
+}
+
+// ⭐ A FONT NOBODY SET IS NOT WRITTEN, and this is the rule rather than a detail of
+// the format: the writer decides by asking the cell whether it HAS a font, never by
+// comparing one font with another. wxFont's own equality measures both through a
+// wxScreenDC, so the old comparison made saving a sheet a question to the display —
+// answerable on a desktop, fatal on a headless runner, and a different answer on a
+// second monitor with another DPI. The colours two lines below it always worked this
+// way; the font is now on the same road.
+TEST(SpreadsheetCellDescriptionMemory, WriteNode_ACellWithNoFont_WritesNone)
+{
+	ibSpreadsheetCellDescription source(1, 1);
+	source.m_value = wxT("Total");
+
+	ASSERT_FALSE(source.m_font.IsOk());   // a new cell carries none
+
+	ibDataValue value;
+	ASSERT_TRUE(ibSpreadsheetCellDescriptionMemory::WriteNode(value, source));
+
+	const std::shared_ptr<ibDataNode>& node = value.AsChild();
+	ASSERT_TRUE(node != nullptr);
+	EXPECT_EQ(nullptr, node->FindField(wxT("font")));
+
+	ibSpreadsheetCellDescription target(1, 1);
+	ASSERT_TRUE(ibSpreadsheetCellDescriptionMemory::ReadNode(value, target));
+	EXPECT_FALSE(target.m_font.IsOk());   // and it does not acquire one on the way back
 }
 
 // The cell compares by EVERYTHING it carries - the text, the fit mode and the

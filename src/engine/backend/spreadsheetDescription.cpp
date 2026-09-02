@@ -23,7 +23,12 @@ bool ibSpreadsheetCellDescriptionMemory::LoadData(ibReaderMemory& reader, ibSpre
 	spreadsheetCellDesc.m_alignVert = reader.r_s32();
 	spreadsheetCellDesc.m_textOrient = reader.r_s32();
 
-	spreadsheetCellDesc.m_font = typeConv::StringToFont(reader.r_stringZ());
+	// The field is always in the stream, the FONT is not: an empty string is a cell that carries
+	// no font of its own, and building one out of nothing would give it one.
+	const wxString fontDesc = reader.r_stringZ();
+	if (!fontDesc.IsEmpty())
+		spreadsheetCellDesc.m_font = typeConv::StringToFont(fontDesc);
+
 	spreadsheetCellDesc.m_backgroundColour = typeConv::StringToColour(reader.r_stringZ());
 	spreadsheetCellDesc.m_textColour = typeConv::StringToColour(reader.r_stringZ());
 
@@ -63,7 +68,8 @@ bool ibSpreadsheetCellDescriptionMemory::SaveData(ibWriterMemory& writer, const 
 	writer.w_s32(spreadsheetCellDesc.m_alignVert);
 	writer.w_s32(spreadsheetCellDesc.m_textOrient);
 
-	writer.w_stringZ(typeConv::FontToString(spreadsheetCellDesc.m_font));
+	writer.w_stringZ(spreadsheetCellDesc.m_font.IsOk()
+		? typeConv::FontToString(spreadsheetCellDesc.m_font) : wxString());
 	writer.w_stringZ(typeConv::ColourToString(spreadsheetCellDesc.m_backgroundColour));
 	writer.w_stringZ(typeConv::ColourToString(spreadsheetCellDesc.m_textColour));
 
@@ -412,7 +418,9 @@ bool ibSpreadsheetCellDescriptionMemory::WriteNode(ibDataValue& value, const ibS
 	if (cell.m_textOrient != wxHORIZONTAL)
 		node->AddField(wxT("orient"), ibDataValue::Int((s64)cell.m_textOrient));
 
-	if (cell.m_font != s_defaultSpreadsheetFont)
+	// An UNSET font is unset — the same rule as the colours below, and it replaced a comparison
+	// with the default that MEASURED both fonts through a wxScreenDC (see the member's note).
+	if (cell.m_font.IsOk())
 		node->SetValue(wxT("font"), typeConv::FontToString(cell.m_font));
 
 	// An UNSET colour is unset — see the note on the members. Writing the resolved

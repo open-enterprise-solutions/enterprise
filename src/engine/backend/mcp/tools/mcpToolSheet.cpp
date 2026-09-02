@@ -660,7 +660,9 @@ public:
 			|| params.FindField(ArgBold().Name()) != nullptr
 			|| params.FindField(ArgFontSize().Name()) != nullptr) {
 
-			wxFont font = cell->m_font;
+			// A cell that carries no font of its own is shown in the sheet's default
+			// one, so that is what "make it bold" starts from.
+			wxFont font = cell->m_font.IsOk() ? cell->m_font : s_defaultSpreadsheetFont;
 
 			if (params.FindField(ArgItalic().Name()) != nullptr)
 				font.SetStyle(ArgItalic().Flag(params)

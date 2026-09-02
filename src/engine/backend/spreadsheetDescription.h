@@ -58,6 +58,18 @@ const static int s_colLabelHeight = 15;
 
 static const wxFont s_defaultSpreadsheetFont = wxFont(8, wxFontFamily::wxFONTFAMILY_DEFAULT, wxFontStyle::wxFONTSTYLE_NORMAL, wxFontWeight::wxFONTWEIGHT_NORMAL);
 
+// ⭐ ARE THESE TWO THE SAME FONT — asked WITHOUT a screen. wxFont's own operator== ends up in
+// GetPixelSize(), and that opens a wxScreenDC to measure the glyphs; a description compares what
+// the font IS instead of how big it comes out on somebody's monitor. Same answer wherever it runs,
+// and the only one available in a process that has no display at all.
+inline bool ibSameSpreadsheetFont(const wxFont& lhs, const wxFont& rhs) {
+	if (lhs.IsSameAs(rhs))
+		return true;
+	if (!lhs.IsOk() || !rhs.IsOk())
+		return lhs.IsOk() == rhs.IsOk();
+	return lhs.GetNativeFontInfoDesc() == rhs.GetNativeFontInfoDesc();
+}
+
 ///////////////////////////////////////
 
 struct ibSpreadsheetBorderDescription {
@@ -174,7 +186,7 @@ struct ibSpreadsheetCellDescription {
 			&& m_alignHorz == rhs.m_alignHorz
 			&& m_alignVert == rhs.m_alignVert
 			&& m_textOrient == rhs.m_textOrient
-			&& m_font == rhs.m_font
+			&& ibSameSpreadsheetFont(m_font, rhs.m_font)
 			&& m_backgroundColour == rhs.m_backgroundColour
 			&& m_textColour == rhs.m_textColour
 			&& m_borderAt[0] == rhs.m_borderAt[0] && m_borderAt[1] == rhs.m_borderAt[1] && m_borderAt[2] == rhs.m_borderAt[2] && m_borderAt[3] == rhs.m_borderAt[3]
@@ -190,7 +202,17 @@ struct ibSpreadsheetCellDescription {
 	int m_alignHorz = wxALIGN_LEFT;
 	int m_alignVert = wxALIGN_TOP;
 	int m_textOrient = wxHORIZONTAL;
-	wxFont m_font = s_defaultSpreadsheetFont;
+	// 🛑 UNSET, LIKE THE COLOURS BELOW — and for the same reason, found the same way. A cell used to
+	// be born holding s_defaultSpreadsheetFont, so the node writer had to ASK whether that font was
+	// still the default one; and asking two wxFonts whether they are equal MEASURES them —
+	// wxFontBase::operator== calls GetPixelSize(), which opens a wxScreenDC. On a machine with no
+	// screen that is a crash, not a slow answer: six round-trip tests died with SIGSEGV inside GTK
+	// while the ones that wrote no cell passed (CI, 2026-09-02).
+	//
+	// ⭐ A FONT NOBODY SET IS NOT A FONT. It is written when it IsOk() and resolved by the getter
+	// below, exactly as an unset colour is — so nothing on the writing side has to know what the
+	// default looks like, and no path without a screen ever asks a toolkit object to measure itself.
+	wxFont m_font;
 	// 🛑 NOT SEEDED FROM THE SYSTEM. An unset colour is UNSET — it is not the window colour written
 	// down early. Asking wxSystemSettings here made every cell CONSTRUCTION a question to the
 	// desktop, and on GTK that question builds a GtkStyleContext, which needs a display connection:
@@ -643,7 +665,7 @@ struct ibSpreadsheetDescription {
 
 	wxFont GetCellFont(int row, int col) const {
 		const ibSpreadsheetCellDescription* cell = GetCell(row, col);
-		if (cell != nullptr)
+		if (cell != nullptr && cell->m_font.IsOk())
 			return cell->m_font;
 		return s_defaultSpreadsheetFont;
 	}
