@@ -1095,9 +1095,19 @@ public:
 	virtual void SetMetaObject(ibValueMetaObject* metaObject) { m_metaObject = metaObject; }
 	virtual ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 
-	template <class T>
+	// 🛑 A DOCUMENT WITHOUT ITS METAOBJECT IS A STATE THAT HAPPENS — it is closed, the object was
+	// deleted, the configuration was reloaded under it — and every caller here already treats the
+	// ANSWER as possibly null (`if (moduleObject != nullptr)`). This dereferenced before it could
+	// give them one, so the check they wrote was unreachable: the crash landed one frame earlier,
+	// inside a one-line helper (measured 2026-09-02 — designer_4404, opening a module from the
+	// tree: OpenObjectForm → OnActivateView → ActivateEditor → here).
+	//
+	// The neighbouring accessor two lines down guards exactly this pointer. One of the two was
+	// written by somebody who had seen it be null.
+	template <typename T>
 	inline T* ConvertMetaObjectToType() {
-		return GetMetaObject()->ConvertToType<T>();
+		ibValueMetaObject* object = GetMetaObject();
+		return object != nullptr ? object->ConvertToType<T>() : nullptr;
 	}
 
 	wxString GetModuleName() const;

@@ -128,9 +128,30 @@ bool ibConfigurationWritesInWords(const ibMetaData* metaData)
 std::function<wxString(ibClassID)> ibMetaTypeResolver(const ibMetaData* metaData)
 {
 	return [metaData](ibClassID clsid) -> wxString {
+
 		const ibCtorMetaValueType* typeCtor = metaData != nullptr
 			? metaData->GetTypeCtor(clsid) : nullptr;
-		return typeCtor != nullptr ? typeCtor->GetClassName() : wxString();
+
+		if (typeCtor != nullptr)
+			return typeCtor->GetClassName();
+
+		// ⭐ AND THE TYPES THAT ARE NOT A CONFIGURATION'S OWN still have names. A ctor answers for
+		// what a CONFIGURATION declares — a catalogue's reference, an enum member; ask it about
+		// `Number` or `String` and it has nothing to say, so the id fell through as a bare number.
+		// Nobody reading `"t": "104754294576172486"` learns anything from it (measured 2026-09-02,
+		// the first value a sandbox serialized: the type of 42 came back as seventeen digits).
+		//
+		// ⚠ AND THE FALLBACK MUST NOT RAISE. Both `GetNameObjectFromID` overloads are assertions —
+		// they report "object with id … does not exist" rather than answering nothing, which is
+		// right where a missing type is a fault and wrong here: this is a RENDERING, called for
+		// whatever a value happens to be, and an unknown id is a line of output, not an error.
+		//
+		// So the registry is asked through the non-throwing door instead. A primitive's name lives
+		// there — `Number`, `String`, `Date` are registered types like any other.
+		if (const ibCtorAbstractType* staticCtor = ibValue::GetAvailableCtor(clsid))
+			return staticCtor->GetClassName();
+
+		return wxString();
 	};
 }
 

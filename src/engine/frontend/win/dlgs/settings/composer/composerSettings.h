@@ -160,6 +160,10 @@ public:
 	//              list at all: there is no such thing as a chosen variant at runtime.
 	ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
 		const class ibMetaData* metaData);
+	// …AND THE SAME ROAD, HANDED THE CELL instead of a reference into it — the form the designer's
+	// tab takes, because a window that stays open has to hold what it edits (see m_heldComposition).
+	ibComposerSettingsPanel(wxWindow* parent, const wxVariant& composition,
+		const class ibMetaData* metaData);
 	ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
 		const class ibMetaData* metaData, ibSettingsDescription& settings);
 	~ibComposerSettingsPanel();   // out of line — the field tree is held by forward-declared pointer
@@ -415,6 +419,23 @@ private:
 	// also be used to say WHICH setting is being edited. One member answering two questions is how
 	// the designer ended up unable to edit any variant but the zeroth.
 	const bool m_readerRoad;
+
+	// 🛑⭐⭐ THE GRIP ON WHAT THIS WINDOW EDITS — empty unless the host handed over a CELL.
+	//
+	// A composition lives in a property, and a property cell is a reference-counted variant: storing
+	// a composition swaps in a NEW cell and lets the old one go. A window outlives the call that
+	// opened it, so binding `m_edited` straight into the cell means freed memory the moment anything
+	// stores one — which is how the designer died on 2026-09-02, an MCP verb writing while this
+	// window stood open, and the crash landing later in ApplyPendingQueryText.
+	//
+	// Holding a copy of the variant raises the count while the window lives (Max, 2026-09-02), so
+	// the store gets its new cell and this one survives to be closed. Declared ABOVE the two members
+	// that point into it: they are initialised in declaration order, and both read it.
+	//
+	// ⚠ AND THE CELL IS UNWRAPPED HERE rather than by the host, because the same window edits a
+	// composition held by a FORM ATTRIBUTE and one declared by a metaobject. Whoever opens it hands
+	// over the value; what a composition IS, is this window's business.
+	wxVariant m_heldComposition;
 
 	// …AND WHAT IS BEING EDITED, always valid. A reader's own setting, or — in the designer — the
 	// variant the list has selected, re-pointed as it moves (ActivateVariant).

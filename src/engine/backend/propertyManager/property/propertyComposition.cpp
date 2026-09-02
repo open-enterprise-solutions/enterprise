@@ -17,6 +17,9 @@ ibCompositionDescription& ibPropertyComposition::GetValueAsCompositionDesc() con
 	return get_cell_variant<ibVariantDataComposition>()->GetCompositionDesc();
 }
 
+// A NEW CELL, WHICH IS WHAT A VARIANT IS FOR. The data is reference-counted, so whoever is looking
+// at the old one goes on holding it and drops it when they close — see the note on the composer
+// editor's holder (composerSettings.h), which is where a window's grip on a composition belongs.
 void ibPropertyComposition::SetValue(const ibCompositionDescription& val) {
 	m_propValue = CreateVariantData(m_owner, val);
 }

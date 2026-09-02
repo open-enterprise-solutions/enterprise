@@ -10,6 +10,12 @@
 
 extern BACKEND_API unsigned int GetBuildId();
 
+// THE BUILD, SPELLED OUT: the number above plus when it was actually compiled —
+// "3164 (Sep  2 2026 16:55:03)". The number is the VERSION and is stable across a day of rebuilds,
+// which is right for saying which engine this is and wrong for telling two of them apart; this is
+// for the second question (the bytecode cache key, a banner that has to be exact).
+extern BACKEND_API const char* GetBuildStamp();
+
 #include "guid.h"
 #include "clsid.h"
 #include "fnumber.h"

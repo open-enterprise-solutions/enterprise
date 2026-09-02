@@ -141,7 +141,28 @@ void ibJsonProvider::EmitNode(const ibDataNode& node, std::string& out, int dept
 	// = the resolved type name, so an entry reads { TypeId: <num>, TypeDesc: "String", … }.
 	auto emitEntry = [&](const wxString& k, const ibDataValue& v) {
 		namedKey(k);
-		if (v.Kind() == ibDataKind::Number && k.IsSameAs(wxT("typeId"), false)) {
+
+		// ⭐ THE SAME COURTESY FOR A PACKED VALUE'S TYPE. A value writes its clsid under `t`
+		// (value.h, kValueFieldClsid) — the id is what the READER needs, so it stays exactly as it
+		// is; but on its own it tells a human nothing. `{"t": "104754294576172486", "v": 42}` was
+		// the first thing a sandbox ever serialized, and seventeen digits is not an answer anybody
+		// can act on (2026-09-02). The NAME goes beside it, the way `typeId` already gets `TypeDesc`.
+		if (k.IsSameAs(kValueFieldClsid, false)) {
+
+			EmitValue(v, out, inner);
+
+			unsigned long long clsid = 0;
+			if (v.Kind() == ibDataKind::Number)
+				clsid = (unsigned long long)v.AsUInt();
+			else if (v.Kind() == ibDataKind::String)
+				v.AsString().ToULongLong(&clsid);
+
+			if (clsid != 0) {
+				const wxString name = ResolveType((ibClassID)clsid);
+				if (!name.IsEmpty()) { namedKey(wxT("type")); out += JsonString(name); }
+			}
+		}
+		else if (v.Kind() == ibDataKind::Number && k.IsSameAs(wxT("typeId"), false)) {
 			out += std::to_string((unsigned long long)v.AsUInt());
 			const wxString name = ResolveType((ibClassID)v.AsUInt());
 			if (!name.IsEmpty()) { namedKey(wxT("TypeDesc")); out += JsonString(name); }

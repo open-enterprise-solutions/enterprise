@@ -481,6 +481,16 @@ See `docs/eval-scope-refactor.md` for the full architecture.
 ## What Not To Do
 
 - Do not add `#include` for wxWidgets headers in `backend.dll` source files — the backend must remain GUI-free
+- **Do not raise a MODAL from the engine.** `backend.dll` has no modal boxes of its own (verified
+  2026-09-02; the last two were leftovers from when the designer and the engine were one binary —
+  a `wxMessageBox` about a breakpoint, and a `ShowModalMessage` that showed a person a C++ function
+  signature). A modal blocks the window until somebody clicks it, so a caller that is not a person —
+  an assistant over MCP, a background job, the web server — is simply frozen, while the sentence
+  that would explain it stands on somebody else's screen. Instead: state it with
+  `ibValueSystemFunction::Message` (it asks the SESSION for its frame, so desktop shows and web
+  queues), and where a caller can act on the reason, hand it back — `bool Verb(…, wxString* refusal)`.
+  The only modals left in the backend are `Alert` / `Question`, which exist because a SCRIPT asked
+  for one.
 - Do not use raw `RunQueryWithResults(wxT("...%s..."), userInput)` for user-supplied values — use `ibPreparedStatement`
 - Do not commit changes to `enterprise.sln` project GUIDs or global section entries unless you are adding/removing a project
 - Do not define `NDEBUG` in Debug configurations

@@ -54,6 +54,11 @@ public:
 	// expected to log via the surrounding compile path.
 	// `configMd5` — ibMetaData::GetConfigMD5() of the configuration this bytecode was compiled
 	// against. Stored with the row and required to find it again.
+	//
+	// ⚠ WHAT IS STORED IS NOT ONLY THAT DIGEST. Bytecode belongs to the ENGINE that produced it as
+	// much as to the configuration, so the row is keyed by BOTH — see CacheKey in the .cpp, and the
+	// day it cost to find out (2026-09-02). Callers pass the configuration's digest and nothing
+	// else: which engine this is, the cache knows for itself.
 	static bool Save(const ibByteCode& bc, const wxString& configMd5);
 
 	// Try to populate `outBc` from cache. Returns:

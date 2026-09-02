@@ -15,6 +15,7 @@
 #include "backend/fileSystem/fs.h"
 #include "backend/diagnostics/journal.h"   // ibJournal — an invalidation that did NOT happen must say so
 #include "backend/guid.h"
+#include "backend/backend_core.h"   // GetBuildId — the engine half of the cache key
 
 // Descriptor (ibRuntimeModuleDataObject) AOT-cache DAO, migrated onto the L2
 // query door. The default-ctor ibDatabaseQueryBuilder resolves to
@@ -26,7 +27,37 @@
 // try/catch turns into a cache miss → recompile — the same graceful degradation
 // as the old `db_query == nullptr` guard. See docs/query-language-arc.md §17.
 
-bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configMd5)
+// 🛑⭐⭐ THE KEY IS THE PLATFORM AND THE CONFIGURATION, NOT THE CONFIGURATION ALONE.
+//
+// Bytecode is compiled BY an engine, against the global API that engine has. The digest said which
+// configuration it came from and nothing at all about which engine — so an engine upgrade left every
+// cached row valid by its key and wrong in fact: modules go on running the bytecode an older build
+// produced, and a global function added by the new one is not there.
+//
+// ⭐ MEASURED, and it cost an hour before anybody suspected the cache (2026-09-02). `SerializeValue`
+// was added to the language, `script_check` compiled it in the designer, and the SAME BINARY refused
+// it in the running application — "Procedure or function not detected". Nothing was wrong with the
+// registration. Touching one module changed the configuration's digest, every cached row fell out of
+// reach, and the function appeared. The symptom of this defect is not a failure to load; it is code
+// that quietly stays as it was.
+//
+// The fix is Max's, in four words: *build + configuration hash* (2026-09-02). Kept as one KEY VALUE
+// rather than a second column on purpose — see the note in Load: a row from another platform is then
+// NOT FOUND, instead of found and rejected by a check somebody has to remember to write.
+//
+// ⚠ THE BUILD NUMBER ALONE IS A DAY COUNT (backend_core.cpp derives it from __DATE__), so two
+// builds of one day answer the same — and development is forty builds a day. Hence the TIME beside
+// it: build + build time + configuration digest (Max, 2026-09-02). The stamp is backend_core.cpp's
+// own compile time, so an incremental build that never touches that file keeps the previous one —
+// it moves for a clean build, a header change reaching it, and every release.
+static wxString CacheKey(const wxString& configDigest)
+{
+	// The STAMP already carries the number — it is that number spelled out with the moment it was
+	// compiled — so naming both would be the same fact twice in one key.
+	return wxString::Format(wxT("%s.%s"), wxString::FromUTF8(GetBuildStamp()), configDigest);
+}
+
+bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
 {
 	if (db_query == nullptr) return false;
 	if (!db_query->TableExists(bytecode_cache_table)) return false;
@@ -40,6 +71,8 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configMd5)
 
 	const wxString descIdStr = bc.m_id;
 	const wxString bcVerStr  = bc.m_version;
+
+	const wxString configMd5 = CacheKey(configDigest);
 
 	// UPSERT via DELETE-then-INSERT (uniform across drivers; FB has no ON
 	// CONFLICT). Both statements run on one builder = one CurrentHolder
@@ -98,12 +131,15 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configMd5)
 	return true;
 }
 
-bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxString& configMd5)
+bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxString& configDigest)
 {
 	if (db_query == nullptr) return false;
 	if (!db_query->TableExists(bytecode_cache_table)) return false;
 
 	wxASSERT(descId.isValid());
+
+	// The same key the row was written under — the platform AND the configuration (see CacheKey).
+	const wxString configMd5 = CacheKey(configDigest);
 
 	try {
 		// SELECT bc_blob FROM <t> WHERE descriptor_id = <descId> AND config_md5 = <configMd5>
