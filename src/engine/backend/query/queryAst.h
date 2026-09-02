@@ -162,6 +162,12 @@ struct ibQuerySource
 	// or a metaobject, and WHICH ONE would be decided by the order the resolver happens to look. A
 	// query has to read as what it is.
 	bool                            m_parameter = false;
+
+	// ⭐ WHERE IT WAS WRITTEN. Every expression node carries its span and a source did not, so the
+	// one refusal an author meets first — "metaobject 'X' not found or cannot be queried" — arrived
+	// at line 0, position 0 while a mistyped FIELD three lines below reported its place exactly.
+	// On a forty-line query that is the difference between being told and being sent looking.
+	unsigned int                    m_line = 0, m_col = 0;
 };
 
 enum class ibQueryJoinKindAst { Inner, Left, Right, Full };

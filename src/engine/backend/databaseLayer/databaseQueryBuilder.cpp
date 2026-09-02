@@ -3,6 +3,7 @@
 #include "backend/query/queryException.h"
 #include "backend/session/sessionException.h"   // NoConnection is the SESSION refusing, not the query tier   // ibBackendQueryException — L3-L5 varieties (not the DB tier)
 
+#include "backend/databaseLayer/databaseLayerException.h"   // the driver's own refusal — re-raised carrying the statement
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/resultSetMetaData.h"
@@ -53,15 +54,34 @@ static ibQueryResult ibRunRendered(const std::shared_ptr<ibDatabaseLayer>& conn,
                                    const ibRenderedQuery& rendered,
                                    const std::vector<ibValue>& externalParams)
 {
-	ibPreparedStatement* stmt = conn->PrepareStatement(rendered.m_sql);
-	if (stmt == nullptr)
-		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
-			wxString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
+	try {
+		ibPreparedStatement* stmt = conn->PrepareStatement(rendered.m_sql);
+		if (stmt == nullptr)
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+				wxString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
 
-	ibBindPlan(stmt, rendered.m_params, externalParams);
+		ibBindPlan(stmt, rendered.m_params, externalParams);
 
-	ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
-	return ibQueryResult(conn, stmt, rs);
+		ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
+		return ibQueryResult(conn, stmt, rs);
+	}
+	// ⭐⭐ THE STATEMENT RIDES WITH THE REFUSAL. A database's complaint is about a text the engine
+	// wrote and the caller has never seen: "Column unknown FLD1043_D. At line 1, column 57" — a
+	// position inside a statement nothing hands over, naming a column nobody typed. It IS journalled
+	// (query.sql, three lines up), but the technology journal is a file beside the binary and it is
+	// 87% session heartbeat: right for whoever builds the platform, useless to whoever is writing a
+	// configuration and has just been told their query failed (measured 2026-09-02).
+	//
+	// So it goes where the failure goes. The KIND, the native code and the SQLSTATE travel unchanged —
+	// retry semantics belong to the driver's classification and must not be lost by re-raising.
+	//
+	// ⚠ THE TEXT ONLY, NEVER THE BINDINGS. Parameters are `?` here and their values stay in the bind
+	// plan: a statement is structure, a value may be somebody's name or password, and this message
+	// ends up in logs and in bug reports.
+	catch (const ibDatabaseLayerException& err) {
+		ibDatabaseLayerException::Throw(err.GetKind(), err.GetDriverErrorCode(), err.GetSqlState(),
+			wxString::Format(_("%s\nThe statement was: %s"), err.GetErrorDescription(), rendered.m_sql));
+	}
 }
 
 // ==========================================================================

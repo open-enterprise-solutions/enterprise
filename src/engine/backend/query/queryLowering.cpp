@@ -143,7 +143,23 @@ using OutputColumn = ibQueryLowering::OutputColumn;
 // where the query is wrong, and a caller that must let real faults through were all indistinguishable.
 void ThrowQueryException(unsigned int line, unsigned int col, const wxString& msg)
 {
-	ibBackendQuerySourceException::ErrorAt(line, col, _("Query: %s (line %u, position %u)"), msg, line, col);
+	// ⚠ NO PLACE IS SAID AS NO PLACE. A refusal raised without a span used to print "(line 0,
+	// position 0)", which reads as a place — the first line of the query, where the mistake
+	// usually is not. Nothing is printed instead, and the reader is not sent to a line that
+	// answers nothing.
+	//
+	// And the number a person reads is 1-BASED, as it already is on the syntax path (queryParser):
+	// the raw offset travels as DATA to ErrorAt, where a caret wants it, and only the SENTENCE is
+	// shifted. Printing both spellings of the same number was one of the two ways a position here
+	// could mislead.
+	// THE NAME VARIETY, not the syntax one: everything raised through here is the LOWERING refusing —
+	// the text read perfectly and asked for something that is not there. The lexer and the parser
+	// raise the other (queryException.h).
+	if (line == 0)
+		ibBackendQueryNameException::Error(_("Query: %s"), msg);
+	else
+		ibBackendQueryNameException::ErrorAt(line, col,
+			_("Query: %s (line %u, position %u)"), msg, line, col + 1);
 }
 
 // …and the same with the message's OWN arguments, because most refusals have to name the thing they
@@ -393,7 +409,8 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 		: factory->Resolve(ns, name,
 			argPtrs.empty() ? nullptr : argPtrs.data(), static_cast<long>(argPtrs.size()));
 	if (q == nullptr) {
-		ThrowQueryException(0, 0, wxString::Format(_("metaobject '%s.%s' not found or cannot be queried"), ns, name));
+		ThrowQueryException(src.m_line, src.m_col,
+			wxString::Format(_("metaobject '%s.%s' not found or cannot be queried"), ns, name));
 		return nullptr;
 	}
 	return q;
@@ -462,6 +479,22 @@ void RequireAliasFree(const std::vector<ibSourceBinding>& sources, const wxStrin
 			_("duplicate source alias '%s': each FROM / JOIN source needs a distinct alias"), alias));
 }
 
+// ⭐⭐ THE NAME THE AUTHOR CALLS IT BY — for a refusal, which is read by whoever wrote the query and
+// nobody else. `GetQueryName()` answers with the name the SCHEMA gave it: a register's balance
+// surface says `AccumulationRegister1041_Balance`, a string that appears nowhere in the query and
+// that the reader has no way to connect to what they typed ("what is 1041?"). The binding already
+// holds the spoken name — the alias when one was written, the last segment of the path otherwise
+// (ibQuerySourceName) — so the refusal points at the FROM the reader can see (2026-09-02).
+//
+// The storage name is not lost: it is what the SQL and the journal carry, where it belongs.
+wxString SpokenSourceName(const std::vector<ibSourceBinding>& sources, const ibBackendQueryable* q)
+{
+	for (const ibSourceBinding& s : sources)
+		if (s.m_q == q && !s.m_alias.empty())
+			return s.m_alias;
+	return q != nullptr ? q->GetQueryName() : wxString();
+}
+
 // A SINGLE column (for WHERE / ORDER / aggregate arg / GROUP BY): `alias.col` -> the aliased
 // source's column; bare `col` -> the one source that owns it (ambiguous across sources -> error). Dot-walk
 // paths are rejected here (only the projection resolves them, via ResolvePath).
@@ -479,7 +512,7 @@ const ibBackendQueryColumn* ResolveColumnSingle(const std::vector<ibSourceBindin
 			// that decides whether the field or the table is the thing to change (2026-08-23).
 			if (col == nullptr)
 				ThrowQueryException(e.m_line, e.m_col, wxString::Format(
-					_("unknown attribute '%s' on source '%s'"), path[1], q->GetQueryName()));
+					_("unknown attribute '%s' on source '%s'"), path[1], SpokenSourceName(sources, q)));
 			return col;
 		}
 		// path[0] is not an alias -> a dot-walk (Producer.Name), not allowed in this clause yet.
@@ -492,7 +525,7 @@ const ibBackendQueryColumn* ResolveColumnSingle(const std::vector<ibSourceBindin
 			wxString asked;
 			for (const ibSourceBinding& s : sources)
 				if (s.m_q != nullptr)
-					asked += (asked.IsEmpty() ? wxT("") : wxT(", ")) + s.m_q->GetQueryName();
+					asked += (asked.IsEmpty() ? wxT("") : wxT(", ")) + SpokenSourceName(sources, s.m_q);
 			ThrowQueryException(e.m_line, e.m_col, wxString::Format(
 				_("unknown attribute '%s': no source of this query has it (asked: %s)"), path[0], asked));
 		}
@@ -563,7 +596,7 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 			const ibBackendQueryColumn* col = cur->ResolveColumnByName(path[k]);
 			if (col == nullptr) {
 				ThrowQueryException(e.m_line, e.m_col, wxString::Format(
-					_("unknown attribute '%s' on source '%s'"), path[k], cur->GetQueryName()));
+					_("unknown attribute '%s' on source '%s'"), path[k], SpokenSourceName(sources, cur)));
 				return cols;
 			}
 			cols.push_back(col);
@@ -638,7 +671,7 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 			// third hop, and without saying where it was asked the message points at the query rather
 			// than at the step.
 			ThrowQueryException(e.m_line, e.m_col, wxString::Format(
-				_("unknown attribute '%s' on source '%s'"), path[k], cur->GetQueryName()));
+				_("unknown attribute '%s' on source '%s'"), path[k], SpokenSourceName(sources, cur)));
 			return {};
 		}
 		cols.push_back(col);
@@ -2777,7 +2810,8 @@ bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValu
 			// A name nothing answers to is the QUERY being wrong, not the engine — L4's variety even
 			// though L3 is the one that finds out, because that is who the message is for.
 			if (reportMissing && source->m_name.size() > 1)
-				ibBackendQuerySourceException::Error(_("Table '%s' does not exist"), ibQuerySourceName(*source));
+				ibBackendQueryNameException::ErrorAt(source->m_line, source->m_col,
+					_("Table '%s' does not exist"), ibQuerySourceName(*source));
 			if (!tolerateOpaque)
 				return false;
 			out.push_back(Opaque(*source));

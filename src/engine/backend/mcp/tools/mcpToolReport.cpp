@@ -1699,17 +1699,17 @@ public:
 				const ibSourceMetaDataScope resolveAgainst(activeMetaData);
 				ibQueryLowering::CheckNames(package, std::map<wxString, ibValue>());
 			}
+			// THE TWO VARIETIES, CAUGHT BY TYPE — a name that does not exist, and a text that does not
+			// parse. This used to read the POSITION to tell them apart (0:0 meant a name), which
+			// stopped being true the moment an unresolved source learnt to point at its own FROM.
+			catch (const ibBackendQueryNameException& e) {
+				refusal = wxString::Format(ibMcpText("The query names something this configuration does "
+					"not have: %s. Nothing was written."), e.GetErrorDescription());
+				return false;
+			}
 			catch (const ibBackendQuerySourceException& e) {
-				// The position is what tells a misplaced comma from a name that does not exist:
-				// the latter arrives at 0:0, because there is nothing in the text to point at.
-				const s32 line = (s32)e.GetLine();
-				const s32 column = (s32)e.GetColumn();
-
-				refusal = (line == 0 && column == 0)
-					? wxString::Format(ibMcpText("The query names something this configuration does not "
-						"have: %s. Nothing was written."), e.GetErrorDescription())
-					: wxString::Format(ibMcpText("The query does not parse at %i:%i - %s. Nothing was "
-						"written."), (int)line, (int)column, e.GetErrorDescription());
+				refusal = wxString::Format(ibMcpText("The query does not parse at %i:%i - %s. Nothing was "
+					"written."), (int)e.GetLine(), (int)e.GetColumn(), e.GetErrorDescription());
 				return false;
 			}
 			catch (const ibBackendException& e) {

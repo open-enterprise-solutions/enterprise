@@ -190,10 +190,10 @@ void ibQueryLexer::DoSetError(int /*codeError*/,
 	// L4 refuses in its OWN variety, carrying the position as data — the text is what is wrong here,
 	// not the machinery, and the caller that shows this is the one editing the query.
 	if (errorDesc.empty())
-		ibBackendQuerySourceException::ErrorAt(currLine, currPos,
+		ibBackendQuerySyntaxException::ErrorAt(currLine, currPos,
 			_("Query lexical error at line %u (position %u)"), currLine, currPos);
 	else
-		ibBackendQuerySourceException::ErrorAt(currLine, currPos,
+		ibBackendQuerySyntaxException::ErrorAt(currLine, currPos,
 			_("Query lexical error at line %u (position %u): %s"), currLine, currPos, errorDesc);
 }
 
@@ -292,7 +292,7 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 			sUpper.clear(); GetNumber(&sUpper);
 			t.m_kind = ibQueryTokenKind::Number;
 			if (!t.m_literal.SetNumber(sUpper))
-				ibBackendQuerySourceException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
+				ibBackendQuerySyntaxException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
 					_("Query: '%s' is not a valid number at line %u (position %u)"),
 					sUpper, GetCurrentLine() + 1, GetCurrentPos());
 			t.m_text = sUpper;
@@ -301,7 +301,7 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 			sUpper.clear(); GetString(&sUpper);
 			t.m_kind = ibQueryTokenKind::String;
 			if (!t.m_literal.SetString(sUpper))
-				ibBackendQuerySourceException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
+				ibBackendQuerySyntaxException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
 					_("Query: a string literal could not be read at line %u (position %u)"),
 					GetCurrentLine() + 1, GetCurrentPos());
 			t.m_text = sUpper;
@@ -310,7 +310,7 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 			sUpper.clear(); GetDate(&sUpper);
 			t.m_kind = ibQueryTokenKind::Date;
 			if (!t.m_literal.SetDate(sUpper))
-				ibBackendQuerySourceException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
+				ibBackendQuerySyntaxException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
 					_("Query: '%s' is not a valid date at line %u (position %u)"),
 					sUpper, GetCurrentLine() + 1, GetCurrentPos());
 			t.m_text = sUpper;
@@ -318,7 +318,7 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 		else if (IsByte(wxT('&'))) {           // &Name — a query parameter
 			GetByte();                         // consume '&'
 			if (!IsWord())
-				ibBackendQuerySourceException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
+				ibBackendQuerySyntaxException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
 					_("Query: expected a parameter name after '&' at line %u (position %u)"),
 					GetCurrentLine() + 1, GetCurrentPos());
 			sUpper.clear(); sOrig.clear();

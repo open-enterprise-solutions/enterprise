@@ -79,7 +79,10 @@ private:
 // differ: this one is shown to the author of the query, the others to whoever runs the system.
 //
 // Both grains stay available — catch the base for "anything the query layer refused", catch this one
-// for "the query is wrong".
+// for "the query is wrong". And a THIRD grain below it, because "wrong" has two remedies:
+// ibBackendQuerySyntaxException (the text cannot be read) and ibBackendQueryNameException (it reads,
+// and names what is not there). Whoever needs only "the query is wrong" still catches this class and
+// meets both.
 class BACKEND_API ibBackendQuerySourceException : public ibBackendQueryException
 {
 public:
@@ -91,18 +94,67 @@ public:
 	unsigned int GetLine()   const { return m_line; }
 	unsigned int GetColumn() const { return m_col; }
 
+	// ⭐⭐ …AND WHICH WAY IT IS WRONG IS A TYPE, not a flag on this one. The two below are what a
+	// caller catches; this class is the grain that means "the query is wrong" and holds the span
+	// both of them carry. It raises nothing itself — there is no such thing as a refusal that is
+	// neither, and a class that can be thrown without saying which is a third state to handle.
+	//
+	// 🛑 A CONSUMER WAS GUESSING BETWEEN THEM, from the position: zero meant "a name", anything
+	// else "a typo". That held only while an unresolved source had nowhere to point, and the moment
+	// the parser started recording a source's span the guess inverted — sending an author to hunt
+	// for a typo in a query that parses perfectly (2026-09-02). The same reasoning that made this
+	// class a subclass rather than a Kind applies one floor down: catching by TYPE needs no
+	// rethrow, and the audiences differ by remedy — punctuation, or query_sources / query_fields.
+protected:
+	ibBackendQuerySourceException(const wxString& msg, unsigned int line, unsigned int col)
+		: ibBackendQueryException(Kind::TranslationFailure, msg), m_line(line), m_col(col) {}
+
+private:
+	unsigned int m_line = 0;
+	unsigned int m_col  = 0;
+};
+
+// THE TEXT CANNOT BE READ — the lexer and the parser. A token that cannot stand there, a bracket
+// that never closes, a clause in a place the grammar has no rule for. The remedy is in the text
+// itself, at the position this carries.
+class BACKEND_API ibBackendQuerySyntaxException : public ibBackendQuerySourceException
+{
+public:
 	// The span first, then the format and its arguments — the same vararg shape the other varieties
 	// use, so a callsite reads like every other raise in the codebase.
 	WX_DEFINE_VARARG_FUNC(static void, ErrorAt, 3, (unsigned int, unsigned int, const wxFormatErrorString&),
 		DoErrorAtWchar, DoErrorAtUtf8);
 
-	// No position known (a name that resolves to nothing has no token behind it by the time L3 finds out).
+private:
+	ibBackendQuerySyntaxException(const wxString& msg, unsigned int line, unsigned int col)
+		: ibBackendQuerySourceException(msg, line, col) {}
+
+#if !wxUSE_UTF8_LOCALE_ONLY
+	static void DoErrorAtWchar(unsigned int line, unsigned int col, const wxChar* format, ...);
+#endif
+#if wxUSE_UNICODE_UTF8
+	static void DoErrorAtUtf8(unsigned int line, unsigned int col, const wxChar* format, ...);
+#endif
+};
+
+// IT READS, AND ASKS FOR SOMETHING THAT IS NOT THERE — the lowering. A table this configuration
+// does not have, a field that source does not offer, a form nothing can carry out. The text is
+// beyond reproach; what it names is the problem, and the remedy is to look up what the names are
+// (query_sources, query_fields) rather than to re-read the punctuation.
+class BACKEND_API ibBackendQueryNameException : public ibBackendQuerySourceException
+{
+public:
+	WX_DEFINE_VARARG_FUNC(static void, ErrorAt, 3, (unsigned int, unsigned int, const wxFormatErrorString&),
+		DoErrorAtWchar, DoErrorAtUtf8);
+
+	// No position known — a refusal reached with no node to point at. Rare, and said as itself:
+	// no span is printed rather than line 0 offered as though it were a place.
 	WX_DEFINE_VARARG_FUNC(static void, Error, 1, (const wxFormatErrorString&),
 		DoErrorWchar, DoErrorUtf8);
 
 private:
-	ibBackendQuerySourceException(const wxString& msg, unsigned int line, unsigned int col)
-		: ibBackendQueryException(Kind::TranslationFailure, msg), m_line(line), m_col(col) {}
+	ibBackendQueryNameException(const wxString& msg, unsigned int line, unsigned int col)
+		: ibBackendQuerySourceException(msg, line, col) {}
 
 #if !wxUSE_UTF8_LOCALE_ONLY
 	static void DoErrorAtWchar(unsigned int line, unsigned int col, const wxChar* format, ...);
@@ -112,9 +164,6 @@ private:
 	static void DoErrorAtUtf8(unsigned int line, unsigned int col, const wxChar* format, ...);
 	static void DoErrorUtf8(const wxChar* format, ...);
 #endif
-
-	unsigned int m_line = 0;
-	unsigned int m_col  = 0;
 };
 
 // ibBackendQueryLinqException — THE PIPELINE REFUSED. The other L4 door: a query written as a chain

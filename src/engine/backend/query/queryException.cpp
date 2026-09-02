@@ -11,46 +11,66 @@ void ibBackendQueryException::Throw(Kind kind, const wxString& message)
 // split, so the format checking and the locale build modes behave identically here.
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-void ibBackendQuerySourceException::DoErrorAtWchar(unsigned int line, unsigned int col, const wxChar* format, ...)
+void ibBackendQuerySyntaxException::DoErrorAtWchar(unsigned int line, unsigned int col, const wxChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
 	const wxString message = wxString::FormatV(format, args);
 	va_end(args);
 
-	throw ibBackendQuerySourceException(message, line, col);
+	throw ibBackendQuerySyntaxException(message, line, col);
 }
 
-void ibBackendQuerySourceException::DoErrorWchar(const wxChar* format, ...)
+void ibBackendQueryNameException::DoErrorAtWchar(unsigned int line, unsigned int col, const wxChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
 	const wxString message = wxString::FormatV(format, args);
 	va_end(args);
 
-	throw ibBackendQuerySourceException(message, 0, 0);
+	throw ibBackendQueryNameException(message, line, col);
+}
+
+void ibBackendQueryNameException::DoErrorWchar(const wxChar* format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	const wxString message = wxString::FormatV(format, args);
+	va_end(args);
+
+	throw ibBackendQueryNameException(message, 0, 0);
 }
 #endif
 
 #if wxUSE_UNICODE_UTF8
-void ibBackendQuerySourceException::DoErrorAtUtf8(unsigned int line, unsigned int col, const wxChar* format, ...)
+void ibBackendQuerySyntaxException::DoErrorAtUtf8(unsigned int line, unsigned int col, const wxChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
 	const wxString message = wxString::FormatV(format, args);
 	va_end(args);
 
-	throw ibBackendQuerySourceException(message, line, col);
+	throw ibBackendQuerySyntaxException(message, line, col);
 }
 
-void ibBackendQuerySourceException::DoErrorUtf8(const wxChar* format, ...)
+void ibBackendQueryNameException::DoErrorAtUtf8(unsigned int line, unsigned int col, const wxChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
 	const wxString message = wxString::FormatV(format, args);
 	va_end(args);
 
-	throw ibBackendQuerySourceException(message, 0, 0);
+	throw ibBackendQueryNameException(message, line, col);
+}
+
+void ibBackendQueryNameException::DoErrorUtf8(const wxChar* format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	const wxString message = wxString::FormatV(format, args);
+	va_end(args);
+
+	throw ibBackendQueryNameException(message, 0, 0);
 }
 #endif
 

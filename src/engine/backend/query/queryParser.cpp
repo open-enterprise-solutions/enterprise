@@ -54,7 +54,7 @@ void ibQueryParser::ThrowQueryException(const ibQueryToken& at, const wxString& 
 	// so only the SENTENCE is shifted here. Printing the raw offset made every reported position one
 	// character short of the token it named, which reads as "the parser is pointing at the space before
 	// the problem" and costs whoever is reading the log an argument with their own arithmetic.
-	ibBackendQuerySourceException::ErrorAt(at.m_line, at.m_col,
+	ibBackendQuerySyntaxException::ErrorAt(at.m_line, at.m_col,
 		_("Query syntax error at line %u (position %u): %s"), at.m_line, at.m_col + 1, msg);
 }
 
@@ -465,6 +465,11 @@ ibQueryProjection ibQueryParser::ParseProjection()
 ibQuerySource ibQueryParser::ParseSource()
 {
 	ibQuerySource s;
+
+	// Taken before anything is consumed, so a source that turns out not to exist can be pointed at
+	// where the author wrote it (see ibQuerySource::m_line).
+	s.m_line = Cur().m_line;
+	s.m_col  = Cur().m_col;
 
 	// subquery source: FROM ( SELECT … ) [AS] alias
 	if (Cur().IsPunct(wxT('(')) && Peek().IsKeyword(ibQueryKeyword::Select)) {

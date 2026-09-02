@@ -326,23 +326,27 @@ public:
 			const ibSourceMetaDataScope resolveAgainst(activeMetaData);
 			ibQueryLowering::CheckNames(package, std::map<wxString, ibValue>());
 		}
-		catch (const ibBackendQuerySourceException& e) {
-			// THE ONE THAT KNOWS WHERE — when there is a where. Line and column are
-			// the whole value of this exception type existing.
-			//
-			// ⚠ IT CARRIES TWO DIFFERENT FAILURES. A comma in the wrong place comes
-			// with a position; a source that does not EXIST comes with 0:0, because
-			// there is nothing in the text to point at — the text is fine, the name
-			// is not. Reported as "syntax" it sent a reader hunting for a typo in a
-			// query that parses perfectly.
-			//
-			// So the position is what tells them apart, since it is what the engine
-			// actually said. The cleaner repair is a type of its own for an
-			// unresolved name, which is a change to the exception family.
+		// ⚠ TWO DIFFERENT FAILURES, TWO VARIETIES, TOLD APART BY WHICH ARRIVED. The
+		// lowering raises a NAME refusal (the text reads and asks for something that is
+		// not there); the lexer and parser raise a SYNTAX one. Both carry the span,
+		// which is the whole value of this branch of the family existing.
+		//
+		// 🛑 IT USED TO GUESS FROM THE POSITION: 0:0 meant a name, anything else a typo.
+		// That held only while an unresolved source had nowhere to point, and the moment
+		// the parser began recording a source's span (2026-09-02) the guess inverted —
+		// telling an author to hunt for a typo in a query that parses perfectly. The
+		// repair the old comment here asked for is the one that was made.
+		catch (const ibBackendQueryNameException& e) {
+			stage = wxT("names");
 			complaint = e.GetErrorDescription();
 			line = (s32)e.GetLine();
 			column = (s32)e.GetColumn();
-			stage = (line == 0 && column == 0) ? wxT("names") : wxT("syntax");
+		}
+		catch (const ibBackendQuerySourceException& e) {
+			stage = wxT("syntax");
+			complaint = e.GetErrorDescription();
+			line = (s32)e.GetLine();
+			column = (s32)e.GetColumn();
 		}
 		catch (const ibBackendQueryException& e) {
 			// Parsed, but names something that is not there. query_sources and

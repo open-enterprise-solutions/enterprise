@@ -113,7 +113,7 @@ public:
 	static void SysError(const wxString& source, long code, const wxString& message);
 
 	// …and the same with the message's OWN arguments, on wx's vararg machinery — the shape every
-	// raise in this codebase uses (`ibBackendQuerySourceException::ErrorAt`, `ibDatabaseLayer::
+	// raise in this codebase uses (`ibBackendQuerySyntaxException::ErrorAt`, `ibDatabaseLayer::
 	// RunQuery`). Two things a hand-rolled parameter pack does not give: the format string is
 	// CHECKED AGAINST ITS ARGUMENTS at compile time, and both wx builds (wchar and UTF-8) get the
 	// right implementation without the callsite knowing which one it is in.
