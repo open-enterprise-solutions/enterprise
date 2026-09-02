@@ -40,7 +40,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgFull()
 {
 	static const ibArg s_a(wxT("full"), ibArg::Kind::Flag,
-		_("Include roles and language for EVERY account. Costs one read per account, so it "
+		ibMcpText("Include roles and language for EVERY account. Costs one read per account, so it "
 		  "is off by default - but it is one call instead of one per person."));
 	return s_a;
 }
@@ -49,14 +49,14 @@ const ibArg& ArgFull()
 const ibArg& ArgName()
 {
 	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
-		_("One account, in full. Omit for the list."));
+		ibMcpText("One account, in full. Omit for the list."));
 	return s_a;
 }
 
 const ibArg& ArgSession()
 {
 	static const ibArg s_a(wxT("session"), ibArg::Kind::Text,
-		_("Which one - the `session` handle from session_list or lock_list."), /*required*/ true);
+		ibMcpText("Which one - the `session` handle from session_list or lock_list."), /*required*/ true);
 	return s_a;
 }
 
@@ -75,13 +75,13 @@ public:
 	{
 		const wxString name = ArgName().Text(params);
 		return name.IsEmpty()
-			? wxString(_("looking at the accounts"))
-			: wxString::Format(_("looking at the account '%s'"), name);
+			? wxString(ibMcpText("looking at the accounts"))
+			: wxString::Format(ibMcpText("looking at the account '%s'"), name);
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("The accounts of this installation - who exists, what roles they hold and which "
+		return ibMcpText("The accounts of this installation - who exists, what roles they hold and which "
 			"language they read in, which together decide what each may see and how they are "
 			"spoken to. A name gives one account; `full` gives every account with its roles and "
 			"language in a single answer, instead of asking again once per person.");
@@ -126,14 +126,14 @@ public:
 			// failed" would be exactly backwards.
 			if (users.empty())
 				result.SetValue(wxT("note"),
-					_("No accounts at all - this installation opens without asking who you are."));
+					ibMcpText("No accounts at all - this installation opens without asking who you are."));
 
 			return true;
 		}
 
 		const ibUserInfo info = ibUserInfo::Read(name);
 		if (!info.IsOk()) {
-			refusal = wxString::Format(_("No account named '%s'."), name);
+			refusal = wxString::Format(ibMcpText("No account named '%s'."), name);
 			return false;
 		}
 
@@ -165,7 +165,7 @@ private:
 			// exact opposite — see role_rights, which reports the same distinction.
 			roles.push_back(ibDataValue::String(
 				role.m_mode == ibRoleCompositionMode_Intersection
-					? role.m_strRoleName + wxT(" (restricting)")
+					? role.m_strRoleName + ibMcpText(" (restricting)")
 					: role.m_strRoleName));
 		}
 
@@ -175,7 +175,7 @@ private:
 		// sentence because it reads the other way round at first glance.
 		if (roles.empty())
 			into.SetValue(wxT("rolesNote"),
-				_("No roles are assigned - nothing narrows what this account may do."));
+				ibMcpText("No roles are assigned - nothing narrows what this account may do."));
 
 		if (info.IsSetLanguage()) {
 			into.SetValue(wxT("language"), info.m_strLanguageName);
@@ -196,12 +196,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("looking at who is connected");
+		return ibMcpText("looking at who is connected");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Who is connected right now: the user, the machine, the application they are "
+		return ibMcpText("Who is connected right now: the user, the machine, the application they are "
 			"in, and when they started. Ask before anything that needs the installation to "
 			"itself - applying a schema, taking the designer exclusively - and after a "
 			"failure, to know whether anyone else was running at all.");
@@ -216,13 +216,13 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (appData == nullptr) {
-			refusal = _("The application is not up.");
+			refusal = ibMcpText("The application is not up.");
 			return false;
 		}
 
 		ibSessionRegistry* registry = appData->GetSessionRegistry();
 		if (registry == nullptr) {
-			refusal = _("There is no session registry in this process.");
+			refusal = ibMcpText("There is no session registry in this process.");
 			return false;
 		}
 
@@ -259,7 +259,7 @@ public:
 		// letting an empty list be read as an empty installation.
 		if (sessions.empty())
 			result.SetValue(wxT("note"),
-				_("Nobody listed. The snapshot refreshes every few seconds, so a session "
+				ibMcpText("Nobody listed. The snapshot refreshes every few seconds, so a session "
 				  "started just now may not have reached it."));
 
 		return true;
@@ -290,12 +290,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("disconnecting a session");
+		return ibMcpText("disconnecting a session");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Ask a session to disconnect - the handle comes from session_list. Used "
+		return ibMcpText("Ask a session to disconnect - the handle comes from session_list. Used "
 			"before something that needs the installation to itself, and to free a lock whose "
 			"holder has walked away (lock_list names the session). It is a SIGNAL: the process "
 			"that owns the session acts on it within a few seconds, so the row does not vanish "
@@ -312,19 +312,19 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (appData == nullptr) {
-			refusal = _("The application is not up.");
+			refusal = ibMcpText("The application is not up.");
 			return false;
 		}
 
 		ibSessionRegistry* registry = appData->GetSessionRegistry();
 		if (registry == nullptr) {
-			refusal = _("There is no session registry in this process.");
+			refusal = ibMcpText("There is no session registry in this process.");
 			return false;
 		}
 
 		const wxString wanted = ArgSession().Text(params);
 		if (wanted.IsEmpty()) {
-			refusal = _("No session named. session_list lists them with their handles.");
+			refusal = ibMcpText("No session named. session_list lists them with their handles.");
 			return false;
 		}
 
@@ -334,7 +334,7 @@ public:
 		// more useful than a silent guard.
 		if (ibSession* self = ibSession::Current()) {
 			if (self->Identity().m_guid.str().IsSameAs(wanted, false)) {
-				refusal = _("That is the session this assistant is running in - disconnecting it "
+				refusal = ibMcpText("That is the session this assistant is running in - disconnecting it "
 					"would end this conversation. Kick another one, or close the designer.");
 				return false;
 			}
@@ -358,13 +358,13 @@ public:
 		// A handle nobody answers to is refused rather than signalled into nowhere: the UPDATE
 		// would touch no row and report success, which reads as "done".
 		if (!found) {
-			refusal = _("No session with that handle is connected. The list refreshes every few "
+			refusal = ibMcpText("No session with that handle is connected. The list refreshes every few "
 				"seconds, so it may have left already.");
 			return false;
 		}
 
 		if (!registry->Kick(wanted)) {
-			refusal = _("The disconnect could not be written to the session table.");
+			refusal = ibMcpText("The disconnect could not be written to the session table.");
 			return false;
 		}
 
@@ -375,7 +375,7 @@ public:
 		// ⭐ "ASKED", NOT "DONE" — see the note above the class. The word is the whole report.
 		result.SetValue(wxT("asked"), wxString(wxT("disconnect")));
 		result.SetValue(wxT("note"),
-			_("The owning process acts on this within a few seconds. Read session_list again "
+			ibMcpText("The owning process acts on this within a few seconds. Read session_list again "
 			  "to see it gone."));
 
 		return true;
@@ -405,12 +405,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("asking a server to re-login its clients");
+		return ibMcpText("asking a server to re-login its clients");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Ask the process owning a session to evict ALL its web clients, so they log in "
+		return ibMcpText("Ask the process owning a session to evict ALL its web clients, so they log in "
 			"again and pick up the current configuration. Use after applying a change that web "
 			"clients must see; use session_kick when the target is one person. The handle names "
 			"the PROCESS through any of its sessions - it is not the session that ends. Like a "
@@ -426,31 +426,31 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (appData == nullptr) {
-			refusal = _("The application is not up.");
+			refusal = ibMcpText("The application is not up.");
 			return false;
 		}
 
 		ibSessionRegistry* registry = appData->GetSessionRegistry();
 		if (registry == nullptr) {
-			refusal = _("There is no session registry in this process.");
+			refusal = ibMcpText("There is no session registry in this process.");
 			return false;
 		}
 
 		const wxString wanted = ArgSession().Text(params);
 		if (wanted.IsEmpty()) {
-			refusal = _("No session named. session_list lists them with their handles.");
+			refusal = ibMcpText("No session named. session_list lists them with their handles.");
 			return false;
 		}
 
 		if (!registry->Reload(wanted)) {
-			refusal = _("The reload could not be written to the session table.");
+			refusal = ibMcpText("The reload could not be written to the session table.");
 			return false;
 		}
 
 		result.SetValue(wxT("session"), wanted);
 		result.SetValue(wxT("asked"), wxString(wxT("reload")));
 		result.SetValue(wxT("note"),
-			_("Every web client of that process will be asked to log in again, within a few "
+			ibMcpText("Every web client of that process will be asked to log in again, within a few "
 			  "seconds."));
 
 		return true;

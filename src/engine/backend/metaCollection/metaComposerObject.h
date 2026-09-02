@@ -58,6 +58,19 @@ public:
 	const ibCompositionDescription& GetCompositionDesc() const { return m_propertyComposition->GetValueAsCompositionDesc(); }
 	void SetCompositionDesc(const ibCompositionDescription& desc) { m_propertyComposition->SetValue(desc); }
 
+	// ⭐⭐ THE CELL ITSELF, FOR WHOEVER HAS TO GO ON LOOKING AT IT. The reference above is the right
+	// answer for a caller that reads or edits and returns; it is the wrong one for a WINDOW, which
+	// outlives the call that opened it. SetCompositionDesc replaces the cell — that is what a
+	// variant is — and a window holding a bare reference into the old one is holding freed memory
+	// the moment anything stores a composition: the designer died exactly so on 2026-09-02, an MCP
+	// verb writing while the settings window stood open, and the fall came later and elsewhere
+	// (ibComposerSettingsPanel::ApplyPendingQueryText, on a page change).
+	//
+	// The variant is reference-counted, so a holder keeps its own alive: the store swaps in a new
+	// cell, the window goes on editing the one it opened, and that one dies quietly when it closes
+	// (Max, 2026-09-02). Handed over BY VALUE for that reason — the copy IS the grip.
+	wxVariant GetCompositionValue() const { return m_propertyComposition->GetValue(); }
+
 	// ⚠ TWO BASES ANSWER THESE, so the metaobject's answers are named as the ones. A composer is a
 	// metaobject that ALSO wears a column face; its name, its synonym and whether it is allowed are
 	// facts about the metaobject, and the column face inherits them rather than holding its own.
@@ -78,6 +91,10 @@ public:
 	//events — the owner is told, so the FIRST composer becomes the report's default one
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
 	virtual bool OnDeleteMetaObject();
+
+	// EVERY VARIANT IS NAMED — refused here rather than discovered by a person opening an empty
+	// picker. See the .cpp for why it reports instead of raising.
+	virtual bool OnSaveMetaObject(int flags) override;
 
 	// ⭐ …and the owner's OBJECT is told that its fields changed — a composition is a field of it,
 	// exactly as an attribute and a tabular section are, so this is their road (see the .cpp).

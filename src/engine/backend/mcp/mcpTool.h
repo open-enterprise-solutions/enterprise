@@ -36,6 +36,18 @@
 
 #include <wx/string.h>
 
+// ⭐⭐ TEXT THAT GOES DOWN THE WIRE — English, never translated, and a `wxString` rather than a bare
+// literal so it can be stored, formatted and compared like any other.
+//
+// 🛑 WHY IT IS NOT `_()`. The translation macro resolves to `wxASCII_STR` here, and that eats every
+// character outside ASCII: on Windows a mark came back as `?`, on Linux the WHOLE STRING came back
+// EMPTY — three tools shipped with no description at all, and only the CI contract test noticed
+// (2026-09-02, `help_search has no description`). Nothing in this layer is read by the person at
+// the designer: descriptions, argument texts and refusals are read by an assistant, in English, so
+// there was never anything to translate. What IS read by a person — the lines the server publishes
+// into the designer's window — stays `_()` in mcpServer.cpp, and stays ASCII.
+#define ibMcpText(text) wxString(wxT(text))
+
 class BACKEND_API ibMcpTool {
 public:
 
@@ -67,6 +79,12 @@ public:
 		}
 
 		const wxString& Name() const { return m_name; }
+
+		// WHAT IT IS FOR, in the caller's words. Read by the finder, which searches a tool by
+		// everything it says about itself: half of what a verb does is said in its arguments and
+		// nowhere else, and a finder blind to them knows the tool less well than its own answer does.
+		const wxString& Description() const { return m_description; }
+
 		bool IsRequired() const { return m_required; }
 
 		// Into the schema ROOT — the frame is this class's business too: `type: object`, the
@@ -213,6 +231,55 @@ public:
 	// The default is false — a tool is found, not announced. Overridden by the two that do the
 	// finding, since a caller with neither has no way in.
 	virtual bool IsAlwaysListed() const { return false; }
+
+	// ⭐⭐ WHAT THIS TOOL KNOWS, for the finder to search — over and above its description.
+	//
+	// A description says what a VERB does, in the words of this platform. A caller arrives with the
+	// words of the JOB, and for most tools the two meet: somebody looking for "lock" finds
+	// `lock_list` because the description is about locks. It fails exactly where the tool is a DOOR
+	// ONTO A CORPUS, because then the description is about the door.
+	//
+	// 🛑 MEASURED, and it was the worst possible miss (Claude Code, 2026-09-02, first session):
+	// `mcp_search "stock balance"` answered `query_sources` and NOT `pattern_read` — whose `shapes`
+	// entry says, in those words, that "what is left" is an AccumulationRegister with RegisterType
+	// = balances and that a balance must never be summed by hand. `mcp_search "print"` answered
+	// six spreadsheet verbs and not the `printing` pattern. The one thing that would have kept a
+	// newcomer from building a stock ledger out of a catalogue was unreachable by every word they
+	// would have used to look for it.
+	//
+	// So a tool that CARRIES text answers with it here, and the finder matches against that too.
+	// Not a keyword list written beside the corpus — the corpus itself, so a pattern added
+	// tomorrow is findable by its own words the day it is written and nobody has to remember.
+	//
+	// ⚠ DECLARED LAST ON PURPOSE. An optional virtual added in the middle of this class moves every
+	// slot below it, and a partial build then links objects that disagree about the layout — the
+	// vtable skew whose symptom is a stack that will not unwind. Last, it only ever appends.
+	virtual wxString GetSearchText() const { return wxEmptyString; }
+
+	// ⭐⭐ WHAT IS INSIDE THIS TOOL, AS ADDRESSES — so one search answers both kinds of question.
+	//
+	// There were two doors: `mcp_search` found VERBS, `pattern_read {query}` found PLACES IN THE
+	// CORPUS, and a caller had to know which of the two their question was before asking it. That
+	// is a choice nobody can make correctly from outside: "how do I print a report" is both, and
+	// "how much is left" is only the second — the very question a newcomer arrives with.
+	//
+	// So a tool that carries a body of text can also say WHERE in it the answer lives, and the
+	// finder asks every tool that can. The tool still owns the shape of its own addresses; this
+	// only says they exist and can be handed back beside the verbs.
+	//
+	// ⚠ APPENDED AFTER GetSearchText, for the same reason that one is last (see above).
+	virtual void FindInside(const wxString& query, std::vector<ibDataValue>& places) const {}
+
+	// ⭐ MAY THIS RUN WHILE THE HOST IS WAITING ON A MODAL DIALOG? Almost nothing may: the
+	// application is mid-question, and a command that opens a document or edits metadata underneath
+	// it lands in a state nobody designed (see ibMcpBusyWith).
+	//
+	// The exceptions are the verbs that GET OUT of it — seeing what is standing, dismissing it,
+	// reading what was said, saying something to the person, asking what state the platform is in.
+	// Refusing those would leave a caller with no way to recover and nothing to tell the person.
+	//
+	// ⚠ APPENDED LAST, like the two above.
+	virtual bool RunsWhileBusy() const { return false; }
 };
 
 
@@ -225,6 +292,43 @@ public:
 // read is still better than a sentence with a hole where the object should be.
 BACKEND_API wxString ibMcpNameOf(const ibDataNode& params,
 	const wxString& field = wxT("id"));
+
+// ⭐⭐ HOW MANY OF THE CALLER'S WORDS LANDED — the one rule every finder here matches by, so the
+// tool search and the corpus search cannot come to different conclusions about the same words.
+//
+// 🛑 REQUIRING ALL OF THEM ANSWERS NOTHING FAR TOO OFTEN, and an empty answer reads as "there is
+// nothing about this" — the most expensive wrong answer a finder can give. Measured on this
+// server (2026-09-02): "moved back and forth" — nothing, though transfers between warehouses are
+// written up in full; "lots cost path movements" — nothing, with a whole entry on exactly that.
+// What worked was the caller first translating their problem into the corpus's own nouns, which
+// is the search doing its job backwards.
+//
+// So the COUNT is returned instead of a verdict, and the caller ranks by it: everything that
+// matched every word if anything did, and otherwise whatever matched the most. A word is tried at
+// shrinking lengths down to four characters, so "distributing" meets "distribution".
+BACKEND_API size_t ibMcpWordsFound(const wxString& haystack, const wxString& query,
+	size_t* asked = nullptr);
+
+// WHAT A COMPOSITION STILL LACKS to produce a report somebody can read — a nameless variant, no
+// output, nothing selected. Written where the report verbs live (mcpToolReport.cpp) and declared
+// here because the configuration-wide audit asks the same question of every composer there is: two
+// implementations of "what is missing" would answer differently within a week.
+BACKEND_API void ibMcpComposerComplaints(const class ibCompositionDescription& composition,
+	std::vector<wxString>& missing);
+
+// ⭐ THE FIRST LINE THAT NAMES SOMETHING, as a WHOLE WORD — for an answer that says where a hit is
+// rather than only that there was one. A caller judges a hit by the line and fetches only what
+// survives that; a bare count sends them to open everything.
+//
+// ⚠ WHOLE WORD, because a name inside a longer identifier is a different thing entirely: `Goods`
+// must not be reported as used by `GoodsReceipt`, or every answer becomes noise in a base whose
+// naming is any good. Empty when the name is nowhere in the text.
+BACKEND_API wxString ibMcpLineNaming(const wxString& text, const wxString& name);
+
+// Is this query written as a REGULAR EXPRESSION rather than as words? Asked by everything that
+// wants to show WHERE a match landed, so the highlight and the match cannot disagree about how
+// the query was read.
+BACKEND_API bool ibMcpIsRegex(const wxString& query);
 
 // ⭐⭐ THE ONE PLACE THAT SAYS AN OBJECT. Every tool that answers about a metaobject answers with
 // the same handful of facts, and each of them was spelling the tags out by hand: `name`, `kind`,
@@ -378,6 +482,48 @@ BACKEND_API wxString ibMcpFencedExcerpt(const wxString& text, const wxString& la
 // is nothing to say, so a clean result stays clean.
 BACKEND_API void ibMcpReportComplaints(ibDataNode& result, class ibValueMetaObject* object);
 
+// ⭐⭐ WHOEVER KNOWS SOMETHING WORTH CHECKING REGISTERS IT. `config_check` asks what is half-built
+// in a configuration, and the answer is not one file's business: composers, fields and reports are
+// the backend's, and a composition held BY A FORM — a list, a composer dropped onto a gridbox — is
+// the frontend's, because a form's controls are a blob to anything that cannot build them
+// (Max, 2026-09-02: *"a composer can be on a form too, like a list"*).
+//
+// 🛑 AND AN AUDIT THAT CANNOT SEE HALF THE WORLD IS WORSE THAN NONE, because it answers "nothing
+// half-built" about a configuration with a broken form in it — a false clean is acted on, an
+// absent check is not. So the checks are a registry rather than a function: the DLL that
+// understands a kind of object contributes the question, and config_check asks whoever is linked.
+class BACKEND_API ibMcpAudit {
+public:
+	virtual ~ibMcpAudit() = default;
+
+	// Says a fault by naming the OBJECT it is about — a fault with no address cannot be acted on.
+	typedef std::function<void(const class ibValueMetaObject*, const wxString&)> ibComplain;
+
+	virtual void Check(class ibMetaData* metaData, const ibComplain& complain) const = 0;
+};
+
+BACKEND_API void ibRegisterMcpAudit(const ibMcpAudit* audit);
+BACKEND_API const std::vector<const ibMcpAudit*>& ibMcpAudits();
+
+// ⭐⭐ IS THE HOST IN THE MIDDLE OF SOMETHING A PERSON HAS TO ANSWER? While a modal dialog stands,
+// the application is not in a state anybody can act on: its window is waiting for a click, its
+// documents are half-open, and a command arriving from outside lands in the gap.
+//
+// 🛑 THIS IS A NEW CLASS OF FAULT, and it exists because of what this server is. A person cannot
+// click in two places at once, so the situation never arose — one pair of hands, one modal, one
+// answer. An assistant that can open anything at any moment reproduces states the platform was
+// never in (Max, 2026-09-02, watching the designer die: he had a modal open and a tool opened a
+// document underneath it — `ibCodeEditor::ActivateEditor` on a document whose metaobject was
+// nowhere).
+//
+// So the server asks before it dispatches, and the answer is the dialog's own title — something the
+// caller can put in front of the person, or clear with `window_dismiss`. Empty means free.
+// Maintained by whoever owns windows (a wxModalDialogHook in the designer); an atomic count, so it
+// can be read from the thread a request arrives on.
+BACKEND_API void ibMcpBusyEnter(const wxString& what);
+BACKEND_API void ibMcpBusyLeave();
+BACKEND_API wxString ibMcpBusyWith();
+
 // The registry. Registration happens during static construction, so the store
 // is a function-local static inside the .cpp — a namespace-scope container
 // would not be built yet when the first registrar runs.
@@ -393,6 +539,16 @@ BACKEND_API const ibMcpTool* ibFindMcpTool(const wxString& name);
 		tool_class m_tool;                                                   \
 	};                                                                       \
 	static tool_class##Registrar s_##tool_class##Registrar;                  \
+	}
+
+//     MCP_AUDIT_REGISTER(ibMcpAuditForms);   — the same idiom, for a check rather than a verb
+#define MCP_AUDIT_REGISTER(audit_class)                                      \
+	namespace {                                                              \
+	struct audit_class##Registrar {                                          \
+		audit_class##Registrar() { ibRegisterMcpAudit(&m_audit); }           \
+		audit_class m_audit;                                                 \
+	};                                                                       \
+	static audit_class##Registrar s_##audit_class##Registrar;                \
 	}
 
 #endif // _IB_MCP_TOOL_H_

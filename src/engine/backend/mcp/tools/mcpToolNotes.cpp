@@ -36,7 +36,7 @@ ibMetaData* OpenConfiguration(wxString& refusal)
 	ibMetaData* metaData = activeMetaData;
 
 	if (metaData == nullptr || !metaData->IsConfigOpen()) {
-		refusal = _("No configuration is open.");
+		refusal = ibMcpText("No configuration is open.");
 		return nullptr;
 	}
 
@@ -72,7 +72,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgHelp()
 {
 	static const ibArg s_a(wxT("help"), ibArg::Kind::Flag,
-		_("Include the user-facing help text as well as the notes. Off by default: the two "
+		ibMcpText("Include the user-facing help text as well as the notes. Off by default: the two "
 		  "are written for different readers, and mixing them is how one ends up in the "
 		  "other."));
 	return s_a;
@@ -81,7 +81,7 @@ const ibArg& ArgHelp()
 const ibArg& ArgId()
 {
 	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
-		_("One object's NodeId, and everything under it. Omit for the whole configuration - "
+		ibMcpText("One object's NodeId, and everything under it. Omit for the whole configuration - "
 			  "which is the usual way to ask."));
 	return s_a;
 }
@@ -89,14 +89,14 @@ const ibArg& ArgId()
 const ibArg& ArgText()
 {
 	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
-		_("The markdown. Empty clears what is there."), /*required*/ true);
+		ibMcpText("The markdown. Empty clears what is there."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgTarget()
 {
 	static const ibArg s_a(wxT("target"), ibArg::Kind::Text,
-		_("Which text: `notes` - why this exists, for whoever builds the configuration; or "
+		ibMcpText("Which text: `notes` - why this exists, for whoever builds the configuration; or "
 			  "`help` - what this is and what to put in it, shown to the person USING the "
 			  "application when they press F1. Different readers, different words."),
 			/*required*/ true, { wxT("notes"), wxT("help") });
@@ -116,12 +116,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("reading what is known about this configuration");
+		return ibMcpText("reading what is known about this configuration");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Everything recorded ABOUT this configuration, in one answer: the markdown NOTES - "
+		return ibMcpText("Everything recorded ABOUT this configuration, in one answer: the markdown NOTES - "
 			"how each thing actually works inside, what was decided, what was tried and rejected - "
 			"and optionally the user-facing help beside them. READ THIS FIRST when picking work "
 			"up: it is where the FINDINGS from earlier work are kept, and a configuration records "
@@ -147,7 +147,7 @@ public:
 			if (asked->Kind() == ibDataKind::Number) {
 				from = ibFindMetaObjectById(metaData, (ibMetaID)asked->AsInt());
 				if (from == nullptr) {
-					refusal = wxString::Format(_("Nothing in this configuration has id %s."),
+					refusal = wxString::Format(ibMcpText("Nothing in this configuration has id %s."),
 						asked->AsNumber().ToString());
 					return false;
 				}
@@ -158,7 +158,7 @@ public:
 			from = metaData->GetCommonMetaObject();
 
 		if (from == nullptr) {
-			refusal = _("This configuration has no root to read from.");
+			refusal = ibMcpText("This configuration has no root to read from.");
 			return false;
 		}
 
@@ -174,7 +174,7 @@ public:
 		// because "nothing is written down" is itself the most actionable answer this tool has.
 		if (entries.empty()) {
 			result.SetValue(wxT("note"),
-				_("Nothing is recorded yet. note_write puts it there - and what is worth writing "
+				ibMcpText("Nothing is recorded yet. note_write puts it there - and what is worth writing "
 				  "is the reasoning a later reader cannot recover from the objects themselves."));
 		}
 
@@ -195,12 +195,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("writing notes on '%s'"), ibMcpNameOf(params));
+		return wxString::Format(ibMcpText("writing notes on '%s'"), ibMcpNameOf(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Write one of the two texts an object carries, saying WHICH every time. `notes` "
+		return ibMcpText("Write one of the two texts an object carries, saying WHICH every time. `notes` "
 			"records what a later reader could not work out from the object itself - why it "
 			"exists, which shape was chosen, what was rejected. `help` is what the person USING "
 			"the application reads when they press F1: what this is and what to put in it, in "
@@ -229,13 +229,13 @@ public:
 
 		const ibDataValue* asked = params.FindField(ArgId().Name());
 		if (asked == nullptr || asked->Kind() != ibDataKind::Number) {
-			refusal = _("No id given.");
+			refusal = ibMcpText("No id given.");
 			return false;
 		}
 
 		ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)asked->AsInt());
 		if (object == nullptr) {
-			refusal = wxString::Format(_("Nothing in this configuration has id %s."),
+			refusal = wxString::Format(ibMcpText("Nothing in this configuration has id %s."),
 				asked->AsNumber().ToString());
 			return false;
 		}
@@ -246,7 +246,7 @@ public:
 		const ibDataValue* incoming = params.FindField(ArgText().Name());
 
 		if (incoming == nullptr || incoming->Kind() != ibDataKind::String) {
-			refusal = _("'text' must be a string. Nothing was written.");
+			refusal = ibMcpText("'text' must be a string. Nothing was written.");
 			return false;
 		}
 
@@ -255,7 +255,7 @@ public:
 		const wxString target = ArgTarget().Text(params);
 
 		if (!target.IsSameAs(wxT("notes"), false) && !target.IsSameAs(wxT("help"), false)) {
-			refusal = _("Say which text: 'notes' for the engineering intent, 'help' for what the "
+			refusal = ibMcpText("Say which text: 'notes' for the engineering intent, 'help' for what the "
 				"person using the application reads. Nothing was written.");
 			return false;
 		}

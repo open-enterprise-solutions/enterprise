@@ -1157,6 +1157,52 @@ static wxString ibMcpUndeclaredArgument(const ibMcpTool* tool, const ibDataNode&
 	return wxEmptyString;
 }
 
+// ⭐⭐ AND THE REFUSAL SAYS WHAT IT DOES TAKE. "Check the tool's schema" is a round trip that ends
+// where the caller already was: they built the call FROM the schema and still got the name wrong,
+// so sending them back to re-read it is the one thing known not to work.
+//
+// Measured on this server, 2026-09-02, two names in one call: `parent` for `parent_id` — a spelling
+// away, guessable from a list — and `comment` for `note`, which no similarity would ever find
+// because the two words differ only in what they are FOR. Both are answered by simply saying the
+// names, which costs one line and ends the guessing.
+//
+// The near name is said FIRST when there is one, because a typo and a wrong concept are different
+// mistakes and the first is worth pointing straight at.
+// (`closest`, not `near`: `near` is still a macro in the Windows headers.)
+static wxString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const wxString& given, wxString& closest)
+{
+	if (tool == nullptr)
+		return wxEmptyString;
+
+	ibDataNode schema;
+	tool->DescribeInput(schema);
+
+	const ibDataNode* properties = schema.FindChild(wxT("properties"));
+	if (properties == nullptr)
+		return wxEmptyString;
+
+	const wxString wanted = given.Lower();
+	wxString names;
+
+	for (const auto& declared : properties->Properties()) {
+
+		if (!names.IsEmpty())
+			names += wxT(", ");
+		names += declared.first;
+
+		// NEAR ENOUGH TO BE A TYPO: one name inside the other (`parent` in `parent_id`, `value` in
+		// `values`). Deliberately not a distance measure — this is a nudge, and a wrong nudge is
+		// worse than none when the full list is right beside it.
+		const wxString candidate = declared.first.Lower();
+
+		if (closest.IsEmpty() && wanted.length() >= 3
+			&& (candidate.Find(wanted) != wxNOT_FOUND || wanted.Find(candidate) != wxNOT_FOUND))
+			closest = declared.first;
+	}
+
+	return names;
+}
+
 //---------------------------------------------------------------------------
 // a required argument that never came
 //---------------------------------------------------------------------------
@@ -1590,9 +1636,9 @@ wxString BuildOrientation()
 	// snapshot stays true, it names the tool that answers the same question live.
 	out << wxT("HOW THIS CONFIGURATION IS WRITTEN - true when you connected. `platform_state` ")
 		<< wxT("answers all of it again at any moment. Ask it at two points, not one:\n")
-		<< wxT("  BEFORE WRITING CODE - the dialect can be switched while you are connected, and ")
+		<< wxT(" BEFORE WRITING CODE - the dialect can be switched while you are connected, and ")
 		<< wxT("the other one is rejected by the compiler while reading perfectly.\n")
-		<< wxT("  BEFORE SAYING SOMETHING IS DONE - `unsavedEdits` means it dies when the ")
+		<< wxT(" BEFORE SAYING SOMETHING IS DONE - `unsavedEdits` means it dies when the ")
 		<< wxT("designer closes, `inDatabase: false` means the running application never got it. ")
 		<< wxT("Both are silent, and \"done\" is false in each of them for a different reason ")
 		<< wxT("with a different cure.\n");
@@ -1600,9 +1646,9 @@ wxString BuildOrientation()
 	out << wxT("Script dialect: ");
 
 	if (ibConfigurationWritesInWords(metaData))
-		out << wxT("WORD-FENCED (`If … Then … EndIf`, `Procedure … EndProcedure`).");
+		out << wxT("WORD-FENCED (`If ... Then ... EndIf`, `Procedure ... EndProcedure`).");
 	else
-		out << wxT("C-STYLE (`if (…) { … }`, braces and semicolons).");
+		out << wxT("C-STYLE (`if (...) { ... }`, braces and semicolons).");
 
 	out << wxT(" Write in that one - the other is a different language to the compiler, and ")
 		<< wxT("`script_check` is how you find out before anyone runs it.\n");
@@ -1628,7 +1674,7 @@ wxString BuildOrientation()
 	// Said in the orientation because a model working with a Russian-speaking developer will
 	// otherwise mirror their language into the names, helpfully and wrongly, and the mistake is
 	// expensive to undo once modules reference it.
-	out << wxT("⚠ THE CONFIGURATION IS WRITTEN IN ENGLISH. Names of objects, attributes, tabular ")
+	out << wxT("NOTE: THE CONFIGURATION IS WRITTEN IN ENGLISH. Names of objects, attributes, tabular ")
 		<< wxT("sections and modules - and the code inside them - are English, always: a name goes ")
 		<< wxT("into script, into query text and into the database schema, and it is what the next ")
 		<< wxT("person has to read.\n")
@@ -1651,7 +1697,7 @@ wxString BuildOrientation()
 	out << wxT("THE CONFIGURATION holds:");
 
 	for (const auto& kind : census)
-		out << wxT("\n  ") << kind.second << wxT(" ") << kind.first;
+		out << wxT("\n ") << kind.second << wxT(" ") << kind.first;
 
 	out << wxT("\n\n");
 
@@ -1705,11 +1751,11 @@ wxString BuildOrientation()
 	// than this one did - which is the only way a record like this survives more than one person.
 	out << wxT("KEEP IT UP, AND KEEP IT AT THE RIGHT LEVEL - there are two, and they are not ")
 		<< wxT("interchangeable.\n")
-		<< wxT("  * THE ROOT is the central document: what is true of the configuration as a ")
+		<< wxT(" * THE ROOT is the central document: what is true of the configuration as a ")
 		<< wxT("whole - how it is put together, the conventions it follows, where the next ")
 		<< wxT("arrival should look, a direction taken or decided against. It is read FIRST, ")
 		<< wxT("before any object is opened.\n")
-		<< wxT("  * EACH OBJECT carries its OWN specifics, written while you are working on that ")
+		<< wxT(" * EACH OBJECT carries its OWN specifics, written while you are working on that ")
 		<< wxT("object: why it exists, which shape was chosen, what was rejected, what a later ")
 		<< wxT("reader could not work out from the object itself. `note_write` ")
 		<< wxT("{id, target: \"notes\", text}. Anything in the tree can carry them.\n")
@@ -1718,9 +1764,21 @@ wxString BuildOrientation()
 		<< wxT("looking for it, and the root swells until it is no longer the thing anyone reads ")
 		<< wxT("first. Write it where it is true, as you go - not gathered up at the end.\n")
 		<< wxT("The OTHER text, target: \"help\", is what the person USING the application reads ")
-		<< wxT("on F1 - different reader, different words, do not mix them. A short line in the ")
-		<< wxT("object's `Comment` property is the third surface: what it is, at a glance, in the ")
-		<< wxT("property list.\n")
+		<< wxT("on F1 - different reader, different words, do not mix them.\n")
+		<< wxT(" * THE THIRD SURFACE IS `Comment`, one line, and every object in the tree has one ")
+		<< wxT("- an attribute, a tabular section, a dimension, not only the top-level objects. It ")
+		<< wxT("answers the smallest question there is: WHY DOES THIS EXIST AT ALL. Whoever opens ")
+		<< wxT("the object meets it in the property list beside the name, and metadata_tree and ")
+		<< wxT("metadata_get answer with it, so one read of the map shows what everything is FOR ")
+		<< wxT("without opening anything. Written with `metadata_set` {id, property: \"Comment\", ")
+		<< wxT("value}. Optional, and cheap: a sentence like \"which warehouse the line is being ")
+		<< wxT("written off from\" costs nothing and saves the next reader a walk through the code. ")
+		<< wxT("It is also where a marker belongs when you need one - a probe you intend to delete, ")
+		<< wxT("something half-built you are coming back to - because you will read it back on the ")
+		<< wxT("next tree, and nothing else in the map distinguishes a real object from a leftover ")
+		<< wxT("one. Mark what you create for a trial as you create it, and SELECTING them again is ")
+		<< wxT("one metadata_tree afterwards: the comment arrives with the node, so the sweep that ")
+		<< wxT("cleans up is the same call as the one that found them.\n")
 		<< wxT("NAME ANOTHER OBJECT AS A LINK, never as a bare word. These texts are Markdown, so ")
 		<< wxT("write `[Goods](oes:1005)` - the target carries the identity (the `id` every tool ")
 		<< wxT("here reports, or the object's guid), and the visible text carries THE NAME IT HAD ")
@@ -1761,11 +1819,11 @@ wxString BuildOrientation()
 		<< wxT("system are its own - do not carry over the shape of anything familiar. It ")
 		<< wxT("documents itself, and every one of these reads the same reference the designer's ")
 		<< wxT("syntax helper shows:\n")
-		<< wxT("  `help_search` / `help_get` - the language reference, function by function\n")
-		<< wxT("  `type_list` / `type_members` - what a value IS and what it can do\n")
-		<< wxT("  `linq_methods` - the query pipeline operations\n")
-		<< wxT("  `metadata_list` / `metadata_get` - the configuration tree, kind by kind\n")
-		<< wxT("  `script_check` / `query_check` - COMPILE without running. Ask them before you ")
+		<< wxT(" `help_search` / `help_get` - the language reference, function by function\n")
+		<< wxT(" `type_list` / `type_members` - what a value IS and what it can do\n")
+		<< wxT(" `linq_methods` - the query pipeline operations\n")
+		<< wxT(" `metadata_list` / `metadata_get` - the configuration tree, kind by kind\n")
+		<< wxT(" `script_check` / `query_check` - COMPILE without running. Ask them before you ")
 		<< wxT("believe anything you wrote; a script that parses in your head is not evidence.\n\n");
 
 	out << wxT("THE CONVERSATION. A person may be typing to you in the designer's assistant ")
@@ -1783,15 +1841,15 @@ wxString BuildOrientation()
 	// hands them the first thing to correct if it is wrong.
 	out << wxT("FIRST THING, BEFORE ANY WORK: read `chat_history` - you may be joining something ")
 		<< wxT("already in progress - and then `chat_say` a greeting with four things in it:\n")
-		<< wxT("  WHO YOU ARE. Name yourself - which assistant and which model. The handshake ")
+		<< wxT(" WHO YOU ARE. Name yourself - which assistant and which model. The handshake ")
 		<< wxT("tells them the client's name and nothing else; what is actually reading their ")
 		<< wxT("configuration is something only you can say, and they are entitled to know it.\n")
-		<< wxT("  WHAT YOU SEE. The configuration by name and what is in it, in a line or two. ")
+		<< wxT(" WHAT YOU SEE. The configuration by name and what is in it, in a line or two. ")
 		<< wxT("This is also the proof the connection works - a greeting that describes their ")
 		<< wxT("base cannot be a stale window.\n")
-		<< wxT("  ANYTHING ALREADY WORTH SAYING. Objects in no section, nothing written on the ")
+		<< wxT(" ANYTHING ALREADY WORTH SAYING. Objects in no section, nothing written on the ")
 		<< wxT("root, unsaved edits - whatever you noticed on the way in.\n")
-		<< wxT("  WHAT NOW. Ask what they want to do, and say you are ready.\n")
+		<< wxT(" WHAT NOW. Ask what they want to do, and say you are ready.\n")
 		<< wxT("Do NOT wait to be spoken to: from where they sit, an assistant reading everything ")
 		<< wxT("in silence is indistinguishable from one that never arrived.\n");
 
@@ -1990,6 +2048,22 @@ wxString ibMcpServer::Answer(const wxString& request)
 				// unwrap forever, and there is no reading of it that means anything.
 				envelopeRefusal = _("mcp_call cannot invoke itself.");
 			}
+			else if (outer->FindChild(wxT("arguments")) == nullptr
+				&& outer->FindField(wxT("arguments")) != nullptr) {
+
+				// 🛑 THE ENVELOPE IS WRONG, AND IT USED TO BE THE LETTER THAT SAID SO. `arguments`
+				// arriving as anything but an object - a JSON string, a number - is invisible to
+				// FindChild, so the tool ran with NOTHING and complained about its own first
+				// required argument: "chat_say needs 'text', and it did not come", of a call that
+				// carried it. The caller then looks at the tool, which is fine, instead of at the
+				// encoding, which is not.
+				//
+				// Refused HERE, where the fault is, and named as what it is.
+				envelopeRefusal = wxString::Format(
+					_("mcp_call's `arguments` must be an OBJECT - the tool's schema filled in - "
+					  "and this one is not. Send {tool: '%s', arguments: {...}}, not the arguments "
+					  "as a string containing JSON."), inner);
+			}
 			else {
 				name = inner;
 				unwrapped = true;
@@ -2085,10 +2159,36 @@ wxString ibMcpServer::Answer(const wxString& request)
 				// The undeclared name is answered as a REFUSAL rather than a protocol error, so it
 				// arrives the way every other "I did not do that, and here is why" arrives — in
 				// the same field the caller already reads.
-				if (!undeclared.IsEmpty()) {
+				// 🛑⭐⭐ THE HOST IS WAITING ON A DIALOG, so it is not in a state to be driven. Refused
+				// before the argument checks because it is not about this call being wrong — the
+				// call may be perfect and still land in the gap between a question and its answer
+				// (Max, 2026-09-02: the designer died when a tool opened a document while a modal
+				// stood; one pair of hands could never have produced that).
+				//
+				// The verbs that get OUT of the situation are exempt (RunsWhileBusy), so a caller
+				// can always look, say something and dismiss.
+				if (const wxString busy = ibMcpBusyWith();
+					!busy.IsEmpty() && !tool->RunsWhileBusy()) {
+
 					refusal = wxString::Format(
-						_("'%s' takes no argument called '%s'. Nothing was done - check the "
-						  "tool's schema for the names it does take."), name, undeclared);
+						_("The designer is waiting on a dialog ('%s'), so it cannot take this now. "
+						  "Nothing was done. Read it with window_dismiss, ask the person to answer "
+						  "it, or dismiss it with window_dismiss {close: true} - it is answered as "
+						  "Cancel."), busy);
+				}
+				else if (!undeclared.IsEmpty()) {
+
+					wxString closest;
+					const wxString names = ibMcpArgumentsOnOffer(tool, undeclared, closest);
+
+					refusal = wxString::Format(
+						_("'%s' takes no argument called '%s'. Nothing was done."), name, undeclared);
+
+					if (!closest.IsEmpty())
+						refusal += wxString::Format(_(" Did you mean '%s'?"), closest);
+
+					if (!names.IsEmpty())
+						refusal += wxString::Format(_(" It takes: %s."), names);
 				}
 				// …AND THE OTHER HALF OF THE SAME GATE: a name the tool declared as required and
 				// nobody sent. Refused BEFORE the tool runs, because what a tool does with an
@@ -2357,7 +2457,7 @@ wxString ibMcpServer::Answer(const wxString& request)
 				wxString line = activity;
 
 				if (!toolOk) {
-					line << wxT(" — ") << _("refused");
+					line << wxT(" - ") << _("refused");
 					if (!toolKind.IsEmpty())
 						line << wxT(" (") << toolKind << wxT(")");
 					if (!toolRefusal.IsEmpty())

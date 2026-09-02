@@ -35,49 +35,49 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgObject()
 {
 	static const ibArg s_a(wxT("object"), ibArg::Kind::Whole,
-		_("The catalog or chart's NodeId."), /*required*/ true);
+		ibMcpText("The catalog or chart's NodeId."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgName()
 {
 	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
-		_("The name code refers to it by. English, like every other name in a configuration."), /*required*/ true);
+		ibMcpText("The name code refers to it by. English, like every other name in a configuration."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgDescription()
 {
 	static const ibArg s_a(wxT("description"), ibArg::Kind::Text,
-		_("What a person sees. May be in the configuration's own language."));
+		ibMcpText("What a person sees. May be in the configuration's own language."));
 	return s_a;
 }
 
 const ibArg& ArgCode()
 {
 	static const ibArg s_a(wxT("code"), ibArg::Kind::Text,
-		_("The item's code, when the object has a code at all."));
+		ibMcpText("The item's code, when the object has a code at all."));
 	return s_a;
 }
 
 const ibArg& ArgFolder()
 {
 	static const ibArg s_a(wxT("folder"), ibArg::Kind::Flag,
-		_("Declare it as a folder, so other predefined items can sit under it."));
+		ibMcpText("Declare it as a folder, so other predefined items can sit under it."));
 	return s_a;
 }
 
 const ibArg& ArgParent()
 {
 	static const ibArg s_a(wxT("parent"), ibArg::Kind::Text,
-		_("The name of a predefined FOLDER already declared here, to put this one inside it."));
+		ibMcpText("The name of a predefined FOLDER already declared here, to put this one inside it."));
 	return s_a;
 }
 
 const ibArg& ArgDelete()
 {
 	static const ibArg s_a(wxT("delete"), ibArg::Kind::Flag,
-		_("Remove the item of that name instead of adding one."));
+		ibMcpText("Remove the item of that name instead of adding one."));
 	return s_a;
 }
 
@@ -89,26 +89,26 @@ typedef ibPredefinedOwner::ibPredefinedValueObject     ibPredefinedItem;
 ibPredefinedOwner* Owner(const ibDataNode& params, wxString& refusal)
 {
 	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-		refusal = _("No configuration is open.");
+		refusal = ibMcpText("No configuration is open.");
 		return nullptr;
 	}
 
 	const s32 id = (s32)ArgObject().Whole(params);
 	if (id <= 0) {
-		refusal = _("Pass the object's NodeId - metadata_list gives it.");
+		refusal = ibMcpText("Pass the object's NodeId - metadata_list gives it.");
 		return nullptr;
 	}
 
 	ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id);
 	if (object == nullptr) {
-		refusal = wxString::Format(_("Nothing in this configuration has id %i."), (int)id);
+		refusal = wxString::Format(ibMcpText("Nothing in this configuration has id %i."), (int)id);
 		return nullptr;
 	}
 
 	ibPredefinedOwner* owner = dynamic_cast<ibPredefinedOwner*>(object);
 	if (owner == nullptr) {
 		refusal = wxString::Format(
-			_("'%s' cannot have predefined items - only a catalog, a chart of accounts or a "
+			ibMcpText("'%s' cannot have predefined items - only a catalog, a chart of accounts or a "
 			  "chart of characteristic types can."), object->GetName());
 		return nullptr;
 	}
@@ -151,13 +151,13 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("looking at the predefined items of '%s'"),
+		return wxString::Format(ibMcpText("looking at the predefined items of '%s'"),
 			ibMcpNameOf(params, ArgObject().Name()));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("The predefined items an object declares - the rows the configuration itself "
+		return ibMcpText("The predefined items an object declares - the rows the configuration itself "
 			"requires to exist, each with the name code refers to it by. Ask before writing "
 			"code that names one, and before adding one, since the name must be unique.");
 	}
@@ -185,7 +185,7 @@ public:
 
 		if (items.empty())
 			result.SetValue(wxT("note"),
-				_("None declared. This object can have them - nothing has been added yet."));
+				ibMcpText("None declared. This object can have them - nothing has been added yet."));
 
 		return true;
 	}
@@ -204,15 +204,15 @@ public:
 	wxString GetActivity(const ibDataNode& params) const override
 	{
 		return wxString::Format(ArgDelete().Flag(params)
-				? _("removing the predefined item '%s' from '%s'")
-				: _("adding the predefined item '%s' to '%s'"),
+				? ibMcpText("removing the predefined item '%s' from '%s'")
+				: ibMcpText("adding the predefined item '%s' to '%s'"),
 			ArgName().Text(params),
 			ibMcpNameOf(params, ArgObject().Name()));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Declare a predefined item on a catalog or a chart - exactly as adding one in "
+		return ibMcpText("Declare a predefined item on a catalog or a chart - exactly as adding one in "
 			"the designer would. The name is what code will refer to it by and must be unique "
 			"within the object; the description is what a person sees. To remove one, pass "
 			"delete:true with its name.");
@@ -232,7 +232,7 @@ public:
 
 		const wxString name = ArgName().Text(params);
 		if (name.IsEmpty()) {
-			refusal = _("A predefined item needs a name - that is what code will call it.");
+			refusal = ibMcpText("A predefined item needs a name - that is what code will call it.");
 			return false;
 		}
 
@@ -241,7 +241,7 @@ public:
 			const auto existing = owner->FindPredefinedValue(name);
 			if (existing == nullptr) {
 				refusal = wxString::Format(
-					_("'%s' has no predefined item named '%s'."), owner->GetName(), name);
+					ibMcpText("'%s' has no predefined item named '%s'."), owner->GetName(), name);
 				return false;
 			}
 
@@ -257,7 +257,7 @@ public:
 		// would only surface when the code ran.
 		if (owner->HasPredefinedValue(name)) {
 			refusal = wxString::Format(
-				_("'%s' already has a predefined item named '%s'."), owner->GetName(), name);
+				ibMcpText("'%s' already has a predefined item named '%s'."), owner->GetName(), name);
 			return false;
 		}
 
@@ -268,7 +268,7 @@ public:
 			parent = owner->FindPredefinedValue(parentName);
 			if (parent == nullptr) {
 				refusal = wxString::Format(
-					_("There is no predefined item named '%s' to put this one under."), parentName);
+					ibMcpText("There is no predefined item named '%s' to put this one under."), parentName);
 				return false;
 			}
 
@@ -276,7 +276,7 @@ public:
 			// designer could not show and the runtime could not walk.
 			if (!parent->IsPredefinedFolder()) {
 				refusal = wxString::Format(
-					_("'%s' is not a folder, so nothing can sit under it."), parentName);
+					ibMcpText("'%s' is not a folder, so nothing can sit under it."), parentName);
 				return false;
 			}
 		}

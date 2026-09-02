@@ -6,6 +6,7 @@
 #include "backend/metaData.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type node data
 #include "backend/metaCollection/partial/dataReport.h"   // the owner told about its default composer
+#include "backend/system/systemManager.h"                // ibValueSystemFunction::Message — the pane, not a dialog
 
 ibValueMetaObjectComposer::ibValueMetaObjectComposer()
 	: ibValueMetaObject()
@@ -66,6 +67,47 @@ bool ibValueMetaObjectComposer::OnCreateMetaObject(ibMetaData* metaData, int fla
 	}
 
 	return true;
+}
+
+// ⭐⭐ EVERY VARIANT IS NAMED, AND THE SAVE IS WHERE THAT IS ENFORCED.
+//
+// A variant is how ONE report answers several questions - "sales", "sales with gross margin",
+// "sales by manager" - each a named setting over the same query, picked by the person running it
+// (Max, 2026-09-02). The name is not decoration: it is the whole of what a variant adds to a
+// setting, and it is what the picker shows. An unnamed one is a variant nobody can choose.
+//
+// 🛑 AND IT IS EXACTLY THE THING THAT GETS FORGOTTEN. A composer built verb by verb - query,
+// output, levels, resources - is complete and correct with a nameless variant, and nothing about
+// the result looks wrong until somebody opens the report and finds an empty picker. Max asked for
+// this to be caught rather than remembered: *"make it so it will not let you save without a
+// variant name, so it slaps your hands."*
+//
+// ⚠ REPORTED, NOT THROWN, and for the reason the accounting register documents at length: raising
+// from inside a save leaves the configuration write transaction open, and the next save meets a
+// deadlock naming neither the rule nor the object. A message and a `false` refuse just as firmly
+// and close cleanly.
+bool ibValueMetaObjectComposer::OnSaveMetaObject(int flags)
+{
+	const ibCompositionDescription& composition = GetCompositionDesc();
+
+	for (size_t index = 0; index < composition.m_variants.size(); index++) {
+
+		if (!composition.m_variants[index].m_name.IsEmpty())
+			continue;
+
+		// The FIRST one is the report as it opens, so it is worth saying which is meant when a
+		// composer has several - counted the way a person would, from one.
+		ibValueSystemFunction::Message(
+			wxString::Format(
+				_("%s: variant %i has no name - a variant IS a named setting, and one without a "
+				  "name cannot be picked by anybody running the report"),
+				GetName(), (int)index + 1),
+			ibStatusMessage::ibStatusMessage_Error);
+
+		return false;
+	}
+
+	return ibValueMetaObject::OnSaveMetaObject(flags);
 }
 
 bool ibValueMetaObjectComposer::OnDeleteMetaObject()

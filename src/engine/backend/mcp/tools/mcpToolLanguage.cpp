@@ -68,7 +68,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgName()
 {
 	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
-		_("The type's name as type_list gives it - 'Array', 'Structure', 'ValueTable'..."), /*required*/ true);
+		ibMcpText("The type's name as type_list gives it - 'Array', 'Structure', 'ValueTable'..."), /*required*/ true);
 	return s_a;
 }
 
@@ -84,14 +84,14 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("looking through the available types");
+		return ibMcpText("looking through the available types");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Every type this platform knows, with what each one IS: a primitive, a value "
+		return ibMcpText("Every type this platform knows, with what each one IS: a primitive, a value "
 			"class you can construct, a metadata kind you can create, a control, an "
-			"enumeration. Ask before writing a type name — the vocabulary is this "
+			"enumeration. Ask before writing a type name - the vocabulary is this "
 			"configuration's, not a general one.");
 	}
 
@@ -121,7 +121,7 @@ public:
 		// of them means try again differently.
 		if (!matched && !wanted.IsSameAs(wxT("configuration"), false)) {
 			refusal = wxString::Format(
-				_("'%s' is not a kind of type. Try: primitive, value, control, system, enum, "
+				ibMcpText("'%s' is not a kind of type. Try: primitive, value, control, system, enum, "
 				  "context, metadata, metaValue, configuration."), wanted);
 			return false;
 		}
@@ -183,13 +183,13 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("looking at what %s can do"),
+		return wxString::Format(ibMcpText("looking at what %s can do"),
 			ArgName().Text(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("What a type offers: its methods with their call form and whether each returns a "
+		return ibMcpText("What a type offers: its methods with their call form and whether each returns a "
 			"value, and its properties. This is what the editor shows after a dot, asked by "
 			"name instead of by cursor position.");
 	}
@@ -204,13 +204,13 @@ public:
 	{
 		const wxString name = ArgName().Text(params);
 		if (name.IsEmpty()) {
-			refusal = _("No type named.");
+			refusal = ibMcpText("No type named.");
 			return false;
 		}
 
 		if (ibValue::GetAvailableCtor(name) == nullptr) {
 			refusal = wxString::Format(
-				_("'%s' is not a type this platform knows. Use type_list to see what is."), name);
+				ibMcpText("'%s' is not a type this platform knows. Use type_list to see what is."), name);
 			return false;
 		}
 
@@ -220,7 +220,7 @@ public:
 		}
 		catch (...) {
 			refusal = wxString::Format(
-				_("'%s' cannot be built without arguments, so its members cannot be listed this "
+				ibMcpText("'%s' cannot be built without arguments, so its members cannot be listed this "
 				  "way."), name);
 			return false;
 		}
@@ -288,13 +288,13 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("looking at the collection operations");
+		return ibMcpText("looking at the collection operations");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("The pipeline operations a query written as a chain may use - Where, Select, "
-			"GroupBy, Join and the rest — each with one line saying what it does and what shape "
+		return ibMcpText("The pipeline operations a query written as a chain may use - Where, Select, "
+			"GroupBy, Join and the rest - each with one line saying what it does and what shape "
 			"of function it takes. This is the whole set; anything else is not one.");
 	}
 

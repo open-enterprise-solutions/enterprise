@@ -37,7 +37,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgDifferingOnly()
 {
 	static const ibArg s_a(wxT("differingOnly"), ibArg::Kind::Flag,
-		_("Report only rights the named roles DISAGREE about - one grants, another refuses. "
+		ibMcpText("Report only rights the named roles DISAGREE about - one grants, another refuses. "
 		  "With several roles this is the comparison itself, and it is usually short."));
 	return s_a;
 }
@@ -45,14 +45,14 @@ const ibArg& ArgDifferingOnly()
 const ibArg& ArgRole()
 {
 	static const ibArg s_a(wxT("role"), ibArg::Kind::Text,
-		_("One role's name, as it is called in the configuration."));
+		ibMcpText("One role's name, as it is called in the configuration."));
 	return s_a;
 }
 
 const ibArg& ArgRoles()
 {
 	static const ibArg s_a(wxT("roles"), ibArg::Kind::Many,
-		_("Several role names, to compare them side by side. Omit both this and `role` to "
+		ibMcpText("Several role names, to compare them side by side. Omit both this and `role` to "
 			  "take every role there is - which is how you ask who can reach something."));
 	return s_a;
 }
@@ -60,7 +60,7 @@ const ibArg& ArgRoles()
 const ibArg& ArgObject()
 {
 	static const ibArg s_a(wxT("object"), ibArg::Kind::Text,
-		_("One object by name - a catalog, a document, a section, or 'Configuration' for the "
+		ibMcpText("One object by name - a catalog, a document, a section, or 'Configuration' for the "
 			  "root, where the administration rights live. Omit for all of them."));
 	return s_a;
 }
@@ -68,7 +68,7 @@ const ibArg& ArgObject()
 const ibArg& ArgDeniedOnly()
 {
 	static const ibArg s_a(wxT("deniedOnly"), ibArg::Kind::Flag,
-		_("Report only rights that SOMEBODY is refused. Usually the shorter half, and the "
+		ibMcpText("Report only rights that SOMEBODY is refused. Usually the shorter half, and the "
 			  "half a complaint is about."));
 	return s_a;
 }
@@ -76,7 +76,7 @@ const ibArg& ArgDeniedOnly()
 const ibArg& ArgValue()
 {
 	static const ibArg s_a(wxT("value"), ibArg::Kind::Flag,
-		_("true grants, false denies. REQUIRED - there is no safe default for a rights "
+		ibMcpText("true grants, false denies. REQUIRED - there is no safe default for a rights "
 			  "change."), /*required*/ true);
 	return s_a;
 }
@@ -84,7 +84,7 @@ const ibArg& ArgValue()
 const ibArg& ArgRights()
 {
 	static const ibArg s_a(wxT("rights"), ibArg::Kind::Many,
-		_("Which rights, by the names metadata_rights reports (Read, Write, Delete, Use, "
+		ibMcpText("Which rights, by the names metadata_rights reports (Read, Write, Delete, Use, "
 			  "Administration...). Omit for all of them. A name an object does not declare is "
 			  "simply not set on it - objects declare different rights."));
 	return s_a;
@@ -105,13 +105,13 @@ public:
 		const wxString role = ArgRole().Text(params);
 
 		return role.IsEmpty()
-			? _("checking who has access to what")
-			: wxString::Format(_("checking what the role '%s' permits"), role);
+			? ibMcpText("checking who has access to what")
+			: wxString::Format(ibMcpText("checking what the role '%s' permits"), role);
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("WHO HAS ACCESS, right by right. Every right an object declares is answered with "
+		return ibMcpText("WHO HAS ACCESS, right by right. Every right an object declares is answered with "
 			"the roles that grant it and the roles that refuse it, so comparing roles IS the "
 			"answer rather than something to work out from two separate readings. Name one role "
 			"to ask about that one, several to compare them, or none to ask about every role in "
@@ -128,7 +128,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = _("No configuration is open.");
+			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
@@ -170,7 +170,7 @@ public:
 
 			if (roleObject == nullptr) {
 				refusal = wxString::Format(
-					_("This configuration has no role named '%s'."), name);
+					ibMcpText("This configuration has no role named '%s'."), name);
 				return false;
 			}
 
@@ -196,7 +196,7 @@ public:
 					asked.push_back(describeRole(object));
 
 		if (asked.empty()) {
-			refusal = _("This configuration declares no roles, so nothing is governed by them - "
+			refusal = ibMcpText("This configuration declares no roles, so nothing is governed by them - "
 				"everything falls back to each right's own default. metadata_rights says what "
 				"those defaults are.");
 			return false;
@@ -353,7 +353,7 @@ public:
 
 		if (anyRestricting)
 			result.SetValue(wxT("composition"),
-				_("A restricting role grants nothing of its own - it SUBTRACTS from whatever the "
+				ibMcpText("A restricting role grants nothing of its own - it SUBTRACTS from whatever the "
 				  "permitting roles allowed, and no further role can widen past it. Read it in "
 				  "`grantedBy` as 'does not object', never as 'allows'. The verdict a user "
 				  "actually gets is (any permitting role grants) AND (every restricting role "
@@ -361,9 +361,9 @@ public:
 
 		if (objects.empty())
 			result.SetValue(wxT("note"), only.IsEmpty()
-				? _("Nothing to report - either no object declares rights, or nothing matched the "
+				? ibMcpText("Nothing to report - either no object declares rights, or nothing matched the "
 					"filters.")
-				: _("That object declares no rights, or does not exist under that name."));
+				: ibMcpText("That object declares no rights, or does not exist under that name."));
 
 		return true;
 	}
@@ -399,13 +399,13 @@ public:
 		const wxString object = ArgObject().Text(params);
 
 		return object.IsEmpty()
-			? _("reading which rights the configuration declares")
-			: wxString::Format(_("reading which rights '%s' declares"), object);
+			? ibMcpText("reading which rights the configuration declares")
+			: wxString::Format(ibMcpText("reading which rights '%s' declares"), object);
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Which rights a metaobject declares, and what each one answers when no role ever "
+		return ibMcpText("Which rights a metaobject declares, and what each one answers when no role ever "
 			"set it. Ask this BEFORE role_grant: every metatype declares its own rights (a catalog "
 			"has Read, Write, Delete; a section has Use; the configuration root has Administration "
 			"and Update database configuration) and there is no shared list. Without `object` it "
@@ -421,7 +421,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = _("No configuration is open.");
+			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
@@ -501,7 +501,7 @@ public:
 
 		if (!only.IsEmpty() && !foundNamed) {
 			refusal = wxString::Format(
-				_("This configuration has no object named '%s'."), only);
+				ibMcpText("This configuration has no object named '%s'."), only);
 			return false;
 		}
 
@@ -510,7 +510,7 @@ public:
 
 		if (objects.empty())
 			result.SetValue(wxT("note"),
-				_("That object declares no rights - nothing about it is governed by roles."));
+				ibMcpText("That object declares no rights - nothing about it is governed by roles."));
 
 		return true;
 	}
@@ -551,15 +551,15 @@ public:
 
 		if (object.IsEmpty())
 			return ArgValue().Flag(params)
-				? wxString::Format(_("granting '%s' everything"), role)
-				: wxString::Format(_("denying '%s' everything"), role);
+				? wxString::Format(ibMcpText("granting '%s' everything"), role)
+				: wxString::Format(ibMcpText("denying '%s' everything"), role);
 
-		return wxString::Format(_("setting what '%s' may do with '%s'"), role, object);
+		return wxString::Format(ibMcpText("setting what '%s' may do with '%s'"), role, object);
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Grant or deny rights to a role - the checkboxes in the role editor. Without "
+		return ibMcpText("Grant or deny rights to a role - the checkboxes in the role editor. Without "
 			"`object` it applies to EVERY object that declares rights, which is how an "
 			"administrator role is made: grant it everything once, then create narrower roles "
 			"beside it. Without `rights` it applies to every right the object declares. A new role "
@@ -576,7 +576,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = _("No configuration is open.");
+			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
@@ -584,7 +584,7 @@ public:
 		ibValueMetaObject* roleObject = ibFindMetaObject(activeMetaData, wxT("Role"), roleName);
 
 		if (roleObject == nullptr) {
-			refusal = wxString::Format(_("This configuration has no role named '%s'."), roleName);
+			refusal = wxString::Format(ibMcpText("This configuration has no role named '%s'."), roleName);
 			return false;
 		}
 
@@ -593,7 +593,7 @@ public:
 		const ibDataValue* asked = params.FindField(ArgValue().Name());
 
 		if (asked == nullptr || asked->Kind() != ibDataKind::Bool) {
-			refusal = _("Say value: true to grant or value: false to deny. Nothing was changed.");
+			refusal = ibMcpText("Say value: true to grant or value: false to deny. Nothing was changed.");
 			return false;
 		}
 
@@ -688,7 +688,7 @@ public:
 
 		if (!only.IsEmpty() && !foundNamed) {
 			refusal = wxString::Format(
-				_("This configuration has no object named '%s'."), only);
+				ibMcpText("This configuration has no object named '%s'."), only);
 			return false;
 		}
 
@@ -702,9 +702,9 @@ public:
 
 		if (touchedRights == 0)
 			result.SetValue(wxT("note"), only.IsEmpty()
-				? _("Nothing declares rights under those names - check them against "
+				? ibMcpText("Nothing declares rights under those names - check them against "
 					"metadata_rights.")
-				: _("That object declares no rights under those names."));
+				: ibMcpText("That object declares no rights under those names."));
 
 		return true;
 	}

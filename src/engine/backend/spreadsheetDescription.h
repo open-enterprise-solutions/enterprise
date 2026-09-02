@@ -4,6 +4,7 @@
 #include "backend/compiler/value.h"
 
 #include <unordered_map>   // the cell index — MSVC drags it in transitively, libstdc++ does not
+#include <deque>          // the cells — see m_cellAt: their addresses must survive a later insert
 #include <cstdint>
 #include <algorithm>
 
@@ -299,7 +300,8 @@ struct ibSpreadsheetDescription {
 
 	void ClearSpreadsheet(int count = 0) {
 
-		m_cellAt.reserve(count);
+		// (no reserve for the cells: they live in a deque now, whose whole point is that it does
+		//  not relocate — see m_cellAt. The index still reserves, being a hash map.)
 		m_cellAt.clear();
 		m_cellIndex.clear();
 		m_cellIndex.reserve(count);
@@ -986,8 +988,24 @@ private:
 	std::unordered_map<unsigned int, size_t> m_rowSizeIndex;
 	std::unordered_map<unsigned int, size_t> m_colSizeIndex;
 
-	//cell
-	std::vector<ibSpreadsheetCellDescription> m_cellAt;
+	// 🛑⭐ A DEQUE, AND THE REASON IS A CRASH. GetOrCreateCell hands out a POINTER INTO this
+	// container, and a `std::vector` moves everything it holds the moment it grows — so any
+	// pointer taken before a later cell was created pointed at freed memory, and writing through
+	// it corrupted the heap.
+	//
+	// It is not a mistake one caller made. SetCellSize (below) is built that way BY NECESSITY: it
+	// takes the owner cell, then creates every cell the merge covers, then writes the span back
+	// through the pointer it took first. `sheet_cell` with a colSpan on an empty template did
+	// exactly that — one cell became six, the container moved, and the designer died on the next
+	// line (dump designer_24140, 2026-09-02; the frame is ibMcpToolSheetCell::Call).
+	//
+	// ⭐ SO THE FIX IS THE CONTAINER, NOT THE TWO CALLERS. A deque never moves the elements it
+	// already holds when it grows at the end, which is the only way cells are ever added here - so
+	// every pointer stays good and the whole class of defect is gone, including from code nobody
+	// has written yet. Insertion order, indexing and equality are what this needs from it, and a
+	// deque gives all three; only `reserve` had to go, which was an optimisation and not a
+	// contract.
+	std::deque<ibSpreadsheetCellDescription> m_cellAt;
 
 	// WHERE each cell is, keyed by its address. Kept in step with m_cellAt by the two
 	// places that touch it — GetOrCreateCell (insert) and ClearSpreadsheet (drop);

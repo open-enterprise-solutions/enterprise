@@ -39,7 +39,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgDebug()
 {
 	static const ibArg s_a(wxT("debug"), ibArg::Kind::Flag,
-		_("Start it with the debugger attached, so breakpoints set through debug_breakpoint "
+		ibMcpText("Start it with the debugger attached, so breakpoints set through debug_breakpoint "
 		  "are honoured. Default true - the reason a tool starts an application is usually "
 		  "to watch it."));
 	return s_a;
@@ -48,7 +48,7 @@ const ibArg& ArgDebug()
 const ibArg& ArgApplication()
 {
 	static const ibArg s_a(wxT("application"), ibArg::Kind::Text,
-		_("Which one. Default is the thick client."),
+		ibMcpText("Which one. Default is the thick client."),
 			/*required*/ false, { wxT("enterprise"), wxT("wenterprise-server") });
 	return s_a;
 }
@@ -66,12 +66,12 @@ public:
 	wxString GetActivity(const ibDataNode& params) const override
 	{
 		const wxString what = ArgApplication().Text(params);
-		return wxString::Format(_("starting %s"), what.IsEmpty() ? wxT("the application") : what);
+		return wxString::Format(ibMcpText("starting %s"), what.IsEmpty() ? ibMcpText("the application") : what);
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Start the application on this base - the thick client or the web server, with "
+		return ibMcpText("Start the application on this base - the thick client or the web server, with "
 			"or without the debugger attached. The same launch the designer's Debug menu "
 			"performs, so connection flags and the debug port are handled. Refuses when the "
 			"configuration has changes the database does not have: read database_diff and apply "
@@ -87,7 +87,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (appData == nullptr) {
-			refusal = _("The application is not up.");
+			refusal = ibMcpText("The application is not up.");
 			return false;
 		}
 
@@ -98,7 +98,7 @@ public:
 		if (!application.IsSameAs(wxT("enterprise"), false)
 			&& !application.IsSameAs(wxT("wenterprise-server"), false)) {
 			refusal = wxString::Format(
-				_("'%s' is not something to start. Use enterprise or wenterprise-server."),
+				ibMcpText("'%s' is not something to start. Use enterprise or wenterprise-server."),
 				application);
 			return false;
 		}
@@ -112,7 +112,7 @@ public:
 		// ONE DEBUGGER AT A TIME — the same guard the menu keeps. A second debug launch attaches
 		// nothing and leaves the caller waiting at a breakpoint that will never be hit.
 		if (withDebug && debugClient != nullptr && debugClient->HasConnections()) {
-			refusal = _("A debug session is already running. Let it finish, or start without "
+			refusal = ibMcpText("A debug session is already running. Let it finish, or start without "
 				"the debugger.");
 			return false;
 		}
@@ -125,7 +125,7 @@ public:
 		// ibMetaDataConfigurationBase and the active metadata is a configuration by definition, so
 		// the cast to the storage class was a conversion to reach a question already in hand.
 		if (!activeMetaData->IsConfigSave()) {
-			refusal = _("The configuration has changes the database does not have - the "
+			refusal = ibMcpText("The configuration has changes the database does not have - the "
 				"application would run the old one. database_diff lists them; apply them "
 				"first.");
 			return false;
@@ -137,7 +137,7 @@ public:
 		const long pid = appData->RunApplication(useWeb, withDebug, manifest);
 
 		if (pid == 0) {
-			refusal = wxString::Format(_("%s could not be started."), application);
+			refusal = wxString::Format(ibMcpText("%s could not be started."), application);
 			return false;
 		}
 
@@ -147,7 +147,7 @@ public:
 
 		if (withDebug) {
 			result.SetValue(wxT("note"),
-				_("The debugger attaches as the application comes up; debug_state says when it "
+				ibMcpText("The debugger attaches as the application comes up; debug_state says when it "
 				  "has stopped somewhere."));
 		}
 

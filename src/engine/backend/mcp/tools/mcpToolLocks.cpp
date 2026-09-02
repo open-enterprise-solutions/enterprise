@@ -37,7 +37,7 @@
 //---------------------------------------------------------------------------
 namespace {
 using ibArg = ibMcpTool::ibMcpArgument;
-const ibArg& ArgObject() { static const ibArg a(wxT("object"), ibArg::Kind::Text, _("Only locks on this object - its full name as a lock names it, e.g. 'Catalog.Products'. Omit for everything held.")); return a; }
+const ibArg& ArgObject() { static const ibArg a(wxT("object"), ibArg::Kind::Text, ibMcpText("Only locks on this object - its full name as a lock names it, e.g. 'Catalog.Products'. Omit for everything held.")); return a; }
 } // namespace
 
 
@@ -48,12 +48,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("looking at what is locked");
+		return ibMcpText("looking at what is locked");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Every long-held lock on this base right now: what is locked, who holds it, "
+		return ibMcpText("Every long-held lock on this base right now: what is locked, who holds it, "
 			"from which machine and since when. This is the answer to 'why can this person not "
 			"write that record' and to 'why will the schema not apply' - a lock is held ACROSS "
 			"PROCESSES, so the holder is usually not the session asking, and session_list is "
@@ -70,13 +70,13 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (appData == nullptr) {
-			refusal = _("The application is not up.");
+			refusal = ibMcpText("The application is not up.");
 			return false;
 		}
 
 		ibLockManager* locks = appData->GetLockManager();
 		if (locks == nullptr) {
-			refusal = _("There is no lock manager in this process.");
+			refusal = ibMcpText("There is no lock manager in this process.");
 			return false;
 		}
 
@@ -123,8 +123,8 @@ public:
 
 		if (entries.empty()) {
 			result.SetValue(wxT("note"), wanted.IsEmpty()
-				? _("Nothing is locked.")
-				: _("Nothing is locked on that object."));
+				? ibMcpText("Nothing is locked.")
+				: ibMcpText("Nothing is locked on that object."));
 		}
 
 		return true;

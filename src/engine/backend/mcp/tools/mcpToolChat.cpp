@@ -26,7 +26,7 @@ ibMcpServer* Server(wxString& refusal)
 {
 	ibMcpServer* server = ibApplicationData::GetMcpServer();
 	if (server == nullptr) {
-		refusal = _("There is no assistant server in this process.");
+		refusal = ibMcpText("There is no assistant server in this process.");
 		return nullptr;
 	}
 
@@ -40,7 +40,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgLast()
 {
 	static const ibArg s_a(wxT("last"), ibArg::Kind::Whole,
-		_("Only the last N turns. A long conversation read whole is mostly padding; the "
+		ibMcpText("Only the last N turns. A long conversation read whole is mostly padding; the "
 		  "recent end is where the current task is. Omit for all of it."));
 	return s_a;
 }
@@ -48,7 +48,7 @@ const ibArg& ArgLast()
 const ibArg& ArgText()
 {
 	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
-		_("What to say. Markdown: a heading, a list, a fenced snippet - the emphasis you "
+		ibMcpText("What to say. Markdown: a heading, a list, a fenced snippet - the emphasis you "
 			  "choose is the emphasis they see."), /*required*/ true);
 	return s_a;
 }
@@ -63,9 +63,12 @@ public:
 
 	wxString GetName() const override { return wxT("chat_take"); }
 
+	// …and hearing them back, which is where "I have answered it" arrives.
+	bool RunsWhileBusy() const override { return true; }
+
 	wxString GetDescription() const override
 	{
-		return _("Collect what the person at the designer has written in the assistant window, and "
+		return ibMcpText("Collect what the person at the designer has written in the assistant window, and "
 			"what has HAPPENED in their configuration while you were not looking. Answers empty "
 			"lists when there is nothing new. Taking REMOVES both from the queue, so ask once and "
 			"answer what you got - chat_history reads the whole conversation back without "
@@ -116,9 +119,13 @@ public:
 
 	wxString GetName() const override { return wxT("chat_say"); }
 
+	// Telling the person what is happening is exactly what a caller must still be able to do while
+	// the application waits on a dialog — often to ask them to answer it.
+	bool RunsWhileBusy() const override { return true; }
+
 	wxString GetDescription() const override
 	{
-		return _("Say something to the person at the designer - it appears in their assistant "
+		return ibMcpText("Say something to the person at the designer - it appears in their assistant "
 			"window. Write for a person: what you did and what you propose, not the shape of "
 			"the calls you made. Markdown is rendered.");
 	}
@@ -137,7 +144,7 @@ public:
 
 		const wxString text = ArgText().Text(params);
 		if (text.IsEmpty()) {
-			refusal = _("Nothing to say.");
+			refusal = ibMcpText("Nothing to say.");
 			return false;
 		}
 
@@ -175,12 +182,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& WXUNUSED(params)) const override
 	{
-		return _("reading back the conversation");
+		return ibMcpText("reading back the conversation");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("The whole conversation with the person at the designer, oldest first, WITHOUT "
+		return ibMcpText("The whole conversation with the person at the designer, oldest first, WITHOUT "
 			"collecting anything - chat_take empties its queue, this does not. Read it when you "
 			"connect, or whenever you need the context of what was already discussed: what they "
 			"asked for earlier is usually why the configuration looks the way it does. Covers "
@@ -229,7 +236,7 @@ public:
 
 		if (conversation.empty())
 			result.SetValue(wxT("note"),
-				_("Nothing has been said yet in this run of the designer."));
+				ibMcpText("Nothing has been said yet in this run of the designer."));
 
 		return true;
 	}

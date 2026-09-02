@@ -62,7 +62,7 @@ std::shared_ptr<const ibHelpCorpus> Corpus(wxString& refusal)
 {
 	ibHelpService* service = ibApplicationData::GetHelpService();
 	if (service == nullptr) {
-		refusal = _("The syntax helper is not loaded in this process.");
+		refusal = ibMcpText("The syntax helper is not loaded in this process.");
 		return nullptr;
 	}
 
@@ -70,7 +70,7 @@ std::shared_ptr<const ibHelpCorpus> Corpus(wxString& refusal)
 	// whose errors are readable, rather than nothing at all.
 	std::shared_ptr<const ibHelpCorpus> corpus = service->GetCorpus();
 	if (corpus && corpus->EntryCount() == 0) {
-		refusal = _("The syntax helper corpus is empty - nothing was loaded for this locale.");
+		refusal = ibMcpText("The syntax helper corpus is empty - nothing was loaded for this locale.");
 		return nullptr;
 	}
 
@@ -106,7 +106,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgQuery()
 {
 	static const ibArg s_a(wxT("query"), ibArg::Kind::Text,
-		_("What to look for. Matched as a name prefix first; if nothing starts with it, "
+		ibMcpText("What to look for. Matched as a name prefix first; if nothing starts with it, "
 			  "as a token across names and signatures."), /*required*/ true);
 	return s_a;
 }
@@ -114,7 +114,7 @@ const ibArg& ArgQuery()
 const ibArg& ArgLimit()
 {
 	static const ibArg s_a(wxT("limit"), ibArg::Kind::Whole,
-		_("How many at most. Defaults to 40 - a search that answers more than that is a "
+		ibMcpText("How many at most. Defaults to 40 - a search that answers more than that is a "
 			  "search that should have been narrower."));
 	return s_a;
 }
@@ -122,7 +122,7 @@ const ibArg& ArgLimit()
 const ibArg& ArgId()
 {
 	static const ibArg s_a(wxT("id"), ibArg::Kind::Text,
-		_("The entry's id, as help_search returned it - for example 'fn.Message' or "
+		ibMcpText("The entry's id, as help_search returned it - for example 'fn.Message' or "
 			  "'meth.Catalog.Goods.Write'."), /*required*/ true);
 	return s_a;
 }
@@ -139,15 +139,15 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("looking up '%s' in the help"),
+		return wxString::Format(ibMcpText("looking up '%s' in the help"),
 			ArgQuery().Text(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Find what this platform offers by name: built-in functions, keywords, types, "
+		return ibMcpText("Find what this platform offers by name: built-in functions, keywords, types, "
 			"collections, events, operators, and the objects, attributes and methods of the "
-			"open configuration. Answers one line each — call help_get for the full entry. "
+			"open configuration. Answers one line each - call help_get for the full entry. "
 			"Ask here BEFORE writing a name you are not certain of.");
 	}
 
@@ -165,7 +165,7 @@ public:
 
 		const wxString query = ArgQuery().Text(params);
 		if (query.IsEmpty()) {
-			refusal = _("Nothing to look for.");
+			refusal = ibMcpText("Nothing to look for.");
 			return false;
 		}
 
@@ -216,12 +216,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("reading a help article");
+		return ibMcpText("reading a help article");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("One help entry in full: signature, parameters, what it returns, both syntax "
+		return ibMcpText("One help entry in full: signature, parameters, what it returns, both syntax "
 			"forms, worked examples, and which runtimes it is valid in. Ids come from "
 			"help_search.");
 	}
@@ -242,7 +242,7 @@ public:
 		const ibHelpEntry* entry = corpus->FindById(id);
 		if (entry == nullptr) {
 			refusal = wxString::Format(
-				_("No help entry has the id '%s'. Use help_search to find one."), id);
+				ibMcpText("No help entry has the id '%s'. Use help_search to find one."), id);
 			return false;
 		}
 
@@ -282,7 +282,7 @@ public:
 		// as "nothing to say" and this means the opposite.
 		if (syntaxHere.IsEmpty() && !syntaxOther.IsEmpty())
 			result.SetValue(wxT("syntaxNote"),
-				_("This entry is written down only in the other syntax form."));
+				ibMcpText("This entry is written down only in the other syntax form."));
 
 		// WHERE IT IS VALID AT ALL. "Works in the daemon, not in the designer" is
 		// the class of mistake that costs a run to discover.

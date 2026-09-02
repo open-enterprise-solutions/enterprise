@@ -63,21 +63,21 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgContains()
 {
 	static const ibArg s_a(wxT("contains"), ibArg::Kind::Text,
-		_("Narrow to paths containing this text. Omit for all of them."));
+		ibMcpText("Narrow to paths containing this text. Omit for all of them."));
 	return s_a;
 }
 
 const ibArg& ArgPath()
 {
 	static const ibArg s_a(wxT("path"), ibArg::Kind::Text,
-		_("The source's dotted path, as query_sources gives it."), /*required*/ true);
+		ibMcpText("The source's dotted path, as query_sources gives it."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgText()
 {
 	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
-		_("The query text, exactly as it would be written in the module - the whole package "
+		ibMcpText("The query text, exactly as it would be written in the module - the whole package "
 			  "if it is one."), /*required*/ true);
 	return s_a;
 }
@@ -94,13 +94,13 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("looking at what a query can read from");
+		return ibMcpText("looking at what a query can read from");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Everything a query may read from in this configuration, by the dotted path a "
-			"query names it with — Catalog.Goods, AccumulationRegister.StockBalance.Balance and "
+		return ibMcpText("Everything a query may read from in this configuration, by the dotted path a "
+			"query names it with - Catalog.Goods, AccumulationRegister.StockBalance.Balance and "
 			"the rest. Ask this before writing a FROM: the names are this configuration's, and "
 			"a virtual table is not guessable from the register's name.");
 	}
@@ -114,7 +114,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = _("No configuration is open.");
+			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
@@ -154,13 +154,13 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("looking at the fields of %s"),
+		return wxString::Format(ibMcpText("looking at the fields of %s"),
 			ArgPath().Text(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("The fields of one query source, with the name a query writes and the words a "
+		return ibMcpText("The fields of one query source, with the name a query writes and the words a "
 			"person reads. A field marked as a reference can be walked further with a dot.");
 	}
 
@@ -173,13 +173,13 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = _("No configuration is open.");
+			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
 		const wxString path = ArgPath().Text(params);
 		if (path.IsEmpty()) {
-			refusal = _("No source named.");
+			refusal = ibMcpText("No source named.");
 			return false;
 		}
 
@@ -200,7 +200,7 @@ public:
 
 		if (fields.empty()) {
 			refusal = wxString::Format(
-				_("'%s' answers with no fields - check the path with query_sources."), path);
+				ibMcpText("'%s' answers with no fields - check the path with query_sources."), path);
 			return false;
 		}
 
@@ -281,12 +281,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("checking a query against the configuration");
+		return ibMcpText("checking a query against the configuration");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Read a query the way the engine will: parse it, then resolve every name in it "
+		return ibMcpText("Read a query the way the engine will: parse it, then resolve every name in it "
 			"against this configuration. ALWAYS ASK THIS BEFORE PUTTING A QUERY IN A MODULE - "
 			"a query lives inside a string, so script_check answers 'ok' for a module whose "
 			"query names a table that does not exist.");
@@ -301,13 +301,13 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = _("No configuration is open.");
+			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
 		wxString text = ArgText().Text(params);
 		if (wxString(text).Trim(true).Trim(false).IsEmpty()) {
-			refusal = _("Nothing to check - pass the query text.");
+			refusal = ibMcpText("Nothing to check - pass the query text.");
 			return false;
 		}
 
@@ -374,9 +374,9 @@ public:
 		// failures have different remedies and pointing at the wrong one costs a
 		// round trip every time.
 		result.SetValue(wxT("nextStep"), stage == wxT("names")
-			? _("A name in the query does not resolve. query_sources lists what can be read "
+			? ibMcpText("A name in the query does not resolve. query_sources lists what can be read "
 			    "from, query_fields what a source has.")
-			: _("The engine could not read the text at that position."));
+			: ibMcpText("The engine could not read the text at that position."));
 
 		return true;
 	}

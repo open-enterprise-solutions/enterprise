@@ -115,7 +115,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgSection()
 {
 	static const ibArg s_a(wxT("section"), ibArg::Kind::Text,
-		_("The section's name. Sections nest - name the sub-section itself, not the path to "
+		ibMcpText("The section's name. Sections nest - name the sub-section itself, not the path to "
 			  "it."), /*required*/ true);
 	return s_a;
 }
@@ -123,14 +123,14 @@ const ibArg& ArgSection()
 const ibArg& ArgId()
 {
 	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
-		_("The metaobject to check in, by id from metadata_list or metadata_create."));
+		ibMcpText("The metaobject to check in, by id from metadata_list or metadata_create."));
 	return s_a;
 }
 
 const ibArg& ArgIds()
 {
 	static const ibArg s_a(wxT("ids"), ibArg::Kind::Many,
-		_("Several at once, instead of `id`. Each is reported on separately, and one bad id "
+		ibMcpText("Several at once, instead of `id`. Each is reported on separately, and one bad id "
 			  "does not undo the rest."));
 	return s_a;
 }
@@ -138,7 +138,7 @@ const ibArg& ArgIds()
 const ibArg& ArgRemove()
 {
 	static const ibArg s_a(wxT("remove"), ibArg::Kind::Flag,
-		_("Take them OUT of the section instead of putting them in. Off by default."));
+		ibMcpText("Take them OUT of the section instead of putting them in. Off by default."));
 	return s_a;
 }
 
@@ -171,7 +171,7 @@ public:
 
 				what = count == 1
 					? ibMcpNameOf(params, ArgIds().Name())
-					: wxString::Format(_("%u objects"), (unsigned)count);
+					: wxString::Format(ibMcpText("%u objects"), (unsigned)count);
 			}
 		}
 		else if (params.FindField(ArgId().Name()) != nullptr) {
@@ -179,18 +179,18 @@ public:
 		}
 
 		if (what.IsEmpty())
-			what = _("nothing");
+			what = wxT("nothing");
 
 		return ArgRemove().Flag(params)
-			? wxString::Format(_("taking %s out of the section '%s'"),
+			? wxString::Format(ibMcpText("taking %s out of the section '%s'"),
 				what, ArgSection().Text(params))
-			: wxString::Format(_("putting %s into the section '%s'"),
+			: wxString::Format(ibMcpText("putting %s into the section '%s'"),
 				what, ArgSection().Text(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Check a metaobject into a section, or take it out - the tick-boxes the section's "
+		return ibMcpText("Check a metaobject into a section, or take it out - the tick-boxes the section's "
 			"editor shows. THIS IS THE LAST STEP OF BUILDING ANYTHING a person is meant to open: a "
 			"catalog or a document outside every section works perfectly and is invisible in the "
 			"running application, because sections ARE the command interface. Takes several ids at "
@@ -208,7 +208,7 @@ public:
 		ibMetaDataConfigurationBase* metaData = activeMetaData;
 
 		if (metaData == nullptr || !metaData->IsConfigOpen()) {
-			refusal = _("No configuration is open.");
+			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
@@ -222,9 +222,9 @@ public:
 			// ⭐ REFUSED WITH THE ANSWER. A caller that misspelled a section can act on this reply;
 			// one told only "not found" has to go and ask a second question.
 			refusal = known.empty()
-				? _("This configuration declares no sections at all. Create one under "
+				? ibMcpText("This configuration declares no sections at all. Create one under "
 					"Common - Sections first (metadata_create kind=Section).")
-				: wxString::Format(_("No section is called '%s'. There is: %s."),
+				: wxString::Format(ibMcpText("No section is called '%s'. There is: %s."),
 					sectionName, ListNames(known));
 			return false;
 		}
@@ -250,7 +250,7 @@ public:
 		}
 
 		if (wanted.empty()) {
-			refusal = _("Nothing to check in - pass `id`, or `ids` for several.");
+			refusal = ibMcpText("Nothing to check in - pass `id`, or `ids` for several.");
 			return false;
 		}
 
@@ -264,7 +264,7 @@ public:
 
 			if (object == nullptr || object->IsDeleted()) {
 				failed.push_back(ibDataValue::String(
-					wxString::Format(_("#%d - no such object"), (int)id)));
+					wxString::Format(ibMcpText("#%d - no such object"), (int)id)));
 				continue;
 			}
 
@@ -272,7 +272,7 @@ public:
 			// interface, and the editor does not offer the box either.
 			if (object == section) {
 				failed.push_back(ibDataValue::String(
-					wxString::Format(_("%s - a section cannot contain itself"), object->GetName())));
+					wxString::Format(ibMcpText("%s - a section cannot contain itself"), object->GetName())));
 				continue;
 			}
 
@@ -282,7 +282,7 @@ public:
 			// is worse than a refusal because there is nothing to notice.
 			if (!object->IsInterfaceAllowed()) {
 				failed.push_back(ibDataValue::String(wxString::Format(
-					_("%s (%s) - this kind does not appear in a command interface"),
+					ibMcpText("%s (%s) - this kind does not appear in a command interface"),
 					object->GetName(), object->GetClassName())));
 				continue;
 			}
@@ -312,7 +312,7 @@ public:
 
 		if (!changed && failed.empty())
 			result.SetValue(wxT("note"),
-				_("Everything named was already the way it was asked to be - nothing changed."));
+				ibMcpText("Everything named was already the way it was asked to be - nothing changed."));
 
 		return true;
 	}
@@ -334,13 +334,13 @@ public:
 		const wxString section = ArgSection().Text(params);
 
 		return section.IsEmpty()
-			? _("reading the command interface")
-			: wxString::Format(_("reading what is in the section '%s'"), section);
+			? ibMcpText("reading the command interface")
+			: wxString::Format(ibMcpText("reading what is in the section '%s'"), section);
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("What each section holds - the checked boxes, read back. Without arguments it "
+		return ibMcpText("What each section holds - the checked boxes, read back. Without arguments it "
 			"answers every section, which is the whole command interface and the fastest way to "
 			"see what a person can actually reach. Objects belonging to NO section are listed "
 			"separately: they are the ones nobody can open.");
@@ -357,7 +357,7 @@ public:
 		ibMetaDataConfigurationBase* metaData = activeMetaData;
 
 		if (metaData == nullptr || !metaData->IsConfigOpen()) {
-			refusal = _("No configuration is open.");
+			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
@@ -366,8 +366,8 @@ public:
 		if (!only.IsEmpty() && FindSection(metaData, only) == nullptr) {
 			const std::vector<wxString> known = AllSectionNames(metaData);
 			refusal = known.empty()
-				? _("This configuration declares no sections at all.")
-				: wxString::Format(_("No section is called '%s'. There is: %s."),
+				? ibMcpText("This configuration declares no sections at all.")
+				: wxString::Format(ibMcpText("No section is called '%s'. There is: %s."),
 					only, ListNames(known));
 			return false;
 		}
@@ -472,7 +472,7 @@ public:
 
 			if (!homeless.empty())
 				result.SetValue(wxT("note"),
-					_("Those belong to no section, so nobody can open them in the running "
+					ibMcpText("Those belong to no section, so nobody can open them in the running "
 					  "application. section_include puts them somewhere."));
 		}
 
@@ -480,7 +480,7 @@ public:
 
 		if (sections.empty())
 			result.SetValue(wxT("note"),
-				_("This configuration declares no sections - there is no command interface yet."));
+				ibMcpText("This configuration declares no sections - there is no command interface yet."));
 
 		return true;
 	}

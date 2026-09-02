@@ -178,6 +178,46 @@ const wxXmlNode* ChildNamed(const wxXmlNode* parent, const wxString& name)
 	return nullptr;
 }
 
+// 🛑⭐ A FONT FLAG IS THE ELEMENT **AND** ITS VALUE, and reading only the first turned every
+// document from one producer into struck-through prose.
+//
+// In OOXML `<b/>` means bold and `<b val="0"/>` means NOT bold — the element carries an optional
+// value that DENIES it. Excel simply omits the element when a flag is off, so testing for presence
+// works on Excel's own files and on nothing else. LibreOffice writes every flag out explicitly,
+// the off ones included: `<b val="false"/><i val="false"/><strike val="false"/>`.
+//
+// Read by presence, such a font came back bold, italic, underlined AND struck through — all four
+// at once, on every cell of the sheet. Reported off the screen (Max, 2026-09-02: *"it keeps putting
+// struck-through text"*), with a workbook that says exactly that; one defect standing on four lines
+// that all looked right.
+bool FontFlag(const wxXmlNode* font, const wxString& name, bool absent = false)
+{
+	const wxXmlNode* flag = ChildNamed(font, name);
+	if (flag == nullptr)
+		return absent;
+
+	// Present and unqualified is the ordinary "on"; a value is the denial.
+	const wxString value = flag->GetAttribute(wxT("val"), wxEmptyString);
+	if (value.IsEmpty())
+		return true;
+
+	return !(value == wxT("0") || value.IsSameAs(wxT("false"), false));
+}
+
+// ⚠ UNDERLINE IS NOT A FLAG AT ALL — it is a STYLE with a name, and one of the names means none.
+// `<u/>` is single, `<u val="double"/>` is double, and `<u val="none"/>` — what a producer writing
+// everything out says for an unstyled font — is no underline whatever. The reader above cannot
+// answer this one: "none" is neither 0 nor false, so it would read as switched on.
+bool Underlined(const wxXmlNode* font)
+{
+	const wxXmlNode* flag = ChildNamed(font, wxT("u"));
+	if (flag == nullptr)
+		return false;
+
+	const wxString value = flag->GetAttribute(wxT("val"), wxEmptyString);
+	return value.IsEmpty() || !value.IsSameAs(wxT("none"), false);
+}
+
 std::vector<XlsxStyle> ReadStyles(const wxString& xmlText)
 {
 	std::vector<XlsxStyle> byIndex;
@@ -208,10 +248,10 @@ std::vector<XlsxStyle> ReadStyles(const wxString& xmlText)
 					face = name->GetAttribute(wxT("val"), wxEmptyString);
 
 				wxFont made(wxFontInfo(static_cast<int>(size + 0.5)).FaceName(face)
-					.Bold(ChildNamed(font, wxT("b")) != nullptr)
-					.Italic(ChildNamed(font, wxT("i")) != nullptr)
-					.Underlined(ChildNamed(font, wxT("u")) != nullptr)
-					.Strikethrough(ChildNamed(font, wxT("strike")) != nullptr));
+					.Bold(FontFlag(font, wxT("b")))
+					.Italic(FontFlag(font, wxT("i")))
+					.Underlined(Underlined(font))
+					.Strikethrough(FontFlag(font, wxT("strike"))));
 				fonts.push_back(made);
 				fontColours.push_back(ColourOf(ChildNamed(font, wxT("color"))));
 			}

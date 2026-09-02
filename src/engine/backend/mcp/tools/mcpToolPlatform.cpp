@@ -28,14 +28,17 @@ public:
 
 	wxString GetName() const override { return wxT("platform_state"); }
 
+	// Asking what state the platform is in must work in every state it can be in, including this one.
+	bool RunsWhileBusy() const override { return true; }
+
 	wxString GetActivity(const ibDataNode& WXUNUSED(params)) const override
 	{
-		return _("checking how this configuration is written");
+		return ibMcpText("checking how this configuration is written");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("What decides how anything here must be written, RIGHT NOW: the script dialect "
+		return ibMcpText("What decides how anything here must be written, RIGHT NOW: the script dialect "
 			"(word-fenced or C-style), the languages this configuration declares, its "
 			"compatibility version, the platform build, and who you are acting as. ASK IT BEFORE "
 			"WRITING CODE. The same facts are handed over at connection, but that was a snapshot "

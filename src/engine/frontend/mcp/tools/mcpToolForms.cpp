@@ -39,6 +39,10 @@
 #include "backend/sourceDescription.h"
 #include "backend/backend_localization.h"   // a caption is an array by language
 #include "backend/propertyManager/property/propertyString.h"   // ibPropertyTString
+#include "backend/propertyManager/property/propertyComposition.h"       // a composition, wherever it is held
+#include "backend/propertyManager/property/propertyDataComposition.h"   // …the report's own
+#include "backend/propertyManager/property/propertyDynamicList.h"       // …and the list's, judged by list rules
+#include "backend/compositionDescription.h"
 #include "backend/stringUtils.h"   // GenerateSynonym — the caption the platform makes from a name
 
 #include "frontend/visualView/ctrl/form.h"
@@ -55,42 +59,42 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgForm()
 {
 	static const ibArg s_a(wxT("form"), ibArg::Kind::Whole,
-		_("The form's NodeId."), /*required*/ true);
+		ibMcpText("The form's NodeId."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgControl()
 {
 	static const ibArg s_a(wxT("control"), ibArg::Kind::Whole,
-		_("The control's id, from form_get. Omit for the form itself."));
+		ibMcpText("The control's id, from form_get. Omit for the form itself."));
 	return s_a;
 }
 
 const ibArg& ArgClass()
 {
 	static const ibArg s_a(wxT("class"), ibArg::Kind::Text,
-		_("The control's class: Textctrl, Tablebox, Button, Staticline, Boxsizer..."), /*required*/ true);
+		ibMcpText("The control's class: Textctrl, Tablebox, Button, Staticline, Boxsizer..."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgParent()
 {
 	static const ibArg s_a(wxT("parent"), ibArg::Kind::Whole,
-		_("The control it goes inside, from form_get. Omit for the form itself."));
+		ibMcpText("The control it goes inside, from form_get. Omit for the form itself."));
 	return s_a;
 }
 
 const ibArg& ArgName()
 {
 	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
-		_("What to call it. This is the name a module refers to it by."));
+		ibMcpText("What to call it. This is the name a module refers to it by."));
 	return s_a;
 }
 
 const ibArg& ArgProperty()
 {
 	static const ibArg s_a(wxT("property"), ibArg::Kind::Text,
-		_("Which property - or which EVENT, they are named in one space and form_control "
+		ibMcpText("Which property - or which EVENT, they are named in one space and form_control "
 			  "lists them together."), /*required*/ true);
 	return s_a;
 }
@@ -98,7 +102,7 @@ const ibArg& ArgProperty()
 const ibArg& ArgValue()
 {
 	static const ibArg s_a(wxT("value"), ibArg::Kind::Text,
-		_("The value. For a closed set, the word. For an event, the NAME of the procedure "
+		ibMcpText("The value. For a closed set, the word. For an event, the NAME of the procedure "
 			  "in the form's module that handles it - the answer says which arguments it "
 			  "receives."));
 	return s_a;
@@ -107,7 +111,7 @@ const ibArg& ArgValue()
 const ibArg& ArgPath()
 {
 	static const ibArg s_a(wxT("path"), ibArg::Kind::Text,
-		_("Unfold this far in, as a dotted path of field names: 'Products' for a "
+		ibMcpText("Unfold this far in, as a dotted path of field names: 'Products' for a "
 			  "tabular section's columns, 'Warehouse' to step through a reference into "
 			  "what it points at. Omit for the top level."));
 	return s_a;
@@ -116,7 +120,7 @@ const ibArg& ArgPath()
 const ibArg& ArgSlot()
 {
 	static const ibArg s_a(wxT("slot"), ibArg::Kind::Text,
-		_("Which buffer to put it in. Omit for the usual one."));
+		ibMcpText("Which buffer to put it in. Omit for the usual one."));
 	return s_a;
 }
 
@@ -128,26 +132,26 @@ ibValueForm* OpenForm(const ibDataNode& params, wxString& refusal,
 	bool* generated = nullptr, ibValueMetaObjectFormBase** creatorOut = nullptr)
 {
 	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-		refusal = _("No configuration is open.");
+		refusal = ibMcpText("No configuration is open.");
 		return nullptr;
 	}
 
 	const s32 id = (s32)ArgForm().Whole(params);
 	if (id <= 0) {
-		refusal = _("Pass the form's NodeId - metadata_get on the owning object lists its forms.");
+		refusal = ibMcpText("Pass the form's NodeId - metadata_get on the owning object lists its forms.");
 		return nullptr;
 	}
 
 	ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id);
 	if (object == nullptr) {
-		refusal = wxString::Format(_("Nothing in this configuration has id %i."), (int)id);
+		refusal = wxString::Format(ibMcpText("Nothing in this configuration has id %i."), (int)id);
 		return nullptr;
 	}
 
 	ibValueMetaObjectFormBase* creator =
 		object->ConvertToType<ibValueMetaObjectFormBase>();
 	if (creator == nullptr) {
-		refusal = wxString::Format(_("'%s' is not a form."), object->GetName());
+		refusal = wxString::Format(ibMcpText("'%s' is not a form."), object->GetName());
 		return nullptr;
 	}
 
@@ -189,7 +193,7 @@ ibValueForm* OpenForm(const ibDataNode& params, wxString& refusal,
 	ibValueForm* form = dynamic_cast<ibValueForm*>(built);
 	if (form == nullptr) {
 		refusal = wxString::Format(
-			_("'%s' could not be opened. Its module may have refused - messages_read has "
+			ibMcpText("'%s' could not be opened. Its module may have refused - messages_read has "
 			  "what the platform said."), object->GetName());
 		return nullptr;
 	}
@@ -276,12 +280,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("reading the form '%s'"), ibMcpNameOf(params, ArgForm().Name()));
+		return wxString::Format(ibMcpText("reading the form '%s'"), ibMcpNameOf(params, ArgForm().Name()));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("A form's three branches: its CONTROLS as a tree, its ATTRIBUTES (one of them "
+		return ibMcpText("A form's three branches: its CONTROLS as a tree, its ATTRIBUTES (one of them "
 			"the main one, through which every binding starts), and its COMMANDS with what "
 			"each runs. The ids are what every other form verb addresses a part by.");
 	}
@@ -381,13 +385,13 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("reading a control of the form '%s'"),
+		return wxString::Format(ibMcpText("reading a control of the form '%s'"),
 			ibMcpNameOf(params, ArgForm().Name()));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("One control in full: its properties with what they hold, and its EVENTS with "
+		return ibMcpText("One control in full: its properties with what they hold, and its EVENTS with "
 			"the arguments each handler receives. An event is stored as a property of its own, "
 			"so both come back together - a control's behaviour is not a separate question "
 			"from its appearance.");
@@ -412,7 +416,7 @@ public:
 			control = FindControl(form, (ibFormID)wanted);
 			if (control == nullptr) {
 				refusal = wxString::Format(
-					_("This form has no control with id %i. form_get lists them."), (int)wanted);
+					ibMcpText("This form has no control with id %i. form_get lists them."), (int)wanted);
 				form->DecrRef();
 				return false;
 			}
@@ -486,14 +490,14 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("adding a %s to the form '%s'"),
+		return wxString::Format(ibMcpText("adding a %s to the form '%s'"),
 			ArgClass().Text(params),
 			ibMcpNameOf(params, ArgForm().Name()));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Put a control on a form - a text box, a table, a button. type_list with "
+		return ibMcpText("Put a control on a form - a text box, a table, a button. type_list with "
 			"kind=control names every class there is. The form is SAVED afterwards, so a "
 			"generated layout becomes a stored one and stops following the object.");
 	}
@@ -517,7 +521,7 @@ public:
 			parent = FindControl(form, (ibFormID)into);
 			if (parent == nullptr) {
 				refusal = wxString::Format(
-					_("This form has no control with id %i. form_get lists them."), (int)into);
+					ibMcpText("This form has no control with id %i. form_get lists them."), (int)into);
 				form->DecrRef();
 				return false;
 			}
@@ -530,7 +534,7 @@ public:
 			// The factory said no. It knows the nesting rules; repeating them here
 			// would be a second copy that could disagree with the first.
 			refusal = wxString::Format(
-				_("A %s cannot go there. type_list with kind=control names the classes; "
+				ibMcpText("A %s cannot go there. type_list with kind=control names the classes; "
 				  "form_get shows what each control already holds."), className);
 			form->DecrRef();
 			return false;
@@ -581,7 +585,7 @@ public:
 		// this call; the configuration keeps the LAYOUT, and nothing reaches it
 		// until the form is written back.
 		if (creator == nullptr || !creator->SaveFormData(form)) {
-			refusal = _("The control was added but the form could not be stored.");
+			refusal = ibMcpText("The control was added but the form could not be stored.");
 			form->DecrRef();
 			return false;
 		}
@@ -608,14 +612,14 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("setting %s on a control of '%s'"),
+		return wxString::Format(ibMcpText("setting %s on a control of '%s'"),
 			ArgProperty().Text(params),
 			ibMcpNameOf(params, ArgForm().Name()));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Set one property of one control - its caption, its width, what it is BOUND "
+		return ibMcpText("Set one property of one control - its caption, its width, what it is BOUND "
 			"to - or one EVENT, whose value is the name of a procedure in the form's module. "
 			"form_control lists both and what each holds now; a property whose values are a "
 			"closed set is set by its word.");
@@ -640,7 +644,7 @@ public:
 			control = FindControl(form, (ibFormID)wanted);
 			if (control == nullptr) {
 				refusal = wxString::Format(
-					_("This form has no control with id %i."), (int)wanted);
+					ibMcpText("This form has no control with id %i."), (int)wanted);
 				form->DecrRef();
 				return false;
 			}
@@ -698,14 +702,14 @@ public:
 		}
 		else {
 			refusal = wxString::Format(
-				_("'%s' has no property or event called '%s'. form_control lists both."),
+				ibMcpText("'%s' has no property or event called '%s'. form_control lists both."),
 				control->GetControlName(), name);
 			form->DecrRef();
 			return false;
 		}
 
 		if (creator == nullptr || !creator->SaveFormData(form)) {
-			refusal = _("The property was set but the form could not be stored.");
+			refusal = ibMcpText("The property was set but the form could not be stored.");
 			form->DecrRef();
 			return false;
 		}
@@ -728,13 +732,13 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("removing a control from '%s'"),
+		return wxString::Format(ibMcpText("removing a control from '%s'"),
 			ibMcpNameOf(params, ArgForm().Name()));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Take a control off a form, with everything inside it - the other half of "
+		return ibMcpText("Take a control off a form, with everything inside it - the other half of "
 			"form_add, so a wrong step can be undone without a person opening the editor.");
 	}
 
@@ -754,7 +758,7 @@ public:
 		const s32 wanted = (s32)ArgControl().Whole(params);
 		ibValueFrame* control = FindControl(form, (ibFormID)wanted);
 		if (control == nullptr) {
-			refusal = wxString::Format(_("This form has no control with id %i."), (int)wanted);
+			refusal = wxString::Format(ibMcpText("This form has no control with id %i."), (int)wanted);
 			form->DecrRef();
 			return false;
 		}
@@ -765,7 +769,7 @@ public:
 		form->RemoveControl(control);
 
 		if (creator == nullptr || !creator->SaveFormData(form)) {
-			refusal = _("The control was removed but the form could not be stored.");
+			refusal = ibMcpText("The control was removed but the form could not be stored.");
 			form->DecrRef();
 			return false;
 		}
@@ -811,13 +815,13 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("looking at what the form '%s' can bind to"),
+		return wxString::Format(ibMcpText("looking at what the form '%s' can bind to"),
 			ibMcpNameOf(params, ArgForm().Name()));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("What the form's source offers to bind a control to: every field with its "
+		return ibMcpText("What the form's source offers to bind a control to: every field with its "
 			"name, its title and its type, and every TABULAR SECTION with the columns under "
 			"it. Ask this before form_set on a binding - a name that is not here is a name "
 			"the form cannot reach.");
@@ -843,7 +847,7 @@ public:
 			// A COMMON form has no source, and that is a state rather than a fault:
 			// its controls bind to the form's own attributes instead.
 			result.SetValue(wxT("note"),
-				_("This form has no source object - a common form binds to its own attributes."));
+				ibMcpText("This form has no source object - a common form binds to its own attributes."));
 			result.AddField(wxT("fields"), ibDataValue::Array(std::vector<ibDataValue>()));
 			form->DecrRef();
 			return true;
@@ -903,7 +907,7 @@ public:
 					}
 
 					refusal = wxString::Format(
-						_("'%s' has no field called '%s'. It offers: %s."),
+						ibMcpText("'%s' has no field called '%s'. It offers: %s."),
 						walked.IsEmpty() ? explorer->GetSourceName() : walked, segment, available);
 					form->DecrRef();
 					return false;
@@ -925,7 +929,7 @@ public:
 		// ends; saying so saves a caller one more descent to find out.
 		if (fields.empty())
 			result.SetValue(wxT("note"),
-				_("Nothing unfolds from here - this is where a binding ends."));
+				ibMcpText("Nothing unfolds from here - this is where a binding ends."));
 
 		form->DecrRef();
 		return true;
@@ -1053,14 +1057,14 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("binding a control of '%s' to %s"),
+		return wxString::Format(ibMcpText("binding a control of '%s' to %s"),
 			ibMcpNameOf(params, ArgForm().Name()),
 			ArgPath().Text(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Bind a control to what the form's source offers, by the dotted path "
+		return ibMcpText("Bind a control to what the form's source offers, by the dotted path "
 			"form_source unfolds - 'Warehouse.Code' reaches through the reference into the "
 			"catalog it points at, 'Products.Quantity' a column of a tabular section. A "
 			"binding is a chain of hops, so it cannot be set as plain text through form_set.");
@@ -1085,14 +1089,14 @@ public:
 		const s32 wanted = (s32)ArgControl().Whole(params);
 
 		if (!ArgControl().Given(params)) {
-			refusal = _("Which control? form_bind needs the control's id - form_get lists them.");
+			refusal = ibMcpText("Which control? form_bind needs the control's id - form_get lists them.");
 			form->DecrRef();
 			return false;
 		}
 
 		ibValueFrame* control = FindControl(form, (ibFormID)wanted);
 		if (control == nullptr) {
-			refusal = _("This form has no control with that id. form_get lists them.");
+			refusal = ibMcpText("This form has no control with that id. form_get lists them.");
 			form->DecrRef();
 			return false;
 		}
@@ -1153,8 +1157,8 @@ public:
 
 			if (!command.IsOk()) {
 				refusal = wxString::Format(
-					_("There is no command called '%s' here. Available: %s."),
-					wanted, available.IsEmpty() ? _("none") : available);
+					ibMcpText("There is no command called '%s' here. Available: %s."),
+					wanted, available.IsEmpty() ? wxT("none") : available);
 				form->DecrRef();
 				return false;
 			}
@@ -1170,7 +1174,7 @@ public:
 
 				if (!receiver->WalkCommand(command, &leaf)) {
 					refusal = wxString::Format(
-						_("'%s' cannot run '%s' - the path does not resolve from this control."),
+						ibMcpText("'%s' cannot run '%s' - the path does not resolve from this control."),
 						control->GetControlName(), wanted);
 					form->DecrRef();
 					return false;
@@ -1180,7 +1184,7 @@ public:
 			wiring->SetValue(command, leaf);
 
 			if (creator == nullptr || !creator->SaveFormData(form)) {
-				refusal = _("The command was bound but the form could not be stored.");
+				refusal = ibMcpText("The command was bound but the form could not be stored.");
 				form->DecrRef();
 				return false;
 			}
@@ -1196,7 +1200,7 @@ public:
 			// reading a form loads, so what a caller reads here is what the file holds.
 			ibDataValue described;
 			if (!ibCommandDescriptionMemory::WriteNode(described, command)) {
-				refusal = _("The command was wired, but could not be read back to confirm it.");
+				refusal = ibMcpText("The command was wired, but could not be read back to confirm it.");
 				form->DecrRef();
 				return false;
 			}
@@ -1210,7 +1214,7 @@ public:
 
 		if (binding == nullptr) {
 			refusal = wxString::Format(
-				_("'%s' has no binding called '%s'. form_control lists its properties."),
+				ibMcpText("'%s' has no binding called '%s'. form_control lists its properties."),
 				control->GetControlName(), name);
 			form->DecrRef();
 			return false;
@@ -1221,7 +1225,7 @@ public:
 			source != nullptr ? source->GetSourceExplorer() : nullptr;
 
 		if (explorer == nullptr) {
-			refusal = _("This form has no source object to bind to.");
+			refusal = ibMcpText("This form has no source object to bind to.");
 			form->DecrRef();
 			return false;
 		}
@@ -1245,7 +1249,7 @@ public:
 		// all — the explorer describes what the attribute POINTS AT.
 		ibFormAttributeValue* mainAttr = form->GetMainAttribute();
 		if (mainAttr == nullptr) {
-			refusal = _("This form has no main attribute to bind through.");
+			refusal = ibMcpText("This form has no main attribute to bind through.");
 			form->DecrRef();
 			return false;
 		}
@@ -1289,7 +1293,7 @@ public:
 
 				if (field == nullptr) {
 					refusal = wxString::Format(
-						_("'%s' has no field called '%s'. It offers: %s."),
+						ibMcpText("'%s' has no field called '%s'. It offers: %s."),
 						through->GetName(), segment, available);
 					form->DecrRef();
 					return false;
@@ -1319,7 +1323,7 @@ public:
 				}
 
 				refusal = wxString::Format(
-					_("'%s' has no field called '%s'. It offers: %s."),
+					ibMcpText("'%s' has no field called '%s'. It offers: %s."),
 					walked.IsEmpty() ? source->GetSourceExplorer()->GetSourceName() : walked,
 					segment, available);
 				form->DecrRef();
@@ -1351,7 +1355,7 @@ public:
 		// The head alone is not a binding — it is the form holding the object.
 		// A path of one hop means nothing was actually named.
 		if (description.GetHopCount() < 2) {
-			refusal = _("Nothing to bind to - pass a path such as 'Warehouse.Code'.");
+			refusal = ibMcpText("Nothing to bind to - pass a path such as 'Warehouse.Code'.");
 			form->DecrRef();
 			return false;
 		}
@@ -1359,7 +1363,7 @@ public:
 		binding->SetValue(description);
 
 		if (creator == nullptr || !creator->SaveFormData(form)) {
-			refusal = _("The binding was set but the form could not be stored.");
+			refusal = ibMcpText("The binding was set but the form could not be stored.");
 			form->DecrRef();
 			return false;
 		}
@@ -1378,7 +1382,7 @@ public:
 
 		ibDataValue described;
 		if (!ibSourceDescriptionMemory::WriteNode(described, description)) {
-			refusal = _("The binding was placed, but could not be read back to confirm it.");
+			refusal = ibMcpText("The binding was placed, but could not be read back to confirm it.");
 			form->DecrRef();
 			return false;
 		}
@@ -1419,12 +1423,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("copying a form control");
+		return ibMcpText("copying a form control");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Copy a control - and everything inside it - into the caller's own buffer, to "
+		return ibMcpText("Copy a control - and everything inside it - into the caller's own buffer, to "
 			"be pasted into this form or another one. The copy carries every property the "
 			"control has, including its binding, which is why copying a laid-out field is a "
 			"truer way to make the next one than adding a bare control and setting what you "
@@ -1448,7 +1452,7 @@ public:
 		ibValueFrame* control = FindControl(form, (ibFormID)wanted);
 		if (control == nullptr) {
 			refusal = wxString::Format(
-				_("This form has no control with id %i. form_get lists them."), (int)wanted);
+				ibMcpText("This form has no control with id %i. form_get lists them."), (int)wanted);
 			form->DecrRef();
 			return false;
 		}
@@ -1456,7 +1460,7 @@ public:
 		// THE FORM IS NOT A CONTROL YOU CAN PASTE. It is the frame everything else
 		// lives in, and the designer's own copy refuses it for the same reason.
 		if (control->GetComponentType() == COMPONENT_TYPE_FRAME) {
-			refusal = _("The form itself is not a control. Copy the form metaobject with "
+			refusal = ibMcpText("The form itself is not a control. Copy the form metaobject with "
 				"metadata_copy instead.");
 			form->DecrRef();
 			return false;
@@ -1465,7 +1469,7 @@ public:
 		ibWriterMemory writer;
 
 		if (!control->CopyObject(writer)) {
-			refusal = wxString::Format(_("'%s' could not be copied."),
+			refusal = wxString::Format(ibMcpText("'%s' could not be copied."),
 				control->GetControlName());
 			form->DecrRef();
 			return false;
@@ -1500,12 +1504,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("pasting a form control");
+		return ibMcpText("pasting a form control");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Paste what form_copy put in the buffer, into a form - the same one or a "
+		return ibMcpText("Paste what form_copy put in the buffer, into a form - the same one or a "
 			"different one. The control that arrives is a new one with a name of its own.");
 	}
 
@@ -1522,13 +1526,13 @@ public:
 		ibMcpClipboardSlot& slot = ibMcpClipboard(slotName);
 
 		if (slot.IsEmpty()) {
-			refusal = _("Nothing has been copied. Call form_copy first.");
+			refusal = ibMcpText("Nothing has been copied. Call form_copy first.");
 			return false;
 		}
 
 		if (slot.m_kind != ibMcpClipboardKind::Control) {
 			refusal = wxString::Format(
-				_("The buffer holds %s, not a form control."),
+				ibMcpText("The buffer holds %s, not a form control."),
 				ibMcpClipboardKindName(slot.m_kind));
 			return false;
 		}
@@ -1544,7 +1548,7 @@ public:
 			parent = FindControl(form, (ibFormID)into);
 			if (parent == nullptr) {
 				refusal = wxString::Format(
-					_("This form has no control with id %i. form_get lists them."), (int)into);
+					ibMcpText("This form has no control with id %i. form_get lists them."), (int)into);
 				form->DecrRef();
 				return false;
 			}
@@ -1565,7 +1569,7 @@ public:
 
 		if (created == nullptr) {
 			refusal = wxString::Format(
-				_("A %s cannot go there. form_get shows what each control already holds."),
+				ibMcpText("A %s cannot go there. form_get shows what each control already holds."),
 				slot.m_what);
 			form->DecrRef();
 			return false;
@@ -1580,7 +1584,7 @@ public:
 			// reach past the owner.
 			if (ibValueFrame* owner = created->GetParent())
 				owner->RemoveChild(created);
-			refusal = wxString::Format(_("'%s' could not be pasted here."), slot.m_name);
+			refusal = wxString::Format(ibMcpText("'%s' could not be pasted here."), slot.m_name);
 			form->DecrRef();
 			return false;
 		}
@@ -1592,7 +1596,7 @@ public:
 		// ⚠ SAVED, OR IT NEVER HAPPENED — the configuration keeps the layout, and
 		// the value form is ours only for the length of this call.
 		if (creator == nullptr || !creator->SaveFormData(form)) {
-			refusal = _("The control was pasted but the form could not be stored.");
+			refusal = ibMcpText("The control was pasted but the form could not be stored.");
 			form->DecrRef();
 			return false;
 		}
@@ -1633,12 +1637,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("asking what a %s holds"), ArgClass().Text(params));
+		return wxString::Format(ibMcpText("asking what a %s holds"), ArgClass().Text(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("What a control of this class holds - every property with what it takes, and the "
+		return ibMcpText("What a control of this class holds - every property with what it takes, and the "
 			"events it can be given handlers for - WITHOUT adding one. An empty one is built where "
 			"it would live, asked, and dropped. Name `parent` to ask about it inside a particular "
 			"container: a form is a tree, and what a class may hold depends on where it stands.");
@@ -1663,7 +1667,7 @@ public:
 			parent = FindControl(form, (ibFormID)into);
 			if (parent == nullptr) {
 				refusal = wxString::Format(
-					_("This form has no control with id %i. form_get lists them."), (int)into);
+					ibMcpText("This form has no control with id %i. form_get lists them."), (int)into);
 				form->DecrRef();
 				return false;
 			}
@@ -1677,9 +1681,9 @@ public:
 		// down knows to ask about another one.
 		if (sample == nullptr) {
 			refusal = wxString::Format(
-				_("A '%s' cannot stand inside '%s'. A form is a tree - name a different `parent`, "
+				ibMcpText("A '%s' cannot stand inside '%s'. A form is a tree - name a different `parent`, "
 				  "or form_control on an existing control shows what its container takes."),
-				className, parent == form ? _("the form") : parent->GetControlName());
+				className, parent == form ? ibMcpText("the form") : parent->GetControlName());
 			form->DecrRef();
 			return false;
 		}
@@ -1717,3 +1721,119 @@ public:
 };
 
 MCP_TOOL_REGISTER(ibMcpToolFormAccepts);
+
+//---------------------------------------------------------------------------
+// what a FORM can be half-built into — config_check asks this too
+//---------------------------------------------------------------------------
+//
+// ⭐⭐ A COMPOSITION DOES NOT ONLY LIVE IN THE METADATA. It lives on FORMS as well — a list, a
+// composer dropped onto a gridbox, a table — and anything on a form can hold one (Max, 2026-09-02:
+// *"a composer can be on a form too, like a list"*, *"anything can live there — tables, a composer,
+// a list"*). The configuration-wide check walks metaobjects, and metaobjects are exactly where
+// these are NOT: a form keeps its controls as a blob, which is unreadable to anything that cannot
+// build them.
+//
+// 🛑 SO WITHOUT THIS THE AUDIT WOULD ANSWER "nothing half-built" ABOUT A BASE WITH AN EMPTY LIST ON
+// EVERY SCREEN — and a false clean is acted on, while a missing check is not. It registers itself
+// through the audit registry (mcpTool.h), so the answer grows by LINKING the DLL that knows about
+// forms rather than by the backend learning what a control is.
+//
+// ⚠ NOTHING IS RUN. The form is loaded from its stored blob — LoadForm builds the control tree and
+// nothing else — so no module fires, no source is bound and no window appears. A check with side
+// effects is one nobody dares call twice.
+class ibMcpAuditForms : public ibMcpAudit {
+
+	// ⭐ ASKED OF THE PROPERTY, NOT OF THE CONTROL. Which controls may carry a composition is a
+	// list that goes stale the day somebody adds one; a property that STORES a composition is what
+	// it is, whatever holds it. So every property of every control is asked, and the ones that
+	// answer are the ones that matter.
+	//
+	// AND THE TWO KINDS ARE JUDGED DIFFERENTLY. A report composition owes outputs and selected
+	// fields; a LIST is a degenerate composer and owes neither — demanding an output of it would
+	// report every list in the configuration as broken, which is how an audit teaches people to
+	// ignore it.
+	static void CheckControl(ibPropertyObject* holder, const ibValueMetaObject* about,
+		const ibComplain& complain)
+	{
+		if (holder == nullptr)
+			return;
+
+		for (unsigned int index = 0; index < holder->GetPropertyCount(); index++) {
+
+			ibProperty* property = holder->GetProperty(index);
+			if (property == nullptr)
+				continue;
+
+			// THE REPORT-SHAPED ONES — the full list of complaints, the same one the report verbs
+			// answer with.
+			const ibCompositionDescription* composition = nullptr;
+			bool asReport = true;
+
+			if (const ibPropertyComposition* asComposition =
+					dynamic_cast<const ibPropertyComposition*>(property)) {
+				composition = &asComposition->GetValueAsCompositionDesc();
+			}
+			else if (const ibPropertyDataComposition* asData =
+					dynamic_cast<const ibPropertyDataComposition*>(property)) {
+				composition = &asData->GetValueAsCompositionDesc();
+			}
+			else if (const ibPropertyDynamicList* asList =
+					dynamic_cast<const ibPropertyDynamicList*>(property)) {
+				composition = &asList->GetValueAsCompositionDesc();
+				asReport = false;
+			}
+
+			if (composition == nullptr)
+				continue;
+
+			if (composition->m_query.IsEmpty()) {
+				complain(about, wxString::Format(
+					ibMcpText("'%s' reads nothing - its composition has no query, so the control is empty "
+					  "whatever the person does"), property->GetName()));
+				continue;
+			}
+
+			if (!asReport)
+				continue;
+
+			std::vector<wxString> missing;
+			ibMcpComposerComplaints(*composition, missing);
+
+			for (const wxString& one : missing)
+				complain(about, wxString::Format(ibMcpText("'%s': %s"), property->GetName(), one));
+		}
+	}
+
+public:
+
+	void Check(ibMetaData* metaData, const ibComplain& complain) const override
+	{
+		if (metaData == nullptr || !metaData->IsConfigOpen())
+			return;
+
+		for (ibValueMetaObject* object : metaData->GetAnyArrayObject<ibValueMetaObject>(true)) {
+
+			ibValueMetaObjectFormBase* creator =
+				object != nullptr ? object->ConvertToType<ibValueMetaObjectFormBase>() : nullptr;
+
+			if (creator == nullptr)
+				continue;
+
+			// AN EMPTY BLOB IS A GENERATED FORM — the platform lays it out when it is opened, and
+			// there is nothing stored to find fault with. Not a complaint: it is how most forms in
+			// a young configuration legitimately are.
+			const wxMemoryBuffer data = creator->GetFormData();
+			if (data.GetDataLen() == 0)
+				continue;
+
+			ibValueForm form(creator);
+			if (!form.LoadForm(data))
+				continue;
+
+			for (ibValueControl* control : form.GetControlList())
+				CheckControl(control, object, complain);
+		}
+	}
+};
+
+MCP_AUDIT_REGISTER(ibMcpAuditForms);

@@ -43,7 +43,7 @@ ibValueMetaObjectSpreadsheetBase* FindTemplate(const ibDataNode& params, wxStrin
 		dynamic_cast<ibValueMetaObjectSpreadsheetBase*>(object);
 	if (sheet == nullptr) {
 		refusal = wxString::Format(
-			_("'%s' is not a template. Create one with metadata_create kind=Template under an "
+			ibMcpText("'%s' is not a template. Create one with metadata_create kind=Template under an "
 			  "object, or kind=CommonTemplate under Common."), object->GetName());
 		return nullptr;
 	}
@@ -59,56 +59,85 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgId()
 {
 	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
-		_("The template's NodeId."), /*required*/ true);
+		ibMcpText("The template's NodeId."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgArea()
 {
 	static const ibArg s_a(wxT("area"), ibArg::Kind::Text,
-		_("Only the cells inside this area. Omit for the whole sheet."));
+		ibMcpText("Only the cells inside this area. Omit for the whole sheet."));
 	return s_a;
 }
 
 const ibArg& ArgRow()
 {
 	static const ibArg s_a(wxT("row"), ibArg::Kind::Whole,
-		_("Row, 1-based."), /*required*/ true);
+		ibMcpText("Row, 1-based - the number the editor shows in the margin."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgCol()
 {
 	static const ibArg s_a(wxT("col"), ibArg::Kind::Whole,
-		_("Column, 1-based."), /*required*/ true);
+		ibMcpText("Column, 1-based - the number the editor shows across the top."), /*required*/ true);
 	return s_a;
+}
+
+// 🛑⭐ TWO NUMBERINGS MET HERE AND NOBODY TRANSLATED — the whole sheet was off by one, invisibly.
+//
+// These tools say "1-based" because that is what the person at the editor sees in the margin, and
+// what anybody describing a blank means by "the first row". The description underneath stores rows
+// and columns from ZERO, as the grid walks them. The number was handed straight across.
+//
+// So `sheet_cell {row: 1}` wrote the SECOND line of the sheet, every layout came out shifted a row
+// down and a column right, and row 1 could not be addressed at all: a size set on it went to row 2
+// and the first line kept its default forever (Max, 2026-09-02, from the screen: *"the size of the
+// first row never changes… as if the numbering starts from the second cell"*).
+//
+// ⚠ AND IT HID BEHIND ITS OWN SYMMETRY. `sheet_get` printed the stored index under the same name,
+// so writing row 1 and reading row 1 agreed perfectly - the tools were consistent with each other
+// and wrong about the sheet. Only a person LOOKING at the result could see it, which is why it
+// survived every check made through this door.
+//
+// ⭐ ONE TRANSLATION, AT THE BOUNDARY. Everything a caller sends comes through Line(); everything
+// answered goes back out through LineOut(). Not twelve subtractions at twelve call sites - the
+// thirteenth is what this defect is made of.
+s32 Line(const ibArg& argument, const ibDataNode& params)
+{
+	return (s32)argument.Whole(params) - 1;
+}
+
+s64 LineOut(int stored)
+{
+	return (s64)stored + 1;
 }
 
 const ibArg& ArgValue()
 {
 	static const ibArg s_a(wxT("value"), ibArg::Kind::Text,
-		_("The text shown. For a caption this is all there is."));
+		ibMcpText("The text shown. For a caption this is all there is."));
 	return s_a;
 }
 
 const ibArg& ArgParameter()
 {
 	static const ibArg s_a(wxT("parameter"), ibArg::Kind::Text,
-		_("The name the module fills in. A cell with one is a hole, not a caption."));
+		ibMcpText("The name the module fills in. A cell with one is a hole, not a caption."));
 	return s_a;
 }
 
 const ibArg& ArgAlign()
 {
 	static const ibArg s_a(wxT("align"), ibArg::Kind::Text,
-		_("left, center or right."));
+		ibMcpText("left, center or right."));
 	return s_a;
 }
 
 const ibArg& ArgUnderline()
 {
 	static const ibArg s_a(wxT("underline"), ibArg::Kind::Flag,
-		_("Rule a line under the cell - this is what a blank to be filled in by hand "
+		ibMcpText("Rule a line under the cell - this is what a blank to be filled in by hand "
 			  "looks like, and what makes an empty printed form usable."));
 	return s_a;
 }
@@ -116,7 +145,7 @@ const ibArg& ArgUnderline()
 const ibArg& ArgColSpan()
 {
 	static const ibArg s_a(wxT("colSpan"), ibArg::Kind::Whole,
-		_("How many columns the cell occupies - a heading spans the page. This MERGES: the "
+		ibMcpText("How many columns the cell occupies - a heading spans the page. This MERGES: the "
 			  "cells it covers become part of this one."));
 	return s_a;
 }
@@ -124,49 +153,49 @@ const ibArg& ArgColSpan()
 const ibArg& ArgRowSpan()
 {
 	static const ibArg s_a(wxT("rowSpan"), ibArg::Kind::Whole,
-		_("How many rows it occupies - a tall cell for a hand-written block."));
+		ibMcpText("How many rows it occupies - a tall cell for a hand-written block."));
 	return s_a;
 }
 
 const ibArg& ArgItalic()
 {
 	static const ibArg s_a(wxT("italic"), ibArg::Kind::Flag,
-		_("For the small explanations under a line."));
+		ibMcpText("For the small explanations under a line."));
 	return s_a;
 }
 
 const ibArg& ArgBold()
 {
 	static const ibArg s_a(wxT("bold"), ibArg::Kind::Flag,
-		_("For a title or a total."));
+		ibMcpText("For a title or a total."));
 	return s_a;
 }
 
 const ibArg& ArgFontSize()
 {
 	static const ibArg s_a(wxT("fontSize"), ibArg::Kind::Whole,
-		_("Point size."));
+		ibMcpText("Point size."));
 	return s_a;
 }
 
 const ibArg& ArgValign()
 {
 	static const ibArg s_a(wxT("valign"), ibArg::Kind::Text,
-		_("top, middle or bottom - which matters the moment a row is tall."));
+		ibMcpText("top, middle or bottom - which matters the moment a row is tall."));
 	return s_a;
 }
 
 const ibArg& ArgVertical()
 {
 	static const ibArg s_a(wxT("vertical"), ibArg::Kind::Flag,
-		_("Turn the text on its side - a narrow column heading in a wide table."));
+		ibMcpText("Turn the text on its side - a narrow column heading in a wide table."));
 	return s_a;
 }
 
 const ibArg& ArgBackground()
 {
 	static const ibArg s_a(wxT("background"), ibArg::Kind::Text,
-		_("Fill colour, as a name or #rrggbb. Unset means unset, and the platform "
+		ibMcpText("Fill colour, as a name or #rrggbb. Unset means unset, and the platform "
 			  "resolves it where there is a screen to ask."));
 	return s_a;
 }
@@ -174,14 +203,14 @@ const ibArg& ArgBackground()
 const ibArg& ArgColour()
 {
 	static const ibArg s_a(wxT("colour"), ibArg::Kind::Text,
-		_("Text colour, same form."));
+		ibMcpText("Text colour, same form."));
 	return s_a;
 }
 
 const ibArg& ArgBorder()
 {
 	static const ibArg s_a(wxT("border"), ibArg::Kind::Text,
-		_("Rule lines on named sides: any of left, right, top, bottom, or `all`. "
+		ibMcpText("Rule lines on named sides: any of left, right, top, bottom, or `all`. "
 			  "`underline` is the common case of this and stays as its own argument."));
 	return s_a;
 }
@@ -189,7 +218,7 @@ const ibArg& ArgBorder()
 const ibArg& ArgFit()
 {
 	static const ibArg s_a(wxT("fit"), ibArg::Kind::Text,
-		_("What long text does: overflow, clip, or ellipsis. On paper this decides "
+		ibMcpText("What long text does: overflow, clip, or ellipsis. On paper this decides "
 			  "whether a name runs into the next cell or is cut."));
 	return s_a;
 }
@@ -197,56 +226,56 @@ const ibArg& ArgFit()
 const ibArg& ArgReadOnly()
 {
 	static const ibArg s_a(wxT("readOnly"), ibArg::Kind::Flag,
-		_("The cell cannot be typed into when the sheet is shown."));
+		ibMcpText("The cell cannot be typed into when the sheet is shown."));
 	return s_a;
 }
 
 const ibArg& ArgName()
 {
 	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
-		_("What the module will call it."), /*required*/ true);
+		ibMcpText("What the module will call it."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgStart()
 {
 	static const ibArg s_a(wxT("start"), ibArg::Kind::Whole,
-		_("First row, 1-based."), /*required*/ true);
+		ibMcpText("First row, 1-based."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgEnd()
 {
 	static const ibArg s_a(wxT("end"), ibArg::Kind::Whole,
-		_("Last row, inclusive."), /*required*/ true);
+		ibMcpText("Last row, inclusive."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgFile()
 {
 	static const ibArg s_a(wxT("file"), ibArg::Kind::Text,
-		_("Full path to the file. The format is decided by its extension."), /*required*/ true);
+		ibMcpText("Full path to the file. The format is decided by its extension."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgSize()
 {
 	static const ibArg s_a(wxT("size"), ibArg::Kind::Whole,
-		_("The measurement. Omit or 0 puts the band back to the platform's default."));
+		ibMcpText("The measurement. Omit or 0 puts the band back to the platform's default."));
 	return s_a;
 }
 
 const ibArg& ArgHide()
 {
 	static const ibArg s_a(wxT("hide"), ibArg::Kind::Flag,
-		_("Hide the band - a width of nothing, which is what hidden IS on a sheet."));
+		ibMcpText("Hide the band - a width of nothing, which is what hidden IS on a sheet."));
 	return s_a;
 }
 
 const ibArg& ArgWhat()
 {
 	static const ibArg s_a(wxT("what"), ibArg::Kind::Text,
-		_("A page `break`, a `freeze` line that holds rows in place while the rest scrolls, "
+		ibMcpText("A page `break`, a `freeze` line that holds rows in place while the rest scrolls, "
 			  "or a `group` that can be collapsed."),
 			/*required*/ true, { wxT("break"), wxT("freeze"), wxT("group") });
 	return s_a;
@@ -255,7 +284,7 @@ const ibArg& ArgWhat()
 const ibArg& ArgColumns()
 {
 	static const ibArg s_a(wxT("columns"), ibArg::Kind::Flag,
-		_("Apply it to columns instead of rows - a vertical page break, a frozen left "
+		ibMcpText("Apply it to columns instead of rows - a vertical page break, a frozen left "
 			  "edge, a column group."));
 	return s_a;
 }
@@ -263,7 +292,7 @@ const ibArg& ArgColumns()
 const ibArg& ArgAt()
 {
 	static const ibArg s_a(wxT("at"), ibArg::Kind::Whole,
-		_("For a break: the row or column the page ends before. For a freeze: everything "
+		ibMcpText("For a break: the row or column the page ends before. For a freeze: everything "
 			  "up to here stays put; 0 unfreezes."));
 	return s_a;
 }
@@ -271,14 +300,14 @@ const ibArg& ArgAt()
 const ibArg& ArgLevel()
 {
 	static const ibArg s_a(wxT("level"), ibArg::Kind::Whole,
-		_("For a group: how deep it nests. Default 1."));
+		ibMcpText("For a group: how deep it nests. Default 1."));
 	return s_a;
 }
 
 const ibArg& ArgCollapsed()
 {
 	static const ibArg s_a(wxT("collapsed"), ibArg::Kind::Flag,
-		_("For a group: start folded. This is a state of the DOCUMENT, so a long form can "
+		ibMcpText("For a group: start folded. This is a state of the DOCUMENT, so a long form can "
 			  "open readable."));
 	return s_a;
 }
@@ -286,7 +315,7 @@ const ibArg& ArgCollapsed()
 const ibArg& ArgRemove()
 {
 	static const ibArg s_a(wxT("remove"), ibArg::Kind::Flag,
-		_("Take it off instead of putting it on. For a break, `at` says which one; for a "
+		ibMcpText("Take it off instead of putting it on. For a break, `at` says which one; for a "
 			  "freeze this is the same as at=0; for a group, `start` and `end` say which."));
 	return s_a;
 }
@@ -294,42 +323,42 @@ const ibArg& ArgRemove()
 const ibArg& ArgTop()
 {
 	static const ibArg s_a(wxT("top"), ibArg::Kind::Whole,
-		_("First row of the rectangle."), /*required*/ true);
+		ibMcpText("First row of the rectangle."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgLeft()
 {
 	static const ibArg s_a(wxT("left"), ibArg::Kind::Whole,
-		_("First column."), /*required*/ true);
+		ibMcpText("First column."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgBottom()
 {
 	static const ibArg s_a(wxT("bottom"), ibArg::Kind::Whole,
-		_("Last row, inclusive."), /*required*/ true);
+		ibMcpText("Last row, inclusive."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgRight()
 {
 	static const ibArg s_a(wxT("right"), ibArg::Kind::Whole,
-		_("Last column, inclusive."), /*required*/ true);
+		ibMcpText("Last column, inclusive."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgSlot()
 {
 	static const ibArg s_a(wxT("slot"), ibArg::Kind::Text,
-		_("Which buffer to put it in. Omit for the usual one."));
+		ibMcpText("Which buffer to put it in. Omit for the usual one."));
 	return s_a;
 }
 
 const ibArg& ArgTimes()
 {
 	static const ibArg s_a(wxT("times"), ibArg::Kind::Whole,
-		_("Lay it down more than once, each block below the last - so a band that repeats "
+		ibMcpText("Lay it down more than once, each block below the last - so a band that repeats "
 			  "is one call. Default 1."));
 	return s_a;
 }
@@ -346,12 +375,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("reading the template '%s'"), ibMcpNameOf(params));
+		return wxString::Format(ibMcpText("reading the template '%s'"), ibMcpNameOf(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("A template as it stands: its named AREAS - which is what a printing module "
+		return ibMcpText("A template as it stands: its named AREAS - which is what a printing module "
 			"puts out - and every cell that has something in it, with the PARAMETER each "
 			"substitutes and the FORMATTING it carries (merge, alignment, font, colours, a "
 			"ruled line). Ask before filling one in: an area is the unit a report prints, and "
@@ -429,8 +458,8 @@ public:
 
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
 			node->SetValue(wxT("name"), area->m_label);
-			node->AddField(wxT("start"), ibDataValue::Int((s64)area->m_start));
-			node->AddField(wxT("end"), ibDataValue::Int((s64)area->m_end));
+			node->AddField(wxT("start"), ibDataValue::Int(LineOut(area->m_start)));
+			node->AddField(wxT("end"), ibDataValue::Int(LineOut(area->m_end)));
 
 			// HOW TALL IT IS, since that is what decides how many of it fit. A
 			// module repeating a one-row band and a module repeating a five-row one
@@ -450,7 +479,7 @@ public:
 
 		if (!wanted.IsEmpty() && wantedStart < 0) {
 			refusal = wxString::Format(
-				_("'%s' has no area called '%s'."), sheet->GetName(), wanted);
+				ibMcpText("'%s' has no area called '%s'."), sheet->GetName(), wanted);
 			return false;
 		}
 
@@ -491,8 +520,8 @@ public:
 			if (!ibSpreadsheetCellDescriptionMemory::WriteNode(described, *cell)
 				|| described.Kind() != ibDataKind::Child) {
 				refusal = wxString::Format(
-					_("The cell at row %i, column %i could not describe itself."),
-					(int)cell->m_row, (int)cell->m_col);
+					ibMcpText("The cell at row %i, column %i could not describe itself."),
+					(int)LineOut(cell->m_row), (int)LineOut(cell->m_col));
 				return false;
 			}
 
@@ -500,8 +529,8 @@ public:
 
 			// The ADDRESS is the container's to say — the cell knows what it holds, not where it
 			// sits, which is exactly the division WriteNode draws.
-			node->AddField(wxT("row"), ibDataValue::Int((s64)cell->m_row));
-			node->AddField(wxT("col"), ibDataValue::Int((s64)cell->m_col));
+			node->AddField(wxT("row"), ibDataValue::Int(LineOut(cell->m_row)));
+			node->AddField(wxT("col"), ibDataValue::Int(LineOut(cell->m_col)));
 
 			// ⭐ THE FILTER FOLLOWS THE REPORTER. A cell with nothing to say is one
 			// the node has nothing in beyond its address — so the test is asked of
@@ -522,7 +551,7 @@ public:
 
 		if (areas.empty())
 			result.SetValue(wxT("note"),
-				_("No areas declared. A printing module names areas to put out, so a template "
+				ibMcpText("No areas declared. A printing module names areas to put out, so a template "
 				  "without them can only be printed whole."));
 
 		return true;
@@ -541,12 +570,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("writing a cell of the template '%s'"), ibMcpNameOf(params));
+		return wxString::Format(ibMcpText("writing a cell of the template '%s'"), ibMcpNameOf(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Put text or a PARAMETER into one cell of a template. A parameter is what the "
+		return ibMcpText("Put text or a PARAMETER into one cell of a template. A parameter is what the "
 			"printing module substitutes when it puts the area out - the whole reason a "
 			"template is not a picture.");
 	}
@@ -563,11 +592,11 @@ public:
 		if (sheet == nullptr)
 			return false;
 
-		const s32 row = (s32)ArgRow().Whole(params);
-		const s32 col = (s32)ArgCol().Whole(params);
+		const s32 row = Line(ArgRow(), params);
+		const s32 col = Line(ArgCol(), params);
 
-		if (row <= 0 || col <= 0) {
-			refusal = _("A cell is addressed by row and column, both 1 or more.");
+		if (row < 0 || col < 0) {
+			refusal = ibMcpText("A cell is addressed by row and column, both 1 or more.");
 			return false;
 		}
 
@@ -575,7 +604,7 @@ public:
 
 		ibSpreadsheetCellDescription* cell = desc.GetOrCreateCell(row, col);
 		if (cell == nullptr) {
-			refusal = _("That cell could not be made.");
+			refusal = ibMcpText("That cell could not be made.");
 			return false;
 		}
 
@@ -597,7 +626,7 @@ public:
 			if (align.IsSameAs(wxT("center"), false))     horizontal = ibAlignmentHorz_Center;
 			else if (align.IsSameAs(wxT("right"), false)) horizontal = ibAlignmentHorz_Right;
 			else if (!align.IsSameAs(wxT("left"), false)) {
-				refusal = _("Alignment is left, center or right.");
+				refusal = ibMcpText("Alignment is left, center or right.");
 				return false;
 			}
 
@@ -657,7 +686,7 @@ public:
 			else if (valign.IsSameAs(wxT("middle"), false)) cell->m_alignVert = ibAlignmentVert_Center;
 			else if (valign.IsSameAs(wxT("bottom"), false)) cell->m_alignVert = ibAlignmentVert_Bottom;
 			else {
-				refusal = _("Vertical alignment is top, middle or bottom.");
+				refusal = ibMcpText("Vertical alignment is top, middle or bottom.");
 				return false;
 			}
 		}
@@ -711,7 +740,7 @@ public:
 			else if (fit.IsSameAs(wxT("ellipsis"), false))
 				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_EllipsizeEnd;
 			else {
-				refusal = _("Fit is overflow, clip or ellipsis.");
+				refusal = ibMcpText("Fit is overflow, clip or ellipsis.");
 				return false;
 			}
 		}
@@ -722,8 +751,8 @@ public:
 		sheet->SetSpreadsheetDesc(desc);
 		activeMetaData->Modify(true);
 
-		result.AddField(wxT("row"), ibDataValue::Int((s64)row));
-		result.AddField(wxT("col"), ibDataValue::Int((s64)col));
+		result.AddField(wxT("row"), ibDataValue::Int(LineOut(row)));
+		result.AddField(wxT("col"), ibDataValue::Int(LineOut(col)));
 		if (!cell->GetValue().IsEmpty())
 			result.SetValue(wxT("value"), cell->GetValue());
 		if (!cell->GetParameter().IsEmpty())
@@ -745,13 +774,13 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("declaring the area '%s' in '%s'"),
+		return wxString::Format(ibMcpText("declaring the area '%s' in '%s'"),
 			ArgName().Text(params), ibMcpNameOf(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Name a band of rows as an AREA - the unit a printing module puts out. A "
+		return ibMcpText("Name a band of rows as an AREA - the unit a printing module puts out. A "
 			"header, a table row, a footer: the module names these, so a template without "
 			"them can only be printed whole.");
 	}
@@ -769,18 +798,18 @@ public:
 			return false;
 
 		const wxString name = ArgName().Text(params);
-		const s32 start = (s32)ArgStart().Whole(params);
-		const s32 end = (s32)ArgEnd().Whole(params);
+		const s32 start = Line(ArgStart(), params);
+		const s32 end = Line(ArgEnd(), params);
 
 		if (name.IsEmpty()) {
-			refusal = _("An area needs a name - that is what the module puts out.");
+			refusal = ibMcpText("An area needs a name - that is what the module puts out.");
 			return false;
 		}
 
 		// A BAND THAT ENDS BEFORE IT BEGINS is not a narrow area, it is a mistake,
 		// and it would print nothing while looking declared.
-		if (start <= 0 || end < start) {
-			refusal = _("An area runs from a first row to a last one, both 1 or more.");
+		if (start < 0 || end < start) {
+			refusal = ibMcpText("An area runs from a first row to a last one, both 1 or more.");
 			return false;
 		}
 
@@ -790,7 +819,7 @@ public:
 			const ibSpreadsheetAreaDescription* area = desc.GetRowAreaByIdx(idx);
 			if (area != nullptr && area->m_label.IsSameAs(name, false)) {
 				refusal = wxString::Format(
-					_("'%s' already has an area called '%s'."), sheet->GetName(), name);
+					ibMcpText("'%s' already has an area called '%s'."), sheet->GetName(), name);
 				return false;
 			}
 		}
@@ -802,8 +831,8 @@ public:
 
 		result.AddField(wxT("added"), ibDataValue::Bool(true));
 		result.SetValue(wxT("name"), name);
-		result.AddField(wxT("start"), ibDataValue::Int((s64)start));
-		result.AddField(wxT("end"), ibDataValue::Int((s64)end));
+		result.AddField(wxT("start"), ibDataValue::Int(LineOut(start)));
+		result.AddField(wxT("end"), ibDataValue::Int(LineOut(end)));
 		return true;
 	}
 };
@@ -836,13 +865,13 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("importing a file into the template '%s'"),
+		return wxString::Format(ibMcpText("importing a file into the template '%s'"),
 			ibMcpNameOf(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Read a spreadsheet or document file INTO a template - an existing invoice, "
+		return ibMcpText("Read a spreadsheet or document file INTO a template - an existing invoice, "
 			"act or contract becomes the layout, and what changes in it becomes parameters "
 			"afterwards with sheet_cell. This is how a printed form that already exists on "
 			"paper gets into the configuration without being drawn again.");
@@ -863,7 +892,7 @@ public:
 		const wxString fileName = ArgFile().Text(params);
 
 		if (!wxFileExists(fileName)) {
-			refusal = wxString::Format(_("There is no file at '%s'."), fileName);
+			refusal = wxString::Format(ibMcpText("There is no file at '%s'."), fileName);
 			return false;
 		}
 
@@ -879,15 +908,15 @@ public:
 			}
 
 			refusal = wxString::Format(
-				_("Nothing here reads that kind of file. Readable: %s."),
-				readable.IsEmpty() ? _("none") : readable);
+				ibMcpText("Nothing here reads that kind of file. Readable: %s."),
+				readable.IsEmpty() ? wxT("none") : readable);
 			return false;
 		}
 
 		ibSpreadsheetDescription desc;
 		if (!format->Read(fileName, desc)) {
 			refusal = wxString::Format(
-				_("'%s' could not read that file - it may be damaged, or written by something "
+				ibMcpText("'%s' could not read that file - it may be damaged, or written by something "
 				  "this format does not follow."), format->GetName());
 			return false;
 		}
@@ -904,7 +933,7 @@ public:
 		// areas and no parameters — it is one flat sheet — so the next two steps
 		// are what turn it into a printed FORM rather than a copy of one.
 		result.SetValue(wxT("nextStep"),
-			_("Read it with sheet_get, then declare the bands with sheet_area and turn the "
+			ibMcpText("Read it with sheet_get, then declare the bands with sheet_area and turn the "
 			  "changing cells into parameters with sheet_cell."));
 
 		return true;
@@ -939,12 +968,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("sizing a band of the template '%s'"), ibMcpNameOf(params));
+		return wxString::Format(ibMcpText("sizing a band of the template '%s'"), ibMcpNameOf(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Set the HEIGHT of a row or the WIDTH of a column, or hide one by giving it "
+		return ibMcpText("Set the HEIGHT of a row or the WIDTH of a column, or hide one by giving it "
 			"nothing. A layout taken from paper is right in its content and wrong in its "
 			"proportions until these are set.");
 	}
@@ -961,35 +990,41 @@ public:
 		if (sheet == nullptr)
 			return false;
 
-		const s32 row = (s32)ArgRow().Whole(params);
-		const s32 col = (s32)ArgCol().Whole(params);
+		// ⚠ ASKED IN THE CALLER'S OWN NUMBERS FIRST, because here a zero means "not said" rather
+		// than a band: the choice between a row and a column is made on what ARRIVED, and only
+		// then is the one that was named translated into the sheet's own numbering.
+		const s32 rowSaid = (s32)ArgRow().Whole(params);
+		const s32 colSaid = (s32)ArgCol().Whole(params);
 
 		// ONE BAND AT A TIME. Accepting both would leave a caller unsure which
 		// measurement the number was, and one of the two silently ignored.
-		if ((row > 0) == (col > 0)) {
-			refusal = _("Name a row or a column - one of the two.");
+		if ((rowSaid > 0) == (colSaid > 0)) {
+			refusal = ibMcpText("Name a row or a column - one of the two.");
 			return false;
 		}
+
+		const s32 row = rowSaid - 1;
+		const s32 col = colSaid - 1;
 
 		s32 size = (s32)ArgSize().Whole(params);
 		if (ArgHide().Flag(params))
 			size = 1;   // the smallest a band can be and still be a band
 
 		if (size < 0) {
-			refusal = _("A size is 0 (the default) or more.");
+			refusal = ibMcpText("A size is 0 (the default) or more.");
 			return false;
 		}
 
 		ibSpreadsheetDescription desc = sheet->GetSpreadsheetDesc();
 
-		if (row > 0) desc.SetRowSize(row, size);
-		else         desc.SetColSize(col, size);
+		if (rowSaid > 0) desc.SetRowSize(row, size);
+		else             desc.SetColSize(col, size);
 
 		sheet->SetSpreadsheetDesc(desc);
 		activeMetaData->Modify(true);
 
-		result.SetValue(wxT("band"), wxString(row > 0 ? wxT("row") : wxT("column")));
-		result.AddField(wxT("at"), ibDataValue::Int((s64)(row > 0 ? row : col)));
+		result.SetValue(wxT("band"), wxString(rowSaid > 0 ? wxT("row") : wxT("column")));
+		result.AddField(wxT("at"), ibDataValue::Int((s64)(rowSaid > 0 ? rowSaid : colSaid)));
 		result.AddField(wxT("size"), ibDataValue::Int((s64)size));
 		return true;
 	}
@@ -1029,13 +1064,13 @@ public:
 	wxString GetActivity(const ibDataNode& params) const override
 	{
 		const wxString what = ArgWhat().Text(params);
-		return wxString::Format(_("setting %s in the template '%s'"),
-			what.IsEmpty() ? _("a band") : what, ibMcpNameOf(params));
+		return wxString::Format(ibMcpText("setting %s in the template '%s'"),
+			what.IsEmpty() ? ibMcpText("a band") : what, ibMcpNameOf(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("What a template says about whole rows or columns: a page BREAK (where the "
+		return ibMcpText("What a template says about whole rows or columns: a page BREAK (where the "
 			"paper ends, horizontally or vertically), a FREEZE (what stays put while the rest "
 			"scrolls), or a GROUP (a stretch that folds, so a long form stays readable).");
 	}
@@ -1060,9 +1095,9 @@ public:
 
 		if (what.IsSameAs(wxT("break"), false)) {
 
-			const s32 at = (s32)ArgAt().Whole(params);
-			if (at <= 0) {
-				refusal = _("A page break is placed at a row or column, 1 or more.");
+			const s32 at = Line(ArgAt(), params);
+			if (at < 0) {
+				refusal = ibMcpText("A page break is placed at a row or column, 1 or more.");
 				return false;
 			}
 
@@ -1077,7 +1112,7 @@ public:
 
 			result.SetValue(wxT("what"), wxString(wxT("break")));
 			result.SetValue(wxT("did"), wxString(remove ? wxT("removed") : wxT("placed")));
-			result.AddField(wxT("at"), ibDataValue::Int((s64)at));
+			result.AddField(wxT("at"), ibDataValue::Int(LineOut(at)));
 		}
 		else if (what.IsSameAs(wxT("freeze"), false)) {
 
@@ -1086,9 +1121,13 @@ public:
 			// therefore the same statement said the other way, and is accepted for
 			// the sake of one spelling across all three rather than because the
 			// freeze needed it.
+			//
+			// ⚠ AND IT IS A COUNT, NOT AN ADDRESS — "how many bands stay put", which is why it is
+			// NOT translated the way a break or a group is: freezing 2 rows freezes rows 1 and 2,
+			// and subtracting one here would freeze the wrong number of them.
 			const s32 at = remove ? 0 : (s32)ArgAt().Whole(params);
 			if (at < 0) {
-				refusal = _("A freeze runs up to a row or column, or 0 for none.");
+				refusal = ibMcpText("A freeze runs up to a row or column, or 0 for none.");
 				return false;
 			}
 
@@ -1100,13 +1139,13 @@ public:
 		}
 		else if (what.IsSameAs(wxT("group"), false)) {
 
-			const s32 start = (s32)ArgStart().Whole(params);
-			const s32 end = (s32)ArgEnd().Whole(params);
+			const s32 start = Line(ArgStart(), params);
+			const s32 end = Line(ArgEnd(), params);
 
 			// A GROUP THAT ENDS BEFORE IT BEGINS folds nothing while looking
 			// declared — the same mistake an area can make, refused the same way.
-			if (start <= 0 || end < start) {
-				refusal = _("A group runs from a first band to a last one, both 1 or more.");
+			if (start < 0 || end < start) {
+				refusal = ibMcpText("A group runs from a first band to a last one, both 1 or more.");
 				return false;
 			}
 
@@ -1129,15 +1168,15 @@ public:
 
 			result.SetValue(wxT("what"), wxString(wxT("group")));
 			result.SetValue(wxT("did"), wxString(remove ? wxT("removed") : wxT("placed")));
-			result.AddField(wxT("start"), ibDataValue::Int((s64)start));
-			result.AddField(wxT("end"), ibDataValue::Int((s64)end));
+			result.AddField(wxT("start"), ibDataValue::Int(LineOut(start)));
+			result.AddField(wxT("end"), ibDataValue::Int(LineOut(end)));
 			if (!remove)
 				result.AddField(wxT("level"), ibDataValue::Int((s64)level));
 		}
 		else {
 			// An unknown word must not fall through to a default: a misspelling
 			// would then quietly do something else.
-			refusal = _("Unknown. Use break, freeze or group.");
+			refusal = ibMcpText("Unknown. Use break, freeze or group.");
 			return false;
 		}
 
@@ -1179,12 +1218,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("copying cells of the template '%s'"), ibMcpNameOf(params));
+		return wxString::Format(ibMcpText("copying cells of the template '%s'"), ibMcpNameOf(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Copy a rectangle of cells into the caller's own buffer, to be laid down "
+		return ibMcpText("Copy a rectangle of cells into the caller's own buffer, to be laid down "
 			"again elsewhere with sheet_paste. Everything a cell carries comes with it - the "
 			"text or parameter, the font and colours, the borders, the alignment, the merge "
 			"size. Use it to repeat a band rather than describing the same cells twice.");
@@ -1202,15 +1241,15 @@ public:
 		if (sheet == nullptr)
 			return false;
 
-		const s32 top = (s32)ArgTop().Whole(params);
-		const s32 left = (s32)ArgLeft().Whole(params);
-		const s32 bottom = (s32)ArgBottom().Whole(params);
-		const s32 right = (s32)ArgRight().Whole(params);
+		const s32 top = Line(ArgTop(), params);
+		const s32 left = Line(ArgLeft(), params);
+		const s32 bottom = Line(ArgBottom(), params);
+		const s32 right = Line(ArgRight(), params);
 
 		// A RECTANGLE THAT ENDS BEFORE IT BEGINS copies nothing while looking
 		// asked-for — refused the same way an area and a group are.
-		if (top <= 0 || left <= 0 || bottom < top || right < left) {
-			refusal = _("A rectangle runs from a top-left cell to a bottom-right one, "
+		if (top < 0 || left < 0 || bottom < top || right < left) {
+			refusal = ibMcpText("A rectangle runs from a top-left cell to a bottom-right one, "
 				"all 1 or more.");
 			return false;
 		}
@@ -1256,7 +1295,7 @@ public:
 
 		slot.m_kind = ibMcpClipboardKind::Cells;
 		slot.m_name = sheet->GetName();
-		slot.m_what = wxString::Format(wxT("%d x %d"), bottom - top + 1, right - left + 1);
+		slot.m_what = wxString::Format(ibMcpText("%d x %d"), bottom - top + 1, right - left + 1);
 
 		slot.m_payload = ibDataNode();
 		slot.m_payload.SetValue(wxT("rows"), (s32)(bottom - top + 1));
@@ -1280,12 +1319,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("pasting cells into the template '%s'"), ibMcpNameOf(params));
+		return wxString::Format(ibMcpText("pasting cells into the template '%s'"), ibMcpNameOf(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Lay the copied rectangle of cells down again, its top-left corner at the "
+		return ibMcpText("Lay the copied rectangle of cells down again, its top-left corner at the "
 			"row and column given. Cells the copy did not include are left as they are.");
 	}
 
@@ -1301,11 +1340,11 @@ public:
 		if (sheet == nullptr)
 			return false;
 
-		const s32 row = (s32)ArgRow().Whole(params);
-		const s32 col = (s32)ArgCol().Whole(params);
+		const s32 row = Line(ArgRow(), params);
+		const s32 col = Line(ArgCol(), params);
 
-		if (row <= 0 || col <= 0) {
-			refusal = _("Cells land at a row and column, both 1 or more.");
+		if (row < 0 || col < 0) {
+			refusal = ibMcpText("Cells land at a row and column, both 1 or more.");
 			return false;
 		}
 
@@ -1314,12 +1353,12 @@ public:
 		ibMcpClipboardSlot& slot = ibMcpClipboard(slotName);
 
 		if (slot.IsEmpty()) {
-			refusal = _("Nothing has been copied. Call sheet_copy first.");
+			refusal = ibMcpText("Nothing has been copied. Call sheet_copy first.");
 			return false;
 		}
 
 		if (slot.m_kind != ibMcpClipboardKind::Cells) {
-			refusal = wxString::Format(_("The buffer holds %s, not cells."),
+			refusal = wxString::Format(ibMcpText("The buffer holds %s, not cells."),
 				ibMcpClipboardKindName(slot.m_kind));
 			return false;
 		}
@@ -1332,7 +1371,7 @@ public:
 
 		const ibDataValue* cells = slot.m_payload.FindField(wxT("cells"));
 		if (cells == nullptr || cells->Kind() != ibDataKind::Array) {
-			refusal = _("The buffer holds no cells.");
+			refusal = ibMcpText("The buffer holds no cells.");
 			return false;
 		}
 

@@ -37,11 +37,11 @@ namespace {
 using ibArg = ibMcpTool::ibMcpArgument;
 
 // The arguments, declared once and read through the same objects — see ibMcpTool::Arguments().
-const ibArg& ArgId() { static const ibArg a(wxT("id"), ibArg::Kind::Whole, _("The object being wired, by NodeId."), true); return a; }
-const ibArg& ArgProperty() { static const ibArg a(wxT("property"), ibArg::Kind::Text, _("Which binding. Naming one the object does not have is refused WITH the list of the ones it does, so a wrong guess costs one call."), true); return a; }
-const ibArg& ArgTarget() { static const ibArg a(wxT("target"), ibArg::Kind::Text, _("The metaobject to bind to, by name. Omit to read the binding instead of changing it.")); return a; }
-const ibArg& ArgRemove() { static const ibArg a(wxT("remove"), ibArg::Kind::Flag, _("Take the target OUT of the binding instead of putting it in.")); return a; }
-const ibArg& ArgOnly() { static const ibArg a(wxT("only"), ibArg::Kind::Flag, _("Make the target the ONLY thing bound, clearing whatever else was there. Off by default, because most bindings legitimately hold several.")); return a; }
+const ibArg& ArgId() { static const ibArg a(wxT("id"), ibArg::Kind::Whole, ibMcpText("The object being wired, by NodeId."), true); return a; }
+const ibArg& ArgProperty() { static const ibArg a(wxT("property"), ibArg::Kind::Text, ibMcpText("Which binding. Naming one the object does not have is refused WITH the list of the ones it does, so a wrong guess costs one call."), true); return a; }
+const ibArg& ArgTarget() { static const ibArg a(wxT("target"), ibArg::Kind::Text, ibMcpText("The metaobject to bind to, by name. Omit to read the binding instead of changing it.")); return a; }
+const ibArg& ArgRemove() { static const ibArg a(wxT("remove"), ibArg::Kind::Flag, ibMcpText("Take the target OUT of the binding instead of putting it in.")); return a; }
+const ibArg& ArgOnly() { static const ibArg a(wxT("only"), ibArg::Kind::Flag, ibMcpText("Make the target the ONLY thing bound, clearing whatever else was there. Off by default, because most bindings legitimately hold several.")); return a; }
 
 // ONE BINDING, WHICHEVER OF THE THREE CLASSES IT IS.
 //
@@ -122,8 +122,8 @@ Binding BindingNamed(ibValueMetaObject* object, const wxString& name, wxString& 
 		known << (known.IsEmpty() ? wxT("") : wxT(", ")) << one;
 
 	refusal = known.IsEmpty()
-		? wxString::Format(_("'%s' has no bindings at all."), object->GetName())
-		: wxString::Format(_("'%s' has no binding called '%s'. It has: %s."),
+		? wxString::Format(ibMcpText("'%s' has no bindings at all."), object->GetName())
+		: wxString::Format(ibMcpText("'%s' has no binding called '%s'. It has: %s."),
 			object->GetName(), name, known);
 
 	return Binding();
@@ -145,7 +145,7 @@ std::vector<ibDataValue> BoundNames(ibMetaData* metaData, const ibMetaDescriptio
 		// healthy while the configuration is not.
 		names.push_back(ibDataValue::String(bound != nullptr
 			? bound->GetName()
-			: wxString::Format(wxT("#%i (missing)"), (int)id)));
+			: wxString::Format(ibMcpText("#%i (missing)"), (int)id)));
 	}
 
 	return names;
@@ -167,18 +167,18 @@ public:
 		const wxString target = ArgTarget().Text(params);
 
 		if (target.IsEmpty())
-			return wxString::Format(_("reading the binding '%s' of '%s'"),
+			return wxString::Format(ibMcpText("reading the binding '%s' of '%s'"),
 				ArgProperty().Text(params), ibMcpNameOf(params));
 
 		return wxString::Format(ArgRemove().Flag(params)
-				? _("unbinding '%s' from '%s'")
-				: _("binding '%s' to '%s'"),
+				? ibMcpText("unbinding '%s' from '%s'")
+				: ibMcpText("binding '%s' to '%s'"),
 			target, ibMcpNameOf(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Wire one metaobject to another - the bindings that carry no value but a "
+		return ibMcpText("Wire one metaobject to another - the bindings that carry no value but a "
 			"relationship: `ListOwner` (which catalog this one is subordinate to), "
 			"`ListRegisterRecord` (which registers a document posts to), `ListGeneration`. "
 			"metadata_set cannot express these: they hold metaobjects, not words. Without "
@@ -229,7 +229,7 @@ public:
 
 		if (other == nullptr) {
 			refusal = wxString::Format(
-				_("Nothing in this configuration is called '%s'."), target);
+				ibMcpText("Nothing in this configuration is called '%s'."), target);
 			return false;
 		}
 
@@ -280,7 +280,7 @@ public:
 		// target, `bound` says so by not containing it — which is the only report that cannot be
 		// wrong.
 		result.SetValue(wxT("note"),
-			_("`bound` is read back from the binding after the change - if the target is not in "
+			ibMcpText("`bound` is read back from the binding after the change - if the target is not in "
 			  "it, the platform did not take it."));
 
 		return true;

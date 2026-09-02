@@ -43,7 +43,7 @@ ibMetaData* OpenConfiguration(wxString& refusal)
 	ibMetaData* metaData = activeMetaData;
 
 	if (metaData == nullptr || !metaData->IsConfigOpen()) {
-		refusal = _("No configuration is open.");
+		refusal = ibMcpText("No configuration is open.");
 		return nullptr;
 	}
 
@@ -58,14 +58,14 @@ ibValueMetaObject* FindObject(ibMetaData* metaData, const ibDataNode& params,
 	const ibDataValue* asked = params.FindField(field);
 
 	if (asked == nullptr || asked->Kind() != ibDataKind::Number) {
-		refusal = wxString::Format(_("No %s given."), field);
+		refusal = wxString::Format(ibMcpText("No %s given."), field);
 		return nullptr;
 	}
 
 	ibValueMetaObject* found = ibFindMetaObjectById(metaData, (ibMetaID)asked->AsInt());
 
 	if (found == nullptr) {
-		refusal = wxString::Format(_("Nothing in this configuration has id %s."),
+		refusal = wxString::Format(ibMcpText("Nothing in this configuration has id %s."),
 			asked->AsNumber().ToString());
 		return nullptr;
 	}
@@ -88,7 +88,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgId()
 {
 	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
-		_("The object's NodeId. Anything in the tree may be copied - an object, an "
+		ibMcpText("The object's NodeId. Anything in the tree may be copied - an object, an "
 			  "attribute, a tabular section, a form."), /*required*/ true);
 	return s_a;
 }
@@ -96,7 +96,7 @@ const ibArg& ArgId()
 const ibArg& ArgSlot()
 {
 	static const ibArg s_a(wxT("slot"), ibArg::Kind::Text,
-		_("Which buffer to put it in. Omit for the usual one; name it to hold several "
+		ibMcpText("Which buffer to put it in. Omit for the usual one; name it to hold several "
 			  "things at once."));
 	return s_a;
 }
@@ -104,14 +104,14 @@ const ibArg& ArgSlot()
 const ibArg& ArgParentId()
 {
 	static const ibArg s_a(wxT("parent_id"), ibArg::Kind::Whole,
-		_("Where it goes. Omit for the top level of the configuration."));
+		ibMcpText("Where it goes. Omit for the top level of the configuration."));
 	return s_a;
 }
 
 const ibArg& ArgName()
 {
 	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
-		_("What to call it. Omit and it is named after the original with a number, the "
+		ibMcpText("What to call it. Omit and it is named after the original with a number, the "
 			  "way a pasted object is named in the designer."));
 	return s_a;
 }
@@ -119,7 +119,7 @@ const ibArg& ArgName()
 const ibArg& ArgKind()
 {
 	static const ibArg s_a(wxT("kind"), ibArg::Kind::Text,
-		_("Paste it as a DIFFERENT kind - the payload is a set of values merged by "
+		ibMcpText("Paste it as a DIFFERENT kind - the payload is a set of values merged by "
 			  "property name, so pasting a document's values onto a catalog is allowed and "
 			  "keeps whatever the two have in common. Omit to paste the kind that was "
 			  "copied."));
@@ -139,12 +139,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("copying a metadata object");
+		return ibMcpText("copying a metadata object");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Copy a metadata object - with everything under it - into the caller's own "
+		return ibMcpText("Copy a metadata object - with everything under it - into the caller's own "
 			"buffer, to be pasted somewhere else. The copy carries EVERY property the object "
 			"has, including the ones no tool can name, which is why copying and then editing "
 			"is a truer way to make a near-duplicate than building one property by property.");
@@ -169,7 +169,7 @@ public:
 		ibWriterMemory writer;
 
 		if (!metaData->CopyMetaObject(object, writer)) {
-			refusal = wxString::Format(_("'%s' could not be copied."), object->GetName());
+			refusal = wxString::Format(ibMcpText("'%s' could not be copied."), object->GetName());
 			return false;
 		}
 
@@ -211,12 +211,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("pasting a metadata object");
+		return ibMcpText("pasting a metadata object");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Paste what metadata_copy put in the buffer, as a new object under a parent. "
+		return ibMcpText("Paste what metadata_copy put in the buffer, as a new object under a parent. "
 			"The new object gets a name of its own so it does not collide with the original; "
 			"pass one to say what it should be called.");
 	}
@@ -238,7 +238,7 @@ public:
 		ibMcpClipboardSlot& slot = ibMcpClipboard(slotName);
 
 		if (slot.IsEmpty()) {
-			refusal = _("Nothing has been copied. Call metadata_copy first.");
+			refusal = ibMcpText("Nothing has been copied. Call metadata_copy first.");
 			return false;
 		}
 
@@ -247,7 +247,7 @@ public:
 		// other, leaving an object that looks pasted and is not.
 		if (slot.m_kind != ibMcpClipboardKind::Metadata) {
 			refusal = wxString::Format(
-				_("The buffer holds %s, not a metadata object."),
+				ibMcpText("The buffer holds %s, not a metadata object."),
 				ibMcpClipboardKindName(slot.m_kind));
 			return false;
 		}
@@ -260,7 +260,7 @@ public:
 		const ibClassID clsid = ibResolveMetaKind(metaData, kind);
 		if (clsid == 0) {
 			refusal = wxString::Format(
-				_("'%s' is not a kind of metadata object in this configuration."), kind);
+				ibMcpText("'%s' is not a kind of metadata object in this configuration."), kind);
 			return false;
 		}
 
@@ -270,7 +270,7 @@ public:
 			if (parentId->Kind() == ibDataKind::Number) {
 				parent = ibFindMetaObjectById(metaData, (ibMetaID)parentId->AsInt());
 				if (parent == nullptr) {
-					refusal = wxString::Format(_("Nothing in this configuration has id %s."),
+					refusal = wxString::Format(ibMcpText("Nothing in this configuration has id %s."),
 						parentId->AsNumber().ToString());
 					return false;
 				}
@@ -281,7 +281,7 @@ public:
 			parent = metaData->GetCommonMetaObject();
 
 		if (parent == nullptr) {
-			refusal = _("This configuration has no root to add to.");
+			refusal = ibMcpText("This configuration has no root to add to.");
 			return false;
 		}
 
@@ -289,7 +289,7 @@ public:
 		// branch asks, so a paste cannot put a thing where a click could not.
 		if (!parent->FilterChild(clsid)) {
 			refusal = wxString::Format(
-				_("A %s cannot be added to '%s'."), kind, parent->GetName());
+				ibMcpText("A %s cannot be added to '%s'."), kind, parent->GetName());
 			return false;
 		}
 
@@ -308,7 +308,7 @@ public:
 		// announced, and nothing left behind if the payload was bad: all of it is the paste's.
 		ibValueMetaObject* created = metaData->PasteMetaObject(clsid, parent, reader);
 		if (created == nullptr) {
-			refusal = wxString::Format(_("'%s' could not be pasted here."), slot.m_name);
+			refusal = wxString::Format(ibMcpText("'%s' could not be pasted here."), slot.m_name);
 			return false;
 		}
 

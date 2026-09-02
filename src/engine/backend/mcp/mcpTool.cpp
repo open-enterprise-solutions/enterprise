@@ -12,6 +12,14 @@
 #include "backend/backend_localization.h"                      // a caption is an array by language
 #include "backend/metaCollection/metaLanguageObject.h"         // …and the languages are the config's own
 
+#include <wx/tokenzr.h>   // a query is words, and the finder counts how many of them landed
+#include <wx/regex.h>     // …unless it is written as a pattern, which is also a way to ask
+#include <wx/log.h>       // a query that does not compile is not the person's error to read
+
+#include <memory>
+#include <atomic>   // how deep the host is in modal dialogs — read from any thread
+#include <mutex>
+
 #include <map>   // property name -> the category it was declared into
 #include "backend/restructureInfo.h"              // the ledger an object complains into
 
@@ -228,6 +236,75 @@ void ibRegisterMcpTool(const ibMcpTool* tool)
 	Store().push_back(tool);
 }
 
+// WHAT THE HOST IS BUSY WITH, and how deep. A COUNT rather than a flag: modals nest (a warning
+// raised from inside a dialog), and a flag would come back clear the moment the inner one closed
+// while the outer still stood.
+static std::atomic<int>& BusyDepth()
+{
+	static std::atomic<int> s_depth(0);
+	return s_depth;
+}
+
+static std::mutex& BusyMutex()
+{
+	static std::mutex s_mutex;
+	return s_mutex;
+}
+
+static wxString& BusyTitle()
+{
+	static wxString s_title;
+	return s_title;
+}
+
+void ibMcpBusyEnter(const wxString& what)
+{
+	{
+		std::lock_guard<std::mutex> lock(BusyMutex());
+		if (BusyDepth().load() == 0 || !what.IsEmpty())
+			BusyTitle() = what;   // the innermost one that named itself is the one in front
+	}
+	BusyDepth()++;
+}
+
+void ibMcpBusyLeave()
+{
+	if (BusyDepth().fetch_sub(1) <= 1) {
+		std::lock_guard<std::mutex> lock(BusyMutex());
+		BusyTitle().Clear();
+	}
+}
+
+wxString ibMcpBusyWith()
+{
+	if (BusyDepth().load() <= 0)
+		return wxEmptyString;
+
+	std::lock_guard<std::mutex> lock(BusyMutex());
+
+	// A dialog with no title is still a dialog in the way — saying so beats answering "free".
+	return BusyTitle().IsEmpty() ? wxString(wxT("a dialog")) : BusyTitle();
+}
+
+// THE SAME SHAPE FOR THE CHECKS — a function-local store, filled during static construction by
+// whichever DLL is linked. No name to claim here: an audit is not addressed, it is asked.
+static std::vector<const ibMcpAudit*>& AuditStore()
+{
+	static std::vector<const ibMcpAudit*> s_audits;
+	return s_audits;
+}
+
+void ibRegisterMcpAudit(const ibMcpAudit* audit)
+{
+	if (audit != nullptr)
+		AuditStore().push_back(audit);
+}
+
+const std::vector<const ibMcpAudit*>& ibMcpAudits()
+{
+	return AuditStore();
+}
+
 const std::vector<const ibMcpTool*>& ibMcpTools()
 {
 	return Store();
@@ -257,6 +334,146 @@ wxString ibMcpNameOf(const ibDataNode& params, const wxString& field)
 	return wxString::Format(wxT("#%i"), (int)id);
 }
 
+namespace {
+
+// ONE ENTRY IS ENOUGH OF A CACHE. A search runs ONE query over hundreds of texts — every pattern,
+// every topic, every tool description — so compiling it per text is the entire cost of searching.
+// Compiled once when the query changes, and the failure is remembered too: a query that is not a
+// valid pattern must not be re-attempted three hundred times.
+const wxRegEx* CompiledQuery(const wxString& query)
+{
+	// ⚠ PER THREAD. Tools run on the main thread or on the delivery thread depending on what they
+	// need, and a shared cache here would be two searches writing one pointer. A regular
+	// expression compiles in microseconds, so a second copy costs nothing worth measuring.
+	static thread_local wxString s_source;
+	static thread_local std::unique_ptr<wxRegEx> s_compiled;
+	static thread_local bool s_tried = false;
+
+	if (!s_tried || s_source != query) {
+
+		s_source = query;
+		s_tried = true;
+		s_compiled.reset();
+
+		// A pattern that does not compile is an ordinary outcome here — the caller wrote words
+		// that happen to hold a bracket — so it must not reach the log the person is reading.
+		wxLogNull quiet;
+
+		std::unique_ptr<wxRegEx> fresh = std::make_unique<wxRegEx>();
+		if (fresh->Compile(query, wxRE_ADVANCED | wxRE_ICASE))
+			s_compiled = std::move(fresh);
+	}
+
+	return s_compiled.get();
+}
+
+} // namespace
+
+bool ibMcpIsRegex(const wxString& query)
+{
+	// ⚠ WHAT MAKES A QUERY A PATTERN is deliberately narrow. Nearly any sentence compiles as a
+	// regular expression — "cost adjustment (RAUZ)" compiles, and then matches nothing, because
+	// the brackets it happens to contain silently became grouping. Ordinary punctuation therefore
+	// does NOT switch modes; only the marks that have no business in prose do.
+	static const wxChar* s_marks[] = { wxT("|"), wxT("\\"), wxT("["), wxT("]"),
+		wxT(".*"), wxT(".+"), wxT("^"), wxT("$") };
+
+	bool looks = false;
+	for (const wxChar* mark : s_marks)
+		looks = looks || query.Find(mark) != wxNOT_FOUND;
+
+	return looks && CompiledQuery(query) != nullptr;
+}
+
+size_t ibMcpWordsFound(const wxString& haystack, const wxString& query, size_t* asked)
+{
+	// ⭐ A PATTERN IS ANSWERED AS A PATTERN. Whoever is on the other end of this server reads code
+	// for a living and will reach for `lot|batch|fifo` the moment plain words disappoint — and
+	// under a word search that query is one long word that appears nowhere. It costs one branch to
+	// mean what it says instead. Matched whole: a pattern either hit or it did not, so it counts
+	// as the single thing that was asked and ranks beside the exact word matches.
+	if (ibMcpIsRegex(query)) {
+
+		if (asked != nullptr)
+			*asked = 1;
+
+		const wxRegEx* compiled = CompiledQuery(query);
+		return (compiled != nullptr && compiled->Matches(haystack)) ? 1 : 0;
+	}
+
+	wxStringTokenizer words(query.Lower(), wxT(" \t,"), wxTOKEN_STRTOK);
+
+	const wxString text = haystack.Lower();
+	size_t found = 0, total = 0;
+
+	while (words.HasMoreTokens()) {
+
+		const wxString word = words.GetNextToken();
+		total++;
+
+		bool present = false;
+
+		// Shortening the QUERY rather than the text: `deleting` reaches "deleted", `translate`
+		// reaches "translation", and the corpus needs no keyword list beside it. Four is the floor
+		// — three lets `set` reach half of everything, which is not a match, it is noise.
+		for (size_t length = word.length(); length >= 4 && !present; --length)
+			present = text.Find(word.Left(length)) != wxNOT_FOUND;
+
+		if (!present && word.length() < 4)
+			present = text.Find(word) != wxNOT_FOUND;
+
+		if (present)
+			found++;
+	}
+
+	if (asked != nullptr)
+		*asked = total;
+
+	return found;
+}
+
+wxString ibMcpLineNaming(const wxString& text, const wxString& name)
+{
+	if (text.IsEmpty() || name.IsEmpty())
+		return wxEmptyString;
+
+	// A NAME IS A WORD OF THE LANGUAGE, so what may not touch it is what may be part of an
+	// identifier. A dot on either side is fine and wanted: `Catalog.Goods.Ref` names Goods.
+	const auto partOfAWord = [](wxUniChar symbol) {
+		return wxIsalnum(symbol) != 0 || symbol == wxT('_');
+	};
+
+	const wxString wanted = name.Lower();
+	size_t at = 0;
+
+	while (at <= text.length()) {
+
+		const size_t end = text.find(wxT('\n'), at);
+		const wxString line = text.Mid(at, (end == wxString::npos ? text.length() : end) - at);
+		const wxString lower = line.Lower();
+
+		for (size_t found = lower.find(wanted); found != wxString::npos;
+			 found = lower.find(wanted, found + 1)) {
+
+			const bool leftClear = found == 0 || !partOfAWord(lower[found - 1]);
+			const size_t after = found + wanted.length();
+			const bool rightClear = after >= lower.length() || !partOfAWord(lower[after]);
+
+			if (leftClear && rightClear) {
+				wxString trimmed = line;
+				trimmed.Trim(true).Trim(false);
+				return trimmed.length() > 200 ? trimmed.Left(197) + wxT("...") : trimmed;
+			}
+		}
+
+		if (end == wxString::npos)
+			break;
+		at = end + 1;
+	}
+
+	return wxEmptyString;
+}
+
 void ibMcpSayObject(const ibValueMetaObject* object, ibDataNode& node, bool withText)
 {
 	if (object == nullptr)
@@ -273,6 +490,19 @@ void ibMcpSayObject(const ibValueMetaObject* object, ibDataNode& node, bool with
 	const wxString synonym = object->GetSynonym();
 	if (!synonym.IsEmpty() && synonym != object->GetName())
 		node.SetValue(wxT("synonym"), synonym);
+
+	// ⭐ THE THIRD SURFACE, and it was the one nothing here read. Every metaobject has carried a
+	// `Comment` all along — the short line that says WHY this thing exists at all, sitting in the
+	// property list where whoever opens the object meets it — and no tool ever answered with it.
+	// A field written by one half of the room and invisible to the other is not a surface; it is a
+	// place things get written and lost (Max, 2026-09-02: *"they are everywhere, you simply have
+	// not connected them yet"*).
+	//
+	// Said BEFORE the long texts and outside the `withText` gate, because it is one line: a
+	// listing that carries it stays a listing.
+	const wxString comment = object->GetComment();
+	if (!comment.IsEmpty())
+		node.SetValue(wxT("comment"), comment);
 
 	if (!withText)
 		return;
@@ -572,12 +802,12 @@ wxString ibMcpTool::GetDetail(const ibDataNode& params) const
 		// One line each, and a long one folded so the log stays a log. The head of a module still
 		// identifies it; the whole of it belongs in the editor.
 		if (shown.length() > 200)
-			shown = shown.Left(200) + wxT("…");
+			shown = shown.Left(200) + wxT("...");
 
 		shown.Replace(wxT("\n"), wxT(" "));
 		shown.Replace(wxT("\r"), wxEmptyString);
 
-		out << wxT("    ") << field.first << wxT(": ") << shown << wxT("\n");
+		out << wxT(" ") << field.first << wxT(": ") << shown << wxT("\n");
 	}
 
 	return out;
@@ -615,13 +845,13 @@ wxString ibMcpFencedExcerpt(const wxString& text, const wxString& language, size
 	wxString out;
 
 	for (const wxString& line : wxSplit(shown, wxT('\n'), wxT('\0')))
-		out << wxT("    ") << line << wxT("\n");
+		out << wxT(" ") << line << wxT("\n");
 
 	// ⚠ SAID WHEN IT IS TRUE, and only then. A reader who is shown everything must not be told
 	// anything was hidden, or they will go looking for what is already in front of them.
 	if (total > lines)
 		out << wxString::Format(
-			_("    ... first %u of %u lines - the rest is in the editor\n"),
+			_(" ... first %u of %u lines - the rest is in the editor\n"),
 			(unsigned)lines, (unsigned)total);
 
 	return out;

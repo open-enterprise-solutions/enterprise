@@ -38,7 +38,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgId()
 {
 	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
-		_("The module this text belongs to, as NodeId - metadata_get on the owning object "
+		ibMcpText("The module this text belongs to, as NodeId - metadata_get on the owning object "
 			  "lists its modules. The module decides what names are in scope."), /*required*/ true);
 	return s_a;
 }
@@ -46,14 +46,14 @@ const ibArg& ArgId()
 const ibArg& ArgText()
 {
 	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
-		_("The module text, as it would be after your edit. It is not stored."), /*required*/ true);
+		ibMcpText("The module text, as it would be after your edit. It is not stored."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgPosition()
 {
 	static const ibArg s_a(wxT("position"), ibArg::Kind::Whole,
-		_("Character offset to stand at - normally just after the dot you want completed."), /*required*/ true);
+		ibMcpText("Character offset to stand at - normally just after the dot you want completed."), /*required*/ true);
 	return s_a;
 }
 
@@ -69,12 +69,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("asking the platform what can be written next");
+		return ibMcpText("asking the platform what can be written next");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("What may be written at a given place in a module - the same list the editor "
+		return ibMcpText("What may be written at a given place in a module - the same list the editor "
 			"shows after a dot. Send the text you are about to write and the offset you are "
 			"standing at (just after the dot), and the answer is what that expression actually "
 			"offers: its methods with their call form, and its properties.\n\n"
@@ -91,20 +91,20 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = _("No configuration is open.");
+			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
 		const ibDataValue* id = params.FindField(ArgId().Name());
 		if (id == nullptr || id->Kind() != ibDataKind::Number) {
-			refusal = _("No module id given.");
+			refusal = ibMcpText("No module id given.");
 			return false;
 		}
 
 		ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id->AsInt());
 		ibValueMetaObjectModuleBase* module = dynamic_cast<ibValueMetaObjectModuleBase*>(object);
 		if (module == nullptr) {
-			refusal = _("That id is not a module.");
+			refusal = ibMcpText("That id is not a module.");
 			return false;
 		}
 
@@ -114,7 +114,7 @@ public:
 
 		if (position < 0 || (size_t)position > text.length()) {
 			refusal = wxString::Format(
-				_("Position %d is outside a text of %u characters."),
+				ibMcpText("Position %d is outside a text of %u characters."),
 				(int)position, (unsigned)text.length());
 			return false;
 		}
@@ -146,7 +146,7 @@ public:
 		precompile.SetCalcValue(false);
 
 		if (!compiled) {
-			refusal = _("The text could not be compiled up to that point, so there is nothing "
+			refusal = ibMcpText("The text could not be compiled up to that point, so there is nothing "
 				"to offer. Check it with script_check first.");
 			return false;
 		}
@@ -208,14 +208,14 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("looking at what a module is made of");
+		return ibMcpText("looking at what a module is made of");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("What a module text declares: its procedures, functions and variables, which of "
+		return ibMcpText("What a module text declares: its procedures, functions and variables, which of "
 			"them are exported, and the lines each one occupies. Reads the text as given and does "
-			"not compile it — ask this before adding a handler, to see whether it is already "
+			"not compile it - ask this before adding a handler, to see whether it is already "
 			"written.");
 	}
 
@@ -231,7 +231,7 @@ public:
 
 		ibParserModule parser;
 		if (!parser.ParseModule(text)) {
-			refusal = _("The text could not be read far enough to list what it declares.");
+			refusal = ibMcpText("The text could not be read far enough to list what it declares.");
 			return false;
 		}
 

@@ -60,35 +60,35 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgName()
 {
 	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
-		_("What to call the image handed over in `data`."));
+		ibMcpText("What to call the image handed over in `data`."));
 	return s_a;
 }
 
 const ibArg& ArgId()
 {
 	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
-		_("The object to give a picture to."));
+		ibMcpText("The object to give a picture to."));
 	return s_a;
 }
 
 const ibArg& ArgEngine()
 {
 	static const ibArg s_a(wxT("engine"), ibArg::Kind::Text,
-		_("Name of one of the engine's pictures (picture_list -> engine)."));
+		ibMcpText("Name of one of the engine's pictures (picture_list -> engine)."));
 	return s_a;
 }
 
 const ibArg& ArgConfiguration()
 {
 	static const ibArg s_a(wxT("configuration"), ibArg::Kind::Text,
-		_("Name of a picture declared in this configuration (picture_list -> configuration)."));
+		ibMcpText("Name of a picture declared in this configuration (picture_list -> configuration)."));
 	return s_a;
 }
 
 const ibArg& ArgData()
 {
 	static const ibArg s_a(wxT("data"), ibArg::Kind::Text,
-		_("Base64 image bytes, for an image that is not in either list."));
+		ibMcpText("Base64 image bytes, for an image that is not in either list."));
 	return s_a;
 }
 
@@ -105,12 +105,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("listing the pictures");
+		return ibMcpText("listing the pictures");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Every picture that can be used without supplying one: the engine's own set, "
+		return ibMcpText("Every picture that can be used without supplying one: the engine's own set, "
 			"which is always there, and the pictures this configuration declares. Names from "
 			"here are what `picture_set` takes. A third source needs nothing listed - an image "
 			"handed over as base64 - see picture_set.");
@@ -176,12 +176,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("setting the picture of '%s'"), ibMcpNameOf(params));
+		return wxString::Format(ibMcpText("setting the picture of '%s'"), ibMcpNameOf(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Give an object its picture. Say WHERE it comes from: `engine` with a name from "
+		return ibMcpText("Give an object its picture. Say WHERE it comes from: `engine` with a name from "
 			"picture_list, `configuration` with the name of a picture this configuration "
 			"declares, or `data` with base64 image bytes and a `name` for it. Objects that carry "
 			"a picture are the ones that show one - commands and sections; an object with no "
@@ -206,7 +206,7 @@ public:
 		// comes to believe an icon was assigned to something that cannot show one.
 		if (property == nullptr) {
 			refusal = wxString::Format(
-				_("'%s' has no picture of its own - commands and sections do. Nothing was set."),
+				ibMcpText("'%s' has no picture of its own - commands and sections do. Nothing was set."),
 				object->GetName());
 			return false;
 		}
@@ -224,9 +224,9 @@ public:
 		// half the time.
 		if (said != 1) {
 			refusal = said == 0
-				? _("Say where the picture comes from: `engine`, `configuration`, or `data` with "
+				? ibMcpText("Say where the picture comes from: `engine`, `configuration`, or `data` with "
 					"base64 bytes. Nothing was set.")
-				: _("Say only ONE source - `engine`, `configuration` or `data`. Nothing was set.");
+				: ibMcpText("Say only ONE source - `engine`, `configuration` or `data`. Nothing was set.");
 			return false;
 		}
 
@@ -245,7 +245,7 @@ public:
 
 			if (!found) {
 				refusal = wxString::Format(
-					_("The engine has no picture called '%s' - picture_list says what it has."),
+					ibMcpText("The engine has no picture called '%s' - picture_list says what it has."),
 					fromEngine);
 				return false;
 			}
@@ -259,7 +259,7 @@ public:
 
 			if (declared == nullptr) {
 				refusal = wxString::Format(
-					_("This configuration declares no picture called '%s'."), fromConfig);
+					ibMcpText("This configuration declares no picture called '%s'."), fromConfig);
 				return false;
 			}
 
@@ -271,7 +271,7 @@ public:
 			const wxString name = ArgName().Text(params);
 
 			if (name.IsEmpty()) {
-				refusal = _("An image handed over in `data` needs a `name` to be known by. "
+				refusal = ibMcpText("An image handed over in `data` needs a `name` to be known by. "
 					"Nothing was set.");
 				return false;
 			}
@@ -279,7 +279,7 @@ public:
 			const wxMemoryBuffer bytes = wxBase64Decode(fromData);
 
 			if (bytes.GetDataLen() == 0) {
-				refusal = _("`data` did not decode as base64, or decoded to nothing. "
+				refusal = ibMcpText("`data` did not decode as base64, or decoded to nothing. "
 					"Nothing was set.");
 				return false;
 			}
@@ -294,7 +294,7 @@ public:
 			{
 				wxLogNull noComplaintsToTheUser;   // a bad image is OUR refusal, not a dialog
 				if (!image.LoadFile(stream, wxBITMAP_TYPE_ANY) || !image.IsOk()) {
-					refusal = _("Those bytes are not an image the platform can read. "
+					refusal = ibMcpText("Those bytes are not an image the platform can read. "
 						"Nothing was set.");
 					return false;
 				}
@@ -326,7 +326,7 @@ public:
 
 		ibDataValue described;
 		if (!ibPictureDescriptionMemory::WriteNode(described, stored)) {
-			refusal = _("The picture was set, but could not be read back to confirm it.");
+			refusal = ibMcpText("The picture was set, but could not be read back to confirm it.");
 			return false;
 		}
 		result.AddField(wxT("picture"), described);

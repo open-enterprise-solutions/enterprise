@@ -46,7 +46,7 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const wxString& text,
 	ibDataNode& result, wxString& refusal)
 {
 	if (module == nullptr) {
-		refusal = _("There is no module to write to.");
+		refusal = ibMcpText("There is no module to write to.");
 		return false;
 	}
 
@@ -95,7 +95,7 @@ const ibArg& ArgId()
 		// ⚠ THE MODULE'S, NOT ITS OWNER'S — the one question a caller actually has here, and the
 		// sentence used to answer it with "the same one module_write takes", inside module_write.
 		// metadata_properties on the object names it: ObjectModule / ManagerModule carry their own id.
-		_("The MODULE's NodeId - not the object's. metadata_properties on the owner answers with it: "
+		ibMcpText("The MODULE's NodeId - not the object's. metadata_properties on the owner answers with it: "
 		  "ObjectModule and ManagerModule each carry an id of their own."), /*required*/ true);
 	return s_a;
 }
@@ -103,7 +103,7 @@ const ibArg& ArgId()
 const ibArg& ArgFind()
 {
 	static const ibArg s_a(wxT("find"), ibArg::Kind::Text,
-		_("The exact text to replace, whitespace and all. Include enough of the surrounding "
+		ibMcpText("The exact text to replace, whitespace and all. Include enough of the surrounding "
 			  "lines to make it occur only once."), /*required*/ true);
 	return s_a;
 }
@@ -111,14 +111,14 @@ const ibArg& ArgFind()
 const ibArg& ArgReplace()
 {
 	static const ibArg s_a(wxT("replace"), ibArg::Kind::Text,
-		_("What to put there. Empty deletes the fragment."));
+		ibMcpText("What to put there. Empty deletes the fragment."));
 	return s_a;
 }
 
 const ibArg& ArgText()
 {
 	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
-		_("The whole module text. Write it in the syntax form this configuration uses - "
+		ibMcpText("The whole module text. Write it in the syntax form this configuration uses - "
 			  "help_search answers which one that is."), /*required*/ true);
 	return s_a;
 }
@@ -136,7 +136,7 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(_("patching the module '%s'"), ibMcpNameOf(params));
+		return wxString::Format(ibMcpText("patching the module '%s'"), ibMcpNameOf(params));
 	}
 
 	wxString GetDetail(const ibDataNode& params) const override
@@ -148,7 +148,7 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return _("Replace ONE exact fragment of a module's text, leaving the rest untouched. Prefer "
+		return ibMcpText("Replace ONE exact fragment of a module's text, leaving the rest untouched. Prefer "
 			"this to module_write for anything short of a rewrite: a whole-module write silently "
 			"discards whatever somebody edited in the designer since you read it, and this cannot "
 			"- if the fragment is no longer there, it refuses and tells you. Refuses just as firmly "
@@ -173,14 +173,14 @@ public:
 
 		if (module == nullptr) {
 			refusal = wxString::Format(
-				_("'%s' is not a module."), object->GetName());
+				ibMcpText("'%s' is not a module."), object->GetName());
 			return false;
 		}
 
 		const wxString find = ArgFind().Text(params);
 
 		if (find.IsEmpty()) {
-			refusal = _("Say what to replace - an empty `find` matches everywhere and nowhere.");
+			refusal = ibMcpText("Say what to replace - an empty `find` matches everywhere and nowhere.");
 			return false;
 		}
 
@@ -198,14 +198,14 @@ public:
 		}
 
 		if (occurrences == 0) {
-			refusal = _("That text is not in the module. It may have been edited since you read "
+			refusal = ibMcpText("That text is not in the module. It may have been edited since you read "
 				"it - read it again rather than writing the whole module over what is there now.");
 			return false;
 		}
 
 		if (occurrences > 1) {
 			refusal = wxString::Format(
-				_("That text appears %u times, so there is no single place it means. Include more "
+				ibMcpText("That text appears %u times, so there is no single place it means. Include more "
 				  "of the surrounding lines."), (unsigned)occurrences);
 			return false;
 		}
@@ -246,9 +246,9 @@ public:
 		const wxString text = ArgText().Text(params);
 
 		if (text.IsEmpty())
-			return wxString::Format(_("emptying the module '%s'"), ibMcpNameOf(params));
+			return wxString::Format(ibMcpText("emptying the module '%s'"), ibMcpNameOf(params));
 
-		return wxString::Format(_("writing %u lines into the module '%s'"),
+		return wxString::Format(ibMcpText("writing %u lines into the module '%s'"),
 			(unsigned)(text.Freq('\n') + 1), ibMcpNameOf(params));
 	}
 
@@ -261,7 +261,7 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return _("Write the text of a module - a document's object module, a common module, a "
+		return ibMcpText("Write the text of a module - a document's object module, a common module, a "
 			"manager module. The text is compiled afterwards IN ITS OWN CONTEXT and the "
 			"diagnostics come back, so a mistake is known immediately. The text is kept either "
 			"way, exactly as it would be if a person typed it.");
@@ -285,7 +285,7 @@ public:
 			dynamic_cast<ibValueMetaObjectModuleBase*>(object);
 		if (module == nullptr) {
 			refusal = wxString::Format(
-				_("'%s' is not a module."), object->GetName());
+				ibMcpText("'%s' is not a module."), object->GetName());
 			return false;
 		}
 
@@ -303,7 +303,7 @@ public:
 		const ibDataValue* incoming = params.FindField(ArgText().Name());
 
 		if (incoming == nullptr || incoming->Kind() != ibDataKind::String) {
-			refusal = _("'text' must be a string holding the module's source. Nothing was written.");
+			refusal = ibMcpText("'text' must be a string holding the module's source. Nothing was written.");
 			return false;
 		}
 

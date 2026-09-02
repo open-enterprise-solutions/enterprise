@@ -25,6 +25,9 @@
 #include "backend/restructureInfo.h"
 #include "backend/metaCollection/metaDiff.h"
 #include "backend/metaCollection/metaObject.h"
+#include "backend/metaCollection/attribute/metaAttributeObject.h"   // a field with no type
+#include "backend/metaCollection/metaComposerObject.h"              // …and a composer with no name
+#include "backend/metaCollection/partial/dataReport.h"              // …and a report with no composer
 
 namespace {
 
@@ -40,7 +43,7 @@ ibMetaDataConfigurationBase* OpenConfiguration(wxString& refusal)
 	ibMetaDataConfigurationBase* metaData = activeMetaData;
 
 	if (metaData == nullptr || !metaData->IsConfigOpen()) {
-		refusal = _("No configuration is open.");
+		refusal = ibMcpText("No configuration is open.");
 		return nullptr;
 	}
 
@@ -50,8 +53,8 @@ ibMetaDataConfigurationBase* OpenConfiguration(wxString& refusal)
 using ibArg = ibMcpTool::ibMcpArgument;
 
 // database_diff's arguments — declared once and read through the same objects.
-const ibArg& ArgProperties() { static const ibArg a(wxT("properties"), ibArg::Kind::Flag, _("Also list the individual PROPERTIES that differ on a changed object. Off by default: a rename shows as one changed object, and the property rows are the detail behind it.")); return a; }
-const ibArg& ArgLimit() { static const ibArg a(wxT("limit"), ibArg::Kind::Whole, _("At most this many entries. A first apply of a fresh configuration differs in everything, and the whole list says less than its first page. Default 200.")); return a; }
+const ibArg& ArgProperties() { static const ibArg a(wxT("properties"), ibArg::Kind::Flag, ibMcpText("Also list the individual PROPERTIES that differ on a changed object. Off by default: a rename shows as one changed object, and the property rows are the detail behind it.")); return a; }
+const ibArg& ArgLimit() { static const ibArg a(wxT("limit"), ibArg::Kind::Whole, ibMcpText("At most this many entries. A first apply of a fresh configuration differs in everything, and the whole list says less than its first page. Default 200.")); return a; }
 
 // The word a caller acts on. The enum's own spelling is about two configurations being compared
 // side by side; here one side IS the database, so left and right have names.
@@ -71,7 +74,7 @@ wxString StatusWord(ibMetaDiffStatus status)
 const ibArg& ArgConfirm()
 {
 	static const ibArg s_a(wxT("confirm"), ibArg::Kind::Flag,
-		_("true commits it. false runs the whole apply and rolls it back, so the answer "
+		ibMcpText("true commits it. false runs the whole apply and rolls it back, so the answer "
 			  "describes exactly what would happen. REQUIRED - there is no default, because "
 			  "neither answer is safe to assume."), /*required*/ true);
 	return s_a;
@@ -90,12 +93,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("saving the configuration");
+		return ibMcpText("saving the configuration");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Store the configuration as it stands, so it survives closing the designer and "
+		return ibMcpText("Store the configuration as it stands, so it survives closing the designer and "
 			"logging in again. It does NOT become the configuration the application runs - that "
 			"is config_apply, and the two are separate on purpose. This is the diskette: cheap, "
 			"safe, and the thing to do before stopping work.");
@@ -161,7 +164,7 @@ public:
 
 		result.AddField(wxT("saved"), ibDataValue::Bool(true));
 		result.SetValue(wxT("note"),
-			_("Stored. The application still runs the previously applied configuration - "
+			ibMcpText("Stored. The application still runs the previously applied configuration - "
 			  "database_diff says what it does not yet have."));
 
 		return true;
@@ -182,13 +185,13 @@ public:
 	wxString GetActivity(const ibDataNode& params) const override
 	{
 		return ArgConfirm().Flag(params)
-			? _("applying the configuration to the database")
-			: _("rehearsing what applying the configuration would do");
+			? ibMcpText("applying the configuration to the database")
+			: ibMcpText("rehearsing what applying the configuration would do");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Make the edited configuration the one the database holds - the designer's "
+		return ibMcpText("Make the edited configuration the one the database holds - the designer's "
 			"Update database configuration. READ database_diff FIRST: this writes DDL and can "
 			"take the base exclusively. With confirm=false it goes all the way and then rolls "
 			"back, answering with the ledger of every CREATE, ALTER and DROP it would have made - "
@@ -214,7 +217,7 @@ public:
 		const ibDataValue* asked = params.FindField(ArgConfirm().Name());
 
 		if (asked == nullptr || asked->Kind() != ibDataKind::Bool) {
-			refusal = _("Say confirm: true to write this to the database, or confirm: false to "
+			refusal = ibMcpText("Say confirm: true to write this to the database, or confirm: false to "
 				"see what it would do and roll back. Nothing was done.");
 			return false;
 		}
@@ -285,9 +288,9 @@ public:
 		// answers TRUE with the account, rather than refusing and throwing the account away.
 		if (!commit || sawErrors) {
 			result.SetValue(wxT("note"), sawErrors
-				? _("Rolled back: the ledger carries errors, so nothing was written whatever was "
+				? ibMcpText("Rolled back: the ledger carries errors, so nothing was written whatever was "
 					"confirmed.")
-				: _("Rolled back as asked - nothing was written. The ledger above is what "
+				: ibMcpText("Rolled back as asked - nothing was written. The ledger above is what "
 					"confirm: true would have done."));
 			return true;
 		}
@@ -309,12 +312,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("taking the configuration back from the database");
+		return ibMcpText("taking the configuration back from the database");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Throw away everything edited since the last apply and take the database's own "
+		return ibMcpText("Throw away everything edited since the last apply and take the database's own "
 			"copy again. Only meaningful BEFORE applying - afterwards the database's copy is what "
 			"was edited. Every open editor is closed by this, and nothing about it can be undone: "
 			"database_diff first says exactly what would be lost.");
@@ -333,7 +336,7 @@ public:
 			return false;
 
 		if (!ArgConfirm().Flag(params)) {
-			refusal = _("This discards every edit since the last apply and cannot be undone. Pass "
+			refusal = ibMcpText("This discards every edit since the last apply and cannot be undone. Pass "
 				"confirm: true if that is what you mean; database_diff lists what would go.");
 			return false;
 		}
@@ -343,7 +346,7 @@ public:
 
 		result.AddField(wxT("rolled_back"), ibDataValue::Bool(true));
 		result.SetValue(wxT("note"),
-			_("The configuration is the database's copy again. Anything built and not applied is "
+			ibMcpText("The configuration is the database's copy again. Anything built and not applied is "
 			  "gone."));
 
 		return true;
@@ -396,12 +399,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("reading what the database does not yet have");
+		return ibMcpText("reading what the database does not yet have");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("What would change in the database if the configuration were applied - object by "
+		return ibMcpText("What would change in the database if the configuration were applied - object by "
 			"object, in the words the metadata tree uses, plus whether the change touches the "
 			"database STRUCTURE at all. Ask it after building or editing anything, and ask it "
 			"BEFORE config_apply: a configuration is only a proposal until it is applied, and "
@@ -422,7 +425,7 @@ public:
 		ibMetaDataConfigurationBase* metaData = activeMetaData;
 
 		if (metaData == nullptr || !metaData->IsConfigOpen()) {
-			refusal = _("No configuration is open.");
+			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
@@ -440,7 +443,7 @@ public:
 		// first, the null the second. With the cast gone they collapse into one answer, and the
 		// sentence says the thing a caller can act on.
 		if (baseline == nullptr) {
-			refusal = _("This configuration is not held in a database, so there is nothing to "
+			refusal = ibMcpText("This configuration is not held in a database, so there is nothing to "
 				"compare it against.");
 			return false;
 		}
@@ -516,21 +519,21 @@ public:
 		if ((int)entries.size() < differing) {
 			result.AddField(wxT("shown"), ibDataValue::Int((s64)entries.size()));
 			result.SetValue(wxT("note"),
-				_("More than the limit. Raise `limit` to see the rest."));
+				ibMcpText("More than the limit. Raise `limit` to see the rest."));
 		}
 
 		// ⭐ THE ANSWER A CALLER WANTS MOST, said plainly rather than left to be inferred from an
 		// empty list — which is also what an error looks like.
 		if (differing == 0) {
 			result.SetValue(wxT("note"),
-				_("The database already holds this configuration - applying it would change "
+				ibMcpText("The database already holds this configuration - applying it would change "
 				  "nothing."));
 		}
 		else {
 			// Where the verb is, said here because a caller reading a list of pending changes
 			// will look for it next.
 			result.SetValue(wxT("apply"),
-				_("config_apply writes these to the database - the same road the designer's "
+				ibMcpText("config_apply writes these to the database - the same road the designer's "
 				  "Update database configuration button takes. Read this list first: it is the "
 				  "only description of what that would do."));
 		}
@@ -540,3 +543,177 @@ public:
 };
 
 MCP_TOOL_REGISTER(ibMcpToolDatabaseDiff);
+
+//---------------------------------------------------------------------------
+// config_check
+//---------------------------------------------------------------------------
+//
+// ⭐⭐ WHAT IS HALF-BUILT, ASKED OF THE WHOLE CONFIGURATION. Every verb here already knows how to
+// complain about the thing it just touched — a composer says what it still lacks after every
+// change, and that one line is what stopped a report being finished with no columns (Max,
+// 2026-09-02). But it only ever speaks about the object under the caller's hand, and a
+// configuration is worked on across sessions, by more than one pair of hands, and read by somebody
+// who did not build it.
+//
+// So the same questions are asked of everything, in one call. Not a style review: every line here
+// is something that either REFUSES TO SAVE or produces silence in front of a user — a report whose
+// composer nobody named, a field that can hold no type, a register that records nothing. Taste
+// stays out, because an audit that mixes "this is wrong" with "I would have done it differently"
+// is one nobody reads twice.
+class ibMcpToolConfigCheck : public ibMcpTool {
+public:
+
+	wxString GetName() const override { return wxT("config_check"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return ibMcpText("checking what is unfinished");
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("WHAT IS UNFINISHED IN THIS CONFIGURATION, object by object - the questions each "
+			"verb asks about the thing it just touched, asked of everything at once. Only faults "
+			"that BITE: what will refuse to save (a composer with a nameless variant), and what "
+			"produces silence for the person using it (a report showing no columns, an attribute "
+			"that can hold no type, a register with no resources). Ask it when picking up a base "
+			"somebody else built, and before saving or applying.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = {};
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		ibMetaData* metaData = activeMetaData;
+
+		if (metaData == nullptr || !metaData->IsConfigOpen()) {
+			refusal = ibMcpText("No configuration is open.");
+			return false;
+		}
+
+		std::vector<ibDataValue> problems;
+
+		// The complaint, said about ONE object — the id and the name are what the caller acts on,
+		// and a fault with no address is a fault nobody can find (measured the same day: a refused
+		// save said "MainComposer: variant 1 has no name" of a configuration holding three
+		// composers called MainComposer).
+		const auto complain = [&problems](const ibValueMetaObject* about, const wxString& says) {
+
+			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+			ibMcpSayObject(about, *entry);
+
+			if (const ibValueMetaObject* owner = about->GetParent())
+				entry->SetValue(wxT("in"), owner->GetName());
+
+			entry->SetValue(wxT("says"), says);
+			problems.push_back(ibDataValue::Child(entry));
+		};
+
+		// EVERY CHECK THAT REGISTERED ITSELF, whichever DLL it came from. The backend's own are one
+		// of them (below); the form world adds its own from frontend.dll, and a host that links
+		// neither simply has fewer questions rather than a broken call.
+		for (const ibMcpAudit* audit : ibMcpAudits()) {
+			if (audit != nullptr)
+				audit->Check(metaData, complain);
+		}
+
+		result.AddField(wxT("checks"), ibDataValue::Int((s64)ibMcpAudits().size()));
+		result.AddField(wxT("problems"), ibDataValue::Array(problems));
+
+		result.SetValue(wxT("note"), problems.empty()
+			? ibMcpText("Nothing half-built. Every composer names its variants and shows something, "
+			  "every field can hold a value, every report has a composer.")
+			: ibMcpText("Each line names the object it is about and what it lacks. These are faults "
+			  "that either refuse to save or show a person an empty page - not opinions."));
+
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolConfigCheck);
+
+// THE BACKEND'S OWN QUESTIONS — what a metaobject can be half-built into. Registered like any
+// other, so this file has no privilege over the ones that come from elsewhere.
+class ibMcpAuditMetadata : public ibMcpAudit {
+public:
+
+	void Check(ibMetaData* metaData, const ibComplain& complain) const override
+	{
+		if (metaData == nullptr || !metaData->IsConfigOpen())
+			return;
+
+		for (ibValueMetaObject* object : metaData->GetAnyArrayObject<ibValueMetaObject>(true)) {
+
+			if (object == nullptr)
+				continue;
+
+			// A COMPOSER DECLARED IN THE METADATA — the same list the report verbs answer with, so
+			// a rule added there arrives here without being written twice.
+			//
+			// ⭐⭐ THREE DOORS, AND THIS ONE IS THE QUESTION. The tree distinguishes them and the
+			// distinction is not style:
+			//   · ConvertToType  — "narrow this, I know what it is". With _USE_CONTROL_VALUECAST
+			//     (on) a miss calls ThrowErrorTypeOperation, which RAISES everywhere except the
+			//     designer — an assertion, and the way to tell a runtime that the wrong type came.
+			//   · ConvertToValue — "are you one of these?" Answers true/false, raises nothing, and
+			//     still unwraps a REFERENCE-held value the way the house cast does.
+			//   · a bare dynamic_cast — the same question, minus that unwrapping.
+			//
+			// 🛑 This walks the whole tree asking each object what it is, so it is a question three
+			// times over. Written through ConvertToType it would be an exception per non-match,
+			// hidden only because this server runs inside the designer — the one process where
+			// that check stays quiet (caught by Max asking whether ConvertToType throws, after I
+			// had "improved" these four casts into it — 2026-09-02).
+			const ibValueMetaObjectComposer* composer = nullptr;
+			if (object->ConvertToValue(composer)) {
+
+				std::vector<wxString> missing;
+				ibMcpComposerComplaints(composer->GetCompositionDesc(), missing);
+
+				for (const wxString& one : missing)
+					complain(object, one);
+
+				continue;
+			}
+
+			// A FIELD THAT CAN HOLD NOTHING. A type description with no type in it is a column the
+			// database cannot be given and a control the form cannot draw — and it is what an
+			// attribute looks like the moment it is created, so it is exactly what an interrupted
+			// piece of work leaves behind.
+			const ibValueMetaObjectAttribute* attribute = nullptr;
+			if (object->ConvertToValue(attribute)) {
+
+				if (attribute->GetTypeDesc().m_listTypeClass.empty())
+					complain(object, ibMcpText("no type - metadata_set_type says what it may hold; a "
+						  "field with no type is one nothing can be written into"));
+
+				continue;
+			}
+
+			// A REPORT WITH NOTHING TO COMPOSE — a menu entry that opens an empty window.
+			const ibValueMetaObjectReport* report = nullptr;
+			if (object->ConvertToValue(report)) {
+
+				bool anyComposer = false;
+				for (unsigned int index = 0; index < object->GetChildCount(); index++) {
+
+					const ibValueMetaObject* child = object->GetChild(index);
+					const ibValueMetaObjectComposer* inside = nullptr;
+
+					anyComposer = anyComposer
+						|| (child != nullptr && child->ConvertToValue(inside));
+				}
+
+				if (!anyComposer)
+					complain(object, ibMcpText("no composer - a report reads through one, and without it "
+						  "there is nothing to run"));
+			}
+		}
+	}
+};
+
+MCP_AUDIT_REGISTER(ibMcpAuditMetadata);

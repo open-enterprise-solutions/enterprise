@@ -15,8 +15,8 @@
 namespace {
 
 using ibArg = ibMcpTool::ibMcpArgument;
-const ibArg& ArgText() { static const ibArg a(wxT("text"), ibArg::Kind::Text, _("The module text to compile."), true); return a; }
-const ibArg& ArgModule() { static const ibArg a(wxT("module"), ibArg::Kind::Text, _("The name the messages are written against - pass the name of the module being edited so the report reads the way the designer's would. Optional.")); return a; }
+const ibArg& ArgText() { static const ibArg a(wxT("text"), ibArg::Kind::Text, ibMcpText("The module text to compile."), true); return a; }
+const ibArg& ArgModule() { static const ibArg a(wxT("module"), ibArg::Kind::Text, ibMcpText("The name the messages are written against - pass the name of the module being edited so the report reads the way the designer's would. Optional.")); return a; }
 
 ibDataValue DiagnosticsOf(const std::vector<ibDiagnostic>& diagnostics)
 {
@@ -57,12 +57,12 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return _("checking a piece of code");
+		return ibMcpText("checking a piece of code");
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("Compile a module text and report what is wrong with it. The text is compiled and "
+		return ibMcpText("Compile a module text and report what is wrong with it. The text is compiled and "
 			"thrown away: nothing is stored and no module is replaced. An empty diagnostics list "
 			"means it compiles.");
 	}
@@ -77,7 +77,7 @@ public:
 	{
 		const wxString text = ArgText().Text(params);
 		if (text.IsEmpty()) {
-			refusal = _("No text to check.");
+			refusal = ibMcpText("No text to check.");
 			return false;
 		}
 
@@ -104,7 +104,7 @@ public:
 		// stopped being text-only, which is a lie in the one field a caller reads to know how much
 		// to trust the verdict.
 		result.SetValue(wxT("scope"), wxString(context != nullptr
-			? wxT("this configuration's context") : wxT("text-only")));
+			? ibMcpText("this configuration's context") : wxT("text-only")));
 		return true;
 	}
 };

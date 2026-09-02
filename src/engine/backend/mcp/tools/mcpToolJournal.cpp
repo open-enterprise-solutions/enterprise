@@ -33,13 +33,13 @@ namespace {
 using ibArg = ibMcpTool::ibMcpArgument;
 
 // The arguments, declared once and read through the same objects — see ibMcpTool::Arguments().
-const ibArg& ArgSinceMinutes() { static const ibArg a(wxT("sinceMinutes"), ibArg::Kind::Whole, _("Only what happened in the last N minutes. This is usually the one to pass.")); return a; }
-const ibArg& ArgLevel() { static const ibArg a(wxT("level"), ibArg::Kind::Text, _("Lowest severity to report: info, warn, error, audit. Pass error for failures only.")); return a; }
-const ibArg& ArgSource() { static const ibArg a(wxT("source"), ibArg::Kind::Text, _("Only this subsystem. script = a running module, auth = logins, and so on.")); return a; }
-const ibArg& ArgEvent() { static const ibArg a(wxT("event"), ibArg::Kind::Text, _("Only this event type, for example runtime.error.")); return a; }
-const ibArg& ArgUser() { static const ibArg a(wxT("user"), ibArg::Kind::Text, _("Only this user's rows.")); return a; }
-const ibArg& ArgContains() { static const ibArg a(wxT("contains"), ibArg::Kind::Text, _("Only rows whose message contains this text - a module name, a field, a phrase.")); return a; }
-const ibArg& ArgLimit() { static const ibArg a(wxT("limit"), ibArg::Kind::Whole, _("How many rows at most. Default 50.")); return a; }
+const ibArg& ArgSinceMinutes() { static const ibArg a(wxT("sinceMinutes"), ibArg::Kind::Whole, ibMcpText("Only what happened in the last N minutes. This is usually the one to pass.")); return a; }
+const ibArg& ArgLevel() { static const ibArg a(wxT("level"), ibArg::Kind::Text, ibMcpText("Lowest severity to report: info, warn, error, audit. Pass error for failures only.")); return a; }
+const ibArg& ArgSource() { static const ibArg a(wxT("source"), ibArg::Kind::Text, ibMcpText("Only this subsystem. script = a running module, auth = logins, and so on.")); return a; }
+const ibArg& ArgEvent() { static const ibArg a(wxT("event"), ibArg::Kind::Text, ibMcpText("Only this event type, for example runtime.error.")); return a; }
+const ibArg& ArgUser() { static const ibArg a(wxT("user"), ibArg::Kind::Text, ibMcpText("Only this user's rows.")); return a; }
+const ibArg& ArgContains() { static const ibArg a(wxT("contains"), ibArg::Kind::Text, ibMcpText("Only rows whose message contains this text - a module name, a field, a phrase.")); return a; }
+const ibArg& ArgLimit() { static const ibArg a(wxT("limit"), ibArg::Kind::Whole, ibMcpText("How many rows at most. Default 50.")); return a; }
 
 // Levels are stored as numbers and asked for as words. The word is the unit a
 // caller thinks in - "show me the errors" - and the number is the file's.
@@ -77,13 +77,13 @@ public:
 	wxString GetActivity(const ibDataNode& params) const override
 	{
 		return ArgLevel().Text(params) == wxT("error")
-			? wxString(_("looking for errors in the journal"))
-			: wxString(_("reading the journal"));
+			? wxString(ibMcpText("looking for errors in the journal"))
+			: wxString(ibMcpText("reading the journal"));
 	}
 
 	wxString GetDescription() const override
 	{
-		return _("The registration journal - what this installation did, newest first: logins, "
+		return ibMcpText("The registration journal - what this installation did, newest first: logins, "
 			"document writes, schema applications, and every script that FAILED WHILE RUNNING "
 			"with its module, line and call stack. Ask this after asking someone to run "
 			"something: a module that compiled cleanly reports its runtime failure here and "
@@ -101,7 +101,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		if (appData == nullptr || appData->GetLogger() == nullptr) {
-			refusal = _("The logger is not running - there is no journal to read.");
+			refusal = ibMcpText("The logger is not running - there is no journal to read.");
 			return false;
 		}
 
@@ -120,7 +120,7 @@ public:
 			// An unrecognised word would silently widen the answer to everything,
 			// which reads as "nothing was filtered" rather than "that is not a level".
 			if (filter.min_level < 0) {
-				refusal = _("Unknown level. Use info, warn, error or audit.");
+				refusal = ibMcpText("Unknown level. Use info, warn, error or audit.");
 				return false;
 			}
 		}
@@ -141,7 +141,7 @@ public:
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 
 			const wxDateTime stamp((wxLongLong)row.ts_ms);
-			entry->SetValue(wxT("time"), stamp.Format(wxT("%Y-%m-%d %H:%M:%S")));
+			entry->SetValue(wxT("time"), stamp.Format(ibMcpText("%Y-%m-%d %H:%M:%S")));
 
 			// The level goes back as the WORD it was asked for by, never the number
 			// it is stored as - a reader should not have to hold the mapping.
@@ -170,7 +170,7 @@ public:
 		// the first one means the question should be asked differently.
 		if (rows.empty())
 			result.SetValue(wxT("note"),
-				_("No rows matched. Widen the period, or drop the level filter."));
+				ibMcpText("No rows matched. Widen the period, or drop the level filter."));
 
 		return true;
 	}
