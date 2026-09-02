@@ -192,7 +192,13 @@ bool ibValueRecordDataObjectRef::BeginWriteScope(ibConnectionScope& scope)
 	if (appData->DesignerMode())          return false;   // designer skip
 	if (!scope || !scope->IsOpen())
 		ibBackendCoreException::Error(_("Database is not open!"));
-	if (ibBackendException::IsEvalMode()) return false;   // eval skip
+
+	// ⭐ A WATCH MAY NOT WRITE; THE SANDBOX MUST. Eval mode covered both, so a document written from
+	// the debugger's sandbox came back with an empty Ref, unposted, and with nothing said — the
+	// write scope had simply refused (measured 2026-09-02). The narrower question is the right one:
+	// the sandbox writes inside a transaction that is always rolled back.
+	if (ibBackendException::IsEvalMode()
+		&& !ibBackendException::IsEvalSandbox()) return false;
 
 	if (!m_metaObject->AccessRight_Write()) {
 		// Name the object and the right — the user has to know WHAT was refused, not only that
@@ -212,7 +218,10 @@ bool ibValueRecordDataObjectRef::BeginDeleteScope(ibConnectionScope& scope)
 	if (appData->DesignerMode())          return false;
 	if (!scope || !scope->IsOpen())
 		ibBackendCoreException::Error(_("Database is not open!"));
-	if (ibBackendException::IsEvalMode()) return false;
+
+	// …and the same for a delete — see the write scope above.
+	if (ibBackendException::IsEvalMode()
+		&& !ibBackendException::IsEvalSandbox()) return false;
 
 	if (!m_metaObject->AccessRight_Delete()) {
 		ibBackendAccessException::Error(wxString::Format(_("deleting '%s'"), m_metaObject->GetSynonym()));

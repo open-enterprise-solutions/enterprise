@@ -182,6 +182,23 @@ enum ibProgramSyntax {
 	syntax_ces,    // C-style ES — paren conditions, brace bodies, `;` terminators (default).
 };
 
+// ⭐⭐ WHAT KIND OF EVALUATION IS RUNNING — one value rather than a flag per capability.
+//
+// There used to be one boolean, "is this an evaluation", and everything that had to behave
+// differently asked it: the write scopes refused, `Message` stayed silent, the fill and copy
+// handlers were skipped. That is right for a WATCH — hovering a variable must not write to a base
+// or fire somebody's code — and exactly wrong for the debugger's SANDBOX, which exists to write,
+// measure and be rolled back: it wrote nothing and said nothing about it (2026-09-02).
+//
+// The difference is a KIND, not a second flag beside the first. Two booleans have four states and
+// only three mean anything; a kind cannot be set half way, and a fourth kind is one enumerator
+// rather than another flag every existing site must learn to consider.
+enum ibEvalMode : unsigned char {
+	eval_none = 0,   // ordinary execution — work the person's own actions started
+	eval_watch,      // a watch, a tooltip, an autocomplete probe: reads, changes nothing
+	eval_sandbox,    // the debugger's sandbox: writes and fires handlers, inside a rolled-back transaction
+};
+
 //*******************************************************************************************
 
 #define COMPONENT_TYPE_ABSTRACT		 0

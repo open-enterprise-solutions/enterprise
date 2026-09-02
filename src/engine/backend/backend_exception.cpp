@@ -428,16 +428,22 @@ bool ibBackendException::IsErrorOutputProcessing()
 	return sess != nullptr && sess->IsProcessingBackendError();
 }
 
-void ibBackendException::SetEvalMode(bool mode)
+void ibBackendException::SetEvalMode(ibEvalMode mode)
 {
 	if (auto* sess = ibSession::Current())
 		sess->SetEvalMode(mode);
 }
 
-bool ibBackendException::IsEvalMode()
+ibEvalMode ibBackendException::IsEvalMode()
 {
 	auto* sess = ibSession::Current();
-	return sess != nullptr && sess->IsEvalMode();
+	return sess != nullptr ? sess->IsEvalMode() : eval_none;
+}
+
+bool ibBackendException::IsEvalSandbox()
+{
+	auto* sess = ibSession::Current();
+	return sess != nullptr && sess->IsEvalSandbox();
 }
 
 ////////////////////////////////////////////////////////////////////

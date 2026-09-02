@@ -54,7 +54,11 @@ namespace {
 //   - acquires first: the worker blocks on the teardown lock until the eval
 //     finishes against a still-live frame, then unwinds; or
 //   - acquires after: sees m_debugLoop == false and skips.
-bool EvalInParkedSession(const wxString& expr, ibValue& vResult, bool compileBlock)
+// `evalMode` separates the two callers this has: a TOOLTIP, which must change nothing, and the
+// SANDBOX, whose purpose is to change things and have them rolled back. They used to share one
+// answer through eval mode, and the sandbox's writes were refused in silence (2026-09-02).
+bool EvalInParkedSession(const wxString& expr, ibValue& vResult, bool compileBlock,
+	ibEvalMode evalMode = eval_watch)
 {
 	ibSession* sess = ibSession::Current();
 	auto* dbg = sess ? sess->Debug() : nullptr;
@@ -65,7 +69,7 @@ bool EvalInParkedSession(const wxString& expr, ibValue& vResult, bool compileBlo
 	if (!dbg->m_debugLoop.load(std::memory_order_acquire) || dbg->m_runContext == nullptr)
 		return false;
 
-	return ibProcUnit::Evaluate(expr, dbg->m_runContext, vResult, compileBlock);
+	return ibProcUnit::Evaluate(expr, dbg->m_runContext, vResult, compileBlock, evalMode);
 }
 } // namespace
 
@@ -1393,7 +1397,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 					//  arrives at the caller BEFORE this reply does, in the order it was printed.
 					//  Gathering it a second time into this answer would be the same fact on two
 					//  roads, and two roads diverge.)
-					ran = EvalInParkedSession(code, vResult, /*compileBlock*/ true);
+					ran = EvalInParkedSession(code, vResult, /*compileBlock*/ true, eval_sandbox);
 
 					// 🛑 THE REASON IS IN THE VALUE, and it was being thrown away. A failed
 					// evaluation writes `<error: …>` into the result slot rather than raising

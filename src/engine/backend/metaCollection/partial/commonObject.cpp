@@ -2389,7 +2389,10 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 		// debugger watch/eval, the same way BeginWriteScope/BeginDeleteScope skip
 		// eval — evaluating a watch must not fire user handlers. (DesignerMode is
 		// already excluded by the enclosing guard.)
-		if (!ibBackendException::IsEvalMode()) {
+		// …and the sandbox is the evaluation that MAY fire them: a document filled by nothing is not
+		// the document the person would have got, so a measurement taken on it measures the wrong
+		// thing. Watches still skip, which is what this guard was written for.
+		if (!ibBackendException::IsEvalMode() || ibBackendException::IsEvalSandbox()) {
 			if (m_newObject && source != nullptr && !generate) {
 				ExecAsProc(wxT("OnCopy"), source->GetValue());
 			}

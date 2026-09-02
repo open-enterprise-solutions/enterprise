@@ -74,7 +74,13 @@ bool ibValueRecordSetObject::BeginRecordSetWriteScope(ibConnectionScope& scope)
 	if (appData->DesignerMode())          return false;
 	if (!scope || !scope->IsOpen())
 		ibBackendCoreException::Error(_("Database is not open!"));
-	if (ibBackendException::IsEvalMode()) return false;
+
+	// ⭐ THE QUESTION IS NOT "is this an evaluation" BUT "may this evaluation write". A watch may
+	// not — that is what eval mode is for. The debugger's sandbox may, and must: it exists to write,
+	// measure and be undone, and it runs inside a transaction that is always rolled back
+	// (backend_exception.h). Under the old, wider test it wrote nothing and said nothing.
+	if (ibBackendException::IsEvalMode()
+		&& !ibBackendException::IsEvalSandbox()) return false;
 
 	if (!m_metaObject->AccessRight_Write()) {
 		// Name the register AND the right: during a posting cascade several objects are gated in a
@@ -94,7 +100,10 @@ bool ibValueRecordSetObject::BeginRecordSetDeleteScope(ibConnectionScope& scope)
 	if (appData->DesignerMode())          return false;
 	if (!scope || !scope->IsOpen())
 		ibBackendCoreException::Error(_("Database is not open!"));
-	if (ibBackendException::IsEvalMode()) return false;
+
+	// …and the same for a delete: see the note on the write scope above.
+	if (ibBackendException::IsEvalMode()
+		&& !ibBackendException::IsEvalSandbox()) return false;
 
 	if (!m_metaObject->AccessRight_Delete()) {
 		ibBackendAccessException::Error(wxString::Format(_("clearing register '%s'"),

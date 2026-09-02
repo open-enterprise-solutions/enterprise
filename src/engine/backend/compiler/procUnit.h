@@ -100,7 +100,17 @@ private:
 	void Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDelta); // bDelta=true - flag for executing module operators that come at the end of functions and procedures
 public:
 
-	static bool Evaluate(const wxString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue, bool bCompileBlock);
+	// `evalMode` says WHAT this evaluation is, and everything else follows from it (backend_core.h):
+	// a WATCH by default — a tooltip, an autocomplete probe, the expression somebody hovered, which
+	// must change nothing — or `eval_sandbox`, the debugger's, which writes and fires handlers
+	// inside a transaction that is always rolled back.
+	//
+	// ⭐ THE KIND RATHER THAN ITS CONSEQUENCE. An earlier version took `bAllowWrites`, which named
+	// what the caller WANTS PERMITTED instead of what they ARE — so every gate downstream would
+	// have had to be told separately about the next thing a sandbox may do. Ask what it is; derive
+	// what it may.
+	static bool Evaluate(const wxString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue,
+		bool bCompileBlock, ibEvalMode evalMode = eval_watch);
 	bool CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetValue, ibCompileCode& cModule, bool bCompileBlock);
 
 	//call an arbitrary function of the executable module

@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "backend_core.h"   // ibEvalMode — which kind of evaluation a session is inside
+
 enum { //Error message numbers
 	ERROR_USAGE = 0,
 	ERROR_FILE_READ,
@@ -200,15 +202,24 @@ public:
 
 	static bool IsErrorOutputProcessing();
 
-	static void SetEvalMode(bool mode = true);
-	static bool IsEvalMode();
+	// ⭐ THE KIND, NOT A YES/NO. `eval_none` is zero, so `if (IsEvalMode())` keeps its old meaning
+	// while a caller that needs to know WHICH kind can ask the same question (backend_core.h).
+	static void SetEvalMode(ibEvalMode mode);
+	static ibEvalMode IsEvalMode();
+
+	// …and the one question the WRITE gates ask, read off that kind: a watch reads, a sandbox
+	// writes and is rolled back.
+	static bool IsEvalSandbox();
 
 	// Saves the current eval-mode flag in ctor, restores it in dtor.
 	// Use to wrap ibProcUnit::Evaluate so an inner throw doesn't leak
 	// the flag onto the session.
 	class ibEvalModeScope {
 	public:
-		explicit ibEvalModeScope(bool newMode = true)
+		// WHICH KIND this evaluation is — a watch by default, which is what eval mode has always
+		// meant. The previous kind is restored on the way out, so a sandbox opened inside a watch
+		// leaves the watch exactly as it found it.
+		explicit ibEvalModeScope(ibEvalMode newMode = eval_watch)
 			: m_previous(ibBackendException::IsEvalMode())
 		{
 			if (m_previous != newMode)
@@ -224,7 +235,7 @@ public:
 		ibEvalModeScope& operator=(const ibEvalModeScope&) = delete;
 
 	private:
-		const bool m_previous;
+		const ibEvalMode m_previous;
 	};
 
 protected:

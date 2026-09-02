@@ -474,8 +474,23 @@ public:
 	// of eval independently — a debug-watch on tab 1 must not silence
 	// tab 2's regular OnWrite. Replaces the thread_local gs_evalMode in
 	// backend_exception.cpp.
-	bool IsEvalMode()       const { return m_evalMode.load(std::memory_order_acquire); }
-	void SetEvalMode(bool m)      { m_evalMode.store(m, std::memory_order_release); }
+	// ⭐ ONE ANSWER, NOT A PAIR. This returns the KIND (backend_core.h) and `eval_none` is zero, so
+	// the old `if (IsEvalMode())` reads exactly as before while a caller that cares WHICH kind can
+	// compare. A separate Get/Is pair would be two names for one fact, and they drift.
+	ibEvalMode IsEvalMode()  const { return m_evalMode.load(std::memory_order_acquire); }
+	void SetEvalMode(ibEvalMode m) { m_evalMode.store(m, std::memory_order_release); }
+
+	// ⭐⭐ …AND WHETHER THIS EVALUATION MAY CHANGE ANYTHING — the question the WRITE gates ask.
+	//
+	// 🛑 THEY USED TO ASK IsEvalMode, and that answered for two different things at once: a watch,
+	// which must never write or fire a handler, and the sandbox, whose entire purpose is to write
+	// and be undone. BeginWriteScope and its record-set twin returned false under eval mode, so a
+	// document Write() from the sandbox answered nothing, left the Ref empty, and reported no error
+	// at all (measured 2026-09-02, trying to post a receipt).
+	//
+	// The safety that remains is the real one: a sandbox runs inside a transaction that is always
+	// rolled back.
+	bool IsEvalSandbox() const { return IsEvalMode() == eval_sandbox; }
 
 	// Processing-backend-error flag — re-entrancy guard for
 	// ibBackendException::ProcessError so a logging path can't re-throw
@@ -1019,7 +1034,7 @@ private:
 	std::atomic<bool>         m_forceExit       { false };
 
 	// Eval / processing-backend-error flags — see Get/Set above.
-	std::atomic<bool>         m_evalMode                { false };
+	std::atomic<ibEvalMode>   m_evalMode                { eval_none };
 	std::atomic<bool>         m_processingBackendError  { false };
 
 	// Per-session interpreter state (currentRunModule, runContext stack,

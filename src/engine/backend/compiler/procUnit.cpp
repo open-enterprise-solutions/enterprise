@@ -2288,7 +2288,8 @@ private:
 	const ibByteCode::ibByteFunction* m_evalHostFunction;
 };
 
-bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue, bool compileBlock)
+bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue,
+	bool compileBlock, ibEvalMode evalMode)
 {
 	if (pRunContext == nullptr) {
 		if (auto* st = ibSession::GetPUState())
@@ -2299,7 +2300,9 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 		return false;
 
 
-	ibBackendException::ibEvalModeScope evalScope;
+	// The kind the caller named — a watch reads and changes nothing, the sandbox writes and is
+	// rolled back. Nothing is decided here; the scope simply is what it was told (backend_core.h).
+	ibBackendException::ibEvalModeScope evalScope(evalMode);
 
 	// Helper — render an exception into the watch result slot so the
 	// debugger panel can show *what* went wrong instead of an empty
