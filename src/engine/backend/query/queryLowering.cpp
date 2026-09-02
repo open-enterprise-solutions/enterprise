@@ -2054,7 +2054,57 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			b.OrderByExpr(BuildColumnExprFromAst(sources, oe, params), o.m_ascending);
 			continue;
 		}
-		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, oe, allowOrderDotWalk);
+		// ⭐⭐ A PATH THAT WAS GROUPED BY CAN BE SORTED BY. The gate above forbids a reference walk in
+		// an aggregate query because the join it needs is built only on the single-source read path
+		// — true in general, and false for exactly this case: GROUP BY has ALREADY built that join
+		// for this very path, so the leaf is there to sort on and the SQL is valid (the key is in
+		// the GROUP BY, which is what the server asks of a sorted column).
+		//
+		// 🛑 `SELECT Ref.Number, COUNT(*) … GROUP BY Ref.Number ORDER BY Ref.Number` is how anybody
+		// writes this, and it was refused while the same query without the ORDER worked (measured
+		// 2026-09-02). The rule is not "no walking under an aggregate"; it is "no walking to a place
+		// nothing grouped by".
+		bool ridesAGroupKey = false;
+
+		if (aggregate && !groupKeys.empty()
+			&& oe.m_kind == ibQueryAstExprKind::Column && oe.m_path.size() > 1) {
+
+			const std::vector<const ibBackendQueryColumn*> ocols = ResolvePath(sources, oe);
+
+			for (const std::vector<const ibBackendQueryColumn*>& key : groupKeys) {
+
+				if (key.empty() || key.size() > ocols.size())
+					continue;
+
+				// The same prefix rule the projection uses above: a key fixes everything it walks
+				// INTO, so `Producer` as a key makes `Producer.Region` a sortable leaf as well.
+				bool prefix = true;
+				for (size_t k = 0; k < key.size() && prefix; ++k)
+					prefix = (key[k] == ocols[k]);
+
+				if (prefix) { ridesAGroupKey = true; break; }
+			}
+		}
+
+		// …AND THE REFUSAL SAYS THE RULE THAT ACTUALLY APPLIES. The shared guard below answers "needs
+		// a single, non-aggregate source", which is the truth about a WHERE and only half of it
+		// here: an aggregate query CAN sort by a walked path, provided it grouped by that path.
+		// Told at the callsite, because this is the only place that knows what was grouped.
+		if (aggregate && !allowOrderDotWalk && !ridesAGroupKey
+			&& oe.m_kind == ibQueryAstExprKind::Column && oe.m_path.size() > 1) {
+
+			wxString path;
+			for (const wxString& segment : oe.m_path)
+				path += (path.IsEmpty() ? wxString() : wxT(".")) + segment;
+
+			ThrowQueryException(oe.m_line, oe.m_col, wxString::Format(
+				_("ORDER BY '%s' needs that path among the GROUP BY keys - a grouped query can only "
+				  "sort by what it grouped by. Add it to GROUP BY, or sort by one of the keys."),
+				path));
+		}
+
+		const std::vector<const ibBackendQueryColumn*> cols =
+			ResolveWhereTarget(sources, oe, allowOrderDotWalk || ridesAGroupKey);
 
 		if (cols.size() > 1) b.OrderBy(cols, o.m_ascending);
 		else                 b.OrderBy(cols[0], o.m_ascending);

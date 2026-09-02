@@ -118,8 +118,18 @@ const ibArg& ArgReplace()
 const ibArg& ArgText()
 {
 	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
-		ibMcpText("The whole module text. Write it in the syntax form this configuration uses - "
-			  "help_search answers which one that is."), /*required*/ true);
+		ibMcpText("The whole module text - this REPLACES what is there, it does not add to it "
+			  "(module_patch edits a part, module_read shows what is there now). Write it in "
+			  "the syntax form this configuration uses - help_search answers which one that is."),
+		/*required*/ true);
+	return s_a;
+}
+
+const ibArg& ArgClear()
+{
+	static const ibArg s_a(wxT("clear"), ibArg::Kind::Flag,
+		ibMcpText("Yes, erase this module's code - required when `text` is empty, so that emptying a "
+			  "module is something asked for rather than something that happens."));
 	return s_a;
 }
 
@@ -230,6 +240,79 @@ MCP_TOOL_REGISTER(ibMcpToolModulePatch);
 
 
 //---------------------------------------------------------------------------
+// module_read
+//---------------------------------------------------------------------------
+//
+// 🛑⭐⭐ THE VERB THAT WAS MISSING, AND ITS ABSENCE COST A MODULE. There was a way to WRITE a module
+// and a way to PATCH one, and no way to simply look at it: `module_outline` takes a TEXT, not an
+// id, so "let me see what is in this module" lands on the only verb that takes an id and deals in
+// module text — the writer. With an empty text a legitimate write, one call wipes it.
+//
+// It happened here, on 2026-09-02, to the assistant that wrote these tools: reaching for
+// module_write to READ a document's posting module. Nothing was lost — the module was already
+// empty, which is why the documents posted nothing — but that was luck, not design.
+//
+// ⭐ A WRITE WITH NO READING SIBLING INVITES EXACTLY THIS. A caller does not choose a verb out of a
+// list; they reach for the one that names the thing they are holding. If the only verb that names
+// a module is the one that replaces it, that is the verb they will reach for.
+class ibMcpToolModuleRead : public ibMcpTool {
+public:
+
+	wxString GetName() const override { return wxT("module_read"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return wxString::Format(ibMcpText("reading the module '%s'"), ibMcpNameOf(params));
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("The text of a module, as it stands - an object module, a manager module, a "
+			"common module. Line numbers are the ones the editor and debug_breakpoint count "
+			"by, so a line read here is the line a breakpoint goes on. Read before writing: "
+			"module_write REPLACES the whole text, and module_patch is the one that edits a "
+			"part of it.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
+		if (object == nullptr)
+			return false;
+
+		const ibValueMetaObjectModuleBase* module = nullptr;
+		if (!object->ConvertToValue(module)) {
+			refusal = wxString::Format(ibMcpText("'%s' is not a module."), object->GetName());
+			return false;
+		}
+
+		const wxString text = module->GetModuleText();
+
+		ibMcpSayObject(object, result);
+		result.SetValue(wxT("text"), text);
+		result.AddField(wxT("lines"), ibDataValue::Int(
+			(s64)(text.IsEmpty() ? 0 : text.Freq('\n') + 1)));
+
+		// ⭐ AN EMPTY MODULE IS AN ANSWER, and one worth spelling out: it looks exactly like a
+		// module whose code failed to arrive, and the difference decides what to do next.
+		if (text.IsEmpty())
+			result.SetValue(wxT("note"),
+				ibMcpText("This module is empty - it has no code at all. If something was expected to "
+				  "happen here (a document posting, a form event), that is why it does not."));
+
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolModuleRead);
+
+//---------------------------------------------------------------------------
 // module_write
 //---------------------------------------------------------------------------
 class ibMcpToolModuleWrite : public ibMcpTool {
@@ -261,15 +344,16 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Write the text of a module - a document's object module, a common module, a "
-			"manager module. The text is compiled afterwards IN ITS OWN CONTEXT and the "
-			"diagnostics come back, so a mistake is known immediately. The text is kept either "
-			"way, exactly as it would be if a person typed it.");
+		return ibMcpText("REPLACE the text of a module - a document's object module, a common module, a "
+			"manager module. The whole text, not an addition: module_patch edits a part and "
+			"module_read shows what is there now. Compiled afterwards IN ITS OWN CONTEXT and "
+			"the diagnostics come back, so a mistake is known immediately. The text is kept "
+			"either way, exactly as it would be if a person typed it.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgText() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgText(), ArgClear() };
 		return s_arguments;
 	}
 
@@ -304,6 +388,18 @@ public:
 
 		if (incoming == nullptr || incoming->Kind() != ibDataKind::String) {
 			refusal = ibMcpText("'text' must be a string holding the module's source. Nothing was written.");
+			return false;
+		}
+
+		// 🛑⭐ AND AN EMPTY TEXT IS NOW ASKED FOR OUT LOUD. Clearing a module stays a real thing to
+		// want - but it is not what somebody means when they arrive at this verb wanting to LOOK at
+		// the module, which is where a caller with no reading verb ends up (module_read now exists
+		// beside this one, and did not on the day this was written). The cost of the two is not
+		// symmetric: a refused clear is one more call, a mistaken one is somebody's code.
+		if (incoming->AsString().IsEmpty() && !ArgClear().Flag(params)) {
+			refusal = ibMcpText("An empty text would erase this module's code. If that is what you mean, "
+				"pass clear:true; if you wanted to SEE what is in it, module_read answers that. "
+				"Nothing was written.");
 			return false;
 		}
 
