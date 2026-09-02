@@ -1104,7 +1104,11 @@ public:
 
 	// The metaobject's guid IS this document's identity — see ibDocument::GetUniqueIdentifier.
 	virtual wxString GetUniqueIdentifier() const override {
-		return m_metaObject != nullptr ? m_metaObject->GetGuid().str() : wxEmptyString;
+		// wxString(wxEmptyString), never the bare constant: outside MSVC wxEmptyString is a
+		// `const wxChar *`, and a conditional whose arms are wxString and const wxChar * is
+		// AMBIGUOUS — each converts to the other. The wrapper is what the rest of the tree writes
+		// (portability.md 1.10, which already records this trap in eight other places).
+		return m_metaObject != nullptr ? m_metaObject->GetGuid().str() : wxString(wxEmptyString);
 	}
 
 	ibMetaDocument(ibMetaDocument* docParent = nullptr);

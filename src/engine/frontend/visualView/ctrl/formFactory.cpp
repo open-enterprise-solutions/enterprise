@@ -21,7 +21,7 @@ inline wxString GetClassType(const wxString& className)
 	const ibCtorControlTypeBase* objectSingle =
 		dynamic_cast<const ibCtorControlTypeBase*>(ibValue::GetAvailableCtor(className));
 	wxASSERT(objectSingle);
-	return objectSingle != nullptr ? objectSingle->GetTypeControlName() : wxEmptyString;
+	return objectSingle != nullptr ? objectSingle->GetTypeControlName() : wxString(wxEmptyString);
 }
 
 inline void SetDefaultLayoutProperties(ibValueSizerItem* sizerItem)

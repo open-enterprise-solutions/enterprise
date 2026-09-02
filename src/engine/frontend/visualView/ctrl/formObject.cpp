@@ -674,7 +674,7 @@ void ibValueForm::HelpForm()
 	const ibValueMetaObjectGenericData* metaObject = GetMetaObject();
 
 	const wxString help = metaObject != nullptr
-		? metaObject->GetHelpContent() : wxEmptyString;
+		? metaObject->GetHelpContent() : wxString(wxEmptyString);
 
 	// NOTHING WRITTEN IS AN ANSWER, and a better one than an empty tab: an empty window leaves a
 	// person wondering whether the help failed to load.
