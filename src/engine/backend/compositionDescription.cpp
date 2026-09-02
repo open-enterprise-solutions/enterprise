@@ -1089,3 +1089,29 @@ void ibValidateSettings(const ibSettingsDescription& settings)
 		if (line.m_path.IsEmpty())
 			ibBackendCoreException::Error(_("A grouping line has no field chosen"));
 }
+
+// ⭐ THE NAMES THE IDS WERE MADE FROM — see the note in the header. One list, built from the same
+// literals the constants above use, so a name and its id cannot part company: each entry is the
+// constant itself beside the word it was spelled with.
+wxString ibCompositionNodeName(ibClassID clsid)
+{
+	static const std::pair<ibClassID, const wxChar*> s_names[] = {
+		{ g_variantNodeClsid,   wxT("CompositionVariant")    },
+		{ g_outputNodeClsid,    wxT("CompositionOutput")     },
+		{ g_levelNodeClsid,     wxT("CompositionLevel")      },
+		{ g_fieldNodeClsid,     wxT("CompositionField")      },
+		{ g_filterNodeClsid,    wxT("CompositionFilterNode") },
+		{ g_orderNodeClsid,     wxT("CompositionOrderLine")  },
+		{ g_groupNodeClsid,     wxT("CompositionGroupLine")  },
+		{ g_parameterNodeClsid, wxT("CompositionParameter")  },
+		{ g_resourceNodeClsid,  wxT("CompositionResource")   },
+		{ g_selectNodeClsid,    wxT("CompositionSelect")     },
+		{ g_fieldInfoNodeClsid, wxT("CompositionFieldInfo")  },
+	};
+
+	for (const auto& entry : s_names)
+		if (entry.first == clsid)
+			return entry.second;
+
+	return wxEmptyString;
+}

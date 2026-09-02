@@ -402,6 +402,14 @@ public:
 		result.AddField(wxT("id"), ibDataValue::Int((s64)from->GetMetaID()));
 		result.SetValue(wxT("kind"), from->GetClassName());
 		result.SetValue(wxT("name"), from->GetName());
+
+		// The node asked ABOUT answers for itself the same way its children do (see Walk).
+		const wxString comment = from->GetComment();
+		if (!comment.IsEmpty())
+			result.SetValue(wxT("comment"), comment);
+		if (!from->GetNoteContent().IsEmpty())
+			result.AddField(wxT("noted"), ibDataValue::Bool(true));
+
 		result.AddField(wxT("children"), ibDataValue::Array(children));
 		return true;
 	}
@@ -453,6 +461,16 @@ private:
 			const wxString comment = child->GetComment();
 			if (!comment.IsEmpty())
 				entry->SetValue(wxT("comment"), comment);
+
+			// ⭐ AND THAT THERE IS MORE TO READ HERE. A note is the long text — why this exists, what
+			// was tried and rejected — and it does not belong on a map; but its EXISTENCE does, and it
+			// was the one thing the map did not say. Two catalogues left over from an experiment,
+			// one of them carrying "Delete on sight", were indistinguishable from working objects: the
+			// only way to find them was to open all twenty-two, one at a time (measured 2026-09-02).
+			// The flag costs a word and turns note_read from something a reader must think to try into
+			// something the tree tells them to do.
+			if (!child->GetNoteContent().IsEmpty())
+				entry->AddField(wxT("noted"), ibDataValue::Bool(true));
 
 			std::vector<ibDataValue> grand;
 			Walk(child, depth < 0 ? -1 : depth - 1, withDeleted, grand);

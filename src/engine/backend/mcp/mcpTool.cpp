@@ -416,10 +416,23 @@ size_t ibMcpWordsFound(const wxString& haystack, const wxString& query, size_t* 
 
 		bool present = false;
 
-		// Shortening the QUERY rather than the text: `deleting` reaches "deleted", `translate`
-		// reaches "translation", and the corpus needs no keyword list beside it. Four is the floor
-		// — three lets `set` reach half of everything, which is not a match, it is noise.
-		for (size_t length = word.length(); length >= 4 && !present; --length)
+		// Shortening the QUERY rather than the text: `bases` reaches "base", `distributing`
+		// reaches "distribution", and the corpus needs no keyword list beside it.
+		//
+		// 🛑 HOW MUCH MAY BE CUT IS PROPORTIONAL TO THE WORD, and the flat floor of four was not.
+		// A seven-letter word was allowed down to four letters — so `comment` was tried as `comm`
+		// and met `command`, `common` and `commission`: sixteen tools answered a one-word query and
+		// the one that was meant was not among them (measured 2026-09-02). An inflection changes an
+		// ENDING; it does not eat a third of the word.
+		//
+		// So a stem keeps two thirds of what was typed, and four is still the absolute floor
+		// (three lets `set` reach half of everything, which is noise rather than a match). The cost
+		// is honest and small: a word whose form differs by more than a third — `deleting` against
+		// "deleted" — is no longer met at the stem. It is met by the OTHER words of the same query,
+		// which is what asking in a sentence is for.
+		const size_t keep = wxMax<size_t>(4, (word.length() * 2 + 2) / 3);
+
+		for (size_t length = word.length(); length >= keep && !present; --length)
 			present = text.Find(word.Left(length)) != wxNOT_FOUND;
 
 		if (!present && word.length() < 4)

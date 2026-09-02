@@ -490,6 +490,29 @@ TEST(McpSearch, AWordIsMetAtItsStem_SoTheFormOfTheNounDoesNotDecide)
 	EXPECT_EQ(ibMcpWordsFound(text, wxT("ova"), nullptr), 0u);
 }
 
+// 🛑⭐ AND A STEM MAY NOT EAT A THIRD OF THE WORD, which is the other half of the same rule and the
+// one that was missing. Under a flat four-character floor `comment` was tried as `comm` and met
+// `command` — sixteen tools answered a one-word query and none of them was about comments (measured
+// live, 2026-09-02). An inflection changes an ending; a match that needs a third of the word gone is
+// a different word.
+TEST(McpSearch, AStemKeepsTwoThirdsOfItsWord_SoOneWordDoesNotBecomeAnother)
+{
+	const wxString commands = wxT("A command bar holds the common commands of a section.");
+
+	EXPECT_EQ(ibMcpWordsFound(commands, wxT("comment"), nullptr), 0u);
+	EXPECT_EQ(ibMcpWordsFound(commands, wxT("commission"), nullptr), 0u);
+
+	// …while the word itself, and an ending on it, still land.
+	EXPECT_GT(ibMcpWordsFound(commands, wxT("command"), nullptr), 0u);
+	EXPECT_GT(ibMcpWordsFound(commands, wxT("commands"), nullptr), 0u);
+
+	// And the inflections the rule exists for are untouched: two thirds of a long word is still
+	// plenty of room for an ending to differ.
+	const wxString text = wxT("Distribution of overheads by a base, lot by lot.");
+	EXPECT_GT(ibMcpWordsFound(text, wxT("distributing"), nullptr), 0u);
+	EXPECT_GT(ibMcpWordsFound(text, wxT("bases"), nullptr), 0u);
+}
+
 TEST(McpSearch, APatternIsReadAsOne_ButAnOrdinaryBracketIsNot)
 {
 	const wxString text = wxT("Write-off by FIFO takes the oldest lot first.");

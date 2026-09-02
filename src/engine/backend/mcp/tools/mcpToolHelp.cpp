@@ -99,6 +99,68 @@ ibDataValue Brief(const ibHelpEntry& entry)
 	return ibDataValue::Child(node);
 }
 
+// ⭐⭐ THE CONFIGURATION'S OWN NAMES, answered from the metadata rather than from an article.
+//
+// What a caller asks this tool before writing a name is one question — "is there a thing called
+// this, and how do I spell it in script" — and for the platform's own vocabulary the corpus answers
+// it. For the configuration's, nothing did: the corpus's per-config source is a FILE of written
+// articles, and a configuration that has none (every configuration, so far) answered zero to
+// `Goods`, `StockBalance`, `Catalog`.
+//
+// So the metadata answers for itself. One line per matching object: the dotted path a query and a
+// script write it as, and the kind it is. Marked `fromConfiguration`, which is what that flag was
+// declared for.
+//
+// ⚠ NAMES ONLY — no prose, no signature list. Everything ABOUT an object is already answered, in
+// full, by metadata_tree / metadata_get / query_fields; repeating it here would be a second
+// spelling of the same fact, and the two would drift.
+void AppendConfigurationNames(const wxString& query, s32 limit, std::vector<ibDataValue>& into)
+{
+	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
+		return;
+
+	const ibValueMetaObject* root = activeMetaData->GetCommonMetaObject();
+	if (root == nullptr)
+		return;
+
+	const wxString asked = query.Lower();
+
+	for (unsigned int index = 0; index < root->GetChildCount(); ++index) {
+
+		if ((s32)into.size() >= limit)
+			return;
+
+		const ibValueMetaObject* child = root->GetChild(index);
+		if (child == nullptr || child->IsDeleted())
+			continue;
+
+		const wxString name = child->GetName();
+		const wxString kind = child->GetClassName();
+
+		// Matched on either half of what a script writes — the KIND ("Catalog") reaches every
+		// catalog, the NAME ("Goods") reaches the one. Case-insensitive, because a name typed from
+		// memory rarely comes back with its capitals.
+		if (name.Lower().Find(asked) == wxNOT_FOUND && kind.Lower().Find(asked) == wxNOT_FOUND)
+			continue;
+
+		std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+		node->SetValue(wxT("id"), kind + wxT(".") + name);
+		node->SetValue(wxT("name"), name);
+		node->SetValue(wxT("nameEn"), name);
+		node->SetValue(wxT("kind"), kind);
+		node->SetValue(wxT("signature"), kind + wxT(".") + name);
+		node->AddField(wxT("fromConfiguration"), ibDataValue::Bool(true));
+
+		// WHERE THE REST OF IT IS. There is no article to fetch with help_get — what this object
+		// holds is answered by the metadata verbs, and the node id they take is right here rather
+		// than a tree walk away.
+		node->AddField(wxT("nodeId"), ibDataValue::Int((s64)child->GetMetaID()));
+		node->SetValue(wxT("read"), wxString(wxT("metadata_get")));
+
+		into.push_back(ibDataValue::Child(node));
+	}
+}
+
 using ibArg = ibMcpTool::ibMcpArgument;
 
 // The arguments this file's tools take — declared once, and read through the same
@@ -189,7 +251,22 @@ public:
 				entries.push_back(Brief(*entry));
 		}
 
-		result.AddField(wxT("found"), ibDataValue::Int((s64)found.size()));
+		// 🛑⭐ …AND THE OTHER HALF THIS TOOL PROMISES. Its own description says "and the objects,
+		// attributes and methods of the OPEN CONFIGURATION", and the corpus answered none of them:
+		// `Goods`, `StockBalance`, `Catalog` — nothing, in a configuration holding all three, while
+		// every entry it did return said `fromConfiguration: false`. The flag exists precisely for
+		// this half; the road it marks was never walked (measured as a newcomer would, 2026-09-02).
+		//
+		// The corpus's per-config source is a FILE source — someone's written articles, merged over
+		// the platform's. What a caller is asking here is smaller and always available: does this
+		// configuration have a thing by this name, and what is it called in script. That is answered
+		// from the metadata itself, which is the authority on it, and it is added BESIDE the corpus
+		// rather than into it — an article somebody wrote must still win.
+		const size_t fromCorpus = entries.size();
+		if ((s32)entries.size() < limit)
+			AppendConfigurationNames(query, limit, entries);
+
+		result.AddField(wxT("found"), ibDataValue::Int((s64)(found.size() + (entries.size() - fromCorpus))));
 		result.AddField(wxT("entries"), ibDataValue::Array(entries));
 
 		// The corpus's own digest. A caller that caches answers can tell whether

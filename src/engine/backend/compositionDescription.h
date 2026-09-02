@@ -1150,4 +1150,16 @@ public:
 	static bool WriteNode(ibDataNode& node, const ibCompositionDescription& composition);
 };
 
+// ⭐⭐ WHAT THIS NODE IS, IN WORDS — the reverse of the ids this file writes, empty for anything else.
+//
+// A composition's parts are typed by SYNTHETIC clsids (`make_clsid("CompositionOutput", …)`): they
+// identify a node when it is read back and they are registered nowhere, because nothing constructs a
+// value from them. That is right for the FORMAT and wrong for a READER: rendered as JSON the tree
+// came out `"NodeType": 67799176431653306`, seventeen digits where every other answer in the system
+// says a word, and nothing anywhere could turn one into the other (measured over MCP, 2026-09-02).
+//
+// The names exist — they are the literals the ids are made FROM, ten lines up from here. This hands
+// them back, so a reader of the tree sees `"NodeType": "CompositionOutput"`.
+BACKEND_API wxString ibCompositionNodeName(ibClassID clsid);
+
 #endif // !__COMPOSITION_DESCRIPTION_H__

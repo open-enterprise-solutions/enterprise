@@ -7,12 +7,30 @@
 #include "backend/backend_exception.h"
 #include "backend/fileSystem/fs.h"            // ibReaderMemory / ibWriterMemory
 #include "backend/serialize/jsonProvider.h"
+#include "backend/compositionDescription.h"   // ibCompositionNodeName — a composition's parts, in words
 
 wxString ibMcpRenderNode(const ibDataNode& node, const std::function<wxString(ibClassID)>& typeResolver)
 {
 	ibJsonProvider provider;
-	if (typeResolver)
-		provider.SetTypeResolver(typeResolver);
+
+	// ⭐ A NODE SAYS WHAT IT IS, IN WORDS — even when its type is a synthetic id nothing constructs.
+	// The provider already names every REGISTERED type; what it could not name were the ids a
+	// description makes for its own parts, and a caller then read `"NodeType": 67799176431653306`
+	// where every other line of the same answer says a word (report_get, measured 2026-09-02).
+	//
+	// The caller's own resolver still wins where there is one — this is the FLOOR, and a floor goes
+	// UNDER. 🛑 The first version chose between the two instead of chaining them, so it never fired
+	// at all: every tool answer is rendered with the metadata resolver (mcpServer), which knows
+	// registered types and says nothing about a composition's parts — the exact ids this exists for.
+	// Written as "the caller's own resolver still wins" in the comment and as `? :` in the code.
+	provider.SetTypeResolver([typeResolver](ibClassID clsid) -> wxString {
+		if (typeResolver) {
+			const wxString named = typeResolver(clsid);
+			if (!named.IsEmpty())
+				return named;
+		}
+		return ibCompositionNodeName(clsid);
+	});
 
 	ibWriterMemory writer;
 	if (!provider.Write(node, writer))
