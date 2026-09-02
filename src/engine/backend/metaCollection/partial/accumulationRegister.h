@@ -534,6 +534,20 @@ public:
 	//
 	// ⚠ Resources are NOT here: they are what is being accumulated. Keying on a value would make
 	// every new amount a new row instead of adding to one.
+	// 🛑 IT ANSWERED WITH THE MOVEMENT'S KEY, and the sentence above says why that is wrong — but the
+	// code did not do what the sentence says. `GetGenericDimensionArrayObject()` is the RECORD SET's
+	// dimension list, and for an accumulation register that list is the RECORDER (see
+	// FillArrayObjectByDimension). So a totals surface answered "period + recorder", and since a read
+	// with no ORDER BY of its own is ordered BY THE PRIMARY KEY (ibDataQueryBuilder::EffectiveSort),
+	// every plain read of a balance was sorted by two columns that surface does not have. Firebird:
+	// "Column unknown FLD1043_D" — measured on a warehouse configuration, 2026-09-02.
+	//
+	// The declared DIMENSIONS are what a total is folded by, and they are asked for by their own name.
+	//
+	// ⭐ AND THE PERIOD ONLY WHERE THE SHAPE HAS ONE. A balance is one moment, not an interval cut
+	// into units, so its surface carries no period column at all (accumulationRegisterMetadataSchema:
+	// `View(…, withPeriod: false)`) — the same rule GetViewQueryable asks, asked here too, because a
+	// key naming a column the surface does not publish is not a key.
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override
 	{
 		std::vector<const ibBackendQueryColumn*> cols;
@@ -541,14 +555,52 @@ public:
 		if (m_reg == nullptr)
 			return cols;
 
-		if (m_reg->HasPeriod() && m_reg->GetRegisterPeriod() != nullptr)
+		return KeyColumns(ibRegFold());   // a balance is one moment: no period, no movement identity
+	}
+
+protected:
+
+	// ⭐⭐ THE PERIODICITY DECIDES WHAT A ROW IS — a ladder, and the key climbs it with the reading
+	// (Max). Folded WHOLE the answer is one row per key with no date on it; by a PERIOD, one row per
+	// period; by the RECORDER a row IS a movement, so the recorder is part of what makes it that row;
+	// by the RECORD, the line number with it. The dimensions are in every rung, because a total is
+	// what the movements sharing them fold into. The accounting register works the same way.
+	//
+	// ⚠ ASKED OF WHAT THE FOLD PRODUCES, NOT OF WHAT IT OFFERS TO NAME. The two are the same on every
+	// rung but one: `Auto` means nobody has decided yet, so the field tree offers every projection —
+	// while the reading itself still folds the interval WHOLE (ibRegFold::IsWholeInterval). Take the
+	// offer as the key and the ORDER BY names a period the derived table does not project, which is
+	// precisely the fault this was written to cure. HasPeriod / FromMovements / HasLineNumber are the
+	// fold's own answers about what it produces, and they are what a key is made of.
+	//
+	// 🛑 AND NOT BY ASKING THE VOCABULARY EITHER. A first attempt filtered these through
+	// ResolveColumnByName — a different question again (what may be NAMED, not what makes a row the
+	// same row), a name lookup per column on every read, and it validated the SURFACE's column while
+	// putting the register's ATTRIBUTE in the key.
+	std::vector<const ibBackendQueryColumn*> KeyColumns(const ibRegFold& fold) const
+	{
+		std::vector<const ibBackendQueryColumn*> cols;
+
+		if (m_reg == nullptr)
+			return cols;
+
+		if (fold.HasPeriod() && m_reg->HasPeriod() && m_reg->GetRegisterPeriod() != nullptr)
 			cols.push_back(m_reg->GetRegisterPeriod());
 
-		for (auto* dimension : m_reg->GetGenericDimensionArrayObject())
+		if (fold.FromMovements() && m_reg->HasRecorder()) {
+			if (m_reg->GetRegisterRecorder() != nullptr)
+				cols.push_back(m_reg->GetRegisterRecorder());
+			if (fold.HasLineNumber() && m_reg->GetRegisterLineNumber() != nullptr)
+				cols.push_back(m_reg->GetRegisterLineNumber());
+		}
+
+		for (const ibValueMetaObjectAttributeBase* dimension : m_reg->GetDimensionArrayObject())
 			cols.push_back(dimension);
 
 		return cols;
 	}
+
+public:
 
 protected:
 	ibViewShape m_shape;
@@ -626,6 +678,14 @@ public:
 		return out;
 	}
 
+	// …AND THE KEY FOLLOWS THE SAME FOLD. Read whole, this reports one row per key with no date on
+	// it, so a period in the key would order the answer by a column it does not project; folded by
+	// the recorder, the movement's own identity is part of what a row IS.
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override
+	{
+		return KeyColumns(m_fold);
+	}
+
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 private:
 	ibValue        m_begin;
@@ -668,6 +728,13 @@ public:
 	{
 		return ibRegisterFoldOffersColumn(m_reg, name, m_fold)
 			? ibAccumulationTotalsQueryable::ResolveColumnByName(name) : nullptr;
+	}
+
+	// …and its key, for the same reason: the fold decides whether a row of this answer is per period,
+	// per movement, or one per key over the whole interval.
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override
+	{
+		return KeyColumns(m_fold);
 	}
 
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override

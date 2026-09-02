@@ -652,6 +652,33 @@ bool AllNodeKeysSingleField(const ibQueryNode* node, const ColocatedLeaves& leav
 	return AllNodeKeysSingleField(node->m_left.get(), leaves) && AllNodeKeysSingleField(node->m_right.get(), leaves);
 }
 
+// ⭐⭐ WHAT A SOURCE IS READ FROM — asked of the SOURCE, in one place, by every road in this file.
+//
+// A source is not always a table. A register's Balance or BalanceAndTurnovers is a READING over the
+// totals surface — an aggregate whose as-of date no view can hold — and it answers with a derived
+// table. Its `GetQueryTableName()` is the name of the SHAPE it publishes, which for
+// `…_BalanceAndTurnovers` is a name the schema deliberately never creates: it exists to key a
+// column-set cache, not to be selected from.
+//
+// 🛑 THE QUESTION WAS ASKED ON ONE ROAD OUT OF FOUR. The rollup path learnt it on 2026-08-22
+// ("built ibScan(name) unconditionally … the engine was right; the statement was ours"), and the
+// three beside it went on scanning the name. What that cost, measured live on 2026-09-02: reading
+// the stock balance of a warehouse configuration produced
+// `SELECT * FROM …_Balance ORDER BY fld1043_D` — a scan of the balance surface, ordered by a period
+// column that surface deliberately does not have, and Firebird refused it; the neighbouring reading
+// asked for `…_BalanceAndTurnovers` and was told there is no such table. Turnovers worked, because
+// its shape happens to be a real view with those columns in it.
+//
+// One question, one answer, four callers. A road that cannot ask is a road that will be wrong the
+// first time a source stops being a table.
+ibQueryRelPtr SourceRelationOf(const ibBackendQueryable* queryable, const wxString& table)
+{
+	if (queryable != nullptr)
+		if (ibQueryRelPtr rel = queryable->GetSourceRelation(table))
+			return rel;
+	return ibScan(table);
+}
+
 // Build the L2-1 FROM tree (nested ibJoin) from the L3 join node — RECURSIVE, any depth. A Source ->
 // ibScan(table); a Join -> its two children joined on the node's resolved keys, qualified by the
 // owning leaf's table. INNER/LEFT per node. The shared co-located FROM both fast paths build over.
@@ -661,9 +688,7 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 		// A source may BE a derived table rather than a table — a register's balance is an
 		// aggregate over its totals view, parameterised by a date that no view can hold. Asking
 		// keeps the join in SQL; assuming a table name would force the whole thing into RAM first.
-		if (ibQueryRelPtr rel = node->m_queryable->GetSourceRelation(node->m_queryable->GetQueryTableName()))
-			return rel;
-		return ibScan(node->m_queryable->GetQueryTableName());
+		return SourceRelationOf(node->m_queryable, node->m_queryable->GetQueryTableName());
 	}
 
 	ibQueryRelPtr left  = BuildColocatedFrom(node->m_left.get(),  leaves);
@@ -1498,7 +1523,7 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 			q.Limit(spec.m_topCount);   // SELECT TOP n + GROUP BY — the dialect LIMIT caps the groups
 
 		if (hasDotWalk) q.From(chain.From());
-		else            q.From(mainTable);
+		else            q.From(SourceRelationOf(queryable, mainTable));   // a source may be a READING, not a table
 	}
 
 // ⭐⭐ RUN WHAT WAS ASSEMBLED FROM **THIS SPEC** — the statement, and the declarations it stands on.
@@ -1885,7 +1910,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteGroupLevelPage(const ibDataQuerySpec
 		if (page.m_count > 0)
 			q.Limit(page.m_count);   // LIMIT the GROUPS (dim is the group key) -- the page-sized level, not all groups
 
-		q.From(mainTable);           // the single physical source (a plain single-table read; the gate rejects joins)
+		q.From(SourceRelationOf(queryable, mainTable));   // one source — a table, or a reading that answers as one
 		return ibDataQueryResult(RunSpecStatement(spec, q), queryable);
 	}
 
@@ -2819,9 +2844,7 @@ ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spe
 		// `FROM  GROUP BY ROLLUP(…)`, with nothing at all between FROM and GROUP. Firebird said
 		// exactly that: "Token unknown - line 1, column 219: GROUP" (2026-08-22, with the road forced
 		// open). The engine was right; the statement was ours.
-		const ibQueryRelPtr derived = q->GetSourceRelation(mainTable);
-		ibQueryRelPtr from = hasDotWalk ? chain.From()
-		                   : (derived ? derived : ibScan(mainTable));
+		ibQueryRelPtr from = hasDotWalk ? chain.From() : SourceRelationOf(q, mainTable);
 		if (ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(q, *spec.m_conditions, spec.m_predicate))
 			from = ibFilter(from, where);
 
@@ -3707,7 +3730,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			q.Project(std::move(projection));
 		}
 		else {
-			q.From(mainTable);
+			q.From(SourceRelationOf(queryable, mainTable));
 		}
 
 		if (req.m_hierarchyFilter && !req.m_flatScan) {

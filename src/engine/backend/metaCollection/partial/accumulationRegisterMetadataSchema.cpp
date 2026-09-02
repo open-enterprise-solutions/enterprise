@@ -381,9 +381,21 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		// — and made the table impossible to write against by hand.
 		const wxString periodName  = GetRegisterPeriod()->GetName();       // what a query writes
 		const wxString periodField = ibRegValueField(GetRegisterPeriod()); // what the table keeps
+		// 🛑 …AND THE COLUMN IS THAT FIELD, SAID WITH THE KIND. `periodField` is already the period's
+		// value field (`fld1043_D`); left declared Composite, a reader spreads it a SECOND time and
+		// asks the database for `fld1043_D_D` beside a `fld1043_D_TYPE` that no view has — a role
+		// suffix applied twice, `-206 Column unknown`.
+		//
+		// ⭐ THE SAME DEFECT, THE SAME CURE, ONE ROAD OVER. The accounting register met it on
+		// 2026-08-31 (`fld1196_RTRef_RRRef`, `fld1217_N_Dr_N`) and it was fixed there, in
+		// ibRegAttributeColumn — which this surface does not use for the period and the figures
+		// because it builds their two names itself. The rule it encodes travelled with the helper and
+		// not with the knowledge, so this half kept the old shape until a reading that spells fields
+		// through the column layout came past it (a turnover folded by the recorder, 2026-09-02).
 		columns.push_back(ibTempColumn(periodName, periodField,
 		                               GetRegisterPeriod()->GetTypeDesc(), synthetic++,
-		                               GetRegisterPeriod()->GetSynonym()));
+		                               GetRegisterPeriod()->GetSynonym(),
+		                               ibBackendQueryColumn::Kind::Computed));
 
 		// The coarser projections the view exposes alongside the stored period. DERIVED from the
 		// stored granularity, not listed by hand: the renderer emits exactly the units above it, and
@@ -399,7 +411,8 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 			if (u.first > GetTotalsPeriodUnit())
 				columns.push_back(ibTempColumn(periodName + u.second,
 				                               periodField + wxT("_") + u.second,
-				                               GetRegisterPeriod()->GetTypeDesc(), synthetic++));
+				                               GetRegisterPeriod()->GetTypeDesc(), synthetic++,
+				                               wxEmptyString, ibBackendQueryColumn::Kind::Computed));
 	}
 
 	// Dimensions keep their METAID as the column id, so a composed read reaches them by
@@ -426,11 +439,15 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	// a query, and the caption used to be built somewhere else entirely (in the manager, per figure,
 	// spelled by hand) — so the same number had a presentation through the script door and none at
 	// all through the query one. The word comes from the one list that already holds the figures.
+	// …and a figure is ONE FIELD too, said with the kind for the same reason as the period above:
+	// the view keeps `Quantity_Turnover`, and a column that still calls itself composite is asked for
+	// `Quantity_Turnover_N`.
 	auto add = [&](const ibValueMetaObjectAttributeBase* res, const wxString& suffix) {
 		columns.push_back(ibTempColumn(res->GetName() + suffix,
 		                               res->GetName() + wxT("_") + suffix,
 		                               res->GetTypeDesc(), synthetic++,
-		                               ibRegFigureColumnCaption(res->GetSynonym(), ibRegFigureCaption(suffix))));
+		                               ibRegFigureColumnCaption(res->GetSynonym(), ibRegFigureCaption(suffix)),
+		                               ibBackendQueryColumn::Kind::Computed));
 	};
 
 	for (const auto res : GetResourceArrayObject()) {
