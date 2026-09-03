@@ -265,14 +265,28 @@ void ibBackendLocalization::SetArrayTranslate(ibBackendLocalizationEntryArray& a
 	SetArrayTranslate(GetUserLanguage(), array, strResult);
 }
 
+// 🛑 IT ONLY UPDATED, AND SO COULD NOT WRITE A FIRST TRANSLATION. The loop looked for a cell with
+// this code and did nothing when there was none — which is exactly the state of every caption that
+// has never been filled in: the array is empty, the write folds to an empty string, and the caption
+// is left blank while the caller is told the value was set.
+//
+// Measured over MCP on 2026-09-03: `metadata_set {property: "Synonym", value: "…", language: "en"}`
+// answered with the value it had accepted, and reading the property back showed nothing. The gate
+// above it had been fixed once for the very same case ("a property that has never been filled in is
+// exactly when this is used") — the gate, not the write.
+//
+// ⭐ A language that is not in the array is APPENDED. Nobody asking to set a translation means "only
+// if one is already there", and a no-op is the one answer that cannot be told from success.
 void ibBackendLocalization::SetArrayTranslate(const wxString& strLangCode, ibBackendLocalizationEntryArray& array, const wxString& strResult)
 {
 	for (auto& entry : array) {
 		if (entry.m_code == strLangCode) {
 			entry.m_data = strResult;
-			break;
+			return;
 		}
 	}
+
+	array.push_back(ibBackendLocalizationEntry{ strLangCode, strResult });
 }
 
 wxString ibBackendLocalization::GetTranslateFromArray(const wxString& strLangCode, const ibBackendLocalizationEntryArray& array)
@@ -319,4 +333,69 @@ bool ibBackendLocalization::GetTranslateFromArray(const wxString& strLangCode, c
 
 	strResult.Clear();
 	return false;
+}
+////////////////////////////////////////////////////////////////////////
+
+void ibTranslateString::SetRawText(const wxString& strRawTranslate)
+{
+	m_translations.clear();
+
+	if (ibBackendLocalization::CreateLocalizationArray(strRawTranslate, m_translations))
+		return;
+
+	// Not in the format: it IS the text, in the language in force.
+	if (!strRawTranslate.IsEmpty())
+		SetTranslate(strRawTranslate);
+}
+
+// ⭐ EXACTLY THIS LANGUAGE — the Find half. GetTranslate falls back to the language in force, which
+// is what a reader wants and what an editor must not have: one box per language, and a substitute in
+// the box is stored AS that language's translation the moment OK is pressed.
+bool ibTranslateString::FindTranslate(const wxString& strLangCode, wxString& strResult) const
+{
+	const auto iterator = std::find_if(m_translations.begin(), m_translations.end(),
+		[&strLangCode](const ibBackendLocalizationEntry& entry) {
+			return stringUtils::CompareString(entry.m_code, strLangCode); });
+
+	if (iterator == m_translations.end()) {
+		strResult.Clear();
+		return false;
+	}
+
+	strResult = iterator->m_data;
+	return true;
+}
+
+wxString ibTranslateString::FindTranslate(const wxString& strLangCode) const
+{
+	wxString strResult;
+	FindTranslate(strLangCode, strResult);
+	return strResult;
+}
+
+bool ibTranslateString::IsEmpty() const
+{
+	for (const ibBackendLocalizationEntry& entry : m_translations) {
+		if (!entry.m_data.IsEmpty())
+			return false;
+	}
+
+	return true;
+}
+
+// EQUAL WHEN THEY SAY THE SAME THING IN THE SAME LANGUAGES — order is how they were written, not
+// what they mean, so it is not compared.
+bool ibTranslateString::operator == (const ibTranslateString& src) const
+{
+	if (src.m_translations.size() != m_translations.size())
+		return false;
+
+	for (const ibBackendLocalizationEntry& entry : m_translations) {
+		// EXACTLY this language — the same reason the editor asks that way.
+		wxString strResult;
+		if (!src.FindTranslate(entry.m_code, strResult) || strResult != entry.m_data)
+			return false;
+	}
+
+	return true;
 }

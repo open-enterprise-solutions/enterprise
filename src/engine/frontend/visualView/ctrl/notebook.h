@@ -92,7 +92,7 @@ public:
 	//get title
 	virtual wxString GetControlTitle() const {
 		if (!m_propertyTitle->IsEmptyProperty())
-			return _("Page item: ") + ibBackendLocalization::GetTranslateGetRawLocText(m_propertyTitle->GetValueAsString());
+			return _("Page item: ") + m_propertyTitle->GetValueAsTranslateString();
 		return _("Page item: ") + _("<empty caption>");
 	}
 

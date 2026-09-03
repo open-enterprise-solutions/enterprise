@@ -2,7 +2,7 @@
 #define __PROPERTY_STRING_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/backend_localization.h"
+#include "backend/backend_localization.h"   // ibTranslateString — what a caption holds
 
 class BACKEND_API ibPropertyStringBase : public ibProperty {
 public:
@@ -115,42 +115,60 @@ public:
 
 };
 
-//base property for "caption" - for translate 
-class BACKEND_API ibPropertyTString : public ibPropertyStringBase {
+//base property for "caption" - for translate
+// ⭐ IT HOLDS AN ibTranslateString, the way the number property holds an ibNumber — so it stands on
+// ibProperty and not on the string base. A string property stores a string and its setter replaces
+// it, which is exactly how every other language used to be lost.
+class BACKEND_API ibPropertyTString : public ibProperty {
+	wxVariantData* CreateVariantData(const ibTranslateString& translate) const;
 public:
 
-	wxString GetValueAsTranslateString() const {
-		static thread_local wxString result;
-		GetValueAsTranslateString(result);
-		return std::move(result);
-	}
+	ibTranslateString& GetValueAsTranslate() const;
+	void SetValue(const ibTranslateString& translate);
 
-	bool GetValueAsTranslateString(wxString& result) const {
-		if (GetValueAsString(result))
-			return ibBackendLocalization::GetTranslateGetRawLocText(result, result);
-		return false;
-	}
+	// THE ACTIVE SYNONYM — the text, in the language in force. It is the translation converting
+	// itself, and it is the one question a label, a tooltip or a page header ever asks.
+	wxString GetValueAsTranslateString() const { return GetValueAsTranslate(); }
 
+	// …AND THE RAW TEMPLATE — `en = 'Goods'; ru = 'Товары';`, every language at once, as it is
+	// written down. What a template cell keeps, and what a file is written with.
+	//
+	// ⚠ NAMED "RAW", not "String". Called GetValueAsString it is indistinguishable from the reader
+	// every other string property has, and two callers asked for it while meaning the text — so a
+	// person was shown `en = 'Title';` in a notebook page header, and the rename gate compared a
+	// synonym against a template.
+	wxString GetValueAsRawString() const { return GetValueAsTranslate().GetRawText(); }
+
+	// ⚠ NO DEFAULT FOR THE VALUE. The three differ only by how many STRINGS precede it, so a default
+	// makes `(cat, name, text)` fit the second one as well — `C2668: ambiguous call` at every
+	// declaration (measured on the first build). The number property can afford one; this cannot.
 	ibPropertyTString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyStringBase(cat, name, ibBackendLocalization::CreateLocalizationRawLocText(value))
+		const ibTranslateString& value) : ibProperty(cat, name, CreateVariantData(value))
 	{
 	}
 
 	ibPropertyTString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, ibBackendLocalization::CreateLocalizationRawLocText(value))
+		const ibTranslateString& value) : ibProperty(cat, name, label, CreateVariantData(value))
 	{
 	}
 
 	ibPropertyTString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString, ibBackendLocalization::CreateLocalizationRawLocText(value))
+		const ibTranslateString& value) : ibProperty(cat, name, label, helpString, CreateVariantData(value))
 	{
 	}
 
-	virtual bool IsEmptyProperty() const { return GetValueAsTranslateString().IsEmpty(); }
+	virtual bool IsEmptyProperty() const { return GetValueAsTranslate().IsEmpty(); }
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
+
+	//per-type node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+public:
+
 };
 
 //base property for "text"

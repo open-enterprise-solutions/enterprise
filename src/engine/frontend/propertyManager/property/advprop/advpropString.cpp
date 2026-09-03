@@ -1,6 +1,7 @@
 #include "advpropString.h"
 
 #include "backend/propertyManager/property/propertyString.h"
+#include "backend/propertyManager/property/variant/variantTranslate.h"
 #include "frontend/propertyManager/property/private/prop.h"                 // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
 
@@ -23,7 +24,7 @@ public:
 		}, ibPropertyRegistry::Priority_Base);
 		ibPropertyRegistry::Register([](ibPropertyTString* prop) -> wxPGProperty* {
 			return new wxTStringProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(),
-				prop->GetValueAsString());
+				prop->GetValueAsTranslate());
 		});
 		ibPropertyRegistry::Register([](ibPropertyMString* prop) -> wxPGProperty* {
 			return new wxMStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
@@ -104,39 +105,38 @@ wxPG_IMPLEMENT_PROPERTY_CLASS(ibUEStringProperty, ibUStringProperty, TextCtrl)
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(wxTStringProperty, wxLongStringProperty, TextCtrlAndButton)
 
+wxTStringProperty::wxTStringProperty(const ibPropertyObject* property, const wxString& label,
+	const wxString& name, const ibTranslateString& value)
+	: wxLongStringProperty(label, name), m_ownerProperty(property)
+{
+	SetValue(
+		new ibVariantDataTranslate(value)
+	);
+}
+
 wxString wxTStringProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
 {
-	return ibBackendLocalization::GetTranslateGetRawLocText(value.GetString());
+	ibVariantDataTranslate* translateVariant = property_cast(value, ibVariantDataTranslate);
+	wxASSERT(translateVariant);
+	return translateVariant->GetTranslate();
 }
 
 bool wxTStringProperty::StringToValue(wxVariant& variant, const wxString& text, wxPGPropValFormatFlags flags) const
 {
-	ibBackendLocalizationEntryArray array;
+	ibVariantDataTranslate* translateVariant = property_cast(variant, ibVariantDataTranslate);
+	wxASSERT(translateVariant);
 
-	if (ibBackendLocalization::CreateLocalizationArray(variant.GetString(), array)) {
-		const wxString& strLangCode = ibBackendLocalization::GetUserLanguage();
-		const auto iterator = std::find_if(array.begin(), array.end(),
-			[strLangCode](const ibBackendLocalizationEntry& entry) {
-				return stringUtils::CompareString(entry.m_code, strLangCode); });
-		if (iterator == array.end()) {
-			ibBackendLocalizationEntry entry;
-			entry.m_code = strLangCode;
-			entry.m_data = text;
-			array.emplace_back(entry);
-		}
-		else {
-			iterator->m_data = text;
-		}
-		variant = ibBackendLocalization::GetRawLocText(array);
-		return true;
-	}
+	const ibTranslateString& held = translateVariant->GetTranslate();
+	if (held.GetString() == text)
+		return false;
 
-	ibBackendLocalizationEntry entry;
-	entry.m_code = ibBackendLocalization::GetUserLanguage();
-	entry.m_data = text;
-	array.emplace_back(entry);
+	// ⚠ A NEW CELL, never an edit in place — the command processor caches these variants and swaps
+	// them back, which is what makes undo a snapshot (property-system.md §3.2). Typed in the grid
+	// means the language in force, so only that one cell differs from the cached value.
+	ibTranslateString edited = held;
+	edited.SetTranslate(text);
 
-	variant = ibBackendLocalization::GetRawLocText(array);
+	variant = new ibVariantDataTranslate(edited);
 	return true;
 }
 
@@ -169,7 +169,8 @@ bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 		}
 	};
 
-	wxASSERT_MSG(value.IsType(wxS("string")), "Function called for incompatible property");
+	ibVariantDataTranslate* translateVariant = property_cast(value, ibVariantDataTranslate);
+	wxASSERT_MSG(translateVariant, "Function called for incompatible property");
 
 	if (m_ownerProperty != nullptr) {
 
@@ -194,9 +195,7 @@ bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 
 			wxBoxSizer* rowsizer = new wxBoxSizer(wxVERTICAL);
 
-			ibBackendLocalizationEntryArray array;
-			ibBackendLocalization::CreateLocalizationArray(
-				m_value.GetString(), array);
+			ibTranslateString& translate = translateVariant->GetTranslate();
 
 			// GetOwner's out-param is non-const (ibMetaData*&), so take it into a
 			// raw local; the owner we actually use downstream is read-only.
@@ -207,12 +206,9 @@ bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 			auto arrayLanguage = owner->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID);
 			for (const auto language : arrayLanguage) {
 
-				auto iterator = std::find_if(array.begin(), array.end(),
-					[language](const ibBackendLocalizationEntry& entry) {
-						return stringUtils::CompareString(entry.m_code, language->GetLangCode()); });
-
-				const wxString& strTranslate =
-					iterator != array.end() ? wxString(iterator->m_data) : wxString();
+				// EXACTLY this language: a box filled with the substitute would be stored as this
+				// language's own translation the moment OK is pressed.
+				const wxString strTranslate = translate.FindTranslate(language->GetLangCode());
 
 				if (arrayLanguage.size() > 1) {
 
@@ -262,15 +258,12 @@ bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 		const int res = dlg->ShowModal();
 
 		if (res == wxID_OK) {
-			wxString strLocalization;
+			ibTranslateString edited;
 			for (const auto pair : locArray) {
 				const auto ml = pair.first;	const auto ed = pair.second;
-				strLocalization += wxString::Format(wxT("%s = '%s';"),
-					ml->GetLangCode(),
-					ed->GetValue()
-				);
+				edited.SetTranslate(ml->GetLangCode(), ed->GetValue());
 			}
-			value = strLocalization;
+			value = new ibVariantDataTranslate(edited);
 
 			dlg->Destroy();
 			return true;

@@ -351,6 +351,7 @@
     <ClInclude Include="propertyManager\property\variant\variantCommandSource.h" />
     <ClInclude Include="propertyManager\property\variant\variantSource.h" />
     <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h" />
+    <ClInclude Include="propertyManager\property\variant\variantTranslate.h" />
     <ClInclude Include="propertyManager\property\variant\variantType.h" />
     <ClInclude Include="res\resource.h" />
     <ClInclude Include="roleHelper.h" />

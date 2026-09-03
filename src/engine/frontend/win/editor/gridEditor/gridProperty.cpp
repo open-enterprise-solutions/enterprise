@@ -194,7 +194,7 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty
 		}
 	}
 	else if (m_propertyText == property) {
-		m_view->SetCellValue(coords, m_propertyText->GetValueAsString());
+		m_view->SetCellValue(coords, m_propertyText->GetValueAsRawString());
 	}
 	else if (m_propertyParameter == property) {
 		m_view->SetCellValue(coords, m_propertyParameter->GetValueAsString());

@@ -64,12 +64,12 @@ public:
 class wxTStringProperty : public wxLongStringProperty {
 
 public:
+	// ⭐ IT CARRIES THE TRANSLATIONS, NOT THE FORMAT. The grid holds the same cell the property
+	// holds (ibVariantDataTranslate), so the editor reads and writes languages instead of taking
+	// apart `en = '…';` and putting it back together in three different places.
 	wxTStringProperty(const class BACKEND_API ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		const wxString& value = wxEmptyString) :
-		wxLongStringProperty(label, name, value), m_ownerProperty(property)
-	{
-	}
+		const ibTranslateString& value = ibTranslateString());
 
 	virtual wxString ValueToString(wxVariant& value,
 		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;

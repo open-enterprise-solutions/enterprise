@@ -1826,8 +1826,7 @@ std::string SessionManager::SessionInfo(const std::string& id)
 	}
 	// Route through the session worker: SessionInfoFromSession iterates
 	// tabs and calls ibValueForm::GetControlTitle → ibPropertyTString
-	// ::GetValueAsTranslateString → ibBackendLocalization::
-	// CreateLocalizationArray, which touches shared non-thread-safe state
+	// ::GetValueAsTranslateString → ibTranslateString, which touches shared non-thread-safe state
 	// (locale cache, wxString internals). Worker may be mutating the same
 	// state concurrently — user saw a crash in CreateLocalizationArray
 	// from the /session HTTP thread (dump 2026-04-19 17:12). Same pattern

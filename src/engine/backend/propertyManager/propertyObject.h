@@ -328,6 +328,14 @@ public:
 	// nothing.
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) { return ibPropertyChoiceMode::None; }
 
+	// (⛔ A `GetValueKind()` VIRTUAL STOOD HERE for an hour on 2026-09-03 and was taken out again,
+	//  which is worth a line so it is not proposed a second time. It answered "what am I, where my
+	//  value's shape does not say it" — and exactly two of the thirty-five property classes had
+	//  anything to say: a caption, and a type. A classification only two members answer is two
+	//  exceptions wearing a classification, and it made the universal base carry a question that is
+	//  none of its business. Asking "are you one of these" already has a door — the value's own
+	//  ConvertToValue / a cast at the point of use — and the caller that needs the answer needs the
+	//  typed interface in the same breath anyway.)
 
 protected:
 

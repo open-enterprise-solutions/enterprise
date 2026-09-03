@@ -712,6 +712,9 @@
     <ClInclude Include="propertyManager\property\variant\variantSource.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantTranslate.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantType.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>

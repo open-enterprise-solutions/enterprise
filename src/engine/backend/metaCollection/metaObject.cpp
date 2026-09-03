@@ -73,7 +73,7 @@ bool ibValueMetaObject::BuildNewName()
 		// nothing else carries.
 		m_metaData->RenameMetaObject(this, metaName);
 
-		const wxString& metaPrevSynonym = m_propertySynonym->GetValueAsString();
+		const wxString& metaPrevSynonym = m_propertySynonym->GetValueAsRawString();
 		const wxString& metaSynonym = metaPrevSynonym.Length() > 0 ? stringUtils::GenerateSynonym(metaName) : wxString(wxEmptyString);
 		SetSynonym(metaSynonym);
 	}
