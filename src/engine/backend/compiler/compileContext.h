@@ -367,6 +367,27 @@ struct ibCompileContext {
 		m_numDoNumber--;
 	}
 
+	// ⭐ THE CONTEXT THAT OPENED THE INNERMOST LOOP — this one, or the nearest parent that has one.
+	//
+	// 🛑 WHY IT HAS TO CLIMB: in C-style a loop's BODY compiles in a child context
+	// (CompileFor / CompileForeach / CompileWhile hand CompileBlock a CreateLocalContext), while
+	// StartLoopList opened the loop on the context above it. Asking the context in hand therefore
+	// found no jump list at all, and `continue` / `break` were refused as "outside a loop" in EVERY
+	// loop of the braces dialect — the VES dialect compiles the body into the same context and never
+	// showed it. Return already climbs, for exactly this reason.
+	//
+	// ⚠ `find`, not `operator[]`: the subscript INSERTS a null entry for a level that was never
+	// opened, so merely asking the question would grow the map and make the next lookup find a hole
+	// that looks like a loop.
+	ibCompileContext* FindLoopContext() {
+		for (ibCompileContext* ctx = this; ctx != nullptr; ctx = ctx->m_parentContext) {
+			const auto found = ctx->m_listContinue.find(ctx->m_numDoNumber);
+			if (found != ctx->m_listContinue.end() && found->second != nullptr)
+				return ctx;
+		}
+		return nullptr;
+	}
+
 	void CreateLabels();
 
 	ibParamUnit CreateVariable(const wxString& strPrefix = wxT("@temp_"));

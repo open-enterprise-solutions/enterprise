@@ -99,8 +99,16 @@ ibQueryPackage ibQueryParser::ParsePackage(const wxString& queryText)
 		// statement — nothing is added to anybody's FROM and nothing is materialised (Max,
 		// 2026-08-21: mark two selections as named and set the links between them, and that is all).
 		if (Cur().IsKeyword(ibQueryKeyword::Link)) {
-			for (ibQueryPackageLink& link : ParsePackageLinks())
+			// …AND IT TAKES ITS PLACE IN THE SEQUENCE. Each link is a STATEMENT as well as a member of
+			// the package's link set: it runs where it stands (after the selections it reconciles) and
+			// answers, from its own position, with how many rows it removed. See
+			// ibQueryAstStatement::m_linkIndex for why the fact is kept in both places.
+			for (ibQueryPackageLink& link : ParsePackageLinks()) {
+				ibQueryAstStatement statement;
+				statement.m_linkIndex = static_cast<int>(package.m_links.size());
 				package.m_links.push_back(std::move(link));
+				package.m_statements.push_back(std::move(statement));
+			}
 		}
 		// ⚠ …AND THE FORM IT REPLACED IS REFUSED OUT LOUD. `JOIN A AND B ON …` standing here was the
 		// first spelling (recognised by position, no keyword); read on today it would parse as a
@@ -586,13 +594,46 @@ void ibQueryParser::ParseOrderBy(ibQuerySelect& sel)
 {
 	do {
 		ibQueryOrderItem it;
-		it.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
-		// ⚠ IN AN ORDER BY ITEM, A KEYWORD IS A NAME — the same rule that already holds after a `.`,
-		// one position earlier. Nothing but a column may stand here, so there is no ambiguity to
-		// resolve, and a configuration naming an attribute `Order`, `Value`, `Count` or `Group` does
-		// not consult our keyword table first. Before this, an enumeration's own `Order` attribute made
-		// `ORDER BY Order` a syntax error, and the list that asked simply came back empty.
-		it.m_expr->m_path = ParseDottedName(/*firstMayBeKeyword*/true);
+
+		// ⭐ SORTING BY AN EXPRESSION — `ORDER BY CASE WHEN … END`, `ORDER BY Price * Qty`,
+		// `ORDER BY ISNULL(Weight, 0)`. The tier below has carried this the whole time (the lowering's
+		// OrderByExpr, "a CASE / arithmetic: sort by a condition"), and only the parser refused it,
+		// with "unexpected text after the query" pointing at the word CASE — the engine disagreeing
+		// with itself about what the language is (measured 2026-09-03).
+		//
+		// ⚠ AND A KEYWORD HERE IS STILL A NAME, which is why this is not simply ParsePredicate(). An
+		// attribute called `Order`, `Value`, `Count` or `Group` must keep sorting the way it always
+		// has — so only the words that can BEGIN AN EXPRESSION and could not be a bare name in this
+		// position take the expression road: CASE, ISNULL, an aggregate call, and anything opening
+		// with a bracket, a literal or a &parameter. Everything else is read as the dotted name it
+		// has always been.
+		const ibQueryToken& tk = Cur();
+		const bool startsExpression =
+			   (tk.m_kind == ibQueryTokenKind::Keyword
+			     && (tk.m_keyword == ibQueryKeyword::Case
+			      || tk.m_keyword == ibQueryKeyword::IsNull
+			      || ibIsAggregateKeyword(tk.m_keyword)))
+			|| tk.m_kind == ibQueryTokenKind::Number
+			|| tk.m_kind == ibQueryTokenKind::String
+			|| tk.m_kind == ibQueryTokenKind::Date
+			|| tk.m_kind == ibQueryTokenKind::Param
+			// A LEADING SIGN starts an expression too — `ORDER BY -Total` is "biggest first" written
+			// the short way, and it reads as a name only until the minus is accounted for.
+			|| (tk.m_kind == ibQueryTokenKind::Op && (tk.m_text == wxT("-") || tk.m_text == wxT("+")))
+			|| (tk.m_kind == ibQueryTokenKind::Punct && tk.m_text == wxT("("));
+
+		if (startsExpression) {
+			it.m_expr = ParsePredicate();
+		}
+		else {
+			it.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+			// ⚠ IN AN ORDER BY ITEM, A KEYWORD IS A NAME — the same rule that already holds after a `.`,
+			// one position earlier. A configuration naming an attribute `Order`, `Value`, `Count` or
+			// `Group` does not consult our keyword table first. Before this, an enumeration's own
+			// `Order` attribute made `ORDER BY Order` a syntax error, and the list that asked simply
+			// came back empty.
+			it.m_expr->m_path = ParseDottedName(/*firstMayBeKeyword*/true);
+		}
 		if (AcceptKw(ibQueryKeyword::Desc))      it.m_ascending = false;
 		else if (AcceptKw(ibQueryKeyword::Asc))  it.m_ascending = true;
 		sel.m_orderBy.push_back(std::move(it));
@@ -1075,6 +1116,30 @@ ibQueryAstExprPtr ibQueryParser::ParseIsNullCall()
 ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 {
 	const ibQueryToken& tk = Cur();
+
+	// ⭐ A LEADING MINUS — `-Quantity`, `SELECT -Amount AS Refund`, `ORDER BY -Total`. It is how a
+	// person writes "the other direction", and the grammar simply had no place for it: the parser
+	// looked for a column, a literal or a parameter and answered "expected a column, literal, or
+	// parameter" pointing at the minus (measured 2026-09-04). The workaround people find is
+	// `0 - Quantity`, which works — and is exactly what this builds, so nothing downstream learns a
+	// new node: the AST, the renderer, the lowering and all four drivers keep the one arithmetic
+	// they already have. A leading PLUS is accepted and dropped, being a no-op said out loud.
+	if (tk.m_kind == ibQueryTokenKind::Op && (tk.m_text == wxT("-") || tk.m_text == wxT("+"))) {
+		const bool negate = tk.m_text == wxT("-");
+		const unsigned int line = tk.m_line, col = tk.m_col;
+		++m_pos;
+		ibQueryAstExprPtr operand = ParsePrimary();
+		if (!negate)
+			return operand;
+		auto zero = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
+		zero->m_literal = ibValue(0);
+		zero->m_line = line; zero->m_col = col;
+		auto neg = ibQueryAstExpr::Make(ibQueryAstExprKind::Arith);
+		neg->m_arith = ibQueryArithOp::Sub;
+		neg->m_lhs = zero; neg->m_rhs = operand;
+		neg->m_line = line; neg->m_col = col;
+		return neg;
+	}
 
 	if (tk.IsKeyword(ibQueryKeyword::IsNull))
 		return ParseIsNullCall();

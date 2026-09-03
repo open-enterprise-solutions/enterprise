@@ -3626,13 +3626,15 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 			case KEY_CONTINUE:
 			{
 				GETKeyWord(KEY_CONTINUE);
-				if (context->m_listContinue[context->m_numDoNumber]) {
+				// THE LOOP MAY BE A CONTEXT ABOVE — see ibCompileContext::FindLoopContext.
+				ibCompileContext* loopContext = context->FindLoopContext();
+				if (loopContext != nullptr) {
 					ibByteUnit code;
 					AddLineInfo(code);
 					code.m_numOper = OPER_GOTO;
 					m_cByteCode.m_listCode.emplace_back(std::move(code));
 					const int addrLine = m_cByteCode.m_listCode.size() - 1;
-					std::vector<int>* pList = context->m_listContinue[context->m_numDoNumber];
+					std::vector<int>* pList = loopContext->m_listContinue[loopContext->m_numDoNumber];
 					pList->emplace_back(addrLine);
 				}
 				else {
@@ -3644,13 +3646,16 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 			case KEY_BREAK:
 			{
 				GETKeyWord(KEY_BREAK);
-				if (context->m_listBreak[context->m_numDoNumber] != nullptr) {
+				ibCompileContext* loopContext = context->FindLoopContext();
+				std::vector<int>* pList = loopContext != nullptr
+					? loopContext->m_listBreak[loopContext->m_numDoNumber]
+					: nullptr;
+				if (pList != nullptr) {
 					ibByteUnit code;
 					AddLineInfo(code);
 					code.m_numOper = OPER_GOTO;
 					m_cByteCode.m_listCode.emplace_back(std::move(code));
 					const int addrLine = m_cByteCode.m_listCode.size() - 1;
-					std::vector<int>* pList = context->m_listBreak[context->m_numDoNumber];
 					pList->emplace_back(addrLine);
 				}
 				else {

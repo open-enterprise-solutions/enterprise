@@ -95,9 +95,18 @@ public:
 			"configuration's, not a general one.");
 	}
 
+	// 🛑 AN ARGUMENT THE TOOL READS AND DOES NOT DECLARE IS AN ARGUMENT NOBODY CAN USE — and worse,
+	// it makes every OTHER word look accepted: a caller passing `query` (the word every other
+	// search here takes) got the whole list back and no complaint, because an undeclared name is
+	// checked against nothing. `kind` was read in Call and declared nowhere.
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = {  };
+		static const ibMcpArgument s_kind(wxT("kind"), ibMcpArgument::Kind::Text,
+			ibMcpText("Narrow it to one kind of type: primitive, value, control, system, enum, "
+				"context, metadata, metaValue, configuration. Omit for all of them. This is not a "
+				"search - it filters by kind, and a word that is not one of these is refused."));
+
+		static const std::vector<ibMcpArgument> s_arguments = { s_kind };
 		return s_arguments;
 	}
 
@@ -209,6 +218,23 @@ public:
 		}
 
 		if (ibValue::GetAvailableCtor(name) == nullptr) {
+
+			// 🛑 TWO REGISTRIES, ONE VOCABULARY — and answering out of one of them made this verb
+			// contradict its own neighbour. type_list lists the CONFIGURATION's types too
+			// (`CatalogRef.Goods`, `DocumentObject.GoodsReceipt`), because they are real names a
+			// script writes; those live in the metadata's registry, not the engine's, so asking the
+			// engine alone answered "not a type this platform knows" about a name type_list had
+			// just given. Two doors to one type system must not disagree about what exists.
+			if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()
+				&& activeMetaData->GetTypeCtor(name) != nullptr) {
+
+				refusal = wxString::Format(
+					ibMcpText("'%s' is a type of this configuration, and its members are not listed "
+					  "this way - it exists against the object that declares it. Read that object "
+					  "with metadata_get, its fields with query_fields."), name);
+				return false;
+			}
+
 			refusal = wxString::Format(
 				ibMcpText("'%s' is not a type this platform knows. Use type_list to see what is."), name);
 			return false;

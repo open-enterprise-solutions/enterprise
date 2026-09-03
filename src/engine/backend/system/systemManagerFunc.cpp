@@ -662,9 +662,31 @@ void ibValueSystemFunction::ClearMessage()
 		frame->ClearMessage();
 }
 
+// ⭐⭐ THE ERROR TRIO ASKS *WHICH KIND* OF EVALUATION, NOT WHETHER IT IS ONE.
+//
+// A WATCH must stay out of this entirely: it runs because a tooltip appeared, it changes nothing,
+// and `GetLastError` DRAINS the chain — so a watch touching these would steal the description from
+// the code that is actually running, or raise an error nobody asked for.
+//
+// A SANDBOX is the code that is actually running. It writes, it fires handlers, and the whole of it
+// is rolled back afterwards — the platform already says so and already asks this question in that
+// shape elsewhere (`!IsEvalMode() || IsEvalSandbox()`, commonObject.cpp). Its `except` block has the
+// same right to ask what failed as any other.
+//
+// 🛑 IT DID NOT, AND THE SILENCE WAS TOTAL: every `except { Message(ErrorDescription()) }` in a
+// sandbox printed empty brackets — a division by zero, a query naming a table that is not there, a
+// posting refused by a stock control, all identical and all blank (measured 2026-09-03: three
+// probes, three empty strings). What made it hard to see is that `Raise` still threw, because THAT
+// is an opcode and never came through here — so the code looked like it was working normally right
+// up to the point where it had to say why it stopped.
+static bool ErrorsAreSilencedHere()
+{
+	return ibBackendException::IsEvalMode() && !ibBackendException::IsEvalSandbox();
+}
+
 void ibValueSystemFunction::SetError(const wxString& strError)
 {
-	if (ibBackendException::IsEvalMode())
+	if (ErrorsAreSilencedHere())
 		return;
 
 	ibBackendCoreException::Error(strError);
@@ -672,7 +694,7 @@ void ibValueSystemFunction::SetError(const wxString& strError)
 
 void ibValueSystemFunction::Raise(const wxString& strError)
 {
-	if (ibBackendException::IsEvalMode())
+	if (ErrorsAreSilencedHere())
 		return;
 
 	if (auto* puState = ibSession::GetPUState())
@@ -682,7 +704,7 @@ void ibValueSystemFunction::Raise(const wxString& strError)
 
 wxString ibValueSystemFunction::ErrorDescription()
 {
-	if (ibBackendException::IsEvalMode())
+	if (ErrorsAreSilencedHere())
 		return wxEmptyString;
 
 	return ibBackendException::GetLastError();

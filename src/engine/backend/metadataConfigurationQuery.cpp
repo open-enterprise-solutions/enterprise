@@ -322,13 +322,48 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 			ledger.HasWarnings() ? wxT(", with warnings") : wxT(""),
 			ledger.HasErrors()   ? wxT(", with errors")   : wxT(""));
 
+		// 🛑 AN ERROR HERE IS NOT LOGGED WITH A DIALOG — IT IS RAISED. ibJournalError echoes through
+		// wxLogError, and in a GUI process that is a MODAL: the person in front of the designer was
+		// shown "! Doesn't have any recorder" for work they never started (a `config_save` over MCP,
+		// 2026-09-03), while the caller sat waiting on a window it could not see.
+		//
+		// ⭐ WHO SHOWS IT IS DECIDED BY WHO ASKED, and the way to let them decide is an exception:
+		// the designer catches it at its button and shows a window; a tool catches it and puts the
+		// words in its answer. Restructuring itself has no business knowing which of the two is
+		// there — it only has to say what went wrong, once, and let go.
+		// ⚠ AND THE LEVEL IS A FACT ABOUT THE RESTRUCTURING, NOT ABOUT THE PROCESS. "Doesn't have any
+		// recorder" is an error OF THIS STAGE - the reason it will not go through, and the material
+		// of the apply report - and not a failure of the application that anybody must be interrupted
+		// about. Written through the error verb it became one: ibJournalError echoes at wx's ERROR
+		// level, and in a GUI process that is a modal dialog in front of whoever happens to be there.
+		//
+		// So the whole ledger goes to the FILE as it stands, each line carrying its own level as a
+		// word; nothing here opens a window.
+		wxString raised;
+
 		for (const ibRestructureInfo::Entry& entry : ledger) {
-			switch (entry.type) {
-			case ibRestructure::error:   ibJournalError  (wxT("metadata.apply"), wxT("%s"), entry.descr); break;
-			case ibRestructure::warning: ibJournalWarning(wxT("metadata.apply"), wxT("%s"), entry.descr); break;
-			default:                     ibJournalInfo   (wxT("metadata.apply"), wxT("%s"), entry.descr); break;
-			}
+
+			const wxChar* level =
+				  entry.type == ibRestructure::error   ? wxT("error")
+				: entry.type == ibRestructure::warning ? wxT("warning")
+				                                       : wxT("info");
+
+			ibJournalInfo(wxT("metadata.apply"), wxT("%s: %s"), level, entry.descr);
+
+			if (entry.type == ibRestructure::error)
+				raised << (raised.IsEmpty() ? wxT("") : wxT("\n")) << entry.descr;
 		}
+
+		// 🛑 AND IT DOES NOT RAISE FROM HERE. Two reasons, and the second is the one that bites: a
+		// caller needs the LIST - which objects, what is wrong with each - and an exception hands it
+		// one string and unwinds; and this point is BEFORE the builder closes the restructuring
+		// transaction below, so leaving through it would abandon the commit-or-rollback that has to
+		// happen either way.
+		//
+		// The ledger IS the answer, and it stays where both roads already read it: the apply dialog
+		// greys its button out of it, and a tool reads it into its result. Nothing is lost by not
+		// throwing - what would have been thrown is sitting in `ledger` for whoever asked.
+		(void)raised;
 	}
 
 	// The L3-2 builder OWNS the close of the restructuring transaction: rollback if asked, else commit the

@@ -236,6 +236,19 @@ struct ibQuerySortItem
 	// empty. Single-source DB reads only (the L4 lowering gates it), like the computed WHERE side; a computed
 	// sort cannot be a keyset key, so a paged read cannot page by it (the text-query full read is the user).
 	std::shared_ptr<struct ibQueryColumnExpr> m_expr;
+
+	// ⭐⭐ SORTING BY A FOLD — `ORDER BY SUM(Qty) DESC`, i.e. "the biggest first", which is what a
+	// TOP-N report is made of. It cannot be any of the three above: an aggregate is not a column of
+	// the source (nothing to point at), and it is not an expression over one either — it exists only
+	// AFTER the fold, under the name the projection gave it. So the sort names that OUTPUT.
+	//
+	// 🛑 Without it neither spelling worked: `ORDER BY SUM(M.Quantity)` answered "expected a column",
+	// and `ORDER BY Qty` — the alias the query itself had just written — answered "unknown attribute
+	// 'Qty' on source 'M'", because the resolver looks for attributes and an alias is not one
+	// (measured 2026-09-04). A person asking for the top three items by turnover had no way to say it.
+	//
+	// Empty = an ordinary sort; the fields above say which of the three it is.
+	wxString                    m_outputAlias;
 };
 
 // ==========================================================================

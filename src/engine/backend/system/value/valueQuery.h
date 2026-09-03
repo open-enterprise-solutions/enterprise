@@ -165,12 +165,22 @@ class BACKEND_API ibValueQueryResult : public ibValueDynamicMembers
 	// in Select(), so releasing THIS does not end the read. Null when a transaction was already open.
 	std::shared_ptr<ibQueryReadState>       m_snapshot;
 
+	// ⭐⭐ …AND THE TEMP TABLES THESE ROWS LIVE IN, for exactly the same reason and by the same means.
+	// A package's own store dies when its last reader lets go — and a script's `Execute()` hands the
+	// result out and reads it later, so the reader IS this object. Held, never touched: the share is
+	// the whole of its job. (Null when a TempTablesManager owns the store instead.)
+	//
+	// 🛑 Without it, `SELECT … INTO T …; SELECT … FROM T` read a column at 0xdddddddd and took the
+	// process down on the first field (dump 2026-09-04) — see ibQueryLowering::PackageResult::m_temps.
+	std::shared_ptr<ibQueryTempTableStore>  m_temps;
+
 	void FillMembers(ibMemberTable& helper) const;
 
 public:
 	ibValueQueryResult();                                                                            // empty
 	ibValueQueryResult(ibDataQueryResult&& result, std::vector<ibQueryLowering::OutputColumn> schema, bool hasTotals,
-	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr);
+	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr,
+	                   std::shared_ptr<ibQueryTempTableStore> temps = nullptr);
 	~ibValueQueryResult() override;
 
 	bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
@@ -193,6 +203,11 @@ class BACKEND_API ibValueQuerySelect : public ibValueDynamicMembers
 	// there. A flat selection needs it most: its cursor is still live and draws rows on demand.
 	std::shared_ptr<ibQueryReadState>       m_snapshot;
 
+	// …and the temp tables its rows live in, inherited the same way and for the same reason: a
+	// selection outlives the result it came from (`s = q.ExecuteBatch().Get(1).Select()` keeps only
+	// this object alive), so the share has to reach the LAST reader, not the first.
+	std::shared_ptr<ibQueryTempTableStore>  m_temps;
+
 	void    FillMembers(ibMemberTable& helper) const;
 	ibValue ReadColumn(const ibQueryLowering::OutputColumn& oc) const;   // current row / node cell
 
@@ -200,10 +215,12 @@ public:
 	ibValueQuerySelect();                                                                            // empty
 	ibValueQuerySelect(std::unique_ptr<ibDataQueryResult> flat,
 	                   std::vector<ibQueryLowering::OutputColumn> schema,
-	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr);                      // flat list
+	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr,
+	                   std::shared_ptr<ibQueryTempTableStore> temps = nullptr);                    // flat list
 	ibValueQuerySelect(ibSelector&& tree,
 	                   std::vector<ibQueryLowering::OutputColumn> schema,
-	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr);                      // grouped / TOTALS
+	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr,
+	                   std::shared_ptr<ibQueryTempTableStore> temps = nullptr);                    // grouped / TOTALS
 	~ibValueQuerySelect() override;
 
 	bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,

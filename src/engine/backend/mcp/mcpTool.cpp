@@ -169,7 +169,7 @@ bool ibMcpTool::ibMcpArgument::Flag(const ibDataNode& params) const
 const ibMcpTool::ibMcpArgument& ibMcpIdArgument()
 {
 	static const ibMcpTool::ibMcpArgument s_id(wxT("id"), ibMcpTool::ibMcpArgument::Kind::Whole,
-		_("The object, as NodeId - metadata_list and metadata_get give it. It survives a rename, "
+		ibMcpText("The object, as NodeId - metadata_list and metadata_get give it. It survives a rename, "
 		  "which a name does not."), /*required*/ true);
 	return s_id;
 }
@@ -177,7 +177,7 @@ const ibMcpTool::ibMcpArgument& ibMcpIdArgument()
 const ibMcpTool::ibMcpArgument& ibMcpValueArgument()
 {
 	static const ibMcpTool::ibMcpArgument s_value(wxT("value"), ibMcpTool::ibMcpArgument::Kind::Text,
-		_("What to put there, IN ITS OWN TYPE: true/false for a switch, a number for a number, the "
+		ibMcpText("What to put there, IN ITS OWN TYPE: true/false for a switch, a number for a number, the "
 		  "word for a property with a closed set of them, the NAME or the id of the object for a "
 		  "relationship. For a composite one, send back the same shape you were given."));
 	return s_value;
@@ -187,8 +187,12 @@ const ibMcpTool::ibMcpArgument& ibMcpLanguageArgument()
 {
 	static const ibMcpTool::ibMcpArgument s_language(wxT("language"),
 		ibMcpTool::ibMcpArgument::Kind::Text,
-		_("Fill in ONE language of a caption, leaving the others alone. The configuration's own "
-		  "language code. Omit to write the value as it stands."));
+		ibMcpText("WHICH LANGUAGE this caption is written in - the two-letter code of a declared Language "
+		  "(`en`, `ru`, `uk`). Fills that one and leaves the others alone.\n"
+		  "OMITTING IT IS NOT 'ALL LANGUAGES': the value goes into the configuration's OWN "
+		  "language, which in a fresh base is English - so a Russian caption written without this "
+		  "is stored as the English one, invisible to a Russian reader and wrong for the next "
+		  "developer. Say it every time; metadata_get on Synonym answers the whole set."));
 	return s_language;
 }
 
@@ -288,6 +292,30 @@ wxString ibMcpBusyWith()
 	// A dialog with no title is still a dialog in the way — saying so beats answering "free".
 	return BusyTitle().IsEmpty() ? wxString(wxT("a dialog")) : BusyTitle();
 }
+
+// ⭐ THE GREETING'S OWN VERBS. Each one is here because the greeting cannot be made without it:
+// chat_history to know whether something is already in progress, platform_state and metadata_tree
+// to have anything true to SAY about the configuration, mcp_search to find the verb at all, and
+// chat_say to speak. Nothing else — the point is that a person learns somebody is here BEFORE
+// their base is read, not after.
+const std::vector<wxString>& ibMcpGreetingVerbs()
+{
+	static const std::vector<wxString> s_verbs = {
+		wxT("chat_say"), wxT("chat_history"), wxT("chat_take"),
+		wxT("platform_state"), wxT("metadata_tree"), wxT("mcp_search") };
+
+	return s_verbs;
+}
+
+bool ibMcpRunsBeforeGreeting(const wxString& toolName)
+{
+	for (const wxString& verb : ibMcpGreetingVerbs())
+		if (verb.IsSameAs(toolName, false))
+			return true;
+
+	return false;
+}
+
 
 // THE SAME SHAPE FOR THE CHECKS — a function-local store, filled during static construction by
 // whichever DLL is linked. No name to claim here: an audit is not addressed, it is asked.
@@ -562,7 +590,7 @@ wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 
 		if (!fits) {
 			return wxString::Format(
-				_("'%s' takes %s for '%s', and %s came. Nothing was done."),
+				ibMcpText("'%s' takes %s for '%s', and %s came. Nothing was done."),
 				tool->GetName(), shapeWord(kind), argument.Name(), arrived(value, child));
 		}
 
@@ -583,7 +611,7 @@ wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 
 		if (!known) {
 			return wxString::Format(
-				_("'%s' is not one of the words '%s' takes for '%s'. It takes: %s. Nothing was done."),
+				ibMcpText("'%s' is not one of the words '%s' takes for '%s'. It takes: %s. Nothing was done."),
 				said, tool->GetName(), argument.Name(), allowed);
 		}
 	}
@@ -929,7 +957,7 @@ ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, wxString& refusal,
 	const wxString& field)
 {
 	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-		refusal = _("No configuration is open.");
+		refusal = ibMcpText("No configuration is open.");
 		return nullptr;
 	}
 
@@ -940,7 +968,7 @@ ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, wxString& refusal,
 
 	if (given == nullptr || given->Kind() != ibDataKind::Number) {
 		refusal = wxString::Format(
-			_("Pass the object's NodeId as `%s` - metadata_list and metadata_get give it."),
+			ibMcpText("Pass the object's NodeId as `%s` - metadata_list and metadata_get give it."),
 			field);
 		return nullptr;
 	}
@@ -949,7 +977,7 @@ ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, wxString& refusal,
 
 	if (id <= 0) {
 		refusal = wxString::Format(
-			_("`%s` must be a NodeId, and ids start at 1."), field);
+			ibMcpText("`%s` must be a NodeId, and ids start at 1."), field);
 		return nullptr;
 	}
 
@@ -957,7 +985,7 @@ ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, wxString& refusal,
 
 	if (object == nullptr) {
 		refusal = wxString::Format(
-			_("Nothing in this configuration has id %i."), (int)id);
+			ibMcpText("Nothing in this configuration has id %i."), (int)id);
 		return nullptr;
 	}
 
@@ -993,7 +1021,7 @@ wxString ibMcpTool::GetDetail(const ibDataNode& params) const
 			case ibDataKind::String: shown = value.AsString(); break;
 			case ibDataKind::Bool:   shown = value.AsBool() ? wxT("yes") : wxT("no"); break;
 			case ibDataKind::Number: shown = value.AsNumber().ToString(); break;
-			case ibDataKind::Array:  shown = wxString::Format(_("%d items"), (int)value.AsArray().size()); break;
+			case ibDataKind::Array:  shown = wxString::Format(ibMcpText("%d items"), (int)value.AsArray().size()); break;
 
 			// EMPTY / Binary / Child / Date have no short reading that is worth a line here: an
 			// argument nobody passed, an opaque block, a nested structure. Naming them without a
@@ -1056,7 +1084,7 @@ wxString ibMcpFencedExcerpt(const wxString& text, const wxString& language, size
 	// anything was hidden, or they will go looking for what is already in front of them.
 	if (total > lines)
 		out << wxString::Format(
-			_(" ... first %u of %u lines - the rest is in the editor\n"),
+			ibMcpText(" ... first %u of %u lines - the rest is in the editor\n"),
 			(unsigned)lines, (unsigned)total);
 
 	return out;
@@ -1116,7 +1144,7 @@ void ibMcpReportComplaints(ibDataNode& result, ibValueMetaObject* object)
 	// WHAT IT MEANS, once, rather than a caller inferring it from the wording:
 	// the object stands, and the configuration will not save while it says this.
 	result.SetValue(wxT("incompleteNote"),
-		_("The change was made. The object still reports this, and the configuration cannot "
+		ibMcpText("The change was made. The object still reports this, and the configuration cannot "
 		  "be saved to the database until it stops. Some objects complain through the "
 		  "message pane instead - messages_read has those."));
 }
@@ -1167,7 +1195,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	ibDataNode& result, wxString& refusal)
 {
 	if (property == nullptr) {
-		refusal = _("There is no such property.");
+		refusal = ibMcpText("There is no such property.");
 		return false;
 	}
 
@@ -1198,7 +1226,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 
 		if (caption == nullptr) {
 			refusal = wxString::Format(
-				_("'%s' is not a caption, so it has no languages."), name);
+				ibMcpText("'%s' is not a caption, so it has no languages."), name);
 			return false;
 		}
 
@@ -1230,10 +1258,10 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 
 		if (!declared) {
 			refusal = available.IsEmpty()
-				? _("This configuration declares no languages. Create one first: "
+				? ibMcpText("This configuration declares no languages. Create one first: "
 				    "metadata_create kind=Language.")
 				: wxString::Format(
-					_("'%s' is not a language this configuration declares. It has: %s."),
+					ibMcpText("'%s' is not a language this configuration declares. It has: %s."),
 					code, available);
 			return false;
 		}
@@ -1328,9 +1356,9 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// configuration holds nothing of the kind yet — "takes one of: " with nothing after the
 		// colon reads like a defect in the tool rather than an empty tree.
 		refusal = allowed.IsEmpty()
-			? wxString::Format(_("'%s' is chosen from the configuration, and there is nothing of "
+			? wxString::Format(ibMcpText("'%s' is chosen from the configuration, and there is nothing of "
 			                     "that kind in it yet."), name)
-			: wxString::Format(_("'%s' takes one of: %s."), name, allowed);
+			: wxString::Format(ibMcpText("'%s' takes one of: %s."), name, allowed);
 		return false;
 	}
 
@@ -1389,10 +1417,10 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			}
 
 			refusal = wxString::Format(
-				_("'%s' is a TYPE, and it is not set as a value: use metadata_set_type - it takes "
+				ibMcpText("'%s' is a TYPE, and it is not set as a value: use metadata_set_type - it takes "
 				  "the type in words (String with a length, Number with precision and scale, "
 				  "CatalogRef.Goods), and `description` for a composite one. It holds %s now."),
-				name, holds.IsEmpty() ? _("nothing") : holds);
+				name, holds.IsEmpty() ? ibMcpText("nothing") : holds);
 			return false;
 		}
 
@@ -1400,7 +1428,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		const ibDataValue held = property->GetNodeValue();
 
 		refusal = wxString::Format(
-			_("'%s' would not take that value. It holds a %s - send one of that shape, or read "
+			ibMcpText("'%s' would not take that value. It holds a %s - send one of that shape, or read "
 			  "metadata_properties for what it has now."), name, KindOf(held));
 		return false;
 	}

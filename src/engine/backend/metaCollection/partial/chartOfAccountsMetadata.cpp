@@ -250,9 +250,9 @@ bool ibValueMetaObjectChartOfAccounts::OnSaveMetaObject(int flags)
 	// under the editor, the way an enumeration with no values reports itself — a modal box for something
 	// found while saving interrupts the work instead of describing it. The save still refuses.
 	if (m_propertyChartOfCharacteristicTypes->IsEmptyProperty()) {
-		ibValueSystemFunction::Message(
-			wxString::Format(_("%s: a chart of characteristic types is required - the account dimension kinds are elements of it"), GetName()),
-			ibStatusMessage::ibStatusMessage_Error);
+		// Into the LEDGER — see metaComposerObject.cpp.
+		RestructureError(wxString::Format(
+			_("%s: a chart of characteristic types is required - the account dimension kinds are elements of it"), GetName()));
 		return false;
 	}
 

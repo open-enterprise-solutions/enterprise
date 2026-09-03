@@ -957,23 +957,23 @@ bool ibMcpServer::CanAskModel() const
 bool ibMcpServer::AskModel(const wxString& question, wxString& refusal)
 {
 	if (question.IsEmpty()) {
-		refusal = _("There is nothing to ask.");
+		refusal = ibMcpText("There is nothing to ask.");
 		return false;
 	}
 
 	if (!IsRunning()) {
-		refusal = _("Assistant access is not running.");
+		refusal = ibMcpText("Assistant access is not running.");
 		return false;
 	}
 
 	if (!m_clientCanSample.load()) {
-		refusal = _("The connected assistant cannot be asked - it did not offer that when it "
+		refusal = ibMcpText("The connected assistant cannot be asked - it did not offer that when it "
 			"connected. What is typed here still reaches it, but only when it next looks.");
 		return false;
 	}
 
 	if (!m_listener) {
-		refusal = _("Nobody is connected.");
+		refusal = ibMcpText("Nobody is connected.");
 		return false;
 	}
 
@@ -1076,7 +1076,7 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	// then busy until a person clicks, and nobody is watching this socket. Long enough for real
 	// work, finite so a forgotten dialog is answered instead of hung on.
 	if (done.wait_for(std::chrono::minutes(5)) != std::future_status::ready) {
-		refusal = _("The designer did not get to this within five minutes - it is most likely "
+		refusal = ibMcpText("The designer did not get to this within five minutes - it is most likely "
 			"showing a dialog and waiting for a person. The call was not abandoned: it will run "
 			"when the window is answered. Nothing here was left half-done.");
 		return false;
@@ -1250,7 +1250,7 @@ void ibMcpDescribePlatform(ibDataNode& into)
 		// backwards at first glance, which is exactly why it is spelled out.
 		into.AddField(wxT("account"), ibDataValue::Bool(false));
 		into.SetValue(wxT("accountNote"),
-			_("No accounts exist in this base, so nobody is logged in - it opens without asking. "
+			ibMcpText("No accounts exist in this base, so nobody is logged in - it opens without asking. "
 			  "That is not a restriction: with no roles to fold, every right answers with its "
 			  "declared default. `metadata_rights` says what those are."));
 	}
@@ -1402,7 +1402,7 @@ void ibMcpDescribePlatform(ibDataNode& into)
 	if (!applied) {
 		into.SetValue(wxT("state"), wxString(wxT("storedNotApplied")));
 		into.SetValue(wxT("meaning"),
-			_("Stored - it survives closing the designer - but the DATABASE still holds an older "
+			ibMcpText("Stored - it survives closing the designer - but the DATABASE still holds an older "
 			  "configuration, so the running application does not have any of it. "
 			  "`database_diff` says what differs; `config_apply` writes it."));
 	}
@@ -1414,7 +1414,7 @@ void ibMcpDescribePlatform(ibDataNode& into)
 		// configuration and change no table, so the diff can legitimately answer "0" while this is
 		// true — and a reader who takes the diff for the whole answer concludes the flag is broken.
 		into.SetValue(wxT("meaning"),
-			_("The database's copy is behind this one: it was applied, and edited since. The "
+			ibMcpText("The database's copy is behind this one: it was applied, and edited since. The "
 			  "running application still works from what was applied. `database_diff` says what "
 			  "of it reaches the SCHEMA - a comment, a note or a module changes the configuration "
 			  "and no table, so an empty diff here means the edits are not structural, not that "
@@ -1423,7 +1423,7 @@ void ibMcpDescribePlatform(ibDataNode& into)
 	else {
 		into.SetValue(wxT("state"), wxString(wxT("inStep")));
 		into.SetValue(wxT("meaning"),
-			_("The database holds this configuration - nothing is pending against it."));
+			ibMcpText("The database holds this configuration - nothing is pending against it."));
 	}
 
 	// ⚠ THE ONE THING NOTHING HERE CAN ANSWER, said rather than left as a gap for a caller to
@@ -1431,7 +1431,7 @@ void ibMcpDescribePlatform(ibDataNode& into)
 	// the only safe advice when the question itself has no answer.
 	if (differs)
 		into.SetValue(wxT("storedUnknown"),
-			_("This differs from the database's copy - but whether it has been STORED to survive "
+			ibMcpText("This differs from the database's copy - but whether it has been STORED to survive "
 			  "closing the designer is a different question, and nothing tracks it: a plain save "
 			  "leaves this difference exactly as it is. If it matters that the edits outlive the "
 			  "process, call `config_save`: it is cheap and harmless to repeat."));
@@ -1462,7 +1462,7 @@ void ibMcpDescribePlatform(ibDataNode& into)
 
 		if (seen > 0 && attached == 0)
 			debugger.SetValue(wxT("note"),
-				_("Something is running but nothing is attached - breakpoints will not be "
+				ibMcpText("Something is running but nothing is attached - breakpoints will not be "
 				  "reached. `debug_attach` takes it."));
 	}
 }
@@ -1595,32 +1595,21 @@ wxString BuildOrientation()
 	// mcp_search points at the patterns in every answer; NOTHING points at note_write at the moment
 	// a finding appears, so a session that got a cut copy simply does not know the discipline
 	// exists. Highest-value paragraph, therefore first.
-	out << wxT("WRITE DOWN WHAT YOU FIND, AT THE RIGHT LEVEL - there are two, and they are not ")
-		<< wxT("interchangeable. A configuration records what was built and never why, so what you ")
-		<< wxT("worked out is lost with your session unless you put it somewhere.\n")
-		<< wxT(" * THE ROOT is the central document: what is true of the configuration as a ")
-		<< wxT("whole - how it is put together, the conventions it follows, where the next ")
-		<< wxT("arrival should look, a direction taken or decided against. It is read FIRST, ")
-		<< wxT("before any object is opened. `note_write` {id: <root NodeId>, target: \"notes\", text}.\n")
-		<< wxT(" * EACH OBJECT carries its OWN specifics, written while you work on it: why it ")
-		<< wxT("exists, which shape was chosen, what was rejected. `note_write` {id, target: ")
-		<< wxT("\"notes\", text}. Put them on the object, not on the root - the person who opens ")
-		<< wxT("that object never re-reads the root looking for them. `note_read` gives them back.\n")
-		<< wxT(" * `target: \"help\"` is the OTHER text: what the person USING the application ")
-		<< wxT("reads on F1. Different reader, different words.\n")
-		<< wxT(" * `Comment` is the third surface - one line, on every node including attributes ")
-		<< wxT("and dimensions, answering WHY DOES THIS EXIST AT ALL. It rides along with ")
-		<< wxT("metadata_tree, so one read of the map shows what everything is for; it is also ")
-		<< wxT("where to mark something you built for a trial and mean to remove. `metadata_set` ")
-		<< wxT("{id, property: \"Comment\", value}.\n")
-		<< wxT(" * AND WHAT YOU DID is kept for you: every call this server carries out goes into ")
-		<< wxT("the registration journal, and `journal_read` reads it back - which is how you check ")
-		<< wxT("what was ACTUALLY done rather than what you believe you did, and how you tell your ")
-		<< wxT("own changes from somebody else's when a configuration turns out different from the ")
-		<< wxT("last thing you remember.\n")
-		<< wxT("NAME ANOTHER OBJECT AS A LINK: these texts are Markdown, so write ")
-		<< wxT("`[Goods](oes:1005)` - the target keeps the identity through a rename, the visible ")
-		<< wxT("text keeps the name it had when you wrote it.\n\n");
+	out << wxT("WRITE DOWN WHAT YOU FIND - a configuration records what was built and never WHY, so ")
+		<< wxT("what you worked out dies with your session unless you put it somewhere. Four ")
+		<< wxT("surfaces, different readers:\n")
+		<< wxT(" * `note_write` {id: <root>, target: \"notes\"} - what is true of the WHOLE ")
+		<< wxT("configuration: how it is put together, what was decided against, where to look ")
+		<< wxT("next. Read first, before any object.\n")
+		<< wxT(" * `note_write` {id, target: \"notes\"} on EACH OBJECT - why it exists, which shape ")
+		<< wxT("was chosen, what was rejected. On the object, not on the root: nobody re-reads the ")
+		<< wxT("root looking for them. `note_read` gives them back.\n")
+		<< wxT(" * `target: \"help\"` - what the person USING the application reads on F1.\n")
+		<< wxT(" * `Comment` (metadata_set) - one line on any node, WHY THIS EXISTS AT ALL. It ")
+		<< wxT("rides along with metadata_tree, so one read of the map shows what everything is for.\n")
+		<< wxT("Markdown, so `[Goods](oes:1005)` names another object: the link survives a rename. ")
+		<< wxT("And what you DID is kept for you - `journal_read` says what was actually done, and ")
+		<< wxT("tells your changes from somebody else's.\n\n");
 
 	ibMetaDataConfigurationBase* metaData = activeMetaData;
 
@@ -1743,7 +1732,29 @@ wxString BuildOrientation()
 		<< wxT("What is NOT English is what a PERSON sees: synonyms (`metadata_set` on Synonym, ")
 		<< wxT("with `language` to fill one at a time), help text, and anything you say in the ")
 		<< wxT("assistant window. Answer them in ")
-		<< wxT("their language; name things in English.\n\n");
+		<< wxT("their language; name things in English.\n");
+
+	// ⭐⭐ AND THE LANGUAGES ARE A THING TO SET UP, NOT A SETTING TO READ. A fresh configuration is
+	// created with English alone, so a person working in Russian or Ukrainian has a base whose
+	// interface can only ever speak English — and every synonym written before their language
+	// EXISTS is written into English, silently, because `language` had nowhere else to put it.
+	// Then adding the language later leaves every caption they see empty.
+	//
+	// The order is the whole of it: DECLARE THE LANGUAGE FIRST, then write captions per language
+	// from that moment on. Said here because the cost of the wrong order is paid once per object,
+	// by hand, months later.
+	// 🛑 WRITTEN AS THREE STEPS BECAUSE THE RULE ALONE DID NOT WORK. It stood here as a sentence -
+	// "a Synonym without `language` goes to the configuration's own" - and the very next assistant
+	// to read it (the one that wrote it, 2026-09-03) still put Russian captions into the ENGLISH
+	// slot on fourteen objects and on the Russian language itself. A rule is read; a STEP is done.
+	out << wxT("CAPTIONS AND LANGUAGES, IN THREE STEPS - the third is where everybody slips:\n")
+		<< wxT(" 1. ASK which language the people USING this read. Not the developer's by default, ")
+		<< wxT("and possibly several.\n")
+		<< wxT(" 2. DECLARE IT FIRST - `metadata_create` {kind: \"Language\", name: \"Russian\"}, an ")
+		<< wxT("English name like any other, then set its `Code` (`ru`, `uk`, `en`).\n")
+		<< wxT(" 3. WRITE EVERY CAPTION WITH `language`. Omitting it is not \"all languages\": it ")
+		<< wxT("writes into the configuration's own - English in a fresh base - so a Russian caption ")
+		<< wxT("is stored as the English one and its reader sees nothing.\n\n");
 
 	if (who.IsOk() && !who.m_strLanguageName.IsEmpty())
 		out << wxT("The person is working in ") << who.m_strLanguageName
@@ -1822,7 +1833,7 @@ wxString BuildOrientation()
 		<< wxT("system are its own - do not carry over the shape of anything familiar. It ")
 		<< wxT("documents itself, and every one of these reads the same reference the designer's ")
 		<< wxT("syntax helper shows:\n")
-		<< wxT(" `help_search` / `help_get` - the language reference, function by function\n")
+		<< wxT(" `syntax_search` / `syntax_get` - the language reference, function by function\n")
 		<< wxT(" `type_list` / `type_members` - what a value IS and what it can do\n")
 		<< wxT(" `linq_methods` - the query pipeline operations\n")
 		<< wxT(" `metadata_list` / `metadata_get` - the configuration tree, kind by kind\n")
@@ -1830,6 +1841,43 @@ wxString BuildOrientation()
 		<< wxT("one above that is about practice rather than syntax\n")
 		<< wxT(" `script_check` / `query_check` - COMPILE without running. Ask them before you ")
 		<< wxT("believe anything you wrote; a script that parses in your head is not evidence.\n\n");
+
+	// ⭐⭐ THE TWO THINGS A NEWCOMER DOES NOT FIND BY SEARCHING, measured on one (2026-09-03, an
+	// assistant building a stock area from an empty base):
+	//
+	// A RELATIONSHIP IS NOT A PROPERTY, and `metadata_set` says so by refusing — but the refusal
+	// does not name the verb that CAN do it. Searching for the job ("recorder", "movements",
+	// "which register this document writes") found nothing, and the conclusion drawn was that the
+	// platform could not express it at all: an hour, and a wrong report to the person.
+	//
+	// AND "BUILT" IS NOT "SAVED". Everything above answers happily while the configuration is
+	// unsaveable — the check that says so is one call and nobody thinks to make it.
+	// ⭐⭐ AND THE ONE THAT MAKES THE DIFFERENCE BETWEEN BUILDING AND KNOWING IT WORKS. An assistant
+	// can create every metaobject and still never see the thing RUN — measured 2026-09-03: the
+	// verbs were searched for with the words of the job ("post a document", "write data") and
+	// app_run does not answer to those, so the whole runtime half stayed invisible for a day.
+	out << wxT("AND YOU CAN RUN THE APPLICATION YOURSELF - `app_run` starts it (with the debugger ")
+		<< wxT("attached by default), `debug_breakpoint` puts a stop where you want to look, ")
+		<< wxT("`debug_state` says when it is standing there, and `debug_sandbox` then runs whole ")
+		<< wxT("statements INSIDE it - create data, post a document, read a register back. It runs ")
+		<< wxT("in a transaction that is ALWAYS rolled back, so it costs nothing to try. This is ")
+		<< wxT("the only way to find out that what you built actually works: metadata that saves ")
+		<< wxT("and applies can still post nothing.\n\n");
+
+	out << wxT("THREE VERBS NOTHING LEADS YOU TO, and each is a step you will otherwise miss:\n")
+		<< wxT(" `metadata_bind` - WHAT POINTS AT WHAT: which registers a document writes to, ")
+		<< wxT("which catalog owns another, what is entered on the basis of what. They hold ")
+		<< wxT("metaobjects, so `metadata_set` cannot say them. A document bound to no register ")
+		<< wxT("posts nothing, and a register with no recorder will not save.\n")
+		<< wxT(" `metadata_accepts` - what may live inside a kind, and what an object still ")
+		<< wxT("lacks. Ask before creating, not by trying kinds.\n")
+		<< wxT(" THE FIRST ONE IS THE DEFAULT - the first composer, the first form of each kind. A ")
+		<< wxT("later one does not take over: move it with `metadata_set` on `DefaultComposer` / ")
+		<< wxT("`DefaultFormObject` / …, which are ordinary lists. A form's MAIN ATTRIBUTE has its ")
+		<< wxT("own verb, `form_attribute`.\n")
+		<< wxT(" `config_check` -> `config_save` -> `config_apply` - half-built / outlives the ")
+		<< wxT("designer / reaches the running application. Three different questions; none ")
+		<< wxT("implies the others.\n\n");
 
 	out << wxT("THE CONVERSATION. A person may be typing to you in the designer's assistant ")
 		<< wxT("window: `chat_take` collects new messages (and EMPTIES the queue), ")
@@ -1844,7 +1892,30 @@ wxString BuildOrientation()
 	// ⚠ AND IT SAYS WHAT WAS SEEN, not just that it happened. "Hello" tells them nothing they
 	// could act on; naming the configuration and what is in it proves the connection works AND
 	// hands them the first thing to correct if it is wrong.
-	out << wxT("FIRST THING, BEFORE ANY WORK: read `chat_history` - you may be joining something ")
+	// ⭐⭐ THE ROUTE, NOT THE REFERENCE. Everything above says what EXISTS; a newcomer with no memory
+	// of this project needs to know in what ORDER to use it, and that is the one thing no verb can
+	// answer. Written as a sequence and kept to a few lines, because it is paid for on every
+	// connection — and because a route that has to be read twice is not one.
+	out << wxT("HOW WORK GOES HERE, IN ORDER - the whole shape of it:\n")
+		<< wxT(" 1. SAY HELLO and say what you see (below). 2. `metadata_tree` depth 1 - the map. ")
+		<< wxT("3. `pattern_read` 'intake' and 'where-to-start' - the questions to ask and the ")
+		<< wxT("order things are built in. 4. PUT THE FORKS BACK to the person in their own words, ")
+		<< wxT("with a recommendation. 5. Build in the recipe's order, `metadata_accepts` before ")
+		<< wxT("creating and `metadata_bind` after. 6. `script_check` / `query_check` before ")
+		<< wxT("believing any code. 7. `config_check`, then `config_save`. Write down WHY as you ")
+		<< wxT("go - notes on the objects, one line of `Comment` each.\n")
+		<< wxT("AND SPEND YOUR READING WHERE IT PAYS. `pattern_read` in layers (no argument lists ")
+		<< wxT("the topics; `name` gives one; `topic` gives it in full) - not the whole corpus. ")
+		<< wxT("`mcp_search` in the words of the job rather than by guessing a verb. Ask the ")
+		<< wxT("configuration about ITSELF (`metadata_tree`, `metadata_get`) rather than reading ")
+		<< wxT("everything: a deep walk of a full base is mostly predefined attributes.\n\n");
+
+	out << wxT("FIRST THING, AND NOTHING ELSE RUNS UNTIL IT IS DONE - this is a door, not a ")
+		<< wxT("request. Until `chat_say` has happened, every other verb is refused; what runs ")
+		<< wxT("before it is exactly what the greeting is made of: `chat_history`, ")
+		<< wxT("`platform_state`, `metadata_tree`, `mcp_search`, `chat_say`. A person is sitting ")
+		<< wxT("in front of this designer and cannot see that anything connected.\n")
+		<< wxT("So: read `chat_history` - you may be joining something ")
 		<< wxT("already in progress - and then `chat_say` a greeting with four things in it:\n")
 		<< wxT(" WHO YOU ARE. Name yourself - which assistant and which model. The handshake ")
 		<< wxT("tells them the client's name and nothing else; what is actually reading their ")
@@ -2046,12 +2117,12 @@ wxString ibMcpServer::Answer(const wxString& request)
 
 			if (inner.IsEmpty()) {
 				envelopeRefusal =
-					_("mcp_call needs `tool` - the name of what to invoke. mcp_search finds it.");
+					ibMcpText("mcp_call needs `tool` - the name of what to invoke. mcp_search finds it.");
 			}
 			else if (inner.IsSameAs(wxT("mcp_call"), false)) {
 				// A CALL THAT CALLS ITSELF is refused rather than recursed into: the loop would
 				// unwrap forever, and there is no reading of it that means anything.
-				envelopeRefusal = _("mcp_call cannot invoke itself.");
+				envelopeRefusal = ibMcpText("mcp_call cannot invoke itself.");
 			}
 			else if (outer->FindChild(wxT("arguments")) == nullptr
 				&& outer->FindField(wxT("arguments")) != nullptr) {
@@ -2181,6 +2252,32 @@ wxString ibMcpServer::Answer(const wxString& request)
 						  "it, or dismiss it with window_dismiss {close: true} - it is answered as "
 						  "Cancel."), busy);
 				}
+				// ⭐⭐ NOT A REMINDER — A DOOR. There is a person sitting in front of this designer, and
+				// from their side a connection is INVISIBLE until something says so: an assistant that
+				// reads their whole configuration in silence looks exactly like one that never came.
+				//
+				// 🛑 ASKING NICELY DOES NOT WORK, and every gentler shape was tried in one day
+				// (2026-09-03): said once at the handshake, it is gone from a long-running client's
+				// context; appended to the answer, it broke the JSON; carried as a second content
+				// block, it broke it again for anything that concatenates blocks. Meanwhile the work
+				// went on and nobody was told who was doing it.
+				//
+				// So the rule is enforced where rules belong — at the door. What is allowed before
+				// the greeting is exactly what the greeting NEEDS: read the room (chat_history), see
+				// where you are (platform_state, metadata_tree), find the verb (mcp_search /
+				// mcp_call), and speak (chat_say). Everything else waits, and the refusal says
+				// precisely what to do rather than that something is wrong.
+				else if (!m_introduced && !ibMcpRunsBeforeGreeting(name)) {
+
+					refusal = ibMcpText("Nobody knows you are here yet. Say who you are first: `chat_say` "
+						"with WHO YOU ARE (which assistant and which model), WHAT YOU SEE (the "
+						"configuration by name and what is in it - `platform_state` and "
+						"`metadata_tree` depth 1 answer that), ANYTHING ALREADY WORTH SAYING, and "
+						"WHAT YOU MEAN TO DO. Until then only those four verbs and `chat_history` "
+						"run - the person at this designer sees a window that has been silent while "
+						"their configuration was being read, and that is the one thing this "
+						"platform will not allow.");
+				}
 				else if (!undeclared.IsEmpty()) {
 
 					wxString closest;
@@ -2193,7 +2290,7 @@ wxString ibMcpServer::Answer(const wxString& request)
 						refusal += wxString::Format(_(" Did you mean '%s'?"), closest);
 
 					if (!names.IsEmpty())
-						refusal += wxString::Format(_(" It takes: %s."), names);
+						refusal += wxString::Format(ibMcpText(" It takes: %s."), names);
 				}
 				// …AND THE OTHER HALF OF THE SAME GATE: a name the tool declared as required and
 				// nobody sent. Refused BEFORE the tool runs, because what a tool does with an
@@ -2278,13 +2375,6 @@ wxString ibMcpServer::Answer(const wxString& request)
 			// of which the person sees as an introduction.
 			if (ok && name == wxT("chat_say"))
 				m_introduced = true;
-
-			if (ok && !m_introduced && name != wxT("chat_say"))
-				text << wxT("\n\n[the platform] You have not introduced yourself to the person at ")
-					 << wxT("this designer. Before further work, `chat_say` who you are - which ")
-					 << wxT("assistant and which model - what you see in their configuration, and ")
-					 << wxT("what you are about to do. From where they sit an assistant working in ")
-					 << wxT("silence is indistinguishable from one that never arrived.");
 
 			content->SetValue(wxT("text"), text);
 

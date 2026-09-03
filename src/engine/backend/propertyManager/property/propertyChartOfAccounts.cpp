@@ -10,12 +10,23 @@ wxVariantData* ibPropertyChartOfAccounts::CreateVariantData(ibPropertyObject* pr
 }
 
 ibMetaDescription& ibPropertyChartOfAccounts::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataOwner>()->GetMetaDesc();
+	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyChartOfAccounts::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// The family rule - see propertyRecord.cpp.
+void ibPropertyChartOfAccounts::DoSetValue(const wxVariant& val)
+{
+	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+		SetValue(carried->GetMetaDesc());
+		return;
+	}
+
+	ibProperty::DoSetValue(val);
 }
 
 // The charts of accounts in this configuration. The list used to sit in advpropChartOfAccounts.cpp.

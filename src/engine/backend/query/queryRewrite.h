@@ -63,16 +63,29 @@ public:
 BACKEND_API void ibQueryFlattenAnd(const ibQueryAstExprPtr& expr, std::vector<ibQueryAstExprPtr>& out);
 BACKEND_API ibQueryAstExprPtr ibQueryFoldAnd(const std::vector<ibQueryAstExprPtr>& rows);
 
-// A CONDITION OVER A FOLDED VALUE IS A HAVING — move the AND-terms of WHERE that mention an
-// aggregate into HAVING, in place. An `OR` across the two kinds is left whole (splitting it would
-// change which rows survive).
+// A CONDITION RUNS WHERE THE VALUE IT NAMES EXISTS — deal the AND-terms of WHERE and HAVING back
+// out by what each one needs, in place. A term that mentions an aggregate becomes a HAVING wherever
+// it was written; a term over a group key becomes a WHERE, for the same reason read the other way
+// (filtering on a key before the fold removes exactly the same groups — a key cannot vary inside
+// its group). An `OR` across the two kinds is left whole (splitting it would change which rows
+// survive).
 //
 // ⚠ PUBLIC BECAUSE THE WINDOW HAS TO SEE IT HAPPEN. `Rewrite` applies this on a CLONE at execution
 // time, which is right for a query typed by hand and wrong for one being BUILT: the constructor
 // shows the author's own AST, so the condition it had just written stayed visibly in WHERE while
 // the engine quietly ran it as HAVING. A window that shows a different query from the one that runs
 // teaches people to distrust it. Same rule, one spelling, applied by whoever holds the AST.
-BACKEND_API void ibQueryMoveAggregateConditionsToHaving(ibQuerySelect& select);
+BACKEND_API void ibQuerySortConditionsByFold(ibQuerySelect& select);
+
+// …AND THE QUESTION THAT RULE TURNS ON: does this expression FOLD — is an aggregate call anywhere
+// inside it (a nested SELECT excepted, it folds its own rows)?
+//
+// Public because the rule above is not its only reader. The LOWERING asks the same thing of a
+// PROJECTION: a computed column built from group keys (`ISNULL(Balance, 0)`) IS a group key and
+// groups by itself, while one built from the fold (`ISNULL(SUM(Qty), 0)`) can only be evaluated
+// after it. Different decisions, one fact about the tree — kept in one place for the reason
+// ibQueryFlattenAnd's note gives.
+BACKEND_API bool ibQueryMentionsAggregate(const ibQueryAstExprPtr& expr);
 
 // ⭐⭐ "NO LINK" IS SPELLED `TRUE`, and that is why these are here rather than written out wherever
 // somebody needs a boolean.

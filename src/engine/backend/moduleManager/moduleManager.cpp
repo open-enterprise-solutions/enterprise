@@ -621,7 +621,16 @@ ibValueModuleManager::ibValueModuleUnit* ibValueModuleManagerDesigner::FindCommo
 bool ibValueModuleManagerDesigner::RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const wxString& newName)
 {
 	ibValue* moduleValue = FindCommonModule(commonModule);
-	wxASSERT(moduleValue);
+
+	// 🛑 A MODULE THIS MANAGER NEVER TOOK IN IS NOT A PROGRAMMING ERROR. A metaobject is created
+	// first and RUN afterwards, and only the run hands its module here — so anything that renames
+	// one between those two moments (the designer's own Add, which names what it just created, and
+	// every server-side create that passes a name) arrives with nothing bound yet. The assert made
+	// that ordinary sequence a debug break, and the rename it was asked about had already happened.
+	//
+	// Nothing to rebind, and nothing to complain about: the run will bind the new name.
+	if (moduleValue == nullptr)
+		return true;
 
 	if (!commonModule->IsGlobalModule()) {
 		BindExportVariable(newName, moduleValue);
@@ -634,10 +643,19 @@ bool ibValueModuleManagerDesigner::RenameCommonModule(ibValueMetaObjectCommonMod
 bool ibValueModuleManagerDesigner::RemoveCommonModule(ibValueMetaObjectCommonModule* commonModule)
 {
 	ibValuePtr<ibValueModuleUnit> moduleValue(FindCommonModule(commonModule));
-	wxASSERT(moduleValue);
 
+	// The compile cache is cleared either way — an entry may stand for a module this manager never
+	// took in, and leaving it behind is what makes the NEXT object of the same name resolve to a
+	// module that no longer exists.
 	if (auto* cc = m_metaManager->GetMetaData()->GetCompileCache())
 		cc->RemoveCompileModule(commonModule);
+
+	// 🛑 SAME ORDINARY CASE AS THE RENAME ABOVE: a module that was created but never run was never
+	// bound here, and deleting it is a perfectly normal thing to do. The assert turned that into a
+	// debug break — twice over, because the delete then continued into OnBeforeCloseMetaObject and
+	// asserted again on the half-torn-down object.
+	if (!moduleValue)
+		return false;
 
 	auto iterator = std::find(m_listCommonModule.begin(), m_listCommonModule.end(), moduleValue);
 	if (iterator == m_listCommonModule.end())

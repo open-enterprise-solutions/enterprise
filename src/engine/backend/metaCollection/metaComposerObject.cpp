@@ -95,14 +95,23 @@ bool ibValueMetaObjectComposer::OnSaveMetaObject(int flags)
 		if (!composition.m_variants[index].m_name.IsEmpty())
 			continue;
 
+		// ⭐⭐ INTO THE LEDGER, NOT INTO THE PANE — one road for a refusal, and this is it. The object
+		// writes down what is wrong and answers false; whoever ASKED then reads the ledger: the
+		// designer puts it in front of the person, a tool puts it in its answer, and the apply dialog
+		// greys its button out of it.
+		//
+		// 🛑 PRINTING IT HERE MADE THE OBJECT SPEAK TO A WINDOW IT KNOWS NOTHING ABOUT, and the cost
+		// showed up in the probe: metadata_create and config_check ask "what does this object still
+		// lack" by calling OnSaveMetaObject, so a printed complaint stayed on the person's screen as
+		// an error that had already been fixed (2026-09-03 - two of these stood in the pane while the
+		// configuration saved cleanly).
+		//
 		// The FIRST one is the report as it opens, so it is worth saying which is meant when a
 		// composer has several - counted the way a person would, from one.
-		ibValueSystemFunction::Message(
-			wxString::Format(
-				_("%s: variant %i has no name - a variant IS a named setting, and one without a "
-				  "name cannot be picked by anybody running the report"),
-				GetName(), (int)index + 1),
-			ibStatusMessage::ibStatusMessage_Error);
+		RestructureError(wxString::Format(
+			_("%s: variant %i has no name - a variant IS a named setting, and one without a "
+			  "name cannot be picked by anybody running the report"),
+			GetName(), (int)index + 1));
 
 		return false;
 	}

@@ -781,6 +781,121 @@ public:
 MCP_TOOL_REGISTER(ibMcpToolFormRemove);
 
 //---------------------------------------------------------------------------
+// form_attribute
+//---------------------------------------------------------------------------
+//
+// ⭐⭐ WHICH ATTRIBUTE THE FORM IS ABOUT — and it was the one thing here a mouse could do and a
+// tool could not. `form_get` already SAYS which one is main (`main: true` beside its name), and
+// nothing could change it: the designer does it from the attribute panel
+// (ibAttributeTree::OnSetMain), and every road from this side was read-only.
+//
+// 🛑 WHY IT MATTERS MORE THAN IT SOUNDS. The main attribute is the head of every binding on the
+// form and the source its controls render against — changing it moves what the whole form is
+// about. A form built by a tool therefore got whichever attribute happened to be created first and
+// stayed that way forever.
+//
+// ⚠ AND IT IS A TOGGLE, exactly as the panel's own command is: naming the current main with
+// `main: false` clears it, leaving the form with no main - which is a legitimate state (the
+// controls then get their own command bar back), not an error.
+//
+class ibMcpToolFormAttribute : public ibMcpTool {
+
+	static const ibArg& ArgAttribute()
+	{
+		static const ibArg s_a(wxT("attribute"), ibArg::Kind::Text,
+			ibMcpText("The attribute, by NAME - form_get lists them, and marks the one that is main."),
+			/*required*/ true);
+		return s_a;
+	}
+
+	static const ibArg& ArgMain()
+	{
+		static const ibArg s_a(wxT("main"), ibArg::Kind::Flag,
+			ibMcpText("Make this the form's MAIN attribute. On by default; `false` on the one that "
+				  "currently is clears it, leaving the form without a main."));
+		return s_a;
+	}
+
+public:
+
+	wxString GetName() const override { return wxT("form_attribute"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return wxString::Format(ibMcpText("making '%s' the main attribute of '%s'"),
+			ArgAttribute().Text(params), ibMcpNameOf(params, ArgForm().Name()));
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("Say which attribute the form is ABOUT - its MAIN one, the head of every "
+			"binding and the source its controls render against. form_get lists the "
+			"attributes and marks the current main; this is what moves it. `main: false` on "
+			"the current one clears it.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgAttribute(), ArgMain() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		ibValueMetaObjectFormBase* creator = nullptr;
+		ibValueForm* form = OpenForm(params, refusal, nullptr, &creator);
+		if (form == nullptr)
+			return false;
+
+		const wxString name = ArgAttribute().Text(params);
+		ibFormAttributeValue* entry = form->GetAttribute(name);
+
+		if (entry == nullptr) {
+
+			// REFUSED WITH WHAT THERE IS — the same shape every other refusal here takes, so a
+			// wrong name costs one call rather than a round trip through form_get.
+			wxString known;
+			for (unsigned int index = 0; index < form->GetAttributeCount(); ++index) {
+				if (const ibFormAttributeValue* one = form->GetAttribute(index))
+					known << (known.IsEmpty() ? wxT("") : wxT(", ")) << one->GetName();
+			}
+
+			refusal = known.IsEmpty()
+				? ibMcpText("This form has no attributes at all.")
+				: wxString::Format(ibMcpText("This form has no attribute called '%s'. It has: %s."),
+					name, known);
+
+			form->DecrRef();
+			return false;
+		}
+
+		// The panel's own verb: set it, or clear it when this one is already the main.
+		const bool wanted = !ArgMain().Given(params) || ArgMain().Flag(params);
+		form->SetMainAttribute(wanted ? entry : nullptr);
+
+		if (creator == nullptr || !creator->SaveFormData(form)) {
+			refusal = ibMcpText("The main attribute was set but the form could not be stored.");
+			form->DecrRef();
+			return false;
+		}
+
+		activeMetaData->Modify(true);
+
+		// ⭐ ANSWERED WITH WHAT THE FORM HOLDS NOW, read back rather than echoed: a caller learns
+		// what IS, and a form left with no main says so by naming nothing.
+		const ibFormAttributeValue* now = form->GetMainAttribute();
+
+		result.SetValue(wxT("form"), form->GetControlName());
+		result.SetValue(wxT("main"), now != nullptr ? now->GetName() : wxString());
+
+		form->DecrRef();
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolFormAttribute);
+
+//---------------------------------------------------------------------------
 // form_source
 //---------------------------------------------------------------------------
 //

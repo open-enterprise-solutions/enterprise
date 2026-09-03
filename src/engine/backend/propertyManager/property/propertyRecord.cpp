@@ -12,16 +12,33 @@ wxVariantData* ibPropertyRecord::CreateVariantData(ibPropertyObject* property, c
 }
 
 ibMetaDescription& ibPropertyRecord::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataRecord>()->GetMetaDesc();
+	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
 }
 
 ibMetaDescription& ibPropertyRecord::GetValueAsMetaDesc(const wxVariant& val) const {
-	return get_cell_variant<ibVariantDataRecord>(val)->GetMetaDesc();
+	return get_cell_variant<ibVariantDataMetaDesc>(val)->GetMetaDesc();
 }
 
 void ibPropertyRecord::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// See the header for why this exists: a value from a NEIGHBOUR of the relationship family carries
+// the right description in the wrong wrapper, and storing it as it comes makes every later read
+// raise. Taken apart and re-wrapped here, where the class this property holds is known.
+void ibPropertyRecord::DoSetValue(const wxVariant& val)
+{
+	// Unconditionally, and that is the point: "is this already mine" is a question worth not
+	// asking. A relationship IS its description, so taking it out and wrapping it in this
+	// property's own class is right whichever wrapper it arrived in - and costs one copy of a
+	// short list of ids.
+	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+		SetValue(carried->GetMetaDesc());
+		return;
+	}
+
+	ibProperty::DoSetValue(val);
 }
 
 // Every kind of register a document can post to. The list used to sit in advpropRecord.cpp.

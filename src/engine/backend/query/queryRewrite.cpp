@@ -9,6 +9,35 @@
 #include <functional>
 #include <map>
 
+// DOES THIS EXPRESSION FOLD ROWS — is there an aggregate call anywhere inside it?
+//
+// ⭐ ONE QUESTION, TWO READERS, AND THEY MUST NOT DRIFT. The pass below asks it of a CONDITION, to
+// decide whether it filters rows or groups; the lowering asks it of a PROJECTION, to decide whether
+// a computed column is a group KEY (`ISNULL(Balance, 0)`) or something that exists only after the
+// fold (`ISNULL(SUM(Qty), 0)`). Two decisions, but "what counts as an aggregate" is a single fact
+// about the tree — and the note on ibQueryFlattenAnd is what happens when such a fact gets written
+// out once per caller.
+//
+// ⚠ NOT INTO A NESTED SELECT: an aggregate in a subquery folds THAT query's rows, so it says
+// nothing about this one. Both readers need that exception, and only one of them would have
+// remembered to write it.
+bool ibQueryMentionsAggregate(const ibQueryAstExprPtr& e)
+{
+	if (!e)
+		return false;
+	if (e->m_kind == ibQueryAstExprKind::Func && ibIsAggregateKeyword(e->m_func))
+		return true;
+	if (e->m_subquery)
+		return false;
+	for (const ibQueryAstExprPtr& child : { e->m_lhs, e->m_rhs, e->m_arg, e->m_low, e->m_high, e->m_else })
+		if (ibQueryMentionsAggregate(child)) return true;
+	for (const ibQueryAstExprPtr& item : e->m_list)
+		if (ibQueryMentionsAggregate(item)) return true;
+	for (const std::pair<ibQueryAstExprPtr, ibQueryAstExprPtr>& branch : e->m_cases)
+		if (ibQueryMentionsAggregate(branch.first) || ibQueryMentionsAggregate(branch.second)) return true;
+	return false;
+}
+
 namespace {
 
 ibQuerySelectPtr CloneSelect(const ibQuerySelect& s);
@@ -384,27 +413,12 @@ void FlattenFrom(ibQuerySelect& s)
 // The pass — bottom-up over every SELECT scope
 //////////////////////////////////////////////////////////////////////
 
-// Does this condition fold rows — i.e. does an aggregate call appear anywhere inside it?
-bool MentionsAggregate(const ibQueryAstExprPtr& e)
-{
-	if (!e)
-		return false;
-	if (e->m_kind == ibQueryAstExprKind::Func && ibIsAggregateKeyword(e->m_func))
-		return true;
-	// NOT into a nested SELECT: an aggregate in a subquery folds THAT query's rows, and moving the
-	// outer condition on its account would filter the wrong thing.
-	if (e->m_subquery)
-		return false;
-	for (const ibQueryAstExprPtr& child : { e->m_lhs, e->m_rhs, e->m_arg, e->m_low, e->m_high, e->m_else })
-		if (MentionsAggregate(child)) return true;
-	for (const ibQueryAstExprPtr& item : e->m_list)
-		if (MentionsAggregate(item)) return true;
-	for (const auto& branch : e->m_cases)
-		if (MentionsAggregate(branch.first) || MentionsAggregate(branch.second)) return true;
-	return false;
-}
+// The question itself is ibQueryMentionsAggregate, above the pass — a PROJECTION asks it too.
 
-// ⭐ RULE: A CONDITION OVER A FOLDED VALUE IS A HAVING, WHEREVER IT WAS WRITTEN.
+// ⭐ RULE: A CONDITION RUNS WHERE THE VALUE IT NAMES EXISTS, WHEREVER IT WAS WRITTEN.
+//
+// One over a FOLDED value is a HAVING; one over a GROUP KEY is a WHERE. Both readings are the same
+// sentence, which is why they are one rule and not two passes that could disagree.
 //
 // `WHERE` filters ROWS and `HAVING` filters GROUPS — a real distinction, and one the author of a
 // query should not have to carry. The constructor's Conditions tab offers the aggregate fields
@@ -422,26 +436,34 @@ bool MentionsAggregate(const ibQueryAstExprPtr& e)
 // leaving it behind is not an option either — anything naming an aggregate can only be evaluated
 // after the fold. So the whole term goes, and `A` must be a group key for it to resolve there,
 // which is the engine's own check to make.
-void MoveAggregateTermsToHaving(ibQuerySelect& s)
+void SortConditionsByFold(ibQuerySelect& s)
 {
-	if (!s.m_where)
+	if (!s.m_where && !s.m_having)
 		return;
 
+	// ⭐ AND IT SORTS IN BOTH DIRECTIONS. The rule is "a condition runs where the value it names
+	// exists", and that reads the same from either side: a term over `SUM(Qty)` written in WHERE has
+	// to wait for the fold, and a term over a GROUP KEY written in HAVING never needed it. The
+	// second half was missing, so `HAVING ISNULL(Balance, 0) < 0` — a plain condition on a key, which
+	// is what a stock control writes — came back as "HAVING must compare an aggregate function to a
+	// value", about a query that names one two columns to the left.
+	//
+	// Filtering on a group key BEFORE the fold instead of after removes exactly the same groups: the
+	// key cannot vary inside its group, so no group is ever split by it. Same answer, one floor lower.
+	//
+	// So both filters are flattened into ONE list of terms and dealt back by what each term NEEDS.
+	// Where the author happened to write a term is not what decides where it runs — which is the
+	// whole point of the rule, and was already true of one direction.
 	std::vector<ibQueryAstExprPtr> terms;
+	ibQueryFlattenAnd(s.m_having, terms);   // first, so an existing HAVING keeps its place in the fold
 	ibQueryFlattenAnd(s.m_where, terms);
 
 	std::vector<ibQueryAstExprPtr> rows, groups;
 	for (const ibQueryAstExprPtr& term : terms)
-		(MentionsAggregate(term) ? groups : rows).push_back(term);
+		(ibQueryMentionsAggregate(term) ? groups : rows).push_back(term);
 
-	if (groups.empty())
-		return;   // nothing folded — the WHERE is a row filter, as written
-
-	s.m_where = ibQueryFoldAnd(rows);   // null when every term moved, which is correct: no row filter
-	// An existing HAVING keeps its place and the moved terms join it — the author may have written
-	// both, and one must not silently replace the other.
-	if (s.m_having)
-		groups.insert(groups.begin(), s.m_having);
+	// Null when a side ends up empty, which is correct: no row filter / no group filter at all.
+	s.m_where  = ibQueryFoldAnd(rows);
 	s.m_having = ibQueryFoldAnd(groups);
 }
 
@@ -635,11 +657,26 @@ void RewriteSelectInPlace(ibQuerySelect& s)
 	if (s.m_where) {
 		s.m_where = NormalizeNeg(s.m_where);
 		WalkInSubqueries(s.m_where, RewriteSelectInPlace);   // IN (SELECT …) — own scope
-		MoveAggregateTermsToHaving(s);
-		// AFTER the aggregate move (a fold belongs in HAVING and is nobody's join key) and BEFORE
-		// FlattenFrom, which may bring a subquery's own joins up into this list.
-		LiftJoinConditions(s);
 	}
+	// A HAVING is a condition tree like any other and gets the same normalization — it can now be
+	// MOVED into WHERE, and arriving there un-normalized would deny it the flat-AND road.
+	if (s.m_having) {
+		s.m_having = NormalizeNeg(s.m_having);
+		WalkInSubqueries(s.m_having, RewriteSelectInPlace);
+	}
+
+	// ⭐ OUTSIDE THE WHERE BRANCH, because the rule is about BOTH filters. Standing inside it, a
+	// query carrying only a HAVING was never sorted at all — so `GROUP BY Goods HAVING Goods = &G`
+	// still reached the lowering as a HAVING and came back as "HAVING must compare an aggregate
+	// function to a value". The rule read both clauses; its caller only asked when one of them
+	// existed, which is the same defect one level up.
+	SortConditionsByFold(s);
+
+	// AFTER the sort (a fold belongs in HAVING and is nobody's join key; a key condition that just
+	// arrived from HAVING may well BE a link) and BEFORE FlattenFrom, which may bring a subquery's
+	// own joins up into this list.
+	if (s.m_where)
+		LiftJoinConditions(s);
 
 	// AFTER the lift, because a term moved into an empty ON changes which tables that link names —
 	// and therefore where it may stand.
@@ -694,9 +731,9 @@ void ibQueryFlattenAnd(const ibQueryAstExprPtr& expr, std::vector<ibQueryAstExpr
 	out.push_back(expr);
 }
 
-void ibQueryMoveAggregateConditionsToHaving(ibQuerySelect& select)
+void ibQuerySortConditionsByFold(ibQuerySelect& select)
 {
-	MoveAggregateTermsToHaving(select);
+	SortConditionsByFold(select);
 }
 
 ibQueryAstExprPtr ibQueryFoldAnd(const std::vector<ibQueryAstExprPtr>& rows)

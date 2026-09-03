@@ -30,6 +30,23 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
+protected:
+
+	// 🛑 A RELATIONSHIP IS THE SAME FACT IN FIVE WRAPPERS, AND THIS ONE KEEPS ITS OWN. Every family
+	// here holds an ibMetaDescription; they differ only in the class that carries it. So a value
+	// arriving from a NEIGHBOUR of the family is not a wrong value — it says exactly the right
+	// thing — but storing it as it comes leaves this property holding a variant it cannot read,
+	// and everything downstream raises "its value is not of the expected kind": the delete path,
+	// the diff, the save. One mis-set property made a whole configuration unsaveable.
+	//
+	// ⚠ AND IT ARRIVED THE HONEST WAY: CreateValueList builds every candidate as ibVariantDataOwner,
+	// so a caller that did the right thing — read GetValueList, pick, place the value it was
+	// offered — was handed the neighbour's wrapper by the property system itself.
+	//
+	// So the property TAKES THE DESCRIPTION AND WRAPS IT ITSELF. Anything of the family is accepted;
+	// anything else falls through to the base, which stores it as before.
+	virtual void DoSetValue(const wxVariant& val) override;
+
 public:
 
 };

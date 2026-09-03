@@ -149,11 +149,11 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Счётный или итераторный цикл. Две формы: индексная (For <i> = <от> To <до> Do) и поэлементная (For Each <Элемент> In <Коллекция> Do).",
-      "syntax_block": "// indexed\nfor (i = 1 To 10) {\n    // body\n}\n\n// for-each\nfor each (Item In Collection) {\n    // body\n}",
+      "description": "Счётный или итераторный цикл. Две формы: индексная (For <i> = <от> To <до> Do) и поэлементная (Foreach <Элемент> In <Коллекция> Do).",
+      "syntax_block": "// indexed\nfor (i = 1 To 10) {\n    // body\n}\n\n// for-each\nforeach (Item In Collection) {\n    // body\n}",
       "parameters": "",
       "return_descr": "",
-      "example": "for each (Order In Customer.Orders) {\n    Total = Total + Order.Amount;\n}",
+      "example": "foreach (Order In Customer.Orders) {\n    Total = Total + Order.Amount;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Foreach",
@@ -163,8 +163,8 @@
         "kw.Continue"
       ],
       "reviewed": true,
-      "syntax_block_ves": "// indexed\nFor i = 1 To 10 Do\n    // body\nEndDo;\n\n// for-each\nFor Each Item In Collection Do\n    // body\nEndDo;",
-      "example_ves": "For Each Order In Customer.Orders Do\n    Total = Total + Order.Amount;\nEndDo;",
+      "syntax_block_ves": "// indexed\nFor i = 1 To 10 Do\n    // body\nEndDo;\n\n// for-each\nForeach Item In Collection Do\n    // body\nEndDo;",
+      "example_ves": "Foreach Order In Customer.Orders Do\n    Total = Total + Order.Amount;\nEndDo;",
       "modes": [
         "ves",
         "ces"
@@ -444,10 +444,10 @@
       ],
       "signature": "",
       "description": "Объявляет процедуру — вызываемый блок кода, который выполняет действия, но не возвращает значение. Когда вызывающему нужен результат — используйте Function.",
-      "syntax_block": "[Public] Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) {\n    // body\n}",
-      "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Public — делает процедуру доступной из других модулей (пишется перед объявлением).",
+      "syntax_block": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Public] {\n    // body\n}",
+      "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Public — делает процедуру доступной из других модулей (пишется после списка параметров).",
       "return_descr": "",
-      "example": "Public Procedure LogMessage(Val Text) {\n    Message(Text);\n}",
+      "example": "Procedure LogMessage(Val Text) Public {\n    Message(Text);\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Function",
@@ -456,8 +456,8 @@
         "kw.Val"
       ],
       "reviewed": true,
-      "syntax_block_ves": "[Public] Procedure <Name>([Val] <Param1>, [Val] <Param2>, …)\n    // body\nEndProcedure",
-      "example_ves": "Public Procedure LogMessage(Val Text)\n    Message(Text);\nEndProcedure",
+      "syntax_block_ves": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Public]\n    // body\nEndProcedure",
+      "example_ves": "Procedure LogMessage(Val Text) Public\n    Message(Text);\nEndProcedure",
       "modes": [
         "ves",
         "ces"
@@ -498,10 +498,10 @@
       ],
       "signature": "",
       "description": "Объявляет функцию — вызываемый блок кода, возвращающий значение через Return. Функции взаимозаменяемы с процедурами везде, кроме использования в качестве источника выражения.",
-      "syntax_block": "[Public] Function <Name>([Val] <Param1>, …) {\n    // body\n    Return <Value>;\n}",
-      "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Public — делает функцию доступной из других модулей (пишется перед объявлением).",
+      "syntax_block": "Function <Name>([Val] <Param1>, …) [Public] {\n    // body\n    Return <Value>;\n}",
+      "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Public — делает функцию доступной из других модулей (пишется после списка параметров).",
       "return_descr": "Значение, переданное оператору Return.",
-      "example": "Public Function Sum(Val A, Val B) {\n    Return A + B;\n}",
+      "example": "Function Sum(Val A, Val B) Public {\n    Return A + B;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Procedure",
@@ -509,8 +509,8 @@
         "kw.Public"
       ],
       "reviewed": true,
-      "syntax_block_ves": "[Public] Function <Name>([Val] <Param1>, …)\n    // body\n    Return <Value>;\nEndFunction",
-      "example_ves": "Public Function Sum(Val A, Val B)\n    Return A + B;\nEndFunction",
+      "syntax_block_ves": "Function <Name>([Val] <Param1>, …) [Public]\n    // body\n    Return <Value>;\nEndFunction",
+      "example_ves": "Function Sum(Val A, Val B) Public\n    Return A + B;\nEndFunction",
       "modes": [
         "ves",
         "ces"
@@ -552,12 +552,12 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Модификатор доступа: делает процедуру, функцию или модульную переменную видимой из других модулей. Пишется ПЕРЕД объявлением. Заменяет прежнее ключевое слово Export, которого больше нет.",
-      "syntax_block": "Public Procedure DoWork() {\n    // body\n}",
-      "syntax_block_ves": "Public Procedure DoWork()\n    // body\nEndProcedure",
+      "description": "Модификатор доступа: делает процедуру, функцию или модульную переменную видимой из других модулей. Пишется ПОСЛЕ списка параметров — за закрывающей скобкой процедуры или функции, за именем переменной. Заменяет прежнее ключевое слово Export, которого больше нет.",
+      "syntax_block": "Procedure DoWork() Public {\n    // body\n}",
+      "syntax_block_ves": "Procedure DoWork() Public\n    // body\nEndProcedure",
       "parameters": "",
       "return_descr": "",
-      "example": "Public Var Counter;\n\nPublic Function Read() {\n    Return Counter;\n}",
+      "example": "Var Counter Public;\n\nFunction Read() Public {\n    Return Counter;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Private",

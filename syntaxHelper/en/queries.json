@@ -137,8 +137,8 @@
       "name_en": "GROUP BY / HAVING",
       "kind": "keyword",
       "category_keys": ["query"],
-      "signature": "GROUP BY <field | dereference> {, ...} [HAVING <aggregate> <op> <value>]",
-      "description": "Flat grouping: one result row per group.\n\n- Group keys are fields or dereferences (`GROUP BY Producer.Region`); every non-aggregate output must be a key.\n- Aggregates in the projection: `SUM / MIN / MAX / AVG (field | dereference | expression)`, `COUNT(*)`. An expression input (`SUM(Price * Quantity)`) needs a single physical source.\n- `HAVING aggregate op value` filters the groups after aggregation; operators `< <= > >=`. One condition (combine via an expression input or a subquery).\n- `TOP n` caps the number of groups.\n\nGrouping by a reference field uses reference IDENTITY (two distinct items with the same description do not merge).\n\nOn a single physical source the grouping runs in the DBMS; over a computed source (a slice, a subquery) the engine folds it. HAVING over a computed source is not supported yet (an outer condition on an aggregate subquery is).",
+      "signature": "GROUP BY <field | dereference> {, ...} [HAVING <condition> {AND ...}]",
+      "description": "Flat grouping: one result row per group.\n\n- Group keys are fields or dereferences (`GROUP BY Producer.Region`); every non-aggregate output must be a key.\n- Aggregates in the projection: `SUM / MIN / MAX / AVG (field | dereference | expression)`, `COUNT(*)`. An expression input (`SUM(Price * Quantity)`) needs a single physical source.\n- A COMPUTED output beside the aggregates is a group key of its own: `ISNULL(QuantityBalance, 0) AS Rest`, `CASE WHEN … END AS Kind`. Anything built from keys is one — what it may NOT be built from is an aggregate's result (`ISNULL(SUM(Qty), 0)`), which exists only after the fold. Fold a computed input instead: `SUM(Price * Quantity)`.\n- `HAVING` filters the groups after aggregation; conditions combine with `AND` (write as many as you need), operators `= <> < <= > >=`.\n- WHERE or HAVING is not a decision you have to make. A condition over an aggregate is a group filter wherever it was written, and a condition over a group key is a row filter wherever it was written — the engine puts each where it runs. Both give the same answer: a key cannot vary inside its group.\n- `TOP n` caps the number of groups.\n\nGrouping by a reference field uses reference IDENTITY (two distinct items with the same description do not merge).\n\nOn a single physical source the grouping runs in the DBMS; over a computed source (a slice, a subquery) the engine folds it. HAVING over a computed source is not supported yet (an outer condition on an aggregate subquery is).",
       "syntax_block": "SELECT Producer.Region AS Region, SUM(Weight) AS Weight, COUNT(*) AS Items\nFROM Catalog.Products\nGROUP BY Producer.Region\nHAVING SUM(Weight) > 100",
       "parameters": "",
       "return_descr": "",
@@ -161,6 +161,22 @@
       "example": "",
       "availability": "enterprise, wenterprise-server, daemon, codeRunner",
       "see_also": ["q.Select", "q.Union", "q.Value"],
+      "reviewed": true
+    },
+    {
+      "id": "q.Package",
+      "name_local": "Query package (INTO / ONTO / DROP, temporary tables)",
+      "name_en": "Query package (INTO / ONTO / DROP, temporary tables)",
+      "kind": "keyword",
+      "category_keys": ["query"],
+      "signature": "<select> [INTO <TempTable> | ONTO <Name>] [INDEX BY <field> {, ...}] {; <select>} [; DROP <TempTable>]",
+      "description": "Several statements in ONE query text, separated by `;`. Each statement sees the temporary tables the ones before it made — that is what a package is for.\n\n- `INTO <TempTable>` — put this result into a temporary table instead of returning it. Later statements read it by the bare name: `FROM Folded AS f`.\n- `ONTO <Name>` — NAME the result this statement returns, so it can be asked for by name instead of by position.\n- **Both are written right after the SELECT list, BEFORE `FROM`** — `SELECT Goods, SUM(Qty) AS Qty INTO Folded FROM …`. They are mutually exclusive: INTO returns no result, so there would be nothing to name.\n- `INDEX BY <field>{, …}` — index the temporary table this statement makes (only with INTO); written after the query body.\n- `DROP <TempTable>` — release it early. A statement of its own, and it returns nothing.\n\n**Reading the results** (`Query` methods):\n- `ExecuteBatch()` — an **Array** of results, indexed by the position each statement was written at. An INTO statement answers with one row holding the record count; a DROP answers Undefined.\n- `Execute()` — the FIRST result, which for an ordinary one-statement query is the only one.\n- `Execute(\"<Name>\")` — the result a statement named with ONTO.\n\n**Living longer than one execution:** without a `TempTablesManager` the tables die with the call that made them. Attach one to both queries and they are shared: `manager = New TempTablesManager(); first.TempTablesManager = manager; … second.TempTablesManager = manager; … manager.Close();`.\n\nA package runs as ONE trip and inside one read state, so every statement sees the same data.",
+      "syntax_block": "SELECT M.Goods AS Goods, SUM(M.Quantity) AS Qty\nINTO Folded\nFROM AccumulationRegister.Stock AS M\nGROUP BY M.Goods\nINDEX BY Goods;\n\nSELECT G.Description AS Item, f.Qty AS Qty\nFROM Catalog.Products AS G\nINNER JOIN Folded AS f ON f.Goods = G.Ref;\n\nDROP Folded",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// the whole package, read by position\nvar q = New Query(\n    \"SELECT M.Goods AS Goods, SUM(M.Quantity) AS Qty INTO Folded \" +\n    \"FROM AccumulationRegister.Stock AS M GROUP BY M.Goods; \" +\n    \"SELECT f.Goods AS Goods, f.Qty AS Qty FROM Folded AS f\");\nvar results = q.ExecuteBatch();\nvar sel = results.Get(1).Select();          // [0] is the INTO statement's row count\nwhile (sel.Next())\n    Message(String(sel.Goods) + \" = \" + String(sel.Qty));",
+      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "see_also": ["q.From", "q.GroupBy", "q.Select"],
       "reviewed": true
     },
     {

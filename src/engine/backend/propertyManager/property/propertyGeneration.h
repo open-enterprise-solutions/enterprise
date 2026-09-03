@@ -36,6 +36,11 @@ public:
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
+	// The same acceptance ibPropertyRecord makes, and for the same reason: CreateValueList wraps
+	// every candidate as ibVariantDataOwner whatever family asked for the list, so a property that
+	// stores the neighbour's wrapper raises on every later read. See propertyRecord.h.
+	virtual void DoSetValue(const wxVariant& val) override;
+
 	//load & save object in control 
 
 	// readable node value

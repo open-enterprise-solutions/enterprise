@@ -8,9 +8,10 @@
 // answer BEFORE the fact: signatures, parameters, return values, worked
 // examples, and which runtimes an entry is even valid in.
 //
-// AND IT KNOWS THIS CONFIGURATION. The corpus is the platform's docs merged
-// with the ones built from the open configuration, so a catalog's own methods
-// and attributes are in it beside `Message` and `Date`.
+// ⭐ IT IS THE SYNTAX HELPER AND NOTHING ELSE — the same corpus the designer shows beside the
+// editor. What a CONFIGURATION holds is metadata_tree / metadata_get / query_fields; how something
+// is USUALLY BUILT here is pattern_read. Those three questions look alike and are not, and a verb
+// that answers all of them teaches a caller to ask the wrong one.
 //
 // ⚠ NO DUMP, DELIBERATELY. A corpus is thousands of entries; a verb that
 // returned all of them would spend a caller's whole context on a list it has to
@@ -99,68 +100,6 @@ ibDataValue Brief(const ibHelpEntry& entry)
 	return ibDataValue::Child(node);
 }
 
-// ⭐⭐ THE CONFIGURATION'S OWN NAMES, answered from the metadata rather than from an article.
-//
-// What a caller asks this tool before writing a name is one question — "is there a thing called
-// this, and how do I spell it in script" — and for the platform's own vocabulary the corpus answers
-// it. For the configuration's, nothing did: the corpus's per-config source is a FILE of written
-// articles, and a configuration that has none (every configuration, so far) answered zero to
-// `Goods`, `StockBalance`, `Catalog`.
-//
-// So the metadata answers for itself. One line per matching object: the dotted path a query and a
-// script write it as, and the kind it is. Marked `fromConfiguration`, which is what that flag was
-// declared for.
-//
-// ⚠ NAMES ONLY — no prose, no signature list. Everything ABOUT an object is already answered, in
-// full, by metadata_tree / metadata_get / query_fields; repeating it here would be a second
-// spelling of the same fact, and the two would drift.
-void AppendConfigurationNames(const wxString& query, s32 limit, std::vector<ibDataValue>& into)
-{
-	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
-		return;
-
-	const ibValueMetaObject* root = activeMetaData->GetCommonMetaObject();
-	if (root == nullptr)
-		return;
-
-	const wxString asked = query.Lower();
-
-	for (unsigned int index = 0; index < root->GetChildCount(); ++index) {
-
-		if ((s32)into.size() >= limit)
-			return;
-
-		const ibValueMetaObject* child = root->GetChild(index);
-		if (child == nullptr || child->IsDeleted())
-			continue;
-
-		const wxString name = child->GetName();
-		const wxString kind = child->GetClassName();
-
-		// Matched on either half of what a script writes — the KIND ("Catalog") reaches every
-		// catalog, the NAME ("Goods") reaches the one. Case-insensitive, because a name typed from
-		// memory rarely comes back with its capitals.
-		if (name.Lower().Find(asked) == wxNOT_FOUND && kind.Lower().Find(asked) == wxNOT_FOUND)
-			continue;
-
-		std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-		node->SetValue(wxT("id"), kind + wxT(".") + name);
-		node->SetValue(wxT("name"), name);
-		node->SetValue(wxT("nameEn"), name);
-		node->SetValue(wxT("kind"), kind);
-		node->SetValue(wxT("signature"), kind + wxT(".") + name);
-		node->AddField(wxT("fromConfiguration"), ibDataValue::Bool(true));
-
-		// WHERE THE REST OF IT IS. There is no article to fetch with help_get — what this object
-		// holds is answered by the metadata verbs, and the node id they take is right here rather
-		// than a tree walk away.
-		node->AddField(wxT("nodeId"), ibDataValue::Int((s64)child->GetMetaID()));
-		node->SetValue(wxT("read"), wxString(wxT("metadata_get")));
-
-		into.push_back(ibDataValue::Child(node));
-	}
-}
-
 using ibArg = ibMcpTool::ibMcpArgument;
 
 // The arguments this file's tools take — declared once, and read through the same
@@ -184,7 +123,7 @@ const ibArg& ArgLimit()
 const ibArg& ArgId()
 {
 	static const ibArg s_a(wxT("id"), ibArg::Kind::Text,
-		ibMcpText("The entry's id, as help_search returned it - for example 'fn.Message' or "
+		ibMcpText("The entry's id, as syntax_search returned it - for example 'fn.Message' or "
 			  "'meth.Catalog.Goods.Write'."), /*required*/ true);
 	return s_a;
 }
@@ -192,12 +131,12 @@ const ibArg& ArgId()
 } // namespace
 
 //---------------------------------------------------------------------------
-// help_search
+// syntax_search
 //---------------------------------------------------------------------------
 class ibMcpToolHelpSearch : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("help_search"); }
+	wxString GetName() const override { return wxT("syntax_search"); }
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
@@ -207,10 +146,12 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Find what this platform offers by name: built-in functions, keywords, types, "
-			"collections, events, operators, and the objects, attributes and methods of the "
-			"open configuration. Answers one line each - call help_get for the full entry. "
-			"Ask here BEFORE writing a name you are not certain of.");
+		return ibMcpText("THE SYNTAX HELPER, asked by name instead of by cursor: the LANGUAGE - built-in "
+			"functions, keywords, types, collections, events, operators - with one line each; "
+			"syntax_get gives the full entry. Ask here before writing a name you are not certain "
+			"of.\nIT IS NOT A SEARCH OVER THE CONFIGURATION, and does not pretend to be: what an "
+			"object holds is answered by metadata_tree / metadata_get, its fields by query_fields, "
+			"and how something is USUALLY BUILT here by pattern_read.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -251,29 +192,29 @@ public:
 				entries.push_back(Brief(*entry));
 		}
 
-		// 🛑⭐ …AND THE OTHER HALF THIS TOOL PROMISES. Its own description says "and the objects,
-		// attributes and methods of the OPEN CONFIGURATION", and the corpus answered none of them:
-		// `Goods`, `StockBalance`, `Catalog` — nothing, in a configuration holding all three, while
-		// every entry it did return said `fromConfiguration: false`. The flag exists precisely for
-		// this half; the road it marks was never walked (measured as a newcomer would, 2026-09-02).
-		//
-		// The corpus's per-config source is a FILE source — someone's written articles, merged over
-		// the platform's. What a caller is asking here is smaller and always available: does this
-		// configuration have a thing by this name, and what is it called in script. That is answered
-		// from the metadata itself, which is the authority on it, and it is added BESIDE the corpus
-		// rather than into it — an article somebody wrote must still win.
-		const size_t fromCorpus = entries.size();
-		if ((s32)entries.size() < limit)
-			AppendConfigurationNames(query, limit, entries);
-
-		result.AddField(wxT("found"), ibDataValue::Int((s64)(found.size() + (entries.size() - fromCorpus))));
+		result.AddField(wxT("found"), ibDataValue::Int((s64)found.size()));
 		result.AddField(wxT("entries"), ibDataValue::Array(entries));
+
+		// ⭐ THIS IS THE SYNTAX HELPER, AND ONLY THAT — the same corpus the designer shows beside the
+		// editor: how the LANGUAGE is written. It briefly also answered names out of the open
+		// configuration, and that was a mixing of two different questions: what a configuration
+		// HOLDS is metadata_tree / metadata_get / query_fields, and how things are USUALLY BUILT is
+		// pattern_read, which is the reference of the trade. A search that answers all three teaches
+		// a caller to ask the wrong one of them.
+		//
+		// So a miss says where the other two live, rather than looking like a platform with no such
+		// word in it.
+		if (entries.empty())
+			result.SetValue(wxT("nothing"),
+				ibMcpText("Nothing in the syntax helper by that name. This is the LANGUAGE reference - "
+				  "functions, keywords, types. For what THIS configuration holds ask metadata_tree / "
+				  "metadata_get / query_fields; for how such a thing is usually built, pattern_read."));
 
 		// The corpus's own digest. A caller that caches answers can tell whether
 		// what it remembers is still what the platform would say.
 		result.SetValue(wxT("corpus"), corpus->Fingerprint());
 
-		// Answered on the FIRST call, not only in help_get: a caller that is
+		// Answered on the FIRST call, not only in syntax_get: a caller that is
 		// about to write code needs to know which dialect it is writing in
 		// before it has looked anything up in full.
 		result.SetValue(wxT("syntaxMode"), wxString(WritesInWords() ? wxT("words") : wxT("braces")));
@@ -284,12 +225,12 @@ public:
 MCP_TOOL_REGISTER(ibMcpToolHelpSearch);
 
 //---------------------------------------------------------------------------
-// help_get
+// syntax_get
 //---------------------------------------------------------------------------
 class ibMcpToolHelpGet : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("help_get"); }
+	wxString GetName() const override { return wxT("syntax_get"); }
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
@@ -298,9 +239,10 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("One help entry in full: signature, parameters, what it returns, both syntax "
-			"forms, worked examples, and which runtimes it is valid in. Ids come from "
-			"help_search.");
+		return ibMcpText("One entry of the SYNTAX HELPER in full: signature, parameters, what it returns, "
+			"both syntax forms, worked examples, and which runtimes it is valid in. Ids come from "
+			"syntax_search - the language ones (`kw.`, `fn.`, `cls.`, `guide.`). An object of the "
+			"configuration has no article here; it is read with metadata_get.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -318,8 +260,29 @@ public:
 		const wxString id = ArgId().Text(params);
 		const ibHelpEntry* entry = corpus->FindById(id);
 		if (entry == nullptr) {
+
+			// ⭐ AN ID FROM THE CONFIGURATION HALF OF syntax_search LANDS HERE, and "no such entry" is
+			// a true sentence that teaches the caller nothing: `Document.GoodsReceipt` was just
+			// handed to them BY syntax_search, marked `fromConfiguration` with the verb to read it
+			// beside it. There is no article to fetch — objects are read with the metadata verbs —
+			// so say that, with the id those verbs take, instead of sending them back to the search
+			// that already answered.
+			const wxString objectName = id.AfterLast(wxT('.'));
+
+			if (!objectName.IsEmpty() && activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
+				if (const ibValueMetaObject* object =
+						activeMetaData->FindAnyObjectByFilter<ibValueMetaObject>(objectName)) {
+
+					refusal = wxString::Format(
+						ibMcpText("'%s' is an object of this configuration, not an article - it has no "
+						  "help text of its own. Read it with metadata_get {id: %i}, its fields with "
+						  "query_fields."), id, (int)object->GetMetaID());
+					return false;
+				}
+			}
+
 			refusal = wxString::Format(
-				ibMcpText("No help entry has the id '%s'. Use help_search to find one."), id);
+				ibMcpText("No help entry has the id '%s'. Use syntax_search to find one."), id);
 			return false;
 		}
 

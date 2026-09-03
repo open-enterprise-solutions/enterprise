@@ -128,6 +128,40 @@ TEST(McpToolRegistry, AnUnknownName_FindsNothingRatherThanAnything)
 	EXPECT_EQ(ibFindMcpTool(wxEmptyString), nullptr);
 }
 
+// A client is refused everything until it has introduced itself, and these are the verbs the
+// greeting itself is made of. A name here that no longer exists would shut the door with no way
+// through it - which is the one failure this rule must not have.
+TEST(McpGreetingGate, EveryVerbAllowedBeforeTheGreeting_IsARealTool)
+{
+	ASSERT_FALSE(ibMcpGreetingVerbs().empty());
+
+	for (const wxString& verb : ibMcpGreetingVerbs())
+		EXPECT_NE(ibFindMcpTool(verb), nullptr) << "greeting verb with no tool: " << verb.ToStdString();
+}
+
+// The greeting must be sayable and the room readable: without these two the rule would be a wall.
+TEST(McpGreetingGate, SpeakingAndReadingTheRoom_AreAllowed)
+{
+	EXPECT_TRUE(ibMcpRunsBeforeGreeting(wxT("chat_say")));
+	EXPECT_TRUE(ibMcpRunsBeforeGreeting(wxT("chat_history")));
+	EXPECT_TRUE(ibMcpRunsBeforeGreeting(wxT("platform_state")));
+	EXPECT_TRUE(ibMcpRunsBeforeGreeting(wxT("metadata_tree")));
+
+	// …and asked the way a caller spells it, which is not always the way the table does.
+	EXPECT_TRUE(ibMcpRunsBeforeGreeting(wxT("Chat_Say")));
+}
+
+// Everything that CHANGES anything waits - that is the whole point of the door.
+TEST(McpGreetingGate, WritingVerbs_WaitForTheGreeting)
+{
+	EXPECT_FALSE(ibMcpRunsBeforeGreeting(wxT("metadata_create")));
+	EXPECT_FALSE(ibMcpRunsBeforeGreeting(wxT("metadata_set")));
+	EXPECT_FALSE(ibMcpRunsBeforeGreeting(wxT("metadata_bind")));
+	EXPECT_FALSE(ibMcpRunsBeforeGreeting(wxT("module_write")));
+	EXPECT_FALSE(ibMcpRunsBeforeGreeting(wxT("config_save")));
+	EXPECT_FALSE(ibMcpRunsBeforeGreeting(wxEmptyString));
+}
+
 //---------------------------------------------------------------------------
 // what a caller is told
 //---------------------------------------------------------------------------

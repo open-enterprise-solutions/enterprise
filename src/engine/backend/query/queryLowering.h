@@ -249,13 +249,28 @@ public:
 		wxString m_dropTemp;                                 // non-empty: this statement released that temp table
 		long     m_rowCount = -1;                            // rows materialised by an INTO statement (-1 = not one)
 		bool     m_hasTotals = false;                        // the statement had a TOTALS clause (the result folds)
-		// ⭐ THE ONE THE PACKAGE EXISTS TO PRODUCE — the query assembled from the package's LINKS,
-		// which relates the named selections to each other (ExecutePackage, at the end). It belongs
-		// to no statement, so it has no `ONTO` name of its own, and without a mark the only way to
-		// find it would be "the last element", which changes meaning the day a statement is added.
-		bool     m_isFinal = false;
+		// ⛔ THERE IS NO "FINAL" RESULT ANY MORE, and the flag that marked one is gone with it. The
+		// package's LINKS used to be assembled into an extra query appended here — a result standing
+		// at a position nobody wrote, in an array whose contract is one entry per statement, while the
+		// selections it related stayed untouched beside it. A LINK is a STATEMENT now: it reconciles
+		// the two named selections IN PLACE and answers with the number of rows it removed.
 		std::unique_ptr<ibDataQueryResult> m_result;         // the table of a plain select (null otherwise)
 		std::vector<OutputColumn>          m_schema;         // its output columns, in projection order
+
+		// ⭐⭐ WHO KEEPS THE TEMP TABLES ALIVE WHILE THIS RESULT IS READ. A package's own store used to
+		// be a LOCAL of ExecutePackage, on the reasoning that "a temp table nobody is keeping dies
+		// with the call" — true of the TABLES and false of the ROWS: the result and its schema point
+		// straight at that store's columns, and a script reads them long after the call returned.
+		//
+		// 🛑 So `SELECT … INTO T …; SELECT … FROM T` CRASHED the process on the first field read —
+		// `ibRamTableResultSource::Value` on a column at 0xdddddddd, the Debug CRT's freed-memory fill
+		// (dump 2026-09-04). Not an error, not an empty value: a dead process.
+		//
+		// The fix is the one this engine already settled on for the query skeleton: OWNERSHIP, not
+		// tracking — everyone who reads it holds a share, and the last one out takes it with them
+		// (docs, and the note beside ibDataQueryResult's own source share). Null when a caller's
+		// TempTablesManager owns the store instead; then IT is the keeper and nothing here need be.
+		std::shared_ptr<class ibQueryTempTableStore> m_temps;
 	};
 
 	// Run every statement of `package` in order and return the results by position. Throws

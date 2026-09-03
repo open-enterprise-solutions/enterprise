@@ -69,6 +69,23 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const wxString& text,
 	result.AddField(wxT("checked"),
 		ibDataValue::Bool(checked.m_outcome == ibScriptCheckOutcome::Checked));
 
+	// 🛑 `checked: false` IS NOT `diagnostics: []` — AND A BARE FLAG LETS IT BE READ AS ONE. Nothing
+	// was compiled: no verdict was reached, and the empty diagnostics list beside it says only that
+	// nobody looked. Measured on a live configuration, four documents answered `true` and the fifth
+	// `false`, with no visible difference between them and nothing to act on.
+	//
+	// ⭐ AND THE REASON IS ALWAYS THE SAME ONE: a module reaches the compile cache in its owner's
+	// OnAfterRunMetaObject, so a module that is not in it belongs to an object that has not been
+	// RUN. That is a fact about the object, not about the text, and it is what the caller needs to
+	// hear — the text IS stored either way.
+	if (checked.m_outcome != ibScriptCheckOutcome::Checked)
+		result.SetValue(wxT("checkedNote"),
+			ibMcpText("The text is written, and NOTHING WAS COMPILED - so the empty `diagnostics` "
+			  "means nobody looked, not that the module is clean. A module is compiled where it "
+			  "lives, and it gets there when its owner is run; an object created but never run has "
+			  "no compile module yet. Re-open the object (or apply the configuration) and write "
+			  "again to get a verdict, and until then treat this module as unverified."));
+
 	std::vector<ibDataValue> diagnostics;
 	for (const ibDiagnostic& diagnostic : checked.m_diagnostics) {
 
@@ -120,7 +137,7 @@ const ibArg& ArgText()
 	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
 		ibMcpText("The whole module text - this REPLACES what is there, it does not add to it "
 			  "(module_patch edits a part, module_read shows what is there now). Write it in "
-			  "the syntax form this configuration uses - help_search answers which one that is."),
+			  "the syntax form this configuration uses - syntax_search answers which one that is."),
 		/*required*/ true);
 	return s_a;
 }

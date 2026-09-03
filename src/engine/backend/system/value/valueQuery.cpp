@@ -56,7 +56,12 @@ void ibValueQueryExec_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 	// Execute() takes an OPTIONAL NAME — the one a statement gave its result with ONTO. Asking by
 	// name is the point of that word: a position changes the moment somebody inserts a statement
 	// above it, a name does not. Same verb, because it is the same act.
-	helper.AppendFunc(wxT("Execute"), wxT("Execute([name : string])"));
+	// ⭐ EXECUTE TAKES NOTHING. "Just run it" is the whole of this verb; anything that needs to reach
+	// a PARTICULAR result of several is asking about a PACKAGE, and a package answers with the array
+	// — `ExecuteBatch()`. Two ways to say the same thing is how the pair drifts (Max, 2026-09-04:
+	// *"execute — no name needed there, just execute and that is all, drive the rest into the batch"*).
+	// ONTO still names a selection; what reads that name is LINK, inside the package text.
+	helper.AppendFunc(wxT("Execute"), wxT("Execute()"));
 	helper.AppendFunc(wxT("ExecuteBatch"), wxT("ExecuteBatch()"));
 	// WHERE this query's temp tables live. Left unset they die with the execution; set to a
 	// TempTablesManager they outlive it and other queries attached to the same manager read them.
@@ -160,7 +165,10 @@ bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out, std::vector<wxStrin
 			// row holding the record count. A DROP has no result at all and hands back the UNDEFINED
 			// value. Nothing in the array is a bare number, so walking it needs no branch.
 			if (r.m_result != nullptr)
-				out.push_back(new ibValueQueryResult(std::move(*r.m_result), std::move(r.m_schema), r.m_hasTotals, readsOneState));
+				// …and the temp-table share travels WITH the rows it belongs to: the package's own
+				// store outlives this call only because every result it produced holds a piece of it.
+				out.push_back(new ibValueQueryResult(std::move(*r.m_result), std::move(r.m_schema), r.m_hasTotals,
+				                                     readsOneState, r.m_temps));
 			else
 				out.push_back(ibValue());   // a drop: a position with no result
 
@@ -189,28 +197,11 @@ bool ibValueQueryExec::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	if (lMethodNum != enExecute && lMethodNum != enExecuteBatch)
 		return false;
 
-	// Execute(<name>) — the result a statement named with ONTO. Read before the run, because a name
-	// nobody wrote is a mistake in the CALL, not in the package.
-	const bool byName = lMethodNum == enExecute && lSizeArray >= 1
-	                    && paParams != nullptr && paParams[0] != nullptr && !paParams[0]->IsEmpty();
-	const wxString wanted = byName ? paParams[0]->GetString() : wxString();
-
+	// ⛔ NO "BY NAME" HERE. Reaching a particular result of several is a question about a PACKAGE, and
+	// the package answers with its array — ExecuteBatch(). Execute() is "just run it" and nothing
+	// else (Max, 2026-09-04). ONTO keeps naming a selection: LINK reads that name, in the query text.
 	std::vector<ibValue> results;
-	std::vector<wxString> names;
-	RunPackage(results, &names);
-
-	if (byName) {
-		for (size_t i = 0; i < results.size() && i < names.size(); ++i) {
-			if (!names[i].IsSameAs(wanted, false))
-				continue;
-			pvarRetValue = results[i];
-			return true;
-		}
-		// SAID, NOT SHRUGGED. Handing back an empty value here is indistinguishable from a query
-		// that returned nothing, and the difference — "no such name" — is the one worth knowing.
-		ibBackendCoreException::Error(_("the query package has no result named '%s'"), wanted);
-		return false;
-	}
+	RunPackage(results);
 
 	// ExecuteBatch() — the whole array, indexed by the position each statement was written at.
 	if (lMethodNum == enExecuteBatch) {
@@ -279,12 +270,14 @@ ibValueQueryResult::ibValueQueryResult()
 
 ibValueQueryResult::ibValueQueryResult(ibDataQueryResult&& result,
                                        std::vector<ibQueryLowering::OutputColumn> schema, bool hasTotals,
-                                       std::shared_ptr<ibQueryReadState> snapshot)
+                                       std::shared_ptr<ibQueryReadState> snapshot,
+                                       std::shared_ptr<ibQueryTempTableStore> temps)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE)
 	, m_result(std::make_unique<ibDataQueryResult>(std::move(result)))
 	, m_schema(std::move(schema))
 	, m_hasTotals(hasTotals)
 	, m_snapshot(std::move(snapshot))
+	, m_temps(std::move(temps))
 {
 	m_members.Bind(this, &ibValueQueryResult::FillMembers);
 }
@@ -293,7 +286,12 @@ ibValueQueryResult::~ibValueQueryResult() = default;
 
 void ibValueQueryResult::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Select"), 1, wxT("Select(method?)"));   // -> a QuerySelect (consumes the result)
+	// …AND THE BRANCH, on this level too. A SPLIT report is entered at the TOP — that is where a
+	// reader starts — so "walk only this branch" has to be sayable here and not merely one level in.
+	// The door has taken it all along (ibDataQueryResult::Select(kind, branch)); the verb declared one
+	// argument, so a second was swallowed in silence and the walk quietly returned every branch
+	// (measured 2026-09-04: a branch name nobody answers to still walked all of them).
+	helper.AppendFunc(wxT("Select"), 2, wxT("Select(method?, branch?)"));   // -> a QuerySelect (consumes the result)
 }
 
 bool ibValueQueryResult::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
@@ -312,13 +310,19 @@ bool ibValueQueryResult::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 		? paParams[0]->ConvertToEnumValue<ibSelectKind>()
 		: ibSelectKind::ibSelectKind_Direct;
 	if (kind == ibSelectKind::ibSelectKind_Direct && !m_hasTotals) {
-		pvarRetValue = new ibValueQuerySelect(std::move(m_result), m_schema, m_snapshot);
+		pvarRetValue = new ibValueQuerySelect(std::move(m_result), m_schema, m_snapshot, m_temps);
 	}
 	else {
-		ibSelector top = m_result->Select(kind);
-		ibJournalInfo(wxT("query.walk"), wxT("select(%d): %ld node(s) at the first level"),
-			static_cast<int>(kind), top.NodeCount());
-		pvarRetValue = new ibValueQuerySelect(std::move(top), m_schema, m_snapshot);
+		// Select(method, branch) — walk ONE branch of a SPLIT from the top. A name nobody answers to
+		// yields an empty walk rather than falling back to all of them: asking for a branch that is
+		// not there is a mistake worth seeing (ibSelector::CollectVisits says the same).
+		const wxString branch = (lSizeArray >= 2 && paParams[1] != nullptr && !paParams[1]->IsEmpty())
+			? paParams[1]->GetString() : wxString();
+		ibSelector top = branch.IsEmpty() ? m_result->Select(kind) : m_result->Select(kind, branch);
+		ibJournalInfo(wxT("query.walk"), wxT("select(%d)%s: %ld node(s) at the first level"),
+			static_cast<int>(kind),
+			branch.IsEmpty() ? wxString() : (wxT(" branch '") + branch + wxT("'")), top.NodeCount());
+		pvarRetValue = new ibValueQuerySelect(std::move(top), m_schema, m_snapshot, m_temps);
 	}
 	return true;
 }
@@ -335,22 +339,26 @@ ibValueQuerySelect::ibValueQuerySelect()
 
 ibValueQuerySelect::ibValueQuerySelect(std::unique_ptr<ibDataQueryResult> flat,
                                        std::vector<ibQueryLowering::OutputColumn> schema,
-                                       std::shared_ptr<ibQueryReadState> snapshot)
+                                       std::shared_ptr<ibQueryReadState> snapshot,
+                                       std::shared_ptr<ibQueryTempTableStore> temps)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE)
 	, m_flat(std::move(flat))
 	, m_schema(std::move(schema))
 	, m_snapshot(std::move(snapshot))
+	, m_temps(std::move(temps))
 {
 	m_members.Bind(this, &ibValueQuerySelect::FillMembers);
 }
 
 ibValueQuerySelect::ibValueQuerySelect(ibSelector&& tree,
                                        std::vector<ibQueryLowering::OutputColumn> schema,
-                                       std::shared_ptr<ibQueryReadState> snapshot)
+                                       std::shared_ptr<ibQueryReadState> snapshot,
+                                       std::shared_ptr<ibQueryTempTableStore> temps)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE)
 	, m_tree(std::make_unique<ibSelector>(std::move(tree)))
 	, m_schema(std::move(schema))
 	, m_snapshot(std::move(snapshot))
+	, m_temps(std::move(temps))
 {
 	m_members.Bind(this, &ibValueQuerySelect::FillMembers);
 }
@@ -423,7 +431,7 @@ bool ibValueQuerySelect::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 		const wxString into = branch.IsEmpty() ? wxString() : wxT(" into branch '") + branch + wxT("'");
 		ibJournalInfo(wxT("query.walk"), wxT("descend from level %d%s: %ld node(s)"),
 			m_tree->Level(), into, sub.NodeCount());
-		pvarRetValue = new ibValueQuerySelect(std::move(sub), m_schema, m_snapshot);
+		pvarRetValue = new ibValueQuerySelect(std::move(sub), m_schema, m_snapshot, m_temps);
 		return true;
 	}
 

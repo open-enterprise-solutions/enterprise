@@ -38,6 +38,14 @@ public:
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control
+protected:
+
+	// The family rule, kept here too: a relationship arrives in whichever wrapper the caller was
+	// handed - CreateValueList builds every candidate as ibVariantDataOwner - and a property that
+	// stores a neighbour's wrapper raises on every later read. See propertyRecord.h.
+	virtual void DoSetValue(const wxVariant& val) override;
+
+public:
 
 	// readable node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override;

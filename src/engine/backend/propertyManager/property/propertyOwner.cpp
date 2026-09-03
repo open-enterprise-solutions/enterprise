@@ -12,12 +12,25 @@ wxVariantData* ibPropertyOwner::CreateVariantData(ibPropertyObject* property, co
 }
 
 ibMetaDescription& ibPropertyOwner::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataOwner>()->GetMetaDesc();
+	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyOwner::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// The family rule - see propertyRecord.cpp. It costs nothing here today, because CreateValueList
+// happens to build ibVariantDataOwner and this is the property that holds one; keeping the rule in
+// all five is what stops that coincidence from being load-bearing.
+void ibPropertyOwner::DoSetValue(const wxVariant& val)
+{
+	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+		SetValue(carried->GetMetaDesc());
+		return;
+	}
+
+	ibProperty::DoSetValue(val);
 }
 
 // A catalog is owned by a catalog. The list used to sit in advpropOwner.cpp's constructor.

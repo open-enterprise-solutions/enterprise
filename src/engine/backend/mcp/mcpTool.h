@@ -42,7 +42,7 @@
 // 🛑 WHY IT IS NOT `_()`. The translation macro resolves to `wxASCII_STR` here, and that eats every
 // character outside ASCII: on Windows a mark came back as `?`, on Linux the WHOLE STRING came back
 // EMPTY — three tools shipped with no description at all, and only the CI contract test noticed
-// (2026-09-02, `help_search has no description`). Nothing in this layer is read by the person at
+// (2026-09-02, `syntax_search has no description`). Nothing in this layer is read by the person at
 // the designer: descriptions, argument texts and refusals are read by an assistant, in English, so
 // there was never anything to translate. What IS read by a person — the lines the server publishes
 // into the designer's window — stays `_()` in mcpServer.cpp, and stays ASCII.
@@ -574,6 +574,18 @@ BACKEND_API const std::vector<const ibMcpAudit*>& ibMcpAudits();
 BACKEND_API void ibMcpBusyEnter(const wxString& what);
 BACKEND_API void ibMcpBusyLeave();
 BACKEND_API wxString ibMcpBusyWith();
+
+// ⭐⭐ WHAT MAY RUN BEFORE A CLIENT HAS SAID WHO IT IS — and the answer is: exactly what saying so
+// requires. There is a person in front of this designer, and a connection is invisible to them until
+// something speaks; a client reading their whole configuration in silence is indistinguishable from
+// one that never arrived. Asking for a greeting did not work in any of its gentler shapes, so it is
+// a DOOR: everything else is refused, with the four verbs named, until `chat_say` has happened.
+//
+// The list is here rather than in the server because it is a fact about the TOOLS - which of them a
+// greeting is made of - and because the contract test reads it to check every name is real.
+BACKEND_API bool ibMcpRunsBeforeGreeting(const wxString& toolName);
+BACKEND_API const std::vector<wxString>& ibMcpGreetingVerbs();
+
 
 // The registry. Registration happens during static construction, so the store
 // is a function-local static inside the .cpp — a namespace-scope container

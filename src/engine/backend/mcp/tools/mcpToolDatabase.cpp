@@ -473,6 +473,18 @@ public:
 			if (record.IsProperty() && !withProperties)
 				continue;
 
+			// 🛑 CREATED AND DELETED WITHOUT EVER BEING APPLIED IS NOT A DIFFERENCE. An object marked
+			// deleted stays in the tree until the configuration is written, so one that the database
+			// has never heard of shows up here as ADDED — and a caller reading the diff is told to
+			// expect a table for something metadata_get answers "nothing has this id" about. Anything
+			// the database DOES hold still reports, deleted or not: that is a removal, which is the
+			// one thing this list must never hide.
+			if (record.m_status == ibMetaDiffStatus::OnlyInRight) {
+				const ibValueMetaObject* object = record.GetAnyObject();
+				if (object != nullptr && object->IsDeleted())
+					continue;
+			}
+
 			differing++;
 
 			if ((int)entries.size() >= limit)
@@ -708,9 +720,25 @@ public:
 						|| (child != nullptr && child->ConvertToValue(inside));
 				}
 
-				if (!anyComposer)
+				if (!anyComposer) {
 					complain(object, ibMcpText("no composer - a report reads through one, and without it "
 						  "there is nothing to run"));
+					continue;
+				}
+
+				// 🛑 AND HAVING ONE IS NOT THE SAME AS USING IT. A report whose composers are all
+				// declared and complete still opens as an EMPTY window when none of them is the
+				// DEFAULT: the generated form is a gridbox bound to that one, and with nothing named
+				// there is nothing for it to bind to. Measured 2026-09-03 - two finished reports,
+				// every check clean, and both opened blank in the running application.
+				//
+				// The one-composer case is the trap: with a single composer "the default" reads as
+				// obvious and is still unset, so nothing but this says so.
+				const ibProperty* byDefault = object->GetProperty(wxT("DefaultComposer"));
+
+				if (byDefault != nullptr && byDefault->IsEmptyProperty())
+					complain(object, ibMcpText("no default composer - the report has one but does not "
+						  "name it, so its form opens empty; metadata_set DefaultComposer says which"));
 			}
 		}
 	}

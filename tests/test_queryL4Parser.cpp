@@ -80,6 +80,43 @@ TEST(QueryL4Parser, OrBindsLooserThanAnd)
 	EXPECT_EQ(sel->m_where->m_rhs->m_kind, ibQueryAstExprKind::Compare); // C = 3 on the right
 }
 
+TEST(QueryL4Parser, OrderByTakesAnExpression)
+{
+	// Sorting by a CONDITION is an ordinary thing to ask ("the one I care about first"), the lowering
+	// has always carried it (OrderByExpr), and only the parser refused — "unexpected text after the
+	// query", pointing at the word CASE.
+	auto sel = Parse(wxT("SELECT Code FROM Catalog.Products ")
+	                 wxT("ORDER BY CASE WHEN Code = \"A\" THEN 0 ELSE 1 END, Price * Qty DESC"));
+	ASSERT_TRUE(sel != nullptr);
+	ASSERT_EQ(sel->m_orderBy.size(), 2u);
+	EXPECT_EQ(sel->m_orderBy[0].m_expr->m_kind, ibQueryAstExprKind::Case);
+	EXPECT_TRUE(sel->m_orderBy[0].m_ascending);
+	EXPECT_EQ(sel->m_orderBy[1].m_expr->m_kind, ibQueryAstExprKind::Arith);
+	EXPECT_FALSE(sel->m_orderBy[1].m_ascending);
+
+	// …and it survives the round trip, which is what the constructor reads back.
+	const wxString written = ibRenderQuery(*sel);
+	auto again = Parse(written);
+	ASSERT_TRUE(again != nullptr);
+	ASSERT_EQ(again->m_orderBy.size(), 2u);
+	EXPECT_EQ(written, ibRenderQuery(*again));
+}
+
+TEST(QueryL4Parser, OrderByStillReadsAKeywordAsAName)
+{
+	// The other half of the same rule, and the reason the expression road is entered by the FIRST
+	// TOKEN rather than always: an attribute called `Order` / `Count` / `Value` keeps sorting the way
+	// it always has. An enumeration's own `Order` attribute is the case that put this rule here.
+	auto sel = Parse(wxT("SELECT Code FROM Catalog.Products ORDER BY Order, Value DESC"));
+	ASSERT_TRUE(sel != nullptr);
+	ASSERT_EQ(sel->m_orderBy.size(), 2u);
+	EXPECT_EQ(sel->m_orderBy[0].m_expr->m_kind, ibQueryAstExprKind::Column);
+	ASSERT_EQ(sel->m_orderBy[0].m_expr->m_path.size(), 1u);
+	EXPECT_EQ(sel->m_orderBy[0].m_expr->m_path[0], wxT("Order"));
+	EXPECT_EQ(sel->m_orderBy[1].m_expr->m_kind, ibQueryAstExprKind::Column);
+	EXPECT_FALSE(sel->m_orderBy[1].m_ascending);
+}
+
 TEST(QueryL4Parser, AliasesAndDottedColumns)
 {
 	auto sel = Parse(wxT("SELECT p.Name AS n FROM Catalog.Products AS p ORDER BY p.Name DESC"));

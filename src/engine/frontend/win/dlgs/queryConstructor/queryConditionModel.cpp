@@ -60,7 +60,7 @@ void ibQueryConditionModel::SetRows(const std::vector<ibQueryAstExprPtr>& rows)
 	// like any other; the engine's rewrite would have moved it anyway, but on a clone — leaving the
 	// author looking at a WHERE while the engine ran a HAVING. Same rule, applied where the AST is
 	// actually held, so the text says what the query is.
-	ibQueryMoveAggregateConditionsToHaving(*m_select);
+	ibQuerySortConditionsByFold(*m_select);
 	// The switch belongs to the ROW, and the rows are these — so the flags follow the list's length.
 	// Growing keeps what was set (an edit does not un-ask for free text); shrinking drops the tail.
 	m_freehand.resize(rows.size(), false);

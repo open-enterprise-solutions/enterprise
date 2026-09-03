@@ -188,14 +188,19 @@ enum recordManager
 	enGetMetadataRecordManager
 };
 
+// 🛑 THIS ORDER IS THE CALL NUMBER, AND IT MUST MATCH FillMembers EXACTLY. A method is invoked by
+// its INDEX in the member table, so an enumerator out of step silently runs a different verb:
+// `Write` landed on Load, `Load` on Unload and `Unload` on Write. Posting any document crashed
+// (Write handed its bool to Load, which casts it to a table) and an Unload would have WRITTEN the
+// set. Found 2026-09-03 by posting a goods receipt from the sandbox.
 enum recordSet
 {
 	enAdd = 0,
 	enCount,
 	enClear,
+	enWriteRecordSet,
 	enLoad,
 	enUnload,
-	enWriteRecordSet,
 	enModifiedRecordSet,
 	enReadRecordSet,
 	enSelectedRecordSet,
@@ -292,6 +297,10 @@ bool ibValueRecordSetObjectInformationRegister::CallAsFunc(const long lMethodNum
 		return true;
 	case recordSet::enClear:
 		ibValueModelStorage::Clear();
+		// ⭐ CLEARING IS A CHANGE. Emptying the set is how a handler says "no movements" - and the
+		// document's final write skips a set that is not modified, so an unmarked Clear would leave
+		// yesterday's movements standing.
+		Modify(true);
 		return true;
 	case recordSet::enLoad:
 		LoadDataFromTable(paParams[0]->ConvertToType<ibValueModel>());

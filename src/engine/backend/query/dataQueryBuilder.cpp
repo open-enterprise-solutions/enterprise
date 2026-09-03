@@ -79,15 +79,50 @@ ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const ibBackendQueryable* query
 	node->m_right    = ibQueryNode::Source(queryable, alias);
 	node->m_joinKind = kind;
 	node->m_on       = on;
+
+	// ⭐⭐ THE SIDES OF A JOIN ARE NOT THE ORDER THE CONDITION WAS WRITTEN IN.
+	//
+	// `ON t.Goods = G.Ref` names the SOURCE BEING JOINED first and the accumulated tree second —
+	// which is ordinary, symmetric, and the way people write it. But `m_colL` / `m_colR` mean the
+	// node's LEFT and RIGHT, and every reader downstream takes them literally: the RAM stitch does
+	// `left.GetCell(row, m_colL->GetColumnId())`, the co-located renderer qualifies each by its own
+	// side's table. Kept as typed, each side then asks its table for a column the OTHER one owns.
+	//
+	// 🛑 AND THAT DOES NOT FAIL — IT MULTIPLIES. A missing column reads as an EMPTY cell, not as an
+	// error, so every row on the left carries the same empty key, every row on the right carries the
+	// same empty key, and the hash join dutifully matches all of them: `Catalog.Goods INNER JOIN
+	// (SELECT Goods, SUM(Qty) … GROUP BY Goods) ON t.Goods = G.Ref` came back with 40 rows for 4
+	// items — every item against every fold, with the WRONG total beside each name and nothing
+	// anywhere to say so (measured 2026-09-04; the journal's `join inner: on [Goods] x [Ref]` is
+	// what made it visible).
+	//
+	// So the sides are decided by OWNERSHIP, here, at the one point that builds the node — never by
+	// the callers, who would each have to remember. A column the new source owns belongs on the
+	// right; if it was handed in as the left, the pair is simply the wrong way round.
+	auto putSidesRight = [queryable](const ibBackendQueryColumn*& left, const ibBackendQueryColumn*& right) {
+		if (left == nullptr || right == nullptr || queryable == nullptr)
+			return;
+		if (queryable->OwnsColumn(left) && !queryable->OwnsColumn(right))
+			std::swap(left, right);
+	};
+	putSidesRight(node->m_on.m_colL, node->m_on.m_colR);
+	// …and every further pair of a composite key, each judged on its own: an author writing
+	// `ON T.Goods = B.Goods AND B.Warehouse = T.Warehouse` has written one of them each way round,
+	// which is neither wrong nor unusual.
+	for (auto& pair : node->m_on.m_alsoOn)
+		putSidesRight(pair.first, pair.second);
+
 	m_root = node;
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
 	const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
-	ibJoinCompareOp onOp, ibQueryJoinKind kind, const wxString& alias)
+	ibJoinCompareOp onOp, ibQueryJoinKind kind, const wxString& alias,
+	const std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>>& alsoOn)
 {
 	ibJoinOn on; on.m_colL = onLeft; on.m_colR = onRight; on.m_op = onOp;   // onOp != Eq -> theta (RAM nested-loop)
+	on.m_alsoOn = alsoOn;                                                  // the rest of a composite key
 	return JoinNode(queryable, kind, alias, on);
 }
 
@@ -305,6 +340,17 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderByExpr(const ibQueryColumnExprPtr& 
 	ibQuerySortItem s;
 	s.m_ascending = ascending;
 	s.m_expr      = expr;   // computed sort — the provider lowers it (BuildColumnExpr) and orders on the expression
+	m_sorts.push_back(std::move(s));
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::OrderByOutput(const wxString& alias, bool ascending)
+{
+	if (alias.IsEmpty())
+		return *this;   // an unnamed output cannot be sorted by name — the caller names it or does not sort
+	ibQuerySortItem s;
+	s.m_ascending   = ascending;
+	s.m_outputAlias = alias;   // sorted AFTER the fold, by the name the projection published
 	m_sorts.push_back(std::move(s));
 	return *this;
 }
@@ -634,6 +680,7 @@ ibDataQuerySpec ibDataQueryBuilder::BuildSpec() const
 	spec.m_selectCols  = &m_selectCols;
 	spec.m_with        = &m_with;       // the named queries this statement declares
 	spec.m_distinct    = m_distinct;
+	spec.m_distinctBy  = &m_distinctBy;   // what "duplicate" means here — see Distinct()
 	spec.m_topCount    = m_top;
 	return spec;
 }

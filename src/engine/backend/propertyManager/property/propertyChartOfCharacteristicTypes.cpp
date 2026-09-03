@@ -10,12 +10,23 @@ wxVariantData* ibPropertyChartOfCharacteristicTypes::CreateVariantData(ibPropert
 }
 
 ibMetaDescription& ibPropertyChartOfCharacteristicTypes::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataOwner>()->GetMetaDesc();
+	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyChartOfCharacteristicTypes::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// The family rule - see propertyRecord.cpp.
+void ibPropertyChartOfCharacteristicTypes::DoSetValue(const wxVariant& val)
+{
+	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+		SetValue(carried->GetMetaDesc());
+		return;
+	}
+
+	ibProperty::DoSetValue(val);
 }
 
 // The charts of characteristic types in this configuration. The list used to sit in

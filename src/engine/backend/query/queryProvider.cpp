@@ -387,7 +387,21 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 			m_ownedColumns.push_back(col);
 			m_columns.push_back(col.get());
 			m_readFrom.push_back(nullptr);
-			m_readAlias.push_back(ibSqlAliasOf(a.m_alias));   // name = the author's, read key = the statement's
+			// 🛑⭐⭐ THE OUTPUT NAME, NOT THE STATEMENT'S SPELLING — the prefix is added by the READER,
+			// and adding it here too produced `out_out_Total`.
+			//
+			// ibSqlAliasOf is deliberately INJECTIVE and therefore NOT idempotent (`Total` -> `out_Total`,
+			// `out_Total` -> `out_out_Total`), and its own note states the contract: writer and reader
+			// agree by COMPUTING the spelling, never by passing it between them. Both readers keep that
+			// contract — the SQL cursor asks `GetValue(ibSqlAliasOf(alias))`, the RAM table matches the
+			// output name as written — so what belongs in this list is the name the column ANSWERS to.
+			//
+			// ⚠ AND IT FAILED THE WAY THAT NOTE PREDICTED: silently, as an empty value. An aggregate
+			// read through a nested source came back EMPTY on every row, so `FROM (SELECT Goods,
+			// SUM(Qty) AS Total … GROUP BY Goods) AS t WHERE t.Total > 3` filtered on nothing and
+			// returned no rows at all — while the same inner query, run on its own, answered 10 / 20 /
+			// 40 (measured 2026-09-04).
+			m_readAlias.push_back(a.m_alias);
 		}
 		m_readPrefix.assign(m_columns.size(), wxEmptyString);
 		return;
@@ -429,12 +443,10 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		m_ownedColumns.push_back(col);
 		m_columns.push_back(col.get());
 		m_readFrom.push_back(nullptr);
-		// ⚠ THE NAME AND THE READ KEY ARE TWO NAMES. The column answers to what the AUTHOR called it
-		// (above) — that is what an outer query names — while the value is fetched by what the
-		// STATEMENT called it, which differs whenever the author's word is SQL's word (ibSqlAliasOf).
-		// Reading by the author's name there would find no such field and yield an empty value in
-		// silence, which is the failure this split exists to prevent.
-		m_readAlias.push_back(ibSqlAliasOf(walk.m_alias));
+		// ⚠ THE NAME AND THE READ KEY ARE TWO NAMES, and the statement's spelling is derived from this
+		// one by whoever writes or reads the statement — see the note on the aggregate list above.
+		// What is stored here is the OUTPUT name; ibSqlAliasOf is applied once, at the read.
+		m_readAlias.push_back(walk.m_alias);
 	}
 
 	// ⭐ AND THE COMPUTED ONES — arithmetic, CASE. A third list, a third way in, and the same rule:
@@ -451,7 +463,7 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		m_ownedColumns.push_back(col);
 		m_columns.push_back(col.get());
 		m_readFrom.push_back(nullptr);
-		m_readAlias.push_back(ibSqlAliasOf(computed.m_alias));   // name = the author's, read key = the statement's
+		m_readAlias.push_back(computed.m_alias);   // the OUTPUT name - the read applies ibSqlAliasOf (see above)
 	}
 
 	m_readPrefix.assign(m_columns.size(), wxEmptyString);   // derived here: no schema, so no spread to reassemble
@@ -503,7 +515,8 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		m_ownedColumns.push_back(col);
 		m_columns.push_back(col.get());
 		m_readFrom.push_back(out.m_col);
-		m_readAlias.push_back(out.m_objectPrefix.IsEmpty() ? ibSqlAliasOf(out.m_alias) : wxString());
+		// The OUTPUT name again — one spelling stored, the read computes the statement's (see above).
+		m_readAlias.push_back(out.m_objectPrefix.IsEmpty() ? out.m_alias : wxString());
 		m_readPrefix.push_back(out.m_objectPrefix);
 	}
 }
@@ -1599,6 +1612,20 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 	for (const ibBackendQueryColumn* c : refCols) {
 		if      (SubtreeProvides(node->m_left.get(),  c)) { outCols.push_back(c); fromLeft.push_back(true);  }
 		else if (SubtreeProvides(node->m_right.get(), c)) { outCols.push_back(c); fromLeft.push_back(false); }
+	}
+
+	// ⭐ WHAT THIS STITCH IS JOINING ON — the one fact the composed row count cannot be read without.
+	// A join with no key column is a CARTESIAN product by construction (JoinRamTables says so), and
+	// from the outside that is indistinguishable from a key that simply matched everything. Said
+	// here, the journal shows which of the two happened before anyone has to guess.
+	ibJournalIf {
+		ibJournalInfo(wxT("query.stitch"), wxT("join %s: on [%s] x [%s]%s"),
+			node->m_joinKind == ibQueryJoinKind::Inner ? wxT("inner") :
+			node->m_joinKind == ibQueryJoinKind::Left  ? wxT("left")  :
+			node->m_joinKind == ibQueryJoinKind::Right ? wxT("right") : wxT("full"),
+			onL != nullptr ? onL->GetName() : wxT("(no key)"),
+			onR != nullptr ? onR->GetName() : wxT("(no key)"),
+			node->m_on.m_cross ? wxT("  CROSS - every row against every row") : wxT(""));
 	}
 
 	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind, node->m_on);
@@ -3487,12 +3514,27 @@ std::vector<long> AttachRefNode(const RefHierCtx& ctx, ibSelectorTree::Node* par
 	const auto cit = ctx.childrenOf->find(valueKey);
 	const bool hasKids = (cit != ctx.childrenOf->end() && !cit->second.empty());
 
-	ibSelectorTree::Node* node = parent->AddChild(level);
-	node->m_values[ctx.refCol->GetColumnId()] = valueKey;   // the key IS the value the node shows
-
 	std::vector<long> ownRows;
 	const auto rit = ctx.rowsByVal->find(valueKey);
 	if (rit != ctx.rowsByVal->end()) ownRows = rit->second;   // this value's own rows
+
+	// ⭐⭐ HIERARCHYONLY: A VALUE WITH NOTHING BELOW IT IS NOT A LEVEL. The two readings, stated by
+	// the person who owns the word (Max, 2026-09-04): «ИТОГИ ПО Ссылка ИЕРАРХИЯ» adds the element's
+	// hierarchy INCLUDING the element itself, and it appears in the detail rows as well; «ТОЛЬКО
+	// ИЕРАРХИЯ» adds those rows NOT including the element — it is in the detail rows only.
+	//
+	// 🛑 ONE WORD, TWO FUNCTIONS, TWO MEANINGS — which is why the modes looked identical. The other
+	// builder of this same tree already reads it right (AttachHierNode: "a leaf element: not a node,
+	// but counts upward"); here HierarchyOnly only withheld the DETAIL rows and still made a node out
+	// of every value, so `TOTALS BY Goods HIERARCHYONLY` came back indistinguishable from HIERARCHY
+	// (measured 2026-09-03). The rows still count upward — the subtotal is over the subtree, not over
+	// the nodes drawn from it.
+	const bool namesNothingBelow = (ctx.dim == ibDimensionKind::HierarchyOnly && !hasKids);
+	if (namesNothingBelow)
+		return ownRows;
+
+	ibSelectorTree::Node* node = parent->AddChild(level);
+	node->m_values[ctx.refCol->GetColumnId()] = valueKey;   // the key IS the value the node shows
 
 	std::vector<long> subtree = ownRows;
 	if (hasKids)
@@ -3654,6 +3696,32 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 	visited[valueKey] = 1;
 	const ibTotalLevel& level = (*ctx.levels)[levelIdx];
 
+	// ⭐⭐ HIERARCHYONLY: THE HIERARCHY WITHOUT THE VALUE THAT NAMES IT. Stated by the person who owns
+	// the word (Max, 2026-09-04): «ИТОГИ ПО Ссылка ИЕРАРХИЯ» adds the element's hierarchy INCLUDING
+	// the element itself, and it also stands in the detail records; «ТОЛЬКО ИЕРАРХИЯ» adds those rows
+	// NOT including the element — it appears in the detail records only.
+	//
+	// So a value with nothing under it is not a rung here: no node, and its rows travel up to the
+	// nearest folder that IS one, where they are read as that folder's detail records. A value that
+	// names something below it stays a node in both modes — it is a folder, which is what the word
+	// keeps.
+	//
+	// 🛑 THE MODE WAS NOT ASKED AT ALL ON THIS ROAD, so `TOTALS BY Goods HIERARCHYONLY` and `… HIERARCHY`
+	// answered identically (measured 2026-09-03) — and the other builder of the same tree had read it
+	// right all along (AttachHierNode: "a leaf element: not a node, but counts upward"). One word, two
+	// functions, two meanings.
+	const auto kidsIt = childrenOf.find(valueKey);
+	const bool hasKids = (kidsIt != childrenOf.end() && !kidsIt->second.empty());
+	const bool foldersOnly = (level.HeadDim() == ibDimensionKind::HierarchyOnly);
+
+	if (foldersOnly && !hasKids) {
+		// ⚠ THE ROWS ARE RETURNED, NEVER DROPPED — the caller hangs them on the folder above (or, at
+		// the root, on the level's own remainder). A fold's contract is that every row it was given is
+		// somewhere in the tree it returns; see the note on `orphaned` below for what losing them costs.
+		const auto own = byVal.find(valueKey);
+		return own != byVal.end() ? own->second : std::vector<long>();
+	}
+
 	// ⚠ THE LEVEL'S NUMBER, not the depth under the parent: a hierarchy nests VALUES inside one
 	// level, so every folder and every item here belongs to the same level and must say so.
 	ibSelectorTree::Node* node = parent->AddChild(depth);
@@ -3698,14 +3766,22 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 	}
 
 	std::vector<long> subtree = ownRows;
+	// …and the rows this node shows as its OWN detail records. They are its own rows, plus — under
+	// HIERARCHYONLY — the rows of every element that was folded into it instead of becoming a node.
+	// That is where "it appears in the detail records only" is actually delivered.
+	std::vector<long> detailRows = ownRows;
 	const auto cit = childrenOf.find(valueKey);          // sub-values (deeper in the catalog hierarchy)
 	if (cit != childrenOf.end())
 		for (const ibValue& childKey : cit->second) {
 			// ⭐ A SUB-VALUE KEEPS THE RUNG AND TAKES ONE MORE STEP IN. The level is the ladder's and does
 			// not move; the indentation is the tree's and does (Max, 2026-08-29: *"if there is a sub-folder
 			// it has to add one"*).
+			const auto grandKids = childrenOf.find(childKey);
+			const bool childIsAFolder = (grandKids != childrenOf.end() && !grandKids->second.empty());
 			std::vector<long> kr = AttachDimValue(ctx, node, levelIdx, childKey, byVal, childrenOf, visited, across, branch, depth, indent + 1);
 			subtree.insert(subtree.end(), kr.begin(), kr.end());
+			if (foldersOnly && !childIsAFolder)
+				detailRows.insert(detailRows.end(), kr.begin(), kr.end());   // no node of its own — its rows are ours
 		}
 	// A hierarchy nests VALUES inside ONE level, so a sub-value keeps this level's depth; the NEXT
 	// level goes one deeper — and stands where this value stands, not where the level began.
@@ -3726,7 +3802,7 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 	const bool nextIsDetails = (levelIdx + 1 >= ctx.levels->size())
 		|| (*ctx.levels)[levelIdx + 1].m_fields.empty();
 	if (!(keyIsTheRow && nextIsDetails))
-		FoldDimLevel(ctx, node, ownRows, levelIdx + 1, across, branch, depth + 1, indent);
+		FoldDimLevel(ctx, node, detailRows, levelIdx + 1, across, branch, depth + 1, indent);   // + elements folded in (HIERARCHYONLY)
 
 	// ⭐ AND THE CELLS OF THIS HEADING — over its WHOLE subtree, which is what its own figures are
 	// computed from (ApplyAggregates below reads the same rows). A folder of a hierarchy stands for
@@ -3978,10 +4054,19 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 				chainUp(pit->second);
 		}
 		ibValueSeen visited;
+		// Rows of ROOT values that HIERARCHYONLY folded away: an element standing at the top has no
+		// folder to be read under, so its rows join the level's remainder below rather than vanishing
+		// (the same contract the `orphaned` note states — a row in none of the nodes is a row eaten).
+		std::vector<long> foldedAtRoot;
 		const auto rit = childrenOf.find(ibValue());
 		if (rit != childrenOf.end())
-			for (const ibValue& rootKey : rit->second)
-				AttachDimValue(ctx, node, levelIdx, rootKey, byVal, childrenOf, visited, across, branch, depth, indent);
+			for (const ibValue& rootKey : rit->second) {
+				std::vector<long> rr = AttachDimValue(ctx, node, levelIdx, rootKey, byVal, childrenOf, visited, across, branch, depth, indent);
+				const auto rootKids = childrenOf.find(rootKey);
+				if (level.HeadDim() == ibDimensionKind::HierarchyOnly
+				 && (rootKids == childrenOf.end() || rootKids->second.empty()))
+					foldedAtRoot.insert(foldedAtRoot.end(), rr.begin(), rr.end());
+			}
 
 		// ⭐⭐ …AND THE ROWS THAT HAVE NO KEY AT THIS LEVEL BELONG TO THE NODE ITSELF. Grouping a catalog by
 		// its PARENT makes "no parent" a real group — it means the TOP LEVEL — and `chainUp` refuses such a
@@ -4020,7 +4105,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 		// rung, so rows attached nowhere are rows nobody can reach — a list showed one group and lost
 		// seventy-one rows. A fold's contract is that every row it was given is somewhere in the tree it
 		// returns; a row that is in none of the nodes is a row the fold ate.
-		std::vector<long> orphaned;
+		std::vector<long> orphaned = foldedAtRoot;   // top-level elements HIERARCHYONLY did not draw
 		for (const ibValue& key : keyOrder) {
 			if (!IsNoKey(key) && visited[key])
 				continue;                                   // attached under its own folder chain
@@ -4350,23 +4435,46 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 	// "1"). Through GetHashKey they collided, because both became the text "1".
 	// Same-kind keys — the case a real join is made of, a column against a
 	// column — are unaffected, and 1 vs 1.0 still match.
-	std::unordered_map<ibValue, std::vector<long>, ibValueHash, ibValueEqual> rightByKey;
+	// ⭐⭐ A KEY OF SEVERAL FIELDS IS ONE KEY — a TUPLE, hashed as a tuple. A stock statement matches
+	// two readings of a register on the item AND the warehouse; matching on one of them is not a
+	// weaker answer, it is the wrong one (ibJoinOn::m_alsoOn). A single-field key is the same walk
+	// with a one-element tuple, so there is no second road here.
+	auto keyOf = [&on](const ibQueryRamTable& table, long row, const ibBackendQueryColumn* first, bool leftSide)
+		-> std::vector<ibValue> {
+		std::vector<ibValue> key;
+		key.reserve(1 + on.m_alsoOn.size());
+		key.push_back(first != nullptr ? table.GetCell(row, first->GetColumnId()) : ibValue());
+		for (const auto& pair : on.m_alsoOn) {
+			const ibBackendQueryColumn* col = leftSide ? pair.first : pair.second;
+			key.push_back(col != nullptr ? table.GetCell(row, col->GetColumnId()) : ibValue());
+		}
+		return key;
+	};
+	// A NULL anywhere in the key makes the whole key unmatchable — SQL's `NULL = NULL` is UNKNOWN,
+	// and one unknown field is enough to make the pair unknown.
+	auto keyIsNull = [](const std::vector<ibValue>& key) {
+		for (const ibValue& part : key)
+			if (RamIsNullValue(part)) return true;
+		return false;
+	};
+
+	std::unordered_map<std::vector<ibValue>, std::vector<long>, ibValueSeqHash, ibValueSeqEqual> rightByKey;
 	for (long j = 0; j < right.RowCount(); ++j) {
 		if (onRight != nullptr) {
-			const ibValue keyR = right.GetCell(j, onRight->GetColumnId());
-			if (RamIsNullValue(keyR)) continue;   // NULL key: unmatchable (RIGHT/FULL emit it below as unmatched)
+			const std::vector<ibValue> keyR = keyOf(right, j, onRight, /*leftSide*/false);
+			if (keyIsNull(keyR)) continue;   // NULL key: unmatchable (RIGHT/FULL emit it below as unmatched)
 			rightByKey[keyR].push_back(j);
 		}
-		else rightByKey[ibValue()].push_back(j);   // keyless cross
+		else rightByKey[std::vector<ibValue>{ ibValue() }].push_back(j);   // keyless cross
 	}
 	std::vector<char> rightMatched(static_cast<size_t>(right.RowCount()), 0);
 	for (long i = 0; i < left.RowCount(); ++i) {
 		auto it = rightByKey.cend();
 		if (onLeft != nullptr) {
-			const ibValue keyL = left.GetCell(i, onLeft->GetColumnId());
-			if (!RamIsNullValue(keyL)) it = rightByKey.find(keyL);   // NULL key -> stays end() -> no match
+			const std::vector<ibValue> keyL = keyOf(left, i, onLeft, /*leftSide*/true);
+			if (!keyIsNull(keyL)) it = rightByKey.find(keyL);   // NULL key -> stays end() -> no match
 		}
-		else it = rightByKey.find(ibValue());   // keyless cross
+		else it = rightByKey.find(std::vector<ibValue>{ ibValue() });   // keyless cross
 		if (it == rightByKey.end()) {
 			if (keepLeft) emit(i, -1);   // unmatched left (LEFT / FULL), including a NULL-key left row
 			continue;

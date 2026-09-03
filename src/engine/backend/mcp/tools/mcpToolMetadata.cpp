@@ -18,6 +18,7 @@
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // anything that DECLARES a type
 #include "backend/metaCollection/genericData.h"        // the owner lays a new form out
 #include "backend/metaCollection/metaComposerObject.h" // …and a query is the other place a name is said
+#include "backend/metaCollection/partial/dataReport.h"  // …whose owner is told about it, as with a form
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaModuleObject.h"   // the standard handlers a module may implement
@@ -714,7 +715,14 @@ public:
 	{
 		return ibMcpText("Add a metadata object, exactly as the designer's Add command does. Answers with "
 			"the new object in full, so its id and its empty fields are known without asking "
-			"again. Refuses when the kind may not live under that parent.");
+			"again. Refuses when the kind may not live under that parent.\n"
+			"THE FIRST ONE BECOMES THE DEFAULT: the first composer of a report is the one it opens "
+			"with, and the first form of each kind is that kind's default form - so a single "
+			"composer or a single form needs nothing further. A LATER one does not take over; to "
+			"move it, metadata_set the owner's `DefaultComposer` / `DefaultFormObject` / "
+			"`DefaultFormList` (and so on) by NAME - they are ordinary lists, and metadata_get "
+			"shows the candidates. A form's MAIN ATTRIBUTE is not one of these: it is set with "
+			"form_attribute.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -863,11 +871,23 @@ public:
 		// Asked of the OWNER, exactly as the click path does once the person has answered. The
 		// answers were ours; the building is still the platform's.
 		if (answered && parent != nullptr) {
+
 			if (ibValueMetaObjectGenericData* owner =
 					parent->ConvertToType<ibValueMetaObjectGenericData>()) {
 				if (ibValueMetaObjectFormBase* form =
 						created->ConvertToType<ibValueMetaObjectFormBase>())
 					owner->OnCreateFormObject(form);
+			}
+
+			// ⭐⭐ AND A COMPOSER IS THE OTHER HALF OF THE SAME RULE. The click path fires both from
+			// OnCreateMetaObject under the NEW flag; this road passes the paste flag, so both are
+			// said here or not at all. The FIRST composer is the report default - and a report with
+			// no default opens as an EMPTY WINDOW, with every check passing (2026-09-03).
+			if (ibValueMetaObjectReport* report =
+					parent->ConvertToType<ibValueMetaObjectReport>()) {
+				if (ibValueMetaObjectComposer* composer =
+						created->ConvertToType<ibValueMetaObjectComposer>())
+					report->OnCreateComposerObject(composer);
 			}
 		}
 
@@ -888,23 +908,17 @@ public:
 		if (const ibDataValue* help = params.FindField(ArgHelp().Name()))
 			created->SetHelpContent(help->AsString());
 
-		// ⭐⭐ AND NOW IT IS RUN, WHICH IS WHAT MAKES IT ALIVE — the two phases the quiet road skips.
+		// ⭐⭐ AND NOW IT IS RUN AND ANNOUNCED — the two phases the quiet road skips.
 		//
-		// 🛑 IT WAS FILLED IN AND ANNOUNCED WITHOUT EVER BEING RUN, and that is a half-created
-		// object standing in the configuration. `runObject == false` is the road an object travels
-		// when somebody else is going to finish it — a paste runs it (metaData.cpp, PasteObject:
-		// OnBeforeRunMetaObject / OnAfterRunMetaObject around the fill) — and this code took that
-		// road and never did.
+		// THE QUIET ROAD IS CHOSEN ON PURPOSE: a create that carries its answers must not stop to
+		// ASK, and the ordinary road ends in `Created`, which the designer's tree answers by putting
+		// a FORM WIZARD in front of a person in the middle of a tool call (seen live, 2026-09-03).
 		//
-		// What it costs is invisible until the configuration CLOSES: the run event is what registers
-		// an object's modules and its queryable source, so a catalog made this way had no manager
-		// module on the register, and closing the configuration asserted in RemoveCommonModule and
-		// then threw *"Object with id '…' is not exist"* — which is how a rollback died on it (Max,
-		// 2026-09-01, rolling back exactly this sweep's catalog).
-		//
-		// ⚠ AS A NEW OBJECT (newObjectFlag), not as a load: the load-only flag gates the queryable
-		// registration off, and this object IS new — the same reasoning, in those words, is written
-		// at the paste's own call.
+		// 🛑 ITS PRICE IS PAID HERE, IN FULL. Every hook that fires for a NEW object is skipped on
+		// this road, so each one must be said again — and the moment one is missed the object stands
+		// finished and wrong, with every check passing: a report whose composer is not the DEFAULT
+		// one opens as an EMPTY WINDOW. That is what happened, and it is why these are written out
+		// together instead of being remembered one at a time.
 		if (answered) {
 
 			if (!created->OnBeforeRunMetaObject(newObjectFlag)
@@ -919,9 +933,6 @@ public:
 
 			// …AND ANNOUNCED, because only now is there a result to announce. Everything above is
 			// part of ONE create: the properties, the name, the note, the run.
-			//
-			// ⚠ WITHOUT THIS AN MCP CREATE THAT CARRIED PROPERTIES WAS INVISIBLE: made, filled in,
-			// saved with the configuration, and never drawn in any tree watching.
 			metaData->MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Created, created);
 		}
 
@@ -1390,7 +1401,11 @@ public:
 			"you send back has the shape you saw there.\n"
 			"A TYPE IS THE ONE THIS DOES NOT DO: an attribute's, a dimension's or a resource's "
 			"type is a description rather than a value, and metadata_set_type is the verb for it "
-			"(in words - String with a length, Number with precision and scale, CatalogRef.Goods).");
+			"(in words - String with a length, Number with precision and scale, CatalogRef.Goods).\n"
+			"AND A RELATIONSHIP IS THE OTHER: which registers a document writes its movements to, "
+			"which catalog owns another, what may be entered on the basis of what. Those hold "
+			"METAOBJECTS and several of them at once, so they are set with metadata_bind - which "
+			"ADDS to the set rather than replacing it, and tells the other end.");
 	}
 
 	// ⭐ TWO OF THESE BELONG TO THE DOOR, NOT TO THIS TOOL. `id` is read by

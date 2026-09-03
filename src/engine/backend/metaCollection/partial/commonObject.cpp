@@ -1466,9 +1466,10 @@ bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
 	// chart of accounts' missing binding — the message belongs in the pane under the editor, the save
 	// refuses, and no exception leaves the configuration write transaction open.
 	if (HasRecorder() && (*m_propertyAttributeRecorder)->IsEmptyTypeDesc()) {
-		ibValueSystemFunction::Message(
-			wxString::Format(_("%s: no recorder - declare a document that posts into this register, or it can never be written to"), GetName()),
-			ibStatusMessage::ibStatusMessage_Error);
+		// Into the LEDGER — see the note in metaComposerObject.cpp: one road for a refusal, read by
+		// whoever asked. Printed here it also stayed on the screen after a probe that only asked.
+		RestructureError(wxString::Format(
+			_("%s: no recorder - declare a document that posts into this register, or it can never be written to"), GetName()));
 		return false;
 	}
 
@@ -2930,6 +2931,21 @@ bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::WriteRecordSet()
 	for (auto& pair : m_records) {
 		ibValueRecordSetObject* record = pair.second;
 		wxASSERT(record);
+
+		// 🛑 A SET THE HANDLER ALREADY WROTE MUST NOT BE WRITTEN AGAIN — because this write REPLACES:
+		// it deletes everything under the recorder and inserts what the set holds. A handler that
+		// wrote its own movements (a legitimate thing to do - a later step may need to read them
+		// back) leaves the set EMPTY behind it, and this pass then deleted the very rows it had just
+		// stored: the document posted, and its movements were gone (measured 2026-09-03 in the
+		// journal - DELETE, INSERT, then DELETE with no INSERT).
+		//
+		// ⭐ MODIFIED IS THE QUESTION, and the set answers it: CommitRecordSetScope clears the flag
+		// on a successful write, so "not modified" means "already in the database as it stands". A
+		// set the handler filled - or CLEARED, which is how movements are taken away - is modified
+		// and is written here.
+		if (!record->IsModified())
+			continue;
+
 		// The register's OWN exception is the informative one — it names the line, the required
 		// attribute, the lock conflict, the access deny. It travels UP intact instead of being
 		// flattened into a bare false that the recorder above can only report as "failed to post":

@@ -58,7 +58,16 @@ ibValue* ibValue::CreateObjectRef(const ibClassID& clsid, ibValue** paParams, co
 
 	if (typeCtor != nullptr) {
 		ibValue* created_value = typeCtor->CreateObject();
-		wxASSERT(created_value);
+
+		// 🛑 NOT AN ASSERT. A ctor that cannot build one WITHOUT ARGUMENTS answers nullptr, and that
+		// is an ORDINARY answer for the parameterised families — a reference type, a register's
+		// record set, a document object. Asking about one of those is a normal thing to do
+		// (type_members does it, wrapped in a try, precisely because it expects a refusal), and the
+		// assert turned that question into a debug break: the caller's own handling never ran, and a
+		// person at the designer got a stack instead of a sentence.
+		if (created_value == nullptr)
+			ibBackendCoreException::Error(_("Object '%s' cannot be created without arguments"),
+				typeCtor->GetClassName());
 		if (typeCtor->GetObjectTypeCtor() != ibCtorObjectType::ibCtorObjectType_object_system) {
 			bool succes = true;
 			if (lSizeArray > 0)

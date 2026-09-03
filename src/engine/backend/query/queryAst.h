@@ -437,7 +437,23 @@ struct ibQueryAstStatement
 	ibQuerySelectPtr m_select;     // the SELECT (null on a drop statement)
 	wxString         m_dropTemp;   // DROP <name> — release a temp table early (empty on a select)
 
+	// ⭐⭐ …OR A LINK, WHICH IS A STEP LIKE THE OTHER TWO. `LINK A INNER JOIN B ON …` RECONCILES two
+	// named selections that already ran: rows on either side that found no partner are dropped, and
+	// the step answers with HOW MANY it removed (Max, 2026-09-04: *"the LINK operator processes the
+	// named selection and itself returns the number of rows it changed"*).
+	//
+	// It is a statement, and not a clause of the package, because the point of a package is the
+	// SEQUENCE (Max: *"the idea of a package is in the sequence"*): a link runs where it is written —
+	// after the selections it reconciles, before whatever reads them — and it occupies a position in
+	// the returned array like everything else, so a reader can see what it did.
+	//
+	// ⚠ The package ALSO keeps the whole set in `m_links`: the composer and the query constructor ask
+	// what relations exist without running anything (PlacePackageLinks). Two readings of one fact —
+	// the step that RUNS it, and the set that DESCRIBES it — kept in step by the parser filling both.
+	int              m_linkIndex = -1;   // >= 0: this statement IS the package's link at that index
+
 	bool IsDrop() const { return !m_dropTemp.IsEmpty(); }
+	bool IsLink() const { return m_linkIndex >= 0; }
 };
 
 // ⭐⭐ A LINK BETWEEN TWO NAMED RESULTS — and it belongs to the PACKAGE, not to any statement in it.

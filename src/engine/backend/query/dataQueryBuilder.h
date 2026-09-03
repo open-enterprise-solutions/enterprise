@@ -436,6 +436,20 @@ enum class ibJoinCompareOp { Eq, Ne, Lt, Le, Gt, Ge };
 struct ibJoinOn {
 	const ibBackendQueryColumn*  m_colL  = nullptr;   // explicit key columns
 	const ibBackendQueryColumn*  m_colR  = nullptr;
+	// ⭐⭐ …AND THE REST OF A COMPOSITE KEY. A stock statement matches on WAREHOUSE **and** ITEM —
+	// two balances of the same register meet on both or they do not meet at all — so `ON T.Goods =
+	// B.Goods AND T.Warehouse = B.Warehouse` is the ordinary sentence, not an exotic one.
+	//
+	// Held as EXTRA PAIRS beside the first rather than replacing it with a list: every reader of a
+	// single-key join goes on reading `m_colL` / `m_colR` unchanged, and only the two places that
+	// can honour more (the hash stitch, the co-located renderer) look here. `m_op` applies to the
+	// whole key — a composite key is equality by construction; a theta join keeps its one pair.
+	//
+	// 🛑 Before this an outer join REFUSED the second comparison outright ("write the other
+	// conditions in WHERE") — and for an OUTER join that advice is wrong, not merely inconvenient:
+	// a condition on the null-producing side moved to WHERE turns the outer join into an inner one
+	// and silently drops the rows the author asked to keep.
+	std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>> m_alsoOn;
 	ibJoinCompareOp              m_op    = ibJoinCompareOp::Eq;   // Eq -> hash; non-Eq -> theta (server-side when co-located)
 	ibQueryColumnExprPtr         m_exprL;                         // computed ON: LEFT-side expr (presence -> theta)
 	ibQueryColumnExprPtr         m_exprR;                         // computed ON: RIGHT-side expr
@@ -605,7 +619,10 @@ public:
 	                         const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	                         ibJoinCompareOp onOp,
 	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
-	                         const wxString& alias = wxEmptyString);                            // explicit on-cols + comparison (theta when != Eq)
+	                         const wxString& alias = wxEmptyString,
+	                         // …and the rest of a COMPOSITE key (`AND a.z = b.w`), which the hash
+	                         // stitch and the co-located renderer honour. See ibJoinOn::m_alsoOn.
+	                         const std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>>& alsoOn = {});   // explicit on-cols + comparison (theta when != Eq)
 	ibDataQueryBuilder& Join(const ibBackendQueryable* queryable,
 	                         const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
 	                         ibJoinCompareOp onOp,
@@ -629,8 +646,9 @@ public:
 	                         const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	                         ibJoinCompareOp onOp,
 	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
-	                         const wxString& alias = wxEmptyString) {
-		return Join(AdoptOwnedSource(std::move(queryable)), onLeft, onRight, onOp, kind, alias);
+	                         const wxString& alias = wxEmptyString,
+	                         const std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>>& alsoOn = {}) {
+		return Join(AdoptOwnedSource(std::move(queryable)), onLeft, onRight, onOp, kind, alias, alsoOn);
 	}
 	ibDataQueryBuilder& Join(std::shared_ptr<const ibBackendQueryable> queryable,
 	                         const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
@@ -686,6 +704,10 @@ public:
 	ibDataQueryBuilder& OrderBy(const ibBackendQueryColumn* col, bool ascending);            // col (null = row-key) -> sort
 	ibDataQueryBuilder& OrderBy(const std::vector<const ibBackendQueryColumn*>& path, bool ascending); // dot-walk leaf sort
 	ibDataQueryBuilder& OrderByExpr(const ibQueryColumnExprPtr& expr, bool ascending);       // ORDER BY <expression> (CASE / arithmetic / value)
+	// ORDER BY an OUTPUT NAME — the only way to sort by an aggregate, which exists after the fold and
+	// under the name the projection gave it (`SUM(Qty) AS Total … ORDER BY Total`). See
+	// ibQuerySortItem::m_outputAlias for why it is neither a column sort nor an expression one.
+	ibDataQueryBuilder& OrderByOutput(const wxString& alias, bool ascending);
 	ibDataQueryBuilder& GroupBy(const ibBackendQueryColumn* col);                            // grouping key (reports / totals)
 	ibDataQueryBuilder& GroupBy(const std::vector<const ibBackendQueryColumn*>& path);       // dot-walk grouping key (Producer.Region)
 	// GROUP BY <expression> — the same expression vocabulary Where/OrderBy/Select/Aggregate already
@@ -787,8 +809,25 @@ public:
 	ibDataQueryBuilder& Group()  { m_aggInTotals = false; return *this; }
 	ibDataQueryBuilder& Totals() { m_aggInTotals = true;  return *this; }
 
-	// SELECT DISTINCT — collapse duplicate output rows (SELECT DISTINCT). Applies to the read.
-	ibDataQueryBuilder& Distinct() { m_distinct = true; return *this; }
+	// SELECT DISTINCT — collapse duplicate output rows. Applies to the read.
+	//
+	// ⭐⭐ AND IT TAKES THE COLUMNS IT DISTINGUISHES BY, because "duplicate" is a question about the
+	// OUTPUT and the read does not project one. A plain single-source read renders `SELECT *` (the
+	// result picks the columns apart afterwards) — so DISTINCT over it compares whole rows, INCLUDING
+	// the row key, which is unique by definition and makes the word a no-op.
+	//
+	// 🛑 That is exactly what it was: `SELECT DISTINCT Warehouse` produced `SELECT DISTINCT * FROM
+	// AccumulationRegister1056 …` and came back with all 20 rows where 3 warehouses exist (journal,
+	// 2026-09-04) — silently, as data. Passing the columns lets the provider project THEM and ask the
+	// server the question the author asked.
+	//
+	// Empty list = the read really is over the whole row, and DISTINCT there means what it says.
+	ibDataQueryBuilder& Distinct(std::vector<const ibBackendQueryColumn*> by = {})
+	{
+		m_distinct = true;
+		m_distinctBy = std::move(by);
+		return *this;
+	}
 
 	// SELECT ALLOWED — "give me what I may see, do not refuse me". A refusal from the access
 	// policy stops being an exception and becomes an EMPTY read (ibMakeEmptyQueryResult).
@@ -1109,6 +1148,7 @@ private:
 	bool                          m_totalsOverall = false;   // .TotalsOverall() — the level above every dimension
 	bool                          m_aggInTotals = false;  // routing flag: .Aggregate → totals set when Totals() active
 	bool                          m_distinct    = false;  // .Distinct() — SELECT DISTINCT
+	std::vector<const ibBackendQueryColumn*> m_distinctBy;  // …and the output columns it compares by (empty = the whole row)
 	bool                          m_allowed     = false;  // .Allowed() — a policy refusal yields an EMPTY read instead of throwing
 	long                          m_top         = 0;      // .Top() — aggregate-terminal row limit (0 = all groups)
 	std::vector<ibDotWalkColumn>  m_dotWalks;       // .SelectPath()
@@ -1207,6 +1247,8 @@ struct ibDataQuerySpec
 	const std::vector<ibDataQueryBuilder::ibNamedQuery>* m_with = nullptr;
 	const std::vector<std::pair<const ibBackendQueryColumn*, wxString>>* m_selectCols = nullptr;   // multi-source output list
 	bool                                            m_distinct    = false;   // .Distinct() — SELECT DISTINCT
+	// …by THESE output columns (empty = the whole row). See ibDataQueryBuilder::Distinct.
+	const std::vector<const ibBackendQueryColumn*>* m_distinctBy  = nullptr;
 	long                                            m_topCount    = 0;       // .Top() — aggregate-terminal row limit (0 = all groups)
 };
 

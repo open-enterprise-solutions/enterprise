@@ -744,6 +744,68 @@ TEST(QueryAggregateCondition, AnExistingHavingIsKeptAndJoined)
 	EXPECT_EQ(nullptr, rewritten->m_where);
 }
 
+TEST(QueryAggregateCondition, AConditionOnAGroupKeyWrittenInHavingBecomesAWhere)
+{
+	// THE SAME RULE READ THE OTHER WAY. A condition runs where the value it names exists — and a
+	// group key exists before the fold, so `HAVING Code = "A"` is a row filter that was written one
+	// clause too high. It used to come back as "HAVING must compare an aggregate function to a
+	// value", which is a complaint about the clause rather than about the query.
+	//
+	// Filtering on a key before the fold removes exactly the same groups: the key cannot vary inside
+	// its group, so no group is ever split by it.
+	const ibQuerySelectPtr parsed = Parse(
+		wxT("SELECT Products.Parent, SUM(Products.Price) FROM Catalog.Products AS Products ")
+		wxT("GROUP BY Products.Parent HAVING Products.Parent = &P"));
+	ASSERT_NE(nullptr, parsed);
+
+	const ibQuerySelectPtr rewritten = ibQueryRewrite::Rewrite(*parsed);
+	ASSERT_NE(nullptr, rewritten);
+	EXPECT_EQ(nullptr, rewritten->m_having);     // nothing left that has to wait for the fold
+	ASSERT_NE(nullptr, rewritten->m_where);
+	EXPECT_EQ(ibQueryAstExprKind::Compare, rewritten->m_where->m_kind);
+}
+
+TEST(QueryAggregateCondition, EachTermOfAMixedHavingGoesToItsOwnFloor)
+{
+	// Both halves of the rule at once, in one clause: the term that folds stays a group filter, the
+	// one over a key moves down to the row filter. Dealt back per AND-term, exactly as WHERE is.
+	const ibQuerySelectPtr parsed = Parse(
+		wxT("SELECT Products.Parent, SUM(Products.Price) FROM Catalog.Products AS Products ")
+		wxT("GROUP BY Products.Parent HAVING Products.Parent = &P AND SUM(Products.Price) > 100"));
+	ASSERT_NE(nullptr, parsed);
+
+	const ibQuerySelectPtr rewritten = ibQueryRewrite::Rewrite(*parsed);
+	ASSERT_NE(nullptr, rewritten);
+	ASSERT_NE(nullptr, rewritten->m_where);
+	EXPECT_EQ(ibQueryAstExprKind::Compare, rewritten->m_where->m_kind);    // the key one, alone
+	ASSERT_NE(nullptr, rewritten->m_having);
+	EXPECT_EQ(ibQueryAstExprKind::Compare, rewritten->m_having->m_kind);   // the folded one, alone
+}
+
+TEST(QueryAggregateCondition, AnIsNullOverAKeyDoesNotFoldButOverAnAggregateItDoes)
+{
+	// The question is asked of the TREE, not of the node at the top of it: `ISNULL(x, 0)` reads as a
+	// Case either way, and what it is made OF is what decides. This is the same fact the lowering
+	// asks about a computed PROJECTION — one function, so the two can never disagree.
+	const ibQuerySelectPtr overKey = Parse(
+		wxT("SELECT Products.Parent, SUM(Products.Price) FROM Catalog.Products AS Products ")
+		wxT("GROUP BY Products.Parent HAVING ISNULL(Products.Parent, &P) = &P"));
+	ASSERT_NE(nullptr, overKey);
+	const ibQuerySelectPtr keyRewritten = ibQueryRewrite::Rewrite(*overKey);
+	ASSERT_NE(nullptr, keyRewritten);
+	EXPECT_NE(nullptr, keyRewritten->m_where);    // a row filter — it names no fold
+	EXPECT_EQ(nullptr, keyRewritten->m_having);
+
+	const ibQuerySelectPtr overFold = Parse(
+		wxT("SELECT Products.Parent, SUM(Products.Price) FROM Catalog.Products AS Products ")
+		wxT("WHERE ISNULL(SUM(Products.Price), 0) > 100 GROUP BY Products.Parent"));
+	ASSERT_NE(nullptr, overFold);
+	const ibQuerySelectPtr foldRewritten = ibQueryRewrite::Rewrite(*overFold);
+	ASSERT_NE(nullptr, foldRewritten);
+	EXPECT_EQ(nullptr, foldRewritten->m_where);
+	EXPECT_NE(nullptr, foldRewritten->m_having);  // it can only be judged after the fold
+}
+
 // ===========================================================================
 //  Grouping completeness reads the whole expression tree, not its top
 // ===========================================================================

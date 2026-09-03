@@ -699,9 +699,43 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 	const ibQueryJoinType jt = (node->m_joinKind == ibQueryJoinKind::Left) ? ibQueryJoinType::Left : ibQueryJoinType::Inner;
 	// The ON operator is the join's real compare op — Eq (the common case) OR a column-to-column theta
 	// (a.x > b.y): the gate admits only column-keyed joins here, so onL/onR are set and the op renders directly.
+	// ⭐⭐ EACH SIDE IS QUALIFIED BY ITS OWN SIDE OF THE NODE, not by whoever owns the column.
+	//
+	// `ColocatedOwner` answers "which leaf has this column" — and that question has NO single answer
+	// when both sides read the SAME register through different virtual tables: `Balance` and
+	// `Turnovers` publish the very same column objects (the register's Goods, its Warehouse), so the
+	// search finds whichever leaf comes first and uses it for BOTH sides.
+	//
+	// 🛑 The statement then reads `ON (Balance.fld1067_RRRef = Balance.fld1067_RRRef)` — X = X, true
+	// for every pair — and a stock statement joining balances to turnovers came back as a product:
+	// 49 rows where 7 were asked for, each balance against every turnover (measured 2026-09-04).
+	// The tables were distinct, which is what the co-location gate checks; the COLUMNS were not.
+	//
+	// The node knows what the owner search cannot: which subtree each key belongs to.
+	auto qualOfSide = [&leaves](const ibQueryNode* side, const ibBackendQueryColumn* col) -> wxString {
+		ColocatedLeaves sideLeaves;
+		if (side != nullptr && CollectColocatedLeaves(side, sideLeaves))
+			for (const ibBackendQueryable* q : sideLeaves)
+				if (q != nullptr && q->OwnsColumn(col))
+					return q->GetQueryTableName();
+		return ColocatedQual(leaves, col);   // single-sided key: the old answer is the only one
+	};
+
 	ibQueryExprPtr on = ibBinOp(JoinOpToBinOp(node->m_on.m_op),
-		ibCol(ColocatedQual(leaves, onL), FirstSqlFieldOfColumn(onL)),
-		ibCol(ColocatedQual(leaves, onR), FirstSqlFieldOfColumn(onR)));
+		ibCol(qualOfSide(node->m_left.get(),  onL), FirstSqlFieldOfColumn(onL)),
+		ibCol(qualOfSide(node->m_right.get(), onR), FirstSqlFieldOfColumn(onR)));
+
+	// …AND THE REST OF A COMPOSITE KEY, ANDed into the same ON. Two readings of one register meet on
+	// the item AND the warehouse; written to the server that is one `ON a = b AND c = d`, which every
+	// dialect renders. Each side keeps ITS OWN leaf's qualification, exactly as the first pair does.
+	for (const auto& pair : node->m_on.m_alsoOn) {
+		if (pair.first == nullptr || pair.second == nullptr)
+			continue;
+		on = ibBinOp(ibQueryBinOp::And, on,
+			ibBinOp(ibQueryBinOp::Eq,
+				ibCol(qualOfSide(node->m_left.get(),  pair.first),  FirstSqlFieldOfColumn(pair.first)),
+				ibCol(qualOfSide(node->m_right.get(), pair.second), FirstSqlFieldOfColumn(pair.second))));
+	}
 	return ibJoin(left, right, on, jt);
 }
 
@@ -1519,6 +1553,19 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 		for (const ibQuerySortKey& key : ibMetaIRBuilder::BuildSortKeys(queryable, *spec.m_sorts, /*reverse*/ false))
 			q.AddSortKey(key);
 
+		// ⭐ …AND THE SORTS THAT NAME AN OUTPUT, which the builder above cannot see: it lowers COLUMNS
+		// of the source, and an aggregate is not one. `ORDER BY SUM(Qty) DESC` sorts by the name the
+		// projection published (ibSqlAliasOf, the same spelling this statement wrote it under), which
+		// is how every engine sorts by a folded value.
+		for (const ibQuerySortItem& s : *spec.m_sorts) {
+			if (s.m_outputAlias.IsEmpty())
+				continue;
+			ibQuerySortKey key;
+			key.m_expr = ibCol(ibSqlAliasOf(s.m_outputAlias));
+			key.m_dir  = s.m_ascending ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
+			q.AddSortKey(std::move(key));
+		}
+
 		if (spec.m_topCount > 0)
 			q.Limit(spec.m_topCount);   // SELECT TOP n + GROUP BY — the dialect LIMIT caps the groups
 
@@ -1540,6 +1587,18 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 static ibQueryResult RunSpecStatement(const ibDataQuerySpec& spec, ibDatabaseQueryBuilder& q)
 {
 	ibQueryIR ir = q.Build();
+
+	// ⭐ DISTINCT BELONGS TO THE STATEMENT, so it is applied where every statement is assembled —
+	// once, rather than in each road that assembles one. These roads DO project (a co-located join
+	// names `ocol<i>`, a union names `u<i>`), so the word compares the OUTPUT here, which is what it
+	// asks for; the plain paged read has no projection and builds its own in BuildPageIR.
+	//
+	// 🛑 The co-located join road simply never applied it: `SELECT DISTINCT Warehouse FROM … JOIN …`
+	// rendered a perfectly projected SELECT with no DISTINCT in it and returned every duplicate
+	// (journal, 2026-09-04). One word, two roads, and only one of them was carrying it.
+	if (spec.m_distinct)
+		ir.m_root = ibDistinct(ir.m_root);
+
 	ibDbTableProvider::AttachNamedQueries(spec, ir);
 	return q.ExecuteIR(ir);
 }
@@ -3803,7 +3862,44 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		if (req.m_count > 0) q.Limit(req.m_count);   // count <= 0 = unbounded (full scan, e.g. FindValue)
 
 		ibQueryIR ir = q.Build();
-		if (spec.m_distinct) ir.m_root = ibDistinct(ir.m_root);   // SELECT DISTINCT — SELECT DISTINCT over the read
+
+		// ⭐⭐ DISTINCT IS OVER WHAT THE QUERY SELECTED, AND AN ORDINARY READ SELECTS EVERYTHING.
+		//
+		// A plain read never projects: it renders `SELECT *` and the RESULT picks the columns apart
+		// afterwards (see AttachNamedQueries on why a declaration cannot do that). Put `DISTINCT` on
+		// top of `SELECT *` and it dedupes by every physical field of the row — including the row's
+		// own KEY, which is unique by definition. So the word was written, the statement carried it,
+		// and it removed exactly nothing.
+		//
+		// 🛑 SILENTLY, which is what makes it worth the projection: `SELECT DISTINCT Goods` came back
+		// with 20 rows where `GROUP BY Goods` over the same column came back with 4 — the duplicates
+		// arrive looking like data (measured 2026-09-04). Both RAM roads had it right all along
+		// (they dedupe by the SELECTED columns); only the physical read was asking the wrong question.
+		//
+		// The projection is the selected columns' own PHYSICAL fields under their own names — no
+		// aliases — so the read side is untouched: GetValue(col) goes on finding `fld<metaID>…`
+		// exactly where it did. A reference dedupes by its type+id pair, which IS its identity.
+		if (spec.m_distinct) {
+			std::vector<ibQueryProjItem> distinctProj;
+			std::vector<wxString> written;
+			if (spec.m_distinctBy != nullptr)
+				for (const ibBackendQueryColumn* col : *spec.m_distinctBy) {
+					if (col == nullptr || col->IsSyntheticColumn())
+						continue;   // its parts are somebody else's fields — they project themselves
+					for (const wxString& field : ColumnFieldNames(col)) {
+						if (std::find(written.begin(), written.end(), field) != written.end())
+							continue;   // one field, one place in the list (two outputs may share a column)
+						written.push_back(field);
+						distinctProj.push_back(ibQueryProjItem{
+							mainQual.empty() ? ibCol(field) : ibCol(mainQual, field), field });
+					}
+				}
+			// Nothing named = the read really is over the whole row (SELECT *), and DISTINCT there
+			// means what it says. Only a stated selection narrows it.
+			if (!distinctProj.empty())
+				ir.m_root = ibProject(ir.m_root, std::move(distinctProj));
+			ir.m_root = ibDistinct(ir.m_root);
+		}
 		ir.m_lockForUpdate = req.m_lockForUpdate;   // pessimistic register set lock — dialect appends the clause
 		AttachNamedQueries(spec, ir);               // WITH … — the queries this statement declared
 		return ir;
