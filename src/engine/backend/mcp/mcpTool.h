@@ -336,6 +336,17 @@ BACKEND_API void ibMcpComposerComplaints(const class ibCompositionDescription& c
 // promised it checked the refusal.
 BACKEND_API wxString ibMcpMissingArgument(const class ibMcpTool* tool, const ibDataNode& arguments);
 
+// ⭐ THE MODULE BEHIND AN ID, or nothing and the refusal to hand back. Four verbs asked this - two
+// in module_read / module_write, one in debug_breakpoint, one in script_complete - and each of them
+// wrote the same cast, the same null test and the same sentence. A question repeated four times is a
+// question with four chances to be spelled differently, and it already had two spellings of the
+// refusal.
+//
+// ⚠ The CAST stays, and belongs: what is wanted here is not "what kind are you" but the module's own
+// interface, which is what a cast is for. What moved is the REPEAT.
+BACKEND_API class ibValueMetaObjectModuleBase* ibMcpModuleOf(class ibValueMetaObject* object,
+	wxString& refusal);
+
 // ⭐⭐ IS WHAT ARRIVED WHAT THE SCHEMA SAID IT WOULD BE? Empty when every declared argument that came
 // matches its own declaration; otherwise the sentence to refuse with.
 //
@@ -421,6 +432,11 @@ BACKEND_API void ibMcpSayObject(const class ibValueMetaObject* object, ibDataNod
 // `only` narrows to one property by name (empty = all); `editableOnly` drops the read-only ones.
 BACKEND_API void ibMcpSayProperties(const class ibPropertyObject* object, ibDataNode& node,
 	const wxString& only = wxEmptyString, bool editableOnly = false);
+
+// …AND ONE PROPERTY THAT IS SAID ITS OWN WAY: a caption, as a `value` of one text PER LANGUAGE.
+// Both the walk above and the answer to a write call this, so a caller sees the same shape however
+// it arrived — and neither hands over the stored template, which is what `GetNodeValue` would give.
+BACKEND_API void ibMcpSayCaption(const class ibPropertyTString* caption, ibDataNode& into);
 
 // ⭐ WHAT THE OBJECT ITSELF SAYS AGAINST BEING STORED — from BOTH places it may
 // say it. A metaobject reports "not ready" either into the restructuring ledger

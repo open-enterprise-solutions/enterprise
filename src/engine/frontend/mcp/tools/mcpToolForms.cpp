@@ -568,16 +568,10 @@ public:
 
 			if (title != nullptr && title->IsEmptyProperty()) {
 
-				// …and written INTO the language cell rather than over the array: a
-				// bare SetValue would replace the whole thing with one string and
-				// take every other language with it.
-				ibBackendLocalizationEntryArray array;
-				ibBackendLocalization::CreateLocalizationArray(
-					title->GetValueAsString(), array);
-				ibBackendLocalization::SetArrayTranslate(
-					array, stringUtils::GenerateSynonym(name));
-
-				title->SetValue(ibBackendLocalization::GetRawLocText(array));
+				// …and written INTO the language cell rather than over the whole
+				// value: the title HOLDS its translations, so the one in force is
+				// filled in and no other language moves.
+				title->GetValueAsTranslate().SetTranslate(stringUtils::GenerateSynonym(name));
 			}
 		}
 
@@ -1752,6 +1746,39 @@ class ibMcpAuditForms : public ibMcpAudit {
 	// fields; a LIST is a degenerate composer and owes neither — demanding an output of it would
 	// report every list in the configuration as broken, which is how an audit teaches people to
 	// ignore it.
+	// ⭐ THE COMPOSITION A PROPERTY CARRIES, ASKED ONCE — and with it the second fact the caller
+	// needs: which rules to judge it by. Three classes carry one, and two of them are report-shaped
+	// while a dynamic list is judged as a list.
+	//
+	// 🛑 IT WAS THREE CASTS IN A ROW AT THE CALLSITE, which is the same question asked three times
+	// and answered in three places. Each cast BINDS its name and is used inside its own branch —
+	// that part was right — but the chain itself belongs behind one door: the fourth class to carry
+	// a composition will be added to this function, and every caller has it at once.
+	static const ibCompositionDescription* CompositionIn(const ibProperty* property, bool& asReport)
+	{
+		if (const ibPropertyComposition* asComposition =
+				dynamic_cast<const ibPropertyComposition*>(property)) {
+			asReport = true;
+			return &asComposition->GetValueAsCompositionDesc();
+		}
+
+		if (const ibPropertyDataComposition* asData =
+				dynamic_cast<const ibPropertyDataComposition*>(property)) {
+			asReport = true;
+			return &asData->GetValueAsCompositionDesc();
+		}
+
+		// A LIST IS NOT A REPORT, and the difference is not cosmetic: a list needs no output and no
+		// variant, so judging it by a report's rules complains about everything it correctly lacks.
+		if (const ibPropertyDynamicList* asList =
+				dynamic_cast<const ibPropertyDynamicList*>(property)) {
+			asReport = false;
+			return &asList->GetValueAsCompositionDesc();
+		}
+
+		return nullptr;
+	}
+
 	static void CheckControl(ibPropertyObject* holder, const ibValueMetaObject* about,
 		const ibComplain& complain)
 	{
@@ -1764,24 +1791,8 @@ class ibMcpAuditForms : public ibMcpAudit {
 			if (property == nullptr)
 				continue;
 
-			// THE REPORT-SHAPED ONES — the full list of complaints, the same one the report verbs
-			// answer with.
-			const ibCompositionDescription* composition = nullptr;
 			bool asReport = true;
-
-			if (const ibPropertyComposition* asComposition =
-					dynamic_cast<const ibPropertyComposition*>(property)) {
-				composition = &asComposition->GetValueAsCompositionDesc();
-			}
-			else if (const ibPropertyDataComposition* asData =
-					dynamic_cast<const ibPropertyDataComposition*>(property)) {
-				composition = &asData->GetValueAsCompositionDesc();
-			}
-			else if (const ibPropertyDynamicList* asList =
-					dynamic_cast<const ibPropertyDynamicList*>(property)) {
-				composition = &asList->GetValueAsCompositionDesc();
-				asReport = false;
-			}
+			const ibCompositionDescription* composition = CompositionIn(property, asReport);
 
 			if (composition == nullptr)
 				continue;

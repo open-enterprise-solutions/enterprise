@@ -95,6 +95,20 @@ const ibArg& ArgProperty()
 		/*required*/ true);
 	return s_property;
 }
+// ⚠ THE STORED NODE, ASKED FOR RATHER THAN GIVEN. It is how the configuration is SERIALISED - every
+// internal field, and a base64 blob (Interface, Roles, Composition) on every predefined attribute -
+// so reading one synonym off a catalogue used to cost the whole storage form of the object
+// (measured while driving this server, 2026-09-03). What a caller needs is above it; whoever wants
+// the node still has it, by name.
+const ibArg& ArgStored()
+{
+	static const ibArg s_a(wxT("stored"), ibArg::Kind::Flag,
+		ibMcpText("Add the whole serialised node beside the properties - the storage form, including "
+			  "the base64 blobs. Off by default: it is several times the size of the answer and "
+			  "nothing in it is set through this server."));
+	return s_a;
+}
+
 const ibArg& ArgAcceptsId()
 {
 	static const ibArg s_id(wxT("id"), ibArg::Kind::Whole,
@@ -566,9 +580,12 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("One metadata object in full: its properties, its attributes with their types, "
-			"its tabular sections and its children. Ask by id when you have one - the answer "
-			"carries the id it was found by, so a follow-up needs no name.");
+		return ibMcpText("One metadata object: its properties, its attributes with their types, its "
+			"tabular sections and its children. Ask by id when you have one - the answer carries the "
+			"id it was found by, so a follow-up needs no name.\n"
+			"`property` narrows it to ONE property, which is what most reads actually want; `stored` "
+			"adds the whole serialised node beside it - every internal field and a base64 blob per "
+			"predefined attribute - and is off unless asked for.");
 	}
 
 	// 🛑 `name` WAS MISSING HERE AND READ BELOW. Call() looks it up, and the refusal when nothing
@@ -576,11 +593,19 @@ public:
 	// answered `'metadata_get' takes no argument called 'name'` and never let the call through. The
 	// road the error message points at was the one road that could not be taken (found 2026-09-01,
 	// sweeping every tool). An argument a tool READS has to be an argument it DECLARES.
+	// ⭐⭐ ONE VERB FOR "READ A PROPERTY", not two that differ by which one takes the argument.
+	// `metadata_get {id, property}` was the first thing I reached for while driving this server and
+	// it was refused: the narrow read lived on `metadata_properties`, and the names invite exactly
+	// the wrong guess — *get* sounds like the reader of one thing, *properties* like the lister of
+	// all of them, and they are the other way round. The refusal cost one call and taught the
+	// vocabulary, which is the cheap failure; but a road that both names point at should exist
+	// rather than be learned. Both verbs now take `property`, and both answer the same shape.
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		// ⚠ NEITHER IS REQUIRED, because either road is enough — see ArgKindOptional. Call() says
-		// which two shapes it accepts when it gets neither.
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgKindOptional(), ArgName() };
+		// ⚠ NEITHER OF THE FINDERS IS REQUIRED, because either road is enough — see
+		// ArgKindOptional. Call() says which two shapes it accepts when it gets neither.
+		static const std::vector<ibMcpArgument> s_arguments = {
+			ArgId(), ArgKindOptional(), ArgName(), ArgOnlyProperty(), ArgStored() };
 		return s_arguments;
 	}
 
@@ -637,12 +662,19 @@ public:
 		// (ibMcpSayProperties — so one added tomorrow is here tomorrow, with nothing edited), and
 		// the stored form is kept beside them under `stored`, because the children — attributes,
 		// tabular sections, forms — are a tree only the serializer walks whole.
-		ibMcpSayObject(found, result, /*withText*/ true);
-		ibMcpSayProperties(found, result);
+		const wxString only = ArgOnlyProperty().Text(params);
 
-		if (!ibBuildMetaObjectNode(found, result.Child(wxT("stored")))) {
-			refusal = ibMcpText("The object could not describe itself.");
-			return false;
+		ibMcpSayObject(found, result, /*withText*/ only.IsEmpty());
+		ibMcpSayProperties(found, result, only);
+
+		// ⚠ NAMING ONE PROPERTY MEANS THAT PROPERTY. The stored node is the whole object however
+		// narrow the question was, so asking for a synonym and being handed the serialised form of
+		// the catalogue is the opposite of what was asked.
+		if (only.IsEmpty() && ArgStored().Flag(params)) {
+			if (!ibBuildMetaObjectNode(found, result.Child(wxT("stored")))) {
+				refusal = ibMcpText("The object could not describe itself.");
+				return false;
+			}
 		}
 
 		return true;
@@ -927,10 +959,18 @@ public:
 				  "words about what it is still missing."));
 		}
 
+		// ⭐ THE CHECK IS KEPT AND THE DUMP IS NOT. Whether the new object can describe itself is a
+		// real fact worth answering — an incomplete one cannot, and a caller needs to know that
+		// before building on it. Its whole NODE was pasted in beside the answer as well, and that
+		// was 7 KB of which the useful part was already above: `properties` lists every property
+		// with what it holds, while the node repeats them and adds a base64 blob (Interface, Roles,
+		// Composition) on every predefined attribute. Creating one catalogue answered with more
+		// text than the map of the entire configuration, and the `id` had to be found by eye
+		// (measured over MCP, 2026-09-03). metadata_get still hands the node over to anyone who
+		// wants it.
 		ibDataNode described;
 		if (ibBuildMetaObjectNode(created, described)) {
 			result.AddField(wxT("described"), ibDataValue::Bool(true));
-			result.Child(wxT("object")) = described;
 		}
 		else {
 			result.AddField(wxT("described"), ibDataValue::Bool(false));
@@ -938,6 +978,19 @@ public:
 				ibMcpText("Created, but it cannot describe itself yet - usually because it is not "
 				  "complete. Use the id above to fill it in."));
 		}
+
+		// ⭐⭐ THE SECOND ROAD TO THE RECORD, AND THE ONLY MOMENT IT IS FREE. The handshake asks every
+		// client to write down WHY a thing exists — and a handshake is read once, at the start, by a
+		// session that has nothing to write yet; several clients truncate it outright (measured
+		// 2026-09-03: a live copy ended mid-sentence well before that paragraph). Here the reason is
+		// in hand: somebody has just decided this object should exist and knows what was rejected.
+		//
+		// ⚠ ON CREATION ONLY. Said after every write it becomes noise, and noise is how a caller
+		// learns to skip the answer's prose.
+		result.SetValue(wxT("record"),
+			ibMcpText("Why does it exist, and which shape was rejected? Write it on the object now - "
+			  "note_write {id, target: \"notes\", text}. A configuration records what was built and "
+			  "never why, so this is lost when your session ends."));
 
 		return true;
 	}
@@ -1331,10 +1384,13 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Set one property of a metadata object - an attribute's type, a string's length, "
-			"a register dimension's type, a synonym. Read the object with metadata_get first: "
+		return ibMcpText("Set one property of a metadata object - a synonym, a comment, a switch, a word "
+			"from a closed set, a relationship by name. Read the object with metadata_get first: "
 			"the answer shows every property by name and what it currently holds, and a value "
-			"you send back has the shape you saw there.");
+			"you send back has the shape you saw there.\n"
+			"A TYPE IS THE ONE THIS DOES NOT DO: an attribute's, a dimension's or a resource's "
+			"type is a description rather than a value, and metadata_set_type is the verb for it "
+			"(in words - String with a length, Number with precision and scale, CatalogRef.Goods).");
 	}
 
 	// ⭐ TWO OF THESE BELONG TO THE DOOR, NOT TO THIS TOOL. `id` is read by
@@ -1397,111 +1453,25 @@ public:
 			return false;
 		}
 
-		// ⭐ AN ENUMERATED PROPERTY IS SET BY ITS WORD.
+		// ⭐⭐ THROUGH THE ONE DOOR, not through a copy of it. `ibMcpSetProperty` (mcpTool.cpp) is
+		// where a value is placed on a property: the word of a closed set, the cell of ONE language
+		// of a caption, the shape a composite takes, and the refusals that name what was wrong.
 		//
-		// Periodicity, RegisterType, WriteMode — each holds a NUMBER, and each is
-		// named in the language by a WORD ("WithinSecond"). Handing the word
-		// straight to the property failed with "wrong value kind (expected 2, got
-		// 4)" — a true sentence about the storage and a useless one to a caller,
-		// who has no way to learn the number and should not have to: the number is
-		// an implementation of the word.
+		// 🛑 THIS TOOL CARRIED ITS OWN COPY of that path, and the two had already parted company.
+		// The copy answered `'%s' would not take that value.` where the door says what shape it
+		// holds and, for a type, which verb sets one. Worse, this tool DECLARES the `language`
+		// argument and its copy never read it: writing one language of a Synonym through here
+		// folded every other language away, silently, which is the exact loss the door's language
+		// branch exists to prevent (measured over MCP, 2026-09-03).
 		//
-		// The choices are the PROPERTY'S OWN (GetEnumList) — the same list the
-		// designer's inspector drops down — so a value added to an enumeration
-		// tomorrow is settable here the day it is added, and a wrong word is
-		// refused WITH the list of right ones.
-		// ⭐⭐ ONE QUESTION TO THE PROPERTY — what may you be set to, and how many at once. It used to
-		// be two `dynamic_cast`s, an enumeration and a list, which meant the gate reached exactly the
-		// two families whose names it had been told; a relationship offers choices the same way and
-		// was not among them. `None` is itself the answer "not chosen from a list", so nothing has to
-		// be tested for first.
-		ibPropertyChoiceList choices;
-
-		if (const ibPropertyChoiceMode mode = property->GetValueList(choices);
-			mode != ibPropertyChoiceMode::None) {
-
-			const wxString word = ibMcpValueArgument().Text(params);
-
-			// ⚠ TWO VOCABULARIES FOR ONE VALUE. The inspector's list reads
-			// "Within second"; the language writes it `WithinSecond`, and that is
-			// the form type_members answers with. A caller that learned the value
-			// from the language was refused by the property — the same value,
-			// spelled the way the other half of the platform spells it.
-			//
-			// Compared with the spaces taken out, so both are accepted without a
-			// table mapping one to the other: a table would be one more thing to
-			// keep in step, and it would be wrong for the first value added after it.
-			auto same = [](const wxString& a, const wxString& b) {
-				wxString l(a), r(b);
-				l.Replace(wxT(" "), wxEmptyString);
-				r.Replace(wxT(" "), wxEmptyString);
-				return l.IsSameAs(r, false);
-			};
-
-			// The id is the steady way to name a choice — it is what the property stores, and
-			// metadata_properties answers it beside the name for exactly this.
-			const ibDataValue* asked = params.FindField(ibMcpValueArgument().Name());
-			const bool byNumber = asked != nullptr && asked->Kind() == ibDataKind::Number;
-			const long askedId = byNumber ? (long)asked->AsNumber().ToInt() : 0;
-
-			for (unsigned int index = 0; index < choices.GetCount(); ++index) {
-
-				// By id when a number came, otherwise by name or by label: the name is what a
-				// script writes, the label is what the designer shows.
-				const bool matches = byNumber
-					? choices.GetId(index) == askedId
-					: same(choices.GetName(index), word) || same(choices.GetLabel(index), word);
-
-				if (!matches)
-					continue;
-
-				// ⭐ THE CHOICE CARRIES ITS OWN VALUE, so there is no per-family setter here any
-				// more. An enumeration's is its number, a relationship's is the metadescription the
-				// property built while listing; this places whichever it was handed.
-				if (!ibMcpApplyByHand(property, choices.GetValue(index), refusal))
-					return false;
-
-				metaData->Modify(true);
-
-				result.SetValue(wxT("property"), name);
-				result.SetValue(wxT("value"), choices.GetLabel(index));
-				return true;
-			}
-
-			wxString allowed;
-			for (unsigned int index = 0; index < choices.GetCount(); ++index)
-				allowed << (allowed.IsEmpty() ? wxT("") : wxT(", ")) << choices.GetLabel(index);
-
-			refusal = allowed.IsEmpty()
-				? wxString::Format(ibMcpText("'%s' is chosen from the configuration, and there is nothing "
-				                     "of that kind in it yet."), name)
-				: wxString::Format(ibMcpText("'%s' takes one of: %s."), name, allowed);
+		// What stays here is what belongs to this tool rather than to the placing: the rename gate
+		// above, the "no such property" sentence that names metadata_get, marking the configuration
+		// modified, and the object's own complaints.
+		if (!ibMcpSetProperty(property, params, result, refusal))
 			return false;
-		}
-
-		// A VALUE IS EITHER A SCALAR OR A SHAPE. The parser puts scalars in the
-		// field area and objects in the properties area as a child, so both are
-		// looked for — a caller sending back what it read should not have to know
-		// which of the two it is holding.
-		ibDataValue value;
-		if (const ibDataValue* scalar = params.FindField(ibMcpValueArgument().Name()))
-			value = *scalar;
-		else if (const ibDataNode* composite = params.FindChild(ibMcpValueArgument().Name()))
-			value = ibDataValue::Child(std::make_shared<ibDataNode>(*composite));
-
-		if (!property->SetNodeValue(value)) {
-			refusal = wxString::Format(
-				ibMcpText("'%s' would not take that value."), name);
-			return false;
-		}
 
 		metaData->Modify(true);
 
-		// ANSWERED WITH WHAT IT NOW HOLDS, read back through the property rather
-		// than echoed from the request: what was asked for and what was taken are
-		// different facts, and only the second one is true.
-		result.SetValue(wxT("property"), name);
-		result.AddField(wxT("value"), property->GetNodeValue());
 		ibMcpReportComplaints(result, object);
 		return true;
 	}
@@ -1783,7 +1753,9 @@ public:
 		return ibMcpText("Every property of an object with what it holds now, what kind of value it "
 			"takes, and - when the value is one of a closed set - the exact words allowed. "
 			"Ask this before metadata_set: a property that takes a word will refuse anything "
-			"else, and the words are this object's, not guessable from its name.");
+			"else, and the words are this object's, not guessable from its name.\n"
+			"`metadata_get` with a `property` answers the same thing - either name reaches the "
+			"narrow read, so neither has to be the one you remembered.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override

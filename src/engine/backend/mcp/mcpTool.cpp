@@ -7,10 +7,13 @@
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/propertyManager/property/propertyString.h"   // ibPropertyTString — the translatable one
+#include "backend/propertyManager/property/variant/variantTranslate.h"   // …and the cell it holds them in
+#include "backend/propertyManager/property/propertyType.h"     // ibPropertyType — the one with a verb of its own
 #include "backend/propertyManager/propertyObject.h"            // the whole property list, walked below
 
 #include "backend/backend_localization.h"                      // a caption is an array by language
 #include "backend/metaCollection/metaLanguageObject.h"         // …and the languages are the config's own
+#include "backend/metaCollection/metaModuleObject.h"           // ibValueMetaObjectModuleBase — the module behind an id
 
 #include <wx/tokenzr.h>   // a query is words, and the finder counts how many of them landed
 #include <wx/regex.h>     // …unless it is written as a pattern, which is also a way to ask
@@ -448,6 +451,33 @@ size_t ibMcpWordsFound(const wxString& haystack, const wxString& query, size_t* 
 	return found;
 }
 
+ibValueMetaObjectModuleBase* ibMcpModuleOf(ibValueMetaObject* object, wxString& refusal)
+{
+	if (object == nullptr) {
+		refusal = ibMcpText("No such object.");
+		return nullptr;
+	}
+
+	// ⭐ THE PLATFORM'S OWN CONVERSION, not a bare cast. `ConvertToValue` is the value's answer to
+	// "are you one of these" — it unwraps a REFERENCE first, which a cast cannot, and it answers
+	// true/false rather than raising the way ConvertToType does outside the designer. Same door
+	// every other value question in the engine goes through.
+	ibValueMetaObjectModuleBase* module = nullptr;
+
+	if (!object->ConvertToValue(module)) {
+		// ⭐ NAMED, AND WITH THE WAY OUT. A caller lands here holding an id from the tree, and the
+		// most common reason is the one the tree itself shows: the modules are CHILDREN of an
+		// object (ObjectModule, ManagerModule), not the object.
+		refusal = wxString::Format(
+			ibMcpText("'%s' is not a module. A module is a child of an object - metadata_tree on it "
+			  "lists them (ObjectModule, ManagerModule, RecordSetModule) with the id each takes."),
+			object->GetName());
+		return nullptr;
+	}
+
+	return module;
+}
+
 wxString ibMcpMissingArgument(const ibMcpTool* tool, const ibDataNode& arguments)
 {
 	if (tool == nullptr)
@@ -693,6 +723,25 @@ void CollectCategories(const ibPropertyCategory* category,
 
 } // namespace
 
+// ⭐⭐ A CAPTION IS SAID AS ITS CELLS, WHEREVER IT IS SAID. The walk that reads properties and the
+// answer to a write are the same fact about the same property, and they were said two different
+// ways: the walk unfolded the languages, the write answered with `GetNodeValue`.
+//
+// 🛑 AND THE NODE VALUE IS THE STORED FORM. Writing a synonym over MCP therefore answered
+// `en = 'Storage sites';` to a caller who had sent "Storage sites" — the template handed back as if
+// it were the value (measured live, 2026-09-03, minutes after the same confusion was renamed out of
+// the property with GetValueAsRawString). One place says a caption now, and both roads call it.
+void ibMcpSayCaption(const ibPropertyTString* caption, ibDataNode& into)
+{
+	if (caption == nullptr)
+		return;
+
+	ibDataNode& byLanguage = into.Child(wxT("value"));
+
+	for (const ibBackendLocalizationEntry& cell : caption->GetValueAsTranslate().GetTranslations())
+		byLanguage.SetValue(cell.m_code, cell.m_data);
+}
+
 void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 	const wxString& only, bool editableOnly)
 {
@@ -760,18 +809,38 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			std::vector<ibDataValue> words;
 			wxString current;
 
+			// ⚠ A WIDE READ DOES NOT INLINE THEM ALL, and this is now the heaviest thing in an
+			// answer about an object. A RELATIONSHIP's choices are every metaobject that may fill
+			// it, so `ListOwner` and `ListGeneration` each carry the configuration's whole
+			// catalogue list — twice in one answer, about one object, growing with the BASE rather
+			// than with the question. Measured while driving this server (2026-09-03): once the
+			// stored node became opt-in, those two were most of what was left.
+			//
+			// ⭐ NARROWING TO THE PROPERTY GIVES THEM ALL — and that is the call a caller makes
+			// anyway, right before setting one. The same trade `places` makes in mcp_search: the
+			// first few, and the count, and where to ask for the rest.
+			const bool everyChoice = !only.IsEmpty();
+			const size_t inlineLimit = 8;
+
 			for (unsigned int choice = 0; choice < choices.GetCount(); ++choice) {
 
-				auto item = std::make_shared<ibDataNode>();
-				item->SetValue(wxT("id"), (int)choices.GetId(choice));
-				item->SetValue(wxT("name"), choices.GetName(choice));
-				if (!choices.GetSynonym(choice).IsEmpty())
-					item->SetValue(wxT("synonym"), choices.GetSynonym(choice));
-				words.push_back(ibDataValue::Child(item));
+				if (everyChoice || words.size() < inlineLimit) {
+
+					auto item = std::make_shared<ibDataNode>();
+					item->SetValue(wxT("id"), (int)choices.GetId(choice));
+					item->SetValue(wxT("name"), choices.GetName(choice));
+					if (!choices.GetSynonym(choice).IsEmpty())
+						item->SetValue(wxT("synonym"), choices.GetSynonym(choice));
+					words.push_back(ibDataValue::Child(item));
+				}
 
 				// WHICH ONE IS CURRENT — variant against variant, whatever they hold. The old test
 				// compared a member number against the property's integer, a reading only an
 				// enumeration has.
+				//
+				// ⚠ ASKED OF EVERY CHOICE, INLINED OR NOT: the current value is not more likely to
+				// be among the first eight, and answering "nothing is set" because the match sat
+				// ninth would be a wrong answer rather than a short one.
 				const wxVariant& carried = choices.GetValue(choice);
 
 				if (held.IsType(carried.GetType()) && held == carried)
@@ -780,6 +849,15 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 
 			entry->SetValue(wxT("kind"), wxString(wxT("enumerated")));
 			entry->AddField(wxT("choices"), ibDataValue::Array(words));
+
+			if (choices.GetCount() > words.size()) {
+
+				entry->AddField(wxT("choiceCount"), ibDataValue::Int((s64)choices.GetCount()));
+				entry->SetValue(wxT("choicesNote"), wxString::Format(
+					ibMcpText("The first %u of %u. Ask for this property by name - "
+					  "metadata_get {id, property: \"%s\"} - for all of them."),
+					(unsigned int)words.size(), (unsigned int)choices.GetCount(), name));
+			}
 
 			// ⭐ AND HOW MANY OF THEM AT ONCE — the caller's next decision is whether writing one
 			// REPLACES what is there or joins it. `single` and `multiple` are the property's own
@@ -802,13 +880,11 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// this is the reading half, and with it the special verb has nothing left to do.
 			entry->SetValue(wxT("kind"), wxString(wxT("caption")));
 
-			ibBackendLocalizationEntryArray cells;
-			ibBackendLocalization::CreateLocalizationArray(
-				property->GetValue().GetString(), cells);
-
-			ibDataNode& byLanguage = entry->Child(wxT("value"));
-			for (const ibBackendLocalizationEntry& cell : cells)
-				byLanguage.SetValue(cell.m_code, cell.m_data);
+			// …AND THE CELLS ARE ASKED OF THE CAPTION THE CONDITION ALREADY OBTAINED. The property
+			// HOLDS them (ibTranslateString), so there is nothing here to recognise or take apart —
+			// which is what used to make a caption typed without a language read back as {} while
+			// `stored` plainly said "Storage warehouse" (measured 2026-09-03).
+			ibMcpSayCaption(caption, *entry);
 		}
 		else {
 			const ibDataValue value = property->GetNodeValue();
@@ -1118,13 +1194,13 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// is a heuristic wearing a check's clothes: an EMPTY caption carries no cells yet, so it
 		// does not look like one, and the first translation of a fresh object could not be written
 		// at all. A property that has never been filled in is exactly when this is used.
-		if (dynamic_cast<const ibPropertyTString*>(property) == nullptr) {
+		const ibPropertyTString* caption = dynamic_cast<const ibPropertyTString*>(property);
+
+		if (caption == nullptr) {
 			refusal = wxString::Format(
 				_("'%s' is not a caption, so it has no languages."), name);
 			return false;
 		}
-
-		const wxVariant held = property->GetValue();
 
 		const wxString code = language->AsString();
 
@@ -1162,20 +1238,23 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			return false;
 		}
 
-		// ⚠ THE CELL IS NAMED, so the fold happens here: a plain write folds a caption into whichever
-		// language is in force, which is right for an ordinary write and wrong when a SPECIFIC
-		// language is being filled in. Unfold, edit that one cell, fold back — no other language
-		// moves. These are the localisation module's own verbs, not a property's internals.
-		ibBackendLocalizationEntryArray array;
-		ibBackendLocalization::CreateLocalizationArray(held.GetString(), array);
-		ibBackendLocalization::SetArrayTranslate(code, array, ibMcpValueArgument().Text(params));
+		// ⚠ THE CELL IS NAMED, so THAT cell is written and no other language moves. A write naming no
+		// language means the one in force, which is right for an ordinary write and wrong here.
+		//
+		// Edited on a COPY and handed to the same door a mouse click uses: the gate needs an old
+		// value and a new one to offer the owner, and editing in place leaves it holding one.
+		ibTranslateString edited = caption->GetValueAsTranslate();
+		edited.SetTranslate(code, ibMcpValueArgument().Text(params));
 
-		if (!ibMcpApplyByHand(property, wxVariant(ibBackendLocalization::GetRawLocText(array)), refusal))
+		if (!ibMcpApplyByHand(property, wxVariant(new ibVariantDataTranslate(edited)), refusal))
 			return false;
 
+		// SAID AS THE CELLS, like every other answer about a caption — and it is worth more here
+		// than an echo: the whole point of naming a language is that the OTHERS stay, and this is
+		// where a caller sees that they did.
 		result.SetValue(wxT("property"), name);
 		result.SetValue(wxT("language"), code);
-		result.SetValue(wxT("value"), ibMcpValueArgument().Text(params));
+		ibMcpSayCaption(caption, result);
 		return true;
 	}
 
@@ -1275,6 +1354,49 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	// can be asked what it holds NOW, and its kind is the shape a value has to arrive in.
 	if (!property->SetNodeValue(value)) {
 
+		// ⭐⭐ WHERE THERE IS A VERB FOR IT, THE REFUSAL NAMES THE VERB. "It holds a structure - send
+		// one of that shape" is true and leaves the caller to assemble a type description by hand
+		// from what they read back; `metadata_set_type` takes it in WORDS (String with a length,
+		// CatalogRef.Goods) and is the road every other caller uses. A refusal that names the
+		// symptom and not the cure costs a round trip at best and a hand-built shape at worst —
+		// which is the lesson of the day this was written (2026-09-03), applied to itself.
+		//
+		// ⭐ CAST ONCE, CHECKED, THEN USED. The name obtained for the test is the one the message
+		// reads from — saying what the property holds NOW turns "you used the wrong verb" into a
+		// sentence an author can act on without a second call.
+		const ibPropertyType* asType = dynamic_cast<const ibPropertyType*>(property);
+
+		if (asType != nullptr) {
+
+			// ⚠ NAMED THROUGH THE ONE RESOLVER, which knows BOTH kinds of id. A REFERENCE type is
+			// constructive — its clsid's body is the metaID of the object it points at — and only
+			// the metadata can name it; a PRIMITIVE is registered with the value types and only the
+			// value registry can. `ibMetaTypeResolver` asks them in that order and raises for
+			// neither, which is why the rendering already uses it (metaIntrospect.h).
+			//
+			// 🛑 BOTH HALVES WERE GOT WRONG IN TURN, in the same hour: first the value registry
+			// alone (a reference would have come out unnamed), then the metadata alone — and that
+			// one was measured saying "It holds nothing now" about an attribute holding String.
+			const auto named = ibMetaTypeResolver(property->GetPropertyObject() != nullptr
+				? property->GetPropertyObject()->GetMetaData() : nullptr);
+
+			wxString holds;
+			for (const ibClassID& clsid : asType->GetValueAsTypeDesc().m_listTypeClass) {
+				const wxString word = named(clsid);
+				if (word.IsEmpty())
+					continue;
+				holds << (holds.IsEmpty() ? wxT("") : wxT(", ")) << word;
+			}
+
+			refusal = wxString::Format(
+				_("'%s' is a TYPE, and it is not set as a value: use metadata_set_type - it takes "
+				  "the type in words (String with a length, Number with precision and scale, "
+				  "CatalogRef.Goods), and `description` for a composite one. It holds %s now."),
+				name, holds.IsEmpty() ? _("nothing") : holds);
+			return false;
+		}
+
+		// …and only the OTHER road needs to know what shape it holds.
 		const ibDataValue held = property->GetNodeValue();
 
 		refusal = wxString::Format(
@@ -1288,7 +1410,14 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	// ANSWERED WITH WHAT IT NOW HOLDS, read back through the property rather than
 	// echoed from the request: what was asked for and what was taken are different
 	// facts, and only the second one is true.
+	//
+	// ⚠ AND A CAPTION IS SAID AS ITS CELLS, not as its node — the node is the stored template, and
+	// answering with it hands the caller the format they were spared everywhere else.
 	result.SetValue(wxT("property"), name);
-	result.AddField(wxT("value"), property->GetNodeValue());
+
+	if (const ibPropertyTString* caption = dynamic_cast<const ibPropertyTString*>(property))
+		ibMcpSayCaption(caption, result);
+	else
+		result.AddField(wxT("value"), property->GetNodeValue());
 	return true;
 }

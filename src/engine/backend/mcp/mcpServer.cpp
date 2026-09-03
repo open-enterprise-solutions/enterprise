@@ -1394,12 +1394,31 @@ void ibMcpDescribePlatform(ibDataNode& into)
 	// meaningful situations, and leaving them to be folded outside is how one of the three gets
 	// forgotten — the reader tests the flag they thought of and calls it done. The flags stay,
 	// because a caller may want either half; the WORD is what the answer is about.
+	// 🛑 AND THE WORD READ ONLY ONE OF THE TWO. Three situations, and this folded `differs` away:
+	// a configuration that HAS been applied and has been edited since answered `inStep`, "nothing
+	// is pending against it", in the same breath as `differsFromDatabase: true` two lines above.
+	// A caller reading its own answer found it arguing with itself and had no way to tell which
+	// half to believe (measured over MCP, 2026-09-03).
 	if (!applied) {
 		into.SetValue(wxT("state"), wxString(wxT("storedNotApplied")));
 		into.SetValue(wxT("meaning"),
 			_("Stored - it survives closing the designer - but the DATABASE still holds an older "
 			  "configuration, so the running application does not have any of it. "
 			  "`database_diff` says what differs; `config_apply` writes it."));
+	}
+	else if (differs) {
+		into.SetValue(wxT("state"), wxString(wxT("editedSinceApplied")));
+
+		// ⚠ AND A DIFFERENCE IS NOT ALWAYS A SCHEMA DIFFERENCE, which is why this says which
+		// question `database_diff` answers. A comment, a note, a module's text all change the
+		// configuration and change no table, so the diff can legitimately answer "0" while this is
+		// true — and a reader who takes the diff for the whole answer concludes the flag is broken.
+		into.SetValue(wxT("meaning"),
+			_("The database's copy is behind this one: it was applied, and edited since. The "
+			  "running application still works from what was applied. `database_diff` says what "
+			  "of it reaches the SCHEMA - a comment, a note or a module changes the configuration "
+			  "and no table, so an empty diff here means the edits are not structural, not that "
+			  "there are none. `config_apply` puts them in."));
 	}
 	else {
 		into.SetValue(wxT("state"), wxString(wxT("inStep")));
@@ -1512,11 +1531,8 @@ wxString BuildOrientation()
 		out << wxT("\n\nEverything you do is written to the registration journal under that name, ")
 			<< wxT("beside what they did themselves. There is no separate identity for an ")
 			<< wxT("assistant, by design: an actor that can change a configuration leaves the ")
-			<< wxT("same trail a person does.\n")
-			<< wxT("`journal_read` reads it back, and it is worth reading rather than only ")
-			<< wxT("writing to - it is how you check WHAT WAS ACTUALLY DONE instead of what you ")
-			<< wxT("believe you did, and how you find out whether a change was yours or theirs ")
-			<< wxT("when a configuration turns out different from the last thing you remember.\n\n");
+			<< wxT("same trail a person does. (Reading it back is `journal_read` - see WRITE DOWN ")
+			<< wxT("WHAT YOU FIND below.)\n\n");
 	}
 	else {
 		// The same absence, said in the same breath as it would have been reported. Skipping the
@@ -1530,7 +1546,81 @@ wxString BuildOrientation()
 	out << wxT("FINDING THE TOOLS. Only two are listed: `mcp_search` finds by words in a name or ")
 		<< wxT("description, `mcp_call` {tool, arguments} invokes anything it found. The rest are ")
 		<< wxT("deliberately not announced - the whole set costs some 75 KB of schemas, and most ")
-		<< wxT("of it is never used. `mcp_search` with no query lists everything.\n\n");
+		<< wxT("of it is never used. `mcp_search` with no query lists everything.\n")
+
+		// ⭐ SAID HERE TOO, not only in the argument's own description. This paragraph is what a
+		// caller reads BEFORE its first call; the schema is read after, or not at all. The finder
+		// has answered patterns since it was written, and the one place that said so was the last
+		// place anyone looks.
+		<< wxT("A query that carries | \\ [ ] ^ $ or .* is read as a REGULAR EXPRESSION rather ")
+		<< wxT("than as words - `lock|block`, `report.*print` - and that holds for BOTH searches ")
+		<< wxT("this server does: the tools, and the pattern corpus that answers questions of the ")
+		<< wxT("trade. Ordinary punctuation does not switch modes, so a sentence with brackets in ")
+		<< wxT("it stays a sentence.\n\n");
+
+	// ⭐⭐ HIGH UP BECAUSE THIS TEXT IS DELIVERED WHOLE OR NOT AT ALL. A client puts `instructions`
+	// into its prompt and several of them CUT IT — measured 2026-09-03, the copy in a live session
+	// ended mid-sentence around "what a PERSON sees", losing everything after it, which is where
+	// this paragraph and the notes discipline used to stand. So the order is by SECOND ROAD, not by
+	// importance: what a caller can find another way goes lower.
+	//
+	// The patterns have one — every mcp_search answer carries `places` from the corpus beside the
+	// tools — but it is worth the lines here, and the FRAMING is what those lines buy.
+	//
+	// 🛑 IT SAID "BEFORE CHOOSING A SHAPE" and nothing else (Max, 2026-09-03: *"он должен знать,
+	// что у него есть возможность подглянуть в паттерны, как это всё пишется"*). That names ONE
+	// moment, so a model outside that moment — writing a query, laying out a form, wondering how a
+	// document chains — has no reason to think the door applies to it. The corpus is sixty-seven
+	// entries covering the whole trade, and the sentence was selling one of them. What a reader
+	// needs first is the RANGE; the metatype advice is a line inside it, not its title.
+	out << wxT("HOW THINGS ARE DONE HERE IS WRITTEN DOWN - `pattern_read`. It is the practice of ")
+		<< wxT("building on this platform, nearly seventy entries of it, and it is there to be ")
+		<< wxT("LOOKED AT rather than deduced: which metatype a request is asking for (a period, a turnover, ")
+		<< wxT("a balance, an accountant's correspondence), how a document posts and what it may ")
+		<< wxT("touch, prices and discounts, payroll, VAT, lots and serial numbers, settlements, ")
+		<< wxT("closing a period, how queries are written here, how names are chosen, how a form is ")
+		<< wxT("laid out, what shapes a report takes, printing, roles and row-level access.\n")
+		<< wxT("`pattern_read` with no argument LISTS the topics - one call, and you know what is ")
+		<< wxT("covered; with a `name` it gives one in full; with a `query` it searches inside them. ")
+		<< wxT("They are recommendations, not rules, and they are written for exactly the moment ")
+		<< wxT("before you invent something: look first, then decide. The choice of shape in ")
+		<< wxT("particular is the one decision that is expensive to revisit once there is data in ")
+		<< wxT("it.\n\n");
+
+	// ⭐⭐ THE DISCIPLINE TRAVELS WITH THE SERVER, not with whoever happens to remember it: every
+	// client that connects is told to keep the record up, so the next one arrives better informed
+	// than this one did. That is the only way a record like this survives more than one person.
+	//
+	// ⚠ AND IT HAS NO SECOND ROAD — which is why it moved here from the far end of this text.
+	// mcp_search points at the patterns in every answer; NOTHING points at note_write at the moment
+	// a finding appears, so a session that got a cut copy simply does not know the discipline
+	// exists. Highest-value paragraph, therefore first.
+	out << wxT("WRITE DOWN WHAT YOU FIND, AT THE RIGHT LEVEL - there are two, and they are not ")
+		<< wxT("interchangeable. A configuration records what was built and never why, so what you ")
+		<< wxT("worked out is lost with your session unless you put it somewhere.\n")
+		<< wxT(" * THE ROOT is the central document: what is true of the configuration as a ")
+		<< wxT("whole - how it is put together, the conventions it follows, where the next ")
+		<< wxT("arrival should look, a direction taken or decided against. It is read FIRST, ")
+		<< wxT("before any object is opened. `note_write` {id: <root NodeId>, target: \"notes\", text}.\n")
+		<< wxT(" * EACH OBJECT carries its OWN specifics, written while you work on it: why it ")
+		<< wxT("exists, which shape was chosen, what was rejected. `note_write` {id, target: ")
+		<< wxT("\"notes\", text}. Put them on the object, not on the root - the person who opens ")
+		<< wxT("that object never re-reads the root looking for them. `note_read` gives them back.\n")
+		<< wxT(" * `target: \"help\"` is the OTHER text: what the person USING the application ")
+		<< wxT("reads on F1. Different reader, different words.\n")
+		<< wxT(" * `Comment` is the third surface - one line, on every node including attributes ")
+		<< wxT("and dimensions, answering WHY DOES THIS EXIST AT ALL. It rides along with ")
+		<< wxT("metadata_tree, so one read of the map shows what everything is for; it is also ")
+		<< wxT("where to mark something you built for a trial and mean to remove. `metadata_set` ")
+		<< wxT("{id, property: \"Comment\", value}.\n")
+		<< wxT(" * AND WHAT YOU DID is kept for you: every call this server carries out goes into ")
+		<< wxT("the registration journal, and `journal_read` reads it back - which is how you check ")
+		<< wxT("what was ACTUALLY done rather than what you believe you did, and how you tell your ")
+		<< wxT("own changes from somebody else's when a configuration turns out different from the ")
+		<< wxT("last thing you remember.\n")
+		<< wxT("NAME ANOTHER OBJECT AS A LINK: these texts are Markdown, so write ")
+		<< wxT("`[Goods](oes:1005)` - the target keeps the identity through a rename, the visible ")
+		<< wxT("text keeps the name it had when you wrote it.\n\n");
 
 	ibMetaDataConfigurationBase* metaData = activeMetaData;
 
@@ -1712,29 +1802,8 @@ wxString BuildOrientation()
 			<< wxT("anything: a configuration records what was built and never why.\n\n");
 	}
 
-	// ⭐ THE DISCIPLINE TRAVELS WITH THE SERVER, not with whoever happens to remember it. Every
-	// client that connects is told to keep the notes up, so the next one arrives better informed
-	// than this one did - which is the only way a record like this survives more than one person.
-	out << wxT("KEEP IT UP, AND KEEP IT AT THE RIGHT LEVEL - there are two, and they are not ")
-		<< wxT("interchangeable.\n")
-		<< wxT(" * THE ROOT is the central document: what is true of the configuration as a ")
-		<< wxT("whole - how it is put together, the conventions it follows, where the next ")
-		<< wxT("arrival should look, a direction taken or decided against. It is read FIRST, ")
-		<< wxT("before any object is opened.\n")
-		<< wxT(" * EACH OBJECT carries its OWN specifics, written while you work on it: why it ")
-		<< wxT("exists, which shape was chosen, what was rejected. `note_write` {id, target: ")
-		<< wxT("\"notes\", text}. Put them on the object, not on the root - the person who opens ")
-		<< wxT("that object never re-reads the root looking for them.\n")
-		<< wxT(" * `target: \"help\"` is the OTHER text: what the person USING the application ")
-		<< wxT("reads on F1. Different reader, different words.\n")
-		<< wxT(" * `Comment` is the third surface - one line, on every node including attributes ")
-		<< wxT("and dimensions, answering WHY DOES THIS EXIST AT ALL. It rides along with ")
-		<< wxT("metadata_tree, so one read of the map shows what everything is for; it is also ")
-		<< wxT("where to mark something you built for a trial and mean to remove. `metadata_set` ")
-		<< wxT("{id, property: \"Comment\", value}.\n")
-		<< wxT("NAME ANOTHER OBJECT AS A LINK: these texts are Markdown, so write ")
-		<< wxT("`[Goods](oes:1005)` - the target keeps the identity through a rename, the visible ")
-		<< wxT("text keeps the name it had when you wrote it.\n\n");
+	// (Where each kind of text belongs is stated near the top, above the cut. Not repeated here —
+	// a second copy of a discipline is a second thing to keep true.)
 
 	// ⭐⭐ POINTED AT, NOT INLINED — and this is the line that decides how big this text can get.
 	//
@@ -1743,18 +1812,6 @@ wxString BuildOrientation()
 	// is the fastest-growing material there is. Inlined here it would be paid for on every
 	// connection by every client, needed or not.
 	//
-	// The dividing line is not size, it is whether a model can know to ask. A DISCIPLINE (notes,
-	// links, the language of names) is invisible when unknown, so it stays above. A PATTERN is
-	// consulted at a moment the model recognises — it is about to choose a metatype, and it knows
-	// it — so it only has to be told the door exists.
-	out << wxT("BEFORE CHOOSING A SHAPE, READ THE PATTERNS. `pattern_read` with no argument lists ")
-		<< wxT("them; with a `name` it gives one in full. They are recommendations, not rules: ")
-		<< wxT("how to hear which metatype a request is asking for (a period, a turnover, a ")
-		<< wxT("balance, an accountant's correspondence), when a named item has to be predefined, ")
-		<< wxT("how to take a printed form apart into areas. The choice of shape is the one ")
-		<< wxT("decision that is expensive to revisit once there is data in it, so it is worth ")
-		<< wxT("the one call.\n\n");
-
 	// ⭐⭐ THE ONE THING A CONNECTING MODEL IS RELIABLY WRONG ABOUT. It arrives fluent in languages
 	// that are not this one and will write something that READS correctly and does not compile —
 	// the failure that costs the most, because it looks like success until it is run. The platform
@@ -1769,6 +1826,8 @@ wxString BuildOrientation()
 		<< wxT(" `type_list` / `type_members` - what a value IS and what it can do\n")
 		<< wxT(" `linq_methods` - the query pipeline operations\n")
 		<< wxT(" `metadata_list` / `metadata_get` - the configuration tree, kind by kind\n")
+		<< wxT(" `pattern_read` - how things are USUALLY done here, in the words of the trade; the ")
+		<< wxT("one above that is about practice rather than syntax\n")
 		<< wxT(" `script_check` / `query_check` - COMPILE without running. Ask them before you ")
 		<< wxT("believe anything you wrote; a script that parses in your head is not evidence.\n\n");
 
