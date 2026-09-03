@@ -85,6 +85,17 @@ struct ibQuerySourceParameter
 	// Non-empty makes the argument a CHOICE, and the editor shows exactly these and nothing else.
 	std::vector<wxString> m_choices;
 
+	// ⭐ WHAT THIS ARGUMENT DECIDES, in one line, when the name alone is not enough — declared by
+	// the source for the same reason the choices are: it is the only one that knows.
+	//
+	// 🛑 `Periodicity` is why this exists. The word names two different things one floor apart: the
+	// register's STORED grain (a metadata property, whose words are "Non periodic / Within second /
+	// Within day") and the granularity of a READING (this, whose words are Period / Recorder /
+	// Day / Month / …). A newcomer reads one list and writes it into the other, and both refusals
+	// are correct and neither says the two are different questions (measured over MCP, 2026-09-03).
+	// Empty for an argument whose name says it all.
+	wxString m_description;
+
 	// ⭐⭐ THE SOURCE CONSUMES THIS CONDITION ITSELF — it is not folded into the WHERE around it.
 	//
 	// An ordinary condition slot is sugar: the predicate written there is ANDed into the query's own

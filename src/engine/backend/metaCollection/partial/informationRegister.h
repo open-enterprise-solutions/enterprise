@@ -412,12 +412,19 @@ void ibInfoRegisterSliceDescriptor<TSlice>::DescribeParameters(std::vector<ibQue
 {
 	ibQuerySourceParameter moment;
 	moment.m_name = wxT("Period");
+	moment.m_description = _("The moment the slice is taken at - one row per set of dimensions, "
+	                         "carrying the record in force then. Left out, the slice is as of now "
+	                         "for a last slice, and as of the register's first record for a first "
+	                         "one.");
 	if (m_reg != nullptr && m_reg->GetRegisterPeriod() != nullptr)
 		moment.m_type = m_reg->GetRegisterPeriod()->GetTypeDesc();
 	out.push_back(moment);
 
 	ibQuerySourceParameter condition;
 	condition.m_name      = wxT("Condition");
+	condition.m_description = _("A condition on the DIMENSIONS, applied while the slice is taken - "
+	                            "so it chooses which keys are sliced, not which of the finished "
+	                            "rows survive.");
 	condition.m_condition = true;
 	out.push_back(condition);
 }

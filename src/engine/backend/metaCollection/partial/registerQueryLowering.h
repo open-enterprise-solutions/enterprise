@@ -630,11 +630,16 @@ inline void ibFillRegisterIntervalParameters(const ibTypeDescription& periodType
 {
 	ibQuerySourceParameter begin;
 	begin.m_name = wxT("BeginOfPeriod");
+	begin.m_description = _("The first moment counted, inclusive. Left out, the reading starts at the "
+	                 "register's first movement - not at some default date.");
 	begin.m_type = periodType;
 	out.push_back(begin);
 
 	ibQuerySourceParameter end;
 	end.m_name = wxT("EndOfPeriod");
+	end.m_description = _("The last moment counted, inclusive - and it may name a DOCUMENT rather than a "
+	               "date, which is how \"the turnovers up to this receipt\" is asked. Left out, "
+	               "the reading runs to the last movement there is.");
 	end.m_type = periodType;
 	out.push_back(end);
 }
@@ -645,6 +650,9 @@ inline void ibAppendRegisterConditionParameter(std::vector<ibQuerySourceParamete
 {
 	ibQuerySourceParameter condition;
 	condition.m_name      = wxT("Condition");
+	condition.m_description      = _("A condition on the DIMENSIONS, applied inside the reading - so it "
+	                          "narrows what is folded rather than dropping rows after the fold. "
+	                          "Written as a predicate (Warehouse = &Warehouse), not as a value.");
 	condition.m_condition = true;
 	out.push_back(condition);
 }
@@ -666,6 +674,11 @@ inline void ibAppendRegisterPeriodicityParameter(std::vector<ibQuerySourceParame
 {
 	ibQuerySourceParameter periodicity;
 	periodicity.m_name    = wxT("Periodicity");
+	periodicity.m_description    = _("How finely this READING is cut, which decides what a row is and "
+	                          "therefore which columns it has: none of them read whole, the period "
+	                          "with a period, the recorder with both, a record with the line number "
+	                          "too. Not the register's stored Periodicity property, which is the "
+	                          "grain the totals are KEPT at and takes different words.");
 	periodicity.m_choices = { wxT("Period"), wxT("Record"), wxT("Recorder"), wxT("Auto") };
 	for (const std::pair<ibTotalsPeriod, wxString>& unit : ibRegisterUnits())
 		periodicity.m_choices.push_back(unit.second);

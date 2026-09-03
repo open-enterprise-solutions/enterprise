@@ -173,12 +173,9 @@ wxString ModuleDocPath(const ibDataNode& params, wxString& moduleName, wxString&
 		return wxEmptyString;
 	}
 
-	ibValueMetaObjectModuleBase* module =
-		dynamic_cast<ibValueMetaObjectModuleBase*>(object);
-	if (module == nullptr) {
-		refusal = wxString::Format(ibMcpText("'%s' is not a module."), object->GetName());
+	ibValueMetaObjectModuleBase* module = ibMcpModuleOf(object, refusal);
+	if (module == nullptr)
 		return wxEmptyString;
-	}
 
 	moduleName = module->GetName();
 	return module->GetDocPath();

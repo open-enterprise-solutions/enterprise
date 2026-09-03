@@ -178,6 +178,27 @@ bool ibBackendProperty::SetNodeValue(const ibDataValue& value)
 {
 	if (value.IsEmpty())
 		return false;
+
+	// ⭐⭐ …AND THE SHAPE IS GATED HERE TOO, for the same reason absence is: so a property type is
+	// spared the question and cannot answer it by RAISING.
+	//
+	// A property that holds a NODE reads it with `AsChild()`, which throws on any other kind — the
+	// type description says so in a comment beside the call, and four more readers do the same
+	// (the two event properties, the form's pair). Handed a string, the throw goes straight past
+	// every caller that was collecting refusals: `metadata_create` answered
+	// `ibDataValue: wrong value kind (expected 6, got 4)` — numbers, about a serialised shape — and
+	// the object it had ALREADY created was never mentioned, so a dimension nobody knew about
+	// stayed behind in the register (measured over MCP, 2026-09-03; a half-built object blocks the
+	// configuration from being saved at all).
+	//
+	// The comparison is with what the property HOLDS, which is the same fact the refusal upstairs
+	// already prints ("It holds a %s - send one of that shape"). A property whose value is not
+	// readable yet answers nothing and is let through, as before: this decides a mismatch, not a
+	// shape.
+	const ibDataValue held = GetNodeValue();
+	if (held.Kind() == ibDataKind::Child && value.Kind() != ibDataKind::Child)
+		return false;
+
 	return ReadNodeValue(value);
 }
 

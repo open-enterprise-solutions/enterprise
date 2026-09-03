@@ -228,6 +228,12 @@ public:
 				entry->AddField(wxT("choices"), ibDataValue::Array(choices));
 			}
 
+			// ⭐ …AND WHAT IT DECIDES, where the source says so. A list of words answers "which may
+			// I write" and not "what will happen", and for `Periodicity` the two are a whole
+			// storey apart from the property of the same name.
+			if (!parameter.m_description.IsEmpty())
+				entry->SetValue(wxT("description"), parameter.m_description);
+
 			parameters.push_back(ibDataValue::Child(entry));
 		}
 

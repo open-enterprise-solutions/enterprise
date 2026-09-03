@@ -102,11 +102,9 @@ public:
 		}
 
 		ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id->AsInt());
-		ibValueMetaObjectModuleBase* module = dynamic_cast<ibValueMetaObjectModuleBase*>(object);
-		if (module == nullptr) {
-			refusal = ibMcpText("That id is not a module.");
+		ibValueMetaObjectModuleBase* module = ibMcpModuleOf(object, refusal);
+		if (module == nullptr)
 			return false;
-		}
 
 		const wxString text = ArgText().Text(params);
 		s32 position = 0;

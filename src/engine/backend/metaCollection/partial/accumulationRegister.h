@@ -916,6 +916,10 @@ inline void ibAccumRegisterBalanceDescriptor::DescribeParameters(std::vector<ibQ
 {
 	ibQuerySourceParameter moment;
 	moment.m_name = wxT("Period");
+	moment.m_description = _("AS OF WHEN - one moment, not an interval: this table answers what is on hand "
+	                  "at it. It may name a DOCUMENT instead of a date, which is how \"the balance "
+	                  "as of this receipt\" is asked when three of them share a day. Left out, the "
+	                  "balance is as of the last movement there is.");
 	// The register's OWN period type, not a hand-written "date": asked of the attribute, so a
 	// register that ever dates its rows differently needs nothing changed here.
 	if (m_reg != nullptr && m_reg->GetRegisterPeriod() != nullptr)
@@ -924,6 +928,8 @@ inline void ibAccumRegisterBalanceDescriptor::DescribeParameters(std::vector<ibQ
 
 	ibQuerySourceParameter condition;
 	condition.m_name      = wxT("Condition");
+	condition.m_description      = _("A condition on the DIMENSIONS, applied inside the reading - so it "
+	                          "narrows what is folded rather than dropping rows after the fold.");
 	condition.m_condition = true;
 	out.push_back(condition);
 }
@@ -1110,6 +1116,10 @@ inline void ibAccumRegisterBalanceAndTurnoverDescriptor::DescribeParameters(std:
 
 	ibQuerySourceParameter fillMethod;
 	fillMethod.m_name    = wxT("FillMethod");
+	fillMethod.m_description = _("Whether the opening and closing balances are reported beside the "
+	                             "movements, or the movements alone. Boundaries are what make this "
+	                             "table different from Turnovers - ask for Movements only when the "
+	                             "balances are genuinely not wanted.");
 	fillMethod.m_choices = { wxT("MovementsAndBoundaries"), wxT("Movements") };   // a word, see the periodicity
 	// ⭐ LEFT OUT, THE BOUNDARIES ARE THERE. This table exists to say where the quantity STOOD as the
 	// period opened and as it closed; a reading without those is a narrower thing somebody asks for

@@ -38,10 +38,25 @@ namespace {
 //
 // SECTIONS NEST, which is why the third argument is true: a caller naming a sub-section means that
 // sub-section, at whatever depth. That is the whole reason the hand-rolled recursion existed.
-ibValueMetaObjectSection* FindSection(ibMetaData* metaData, const wxString& name)
+// ⭐ BY NAME OR BY ID, because a caller holding one should not have to fetch the other. Every other
+// verb here addresses a metaobject by the `id` the tree hands out, and this one asked for a NAME:
+// a newcomer with the section's id in front of them met two refusals in a row before guessing that
+// this door speaks a different language (measured over MCP, 2026-09-03).
+//
+// The id is the steadier of the two — it survives a rename — so a number is read as one; anything
+// else is the name, which is what a person reads in the tree.
+ibValueMetaObjectSection* FindSection(ibMetaData* metaData, const wxString& nameOrId)
 {
+	// The SAME finder answers both: its filter is a template, so a name and an id are two spellings
+	// of one question rather than two searches. The class filter stands either way, so a number that
+	// happens to be some other object's id finds nothing here instead of finding the wrong thing.
+	long asId = 0;
+	if (nameOrId.ToLong(&asId) && asId > 0)
+		return metaData->FindAnyObjectByFilter<ibValueMetaObjectSection>(
+			static_cast<ibMetaID>(asId), g_metaSectionCLSID, /*use_child_filter*/ true);
+
 	return metaData->FindAnyObjectByFilter<ibValueMetaObjectSection>(
-		name, g_metaSectionCLSID, /*use_child_filter*/ true);
+		nameOrId, g_metaSectionCLSID, /*use_child_filter*/ true);
 }
 
 // Every section in the tree, deepest last — for saying which ones exist when a name misses. A
@@ -115,8 +130,8 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgSection()
 {
 	static const ibArg s_a(wxT("section"), ibArg::Kind::Text,
-		ibMcpText("The section's name. Sections nest - name the sub-section itself, not the path to "
-			  "it."), /*required*/ true);
+		ibMcpText("The section - its name, or the id the tree gives it. Sections nest: name the "
+			  "sub-section itself, not the path to it."), /*required*/ true);
 	return s_a;
 }
 

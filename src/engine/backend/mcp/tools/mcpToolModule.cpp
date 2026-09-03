@@ -178,14 +178,9 @@ public:
 		if (object == nullptr)
 			return false;
 
-		ibValueMetaObjectModuleBase* module =
-			dynamic_cast<ibValueMetaObjectModuleBase*>(object);
-
-		if (module == nullptr) {
-			refusal = wxString::Format(
-				ibMcpText("'%s' is not a module."), object->GetName());
+		ibValueMetaObjectModuleBase* module = ibMcpModuleOf(object, refusal);
+		if (module == nullptr)
 			return false;
-		}
 
 		const wxString find = ArgFind().Text(params);
 
@@ -365,13 +360,9 @@ public:
 		if (object == nullptr)
 			return false;
 
-		ibValueMetaObjectModuleBase* module =
-			dynamic_cast<ibValueMetaObjectModuleBase*>(object);
-		if (module == nullptr) {
-			refusal = wxString::Format(
-				ibMcpText("'%s' is not a module."), object->GetName());
+		ibValueMetaObjectModuleBase* module = ibMcpModuleOf(object, refusal);
+		if (module == nullptr)
 			return false;
-		}
 
 		// ⚠ A TEXT THAT IS NOT A STRING IS A REFUSAL, NOT AN EMPTY MODULE.
 		//

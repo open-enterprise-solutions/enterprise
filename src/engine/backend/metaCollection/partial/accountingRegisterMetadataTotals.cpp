@@ -3461,10 +3461,12 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 
 	// ⚠ DECLARED FROM THE SAME LAYOUT THE CALL IS READ BY. Two lists that must agree, derived from one
 	// — which is the only arrangement in which they cannot drift apart.
-	const auto push = [&out](const wxString& name, const ibTypeDescription& type) {
+	const auto push = [&out](const wxString& name, const ibTypeDescription& type,
+		const wxString& description = wxEmptyString) {
 		ibQuerySourceParameter parameter;
-		parameter.m_name = name;
-		parameter.m_type = type;
+		parameter.m_name        = name;
+		parameter.m_type        = type;
+		parameter.m_description = description;
 		out.push_back(parameter);
 	};
 
@@ -3475,6 +3477,20 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 		ibQuerySourceParameter parameter;
 		parameter.m_name             = name;
 		parameter.m_condition        = true;
+
+		// ⭐ WHICH CONDITION THIS IS, since there are up to four of them and their names differ by
+		// one word. An ACCOUNT condition decides which account a row is about — and, when it is
+		// written with IN HIERARCHY, which account the rows are reported UNDER, which is a fold and
+		// not a filter. The general one narrows the rows the reading produces. A caller that puts
+		// one where the other belongs gets a correct query answering a different question.
+		parameter.m_description = consumed
+			? _("A condition on the ACCOUNT, consumed by the reading itself: `IN HIERARCHY` reports "
+			    "the subordinate accounts folded under the one named, which a filter applied around "
+			    "the reading could never do. Accounts only - everything else has the general "
+			    "Condition slot.")
+			: _("A condition on the reading's own columns, applied inside it so it narrows what is "
+			    "folded rather than dropping finished rows.");
+
 		parameter.m_consumedBySource = consumed;
 		out.push_back(parameter);
 	};
@@ -3489,7 +3505,9 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 	if (layout.m_end >= 0)
 		ibFillRegisterIntervalParameters(periodType, out);
 	else
-		push(wxT("Period"), periodType);
+		push(wxT("Period"), periodType,
+			_("AS OF WHEN the balance stands - one moment, not an interval. It may name a DOCUMENT "
+			  "rather than a date, which is how \"the balance as of this entry\" is asked."));
 
 	// How the interval is CUT — right after the interval, because that is what it is about.
 	if (layout.m_periodicity >= 0)
@@ -3499,6 +3517,10 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 	if (layout.m_fillMethod >= 0) {
 		ibQuerySourceParameter fill;
 		fill.m_name    = wxT("FillMethod");
+		fill.m_description = _("What to do with a period nothing moved in: report only the periods "
+		                       "that have movements, or a row on every period boundary of the "
+		                       "interval - which is what a month-by-month column needs so the "
+		                       "quiet months are not simply missing.");
 		fill.m_choices = { wxT("Movements"), wxT("MovementsAndPeriodBoundaries") };
 		fill.m_default = wxT("Movements");
 		out.push_back(fill);
@@ -3528,7 +3550,11 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 	const ibValueMetaObjectAttributeBase* kindSlot = m_reg->GetRegisterAccountDimensionKind(0);
 	const ibTypeDescription kindType = kindSlot != nullptr ? kindSlot->GetTypeDesc() : ibTypeDescription();
 	if (layout.m_kindsDr >= 0)
-		push(layout.m_kindsCr >= 0 && symmetricSides ? wxT("AccountDimensionsDr") : wxT("AccountDimensions"), kindType);
+		push(layout.m_kindsCr >= 0 && symmetricSides ? wxT("AccountDimensionsDr") : wxT("AccountDimensions"), kindType,
+			_("WHICH BREAKDOWN to report, as a KIND from the chart of characteristic types - or an "
+			  "array of kinds, in the order the columns should come out. Not a filter: it says what "
+			  "the figures are split BY. Left out, the reading reports the account's own totals with "
+			  "no breakdown at all."));
 
 	// The general condition sits where the layout puts it — between the two sides for a turnover,
 	// after both for the matrix. See ibAcctArgs::For for why that is not arbitrary.
@@ -3538,7 +3564,9 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 	if (layout.m_accountCr >= 0)
 		pushCondition(symmetricSides ? wxT("AccountConditionCr") : wxT("CorrAccountCondition"), /*consumed*/ true);
 	if (layout.m_kindsCr >= 0)
-		push(symmetricSides ? wxT("AccountDimensionsCr") : wxT("CorrAccountDimensions"), kindType);
+		push(symmetricSides ? wxT("AccountDimensionsCr") : wxT("CorrAccountDimensions"), kindType,
+			_("The same, for the other side: the credit side of a matrix, or the CORRESPONDING "
+			  "account of a turnover - the one the figure moved against."));
 
 	if (layout.m_condition >= 0 && symmetricSides)
 		ibAppendRegisterConditionParameter(out);
@@ -3549,9 +3577,14 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 	// expression slot. Declaring it as a condition would put the wrong editor in front of the author
 	// and, worse, would let the lowering route it into the WHERE.
 	if (layout.m_order >= 0)
-		push(wxT("Order"), ibTypeDescription());
+		push(wxT("Order"), ibTypeDescription(),
+			_("How the LINES are ordered - a list of fields with directions, not a condition. Only a "
+			  "listing takes one: a fold has no line to order and answers with every group it "
+			  "found."));
 	if (layout.m_top >= 0)
-		push(wxT("Top"), ibTypeDescription());
+		push(wxT("Top"), ibTypeDescription(),
+			_("How many lines at most, taken AFTER the order - so it means the first N of that "
+			  "order, not an arbitrary N of the whole."));
 }
 
 // A READING IS FILTERED BY ITS DIMENSIONS AND ITS BREAKDOWN, never by a resource. A resource is what
