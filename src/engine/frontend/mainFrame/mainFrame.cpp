@@ -737,3 +737,120 @@ bool ibFrontendMainFrame::CaptureWindow(const wxString& reason, const wxString& 
 	bytes.AppendData(buffer->GetBufferStart(), buffer->GetBufferSize());
 	return true;
 }
+
+// ---------------------------------------------------------------------------
+// ibDocBottomStatusBar — the bar along the bottom.
+//
+// The backend header is included HERE rather than beside the class, so the frame
+// header does not carry the MCP server into every translation unit that merely
+// needs a frame.
+// ---------------------------------------------------------------------------
+
+#include "backend/mcp/mcpServer.h"
+
+namespace {
+
+// The interior palette, spelled where it is used — the same values the rest of the
+// chrome carries (see luna_dockart.cpp).
+const wxColour kStatusBarGround(0xC8, 0xD6, 0xDF);   // #C8D6DF light dusty
+const wxColour kStatusBarInk   (0x3F, 0x5C, 0x77);   // #3F5C77 deep dusty blue
+
+// The lamp. Muted rather than a signal green: it reports a steady state, and the
+// bar it sits in is a quiet one.
+const wxColour kAssistantLampOn(0x4F, 0x8A, 0x53);   // #4F8A53 sage
+
+// Sized to the longest thing the field ever says, so the message beside it does
+// not jump when the assistant starts.
+const int kAssistantFieldWidth = 210;
+
+const int kAssistantPollMilliseconds = 1000;
+
+} // namespace
+
+ibDocBottomStatusBar::ibDocBottomStatusBar(wxWindow* parent, wxWindowID id, long style, const wxString& name)
+	: wxStatusBar(parent, id, style, name)
+{
+	// Light dusty bar — sits between the powder-blue workspace and the cream content
+	// panes; deep-blue text reads cleanly against it.
+	SetBackgroundColour(kStatusBarGround);
+	SetForegroundColour(kStatusBarInk);
+
+	// -1 is "share what is left"; a positive number is a fixed width. So the message
+	// grows with the window and the lamp keeps its place at the right-hand end.
+	const int widths[FieldCount] = { -1, kAssistantFieldWidth };
+	SetFieldsCount(FieldCount);
+	SetStatusWidths(FieldCount, widths);
+
+	// wxSB_FLAT for the lamp: a sunken border around a field that is usually empty
+	// draws a box on the bar for no reason.
+	const int styles[FieldCount] = { wxSB_NORMAL, wxSB_FLAT };
+	SetStatusStyles(FieldCount, styles);
+
+	m_assistantPoll.SetOwner(this);
+	Bind(wxEVT_TIMER, &ibDocBottomStatusBar::OnAssistantPoll, this, m_assistantPoll.GetId());
+	m_assistantPoll.Start(kAssistantPollMilliseconds);
+
+	// Ask once now rather than waiting a second for the first tick: a bar that comes
+	// up blank and fills in a moment later looks like something still loading.
+	wxTimerEvent unused(m_assistantPoll);
+	OnAssistantPoll(unused);
+}
+
+void ibDocBottomStatusBar::OnAssistantPoll(wxTimerEvent& WXUNUSED(event))
+{
+	const ibMcpServer* server = ibApplicationData::GetMcpServer();
+	const bool running = server != nullptr && server->IsRunning();
+
+	// ⭐ NOTHING IS TOUCHED WHILE NOTHING CHANGES. SetStatusText invalidates the field,
+	// so writing the same string every second would repaint the bar once a second for
+	// the life of the process.
+	if (running == m_assistantRunning)
+		return;
+
+	m_assistantRunning = running;
+
+	// The endpoint, not just the word: when an assistant cannot connect, the first
+	// question is always which address and port it should have used, and the answer
+	// is then already on screen. Empty when it is off — an indicator that says "off"
+	// in every window of every session is noise, and its absence says the same thing.
+	const wxString lamp = running
+		? wxString::Format(wxT("Assistant  %s"), server->GetEndpoint())
+		: wxString();
+
+	SetStatusText(lamp, FieldAssistant);
+}
+
+#if OES_STATUSBAR_CUSTOM_INK
+
+void ibDocBottomStatusBar::DrawFieldText(wxDC& dc, const wxRect& rect, int i, int textHeight)
+{
+	// ⭐ THE ONE LINE THE OLD wxStaticText EXISTED FOR. The generic bar never sets a text
+	// colour, so the field is drawn in the DC's default — black — whatever the window's
+	// foreground says.
+	dc.SetTextForeground(GetForegroundColour());
+
+	if (i != FieldAssistant || !m_assistantRunning) {
+		wxStatusBar::DrawFieldText(dc, rect, i, textHeight);
+		return;
+	}
+
+	// A lit lamp, then the text moved clear of it. The rectangle handed to the base is
+	// narrowed rather than the text indented, so ellipsizing and clipping still measure
+	// against the space the text actually has.
+	const int diameter = wxMax(6, textHeight / 2);
+	const int cx = rect.x + 8 + diameter / 2;
+	const int cy = rect.y + rect.height / 2;
+
+	dc.SetBrush(wxBrush(kAssistantLampOn));
+	dc.SetPen(wxPen(kAssistantLampOn));
+	dc.DrawCircle(cx, cy, diameter / 2);
+
+	wxRect textRect(rect);
+	const int taken = (cx + diameter / 2 + 4) - rect.x;
+	textRect.x     += taken;
+	textRect.width -= taken;
+
+	wxStatusBar::DrawFieldText(dc, textRect, i, textHeight);
+}
+
+#endif // OES_STATUSBAR_CUSTOM_INK
