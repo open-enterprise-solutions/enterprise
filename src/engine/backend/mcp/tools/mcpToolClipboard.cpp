@@ -103,7 +103,7 @@ const ibArg& ArgSlot()
 
 const ibArg& ArgParentId()
 {
-	static const ibArg s_a(wxT("parent_id"), ibArg::Kind::Whole,
+	static const ibArg s_a(wxT("parentId"), ibArg::Kind::Whole,
 		ibMcpText("Where it goes. Omit for the top level of the configuration."));
 	return s_a;
 }

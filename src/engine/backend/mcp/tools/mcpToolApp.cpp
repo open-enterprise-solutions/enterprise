@@ -32,6 +32,9 @@
 #include "backend/debugger/debugClient.h"     // one debug session at a time — the menu's own guard
 #include "backend/metadataConfiguration.h"    // …and the configuration must already be in the base
 
+#include <wx/process.h>                       // wxProcess::Exists — has the previous run actually gone
+#include <wx/utils.h>                         // wxMilliSleep — the wait while it goes
+
 namespace {
 
 using ibArg = ibMcpTool::ibMcpArgument;
@@ -52,6 +55,28 @@ const ibArg& ArgApplication()
 			/*required*/ false, { wxT("enterprise"), wxT("wenterprise-server") });
 	return s_a;
 }
+
+// ⭐⭐ THE VERB THE LOOP WAS MISSING, AND IT IS NOT A NEW MECHANISM. Ending a run has been possible
+// all along — `debug_attach {host, port, stop: true}` — but a caller who has just rewritten a module
+// is not asking to end anything: they are asking for the NEW code to run, and the ending is a step
+// on the way. Measured 2026-09-04: the refusal below named the state and not the door, so a whole
+// session's worth of restarts went out to the operating system, and twice the answer that came back
+// was produced by the PREVIOUS version of the module — a running application holds the bytecode it
+// started with.
+const ibArg& ArgRestart()
+{
+	static const ibArg s_a(wxT("restart"), ibArg::Kind::Flag,
+		ibMcpText("End the run that is already going, then start a fresh one. This is what to pass "
+		  "after changing a module: a running application keeps the bytecode it started with, so "
+		  "the change is invisible until it comes up again."));
+	return s_a;
+}
+
+// The last run STARTED FROM HERE. Kept so a restart can wait for the process to actually go before
+// starting its replacement — two of them on one file base is a lock fight, and the loser is silent.
+// Zero when this designer has started nothing, which is honest: a run somebody else started is one
+// this cannot watch, and the wait falls back to a fixed one.
+long s_lastStartedPid = 0;
 
 } // namespace
 
@@ -75,12 +100,14 @@ public:
 			"or without the debugger attached. The same launch the designer's Debug menu "
 			"performs, so connection flags and the debug port are handled. Refuses when the "
 			"configuration has changes the database does not have: read database_diff and apply "
-			"them first, because a launch must never write to a base as a side effect.");
+			"them first, because a launch must never write to a base as a side effect.\n\n"
+			"After changing a module, pass restart: true - a running application keeps the "
+			"bytecode it came up with, so the new code is invisible until it is started again.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgApplication(), ArgDebug() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgApplication(), ArgDebug(), ArgRestart() };
 		return s_arguments;
 	}
 
@@ -109,12 +136,46 @@ public:
 		if (params.FindField(ArgDebug().Name()) != nullptr)
 			withDebug = ArgDebug().Flag(params);
 
+		const bool restart = ArgRestart().Flag(params);
+
 		// ONE DEBUGGER AT A TIME — the same guard the menu keeps. A second debug launch attaches
 		// nothing and leaves the caller waiting at a breakpoint that will never be hit.
-		if (withDebug && debugClient != nullptr && debugClient->HasConnections()) {
-			refusal = ibMcpText("A debug session is already running. Let it finish, or start without "
-				"the debugger.");
-			return false;
+		bool ended = false;
+		if (debugClient != nullptr && debugClient->HasConnections()) {
+
+			if (!restart && withDebug) {
+				// ⭐ A REFUSAL THAT NAMES THE DOOR. "Let it finish" is advice a tool cannot act on,
+				// and it is not even what the caller wants — they want the new code running.
+				refusal = ibMcpText("A debug session is already running. Pass restart: true to end it "
+					"and come up again with the current configuration - that is what to do after "
+					"changing a module, because a running application keeps the bytecode it "
+					"started with. (debug_sessions reports the address, and debug_attach with "
+					"stop: true ends one without starting anything.)");
+				return false;
+			}
+
+			if (restart) {
+				// ⭐ THE PLATFORM'S OWN ENDING, asked of every connection rather than of a chosen
+				// one: DetachConnection is a no-op on a connection that is not attached, so the
+				// filtering that would otherwise be written here is already inside it.
+				for (auto* connection : debugClient->GetListConnection())
+					if (connection != nullptr)
+						connection->DetachConnection(/*kill=*/true);
+
+				ended = true;
+
+				// ⚠ AND WAIT FOR IT TO ACTUALLY GO. The command travels to another process, which
+				// then unwinds, closes its session and lets go of the base; starting the
+				// replacement before that is two processes on one file base — Firebird gives the
+				// second one a lock error that reads like a corrupt installation.
+				if (s_lastStartedPid != 0) {
+					for (int waited = 0; waited < 100 && wxProcess::Exists((int)s_lastStartedPid); ++waited)
+						wxMilliSleep(50);
+				}
+				else {
+					wxMilliSleep(1000);   // started by somebody else - there is no pid to watch
+				}
+			}
 		}
 
 		// ⚠ THE CONFIGURATION MUST ALREADY BE IN THE BASE. The application reads the database's
@@ -141,9 +202,14 @@ public:
 			return false;
 		}
 
+		s_lastStartedPid = pid;
+
 		result.SetValue(wxT("started"), application);
 		result.AddField(wxT("pid"), ibDataValue::Int((s64)pid));
 		result.AddField(wxT("debug"), ibDataValue::Bool(withDebug));
+
+		if (ended)
+			result.AddField(wxT("endedPrevious"), ibDataValue::Bool(true));
 
 		if (withDebug) {
 			result.SetValue(wxT("note"),

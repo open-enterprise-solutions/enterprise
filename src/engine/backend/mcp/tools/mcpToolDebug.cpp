@@ -84,12 +84,17 @@ const ibArg& ArgExpression()
 	return s_a;
 }
 
-const ibArg& ArgCode()
+const ibArg& ArgText()
 {
-	static const ibArg s_a(wxT("code"), ibArg::Kind::Text,
+	// ⚠ `text`, NOT `code`, AND THE WORD IS THE WHOLE REASON. Source arrives as `text` everywhere
+	// else it arrives — module_write, query_run, a report's query — while `code` in this platform
+	// is a BUSINESS FIELD: the Code of a catalog item, which is what predefined_* means by it. Two
+	// meanings under one name cost a step every time somebody guesses which one this is.
+	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
 		ibMcpText("Whole statements, in the configuration's own dialect - platform_state says which. "
 			  "Everything it writes is rolled back, so read what you need INSIDE it: the last "
-			  "value, or `Result`, comes back as the answer."), /*required*/ true);
+			  "value, or `Result`, comes back as the answer - along with `microseconds`, how long "
+			  "it took, timed where it ran."), /*required*/ true);
 	return s_a;
 }
 
@@ -210,6 +215,14 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
+		// ⚠ THE SWEEPING CASE SAYS SO. `all` takes every breakpoint out of every module and uses
+		// neither module nor line — so the ordinary sentence rendered it as "taking the breakpoint
+		// off '' line 0", which names an address nobody touched and hides the one thing worth
+		// recording: that all of them are gone. The journal is read to find out what was DONE, and
+		// a line that understates it is worse than no line (2026-09-04, read back from the audit).
+		if (ArgAll().Flag(params))
+			return ibMcpText("taking every breakpoint off, in every module");
+
 		return wxString::Format(ArgRemove().Flag(params)
 				? ibMcpText("taking the breakpoint off '%s' line %i")
 				: ibMcpText("putting a breakpoint on '%s' line %i"),
@@ -340,6 +353,92 @@ public:
 
 		if (!stop.m_message.IsEmpty())
 			result.SetValue(wxT("message"), stop.m_message);
+
+		// ⭐⭐ WHAT THE RUN SAID — its output buffer, emptied into this answer. The application's own
+		// window has these lines and the designer deliberately does not: a person reading their
+		// configurator does not want somebody else's run narrating into it. This is the other
+		// reader's copy, and it is handed over on request rather than announced line by line, so
+		// "posted 12 documents" never wakes anybody (Max, 2026-09-04).
+		//
+		// Taken WITH CLEARING: each read answers what happened since the last one, which is the
+		// question actually being asked after doing something.
+		std::vector<ibDataValue> said;
+		for (const ibMcpDebugBridge::Printed& line : bridge->TakeOutput(/*clear*/ true)) {
+
+			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+			node->SetValue(wxT("text"), line.m_text);
+			node->SetValue(wxT("level"), wxString(
+				  line.m_level == MessageType_Error   ? wxT("error")
+				: line.m_level == MessageType_Warning ? wxT("warning")
+				                                      : wxT("info")));
+			said.push_back(ibDataValue::Child(node));
+		}
+
+		if (!said.empty())
+			result.AddField(wxT("output"), ibDataValue::Array(said));
+
+		// ⭐⭐ WHAT IS SET TO STOP IT — reported whether or not anything is stopped right now, because
+		// the question it answers ("why did it park HERE?") is asked when something already looks
+		// wrong. A breakpoint outlives the run it was set for; the next one it catches belongs to
+		// somebody else, and there is nothing on the surface to say so.
+		//
+		// 🛑 Measured on myself, 2026-09-04: a forgotten breakpoint on line 4 parked a run after its
+		// first line, I read that as "only the first message arrives", and built a theory about a
+		// lost channel out of it. Every fact needed to dismiss that was already in the debugger.
+		if (debugClient != nullptr) {
+
+			std::vector<ibDataValue> set;
+			for (const auto& module : debugClient->GetBreakpoints()) {
+
+				std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+
+				// ⭐ THE ID IS A REFERENCE TO THE MODULE, not a number to look at. It is the module's
+				// stable guid — what the debugger addresses code by — so it is resolved back into
+				// the name a person reads, and the guid is kept beside it for anything that has to
+				// address the module again.
+				node->SetValue(wxT("module"), module.first);
+
+				if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
+					const ibMetaID id = activeMetaData->MetaIdByGuid(ibGuid(module.first));
+					if (id != wxNOT_FOUND) {
+						if (ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, id)) {
+
+							// ⭐ THE WHOLE PATH, not the module's own name. Every document has an
+							// `ObjectModule`, so the name alone identifies nothing and costs a
+							// lookup to make sense of — which is exactly the errand this field
+							// exists to save (Max, 2026-09-04: *"decode it right there, so you do
+							// not spend time searching"*).
+							wxString path = object->GetName();
+							for (const ibValueMetaObject* owner = object->GetParent();
+							     owner != nullptr; owner = owner->GetParent()) {
+
+								const wxString step = owner->GetName();
+								if (step.IsEmpty())
+									break;               // the configuration root names nothing useful
+								path = step + wxT(".") + path;
+							}
+
+							node->SetValue(wxT("name"), path);
+							node->AddField(wxT("id"), ibDataValue::Int((s64)id));
+						}
+					}
+				}
+
+				std::vector<ibDataValue> lines;
+				for (unsigned int line : module.second)
+					lines.push_back(ibDataValue::Int((s64)line));
+
+				node->AddField(wxT("lines"), ibDataValue::Array(lines));
+				set.push_back(ibDataValue::Child(node));
+			}
+
+			if (!set.empty()) {
+				result.AddField(wxT("breakpoints"), ibDataValue::Array(set));
+				result.SetValue(wxT("breakpointsNote"),
+					ibMcpText("These stop the run wherever it reaches them, including runs set going "
+					  "for something else entirely. debug_breakpoint with all + remove clears them."));
+			}
+		}
 
 		if (!stop.m_stopped) {
 			// NOT AN ERROR. A running application is an ordinary state, and the
@@ -843,7 +942,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgCode() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgText() };
 		return s_arguments;
 	}
 
@@ -853,7 +952,7 @@ public:
 		if (bridge == nullptr)
 			return false;
 
-		const wxString code = ArgCode().Text(params);
+		const wxString code = ArgText().Text(params);
 		if (code.IsEmpty()) {
 			refusal = ibMcpText("Nothing to run - pass the code.");
 			return false;
@@ -877,8 +976,9 @@ public:
 		bool ran = false;
 		wxString answer, json;
 		std::vector<wxString> printed;
+		wxLongLong_t microseconds = 0;
 
-		if (!bridge->Sandbox(code, ran, answer, json, printed)) {
+		if (!bridge->Sandbox(code, ran, answer, json, printed, microseconds)) {
 			refusal = ibMcpText("The runtime did not answer in time. Whatever the code did was still "
 				"rolled back - the transaction is on the far end and does not depend on this "
 				"answer arriving.");
@@ -886,6 +986,16 @@ public:
 		}
 
 		result.AddField(wxT("ran"), ibDataValue::Bool(ran));
+
+		// ⭐⭐ HOW LONG IT TOOK — measured in the process that ran it, not around this call, which
+		// would time the socket and the wait as well. This is the platform's only stopwatch: the
+		// language's clock is a BUSINESS clock, a date to the second, because that is what the
+		// accounting it exists for needs — so code cannot time itself, and a measurement used to
+		// mean running the same thing ten times from outside and dividing.
+		//
+		// Microseconds, because single queries and single postings are the things worth timing and
+		// milliseconds report most of them as 0 or 1.
+		result.AddField(wxT("microseconds"), ibDataValue::Int((s64)microseconds));
 
 		if (!answer.IsEmpty())
 			result.SetValue(wxT("answer"), answer);

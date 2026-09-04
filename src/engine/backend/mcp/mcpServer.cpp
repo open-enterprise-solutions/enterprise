@@ -1862,7 +1862,40 @@ wxString BuildOrientation()
 		<< wxT("statements INSIDE it - create data, post a document, read a register back. It runs ")
 		<< wxT("in a transaction that is ALWAYS rolled back, so it costs nothing to try. This is ")
 		<< wxT("the only way to find out that what you built actually works: metadata that saves ")
-		<< wxT("and applies can still post nothing.\n\n");
+		<< wxT("and applies can still post nothing.\n")
+		// 🛑⭐ THE TRAP THAT COSTS THE MOST, because it does not look like one: the answer arrives,
+		// it is simply the OLD answer. Measured twice in one evening (2026-09-04) — a module was
+		// rewritten, the run was asked again, and it replied from the version it started with.
+		<< wxT("A RUNNING APPLICATION KEEPS THE BYTECODE IT CAME UP WITH, so after changing a ")
+		<< wxT("module start it again with `app_run` and `restart: true` - otherwise it answers ")
+		<< wxT("from the old version and nothing tells you so.\n")
+		// ⭐ AND MEASURING IS POSSIBLE AT ALL, which nobody guesses: the language's clock is a
+		// BUSINESS clock (a date, to the second), so code cannot time itself and the obvious move —
+		// running the same thing ten times from outside and dividing — measures the socket too.
+		<< wxT("`debug_sandbox` also answers with `microseconds`, how long the code took, timed ")
+		<< wxT("inside the process that ran it. That is the platform's stopwatch: use it instead ")
+		<< wxT("of repeating something to time it from out here.\n")
+		// ⭐⭐ THE ONE NOBODY WOULD GUESS AT, and the one that answers the commonest report of all.
+		// Named here because a new session has no memory of this conversation and would never think
+		// to ask a tool for a PICTURE (Max, 2026-09-04).
+		<< wxT("AND YOU CAN SEE WHAT THEY SEE - `screen_capture` asks the running application for a ")
+		<< wxT("picture of its window. That is the answer to \"the numbers do not add up\" and \"the ")
+		<< wxT("list is wrong\" from somebody who cannot say WHICH form, WHICH period or WHICH ")
+		<< wxT("column: they click on the thing, and it comes back ringed and named. Ask for ")
+		<< wxT("`area: \"focus\"` and you get just that part, which is smaller and already about the ")
+		<< wxT("right thing. It needs the run to be GOING, not stopped - a parked window draws ")
+		<< wxT("nothing - and in a shipped build the person is asked first and may say no, which is ")
+		<< wxT("an answer rather than a fault. What it CANNOT tell you is why a number is what it ")
+		<< wxT("is: use it to find the question, then `trace_read` and `debug_sandbox` to answer it.\n")
+		// ⭐ AND WHEN THE ANSWER IS WRONG RATHER THAN ABSENT, the engine has already written down
+		// why. Named here because it is a FILE and therefore covers the run being debugged as well
+		// as this one — deducing from a wrong number what SQL produced it is hours of work that a
+		// single read replaces.
+		<< wxT("When a run answers something you did not expect, `trace_read` has the engine's own ")
+		<< wxT("commentary on it - the SQL exactly as sent, the road the query took, the keys a ")
+		<< wxT("join was stitched on - for the application under the debugger as well as for this ")
+		<< wxT("designer. (`journal_read` is the other journal: what the INSTALLATION did - logins, ")
+		<< wxT("writes, postings - the record an auditor reads.)\n\n");
 
 	out << wxT("THREE VERBS NOTHING LEADS YOU TO, and each is a step you will otherwise miss:\n")
 		<< wxT(" `metadata_bind` - WHAT POINTS AT WHAT: which registers a document writes to, ")
@@ -2378,8 +2411,48 @@ wxString ibMcpServer::Answer(const wxString& request)
 
 			content->SetValue(wxT("text"), text);
 
+			std::vector<ibDataValue> blocks = { ibDataValue::Child(content) };
+
+			// ⭐⭐ AN IMAGE TRAVELS AS AN IMAGE. A tool that answers with a picture (screen_capture)
+			// puts the bytes in `image` with `imageType` beside them, and they leave here as a
+			// content block of their own — the protocol has a kind for exactly this. Left in the
+			// text they would arrive as a wall of base64: technically the same bytes, and
+			// unreadable, which for a picture means useless.
+			if (ok) {
+				const ibDataValue* image = payload.FindField(wxT("image"));
+				const ibDataValue* type  = payload.FindField(wxT("imageType"));
+
+				if (image != nullptr && image->Kind() == ibDataKind::String && !image->AsString().IsEmpty()) {
+
+					std::shared_ptr<ibDataNode> picture = std::make_shared<ibDataNode>();
+					picture->SetValue(wxT("type"), wxString(wxT("image")));
+					picture->SetValue(wxT("data"), image->AsString());
+					picture->SetValue(wxT("mimeType"),
+						type != nullptr && type->Kind() == ibDataKind::String && !type->AsString().IsEmpty()
+							? type->AsString() : wxString(wxT("image/png")));
+
+					blocks.push_back(ibDataValue::Child(picture));
+
+					// 🛑 AND THE TEXT BLOCK STOPS CARRYING THE SAME BYTES. Rendered whole, the answer
+					// would repeat the picture as a wall of base64 beside it — the identical data in
+					// the form that costs the most and reads the least. What stays is what the image
+					// cannot say for itself: what was in focus, and how big it is.
+					wxString said = ibMcpText("A picture is attached.");
+
+					if (const ibDataValue* focus = payload.FindField(wxT("focus")))
+						if (focus->Kind() == ibDataKind::String && !focus->AsString().IsEmpty())
+							said << wxT("\n") << ibMcpText("In focus: ") << focus->AsString();
+
+					if (const ibDataValue* note = payload.FindField(wxT("note")))
+						if (note->Kind() == ibDataKind::String && !note->AsString().IsEmpty())
+							said << wxT("\n") << note->AsString();
+
+					content->SetValue(wxT("text"), said);
+				}
+			}
+
 			ibDataNode result;
-			result.AddField(wxT("content"), ibDataValue::Array({ ibDataValue::Child(content) }));
+			result.AddField(wxT("content"), ibDataValue::Array(blocks));
 			if (!ok)
 				result.SetValue(wxT("isError"), true);
 

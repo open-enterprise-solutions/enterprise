@@ -124,7 +124,7 @@ const ibArg& ArgAcceptsKind()
 		ibMcpText("A KIND, spelled the way a script writes it - Catalog, Document, Attribute. Answers what "
 		  "one of those would hold BEFORE you make one: an empty one is built where it would live, "
 		  "asked, and dropped, so nothing is created in the configuration. Metadata is built "
-		  "tree-wise, so a kind that lives INSIDE something needs `parent_id` - an attribute under "
+		  "tree-wise, so a kind that lives INSIDE something needs `parentId` - an attribute under "
 		  "a catalog holds different things from one under a register."));
 	return s_kind;
 }
@@ -183,7 +183,9 @@ const ibArg& ArgId()
 
 const ibArg& ArgParentId()
 {
-	static const ibArg s_a(wxT("parent_id"), ibArg::Kind::Whole,
+	// One spelling for the whole surface: every other multi-word argument here is camelCase
+	// (`typeId`, `sinceMinutes`, `rowSpan`), and this was the last one carrying an underscore.
+	static const ibArg s_a(wxT("parentId"), ibArg::Kind::Whole,
 		ibMcpText("Where it goes, as NodeId from a previous answer - a catalog's id to add an "
 			  "attribute to it. Omit for a top-level object."));
 	return s_a;
@@ -1146,7 +1148,7 @@ public:
 				refusal = wxString::Format(
 					ibMcpText("'%s' does not go inside '%s'. Metadata is built tree-wise - a catalog first, "
 					  "then the attributes on it - so name the parent it would live under with "
-					  "`parent_id`, and this will answer for it there."),
+					  "`parentId`, and this will answer for it there."),
 					askedKind, root->GetName());
 				return false;
 			}
