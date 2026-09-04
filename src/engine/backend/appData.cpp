@@ -944,7 +944,46 @@ long ibApplicationData::RunApplication(const wxString& strAppName, const wxStrin
 	// file/ibuser/ibpwd/locale/debug). enterprise.exe / designer.exe /
 	// daemon.exe declare these as the long name of their legacy short
 	// options, so one builder feeds every parser.
-	wxString executeCmd = strAppName + wxT(' ');
+
+	// Resolve the binary next to this one. A bare "enterprise" is looked up on PATH and in the
+	// working directory, and it is in neither; on macOS it is not even a plain file, since the
+	// sibling is enterprise.app and the executable sits inside it. Without this the fork succeeds,
+	// the exec fails, and wxExecute still returns a pid — so the caller is told the application
+	// started while nothing runs.
+	wxFileName home = wxFileName::DirName(
+		wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath());
+
+#ifdef __WXOSX__
+	// This binary is itself inside a bundle, so its siblings are three levels up.
+	if (home.GetDirCount() >= 2
+		&& home.GetDirs().Last().IsSameAs(wxT("MacOS"))
+		&& home.GetDirs()[home.GetDirCount() - 2].IsSameAs(wxT("Contents"))) {
+		home.RemoveLastDir();
+		home.RemoveLastDir();
+		home.RemoveLastDir();
+	}
+#endif
+
+	wxFileName binary(home);
+	binary.SetFullName(strAppName);
+
+#ifdef __WXOSX__
+	if (!binary.FileExists()) {
+		wxFileName bundled(home);
+		bundled.AppendDir(strAppName + wxT(".app"));
+		bundled.AppendDir(wxT("Contents"));
+		bundled.AppendDir(wxT("MacOS"));
+		bundled.SetFullName(strAppName);
+		if (bundled.FileExists())
+			binary = bundled;
+	}
+#endif
+
+	// The bare name stays the fallback, so a layout this does not recognise behaves as before.
+	// Quoted because a resolved path can contain a space and wxExecute splits on those.
+	wxString executeCmd = binary.FileExists()
+		? (wxT('"') + binary.GetFullPath() + wxT("\" "))
+		: (strAppName + wxT(' '));
 
 	if (m_strFile.IsEmpty()) {
 
