@@ -188,8 +188,20 @@ static wxString gs_listErrorString[] =
 	_("Object field not writable (%s)"),//ERROR_PROP_NOT_WRITABLE
 	_("Object field not readable (%s)"),//ERROR_PROP_NOT_READABLE
 	_("Object field is scope-local (%s)"),//ERROR_PROP_SCOPE_LOCAL
+	// NAMING THE RECEIVER'S TYPE HERE WAS TRIED AND TAKEN BACK OUT. The type would be the
+	// interesting half, but the only honest way to ask for it is the value itself
+	// (GetClassName is virtual — a reference, a manager, a record each answer their own way),
+	// and a reference answers it by READING: ReadData walks reference fields and can recurse
+	// (see reference.cpp's cycle guard) or raise. A diagnostic that reads is a diagnostic
+	// that can fail while explaining a failure, so the receiver stays unnamed (Max, 2026-09-04).
 	_("No attribute or method found '%s' - a variable is not an aggregate object"),//ERROR_MEMBER_NOT_AGGREGATE
 	_("Aggregate object field not found '%s'"),//ERROR_MEMBER_NOT_FOUND
+	// STATES THE FACT, ADVISES NOTHING. It first read "call it directly, without the dot",
+	// which was written for `x.ValueIsFilled()` — and then it met a CORRECT call,
+	// `ValueIsFilled(Warehouse)`, that failed for a different reason, and told the person to
+	// remove a dot they had not written (Max, 2026-09-04). A diagnostic may say what it knows;
+	// it may not guess what was meant.
+	_("'%s' is a global function - it is not a member of this value"),//ERROR_MEMBER_IS_GLOBAL_FUNCTION
 };
 
 //////////////////////////////////////////////////////////////////////

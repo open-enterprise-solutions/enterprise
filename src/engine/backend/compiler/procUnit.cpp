@@ -317,6 +317,13 @@ void ibProcUnit::BuildScopeChain(ibValue** localScope)
 {
 	const unsigned int nParentCount = GetParentCount();
 
+	// ⭐ MEASURED 2026-09-04, worth keeping as a fact: the two ladders agree in length. The
+	// compiler counts rungs up the BYTECODE chain, this builds the frame array from the PROCUNIT
+	// chain, and for every module of the sample configuration both came out equal (an object
+	// module: 1 and 1). So the depth that lands past the end does NOT come from the descriptor
+	// hierarchy being shorter at run time — look at what ELSE adds a rung on the compile side
+	// (an eval's host frame does; see GetVariable step 2).
+
 	m_ppArrayCode = new ibProcUnit * [nParentCount + 1];
 	m_ppArrayCode[0] = this;
 
@@ -724,14 +731,19 @@ inline void CompareValueNE(ibValue& cValue1, const ibValue& cValue2, const ibVal
 // out-of-line place — see the raise-helper note above.
 IB_NOINLINE void RaiseMemberNotFound(const ibValue& variable, const wxString& name)
 {
-	// WORTH IMPROVING, from a live diagnosis: this message names the MEMBER and
-	// says nothing about the receiver it was asked of, which is the interesting
-	// half. "No attribute or method found 'Message'" reads identically whether the
-	// receiver was the wrong context object or the right one with its surface not
-	// yet built — and telling those apart took a temporary dump of the receiver's
-	// type and member list. The type name is one call away
-	// (ibValue::GetNameObjectFromID(variable.GetClassType())); putting it in the
-	// message is a user-visible change and belongs to whoever owns the wording.
+	// A GLOBAL FUNCTION asked of a value is the commonest shape of this failure and the
+	// one a plain "no such member" explains worst. `x.ValueIsFilled()` reads like a method
+	// call, but ValueIsFilled is a function that TAKES the value — no receiver anywhere
+	// has it, so no amount of looking at x helps. Say what has to change instead.
+	const ibValue::ibMemberTable* const globals =
+		ibValue::ibMemberTable::Shared<&ibValueSystemFunction_BindNames>();
+	if (globals != nullptr && globals->FindMethod(name) >= 0) {
+		Raise(ERROR_MEMBER_IS_GLOBAL_FUNCTION, name);
+	}
+
+	// The receiver is deliberately NOT named — asking a value what it is means calling into
+	// it, and a reference answers by reading, which can recurse or raise. See the note beside
+	// the message texts in backend_exception.cpp.
 
 	// Which of the two it is depends on the VALUE, not on the opcode — so the
 	// choice belongs here rather than at each of the three call sites.
@@ -2313,8 +2325,18 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 		pvarRetValue = ibValue(wxString(wxT("<error: ")) + msg + wxT(">"));
 	};
 
-	auto iterator = std::find_if(pRunContext->m_listEval.begin(), pRunContext->m_listEval.end(),
-		[strExpression](const auto pair) {return stringUtils::CompareString(strExpression, pair.first); });
+	// A SANDBOX IS NOT AN EXPRESSION, so it is neither looked up here nor kept below: the text is a
+	// script somebody typed for this one run, while the cache exists for a WATCH — the same handful
+	// of expressions re-read at every step, where compiling once is the whole point. Keeping sandbox
+	// bytecode bought nothing and cost a wrong answer: the key is case-folded, so a second sandbox
+	// differing only in case silently re-ran the FIRST one's bytecode, down to the member spelling
+	// its error message quoted. It runs, and it is gone with runEvaluate at the end of this call.
+	const bool reusable = evalMode != eval_sandbox;
+
+	auto iterator = reusable
+		? std::find_if(pRunContext->m_listEval.begin(), pRunContext->m_listEval.end(),
+			[strExpression](const auto pair) {return stringUtils::CompareString(strExpression, pair.first); })
+		: pRunContext->m_listEval.end();
 
 	std::shared_ptr<ibProcUnitEvaluate> runEvaluate = nullptr;
 	if (iterator == pRunContext->m_listEval.end()) { //this text has not yet been compiled
@@ -2343,7 +2365,8 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 			//everything is OK
 			// push_back, not insert_or_assign: this branch is reached only when the
 			// scan above found nothing, so there is no entry to assign over.
-			pRunContext->m_listEval.emplace_back(stringUtils::MakeUpper(strExpression), runEvaluate);
+			if (reusable)
+				pRunContext->m_listEval.emplace_back(stringUtils::MakeUpper(strExpression), runEvaluate);
 		}
 		catch (const ibBackendException& e) {
 			reportFailure(e.GetErrorDescription());

@@ -581,8 +581,14 @@ ibValue ibCompileCode::GETConstant()
 // getting the number with a string constant (to determine the method number)
 const int ibCompileCode::GetConstString(const wxString& strConstName)
 {
-	auto iterator = std::find_if(m_listHashConst.begin(), m_listHashConst.end(),
-		[strConstName](const auto pair) { return stringUtils::CompareString(strConstName, pair.first); });
+	// EXACT match, deliberately. The language is case-blind about NAMES, but this pool
+	// stores a SPELLING, and the runtime prints that spelling back when a member is not
+	// found. Folding case-insensitively made the pool keep whichever spelling arrived
+	// first, so `x.ValueIsFilled()` was reported as 'VALUEISFILLED' — a name nobody in
+	// the module had written, and the first thing a person doubts is their own eyes.
+	// Case-blindness belongs where a name is RESOLVED (ibValue::FindMethod / FindProp
+	// / the ctor registry, all at run time), not where its letters are stored.
+	auto iterator = m_listHashConst.find(strConstName);
 
 	if (iterator != m_listHashConst.end())
 		return iterator->second - 1;
@@ -1261,7 +1267,11 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 		code.m_numOper = OPER_CALL_METHOD;
 		code.m_param1 = callFunction->m_puRetValue;		// variable into which the value is returned
 		code.m_param2 = callFunction->m_puContextVal;	// variable on which the method is called
-		code.m_param3.m_numIndex = GetConstString(callFunction->m_strName);	// number of the called method from the list of encountered methods
+		// m_strRealName, not m_strName: the pair is (upper form for LOOKUP, spelling as WRITTEN),
+		// and what goes into the constant pool is read back by a person — the runtime prints it
+		// when the member is not found. The upper form leaked out that way as 'VALUEISFILLED',
+		// a spelling nobody typed. Resolution stays case-blind at run time (FindMethod).
+		code.m_param3.m_numIndex = GetConstString(callFunction->m_strRealName);	// number of the called method from the list of encountered methods
 		code.m_param3.m_numArray = numDefCount;	// number of parameters
 	}
 	else {
