@@ -523,13 +523,17 @@ void ibDebuggerClient::EvaluateToolTip(const wxString& strFileName, const wxStri
 // open forms (Max, 2026-09-02). That is the whole advantage: the situation being investigated is
 // reproduced where it actually happens, not in a copy that behaves nearly the same. What makes it
 // safe to do that in somebody's live session is the other half — the transaction the far end wraps
-// it in, which is rolled back whatever the code does.
-void ibDebuggerClient::RunSandbox(const wxString& code)
+// it in, which is rolled back unless this call says otherwise.
+//
+// ⚠ The flag goes LAST so an older runtime, which stops reading after the string, rolls back —
+// it cannot be talked into keeping writes by a newer designer.
+void ibDebuggerClient::RunSandbox(const wxString& code, bool keepWrites)
 {
 	if (ibDebuggerClient::IsEnterLoop()) {
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_RunSandbox);
 		commandChannel.w_stringZ(code);
+		commandChannel.w_u8(keepWrites ? 1 : 0);
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
 }

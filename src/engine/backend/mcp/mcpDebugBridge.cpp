@@ -114,8 +114,8 @@ bool ibMcpDebugBridge::Evaluate(const wxString& expression, wxString& answer, in
 	return arrived;
 }
 
-bool ibMcpDebugBridge::Sandbox(const wxString& code, bool& ran, wxString& answer, wxString& json,
-	std::vector<wxString>& printed, wxLongLong_t& microseconds, int timeoutMs)
+bool ibMcpDebugBridge::Sandbox(const wxString& code, bool keepWrites, bool& ran, wxString& answer,
+	wxString& json, std::vector<wxString>& printed, wxLongLong_t& microseconds, int timeoutMs)
 {
 	ran = false;
 	microseconds = 0;
@@ -138,7 +138,7 @@ bool ibMcpDebugBridge::Sandbox(const wxString& code, bool& ran, wxString& answer
 		m_sandboxMicroseconds = 0;
 	}
 
-	debugClient->RunSandbox(code);
+	debugClient->RunSandbox(code, keepWrites);
 
 	std::unique_lock<std::mutex> lock(m_mutex);
 	const bool arrived = m_answered.wait_for(lock,

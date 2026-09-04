@@ -1342,6 +1342,12 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		wxString code;
 		commandReader.r_stringZ(code);
 
+		// Optional on the wire: a client that predates the flag sends the string and stops, so
+		// elapsed() is 0 and this stays false. An old peer, either direction, means rollback.
+		bool keepWrites = false;
+		if (commandReader.elapsed() >= 1)
+			keepWrites = commandReader.r_u8() != 0;
+
 		// ⚠ ANSWERED EVEN WHEN IT CANNOT RUN — see the note on the evaluation above. A caller that
 		// waits deserves a sentence, and "not parked" is a sentence it can act on; silence is one
 		// it can only time out on.
@@ -1374,8 +1380,13 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 						ibValueSystemFunction::Message(text, status); });
 			};
 
-			tell(_("An assistant is running code here in a sandbox - nothing it writes is kept."),
-				ibStatusMessage::ibStatusMessage_Information);
+			// The sentence follows the flag: "nothing is kept", said while the transaction is about
+			// to be committed, is the one wrong thing to tell somebody here.
+			tell(keepWrites
+				? _("An assistant is running code here and keeping what it writes - this changes the base.")
+				: _("An assistant is running code here in a sandbox - nothing it writes is kept."),
+				keepWrites ? ibStatusMessage::ibStatusMessage_Warning
+				           : ibStatusMessage::ibStatusMessage_Information);
 
 			// …AND WHAT IT WAS. A person who is told that "code is running" and not WHICH code has
 			// been told the alarming half and none of the useful one; they are sitting in front of
@@ -1493,8 +1504,16 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 				// when the thing being investigated is a timeout.
 				elapsed = std::chrono::steady_clock::now() - began;
 
+				// A failed run is rolled back whatever was asked: ran is false when the code threw
+				// partway, and committing would keep the half that got through — a document posted
+				// with its movements missing. The flag means "keep it if it worked".
+				const bool keeping = keepWrites && ran;
+
 				try {
-					layer->RollBack();
+					if (keeping)
+						layer->Commit();
+					else
+						layer->RollBack();
 				}
 				catch (...) {
 					// A rollback that cannot run is not something the caller can act on, and saying
@@ -1520,10 +1539,14 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 				const wxString shown = answer.length() > 500
 					? answer.Left(497) + wxT("...") : answer;
 
+				// The ending says whether the base moved, which is the fact worth having.
 				tell(ran
-					? wxString::Format(
-						_("The sandbox finished and everything it wrote was rolled back. %s"), shown)
-					: wxString::Format(_("The sandbox stopped: %s"), shown),
+					? wxString::Format(keepWrites
+						? _("The code finished and what it wrote was kept. %s")
+						: _("The sandbox finished and everything it wrote was rolled back. %s"), shown)
+					: wxString::Format(keepWrites
+						? _("The code stopped and nothing was kept - a failed run is always rolled back. %s")
+						: _("The sandbox stopped: %s"), shown),
 					ran ? ibStatusMessage::ibStatusMessage_Information
 					    : ibStatusMessage::ibStatusMessage_Error);
 			}

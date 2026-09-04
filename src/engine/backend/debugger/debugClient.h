@@ -310,9 +310,10 @@ public:
 	//evaluate for tooltip
 	void EvaluateToolTip(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression);
 
-	// Arbitrary code, run in the stopped runtime inside a transaction the far end always rolls
-	// back. The answer arrives as OnSandboxResult.
-	void RunSandbox(const wxString& code);
+	// Arbitrary code, run in the stopped runtime inside a transaction the far end rolls back —
+	// unless `keepWrites` asks it to commit. Off by default: undoing is what makes this safe in a
+	// live session. A failed run is rolled back either way. The answer arrives as OnSandboxResult.
+	void RunSandbox(const wxString& code, bool keepWrites = false);
 
 	// ⭐ ASK THE RUNNING APPLICATION FOR A PICTURE OF ITS WINDOW. `reason` is shown to the person on
 	// the other end, who decides — the answer arrives as OnScreenshot, empty when they declined.

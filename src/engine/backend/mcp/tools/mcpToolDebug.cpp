@@ -92,9 +92,21 @@ const ibArg& ArgText()
 	// meanings under one name cost a step every time somebody guesses which one this is.
 	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
 		ibMcpText("Whole statements, in the configuration's own dialect - platform_state says which. "
-			  "Everything it writes is rolled back, so read what you need INSIDE it: the last "
-			  "value, or `Result`, comes back as the answer - along with `microseconds`, how long "
-			  "it took, timed where it ran."), /*required*/ true);
+			  "Everything it writes is rolled back unless `commit` says otherwise, so read what you "
+			  "need INSIDE it: the last value, or `Result`, comes back as the answer - along with "
+			  "`microseconds`, how long it took, timed where it ran."), /*required*/ true);
+	return s_a;
+}
+
+const ibArg& ArgCommit()
+{
+	static const ibArg s_a(wxT("commit"), ibArg::Kind::Flag,
+		ibMcpText("KEEP what the code writes instead of undoing it. Off by default, and the default "
+			  "is the point: undoing is what makes running code in somebody's live session "
+			  "defensible, so this is for the case where changing the base IS the errand - seeding "
+			  "a fresh configuration, correcting a row - and not for reading. The person is told "
+			  "which of the two is happening, before it runs and after. A run that FAILS is rolled "
+			  "back whatever this says: half an experiment is nobody's intention."));
 	return s_a;
 }
 
@@ -914,7 +926,10 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return ibMcpText("running code in a sandbox - everything it writes is rolled back");
+		// The line the person sees in the journal, so it names which of the two this is.
+		return ArgCommit().Flag(params)
+			? ibMcpText("running code AND KEEPING what it writes")
+			: ibMcpText("running code in a sandbox - everything it writes is rolled back");
 	}
 
 	wxString GetDescription() const override
@@ -933,16 +948,20 @@ public:
 			"is watching their own application while somebody else's code runs in it, and a "
 			"silent assistant is indistinguishable from a malfunction. "
 			"It runs in the person's own session - their data, their rights, their open "
-			"forms - INSIDE A TRANSACTION THAT IS ALWAYS ROLLED BACK, so nothing it writes "
-			"survives, and code that commits on purpose is undone with the rest. The person at "
-			"the application is told that code is running. Use `Result = ...` or return a value "
-			"as the last statement to get something back. Needs the runtime stopped at a "
-			"breakpoint: debug_state says whether it is.");
+			"forms - INSIDE A TRANSACTION THAT IS ROLLED BACK, so nothing it writes survives and "
+			"code that commits on purpose is undone with the rest. "
+			"`commit: true` KEEPS the writes instead, and that is the road for making data rather "
+			"than reading it - seeding a fresh configuration, correcting a row. It is off by "
+			"default on purpose, the person is told which of the two is happening, and a run that "
+			"fails is rolled back whatever was asked. "
+			"The person at the application is told that code is running. Use `Result = ...` or "
+			"return a value as the last statement to get something back. Needs the runtime stopped "
+			"at a breakpoint: debug_state says whether it is.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgText() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgText(), ArgCommit() };
 		return s_arguments;
 	}
 
@@ -978,10 +997,19 @@ public:
 		std::vector<wxString> printed;
 		wxLongLong_t microseconds = 0;
 
-		if (!bridge->Sandbox(code, ran, answer, json, printed, microseconds)) {
-			refusal = ibMcpText("The runtime did not answer in time. Whatever the code did was still "
-				"rolled back - the transaction is on the far end and does not depend on this "
-				"answer arriving.");
+		const bool commit = ArgCommit().Flag(params);
+
+		if (!bridge->Sandbox(code, commit, ran, answer, json, printed, microseconds)) {
+			// With commit the usual reassurance would be a guess: the transaction finishes on the
+			// far end either way, which under a rollback is a promise and under a commit is why
+			// the writes may have landed while this call gave up waiting.
+			refusal = commit
+				? ibMcpText("The runtime did not answer in time. It was asked to KEEP what the code "
+					"wrote, and the far end finishes on its own - so the writes may have landed. "
+					"Read the base before running this again.")
+				: ibMcpText("The runtime did not answer in time. Whatever the code did was still "
+					"rolled back - the transaction is on the far end and does not depend on this "
+					"answer arriving.");
 			return false;
 		}
 

@@ -95,14 +95,17 @@ public:
 	// printable form. Same road the watch window uses.
 	bool Unfold(const wxString& expression, std::vector<Local>& members, int timeoutMs = 3000);
 
-	// ⭐⭐ CODE, NOT AN EXPRESSION — run in the stopped runtime and then UNDONE. The far end wraps it
-	// in a transaction it always rolls back, so the base the person is using is not changed by an
-	// experiment run inside their own session. Longer by default than an evaluation: this may write
-	// documents, post them and read them back, which is work rather than a lookup.
+	// ⭐⭐ CODE, NOT AN EXPRESSION — run in the stopped runtime and, by default, UNDONE. The far end
+	// wraps it in a transaction, so the base the person is using is not changed by an experiment run
+	// inside their own session. Longer by default than an evaluation: this may write documents, post
+	// them and read them back, which is work rather than a lookup.
+	//
+	// `keepWrites` COMMITS instead — the caller saying this run is meant to change the base rather
+	// than to ask it something. Off unless asked for; a failed run is rolled back either way.
 	//
 	// `microseconds` comes back with the rest: how long the code itself took, timed in the process
 	// that ran it. Measuring from this side would be measuring the socket and the wait.
-	bool Sandbox(const wxString& code, bool& ran, wxString& answer, wxString& json,
+	bool Sandbox(const wxString& code, bool keepWrites, bool& ran, wxString& answer, wxString& json,
 		std::vector<wxString>& printed, wxLongLong_t& microseconds, int timeoutMs = 30000);
 
 	// ⭐⭐ ASK THE RUNNING APPLICATION FOR A PICTURE OF ITS WINDOW, and wait for the answer. `reason`
