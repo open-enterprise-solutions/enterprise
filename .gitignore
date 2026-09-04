@@ -264,3 +264,6 @@ __pycache__/
 *.pyc
 # Assistant access config — carries a live MCP bearer token.
 .mcp.json
+
+# The Debug build tree, beside the Release one above.
+build-debug/
