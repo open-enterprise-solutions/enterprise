@@ -37,6 +37,7 @@
 
 #include "backend/appData.h"                        // GetSettingsStorage — where a person's settings live
 #include "backend/logger/logger.h"                  // …and ibLog — the registration journal
+#include "backend/diagnostics/journal.h"            // ibJournalInfo — the ENGINE's journal, `mcp` channel
 #include "backend/backend_exception.h"              // an engine refusal arrives as an exception
 #include "backend/query/queryException.h"           // …and the query family says WHERE
 #include "backend/debugger/debugClient.h"           // the bridge list — we ride along on a session
@@ -207,6 +208,36 @@ private:
 	// The two verbs of the protocol, on one path.
 	void Route()
 	{
+		// ⚠ HOW LONG A REQUEST MAY TAKE, SAID OUT LOUD — because httplib's own answer is FIVE
+		// SECONDS (CPPHTTPLIB_SERVER_READ_TIMEOUT_SECOND / _WRITE_TIMEOUT_SECOND), and almost
+		// nothing this server does is finished in five seconds.
+		//
+		// A verb that touches metadata is handed to the MAIN THREAD and waits its turn there
+		// (RunTool). Creating a metaobject, saving a configuration, applying one — each takes
+		// longer than that whenever the designer is busy. httplib then closed the socket while the
+		// work was still queued, so the caller was told the session had ended WHILE THE OPERATION
+		// WENT ON TO SUCCEED. Measured 2026-09-04: `metadata_create` and `config_save` both
+		// answered "session expired" and both had done their work — and the assistant, believing
+		// the refusal, repeated the call and left three unnamed common modules behind in somebody's
+		// configuration. A false refusal is worse than a slow answer: it makes a caller act.
+		//
+		// Matched to the wait in RunTool, which gives the main thread five minutes before it
+		// answers on its own, plus a margin so the transport never gives up FIRST — whoever times
+		// out should be the one that can explain why.
+		m_server.set_read_timeout(std::chrono::minutes(6));
+		m_server.set_write_timeout(std::chrono::minutes(6));
+
+		// ⚠ AND HOW LONG A CONNECTION MAY SIT IDLE, which is the half that actually bit. httplib
+		// closes a kept-alive connection after FIVE SECONDS of silence
+		// (CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND) — and the pause between two calls from an assistant
+		// is a pause for THINKING, routinely longer than that. The socket was then closed under a
+		// client that had every intention of using it again, and the next call read as a dropped
+		// session rather than as a reconnect. It explains what the read timeout above does not: the
+		// refusal arrived INSTANTLY, on a call that takes 371 ms.
+		//
+		// This server exists to be addressed occasionally and thought about in between. Idle is its
+		// normal state, not a sign the caller has gone.
+		m_server.set_keep_alive_timeout(std::chrono::minutes(10));
 		// A POST IS A QUESTION: one JSON-RPC message in, one answer out.
 		m_server.Post("/", [this](const httplib::Request& req, httplib::Response& res) {
 
@@ -1066,6 +1097,15 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	call->m_tool      = tool;
 	call->m_arguments = arguments;
 
+	// ⭐ WRITTEN DOWN, BECAUSE WHEN THIS GOES WRONG THERE IS NOTHING ELSE TO READ. The journal
+	// carried no `mcp` channel at all until 2026-09-04, so a call that reached the main thread and
+	// never came back left the technology journal without a single line about it — the one place
+	// somebody would look. Two lines per main-thread call: what was asked, and what came of it
+	// with how long it took. Enough to tell "slow" from "never ran" without a debugger.
+	const wxString toolName = tool->GetName();
+	ibJournalInfo(wxT("mcp"), wxT("%s: handed to the main thread"), toolName);
+	const wxLongLong startedAt = wxGetUTCTimeMillis();
+
 	std::future<void> done = pool->Submit(m_session, [call]() {
 		call->m_ok = call->m_tool->Call(call->m_arguments, call->m_payload, call->m_refusal);
 	});
@@ -1076,6 +1116,8 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	// then busy until a person clicks, and nobody is watching this socket. Long enough for real
 	// work, finite so a forgotten dialog is answered instead of hung on.
 	if (done.wait_for(std::chrono::minutes(5)) != std::future_status::ready) {
+		ibJournalError(wxT("mcp"), wxT("%s: the main thread did not take it within five minutes - "
+			"the call is still queued and will run"), toolName);
 		refusal = ibMcpText("The designer did not get to this within five minutes - it is most likely "
 			"showing a dialog and waiting for a person. The call was not abandoned: it will run "
 			"when the window is answered. Nothing here was left half-done.");
@@ -1089,6 +1131,13 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 
 	payload = call->m_payload;
 	refusal = call->m_refusal;
+
+	// The figure is the point: a caller that was told the connection dropped can read here whether
+	// the work took four seconds or four minutes, and whether it succeeded anyway.
+	ibJournalInfo(wxT("mcp"), wxT("%s: %s in %lld ms"), toolName,
+		call->m_ok ? wxT("done") : (call->m_refusal.IsEmpty() ? wxT("refused") : call->m_refusal),
+		(wxGetUTCTimeMillis() - startedAt).GetValue());
+
 	return call->m_ok;
 }
 

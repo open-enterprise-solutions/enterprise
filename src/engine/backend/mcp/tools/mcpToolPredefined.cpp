@@ -32,10 +32,15 @@ using ibArg = ibMcpTool::ibMcpArgument;
 
 // The arguments this file's tools take — declared once, and read through the same
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
+// ⭐ `id`, BECAUSE THAT IS WHAT IT IS. It was `object` — and `object` elsewhere in this server means
+// a NAME: lock_list takes 'Catalog.Products', role_grant takes 'Catalog.Goods' or 'Configuration'.
+// One word standing for a number here and a string there is the trap a caller falls into once and
+// then distrusts every argument. The rule this restores is worth more than either name: `id` IS a
+// NodeId, `object` and `name` ARE names.
 const ibArg& ArgObject()
 {
-	static const ibArg s_a(wxT("object"), ibArg::Kind::Whole,
-		ibMcpText("The catalog or chart's NodeId."), /*required*/ true);
+	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+		ibMcpText("The catalog or chart's NodeId - metadata_tree and metadata_get give it."), /*required*/ true);
 	return s_a;
 }
 

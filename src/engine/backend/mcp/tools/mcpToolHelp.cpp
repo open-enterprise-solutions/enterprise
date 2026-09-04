@@ -149,7 +149,11 @@ public:
 		return ibMcpText("THE SYNTAX HELPER, asked by name instead of by cursor: the LANGUAGE - built-in "
 			"functions, keywords, types, collections, events, operators - with one line each; "
 			"syntax_get gives the full entry. Ask here before writing a name you are not certain "
-			"of.\nIT IS NOT A SEARCH OVER THE CONFIGURATION, and does not pretend to be: what an "
+			"of.\nEvery answer also names the GUIDES (`guide.`) - short articles on what the "
+			"language offers rather than what a name is called, the query language among them. "
+			"Read them once before writing much code: they cover ground a name search cannot, "
+			"because you have to know a thing exists to search for it.\nIT IS NOT A SEARCH OVER "
+			"THE CONFIGURATION, and does not pretend to be: what an "
 			"object holds is answered by metadata_tree / metadata_get, its fields by query_fields, "
 			"and how something is USUALLY BUILT here by pattern_read.");
 	}
@@ -218,6 +222,26 @@ public:
 		// about to write code needs to know which dialect it is writing in
 		// before it has looked anything up in full.
 		result.SetValue(wxT("syntaxMode"), wxString(WritesInWords() ? wxT("words") : wxT("braces")));
+
+		// THE SAME REASON, ONE STEP FURTHER — and it is a different question from
+		// the one asked. A search answers "what is this called"; it cannot answer
+		// "what does this language OFFER", and a caller who does not know that a
+		// query language exists never types a word that would find it. It writes
+		// a loop. So the guides — there are two, and they are cheap — are named on
+		// every search, the way the dialect is: not as an answer, as the thing you
+		// would have had to already know in order to ask.
+		std::vector<ibDataValue> guides;
+		for (const ibHelpEntry* entry : corpus->AllEntries()) {
+			if (entry == nullptr || !entry->id.StartsWith(wxT("guide.")))
+				continue;
+			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+			node->SetValue(wxT("id"), entry->id);
+			node->SetValue(wxT("name"), entry->nameLocal);
+			guides.push_back(ibDataValue::Child(node));
+		}
+		if (!guides.empty())
+			result.AddField(wxT("guides"), ibDataValue::Array(guides));
+
 		return true;
 	}
 };

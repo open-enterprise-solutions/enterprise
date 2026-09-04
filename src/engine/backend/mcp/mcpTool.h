@@ -64,7 +64,17 @@ public:
 
 		// The four shapes an argument arrives in, plus the list. Enumerators rather than the
 		// schema's own words, so `"integer"` cannot be typed `"interger"` in one of eighty places.
-		enum class Kind { Text, Whole, Flag, Words, Many, Node };
+		// `Any` is the one that is not a shape: an argument whose type is decided by SOMETHING ELSE
+		// IN THE CALL, not by this schema. metadata_set's `value` is the case it exists for — what
+		// it may hold is the PROPERTY's business (a switch takes true/false, a number a number, a
+		// closed set one of its words), and the argument itself cannot say which.
+		//
+		// ⚠ IT WAS DECLARED `Text` AND DESCRIBED AS "in its own type: true/false for a switch, a
+		// number for a number". The description told the truth about the platform and the schema
+		// told the truth about the gate, and they disagreed — so `value: true` was refused with
+		// "takes string, and a boolean came" while the documentation beside it said to send exactly
+		// that. A published shape nothing honours is worse than none: the caller acts on it.
+		enum class Kind { Text, Whole, Flag, Words, Many, Node, Any };
 
 		// What an argument that carries a STRUCTURE looks like. Not written by hand: handed a
 		// function that writes an EMPTY one, which for everything in this tree is the ib*Memory

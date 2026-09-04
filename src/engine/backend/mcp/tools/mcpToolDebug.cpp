@@ -47,10 +47,17 @@ const ibArg& ArgStop()
 	return s_a;
 }
 
+// ⭐ `id`, LIKE EVERYWHERE ELSE. It was `module` — the same NodeId under a name of its own, in one
+// tool out of the eleven that take one — so a caller who had just used metadata_get, module_read or
+// section_include had to be told, by a refusal, that this door calls it something different. The
+// vocabulary is part of the interface: a name that means NodeId is `id` here as it is there.
+//
+// (The ANSWER still says `module`, and correctly: there it is the module's NAME. That is the other
+// half of the same rule — `id` is a number, a name is a name.)
 const ibArg& ArgModule()
 {
-	static const ibArg s_a(wxT("module"), ibArg::Kind::Whole,
-		ibMcpText("The module's NodeId."));
+	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+		ibMcpText("The module's NodeId - metadata_tree and metadata_get give it."));
 	return s_a;
 }
 

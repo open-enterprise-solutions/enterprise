@@ -58,6 +58,10 @@ wxString SchemaWordFor(ibMcpTool::ibMcpArgument::Kind kind)
 		case ibMcpTool::ibMcpArgument::Kind::Flag:  return wxT("boolean");
 		case ibMcpTool::ibMcpArgument::Kind::Many:  return wxT("array");
 		case ibMcpTool::ibMcpArgument::Kind::Node:  return wxT("object");
+		// Deliberately EMPTY, and the writer leaves `type` out when it is: JSON Schema reads a
+		// missing type as "any type", which is exactly what this argument means. Naming one here
+		// would be picking a lie to tell.
+		case ibMcpTool::ibMcpArgument::Kind::Any:   return wxString();
 		default:                                    return wxT("string");
 	}
 }
@@ -66,7 +70,11 @@ void ibMcpSchemaArgument(ibDataNode& properties, const wxString& name,
 	const std::vector<wxString>& values)
 {
 	ibDataNode& argument = properties.Child(name);
-	argument.SetValue(wxT("type"), type);
+	// An empty type is Kind::Any — the argument whose type this schema does not decide. Left OUT
+	// rather than written blank: JSON Schema reads an absent `type` as "any", and `"type": ""` as
+	// a type nobody has.
+	if (!type.IsEmpty())
+		argument.SetValue(wxT("type"), type);
 	argument.SetValue(wxT("description"), description);
 
 	// ⭐ THE WORDS IT ACCEPTS, WHEN THERE IS A FIXED SET OF THEM. A caller that is told the type is
@@ -176,7 +184,7 @@ const ibMcpTool::ibMcpArgument& ibMcpIdArgument()
 
 const ibMcpTool::ibMcpArgument& ibMcpValueArgument()
 {
-	static const ibMcpTool::ibMcpArgument s_value(wxT("value"), ibMcpTool::ibMcpArgument::Kind::Text,
+	static const ibMcpTool::ibMcpArgument s_value(wxT("value"), ibMcpTool::ibMcpArgument::Kind::Any,
 		ibMcpText("What to put there, IN ITS OWN TYPE: true/false for a switch, a number for a number, the "
 		  "word for a property with a closed set of them, the NAME or the id of the object for a "
 		  "relationship. For a composite one, send back the same shape you were given."));
@@ -582,6 +590,12 @@ wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 			case ibMcpTool::ibMcpArgument::Kind::Node:
 				// A node may arrive either way — as a child, or as a value carrying one.
 				fits = child != nullptr || (value != nullptr && value->Kind() == ibDataKind::Child);
+				break;
+			case ibMcpTool::ibMcpArgument::Kind::Any:
+				// Whatever came is the right shape, because this gate is not the one that knows.
+				// The TOOL checks it against the thing it is for — a property refuses a word it
+				// does not have, in its own words, which is a better refusal than "takes string".
+				fits = true;
 				break;
 			default:
 				fits = child == nullptr && value != nullptr && value->Kind() == ibDataKind::String;

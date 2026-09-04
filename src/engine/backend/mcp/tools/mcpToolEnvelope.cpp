@@ -94,6 +94,11 @@ const ibArg& ArgQuery()
 			  "description or the text it carries: everything that matched them all if anything "
 			  "did, otherwise the best there was, marked '2 of your 4 words'. A REGULAR EXPRESSION "
 			  "is read as one whenever it carries | \\ [ ] ^ $ .* - 'lock|block', 'report.*print'. "
+			  "\nASK FOR THE WHOLE FAMILY AT ONCE when you are about to work in one - 'metadata_.*', "
+			  "'report_.*', 'form_.*' - and the schemas of all of them come back together. Tools of "
+			  "a family are used in sequence and their arguments differ in small ways, so fetching "
+			  "them one at a time costs a refusal per difference; one call up front costs nothing "
+			  "and answers them all.\n"
 			  "The answer also names PLACES IN THE PATTERNS that speak about it, which is where "
 			  "questions of the trade ('how much is left') are answered rather than by any verb. "
 			  "Omit to list every tool."));
@@ -165,7 +170,11 @@ public:
 			"easier, or with no query at all to see everything. The answer carries each tool's "
 			"full input schema, which is what mcp_call then needs - and, beside it, the PLACES in "
 			"the pattern corpus that speak about the same words, because half of what a caller "
-			"needs is a passage rather than a verb.");
+			"needs is a passage rather than a verb.\n"
+			"⭐ ABOUT TO WORK IN ONE AREA? ASK FOR THE FAMILY, NOT THE VERB - 'metadata_.*', "
+			"'report_.*', 'debug_.*' - and every schema in it arrives together. These verbs are "
+			"used in sequence and differ from each other in small ways, so learning them one "
+			"refusal at a time is the slow road, and it is the one a caller takes by default.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
