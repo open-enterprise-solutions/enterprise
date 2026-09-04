@@ -124,7 +124,38 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 			// Public and Protected are both visible up the parent chain (children
 			// see them). The difference is the cross-module export registry:
 			// Public is in it (config-wide); Protected is NOT.
-			if (!(m_numReturn == RETURN_BLOCK || numCanUseLocalInParent > 0 || cur->IsPublic() || cur->IsProtected() || crossedLambda))
+			// ⭐⭐ AN EXTERNAL NAME IS VISIBLE FROM ANYWHERE — that is what makes it external. Common
+			// modules are bound onto the configuration root with BindExportVariable (kind=External),
+			// and `StockManagement.CheckFreeBalance(…)` inside a document's object module is the
+			// ordinary way to call one.
+			//
+			// 🛑 IT ONLY SURFACED WHEN THE AOT CACHE STARTED WORKING (2026-09-04). With a live
+			// compile context on the configuration root, the name resolved on the FIRST walk — the
+			// compile-context chain — which does not ask this question. A cache HIT skips Compile()
+			// entirely, so there is no live context and the search falls through to the BYTECODE
+			// chain, where the visibility budget is asked about instead. `numCanUseLocalInParent`
+			// is a rule about reaching somebody's LOCALS one level up; it was never meant to gate a
+			// name that is global by construction, and until the cache worked nothing ever asked it
+			// to. Probes: the name was in the parent bytecode ("externs: … StockManagement") and
+			// still reported "Var is not found".
+			// ⭐ THE LADDER (Max, 2026-09-04): root (code, global vars, contexts) → common modules,
+			// which see the root ENTIRE and register themselves back on it as exports → an object
+			// module, which sees the root and everything registered on it and adds its own exports
+			// and contexts → a form, adding its own on top. Each step sees its parent WHOLE and
+			// builds a lean-to over it.
+			//
+			// ⭐ THE RULE, SAID AS A RULE: a child sees its parent entire EXCEPT the parent's own
+			// locals and privates. Enumerating what MAY pass (Public / Protected / External / …)
+			// leaves the list short by whatever nobody thought of that day — which is how
+			// `StockManagement` became invisible from a document's object module.
+			//
+			// ⚠ SAYING IT THIS WAY IS NOT ENOUGH, and the measurement says so: widening visibility
+			// moves names between DEPTHS, and a depth is what the receiver operand carries. Every
+			// version of this condition tried on 2026-09-04 fixed one road and broke another,
+			// because the address itself is the problem — see the arc note. Left as the narrower
+			// form until the addressing is fixed; the broad rule belongs with that fix.
+			if (!(m_numReturn == RETURN_BLOCK || numCanUseLocalInParent > 0 || cur->IsPublic() || cur->IsProtected()
+			      || cur->IsExternal() || crossedLambda))
 				return false;
 			out.m_numArray = blockReturn ? (long long)DEF_VAR_TEMP : (long long)depth;
 			out.m_numIndex = cur->m_numVariable;

@@ -739,7 +739,16 @@ bool ibMetaDataConfigurationBase::SaveConfiguration(wxString& refusal)
 		// THE DISKETTE IS ONE CALL. It persists the configuration so it survives a re-login and leaves
 		// the LIVE one alone — that is what applying is for, and they are two buttons because they are
 		// two intentions.
-		if (!SaveDatabase()) {
+		//
+		// ⭐ WITH saveConfigFlag, AND THAT IS NOT DECORATION. Each metaobject reads the flag in
+		// OnSaveMetaObject, and a MODULE does two things when it sees it: hands the debugger its new
+		// line count, and drops its row from the AOT cache — the row was compiled from the text that
+		// has just been replaced. Called with defaultFlag (0x0000) the test `(flags & saveConfigFlag)`
+		// is false, so the save persisted the new text and LEFT THE STALE BYTE CODE in place, to be
+		// handed to the next session as current. That is the whole of the "worked yesterday" failure:
+		// the byte code answers for names that no longer sit where it thinks (Max, 2026-09-04:
+		// *"ты передаёшь нулевой и считаешь, что кэш валидный"*).
+		if (!SaveDatabase(saveConfigFlag)) {
 			refusal = _("Failed to save the configuration.");
 			return false;
 		}
@@ -761,8 +770,10 @@ bool ibMetaDataConfigurationBase::ApplyConfiguration(wxString& refusal,
 	}
 
 	try {
-		// 1 — the configuration itself
-		if (!SaveDatabase()) {
+		// 1 — the configuration itself, with the same flag the save above passes: an apply persists
+		// the edited configuration first, and every module in it must retire its cached byte code
+		// at that moment, not at some later compile that never comes.
+		if (!SaveDatabase(saveConfigFlag)) {
 			refusal = _("Failed to save the configuration.");
 			return false;
 		}

@@ -191,6 +191,14 @@ bool ibRuntimeModuleDataObject::Compile()
 	// WHAT THIS BYTECODE WOULD BE COMPILED AGAINST, as one value. It is part of the cache KEY, so a
 	// row saved under any earlier state of the configuration is not found at all — see byteCodeCache.h.
 	const ibMetaData* const owner = meta != nullptr ? meta->GetMetaData() : nullptr;
+
+	// ⚠ THE KEY IS THE CONFIGURATION'S DIGEST, and it stays that. Mixing the module's own text into
+	// it was tried on 2026-09-04 and taken back out: it patches the symptom at the reader's end,
+	// while the cause is a WRITER that changes metadata without going through the save the rest of
+	// the product goes through (Max: "ты меняешь форму, меняешь объекты, минуя стандартную систему
+	// сохранения"). In the Designer, editing a module and closing the document saves the metadata —
+	// the digest moves, the cache row retires by itself. A door that skips that has to be fixed at
+	// the door.
 	const wxString configMd5 = owner != nullptr ? owner->GetConfigMD5() : wxString();
 
 	bool ready = false;
@@ -205,6 +213,31 @@ bool ibRuntimeModuleDataObject::Compile()
 			// derefs nullptr.
 			if (ibCompileModule* parentCompile = m_compileModule->GetParent())
 				bc.m_parent = &parentCompile->m_cByteCode;
+
+			// ⭐⭐ AND THE NAME SURFACE, which the cache-hit path used to leave unbuilt.
+			//
+			// A name is resolved by walking, and there are two walks: the live COMPILE CONTEXTS
+			// first, the parent BYTECODE chain after. They do not count the same number of rungs,
+			// and the rung count IS the address a receiver operand carries.
+			//
+			// So the same module compiled against a freshly-compiled parent and against a parent
+			// LOADED FROM CACHE gets two different addresses for the same name — because a loaded
+			// parent skips Compile(), and with it PrepareModuleData, so its context is empty and the
+			// search falls through to the second walk. Measured 2026-09-04: the first run after an
+			// apply posts a document; the next run, with the parent coming from the cache, fails in
+			// the posting handler with "'ValueIsFilled' is a global function - it is not a member of
+			// this value". Same text, same byte code (vars=68 funcs=101 both ways), different road.
+			//
+			// Building the surface here makes the two roads agree. It is the same call the compile
+			// path makes, it is idempotent, and it costs one pass over the bound values.
+			// ⚠ AND NO COMPARISON AGAINST THE LOADED TABLE HERE. Checking the surface against
+			// bc.m_listVar on every hit was written and taken back out the same day: it turns the
+			// reader into the place that notices staleness, which is one place too late. A row that
+			// no longer matches the configuration must not be READABLE at all — it is thrown away
+			// where it goes stale (OnSaveMetaObject drops it on saveConfigFlag; the key retires
+			// every row of a previous configuration digest), and this branch may then trust what it
+			// gets (Max, 2026-09-04: *"протухший кеш должен выбрасываться"*).
+			m_compileModule->PrepareModuleData();
 			ready = true;
 		} else {
 			// (c) — dep registry missing the target or version drift.
@@ -241,7 +274,17 @@ bool ibRuntimeModuleDataObject::Compile()
 		// returns false on serialization rejection (e.g. non-primitive
 		// constants) or DB error; the runtime keeps the live bc and
 		// the next session pays the recompile cost again.
-		if (meta != nullptr)
+		//
+		// ⭐ NOT WHAT WAS COMPILED UNDER AN EVAL. A watch or a sandbox opens a compile inside its
+		// OWN host frame, and that frame is a rung: every operand this compile stamps carries a
+		// depth counted with it. Executed later on the ordinary road — a posting, a form — the
+		// rung is not there and the address points one step past the ladder. Live, that byte code
+		// is consistent with the run that made it; SAVED, it is handed to every later run as if
+		// it were ordinary, and the failure arrives on the SECOND launch, which is why it read as
+		// "worked yesterday" (Max, 2026-09-04). A module first touched from a sandbox therefore
+		// compiles again next time — the cost of a recompile, against an address that is wrong
+		// for everybody else.
+		if (meta != nullptr && ibBackendException::IsEvalMode() == eval_none)
 			ibByteCodeCache::Save(bc, configMd5);
 	}
 

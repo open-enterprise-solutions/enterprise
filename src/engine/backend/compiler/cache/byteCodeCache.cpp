@@ -6,6 +6,8 @@
 #include "byteCodeCache.h"
 
 #include <mutex>
+#include <thread>       // TEMPORARY — thread id in the cache-write probe
+#include <functional>
 
 #include "backend/appData.h"
 #include "backend/compiler/byteCode.h"
@@ -15,6 +17,7 @@
 #include "backend/fileSystem/fs.h"
 #include "backend/diagnostics/journal.h"   // ibJournal — an invalidation that did NOT happen must say so
 #include "backend/guid.h"
+#include "backend/utils/md5.hpp"   // the key is digested to the width its column declares
 #include "backend/backend_core.h"   // GetBuildId — the engine half of the cache key
 
 // Descriptor (ibRuntimeModuleDataObject) AOT-cache DAO, migrated onto the L2
@@ -54,7 +57,25 @@ static wxString CacheKey(const wxString& configDigest)
 {
 	// The STAMP already carries the number — it is that number spelled out with the moment it was
 	// compiled — so naming both would be the same fact twice in one key.
-	return wxString::Format(wxT("%s.%s"), wxString::FromUTF8(GetBuildStamp()), configDigest);
+	//
+	// 🛑⭐⭐ AND THE RESULT IS DIGESTED BACK DOWN TO 32, because that is what the COLUMN is
+	// (`config_md5`, ibTypeString(32) — appDataQuery.cpp). Returning "<stamp>.<digest>" raw made the
+	// key about 60 characters, and every statement touching it died on the spot:
+	//
+	//     SQL error code = -303 … string right truncation, expected length 32, actual 60
+	//
+	// The lookup, the prune and the save all failed, so THE CACHE HAS BEEN DEAD since the stamp was
+	// added (2026-09-02) — every run recompiled everything and left three exceptions in the journal
+	// on the way up. Nothing said so: the misses look exactly like a cold cache, and the failures
+	// were swallowed by the catch that exists for "no table yet" (found 2026-09-04, by reading the
+	// engine's journal of an ordinary start).
+	//
+	// ⭐ HASHED RATHER THAN WIDENED, deliberately. A wider column is a schema change every existing
+	// base would have to be migrated through, for a table whose whole content is disposable; a
+	// digest is the same key by a different spelling and fits what is already declared. The value
+	// stays what it must be — different build OR different configuration ⇒ different key.
+	return ibMD5::ComputeMd5(
+		wxString::Format(wxT("%s.%s"), wxString::FromUTF8(GetBuildStamp()), configDigest));
 }
 
 bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
@@ -197,6 +218,7 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxStri
 
 void ibByteCodeCache::Invalidate(const ibGuid& descId)
 {
+
 	// ⭐⭐ IT MAY DECLINE, BUT IT MAY NOT DO SO IN SILENCE.
 	//
 	// Three ways out of this function do nothing: no database handle, no table yet, and an exception

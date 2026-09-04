@@ -2746,8 +2746,14 @@ bool ibMetaDocument::Save()
 		// reported as a failed save, and one that FAILED fell through to SaveAs() — which answers
 		// true for a metaobject document — and was reported as a success. The write itself always
 		// happened, which is why it went unnoticed: only the verdict was wrong.
+		// ⭐ WITH saveConfigFlag — the last door that saved without it. The flag is what reaches each
+		// metaobject's OnSaveMetaObject, and a MODULE reading it drops its AOT cache row: the row was
+		// compiled from the text this save has just replaced. Ctrl+S here worked only because saving
+		// the metadata also moves the configuration digest, which retires every row of the previous
+		// digest — correct by accident, through the key, while the door meant to do it stayed shut
+		// (Max, 2026-09-04: a stale row must be thrown away where it goes stale).
 		if ((m_documentParent == nullptr && m_metaObject != nullptr) && IsChildDocument())
-			return activeMetaData->SaveDatabase();
+			return activeMetaData->SaveDatabase(saveConfigFlag);
 
 		if (m_documentFile.IsEmpty() ||
 			!m_savedYet) {
