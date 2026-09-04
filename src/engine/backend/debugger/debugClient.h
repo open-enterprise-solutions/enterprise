@@ -3,6 +3,7 @@
 
 #include <wx/thread.h>
 #include <atomic>   // std::atomic<short> m_number_connection_attempts (MSVC pulled it in transitively)
+#include <functional>   // std::function — the deferred call the pack below is wrapped in
 #include <memory>   // the adapter owns its bridges
 #include <vector>
 
@@ -64,12 +65,16 @@ class BACKEND_API ibDebuggerClient {
 
 		// A line printed by EVALUATED code — a sandbox, a watch expression. Its own road, read by
 		// whoever asked for the evaluation and shown to nobody else.
-		void OnEvalMessage(const wxString& message);
+		void OnEvalMessage(const wxString& message, MessageType type);
+
+		// The picture the running application was asked for. Empty when its user declined, which is
+		// an answer and not a failure.
+		void OnScreenshot(const wxMemoryBuffer& png, const wxString& focus);
 
 		// What the sandbox did — ran or failed, what it answered with, and the RESULT VALUE as
 		// text when it could be written (empty when the value cannot travel, which is not a
 		// failure of the run).
-		void OnSandboxResult(bool ran, const wxString& answer, const wxString& json);
+		void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, wxLongLong_t microseconds);
 
 	private:
 		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
@@ -309,6 +314,11 @@ public:
 	// back. The answer arrives as OnSandboxResult.
 	void RunSandbox(const wxString& code);
 
+	// ⭐ ASK THE RUNNING APPLICATION FOR A PICTURE OF ITS WINDOW. `reason` is shown to the person on
+	// the other end, who decides — the answer arrives as OnScreenshot, empty when they declined.
+	// Unlike everything above it, this does not need the runtime to be stopped.
+	void RequestScreenshot(const wxString& reason, const wxString& area, const wxString& format);
+
 	//support calc strExpression in debugloop
 	void EvaluateAutocomplete(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression, const wxString& keyWord, int currline);
 
@@ -355,41 +365,39 @@ public:
 
 	bool IsEnterLoop() const { return m_enterLoop; }
 
+	// ⭐⭐ WHAT IS SET, AND WHERE — because a breakpoint OUTLIVES the run that needed it, and the
+	// next run it stops is somebody else's. Read back as (module guid -> lines), with the editor
+	// line each one currently sits on: the map stores a committed line plus the offset edits have
+	// moved it by, and only their sum is an address anybody can use.
+	//
+	// 🛑 Measured on myself, 2026-09-04: a forgotten breakpoint parked a run on its second line, I
+	// read "only the first message arrived", and spent several turns building a theory about a lost
+	// channel. The state was knowable the whole time and nothing offered it.
+	std::map<wxString, std::vector<unsigned int>> GetBreakpoints() const;
+
 public:
 
-	template <typename T>
-	void CallAfter(void (T::* method)()) {
-		if (m_adapter != nullptr) {
-			wxQueueEvent(m_adapter, new wxAsyncMethodCallEvent0<T>(static_cast<T*>(m_adapter), method));
-		}
-	}
-
-	template <typename T, typename T1, typename P1>
-	void CallAfter(void (T::* method)(T1 x1), P1 x1) {
-		if (m_adapter != nullptr) {
-			wxQueueEvent(m_adapter, new wxAsyncMethodCallEvent1<T, T1>(static_cast<T*>(m_adapter), method, x1));
-		}
-	}
-
-	template <typename T, typename T1, typename T2, typename P1, typename P2>
-	void CallAfter(void (T::* method)(T1 x1, T2 x2), P1 x1, P2 x2) {
-		if (m_adapter != nullptr) {
-			wxQueueEvent(m_adapter, new wxAsyncMethodCallEvent2<T, T1, T2>(static_cast<T*>(m_adapter), method, x1, x2));
-		}
-	}
-
-	// ⭐ THREE, BECAUSE A THREE-ARGUMENT ANSWER TURNED UP. wx supplies the event classes for none,
-	// one and two arguments and stops there, so this one is expressed through the FUNCTOR form —
-	// the same queue, the same handler, the arguments copied into the closure exactly as the
-	// numbered versions copy them into their event. Written here rather than at the callsite so a
-	// fourth caller finds an overload instead of inventing a lambda of its own.
-	template <typename T, typename T1, typename T2, typename T3,
-	          typename P1, typename P2, typename P3>
-	void CallAfter(void (T::* method)(T1 x1, T2 x2, T3 x3), P1 x1, P2 x2, P3 x3) {
+	// ⭐⭐ ONE OVERLOAD, ANY NUMBER OF ARGUMENTS — a parameter pack instead of a family.
+	//
+	// This used to be four functions, one per arity: wx supplies event classes for none, one and
+	// two arguments and stops there, so a three-argument answer grew a third by hand and a
+	// four-argument one grew a fourth. Each was the same six lines with the numbers changed, and
+	// each was written the day a callsite needed it — which means the family was always exactly one
+	// short of what the protocol was about to ask for.
+	//
+	// The pack ends that: the next reply to gain a field needs nothing here at all. Two packs, not
+	// one, because the METHOD's parameters and the CALLER's arguments are different types on
+	// purpose — a `const wxString&` parameter takes a `wxString` argument, and deducing both from
+	// one pack would refuse exactly that.
+	//
+	// ⚠ THE ARGUMENTS ARE COPIED INTO THE CLOSURE, which is the whole contract of a deferred call:
+	// this runs later, on another thread, when every stack it was called from is gone.
+	template <typename T, typename... TArgs, typename... PArgs>
+	void CallAfter(void (T::* method)(TArgs...), PArgs... args) {
 		if (m_adapter != nullptr) {
 			T* const target = static_cast<T*>(m_adapter);
-			std::function<void()> call = [target, method, x1, x2, x3]() {
-				(target->*method)(x1, x2, x3); };
+			std::function<void()> call = [target, method, args...]() {
+				(target->*method)(args...); };
 			wxQueueEvent(m_adapter,
 				new wxAsyncMethodCallEventFunctor<std::function<void()> >(m_adapter, call));
 		}

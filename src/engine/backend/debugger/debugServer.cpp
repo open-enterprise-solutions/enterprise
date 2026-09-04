@@ -13,6 +13,10 @@
 #include <netinet/tcp.h>
 #endif
 
+#include <chrono>                             // steady_clock — how long a sandbox run actually took
+
+#include "backend/logger/logger.h"            // the screenshot is written down before it is handed over
+
 #include "backend/compiler/procUnit.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
@@ -485,7 +489,7 @@ void ibDebuggerServer::EnterDebugger(ibRunContext* runContext, const ibByteUnit&
 	}
 }
 
-void ibDebuggerServer::SendEvalMessage(const wxString& strMessage)
+void ibDebuggerServer::SendEvalMessage(const wxString& strMessage, MessageType type)
 {
 	// ⚠ NO LAZY CreateServer HERE. The error road below opens one when none is running, because an
 	// error is worth reaching a developer for; an evaluation that nobody is watching simply has
@@ -496,6 +500,11 @@ void ibDebuggerServer::SendEvalMessage(const wxString& strMessage)
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_EvalMessage);
 	commandChannel.w_stringZ(strMessage);
+
+	// THE LEVEL, so a reader can tell "the document did not post" from "posted 12" without parsing
+	// the sentence. Error here is the APPLICATION's word — a business rule declining — and not a
+	// fault of the platform; those travel the other road, with a module and a line.
+	commandChannel.w_u16((unsigned short)type);
 
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 }
@@ -514,8 +523,8 @@ void ibDebuggerServer::SendErrorToClient(const wxString& strFileName,
 	commandChannel.w_u16(CommandId_MessageFromServer);
 	commandChannel.w_stringZ(strFileName); // file name
 	commandChannel.w_stringZ(strDocPath); // module name
-	commandChannel.w_u32(numLine); // line code 
-	commandChannel.w_stringZ(strErrorMessage); // error message 
+	commandChannel.w_u32(numLine); // line code
+	commandChannel.w_stringZ(strErrorMessage); // error message
 
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 }
@@ -1326,6 +1335,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			refused.w_stringZ(_("The runtime is not parked at a breakpoint, so there is no session and "
 				"no frame for the code to run in. Nothing was run and nothing was changed."));
 			refused.w_stringZ(wxEmptyString);   // …and no value, for the same reason
+			refused.w_u64(0);                   // …and nothing ran, so nothing took any time
 
 			SendCommand(refused.pointer(), refused.size());
 		}
@@ -1356,6 +1366,15 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 
 			wxString answer, json;
 			bool ran = false;
+
+			// ⭐⭐ HOW LONG IT TOOK, MEASURED WHERE IT RAN. The platform's own clock is a business
+			// clock — a date, to the second, because that is what an accountant needs — so code
+			// being tested cannot time itself, and timing it from the other end of a socket measures
+			// the socket. Whoever EXECUTES is the only one holding both edges of the run.
+			//
+			// Monotonic on purpose: a wall clock can step (a correction, daylight saving) and a
+			// measurement that can come back negative is worse than none.
+			std::chrono::steady_clock::duration elapsed{};
 
 			// 🛑⭐⭐ THE TRANSACTION BELONGS TO THE PARKED SESSION'S OWN CONNECTION, and taking it on
 			// `db_query` was wrong twice over. A session owns ONE connection (session.h: *"session
@@ -1388,6 +1407,8 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 				// somebody is testing, and a transaction left open by a failed experiment would hold
 				// locks on a live base until the application closed.
 				layer->BeginTransaction();
+
+				const std::chrono::steady_clock::time_point began = std::chrono::steady_clock::now();
 
 				try {
 					ibValue vResult;
@@ -1449,6 +1470,11 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 					answer = _("The code failed with something that carries no description.");
 				}
 
+				// ⚠ TAKEN BEFORE THE ROLLBACK AND AFTER EVERY EXIT FROM THE TRY, so code that FAILED
+				// is timed too — how long something took before it gave up is exactly the question
+				// when the thing being investigated is a timeout.
+				elapsed = std::chrono::steady_clock::now() - began;
+
 				try {
 					layer->RollBack();
 				}
@@ -1492,6 +1518,11 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			commandChannel.w_u8(ran ? 1 : 0);
 			commandChannel.w_stringZ(answer);
 			commandChannel.w_stringZ(json);   // the value itself, when it could be written
+
+			// MICROSECONDS, not milliseconds: the things worth measuring here are single queries and
+			// single postings, and a millisecond field reports most of them as "0" or "1".
+			commandChannel.w_u64((wxLongLong_t)
+				std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
 
 			if (ms_debugServer->IsDebugLooped())
 				SendCommand(commandChannel.pointer(), commandChannel.size());
@@ -1588,6 +1619,105 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			ms_debugServer->m_numCurrentNumberStopContext = puState ? puState->GetCountRunContext() : 0;
 			ms_debugServer->WakeDebugSession(sid);
 		}
+	}
+	// ⭐⭐ "SHOW ME WHAT YOU ARE SEEING." The one command here that does not speak to a PARKED
+	// runtime: it asks a window to draw itself, which a running application can do at any moment —
+	// and that is the point, since the person is looking at the wrong list right now, not at a stop.
+	//
+	// 🛑 THE ANSWER IS THEIR DECISION. CaptureWindow asks the person, showing them the reason this
+	// carries, and a refusal comes back as zero bytes — which the caller reports as a refusal, not
+	// as a failure. Nothing on this side may photograph somebody's screen by deciding to.
+	else if (commandFromClient == CommandId_Screenshot) {
+
+		wxString reason, area, format;
+		commandReader.r_stringZ(reason);
+		commandReader.r_stringZ(area);
+		commandReader.r_stringZ(format);
+
+		wxMemoryBuffer png;
+		wxString focus;
+
+		// 🛑⭐⭐ NOT WHILE THE RUNTIME IS PARKED, and this is the whole nature of the thing. Every other
+		// command here NEEDS the stop: the stack, the locals and the sandbox exist only because
+		// execution is standing still. A picture is the opposite — a window paints itself on the main
+		// thread, and while that thread sits in the debug loop there is nobody to paint it. The
+		// request would simply wait out its deadline and answer "no reply", which reads as a broken
+		// connection rather than as the plain fact it is (measured 2026-09-04: sixty seconds of
+		// nothing, with both processes alive and well).
+		//
+		// So it is refused HERE, immediately, with the reason and the way out. Continue the run and
+		// ask again — the window will be drawing by then.
+		if (ms_debugServer->IsDebugLooped()) {
+			focus = _("The application is stopped at a breakpoint, so its window is not being drawn - "
+				"nothing can be captured until it runs on. Continue it and ask again.");
+		}
+		// 🛑⭐⭐ ON THE APPLICATION'S OWN THREAD, NEVER ON THIS ONE. This runs on the debug socket
+		// thread, and a window may only be drawn by the thread that owns it — touching it from here
+		// HANGS WHERE IT DOES NOT CRASH, which is exactly what it did: both processes alive, both
+		// answering, and the request sitting out its full minute (measured 2026-09-04, twice).
+		//
+		// The same rule the sandbox already keeps two branches up for its `tell`, and the same door:
+		// the session's worker pool, which on the desktop IS wxTheApp::CallAfter and runs the task
+		// inline when the caller is already on the main thread.
+		else if (ibSession* const session = ibSession::Current()) {
+
+			const auto capture = [&]() {
+				if (auto* frame = ibSession::CurrentFrame())
+					frame->CaptureWindow(reason, area, format, png, focus);
+			};
+
+			if (ibWorkerPool* const pool = session->GetWorkerPool()) {
+				try {
+					// Waits for it: the answer has to be in hand before the reply is written, and the
+					// far end is already waiting on us.
+					pool->RunOnSession(session, capture);
+				}
+				catch (...) {
+					focus = _("The window could not be captured.");
+				}
+			}
+			else {
+				capture();   // no pool — a host that runs everything on one thread anyway
+			}
+		}
+
+		// 🛑⭐⭐ WRITTEN DOWN, ALWAYS, AND ON BOTH ANSWERS. A picture of somebody's screen is a picture
+		// of their business — customers, sums, whoever they were paying — so consent alone is not
+		// enough: there has to be a RECORD of what was permitted, why, and whether it happened. That
+		// is what makes this auditable rather than merely polite (Max, 2026-09-04: *"my consent, an
+		// entry in the journal, and only then you work with it — you cannot photograph business
+		// processes uncontrollably"*).
+		//
+		// It goes to the ACCOUNTANT'S journal, not the engine's: this is not a technical event, it
+		// is something that was done with a person's data, and that is exactly the surface an
+		// auditor reads.
+		if (appData != nullptr && appData->GetLogger() != nullptr) {
+
+			const bool taken = png.GetDataLen() > 0;
+
+			// ⚠ TWO SENTENCES, NOT ONE WITH A HOLE IN IT. The two outcomes carry different facts —
+			// a size only exists for one of them — and a single format string reused for both is
+			// how an argument ends up read as the wrong type.
+			const wxString said = taken
+				? wxString::Format(
+					_("The user allowed a picture of their window to be sent to the assistant "
+					  "(%u bytes). Reason given: %s"), (unsigned)png.GetDataLen(), reason)
+				: wxString::Format(
+					_("The user was asked for a picture of their window and DECLINED. Nothing was "
+					  "captured. Reason given: %s"), reason);
+
+			appData->GetLogger()->Audit(wxT("assistant"),
+				taken ? wxT("screen.captured") : wxT("screen.refused"), said);
+		}
+
+		ibWriterMemory commandChannel;
+		commandChannel.w_u16(CommandId_Screenshot);
+		commandChannel.w_stringZ(focus);   // …and what they were pointing at, which is half the answer
+		commandChannel.w_u32((unsigned int)png.GetDataLen());
+		if (png.GetDataLen() > 0)
+			commandChannel.w(png.GetData(), (u32)png.GetDataLen());
+
+		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
 	else if (commandFromClient == CommandId_Pause) {
 		wxString sid; commandReader.r_stringZ(sid);

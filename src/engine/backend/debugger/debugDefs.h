@@ -1,6 +1,14 @@
 #ifndef _DEBUGGER_DEFS_H__
 #define _DEBUGGER_DEFS_H__
 
+// ⭐ HOW LOUD A REPORTED LINE WAS SAID — the PROTOCOL's own word for it, which is why this file
+// defines one instead of including the platform's `ibStatusMessage`. The wire is a contract between
+// two processes and must not move when an application enum gains a member or renumbers; the two
+// ends translate, and translating is three lines each, at the exact points where one vocabulary
+// meets the other.
+//
+// (It sat here declared and unused until 2026-09-04, when a run's output first started travelling
+// to whoever is debugging it and the level had to travel with it.)
 enum MessageType
 {
 	MessageType_Normal = 0,
@@ -94,7 +102,21 @@ enum CommandId
 	// every message of a running application storms the debugger (Max, 2026-09-02, weighing it).
 	// So they travel apart: the assistant that asked for the run reads them, the designer drops
 	// them, and the person is shown whatever the assistant decides is worth showing.
-	CommandId_EvalMessage = 31
+	CommandId_EvalMessage = 31,
+
+	// ⭐⭐ "SEND ME A PICTURE OF WHAT YOU ARE SEEING" — asked of the running application through the
+	// designer, answered with the window as PNG bytes. The hardest reports to act on are the ones a
+	// person cannot phrase: "the list displays wrongly", "the numbers do not add up". Which form,
+	// which period, which column — all of it is in one image and none of it is in the sentence.
+	//
+	// ⭐ IT DOES NOT NEED A BREAKPOINT. Every other command here speaks to a runtime that is PARKED;
+	// this one asks a window to draw itself, which a running application can do at any moment. That
+	// is the point — the person is looking at the wrong list right now, not at a stop.
+	//
+	// 🛑 AND IT IS NEVER SILENT: the far end asks its user, showing them why, and a refusal comes
+	// back as empty bytes. A screen holds whatever happened to be open, and no caller on this side
+	// may photograph it by deciding to.
+	CommandId_Screenshot = 32
 };
 
 enum ConnectionType {

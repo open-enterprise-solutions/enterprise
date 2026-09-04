@@ -61,8 +61,21 @@ public:
 		wxString           m_message;      // last message the runtime sent up
 	};
 
+	// ONE LINE THE RUN PRINTED, with the level it printed at. Kept as data rather than as a
+	// sentence: "did the posting complain" is a filter, and a filter over prose is a guess.
+	struct Printed {
+		wxString    m_text;
+		MessageType m_level = MessageType_Normal;
+	};
+
 	ibMcpDebugBridge();
 	~ibMcpDebugBridge() override;
+
+	// ⭐ THE RUN'S OUTPUT BUFFER — everything the application said since this was last emptied.
+	// It is the assistant's copy: the person already has these lines in the application's own
+	// window and does not want them in the designer, so nothing is announced as it arrives and the
+	// buffer is read when there is a reason to.
+	std::vector<Printed> TakeOutput(bool clear);
 
 	// Installs itself as an observer on the debug client, if there is one. Safe
 	// to call when the process has no debugger at all — answers false.
@@ -86,8 +99,21 @@ public:
 	// in a transaction it always rolls back, so the base the person is using is not changed by an
 	// experiment run inside their own session. Longer by default than an evaluation: this may write
 	// documents, post them and read them back, which is work rather than a lookup.
+	//
+	// `microseconds` comes back with the rest: how long the code itself took, timed in the process
+	// that ran it. Measuring from this side would be measuring the socket and the wait.
 	bool Sandbox(const wxString& code, bool& ran, wxString& answer, wxString& json,
-		std::vector<wxString>& printed, int timeoutMs = 30000);
+		std::vector<wxString>& printed, wxLongLong_t& microseconds, int timeoutMs = 30000);
+
+	// ⭐⭐ ASK THE RUNNING APPLICATION FOR A PICTURE OF ITS WINDOW, and wait for the answer. `reason`
+	// is shown to the PERSON at that window, who decides — this is the one verb here whose outcome
+	// belongs to somebody else, and `allowed` comes back false when they say no.
+	//
+	// ⚠ IT DOES NOT NEED A STOP. Everything else on this bridge speaks to a parked runtime; a window
+	// draws itself while the application runs, which is exactly the moment somebody is looking at
+	// the wrong list. Longer default than an evaluation: a person has to read the question first.
+	bool Screenshot(const wxString& reason, const wxString& area, const wxString& format, bool& allowed,
+		wxMemoryBuffer& bytes, wxString& focus, int timeoutMs = 60000);
 
 	// Forgets the stop. Called when the runtime is told to continue, so a stale
 	// stack cannot be read back as the current one.
@@ -105,8 +131,9 @@ public:
 	void OnSetLocalVariable(const ibLocalWindowData& watchData) override;
 	void OnSetVariable(const ibWatchWindowData& watchData) override;
 	void OnSetExpanded(const ibWatchWindowData& watchData) override;
-	void OnEvalMessage(const wxString& message) override;
-	void OnSandboxResult(bool ran, const wxString& answer, const wxString& json) override;
+	void OnEvalMessage(const wxString& message, MessageType type) override;
+	void OnScreenshot(const wxMemoryBuffer& png, const wxString& focus) override;
+	void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, wxLongLong_t microseconds) override;
 
 private:
 
@@ -126,14 +153,25 @@ private:
 	// meaningfully answer anyway. Two kinds because the runtime answers them
 	// through two different events, and mixing them would let a tooltip satisfy
 	// a request for structure.
-	enum class Pending { None, Value, Members, Sandbox };
+	enum class Pending { None, Value, Members, Sandbox, Picture };
 
 	std::condition_variable m_answered;
 	Pending                 m_pending = Pending::None;
 	wxString                m_answer;
 	bool                    m_sandboxRan = false;   // …and whether the sandbox got as far as running
 	wxString                m_sandboxJson;          // …and its result AS A VALUE, when it could travel
+	wxLongLong_t            m_sandboxMicroseconds = 0;  // …and how long it took, measured where it ran
 	std::vector<wxString>   m_sandboxPrinted;       // …and every line it printed while it ran
+
+	// What the RUN printed outside any sandbox — the application talking, kept for whoever asked
+	// for the run. Trimmed from the front; see OnEvalMessage.
+	std::vector<Printed>    m_output;
+
+	// The picture asked for, and whether its owner allowed it at all — empty bytes with allowed
+	// true would be a broken transfer, which is a different answer from "they said no".
+	wxMemoryBuffer          m_picture;
+	bool                    m_pictureAllowed = false;
+	wxString                m_pictureFocus;   // …and what had the focus when it was taken
 	std::vector<Local>      m_members;
 	unsigned long long      m_nextWatchId = 1;
 };

@@ -132,6 +132,31 @@ void ibDebuggerClient::Pause()
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 }
 
+std::map<wxString, std::vector<unsigned int>> ibDebuggerClient::GetBreakpoints() const
+{
+	std::map<wxString, std::vector<unsigned int>> out;
+
+	for (const auto& module : m_listBreakpoint) {
+
+		std::vector<unsigned int>& lines = out[module.first];
+
+		// THE SUM IS THE ADDRESS. A row is (committed line -> offset the edits since have moved it
+		// by); either half alone points at a line nobody is looking at. Same arithmetic ShiftLineMap
+		// does when it decides which rows an edit moves.
+		for (const auto& line : module.second)
+			lines.push_back(line.first + line.second);
+	}
+
+	// A module whose last breakpoint was taken off keeps an empty row in the map, and reporting it
+	// would read as "something is set here" — which is the one thing this must never say wrongly.
+	for (auto it = out.begin(); it != out.end(); ) {
+		if (it->second.empty()) it = out.erase(it);
+		else ++it;
+	}
+
+	return out;
+}
+
 void ibDebuggerClient::Stop(bool kill)
 {
 	for (auto connection : m_listConnection) {
@@ -507,6 +532,21 @@ void ibDebuggerClient::RunSandbox(const wxString& code)
 		commandChannel.w_stringZ(code);
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
+}
+
+// ⭐⭐ AND THIS ONE IS NOT GUARDED BY IsEnterLoop, which every command above it is. Those speak to a
+// PARKED runtime — there is no stack to read and no session to evaluate in while it runs. A window,
+// though, can draw itself at any moment, and that is exactly when it is worth asking: the person is
+// looking at the wrong list NOW, not at a breakpoint (Max, 2026-09-04: *"it can also send it while
+// debugging is active — what is the problem with photographing a screen"*).
+void ibDebuggerClient::RequestScreenshot(const wxString& reason, const wxString& area, const wxString& format)
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_Screenshot);
+	commandChannel.w_stringZ(reason);
+	commandChannel.w_stringZ(area);
+	commandChannel.w_stringZ(format);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
 }
 
 void ibDebuggerClient::EvaluateAutocomplete(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression, const wxString& keyWord, int currline)
@@ -889,13 +929,35 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 			);
 		}
 	}
+	else if (commandFromServer == CommandId_Screenshot) {
+
+		// LENGTH FIRST, THEN THE BYTES — and a length of zero is the person having said no. That is
+		// an answer, not a truncated packet, so it travels the same road and is read as one.
+		wxString focus;
+		commandReader.r_stringZ(focus);
+
+		const unsigned int length = commandReader.r_u32();
+
+		wxMemoryBuffer png;
+		if (length > 0) {
+			png.SetBufSize(length);
+			commandReader.r(png.GetWriteBuf(length), length);
+			png.SetDataLen(length);
+		}
+
+		ms_debugClient->CallAfter(
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnScreenshot, png, focus
+		);
+	}
 	else if (commandFromServer == CommandId_EvalMessage) {
 
 		wxString message;
 		commandReader.r_stringZ(message);
 
+		const MessageType type = (MessageType)commandReader.r_u16();
+
 		ms_debugClient->CallAfter(
-			&ibDebuggerClient::ibDebuggerClientAdapter::OnEvalMessage, message
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnEvalMessage, message, type
 		);
 	}
 	else if (commandFromServer == CommandId_RunSandbox) {
@@ -906,8 +968,10 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		commandReader.r_stringZ(answer);
 		commandReader.r_stringZ(json);
 
+		const wxLongLong_t microseconds = commandReader.r_u64();
+
 		ms_debugClient->CallAfter(
-			&ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult, ran, answer, json
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult, ran, answer, json, microseconds
 		);
 	}
 	else if (commandFromServer == CommandId_EvalAutocomplete) {

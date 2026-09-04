@@ -189,6 +189,9 @@ void ibDebuggerClientBridgeDesigner::OnAutoComplete(const ibDebugAutoCompleteDat
 
 void ibDebuggerClientBridgeDesigner::OnMessageFromServer(const ibDebugLineData& data, const wxString& message)
 {
+	// ⭐ WHAT ARRIVES HERE IS A FAILURE, and that is why it takes the screen: a person chose to send
+	// it over ("Go to designer"), and the module and line below are theirs to fix. What a run merely
+	// SAYS never comes down this road — it goes to whoever asked for the run, by the eval channel.
 	if (mainFrame != nullptr) mainFrame->RaiseFrame();
 
 	// A REPORTED ERROR HAS A PLACE, and the place has to be reachable — so this opens a file nobody

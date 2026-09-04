@@ -97,6 +97,14 @@ public:
 		return wxMessageBox(message, caption, style, this);
 	}
 
+	// ⭐ ONE IMPLEMENTATION, BOTH WINDOWS. What is being looked at is sometimes a list in the running
+	// client and sometimes a form in the designer, and neither is more the subject than the other —
+	// so it is written where they meet rather than twice (Max, 2026-09-04: *"I say my list displays
+	// wrongly — I send you screenshots all the time"*). Asks the person first; see the base.
+	bool CaptureWindow(const wxString& reason, const wxString& area, const wxString& format,
+		wxMemoryBuffer& bytes, wxString& focus) override;
+
+
 	virtual wxAuiToolBar* GetMainFrameToolbar() const { return m_mainFrameToolbar; }
 	virtual wxAuiToolBar* GetDocToolbar() const { return m_docToolbar; }
 

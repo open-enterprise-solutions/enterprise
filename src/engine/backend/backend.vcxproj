@@ -454,6 +454,7 @@
     <ClCompile Include="mcp\tools\mcpToolModule.cpp" />
     <ClCompile Include="mcp\tools\mcpToolHelp.cpp" />
     <ClCompile Include="mcp\tools\mcpToolJournal.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolScreen.cpp" />
     <ClCompile Include="mcp\tools\mcpToolSession.cpp" />
     <ClCompile Include="mcp\tools\mcpToolMetadata.cpp" />
     <ClCompile Include="mcp\tools\mcpToolNotes.cpp" />

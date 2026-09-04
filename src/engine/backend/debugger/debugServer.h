@@ -143,6 +143,12 @@ public:
 	// each knows its session through the run context already held by
 	// the dispatch loop.
 	void EnterDebugger(ibRunContext* runContext, const struct ibByteUnit& byteCode, long& numPrevLine);
+	// ⭐⭐ THE PERSON'S ROAD, AND IT CARRIES FAILURES. It lands in the DESIGNER'S OUTPUT PANE, where
+	// somebody is working: a fault in a module belongs there, with its file, its module and its line,
+	// because it is theirs to fix. What a run merely SAYS does not — it goes to whoever asked for the
+	// run, by the channel below (Max, 2026-09-04: *"this is an error that reaches me in the designer,
+	// and I can see it really is an error; and there are messages that should reach you, not me — I
+	// do not need them"*).
 	void SendErrorToClient(const wxString& strFileName, const wxString& strDocPath, unsigned int numLine, const wxString& strErrorMessage);
 
 	// ⭐ WHAT EVALUATED CODE PRINTED — up the eval channel, to whoever asked for the evaluation.
@@ -154,7 +160,14 @@ public:
 	// you write them in the sandbox and I have no access to the sandbox"*).
 	//
 	// Never opens a connection: unlike an error, an evaluation is not worth a listening socket.
-	void SendEvalMessage(const wxString& strMessage);
+	// ⭐⭐ THE ASSISTANT'S OWN CHANNEL, and what a run SAYS travels on it too. Two roads exist and
+	// they answer to different readers: `SendErrorToClient` lands in the DESIGNER'S OUTPUT PANE —
+	// the person's window, where a failure belongs — while this one is read by whoever ASKED for
+	// the run and is dropped by the designer. Ordinary output down the error road would paint a
+	// person's pane with somebody else's narration (Max, 2026-09-04).
+	//
+	// The level rides along, so a reader can tell "the document did not post" from "posted 12".
+	void SendEvalMessage(const wxString& strMessage, MessageType type = MessageType_Normal);
 
 	// "Is the debug-thread-current session parked in DoDebugLoop?" Resolves
 	// the per-session m_debugLoop via ibSession::Current() (body in .cpp —

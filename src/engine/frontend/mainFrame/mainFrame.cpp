@@ -523,3 +523,217 @@ void ibFrontendMainFrame::OnCloseWindow(wxCloseEvent& event)
 	// destructor releases the holder, which ends the session.
 	Destroy();
 }
+///////////////////////////////////////////////////////////////////////////
+
+#include <wx/bitmap.h>
+#include <wx/dcclient.h>
+#include <wx/dcmemory.h>
+#include <wx/image.h>
+#include <wx/mstream.h>
+#include <wx/dcscreen.h>
+
+bool ibFrontendMainFrame::CaptureWindow(const wxString& reason, const wxString& area,
+	const wxString& format, wxMemoryBuffer& bytes, wxString& focus)
+{
+	bytes.SetDataLen(0);
+	focus.Clear();
+
+	// 🛑⭐⭐ ASKED, EVERY TIME, AND IN THE PERSON'S TERMS. Not "allow screen capture?" — a technical
+	// verb nobody can weigh — but WHAT is being looked for and WHY, so consent is given to a purpose.
+	// Whatever is on this window right now goes with the picture: counterparties, sums, somebody's
+	// pay. That is not the platform's to hand over because a caller found it useful, and it is why
+	// this question is here rather than in the manners of whoever asked (Max, 2026-09-04).
+	// ⭐ ASKED IN A RELEASE BUILD, SILENT IN A DEBUG ONE — and the line between them is not a
+	// convenience, it is WHOSE SCREEN IT IS. A shipped installation is somebody's workplace: their
+	// customers, their sums, their pay, and nobody may photograph it without being told yes. A Debug
+	// binary is a developer's own machine, where they ARE the assistant's counterpart and a modal
+	// per capture is a click that buys nothing (Max, 2026-09-04: *"in the release version it always
+	// asks; in debug you need not ask me — it is debug"*).
+	//
+	// ⚠ THE JOURNAL ENTRY IS NOT UNDER THIS SWITCH. Consent varies by build; the RECORD does not —
+	// debugServer writes what happened either way, so even the silent path leaves a trail.
+#ifdef NDEBUG
+	const wxString question = wxString::Format(
+		_("The assistant asks for a picture of this window:\n\n%s\n\n"
+		  "Everything visible on it right now will be sent. Allow it?"), reason);
+
+	if (ShowModalMessage(question, _("Picture of the window"), wxYES_NO | wxICON_QUESTION) != wxYES)
+		return false;   // an ordinary answer, not a failure
+#else
+	wxUnusedVar(reason);
+#endif
+
+	// ⭐ WHICH WINDOW — chosen by the caller, because only it knows what it is after. A form standing
+	// on its own (a report, a dialog) is a separate top-level window, and photographing the main
+	// frame would hand back everything except the thing asked about; "screen" is for when the person
+	// is moving between windows to show a sequence (Max, 2026-09-04).
+	wxWindow* target = this;
+	if (!area.IsSameAs(wxT("main"), false)) {
+		wxWindow* active = wxGetActiveWindow();
+		if (active != nullptr && active->IsShownOnScreen())
+			target = active;
+	}
+
+	const bool wholeScreen = area.IsSameAs(wxT("screen"), false);
+
+	// ⭐⭐ THE CHEAPEST AND USUALLY THE BEST ANSWER: just the part they pointed at. A desktop is huge
+	// and most of it is irrelevant — the cost of an image is its PIXELS, and so is the effort of
+	// finding the one row that matters in it. Cropping to the focused control plus a margin gives a
+	// picture that is small AND already about the right thing (Max, 2026-09-04: *"the job is to
+	// decode the picture as efficiently as possible and see the information that is needed"*).
+	wxRect crop;
+	if (area.IsSameAs(wxT("focus"), false)) {
+		if (const wxWindow* focused = wxWindow::FindFocus()) {
+			if (focused->IsShownOnScreen()) {
+
+				const wxPoint at = focused->GetScreenPosition() - target->GetScreenPosition();
+				const wxSize  of = focused->GetSize();
+
+				// A margin, because a control read with nothing around it loses what names it: the
+				// column heading above, the label to its left, the total underneath.
+				const int margin = 60;
+				crop = wxRect(at.x - margin, at.y - margin,
+					of.GetWidth() + margin * 2, of.GetHeight() + margin * 2);
+				crop = crop.Intersect(wxRect(wxPoint(0, 0), target->GetSize()));
+			}
+		}
+	}
+
+	// ⚠ THE WHOLE WINDOW, FRAME AND TITLE INCLUDED — because PrintWindow below draws exactly that,
+	// and a canvas cut to the CLIENT area loses the difference off the right and the bottom: the
+	// last column and the scrollbar, which is the half a "why is the list wrong" question is usually
+	// about (seen on the second live picture, 2026-09-04).
+	const wxSize size = wholeScreen ? wxGetDisplaySize() : target->GetSize();
+	if (size.GetWidth() <= 0 || size.GetHeight() <= 0)
+		return false;   // minimised, or not laid out yet — nothing to draw
+
+	// ONE WINDOW, not the desktop behind it — unless the desktop is what was asked for. Narrow by
+	// default on purpose: the question is about what the application shows, and everything else on
+	// that screen belongs to somebody's private day.
+	wxBitmap shot(size);
+	{
+		wxMemoryDC memory(shot);
+
+		if (wholeScreen) {
+			wxScreenDC screen;
+			memory.Blit(0, 0, size.GetWidth(), size.GetHeight(), &screen, 0, 0);
+		}
+		else {
+			// 🛑⭐⭐ THE WINDOW DRAWS ITSELF — it is NOT a copy of the screen inside its rectangle. Blitting
+			// from a wxWindowDC takes whatever pixels are there, INCLUDING ANYTHING SITTING ON TOP: a
+			// chat window, somebody's mail, the terminal I happened to have open. Measured on the very
+			// first picture that came back (2026-09-04) — a strip of another application's output was
+			// across the top of it.
+			//
+			// That is wrong twice. Diagnostically, an overlapped window returns rubbish instead of the
+			// form being asked about. And on consent: permission was given for THIS window, so
+			// whatever else is on that screen must not travel with it — the narrower thing was
+			// promised and the narrower thing has to be delivered.
+			//
+			// PrintWindow asks the window to render into our DC directly, so overlapping windows are
+			// not in it and neither is anything behind it. PW_RENDERFULLCONTENT is what makes it work
+			// for composited (DWM) surfaces, which every modern control on Windows is.
+			bool drawn = false;
+#ifdef __WXMSW__
+			if (HWND hwnd = target->GetHWND() ? (HWND)target->GetHWND() : nullptr) {
+				HDC dc = (HDC)memory.GetHDC();
+				if (dc != nullptr)
+					drawn = ::PrintWindow(hwnd, dc, PW_RENDERFULLCONTENT) != FALSE;
+			}
+#endif
+			// Everywhere else — and if the window declined to draw itself — the screen copy is still
+			// better than nothing; it is simply not guaranteed to be only this window.
+			if (!drawn) {
+				wxWindowDC window(target);
+				memory.Blit(0, 0, size.GetWidth(), size.GetHeight(), &window, 0, 0);
+			}
+		}
+
+		// ⭐⭐ AND THE THING THEY CLICKED ON IS RINGED. A person showing you something puts the focus
+		// on it first; drawing that rectangle turns "somewhere in this list" into "this cell". It
+		// costs one DrawRectangle and saves the whole exchange where they try to describe a position.
+		if (!wholeScreen) {
+			wxWindow* focused = wxWindow::FindFocus();
+			if (focused != nullptr && focused != target && focused->IsShownOnScreen()) {
+
+				// ⚠ WINDOW coordinates, not client ones: the canvas holds the whole window (frame and
+				// title included), so a client-relative rectangle would sit above and left of the control.
+				const wxPoint at = focused->GetScreenPosition() - target->GetScreenPosition();
+				const wxSize  of = focused->GetSize();
+
+				memory.SetPen(wxPen(wxColour(220, 40, 40), 2));
+				memory.SetBrush(*wxTRANSPARENT_BRUSH);
+				memory.DrawRectangle(at.x - 1, at.y - 1, of.GetWidth() + 2, of.GetHeight() + 2);
+			}
+		}
+	}
+
+	// ⭐ WHAT HAS THE FOCUS, IN WORDS — the same fact as the rectangle, in the form a filter can use.
+	// The platform's own ActiveWindow() names the FORM, which is what a caller can then look up in
+	// the metadata; the control class and label say which part of it.
+	{
+		wxString said;
+
+		if (const wxWindow* focused = wxWindow::FindFocus()) {
+			said << _("control: ") << focused->GetClassInfo()->GetClassName();
+			if (!focused->GetLabel().IsEmpty())
+				said << wxT(" '") << focused->GetLabel() << wxT("'");
+			if (!focused->GetName().IsEmpty() && focused->GetName() != wxT("panel"))
+				said << wxT(" (") << focused->GetName() << wxT(")");
+		}
+
+		// WHICH WINDOW IT WAS, by the title the person reads on it — "Goods (list)", "Receipt 000012".
+		// That is the same thing the platform's ActiveWindow() names, said in the words already on
+		// screen, and it needs nothing from the metadata to be useful.
+		if (const wxTopLevelWindow* top = wxDynamicCast(wxGetTopLevelParent(target), wxTopLevelWindow)) {
+			if (!top->GetTitle().IsEmpty()) {
+				if (!said.IsEmpty()) said << wxT("; ");
+				said << _("window: '") << top->GetTitle() << wxT("'");
+			}
+		}
+
+		const wxPoint mouse = ScreenToClient(wxGetMousePosition());
+		if (!said.IsEmpty()) said << wxT("; ");
+		said << wxString::Format(_("pointer at %d,%d"), mouse.x, mouse.y);
+
+		focus = said;
+	}
+
+	// …and cut down to the asked-for region, once the focus ring has been drawn on it.
+	if (!crop.IsEmpty() && crop.GetWidth() > 8 && crop.GetHeight() > 8)
+		shot = shot.GetSubBitmap(crop);
+
+	wxImage picture = shot.ConvertToImage();
+	if (!picture.IsOk())
+		return false;
+
+	// ⭐ SCALED DOWN, BECAUSE THE READER PAYS FOR EVERY BYTE. A full-size window is megabytes of PNG
+	// and most of it is flat background; at 1280 across the text is still legible and the image is a
+	// fraction of the size. The point is to be READ, and an answer too big to look at is no answer.
+	const int kReadableWidth = 1280;
+	if (picture.GetWidth() > kReadableWidth) {
+		const int height = (int)((double)picture.GetHeight() * kReadableWidth / picture.GetWidth());
+		picture.Rescale(kReadableWidth, height > 0 ? height : 1, wxIMAGE_QUALITY_HIGH);
+	}
+
+	// ⭐⭐ THE FORMAT IS THE CALLER'S CHOICE, because the trade belongs to them. PNG is exact, and a
+	// picture of TEXT needs that — lossy compression smears precisely the digits somebody is asking
+	// about, which in a screenshot of "the numbers do not add up" is the one detail that mattered.
+	// JPEG is a fraction of the size and right when the question is about LAYOUT: which panel, what
+	// sits where, whether the column is even on screen (Max, 2026-09-04: *"some format that does not
+	// take much room and travels fast"*).
+	const bool asJpeg = format.IsSameAs(wxT("jpeg"), false) || format.IsSameAs(wxT("jpg"), false);
+	if (asJpeg)
+		picture.SetOption(wxIMAGE_OPTION_QUALITY, 72);
+
+	wxMemoryOutputStream stream;
+	if (!picture.SaveFile(stream, asJpeg ? wxBITMAP_TYPE_JPEG : wxBITMAP_TYPE_PNG))
+		return false;
+
+	const wxStreamBuffer* buffer = stream.GetOutputStreamBuffer();
+	if (buffer == nullptr || buffer->GetBufferSize() == 0)
+		return false;
+
+	bytes.AppendData(buffer->GetBufferStart(), buffer->GetBufferSize());
+	return true;
+}

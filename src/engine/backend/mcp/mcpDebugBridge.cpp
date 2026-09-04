@@ -115,9 +115,10 @@ bool ibMcpDebugBridge::Evaluate(const wxString& expression, wxString& answer, in
 }
 
 bool ibMcpDebugBridge::Sandbox(const wxString& code, bool& ran, wxString& answer, wxString& json,
-	std::vector<wxString>& printed, int timeoutMs)
+	std::vector<wxString>& printed, wxLongLong_t& microseconds, int timeoutMs)
 {
 	ran = false;
+	microseconds = 0;
 	answer.Clear();
 	json.Clear();
 	printed.clear();
@@ -134,6 +135,7 @@ bool ibMcpDebugBridge::Sandbox(const wxString& code, bool& ran, wxString& answer
 		m_sandboxJson.Clear();
 		m_sandboxPrinted.clear();
 		m_sandboxRan = false;
+		m_sandboxMicroseconds = 0;
 	}
 
 	debugClient->RunSandbox(code);
@@ -147,6 +149,7 @@ bool ibMcpDebugBridge::Sandbox(const wxString& code, bool& ran, wxString& answer
 		ran = m_sandboxRan;
 		answer = m_answer;
 		json = m_sandboxJson;
+		microseconds = m_sandboxMicroseconds;
 	}
 
 	// HANDED OVER EITHER WAY. A run that timed out still printed whatever it printed before it
@@ -155,6 +158,74 @@ bool ibMcpDebugBridge::Sandbox(const wxString& code, bool& ran, wxString& answer
 
 	m_pending = Pending::None;
 	return arrived;
+}
+
+bool ibMcpDebugBridge::Screenshot(const wxString& reason, const wxString& area, const wxString& format,
+	bool& allowed, wxMemoryBuffer& png, wxString& focus, int timeoutMs)
+{
+	allowed = false;
+	png.SetDataLen(0);
+	focus.Clear();
+
+	if (debugClient == nullptr)
+		return false;
+
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+
+		// ⚠ NO STOP REQUIRED, and that is the difference from everything else here. A parked runtime
+		// is needed to read a stack or evaluate in a session; a window can draw itself while the
+		// application is running, which is precisely when somebody is looking at the wrong list.
+		if (!m_stop.m_connected)
+			return false;
+
+		m_pending = Pending::Picture;
+		m_picture.SetDataLen(0);
+		m_pictureAllowed = false;
+		m_pictureFocus.Clear();
+	}
+
+	debugClient->RequestScreenshot(reason, area, format);
+
+	// ⭐ THE DEADLINE IS LONG BECAUSE A PERSON IS IN IT. What is being waited for is not a machine
+	// answering but somebody reading a question and deciding — a three-second timeout would report
+	// "no answer" while they were still looking at it.
+	std::unique_lock<std::mutex> lock(m_mutex);
+	const bool arrived = m_answered.wait_for(lock,
+		std::chrono::milliseconds(timeoutMs),
+		[this]() { return m_pending == Pending::None; });
+
+	if (arrived) {
+		allowed = m_pictureAllowed;
+		focus = m_pictureFocus;
+		if (m_picture.GetDataLen() > 0)
+			png.AppendData(m_picture.GetData(), m_picture.GetDataLen());
+	}
+
+	m_pending = Pending::None;
+	return arrived;
+}
+
+void ibMcpDebugBridge::OnScreenshot(const wxMemoryBuffer& png, const wxString& focus)
+{
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if (m_pending != Pending::Picture)
+			return;             // nobody is waiting — a late answer to a request that timed out
+
+		// EMPTY MEANS THEY SAID NO. It is an answer, and it must not read as a failed transfer:
+		// the difference decides whether asking again is reasonable or is pestering somebody who
+		// has already declined.
+		m_pictureAllowed = png.GetDataLen() > 0;
+		m_pictureFocus = focus;
+
+		m_picture.SetDataLen(0);
+		if (png.GetDataLen() > 0)
+			m_picture.AppendData(png.GetData(), png.GetDataLen());
+
+		m_pending = Pending::None;
+	}
+	m_answered.notify_all();
 }
 
 bool ibMcpDebugBridge::Unfold(const wxString& expression, std::vector<Local>& members, int timeoutMs)
@@ -289,7 +360,9 @@ void ibMcpDebugBridge::OnMessageFromServer(const ibDebugLineData& data, const wx
 		//  design. Collecting here would gather whatever the application happened to say at the
 		//  same moment and call it the run's result.)
 	}
-	Announce(wxT("debugger: ") + message);
+	// READ BY BOTH OF US. This road ends in the designer's output pane, where the person is; the
+	// assistant is told as well because it is usually the one that asked for the run.
+	Announce(wxT("the run reported a failure: ") + message);
 }
 
 void ibMcpDebugBridge::OnSetToolTip(const ibDebugExpressionData& data, const wxString& resultStr)
@@ -308,15 +381,54 @@ void ibMcpDebugBridge::OnSetToolTip(const ibDebugExpressionData& data, const wxS
 // its own, so printing is how it hands anything back, and `Message(SerializeValue(x))` carries a
 // whole structure through here. Kept while a run is pending, so the answer to THAT run is what it
 // printed and not whatever else was said meanwhile.
-void ibMcpDebugBridge::OnEvalMessage(const wxString& message)
+void ibMcpDebugBridge::OnEvalMessage(const wxString& message, MessageType type)
+{
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+
+		// DURING A SANDBOX THE LINES ARE ITS OWN OUTPUT, and they are handed back with its result —
+		// in the order they were printed, which is how a long experiment narrates itself.
+		if (m_pending == Pending::Sandbox) {
+			m_sandboxPrinted.push_back(message);
+			return;
+		}
+	}
+
+	// ⭐⭐ AND OUTSIDE ONE, THIS IS THE RUN'S OUTPUT BUFFER, KEPT — not announced. Everything not
+	// arriving inside a sandbox used to fall on the floor, so a `Message` from a posting handler —
+	// the ordinary way a configuration reports what it did — reached nobody at all.
+	//
+	// ⚠ KEPT RATHER THAN SAID, and that is the whole design (Max, 2026-09-04: *"this is you reading
+	// the output buffer; I do not need it — I read only the errors, when I press the button myself.
+	// The buffer you can show yourself"*). A line per message would wake somebody for every
+	// "posted 12 documents"; a buffer is read when there is a reason to read it, and what is worth
+	// repeating to the person is then a decision rather than a reflex.
+	std::lock_guard<std::mutex> lock(m_mutex);
+
+	Printed line;
+	line.m_text  = message;
+	line.m_level = type;
+	m_output.push_back(line);
+
+	// A window, not a history: a long run would otherwise grow this without bound, and what matters
+	// is what it said RECENTLY. Oldest out first, in one block so the trimming is not per-line work.
+	if (m_output.size() > 500)
+		m_output.erase(m_output.begin(), m_output.begin() + 100);
+}
+
+std::vector<ibMcpDebugBridge::Printed> ibMcpDebugBridge::TakeOutput(bool clear)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 
-	if (m_pending == Pending::Sandbox)
-		m_sandboxPrinted.push_back(message);
+	std::vector<Printed> out = m_output;
+	if (clear)
+		m_output.clear();
+
+	return out;
 }
 
-void ibMcpDebugBridge::OnSandboxResult(bool ran, const wxString& answer, const wxString& json)
+void ibMcpDebugBridge::OnSandboxResult(bool ran, const wxString& answer, const wxString& json,
+	wxLongLong_t microseconds)
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -325,6 +437,7 @@ void ibMcpDebugBridge::OnSandboxResult(bool ran, const wxString& answer, const w
 		m_sandboxRan = ran;
 		m_answer = answer;
 		m_sandboxJson = json;
+		m_sandboxMicroseconds = microseconds;
 		m_pending = Pending::None;
 	}
 	m_answered.notify_all();

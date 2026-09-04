@@ -81,15 +81,20 @@ void ibDebuggerClient::ibDebuggerClientAdapter::OnSetStack(const ibStackData& da
 	IB_DEBUG_FANOUT(OnSetStack(data));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnEvalMessage(const wxString& message)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnScreenshot(const wxMemoryBuffer& png, const wxString& focus)
 {
-	IB_DEBUG_FANOUT(OnEvalMessage(message));
+	IB_DEBUG_FANOUT(OnScreenshot(png, focus));
+}
+
+void ibDebuggerClient::ibDebuggerClientAdapter::OnEvalMessage(const wxString& message, MessageType type)
+{
+	IB_DEBUG_FANOUT(OnEvalMessage(message, type));
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult(bool ran, const wxString& answer,
-	const wxString& json)
+	const wxString& json, wxLongLong_t microseconds)
 {
-	IB_DEBUG_FANOUT(OnSandboxResult(ran, answer, json));
+	IB_DEBUG_FANOUT(OnSandboxResult(ran, answer, json, microseconds));
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::OnSetLocalVariable(const ibLocalWindowData& data)
