@@ -208,7 +208,13 @@ public:
 			result.SetValue(wxT("nothing"),
 				ibMcpText("Nothing in the syntax helper by that name. This is the LANGUAGE reference - "
 				  "functions, keywords, types. For what THIS configuration holds ask metadata_tree / "
-				  "metadata_get / query_fields; for how such a thing is usually built, pattern_read."));
+				  "metadata_get / query_fields; for how such a thing is usually built, pattern_read.\n"
+				  "AND TWO FAMILIES ARE NOT IN THIS CORPUS YET, so a miss on one of them is a gap "
+				  "rather than a wrong word: the CREATABLE TYPES apart from the Query family (Array, "
+				  "Structure, Container, Table, TypeDescription, ...) and the PLATFORM ENUMERATIONS "
+				  "(AccumulationRecordType, DocumentWriteMode, HierarchyType, ...). Their names and "
+				  "signatures are declared in the backend registries and none of the tools above "
+				  "answer for them - see open-enterprise-solutions/enterprise#83."));
 
 		// The corpus's own digest. A caller that caches answers can tell whether
 		// what it remembers is still what the platform would say.
