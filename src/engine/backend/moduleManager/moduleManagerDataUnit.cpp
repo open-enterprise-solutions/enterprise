@@ -72,7 +72,12 @@ ibValueStructure* BuildKindNamespace(ibMetaData* metaData, const ibClassID& clsi
 void ibValueModuleManager::ibValueDataUnit::FillMembers(ibMemberTable& helper) const
 {
 	// Data.From(valueTable) — an in-memory value table as a Queryable source.
-	helper.AppendFunc("From", "From(valueTable)");
+	// ⚠ THE COUNT IS DECLARED, NOT ONLY THE SIGNATURE. The text says `From(valueTable)` and the
+	// implementation reads paParams[0] — but the compiler counts what was REGISTERED, and zero was
+	// registered: `Data.From(table)` came back "too many parameters passed to 'From'", a verb
+	// documented, implemented and unreachable (2026-09-04; the third of this exact shape in one
+	// session, after Query.Execute and QueryResult.Select).
+	helper.AppendFunc("From", 1, "From(valueTable)");
 
 	// The QUERYABLE kinds only — mirrors the query language's source coverage
 	// (queryableFactory): data-reference records, registers, constants.

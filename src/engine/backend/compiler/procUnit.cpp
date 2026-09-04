@@ -2366,8 +2366,43 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 	// SetParent → GetParent loop). bDelta=false aligns the emitted
 	// depth chain (own=0, parent=1, parent²=2, …) with this layout
 	// directly — no +1 shift in pppArrayList[depth + (bDelta?1:0)].
+	// ⭐⭐ AN EVAL BLOCK RUNS IN A HEAP FRAME, so a lambda made inside it can CAPTURE it.
+	//
+	// Capture is decided by one runtime question (procContext.h): a frame is capturable iff
+	// `weak_from_this().lock()` returns something — which is true of frames built by make_shared and
+	// false of every frame that is a MEMBER, as `m_cCurContext` is. A lambda materialised in an eval
+	// block therefore captured NOTHING, and the depths the compiler had emitted no longer pointed
+	// where it meant: depth 1 was supposed to reach the block's own frame and instead landed on the
+	// host's, one layer further out.
+	//
+	// 🛑 That is a WRONG VALUE, not an error: `wanted = "Болт"; f = Function(x) { Return x = wanted; }`
+	// compared against somebody else's slot — `f("Болт")` answered False, `Where(f)` answered 0, and
+	// on the pipeline road the slot held no ibValue at all and the process went down (dump 2026-09-04:
+	// N = 0 captured frames, then CompareValueEQ on 0x0077002e). Everything worked in an ordinary
+	// module frame, so it read as "LINQ is broken in the sandbox" for an hour.
+	//
+	// The block gets a real heap frame. The lambda then captures it as index 0 — exactly the depth
+	// the compiler emitted — and the frame outlives this call for as long as some lambda holds it,
+	// which is what a closure IS. Watch expressions (bCompileBlock == false) are a single expression
+	// with no place to declare anything, so they keep the member frame and pay nothing.
+	//
+	// ⚠ `m_pppArrayList[0]` still points at the member frame and that is correct: depth 0 is read
+	// straight from `m_pRefLocVars` (procUnitValues.h), so slot 0 of the list is unused in normal
+	// execution — the note there says so, and this relies on it rather than restating it.
+	std::shared_ptr<ibRunContext> spBlockFrame;
+	ibRunContext* pEvalFrame = &runEvaluate->m_cCurContext;
+	if (compileBlock) {
+		const ibByteCode* evalBc = runEvaluate->GetByteCode();
+		spBlockFrame = std::make_shared<ibRunContext>(
+			evalBc != nullptr ? (int)evalBc->m_lVarCount : (int)runEvaluate->m_cCurContext.GetLocalCount());
+		spBlockFrame->m_procUnit         = runEvaluate.get();
+		spBlockFrame->m_parentRunContext = pRunContext;   // the host frame, for the capture walk
+		spBlockFrame->m_lStart           = runEvaluate->m_cCurContext.m_lStart;
+		pEvalFrame = spBlockFrame.get();
+	}
+
 	try {
-		runEvaluate->Execute(&runEvaluate->m_cCurContext, &pvarRetValue, /*bDelta=*/false);
+		runEvaluate->Execute(pEvalFrame, &pvarRetValue, /*bDelta=*/false);
 	}
 	catch (const ibBackendException& e) {
 		// Carry the message into the watch result. Previous behaviour

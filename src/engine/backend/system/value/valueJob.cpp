@@ -55,8 +55,8 @@ void ibValueSchedule_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*
 	helper.AppendProp(wxT("ActiveFrom"));
 	helper.AppendProp(wxT("ActiveTo"));
 
-	helper.AppendFunc(wxT("Allowed"), wxT("Allowed(moment : date)"));
-	helper.AppendFunc(wxT("NextRun"), wxT("NextRun(notBefore : date)"));
+	helper.AppendFunc(wxT("Allowed"), 1, wxT("Allowed(moment : date)"));
+	helper.AppendFunc(wxT("NextRun"), 1, wxT("NextRun(notBefore : date)"));
 	helper.AppendFunc(wxT("Presentation"), wxT("Presentation()"));
 	helper.AppendFunc(wxT("IsValid"), wxT("IsValid()"));
 }

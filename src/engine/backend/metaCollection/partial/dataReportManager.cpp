@@ -24,7 +24,7 @@ enum Func {
 void ibValueManagerDataObjectReport::FillManagerMethods(ibMemberTable& helper) const
 {
 	helper.AppendFunc(wxT("Create"), wxT("Create()"));
-	helper.AppendFunc(wxT("GetForm"), wxT("GetForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));   // the COUNT, not only the text - see Data.From
 	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
 }
 

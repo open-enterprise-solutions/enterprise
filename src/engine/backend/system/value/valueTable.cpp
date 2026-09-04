@@ -255,7 +255,10 @@ ibValueModelTable::ibValueModelTableColumnCollection::~ibValueModelTableColumnCo
 
 void ibValueModelTable::ibValueModelTableColumnCollection::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("AddColumn"), 4, wxT("Add(name : string, type : typeDescription, caption, width)"));
+	// The verb's own name, and the DEFAULT said out loud: without a type the column holds text, and a
+	// filter over it compares as text. Both halves were missing — the text named `Add`, and nothing
+	// said what an omitted type means.
+	helper.AppendFunc(wxT("AddColumn"), 4, wxT("AddColumn(name : string, type : typeDescription = string, caption, width)"));
 	helper.AppendProc(wxT("RemoveColumn"), 1, wxT("RemoveColumn(name : string)"));
 }
 
@@ -292,6 +295,15 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsFunc(const long
 		else if (lSizeArray > 1)
 			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? ibTypeDescription(valueType->GetOwnerTypeDescription()) : ibTypeDescription(*paParams[1]->ConvertToType<ibValueTypeDescription>()), paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
 		else
+			// ⚠ NO TYPE GIVEN MEANS A STRING COLUMN, and that is a DECISION with consequences a
+			// caller has to know about: whatever is written into the cell, the column keeps saying
+			// it holds text, and everything that compares by the COLUMN's type then compares as
+			// text. `AddColumn("N")` + `row.N = 5` + `Where(x.N > 100)` keeps the row, because "5"
+			// sorts after "100" (measured 2026-09-04 — it reads as a broken filter and is not one).
+			//
+			// Left as it is on purpose: changing the default would change what every existing table
+			// holds. Say it in the signature instead, so the caller passes a type when they mean a
+			// number — `AddColumn("N", New TypeDescription("Number"))` compares as a number.
 			pvarRetValue = AddColumn(paParams[0]->GetString(), ibTypeDescription(g_valueStringCLSID), paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
 		return true;
 	}

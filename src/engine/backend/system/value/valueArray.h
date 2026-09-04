@@ -240,9 +240,32 @@ public:
 
 	//Working with iterators
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override {
+		// ⭐⭐ THE ITERATOR OWNS THE ARRAY IT WALKS — a lazy pipeline outlives the expression that
+		// made its source, and an array that only lends a reference dies underneath it.
+		//
+		// `arr.Where(f)` returns a STATE, not rows: nothing is read until Count / Foreach asks. So
+		// the array has to survive the statement that created it, and the only thing that knows the
+		// state still needs it is the state itself. A reference to `m_listValue` said the opposite —
+		// "somebody else is keeping this alive" — and for a NAMED array that is true.
+		//
+		// 🛑 It is false for a TEMPORARY one, which is exactly what the pushed-down road builds:
+		// ibValueQueryable::MaterialiseThenRam streams the query into a local array and dispatches
+		// the untranslatable op on it. The op returned a lazy state, the local went out of scope, and
+		// the walk then read a freed vector — `Data.Catalogs.Goods.Where(f).Count()` answered 0 where
+		// 10 rows existed, SILENTLY, and the contract that road is built on ("the RAM floor, always
+		// correct") quietly did not hold (measured 2026-09-04).
+		//
+		// Holding a counted reference costs one increment per iterator and is what "always correct"
+		// requires; the vector is still read by reference, so the walk itself is unchanged.
 		class ArrayIteratorState : public ibValueIteratorState {
 		public:
-			explicit ArrayIteratorState(const std::vector<ibValue>& list) : m_list(list) {}
+			ArrayIteratorState(ibValueArray* owner, const std::vector<ibValue>& list)
+				: m_owner(owner), m_list(list) {
+				if (m_owner != nullptr) m_owner->IncrRef();
+			}
+			~ArrayIteratorState() override {
+				if (m_owner != nullptr) m_owner->DecrRef();
+			}
 			bool MoveNext(ibValue& current) override {
 				if (m_started) ++m_pos; else m_started = true;
 				if (m_pos >= m_list.size()) return false;
@@ -251,11 +274,12 @@ public:
 			}
 			void Reset() override { m_pos = 0; m_started = false; }
 		private:
-			const std::vector<ibValue>& m_list;
+			ibValueArray*                m_owner;   // kept alive for the walk — see the note above
+			const std::vector<ibValue>&  m_list;
 			size_t m_pos = 0;
 			bool m_started = false;
 		};
-		return std::make_shared<ArrayIteratorState>(m_listValue);
+		return std::make_shared<ArrayIteratorState>(this, m_listValue);
 	}
 };
 
