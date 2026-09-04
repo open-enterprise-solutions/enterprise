@@ -1409,8 +1409,17 @@ void ibDataDBComposer::SplitSourceText() const
 			// EVERY STATEMENT STAYS IN FRONT: each is a SOURCE of the select above, resolved through
 			// the named-result scope. Rendered from the package WITHOUT its links — they have just
 			// become the FROM, and writing them twice would relate the selections a second time.
+			// ⚠ AND WITHOUT THE LINK'S OWN STATEMENT EITHER. A link section takes a place in the
+			// sequence (it runs there and answers with how many rows it removed), so it is a
+			// statement as well as a relation — and here the relation has just become the FROM
+			// above. Copying the statement while dropping the links it points at would render an
+			// EMPTY statement: a bare `;` between two selections, which reads back as "expected
+			// SELECT" (2026-09-04).
 			ibQueryPackage related;
-			related.m_statements = package.m_statements;
+			for (const ibQueryAstStatement& statement : package.m_statements)
+				if (!statement.IsLink())
+					related.m_statements.push_back(statement);
+
 			m_resolved.m_preamble = ibRenderQueryPackage(related);
 			return;
 		}

@@ -1171,9 +1171,13 @@ TEST(QueryComposerPackage, SettingsStandOverTheLinkedSelections)
 }
 
 // ⚠ A PACKAGE IS NEVER HANDED BACK VERBATIM, settings or no settings. The verbatim road means
-// "nothing is being asked of this text" — true of one query, false of a package: the `LINK` section
-// is not a statement, so whoever parses the text afterwards takes its last SELECT and the relations
-// are silently gone. A smaller answer, quietly, is the one kind of wrong this composer must not be.
+// "nothing is being asked of this text" — true of one query, false of a package: whoever parses the
+// text afterwards reads its last SELECT as the result, and the relations a `LINK` states are not in
+// that SELECT. A smaller answer, quietly, is the one kind of wrong this composer must not be.
+//
+// (This note used to say "the LINK section is not a statement". It is one since 2026-09-04 — it runs
+//  where it stands and answers with how many rows it removed — which changes nothing here: the
+//  composer still has to stand its own select on top rather than hand the text back.)
 TEST(QueryComposerPackage, ALinkedPackageIsStoodOnEvenWithNoSettings)
 {
 	const wxString source =

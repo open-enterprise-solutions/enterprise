@@ -4382,7 +4382,26 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 		// number of rows it removed, exactly as an INTO answers with the number it wrote.
 		if (statement.IsLink()) {
 			PackageResult r;
-			const ibQueryPackageLink& link = package.m_links[static_cast<size_t>(statement.m_linkIndex)];
+
+			// ⭐⭐ THE WHOLE SECTION RUNS HERE, not one relation of it. A chain is written with its
+			// head said once (`LINK Sales LEFT JOIN Plan ON … JOIN Stock ON …`) and therefore stands
+			// in ONE place in the package's sequence — so the statement covers every relation
+			// sharing that head, and answers with the total it removed.
+			//
+			// 🛑 One statement per RELATION was the first shape, and it made the number of
+			// statements depend on how many JOINs a section happened to carry — invisible in the
+			// text, and it left the second relation of a chain with nobody to execute it once the
+			// statement became the section's (2026-09-04).
+			const std::size_t firstLink = static_cast<std::size_t>(statement.m_linkIndex);
+			const wxString sectionHead = package.m_links[firstLink].m_left;
+
+			long removedInSection = 0;
+
+			for (std::size_t li = firstLink; li < package.m_links.size(); ++li) {
+
+			const ibQueryPackageLink& link = package.m_links[li];
+			if (!link.m_left.IsSameAs(sectionHead, false))
+				break;
 
 			auto findNamed = [&results](const wxString& name) -> PackageResult* {
 				for (PackageResult& done : results)
@@ -4424,17 +4443,24 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 			removed += cleanRight ? KeepMatched(*right, rightRows, rightCols, leftKeys)
 			                      : KeepMatched(*right, rightRows, rightCols, rightKeys);
 
+			removedInSection += removed;
+
+			ibJournalInfo(wxT("query"), wxT("link %s <-> %s: %ld row(s) removed"),
+			              link.m_left, link.m_right, removed);
+			}
+
+			// ⭐ THE SECTION'S OWN ANSWER: how many rows this link removed, in total, from the
+			// selections it reconciled (Max, 2026-09-04: *"a link returns either Undefined, or how
+			// many rows it filtered out"*).
 			ibQueryRamTable counted;
 			counted.AddColumn(1, wxT("Count"), ibTypeDescription());
-			counted.SetCell(counted.AppendRow(), 1, ibValue(static_cast<int>(removed)));
+			counted.SetCell(counted.AppendRow(), 1, ibValue(static_cast<int>(removedInSection)));
 			r.m_result = std::make_unique<ibDataQueryResult>(std::move(counted), nullptr);
 
 			OutputColumn oc;
 			oc.m_name = wxT("Count"); oc.m_alias = wxT("Count"); oc.m_byAlias = true;
 			r.m_schema.push_back(oc);
 
-			ibJournalInfo(wxT("query"), wxT("link %s <-> %s: %ld row(s) removed"),
-			              link.m_left, link.m_right, removed);
 			results.push_back(std::move(r));
 			continue;
 		}

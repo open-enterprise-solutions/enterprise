@@ -122,6 +122,12 @@ private:
 	ibQueryAstExprPtr             ParseComparison();
 	ibQueryAstExprPtr             ParseAddSub();      // + - (lower precedence)
 	ibQueryAstExprPtr             ParseMulDiv();      // * / % (higher precedence)
+
+	// …and the same two levels entered with the left operand ALREADY READ. ORDER BY needs them: it
+	// reads its item as a name first (a keyword there is an attribute name) and only then finds an
+	// operator behind it. Precedence stays stated once — the pair above is written through these.
+	ibQueryAstExprPtr             ParseAddSubFrom(ibQueryAstExprPtr lhs);
+	ibQueryAstExprPtr             ParseMulDivFrom(ibQueryAstExprPtr lhs);
 	ibQueryAstExprPtr             ParsePrimary();
 	// SUM/COUNT/... ( ... ) [OVER (...)]
 	//

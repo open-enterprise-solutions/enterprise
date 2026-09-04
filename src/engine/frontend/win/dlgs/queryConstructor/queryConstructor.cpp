@@ -564,6 +564,15 @@ wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 			return wxString::Format(_("Query %u"), row + 1);
 		if (!statement.m_dropTemp.IsEmpty())
 			return wxString::Format(_("drops the temp table %s"), statement.m_dropTemp);
+		// ⭐ A LINK STANDS IN THE SEQUENCE TOO, so it has a row here — and it has no select, which
+		// means without this line it fell through to "selects" and the list said the one thing that
+		// is not true of it. The relations themselves are edited on the links tab; this row says
+		// WHERE in the order they take effect, which is the whole reason a link is a statement.
+		if (statement.IsLink())
+			return statement.m_linkIndex >= 0
+			    && (std::size_t)statement.m_linkIndex < m_package.m_links.size()
+				? wxString::Format(_("links %s"), m_package.m_links[statement.m_linkIndex].m_left)
+				: wxString(_("links the named selections"));
 		if (statement.m_select && !statement.m_select->m_intoTemp.IsEmpty())
 			return wxString::Format(_("makes the temp table %s"), statement.m_select->m_intoTemp);
 		if (statement.m_select && !statement.m_select->m_ontoName.IsEmpty())

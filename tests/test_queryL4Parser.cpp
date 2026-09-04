@@ -1174,9 +1174,24 @@ TEST(QueryL4Parser, PackageLinkRelatesTwoNamedSelections)
 		wxT("SELECT Partner, Paid ONTO Payments FROM Document.Payments;")
 		wxT("LINK Sales JOIN Payments ON Sales.Partner = Payments.Partner"));
 
-	// The two statements stayed statements — the link did not become one of them…
-	ASSERT_EQ(package.m_statements.size(), 2u);
+	// ⭐⭐ THREE STATEMENTS: the two selections and THE LINK, which takes its place in the sequence.
+	//
+	// This test used to assert two, and it was right when it was written (2026-08-21): a link was
+	// the PACKAGE's and belonged to no statement. The form changed on 2026-09-04, and by decision
+	// rather than by drift — Max: *"the idea of a package is the SEQUENCE"*, and *"a link processes
+	// the named selections and itself returns how many rows it filtered out"*. Something that runs
+	// where it stands and answers from its own position is a statement; the alternative left no way
+	// to say whether a link runs before or after the DROP written under it.
+	//
+	// ⚠ ONE STATEMENT PER SECTION, NOT PER RELATION — see PackageLinkChainsOffOneHead, which pins
+	// the other half: a chain says its head ONCE, so it stands in one place and reads back as one.
+	// The statement carries the index of the section's first relation.
+	ASSERT_EQ(package.m_statements.size(), 3u);
 	ASSERT_EQ(package.m_links.size(), 1u);
+
+	// …and the link is still the PACKAGE's: the statement only points at it.
+	EXPECT_TRUE(package.m_statements[2].IsLink());
+	EXPECT_EQ(package.m_statements[2].m_linkIndex, 0);
 
 	// …and nothing was pushed into either query: both read exactly what they were written to read.
 	EXPECT_TRUE(package.m_statements[0].m_select->m_joins.empty());
@@ -1235,8 +1250,17 @@ TEST(QueryL4Parser, PackageLinkChainsOffOneHead)
 		wxT("           JOIN Stock ON Stock.Item = Plan.Item");
 
 	auto package = ibQueryParser().ParsePackage(text);
-	ASSERT_EQ(package.m_statements.size(), 3u);
+
+	// ⭐⭐ FOUR STATEMENTS FOR TWO RELATIONS — three selections and ONE link. This is the half that
+	// says a section is a statement rather than each relation being one: the chain says `LINK Sales`
+	// ONCE, occupies one place in the sequence, and comes back out as one (the LINK-count assertion
+	// below). Numbering per relation would make the count depend on how many JOINs a section happens
+	// to carry — a number nobody reading the text can see.
+	ASSERT_EQ(package.m_statements.size(), 4u);
 	ASSERT_EQ(package.m_links.size(), 2u);
+
+	EXPECT_TRUE(package.m_statements[3].IsLink());
+	EXPECT_EQ(package.m_statements[3].m_linkIndex, 0);   // the section's FIRST relation
 
 	EXPECT_EQ(package.m_links[0].m_left,  wxT("Sales"));
 	EXPECT_EQ(package.m_links[0].m_right, wxT("Plan"));

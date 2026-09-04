@@ -99,15 +99,30 @@ ibQueryPackage ibQueryParser::ParsePackage(const wxString& queryText)
 		// statement — nothing is added to anybody's FROM and nothing is materialised (Max,
 		// 2026-08-21: mark two selections as named and set the links between them, and that is all).
 		if (Cur().IsKeyword(ibQueryKeyword::Link)) {
-			// …AND IT TAKES ITS PLACE IN THE SEQUENCE. Each link is a STATEMENT as well as a member of
-			// the package's link set: it runs where it stands (after the selections it reconciles) and
-			// answers, from its own position, with how many rows it removed. See
-			// ibQueryAstStatement::m_linkIndex for why the fact is kept in both places.
-			for (ibQueryPackageLink& link : ParsePackageLinks()) {
-				ibQueryAstStatement statement;
-				statement.m_linkIndex = static_cast<int>(package.m_links.size());
-				package.m_links.push_back(std::move(link));
-				package.m_statements.push_back(std::move(statement));
+			// …AND IT TAKES ITS PLACE IN THE SEQUENCE (Max, 2026-09-04: *"the idea of a package is the
+			// SEQUENCE"*, and a link *"answers with how many rows it removed"*). So the section is a
+			// STATEMENT as well as a set of relations: it runs where it stands, after the selections
+			// it reconciles, and answers from its own position.
+			//
+			// ⭐ ONE STATEMENT PER SECTION, NOT PER RELATION — and the text is what settles it. A
+			// chain is written with the head said ONCE (`LINK Sales LEFT JOIN Plan ON … JOIN Stock
+			// ON …`), so it occupies one place in the sequence and reads back as one. Numbering
+			// statements per relation made the count depend on how many JOINs a section happened to
+			// carry, which is not something a reader of the text can see.
+			//
+			// The statement therefore carries the index of the section's FIRST relation; the rest of
+			// the section follows it in m_links, sharing its head. See ibQueryAstStatement::m_linkIndex.
+			{
+				const int firstLink = static_cast<int>(package.m_links.size());
+
+				for (ibQueryPackageLink& link : ParsePackageLinks())
+					package.m_links.push_back(std::move(link));
+
+				if (static_cast<int>(package.m_links.size()) > firstLink) {
+					ibQueryAstStatement statement;
+					statement.m_linkIndex = firstLink;
+					package.m_statements.push_back(std::move(statement));
+				}
 			}
 		}
 		// ⚠ …AND THE FORM IT REPLACED IS REFUSED OUT LOUD. `JOIN A AND B ON …` standing here was the
@@ -633,6 +648,20 @@ void ibQueryParser::ParseOrderBy(ibQuerySelect& sel)
 			// `Order` attribute made `ORDER BY Order` a syntax error, and the list that asked simply
 			// came back empty.
 			it.m_expr->m_path = ParseDottedName(/*firstMayBeKeyword*/true);
+
+			// ⭐⭐ …AND AN OPERATOR BEHIND THE NAME MEANS IT WAS AN EXPRESSION ALL ALONG.
+			// `ORDER BY Price * Qty` begins with a name, so the test above sends it down the name
+			// road — and the road used to end at the `*`, taking the whole query with it
+			// ("unexpected text after the query", pointing three words past the problem).
+			//
+			// The name just read IS the left operand, so the arithmetic levels are re-entered with
+			// it in hand. Deciding by the FIRST TOKEN was the mistake: the first token of an
+			// expression and the first token of a name are the same token.
+			if (Cur().IsOp(wxT("*")) || Cur().IsOp(wxT("/")) || Cur().IsOp(wxT("%")))
+				it.m_expr = ParseMulDivFrom(it.m_expr);
+
+			if (Cur().IsOp(wxT("+")) || Cur().IsOp(wxT("-")))
+				it.m_expr = ParseAddSubFrom(it.m_expr);
 		}
 		if (AcceptKw(ibQueryKeyword::Desc))      it.m_ascending = false;
 		else if (AcceptKw(ibQueryKeyword::Asc))  it.m_ascending = true;
@@ -1025,7 +1054,19 @@ ibQueryAstExprPtr ibQueryParser::ParseComparison()
 // computed expression yet, so the lowering rejects an Arith node; the parser stays complete.
 ibQueryAstExprPtr ibQueryParser::ParseAddSub()
 {
-	ibQueryAstExprPtr lhs = ParseMulDiv();
+	return ParseAddSubFrom(ParseMulDiv());
+}
+
+// ⭐⭐ THE SAME LEVEL, ENTERED WITH ITS LEFT OPERAND ALREADY READ. One caller has to: ORDER BY reads
+// its item as a NAME first (a keyword there is an attribute name — `ORDER BY Order` must keep
+// working), and only then discovers an operator behind it. Without this it stopped at the operator
+// and the query died as "unexpected text after the query" — `ORDER BY Price * Qty` did not parse at
+// all (measured in CI, 2026-09-04).
+//
+// Split rather than repeated: precedence is stated ONCE, here, and both entrances walk the same
+// loop. A second copy of "* binds tighter than +" is a second copy that eventually disagrees.
+ibQueryAstExprPtr ibQueryParser::ParseAddSubFrom(ibQueryAstExprPtr lhs)
+{
 	for (;;) {
 		ibQueryArithOp op;
 		if      (Cur().IsOp(wxT("+"))) op = ibQueryArithOp::Add;
@@ -1042,7 +1083,11 @@ ibQueryAstExprPtr ibQueryParser::ParseAddSub()
 
 ibQueryAstExprPtr ibQueryParser::ParseMulDiv()
 {
-	ibQueryAstExprPtr lhs = ParsePrimary();
+	return ParseMulDivFrom(ParsePrimary());
+}
+
+ibQueryAstExprPtr ibQueryParser::ParseMulDivFrom(ibQueryAstExprPtr lhs)
+{
 	for (;;) {
 		ibQueryArithOp op;
 		if      (Cur().IsOp(wxT("*"))) op = ibQueryArithOp::Mul;

@@ -579,6 +579,53 @@ wxString ibRenderQuery(const ibQuerySelect& select)
 	return RenderSelect(select, 0);
 }
 
+// ⭐⭐ ONE LINK SECTION, WRITTEN WHERE IT STANDS. `LINK Sales LEFT JOIN Plan ON … JOIN Stock ON …` —
+// the head said ONCE, then a line per relation, each spelled exactly as a join inside a query is.
+//
+// 🛑 IT USED TO BE WRITTEN AT THE END, after every statement, and that was wrong twice over once a
+// link became a statement of its own: the position it was given by the author was thrown away, and
+// the statement standing in its place rendered as NOTHING — an empty `;` between two selections,
+// which read back as "expected SELECT" (measured 2026-09-04, six CI failures from this one gap).
+//
+// A relation with no condition is not written at all: it is a row the author opened in the window
+// and has not filled in, and a package saying two selections are related without saying how says
+// nothing the parser could read back.
+static wxString RenderLinkSection(const ibQueryPackage& package, int firstLink)
+{
+	if (firstLink < 0 || (std::size_t)firstLink >= package.m_links.size())
+		return wxEmptyString;
+
+	const wxString head = package.m_links[firstLink].m_left;
+	if (head.IsEmpty())
+		return wxEmptyString;
+
+	wxString out = Kw(ibQueryKeyword::Link) + wxT(" ") + head;
+
+	// THE WHOLE SECTION, which is every relation sharing this head from here on — that is what one
+	// statement stands for, and what one `LINK` in the text says.
+	for (std::size_t i = (std::size_t)firstLink; i < package.m_links.size(); ++i) {
+
+		const ibQueryPackageLink& link = package.m_links[i];
+		if (!link.m_left.IsSameAs(head, false))
+			break;
+		if (link.m_right.IsEmpty() || !link.m_on)
+			continue;   // …the half-filled row, skipped where it stands
+
+		wxString kind;
+		switch (link.m_kind) {
+		case ibQueryJoinKindAst::Left:  kind = Kw(ibQueryKeyword::Left)  + wxT(" "); break;
+		case ibQueryJoinKindAst::Right: kind = Kw(ibQueryKeyword::Right) + wxT(" "); break;
+		case ibQueryJoinKindAst::Full:  kind = Kw(ibQueryKeyword::Full)  + wxT(" "); break;
+		default: break;   // INNER is the bare JOIN, as it is inside a query
+		}
+
+		out += wxT("\n\t") + kind + Kw(ibQueryKeyword::Join) + wxT(" ") + link.m_right
+		     + wxT(" ") + Kw(ibQueryKeyword::On) + wxT(" ") + RenderExpr(*link.m_on);
+	}
+
+	return out;
+}
+
 wxString ibRenderQueryPackage(const ibQueryPackage& package)
 {
 	// ';' SEPARATES the statements of a package and does NOT terminate the last one. It is the
@@ -597,49 +644,12 @@ wxString ibRenderQueryPackage(const ibQueryPackage& package)
 			out += wxT("\n;\n");
 		if (statement.IsDrop())
 			out += Kw(ibQueryKeyword::Drop) + wxT(" ") + statement.m_dropTemp;
+		else if (statement.IsLink())
+			out += RenderLinkSection(package, statement.m_linkIndex);
 		else if (statement.m_select)
 			out += RenderSelect(*statement.m_select, 0);
 	}
 
-	// ⭐ AND THE PACKAGE'S OWN LINKS, after the statements that produced the names —
-	// `LINK Sales LEFT JOIN Plan ON …`. They stand where a statement stands, and last, because a
-	// name has to be declared before it is related to anything.
-	//
-	// ⭐⭐ ONE SECTION PER HEAD, which is how a chain was written and how it reads back: the head
-	// once, then a line per relation, each spelled exactly as a join inside a query is. There is no
-	// `AND` between the two names any more — it was there only because both stood after one JOIN.
-	//
-	// A link with no condition is not written at all: it is a row the author opened in the window
-	// and has not filled in, and a package saying two selections are related without saying how says
-	// nothing the parser could read back.
-	for (std::size_t i = 0; i < package.m_links.size(); ) {
-		const wxString head = package.m_links[i].m_left;
-		if (head.IsEmpty() || package.m_links[i].m_right.IsEmpty() || !package.m_links[i].m_on) {
-			++i;
-			continue;
-		}
-
-		if (!out.IsEmpty())
-			out += wxT("\n;\n");
-		out += Kw(ibQueryKeyword::Link) + wxT(" ") + head;
-
-		for (; i < package.m_links.size(); ++i) {
-			const ibQueryPackageLink& link = package.m_links[i];
-			if (!link.m_left.IsSameAs(head, false))
-				break;
-			if (link.m_right.IsEmpty() || !link.m_on)
-				continue;   // …the half-filled row, skipped where it stands
-			wxString kind;
-			switch (link.m_kind) {
-			case ibQueryJoinKindAst::Left:  kind = Kw(ibQueryKeyword::Left)  + wxT(" "); break;
-			case ibQueryJoinKindAst::Right: kind = Kw(ibQueryKeyword::Right) + wxT(" "); break;
-			case ibQueryJoinKindAst::Full:  kind = Kw(ibQueryKeyword::Full)  + wxT(" "); break;
-			default: break;   // INNER is the bare JOIN, as it is inside a query
-			}
-			out += wxT("\n\t") + kind + Kw(ibQueryKeyword::Join) + wxT(" ") + link.m_right
-			     + wxT(" ") + Kw(ibQueryKeyword::On) + wxT(" ") + RenderExpr(*link.m_on);
-		}
-	}
 	return out;
 }
 
