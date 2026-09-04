@@ -724,7 +724,14 @@ public:
 			"move it, metadata_set the owner's `DefaultComposer` / `DefaultFormObject` / "
 			"`DefaultFormList` (and so on) by NAME - they are ordinary lists, and metadata_get "
 			"shows the candidates. A form's MAIN ATTRIBUTE is not one of these: it is set with "
-			"form_attribute.");
+			"form_attribute.\n"
+			"AND ONE PROPERTY IS KNOWN NOT TO TAKE THROUGH `properties`: a document's "
+			"`ListRegisterRecord` is accepted here and has no effect, with nothing said - so a "
+			"document created that way posts to no register at all, and the register reports "
+			"\"Doesn't have any recorder\" later, somewhere else. Bind it with metadata_bind, which "
+			"is the verb for a relationship anyway and tells the other end too. Other "
+			"relationships (`ListOwner`, `ListGeneration`) do take here. "
+			"See open-enterprise-solutions/enterprise#84.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -827,6 +834,20 @@ public:
 		// what it may set from the object rather than from this file.
 		if (const ibDataNode* wanted = params.FindChild(ArgProperties().Name())) {
 
+			// 🛑 AND ONE PROPERTY GOES THROUGH THIS LOOP AND COMES OUT UNSET, SAYING NOTHING.
+			// A document's `ListRegisterRecord` passed here is neither applied nor refused: the
+			// object is created bound to no register, and what reports it is the REGISTER, later
+			// and elsewhere, with "Doesn't have any recorder". Measured 2026-09-04 against a live
+			// designer, with the register already holding two recorders, so an empty choice list
+			// is not the explanation.
+			//
+			// ⚠ AND IT IS NOT "RELATIONSHIPS DO NOT WORK HERE", which was the first and wrong
+			// reading. The choice road is live at this point and answers properly: `ListOwner`
+			// with a bad name is refused BY NAME with the list of candidates, and with a good one
+			// it is applied and reads back. Only this property behaves differently, and why is not
+			// yet established — hence a description that warns rather than a fix that guesses.
+			//
+			// Recorded rather than worked around: open-enterprise-solutions/enterprise#84.
 			std::vector<ibDataValue> refused;
 
 			for (const auto& field : wanted->Fields()) {
