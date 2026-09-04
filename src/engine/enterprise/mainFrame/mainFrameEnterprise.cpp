@@ -53,13 +53,15 @@ void ibFrontendMainFrameEnterprise::BackendError(const wxString& strFileName, co
 	//get error code
 	const int retCode = errDlg->ShowModal();
 
-	//send message to enterprise
-	if (retCode == 1) {
-		outputWindow->OutputError(strErrorMessage);
-	}
+	// ⭐ THE THREE ANSWERS ARE CUMULATIVE, and the code read them as exclusive. "Close window" keeps
+	// the error in the pane below; "Go to designer" does that AND sends the line to whoever is
+	// editing it; "Close program" does both AND ends the run. Read as a switch, the second answer
+	// silently dropped the notice and the third dropped everything but the exit — so choosing to
+	// leave was also choosing to lose the reason for leaving.
+	outputWindow->OutputError(strErrorMessage);
 
 	//send error to designer
-	if (retCode == 2) {
+	if (debugServer != nullptr && (retCode == 2 || retCode == 3)) {
 		debugServer->SendErrorToClient(
 			strFileName,
 			strDocPath,

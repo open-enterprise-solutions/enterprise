@@ -125,7 +125,15 @@ bool ibValueModuleRuntimeManager::RuntimeRegisterCommonModule(ibValueMetaObjectC
 				Compile();
 			}
 			catch (const ibBackendException& err) {
-				ibJournalWarning(wxT("module"),_("Common module '%s' failed to compile: %s"),
+				// ⚠ INFO, NOT WARNING — a warning is ECHOED THROUGH wxLog, and in a GUI application
+				// that opens a MODAL. A module that does not compile then stops the whole client on a
+				// dialog captioned "Warning", in front of somebody who merely opened a list; and for
+				// a caller who is not a person there is nobody to close it at all. Same correction as
+				// the one in metaData.cpp's paste path, for the same reason (2026-09-04).
+				//
+				// The failure is not lost: it is in the journal, and the compile diagnostic reaches
+				// the message pane through the ordinary error road.
+				ibJournalInfo(wxT("module"),_("Common module '%s' failed to compile: %s"),
 					commonModule->GetName(), err.GetErrorDescription());
 			};
 		}
@@ -361,6 +369,11 @@ bool ibValueModuleManagerRuntimeConfiguration::CreateMainModule()
 	// Global constants (Metadata + common modules) are already in the compile
 	// module's extern map — bound at registration (ctor / RuntimeRegisterCommonModule)
 	// and persistent across Reset. No materialization pass needed here.
+
+	// ⚠ THE ORDER HERE IS LOAD-BEARING, and reordering it is not a cleanup. Moving these binds
+	// ABOVE the common-module loop was tried on 2026-09-04 and made things worse — posting broke
+	// on runs that had worked, because a name's slot number falls out of the order it was
+	// registered in, and bytecode already in the AOT cache still carries the old numbers.
 
 	//create singleton "manager" — scope-context: its name isn't an editor
 	// identifier, only its props/methods (Catalogs / Documents / …) surface.

@@ -98,7 +98,8 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 #ifndef OES_USE_WEB
 			// Desktop surfaces access-denied as a modal Alert; web has
 			// no modal channel yet, so it silently swallows.
-			ibValueSystemFunction::Alert(err.GetErrorDescription());
+			// Already reported where it happened (ProcessExceptionError hands it to the frame) - saying it
+		// again puts one failure in the pane twice.
 #else
 			(void)err;
 #endif
@@ -110,7 +111,8 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 			// feedback. Web routes the same exception through wfrontend's
 			// ExceptionToJson → OES.handleBackendError toast/alert, so
 			// here we silent-swallow on web to avoid double-surfacing.
-			ibValueSystemFunction::Alert(err.GetErrorDescription());
+			// Already reported where it happened (ProcessExceptionError hands it to the frame) - saying it
+		// again puts one failure in the pane twice.
 #else
 			(void)err;
 #endif
@@ -122,7 +124,8 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 			// button that did nothing. The reason is shown; web keeps routing it through
 			// wfrontend's ExceptionToJson, so it is not surfaced twice there.
 #ifndef OES_USE_WEB
-			ibValueSystemFunction::Alert(err.GetErrorDescription());
+			// Already reported where it happened (ProcessExceptionError hands it to the frame) - saying it
+		// again puts one failure in the pane twice.
 #else
 			(void)err;
 #endif

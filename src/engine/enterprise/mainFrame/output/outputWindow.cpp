@@ -8,6 +8,8 @@
 #include "mainFrame/mainFrameEnterprise.h"
 #include "frontend/mainFrame/settings/fontcolorsettings.h"
 
+#include "backend/debugger/debugServer.h"   // …and on to whoever is debugging this run
+
 /** Enumeration of commands and child windows. */
 enum
 {
@@ -132,6 +134,34 @@ void ibOutputWindow::SharedOutput(const wxString& message, ibStatusMessage statu
 	const wxString& strFileName, const wxString& strDocPath,
 	int currLine)
 {
+	// ⭐⭐ AND INTO THE OUTPUT BUFFER OF WHOEVER ASKED FOR THIS RUN. The pane belongs to a WINDOW and
+	// the window belongs to THIS PROCESS, so a run started from the designer says everything on a
+	// screen its author is not sitting in front of.
+	//
+	// 🛑 NOT down the error road (`SendErrorToClient`). That one ends in the DESIGNER'S OUTPUT PANE,
+	// and it is a person's workspace: it carries failures they chose to send over, with a module and
+	// a line to jump to. Pouring a run's narration in there paints their window with output nobody
+	// asked for, and it raises the designer to the foreground on every line (Max, 2026-09-04: *"I
+	// read only the errors, when I press the button myself"*).
+	//
+	// The eval channel is the other reader's, and the designer shows none of it — the assistant
+	// collects the lines and decides what, if anything, is worth repeating.
+	//
+	// ⚠ ONLY WHEN THE RUN IS BEING DEBUGGED: with nobody attached the sender opens no socket and
+	// the line simply stays in this window, where the person can see it.
+	if (debugServer != nullptr && debugServer->IsDebugging()) {
+
+		// ⭐ TRANSLATED HERE, because here is where the application's vocabulary meets the wire's.
+		// The protocol keeps its own word for a level (debugDefs.h) so that renumbering an
+		// application enum cannot silently change what two processes mean by the same byte.
+		const MessageType type =
+			  status == ibStatusMessage::ibStatusMessage_Error   ? MessageType_Error
+			: status == ibStatusMessage::ibStatusMessage_Warning ? MessageType_Warning
+			                                                     : MessageType_Normal;
+
+		debugServer->SendEvalMessage(message, type);
+	}
+
 	int beforeAppendPosition = GetInsertionPoint();
 	int beforeAppendLastPosition = GetLastPosition();
 

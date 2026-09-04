@@ -1096,12 +1096,12 @@
         "global_functions"
       ],
       "signature": "Message(<String>, [<Marker>])",
-      "description": "Prints a message to the message window. The marker parameter, when supported, prefixes a pictogram indicating the message's importance.",
+      "description": "Prints a message to the message window. The marker sets how it is shown and how it is read back: the pane paints it at that level, and a run being debugged sends it to the designer with the level attached, so a filter for problems finds problems rather than everything.",
       "syntax_block": "Message(<String>, [<Marker>])",
-      "parameters": "<String> — message text.\n<Marker> — optional severity marker; not implemented in Phase 1 and currently ignored.",
+      "parameters": "<String> — message text.\n<Marker> — StatusMessage.Information (the default), StatusMessage.Warning or StatusMessage.Error.\n\nError here is the APPLICATION's word, not the platform's: a document declining to post says so at that level and nothing has broken.",
       "return_descr": "",
-      "example": "Message(\"Document saved successfully.\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "example": "Message(\"Document saved successfully.\");\nMessage(\"The document did not post: no stock left.\", StatusMessage.Error);",
+      "availability": "Enterprise, Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "fn.SetStatus"
       ],

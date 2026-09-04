@@ -57,7 +57,7 @@ void ibValueRecordDataObjectParameterizedJob::CallAsAction(const ibActionID& act
 			ExecuteJob();
 		}
 		catch (const ibBackendInterruptException&) {}   // the user stopped it — nothing to report
-		catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+		catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
 		break;
 	}
 	case eCopy: CopyObject(true); break;
@@ -89,7 +89,7 @@ void ibValueMetaObjectParameterizedJob::CallAsCommand(ibActionID id, const ibUni
 		// ibBackendException too, and catching only Core would drop them into catch(...) — the run
 		// refused for lack of rights, with nothing but a line in the log to say so.
 		catch (const ibBackendInterruptException&) {}
-		catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+		catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
 		catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectParameterizedJob::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}

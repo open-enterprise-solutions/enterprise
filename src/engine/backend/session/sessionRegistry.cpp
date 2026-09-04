@@ -421,7 +421,12 @@ void ibSessionRegistry::Stop()
 	}
 	const bool detached = m_threadAlive.load(std::memory_order_acquire);
 	if (detached) {
-		ibJournalWarning(wxT("session"),wxT("registry: m_thread join timed out - detaching ")
+		// ⚠ INFO, NOT WARNING. A warning is echoed through wxLog, and in a GUI application that opens
+		// a MODAL — so this sentence, which is addressed to whoever maintains the registry, stopped
+		// the application ON ITS WAY OUT and waited for somebody to click OK (seen 2026-09-04). It
+		// says nothing a user can act on and names an internal callback chain; the file is its
+		// reader. Same correction as metaData.cpp's paste path and the module-compile failure.
+		ibJournalInfo(wxT("session"),wxT("registry: m_thread join timed out - detaching ")
 			wxT("(deadlock against an in-flight ProcessRemove -> DetachRuntime / ")
 			wxT("listener callback chain). Process will exit anyway."));
 		m_thread.detach();

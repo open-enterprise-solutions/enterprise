@@ -37,6 +37,7 @@
 #include "backend/backend_exception.h"
 
 #include <wx/app.h>
+#include <wx/cmdline.h>   // the usage text an unparsed command line is answered with
 #include <wx/debugrpt.h>
 #include <wx/log.h>
 #include <wx/msgdlg.h>
@@ -68,6 +69,48 @@ public:
 	}
 
 	virtual int DoOnRun() { return wxApp::OnRun(); }
+
+	// ⭐⭐ A COMMAND LINE IT DOES NOT UNDERSTAND IS SAID OUT LOUD — because the default is to say it
+	// on a stream a windowed application does not have. wx prints the usage to stderr and returns
+	// false; the process then ends with NOTHING anywhere: no window, no dump, and a journal holding
+	// six start-up lines and an abrupt stop.
+	//
+	// 🛑 MEASURED, AND IT COST A TURN (2026-09-04): `designer.exe /F"…\fb_test301"` — a plausible
+	// spelling, and wrong. The exe vanished, and the only way to learn that the option is `--file=`
+	// was to open the source. Whoever arrives here NEXT — a person on a first run, an assistant on
+	// its first launch — must be told by the platform rather than have to read it.
+	//
+	// The journal is the right ear: it is written whether or not anyone is watching, it survives the
+	// process, and it is now readable from outside (`trace_read`). The usage text is the parser's
+	// own, so it cannot drift from the options actually declared.
+	// ⚠ INFO, AND BOTH LOUDER LEVELS WERE TRIED ON A LIVE RUN FIRST — each brought a cost that has
+	// nothing to do with saying the sentence:
+	//
+	//   `ibJournalError`   takes a CRASH DUMP with it (once per run, by design — an error is a fault
+	//                      worth a snapshot). A mistyped option is not a fault of the program, and a
+	//                      dump per typo is litter in the directory somebody digs through when
+	//                      something really did break.
+	//   `ibJournalWarning` echoes to the SCREEN, so the process stopped at a modal box instead of
+	//                      stopping — worse than the silence it replaced, because a launch from a
+	//                      script now hangs where it used to exit.
+	//
+	// So it is written where it can always be read and never blocks: the file. The line names the
+	// options verbatim, and `trace_read` reaches it from outside the process.
+	bool OnCmdLineError(wxCmdLineParser& parser) override
+	{
+		ibJournalInfo(wxT("start"), wxT("this command line was not understood, so %s is stopping. "
+			"It accepts:\n%s"), GetExeName(), parser.GetUsageString());
+
+		return wxApp::OnCmdLineError(parser);
+	}
+
+	// …and the same courtesy for `--help`, which otherwise answers into the same missing stream.
+	bool OnCmdLineHelp(wxCmdLineParser& parser) override
+	{
+		ibJournalInfo(wxT("start"), wxT("%s accepts:\n%s"), GetExeName(), parser.GetUsageString());
+
+		return wxApp::OnCmdLineHelp(parser);
+	}
 
 	bool OnInit() override
 	{

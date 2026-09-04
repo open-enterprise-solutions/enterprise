@@ -110,22 +110,26 @@ bool ibFormVisualDocument::Save()
 		success = sourceObject != nullptr ?
 			sourceObject->SaveModify() : true;
 	}
-	catch (const ibBackendAccessException& err) {
-		ibValueSystemFunction::Alert(err.GetErrorDescription());
+	catch (const ibBackendAccessException&) {
+		// Already reported where it happened (ProcessExceptionError hands it to the frame) - saying it
+		// again puts one failure in the pane twice. Unnamed: nothing is read from it any more, and a
+		// named-but-unused parameter is a warning on the compilers this has to stay quiet on.
 		success = false;
 	}
 	catch (const ibBackendLockException& err) {
 		// Version-conflict / row-lock-timeout — show the actual reason
 		// ("changed by another user, please reload") instead of the
 		// generic "An error occurred". Same pattern as access-denied.
-		ibValueSystemFunction::Alert(err.GetErrorDescription());
+		// Already reported where it happened (ProcessExceptionError hands it to the frame) - saying it
+		// again puts one failure in the pane twice.
 		success = false;
 	}
 	catch (const ibBackendException& err) {
 		// The exception already carries the reason ("Register 'Stock': failed to store the
 		// records", "… cancelled by the OnWrite handler"). Replacing it with a generic
 		// "an error occurred" threw away the only part worth reading — show what it says.
-		ibValueSystemFunction::Alert(err.GetErrorDescription());
+		// Already reported where it happened (ProcessExceptionError hands it to the frame) - saying it
+		// again puts one failure in the pane twice.
 		success = false;
 	}
 

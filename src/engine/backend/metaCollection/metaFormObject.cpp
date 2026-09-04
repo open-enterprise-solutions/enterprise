@@ -44,7 +44,8 @@ bool ibBackendCommandItem::Execute(ibInterfaceCommandType cmdType, ibBackendValu
 	}
 	catch (const ibBackendAccessException& err) {
 		wxDELETE(valueForm);
-		ibValueSystemFunction::Alert(err.GetErrorDescription());
+		// Already reported where it happened (ProcessExceptionError hands it to the frame) - saying it
+		// again puts one failure in the pane twice.
 		return false;
 	}
 	catch (const ibBackendException&) {

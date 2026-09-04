@@ -85,7 +85,29 @@ public:
 	// declines, which is the honest answer there.
 	virtual bool ShowScheduleEditor(ibJobScheduleDescription& schedule) { return false; }
 
-#pragma endregion 
+	// A PICTURE OF THIS WINDOW, as PNG bytes — the same shape as the two doors above and for the
+	// same reason: the backend is asked for it (a debugger command arrives here), the frontend is
+	// the only side that can draw. Whether it CAN is the implementation's business — a desktop GUI
+	// can, a web client is a different question — so the default declines and a host without a
+	// window inherits it.
+	//
+	// 🛑 THE IMPLEMENTATION ASKS ITS USER FIRST, showing them `reason`. Consent belongs here, not
+	// with the caller: a screen holds counterparties, sums, somebody's pay, and none of it is the
+	// platform's to hand over because a caller found it useful. Declining is an ordinary answer.
+	// `area` picks WHAT to photograph, and the caller chooses because only the caller knows what it
+	// is looking for: "active" — the window being worked in (a report standing on its own, a
+	// dialog), "main" — the main frame, "screen" — everything, for when the person is moving
+	// between windows to show a sequence.
+	//
+	// ⭐⭐ `focus` IS THE OTHER HALF OF THE ANSWER, and often the more useful one. Somebody trying to
+	// show you something CLICKS ON IT FIRST — so the control holding the keyboard focus is them
+	// pointing, in a sentence they could not finish (Max, 2026-09-04: *"he clicked and the focus
+	// landed — then you know exactly which area he wants to show you"*). It comes back as text: the
+	// control, the form the platform has open (ActiveWindow), and where the pointer is.
+	virtual bool CaptureWindow(const wxString& reason, const wxString& area, const wxString& format,
+		wxMemoryBuffer& bytes, wxString& focus) { return false; }
+
+#pragma endregion
 
 #pragma region property
 	virtual class BACKEND_API ibPropertyObject* GetProperty() const { return nullptr; }

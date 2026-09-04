@@ -312,6 +312,49 @@ See `docs/BUILD.md` for per-platform requirements.
 
 ---
 
+## Running It — and the door an assistant comes in through
+
+**Nothing here should have to be guessed.** This section exists because it was: an assistant lost a
+turn on 2026-09-04 inventing `/F"…"` for the database folder, and the exe answered by vanishing —
+no window, no dump, six lines in the journal and a stop. The options are below; a wrong one is now
+also written into the technology journal with the accepted list beside it.
+
+### Start a client on a folder base
+
+```cmd
+bin\Win32\Debug\designer.exe   --file=F:\projects\oes-bin\examples\fb_test301
+bin\Win32\Debug\enterprise.exe --file=F:\projects\oes-bin\examples\fb_test301
+```
+
+`--file=` is the **folder**, not a `.fdb`. Started with no `--file` and no `--srv`, the designer asks
+for the folder with a picker. Server bases take `--srv` / `--db` / `--usr` / `--pwd` instead; the
+full list is `OnInitCmdLine` in each `mainApp.cpp` (`file`, `srv`, `dbport`, `db`, `user`,
+`password`, `ibuser`, `ibpwd`, `locale`).
+
+### The MCP server — how an assistant reaches the platform
+
+**It lives INSIDE `designer.exe`.** Nothing answers until the designer is running with a
+configuration open — a refused connection means the process is not up, not that the feature is
+missing. It listens on `http://127.0.0.1:3737/` (default; the address, the port and the token are
+in the designer's own MCP settings, kept per user in the base). The token is minted once, on first
+enable, and never regenerated behind anyone's back.
+
+**The first call must be `chat_say`.** Every other verb is refused until an assistant has said who
+it is, what it sees and what it means to do — because the person at that designer is watching a
+window that would otherwise stay silent while their configuration is read and changed. The refusal
+text says exactly this, so the rule teaches itself.
+
+Then the ones worth knowing before starting: `platform_state` (what is open, which dialect),
+`metadata_tree` (the map), `app_run` (start the application; **`restart: true`** after changing a
+module — a running client keeps the bytecode it came up with), `debug_sandbox` (run statements
+inside a stopped runtime, always rolled back; answers with `microseconds`), and the two journals —
+`journal_read` for what the INSTALLATION did (logins, writes, postings: the accountant's record)
+and `trace_read` for what the ENGINE did (the SQL as sent, query roads, driver traffic, and the
+crash dump matched to the run that ended). `trace_read` reads files, so it answers for the process
+under the debugger as well as for the designer itself.
+
+---
+
 ## Branch Strategy
 
 | Branch | Purpose |
