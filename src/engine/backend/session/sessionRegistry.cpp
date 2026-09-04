@@ -2126,6 +2126,20 @@ void ibSessionRegistry::Die(const wxString& why)
 		return;
 	}
 
+	// ⭐⭐ A DELIBERATE STOP IS NOT A FAILURE, and the two arrive through this same door.
+	// Once m_stop is set the process is already leaving: the database connection is being
+	// torn down under this thread, so its next statement throws — Firebird says
+	// "Unsuccessful execution caused by an unavailable resource" — and the hard path below
+	// turned an ordinary exit into SIGABRT and a crash report (seen 2026-09-04, on a plain
+	// SIGTERM). The reason the hard path exists does not apply here: sys_session may well
+	// be left lying, and it does not matter, because the rows are stale rows and the next
+	// process's eager sweep DELETEs them — the same idempotence the soft path above relies
+	// on. Say it and leave quietly; the reason is recorded either way.
+	if (m_stop.load(std::memory_order_acquire)) {
+		m_submitCv.notify_all();
+		return;
+	}
+
 	// Steady-state failure: registry was alive and consistent. Pretending
 	// otherwise would let stale state propagate cluster-wide. std::terminate
 	// lets a custom terminate_handler log / dump before exit; abort() would
