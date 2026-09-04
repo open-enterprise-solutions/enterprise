@@ -307,7 +307,11 @@ wxAuiMDIClientWindow* ibFrontendMainFrame::OnCreateClient()
 			// Use the system background instead of the old hard-coded blue —
 			// respects dark/light mode.
 			SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_APPWORKSPACE));
-			SetBackgroundStyle(wxBG_STYLE_SYSTEM);
+			// ⚠ NO SetBackgroundStyle() HERE. wxBookCtrlBase::HasTransparentBackground() is
+			// true, so wxWindowMac::Create() has already stamped this window
+			// wxBG_STYLE_TRANSPARENT — and wx forbids unsetting it. The call returned false
+			// in Release and asserted in Debug; it never did anything either way. What
+			// actually fills the ground is the paint / erase pair bound just below.
 #else
 			// Powder-blue workspace — interior-design dominant
 			// chrome tone (the "walls" of the application). Forms /
