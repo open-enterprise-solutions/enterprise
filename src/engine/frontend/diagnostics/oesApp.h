@@ -118,6 +118,34 @@ public:
 		// faults during wxApp::OnInit / image-handler registry / locale
 		// init also land in a dump.
 		ibCrashGuard::Install(GetExeName());
+
+		// ⭐ THE APPLICATION IS LIGHT, AND NOW IT SAYS SO — because the half that answers to the
+		// system was contradicting the half that does not.
+		//
+		// Every surface this platform draws is painted from a fixed LIGHT palette, in code:
+		// #FAF7F0 for the metadata tree, #B8C9D4 for the panels around it, and so on through
+		// docs/ui-palette.md. What is NOT set anywhere is the text colour — no SetForegroundColour
+		// accompanies those backgrounds — so glyphs come from the system.
+		//
+		// Under a dark system appearance the system duly hands back white. White on #FAF7F0 is
+		// invisible: the metadata tree renders as a column of blank rows (macOS 15, 2026-09-04).
+		// Nothing is broken, nothing is logged, and the window is simply unreadable.
+		//
+		// Declaring the appearance is the honest fix, not a workaround: an application whose
+		// palette cannot follow the system should not claim to. It costs one call and makes every
+		// system-derived colour — label text, disabled states, focus rings, native scrollbars —
+		// agree with the palette they are drawn against.
+		//
+		// A real dark theme is a different piece of work: it means a second palette and a
+		// theme-aware source for every hard-coded colour, not a switch. Until that exists, this is
+		// what keeps the window legible.
+		//
+		// Called before DoOnInit() so it lands ahead of every window: wx wants it at the very start
+		// of OnInit, and MSW in particular can only apply it before controls exist. The result is
+		// deliberately ignored — CannotChange is the correct answer on a platform with no such
+		// concept, and it is not a startup failure anywhere.
+		SetAppearance(Appearance::Light);
+
 		return DoOnInit();
 	}
 
