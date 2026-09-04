@@ -287,6 +287,14 @@ struct ibByteCode {
 		// marker (Phase A is compile-only).
 		bool      m_needsHeapFrame = false;
 
+		// `Cached` — the result is kept per argument tuple, on the ProcUnit
+		// that owns this function. THE LIFETIME IS OWNERSHIP, not a clock:
+		// the store dies with its ProcUnit, so an object module's cache
+		// lasts as long as that object and a common module's lasts as long
+		// as the root it hangs from. That is why there is no invalidation
+		// call anywhere — nothing can go stale that outlives its holder.
+		bool      m_valueCached = false;
+
 		// Convenience predicates — preferred over inline `m_kind == X`
 		// at callsites. Symmetric with ibByteCodeVarInfo's helpers.
 		bool IsLocal()         const { return m_kind == ibFnKind::Local; }
@@ -366,6 +374,7 @@ struct ibByteCode {
 			  m_returnClsid(src.m_clsid),
 			  m_kind(src.m_kind),
 			  m_needsHeapFrame(src.m_needsHeapFrame),
+			  m_valueCached(src.m_valueCached),
 			  m_strRealName(src.m_strRealName),
 			  m_strContext(src.m_strContext)
 		{

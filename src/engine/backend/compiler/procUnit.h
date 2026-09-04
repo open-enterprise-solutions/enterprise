@@ -180,6 +180,21 @@ protected:
 	bool m_bExecuted = false;
 	std::vector <ibProcUnit*> m_procParent;
 
+	// `Cached` results — the memoisation store for the functions THIS unit
+	// runs. Outer key is the function's entry address (what the call opcode
+	// already carries, so nothing has to be looked up to find the bucket);
+	// inner key is the argument tuple, through the one key policy in value.h
+	// rather than a private hash of its own.
+	//
+	// THERE IS NO INVALIDATION, AND THAT IS THE DESIGN. The store is a member,
+	// so its lifetime IS the unit's: an object module's results last exactly as
+	// long as that object, a common module's as long as the root it hangs from.
+	// Nothing can go stale that cannot outlive its holder, so there is no clock
+	// to tune and no "drop the cache" call for a caller to forget.
+	std::unordered_map<long,
+		std::unordered_map<std::vector<ibValue>, ibValue, ibValueSeqHash, ibValueSeqEqual>> m_cachedResults;
+
+
 	// Per-thread state (m_currentRunModule, ms_runContext, s_nRecCount,
 	// s_errorPlace) lives as thread_local in procUnit.cpp. The storage
 	// cannot be declared `static thread_local` on an exported (BACKEND_API)

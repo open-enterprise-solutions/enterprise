@@ -1055,6 +1055,14 @@ bool ibCompileCode::CompileModule()
 				CompileDeclaration(mainContext); // load variable declaration
 			}
 			else {
+				// ⚠ THE CURSOR IS STILL BEHIND THE WORD THAT IS WRONG. The lexem above came from
+				// PreviewGetLexem, which looks ahead WITHOUT advancing, so an unqualified SetError
+				// reports wherever the previous construct ended — and, when the module opens with
+				// the declaration, m_numCurrentCompile is still -1 and the message carries NO LINE
+				// AT ALL. Measured 2026-09-04 on a common module: `Var calls;` on line 1 was
+				// reported at line 5 (the end of the file), which reads as a broken last line and
+				// sends the reader to the wrong end of the module.
+				m_numCurrentCompile++;
 				SetError(ERROR_ONLY_FUNCTION);
 				return false;
 			}
@@ -1250,7 +1258,13 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 	unsigned int numRealCount = callFunction->m_listParam.size();
 	unsigned int numDefCount = foundedFunc->m_listParam.size();
 
-	if (numRealCount > numDefCount) {
+	if (foundedFunc->m_bVariadic) {
+		// It takes what it is given. The declared list is empty BY CONSTRUCTION
+		// for a negative arity, so it can neither bound the call nor say how many
+		// slots to emit — the caller's own count is both answers.
+		numDefCount = numRealCount;
+	}
+	else if (numRealCount > numDefCount) {
 		m_numCurrentCompile = callFunction->m_numError;
 		SetError(ERROR_MANY_PARAMS, foundedFunc->m_strRealName);
 		return false;
@@ -1282,6 +1296,11 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 		// by the time we get here: backward refs see the fully-compiled
 		// callee directly; forward refs land in m_listCallFunc and
 		// PushCallFunction reruns at finalize when all bodies are done.
+		// `Cached` is NOT a call opcode. The modifier is applied at the callee's
+		// entry opcode, where every road into a body arrives — a direct call, a
+		// call through a module value, a handler fired from C++ — so the caller
+		// emits the ordinary call and the callee decides. An opcode here would
+		// have covered only the calls this emitter can see.
 		code.m_numOper = foundedFunc->m_needsHeapFrame ? OPER_CALL_CLOSURE : OPER_CALL;
 		code.m_param1 = callFunction->m_puRetValue;	// variable into which the value is returned
 		code.m_param2.m_numArray = numModule;		// module number
@@ -1537,15 +1556,37 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 	}
 	GETDelimeter(')');
 
-	// Access modifier — exactly one of Public / Private / Protected, in place of
-	// the old single Export check. All optional (none = Private, the default);
-	// more than one is an error. m_access holds the enum, m_bExport is derived.
+	// Trailing modifiers — TWO INDEPENDENT AXES, read in one pass so neither
+	// owns a position. Access (Public / Private / Protected) answers who sees
+	// the function; Cached answers when it is evaluated. Both optional, both
+	// at most once; `Private Cached` and `Cached Private` are the same
+	// declaration. Repeating an axis is the error — two accesses, or Cached
+	// twice.
 	int numModifiers = 0;
-	if (IsNextKeyWord(KEY_PUBLIC))    { GETKeyWord(KEY_PUBLIC);    outFunction->m_access = ACCESS_PUBLIC;    numModifiers++; }
-	if (IsNextKeyWord(KEY_PRIVATE))   { GETKeyWord(KEY_PRIVATE);   outFunction->m_access = ACCESS_PRIVATE;   numModifiers++; }
-	if (IsNextKeyWord(KEY_PROTECTED)) { GETKeyWord(KEY_PROTECTED); outFunction->m_access = ACCESS_PROTECTED; numModifiers++; }
+	for (;;) {
+		if (IsNextKeyWord(KEY_PUBLIC))         { GETKeyWord(KEY_PUBLIC);    outFunction->m_access = ACCESS_PUBLIC;    numModifiers++; }
+		else if (IsNextKeyWord(KEY_PRIVATE))   { GETKeyWord(KEY_PRIVATE);   outFunction->m_access = ACCESS_PRIVATE;   numModifiers++; }
+		else if (IsNextKeyWord(KEY_PROTECTED)) { GETKeyWord(KEY_PROTECTED); outFunction->m_access = ACCESS_PROTECTED; numModifiers++; }
+		else if (IsNextKeyWord(KEY_CACHED)) {
+			GETKeyWord(KEY_CACHED);
+			if (outFunction->m_valueCached) {
+				SetError(ERROR_CODE); // `Cached` stated twice
+				return false;
+			}
+			outFunction->m_valueCached = true;
+		}
+		else
+			break;
+	}
 	if (numModifiers > 1) {
 		SetError(ERROR_CODE); // only one access modifier (Public / Private / Protected) is allowed
+		return false;
+	}
+	// A PROCEDURE has no result to keep, so the modifier has nothing to mean
+	// there — refused rather than ignored, because a silently-dropped Cached
+	// looks exactly like a cache that never helps.
+	if (outFunction->m_valueCached && !outFunction->m_bCodeRet) {
+		SetError(ERROR_CODE); // `Cached` applies to a Function, not a Procedure
 		return false;
 	}
 	// Kind from the access modifier — user-declared functions only (a context
@@ -4057,7 +4098,10 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 				SetError(ERROR_USE_PROCEDURE_AS_FUNCTION, foundedFunc->m_strRealName);
 				return ibParamUnit();
 			}
-			if (listParam.size() > foundedFunc->m_listParam.size()) {
+			// A variadic built-in (negative declared arity) has an empty declared
+			// list, so this bound would reject its first argument. See
+			// ibFunction::m_bVariadic.
+			if (!foundedFunc->m_bVariadic && listParam.size() > foundedFunc->m_listParam.size()) {
 				SetError(ERROR_MANY_PARAMS, foundedFunc->m_strRealName);
 				return ibParamUnit();
 			}

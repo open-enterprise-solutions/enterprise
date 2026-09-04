@@ -111,25 +111,38 @@ ibNumber ibValueSystemFunction::Ln(const ibValue& cValue)
 	return cValue.GetNumber().Ln();   // high-precision exact-tier ln (was std::log → double)
 }
 
+// ⚠ THE ADVANCE BELONGS TO THE LOOP, NOT TO THE BRANCH. Both of these used to
+// carry the increment inside the comparison — `maxValue = paParams[i++];` — so
+// the index moved only when the candidate WON. `Max(3, 5)` therefore worked and
+// `Max(5, 3)` hung forever: the test fails, i stays 1, and the condition is
+// re-evaluated on the same argument for as long as the process lives. Neither
+// function had a test, and a hang reports nothing at all — the application is
+// simply "frozen", with no failing call to point at.
 ibValue ibValueSystemFunction::Max(ibValue** paParams, const long lSizeArray)
 {
-	ibValue* maxValue = paParams[0]; int i = 1;
-	while (i < lSizeArray) {
+	ibValue* maxValue = paParams[0];
+	for (long i = 1; i < lSizeArray; ++i) {
 		if (paParams[i]->GetNumber() > maxValue->GetNumber())
-			maxValue = paParams[i++];
+			maxValue = paParams[i];
 	}
 
-	return maxValue;
+	// ⚠ DEREFERENCED — a COPY of the winning value, not the pointer to it.
+	// `return maxValue;` selects `ibValue(ibValue*)`, which builds a TYPE_REFFER
+	// and calls IncrRef on the target. The target here is a SLOT OF THE CALL
+	// FRAME, not a ref-counted object, so the returned value took ownership of
+	// memory it does not own and the matching release corrupted the heap
+	// (_CrtIsValidHeapPointer). Same in Min.
+	return *maxValue;
 }
 
 ibValue ibValueSystemFunction::Min(ibValue** paParams, const long lSizeArray)
 {
-	ibValue* minValue = paParams[0]; int i = 1;
-	while (i < lSizeArray) {
+	ibValue* minValue = paParams[0];
+	for (long i = 1; i < lSizeArray; ++i) {
 		if (paParams[i]->GetNumber() < minValue->GetNumber())
-			minValue = paParams[i++];
+			minValue = paParams[i];
 	}
-	return minValue;
+	return *minValue;   // a copy — see the note in Max
 }
 
 ibValue ibValueSystemFunction::Sqrt(const ibValue& cValue)
@@ -188,10 +201,17 @@ ibString ibValueSystemFunction::Right(const ibValue& cValue, unsigned int nCount
 	return cValue.GetString(scratch).Right(nCount);
 }
 
-ibString ibValueSystemFunction::Mid(const ibValue& cValue, unsigned int nFirst, unsigned int nCount)
+// ⚠ 1-BASED, AND THE LENGTH IS OPTIONAL — both changed on 2026-09-04 (Max's call).
+// The start used to be handed straight to ibString::Mid, which counts from zero,
+// while Find answers from one, so `Mid(s, Find(s, x))` was off by a character —
+// two functions of the same family disagreeing about what "position" means. And
+// an omitted length used to mean ONE character rather than the rest of the
+// string, which is not what anybody writing `Mid(s, 5)` intends.
+ibString ibValueSystemFunction::Mid(const ibValue& cValue, size_t nFirst, size_t nCount)
 {
 	ibString scratch;
-	return cValue.GetString(scratch).Mid(nFirst, nCount);
+	if (nFirst < 1) nFirst = 1;   // position 0 reads as the first character
+	return cValue.GetString(scratch).Mid(nFirst - 1, nCount);
 }
 
 unsigned int ibValueSystemFunction::Find(const ibValue& cValue, const ibValue& cValue2, unsigned int nStart)
@@ -210,16 +230,50 @@ ibString ibValueSystemFunction::StrReplace(const ibValue& cSource, const ibValue
 	return result;
 }
 
+// ⚠ THIS COUNTED NOTHING. It was `return Find(sub);` — the POSITION of the first
+// occurrence, under a name that promises how many there are. The two agree only
+// when the answer is 0/npos, so a caller checking `> 0` saw "found" and a caller
+// using the figure got a position. Non-overlapping occurrences, which is what
+// "how many times does this appear" means.
 int ibValueSystemFunction::StrCountOccur(const ibValue& cSource, const ibValue& cValue1)
 {
 	ibString s1, s2;
-	return static_cast<int>(cSource.GetString(s1).Find(cValue1.GetString(s2)));
+	const ibString src = cSource.GetString(s1);
+	const ibString sub = cValue1.GetString(s2);
+
+	// An empty needle has no meaningful count — it "occurs" between every pair of
+	// characters. Zero, rather than a loop that never ends.
+	if (sub.Length() == 0)
+		return 0;
+
+	int count = 0;
+	for (size_t pos = src.Find(sub); pos != ibString::npos; pos = src.Find(sub, pos + sub.Length()))
+		count++;
+	return count;
 }
 
+// ⚠ AND THIS ONE COUNTED NOTHING EITHER: `Find('\n') + 1` is the position of the
+// FIRST line break, plus one. A single-line text (no break at all) gave npos + 1
+// == 0 — a text with no lines — and "a\nb\nc" gave 2 whichever way you read it.
+// The line breaks are counted the way StrGetLine walks them, CRLF as ONE break,
+// so the two functions agree about what a line is.
 int ibValueSystemFunction::StrLineCount(const ibValue& cSource)
 {
-	ibString scratch;
-	return static_cast<int>(cSource.GetString(scratch).Find(L'\n') + 1);
+	const wxString src = cSource.GetString();
+
+	int lines = 1;   // text always has a first line, empty included
+	for (size_t pos = 0; pos < src.length(); ++pos) {
+		const wxChar ch = src[pos];
+		if (ch == wxT('\r')) {
+			if (pos + 1 < src.length() && src[pos + 1] == wxT('\n'))
+				++pos;   // CRLF is a single break
+			++lines;
+		}
+		else if (ch == wxT('\n')) {
+			++lines;
+		}
+	}
+	return lines;
 }
 
 wxString ibValueSystemFunction::StrGetLine(const ibValue& cValue, unsigned int nLine)
@@ -362,7 +416,11 @@ ibValue ibValueSystemFunction::BegOfQuart(const ibValue& cData)
 
 ibValue ibValueSystemFunction::EndOfQuart(const ibValue& cData)
 {
-	return AddMonth(BegOfQuart(cData), 3) - 1;
+	// TO THE END OF THAT DAY, like EndOfMonth / EndOfYear / EndOfDay. This one
+	// and EndOfWeek used to stop at midnight, so `date <= EndOfQuart(d)` dropped
+	// everything recorded during the quarter's last day — a whole day missing
+	// from a total, and only in two of the five period functions.
+	return EndOfDay(AddMonth(BegOfQuart(cData), 3) - 1);
 }
 
 ibValue ibValueSystemFunction::BegOfYear(const ibValue& cData)
@@ -379,19 +437,35 @@ ibValue ibValueSystemFunction::EndOfYear(const ibValue& cData)
 	return ibValue(nYear, 12, 31, 23, 59, 59);
 }
 
+// The week runs Monday (DayOfWeek == 1) to Sunday (7): its first day is
+// `DayOfWeek - 1` DAYS back and its last is `7 - DayOfWeek` days forward.
+//
+// ⚠ AND A DAY IS NOT A NUMBER HERE. `date + n` adds n SECONDS (GetDate() reads a
+// number as seconds), so the old `- (DayOfWeek + 1)` was not "back two days" but
+// "back two seconds" — landing the previous evening at 23:59:58, whatever day
+// was asked about. EndOfMonth gets away with the same idiom only because
+// AddMonth drops the time of day first, which is not a rule to rely on twice.
+// Stepping in wxDateSpan::Days is calendar arithmetic and says what it means.
 ibValue ibValueSystemFunction::BegOfWeek(const ibValue& cData)
 {
 	int nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear;
 	cData.FromDate(nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear);
-	ibValue Date1 = ibValue(nYear, nMonth, nDay) - (DayOfWeek + 1);
-	return Date1;
+
+	wxDateTime day(static_cast<unsigned short>(nDay),
+		static_cast<wxDateTime::Month>(nMonth - 1), nYear);
+	day -= wxDateSpan::Days(DayOfWeek - 1);
+	return ibValue(day.GetYear(), day.GetMonth() + 1, day.GetDay());
 }
 
 ibValue ibValueSystemFunction::EndOfWeek(const ibValue& cData)
 {
 	int nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear;
 	cData.FromDate(nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear);
-	return ibValue(nYear, nMonth, nDay) + (7 - DayOfWeek);
+
+	wxDateTime day(static_cast<unsigned short>(nDay),
+		static_cast<wxDateTime::Month>(nMonth - 1), nYear);
+	day += wxDateSpan::Days(7 - DayOfWeek);
+	return ibValue(day.GetYear(), day.GetMonth() + 1, day.GetDay(), 23, 59, 59);
 }
 
 ibValue ibValueSystemFunction::BegOfDay(const ibValue& cData)

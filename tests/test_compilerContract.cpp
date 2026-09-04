@@ -35,6 +35,15 @@
 // From here the suite guards THIS emitter: the next digest that moves is a real
 // change in codegen, and the first candidate to suspect is the assignment fold
 // in CompileBlock, which was given a destination check the same day.
+//
+// AND ONCE IT CAUGHT A DESIGN, not a bug (2026-09-04). The `Cached` modifier
+// first landed as a call opcode, which renumbered every opcode after it and
+// moved all sixteen digests at once. They were re-baselined — and then the
+// design changed: the modifier belongs at the callee's ENTRY, where every road
+// into a body arrives, not at a caller the emitter happens to see. The opcode
+// went away, the numbering came back, and these values are the originals again.
+// The suite had faithfully reported a global change; the right answer was to
+// stop making it.
 // =============================================================================
 
 #include <gtest/gtest.h>

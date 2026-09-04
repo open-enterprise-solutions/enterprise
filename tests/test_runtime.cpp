@@ -1674,3 +1674,418 @@ TEST_F(BuiltInRuntime, EvaluateReadsAVariableOfTheHostModule) {
 		<< "eval returned " << v.GetString().ToStdString();
 	EXPECT_EQ(v.GetInteger(), 42);
 }
+
+// ===========================================================================
+// `Cached` — the result is kept per argument tuple
+//
+// What is being asserted is NOT that the value is right (an uncached function
+// returns the same value); it is that THE BODY DID NOT RUN AGAIN. So every
+// case below counts calls in a module variable and reads the counter, which is
+// the only thing that tells a working cache from a call that merely repeats
+// cheaply.
+// ===========================================================================
+
+TEST(CachedFunction, SecondCallWithTheSameArgumentDoesNotRunTheBody) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var calls public; var r1 public; var r2 public;\n")
+		wxT("Function Ten(x) Public Cached\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Return x * 10;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("r1 = Ten(5);\n")
+		wxT("r2 = Ten(5);\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r1"), v));
+	EXPECT_EQ(v.GetInteger(), 50);
+	ASSERT_TRUE(pu.GetPropVal(wxT("r2"), v));
+	EXPECT_EQ(v.GetInteger(), 50) << "the kept result must equal the computed one";
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 1) << "the body ran twice — the second call was not served from the cache";
+}
+
+// A DIFFERENT tuple is a different entry, so the body runs again. Without this
+// the test above would also pass for a cache that ignores its arguments and
+// answers every call with the first result — the worst possible failure, since
+// it returns a plausible number.
+TEST(CachedFunction, ADifferentArgumentIsADifferentEntry) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var calls public; var r1 public; var r2 public; var r3 public;\n")
+		wxT("Function Ten(x) Public Cached\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Return x * 10;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("r1 = Ten(5);\n")
+		wxT("r2 = Ten(7);\n")
+		wxT("r3 = Ten(5);\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r1"), v));
+	EXPECT_EQ(v.GetInteger(), 50);
+	ASSERT_TRUE(pu.GetPropVal(wxT("r2"), v));
+	EXPECT_EQ(v.GetInteger(), 70) << "a second argument was answered with the first one's result";
+	ASSERT_TRUE(pu.GetPropVal(wxT("r3"), v));
+	EXPECT_EQ(v.GetInteger(), 50);
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 2) << "expected one run per distinct argument";
+}
+
+// The tuple is keyed BY VALUE, not by type name or by text: 1 and "1" are
+// different keys. A cache that joined its arguments into a string would answer
+// the second call with the first result here.
+TEST(CachedFunction, ANumberAndAStringThatSpellTheSameAreDifferentKeys) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var calls public; var r1 public; var r2 public;\n")
+		wxT("Function Kind(x) Public Cached\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Return calls;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("r1 = Kind(1);\n")
+		wxT("r2 = Kind(\"1\");\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 2) << "the number 1 and the string \"1\" collapsed into one key";
+}
+
+// No arguments at all — the empty tuple is a key like any other, and the
+// once-only case is the one a settings lookup actually uses.
+TEST(CachedFunction, AFunctionWithoutArgumentsRunsOnce) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var calls public; var r1 public; var r2 public;\n")
+		wxT("Function Once() Public Cached\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Return 99;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("r1 = Once();\n")
+		wxT("r2 = Once();\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r2"), v));
+	EXPECT_EQ(v.GetInteger(), 99);
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 1);
+}
+
+// `Cached` is a SECOND AXIS, so it combines with an access modifier and neither
+// owns a position: `Private Cached` and `Cached Private` are one declaration.
+TEST(CachedFunction, CombinesWithAnAccessModifierInEitherOrder) {
+	for (const wxString& modifiers : { wxString(wxT("Private Cached")), wxString(wxT("Cached Private")) }) {
+		ibCompileCode cc(wxT("test"), wxT("memory"), false);
+		const wxString src =
+			wxT("var calls public; var r public;\n")
+			wxT("Function Ten(x) ") + modifiers + wxT("\n")
+			wxT("  calls = calls + 1;\n")
+			wxT("  Return x * 10;\n")
+			wxT("EndFunction\n")
+			wxT("calls = 0;\n")
+			wxT("r = Ten(4);\n")
+			wxT("r = Ten(4);\n");
+		ASSERT_TRUE(TryCompile(cc, src)) << modifiers.ToStdString();
+
+		ibProcUnit pu;
+		wxString strError;
+		ASSERT_TRUE(RunBound(cc, pu, strError)) << modifiers.ToStdString() << ": " << strError.ToStdString();
+
+		ibValue v;
+		ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+		EXPECT_EQ(v.GetInteger(), 1) << modifiers.ToStdString();
+	}
+}
+
+// A raise is not a result. The failed call must leave nothing behind, or the
+// next call with those arguments would be answered with a value the function
+// never returned.
+TEST(CachedFunction, ACallThatRaisedIsNotKept) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var calls public; var r public;\n")
+		wxT("Function Guarded(x) Public Cached\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  If calls < 2 Then\n")
+		wxT("    Raise(\"first attempt fails\");\n")
+		wxT("  EndIf;\n")
+		wxT("  Return x * 10;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("Try\n")
+		wxT("  r = Guarded(3);\n")
+		wxT("Except\n")
+		wxT("EndTry;\n")
+		wxT("r = Guarded(3);\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
+	EXPECT_EQ(v.GetInteger(), 30) << "the retry after a raise did not compute a result";
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 2) << "the raising call was kept and answered the retry";
+}
+
+// ===========================================================================
+// Max / Min — the descending case
+//
+// `Max(3, 5)` always worked and `Max(5, 3)` HUNG: the index advanced inside the
+// comparison (`maxValue = paParams[i++]`), so a losing candidate left i where it
+// was and the same argument was compared forever. It survived because neither
+// function had a test and because a hang is the one failure that reports
+// nothing — the process is simply frozen, with no call to point at.
+//
+// The ascending case is here on purpose: without it a fix that always returned
+// the first argument would pass.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, MaxAndMinTerminateWhateverTheArgumentOrder) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		// NOT named `descending` / `ascending` — those are LINQ keywords
+		// (KEY_DESCENDING / KEY_ASCENDING), and the declaration fails with
+		// "Identifier expected".
+		wxT("var highFromDesc public; var highFromAsc public;\n")
+		wxT("var lowFromDesc public; var lowFromAsc public;\n")
+		wxT("var several public;\n")
+		wxT("highFromDesc = Max(5, 3);\n")   // used to hang
+		wxT("highFromAsc  = Max(3, 5);\n")
+		wxT("lowFromDesc = Min(5, 3);\n")
+		wxT("lowFromAsc  = Min(3, 5);\n")    // used to hang
+		wxT("several = Max(2, 9, 4, 1);\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("highFromDesc"), v));
+	EXPECT_EQ(v.GetInteger(), 5);
+	ASSERT_TRUE(pu.GetPropVal(wxT("highFromAsc"), v));
+	EXPECT_EQ(v.GetInteger(), 5);
+	ASSERT_TRUE(pu.GetPropVal(wxT("lowFromDesc"), v));
+	EXPECT_EQ(v.GetInteger(), 3);
+	ASSERT_TRUE(pu.GetPropVal(wxT("lowFromAsc"), v));
+	EXPECT_EQ(v.GetInteger(), 3);
+	ASSERT_TRUE(pu.GetPropVal(wxT("several"), v));
+	EXPECT_EQ(v.GetInteger(), 9) << "the winner was not the largest of four";
+}
+
+// ===========================================================================
+// StrCountOccur / StrLineCount — the two that answered with a POSITION
+//
+// Both were `Find(...)` under a counting name: StrCountOccur returned where the
+// first occurrence was, StrLineCount returned where the first line break was,
+// plus one. The second is the worse of the two — a text with no break at all
+// gave npos + 1 == 0, "a text with no lines" — because it is the answer a loop
+// bound is written from.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, StringCountingFunctionsCountRatherThanLocate) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var occurNone public; var occurOne public; var occurThree public;\n")
+		wxT("var linesOne public; var linesThree public; var linesCrLf public;\n")
+		wxT("var lineTwo public;\n")
+		wxT("occurNone  = StrCountOccur(\"abcabc\", \"z\");\n")
+		wxT("occurOne   = StrCountOccur(\"abcabc\", \"bca\");\n")
+		wxT("occurThree = StrCountOccur(\"aaa\", \"a\");\n")
+		wxT("linesOne   = StrLineCount(\"one line, no break\");\n")
+		wxT("linesThree = StrLineCount(\"a\" + Chr(10) + \"b\" + Chr(10) + \"c\");\n")
+		wxT("linesCrLf  = StrLineCount(\"a\" + Chr(13) + Chr(10) + \"b\");\n")
+		wxT("lineTwo    = StrGetLine(\"a\" + Chr(10) + \"b\", 2);\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("occurNone"), v));
+	EXPECT_EQ(v.GetInteger(), 0);
+	ASSERT_TRUE(pu.GetPropVal(wxT("occurOne"), v));
+	EXPECT_EQ(v.GetInteger(), 1) << "a single occurrence away from position 0 was reported as its position";
+	ASSERT_TRUE(pu.GetPropVal(wxT("occurThree"), v));
+	EXPECT_EQ(v.GetInteger(), 3);
+
+	ASSERT_TRUE(pu.GetPropVal(wxT("linesOne"), v));
+	EXPECT_EQ(v.GetInteger(), 1) << "a text with no line break must still be one line, not zero";
+	ASSERT_TRUE(pu.GetPropVal(wxT("linesThree"), v));
+	EXPECT_EQ(v.GetInteger(), 3);
+	ASSERT_TRUE(pu.GetPropVal(wxT("linesCrLf"), v));
+	EXPECT_EQ(v.GetInteger(), 2) << "CRLF must count as one break — StrGetLine walks it that way";
+
+	// The two must agree about what a line IS, which is why StrGetLine is here.
+	ASSERT_TRUE(pu.GetPropVal(wxT("lineTwo"), v));
+	EXPECT_EQ(v.GetString(), wxT("b"));
+}
+
+// ===========================================================================
+// Where a string position STARTS — ONE, for both of them
+//
+// Find was always 1-based on purpose (`nStart - 1` going in, `+ 1` coming out,
+// 0 left free to mean "not found"). Mid used to hand its argument straight to
+// ibString::Mid, which counts from zero, so `Mid(s, Find(s, x))` was off by a
+// character — and an omitted length meant ONE character rather than the rest.
+// Both were aligned on 2026-09-04 (Max's call, a deliberate breaking change).
+// The composition below is the point of the test: the two functions have to be
+// usable together, which is what they are for.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, StringPositionsAsTheyActuallyAre) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var found public; var missing public;\n")
+		wxT("var midTwo public; var midDefault public; var composed public;\n")
+		wxT("var leftThree public; var rightThree public;\n")
+		wxT("found      = Find(\"abcdef\", \"c\");\n")
+		wxT("missing    = Find(\"abcdef\", \"z\");\n")
+		wxT("midTwo     = Mid(\"abcdef\", 2, 3);\n")
+		wxT("midDefault = Mid(\"abcdef\", 2);\n")
+		wxT("composed   = Mid(\"abcdef\", Find(\"abcdef\", \"c\"));\n")
+		wxT("leftThree  = Left(\"abcdef\", 3);\n")
+		wxT("rightThree = Right(\"abcdef\", 3);\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("found"), v));
+	EXPECT_EQ(v.GetInteger(), 3) << "Find is 1-based: 'c' is the third character";
+	ASSERT_TRUE(pu.GetPropVal(wxT("missing"), v));
+	EXPECT_EQ(v.GetInteger(), 0) << "not found is 0, which is why Find is 1-based";
+
+	ASSERT_TRUE(pu.GetPropVal(wxT("midTwo"), v));
+	EXPECT_EQ(v.GetString(), wxT("bcd")) << "Mid counts from ONE, the same as Find answers";
+	ASSERT_TRUE(pu.GetPropVal(wxT("midDefault"), v));
+	EXPECT_EQ(v.GetString(), wxT("bcdef")) << "an omitted length means the REST of the string";
+
+	// THE POINT OF THE ALIGNMENT: the position Find answers with is the position
+	// Mid takes. If these two ever disagree again, this is the line that says so.
+	ASSERT_TRUE(pu.GetPropVal(wxT("composed"), v));
+	EXPECT_EQ(v.GetString(), wxT("cdef")) << "Mid(s, Find(s, x)) must start AT the match";
+
+	ASSERT_TRUE(pu.GetPropVal(wxT("leftThree"), v));
+	EXPECT_EQ(v.GetString(), wxT("abc"));
+	ASSERT_TRUE(pu.GetPropVal(wxT("rightThree"), v));
+	EXPECT_EQ(v.GetString(), wxT("def"));
+}
+
+// ===========================================================================
+// PROBE — the calendar, as it actually answers
+//
+// 2024-01-01 was a Monday, so a full week of known days runs through here. The
+// expectations below are ISO (Monday = 1 … Sunday = 7); where the engine
+// disagrees the test says so by name rather than by a number nobody can place.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, DayOfWeekIsIsoAndTheWeekIsSevenDays) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var mon public; var tue public; var wed public; var thu public;\n")
+		wxT("var fri public; var sat public; var sun public;\n")
+		wxT("var weekSpan public; var begIsMonday public;\n")
+		wxT("mon = GetDayOfWeek(Date(2024, 1, 1));\n")
+		wxT("tue = GetDayOfWeek(Date(2024, 1, 2));\n")
+		wxT("wed = GetDayOfWeek(Date(2024, 1, 3));\n")
+		wxT("thu = GetDayOfWeek(Date(2024, 1, 4));\n")
+		wxT("fri = GetDayOfWeek(Date(2024, 1, 5));\n")
+		wxT("sat = GetDayOfWeek(Date(2024, 1, 6));\n")
+		wxT("sun = GetDayOfWeek(Date(2024, 1, 7));\n")
+		// A week must span seven days, whatever day it is asked about.
+		wxT("weekSpan   = GetDayOfYear(EndOfWeek(Date(2024, 1, 3))) - GetDayOfYear(BegOfWeek(Date(2024, 1, 3)));\n")
+		wxT("begIsMonday = GetDayOfWeek(BegOfWeek(Date(2024, 1, 3)));\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	auto dayOf = [&](const wxChar* name) {
+		ibValue v;
+		EXPECT_TRUE(pu.GetPropVal(name, v));
+		return v.GetInteger();
+	};
+
+	EXPECT_EQ(dayOf(wxT("mon")), 1) << "Monday";
+	EXPECT_EQ(dayOf(wxT("tue")), 2) << "Tuesday";
+	EXPECT_EQ(dayOf(wxT("wed")), 3) << "Wednesday";
+	EXPECT_EQ(dayOf(wxT("thu")), 4) << "Thursday";
+	EXPECT_EQ(dayOf(wxT("fri")), 5) << "Friday";
+	EXPECT_EQ(dayOf(wxT("sat")), 6) << "Saturday";
+	EXPECT_EQ(dayOf(wxT("sun")), 7) << "Sunday";
+
+	EXPECT_EQ(dayOf(wxT("weekSpan")), 6) << "a week from its first day to its last spans six days";
+	EXPECT_EQ(dayOf(wxT("begIsMonday")), 1) << "the week must begin on a Monday";
+}
+
+// PROBE — is the DATE itself right, before blaming the weekday?
+TEST_F(BuiltInRuntime, ACalendarDateKeepsItsOwnComponents) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var y public; var m public; var d public;\n")
+		wxT("var doy public; var woy public;\n")
+		wxT("y = GetYear(Date(2024, 1, 1));\n")
+		wxT("m = GetMonth(Date(2024, 1, 1));\n")
+		wxT("d = GetDay(Date(2024, 1, 1));\n")
+		wxT("doy = GetDayOfYear(Date(2024, 1, 1));\n")
+		wxT("woy = GetWeekOfYear(Date(2024, 1, 1));\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("y"), v));   EXPECT_EQ(v.GetInteger(), 2024) << "year";
+	ASSERT_TRUE(pu.GetPropVal(wxT("m"), v));   EXPECT_EQ(v.GetInteger(), 1)    << "month";
+	ASSERT_TRUE(pu.GetPropVal(wxT("d"), v));   EXPECT_EQ(v.GetInteger(), 1)    << "day";
+	ASSERT_TRUE(pu.GetPropVal(wxT("doy"), v)); EXPECT_EQ(v.GetInteger(), 1)    << "day of year";
+	ASSERT_TRUE(pu.GetPropVal(wxT("woy"), v)); EXPECT_EQ(v.GetInteger(), 1)    << "week of year";
+}

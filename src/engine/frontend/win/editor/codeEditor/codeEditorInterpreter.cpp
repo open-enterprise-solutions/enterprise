@@ -1069,12 +1069,18 @@ bool ibPrecompileCode::CompileFunction()
 
 	ExpectDelimeter(')');
 
-	if (IsNextKeyWord(KEY_PUBLIC)) {
-		ExpectKeyword(KEY_PUBLIC);
-		pFunction->m_isExport = true;
+	// Trailing modifiers — TWO INDEPENDENT AXES, read in one pass exactly as the
+	// compiler reads them (compileCode.cpp): one access modifier and, optionally,
+	// `Cached`, in either order. An if/else-if chain consumes one word only, so
+	// `Cached Public` would leave the access word unread and completion would
+	// offer the name as private.
+	for (;;) {
+		if (IsNextKeyWord(KEY_PUBLIC))         { ExpectKeyword(KEY_PUBLIC); pFunction->m_isExport = true; }
+		else if (IsNextKeyWord(KEY_PRIVATE))   { ExpectKeyword(KEY_PRIVATE); }
+		else if (IsNextKeyWord(KEY_PROTECTED)) { ExpectKeyword(KEY_PROTECTED); }
+		else if (IsNextKeyWord(KEY_CACHED))    { ExpectKeyword(KEY_CACHED); }
+		else break;
 	}
-	else if (IsNextKeyWord(KEY_PRIVATE))   ExpectKeyword(KEY_PRIVATE);
-	else if (IsNextKeyWord(KEY_PROTECTED)) ExpectKeyword(KEY_PROTECTED);
 
 	// check for typing
 	GetContext()->m_functions[funcName] = pFunction;
@@ -1130,13 +1136,15 @@ bool ibPrecompileCode::CompileDeclaration()
 			ExpectDelimeter(']');
 		}
 
+		// Same two axes as on a routine — see the note above.
 		bool isExport = false;
-		if (IsNextKeyWord(KEY_PUBLIC)) {
-			ExpectKeyword(KEY_PUBLIC);
-			isExport = true;
+		for (;;) {
+			if (IsNextKeyWord(KEY_PUBLIC))         { ExpectKeyword(KEY_PUBLIC); isExport = true; }
+			else if (IsNextKeyWord(KEY_PRIVATE))   { ExpectKeyword(KEY_PRIVATE); }
+			else if (IsNextKeyWord(KEY_PROTECTED)) { ExpectKeyword(KEY_PROTECTED); }
+			else if (IsNextKeyWord(KEY_CACHED))    { ExpectKeyword(KEY_CACHED); }
+			else break;
 		}
-		else if (IsNextKeyWord(KEY_PRIVATE))   ExpectKeyword(KEY_PRIVATE);
-		else if (IsNextKeyWord(KEY_PROTECTED)) ExpectKeyword(KEY_PROTECTED);
 
 		ibParamValue inferred;
 		bool         hasInit = false;

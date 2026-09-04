@@ -1644,3 +1644,149 @@ TEST(ListSettingsLines, SettingsCarryAllThreeParts) {
 
 	EXPECT_EQ(settings, loaded) << "the whole of it, not merely the parts asked about above";
 }
+
+// ===========================================================================
+// `Cached` — a second modifier axis beside the access one
+// ===========================================================================
+
+// A PROCEDURE has no result to keep. The modifier is REFUSED there rather than
+// ignored, because a silently-dropped Cached is indistinguishable from a cache
+// that simply never helps — and the only symptom would be the clock.
+TEST(CompilerTest, CachedIsRefusedOnAProcedure) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	EXPECT_FALSE(TryCompile(cc,
+		wxT("Procedure DoIt(x) Public Cached\n")
+		wxT("  x = 1;\n")
+		wxT("EndProcedure\n")));
+}
+
+// Stated twice is a mistake worth naming, the same way two access modifiers are.
+TEST(CompilerTest, CachedIsRefusedWhenStatedTwice) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	EXPECT_FALSE(TryCompile(cc,
+		wxT("Function F(x) Cached Cached\n")
+		wxT("  Return x;\n")
+		wxT("EndFunction\n")));
+}
+
+// The axes are independent: an access modifier still admits exactly one of its
+// own even when Cached is present.
+TEST(CompilerTest, TwoAccessModifiersAreStillRefusedAlongsideCached) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	EXPECT_FALSE(TryCompile(cc,
+		wxT("Function F(x) Public Private Cached\n")
+		wxT("  Return x;\n")
+		wxT("EndFunction\n")));
+}
+
+// The modifier reaches the BYTECODE — and the call site stays an ORDINARY call.
+//
+// That second half is the design, not an implementation detail: `Cached` is
+// applied at the callee's entry, where every road into a body arrives, so the
+// caller emits what it always emitted. An opcode here would have covered only
+// the calls this emitter can see — and `CommonModule.Function(...)`, which is
+// how a non-global common module is normally called, is not one of them.
+TEST(CompilerTest, CachedReachesTheBytecodeAndLeavesTheCallSiteAlone) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var r public;\n")
+		wxT("Function Ten(x) Public Cached\n")
+		wxT("  Return x * 10;\n")
+		wxT("EndFunction\n")
+		wxT("r = Ten(5);\n")));
+
+	ASSERT_FALSE(cc.m_cByteCode.m_listFunc.empty());
+	const auto& fn = cc.m_cByteCode.m_listFunc[0];
+	EXPECT_EQ(fn.m_strRealName, wxT("Ten"));
+	EXPECT_TRUE(fn.m_valueCached);
+	EXPECT_EQ(fn.m_kind, ibFnKind::Export) << "Cached must not disturb the access axis";
+
+	int numPlainCalls = 0;
+	for (const auto& code : cc.m_cByteCode.m_listCode)
+		if (code.m_numOper == OPER_CALL) numPlainCalls++;
+	EXPECT_EQ(numPlainCalls, 1) << "the call site must stay an ordinary call";
+}
+
+// And a function WITHOUT the modifier carries the flag cleared — otherwise the
+// test above would pass for a compiler that marked everything cached.
+TEST(CompilerTest, AFunctionWithoutCachedCarriesTheFlagCleared) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var r public;\n")
+		wxT("Function Ten(x) Public\n")
+		wxT("  Return x * 10;\n")
+		wxT("EndFunction\n")
+		wxT("r = Ten(5);\n")));
+
+	ASSERT_FALSE(cc.m_cByteCode.m_listFunc.empty());
+	EXPECT_FALSE(cc.m_cByteCode.m_listFunc[0].m_valueCached);
+}
+
+// CES is the DEFAULT dialect for new configurations, so a modifier that only
+// worked in VES would be broken for most users while every test here passed —
+// this binary forces VES process-wide. Style is swapped back before returning,
+// including on a failed assertion, so suite order stays unaffected.
+TEST(CompilerTest, CachedParsesInTheBraceDialectToo) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_CES);
+
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var r public;\n")
+		wxT("Function Ten(x) Public Cached {\n")
+		wxT("  return x * 10;\n")
+		wxT("}\n")
+		wxT("r = Ten(5);\n")));
+
+	ASSERT_FALSE(cc.m_cByteCode.m_listFunc.empty());
+	EXPECT_TRUE(cc.m_cByteCode.m_listFunc[0].m_valueCached);
+}
+
+// WHERE A MODIFIER GOES, stated as a test because the syntax helper stated it
+// two different ways: Public was documented after the parameter list and
+// Private/Protected before the declaration. Only one of those parses — the
+// grammar reads all three in ONE place, after the closing bracket (and, for a
+// variable, after the name). A leading modifier is not a dialect variant, it is
+// a syntax error, and the helper's examples were unrunnable.
+TEST(CompilerTest, AccessModifiersAreTrailingForEveryOneOfThem) {
+	for (const wxString& access : { wxString(wxT("Public")), wxString(wxT("Private")), wxString(wxT("Protected")) }) {
+		{	// trailing — the form the grammar has
+			ibCompileCode cc(wxT("test"), wxT("memory"), false);
+			EXPECT_TRUE(TryCompile(cc,
+				wxT("Function F(x) ") + access + wxT("\n")
+				wxT("  Return x;\n")
+				wxT("EndFunction\n"))) << access.ToStdString() << " (trailing) must parse";
+		}
+		{	// leading — refused
+			ibCompileCode cc(wxT("test"), wxT("memory"), false);
+			EXPECT_FALSE(TryCompile(cc,
+				access + wxT(" Function F(x)\n")
+				wxT("  Return x;\n")
+				wxT("EndFunction\n"))) << access.ToStdString() << " (leading) must not parse";
+		}
+	}
+}
+
+// A VARIABLE takes its modifier in the same trailing place a routine does. The
+// language reference claimed the opposite — "a Var takes it in front —
+// `Public Var total;` — which is exactly why the routine form is easy to get
+// wrong" — and taught a form that does not compile. One parse site reads all
+// three modifiers (compileCode.cpp, the Var declaration loop), and it reads
+// them after the NAME.
+TEST(CompilerTest, AVariableTakesItsModifierAfterTheNameToo) {
+	for (const wxString& access : { wxString(wxT("Public")), wxString(wxT("Private")), wxString(wxT("Protected")) }) {
+		{	// trailing — the form the grammar has
+			ibCompileCode cc(wxT("test"), wxT("memory"), false);
+			EXPECT_TRUE(TryCompile(cc, wxT("Var total ") + access + wxT(";\n")))
+				<< access.ToStdString() << " (trailing) must parse";
+		}
+		{	// leading — refused
+			ibCompileCode cc(wxT("test"), wxT("memory"), false);
+			EXPECT_FALSE(TryCompile(cc, access + wxT(" Var total;\n")))
+				<< access.ToStdString() << " (leading) must not parse";
+		}
+	}
+}

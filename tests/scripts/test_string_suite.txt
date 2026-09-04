@@ -40,12 +40,13 @@ Message(Left("hello", 3));         // hel
 Message(Right("hello", 3));        // llo
 Message(Left("hi", 10));           // hi   (count > length -> whole string)
 
-Message("=== Mid ===");
-// Implementation is a straight pass-through to wxString::Mid(first, count),
-// i.e. 0-based. If the team expects 1-based ("hel"), that's a pre-existing
-// convention question — NOT introduced by today's native-ibString swap, which
-// preserved Mid(first,count) semantics exactly.
-Message(Mid("hello", 1, 3));       // ell   (0-based)
+Message("=== Mid  (1-based, like Find; omitted length = to the end) ===");
+// The convention question this file used to record is answered: Mid counts from
+// ONE, the same position Find answers with, so the two compose. Decided
+// 2026-09-04.
+Message(Mid("hello", 1, 3));       // hel
+Message(Mid("hello", 2));          // ello  (no length = the rest)
+Message(Mid("hello", Find("hello", "l")));   // llo   (composes with Find)
 
 Message("=== Find  (returns 1-based position, 0 = not found) ===");
 Message(Find("abcabc", "c", 1));   // 3

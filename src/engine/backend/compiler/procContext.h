@@ -171,6 +171,18 @@ struct ibRunContext : std::enable_shared_from_this<ibRunContext> {
 	// level) show until execution enters a `{ }` block.
 	int m_currentScopeDepth = 0;
 
+	// `Cached` — the argument tuple this frame's result will be kept under, and
+	// the function it belongs to. Filled at OPER_FUNC when the body is about to
+	// run on a MISS, read at OPER_RET / OPER_ENDFUNC when it returns.
+	//
+	// IT LIVES ON THE FRAME because that is what makes recursion and re-entry
+	// correct without a word of extra care: each call has its own, so a cached
+	// function that calls itself cannot overwrite the key of the call above it.
+	// An empty vector costs no allocation, so a frame that is not cached pays
+	// for a pointer-sized triple and nothing else.
+	long                 m_cachedEntry = wxNOT_FOUND;
+	std::vector<ibValue> m_cachedKey;
+
 	// A VECTOR, AND EMPTY IT COSTS NOTHING. This was a std::map, which on MSVC
 	// allocates its sentinel node in the DEFAULT CONSTRUCTOR — so every frame paid
 	// one heap allocation and one free for a container that is empty unless a

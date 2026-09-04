@@ -401,6 +401,13 @@ void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString&
 
 	contextFunction->m_strContext = strContextVar; //variable for which the attribute is called
 
+	// A negative declared arity means "as many as it is given" — the registration
+	// convention the runtime already honours (procUnit.cpp sizes such a frame by
+	// MAX_STATIC_VAR, "arity unknown"). Carry it across; without this the loop
+	// below simply builds an empty list and the caller's first argument reads as
+	// one too many.
+	contextFunction->m_bVariadic = (argCount < 0);
+
 	if (argCount > 0) contextFunction->m_listParam.reserve(argCount);
 
 	for (long arg = 0; arg < argCount; arg++) {

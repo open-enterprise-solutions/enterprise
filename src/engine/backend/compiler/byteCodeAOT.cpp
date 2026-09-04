@@ -141,7 +141,13 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // compiled before either existed resolved its names against the smaller context, and
 // a cached one is served without ever asking whether that context still holds. Bump
 // so every module recompiles against the context as it is now.
-constexpr uint16_t kAOTFormatVersion = 20;
+// v21 (2026-09-04): a function record gained two bytes after m_kind —
+// `m_needsHeapFrame`, which was never written and came back false on every
+// cached module (see WriteFunction), and `m_valueCached`, the `Cached` modifier.
+// A v20 blob read as v21 would take the parent ref two bytes late and every
+// field after it with it, so a stale reader does not fail cleanly — the strict
+// version check is what stops it.
+constexpr uint16_t kAOTFormatVersion = 21;
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against
@@ -452,6 +458,14 @@ bool WriteFunction(ibWriterMemory& w, const ibByteCode::ibByteFunction& f) {
 	w.w_s32((int32_t)f.m_lVarCount);
 	w.w_u64((uint64_t)f.m_returnClsid);
 	w.w_u8((uint8_t)f.m_kind);
+	// m_needsHeapFrame was NOT written before v21, and a default-false bool that
+	// the reconstruction path has to restore is exactly the shape of a silent
+	// defect: a module served from the cache came back with the flag cleared on
+	// every function, so a cross-module call to an exported function holding an
+	// inner lambda emitted OPER_CALL instead of OPER_CALL_CLOSURE and the capture
+	// dangled — only on the runs that hit the cache.
+	w.w_u8(f.m_needsHeapFrame ? 1 : 0);
+	w.w_u8(f.m_valueCached ? 1 : 0);
 	w.w_s32((int32_t)f.m_parentRef);
 	w.w_stringZ(f.m_strRealName);
 	w.w_stringZ(f.m_strContext);
@@ -484,6 +498,8 @@ bool ReadFunction(const ibReaderMemory& r, ibByteCode::ibByteFunction& f) {
 	f.m_lVarCount       = (long)r.r_s32();
 	f.m_returnClsid     = (ibClassID)r.r_u64();
 	f.m_kind            = (ibFnKind)r.r_u8();
+	f.m_needsHeapFrame  = (r.r_u8() != 0);
+	f.m_valueCached     = (r.r_u8() != 0);
 	f.m_parentRef       = (long)r.r_s32();
 	r.r_stringZ(f.m_strRealName);
 	r.r_stringZ(f.m_strContext);

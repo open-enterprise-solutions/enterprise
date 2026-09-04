@@ -17,6 +17,8 @@
 
 #include <wx/defs.h>   // wxNOT_FOUND
 
+#include "value.h"     // ibValue — m_cacheProbe holds them by value
+
 class ibProcUnit;
 struct ibRunContext;
 struct ibByteCode;
@@ -59,6 +61,17 @@ struct ibProcUnitState {
 	// Recursion-depth counter — gates against runaway scripts via
 	// MAX_REC_COUNT in procUnit.cpp.
 	short                       m_recCount = 0;
+
+	// Scratch buffer the OPER_FUNC entry builds a `Cached` call's argument tuple
+	// in before looking it up. It belongs HERE, beside the call stack, for the
+	// same reason the call stack does: it is interpreter state, so when the
+	// worker boundary swaps a session's state in and out it travels with the
+	// rest rather than staying behind on whichever thread happened to run.
+	// Reused rather than built per call — a cache hit is meant to cost a hash
+	// and a compare, not a heap allocation. Filled and read inside a single
+	// instruction, so a nested cached call refills it after the outer one is
+	// finished with it.
+	std::vector<ibValue>        m_cacheProbe;
 
 	// Resolves the lambda executor for this state. Primary path:
 	// session's m_lambdaRuntime (allocated alongside m_root, parent =

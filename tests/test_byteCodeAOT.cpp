@@ -363,6 +363,12 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	fn.m_lVarCount       = 5;
 	fn.m_returnClsid     = 0xABCDEF;
 	fn.m_kind            = ibFnKind::Export;
+	// Two flags that default FALSE and have to be RESTORED rather than derived —
+	// exactly the shape that goes missing without a symptom. m_needsHeapFrame
+	// was in fact never written until v21, so a module served from the cache came
+	// back with it cleared on every function.
+	fn.m_needsHeapFrame  = true;
+	fn.m_valueCached     = true;
 	fn.m_strRealName     = wxT("Calculate");
 	fn.m_strContext      = wxEmptyString;
 
@@ -410,6 +416,8 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	EXPECT_EQ(a.m_lVarCount,       5);
 	EXPECT_EQ(a.m_returnClsid,     (ibClassID)0xABCDEF);
 	EXPECT_EQ(a.m_kind,            ibFnKind::Export);
+	EXPECT_TRUE(a.m_needsHeapFrame) << "the heap-frame flag did not survive the round trip";
+	EXPECT_TRUE(a.m_valueCached)    << "the Cached modifier did not survive the round trip";
 	EXPECT_EQ(a.m_strRealName,     wxT("Calculate"));
 
 	ASSERT_EQ(a.m_listParam.size(),         2u);

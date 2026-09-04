@@ -46,6 +46,7 @@ struct ibKeyWords s_listKeyWord[] =
 	{"Public"},      // KEY_PUBLIC    — was "Export"; leading access modifier
 	{"Private"},     // KEY_PRIVATE
 	{"Protected"},   // KEY_PROTECTED
+	{"Cached"},      // KEY_CACHED    — memoisation; combines with the three above
 	{"Val"},
 	{"Return"},
 	{"Try"},

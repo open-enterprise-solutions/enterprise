@@ -1,6 +1,8 @@
 #ifndef _SYSTEM_OBJECTS_H__
 #define _SYSTEM_OBJECTS_H__
 
+#include <limits>   // Mid's "to the end of the string" default
+
 #include "backend/backend.h"
 #include "backend/compiler/value.h"
 
@@ -51,7 +53,9 @@ public:
 	static ibString TrimAll(const ibValue& cValue);
 	static ibString Left(const ibValue& cValue, unsigned int nCount);
 	static ibString Right(const ibValue& cValue, unsigned int nCount);
-	static ibString Mid(const ibValue& cValue, unsigned int nFirst, unsigned int nCount);
+	// nFirst is 1-BASED, like Find's answer — see the note on the definition.
+	// nCount defaults to "to the end of the string".
+	static ibString Mid(const ibValue& cValue, size_t nFirst, size_t nCount = std::numeric_limits<size_t>::max());
 	static unsigned int Find(const ibValue& cValue, const ibValue& cValue2, unsigned int nStart);
 	static ibString StrReplace(const ibValue& cSource, const ibValue& cValue1, const ibValue& cValue2);
 	static int StrCountOccur(const ibValue& cSource, const ibValue& cValue1);

@@ -886,23 +886,32 @@ void ibValue::FromDate(int& nYear, int& nMonth, int& nDay, int& DayOfWeek, int& 
 	const wxLongLong& llData = wxLongLong(GetDate());
 	wxDateTime dateTime(llData);
 
+	// ⚠ THIS SAID `- 1`, WHERE ITS TWO SIBLINGS ABOVE SAY `+ 1`. wxDateTime
+	// numbers months from zero, so January came back as -1 — and the month was
+	// then cast straight back into a wxDateTime to derive everything else, which
+	// made that rebuilt date DECEMBER OF THE PREVIOUS YEAR. Measured on
+	// 2024-01-01: day of year 335, week 49. Every caller of this overload —
+	// GetDayOfWeek / GetDayOfYear / GetWeekOfYear, and BegOfWeek / EndOfWeek,
+	// which build their result out of nMonth — was wrong, and quietly: the
+	// figures look like dates, so nothing raises.
 	nYear = dateTime.GetYear();
-	nMonth = dateTime.GetMonth() - 1;
+	nMonth = dateTime.GetMonth() + 1;
 	nDay = dateTime.GetDay();
 
-	WeekOfYear = DayOfWeek = DayOfYear = 0;
+	// And ASK THE DATE, rather than rebuilding one from the parts just taken off
+	// it. The rebuild was what turned one wrong month into three wrong answers.
+	DayOfYear = dateTime.GetDayOfYear();
 
-	wxDateTime partDateTime(nDay, (wxDateTime::Month)nMonth, nYear);
-	DayOfYear = partDateTime.GetDayOfYear();
-	DayOfWeek = partDateTime.GetWeekDay() - 1;
+	// ISO numbering: Monday = 1 … Sunday = 7. wx numbers Sunday 0 … Saturday 6,
+	// and the old `GetWeekDay() - 1` with a `< 1 → 7` floor gave Monday and
+	// Sunday the SAME number while shifting every other day down by one.
+	const int wxWeekDay = static_cast<int>(dateTime.GetWeekDay());
+	DayOfWeek = (wxWeekDay == static_cast<int>(wxDateTime::Sun)) ? 7 : wxWeekDay;
 
-	if (DayOfWeek < 1)
-		DayOfWeek = 7;
-
-	WeekOfYear = 1 + (DayOfYear - 1) / 7;
-
-	int nD = (1 + (DayOfYear - 1) % 7);
-	if (nD > DayOfWeek) WeekOfYear++;
+	// wx knows the calendar rule; the hand-rolled `1 + (DayOfYear - 1) / 7` did
+	// not — it counted seven-day blocks from January 1st, which is not what a
+	// week number is in any calendar anybody reconciles against.
+	WeekOfYear = static_cast<int>(dateTime.GetWeekOfYear(wxDateTime::Monday_First));
 }
 
 bool ibValue::IsEmpty() const

@@ -292,7 +292,9 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enTrimAll: pvarRetValue = TrimAll(*paParams[0]); return true;
 		case enLeft: pvarRetValue = Left(*paParams[0], paParams[1]->GetInteger()); return true;
 		case enRight: pvarRetValue = Right(*paParams[0], paParams[1]->GetInteger()); return true;
-		case enMid: pvarRetValue = Mid(*paParams[0], paParams[1]->GetInteger(), lSizeArray > 2 ? paParams[2]->GetInteger() : 1); return true;
+			// An omitted length means TO THE END, not one character.
+		case enMid: pvarRetValue = Mid(*paParams[0], (size_t)paParams[1]->GetInteger(),
+			lSizeArray > 2 ? (size_t)paParams[2]->GetInteger() : std::numeric_limits<size_t>::max()); return true;
 		case enFind: pvarRetValue = Find(*paParams[0], *paParams[1], lSizeArray > 2 ? paParams[2]->GetInteger() : 0); return true;
 		case enStrReplace: pvarRetValue = StrReplace(*paParams[0], *paParams[1], *paParams[2]); return true;
 		case enStrCountOccur: pvarRetValue = StrCountOccur(*paParams[0], *paParams[1]); return true;

@@ -197,10 +197,22 @@ enum { // numbers of keywords (in strict sequence as the values ​​themselves
 	KEY_ENDPROCEDURE,
 	KEY_FUNCTION,
 	KEY_ENDFUNCTION,
-	// === access modifiers (leading) — replaced the old trailing `Export` ===
+	// === access modifiers — replaced the old single `Export` ===
+	// TRAILING, all three of them, and there is no leading form anywhere: a
+	// routine takes the modifier after its signature, a variable after its
+	// name. The word "(leading)" stood here and was simply wrong; it had
+	// already been copied into the language reference and the syntax helper,
+	// which taught `Public Var total;` — a line that does not compile.
+	// Pinned by CompilerTest.AccessModifiersAreTrailingForEveryOneOfThem and
+	// .AVariableTakesItsModifierAfterTheNameToo.
 	KEY_PUBLIC,           // `Public`    — exported / visible everywhere (was `Export`)
 	KEY_PRIVATE,          // `Private`   — module-local (default; optional explicit-intent)
 	KEY_PROTECTED,        // `Protected` — visible to children (object -> its forms)
+	// === memoisation (a SECOND axis, not a fourth access) ===
+	// `Cached` combines with an access modifier rather than replacing one —
+	// `Private Cached` / `Public Cached` are both well-formed. Access answers
+	// WHO SEES the function; this answers WHEN IT IS EVALUATED.
+	KEY_CACHED,           // `Cached`    — the result is kept per argument tuple
 	KEY_VAL,
 	KEY_RETURN,
 	KEY_TRY,

@@ -311,6 +311,11 @@ void ibProcUnit::Reset()
 	m_ppArrayCode = nullptr;
 	m_pByteCode = nullptr;
 	m_bExecuted = false;
+
+	// The bytecode is going, and the cache is keyed by entry addresses INTO it —
+	// keeping the rows would mean answering calls into a tape that no longer
+	// exists, with results computed by code that may no longer be there.
+	m_cachedResults.clear();
 }
 
 void ibProcUnit::BuildScopeChain(ibValue** localScope)
@@ -1175,7 +1180,13 @@ start_label:
 				// too many parameters — per-class methods have a meaningful
 				// compile-time GetNParams.
 				{
-					if (paramCount < cRunContext.m_lParamCount)
+					// wxNOT_FOUND = "as many as it is given" (a negative declared
+					// arity), and the frame above is already sized for it. It must
+					// be excluded from the upper bound FIRST — `-1 < anything` is
+					// true, so the bound rejected every call to such a method and
+					// the clause below it, which is the one written for this case,
+					// could never be reached.
+					if (paramCount != wxNOT_FOUND && paramCount < cRunContext.m_lParamCount)
 						Raise(ERROR_MANY_PARAMS, funcName);
 					else if (paramCount == wxNOT_FOUND && cRunContext.m_lParamCount == 0)
 						Raise(ERROR_MANY_PARAMS, funcName);
@@ -1417,6 +1428,16 @@ start_label:
 			case OPER_ENDFUNC:
 			case OPER_ENDLFUNC:
 			case OPER_END:
+				// `Cached` — the other half of the pair opened at OPER_FUNC.
+				// Reached only by a body that RETURNED: a raise unwinds past
+				// here, so a failed call is never answered from the store.
+				if (pContext->m_cachedEntry != wxNOT_FOUND && pvarRetValue != nullptr) {
+					// emplace, not insert_or_assign — a recursive call may have
+					// kept this very tuple already, and the first result stands.
+					m_cachedResults[pContext->m_cachedEntry].emplace(
+						std::move(pContext->m_cachedKey), *pvarRetValue);
+					pContext->m_cachedEntry = wxNOT_FOUND;
+				}
 				lCodeLine = lFinish;
 				break; //exit
 			case OPER_FUNC: if (bDelta) {
@@ -1442,6 +1463,46 @@ start_label:
 				// model that the AOT-friendly self-describing tape design
 				// requires (see project_bytecode_tape_design memory).
 				pContext->m_currentFunction = m_pByteCode->FindFunctionByEntry(lCodeLine);
+
+				// `Cached` — DECIDED HERE, and here only.
+				//
+				// ⭐ THIS IS WHERE EVERY ROAD INTO A BODY ARRIVES. A direct call
+				// (OPER_CALL), a call through a module value — which is what
+				// `CommonModule.Function(...)` is, arriving by name through
+				// CallAsFunc — a manager's method, a handler fired from C++:
+				// they build a frame by different means and all of them execute
+				// the tape from the function's entry, which is this opcode. So
+				// the modifier is applied once, for roads nobody has to
+				// enumerate, instead of being taught to each caller in turn.
+				//
+				// It also costs nothing to ask: the lookup above already ran,
+				// for its own reasons, on every call.
+				if (pContext->m_currentFunction != nullptr
+					&& pContext->m_currentFunction->m_valueCached
+					&& pvarRetValue != nullptr) {
+
+					// The key is the argument tuple, through the one key policy
+					// in value.h. Built into the reused probe, so a hit costs a
+					// hash and a compare and no allocation.
+					std::vector<ibValue>& probe = state->m_cacheProbe;
+					probe.clear();
+					probe.reserve((size_t)pContext->m_lParamCount);
+					for (long i = 0; i < pContext->m_lParamCount; i++)
+						probe.emplace_back(*pContext->m_pRefLocVars[i]);
+
+					const auto& kept = m_cachedResults[lCodeLine];
+					const auto itKept = kept.find(probe);
+					if (itKept != kept.end()) {
+						CopyValue(*pvarRetValue, itKept->second);
+						lCodeLine = lFinish;   // the body does not run AT ALL
+						break;
+					}
+
+					// A miss: remember what to keep it under, on the FRAME, and
+					// let the body run. OPER_RET closes the pair.
+					pContext->m_cachedEntry = lCodeLine;
+					pContext->m_cachedKey = probe;
+				}
 			}
 			break;
 			case OPER_LFUNC: {
@@ -2190,6 +2251,8 @@ void ibProcUnit::CallAsFunc(const long lCodeLine, ibValue& pvarRetValue, ibValue
 	//load parameters
 	memcpy(&cRunContext.m_pRefLocVars[0], &ppParams[0], std::min(lSizeArray, cRunContext.m_lParamCount) * sizeof(ibValue*));
 
+	// `Cached` needs nothing here: the modifier is applied at the function's
+	// ENTRY OPCODE, which this call reaches like every other road into a body.
 	//execute arbitrary code
 	Execute(&cRunContext, &pvarRetValue, false);
 }

@@ -79,15 +79,21 @@ bool ibParserModule::ParseModule(const wxString& sModule)
 					ExpectDelimeter(']');
 				}
 
+				// Trailing modifiers, read the way the compiler reads them
+				// (compileCode.cpp): TWO INDEPENDENT AXES — one access modifier
+				// and, optionally, `Cached` — in either order. An if/else-if
+				// chain sees exactly one word, so `Cached Public` would leave
+				// the access word unread and the name would show in the outline
+				// as private. The parse must not disagree with the compiler
+				// about what a declaration says.
 				bool isExport = false;
-
-				if (IsNextKeyWord(KEY_PUBLIC))
-				{
-					ExpectKeyword(KEY_PUBLIC);
-					isExport = true;
+				for (;;) {
+					if (IsNextKeyWord(KEY_PUBLIC))         { ExpectKeyword(KEY_PUBLIC); isExport = true; }
+					else if (IsNextKeyWord(KEY_PRIVATE))   { ExpectKeyword(KEY_PRIVATE); }
+					else if (IsNextKeyWord(KEY_PROTECTED)) { ExpectKeyword(KEY_PROTECTED); }
+					else if (IsNextKeyWord(KEY_CACHED))    { ExpectKeyword(KEY_CACHED); }
+					else break;
 				}
-				else if (IsNextKeyWord(KEY_PRIVATE))   ExpectKeyword(KEY_PRIVATE);
-				else if (IsNextKeyWord(KEY_PROTECTED)) ExpectKeyword(KEY_PROTECTED);
 
 				if (IsNextDelimeter('='))// initial initialization - works only inside the text of modules (but not re-declaring procedures and functions)
 				{
@@ -219,14 +225,16 @@ bool ibParserModule::ParseModule(const wxString& sModule)
 
 			ExpectDelimeter(')');
 
+			// Same two axes as on a variable, and the same reason to read them
+			// in a loop rather than one apiece — see the note there.
 			bool isExport = false;
-
-			if (IsNextKeyWord(KEY_PUBLIC))
-			{
-				ExpectKeyword(KEY_PUBLIC); isExport = true;
+			for (;;) {
+				if (IsNextKeyWord(KEY_PUBLIC))         { ExpectKeyword(KEY_PUBLIC); isExport = true; }
+				else if (IsNextKeyWord(KEY_PRIVATE))   { ExpectKeyword(KEY_PRIVATE); }
+				else if (IsNextKeyWord(KEY_PROTECTED)) { ExpectKeyword(KEY_PROTECTED); }
+				else if (IsNextKeyWord(KEY_CACHED))    { ExpectKeyword(KEY_CACHED); }
+				else break;
 			}
-			else if (IsNextKeyWord(KEY_PRIVATE))   ExpectKeyword(KEY_PRIVATE);
-			else if (IsNextKeyWord(KEY_PROTECTED)) ExpectKeyword(KEY_PROTECTED);
 
 			ibModuleElement data;
 			data.m_name = strFuncName;

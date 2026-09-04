@@ -213,6 +213,11 @@ struct ibCompileContext {
 			  // dropping this here would emit a plain OPER_CALL and dangle
 			  // the capture (compileCode.cpp:1165 reads m_needsHeapFrame).
 			  m_needsHeapFrame(fn.m_needsHeapFrame),
+			  // Same reason as the line above — and here it is not a dangling
+			  // capture but a silent loss of the modifier: a cross-module call
+			  // to a cached function would emit a plain OPER_CALL and quietly
+			  // stop memoising, with nothing to see but the time.
+			  m_valueCached(fn.m_valueCached),
 			  m_strRealName(fn.m_strRealName.IsEmpty() ? strFuncName : fn.m_strRealName),
 			  m_strContext(fn.m_strContext),
 			  m_lVarCount(fn.m_lVarCount),
@@ -263,6 +268,25 @@ struct ibCompileContext {
 		// decide heap-promotion for a dynamically-called lambda
 		// whose body has its own inner-lambda capture chain.
 		bool m_needsHeapFrame = false;
+
+		// `Cached` — memoise the result per argument tuple. A SECOND axis
+		// beside m_access (Private Cached / Public Cached both parse), and
+		// legal only where there is a result to keep: a PROCEDURE with the
+		// modifier is refused at ParseFunctionSignature. Mirrored to
+		// ibByteFunction::m_valueCached, which is where the RUNTIME reads it —
+		// at the function's entry opcode. The call site emits an ordinary call:
+		// the modifier belongs to the callee, not to whoever names it.
+		bool m_valueCached = false;
+
+		// A built-in that takes AS MANY ARGUMENTS AS IT IS GIVEN — declared by
+		// registering it with a negative arity (`AppendFunc("Max", -1, …)`).
+		// The fact was written at registration and never read: PushFunction's
+		// `for (arg = 0; arg < argCount; ...)` builds nothing for a negative
+		// count, so m_listParam stayed empty and the "too many parameters" check
+		// below rejected the FIRST argument. `Max` and `Min` are the only two,
+		// and neither could be called at all — which is also why the infinite
+		// loop inside Max survived (systemManagerFunc.cpp).
+		bool m_bVariadic = false;
 
 		wxString m_strRealName; //Function name (canonical)
 		ibClassID m_clsid = 0;   // declared return type; 0 = untyped
