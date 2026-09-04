@@ -1022,20 +1022,26 @@ long ibApplicationData::RunApplication(const wxString& strAppName, const wxStrin
 	const long execute = wxExecute(executeCmd);
 
 	if (searchDebug) {
+		// Scan in rounds, the same way the manifest path below does, and for the same
+		// reason: one sweep races the process that was just started. Its debug server
+		// is created near the end of bootstrap, after the database is open, so the
+		// first sweep finds nothing listening and its threads exit on connect-refused
+		// with the counter spent - which is what lets the next SearchServer call make
+		// fresh ones. A single sweep followed by a 1.5-second wait, which is what stood
+		// here, could only ever succeed on a fast warm start.
+		const int kRounds       = 60;   // 60 rounds * 250ms = ~15s, and it stops on success
+		const int kRoundSleepMs = 250;
 
-		unsigned short num_attempts = 0;
+		for (int round = 0; round < kRounds; ++round) {
 
-		debugClient->SearchServer(true);
-		while (debugClient != nullptr) {
+			if (debugClient == nullptr)
+				break;
+
+			debugClient->SearchServer(true);
+			wxMilliSleep(kRoundSleepMs);
 
 			if (debugClient->GetConnectionSuccess())
 				break;
-
-			if (num_attempts > 300)
-				break;
-
-			num_attempts++;
-			wxMilliSleep(5);
 		}
 	}
 

@@ -115,17 +115,31 @@ bool ibDebuggerServer::CreateServer(const wxString& hostName, unsigned short sta
 	}
 
 	if (wait) {
+		// Hold the bootstrap until the debug client is on the socket, so breakpoints
+		// exist before OnStart runs. Bounded, because a process started with --debug
+		// and no designer would otherwise never finish starting; when the bound
+		// expires it goes on without a debugger. An assertion used to stand here and
+		// it fired on a race nobody at the window could act on - the designer scans
+		// the ports while this process is still connecting to its database, so the
+		// two miss each other on a slow start.
+		const int kWaitForClientMs = 30000;
+		int waited = 0;
 
 		while (m_socketConnectionThread != nullptr) {
 
 			if (m_bUseDebug || m_socketConnectionThread->m_acceptConnection)
 				break;
 
-			wxMilliSleep(5);
-		}
+			if (waited >= kWaitForClientMs) {
+				ibJournalWarning(wxT("debugger"),
+					wxT("no debug client connected within %d ms - starting without a debugger"),
+					kWaitForClientMs);
+				break;
+			}
 
-		wxASSERT_MSG(m_socketConnectionThread != nullptr
-			&& m_socketConnectionThread->m_socket != nullptr, _("Client not connected!"));
+			wxMilliSleep(5);
+			waited += 5;
+		}
 	}
 	else {
 		// Non-blocking server (wes / designer auto-debug): wait for the
@@ -949,7 +963,11 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 				m_socket->SetOption(SOL_SOCKET, SO_KEEPALIVE, &flag, sizeof(flag));
 			}
 
-			if (m_socket != nullptr || m_waitConnection)
+			// Keep trying. Accept(true) comes back after the socket's own ten-second
+			// timeout, and a debugger that has not arrived yet is the ordinary case.
+			// Breaking on that timeout is what left m_socket null while the flag below
+			// said a connection had been accepted.
+			if (m_socket != nullptr)
 				break;
 		}
 
