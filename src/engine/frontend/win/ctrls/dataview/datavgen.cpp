@@ -5317,6 +5317,16 @@ void ibDataViewCtrl::Refresh(bool eraseb, const wxRect* rect)
 	// Refresh to get correct scrolled position:
 	BaseType::Refresh(eraseb, rect);
 
+	// ⭐⭐ THE AREAS MAY NOT EXIST YET, AND THIS RUNS BEFORE THEY DO. wxWindow::Create()
+	// calls InheritAttributes(), which calls the VIRTUAL SetFont() — ours — which lands
+	// here while the constructor body has not run and every area window is still null.
+	// Every sibling below is null-checked; m_tableAreaWin was the one that was not, so
+	// dropping a table onto a form in the editor died with SIGSEGV at this line
+	// (macOS, 2026-09-04). It is the mandatory area — null here means "not built yet",
+	// and there is nothing to repaint before there is anything to paint on.
+	if (!m_tableAreaWin)
+		return;
+
 	if (rect)
 	{
 		m_tableAreaWin->Refresh(eraseb, rect);
