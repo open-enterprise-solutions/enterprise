@@ -306,8 +306,50 @@ void ibConfigurationTree::ibMetaTreeCtrl::OnPasteItem(wxCommandEvent& event)
 #include "frontend/docView/docView.h"
 #include "frontend/mainFrame/mainFrameChild.h"
 
+// ⭐⭐ THE HANDLER MUST NOT ANSWER THE FOCUS EVENTS IT ITSELF CAUSES — without this the designer
+// died on macOS the moment a common module was added: EXC_BAD_ACCESS at the main thread's guard
+// page, twelve frames repeating to the bottom of an exhausted stack.
+//
+// The loop, read from a live backtrace rather than reasoned about:
+//
+//     OnSetFocus → ibView::Activate(true) → wxWidgetCocoaImpl::SetFocus()
+//       → -[NSWindow _realMakeFirstResponder:] → resignFirstResponder
+//         → DoNotifyFocusEvent → a wx focus event, dispatched inline → OnSetFocus …
+//
+// Activating a view moves the focus, moving the focus tells the window that was holding it, and
+// on Cocoa that telling is SYNCHRONOUS: -[NSWindow _realMakeFirstResponder:] calls
+// resignFirstResponder inside SetFocus, and wx turns it into a focus event dispatched in the same
+// stack. Windows does not close the circle because it posts the notification through the message
+// queue instead, which is why this was never seen there.
+//
+// 🛑 AND THE GUARD THAT WAS HERE COULD NOT CLOSE IT, because it asks a question the call it
+// guards has not yet answered. `m_metaView != docManager->GetCurrentView()` looks like it stops
+// the second entry — but ibView::Activate updates the current view LAST (docManager.cpp: the
+// mgr->ActivateView call sits after mainFrame->ActivateView, which is where the focus actually
+// moves). On re-entry the current view is still the old one, so the condition is still true and
+// the handler activates again. The KILL_FOCUS branch below already stopped trusting that same
+// state, for its own reason, and its comment describes the same unreliability from the other end.
+//
+// So the state this needs is not "which view is current" but "am I in the middle of changing
+// that" — and only this handler knows it. One flag, cleared on the way out by scope, both
+// branches covered: KILL_FOCUS activates too, and would recurse the same way from the other side.
 void ibConfigurationTree::ibMetaTreeCtrl::OnSetFocus(wxFocusEvent& event)
 {
+	if (m_switchingActivation) {
+		event.Skip();
+		return;
+	}
+
+	// Cleared by scope, so an exception out of Activate cannot leave the tree permanently deaf to
+	// focus — a stuck flag would be a quieter bug than the crash it replaces, and harder to see.
+	class Switching {
+	public:
+		explicit Switching(bool& flag) : m_flag(flag) { m_flag = true; }
+		~Switching() { m_flag = false; }
+	private:
+		bool& m_flag;
+	} const switching(m_switchingActivation);
+
 	if (docManager != nullptr && event.GetEventType() == wxEVT_SET_FOCUS) {
 
 		const wxTreeItemId& item = GetSelection();
