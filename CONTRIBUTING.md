@@ -86,6 +86,21 @@ placement and file layout vary a little by area, and the local convention wins. 
 prefix for public classes, `m_` for members, `s_` for statics, `g_` for compile-time
 constants; tabs for indentation.
 
+**Comments carry a marker, and the marker means something.** Four of them are used throughout
+`src/engine`, and they are not decoration:
+
+| | |
+|---|---|
+| ⭐ | A deliberate decision, with the reason it was made that way rather than the obvious way. |
+| ⭐⭐ | The central point of the file or function — what it exists for. |
+| ⚠ | A limit or caveat: where the thing above stops applying, and what breaks past it. |
+| 🛑 | A defect that actually happened, and what it cost. Not a hypothetical. |
+
+The marker is followed by one statement in capitals, then the explanation in ordinary prose;
+where it matters, the date and who decided. The point of the grammar is that the four are not
+interchangeable: ⭐ says *this was chosen*, 🛑 says *this was paid for*. Reach for 🛑 only when
+something really did go wrong, or it stops meaning anything.
+
 **Say why in the commit message, not what.** The diff already says what changed. What it
 cannot say is what was wrong before, what you measured, and what you decided against — and
 that is the part somebody will need in a year. Long commit messages are normal here.
