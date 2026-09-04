@@ -64,10 +64,14 @@ public:
 	// Single-source constructor. The loader produces one of these per
 	// source (platform / per-config), then hands them to the merging
 	// constructor below.
+	// `categoryNames` is the locale's `_categories.json` dictionary, key →
+	// display name. It is passed IN rather than read here because the corpus
+	// does not know about files — the loader owns every source medium.
 	ibHelpCorpus(const wxString&                   locale,
 	             Source                            source,
 	             std::vector<ibHelpEntry>          entries,
-	             std::vector<ibHelpLoadError>      loadErrors);
+	             std::vector<ibHelpLoadError>      loadErrors,
+	             std::map<wxString, wxString>      categoryNames = {});
 
 	// Merging constructor — composes platform + per-config into a single
 	// immutable snapshot. Platform entries are added first; per-config
@@ -146,6 +150,13 @@ private:
 
 	// Root of the category tree. Owned.
 	std::unique_ptr<ibHelpCategory> m_root;
+
+	// Category key → display name, from the locale's `_categories.json`.
+	// ⚠ THIS DICTIONARY EXISTED IN ALL THREE LOCALES AND NOTHING READ IT: the
+	// file shipped inside every .hlk, ibHelpCategory::displayName was declared
+	// and never assigned, and the tree view fell back to showing the raw key
+	// ("global_functions" instead of "Глобальные функции"). Wired 2026-09-04.
+	std::map<wxString, wxString> m_categoryNames;
 
 	// Source-file digest used by Fingerprint(). Computed once at
 	// construction time so the accessor is trivial.

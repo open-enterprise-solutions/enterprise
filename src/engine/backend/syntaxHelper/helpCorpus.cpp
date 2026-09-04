@@ -110,10 +110,12 @@ ibHelpCorpus::ibHelpCorpus(const wxString& locale)
 ibHelpCorpus::ibHelpCorpus(const wxString&              locale,
                            Source                       source,
                            std::vector<ibHelpEntry>     entries,
-                           std::vector<ibHelpLoadError> loadErrors)
+                           std::vector<ibHelpLoadError> loadErrors,
+                           std::map<wxString, wxString> categoryNames)
     : m_entries(std::move(entries)),
       m_locale(locale),
-      m_loadErrors(std::move(loadErrors)) {
+      m_loadErrors(std::move(loadErrors)),
+      m_categoryNames(std::move(categoryNames)) {
 	// Tag every entry with its source so the merging constructor and the
 	// UI can distinguish later. Loader does not set this — keeping the
 	// invariant in one place avoids contradictions.
@@ -172,6 +174,15 @@ ibHelpCorpus::ibHelpCorpus(std::shared_ptr<const ibHelpCorpus> platform,
 			}
 		}
 	}
+
+	// Category names travel with the entries, platform first so a
+	// per-configuration dictionary can rename a section for its own corpus —
+	// the same overlay rule the entries themselves follow.
+	if (platform)
+		m_categoryNames = platform->m_categoryNames;
+	if (perConfig)
+		for (const auto& named : perConfig->m_categoryNames)
+			m_categoryNames[named.first] = named.second;
 
 	m_root        = std::make_unique<ibHelpCategory>();
 	m_fingerprint = HashEntries(m_entries, m_locale);
@@ -247,6 +258,12 @@ void ibHelpCorpus::BuildCategoryTree() {
 			if (it == cur->children.end() || (*it)->key != key) {
 				auto node = std::make_unique<ibHelpCategory>();
 				node->key = key;
+				// The localised name, when the dictionary has one. A key with no
+				// entry keeps an empty display name and the tree view falls back
+				// to the key — visibly untranslated rather than absent.
+				const auto named = m_categoryNames.find(key);
+				if (named != m_categoryNames.end())
+					node->displayName = named->second;
 				it        = cur->children.insert(it, std::move(node));
 			}
 			cur = it->get();

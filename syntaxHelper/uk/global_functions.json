@@ -13,14 +13,14 @@
         "global_functions"
       ],
       "signature": "Boolean(value : any)",
-      "description": "",
+      "description": "Перетворює значення на булеве. Число хибне, коли дорівнює нулю, і істинне в решті випадків; порожній рядок, порожня дата та Undefined хибні. Застосовується, коли умовою має керувати значення невідомого типу.",
       "syntax_block": "Boolean(value : any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — значення будь-якого типу.",
+      "return_descr": "Булеве.",
+      "example": "Message(Boolean(0));      // False\nMessage(Boolean(\"\"));     // False\nMessage(Boolean(42));     // True",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Number", "fn.String", "fn.TypeOf"],
+      "reviewed": true
     },
     {
       "id": "fn.Number",
@@ -32,14 +32,14 @@
         "global_functions"
       ],
       "signature": "Number(value: any)",
-      "description": "",
+      "description": "Перетворює значення на число. Рядок розбирається; булеве дає 1 або 0; значення без числового прочитання дає нуль, а не виняток. Результат — точне десяткове число: числа цієї платформи не двійкові з рухомою комою, тому грошова арифметика не пливе.",
       "syntax_block": "Number(value: any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — значення будь-якого типу.",
+      "return_descr": "Число.",
+      "example": "Message(Number(\"3.14\"));   // 3.14\nMessage(Number(True));     // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.String", "fn.Boolean", "fn.Int", "fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.Date",
@@ -58,7 +58,7 @@
       "example": "Date(2026, 9, 2)\nDate(2026, 9, 2, 10, 45, 25)\nDate(\"20260902104525\")",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [],
-      "reviewed": false
+      "reviewed": true
     },
     {
       "id": "fn.String",
@@ -70,14 +70,14 @@
         "global_functions"
       ],
       "signature": "String(value: any)",
-      "description": "",
+      "description": "Перетворює значення на рядковий вигляд — той самий текст, яким платформа показує це значення. Для форматованого виводу (шаблон дати, розряди чи знаки числа) є Format, що приймає рядок формату; у String параметрів немає.",
       "syntax_block": "String(value: any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — значення будь-якого типу.",
+      "return_descr": "Рядок.",
+      "example": "Message(String(1250.5));\nMessage(Format(1250.5, \"ND=2\"));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Format", "fn.Number", "fn.Boolean"],
+      "reviewed": true
     },
     {
       "id": "fn.Round",
@@ -89,14 +89,14 @@
         "global_functions"
       ],
       "signature": "Round(num : number, number, roundMode)",
-      "description": "",
+      "description": "Округлює число до заданої кількості десяткових знаків. ПРАВИЛО округлення задає третій аргумент, і воно розрізняє результати рівно на половині: Round15as20 (за замовчуванням) відправляє половину від нуля, тому 1.5 стає 2; Round15as10 лишає половину вниз, тому 1.5 стає 1, а вгору йдуть лише .6 і більше. Зазначайте правило явно всюди, де цифру звіряють з іншою системою.",
       "syntax_block": "Round(num : number, number, roundMode)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — число. number — кількість десяткових знаків (за замовчуванням 0). roundMode — RoundMode.Round15as20 (за замовчуванням) або RoundMode.Round15as10.",
+      "return_descr": "Число, округлене.",
+      "example": "Message(Round(1.5));                             // 2\nMessage(Round(1.5, 0, RoundMode.Round15as10));   // 1\nMessage(Round(1250.567, 2));                     // 1250.57\nMessage(Int(1.9));                               // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Int", "fn.Number", "fn.Format"],
+      "reviewed": true
     },
     {
       "id": "fn.Int",
@@ -127,14 +127,14 @@
         "global_functions"
       ],
       "signature": "Log10(num : number)",
-      "description": "",
+      "description": "Десятковий логарифм числа.",
       "syntax_block": "Log10(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — додатне число.",
+      "return_descr": "Число — логарифм.",
+      "example": "Message(Log10(1000));   // 3",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Ln", "fn.Sqrt"],
+      "reviewed": true
     },
     {
       "id": "fn.Ln",
@@ -146,14 +146,14 @@
         "global_functions"
       ],
       "signature": "Ln(num : number)",
-      "description": "",
+      "description": "Натуральний логарифм числа.",
       "syntax_block": "Ln(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — додатне число.",
+      "return_descr": "Число — логарифм.",
+      "example": "Message(Ln(1));   // 0",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Log10", "fn.Sqrt"],
+      "reviewed": true
     },
     {
       "id": "fn.Max",
@@ -165,14 +165,14 @@
         "global_functions"
       ],
       "signature": "Max(num : number, ...)",
-      "description": "",
+      "description": "Найбільший з аргументів, що порівнюються як числа. Приймає скільки завгодно аргументів.",
       "syntax_block": "Max(num : number, ...)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num, ... — два і більше значення; кожне читається як число. Виклик без аргументів спричиняє виняток.",
+      "return_descr": "Найбільший аргумент.",
+      "example": "Message(Max(2, 9, 4, 1));   // 9\nMessage(Min(2, 9, 4, 1));   // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Min", "fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.Min",
@@ -184,14 +184,14 @@
         "global_functions"
       ],
       "signature": "Min(num : number, ...)",
-      "description": "",
+      "description": "Найменший з аргументів, що порівнюються як числа. Приймає скільки завгодно аргументів.",
       "syntax_block": "Min(num : number, ...)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num, ... — два і більше значення; кожне читається як число. Виклик без аргументів спричиняє виняток.",
+      "return_descr": "Найменший аргумент.",
+      "example": "Message(Min(5, 3));   // 3",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Max", "fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.Sqrt",
@@ -203,14 +203,14 @@
         "global_functions"
       ],
       "signature": "Sqrt(num : number)",
-      "description": "",
+      "description": "Квадратний корінь числа. У від'ємного аргументу немає дійсного кореня, тому виникає виняток, а не повертається беззмістовна величина.",
       "syntax_block": "Sqrt(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — невід'ємне число.",
+      "return_descr": "Число — корінь.",
+      "example": "Message(Sqrt(16));   // 4",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Log10", "fn.Ln"],
+      "reviewed": true
     },
     {
       "id": "fn.StrLen",
@@ -222,14 +222,14 @@
         "global_functions"
       ],
       "signature": "StrLen(str : string)",
-      "description": "",
+      "description": "Кількість символів у рядку.",
       "syntax_block": "StrLen(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок (або значення, що читається як рядок).",
+      "return_descr": "Число — довжина.",
+      "example": "Message(StrLen(\"abc\"));   // 3",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.IsBlankString", "fn.TrimAll"],
+      "reviewed": true
     },
     {
       "id": "fn.IsBlankString",
@@ -241,14 +241,14 @@
         "global_functions"
       ],
       "signature": "IsBlankString(str : string)",
-      "description": "",
+      "description": "Істина, коли рядок порожній або складається лише з пробільних символів. Це доречна перевірка перед збереженням уведеного людиною тексту: випадковий пробіл значенням не є.",
       "syntax_block": "IsBlankString(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок.",
+      "return_descr": "Булеве.",
+      "example": "Message(IsBlankString(\"   \"));   // True\nMessage(IsBlankString(\"x\"));     // False",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TrimAll", "fn.StrLen", "fn.ValueIsFilled"],
+      "reviewed": true
     },
     {
       "id": "fn.TrimL",
@@ -260,14 +260,14 @@
         "global_functions"
       ],
       "signature": "TrimL(str : string)",
-      "description": "",
+      "description": "Рядок без початкових пробільних символів.",
       "syntax_block": "TrimL(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок.",
+      "return_descr": "Рядок.",
+      "example": "Message(\"[\" + TrimL(\"  x  \") + \"]\");   // [x  ]",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TrimR", "fn.TrimAll"],
+      "reviewed": true
     },
     {
       "id": "fn.TrimR",
@@ -279,14 +279,14 @@
         "global_functions"
       ],
       "signature": "TrimR(str : string)",
-      "description": "",
+      "description": "Рядок без кінцевих пробільних символів.",
       "syntax_block": "TrimR(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок.",
+      "return_descr": "Рядок.",
+      "example": "Message(\"[\" + TrimR(\"  x  \") + \"]\");   // [  x]",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TrimL", "fn.TrimAll"],
+      "reviewed": true
     },
     {
       "id": "fn.TrimAll",
@@ -298,14 +298,14 @@
         "global_functions"
       ],
       "signature": "TrimAll(str : string)",
-      "description": "",
+      "description": "Рядок без пробільних символів з обох боків.",
       "syntax_block": "TrimAll(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок.",
+      "return_descr": "Рядок.",
+      "example": "Message(\"[\" + TrimAll(\"  x  \") + \"]\");   // [x]",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TrimL", "fn.TrimR", "fn.IsBlankString"],
+      "reviewed": true
     },
     {
       "id": "fn.Left",
@@ -317,14 +317,14 @@
         "global_functions"
       ],
       "signature": "Left(str : string, number)",
-      "description": "",
+      "description": "Перші N символів рядка. Запит більшої кількості, ніж є, повертає рядок цілком, а не спричиняє виняток.",
       "syntax_block": "Left(str : string, number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок. number — скільки символів.",
+      "return_descr": "Рядок.",
+      "example": "Message(Left(\"abcdef\", 3));   // abc",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Right", "fn.Mid", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.Right",
@@ -336,14 +336,14 @@
         "global_functions"
       ],
       "signature": "Right(str : string, number)",
-      "description": "",
+      "description": "Останні N символів рядка. Запит більшої кількості, ніж є, повертає рядок цілком, а не спричиняє виняток.",
       "syntax_block": "Right(str : string, number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок. number — скільки символів.",
+      "return_descr": "Рядок.",
+      "example": "Message(Right(\"abcdef\", 3));   // def",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Left", "fn.Mid", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.Mid",
@@ -355,14 +355,14 @@
         "global_functions"
       ],
       "signature": "Mid(str : string, number, number)",
-      "description": "",
+      "description": "Фрагмент рядка, що починається з позиції, яка відлічується ВІД ОДИНИЦІ, — тієї самої позиції, яку повертає Find, тому вони стикуються напряму. Пропущена довжина означає решту рядка.",
       "syntax_block": "Mid(str : string, number, number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок. number — початок, що відлічується від 1. number — скільки символів (за замовчуванням — до кінця рядка).",
+      "return_descr": "Рядок — фрагмент.",
+      "example": "Message(Mid(\"abcdef\", 2, 3));                  // bcd\nMessage(Mid(\"abcdef\", 2));                     // bcdef\nMessage(Mid(\"abcdef\", Find(\"abcdef\", \"c\")));   // cdef",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Left", "fn.Right", "fn.Find", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.Find",
@@ -374,14 +374,14 @@
         "global_functions"
       ],
       "signature": "Find(str : string, string, number)",
-      "description": "",
+      "description": "Позиція підрядка, що відлічується ВІД ОДИНИЦІ, або 0, коли його немає, — тому відлік і починається з одиниці: 0 лишається вільним значенням для «ніде». Mid приймає позиції в тому самому відліку, тому Mid(s, Find(s, x)) починається саме зі знайденого.",
       "syntax_block": "Find(str : string, string, number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок, у якому шукаємо. string — що шукаємо. number — позиція початку пошуку, від 1 (за замовчуванням — з початку).",
+      "return_descr": "Число — позиція від 1 або 0, якщо не знайдено.",
+      "example": "Message(Find(\"abcdef\", \"c\"));   // 3\nMessage(Find(\"abcdef\", \"z\"));   // 0",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.StrCountOccur", "fn.Mid", "fn.StrReplace"],
+      "reviewed": true
     },
     {
       "id": "fn.StrReplace",
@@ -393,14 +393,14 @@
         "global_functions"
       ],
       "signature": "StrReplace(str : string, string, string)",
-      "description": "",
+      "description": "Рядок, у якому КОЖНЕ входження одного підрядка замінено іншим. Заміна не спиняється на першому входженні.",
       "syntax_block": "StrReplace(str : string, string, string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — вихідний рядок. string — що замінюємо. string — на що замінюємо.",
+      "return_descr": "Рядок — новий; вихідний не змінюється.",
+      "example": "Message(StrReplace(\"a-b-c\", \"-\", \"+\"));   // a+b+c",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Find", "fn.StrCountOccur"],
+      "reviewed": true
     },
     {
       "id": "fn.StrCountOccur",
@@ -412,14 +412,14 @@
         "global_functions"
       ],
       "signature": "StrCountOccur(str : string, string)",
-      "description": "",
+      "description": "Скільки разів підрядок трапляється в рядку; рахуються неперетинні входження. Порожній підрядок дає 0.",
       "syntax_block": "StrCountOccur(str : string, string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок, у якому рахуємо. string — що рахуємо.",
+      "return_descr": "Число — кількість (0, якщо не трапляється).",
+      "example": "Message(StrCountOccur(\"aaa\", \"a\"));     // 3\nMessage(StrCountOccur(\"abcabc\", \"z\"));  // 0",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Find", "fn.StrReplace"],
+      "reviewed": true
     },
     {
       "id": "fn.StrLineCount",
@@ -431,14 +431,14 @@
         "global_functions"
       ],
       "signature": "StrLineCount(str : string)",
-      "description": "",
+      "description": "Скільки рядків у тексті. Текст зовсім без переведень рядка — це один рядок, а не нуль. Пара CRLF рахується одним розривом, так само, як її проходить StrGetLine, тому обидві функції однаково розуміють, що таке рядок.",
       "syntax_block": "StrLineCount(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — текст.",
+      "return_descr": "Число — кількість рядків (не менше 1).",
+      "example": "text = \"a\" + Chr(10) + \"b\";\nFor i = 1 To StrLineCount(text) Do\n    Message(StrGetLine(text, i));\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.StrGetLine", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.StrGetLine",
@@ -449,15 +449,15 @@
         "global_context",
         "global_functions"
       ],
-      "signature": "StrGetLine(str : string)",
-      "description": "",
-      "syntax_block": "StrGetLine(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "StrGetLine(str : string, line : number)",
+      "description": "Один рядок багаторядкового тексту за його номером, що відлічується ВІД ОДИНИЦІ. Номер за останнім рядком дає порожній рядок, а не виняток, — обходьте текст у парі зі StrLineCount.",
+      "syntax_block": "StrGetLine(str : string, line : number)",
+      "parameters": "str — текст. line — номер рядка, від 1.",
+      "return_descr": "Рядок — без символа переведення рядка; порожній, якщо такого рядка немає.",
+      "example": "text = \"first\" + Chr(10) + \"second\";\nMessage(StrGetLine(text, 2));   // second",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.StrLineCount", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.Upper",
@@ -469,14 +469,14 @@
         "global_functions"
       ],
       "signature": "Upper(str : string)",
-      "description": "",
+      "description": "Рядок у верхньому регістрі.",
       "syntax_block": "Upper(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок.",
+      "return_descr": "Рядок.",
+      "example": "Message(Upper(\"abc\"));   // ABC",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Lower"],
+      "reviewed": true
     },
     {
       "id": "fn.Lower",
@@ -488,14 +488,14 @@
         "global_functions"
       ],
       "signature": "Lower(str : string)",
-      "description": "",
+      "description": "Рядок у нижньому регістрі.",
       "syntax_block": "Lower(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок.",
+      "return_descr": "Рядок.",
+      "example": "Message(Lower(\"ABC\"));   // abc",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Upper"],
+      "reviewed": true
     },
     {
       "id": "fn.Chr",
@@ -507,14 +507,14 @@
         "global_functions"
       ],
       "signature": "Chr(num : number)",
-      "description": "",
+      "description": "Символ із заданим кодом. Так скрипт записує символи, які не можна набрати у вихідному тексті: Chr(10) — переведення рядка, Chr(13) — повернення каретки, Chr(9) — табуляція.",
       "syntax_block": "Chr(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — код символа.",
+      "return_descr": "Рядок з одного символа.",
+      "example": "text = \"first\" + Chr(10) + \"second\";",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Asc", "fn.StrGetLine"],
+      "reviewed": true
     },
     {
       "id": "fn.Asc",
@@ -526,14 +526,14 @@
         "global_functions"
       ],
       "signature": "Asc(str : string)",
-      "description": "",
+      "description": "Код ПЕРШОГО символа рядка. Порожній рядок дає 0.",
       "syntax_block": "Asc(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — рядок.",
+      "return_descr": "Число — код символа.",
+      "example": "Message(Asc(\"A\"));   // 65",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Chr", "fn.Left"],
+      "reviewed": true
     },
     {
       "id": "fn.Tstr",
@@ -545,14 +545,14 @@
         "global_functions"
       ],
       "signature": "Tstr(text : string, langCode : string)",
-      "description": "",
+      "description": "Переклад тексту названою мовою, узятий зі сховища локалізації конфігурації. Застосовується там, де повідомлення має з'явитися мовою, відмінною від поточної, — наприклад, у документі, що друкується для контрагента.",
       "syntax_block": "Tstr(text : string, langCode : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "text — вихідний текст. langCode — код мови, під яким зберігається переклад.",
+      "return_descr": "Рядок — переклад або вихідний текст, якщо перекладу немає.",
+      "example": "Message(Tstr(\"Total\", \"uk\"));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GeneralLanguage", "fn.String"],
+      "reviewed": true
     },
     {
       "id": "fn.CurrentDate",
@@ -564,14 +564,14 @@
         "global_functions"
       ],
       "signature": "CurrentDate()",
-      "description": "",
+      "description": "Поточні дата й час машини, на якій виконується код. Дату, ПІД ЯКОЮ працює людина, — а вона може навмисно відрізнятися — дає WorkingDate.",
       "syntax_block": "CurrentDate()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Дата з часом.",
+      "example": "Message(CurrentDate());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.WorkingDate", "fn.BegOfDay", "fn.GetYear"],
+      "reviewed": true
     },
     {
       "id": "fn.WorkingDate",
@@ -582,15 +582,15 @@
         "global_context",
         "global_functions"
       ],
-      "signature": "WorkingDate(d : date)",
-      "description": "",
-      "syntax_block": "WorkingDate(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "WorkingDate()",
+      "description": "РОБОЧА ДАТА сеансу, на північ. Це дата, під якою людина вводить документи, і вона не завжди сьогоднішня: закриття періоду, введення вчорашніх паперів. Належить сеансу; поза сеансом береться значення процесу.",
+      "syntax_block": "WorkingDate()",
+      "parameters": "Немає.",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "doc.Date = WorkingDate();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.CurrentDate", "fn.BegOfDay"],
+      "reviewed": true
     },
     {
       "id": "fn.AddMonth",
@@ -602,14 +602,14 @@
         "global_functions"
       ],
       "signature": "AddMonth(d : date, num : number)",
-      "description": "",
+      "description": "Зсуває дату на ціле число місяців; від'ємне значення — назад. ⚠ Зберігає НОМЕР ДНЯ і відкидає час — результат припадає на північ.",
       "syntax_block": "AddMonth(d : date, num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата. num — скільки місяців додати (може бути від'ємним).",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "Message(AddMonth(Date(2024, 1, 31), 1));\nMessage(AddMonth(Date(2024, 3, 15), -2));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfMonth", "fn.EndOfMonth"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfMonth",
@@ -621,14 +621,14 @@
         "global_functions"
       ],
       "signature": "BegOfMonth(d : date)",
-      "description": "",
+      "description": "Перший день місяця, у який припадає дата, на 00:00:00.",
       "syntax_block": "BegOfMonth(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "// the month a document belongs to, as a period\nbegin = BegOfMonth(doc.Date);\nend   = EndOfMonth(doc.Date);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfMonth", "fn.BegOfQuart", "fn.BegOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfMonth",
@@ -640,14 +640,14 @@
         "global_functions"
       ],
       "signature": "EndOfMonth(d : date)",
-      "description": "",
+      "description": "Останній день місяця, у який припадає дата, на 23:59:59 — КІНЕЦЬ цього дня, тому `d <= EndOfMonth(x)` утримує все, записане протягом нього.",
       "syntax_block": "EndOfMonth(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 23:59:59.",
+      "example": "Message(EndOfMonth(Date(2024, 2, 10)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfMonth", "fn.EndOfQuart", "fn.EndOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfQuart",
@@ -659,14 +659,14 @@
         "global_functions"
       ],
       "signature": "BegOfQuart(d : date)",
-      "description": "",
+      "description": "Перший день кварталу, у який припадає дата (1 січня, квітня, липня або жовтня), на 00:00:00.",
       "syntax_block": "BegOfQuart(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "Message(BegOfQuart(Date(2024, 5, 20)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfQuart", "fn.GetQuartOfYear", "fn.BegOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfQuart",
@@ -678,14 +678,14 @@
         "global_functions"
       ],
       "signature": "EndOfQuart(d : date)",
-      "description": "",
+      "description": "Останній день кварталу, у який припадає дата, на 23:59:59.",
       "syntax_block": "EndOfQuart(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 23:59:59.",
+      "example": "Message(EndOfQuart(Date(2024, 5, 20)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfQuart", "fn.GetQuartOfYear", "fn.EndOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfYear",
@@ -697,14 +697,14 @@
         "global_functions"
       ],
       "signature": "BegOfYear(d : date)",
-      "description": "",
+      "description": "1 січня року, у який припадає дата, на 00:00:00.",
       "syntax_block": "BegOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "Message(BegOfYear(Date(2024, 5, 20)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfYear", "fn.GetYear"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfYear",
@@ -716,14 +716,14 @@
         "global_functions"
       ],
       "signature": "EndOfYear(d : date)",
-      "description": "",
+      "description": "31 грудня року, у який припадає дата, на 23:59:59.",
       "syntax_block": "EndOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 23:59:59.",
+      "example": "Message(EndOfYear(Date(2024, 5, 20)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfYear", "fn.GetYear"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfWeek",
@@ -735,14 +735,14 @@
         "global_functions"
       ],
       "signature": "BegOfWeek(d : date)",
-      "description": "",
+      "description": "ПОНЕДІЛОК тижня, у який припадає дата, на 00:00:00. Тиждень іде з понеділка по неділю — у тій самій нумерації, яку повертає GetDayOfWeek.",
       "syntax_block": "BegOfWeek(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "Message(BegOfWeek(Date(2024, 1, 3)));   // 2024-01-01, a Monday",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfWeek", "fn.GetDayOfWeek", "fn.GetWeekOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfWeek",
@@ -754,14 +754,14 @@
         "global_functions"
       ],
       "signature": "EndOfWeek(d : date)",
-      "description": "",
+      "description": "НЕДІЛЯ тижня, у який припадає дата, на 23:59:59.",
       "syntax_block": "EndOfWeek(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 23:59:59.",
+      "example": "Message(EndOfWeek(Date(2024, 1, 3)));   // 2024-01-07, a Sunday",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfWeek", "fn.GetDayOfWeek"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfDay",
@@ -773,14 +773,14 @@
         "global_functions"
       ],
       "signature": "BegOfDay(d : date)",
-      "description": "",
+      "description": "Той самий день на 00:00:00 — час відкидається. Так дату з часом порівнюють із датою, яку ввела людина.",
       "syntax_block": "BegOfDay(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "If BegOfDay(doc.Date) == WorkingDate() Then\n    Message(\"today's document\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfDay", "fn.WorkingDate", "fn.CurrentDate"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfDay",
@@ -792,14 +792,14 @@
         "global_functions"
       ],
       "signature": "EndOfDay(d : date)",
-      "description": "",
+      "description": "Той самий день на 23:59:59. Разом із BegOfDay перетворює день на період, придатний для порівняння.",
       "syntax_block": "EndOfDay(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 23:59:59.",
+      "example": "from = BegOfDay(d);\nto   = EndOfDay(d);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfDay"],
+      "reviewed": true
     },
     {
       "id": "fn.GetYear",
@@ -811,14 +811,14 @@
         "global_functions"
       ],
       "signature": "GetYear(d : date)",
-      "description": "",
+      "description": "Рік дати, числом.",
       "syntax_block": "GetYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число — рік.",
+      "example": "Message(GetYear(Date(2024, 5, 20)));   // 2024",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetMonth", "fn.GetDay", "fn.BegOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetMonth",
@@ -830,14 +830,14 @@
         "global_functions"
       ],
       "signature": "GetMonth(d : date)",
-      "description": "",
+      "description": "Місяць дати, від 1 до 12: січень — це 1.",
       "syntax_block": "GetMonth(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 1..12.",
+      "example": "Message(GetMonth(Date(2024, 5, 20)));   // 5",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetYear", "fn.GetDay", "fn.GetQuartOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetDay",
@@ -849,14 +849,14 @@
         "global_functions"
       ],
       "signature": "GetDay(d : date)",
-      "description": "",
+      "description": "День місяця, від 1 до 31.",
       "syntax_block": "GetDay(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 1..31.",
+      "example": "Message(GetDay(Date(2024, 5, 20)));   // 20",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetMonth", "fn.GetDayOfWeek", "fn.GetDayOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetHour",
@@ -868,14 +868,14 @@
         "global_functions"
       ],
       "signature": "GetHour(d : date)",
-      "description": "",
+      "description": "Година в часі доби дати, від 0 до 23.",
       "syntax_block": "GetHour(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 0..23.",
+      "example": "Message(GetHour(CurrentDate()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetMinute", "fn.GetSecond", "fn.BegOfDay"],
+      "reviewed": true
     },
     {
       "id": "fn.GetMinute",
@@ -887,14 +887,14 @@
         "global_functions"
       ],
       "signature": "GetMinute(d : date)",
-      "description": "",
+      "description": "Хвилина в часі доби дати, від 0 до 59.",
       "syntax_block": "GetMinute(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 0..59.",
+      "example": "Message(GetMinute(CurrentDate()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetHour", "fn.GetSecond"],
+      "reviewed": true
     },
     {
       "id": "fn.GetSecond",
@@ -906,14 +906,14 @@
         "global_functions"
       ],
       "signature": "GetSecond(d : date)",
-      "description": "",
+      "description": "Секунда в часі доби дати, від 0 до 59.",
       "syntax_block": "GetSecond(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 0..59.",
+      "example": "Message(GetSecond(CurrentDate()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetHour", "fn.GetMinute"],
+      "reviewed": true
     },
     {
       "id": "fn.GetWeekOfYear",
@@ -925,14 +925,14 @@
         "global_functions"
       ],
       "signature": "GetWeekOfYear(d : date)",
-      "description": "",
+      "description": "Номер тижня в році; тиждень вважається таким, що починається з понеділка.",
       "syntax_block": "GetWeekOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число — тиждень року.",
+      "example": "Message(GetWeekOfYear(Date(2024, 1, 1)));   // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfWeek", "fn.GetDayOfWeek", "fn.GetDayOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetDayOfYear",
@@ -944,14 +944,14 @@
         "global_functions"
       ],
       "signature": "GetDayOfYear(d : date)",
-      "description": "",
+      "description": "Номер дня в році: 1 для 1 січня, 365 або 366 для 31 грудня.",
       "syntax_block": "GetDayOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 1..366.",
+      "example": "Message(GetDayOfYear(Date(2024, 1, 1)));   // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetWeekOfYear", "fn.GetDay"],
+      "reviewed": true
     },
     {
       "id": "fn.GetDayOfWeek",
@@ -963,14 +963,14 @@
         "global_functions"
       ],
       "signature": "GetDayOfWeek(d : date)",
-      "description": "",
+      "description": "День тижня: ПОНЕДІЛОК = 1 … НЕДІЛЯ = 7. Функції тижня використовують ту саму нумерацію, тому BegOfWeek завжди припадає на день, у якого GetDayOfWeek дорівнює 1.",
       "syntax_block": "GetDayOfWeek(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 1 (понеділок) .. 7 (неділя).",
+      "example": "If GetDayOfWeek(d) > 5 Then\n    Message(\"weekend\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfWeek", "fn.EndOfWeek", "fn.GetWeekOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetQuartOfYear",
@@ -982,14 +982,14 @@
         "global_functions"
       ],
       "signature": "GetQuartOfYear(d : date)",
-      "description": "",
+      "description": "Квартал, у який припадає дата, від 1 до 4.",
       "syntax_block": "GetQuartOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 1..4.",
+      "example": "Message(GetQuartOfYear(Date(2024, 5, 20)));   // 2",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfQuart", "fn.EndOfQuart", "fn.GetMonth"],
+      "reviewed": true
     },
     {
       "id": "fn.FileDelete",
@@ -1001,14 +1001,14 @@
         "global_functions"
       ],
       "signature": "FileDelete(fileName : string)",
-      "description": "",
+      "description": "Видаляє файл з диска.",
       "syntax_block": "FileDelete(fileName : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "fileName — повний шлях.",
+      "return_descr": "Булеве — чи видалено файл.",
+      "example": "FileDelete(GetTempDir() + \"report.xlsx\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.FileCopy", "fn.GetTempFileName", "fn.GetTempDir"],
+      "reviewed": true
     },
     {
       "id": "fn.FileCopy",
@@ -1020,14 +1020,14 @@
         "global_functions"
       ],
       "signature": "FileCopy(fileDstName : string, fileSrcName : string)",
-      "description": "",
+      "description": "Копіює файл. ⚠ Першим іде ПРИЙМАЧ, другим джерело — порядок, зворотний до звичного для команд копіювання.",
       "syntax_block": "FileCopy(fileDstName : string, fileSrcName : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "fileDstName — куди копіювати. fileSrcName — що копіювати.",
+      "return_descr": "Булеве — чи вдалося копіювання.",
+      "example": "FileCopy(GetTempDir() + \"copy.txt\", \"C:\\\\data\\\\original.txt\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.FileDelete", "fn.GetTempDir"],
+      "reviewed": true
     },
     {
       "id": "fn.GetTempDir",
@@ -1039,14 +1039,14 @@
         "global_functions"
       ],
       "signature": "GetTempDir()",
-      "description": "",
+      "description": "Каталог для тимчасових файлів, із завершальним роздільником.",
       "syntax_block": "GetTempDir()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Рядок — шлях.",
+      "example": "path = GetTempDir() + \"export.csv\";",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetTempFileName", "fn.FileDelete"],
+      "reviewed": true
     },
     {
       "id": "fn.GetTempFileName",
@@ -1058,14 +1058,14 @@
         "global_functions"
       ],
       "signature": "GetTempFileName()",
-      "description": "",
+      "description": "Повний шлях імені тимчасового файлу, яке ніким не зайняте. Повертається ІМ'Я: створити, заповнити й видалити файл — ваш клопіт.",
       "syntax_block": "GetTempFileName()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Рядок — шлях.",
+      "example": "file = GetTempFileName();\n// … write it, use it …\nFileDelete(file);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetTempDir", "fn.FileDelete"],
+      "reviewed": true
     },
     {
       "id": "fn.ActiveWindow",
@@ -1077,14 +1077,14 @@
         "global_functions"
       ],
       "signature": "ActiveWindow()",
-      "description": "",
+      "description": "Вікно, у якому працює людина, або порожнє значення, коли його немає: фонове завдання, безвіконний запуск скрипта. Перевіряйте перед використанням.",
       "syntax_block": "ActiveWindow()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Активна форма або порожньо.",
+      "example": "form = ActiveWindow();\nIf ValueIsFilled(form) Then\n    Message(\"running in a window\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetCommonForm", "fn.ShowCommonForm"],
+      "reviewed": true
     },
     {
       "id": "fn.Message",
@@ -1117,14 +1117,14 @@
         "global_functions"
       ],
       "signature": "Alert(message : string)",
-      "description": "",
+      "description": "Показує повідомлення, яке людина має підтвердити, і чекає на це. Для просто інформувального тексту краще Message: попередження перериває роботу. Під обчисленням (спостереження зневаджувача, зонд асистента) вікно не відкривається — натомість повертається текст із поміткою, що код намагався відкрити модальне вікно.",
       "syntax_block": "Alert(message : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "message — текст.",
+      "return_descr": "Нічого.",
+      "example": "Alert(\"the period is closed\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Message", "fn.Question", "fn.SetStatus"],
+      "reviewed": true
     },
     {
       "id": "fn.Question",
@@ -1136,14 +1136,14 @@
         "global_functions"
       ],
       "signature": "Question(message : string, questionMode)",
-      "description": "",
+      "description": "Ставить людині запитання й чекає на відповідь, повертаючи обрану кнопку. Під обчисленням відповісти нікому: код отримує порожній код повернення, а тому, хто викликав, повідомляється, що код СПИНИВСЯ, ЩОБ ЗАПИТАТИ, — часто це і є знахідка, адже запитання посеред розрахунку й пояснює, чому розрахунок не завершився.",
       "syntax_block": "Question(message : string, questionMode)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "message — запитання. questionMode — які кнопки запропонувати (QuestionMode).",
+      "return_descr": "Обрана відповідь; порожньо, якщо запитати не було в кого.",
+      "example": "answer = Question(\"Post the document?\", QuestionMode.YesNo);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Alert", "fn.Message"],
+      "reviewed": true
     },
     {
       "id": "fn.SetStatus",
@@ -1155,14 +1155,14 @@
         "global_functions"
       ],
       "signature": "SetStatus(text : string)",
-      "description": "",
+      "description": "Виводить рядок у рядок стану вікна — перебіг роботи, що триває, нікого не перериваючи.  Під обчисленням не робить нічого.",
       "syntax_block": "SetStatus(text : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "text — рядок для показу.",
+      "return_descr": "Нічого.",
+      "example": "For Each row In rows Do\n    SetStatus(\"processing \" + String(row.LineNumber));\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Message", "fn.Alert"],
+      "reviewed": true
     },
     {
       "id": "fn.ClearMessages",
@@ -1174,14 +1174,14 @@
         "global_functions"
       ],
       "signature": "ClearMessages()",
-      "description": "",
+      "description": "Очищає вікно повідомлень. Має сенс викликати на початку тривалої операції, щоб прочитане людиною стосувалося ЦЬОГО запуску, а не попереднього.",
       "syntax_block": "ClearMessages()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Нічого.",
+      "example": "ClearMessages();\nMessage(\"starting\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Message", "fn.SetStatus"],
+      "reviewed": true
     },
     {
       "id": "fn.SetError",
@@ -1193,14 +1193,14 @@
         "global_functions"
       ],
       "signature": "SetError(string)",
-      "description": "",
+      "description": "Припиняє поточну роботу помилкою з вашим текстом — та сама дія, що Raise(text); написання збережено, бо наявний код використовує обидва.",
       "syntax_block": "SetError(string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "string — повідомлення.",
+      "return_descr": "Не повертає керування.",
+      "example": "SetError(\"the period is closed\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Raise", "fn.ErrorDescription"],
+      "reviewed": true
     },
     {
       "id": "fn.Raise",
@@ -1212,14 +1212,14 @@
         "global_functions"
       ],
       "signature": "Raise(string)",
-      "description": "",
+      "description": "Припиняє поточну роботу помилкою з вашим текстом. Це повідомлення прочитає людина, коли операція відмовить, — тому пишіть, що не так із даними, а не де спинився код.\n\nКлючове слово `Raise` — інше: записане без дужок усередині блоку Except, воно повторно збуджує оброблюваний виняток, зберігаючи вихідний опис.",
       "syntax_block": "Raise(string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "string — повідомлення.",
+      "return_descr": "Не повертає керування.",
+      "example": "If IsEmptyValue(doc.Counterparty) Then\n    Raise(\"the counterparty is not filled in\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.SetError", "fn.ErrorDescription", "kw.Raise", "kw.Try"],
+      "reviewed": true
     },
     {
       "id": "fn.ErrorDescription",
@@ -1231,14 +1231,14 @@
         "global_functions"
       ],
       "signature": "ErrorDescription()",
-      "description": "",
+      "description": "Опис помилки, що обробляється. Має сенс усередині блоку Except: саме так повідомляють, ЩО саме не вдалося, замість голого «сталася помилка».",
       "syntax_block": "ErrorDescription()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Рядок — повідомлення останньої збудженої помилки.",
+      "example": "Try\n    doc.Write();\nExcept\n    Message(\"could not write: \" + ErrorDescription());\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Raise", "fn.SetError", "kw.Try", "kw.Except"],
+      "reviewed": true
     },
     {
       "id": "fn.IsNull",
@@ -1294,14 +1294,14 @@
         "global_functions"
       ],
       "signature": "IsEmptyValue(value : any)",
-      "description": "",
+      "description": "Істина, коли значення порожнє: Undefined, NULL, порожній рядок, нульове число, порожня дата або посилання, що має тип, але не має об'єкта. Протилежність ValueIsFilled. Коли потрібен саме SQL-null і нічого більше, є IsNull.",
       "syntax_block": "IsEmptyValue(value : any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — значення будь-якого типу.",
+      "return_descr": "Булеве.",
+      "example": "If IsEmptyValue(doc.Counterparty) Then\n    Raise(\"the counterparty is not filled in\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ValueIsFilled", "fn.IsNull", "fn.IsBlankString"],
+      "reviewed": true
     },
     {
       "id": "fn.Evaluate",
@@ -1313,14 +1313,14 @@
         "global_functions"
       ],
       "signature": "Evaluate(expr : string)",
-      "description": "",
+      "description": "Компілює й виконує ВИРАЗ, записаний текстом, в області видимості рядка, що викликав, — змінні того, хто викликає, йому видно. Повертає те, у що обчислився вираз. Для оператора, а не виразу, є Execute.\n\nЦе двері, крізь які проходить обчислюване поле звіту, і причина обережно ставитися до тексту ззовні: хоч би що в ньому стояло, воно виконається з правами того, хто викликав.",
       "syntax_block": "Evaluate(expr : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "expr — вираз рядком.",
+      "return_descr": "Те, що дав вираз.",
+      "example": "var k = 40;\nMessage(Evaluate(\"k + 2\"));   // 42",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Execute", "fn.Type", "fn.TypeOf"],
+      "reviewed": true
     },
     {
       "id": "fn.Execute",
@@ -1332,14 +1332,14 @@
         "global_functions"
       ],
       "signature": "Execute(expr : string)",
-      "description": "",
+      "description": "Компілює й виконує ОПЕРАТОРИ, записані текстом, в області видимості рядка, що викликав. Нічого не повертає — по значення звертайтеся до Evaluate. Обережність та сама: текст ззовні виконується з правами того, хто викликав.",
       "syntax_block": "Execute(expr : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "expr — оператори рядком.",
+      "return_descr": "Нічого.",
+      "example": "Execute(\"total = total + 1;\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Evaluate"],
+      "reviewed": true
     },
     {
       "id": "fn.Format",
@@ -1351,14 +1351,14 @@
         "global_functions"
       ],
       "signature": "Format(value : any, format : string)",
-      "description": "",
+      "description": "Значення як текст у явно заданому форматі: String дає вигляд за замовчуванням, Format — той, який ви зазначили. Формат — список пар `КОД=значення`, розділених `;`.\n\nЧисла: ND (усього знаків), NFD (знаків після коми), NDS (десятковий роздільник), NGS (роздільник груп), NG (розмір групи), NZ (чим друкується нуль). Булеві: BT і BF (текст для істини та для хиби). Дати: DF (шаблон дати), DE (чим друкується порожня дата).",
       "syntax_block": "Format(value : any, format : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — значення. format — рядок формату, наприклад \"NFD=2; NGS= \".",
+      "return_descr": "Рядок.",
+      "example": "Message(Format(1250.5, \"NFD=2\"));\nMessage(Format(0, \"NZ=-\"));\nMessage(Format(True, \"BT=yes; BF=no\"));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.String", "fn.Number", "fn.Tstr"],
+      "reviewed": true
     },
     {
       "id": "fn.Type",
@@ -1370,14 +1370,14 @@
         "global_functions"
       ],
       "signature": "Type(strType : string)",
-      "description": "",
+      "description": "ТИП із зазначеним іменем як значення — те, з чим порівнюють тип. Ім'я має бути зареєстроване платформою; невідоме ім'я спричиняє виняток, а не повертає порожній тип.",
       "syntax_block": "Type(strType : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "strType — зареєстроване ім'я типу, наприклад \"Number\" або \"CatalogRef.Goods\".",
+      "return_descr": "Тип.",
+      "example": "If TypeOf(value) == Type(\"Number\") Then\n    Message(\"a number\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TypeOf", "fn.IsEmptyValue"],
+      "reviewed": true
     },
     {
       "id": "fn.TypeOf",
@@ -1389,14 +1389,14 @@
         "global_functions"
       ],
       "signature": "TypeOf(value : any)",
-      "description": "",
+      "description": "Тип ЗНАЧЕННЯ як значення: порівнюйте його з Type(\"...\"), щоб дізнатися, чим щось є.",
       "syntax_block": "TypeOf(value : any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — значення будь-якого типу.",
+      "return_descr": "Тип.",
+      "example": "Message(TypeOf(42) == Type(\"Number\"));   // True",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Type", "fn.IsEmptyValue"],
+      "reviewed": true
     },
     {
       "id": "fn.Rand",
@@ -1408,14 +1408,14 @@
         "global_functions"
       ],
       "signature": "Rand()",
-      "description": "",
+      "description": "Псевдовипадкове невід'ємне ціле число. НЕ годиться для того, що має бути невгадуваним: пароль, токен, ключ. Застосовуйте для вибірок і тестових даних.",
       "syntax_block": "Rand()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Число.",
+      "example": "Message(Rand());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Int", "fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.ArgCount",
@@ -1427,14 +1427,14 @@
         "global_functions"
       ],
       "signature": "ArgCount()",
-      "description": "",
+      "description": "Скільки аргументів командного рядка отримав процес під час запуску, включно зі шляхом до самої програми.",
       "syntax_block": "ArgCount()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Число.",
+      "example": "For i = 0 To ArgCount() - 1 Do\n    Message(ArgValue(i));\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ArgValue"],
+      "reviewed": true
     },
     {
       "id": "fn.ArgValue",
@@ -1445,15 +1445,15 @@
         "global_context",
         "global_functions"
       ],
-      "signature": "ArgValue()",
-      "description": "",
-      "syntax_block": "ArgValue()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "ArgValue(index : number)",
+      "description": "Один аргумент командного рядка за індексом, що відлічується ВІД НУЛЯ: індекс 0 — шлях до самої програми. Індекс поза діапазоном спричиняє виняток.",
+      "syntax_block": "ArgValue(index : number)",
+      "parameters": "index — позиція аргументу, від 0.",
+      "return_descr": "Рядок — аргумент.",
+      "example": "Message(ArgValue(0));   // the executable's path",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ArgCount"],
+      "reviewed": true
     },
     {
       "id": "fn.ComputerName",
@@ -1465,14 +1465,14 @@
         "global_functions"
       ],
       "signature": "ComputerName()",
-      "description": "",
+      "description": "Мережеве ім'я машини, на якій виконується код. У клієнт-серверній установці це СЕРВЕР для коду, що працює там, і робоча станція для коду на клієнті, — перш ніж щось із цього виводити, перевірте, де ваш код виконується.",
       "syntax_block": "ComputerName()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Рядок.",
+      "example": "Message(ComputerName());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.UserName", "fn.GeneralLanguage"],
+      "reviewed": true
     },
     {
       "id": "fn.RunApp",
@@ -1484,14 +1484,14 @@
         "global_functions"
       ],
       "signature": "RunApp(command : string)",
-      "description": "",
+      "description": "Запускає зовнішню програму й одразу повертає керування, не чекаючи на її завершення. Під обчисленням не робить нічого. Команда виконується з правами процесу, що її запустив, тому ніколи не збирайте її з тексту, отриманого ззовні.",
       "syntax_block": "RunApp(command : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "command — командний рядок для запуску.",
+      "return_descr": "Нічого.",
+      "example": "RunApp(\"notepad.exe \" + GetTempFileName());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetTempFileName", "fn.ComputerName"],
+      "reviewed": true
     },
     {
       "id": "fn.SetAppTitle",
@@ -1503,14 +1503,14 @@
         "global_functions"
       ],
       "signature": "SetAppTitle(title : string)",
-      "description": "",
+      "description": "Задає заголовок вікна застосунку — за ним людина відрізняє дві відкриті бази. Без вікна не робить нічого.",
       "syntax_block": "SetAppTitle(title : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "title — текст.",
+      "return_descr": "Нічого.",
+      "example": "SetAppTitle(\"Production base\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ActiveWindow", "fn.SetStatus"],
+      "reviewed": true
     },
     {
       "id": "fn.UserDir",
@@ -1522,14 +1522,14 @@
         "global_functions"
       ],
       "signature": "UserDir()",
-      "description": "",
+      "description": "⚠ НЕ РЕАЛІЗОВАНА — зараз завжди повертає порожній рядок. Місце для файлів дає GetTempDir.",
       "syntax_block": "UserDir()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Рядок — зараз завжди порожній.",
+      "example": "// use GetTempDir() instead\npath = GetTempDir();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetTempDir", "fn.GetTempFileName"],
+      "reviewed": true
     },
     {
       "id": "fn.UserName",
@@ -1541,14 +1541,14 @@
         "global_functions"
       ],
       "signature": "UserName()",
-      "description": "",
+      "description": "Ім'я користувача, під яким працює сеанс, — те, що записують до журналу або в поле «ким записано».",
       "syntax_block": "UserName()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Рядок.",
+      "example": "doc.Author = UserName();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.IsInRole", "fn.AccessRight", "fn.ComputerName"],
+      "reviewed": true
     },
     {
       "id": "fn.UserPassword",
@@ -1560,14 +1560,14 @@
         "global_functions"
       ],
       "signature": "UserPassword()",
-      "description": "",
+      "description": "Пароль, з яким увійшов поточний сеанс. ⚠ Поводьтеся з ним як із секретом: не виводьте, не пишіть до журналу, не зберігайте в дані й нікуди не надсилайте. Він існує, щоб скрипт міг переавтентифікуватися там, де відкриваються ті самі облікові дані, — і більше ні для чого.",
       "syntax_block": "UserPassword()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Рядок.",
+      "example": "// only where the same credentials are required again\nconnect(UserName(), UserPassword());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.UserName"],
+      "reviewed": true
     },
     {
       "id": "fn.ExclusiveMode",
@@ -1579,14 +1579,14 @@
         "global_functions"
       ],
       "signature": "ExclusiveMode()",
-      "description": "",
+      "description": "Чи утримується база монопольно — один сеанс і жодних інших. Запитуйте перед початком роботи, якій це потрібно, щоб відмову сформулювали ви, а не збій на середині.",
       "syntax_block": "ExclusiveMode()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Булеве.",
+      "example": "If Not ExclusiveMode() Then\n    Raise(\"this operation needs exclusive access\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.SetExclusive"],
+      "reviewed": true
     },
     {
       "id": "fn.SetExclusive",
@@ -1598,14 +1598,14 @@
         "global_functions"
       ],
       "signature": "SetExclusive(on : boolean)",
-      "description": "",
+      "description": "Забирає або звільняє монопольний доступ до бази для цього сеансу. За неможливості — бо підключений хтось іще — ЗБУДЖУЄ виняток із причиною, тому Try/Except навколо нього і є природним місцем для повтору чи пояснення.",
       "syntax_block": "SetExclusive(on : boolean)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "on — True, щоб забрати монопольний доступ, False, щоб звільнити.",
+      "return_descr": "Нічого.",
+      "example": "Try\n    SetExclusive(True);\nExcept\n    Message(ErrorDescription());\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ExclusiveMode"],
+      "reviewed": true
     },
     {
       "id": "fn.GeneralLanguage",
@@ -1617,14 +1617,14 @@
         "global_functions"
       ],
       "signature": "GeneralLanguage()",
-      "description": "",
+      "description": "Код мови інтерфейсу поточного користувача — мова, якою готують текст, що показують ЦІЙ людині. Щоб перекласти іншою, назвіть її у Tstr.",
       "syntax_block": "GeneralLanguage()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Рядок — код мови.",
+      "example": "Message(Tstr(\"Total\", GeneralLanguage()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Tstr", "fn.UserName"],
+      "reviewed": true
     },
     {
       "id": "fn.EndJob",
@@ -1636,14 +1636,14 @@
         "global_functions"
       ],
       "signature": "EndJob(force : boolean)",
-      "description": "",
+      "description": "Завершує сеанс, тобто закриває вікно, яке його тримає. EndJob(False) — та сама подія, що натискання людиною кнопки закриття вікна: відпрацьовує BeforeExit, незбережені документи отримують слово, а відмова лишає все як було. EndJob(True) не запитує.",
       "syntax_block": "EndJob(force : boolean)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "force — False, щоб закрити звичайним шляхом (можна відмовити), True — щоб закрити в будь-якому разі.",
+      "return_descr": "Нічого.",
+      "example": "EndJob(False);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ActiveWindow"],
+      "reviewed": true
     },
     {
       "id": "fn.UserInterruptProcessing",
@@ -1655,14 +1655,14 @@
         "global_functions"
       ],
       "signature": "UserInterruptProcessing()",
-      "description": "",
+      "description": "Дає людині змогу перервати роботу: викличте всередині довгого циклу, і натискання клавіші переривання спинить його штатною помилкою «перервано користувачем». Без цього тривалий розрахунок спинити не можна взагалі.",
       "syntax_block": "UserInterruptProcessing()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Нічого — збуджує виняток, якщо переривання запитано.",
+      "example": "For Each row In rows Do\n    UserInterruptProcessing();\n    // … the slow part …\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.SetStatus", "fn.EndJob"],
+      "reviewed": true
     },
     {
       "id": "fn.AccessRight",
@@ -1674,14 +1674,14 @@
         "global_functions"
       ],
       "signature": "AccessRight(strRole : string, metadata)",
-      "description": "",
+      "description": "Чи має поточний користувач назване право на об'єкт метаданих. Цю перевірку роблять перед тим, як запропонувати дію, щоб людині не показували команду, яка потім відмовить.",
       "syntax_block": "AccessRight(strRole : string, metadata)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "strRole — ім'я права (наприклад, \"Read\", \"Write\", \"Delete\"). metadata — об'єкт, про який запитують. ОБИДВА обов'язкові.",
+      "return_descr": "Булеве.",
+      "example": "If Not AccessRight(\"Delete\", Metadata.Catalogs.Goods) Then\n    button.Enabled = False;\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.IsInRole", "fn.UserName"],
+      "reviewed": true
     },
     {
       "id": "fn.IsInRole",
@@ -1693,14 +1693,14 @@
         "global_functions"
       ],
       "signature": "IsInRole(strRole : string)",
-      "description": "",
+      "description": "Чи входить поточний користувач до названої ролі. Коли насправді запитують про дозвіл, краще AccessRight: право переживе перекроювання ролей, ім'я ролі — ні.",
       "syntax_block": "IsInRole(strRole : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "strRole — ім'я ролі.",
+      "return_descr": "Булеве.",
+      "example": "If IsInRole(\"Accountant\") Then\n    ShowCommonForm(\"ClosingPeriod\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.AccessRight", "fn.UserName"],
+      "reviewed": true
     },
     {
       "id": "fn.GetCommonForm",
@@ -1712,14 +1712,14 @@
         "global_functions"
       ],
       "signature": "GetCommonForm(name : string, owner : any, id : guid)",
-      "description": "",
+      "description": "Будує спільну форму за іменем і ПОВЕРТАЄ її, не показуючи, — щоб можна було заповнити до того, як людина її побачить. ShowCommonForm — те саме, але одразу відкрите.",
       "syntax_block": "GetCommonForm(name : string, owner : any, id : guid)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "name — ім'я спільної форми. owner — вікно-власник (необов'язково). id — ключ, що впізнає цю форму, щоб повторний запит перевикористав одне вікно (необов'язково).",
+      "return_descr": "Форма.",
+      "example": "form = GetCommonForm(\"Settings\");\nform.Open();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ShowCommonForm", "fn.ActiveWindow", "fn.GetCommonTemplate"],
+      "reviewed": true
     },
     {
       "id": "fn.ShowCommonForm",
@@ -1731,14 +1731,14 @@
         "global_functions"
       ],
       "signature": "ShowCommonForm(name : string, owner : any, id : guid)",
-      "description": "",
+      "description": "Відкриває спільну форму за іменем. Коли форму потрібно заповнити до показу, беріть GetCommonForm.",
       "syntax_block": "ShowCommonForm(name : string, owner : any, id : guid)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "name — ім'я спільної форми. owner — вікно-власник (необов'язково). id — ключ, що впізнає цю форму, щоб повторний запит перевикористав одне вікно (необов'язково).",
+      "return_descr": "Нічого.",
+      "example": "ShowCommonForm(\"Settings\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetCommonForm", "fn.ActiveWindow"],
+      "reviewed": true
     },
     {
       "id": "fn.GetCommonTemplate",
@@ -1750,14 +1750,14 @@
         "global_functions"
       ],
       "signature": "GetCommonTemplate(name : string)",
-      "description": "",
+      "description": "Спільний макет за іменем — табличний документ, з якого збирається друкована форма.",
       "syntax_block": "GetCommonTemplate(name : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "name — ім'я спільного макета.",
+      "return_descr": "Макет.",
+      "example": "template = GetCommonTemplate(\"InvoiceHeader\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetCommonForm"],
+      "reviewed": true
     },
     {
       "id": "fn.BeginTransaction",
@@ -1769,14 +1769,14 @@
         "global_functions"
       ],
       "signature": "BeginTransaction()",
-      "description": "",
+      "description": "Відкриває транзакцію бази даних: усе записане після неї стає видно іншим лише при CommitTransaction і зникає при RollBackTransaction. Загортайте роботу в Try/Except і відкочуйте в обробнику, інакше збій на середині лишить транзакцію відкритою.\n\nЗапис документа й так іде у власній транзакції — ця потрібна, щоб зробити КІЛЬКА записів одним кроком «усе або нічого».",
       "syntax_block": "BeginTransaction()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Нічого.",
+      "example": "BeginTransaction();\nTry\n    first.Write();\n    second.Write();\n    CommitTransaction();\nExcept\n    RollBackTransaction();\n    Raise(ErrorDescription());\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.CommitTransaction", "fn.RollBackTransaction"],
+      "reviewed": true
     },
     {
       "id": "fn.CommitTransaction",
@@ -1788,14 +1788,14 @@
         "global_functions"
       ],
       "signature": "CommitTransaction()",
-      "description": "",
+      "description": "Закриває відкриту транзакцію, роблячи все записане в ній постійним і видимим іншим.",
       "syntax_block": "CommitTransaction()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Нічого.",
+      "example": "CommitTransaction();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BeginTransaction", "fn.RollBackTransaction"],
+      "reviewed": true
     },
     {
       "id": "fn.RollBackTransaction",
@@ -1807,14 +1807,109 @@
         "global_functions"
       ],
       "signature": "RollBackTransaction()",
-      "description": "",
+      "description": "Скасовує відкриту транзакцію: усе записане в ній відкочується, наче роботи й не починали.",
       "syntax_block": "RollBackTransaction()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Немає.",
+      "return_descr": "Нічого.",
+      "example": "Except\n    RollBackTransaction();\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BeginTransaction", "fn.CommitTransaction"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.RunScheduledJobs",
+      "name_local": "RunScheduledJobs",
+      "name_en": "RunScheduledJobs",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "RunScheduledJobs()",
+      "description": "Передає кожне завдання, що підійшло за розкладом, його сеансу і повертає керування ОДРАЗУ — не чекаючи на завершення. Це навмисно: звичайний виклик — обробник простою форми, і очікування там заморозило б вікно. Під обчисленням не робить нічого, тому погляд на значення ніколи не запускає роботу.",
+      "syntax_block": "RunScheduledJobs()",
+      "parameters": "Немає.",
+      "return_descr": "Число — скільки завдань запущено.",
+      "example": "started = RunScheduledJobs();",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.RunJob", "fn.RunBackground"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.RunJob",
+      "name_local": "RunJob",
+      "name_en": "RunJob",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "RunJob(name : string)",
+      "description": "Запускає регламентне завдання ЗАРАЗ, за іменем, не чекаючи на розклад. Відповідає, чи запущено його: False — коли такого завдання немає або застосунок не працює.",
+      "syntax_block": "RunJob(name : string)",
+      "parameters": "name — ім'я регламентного завдання.",
+      "return_descr": "Булеве — чи запущено.",
+      "example": "If Not RunJob(\"NightlyRecalculation\") Then\n    Message(\"the job did not start\");\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.RunScheduledJobs", "fn.RunBackground"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.RunBackground",
+      "name_local": "RunBackground",
+      "name_en": "RunBackground",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "RunBackground(procedure : string, args : array)",
+      "description": "Запускає процедуру у фоні й повертає описувач запущеного завдання, не чекаючи на нього. Аргументи передаються Масивом, який розкладається в позиційні параметри процедури; будь-яке інше непорожнє значення відхиляється із зазначенням причини, а не приймається за «без аргументів» — інакше процедура запустилася б із хибною сигнатурою і впала б глибоко всередині. Якщо застосунок не працює, виникає виняток.",
+      "syntax_block": "RunBackground(procedure : string, args : array)",
+      "parameters": "procedure — ім'я процедури, що запускається. args — Масив її аргументів (може бути порожнім).",
+      "return_descr": "Запущене фонове завдання.",
+      "example": "args = New Array();\nargs.Add(BegOfMonth(WorkingDate()));\njob = RunBackground(\"RecalculateTotals\", args);",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.RunJob", "fn.RunScheduledJobs"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.SerializeValue",
+      "name_local": "SerializeValue",
+      "name_en": "SerializeValue",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "SerializeValue(value : any)",
+      "description": "Перетворює значення часу виконання на текст (JSON). Друк значення відповідає, ЯК ВОНО ВИГЛЯДАЄ; ця функція — З ЧОГО ВОНО СКЛАДАЄТЬСЯ, тому структура переживає запис: вибірка, набір записів, об'єкт документа, масив. Застосовуйте там, де значення існує, — поруч із рядком, що його побудував, — щоб побачити вміст, зберегти його, порівняти два значення або надіслати одне з них. Коло записуваного зростає разом із типами: усе, що навчилося пакувати себе, покривається того самого дня.",
+      "syntax_block": "SerializeValue(value : any)",
+      "parameters": "value — будь-яке значення, яке може тримати ця конфігурація.",
+      "return_descr": "Значення як текст JSON. Спричиняє виняток, коли значення непередаване (IsTransferable) або коли не відкрито конфігурацію: типи, які називає посилання, живуть у її власному реєстрі.",
+      "example": "Selection = Query.Execute().Select();\nWhile Selection.Next() Do\n\tMessage(SerializeValue(Selection));\nEndDo;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.DeserializeValue"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.DeserializeValue",
+      "name_local": "DeserializeValue",
+      "name_en": "DeserializeValue",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "DeserializeValue(json : string)",
+      "description": "Читає текст, записаний SerializeValue, назад у значення часу виконання — а водночас БУДУЄ значення з JSON, написаного вручну або отриманого ззовні. Це єдиний спосіб побудувати його без скрипта: текст на вході, значення на виході. НЕ кожен запис переживає зворотний шлях: подання JSON — це відображення, тому дата в ньому ISO-рядок, а частина форм сплощується. Там, де значення має повернутися точно таким, яким пішло, зберігайте двійкову форму.",
+      "syntax_block": "DeserializeValue(json : string)",
+      "parameters": "json — текст у тому вигляді, у якому його пише SerializeValue.",
+      "return_descr": "Значення, описане текстом. Спричиняє виняток, коли текст не є JSON, з якого читається значення, коли він називає тип, якого немає в цій конфігурації, або коли конфігурацію не відкрито.",
+      "example": "Value = DeserializeValue(\"{\\\"type\\\":\\\"Number\\\",\\\"value\\\":42}\");",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.SerializeValue"],
+      "reviewed": true
     }
   ]
 }

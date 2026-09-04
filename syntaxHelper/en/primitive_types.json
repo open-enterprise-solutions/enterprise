@@ -24,6 +24,101 @@
         "fn.Message"
       ],
       "reviewed": true
+    },
+    {
+      "id": "type.Number",
+      "name_local": "Number",
+      "name_en": "Number",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "Number(<value>) — or a literal: 42, -3.14",
+      "description": "An EXACT DECIMAL number, not binary floating point. That is the difference that matters in an accounting system: 0.1 + 0.2 is 0.3 here, sums of money add up, and a total does not drift by a hundredth after ten thousand rows.\n\nIt grows as needed — small values stay in eight bytes, larger or longer ones move to an arbitrary-precision form on demand, so a rate with many decimal places is stored as written rather than rounded to fit.",
+      "syntax_block": "Number(<value>) — or a literal: 42, -3.14",
+      "parameters": "Written as a literal (42, -3.14) or produced by Number(value).",
+      "return_descr": "A value of type Number.",
+      "example": "price = 1250.55;\ntotal = price * 3;\nMessage(Format(total, \"NFD=2\"));",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Number", "fn.Round", "fn.Int", "fn.Format"],
+      "reviewed": true
+    },
+    {
+      "id": "type.String",
+      "name_local": "String",
+      "name_en": "String",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "String(<value>) — or a literal: \"text\"",
+      "description": "Text. Concatenated with `+`, compared with `==`, and measured by StrLen. A string that a person left blank is best tested with IsBlankString rather than a comparison against \"\" — a stray space is not a value.",
+      "syntax_block": "String(<value>) — or a literal: \"text\"",
+      "parameters": "Written between double quotes, or produced by String(value).",
+      "return_descr": "A value of type String.",
+      "example": "name = \"Acme\" + \" \" + \"Ltd\";\nIf Not IsBlankString(name) Then\n    Message(name);\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.String", "fn.StrLen", "fn.Mid", "fn.Find", "fn.IsBlankString"],
+      "reviewed": true
+    },
+    {
+      "id": "type.Boolean",
+      "name_local": "Boolean",
+      "name_en": "Boolean",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "Boolean(<value>) — or a literal: True / False",
+      "description": "True or False — what a condition tests and what a flag holds. Combined with And / Or / Not.",
+      "syntax_block": "Boolean(<value>) — or a literal: True / False",
+      "parameters": "Written as True or False, or produced by Boolean(value).",
+      "return_descr": "A value of type Boolean.",
+      "example": "posted = True;\nIf posted And Not cancelled Then\n    Message(\"in effect\");\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Boolean", "kw.True", "kw.False", "kw.Not"],
+      "reviewed": true
+    },
+    {
+      "id": "type.Undefined",
+      "name_local": "Undefined",
+      "name_en": "Undefined",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "Undefined",
+      "description": "THE ABSENCE OF A VALUE — what an unassigned variable holds and what an optional argument that was not passed contains. It is not the same as NULL, which is the database's explicit \"no value recorded\": Undefined means nobody put anything here, NULL means the data says there is nothing. IsEmptyValue is true for both.",
+      "syntax_block": "Undefined",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var x;\nIf x == Undefined Then\n    Message(\"nothing was assigned\");\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["kw.Undefined", "type.Null", "fn.IsEmptyValue", "fn.ValueIsFilled"],
+      "reviewed": true
+    },
+    {
+      "id": "type.Null",
+      "name_local": "Null",
+      "name_en": "Null",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "Null",
+      "description": "The DATABASE's explicit \"no value\" — what a query returns for a column with nothing in it, and what an outer join produces for rows that did not match. Distinct from Undefined (nobody assigned anything) and from an empty reference (a type was chosen, no object picked). Test it with IsNull when you mean this one specifically; IsEmptyValue answers true for all three.",
+      "syntax_block": "Null",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If IsNull(selection.Discount) Then\n    discount = 0;\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["kw.Null", "type.Undefined", "fn.IsNull", "fn.IsEmptyValue"],
+      "reviewed": true
     }
   ]
 }

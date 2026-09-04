@@ -498,18 +498,19 @@
       ],
       "signature": "",
       "description": "Declares a function — a callable that returns a value via Return. Functions are interchangeable with procedures everywhere except as expression sources.",
-      "syntax_block": "Function <Name>([Val] <Param1>, …) [Public] {\n    // body\n    Return <Value>;\n}",
-      "parameters": "<Name> — identifier. Val — pass-by-value modifier. Public — make the function callable from other modules (written after the parameter list).",
+      "syntax_block": "Function <Name>([Val] <Param1>, …) [Public|Private|Protected] [Cached] {\n    // body\n    Return <Value>;\n}",
+      "parameters": "<Name> — identifier. Val — pass-by-value modifier. The modifiers after the parameter list are two independent axes: one access modifier (Public / Private / Protected, default Private) and, optionally, Cached, which keeps the result per combination of argument values. Their order does not matter.",
       "return_descr": "Whatever the Return statement produces.",
       "example": "Function Sum(Val A, Val B) Public {\n    Return A + B;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Procedure",
         "kw.Return",
-        "kw.Public"
+        "kw.Public",
+        "kw.Cached"
       ],
       "reviewed": true,
-      "syntax_block_ves": "Function <Name>([Val] <Param1>, …) [Public]\n    // body\n    Return <Value>;\nEndFunction",
+      "syntax_block_ves": "Function <Name>([Val] <Param1>, …) [Public|Private|Protected] [Cached]\n    // body\n    Return <Value>;\nEndFunction",
       "example_ves": "Function Sum(Val A, Val B) Public\n    Return A + B;\nEndFunction",
       "modes": [
         "ves",
@@ -562,6 +563,7 @@
       "see_also": [
         "kw.Private",
         "kw.Protected",
+        "kw.Cached",
         "kw.Procedure",
         "kw.Function",
         "kw.Var"
@@ -582,16 +584,17 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Access modifier: the symbol is visible only inside its own module. This is the default, so Private is written to state the intent explicitly.",
-      "syntax_block": "Private Procedure Helper() {\n    // body\n}",
-      "syntax_block_ves": "Private Procedure Helper()\n    // body\nEndProcedure",
+      "description": "Access modifier: the symbol is visible only inside its own module. This is the default, so Private is written to state the intent explicitly. Written AFTER the parameter list — after the closing bracket for a procedure or function, after the name for a variable — the same position as Public and Protected.",
+      "syntax_block": "Procedure Helper() Private {\n    // body\n}",
+      "syntax_block_ves": "Procedure Helper() Private\n    // body\nEndProcedure",
       "parameters": "",
       "return_descr": "",
-      "example": "Private Var cache;\n\nPrivate Function Prepare() {\n    Return cache;\n}",
+      "example": "Var cache Private;\n\nFunction Prepare() Private {\n    Return cache;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Public",
         "kw.Protected",
+        "kw.Cached",
         "kw.Var"
       ],
       "reviewed": true,
@@ -610,17 +613,47 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Access modifier: the symbol is visible to the module's children — an object module exposes it to the forms of that object — but not to the whole configuration.",
-      "syntax_block": "Protected Procedure Recalculate() {\n    // visible to this object's forms\n}",
-      "syntax_block_ves": "Protected Procedure Recalculate()\n    // visible to this object's forms\nEndProcedure",
+      "description": "Access modifier: the symbol is visible to the module's children — an object module exposes it to the forms of that object — but not to the whole configuration. Written AFTER the parameter list — after the closing bracket for a procedure or function, after the name for a variable — the same position as Public and Private.",
+      "syntax_block": "Procedure Recalculate() Protected {\n    // visible to this object's forms\n}",
+      "syntax_block_ves": "Procedure Recalculate() Protected\n    // visible to this object's forms\nEndProcedure",
       "parameters": "",
       "return_descr": "",
-      "example": "Protected Var lastTotal;\n\nProtected Function Total() {\n    Return lastTotal;\n}",
+      "example": "Var lastTotal Protected;\n\nFunction Total() Protected {\n    Return lastTotal;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Public",
         "kw.Private",
+        "kw.Cached",
         "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Cached",
+      "name_local": "Cached",
+      "name_en": "Cached",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Keeps the function's result per combination of argument values: the first call with a given combination runs the body, every later call with the same combination returns the kept result without entering the function at all. Legal on a Function only — a Procedure has no result to keep, and the modifier is refused there rather than ignored. It is a SECOND axis, not a fourth access modifier: it combines with Public, Private or Protected, and the order between them does not matter. Written in the same place as they are, after the parameter list. The kept results live on the module that runs the function and die with it — an object module's results last as long as that object, a common module's as long as the session root — so there is nothing to clear and no expiry to set. A call that raised is not kept.",
+      "syntax_block": "Function Rate(Val CurrencyCode, Val OnDate) Public Cached {\n    // read the rate once per (currency, date)\n    Return <Value>;\n}",
+      "syntax_block_ves": "Function Rate(Val CurrencyCode, Val OnDate) Public Cached\n    // read the rate once per (currency, date)\n    Return <Value>;\nEndFunction",
+      "parameters": "Argument values form the key, and they are compared BY VALUE: the number 1 and the string \"1\" are different keys. A function without arguments is computed once.",
+      "return_descr": "",
+      "example": "Function Settings() Private Cached {\n    Return ReadSettingsFromDatabase();\n}\n\n// called in a loop over 10000 rows — the database is read once\nFor Each Row In Rows Do\n    Row.Currency = Settings().Currency;\nEndDo;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "kw.Public",
+        "kw.Private",
+        "kw.Protected"
       ],
       "reviewed": true,
       "modes": [
@@ -1014,14 +1047,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Defines a preprocessor name. The name then exists for #Ifdef, and whatever follows it on the line is substituted wherever the name appears later in the source. Preprocessing happens BEFORE compilation, so a name defined here is not a variable and holds no runtime value.",
       "syntax_block": "",
-      "parameters": "",
+      "parameters": "The name, and optionally the text it stands for.",
       "return_descr": "",
-      "example": "",
+      "example": "#Define DEBUG\n\n#Ifdef DEBUG\n    Message(\"debug build\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpUndef", "kw.PpIfdef", "kw.PpIfndef"],
+      "reviewed": true
     },
     {
       "id": "kw.PpUndef",
@@ -1033,14 +1066,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Removes a preprocessor name defined earlier, so #Ifdef stops seeing it from this point in the source onward.",
       "syntax_block": "",
-      "parameters": "",
+      "parameters": "The name to remove.",
       "return_descr": "",
-      "example": "",
+      "example": "#Define DEBUG\n// …\n#Undef DEBUG",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpDefine", "kw.PpIfdef"],
+      "reviewed": true
     },
     {
       "id": "kw.PpIfdef",
@@ -1052,14 +1085,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Compiles the block that follows ONLY IF the name is defined. The code inside an unmet branch does not reach the compiler at all — it is not dead code that never runs, it is text that is never read, so it need not even be valid.",
       "syntax_block": "",
-      "parameters": "",
+      "parameters": "The name to test.",
       "return_descr": "",
-      "example": "",
+      "example": "#Ifdef SERVER\n    doc.Write();\n#Else\n    Message(\"client side\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpIfndef", "kw.PpElse", "kw.PpEndif", "kw.PpDefine"],
+      "reviewed": true
     },
     {
       "id": "kw.PpIfndef",
@@ -1071,14 +1104,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "The opposite of #Ifdef: compiles the block that follows only if the name is NOT defined.",
       "syntax_block": "",
-      "parameters": "",
+      "parameters": "The name to test.",
       "return_descr": "",
-      "example": "",
+      "example": "#Ifndef PRODUCTION\n    Message(\"not a production build\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpIfdef", "kw.PpElse", "kw.PpEndif"],
+      "reviewed": true
     },
     {
       "id": "kw.PpElse",
@@ -1090,14 +1123,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "The other branch of #Ifdef / #Ifndef — compiled when the condition was not met.",
       "syntax_block": "",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "#Ifdef DEBUG\n    Message(\"debug\");\n#Else\n    Message(\"release\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpIfdef", "kw.PpIfndef", "kw.PpEndif"],
+      "reviewed": true
     },
     {
       "id": "kw.PpEndif",
@@ -1109,14 +1142,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Closes an #Ifdef or #Ifndef block. Every one of them needs its own.",
       "syntax_block": "",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "#Ifdef DEBUG\n    Message(\"debug\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpIfdef", "kw.PpIfndef", "kw.PpElse"],
+      "reviewed": true
     },
     {
       "id": "kw.PpRegion",
@@ -1128,14 +1161,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Opens a NAMED region — a stretch of source the editor can fold away. It changes nothing about what is compiled; it is there so a long module can be read. The name is required, and so is a matching #EndRegion.",
       "syntax_block": "",
-      "parameters": "",
+      "parameters": "The region's name.",
       "return_descr": "",
-      "example": "",
+      "example": "#Region EventHandlers\n\nProcedure OnOpen() Public\n    // …\nEndProcedure\n\n#EndRegion",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpEndRegion"],
+      "reviewed": true
     },
     {
       "id": "kw.PpEndRegion",
@@ -1147,14 +1180,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Closes a #Region. It is required — a region left open is reported where it was opened, not at the end of the file.",
       "syntax_block": "",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "#Region Helpers\n// …\n#EndRegion",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpRegion"],
+      "reviewed": true
     },
     {
       "id": "kw.From",

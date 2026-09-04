@@ -24,6 +24,101 @@
         "fn.Message"
       ],
       "reviewed": true
+    },
+    {
+      "id": "type.Number",
+      "name_local": "Number",
+      "name_en": "Number",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "Number(<value>) — or a literal: 42, -3.14",
+      "description": "ТОЧНЕ ДЕСЯТКОВЕ число, а не двійкове з рухомою комою. Саме ця відмінність і важлива в обліковій системі: 0.1 + 0.2 тут дорівнює 0.3, грошові суми складаються, і підсумок не пливе на соту після десяти тисяч рядків.\n\nЧисло зростає за потребою: малі значення лишаються у восьми байтах, великі або довгі переходять до форми довільної точності, тому курс із багатьма знаками зберігається як записаний, а не округлюється під розмір.",
+      "syntax_block": "Number(<value>) — or a literal: 42, -3.14",
+      "parameters": "Записується літералом (42, -3.14) або отримується з Number(value).",
+      "return_descr": "Значення типу Число.",
+      "example": "price = 1250.55;\ntotal = price * 3;\nMessage(Format(total, \"NFD=2\"));",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Number", "fn.Round", "fn.Int", "fn.Format"],
+      "reviewed": true
+    },
+    {
+      "id": "type.String",
+      "name_local": "String",
+      "name_en": "String",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "String(<value>) — or a literal: \"text\"",
+      "description": "Текст. Складається через `+`, порівнюється через `==`, довжина — StrLen. Рядок, який людина лишила порожнім, краще перевіряти через IsBlankString, а не порівнянням із \"\": випадковий пробіл значенням не є.",
+      "syntax_block": "String(<value>) — or a literal: \"text\"",
+      "parameters": "Записується у подвійних лапках або отримується зі String(value).",
+      "return_descr": "Значення типу Рядок.",
+      "example": "name = \"Acme\" + \" \" + \"Ltd\";\nIf Not IsBlankString(name) Then\n    Message(name);\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.String", "fn.StrLen", "fn.Mid", "fn.Find", "fn.IsBlankString"],
+      "reviewed": true
+    },
+    {
+      "id": "type.Boolean",
+      "name_local": "Boolean",
+      "name_en": "Boolean",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "Boolean(<value>) — or a literal: True / False",
+      "description": "Істина або Хиба — те, що перевіряє умова і що зберігає прапорець. Комбінується через And / Or / Not.",
+      "syntax_block": "Boolean(<value>) — or a literal: True / False",
+      "parameters": "Записується як True або False чи отримується з Boolean(value).",
+      "return_descr": "Значення типу Булеве.",
+      "example": "posted = True;\nIf posted And Not cancelled Then\n    Message(\"in effect\");\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Boolean", "kw.True", "kw.False", "kw.Not"],
+      "reviewed": true
+    },
+    {
+      "id": "type.Undefined",
+      "name_local": "Undefined",
+      "name_en": "Undefined",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "Undefined",
+      "description": "ВІДСУТНІСТЬ ЗНАЧЕННЯ — те, що зберігає неприсвоєна змінна і що містить непереданий необов'язковий аргумент. Це не те саме, що NULL, — явне «значення не записано» з бази: Undefined означає, що сюди ніхто нічого не поклав, NULL — що дані свідчать про відсутність. IsEmptyValue істинне для обох.",
+      "syntax_block": "Undefined",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var x;\nIf x == Undefined Then\n    Message(\"nothing was assigned\");\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["kw.Undefined", "type.Null", "fn.IsEmptyValue", "fn.ValueIsFilled"],
+      "reviewed": true
+    },
+    {
+      "id": "type.Null",
+      "name_local": "Null",
+      "name_en": "Null",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "Null",
+      "description": "Явне «немає значення» З БАЗИ — те, що запит повертає для колонки, де нічого немає, і що дає зовнішнє з'єднання для незіставлених рядків. Відрізняється від Undefined (ніхто нічого не присвоював) і від порожнього посилання (тип обрано, об'єкт не вказано). Перевіряйте через IsNull, коли маєте на увазі саме це; IsEmptyValue відповідає істиною для всіх трьох.",
+      "syntax_block": "Null",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If IsNull(selection.Discount) Then\n    discount = 0;\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["kw.Null", "type.Undefined", "fn.IsNull", "fn.IsEmptyValue"],
+      "reviewed": true
     }
   ]
 }

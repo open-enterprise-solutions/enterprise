@@ -13,14 +13,14 @@
         "global_functions"
       ],
       "signature": "Boolean(value : any)",
-      "description": "",
+      "description": "Converts a value to Boolean. A number is false when it is zero and true otherwise; an empty string, an empty date and Undefined are false. Use it when a value of unknown type has to drive a condition.",
       "syntax_block": "Boolean(value : any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — a value of any type.",
+      "return_descr": "Boolean.",
+      "example": "Message(Boolean(0));      // False\nMessage(Boolean(\"\"));     // False\nMessage(Boolean(42));     // True",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Number", "fn.String", "fn.TypeOf"],
+      "reviewed": true
     },
     {
       "id": "fn.Number",
@@ -32,14 +32,14 @@
         "global_functions"
       ],
       "signature": "Number(value: any)",
-      "description": "",
+      "description": "Converts a value to a number. A string is parsed; a boolean gives 1 or 0; a value with no numeric reading gives zero rather than raising. The result is an exact decimal — this platform's numbers are not binary floating point, so money arithmetic does not drift.",
       "syntax_block": "Number(value: any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — a value of any type.",
+      "return_descr": "Number.",
+      "example": "Message(Number(\"3.14\"));   // 3.14\nMessage(Number(True));     // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.String", "fn.Boolean", "fn.Int", "fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.Date",
@@ -58,7 +58,7 @@
       "example": "Date(2026, 9, 2)\nDate(2026, 9, 2, 10, 45, 25)\nDate(\"20260902104525\")",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [],
-      "reviewed": false
+      "reviewed": true
     },
     {
       "id": "fn.String",
@@ -70,14 +70,14 @@
         "global_functions"
       ],
       "signature": "String(value: any)",
-      "description": "",
+      "description": "Converts a value to its string form — the same text the platform shows for that value. For formatted output (a date pattern, a number's grouping or decimals) use Format, which takes a format string; String has no options.",
       "syntax_block": "String(value: any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — a value of any type.",
+      "return_descr": "String.",
+      "example": "Message(String(1250.5));\nMessage(Format(1250.5, \"ND=2\"));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Format", "fn.Number", "fn.Boolean"],
+      "reviewed": true
     },
     {
       "id": "fn.Round",
@@ -89,14 +89,14 @@
         "global_functions"
       ],
       "signature": "Round(num : number, number, roundMode)",
-      "description": "",
+      "description": "Rounds a number to the given number of decimal places. The rounding RULE is the third argument and it changes results on exact halves: Round15as20 (the default) sends a half away from zero, so 1.5 becomes 2; Round15as10 keeps a half down, so 1.5 becomes 1 and only .6 and above go up. State the rule explicitly wherever the figure is reconciled against another system.",
       "syntax_block": "Round(num : number, number, roundMode)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — the number. number — decimal places (default 0). roundMode — RoundMode.Round15as20 (default) or RoundMode.Round15as10.",
+      "return_descr": "Number, rounded.",
+      "example": "Message(Round(1.5));                             // 2\nMessage(Round(1.5, 0, RoundMode.Round15as10));   // 1\nMessage(Round(1250.567, 2));                     // 1250.57\nMessage(Int(1.9));                               // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Int", "fn.Number", "fn.Format"],
+      "reviewed": true
     },
     {
       "id": "fn.Int",
@@ -127,14 +127,14 @@
         "global_functions"
       ],
       "signature": "Log10(num : number)",
-      "description": "",
+      "description": "The base-10 logarithm of a number.",
       "syntax_block": "Log10(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — a positive number.",
+      "return_descr": "Number — the logarithm.",
+      "example": "Message(Log10(1000));   // 3",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Ln", "fn.Sqrt"],
+      "reviewed": true
     },
     {
       "id": "fn.Ln",
@@ -146,14 +146,14 @@
         "global_functions"
       ],
       "signature": "Ln(num : number)",
-      "description": "",
+      "description": "The natural logarithm of a number.",
       "syntax_block": "Ln(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — a positive number.",
+      "return_descr": "Number — the logarithm.",
+      "example": "Message(Ln(1));   // 0",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Log10", "fn.Sqrt"],
+      "reviewed": true
     },
     {
       "id": "fn.Max",
@@ -165,14 +165,14 @@
         "global_functions"
       ],
       "signature": "Max(num : number, ...)",
-      "description": "",
+      "description": "The largest of the arguments, compared as numbers. Takes as many arguments as it is given.",
       "syntax_block": "Max(num : number, ...)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num, ... — two or more values; each is read as a number. Called with no arguments it raises.",
+      "return_descr": "The largest argument.",
+      "example": "Message(Max(2, 9, 4, 1));   // 9\nMessage(Min(2, 9, 4, 1));   // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Min", "fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.Min",
@@ -184,14 +184,14 @@
         "global_functions"
       ],
       "signature": "Min(num : number, ...)",
-      "description": "",
+      "description": "The smallest of the arguments, compared as numbers. Takes as many arguments as it is given.",
       "syntax_block": "Min(num : number, ...)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num, ... — two or more values; each is read as a number. Called with no arguments it raises.",
+      "return_descr": "The smallest argument.",
+      "example": "Message(Min(5, 3));   // 3",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Max", "fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.Sqrt",
@@ -203,14 +203,14 @@
         "global_functions"
       ],
       "signature": "Sqrt(num : number)",
-      "description": "",
+      "description": "The square root of a number. A negative argument has no real root and raises rather than returning a meaningless figure.",
       "syntax_block": "Sqrt(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — a number that is not negative.",
+      "return_descr": "Number — the root.",
+      "example": "Message(Sqrt(16));   // 4",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Log10", "fn.Ln"],
+      "reviewed": true
     },
     {
       "id": "fn.StrLen",
@@ -222,14 +222,14 @@
         "global_functions"
       ],
       "signature": "StrLen(str : string)",
-      "description": "",
+      "description": "The number of characters in a string.",
       "syntax_block": "StrLen(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — a string (or a value read as one).",
+      "return_descr": "Number — the length.",
+      "example": "Message(StrLen(\"abc\"));   // 3",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.IsBlankString", "fn.TrimAll"],
+      "reviewed": true
     },
     {
       "id": "fn.IsBlankString",
@@ -241,14 +241,14 @@
         "global_functions"
       ],
       "signature": "IsBlankString(str : string)",
-      "description": "",
+      "description": "True when a string is empty or contains nothing but whitespace. This is the check to use before saving a text a person typed — an accidental space is not a value.",
       "syntax_block": "IsBlankString(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — a string.",
+      "return_descr": "Boolean.",
+      "example": "Message(IsBlankString(\"   \"));   // True\nMessage(IsBlankString(\"x\"));     // False",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TrimAll", "fn.StrLen", "fn.ValueIsFilled"],
+      "reviewed": true
     },
     {
       "id": "fn.TrimL",
@@ -260,14 +260,14 @@
         "global_functions"
       ],
       "signature": "TrimL(str : string)",
-      "description": "",
+      "description": "The string without its leading whitespace.",
       "syntax_block": "TrimL(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — a string.",
+      "return_descr": "String.",
+      "example": "Message(\"[\" + TrimL(\"  x  \") + \"]\");   // [x  ]",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TrimR", "fn.TrimAll"],
+      "reviewed": true
     },
     {
       "id": "fn.TrimR",
@@ -279,14 +279,14 @@
         "global_functions"
       ],
       "signature": "TrimR(str : string)",
-      "description": "",
+      "description": "The string without its trailing whitespace.",
       "syntax_block": "TrimR(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — a string.",
+      "return_descr": "String.",
+      "example": "Message(\"[\" + TrimR(\"  x  \") + \"]\");   // [  x]",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TrimL", "fn.TrimAll"],
+      "reviewed": true
     },
     {
       "id": "fn.TrimAll",
@@ -298,14 +298,14 @@
         "global_functions"
       ],
       "signature": "TrimAll(str : string)",
-      "description": "",
+      "description": "The string without whitespace at either end.",
       "syntax_block": "TrimAll(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — a string.",
+      "return_descr": "String.",
+      "example": "Message(\"[\" + TrimAll(\"  x  \") + \"]\");   // [x]",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TrimL", "fn.TrimR", "fn.IsBlankString"],
+      "reviewed": true
     },
     {
       "id": "fn.Left",
@@ -317,14 +317,14 @@
         "global_functions"
       ],
       "signature": "Left(str : string, number)",
-      "description": "",
+      "description": "The first N characters of a string. Asking for more than there are returns the whole string rather than raising.",
       "syntax_block": "Left(str : string, number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — a string. number — how many characters.",
+      "return_descr": "String.",
+      "example": "Message(Left(\"abcdef\", 3));   // abc",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Right", "fn.Mid", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.Right",
@@ -336,14 +336,14 @@
         "global_functions"
       ],
       "signature": "Right(str : string, number)",
-      "description": "",
+      "description": "The last N characters of a string. Asking for more than there are returns the whole string rather than raising.",
       "syntax_block": "Right(str : string, number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — a string. number — how many characters.",
+      "return_descr": "String.",
+      "example": "Message(Right(\"abcdef\", 3));   // def",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Left", "fn.Mid", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.Mid",
@@ -355,14 +355,14 @@
         "global_functions"
       ],
       "signature": "Mid(str : string, number, number)",
-      "description": "",
+      "description": "A slice of a string, starting at a position counted FROM ONE — the same position Find answers with, so the two compose directly. An omitted length means the rest of the string.",
       "syntax_block": "Mid(str : string, number, number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — a string. number — the start, counted from 1. number — how many characters (default: to the end of the string).",
+      "return_descr": "String — the slice.",
+      "example": "Message(Mid(\"abcdef\", 2, 3));                  // bcd\nMessage(Mid(\"abcdef\", 2));                     // bcdef\nMessage(Mid(\"abcdef\", Find(\"abcdef\", \"c\")));   // cdef",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Left", "fn.Right", "fn.Find", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.Find",
@@ -374,14 +374,14 @@
         "global_functions"
       ],
       "signature": "Find(str : string, string, number)",
-      "description": "",
+      "description": "The position of a substring, counted FROM ONE, or 0 when it does not occur — which is why the count starts at one: 0 is the free value that can mean \"nowhere\". Mid takes positions on the same footing, so Mid(s, Find(s, x)) starts at the match.",
       "syntax_block": "Find(str : string, string, number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — the string to search. string — what to look for. number — the position to start from, counted from 1 (default: the beginning).",
+      "return_descr": "Number — the position from 1, or 0 if not found.",
+      "example": "Message(Find(\"abcdef\", \"c\"));   // 3\nMessage(Find(\"abcdef\", \"z\"));   // 0",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.StrCountOccur", "fn.Mid", "fn.StrReplace"],
+      "reviewed": true
     },
     {
       "id": "fn.StrReplace",
@@ -393,14 +393,14 @@
         "global_functions"
       ],
       "signature": "StrReplace(str : string, string, string)",
-      "description": "",
+      "description": "The string with EVERY occurrence of one substring replaced by another. It does not stop at the first.",
       "syntax_block": "StrReplace(str : string, string, string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — the source. string — what to replace. string — what to put in its place.",
+      "return_descr": "String — a new string; the source is unchanged.",
+      "example": "Message(StrReplace(\"a-b-c\", \"-\", \"+\"));   // a+b+c",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Find", "fn.StrCountOccur"],
+      "reviewed": true
     },
     {
       "id": "fn.StrCountOccur",
@@ -412,14 +412,14 @@
         "global_functions"
       ],
       "signature": "StrCountOccur(str : string, string)",
-      "description": "",
+      "description": "How many times a substring occurs in a string, counting non-overlapping occurrences. An empty substring counts as 0.",
       "syntax_block": "StrCountOccur(str : string, string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — the string to search. string — what to count.",
+      "return_descr": "Number — the count (0 when it does not occur).",
+      "example": "Message(StrCountOccur(\"aaa\", \"a\"));     // 3\nMessage(StrCountOccur(\"abcabc\", \"z\"));  // 0",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Find", "fn.StrReplace"],
+      "reviewed": true
     },
     {
       "id": "fn.StrLineCount",
@@ -431,14 +431,14 @@
         "global_functions"
       ],
       "signature": "StrLineCount(str : string)",
-      "description": "",
+      "description": "How many lines a text has. A text with no line break at all is one line, not none. A CRLF pair counts as a single break, the same way StrGetLine walks it, so the two agree about what a line is.",
       "syntax_block": "StrLineCount(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — the text.",
+      "return_descr": "Number — the count of lines (at least 1).",
+      "example": "text = \"a\" + Chr(10) + \"b\";\nFor i = 1 To StrLineCount(text) Do\n    Message(StrGetLine(text, i));\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.StrGetLine", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.StrGetLine",
@@ -449,15 +449,15 @@
         "global_context",
         "global_functions"
       ],
-      "signature": "StrGetLine(str : string)",
-      "description": "",
-      "syntax_block": "StrGetLine(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "StrGetLine(str : string, line : number)",
+      "description": "One line of a multi-line text, by its number counted FROM ONE. A number past the last line gives an empty string rather than raising — pair it with StrLineCount to walk a text.",
+      "syntax_block": "StrGetLine(str : string, line : number)",
+      "parameters": "str — the text. line — the line number, from 1.",
+      "return_descr": "String — the line without its line break; empty when there is no such line.",
+      "example": "text = \"first\" + Chr(10) + \"second\";\nMessage(StrGetLine(text, 2));   // second",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.StrLineCount", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.Upper",
@@ -469,14 +469,14 @@
         "global_functions"
       ],
       "signature": "Upper(str : string)",
-      "description": "",
+      "description": "The string in upper case.",
       "syntax_block": "Upper(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — a string.",
+      "return_descr": "String.",
+      "example": "Message(Upper(\"abc\"));   // ABC",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Lower"],
+      "reviewed": true
     },
     {
       "id": "fn.Lower",
@@ -488,14 +488,14 @@
         "global_functions"
       ],
       "signature": "Lower(str : string)",
-      "description": "",
+      "description": "The string in lower case.",
       "syntax_block": "Lower(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — a string.",
+      "return_descr": "String.",
+      "example": "Message(Lower(\"ABC\"));   // abc",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Upper"],
+      "reviewed": true
     },
     {
       "id": "fn.Chr",
@@ -507,14 +507,14 @@
         "global_functions"
       ],
       "signature": "Chr(num : number)",
-      "description": "",
+      "description": "The character with the given code. This is how a script writes characters it cannot type in source: Chr(10) is a line feed, Chr(13) a carriage return, Chr(9) a tab.",
       "syntax_block": "Chr(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — a character code.",
+      "return_descr": "String of one character.",
+      "example": "text = \"first\" + Chr(10) + \"second\";",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Asc", "fn.StrGetLine"],
+      "reviewed": true
     },
     {
       "id": "fn.Asc",
@@ -526,14 +526,14 @@
         "global_functions"
       ],
       "signature": "Asc(str : string)",
-      "description": "",
+      "description": "The code of a string's FIRST character. An empty string gives 0.",
       "syntax_block": "Asc(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — a string.",
+      "return_descr": "Number — the character code.",
+      "example": "Message(Asc(\"A\"));   // 65",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Chr", "fn.Left"],
+      "reviewed": true
     },
     {
       "id": "fn.Tstr",
@@ -545,14 +545,14 @@
         "global_functions"
       ],
       "signature": "Tstr(text : string, langCode : string)",
-      "description": "",
+      "description": "The translation of a text into the named language, taken from the configuration's localisation store. Use it where a message has to appear in a language other than the current one — a document printed for a counterparty, say.",
       "syntax_block": "Tstr(text : string, langCode : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "text — the source text. langCode — the language code the translation is stored under.",
+      "return_descr": "String — the translation, or the source text when there is none.",
+      "example": "Message(Tstr(\"Total\", \"uk\"));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GeneralLanguage", "fn.String"],
+      "reviewed": true
     },
     {
       "id": "fn.CurrentDate",
@@ -564,14 +564,14 @@
         "global_functions"
       ],
       "signature": "CurrentDate()",
-      "description": "",
+      "description": "The current date and time of the machine the code runs on. For the date a person is POSTING under — which may deliberately differ — use WorkingDate.",
       "syntax_block": "CurrentDate()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "Date, with the time of day.",
+      "example": "Message(CurrentDate());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.WorkingDate", "fn.BegOfDay", "fn.GetYear"],
+      "reviewed": true
     },
     {
       "id": "fn.WorkingDate",
@@ -582,15 +582,15 @@
         "global_context",
         "global_functions"
       ],
-      "signature": "WorkingDate(d : date)",
-      "description": "",
-      "syntax_block": "WorkingDate(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "WorkingDate()",
+      "description": "The session's WORKING DATE, at midnight. It is the date the person is entering documents under, which is not always today — closing a period, entering yesterday's paperwork. Belongs to the session; without one the process-wide value is used.",
+      "syntax_block": "WorkingDate()",
+      "parameters": "None.",
+      "return_descr": "Date at 00:00:00.",
+      "example": "doc.Date = WorkingDate();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.CurrentDate", "fn.BegOfDay"],
+      "reviewed": true
     },
     {
       "id": "fn.AddMonth",
@@ -602,14 +602,14 @@
         "global_functions"
       ],
       "signature": "AddMonth(d : date, num : number)",
-      "description": "",
+      "description": "Shifts a date by a whole number of months; a negative count goes back. ⚠ It keeps the DAY NUMBER and drops the time of day — the result is at midnight.",
       "syntax_block": "AddMonth(d : date, num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date. num — months to add (may be negative).",
+      "return_descr": "Date at 00:00:00.",
+      "example": "Message(AddMonth(Date(2024, 1, 31), 1));\nMessage(AddMonth(Date(2024, 3, 15), -2));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfMonth", "fn.EndOfMonth"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfMonth",
@@ -621,14 +621,14 @@
         "global_functions"
       ],
       "signature": "BegOfMonth(d : date)",
-      "description": "",
+      "description": "The first day of the month a date falls in, at 00:00:00.",
       "syntax_block": "BegOfMonth(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Date at 00:00:00.",
+      "example": "// the month a document belongs to, as a period\nbegin = BegOfMonth(doc.Date);\nend   = EndOfMonth(doc.Date);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfMonth", "fn.BegOfQuart", "fn.BegOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfMonth",
@@ -640,14 +640,14 @@
         "global_functions"
       ],
       "signature": "EndOfMonth(d : date)",
-      "description": "",
+      "description": "The last day of the month a date falls in, at 23:59:59 — the END of that day, so `d <= EndOfMonth(x)` keeps everything recorded during it.",
       "syntax_block": "EndOfMonth(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Date at 23:59:59.",
+      "example": "Message(EndOfMonth(Date(2024, 2, 10)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfMonth", "fn.EndOfQuart", "fn.EndOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfQuart",
@@ -659,14 +659,14 @@
         "global_functions"
       ],
       "signature": "BegOfQuart(d : date)",
-      "description": "",
+      "description": "The first day of the quarter a date falls in (January, April, July or October 1st), at 00:00:00.",
       "syntax_block": "BegOfQuart(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Date at 00:00:00.",
+      "example": "Message(BegOfQuart(Date(2024, 5, 20)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfQuart", "fn.GetQuartOfYear", "fn.BegOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfQuart",
@@ -678,14 +678,14 @@
         "global_functions"
       ],
       "signature": "EndOfQuart(d : date)",
-      "description": "",
+      "description": "The last day of the quarter a date falls in, at 23:59:59.",
       "syntax_block": "EndOfQuart(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Date at 23:59:59.",
+      "example": "Message(EndOfQuart(Date(2024, 5, 20)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfQuart", "fn.GetQuartOfYear", "fn.EndOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfYear",
@@ -697,14 +697,14 @@
         "global_functions"
       ],
       "signature": "BegOfYear(d : date)",
-      "description": "",
+      "description": "January 1st of the year a date falls in, at 00:00:00.",
       "syntax_block": "BegOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Date at 00:00:00.",
+      "example": "Message(BegOfYear(Date(2024, 5, 20)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfYear", "fn.GetYear"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfYear",
@@ -716,14 +716,14 @@
         "global_functions"
       ],
       "signature": "EndOfYear(d : date)",
-      "description": "",
+      "description": "December 31st of the year a date falls in, at 23:59:59.",
       "syntax_block": "EndOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Date at 23:59:59.",
+      "example": "Message(EndOfYear(Date(2024, 5, 20)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfYear", "fn.GetYear"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfWeek",
@@ -735,14 +735,14 @@
         "global_functions"
       ],
       "signature": "BegOfWeek(d : date)",
-      "description": "",
+      "description": "The MONDAY of the week a date falls in, at 00:00:00. The week runs Monday to Sunday, the same numbering GetDayOfWeek answers with.",
       "syntax_block": "BegOfWeek(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Date at 00:00:00.",
+      "example": "Message(BegOfWeek(Date(2024, 1, 3)));   // 2024-01-01, a Monday",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfWeek", "fn.GetDayOfWeek", "fn.GetWeekOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfWeek",
@@ -754,14 +754,14 @@
         "global_functions"
       ],
       "signature": "EndOfWeek(d : date)",
-      "description": "",
+      "description": "The SUNDAY of the week a date falls in, at 23:59:59.",
       "syntax_block": "EndOfWeek(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Date at 23:59:59.",
+      "example": "Message(EndOfWeek(Date(2024, 1, 3)));   // 2024-01-07, a Sunday",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfWeek", "fn.GetDayOfWeek"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfDay",
@@ -773,14 +773,14 @@
         "global_functions"
       ],
       "signature": "BegOfDay(d : date)",
-      "description": "",
+      "description": "The same day at 00:00:00 — the time of day is dropped. This is how a date-with-time is compared against a date somebody typed.",
       "syntax_block": "BegOfDay(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Date at 00:00:00.",
+      "example": "If BegOfDay(doc.Date) == WorkingDate() Then\n    Message(\"today's document\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfDay", "fn.WorkingDate", "fn.CurrentDate"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfDay",
@@ -792,14 +792,14 @@
         "global_functions"
       ],
       "signature": "EndOfDay(d : date)",
-      "description": "",
+      "description": "The same day at 23:59:59. Together with BegOfDay it makes a day into a period a comparison can use.",
       "syntax_block": "EndOfDay(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Date at 23:59:59.",
+      "example": "from = BegOfDay(d);\nto   = EndOfDay(d);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfDay"],
+      "reviewed": true
     },
     {
       "id": "fn.GetYear",
@@ -811,14 +811,14 @@
         "global_functions"
       ],
       "signature": "GetYear(d : date)",
-      "description": "",
+      "description": "The year of a date, as a number.",
       "syntax_block": "GetYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Number — the year.",
+      "example": "Message(GetYear(Date(2024, 5, 20)));   // 2024",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetMonth", "fn.GetDay", "fn.BegOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetMonth",
@@ -830,14 +830,14 @@
         "global_functions"
       ],
       "signature": "GetMonth(d : date)",
-      "description": "",
+      "description": "The month of a date, 1 to 12 — January is 1.",
       "syntax_block": "GetMonth(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Number, 1..12.",
+      "example": "Message(GetMonth(Date(2024, 5, 20)));   // 5",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetYear", "fn.GetDay", "fn.GetQuartOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetDay",
@@ -849,14 +849,14 @@
         "global_functions"
       ],
       "signature": "GetDay(d : date)",
-      "description": "",
+      "description": "The day of the month, 1 to 31.",
       "syntax_block": "GetDay(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Number, 1..31.",
+      "example": "Message(GetDay(Date(2024, 5, 20)));   // 20",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetMonth", "fn.GetDayOfWeek", "fn.GetDayOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetHour",
@@ -868,14 +868,14 @@
         "global_functions"
       ],
       "signature": "GetHour(d : date)",
-      "description": "",
+      "description": "The hour of a date's time of day, 0 to 23.",
       "syntax_block": "GetHour(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Number, 0..23.",
+      "example": "Message(GetHour(CurrentDate()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetMinute", "fn.GetSecond", "fn.BegOfDay"],
+      "reviewed": true
     },
     {
       "id": "fn.GetMinute",
@@ -887,14 +887,14 @@
         "global_functions"
       ],
       "signature": "GetMinute(d : date)",
-      "description": "",
+      "description": "The minute of a date's time of day, 0 to 59.",
       "syntax_block": "GetMinute(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Number, 0..59.",
+      "example": "Message(GetMinute(CurrentDate()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetHour", "fn.GetSecond"],
+      "reviewed": true
     },
     {
       "id": "fn.GetSecond",
@@ -906,14 +906,14 @@
         "global_functions"
       ],
       "signature": "GetSecond(d : date)",
-      "description": "",
+      "description": "The second of a date's time of day, 0 to 59.",
       "syntax_block": "GetSecond(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Number, 0..59.",
+      "example": "Message(GetSecond(CurrentDate()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetHour", "fn.GetMinute"],
+      "reviewed": true
     },
     {
       "id": "fn.GetWeekOfYear",
@@ -925,14 +925,14 @@
         "global_functions"
       ],
       "signature": "GetWeekOfYear(d : date)",
-      "description": "",
+      "description": "The week number within the year, counted with Monday as the first day of the week.",
       "syntax_block": "GetWeekOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Number — the week of the year.",
+      "example": "Message(GetWeekOfYear(Date(2024, 1, 1)));   // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfWeek", "fn.GetDayOfWeek", "fn.GetDayOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetDayOfYear",
@@ -944,14 +944,14 @@
         "global_functions"
       ],
       "signature": "GetDayOfYear(d : date)",
-      "description": "",
+      "description": "The day's number within the year — 1 for January 1st, 365 or 366 for December 31st.",
       "syntax_block": "GetDayOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Number, 1..366.",
+      "example": "Message(GetDayOfYear(Date(2024, 1, 1)));   // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetWeekOfYear", "fn.GetDay"],
+      "reviewed": true
     },
     {
       "id": "fn.GetDayOfWeek",
@@ -963,14 +963,14 @@
         "global_functions"
       ],
       "signature": "GetDayOfWeek(d : date)",
-      "description": "",
+      "description": "The day of the week, MONDAY = 1 through SUNDAY = 7. The week functions use the same numbering, so BegOfWeek always lands on a day whose GetDayOfWeek is 1.",
       "syntax_block": "GetDayOfWeek(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Number, 1 (Monday) .. 7 (Sunday).",
+      "example": "If GetDayOfWeek(d) > 5 Then\n    Message(\"weekend\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfWeek", "fn.EndOfWeek", "fn.GetWeekOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetQuartOfYear",
@@ -982,14 +982,14 @@
         "global_functions"
       ],
       "signature": "GetQuartOfYear(d : date)",
-      "description": "",
+      "description": "The quarter a date falls in, 1 to 4.",
       "syntax_block": "GetQuartOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — a date.",
+      "return_descr": "Number, 1..4.",
+      "example": "Message(GetQuartOfYear(Date(2024, 5, 20)));   // 2",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfQuart", "fn.EndOfQuart", "fn.GetMonth"],
+      "reviewed": true
     },
     {
       "id": "fn.FileDelete",
@@ -1001,14 +1001,14 @@
         "global_functions"
       ],
       "signature": "FileDelete(fileName : string)",
-      "description": "",
+      "description": "Deletes a file from disk.",
       "syntax_block": "FileDelete(fileName : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "fileName — the full path.",
+      "return_descr": "Boolean — whether the file was deleted.",
+      "example": "FileDelete(GetTempDir() + \"report.xlsx\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.FileCopy", "fn.GetTempFileName", "fn.GetTempDir"],
+      "reviewed": true
     },
     {
       "id": "fn.FileCopy",
@@ -1020,14 +1020,14 @@
         "global_functions"
       ],
       "signature": "FileCopy(fileDstName : string, fileSrcName : string)",
-      "description": "",
+      "description": "Copies a file. ⚠ The DESTINATION comes first and the source second — the opposite order to most copy commands.",
       "syntax_block": "FileCopy(fileDstName : string, fileSrcName : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "fileDstName — where to copy TO. fileSrcName — what to copy FROM.",
+      "return_descr": "Boolean — whether the copy succeeded.",
+      "example": "FileCopy(GetTempDir() + \"copy.txt\", \"C:\\\\data\\\\original.txt\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.FileDelete", "fn.GetTempDir"],
+      "reviewed": true
     },
     {
       "id": "fn.GetTempDir",
@@ -1039,14 +1039,14 @@
         "global_functions"
       ],
       "signature": "GetTempDir()",
-      "description": "",
+      "description": "The directory for temporary files, with a trailing separator.",
       "syntax_block": "GetTempDir()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "String — the path.",
+      "example": "path = GetTempDir() + \"export.csv\";",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetTempFileName", "fn.FileDelete"],
+      "reviewed": true
     },
     {
       "id": "fn.GetTempFileName",
@@ -1058,14 +1058,14 @@
         "global_functions"
       ],
       "signature": "GetTempFileName()",
-      "description": "",
+      "description": "The full path of a temporary file name nothing else is using. It gives you a NAME — creating, filling and deleting the file is yours to do.",
       "syntax_block": "GetTempFileName()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "String — the path.",
+      "example": "file = GetTempFileName();\n// … write it, use it …\nFileDelete(file);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetTempDir", "fn.FileDelete"],
+      "reviewed": true
     },
     {
       "id": "fn.ActiveWindow",
@@ -1077,14 +1077,14 @@
         "global_functions"
       ],
       "signature": "ActiveWindow()",
-      "description": "",
+      "description": "The window the person is working in, or an empty value when there is none — a background job, a script run headless. Check before using it.",
       "syntax_block": "ActiveWindow()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "The active form, or empty.",
+      "example": "form = ActiveWindow();\nIf ValueIsFilled(form) Then\n    Message(\"running in a window\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetCommonForm", "fn.ShowCommonForm"],
+      "reviewed": true
     },
     {
       "id": "fn.Message",
@@ -1117,14 +1117,14 @@
         "global_functions"
       ],
       "signature": "Alert(message : string)",
-      "description": "",
+      "description": "Shows a message the person must acknowledge, stopping until they do. Prefer Message for anything that is merely informative — an alert interrupts. Under an evaluation (a debugger watch, an assistant's probe) no window opens; the text is reported back instead, marked as a modal the code tried to open.",
       "syntax_block": "Alert(message : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "message — the text.",
+      "return_descr": "Nothing.",
+      "example": "Alert(\"the period is closed\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Message", "fn.Question", "fn.SetStatus"],
+      "reviewed": true
     },
     {
       "id": "fn.Question",
@@ -1136,14 +1136,14 @@
         "global_functions"
       ],
       "signature": "Question(message : string, questionMode)",
-      "description": "",
+      "description": "Asks the person a question and waits for the answer, returning which button they chose. Under an evaluation nobody can answer, so the code receives the empty return code and the caller is told the code STOPPED TO ASK — often the finding itself, since a question in the middle of a calculation is why the calculation never finished.",
       "syntax_block": "Question(message : string, questionMode)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "message — the question. questionMode — which buttons to offer (QuestionMode).",
+      "return_descr": "The chosen answer; empty when nobody could be asked.",
+      "example": "answer = Question(\"Post the document?\", QuestionMode.YesNo);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Alert", "fn.Message"],
+      "reviewed": true
     },
     {
       "id": "fn.SetStatus",
@@ -1155,14 +1155,14 @@
         "global_functions"
       ],
       "signature": "SetStatus(text : string)",
-      "description": "",
+      "description": "Puts a line of text in the window's status bar — progress for work that takes a while, without interrupting anybody. Does nothing under an evaluation.",
       "syntax_block": "SetStatus(text : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "text — the line to show.",
+      "return_descr": "Nothing.",
+      "example": "For Each row In rows Do\n    SetStatus(\"processing \" + String(row.LineNumber));\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Message", "fn.Alert"],
+      "reviewed": true
     },
     {
       "id": "fn.ClearMessages",
@@ -1174,14 +1174,14 @@
         "global_functions"
       ],
       "signature": "ClearMessages()",
-      "description": "",
+      "description": "Empties the message window. Worth calling at the start of a long operation so what the person then reads belongs to THIS run and not the previous one.",
       "syntax_block": "ClearMessages()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "Nothing.",
+      "example": "ClearMessages();\nMessage(\"starting\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Message", "fn.SetStatus"],
+      "reviewed": true
     },
     {
       "id": "fn.SetError",
@@ -1193,14 +1193,14 @@
         "global_functions"
       ],
       "signature": "SetError(string)",
-      "description": "",
+      "description": "Stops the current work with an error carrying your text — the same effect as Raise(text), kept because existing code uses both spellings.",
       "syntax_block": "SetError(string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "string — the message.",
+      "return_descr": "Does not return.",
+      "example": "SetError(\"the period is closed\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Raise", "fn.ErrorDescription"],
+      "reviewed": true
     },
     {
       "id": "fn.Raise",
@@ -1212,14 +1212,14 @@
         "global_functions"
       ],
       "signature": "Raise(string)",
-      "description": "",
+      "description": "Stops the current work with an error carrying your text. The message is what somebody will read when the operation refuses, so say what was wrong with the data rather than where the code stopped.\n\nThe `Raise` KEYWORD is a different thing: written without brackets inside an Except block it re-raises the exception being handled, keeping its original description.",
       "syntax_block": "Raise(string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "string — the message.",
+      "return_descr": "Does not return.",
+      "example": "If IsEmptyValue(doc.Counterparty) Then\n    Raise(\"the counterparty is not filled in\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.SetError", "fn.ErrorDescription", "kw.Raise", "kw.Try"],
+      "reviewed": true
     },
     {
       "id": "fn.ErrorDescription",
@@ -1231,14 +1231,14 @@
         "global_functions"
       ],
       "signature": "ErrorDescription()",
-      "description": "",
+      "description": "The description of the error being handled — meaningful inside an Except block, where it is how you report WHAT failed instead of a bare \"an error occurred\".",
       "syntax_block": "ErrorDescription()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "String — the message of the last raised error.",
+      "example": "Try\n    doc.Write();\nExcept\n    Message(\"could not write: \" + ErrorDescription());\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Raise", "fn.SetError", "kw.Try", "kw.Except"],
+      "reviewed": true
     },
     {
       "id": "fn.IsNull",
@@ -1294,14 +1294,14 @@
         "global_functions"
       ],
       "signature": "IsEmptyValue(value : any)",
-      "description": "",
+      "description": "True when a value is empty: Undefined, NULL, an empty string, a zero number, an empty date, or a reference that has a type but points at nothing. The opposite of ValueIsFilled. Use IsNull when you specifically mean the SQL null and nothing else.",
       "syntax_block": "IsEmptyValue(value : any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — a value of any type.",
+      "return_descr": "Boolean.",
+      "example": "If IsEmptyValue(doc.Counterparty) Then\n    Raise(\"the counterparty is not filled in\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ValueIsFilled", "fn.IsNull", "fn.IsBlankString"],
+      "reviewed": true
     },
     {
       "id": "fn.Evaluate",
@@ -1313,14 +1313,14 @@
         "global_functions"
       ],
       "signature": "Evaluate(expr : string)",
-      "description": "",
+      "description": "Compiles and runs an EXPRESSION written as text, in the scope of the line that called it — the caller's own variables are visible to it. Returns what the expression evaluated to. For a statement rather than an expression there is Execute.\n\nIt is the door a report's calculated field goes through, and the reason to be careful with text that came from outside: whatever it says will run with the caller's rights.",
       "syntax_block": "Evaluate(expr : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "expr — the expression, as a string.",
+      "return_descr": "Whatever the expression produced.",
+      "example": "var k = 40;\nMessage(Evaluate(\"k + 2\"));   // 42",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Execute", "fn.Type", "fn.TypeOf"],
+      "reviewed": true
     },
     {
       "id": "fn.Execute",
@@ -1332,14 +1332,14 @@
         "global_functions"
       ],
       "signature": "Execute(expr : string)",
-      "description": "",
+      "description": "Compiles and runs STATEMENTS written as text, in the scope of the line that called it. Returns nothing — for a value there is Evaluate. The same caution applies: text from outside runs with the caller's rights.",
       "syntax_block": "Execute(expr : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "expr — the statements, as a string.",
+      "return_descr": "Nothing.",
+      "example": "Execute(\"total = total + 1;\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Evaluate"],
+      "reviewed": true
     },
     {
       "id": "fn.Format",
@@ -1351,14 +1351,14 @@
         "global_functions"
       ],
       "signature": "Format(value : any, format : string)",
-      "description": "",
+      "description": "A value as text, under an explicit format — String gives the platform's default appearance, Format gives the one you state. The format is a list of `CODE=value` pairs separated by `;`.\n\nNumbers: ND (total digits), NFD (digits after the point), NDS (decimal separator), NGS (group separator), NG (group size), NZ (what a zero prints as). Booleans: BT and BF (the text for true and for false). Dates: DF (the date pattern), DE (what an empty date prints as).",
       "syntax_block": "Format(value : any, format : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — the value. format — the format string, e.g. \"NFD=2; NGS= \".",
+      "return_descr": "String.",
+      "example": "Message(Format(1250.5, \"NFD=2\"));\nMessage(Format(0, \"NZ=-\"));\nMessage(Format(True, \"BT=yes; BF=no\"));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.String", "fn.Number", "fn.Tstr"],
+      "reviewed": true
     },
     {
       "id": "fn.Type",
@@ -1370,14 +1370,14 @@
         "global_functions"
       ],
       "signature": "Type(strType : string)",
-      "description": "",
+      "description": "The TYPE with the given name, as a value — the thing a type comparison is made against. The name must be one the platform has registered; an unknown name raises rather than returning an empty type.",
       "syntax_block": "Type(strType : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "strType — the registered type name, e.g. \"Number\" or \"CatalogRef.Goods\".",
+      "return_descr": "Type.",
+      "example": "If TypeOf(value) == Type(\"Number\") Then\n    Message(\"a number\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TypeOf", "fn.IsEmptyValue"],
+      "reviewed": true
     },
     {
       "id": "fn.TypeOf",
@@ -1389,14 +1389,14 @@
         "global_functions"
       ],
       "signature": "TypeOf(value : any)",
-      "description": "",
+      "description": "The type OF a value, as a value — compare it against Type(\"...\") to ask what something is.",
       "syntax_block": "TypeOf(value : any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — a value of any type.",
+      "return_descr": "Type.",
+      "example": "Message(TypeOf(42) == Type(\"Number\"));   // True",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Type", "fn.IsEmptyValue"],
+      "reviewed": true
     },
     {
       "id": "fn.Rand",
@@ -1408,14 +1408,14 @@
         "global_functions"
       ],
       "signature": "Rand()",
-      "description": "",
+      "description": "A pseudo-random non-negative whole number. It is NOT suitable for anything that must be unguessable — a password, a token, a key. Use it for sampling and test data.",
       "syntax_block": "Rand()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "Number.",
+      "example": "Message(Rand());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Int", "fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.ArgCount",
@@ -1427,14 +1427,14 @@
         "global_functions"
       ],
       "signature": "ArgCount()",
-      "description": "",
+      "description": "How many command-line arguments the process was started with, the program's own path included.",
       "syntax_block": "ArgCount()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "Number.",
+      "example": "For i = 0 To ArgCount() - 1 Do\n    Message(ArgValue(i));\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ArgValue"],
+      "reviewed": true
     },
     {
       "id": "fn.ArgValue",
@@ -1445,15 +1445,15 @@
         "global_context",
         "global_functions"
       ],
-      "signature": "ArgValue()",
-      "description": "",
-      "syntax_block": "ArgValue()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "ArgValue(index : number)",
+      "description": "One command-line argument by index, counted FROM ZERO — index 0 is the program's own path. An index outside the range raises.",
+      "syntax_block": "ArgValue(index : number)",
+      "parameters": "index — the argument's position, from 0.",
+      "return_descr": "String — the argument.",
+      "example": "Message(ArgValue(0));   // the executable's path",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ArgCount"],
+      "reviewed": true
     },
     {
       "id": "fn.ComputerName",
@@ -1465,14 +1465,14 @@
         "global_functions"
       ],
       "signature": "ComputerName()",
-      "description": "",
+      "description": "The network name of the machine the code is running on. In a client-server installation that is the SERVER for code running there and the workstation for code running on the client — check where your code executes before reading anything into it.",
       "syntax_block": "ComputerName()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "String.",
+      "example": "Message(ComputerName());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.UserName", "fn.GeneralLanguage"],
+      "reviewed": true
     },
     {
       "id": "fn.RunApp",
@@ -1484,14 +1484,14 @@
         "global_functions"
       ],
       "signature": "RunApp(command : string)",
-      "description": "",
+      "description": "Starts an external program and returns at once, without waiting for it to finish. Does nothing under an evaluation. The command runs with the rights of the process that started it, so never build one out of text somebody else supplied.",
       "syntax_block": "RunApp(command : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "command — the command line to run.",
+      "return_descr": "Nothing.",
+      "example": "RunApp(\"notepad.exe \" + GetTempFileName());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetTempFileName", "fn.ComputerName"],
+      "reviewed": true
     },
     {
       "id": "fn.SetAppTitle",
@@ -1503,14 +1503,14 @@
         "global_functions"
       ],
       "signature": "SetAppTitle(title : string)",
-      "description": "",
+      "description": "Sets the title of the application window — how a person tells two open bases apart. Does nothing when there is no window.",
       "syntax_block": "SetAppTitle(title : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "title — the text.",
+      "return_descr": "Nothing.",
+      "example": "SetAppTitle(\"Production base\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ActiveWindow", "fn.SetStatus"],
+      "reviewed": true
     },
     {
       "id": "fn.UserDir",
@@ -1522,14 +1522,14 @@
         "global_functions"
       ],
       "signature": "UserDir()",
-      "description": "",
+      "description": "⚠ NOT IMPLEMENTED — it currently returns an empty string always. For a place to put files, use GetTempDir.",
       "syntax_block": "UserDir()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "String — always empty at present.",
+      "example": "// use GetTempDir() instead\npath = GetTempDir();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetTempDir", "fn.GetTempFileName"],
+      "reviewed": true
     },
     {
       "id": "fn.UserName",
@@ -1541,14 +1541,14 @@
         "global_functions"
       ],
       "signature": "UserName()",
-      "description": "",
+      "description": "The name of the user this session is running as — what an audit trail or a written-by field records.",
       "syntax_block": "UserName()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "String.",
+      "example": "doc.Author = UserName();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.IsInRole", "fn.AccessRight", "fn.ComputerName"],
+      "reviewed": true
     },
     {
       "id": "fn.UserPassword",
@@ -1560,14 +1560,14 @@
         "global_functions"
       ],
       "signature": "UserPassword()",
-      "description": "",
+      "description": "The password the current session signed in with. ⚠ Treat it as a secret: do not print it, log it, write it into data or send it anywhere. It exists so a script can re-authenticate against something the same credentials open, and for nothing else.",
       "syntax_block": "UserPassword()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "String.",
+      "example": "// only where the same credentials are required again\nconnect(UserName(), UserPassword());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.UserName"],
+      "reviewed": true
     },
     {
       "id": "fn.ExclusiveMode",
@@ -1579,14 +1579,14 @@
         "global_functions"
       ],
       "signature": "ExclusiveMode()",
-      "description": "",
+      "description": "Whether the base is currently held exclusively — one session and no others. Ask before starting work that needs it, so the refusal is yours to word rather than a failure halfway.",
       "syntax_block": "ExclusiveMode()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "Boolean.",
+      "example": "If Not ExclusiveMode() Then\n    Raise(\"this operation needs exclusive access\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.SetExclusive"],
+      "reviewed": true
     },
     {
       "id": "fn.SetExclusive",
@@ -1598,14 +1598,14 @@
         "global_functions"
       ],
       "signature": "SetExclusive(on : boolean)",
-      "description": "",
+      "description": "Takes or releases exclusive access to the base for this session. It RAISES when it cannot be granted — because somebody else is connected — and the reason is in the error, so a Try/Except around it is the natural place to retry or to explain.",
       "syntax_block": "SetExclusive(on : boolean)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "on — True to take exclusive access, False to release it.",
+      "return_descr": "Nothing.",
+      "example": "Try\n    SetExclusive(True);\nExcept\n    Message(ErrorDescription());\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ExclusiveMode"],
+      "reviewed": true
     },
     {
       "id": "fn.GeneralLanguage",
@@ -1617,14 +1617,14 @@
         "global_functions"
       ],
       "signature": "GeneralLanguage()",
-      "description": "",
+      "description": "The language code of the current user's interface — the language to produce text in when it is being shown to THIS person. To translate into a different one, name it to Tstr.",
       "syntax_block": "GeneralLanguage()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "String — the language code.",
+      "example": "Message(Tstr(\"Total\", GeneralLanguage()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Tstr", "fn.UserName"],
+      "reviewed": true
     },
     {
       "id": "fn.EndJob",
@@ -1636,14 +1636,14 @@
         "global_functions"
       ],
       "signature": "EndJob(force : boolean)",
-      "description": "",
+      "description": "Ends the session — which means closing the window that holds it. EndJob(False) is the same event as the person clicking the window's close button: BeforeExit runs, unsaved documents get their say, and a refusal leaves everything exactly as it was. EndJob(True) does not ask.",
       "syntax_block": "EndJob(force : boolean)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "force — False to close the normal way (can be refused), True to close regardless.",
+      "return_descr": "Nothing.",
+      "example": "EndJob(False);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ActiveWindow"],
+      "reviewed": true
     },
     {
       "id": "fn.UserInterruptProcessing",
@@ -1655,14 +1655,14 @@
         "global_functions"
       ],
       "signature": "UserInterruptProcessing()",
-      "description": "",
+      "description": "Gives the person a chance to interrupt: call it inside a long loop and pressing the interrupt key stops the work with the standard \"aborted by user\" error. Without it a long calculation cannot be stopped at all.",
       "syntax_block": "UserInterruptProcessing()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "Nothing — it raises when an interrupt is pending.",
+      "example": "For Each row In rows Do\n    UserInterruptProcessing();\n    // … the slow part …\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.SetStatus", "fn.EndJob"],
+      "reviewed": true
     },
     {
       "id": "fn.AccessRight",
@@ -1674,14 +1674,14 @@
         "global_functions"
       ],
       "signature": "AccessRight(strRole : string, metadata)",
-      "description": "",
+      "description": "Whether the current user has the named right on a metadata object — the check to make before offering an action, so a person is not shown a command that will then refuse.",
       "syntax_block": "AccessRight(strRole : string, metadata)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "strRole — the right's name (e.g. \"Read\", \"Write\", \"Delete\"). metadata — the object it is asked about. BOTH are required.",
+      "return_descr": "Boolean.",
+      "example": "If Not AccessRight(\"Delete\", Metadata.Catalogs.Goods) Then\n    button.Enabled = False;\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.IsInRole", "fn.UserName"],
+      "reviewed": true
     },
     {
       "id": "fn.IsInRole",
@@ -1693,14 +1693,14 @@
         "global_functions"
       ],
       "signature": "IsInRole(strRole : string)",
-      "description": "",
+      "description": "Whether the current user holds the named role. Prefer AccessRight where you are really asking about a permission — a right survives the roles being reorganised, a role name does not.",
       "syntax_block": "IsInRole(strRole : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "strRole — the role's name.",
+      "return_descr": "Boolean.",
+      "example": "If IsInRole(\"Accountant\") Then\n    ShowCommonForm(\"ClosingPeriod\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.AccessRight", "fn.UserName"],
+      "reviewed": true
     },
     {
       "id": "fn.GetCommonForm",
@@ -1712,14 +1712,14 @@
         "global_functions"
       ],
       "signature": "GetCommonForm(name : string, owner : any, id : guid)",
-      "description": "",
+      "description": "Builds a common form by name and RETURNS it, without showing it — so you can fill it in before the person sees it. ShowCommonForm is the same thing opened straight away.",
       "syntax_block": "GetCommonForm(name : string, owner : any, id : guid)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "name — the common form's name. owner — the owning window (optional). id — a key that identifies this form, so asking twice reuses one window (optional).",
+      "return_descr": "The form.",
+      "example": "form = GetCommonForm(\"Settings\");\nform.Open();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ShowCommonForm", "fn.ActiveWindow", "fn.GetCommonTemplate"],
+      "reviewed": true
     },
     {
       "id": "fn.ShowCommonForm",
@@ -1731,14 +1731,14 @@
         "global_functions"
       ],
       "signature": "ShowCommonForm(name : string, owner : any, id : guid)",
-      "description": "",
+      "description": "Opens a common form by name. Use GetCommonForm instead when the form has to be filled in before it is shown.",
       "syntax_block": "ShowCommonForm(name : string, owner : any, id : guid)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "name — the common form's name. owner — the owning window (optional). id — a key that identifies this form, so asking twice reuses one window (optional).",
+      "return_descr": "Nothing.",
+      "example": "ShowCommonForm(\"Settings\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetCommonForm", "fn.ActiveWindow"],
+      "reviewed": true
     },
     {
       "id": "fn.GetCommonTemplate",
@@ -1750,14 +1750,14 @@
         "global_functions"
       ],
       "signature": "GetCommonTemplate(name : string)",
-      "description": "",
+      "description": "A common template by name — the spreadsheet a printed form is built from.",
       "syntax_block": "GetCommonTemplate(name : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "name — the common template's name.",
+      "return_descr": "The template.",
+      "example": "template = GetCommonTemplate(\"InvoiceHeader\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetCommonForm"],
+      "reviewed": true
     },
     {
       "id": "fn.BeginTransaction",
@@ -1769,14 +1769,14 @@
         "global_functions"
       ],
       "signature": "BeginTransaction()",
-      "description": "",
+      "description": "Opens a database transaction: everything written after it becomes visible to others only at CommitTransaction, and disappears at RollBackTransaction. Wrap the work in Try/Except and roll back in the handler, or a failure halfway leaves the transaction open.\n\nWriting a document already runs in a transaction of its own — this is for making SEVERAL writes into one all-or-nothing step.",
       "syntax_block": "BeginTransaction()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "Nothing.",
+      "example": "BeginTransaction();\nTry\n    first.Write();\n    second.Write();\n    CommitTransaction();\nExcept\n    RollBackTransaction();\n    Raise(ErrorDescription());\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.CommitTransaction", "fn.RollBackTransaction"],
+      "reviewed": true
     },
     {
       "id": "fn.CommitTransaction",
@@ -1788,14 +1788,14 @@
         "global_functions"
       ],
       "signature": "CommitTransaction()",
-      "description": "",
+      "description": "Closes the open transaction and makes everything written inside it permanent and visible to others.",
       "syntax_block": "CommitTransaction()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "Nothing.",
+      "example": "CommitTransaction();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BeginTransaction", "fn.RollBackTransaction"],
+      "reviewed": true
     },
     {
       "id": "fn.RollBackTransaction",
@@ -1807,14 +1807,14 @@
         "global_functions"
       ],
       "signature": "RollBackTransaction()",
-      "description": "",
+      "description": "Cancels the open transaction: everything written inside it is undone, as though the work had not started.",
       "syntax_block": "RollBackTransaction()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "None.",
+      "return_descr": "Nothing.",
+      "example": "Except\n    RollBackTransaction();\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BeginTransaction", "fn.CommitTransaction"],
+      "reviewed": true
     },
     {
       "id": "fn.SerializeValue",
@@ -1835,7 +1835,7 @@
       "see_also": [
         "fn.DeserializeValue"
       ],
-      "reviewed": false
+      "reviewed": true
     },
     {
       "id": "fn.DeserializeValue",
@@ -1856,7 +1856,64 @@
       "see_also": [
         "fn.SerializeValue"
       ],
-      "reviewed": false
+      "reviewed": true
+    },
+    {
+      "id": "fn.RunScheduledJobs",
+      "name_local": "RunScheduledJobs",
+      "name_en": "RunScheduledJobs",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "RunScheduledJobs()",
+      "description": "Hands every scheduled job that has come due to its session and returns AT ONCE — it does not wait for them to finish. That is deliberate: the usual caller is a form's idle handler, and waiting there would freeze the window. Does nothing under an evaluation, so looking at a value never starts work.",
+      "syntax_block": "RunScheduledJobs()",
+      "parameters": "None.",
+      "return_descr": "Number — how many jobs were started.",
+      "example": "started = RunScheduledJobs();",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.RunJob", "fn.RunBackground"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.RunJob",
+      "name_local": "RunJob",
+      "name_en": "RunJob",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "RunJob(name : string)",
+      "description": "Runs a scheduled job NOW, by name, without waiting for its schedule. Answers whether it was started — False when there is no such job or the application is not running.",
+      "syntax_block": "RunJob(name : string)",
+      "parameters": "name — the scheduled job's name.",
+      "return_descr": "Boolean — whether it was started.",
+      "example": "If Not RunJob(\"NightlyRecalculation\") Then\n    Message(\"the job did not start\");\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.RunScheduledJobs", "fn.RunBackground"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.RunBackground",
+      "name_local": "RunBackground",
+      "name_en": "RunBackground",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "RunBackground(procedure : string, args : array)",
+      "description": "Starts a procedure in the background and returns a handle to the started job, without waiting for it. The arguments are an Array, flattened into the procedure's positional parameters — anything else non-empty is refused by name rather than treated as \"no arguments\", which would start the procedure with the wrong signature and fail deep inside it. Raises when the application is not running.",
+      "syntax_block": "RunBackground(procedure : string, args : array)",
+      "parameters": "procedure — the name of the procedure to run. args — an Array of its arguments (may be empty).",
+      "return_descr": "The background job that was started.",
+      "example": "args = New Array();\nargs.Add(BegOfMonth(WorkingDate()));\njob = RunBackground(\"RecalculateTotals\", args);",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.RunJob", "fn.RunScheduledJobs"],
+      "reviewed": true
     }
   ]
 }

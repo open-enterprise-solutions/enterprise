@@ -13,14 +13,14 @@
         "global_functions"
       ],
       "signature": "Boolean(value : any)",
-      "description": "",
+      "description": "Преобразует значение в булево. Число ложно, когда оно равно нулю, и истинно в остальных случаях; пустая строка, пустая дата и Undefined ложны. Применяется, когда условием должно управлять значение неизвестного типа.",
       "syntax_block": "Boolean(value : any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — значение любого типа.",
+      "return_descr": "Булево.",
+      "example": "Message(Boolean(0));      // False\nMessage(Boolean(\"\"));     // False\nMessage(Boolean(42));     // True",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Number", "fn.String", "fn.TypeOf"],
+      "reviewed": true
     },
     {
       "id": "fn.Number",
@@ -32,14 +32,14 @@
         "global_functions"
       ],
       "signature": "Number(value: any)",
-      "description": "",
+      "description": "Преобразует значение в число. Строка разбирается; булево даёт 1 или 0; значение без числового прочтения даёт ноль, а не исключение. Результат — точное десятичное число: числа этой платформы не двоичные с плавающей точкой, поэтому денежная арифметика не уплывает.",
       "syntax_block": "Number(value: any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — значение любого типа.",
+      "return_descr": "Число.",
+      "example": "Message(Number(\"3.14\"));   // 3.14\nMessage(Number(True));     // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.String", "fn.Boolean", "fn.Int", "fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.Date",
@@ -58,7 +58,7 @@
       "example": "Date(2026, 9, 2)\nDate(2026, 9, 2, 10, 45, 25)\nDate(\"20260902104525\")",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [],
-      "reviewed": false
+      "reviewed": true
     },
     {
       "id": "fn.String",
@@ -70,14 +70,14 @@
         "global_functions"
       ],
       "signature": "String(value: any)",
-      "description": "",
+      "description": "Преобразует значение в строковый вид — тот же текст, каким платформа показывает это значение. Для форматированного вывода (шаблон даты, разряды или знаки числа) есть Format, принимающий строку формата; у String параметров нет.",
       "syntax_block": "String(value: any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — значение любого типа.",
+      "return_descr": "Строка.",
+      "example": "Message(String(1250.5));\nMessage(Format(1250.5, \"ND=2\"));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Format", "fn.Number", "fn.Boolean"],
+      "reviewed": true
     },
     {
       "id": "fn.Round",
@@ -89,14 +89,14 @@
         "global_functions"
       ],
       "signature": "Round(num : number, number, roundMode)",
-      "description": "",
+      "description": "Округляет число до заданного числа десятичных знаков. ПРАВИЛО округления задаётся третьим аргументом и различает результаты ровно на половине: Round15as20 (по умолчанию) отправляет половину от нуля, поэтому 1.5 становится 2; Round15as10 оставляет половину вниз, поэтому 1.5 становится 1, а вверх идут только .6 и больше. Указывайте правило явно везде, где цифру сверяют с другой системой.",
       "syntax_block": "Round(num : number, number, roundMode)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — число. number — количество десятичных знаков (по умолчанию 0). roundMode — RoundMode.Round15as20 (по умолчанию) либо RoundMode.Round15as10.",
+      "return_descr": "Число, округлённое.",
+      "example": "Message(Round(1.5));                             // 2\nMessage(Round(1.5, 0, RoundMode.Round15as10));   // 1\nMessage(Round(1250.567, 2));                     // 1250.57\nMessage(Int(1.9));                               // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Int", "fn.Number", "fn.Format"],
+      "reviewed": true
     },
     {
       "id": "fn.Int",
@@ -127,14 +127,14 @@
         "global_functions"
       ],
       "signature": "Log10(num : number)",
-      "description": "",
+      "description": "Десятичный логарифм числа.",
       "syntax_block": "Log10(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — положительное число.",
+      "return_descr": "Число — логарифм.",
+      "example": "Message(Log10(1000));   // 3",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Ln", "fn.Sqrt"],
+      "reviewed": true
     },
     {
       "id": "fn.Ln",
@@ -146,14 +146,14 @@
         "global_functions"
       ],
       "signature": "Ln(num : number)",
-      "description": "",
+      "description": "Натуральный логарифм числа.",
       "syntax_block": "Ln(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — положительное число.",
+      "return_descr": "Число — логарифм.",
+      "example": "Message(Ln(1));   // 0",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Log10", "fn.Sqrt"],
+      "reviewed": true
     },
     {
       "id": "fn.Max",
@@ -165,14 +165,14 @@
         "global_functions"
       ],
       "signature": "Max(num : number, ...)",
-      "description": "",
+      "description": "Наибольший из аргументов, сравниваемых как числа. Принимает сколько угодно аргументов.",
       "syntax_block": "Max(num : number, ...)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num, ... — два и более значения; каждое читается как число. Вызов без аргументов вызывает исключение.",
+      "return_descr": "Наибольший аргумент.",
+      "example": "Message(Max(2, 9, 4, 1));   // 9\nMessage(Min(2, 9, 4, 1));   // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Min", "fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.Min",
@@ -184,14 +184,14 @@
         "global_functions"
       ],
       "signature": "Min(num : number, ...)",
-      "description": "",
+      "description": "Наименьший из аргументов, сравниваемых как числа. Принимает сколько угодно аргументов.",
       "syntax_block": "Min(num : number, ...)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num, ... — два и более значения; каждое читается как число. Вызов без аргументов вызывает исключение.",
+      "return_descr": "Наименьший аргумент.",
+      "example": "Message(Min(5, 3));   // 3",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Max", "fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.Sqrt",
@@ -203,14 +203,14 @@
         "global_functions"
       ],
       "signature": "Sqrt(num : number)",
-      "description": "",
+      "description": "Квадратный корень числа. У отрицательного аргумента нет вещественного корня, поэтому вызывается исключение, а не возвращается бессмысленная величина.",
       "syntax_block": "Sqrt(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — неотрицательное число.",
+      "return_descr": "Число — корень.",
+      "example": "Message(Sqrt(16));   // 4",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Log10", "fn.Ln"],
+      "reviewed": true
     },
     {
       "id": "fn.StrLen",
@@ -222,14 +222,14 @@
         "global_functions"
       ],
       "signature": "StrLen(str : string)",
-      "description": "",
+      "description": "Количество символов в строке.",
       "syntax_block": "StrLen(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка (или значение, читаемое как строка).",
+      "return_descr": "Число — длина.",
+      "example": "Message(StrLen(\"abc\"));   // 3",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.IsBlankString", "fn.TrimAll"],
+      "reviewed": true
     },
     {
       "id": "fn.IsBlankString",
@@ -241,14 +241,14 @@
         "global_functions"
       ],
       "signature": "IsBlankString(str : string)",
-      "description": "",
+      "description": "Истина, когда строка пуста или состоит только из пробельных символов. Это подходящая проверка перед сохранением введённого человеком текста: случайный пробел значением не является.",
       "syntax_block": "IsBlankString(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка.",
+      "return_descr": "Булево.",
+      "example": "Message(IsBlankString(\"   \"));   // True\nMessage(IsBlankString(\"x\"));     // False",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TrimAll", "fn.StrLen", "fn.ValueIsFilled"],
+      "reviewed": true
     },
     {
       "id": "fn.TrimL",
@@ -260,14 +260,14 @@
         "global_functions"
       ],
       "signature": "TrimL(str : string)",
-      "description": "",
+      "description": "Строка без начальных пробельных символов.",
       "syntax_block": "TrimL(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка.",
+      "return_descr": "Строка.",
+      "example": "Message(\"[\" + TrimL(\"  x  \") + \"]\");   // [x  ]",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TrimR", "fn.TrimAll"],
+      "reviewed": true
     },
     {
       "id": "fn.TrimR",
@@ -279,14 +279,14 @@
         "global_functions"
       ],
       "signature": "TrimR(str : string)",
-      "description": "",
+      "description": "Строка без конечных пробельных символов.",
       "syntax_block": "TrimR(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка.",
+      "return_descr": "Строка.",
+      "example": "Message(\"[\" + TrimR(\"  x  \") + \"]\");   // [  x]",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TrimL", "fn.TrimAll"],
+      "reviewed": true
     },
     {
       "id": "fn.TrimAll",
@@ -298,14 +298,14 @@
         "global_functions"
       ],
       "signature": "TrimAll(str : string)",
-      "description": "",
+      "description": "Строка без пробельных символов с обеих сторон.",
       "syntax_block": "TrimAll(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка.",
+      "return_descr": "Строка.",
+      "example": "Message(\"[\" + TrimAll(\"  x  \") + \"]\");   // [x]",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TrimL", "fn.TrimR", "fn.IsBlankString"],
+      "reviewed": true
     },
     {
       "id": "fn.Left",
@@ -317,14 +317,14 @@
         "global_functions"
       ],
       "signature": "Left(str : string, number)",
-      "description": "",
+      "description": "Первые N символов строки. Запрос большего числа, чем есть, возвращает строку целиком, а не вызывает исключение.",
       "syntax_block": "Left(str : string, number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка. number — сколько символов.",
+      "return_descr": "Строка.",
+      "example": "Message(Left(\"abcdef\", 3));   // abc",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Right", "fn.Mid", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.Right",
@@ -336,14 +336,14 @@
         "global_functions"
       ],
       "signature": "Right(str : string, number)",
-      "description": "",
+      "description": "Последние N символов строки. Запрос большего числа, чем есть, возвращает строку целиком, а не вызывает исключение.",
       "syntax_block": "Right(str : string, number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка. number — сколько символов.",
+      "return_descr": "Строка.",
+      "example": "Message(Right(\"abcdef\", 3));   // def",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Left", "fn.Mid", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.Mid",
@@ -355,14 +355,14 @@
         "global_functions"
       ],
       "signature": "Mid(str : string, number, number)",
-      "description": "",
+      "description": "Фрагмент строки, начинающийся с позиции, отсчитываемой ОТ ЕДИНИЦЫ, — той же позиции, которую возвращает Find, поэтому они стыкуются напрямую. Пропущенная длина означает остаток строки.",
       "syntax_block": "Mid(str : string, number, number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка. number — начало, отсчитываемое от 1. number — сколько символов (по умолчанию — до конца строки).",
+      "return_descr": "Строка — фрагмент.",
+      "example": "Message(Mid(\"abcdef\", 2, 3));                  // bcd\nMessage(Mid(\"abcdef\", 2));                     // bcdef\nMessage(Mid(\"abcdef\", Find(\"abcdef\", \"c\")));   // cdef",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Left", "fn.Right", "fn.Find", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.Find",
@@ -374,14 +374,14 @@
         "global_functions"
       ],
       "signature": "Find(str : string, string, number)",
-      "description": "",
+      "description": "Позиция подстроки, отсчитываемая ОТ ЕДИНИЦЫ, либо 0, когда её нет, — потому отсчёт и начинается с единицы: 0 остаётся свободным значением для «нигде». Mid принимает позиции в том же счёте, поэтому Mid(s, Find(s, x)) начинается ровно с найденного.",
       "syntax_block": "Find(str : string, string, number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка, в которой ищем. string — что ищем. number — позиция начала поиска, от 1 (по умолчанию — с начала).",
+      "return_descr": "Число — позиция от 1 либо 0, если не найдено.",
+      "example": "Message(Find(\"abcdef\", \"c\"));   // 3\nMessage(Find(\"abcdef\", \"z\"));   // 0",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.StrCountOccur", "fn.Mid", "fn.StrReplace"],
+      "reviewed": true
     },
     {
       "id": "fn.StrReplace",
@@ -393,14 +393,14 @@
         "global_functions"
       ],
       "signature": "StrReplace(str : string, string, string)",
-      "description": "",
+      "description": "Строка, в которой КАЖДОЕ вхождение одной подстроки заменено другой. Замена не останавливается на первом вхождении.",
       "syntax_block": "StrReplace(str : string, string, string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — исходная строка. string — что заменяем. string — на что заменяем.",
+      "return_descr": "Строка — новая; исходная не изменяется.",
+      "example": "Message(StrReplace(\"a-b-c\", \"-\", \"+\"));   // a+b+c",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Find", "fn.StrCountOccur"],
+      "reviewed": true
     },
     {
       "id": "fn.StrCountOccur",
@@ -412,14 +412,14 @@
         "global_functions"
       ],
       "signature": "StrCountOccur(str : string, string)",
-      "description": "",
+      "description": "Сколько раз подстрока встречается в строке; считаются непересекающиеся вхождения. Пустая подстрока даёт 0.",
       "syntax_block": "StrCountOccur(str : string, string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка, в которой считаем. string — что считаем.",
+      "return_descr": "Число — количество (0, если не встречается).",
+      "example": "Message(StrCountOccur(\"aaa\", \"a\"));     // 3\nMessage(StrCountOccur(\"abcabc\", \"z\"));  // 0",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Find", "fn.StrReplace"],
+      "reviewed": true
     },
     {
       "id": "fn.StrLineCount",
@@ -431,14 +431,14 @@
         "global_functions"
       ],
       "signature": "StrLineCount(str : string)",
-      "description": "",
+      "description": "Сколько строк в тексте. Текст вовсе без переводов строки — это одна строка, а не ноль. Пара CRLF считается одним разрывом, ровно так же, как её проходит StrGetLine, поэтому обе функции одинаково понимают, что такое строка.",
       "syntax_block": "StrLineCount(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — текст.",
+      "return_descr": "Число — количество строк (не меньше 1).",
+      "example": "text = \"a\" + Chr(10) + \"b\";\nFor i = 1 To StrLineCount(text) Do\n    Message(StrGetLine(text, i));\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.StrGetLine", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.StrGetLine",
@@ -449,15 +449,15 @@
         "global_context",
         "global_functions"
       ],
-      "signature": "StrGetLine(str : string)",
-      "description": "",
-      "syntax_block": "StrGetLine(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "StrGetLine(str : string, line : number)",
+      "description": "Одна строка многострочного текста по её номеру, отсчитываемому ОТ ЕДИНИЦЫ. Номер за последней строкой даёт пустую строку, а не исключение, — обходите текст в паре со StrLineCount.",
+      "syntax_block": "StrGetLine(str : string, line : number)",
+      "parameters": "str — текст. line — номер строки, от 1.",
+      "return_descr": "Строка — без символа перевода строки; пустая, если такой строки нет.",
+      "example": "text = \"first\" + Chr(10) + \"second\";\nMessage(StrGetLine(text, 2));   // second",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.StrLineCount", "fn.StrLen"],
+      "reviewed": true
     },
     {
       "id": "fn.Upper",
@@ -469,14 +469,14 @@
         "global_functions"
       ],
       "signature": "Upper(str : string)",
-      "description": "",
+      "description": "Строка в верхнем регистре.",
       "syntax_block": "Upper(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка.",
+      "return_descr": "Строка.",
+      "example": "Message(Upper(\"abc\"));   // ABC",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Lower"],
+      "reviewed": true
     },
     {
       "id": "fn.Lower",
@@ -488,14 +488,14 @@
         "global_functions"
       ],
       "signature": "Lower(str : string)",
-      "description": "",
+      "description": "Строка в нижнем регистре.",
       "syntax_block": "Lower(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка.",
+      "return_descr": "Строка.",
+      "example": "Message(Lower(\"ABC\"));   // abc",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Upper"],
+      "reviewed": true
     },
     {
       "id": "fn.Chr",
@@ -507,14 +507,14 @@
         "global_functions"
       ],
       "signature": "Chr(num : number)",
-      "description": "",
+      "description": "Символ с заданным кодом. Так скрипт записывает символы, которые нельзя набрать в исходном тексте: Chr(10) — перевод строки, Chr(13) — возврат каретки, Chr(9) — табуляция.",
       "syntax_block": "Chr(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "num — код символа.",
+      "return_descr": "Строка из одного символа.",
+      "example": "text = \"first\" + Chr(10) + \"second\";",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Asc", "fn.StrGetLine"],
+      "reviewed": true
     },
     {
       "id": "fn.Asc",
@@ -526,14 +526,14 @@
         "global_functions"
       ],
       "signature": "Asc(str : string)",
-      "description": "",
+      "description": "Код ПЕРВОГО символа строки. Пустая строка даёт 0.",
       "syntax_block": "Asc(str : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "str — строка.",
+      "return_descr": "Число — код символа.",
+      "example": "Message(Asc(\"A\"));   // 65",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Chr", "fn.Left"],
+      "reviewed": true
     },
     {
       "id": "fn.Tstr",
@@ -545,14 +545,14 @@
         "global_functions"
       ],
       "signature": "Tstr(text : string, langCode : string)",
-      "description": "",
+      "description": "Перевод текста на названный язык, взятый из хранилища локализации конфигурации. Применяется там, где сообщение должно появиться на языке, отличном от текущего, — например, в документе, печатаемом для контрагента.",
       "syntax_block": "Tstr(text : string, langCode : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "text — исходный текст. langCode — код языка, под которым хранится перевод.",
+      "return_descr": "Строка — перевод либо исходный текст, если перевода нет.",
+      "example": "Message(Tstr(\"Total\", \"uk\"));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GeneralLanguage", "fn.String"],
+      "reviewed": true
     },
     {
       "id": "fn.CurrentDate",
@@ -564,14 +564,14 @@
         "global_functions"
       ],
       "signature": "CurrentDate()",
-      "description": "",
+      "description": "Текущие дата и время машины, на которой выполняется код. Дату, ПОД КОТОРОЙ работает человек, — а она может намеренно отличаться — даёт WorkingDate.",
       "syntax_block": "CurrentDate()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Дата со временем.",
+      "example": "Message(CurrentDate());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.WorkingDate", "fn.BegOfDay", "fn.GetYear"],
+      "reviewed": true
     },
     {
       "id": "fn.WorkingDate",
@@ -582,15 +582,15 @@
         "global_context",
         "global_functions"
       ],
-      "signature": "WorkingDate(d : date)",
-      "description": "",
-      "syntax_block": "WorkingDate(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "WorkingDate()",
+      "description": "РАБОЧАЯ ДАТА сеанса, на полночь. Это дата, под которой человек вводит документы, и она не всегда сегодняшняя: закрытие периода, ввод вчерашних бумаг. Принадлежит сеансу; вне сеанса берётся значение процесса.",
+      "syntax_block": "WorkingDate()",
+      "parameters": "Нет.",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "doc.Date = WorkingDate();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.CurrentDate", "fn.BegOfDay"],
+      "reviewed": true
     },
     {
       "id": "fn.AddMonth",
@@ -602,14 +602,14 @@
         "global_functions"
       ],
       "signature": "AddMonth(d : date, num : number)",
-      "description": "",
+      "description": "Сдвигает дату на целое число месяцев; отрицательное значение — назад. ⚠ Сохраняет НОМЕР ДНЯ и отбрасывает время — результат приходится на полночь.",
       "syntax_block": "AddMonth(d : date, num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата. num — сколько месяцев прибавить (может быть отрицательным).",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "Message(AddMonth(Date(2024, 1, 31), 1));\nMessage(AddMonth(Date(2024, 3, 15), -2));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfMonth", "fn.EndOfMonth"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfMonth",
@@ -621,14 +621,14 @@
         "global_functions"
       ],
       "signature": "BegOfMonth(d : date)",
-      "description": "",
+      "description": "Первый день месяца, в который попадает дата, на 00:00:00.",
       "syntax_block": "BegOfMonth(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "// the month a document belongs to, as a period\nbegin = BegOfMonth(doc.Date);\nend   = EndOfMonth(doc.Date);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfMonth", "fn.BegOfQuart", "fn.BegOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfMonth",
@@ -640,14 +640,14 @@
         "global_functions"
       ],
       "signature": "EndOfMonth(d : date)",
-      "description": "",
+      "description": "Последний день месяца, в который попадает дата, на 23:59:59 — КОНЕЦ этого дня, поэтому `d <= EndOfMonth(x)` удерживает всё, записанное в течение него.",
       "syntax_block": "EndOfMonth(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 23:59:59.",
+      "example": "Message(EndOfMonth(Date(2024, 2, 10)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfMonth", "fn.EndOfQuart", "fn.EndOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfQuart",
@@ -659,14 +659,14 @@
         "global_functions"
       ],
       "signature": "BegOfQuart(d : date)",
-      "description": "",
+      "description": "Первый день квартала, в который попадает дата (1 января, апреля, июля или октября), на 00:00:00.",
       "syntax_block": "BegOfQuart(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "Message(BegOfQuart(Date(2024, 5, 20)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfQuart", "fn.GetQuartOfYear", "fn.BegOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfQuart",
@@ -678,14 +678,14 @@
         "global_functions"
       ],
       "signature": "EndOfQuart(d : date)",
-      "description": "",
+      "description": "Последний день квартала, в который попадает дата, на 23:59:59.",
       "syntax_block": "EndOfQuart(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 23:59:59.",
+      "example": "Message(EndOfQuart(Date(2024, 5, 20)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfQuart", "fn.GetQuartOfYear", "fn.EndOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfYear",
@@ -697,14 +697,14 @@
         "global_functions"
       ],
       "signature": "BegOfYear(d : date)",
-      "description": "",
+      "description": "1 января года, в который попадает дата, на 00:00:00.",
       "syntax_block": "BegOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "Message(BegOfYear(Date(2024, 5, 20)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfYear", "fn.GetYear"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfYear",
@@ -716,14 +716,14 @@
         "global_functions"
       ],
       "signature": "EndOfYear(d : date)",
-      "description": "",
+      "description": "31 декабря года, в который попадает дата, на 23:59:59.",
       "syntax_block": "EndOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 23:59:59.",
+      "example": "Message(EndOfYear(Date(2024, 5, 20)));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfYear", "fn.GetYear"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfWeek",
@@ -735,14 +735,14 @@
         "global_functions"
       ],
       "signature": "BegOfWeek(d : date)",
-      "description": "",
+      "description": "ПОНЕДЕЛЬНИК недели, в которую попадает дата, на 00:00:00. Неделя идёт с понедельника по воскресенье — в той же нумерации, что возвращает GetDayOfWeek.",
       "syntax_block": "BegOfWeek(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "Message(BegOfWeek(Date(2024, 1, 3)));   // 2024-01-01, a Monday",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfWeek", "fn.GetDayOfWeek", "fn.GetWeekOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfWeek",
@@ -754,14 +754,14 @@
         "global_functions"
       ],
       "signature": "EndOfWeek(d : date)",
-      "description": "",
+      "description": "ВОСКРЕСЕНЬЕ недели, в которую попадает дата, на 23:59:59.",
       "syntax_block": "EndOfWeek(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 23:59:59.",
+      "example": "Message(EndOfWeek(Date(2024, 1, 3)));   // 2024-01-07, a Sunday",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfWeek", "fn.GetDayOfWeek"],
+      "reviewed": true
     },
     {
       "id": "fn.BegOfDay",
@@ -773,14 +773,14 @@
         "global_functions"
       ],
       "signature": "BegOfDay(d : date)",
-      "description": "",
+      "description": "Тот же день на 00:00:00 — время отбрасывается. Так дату со временем сравнивают с датой, которую ввёл человек.",
       "syntax_block": "BegOfDay(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 00:00:00.",
+      "example": "If BegOfDay(doc.Date) == WorkingDate() Then\n    Message(\"today's document\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.EndOfDay", "fn.WorkingDate", "fn.CurrentDate"],
+      "reviewed": true
     },
     {
       "id": "fn.EndOfDay",
@@ -792,14 +792,14 @@
         "global_functions"
       ],
       "signature": "EndOfDay(d : date)",
-      "description": "",
+      "description": "Тот же день на 23:59:59. Вместе с BegOfDay превращает день в период, пригодный для сравнения.",
       "syntax_block": "EndOfDay(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на 23:59:59.",
+      "example": "from = BegOfDay(d);\nto   = EndOfDay(d);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfDay"],
+      "reviewed": true
     },
     {
       "id": "fn.GetYear",
@@ -811,14 +811,14 @@
         "global_functions"
       ],
       "signature": "GetYear(d : date)",
-      "description": "",
+      "description": "Год даты, числом.",
       "syntax_block": "GetYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число — год.",
+      "example": "Message(GetYear(Date(2024, 5, 20)));   // 2024",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetMonth", "fn.GetDay", "fn.BegOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetMonth",
@@ -830,14 +830,14 @@
         "global_functions"
       ],
       "signature": "GetMonth(d : date)",
-      "description": "",
+      "description": "Месяц даты, от 1 до 12: январь — это 1.",
       "syntax_block": "GetMonth(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 1..12.",
+      "example": "Message(GetMonth(Date(2024, 5, 20)));   // 5",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetYear", "fn.GetDay", "fn.GetQuartOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetDay",
@@ -849,14 +849,14 @@
         "global_functions"
       ],
       "signature": "GetDay(d : date)",
-      "description": "",
+      "description": "День месяца, от 1 до 31.",
       "syntax_block": "GetDay(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 1..31.",
+      "example": "Message(GetDay(Date(2024, 5, 20)));   // 20",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetMonth", "fn.GetDayOfWeek", "fn.GetDayOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetHour",
@@ -868,14 +868,14 @@
         "global_functions"
       ],
       "signature": "GetHour(d : date)",
-      "description": "",
+      "description": "Час во времени суток даты, от 0 до 23.",
       "syntax_block": "GetHour(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 0..23.",
+      "example": "Message(GetHour(CurrentDate()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetMinute", "fn.GetSecond", "fn.BegOfDay"],
+      "reviewed": true
     },
     {
       "id": "fn.GetMinute",
@@ -887,14 +887,14 @@
         "global_functions"
       ],
       "signature": "GetMinute(d : date)",
-      "description": "",
+      "description": "Минута во времени суток даты, от 0 до 59.",
       "syntax_block": "GetMinute(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 0..59.",
+      "example": "Message(GetMinute(CurrentDate()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetHour", "fn.GetSecond"],
+      "reviewed": true
     },
     {
       "id": "fn.GetSecond",
@@ -906,14 +906,14 @@
         "global_functions"
       ],
       "signature": "GetSecond(d : date)",
-      "description": "",
+      "description": "Секунда во времени суток даты, от 0 до 59.",
       "syntax_block": "GetSecond(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 0..59.",
+      "example": "Message(GetSecond(CurrentDate()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetHour", "fn.GetMinute"],
+      "reviewed": true
     },
     {
       "id": "fn.GetWeekOfYear",
@@ -925,14 +925,14 @@
         "global_functions"
       ],
       "signature": "GetWeekOfYear(d : date)",
-      "description": "",
+      "description": "Номер недели в году; неделя считается начинающейся с понедельника.",
       "syntax_block": "GetWeekOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число — неделя года.",
+      "example": "Message(GetWeekOfYear(Date(2024, 1, 1)));   // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfWeek", "fn.GetDayOfWeek", "fn.GetDayOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetDayOfYear",
@@ -944,14 +944,14 @@
         "global_functions"
       ],
       "signature": "GetDayOfYear(d : date)",
-      "description": "",
+      "description": "Номер дня в году: 1 для 1 января, 365 или 366 для 31 декабря.",
       "syntax_block": "GetDayOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 1..366.",
+      "example": "Message(GetDayOfYear(Date(2024, 1, 1)));   // 1",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetWeekOfYear", "fn.GetDay"],
+      "reviewed": true
     },
     {
       "id": "fn.GetDayOfWeek",
@@ -963,14 +963,14 @@
         "global_functions"
       ],
       "signature": "GetDayOfWeek(d : date)",
-      "description": "",
+      "description": "День недели: ПОНЕДЕЛЬНИК = 1 … ВОСКРЕСЕНЬЕ = 7. Функции недели используют ту же нумерацию, поэтому BegOfWeek всегда попадает на день, у которого GetDayOfWeek равен 1.",
       "syntax_block": "GetDayOfWeek(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 1 (понедельник) .. 7 (воскресенье).",
+      "example": "If GetDayOfWeek(d) > 5 Then\n    Message(\"weekend\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfWeek", "fn.EndOfWeek", "fn.GetWeekOfYear"],
+      "reviewed": true
     },
     {
       "id": "fn.GetQuartOfYear",
@@ -982,14 +982,14 @@
         "global_functions"
       ],
       "signature": "GetQuartOfYear(d : date)",
-      "description": "",
+      "description": "Квартал, в который попадает дата, от 1 до 4.",
       "syntax_block": "GetQuartOfYear(d : date)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "d — дата.",
+      "return_descr": "Число, 1..4.",
+      "example": "Message(GetQuartOfYear(Date(2024, 5, 20)));   // 2",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BegOfQuart", "fn.EndOfQuart", "fn.GetMonth"],
+      "reviewed": true
     },
     {
       "id": "fn.FileDelete",
@@ -1001,14 +1001,14 @@
         "global_functions"
       ],
       "signature": "FileDelete(fileName : string)",
-      "description": "",
+      "description": "Удаляет файл с диска.",
       "syntax_block": "FileDelete(fileName : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "fileName — полный путь.",
+      "return_descr": "Булево — удалён ли файл.",
+      "example": "FileDelete(GetTempDir() + \"report.xlsx\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.FileCopy", "fn.GetTempFileName", "fn.GetTempDir"],
+      "reviewed": true
     },
     {
       "id": "fn.FileCopy",
@@ -1020,14 +1020,14 @@
         "global_functions"
       ],
       "signature": "FileCopy(fileDstName : string, fileSrcName : string)",
-      "description": "",
+      "description": "Копирует файл. ⚠ Первым идёт ПРИЁМНИК, вторым источник — порядок, обратный привычному для команд копирования.",
       "syntax_block": "FileCopy(fileDstName : string, fileSrcName : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "fileDstName — куда копировать. fileSrcName — что копировать.",
+      "return_descr": "Булево — удалось ли копирование.",
+      "example": "FileCopy(GetTempDir() + \"copy.txt\", \"C:\\\\data\\\\original.txt\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.FileDelete", "fn.GetTempDir"],
+      "reviewed": true
     },
     {
       "id": "fn.GetTempDir",
@@ -1039,14 +1039,14 @@
         "global_functions"
       ],
       "signature": "GetTempDir()",
-      "description": "",
+      "description": "Каталог для временных файлов, с завершающим разделителем.",
       "syntax_block": "GetTempDir()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Строка — путь.",
+      "example": "path = GetTempDir() + \"export.csv\";",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetTempFileName", "fn.FileDelete"],
+      "reviewed": true
     },
     {
       "id": "fn.GetTempFileName",
@@ -1058,14 +1058,14 @@
         "global_functions"
       ],
       "signature": "GetTempFileName()",
-      "description": "",
+      "description": "Полный путь имени временного файла, которое никем не занято. Возвращается ИМЯ: создать, заполнить и удалить файл — ваша забота.",
       "syntax_block": "GetTempFileName()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Строка — путь.",
+      "example": "file = GetTempFileName();\n// … write it, use it …\nFileDelete(file);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetTempDir", "fn.FileDelete"],
+      "reviewed": true
     },
     {
       "id": "fn.ActiveWindow",
@@ -1077,14 +1077,14 @@
         "global_functions"
       ],
       "signature": "ActiveWindow()",
-      "description": "",
+      "description": "Окно, в котором работает человек, либо пустое значение, когда его нет: фоновое задание, безоконный запуск скрипта. Проверяйте перед использованием.",
       "syntax_block": "ActiveWindow()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Активная форма либо пусто.",
+      "example": "form = ActiveWindow();\nIf ValueIsFilled(form) Then\n    Message(\"running in a window\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetCommonForm", "fn.ShowCommonForm"],
+      "reviewed": true
     },
     {
       "id": "fn.Message",
@@ -1117,14 +1117,14 @@
         "global_functions"
       ],
       "signature": "Alert(message : string)",
-      "description": "",
+      "description": "Показывает сообщение, которое человек должен подтвердить, и ждёт этого. Для просто информирующего текста лучше Message: предупреждение прерывает работу. Под вычислением (наблюдение отладчика, зонд ассистента) окно не открывается — вместо него возвращается текст с пометкой, что код пытался открыть модальное окно.",
       "syntax_block": "Alert(message : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "message — текст.",
+      "return_descr": "Ничего.",
+      "example": "Alert(\"the period is closed\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Message", "fn.Question", "fn.SetStatus"],
+      "reviewed": true
     },
     {
       "id": "fn.Question",
@@ -1136,14 +1136,14 @@
         "global_functions"
       ],
       "signature": "Question(message : string, questionMode)",
-      "description": "",
+      "description": "Задаёт человеку вопрос и ждёт ответа, возвращая выбранную кнопку. Под вычислением ответить некому: код получает пустой код возврата, а вызывающему сообщается, что код ОСТАНОВИЛСЯ, ЧТОБЫ СПРОСИТЬ, — часто это и есть находка, ведь вопрос посреди расчёта и объясняет, почему расчёт не завершился.",
       "syntax_block": "Question(message : string, questionMode)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "message — вопрос. questionMode — какие кнопки предложить (QuestionMode).",
+      "return_descr": "Выбранный ответ; пусто, если спросить было некого.",
+      "example": "answer = Question(\"Post the document?\", QuestionMode.YesNo);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Alert", "fn.Message"],
+      "reviewed": true
     },
     {
       "id": "fn.SetStatus",
@@ -1155,14 +1155,14 @@
         "global_functions"
       ],
       "signature": "SetStatus(text : string)",
-      "description": "",
+      "description": "Выводит строку в строку состояния окна — ход работы, которая длится, никого не прерывая. Под вычислением не делает ничего.",
       "syntax_block": "SetStatus(text : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "text — выводимая строка.",
+      "return_descr": "Ничего.",
+      "example": "For Each row In rows Do\n    SetStatus(\"processing \" + String(row.LineNumber));\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Message", "fn.Alert"],
+      "reviewed": true
     },
     {
       "id": "fn.ClearMessages",
@@ -1174,14 +1174,14 @@
         "global_functions"
       ],
       "signature": "ClearMessages()",
-      "description": "",
+      "description": "Очищает окно сообщений. Имеет смысл вызывать в начале длительной операции, чтобы прочитанное человеком относилось к ЭТОМУ запуску, а не к предыдущему.",
       "syntax_block": "ClearMessages()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Ничего.",
+      "example": "ClearMessages();\nMessage(\"starting\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Message", "fn.SetStatus"],
+      "reviewed": true
     },
     {
       "id": "fn.SetError",
@@ -1193,14 +1193,14 @@
         "global_functions"
       ],
       "signature": "SetError(string)",
-      "description": "",
+      "description": "Прекращает текущую работу ошибкой с вашим текстом — то же действие, что Raise(text); написание сохранено, потому что существующий код использует оба.",
       "syntax_block": "SetError(string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "string — сообщение.",
+      "return_descr": "Не возвращает управление.",
+      "example": "SetError(\"the period is closed\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Raise", "fn.ErrorDescription"],
+      "reviewed": true
     },
     {
       "id": "fn.Raise",
@@ -1212,14 +1212,14 @@
         "global_functions"
       ],
       "signature": "Raise(string)",
-      "description": "",
+      "description": "Прекращает текущую работу ошибкой с вашим текстом. Это сообщение прочитает человек, когда операция откажет, — поэтому пишите, что не так с данными, а не где остановился код.\n\nКлючевое слово `Raise` — другое: записанное без скобок внутри блока Except, оно повторно возбуждает обрабатываемое исключение, сохраняя исходное описание.",
       "syntax_block": "Raise(string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "string — сообщение.",
+      "return_descr": "Не возвращает управление.",
+      "example": "If IsEmptyValue(doc.Counterparty) Then\n    Raise(\"the counterparty is not filled in\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.SetError", "fn.ErrorDescription", "kw.Raise", "kw.Try"],
+      "reviewed": true
     },
     {
       "id": "fn.ErrorDescription",
@@ -1231,14 +1231,14 @@
         "global_functions"
       ],
       "signature": "ErrorDescription()",
-      "description": "",
+      "description": "Описание обрабатываемой ошибки. Осмысленно внутри блока Except: именно так сообщают, ЧТО именно не получилось, вместо голого «произошла ошибка».",
       "syntax_block": "ErrorDescription()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Строка — сообщение последней возбуждённой ошибки.",
+      "example": "Try\n    doc.Write();\nExcept\n    Message(\"could not write: \" + ErrorDescription());\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Raise", "fn.SetError", "kw.Try", "kw.Except"],
+      "reviewed": true
     },
     {
       "id": "fn.IsNull",
@@ -1294,14 +1294,14 @@
         "global_functions"
       ],
       "signature": "IsEmptyValue(value : any)",
-      "description": "",
+      "description": "Истина, когда значение пусто: Undefined, NULL, пустая строка, нулевое число, пустая дата или ссылка, у которой есть тип, но нет объекта. Противоположность ValueIsFilled. Когда нужен именно SQL-null и ничего больше, есть IsNull.",
       "syntax_block": "IsEmptyValue(value : any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — значение любого типа.",
+      "return_descr": "Булево.",
+      "example": "If IsEmptyValue(doc.Counterparty) Then\n    Raise(\"the counterparty is not filled in\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ValueIsFilled", "fn.IsNull", "fn.IsBlankString"],
+      "reviewed": true
     },
     {
       "id": "fn.Evaluate",
@@ -1313,14 +1313,14 @@
         "global_functions"
       ],
       "signature": "Evaluate(expr : string)",
-      "description": "",
+      "description": "Компилирует и выполняет ВЫРАЖЕНИЕ, записанное текстом, в области видимости вызвавшей строки — переменные вызывающего ему видны. Возвращает то, во что вычислилось выражение. Для оператора, а не выражения, есть Execute.\n\nЭто дверь, через которую проходит вычисляемое поле отчёта, и причина осторожно относиться к тексту извне: что бы в нём ни стояло, оно выполнится с правами вызывающего.",
       "syntax_block": "Evaluate(expr : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "expr — выражение строкой.",
+      "return_descr": "То, что дало выражение.",
+      "example": "var k = 40;\nMessage(Evaluate(\"k + 2\"));   // 42",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Execute", "fn.Type", "fn.TypeOf"],
+      "reviewed": true
     },
     {
       "id": "fn.Execute",
@@ -1332,14 +1332,14 @@
         "global_functions"
       ],
       "signature": "Execute(expr : string)",
-      "description": "",
+      "description": "Компилирует и выполняет ОПЕРАТОРЫ, записанные текстом, в области видимости вызвавшей строки. Ничего не возвращает — за значением обращайтесь к Evaluate. Осторожность та же: текст извне выполняется с правами вызывающего.",
       "syntax_block": "Execute(expr : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "expr — операторы строкой.",
+      "return_descr": "Ничего.",
+      "example": "Execute(\"total = total + 1;\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Evaluate"],
+      "reviewed": true
     },
     {
       "id": "fn.Format",
@@ -1351,14 +1351,14 @@
         "global_functions"
       ],
       "signature": "Format(value : any, format : string)",
-      "description": "",
+      "description": "Значение как текст в явно заданном формате: String даёт вид по умолчанию, Format — тот, который вы указали. Формат — список пар `КОД=значение`, разделённых `;`.\n\nЧисла: ND (всего знаков), NFD (знаков после запятой), NDS (десятичный разделитель), NGS (разделитель групп), NG (размер группы), NZ (чем печатается ноль). Булевы: BT и BF (текст для истины и для лжи). Даты: DF (шаблон даты), DE (чем печатается пустая дата).",
       "syntax_block": "Format(value : any, format : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — значение. format — строка формата, например \"NFD=2; NGS= \".",
+      "return_descr": "Строка.",
+      "example": "Message(Format(1250.5, \"NFD=2\"));\nMessage(Format(0, \"NZ=-\"));\nMessage(Format(True, \"BT=yes; BF=no\"));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.String", "fn.Number", "fn.Tstr"],
+      "reviewed": true
     },
     {
       "id": "fn.Type",
@@ -1370,14 +1370,14 @@
         "global_functions"
       ],
       "signature": "Type(strType : string)",
-      "description": "",
+      "description": "ТИП с указанным именем как значение — то, с чем сравнивают тип. Имя должно быть зарегистрировано платформой; неизвестное имя вызывает исключение, а не возвращает пустой тип.",
       "syntax_block": "Type(strType : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "strType — зарегистрированное имя типа, например \"Number\" или \"CatalogRef.Goods\".",
+      "return_descr": "Тип.",
+      "example": "If TypeOf(value) == Type(\"Number\") Then\n    Message(\"a number\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.TypeOf", "fn.IsEmptyValue"],
+      "reviewed": true
     },
     {
       "id": "fn.TypeOf",
@@ -1389,14 +1389,14 @@
         "global_functions"
       ],
       "signature": "TypeOf(value : any)",
-      "description": "",
+      "description": "Тип ЗНАЧЕНИЯ как значение: сравнивайте его с Type(\"...\"), чтобы узнать, чем что-то является.",
       "syntax_block": "TypeOf(value : any)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "value — значение любого типа.",
+      "return_descr": "Тип.",
+      "example": "Message(TypeOf(42) == Type(\"Number\"));   // True",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Type", "fn.IsEmptyValue"],
+      "reviewed": true
     },
     {
       "id": "fn.Rand",
@@ -1408,14 +1408,14 @@
         "global_functions"
       ],
       "signature": "Rand()",
-      "description": "",
+      "description": "Псевдослучайное неотрицательное целое число. НЕ годится для того, что должно быть неугадываемым: пароль, токен, ключ. Применяйте для выборок и тестовых данных.",
       "syntax_block": "Rand()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Число.",
+      "example": "Message(Rand());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Int", "fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.ArgCount",
@@ -1427,14 +1427,14 @@
         "global_functions"
       ],
       "signature": "ArgCount()",
-      "description": "",
+      "description": "Сколько аргументов командной строки получил процесс при запуске, включая путь к самой программе.",
       "syntax_block": "ArgCount()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Число.",
+      "example": "For i = 0 To ArgCount() - 1 Do\n    Message(ArgValue(i));\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ArgValue"],
+      "reviewed": true
     },
     {
       "id": "fn.ArgValue",
@@ -1445,15 +1445,15 @@
         "global_context",
         "global_functions"
       ],
-      "signature": "ArgValue()",
-      "description": "",
-      "syntax_block": "ArgValue()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "ArgValue(index : number)",
+      "description": "Один аргумент командной строки по индексу, отсчитываемому ОТ НУЛЯ: индекс 0 — путь к самой программе. Индекс вне диапазона вызывает исключение.",
+      "syntax_block": "ArgValue(index : number)",
+      "parameters": "index — позиция аргумента, от 0.",
+      "return_descr": "Строка — аргумент.",
+      "example": "Message(ArgValue(0));   // the executable's path",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ArgCount"],
+      "reviewed": true
     },
     {
       "id": "fn.ComputerName",
@@ -1465,14 +1465,14 @@
         "global_functions"
       ],
       "signature": "ComputerName()",
-      "description": "",
+      "description": "Сетевое имя машины, на которой выполняется код. В клиент-серверной установке это СЕРВЕР для кода, работающего там, и рабочая станция для кода на клиенте, — прежде чем что-то из этого выводить, проверьте, где ваш код исполняется.",
       "syntax_block": "ComputerName()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Строка.",
+      "example": "Message(ComputerName());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.UserName", "fn.GeneralLanguage"],
+      "reviewed": true
     },
     {
       "id": "fn.RunApp",
@@ -1484,14 +1484,14 @@
         "global_functions"
       ],
       "signature": "RunApp(command : string)",
-      "description": "",
+      "description": "Запускает внешнюю программу и сразу возвращает управление, не дожидаясь её завершения. Под вычислением не делает ничего. Команда выполняется с правами запустившего процесса, поэтому никогда не собирайте её из текста, полученного извне.",
       "syntax_block": "RunApp(command : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "command — командная строка для запуска.",
+      "return_descr": "Ничего.",
+      "example": "RunApp(\"notepad.exe \" + GetTempFileName());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetTempFileName", "fn.ComputerName"],
+      "reviewed": true
     },
     {
       "id": "fn.SetAppTitle",
@@ -1503,14 +1503,14 @@
         "global_functions"
       ],
       "signature": "SetAppTitle(title : string)",
-      "description": "",
+      "description": "Задаёт заголовок окна приложения — по нему человек отличает две открытые базы. Без окна не делает ничего.",
       "syntax_block": "SetAppTitle(title : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "title — текст.",
+      "return_descr": "Ничего.",
+      "example": "SetAppTitle(\"Production base\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ActiveWindow", "fn.SetStatus"],
+      "reviewed": true
     },
     {
       "id": "fn.UserDir",
@@ -1522,14 +1522,14 @@
         "global_functions"
       ],
       "signature": "UserDir()",
-      "description": "",
+      "description": "⚠ НЕ РЕАЛИЗОВАНА — сейчас всегда возвращает пустую строку. Место для файлов даёт GetTempDir.",
       "syntax_block": "UserDir()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Строка — сейчас всегда пустая.",
+      "example": "// use GetTempDir() instead\npath = GetTempDir();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetTempDir", "fn.GetTempFileName"],
+      "reviewed": true
     },
     {
       "id": "fn.UserName",
@@ -1541,14 +1541,14 @@
         "global_functions"
       ],
       "signature": "UserName()",
-      "description": "",
+      "description": "Имя пользователя, под которым работает сеанс, — то, что записывают в журнал или в поле «кем записано».",
       "syntax_block": "UserName()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Строка.",
+      "example": "doc.Author = UserName();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.IsInRole", "fn.AccessRight", "fn.ComputerName"],
+      "reviewed": true
     },
     {
       "id": "fn.UserPassword",
@@ -1560,14 +1560,14 @@
         "global_functions"
       ],
       "signature": "UserPassword()",
-      "description": "",
+      "description": "Пароль, с которым вошёл текущий сеанс. ⚠ Обращайтесь с ним как с секретом: не выводите, не пишите в журнал, не сохраняйте в данные и никуда не отправляйте. Он существует, чтобы скрипт мог переаутентифицироваться там, где открываются те же учётные данные, — и больше ни для чего.",
       "syntax_block": "UserPassword()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Строка.",
+      "example": "// only where the same credentials are required again\nconnect(UserName(), UserPassword());",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.UserName"],
+      "reviewed": true
     },
     {
       "id": "fn.ExclusiveMode",
@@ -1579,14 +1579,14 @@
         "global_functions"
       ],
       "signature": "ExclusiveMode()",
-      "description": "",
+      "description": "Удерживается ли база монопольно — один сеанс и никаких других. Спрашивайте перед началом работы, которой это нужно, чтобы отказ сформулировали вы, а не сбой на середине.",
       "syntax_block": "ExclusiveMode()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Булево.",
+      "example": "If Not ExclusiveMode() Then\n    Raise(\"this operation needs exclusive access\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.SetExclusive"],
+      "reviewed": true
     },
     {
       "id": "fn.SetExclusive",
@@ -1598,14 +1598,14 @@
         "global_functions"
       ],
       "signature": "SetExclusive(on : boolean)",
-      "description": "",
+      "description": "Забирает или освобождает монопольный доступ к базе для этого сеанса. При невозможности — потому что подключён кто-то ещё — ВОЗБУЖДАЕТ исключение с причиной, поэтому Try/Except вокруг него и есть естественное место для повтора или объяснения.",
       "syntax_block": "SetExclusive(on : boolean)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "on — True, чтобы забрать монопольный доступ, False, чтобы освободить.",
+      "return_descr": "Ничего.",
+      "example": "Try\n    SetExclusive(True);\nExcept\n    Message(ErrorDescription());\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ExclusiveMode"],
+      "reviewed": true
     },
     {
       "id": "fn.GeneralLanguage",
@@ -1617,14 +1617,14 @@
         "global_functions"
       ],
       "signature": "GeneralLanguage()",
-      "description": "",
+      "description": "Код языка интерфейса текущего пользователя — язык, на котором готовят текст, показываемый ЭТОМУ человеку. Чтобы перевести на другой, назовите его в Tstr.",
       "syntax_block": "GeneralLanguage()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Строка — код языка.",
+      "example": "Message(Tstr(\"Total\", GeneralLanguage()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Tstr", "fn.UserName"],
+      "reviewed": true
     },
     {
       "id": "fn.EndJob",
@@ -1636,14 +1636,14 @@
         "global_functions"
       ],
       "signature": "EndJob(force : boolean)",
-      "description": "",
+      "description": "Завершает сеанс, то есть закрывает окно, которое его держит. EndJob(False) — то же событие, что нажатие человеком кнопки закрытия окна: отрабатывает BeforeExit, несохранённые документы получают слово, а отказ оставляет всё как было. EndJob(True) не спрашивает.",
       "syntax_block": "EndJob(force : boolean)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "force — False, чтобы закрыть обычным путём (можно отказать), True — чтобы закрыть в любом случае.",
+      "return_descr": "Ничего.",
+      "example": "EndJob(False);",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ActiveWindow"],
+      "reviewed": true
     },
     {
       "id": "fn.UserInterruptProcessing",
@@ -1655,14 +1655,14 @@
         "global_functions"
       ],
       "signature": "UserInterruptProcessing()",
-      "description": "",
+      "description": "Даёт человеку возможность прервать работу: вызовите внутри длинного цикла, и нажатие клавиши прерывания остановит его штатной ошибкой «прервано пользователем». Без этого длительный расчёт остановить нельзя вовсе.",
       "syntax_block": "UserInterruptProcessing()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Ничего — возбуждает исключение, если прерывание запрошено.",
+      "example": "For Each row In rows Do\n    UserInterruptProcessing();\n    // … the slow part …\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.SetStatus", "fn.EndJob"],
+      "reviewed": true
     },
     {
       "id": "fn.AccessRight",
@@ -1674,14 +1674,14 @@
         "global_functions"
       ],
       "signature": "AccessRight(strRole : string, metadata)",
-      "description": "",
+      "description": "Есть ли у текущего пользователя названное право на объект метаданных. Эту проверку делают перед тем, как предложить действие, чтобы человеку не показывали команду, которая затем откажет.",
       "syntax_block": "AccessRight(strRole : string, metadata)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "strRole — имя права (например, \"Read\", \"Write\", \"Delete\"). metadata — объект, о котором спрашивают. ОБА обязательны.",
+      "return_descr": "Булево.",
+      "example": "If Not AccessRight(\"Delete\", Metadata.Catalogs.Goods) Then\n    button.Enabled = False;\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.IsInRole", "fn.UserName"],
+      "reviewed": true
     },
     {
       "id": "fn.IsInRole",
@@ -1693,14 +1693,14 @@
         "global_functions"
       ],
       "signature": "IsInRole(strRole : string)",
-      "description": "",
+      "description": "Входит ли текущий пользователь в названную роль. Когда на самом деле спрашивают о разрешении, лучше AccessRight: право переживёт перекройку ролей, имя роли — нет.",
       "syntax_block": "IsInRole(strRole : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "strRole — имя роли.",
+      "return_descr": "Булево.",
+      "example": "If IsInRole(\"Accountant\") Then\n    ShowCommonForm(\"ClosingPeriod\");\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.AccessRight", "fn.UserName"],
+      "reviewed": true
     },
     {
       "id": "fn.GetCommonForm",
@@ -1712,14 +1712,14 @@
         "global_functions"
       ],
       "signature": "GetCommonForm(name : string, owner : any, id : guid)",
-      "description": "",
+      "description": "Строит общую форму по имени и ВОЗВРАЩАЕТ её, не показывая, — чтобы можно было заполнить до того, как человек её увидит. ShowCommonForm — то же самое, но сразу открытое.",
       "syntax_block": "GetCommonForm(name : string, owner : any, id : guid)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "name — имя общей формы. owner — окно-владелец (необязательно). id — ключ, опознающий эту форму, чтобы повторный запрос переиспользовал одно окно (необязательно).",
+      "return_descr": "Форма.",
+      "example": "form = GetCommonForm(\"Settings\");\nform.Open();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.ShowCommonForm", "fn.ActiveWindow", "fn.GetCommonTemplate"],
+      "reviewed": true
     },
     {
       "id": "fn.ShowCommonForm",
@@ -1731,14 +1731,14 @@
         "global_functions"
       ],
       "signature": "ShowCommonForm(name : string, owner : any, id : guid)",
-      "description": "",
+      "description": "Открывает общую форму по имени. Когда форму нужно заполнить до показа, берите GetCommonForm.",
       "syntax_block": "ShowCommonForm(name : string, owner : any, id : guid)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "name — имя общей формы. owner — окно-владелец (необязательно). id — ключ, опознающий эту форму, чтобы повторный запрос переиспользовал одно окно (необязательно).",
+      "return_descr": "Ничего.",
+      "example": "ShowCommonForm(\"Settings\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetCommonForm", "fn.ActiveWindow"],
+      "reviewed": true
     },
     {
       "id": "fn.GetCommonTemplate",
@@ -1750,14 +1750,14 @@
         "global_functions"
       ],
       "signature": "GetCommonTemplate(name : string)",
-      "description": "",
+      "description": "Общий макет по имени — табличный документ, из которого собирается печатная форма.",
       "syntax_block": "GetCommonTemplate(name : string)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "name — имя общего макета.",
+      "return_descr": "Макет.",
+      "example": "template = GetCommonTemplate(\"InvoiceHeader\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.GetCommonForm"],
+      "reviewed": true
     },
     {
       "id": "fn.BeginTransaction",
@@ -1769,14 +1769,14 @@
         "global_functions"
       ],
       "signature": "BeginTransaction()",
-      "description": "",
+      "description": "Открывает транзакцию базы данных: всё записанное после неё становится видно другим только при CommitTransaction и исчезает при RollBackTransaction. Оборачивайте работу в Try/Except и откатывайте в обработчике, иначе сбой на середине оставит транзакцию открытой.\n\nЗапись документа и так идёт в собственной транзакции — эта нужна, чтобы сделать НЕСКОЛЬКО записей одним шагом «всё или ничего».",
       "syntax_block": "BeginTransaction()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Ничего.",
+      "example": "BeginTransaction();\nTry\n    first.Write();\n    second.Write();\n    CommitTransaction();\nExcept\n    RollBackTransaction();\n    Raise(ErrorDescription());\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.CommitTransaction", "fn.RollBackTransaction"],
+      "reviewed": true
     },
     {
       "id": "fn.CommitTransaction",
@@ -1788,14 +1788,14 @@
         "global_functions"
       ],
       "signature": "CommitTransaction()",
-      "description": "",
+      "description": "Закрывает открытую транзакцию, делая всё записанное внутри неё постоянным и видимым другим.",
       "syntax_block": "CommitTransaction()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Ничего.",
+      "example": "CommitTransaction();",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BeginTransaction", "fn.RollBackTransaction"],
+      "reviewed": true
     },
     {
       "id": "fn.RollBackTransaction",
@@ -1807,14 +1807,109 @@
         "global_functions"
       ],
       "signature": "RollBackTransaction()",
-      "description": "",
+      "description": "Отменяет открытую транзакцию: всё записанное внутри неё откатывается, как будто работа и не начиналась.",
       "syntax_block": "RollBackTransaction()",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "parameters": "Нет.",
+      "return_descr": "Ничего.",
+      "example": "Except\n    RollBackTransaction();\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.BeginTransaction", "fn.CommitTransaction"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.RunScheduledJobs",
+      "name_local": "RunScheduledJobs",
+      "name_en": "RunScheduledJobs",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "RunScheduledJobs()",
+      "description": "Передаёт каждое подошедшее по расписанию задание его сеансу и возвращает управление СРАЗУ — не дожидаясь завершения. Это намеренно: обычный вызывающий — обработчик простоя формы, и ожидание там заморозило бы окно. Под вычислением не делает ничего, поэтому взгляд на значение никогда не запускает работу.",
+      "syntax_block": "RunScheduledJobs()",
+      "parameters": "Нет.",
+      "return_descr": "Число — сколько заданий запущено.",
+      "example": "started = RunScheduledJobs();",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.RunJob", "fn.RunBackground"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.RunJob",
+      "name_local": "RunJob",
+      "name_en": "RunJob",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "RunJob(name : string)",
+      "description": "Запускает регламентное задание СЕЙЧАС, по имени, не дожидаясь расписания. Отвечает, запущено ли оно: False — когда такого задания нет либо приложение не работает.",
+      "syntax_block": "RunJob(name : string)",
+      "parameters": "name — имя регламентного задания.",
+      "return_descr": "Булево — запущено ли.",
+      "example": "If Not RunJob(\"NightlyRecalculation\") Then\n    Message(\"the job did not start\");\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.RunScheduledJobs", "fn.RunBackground"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.RunBackground",
+      "name_local": "RunBackground",
+      "name_en": "RunBackground",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "RunBackground(procedure : string, args : array)",
+      "description": "Запускает процедуру в фоне и возвращает описатель запущенного задания, не дожидаясь его. Аргументы передаются Массивом, который раскладывается в позиционные параметры процедуры; любое другое непустое значение отвергается с указанием причины, а не принимается за «без аргументов» — иначе процедура запустилась бы с неверной сигнатурой и упала бы глубоко внутри. Если приложение не работает, вызывается исключение.",
+      "syntax_block": "RunBackground(procedure : string, args : array)",
+      "parameters": "procedure — имя запускаемой процедуры. args — Массив её аргументов (может быть пустым).",
+      "return_descr": "Запущенное фоновое задание.",
+      "example": "args = New Array();\nargs.Add(BegOfMonth(WorkingDate()));\njob = RunBackground(\"RecalculateTotals\", args);",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.RunJob", "fn.RunScheduledJobs"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.SerializeValue",
+      "name_local": "SerializeValue",
+      "name_en": "SerializeValue",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "SerializeValue(value : any)",
+      "description": "Превращает значение времени выполнения в текст (JSON). Печать значения отвечает, КАК ОНО ВЫГЛЯДИТ; эта функция — ИЗ ЧЕГО ОНО СОСТОИТ, поэтому структура переживает запись: выборка, набор записей, объект документа, массив. Применяйте там, где значение существует, — рядом со строкой, которая его построила, — чтобы увидеть содержимое, сохранить его, сравнить два значения или отправить одно из них. Круг записываемого растёт вместе с типами: всё, что научилось упаковывать себя, покрывается в тот же день.",
+      "syntax_block": "SerializeValue(value : any)",
+      "parameters": "value — любое значение, которое может держать эта конфигурация.",
+      "return_descr": "Значение как текст JSON. Вызывает исключение, когда значение непередаваемо (IsTransferable) или когда не открыта конфигурация: типы, которые называет ссылка, живут в её собственном реестре.",
+      "example": "Selection = Query.Execute().Select();\nWhile Selection.Next() Do\n\tMessage(SerializeValue(Selection));\nEndDo;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.DeserializeValue"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.DeserializeValue",
+      "name_local": "DeserializeValue",
+      "name_en": "DeserializeValue",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "DeserializeValue(json : string)",
+      "description": "Читает текст, записанный SerializeValue, обратно в значение времени выполнения — а вместе с тем СТРОИТ значение из JSON, написанного вручную или пришедшего извне. Это единственный способ построить его без скрипта: текст на входе, значение на выходе. НЕ всякая запись переживает обратный путь: представление JSON — это отображение, поэтому дата в нём ISO-строка, а часть форм уплощается. Там, где значение должно вернуться ровно таким, каким ушло, храните двоичную форму.",
+      "syntax_block": "DeserializeValue(json : string)",
+      "parameters": "json — текст в том виде, в каком его пишет SerializeValue.",
+      "return_descr": "Значение, описанное текстом. Вызывает исключение, когда текст не является JSON, из которого читается значение, когда он называет тип, которого нет в этой конфигурации, или когда конфигурация не открыта.",
+      "example": "Value = DeserializeValue(\"{\\\"type\\\":\\\"Number\\\",\\\"value\\\":42}\");",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.SerializeValue"],
+      "reviewed": true
     }
   ]
 }

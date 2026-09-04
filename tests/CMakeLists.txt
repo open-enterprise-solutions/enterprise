@@ -40,6 +40,7 @@ add_executable(oes_tests
     test_compileTree.cpp
     test_compilerContract.cpp
     test_scriptCorpus.cpp
+    test_helpCorpus.cpp
     bench_runtime.cpp
     test_connectionPool.cpp
     test_session.cpp

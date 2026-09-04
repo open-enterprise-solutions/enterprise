@@ -24,6 +24,101 @@
         "fn.Message"
       ],
       "reviewed": true
+    },
+    {
+      "id": "type.Number",
+      "name_local": "Number",
+      "name_en": "Number",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "Number(<value>) — or a literal: 42, -3.14",
+      "description": "ТОЧНОЕ ДЕСЯТИЧНОЕ число, а не двоичное с плавающей точкой. Именно это различие и важно в учётной системе: 0.1 + 0.2 здесь равно 0.3, денежные суммы складываются, и итог не уплывает на сотую после десяти тысяч строк.\n\nЧисло растёт по потребности: малые значения остаются в восьми байтах, большие или длинные переходят к форме произвольной точности, поэтому курс со многими знаками хранится как записан, а не округляется под размер.",
+      "syntax_block": "Number(<value>) — or a literal: 42, -3.14",
+      "parameters": "Записывается литералом (42, -3.14) либо получается из Number(value).",
+      "return_descr": "Значение типа Число.",
+      "example": "price = 1250.55;\ntotal = price * 3;\nMessage(Format(total, \"NFD=2\"));",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Number", "fn.Round", "fn.Int", "fn.Format"],
+      "reviewed": true
+    },
+    {
+      "id": "type.String",
+      "name_local": "String",
+      "name_en": "String",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "String(<value>) — or a literal: \"text\"",
+      "description": "Текст. Складывается через `+`, сравнивается через `==`, длина — StrLen. Строку, которую человек оставил пустой, лучше проверять через IsBlankString, а не сравнением с \"\": случайный пробел значением не является.",
+      "syntax_block": "String(<value>) — or a literal: \"text\"",
+      "parameters": "Записывается в двойных кавычках либо получается из String(value).",
+      "return_descr": "Значение типа Строка.",
+      "example": "name = \"Acme\" + \" \" + \"Ltd\";\nIf Not IsBlankString(name) Then\n    Message(name);\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.String", "fn.StrLen", "fn.Mid", "fn.Find", "fn.IsBlankString"],
+      "reviewed": true
+    },
+    {
+      "id": "type.Boolean",
+      "name_local": "Boolean",
+      "name_en": "Boolean",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "Boolean(<value>) — or a literal: True / False",
+      "description": "Истина или Ложь — то, что проверяет условие и что хранит флаг. Комбинируется через And / Or / Not.",
+      "syntax_block": "Boolean(<value>) — or a literal: True / False",
+      "parameters": "Записывается как True или False либо получается из Boolean(value).",
+      "return_descr": "Значение типа Булево.",
+      "example": "posted = True;\nIf posted And Not cancelled Then\n    Message(\"in effect\");\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Boolean", "kw.True", "kw.False", "kw.Not"],
+      "reviewed": true
+    },
+    {
+      "id": "type.Undefined",
+      "name_local": "Undefined",
+      "name_en": "Undefined",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "Undefined",
+      "description": "ОТСУТСТВИЕ ЗНАЧЕНИЯ — то, что хранит неприсвоенная переменная и что содержит непереданный необязательный аргумент. Это не то же, что NULL, — явное «значение не записано» из базы: Undefined означает, что сюда никто ничего не положил, NULL — что данные говорят об отсутствии. IsEmptyValue истинно для обоих.",
+      "syntax_block": "Undefined",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var x;\nIf x == Undefined Then\n    Message(\"nothing was assigned\");\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["kw.Undefined", "type.Null", "fn.IsEmptyValue", "fn.ValueIsFilled"],
+      "reviewed": true
+    },
+    {
+      "id": "type.Null",
+      "name_local": "Null",
+      "name_en": "Null",
+      "kind": "primitive_type",
+      "category_keys": [
+        "common_lang",
+        "primitive_types"
+      ],
+      "signature": "Null",
+      "description": "Явное «нет значения» ИЗ БАЗЫ — то, что запрос возвращает для колонки, где ничего нет, и что даёт внешнее соединение для несопоставленных строк. Отличается от Undefined (никто ничего не присваивал) и от пустой ссылки (тип выбран, объект не указан). Проверяйте через IsNull, когда имеете в виду именно это; IsEmptyValue отвечает истиной для всех трёх.",
+      "syntax_block": "Null",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If IsNull(selection.Discount) Then\n    discount = 0;\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["kw.Null", "type.Undefined", "fn.IsNull", "fn.IsEmptyValue"],
+      "reviewed": true
     }
   ]
 }

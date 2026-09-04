@@ -242,6 +242,24 @@
       "availability": "enterprise, wenterprise-server, daemon, codeRunner",
       "see_also": ["q.Where", "q.Select", "q.GroupBy"],
       "reviewed": true
+    },
+    {
+      "id": "q.Package",
+      "name_local": "Пакет запитів (INTO / ONTO / DROP, тимчасові таблиці)",
+      "name_en": "Query package (INTO / ONTO / DROP, temporary tables)",
+      "kind": "keyword",
+      "category_keys": [
+        "query"
+      ],
+      "signature": "<запит> [INTO <ТимчТаблиця> | ONTO <Ім'я>] [INDEX BY <поле> {, ...}] {; <запит>} [; DROP <ТимчТаблиця>]",
+      "description": "Кілька запитів в ОДНОМУ тексті, через `;`. Кожен наступний бачить тимчасові таблиці, створені попередніми, — заради цього пакет і пишуть.\n\n- `INTO <ТимчТаблиця>` — покласти результат до тимчасової таблиці замість того, щоб повернути його. Далі її читають за голим іменем: `FROM Folded AS f`.\n- `ONTO <Ім'я>` — ДАТИ ІМ'Я результату цього запиту, щоб просити його за іменем, а не за позицією.\n- **Обидва пишуться одразу після списку полів, ДО `FROM`** — `SELECT Товар, SUM(Кількість) AS Кількість INTO Згорнуті FROM …`. Одночасно їх писати не можна: INTO не повертає результату, називати було б нічого.\n- `INDEX BY <поле>{, …}` — проіндексувати створювану тимчасову таблицю (лише разом з INTO); пишеться після тіла запиту.\n- `DROP <ТимчТаблиця>` — звільнити її достроково. Це окремий запит пакета, він нічого не повертає.\n\n**Як забрати результати** (методи `Query`):\n- `ExecuteBatch()` — **Масив** результатів за позицією написання. Запит з INTO відповідає одним рядком із кількістю записів; DROP — Невизначено.\n- `Execute()` — ПЕРШИЙ результат (для звичайного запиту з одного оператора він єдиний).\n- `Execute(\"<Ім'я>\")` — результат, названий через ONTO.\n\n**Щоб таблиці пережили виконання:** без `TempTablesManager` вони вмирають разом із викликом. Прив'яжіть той самий менеджер до обох запитів: `manager = New TempTablesManager(); first.TempTablesManager = manager; … second.TempTablesManager = manager; … manager.Close();`.\n\nПакет виконується одним заходом і в одному стані читання — усі запити бачать ті самі дані.",
+      "syntax_block": "SELECT M.Товар AS Товар, SUM(M.Кількість) AS Кількість\nINTO Згорнуті\nFROM AccumulationRegister.ТовариНаСкладах AS M\nGROUP BY M.Товар\nINDEX BY Товар;\n\nSELECT G.Description AS Товар, f.Кількість AS Кількість\nFROM Catalog.Товари AS G\nINNER JOIN Згорнуті AS f ON f.Товар = G.Ref;\n\nDROP Згорнуті",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// увесь пакет, результати за позицією\nvar q = New Query(\n    \"SELECT M.Товар AS Товар, SUM(M.Кількість) AS Кількість INTO Згорнуті \" +\n    \"FROM AccumulationRegister.ТовариНаСкладах AS M GROUP BY M.Товар; \" +\n    \"SELECT f.Товар AS Товар, f.Кількість AS Кількість FROM Згорнуті AS f\");\nvar results = q.ExecuteBatch();\nvar sel = results.Get(1).Select();          // [0] — рядок із кількістю записів запиту з INTO\nwhile (sel.Next())\n    Message(String(sel.Товар) + \" = \" + String(sel.Кількість));",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["q.From", "q.GroupBy", "q.Select"],
+      "reviewed": true
     }
   ]
 }

@@ -498,18 +498,19 @@
       ],
       "signature": "",
       "description": "Объявляет функцию — вызываемый блок кода, возвращающий значение через Return. Функции взаимозаменяемы с процедурами везде, кроме использования в качестве источника выражения.",
-      "syntax_block": "Function <Name>([Val] <Param1>, …) [Public] {\n    // body\n    Return <Value>;\n}",
-      "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Public — делает функцию доступной из других модулей (пишется после списка параметров).",
+      "syntax_block": "Function <Name>([Val] <Param1>, …) [Public|Private|Protected] [Cached] {\n    // body\n    Return <Value>;\n}",
+      "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Модификаторы после списка параметров — это две независимые оси: один модификатор доступа (Public / Private / Protected, по умолчанию Private) и, необязательно, Cached, который сохраняет результат для каждой комбинации значений аргументов. Порядок между ними значения не имеет.",
       "return_descr": "Значение, переданное оператору Return.",
       "example": "Function Sum(Val A, Val B) Public {\n    Return A + B;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Procedure",
         "kw.Return",
-        "kw.Public"
+        "kw.Public",
+        "kw.Cached"
       ],
       "reviewed": true,
-      "syntax_block_ves": "Function <Name>([Val] <Param1>, …) [Public]\n    // body\n    Return <Value>;\nEndFunction",
+      "syntax_block_ves": "Function <Name>([Val] <Param1>, …) [Public|Private|Protected] [Cached]\n    // body\n    Return <Value>;\nEndFunction",
       "example_ves": "Function Sum(Val A, Val B) Public\n    Return A + B;\nEndFunction",
       "modes": [
         "ves",
@@ -562,6 +563,7 @@
       "see_also": [
         "kw.Private",
         "kw.Protected",
+        "kw.Cached",
         "kw.Procedure",
         "kw.Function",
         "kw.Var"
@@ -582,16 +584,17 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Модификатор доступа: символ виден только внутри своего модуля. Это поведение по умолчанию, поэтому Private пишут, чтобы явно обозначить намерение.",
-      "syntax_block": "Private Procedure Helper() {\n    // body\n}",
-      "syntax_block_ves": "Private Procedure Helper()\n    // body\nEndProcedure",
+      "description": "Модификатор доступа: символ виден только внутри своего модуля. Это поведение по умолчанию, поэтому Private пишут, чтобы явно обозначить намерение. Пишется ПОСЛЕ списка параметров — за закрывающей скобкой процедуры или функции, за именем переменной, — там же, где Public и Protected.",
+      "syntax_block": "Procedure Helper() Private {\n    // body\n}",
+      "syntax_block_ves": "Procedure Helper() Private\n    // body\nEndProcedure",
       "parameters": "",
       "return_descr": "",
-      "example": "Private Var cache;\n\nPrivate Function Prepare() {\n    Return cache;\n}",
+      "example": "Var cache Private;\n\nFunction Prepare() Private {\n    Return cache;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Public",
         "kw.Protected",
+        "kw.Cached",
         "kw.Var"
       ],
       "reviewed": true,
@@ -610,17 +613,47 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Модификатор доступа: символ виден потомкам модуля — модуль объекта отдаёт его формам этого объекта, — но не всей конфигурации.",
-      "syntax_block": "Protected Procedure Recalculate() {\n    // видно формам этого объекта\n}",
-      "syntax_block_ves": "Protected Procedure Recalculate()\n    // видно формам этого объекта\nEndProcedure",
+      "description": "Модификатор доступа: символ виден потомкам модуля — модуль объекта отдаёт его формам этого объекта, — но не всей конфигурации. Пишется ПОСЛЕ списка параметров — за закрывающей скобкой процедуры или функции, за именем переменной, — там же, где Public и Private.",
+      "syntax_block": "Procedure Recalculate() Protected {\n    // видно формам этого объекта\n}",
+      "syntax_block_ves": "Procedure Recalculate() Protected\n    // видно формам этого объекта\nEndProcedure",
       "parameters": "",
       "return_descr": "",
-      "example": "Protected Var lastTotal;\n\nProtected Function Total() {\n    Return lastTotal;\n}",
+      "example": "Var lastTotal Protected;\n\nFunction Total() Protected {\n    Return lastTotal;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Public",
         "kw.Private",
+        "kw.Cached",
         "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Cached",
+      "name_local": "Cached",
+      "name_en": "Cached",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Сохраняет результат функции для каждой комбинации значений аргументов: первый вызов с данной комбинацией выполняет тело, каждый следующий с той же комбинацией возвращает сохранённый результат, не заходя в функцию вообще. Допустим только для функции — процедуре нечего сохранять, и модификатор там отвергается, а не игнорируется. Это ВТОРАЯ ось, а не четвёртый модификатор доступа: сочетается с Public, Private или Protected, и порядок между ними значения не имеет. Пишется там же, где они, — после списка параметров. Сохранённые значения живут на модуле, который выполняет функцию, и умирают вместе с ним: у модуля объекта — пока жив объект, у общего модуля — пока жив корневой модуль сеанса, — поэтому очищать нечего и срок жизни задавать не нужно. Вызов, завершившийся исключением, не сохраняется.",
+      "syntax_block": "Function Rate(Val CurrencyCode, Val OnDate) Public Cached {\n    // курс читается один раз на пару (валюта, дата)\n    Return <Значение>;\n}",
+      "syntax_block_ves": "Function Rate(Val CurrencyCode, Val OnDate) Public Cached\n    // курс читается один раз на пару (валюта, дата)\n    Return <Значение>;\nEndFunction",
+      "parameters": "Ключом служат значения аргументов, и сравниваются они ПО ЗНАЧЕНИЮ: число 1 и строка \"1\" — разные ключи. Функция без аргументов вычисляется один раз.",
+      "return_descr": "",
+      "example": "Function Settings() Private Cached {\n    Return ReadSettingsFromDatabase();\n}\n\n// вызывается в цикле по 10000 строк — база читается один раз\nFor Each Row In Rows Do\n    Row.Currency = Settings().Currency;\nEndDo;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "kw.Public",
+        "kw.Private",
+        "kw.Protected"
       ],
       "reviewed": true,
       "modes": [
@@ -1014,14 +1047,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Определяет имя препроцессора. После этого имя существует для #Ifdef, а то, что записано за ним в строке, подставляется всюду, где имя встретится дальше в исходном тексте. Препроцессирование идёт ДО компиляции, поэтому определённое здесь имя не является переменной и не хранит значения времени выполнения.",
       "syntax_block": "",
-      "parameters": "",
+      "parameters": "Имя и, необязательно, текст, который оно обозначает.",
       "return_descr": "",
-      "example": "",
+      "example": "#Define DEBUG\n\n#Ifdef DEBUG\n    Message(\"debug build\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpUndef", "kw.PpIfdef", "kw.PpIfndef"],
+      "reviewed": true
     },
     {
       "id": "kw.PpUndef",
@@ -1033,14 +1066,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Снимает ранее определённое имя препроцессора, так что #Ifdef перестаёт его видеть начиная с этого места в исходном тексте.",
       "syntax_block": "",
-      "parameters": "",
+      "parameters": "Имя, которое снимается.",
       "return_descr": "",
-      "example": "",
+      "example": "#Define DEBUG\n// …\n#Undef DEBUG",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpDefine", "kw.PpIfdef"],
+      "reviewed": true
     },
     {
       "id": "kw.PpIfdef",
@@ -1052,14 +1085,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Компилирует следующий блок ТОЛЬКО ЕСЛИ имя определено. Код внутри невыполненной ветки вообще не доходит до компилятора: это не мёртвый код, который не выполняется, а текст, который не читается, — он может быть даже невалидным.",
       "syntax_block": "",
-      "parameters": "",
+      "parameters": "Проверяемое имя.",
       "return_descr": "",
-      "example": "",
+      "example": "#Ifdef SERVER\n    doc.Write();\n#Else\n    Message(\"client side\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpIfndef", "kw.PpElse", "kw.PpEndif", "kw.PpDefine"],
+      "reviewed": true
     },
     {
       "id": "kw.PpIfndef",
@@ -1071,14 +1104,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Противоположность #Ifdef: компилирует следующий блок только если имя НЕ определено.",
       "syntax_block": "",
-      "parameters": "",
+      "parameters": "Проверяемое имя.",
       "return_descr": "",
-      "example": "",
+      "example": "#Ifndef PRODUCTION\n    Message(\"not a production build\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpIfdef", "kw.PpElse", "kw.PpEndif"],
+      "reviewed": true
     },
     {
       "id": "kw.PpElse",
@@ -1090,14 +1123,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Вторая ветвь #Ifdef / #Ifndef — компилируется, когда условие не выполнилось.",
       "syntax_block": "",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "#Ifdef DEBUG\n    Message(\"debug\");\n#Else\n    Message(\"release\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpIfdef", "kw.PpIfndef", "kw.PpEndif"],
+      "reviewed": true
     },
     {
       "id": "kw.PpEndif",
@@ -1109,14 +1142,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Закрывает блок #Ifdef или #Ifndef. Каждому из них нужен свой.",
       "syntax_block": "",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "#Ifdef DEBUG\n    Message(\"debug\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpIfdef", "kw.PpIfndef", "kw.PpElse"],
+      "reviewed": true
     },
     {
       "id": "kw.PpRegion",
@@ -1128,14 +1161,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Открывает ИМЕНОВАННУЮ область — участок исходного текста, который редактор умеет сворачивать. На то, что компилируется, не влияет никак; существует, чтобы длинный модуль можно было читать. Имя обязательно, как и парный #EndRegion.",
       "syntax_block": "",
-      "parameters": "",
+      "parameters": "Имя области.",
       "return_descr": "",
-      "example": "",
+      "example": "#Region EventHandlers\n\nProcedure OnOpen() Public\n    // …\nEndProcedure\n\n#EndRegion",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpEndRegion"],
+      "reviewed": true
     },
     {
       "id": "kw.PpEndRegion",
@@ -1147,14 +1180,14 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Закрывает #Region. Обязателен: незакрытая область сообщается там, где была открыта, а не в конце файла.",
       "syntax_block": "",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "#Region Helpers\n// …\n#EndRegion",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["kw.PpRegion"],
+      "reviewed": true
     },
     {
       "id": "kw.From",

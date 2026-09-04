@@ -152,6 +152,48 @@ namespace {
 // layer knows how to fetch the bytes; the parser is medium-agnostic.
 // `bucketPath` is the display string used in error records (file
 // path for FS sources, "<zip>!<entry>" for zip sources).
+// The CATEGORY DICTIONARY — `_categories.json`, key → display name for the
+// locale. It is a meta file, deliberately outside ListBucketNames (which skips
+// the leading '_'), so it is asked for by name instead.
+//
+// ⚠ IT SHIPPED IN EVERY .hlk AND NOTHING PARSED IT. ibHelpCategory::displayName
+// was declared, documented as "looked up from _categories.json at load", and
+// never assigned by anybody — the tree view's fallback (`displayName.IsEmpty()
+// ? key`) then showed "global_functions" where "Глобальные функции" was
+// translated and waiting, in all three locales.
+//
+// Missing or malformed is a WARNING and never a failure: the tree falls back to
+// keys, which looks untranslated rather than broken.
+std::map<wxString, wxString> ParseCategories(const std::string&            raw,
+                                             const wxString&               bucketPath,
+                                             std::vector<ibHelpLoadError>& errors) {
+	std::map<wxString, wxString> out;
+
+	json doc;
+	try {
+		doc = json::parse(raw);
+	} catch (const std::exception& ex) {
+		ibHelpLoadError e;
+		e.bucketPath = bucketPath;
+		e.severity   = ibHelpLoadSeverity::kWarning;
+		e.message    = wxString::Format(
+		    wxT("Malformed category dictionary, section names fall back to keys: %s"),
+		    Utf8(ex.what()));
+		errors.push_back(std::move(e));
+		return out;
+	}
+
+	const auto categories = doc.find("categories");
+	if (categories == doc.end() || !categories->is_object())
+		return out;
+
+	for (auto it = categories->begin(); it != categories->end(); ++it) {
+		if (it.value().is_string())
+			out[Utf8(it.key())] = Utf8(it.value().get<std::string>());
+	}
+	return out;
+}
+
 void ParseBucket(const std::string&            raw,
                  const wxString&               bucketPath,
                  std::vector<ibHelpEntry>&     out,
@@ -544,8 +586,22 @@ LoadSource(const wxString&               localeCode,
 	// signature for backwards compatibility with the outer loader's
 	// catch path but is not used here.
 	(void)errorsOut;
+
+	// The category dictionary, asked for by name because the bucket listing
+	// skips meta files. A source without one is normal (a per-configuration
+	// corpus need not restate the platform's section names).
+	std::map<wxString, wxString> categoryNames;
+	{
+		bool readOk = false;
+		const std::string raw = source->ReadBucket(wxT("_categories.json"), &readOk);
+		if (readOk)
+			categoryNames = ParseCategories(
+			    raw, source->BucketDisplayPath(wxT("_categories.json")), localErrors);
+	}
+
 	return std::make_shared<ibHelpCorpus>(
-	    localeCode, sourceTag, std::move(deduped), std::move(localErrors));
+	    localeCode, sourceTag, std::move(deduped), std::move(localErrors),
+	    std::move(categoryNames));
 }
 
 } // namespace
