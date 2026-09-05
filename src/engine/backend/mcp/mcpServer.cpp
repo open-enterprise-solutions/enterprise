@@ -1799,8 +1799,8 @@ wxString BuildOrientation()
 	// The patterns have one — every mcp_search answer carries `places` from the corpus beside the
 	// tools — but it is worth the lines here, and the FRAMING is what those lines buy.
 	//
-	// 🛑 IT SAID "BEFORE CHOOSING A SHAPE" and nothing else (Max, 2026-09-03: *"он должен знать,
-	// что у него есть возможность подглянуть в паттерны, как это всё пишется"*). That names ONE
+	// 🛑 IT SAID "BEFORE CHOOSING A SHAPE" and nothing else (Max, 2026-09-03: a model has to KNOW
+	// it may look into the patterns for how any of this is written). That names ONE
 	// moment, so a model outside that moment — writing a query, laying out a form, wondering how a
 	// document chains — has no reason to think the door applies to it. The corpus is sixty-seven
 	// entries covering the whole trade, and the sentence was selling one of them. What a reader

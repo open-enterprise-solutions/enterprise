@@ -194,7 +194,7 @@ static void LaunchWebDebug(wxWindow* parent, bool withDebug)
 	// URL prefix and port are derived by wes itself (from --file/--db
 	// basename and OS-picked ephemeral port). Manifest handshake reports
 	// the real URL back and opens the browser — no guessing here.
-	// withDebug=true в†’ wes spawns with --debug so its debugServer comes
+	// withDebug=true -> wes spawns with --debug so its debugServer comes
 	// up; the designer's debugClient then attaches via the manifest's
 	// pid/host (out-of-band of the manifest itself — debug-server still
 	// listens on defaultDebuggerPort+offset).
@@ -611,7 +611,7 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		// "write current's changes into the DB config in memory". That
 		// mutation never gets persisted unless the user runs "Update
 		// database configuration" afterwards, so we don't expose Push
-		// here (no save callback в†’ view hides the Push entry).
+		// here (no save callback -> view hides the Push entry).
 		if (docManager != nullptr) {
 			auto* doc = docManager->CreateDocument<ibConfigCompareDocument>();
 			if (doc != nullptr) {

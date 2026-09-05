@@ -74,8 +74,8 @@ wxString ContentTypes()
 // ⭐⭐ THE DOCUMENT DECLARES WHICH WORD IT IS FOR, and until it did Word opened it in COMPATIBILITY
 // MODE — which is not a label on the title bar but a different engine underneath: the pre-2013
 // table layout, and on a table of tens of thousands of rows that is the difference between a
-// document and a hang (Max, 2026-08-30: the title bar read *"режим совместимости"* and *"Не
-// отвечает"*, with one core pegged).
+// document and a hang (Max, 2026-08-30: the title bar read "compatibility mode" and then "not
+// responding", with one core pegged).
 //
 // A part of four lines, and it is the whole statement: we write today's WordprocessingML.
 wxString Settings()

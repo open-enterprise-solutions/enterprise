@@ -3519,9 +3519,9 @@ std::vector<long> AttachRefNode(const RefHierCtx& ctx, ibSelectorTree::Node* par
 	if (rit != ctx.rowsByVal->end()) ownRows = rit->second;   // this value's own rows
 
 	// ⭐⭐ HIERARCHYONLY: A VALUE WITH NOTHING BELOW IT IS NOT A LEVEL. The two readings, stated by
-	// the person who owns the word (Max, 2026-09-04): «ИТОГИ ПО Ссылка ИЕРАРХИЯ» adds the element's
-	// hierarchy INCLUDING the element itself, and it appears in the detail rows as well; «ТОЛЬКО
-	// ИЕРАРХИЯ» adds those rows NOT including the element — it is in the detail rows only.
+	// the person who owns the word (Max, 2026-09-04): `TOTALS BY Ref HIERARCHY` adds the element's
+	// hierarchy INCLUDING the element itself, and it appears in the detail rows as well;
+	// `HIERARCHYONLY` adds those rows NOT including the element — it is in the detail rows only.
 	//
 	// 🛑 ONE WORD, TWO FUNCTIONS, TWO MEANINGS — which is why the modes looked identical. The other
 	// builder of this same tree already reads it right (AttachHierNode: "a leaf element: not a node,
@@ -3697,8 +3697,8 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 	const ibTotalLevel& level = (*ctx.levels)[levelIdx];
 
 	// ⭐⭐ HIERARCHYONLY: THE HIERARCHY WITHOUT THE VALUE THAT NAMES IT. Stated by the person who owns
-	// the word (Max, 2026-09-04): «ИТОГИ ПО Ссылка ИЕРАРХИЯ» adds the element's hierarchy INCLUDING
-	// the element itself, and it also stands in the detail records; «ТОЛЬКО ИЕРАРХИЯ» adds those rows
+	// the word (Max, 2026-09-04): `TOTALS BY Ref HIERARCHY` adds the element's hierarchy INCLUDING
+	// the element itself, and it also stands in the detail records; `HIERARCHYONLY` adds those rows
 	// NOT including the element — it appears in the detail records only.
 	//
 	// So a value with nothing under it is not a rung here: no node, and its rows travel up to the

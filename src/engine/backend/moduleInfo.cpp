@@ -195,8 +195,8 @@ bool ibRuntimeModuleDataObject::Compile()
 	// ⚠ THE KEY IS THE CONFIGURATION'S DIGEST, and it stays that. Mixing the module's own text into
 	// it was tried on 2026-09-04 and taken back out: it patches the symptom at the reader's end,
 	// while the cause is a WRITER that changes metadata without going through the save the rest of
-	// the product goes through (Max: "ты меняешь форму, меняешь объекты, минуя стандартную систему
-	// сохранения"). In the Designer, editing a module and closing the document saves the metadata —
+	// the product goes through (Max: you change a form, you change objects, and you go PAST the
+	// standard save). In the Designer, editing a module and closing the document saves the metadata —
 	// the digest moves, the cache row retires by itself. A door that skips that has to be fixed at
 	// the door.
 	const wxString configMd5 = owner != nullptr ? owner->GetConfigMD5() : wxString();
@@ -236,7 +236,7 @@ bool ibRuntimeModuleDataObject::Compile()
 			// no longer matches the configuration must not be READABLE at all — it is thrown away
 			// where it goes stale (OnSaveMetaObject drops it on saveConfigFlag; the key retires
 			// every row of a previous configuration digest), and this branch may then trust what it
-			// gets (Max, 2026-09-04: *"протухший кеш должен выбрасываться"*).
+			// gets (Max, 2026-09-04: a stale cache must be THROWN AWAY, not worked around).
 			m_compileModule->PrepareModuleData();
 			ready = true;
 		} else {
