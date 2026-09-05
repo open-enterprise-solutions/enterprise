@@ -371,6 +371,12 @@ private:
 	// there first is never told to.
 	std::set<wxString>           m_hinted;
 
+	// ⭐ AND THE ONE FACT THAT CHANGES HOW EVERY VISIBLE STRING IS WRITTEN, said once. A
+	// configuration with two declared languages needs every synonym, caption and heading in BOTH —
+	// and a caller writing one of them cannot see that from the call it is making. The platform
+	// knows; the caller does not; so the platform says it.
+	bool                         m_saidLanguages = false;
+
 	mutable std::mutex           m_saidMutex;
 
 	// NOT YET COLLECTED — drained by TakeSaid, so each message is answered once.

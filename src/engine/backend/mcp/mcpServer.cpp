@@ -2847,6 +2847,45 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 					for (const ibMcpTool* each : ibMcpTools())
 						each->FindInside(family, places);
 
+					// ⭐⭐ AND WHETHER THIS CONFIGURATION SPEAKS MORE THAN ONE LANGUAGE — said at the
+					// first thing a caller does, because it changes how EVERY visible string is
+					// written from that moment on.
+					//
+					// A synonym, a form's title, a column heading, a caption on a printed blank: all
+					// of them are localised strings, and in a two-language configuration a bare one
+					// is stored as itself and shown as itself, so the second language gets the first
+					// language's words. Nothing refuses it and nothing looks wrong — the form is
+					// correct in the language whoever built it is looking at, and the failure belongs
+					// to somebody else, later.
+					//
+					// ⚠ AND IT IS ONLY WORTH SAYING BEFORE THE WRITING, not after: retrofitting is
+					// per-cell and per-object, and there may be hundreds. A caller that has this
+					// early writes every language as it goes, which costs nothing extra when the one
+					// writing is a model that can translate.
+					if (!m_saidLanguages && activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
+
+						const std::vector<wxString> languages =
+							ibListMetaObjectNames(activeMetaData, wxT("Language"));
+
+						if (languages.size() > 1) {
+
+							wxString named;
+							for (const wxString& each : languages)
+								named += (named.IsEmpty() ? wxString() : wxT(", ")) + each;
+
+							m_saidLanguages = true;
+							result.SetValue(wxT("languages"),
+								wxString::Format(
+									ibMcpText("This configuration declares %d languages (%s), so every string a "
+									  "PERSON reads - a synonym, a form title, a column heading, a caption on "
+									  "a blank - has to carry all of them. Write them together as you go: a "
+									  "bare string is shown as itself in every language, and correcting it "
+									  "later is one edit per object. Parameter names and identifiers are not "
+									  "language and stay as they are. Said once."),
+									(int)languages.size(), named));
+						}
+					}
+
 					if (!places.empty()) {
 						result.SetValue(wxT("worthReading"),
 							wxString::Format(
