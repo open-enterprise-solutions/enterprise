@@ -519,8 +519,10 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		// proceed loading the file chosen by the user;
 		if (activeMetaData->LoadConfigFromFile(openFileDialog.GetPath())) {
 			if (m_metaWindow->Load()) {
-				if (activeMetaData->IsModified()) {
-					if (wxMessageBox(wxString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"), 
+				// A configuration just read from a FILE lives nowhere but in this process, which is
+				// what makes the question worth asking here (ibMetaData::IsEdited).
+				if (activeMetaData->IsEdited()) {
+					if (wxMessageBox(wxString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
 						activeMetaData->GetConfigName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
 						OnUpdateConfiguration(event);
 					}

@@ -21,6 +21,10 @@
 #include "backend/mcp/mcpTool.h"
 #include "backend/mcp/mcpClipboard.h"   // the caller's own board — copy and paste share it
 
+#include "backend/backend_mainFrame.h"   // ibBackendDocFrame — the window a finished sheet is shown in
+#include "backend/backend_spreadsheet.h" // ibBackendSpreadsheetObject — a description IS a sheet
+#include "backend/session/session.h"     // ibSession::CurrentFrame — and whether there is one at all
+
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaSpreadsheetObject.h"
 #include "backend/metadataConfiguration.h"
@@ -70,17 +74,33 @@ const ibArg& ArgArea()
 	return s_a;
 }
 
+// ⚠ NOT MARKED REQUIRED, THOUGH EVERY TOOL HERE NEEDS THEM ONE WAY OR ANOTHER — and the three that
+// share them need them in three DIFFERENT ways, which a per-argument flag cannot say:
+//
+//   sheet_cell   both, or neither when the cells arrive as a list in `cells` — each entry then
+//                carries its own, one level in from where a tool-level gate can look.
+//   sheet_size   EXACTLY ONE of the two: a row has a height, a column has a width. The flag said
+//                "both required" while the body refuses when both come — the schema contradicted
+//                the tool it described.
+//   sheet_paste  both, always.
+//
+// So the pair is optional in the schema and each body refuses in its own words, saying what IT
+// wanted. Same treatment, same reason, as `start` / `end` on sheet_band.
+//
+// ⚠ AND THE SENTENCES STAY NEUTRAL because they are read in all three places: `cells` was named
+// here for a moment and turned up in the published schema of sheet_size and sheet_paste, which have
+// no such thing. A shared argument may only say what is true of every tool that takes it.
 const ibArg& ArgRow()
 {
 	static const ibArg s_a(wxT("row"), ibArg::Kind::Whole,
-		ibMcpText("Row, 1-based - the number the editor shows in the margin."), /*required*/ true);
+		ibMcpText("Row, 1-based - the number the editor shows in the margin."));
 	return s_a;
 }
 
 const ibArg& ArgCol()
 {
 	static const ibArg s_a(wxT("col"), ibArg::Kind::Whole,
-		ibMcpText("Column, 1-based - the number the editor shows across the top."), /*required*/ true);
+		ibMcpText("Column, 1-based - the number the editor shows across the top."));
 	return s_a;
 }
 
@@ -293,11 +313,38 @@ const ibArg& ArgBorderWidth()
 	return s_a;
 }
 
+// ⭐⭐ THE PLURAL, ON THE VERB THAT IS ACTUALLY REPEATED. A blank is not laid out one cell at a
+// time by anybody's choice — a header band alone is a dozen, and one real form took 25 separate
+// calls (2026-09-05), each a round trip, each able to fail on its own with the previous two dozen
+// already written.
+//
+// ⚠ IT IS NOT A GENERIC BATCH, AND THAT WAS THE FORK. A `mcp_batch` taking {tool, arguments} pairs
+// would cover every verb at once — and would have to reproduce, inside itself, the argument gate,
+// the exception classification and the journal line that the SERVER does around each call. That is
+// the envelope's own rule (`mcp_call` is unwrapped in the server precisely so none of it is
+// duplicated), and a batch tool would have been the second copy of all three. The neighbour that
+// already got this right is `section_include`, whose `ids` says the same thing: a section is
+// normally filled in one go, so the verb takes a set and one is the degenerate case.
+const ibArg& ArgCells()
+{
+	static const ibArg s_a(wxT("cells"), ibArg::Kind::Many,
+		ibMcpText("Several cells at once, instead of the single-cell arguments. Each entry is the "
+			  "same shape as one call - {row, col, value|parameter, fill, bold, border, ...} - and "
+			  "`id` is named once, on the outside. They are written in order and reported on "
+			  "separately; a refusal stops the run and says which entry it was, with the ones "
+			  "before it already written, because a template has no transaction. Lay a band out "
+			  "in one call: it is the same work with one round trip instead of a dozen."));
+	return s_a;
+}
+
 const ibArg& ArgFit()
 {
 	static const ibArg s_a(wxT("fit"), ibArg::Kind::Text,
-		ibMcpText("What long text does: overflow, clip, or ellipsis. On paper this decides "
-			  "whether a name runs into the next cell or is cut."));
+		ibMcpText("What long text does: wrap, overflow, clip, or ellipsis. On paper this decides "
+			  "whether a name runs into the next cell, is cut, or continues on a further line "
+			  "inside the same cell. `wrap` is what a column heading over a narrow money column "
+			  "almost always wants, and it is the commonest of the four in real blanks; the cell "
+			  "keeps the height the band gives it, so leave room for the lines you expect."));
 	return s_a;
 }
 
@@ -745,19 +792,72 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Put text or a PARAMETER into one cell of a template. A parameter is what the "
-			"printing module substitutes when it puts the area out - the whole reason a "
-			"template is not a picture.");
+		return ibMcpText("Put text or a PARAMETER into a cell of a template - or into a whole band of "
+			"them at once through `cells`, which is how a header row or a detail line is "
+			"meant to be laid out. A parameter is what the printing module substitutes when "
+			"it puts the area out - the whole reason a template is not a picture.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgRow(), ArgCol(), ArgValue(), ArgParameter(), ArgDetails(), ArgFill(), ArgAlign(), ArgUnderline(), ArgColSpan(), ArgRowSpan(), ArgItalic(), ArgBold(), ArgFontSize(), ArgValign(), ArgVertical(), ArgBackground(), ArgColour(), ArgBorder(), ArgBorderWidth(), ArgFit(), ArgReadOnly() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgCells(), ArgRow(), ArgCol(), ArgValue(), ArgParameter(), ArgDetails(), ArgFill(), ArgAlign(), ArgUnderline(), ArgColSpan(), ArgRowSpan(), ArgItalic(), ArgBold(), ArgFontSize(), ArgValign(), ArgVertical(), ArgBackground(), ArgColour(), ArgBorder(), ArgBorderWidth(), ArgFit(), ArgReadOnly() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
+		// ⭐ THE SET FIRST, AND IT RUNS THE SINGLE-CELL BODY BELOW ONCE PER ENTRY. Written this way
+		// rather than as a second implementation: every rule about parameters, fill types, borders
+		// and spans stays in one place, so a cell written in a set is written by exactly the code
+		// that writes one on its own. The template is named once, on the outside, and carried in.
+		if (const ibDataValue* many = params.FindField(ArgCells().Name())) {
+
+			if (many->Kind() != ibDataKind::Array) {
+				refusal = ibMcpText("`cells` is a LIST of cells - [{row, col, value}, ...].");
+				return false;
+			}
+
+			const ibDataValue* named = params.FindField(ArgId().Name());
+
+			std::vector<ibDataValue> written;
+			int at = 0;
+
+			for (const ibDataValue& each : many->AsArray()) {
+
+				++at;
+
+				if (each.Kind() != ibDataKind::Child || each.AsChild() == nullptr) {
+					refusal = wxString::Format(
+						ibMcpText("Entry %i of `cells` is not a cell - each one is an object, "
+							  "{row, col, ...}."), at);
+					return false;
+				}
+
+				ibDataNode one = *each.AsChild();
+
+				if (named != nullptr && one.FindField(ArgId().Name()) == nullptr)
+					one.AddField(ArgId().Name(), *named);
+
+				ibDataNode said;
+				if (!Call(one, said, refusal)) {
+					// ⚠ SAID PLAINLY: THE EARLIER ONES ARE ALREADY IN. Nothing here is a
+					// transaction, so calling the set atomic would be the lie. The caller is told
+					// which entry stopped it and how many stand, which is what it needs to carry
+					// on from rather than start over.
+					refusal = wxString::Format(
+						ibMcpText("Cell %i of %u: %s. The %i before it are written."),
+						at, (unsigned)many->AsArray().size(), refusal, at - 1);
+					return false;
+				}
+
+				written.push_back(ibDataValue::Child(std::make_shared<ibDataNode>(said)));
+			}
+
+			result.AddField(wxT("written"), ibDataValue::Int((s64)written.size()));
+			result.AddField(wxT("cells"), ibDataValue::Array(written));
+			return true;
+		}
+
 		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
@@ -766,7 +866,8 @@ public:
 		const s32 col = Line(ArgCol(), params);
 
 		if (row < 0 || col < 0) {
-			refusal = ibMcpText("A cell is addressed by row and column, both 1 or more.");
+			refusal = ibMcpText("A cell is addressed by row and column, both 1 or more - or a whole "
+				  "band of them arrives in `cells`, each entry carrying its own.");
 			return false;
 		}
 
@@ -777,6 +878,8 @@ public:
 			refusal = ibMcpText("That cell could not be made.");
 			return false;
 		}
+		// (A set of cells arrives through `cells` and comes back through here one entry at a time —
+		//  see the branch at the top of this method.)
 
 		const bool gaveValue     = params.FindField(ArgValue().Name())     != nullptr;
 		const bool gaveParameter = params.FindField(ArgParameter().Name()) != nullptr;
@@ -965,12 +1068,14 @@ public:
 			// alignment fell into, so the class that OWNS the member decides.
 			if (fit.IsSameAs(wxT("overflow"), false))
 				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_Overflow;
+			else if (fit.IsSameAs(wxT("wrap"), false))
+				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_Wrap;
 			else if (fit.IsSameAs(wxT("clip"), false))
 				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_Clip;
 			else if (fit.IsSameAs(wxT("ellipsis"), false))
 				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_EllipsizeEnd;
 			else {
-				refusal = ibMcpText("Fit is overflow, clip or ellipsis.");
+				refusal = ibMcpText("Fit is wrap, overflow, clip or ellipsis.");
 				return false;
 			}
 		}
@@ -1002,6 +1107,23 @@ public:
 		// this answered there was no way to tell one from a working cell without opening the
 		// designer and looking at the property panel.
 		result.SetValue(wxT("fill"), FillWord(desc.GetFillType(row, col)));
+
+		// ⭐ AND THE PLACEMENT, for the same reason. `fit` could be written and never read, so a
+		// caller checking its own work saw a cell that agreed with everything it had asked for
+		// while the one property that decides whether a heading is legible went unmentioned. Said
+		// only when it is not the default, so an ordinary cell's answer stays short.
+		switch (cell->m_fitMode) {
+		case ibSpreadsheetCellDescription::Mode_Wrap:
+			result.SetValue(wxT("fit"), wxString(wxT("wrap"))); break;
+		case ibSpreadsheetCellDescription::Mode_Clip:
+			result.SetValue(wxT("fit"), wxString(wxT("clip"))); break;
+		case ibSpreadsheetCellDescription::Mode_EllipsizeStart:
+		case ibSpreadsheetCellDescription::Mode_EllipsizeMiddle:
+		case ibSpreadsheetCellDescription::Mode_EllipsizeEnd:
+			result.SetValue(wxT("fit"), wxString(wxT("ellipsis"))); break;
+		default:
+			break;
+		}
 
 		return true;
 	}
@@ -1740,3 +1862,178 @@ public:
 };
 
 MCP_TOOL_REGISTER(ibMcpToolSheetPaste);
+
+//---------------------------------------------------------------------------
+// sheet_show
+//---------------------------------------------------------------------------
+//
+// ⭐⭐ THE ONE THING THIS DOOR COULD NOT DO IS LET SOMEBODY LOOK. Everything else about a template
+// can be written and read back over the wire, and the last question — does it actually look right
+// on paper — had no answer here at all: a caller could build a whole blank, verify every cell it
+// had written, and still not know that a heading was cut in half. It ended with "open it in the
+// designer and see", which needs a person who did not build it to go and find it.
+//
+// ⚠ FOR THE PERSON, NOT FOR THE CALLER (Max, 2026-09-05: *"purely so I can see"*). Nothing comes
+// back but the fact that a window opened; a picture is not something this wire carries, and
+// pretending otherwise would be the same lie as a read that agrees with its own write.
+//
+// ⭐ AND IT IS ASSEMBLED FROM WHAT IS ALREADY THERE, not built: a template's description IS a
+// sheet (ibBackendSpreadsheetObject takes one whole), and a sheet already knows how to be shown —
+// ShowSpreadsheetDocument makes a document view over it, the same road `Show()` takes at runtime
+// and the list output takes from a form. Three lines of connecting, no new mechanism.
+class ibMcpToolSheetShow : public ibMcpTool {
+public:
+
+	wxString GetName() const override { return wxT("sheet_show"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return wxString::Format(ibMcpText("opening the template '%s' for you to look at"),
+			ibMcpNameOf(params));
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("Open a template in a window, as a spreadsheet, so the PERSON at the designer can "
+			"look at it. Everything else here answers in text; this is the one question text "
+			"cannot answer - whether a heading wraps or is cut, whether a column is wide enough, "
+			"whether the frame lines fall where they should.\n"
+			"Nothing comes back but the fact that it opened: use it to ASK somebody to look, at "
+			"the point where a blank is finished, and say what you would like checked. The window "
+			"is a copy and cannot be typed into - editing a template is what the tree is for.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
+		if (sheet == nullptr)
+			return false;
+
+		// ⚠ THERE HAS TO BE SOMEBODY THERE. A server-side host has no frame at all, and answering
+		// "shown" into a process with no screen would be a report of something that did not happen.
+		ibBackendDocFrame* const frame = ibSession::CurrentFrame();
+
+		if (frame == nullptr) {
+			refusal = ibMcpText("There is no window to show it in - this platform is running without "
+				"a screen. `sheet_get` answers everything about a template that text can.");
+			return false;
+		}
+
+		wxObjectDataPtr<ibBackendSpreadsheetObject> shown(
+			new ibBackendSpreadsheetObject(sheet->GetSpreadsheetDesc()));
+
+		// ⚠ READ-ONLY, BECAUSE IT IS A COPY. Typing into it would change nothing and look as though
+		// it had - the window holds its own description, not the template's.
+		shown->EnableEditing(false);
+
+		const wxString title = wxString::Format(ibMcpText("Template: %s"), sheet->GetName());
+
+		if (!frame->ShowSpreadsheetDocument(title, shown)) {
+			refusal = ibMcpText("The window could not be opened.");
+			return false;
+		}
+
+		result.SetValue(wxT("shown"), title);
+		result.SetValue(wxT("note"),
+			ibMcpText("It is open in front of the person at the designer. Say what you would like "
+			  "them to check - nothing about how it LOOKS comes back through here."));
+
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolSheetShow);
+
+//---------------------------------------------------------------------------
+// sheet_export
+//---------------------------------------------------------------------------
+//
+// ⭐⭐ THE OTHER HALF OF `sheet_import`, AND ITS ABSENCE WAS FELT AS SOON AS A FILE CAME BACK WRONG.
+// A format that can only be read is not a format — a blank that arrives from an accountant has to
+// be able to go back to them, into the program they live in, with the changes in it.
+//
+// ⚠ AND IT IS WHAT MAKES A ROUND TRIP TESTABLE AT ALL. An export that lost every row height was
+// found by a person doing it by hand (Max, 2026-09-05), and the fault could not be narrowed from
+// here because only he could produce the file: three candidate roads, no way to run one. A door
+// that reads but cannot write leaves the person as the only instrument.
+class ibMcpToolSheetExport : public ibMcpTool {
+public:
+
+	wxString GetName() const override { return wxT("sheet_export"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return wxString::Format(ibMcpText("writing the template '%s' out to a file"),
+			ibMcpNameOf(params));
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("Write a template OUT to a spreadsheet file - the reverse of sheet_import. The "
+			"format is decided by the name's extension, exactly as it is on the way in.\n"
+			"Two uses: handing a blank back to the person who supplied it, in the program they "
+			"work in; and checking a round trip, since what a file keeps and what it drops is "
+			"only visible by writing one and reading it again.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgFile() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
+		if (sheet == nullptr)
+			return false;
+
+		const wxString fileName = ArgFile().Text(params);
+
+		if (fileName.IsEmpty()) {
+			refusal = ibMcpText("Say where to write it - the extension decides the format.");
+			return false;
+		}
+
+		const ibSheetFormat* format = ibSheetFormatFor(fileName);
+
+		if (format == nullptr || !format->CanWrite()) {
+
+			// The list is the registry's, so it grows by itself — same as on the reading side.
+			wxString writable;
+			for (const ibSheetFormat* known : ibSheetFormats()) {
+				if (known == nullptr || !known->CanWrite())
+					continue;
+				if (!writable.IsEmpty())
+					writable << wxT(", ");
+				writable << known->GetExtension();
+			}
+
+			refusal = wxString::Format(
+				ibMcpText("Nothing here writes '%s'. These can be written: %s."), fileName, writable);
+			return false;
+		}
+
+		// ⭐ THE TEMPLATE'S OWN DESCRIPTION, NOT A COPY THROUGH A WINDOW. That is the point of
+		// having this here: the file then answers for what the CONFIGURATION holds, and a
+		// difference between this file and one saved from an editor says the editor's road is
+		// where something is lost.
+		if (!format->Write(fileName, sheet->GetSpreadsheetDesc())) {
+			refusal = wxString::Format(ibMcpText("'%s' could not be written."), fileName);
+			return false;
+		}
+
+		result.SetValue(wxT("written"), fileName);
+		result.SetValue(wxT("format"), format->GetName());
+
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolSheetExport);

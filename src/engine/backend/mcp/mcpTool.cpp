@@ -928,6 +928,34 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// `stored` plainly said "Storage warehouse" (measured 2026-09-03).
 			ibMcpSayCaption(caption, *entry);
 		}
+		else if (const ibPropertyType* typed = dynamic_cast<const ibPropertyType*>(property)) {
+
+			// 🛑 A TYPE IS NOT A NESTED METAOBJECT, AND THE BRANCH BELOW TREATED IT AS ONE. It is a
+			// Child like a catalog's `Code` is, so it fell into "a structure is NAMED, not
+			// unfolded" — and a type description has neither a Name nor an Id, so every attribute
+			// in this configuration reported its type as `{"name": ""}`. Set through
+			// metadata_set_type, which answered with the type in full; read back through here,
+			// which said nothing. Checking your own work was impossible, and that is the one thing
+			// a reading side exists for (found while building a delivery note over this server,
+			// 2026-09-05).
+			//
+			// ⭐ SAID BY THE SAME ROAD THE SETTER USES — ibTypeDescriptionMemory::WriteNode — so the
+			// shape a caller reads is the shape metadata_set_type takes back, and a type can be
+			// read from one attribute and placed on another without translating anything.
+			entry->SetValue(wxT("kind"), wxString(wxT("type")));
+
+			// The metadata is asked of the object itself — ibPropertyObject declares GetMetaData and
+			// a metaobject answers it, so there is nothing here to recognise first. A reference
+			// type's name is resolved against it.
+			ibDataValue described;
+			if (ibTypeDescriptionMemory::WriteNode(described, typed->GetValueAsTypeDesc(),
+					object->GetMetaData()))
+				entry->AddField(wxT("value"), described);
+			else
+				// ⚠ AND A TYPE THAT CANNOT SAY ITSELF SAYS THAT, rather than coming back as an
+				// empty one - which is what "no type" looks like, and is a different fact.
+				entry->SetValue(wxT("value"), wxString(ibMcpText("<the type could not be read>")));
+		}
 		else {
 			const ibDataValue value = property->GetNodeValue();
 			entry->SetValue(wxT("kind"), KindOf(value));

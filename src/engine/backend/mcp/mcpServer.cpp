@@ -1639,6 +1639,15 @@ void ibMcpDescribePlatform(ibDataNode& into)
 
 	into.AddField(wxT("inDatabase"), ibDataValue::Bool(applied));
 
+	// ⭐⭐ THE THIRD FACT, AND IT USED TO BE A CONFESSION INSTEAD OF AN ANSWER. "Would closing the
+	// designer lose this?" is the question a session actually needs, and it is independent of both
+	// fields above: a plain save writes the store and leaves the database exactly as behind as it
+	// was, so `differsFromDatabase: true` with nothing at risk is the ordinary state. The metadata
+	// now keeps it (ibMetaData::IsStored) from the only two occasions that can move it.
+	const bool unsaved = metaData->IsEdited();
+
+	into.AddField(wxT("unsavedEdits"), ibDataValue::Bool(unsaved));
+
 	// ⭐⭐ THE STATE AS A WORD, not two flags for the caller to combine. Two booleans carry three
 	// meaningful situations, and leaving them to be folded outside is how one of the three gets
 	// forgotten — the reader tests the flag they thought of and calls it done. The flags stay,
@@ -1650,10 +1659,19 @@ void ibMcpDescribePlatform(ibDataNode& into)
 	// half to believe (measured over MCP, 2026-09-03).
 	if (!applied) {
 		into.SetValue(wxT("state"), wxString(wxT("storedNotApplied")));
-		into.SetValue(wxT("meaning"),
-			ibMcpText("Stored - it survives closing the designer - but the DATABASE still holds an older "
-			  "configuration, so the running application does not have any of it. "
-			  "`database_diff` says what differs; `config_apply` writes it."));
+
+		// 🛑 THE FIRST HALF OF THIS SENTENCE USED TO BE ASSERTED WITHOUT KNOWING IT. The word says
+		// "stored", and the text said "it survives closing the designer" — while four lines below,
+		// the same answer admitted that nothing tracked whether it had been stored at all. Now it
+		// is known, so the state says which of the two it is instead of asserting the good one.
+		into.SetValue(wxT("meaning"), unsaved
+			? ibMcpText("NOT stored: closing the designer loses this work. And the DATABASE holds an "
+			    "older configuration besides, so the running application does not have any of it. "
+			    "`config_save` writes the store; `config_apply` does that AND publishes to the "
+			    "database. `database_diff` says what differs.")
+			: ibMcpText("Stored - it survives closing the designer - but the DATABASE still holds an "
+			    "older configuration, so the running application does not have any of it. "
+			    "`database_diff` says what differs; `config_apply` writes it."));
 	}
 	else if (differs) {
 		into.SetValue(wxT("state"), wxString(wxT("editedSinceApplied")));
@@ -1675,15 +1693,16 @@ void ibMcpDescribePlatform(ibDataNode& into)
 			ibMcpText("The database holds this configuration - nothing is pending against it."));
 	}
 
-	// ⚠ THE ONE THING NOTHING HERE CAN ANSWER, said rather than left as a gap for a caller to
-	// fill with an assumption. `config_save` is cheap and doing it again costs nothing, which is
-	// the only safe advice when the question itself has no answer.
-	if (differs)
-		into.SetValue(wxT("storedUnknown"),
-			ibMcpText("This differs from the database's copy - but whether it has been STORED to survive "
-			  "closing the designer is a different question, and nothing tracks it: a plain save "
-			  "leaves this difference exactly as it is. If it matters that the edits outlive the "
-			  "process, call `config_save`: it is cheap and harmless to repeat."));
+	// ⭐ SAID ONLY WHEN THERE IS SOMETHING TO LOSE. This field was `storedUnknown` and it was there
+	// on every differing configuration, saying the platform could not tell — advice to save "just in
+	// case", which is the shape of a warning that gets read past. It is now a fact about THIS
+	// session and appears only when it is true.
+	if (unsaved)
+		into.SetValue(wxT("atRisk"),
+			ibMcpText("There are edits that exist only in this process. Closing the designer - including "
+			  "a close for a rebuild - loses them, and nothing else in this answer says so: "
+			  "`differsFromDatabase` is about the DATABASE and stays true after a perfectly good "
+			  "save. `config_save` is the cure and is cheap."));
 
 	// ⭐ AND WHETHER ANYTHING IS BEING WATCHED. Breakpoints are set against a runtime, not against
 	// a configuration: with nothing attached they are set and never reached, which looks exactly
@@ -2887,12 +2906,49 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 					}
 
 					if (!places.empty()) {
+
+						// ⭐ TWO BODIES OF TEXT ANSWER THIS, and the difference between them is the
+						// difference between knowing HOW a thing is built and knowing what it is
+						// CALLED. The patterns carry the craft; the syntax helper carries the
+						// names, signatures and guides. A caller pointed at only one of them gets
+						// half an answer — a template builder was told how a blank is cut into
+						// bands and never that `SpreadsheetDocument` and `GetArea` exist.
+						int fromPatterns = 0;
+						for (const ibDataValue& each : places) {
+							if (each.Kind() == ibDataKind::Child && each.AsChild()
+								&& each.AsChild()->FindField(wxT("pattern")) != nullptr)
+								++fromPatterns;
+						}
+
+						const int fromSyntax = (int)places.size() - fromPatterns;
+
+						// 🛑 AND NO COUNT IS QUOTED, BECAUSE THERE IS NONE TO QUOTE. Both sides cap
+						// what they hand back — the patterns at two dozen, the helper at four — so
+						// the length of this list is a CEILING and printing it as a number said
+						// "24 places" about three different words in a row (2026-09-05, on the
+						// first live reading of this hint). A ceiling presented as a measurement is
+						// the same mistake as every other one this file has been fixing today, and
+						// the number bought nothing: nobody chooses what to read by how many hits
+						// there were.
+						wxString where;
+						if (fromPatterns > 0)
+							where << wxString::Format(
+								ibMcpText("the pattern corpus, for how this is usually built here "
+								  "(pattern_read {query: '%s'})"), family);
+
+						if (fromSyntax > 0) {
+							if (!where.IsEmpty())
+								where << ibMcpText(", and ");
+							where << wxString::Format(
+								ibMcpText("the syntax helper, for what it is called and what it takes "
+								  "(syntax_search {query: '%s'})"), family);
+						}
+
 						result.SetValue(wxT("worthReading"),
 							wxString::Format(
-								ibMcpText("The pattern corpus speaks about `%s` in %d place(s) - how this "
-								  "is usually built here, which is knowledge no single answer carries. "
-								  "pattern_read {query: '%s'}. Said once."),
-								family, (int)places.size(), family));
+								ibMcpText("`%s` is written about in %s. Knowledge no single answer "
+								  "carries. Said once."),
+								family, where));
 					}
 				}
 			}

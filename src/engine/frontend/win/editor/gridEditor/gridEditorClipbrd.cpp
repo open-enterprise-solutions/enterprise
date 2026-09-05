@@ -49,7 +49,7 @@ private:
 		AppendCommand<ibGridCommandAttrBorderBottom>(row, col, GetCellGridBorder(cell.m_borderAt[3]),
 			ibGridCommandAttrBorderBottom::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
 
-		AppendCommand<ibGridCommandAttrFitMode>(row, col, cell.m_fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow ? ibGridFitMode::Overflow() : ibGridFitMode::Clip(),
+		AppendCommand<ibGridCommandAttrFitMode>(row, col, ibToGridFitMode(cell.m_fitMode),
 			ibGridCommandAttrFitMode::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrSize>(row, col, wxSize(cell.m_row_size, cell.m_col_size),
@@ -260,7 +260,7 @@ void ibGridEditor::Paste()
 					SetCellBorderTop(cell.m_row, cell.m_col, cell.m_borderAt[2].m_style, cell.m_borderAt[2].m_colour, cell.m_borderAt[2].m_width, false);
 					SetCellBorderBottom(cell.m_row, cell.m_col, cell.m_borderAt[3].m_style, cell.m_borderAt[3].m_colour, cell.m_borderAt[3].m_width, false);
 
-					SetCellFitMode(cell.m_row, cell.m_col, cell.m_fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow ? ibGridFitMode::Overflow() : ibGridFitMode::Clip(), false);
+					SetCellFitMode(cell.m_row, cell.m_col, ibToGridFitMode(cell.m_fitMode), false);
 					SetCellReadOnly(cell.m_row, cell.m_col, cell.m_isReadOnly, false);
 
 					if (cell.m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrText) {

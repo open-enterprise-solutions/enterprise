@@ -55,44 +55,44 @@ void ibFrontendMainFrameDesigner::CreateGUI()
 	CreateWideGui();
 }
 
-static bool s_setModify = false, s_modified = false;
-
-void ibFrontendMainFrameDesigner::Modify(bool modify)
+// 🛑 THE TWO FILE-STATICS ARE GONE, AND THEY WERE THE WHOLE DEFECT. `s_setModify` swallowed the
+// FIRST report after startup and honoured every one after it — a way of guessing "was that the load
+// or an edit?" from the ORDER of calls rather than from any fact. It held only while exactly one
+// report arrived per occasion, and stopped holding the moment anything reported twice: the tree's
+// fill announced modified-ness as well, and a read-only flip re-announced a mode it had not changed.
+// So an untouched configuration wore the mark for unsaved edits on opening (Max, 2026-09-05: *"why
+// does the asterisk light up on opening?"*). They were shared by every frame and every configuration
+// besides, and `s_modified` made IsModified() answer from a copy of the last mark painted.
+//
+// The state moved to the metadata, where it belongs and where anything else can reach it, so what is
+// left here is drawing. The parameter is not read: it carried a copy of a value the authority for it
+// is one call away, and a copy has a moment of being wrong. What is being said is only WHEN to look.
+void ibFrontendMainFrameDesigner::Modify(bool WXUNUSED(modify))
 {
 	wxAuiPaneInfo& paneInfo = m_mgr.GetPane(wxAUI_PANE_METADATA);
 
-	if (paneInfo.IsOk()) {
+	if (!paneInfo.IsOk())
+		return;
 
-		wxString caption = _("Configuration") + ' ';
+	wxString caption = _("Configuration") + ' ';
 
-		if (s_setModify && modify) {
-			caption += wxT('*'); s_modified = true;
-		}
-		else {
-			s_modified = false;
-		}
+	if (activeMetaData->IsEdited())
+		caption += wxT('*');
 
-		if (!activeMetaData->IsConfigSave()) {
-			caption += wxT("<!>");
-		}
+	if (!activeMetaData->IsConfigSave())
+		caption += wxT("<!>");
 
-		if (caption != paneInfo.caption) {
-			paneInfo.Caption(caption);
-			m_mgr.Refresh();
-		}
-	}
-
-	if (!s_setModify) {
-		s_setModify = true;
-	}
-	else if (modify == false) {
-		s_setModify = activeMetaData->IsConfigSave();
+	if (caption != paneInfo.caption) {
+		paneInfo.Caption(caption);
+		m_mgr.Refresh();
 	}
 }
 
+// Asked of the metadata, which is the authority for it — this used to answer from `s_modified`, a
+// copy of the last mark the caption painted and therefore never fresher than the last repaint.
 bool ibFrontendMainFrameDesigner::IsModified() const
 {
-	return s_modified;
+	return activeMetaData != nullptr && activeMetaData->IsEdited();
 }
 
 void ibFrontendMainFrameDesigner::LoadOptions()

@@ -206,10 +206,11 @@ CellStyle StyleOf(const ibSpreadsheetCellDescription& cell)
 
 	// ⚠ FIT MODE IS CARRIED AS THE NEAREST TRUE THING, and it is not the same thing.
 	// `Overflow` is exactly Excel's default — text spills right while the neighbour is
-	// empty. `Clip` and the three ellipsize modes all mean "the text stays inside its
-	// cell", and the only way Excel says that is `wrapText`, which keeps it inside by
-	// WRAPPING rather than by cutting. So the boundary survives the trip and the manner
-	// of cutting does not; the alternative was to drop the property entirely.
+	// empty. `Wrap` is exactly Excel's `wrapText`, and that pair now goes both ways
+	// without loss. `Clip` and the three ellipsize modes still have no counterpart —
+	// Excel has no "cut it off" — so they keep travelling as `wrapText`: the boundary
+	// survives the trip and the manner of confining does not, which is the lesser of
+	// the two lies available.
 	style.m_wrapText = cell.m_fitMode != ibSpreadsheetCellDescription::Mode_Overflow;
 
 	// READ-ONLY is Excel's `locked`, which only bites once a sheet is protected — ours is
@@ -287,10 +288,31 @@ wxString Styles(const std::vector<CellStyle>& styles)
 
 	// fonts
 	xml += wxString::Format(wxT("<fonts count=\"%u\">"), static_cast<unsigned>(styles.size() + 1));
-	xml += wxT("<font><sz val=\"11\"/><name val=\"Calibri\"/></font>");
+	// 🛑 FONT ZERO IS THE WHOLE SHEET'S DEFAULT, AND IT WAS A CONSTANT THAT CONTRADICTED OURS.
+	// Excel draws every cell with no style of its own in this font, so declaring Calibri 11 while
+	// this platform's own default is EIGHT POINT (s_defaultSpreadsheetFont) made an exported blank
+	// come back three points larger everywhere the layout had not been given an explicit font —
+	// with the row heights and column widths still exactly right, so the text simply no longer fit
+	// them. A blank that reads properly here looked broken the moment it was opened in Excel
+	// (Max, 2026-09-05, on the delivery note imported from his own file: base font Arial 8 in,
+	// Calibri 11 out).
+	//
+	// ⚠ TAKEN FROM THE DEFAULT ITSELF rather than written out again: a number repeated in a second
+	// file is a number that stops agreeing the day the first one changes.
+	const int defaultSize = s_defaultSpreadsheetFont.GetPointSize() > 0
+		? s_defaultSpreadsheetFont.GetPointSize() : 8;
+
+	const wxString defaultFace = s_defaultSpreadsheetFont.GetFaceName().IsEmpty()
+		? wxString(wxT("Arial")) : s_defaultSpreadsheetFont.GetFaceName();
+
+	xml += wxString::Format(wxT("<font><sz val=\"%d\"/><name val=\"%s\"/></font>"),
+		defaultSize, XmlText(defaultFace));
+
 	for (const CellStyle& style : styles) {
 		xml += wxT("<font>");
-		xml += wxString::Format(wxT("<sz val=\"%d\"/>"), style.m_fontSize > 0 ? style.m_fontSize : 11);
+		// …and the same default where a cell names no size of its own, for the same reason.
+		xml += wxString::Format(wxT("<sz val=\"%d\"/>"),
+			style.m_fontSize > 0 ? style.m_fontSize : defaultSize);
 		if (style.m_bold)       xml += wxT("<b/>");
 		if (style.m_italic)     xml += wxT("<i/>");
 		if (style.m_underlined) xml += wxT("<u/>");
@@ -298,7 +320,7 @@ wxString Styles(const std::vector<CellStyle>& styles)
 		if (!style.m_textColour.IsEmpty())
 			xml += wxString::Format(wxT("<color rgb=\"%s\"/>"), style.m_textColour);
 		xml += wxString::Format(wxT("<name val=\"%s\"/>"),
-			XmlText(style.m_fontFace.IsEmpty() ? wxT("Calibri") : style.m_fontFace));
+			XmlText(style.m_fontFace.IsEmpty() ? defaultFace : style.m_fontFace));
 		xml += wxT("</font>");
 	}
 	xml += wxT("</fonts>");
@@ -575,10 +597,18 @@ bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescr
 			}
 		}
 
-		if (cells.IsEmpty())
-			continue;
-
 		const int height = sheet.GetRowSize(row);
+
+		// 🛑 AN EMPTY ROW CAN STILL HAVE SOMETHING TO SAY, AND IN A PRINTED FORM IT USUALLY DOES.
+		// This skipped every row with no cells in it — and a blank's GAPS are exactly that: a row
+		// of four or five units with nothing written on it, which is how space between blocks is
+		// made when a cell has no padding of its own. Twenty-six rows carried a height in the
+		// accountant's file and sixteen came back out; the ten that went were the gutters, so the
+		// vertical rhythm collapsed while every visible line was still correct (2026-09-05).
+		//
+		// A row is now skipped only when it has nothing at all — no cells AND no height of its own.
+		if (cells.IsEmpty() && height == s_defaultRowHeight)
+			continue;
 		wxString rowTag = wxString::Format(wxT("<row r=\"%d\""), row + 1);
 		// The height goes across as it stands, against the default declared in `sheetFormatPr` above.
 		// A height of ZERO is how «Hide» is stored here, so it is written as the flag rather than as

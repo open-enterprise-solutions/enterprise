@@ -16,6 +16,36 @@ static const wxString s_strTypeParameter = wxT("stringParameter");
 #include "frontend/win/ctrls/grid/gridextctrl.h"
 #include "frontend/win/ctrls/grid/gridexteditors.h"
 
+// ⭐⭐ THE ONE PLACE THE TWO FIT MODES MEET. The description's mode is what a template is SAVED with;
+// the grid's is what the control draws by. Translating between them was written out inline as
+// `mode == Mode_Overflow ? Overflow() : Clip()` in EIGHT places — the document builder three times,
+// the clipboard twice, the property panel, the notifier, the editor — which is a rule that holds only
+// while it is two-valued. Adding a third meant editing eight sites and trusting the ninth to be
+// written with it; the ternary silently answered `Clip` for anything it did not recognise, so the
+// third value would have arrived as "cut it off" everywhere and looked like a drawing defect.
+inline ibGridFitMode ibToGridFitMode(ibSpreadsheetCellDescription::ibFitMode mode)
+{
+	switch (mode) {
+	case ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow: return ibGridFitMode::Overflow();
+	case ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap:     return ibGridFitMode::Wrap();
+	case ibSpreadsheetCellDescription::ibFitMode::Mode_Clip:     return ibGridFitMode::Clip();
+	default: break;
+	}
+
+	// Unset and the three ellipsize modes: the grid takes them as they are - the two enums share
+	// those values deliberately (see the note in ibGridFitMode).
+	return ibGridFitMode::Ellipsize(static_cast<wxEllipsizeMode>(mode));
+}
+
+inline ibSpreadsheetCellDescription::ibFitMode ibFromGridFitMode(ibGridFitMode mode)
+{
+	if (mode.IsOverflow()) return ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow;
+	if (mode.IsWrap())     return ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap;
+	if (mode.IsClip())     return ibSpreadsheetCellDescription::ibFitMode::Mode_Clip;
+
+	return static_cast<ibSpreadsheetCellDescription::ibFitMode>(mode.GetEllipsizeMode());
+}
+
 class FRONTEND_API ibGridEditor : public ibGrid {
 
 	class ibGenericSpreadsheetNotifier : public ibBackendSpreadsheetNotifier {
@@ -46,7 +76,7 @@ class FRONTEND_API ibGridEditor : public ibGrid {
 		virtual void SetCellBorderTop(int row, int col, const ibSpreadsheetBorderDescription& desc) {}
 		virtual void SetCellBorderBottom(int row, int col, const ibSpreadsheetBorderDescription& desc) {}
 		virtual void SetCellSize(int row, int col, int num_rows, int num_cols) { GetOrCreateCell(row, col)->SetCellSize(row, col, num_rows, num_cols, false); }
-		virtual void SetCellFitMode(int row, int col, ibSpreadsheetCellDescription::ibFitMode fitMode) { GetOrCreateCell(row, col)->SetCellFitMode(row, col, fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow ? ibGridFitMode::Overflow() : ibGridFitMode::Clip(), false); }
+		virtual void SetCellFitMode(int row, int col, ibSpreadsheetCellDescription::ibFitMode fitMode) { GetOrCreateCell(row, col)->SetCellFitMode(row, col, ibToGridFitMode(fitMode), false); }
 		virtual void SetCellReadOnly(int row, int col, bool isReadOnly = true) { GetOrCreateCell(row, col)->SetCellReadOnly(row, col, isReadOnly, false); }
 
 		// ------ cell brake accessors

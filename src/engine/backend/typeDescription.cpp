@@ -18,7 +18,29 @@ bool ibTypeDescriptionMemory::ReadNode(const ibDataValue& value, ibTypeDescripti
 
 	typeDesc.ClearMetaType();
 
-	const ibDataValue typesVal = root->GetProperty(wxT("Types"));
+	// 🛑 EITHER AREA, BECAUSE THE TEXT CANNOT SAY WHICH ONE IT CAME FROM. A node built by the
+	// storage layer puts this list in the PROPERTY area — SetProperty, a dozen lines below — while a
+	// node PARSED FROM JSON puts every non-object value in the FIELD area, arrays included: the
+	// reader decides by the value's kind because "which area a key came from is not in the text"
+	// (jsonProvider.cpp, which says so itself).
+	//
+	// So the two halves of one format disagreed the moment a description made the round trip
+	// through text. metadata_set_type's `description` argument exists for exactly that trip - read
+	// a type, add a second one to it, send it back - and the list arrived invisible: the types were
+	// silently dropped, and a composite type came back as whatever the attribute already held
+	// (measured over this server, 2026-09-05, on the first attempt to build one).
+	//
+	// ⚠ NOT FIXED IN THE JSON READER, though that is where the guess lives: arrays land in fields
+	// deliberately and every other tool reads them there (`cells`, `ids`). What is wrong is a READER
+	// of a node that may have come from either side insisting on one - so the reader accepts both,
+	// and the writer keeps saying it the one way storage expects.
+	ibDataValue typesVal = root->GetProperty(wxT("Types"));
+
+	if (typesVal.Kind() != ibDataKind::Array) {
+		if (const ibDataValue* fromField = root->FindField(wxT("Types")))
+			typesVal = *fromField;
+	}
+
 	if (typesVal.Kind() == ibDataKind::Array) {
 		for (const ibDataValue& item : typesVal.AsArray()) {
 			const std::shared_ptr<ibDataNode>& entry = item.AsChild();
@@ -27,6 +49,12 @@ bool ibTypeDescriptionMemory::ReadNode(const ibDataValue& value, ibTypeDescripti
 
 			// Prefer the portable NAME (resolved to THIS config's live clsid); the raw
 			// TypeId is the same-config fallback when there is no metaData / no such type.
+			// ⚠ A NAME IS ONLY EVER ASKED OF THE METADATA, and that is not an oversight: a REFERENCE
+			// type belongs to the configuration that declared it, while the value types — String,
+			// Number, Date, Boolean — are common to the whole process (Max, 2026-09-05: *"a
+			// reference is a type of a particular metadata, and values are common"*). So the name
+			// exists for carrying a reference BETWEEN configurations, and everything else is
+			// identified by its id, which does not move.
 			ibClassID clsid = 0;
 			if (metaData != nullptr) {
 				const wxString typeName = entry->GetValue<wxString>(wxT("TypeName"));
@@ -35,9 +63,22 @@ bool ibTypeDescriptionMemory::ReadNode(const ibDataValue& value, ibTypeDescripti
 						clsid = ctor->GetClassType();
 				}
 			}
+
+			// EITHER SPELLING OF THE ID. It is written as text now, so that it survives a trip
+			// through JSON (see WriteNode); a configuration written before that holds a number, and
+			// both mean the same thing.
 			if (clsid == 0) {
-				if (const ibDataValue* tid = entry->FindField(wxT("TypeId")))
-					clsid = (ibClassID)tid->AsInt();
+				if (const ibDataValue* tid = entry->FindField(wxT("TypeId"))) {
+
+					if (tid->Kind() == ibDataKind::String) {
+						unsigned long long parsed = 0;
+						if (tid->AsString().ToULongLong(&parsed))
+							clsid = (ibClassID)parsed;
+					}
+					else {
+						clsid = (ibClassID)tid->AsInt();
+					}
+				}
 			}
 			if (clsid != 0)
 				typeDesc.AppendMetaType(clsid);
@@ -65,7 +106,22 @@ bool ibTypeDescriptionMemory::WriteNode(ibDataValue& value, const ibTypeDescript
 	std::vector<ibDataValue> types;
 	for (ibClassID clsid : typeDesc.GetClsidList()) {
 		auto entry = std::make_shared<ibDataNode>();
-		entry->AddField(wxT("TypeId"), ibDataValue::Int((s64)clsid));
+		// 🛑 AS TEXT, BECAUSE A CLASS ID IS 64 BITS AND A JSON NUMBER IS A DOUBLE. String's id is
+		// 125750747597698322 and comes back from JSON as 125750747597698320 — near enough to look
+		// right, different enough to name nothing. A description that went out of this platform and
+		// came back therefore lost every type the reader had to fall back on the id for: sent three
+		// types, two arrived, and the primitive vanished without a word (measured 2026-09-05).
+		//
+		// ⚠ AND THE ID STAYS THE IDENTITY — resolving by NAME instead was tried and is wrong: a
+		// reference type's name has the OBJECT'S name inside it (`CatalogRef.Goods`), so a rename
+		// silently breaks every description that trusted it, while the id does not move (Max,
+		// 2026-09-05: *"if you go looking by knowledge alone, your references will stop working"*).
+		// The name beside it is for travel BETWEEN configurations and nothing else.
+		//
+		// Read back as either — see ReadNode. A configuration written before this holds a number.
+		entry->AddField(wxT("TypeId"),
+			ibDataValue::String(wxString::Format(wxT("%llu"), (unsigned long long)clsid)));
+
 		if (metaData != nullptr) {
 			if (ibCtorMetaValueType* ctor = metaData->GetTypeCtor(clsid))
 				entry->AddField(wxT("TypeName"), ibDataValue::String(ctor->GetClassName()));

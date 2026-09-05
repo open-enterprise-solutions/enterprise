@@ -162,9 +162,27 @@ void ibJsonProvider::EmitNode(const ibDataNode& node, std::string& out, int dept
 				if (!name.IsEmpty()) { namedKey(wxT("type")); out += JsonString(name); }
 			}
 		}
-		else if (v.Kind() == ibDataKind::Number && k.IsSameAs(wxT("typeId"), false)) {
-			out += std::to_string((unsigned long long)v.AsUInt());
-			const wxString name = ResolveType((ibClassID)v.AsUInt());
+		// ⚠ AND THE ID ARRIVES AS TEXT NOW, NOT ONLY AS A NUMBER — so the courtesy has to know both
+		// spellings or it quietly stops happening. A type description carries its clsid as a string
+		// (ibTypeDescriptionMemory::WriteNode: sixty-four bits do not survive a JSON number on the
+		// far side), and this branch, testing for Number, stopped injecting the readable name the
+		// moment that changed. The clsid branch above already reads either; this one did not.
+		else if (k.IsSameAs(wxT("typeId"), false)
+			&& (v.Kind() == ibDataKind::Number || v.Kind() == ibDataKind::String)) {
+
+			unsigned long long clsid = 0;
+
+			if (v.Kind() == ibDataKind::Number) {
+				clsid = (unsigned long long)v.AsUInt();
+				// Written out in full rather than through EmitValue - the digits are the identity.
+				out += std::to_string(clsid);
+			}
+			else {
+				v.AsString().ToULongLong(&clsid);
+				EmitValue(v, out, inner);
+			}
+
+			const wxString name = ResolveType((ibClassID)clsid);
 			if (!name.IsEmpty()) { namedKey(wxT("TypeDesc")); out += JsonString(name); }
 		}
 		else {

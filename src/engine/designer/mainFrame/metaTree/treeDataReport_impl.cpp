@@ -600,10 +600,10 @@ void ibDataReportTree::FillData()
 	//set init flag
 	m_initialized = true;
 
-	//set modify 
-	Modify(m_metaData->IsModified());
+	// 🛑 NOT FROM HERE — see the note in ibConfigurationTree::FillData. A fill is a read; the mark is
+	// said once by Load and after that only by a signal.
 
-	//update toolbar 
+	//update toolbar
 	UpdateToolbar(nullptr, Group(g_metaAttributeCLSID));
 }
 
@@ -621,6 +621,10 @@ bool ibDataReportTree::Load(ibMetaDataReport* metaData)
 	// sets it on the widget before the metadata is known, and because one file has one view — so
 	// there is nobody to disagree with.
 	m_metaData->SetReadOnly(m_bReadOnly);
+
+	// ⭐ ONCE, HERE — the load half of the rule; see ibConfigurationTree::Load.
+	Modify(m_metaData->IsModified());
+
 	m_metaTreeCtrl->SelectItem(Group(g_metaAttributeCLSID));
 	m_metaTreeCtrl->ExpandAll();
 	m_metaTreeCtrl->Thaw();

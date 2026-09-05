@@ -329,7 +329,12 @@ std::vector<XlsxStyle> ReadStyles(const wxString& xmlText)
 				const bool spread = horz == wxT("justify") || horz == wxT("distributed")
 					|| BoolOf(align, wxT("wrapText"));
 				if (spread)
-					style.m_fitMode = ibSpreadsheetCellDescription::Mode_Clip;
+					// ⭐ AND IT IS `Wrap` NOW, WHICH IS WHAT THE FILE ACTUALLY SAID. This read
+					// `wrapText` as `Clip` because there was no wrapping mode to read it into, so an
+					// imported blank came back with its column headings cut off mid-word — the one
+					// placement most of them use. The approximation is gone; the mapping is exact
+					// in both directions.
+					style.m_fitMode = ibSpreadsheetCellDescription::Mode_Wrap;
 
 				// An angle back to a direction: anything that is not level is drawn vertically here.
 				long rotation = 0;

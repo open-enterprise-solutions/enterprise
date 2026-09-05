@@ -158,6 +158,58 @@ public:
 			"and how something is USUALLY BUILT here by pattern_read.");
 	}
 
+	// ⭐⭐ AND THE CORPUS ANSWERS WHEN IT IS NOT ASKED, which is the only way a caller learns of a
+	// name it does not know exists. mcp_search already gathers PLACES from whatever carries a body
+	// of text, and the once-per-family reminder in the server asks the same question of everything
+	// registered - but only the pattern corpus was answering, so a caller working on a template was
+	// pointed at how a blank is cut and never at `SpreadsheetDocument`, `GetArea` or `Parameters`.
+	//
+	// The language is a body of text like any other. Answering here costs one search and makes the
+	// difference between "there is craft written about this" and "there are also WORDS for it".
+	//
+	// ⚠ IT ANSWERS WHAT IS THERE, AND NO MORE. Two families are not in this corpus yet - the
+	// creatable types outside the Query family, and the platform enumerations - so a hint about
+	// them still comes back empty. That is a gap in the CORPUS, not in this road, and it is stated
+	// where a caller meets it (the `nothing` line of a search).
+	void FindInside(const wxString& query, std::vector<ibDataValue>& places) const override
+	{
+		if (query.IsEmpty())
+			return;
+
+		wxString unused;
+		std::shared_ptr<const ibHelpCorpus> corpus = Corpus(unused);
+		if (!corpus)
+			return;
+
+		// The same two searches, in the same order and for the same reason: somebody who typed most
+		// of a name means that name, and falling straight to tokens buries it.
+		std::vector<const ibHelpEntry*> found = corpus->SearchPrefix(query);
+		if (found.empty())
+			found = corpus->SearchText(query);
+
+		// A HANDFUL. This is a hint riding somebody else's answer, not a search they asked for -
+		// a common word answers from dozens of entries, and that list arriving unbidden is noise.
+		// Whoever wants all of them asks syntax_search, which is what the hint says to do.
+		size_t taken = 0;
+		for (const ibHelpEntry* entry : found) {
+
+			if (entry == nullptr)
+				continue;
+			if (++taken > 4)
+				break;
+
+			std::shared_ptr<ibDataNode> hit = std::make_shared<ibDataNode>();
+			hit->SetValue(wxT("syntax"), entry->id);
+			hit->SetValue(wxT("name"), entry->nameLocal);
+			hit->SetValue(wxT("kind"), KindWord(entry->kind));
+
+			if (!entry->signature.IsEmpty())
+				hit->SetValue(wxT("signature"), entry->signature);
+
+			places.push_back(ibDataValue::Child(hit));
+		}
+	}
+
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
 		static const std::vector<ibMcpArgument> s_arguments = { ArgQuery(), ArgLimit() };

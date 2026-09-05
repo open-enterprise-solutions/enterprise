@@ -247,7 +247,8 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 					m_doc->GetCellFont(row, col),
 					m_doc->GetCellTextColour(row, col),
 					horz, vert,
-					m_doc->GetCellTextOrient(row, col)
+					m_doc->GetCellTextOrient(row, col),
+					m_doc->GetCellFitMode(row, col) == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap
 				);
 			}
 			else if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_None) {
@@ -266,7 +267,8 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 					m_doc->GetCellFont(row, col),
 					m_doc->GetCellTextColour(row, col),
 					horz, vert,
-					m_doc->GetCellTextOrient(row, col)
+					m_doc->GetCellTextOrient(row, col),
+					m_doc->GetCellFitMode(row, col) == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap
 				);
 			}
 
@@ -497,7 +499,7 @@ void ibGridEditorPrintout::SetUserScale(float scale)
 }
 
 void ibGridEditorPrintout::DrawTextInRectangle(wxDC& dc, const wxString& strValue, wxRect& rect, const wxFont& font, const wxColour& fontClr,
-	int horizAlign, int vertAlign, int textOrientation)
+	int horizAlign, int vertAlign, int textOrientation, bool wrap)
 {
 	wxArrayString lines, naturalLines;
 	ibGridEditor::ParseLines(strValue, naturalLines);
@@ -505,11 +507,21 @@ void ibGridEditorPrintout::DrawTextInRectangle(wxDC& dc, const wxString& strValu
 	rect.x += 2;
 	rect.width -= 2;
 
-	for (unsigned int i = 0; i < naturalLines.Count(); i++) {
-		wxArrayString wrappedLines = GetTextLines(dc, naturalLines.Item(i), font, rect);
-		for (unsigned int j = 0; j < wrappedLines.Count(); j++) {
-			lines.Add(wrappedLines.Item(j));
-		}
+	// 🛑 THIS PASS EXISTED AND WAS SWITCHED OFF, and the reason it had to be is that it had nothing
+	// to ask: it wrapped EVERY cell, because the placement of the one being drawn was not reachable
+	// from here. So the machinery sat commented out with its measuring variables deleted around it.
+	// Now the caller knows, and the pass runs for the cells that asked for it.
+	//
+	// ⚠ The font goes on the dc BEFORE any measuring - a width measured in the wrong face wraps in
+	// the wrong place, and that is invisible until the paper comes out.
+	dc.SetFont(font);
+
+	if (wrap) {
+		for (const wxString& one : naturalLines)
+			ibGridEditor::WrapTextLine(dc, one, rect.width, lines);
+	}
+	else {
+		lines = naturalLines;
 	}
 
 	dc.SetTextBackground(fontClr);
@@ -521,42 +533,6 @@ void ibGridEditorPrintout::DrawTextInRectangle(wxDC& dc, const wxString& strValu
 		lines, rect, horizAlign, vertAlign, textOrientation);
 }
 
-wxArrayString ibGridEditorPrintout::GetTextLines(wxDC& dc, const wxString& data, const wxFont& font, const wxRect& rect)
-{
-	wxArrayString lines;
-
-	// (The wrapping pass below is commented out; its measuring variables went with it.)
-	dc.SetFont(font);
-
-	//wxStringTokenizer tk(data, _T(" \n\t\r"));
-	//wxString thisline = wxEmptyString;
-
-	//while (tk.HasMoreTokens())
-	//{
-	//	wxString tok = tk.GetNextToken();
-	//	//FIXME: this causes us to print an extra unnecesary
-	//	//       space at the end of the line. But it
-	//	//       is invisible , simplifies the size calculation
-	//	//       and ensures tokens are separated in the display
-	//	tok += _T(" ");
-
-	//	dc.GetTextExtent(tok, &x, &y);
-	//	if (curr_x + x > max_x)
-	//	{
-	//		lines.Add(wxString(thisline));
-	//		thisline = tok;
-	//		curr_x = x;
-	//	}
-	//	else
-	//	{
-	//		thisline += tok;
-	//		curr_x += x;
-	//	}
-	//}
-	//
-	////Add last line
-	//lines.Add(wxString(thisline));
-
-	lines.Add(data);
-	return lines;
-}
+// (GetTextLines is gone: its live body added one line and its wrapping pass had been commented out
+//  for want of a way to ask whether the cell wanted wrapping. Both questions are answered above now,
+//  and the splitting itself is ibGrid::WrapTextLine, shared with the screen.)

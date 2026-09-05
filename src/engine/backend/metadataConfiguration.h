@@ -70,6 +70,35 @@ public:
 	// (IsConfigOpen lives on ibMetaData now — backed by the open-image flag.)
 	virtual bool IsConfigSave() const { return true; }
 
+	// ⭐⭐ THE OTHER HALF OF THE MODIFIED-MARK RULE, and it lives here because it asks a question
+	// only a configuration can answer.
+	//
+	// A save reports TWICE — `Modify(false)` and then `Modify(true)` (see the plain-save branch in
+	// metadataConfigurationQuery.cpp): the configuration stops being what the database has and
+	// immediately says so again. The `false` is where the mark re-arms, so the `true` that follows
+	// is heard the way the LOAD's report is heard — as a statement of what now stands, not as
+	// somebody editing.
+	//
+	// 🛑 WITHOUT THIS, PRESSING SAVE LEFT THE ASTERISK ON. The base does `m_metaSetModify = true`
+	// unconditionally, which is right for every other occasion and wrong for exactly this one
+	// (Max, 2026-09-05, watching the button do nothing).
+	//
+	// ⚠ AND IT IS `IsConfigSave()`, NOT `!IsModified()`, though at this instant they look alike.
+	// `Modify(false)` has just cleared the flag, so `!IsModified()` is true whatever happened;
+	// IsConfigSave compares against the database and is FALSE after a plain save, which is the
+	// whole point — the re-arm has to distinguish "saved, database still behind" from "applied".
+	// ⚠ ONLY WHEN IT WAS ALREADY ARMED — the first report of all is the load, and the base arms on
+	// it; re-arming has to be the ELSE of that, or the load itself would be second-guessed.
+	virtual void Modify(bool modify = true) override {
+
+		const bool wasArmed = m_metaSetModify;
+
+		ibMetaData::Modify(modify);
+
+		if (wasArmed && !modify)
+			m_metaSetModify = IsConfigSave();
+	}
+
 	// Restructure ledger — the record of REAL structural changes (CREATE/ALTER/DROP table, add/change/
 	// remove column + value row) from the config-save differ, plus metadata-validation warnings/errors.
 	// Lives on the CONFIGURATION: only a config restructures, an external data-processor / report never

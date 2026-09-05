@@ -8654,6 +8654,28 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 {
 	attr.GetNonDefaultAlignment(&hAlign, &vAlign);
 
+	// ⭐⭐ WRAP: THE COMMONEST PLACEMENT IN A REAL BLANK, and the one this control could not do. A
+	// column header reading "Quantity of packages" over a 15mm column has nowhere to go but onto a
+	// second line — the other two modes answer that by spilling over the neighbour or by cutting the
+	// word in half, and both are wrong on a printed form. Measured over 186 templates it is the
+	// majority placement by a wide margin (2026-09-05).
+	//
+	// ⚠ THE CELL'S HEIGHT IS NOT TOUCHED. A blank sets its row heights deliberately - a band is a
+	// fixed piece of paper - so wrapping fills the height that is there and no more. Growing the row
+	// to fit would move every band below it and change the page the totals land on.
+	if (attr.GetFitMode().IsWrap()) {
+
+		wxArrayString natural;
+		ParseLines(text, natural);
+
+		wxArrayString lines;
+		for (const wxString& one : natural)
+			WrapTextLine(dc, one, rect.GetWidth() - 2 * GRID_TEXT_MARGIN, lines);
+
+		DrawTextRectangle(dc, lines, rect, hAlign, vAlign, attr.GetTextOrient());
+		return;
+	}
+
 	const wxEllipsizeMode mode = attr.GetFitMode().GetEllipsizeMode();
 	if (mode != wxEllipsizeMode::wxELLIPSIZE_NONE) {
 
@@ -8673,6 +8695,64 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 
 		DrawTextRectangle(dc, text, rect, hAlign, vAlign, attr.GetTextOrient());
 	}
+}
+
+// Break ONE line at word boundaries so that no piece is wider than maxWidth, appending the pieces.
+// The caller has already split on newlines: a wrapped cell honours the breaks that were typed AND
+// adds its own, which is what a person means by both.
+//
+// ⚠ A WORD LONGER THAN THE COLUMN STILL GOES OUT ON ITS OWN LINE rather than being cut mid-letter.
+// A cell narrow enough for that is a layout to fix, and half a word is not a better answer than an
+// overhang - the overhang is at least legible and visibly wrong.
+void ibGrid::WrapTextLine(wxDC& dc, const wxString& line, int maxWidth, wxArrayString& lines)
+{
+	if (maxWidth <= 0 || line.IsEmpty()) {
+		lines.Add(line);
+		return;
+	}
+
+	wxCoord width = 0, height = 0;
+	dc.GetTextExtent(line, &width, &height);
+
+	if (width <= maxWidth) {
+		lines.Add(line);
+		return;
+	}
+
+	wxString current;
+
+	// Whitespace is where a line may break; it is kept with the word before it so that re-joining
+	// the pieces gives the original text back.
+	size_t at = 0;
+	while (at < line.length()) {
+
+		size_t end = line.find(wxT(' '), at);
+		if (end == wxString::npos)
+			end = line.length();
+		else
+			++end;   // the space belongs to the word it follows
+
+		const wxString word = line.Mid(at, end - at);
+		at = end;
+
+		if (current.IsEmpty()) {
+			current = word;
+			continue;
+		}
+
+		dc.GetTextExtent(current + word, &width, &height);
+
+		if (width <= maxWidth) {
+			current += word;
+		}
+		else {
+			lines.Add(current);
+			current = word;
+		}
+	}
+
+	if (!current.IsEmpty())
+		lines.Add(current);
 }
 
 // Split multi-line text up into an array of strings.

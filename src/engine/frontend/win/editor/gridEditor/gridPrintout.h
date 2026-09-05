@@ -55,8 +55,10 @@ protected:
 
 protected:
 
-	static void DrawTextInRectangle(wxDC& dc, const wxString& strValue, wxRect& rect, const wxFont& font, const wxColour& fontClr, int horizAlign = wxALIGN_LEFT, int vertAlign = wxALIGN_TOP, int textOrientation = wxHORIZONTAL);
-	static wxArrayString GetTextLines(wxDC& dc, const wxString& data, const wxFont& font, const wxRect& rect);
+	// `wrap` is the CELL's own placement, asked of the document — the printout reads the document,
+	// not the grid, so it has to be told here. It is the last parameter and defaults to off because
+	// the column and row headers drawn through this never wrap.
+	static void DrawTextInRectangle(wxDC& dc, const wxString& strValue, wxRect& rect, const wxFont& font, const wxColour& fontClr, int horizAlign = wxALIGN_LEFT, int vertAlign = wxALIGN_TOP, int textOrientation = wxHORIZONTAL, bool wrap = false);
 
 	// WHAT THE CELL SAYS — the one place that turns a stored value into the text on paper.
 	wxString CellText(int row, int col) const;

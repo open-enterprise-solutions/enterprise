@@ -333,7 +333,10 @@ void ibValueSpreadsheetDocument_BindNames(ibValue::ibMemberTable& helper, const 
 	helper.AppendProp(wxT("PrinterName"), ePrinterName);
 	helper.AppendProp(wxT("LanguageCode"), eLanguageCode);
 
-	helper.AppendFunc(wxT("Area"), 2, wxT("Area(string: left, string: top = <empty>)"));
+	// 🛑 THE SIGNATURE SAID `string` AND THE BODY READS `GetInteger()`. A caller following the
+	// published shape passed cell names and got row 0 of column 0 — the one cell that always
+	// exists, so it answered rather than refusing. Says what it takes now: a cell, by number.
+	helper.AppendFunc(wxT("Area"), 2, wxT("Area(number: row, number: col = 0)"));
 	helper.AppendFunc(wxT("Range"), 2, wxT("Range(number: row start, number: row end, number: col start = -1, number: col end = -1)"));
 	helper.AppendProc(wxT("PutVerticalPageBreak"), wxT("PutVerticalPageBreak()"));
 	helper.AppendProc(wxT("PutHorizontalPageBreak"), wxT("PutHorizontalPageBreak()"));
@@ -444,8 +447,17 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 
 			wxStringTokenizer tkn(paParams[0]->GetString(), wxT("|"));
 
+			// 🛑 THE COLUMN HALF WAS LOOKED FOR AMONG THE ROWS. Both tokens of "Row|Column" went to
+			// GetRowAreaByName, so the column block was never found — `c` came back null, the call
+			// fell through to the whole row, and the intersection quietly produced a band the full
+			// width of the blank instead of one column of it.
+			//
+			// ⚠ AND IT COULD NOT SHOW AS AN ERROR: a wider area is a legal area. A table assembled
+			// out of column blocks came out as a stack of full-width rows, which reads as a layout
+			// mistake in the template rather than as this. GetColAreaByName has been sitting beside
+			// its twin all along (spreadsheetDescription.h).
 			const ibSpreadsheetAreaDescription* r = m_spreadsheetDoc->GetSpreadsheetDesc().GetRowAreaByName(tkn.GetNextToken());
-			const ibSpreadsheetAreaDescription* c = m_spreadsheetDoc->GetSpreadsheetDesc().GetRowAreaByName(tkn.GetNextToken());
+			const ibSpreadsheetAreaDescription* c = m_spreadsheetDoc->GetSpreadsheetDesc().GetColAreaByName(tkn.GetNextToken());
 
 			if (!r)
 				return false;
@@ -454,8 +466,9 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 			return true;
 		}
 
+		// Same pair, same rule — see the note above: the second name is a COLUMN block.
 		const ibSpreadsheetAreaDescription* r = m_spreadsheetDoc->GetSpreadsheetDesc().GetRowAreaByName(paParams[0]->GetString());
-		const ibSpreadsheetAreaDescription* c = m_spreadsheetDoc->GetSpreadsheetDesc().GetRowAreaByName(lSizeArray > 1 ? paParams[1]->GetString() : wxT(""));
+		const ibSpreadsheetAreaDescription* c = m_spreadsheetDoc->GetSpreadsheetDesc().GetColAreaByName(lSizeArray > 1 ? paParams[1]->GetString() : wxT(""));
 
 		if (!r)
 			return false;

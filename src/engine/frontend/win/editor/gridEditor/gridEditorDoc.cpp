@@ -102,7 +102,7 @@ bool ibGridEditor::LoadDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 				attr->SetBorderTop(cell->m_borderAt[2].m_style, cell->m_borderAt[2].m_colour, cell->m_borderAt[2].m_width);
 				attr->SetBorderBottom(cell->m_borderAt[3].m_style, cell->m_borderAt[3].m_colour, cell->m_borderAt[3].m_width);
 
-				attr->SetFitMode(cell->m_fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow ? ibGridFitMode::Overflow() : ibGridFitMode::Clip());
+				attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
 				attr->SetReadOnly(cell->m_isReadOnly);
 
 				wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType)));
@@ -267,7 +267,7 @@ void ibGridEditor::PutDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>
 			attr->SetBorderTop(cell->m_borderAt[2].m_style, cell->m_borderAt[2].m_colour, cell->m_borderAt[2].m_width);
 			attr->SetBorderBottom(cell->m_borderAt[3].m_style, cell->m_borderAt[3].m_colour, cell->m_borderAt[3].m_width);
 
-			attr->SetFitMode(cell->m_fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow ? ibGridFitMode::Overflow() : ibGridFitMode::Clip());
+			attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
 			attr->SetReadOnly(cell->m_isReadOnly);
 
 			wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType)));
@@ -338,7 +338,7 @@ void ibGridEditor::JoinDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 			attr->SetBorderTop(cell->m_borderAt[2].m_style, cell->m_borderAt[2].m_colour, cell->m_borderAt[2].m_width);
 			attr->SetBorderBottom(cell->m_borderAt[3].m_style, cell->m_borderAt[3].m_colour, cell->m_borderAt[3].m_width);
 
-			attr->SetFitMode(cell->m_fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow ? ibGridFitMode::Overflow() : ibGridFitMode::Clip());
+			attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
 			attr->SetReadOnly(cell->m_isReadOnly);
 
 			wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType)));
@@ -416,7 +416,7 @@ bool ibGridEditor::LoadSpreadsheet(const ibSpreadsheetDescription& spreadsheetDe
 				attr->SetBorderTop(cell->m_borderAt[2].m_style, cell->m_borderAt[2].m_colour, cell->m_borderAt[2].m_width);
 				attr->SetBorderBottom(cell->m_borderAt[3].m_style, cell->m_borderAt[3].m_colour, cell->m_borderAt[3].m_width);
 
-				attr->SetFitMode(cell->m_fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow ? ibGridFitMode::Overflow() : ibGridFitMode::Clip());
+				attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
 				attr->SetReadOnly(cell->m_isReadOnly);
 
 				if (cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrText) {

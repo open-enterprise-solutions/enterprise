@@ -720,6 +720,7 @@ public:
 	// Static methods allowing to create objects actually specifying behaviour.
 	static ibGridFitMode Clip() { return ibGridFitMode(Mode_Clip); }
 	static ibGridFitMode Overflow() { return ibGridFitMode(Mode_Overflow); }
+	static ibGridFitMode Wrap() { return ibGridFitMode(Mode_Wrap); }
 	static ibGridFitMode Ellipsize(wxEllipsizeMode ellipsize = wxELLIPSIZE_END)
 	{
 		// This cast works because the enum elements are the same, see below.
@@ -730,6 +731,7 @@ public:
 	bool IsSpecified() const { return m_mode != Mode_Unset; }
 	bool IsClip() const { return m_mode == Mode_Clip; }
 	bool IsOverflow() const { return m_mode == Mode_Overflow; }
+	bool IsWrap() const { return m_mode == Mode_Wrap; }
 
 	wxEllipsizeMode GetEllipsizeMode() const
 	{
@@ -743,6 +745,7 @@ public:
 
 		case Mode_Overflow:
 		case Mode_Clip:
+		case Mode_Wrap:
 			break;
 		}
 
@@ -765,7 +768,8 @@ private:
 		Mode_EllipsizeMiddle = wxELLIPSIZE_MIDDLE,
 		Mode_EllipsizeEnd = wxELLIPSIZE_END,
 		Mode_Overflow,
-		Mode_Clip
+		Mode_Clip,
+		Mode_Wrap
 	};
 
 	explicit ibGridFitMode(Mode mode) : m_mode(mode) {}
@@ -1944,6 +1948,13 @@ public:
 	// strings and return the number of lines
 	//
 	static void ParseLines(const wxString& value, wxArrayString& lines);
+
+	// ⭐ ONE WRAPPER FOR BOTH SURFACES. The screen reads the grid and the print reads the document,
+	// so a cell that wraps has to be broken up twice — and the printout already carried its own
+	// word-splitting pass, written out and then commented out because it had no way to ask whether
+	// THIS cell wanted wrapping and so wrapped everything. Breaking one line is the part that is the
+	// same either way; who asks for it is not.
+	static void WrapTextLine(wxDC& dc, const wxString& line, int maxWidth, wxArrayString& lines);
 	static void GetTextBoxSize(const wxDC& dc,
 		const wxArrayString& lines,
 		wxArrayInt* arrRow, wxArrayInt* arrCol,

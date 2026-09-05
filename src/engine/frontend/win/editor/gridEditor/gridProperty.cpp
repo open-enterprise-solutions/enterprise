@@ -81,11 +81,10 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyCreated(ibProperty
 		m_propertyColourBorder->SetValue(borderLeft.m_colour);
 	}
 	else if (m_propertyFitMode == property) {
-		ibGridFitMode fitMode = m_view->GetCellFitMode(coords.GetTopRow(), coords.GetLeftCol());
-		if (fitMode.IsOverflow())
-			m_propertyFitMode->SetValue(ibFitMode_Overflow);
-		else if (fitMode.IsClip())
-			m_propertyFitMode->SetValue(ibFitMode_Clip);
+		// The two enums share their values on purpose (see ibToGridFitMode); going through the one
+		// translation is what keeps a mode added to the model from being silently unlistable here.
+		m_propertyFitMode->SetValue((ibSpreadsheetFitMode)
+			ibFromGridFitMode(m_view->GetCellFitMode(coords.GetTopRow(), coords.GetLeftCol())));
 	}
 	else if (m_propertyReadOnly == property) {
 		m_propertyReadOnly->SetValue(m_view->IsCellReadOnly(coords.GetTopRow(), coords.GetLeftCol()));
@@ -166,7 +165,8 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty
 		m_view->SetCellBorderBottom(coords, (wxPenStyle)m_propertyBottomBorder->GetValueAsEnum(), m_propertyColourBorder->GetValueAsColour());
 	}
 	else if (m_propertyFitMode == property) {
-		m_view->SetCellFitMode(coords, m_propertyFitMode->GetValueAsEnum() == ibFitMode_Overflow ? ibGridFitMode::Overflow() : ibGridFitMode::Clip());
+		m_view->SetCellFitMode(coords, ibToGridFitMode(
+			(ibSpreadsheetCellDescription::ibFitMode)m_propertyFitMode->GetValueAsEnum()));
 	}
 	else if (m_propertyReadOnly == property) {
 		m_view->SetCellReadOnly(coords, m_propertyReadOnly->GetValueAsBoolean());

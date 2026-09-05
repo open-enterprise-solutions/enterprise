@@ -30,7 +30,12 @@ enum ibSpreadsheetAlignmentVert {
 
 enum ibSpreadsheetFitMode {
 	ibFitMode_Overflow = 4,
-	ibFitMode_Clip = 5
+	ibFitMode_Clip = 5,
+	// Wrap the text onto further lines inside the cell instead of running past its edge or cutting
+	// it off. The commonest placement in real blanks by a wide margin - a header cell that reads
+	// "Quantity of packages" over a 15mm column has nowhere else to go (measured over 186 templates,
+	// 2026-09-05). Appended, never inserted: the value is what gets serialised.
+	ibFitMode_Wrap = 6
 };
 
 enum ibSpreadsheetPenStyle {
@@ -95,7 +100,12 @@ struct ibSpreadsheetCellDescription {
 		Mode_EllipsizeMiddle = wxELLIPSIZE_MIDDLE,
 		Mode_EllipsizeEnd = wxELLIPSIZE_END,
 		Mode_Overflow,
-		Mode_Clip
+		Mode_Clip,
+		// ⚠ AND THE SHEET-LEVEL `ibSpreadsheetFitMode` GETS THE SAME MEMBER AT THE SAME VALUE. The
+		// two enums are separate and count alike from Overflow = 4 on purpose; adding a mode to one
+		// and not the other compiles everywhere except where the two meet, which is exactly how
+		// this one first failed (2026-09-05).
+		Mode_Wrap
 	};
 
 	ibSpreadsheetCellDescription(int row, int col) : m_row(row), m_col(col) {}

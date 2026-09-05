@@ -1793,8 +1793,17 @@ void ibConfigurationTree::FillData()
 		}
 	}
 
-	//set modify
-	Modify(m_metaData->IsModified());
+	// 🛑 AND THE MODIFIED MARK IS NOT SAID FROM HERE. Drawing rows is a READ, and a read is not an
+	// occasion on which anything became modified — but this stood at the end of the fill, so every
+	// road that redraws reported it again: the load fills, the Loaded/Run/Reverted stage fills, and
+	// SEARCH fills on every keystroke. The frame's caption arms itself on the first report it hears
+	// and paints the asterisk on the SECOND, so a plain open — one fill plus one more signal — lit
+	// a mark that means "you have edits" over a configuration nobody had touched.
+	//
+	// The rule it broke is the whole of it (Max, 2026-09-05): *the flag is set ONCE at load, and
+	// after that only if somebody actually changes something.* Both of those already have a road —
+	// the load says it below, and an edit arrives as MetaDataChanged / the Saved stage. A third
+	// sender could only repeat them.
 
 	//update toolbar
 	UpdateToolbar(commonMetadata, m_treeRoot);
@@ -1828,6 +1837,14 @@ bool ibConfigurationTree::Load(ibMetaDataConfigurationBase* metaData)
 	// sets it on the widget before the metadata is known, and because one file has one view — so
 	// there is nobody to disagree with.
 	m_metaData->SetReadOnly(m_bReadOnly);
+
+	// ⭐ ONCE, HERE — the caption is drawn for the configuration just taken. This is the load half of
+	// the rule above; everything after it arrives as a signal, because from now on the tree IS on the
+	// watcher list. At the FIRST open it is not yet: the metadata settles its flag while it is being
+	// read (Modify(!CompareMetadata) in ibMetaDataConfigurationStorage::LoadDatabase), which is before
+	// anything here exists to hear it — so without this call the caption would never be drawn at all.
+	Modify(m_metaData->IsModified());
+
 	m_metaTreeCtrl->Thaw();
 	return true;
 }
@@ -1836,7 +1853,7 @@ bool ibConfigurationTree::Save()
 {
 	wxASSERT(m_metaData);
 
-	if (m_metaData->IsModified() && wxMessageBox(wxString::Format(_("Configuration '%s' has been changed. Save?"), m_metaData->GetConfigName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) 
+	if (m_metaData->IsModified() && wxMessageBox(wxString::Format(_("Configuration '%s' has been changed. Save?"), m_metaData->GetConfigName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES)
 		return m_metaData->SaveDatabase();
 
 	return false;

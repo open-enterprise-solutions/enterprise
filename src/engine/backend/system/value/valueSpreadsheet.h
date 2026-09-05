@@ -112,6 +112,7 @@ class BACKEND_API ibValueEnumSpreadsheetFitMode :
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Overflow, wxT("Overflow"), _("Overflow"));
 		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Clip, wxT("Clip"), _("Clip"));
+		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Wrap, wxT("Wrap"), _("Wrap"));
 	}
 
 private:

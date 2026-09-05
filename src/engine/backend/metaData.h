@@ -485,6 +485,30 @@ public:
 
 		m_metaModify = modify;
 
+		// ⭐⭐ THE SAME MECHANISM THAT WAS IN THE DESIGNER'S CAPTION, MOVED TO WHERE THE STATE IS.
+		// It worked; what was wrong was WHERE IT LIVED — a file-static in one window, so the answer
+		// belonged to a process rather than to a configuration, one copy shared by every frame and
+		// every configuration opened in turn, and nothing else could ask for it.
+		//
+		// ⚠ THE ORDER IS THE MECHANISM. The fact is taken from the latch AS IT STANDS, and only then
+		// is the latch moved — so a report is judged by the state that was true when it arrived.
+		// Computing it lazily instead (`IsEdited()` reading both flags on demand) looks equivalent
+		// and is not: it reads the latch AFTER the move, which quietly undid the re-arm below and
+		// left the mark on for ever after a save (2026-09-05, with the button in front of Max).
+		// This is the twin that was in the frame as `s_modified`, and dropping it as "a copy of
+		// what IsModified() already says" was wrong: it is a SNAPSHOT, not a copy.
+		m_metaEdited = m_metaSetModify && modify;
+
+		// The first report is the LOAD stating what was read; every one after it is an edit.
+		//
+		// ⚠ AND THAT IS ONLY HALF THE RULE. A SAVE also has to re-arm it, because a save reports
+		// `false` and then `true` — and without the re-arm that trailing `true` is heard as an edit
+		// and the mark never clears. Re-arming needs to know whether the DATABASE is now in step,
+		// which is a question about a CONFIGURATION and not about a metadata, so that half lives in
+		// the override.
+		if (!m_metaSetModify)
+			m_metaSetModify = true;
+
 		SayToNotifiers([](ibMetaDataNotifier* watching) { watching->MetaDataChanged(); });
 	}
 
@@ -690,7 +714,18 @@ public:
 	//
 	// So the metadata keeps it, and the watchers are TOLD — they need it for their own chrome
 	// (greyed toolbars, a refused drag), but nobody is asked for it any more.
+	// 🛑 AND IT SAYS SO ONLY WHEN IT ACTUALLY CHANGED. The announcement means "it is no longer what
+	// you last read"; making it for a value that is already the current one says that of a metadata
+	// nothing happened to. Loading a configuration ends in `SetReadOnly(m_bReadOnly)` with the same
+	// value it already held (ibConfigurationTree::Load) — a flip that flips nothing — and the false
+	// signal that came out of it was doing visible damage: the designer's caption paints its
+	// modified mark on the SECOND report it hears, so this one arrived to draw a mark the first,
+	// truthful report had been suppressed for (Max, 2026-09-05: *"SetReadOnly — the mode did not
+	// actually change"*).
 	void SetReadOnly(bool readOnly = true) {
+		if (m_metaReadOnly == readOnly)
+			return;
+
 		m_metaReadOnly = readOnly;
 		SayToNotifiers([](ibMetaDataNotifier* watching) { watching->MetaDataChanged(); });
 	}
@@ -882,6 +917,14 @@ public:
 
 #pragma endregion
 
+	// ⭐ SOMEBODY HAS EDITED IT — as against a difference that was already there when the
+	// configuration was read, which is what IsModified() answers and is true of a perfectly
+	// untouched one.
+	//
+	// Not a stored fact of its own: being modified is what says the configuration changed, and the
+	// only thing that has to be remembered beside it is whether the load has been heard yet.
+	bool IsEdited() const { return m_metaEdited; }
+
 protected:
 
 #pragma region __array_h__
@@ -1015,6 +1058,21 @@ protected:
 	// each register / unregister; never reset when the image drops, so observers only
 	// ever see it advance.
 	std::atomic<unsigned int> m_factoryCtorCountChanges = 0;
+
+protected:
+
+	// 🛑 THIS WAS A FILE-STATIC IN THE DESIGNER'S FRAME (`s_setModify`), which made the answer belong
+	// to the PROCESS instead of to a configuration: one copy shared by every frame and every
+	// configuration opened in turn, and unreachable by anything but the caption. Its twin
+	// (`s_modified`) is gone entirely — it held what IsModified() already says.
+	//
+	// Protected, not private: a CONFIGURATION re-arms it after a save, which is a fact only that
+	// class can establish — see ibMetaDataConfigurationBase::Modify.
+	bool m_metaSetModify = false;
+
+	// The `s_modified` twin — the answer as it stood when the report arrived, taken before the
+	// latch above moves. See the note in Modify for why it cannot be computed on demand.
+	bool m_metaEdited = false;
 
 private:
 
