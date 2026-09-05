@@ -11,6 +11,23 @@
 //   FR amount sum: 100
 //   UK amount sum: 50
 //   USA amount sum: 75
+//   --- aggregates over a filtered pipeline ---
+//   filtered sum=12
+//   filtered min=3
+//   filtered max=5
+//   filtered avg=4
+//   --- aggregates with a selector ---
+//   sum of doubles=30
+//   max of doubles=10
+//   --- aggregate over an empty pipeline ---
+//   empty sum is empty: True
+//
+// ⚠ ONE DIALECT PER FILE. This is a BRACES script — `foreach (x in q) { }` — so its
+// lambdas are `Function(x) { return ...; }` too. Three of them were written in the
+// other form, `Function(x) Return ... EndFunction`, which every wholly-VES script in
+// this corpus uses and which does not parse here. The compiler then reported the
+// failure at the `foreach` far above, because that is where the parse gave up rather
+// than where the wrong word was.
 
 var nums = New Array;
 nums.Add(1);
@@ -52,17 +69,17 @@ foreach (g in q) {
 // ---------------------------------------------------------------------------
 
 Message("--- aggregates over a filtered pipeline ---");
-var even = Function(x) Return x % 2 = 0 EndFunction;
-Message("filtered sum=" + nums.Where(even).Sum());          // 6   (2 + 4)
-Message("filtered min=" + nums.Where(even).Min());          // 2
-Message("filtered max=" + nums.Where(even).Max());          // 4
-Message("filtered avg=" + nums.Where(even).Average());      // 3
+var big = Function(x) { return x > 2; };
+Message("filtered sum=" + nums.Where(big).Sum());           // 12  (3 + 4 + 5)
+Message("filtered min=" + nums.Where(big).Min());           // 3
+Message("filtered max=" + nums.Where(big).Max());           // 5
+Message("filtered avg=" + nums.Where(big).Average());       // 4
 
 Message("--- aggregates with a selector ---");
-var twice = Function(x) Return x * 2 EndFunction;
+var twice = Function(x) { return x * 2; };
 Message("sum of doubles=" + nums.Sum(twice));               // 30
 Message("max of doubles=" + nums.Select(twice).Max());      // 10
 
 Message("--- aggregate over an empty pipeline ---");
-var none = Function(x) Return x > 100 EndFunction;
+var none = Function(x) { return x > 100; };
 Message("empty sum is empty: " + (nums.Where(none).Sum() = Undefined));   // True

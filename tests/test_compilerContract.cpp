@@ -337,7 +337,18 @@ TEST(CompilerContract, IfElseIfElse) {
 		wxT("Else\n")
 		wxT("  r = 3;\n")
 		wxT("EndIf;\n"),
-		4705527781584554419ULL);
+		// 🛑 MOVED 2026-09-05, AND THE OLD NUMBER WAS PINNING A DEFECT. CompileIf tracked the last
+		// IF line in a counter initialised to 0 — and zero is a VALID instruction address, not a
+		// sentinel — so the write after an `else` patched INSTRUCTION 0's operand with the length
+		// of the bytecode. Instruction 0 here is `var a`, and it carried that length in every
+		// compile with an else in it.
+		//
+		// ⭐ WHICH IS WHAT A GOLDEN DIGEST IS FOR AND ALSO ITS LIMIT: it knows changed from
+		// unchanged and nothing about right from wrong, so it held the broken shape steady for as
+		// long as the break was steady. The emission was read before this number was replaced —
+		// the two conditionals now jump to 7 and 11, both arms jump to 12, and instruction 0
+		// carries a clean operand.
+		6857540215827998380ULL);
 }
 
 TEST(CompilerContract, WhileWithTwoBreaksAndTwoContinues) {
