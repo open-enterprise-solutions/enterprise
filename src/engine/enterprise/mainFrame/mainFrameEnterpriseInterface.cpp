@@ -107,17 +107,24 @@ class ibSubSystemWindow : public wxWindow {
 
 		void OnLeftUp(wxMouseEvent& event) {
 
-			if (m_mainWindow->m_activeButton != this) {
-
+			// Clicking the open section closes it. That click used to be the one case this
+			// handler skipped, and the transient window does not dismiss itself here either,
+			// so a panel could not be put away at all.
+			if (m_popupWindow != nullptr) {
 				DismissPopupWindow();
+			}
+			else {
+				// The open panel belongs to the button that opened it, not to this one.
+				if (m_mainWindow->m_activeButton != nullptr && m_mainWindow->m_activeButton != this)
+					m_mainWindow->m_activeButton->DismissPopupWindow();
 
-				wxCommandEvent event(m_eventType, m_mainWindow->GetId());
+				wxCommandEvent open(m_eventType, m_mainWindow->GetId());
 
-				event.SetEventObject(this);
-				event.SetString(GetLabel());
-				event.SetExtraLong(true);
+				open.SetEventObject(this);
+				open.SetString(GetLabel());
+				open.SetExtraLong(true);
 
-				GetEventHandler()->ProcessEvent(event);
+				GetEventHandler()->ProcessEvent(open);
 			}
 
 			ibSubSystemButton::Refresh();
@@ -757,12 +764,15 @@ class ibSubSystemWindow : public wxWindow {
 
 		// Implement base class pure virtuals.
 		virtual void Popup(wxWindow* focus = nullptr) override {
+			m_dismissPending = false;
 			m_currentButton->SetPopupWindow(this);
 			wxPopupTransientWindow::Popup(focus);
 			StartFade(255);
 		}
 
 		virtual void Dismiss() override {
+			if (m_dismissPending)
+				return;   // already fading out; a second ask would restart the ramp
 			m_currentButton->SetPopupWindow(nullptr);
 			m_dismissPending = true;
 			StartFade(0);
@@ -787,8 +797,10 @@ class ibSubSystemWindow : public wxWindow {
 
 			if (m_currentAlpha == m_targetAlpha) {
 				m_fadeTimer.Stop();
-				if (m_dismissPending && m_currentAlpha == 0)
+				if (m_dismissPending && m_currentAlpha == 0) {
 					wxPopupTransientWindow::Dismiss();
+					Destroy();   // one window per opening, and nothing deleted them
+				}
 			}
 		}
 
