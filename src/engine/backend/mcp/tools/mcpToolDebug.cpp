@@ -1061,9 +1061,18 @@ public:
 		// reads an empty register back as a defect in the code it just tested - the write DID
 		// happen, and then it was undone, which is the one thing that makes the reading different
 		// from every other reading in this server.
-		result.SetValue(wxT("rolledBack"),
-			ibMcpText("Everything this wrote has been undone. Read anything you need INSIDE the same "
-			  "code - a second call starts from the base as it was."));
+		//
+		// Which key carries it says what happened, so the two cannot be skimmed past as one.
+		if (commit && ran)
+			result.SetValue(wxT("kept"),
+				ibMcpText("What this wrote is IN THE BASE - it was not undone. The next call reads a "
+				  "base this one changed."));
+		else
+			result.SetValue(wxT("rolledBack"), commit
+				? ibMcpText("The run did not finish, so everything it wrote has been undone - a failed "
+				    "run is rolled back whatever was asked for.")
+				: ibMcpText("Everything this wrote has been undone. Read anything you need INSIDE the same "
+				    "code - a second call starts from the base as it was."));
 
 		if (!ran)
 			result.SetValue(wxT("note"),
