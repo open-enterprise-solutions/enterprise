@@ -40,6 +40,7 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <vector>
 
 #include <wx/string.h>
@@ -356,6 +357,19 @@ private:
 	// introduce itself, because the orientation that asks for it is handed over once and a
 	// long-running client no longer has it in view.
 	bool                         m_introduced = false;
+
+	// ⭐⭐ WHAT HAS ALREADY BEEN POINTED AT, so a reminder is said ONCE and then never again.
+	//
+	// The corpus knows how a template is cut into bands, how a form is laid out, how a register is
+	// shaped — and a caller has to KNOW IT IS THERE to ask. The greeting has exactly this problem
+	// and exactly this cure (m_introduced): say it at a moment the reader can act on it, and stop
+	// the moment it is honoured.
+	//
+	// Keyed by tool FAMILY (`sheet`, `form`, `metadata`), because that is the grain a body of
+	// craft is written at: a hint per call would be sixty of them during one layout, which is a
+	// nag, and a nag is read past. Reading the corpus marks its families too, so a caller who went
+	// there first is never told to.
+	std::set<wxString>           m_hinted;
 
 	mutable std::mutex           m_saidMutex;
 

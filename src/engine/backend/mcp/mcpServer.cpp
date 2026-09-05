@@ -2815,6 +2815,49 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			ibDataNode result;
 			result.AddField(wxT("content"), ibDataValue::Array(blocks));
 
+			// ⭐⭐ THE PLATFORM REMEMBERS WHAT THE CALLER FORGOT, AND SAYS IT ONCE.
+			//
+			// A template is always a shape somebody has already worked out; so is a form, so is a
+			// register. The corpus holds those, and a caller has to KNOW IT IS THERE to ask. This
+			// is not a hypothetical: on 2026-09-05 a printed form was built through twenty-five
+			// calls of these very tools without one of those entries being opened, and the pattern
+			// describing the bands, the optional column blocks and the whole crossing had been
+			// written for weeks. The knowledge was two steps away and nothing stood between the
+			// caller and the mistake.
+			//
+			// ⚠ ONCE PER FAMILY, WHICH IS THE WHOLE DIFFERENCE BETWEEN A REMINDER AND A NAG. On
+			// every call it would be sixty of them during one layout, and sixty is read past. The
+			// grain is the family (`sheet`, `form`, `metadata`) because that is what a body of
+			// craft is written at. Same shape as the greeting above: said at a moment the reader
+			// can act on it, and stopped the moment it is honoured.
+			if (ok && !name.IsEmpty()) {
+
+				const wxString family = name.BeforeFirst(wxT('_'));
+
+				// The corpus's own doors are exempt: pointing at the patterns from inside
+				// pattern_read is a loop, and mcp_search already answers with places.
+				const bool asksTheCorpusItself =
+					family == wxT("pattern") || family == wxT("mcp") || family == wxT("syntax");
+
+				if (!asksTheCorpusItself && m_hinted.insert(family).second) {
+
+					// The same road mcp_search takes — whatever carries a body of text is asked to
+					// point INTO it with these words. No second matcher, and nothing to keep in step.
+					std::vector<ibDataValue> places;
+					for (const ibMcpTool* each : ibMcpTools())
+						each->FindInside(family, places);
+
+					if (!places.empty()) {
+						result.SetValue(wxT("worthReading"),
+							wxString::Format(
+								ibMcpText("The pattern corpus speaks about `%s` in %d place(s) - how this "
+								  "is usually built here, which is knowledge no single answer carries. "
+								  "pattern_read {query: '%s'}. Said once."),
+								family, (int)places.size(), family));
+					}
+				}
+			}
+
 			// 🛑 A CALL STILL RUNNING IS NOT AN ERROR, and marking it one is what makes a caller
 			// repeat it. `isError` is the only field a client is obliged to read, and to a machine
 			// it means "this did not happen" — while the work is queued and about to happen. The
