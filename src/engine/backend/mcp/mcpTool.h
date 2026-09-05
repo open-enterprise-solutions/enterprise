@@ -485,6 +485,13 @@ BACKEND_API void ibMcpNotifyChanged(class ibProperty* property, const wxVariant&
 // record), and a second copy of a four-step sequence is four chances to drop a step.
 BACKEND_API bool ibMcpApplyByHand(class ibProperty* property, const wxVariant& newValue, wxString& refusal);
 
+// ⭐ THE PATTERN CORPUS, FOR SURFACES THAT ARE NOT TOOLS. `prompts` is served by the server and is
+// the one place the platform can put words in front of a PERSON without a model relaying them — so
+// the corpus has to be readable from outside the tool that reads it (mcpToolPatterns.cpp).
+// The index is (name, summary); the text is one entry, empty when there is no such name.
+BACKEND_API std::vector<std::pair<wxString, wxString>> ibMcpPatternIndex();
+BACKEND_API wxString ibMcpPatternText(const wxString& name);
+
 BACKEND_API bool ibMcpSetProperty(class ibProperty* property,
 	const ibDataNode& params, ibDataNode& result, wxString& refusal);
 

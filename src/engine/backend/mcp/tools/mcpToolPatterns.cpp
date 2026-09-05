@@ -8955,6 +8955,30 @@ const ibMcpPattern* FindPattern(const wxString& name)
 
 } // namespace
 
+// ⭐⭐ THE CORPUS, REACHABLE BY SOMETHING THAT IS NOT A TOOL. `prompts` is a surface of the protocol
+// the PERSON sees — a menu in their client — and it is served by the server, not from in here, so
+// the entries have to be readable from outside this file.
+//
+// ⚠ TWO FUNCTIONS AND NO MORE. Not the whole table: what a caller outside needs is the INDEX (to
+// build a menu) and ONE ENTRY BY NAME (to answer a choice from it). Handing out the vector would
+// let the next surface re-derive summaries, headings and search of its own, which is how the
+// corpus would end up with two readers disagreeing about what it says.
+std::vector<std::pair<wxString, wxString>> ibMcpPatternIndex()
+{
+	std::vector<std::pair<wxString, wxString>> index;
+
+	for (const ibMcpPattern& pattern : Patterns())
+		index.emplace_back(wxString(pattern.m_name), pattern.m_summary);
+
+	return index;
+}
+
+wxString ibMcpPatternText(const wxString& name)
+{
+	const ibMcpPattern* found = FindPattern(name);
+	return found != nullptr ? found->m_text : wxString();
+}
+
 //---------------------------------------------------------------------------
 // patterns
 //---------------------------------------------------------------------------

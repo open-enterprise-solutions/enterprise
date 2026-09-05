@@ -111,14 +111,25 @@ const wxChar* const kSupportedProtocolVersions[] = {
 // AND IT IS A LIST. The first version numbered the keys of a child node — `{"0":"2025-11-25",…}` —
 // which a client reads as an object, so `supported.includes(v)` finds nothing and the refusal
 // stops being answerable. The node tree has carried an Array value all along (dataBuilder.h).
-ibDataNode SupportedVersions(const wxString& asked)
+// ⭐ THE LIST ITSELF, BUILT ONCE — because saying it twice is how the second copy kept the defect
+// the first one had been fixed for. `server/discover` announced the same versions and built them
+// again, with numbered keys, and it is the ONE method of the modern era: the answer a client reads
+// before it knows what we speak. `supportedVersions.includes(v)` found nothing there, so a caller
+// could not tell what to fall back to — the same failure as the refusal above, in the place where
+// it costs most (found 2026-09-05, after the refusal had been fixed the same day).
+std::vector<ibDataValue> SupportedVersionList()
 {
 	std::vector<ibDataValue> versions;
 	for (const wxChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v)
 		versions.push_back(ibDataValue::String(wxString(*v)));
 
+	return versions;
+}
+
+ibDataNode SupportedVersions(const wxString& asked)
+{
 	ibDataNode data;
-	data.AddField(wxT("supported"), ibDataValue::Array(versions));
+	data.AddField(wxT("supported"), ibDataValue::Array(SupportedVersionList()));
 	if (!asked.IsEmpty())
 		data.SetValue(wxT("requested"), asked);
 
@@ -2338,10 +2349,8 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		ibDataNode result;
 		result.SetValue(wxT("resultType"), wxString(wxT("complete")));
 
-		ibDataNode& versions = result.Child(wxT("supportedVersions"));
-		int at = 0;
-		for (const wxChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v, ++at)
-			versions.SetValue(wxString::Format(wxT("%d"), at), wxString(*v));
+		// AND IT IS A LIST — asked of the one place that builds it, not assembled again here.
+		result.AddField(wxT("supportedVersions"), ibDataValue::Array(SupportedVersionList()));
 
 		// The same capabilities `initialize` reports: tools, and the logging that carries what a
 		// person types in the assistant window.
@@ -2419,10 +2428,21 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		}
 		result.SetValue(wxT("protocolVersion"), agreed);
 
-		// We offer tools and nothing else yet. Saying so plainly is what keeps a
-		// client from asking for prompts or resources and getting silence.
+		// Saying plainly what is on offer is what keeps a client from asking for something and
+		// getting silence. RESOURCES are still not among them, and deliberately: everything that
+		// would be one is already a verb (metadata_get, module_read, sheet_get, note_read), and half
+		// of what a resource is worth is the SUBSCRIPTION — which is the same deferred decision as
+		// `subscriptions/listen`. A read-only resource list would be half a surface: it can be shown
+		// and cannot be trusted after the first change, which is worse than not offering it.
 		ibDataNode& capabilities = result.Child(wxT("capabilities"));
 		capabilities.Child(wxT("tools"));
+
+		// ⭐⭐ PROMPTS ARE THE ONE SURFACE THE PERSON SEES. A tool is invisible to them — it is
+		// offered to the model, and reaches them only if the model thinks to mention it. The corpus
+		// of practice is written for whoever reads it ("a model today, a person tomorrow") and could
+		// be reached by nobody but a model that already suspected it was there — the same blind spot
+		// `worthReading` closes for the model and nothing closed for the person.
+		capabilities.Child(wxT("prompts"));
 
 		// ⚠ AND LOGGING, WHICH WAS BEING DONE WITHOUT BEING DECLARED. Say() writes
 		// `notifications/message` on the stream the moment a person types — that IS the logging
@@ -2473,6 +2493,126 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		Publish(wxT("did"), arrival + wxT("."), wxEmptyString);
 
 		answer = ibMcpWriteResult(parsed.m_id, result);
+	}
+	// ⭐⭐ THE MENU A PERSON SEES, AND IT IS NINE ENTRIES RATHER THAN SIXTY-SEVEN.
+	//
+	// A prompt is an INVOKED THING, not a table of contents: putting the whole corpus here would
+	// give a client a sixty-seven-item list to scroll, which is a worse surface than the search the
+	// model already has. What belongs in a menu is the doors — and the corpus names its own: eight
+	// entries are about how to use the others, and a search by the words of a trade reaches none of
+	// them, because they are not about a trade.
+	//
+	// ⚠ THE LIST IS THE CORPUS'S OWN CHOICE, NOT A TASTE. These are the ones its tool description
+	// calls out by name, plus `where-to-start`, which the connection's own instructions make step
+	// three. Everything else is reachable through the parameterised `pattern` below, so nothing is
+	// hidden — it is simply not in the menu, the same trade `tools/list` makes above.
+	else if (parsed.m_method == wxT("prompts/list")) {
+
+		static const wxChar* const kDoors[] = {
+			wxT("body-map"), wxT("intake"), wxT("where-to-start"), wxT("combining"),
+			wxT("same-shape-elsewhere"), wxT("document-chains"), wxT("unfamiliar-domain"),
+			wxT("where-behaviour-lives"), wxT("building-an-erp"), nullptr
+		};
+
+		std::vector<ibDataValue> prompts;
+
+		const std::vector<std::pair<wxString, wxString>> index = ibMcpPatternIndex();
+
+		for (const wxChar* const* door = kDoors; *door != nullptr; ++door) {
+
+			// ⚠ ASKED OF THE CORPUS RATHER THAN DESCRIBED HERE. A summary written out beside the
+			// name would be a second copy of a sentence that lives in the entry, and the day the
+			// entry is rewritten the menu would go on saying the old thing.
+			const auto found = std::find_if(index.begin(), index.end(),
+				[door](const std::pair<wxString, wxString>& each) { return each.first == *door; });
+
+			if (found == index.end())
+				continue;   // an entry renamed out of the corpus simply leaves the menu
+
+			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+			entry->SetValue(wxT("name"), found->first);
+			entry->SetValue(wxT("description"), found->second);
+			prompts.push_back(ibDataValue::Child(entry));
+		}
+
+		// …AND ONE THAT REACHES EVERY OTHER ENTRY, so the menu is a door rather than a fence.
+		{
+			std::shared_ptr<ibDataNode> any = std::make_shared<ibDataNode>();
+			any->SetValue(wxT("name"), wxString(wxT("pattern")));
+			any->SetValue(wxT("description"), wxString::Format(
+				ibMcpText("Any one of the %u entries of practice by name - how a thing is usually "
+				  "built on this platform. The nine above are the ones about where to START; this "
+				  "reaches the rest, which are about a trade: posting, pricing, payroll, VAT, "
+				  "stock, closing a period, printed forms, reports, roles."),
+				(unsigned int)index.size()));
+
+			std::shared_ptr<ibDataNode> argument = std::make_shared<ibDataNode>();
+			argument->SetValue(wxT("name"), wxString(wxT("name")));
+			argument->SetValue(wxT("description"),
+				ibMcpText("Which entry. `pattern_read` with no argument lists them all."));
+			argument->AddField(wxT("required"), ibDataValue::Bool(true));
+
+			any->AddField(wxT("arguments"),
+				ibDataValue::Array({ ibDataValue::Child(argument) }));
+
+			prompts.push_back(ibDataValue::Child(any));
+		}
+
+		ibDataNode result;
+		result.AddField(wxT("prompts"), ibDataValue::Array(prompts));
+		answer = ibMcpWriteResult(parsed.m_id, result);
+	}
+	// ⭐ AND ONE ENTRY, WHOLE. The corpus is prose meant to be read by whoever is deciding — so the
+	// message is the text as it stands, not a summary of it: a prompt that paraphrases the thing it
+	// is a door to has put a second author between the reader and the writing.
+	else if (parsed.m_method == wxT("prompts/get")) {
+
+		wxString wanted = parsed.m_params.GetValue<wxString>(wxT("name"));
+
+		// The parameterised one carries the real name in its argument; every other prompt IS the
+		// name. Written this way round so a client that offers `pattern` and a client that offers
+		// the nine doors both end up asking the same question.
+		if (wanted.IsSameAs(wxT("pattern"), false)) {
+			if (const ibDataNode* arguments = parsed.m_params.FindChild(wxT("arguments")))
+				wanted = arguments->GetValue<wxString>(wxT("name"));
+			else
+				wanted.clear();
+		}
+
+		const wxString text = wanted.IsEmpty() ? wxString() : ibMcpPatternText(wanted);
+
+		if (text.IsEmpty()) {
+
+			// ⚠ REFUSED WITH THE NAMES, not with "no such prompt". A person choosing from a menu
+			// cannot mistype; a model calling this by name can, and the list is the answer.
+			wxString names;
+			for (const std::pair<wxString, wxString>& each : ibMcpPatternIndex())
+				names << (names.IsEmpty() ? wxT("") : wxT(", ")) << each.first;
+
+			answer = refuse(parsed.m_id, ibMcpError::InvalidParams,
+				wanted.IsEmpty()
+					? ibMcpText("Say which entry: `pattern` takes a `name` argument.")
+					: wxString::Format(
+						ibMcpText("There is no entry called '%s'. There are: %s."), wanted, names),
+				nullptr);
+		}
+		else {
+			ibDataNode result;
+			result.SetValue(wxT("description"), wanted);
+
+			std::shared_ptr<ibDataNode> content = std::make_shared<ibDataNode>();
+			content->SetValue(wxT("type"), wxString(wxT("text")));
+			content->SetValue(wxT("text"), text);
+
+			std::shared_ptr<ibDataNode> message = std::make_shared<ibDataNode>();
+			message->SetValue(wxT("role"), wxString(wxT("user")));
+			message->AddField(wxT("content"), ibDataValue::Child(content));
+
+			result.AddField(wxT("messages"),
+				ibDataValue::Array({ ibDataValue::Child(message) }));
+
+			answer = ibMcpWriteResult(parsed.m_id, result);
+		}
 	}
 	else if (parsed.m_method == wxT("tools/list")) {
 

@@ -1233,6 +1233,47 @@ void ibMcpNotifyChanged(ibProperty* property, const wxVariant& oldValue)
 	owner->OnChildChanged();
 }
 
+namespace {
+
+// WHICH LANGUAGE CODES THIS CONTAINER DECLARES, listed once. Both roads that write a caption ask it —
+// one cell by name, or every cell of a map — and a rule kept in two places is a rule the second road
+// is written without.
+//
+// 🛑 ASKED OF THE METADATA THE PROPERTY BELONGS TO, NOT OF THE ACTIVE ONE. Several containers are
+// open at a time — the configuration, and every external report or data processor beside it — and
+// each declares its own languages. Reaching for `activeMetaData` here would validate a caption of an
+// external report against the CONFIGURATION's list: a code the report declares would be refused, and
+// one it does not would be accepted and stored where nothing will ever read it. Neither shows up as
+// an error; the translation simply belongs to the wrong container.
+bool ibMcpLanguageDeclared(const ibMetaData* owner, const wxString& code, wxString& available)
+{
+	bool declared = false;
+	available.clear();
+
+	if (owner == nullptr)
+		return false;
+
+	// ⭐ THE OBJECTS, NOT THEIR NAMES — a language's CODE is what matters here and only the object
+	// carries it, so listing names and looking each one up again was a second walk for nothing.
+	for (const ibValueMetaObject* found : ibListMetaObjects(owner, wxT("Language"))) {
+
+		const ibValueMetaObjectLanguage* lang =
+			found != nullptr ? found->ConvertToType<ibValueMetaObjectLanguage>() : nullptr;
+		if (lang == nullptr)
+			continue;
+
+		const wxString declaredCode = lang->GetLangCode();
+		available << (available.IsEmpty() ? wxT("") : wxT(", ")) << declaredCode;
+
+		if (declaredCode.IsSameAs(code, false))
+			declared = true;
+	}
+
+	return declared;
+}
+
+} // namespace
+
 bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	ibDataNode& result, wxString& refusal)
 {
@@ -1242,6 +1283,70 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	}
 
 	const wxString name = property->GetName();
+
+	// ⚠ WHICH CONTAINER THIS PROPERTY BELONGS TO — the door is HANDED the object, and everything
+	// asked about it is asked of the metadata that owns it. See ibMcpLanguageDeclared.
+	const ibPropertyObject* holder = property->GetPropertyObject();
+	const ibMetaData* owner = holder != nullptr ? holder->GetMetaData() : nullptr;
+
+	// ⭐⭐ THE SHAPE A CAPTION IS ANSWERED IN IS THE SHAPE IT TAKES BACK — every language at once.
+	//
+	// 🛑 IT WAS ANSWERED AS A MAP AND COULD ONLY BE WRITTEN A CELL AT A TIME. Reading a synonym gave
+	// `{en: …, ru: …, uk: …}`; sending that same object back fell through to the ordinary write,
+	// which reads `value` as a STRING — so the platform raised its own type mismatch, `wrong value
+	// kind (expected 4, got 6)`, at a caller who had returned exactly what it was handed. Naming
+	// every object of a configuration in three languages meant three calls per object, and the one
+	// obvious shortcut was answered with an internal error rather than a sentence.
+	//
+	// ⚠ A MAP MEANS THE CELLS IT NAMES, AND ONLY THOSE. A language the map leaves out keeps what it
+	// had — the same promise the single-cell road makes, so the two agree instead of one of them
+	// being the safe one.
+	if (const ibDataNode* byLanguage = params.FindChild(ibMcpValueArgument().Name())) {
+
+		const ibPropertyTString* caption = dynamic_cast<const ibPropertyTString*>(property);
+
+		if (caption == nullptr) {
+			refusal = wxString::Format(
+				ibMcpText("'%s' is not a caption, so it takes a value rather than a set of "
+				  "languages."), name);
+			return false;
+		}
+
+		ibTranslateString edited = caption->GetValueAsTranslate();
+		int written = 0;
+
+		for (const auto& cell : byLanguage->Fields()) {
+
+			wxString available;
+			if (!ibMcpLanguageDeclared(owner, cell.first, available)) {
+				refusal = available.IsEmpty()
+					? ibMcpText("This configuration declares no languages. Create one first: "
+					    "metadata_create kind=Language.")
+					: wxString::Format(
+						ibMcpText("'%s' is not a language this configuration declares. It has: %s."),
+						cell.first, available);
+				return false;
+			}
+
+			edited.SetTranslate(cell.first, cell.second.AsString());
+			++written;
+		}
+
+		if (written == 0) {
+			refusal = ibMcpText("That caption names no languages - send the shape metadata_get "
+				"answers with, {en: '…', ru: '…'}.");
+			return false;
+		}
+
+		// ⚠ EVERY CELL FIRST, THEN ONE WRITE. Applying them one at a time would announce a change
+		// per language and leave a watcher redrawing a caption that is half translated.
+		if (!ibMcpApplyByHand(property, wxVariant(new ibVariantDataTranslate(edited)), refusal))
+			return false;
+
+		result.SetValue(wxT("property"), name);
+		ibMcpSayCaption(caption, result);
+		return true;
+	}
 
 	// ⭐⭐ A CAPTION IS TRANSLATABLE WHEREVER IT LIVES — and it lives on both trees.
 	//
@@ -1281,24 +1386,9 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// existed because the setter could not reach a caption at all; the setter can now, so
 		// every road that writes a translation has to pass this and not just the road somebody
 		// remembered to put it on.
-		bool declared = false;
 		wxString available;
 
-		for (const wxString& known : ibListMetaObjectNames(activeMetaData, wxT("Language"))) {
-
-			ibValueMetaObject* found = ibFindMetaObject(activeMetaData, wxT("Language"), known);
-			ibValueMetaObjectLanguage* lang =
-				found != nullptr ? found->ConvertToType<ibValueMetaObjectLanguage>() : nullptr;
-			if (lang == nullptr)
-				continue;
-
-			const wxString declaredCode = lang->GetLangCode();
-			available << (available.IsEmpty() ? wxT("") : wxT(", ")) << declaredCode;
-			if (declaredCode.IsSameAs(code, false))
-				declared = true;
-		}
-
-		if (!declared) {
+		if (!ibMcpLanguageDeclared(owner, code, available)) {
 			refusal = available.IsEmpty()
 				? ibMcpText("This configuration declares no languages. Create one first: "
 				    "metadata_create kind=Language.")
