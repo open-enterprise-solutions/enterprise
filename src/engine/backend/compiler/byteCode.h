@@ -36,7 +36,8 @@ inline ibClassID ib_type_clsid(const wxString& typeName)
 //                    extern-slot semantics as External; the distinction
 //                    is that Context exposes a self-ref helper whose
 //                    props/methods become bare-callable (Catalogs,
-//                    GetForm) and may carry m_bScoped.
+//                    GetForm), and whose scope-local ones answer
+//                    IsPropScoped on the VALUE.
 //   - ContextProp  — prop of a Context binding (`Catalogs` of Manager).
 //                    m_slotIndex = prop-index in the parent's helper;
 //                    m_parentRef points at the Context entry. Emit goes
@@ -165,13 +166,6 @@ struct ibByteCode {
 	struct ibByteCodeVarInfo {
 		long      m_slotIndex = 0;
 		ibClassID m_clsid     = 0;       // 0 = dynamic, no CHECK_TYPE needed
-		// Scope-local entry (ThisObject / ThisForm / similar) — must
-		// NOT be visible to children through the bytecode parent walk.
-		// Cross-bc resolve (template FindVariable) skips entries with
-		// this flag set. PrepareModuleData stamps it on context-props
-		// representing per-instance "self" handles.
-		bool      m_bScoped    = false;
-
 		// Discriminator — see ibVarKind header comment. Sole "what is
 		// this entry" tag; legacy m_bContext / m_bExport mirrors are
 		// gone — readers that need them derive via IsContext() /
@@ -237,14 +231,13 @@ struct ibByteCode {
 		// byteCode.h free of compileContext.h — instantiated at the
 		// mirror site (compileCode.cpp, which includes both headers).
 		// CompileVar must expose: m_numVariable, m_clsid, m_kind,
-		// m_bScoped, m_strRealName, m_strContext, m_scopeDepth, m_clsid.
+		// m_strRealName, m_strContext, m_scopeDepth, m_clsid.
 		// Temps are filtered out at the mirror site — they never reach
 		// bc-level structs.
 		template<typename CompileVar>
 		explicit ibByteCodeVarInfo(const CompileVar& v)
 			: m_slotIndex(v.m_numVariable),
 			  m_clsid(v.m_clsid),
-			  m_bScoped(v.m_bScoped),
 			  m_strRealName(v.m_strRealName),
 			  m_scopeDepth(v.m_scopeDepth),
 			  m_strContext(v.m_strContext)
@@ -466,8 +459,9 @@ public:
 	// reachable iff they live on a real ancestor — exactly the legit
 	// case. Cross-entity isolation through value chain access
 	// (`Catalogs.X.CreateElement().ThisObject`) is enforced at the
-	// runtime OPER_GET_A handler / autocomplete / debugger via the
-	// m_bScoped flag on the prop entry, NOT here.
+	// runtime OPER_GET_A handler / autocomplete / debugger, each of which asks
+	// the VALUE through IsPropScoped - NOT here, and not from a copy on the
+	// variable: that copy existed, rode into the AOT blob, and was read by no one.
 	template<typename CompileVar>
 	bool FindVariable(const wxString& strVarName, std::shared_ptr<CompileVar>& foundedVar) const {
 		auto it = std::find_if(m_listVar.begin(), m_listVar.end(),

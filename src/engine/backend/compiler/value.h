@@ -124,12 +124,17 @@ public:
 			eProp_None     = 0,
 			eProp_Readable = 1u << 0,
 			eProp_Writable = 1u << 1,
-			// Scope-local prop (ThisObject / ThisForm / similar): when
-			// the host bc is mirrored to ibByteCode::m_listVar, this
-			// flag travels into ibByteCodeVarInfo::m_bScoped, and the
-			// cross-bc resolver (template FindVariable) skips the
-			// entry. Children resolving `ThisObject` therefore can't
-			// silently reach the parent's record.
+			// Scope-local prop (ThisObject / ThisForm / similar). ⭐ THE FLAG
+			// LIVES HERE AND IS ASKED FOR HERE, through IsPropScoped, by every
+			// place that cares: the runtime's OPER_GET_A, the debugger's
+			// property walk, autocomplete, the editor's interpreter, the
+			// language tool. The value owns the fact and answers for it.
+			//
+			// 🛑 It used to be COPIED onto the compile-side variable and mirrored
+			// into ibByteCodeVarInfo, on the plan that the cross-bc resolver
+			// would skip such entries. That resolver never read it: the copy was
+			// written, carried through three constructors, serialised into every
+			// AOT blob, and consulted by nobody. Removed 2026-09-05 (AOT v24).
 			eProp_Scoped   = 1u << 2,
 		};
 
@@ -666,10 +671,9 @@ public:
 			return m_props[lPropNum].IsWritable();
 		}
 
-		// Scope-local props (ThisObject / ThisForm / similar) must
-		// not leak across bc boundaries. Pass-3 PrepareModuleData
-		// reads this and stamps ibCompileContext::ibVariable::m_bScoped
-		// on the freshly pushed entry.
+		// Scope-local props (ThisObject / ThisForm / similar) must not leak
+		// across entity boundaries. Asked of the VALUE at each place that
+		// enforces it — there is no copy of the answer anywhere else.
 		virtual bool IsPropScoped(const long lPropNum) const {
 			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return false;

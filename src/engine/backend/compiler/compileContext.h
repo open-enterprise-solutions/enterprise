@@ -69,8 +69,8 @@ struct ibCompileContext {
 	//variable definition
 	struct ibVariable
 	{
-		ibVariable() : m_kind(ibVarKind::Local), m_bTempVar(false), m_bScoped(false), m_numVariable(0), m_clsid(0) {}
-		ibVariable(const wxString& strVariableName) : m_kind(ibVarKind::Local), m_bTempVar(false), m_bScoped(false), m_numVariable(0), m_clsid(0), m_strRealName(strVariableName) {}
+		ibVariable() : m_kind(ibVarKind::Local), m_bTempVar(false), m_numVariable(0), m_clsid(0) {}
+		ibVariable(const wxString& strVariableName) : m_kind(ibVarKind::Local), m_bTempVar(false), m_numVariable(0), m_clsid(0), m_strRealName(strVariableName) {}
 
 		// Construct from bytecode-side info — used by FindVariable's
 		// bytecode fallback so eval scopes (no parent compile-context
@@ -87,7 +87,6 @@ struct ibCompileContext {
 			  // Temps are filtered out at bc-mirror sites — synth from
 			  // bc-info is never a temp.
 			  m_bTempVar(false),
-			  m_bScoped(info.m_bScoped),
 			  m_scopeDepth(info.m_scopeDepth),
 			  m_numVariable(info.m_slotIndex),
 			  m_clsid(info.m_clsid),
@@ -109,10 +108,6 @@ struct ibCompileContext {
 		// ContextProp) is Public-visible yet is NOT kind=Export.
 		int  m_access = 0;
 		bool m_bTempVar;
-		// Scope-local marker (e.g. ThisObject / ThisForm) — invisible
-		// to children through cross-bc resolution. Mirrored to
-		// ibByteCode::ibByteCodeVarInfo::m_bScoped at compile finalize.
-		bool m_bScoped;
 		// Nesting depth of the OPER_CTX_BEGIN stack at declaration site.
 		// 0 = fn-frame / module-body. Stamped at PushVariable time from
 		// m_compileModule->m_activeScopes.size(). Copied into bc-side

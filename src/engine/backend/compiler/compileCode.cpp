@@ -196,18 +196,13 @@ void ibCompileCode::PrepareModuleData()
 	// as required and resolve walks them visibility-aware.
 	for (auto& contextValue : m_listContextValue) {
 		m_rootContext->AddVariable(contextValue.first, 0, true, true);
-		bool scoped = false;
 		ibClassID clsid = 0;
 		if (contextValue.second.m_value) {
 			contextValue.second.m_value->InvalidateNames();
 			clsid = contextValue.second.m_value->GetClassType();
-			const long selfPropIdx = contextValue.second.m_value->FindProp(contextValue.first);
-			if (selfPropIdx >= 0)
-				scoped = contextValue.second.m_value->IsPropScoped(selfPropIdx);
 		}
 		stampOnContext(contextValue.first, [&](ibCompileContext::ibVariable& v) {
 			v.m_clsid = clsid;
-			if (scoped) v.m_bScoped = true;
 		});
 	}
 
@@ -228,21 +223,17 @@ void ibCompileCode::PrepareModuleData()
 			// kind=Context with a real frame slot — pushing the
 			// self-prop here would overwrite that via PushVariable's
 			// insert_or_assign (Pass-2 entry lost → binder skips the
-			// slot at pre-flight → runtime reads garbage). Scoped
-			// semantics are already on the Pass-2 entry from the
-			// stampOnContext step above.
+			// slot at pre-flight → runtime reads garbage).
 			if (stringUtils::CompareString(propName, pair.first))
 				continue;
 			mainContext->PushVariable(propName, pair.first, i);
-			// Non-self per-instance handles (Controls / DataSource of
-			// ThisForm) — flag scoped from helper. (RegisterRecords of a
-			// document is EXPORTED, not scoped — see documentObject.cpp.)
-			if (contextValue->IsPropScoped(i)) {
-				auto pushed = std::find_if(mainContext->m_listVariable.begin(), mainContext->m_listVariable.end(),
-					[&propName](const auto& v) { return v && stringUtils::CompareString(propName, v->m_strRealName); });
-				if (pushed != mainContext->m_listVariable.end() && *pushed)
-					(*pushed)->m_bScoped = true;
-			}
+
+			// ⚠ AND SCOPE-LOCALITY IS NOT COPIED ONTO THE VARIABLE, because nothing ever read it
+			// back. It is asked of the VALUE, by IsPropScoped, at each of the places that care —
+			// the runtime's OPER_GET_A, the debugger's property walk, autocomplete, the editor's
+			// interpreter. A second copy on the compile entry travelled all the way into the AOT
+			// blob and was consulted by no one; see the note in value.h, which described the
+			// arrangement this replaced.
 		}
 
 		// add methods from context

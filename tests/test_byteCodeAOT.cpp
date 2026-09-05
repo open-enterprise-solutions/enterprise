@@ -62,7 +62,6 @@ ibByteCode::ibByteCodeVarInfo MakeVar(const wxString& name, ibVarKind kind, long
 	ibByteCode::ibByteCodeVarInfo v;
 	v.m_slotIndex   = slot;
 	v.m_clsid       = 0;
-	v.m_bScoped     = false;
 	v.m_kind        = kind;
 	v.m_parentRef   = -1;
 	v.m_strRealName = name;
@@ -326,7 +325,6 @@ TEST(ByteCodeAOT, ListVarAllKinds) {
 	auto prop = MakeVar(wxT("Catalogs"), ibVarKind::ContextProp, 0);
 	prop.m_strContext = wxT("Manager");
 	prop.m_parentRef  = 3; // index of "Manager" above
-	prop.m_bScoped    = true;
 	prop.m_clsid      = 0x12345;
 	src.m_listVar.push_back(prop);
 
@@ -343,7 +341,6 @@ TEST(ByteCodeAOT, ListVarAllKinds) {
 	EXPECT_EQ(dst.m_listVar[4].m_strRealName, wxT("Catalogs"));
 	EXPECT_EQ(dst.m_listVar[4].m_strContext,  wxT("Manager"));
 	EXPECT_EQ(dst.m_listVar[4].m_parentRef,    3);
-	EXPECT_TRUE(dst.m_listVar[4].m_bScoped);
 	EXPECT_EQ(dst.m_listVar[4].m_clsid, (ibClassID)0x12345);
 }
 

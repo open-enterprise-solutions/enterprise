@@ -175,7 +175,7 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // question to ask of the NEXT field added here is theirs: not "does it compile" but "who
 // writes it back, and what does its absence look like". Absence looks like a feature that
 // was never reachable — and a feature nobody can call has no symptoms to report.
-constexpr uint16_t kAOTFormatVersion = 23;
+constexpr uint16_t kAOTFormatVersion = 24;
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against
@@ -327,7 +327,6 @@ bool ReadConstValue(const ibReaderMemory& r, ibValue& v) {
 bool WriteVarInfo(ibWriterMemory& w, const ibByteCode::ibByteCodeVarInfo& v) {
 	w.w_s32((int32_t)v.m_slotIndex);
 	w.w_u64((uint64_t)v.m_clsid);
-	w.w_u8(v.m_bScoped ? 1 : 0);
 	w.w_u8((uint8_t)v.m_kind);
 	w.w_s32((int32_t)v.m_parentRef);
 	w.w_stringZ(v.m_strRealName);
@@ -339,7 +338,6 @@ bool WriteVarInfo(ibWriterMemory& w, const ibByteCode::ibByteCodeVarInfo& v) {
 void ReadVarInfo(const ibReaderMemory& r, ibByteCode::ibByteCodeVarInfo& v) {
 	v.m_slotIndex = (long)r.r_s32();
 	v.m_clsid     = (ibClassID)r.r_u64();
-	v.m_bScoped   = (r.r_u8() != 0);
 	v.m_kind      = (ibVarKind)r.r_u8();
 	v.m_parentRef = (long)r.r_s32();
 	r.r_stringZ(v.m_strRealName);
