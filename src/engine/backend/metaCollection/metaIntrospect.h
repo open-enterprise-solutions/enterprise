@@ -52,9 +52,17 @@ class ibValueMetaObject;
 // the tree.
 BACKEND_API ibClassID ibResolveMetaKind(const ibMetaData* metaData, const wxString& kind);
 
-// Names of every metaobject of a kind, in tree order. Empty when the kind does
-// not resolve.
-BACKEND_API std::vector<wxString> ibListMetaObjects(const ibMetaData* metaData, const wxString& kind);
+// Every metaobject of a kind, in tree order. Empty when the kind does not resolve.
+//
+// ⭐ THE OBJECTS, because the name alone is rarely the end of it: a caller that lists a kind goes
+// on to ADDRESS one, and every verb downstream — metadata_get, metadata_delete, section_*,
+// predefined_* — is addressed by NodeId. This used to answer names only, and the id had to be
+// fetched back one FindAnyObjectByFilter at a time from names this walk had just thrown away.
+BACKEND_API std::vector<const ibValueMetaObject*> ibListMetaObjects(const ibMetaData* metaData,
+	const wxString& kind);
+
+// The same walk, projected to names — which is all four of its other callers want.
+BACKEND_API std::vector<wxString> ibListMetaObjectNames(const ibMetaData* metaData, const wxString& kind);
 
 // FINDING. Null when the kind does not resolve or nothing carries that
 // name / id. The id form searches the whole tree, so it finds an attribute or a

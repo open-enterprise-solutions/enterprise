@@ -245,10 +245,37 @@ private:
 
 	class ibMcpListener;   // the worker thread + its socket, defined in the .cpp
 
+	// WHAT THE HTTP HEADERS SAID, for the parts of the message the transport mirrors
+	// into them. From revision 2025-06-18 a client states the protocol version in a
+	// header; from 2026-07-28 it also mirrors the method and the tool name, and the
+	// server MUST refuse a request whose header and body disagree — because a
+	// load balancer routes on the one and the server executes on the other.
+	//
+	// Carried in a struct of its own rather than by handing Answer an
+	// httplib::Request: the JSON-RPC layer has never known what HTTP is, and the
+	// three strings it now needs are not a reason to teach it.
+	struct ibMcpWireHeaders {
+		wxString m_protocolVersion;   // MCP-Protocol-Version, empty when absent
+		wxString m_method;            // Mcp-Method
+		wxString m_name;              // Mcp-Name (tools/call, resources/read, prompts/get)
+	};
+
 	// ANSWER ONE MESSAGE. Parses the envelope, finds the tool, calls it, writes
 	// the answer. Public behaviour of the protocol lives here rather than in the
 	// listener so a test can ask a question without opening a port.
-	wxString Answer(const wxString& request);
+	//
+	// `headers` is what the transport saw; a caller with no transport (a test) passes
+	// none and the header checks simply have nothing to compare against.
+	//
+	// `outErrorCode` receives the JSON-RPC error code when the answer is a refusal, 0
+	// otherwise. The transport needs it because the modern revision expects certain
+	// refusals to carry an HTTP status of their own — but WHICH status is the
+	// transport's business, so this hands over the protocol's own verdict rather than
+	// an HTTP number. It also spares the caller from reading its own output back:
+	// searching the emitted JSON for `"code":-32020` is a guess about the writer's
+	// spacing, and it was wrong the first time it was tried.
+	wxString Answer(const wxString& request) { return Answer(request, ibMcpWireHeaders(), nullptr); }
+	wxString Answer(const wxString& request, const ibMcpWireHeaders& headers, int* outErrorCode);
 	friend class ibMcpListener;
 
 	void Publish(const wxString& method, const wxString& request, const wxString& answer);

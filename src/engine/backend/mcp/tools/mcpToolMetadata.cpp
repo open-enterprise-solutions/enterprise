@@ -520,7 +520,9 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Names of every metadata object of a kind in the open configuration.");
+		return ibMcpText("Every metadata object of a kind in the open configuration, each with the "
+			"NodeId the other verbs are addressed by - metadata_get, metadata_delete, "
+			"metadata_rename and the rest all take an id, and this is where one comes from.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -550,12 +552,44 @@ public:
 			return false;
 		}
 
-		std::vector<ibDataValue> names;
-		for (const wxString& name : ibListMetaObjects(metaData, kind))
-			names.push_back(ibDataValue::String(name));
+		// ⭐⭐ THE LIST ANSWERS WITH WHAT THE NEXT VERB TAKES. It used to answer bare NAMES, while
+		// every verb it leads into — metadata_get, metadata_delete, metadata_rename, section_*,
+		// predefined_* — is addressed by NodeId; so listing a kind and then acting on one of its
+		// objects cost a THIRD call to metadata_get purely to learn the id. Measured on this
+		// server 2026-09-05, deleting one leftover module.
+		//
+		// 🛑 And three places in the corpus already told the caller "metadata_list gives it"
+		// (mcpTool.cpp, mcpToolPredefined.cpp, mcpToolSection.cpp) — the promise was written, the
+		// answer was not. A projection the neighbouring verb cannot eat is not a shorter answer,
+		// it is a round trip charged to every caller.
+		//
+		// The SHAPE is metadata_tree's, entry for entry, because a list of one kind and a tree of
+		// all of them are the same question asked at two depths.
+		std::vector<ibDataValue> objects;
+		for (const ibValueMetaObject* object : ibListMetaObjects(metaData, kind)) {
+
+			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+			entry->AddField(wxT("id"), ibDataValue::Int((s64)object->GetMetaID()));
+			entry->SetValue(wxT("name"), object->GetName());
+
+			// The glance line and the flag that says there is more to read — the same two the map
+			// carries, and for the same reason: a name alone cannot tell a live object from a
+			// probe left over from an experiment.
+			const wxString comment = object->GetComment();
+			if (!comment.IsEmpty())
+				entry->SetValue(wxT("comment"), comment);
+
+			if (!object->GetNoteContent().IsEmpty())
+				entry->AddField(wxT("noted"), ibDataValue::Bool(true));
+
+			if (!object->IsEnabled())
+				entry->AddField(wxT("disabled"), ibDataValue::Bool(true));
+
+			objects.push_back(ibDataValue::Child(entry));
+		}
 
 		result.SetValue(wxT("kind"), kind);
-		result.AddField(wxT("names"), ibDataValue::Array(names));
+		result.AddField(wxT("objects"), ibDataValue::Array(objects));
 		return true;
 	}
 };

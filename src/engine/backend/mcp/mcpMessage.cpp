@@ -151,6 +151,12 @@ wxString ibMcpWriteResult(const ibDataValue& id, const ibDataNode& result)
 
 wxString ibMcpWriteError(const ibDataValue& id, ibMcpError code, const wxString& message)
 {
+	return ibMcpWriteError(id, code, message, nullptr);
+}
+
+wxString ibMcpWriteError(const ibDataValue& id, ibMcpError code, const wxString& message,
+	const ibDataNode* data)
+{
 	ibDataNode root = Envelope(id);
 
 	ibDataNode& error = root.Child(wxT("error"));
@@ -159,6 +165,14 @@ wxString ibMcpWriteError(const ibDataValue& id, ibMcpError code, const wxString&
 	// integer is not one of them.
 	error.AddField(wxT("code"), ibDataValue::Int((s64)code));
 	error.SetValue(wxT("message"), message);
+
+	// ⭐ WHAT THE CALLER CAN DO ABOUT IT, when the refusal has an answer. A version
+	// refusal that does not list the versions on offer leaves the client to guess,
+	// which is the same as no answer; the specification therefore puts the list in
+	// `data.supported`. Optional because most refusals have nothing to add — a
+	// malformed message is not made actionable by decorating it.
+	if (data != nullptr)
+		error.Child(wxT("data")) = *data;
 
 	return EmitNode(root);
 }

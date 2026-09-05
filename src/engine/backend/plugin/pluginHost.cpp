@@ -15,7 +15,7 @@
 #include "backend/backend_diagnostic.h"
 #include "backend/compiler/scriptCheck.h"           // ibCheckScript — the door this window opens
 #include "backend/metaData.h"
-#include "backend/metaCollection/metaIntrospect.h"  // ibListMetaObjects / ibDescribeMetaObject
+#include "backend/metaCollection/metaIntrospect.h"  // ibListMetaObjectNames / ibDescribeMetaObject
 #include "backend/metadataConfiguration.h"
 
 #include <cstring>
@@ -61,7 +61,7 @@ public:
 		// The plugin has no configuration of its own to name, so the window
 		// answers about the active one — see metaCollection/metaIntrospect.h for
 		// why the mechanism itself refuses to make that assumption.
-		return ibListMetaObjects(activeMetaData, kind);
+		return ibListMetaObjectNames(activeMetaData, kind);
 	}
 
 	wxString Describe(const wxString& kind, const wxString& name) const override

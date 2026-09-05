@@ -1256,7 +1256,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		bool declared = false;
 		wxString available;
 
-		for (const wxString& known : ibListMetaObjects(activeMetaData, wxT("Language"))) {
+		for (const wxString& known : ibListMetaObjectNames(activeMetaData, wxT("Language"))) {
 
 			ibValueMetaObject* found = ibFindMetaObject(activeMetaData, wxT("Language"), known);
 			ibValueMetaObjectLanguage* lang =

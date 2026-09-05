@@ -50,6 +50,29 @@ enum class ibMcpError {
 	MethodNotFound = -32601,
 	InvalidParams  = -32602,
 	Internal       = -32603,
+
+	// The two the MCP specification allocates for itself, out of the range JSON-RPC
+	// reserves for implementations. They exist because the transport now mirrors
+	// parts of the body into HTTP headers, and both failures they name are about
+	// the two disagreeing.
+	//
+	// ⚠ AND THEIR MESSAGES ARE ENGLISH, not translated. What goes on the wire is read
+	// by a CLIENT — another program, or a model — and never by the person at the
+	// designer, who is shown platform errors through a different door entirely. A
+	// refusal that changes wording with the machine's locale is one a client cannot
+	// match on and a report nobody can compare; `_()` belongs where a human reads.
+	//
+	// HeaderMismatch — a header does not match the body it mirrors (or a required
+	// one is missing). It matters because different boxes read different sources:
+	// a load balancer routes on the header, the server executes on the body, and a
+	// request where they differ is exactly the shape that gets past one and is
+	// carried out by the other.
+	HeaderMismatch = -32020,
+
+	// UnsupportedProtocolVersion — carries `data.supported` listing what this
+	// server speaks, so a client can retry with a version both sides have instead
+	// of guessing why the answers look strange.
+	UnsupportedVersion = -32022,
 };
 
 // Reads one request. Answers false and fills `error` when the text is not a
@@ -78,5 +101,11 @@ BACKEND_API wxString ibMcpRenderNode(const ibDataNode& node,
 // reply to its call by that value and by nothing else.
 BACKEND_API wxString ibMcpWriteResult(const ibDataValue& id, const ibDataNode& result);
 BACKEND_API wxString ibMcpWriteError(const ibDataValue& id, ibMcpError code, const wxString& message);
+
+// The same, with the `data` member a few refusals owe the caller — chiefly the list
+// of versions this server speaks, which is what makes a version refusal answerable
+// rather than merely final.
+BACKEND_API wxString ibMcpWriteError(const ibDataValue& id, ibMcpError code, const wxString& message,
+	const ibDataNode* data);
 
 #endif // _IB_MCP_MESSAGE_H_

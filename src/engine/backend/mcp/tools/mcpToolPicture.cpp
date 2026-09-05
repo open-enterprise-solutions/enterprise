@@ -22,7 +22,7 @@
 #include "backend/pictureDescription.h"                     // ibPictureDescription — the tagged value
 #include "backend/propertyManager/property/propertyPicture.h"
 #include "backend/metaCollection/metaObject.h"              // ibValueMetaObject::GetGuid
-#include "backend/metaCollection/metaIntrospect.h"          // ibListMetaObjects / ibFindMetaObject — the shared road
+#include "backend/metaCollection/metaIntrospect.h"          // ibListMetaObjectNames / ibFindMetaObject — the shared road
 #include "backend/metadataConfiguration.h"                  // activeMetaData — the open configuration
 
 // The metatype's own name, resolved through ibResolveMetaKind like every other kind.
@@ -144,7 +144,7 @@ public:
 
 			std::vector<ibDataValue> declared;
 
-			for (const wxString& name : ibListMetaObjects(activeMetaData, kPictureKind)) {
+			for (const wxString& name : ibListMetaObjectNames(activeMetaData, kPictureKind)) {
 
 				std::shared_ptr<ibDataNode> line = std::make_shared<ibDataNode>();
 				line->SetValue(wxT("name"), name);

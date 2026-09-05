@@ -77,7 +77,53 @@ namespace {
 
 // The protocol revision this server speaks. Announced in `initialize`; a client
 // that wants another one is told what we have rather than being guessed at.
-const wxChar* const kProtocolVersion = wxT("2024-11-05");
+// WHAT THIS SERVER SPEAKS — and it is what it has been speaking for a while, said out loud at
+// last. The constant read `2024-11-05` until 2026-09-05, which is the FIRST MCP revision and the
+// deprecated HTTP+SSE transport; the server has meanwhile been Streamable HTTP all along — one
+// endpoint, POST answered as JSON or as an SSE stream, GET offering a listen stream, server-sent
+// requests on it for `sampling/createMessage`. That is the 2025-03-26 … 2025-11-25 shape exactly,
+// and the last of those is the one to name: sessions are OPTIONAL there (this server is
+// deliberately stateless), resumability is optional, and a server MAY send requests on a stream —
+// so nothing here is claimed that is not done.
+//
+// ⚠ NOT the current revision, and that is a decision rather than an oversight. 2026-07-28 removed
+// the GET stream and protocol-level sessions and moved server-to-client interaction to MRTR
+// (the server returns an InputRequiredResult and the client re-calls) — which is a rebuild of how
+// the assistant window asks the model anything, not a version bump. Naming 2025-11-25 states the
+// truth today; the dual-era work is its own piece.
+const wxChar* const kProtocolVersion = wxT("2025-11-25");
+
+// The revisions a caller may name and still be served. They differ, on THIS server's side, only
+// in what the client is obliged to send — the header below arrived in 2025-06-18 — so one
+// implementation answers all three honestly. A version outside this list is refused rather than
+// answered as if it were ours: see IsProtocolVersionAcceptable.
+const wxChar* const kSupportedProtocolVersions[] = {
+	wxT("2025-11-25"),
+	wxT("2025-06-18"),
+	wxT("2025-03-26"),
+	nullptr
+};
+
+// ⭐ WHAT A VERSION REFUSAL OWES THE CALLER, built from the array above and from nowhere else.
+// A refusal that does not say what IS on offer leaves the client to guess, which is the same as
+// no answer; the specification therefore puts the list in `data.supported`.
+//
+// AND IT IS A LIST. The first version numbered the keys of a child node — `{"0":"2025-11-25",…}` —
+// which a client reads as an object, so `supported.includes(v)` finds nothing and the refusal
+// stops being answerable. The node tree has carried an Array value all along (dataBuilder.h).
+ibDataNode SupportedVersions(const wxString& asked)
+{
+	std::vector<ibDataValue> versions;
+	for (const wxChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v)
+		versions.push_back(ibDataValue::String(wxString(*v)));
+
+	ibDataNode data;
+	data.AddField(wxT("supported"), ibDataValue::Array(versions));
+	if (!asked.IsEmpty())
+		data.SetValue(wxT("requested"), asked);
+
+	return data;
+}
 
 // A request is a JSON document, not a file upload. Anything past this is a
 // client that has lost its place — refused before it is allocated, the way the
@@ -205,6 +251,84 @@ private:
 		return given.Mid(7).Trim(true).Trim(false) == expected;
 	}
 
+	// ⭐ WHERE THE CALLER IS SPEAKING FROM — a DIFFERENT question from who they are, and the
+	// transport requires both. A browser on any web page can POST to 127.0.0.1; DNS rebinding
+	// makes that page's own origin look local to the network stack, and nothing about the packet
+	// says it came from a page rather than from a tool. The Origin header is what the browser
+	// attaches and cannot be forged by script, so refusing an unknown one is the only defence a
+	// local server has against being driven by a site the person merely visited.
+	//
+	// PRESENCE IS THE DISCRIMINATOR: an ordinary client (a CLI, an editor plugin) sends no Origin
+	// at all, and the spec asks for a refusal only when the header IS present and wrong — so this
+	// costs nothing for the callers that are not browsers. A loopback origin is allowed because
+	// that is a page served by this machine's own tooling.
+	//
+	// The token already refuses an unauthorised caller; this refuses an unauthorised PLACE, one
+	// step earlier, without reading the body.
+	static bool IsOriginAllowed(const httplib::Request& req)
+	{
+		const std::string origin = req.get_header_value("Origin");
+		if (origin.empty())
+			return true;   // not a browser — nothing to check
+
+		const wxString value = wxString::FromUTF8(origin.c_str(), origin.size()).Lower();
+		return value.StartsWith(wxT("http://127.0.0.1"))
+			|| value.StartsWith(wxT("https://127.0.0.1"))
+			|| value.StartsWith(wxT("http://localhost"))
+			|| value.StartsWith(wxT("https://localhost"))
+			|| value == wxT("null");   // a file:// page, which is local by construction
+	}
+
+	// WHICH REVISION THIS CALLER SPEAKS, and whether we speak it too.
+	//
+	// The header arrived in revision 2025-06-18 and is REQUIRED of clients from then on; a client
+	// older than that sends none, and the transport says to read its absence as 2025-03-26 rather
+	// than as an error. What is NOT allowed is to answer an unknown revision as if it were ours —
+	// the spec asks for 400 there, so the client learns to negotiate instead of guessing why the
+	// answers look wrong.
+	static bool IsProtocolVersionAcceptable(const httplib::Request& req)
+	{
+		const std::string header = req.get_header_value("MCP-Protocol-Version");
+		if (header.empty())
+			return true;   // pre-2025-06-18 client — read as 2025-03-26, per the transport
+
+		const wxString asked = wxString::FromUTF8(header.c_str(), header.size()).Trim(true).Trim(false);
+		for (const wxChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
+			if (asked == *v)
+				return true;
+		}
+		return false;
+	}
+
+	// ⭐ THE VERSION REFUSAL, WRITTEN ONCE. It is decided in three places — the header check on
+	// each verb, and the `_meta` check in the body — and it used to be ANSWERED in three ways:
+	// `-32000` with the list of versions typed out by hand in an English sentence, `-32000` with
+	// no list at all, and `-32022` with `data.supported`. Three answers to one refusal, and the
+	// hand-typed sentence sat two screens from the array it was copied from, so the next version
+	// added would have been announced in one of them and not the others.
+	//
+	// The code is the one the specification allocates (`-32022`), and the list is READ FROM THE
+	// ARRAY, which is the only way it cannot drift from what the server actually accepts.
+	static std::string RefuseVersion(const wxString& asked)
+	{
+		const ibDataNode data = SupportedVersions(asked);
+
+		// No id: the refusal happens before the body has been read, so there is no call to
+		// answer — which is the shape JSON-RPC allows for exactly this.
+		const wxString text = ibMcpWriteError(ibDataValue(), ibMcpError::UnsupportedVersion,
+			wxT("Unsupported protocol version"), &data);
+
+		const wxScopedCharBuffer utf8 = text.utf8_str();
+		return std::string(utf8.data(), utf8.length());
+	}
+
+	// What the transport saw in the header, for the refusal to quote back.
+	static wxString AskedVersion(const httplib::Request& req)
+	{
+		const std::string header = req.get_header_value("MCP-Protocol-Version");
+		return wxString::FromUTF8(header.c_str(), header.size()).Trim(true).Trim(false);
+	}
+
 	// The two verbs of the protocol, on one path.
 	void Route()
 	{
@@ -254,6 +378,21 @@ private:
 				return;
 			}
 
+			// WHERE FROM, and IN WHICH REVISION — both are the transport's questions, both are
+			// answered before the body is read. A JSON-RPC error with no `id` is what the spec
+			// allows for a refusal that happens before a message exists to answer.
+			if (!IsOriginAllowed(req)) {
+				res.status = 403;
+				res.set_content("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,"
+					"\"message\":\"Origin not allowed\"}}", "application/json");
+				return;
+			}
+			if (!IsProtocolVersionAcceptable(req)) {
+				res.status = 400;
+				res.set_content(RefuseVersion(AskedVersion(req)), "application/json");
+				return;
+			}
+
 			// ⭐ IN WHOSE NAME — per request, because there is no longer one thread to bind once.
 			// httplib serves from a pool, so the session that started the server is bound around
 			// each call and released after: metadata, rights and the active configuration then
@@ -265,8 +404,38 @@ private:
 			// thread map on the way out.
 			const ibSessionScope inThisSession(m_session);
 
+			// WHAT THE TRANSPORT SAW, handed down so the protocol layer can hold the body to it.
+			// Reading them here and nowhere else keeps httplib out of everything below.
+			ibMcpServer::ibMcpWireHeaders wire;
+			const auto headerOf = [&req](const char* name) -> wxString {
+				const std::string v = req.get_header_value(name);
+				return v.empty() ? wxString() : wxString::FromUTF8(v.c_str(), v.size());
+			};
+			wire.m_protocolVersion = headerOf("MCP-Protocol-Version");
+			wire.m_method          = headerOf("Mcp-Method");
+			wire.m_name            = headerOf("Mcp-Name");
+
 			const wxString request = wxString::FromUTF8(req.body.data(), req.body.size());
-			const wxString answer = m_owner->Answer(request);
+
+			// 🛑 THE VERDICT IS ASKED FOR, NOT RECOGNISED. The first version read the status out
+			// of the emitted JSON by looking for `"code":-32020` — and got 200 on every refusal,
+			// because the writer puts a space after the colon. Searching your own output for a
+			// fact you already had is a guess about the writer's formatting dressed up as a
+			// decision; the layer that decided the refusal is the one that says so.
+			int refusalCode = 0;
+			const wxString answer = m_owner->Answer(request, wire, &refusalCode);
+
+			// ⭐ THE HTTP STATUS IS PART OF THE REFUSAL, not decoration on it. The modern
+			// transport asks a client to tell a version refusal from a header refusal from an
+			// unknown method WITHOUT parsing — and that is how a dual-era client decides whether
+			// to retry with another version or fall back to `initialize` entirely. A refusal
+			// answered 200 reads as agreement to a client that only looks at the status.
+			switch ((ibMcpError)refusalCode) {
+				case ibMcpError::UnsupportedVersion:                       // retry with another version
+				case ibMcpError::HeaderMismatch: res.status = 400; break;  // the two sources disagree
+				case ibMcpError::MethodNotFound: res.status = 404; break;  // nothing here answers to that name
+				default: break;                                            // 200: the body carries the whole answer
+			}
 
 			// A notification is answered with no body, as the protocol says — but
 			// the transport still needs a reply, or the client waits for one.
@@ -290,6 +459,20 @@ private:
 			if (!IsAuthorised(req)) {
 				res.status = 401;
 				res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+				return;
+			}
+
+			// The same two transport questions as on POST — a listen stream hands over MORE than
+			// any single call does, so it is the last place to relax either of them.
+			if (!IsOriginAllowed(req)) {
+				res.status = 403;
+				res.set_content("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,"
+					"\"message\":\"Origin not allowed\"}}", "application/json");
+				return;
+			}
+			if (!IsProtocolVersionAcceptable(req)) {
+				res.status = 400;
+				res.set_content(RefuseVersion(AskedVersion(req)), "application/json");
 				return;
 			}
 
@@ -1357,7 +1540,7 @@ void ibMcpDescribePlatform(ibDataNode& into)
 
 	std::vector<ibDataValue> languages;
 
-	for (const wxString& language : ibListMetaObjects(metaData, wxT("Language")))
+	for (const wxString& language : ibListMetaObjectNames(metaData, wxT("Language")))
 		languages.push_back(ibDataValue::String(language));
 
 	into.AddField(wxT("languages"), ibDataValue::Array(languages));
@@ -1753,7 +1936,7 @@ wxString BuildOrientation()
 	out << wxT(" Write in that one - the other is a different language to the compiler, and ")
 		<< wxT("`script_check` is how you find out before anyone runs it.\n");
 
-	const std::vector<wxString> languages = ibListMetaObjects(metaData, wxT("Language"));
+	const std::vector<wxString> languages = ibListMetaObjectNames(metaData, wxT("Language"));
 
 	if (!languages.empty()) {
 
@@ -2016,8 +2199,18 @@ wxString BuildOrientation()
 
 } // namespace
 
-wxString ibMcpServer::Answer(const wxString& request)
+wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& headers, int* outErrorCode)
 {
+	// THE VERDICT THE TRANSPORT WILL ASK FOR — recorded where the refusal is decided,
+	// which is the only place that knows. Reading it back out of the emitted JSON was
+	// the first attempt and it failed on a space: the writer emits `"code": -32020`
+	// and the search looked for `"code":-32020`.
+	if (outErrorCode != nullptr) *outErrorCode = 0;
+	const auto refuse = [&](const ibDataValue& id, ibMcpError code, const wxString& text,
+		const ibDataNode* data = nullptr) -> wxString {
+		if (outErrorCode != nullptr) *outErrorCode = (int)code;
+		return ibMcpWriteError(id, code, text, data);
+	};
 	// ⭐ IT MAY NOT BE A CALL AT ALL. Once the server can ask the client something, the same
 	// endpoint starts receiving both — and they are told apart by one fact: a request names a
 	// method, a response does not (mcpMessage.h). This has to be asked FIRST, because reading a
@@ -2050,6 +2243,85 @@ wxString ibMcpServer::Answer(const wxString& request)
 		// wrong, not what the bytes were.
 		Publish(wxT("did"), wxString::Format(_("unreadable message: %s"), error), wxEmptyString);
 		return ibMcpWriteError(ibDataValue(), ibMcpError::Parse, error);
+	}
+
+	// ⭐⭐ WHICH ERA IS SPEAKING, decided before the method is looked at — because the answer
+	// changes what a refusal must look like, not merely what is done.
+	//
+	// The specification calls them LEGACY (an `initialize` handshake opens a session; revisions
+	// through 2025-11-25) and MODERN (no handshake at all; every request carries its own version
+	// in `_meta`, 2026-07-28 onward). A dual-era server is allowed to serve both on one endpoint,
+	// and it tells them apart by how the caller opened: metadata present means modern, an
+	// `initialize` means legacy. Nothing else is consulted — the era is a property of the
+	// REQUEST, and the same client may be either on different days.
+	const ibDataNode* meta = parsed.m_params.FindChild(wxT("_meta"));
+	const ibDataValue* metaVersion = meta != nullptr
+		? meta->FindField(wxT("io.modelcontextprotocol/protocolVersion")) : nullptr;
+	const bool isModern = metaVersion != nullptr && metaVersion->Kind() == ibDataKind::String;
+
+	if (isModern) {
+		const wxString asked = metaVersion->AsString();
+
+		// THE HEADER AND THE BODY MUST AGREE. Two readers, two sources: an intermediary routes on
+		// the header, this server executes on the body. A request where they differ is the one
+		// that gets past the first and is carried out by the second.
+		if (!headers.m_protocolVersion.IsEmpty() && headers.m_protocolVersion != asked) {
+			return refuse(parsed.m_id, ibMcpError::HeaderMismatch,
+				wxString::Format(wxT("MCP-Protocol-Version header says '%s' and the body says '%s'"),
+					headers.m_protocolVersion, asked));
+		}
+		if (!headers.m_method.IsEmpty() && headers.m_method != parsed.m_method) {
+			return refuse(parsed.m_id, ibMcpError::HeaderMismatch,
+				wxString::Format(wxT("Mcp-Method header says '%s' and the body calls '%s'"),
+					headers.m_method, parsed.m_method));
+		}
+
+		// AND THE VERSION MUST BE ONE WE SPEAK — answered with the list, so the caller can pick
+		// another rather than work out why the replies look wrong. This server is legacy-era: it
+		// speaks 2025-11-25 and below, so a modern caller is told exactly that and retries as a
+		// legacy client, which is the fallback the transport describes.
+		bool known = false;
+		for (const wxChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
+			if (asked == *v) { known = true; break; }
+		}
+		if (!known) {
+			// The SAME refusal the header check answers with, from the same list — the only
+			// difference is that here there is a call to answer, so it carries the id.
+			const ibDataNode data = SupportedVersions(asked);
+			return refuse(parsed.m_id, ibMcpError::UnsupportedVersion,
+				wxT("Unsupported protocol version"), &data);
+		}
+	}
+
+	// EVERY SERVER MUST ANSWER THIS ONE — the modern era's way of asking "who are you and what do
+	// you speak", in a single call and without a handshake. It says the same things `initialize`
+	// says, which is why it is answered from the same material rather than from a second one; the
+	// difference is that it opens nothing and may be asked at any time, including first.
+	if (parsed.m_method == wxT("server/discover")) {
+
+		ibDataNode result;
+		result.SetValue(wxT("resultType"), wxString(wxT("complete")));
+
+		ibDataNode& versions = result.Child(wxT("supportedVersions"));
+		int at = 0;
+		for (const wxChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v, ++at)
+			versions.SetValue(wxString::Format(wxT("%d"), at), wxString(*v));
+
+		// The same capabilities `initialize` reports: tools, and the logging that carries what a
+		// person types in the assistant window.
+		ibDataNode& capabilities = result.Child(wxT("capabilities"));
+		capabilities.Child(wxT("tools"));
+		capabilities.Child(wxT("logging"));
+
+		ibDataNode& resultMeta = result.Child(wxT("_meta"));
+		ibDataNode& serverInfo = resultMeta.Child(wxT("io.modelcontextprotocol/serverInfo"));
+		serverInfo.SetValue(wxT("name"), wxString(wxT("OES Enterprise")));
+		serverInfo.SetValue(wxT("version"), wxString::Format(wxT("build %d"), GetBuildId()));
+
+		// The same orientation text initialize hands over - one source, two doors.
+		result.SetValue(wxT("instructions"), BuildOrientation());
+
+		return ibMcpWriteResult(parsed.m_id, result);
 	}
 
 	wxString answer;
@@ -2091,7 +2363,25 @@ wxString ibMcpServer::Answer(const wxString& request)
 			m_clientCanSample.store(false);
 
 		ibDataNode result;
-		result.SetValue(wxT("protocolVersion"), wxString(kProtocolVersion));
+
+		// ⭐ ANSWER IN THE REVISION THAT WAS ASKED FOR, when it is one we speak. Negotiation is
+		// the point of this field: the client names what it wants, and a server that always
+		// answers with its own newest leaves the client to work out whether that is agreement or
+		// a refusal it has to survive. Naming the asked-for version back IS the agreement.
+		//
+		// A version we do not speak — or none at all, which is what a pre-2025-03-26 client
+		// sends — gets ours, and the client decides whether it can live with it. That is the
+		// lifecycle's own rule, and it is why this cannot simply refuse.
+		wxString agreed(kProtocolVersion);
+		if (const ibDataValue* asked = parsed.m_params.FindField(wxT("protocolVersion"))) {
+			if (asked->Kind() == ibDataKind::String) {
+				const wxString wanted = asked->AsString();
+				for (const wxChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
+					if (wanted == *v) { agreed = wanted; break; }
+				}
+			}
+		}
+		result.SetValue(wxT("protocolVersion"), agreed);
 
 		// We offer tools and nothing else yet. Saying so plainly is what keeps a
 		// client from asking for prompts or resources and getting silence.
@@ -2237,8 +2527,8 @@ wxString ibMcpServer::Answer(const wxString& request)
 			answer = ibMcpWriteError(parsed.m_id, ibMcpError::InvalidParams, envelopeRefusal);
 		}
 		else if (tool == nullptr) {
-			answer = ibMcpWriteError(parsed.m_id, ibMcpError::MethodNotFound,
-				wxString::Format(_("No tool named '%s'"), name));
+			answer = refuse(parsed.m_id, ibMcpError::MethodNotFound,
+				wxString::Format(wxT("No tool named '%s'"), name));
 		}
 		else {
 			ibDataNode arguments;
@@ -2563,8 +2853,8 @@ wxString ibMcpServer::Answer(const wxString& request)
 		answer = wxEmptyString;
 	}
 	else {
-		answer = ibMcpWriteError(parsed.m_id, ibMcpError::MethodNotFound,
-			wxString::Format(_("No method named '%s'"), parsed.m_method));
+		answer = refuse(parsed.m_id, ibMcpError::MethodNotFound,
+			wxString::Format(wxT("No method named '%s'"), parsed.m_method));
 	}
 
 	// WHAT THE WINDOW IS TOLD IS NOT THE WIRE.

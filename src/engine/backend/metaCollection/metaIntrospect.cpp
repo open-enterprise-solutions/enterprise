@@ -33,17 +33,27 @@ ibClassID ibResolveMetaKind(const ibMetaData* metaData, const wxString& kind)
 	return ctor->GetClassType();
 }
 
-std::vector<wxString> ibListMetaObjects(const ibMetaData* metaData, const wxString& kind)
+std::vector<const ibValueMetaObject*> ibListMetaObjects(const ibMetaData* metaData, const wxString& kind)
 {
-	std::vector<wxString> names;
+	std::vector<const ibValueMetaObject*> objects;
 
 	const ibClassID clsid = ibResolveMetaKind(metaData, kind);
 	if (clsid == 0)
-		return names;
+		return objects;
 
 	for (const ibValueMetaObject* object : metaData->GetAnyArrayObject<ibValueMetaObject>(clsid))
 		if (object != nullptr)
-			names.push_back(object->GetName());
+			objects.push_back(object);
+
+	return objects;
+}
+
+std::vector<wxString> ibListMetaObjectNames(const ibMetaData* metaData, const wxString& kind)
+{
+	std::vector<wxString> names;
+
+	for (const ibValueMetaObject* object : ibListMetaObjects(metaData, kind))
+		names.push_back(object->GetName());
 
 	return names;
 }

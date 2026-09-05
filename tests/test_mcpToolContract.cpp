@@ -53,6 +53,18 @@ ibDataNode SchemaOf(const ibMcpTool* tool)
 
 // Every argument name a tool declares. The declaration is a sub-node per
 // argument in `properties`, which the node keeps in its PROPERTY area.
+// What KIND a tool declared an argument as, found by the name the schema publishes
+// it under. The schema walk sees names and JSON fields; the kind lives on the
+// argument, and one check below needs both sides of that pair.
+ibMcpTool::ibMcpArgument::Kind KindOfArgument(const ibMcpTool* tool, const wxString& name)
+{
+	for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
+		if (argument.Name() == name)
+			return argument.KindOf();
+	}
+	return ibMcpTool::ibMcpArgument::Kind::Text;
+}
+
 std::set<wxString> DeclaredArguments(const ibDataNode& schema)
 {
 	std::set<wxString> names;
@@ -268,10 +280,31 @@ TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)
 			const std::shared_ptr<ibDataNode>& argument = entry.second.AsChild();
 			ASSERT_NE(argument, nullptr);
 
+			// ⭐ EXCEPT WHERE "ANY VALUE" IS THE HONEST ANSWER, and that is not a hole
+			// in the rule. `metadata_set` writes an ATTRIBUTE, and an attribute is a
+			// number, a string, a date, a boolean or a reference depending on which
+			// one it is; the report filters take the same. Naming one type there
+			// would be a lie, and naming all of them is the same statement spelled
+			// longer. JSON Schema says "any" by omitting `type`, so the argument that
+			// declares Kind::Any omits it — deliberately, and only it may.
+			//
+			// What such an argument still owes the caller is the SENTENCE below: with
+			// no type to lean on, the description is the whole of what it says about
+			// itself, which is why that check stays unconditional.
+			const bool takesAnyValue = KindOfArgument(tool, entry.first) ==
+				ibMcpTool::ibMcpArgument::Kind::Any;
+
 			const ibDataValue* type = argument->FindField(wxT("type"));
-			EXPECT_NE(type, nullptr)
-				<< tool->GetName().ToStdString() << " / " << entry.first.ToStdString()
-				<< " has no type";
+			if (!takesAnyValue) {
+				EXPECT_NE(type, nullptr)
+					<< tool->GetName().ToStdString() << " / " << entry.first.ToStdString()
+					<< " has no type";
+			}
+			else {
+				EXPECT_EQ(type, nullptr)
+					<< tool->GetName().ToStdString() << " / " << entry.first.ToStdString()
+					<< " takes any value, so it must not publish one type as if it were the only one";
+			}
 
 			// ⭐ AND WHAT IT MEANS, not only its type. "integer" tells a caller
 			// nothing about whether a number is a NodeId, a row or a length —
@@ -438,7 +471,11 @@ TEST(McpToolContract, EveryArgument_IsHeldToTheShapeItPublishes)
 			using Kind = ibMcpTool::ibMcpArgument::Kind;
 
 			// A string where the schema says integer / boolean / array / object.
-			if (argument.KindOf() == Kind::Text)
+			// Text takes one by definition — and so does Any, which is the point of
+			// it: `metadata_set`'s value is whatever the attribute's type is, and a
+			// string is one of the shapes it legitimately arrives in. Refusing one
+			// there would be the defect, not the check.
+			if (argument.KindOf() == Kind::Text || argument.KindOf() == Kind::Any)
 				continue;
 
 			ibDataNode wrong;
