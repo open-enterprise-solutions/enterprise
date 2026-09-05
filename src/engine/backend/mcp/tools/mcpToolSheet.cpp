@@ -116,15 +116,75 @@ s64 LineOut(int stored)
 const ibArg& ArgValue()
 {
 	static const ibArg s_a(wxT("value"), ibArg::Kind::Text,
-		ibMcpText("The text shown. For a caption this is all there is."));
+		ibMcpText("The text shown. For a caption this is all there is - and it is a LOCALISED string: "
+			  "it is translated when the sheet is put out, so it may carry the every-language form "
+			  "(`en = 'Goods'; ru = 'Tovary';`) exactly as a synonym does. A `template` text is "
+			  "translated the same way, before its [holes] are filled."));
 	return s_a;
 }
 
 const ibArg& ArgParameter()
 {
 	static const ibArg s_a(wxT("parameter"), ibArg::Kind::Text,
-		ibMcpText("The name the module fills in. A cell with one is a hole, not a caption."));
+		ibMcpText("The name the module fills in, when the WHOLE cell is that value. A cell with one "
+			  "is a hole, not a caption - and it is stamped as a parameter cell, which is what "
+			  "makes the module's Parameters.Set reach it.\n"
+			  "⚠ A PLAIN NAME, NOT A TRANSLATED STRING. It is looked up as written, so it is an "
+			  "identifier the module knows - never the every-language form a caption may take. "
+			  "The two are different kinds of text and the sheet treats them differently."));
 	return s_a;
+}
+
+// ⭐⭐ A CELL IS FILLED IN ONE OF THREE WAYS, AND THE SHEET HAS ALWAYS KNOWN THAT.
+// ibSpreadsheetFillType is Text, Parameter or Template (spreadsheetDescription.h), and it is what
+// the designer's property panel calls "Fill type".
+//
+// 🛑 THIS TOOL WROTE THE PARAMETER NAME AND NEVER THE TYPE. `SetParameter` fills
+// m_detailsParameter; the cell stayed StrText, so the module's Parameters.Set had nothing to
+// substitute into and the printed form came out with every hole EMPTY. Found by looking at the
+// designer's own property panel after building a print form through these tools (2026-09-05):
+// every parameter cell read `Fill type: Text`, and sheet_get - which reports the parameter name -
+// could not show it, because it did not report the type either. Written and never read, on both
+// sides at once.
+//
+// The ordinary cases decide themselves: a `parameter` makes a parameter cell, a `value` makes a
+// text one. This argument is for the third, which nothing else can say - a caption with holes IN
+// it, `"No. [Number] of [Date]"` - and for a caller that would rather be explicit than rely on
+// what it happened to pass.
+// ⭐ THE OTHER PARAMETER, AND IT IS NOT THE SAME ONE. A cell can carry a DECIPHER value beside
+// what it prints: click the total on a report and be shown what it is made of. It is the field the
+// designer's panel calls `Details parameter`, it is set per printed cell as an area is put out, and
+// it has nothing to do with what the cell SAYS.
+const ibArg& ArgDetails()
+{
+	static const ibArg s_a(wxT("details"), ibArg::Kind::Text,
+		ibMcpText("The DECIPHER parameter - what this cell drills down to when somebody clicks it in a "
+			  "printed report. Not what the cell shows: that is `parameter` or `value`."));
+	return s_a;
+}
+
+const ibArg& ArgFill()
+{
+	static const ibArg s_a(wxT("fill"), ibArg::Kind::Text,
+		ibMcpText("How the cell is filled: `text` is a caption as typed, `parameter` means the whole "
+			  "cell is one substituted value, `template` means the TEXT carries holes in square "
+			  "brackets - \"No. [Number] of [Date]\" - which the module fills by those names. "
+			  "Omitted, passing `parameter` makes a parameter cell and passing `value` makes a text "
+			  "one, which is right nearly always; name it when you want a template."),
+		/*required*/ false, { wxT("text"), wxT("parameter"), wxT("template") });
+	return s_a;
+}
+
+// The fill type as the word the caller was given, so what is read back and what may be written are
+// the same three words rather than a number and a vocabulary.
+wxString FillWord(ibSpreadsheetFillType type)
+{
+	switch (type) {
+		case ibSpreadsheetFillType_StrParameter: return wxT("parameter");
+		case ibSpreadsheetFillType_StrTemplate:  return wxT("template");
+		default: break;
+	}
+	return wxT("text");
 }
 
 const ibArg& ArgAlign()
@@ -212,6 +272,24 @@ const ibArg& ArgBorder()
 	static const ibArg s_a(wxT("border"), ibArg::Kind::Text,
 		ibMcpText("Rule lines on named sides: any of left, right, top, bottom, or `all`. "
 			  "`underline` is the common case of this and stays as its own argument."));
+	return s_a;
+}
+
+// ⭐⭐ A RULE HAS A THICKNESS, AND A FORM IS READ BY IT. The outer frame of a table and the lines
+// between its rows are not the same weight on any printed document: the heavy line says where the
+// table begins and the hairline says where one row ends, and a sheet ruled entirely at 1 reads as
+// a grey mesh with no structure in it.
+//
+// 🛑 THIS TOOL RULED EVERYTHING AT 1 and offered no way to say otherwise, so every form built
+// through this door came out flat. Counted in a working configuration's own templates (2026-09-05,
+// a cash order): of twenty left borders, ELEVEN are width 3, two are 2, two are 1 and five are 0 —
+// the heavy line is the COMMON case, not the exception, and the one this door could not draw.
+const ibArg& ArgBorderWidth()
+{
+	static const ibArg s_a(wxT("borderWidth"), ibArg::Kind::Whole,
+		ibMcpText("How heavy the rule is: 0 rubs it out, 1 is a hairline for the lines inside a "
+			  "table, 2 and 3 are the weights a printed form frames itself with. Default 1. "
+			  "Applies to the sides named by `border`."));
 	return s_a;
 }
 
@@ -477,6 +555,64 @@ public:
 
 		result.AddField(wxT("areas"), ibDataValue::Array(areas));
 
+		// ⭐⭐ AND A SHEET WITH NO BANDS IS A SHEET NOBODY HAS CUT YET — said HERE, because this is
+		// the one call a caller makes before laying anything out, and the mistake it prevents is
+		// made in the first minute and paid for in the last.
+		//
+		// A template is not drawn cell by cell; it is read for what REPEATS and cut into bands — a
+		// header said once, a detail line drawn once per row, a footer, and the column blocks that
+		// make one blank serve several variants. That knowledge is written down and is nothing this
+		// tool could teach in a sentence, so the answer names where it lives rather than paraphrasing
+		// it. A caller that already knows loses one line; a caller that does not would otherwise
+		// build a form cell by cell and discover the bands only when the second variant is asked
+		// for (measured on this server 2026-09-05: a print form laid out in twenty-five calls
+		// without one of these patterns being read).
+		if (areas.empty()) {
+			result.SetValue(wxT("nextStep"),
+				ibMcpText("This sheet has no AREAS, so a module can only print it whole - and areas are "
+				  "what a printed form is made of. Before laying cells out, read how a blank is taken "
+				  "apart: pattern_read 'form-to-areas' for the bands and the column blocks, "
+				  "'printing' for the order of the blocks a person expects to see. Then name the "
+				  "bands with sheet_area."));
+		}
+
+		// ⭐⭐ THE BANDS THAT ARE NOT THE DEFAULT — which is the half that made sizing BLIND.
+		//
+		// sheet_size can set a row's height and a column's width, and nothing could read one back:
+		// a caller could not tell a column it had narrowed from one it had never touched, could not
+		// compare two, and could not learn what the default even is. So it guessed, and a form came
+		// out with `Counterparty:` clipped to `Counter` (2026-09-05, seen on the screen and not in
+		// any answer this door gave).
+		//
+		// Only the ones STORED are listed, because that is what "not the default" means here and a
+		// line per untouched column would bury the four that were set. `hidden` is a width of
+		// nothing, which is what hidden IS on a sheet — said as a word rather than left as a zero
+		// the reader has to know how to read.
+		{
+			std::vector<ibDataValue> bands;
+
+			const auto band = [&bands](const wxChar* what, s64 at, int size) {
+				std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+				node->SetValue(wxT("band"), wxString(what));
+				node->AddField(wxT("at"), ibDataValue::Int(at));
+				node->AddField(wxT("size"), ibDataValue::Int((s64)size));
+				if (size == 0)
+					node->AddField(wxT("hidden"), ibDataValue::Bool(true));
+				bands.push_back(ibDataValue::Child(node));
+			};
+
+			for (int idx = 0; idx < desc.GetSizeNumberRows(); ++idx)
+				if (const ibSpreadsheetRowSizeDescription* r = desc.GetRowSizeByIdx((size_t)idx))
+					band(wxT("row"), LineOut((int)r->m_row), (int)r->m_height);
+
+			for (int idx = 0; idx < desc.GetSizeNumberCols(); ++idx)
+				if (const ibSpreadsheetColSizeDescription* c = desc.GetColSizeByIdx((size_t)idx))
+					band(wxT("column"), LineOut((int)c->m_col), (int)c->m_width);
+
+			if (!bands.empty())
+				result.AddField(wxT("sizes"), ibDataValue::Array(bands));
+		}
+
 		if (!wanted.IsEmpty() && wantedStart < 0) {
 			refusal = wxString::Format(
 				ibMcpText("'%s' has no area called '%s'."), sheet->GetName(), wanted);
@@ -582,7 +718,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgRow(), ArgCol(), ArgValue(), ArgParameter(), ArgAlign(), ArgUnderline(), ArgColSpan(), ArgRowSpan(), ArgItalic(), ArgBold(), ArgFontSize(), ArgValign(), ArgVertical(), ArgBackground(), ArgColour(), ArgBorder(), ArgFit(), ArgReadOnly() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgRow(), ArgCol(), ArgValue(), ArgParameter(), ArgDetails(), ArgFill(), ArgAlign(), ArgUnderline(), ArgColSpan(), ArgRowSpan(), ArgItalic(), ArgBold(), ArgFontSize(), ArgValign(), ArgVertical(), ArgBackground(), ArgColour(), ArgBorder(), ArgBorderWidth(), ArgFit(), ArgReadOnly() };
 		return s_arguments;
 	}
 
@@ -608,10 +744,57 @@ public:
 			return false;
 		}
 
-		if (params.FindField(ArgValue().Name()) != nullptr)
+		const bool gaveValue     = params.FindField(ArgValue().Name())     != nullptr;
+		const bool gaveParameter = params.FindField(ArgParameter().Name()) != nullptr;
+
+		if (gaveValue)
 			cell->SetValue(ArgValue().Text(params));
-		if (params.FindField(ArgParameter().Name()) != nullptr)
-			cell->SetParameter(ArgParameter().Text(params));
+
+		// 🛑⭐⭐ A PARAMETER CELL CARRIES THE NAME AS ITS VALUE — AND THIS WROTE IT SOMEWHERE ELSE.
+		//
+		// ibBackendSpreadsheetObject::Put substitutes with
+		//     cell->m_value = ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType)
+		// so for a Parameter cell the WHOLE TEXT is the name looked up, and for a Template cell the
+		// names are the `[...]` inside that text. The name has to be in m_value or there is nothing
+		// to substitute.
+		//
+		// SetParameter fills m_detailsParameter, which is a DIFFERENT FIELD FOR A DIFFERENT JOB: the
+		// decipher parameter, used ten lines below Put's substitution to give each printed cell its
+		// own drill-down value. The designer's property panel names them apart — `Fill type` against
+		// `Details parameter` — and this tool had been writing the second while its argument said,
+		// and its description promised, the first.
+		//
+		// What that cost: every parameter cell built through this door was EMPTY. Empty in the
+		// editor, because there is no text; empty on paper, because the substitution reads the text
+		// there is none of. Seen on the screen (Max, 2026-09-05) as a print form whose detail band
+		// was a row of blank boxes, after `sheet_get` had reported the parameter names back quite
+		// happily — the read side agreed with the write side and both were looking at the wrong
+		// field.
+		if (gaveParameter)
+			cell->SetValue(ArgParameter().Text(params));
+
+		// The decipher parameter, when one is asked for — the field SetParameter actually fills.
+		if (params.FindField(ArgDetails().Name()) != nullptr)
+			cell->SetParameter(ArgDetails().Text(params));
+
+		// ⭐⭐ AND THE FILL TYPE WITH IT — see the note on ArgFill. Writing the parameter name
+		// without stamping the type left a cell that LOOKS like a hole to this tool and is a
+		// caption to everything that reads the sheet.
+		const wxString fill = ArgFill().Text(params);
+
+		if (!fill.IsEmpty()) {
+			desc.SetCellFillType(row, col,
+				fill.IsSameAs(wxT("parameter"), false) ? ibSpreadsheetFillType_StrParameter
+				: fill.IsSameAs(wxT("template"), false) ? ibSpreadsheetFillType_StrTemplate
+				: ibSpreadsheetFillType_StrText);
+		}
+		// Not said, so it follows what arrived: a name to substitute is a parameter cell, a
+		// caption is a text one. Only touched when one of them came, so a call that changes
+		// nothing but the colour leaves a template cell a template.
+		else if (gaveParameter && !ArgParameter().Text(params).IsEmpty())
+			desc.SetCellFillType(row, col, ibSpreadsheetFillType_StrParameter);
+		else if (gaveValue)
+			desc.SetCellFillType(row, col, ibSpreadsheetFillType_StrText);
 
 		const wxString align = ArgAlign().Text(params);
 		if (!align.IsEmpty()) {
@@ -719,11 +902,22 @@ public:
 				all || border.Lower().Contains(wxT("bottom")),
 			};
 
+			// The weight, if one was named — see ArgBorderWidth for why the heavy line is the case
+			// this door could not draw. Zero rubs the rule out, which is how a form takes a line
+			// AWAY from one side of a framed block.
+			const int weight = params.FindField(ArgBorderWidth().Name()) != nullptr
+				? (int)ArgBorderWidth().Whole(params) : 1;
+
+			if (weight < 0) {
+				refusal = ibMcpText("A border width is 0 or more - 0 rubs the rule out.");
+				return false;
+			}
+
 			for (int side = 0; side < 4; ++side) {
 				if (!sides[side])
 					continue;
-				cell->m_borderAt[side].m_style = wxPENSTYLE_SOLID;
-				cell->m_borderAt[side].m_width = 1;
+				cell->m_borderAt[side].m_style = weight > 0 ? wxPENSTYLE_SOLID : wxPENSTYLE_TRANSPARENT;
+				cell->m_borderAt[side].m_width = weight;
 				cell->m_borderAt[side].m_colour = *wxBLACK;
 			}
 		}
@@ -755,10 +949,25 @@ public:
 
 		result.AddField(wxT("row"), ibDataValue::Int(LineOut(row)));
 		result.AddField(wxT("col"), ibDataValue::Int(LineOut(col)));
-		if (!cell->GetValue().IsEmpty())
-			result.SetValue(wxT("value"), cell->GetValue());
+		// ⚠ THE TEXT IS ANSWERED UNDER THE NAME IT WAS SENT AS. A parameter cell holds the name in
+		// its value — that is what a parameter cell IS — so answering it as `value` would tell a
+		// caller that its `parameter` had not been taken. The fill type decides which word to use,
+		// which is the same fact deciding it in both directions.
+		const wxString said = cell->GetValue();
+		if (!said.IsEmpty()) {
+			result.SetValue(desc.GetFillType(row, col) == ibSpreadsheetFillType_StrParameter
+				? wxT("parameter") : wxT("value"), said);
+		}
+
+		// And the decipher parameter, which is a different field and a different question.
 		if (!cell->GetParameter().IsEmpty())
-			result.SetValue(wxT("parameter"), cell->GetParameter());
+			result.SetValue(wxT("details"), cell->GetParameter());
+
+		// ⭐ AND WHAT IT NOW IS, because that is the half a caller could not see. A cell carrying a
+		// parameter name and a fill type of Text is the shape that prints an empty hole, and until
+		// this answered there was no way to tell one from a working cell without opening the
+		// designer and looking at the property panel.
+		result.SetValue(wxT("fill"), FillWord(desc.GetFillType(row, col)));
 
 		return true;
 	}
