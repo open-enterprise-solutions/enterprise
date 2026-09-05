@@ -315,17 +315,26 @@ const ibArg& ArgName()
 	return s_a;
 }
 
+// 🛑⭐ NOT REQUIRED, BECAUSE WHETHER THEY ARE DEPENDS ON WHAT THE CALL IS DOING - and the gate
+// cannot know that. Declared required, this pair made `sheet_band {what: 'break', at: 12}`
+// impossible: a page break is addressed by `at`, says so in its own schema, and was refused for a
+// missing `start` it has no use for. Setting a page break through this door could not be done at
+// all (measured 2026-09-05). Removing an area has the same shape: the NAME says which one.
+//
+// ⭐ So the gate answers "it did not come" and each tool answers "it did not come FOR THIS", in
+// its own words and with the shape it wanted - which is the only place that knows.
 const ibArg& ArgStart()
 {
 	static const ibArg s_a(wxT("start"), ibArg::Kind::Whole,
-		ibMcpText("First row, 1-based."), /*required*/ true);
+		ibMcpText("First row, 1-based. Needed where a band is a RANGE - an area, a group - and not "
+			  "where one point addresses it."));
 	return s_a;
 }
 
 const ibArg& ArgEnd()
 {
 	static const ibArg s_a(wxT("end"), ibArg::Kind::Whole,
-		ibMcpText("Last row, inclusive."), /*required*/ true);
+		ibMcpText("Last row, inclusive. Needed alongside `start`."));
 	return s_a;
 }
 
@@ -362,8 +371,9 @@ const ibArg& ArgWhat()
 const ibArg& ArgColumns()
 {
 	static const ibArg s_a(wxT("columns"), ibArg::Kind::Flag,
-		ibMcpText("Apply it to columns instead of rows - a vertical page break, a frozen left "
-			  "edge, a column group."));
+		ibMcpText("Apply it to COLUMNS instead of rows. For a band: a vertical page break, a frozen "
+			  "left edge, a column group. For an AREA: a vertical block a module joins sideways, "
+			  "which is how one template serves a document with an article code and one without."));
 	return s_a;
 }
 
@@ -394,7 +404,8 @@ const ibArg& ArgRemove()
 {
 	static const ibArg s_a(wxT("remove"), ibArg::Kind::Flag,
 		ibMcpText("Take it off instead of putting it on. For a break, `at` says which one; for a "
-			  "freeze this is the same as at=0; for a group, `start` and `end` say which."));
+			  "freeze this is the same as at=0; for a group, `start` and `end` say which; for an "
+			  "AREA, the name does."));
 	return s_a;
 }
 
@@ -551,6 +562,29 @@ public:
 				wantedStart = (int)area->m_start;
 				wantedEnd = (int)area->m_end;
 			}
+		}
+
+		// ⭐⭐ AND THE VERTICAL ONES, which this reading did not know existed. A template is cut both
+		// ways — row bands put out down the page, COLUMN blocks joined sideways so one blank serves
+		// a document with an article code and one without — and listing only half of that made the
+		// other half invisible the moment it could be created (2026-09-05, on the call that first
+		// made one). Named as a band so the two cannot be confused: they are addressed separately
+		// and a name may honestly be used once in each.
+		for (int idx = 0; idx < desc.GetAreaNumberCols(); ++idx) {
+
+			const ibSpreadsheetAreaDescription* area = desc.GetColAreaByIdx(idx);
+			if (area == nullptr)
+				continue;
+
+			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+			node->SetValue(wxT("name"), area->m_label);
+			node->SetValue(wxT("band"), wxString(wxT("columns")));
+			node->AddField(wxT("start"), ibDataValue::Int(LineOut(area->m_start)));
+			node->AddField(wxT("end"), ibDataValue::Int(LineOut(area->m_end)));
+			node->AddField(wxT("width"),
+				ibDataValue::Int((s64)(area->m_end - area->m_start + 1)));
+
+			areas.push_back(ibDataValue::Child(node));
 		}
 
 		result.AddField(wxT("areas"), ibDataValue::Array(areas));
@@ -991,14 +1025,21 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Name a band of rows as an AREA - the unit a printing module puts out. A "
-			"header, a table row, a footer: the module names these, so a template without "
-			"them can only be printed whole.");
+		return ibMcpText("Name a band as an AREA - the unit a printing module puts out. A header, a "
+			"table row, a footer: the module names these, so a template without them can only "
+			"be printed whole.\n"
+			"AND A TEMPLATE IS CUT BOTH WAYS. `columns: true` names a band of COLUMNS instead, "
+			"which is how one blank serves several variants: a module JOINS the column blocks a "
+			"document actually needs - with the article code or without it, with the discount "
+			"columns or without - and puts the row bands out down the page. A vertical cut goes "
+			"through every horizontal band it crosses, the heading and the totals included.\n"
+			"Naming an area that already exists MOVES it, so a layout can be adjusted while it "
+			"is being built; `remove: true` takes one away.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgName(), ArgStart(), ArgEnd() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgName(), ArgStart(), ArgEnd(), ArgColumns(), ArgRemove() };
 		return s_arguments;
 	}
 
@@ -1017,31 +1058,80 @@ public:
 			return false;
 		}
 
+		// ⚠ AND THE RANGE IS ONLY ASKED FOR WHEN THERE IS ONE. A removal is addressed by the NAME —
+		// demanding a first and last row to take an area away is asking which rows the thing being
+		// removed occupied, which the caller may not know and which cannot matter.
+		//
 		// A BAND THAT ENDS BEFORE IT BEGINS is not a narrow area, it is a mistake,
 		// and it would print nothing while looking declared.
-		if (start < 0 || end < start) {
+		if (!ArgRemove().Flag(params) && (start < 0 || end < start)) {
 			refusal = ibMcpText("An area runs from a first row to a last one, both 1 or more.");
 			return false;
 		}
 
 		ibSpreadsheetDescription desc = sheet->GetSpreadsheetDesc();
 
-		for (int idx = 0; idx < desc.GetAreaNumberRows(); ++idx) {
-			const ibSpreadsheetAreaDescription* area = desc.GetRowAreaByIdx(idx);
-			if (area != nullptr && area->m_label.IsSameAs(name, false)) {
-				refusal = wxString::Format(
-					ibMcpText("'%s' already has an area called '%s'."), sheet->GetName(), name);
-				return false;
-			}
+		// ⭐⭐ ROWS OR COLUMNS, BECAUSE A TEMPLATE IS CUT BOTH WAYS AND THIS DOOR COULD ONLY CUT ONE.
+		// The description has carried column areas all along - AddColArea beside AddRowArea, with
+		// their own list - and they are what makes a blank serve several variants: the module JOINS
+		// the blocks a document needs and PUTS the row bands down the page. Everything the corpus
+		// says about optional column blocks (`form-to-areas`) was unbuildable from here.
+		const bool columns = ArgColumns().Flag(params);
+
+		// Whether one of this name is already there, which decides between adding and moving.
+		bool exists = false;
+		const int count = columns ? desc.GetAreaNumberCols() : desc.GetAreaNumberRows();
+
+		for (int idx = 0; idx < count && !exists; ++idx) {
+			const ibSpreadsheetAreaDescription* area =
+				columns ? desc.GetColAreaByIdx(idx) : desc.GetRowAreaByIdx(idx);
+			exists = area != nullptr && area->m_label.IsSameAs(name, false);
 		}
 
-		desc.AddRowArea(name, start, end);
+		// 🛑 TAKING ONE AWAY, AND MOVING ONE, WERE BOTH IMPOSSIBLE. A second call with a name that
+		// existed was REFUSED - and a layout is built by adjustment, so the bands move as the sheet
+		// takes shape. Three refusals in one sitting here (2026-09-05), after which the areas of a
+		// half-built form could not be corrected at all: the only way out was to delete the
+		// template and start again.
+		if (ArgRemove().Flag(params)) {
+
+			if (!exists) {
+				refusal = wxString::Format(
+					ibMcpText("'%s' has no %s area called '%s' to remove."),
+					sheet->GetName(), columns ? ibMcpText("column") : ibMcpText("row"), name);
+				return false;
+			}
+
+			if (columns) desc.DeleteColArea(name);
+			else         desc.DeleteRowArea(name);
+
+			sheet->SetSpreadsheetDesc(desc);
+			activeMetaData->Modify(true);
+
+			result.AddField(wxT("removed"), ibDataValue::Bool(true));
+			result.SetValue(wxT("name"), name);
+			result.SetValue(wxT("band"), wxString(columns ? wxT("columns") : wxT("rows")));
+			return true;
+		}
+
+		// ⭐ NAMING ONE THAT EXISTS MOVES IT. An area is identified by its NAME - that is what the
+		// module puts out - so the same name twice is one area in two places, which is a
+		// correction and not a conflict.
+		if (exists) {
+			if (columns) desc.SetColSizeArea(name, start, end);
+			else         desc.SetRowSizeArea(name, start, end);
+		}
+		else {
+			if (columns) desc.AddColArea(name, start, end);
+			else         desc.AddRowArea(name, start, end);
+		}
 
 		sheet->SetSpreadsheetDesc(desc);
 		activeMetaData->Modify(true);
 
-		result.AddField(wxT("added"), ibDataValue::Bool(true));
+		result.AddField(exists ? wxT("moved") : wxT("added"), ibDataValue::Bool(true));
 		result.SetValue(wxT("name"), name);
+		result.SetValue(wxT("band"), wxString(columns ? wxT("columns") : wxT("rows")));
 		result.AddField(wxT("start"), ibDataValue::Int(LineOut(start)));
 		result.AddField(wxT("end"), ibDataValue::Int(LineOut(end)));
 		return true;
