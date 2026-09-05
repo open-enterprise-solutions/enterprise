@@ -296,6 +296,25 @@ void ibValueArray::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 			SetTypeBoolean(ret, !m_listValue.empty());
 			return;
 		}
+		// The aggregates joined the pipeline vocabulary, so `arr.Sum()` now emits
+		// OPER_CALL_LINQ and arrives HERE rather than at the method table below.
+		// Answered from the vector directly, the way Count and First are: the base
+		// implementation would build an iterator to walk a sequence we are already
+		// holding. Same functions the method entries call, so the two roads cannot
+		// drift apart.
+		case M::Sum:
+		case M::Min:
+		case M::Max:
+		case M::Average:
+		{
+			const bool bSelector = (n >= 1 && args != nullptr && args[0] != nullptr);
+			switch (method) {
+				case M::Sum:     CopyValue(ret, bSelector ? SumWithSelector(*args[0])     : Sum());     return;
+				case M::Min:     CopyValue(ret, bSelector ? MinWithSelector(*args[0])     : Min());     return;
+				case M::Max:     CopyValue(ret, bSelector ? MaxWithSelector(*args[0])     : Max());     return;
+				default:         CopyValue(ret, bSelector ? AverageWithSelector(*args[0]) : Average()); return;
+			}
+		}
 		default:
 			// Fall through to base impl — handles Where/Select/OrderBy/
 			// GroupBy/Join/Skip/Take/Aggregate/etc via CreateIterator

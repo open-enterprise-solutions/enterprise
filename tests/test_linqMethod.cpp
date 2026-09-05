@@ -41,3 +41,28 @@ TEST(LinqMethod, EveryTableEntryNameResolvesToItsId) {
             << "method name: " << wxString(e.name).ToStdString();
     }
 }
+
+// ...AND THE OTHER DIRECTION, which the test above cannot see. It walks the
+// TABLE, so an enum value added without its row is invisible to it — and that
+// failure is silent in the worst way: the compiler never resolves the name, so
+// the call emits OPER_CALL_METHOD, the receiver has no such method, and the user
+// reads "field not found" about a method the language does list.
+//
+// Counting is enough because the enum is contiguous and Average is last by
+// construction (values are appended — an AOT-compiled module carries these
+// numbers on disk).
+TEST(LinqMethod, TableCoversEveryEnumValue) {
+    const size_t declared = (size_t)ibValue::ibLinqMethod::Average + 1;
+    EXPECT_EQ(ibValue::GetLinqMethodTable().size(), declared)
+        << "an ibLinqMethod value has no row in GetLinqMethodTable(), so its name "
+           "will never resolve and the call will emit the wrong opcode";
+}
+
+// The aggregates are pipeline operations, not merely Array methods — this is the
+// pin for the gap that made `arr.Where(...).Sum()` fail while `arr.Sum()` worked.
+TEST(LinqMethod, AggregatesResolveAsPipelineOps) {
+    EXPECT_EQ(ibValue::FindLinqMethodByName(wxT("Sum")),     (long)ibValue::ibLinqMethod::Sum);
+    EXPECT_EQ(ibValue::FindLinqMethodByName(wxT("Min")),     (long)ibValue::ibLinqMethod::Min);
+    EXPECT_EQ(ibValue::FindLinqMethodByName(wxT("Max")),     (long)ibValue::ibLinqMethod::Max);
+    EXPECT_EQ(ibValue::FindLinqMethodByName(wxT("Average")), (long)ibValue::ibLinqMethod::Average);
+}

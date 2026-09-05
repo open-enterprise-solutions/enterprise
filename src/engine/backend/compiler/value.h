@@ -1510,6 +1510,24 @@ public:
 		SelectIndexed,
 		ToTable,        // materialise into the built-in value table (data sources / Queryable)
 		SelectMany,     // flatten: fn(elem) -> a source, and its elements are yielded in turn
+
+		// ⚠ APPENDED, AND NEW ONES GO AFTER THESE. The enum value is what
+		// OPER_CALL_LINQ carries in its operand and what an AOT-compiled module
+		// has on disk, so inserting in the middle would make every stored
+		// bytecode call a different method.
+		//
+		// The aggregates were missing from the PIPELINE, though every concrete
+		// collection had them: `arr.Sum()` worked because ibValueArray declares a
+		// method of that name, while `arr.Where(...).Sum()` answered "Aggregate
+		// object field not found 'Sum'" — the receiver was a pipeline, which has
+		// no methods of its own. The workaround, `.ToArray().Sum()`, materialises
+		// the whole sequence, which is the one thing a lazy pipeline exists to
+		// avoid. Filtering and then totalling is not an exotic request; it is what
+		// a report does.
+		Sum,            // total; Sum(selector?) projects each element first
+		Min,            // smallest; Min(selector?)
+		Max,            // largest; Max(selector?)
+		Average,        // arithmetic mean; Average(selector?)
 	};
 
 	// Method-table entry — enum id + script-side name + one-line help

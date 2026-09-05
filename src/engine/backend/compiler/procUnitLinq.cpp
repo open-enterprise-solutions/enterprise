@@ -103,7 +103,10 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	const bool bHeapFrame = bfn->m_needsHeapFrame;
 
 	std::shared_ptr<ibRunContext> spHeapCtx;
-	ibRunContext                  stackCtx(bHeapFrame ? wxNOT_FOUND : (int)lambdaVarCount);
+	// The stack frame leases its slots; the heap-promoted one cannot, because it is
+	// the case that OUTLIVES the call — a lambda captured it. procUnitState.h, ibRunStack.
+	ibRunContext                  stackCtx(bHeapFrame ? wxNOT_FOUND : (int)lambdaVarCount,
+	                                       ibRunLifetime::PerCall);
 	if (bHeapFrame)
 		spHeapCtx = std::make_shared<ibRunContext>((int)lambdaVarCount);
 
@@ -1268,6 +1271,58 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			CopyValue(ret, acc);
 			break;
 		}
+		// AGGREGATES OVER THE STREAM — one pass, nothing materialised. Each takes an
+		// OPTIONAL selector, exactly as the concrete collections' own Sum/Min/Max/
+		// Average do (ibValueArray::SumWithSelector and friends): `Sum()` totals the
+		// elements, `Sum(fn)` totals fn(element). An EMPTY sequence answers Empty
+		// rather than zero — the same answer the Array versions give, and the honest
+		// one, because "nothing to add up" is not the same statement as "adds up to
+		// nothing".
+		case M::Sum:
+		case M::Min:
+		case M::Max:
+		case M::Average:
+		{
+			ibValueFunction* selector = (n >= 1 && args && args[0]) ? AsFunction(args[0]) : nullptr;
+			if (n >= 1 && args && args[0] != nullptr && selector == nullptr)
+				ibBackendQueryLinqException::Error(_("The aggregate selector must be a Function value"));
+
+			ibValue acc, current, projected;
+			long   seen  = 0;
+
+			while (upstream->MoveNext(current)) {
+				ibValue* pTerm = &current;
+				if (selector != nullptr) {
+					CallLambdaWithArgs(*selector, &pTerm, 1, projected);
+					pTerm = &projected;
+				}
+				if (seen == 0) {
+					acc = *pTerm;
+				}
+				else if (method == M::Sum || method == M::Average) {
+					acc = acc + *pTerm;
+				}
+				else if (method == M::Min) {
+					if (*pTerm < acc) acc = *pTerm;
+				}
+				else {   // M::Max
+					if (acc < *pTerm) acc = *pTerm;
+				}
+				seen++;
+			}
+
+			if (seen == 0)
+				break;                     // ret stays empty — an empty sequence has no total
+
+			if (method == M::Average) {
+				const ibNumber count(static_cast<int64_t>(seen));
+				CopyValue(ret, ibValue(acc.GetNumber() / count));
+			}
+			else {
+				CopyValue(ret, acc);
+			}
+			break;
+		}
 		case M::WhereIndexed: // WhereIndexed(fn)
 		{
 			ibValueFunction* fn = (n >= 1 && args && args[0]) ? AsFunction(args[0]) : nullptr;
@@ -1365,6 +1420,10 @@ const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {
 		{ M::SelectIndexed,       L"SelectIndexed",       L"Project with index - fn(elem, index) -> newElem" },
 		{ M::ToTable,             L"ToTable",             L"Materialise a data source into a value table (Queryable)" },
 		{ M::SelectMany,          L"SelectMany",          L"Flatten - fn(elem) -> a source, whose elements are yielded in turn" },
+		{ M::Sum,                 L"Sum",                 L"Total of the sequence; Sum(selector?) projects each element first" },
+		{ M::Min,                 L"Min",                 L"Smallest element; Min(selector?) compares the projection" },
+		{ M::Max,                 L"Max",                 L"Largest element; Max(selector?) compares the projection" },
+		{ M::Average,             L"Average",             L"Arithmetic mean; Average(selector?) averages the projection" },
 	};
 	return table;
 }

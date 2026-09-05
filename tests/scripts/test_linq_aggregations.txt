@@ -39,3 +39,30 @@ var q = from o in orders
 foreach (g in q) {
     Message(g.Key + " amount sum: " + g.Values.Sum());
 }
+
+// ---------------------------------------------------------------------------
+// AGGREGATES ON A PIPELINE, not only on a materialised collection.
+//
+// `nums.Sum()` above works because Array declares a method of that name. Until
+// Sum/Min/Max/Average joined the LINQ vocabulary, the moment a filter came
+// first — `nums.Where(...).Sum()` — the receiver was a pipeline with no methods
+// of its own and the answer was "Aggregate object field not found 'Sum'". The
+// workaround was .ToArray().Sum(), which materialises everything a lazy
+// pipeline exists to avoid.
+// ---------------------------------------------------------------------------
+
+Message("--- aggregates over a filtered pipeline ---");
+var even = Function(x) Return x % 2 = 0 EndFunction;
+Message("filtered sum=" + nums.Where(even).Sum());          // 6   (2 + 4)
+Message("filtered min=" + nums.Where(even).Min());          // 2
+Message("filtered max=" + nums.Where(even).Max());          // 4
+Message("filtered avg=" + nums.Where(even).Average());      // 3
+
+Message("--- aggregates with a selector ---");
+var twice = Function(x) Return x * 2 EndFunction;
+Message("sum of doubles=" + nums.Sum(twice));               // 30
+Message("max of doubles=" + nums.Select(twice).Max());      // 10
+
+Message("--- aggregate over an empty pipeline ---");
+var none = Function(x) Return x > 100 EndFunction;
+Message("empty sum is empty: " + (nums.Where(none).Sum() = Undefined));   // True
