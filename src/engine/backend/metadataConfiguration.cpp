@@ -740,15 +740,19 @@ bool ibMetaDataConfigurationBase::SaveConfiguration(wxString& refusal)
 		// the LIVE one alone — that is what applying is for, and they are two buttons because they are
 		// two intentions.
 		//
-		// ⭐ WITH saveConfigFlag, AND THAT IS NOT DECORATION. Each metaobject reads the flag in
-		// OnSaveMetaObject, and a MODULE does two things when it sees it: hands the debugger its new
-		// line count, and drops its row from the AOT cache — the row was compiled from the text that
-		// has just been replaced. Called with defaultFlag (0x0000) the test `(flags & saveConfigFlag)`
-		// is false, so the save persisted the new text and LEFT THE STALE BYTE CODE in place, to be
-		// handed to the next session as current. That is the whole of the "worked yesterday" failure:
-		// the byte code answers for names that no longer sit where it thinks (Max, 2026-09-04:
-		// *"ты передаёшь нулевой и считаешь, что кэш валидный"*).
-		if (!SaveDatabase(saveConfigFlag)) {
+		// 🛑 AND IT PASSES defaultFlag, WHICH IT STOPPED DOING FOR TWO DAYS. saveConfigFlag does not
+		// mean "the text changed"; it is what opens the RESTRUCTURE branch in OnSaveDatabase, and
+		// handing it to a plain save turned the diskette into a full apply — ten CREATE TABLE and six
+		// ALTER TABLE during saves alone (measured by DitriXNew, 2026-09-05, issue #85). Worse, it
+		// took the SAFEGUARD with it: ApplyConfiguration's own step 1 called this same road, so the
+		// consent point below was offered a ledger for work it had already committed.
+		//
+		// ⭐ THE CACHE IS RETIRED BY THE KEY, NOT BY THIS FLAG. An AOT row is keyed by the build stamp
+		// and the CONFIGURATION DIGEST, and the digest moves only when a restructure succeeds — so a
+		// plain save leaves every row still true, which is correct: the runtime reads `config`, and a
+		// plain save does not publish it. Chasing a stale row from here was solving a problem the key
+		// already solves, and it cost the two things above.
+		if (!SaveDatabase(defaultFlag)) {
 			refusal = _("Failed to save the configuration.");
 			return false;
 		}
@@ -770,10 +774,16 @@ bool ibMetaDataConfigurationBase::ApplyConfiguration(wxString& refusal,
 	}
 
 	try {
-		// 1 — the configuration itself, with the same flag the save above passes: an apply persists
-		// the edited configuration first, and every module in it must retire its cached byte code
-		// at that moment, not at some later compile that never comes.
-		if (!SaveDatabase(saveConfigFlag)) {
+		// 1 — the configuration itself, PERSISTED AND NOTHING MORE. The restructure is steps 2-5,
+		// and it is the whole reason this verb is separate from the save above.
+		//
+		// 🛑 THIS CARRIED saveConfigFlag FOR TWO DAYS, and that made the apply do everything TWICE:
+		// SaveDatabase is OnBefore + OnSave + OnAfter, the same trio spelled out below, so the DDL
+		// ran here, `config` was published here, and the baseline was re-read here. By the time step
+		// 4 offered "the one moment 'no' is free", baseline and target were equal and the ledger it
+		// showed was empty. The consent point guarded nothing, and `config_apply {confirm: false}` —
+		// documented as the only way to see the DDL in advance — could not work by construction.
+		if (!SaveDatabase(defaultFlag)) {
 			refusal = _("Failed to save the configuration.");
 			return false;
 		}

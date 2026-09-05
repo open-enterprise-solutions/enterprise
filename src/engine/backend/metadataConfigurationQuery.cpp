@@ -233,6 +233,22 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 			{ wxT("file_guid"),   ibConst(ibValue(m_metaGuid.str())) },
 		}, { wxT("file_name") }));
 
+	// ⭐⭐ RECOMPUTED ON EVERY SAVE, AND THAT IS THE AOT CACHE'S WHOLE CORRECTNESS STORY. A cached
+	// row is looked up by (descriptor, configuration digest), so bytecode compiled against an
+	// earlier configuration is not found-and-rejected — it is NOT FOUND, and the caller takes the
+	// ordinary compile path. Moving the digest here retires every previous row in the same instant,
+	// with no DELETE to run and nobody to remember running it (byteCodeCache.h, which records that
+	// the rule it replaced cost half a day twice).
+	//
+	// 🛑 SO IT MAY NOT WAIT FOR THE RESTRUCTURE. Deferring it to the publication was tried on
+	// 2026-09-05 and taken straight back out: a plain save changes the module TEXT without moving
+	// the key, which puts the previous row back in reach — the exact stale-bytecode failure the key
+	// exists to make impossible.
+	//
+	// ⚠ AND IT IS NOT AN "APPLIED" MARK, which is what made the mistake tempting. Both readers ask
+	// about TEXT, not about the database: Modify() compares the edited configuration against the
+	// saved baseline, and the debugger verifies a connection by the configuration GUID and merely
+	// carries this along. What "the base has not got yet" is answered by database_diff.
 	m_md5Hash = ibMD5::ComputeMd5(
 		wxBase64Encode(writerData.pointer(), writerData.size())
 	);

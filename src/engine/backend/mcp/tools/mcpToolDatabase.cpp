@@ -98,25 +98,25 @@ public:
 
 	wxString GetDescription() const override
 	{
-		// ⚠ THE DESCRIPTION SAID "IT DOES NOT BECOME THE CONFIGURATION THE APPLICATION RUNS", FULL
-		// STOP, AND THE HALF THAT MATTERS MOST WAS MISSING. SaveConfiguration goes through
-		// SaveDatabase(saveConfigFlag), and the restructure lives inside that flag's branch
-		// (metadataConfigurationQuery.cpp) - so a plain save CREATEs, ALTERs and DROPs tables.
-		// Building a small configuration through MCP issued ten CREATE TABLE and six ALTER TABLE
-		// during saves alone, and `config_apply {confirm: false}` - the rehearsal, and the only way
-		// to see DDL in advance - then had an empty ledger, because the work it previews was done.
+		// 🛑 THIS TEXT WAS TRUE, THEN FALSE FOR TWO DAYS, THEN TRUE AGAIN, AND IT NEVER MOVED.
+		// SaveConfiguration was given saveConfigFlag on 2026-09-04 — the flag that opens the
+		// RESTRUCTURE branch, handed over to reach something else entirely — and from that moment a
+		// plain save issued DDL: ten CREATE TABLE and six ALTER TABLE during saves alone, measured
+		// 2026-09-05. The description was then corrected to say so, which was the right thing to do
+		// about a false text; the flag went back on the same day (issue #85), and this went with it.
 		//
-		// 🛑 SO THE SENTENCE TAUGHT THE ONE HABIT THAT DEFEATS THE SAFEGUARD: save often, it is
-		// cheap and safe, review later. Whether the restructure BELONGS here is a question for
-		// whoever owns the save path (open-enterprise-solutions/enterprise#85); saying what it
-		// actually does is not, and a false description costs more than a missing one.
+		// ⭐ THE LESSON WORTH KEEPING IS NOT ABOUT THE WORDING. What a verb DOES is decided in the
+		// engine, and a description that follows it around is the second copy of a fact. Both times
+		// the text was wrong, the fix was in the save path.
 		return ibMcpText("Store the configuration as it stands, so it survives closing the designer and "
-			"logging in again. IT ALSO BRINGS THE DATABASE STRUCTURE INTO STEP - the "
-			"restructure runs here, so this call creates, alters and drops tables. What "
-			"config_apply adds is the announcement to whoever is running the configuration and "
-			"the ledger of what changed, NOT the DDL itself: schema you want to see before it "
-			"happens has to be read with config_apply confirm=false BEFORE the save that "
-			"introduces it, not after.");
+			"logging in again. It does NOT touch the database structure and does NOT become the "
+			"configuration the application runs - that is config_apply, and the two are separate "
+			"because they are two intentions. This is the diskette: cheap, safe, and the thing to "
+			"do before stopping work.\n"
+			"WHAT A SAVE LEAVES BEHIND IS A DIFFERENCE, and that is the point: the stored "
+			"configuration and the running one now disagree, database_diff says how, and the next "
+			"apply - or the next time this base is opened - is what closes it. A restructure that "
+			"fails leaves the same difference rather than losing the work.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -178,13 +178,12 @@ public:
 		ledger.Clear();
 
 		result.AddField(wxT("saved"), ibDataValue::Bool(true));
-		// ⚠ AND THE NOTE WAS THE SAME CLAIM, ARRIVING AFTER EVERY SAVE. It sent the caller to
-		// database_diff for "what it does not yet have" - which answers zero differences, because
-		// the structure has just been brought into step by this call.
+		// ⭐ AND THE NOTE SAYS WHAT IS NOW OUTSTANDING, which is the useful half of a save. It said
+		// this before, then said the opposite for the two days the save was restructuring, and says
+		// it again — see the description above for why the text was never the thing to fix.
 		result.SetValue(wxT("note"),
-			ibMcpText("Stored, and the database structure was brought into step with it - tables may "
-			  "have been created, altered or dropped. config_apply is what announces the change "
-			  "and hands back the ledger; database_diff says whether anything is still outstanding."));
+			ibMcpText("Stored. The application still runs the previously applied configuration - "
+			  "database_diff says what it does not yet have."));
 
 		return true;
 	}
@@ -215,10 +214,9 @@ public:
 			"take the base exclusively. With confirm=false it goes all the way and then rolls "
 			"back, answering with the ledger of every CREATE, ALTER and DROP it would have made - "
 			"which is the only way to see the schema changes in advance, because the engine has "
-			"no rehearsal mode by design. ASK IT BEFORE YOU SAVE: config_save runs the restructure "
-			"too, so a change already saved has already been made and the ledger comes back "
-			"empty. An empty ledger means nothing is outstanding - never that nothing will "
-			"happen.");
+			"no rehearsal mode by design. Saving first costs nothing here - config_save stores the "
+			"configuration without touching the structure, so the ledger this hands back still "
+			"holds everything the base has not got.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override

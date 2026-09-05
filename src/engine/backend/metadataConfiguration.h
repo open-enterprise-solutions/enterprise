@@ -237,7 +237,11 @@ protected:
 
 protected:
 
+	// ⭐ THE CONFIGURATION'S DIGEST, and it is the AOT cache's KEY rather than a mark of what has
+	// been applied — recomputed on every load and every save, so a save retires every cached row of
+	// the previous configuration by putting them out of reach (byteCodeCache.h).
 	wxString m_md5Hash;
+
 	//common meta object — owning handle (ibValuePtr): bind = IncrRef, rebind / dtor = DecrRef
 	ibValuePtr<ibValueMetaObjectConfiguration> m_commonObject;
 };
