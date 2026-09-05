@@ -7,6 +7,7 @@
 
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"
+#include "backend/metaCollection/partial/selector/objectSelector.h"   // the selector ctor below upcasts to a second base
 #include "backend/composition/dataComposer.h"   // GetModelComposer().GroupCount/GetGroupAt — grouped-add dim seeding
 
 #include "backend/appData.h"
@@ -214,8 +215,11 @@ ibValueTabularSectionDataObjectRef::ibValueTabularSectionDataObjectRef(ibValueRe
 {
 }
 
+// A selector derives ibValueDataObject as its second base, so the pointer needs an offset. The
+// C-style cast that stood here compiled as a reinterpret_cast on an incomplete type and applied
+// none, so every call through m_objectValue landed in the wrong vtable.
 ibValueTabularSectionDataObjectRef::ibValueTabularSectionDataObjectRef(ibValueSelectorRecordDataObject* selectorObject, const ibValueMetaObjectTableData* tableObject) :
-	ibValueTabularSectionDataObjectBase((ibValueDataObject*)selectorObject, tableObject), m_readAfter(false)
+	ibValueTabularSectionDataObjectBase(selectorObject, tableObject), m_readAfter(false)
 {
 }
 
