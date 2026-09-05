@@ -422,8 +422,7 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	EXPECT_EQ(a.m_kind,            ibFnKind::Export);
 	EXPECT_TRUE(a.m_needsHeapFrame) << "the heap-frame flag did not survive the round trip";
 	EXPECT_TRUE(a.m_valueCached)    << "the Cached modifier did not survive the round trip";
-	EXPECT_TRUE(a.m_valueVariadic)  << "the variadic flag did not survive the round trip — a negative-arity
-"
+	EXPECT_TRUE(a.m_valueVariadic)  << "the variadic flag did not survive the round trip - a negative-arity "
 	                                   "built-in resolved through bytecode then refuses every call it is given";
 	EXPECT_EQ(a.m_strRealName,     wxT("Calculate"));
 

@@ -377,8 +377,10 @@ TEST(RuntimeBench, DISABLED_DumpThinLambda) {
         wxT("EndFunction\n")));
 
     const auto& bc = cc.m_cByteCode;
-    std::cout << "=== inline arg slots=" << (long long)kInlineArgSlots
-              << "  functions (" << bc.m_listFunc.size() << ") ===\n";
+    // A frame no longer carries any slots inline — it reserves a run on ibRunStack sized by the
+    // arity the compiler counted (procContext.h). So there is no inline width left to print, and
+    // the header names what this dump is actually about.
+    std::cout << "=== compiled functions (" << bc.m_listFunc.size() << ") ===\n";
     for (size_t i = 0; i < bc.m_listFunc.size(); ++i) {
         const auto& fn = bc.m_listFunc[i];
         std::cout << std::right << std::setw(3) << i
