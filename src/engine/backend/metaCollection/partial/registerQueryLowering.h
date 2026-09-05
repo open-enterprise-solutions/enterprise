@@ -1028,9 +1028,11 @@ inline ibValue ibRegSelectionToTable(ibDataQueryResult& selection, const ibBacke
 	while (selection.Next()) {
 		ibValueModelTable::ibValueModelTableReturnLine* line = table->GetRowAt(table->AppendRow());
 		wxASSERT(line);
+		// By the column, not by its name: GetColumn reads one scalar field under the read's own
+		// alias, and a dimension is a reference of three. Every value used to come back empty.
 		for (const ibBackendQueryColumn* col : columns)
 			if (col != nullptr)
-				line->SetAt(col->GetName(), selection.GetColumn(col->GetName()));
+				line->SetAt(col->GetName(), selection.GetValue(col));
 		wxDELETE(line);
 	}
 
