@@ -149,13 +149,18 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 			// leaves the list short by whatever nobody thought of that day — which is how
 			// `StockManagement` became invisible from a document's object module.
 			//
-			// ⚠ SAYING IT THIS WAY IS NOT ENOUGH, and the measurement says so: widening visibility
-			// moves names between DEPTHS, and a depth is what the receiver operand carries. Every
-			// version of this condition tried on 2026-09-04 fixed one road and broke another,
-			// because the address itself is the problem — see the arc note. Left as the narrower
-			// form until the addressing is fixed; the broad rule belongs with that fix.
-			if (!(m_numReturn == RETURN_BLOCK || numCanUseLocalInParent > 0 || cur->IsPublic() || cur->IsProtected()
-			      || cur->IsExternal() || crossedLambda))
+			// ⭐ AND IT IS SAID THAT WAY NOW, 2026-09-05 — what made it sayable was finding the
+			// SECOND ROAD. The list was this walk's answer; the bytecode walk
+			// (ibByteCode::FindVariable) had its own, `if (v.IsLocal()) return false`, which IS
+			// the rule — on that side access is carried by the kind. So one name got two
+			// answers depending on which road found it: the list left Context / ContextProp
+			// out, so `Catalogs` / `Documents` / `Manager` passed here only on the
+			// one-level-up budget while sailing through there. Widening either road alone then
+			// moved names between depths on that road only — which is what "fixed one road and
+			// broke another" was. Both now ask `IsLocal()`, which is the same question in the
+			// same words, and needs no third name to say it.
+			if (!(m_numReturn == RETURN_BLOCK || numCanUseLocalInParent > 0 || crossedLambda
+			      || !cur->IsLocal()))
 				return false;
 			out.m_numArray = blockReturn ? (long long)DEF_VAR_TEMP : (long long)depth;
 			out.m_numIndex = cur->m_numVariable;
@@ -406,7 +411,7 @@ void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString&
 	// MAX_STATIC_VAR, "arity unknown"). Carry it across; without this the loop
 	// below simply builds an empty list and the caller's first argument reads as
 	// one too many.
-	contextFunction->m_bVariadic = (argCount < 0);
+	contextFunction->m_valueVariadic = (argCount < 0);
 
 	if (argCount > 0) contextFunction->m_listParam.reserve(argCount);
 

@@ -363,12 +363,16 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	fn.m_lVarCount       = 5;
 	fn.m_returnClsid     = 0xABCDEF;
 	fn.m_kind            = ibFnKind::Export;
-	// Two flags that default FALSE and have to be RESTORED rather than derived —
-	// exactly the shape that goes missing without a symptom. m_needsHeapFrame
-	// was in fact never written until v21, so a module served from the cache came
-	// back with it cleared on every function.
+	// THREE flags that default FALSE and have to be RESTORED rather than derived —
+	// exactly the shape that goes missing without a symptom, and all three went
+	// missing in turn. m_needsHeapFrame was never written until v21, so a module
+	// served from the cache came back with it cleared on every function; m_valueCached
+	// went the same way; m_valueVariadic was not carried at all until v23, which made
+	// every built-in of negative arity — Max, Min — REFUSE EVERY CALL it was given
+	// the moment a name resolved through bytecode instead of a live compile context.
 	fn.m_needsHeapFrame  = true;
 	fn.m_valueCached     = true;
+	fn.m_valueVariadic   = true;
 	fn.m_strRealName     = wxT("Calculate");
 	fn.m_strContext      = wxEmptyString;
 
@@ -418,6 +422,9 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	EXPECT_EQ(a.m_kind,            ibFnKind::Export);
 	EXPECT_TRUE(a.m_needsHeapFrame) << "the heap-frame flag did not survive the round trip";
 	EXPECT_TRUE(a.m_valueCached)    << "the Cached modifier did not survive the round trip";
+	EXPECT_TRUE(a.m_valueVariadic)  << "the variadic flag did not survive the round trip — a negative-arity
+"
+	                                   "built-in resolved through bytecode then refuses every call it is given";
 	EXPECT_EQ(a.m_strRealName,     wxT("Calculate"));
 
 	ASSERT_EQ(a.m_listParam.size(),         2u);
@@ -576,4 +583,32 @@ TEST(ByteCodeAOT, LargeButRealisticBytecode) {
 	EXPECT_EQ(dst.m_listVar[42].m_strRealName, wxT("v42"));
 	EXPECT_EQ(dst.m_listFunc[7].m_strRealName, wxT("Fn7"));
 	EXPECT_EQ(dst.m_listCode[1234].m_numLine,  1235u);
+}
+
+// ===========================================================================
+// THE VISIBILITY RULE, asked of every kind
+//
+// "A child sees its parent entire except the parent's own private locals."
+// On the bytecode side access IS the kind: Private is Local, Public is Export,
+// Protected is its own kind. The compile side used to answer the same question
+// with a LIST of permitted kinds, which left Context / ContextProp out — so one
+// name resolved differently depending on which road found it.
+// ===========================================================================
+
+TEST(ByteCodeAOT, AChildSeesEverythingButPrivateLocals) {
+	// The one thing a child must not see. `var X` with no modifier is kind=Local,
+	// and on this side that IS "private".
+	EXPECT_TRUE(MakeVar(wxT("hidden"), ibVarKind::Local, 0).IsLocal());
+
+	// Declared for others to see: `var X Public` is stamped kind=Export at
+	// creation, `var X Protected` flips to kind=Protected (compileCode.cpp).
+	EXPECT_FALSE(MakeVar(wxT("shared"),  ibVarKind::Export,    1).IsLocal());
+	EXPECT_FALSE(MakeVar(wxT("guarded"), ibVarKind::Protected, 2).IsLocal());
+
+	// System bindings — for children by construction, and the ones the compile
+	// side's list forgot: a common module reaching a document's object module is
+	// External, and Catalogs / Documents / Manager are Context / ContextProp.
+	EXPECT_FALSE(MakeVar(wxT("StockManagement"), ibVarKind::External,    3).IsLocal());
+	EXPECT_FALSE(MakeVar(wxT("Manager"),         ibVarKind::Context,     4).IsLocal());
+	EXPECT_FALSE(MakeVar(wxT("Catalogs"),        ibVarKind::ContextProp, 5).IsLocal());
 }

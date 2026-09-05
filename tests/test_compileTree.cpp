@@ -965,3 +965,66 @@ TEST(CompileTree, ALambdaIsAnOrdinaryArgument) {
 
 	EXPECT_TRUE(bOk) << Listing(compiler.m_cByteCode).ToStdString();
 }
+
+// ===========================================================================
+// AN `else` MUST NOT WRITE OVER INSTRUCTION ZERO
+//
+// CompileIf used `nLastIFLine = 0` to mean "no condition is left open", and
+// then wrote the block's end address into m_listCode[nLastIFLine] on the way
+// out — unconditionally. Zero is a perfectly good instruction index, so every
+// `else` stamped the bytecode's LENGTH into the second operand of the module's
+// FIRST instruction.
+//
+// It corrupted silently, because an operand's slot number stays a plausible
+// number: a first line reading `Message("x" + CommonModule.Method())` began
+// resolving CommonModule to slot 116 of a frame that holds 69, and the engine
+// reported "a variable is not an aggregate object" about a name that is a
+// common module. Where the first instruction's second operand happened not to
+// matter, nothing showed at all.
+//
+// Pinned on the EMISSION rather than on a run, because the damaged value is
+// numeric and a run only fails when the damage lands somewhere that reads it.
+// ===========================================================================
+
+TEST(CompileTree, AnElseLeavesTheFirstInstructionAlone) {
+	ibCompileCode compiler(wxT("test"), wxT("memory"));
+	ASSERT_TRUE(Build(compiler,
+		wxT("var head; var flag; var tail;\n")
+		wxT("head = 1;\n")
+		wxT("flag = True;\n")
+		wxT("If flag Then\n")
+		wxT("  tail = 2;\n")
+		wxT("Else\n")
+		wxT("  tail = 3;\n")
+		wxT("EndIf;\n")));
+
+	const ibByteCode& bc = compiler.m_cByteCode;
+	ASSERT_FALSE(bc.m_listCode.empty());
+
+	// The first instruction is `head = 1` — an assignment whose second operand
+	// addresses the constant. What it must NOT be is the number of instructions
+	// in the module, which is what the defect wrote there.
+	EXPECT_NE((long)bc.m_listCode[0].m_param2.m_numIndex, (long)bc.m_listCode.size())
+		<< "instruction 0's operand was overwritten with the bytecode length\n"
+		<< Listing(bc).ToStdString();
+}
+
+TEST(CompileTree, AnIfWithoutElseStillClosesItsJump) {
+	// The guard added for the case above must not skip the ordinary one: with no
+	// `else`, the last condition still needs its not-taken address filled in, and
+	// an unfilled jump would send control to instruction 0.
+	ibCompileCode compiler(wxT("test"), wxT("memory"));
+	ASSERT_TRUE(Build(compiler,
+		wxT("var flag; var tail;\n")
+		wxT("flag = True;\n")
+		wxT("If flag Then\n")
+		wxT("  tail = 2;\n")
+		wxT("EndIf;\n")));
+
+	const ibByteCode& bc = compiler.m_cByteCode;
+	const int nIf = FindOpcode(bc, OPER_IF);
+	ASSERT_GE(nIf, 0) << Listing(bc).ToStdString();
+	EXPECT_GT((long)bc.m_listCode[nIf].m_param2.m_numIndex, (long)nIf)
+		<< "a condition that is not taken must jump FORWARD, past its block\n"
+		<< Listing(bc).ToStdString();
+}

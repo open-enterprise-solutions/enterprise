@@ -147,7 +147,35 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // A v20 blob read as v21 would take the parent ref two bytes late and every
 // field after it with it, so a stale reader does not fail cleanly — the strict
 // version check is what stops it.
-constexpr uint16_t kAOTFormatVersion = 21;
+// v22 (2026-09-05): NOT A LAYOUT CHANGE — the bytes are identical to v21. What moved is
+// what the operands MEAN: the parent-chain visibility rule became one sentence ("a child
+// sees its parent entire except the parent's own private locals", ibByteCodeVarInfo::
+// IsLocal on both sides), and the compile side stopped answering it with a list that left
+// Context / ContextProp out. Names that used to be found further up the chain are now
+// found where they live, so their (depth, index) differs — and a v21 blob carries the
+// old addresses. Served to this engine, it resolves a name against a frame that is not
+// there ("Outer frame not bound at depth 3 / idx 69"), which is exactly what happened
+// while this was being tested.
+//
+// ⭐ THE VERSION IS ABOUT WHETHER THIS ENGINE MAY USE THIS BLOB, not about byte layout.
+// The cache key (byteCodeCache.cpp) is build-stamp + configuration digest, and the stamp
+// only moves when backend_core.cpp is recompiled — a compiler-rule change in another file
+// leaves it untouched. The strict check below is what makes a rule change safe.
+// v23 (2026-09-05): a function record gained one byte after m_valueCached —
+// `m_valueVariadic`, THE THIRD default-false flag this record has lost on the way back.
+// A built-in registered with a negative arity (`AppendFunc(wxT("Max"), -1, …)`) declares
+// no parameters, so the compiler's two arity checks refuse the caller's first argument
+// unless this says "takes what it is given". The compile-context registration set it; the
+// bytecode never carried it; so the moment a name resolved through bytecode instead of a
+// live context — which is what a cache hit IS — `Max(3, 9)` answered "Too many parameters
+// passed to 'Max'". For ANY count, including one, while the help published the signature
+// it always had.
+//
+// ⭐ The same shape as m_needsHeapFrame (v21) and m_valueCached (v21) before it, and the
+// question to ask of the NEXT field added here is theirs: not "does it compile" but "who
+// writes it back, and what does its absence look like". Absence looks like a feature that
+// was never reachable — and a feature nobody can call has no symptoms to report.
+constexpr uint16_t kAOTFormatVersion = 23;
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against
@@ -466,6 +494,7 @@ bool WriteFunction(ibWriterMemory& w, const ibByteCode::ibByteFunction& f) {
 	// dangled — only on the runs that hit the cache.
 	w.w_u8(f.m_needsHeapFrame ? 1 : 0);
 	w.w_u8(f.m_valueCached ? 1 : 0);
+	w.w_u8(f.m_valueVariadic ? 1 : 0);   // v23 - see the note on the constant
 	w.w_s32((int32_t)f.m_parentRef);
 	w.w_stringZ(f.m_strRealName);
 	w.w_stringZ(f.m_strContext);
@@ -500,6 +529,7 @@ bool ReadFunction(const ibReaderMemory& r, ibByteCode::ibByteFunction& f) {
 	f.m_kind            = (ibFnKind)r.r_u8();
 	f.m_needsHeapFrame  = (r.r_u8() != 0);
 	f.m_valueCached     = (r.r_u8() != 0);
+	f.m_valueVariadic   = (r.r_u8() != 0);   // v23
 	f.m_parentRef       = (long)r.r_s32();
 	r.r_stringZ(f.m_strRealName);
 	r.r_stringZ(f.m_strContext);

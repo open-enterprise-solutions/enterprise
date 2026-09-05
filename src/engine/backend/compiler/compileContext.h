@@ -133,6 +133,11 @@ struct ibCompileContext {
 		wxString m_strContext; //name of the context variable
 
 		// Kind predicates — mirror the bc-side ibByteCodeVarInfo helpers.
+		// A declared private local — the family's missing member, and the one the
+		// parent-chain gate asks for: a child sees its parent entire EXCEPT these.
+		// (`var X Public` is stamped kind=Export at creation and `Protected` flips to
+		// its own kind, so an access modifier never leaves an entry Local.)
+		bool IsLocal()       const { return m_kind == ibVarKind::Local; }
 		bool IsExport()      const { return m_kind == ibVarKind::Export; }
 		bool IsContext()     const { return m_kind == ibVarKind::Context; }
 		bool IsExternal()    const { return m_kind == ibVarKind::External; }
@@ -218,6 +223,9 @@ struct ibCompileContext {
 			  // to a cached function would emit a plain OPER_CALL and quietly
 			  // stop memoising, with nothing to see but the time.
 			  m_valueCached(fn.m_valueCached),
+			  // And the third of the same kind — without it a built-in of negative
+			  // arity resolved through bytecode refuses every call it is given.
+			  m_valueVariadic(fn.m_valueVariadic),
 			  m_strRealName(fn.m_strRealName.IsEmpty() ? strFuncName : fn.m_strRealName),
 			  m_strContext(fn.m_strContext),
 			  m_lVarCount(fn.m_lVarCount),
@@ -286,7 +294,7 @@ struct ibCompileContext {
 		// below rejected the FIRST argument. `Max` and `Min` are the only two,
 		// and neither could be called at all — which is also why the infinite
 		// loop inside Max survived (systemManagerFunc.cpp).
-		bool m_bVariadic = false;
+		bool m_valueVariadic = false;
 
 		wxString m_strRealName; //Function name (canonical)
 		ibClassID m_clsid = 0;   // declared return type; 0 = untyped

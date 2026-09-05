@@ -1258,7 +1258,7 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 	unsigned int numRealCount = callFunction->m_listParam.size();
 	unsigned int numDefCount = foundedFunc->m_listParam.size();
 
-	if (foundedFunc->m_bVariadic) {
+	if (foundedFunc->m_valueVariadic) {
 		// It takes what it is given. The declared list is empty BY CONSTRUCTION
 		// for a negative arity, so it can neither bound the call nor say how many
 		// slots to emit — the caller's own count is both answers.
@@ -4100,8 +4100,8 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 			}
 			// A variadic built-in (negative declared arity) has an empty declared
 			// list, so this bound would reject its first argument. See
-			// ibFunction::m_bVariadic.
-			if (!foundedFunc->m_bVariadic && listParam.size() > foundedFunc->m_listParam.size()) {
+			// ibFunction::m_valueVariadic.
+			if (!foundedFunc->m_valueVariadic && listParam.size() > foundedFunc->m_listParam.size()) {
 				SetError(ERROR_MANY_PARAMS, foundedFunc->m_strRealName);
 				return ibParamUnit();
 			}
@@ -4519,7 +4519,20 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 
 		//for the previous condition, set the jump address if the condition does not match
 		m_cByteCode.m_listCode[nLastIFLine].m_param2.m_numIndex = m_cByteCode.m_listCode.size();
-		nLastIFLine = 0;
+
+		// ⚠ "THERE IS NO LONGER AN OPEN CONDITION", and it must not be sayable as an
+		// ADDRESS. This was `nLastIFLine = 0`, and zero is a perfectly good instruction
+		// index — the FIRST one — so the unconditional write at the end of this function
+		// stamped the length of the bytecode into the operand of instruction 0.
+		//
+		// An `else` therefore corrupted the module's opening instruction. Silently,
+		// because what it overwrote is m_param2.m_numIndex — an operand's slot number,
+		// which stays a plausible number: `Message("x" + CommonModule.Method())` on the
+		// first line began resolving CommonModule to slot 116 of a frame holding 69, and
+		// the engine answered "a variable is not an aggregate object" about a name that
+		// is a common module. Where the first instruction's second operand happened not
+		// to matter, the corruption did nothing at all and waited.
+		nLastIFLine = wxNOT_FOUND;
 
 		GETKeyWord(KEY_ELSE);
 
@@ -4535,7 +4548,10 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 	const int numCurCompile = m_cByteCode.m_listCode.size();
 
 	//for the last condition, set the jump address if the condition does not match
-	m_cByteCode.m_listCode[nLastIFLine].m_param2.m_numIndex = numCurCompile;
+	// — unless an `else` closed the last one already, in which case there is nothing
+	// to point anywhere and the marker says so.
+	if (nLastIFLine != wxNOT_FOUND)
+		m_cByteCode.m_listCode[nLastIFLine].m_param2.m_numIndex = numCurCompile;
 
 	//Set the parameter for the GOTO operator - exit from all local conditions
 	for (unsigned int i = 0; i < listAddrLine.size(); i++) {

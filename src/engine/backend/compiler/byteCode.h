@@ -255,6 +255,7 @@ struct ibByteCode {
 			// boolean-cascade derivation here.
 			m_kind = v.m_kind;
 		}
+
 	};
 
 	struct ibByteFunction {
@@ -294,6 +295,21 @@ struct ibByteCode {
 		// as the root it hangs from. That is why there is no invalidation
 		// call anywhere — nothing can go stale that outlives its holder.
 		bool      m_valueCached = false;
+
+		// "TAKES WHAT IT IS GIVEN" — a built-in registered with a NEGATIVE declared
+		// arity (`AppendFunc(wxT("Max"), -1, …)`). Its parameter list is empty by
+		// construction, so a caller's first argument reads as one too many unless
+		// this says otherwise (compileCode.cpp's two arity checks read it).
+		//
+		// ⚠ THE THIRD FLAG ON THIS RECORD TO BE FORGOTTEN BY THE RECONSTRUCTION PATH,
+		// after m_needsHeapFrame and m_valueCached above — and the symptom is the
+		// same shape every time: the compile-context registration set it, the
+		// bytecode did not carry it, and everything worked until a build resolved
+		// the name through bytecode instead. Here that made `Max(3, 9)` answer
+		// "Too many parameters passed to 'Max'" — for ANY number of arguments,
+		// including one — while `Max` sat in the help with the signature it has
+		// always published.
+		bool      m_valueVariadic = false;
 
 		// Convenience predicates — preferred over inline `m_kind == X`
 		// at callsites. Symmetric with ibByteCodeVarInfo's helpers.
@@ -375,6 +391,7 @@ struct ibByteCode {
 			  m_kind(src.m_kind),
 			  m_needsHeapFrame(src.m_needsHeapFrame),
 			  m_valueCached(src.m_valueCached),
+			  m_valueVariadic(src.m_valueVariadic),
 			  m_strRealName(src.m_strRealName),
 			  m_strContext(src.m_strContext)
 		{
@@ -455,6 +472,17 @@ public:
 	bool FindVariable(const wxString& strVarName, std::shared_ptr<CompileVar>& foundedVar) const {
 		auto it = std::find_if(m_listVar.begin(), m_listVar.end(),
 			[&](const auto& v) {
+				// A CHILD SEES ITS PARENT ENTIRE EXCEPT THE PARENT'S OWN PRIVATE
+				// LOCALS — and here a private local IS kind=Local, because on this
+				// side access is carried by the kind (Public is Export, Protected is
+				// its own kind; see the aliases above).
+				//
+				// The compile-context walk asks the same thing, the same way
+				// (ibCompileContext::ibVariable::IsLocal, compileContext.cpp's
+				// tryEmit). It used to ask a LIST there — Public, Protected,
+				// External — which left Context / ContextProp out, so one name got
+				// two answers depending on which road found it, and widening either
+				// road alone moved names between depths on that road only.
 				if (v.IsLocal()) return false;
 				return stringUtils::CompareString(strVarName, v.m_strRealName);
 			});
