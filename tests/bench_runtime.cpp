@@ -356,9 +356,14 @@ TEST(RuntimeBench, DISABLED_DumpNestedLambda) {
 // calls coming from CallLambdaWithArgs, i.e. the FRAME is reaching the heap on
 // every invocation. Two things there can allocate and they are told apart by two
 // printed numbers, not by reading:
-//   vars > MAX_STATIC_VAR (25 on x64) -> SetLocalCount spills to `new ibValue[]`
-//   heapFrame = YES                   -> make_shared, one per call
+//   vars > 256 (one pool block) -> SetLocalCount falls back to `new ibValue[]`
+//   heapFrame = YES             -> make_shared, one per call
 // A lambda with no inner lambda must show neither.
+//
+// The first line used to read `vars > MAX_STATIC_VAR`, back when a frame carried its
+// locals inline and anything wider went to the heap. Local slots now come from the
+// session's slot stack (frameSlots.h), so the width that matters is a pool block, and
+// the ordinary case allocates nothing at all rather than "nothing up to 25".
 TEST(RuntimeBench, DISABLED_DumpThinLambda) {
     ibCompileCode cc(wxT("test"), wxT("memory"), false);
     ASSERT_TRUE(Build(cc,
@@ -372,7 +377,7 @@ TEST(RuntimeBench, DISABLED_DumpThinLambda) {
         wxT("EndFunction\n")));
 
     const auto& bc = cc.m_cByteCode;
-    std::cout << "=== MAX_STATIC_VAR=" << (long long)MAX_STATIC_VAR
+    std::cout << "=== inline arg slots=" << (long long)kInlineArgSlots
               << "  functions (" << bc.m_listFunc.size() << ") ===\n";
     for (size_t i = 0; i < bc.m_listFunc.size(); ++i) {
         const auto& fn = bc.m_listFunc[i];
@@ -382,7 +387,7 @@ TEST(RuntimeBench, DISABLED_DumpThinLambda) {
                   << "  vars=" << fn.m_lVarCount
                   << "  heapFrame=" << (fn.m_needsHeapFrame ? "YES" : "no")
                   << "  lambda=" << (fn.IsLambda() ? "yes" : "no")
-                  << "  spills=" << (fn.m_lVarCount > MAX_STATIC_VAR ? "YES" : "no")
+                  << "  spills=" << (fn.m_lVarCount > 256 ? "YES" : "no")
                   << "\n";
     }
     std::cout.flush();
@@ -1343,10 +1348,16 @@ TEST(RuntimeBench, DISABLED_StructureFootprint) {
 // --- what a call frame costs, on its own ----------------------------------
 // recursion measures 318 ns/call while an arithmetic opcode is ~15 ns, so the
 // call is worth ~21 opcodes and nothing in the suite says why. ibRunContextSmall
-// carries `ibValue m_cLocVars[MAX_STATIC_VAR]` (25) plus a pointer row of the
-// same length, and ibValue has a virtual destructor — so entering ANY function
-// value-initialises 25 objects and leaving it runs 25 destructors, whether the
-// function declares three locals or twenty-five.
+// used to carry `ibValue m_cLocVars[MAX_STATIC_VAR]` (25) plus a pointer row of
+// the same length, and ibValue has a virtual destructor — so entering ANY function
+// value-initialised 25 objects and leaving it ran 25 destructors, whether the
+// function declared three locals or twenty-five.
+//
+// Both halves of that have since been answered, and the row is kept because it is
+// the arithmetic that drove them: slots are built to the frame's real width, and
+// the width itself is now measured rather than assumed — argument frames keep a
+// small inline buffer (kInlineArgSlots), local-variable frames lease from a shared
+// stack (frameSlots.h).
 //
 // The baseline column is the honest counterfactual: the same work if only the
 // slots actually used were built. The gap between the two IS the upper bound on

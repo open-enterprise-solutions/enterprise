@@ -29,6 +29,34 @@
   <PropertyGroup>
     <PreferredToolArchitecture>x64</PreferredToolArchitecture>
   </PropertyGroup>
+
+  <!-- HOW DEEP A SCRIPT MAY RECURSE, decided here because it is decided by the LINKER and not by
+       the interpreter.
+
+       The engine has a recursion guard - MAX_REC_COUNT, 200, in backend_core.h - and it is a good
+       one: it collects the whole call stack with module names and line numbers and raises an error
+       a person can read. IT WAS NEVER REACHED. Measured 2026-09-04 in a running application:
+       Depth(60) returned in 2.9 ms, Depth(75) killed the process - no dump, no exception, no line
+       in the journal, the window simply gone. A C++ stack frame per script frame is expensive here
+       (ibRunContext keeps MAX_STATIC_VAR values IN the frame, and Execute is a large function), so
+       the default 1 MB ran out at roughly a THIRD of the guard's count.
+
+       Seventy levels is not an abstraction: walking a hierarchical catalog, a tree of subordinate
+       documents, or any recursive descent over a structure reaches it - and reaches it as a
+       disappearance rather than as an error.
+
+       8 MB gives the guard room to be the thing that stops a runaway, which is what it was written
+       for. It is address space reserved, not memory committed: a thread that never goes deep pays
+       nothing for it.
+
+       ⚠ THE ENGINE'S GUARD STAYS THE LIMIT, and it must stay reachable. If MAX_STATIC_VAR or the
+       size of Execute's frame grows, measure this again - the number here is not a guess to be
+       kept, it is a measurement to be repeated. -->
+  <ItemDefinitionGroup>
+    <Link>
+      <StackReserveSize>8388608</StackReserveSize>
+    </Link>
+  </ItemDefinitionGroup>
   <PropertyGroup Label="UserMacros" Condition="'$(Platform)'=='Win32'">
     <oesPlatform>Win32</oesPlatform>
   </PropertyGroup>

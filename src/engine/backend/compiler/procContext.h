@@ -15,70 +15,100 @@ class BACKEND_API ibProcUnitEvaluate;
 
 //*******************************************************************************
 
-// The inline slot buffer is RAW storage, not an ibValue array, and only the
-// slots a frame actually declares are constructed.
+// A FRAME'S SLOTS ARE NOT IN THE FRAME. They are a run of slots on the session's
+// run stack (ibRunStack, procUnitState.h) when the frame IS one call, and the
+// frame's own memory when it can outlive one.
 //
-// It used to be `ibValue m_cLocVars[MAX_STATIC_VAR] = {}`, so entering ANY
-// function value-initialised 25 ibValue objects and leaving it ran 25
-// destructors — whatever the function declared. Measured
-// (tests/bench_runtime.cpp, DISABLED_FrameCost): 25 ibValue cost 149.8 ns
-// against 20.5 ns for the 3 a typical function uses, while a whole call is
-// ~336 ns. That is ~45% of a call spent on slots nobody reads. See
-// docs/runtime-perf.md §5.6.
+// Both frames below used to carry `ibValue m_cLocStorage[MAX_STATIC_VAR]` inline —
+// ten slots on x86, twenty-five on x64 — and that cost twice over. In TIME first:
+// the array was value-initialised, so entering ANY function built twenty-five
+// ibValue and leaving it ran twenty-five destructors, whatever the function
+// declared (~45% of a call, bench_runtime.cpp DISABLED_FrameCost), which was fixed
+// by constructing only the declared slots. Then in SPACE: 1 200 bytes per frame on
+// x64 for a reserve that fitted NEITHER kind of frame — argument frames never need
+// more than five slots, local-variable frames need sixteen to ninety and reached
+// `new ibValue[]` on every call anyway. docs/runtime-perf.md §10.
 //
-// The price of the change is that lifetime is ours now: SetLocalCount and the
-// destructor construct and destroy explicitly. Both funnel through
-// DestroyLocals so there is ONE place that knows how the storage was obtained
-// — which matters because an exception unwinding through a live frame (every
-// Raise, every script `try`, every session cancel) runs that destructor.
-// C4324 — "structure was padded due to alignment specifier". BOTH frames below hold an
-// `alignas(ibValue)` byte buffer that local slots are placement-constructed into, so the padding is
-// the POINT of the declaration, not an accident: without it the slots would be misaligned. MSVC
-// reports it once per translation unit that sees this header — hundreds of identical lines in a full
-// build, which is how a real warning goes unnoticed. Silenced HERE, around the two declarations that
-// earn it, rather than project-wide.
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable: 4324)
-#endif
+// ⚠ And it was hiding a defect, not merely costing: an index past the end of a
+// frame read into that spare capacity — empty, plausible ibValue — instead of
+// faulting. ResolveOuterFrame (procUnit.cpp) now asks the frame how wide it is.
+struct ibRunStack;
 
+// HOW LONG THIS FRAME LIVES — the one thing the caller knows and the frame cannot
+// work out for itself, and everything about its storage follows from it. The
+// callsite says what it means ("this frame is the call") instead of being handed a
+// stack it would then have to know what to do with.
+enum class ibRunLifetime {
+
+	// Exactly one call, ending where it began: every frame built inside Execute for
+	// the duration of a call, and inside CallAsFunc / CallAsProc. Its slots are a
+	// run on the session's run stack, released in order.
+	PerCall,
+
+	// Can outlive the call that made it — heap-promoted for a lambda to capture
+	// (ibByteFunction::m_needsHeapFrame), or the context embedded in an ibProcUnit,
+	// which lives as long as its module. Owns its slots.
+	//
+	// THE DEFAULT, because it is the safe answer: a frame declared as a member is
+	// default-constructed and must never reserve on a stack it will outlive.
+	Retained
+};
+
+// WHEN THE METHOD'S ARITY IS UNKNOWN, this many slots. `GetNParams` answers
+// wxNOT_FOUND for a handful of built-ins, and the frame still has to cover whatever
+// the implementation may reach, because method implementations index paParams[] by
+// their own declared arity without consulting the count they were handed.
+//
+// Eight, measured rather than assumed: a probe counted every frame the runtime built
+// while the warehouse example ran, and argument frames never exceeded FIVE slots —
+// three out of four were EMPTY (`max=5 | 0:150000 5:49999` over 200 000 of them).
+// It used to be MAX_STATIC_VAR, which answered a different question, and answered it
+// by the width of a pointer: 10 on x86, 25 on x64.
+static const long kSlotsWhenArityUnknown = 8;
+
+// The arguments of one C++ method call, and — since ibRunContext is this plus what
+// makes a frame an interpreter frame — the slots themselves.
 struct ibRunContextSmall {
 
-	ibRunContextSmall(int varCount = wxNOT_FOUND) :
-		m_lParamCount(0), m_lVarCount(0) {
+	ibRunContextSmall(int varCount = wxNOT_FOUND, ibRunLifetime lifetime = ibRunLifetime::Retained)
+		: m_lStart(0), m_lParamCount(0), m_lifetime(lifetime) {
 		if (varCount >= 0) SetLocalCount(varCount);
 	}
 
-	~ibRunContextSmall();
+	~ibRunContextSmall() { DestroyLocals(); }
 
-	// Out of line because a frame is built once per CALL, not per opcode — there
-	// is nothing to gain from inlining three loops (destroy / placement-new /
-	// pointer row) at every site that builds one, and the header stays lighter.
-	//
-	// Honest note on what this did NOT do: moving them out left
-	// ibProcUnit::Execute at exactly 38 624 bytes, so the +9 KB that function
-	// gained during the frame work came from somewhere else and is still
-	// unaccounted for. Do not cite this as a size fix.
+	// Out of line because a frame is built once per CALL, not per opcode — there is
+	// nothing to gain from inlining the loops at every site that builds one, and the
+	// header stays lighter.
 	void SetLocalCount(const long varCount);
 
-	// The one place that knows whether the slots came from the heap or from the
-	// inline buffer. Leaves the frame empty, so calling it twice is harmless.
+	// The one place that knows where the slots came from. Leaves the frame empty, so
+	// calling it twice is harmless — which matters, because an exception unwinding
+	// through a live frame (every Raise, every script `try`, every session cancel)
+	// runs the destructor.
 	void DestroyLocals();
 
 	long GetLocalCount() const { return m_lVarCount; }
 
 	long m_lStart, m_lParamCount;
 
-	alignas(ibValue) unsigned char m_cLocStorage[sizeof(ibValue) * MAX_STATIC_VAR];
-	ibValue* m_pLocVars = nullptr;
-
-	// Pointers are trivial — deliberately NOT value-initialised: only the first
-	// m_lVarCount entries are ever written or read, and zeroing all 25 was pure
-	// cost on a path taken by every call.
-	ibValue* m_cRefLocVars[MAX_STATIC_VAR];
+	ibValue*  m_pLocVars    = nullptr;
 	ibValue** m_pRefLocVars = nullptr;
 
-	long m_lVarCount;
+protected:
+
+	// WHERE the slots came from, remembered rather than looked up twice: the stack
+	// that granted them and the position it granted at (the two numbers
+	// ibRunStack::ibRun carries, kept as plain values so this header needs only the
+	// forward declaration above). A frame must give its run back to the stack that
+	// gave it, not to whichever one the session resolves to at destruction time.
+	// m_runMark == kNoRun means the frame owns its slots; procContext.cpp is the
+	// only place that reads any of this.
+	long          m_lVarCount = 0;
+	ibRunLifetime m_lifetime;
+	ibRunStack*   m_pRunStack = nullptr;
+	unsigned int  m_runBlock  = 0;
+	unsigned int  m_runMark   = 0xFFFFFFFFu;
 };
 
 // Inherits enable_shared_from_this so heap-promoted instances (created
@@ -89,26 +119,23 @@ struct ibRunContextSmall {
 // lambda) return an expired weak_ptr from weak_from_this() — used as
 // the runtime discriminator: "heap-promoted iff weak_from_this().lock()
 // is non-null". No separate kind flag needed.
-struct ibRunContext : std::enable_shared_from_this<ibRunContext> {
+struct ibRunContext : ibRunContextSmall, std::enable_shared_from_this<ibRunContext> {
 
-	ibRunContext(int varCount = wxNOT_FOUND) :
-		m_lStart(0), m_lCurLine(0), m_lVarCount(0), m_lParamCount(0) {
+	ibRunContext(int varCount = wxNOT_FOUND, ibRunLifetime lifetime = ibRunLifetime::Retained) :
+		ibRunContextSmall(wxNOT_FOUND, lifetime), m_lCurLine(0) {
 		if (varCount >= 0) SetLocalCount(varCount);
+	}
+
+	// A frame starts at block-depth 0 whatever its storage, and re-sizing a frame is
+	// re-entering it (the prepare/execute pair reuses one). The scope depth is this
+	// frame's business, not the slots', so it is reset here.
+	void SetLocalCount(const long varCount) {
+		ibRunContextSmall::SetLocalCount(varCount);
+		m_currentScopeDepth = 0;
 	}
 
 	~ibRunContext();
 
-	// Raw inline storage, only the declared slots constructed — same reasoning
-	// as ibRunContextSmall above, and this is the one that matters more: the
-	// OPER_CALL path asks for the function's REAL local count (procUnit.cpp
-	// `ibRunContext cRunContext(index3)`), so a function with three locals now
-	// builds three ibValue instead of twenty-five.
-	// Out of line for the same reason as ibRunContextSmall's — see the note
-	// there. Built once per call; the header form was displacing the
-	// interpreting loop from the instruction cache.
-	void SetLocalCount(const long varCount);
-
-	long GetLocalCount() const { return m_lVarCount; }
 	const ibByteCode* GetByteCode() const;
 
 	void SetProcUnit(ibProcUnit* procUnit) { m_procUnit = procUnit; }
@@ -148,21 +175,7 @@ struct ibRunContext : std::enable_shared_from_this<ibRunContext> {
 
 	long m_lStart, m_lCurLine; //current executing bytecode line
 
-	long m_lVarCount, m_lParamCount;
-
-	alignas(ibValue) unsigned char m_cLocStorage[sizeof(ibValue) * MAX_STATIC_VAR];
-	ibValue* m_pLocVars = nullptr;
-
-	// Trivial pointers, deliberately not value-initialised — only the first
-	// m_lVarCount entries are written or read.
-	ibValue* m_cRefLocVars[MAX_STATIC_VAR];
-	ibValue** m_pRefLocVars = nullptr;
-
-	// Single owner of the "how was this storage obtained" question, for the
-	// same reason as in ibRunContextSmall: an exception unwinding through a
-	// live frame runs the destructor, and placement-constructed slots must be
-	// destroyed by hand there too.
-	void DestroyLocals();
+	long m_lParamCount;
 
 	// Current block-scope nesting depth. Push (++) on OPER_CTX_BEGIN,
 	// pop (--) on OPER_CTX_END. SendLocalVariables filter:
@@ -199,9 +212,5 @@ struct ibRunContext : std::enable_shared_from_this<ibRunContext> {
 	// found nothing. A vector is what the code was already doing.
 	std::vector<std::pair<wxString, std::shared_ptr<ibProcUnitEvaluate>>> m_listEval;
 };
-
-#ifdef _MSC_VER
-#pragma warning(pop)   // C4324 — see the note above ibRunContextSmall
-#endif
 
 #endif // ! _PROC_CONTEXT__H__

@@ -37,12 +37,26 @@ namespace {
 // a lambda has no parent-module frame, so depth ≥ 2 lands on null. The
 // guards convert the segfault into an ibBackendException so the watch
 // panel surfaces an error message instead of taking down the process.
-inline ibValue*** ResolveOuterFrame(int slot, ibValue*** pppArrayList, bool bDelta)
+inline ibRunContext* ResolveOuterFrame(int slot, ibRunContext** ppArrayContext, bool bDelta)
 {
 	const int depth = slot + (bDelta ? 1 : 0);
-	if (pppArrayList == nullptr || depth < 0)
+	if (ppArrayContext == nullptr || depth < 0)
 		return nullptr;
-	return &pppArrayList[depth];
+	return ppArrayContext[depth];
+}
+
+// The slot, WITH ITS FRAME'S WIDTH CHECKED — nullptr when the index is not one
+// this frame has. Reading past the end used to be invisible: the chain held a
+// bare pointer row with no length, so an index past the end read whatever lay
+// after it, and under the old inline slot buffer what lay after it was the
+// frame's OWN spare capacity — ten empty ibValue that answered plausibly. The
+// engine only faulted once the spare capacity went away, on a script that had
+// been quietly reading rubbish all along.
+inline ibValue* SlotOfFrame(ibRunContext* frame, int idx)
+{
+	if (frame == nullptr || idx < 0 || idx >= frame->GetLocalCount() || frame->m_pRefLocVars == nullptr)
+		return nullptr;
+	return frame->m_pRefLocVars[idx];
 }
 
 // Operand resolution is hot/cold split, and the reason is visible in the
@@ -67,7 +81,7 @@ inline ibValue*** ResolveOuterFrame(int slot, ibValue*** pppArrayList, bool bDel
 // Defined FIRST so the hot wrappers below can call them without a forward
 // declaration — one signature per function instead of two kept in step by hand.
 
-ibValue& ResolveWriteOuter(int slot, int idx, ibValue*** pppArrayList, bool bDelta)
+ibValue& ResolveWriteOuter(int slot, int idx, ibRunContext** ppArrayContext, bool bDelta)
 {
 	// WHICH constant, and AT WHICH INSTRUCTION. The bare sentence named neither,
 	// so it could be any operand of any opcode on the line — and the line is only
@@ -87,24 +101,26 @@ ibValue& ResolveWriteOuter(int slot, int idx, ibValue*** pppArrayList, bool bDel
 			idx, lAtOpcode);
 	}
 
-	auto* row = ResolveOuterFrame(slot, pppArrayList, bDelta);
-	if (row == nullptr || *row == nullptr || (*row)[idx] == nullptr) {
+	ibRunContext* frame = ResolveOuterFrame(slot, ppArrayContext, bDelta);
+	ibValue* pSlot = SlotOfFrame(frame, idx);
+	if (pSlot == nullptr) {
 		ibBackendCoreException::Error(
-			_("Outer frame not bound at depth %d / idx %d (eval inside lambda?)"),
-			slot + (bDelta ? 1 : 0), idx);
+			_("Outer frame not bound at depth %d / idx %d (the frame holds %d slots)"),
+			slot + (bDelta ? 1 : 0), idx, frame != nullptr ? (int)frame->GetLocalCount() : -1);
 	}
-	return *(*row)[idx];
+	return *pSlot;
 }
 
-const ibValue& ResolveReadOuter(int slot, int idx, ibValue*** pppArrayList, bool bDelta)
+const ibValue& ResolveReadOuter(int slot, int idx, ibRunContext** ppArrayContext, bool bDelta)
 {
-	auto* row = ResolveOuterFrame(slot, pppArrayList, bDelta);
-	if (row == nullptr || *row == nullptr || (*row)[idx] == nullptr) {
+	ibRunContext* frame = ResolveOuterFrame(slot, ppArrayContext, bDelta);
+	ibValue* pSlot = SlotOfFrame(frame, idx);
+	if (pSlot == nullptr) {
 		ibBackendCoreException::Error(
-			_("Outer frame not bound at depth %d / idx %d (eval inside lambda?)"),
-			slot + (bDelta ? 1 : 0), idx);
+			_("Outer frame not bound at depth %d / idx %d (the frame holds %d slots)"),
+			slot + (bDelta ? 1 : 0), idx, frame != nullptr ? (int)frame->GetLocalCount() : -1);
 	}
-	return *(*row)[idx];
+	return *pSlot;
 }
 
 // `inline` alone is not enough here and the disassembly says so: after the
@@ -159,17 +175,17 @@ IB_NOINLINE void Raise(int code, const ibValue& value)
 
 IB_FORCEINLINE ibValue& ResolveWrite(int slot, int idx,
 							  ibValue** pRefLocVars,
-							  ibValue*** pppArrayList,
+							  ibRunContext** ppArrayContext,
 							  bool bDelta)
 {
 	if (slot <= 0)
 		return *pRefLocVars[idx];
-	return ResolveWriteOuter(slot, idx, pppArrayList, bDelta);
+	return ResolveWriteOuter(slot, idx, ppArrayContext, bDelta);
 }
 
 IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
 								   ibValue** pRefLocVars,
-								   ibValue*** pppArrayList,
+								   ibRunContext** ppArrayContext,
 								   const ibByteCode* pByteCode,
 								   bool bDelta)
 {
@@ -177,7 +193,7 @@ IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
 		return *pRefLocVars[idx];
 	if (slot == DEF_VAR_CONST)
 		return pByteCode->m_listConst[idx];
-	return ResolveReadOuter(slot, idx, pppArrayList, bDelta);
+	return ResolveReadOuter(slot, idx, ppArrayContext, bDelta);
 }
 
 } // namespace
@@ -199,14 +215,14 @@ IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
 #define locVariable3 *m_pRefLocVars[index3]
 #define locVariable4 *m_pRefLocVars[index4]
 
-#define variable(x)  ResolveWrite(array##x, index##x, pRefLocVars, m_pppArrayList, bDelta)
+#define variable(x)  ResolveWrite(array##x, index##x, pRefLocVars, m_ppArrayContext, bDelta)
 
 #define variable1 variable(1)
 #define variable2 variable(2)
 #define variable3 variable(3)
 #define variable4 variable(4)
 
-#define cvariable(x) ResolveRead (array##x, index##x, pRefLocVars, m_pppArrayList, m_pByteCode, bDelta)
+#define cvariable(x) ResolveRead (array##x, index##x, pRefLocVars, m_ppArrayContext, m_pByteCode, bDelta)
 
 #define cvariable1 cvariable(1)
 #define cvariable2 cvariable(2)
@@ -289,8 +305,8 @@ void ibProcUnitState::Raise()
 
 void ibProcUnit::Reset()
 {
-	if (m_pppArrayList != nullptr) {
-		wxDELETEA(m_pppArrayList);
+	if (m_ppArrayContext != nullptr) {
+		wxDELETEA(m_ppArrayContext);
 	}
 
 	if (m_ppArrayCode != nullptr) {
@@ -307,7 +323,7 @@ void ibProcUnit::Reset()
 
 	m_numAutoDeleteParent = 0;
 
-	m_pppArrayList = nullptr;
+	m_ppArrayContext = nullptr;
 	m_ppArrayCode = nullptr;
 	m_pByteCode = nullptr;
 	m_bExecuted = false;
@@ -315,10 +331,10 @@ void ibProcUnit::Reset()
 	// The bytecode is going, and the cache is keyed by entry addresses INTO it —
 	// keeping the rows would mean answering calls into a tape that no longer
 	// exists, with results computed by code that may no longer be there.
-	m_cachedResults.clear();
+	m_cachedResults.reset();
 }
 
-void ibProcUnit::BuildScopeChain(ibValue** localScope)
+void ibProcUnit::BuildScopeChain(ibRunContext* localScope)
 {
 	const unsigned int nParentCount = GetParentCount();
 
@@ -348,16 +364,18 @@ void ibProcUnit::BuildScopeChain(ibValue** localScope)
 	// ⚠ IT GUARDS ONE STEP, not any distance: a frame number two past the end still reads whatever
 	// is there. The real bound is the count, and the real defect is upstream — the compiler emitting
 	// a frame index that this chain never had.
-	m_pppArrayList = new ibValue * *[nParentCount + 3];
-	m_pppArrayList[nParentCount + 2] = nullptr;
+	m_ppArrayContext = new ibRunContext * [nParentCount + 3];
+	m_ppArrayContext[nParentCount + 2] = nullptr;
 
-	m_pppArrayList[0] = localScope;
-	m_pppArrayList[1] = localScope;//start with 1, because 0 means local context
+	m_ppArrayContext[0] = localScope;
+	m_ppArrayContext[1] = localScope;//start with 1, because 0 means local context
 
 	for (unsigned int i = 0; i < nParentCount; i++) {
 		ibProcUnit* pCurUnit = GetParent(i);
 		m_ppArrayCode[i + 1] = pCurUnit;
-		m_pppArrayList[i + 2] = pCurUnit->m_cCurContext.m_pRefLocVars;
+		// THE FRAME, not a copy of its slot row — the frame outlives every resize
+		// of the row, and it is the only thing that knows how wide the row is.
+		m_ppArrayContext[i + 2] = &pCurUnit->m_cCurContext;
 	}
 }
 
@@ -369,7 +387,7 @@ void ibProcUnit::BorrowScopeFrom(ibProcUnit* donor)
 
 	Reset();//idempotent: a second call re-borrows instead of leaking the first arrays
 	SetParent(donor);
-	BuildScopeChain(donor->m_cCurContext.m_pRefLocVars);
+	BuildScopeChain(&donor->m_cCurContext);
 }
 
 //**************************************************************************************************************
@@ -406,6 +424,7 @@ inline bool EndByteCode(ibProcUnitState* st)
 //Stack reset
 inline void ResetByteCode() { auto* st = ibSession::GetPUState(); while (EndByteCode(st)); }
 
+
 struct ibProcStackGuard {
 
 	// The state is HANDED IN by the only caller (ibProcUnit::Execute), which has
@@ -418,17 +437,55 @@ struct ibProcStackGuard {
 		m_state = state;
 		wxASSERT(state != nullptr);
 		if (state->m_recCount > MAX_REC_COUNT) { //critical error
+
+			// ⚠ THE REPEAT IS THE WHOLE POINT, SO IT IS COUNTED AND NOT REPRINTED. A runaway is
+			// recursion, so the frame that ran away is BY DEFINITION on the stack hundreds of
+			// times — and printing each one buries the two lines that say anything: where it
+			// started, and what is going round. Measured 2026-09-04: the message came back as two
+			// hundred identical lines, tens of kilobytes of them, and a person had to scroll past
+			// all of it to learn nothing it had not said in the first two.
+			//
+			//     ConfigurationModule (#line 4)
+			//     CommonModule.CachedProbe (#line 9) x 197
+			//
+			// Consecutive identical frames only: a cycle through several functions still shows
+			// every one of them, because there the repetition IS the shape worth reading.
 			wxString strError;
+			wxString previous;
+			long repeats = 0;
+
+			// Closes the run of identical frames that has just ended — writes the frame once, and
+			// how many times it stood there when that is more than once.
+			const auto flush = [&strError, &previous, &repeats]() {
+				if (previous.IsEmpty())
+					return;
+				strError += wxT("\n") + previous;
+				if (repeats > 1)
+					strError += wxString::Format(wxT(" x %ld"), repeats);
+			};
+
 			for (unsigned int i = 0; i < state->GetCountRunContext(); i++) {
 				const ibRunContext* stackContext = state->GetRunContext(i);
 				wxASSERT(stackContext);
 				const ibByteCode* stackByteCode = stackContext->GetByteCode();
 				wxASSERT(stackByteCode);
-				strError += wxString::Format(wxT("\n%s (#line %d)"),
+
+				const wxString frame = wxString::Format(wxT("%s (#line %d)"),
 					stackByteCode->m_strModuleName,
 					stackByteCode->m_listCode[stackContext->m_lCurLine].m_numLine + 1
 				);
+
+				if (frame == previous) {
+					repeats++;
+					continue;
+				}
+
+				flush();
+				previous = frame;
+				repeats = 1;
 			}
+			flush();
+
 			ibBackendCoreException::Error(_("Number of recursive calls exceeded the maximum allowed value!\nCall stack :") + strError);
 		}
 		state->m_recCount++;
@@ -657,6 +714,7 @@ inline void ModValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 
 // Definition of the LINQ-filter three-valued NULL flag (declared in procUnitValues.h).
 thread_local bool ts_threeValuedNullCompare = false;
+
 
 // SQL three-valued NULL: under the flag, a comparison with a NULL operand yields UNKNOWN
 // instead of a Boolean. UNKNOWN is represented as TYPE_NULL (SQL: unknown ≡ null), so it both
@@ -960,7 +1018,25 @@ start_label:
 			case OPER_FOR:
 				if (cvariable1.m_typeClass != ibValueTypes::TYPE_NUMBER)
 					ibBackendCoreException::Error(_("Only variables with type can be used to organize the loop \"number\""));
-				if (cvariable1.m_fData == cvariable2.m_fData)
+				// PAST THE BOUND, not equal to it — and the difference is two defects.
+				//
+				// `==` meant the body ran for [from, to) while the language reference
+				// says the range is INCLUSIVE (docs/script-language.md §"for (i = 1 To
+				// 10) — numeric range, inclusive") and the syntax helper shows the same
+				// shape. Every counted loop in every configuration silently dropped its
+				// last iteration: a probe function summing 0.01 a thousand times
+				// returned 9.99, which reads as a rounding bug in the money type rather
+				// than as an off-by-one in the loop.
+				//
+				// And an EMPTY OR BACKWARDS RANGE never met the equality at all, so
+				// `for (i = 5 To 1)` did not run zero times — it ran forever. Measured:
+				// 51 iterations before a hand-written Break stopped it. That is the
+				// commonest way an empty collection is walked (`1 To arr.Count()` when
+				// the count is 0 hits the same wall from the other side).
+				//
+				// One comparison answers both, because "have we gone past the end" is
+				// the question the loop was always asking.
+				if (cvariable1.m_fData > cvariable2.m_fData)
 					lCodeLine = index3 - 1;
 				break;
 			case OPER_FOREACH:
@@ -1018,7 +1094,7 @@ start_label:
 			case OPER_NEW:
 			{
 				ibValue* pRetValue = &variable1;
-				ibRunContextSmall cRunContext(array2);
+				ibRunContextSmall cRunContext(array2, ibRunLifetime::PerCall);
 				cRunContext.m_lParamCount = array2;
 				const wxString className = m_pByteCode->m_listConst[index2].GetString();
 				//load parameters
@@ -1131,11 +1207,14 @@ start_label:
 				// frame work land nowhere on this path (docs/runtime-perf.md §5.6).
 				// The method's own arity is the honest bound, and it is already
 				// being fetched for the check. wxNOT_FOUND means "arity unknown",
-				// and there the old blanket 25 is the only safe answer.
+				// and there a blanket width is the only safe answer — a width chosen
+				// for THIS question (procContext.h, kSlotsWhenArityUnknown) rather than
+				// MAX_STATIC_VAR, which answered a different one and answered it by
+				// the size of a pointer.
 				const long paramCount = pVariable2->GetNParams(lMethodNum);
 				ibRunContextSmall cRunContext(paramCount == wxNOT_FOUND
-					? std::max((long)array3, (long)MAX_STATIC_VAR)
-					: std::max((long)array3, paramCount));
+					? std::max((long)array3, kSlotsWhenArityUnknown)
+					: std::max((long)array3, paramCount), ibRunLifetime::PerCall);
 				cRunContext.m_lParamCount = array3;
 
 				// TWO DIFFERENT COUNTS, and only one of them is the frame's.
@@ -1280,7 +1359,22 @@ start_label:
 				const long enumId   = index3;   // ibLinqMethod (as long)
 				const long argCount = array3;
 
-				ibRunContextSmall cRunContext(std::max(argCount, (long)MAX_STATIC_VAR));
+				// THE CALLER'S COUNT IS THE FRAME, and here that is not merely an
+				// honest bound but the whole cost. This used to be
+				// std::max(argCount, MAX_STATIC_VAR) — the last survivor of the
+				// blanket sizing that OPER_CALL_METHOD shed above (§5.6 of
+				// docs/runtime-perf.md) — so every LINQ step built ten ibValue on
+				// x86 and TWENTY-FIVE on x64 to hold the nought-to-two a pipeline
+				// operator takes. On the path where a pipeline runs an operator
+				// PER ELEMENT.
+				//
+				// It is safe because the LINQ contract is checked rather than
+				// assumed: every handler in procUnitLinq.cpp gates on `n` before
+				// touching args[i] (`if (n < 1 || args[0] == nullptr)`), unlike the
+				// member-method implementations above, which index by their own
+				// declared arity and are why THAT frame is sized by GetNParams.
+				// Two different contracts, and each frame follows its own.
+				ibRunContextSmall cRunContext(argCount, ibRunLifetime::PerCall);
 				cRunContext.m_lParamCount = argCount;
 
 				//load parameters — same SET/SETCONST tape as OPER_CALL_METHOD
@@ -1316,7 +1410,7 @@ start_label:
 				// has no inner lambda, m_needsHeapFrame=false). Compile
 				// emits OPER_CALL_CLOSURE instead when heap promotion needed.
 				const long lModuleNumber = array2;
-				ibRunContext cRunContext(index3);
+				ibRunContext cRunContext(index3, ibRunLifetime::PerCall);
 				cRunContext.m_lStart = index2;
 				cRunContext.m_lParamCount = array3;
 				cRunContext.m_parentRunContext = pContext;
@@ -1432,9 +1526,14 @@ start_label:
 				// Reached only by a body that RETURNED: a raise unwinds past
 				// here, so a failed call is never answered from the store.
 				if (pContext->m_cachedEntry != wxNOT_FOUND && pvarRetValue != nullptr) {
+					// The store is MADE HERE, at the first result worth keeping —
+					// which is the only moment this unit is known to need one.
+					if (!m_cachedResults)
+						m_cachedResults.reset(new std::unordered_map<long, ibCachedByArguments>());
+
 					// emplace, not insert_or_assign — a recursive call may have
 					// kept this very tuple already, and the first result stands.
-					m_cachedResults[pContext->m_cachedEntry].emplace(
+					(*m_cachedResults)[pContext->m_cachedEntry].emplace(
 						std::move(pContext->m_cachedKey), *pvarRetValue);
 					pContext->m_cachedEntry = wxNOT_FOUND;
 				}
@@ -1490,12 +1589,18 @@ start_label:
 					for (long i = 0; i < pContext->m_lParamCount; i++)
 						probe.emplace_back(*pContext->m_pRefLocVars[i]);
 
-					const auto& kept = m_cachedResults[lCodeLine];
-					const auto itKept = kept.find(probe);
-					if (itKept != kept.end()) {
-						CopyValue(*pvarRetValue, itKept->second);
-						lCodeLine = lFinish;   // the body does not run AT ALL
-						break;
+					// READ WITHOUT CREATING: a unit that has never kept anything
+					// has no store at all, and asking must not give it one.
+					if (m_cachedResults) {
+						const auto forFunction = m_cachedResults->find(lCodeLine);
+						if (forFunction != m_cachedResults->end()) {
+							const auto itKept = forFunction->second.find(probe);
+							if (itKept != forFunction->second.end()) {
+								CopyValue(*pvarRetValue, itKept->second);
+								lCodeLine = lFinish;   // the body does not run AT ALL
+								break;
+							}
+						}
 					}
 
 					// A miss: remember what to keep it under, on the FRAME, and
@@ -1620,7 +1725,10 @@ start_label:
 				// m_parentBc->m_listFunc[funcIdx].
 				const bool useHeapFrame = fn->m_needsHeapFrame;
 				std::shared_ptr<ibRunContext> heapCtx;
-				ibRunContext  stackCtx;
+				// Declared with the slot stack but no width — SetLocalCount below
+				// leases through the pool it was given. The heap-promoted branch
+				// takes none: that frame is the one that outlives the call.
+				ibRunContext  stackCtx(wxNOT_FOUND, ibRunLifetime::PerCall);
 				ibRunContext* pNewCtx = nullptr;
 				if (useHeapFrame) {
 					heapCtx = std::make_shared<ibRunContext>(lambdaVarCount);
@@ -1972,7 +2080,7 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 	m_cCurContext.SetLocalCount(cByteCode.m_lVarCount);
 	m_cCurContext.m_lStart = cByteCode.m_lStartModule;
 
-	BuildScopeChain(m_cCurContext.m_pRefLocVars);
+	BuildScopeChain(&m_cCurContext);
 	} // end frame allocation (bNeedsBuild) — structure reused on a repeat Execute
 
 	// Pre-flight runs on EVERY Execute, including the reused-frame pass: it copies
@@ -2054,7 +2162,7 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 		if (byte.m_numOper == OPER_LFUNC) { ++lambdaDepth; continue; }
 		if (byte.m_numOper == OPER_ENDLFUNC) { if (lambdaDepth > 0) --lambdaDepth; continue; }
 		if (lambdaDepth == 0 && byte.m_numOper == OPER_SET_TYPE) {
-			ResolveWrite(byte.m_param1.m_numArray, byte.m_param1.m_numIndex, pRefLocVars, m_pppArrayList, bDelta)
+			ResolveWrite(byte.m_param1.m_numArray, byte.m_param1.m_numIndex, pRefLocVars, m_ppArrayContext, bDelta)
 				.SetType(ibValue::GetVTByID(byte.m_param2.m_numArray));
 		}
 	}
@@ -2211,7 +2319,11 @@ void ibProcUnit::CallAsProc(const long lCodeLine, ibValue** ppParams, const long
 		return;
 	}
 
-	ibRunContext cRunContext(index3);// number of local variables
+	// Leases its locals from the session's slot stack like any other call frame —
+	// this one lives exactly as long as the Execute below it. No session (a sandbox
+	// run with none bound) means no stack to lease from, and the frame falls back to
+	// the heap on its own.
+	ibRunContext cRunContext(index3, ibRunLifetime::PerCall);// number of local variables
 
 	cRunContext.m_lParamCount = array3;//number of formal parameters
 	cRunContext.m_lStart = lCodeLine;
@@ -2242,7 +2354,7 @@ void ibProcUnit::CallAsFunc(const long lCodeLine, ibValue& pvarRetValue, ibValue
 		return;
 	}
 
-	ibRunContext cRunContext(index3);// number of local variables
+	ibRunContext cRunContext(index3, ibRunLifetime::PerCall);// number of local variables
 
 	cRunContext.m_lParamCount = array3;//number of formal parameters
 	cRunContext.m_lStart = lCodeLine;
@@ -2289,8 +2401,8 @@ bool ibProcUnit::SetPropVal(const wxString& strPropName, const ibValue& varPropV
 		const long lPropPos = m_cCurContext.GetLocalCount();
 		m_cCurContext.SetLocalCount(lPropPos + 1);
 		// (was: m_cLocVars[lPropPos] = ibValue(strPropName) — a no-op. The next line
-		// overwrites the very same slot, and above MAX_STATIC_VAR it wrote into the
-		// inline buffer while m_pRefLocVars pointed at the heap.)
+		// overwrites the very same slot, and past the old inline capacity it wrote
+		// into the buffer while m_pRefLocVars pointed at the heap.)
 		*m_cCurContext.m_pRefLocVars[lPropPos] = varPropVal;
 	}
 	return true;
@@ -2472,7 +2584,7 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 	// which is what a closure IS. Watch expressions (bCompileBlock == false) are a single expression
 	// with no place to declare anything, so they keep the member frame and pay nothing.
 	//
-	// ⚠ `m_pppArrayList[0]` still points at the member frame and that is correct: depth 0 is read
+	// ⚠ `m_ppArrayContext[0]` still points at the member frame and that is correct: depth 0 is read
 	// straight from `m_pRefLocVars` (procUnitValues.h), so slot 0 of the list is unused in normal
 	// execution — the note there says so, and this relies on it rather than restating it.
 	std::shared_ptr<ibRunContext> spBlockFrame;
@@ -2565,7 +2677,7 @@ bool ibProcUnit::CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetVa
 		Execute(cModule.m_cByteCode, pvarRetValue, false);
 		// Frame-array setup — bytecode-driven walk. If host frame is
 		// already expression-only (eval-inside-eval), count nested
-		// expression-only ancestors; pick m_pppArrayList from N levels
+		// expression-only ancestors; pick m_ppArrayContext from N levels
 		// up the host's array. Else fall back to host's local frame.
 		if (pRunContext->IsExpressionOnly()) {
 			int nParentNumber = 1;
@@ -2574,7 +2686,7 @@ bool ibProcUnit::CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetVa
 				 bc = bc->m_parent) {
 				nParentNumber++;
 			}
-			m_pppArrayList[nParentNumber] = pRunContext->m_procUnit->m_pppArrayList[nParentNumber - 1];
+			m_ppArrayContext[nParentNumber] = pRunContext->m_procUnit->m_ppArrayContext[nParentNumber - 1];
 		}
 		else {
 			// Layout (eval bDelta=false):
@@ -2586,12 +2698,12 @@ bool ibProcUnit::CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetVa
 			//         iff host is not inside a function — that's a
 			//         semantic coincidence, not a duplicate slot)
 			//   [3+] = host's parent modules (GetParent(1+))
-			m_pppArrayList[1] = pRunContext->m_pRefLocVars;
+			m_ppArrayContext[1] = pRunContext;
 
 			// Eval inside a lambda body: pRunContext->m_procUnit is the
 			// session's lambda shim, whose m_cCurContext is empty (the
 			// shim never runs its own module body — frames live directly
-			// in m_pppArrayList, wired by ibSession::CompileRoot). The
+			// in m_ppArrayContext, wired by ibSession::CompileRoot). The
 			// outer Execute populated eval[2..] from each parent's
 			// m_cCurContext, so eval[2] landed on the shim's empty frame.
 			// Splice the shim's actual chain in at offset +1 (eval has one
@@ -2602,13 +2714,13 @@ bool ibProcUnit::CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetVa
 				&& pRunContext->m_currentFunction->IsLambda())
 			{
 				ibProcUnit* const shim = pRunContext->m_procUnit;
-				if (shim != nullptr && shim->m_pppArrayList != nullptr) {
+				if (shim != nullptr && shim->m_ppArrayContext != nullptr) {
 					const unsigned int shimSize = shim->GetParentCount() + 2;
 					const unsigned int evalSize = GetParentCount() + 2;
 					for (unsigned int k = 2; k < evalSize; ++k) {
 						const unsigned int srcIdx = k - 1;
 						if (srcIdx < shimSize)
-							m_pppArrayList[k] = shim->m_pppArrayList[srcIdx];
+							m_ppArrayContext[k] = shim->m_ppArrayContext[srcIdx];
 					}
 				}
 			}

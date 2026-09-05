@@ -131,7 +131,7 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 	// skipped by the weak_from_this().lock() guard at capture time.
 	// Vector size = nesting depth of heap-promoted ancestors at
 	// materialise site (≤ closure nesting count, not per-reference).
-	// At OPER_CALL_LAMBDA invoke, shim's m_pppArrayList[k+1] is wired to
+	// At OPER_CALL_LAMBDA invoke, shim's m_ppArrayContext[k+1] is wired to
 	// m_capturedFrames[k]->m_pRefLocVars for the call duration.
 	std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames;
 
@@ -171,7 +171,7 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 		runtime->m_pByteCode = m_parentBc;
 
 		// Closure capture (Phase B) — install captured frames as
-		// extra layers in shim's m_pppArrayList for the call
+		// extra layers in shim's m_ppArrayContext for the call
 		// duration. Lambda body OPER_GET / OPER_SET at depth k+1
 		// (k in [0, N)) reads/writes through m_capturedFrames[k]'s
 		// m_pRefLocVars. Pre-existing parent layers (root, common
@@ -180,24 +180,24 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 		// Allocation done per invoke (could pool later); freed on
 		// unwind. Empty m_capturedFrames → original list untouched,
 		// zero-overhead fast path.
-		ibValue*** prevList   = runtime->m_pppArrayList;
-		ibValue*** newList    = nullptr;
+		ibRunContext** prevList = runtime->m_ppArrayContext;
+		ibRunContext** newList  = nullptr;
 		unsigned int origSize = 0;
 		const unsigned int N  = (unsigned int)m_capturedFrames.size();
 		if (N > 0) {
 			origSize = runtime->GetParentCount() + 2;
-			newList  = new ibValue**[origSize + N];
+			newList  = new ibRunContext*[origSize + N];
 			// [0] stays own — depth=0 in macros reads pRefLocVars directly,
-			// m_pppArrayList[0] is unused in normal execution but kept for
+			// m_ppArrayContext[0] is unused in normal execution but kept for
 			// the bDelta=true case where slot=-1 lands here.
 			newList[0] = prevList ? prevList[0] : nullptr;
 			for (unsigned int k = 0; k < N; ++k) {
-				newList[k + 1] = m_capturedFrames[k]->m_pRefLocVars;
+				newList[k + 1] = m_capturedFrames[k].get();
 			}
 			for (unsigned int i = 1; i < origSize; ++i) {
 				newList[i + N] = prevList ? prevList[i] : nullptr;
 			}
-			runtime->m_pppArrayList = newList;
+			runtime->m_ppArrayContext = newList;
 		}
 
 		try {
@@ -206,14 +206,14 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 		catch (...) {
 			runtime->m_pByteCode = prevBc;
 			if (newList) {
-				runtime->m_pppArrayList = prevList;
+				runtime->m_ppArrayContext = prevList;
 				delete[] newList;
 			}
 			throw;
 		}
 		runtime->m_pByteCode = prevBc;
 		if (newList) {
-			runtime->m_pppArrayList = prevList;
+			runtime->m_ppArrayContext = prevList;
 			delete[] newList;
 		}
 	}

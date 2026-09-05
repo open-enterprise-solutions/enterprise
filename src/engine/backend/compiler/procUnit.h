@@ -32,7 +32,7 @@ public:
 	//Constructors/destructors
 	ibProcUnit() : m_numAutoDeleteParent(0),
 		m_pByteCode(nullptr),
-		m_pppArrayList(nullptr),
+		m_ppArrayContext(nullptr),
 		m_ppArrayCode(nullptr) {
 	}
 
@@ -89,7 +89,7 @@ public:
 
 	// Internal ibByteCode-only overloads — used by eval / nested call
 	// paths that don't need a real binding session (extern frames
-	// inherited via m_pppArrayList from a parent procunit). Construct
+	// inherited via m_ppArrayContext from a parent procunit). Construct
 	// an empty binder internally bound to bc's m_listVar.
 	void Execute(const ibByteCode& bc) { ibByteBinder br(bc.m_listVar, /*delta=*/true); Execute(bc, br, nullptr); }
 	void Execute(const ibByteCode& bc, bool delta) { ibByteBinder br(bc.m_listVar, delta); Execute(bc, br, nullptr); }
@@ -161,16 +161,33 @@ public:
 protected:
 
 	// Flatten the parent chain into the indexable scope chain this unit runs on
-	// (§5 of compiler-pipeline.md): m_ppArrayCode = the modules, m_pppArrayList =
+	// (§5 of compiler-pipeline.md): m_ppArrayCode = the modules, m_ppArrayContext =
 	// their frames. `localScope` fills the two local-context slots — own frame on
 	// the normal path, the donor's on the borrowed one (BorrowScopeFrom). The only
 	// difference between the two.
-	void BuildScopeChain(ibValue** localScope);
+	void BuildScopeChain(ibRunContext* localScope);
 
 	//attributes:
 	int m_numAutoDeleteParent; //flag for deleting the parent module
 	const ibByteCode* m_pByteCode = nullptr;
-	ibValue*** m_pppArrayList = {}; //pointers to arrays of variable pointers (0 - local variables, 1 - variables of the current module, 2 and higher - variables of parent modules)
+	// THE FRAMES THEMSELVES, not their innards. (0 - local variables, 1 - variables
+	// of the current module, 2 and higher - variables of parent modules.)
+	//
+	// This used to be `ibValue***` — a copy of each frame's `m_pRefLocVars`. Two
+	// defects lived in that copy, and both are gone by asking the frame instead:
+	//
+	// 1. THE COPY WENT STALE. `SetLocalCount` reallocates the slot row, so any
+	//    frame resized after the chain was built (SetPropVal does exactly that)
+	//    left this array pointing at freed memory. It survived for years only
+	//    because a frame under the old inline capacity kept its slots INSIDE
+	//    itself, at a fixed address — the dangling pointer was real, but it
+	//    happened to point at the same place.
+	// 2. THERE WAS NO LENGTH, so nothing could tell an index past the end from a
+	//    valid one. `ResolveReadOuter` checked the slot for null and read whatever
+	//    was there — with the old inline buffer that was ten spare slots of the
+	//    frame's own storage, which is why an out-of-range index read plausible
+	//    rubbish instead of faulting. A frame knows its own width; the copy did not.
+	ibRunContext** m_ppArrayContext = {};
 	ibProcUnit** m_ppArrayCode = {}; //pointers to arrays of executable modules (0 - current module, 1 and higher - parent modules)
 	// "Body already executed" flag — set when Execute runs the module body
 	// (bDelta), cleared in Reset(). Marks the frame DIRTY so a repeat Execute on
@@ -191,8 +208,16 @@ protected:
 	// long as that object, a common module's as long as the root it hangs from.
 	// Nothing can go stale that cannot outlive its holder, so there is no clock
 	// to tune and no "drop the cache" call for a caller to forget.
-	std::unordered_map<long,
-		std::unordered_map<std::vector<ibValue>, ibValue, ibValueSeqHash, ibValueSeqEqual>> m_cachedResults;
+	//
+	// ⚠ HELD BEHIND A POINTER, AND MADE ONLY WHEN SOMETHING IS KEPT. The map
+	// itself is 40 bytes on x86, and a ProcUnit exists per module — object,
+	// manager, form, common — so a configuration carries hundreds of them. Every
+	// one of those was paying for a store that the great majority never open:
+	// `Cached` is a modifier a few functions carry, not a property of running
+	// code. Measured off the layout of ibProcUnit (528 bytes: 448 of them the
+	// embedded run context, 40 this map); a pointer is four.
+	typedef std::unordered_map<std::vector<ibValue>, ibValue, ibValueSeqHash, ibValueSeqEqual> ibCachedByArguments;
+	std::unique_ptr<std::unordered_map<long, ibCachedByArguments>> m_cachedResults;
 
 
 	// Per-thread state (m_currentRunModule, ms_runContext, s_nRecCount,

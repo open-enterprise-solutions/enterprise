@@ -370,6 +370,107 @@ TEST(RuntimeTest, WhileLoopCountsToTen) {
 }
 
 // ===========================================================================
+// THE COUNTED LOOP RUNS ITS BOUND, AND STOPS ON AN EMPTY RANGE
+//
+// Both of these were broken and neither was covered: the suite compiled `For`
+// (CompileTree.ForEmitsItsHeaderAndNext, CompilerContract.ForLoop) but never
+// EXECUTED one, so nothing asked how many times the body ran.
+//
+// OPER_FOR left the loop when the counter EQUALLED the bound, which meant the
+// body ran for [from, to) while the language reference calls the range
+// inclusive — every counted loop in every configuration quietly dropped its
+// last turn. A probe adding 0.01 a thousand times returned 9.99, which reads
+// as a defect in the money type rather than in the loop.
+//
+// The same equality never arrived at all when the range was empty or
+// backwards, so `For i = 5 To 1` did not run zero times: it ran forever.
+// ===========================================================================
+
+TEST(RuntimeTest, ForLoopIncludesItsUpperBound) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var turns public; var last public;\n")
+		wxT("turns = 0; last = 0;\n")
+		wxT("For i = 1 To 10 Do\n")
+		wxT("  turns = turns + 1;\n")
+		wxT("  last = i;\n")
+		wxT("EndDo;\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("turns"), v));
+	EXPECT_EQ(v.GetInteger(), 10) << "1 To 10 is ten turns — the bound is included";
+	ASSERT_TRUE(pu.GetPropVal(wxT("last"), v));
+	EXPECT_EQ(v.GetInteger(), 10) << "the last turn must see the bound itself";
+}
+
+TEST(RuntimeTest, ForLoopOverOneValueRunsOnce) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var turns public;\n")
+		wxT("turns = 0;\n")
+		wxT("For i = 4 To 4 Do\n")
+		wxT("  turns = turns + 1;\n")
+		wxT("EndDo;\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("turns"), v));
+	EXPECT_EQ(v.GetInteger(), 1) << "a range of one value is one turn, not none";
+}
+
+TEST(RuntimeTest, ForLoopOverEmptyRangeRunsNever) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	// The shape this arrives in for real: `1 To collection.Count()` with nothing
+	// in the collection. A guard counter is here so that a REGRESSION FAILS THE
+	// TEST INSTEAD OF HANGING CI — the defect this pins was an infinite loop.
+	const wxString src =
+		wxT("var turns public;\n")
+		wxT("turns = 0;\n")
+		wxT("For i = 1 To 0 Do\n")
+		wxT("  turns = turns + 1;\n")
+		wxT("  If turns > 1000 Then\n")
+		wxT("    Break;\n")
+		wxT("  EndIf;\n")
+		wxT("EndDo;\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("turns"), v));
+	EXPECT_EQ(v.GetInteger(), 0) << "an empty range is no turns at all — it used to be endless";
+}
+
+TEST(RuntimeTest, ForLoopOverBackwardsRangeRunsNever) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var turns public;\n")
+		wxT("turns = 0;\n")
+		wxT("For i = 5 To 1 Do\n")
+		wxT("  turns = turns + 1;\n")
+		wxT("  If turns > 1000 Then\n")
+		wxT("    Break;\n")
+		wxT("  EndIf;\n")
+		wxT("EndDo;\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("turns"), v));
+	EXPECT_EQ(v.GetInteger(), 0) << "counting up from 5 to 1 is no turns, not an endless loop";
+}
+
+// ===========================================================================
 // Functions — declaration, call, return value
 // ===========================================================================
 
@@ -2088,4 +2189,57 @@ TEST_F(BuiltInRuntime, ACalendarDateKeepsItsOwnComponents) {
 	ASSERT_TRUE(pu.GetPropVal(wxT("d"), v));   EXPECT_EQ(v.GetInteger(), 1)    << "day";
 	ASSERT_TRUE(pu.GetPropVal(wxT("doy"), v)); EXPECT_EQ(v.GetInteger(), 1)    << "day of year";
 	ASSERT_TRUE(pu.GetPropVal(wxT("woy"), v)); EXPECT_EQ(v.GetInteger(), 1)    << "week of year";
+}
+
+// ===========================================================================
+// A BUILT-IN OF NEGATIVE ARITY TAKES WHAT IT IS GIVEN
+//
+// `Max` and `Min` are registered with arity -1 — "as many as it is given" —
+// and the help publishes `Max(num : number, ...)`. They were UNCALLABLE:
+// every call, at every count including one, answered "Too many parameters
+// passed to 'Max'", because a negative arity declares an EMPTY parameter list
+// and the compiler's arity check read the caller's first argument as one too
+// many.
+//
+// The flag that says otherwise (ibFunction::m_valueVariadic) was set at
+// registration and never carried in the bytecode, so it survived only while a
+// LIVE compile context resolved the name — and a cache hit is precisely the
+// case where none exists. Third field of this shape after m_needsHeapFrame and
+// m_valueCached.
+//
+// ⚠ WHAT THIS TEST DOES NOT DO, said plainly so nobody trusts it for that: it
+// CANNOT catch the defect it was written after. Here the context is live — the
+// fixture registers the built-ins itself — so the flag is set and the call
+// compiles with or without the bytecode carrying it. What the shipped engine
+// does instead is resolve through a CACHED bytecode, and that road is pinned by
+// the round trip in test_byteCodeAOT.cpp (ListFuncWithLocalsAndParams, which
+// asserts all three flags come back).
+// This one guards the other half: that the compiler's arity checks keep letting
+// a negative arity through at all.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, AVariadicBuiltInAcceptsEveryCount) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var one public; var two public; var many public;\n")
+		wxT("one  = Max(42);\n")
+		wxT("two  = Max(3, 9);\n")
+		wxT("many = Min(10, 2, 7, 5);\n")))
+		<< "a negative-arity built-in refused a call the help says it takes";
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("one"), v));
+	EXPECT_EQ(v.GetInteger(), 42) << "one argument is a legitimate count for Max";
+	ASSERT_TRUE(pu.GetPropVal(wxT("two"), v));
+	EXPECT_EQ(v.GetInteger(), 9);
+	ASSERT_TRUE(pu.GetPropVal(wxT("many"), v));
+	EXPECT_EQ(v.GetInteger(), 2);
 }
