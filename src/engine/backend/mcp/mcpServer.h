@@ -283,8 +283,18 @@ private:
 	// ⭐⭐ RUN A TOOL WHERE A MOUSE CLICK RUNS — through the session's worker pool, which on a
 	// desktop host is the wx main thread. The socket thread may not touch a widget or the tree, and
 	// what that cost was not a refusal but the process: see the note on the definition.
+	//
+	// ⭐⭐ AND THERE ARE THREE OUTCOMES, NOT TWO. `outPending` is set when the wait expired with the
+	// call still QUEUED — it did not fail, and it did not finish; it will run. That is not a
+	// refusal, and answering one is what cost three unnamed common modules: the assistant read
+	// `isError`, believed the work had not happened, called again, and the first call then landed
+	// too (2026-08-31). A false refusal is worse than a slow answer because it makes a caller ACT.
+	//
+	// The reason it needs its own channel is the same one that keeps recurring here: a bool cannot
+	// carry a third state, and the text that explains it is read by a person while the caller is a
+	// machine, for which false is false.
 	bool RunTool(const class ibMcpTool* tool, const class ibDataNode& arguments,
-		class ibDataNode& payload, wxString& refusal);
+		class ibDataNode& payload, wxString& refusal, bool* outPending = nullptr);
 
 	ibMcpSettings                m_settings;
 	std::unique_ptr<ibMcpListener> m_listener;

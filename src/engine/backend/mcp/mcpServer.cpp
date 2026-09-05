@@ -1253,8 +1253,11 @@ bool ibMcpServer::AskModel(const wxString& question, wxString& refusal)
 // gone. Everything it touches therefore lives in the shared block, and the arguments are COPIED
 // into it rather than pointed at.
 bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& arguments,
-	ibDataNode& payload, wxString& refusal)
+	ibDataNode& payload, wxString& refusal, bool* outPending)
 {
+	if (outPending != nullptr)
+		*outPending = false;
+
 	// ⭐ ON THE OPEN CONFIGURATION'S LIST, checked here because this is the one place every call
 	// passes and a configuration can be opened, closed and reopened while the server runs. A
 	// pointer compare when nothing has changed, which is almost always.
@@ -1301,9 +1304,23 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	if (done.wait_for(std::chrono::minutes(5)) != std::future_status::ready) {
 		ibJournalError(wxT("mcp"), wxT("%s: the main thread did not take it within five minutes - "
 			"the call is still queued and will run"), toolName);
+
+		// 🛑 AND THIS IS NOT A REFUSAL, WHICH IS THE WHOLE POINT OF SAYING SO OUT LOUD. The work is
+		// queued and WILL run; what expired is our patience, not the call. Reported as an error it
+		// reads to a caller as "this did not happen", and the caller then does the one thing that
+		// makes it worse — asks again. That is exactly how three unnamed common modules were left
+		// in somebody's configuration.
+		if (outPending != nullptr)
+			*outPending = true;
+
 		refusal = ibMcpText("The designer did not get to this within five minutes - it is most likely "
-			"showing a dialog and waiting for a person. The call was not abandoned: it will run "
-			"when the window is answered. Nothing here was left half-done.");
+			"showing a dialog and waiting for a person. THE CALL WAS NOT ABANDONED and nothing was "
+			"left half-done: it runs when the window is answered, and the outcome is simply not "
+			"known here yet.\n"
+			"DO NOT REPEAT THIS CALL. Repeating a call that creates something is how a "
+			"configuration ends up with two of it. Read back what you were making instead - "
+			"metadata_list or metadata_get for an object, module_read for text - and only act on "
+			"what you find.");
 		return false;
 	}
 
@@ -2584,6 +2601,11 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			wxString   refusal;
 			bool       ok = false;
 
+			// THE THIRD OUTCOME — see RunTool. Neither done nor refused: still queued, and it will
+			// run. Kept apart from `ok` because the two answer different questions, and the wire
+			// has a place for exactly this distinction below.
+			bool       pending = false;
+
 			// ⚠ THE ENGINE THROWS, AND THAT IS AN ANSWER TOO. A tool calls the
 			// platform's own doors, and those report a refusal by raising — with
 			// the diagnosis inside, which is exactly what a caller needs. Left
@@ -2682,7 +2704,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 					refusal = fault;
 				}
 				else {
-					ok = RunTool(tool, arguments, payload, refusal);
+					ok = RunTool(tool, arguments, payload, refusal, &pending);
 				}
 			}
 			// The query family FIRST, and the positioned one before its parent:
@@ -2792,7 +2814,18 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 
 			ibDataNode result;
 			result.AddField(wxT("content"), ibDataValue::Array(blocks));
-			if (!ok)
+
+			// 🛑 A CALL STILL RUNNING IS NOT AN ERROR, and marking it one is what makes a caller
+			// repeat it. `isError` is the only field a client is obliged to read, and to a machine
+			// it means "this did not happen" — while the work is queued and about to happen. The
+			// text says so in words, but words are what the person reads.
+			//
+			// So the flag stays off and the outcome is stated in a field of its own: a caller that
+			// looks at nothing else still learns the one thing that decides what to do next, which
+			// is that repeating is the wrong move.
+			if (pending)
+				result.SetValue(wxT("outcome"), wxString(wxT("pending")));
+			else if (!ok)
 				result.SetValue(wxT("isError"), true);
 
 			toolRan = true;

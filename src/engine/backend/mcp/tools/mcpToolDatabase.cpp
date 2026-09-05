@@ -255,6 +255,18 @@ public:
 		// the plan and never with the outcome. See the second pass below.
 		size_t capturedUpTo = 0;
 
+		// 🛑 AND WHETHER THE RUN EVER GOT THIS FAR, which is a different question from what it
+		// decided. `decide` is called at the one moment the ledger is complete and the transaction
+		// is still open; an apply that could not START — the base held by another session, so the
+		// builder never gets its exclusive — returns before reaching it.
+		//
+		// Without this the rehearsal LIED. `confirm: false` fell into the "rolled back as asked"
+		// branch on any outcome, so a refusal the engine had spelled out in words came back as
+		// `changes: 0` with a calm note, which reads as "there is nothing to do" — while
+		// database_diff answered three differences in the same second (measured 2026-09-05). The
+		// same failure was reported as a failure when committing and as a clean rehearsal when not.
+		bool decisionReached = false;
+
 		const auto appendEntry = [&ledger](const ibRestructureInfo::Entry& entry) {
 			std::shared_ptr<ibDataNode> line = std::make_shared<ibDataNode>();
 			line->SetValue(wxT("level"), wxString(
@@ -265,7 +277,9 @@ public:
 		};
 
 		const bool applied = config->ApplyConfiguration(refusal,
-			[&appendEntry, &capturedUpTo, &sawErrors, commit](const ibRestructureInfo& info) {
+			[&appendEntry, &capturedUpTo, &sawErrors, &decisionReached, commit](const ibRestructureInfo& info) {
+
+				decisionReached = true;
 
 				for (const auto& entry : info)
 					appendEntry(entry);
@@ -306,7 +320,10 @@ public:
 
 		// A DECLINE IS NOT A FAILURE, and the ledger above is the whole point of it — so this
 		// answers TRUE with the account, rather than refusing and throwing the account away.
-		if (!commit || sawErrors) {
+		//
+		// ⚠ BUT ONLY IF THERE WAS A DECISION TO DECLINE. Everything that stops the apply before
+		// `decide` is a refusal with the engine's own words behind it, and it falls through.
+		if (decisionReached && (!commit || sawErrors)) {
 			result.SetValue(wxT("note"), sawErrors
 				? ibMcpText("Rolled back: the ledger carries errors, so nothing was written whatever was "
 					"confirmed.")

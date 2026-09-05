@@ -198,6 +198,30 @@ const ibArg& ArgName()
 	return s_a;
 }
 
+// ⭐⭐ THE SAME ARGUMENT, REQUIRED — for the verbs that CREATE, where it is an identity question
+// rather than a tidiness one. Paired with the plain one above the way ArgKind / ArgKindOptional
+// already are: a reader asks by id OR by kind and name, so there the name may be absent.
+//
+// A generated name — `Catalog1` — is a convenience for a person who has the property panel open and
+// will type over it in a second. A caller on this door has neither, and always knows what the thing
+// is called; what an omitted name actually buys is a CREATE WITH NO IDENTITY, and a call with no
+// identity cannot be recognised as one that already happened.
+//
+// 🛑 Which is how three unnamed common modules were left in somebody's configuration (2026-08-31):
+// the call timed out, the caller read a refusal, asked again, and nothing about the second request
+// said it was the first one. Of every writing verb on this server only the CREATING ones can do
+// that — the rest are addressed by id or by content, so a repeat lands on the same state — and of
+// those, this was the one that could be called with no name at all.
+const ibArg& ArgNameRequired()
+{
+	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
+		ibMcpText("What to call it. REQUIRED here: the object is addressed by this name afterwards, "
+			  "and a create carrying no name cannot be told apart from a repeat of itself - which "
+			  "is how a configuration ends up with two of something. The designer's own Add makes "
+			  "one up because a person is about to type over it; you are not."), /*required*/ true);
+	return s_a;
+}
+
 const ibArg& ArgNote()
 {
 	static const ibArg s_a(wxT("note"), ibArg::Kind::Text,
@@ -773,7 +797,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgKind(), ArgParentId(), ArgName(), ArgNote(), ArgHelp(), ArgProperties() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgKind(), ArgParentId(), ArgNameRequired(), ArgNote(), ArgHelp(), ArgProperties() };
 		return s_arguments;
 	}
 
@@ -847,10 +871,12 @@ public:
 		// then `renamed Catalog 'SwCat'` for a single create, the first line naming an object that
 		// never existed under that name for any purpose (2026-09-01, reading the assistant's own
 		// event log). A stage is a statement about a finished thing.
-		const bool answered = params.FindChild(ArgProperties().Name()) != nullptr
-			|| !ArgName().Text(params).IsEmpty();
-
-		ibValueMetaObject* created = metaData->CreateMetaObject(clsid, parent, !answered);
+		//
+		// ⭐ AND SINCE `name` BECAME REQUIRED (ArgNameRequired, for the identity reason written
+		// there), that answer is always present: the gate refuses the call before this line when it
+		// is missing. So the dialog is never the road here, and the condition that used to weigh it
+		// is gone rather than left standing as something that cannot be false.
+		ibValueMetaObject* created = metaData->CreateMetaObject(clsid, parent, /*runObject*/ false);
 		if (created == nullptr) {
 			refusal = wxString::Format(ibMcpText("The %s could not be created."), kind);
 			return false;
@@ -930,7 +956,7 @@ public:
 		//
 		// Asked of the OWNER, exactly as the click path does once the person has answered. The
 		// answers were ours; the building is still the platform's.
-		if (answered && parent != nullptr) {
+		if (parent != nullptr) {
 
 			if (ibValueMetaObjectGenericData* owner =
 					parent->ConvertToType<ibValueMetaObjectGenericData>()) {
@@ -979,22 +1005,22 @@ public:
 		// finished and wrong, with every check passing: a report whose composer is not the DEFAULT
 		// one opens as an EMPTY WINDOW. That is what happened, and it is why these are written out
 		// together instead of being remembered one at a time.
-		if (answered) {
+		// ⭐ AND UNCONDITIONALLY, because the quiet road is now the only road: `name` is required, so
+		// the branch that used to weigh whether the caller had answered enough can no longer come
+		// out false. What was a condition is a statement.
+		if (!created->OnBeforeRunMetaObject(newObjectFlag)
+			|| !created->OnAfterRunMetaObject(newObjectFlag)) {
 
-			if (!created->OnBeforeRunMetaObject(newObjectFlag)
-				|| !created->OnAfterRunMetaObject(newObjectFlag)) {
-
-				// It could not be brought to life — so it does not stand. Removed while it is still
-				// reachable, which is the only moment it can be.
-				metaData->RemoveMetaObject(created, parent);
-				refusal = wxString::Format(ibMcpText("The %s was built but could not be started."), kind);
-				return false;
-			}
-
-			// …AND ANNOUNCED, because only now is there a result to announce. Everything above is
-			// part of ONE create: the properties, the name, the note, the run.
-			metaData->MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Created, created);
+			// It could not be brought to life — so it does not stand. Removed while it is still
+			// reachable, which is the only moment it can be.
+			metaData->RemoveMetaObject(created, parent);
+			refusal = wxString::Format(ibMcpText("The %s was built but could not be started."), kind);
+			return false;
 		}
+
+		// …AND ANNOUNCED, because only now is there a result to announce. Everything above is
+		// part of ONE create: the properties, the name, the note, the run.
+		metaData->MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Created, created);
 
 		// ⚠ AN OBJECT THAT EXISTS IS NEVER REPORTED AS A FAILURE.
 		//
