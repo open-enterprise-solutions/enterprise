@@ -521,6 +521,10 @@ private:
 	private:
 		ibConfigurationTree* m_ownerTree;
 		ibMetaView* m_metaView;
+
+		// ⭐ TRUE WHILE THIS HANDLER IS ITSELF MOVING THE ACTIVATION — see OnSetFocus, which
+		// recursed until the stack ran out without it.
+		bool m_switchingActivation = false;
 	private:
 		wxTreeItemId m_draggedItem;
 	public:

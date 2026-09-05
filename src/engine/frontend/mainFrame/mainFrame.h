@@ -5,6 +5,8 @@
 #include <wx/aui/aui.h>
 #include <wx/splash.h>
 #include <wx/stc/stc.h>
+#include <wx/generic/statusbr.h>   // the bottom bar derives from the GENERIC one — see ibDocBottomStatusBar
+#include <wx/timer.h>
 
 #include "frontend/docView/docView.h"   // forked ib* doc/view (replaces wx/docview.h)
 
@@ -309,35 +311,68 @@ protected:
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-class ibDocBottomStatusBar : public wxStatusBar {
+// The bar along the bottom: what the application is doing on the left, whether an assistant can
+// reach it on the right.
+//
+// ⭐⭐ THE INK IS OURS WHERE THE PLATFORM LETS IT BE. The generic status bar draws its field text
+// with the DC's default foreground and never consults SetForegroundColour, so the colour has to be
+// set in DrawFieldText — which exists only where wxStatusBar is the generic one. wx/statusbr.h
+// picks that per platform: generic under macOS and GTK, NATIVE under MSW, different again under
+// wxUniversal and Qt. So the override is compiled where the hook exists, and where it does not the
+// native bar draws its own text in the system colour, which is what a user of that platform
+// expects anyway. OES_STATUSBAR_CUSTOM_INK below is that condition, spelled once.
+//
+// 🛑 WHAT WAS HERE BEFORE, AND WHY IT SHOWED: the colour was obtained by parking a wxStaticText
+// child at wxPoint(5, 5) and writing the text into that. But nothing stopped the bar from drawing
+// the field as well, so every message appeared TWICE — once where the bar put it, once five pixels
+// away where the child sat. A fixed point cannot follow the bar's height either, so the ghost was
+// off-centre as well as doubled. Setting the DC's text colour is the whole of what that child was
+// for, and DrawFieldText is where it belongs.
+#if !defined(__WXUNIVERSAL__) && !defined(__WXQT__) && !(defined(__WXMSW__) && wxUSE_NATIVE_STATUSBAR)
+	#define OES_STATUSBAR_CUSTOM_INK 1
+#else
+	#define OES_STATUSBAR_CUSTOM_INK 0
+#endif
+
+// ⚠ EXPORTED, BECAUSE ITS BODY LEFT THE HEADER. The constructor used to be inline here, so every
+// consumer compiled its own copy and nothing had to cross the DLL boundary; it lives in
+// mainFrame.cpp now, and enterprise.exe and designer.exe both construct one. Without the macro
+// MSVC answers LNK2019 on the constructor alone — the class links everywhere the CMake build puts
+// it in one binary, which is why it built on the toolchain it was written on.
+class FRONTEND_API ibDocBottomStatusBar : public wxStatusBar {
 public:
 
-	ibDocBottomStatusBar() : wxStatusBar() {};
+	// The fields, left to right. Message takes what is left; Assistant is sized to its content.
+	enum {
+		FieldMessage   = 0,
+		FieldAssistant = 1,
+		FieldCount
+	};
+
+	ibDocBottomStatusBar() : wxStatusBar() {}
 	ibDocBottomStatusBar(wxWindow* parent,
 		wxWindowID id = wxID_ANY,
 		long style = wxSTB_DEFAULT_STYLE,
-		const wxString& name = wxStatusBarNameStr)
-		: wxStatusBar(parent, id, style, name)
-	{
-		// Light dusty status bar — sits between the powder-blue
-		// workspace and the cream content panes; deep-blue text reads
-		// cleanly. Matches the interior-design palette (see
-		// luna_dockart.cpp).
-		wxStatusBar::SetBackgroundColour(wxColour(0xC8, 0xD6, 0xDF));   // #C8D6DF light dusty
-		wxStatusBar::SetForegroundColour(wxColour(0x3F, 0x5C, 0x77));   // #3F5C77 deep dusty blue
+		const wxString& name = wxStatusBarNameStr);
 
-		m_statusBarText = new wxStaticText(this, wxID_ANY, wxEmptyString, wxPoint(5, 5), wxDefaultSize, 0);
-		m_statusBarText->Show();
-	}
+protected:
 
-	virtual void DoUpdateStatusText(int field) override {
-		m_statusBarText->SetLabelText(
-			GetStatusText(field)
-		);
-	}
+#if OES_STATUSBAR_CUSTOM_INK
+	// Both halves of the fix: the colour the bar would otherwise ignore, and the lamp that only
+	// the assistant field draws.
+	void DrawFieldText(wxDC& dc, const wxRect& rect, int i, int textHeight) override;
+#endif
 
 private:
-	wxStaticText* m_statusBarText;
+
+	// ⚠ POLLED, NOT SUBSCRIBED, and the reason is proportion rather than laziness. The server does
+	// offer notifiers, but reaching one from here means an ibMcpNotifier implementation living in
+	// the frame purely to flip a bool — while IsRunning() is a plain read that costs nothing once a
+	// second. A status lamp is a heartbeat by nature; if it is a second stale, nobody is harmed.
+	void OnAssistantPoll(wxTimerEvent& event);
+
+	wxTimer m_assistantPoll;
+	bool    m_assistantRunning = false;
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////

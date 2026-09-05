@@ -44,6 +44,7 @@ void ibValueSelectorRecordDataObject::Reset()
 {
 	// Anchor = the start (m_objGuid invalid). The statement / page cache persist.
 	m_objGuid.reset(); m_newObject = false;
+	m_anchorSort.clear();
 	m_listObjectValue.clear();
 	// Designer mode never iterates (Next() returns false); GetPropVal reads these
 	// designer values directly, so populate them up front.
@@ -59,15 +60,30 @@ bool ibValueSelectorRecordDataObject::ApplyAnchor(ibReadPageRequest& page) const
 {
 	if (!m_objGuid.isValid())
 		return false;   // first row — no keyset clause
-	page.m_hasAnchor  = true;   // the keyset cursor rides in m_anchorSortValues (the selector's effective sort)
+	page.m_hasAnchor        = true;
+	page.m_anchorSortValues = m_anchorSort;   // effective-sort order, the way the door binds it
 	return true;
 }
 
 void ibValueSelectorRecordDataObject::CaptureAnchor(const ibDataQueryResult& selection)
 {
-	// The anchor IS the row's uuid — the identity tail's last (unique) column. The
-	// driver trims the CHAR pad tail now, so the uuid reads back clean (no padded-guid).
-	m_objGuid = ibGuid(selection.GetValue(m_effective.back().m_col).GetString());
+	// The row's key is a REFERENCE - the primary key EffectiveSort appends. Read as a string it
+	// gave the presentation, so the guid never parsed and the anchor was never taken to exist.
+	// The value is held in a local because ConvertToValue hands out a pointer it owns.
+	const ibValue key = selection.GetValue(m_effective.back().m_col);
+	ibValueReferenceDataObject* reference = nullptr;
+	if (key.ConvertToValue(reference) && reference != nullptr)
+		m_objGuid = reference->GetGuid().GetGuid();
+	else
+		m_objGuid.reset();
+
+	// And the values the keyset compares against, one per effective-sort column: the page
+	// request carried m_hasAnchor with nothing to compare it to.
+	m_anchorSort.clear();
+	m_anchorSort.reserve(m_effective.size());
+	for (const auto& c : m_effective)
+		if (c.m_col != nullptr)
+			m_anchorSort.push_back(selection.GetValue(c.m_col));
 }
 
 void ibValueSelectorRecordDataObject::MaterialiseRow(const ibDataQueryResult& selection)

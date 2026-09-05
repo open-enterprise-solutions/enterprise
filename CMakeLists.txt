@@ -352,6 +352,47 @@ if(OES_USE_FIREBIRD)
             "/opt/firebird/lib"
     )
     add_compile_definitions(OES_USE_FIREBIRD)
+
+    if(APPLE)
+        # ⭐ THE FRAMEWORK CANNOT LOAD ITSELF — an rpath of ours has to stand in for the one
+        # the package forgot.
+        #
+        # The official macOS Firebird package ships
+        # `Firebird.framework/Versions/A/Resources/lib/libfbclient.dylib` linked against
+        # `@rpath/lib/libtommath.dylib` while carrying NO LC_RPATH of its own. `@rpath` is
+        # resolved against the load commands of the image that INITIATES the load — here
+        # backend's `wxDynamicLibrary::Load` (firebirdInterface.cpp) — so with nothing to
+        # substitute, dyld gives up:
+        #
+        #   Library not loaded: @rpath/lib/libtommath.dylib
+        #   Reason: no LC_RPATH's found
+        #
+        # The symptom is indistinguishable from "Firebird is not installed": Init() returns
+        # false on the failed Load and the startup dialog says the infobase could not be
+        # opened, with the framework sitting right there on disk. Naming the framework's
+        # Resources directory in OUR rpath makes `@rpath/lib/libtommath.dylib` resolve to
+        # the file that is already beside fbclient. Costs nothing when Firebird is absent —
+        # a non-existent rpath entry is simply skipped.
+        #
+        # BOTH directories are needed, for two different lookups:
+        #   Resources     — resolves `@rpath/lib/libtommath.dylib` (and fbclient's other
+        #                   siblings) once fbclient itself is in.
+        #   Resources/lib — lets the FIRST Load in ibInterfaceFirebird::Init() succeed on the
+        #                   bare name `libfbclient.dylib`. Without it that call fails, wx logs
+        #                   "Failed to load shared library" at error level, and the user is
+        #                   shown an alert about a library that the very next line loads
+        #                   successfully through the hard-coded framework path.
+        #
+        # Set before the engine's add_subdirectory() calls so every target below inherits it;
+        # wxWidgets is added earlier and is deliberately untouched.
+        foreach(_fb_rpath
+                "/Library/Frameworks/Firebird.framework/Versions/A/Resources/lib"
+                "/Library/Frameworks/Firebird.framework/Versions/A/Resources")
+            list(APPEND CMAKE_BUILD_RPATH   "${_fb_rpath}")
+            list(APPEND CMAKE_INSTALL_RPATH "${_fb_rpath}")
+        endforeach()
+        unset(_fb_rpath)
+    endif()
     if(FIREBIRD_LIBRARY)
         message(STATUS "Firebird client found (optional): ${FIREBIRD_LIBRARY}")
     else()

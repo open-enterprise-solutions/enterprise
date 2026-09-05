@@ -94,7 +94,7 @@ const ibArg& ArgExpression()
 const ibArg& ArgText()
 {
 	// ⚠ `text`, NOT `code`, AND THE WORD IS THE WHOLE REASON. Source arrives as `text` everywhere
-	// else it arrives — module_write, query_run, a report's query — while `code` in this platform
+	// else it arrives — module_write, script_check, a report's query — while `code` in this platform
 	// is a BUSINESS FIELD: the Code of a catalog item, which is what predefined_* means by it. Two
 	// meanings under one name cost a step every time somebody guesses which one this is.
 	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,

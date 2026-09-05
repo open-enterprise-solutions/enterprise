@@ -629,15 +629,10 @@ const ibBackendQueryable* ibAccumulationTotalsQueryable::NavigationSource() cons
 namespace {
 
 // The dimension filter, resolved to (physical column, value) pairs L2-2 applies inside the read.
-std::vector<std::pair<wxString, ibValue>> ReadFilters(
-	const ibValueMetaObjectAccumulationRegister* /*reg*/, const ibQueryPredicatePtr& filter)
+std::vector<ibQueryExprPtr> ReadFilters(
+	const ibValueMetaObjectAccumulationRegister* reg, const ibQueryPredicatePtr& filter)
 {
-	std::vector<std::pair<wxString, ibValue>> out;
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
-	ibRegFlatLeaves(filter, leaves);
-	for (const auto& leaf : leaves)
-		out.push_back({ leaf.first->GetPhysicalName(), leaf.second });
-	return out;
+	return ibRegFilterExprs(filter, reg != nullptr ? reg->GetMetaData() : nullptr);
 }
 
 // Every dimension's physical fields — the key of any read over the surface.

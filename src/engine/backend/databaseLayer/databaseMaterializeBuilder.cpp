@@ -970,8 +970,8 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 		}
 	}
 
-	for (const auto& f : spec.m_filters)
-		q.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(f.first), ibConst(f.second)));
+	for (const ibQueryExprPtr& f : spec.m_filters)
+		if (f) q.Where(f);
 
 	if (anyAggregate) {
 		for (const ibQueryExprPtr& k : keys) q.GroupBy(k);

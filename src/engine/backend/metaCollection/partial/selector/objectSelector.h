@@ -90,6 +90,9 @@ protected:
 protected:
 
 	const ibValueMetaObjectRecordDataMutableRef* m_metaObject;
+
+	// The keyset cursor: the fetched row's value for every effective-sort column, in that order.
+	std::vector<ibValue> m_anchorSort;
 };
 
 /////////////////////////////////////////////////////////////////////////////
