@@ -302,7 +302,9 @@ struct ibMaterializeReadSpec
 	ibValue  m_fromGrain;
 
 	std::vector<wxString> m_keyColumns;    // projected, and grouped by when any column aggregates
-	std::vector<std::pair<wxString, ibValue>> m_filters;   // column = value, applied INSIDE
+	// Conditions applied INSIDE. Whole predicates rather than column/value pairs: a logical column
+	// can be several physical fields, and which ones is a metadata question this floor cannot ask.
+	std::vector<ibQueryExprPtr> m_filters;
 
 	std::vector<ibMaterializeReadColumn> m_columns;
 	bool m_dropZeroRows = false;           // keep only rows where some reported figure is non-zero

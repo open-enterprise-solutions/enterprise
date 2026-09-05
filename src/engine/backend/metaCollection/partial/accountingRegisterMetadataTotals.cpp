@@ -2694,11 +2694,9 @@ ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const wxString& alias) 
 
 	// The filters ride INSIDE the subquery, so the selection happens on the server before the outer
 	// query sees a row — which is the whole point of handing the door a relation instead of rows.
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
-	ibRegFlatLeaves(m_filter, leaves);
-	for (const auto& leaf : leaves)
-		if (leaf.first != nullptr)
-			r.m_filters.push_back({ leaf.first->GetPhysicalName(), leaf.second });
+	for (const ibQueryExprPtr& condition :
+		ibRegFilterExprs(m_filter, m_reg != nullptr ? m_reg->GetMetaData() : nullptr))
+		r.m_filters.push_back(condition);
 
 	// ⭐⭐ THE CUT, AND THE HALF OF A BOUNDARY THAT ONLY IT CAN SAY. Whole grains come from the stored
 	// rows and each partial end from the movements — and where an end names a DOCUMENT, the recorder's
@@ -2868,11 +2866,9 @@ ibQueryRelPtr ibAcctBalanceQueryable::GetSourceRelation(const wxString& alias) c
 		appendFields(dimension);
 
 	// The filters ride INSIDE the subquery, so the selection happens before the outer query sees a row.
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
-	ibRegFlatLeaves(m_filter, leaves);
-	for (const auto& leaf : leaves)
-		if (leaf.first != nullptr)
-			r.m_filters.push_back({ leaf.first->GetPhysicalName(), leaf.second });
+	for (const ibQueryExprPtr& condition :
+		ibRegFilterExprs(m_filter, m_reg != nullptr ? m_reg->GetMetaData() : nullptr))
+		r.m_filters.push_back(condition);
 
 	// THE CUT. Whole grains come from the stored rows and the partial end from the movements — and
 	// where the moment names a DOCUMENT, the recorder's field tuple is compared as an ORDERING. A
@@ -3092,11 +3088,9 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 	for (const auto dimension : m_reg->GetDimensionArrayObject())
 		appendFields(dimension);
 
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
-	ibRegFlatLeaves(m_filter, leaves);
-	for (const auto& leaf : leaves)
-		if (leaf.first != nullptr)
-			r.m_filters.push_back({ leaf.first->GetPhysicalName(), leaf.second });
+	for (const ibQueryExprPtr& condition :
+		ibRegFilterExprs(m_filter, m_reg != nullptr ? m_reg->GetMetaData() : nullptr))
+		r.m_filters.push_back(condition);
 
 	// EITHER END MAY REACH BELOW THE GRAIN — "between this document and that one" is the question, and
 	// both ends of it name a moment. Whole days come from the stored rows, each partial end from the

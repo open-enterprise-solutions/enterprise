@@ -559,6 +559,25 @@ inline ibQueryExprPtr ibRegCompositeIR(const ibBackendQueryColumn* a, const ibMe
 	return pred;
 }
 
+// A filter predicate as the conditions a read spec applies - one per leaf, spread over the
+// column's own fields. A leaf's GetPhysicalName() is the base name of a column the table does not
+// have when the dimension is a reference, and every such reading failed with "Column unknown".
+inline std::vector<ibQueryExprPtr> ibRegFilterExprs(const ibQueryPredicatePtr& filter,
+                                                    const ibMetaData* metaData)
+{
+	std::vector<ibQueryExprPtr> out;
+	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
+	ibRegFlatLeaves(filter, leaves);
+	for (const auto& leaf : leaves) {
+		if (leaf.first == nullptr)
+			continue;
+		const ibQueryExprPtr one = ibRegCompositeIR(leaf.first, metaData, leaf.second, ibQueryBinOp::Eq);
+		if (one)
+			out.push_back(one);
+	}
+	return out;
+}
+
 // ⭐⭐ THE STORAGE NAME IS ASKED FOR, NEVER SPELLED.
 //
 // A view column carries BOTH names — `Resource1Turnover` for a query to write, `Resource1_Turnover`
