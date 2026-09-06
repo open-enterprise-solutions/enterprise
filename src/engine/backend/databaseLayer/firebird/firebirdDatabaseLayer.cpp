@@ -1882,11 +1882,17 @@ wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird
 
 	if (nCode > -901) // Error codes less than -900 indicate that it wasn't a SQL error but an ibase system error
 	{
-		long* pVector = (long*)status;
-		pInterface->GetFbInterpret()(szError, 512, (const ISC_STATUS**)&pVector);
+		// ⚠ WALKED AS ISC_STATUS, NOT AS long — and the cast to the parameter type is gone with it,
+		// which is the point rather than a tidy-up. `ISC_STATUS` is `intptr_t` (types_pub.h), so the
+		// two agree on Win32 and on LP64 and DISAGREE on Win64, where `long` is 32 bits and the walk
+		// would stride half an element: a wrong message where it did not read past the array. Nothing
+		// we ship today is 64-bit on Windows, which is exactly why this was invisible — and why it
+		// had to be written down or fixed rather than left to be found by a wrong error message.
+		const ISC_STATUS* pVector = static_cast<const ISC_STATUS*>(status);
+		pInterface->GetFbInterpret()(szError, 512, &pVector);
 
 		strReturn = wxString::Format(wxT("%s\n"), szError);
-		while (pInterface->GetFbInterpret()(szError, 512, (const ISC_STATUS**)&pVector))
+		while (pInterface->GetFbInterpret()(szError, 512, &pVector))
 		{
 			strReturn += wxString::Format(wxT("%s\n"), szError);
 		}
@@ -1907,9 +1913,14 @@ wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird
 		// only in the vector. Reading one and not the other is why a lock directory
 		// the process cannot write, a security database it cannot reach and a file
 		// it has no permission on all arrived as one indistinguishable line.
-		long* pVector = (long*)status;
-		while (pInterface->GetFbInterpret()(szError, 512, (const ISC_STATUS**)&pVector))
-			strReturn += wxString::Format(wxT("\n%s"), szError);
+		// ⚠ AND THROUGH THE SAME CONVERTER AS THE LINE IT IS APPENDED TO. The sentence above went
+		// through the system encoding and these did not, so on a locale that is not UTF-8 one half of
+		// one message came out right and the other half did not — a contradiction inside a single
+		// branch, which is worse than either choice made consistently. (Found reviewing PR #99, which
+		// added the vector walk here; the walk itself is Dmytro Sherstobitov's.)
+		const ISC_STATUS* pVector = static_cast<const ISC_STATUS*>(status);
+		while (pInterface->GetFbInterpret()(szError, 512, &pVector))
+			strReturn += wxT("\n") + ibDatabaseStringConverter::ConvertFromUnicodeStream(szError, (const char*)systemEncoding);
 	}
 
 	return strReturn;
