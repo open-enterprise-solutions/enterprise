@@ -60,6 +60,12 @@ endforeach()
 
 option(BUILD_TESTING       "Build unit tests (Google Test)"     OFF)
 
+# The web pair — wfrontend (the OES_USE_WEB frontend) and wenterprise-server.
+# Off by default: until the three CI toolchains have all built them, the desktop
+# suite is what `cmake -B build` is expected to produce, and a web source that
+# stops compiling somewhere must not be able to take that down with it.
+option(OES_BUILD_WEB       "Build the web runtime (wfrontend + wenterprise-server)" OFF)
+
 option(OES_USE_FIREBIRD    "Enable Firebird database driver"    OFF)
 option(OES_USE_POSTGRESQL  "Enable PostgreSQL database driver"  OFF)
 option(OES_USE_ODBC        "Enable ODBC database driver"        OFF)
@@ -463,6 +469,8 @@ endif()
 #   launcher      — executable      (GUI subsystem)
 #   codeRunner    — executable      (GUI subsystem)
 #   simplePlugin  — SHARED library  (plugin example)
+#   wfrontend     — SHARED library  (the web frontend, OES_BUILD_WEB)
+#   wenterprise-server — executable (the web HTTP server, OES_BUILD_WEB)
 # ---------------------------------------------------------------------------
 
 add_subdirectory("${OES_ENGINE_DIR}/backend")
@@ -473,6 +481,10 @@ add_subdirectory("${OES_ENGINE_DIR}/designer")
 add_subdirectory("${OES_ENGINE_DIR}/launcher")
 add_subdirectory("${OES_ENGINE_DIR}/codeRunner")
 add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
+
+if(OES_BUILD_WEB)
+    add_subdirectory("${OES_ENGINE_DIR}/wenterprise-server")
+endif()
 
 # ---------------------------------------------------------------------------
 # Unit tests (Google Test)

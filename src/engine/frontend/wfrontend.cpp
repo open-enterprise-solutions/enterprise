@@ -556,10 +556,62 @@ ibSessionHolder   g_serverSession;
 std::mutex        g_addrMutex;
 std::string       g_serverAddress;
 
-void RememberError()
+// The whole chain, not only its last link: a base that cannot be opened records
+// the driver's reason and the layer's summary as separate entries, and the
+// driver's is the one that says why.
+//
+// `thrown` is what escaped when it was not an ibBackendException -- those put
+// themselves on the chain, a std::exception does not.
+void RememberError(const wxString& thrown = wxEmptyString)
 {
-	const wxString& msg = ibBackendException::GetLastError();
-	g_lastError = msg.IsEmpty() ? "unknown backend error" : std::string(msg.mb_str(wxConvUTF8));
+	wxString combined;
+	for (const wxString& msg : ibBackendException::DrainLastErrors()) {
+		if (!combined.IsEmpty()) combined += wxT("\n--\n");
+		combined += msg;
+	}
+	if (combined.IsEmpty()) combined = thrown;
+	if (combined.IsEmpty()) combined = ibBackendException::GetLastError();
+
+	if (combined.IsEmpty()) {
+		// Nothing new to say. An earlier step in the same bring-up may already
+		// have recorded the real reason, and a placeholder must not replace it.
+		if (g_lastError.empty())
+			g_lastError = "unknown backend error";
+		return;
+	}
+
+	g_lastError = std::string(combined.mb_str(wxConvUTF8));
+}
+
+// One bring-up step, with every way it can fail turned into `false` plus a
+// description in g_lastError.
+//
+// The bring-up THROWS as well as returning false: a Firebird base that cannot
+// be taken is reported by ibDatabaseLayerFirebird::Open raising, and nothing
+// between there and here caught it. Uncaught it reached std::terminate, so the
+// host died on SIGABRT with an empty console -- while the sentence explaining
+// why sat inside the exception, and the `return false` road that would have
+// printed it was never taken. The desktop clients guard the same two calls the
+// same way (designer/mainApp.cpp, enterprise/mainApp.cpp).
+template <class Step>
+bool RunBringUp(Step&& step)
+{
+	wxString thrown;
+	try {
+		if (step())
+			return true;
+	}
+	catch (const ibBackendException&) {
+		// Its ctor pushed the description onto this thread's chain.
+	}
+	catch (const std::exception& err) {
+		thrown = wxString::FromUTF8(err.what());
+	}
+	catch (...) {
+		thrown = _("an unknown failure");
+	}
+	RememberError(thrown);
+	return false;
 }
 
 } // namespace
@@ -640,14 +692,14 @@ WFRONTEND_API bool wfrontendInitFile(
 		return true;  // idempotent
 
 	EnsurePngHandler();
+	g_lastError.clear();
 
-	if (!appDataCreateFile(ibRunMode::eWEB_RUNTIME_MODE,
-		wxString::FromUTF8(filePath.c_str()),
-		wxString::FromUTF8(locale.c_str())))
-	{
-		RememberError();
+	if (!RunBringUp([&] {
+		return appDataCreateFile(ibRunMode::eWEB_RUNTIME_MODE,
+			wxString::FromUTF8(filePath.c_str()),
+			wxString::FromUTF8(locale.c_str()));
+	}))
 		return false;
-	}
 
 	// Stamp debug flag BEFORE FinishConnect: OnFirstConnect listener
 	// (in appData::WireSessionEvents) reads m_loadMetadataFlags inside
@@ -656,7 +708,7 @@ WFRONTEND_API bool wfrontendInitFile(
 	if (debugEnable)
 		appData->m_loadMetadataFlags = _app_start_create_debug_server_flag;
 
-	if (!FinishConnect(ibUser, ibPassword))
+	if (!RunBringUp([&] { return FinishConnect(ibUser, ibPassword); }))
 		return false;
 
 	g_initialized.store(true);
@@ -679,23 +731,23 @@ WFRONTEND_API bool wfrontendInitServer(
 		return true;
 
 	EnsurePngHandler();
+	g_lastError.clear();
 
-	if (!appDataCreateServer(ibRunMode::eWEB_RUNTIME_MODE,
-		wxString::FromUTF8(server.c_str()),
-		wxString::FromUTF8(port.c_str()),
-		wxString::FromUTF8(user.c_str()),
-		wxString::FromUTF8(password.c_str()),
-		wxString::FromUTF8(database.c_str()),
-		wxString::FromUTF8(locale.c_str())))
-	{
-		RememberError();
+	if (!RunBringUp([&] {
+		return appDataCreateServer(ibRunMode::eWEB_RUNTIME_MODE,
+			wxString::FromUTF8(server.c_str()),
+			wxString::FromUTF8(port.c_str()),
+			wxString::FromUTF8(user.c_str()),
+			wxString::FromUTF8(password.c_str()),
+			wxString::FromUTF8(database.c_str()),
+			wxString::FromUTF8(locale.c_str()));
+	}))
 		return false;
-	}
 
 	if (debugEnable)
 		appData->m_loadMetadataFlags = _app_start_create_debug_server_flag;
 
-	if (!FinishConnect(ibUser, ibPassword))
+	if (!RunBringUp([&] { return FinishConnect(ibUser, ibPassword); }))
 		return false;
 
 	g_initialized.store(true);
