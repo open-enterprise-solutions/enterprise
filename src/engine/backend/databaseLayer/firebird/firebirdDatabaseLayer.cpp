@@ -1899,6 +1899,17 @@ wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird
 		pInterface->GetIscSqlInterprete()(nCode, szError, sizeof(szError));
 		wxCharBuffer systemEncoding = wxLocale::GetSystemEncodingName().mb_str();
 		strReturn = ibDatabaseStringConverter::ConvertFromUnicodeStream(szError, (const char*)systemEncoding);
+
+		// ...and then the status vector, for the same reason the branch above reads
+		// it. The sentence for the CODE is generic by construction -- "a system
+		// error that precludes successful execution of subsequent statements" is
+		// what every system-level failure says -- and WHICH system error it was is
+		// only in the vector. Reading one and not the other is why a lock directory
+		// the process cannot write, a security database it cannot reach and a file
+		// it has no permission on all arrived as one indistinguishable line.
+		long* pVector = (long*)status;
+		while (pInterface->GetFbInterpret()(szError, 512, (const ISC_STATUS**)&pVector))
+			strReturn += wxString::Format(wxT("\n%s"), szError);
 	}
 
 	return strReturn;
