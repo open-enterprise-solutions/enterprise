@@ -950,9 +950,12 @@ WFRONTEND_API void wfrontendSetProcessExitHook(void (*hook)())
 		auto* reg = ibApplicationData::GetSessionRegistry();
 		if (reg == nullptr) return;
 
-		// Keep-alive predicate: wes process stays up while at least
-		// one WebClient session is registered against the WebServer.
+		// A plain wes is a persistent multi-user service; zero clients is
+		// an ordinary idle state. Only a debug-spawned one-shot wes lets
+		// its client count decline process keep-alive.
 		reg->OnShouldKeepAlive([]() {
+			if (!wfrontendDebugMode())
+				return true;
 			auto* r = ibApplicationData::GetSessionRegistry();
 			return r != nullptr && r->HasClients();
 		});

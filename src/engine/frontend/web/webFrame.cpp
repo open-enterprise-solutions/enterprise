@@ -350,11 +350,19 @@ void ibWebFrame::DrainPendingCloses()
 				continue;
 			std::cerr << "[life] DeleteAllViews form=" << (void*)form
 				<< " doc=" << (void*)visualDoc << std::endl;
+			// m_tabs owns the child frame. Detach it from the view before
+			// DeleteAllViews deletes that view; ibView::~ibView otherwise
+			// calls childFrame->Destroy() and deletes the owned frame here,
+			// leaving the vector's unique_ptr to delete it a second time.
+			ibWebDocChildFrame* const dyingTab = m_tabs[i].get();
+			if (ibView* const dyingView = dyingTab->GetView())
+				dyingView->SetDocChildFrame(nullptr);
+			dyingTab->SetView(nullptr);
 			// Now — outside any control's event handler — we can safely
 			// destroy the view, which cascades into host and all its
 			// child controls (toolbar, tools, textctrl etc.). ibDocument's
 			// DeleteAllViews contract also deletes the doc itself when
-			// the last view goes, so m_tabs[i]->m_doc becomes dangling
+			// the last view goes, so dyingTab->m_doc becomes dangling
 			// (tab dtor nulls it, doesn't delete).
 			visualDoc->DeleteAllViews();
 			std::cerr << "[life] after DeleteAllViews" << std::endl;

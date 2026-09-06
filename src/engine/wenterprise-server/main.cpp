@@ -5,6 +5,7 @@
 // smoke-test endpoints (/, /ping, /login, /logout) on top of a real
 // database connection.
 
+#include <atomic>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -54,6 +55,34 @@ namespace {
 // mid-listen and leave the row around until another wes sweep cleans it.
 httplib::Server* g_svr = nullptr;
 
+enum class StopReason {
+	None,
+	ConsoleControl,
+	Signal,
+	BackendRequest,
+};
+
+std::atomic<StopReason> g_stopReason{StopReason::None};
+
+void RequestServerStop(StopReason reason)
+{
+	StopReason expected = StopReason::None;
+	g_stopReason.compare_exchange_strong(expected, reason,
+		std::memory_order_acq_rel, std::memory_order_acquire);
+	if (g_svr) g_svr->stop();
+}
+
+const char* StopReasonText(StopReason reason)
+{
+	switch (reason) {
+	case StopReason::ConsoleControl: return "console control event";
+	case StopReason::Signal:         return "process signal";
+	case StopReason::BackendRequest: return "backend lifecycle request";
+	case StopReason::None:           break;
+	}
+	return "unknown request";
+}
+
 #if defined(_WIN32)
 void LogShutdownLine(const char* msg) {
 	// Goes to both stderr (visible while console still exists) and the
@@ -72,7 +101,7 @@ BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType) {
 		// Console still live — main has time to clean up after
 		// listen_after_bind returns. Just break the listener.
 		LogShutdownLine("[ctrl] Ctrl+C/Break - svr.stop() + let main cleanup");
-		if (g_svr) g_svr->stop();
+		RequestServerStop(StopReason::ConsoleControl);
 		return TRUE;
 
 	case CTRL_CLOSE_EVENT:
@@ -85,7 +114,7 @@ BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType) {
 		// the handler so the sys_session DELETE reaches the DB before
 		// Windows kills us, then ExitProcess instead of returning.
 		LogShutdownLine("[ctrl] close event - direct in-handler shutdown");
-		if (g_svr) g_svr->stop();
+		RequestServerStop(StopReason::ConsoleControl);
 		wfrontendShutdown();
 		LogShutdownLine("[ctrl] shutdown complete, ExitProcess(0)");
 		ExitProcess(0);
@@ -97,7 +126,7 @@ BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType) {
 }
 #else
 void PosixSignalHandler(int /*sig*/) {
-	if (g_svr) g_svr->stop();
+	RequestServerStop(StopReason::Signal);
 }
 #endif
 
@@ -1046,7 +1075,7 @@ int main(int argc, char** argv)
 	// returns and main proceeds to wfrontendShutdown — same orderly
 	// path as Ctrl+C.
 	wfrontendSetProcessExitHook([]() {
-		if (g_svr) g_svr->stop();
+		RequestServerStop(StopReason::BackendRequest);
 	});
 
 	// 0.0.0.0 is a wildcard bind, not a routable address — browsers
@@ -1080,6 +1109,12 @@ int main(int argc, char** argv)
 	}
 
 	const bool ok = svr.listen_after_bind();
+	const StopReason stopReason = g_stopReason.load(std::memory_order_acquire);
+	g_svr = nullptr;
+	if (stopReason != StopReason::None) {
+		std::cerr << "wenterprise-server stop requested by "
+			<< StopReasonText(stopReason) << "; shutting down" << std::endl;
+	}
 
 #if defined(_WIN32)
 	LogShutdownLine("[main] listen_after_bind returned, entering wfrontendShutdown");
@@ -1089,6 +1124,8 @@ int main(int argc, char** argv)
 	LogShutdownLine("[main] wfrontendShutdown returned");
 #endif
 
+	if (stopReason != StopReason::None)
+		return 0;
 	if (!ok) {
 		std::cerr << "listen_after_bind failed on " << args.host << ":" << boundPort << std::endl;
 		return 1;
