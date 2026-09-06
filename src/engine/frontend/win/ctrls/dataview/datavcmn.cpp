@@ -716,17 +716,33 @@ wxSize ibDataViewCustomRendererBase::GetTextExtent(const wxString& str) const
 {
 	const ibDataViewCtrl* view = GetView();
 
+	const wxFont font = m_attr.HasFont()
+		? m_attr.GetEffectiveFont(view->GetFont())
+		: view->GetFont();
+
+	// ⭐ ASKED TWICE FOR THE SAME CELL, ANSWERED ONCE. WXCallRender measures to place the text and
+	// RenderText measures to decide whether it fits - the same string, the same font, one paint
+	// apart. See the note on m_lastMeasured: this is where the second crossing into the font engine
+	// used to happen.
+	if (m_lastMeasuredValid && m_lastMeasured == str && m_lastMeasuredFont == font)
+		return m_lastMeasuredSize;
+
+	wxSize size;
 	if (m_attr.HasFont())
 	{
-		wxFont font(m_attr.GetEffectiveFont(view->GetFont()));
-		wxSize size;
-		view->GetTextExtent(str, &size.x, &size.y, NULL, NULL, &font);
-		return size;
+		wxFont measureWith(font);
+		view->GetTextExtent(str, &size.x, &size.y, NULL, NULL, &measureWith);
 	}
 	else
 	{
-		return view->GetTextExtent(str);
+		size = view->GetTextExtent(str);
 	}
+
+	m_lastMeasured     = str;
+	m_lastMeasuredFont = font;
+	m_lastMeasuredSize = size;
+	m_lastMeasuredValid = true;
+	return size;
 }
 
 void
@@ -745,6 +761,29 @@ ibDataViewCustomRendererBase::RenderText(const wxString& text,
 		flags |= wxCONTROL_SELECTED;
 	if (!(GetOwner()->GetOwner()->IsEnabled() && GetEnabled()))
 		flags |= wxCONTROL_DISABLED;
+
+	// ⭐⭐ THE ORDINARY CELL IS DRAWN AS TEXT, not as a themed item, and that is most of them: not
+	// selected, not disabled, and short enough to fit. DrawItemText is the right call for the other
+	// cases and the wrong price for this one - on MSW it opens a THEME HANDLE per call, runs
+	// Ellipsize (which searches for a width by measuring repeatedly) and then draws through uxtheme.
+	// Measured on a grid scroll, 2026-09-06: DrawItemText 20.97% of the whole process, of which the
+	// theme handle 3.77% and Ellipsize 5.12% - paid on every cell, to decide nothing.
+	//
+	// ⚠ WHAT IT DOES NOT CHANGE. The colour is already set by WXCallRender (wxDCTextColourChanger)
+	// and the rectangle is already placed and narrowed by it for the alignment, so a cell that fits
+	// has its box exactly where the text goes. Selection, disabling and real truncation keep the
+	// themed path, which is where those three actually mean something.
+	//
+	// 🛑 AND IT MUST NOT BE MADE UNCONDITIONAL. A text that does NOT fit needs the ellipsis, and the
+	// ellipsis is what DrawItemText is for; drawing it plainly would spill the string across the
+	// neighbouring column instead of cutting it.
+	if (flags == 0) {
+		const wxSize extent = GetTextExtent(text);   // remembered - see GetTextExtent
+		if (extent.x <= rectText.width && extent.y <= rectText.height) {
+			dc->DrawText(text, rectText.x, rectText.y + (rectText.height - extent.y) / 2);
+			return;
+		}
+	}
 
 	wxRendererNative::Get().DrawItemText(
 		GetOwner()->GetOwner(),

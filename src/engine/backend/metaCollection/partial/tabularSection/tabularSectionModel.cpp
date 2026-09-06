@@ -237,9 +237,9 @@ void ibValueTabularSectionDataObjectRef::CopyValue(const ibDataViewItem& row)
 	ibValueTabularSectionDataObjectBase::CopyValue(row);
 
 	if (!ibBackendException::IsEvalMode()) {
-		ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(
-			m_objectValue->GetGuid()
-		);
+		ibBackendValueForm* const foundedForm = ibFormToNotify([this] {
+			return ibBackendValueForm::FindFormByUniqueKey(m_objectValue->GetGuid());
+		});
 		if (foundedForm != nullptr) {
 			foundedForm->Modify(true);
 		}
@@ -273,7 +273,9 @@ void ibValueTabularSectionDataObjectRef::DeleteValue(const ibDataViewItem& row)
 	ibValueTabularSectionDataObjectBase::DeleteValue(row);
 
 	if (!ibBackendException::IsEvalMode()) {
-		ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(m_objectValue->GetGuid());
+		ibBackendValueForm* const foundedForm = ibFormToNotify([this] {
+			return ibBackendValueForm::FindFormByUniqueKey(m_objectValue->GetGuid());
+		});
 		if (foundedForm != nullptr) foundedForm->Modify(true);
 	}
 }

@@ -1058,7 +1058,7 @@ public:
 	std::vector<ibColumnSlot> DescribeLayout() const override { return m_origin->DescribeLayout(); }
 
 	bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
-	               class ibValue& retValue, class ibQueryResult& result, bool createData = true) const override {
+	               class ibValue& retValue, class ibQueryResult& result, bool createData = false) const override {
 		return m_origin->ReadValue(fieldName, metaData, retValue, result, createData);
 	}
 	void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,

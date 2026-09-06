@@ -12,7 +12,7 @@
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/backend_exception.h"
-#include "backend/system/systemManager.h"   // ibValueSystemFunction::Message - telling the person
+#include "backend/system/systemManager.h"   // Message - telling the person; WriteJournalEvent - the run's own record
 #include "backend/compiler/compileCode.h"   // the code is COMPILED here, against this application
 #include "backend/compiler/compileModule.h" // ...parented to the root, which is what it must see
 #include "backend/moduleInfo.h"             // GetCompileModule - which is how the root is asked for
@@ -272,6 +272,10 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 		catch (...) {
 			// ⚠ THE ROLLBACK IS OUTSIDE EVERY EXIT. A throw is a likely end for sent code, and a
 			// transaction left open by a failed run would hold locks on a live base.
+			//
+			// ⚠ AND ONLY THE ROLLBACK. Recording the failure is NOT this job's business - EVERY
+			// background run has to leave that trace, not the one that happens to be mine, so it
+			// lives in the worker that runs them all (jobBackground.cpp).
 			layer->RollBack();
 			throw;
 		}

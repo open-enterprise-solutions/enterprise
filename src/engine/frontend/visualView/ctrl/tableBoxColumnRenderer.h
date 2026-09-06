@@ -128,7 +128,11 @@ public:
 
 	virtual bool Render(wxRect rect, wxDC* dc, int state) override
 	{
-		RenderText(m_valueVariant,
+		// ⭐ THE TEXT, NOT THE VARIANT. Passing m_valueVariant here converted it to a string on every
+		// draw - and GetSize() below converted the same variant separately to measure it, so one
+		// painted cell built the string twice. wxVariant::operator wxString was 3.10% of the whole
+		// process on a grid scroll (measured 2026-09-06); it is now built once, in SetValue.
+		RenderText(m_valueText,
 			0, // no offset
 			rect,
 			dc,
@@ -148,7 +152,7 @@ public:
 
 	virtual wxSize GetSize() const override {
 		if (!m_valueVariant.IsNull()) {
-			return GetTextExtent(m_valueVariant);
+			return GetTextExtent(m_valueText);
 		}
 		else {
 			return GetView()->FromDIP(wxSize(wxDVC_DEFAULT_RENDERER_SIZE,
@@ -170,6 +174,8 @@ public:
 			SetAlignment(wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
 
 		m_valueVariant = value;
+		// Built ONCE, here, where the value arrives - drawing and measuring both read it.
+		m_valueText = value.IsNull() ? wxString() : value.MakeString();
 		return true;
 	}
 
@@ -194,7 +200,7 @@ public:
 	}
 
 #if wxUSE_ACCESSIBILITY
-	virtual wxString GetAccessibleDescription() const override { return m_valueVariant; }
+	virtual wxString GetAccessibleDescription() const override { return m_valueText; }
 #endif // wxUSE_ACCESSIBILITY
 
 	virtual bool HasEditorCtrl() const override {
@@ -211,6 +217,8 @@ private:
 
 	ibValueModelTableBoxColumn* m_tableBoxColumn;
 	wxVariant m_valueVariant;
+	// The same value as text, built once in SetValue - see Render and GetSize.
+	wxString  m_valueText;
 };
 
 // ----------------------------------------------------------------------------

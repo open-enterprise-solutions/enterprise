@@ -296,9 +296,11 @@ ibValueModel* ibValueTabularSectionDataObjectBase::SaveDataToTable() const
 bool ibValueTabularSectionDataObjectRef::SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal)
 {
 	if (varMetaVal != ibValueTabularSectionDataObjectBase::GetValueByMetaID(item, id)) {
-		ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(
-			m_objectValue->GetGuid()
-		);
+		// Modifiedness again, one level down: the row is set whatever happens, and an open window is
+		// told only where there is one (ibFormToNotify, backend_form.h).
+		ibBackendValueForm* const foundedForm = ibFormToNotify([this] {
+			return ibBackendValueForm::FindFormByUniqueKey(m_objectValue->GetGuid());
+		});
 		bool result = ibValueTabularSectionDataObjectBase::SetValueByMetaID(item, id, varMetaVal);
 		if (result && foundedForm != nullptr)
 			foundedForm->Modify(true);

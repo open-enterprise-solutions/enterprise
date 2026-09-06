@@ -76,7 +76,29 @@ BoundFilter BuildWhere(const ibLogFilter& f)
 
     if (f.from_ms != 0)        { andAdd(wxT("ts_ms >= ?")); b.nums.push_back(f.from_ms); b.kinds.push_back('L'); }
     if (f.to_ms   != 0)        { andAdd(wxT("ts_ms <  ?")); b.nums.push_back(f.to_ms);   b.kinds.push_back('L'); }
-    if (f.min_level >= 0)      { andAdd(wxT("level >= ?")); b.nums.push_back(f.min_level); b.kinds.push_back('I'); }
+    // 🛑⭐⭐ AUDIT IS A KIND, NOT A SEVERITY, and it sits at 3 — above Error(2) — on a scale this
+    // query reads as a THRESHOLD. So a plain `level >= ?` answered "show me the errors" with every
+    // login, every document write and every assistant call in the base, and the actual failures were
+    // nowhere among them. MEASURED 2026-09-06: `journal_read {level: error}` came back with fifteen
+    // rows, all of them audit, not one error. The one question the journal exists to answer -
+    // "what broke here while nobody was looking" - could not be asked at all.
+    //
+    // ⭐ SO THE LADDER STOPS AT ERROR, and audit is reachable only by asking for it BY NAME. Two
+    // meanings had been folded into one number; this separates them at the only place that reads it.
+    if (f.min_level >= 0) {
+        if (f.min_level == static_cast<int>(ibLogLevel::Audit)) {
+            andAdd(wxT("level = ?"));
+            b.nums.push_back(f.min_level);
+            b.kinds.push_back('I');
+        }
+        else {
+            andAdd(wxT("level >= ? AND level <> ?"));
+            b.nums.push_back(f.min_level);
+            b.kinds.push_back('I');
+            b.nums.push_back(static_cast<int>(ibLogLevel::Audit));
+            b.kinds.push_back('I');
+        }
+    }
     if (!f.user_name.IsEmpty()){ andAdd(wxT("user_name = ?")); b.strs.push_back(f.user_name); b.kinds.push_back('S'); }
     if (!f.session_id.IsEmpty()){ andAdd(wxT("session_id = ?")); b.strs.push_back(f.session_id); b.kinds.push_back('S'); }
     if (!f.source.IsEmpty())   { andAdd(wxT("source = ?"));    b.strs.push_back(f.source);    b.kinds.push_back('S'); }

@@ -129,11 +129,11 @@ public:
 	//     IS a column and carries its own metaData, so these forward to the column-based core; the
 	//     core itself names no attribute.
 	static void SetValueAttribute(const ibValueMetaObjectAttributeBase* attr, const ibValue& cValue, ibQueryStatement* statement, int& position);
-	static bool GetValueAttribute(const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData = true);
+	static bool GetValueAttribute(const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData = false);
 	// Read a NAMED field of a KNOWN variant type (a register reading a numeric balance / turnover
 	// column). Forwards to the codec's read leaf (ibColumnCodec::ReadField).
 	static bool GetValueAttribute(const wxString& fieldName, ibFieldTypes fieldType,
-	                              const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData = true);
+	                              const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData = false);
 
 	// ⭐⭐ WOULD THIS DOOR RENDER WHOLE, IF IT WERE DECLARED? Asked BEFORE `.With(name, inner)` by the
 	// lowering that is choosing a road, and answered by the tier that would have to write the SQL.

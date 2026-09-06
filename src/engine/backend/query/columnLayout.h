@@ -195,17 +195,35 @@ public:
 	// READ — reassemble the value off the column's physical fields in `result`. The col-only
 	// overload reads the column's own physical name; the fieldName overload reads a given base
 	// (a dot-walk alias prefix). Reference / enum reconstruction uses the metadata context.
+	//
+	// 🛑⭐⭐ `createData` DECIDES WHETHER A REFERENCE GOES AND FETCHES ITS ROW, and it defaults to NO.
+	// A query column carries a reference's IDENTITY - its type and its guid - and that is a whole
+	// answer; whoever later asks the reference what it IS pays for the read, which is exactly what
+	// ibReferenceLoad::OnDemand was made the default for in August ("we made every reference read
+	// nothing by default", reference.h).
+	//
+	// ⚠ IT DEFAULTED TO TRUE UNTIL 2026-09-06, AND THAT UNDID THE OTHER DEFAULT ENTIRELY. One rule
+	// decided in two places: the reference said "read nothing", this door said "read it", and this
+	// door is the one every query result comes through. What it cost is not a constant factor -
+	// reading a row materialises ITS reference fields, which fetch THEIR rows, so one cell of a list
+	// pulled a tree of objects with a SELECT at every node. MEASURED on a grid scroll: reading one
+	// value spent almost all of itself building references - `ibColumnCodec::ReadField` 1226 samples,
+	// of which `ibValueReferenceDataObject::Create` 1179 - and the descent ran at least three levels
+	// deep, stopping there only because a cycle guard cuts it (reference.cpp) - a guard written to
+	// save the STACK, not the database.
+	//
+	// A caller that truly needs the row NOW says so, in one word, at its own call site.
 	static bool ReadValue(const ibBackendQueryColumn* col, const ibMetaData* metaData,
-	                      ibValue& retValue, ibQueryResult& result, bool createData = true);
+	                      ibValue& retValue, ibQueryResult& result, bool createData = false);
 	static bool ReadValue(const wxString& fieldName, const ibBackendQueryColumn* col, const ibMetaData* metaData,
-	                      ibValue& retValue, ibQueryResult& result, bool createData = true);
+	                      ibValue& retValue, ibQueryResult& result, bool createData = false);
 
 	// READ ONE physical field of a KNOWN variant type (the read leaf). `fieldType` is the persisted
 	// variant tag (ibValueMetaObjectAttributeBase::ibFieldTypes) passed as a plain int, so this
 	// header need not pull the heavy attribute header in. Used directly by callers that already
 	// know a field's type (a register reading a numeric balance/turnover column).
 	static bool ReadField(const wxString& fieldName, int fieldType, const ibBackendQueryColumn* col,
-	                      const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData = true);
+	                      const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData = false);
 
 	// Does the column's type admit a reference value — its spread carries _RTRef/_RRRef?
 	// Pure clsid-kind gate (IsReference), no metadata.

@@ -271,12 +271,39 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	ibQueryRamTable retTable;
 	SeedRamTableFromView(retTable, view, this, cFold);
 
+	// ⭐⭐ WHICH TABLE THE READING STANDS ON, AND THE FOLD DECIDES IT. A rolled-up total is written by
+	// no one document — the trigger sums a period's movements into a single stored row, and the
+	// recorder is exactly what that sum throws away. So a reading asked for at MOVEMENT grain cannot
+	// come from the surface at all: it has to stand on the register's own movements, which is what
+	// `FromMovements()` has said since it was written.
+	//
+	// 🛑 WITHOUT THIS THE RECORDER WAS NOT MERELY MISSING — IT WAS FILTERED OUT. Every reading here
+	// took the stored arm (`RestrictToStoredArm`, i.e. `Recorder IS NULL`), so a caller who asked for
+	// `Periodicity = Recorder` got correct totals under an EMPTY recorder, all of them folded into
+	// one group. MEASURED 2026-09-06 on GoodsInWarehouses: `Turnovers(, , Recorder, )` answered 116
+	// against a blank name, while the same data read from the movements table named three documents
+	// (1 / 55 / 60). The periodicity was parsed, the fold was built, the column was declared and the
+	// key included it - and then the one clause that decides which rows are read said no.
+	//
+	// Everything above this line already knew: ibReadRegisterFold parses the word,
+	// ibRegisterViewColumnFits publishes the column for Auto/Recorder/Record, KeyColumns puts it in
+	// the key. The accounting register does the same thing on its own road
+	// (accountingRegisterMetadataTotals.cpp, `atMovementGrain`). This is the accumulation register's
+	// half of it, which was never written.
+	const bool atMovementGrain = cFold.FromMovements();
+	const ibBackendQueryable* const source = atMovementGrain ? GetQueryable() : view;
+	if (source == nullptr)
+		return retTable;
+
 	const wxString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : wxString();
-	const ibBackendQueryColumn* periodCol = view->ResolveColumnByName(periodName);
+	const ibBackendQueryColumn* periodCol = source->ResolveColumnByName(periodName);
 
 	ibDataQueryBuilder b;
-	b.From(view);
-	RestrictToStoredArm(b, this, view);
+	b.From(source);
+	// ⚠ THE ARM QUESTION BELONGS TO THE SURFACE ONLY. The movements table has one arm - itself - and
+	// asking it for `Recorder IS NULL` would return nothing at all.
+	if (!atMovementGrain)
+		RestrictToStoredArm(b, this, view);
 	// ⚠ NOT FILTERED BY THE CALLER'S RIGHTS. Totals read through a right-limited view would report
 	// figures computed from the rows that caller happens to see, and a wrong total does not look
 	// like an error.
@@ -294,7 +321,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	ibRegFlatLeaves(cFilter, leaves);
 	for (const auto& leaf : leaves) {
 		const ibBackendQueryColumn* onView = leaf.first != nullptr
-			? view->ResolveColumnByName(leaf.first->GetName()) : nullptr;
+			? source->ResolveColumnByName(leaf.first->GetName()) : nullptr;
 		if (onView != nullptr)
 			b.Where(onView, leaf.second);
 	}
@@ -304,16 +331,38 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	std::vector<const ibBackendQueryColumn*> keyCols;
 	for (const auto dimension : GetDimensionArrayObject()) {
 		const ibBackendQueryColumn* onView = dimension != nullptr
-			? view->ResolveColumnByName(dimension->GetName()) : nullptr;
+			? source->ResolveColumnByName(dimension->GetName()) : nullptr;
 		if (onView != nullptr) { keyCols.push_back(onView); b.GroupBy(onView); }
+	}
+
+	// ⭐ AT MOVEMENT GRAIN THE MOVEMENT'S OWN IDENTITY IS PART OF THE KEY, which is what makes the row
+	// a document's worth rather than a period's. It is added exactly as a dimension is — same metaID
+	// for its column id on both tables, so the row-writing below reaches it without knowing which
+	// table it came from.
+	if (atMovementGrain) {
+		if (GetRegisterRecorder() != nullptr)
+			if (const ibBackendQueryColumn* rec = source->ResolveColumnByName(GetRegisterRecorder()->GetName())) {
+				keyCols.push_back(rec);
+				b.GroupBy(rec);
+			}
+		// A `Record` reading is one row per LINE; a `Recorder` reading folds a document's lines together.
+		if (cFold.HasLineNumber() && GetRegisterLineNumber() != nullptr)
+			if (const ibBackendQueryColumn* line = source->ResolveColumnByName(GetRegisterLineNumber()->GetName())) {
+				keyCols.push_back(line);
+				b.GroupBy(line);
+			}
 	}
 	// ⭐ A CALENDAR FOLD TRUNCATES; THE REGISTER'S OWN PERIOD DOES NOT. `Period` groups by the column
 	// as it stands -- which is a different reading from "the interval whole", and used to be the same
 	// one because a bool could not hold the difference.
+	// A movement grain carries the period AS IT STANDS for the same reason `Period` does: the row is
+	// one movement's worth, and its moment is that movement's own.
+	const bool withPeriodOut = periodCol != nullptr
+		&& (cFold.IsCalendar() || cFold.m_kind == ibRegGranularity::Period || atMovementGrain);
 	if (periodCol != nullptr) {
 		if (cFold.IsCalendar())
 			b.GroupByExpr(ibQueryColumnExpr::PeriodTrunc(ibQueryColumnExpr::Col(periodCol), cFold.m_unit), periodName);
-		else if (cFold.m_kind == ibRegGranularity::Period)
+		else if (cFold.m_kind == ibRegGranularity::Period || atMovementGrain)
 			b.GroupBy(periodCol);
 	}
 
@@ -330,9 +379,71 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 			figures.push_back(res->GetName() + ibRegFigure::Expense);
 		}
 	}
-	for (const wxString& figure : figures)
-		if (const ibBackendQueryColumn* col = view->ResolveColumnByName(figure))
-			b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, figure);
+	if (!atMovementGrain) {
+		// The surface already holds each figure, computed and stored. Reading is all that is left.
+		for (const wxString& figure : figures)
+			if (const ibBackendQueryColumn* col = view->ResolveColumnByName(figure))
+				b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, figure);
+	}
+	else {
+		// ⭐ ON THE MOVEMENTS THE FIGURES DO NOT EXIST YET — a movement carries ONE amount and a
+		// RECORD TYPE that says which way it points. The three published figures are that one amount
+		// read three ways, which is exactly what the materialisation's trigger does when it rolls a
+		// period up. Said here as CASE sums so it stays one pass and one GROUP BY.
+		// ⚠ TESTED FOR RECEIPT, NEVER FOR EXPENSE. `ibRecordType` declares Expense FIRST, so the
+		// expense side is the enum's ZERO — and a condition written against zero reads as "no value
+		// given" in half the places a value can be compared. Naming the receipt keeps the test on the
+		// side that has a name.
+		//
+		// 🛑 AND IT IS COMPARED AS THE ENUM VALUE, NOT AS ITS ORDINAL, which is where this first went
+		// wrong. The materialisation next door compares the ordinal
+		// (accumulationRegisterMetadataSchema.cpp) and is right to: it writes the trigger, and there
+		// the column IS the raw stored field. THIS reading stands on the register as the query layer
+		// sees it, where the same column carries a typed enumeration — measured 2026-09-06:
+		// `SELECT RecordType FROM AccumulationRegister.GoodsInWarehouses` answers `Receipt`, not `1`.
+		// Compared against a bare number nothing matched, every receipt fell to the ELSE branch, and
+		// three goods receipts reported as an expense of 116 with a turnover of -116.
+		const ibValueMetaObjectAttributePredefined* const typeAttr = GetRegisterRecordType();
+		const ibBackendQueryColumn* const typeCol = typeAttr != nullptr ? typeAttr->GetQueryColumn() : nullptr;
+
+		ibQueryPredicatePtr isReceipt;
+		if (withSign && typeCol != nullptr)
+			isReceipt = ibQueryPredicate::Leaf(ibQueryCondition{
+				typeCol, ibQueryFilterOp::Equal,
+				ibValue::CreateEnumObject<ibValueEnumAccumulationRegisterRecordType>(ibRecordType::eReceipt) });
+
+		const ibQueryColumnExprPtr zero = ibQueryColumnExpr::Const(ibValue(0.0));
+
+		for (const auto res : GetResourceArrayObject()) {
+			if (res == nullptr || res->GetQueryColumn() == nullptr)
+				continue;
+
+			const ibQueryColumnExprPtr amount = ibQueryColumnExpr::Col(res->GetQueryColumn());
+
+			// 🛑 A TURNOVER-ONLY REGISTER HAS NO SIDES, so its movements are simply added up. Signing
+			// them by a record type it does not have would be inventing an expense arm.
+			if (isReceipt == nullptr) {
+				b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, amount,
+					res->GetName() + ibRegFigure::Turnover);
+				continue;
+			}
+
+			b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum,
+				ibQueryColumnExpr::Case({ { isReceipt, amount } }, zero),
+				res->GetName() + ibRegFigure::Receipt);
+
+			b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum,
+				ibQueryColumnExpr::Case({ { isReceipt, zero } }, amount),
+				res->GetName() + ibRegFigure::Expense);
+
+			// Receipt LESS expense, said in ONE expression rather than as a difference of two
+			// aggregates - the door sums expressions, not columns of its own output.
+			b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum,
+				ibQueryColumnExpr::Case({ { isReceipt, amount } },
+					ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Sub, zero, amount)),
+				res->GetName() + ibRegFigure::Turnover);
+		}
+	}
 
 	try {
 		ibDataQueryResult sel = b.SelectAggregate();
@@ -353,7 +464,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 			const long row = retTable.AppendRow();
 			for (const ibBackendQueryColumn* key : keyCols)
 				retTable.SetCell(row, key->GetColumnId(), sel.GetValue(key));
-			if (cFold.HasPeriod())
+			if (withPeriodOut)
 				retTable.SetByName(row, periodName, sel.GetColumn(periodName));
 			for (size_t i = 0; i < figures.size(); i++)
 				retTable.SetByName(row, figures[i], values[i]);

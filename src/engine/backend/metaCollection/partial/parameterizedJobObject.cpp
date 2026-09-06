@@ -225,20 +225,15 @@ bool ibValueRecordDataObjectParameterizedJob::ExecuteJob()
 			// handle, and nobody is holding this one — started and forgotten is the whole point.
 			// Without this line a broken handler is indistinguishable from a job that ran and did
 			// nothing, which is the one failure mode a scheduled job must never have.
-			try {
-				meta->RunHandler(rowGuid);
-				meta->StampLastRun(rowGuid);
-
-				if (ibLogger* const log = ibApplicationData::GetLogger())
-					log->Audit(wxT("job"), wxT("finished"),
-						wxString::Format(_("Job '%s' finished"), jobName));
-			}
-			catch (const ibBackendException& err) {
-				if (ibLogger* const log = ibApplicationData::GetLogger())
-					log->Audit(wxT("job"), wxT("failed"),
-						wxString::Format(_("Job '%s' failed: %s"), jobName, err.GetErrorDescription()));
-				throw;
-			}
+			// ⭐ NOT JOURNALLED HERE ANY MORE. Every background run now records its own ending in
+			// the worker that runs them all (jobBackground.cpp) — finished, cancelled or failed,
+			// under this run's own session id, and naming the job through the activity string
+			// passed below. Keeping a second pair of lines here would write each event twice and
+			// leave two places to fix when the wording or the level is wrong; the level WAS wrong
+			// (a failure filed as `Audit` cannot be found by `level: error`), which is exactly the
+			// defect a second writer preserves.
+			meta->RunHandler(rowGuid);
+			meta->StampLastRun(rowGuid);
 
 			return ibValue();
 		},

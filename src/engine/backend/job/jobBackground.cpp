@@ -11,10 +11,20 @@
 #include "backend/moduleManager/moduleManager.h"   // root module manager -> GetProcUnit
 #include "backend/compiler/procUnit.h"             // CallAsFunc by name
 #include "backend/backend_exception.h"
+#include "backend/system/systemManager.h"          // WriteJournalEvent - the run's own record
 
 #include <wx/log.h>
 
 namespace {
+
+// THE RUN'S OWN VOICE. A background session is tied to nobody, so this is not one channel
+// among several — it is the only one. Everything a run has to say about itself goes through
+// here, stamped with the session id by the logger, which is what makes `journal_read
+// {session}` the account of a single run rather than of the whole installation.
+void Journal(const wxString& text, ibStatusMessage status)
+{
+	ibValueSystemFunction::WriteJournalEvent(text, status, wxT("job.background"));
+}
 
 // HOW LONG A TENANT WAITS — for the registry to answer its Add, and for the pool to
 // hand it a connection. Short, and short for one reason: a rented run is serving
@@ -340,14 +350,57 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 			//    session, and this layer neither knows nor needs to know which.
 			const ibValue result = l.m_body(l.m_session);
 
+			// ⭐ AN ENDING IS AN EVENT TOO. Without this the journal shows a run starting and
+			// talking, and then nothing — and "still going" reads exactly like "finished a while
+			// ago", which is the one question a person asks about work they cannot see.
+			//
+			// ⚠ NOT FOR A TENANT. It is a rented read serving somebody who is already waiting and
+			// already holds the handle; it has no row in Active Users for the same reason, and a
+			// line per scrolled page would bury the runs that are actually jobs.
+			if (!l.m_tenant)
+				Journal(wxString::Format(_("Background job finished: %s"), l.m_activity),
+					ibStatusMessage_Information);
+
 			std::lock_guard<std::mutex> lk(run->m_mtx);
 			run->m_result = result;
 		}
+		// ⭐⭐ A BACKGROUND RUN THAT FAILS WRITES ITS OWN OBITUARY, AND IT BELONGS HERE RATHER THAN IN
+		// ANY ONE JOB. This session is tied to nobody: `Message` reaches no window, so an exception
+		// that merely unwinds is an event NOBODY CAN EVER SEE - the handle below carries the text,
+		// but only for as long as somebody is holding it and only if they think to ask at the right
+		// moment. The registration journal is the one durable channel a session like this has, it
+		// is stamped with the session id automatically, and it is where the run's own
+		// WriteJournalEvent lines already land - so `journal_read {session}` reads the whole story
+		// in order: what it was doing, and what it died of (Max, 2026-09-06: *"any background job,
+		// when it runs, must handle this inside itself and write the journal - not only the one you
+		// have now"*).
+		//
+		// ⭐ THE KIND IS READ OFF THE TYPE, which is the reason the exception family is split at all.
+		// A refusal that names a broken rule - ibBackendFormException, "there are no forms in this
+		// process" - arrives intact because nothing on the way up swallowed it, and lands as a line
+		// naming that rule instead of a null for somebody to interpret.
+		catch (const ibBackendInterruptException&) {
+			// ⚠ NOT AN ERROR, AND IT MUST NOT BE FILED AS ONE. Somebody asked for this run to stop
+			// and it obeyed; writing it under `level: error` would put a successful cancellation in
+			// front of whoever scans the journal for what is broken. It is still recorded, because
+			// "why did that run not finish" is a real question with a real answer.
+			Journal(wxString::Format(_("Background job cancelled: %s"), l.m_activity),
+				ibStatusMessage_Warning);
+
+			std::lock_guard<std::mutex> lk(run->m_mtx);
+			run->m_error = _("the run was cancelled");
+		}
 		catch (const ibBackendException& err) {
+			Journal(wxString::Format(_("Background job FAILED: %s - %s"),
+				l.m_activity, err.GetErrorDescription()), ibStatusMessage_Error);
+
 			std::lock_guard<std::mutex> lk(run->m_mtx);
 			run->m_error = err.GetErrorDescription();
 		}
 		catch (...) {
+			Journal(wxString::Format(_("Background job FAILED: %s - unknown error"), l.m_activity),
+				ibStatusMessage_Error);
+
 			std::lock_guard<std::mutex> lk(run->m_mtx);
 			run->m_error = _("unknown exception");
 		}

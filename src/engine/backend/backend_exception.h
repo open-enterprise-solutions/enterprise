@@ -312,6 +312,34 @@ public:
 	static void Error();
 };
 
+// 🛑⭐⭐ A FORM WAS ASKED FOR WHERE THERE ARE NO FORMS — its own type, because it is its own KIND of
+// wrong and callers need to tell it apart from everything else that can fail in the same line.
+//
+// USING A FORM ON THE SERVER IS NOT ALLOWED, and this exception is how that rule is enforced rather
+// than worked around. A server (a background job, the daemon, codeRunner, a web-server worker) has
+// no windows; code that reaches for one there has asked the wrong process, and softening the refusal
+// to a silent null would let form-driven logic run half-done and answer DIFFERENTLY on the server
+// than on the client — the failure nobody audits (Max, 2026-09-06: *"you have no right to use forms
+// on the server — do not go around the rule; make a separate exception so you know the exact kind"*).
+//
+// ⚠ WHAT THE TYPE BUYS, AND IT IS NOT A LICENCE TO CATCH IT AT THE LEAF. A form lookup answers NULL
+// for "nothing is open for this object", which is an ordinary state; folding "there are no forms in
+// this process at all" into the same null makes the two indistinguishable, and then nobody can say
+// WHY the form came back undefined. So the second answer is a refusal, it carries its own type, and
+// it travels all the way up to whoever STARTED the code — a background job reports it in its
+// `error` like any other failure, naming the line that asked. Catching it lower down is muffling:
+// the run goes on doing half of what it was written to do, silently (Max, 2026-09-06: *"how will
+// you understand why the form came back undefined?"* — *"you just muffled it"*).
+class BACKEND_API ibBackendFormException : public ibBackendException {
+	explicit ibBackendFormException(const wxString& what)
+		: ibBackendException(what) {}
+public:
+	// The one the frameless case raises. `subject` names what was being asked for, when the caller
+	// knows — "a form for 'Catalog.Goods'" — because "no forms here" is a true sentence that still
+	// leaves a person hunting for which line asked.
+	static void Error(const wxString& subject = wxEmptyString);
+};
+
 class BACKEND_API ibBackendAccessException : public ibBackendException {
 	explicit ibBackendAccessException(const wxString& subject = wxEmptyString)
 		: ibBackendException(subject.IsEmpty()

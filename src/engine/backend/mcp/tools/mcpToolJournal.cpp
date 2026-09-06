@@ -57,7 +57,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 
 // The arguments, declared once and read through the same objects — see ibMcpTool::Arguments().
 const ibArg& ArgSinceMinutes() { static const ibArg a(wxT("sinceMinutes"), ibArg::Kind::Whole, ibMcpText("Only what happened in the last N minutes. This is usually the one to pass.")); return a; }
-const ibArg& ArgLevel() { static const ibArg a(wxT("level"), ibArg::Kind::Text, ibMcpText("Lowest severity to report: info, warn, error, audit. Pass error for failures only.")); return a; }
+const ibArg& ArgLevel() { static const ibArg a(wxT("level"), ibArg::Kind::Text, ibMcpText("Which rows to report, and the four words are not one scale. info, warn and error step up a SEVERITY ladder, so error means failures and nothing else. audit is not a severity at all - it is a KIND, the business trail: logins, document writes, schema applications, what an assistant did. Ask for it BY NAME and you get that trail alone; it never arrives mixed into a severity you asked for.")); return a; }
 const ibArg& ArgSource() { static const ibArg a(wxT("source"), ibArg::Kind::Text, ibMcpText("Only this subsystem. script = a running module, auth = logins, and so on.")); return a; }
 const ibArg& ArgEvent() { static const ibArg a(wxT("event"), ibArg::Kind::Text, ibMcpText("Only this event type, for example runtime.error.")); return a; }
 const ibArg& ArgUser() { static const ibArg a(wxT("user"), ibArg::Kind::Text, ibMcpText("Only this user's rows.")); return a; }

@@ -316,7 +316,7 @@ public:
 	// has no tag of its own and assembles its value from the columns it is made of. The default stays
 	// the default, so nothing that reads a stored column pays for the possibility.
 	virtual bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
-	                       class ibValue& retValue, class ibQueryResult& result, bool createData = true) const;
+	                       class ibValue& retValue, class ibQueryResult& result, bool createData = false) const;
 
 	// …AND THE WRITE, THE SAME WAY. The pair belongs together: a value bound by the default lands in
 	// exactly the fields the default read takes it back out of, so a column that changes one and not
@@ -439,7 +439,7 @@ public:
 	// asks nobody what kind of column it holds. (Bodies in dbTableProvider.cpp, beside the reference
 	// assembly a single-target raw reference needs.)
 	bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
-	               class ibValue& retValue, class ibQueryResult& result, bool createData = true) const override;
+	               class ibValue& retValue, class ibQueryResult& result, bool createData = false) const override;
 	void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,
 	               const class ibValue& value, int& position) const override;
 	static ibBackendColumnRawDB Date     (const wxString& field, ibMetaID id = 0) { return ibBackendColumnRawDB(field, RawType::Date, id);      }

@@ -124,7 +124,11 @@ ibBackendValueForm* ibValueRecordDataObjectConstant::GetForm() const
 
 void ibValueRecordDataObjectConstant::Modify(bool mod)
 {
-	ibBackendValueForm* const foundedForm = GetForm();
+	// Same as the catalog / document objects (commonObject.cpp): marking a constant modified is an
+	// operation on the constant, and looking for a window to tell is an afterthought that only
+	// applies where windows exist. Getting a form still raises — it is asking from HERE that was
+	// wrong, so the refusal is caught here.
+	ibBackendValueForm* const foundedForm = ibFormToNotify([this] { return GetForm(); });
 
 	if (foundedForm != nullptr)
 		foundedForm->Modify(mod);
@@ -209,11 +213,13 @@ ibBackendValueForm* ibValueRecordDataObjectConstant::GetFormValue()
 bool ibValueRecordDataObjectConstant::SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal)
 {
 	if (id == m_metaObject->GetMetaID()) {
-		ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(m_metaObject->GetGuid());
+		// THE VALUE IS SET WHATEVER HAPPENS BELOW. This is modifiedness again wearing another name:
+		// the assignment is the operation, telling an open window is the afterthought. Through
+		// GetForm rather than the registry directly, so there is one road to catch on.
 		m_constValue = m_metaObject->AdjustValue(varMetaVal);
-		if (foundedForm != nullptr) {
+		ibBackendValueForm* const foundedForm = ibFormToNotify([this] { return GetForm(); });
+		if (foundedForm != nullptr)
 			foundedForm->Modify(true);
-		}
 		return true;
 	}
 	return false;
@@ -343,7 +349,8 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
 	const wxString& tableName = m_metaObject->GetPhysicalTableName();
-	ibBackendValueForm* const valueForm = GetForm();
+	// Told afterwards if there is anybody to tell — see ibFormToNotify (backend_form.h).
+	ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 
 	scope.SafeBeginTransaction();
 

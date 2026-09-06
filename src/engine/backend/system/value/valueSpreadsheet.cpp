@@ -501,13 +501,16 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 	else if (lMethodNum == ePrint) {
 		if (auto* frame = ibSession::CurrentFrame())
 			return frame->PrintSpreadsheetDocument(m_spreadsheetDoc, lSizeArray > 0 ? paParams[0]->GetBoolean() : false);
-		ibBackendCoreException::Error(_("Context functions are not available!"));
+		// SAME RULE AS EVERY OTHER FRAMELESS REFUSAL, so it is the same TYPE: printing needs a
+		// window, and a process without one is a process this code cannot run in. Raised as a core
+		// exception it was indistinguishable from any other engine failure.
+		ibBackendFormException::Error(_("printing a spreadsheet"));
 		return false;
 	}
 	else if (lMethodNum == eShow) {
 		if (auto* frame = ibSession::CurrentFrame())
 			return frame->ShowSpreadsheetDocument(paParams[0]->GetString(), m_spreadsheetDoc);
-		ibBackendCoreException::Error(_("Context functions are not available!"));
+		ibBackendFormException::Error(_("showing a spreadsheet"));
 		return false;
 	}
 	else if (lMethodNum == ePut) {

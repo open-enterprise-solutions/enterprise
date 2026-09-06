@@ -415,12 +415,19 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		if (ibLogger* const log = ibApplicationData::GetLogger()) {
 			const bool ok = result->m_ok.load(std::memory_order_acquire);
 			if (ok) {
+				// A completed run is a business event: it belongs to the trail an administrator
+				// reads, not to the list of things that are wrong.
 				log->Audit(wxT("job"), wxT("finished"),
 				           wxString::Format(_("Job '%s' completed"), desc.m_name));
 			}
 			else {
+				// 🛑⭐ A FAILURE IS FILED AS A FAILURE. This said `Audit`, which forces the row's
+				// level to audit however bad the news is — so a scheduled job that failed every
+				// night sat in the journal indistinguishable from a login, and the one query built
+				// to find it (`level: error`) could not. Unattended work is exactly the work whose
+				// failures nobody witnesses; if it is not legible here it is legible nowhere.
 				std::lock_guard<std::mutex> lk(result->m_mtx);
-				log->Audit(wxT("job"), wxT("failed"),
+				log->Error(wxT("job"), wxT("failed"),
 				           wxString::Format(_("Job '%s' failed: %s"), desc.m_name, result->m_error));
 			}
 		}

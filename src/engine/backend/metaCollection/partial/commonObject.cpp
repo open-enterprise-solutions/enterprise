@@ -1835,6 +1835,11 @@ ibBackendValueForm* ibValueRecordDataObject::GetForm() const
 {
 	if (!m_objGuid.isValid())
 		return nullptr;
+
+	// ⭐ GETTING A FORM RAISES WHERE THERE ARE NONE, AND THAT IS CORRECT — this asks plainly and does
+	// not soften the answer. The refusal belongs to whoever asked for a form; it is not this
+	// function's business to decide that the asker did not really mean it
+	// (Max, 2026-09-06: *"getting a form should indeed return an exception - that is normal"*).
 	return ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
 }
 
@@ -2458,8 +2463,20 @@ const ibSourceExplorer* ibValueRecordDataObjectRef::GetSourceExplorer() const
 
 void ibValueRecordDataObjectRef::Modify(bool mod)
 {
-	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
-
+	// ⭐⭐ THE FAULT IS HERE, NOT IN THE FORM LOOKUP. Getting a form raises where there are none, and
+	// that is right; what is wrong is that MARKING AN OBJECT MODIFIED went looking for one at all.
+	// This runs on EVERY field assignment, so `usd.Code = "840"` came through here before any write
+	// did — MEASURED 2026-09-06 on the first line of a hundred-payment fill, which refused at
+	// JobCode line 2 and left a background job, a daemon and codeRunner unable to assign a field.
+	//
+	// So the refusal is caught HERE, where the question was asked wrongly, rather than softened
+	// THERE, where it is answered correctly (Max, 2026-09-06: *"the problem is not in getting the
+	// form - it is exactly that modifiedness tries to get the form; wrap that in try/catch"*).
+	//
+	// The object is modified either way — that is DATA, and it does not depend on anybody being
+	// there to watch it happen.
+	ibBackendValueForm* const foundedForm =
+		ibFormToNotify([this] { return ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid); });
 	if (foundedForm != nullptr)
 		foundedForm->Modify(mod);
 
@@ -2790,7 +2807,9 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 	if (!BeginWriteScope(scope)) return true;
 
-	ibBackendValueForm* const valueForm = GetForm();
+	// Asked only so an OPEN window can be told afterwards — see ibFormToNotify (backend_form.h).
+	// A server has none, and that is not a reason for a write to fail.
+	ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 	const bool newObject = IsNewObject();
 
 	// Stage-named failures — same rule as the recorder path: the message says which stage
@@ -2856,7 +2875,9 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 	if (!BeginDeleteScope(scope)) return true;
 
-	ibBackendValueForm* const valueForm = GetForm();
+	// Asked only so an OPEN window can be told afterwards — see ibFormToNotify (backend_form.h).
+	// A server has none, and that is not a reason for a write to fail.
+	ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 
 	{
 		ibValue cancel = false;
@@ -2983,7 +3004,12 @@ void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::RefreshRecordSet()
 		wxASSERT(record);
 		const ibValueMetaObjectRegisterData* object = record->GetMetaObject();
 		wxASSERT(object);
-		ibBackendValueForm* backendFrame = ibBackendValueForm::FindFormBySourceUniqueKey(object->GetGuid());
+		// Refreshing an open register list after a document wrote its movements — pure notification,
+		// and there is nothing to refresh in a process with no windows (ibFormToNotify,
+		// backend_form.h). MEASURED 2026-09-06: this is what stopped a document write on a server
+		// AFTER the row had already been created and logged.
+		ibBackendValueForm* backendFrame =
+			ibFormToNotify([object] { return ibBackendValueForm::FindFormBySourceUniqueKey(object->GetGuid()); });
 		if (backendFrame != nullptr) backendFrame->UpdateForm();
 	}
 }
@@ -3111,7 +3137,9 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 	if (!BeginWriteScope(scope)) return true;
 
-	ibBackendValueForm* const valueForm = GetForm();
+	// Asked only so an OPEN window can be told afterwards — see ibFormToNotify (backend_form.h).
+	// A server has none, and that is not a reason for a write to fail.
+	ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 	const bool newObject = IsNewObject();
 
 	// Every failure below says WHICH STAGE refused and on WHICH OBJECT. A posting run walks a long
@@ -3257,7 +3285,9 @@ bool ibValueRecordDataObjectRecorderRef::DeleteObject()
 	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 	if (!BeginDeleteScope(scope)) return true;
 
-	ibBackendValueForm* const valueForm = GetForm();
+	// Asked only so an OPEN window can be told afterwards — see ibFormToNotify (backend_form.h).
+	// A server has none, and that is not a reason for a write to fail.
+	ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 
 	// Stage-named failures, as on the write path: a delete that stops has a reason and a place.
 	{
@@ -3458,6 +3488,7 @@ ibBackendValueForm* ibValueRecordManagerObject::GetForm() const
 {
 	if (!m_objGuid.isValid())
 		return nullptr;
+	// Same as the object's own GetForm above — asked plainly, and a process with no forms says so.
 	if (m_recordSet->m_selected)
 		return ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
 	return nullptr;
@@ -3483,9 +3514,13 @@ const ibSourceExplorer* ibValueRecordManagerObject::GetSourceExplorer() const
 
 void ibValueRecordManagerObject::Modify(bool mod)
 {
-	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
+	// Same as the object's Modify — the record set is modified either way, and "there was nobody to
+	// tell" is not a failure of the modification.
+	ibBackendValueForm* const foundedForm =
+		ibFormToNotify([this] { return ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid); });
 	if (foundedForm != nullptr)
 		foundedForm->Modify(mod);
+
 	m_recordSet->Modify(mod);
 }
 

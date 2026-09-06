@@ -120,7 +120,8 @@ bool ibValueRecordManagerObjectInformationRegister::WriteRegister(bool replace)
 
 				scope.SafeCommitTransaction();
 
-				ibBackendValueForm* const valueForm = GetForm();
+				// Told afterwards if there is anybody to tell — ibFormToNotify (backend_form.h).
+				ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 
 				// WHICH NEWS THE LIST NEEDS is not "was this new" but "can the list still find the row it knows".
 				// It identifies rows by their key, so only an identity that APPEARED or MOVED is worth an anchor;
@@ -152,7 +153,8 @@ bool ibValueRecordManagerObjectInformationRegister::DeleteRegister()
 		if (!ibBackendException::IsEvalMode())
 		{
 			{
-				ibBackendValueForm* const valueForm = GetForm();
+				// Told afterwards if there is anybody to tell — ibFormToNotify (backend_form.h).
+				ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 				{
 					scope.SafeBeginTransaction();
 

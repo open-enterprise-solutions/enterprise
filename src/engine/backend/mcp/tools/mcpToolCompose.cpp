@@ -238,7 +238,15 @@ public:
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("running the composer '%s'"), ibMcpNameOf(params));
+		// ⚠ A COMPOSITION PASSED WHOLE HAS NO NAME, AND EMPTY QUOTES ARE NOT A NAME. This read
+		// `running the composer ''` on the person's own screen whenever a schema was handed over
+		// instead of a report id - which is the ordinary case for every question the configuration
+		// has no report for. What they need to know is not a name that does not exist, but WHERE the
+		// thing came from: it was built here, it is not one of their reports, and nothing was stored.
+		const wxString name = ibMcpNameOf(params);
+		return name.IsEmpty()
+			? ibMcpText("running a composition built here - not a stored report, nothing is kept")
+			: wxString::Format(ibMcpText("running the composer '%s'"), name);
 	}
 
 	wxString GetDescription() const override

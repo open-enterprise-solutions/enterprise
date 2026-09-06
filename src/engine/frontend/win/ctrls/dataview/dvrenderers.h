@@ -402,6 +402,21 @@ protected:
 	wxSize GetTextExtent(const wxString& str) const;
 
 private:
+	// ⭐⭐ THE LAST TEXT MEASURED, AND THE ANSWER. Painting one cell measured the same string twice
+	// and then a third time inside the themed draw: WXCallRender asks GetSize() to place the text,
+	// Render draws it, and DrawItemText's Ellipsize searches for a width all over again. Measuring
+	// text is not free - it crosses into the font engine - and it was 12% of the whole process on a
+	// grid scroll (measured 2026-09-06: GetSize 7.13%, of which GetTextExtent 3.83%; Ellipsize
+	// 5.12%).
+	//
+	// ⚠ KEYED ON THE FONT AS WELL AS THE STRING. The attribute carries a per-item font (bold for a
+	// group row, say), so the same characters do not always occupy the same width - remembering the
+	// string alone would hand a bold row the plain row's measurement.
+	mutable wxString m_lastMeasured;
+	mutable wxFont   m_lastMeasuredFont;
+	mutable wxSize   m_lastMeasuredSize;
+	mutable bool     m_lastMeasuredValid = false;
+
 	ibDataViewItemAttr m_attr;
 	bool m_enabled;
 

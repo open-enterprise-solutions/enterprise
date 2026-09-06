@@ -1046,7 +1046,7 @@ public:
 		Kind GetColumnKind() const override { return Kind::Synthetic; }
 
 		bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
-		               class ibValue& retValue, class ibQueryResult& result, bool createData = true) const override;
+		               class ibValue& retValue, class ibQueryResult& result, bool createData = false) const override;
 
 		// …and it BINDS the same way: into the parts' fields, in the order the layout names them.
 		// Nothing STORES a moment — a document stores its date and its reference, and the pair is the

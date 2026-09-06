@@ -536,6 +536,20 @@ wxString ibBackendException::FindErrorCodeLine(const wxString& strBuffer, unsign
 {
 	const unsigned int sizeText = strBuffer.length();
 
+	// 🛑⭐⭐ NO TEXT, NO LINE — and this is not a tidy-up. Every scan below INDEXES the buffer at a
+	// position taken from the error, and an empty buffer with a non-zero position reads off the end:
+	// `strBuffer[45]` on a string of length 0. Nothing catches that — it is an access violation, not
+	// an exception — so the thread that was REPORTING a failure died silently, the background run it
+	// belonged to never published its completion, and `code_status` answered "still running" for
+	// ever (measured 2026-09-06, on a run whose own code raised).
+	//
+	// ⚠ AND IT WAS PUT HERE BY THE FIX ONE FILE UP. ProcessError used to dereference a null
+	// metaobject to get the module text; made tolerant, it now passes an EMPTY text instead — so the
+	// crash MOVED rather than went away. A guard against absence has to be written at every place
+	// that consumes the absent thing, not only at the one that produced it.
+	if (sizeText == 0)
+		return wxEmptyString;
+
 	unsigned int startPos = 0;
 	unsigned int endPos = sizeText;
 
@@ -555,9 +569,12 @@ wxString ibBackendException::FindErrorCodeLine(const wxString& strBuffer, unsign
 	// UNSIGNED, so the length wrapped to 4294967295 and Mid returned the rest of the
 	// file. Measured, not guessed: currPos=670 bufLen=12683 start=671 end=670
 	// len=12019 — 285 lines of source printed as an error message.
+	// ⚠ AND IT IS CLAMPED, because `currPos` comes from a DIFFERENT text than this one whenever the
+	// two disagree — a module that was edited, or a program with no module at all. Past the end it
+	// is not a position, and both scans below dereference it.
 	const unsigned int scanPos =
 		(currPos > 0 && currPos < sizeText && IsEol(strBuffer[currPos])) ? currPos - 1
-		: (currPos >= sizeText && sizeText > 0) ? sizeText - 1
+		: (currPos >= sizeText) ? sizeText - 1
 		: currPos;
 
 	for (unsigned int i = scanPos; i > 0; i--) {
@@ -631,6 +648,26 @@ void ibBackendInterruptException::Error()
 void ibBackendAccessException::Error(const wxString& subject)
 {
 	throw ibBackendAccessException(subject);
+}
+
+void ibBackendFormException::Error(const wxString& subject)
+{
+	// ⚠ THE CANONICAL SENTENCE STAYS. "Context functions are not available" is what this has said for
+	// years and what people recognise, and it was the wording of every frameless refusal in the tree
+	// — the spreadsheet's Print and Show among them. Replacing it here would have left one rule
+	// speaking with two voices; instead every one of those sites now raises THIS, so the sentence is
+	// written once and they all say it.
+	//
+	// What was actually missing was never the wording. It was the REASON — a server has no forms, so
+	// the answer is about WHERE the code is running rather than about a function somebody forgot to
+	// declare — and the TYPE, which is what lets a caller recognise this refusal among all the
+	// others (Max, 2026-09-06: *"the canonical one is 'context functions are not available' - you
+	// just create a new kind so it is clear"*).
+	throw ibBackendFormException(subject.IsEmpty()
+		? _("Context functions are not available: this is a server, and a server has no forms.")
+		: wxString::Format(
+			_("Context functions are not available: this is a server, and a server has no forms "
+			  "(asked for %s)."), subject));
 }
 
 void ibBackendLockException::VersionChangedThrow(const wxString& objectSynonym,
