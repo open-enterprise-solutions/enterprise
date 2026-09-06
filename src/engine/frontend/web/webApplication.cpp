@@ -362,8 +362,18 @@ void ibWebApplication::OnExit()
 			for (std::size_t i = 0; i < n; ++i) {
 				ibWebDocChildFrame* tab = m_frame->Tab(i);
 				if (tab == nullptr) continue;
-				if (auto* doc = dynamic_cast<ibFormVisualDocument*>(tab->GetDocument()))
-					doc->DeleteAllViews();
+				auto* doc = dynamic_cast<ibFormVisualDocument*>(tab->GetDocument());
+				if (doc == nullptr) continue;
+				// Detach the tab from its view before deleting that view, the
+				// same way DrainPendingCloses does. m_tabs owns the child frame;
+				// ibView::~ibView otherwise follows its back-link and calls
+				// Destroy() on it, and ~ibWebFrame's m_tabs.clear() then deletes
+				// the same shell a second time. That dtor's comment -- "only the
+				// tab shells remain" -- is only true once this has run.
+				if (ibView* const dyingView = tab->GetView())
+					dyingView->SetDocChildFrame(nullptr);
+				tab->SetView(nullptr);
+				doc->DeleteAllViews();
 			}
 			return true;
 		}).get();
