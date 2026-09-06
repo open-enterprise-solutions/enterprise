@@ -44,16 +44,32 @@ void ibConnectionPool::SetActiveTxConnection(std::shared_ptr<ibDatabaseLayer> co
 	auto* pool = ibApplicationData::GetConnectionPool();
 	if (pool == nullptr) return;
 	// Resolve the holder for the TX pin, in priority:
-	//   1. CurrentHolder() — session if bound, else db_query singleton.
-	//   2. The conn's already-pinned holder (set by an earlier ReserveTx
-	//      on a different thread).
-	//   3. The conn's scope-binding — lets an ad-hoc holder that
-	//      opened a scope still pin its TX correctly.
-	ibDatabaseConnectionHolder* holder = CurrentHolder();
-	if (holder == nullptr) {
-		if (auto* h = conn->GetHolder()) holder = h;
-		else                             holder = pool->FindBoundHolder(conn.get());
-	}
+	//   1. The conn's already-pinned holder (set by an earlier ReserveTx).
+	//   2. The conn's scope-binding — the holder whose scope checked it out.
+	//   3. CurrentHolder() — the calling thread's db_query channel.
+	//
+	// 🛑⭐⭐ THE CONNECTION'S OWN HOLDER COMES FIRST, AND THE ORDER USED TO BE THE OTHER WAY ROUND.
+	// CurrentHolder() is a thread_local singleton and therefore NEVER null, so the two fallbacks
+	// below were unreachable: every transaction, on every connection, pinned itself to the calling
+	// THREAD. A subsystem with a private holder — the lock manager writes sys_lock on a dedicated
+	// connection of its own, so its rows are visible to other sessions — then reserved the thread's
+	// channel on its way in and RELEASED IT on its way out, taking with it the pin of whoever was
+	// already there.
+	//
+	// ⭐ MEASURED 2026-09-07, and it deadlocked a run against itself. A background job posting
+	// documents holds ONE transaction for the whole run (jobRunByteCode.cpp). Posting the first
+	// document takes a pessimistic lock; that lock's own commit cleared the run's pin, so every
+	// later `db_query` left the run's transaction and landed on a fresh pooled connection. The
+	// bytecode cache is such a caller: on the second document it could no longer see the row it had
+	// written itself, called it a miss, and re-inserted the same primary key — which Firebird made
+	// wait for the uncommitted row held by the run's own transaction, which was waiting on this
+	// insert. Nothing failed, nothing was logged; the job simply stopped, one document in.
+	//
+	// A connection handed to a holder is that holder's work. Only a connection nobody owns — a
+	// session layer the pool never handed out — falls through to the calling thread.
+	ibDatabaseConnectionHolder* holder = conn->GetHolder();
+	if (holder == nullptr) holder = pool->FindBoundHolder(conn.get());
+	if (holder == nullptr) holder = CurrentHolder();
 	if (holder == nullptr) return;
 	pool->ReserveTx(holder, std::move(conn));
 }

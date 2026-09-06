@@ -314,6 +314,58 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 	run->m_future = session->Submit([launch]() {
 		const ibBackgroundLaunch&              l   = *launch;
 		const std::shared_ptr<ibBackgroundRun> run = l.m_run;
+
+		// 🛑⭐⭐ THE ENDING IS PUBLISHED BY A DESTRUCTOR, NOT BY THE LAST STATEMENT — because a run
+		// that never REACHES the last statement is the one failure nobody can see. A job that throws
+		// is visible (the catches below say so); a job that is cancelled is visible. A job whose
+		// thread simply stops being there looks EXACTLY like a job that is working: `complete: false`
+		// and an activity line, for as long as anybody cares to watch.
+		//
+		// WHAT PROMPTED IT, 2026-09-07: a posting run wrote its first document and its movement and
+		// was never heard from again — 205 documents asked for, one done, no error anywhere, and the
+		// run object still answering "running" twenty minutes later. That particular run turned out
+		// to be BLOCKED, not gone (a transaction pin the lock manager took from it, connectionPool.cpp
+		// — a stack dump named it in one read, after a debugger attach had said the opposite), and a
+		// destructor cannot see a thread that never leaves. It is the shape that matters: the only
+		// account of a background run is what the run itself says, so every way OUT of the body has
+		// to say something, including the ways nobody wrote.
+		//
+		// So completion is tied to the SCOPE rather than to reaching its end. Whatever leaves this
+		// lambda — a return, an exception the catches missed, an unwind nobody wrote — the guard runs
+		// and the run stops claiming to be alive. And if the body did not report an ending itself, the
+		// guard says so in the journal, because "it ended and nobody knows how" is a fact worth having
+		// rather than a silence to interpret.
+		struct ibRunEnded {
+			const std::shared_ptr<ibBackgroundRun>& m_run;
+			const wxString&                         m_activity;
+			bool                                    m_said = false;
+
+			~ibRunEnded()
+			{
+				if (!m_said) {
+					try {
+						Journal(wxString::Format(
+							_("Background job ENDED WITHOUT SAYING HOW: %s - the run left its body by a "
+							  "path that reported nothing. Anything it committed stays."), m_activity),
+							ibStatusMessage_Error);
+					}
+					catch (...) {
+						// A destructor says what it can and never throws. Losing the line is bad;
+						// losing the completion below would be worse.
+					}
+					std::lock_guard<std::mutex> lk(m_run->m_mtx);
+					if (m_run->m_error.IsEmpty())
+						m_run->m_error = _("the run ended without saying how");
+				}
+				{
+					std::lock_guard<std::mutex> lk(m_run->m_mtx);
+					m_run->m_activity.clear();
+				}
+				// Published LAST, and only after the result / error are stored: a watcher that sees
+				// IsComplete() must find everything already there.
+				m_run->m_done.store(true, std::memory_order_release);
+			}
+		} ended{ run, l.m_activity };
 		try {
 			// 1. Adopt the initiator's identity. No password: Login is already
 			//    split into AuthenticateUser (the check) and InstallUser (the
@@ -405,13 +457,9 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 			run->m_error = _("unknown exception");
 		}
 
-		{
-			std::lock_guard<std::mutex> lk(run->m_mtx);
-			run->m_activity.clear();
-		}
-		// Published LAST, and only after the result / error are stored: a watcher
-		// that sees IsComplete() must find everything already there.
-		run->m_done.store(true, std::memory_order_release);
+		// EVERY ARM ABOVE HAS SAID WHAT HAPPENED, so the guard has nothing to add — clearing the
+		// activity and publishing completion are its business now, on the way out.
+		ended.m_said = true;
 	});
 
 	// A SUBMIT THAT WAS NOT ACCEPTED MUST NOT READ AS "IN FLIGHT". A stopped pool
