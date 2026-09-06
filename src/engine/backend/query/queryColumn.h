@@ -167,6 +167,64 @@ public:
 	// resource's Balance vs Turnover have distinct model ids, though one metaID).
 	virtual ibMetaID GetColumnId() const = 0;
 
+	// ⭐⭐ …AND AN ID NOTHING DECLARED IS A NEGATIVE ONE — the sign carries the classification.
+	//
+	// The id above is a CONFIGURATION number wherever a metaobject stands behind the column: the
+	// metadata tree hands those out, and they are positive and small. A query also needs ids for
+	// columns nothing declared — an aggregate's figure, a computed projection, a second reading of one
+	// table — and those are minted NEGATIVE, so no query column can ever be mistaken for a declared
+	// one. (They are handed out by the DOOR that assembles the query — ibDataQueryBuilder — because
+	// minting is a property of building a query, not of being a column. This is the reading side.)
+	//
+	// 🛑 They used to be carved out of the POSITIVE space in bands (0x4000'0000 aggregates,
+	// 0x5000'0000 minted columns, 0x6000'0000 subquery folds, 0x7000'0000 stitch outputs), and that
+	// bookkeeping had already failed twice by 2026-09-06: one band held TWO tenants, `ibMetaID` is a
+	// signed int so 0x7000'0000 was the last band there is, and I walked into an occupied one adding a
+	// fifth. A map of bands has to be READ before every addition, and nothing makes anybody read it.
+	// The sign does what the map was trying to do, structurally (Max, 2026-09-06).
+	//
+	// ⭐⭐ A COLUMN NOBODY DECLARED SAYS SO BY ITS SIGN — and the KIND is stamped on BY THE COLUMN.
+	//
+	// Whoever makes such a column hands in a plain ordinary number — the id of the column it stands for,
+	// a position it is already walking, a running count of its own. The synthetic column then STORES it with
+	// its own kind composed onto it, because the class is the thing that knows which kind it is
+	// (Max, 2026-09-06: *"the synthetic takes an id in its argument, and when it stores it, it adds
+	// its own kind"*). The result is negative, so no minted id can ever be a configuration number.
+	//
+	// 🛑 This replaced five hand-carved BANDS in the positive space — one of which already held two
+	// tenants, against a ceiling made by the sign bit. A band map has to be READ before every
+	// addition and nothing makes anybody read it; I walked into an occupied one adding a sixth.
+	//
+	// ⚠ Nothing is decoded back out. Where such an id is read, what it stands for is known from where
+	// the reader is standing.
+	enum class SyntheticKind : unsigned {
+		Output = 1,   // an output of the query with no declared column behind it
+		Alias,        // a twin — a second reading of one table (ibAliasColumn)
+		Stitch,       // made while a result is assembled: a repeated select entry, a computed projection
+		Aggregate,    // the slot a fold's figure lands in when it cannot roll into its input's column
+		GroupKey,     // a computed GROUP BY key — grouped by an expression, so it has no column
+		Subquery,     // what a nested query publishes for its own folds and walks
+	};
+	// ⭐⭐ THE VALUE GOES IN AS IT IS — ordinary or already synthetic — AND A NEW ONE COMES OUT.
+	//
+	// The kind is the LOW digit and the value the high ones, so composing is a mixed radix rather
+	// than a bit field. That is what lets a synthetic id be fed back in: a field layout would mask the
+	// inner kind away and hand back the same number, while here the value simply grows
+	// (Max, 2026-09-06: *"you take the value, feed it into the kind as it is — synthetic or ordinary —
+	// and get a new one"*).
+	//
+	// Which is what a THIRD reading of one table needs: it wraps the second, the second wraps the
+	// first, and each link is a new number without anybody counting anything.
+	//
+	// ⚠ So `id + 1` is NOT "the next value of this kind" — it is another KIND. Whoever numbers a run
+	// of these composes each one (`SyntheticId(kind, i++)`), never increments a composed id.
+	static constexpr unsigned kSyntheticKinds = 8;
+	static constexpr ibMetaID SyntheticId(SyntheticKind kind, ibMetaID value) {
+		return -((value < 0 ? -value : value) * static_cast<ibMetaID>(kSyntheticKinds)
+		         + static_cast<ibMetaID>(kind));
+	}
+	static bool IsSyntheticId(ibMetaID id) { return id < 0; }
+
 	// (The column's value-field split — a composite / variant / reference column expands to several
 	// physical fields — is NOT a column method: it is the tier free function ColumnValueFields(col)
 	// over DescribeColumnLayout (columnLayout.h), metadata-free, asked only by the DB provider. The
@@ -240,6 +298,23 @@ public:
 	// the date and the reference and WRITTEN by writing those, which is what already happens.
 	virtual void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,
 	                       const class ibValue& value, int& position) const;
+
+	// ⭐⭐ THE RAW DB COLUMN THIS ONE *IS*, or null — asked instead of casting on IsRawColumn().
+	//
+	// `GetColumnKind() == Raw` says what a column is LIKE; five places read it as "so it is an
+	// ibBackendColumnRawDB" and static_cast on the strength of that. The two are not the same
+	// statement, and the day they parted was the day a column began STANDING FOR another one: an
+	// aliased reading of a table forwards every question about the data to the column it aliases —
+	// including this one — while being a different class entirely. The cast would then read a
+	// RawType out of an object that has none, silently.
+	//
+	// So the question is asked OF THE COLUMN and answered by whoever can: the raw column with itself,
+	// a forwarding one with what it stands for, everybody else with null. A cast cannot be wrong when
+	// there is no cast.
+	//
+	// ⚠ LAST IN THE CLASS ON PURPOSE — a virtual inserted among the others renumbers every slot after
+	// it. New optional virtuals go here.
+	virtual const class ibBackendColumnRawDB* AsRawColumn() const { return nullptr; }
 };
 
 // ==========================================================================
@@ -278,6 +353,8 @@ public:
 	ibTypeDescription&    GetTypeDesc()     const override { return m_typeDesc; }   // interface returns a non-const ref
 	ibMetaID              GetColumnId()      const override { return m_modelId; }   // 0 = scaffold, never diffed
 	Kind                  GetColumnKind()   const override { return Kind::Raw; }
+	// …and it IS one, which is the whole of the answer nobody else can give.
+	const ibBackendColumnRawDB* AsRawColumn() const override { return this; }
 
 	RawType               GetRawType()      const { return m_type; }   // the provider's bind selector
 	// The declared width: a string's length, a number's PRECISION. 0 = "no reason to say", and the

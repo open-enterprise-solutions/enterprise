@@ -323,6 +323,23 @@ public:
 	// fetch path (it consumes Next()/GetValue() directly and never calls Select(mode)).
 	void SetMaterialiseColumns(std::vector<const ibBackendQueryColumn*> cols);
 
+	// ⭐⭐ THE COLUMNS THIS RESULT ANSWERS FOR ITSELF — evaluated over the row that came back.
+	//
+	// Two questions no engine can be asked, and they turn out to be one arrangement:
+	//
+	//   * WHAT A VALUE SHOWS — `PRESENTATION(x)` is answered by the METATYPE off the loaded object, so
+	//     it exists nowhere in SQL; the input column is projected and the question is put to the value
+	//     that came back;
+	//   * WHAT STANDS OVER A FOLD — `ISNULL(MIN(Period), &Till)`. The aggregate is registered exactly
+	//     as it would be alone and lands under its alias; the expression around it is evaluated here,
+	//     over the group row, reading that alias (ibQueryColumnExprKind::OutputRef).
+	//
+	// Held on the RESULT rather than on a road, because every road ends in one: a lazy DB cursor, a
+	// composed RAM table, a fold — all of them answer `GetColumn(alias)`, and that is the whole of
+	// what this needs. So there is one implementation instead of one per provider, and a road added
+	// tomorrow gets it without knowing.
+	void SetComputedOverRow(std::vector<ibQueryColumnSelect> columns);
+
 	// The door also stamps the totals config — the TotalBy dimension levels (in order) + the common
 	// totals aggregate set — so result.Select(kind) folds by them automatically (no manual fold on
 	// the Selector). (docs/query-language-arc.md §22.1b)
@@ -378,6 +395,7 @@ private:
 	// "the selection consumes the result" always meant.
 	std::shared_ptr<ibDataResultSource> m_source;
 	std::vector<const ibBackendQueryColumn*> m_matColumns;   // columns a Select(mode) drains into the snapshot
+	std::vector<ibQueryColumnSelect> m_computedOverRow;      // …and the ones this result answers itself — see the setter
 	// Co-ownership of the sources built for the query (AdoptSources) — every column pointer above
 	// lives inside one of them, so they stay valid for exactly as long as this result does.
 	std::vector<std::shared_ptr<const ibBackendQueryable>> m_ownedSources;
@@ -424,6 +442,34 @@ enum class ibQueryJoinKind { Inner, Left, Right, Full };   // Right / Full -> RA
 // a COMPUTED ON forces the RAM nested-loop stitch. (Landed 2026-07-16; the gate is `allColumnKeyed`.)
 enum class ibJoinCompareOp { Eq, Ne, Lt, Le, Gt, Ge };
 
+// ⭐⭐ THE SAME COMPARISON, READ FROM THE OTHER SIDE — `a > b` seen as `b < a`.
+//
+// A join's ON is written in the author's order and STORED in the node's order (left subtree first),
+// so the pair is sometimes swapped on the way in (ibDataQueryBuilder::JoinNode, putSidesRight).
+// Swapping the operands of `=` changes nothing, which is why this was not needed while every ON was
+// an equality; swapping them under `>` inverts the sentence.
+//
+// 🛑 And it inverts it SILENTLY, with the right row count: `>` and `<` select different pairs but
+// the same NUMBER of them, so "the next rate of this currency" came back as the PREVIOUS one and
+// the seven rows looked exactly right (measured 2026-09-05, the hour the self-join started telling
+// its two sides apart — before that both sides owned the same column, no swap was ever made, and
+// this stood unexercised).
+//
+// It lives beside the enum because it is a fact ABOUT the enum, not about joins: whoever swaps a
+// pair mirrors its operator, and there is one answer to what that mirror is.
+inline ibJoinCompareOp ibMirrorJoinOp(ibJoinCompareOp op)
+{
+	switch (op) {
+	case ibJoinCompareOp::Lt: return ibJoinCompareOp::Gt;
+	case ibJoinCompareOp::Le: return ibJoinCompareOp::Ge;
+	case ibJoinCompareOp::Gt: return ibJoinCompareOp::Lt;
+	case ibJoinCompareOp::Ge: return ibJoinCompareOp::Le;
+	case ibJoinCompareOp::Eq:
+	case ibJoinCompareOp::Ne: break;   // symmetric — the mirror is the operator itself
+	}
+	return op;
+}
+
 // A JOIN's ON condition — grouped (was six scattered fields on ibQueryNode) so the mutually-exclusive ways to
 // express it live in one cohesive place. By convention: m_cross = cartesian (ON TRUE); else m_exprL/m_exprR
 // set = a COMPUTED theta join (a.x+1 <op> b.y), always RAM nested-loop — no column key to qualify against a
@@ -449,8 +495,23 @@ struct ibJoinOn {
 	// conditions in WHERE") — and for an OUTER join that advice is wrong, not merely inconvenient:
 	// a condition on the null-producing side moved to WHERE turns the outer join into an inner one
 	// and silently drops the rows the author asked to keep.
-	std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>> m_alsoOn;
-	ibJoinCompareOp              m_op    = ibJoinCompareOp::Eq;   // Eq -> hash; non-Eq -> theta (server-side when co-located)
+	// ⭐⭐ …AND EACH PART CARRIES ITS OWN COMPARISON. A composite key is NOT equality by construction:
+	// "the next record of the same currency" is `B.Currency = A.Currency AND B.Period > A.Period` —
+	// one equality that says WHICH series, one inequality that says WHERE IN IT. Written with a single
+	// `m_op` for the whole key, that sentence could not be carried at all, and an outer join refused
+	// it outright — which is how "how long did this rate hold" became inexpressible: no windows, no
+	// scalar subquery, and now no join either (measured 2026-09-05).
+	//
+	// The EQUALITIES still form the hash key (that is what makes the join O(n+m)); the rest are
+	// checked per candidate pair inside the matching bucket. So the common case pays nothing and the
+	// mixed case is a bucket scan rather than a full product.
+	struct ibJoinKeyPart {
+		const ibBackendQueryColumn* m_colL = nullptr;
+		const ibBackendQueryColumn* m_colR = nullptr;
+		ibJoinCompareOp             m_op   = ibJoinCompareOp::Eq;
+	};
+	std::vector<ibJoinKeyPart> m_alsoOn;
+	ibJoinCompareOp              m_op    = ibJoinCompareOp::Eq;   // the FIRST pair's comparison: Eq -> hash; non-Eq -> theta
 	ibQueryColumnExprPtr         m_exprL;                         // computed ON: LEFT-side expr (presence -> theta)
 	ibQueryColumnExprPtr         m_exprR;                         // computed ON: RIGHT-side expr
 	bool                         m_cross = false;                 // CROSS / ON TRUE — keyless cartesian (RAM only)
@@ -622,7 +683,7 @@ public:
 	                         const wxString& alias = wxEmptyString,
 	                         // …and the rest of a COMPOSITE key (`AND a.z = b.w`), which the hash
 	                         // stitch and the co-located renderer honour. See ibJoinOn::m_alsoOn.
-	                         const std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>>& alsoOn = {});   // explicit on-cols + comparison (theta when != Eq)
+	                         const std::vector<ibJoinOn::ibJoinKeyPart>& alsoOn = {});   // explicit on-cols + comparison (theta when != Eq)
 	ibDataQueryBuilder& Join(const ibBackendQueryable* queryable,
 	                         const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
 	                         ibJoinCompareOp onOp,
@@ -647,7 +708,7 @@ public:
 	                         ibJoinCompareOp onOp,
 	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
 	                         const wxString& alias = wxEmptyString,
-	                         const std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>>& alsoOn = {}) {
+	                         const std::vector<ibJoinOn::ibJoinKeyPart>& alsoOn = {}) {
 		return Join(AdoptOwnedSource(std::move(queryable)), onLeft, onRight, onOp, kind, alias, alsoOn);
 	}
 	ibDataQueryBuilder& Join(std::shared_ptr<const ibBackendQueryable> queryable,
@@ -708,6 +769,19 @@ public:
 	// under the name the projection gave it (`SUM(Qty) AS Total … ORDER BY Total`). See
 	// ibQuerySortItem::m_outputAlias for why it is neither a column sort nor an expression one.
 	ibDataQueryBuilder& OrderByOutput(const wxString& alias, bool ascending);
+	// ⭐⭐ AN ID FOR A COLUMN NOTHING DECLARED — minted HERE, and always NEGATIVE.
+	//
+	// A metaID is a configuration number: positive, small, handed out by the metadata tree. A query
+	// also needs ids for columns nobody declared — an aggregate's figure, a computed projection, a
+	// second reading of one table — and the SIGN is what tells the two apart, so a check is
+	// `id < 0` (ibBackendQueryColumn::IsSyntheticId) and never a range against a table of bands.
+	//
+	// 🛑 Bands are what this replaces, and they had already failed twice by 2026-09-06: five of them
+	// carved out of the positive space, one holding TWO tenants, `ibMetaID` a signed int so the last
+	// band was the last there is — and me walking into an occupied one adding a sixth.
+	//
+
+
 	ibDataQueryBuilder& GroupBy(const ibBackendQueryColumn* col);                            // grouping key (reports / totals)
 	ibDataQueryBuilder& GroupBy(const std::vector<const ibBackendQueryColumn*>& path);       // dot-walk grouping key (Producer.Region)
 	// GROUP BY <expression> — the same expression vocabulary Where/OrderBy/Select/Aggregate already
@@ -1161,6 +1235,7 @@ private:
 	                                                //   joins the path and projects the leaf's SCALAR value under
 	                                                //   m_alias (distinct), read by a synthetic dimension column.
 	std::vector<ibNamedQuery>     m_with;           // .With(name, inner) — the named queries, in declaration order
+
 	std::vector<ibQueryColumnSelect> m_selectExprs; // .SelectExpr() — computed output columns (arithmetic / CASE)
 	std::vector<std::pair<const ibBackendQueryColumn*, wxString>> m_selectCols;   // .Select(col, alias) — multi-source output list
 

@@ -992,6 +992,21 @@ ibQueryAstExprPtr ibQueryParser::ParseComparison()
 		n->m_negated = negated; n->m_lhs = lhs; n->m_rhs = ParseAddSub();
 		return n;
 	}
+	// ⭐ `<expr> [NOT] REFS <Kind>.<Name>` — the type TEST. Written where LIKE and IN are written,
+	// because it is the same sort of thing: a predicate over one operand and a fixed right-hand
+	// side. The right side is a TYPE NAME rather than a value, so it is read as a dotted name — the
+	// same way CAST reads the type it narrows to, and refused here if it is a bare word (a type is
+	// `Catalog.Goods`, and `Goods` alone would name a table nobody declared).
+	if (AcceptKw(ibQueryKeyword::Refs)) {
+		const ibQueryToken at = Cur();
+		auto n = ibQueryAstExpr::Make(ibQueryAstExprKind::Refs);
+		n->m_negated = negated; n->m_lhs = lhs;
+		n->m_line = at.m_line; n->m_col = at.m_col;
+		n->m_path = ParseDottedName(/*firstMayBeKeyword*/true);
+		if (n->m_path.size() < 2)
+			ThrowQueryException(at, _("REFS takes a type: <Kind>.<Name>, as CAST does"));
+		return n;
+	}
 	if (AcceptKw(ibQueryKeyword::In)) {
 		// ⭐⭐ «IN HIERARCHY» IS THE SAME OPERATOR, TOLD HOW FAR DOWN TO LOOK — and it is said in the
 		// three words this language already has (TOTALS BY unfolds a dimension by the very same ones).
@@ -1137,6 +1152,44 @@ ibQueryAstExprPtr ibQueryParser::ParseCase()
 // That is the price of not adding a node, and it is a real one — a reader who wrote the short form
 // finds the long one. Keeping the word would mean its own AST kind, its own rendering and its own
 // lowering; worth doing when the short form earns its keep, not before.
+// A SCALAR CALL — the second family of calls, read where a name stands before a `(`.
+//
+// ⭐ THE ARGUMENT COUNT IS THE TABLE'S ANSWER, not a number written here. Each call declares its own
+// range beside its word (queryLexer.cpp), so `DATEADD` needing three is stated in ONE place — the
+// same place the palette writes its skeleton from and the syntax helper reads its signature out of.
+// A count checked here against a literal would be a second authority on the language, free to
+// disagree with the first the day a call gains an optional argument (DATETIME already has four).
+ibQueryAstExprPtr ibQueryParser::ParseScalarCall(ibQueryScalarFn fn)
+{
+	const ibQueryToken name = Cur();
+	++m_pos;                                        // the name
+	ExpectPunct(wxT('('), wxT("'(' after a function name"));
+
+	auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::ScalarCall);
+	e->m_scalar = fn;
+	e->m_line = name.m_line; e->m_col = name.m_col;
+
+	if (!Cur().IsPunct(wxT(')')))
+		do { e->m_args.push_back(ParsePredicate()); } while (AcceptPunct(wxT(',')));
+
+	ExpectPunct(wxT(')'), wxT("')'"));
+
+	size_t least = 0, most = 0;
+	if (ibQueryScalarFnArity(fn, least, most) && (e->m_args.size() < least || e->m_args.size() > most)) {
+		const wxString word = ibQueryScalarFnText(fn);
+		if (least == most)
+			ThrowQueryException(name, wxString::Format(
+				_("%s takes %u argument(s), %u given"), word,
+				static_cast<unsigned>(least), static_cast<unsigned>(e->m_args.size())));
+		else
+			ThrowQueryException(name, wxString::Format(
+				_("%s takes between %u and %u arguments, %u given"), word,
+				static_cast<unsigned>(least), static_cast<unsigned>(most),
+				static_cast<unsigned>(e->m_args.size())));
+	}
+	return e;
+}
+
 ibQueryAstExprPtr ibQueryParser::ParseIsNullCall()
 {
 	const ibQueryToken kw = Cur();
@@ -1235,6 +1288,19 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
 		e->m_literal.SetType(ibValueTypes::TYPE_NULL);
 		return e;
+	}
+
+	// ⭐⭐ A SCALAR CALL IS RECOGNISED BY POSITION, NOT BY OWNING THE WORD.
+	//
+	// `YEAR`, `MONTH`, `DAY`, `TYPE` are words a configuration is entitled to use for its own
+	// attributes, and a virtual table already spells its periodicity with them. So they are NOT in
+	// the keyword table (queryKeywords.h says why at length): a name followed by `(` is a call —
+	// nothing else can stand there, since a column is never invoked — and the very same name
+	// standing alone is still the field it always was.
+	if (tk.m_kind == ibQueryTokenKind::Ident && PeekIsPunct(1, wxT('('))) {
+		const ibQueryScalarFn fn = ibFindQueryScalarFn(tk.m_text.Upper());
+		if (fn != ibQueryScalarFn::None)
+			return ParseScalarCall(fn);
 	}
 
 	// column path

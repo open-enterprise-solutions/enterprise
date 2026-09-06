@@ -58,6 +58,78 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 			{ ibTotalsPeriod::HalfYear, wxT("(date_trunc('year', {expr}) + (FLOOR((EXTRACT(MONTH FROM {expr}) - 1) / 6) * INTERVAL '6 months'))") },
 			{ ibTotalsPeriod::Year,     wxT("date_trunc('year', {expr})")    },
 		};
+
+		// The end of a period is the start of the next one less a second — the same sentence the
+		// Firebird dictionary and the RAM twin say, so a boundary belongs to its period on every
+		// engine. TenDays is deliberately absent from the moving calls (its buckets are not all the
+		// same length); the lowering refuses that unit before a dialect is asked.
+		auto endOf = [&d](ibTotalsPeriod unit, const wxString& step) {
+			return wxT("(") + d.m_periodTrunc[unit] + wxT(" + INTERVAL '1 ") + step + wxT("' - INTERVAL '1 second')");
+		};
+		d.m_periodEnd = {
+			{ ibTotalsPeriod::Second,   endOf(ibTotalsPeriod::Second,   wxT("second")) },
+			{ ibTotalsPeriod::Minute,   endOf(ibTotalsPeriod::Minute,   wxT("minute")) },
+			{ ibTotalsPeriod::Hour,     endOf(ibTotalsPeriod::Hour,     wxT("hour"))   },
+			{ ibTotalsPeriod::Day,      endOf(ibTotalsPeriod::Day,      wxT("day"))    },
+			{ ibTotalsPeriod::Week,     endOf(ibTotalsPeriod::Week,     wxT("week"))   },
+			{ ibTotalsPeriod::Month,    endOf(ibTotalsPeriod::Month,    wxT("month"))  },
+			{ ibTotalsPeriod::Quarter,  endOf(ibTotalsPeriod::Quarter,  wxT("3 months")) },
+			{ ibTotalsPeriod::HalfYear, endOf(ibTotalsPeriod::HalfYear, wxT("6 months")) },
+			{ ibTotalsPeriod::Year,     endOf(ibTotalsPeriod::Year,     wxT("year"))   },
+		};
+
+		auto addOf = [](const wxString& step) {
+			return wxT("({expr} + ({count}) * INTERVAL '1 ") + step + wxT("')");
+		};
+		d.m_dateAdd = {
+			{ ibTotalsPeriod::Second,   addOf(wxT("second")) },
+			{ ibTotalsPeriod::Minute,   addOf(wxT("minute")) },
+			{ ibTotalsPeriod::Hour,     addOf(wxT("hour"))   },
+			{ ibTotalsPeriod::Day,      addOf(wxT("day"))    },
+			{ ibTotalsPeriod::Week,     addOf(wxT("week"))   },
+			{ ibTotalsPeriod::Month,    addOf(wxT("month"))  },
+			{ ibTotalsPeriod::Quarter,  wxT("({expr} + (({count}) * 3) * INTERVAL '1 month')") },
+			{ ibTotalsPeriod::HalfYear, wxT("({expr} + (({count}) * 6) * INTERVAL '1 month')") },
+			{ ibTotalsPeriod::Year,     addOf(wxT("year"))   },
+		};
+
+		// ⭐ WHOLE UNITS BETWEEN THE UNITS, not a span divided by a length. Postgres has no DATEDIFF,
+		// so the calendar units are counted off the truncated pair (months since year zero, then
+		// divided) and the fixed-length ones off the epoch difference. Both agree with the RAM twin,
+		// which is the only requirement that matters here.
+		const wxString months = wxT("((EXTRACT(YEAR FROM {to})::int * 12 + EXTRACT(MONTH FROM {to})::int)"
+		                            " - (EXTRACT(YEAR FROM {from})::int * 12 + EXTRACT(MONTH FROM {from})::int))");
+		auto secondsOver = [](const wxString& divisor) {
+			return wxT("(FLOOR(EXTRACT(EPOCH FROM (date_trunc('second', {to}) - date_trunc('second', {from}))) / ") + divisor + wxT(")::bigint)");
+		};
+		d.m_dateDiff = {
+			{ ibTotalsPeriod::Second,   secondsOver(wxT("1"))    },
+			{ ibTotalsPeriod::Minute,   secondsOver(wxT("60"))   },
+			{ ibTotalsPeriod::Hour,     secondsOver(wxT("3600")) },
+			{ ibTotalsPeriod::Day,      wxT("(date_trunc('day', {to})::date - date_trunc('day', {from})::date)") },
+			{ ibTotalsPeriod::Week,     wxT("((date_trunc('week', {to})::date - date_trunc('week', {from})::date) / 7)") },
+			{ ibTotalsPeriod::Month,    months },
+			{ ibTotalsPeriod::Quarter,  wxT("(") + months + wxT(" / 3)") },
+			{ ibTotalsPeriod::HalfYear, wxT("(") + months + wxT(" / 6)") },
+			{ ibTotalsPeriod::Year,     wxT("(EXTRACT(YEAR FROM {to})::int - EXTRACT(YEAR FROM {from})::int)") },
+		};
+
+		// ISODOW is Monday = 1 … Sunday = 7, which is exactly the numbering this language pins to —
+		// DOW would be Sunday = 0 and would read differently from every other engine.
+		d.m_datePart = {
+			{ ibDatePart::Year,      wxT("EXTRACT(YEAR FROM {expr})::int")    },
+			{ ibDatePart::Quarter,   wxT("EXTRACT(QUARTER FROM {expr})::int") },
+			{ ibDatePart::Month,     wxT("EXTRACT(MONTH FROM {expr})::int")   },
+			{ ibDatePart::DayOfYear, wxT("EXTRACT(DOY FROM {expr})::int")     },
+			{ ibDatePart::Day,       wxT("EXTRACT(DAY FROM {expr})::int")     },
+			{ ibDatePart::Week,      wxT("EXTRACT(WEEK FROM {expr})::int")    },
+			{ ibDatePart::WeekDay,   wxT("EXTRACT(ISODOW FROM {expr})::int")  },
+			{ ibDatePart::Hour,      wxT("EXTRACT(HOUR FROM {expr})::int")    },
+			{ ibDatePart::Minute,    wxT("EXTRACT(MINUTE FROM {expr})::int")  },
+			{ ibDatePart::Second,    wxT("FLOOR(EXTRACT(SECOND FROM {expr}))::int") },
+		};
+
+		d.m_substring = wxT("SUBSTRING({expr} FROM {from} FOR {len})");
 		return d;
 	}();
 	return s_dialect;

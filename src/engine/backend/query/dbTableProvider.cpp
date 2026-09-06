@@ -143,9 +143,10 @@ ibQueryExprPtr ColumnConst(const ibBackendQueryColumn* col, const ibValue& v)
 	// by a row-key scaffold beside it: the key lookup then names an attribute here, and answering it
 	// with the guid's text compared 36 characters against a sixteen-byte field - no error, no empty
 	// result with a reason, just a row that is there and is never found.
-	const bool identityValued = col->IsRawColumn()
-		? (static_cast<const ibBackendColumnRawDB*>(col)->GetRawType() == ibBackendColumnRawDB::RawType::Guid
-			|| static_cast<const ibBackendColumnRawDB*>(col)->GetRawType() == ibBackendColumnRawDB::RawType::Reference)
+	const ibBackendColumnRawDB* const rawCol = col->AsRawColumn();   // asked of the column — see queryColumn.h
+	const bool identityValued = rawCol != nullptr
+		? (rawCol->GetRawType() == ibBackendColumnRawDB::RawType::Guid
+			|| rawCol->GetRawType() == ibBackendColumnRawDB::RawType::Reference)
 		: IsReferenceValued(col);
 	if (!identityValued)
 		return ibConst(v);
@@ -195,6 +196,67 @@ wxString SelfReferenceField(const ibBackendQueryable* queryable)
 ibQueryExprPtr ibColQ(const wxString& qualifier, const wxString& name)
 {
 	return qualifier.empty() ? ibCol(name) : ibCol(qualifier, name);
+}
+
+// ⭐⭐ WHICH FIELD ANSWERS "IS THIS VALUE OF TYPE T" — and it is not always the same field.
+//
+// A composite column stores a TAG (`_TYPE`) saying which of its admissible types the row actually
+// holds, and — when that type is a reference — a `_RTRef` naming WHICH table it points at. So the
+// test is written against one field or the other depending on the type ASKED ABOUT, not on the
+// column: `VALUETYPE(x) = TYPE(Catalog.Goods)` is a question about `_RTRef`, and
+// `VALUETYPE(x) = TYPE(Number)` is a question about `_TYPE`. Answered here, once, for both roads
+// (the single-source WHERE and the co-located one), so a type test cannot come to mean two things.
+//
+// Returns the predicate, or NULL when the type asked about is one this column can never hold — the
+// caller then answers the whole test with a constant, which is what "it is not of that type" is.
+ibQueryExprPtr TypeTagTest(const ibBackendQueryColumn* col, ibClassID target, const wxString& qual)
+{
+	if (col == nullptr || target == 0)
+		return nullptr;
+	const wxString base = col->GetPhysicalName();
+	if (IsReference(target)) {
+		if (!IsReferenceValued(col))
+			return nullptr;   // this column holds no reference at all — no row of it is of that type
+		return ibBinOp(ibQueryBinOp::Eq,
+			ibColQ(qual, base + ibFieldSuffix(ibColumnRole::ReferenceType)),
+			ibConst(ibValue(ibNumber(static_cast<unsigned long long>(target)))));
+	}
+	// A PRIMITIVE is answered by the stored tag. The vocabulary is the PERSISTED one (ibFieldTypes),
+	// the same the codec writes — this is a reading of what was written, not a second spelling of it.
+	const ibFieldTypes tag =
+		  target == g_valueBooleanCLSID ? ibFieldTypes_Boolean
+		: target == g_valueNumberCLSID  ? ibFieldTypes_Number
+		: target == g_valueDateCLSID    ? ibFieldTypes_Date
+		: target == g_valueStringCLSID  ? ibFieldTypes_String
+		: target == g_valueNullCLSID    ? ibFieldTypes_Null
+		                                : ibFieldTypes_Empty;
+	if (tag == ibFieldTypes_Empty)
+		return nullptr;   // a type this tier stores no tag for — no row here carries a value of it
+	return ibBinOp(ibQueryBinOp::Eq,
+		ibColQ(qual, base + ibFieldSuffix(ibColumnRole::Discriminator)),
+		ibConst(ibValue(ibNumber(static_cast<int>(tag)))));
+}
+
+// ⭐ A WHOLE TEST ANSWERED WITHOUT LOOKING AT THE ROW — "every row" or "no row" — SAID ABOUT A FIELD.
+//
+// 🛑 Two spellings were tried and both were refused by the engine, for the same underlying reason:
+// this tier BINDS its values rather than writing them into the text. A bare boolean constant is a
+// lone bound parameter standing where a condition belongs ("no room can be made for a parameter of
+// SQL type 32764"), and `? = ?` gives the engine two parameters and no type to infer from
+// ("Dynamic SQL Error"). Both measured 2026-09-06, asking a NUMBER column whether it holds a
+// reference — a well-formed question with a knowable answer.
+//
+// ⭐ The house already had the spelling: an EMPTY `IN ( )` is encoded as `col IS NULL AND col IS NOT
+// NULL` (queryLowering). A contradiction over a FIELD needs no constant at all, types itself from the
+// column, and every dialect folds it away. The tautology is the same sentence with OR — true for
+// every row, NULL ones included.
+ibQueryExprPtr AlwaysPredicate(bool holds, const ibBackendQueryColumn* col, const wxString& qual)
+{
+	if (col == nullptr)
+		return nullptr;   // nothing to say it about — the caller drops the branch
+	const ibQueryExprPtr isNull    = ibIsNull(ibColQ(qual, FirstSqlFieldOfColumn(col)), false);
+	const ibQueryExprPtr isNotNull = ibIsNull(ibColQ(qual, FirstSqlFieldOfColumn(col)), true);
+	return ibBinOp(holds ? ibQueryBinOp::Or : ibQueryBinOp::And, isNull, isNotNull);
 }
 
 ibQueryExprPtr AndFold(ibQueryExprPtr a, ibQueryExprPtr b)
@@ -495,6 +557,15 @@ ibValue ReadScalarByAlias(const ibBackendQueryColumn* col, const wxString& alias
                           const ibMetaData* metaData, ibQueryResult& cursor)
 {
 	ibValue v;
+	// ⭐⭐ NOTHING THERE IS *NULL*, and it has to be asked before it is read. A field projected under
+	// an alias carries no `_TYPE` beside it, so absence has no spelling in the value itself: read as a
+	// date, a NULL is an INVALID wxDateTime and assigning one stops the program; read as a number it
+	// is a silent zero. The fold in memory answers this case with a real NULL (ibAggAcc::Result) — the
+	// server road owes the same answer, or one query means two things by where it ran.
+	if (cursor.IsResultNull(alias)) {
+		v.SetType(ibValueTypes::TYPE_NULL);
+		return v;
+	}
 	if (col->IsRawColumn()) {
 		col->ReadValue(alias, metaData, v, cursor);
 		return v;
@@ -555,13 +626,27 @@ bool CollectColocatedLeaves(const ibQueryNode* node, ColocatedLeaves& out)
 	return false;
 }
 
-// The leaf owning a column (by name); null if none. Tables are distinct (the gate rejects self-join),
-// so ownership is unambiguous for qualification.
+// The leaf owning a column (by name); null if none. Leaves are distinctly QUALIFIED (the gate below
+// requires it), so ownership is unambiguous for qualification.
 const ibBackendQueryable* ColocatedOwner(const ColocatedLeaves& leaves, const ibBackendQueryColumn* col)
 {
 	for (const ibBackendQueryable* q : leaves)
 		if (q != nullptr && q->OwnsColumn(col)) return q;
 	return nullptr;
+}
+
+// ⭐⭐ WHAT QUALIFIES THIS SOURCE'S COLUMNS IN SQL — one answer, given here, taken by every road.
+//
+// It used to be `GetQueryTableName()` written out at a dozen call sites, which was right only while
+// no table could appear twice. A SECOND READING of one table cannot be qualified by the table name —
+// both readings answer to it — so it is scanned as `T AS b` and its columns say `b`. The source knows
+// which it is (GetQueryTableAlias); nobody else has to.
+wxString ColocatedQualOf(const ibBackendQueryable* q)
+{
+	if (q == nullptr)
+		return wxString();
+	const wxString alias = q->GetQueryTableAlias();
+	return alias.IsEmpty() ? q->GetQueryTableName() : alias;
 }
 
 // Structural gate over the WHOLE join tree (ANY depth, N-way left/right-nested): collect the leaves
@@ -576,9 +661,18 @@ bool ColocatableJoinTree(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 	leaves.clear();
 	if (!CollectColocatedLeaves(root, leaves)) return false;   // all leaves real DB tables
 	if (leaves.size() < 2)                     return false;
-	for (size_t i = 0; i < leaves.size(); ++i)                 // distinct tables — no self-join
+	// ⭐⭐ DISTINCTLY QUALIFIED — which is a weaker demand than "distinct tables", and the right one.
+	//
+	// A table read twice is perfectly co-locatable the moment each reading has a NAME of its own:
+	// `T AS a JOIN T AS b` is ordinary SQL, and the L2-1 scan has carried an alias all along. What
+	// cannot be co-located is two leaves that would answer to the SAME qualifier — then every column
+	// reference is ambiguous and `ON (T.x = T.x)` is true for every pair, which is how a stock
+	// statement once came back as a product. So the test is on the QUALIFIER, not on the table:
+	// aliased readings pass, an unaliased duplicate (a reference-path chain that visits one catalog
+	// twice) still falls to the RAM stitch, where a column belongs to a leaf by identity.
+	for (size_t i = 0; i < leaves.size(); ++i)
 		for (size_t j = i + 1; j < leaves.size(); ++j)
-			if (leaves[i]->GetQueryTableName() == leaves[j]->GetQueryTableName()) return false;
+			if (ColocatedQualOf(leaves[i]) == ColocatedQualOf(leaves[j])) return false;
 	if (!AllNodeKeysResolvable(root))          return false;
 	// Co-located SQL emits only INNER / LEFT; a RIGHT / FULL (or cross / ON TRUE) join folds in the RAM stitch.
 	std::function<bool(const ibQueryNode*)> innerOrLeftOnly = [&](const ibQueryNode* n) -> bool {
@@ -614,11 +708,10 @@ bool ScalarReadable(const ibBackendQueryColumn* col, const ColocatedLeaves& leav
 	return true;
 }
 
-// A column's table qualifier = the table of the leaf that owns it (tables distinct -> unambiguous).
+// A column's qualifier = that of the leaf which owns it (leaves distinctly qualified -> unambiguous).
 wxString ColocatedQual(const ColocatedLeaves& leaves, const ibBackendQueryColumn* col)
 {
-	const ibBackendQueryable* q = ColocatedOwner(leaves, col);
-	return q != nullptr ? q->GetQueryTableName() : wxString();
+	return ColocatedQualOf(ColocatedOwner(leaves, col));
 }
 
 // A column joinable on ONE physical field — the join compares FirstSqlFieldOfColumn on both sides, so
@@ -685,6 +778,12 @@ ibQueryRelPtr SourceRelationOf(const ibBackendQueryable* queryable, const wxStri
 ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves& leaves)
 {
 	if (node->m_kind == ibQueryNode::Kind::Source) {
+		// ⭐ A SECOND READING OF ONE TABLE IS SCANNED UNDER ITS OWN NAME — `T AS b`, which is what its
+		// columns are then qualified by (ColocatedQualOf). L2-1 has taken an alias on a scan all
+		// along; what was missing was anyone to give it one.
+		const wxString alias = node->m_queryable->GetQueryTableAlias();
+		if (!alias.IsEmpty())
+			return ibScan(node->m_queryable->GetQueryTableName(), alias);
 		// A source may BE a derived table rather than a table — a register's balance is an
 		// aggregate over its totals view, parameterised by a date that no view can hold. Asking
 		// keeps the join in SQL; assuming a table name would force the whole thing into RAM first.
@@ -717,7 +816,7 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 		if (side != nullptr && CollectColocatedLeaves(side, sideLeaves))
 			for (const ibBackendQueryable* q : sideLeaves)
 				if (q != nullptr && q->OwnsColumn(col))
-					return q->GetQueryTableName();
+					return ColocatedQualOf(q);
 		return ColocatedQual(leaves, col);   // single-sided key: the old answer is the only one
 	};
 
@@ -728,13 +827,16 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 	// …AND THE REST OF A COMPOSITE KEY, ANDed into the same ON. Two readings of one register meet on
 	// the item AND the warehouse; written to the server that is one `ON a = b AND c = d`, which every
 	// dialect renders. Each side keeps ITS OWN leaf's qualification, exactly as the first pair does.
-	for (const auto& pair : node->m_on.m_alsoOn) {
-		if (pair.first == nullptr || pair.second == nullptr)
+	for (const auto& part : node->m_on.m_alsoOn) {
+		if (part.m_colL == nullptr || part.m_colR == nullptr)
 			continue;
+		// …WITH ITS OWN COMPARISON. `ON B.Currency = A.Currency AND B.Period > A.Period` is one ON
+		// with two parts that say different things; rendering the second as an equality would answer
+		// a question nobody asked, and silently.
 		on = ibBinOp(ibQueryBinOp::And, on,
-			ibBinOp(ibQueryBinOp::Eq,
-				ibCol(qualOfSide(node->m_left.get(),  pair.first),  FirstSqlFieldOfColumn(pair.first)),
-				ibCol(qualOfSide(node->m_right.get(), pair.second), FirstSqlFieldOfColumn(pair.second))));
+			ibBinOp(JoinOpToBinOp(part.m_op),
+				ibCol(qualOfSide(node->m_left.get(),  part.m_colL), FirstSqlFieldOfColumn(part.m_colL)),
+				ibCol(qualOfSide(node->m_right.get(), part.m_colR), FirstSqlFieldOfColumn(part.m_colR))));
 	}
 	return ibJoin(left, right, on, jt);
 }
@@ -751,7 +853,10 @@ bool PredicateHasPath(const ibQueryPredicatePtr& p)
 {
 	if (!p) return false;
 	if (p->m_kind == ibQueryPredicateKind::Leaf)   return !p->m_leaf.m_path.empty();
-	if (p->m_kind == ibQueryPredicateKind::IsNull) return !p->m_path.empty();
+	// IsNull and RefType both carry the walk in the same field, and both need the join built before
+	// they can be rendered — one question, asked of the pair rather than of one of them.
+	if (p->m_kind == ibQueryPredicateKind::IsNull ||
+	    p->m_kind == ibQueryPredicateKind::RefType) return !p->m_path.empty();
 	for (const ibQueryPredicatePtr& c : p->m_children)
 		if (PredicateHasPath(c)) return true;
 	return false;
@@ -767,13 +872,13 @@ ibQueryExprPtr BuildColocatedPredicate(const ibQueryPredicatePtr& p, const Coloc
 			// leaf, so qualify by whichever co-located leaf owns m_outerKey.
 			const ibBackendQueryable* outerOwner = ColocatedOwner(leaves, p->m_leaf.m_semiJoin->m_outerKey);
 			return ibMetaIRBuilder::BuildSemiJoinExists(*p->m_leaf.m_semiJoin,
-				outerOwner != nullptr ? outerOwner->GetQueryTableName() : wxString());
+				ColocatedQualOf(outerOwner));
 		}
 		const ibBackendQueryColumn* col = p->m_leaf.m_col;
 		const ibBackendQueryable* owner = col != nullptr ? ColocatedOwner(leaves, col) : nullptr;
 		if (owner == nullptr)
 			throw std::logic_error("ColocatedWhere: a WHERE-tree leaf references no joined leaf column");
-		return ibMetaIRBuilder::BuildConditionExpr(owner, p->m_leaf, owner->GetQueryTableName());
+		return ibMetaIRBuilder::BuildConditionExpr(owner, p->m_leaf, ColocatedQualOf(owner));
 	}
 	case ibQueryPredicateKind::And: {
 		ibQueryExprPtr a;
@@ -795,9 +900,20 @@ ibQueryExprPtr BuildColocatedPredicate(const ibQueryPredicatePtr& p, const Coloc
 			throw std::logic_error("ColocatedWhere: an IS NULL references no joined leaf column");
 		ibQueryExprPtr allNull;
 		for (const wxString& f : ColumnValueFields(p->m_col))
-			allNull = AndFold(allNull, ibIsNull(ibColQ(owner->GetQueryTableName(), f), false));
+			allNull = AndFold(allNull, ibIsNull(ibColQ(ColocatedQualOf(owner), f), false));
 		if (!allNull) return nullptr;
 		return p->m_negated ? ibNot(allNull) : allNull;
+	}
+	// The type tag over a co-located join — the same one comparison as on a single source, qualified
+	// by the leaf that owns the column.
+	case ibQueryPredicateKind::RefType: {
+		const ibBackendQueryable* owner = p->m_col != nullptr ? ColocatedOwner(leaves, p->m_col) : nullptr;
+		if (owner == nullptr)
+			throw std::logic_error("ColocatedWhere: a REFS references no joined leaf column");
+		const ibQueryExprPtr test = TypeTagTest(p->m_col, p->m_refTypeClsid, ColocatedQualOf(owner));
+		if (!test)
+			return AlwaysPredicate(p->m_negated, p->m_col, ColocatedQualOf(owner));   // a type this column can never hold
+		return p->m_negated ? ibNot(test) : test;
 	}
 	}
 	return nullptr;
@@ -813,7 +929,7 @@ ibQueryExprPtr ColocatedWhere(const ibDataQuerySpec& spec, const ColocatedLeaves
 		std::vector<ibQueryCondition> conds;
 		for (const ibQueryCondition& c : *spec.m_conditions)
 			if (c.m_col != nullptr && q->OwnsColumn(c.m_col)) conds.push_back(c);
-		if (auto p = ibMetaIRBuilder::BuildFilterPredicate(q, conds, q->GetQueryTableName()))
+		if (auto p = ibMetaIRBuilder::BuildFilterPredicate(q, conds, ColocatedQualOf(q)))
 			where = AndFold(where, p);
 	}
 	where = AndFold(where, BuildColocatedPredicate(spec.m_predicate, leaves));
@@ -821,6 +937,39 @@ ibQueryExprPtr ColocatedWhere(const ibDataQuerySpec& spec, const ColocatedLeaves
 }
 
 } // namespace
+
+// A TYPE AS A VALUE — the doors declared in dbTableProvider.h. Implemented in this file because this
+// is the tier already permitted to name a runtime value class; see the note there for why.
+//
+// ⚠ OUTSIDE the anonymous namespace above — they are declared with external linkage and callers in
+// other translation units link against them. Put inside it they compile as something else entirely
+// with the same name, which is what happened when I first wrote them (2026-09-06).
+ibValue ibTypeValueOf(const ibClassID& clsid)
+{
+	if (clsid == 0)
+		return ibValue();
+	ibValuePtr<ibValueType> type(new ibValueType(clsid));
+	return ibValue(type);
+}
+
+ibValue ibTypeValueByName(const wxString& typeName)
+{
+	if (typeName.IsEmpty())
+		return ibValue();
+	ibValuePtr<ibValueType> type(new ibValueType(typeName));
+	// A name nothing answers to yields NOTHING rather than a type with no class: the caller then says
+	// "that is not a type" in its own words, at the position the name was written.
+	return type->GetOwnerTypeClass() != 0 ? ibValue(type) : ibValue();
+}
+
+bool ibTypeValueClsid(const ibValue& value, ibClassID& outClsid)
+{
+	const ibValueType* const type = CastValue<ibValueType>(value);
+	if (type == nullptr || type->GetOwnerTypeClass() == 0)
+		return false;
+	outClsid = type->GetOwnerTypeClass();
+	return true;
+}
 
 ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* queryable,
                                                    const ibQueryCondition& c,
@@ -975,6 +1124,18 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* que
 		if (!allNull)   // defensive: a column with no physical fields — no constraint
 			return nullptr;
 		return predicate->m_negated ? ibNot(allNull) : allNull;
+	}
+	// ⭐ `x REFS Document.Order` — THE TYPE TAG, COMPARED. A composite reference stores which table it
+	// points at in its own `_RTRef` field (the clsid), beside the `_RRRef` that says which row. So the
+	// test is one comparison on that field — no join, no narrowing, nothing read from the target.
+	//
+	// A column with no reference pair (a plain number, a string) can never point anywhere, and says so
+	// as FALSE rather than as an error: `WHERE Code REFS Catalog.Goods` is a question with an answer.
+	case ibQueryPredicateKind::RefType: {
+		const ibQueryExprPtr test = TypeTagTest(predicate->m_col, predicate->m_refTypeClsid, mainQual);
+		if (!test)
+			return AlwaysPredicate(predicate->m_negated, predicate->m_col, mainQual);   // a type this column can never hold
+		return predicate->m_negated ? ibNot(test) : test;
 	}
 	}
 	return nullptr;
@@ -1131,6 +1292,28 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 		// spelling. Nothing engine-specific reaches this far up, which is the point: a totals rebuild
 		// groups the movements by the very expression the maintenance trigger keys rows with.
 		return ibPeriodTrunc(BuildColumnExpr(queryable, expr->m_lhs, mainQual), expr->m_periodUnit);
+
+	// The calendar's other four, each straight through to the L2-1 node of the same name. They carry
+	// no spelling and no arithmetic of their own — the dictionaries do that — so this is a mapping
+	// and stays one.
+	case ibQueryColumnExprKind::PeriodEnd:
+		return ibPeriodEnd(BuildColumnExpr(queryable, expr->m_lhs, mainQual), expr->m_periodUnit);
+
+	case ibQueryColumnExprKind::DateAdd:
+		return ibDateAdd(BuildColumnExpr(queryable, expr->m_lhs, mainQual), expr->m_periodUnit,
+			expr->m_args.empty() ? nullptr : BuildColumnExpr(queryable, expr->m_args.front(), mainQual));
+
+	case ibQueryColumnExprKind::DateDiff:
+		return ibDateDiff(BuildColumnExpr(queryable, expr->m_lhs, mainQual),
+		                  BuildColumnExpr(queryable, expr->m_rhs, mainQual), expr->m_periodUnit);
+
+	case ibQueryColumnExprKind::DatePart:
+		return ibDatePartOf(BuildColumnExpr(queryable, expr->m_lhs, mainQual), expr->m_datePart);
+
+	case ibQueryColumnExprKind::Substring:
+		return ibSubstring(BuildColumnExpr(queryable, expr->m_lhs, mainQual),
+			expr->m_args.size() > 0 ? BuildColumnExpr(queryable, expr->m_args[0], mainQual) : nullptr,
+			expr->m_args.size() > 1 ? BuildColumnExpr(queryable, expr->m_args[1], mainQual) : nullptr);
 
 	case ibQueryColumnExprKind::WindowAgg: {
 		// ⭐⭐ THE ONE FIGURE OF A REPORT THE SERVER CAN COMPUTE WITHOUT A PUSH-DOWN OF THE FOLD.
@@ -1416,8 +1599,15 @@ ibDataQueryResult ibDbTableProvider::ExecuteReadCached(const ibDataQuerySpec& sp
 class ibRefJoinChain
 {
 public:
+	// ⭐ THE ROOT IS ASKED WHAT IT IS READ FROM — the FIFTH caller of that one question. The four
+	// SourceRelationOf names above were the roads a source WITHOUT a dot-walk takes; this is the one
+	// it takes WITH one, and it scanned the table name unconditionally. So `Balance(&AsOf)` answered
+	// correctly until somebody wrote `B.Goods.Description` in the select list, at which point the
+	// date silently disappeared and the balance surface was read whole (measured 2026-09-05: as of
+	// 2020 the same rows came back as as of today), and `BalanceAndTurnovers` — a name the schema
+	// deliberately never creates — asked Firebird for a table that does not exist.
 	ibRefJoinChain(const ibBackendQueryable* root, const wxString& rootTable)
-		: m_root(root), m_rootTable(rootTable), m_from(ibScan(rootTable)) {}
+		: m_root(root), m_rootTable(rootTable), m_from(SourceRelationOf(root, rootTable)) {}
 
 	// Resolve a reference path to its LEAF's join alias + target queryable, appending (deduped) joins.
 	// Returns false if a segment is not a single-target reference (an unresolvable / composite edge).
@@ -1509,7 +1699,13 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 				const ibQueryExprPtr gexpr =
 					ibMetaIRBuilder::BuildColumnExpr(queryable, (*spec.m_groupExprs)[gi], mainQual);
 				q.GroupBy(gexpr);
-				projection.push_back(ibQueryProjItem{ gexpr, (*spec.m_groupAliases)[gi] });
+				// …UNDER THE STATEMENT'S SPELLING, the one every other output here is written with
+				// (ibSqlAliasOf, the same call the aggregates beside it use). Written raw, the key
+				// went out as `M2` while the reader asked the cursor for the prefixed name — the
+				// figures came back and the key they were grouped by came back empty, which reads as
+				// "the month is missing" rather than as a naming mismatch (measured 2026-09-05:
+				// `GROUP BY MONTH(Period)` returned five correct sums against five blank months).
+				projection.push_back(ibQueryProjItem{ gexpr, ibSqlAliasOf((*spec.m_groupAliases)[gi]) });
 				continue;
 			}
 			const ibBackendQueryColumn* gcol = (*spec.m_groupBy)[gi];
@@ -1676,6 +1872,16 @@ bool ibDbTableProvider::CanColocateJoin(const ibDataQuerySpec& spec)
 			}
 		if (spec.m_selectCols->empty())                              return false;
 
+		// ⚠ AN ALIASED LEAF AND AN `ORDER BY <EXPRESSION>` DO NOT MIX. The expression is lowered against
+		// ONE qualifier and may read columns of either side, so with a table read twice its bare field
+		// names name BOTH readings and the engine refuses the statement as ambiguous. Kept off this road
+		// rather than sent out ambiguous; the RAM stitch sorts it by column identity instead.
+		const bool anyAliased = std::any_of(leaves.begin(), leaves.end(),
+			[](const ibBackendQueryable* q) { return q != nullptr && !q->GetQueryTableAlias().IsEmpty(); });
+		if (anyAliased)
+			for (const ibQuerySortItem& s : *spec.m_sorts)
+				if (s.m_expr) return false;
+
 		// OUTPUTS: any column is projectable — a RAW column reads one scalar field, a metadata column its
 		// FULL spread (reference / enum / variant reconstruct via GetValueColumn). Just require each is
 		// owned by a leaf (so it qualifies).
@@ -1747,7 +1953,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 		for (const auto& sc : *spec.m_selectCols) {
 			const ibBackendQueryColumn* col = sc.first;
 			const ibBackendQueryable* owner = ColocatedOwner(leaves, col);
-			const wxString    qual = owner != nullptr ? owner->GetQueryTableName() : wxString();
+			const wxString    qual = ColocatedQualOf(owner);
 			const ibMetaData* meta = owner != nullptr ? owner->GetMetaData() : nullptr;
 			if (col->IsRawColumn()) {
 				projection.push_back(ibQueryProjItem{ ibCol(qual, FirstSqlFieldOfColumn(col)), sc.second });
@@ -1780,7 +1986,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 			// scalar field, a metadata column its full spread under a unique prefix. Taking the raw
 			// shortcut for both would read a composite column's FIRST field, which is its type tag.
 			const ibBackendQueryable* owner = ColocatedOwner(leaves, c);
-			const wxString    qual = owner != nullptr ? owner->GetQueryTableName() : wxString();
+			const wxString    qual = ColocatedQualOf(owner);
 			const ibMetaData* meta = owner != nullptr ? owner->GetMetaData() : nullptr;
 			const wxString    alias = wxString::Format(wxT("xin%d"), oi);
 			if (c->IsRawColumn()) {
@@ -1813,7 +2019,13 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 			//
 			// UNQUALIFIED, deliberately: a co-located join's leaves are distinct tables and their fields
 			// are `fld<metaID>`, unique per metatype — the same reason the declaration writer spells them
-			// bare. (A self-join is refused by the gate, so there is no second copy of a name.)
+			// bare.
+			//
+			// ⚠ THAT REASONING ENDS WHERE A TABLE IS READ TWICE. Two readings of one table have the same
+			// field names, so a bare `fld1248_D` names both and the engine refuses the statement as
+			// ambiguous. The expression is built from ONE mainQual and may span leaves, so there is no
+			// qualifier to hand it — such a read keeps the RAM road instead (the gate refuses it,
+			// CanColocateJoin), and this branch is reached only where the names are unique.
 			if (s.m_expr)
 				k.m_expr = ibMetaIRBuilder::BuildColumnExpr(spec.m_queryable, s.m_expr);
 			else if (s.m_col != nullptr)
@@ -1850,9 +2062,10 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 		// GetColumn(alias); the synthetic ids are the range the RAM road already uses for the same
 		// thing, so the two roads number these columns alike.
 		if (spec.m_selectExprs != nullptr) {
-			ibMetaID exprId = 0x70000000u;
-			for (const ibQueryColumnSelect& sc : *spec.m_selectExprs) {
-				const ibMetaID id = exprId++;
+			for (size_t k = 0; k < spec.m_selectExprs->size(); ++k) {
+				const ibQueryColumnSelect& sc = (*spec.m_selectExprs)[k];
+				const ibMetaID id = ibBackendQueryColumn::SyntheticId(
+					ibBackendQueryColumn::SyntheticKind::Stitch, static_cast<ibMetaID>(k));
 				out.AddColumn(id, sc.m_alias, ibTypeDescription());
 				for (long r = 0; r < out.RowCount(); ++r)
 					out.SetCell(r, id, ibQueryComposer::EvalColumnExpr(sc.m_expr.get(), out, r));
@@ -2042,11 +2255,16 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 		ibQueryRamTable out;
 		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
 			out.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
-		const ibMetaID aggBaseId = 0x40000000u;
-		{
-			ibMetaID aid = aggBaseId;
-			for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
-				out.AddColumn(aid++, a.m_alias, a.m_col != nullptr ? a.m_col->GetTypeDesc() : ibTypeDescription());
+		// ⭐ The aggregate's place in the list IS its number — the same index the read loop below walks
+		// by, and the same one the RAM fold uses, so the two roads number these columns alike.
+		auto aggSlotId = [](size_t ai) {
+			return ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Aggregate,
+			                                        static_cast<ibMetaID>(ai));
+		};
+		for (size_t ai = 0; ai < spec.m_aggregates->size(); ++ai) {
+			const ibDataQueryBuilder::AggregateItem& a = (*spec.m_aggregates)[ai];
+			out.AddColumn(aggSlotId(ai), a.m_alias,
+			              a.m_col != nullptr ? a.m_col->GetTypeDesc() : ibTypeDescription());
 		}
 
 		while (cursor.Next()) {
@@ -2057,8 +2275,8 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 				else           gp.col->ReadValue(gp.tag, gp.meta, v, cursor);   // reference / variant group key
 				out.SetCell(r, gp.col->GetColumnId(), v);
 			}
-			ibMetaID aid = aggBaseId;
-			for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
+			for (size_t ai = 0; ai < spec.m_aggregates->size(); ++ai) {
+				const ibDataQueryBuilder::AggregateItem& a = (*spec.m_aggregates)[ai];
 				using Fn = ibDataQueryBuilder::AggregateFn;
 				ibValue v;
 				// …asked of the cursor under the name the STATEMENT wrote (ibSqlAliasOf), while the
@@ -2066,9 +2284,14 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 				const wxString aggAlias = ibSqlAliasOf(a.m_alias);
 				if (a.m_fn == Fn::Min || a.m_fn == Fn::Max)
 					v = ReadScalarByAlias(a.m_col, aggAlias, spec.m_queryable->GetMetaData(), cursor);   // MIN/MAX keep the input column's type
+				// ⭐ AN AVERAGE OF NOTHING IS NULL, and the memory fold says so (ibAggAcc::Result) — so
+				// this one is asked before it is read. SUM stays a ZERO by this engine's deliberate
+				// choice, and COUNT of no rows IS zero, so both are read straight.
+				else if (a.m_fn == Fn::Avg && cursor.IsResultNull(aggAlias))
+					v.SetType(ibValueTypes::TYPE_NULL);
 				else
-					v = cursor.GetResultNumber(aggAlias);                  // SUM / AVG / COUNT -> number
-				out.SetCell(r, aid++, v);
+					v = cursor.GetResultNumber(aggAlias);                  // SUM / COUNT -> number
+				out.SetCell(r, aggSlotId(ai), v);
 			}
 		}
 		return ibDataQueryResult(std::move(out), spec.m_queryable);
@@ -2213,7 +2436,10 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 		ibQueryRelPtr unionRel;
 		for (size_t pi = 0; pi < root->m_parts.size(); ++pi) {
 			const ibBackendQueryable* q = root->m_parts[pi]->m_queryable;
-			ibQueryRelPtr rel = ibScan(q->GetQueryTableName());
+			// A UNION branch is a source like any other, so it is ASKED what it is read from. The gate
+			// above only refuses a branch computed in RAM — a register's Balance backed by a stored
+			// surface is not that, and it is still not a table: its date lives in a derived read.
+			ibQueryRelPtr rel = SourceRelationOf(q, q->GetQueryTableName());
 
 			// ⚠ THESE TWO GUARDS ARE LIVE — do not read them as the pair in BuildUnionRollupFrom,
 			// which the rollup gate makes unreachable. THIS path's gate (CanColocateUnion) checks
@@ -2807,9 +3033,14 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 		for (const ibDataQueryBuilder::AggregateItem& a : aggregates) {
 			using Fn = ibDataQueryBuilder::AggregateFn;
 			const wxString aggAlias = ibSqlAliasOf(a.m_alias);   // …off the cursor by what was written
-			rr.aggs.push_back((a.m_fn == Fn::Min || a.m_fn == Fn::Max)
-				? ReadScalarByAlias(a.m_col, aggAlias, spec.m_queryable->GetMetaData(), cursor)
-				: ibValue(cursor.GetResultNumber(aggAlias)));
+			ibValue av;
+			if (a.m_fn == Fn::Min || a.m_fn == Fn::Max)
+				av = ReadScalarByAlias(a.m_col, aggAlias, spec.m_queryable->GetMetaData(), cursor);
+			else if (a.m_fn == Fn::Avg && cursor.IsResultNull(aggAlias))
+				av.SetType(ibValueTypes::TYPE_NULL);   // an average of nothing — see the note in the aggregate read
+			else
+				av = ibValue(cursor.GetResultNumber(aggAlias));
+			rr.aggs.push_back(av);
 		}
 
 		// --- this row becomes its node, here, while the cursor stands on it ---------------------
@@ -2995,7 +3226,8 @@ static ibQueryRelPtr BuildUnionRollupFrom(const ibDataQuerySpec& spec,
 	ibQueryRelPtr unionRel;
 	for (size_t pi = 0; pi < root->m_parts.size(); ++pi) {
 		const ibBackendQueryable* q = root->m_parts[pi]->m_queryable;
-		ibQueryRelPtr rel = ibScan(q->GetQueryTableName());
+		// Asked, not assumed — the same one question the read path and the rollup ask (SourceRelationOf).
+		ibQueryRelPtr rel = SourceRelationOf(q, q->GetQueryTableName());
 
 		// Flat WHERE, resolved per branch by name (m_predicate is gated off -> RLS goes RAM).
 		// Both facts come from the gate, which walks every condition: a null column is refused

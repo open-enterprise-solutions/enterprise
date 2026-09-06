@@ -66,6 +66,14 @@ static ibQueryExprPtr SliceBoundaryPredicate(const ibValueMetaObjectInformationR
                                              const ibValueMetaObjectAttributeBase* periodAttr,
                                              const ibRegBound& bound, bool last, ibQueryBinOp periodOp)
 {
+	// ⭐ NO MOMENT NAMED MEANS NO BOUNDARY — the whole register, sliced. `SliceLast` written without a
+	// date is "the latest of each key, whenever that was", which is what the balance's own `Period`
+	// argument already means when it is left out ("the reading runs to the last movement there is").
+	// Compared against an empty date instead, every row failed the test and the slice came back
+	// EMPTY — a register full of prices answering that it has none (measured 2026-09-05).
+	if (bound.m_date.IsEmpty())
+		return nullptr;
+
 	const ibQueryExprPtr plain = ibRegCompositeIR(periodAttr, metaData, bound.m_date, periodOp);
 	if (!bound.HasRecorder() || !meta->HasRecorder() || meta->GetRegisterRecorder() == nullptr)
 		return plain;
@@ -171,14 +179,21 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 					orderBy.push_back(ibQuerySortKey{ ibCol(rankPeriodFields[i]), dir });
 			}
 
-			auto addSliceKey = [&](const ibValueMetaObjectAttributeBase* a) {
+			// ⭐⭐ THE SLICE IS KEYED BY THE DIMENSIONS. A RESOURCE IS WHAT IT ANSWERS WITH.
+			//
+			// Partitioning by the resources too made every row its own partition the moment the value
+			// changed — which is exactly when a slice matters. `SliceLast` then returned EVERY record
+			// up to the date instead of the last one per key: three currencies, seven rows, all of
+			// them rank 1 (measured 2026-09-05). The rows are still PROJECTED, of course — the slice
+			// is read for its resources — they simply do not decide what a slice IS.
+			auto addSliceKey = [&](const ibValueMetaObjectAttributeBase* a, bool partitions) {
 				for (const wxString& f : ibRegFieldsOf(a)) {
-					partitionBy.push_back(ibCol(f));
+					if (partitions) partitionBy.push_back(ibCol(f));
 					sliceFields.push_back(f);
 				}
 			};
-			for (const auto object : meta->GetDimensionArrayObject()) addSliceKey(object);
-			for (const auto object : meta->GetResourceArrayObject())  addSliceKey(object);
+			for (const auto object : meta->GetDimensionArrayObject()) addSliceKey(object, /*partitions*/true);
+			for (const auto object : meta->GetResourceArrayObject())  addSliceKey(object, /*partitions*/false);
 
 			// ⭐ THE TIE IS ONE MORE SORT KEY. Where the aggregate road needs a whole extra level to
 			// choose among the records sitting AT the boundary period, an ordered ranking already has
@@ -266,6 +281,10 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 				l1proj.push_back(ibQueryProjItem{ ibFunc(aggregateFn, { ibCol(periodFields[i]) }), periodFields[i] });
 			}
 		}
+		// The same key as the ranked road above, for the same reason and stated once more here: the
+		// boundary is looked for PER DIMENSION KEY. A resource joined the GROUP BY made the boundary
+		// per (key, value), which is every row that ever changed — the two roads were identically
+		// wrong, which is the one thing a pair of roads is supposed to make visible.
 		auto addKeyCols = [&](const ibValueMetaObjectAttributeBase* a) {
 			for (const wxString& f : ibRegFieldsOf(a)) {
 				l1proj.push_back(ibQueryProjItem{ ibCol(f), wxString() });
@@ -273,7 +292,6 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 			}
 		};
 		for (const auto object : meta->GetDimensionArrayObject()) addKeyCols(object);
-		for (const auto object : meta->GetResourceArrayObject())  addKeyCols(object);
 
 		ibDatabaseQueryBuilder l1;
 		l1.From(table);
@@ -291,10 +309,11 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		for (const ibQueryExprPtr& gk : groupKeys) l1.GroupBy(gk);
 
 		// The fields the boundary is keyed by — the same set at every level below.
+		// …and the join back to the table is on that same key — period + dimensions. Joining on the
+		// resources as well would ask the table for the row that already matched itself.
 		std::vector<const ibValueMetaObjectAttributeBase*> joinAttrs;
 		joinAttrs.push_back(periodAttr);
 		for (const auto object : meta->GetDimensionArrayObject()) joinAttrs.push_back(object);
-		for (const auto object : meta->GetResourceArrayObject())  joinAttrs.push_back(object);
 
 		std::vector<wxString> keyFields;
 		for (const auto a : joinAttrs)

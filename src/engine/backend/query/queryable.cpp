@@ -19,6 +19,8 @@
 #include "backend/query/dbTableProvider.h"                 // ibDbTableProvider — the DB default this base vends
 #include "backend/metaCollection/genericData.h"            // ibValueMetaObjectGenericData — the metaobject asked below
 
+#include <atomic>                                          // the alias-column id counter below
+
 // ==========================================================================
 // ibBackendQueryable::GetProvider — the DB DEFAULT. A queryable vends its engine; the
 // record / register / constant / tabular families are physical DB tables, so they all
@@ -64,4 +66,68 @@ ibMetaID ibBackendQueryable::GetQueryTableId() const
 {
 	const ibValueMetaObjectGenericData* const meta = GetSourceMetaObject();
 	return meta != nullptr ? meta->GetMetaID() : 0;
+}
+
+// ==========================================================================
+// ibAliasQueryable — the same table, read a second time (see queryable.h for why).
+// ==========================================================================
+
+// ⭐⭐ THE TWINS' IDs ARE NEGATIVE, like every id nothing declared.
+//
+// A metaID is a configuration number — positive and small. An id minted for a column nobody declared
+// says so BY ITS SIGN (ibBackendQueryColumn::IsSyntheticId), which is what replaced five hand-carved
+// bands in the positive space: bands have to be read before every addition, and nothing makes anyone
+// read them — I walked into an occupied one adding a sixth (2026-09-06).
+//
+ibAliasQueryable::ibAliasQueryable(const ibBackendQueryable* origin, const wxString& sqlAlias)
+	: m_origin(origin), m_sqlAlias(sqlAlias)
+{
+	for (const ibBackendQueryColumn* c : origin->GetColumns()) {
+		if (c == nullptr)
+			continue;
+		m_owned.push_back(std::make_shared<ibAliasColumn>(c));
+		m_published.push_back(m_owned.back().get());
+	}
+}
+
+// Twinned on demand — see the header for why the published face is not enough. Matched by the ORIGIN
+// object rather than by the name a second time: two names could reach one column (a synonym, a
+// case difference), and minting a second twin for it would put the same field in the result twice
+// under two identities.
+const ibBackendQueryColumn* ibAliasQueryable::ResolveColumnByName(const wxString& name) const
+{
+	for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
+		if (c->GetName().IsSameAs(name, false)) return c.get();
+
+	const ibBackendQueryColumn* const origin = m_origin->ResolveColumnByName(name);
+	if (origin == nullptr)
+		return nullptr;
+	for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
+		if (c->Origin() == origin) return c.get();
+
+	m_owned.push_back(std::make_shared<ibAliasColumn>(origin));
+	return m_owned.back().get();
+}
+
+// The key / hierarchy columns are the ORIGIN's answers, translated to OUR twins: they are read
+// through this reading of the table, so handing back the origin's objects would route them to the
+// other side of the join — the very confusion this class exists to end. A column the origin names
+// but does not publish (it is not in GetColumns) is dropped rather than passed through untranslated.
+std::vector<const ibBackendQueryColumn*> ibAliasQueryable::GetPrimaryKeyColumns() const
+{
+	std::vector<const ibBackendQueryColumn*> keys;
+	for (const ibBackendQueryColumn* k : m_origin->GetPrimaryKeyColumns())
+		for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
+			if (c->Origin() == k) { keys.push_back(c.get()); break; }
+	return keys;
+}
+
+const ibBackendQueryColumn* ibAliasQueryable::GetHierarchyColumn() const
+{
+	const ibBackendQueryColumn* h = m_origin->GetHierarchyColumn();
+	if (h == nullptr)
+		return nullptr;
+	for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
+		if (c->Origin() == h) return c.get();
+	return nullptr;
 }

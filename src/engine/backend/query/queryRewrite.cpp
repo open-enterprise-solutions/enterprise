@@ -25,17 +25,20 @@ bool ibQueryMentionsAggregate(const ibQueryAstExprPtr& e)
 {
 	if (!e)
 		return false;
-	if (e->m_kind == ibQueryAstExprKind::Func && ibIsAggregateKeyword(e->m_func))
+	// ⭐⭐ …AND A WINDOWED CALL FOLDS NOTHING. `SUM(x)` collapses its rows into one; `SUM(x) OVER (…)`
+	// returns a value on EVERY row and leaves the row count exactly as it was. Same word, opposite
+	// answer to the only question this function asks — so the OVER is part of the test, not a detail
+	// of the call. (A ranking call — ROW_NUMBER, RANK — is not an aggregate keyword and never reached
+	// here; this is the half that looked like one.)
+	if (e->m_kind == ibQueryAstExprKind::Func && ibIsAggregateKeyword(e->m_func) && !e->m_over)
 		return true;
 	if (e->m_subquery)
 		return false;
-	for (const ibQueryAstExprPtr& child : { e->m_lhs, e->m_rhs, e->m_arg, e->m_low, e->m_high, e->m_else })
-		if (ibQueryMentionsAggregate(child)) return true;
-	for (const ibQueryAstExprPtr& item : e->m_list)
-		if (ibQueryMentionsAggregate(item)) return true;
-	for (const std::pair<ibQueryAstExprPtr, ibQueryAstExprPtr>& branch : e->m_cases)
-		if (ibQueryMentionsAggregate(branch.first) || ibQueryMentionsAggregate(branch.second)) return true;
-	return false;
+	bool found = false;
+	ibQueryForEachChild(*e, [&found](const ibQueryAstExprPtr& child) {
+		if (!found && ibQueryMentionsAggregate(child)) found = true;
+	});
+	return found;
 }
 
 namespace {
@@ -47,19 +50,12 @@ ibQuerySelectPtr CloneSelect(const ibQuerySelect& s);
 ibQueryAstExprPtr CloneExpr(const ibQueryAstExprPtr& e)
 {
 	if (!e) return nullptr;
+	// The struct copy brings every scalar field AND a copy of each child POINTER — so the clone starts
+	// out sharing the whole subtree. Replacing each child in place with its own clone is what makes it
+	// a deep copy, and doing it through the one child walk is what keeps a field added tomorrow from
+	// staying shared in silence.
 	auto c = std::make_shared<ibQueryAstExpr>(*e);
-	c->m_arg  = CloneExpr(e->m_arg);
-	c->m_lhs  = CloneExpr(e->m_lhs);
-	c->m_rhs  = CloneExpr(e->m_rhs);
-	c->m_low  = CloneExpr(e->m_low);
-	c->m_high = CloneExpr(e->m_high);
-	c->m_else = CloneExpr(e->m_else);
-	c->m_list.clear();
-	for (const ibQueryAstExprPtr& i : e->m_list)
-		c->m_list.push_back(CloneExpr(i));
-	c->m_cases.clear();
-	for (const auto& wt : e->m_cases)
-		c->m_cases.emplace_back(CloneExpr(wt.first), CloneExpr(wt.second));
+	ibQueryForEachChild(*c, [](ibQueryAstExprPtr& child) { child = CloneExpr(child); });
 	if (e->m_subquery)
 		c->m_subquery = CloneSelect(*e->m_subquery);
 	return c;

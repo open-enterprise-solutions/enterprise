@@ -171,4 +171,29 @@ private:
 	static std::vector<ibValue> BuildExternal(const ibReadPageRequest& req, const std::vector<ibQuerySortItem>& effective);
 };
 
+// ==========================================================================
+// ⭐⭐ A TYPE, AS A VALUE — made and read WITHOUT naming the class that carries one.
+//
+// `TYPE(Catalog.Goods)`, `VALUETYPE(x)`, a type handed in through a parameter: three spellings of one
+// thing — an ordinary value whose content is a type. The lowering has to MAKE one (a name written in
+// a query) and the evaluator has to READ the clsid back out (a value that came home), and neither may
+// name `ibValueType`: it lives in the runtime's value zoo, and a query tier that reaches in there has
+// stopped being metadata-blind.
+//
+// 🛑 I reached in — `#include "backend/system/value/valueType.h"` in the lowering AND in the provider
+// (Max, 2026-09-06, pointing at the line). And then put the doors in `typeDescription.h`, which is a
+// narrow header a great many things include: closing a leak by widening a wall.
+//
+// THEY BELONG HERE. This file is the seam that is ALREADY allowed to know both storeys — its own
+// header says so ("the ONLY place L2-1 and the attribute field-machinery meet"), and it already
+// includes the value zoo for the same reason. Both callers already include this header, so the doors
+// cost nobody a new include and nothing else in the tree gains sight of a runtime value class.
+//
+// `ibTypeValueClsid` answers FALSE for a value that is not a type — a legitimate answer, and the one
+// a query needs when the other side of a comparison turns out to be a number.
+// ==========================================================================
+BACKEND_API ibValue ibTypeValueOf(const ibClassID& clsid);
+BACKEND_API ibValue ibTypeValueByName(const wxString& typeName);
+BACKEND_API bool    ibTypeValueClsid(const ibValue& value, ibClassID& outClsid);
+
 #endif // __DB_TABLE_PROVIDER_H__

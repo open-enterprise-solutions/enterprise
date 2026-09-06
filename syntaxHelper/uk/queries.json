@@ -1,265 +1,513 @@
 {
-  "format": "OES-HELP-1.0",
-  "schema_version": 1,
-  "locale": "uk",
-  "entries": [
-    {
-      "id": "guide.query",
-      "name_local": "Мова запитів — огляд",
-      "name_en": "Query language — overview",
-      "kind": "keyword",
-      "category_keys": ["query", "guide"],
-      "signature": "SELECT [TOP n] [DISTINCT] <поля> FROM <джерело> [JOIN ...] [WHERE ...] [GROUP BY ... [HAVING ...]] [ORDER BY ...] [TOTALS ... BY ...] [UNION ...]",
-      "description": "Мова запитів читає дані конфігурації декларативно: ви називаєте метаоб'єкти й реквізити, платформа сама будує SQL під підключену СУБД.\n\n**Як пишеться.** Текст запиту — звичайний рядок. Джерела називаються за видом та іменем метаоб'єкта: `Catalog.Товари`, `Document.Видаткова`, `InformationRegister.Ціни`, плюс віртуальні таблиці регістрів (`AccumulationRegister.Залишки.Balance(&Період)`). Реквізити — за іменами, включно з розіменуванням посилань через крапку: `Товар.Виробник.Найменування` — платформа сама побудує з'єднання. Значення передаються параметрами `&Ім'я`. Регістр літер ключових слів не важливий.\n\n**Як виконується.** `New Query(текст)` розбирає текст один раз (один розбір — багато виконань). Під час `Execute()`:\n1. оптимізатор спрощує дерево запиту (нормалізує НЕ, розплющує прості підзапити в один SELECT);\n2. імена розв'язуються в метадані, запит опускається на універсальні «двері» читання;\n3. провайдери виконують: фізичні таблиці — одним SQL-запитом у СУБД (з'єднання та агрегації за можливості йдуть на сервер цілком); обчислювані джерела (зрізи, залишки, агрегатні підзапити) рахуються рушієм і за потреби зшиваються з фізичними; на PostgreSQL великі проміжні набори матеріалізуються в тимчасові таблиці, щоб з'єднання йшло на сервері.\n\nРезультат — `QueryResult`; обхід — через `QuerySelect` (плоский курсор або дерево підсумків — один і той самий інтерфейс).\n\n**Доступ.** Текст запиту користувача — лише читання (SELECT); зміна даних — через об'єктну модель. Якщо для ролі користувача задано обмеження доступу до даних (RLS), воно вкладається в запит на тих самих дверях читання — обійти його запитом неможливо (див. «Обмеження доступу до даних (RLS) — огляд»).\n\nДеталі за клаузами — статті розділу «Запити до даних».",
-      "syntax_block": "var q = New Query(\"SELECT TOP 10 Найменування, Ціна FROM Catalog.Товари WHERE Ціна > &МінЦіна ORDER BY Ціна DESC\");\nq.SetParameter(\"МінЦіна\", 100);\nvar res = q.Execute();\nvar sel = res.Select();\nwhile (sel.Next()) {\n    Message(sel.Найменування + \": \" + sel.Ціна);\n}",
-      "parameters": "",
-      "return_descr": "",
-      "example": "// агрегація з групуванням\nvar q = New Query(\n    \"SELECT Виробник, SUM(Вага) AS ЗагальнаВага \" +\n    \"FROM Catalog.Товари GROUP BY Виробник HAVING SUM(Вага) > 50\");\nvar sel = q.Execute().Select();\nwhile (sel.Next())\n    Message(sel.Виробник + \" -> \" + sel.ЗагальнаВага);",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["cls.Query", "cls.QueryResult", "cls.QuerySelect", "q.Select", "q.From", "q.Where", "q.DotWalk", "guide.rls"],
-      "reviewed": true
-    },
-    {
-      "id": "cls.Query",
-      "name_local": "Query",
-      "name_en": "Query",
-      "kind": "collection",
-      "category_keys": ["query", "global_context"],
-      "signature": "New Query(text: string)",
-      "description": "Об'єкт запиту. Конструктор розбирає текст одразу (синтаксичні помилки — негайно, з номером рядка та позицією); розібране дерево кешується, тож один об'єкт можна виконувати багаторазово з різними параметрами.\n\n**Методи:**\n- `SetParameter(ім'я, значення)` — задати значення параметра `&ім'я` (без амперсанда). Імена регістронезалежні. Невстановлений параметр під час виконання — помилка.\n- `Execute()` — виконати й повернути `QueryResult`. Кожен виклик читає дані заново.",
-      "syntax_block": "var q = New Query(\"SELECT Code, Description FROM Catalog.Контрагенти WHERE Code = &Код\");\nq.SetParameter(\"Код\", \"000042\");\nvar res = q.Execute();",
-      "parameters": "text — текст запиту (див. «Мова запитів — огляд»).",
-      "return_descr": "Execute() повертає QueryResult.",
-      "example": "// один розбір — багато виконань\nvar q = New Query(\"SELECT * FROM Catalog.Товари WHERE Ціна > &П\");\nq.SetParameter(\"П\", 100);\nvar дорогі = q.Execute();\nq.SetParameter(\"П\", 10);\nvar усі = q.Execute();",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["guide.query", "cls.QueryResult", "q.Params"],
-      "reviewed": true
-    },
-    {
-      "id": "cls.QueryResult",
-      "name_local": "QueryResult",
-      "name_en": "QueryResult",
-      "kind": "collection",
-      "category_keys": ["query"],
-      "signature": "Query.Execute() : QueryResult",
-      "description": "Результат виконання запиту — один знімок даних. Деталь і підсумки читаються з одного знімка, тож розійтися не можуть.\n\n**Методи:**\n- `Select()` — відкрити обхід. Для звичайного SELECT повертає плоский курсор; для запиту з TOTALS — дерево підсумків. В обох випадках повертається `QuerySelect` з одним і тим самим інтерфейсом обходу.",
-      "syntax_block": "var res = q.Execute();\nvar sel = res.Select();",
-      "parameters": "",
-      "return_descr": "Select() повертає QuerySelect.",
-      "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["cls.Query", "cls.QuerySelect", "q.Totals"],
-      "reviewed": true
-    },
-    {
-      "id": "cls.QuerySelect",
-      "name_local": "QuerySelect",
-      "name_en": "QuerySelect",
-      "kind": "collection",
-      "category_keys": ["query"],
-      "signature": "QueryResult.Select() : QuerySelect",
-      "description": "Вибірка — курсор по рядках результату. Колонки результату читаються як властивості за іменем вихідної колонки (іменем реквізиту чи аліасом `AS`).\n\n**Методи та властивості:**\n- `Next()` — перейти до наступного рядка; хибно в кінці.\n- `Reset()` — повернутися на початок.\n- `<Ім'яКолонки>` — значення колонки поточного рядка (посилання повертаються об'єктами, ними можна ходити далі).\n- `Level()` — глибина вузла (для дерева підсумків; 0 — корінь).\n- `HasChildren()` — чи є вкладені вузли.\n- `Select()` — спуститися в дітей поточного вузла: повертає вкладений QuerySelect (рекурсивний обхід дерева підсумків).\n- `Total(ім'я)` — загальний підсумок за колонкою (по всьому результату).\n\nДля запиту з TOTALS значення агрегованої колонки на груповому вузлі — проміжний підсумок рівня, на листі — значення рядка.",
-      "syntax_block": "var sel = res.Select();\nwhile (sel.Next()) { ... sel.Ціна ... }",
-      "parameters": "",
-      "return_descr": "",
-      "example": "// рекурсивний обхід дерева підсумків\nProcedure Walk(sel, indent) {\n    while (sel.Next()) {\n        Message(indent + sel.Склад + \" = \" + sel.Кількість);\n        if (sel.HasChildren())\n            Walk(sel.Select(), indent + \"  \");\n    }\n}",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["cls.QueryResult", "q.Totals"],
-      "reviewed": true
-    },
-    {
-      "id": "q.Select",
-      "name_local": "SELECT (проєкція, TOP, DISTINCT)",
-      "name_en": "SELECT (projection, TOP, DISTINCT)",
-      "kind": "keyword",
-      "category_keys": ["query"],
-      "signature": "SELECT [TOP n] [DISTINCT] <поле | вираз | агрегат> [AS алiас] {, ...} | *",
-      "description": "Список вибірки.\n\n- `*` — усі реквізити джерела (за JOIN — усіх джерел).\n- Поле — ім'я реквізиту, за потреби з префіксом алiаса джерела (`t.Код`) і розіменуванням (`Товар.Виробник.Найменування`).\n- **Вираз** — арифметика (`Ціна * Кількість`) і `CASE WHEN ... THEN ... ELSE ... END`; читається за алiасом. Одне джерело.\n- **Агрегат** — `SUM / MIN / MAX / AVG (поле | розіменування | вираз)`, `COUNT(* | поле)`; робить запит групувальним (див. GROUP BY).\n- `AS алiас` (або просто ідентифікатор після поля) — вихідне ім'я; за ним колонка читається з вибірки.\n- `TOP n` — не більше n рядків результату. В об'єднанні: TOP першої гілки обмежує весь UNION, TOP наступних гілок — свою гілку; у підзапиті — рядки підзапиту. Працює і з GROUP BY (обмежує групи); з TOTALS не поєднується.\n- `DISTINCT` — без повторів рядків.",
-      "syntax_block": "SELECT TOP 10 DISTINCT Виробник.Регіон AS Регіон,\n       Ціна * Кількість AS Сума,\n       CASE WHEN Кількість > 100 THEN \"опт\" ELSE \"роздріб\" END AS Вид\nFROM Document.Продаж",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["q.From", "q.GroupBy", "q.DotWalk"],
-      "reviewed": true
-    },
-    {
-      "id": "q.From",
-      "name_local": "FROM (джерела, віртуальні таблиці, підзапити)",
-      "name_en": "FROM (sources, virtual tables, subqueries)",
-      "kind": "keyword",
-      "category_keys": ["query"],
-      "signature": "FROM <Вид>.<Ім'я>[.<ВіртТаблиця>[(аргументи)]] [[AS] алiас] | FROM (SELECT ...) [AS] алiас",
-      "description": "Джерело даних.\n\n**Метаоб'єкти:** `Catalog.X`, `Document.X`, `Enumeration.X`, `InformationRegister.X`, `AccumulationRegister.X`, `AccountingRegister.X`, `Constant.X`, `ChartOfAccounts.X`, `ChartOfCharacteristicTypes.X`; табличні частини — `Document.X.ТабЧастина`. Звіти й обробки джерелами не є.\n\n**Віртуальні таблиці регістрів** — третій сегмент імені, аргументи в дужках (значення та параметри):\n- `InformationRegister.Ціни.SliceLast(&Період [, &Відбір])` / `.SliceFirst(...)` — зріз останніх/перших;\n- `AccumulationRegister.Залишки.Balance(&Період [, &Відбір])` — залишки;\n- `AccumulationRegister.Залишки.Turnovers(&Початок, &Кінець [, &Відбір])` — обороти.\nБез аргументів — на поточний момент / без відбору.\n\n**Підзапит:** `FROM (SELECT ...) AS s` — вкладений SELECT як джерело, зокрема **агрегатний** (`SELECT Кат, SUM(x) AS s ... GROUP BY Кат`): зовні доступні ключі групування та алiаси агрегатів, умова зовні за алiасом агрегату працює як HAVING. Прості підзапити оптимізатор розплющує в один SELECT автоматично.\n\nАліас джерела задає префікс для імен полів (`t.Код`).",
-      "syntax_block": "FROM AccumulationRegister.ТовариНаСкладах.Balance(&НаДату) AS зал\nFROM (SELECT Виробник, SUM(Вага) AS В FROM Catalog.Товари GROUP BY Виробник) AS s",
-      "parameters": "",
-      "return_descr": "",
-      "example": "// залишки на дату з відбором зовні\nSELECT Номенклатура, КількістьBalance\nFROM AccumulationRegister.Залишки.Balance(&Період)\nWHERE КількістьBalance > 0",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["q.Join", "q.Select", "q.Params"],
-      "reviewed": true
-    },
-    {
-      "id": "q.Join",
-      "name_local": "JOIN (з'єднання)",
-      "name_en": "JOIN",
-      "kind": "keyword",
-      "category_keys": ["query"],
-      "signature": "[INNER | LEFT | RIGHT | FULL [OUTER]] JOIN <джерело> [AS алiас] [ON <умова> | ON TRUE]",
-      "description": "Горизонтальне з'єднання джерел.\n\n- Види: `INNER` (типово для голого JOIN), `LEFT`, `RIGHT`, `FULL`; слово `OUTER` необов'язкове.\n- `ON a.x = b.y` — рівність ключів (порядок сторін довільний). Це швидкий шлях: з'єднання хешем, за змоги цілком на сервері СУБД.\n- `ON a.x <op> b.y` — **нерівність** (`<> < <= > >=`), тета-з'єднання. Виконується перебором пар у пам'яті рушія — на великих наборах це дорого, на відміну від рівності.\n- `ON a.x + 1 = b.y` — **обчислювана** умова (вираз хоча б з одного боку): теж перебір пар у пам'яті, ключових колонок тут немає.\n- `ON b.x <op> value / &параметр` — **константна** умова (з одного боку `value(...)`, `&параметр` або літерал): за SQL це cross join з фільтром за цією колонкою, так і виконується — лише INNER-з'єднання (для зовнішнього пишіть умову у WHERE).\n- `ON TRUE` — декартів добуток (cross join).\n- Без `ON` — автоз'єднання за посиланням: якщо поле одного джерела посилається на інше, ключ виводиться автоматично.\n\nКолонки в проєкції за JOIN вказуються явно (за алiасами); `SELECT *` розгортає всі джерела. Якщо обидва джерела — фізичні таблиці, з'єднання виконується одним SQL на сервері; обчислювана сторона (зріз, залишки, підзапит) за достатнього розміру матеріалізується в тимчасову таблицю СУБД (PostgreSQL), інакше зшивається рушієм; суто внутрішні ланцюжки з трьох і більше джерел рушій перезбирає від меншого до більшого за реальними розмірами.\n\n**Поточні обмеження:** в умові WHERE за JOIN булева комбінація (OR/NOT/IN/IS NULL) працює, коли з'єднання виконується одним SQL; розіменування через крапку у WHERE/GROUP BY за JOIN поки не підтримане (у проєкції — підтримане на одному джерелі).",
-      "syntax_block": "SELECT т.Найменування, з.КількістьBalance\nFROM Catalog.Товари AS т\nLEFT JOIN AccumulationRegister.Залишки.Balance(&П) AS з ON т.Ссилка = з.Номенклатура",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["q.From", "q.Where", "q.Union", "q.Value"],
-      "reviewed": true
-    },
-    {
-      "id": "q.Where",
-      "name_local": "WHERE (відбір)",
-      "name_en": "WHERE",
-      "kind": "keyword",
-      "category_keys": ["query"],
-      "signature": "WHERE <умова> { AND | OR <умова> }",
-      "description": "Відбір рядків до групування.\n\n**Порівняння:** `= <> < <= > >=`. Ліва частина — поле, розіменування (`Виробник.Регіон = &Р`) або **вираз** (`Ціна * Кількість > 1000`, `CASE ... END = ...`; вирази — одне фізичне джерело). Права частина — літерал або параметр.\n\n**Оператори:**\n- `[NOT] LIKE \"шаблон\"` — `%` будь-який підрядок, `_` один символ;\n- `[NOT] IN (значення, ...)` або `[NOT] IN (SELECT однаКолонка FROM ...)`;\n- `[NOT] BETWEEN а AND б` — включно;\n- `IS [NOT] NULL` — для посилальних полів зважте: порожнє посилання — це «порожньо», а не NULL (див. «Розіменування посилань»);\n- булева логіка `AND / OR / NOT` з дужками; булеве поле саме по собі — істинність (`WHERE Проведений`).\n\nОптимізатор нормалізує НЕ (`NOT (a = 1)` -> `a <> 1`, де Морган) — пишіть як зручніше.\n\nЛітерали: числа `100`, рядки в лапках, `TRUE / FALSE`, `NULL`; дати передавайте параметрами.",
-      "syntax_block": "WHERE (Ціна > &Мін OR Виробник.Регіон = &Рег)\n  AND Найменування LIKE \"А%\"\n  AND Проведений = TRUE",
-      "parameters": "",
-      "return_descr": "",
-      "example": "// IN з підзапитом\nSELECT * FROM Document.Видаткова\nWHERE Контрагент IN (SELECT Ссилка FROM Catalog.Контрагенти WHERE Регіон = &Р)",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["q.Params", "q.DotWalk", "q.GroupBy"],
-      "reviewed": true
-    },
-    {
-      "id": "q.GroupBy",
-      "name_local": "GROUP BY / HAVING (групування)",
-      "name_en": "GROUP BY / HAVING",
-      "kind": "keyword",
-      "category_keys": ["query"],
-      "signature": "GROUP BY <поле | розіменування> {, ...} [HAVING <умова> {AND ...}]",
-      "description": "Плоске групування: один рядок результату на групу.\n\n- Ключі групування — поля або розіменування (`GROUP BY Виробник.Регіон`); кожен неагрегатний елемент проєкції мусить бути ключем.\n- Агрегати в проєкції: `SUM / MIN / MAX / AVG (поле | розіменування | вираз)`, `COUNT(*)`. Вхід-вираз (`SUM(Ціна * Кількість)`) — одне фізичне джерело.\n- ОБЧИСЛЮВАНИЙ елемент проєкції поруч з агрегатами — сам собою ключ групування: `ISNULL(КількістьЗалишок, 0) AS Залишок`, `CASE WHEN … END AS Вид`. Ключем є все, що збудоване з ключів; чого не можна — будувати від РЕЗУЛЬТАТУ агрегата (`ISNULL(SUM(Кількість), 0)`): він існує лише після згортки. Згортайте вхід-вираз: `SUM(Ціна * Кількість)`.\n- `HAVING` — відбір груп після агрегації; умови поєднуються через `AND` (пишіть скільки потрібно), оператори `= <> < <= > >=`.\n- WHERE чи HAVING — не ваш вибір. Умова над агрегатом лишається відбором груп, хоч би де ви її написали, а умова над ключем групування — відбором рядків, хоч би де вона стояла: рушій ставить кожну туди, де вона виконується. Відповідь та сама — ключ усередині своєї групи не змінюється.\n- `TOP n` обмежує кількість груп.\n\nГрупування за посилальним полем іде за тотожністю посилання (дві різні позиції з однаковим найменуванням не зіллються).\n\nНа одному фізичному джерелі групування виконується на сервері СУБД; за обчислюваним джерелом (зріз, підзапит) — рушієм. HAVING за обчислюваним джерелом поки не підтриманий (умова зовні агрегатного підзапиту — підтримана).",
-      "syntax_block": "SELECT Виробник.Регіон AS Регіон, SUM(Вага) AS Вага, COUNT(*) AS Позицій\nFROM Catalog.Товари\nGROUP BY Виробник.Регіон\nHAVING SUM(Вага) > 100",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["q.Select", "q.Totals", "q.From"],
-      "reviewed": true
-    },
-    {
-      "id": "q.OrderBy",
-      "name_local": "ORDER BY (сортування)",
-      "name_en": "ORDER BY",
-      "kind": "keyword",
-      "category_keys": ["query"],
-      "signature": "ORDER BY <поле | розіменування | вираз> [ASC | DESC] {, ...}",
-      "description": "Сортування результату. Типово за зростанням (`ASC`); `DESC` — за спаданням. Допускає розіменування (`ORDER BY Виробник.Найменування`).\n\nОкрім поля можна сортувати за **виразом** — арифметика або `CASE WHEN ... THEN ... END` («сортування за умовою»), і за константою (`&параметр` / `value(...)`). Сортування за виразом — одне фізичне джерело. Сортування за звичайним полем / розіменуванням уміє посторінково віддавати великий результат; сортування за виразом читає впорядкований результат цілком.\n\nВ об'єднанні ORDER BY пишеться один раз наприкінці й сортує весь результат (за іменами колонок першої гілки).",
-      "syntax_block": "ORDER BY CASE WHEN Пріоритет = &Високий THEN 0 ELSE 1 END,\n         Виробник.Найменування, Ціна DESC",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["q.Select", "q.Union", "q.Value"],
-      "reviewed": true
-    },
-    {
-      "id": "q.Totals",
-      "name_local": "TOTALS ... BY (ієрархічні підсумки)",
-      "name_en": "TOTALS ... BY (hierarchical totals)",
-      "kind": "keyword",
-      "category_keys": ["query"],
-      "signature": "TOTALS [<агрегат> {, ...}] BY <вимір> [HIERARCHY | HIERARCHYONLY | ELEMENTS] {, ...}",
-      "description": "Ієрархічні підсумки: результат — дерево з проміжними підсумками на кожному рівні та загальним підсумком у корені (на відміну від плоского GROUP BY).\n\n- Агрегати між `TOTALS` і `BY` (`SUM(Кількість)`, `COUNT(*)`, обчислювана міра за алiасом із SELECT — `SELECT 1 AS шт ... TOTALS SUM(шт)`) згортаються «на місці»: на груповому вузлі читаються з тієї ж колонки, що й значення рядка на листі.\n- **Агрегати необов'язкові:** `TOTALS BY Склад` — чисте групування в дерево, без згорнутої міри (так будується список із групуванням). Якщо одразу за `TOTALS` іде `BY`, агрегатів немає.\n- Виміри після `BY` застосовуються по порядку: кожен — рівень дерева. Допустиме скалярне розіменування (`BY Батько.Код`) — платформа сама побудує з'єднання за посилальним шляхом.\n- `HIERARCHY` — розгорнути вимір-посилання за ієрархією його довідника (групи як вузли); `HIERARCHYONLY` — лише вузли ієрархії: елемент-лист не виводиться окремим рядком, але й далі враховується в підсумках; `ELEMENTS` (типово) — за значеннями.\n\n**Джерела.** Працює і на одному джерелі, і з `JOIN` (спільний розбір джерел зі звичайним читанням), і з `UNION`: гілки об'єднання складаються вертикально, а виміри та агрегати розв'язуються за колонками **першої** гілки — як і завершальний ORDER BY звичайного об'єднання.\n\nЧитання: `res.Select()` повертає дерево — `Level()`, `HasChildren()`, спуск `Select()`, загальний підсумок `Total(ім'я)` (див. QuerySelect). Деталь і підсумки рахуються з одного знімка — розійтися не можуть.\n\n**Обмеження:** вимір-розіменування — скалярний лист; TOP з TOTALS не поєднується; усередині підзапиту чи гілки UNION `TOTALS` (як і `JOIN`) поки не допускається — пишіть їх на верхньому рівні.",
-      "syntax_block": "SELECT Склад, Товар, Кількість\nFROM AccumulationRegister.Залишки.Balance(&П)\nTOTALS SUM(Кількість) BY Склад, Товар HIERARCHY\n\n// без агрегату — просто дерево за виміром\nSELECT Найменування, Ціна FROM Catalog.Товари\nTOTALS BY Виробник",
-      "parameters": "",
-      "return_descr": "",
-      "example": "// обхід: вузли складів -> вузли товарів (за ієрархією) -> рядки\nvar sel = q.Execute().Select();\nwhile (sel.Next()) {\n    Message(\"Склад \" + sel.Склад + \": \" + sel.Кількість);\n    var заТоварами = sel.Select();\n    while (заТоварами.Next())\n        Message(\"  \" + заТоварами.Товар + \": \" + заТоварами.Кількість);\n}",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["cls.QuerySelect", "q.GroupBy"],
-      "reviewed": true
-    },
-    {
-      "id": "q.Union",
-      "name_local": "UNION / UNION ALL (об'єднання)",
-      "name_en": "UNION / UNION ALL",
-      "kind": "keyword",
-      "category_keys": ["query"],
-      "signature": "SELECT ... UNION [ALL] SELECT ... [ORDER BY ...] [TOTALS ...]",
-      "description": "Вертикальне об'єднання результатів. Колонки гілок зіставляються **за іменами** вихідних колонок; відсутня в гілці колонка дає порожнє значення.\n\n- `UNION` — прибирає повтори з накопиченого результату на цьому операторі (еквівалент «вибрати різні» поверх склейки).\n- `UNION ALL` — зберігає повтори.\n- Семантика ліво-асоціативна: `A UNION B UNION ALL C` — дедуплікація після B, повтори з C зберігаються.\n- Завершальний ORDER BY стосується всього об'єднання. TOP першої гілки обмежує весь результат; TOP наступних — свою гілку.\n\nОб'єднання фізичних таблиць виконується одним SQL на сервері (включно з нативними UNION/UNION ALL); обчислювані гілки за достатнього розміру йдуть у тимчасові таблиці (PostgreSQL) або зшиваються рушієм.\n\n**Обмеження:** гілки поки без JOIN і TOTALS.",
-      "syntax_block": "SELECT Code, Description FROM Catalog.Товари\nUNION ALL\nSELECT Code, Description FROM Catalog.Послуги\nORDER BY Description",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["q.Select", "q.OrderBy"],
-      "reviewed": true
-    },
-    {
-      "id": "q.Params",
-      "name_local": "&Параметри запиту",
-      "name_en": "&Query parameters",
-      "kind": "keyword",
-      "category_keys": ["query"],
-      "signature": "&Ім'я  +  Query.SetParameter(\"Ім'я\", значення)",
-      "description": "Параметри передають значення в запит безпечно: текст із даними не склеюється ніколи, значення йдуть у СУБД зв'язаними параметрами — ін'єкція виключена конструктивно.\n\n- У тексті — `&Ім'я` всюди, де допустиме значення: у порівняннях, IN, BETWEEN, аргументах віртуальних таблиць (`Balance(&Період, &Відбір)`).\n- Встановлення — `q.SetParameter(\"Ім'я\", значення)` до `Execute()`; імена регістронезалежні; невстановлений параметр — помилка виконання.\n- Типи значень: число, рядок, дата, булеве, посилання (посилання отримуйте об'єктною моделлю чи підзапитом).\n\nДати передавайте лише параметрами — літералів дат у мові немає.",
-      "syntax_block": "var q = New Query(\"SELECT * FROM Document.Видаткова WHERE Date BETWEEN &З AND &По\");\nq.SetParameter(\"З\",  ПочатокМісяця);\nq.SetParameter(\"По\", КінецьМісяця);",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["cls.Query", "q.Where", "q.From", "q.Value"],
-      "reviewed": true
-    },
-    {
-      "id": "q.Value",
-      "name_local": "value() — літерал посилання",
-      "name_en": "value() — literal reference constant",
-      "kind": "keyword",
-      "category_keys": ["query"],
-      "signature": "value(<Вид>.<Ім'я>.EmptyRef) | value(<Вид>.<Ім'я>.<Визначений>)",
-      "description": "Літерал посилання прямо в тексті запиту — порожнє посилання метаоб'єкта або один з його визначених елементів — щоб не передавати його параметром.\n\n- `value(Catalog.Валюти.EmptyRef)` — ПОРОЖНЄ посилання цього довідника (типізоване «порожньо», не NULL).\n- `value(Catalog.Рахунки.Каса)` — посилання на ВИЗНАЧЕНИЙ елемент за іменем (визначені є в довідників і планів рахунків / видів характеристик).\n- `EmptyRef` регістронезалежне; ім'я визначеного — як задано. Невідомий метаоб'єкт або член — помилка запиту (з позицією).\n\n**Де працює:** усюди, де очікується значення — права частина порівняння / IN / BETWEEN, умова JOIN ON, проєкція (`SELECT value(...) AS x`), усередині CASE. Поводиться точно як зв'язаний параметр, лише значення береться з метаданих, а не із `SetParameter`.",
-      "syntax_block": "WHERE Рахунок     = value(ChartOfAccounts.Основний.Каса)\n  AND Контрагент <> value(Catalog.Контрагенти.EmptyRef)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "// позначити кожну гілку об'єднання визначеним елементом\nSELECT Ссилка, value(Catalog.ВидиДок.Прихід) AS Вид FROM Document.Прибуткова\nUNION ALL\nSELECT Ссилка, value(Catalog.ВидиДок.Видаток) AS Вид FROM Document.Видаткова",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["q.Params", "q.Where", "q.DotWalk"],
-      "reviewed": true
-    },
-    {
-      "id": "q.DotWalk",
-      "name_local": "Розіменування посилань (крапка)",
-      "name_en": "Reference dereference (dot-walk)",
-      "kind": "keyword",
-      "category_keys": ["query"],
-      "signature": "<ПосилальнеПоле>.<Реквізит>[.<Реквізит>...]",
-      "description": "Крапка після посилального поля читає реквізит пов'язаного об'єкта; платформа автоматично будує потрібні з'єднання (LEFT JOIN за ключем посилання). Ланцюжок може бути будь-якої довжини: `Товар.Виробник.Регіон.Найменування`.\n\n**Де працює:** проєкція, WHERE (включно з булевими комбінаціями, IN, IS NULL), ORDER BY, GROUP BY, входи агрегатів, виміри TOTALS BY (скалярний лист). На одному джерелі; шляхи зі спільним префіксом використовують одне з'єднання.\n\n**Порожні та биті посилання** не «провалюють» рядок: реквізит читається як порожнє значення свого типу (не NULL) — поведінка збігається з об'єктною моделлю.\n\n**Складені посилання** (поле, що посилається на кілька типів, — наприклад, Реєстратор регістру): платформа з'єднує лише ті типи, в яких є запитаний реквізит, і бере значення гілки, що збіглася. Працює й для посилального реквізиту за складеним сегментом (`Реєстратор.Контрагент`). Відбір і сортування за таким посилальним реквізитом за складеним сегментом поки не підтримані (за скалярним — підтримані).",
-      "syntax_block": "SELECT Найменування, Виробник.Регіон.Найменування AS Регіон\nFROM Catalog.Товари\nWHERE Виробник.Регіон = &Рег\nORDER BY Виробник.Найменування",
-      "parameters": "",
-      "return_descr": "",
-      "example": "// складене посилання: реквізит є лише в частини типів реєстратора\nSELECT Реєстратор.Контрагент AS Хто, SUM(Кількість) AS К\nFROM AccumulationRegister.Залишки\nGROUP BY Реєстратор.Контрагент",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
-      "see_also": ["q.Where", "q.Select", "q.GroupBy"],
-      "reviewed": true
-    },
-    {
-      "id": "q.Package",
-      "name_local": "Пакет запитів (INTO / ONTO / DROP, тимчасові таблиці)",
-      "name_en": "Query package (INTO / ONTO / DROP, temporary tables)",
-      "kind": "keyword",
-      "category_keys": [
-        "query"
-      ],
-      "signature": "<запит> [INTO <ТимчТаблиця> | ONTO <Ім'я>] [INDEX BY <поле> {, ...}] {; <запит>} [; DROP <ТимчТаблиця>]",
-      "description": "Кілька запитів в ОДНОМУ тексті, через `;`. Кожен наступний бачить тимчасові таблиці, створені попередніми, — заради цього пакет і пишуть.\n\n- `INTO <ТимчТаблиця>` — покласти результат до тимчасової таблиці замість того, щоб повернути його. Далі її читають за голим іменем: `FROM Folded AS f`.\n- `ONTO <Ім'я>` — ДАТИ ІМ'Я результату цього запиту, щоб просити його за іменем, а не за позицією.\n- **Обидва пишуться одразу після списку полів, ДО `FROM`** — `SELECT Товар, SUM(Кількість) AS Кількість INTO Згорнуті FROM …`. Одночасно їх писати не можна: INTO не повертає результату, називати було б нічого.\n- `INDEX BY <поле>{, …}` — проіндексувати створювану тимчасову таблицю (лише разом з INTO); пишеться після тіла запиту.\n- `DROP <ТимчТаблиця>` — звільнити її достроково. Це окремий запит пакета, він нічого не повертає.\n\n**Як забрати результати** (методи `Query`):\n- `ExecuteBatch()` — **Масив** результатів за позицією написання. Запит з INTO відповідає одним рядком із кількістю записів; DROP — Невизначено.\n- `Execute()` — ПЕРШИЙ результат (для звичайного запиту з одного оператора він єдиний).\n- `Execute(\"<Ім'я>\")` — результат, названий через ONTO.\n\n**Щоб таблиці пережили виконання:** без `TempTablesManager` вони вмирають разом із викликом. Прив'яжіть той самий менеджер до обох запитів: `manager = New TempTablesManager(); first.TempTablesManager = manager; … second.TempTablesManager = manager; … manager.Close();`.\n\nПакет виконується одним заходом і в одному стані читання — усі запити бачать ті самі дані.",
-      "syntax_block": "SELECT M.Товар AS Товар, SUM(M.Кількість) AS Кількість\nINTO Згорнуті\nFROM AccumulationRegister.ТовариНаСкладах AS M\nGROUP BY M.Товар\nINDEX BY Товар;\n\nSELECT G.Description AS Товар, f.Кількість AS Кількість\nFROM Catalog.Товари AS G\nINNER JOIN Згорнуті AS f ON f.Товар = G.Ref;\n\nDROP Згорнуті",
-      "parameters": "",
-      "return_descr": "",
-      "example": "// увесь пакет, результати за позицією\nvar q = New Query(\n    \"SELECT M.Товар AS Товар, SUM(M.Кількість) AS Кількість INTO Згорнуті \" +\n    \"FROM AccumulationRegister.ТовариНаСкладах AS M GROUP BY M.Товар; \" +\n    \"SELECT f.Товар AS Товар, f.Кількість AS Кількість FROM Згорнуті AS f\");\nvar results = q.ExecuteBatch();\nvar sel = results.Get(1).Select();          // [0] — рядок із кількістю записів запиту з INTO\nwhile (sel.Next())\n    Message(String(sel.Товар) + \" = \" + String(sel.Кількість));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["q.From", "q.GroupBy", "q.Select"],
-      "reviewed": true
-    }
-  ]
+ "format": "OES-HELP-1.0",
+ "schema_version": 1,
+ "locale": "uk",
+ "entries": [
+  {
+   "id": "guide.query",
+   "name_local": "Мова запитів — огляд",
+   "name_en": "Query language — overview",
+   "kind": "keyword",
+   "category_keys": [
+    "query",
+    "guide"
+   ],
+   "signature": "SELECT [TOP n] [DISTINCT] <поля> FROM <джерело> [JOIN ...] [WHERE ...] [GROUP BY ... [HAVING ...]] [ORDER BY ...] [TOTALS ... BY ...] [UNION ...]  ·  YEAR/MONTH/DAY(...) · BEGINOFPERIOD/ENDOFPERIOD(...) · DATEADD/DATEDIFF(...) · SUBSTRING(...) · <expr> REFS <Kind>.<Name>",
+   "description": "Мова запитів читає дані конфігурації декларативно: ви називаєте метаоб'єкти й реквізити, платформа сама будує SQL під підключену СУБД.\n\n**Як пишеться.** Текст запиту — звичайний рядок. Джерела називаються за видом та іменем метаоб'єкта: `Catalog.Товари`, `Document.Видаткова`, `InformationRegister.Ціни`, плюс віртуальні таблиці регістрів (`AccumulationRegister.Залишки.Balance(&Період)`). Реквізити — за іменами, включно з розіменуванням посилань через крапку: `Товар.Виробник.Найменування` — платформа сама побудує з'єднання. Значення передаються параметрами `&Ім'я`. Регістр літер ключових слів не важливий.\n\n**Як виконується.** `New Query(текст)` розбирає текст один раз (один розбір — багато виконань). Під час `Execute()`:\n1. оптимізатор спрощує дерево запиту (нормалізує НЕ, розплющує прості підзапити в один SELECT);\n2. імена розв'язуються в метадані, запит опускається на універсальні «двері» читання;\n3. провайдери виконують: фізичні таблиці — одним SQL-запитом у СУБД (з'єднання та агрегації за можливості йдуть на сервер цілком); обчислювані джерела (зрізи, залишки, агрегатні підзапити) рахуються рушієм і за потреби зшиваються з фізичними; на PostgreSQL великі проміжні набори матеріалізуються в тимчасові таблиці, щоб з'єднання йшло на сервері.\n\nРезультат — `QueryResult`; обхід — через `QuerySelect` (плоский курсор або дерево підсумків — один і той самий інтерфейс).\n\n**Доступ.** Текст запиту користувача — лише читання (SELECT); зміна даних — через об'єктну модель. Якщо для ролі користувача задано обмеження доступу до даних (RLS), воно вкладається в запит на тих самих дверях читання — обійти його запитом неможливо (див. «Обмеження доступу до даних (RLS) — огляд»).\n\nДеталі за клаузами — статті розділу «Запити до даних».",
+   "syntax_block": "var q = New Query(\"SELECT TOP 10 Найменування, Ціна FROM Catalog.Товари WHERE Ціна > &МінЦіна ORDER BY Ціна DESC\");\nq.SetParameter(\"МінЦіна\", 100);\nvar res = q.Execute();\nvar sel = res.Select();\nwhile (sel.Next()) {\n    Message(sel.Найменування + \": \" + sel.Ціна);\n}",
+   "parameters": "",
+   "return_descr": "",
+   "example": "// агрегація з групуванням\nvar q = New Query(\n    \"SELECT Виробник, SUM(Вага) AS ЗагальнаВага \" +\n    \"FROM Catalog.Товари GROUP BY Виробник HAVING SUM(Вага) > 50\");\nvar sel = q.Execute().Select();\nwhile (sel.Next())\n    Message(sel.Виробник + \" -> \" + sel.ЗагальнаВага);",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "cls.Query",
+    "cls.QueryResult",
+    "cls.QuerySelect",
+    "q.Select",
+    "q.From",
+    "q.Where",
+    "q.DotWalk",
+    "guide.rls"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "cls.Query",
+   "name_local": "Query",
+   "name_en": "Query",
+   "kind": "collection",
+   "category_keys": [
+    "query",
+    "global_context"
+   ],
+   "signature": "New Query(text: string)",
+   "description": "Об'єкт запиту. Конструктор розбирає текст одразу (синтаксичні помилки — негайно, з номером рядка та позицією); розібране дерево кешується, тож один об'єкт можна виконувати багаторазово з різними параметрами.\n\n**Методи:**\n- `SetParameter(ім'я, значення)` — задати значення параметра `&ім'я` (без амперсанда). Імена регістронезалежні. Невстановлений параметр під час виконання — помилка.\n- `Execute()` — виконати й повернути `QueryResult`. Кожен виклик читає дані заново.",
+   "syntax_block": "var q = New Query(\"SELECT Code, Description FROM Catalog.Контрагенти WHERE Code = &Код\");\nq.SetParameter(\"Код\", \"000042\");\nvar res = q.Execute();",
+   "parameters": "text — текст запиту (див. «Мова запитів — огляд»).",
+   "return_descr": "Execute() повертає QueryResult.",
+   "example": "// один розбір — багато виконань\nvar q = New Query(\"SELECT * FROM Catalog.Товари WHERE Ціна > &П\");\nq.SetParameter(\"П\", 100);\nvar дорогі = q.Execute();\nq.SetParameter(\"П\", 10);\nvar усі = q.Execute();",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "guide.query",
+    "cls.QueryResult",
+    "q.Params"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "cls.QueryResult",
+   "name_local": "QueryResult",
+   "name_en": "QueryResult",
+   "kind": "collection",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "Query.Execute() : QueryResult",
+   "description": "Результат виконання запиту — один знімок даних. Деталь і підсумки читаються з одного знімка, тож розійтися не можуть.\n\n**Методи:**\n- `Select()` — відкрити обхід. Для звичайного SELECT повертає плоский курсор; для запиту з TOTALS — дерево підсумків. В обох випадках повертається `QuerySelect` з одним і тим самим інтерфейсом обходу.",
+   "syntax_block": "var res = q.Execute();\nvar sel = res.Select();",
+   "parameters": "",
+   "return_descr": "Select() повертає QuerySelect.",
+   "example": "",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "cls.Query",
+    "cls.QuerySelect",
+    "q.Totals"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "cls.QuerySelect",
+   "name_local": "QuerySelect",
+   "name_en": "QuerySelect",
+   "kind": "collection",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "QueryResult.Select() : QuerySelect",
+   "description": "Вибірка — курсор по рядках результату. Колонки результату читаються як властивості за іменем вихідної колонки (іменем реквізиту чи аліасом `AS`).\n\n**Методи та властивості:**\n- `Next()` — перейти до наступного рядка; хибно в кінці.\n- `Reset()` — повернутися на початок.\n- `<Ім'яКолонки>` — значення колонки поточного рядка (посилання повертаються об'єктами, ними можна ходити далі).\n- `Level()` — глибина вузла (для дерева підсумків; 0 — корінь).\n- `HasChildren()` — чи є вкладені вузли.\n- `Select()` — спуститися в дітей поточного вузла: повертає вкладений QuerySelect (рекурсивний обхід дерева підсумків).\n- `Total(ім'я)` — загальний підсумок за колонкою (по всьому результату).\n\nДля запиту з TOTALS значення агрегованої колонки на груповому вузлі — проміжний підсумок рівня, на листі — значення рядка.",
+   "syntax_block": "var sel = res.Select();\nwhile (sel.Next()) { ... sel.Ціна ... }",
+   "parameters": "",
+   "return_descr": "",
+   "example": "// рекурсивний обхід дерева підсумків\nProcedure Walk(sel, indent) {\n    while (sel.Next()) {\n        Message(indent + sel.Склад + \" = \" + sel.Кількість);\n        if (sel.HasChildren())\n            Walk(sel.Select(), indent + \"  \");\n    }\n}",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "cls.QueryResult",
+    "q.Totals"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.Select",
+   "name_local": "SELECT (проєкція, TOP, DISTINCT)",
+   "name_en": "SELECT (projection, TOP, DISTINCT)",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "SELECT [TOP n] [DISTINCT] <поле | вираз | агрегат> [AS алiас] {, ...} | *",
+   "description": "Список вибірки.\n\n- `*` — усі реквізити джерела (за JOIN — усіх джерел).\n- Поле — ім'я реквізиту, за потреби з префіксом алiаса джерела (`t.Код`) і розіменуванням (`Товар.Виробник.Найменування`).\n- **Вираз** — арифметика (`Ціна * Кількість`) і `CASE WHEN ... THEN ... ELSE ... END`; читається за алiасом. Одне джерело.\n- **Агрегат** — `SUM / MIN / MAX / AVG (поле | розіменування | вираз)`, `COUNT(* | поле)`; робить запит групувальним (див. GROUP BY).\n- `AS алiас` (або просто ідентифікатор після поля) — вихідне ім'я; за ним колонка читається з вибірки.\n- `TOP n` — не більше n рядків результату. В об'єднанні: TOP першої гілки обмежує весь UNION, TOP наступних гілок — свою гілку; у підзапиті — рядки підзапиту. Працює і з GROUP BY (обмежує групи); з TOTALS не поєднується.\n- `DISTINCT` — без повторів рядків.",
+   "syntax_block": "SELECT TOP 10 DISTINCT Виробник.Регіон AS Регіон,\n       Ціна * Кількість AS Сума,\n       CASE WHEN Кількість > 100 THEN \"опт\" ELSE \"роздріб\" END AS Вид\nFROM Document.Продаж",
+   "parameters": "",
+   "return_descr": "",
+   "example": "",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.From",
+    "q.GroupBy",
+    "q.DotWalk"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.From",
+   "name_local": "FROM (джерела, віртуальні таблиці, підзапити)",
+   "name_en": "FROM (sources, virtual tables, subqueries)",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "FROM <Вид>.<Ім'я>[.<ВіртТаблиця>[(аргументи)]] [[AS] алiас] | FROM (SELECT ...) [AS] алiас",
+   "description": "Джерело даних.\n\n**Метаоб'єкти:** `Catalog.X`, `Document.X`, `Enumeration.X`, `InformationRegister.X`, `AccumulationRegister.X`, `AccountingRegister.X`, `Constant.X`, `ChartOfAccounts.X`, `ChartOfCharacteristicTypes.X`; табличні частини — `Document.X.ТабЧастина`. Звіти й обробки джерелами не є.\n\n**Віртуальні таблиці регістрів** — третій сегмент імені, аргументи в дужках (значення та параметри):\n- `InformationRegister.Ціни.SliceLast(&Період [, &Відбір])` / `.SliceFirst(...)` — зріз останніх/перших;\n- `AccumulationRegister.Залишки.Balance(&Період [, &Відбір])` — залишки;\n- `AccumulationRegister.Залишки.Turnovers(&Початок, &Кінець [, &Відбір])` — обороти.\nБез аргументів — на поточний момент / без відбору.\n\n**Підзапит:** `FROM (SELECT ...) AS s` — вкладений SELECT як джерело, зокрема **агрегатний** (`SELECT Кат, SUM(x) AS s ... GROUP BY Кат`): зовні доступні ключі групування та алiаси агрегатів, умова зовні за алiасом агрегату працює як HAVING. Прості підзапити оптимізатор розплющує в один SELECT автоматично.\n\nАліас джерела задає префікс для імен полів (`t.Код`).",
+   "syntax_block": "FROM AccumulationRegister.ТовариНаСкладах.Balance(&НаДату) AS зал\nFROM (SELECT Виробник, SUM(Вага) AS В FROM Catalog.Товари GROUP BY Виробник) AS s",
+   "parameters": "",
+   "return_descr": "",
+   "example": "// залишки на дату з відбором зовні\nSELECT Номенклатура, КількістьBalance\nFROM AccumulationRegister.Залишки.Balance(&Період)\nWHERE КількістьBalance > 0",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.Join",
+    "q.Select",
+    "q.Params"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.Join",
+   "name_local": "JOIN (з'єднання)",
+   "name_en": "JOIN",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "[INNER | LEFT | RIGHT | FULL [OUTER]] JOIN <джерело> [AS алiас] [ON <умова> | ON TRUE]",
+   "description": "Горизонтальне з'єднання джерел.\n\n- Види: `INNER` (типово для голого JOIN), `LEFT`, `RIGHT`, `FULL`; слово `OUTER` необов'язкове.\n- `ON a.x = b.y` — рівність ключів (порядок сторін довільний). Це швидкий шлях: з'єднання хешем, за змоги цілком на сервері СУБД.\n- `ON a.x <op> b.y` — **нерівність** (`<> < <= > >=`), тета-з'єднання. Виконується перебором пар у пам'яті рушія — на великих наборах це дорого, на відміну від рівності.\n- `ON a.x + 1 = b.y` — **обчислювана** умова (вираз хоча б з одного боку): теж перебір пар у пам'яті, ключових колонок тут немає.\n- `ON b.x <op> value / &параметр` — **константна** умова (з одного боку `value(...)`, `&параметр` або літерал): за SQL це cross join з фільтром за цією колонкою, так і виконується — лише INNER-з'єднання (для зовнішнього пишіть умову у WHERE).\n- `ON TRUE` — декартів добуток (cross join).\n- Без `ON` — автоз'єднання за посиланням: якщо поле одного джерела посилається на інше, ключ виводиться автоматично.\n\nКолонки в проєкції за JOIN вказуються явно (за алiасами); `SELECT *` розгортає всі джерела. Якщо обидва джерела — фізичні таблиці, з'єднання виконується одним SQL на сервері; обчислювана сторона (зріз, залишки, підзапит) за достатнього розміру матеріалізується в тимчасову таблицю СУБД (PostgreSQL), інакше зшивається рушієм; суто внутрішні ланцюжки з трьох і більше джерел рушій перезбирає від меншого до більшого за реальними розмірами.\n\n**Поточні обмеження:** в умові WHERE за JOIN булева комбінація (OR/NOT/IN/IS NULL) працює, коли з'єднання виконується одним SQL; розіменування через крапку у WHERE/GROUP BY за JOIN поки не підтримане (у проєкції — підтримане на одному джерелі).",
+   "syntax_block": "SELECT т.Найменування, з.КількістьBalance\nFROM Catalog.Товари AS т\nLEFT JOIN AccumulationRegister.Залишки.Balance(&П) AS з ON т.Ссилка = з.Номенклатура",
+   "parameters": "",
+   "return_descr": "",
+   "example": "",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.From",
+    "q.Where",
+    "q.Union",
+    "q.Value"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.Where",
+   "name_local": "WHERE (відбір)",
+   "name_en": "WHERE",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "WHERE <умова> { AND | OR <умова> }",
+   "description": "Відбір рядків до групування.\n\n**Порівняння:** `= <> < <= > >=`. Ліва частина — поле, розіменування (`Виробник.Регіон = &Р`) або **вираз** (`Ціна * Кількість > 1000`, `CASE ... END = ...`; вирази — одне фізичне джерело). Права частина — літерал або параметр.\n\n**Оператори:**\n- `[NOT] LIKE \"шаблон\"` — `%` будь-який підрядок, `_` один символ;\n- `[NOT] IN (значення, ...)` або `[NOT] IN (SELECT однаКолонка FROM ...)`;\n- `[NOT] BETWEEN а AND б` — включно;\n- `IS [NOT] NULL` — для посилальних полів зважте: порожнє посилання — це «порожньо», а не NULL (див. «Розіменування посилань»);\n- булева логіка `AND / OR / NOT` з дужками; булеве поле саме по собі — істинність (`WHERE Проведений`).\n\nОптимізатор нормалізує НЕ (`NOT (a = 1)` -> `a <> 1`, де Морган) — пишіть як зручніше.\n\nЛітерали: числа `100`, рядки в лапках, `TRUE / FALSE`, `NULL`; дати передавайте параметрами.",
+   "syntax_block": "WHERE (Ціна > &Мін OR Виробник.Регіон = &Рег)\n  AND Найменування LIKE \"А%\"\n  AND Проведений = TRUE",
+   "parameters": "",
+   "return_descr": "",
+   "example": "// IN з підзапитом\nSELECT * FROM Document.Видаткова\nWHERE Контрагент IN (SELECT Ссилка FROM Catalog.Контрагенти WHERE Регіон = &Р)",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.Params",
+    "q.DotWalk",
+    "q.GroupBy"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.GroupBy",
+   "name_local": "GROUP BY / HAVING (групування)",
+   "name_en": "GROUP BY / HAVING",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "GROUP BY <поле | розіменування> {, ...} [HAVING <умова> {AND ...}]",
+   "description": "Плоске групування: один рядок результату на групу.\n\n- Ключі групування — поля або розіменування (`GROUP BY Виробник.Регіон`); кожен неагрегатний елемент проєкції мусить бути ключем.\n- Агрегати в проєкції: `SUM / MIN / MAX / AVG (поле | розіменування | вираз)`, `COUNT(*)`. Вхід-вираз (`SUM(Ціна * Кількість)`) — одне фізичне джерело.\n- ОБЧИСЛЮВАНИЙ елемент проєкції поруч з агрегатами — сам собою ключ групування: `ISNULL(КількістьЗалишок, 0) AS Залишок`, `CASE WHEN … END AS Вид`. Ключем є все, що збудоване з ключів; чого не можна — будувати від РЕЗУЛЬТАТУ агрегата (`ISNULL(SUM(Кількість), 0)`): він існує лише після згортки. Згортайте вхід-вираз: `SUM(Ціна * Кількість)`.\n- `HAVING` — відбір груп після агрегації; умови поєднуються через `AND` (пишіть скільки потрібно), оператори `= <> < <= > >=`.\n- WHERE чи HAVING — не ваш вибір. Умова над агрегатом лишається відбором груп, хоч би де ви її написали, а умова над ключем групування — відбором рядків, хоч би де вона стояла: рушій ставить кожну туди, де вона виконується. Відповідь та сама — ключ усередині своєї групи не змінюється.\n- `TOP n` обмежує кількість груп.\n\nГрупування за посилальним полем іде за тотожністю посилання (дві різні позиції з однаковим найменуванням не зіллються).\n\nНа одному фізичному джерелі групування виконується на сервері СУБД; за обчислюваним джерелом (зріз, підзапит) — рушієм. HAVING за обчислюваним джерелом поки не підтриманий (умова зовні агрегатного підзапиту — підтримана).",
+   "syntax_block": "SELECT Виробник.Регіон AS Регіон, SUM(Вага) AS Вага, COUNT(*) AS Позицій\nFROM Catalog.Товари\nGROUP BY Виробник.Регіон\nHAVING SUM(Вага) > 100",
+   "parameters": "",
+   "return_descr": "",
+   "example": "",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.Select",
+    "q.Totals",
+    "q.From"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.OrderBy",
+   "name_local": "ORDER BY (сортування)",
+   "name_en": "ORDER BY",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "ORDER BY <поле | розіменування | вираз> [ASC | DESC] {, ...}",
+   "description": "Сортування результату. Типово за зростанням (`ASC`); `DESC` — за спаданням. Допускає розіменування (`ORDER BY Виробник.Найменування`).\n\nОкрім поля можна сортувати за **виразом** — арифметика або `CASE WHEN ... THEN ... END` («сортування за умовою»), і за константою (`&параметр` / `value(...)`). Сортування за виразом — одне фізичне джерело. Сортування за звичайним полем / розіменуванням уміє посторінково віддавати великий результат; сортування за виразом читає впорядкований результат цілком.\n\nВ об'єднанні ORDER BY пишеться один раз наприкінці й сортує весь результат (за іменами колонок першої гілки).",
+   "syntax_block": "ORDER BY CASE WHEN Пріоритет = &Високий THEN 0 ELSE 1 END,\n         Виробник.Найменування, Ціна DESC",
+   "parameters": "",
+   "return_descr": "",
+   "example": "",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.Select",
+    "q.Union",
+    "q.Value"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.Totals",
+   "name_local": "TOTALS ... BY (ієрархічні підсумки)",
+   "name_en": "TOTALS ... BY (hierarchical totals)",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "TOTALS [<агрегат> {, ...}] BY <вимір> [HIERARCHY | HIERARCHYONLY | ELEMENTS] {, ...}",
+   "description": "Ієрархічні підсумки: результат — дерево з проміжними підсумками на кожному рівні та загальним підсумком у корені (на відміну від плоского GROUP BY).\n\n- Агрегати між `TOTALS` і `BY` (`SUM(Кількість)`, `COUNT(*)`, обчислювана міра за алiасом із SELECT — `SELECT 1 AS шт ... TOTALS SUM(шт)`) згортаються «на місці»: на груповому вузлі читаються з тієї ж колонки, що й значення рядка на листі.\n- **Агрегати необов'язкові:** `TOTALS BY Склад` — чисте групування в дерево, без згорнутої міри (так будується список із групуванням). Якщо одразу за `TOTALS` іде `BY`, агрегатів немає.\n- Виміри після `BY` застосовуються по порядку: кожен — рівень дерева. Допустиме скалярне розіменування (`BY Батько.Код`) — платформа сама побудує з'єднання за посилальним шляхом.\n- `HIERARCHY` — розгорнути вимір-посилання за ієрархією його довідника (групи як вузли); `HIERARCHYONLY` — лише вузли ієрархії: елемент-лист не виводиться окремим рядком, але й далі враховується в підсумках; `ELEMENTS` (типово) — за значеннями.\n\n**Джерела.** Працює і на одному джерелі, і з `JOIN` (спільний розбір джерел зі звичайним читанням), і з `UNION`: гілки об'єднання складаються вертикально, а виміри та агрегати розв'язуються за колонками **першої** гілки — як і завершальний ORDER BY звичайного об'єднання.\n\nЧитання: `res.Select()` повертає дерево — `Level()`, `HasChildren()`, спуск `Select()`, загальний підсумок `Total(ім'я)` (див. QuerySelect). Деталь і підсумки рахуються з одного знімка — розійтися не можуть.\n\n**Обмеження:** вимір-розіменування — скалярний лист; TOP з TOTALS не поєднується; усередині підзапиту чи гілки UNION `TOTALS` (як і `JOIN`) поки не допускається — пишіть їх на верхньому рівні.",
+   "syntax_block": "SELECT Склад, Товар, Кількість\nFROM AccumulationRegister.Залишки.Balance(&П)\nTOTALS SUM(Кількість) BY Склад, Товар HIERARCHY\n\n// без агрегату — просто дерево за виміром\nSELECT Найменування, Ціна FROM Catalog.Товари\nTOTALS BY Виробник",
+   "parameters": "",
+   "return_descr": "",
+   "example": "// обхід: вузли складів -> вузли товарів (за ієрархією) -> рядки\nvar sel = q.Execute().Select();\nwhile (sel.Next()) {\n    Message(\"Склад \" + sel.Склад + \": \" + sel.Кількість);\n    var заТоварами = sel.Select();\n    while (заТоварами.Next())\n        Message(\"  \" + заТоварами.Товар + \": \" + заТоварами.Кількість);\n}",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "cls.QuerySelect",
+    "q.GroupBy"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.Union",
+   "name_local": "UNION / UNION ALL (об'єднання)",
+   "name_en": "UNION / UNION ALL",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "SELECT ... UNION [ALL] SELECT ... [ORDER BY ...] [TOTALS ...]",
+   "description": "Вертикальне об'єднання результатів. Колонки гілок зіставляються **за іменами** вихідних колонок; відсутня в гілці колонка дає порожнє значення.\n\n- `UNION` — прибирає повтори з накопиченого результату на цьому операторі (еквівалент «вибрати різні» поверх склейки).\n- `UNION ALL` — зберігає повтори.\n- Семантика ліво-асоціативна: `A UNION B UNION ALL C` — дедуплікація після B, повтори з C зберігаються.\n- Завершальний ORDER BY стосується всього об'єднання. TOP першої гілки обмежує весь результат; TOP наступних — свою гілку.\n\nОб'єднання фізичних таблиць виконується одним SQL на сервері (включно з нативними UNION/UNION ALL); обчислювані гілки за достатнього розміру йдуть у тимчасові таблиці (PostgreSQL) або зшиваються рушієм.\n\n**Обмеження:** гілки поки без JOIN і TOTALS.",
+   "syntax_block": "SELECT Code, Description FROM Catalog.Товари\nUNION ALL\nSELECT Code, Description FROM Catalog.Послуги\nORDER BY Description",
+   "parameters": "",
+   "return_descr": "",
+   "example": "",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.Select",
+    "q.OrderBy"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.Params",
+   "name_local": "&Параметри запиту",
+   "name_en": "&Query parameters",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "&Ім'я  +  Query.SetParameter(\"Ім'я\", значення)",
+   "description": "Параметри передають значення в запит безпечно: текст із даними не склеюється ніколи, значення йдуть у СУБД зв'язаними параметрами — ін'єкція виключена конструктивно.\n\n- У тексті — `&Ім'я` всюди, де допустиме значення: у порівняннях, IN, BETWEEN, аргументах віртуальних таблиць (`Balance(&Період, &Відбір)`).\n- Встановлення — `q.SetParameter(\"Ім'я\", значення)` до `Execute()`; імена регістронезалежні; невстановлений параметр — помилка виконання.\n- Типи значень: число, рядок, дата, булеве, посилання (посилання отримуйте об'єктною моделлю чи підзапитом).\n\nДати передавайте лише параметрами — літералів дат у мові немає.",
+   "syntax_block": "var q = New Query(\"SELECT * FROM Document.Видаткова WHERE Date BETWEEN &З AND &По\");\nq.SetParameter(\"З\",  ПочатокМісяця);\nq.SetParameter(\"По\", КінецьМісяця);",
+   "parameters": "",
+   "return_descr": "",
+   "example": "",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "cls.Query",
+    "q.Where",
+    "q.From",
+    "q.Value"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.Value",
+   "name_local": "value() — літерал посилання",
+   "name_en": "value() — literal reference constant",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "value(<Вид>.<Ім'я>.EmptyRef) | value(<Вид>.<Ім'я>.<Визначений>)",
+   "description": "Літерал посилання прямо в тексті запиту — порожнє посилання метаоб'єкта або один з його визначених елементів — щоб не передавати його параметром.\n\n- `value(Catalog.Валюти.EmptyRef)` — ПОРОЖНЄ посилання цього довідника (типізоване «порожньо», не NULL).\n- `value(Catalog.Рахунки.Каса)` — посилання на ВИЗНАЧЕНИЙ елемент за іменем (визначені є в довідників і планів рахунків / видів характеристик).\n- `EmptyRef` регістронезалежне; ім'я визначеного — як задано. Невідомий метаоб'єкт або член — помилка запиту (з позицією).\n\n**Де працює:** усюди, де очікується значення — права частина порівняння / IN / BETWEEN, умова JOIN ON, проєкція (`SELECT value(...) AS x`), усередині CASE. Поводиться точно як зв'язаний параметр, лише значення береться з метаданих, а не із `SetParameter`.",
+   "syntax_block": "WHERE Рахунок     = value(ChartOfAccounts.Основний.Каса)\n  AND Контрагент <> value(Catalog.Контрагенти.EmptyRef)",
+   "parameters": "",
+   "return_descr": "",
+   "example": "// позначити кожну гілку об'єднання визначеним елементом\nSELECT Ссилка, value(Catalog.ВидиДок.Прихід) AS Вид FROM Document.Прибуткова\nUNION ALL\nSELECT Ссилка, value(Catalog.ВидиДок.Видаток) AS Вид FROM Document.Видаткова",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.Params",
+    "q.Where",
+    "q.DotWalk"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.DotWalk",
+   "name_local": "Розіменування посилань (крапка)",
+   "name_en": "Reference dereference (dot-walk)",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "<ПосилальнеПоле>.<Реквізит>[.<Реквізит>...]",
+   "description": "Крапка після посилального поля читає реквізит пов'язаного об'єкта; платформа автоматично будує потрібні з'єднання (LEFT JOIN за ключем посилання). Ланцюжок може бути будь-якої довжини: `Товар.Виробник.Регіон.Найменування`.\n\n**Де працює:** проєкція, WHERE (включно з булевими комбінаціями, IN, IS NULL), ORDER BY, GROUP BY, входи агрегатів, виміри TOTALS BY (скалярний лист). На одному джерелі; шляхи зі спільним префіксом використовують одне з'єднання.\n\n**Порожні та биті посилання** не «провалюють» рядок: реквізит читається як порожнє значення свого типу (не NULL) — поведінка збігається з об'єктною моделлю.\n\n**Складені посилання** (поле, що посилається на кілька типів, — наприклад, Реєстратор регістру): платформа з'єднує лише ті типи, в яких є запитаний реквізит, і бере значення гілки, що збіглася. Працює й для посилального реквізиту за складеним сегментом (`Реєстратор.Контрагент`). Відбір і сортування за таким посилальним реквізитом за складеним сегментом поки не підтримані (за скалярним — підтримані).",
+   "syntax_block": "SELECT Найменування, Виробник.Регіон.Найменування AS Регіон\nFROM Catalog.Товари\nWHERE Виробник.Регіон = &Рег\nORDER BY Виробник.Найменування",
+   "parameters": "",
+   "return_descr": "",
+   "example": "// складене посилання: реквізит є лише в частини типів реєстратора\nSELECT Реєстратор.Контрагент AS Хто, SUM(Кількість) AS К\nFROM AccumulationRegister.Залишки\nGROUP BY Реєстратор.Контрагент",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.Where",
+    "q.Select",
+    "q.GroupBy"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.Package",
+   "name_local": "Пакет запитів (INTO / ONTO / DROP, тимчасові таблиці)",
+   "name_en": "Query package (INTO / ONTO / DROP, temporary tables)",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "<запит> [INTO <ТимчТаблиця> | ONTO <Ім'я>] [INDEX BY <поле> {, ...}] {; <запит>} [; DROP <ТимчТаблиця>]",
+   "description": "Кілька запитів в ОДНОМУ тексті, через `;`. Кожен наступний бачить тимчасові таблиці, створені попередніми, — заради цього пакет і пишуть.\n\n- `INTO <ТимчТаблиця>` — покласти результат до тимчасової таблиці замість того, щоб повернути його. Далі її читають за голим іменем: `FROM Folded AS f`.\n- `ONTO <Ім'я>` — ДАТИ ІМ'Я результату цього запиту, щоб просити його за іменем, а не за позицією.\n- **Обидва пишуться одразу після списку полів, ДО `FROM`** — `SELECT Товар, SUM(Кількість) AS Кількість INTO Згорнуті FROM …`. Одночасно їх писати не можна: INTO не повертає результату, називати було б нічого.\n- `INDEX BY <поле>{, …}` — проіндексувати створювану тимчасову таблицю (лише разом з INTO); пишеться після тіла запиту.\n- `DROP <ТимчТаблиця>` — звільнити її достроково. Це окремий запит пакета, він нічого не повертає.\n\n**Як забрати результати** (методи `Query`):\n- `ExecuteBatch()` — **Масив** результатів за позицією написання. Запит з INTO відповідає одним рядком із кількістю записів; DROP — Невизначено.\n- `Execute()` — ПЕРШИЙ результат (для звичайного запиту з одного оператора він єдиний).\n- `Execute(\"<Ім'я>\")` — результат, названий через ONTO.\n\n**Щоб таблиці пережили виконання:** без `TempTablesManager` вони вмирають разом із викликом. Прив'яжіть той самий менеджер до обох запитів: `manager = New TempTablesManager(); first.TempTablesManager = manager; … second.TempTablesManager = manager; … manager.Close();`.\n\nПакет виконується одним заходом і в одному стані читання — усі запити бачать ті самі дані.",
+   "syntax_block": "SELECT M.Товар AS Товар, SUM(M.Кількість) AS Кількість\nINTO Згорнуті\nFROM AccumulationRegister.ТовариНаСкладах AS M\nGROUP BY M.Товар\nINDEX BY Товар;\n\nSELECT G.Description AS Товар, f.Кількість AS Кількість\nFROM Catalog.Товари AS G\nINNER JOIN Згорнуті AS f ON f.Товар = G.Ref;\n\nDROP Згорнуті",
+   "parameters": "",
+   "return_descr": "",
+   "example": "// увесь пакет, результати за позицією\nvar q = New Query(\n    \"SELECT M.Товар AS Товар, SUM(M.Кількість) AS Кількість INTO Згорнуті \" +\n    \"FROM AccumulationRegister.ТовариНаСкладах AS M GROUP BY M.Товар; \" +\n    \"SELECT f.Товар AS Товар, f.Кількість AS Кількість FROM Згорнуті AS f\");\nvar results = q.ExecuteBatch();\nvar sel = results.Get(1).Select();          // [0] — рядок із кількістю записів запиту з INTO\nwhile (sel.Next())\n    Message(String(sel.Товар) + \" = \" + String(sel.Кількість));",
+   "availability": "Designer, codeRunner, daemon, wenterprise-server",
+   "see_also": [
+    "q.From",
+    "q.GroupBy",
+    "q.Select"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.DateParts",
+   "name_local": "Date parts — YEAR, MONTH, DAY and the rest",
+   "name_en": "Date parts — YEAR, MONTH, DAY and the rest",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "YEAR(<date>) | QUARTER(<date>) | MONTH(<date>) | DAYOFYEAR(<date>) | DAY(<date>) | WEEK(<date>) | WEEKDAY(<date>) | HOUR(<date>) | MINUTE(<date>) | SECOND(<date>)",
+   "description": "One piece of a date, as a NUMBER. Ten calls of one shape: the argument is any date expression — a field, a &parameter, another calendar call — and the answer is an ordinary number to group by, compare and total.\n\n- `WEEKDAY` is **Monday = 1 … Sunday = 7** (ISO), the same on every DBMS: the platform pins the numbering rather than passing the engine's own through, so a report reads alike wherever it runs.\n- `WEEK` is the ISO week of the year; `DAYOFYEAR` counts from 1; `SECOND` answers whole seconds.\n\n**These are not keywords.** `YEAR`, `MONTH`, `DAY` and the rest stay available as ATTRIBUTE names — a call is recognised by the bracket after it, so a catalog with a `Year` attribute keeps reading it.",
+   "syntax_block": "SELECT\n\tYEAR(Doc.Date) AS Y,\n\tMONTH(Doc.Date) AS M,\n\tWEEKDAY(Doc.Date) AS Weekday\nFROM Document.Expense AS Doc\nWHERE YEAR(Doc.Date) = 2026",
+   "parameters": "",
+   "return_descr": "Number.",
+   "example": "// how much left the warehouse per weekday\nSELECT WEEKDAY(M.Period) AS Weekday, SUM(M.Quantity) AS Qty\nFROM AccumulationRegister.Stock AS M\nGROUP BY WEEKDAY(M.Period)",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.PeriodBounds",
+    "q.DateAdd",
+    "q.DateDiff"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.PeriodBounds",
+   "name_local": "BEGINOFPERIOD / ENDOFPERIOD",
+   "name_en": "BEGINOFPERIOD / ENDOFPERIOD",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "BEGINOFPERIOD(<date>, <period>) | ENDOFPERIOD(<date>, <period>)",
+   "description": "The first and the last moment of the period a date falls in. The period is one of: Second, Minute, Hour, Day, Week, Month, Quarter, HalfYear, Year — the same words a register's virtual table takes for its periodicity, because it is the same vocabulary.\n\n- `ENDOFPERIOD` answers the LAST instant the period still covers (one second before the next begins), so `BETWEEN BEGINOFPERIOD(&D, Month) AND ENDOFPERIOD(&D, Month)` covers the whole month with nothing falling between two comparisons.\n- The date may be a &parameter, a field, or another call — `BEGINOFPERIOD(&AsOf, Quarter)` is the ordinary way to say \"since the quarter began\".\n- `TenDays` is refused here: the last ten-day bucket of a month runs 8 to 11 days, so it is a bucket rather than a length and nothing can be moved by it.",
+   "syntax_block": "SELECT\n\tBEGINOFPERIOD(Doc.Date, Month) AS MonthStart,\n\tENDOFPERIOD(Doc.Date, Month) AS MonthEnd\nFROM Document.Expense AS Doc",
+   "parameters": "",
+   "return_descr": "Date.",
+   "example": "// everything written this quarter\nSELECT Doc.Ref AS Doc\nFROM Document.Expense AS Doc\nWHERE Doc.Date BETWEEN BEGINOFPERIOD(&AsOf, Quarter) AND ENDOFPERIOD(&AsOf, Quarter)",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.DateParts",
+    "q.DateAdd",
+    "q.Totals"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.DateAdd",
+   "name_local": "DATEADD — move a date by whole periods",
+   "name_en": "DATEADD — move a date by whole periods",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "DATEADD(<date>, <period>, <count>)",
+   "description": "Move a date by whole periods — Second, Minute, Hour, Day, Week, Month, Quarter, HalfYear, Year. The count may be negative, which is how \"a month ago\" is written.\n\nIt is CALENDAR arithmetic, not a number of days: adding a month to the 31st lands on the last day of a shorter month, which is what a person means by \"a month later\" and what adding 30 days gets wrong. The same answer is computed in memory when a reading cannot be pushed to the server, so a query does not change its mind about dates depending on how it ran.",
+   "syntax_block": "SELECT\n\tDATEADD(Doc.Date, Day, 30) AS DueDate,\n\tDATEADD(Doc.Date, Month, -1) AS MonthBefore\nFROM Document.Expense AS Doc",
+   "parameters": "",
+   "return_descr": "Date.",
+   "example": "// invoices past their thirty days\nSELECT Doc.Ref AS Doc\nFROM Document.Expense AS Doc\nWHERE DATEADD(Doc.Date, Day, 30) < &Today",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.DateDiff",
+    "q.PeriodBounds"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.DateDiff",
+   "name_local": "DATEDIFF — whole periods between two dates",
+   "name_en": "DATEDIFF — whole periods between two dates",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "DATEDIFF(<date1>, <date2>, <period>)",
+   "description": "How many WHOLE periods lie between two dates — Second, Minute, Hour, Day, Week, Month, Quarter, HalfYear, Year. Negative when the second is earlier.\n\nWhole periods means BOUNDARIES CROSSED, not a span divided by a length: from the 31st of January to the 1st of February is one month, because they are different months, and two moments of one day are zero days apart.\n\nThis is the call a \"how long did it hold\" reading is built out of: pair each row with the next one and take the difference between their dates.",
+   "syntax_block": "SELECT DATEDIFF(Doc.Date, &Today, Day) AS DaysOld\nFROM Document.Expense AS Doc",
+   "parameters": "",
+   "return_descr": "Number — whole periods.",
+   "example": "// how long each price held\nSELECT P.Period AS Since,\n\tDATEDIFF(P.Period, ISNULL(MIN(N.Period), &Till), Day) AS Days\nFROM InformationRegister.Prices AS P\n\tLEFT JOIN InformationRegister.Prices AS N\n\t\tON N.Item = P.Item AND N.Period > P.Period\nGROUP BY P.Item, P.Period",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.DateAdd",
+    "q.DateParts"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.DateTime",
+   "name_local": "DATETIME — a date written as its parts",
+   "name_en": "DATETIME — a date written as its parts",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "DATETIME(<year>, <month>, <day>[, <hour>, <minute>, <second>])",
+   "description": "A date CONSTANT, written as numbers instead of a literal. Every argument has to be a constant — a number or a &parameter — because the value is settled once, before the query runs, and travels as the date it denotes.\n\nGive it a field and it is refused, with that as the reason: a date built per row out of columns is a different thing and this is not it.",
+   "syntax_block": "SELECT Doc.Ref AS Doc\nFROM Document.Expense AS Doc\nWHERE Doc.Date >= DATETIME(2026, 1, 1)",
+   "parameters": "",
+   "return_descr": "Date.",
+   "example": "SELECT Doc.Ref AS Doc\nFROM Document.Expense AS Doc\nWHERE Doc.Date BETWEEN DATETIME(2026, 1, 1) AND DATETIME(2026, 3, 31, 23, 59, 59)",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.PeriodBounds",
+    "q.Params"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.Substring",
+   "name_local": "SUBSTRING — part of a string",
+   "name_en": "SUBSTRING — part of a string",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "SUBSTRING(<string>, <from>, <length>)",
+   "description": "Part of a string, counted FROM ONE: `SUBSTRING(Code, 1, 3)` is the first three characters. A `from` past the end, or a length of zero, answers with an empty string rather than failing.\n\nThe same answer is computed in memory when the reading cannot be pushed to the server, so the two roads agree.",
+   "syntax_block": "SELECT SUBSTRING(G.Code, 1, 3) AS Prefix, G.Description AS Item\nFROM Catalog.Goods AS G",
+   "parameters": "",
+   "return_descr": "String.",
+   "example": "// how many items per code prefix\nSELECT SUBSTRING(G.Code, 1, 3) AS Prefix, COUNT(*) AS Items\nFROM Catalog.Goods AS G\nGROUP BY SUBSTRING(G.Code, 1, 3)",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.Select"
+   ],
+   "reviewed": true
+  },
+  {
+   "id": "q.TypeTest",
+   "name_local": "REFS / VALUETYPE / TYPE — which type is in this row",
+   "name_en": "REFS / VALUETYPE / TYPE — which type is in this row",
+   "kind": "keyword",
+   "category_keys": [
+    "query"
+   ],
+   "signature": "<expression> [NOT] REFS <Kind>.<Name>   |   VALUETYPE(<expression>) = TYPE(<Kind>.<Name>)",
+   "description": "A composite field — a register's recorder, a document's basis, a characteristic's value — may hold a reference to any of several tables. These ask WHICH one is in this row.\n\n- `Basis REFS Document.Expense` — a predicate, true when the field points at that table.\n- `VALUETYPE(Basis) = TYPE(Document.Expense)` is the same question in the other spelling, and the engine reads it as the same thing.\n- `NOT REFS` (or `<>` on the second form) negates it.\n\n**It is a TEST, not a narrowing.** It answers yes or no and reads nothing out of the target. To WALK into the type — `CAST(Recorder AS Document.Expense).Number` — use CAST, which says which type is meant and continues the dot from there. The two are written together often: test in the WHERE, walk in the selection.\n\nA field that cannot hold a reference at all (a number, a string) answers FALSE rather than failing — \"it does not point there\" is a complete answer.",
+   "syntax_block": "SELECT M.Recorder AS Doc, M.Quantity AS Qty\nFROM AccumulationRegister.Stock AS M\nWHERE M.Recorder REFS Document.Expense",
+   "parameters": "",
+   "return_descr": "Boolean (a predicate).",
+   "example": "// the number of the document behind each movement of one kind\nSELECT\n\tCAST(M.Recorder AS Document.Expense).Number AS ExpenseNo,\n\tM.Quantity AS Qty\nFROM AccumulationRegister.Stock AS M\nWHERE VALUETYPE(M.Recorder) = TYPE(Document.Expense)",
+   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "see_also": [
+    "q.Value",
+    "q.DotWalk"
+   ],
+   "reviewed": true
+  }
+ ]
 }

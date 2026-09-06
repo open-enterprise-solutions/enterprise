@@ -142,6 +142,27 @@ enum class ibTotalsPeriod
 	Year
 };
 
+// ⭐ ONE PIECE OF A DATE, AS A NUMBER — what `YEAR(x)` / `WEEKDAY(x)` answer with. A different
+// question from ibTotalsPeriod, which names a STRETCH of time and answers with a date: truncating to
+// the month gives the 1st of it, taking the month gives 9. They share most of their words and none
+// of their meaning, so they are separate enums rather than one with two readings.
+//
+// WeekDay is Monday = 1 … Sunday = 7 (ISO), pinned here rather than left to each engine's own
+// numbering — a rule that differs per dialect is a report that reads differently per deployment.
+enum class ibDatePart
+{
+	Year,
+	Quarter,
+	Month,
+	DayOfYear,
+	Day,
+	Week,
+	WeekDay,
+	Hour,
+	Minute,
+	Second
+};
+
 // The RAM twin of the dialect's truncation expression: same answer, computed in C++ for the paths
 // that cannot push down (a multi-source read materialises its leaves and folds them here).
 //
@@ -157,6 +178,24 @@ BACKEND_API wxDateTime ibTruncateToPeriod(const wxDateTime& moment, ibTotalsPeri
 // takes the head from the movements instead. Calendar-walking for the same reason as the truncation:
 // months differ in length, and the ten-day bucket ending a month is not ten days long.
 BACKEND_API wxDateTime ibNextPeriodStart(const wxDateTime& moment, ibTotalsPeriod unit);
+
+// The LAST instant the period holding `moment` still covers — `ENDOFPERIOD(x, Month)`. Written as
+// the start of the next period less one second, and said here ONCE so the RAM road and the SQL one
+// cannot disagree about whether the boundary belongs to the period (it does).
+BACKEND_API wxDateTime ibEndOfPeriod(const wxDateTime& moment, ibTotalsPeriod unit);
+
+// Move a date by whole units, calendar-aware — `DATEADD(x, Month, 3)`. Adding a month to the 31st of
+// a 31-day month lands on the last day of a shorter one, which is what a person means by "a month
+// later" and what fixed-length arithmetic gets wrong.
+BACKEND_API wxDateTime ibDateAddUnits(const wxDateTime& moment, ibTotalsPeriod unit, long count);
+
+// How many WHOLE units lie between two moments — `DATEDIFF(a, b, Day)`. Negative when `to` is
+// earlier, zero when they fall in the same unit.
+BACKEND_API long ibDateDiffUnits(const wxDateTime& from, const wxDateTime& to, ibTotalsPeriod unit);
+
+// One piece of a date as a number — `YEAR(x)`, `WEEKDAY(x)`. The RAM twin of the dialect's
+// m_datePart expression, and it must agree with it to the digit.
+BACKEND_API long ibReadDatePart(const wxDateTime& moment, ibDatePart part);
 
 struct ibDialectDictionary
 {
@@ -320,6 +359,29 @@ struct ibDialectDictionary
 	// One definition per engine, shared by every consumer: the totals trigger keys rows with it and
 	// the read view projects columns with it, so a stored key and a read column CANNOT drift apart.
 	std::map<ibTotalsPeriod, wxString> m_periodTrunc;
+
+	// ⭐ THE REST OF THE CALENDAR, ON THE SAME TERMS. Each map is unit -> a SQL template with named
+	// placeholders, so the IR keeps saying WHAT and the dictionary keeps saying HOW. A unit missing
+	// from a map is refused loudly by the renderer, exactly as a missing truncation is: answering
+	// with a neighbouring unit would be a wrong number that still runs.
+	//
+	//   m_periodEnd  {expr}          — the LAST instant of the period holding it
+	//   m_dateAdd    {expr}, {count} — move by whole units, calendar-aware
+	//   m_dateDiff   {from}, {to}    — how many whole units between two moments
+	//   m_datePart   {expr}          — one piece of a date as a number
+	//
+	// They are four maps rather than one keyed by (operation, unit) because they are asked
+	// separately and a missing entry has to be reportable as "this engine cannot END a quarter"
+	// rather than as a lookup miss in a table nobody can see the shape of.
+	std::map<ibTotalsPeriod, wxString> m_periodEnd;
+	std::map<ibTotalsPeriod, wxString> m_dateAdd;
+	std::map<ibTotalsPeriod, wxString> m_dateDiff;
+	std::map<ibDatePart,     wxString> m_datePart;
+
+	// SUBSTRING(<string>, <from>, <length>) — one template, {expr} / {from} / {len}. Not a map: the
+	// call has no unit to vary by, and the engines differ only in the word (SUBSTRING … FROM … FOR …
+	// against SUBSTR(…)). Empty = this engine is not asked to do it.
+	wxString m_substring;
 
 	// --- behaviour slots (the small tail data cannot express) -------------
 	// Reserved for emulation rewrites (FULL OUTER -> LEFT UNION RIGHT, window ->

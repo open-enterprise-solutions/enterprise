@@ -3570,6 +3570,20 @@ void ibValueRecordManagerObject::PrepareEmptyObject(const ibValueRecordManagerOb
 //						  ibValueRecordSetObject							//
 //////////////////////////////////////////////////////////////////////
 
+// The set's one property — see the declaration for why it is one at all. Index 0 because Filter is
+// the only AppendProp on every register's record-set member table; the verbs live in their own
+// numbering beside it.
+bool ibValueRecordSetObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	// The number handed in is the property's POSITION; what identifies it is the TAG the member table
+	// carries beside it (GetPropData) — the arrangement every other register property here uses. Read
+	// as a position, the first property of any register would have answered as the filter.
+	if (m_members.GetPropData(lPropNum) != enPropFilter)
+		return false;
+	pvarPropVal = m_recordSetKeyValue;
+	return true;
+}
+
 void ibValueRecordSetObject::CreateEmptyKey()
 {
 	m_keyValues.clear();
@@ -3643,7 +3657,17 @@ ibValueRecordSetObject* ibValueRecordSetObject::CopyRegisterValue()
 ibValueRecordSetObject::ibValueRecordSetObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey) : ibValueModelStorage(),
 ibRuntimeModuleDataObject(m_members, this),
 m_objModified(false), m_selected(false),
-m_keyValues(uniqueKey.IsOk() ? uniqueKey : metaObject->CreateUniqueKeyPair()), m_metaObject(metaObject),
+// ⭐⭐ A SET MADE WITHOUT A KEY HAS NO FILTER AT ALL — not a filter of empty values.
+//
+// The filter's `Use` IS the key's PRESENCE here: setting Use = True inserts the entry, False erases
+// it, and reading Use asks whether it is in the map. Seeding every dimension with an empty value
+// therefore turned every filter ON, with nothing in it — so a set built and written from a script
+// stored blank keys over whatever its lines held (an information register took year 0001 and an
+// all-zero reference, and the second line collided with the first on the unique index).
+//
+// Nothing is lost by starting empty: a caller who wants to address the set says so — Filter.X.Set(v)
+// — and a set read by key gets its pair handed in.
+m_keyValues(uniqueKey.IsOk() ? ibRowMetaValues(uniqueKey) : ibRowMetaValues()), m_metaObject(metaObject),
 m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this))
 {
 }
@@ -4293,7 +4317,14 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueReco
 	switch (lMethodNum)
 	{
 	case enSet:
-		m_recordSet->SetKeyValue(m_metaId, paParams[0]);
+		// ⚠ THE VALUE, NOT THE POINTER TO IT. `paParams` is an array of ibValue*, and SetKeyValue is a
+		// template — handed the pointer it deduced `ibValue*` and stored a value wrapping the pointer
+		// instead of the reference the caller passed. `Filter.X.Set(ref)` then hung the runtime the
+		// first time anything read that entry back (2026-09-05, the first call ever made from outside
+		// the set's own module — the property was unreachable until then, which is why nothing had
+		// tripped over it).
+		if (lSizeArray > 0 && paParams[0] != nullptr)
+			m_recordSet->SetKeyValue(m_metaId, *paParams[0]);
 		return true;
 	}
 	return false;

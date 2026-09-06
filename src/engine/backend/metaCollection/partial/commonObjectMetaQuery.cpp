@@ -46,18 +46,34 @@ bool ibValueMetaObjectGenericData::ResolveQueryConstant(const wxString& /*member
 
 bool ibValueMetaObjectRecordDataRef::ResolveQueryConstant(const wxString& member, ibValue& out) const
 {
-	if (member.CmpNoCase(wxT("EmptyRef")) != 0)
+	if (member.CmpNoCase(ibRefMember::EmptyRef) != 0)
 		return false;
 	out = ibValue(ibValueReferenceDataObject::Create(this));
 	return true;
 }
 
-bool ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveQueryConstant(const wxString& member, ibValue& out) const
+// ADDITIVE, like every other override in this family: the parent answers what it declares
+// (EmptyRef, spelled ONCE where the reference itself lives) and the level below adds what it has.
+// Re-spelling the base's own constant here would be a second place to change it.
+bool ibValueMetaObjectRecordDataEnumRef::ResolveQueryConstant(const wxString& member, ibValue& out) const
 {
-	if (member.CmpNoCase(wxT("EmptyRef")) == 0) {
-		out = ibValue(ibValueReferenceDataObject::Create(this));
+	if (ibValueMetaObjectRecordDataRef::ResolveQueryConstant(member, out))
+		return true;
+	// The members ARE this object's constants — the same reference the manager hands a script
+	// (ibValueManagerDataObjectEnumeration::GetPropVal), resolved by the name the author wrote.
+	for (const ibValueMetaObjectEnum* object : GetEnumObjectArray()) {
+		if (object == nullptr || object->GetName().CmpNoCase(member) != 0)
+			continue;
+		out = ibValue(ibValueReferenceDataObject::Create(this, object->GetGuid()));
 		return true;
 	}
+	return false;
+}
+
+bool ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveQueryConstant(const wxString& member, ibValue& out) const
+{
+	if (ibValueMetaObjectRecordDataRef::ResolveQueryConstant(member, out))
+		return true;
 	if (const wxObjectDataPtr<ibPredefinedValueObject> pv = FindPredefinedValue(member)) {
 		out = ibValue(ibValueReferenceDataObject::Create(this, pv->GetPredefinedGuid()));
 		return true;

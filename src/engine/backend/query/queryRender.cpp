@@ -169,6 +169,27 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 		return Kw(ibQueryKeyword::Cast) + wxT("(") + (expr.m_arg ? RenderExpr(*expr.m_arg) : wxString())
 			+ wxT(" ") + Kw(ibQueryKeyword::As) + wxT(" ") + Join(expr.m_path, wxT(".")) + wxT(")");
 
+	// ⭐ A SCALAR CALL, WRITTEN BACK AS IT WAS READ. This renderer feeds a PARSER — the constructor's
+	// tabs round-trip every expression through it — so a kind it does not know does not merely look
+	// wrong, it VANISHES: the query came back with `AS Y` and nothing in front of it (measured
+	// 2026-09-05, in the journal's own echo of the text). The name comes from the table that declares
+	// the call, so a call added to the language renders the day it is added.
+	case ibQueryAstExprKind::ScalarCall:
+	{
+		wxString out = ibQueryScalarFnText(expr.m_scalar) + wxT("(");
+		for (size_t i = 0; i < expr.m_args.size(); ++i) {
+			if (i) out += wxT(", ");
+			if (expr.m_args[i]) out += RenderExpr(*expr.m_args[i]);
+		}
+		return out + wxT(")");
+	}
+
+	// `<expr> [NOT] REFS <Kind>.<Name>` — the operator's own shape, negation included.
+	case ibQueryAstExprKind::Refs:
+		return (expr.m_lhs ? RenderExpr(*expr.m_lhs) : wxString())
+			+ (expr.m_negated ? wxT(" ") + Kw(ibQueryKeyword::Not) : wxString())
+			+ wxT(" ") + Kw(ibQueryKeyword::Refs) + wxT(" ") + Join(expr.m_path, wxT("."));
+
 	case ibQueryAstExprKind::Func:
 	{
 		// A RANKING call has no argument at all — `ROW_NUMBER()`, not `ROW_NUMBER(*)`. Rendering the

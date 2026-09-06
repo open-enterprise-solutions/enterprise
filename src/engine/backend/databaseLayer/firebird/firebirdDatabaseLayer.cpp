@@ -136,6 +136,83 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 			// Year: EXTRACT(YEARDAY) is 0-based (1 Jan == 0), so subtracting it lands on 1 Jan.
 			{ ibTotalsPeriod::Year,    wxT("DATEADD(-EXTRACT(YEARDAY FROM {expr}) DAY TO ") + day + wxT(")") },
 		};
+
+		// ⭐ THE END OF A PERIOD IS THE START OF THE NEXT ONE, LESS A SECOND — written that way rather
+		// than as ten more hand-built expressions, so the boundary rule lives in ONE place and the
+		// truncations above stay the single authority on where a period begins. (ibEndOfPeriod, the
+		// RAM twin, says the same sentence in C++.)
+		auto endOf = [&d](ibTotalsPeriod unit, const wxString& step) {
+			return wxT("DATEADD(-1 SECOND TO DATEADD(1 ") + step + wxT(" TO ") + d.m_periodTrunc[unit] + wxT("))");
+		};
+		d.m_periodEnd = {
+			{ ibTotalsPeriod::Second,   endOf(ibTotalsPeriod::Second,  wxT("SECOND")) },
+			{ ibTotalsPeriod::Minute,   endOf(ibTotalsPeriod::Minute,  wxT("MINUTE")) },
+			{ ibTotalsPeriod::Hour,     endOf(ibTotalsPeriod::Hour,    wxT("HOUR"))   },
+			{ ibTotalsPeriod::Day,      endOf(ibTotalsPeriod::Day,     wxT("DAY"))    },
+			{ ibTotalsPeriod::Week,     endOf(ibTotalsPeriod::Week,    wxT("WEEK"))   },
+			{ ibTotalsPeriod::Month,    endOf(ibTotalsPeriod::Month,   wxT("MONTH"))  },
+			{ ibTotalsPeriod::Quarter,  wxT("DATEADD(-1 SECOND TO DATEADD(3 MONTH TO ") + d.m_periodTrunc[ibTotalsPeriod::Quarter]  + wxT("))") },
+			{ ibTotalsPeriod::HalfYear, wxT("DATEADD(-1 SECOND TO DATEADD(6 MONTH TO ") + d.m_periodTrunc[ibTotalsPeriod::HalfYear] + wxT("))") },
+			{ ibTotalsPeriod::Year,     endOf(ibTotalsPeriod::Year,    wxT("YEAR"))   },
+			// TenDays is absent on purpose: its third bucket runs to the end of the month, so "one
+			// ten-day later" is not a length. The lowering refuses that unit for the moving calls
+			// before either road sees it — see the note there.
+		};
+
+		// DATEADD(<n> <unit> TO <date>) is Firebird's own spelling, and it is calendar-aware for the
+		// month-shaped units — adding a month to the 31st lands on the last day of a shorter one.
+		auto addOf = [](const wxString& unit, const wxString& factor) {
+			return wxT("DATEADD((") + factor + wxT(") ") + unit + wxT(" TO {expr})");
+		};
+		d.m_dateAdd = {
+			{ ibTotalsPeriod::Second,   addOf(wxT("SECOND"), wxT("{count}"))     },
+			{ ibTotalsPeriod::Minute,   addOf(wxT("MINUTE"), wxT("{count}"))     },
+			{ ibTotalsPeriod::Hour,     addOf(wxT("HOUR"),   wxT("{count}"))     },
+			{ ibTotalsPeriod::Day,      addOf(wxT("DAY"),    wxT("{count}"))     },
+			{ ibTotalsPeriod::Week,     addOf(wxT("WEEK"),   wxT("{count}"))     },
+			{ ibTotalsPeriod::Month,    addOf(wxT("MONTH"),  wxT("{count}"))     },
+			{ ibTotalsPeriod::Quarter,  addOf(wxT("MONTH"),  wxT("({count}) * 3")) },
+			{ ibTotalsPeriod::HalfYear, addOf(wxT("MONTH"),  wxT("({count}) * 6")) },
+			{ ibTotalsPeriod::Year,     addOf(wxT("YEAR"),   wxT("{count}"))     },
+		};
+
+		// DATEDIFF(<unit> FROM <a> TO <b>) counts BOUNDARIES crossed, which is the whole-units answer
+		// this language promises: from the 31st of January to the 1st of February is one month.
+		auto diffOf = [](const wxString& unit, const wxString& divisor = wxEmptyString) {
+			const wxString call = wxT("DATEDIFF(") + unit + wxT(" FROM {from} TO {to})");
+			return divisor.IsEmpty() ? call : wxT("(") + call + wxT(" / ") + divisor + wxT(")");
+		};
+		d.m_dateDiff = {
+			{ ibTotalsPeriod::Second,   diffOf(wxT("SECOND")) },
+			{ ibTotalsPeriod::Minute,   diffOf(wxT("MINUTE")) },
+			{ ibTotalsPeriod::Hour,     diffOf(wxT("HOUR"))   },
+			{ ibTotalsPeriod::Day,      diffOf(wxT("DAY"))    },
+			{ ibTotalsPeriod::Week,     diffOf(wxT("WEEK"))   },
+			{ ibTotalsPeriod::Month,    diffOf(wxT("MONTH"))  },
+			{ ibTotalsPeriod::Quarter,  diffOf(wxT("MONTH"), wxT("3")) },
+			{ ibTotalsPeriod::HalfYear, diffOf(wxT("MONTH"), wxT("6")) },
+			{ ibTotalsPeriod::Year,     diffOf(wxT("YEAR"))   },
+		};
+
+		// EXTRACT answers most of these directly. The three that need arithmetic are the ones where
+		// Firebird's numbering is its own: QUARTER is not an EXTRACT unit before FB4, YEARDAY counts
+		// from zero, and WEEKDAY is Sunday = 0 while this language pins Monday = 1 (ISO).
+		d.m_datePart = {
+			{ ibDatePart::Year,      wxT("EXTRACT(YEAR FROM {expr})")   },
+			{ ibDatePart::Quarter,   wxT("((EXTRACT(MONTH FROM {expr}) - 1) / 3 + 1)") },
+			{ ibDatePart::Month,     wxT("EXTRACT(MONTH FROM {expr})")  },
+			{ ibDatePart::DayOfYear, wxT("(EXTRACT(YEARDAY FROM {expr}) + 1)") },
+			{ ibDatePart::Day,       wxT("EXTRACT(DAY FROM {expr})")    },
+			{ ibDatePart::Week,      wxT("EXTRACT(WEEK FROM {expr})")   },
+			{ ibDatePart::WeekDay,   wxT("(MOD(EXTRACT(WEEKDAY FROM {expr}) + 6, 7) + 1)") },
+			{ ibDatePart::Hour,      wxT("EXTRACT(HOUR FROM {expr})")   },
+			{ ibDatePart::Minute,    wxT("EXTRACT(MINUTE FROM {expr})") },
+			// EXTRACT(SECOND) is fractional on a TIMESTAMP — the same fact the sub-day truncations
+			// above work around; the whole second is what a person asked for.
+			{ ibDatePart::Second,    wxT("CAST(FLOOR(EXTRACT(SECOND FROM {expr})) AS INTEGER)") },
+		};
+
+		d.m_substring = wxT("SUBSTRING({expr} FROM {from} FOR {len})");
 		return d;
 	}();
 	return s_dialect;

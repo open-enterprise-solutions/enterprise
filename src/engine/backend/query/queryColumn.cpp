@@ -18,6 +18,8 @@
 #include "backend/query/queryColumn.h"
 #include "backend/query/columnLayout.h"                            // ibColumnCodec + ibFieldSuffix + ReadSingleTargetReference
 #include "backend/backend_core.h"                                  // emptyEnum — the "no member" ordinal
+
+#include <atomic>                                                  // the synthetic-id counter below
 #include "backend/clsid.h"                                         // IsReference — a reference target by its clsid KIND
 #include "backend/system/value/valueJob.h"                         // g_valueScheduleCLSID — a value stored whole
 #include "backend/system/value/valueType.h"                        // g_valueTypeDescriptionCLSID — the other one
@@ -65,9 +67,11 @@ ibColumnType PrimitiveType(ibValueTypes vt, const ibTypeDescription& td)
 // failing months later.
 ibColumnType RawTypeOf(const ibBackendQueryColumn* col)
 {
-	wxASSERT_MSG(col != nullptr && col->IsRawColumn(),
+	const ibBackendColumnRawDB* const raw = col != nullptr ? col->AsRawColumn() : nullptr;
+	wxASSERT_MSG(raw != nullptr,
 		wxT("RawTypeOf asked of a column that does not carry its own physical type"));
-	const auto* raw = static_cast<const ibBackendColumnRawDB*>(col);
+	if (raw == nullptr)
+		return ibTypeString(255);
 	switch (raw->GetRawType()) {
 	// ⭐ THE COLUMN'S OWN WIDTH WHERE IT DECLARED ONE. A raw column that says nothing gets the old
 	// defaults; one that DOES say — an indexed digest, a totals figure carrying a resource's own

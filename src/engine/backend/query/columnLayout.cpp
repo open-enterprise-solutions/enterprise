@@ -469,8 +469,26 @@ bool ibColumnCodec::ReadTaggedValue(const wxString& fieldName,
 		return ReadField(fieldName, tag, col, metaData, retValue, result, createData);
 	}
 
-	ibFieldTypes fieldType =
-		static_cast<ibFieldTypes>(result.GetResultInt(fieldName + ibFieldSuffix(ibColumnRole::Discriminator)));
+	// ⭐⭐ NOTHING THERE AT ALL IS *NULL* — and it is a different fact from an untagged value.
+	//
+	// The tag field answers `0` for both: a row whose column was never written (a fresh row, a
+	// dot-walk through an empty reference) stores a real zero, while a row that DID NOT MATCH an
+	// outer join has no row on that side at all and the whole spread comes back as SQL NULL.
+	// `GetResultInt` flattens the two into 0, and the `default` arm below then yields the column's
+	// TYPED EMPTY — which is right for the first and wrong for the second.
+	//
+	// 🛑 Wrong VISIBLY: `B.Period` of an unmatched LEFT JOIN read as **01.01.0001**, a date that looks
+	// like data (measured 2026-09-06, the hour a self-join began folding on the server). And wrong
+	// where it counts: an empty value answers FALSE to `IS NULL`, so `ISNULL(B.Period, &Till)` — the
+	// guard every outer join obliges — could not fire. The RAM stitch was taught this the day before
+	// (RamNullValue); this is the same answer on the other road, told apart by the one question a
+	// typed read cannot express.
+	const wxString tagField = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
+	if (result.IsResultNull(tagField)) {
+		retValue = ibValue(ibValueTypes::TYPE_NULL);
+		return true;
+	}
+	ibFieldTypes fieldType = static_cast<ibFieldTypes>(result.GetResultInt(tagField));
 
 	if (col != nullptr && !TagFitsColumn(col, fieldType)) {
 		retValue = ibValueTypeDescription::AdjustValue(col->GetTypeDesc());

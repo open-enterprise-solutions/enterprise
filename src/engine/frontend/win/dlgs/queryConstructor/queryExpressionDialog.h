@@ -94,6 +94,17 @@ private:
 	void FillLanguageTree();
 	void InsertAtCaret(const wxString& text);
 
+	// ⭐ WHAT THE EXPRESSION NAMES, CHECKED AGAINST WHAT THE QUERY HAS — run on OK, after the text
+	// parses. A parser answers "is this a sentence"; it cannot answer "is there such a field", and
+	// that is the mistake a person actually makes: a field spelled from memory, a source alias that
+	// belongs to another query, a period word that is not one. Left unchecked, the expression stores
+	// happily and the query refuses to run LATER, somewhere else, with the position counted in a text
+	// this window never showed.
+	//
+	// Empty return = nothing to say. Otherwise the sentence to put in front of the person, naming the
+	// word that could not be resolved and what the query does offer instead.
+	wxString CheckExpressionNames(const ibQueryAstExprPtr& expression) const;
+
 	std::vector<ibQueryConstructorField> m_fields;
 	ibQueryAstExprPtr m_expression;
 	const ibMetaData* m_metaData = nullptr;

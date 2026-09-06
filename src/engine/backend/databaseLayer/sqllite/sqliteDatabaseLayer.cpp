@@ -59,6 +59,82 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 			{ ibTotalsPeriod::HalfYear, wxT("strftime('%Y-%m-%d 00:00:00', date(strftime('%Y-01-01', {expr}), '+' || (((CAST(strftime('%m', {expr}) AS INTEGER) - 1) / 6) * 6) || ' months'))") },
 			{ ibTotalsPeriod::Year,     wxT("strftime('%Y-01-01 00:00:00', {expr})")  },
 		};
+
+		// The end of a period is the start of the next one less a second — said the same way on every
+		// engine, so the boundary belongs to its period wherever the query runs. SQLite spells the
+		// step as a datetime() modifier; the truncation above supplies the start.
+		auto endOf = [&d](ibTotalsPeriod unit, const wxString& step) {
+			return wxT("strftime('%Y-%m-%d %H:%M:%S', datetime(") + d.m_periodTrunc[unit]
+			     + wxT(", '+1 ") + step + wxT("', '-1 second'))");
+		};
+		d.m_periodEnd = {
+			{ ibTotalsPeriod::Second,   endOf(ibTotalsPeriod::Second,   wxT("second")) },
+			{ ibTotalsPeriod::Minute,   endOf(ibTotalsPeriod::Minute,   wxT("minute")) },
+			{ ibTotalsPeriod::Hour,     endOf(ibTotalsPeriod::Hour,     wxT("hour"))   },
+			{ ibTotalsPeriod::Day,      endOf(ibTotalsPeriod::Day,      wxT("day"))    },
+			{ ibTotalsPeriod::Week,     endOf(ibTotalsPeriod::Week,     wxT("day"))    },   // +7 days below
+			{ ibTotalsPeriod::Month,    endOf(ibTotalsPeriod::Month,    wxT("month"))  },
+			{ ibTotalsPeriod::Quarter,  endOf(ibTotalsPeriod::Quarter,  wxT("month"))  },   // +3 months below
+			{ ibTotalsPeriod::HalfYear, endOf(ibTotalsPeriod::HalfYear, wxT("month"))  },   // +6 months below
+			{ ibTotalsPeriod::Year,     endOf(ibTotalsPeriod::Year,     wxT("year"))   },
+		};
+		// The three whose step is more than one of its unit, spelled out rather than folded into the
+		// helper: a lambda that took a count as well would be harder to read than the three lines it
+		// saved.
+		d.m_periodEnd[ibTotalsPeriod::Week]     = wxT("strftime('%Y-%m-%d %H:%M:%S', datetime(") + d.m_periodTrunc[ibTotalsPeriod::Week]     + wxT(", '+7 days', '-1 second'))");
+		d.m_periodEnd[ibTotalsPeriod::Quarter]  = wxT("strftime('%Y-%m-%d %H:%M:%S', datetime(") + d.m_periodTrunc[ibTotalsPeriod::Quarter]  + wxT(", '+3 months', '-1 second'))");
+		d.m_periodEnd[ibTotalsPeriod::HalfYear] = wxT("strftime('%Y-%m-%d %H:%M:%S', datetime(") + d.m_periodTrunc[ibTotalsPeriod::HalfYear] + wxT(", '+6 months', '-1 second'))");
+
+		// datetime(x, '<n> months') takes the sign with the number, so one template serves both
+		// directions — `|| ' months'` on a negative count reads as '-3 months', which is what it means.
+		auto addOf = [](const wxString& step, const wxString& factor) {
+			return wxT("strftime('%Y-%m-%d %H:%M:%S', datetime({expr}, (") + factor + wxT(") || ' ") + step + wxT("'))");
+		};
+		d.m_dateAdd = {
+			{ ibTotalsPeriod::Second,   addOf(wxT("seconds"), wxT("{count}")) },
+			{ ibTotalsPeriod::Minute,   addOf(wxT("minutes"), wxT("{count}")) },
+			{ ibTotalsPeriod::Hour,     addOf(wxT("hours"),   wxT("{count}")) },
+			{ ibTotalsPeriod::Day,      addOf(wxT("days"),    wxT("{count}")) },
+			{ ibTotalsPeriod::Week,     addOf(wxT("days"),    wxT("({count}) * 7")) },
+			{ ibTotalsPeriod::Month,    addOf(wxT("months"),  wxT("{count}")) },
+			{ ibTotalsPeriod::Quarter,  addOf(wxT("months"),  wxT("({count}) * 3")) },
+			{ ibTotalsPeriod::HalfYear, addOf(wxT("months"),  wxT("({count}) * 6")) },
+			{ ibTotalsPeriod::Year,     addOf(wxT("years"),   wxT("{count}")) },
+		};
+
+		const wxString months = wxT("((CAST(strftime('%Y', {to}) AS INTEGER) * 12 + CAST(strftime('%m', {to}) AS INTEGER))"
+		                            " - (CAST(strftime('%Y', {from}) AS INTEGER) * 12 + CAST(strftime('%m', {from}) AS INTEGER)))");
+		auto secondsOver = [](const wxString& divisor) {
+			return wxT("CAST((CAST(strftime('%s', {to}) AS INTEGER) - CAST(strftime('%s', {from}) AS INTEGER)) / ") + divisor + wxT(" AS INTEGER)");
+		};
+		d.m_dateDiff = {
+			{ ibTotalsPeriod::Second,   secondsOver(wxT("1"))    },
+			{ ibTotalsPeriod::Minute,   secondsOver(wxT("60"))   },
+			{ ibTotalsPeriod::Hour,     secondsOver(wxT("3600")) },
+			{ ibTotalsPeriod::Day,      wxT("CAST(julianday(date({to})) - julianday(date({from})) AS INTEGER)") },
+			{ ibTotalsPeriod::Week,     wxT("CAST((julianday(date({to}, '-6 days', 'weekday 1')) - julianday(date({from}, '-6 days', 'weekday 1'))) / 7 AS INTEGER)") },
+			{ ibTotalsPeriod::Month,    months },
+			{ ibTotalsPeriod::Quarter,  wxT("(") + months + wxT(" / 3)") },
+			{ ibTotalsPeriod::HalfYear, wxT("(") + months + wxT(" / 6)") },
+			{ ibTotalsPeriod::Year,     wxT("(CAST(strftime('%Y', {to}) AS INTEGER) - CAST(strftime('%Y', {from}) AS INTEGER))") },
+		};
+
+		// strftime('%w') is Sunday = 0; this language pins Monday = 1 (ISO), so the shift is applied
+		// here rather than left to whoever reads the number.
+		d.m_datePart = {
+			{ ibDatePart::Year,      wxT("CAST(strftime('%Y', {expr}) AS INTEGER)") },
+			{ ibDatePart::Quarter,   wxT("((CAST(strftime('%m', {expr}) AS INTEGER) - 1) / 3 + 1)") },
+			{ ibDatePart::Month,     wxT("CAST(strftime('%m', {expr}) AS INTEGER)") },
+			{ ibDatePart::DayOfYear, wxT("(CAST(strftime('%j', {expr}) AS INTEGER))") },
+			{ ibDatePart::Day,       wxT("CAST(strftime('%d', {expr}) AS INTEGER)") },
+			{ ibDatePart::Week,      wxT("CAST(strftime('%W', {expr}) AS INTEGER)") },
+			{ ibDatePart::WeekDay,   wxT("(((CAST(strftime('%w', {expr}) AS INTEGER) + 6) % 7) + 1)") },
+			{ ibDatePart::Hour,      wxT("CAST(strftime('%H', {expr}) AS INTEGER)") },
+			{ ibDatePart::Minute,    wxT("CAST(strftime('%M', {expr}) AS INTEGER)") },
+			{ ibDatePart::Second,    wxT("CAST(strftime('%S', {expr}) AS INTEGER)") },
+		};
+
+		d.m_substring = wxT("substr({expr}, {from}, {len})");
 		return d;
 	}();
 	return s_dialect;

@@ -60,6 +60,7 @@ static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 	{ ibQueryKeyword::Null,     wxT("NULL")     },
 	{ ibQueryKeyword::Like,     wxT("LIKE")     },
 	{ ibQueryKeyword::Between,  wxT("BETWEEN")  },
+	{ ibQueryKeyword::Refs,     wxT("REFS")     },
 	{ ibQueryKeyword::True,     wxT("TRUE")     },
 	{ ibQueryKeyword::False,    wxT("FALSE")    },
 	{ ibQueryKeyword::Case,     wxT("CASE")     },
@@ -83,6 +84,114 @@ static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 	{ ibQueryKeyword::Rank,      wxT("RANK")       },
 	{ ibQueryKeyword::DenseRank, wxT("DENSE_RANK") },
 };
+
+// THE SCALAR CALLS, in the same shape and beside the keywords they are deliberately NOT part of
+// (queryKeywords.h says why). One row per call: the enum, the word, and how many arguments it takes
+// — the arity travels WITH the word so the parser, the palette and the syntax helper cannot each
+// hold a different idea of what `DATEADD` needs.
+namespace {
+
+struct ibQueryScalarFnEntry
+{
+	ibQueryScalarFn m_fn;
+	const wxChar*   m_text;
+	size_t          m_minArgs;
+	size_t          m_maxArgs;
+	// Which argument names a PERIOD UNIT (0 = none, 1-based otherwise). A property of the call: the
+	// unit is second in BEGINOFPERIOD / DATEADD and third in DATEDIFF, and a parser that assumed one
+	// position would read the other silently wrong.
+	size_t          m_unitArg;
+};
+
+const ibQueryScalarFnEntry s_queryScalarFnsEN[] =
+{
+	{ ibQueryScalarFn::Year,            wxT("YEAR"),            1, 1, 0 },
+	{ ibQueryScalarFn::Quarter,         wxT("QUARTER"),         1, 1, 0 },
+	{ ibQueryScalarFn::Month,           wxT("MONTH"),           1, 1, 0 },
+	{ ibQueryScalarFn::DayOfYear,       wxT("DAYOFYEAR"),       1, 1, 0 },
+	{ ibQueryScalarFn::Day,             wxT("DAY"),             1, 1, 0 },
+	{ ibQueryScalarFn::Week,            wxT("WEEK"),            1, 1, 0 },
+	{ ibQueryScalarFn::WeekDay,         wxT("WEEKDAY"),         1, 1, 0 },
+	{ ibQueryScalarFn::Hour,            wxT("HOUR"),            1, 1, 0 },
+	{ ibQueryScalarFn::Minute,          wxT("MINUTE"),          1, 1, 0 },
+	{ ibQueryScalarFn::Second,          wxT("SECOND"),          1, 1, 0 },
+	{ ibQueryScalarFn::BeginOfPeriod,   wxT("BEGINOFPERIOD"),   2, 2, 2 },
+	{ ibQueryScalarFn::EndOfPeriod,     wxT("ENDOFPERIOD"),     2, 2, 2 },
+	{ ibQueryScalarFn::DateAdd,         wxT("DATEADD"),         3, 3, 2 },
+	{ ibQueryScalarFn::DateDiff,        wxT("DATEDIFF"),        3, 3, 3 },
+	{ ibQueryScalarFn::DateTime,        wxT("DATETIME"),        3, 6, 0 },
+	{ ibQueryScalarFn::Substring,       wxT("SUBSTRING"),       3, 3, 0 },
+	{ ibQueryScalarFn::ValueType,       wxT("VALUETYPE"),       1, 1, 0 },
+	{ ibQueryScalarFn::Type,            wxT("TYPE"),            1, 1, 0 },
+	{ ibQueryScalarFn::Presentation,    wxT("PRESENTATION"),    1, 1, 0 },
+	{ ibQueryScalarFn::RefPresentation, wxT("REFPRESENTATION"), 1, 1, 0 },
+	{ ibQueryScalarFn::Grouping,        wxT("GROUPING"),        1, 1, 0 },
+	{ ibQueryScalarFn::RecordAutoNumber,wxT("RECORDAUTONUMBER"),0, 0, 0 },
+};
+
+const ibQueryScalarFnEntry* ScalarEntry(ibQueryScalarFn fn)
+{
+	for (const ibQueryScalarFnEntry& e : s_queryScalarFnsEN)
+		if (e.m_fn == fn)
+			return &e;
+	return nullptr;
+}
+
+} // namespace
+
+ibQueryScalarFn ibFindQueryScalarFn(const wxString& upperWord)
+{
+	static const std::map<wxString, ibQueryScalarFn> s_map = [] {
+		std::map<wxString, ibQueryScalarFn> m;
+		for (const ibQueryScalarFnEntry& e : s_queryScalarFnsEN)
+			m[e.m_text] = e.m_fn;
+		return m;
+	}();
+	const auto it = s_map.find(upperWord);
+	return it != s_map.end() ? it->second : ibQueryScalarFn::None;
+}
+
+const wxString& ibQueryScalarFnText(ibQueryScalarFn fn)
+{
+	static const std::map<ibQueryScalarFn, wxString> s_map = [] {
+		std::map<ibQueryScalarFn, wxString> m;
+		for (const ibQueryScalarFnEntry& e : s_queryScalarFnsEN)
+			m[e.m_fn] = e.m_text;
+		return m;
+	}();
+	static const wxString s_empty;
+	const auto it = s_map.find(fn);
+	return it != s_map.end() ? it->second : s_empty;
+}
+
+bool ibQueryScalarFnArity(ibQueryScalarFn fn, size_t& outMin, size_t& outMax)
+{
+	const ibQueryScalarFnEntry* e = ScalarEntry(fn);
+	if (e == nullptr)
+		return false;
+	outMin = e->m_minArgs; outMax = e->m_maxArgs;
+	return true;
+}
+
+bool ibQueryScalarFnUnitArg(ibQueryScalarFn fn, size_t& outIndex)
+{
+	const ibQueryScalarFnEntry* e = ScalarEntry(fn);
+	if (e == nullptr || e->m_unitArg == 0)
+		return false;
+	outIndex = e->m_unitArg - 1;   // the table counts from one, the argument vector from zero
+	return true;
+}
+
+wxString ibAllQueryScalarFns()
+{
+	wxString out;
+	for (const ibQueryScalarFnEntry& entry : s_queryScalarFnsEN) {
+		if (!out.IsEmpty())
+			out += wxT(" ");
+		out += entry.m_text;
+	}
+	return out;
+}
 
 namespace {
 

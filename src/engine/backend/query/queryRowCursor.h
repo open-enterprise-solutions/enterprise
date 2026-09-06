@@ -34,6 +34,20 @@ public:
 	virtual ~ibQueryRow() = default;
 	virtual ibValue Get(ibMetaID id) const = 0;
 	ibValue Get(const ibBackendQueryColumn* col) const { return col != nullptr ? Get(col->GetColumnId()) : ibValue(); }
+
+	// ⭐⭐ …AND BY THE NAME A COLUMN WAS PUBLISHED UNDER. An aggregate's figure has no column object to
+	// ask for — both roads give it a synthetic id and a NAME — so a row that carries one answers for
+	// it here. Same row, second question, rather than a second kind of row.
+	//
+	// 🛑 The alternative was a second evaluator: one walking a source row, one walking a result, with
+	// the tree copied between them so the fold could be substituted before the first was called. Two
+	// walks over one grammar is two sets of semantics waiting to disagree — the very thing this file
+	// spends its comments guarding against. A row that can be asked by name removes the need for the
+	// second walk entirely (2026-09-06, after Max: "you multiplied roads instead of collapsing them").
+	//
+	// Empty by default: a row whose columns have no published names has nothing to answer, and that
+	// is a complete answer rather than a gap.
+	virtual ibValue Get(const wxString& /*name*/) const { return ibValue(); }
 };
 
 // A forward cursor over rows. The cursor IS the current row — one object, one position, no
@@ -54,6 +68,12 @@ class ibRamTableRow : public ibQueryRow
 public:
 	ibRamTableRow(const ibQueryRamTable& table, long row) : m_table(table), m_row(row) {}
 	ibValue Get(ibMetaID id) const override { return m_table.GetCell(m_row, id); }
+	// …and by name: the table already carries one per column (an aggregate's alias among them).
+	ibValue Get(const wxString& name) const override {
+		for (const ibQueryRamColumn& c : m_table.Columns())
+			if (c.m_name.IsSameAs(name, false)) return m_table.GetCell(m_row, c.m_id);
+		return ibValue();
+	}
 
 private:
 	const ibQueryRamTable& m_table;

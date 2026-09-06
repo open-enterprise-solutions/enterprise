@@ -113,6 +113,9 @@ public:
 	// (Source list COMMANDS live as plain virtuals on the record / register / constant metaobjects, forwarded by the
 	//  templated source descriptor — NOT here: GenericData carries no such surface, so nothing is pushed onto it.)
 
+	// (ibRefMember::EmptyRef — the name this resolver answers to — is declared just below the class,
+	//  where every caller of ResolveQueryConstant can reach it without the metaobject headers.)
+
 	// value(<Kind>.<Name>.<Member>) — the L4-1 literal-reference constant: resolve a metaobject's
 	// EmptyRef or one of its predefined items to a runtime ibValue. Reached off GetSourceMetaObject() at lowering
 	// (the queryable already vends the metaobject — nothing is added to the queryable). Returns TRUE + the value in
@@ -237,5 +240,17 @@ protected:
 	//create object data with meta form
 	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const { return nullptr; }
 };
+
+// THE MEMBER A REFERENCE ITSELF DECLARES. The managers DECLARE `EmptyRef` as a method, each in its
+// own AppendFunc — that is a declaration and reads fine as a literal. What does NOT is the code that
+// RECOGNISES the word: the constant resolver above compares a member name against it, the designer's
+// presentation builds `CatalogRef.Goods.EmptyRef` out of it, and the query engine asks for the empty
+// reference by it to learn what a type IS (`x REFS Catalog.Goods`). Those three have to agree letter
+// for letter, so the word is asked for rather than typed out again — the same reason ibRegFigure
+// exists. It lives HERE, beside the resolver that answers to it, so a caller needs no metaobject
+// header to say the name.
+namespace ibRefMember {
+	inline constexpr const wxChar* EmptyRef = wxT("EmptyRef");
+}
 
 #endif

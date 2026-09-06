@@ -88,6 +88,12 @@ enum class ibQueryKeyword
 	// boolean / predicate operators
 	And, Or, Not, In, Is, Null, Like, Between,
 
+	// ⭐ `<expr> REFS <Kind>.<Name>` — the type TEST beside the type NARROWING (`CAST`). A word here
+	// costs nothing for the same reason LINK's does: it is read where an operator stands, never
+	// where a field may, and ParsePrimary's closing rule hands any keyword still standing in a value
+	// position back as a name — so a configuration may still have an attribute called `Refs`.
+	Refs,
+
 	// literals
 	True, False,
 
@@ -130,6 +136,69 @@ struct ibQueryKeyWordEntry
 	ibQueryKeyword m_kw;
 	const wxChar*  m_text;
 };
+
+// ⭐⭐ THE SCALAR CALLS — A SECOND VOCABULARY, AND DELIBERATELY NOT KEYWORDS.
+//
+// `YEAR`, `MONTH`, `DAY`, `WEEK`, `HOUR`, `TYPE` are ordinary words. A configuration is entitled to
+// an attribute called `Year`; a virtual table already spells its periodicity with the very same
+// words (`Turnovers(&From, &To, Month)`), read there as plain identifiers. Putting them in the
+// keyword table would take every one of those names away from every configuration at once — the
+// exact cost the `LINK` note weighed and refused to pay for a word read where a FIELD may stand.
+//
+// So they are recognised BY POSITION instead: an identifier immediately followed by `(`. A column
+// is never called, so no name is taken — `SELECT Year FROM …` still reads the attribute, and
+// `SELECT YEAR(Date) …` reads the call. The same reasoning, and the same conclusion, as LINK's:
+// a word costs nothing exactly where a name cannot stand.
+enum class ibQueryScalarFn
+{
+	None = 0,
+
+	// the calendar, taken apart — each returns a NUMBER out of a date
+	Year, Quarter, Month, DayOfYear, Day, Week, WeekDay, Hour, Minute, Second,
+
+	// the calendar, moved about — each returns a DATE (or, for DateDiff, a count of units)
+	BeginOfPeriod,   // BEGINOFPERIOD(<date>, <unit>)      — the first moment of the unit holding it
+	EndOfPeriod,     // ENDOFPERIOD(<date>, <unit>)        — the last moment of that same unit
+	DateAdd,         // DATEADD(<date>, <unit>, <count>)   — move by whole units, calendar-aware
+	DateDiff,        // DATEDIFF(<from>, <to>, <unit>)     — how many whole units between them
+	DateTime,        // DATETIME(<y>,<m>,<d>[,<h>,<mi>,<s>]) — a date written as its parts
+
+	// text
+	Substring,       // SUBSTRING(<string>, <from>, <length>)
+
+	// what a value IS, and how it READS
+	ValueType,       // VALUETYPE(<expr>)            — the type of a composite value
+	Type,            // TYPE(<Kind.Name>)            — a type named as a constant, to compare against
+	Presentation,    // PRESENTATION(<expr>)         — what a person reads instead of the raw value
+	RefPresentation, // REFPRESENTATION(<expr>)      — the reference's own presentation
+
+	// the fold's own questions
+	Grouping,        // GROUPING(<field>) — is THIS row folded over that field, or does it hold a value
+	RecordAutoNumber // RECORDAUTONUMBER() — the row's number within the reading
+};
+
+// Look a word up in the scalar-call table. The caller has already established that the word stands
+// where a call may (an identifier followed by `(`); None means it is an ordinary name after all.
+BACKEND_API ibQueryScalarFn ibFindQueryScalarFn(const wxString& upperWord);
+
+// The canonical spelling of a scalar call — for diagnostics and for the editor's palette. Empty for
+// ibQueryScalarFn::None.
+BACKEND_API const wxString& ibQueryScalarFnText(ibQueryScalarFn fn);
+
+// HOW MANY ARGUMENTS THE CALL TAKES — asked of the table rather than re-listed at each check, for
+// the same reason ibIsAggregateKeyword is: the parser validates the count, the palette writes the
+// skeleton, and a third reader (the syntax helper) states it. Returns false for None.
+BACKEND_API bool ibQueryScalarFnArity(ibQueryScalarFn fn, size_t& outMin, size_t& outMax);
+
+// DOES THIS CALL NAME A PERIOD UNIT, and in WHICH argument? `BEGINOFPERIOD(x, Month)` and
+// `DATEADD(x, Month, 3)` say the unit second; `DATEDIFF(a, b, Month)` says it third. The position is
+// a property of the call, so it is answered here — a parser that hard-codes "argument 2" reads
+// DATEDIFF wrong and does it silently.
+BACKEND_API bool ibQueryScalarFnUnitArg(ibQueryScalarFn fn, size_t& outIndex);
+
+// EVERY SCALAR CALL, space-separated — the twin of ibAllQueryKeywords, and for the same reader: the
+// editor highlights what the language HAS rather than a list somebody remembered to update.
+BACKEND_API wxString ibAllQueryScalarFns();
 
 // Look a word up in the ACTIVE keyword table. The lexer passes an UPPERCASED
 // word (matching is case-insensitive, like the script lexer). Returns

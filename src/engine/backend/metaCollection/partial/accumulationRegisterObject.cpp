@@ -50,8 +50,11 @@ void ibValueRecordSetObjectAccumulationRegister::FillMembers(ibMemberTable& help
 	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
 	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 
-	// ThisObject + Filter are bound in InitializeObject (context / export) —
-	// no manual prop AppendProp on the record-set helper.
+	// ⭐ THE FILTER, AS A PROPERTY. It is also bound as a module export (InitializeObject), which is
+	// what lets the set's own module say `Filter.X` — but an export is invisible from outside and to
+	// the editor's completion. Declared here, a caller can address the set before writing it, which
+	// is the difference between "replace these records" and "replace the table".
+	helper.AppendProp(wxT("Filter"), ibValueRecordSetObject::enPropFilter);
 }
 
 bool ibValueRecordSetObjectAccumulationRegister::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -61,7 +64,11 @@ bool ibValueRecordSetObjectAccumulationRegister::SetPropVal(const long lPropNum,
 
 bool ibValueRecordSetObjectAccumulationRegister::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	return false;
+	// The set's own properties (Filter) live on the base — asked here first because a register may add
+	// its own later, and answered by the base when it has none of its own. Returning false outright is
+	// what kept `Filter` unreachable from outside while it was declared in this very file's member
+	// table (2026-09-05).
+	return ibValueRecordSetObject::GetPropVal(lPropNum, pvarPropVal);
 }
 
 bool ibValueRecordSetObjectAccumulationRegister::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)

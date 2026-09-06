@@ -317,6 +317,10 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	// value. No fields, no positions — the door / provider owns those.
 	auto stageRow = [&](ibDataQueryBuilder& q, long row) {
 		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
+			// ⭐ A KEY THAT IS IN THE FILTER IS USED — whatever it holds. The filter's `Use` IS its
+			// presence here (setting Use = True inserts the key, False erases it), so an entry with an
+			// empty value is a deliberate "records whose dimension is blank" and gets written as such.
+			// The question of WHICH keys are in the filter belongs to whoever built the set, not here.
 			auto foundedKey = m_keyValues.find(object->GetMetaID());
 			if (foundedKey != m_keyValues.end())
 				q.SetValue(object, foundedKey->second);

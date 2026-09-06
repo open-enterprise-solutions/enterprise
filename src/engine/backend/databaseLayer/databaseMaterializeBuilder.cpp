@@ -106,6 +106,159 @@ wxDateTime ibTruncateToPeriod(const wxDateTime& moment, ibTotalsPeriod unit)
 	return d;
 }
 
+// ⭐ THE REST OF THE CALENDAR, IN RAM — the twins of the dialect's m_periodEnd / m_dateAdd /
+// m_dateDiff / m_datePart templates, and they carry the same obligation the truncation pair does:
+// the two roads must answer identically, or one query gives two numbers depending on whether it
+// pushed down. Written through ibTruncateToPeriod / ibNextPeriodStart wherever the answer IS one of
+// those, so a calendar rule fixed once is fixed everywhere.
+
+wxDateTime ibEndOfPeriod(const wxDateTime& moment, ibTotalsPeriod unit)
+{
+	if (!moment.IsValid())
+		return moment;
+	// The last instant the period still covers. A second before the next one starts — the boundary
+	// belongs to the period that contains it, which is the reading every "as of the end of the
+	// month" filter depends on.
+	return ibNextPeriodStart(moment, unit) - wxTimeSpan::Seconds(1);
+}
+
+wxDateTime ibDateAddUnits(const wxDateTime& moment, ibTotalsPeriod unit, long count)
+{
+	if (!moment.IsValid())
+		return moment;
+	const int n = static_cast<int>(count);
+	switch (unit) {
+		case ibTotalsPeriod::Second:   return moment + wxTimeSpan::Seconds(count);
+		case ibTotalsPeriod::Minute:   return moment + wxTimeSpan::Minutes(count);
+		case ibTotalsPeriod::Hour:     return moment + wxTimeSpan::Hours(count);
+		case ibTotalsPeriod::Day:      return moment + wxDateSpan::Days(n);
+		case ibTotalsPeriod::Week:     return moment + wxDateSpan::Weeks(n);
+		// Ten days is a bucket, not a length — the third one of a month runs 8 to 11 days. Moving BY
+		// it means moving by that many ten-day steps of the calendar, which is what the truncation
+		// draws: land on the bucket, then walk forward bucket by bucket.
+		case ibTotalsPeriod::TenDays: {
+			wxDateTime d = moment;
+			for (int i = 0; i < n; ++i)  d = ibNextPeriodStart(d, unit);
+			for (int i = 0; i > n; --i)  d = ibTruncateToPeriod(d, unit) - wxTimeSpan::Seconds(1);
+			return d;
+		}
+		case ibTotalsPeriod::Month:    return moment + wxDateSpan::Months(n);
+		case ibTotalsPeriod::Quarter:  return moment + wxDateSpan::Months(n * 3);
+		case ibTotalsPeriod::HalfYear: return moment + wxDateSpan::Months(n * 6);
+		case ibTotalsPeriod::Year:     return moment + wxDateSpan::Years(n);
+	}
+	return moment;
+}
+
+// ⭐⭐ A DAY NUMBER READ OFF THE CALENDAR, NOT OFF A DURATION.
+//
+// 🛑 The difference is not academic. Counting days as `(to - from).GetDays()` measures a SPAN in
+// hours and divides — and a span that crosses a daylight-saving change is one hour short, so the
+// division truncates a whole day away. `DATEDIFF(01.01.2026, 01.04.2026, Day)` answered **89** in RAM
+// and **90** on the server, on the same two constants, because the clocks go forward in late March
+// (measured 2026-09-06). It appears and disappears with the dates, which is the worst way for a
+// number to be wrong.
+//
+// A TIMESTAMP is a wall-clock reading with no zone in it — the engines treat it that way and so must
+// its twin. This is the standard days-from-civil arithmetic: pure integers over (year, month, day),
+// with nothing for a timezone or a leap second to reach.
+long ibCivilDayNumber(const wxDateTime& d)
+{
+	long y = static_cast<long>(d.GetYear());
+	const unsigned m = static_cast<unsigned>(d.GetMonth()) + 1;   // wxDateTime::Jan == 0
+	const unsigned day = static_cast<unsigned>(d.GetDay());
+
+	y -= (m <= 2 ? 1 : 0);
+	const long era = (y >= 0 ? y : y - 399) / 400;
+	const unsigned long yoe = static_cast<unsigned long>(y - era * 400);              // [0, 399]
+	const unsigned long doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + day - 1;       // [0, 365]
+	const unsigned long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;                  // [0, 146096]
+	return era * 146097 + static_cast<long>(doe) - 719468;                            // days since 1970-01-01
+}
+
+// …AND THE SECONDS WITHIN THE DAY, for the same reason: an hour of the day is what the clock reads,
+// not how far the moment is from midnight in real time.
+long ibSecondsOfDay(const wxDateTime& d)
+{
+	return static_cast<long>(d.GetHour()) * 3600 + static_cast<long>(d.GetMinute()) * 60
+	     + static_cast<long>(d.GetSecond());
+}
+
+long ibDateDiffUnits(const wxDateTime& from, const wxDateTime& to, ibTotalsPeriod unit)
+{
+	if (!from.IsValid() || !to.IsValid())
+		return 0;
+
+	// Every sub-day unit is derived from the SAME wall-clock difference, so they cannot disagree with
+	// each other or with Day about where a boundary is.
+	const long dayDelta = ibCivilDayNumber(to) - ibCivilDayNumber(from);
+	const long secDelta = dayDelta * 86400 + (ibSecondsOfDay(to) - ibSecondsOfDay(from));
+
+	// ⭐ WHOLE UNITS BETWEEN THE UNITS THEY FALL IN — not a span divided by a length. "How many
+	// months from the 31st of January to the 1st of February" is one, because they are in different
+	// months; a division by 30 days would answer zero. Sub-day units have a fixed length and are
+	// measured directly; calendar units count the boundaries between them.
+	switch (unit) {
+		case ibTotalsPeriod::Second:   return secDelta;
+		case ibTotalsPeriod::Minute:   return secDelta / 60;
+		case ibTotalsPeriod::Hour:     return secDelta / 3600;
+		case ibTotalsPeriod::Day:      return dayDelta;
+		case ibTotalsPeriod::Week:     return (ibCivilDayNumber(ibTruncateToPeriod(to, unit))
+		                                     - ibCivilDayNumber(ibTruncateToPeriod(from, unit))) / 7;
+		case ibTotalsPeriod::TenDays: {
+			// Count the buckets by walking, for the same reason DateAdd does: they are not all the
+			// same length, so no division answers this.
+			wxDateTime cur = ibTruncateToPeriod(from, unit);
+			const wxDateTime end = ibTruncateToPeriod(to, unit);
+			long steps = 0;
+			while (cur < end) { cur = ibNextPeriodStart(cur, unit); ++steps; }
+			while (cur > end) { cur = ibTruncateToPeriod(cur - wxTimeSpan::Seconds(1), unit); --steps; }
+			return steps;
+		}
+		case ibTotalsPeriod::Month:
+		case ibTotalsPeriod::Quarter:
+		case ibTotalsPeriod::HalfYear:
+		case ibTotalsPeriod::Year: {
+			const wxDateTime a = ibTruncateToPeriod(from, unit);
+			const wxDateTime b = ibTruncateToPeriod(to, unit);
+			const long months = (b.GetYear() - a.GetYear()) * 12 + (static_cast<int>(b.GetMonth()) - static_cast<int>(a.GetMonth()));
+			switch (unit) {
+				case ibTotalsPeriod::Month:    return months;
+				case ibTotalsPeriod::Quarter:  return months / 3;
+				case ibTotalsPeriod::HalfYear: return months / 6;
+				default:                       return months / 12;
+			}
+		}
+	}
+	return 0;
+}
+
+long ibReadDatePart(const wxDateTime& moment, ibDatePart part)
+{
+	if (!moment.IsValid())
+		return 0;
+	switch (part) {
+		case ibDatePart::Year:      return moment.GetYear();
+		case ibDatePart::Quarter:   return static_cast<int>(moment.GetMonth()) / 3 + 1;
+		case ibDatePart::Month:     return static_cast<int>(moment.GetMonth()) + 1;   // wx counts from Jan = 0
+		case ibDatePart::DayOfYear: return moment.GetDayOfYear();
+		case ibDatePart::Day:       return moment.GetDay();
+		// ISO week, pinned here so every engine's own numbering is irrelevant.
+		case ibDatePart::Week:      return moment.GetWeekOfYear(wxDateTime::Monday_First);
+		// Monday = 1 … Sunday = 7. wx has Sunday = 0, which is the one place this differs from the
+		// platform underneath and therefore the one worth stating out loud.
+		case ibDatePart::WeekDay: {
+			const int wd = static_cast<int>(moment.GetWeekDay());
+			return wd == wxDateTime::Sun ? 7 : wd;
+		}
+		case ibDatePart::Hour:      return moment.GetHour();
+		case ibDatePart::Minute:    return moment.GetMinute();
+		case ibDatePart::Second:    return moment.GetSecond();
+	}
+	return 0;
+}
+
+
 namespace {
 
 // ---------------------------------------------------------------------------

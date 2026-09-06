@@ -747,6 +747,13 @@ public:
 	// presentations, which moves when they are translated.
 	virtual int CompareDataValues(const ibValueDataObject* lhs, const ibValueDataObject* rhs) const override;
 
+	// ⭐ `value(Enumeration.<Name>.<Member>)` — A MEMBER IS THE CONSTANT AN ENUMERATION HAS. The
+	// reference base vends EmptyRef and nothing else, so a query comparing against a member — the
+	// ONE thing an enumeration is written for — was refused with "has no 'Vat20'" while the same
+	// member read perfectly well from a script (`Enumerations.VatRates.Vat20`). One name, two
+	// answers, because only the manager knew how to resolve it.
+	virtual bool ResolveQueryConstant(const wxString& member, ibValue& out) const override;
+
 	//events: 
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
 	virtual bool OnLoadMetaObject(ibMetaData* metaData);
@@ -2687,6 +2694,25 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 			return nullptr;
 		return new ibValueRecordSetObjectRegisterReturnLine(this, line);
 	}
+
+	// ⭐⭐ THE FILTER IS PART OF THE SET'S SURFACE, NOT A PRIVILEGE OF ITS OWN MODULE.
+	//
+	// It was bound only as a module EXPORT (InitializeObject), so `Filter.Warehouse` worked inside
+	// the set's own module and NOWHERE else — including the editor's completion, which reads the
+	// member table (Max, 2026-09-05: "the filter did not resolve either, IntelliSense did not see
+	// it"). And addressing a set is done from OUTSIDE far more often than from within: a script that
+	// rewrites one warehouse's records says which warehouse before it says anything else.
+	//
+	// The filter is what makes a write mean "replace THESE records" rather than "replace the table":
+	// a set read or built without one and then written IS the whole table, which is exactly how it
+	// should read — but only a caller who can SAY the filter gets to choose between the two.
+	//
+	// It is the record set's ONE property, and the index is NAMED in both places (the same
+	// arrangement the Query's TempTablesManager uses) — a bare 0 in one of them is how a property
+	// ends up answered by the wrong number.
+	// separately (their own enum per register — see the note there about order being the call number).
+	enum { enPropFilter = 1 };   // the TAG carried in the member table, read back with GetPropData
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 
 	class ibValueRecordSetObjectRegisterColumnCollection : public ibValueModel::ibValueModelColumnCollection {
 	public:

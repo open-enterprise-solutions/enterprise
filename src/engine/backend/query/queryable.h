@@ -258,10 +258,23 @@ struct ibQuerySortItem
 // ibIsNull) — L3 stays L2-blind. IN expands to Or(Eq …) and BETWEEN to And(>=, <=) at the
 // L4 lowering, so the tree needs no dedicated IN / BETWEEN node. (docs §23: door Where via L2-1.)
 // ==========================================================================
-enum class ibQueryPredicateKind { Leaf, And, Or, Not, IsNull };
+// ⭐ `RefType` — DOES THIS COMPOSITE POINT AT THAT TABLE (`x REFS Document.Order`, and the
+// `VALUETYPE(x) = TYPE(…)` that says the same thing). A predicate of its own rather than a leaf over
+// a computed expression, because the two roads answer it from DIFFERENT MATERIAL and neither can
+// borrow the other's: in SQL the answer is the reference's `_RTRef` field against the target's
+// clsid, in RAM it is the cell VALUE's own class — a RAM table is keyed by column, and the physical
+// fields a reference spreads into do not exist there at all. One question, two honest answers, and
+// a kind is what lets each side give its own.
+enum class ibQueryPredicateKind { Leaf, And, Or, Not, IsNull, RefType };
 
 struct ibQueryPredicate;
 using ibQueryPredicatePtr = std::shared_ptr<ibQueryPredicate>;
+
+// …and the expression type, named here because an IS NULL may be asked ABOUT one (see m_expr below).
+// The two are mutually recursive by nature — a CASE's arms are expressions and its WHENs predicates —
+// so whichever is declared first forward-declares the other. (Defined in full further down.)
+struct ibQueryColumnExpr;
+using ibQueryColumnExprPtr = std::shared_ptr<ibQueryColumnExpr>;
 
 struct ibQueryPredicate
 {
@@ -270,7 +283,22 @@ struct ibQueryPredicate
 	ibQueryCondition            m_leaf;                 // Leaf — one col / op / value (Eq/Ne/ordered/LIKE)
 	const ibBackendQueryColumn* m_col = nullptr;    // IsNull — the column (the path LEAF when m_path set)
 	bool                        m_negated = false;      // IsNull — IS NOT NULL
-	std::vector<const ibBackendQueryColumn*> m_path;    // IsNull — reference dot-walk path (empty = plain column)
+	std::vector<const ibBackendQueryColumn*> m_path;    // IsNull / RefType — reference dot-walk path (empty = plain column)
+
+	// ⭐ IsNull — …OR AN EXPRESSION, when what is asked about is not a column. `ISNULL(MIN(x), y)`
+	// unfolds to `CASE WHEN MIN(x) IS NULL THEN y ELSE MIN(x) END`, and a FOLD is not a column: it is
+	// read back by the name it was published under (ibQueryColumnExprKind::OutputRef). The same field
+	// the neighbouring ibQueryCondition already carries for the same reason — a computed left-hand
+	// side — so the two say "the thing being tested is an expression" the same way.
+	//
+	// ⚠ Set only inside an expression the RESULT evaluates (SetComputedOverRow); nothing hands such a
+	// predicate to a provider, because the fold it reads has not happened when SQL is written.
+	ibQueryColumnExprPtr        m_expr;
+
+	// RefType — the TARGET TYPE, as the clsid a reference to it carries. A clsid rather than a
+	// metaobject pointer: it is what is stored in the row and what a value answers with, so both
+	// roads compare the same thing and neither has to reach for the metadata to do it.
+	ibClassID                   m_refTypeClsid = 0;
 
 	std::vector<ibQueryPredicatePtr> m_children;        // And / Or (N) · Not (1)
 
@@ -290,6 +318,22 @@ struct ibQueryPredicate
 		const std::vector<const ibBackendQueryColumn*>& path = {}) {
 		auto p = std::make_shared<ibQueryPredicate>();
 		p->m_kind = ibQueryPredicateKind::IsNull; p->m_col = col; p->m_negated = negated;
+		if (path.size() > 1) p->m_path = path;
+		return p;
+	}
+	// …and the same test put to an EXPRESSION — see m_expr above.
+	static ibQueryPredicatePtr NullExpr(ibQueryColumnExprPtr expr, bool negated) {
+		auto p = std::make_shared<ibQueryPredicate>();
+		p->m_kind = ibQueryPredicateKind::IsNull; p->m_expr = std::move(expr); p->m_negated = negated;
+		return p;
+	}
+	// `<col> [NOT] REFS <type>` — the type test. The TARGET travels as its clsid, which is what both
+	// roads compare against: the stored `_RTRef` in SQL, the value's own class in RAM.
+	static ibQueryPredicatePtr RefType(const ibBackendQueryColumn* col, ibClassID target, bool negated,
+		const std::vector<const ibBackendQueryColumn*>& path = {}) {
+		auto p = std::make_shared<ibQueryPredicate>();
+		p->m_kind = ibQueryPredicateKind::RefType; p->m_col = col; p->m_negated = negated;
+		p->m_refTypeClsid = target;
 		if (path.size() > 1) p->m_path = path;
 		return p;
 	}
@@ -332,7 +376,32 @@ struct ibSemiJoinExists
 //
 // Inside its area the value is CONSTANT, which is what makes it usable on a heading: the node folds
 // it with MIN and gets the value itself back. (docs/query-language-arc.md §27)
-enum class ibQueryColumnExprKind { Column, Const, Arith, Case, PeriodTrunc, WindowAgg };
+// ⭐⭐ `OutputRef` — A COLUMN OF THE FINISHED RESULT, READ BY THE NAME IT WAS PUBLISHED UNDER.
+//
+// Every other kind here reads a SOURCE row. This one reads an OUTPUT: the figure an aggregate left
+// behind. That is what lets an expression stand OVER a fold — `ISNULL(MIN(Period), &Till)`,
+// `DATEDIFF(a, MIN(b), Day)`, `MAX(x) * 2` — without the fold learning anything: the aggregate is
+// registered exactly as it would be on its own, and the expression is evaluated afterwards, over the
+// group row, reading it by its alias.
+//
+// ⭐ BY NAME BECAUSE BOTH ROADS ALREADY PUBLISH IT THAT WAY. The RAM fold gives each aggregate a
+// synthetic id and names it by alias ("aggregates read by alias NAME"); the server road reads it off
+// the cursor under the alias the statement wrote. So the one thing the two agree on is the NAME —
+// which is therefore what this node holds. Asking for a column object instead would need the fold to
+// hand one back, and the two roads would have to agree on that too.
+//
+// ⭐⭐ `ValueAsk` — A QUESTION PUT TO THE VALUE, not to the database.
+//
+// `PRESENTATION(x)` is what the METATYPE says a value shows (GenerateDataDesc — it reads the loaded
+// object and answers in its own words), and `VALUETYPE(x)` is the type the value carries. Neither is
+// a reading of a field, so neither can be rendered into SQL at all: the input column is projected and
+// the question is put here, to the value that came back.
+enum class ibQueryColumnExprKind { Column, Const, Arith, Case, PeriodTrunc, PeriodEnd, DateAdd, DateDiff,
+                                  DatePart, Substring, WindowAgg, OutputRef, ValueAsk };
+
+// WHAT IS ASKED OF THE VALUE. Three questions, one kind — they differ in what is asked, never in how
+// it is answered, and a separate kind each would be three copies of the same walk.
+enum class ibQueryValueAsk { Presentation, RefPresentation, ValueType };
 
 // ⭐ THE CALL A WINDOW MAKES — named as a CONCEPT here, spelled by the provider, exactly as
 // ibTotalsPeriod is. The five folds and the three ranking calls sit in one enum because they differ
@@ -407,9 +476,24 @@ struct ibQueryColumnExpr
 	std::vector<std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>> m_cases;
 	ibQueryColumnExprPtr        m_else;
 
-	// PeriodTrunc — the unit m_lhs is truncated to. Same principle as everything else here: the
-	// expression names the CONCEPT, the dialect owns the spelling.
+	// PeriodTrunc / PeriodEnd / DateAdd / DateDiff — the unit the operation is measured in. Same
+	// principle as everything else here: the expression names the CONCEPT, the dialect owns the
+	// spelling.
 	ibTotalsPeriod              m_periodUnit = ibTotalsPeriod::Month;
+
+	// DatePart — WHICH piece of the date. A different enum from the unit above, for the reason its
+	// declaration gives: "truncate to month" and "which month" share a word and no meaning.
+	ibDatePart                  m_datePart = ibDatePart::Year;
+
+	// DateAdd — how many units (m_args[0]); Substring — from where and for how long (m_args[0..1]).
+	// A vector rather than more named fields: these are ordinary arguments in written order, and the
+	// node that reads them knows what it asked for.
+	std::vector<ibQueryColumnExprPtr> m_args;
+
+	// OutputRef — the published NAME of the result column this node reads (an aggregate's alias).
+	wxString                    m_outputName;
+	// ValueAsk — which question is put to m_lhs's value.
+	ibQueryValueAsk             m_valueAsk = ibQueryValueAsk::Presentation;
 
 	// WindowAgg — the call applied to m_lhs, partitioned by m_partition, ordered by m_windowOrder.
 	//
@@ -476,6 +560,45 @@ struct ibQueryColumnExpr
 		auto e = std::make_shared<ibQueryColumnExpr>();
 		e->m_kind = ibQueryColumnExprKind::PeriodTrunc; e->m_lhs = expr; e->m_periodUnit = unit; return e;
 	}
+	// ⭐ THE REST OF THE CALENDAR, on exactly the terms PeriodTrunc set: this tier names the
+	// operation and its unit, the provider spells it, and the RAM evaluator answers the same thing
+	// in C++. Four factories rather than one with a discriminator, because a caller that says
+	// `DateDiff(a, b, Day)` should not have to name the kind twice.
+	static ibQueryColumnExprPtr PeriodEnd(ibQueryColumnExprPtr expr, ibTotalsPeriod unit) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::PeriodEnd; e->m_lhs = expr; e->m_periodUnit = unit; return e;
+	}
+	static ibQueryColumnExprPtr DateAdd(ibQueryColumnExprPtr expr, ibTotalsPeriod unit, ibQueryColumnExprPtr count) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::DateAdd; e->m_lhs = expr; e->m_periodUnit = unit;
+		e->m_args.push_back(std::move(count));
+		return e;
+	}
+	static ibQueryColumnExprPtr DateDiff(ibQueryColumnExprPtr from, ibQueryColumnExprPtr to, ibTotalsPeriod unit) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::DateDiff; e->m_lhs = from; e->m_rhs = to; e->m_periodUnit = unit; return e;
+	}
+	static ibQueryColumnExprPtr DatePart(ibQueryColumnExprPtr expr, ibDatePart part) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::DatePart; e->m_lhs = expr; e->m_datePart = part; return e;
+	}
+	static ibQueryColumnExprPtr Substring(ibQueryColumnExprPtr expr, ibQueryColumnExprPtr from, ibQueryColumnExprPtr len) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::Substring; e->m_lhs = expr;
+		e->m_args.push_back(std::move(from));
+		e->m_args.push_back(std::move(len));
+		return e;
+	}
+	// The figure a fold left behind, named by the alias it was published under — see OutputRef above.
+	static ibQueryColumnExprPtr OutputRef(const wxString& name) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::OutputRef; e->m_outputName = name; return e;
+	}
+	// A question put to the value — see ValueAsk above.
+	static ibQueryColumnExprPtr ValueAsk(ibQueryColumnExprPtr expr, ibQueryValueAsk ask) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::ValueAsk; e->m_lhs = std::move(expr); e->m_valueAsk = ask; return e;
+	}
 	static ibQueryColumnExprPtr Case(std::vector<std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>> cases,
 	                                 ibQueryColumnExprPtr otherwise) {
 		auto e = std::make_shared<ibQueryColumnExpr>();
@@ -488,6 +611,24 @@ struct ibQueryColumnSelect
 {
 	ibQueryColumnExprPtr m_expr;
 	wxString             m_alias;
+
+	// ⭐⭐ …AND WHERE ITS INPUTS LANDED, for an expression the RESULT evaluates.
+	//
+	// A projected column does not come back under its own physical field names: the statement writes
+	// `<its fields> AS <prefix>…`, and the reader takes it back by that PREFIX — one scalar field for
+	// a primitive, the whole reassembled spread for a reference or an enum. An expression evaluated
+	// over the finished row therefore cannot look its inputs up the way a source row would; it has to
+	// be told where each one was put.
+	//
+	// 🛑 Without this the questions answered here came back EMPTY rather than wrong, which is worse:
+	// `PRESENTATION(Currency)` returned seven blank cells and no complaint (measured 2026-09-06). The
+	// value was in the row under a name nobody had told the evaluator about.
+	struct Input {
+		const ibBackendQueryColumn* m_col    = nullptr;   // what the expression names
+		wxString                    m_prefix;             // …and what the statement called it
+		bool                        m_object = false;     // read as a whole value (reference / enum), not one field
+	};
+	std::vector<Input>   m_inputs;
 };
 
 // ⭐⭐ ONE PUBLISHED COLUMN OF A NESTED QUERY — the name the outer world uses, and how to read it.
@@ -720,6 +861,19 @@ public:
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const { return ibQueryRamTable(); }
 	// (The cell-UPSERT write path was removed: a RAM list now edits its LIVE storage rows directly — the node
 	// IS the storage row — so there is no display-copy to write back through the queryable. See ibDataRamComposer.)
+
+	// ⭐ WHAT THIS SOURCE IS CALLED INSIDE THE STATEMENT, when that differs from the table.
+	//
+	// Empty (the default) means "the table name is its own qualifier" — true of every source that
+	// appears once. A source that is a SECOND reading of a table already in the FROM cannot be
+	// qualified by the table name (both readings would answer to it), so it names itself here and
+	// the SQL road scans it as `T AS <this>` and qualifies its columns with it. One question, asked
+	// of the source, so no road has to know WHY a name differs. (ibAliasQueryable, below)
+	//
+	// ⚠ LAST IN THE CLASS ON PURPOSE — a virtual inserted among the others renumbers every slot
+	// after it, and a partially-rebuilt tree then calls through the wrong one: the stack does not
+	// unwind and the frame pointer reads as a code address. New optional virtuals go here.
+	virtual wxString GetQueryTableAlias() const { return wxEmptyString; }
 };
 
 // ==========================================================================
@@ -850,6 +1004,171 @@ private:
 
 // ibBackendQueryColumn — the column counterpart, lives in queryColumn.h (included
 // above) so the fundamental attribute metaobject can derive from it lightly.
+
+// ==========================================================================
+// ibAliasQueryable / ibAliasColumn — THE SAME TABLE, READ A SECOND TIME.
+//
+// ⭐⭐ A SOURCE IS IDENTIFIED BY ITS COLUMNS, so two readings of one table need two sets of them.
+//
+// Everything in this tier routes a column to its source by ASKING THE SOURCES: `OwnsColumn(col)`
+// decides which leaf of a join a value is read from, which side of an ON a key belongs to, which
+// table qualifies it in SQL. That question has one answer per column — and a self-join hands the
+// same column object to both sides, so the answer is "the left one", always. Measured 2026-09-05 on
+// `FROM ExchangeRates AS A JOIN ExchangeRates AS B ON B.Currency = A.Currency AND B.Period >
+// A.Period`: the join itself was right (7 pairs, exactly the ones asked for) and every projected
+// `B.Period` came back holding `A.Period`. A wrong number that looks right — the join had run.
+//
+// The alias is not a label on a shared column; it IS a second source. So it gets its own column
+// objects, and every existing road answers correctly with nothing taught to it: `OwnsColumn` tells
+// the sides apart, the referenced-column set stops folding `A.Period` and `B.Period` into one entry,
+// and the projection's duplicate-id machinery sees two distinct ids.
+//
+// The twin DELEGATES everything about the data — name, type, physical field, layout, read, write —
+// because it IS that column; what it does not share is IDENTITY. Where the value actually comes from
+// is asked of the source (`OriginOf`), in one place, so a read still goes through the real table with
+// the real metadata column and nothing downstream meets a synthetic column it cannot resolve.
+// ==========================================================================
+class BACKEND_API ibAliasColumn : public ibBackendQueryColumn
+{
+public:
+	// The twin takes the ORDINARY id — the one the column it stands for already has — and turns it
+	// into its own inside: the Alias kind stamped on, which makes it negative. Nobody outside hands
+	// it a number and nobody outside composes one; the class knows which kind it is.
+	explicit ibAliasColumn(const ibBackendQueryColumn* origin)
+		: m_origin(origin), m_id(SyntheticId(SyntheticKind::Alias, origin->GetColumnId())) {}
+
+	const ibBackendQueryColumn* Origin() const { return m_origin; }
+
+	// IDENTITY — the one thing that is this column's own. Everything below is the origin's.
+	ibMetaID GetColumnId() const override { return m_id; }
+
+	wxString           GetName()          const override { return m_origin->GetName(); }
+	wxString           GetSynonym()       const override { return m_origin->GetSynonym(); }
+	wxString           GetComment()       const override { return m_origin->GetComment(); }
+	wxString           GetPhysicalName()  const override { return m_origin->GetPhysicalName(); }
+	ibTypeDescription& GetTypeDesc()      const override { return m_origin->GetTypeDesc(); }
+	ibTypeDescription& GetTypeValueDesc() const override { return m_origin->GetTypeValueDesc(); }
+	bool               IsAllowed()        const override { return m_origin->IsAllowed(); }
+	wxIcon             GetColumnIcon()    const override { return m_origin->GetColumnIcon(); }
+	Kind               GetColumnKind()    const override { return m_origin->GetColumnKind(); }
+	// …and WHAT IT STANDS FOR answers for it here too: a twin of a raw column IS that raw column for
+	// every question about the data, and this is the one question a cast used to answer instead.
+	const ibBackendColumnRawDB* AsRawColumn() const override { return m_origin->AsRawColumn(); }
+
+	std::vector<ibColumnSlot> DescribeLayout() const override { return m_origin->DescribeLayout(); }
+
+	bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
+	               class ibValue& retValue, class ibQueryResult& result, bool createData = true) const override {
+		return m_origin->ReadValue(fieldName, metaData, retValue, result, createData);
+	}
+	void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,
+	               const class ibValue& value, int& position) const override {
+		m_origin->BindValue(statement, metaData, value, position);
+	}
+
+private:
+	const ibBackendQueryColumn* m_origin;
+	ibMetaID                    m_id;
+};
+
+class BACKEND_API ibAliasQueryable : public ibBackendQueryable
+{
+public:
+	// Mints one twin per column the origin publishes. `sqlAlias` is what the statement calls this
+	// reading — the author's `AS B` — and it is what qualifies the twins in SQL.
+	ibAliasQueryable(const ibBackendQueryable* origin, const wxString& sqlAlias);
+	// …AND THE ORIGIN AS AN OWNING HANDLE, for a source that was built FOR this query (a subquery, a
+	// named result): the alias outlives the lowering that made it, so it must be a co-owner rather
+	// than hold a pointer into something the lowering was keeping. A metadata source's share is
+	// non-owning and this costs nothing — the same arrangement the builder's From already has.
+	ibAliasQueryable(std::shared_ptr<const ibBackendQueryable> origin, const wxString& sqlAlias)
+		: ibAliasQueryable(origin.get(), sqlAlias) { m_hold = std::move(origin); }
+
+	const ibBackendQueryable* Origin()   const { return m_origin; }
+	wxString                  SqlAlias() const { return m_sqlAlias; }
+
+	// WHERE A TWIN'S VALUE ACTUALLY LIVES — the origin's own column, or null if this is not ours.
+	// Asked by every road that has to READ rather than route: the leaf materialisation, the pushed
+	// condition, the SQL projection.
+	const ibBackendQueryColumn* OriginOf(const ibBackendQueryColumn* col) const {
+		for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
+			if (c.get() == col) return c->Origin();
+		return nullptr;
+	}
+
+	bool OwnsColumn(const ibBackendQueryColumn* col) const override {
+		for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
+			if (c.get() == col) return true;
+		return false;
+	}
+	std::shared_ptr<ibBackendQueryColumn> ShareColumn(const ibBackendQueryColumn* col) const override {
+		for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
+			if (c.get() == col) return c;
+		return nullptr;
+	}
+	// ⭐ A NAME THE TABLE ANSWERS TO GETS A TWIN, whether or not it is in the published face.
+	//
+	// `GetColumns()` is the SELECT * face and it is narrower than what a source can RESOLVE: a record
+	// answers by name for common attributes it does not list, a register for its identity columns.
+	// Minting only from the published set would leave those names resolving to the ORIGIN's column —
+	// which belongs to the other side of the join, and reads its value. So the twin is minted on
+	// demand, and the published face stays exactly what the origin publishes.
+	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;
+	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_published; }
+	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;
+	const ibBackendQueryColumn*              GetHierarchyColumn() const override;
+
+	// …AND EVERYTHING ELSE IS THE ORIGIN'S, because it is the same table.
+	ibBackendQueryProvider& GetProvider()      const override { return m_origin->GetProvider(); }
+	wxString  GetQueryTableName()              const override { return m_origin->GetQueryTableName(); }
+	// …UNDER THIS NAME. A second reading of one table exists in SQL only as `T AS b`, and every
+	// qualification of its columns has to say `b`, not `T` — which is the whole reason the source
+	// carries the author's alias down here rather than leaving it in the statement.
+	wxString  GetQueryTableAlias()             const override { return m_sqlAlias; }
+	ibQueryRelPtr GetSourceRelation(const wxString& alias) const override { return m_origin->GetSourceRelation(alias); }
+	ibGuid    GetQueryTableGuid()              const override { return m_origin->GetQueryTableGuid(); }
+	ibMetaID  GetQueryTableId()                const override { return m_origin->GetQueryTableId(); }
+	wxString  GetQueryName()                   const override { return m_origin->GetQueryName(); }
+	const ibMetaData* GetMetaData()            const override { return m_origin->GetMetaData(); }
+	const class ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return m_origin->GetSourceMetaObject(); }
+	ibHierarchyType GetHierarchyType()         const override { return m_origin->GetHierarchyType(); }
+	bool      IsComputedInRam()                const override { return m_origin->IsComputedInRam(); }
+	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override { return m_origin->ComputeRows(extra); }
+
+private:
+	const ibBackendQueryable*                m_origin;
+	std::shared_ptr<const ibBackendQueryable> m_hold;     // set only when the origin is query-scoped
+	wxString                                 m_sqlAlias;
+	// EVERY twin this reading has minted — the published ones plus whatever a name lookup asked for.
+	// Mutable because minting is a lookup's business: the set is not state the query changes, it is
+	// the set of columns this reading has been ASKED about, and a const source answers by growing it.
+	mutable std::vector<std::shared_ptr<ibAliasColumn>> m_owned;
+	std::vector<const ibBackendQueryColumn*>            m_published;   // the SELECT * face — the origin's, twinned
+};
+
+// ⭐ WHAT THIS SOURCE / COLUMN STANDS FOR — one door, asked by every road that READS.
+//
+// A plain source stands for itself, which is why these are free functions with a default rather than
+// a virtual every source has to answer: aliasing is one shape, not a property of being a source.
+// ⭐⭐ AND THEY WALK ALL THE WAY DOWN. A third reading of one table is a twin OF THE SECOND (that is
+// what keeps their column ids apart — see the note in queryColumn.h on SyntheticId), so "what does
+// this stand for" is a chain, not a hop. Answering after one hop would name another twin as the
+// origin: two readings of one table would stop looking like the same table, and a read would reach
+// the SQL road holding a column no table has.
+inline const ibBackendQueryable* ibOriginQueryable(const ibBackendQueryable* q) {
+	while (const ibAliasQueryable* a = dynamic_cast<const ibAliasQueryable*>(q))
+		q = a->Origin();
+	return q;
+}
+inline const ibBackendQueryColumn* ibOriginColumn(const ibBackendQueryable* q, const ibBackendQueryColumn* col) {
+	while (const ibAliasQueryable* a = dynamic_cast<const ibAliasQueryable*>(q)) {
+		const ibBackendQueryColumn* const origin = a->OriginOf(col);
+		if (origin == nullptr) break;   // not this reading's column — it is already the origin's own
+		col = origin;
+		q   = a->Origin();
+	}
+	return col;
+}
 
 // ==========================================================================
 // ibComputedRegisterQueryable<TReg> — the shared base for a register's call-scoped,

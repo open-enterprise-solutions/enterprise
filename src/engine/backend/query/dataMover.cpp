@@ -299,9 +299,9 @@ bool ibDataMover::Restore(const ibSchemaTable& table, const ibReaderMemory& rows
 // straight by its declared RawType, metadata goes through the spread. One door, both kinds.
 static bool RawFromResult(const ibBackendQueryColumn* col, ibWriterMemory& writer, ibQueryResult& result)
 {
-	if (!col->IsRawColumn())
+	const ibBackendColumnRawDB* const raw = col->AsRawColumn();   // asked of the column — see queryColumn.h
+	if (raw == nullptr)
 		return false;
-	const ibBackendColumnRawDB* const raw = static_cast<const ibBackendColumnRawDB*>(col);
 	const wxString f = raw->GetPhysicalName();
 	switch (raw->GetRawType()) {
 	case ibBackendColumnRawDB::RawType::Boolean: writer.w_u8(result.GetResultBool(f) ? 1u : 0u); break;
@@ -325,9 +325,9 @@ static bool RawFromResult(const ibBackendQueryColumn* col, ibWriterMemory& write
 static bool RawToStatement(const ibBackendQueryColumn* col, const ibReaderMemory& reader,
 	ibQueryStatement* statement, int& position)
 {
-	if (!col->IsRawColumn())
+	const ibBackendColumnRawDB* const raw = col->AsRawColumn();   // asked of the column — see queryColumn.h
+	if (raw == nullptr)
 		return false;
-	const ibBackendColumnRawDB* const raw = static_cast<const ibBackendColumnRawDB*>(col);
 	switch (raw->GetRawType()) {
 	case ibBackendColumnRawDB::RawType::Boolean: statement->SetParamBool(position++, reader.r_u8() != 0); break;
 	case ibBackendColumnRawDB::RawType::Number: {

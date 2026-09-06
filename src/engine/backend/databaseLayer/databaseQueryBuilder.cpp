@@ -482,6 +482,8 @@ wxDateTime ibQueryResult::GetResultDate(const wxString& name)                   
 double     ibQueryResult::GetResultDouble(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultDouble(name)        : 0.0; }
 ibNumber   ibQueryResult::GetResultNumber(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultNumber(name)        : ibNumber(); }
 void*      ibQueryResult::GetResultBlob(const wxString& name, wxMemoryBuffer& b) { return m_rs != nullptr ? m_rs->GetResultBlob(name, b)       : nullptr; }
+// No cursor is not "not null" — there is nothing there at all, which is the same answer.
+bool       ibQueryResult::IsResultNull(const wxString& name)                     { return m_rs == nullptr || m_rs->IsFieldNull(name); }
 
 // ==========================================================================
 // ibQueryRenderer (merged from queryRenderer.cpp)
@@ -798,6 +800,54 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		return (expr->m_negated ? wxT("(NOT EXISTS (") : wxT("(EXISTS ("))
 		     + RenderSelect(expr->m_subquery.get()) + wxT("))");
 
+	// ⭐ THE CALENDAR CALLS — one shape, four dictionaries. Each looks its unit up in the map that
+	// belongs to the operation and fills the template's NAMED placeholders. A unit the engine has no
+	// spelling for is refused by name rather than approximated, exactly as the truncation below is:
+	// "the engine cannot do THIS to a quarter" is a sentence somebody can act on, and a neighbouring
+	// unit quietly substituted is a wrong number that reconciles to nothing.
+	case ibQueryExprKind::PeriodEnd:
+	case ibQueryExprKind::DateAdd:
+	case ibQueryExprKind::DateDiff: {
+		const std::map<ibTotalsPeriod, wxString>& table =
+			  expr->m_kind == ibQueryExprKind::PeriodEnd ? m_dialect.m_periodEnd
+			: expr->m_kind == ibQueryExprKind::DateAdd   ? m_dialect.m_dateAdd
+			                                             : m_dialect.m_dateDiff;
+		const auto it = table.find(expr->m_periodUnit);
+		if (it == table.end())
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+				_("The database engine cannot compute this calendar operation for that unit"));
+		// Each placeholder is rendered per OCCURRENCE (FillRepeated says why), and left to right, so a
+		// template naming its operand twice binds twice and the plan stays in statement order.
+		if (expr->m_kind == ibQueryExprKind::DateDiff) {
+			const wxString half = FillRepeated(it->second, wxT("{from}"), expr->m_lhs);
+			return FillRepeated(half, wxT("{to}"), expr->m_rhs);
+		}
+		const wxString filled = FillRepeated(it->second, wxT("{expr}"), expr->m_lhs);
+		if (expr->m_kind != ibQueryExprKind::DateAdd)
+			return filled;
+		return expr->m_args.empty() ? filled : FillRepeated(filled, wxT("{count}"), expr->m_args.front());
+	}
+
+	case ibQueryExprKind::DatePart: {
+		const auto it = m_dialect.m_datePart.find(expr->m_datePart);
+		if (it == m_dialect.m_datePart.end())
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+				_("The database engine cannot read this part out of a date"));
+		return FillRepeated(it->second, wxT("{expr}"), expr->m_lhs);
+	}
+
+	case ibQueryExprKind::Substring: {
+		if (m_dialect.m_substring.IsEmpty())
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+				_("The database engine has no substring of its own"));
+		wxString out = FillRepeated(m_dialect.m_substring, wxT("{expr}"), expr->m_lhs);
+		out = expr->m_args.size() > 0 ? FillRepeated(out, wxT("{from}"), expr->m_args[0])
+		                              : (out.Replace(wxT("{from}"), wxT("1")), out);
+		out = expr->m_args.size() > 1 ? FillRepeated(out, wxT("{len}"), expr->m_args[1])
+		                              : (out.Replace(wxT("{len}"), wxT("0")), out);
+		return out;
+	}
+
 	case ibQueryExprKind::PeriodTrunc: {
 		// Spell the unit through the dialect's truncation map — same principle as Cast above: the IR
 		// carries the CONCEPT ("start of the month"), the dictionary carries the engine's spelling.
@@ -811,13 +861,34 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 			// nothing — the failure would surface months later, far from here.
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 				_("The database engine cannot truncate a period to this unit"));
-		wxString tpl = it->second;
-		tpl.Replace(wxT("{expr}"), RenderExpr(expr->m_lhs));
-		return tpl;
+		return FillRepeated(it->second, wxT("{expr}"), expr->m_lhs);
 	}
 	}
 
 	return wxString();
+}
+
+// ⭐⭐ A TEMPLATE THAT NAMES ITS OPERAND TWICE HAS TO RENDER IT TWICE.
+//
+// Several truncations spell the operand more than once — Firebird's quarter reads the month out of it,
+// the day out of it, and casts it, all in one expression. Rendering ONCE and pasting the text into
+// three places is correct while the operand is a COLUMN (`T.fld` repeats harmlessly) and wrong the
+// moment it is anything that BINDS: `BEGINOFPERIOD(&AsOf, Quarter)` put three `?` in the statement
+// and one value in the plan, and the driver walked off the end of the bind array (measured
+// 2026-09-05 — the runtime died rather than refusing).
+//
+// So each occurrence is rendered on its own. RenderExpr appends to the bind plan as it goes, and the
+// occurrences are filled LEFT TO RIGHT, so the plan comes out in statement order — the invariant
+// every other multi-operand node here keeps.
+wxString ibQueryRenderer::FillRepeated(const wxString& tpl, const wxString& key, const ibQueryExprPtr& operand)
+{
+	wxString out = tpl;
+	for (size_t at = out.find(key); at != wxString::npos; at = out.find(key, at)) {
+		const wxString rendered = RenderExpr(operand);
+		out = out.Left(at) + rendered + out.Mid(at + key.length());
+		at += rendered.length();
+	}
+	return out;
 }
 
 wxString ibQueryRenderer::RenderOver(const ibQueryWindow& window)

@@ -58,7 +58,18 @@ enum class ibQueryAstExprKind
 	// One shape, and every dot-walk mechanism downstream (SelectPath, ExpandDotWalkJoins, the RAM
 	// join) works on it unchanged.
 	Cast,
+	// ⭐ A SCALAR CALL — `YEAR(Date)`, `BEGINOFPERIOD(Date, Month)`, `DATEDIFF(a, b, Day)`,
+	// `SUBSTRING(s, 1, 3)`, `VALUETYPE(x)`, `TYPE(Catalog.Goods)`. Held apart from Func, which is
+	// the FOLD family (SUM/COUNT/… and the rankings): a fold turns many rows into one and travels to
+	// the door as an aggregate item, a scalar call is an expression over ONE row and travels as one.
+	// Two families under one node is how a lowering ends up asking "is this the folding kind?" at
+	// every step. (m_scalar names it, m_args holds its arguments in written order.)
+	ScalarCall,
 	Compare,   // lhs <cmp> rhs      (m_cmp)
+	// ⭐ `<expr> REFS <Kind>.<Name>` — DOES THIS COMPOSITE POINT AT THAT TABLE. A predicate, not a
+	// narrowing: CAST says which type is meant and walks into it, this only ASKS. (m_lhs = the
+	// expression, m_path = the type's dotted name, m_negated for `NOT REFS`.)
+	Refs,
 	Like,      // lhs [NOT] LIKE rhs (m_negated)
 	In,        // lhs [NOT] IN (list | subquery)  (m_negated, m_list / m_subquery)
 	IsNull,    // lhs IS [NOT] NULL  (m_negated)
@@ -85,6 +96,13 @@ struct ibQueryAstExpr
 	wxString              m_paramName;   // Param
 
 	ibQueryKeyword        m_func = ibQueryKeyword::None;  // Func: Sum/Count/Min/Max/Avg
+	// ScalarCall: which call, and its arguments IN WRITTEN ORDER. The unit of a period call
+	// (`BEGINOFPERIOD(x, Month)`) arrives here as an ordinary Column node holding one name — it is
+	// read as a unit at LOWERING, where a wrong word can be refused with the position it was written
+	// at. Reading it in the lexer would have meant making `Month` a keyword, which is exactly what
+	// the scalar table exists to avoid.
+	ibQueryScalarFn       m_scalar = ibQueryScalarFn::None;
+	std::vector<ibQueryAstExprPtr> m_args;
 	bool                  m_star = false;                 // Func: COUNT(*)
 	// Func: fold over DISTINCT values of the argument — `COUNT(DISTINCT Board)` asks how many
 	// different boards, not how many rows have one.
@@ -131,6 +149,53 @@ struct ibQueryAstExpr
 		return e;
 	}
 };
+
+// ==========================================================================
+// ⭐⭐ WHAT THE CHILDREN OF A NODE ARE — asked in ONE place, by everyone who walks the tree.
+//
+// The node holds its children in eight separate fields, and every walker used to spell the list out
+// for itself. That is a list that has to be extended in N places the day a node kind gains a slot,
+// and the one nobody remembers is silent: it does not fail, it simply stops SEEING part of the tree.
+//
+// 🛑 Measured 2026-09-05, one field (`m_args`, the scalar-call arguments) missed by all three
+// walkers at once:
+//   * ibQueryMentionsAggregate — `DATEDIFF(x, MIN(y), Day)` read as "folds nothing", so the
+//     projection was taken for a GROUP KEY and died on a message about "an unsupported expression"
+//     instead of the one written for exactly this case;
+//   * CollectFoldedAndFree — the GROUP BY completeness rule could not see a column inside
+//     `YEAR(Period)`, so a free column beside a folded one went unreported there;
+//   * CloneExpr — the arguments were SHARED between the clone and the original (the struct copy
+//     copies the vector of shared pointers), so a rewrite of the copy reaches into the source tree.
+//
+// One walk, two spellings: const to READ the tree, non-const to REWRITE it in place. `m_subquery` is
+// deliberately NOT a child — an aggregate inside a nested SELECT folds THAT query's rows and says
+// nothing about this one, and every reader needs that exception.
+// ==========================================================================
+template <typename Fn>
+void ibQueryForEachChild(const ibQueryAstExpr& e, Fn visit)
+{
+	for (const ibQueryAstExprPtr& child : { e.m_lhs, e.m_rhs, e.m_arg, e.m_low, e.m_high, e.m_else })
+		visit(child);
+	for (const ibQueryAstExprPtr& item : e.m_list)  visit(item);
+	for (const ibQueryAstExprPtr& item : e.m_args)  visit(item);
+	for (const std::pair<ibQueryAstExprPtr, ibQueryAstExprPtr>& branch : e.m_cases) {
+		visit(branch.first);
+		visit(branch.second);
+	}
+}
+
+template <typename Fn>
+void ibQueryForEachChild(ibQueryAstExpr& e, Fn visit)
+{
+	for (ibQueryAstExprPtr* child : { &e.m_lhs, &e.m_rhs, &e.m_arg, &e.m_low, &e.m_high, &e.m_else })
+		visit(*child);
+	for (ibQueryAstExprPtr& item : e.m_list)  visit(item);
+	for (ibQueryAstExprPtr& item : e.m_args)  visit(item);
+	for (std::pair<ibQueryAstExprPtr, ibQueryAstExprPtr>& branch : e.m_cases) {
+		visit(branch.first);
+		visit(branch.second);
+	}
+}
 
 // One SELECT output column: an expression (column path or aggregate) + an optional
 // alias. SELECT * sets m_star (whole-row, no expr).

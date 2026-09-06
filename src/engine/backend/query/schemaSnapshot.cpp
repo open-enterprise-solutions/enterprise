@@ -291,8 +291,8 @@ SeedKey SeedKeyFor(const ibSchemaTable& t)
 	const ibBackendQueryColumn* const src = SeedKeyColumn(t);
 	if (src == nullptr)
 		return key;   // no key — the table carries no declared rows either
-	if (src->IsRawColumn()) {
-		key.m_owned = std::make_shared<ibBackendColumnRawDB>(*static_cast<const ibBackendColumnRawDB*>(src));
+	if (const ibBackendColumnRawDB* const raw = src->AsRawColumn()) {   // asked of the column — see queryColumn.h
+		key.m_owned = std::make_shared<ibBackendColumnRawDB>(*raw);
 		key.m_col   = key.m_owned.get();
 	}
 	else {

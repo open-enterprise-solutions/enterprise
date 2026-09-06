@@ -42,7 +42,7 @@ inline wxString ibDeclaredEmptyRef(const ibValueMetaObjectRecordDataRef* metaObj
 {
 	if (metaObject == nullptr || guid.isValid())
 		return wxEmptyString;
-	return ibDeclaredTypeName(metaObject) + wxT(".EmptyRef");
+	return ibDeclaredTypeName(metaObject) + wxT(".") + ibRefMember::EmptyRef;
 }
 
 #endif // _DECLARED_PRESENTATION_H__

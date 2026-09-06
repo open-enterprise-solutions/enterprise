@@ -68,6 +68,20 @@ enum class ibQueryExprKind
 	Cast,     // CAST( m_lhs AS <m_castType, spelled per-DBMS via the dialect TYPE-MAP> ) — pin an expr's type
 	Exists,   // [NOT m_negated] EXISTS ( m_subquery ) — a CORRELATED subquery test; the write-path lowering of a
 	          // dot-walk RLS predicate (a write cannot JOIN, so the reference path rides as a correlated EXISTS)
+	// ⭐ THE REST OF THE CALENDAR — the same arrangement PeriodTrunc introduced, extended to the
+	// operations a query language actually offers. Each says WHAT and lets the dictionary say HOW:
+	//   PeriodEnd  — the last instant of m_periodUnit containing m_lhs
+	//   DateAdd    — m_lhs moved by m_args[0] whole m_periodUnit
+	//   DateDiff   — whole m_periodUnit between m_lhs and m_rhs
+	//   DatePart   — one piece of m_lhs (m_datePart) as a number
+	//   Substring  — m_lhs from m_args[0] for m_args[1] characters
+	// They are separate kinds rather than a Func with a name, because a Func's name is SQL text and
+	// this tier does not carry SQL text: that is the leak the window-function note above records.
+	PeriodEnd,
+	DateAdd,
+	DateDiff,
+	DatePart,
+	Substring,
 	PeriodTrunc  // start of the m_periodUnit containing m_lhs, spelled per-DBMS via the dialect's
 	             // m_periodTrunc map. A SEMANTIC node, not a raw-SQL hatch: the IR says "truncate to
 	             // month", never how, so L2-1 keeps its no-SQL invariant while engines that disagree
@@ -142,8 +156,14 @@ struct ibQueryExpr
 	ibColumnType m_castType;
 
 	// PeriodTrunc: the unit m_lhs is truncated to. Same principle as m_castType — the IR names the
-	// CONCEPT and the dialect owns the spelling.
+	// CONCEPT and the dialect owns the spelling. PeriodEnd / DateAdd / DateDiff read it too — they
+	// are the same question asked from the other side.
 	ibTotalsPeriod m_periodUnit = ibTotalsPeriod::Month;
+
+	// DatePart: WHICH piece of the date is wanted. A separate enum from the unit above for the reason
+	// stated where it is declared — "truncate to month" and "which month is it" share a word and no
+	// meaning.
+	ibDatePart m_datePart = ibDatePart::Year;
 
 	// In / IsNull / Exists: negation (NOT IN / IS NOT NULL / NOT EXISTS).
 	bool m_negated = false;
@@ -282,6 +302,51 @@ inline ibQueryExprPtr ibPeriodTrunc(ibQueryExprPtr expr, ibTotalsPeriod unit)
 	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::PeriodTrunc);
 	e->m_lhs        = std::move(expr);
 	e->m_periodUnit = unit;
+	return e;
+}
+
+// The calendar's other four, built the same way and for the same reason: the caller names the
+// operation, the dictionary spells it, and nothing above this line carries SQL text.
+inline ibQueryExprPtr ibPeriodEnd(ibQueryExprPtr expr, ibTotalsPeriod unit)
+{
+	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::PeriodEnd);
+	e->m_lhs        = std::move(expr);
+	e->m_periodUnit = unit;
+	return e;
+}
+
+inline ibQueryExprPtr ibDateAdd(ibQueryExprPtr expr, ibTotalsPeriod unit, ibQueryExprPtr count)
+{
+	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::DateAdd);
+	e->m_lhs        = std::move(expr);
+	e->m_periodUnit = unit;
+	if (count) e->m_args.push_back(std::move(count));
+	return e;
+}
+
+inline ibQueryExprPtr ibDateDiff(ibQueryExprPtr from, ibQueryExprPtr to, ibTotalsPeriod unit)
+{
+	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::DateDiff);
+	e->m_lhs        = std::move(from);
+	e->m_rhs        = std::move(to);
+	e->m_periodUnit = unit;
+	return e;
+}
+
+inline ibQueryExprPtr ibDatePartOf(ibQueryExprPtr expr, ibDatePart part)
+{
+	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::DatePart);
+	e->m_lhs      = std::move(expr);
+	e->m_datePart = part;
+	return e;
+}
+
+inline ibQueryExprPtr ibSubstring(ibQueryExprPtr expr, ibQueryExprPtr from, ibQueryExprPtr len)
+{
+	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::Substring);
+	e->m_lhs = std::move(expr);
+	if (from) e->m_args.push_back(std::move(from));
+	if (len)  e->m_args.push_back(std::move(len));
 	return e;
 }
 
@@ -964,6 +1029,10 @@ private:
 
 	wxString RenderSelect(const ibQueryRel* root);  // flatten a relation chain into one SELECT (appends binds)
 	wxString RenderExpr(const ibQueryExprPtr& expr);
+	// Fill EVERY occurrence of a template placeholder, rendering the operand once PER occurrence — a
+	// dialect template may name its operand several times, and a bound operand has to bind as often
+	// as it is spelled. See the body for what a single render cost.
+	wxString FillRepeated(const wxString& tpl, const wxString& key, const ibQueryExprPtr& operand);
 	wxString RenderOver(const ibQueryWindow& window);  // renders the operands, spells the clause via ibRenderOverClause
 	wxString RenderSource(const ibQueryRel* rel);   // FROM source: Scan / Join-tree / Subquery (recursive)
 	wxString RenderPlaceholder();              // spells the next placeholder, bumps the counter
@@ -1071,6 +1140,21 @@ public:
 	double      GetResultDouble(const wxString& name);
 	ibNumber    GetResultNumber(const wxString& name);
 	void*       GetResultBlob(const wxString& name, wxMemoryBuffer& buffer);
+
+	// ⭐⭐ IS THIS FIELD NULL — the one question the typed reads above cannot answer.
+	//
+	// Each of them returns a VALUE, and every type has one that means "nothing was there": zero, an
+	// empty string, an invalid date. A stored column never needs this — its `_TYPE` tag says what it
+	// holds, NULL included. A field projected UNDER AN ALIAS has no tag beside it: a computed output
+	// and an aggregate are one field and nothing else, so an empty fold (`MIN(x)` over a group that
+	// matched nothing) comes back as SQL NULL with no way to say so.
+	//
+	// 🛑 Asked as a date, that NULL is an INVALID wxDateTime, and assigning one into an ibValue trips
+	// its assertion and stops the program — which is how a self-join's `MIN(Period)`, the moment it
+	// began folding on the server, came back as a debug alert instead of a blank cell (2026-09-06).
+	// The RAM fold answers the same case with a real NULL (ibAggAcc::Result); this is what lets the
+	// server road say it too, instead of guessing from a value that has no way to be absent.
+	bool        IsResultNull(const wxString& name);
 
 	int      ColumnCount();
 	wxString ColumnName(int column);

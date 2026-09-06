@@ -28,6 +28,7 @@
 #include <wx/stc/stc.h>
 
 #include <algorithm>
+#include <functional>   // the name check walks the tree through a recursive lambda
 
 namespace {
 
@@ -265,6 +266,39 @@ void ibDialogQueryExpression::FillLanguageTree()
 	// are chosen apart rather than confused by proximity.
 	leaf(functions, Kw(ibQueryKeyword::IsNull) + wxT("(, )"), Kw(ibQueryKeyword::IsNull) + wxT("(, )"));
 
+	// ⭐ THE SCALAR CALLS, FROM THE TABLE THAT DECLARES THEM — the word AND how many arguments it
+	// takes both come from ibQueryScalarFnArity, so the skeleton this drops is the one the parser
+	// will accept. A palette with its own idea of the signatures is a palette that writes queries
+	// the engine refuses, and the person reading the refusal has no way to know which of the two is
+	// wrong. Filed in the three folders a person looks in — dates, text, and the rest.
+	auto call = [](ibQueryScalarFn fn) {
+		size_t least = 0, most = 0;
+		ibQueryScalarFnArity(fn, least, most);
+		wxString args;
+		for (size_t i = 0; i < least; ++i)
+			args += (i == 0 ? wxString() : wxT(", "));
+		return ibQueryScalarFnText(fn) + wxT("(") + args + wxT(")");
+	};
+	auto callGroup = [&](const wxTreeItemId& parent, std::initializer_list<ibQueryScalarFn> fns) {
+		for (const ibQueryScalarFn fn : fns) {
+			const wxString text = call(fn);
+			leaf(parent, text, text);
+		}
+	};
+
+	const wxTreeItemId dates = m_language->AppendItem(functions, _("Date functions"));
+	callGroup(dates, { ibQueryScalarFn::Year, ibQueryScalarFn::Quarter, ibQueryScalarFn::Month,
+	                   ibQueryScalarFn::DayOfYear, ibQueryScalarFn::Day, ibQueryScalarFn::Week,
+	                   ibQueryScalarFn::WeekDay, ibQueryScalarFn::Hour, ibQueryScalarFn::Minute,
+	                   ibQueryScalarFn::Second, ibQueryScalarFn::BeginOfPeriod, ibQueryScalarFn::EndOfPeriod,
+	                   ibQueryScalarFn::DateAdd, ibQueryScalarFn::DateDiff });
+
+	const wxTreeItemId strings = m_language->AppendItem(functions, _("String functions"));
+	callGroup(strings, { ibQueryScalarFn::Substring });
+
+	const wxTreeItemId others = m_language->AppendItem(functions, _("Other functions"));
+	callGroup(others, { ibQueryScalarFn::ValueType, ibQueryScalarFn::Presentation,
+	                    ibQueryScalarFn::RefPresentation });
 
 	const wxTreeItemId operators = group(_("Operators"));
 	// Comparison glyphs are punctuation — the lexer reads them from characters, not a table, so
@@ -273,8 +307,13 @@ void ibDialogQueryExpression::FillLanguageTree()
 	                             wxT("+"), wxT("-"), wxT("*"), wxT("/"), wxT("%") })
 		leaf(operators, glyph, glyph);
 	for (const ibQueryKeyword kw : { ibQueryKeyword::And, ibQueryKeyword::Or, ibQueryKeyword::Not,
-	                                 ibQueryKeyword::Like, ibQueryKeyword::In, ibQueryKeyword::Between })
+	                                 ibQueryKeyword::Like, ibQueryKeyword::In, ibQueryKeyword::Between,
+	                                 ibQueryKeyword::Refs })
 		leaf(operators, Kw(kw), Kw(kw) + wxT(" "));
+	// `IN HIERARCHY` is the same operator told how far down to look, so it is offered as the phrase
+	// rather than as a second word somebody has to know goes after IN.
+	leaf(operators, Kw(ibQueryKeyword::In) + wxT(" ") + Kw(ibQueryKeyword::Hierarchy) + wxT("()"),
+		Kw(ibQueryKeyword::In) + wxT(" ") + Kw(ibQueryKeyword::Hierarchy) + wxT("()"));
 	leaf(operators, Kw(ibQueryKeyword::Is) + wxT(" ") + Kw(ibQueryKeyword::Null),
 		Kw(ibQueryKeyword::Is) + wxT(" ") + Kw(ibQueryKeyword::Null));
 	leaf(operators, Kw(ibQueryKeyword::Is) + wxT(" ") + Kw(ibQueryKeyword::Not) + wxT(" ") + Kw(ibQueryKeyword::Null),
@@ -287,10 +326,15 @@ void ibDialogQueryExpression::FillLanguageTree()
 		+ Kw(ibQueryKeyword::Then) + wxT("  ") + Kw(ibQueryKeyword::Else) + wxT("  ")
 		+ Kw(ibQueryKeyword::End));
 	leaf(other, Kw(ibQueryKeyword::Value) + wxT("()"), Kw(ibQueryKeyword::Value) + wxT("()"));
+	// CAST written whole, for the same reason CASE is: what a person forgets is the `AS`, not the word.
+	leaf(other, Kw(ibQueryKeyword::Cast) + wxT("( ") + Kw(ibQueryKeyword::As) + wxT(" )"),
+		Kw(ibQueryKeyword::Cast) + wxT("( ") + Kw(ibQueryKeyword::As) + wxT(" )"));
+	leaf(other, ibQueryScalarFnText(ibQueryScalarFn::Type) + wxT("()"),
+		ibQueryScalarFnText(ibQueryScalarFn::Type) + wxT("()"));
+	leaf(other, wxT("DATETIME(y, m, d)"), ibQueryScalarFnText(ibQueryScalarFn::DateTime) + wxT("(, , )"));
 	leaf(other, Kw(ibQueryKeyword::True),  Kw(ibQueryKeyword::True));
 	leaf(other, Kw(ibQueryKeyword::False), Kw(ibQueryKeyword::False));
 	leaf(other, Kw(ibQueryKeyword::Null),  Kw(ibQueryKeyword::Null));
-	leaf(other, wxT("DATETIME(y, m, d)"), wxT("DATETIME(, , )"));
 	// A PARAMETER is how a value reaches a query from outside — the one piece of syntax a person
 	// writing a condition needs and cannot find among the fields.
 	leaf(other, wxT("&") + wxString(_("Parameter")), wxT("&"));
@@ -435,7 +479,120 @@ void ibDialogQueryExpression::OnOk(wxCommandEvent& event)
 		return;
 	}
 
+	// …AND THEN WHETHER THE WORDS IN IT EXIST. Parsing only says the sentence is well formed; the
+	// mistake people make here is a NAME — a field typed from memory, a type whose kind is spelled
+	// wrong, a period that is not one of the nine. Said now, beside the text, it is a sentence about
+	// what to fix; found later by the engine it is a refusal in a query this window never showed.
+	const wxString complaint = CheckExpressionNames(m_expression);
+	if (!complaint.IsEmpty()) {
+		wxMessageBox(complaint, GetTitle(), wxOK | wxICON_ERROR, this);
+		return;
+	}
+
 	EndModal(wxID_OK);
+}
+
+// The walk itself. Only what this window can answer for is checked — the fields it was handed and
+// the closed vocabularies of the language. A type name (`Catalog.Goods` after REFS / CAST / TYPE) is
+// checked for SHAPE only: whether that catalog exists is the configuration's answer, and the engine
+// gives it with the source span when the query is stored.
+wxString ibDialogQueryExpression::CheckExpressionNames(const ibQueryAstExprPtr& expression) const
+{
+	if (!expression)
+		return wxEmptyString;
+
+	wxString complaint;
+
+	// A field is known when the whole dotted path starts at something this query offers: a field's
+	// own name, or a source's name followed by one of its fields. Anything DEEPER is a dot-walk into
+	// a reference, which this window does not resolve — the engine does, and it knows the targets.
+	auto knownFirstSegment = [&](const wxString& name) {
+		for (const ibQueryConstructorField& f : m_fields)
+			if (f.m_name.CmpNoCase(name) == 0 || f.m_source.CmpNoCase(name) == 0)
+				return true;
+		return false;
+	};
+
+	std::function<void(const ibQueryAstExpr&)> walk = [&](const ibQueryAstExpr& e) {
+		if (!complaint.IsEmpty())
+			return;   // one complaint at a time: the first unknown word is the one to fix
+
+		switch (e.m_kind) {
+		case ibQueryAstExprKind::Column:
+			if (!e.m_path.empty() && !knownFirstSegment(e.m_path.front())) {
+				wxString offered;
+				int shown = 0;
+				for (const ibQueryConstructorField& f : m_fields) {
+					if (shown++ >= 6) { offered += wxT(", …"); break; }
+					offered += (offered.IsEmpty() ? wxString() : wxT(", ")) + f.m_name;
+				}
+				complaint = wxString::Format(
+					_("'%s' is not a field of this query. It offers: %s"), e.m_path.front(), offered);
+			}
+			break;
+
+		case ibQueryAstExprKind::ScalarCall: {
+			// The period word of a calendar call — the one closed vocabulary a person gets wrong,
+			// and the one this window can settle without asking anybody.
+			size_t unitAt = 0;
+			if (ibQueryScalarFnUnitArg(e.m_scalar, unitAt) && unitAt < e.m_args.size() && e.m_args[unitAt]) {
+				const ibQueryAstExpr& unit = *e.m_args[unitAt];
+				ibTotalsPeriod parsed = ibTotalsPeriod::Month;
+				const bool named = unit.m_kind == ibQueryAstExprKind::Column && unit.m_path.size() == 1;
+				if (!named || !ibReadPeriodUnit(unit.m_path.front(), parsed)) {
+					wxString words;
+					for (const std::pair<ibTotalsPeriod, wxString>& u : ibPeriodUnits())
+						words += (words.IsEmpty() ? wxString() : wxT(", ")) + u.second;
+					complaint = wxString::Format(
+						_("%s takes a period as its argument %u. Write one of: %s"),
+						ibQueryScalarFnText(e.m_scalar), static_cast<unsigned>(unitAt + 1), words);
+					return;
+				}
+			}
+			for (size_t i = 0; i < e.m_args.size(); ++i)
+				if (e.m_args[i] && !(ibQueryScalarFnUnitArg(e.m_scalar, unitAt) && i == unitAt))
+					walk(*e.m_args[i]);
+			break;
+		}
+
+		// A TYPE is a kind and a name — `Catalog.Goods`. One bare word is the mistake worth catching
+		// here, because it reads like a field and is not one.
+		case ibQueryAstExprKind::Refs:
+			if (e.m_path.size() < 2)
+				complaint = _("REFS takes a type: <Kind>.<Name>, for instance Document.Expense");
+			else if (e.m_lhs)
+				walk(*e.m_lhs);
+			break;
+
+		case ibQueryAstExprKind::Cast:
+			if (e.m_path.size() < 2)
+				complaint = _("CAST narrows to a type: CAST(<field> AS <Kind>.<Name>)");
+			else if (e.m_arg)
+				walk(*e.m_arg);
+			break;
+
+		default:
+			// Everything else is structure: walk whatever it holds.
+			if (e.m_lhs)  walk(*e.m_lhs);
+			if (e.m_rhs)  walk(*e.m_rhs);
+			if (e.m_arg)  walk(*e.m_arg);
+			if (e.m_low)  walk(*e.m_low);
+			if (e.m_high) walk(*e.m_high);
+			if (e.m_else) walk(*e.m_else);
+			for (const auto& wt : e.m_cases) {
+				if (wt.first)  walk(*wt.first);
+				if (wt.second) walk(*wt.second);
+			}
+			for (const ibQueryAstExprPtr& item : e.m_list)
+				if (item) walk(*item);
+			for (const ibQueryAstExprPtr& item : e.m_args)
+				if (item) walk(*item);
+			break;
+		}
+	};
+
+	walk(*expression);
+	return complaint;
 }
 
 // THE CHOICE, AS THE LIST IT IS. Same gesture as "Query constructor" beside it: the SELECTION (or

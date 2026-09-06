@@ -143,6 +143,18 @@ private:
 	ibQueryAstExprPtr             ParseCast();
 	ibQueryAstExprPtr             ParseCase();        // CASE WHEN … THEN … [ELSE …] END
 	ibQueryAstExprPtr             ParseIsNullCall();  // ISNULL(a, b) — read as the CASE it is
+	// YEAR(x) / BEGINOFPERIOD(x, Month) / DATEDIFF(a, b, Day) / SUBSTRING(s, 1, 3) / TYPE(Catalog.Goods) …
+	// The caller has established that an identifier stands before a `(` and that the word names one
+	// of these; this reads the arguments and checks the count against the table that declared it.
+	ibQueryAstExprPtr             ParseScalarCall(ibQueryScalarFn fn);
+
+	// Is the token `offset` ahead this punctuation? Written for the one question a scalar call asks —
+	// "is this name being CALLED" — which needs to look one token past the current one without
+	// consuming it.
+	bool PeekIsPunct(size_t offset, wxChar ch) const {
+		const size_t i = m_pos + offset;
+		return i < m_toks.size() && m_toks[i].IsPunct(ch);
+	}
 };
 
 #endif

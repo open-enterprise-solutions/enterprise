@@ -99,18 +99,26 @@ ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const ibBackendQueryable* query
 	// So the sides are decided by OWNERSHIP, here, at the one point that builds the node — never by
 	// the callers, who would each have to remember. A column the new source owns belongs on the
 	// right; if it was handed in as the left, the pair is simply the wrong way round.
-	auto putSidesRight = [queryable](const ibBackendQueryColumn*& left, const ibBackendQueryColumn*& right) {
+	//
+	// ⭐⭐ AND SWAPPING THE OPERANDS MIRRORS THE OPERATOR. `ON B.Period > A.Period` names the joined
+	// source first, so the pair is turned round here — and `>` read from the other side is `<`. Left
+	// as written it says the opposite of what the author wrote, with the SAME number of rows, which
+	// is why it reads as correct: "the next rate of this currency" answers with the previous one.
+	auto putSidesRight = [queryable](const ibBackendQueryColumn*& left, const ibBackendQueryColumn*& right,
+	                                 ibJoinCompareOp& op) {
 		if (left == nullptr || right == nullptr || queryable == nullptr)
 			return;
-		if (queryable->OwnsColumn(left) && !queryable->OwnsColumn(right))
+		if (queryable->OwnsColumn(left) && !queryable->OwnsColumn(right)) {
 			std::swap(left, right);
+			op = ibMirrorJoinOp(op);
+		}
 	};
-	putSidesRight(node->m_on.m_colL, node->m_on.m_colR);
+	putSidesRight(node->m_on.m_colL, node->m_on.m_colR, node->m_on.m_op);
 	// …and every further pair of a composite key, each judged on its own: an author writing
 	// `ON T.Goods = B.Goods AND B.Warehouse = T.Warehouse` has written one of them each way round,
-	// which is neither wrong nor unusual.
-	for (auto& pair : node->m_on.m_alsoOn)
-		putSidesRight(pair.first, pair.second);
+	// which is neither wrong nor unusual — and each carries its OWN comparison, so each mirrors its own.
+	for (auto& part : node->m_on.m_alsoOn)
+		putSidesRight(part.m_colL, part.m_colR, part.m_op);
 
 	m_root = node;
 	return *this;
@@ -119,7 +127,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const ibBackendQueryable* query
 ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
 	const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	ibJoinCompareOp onOp, ibQueryJoinKind kind, const wxString& alias,
-	const std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>>& alsoOn)
+	const std::vector<ibJoinOn::ibJoinKeyPart>& alsoOn)
 {
 	ibJoinOn on; on.m_colL = onLeft; on.m_colR = onRight; on.m_op = onOp;   // onOp != Eq -> theta (RAM nested-loop)
 	on.m_alsoOn = alsoOn;                                                  // the rest of a composite key
@@ -355,8 +363,17 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderByOutput(const wxString& alias, boo
 	return *this;
 }
 
+// ⭐ GROUPING BY A KEY TWICE IS GROUPING BY IT ONCE, so the second addition is dropped here rather
+// than guarded at every caller. Two of them legitimately reach for the same key without being able
+// to see each other: the author's own GROUP BY, and the lowering adding whatever a computed output
+// reads so it has somewhere to read it from. A duplicate is not merely redundant downstream — the
+// fold builds its result by adding one column PER KEY, and the same column id added twice is a
+// column collision in the row it hands back.
 ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const ibBackendQueryColumn* col)
 {
+	for (size_t i = 0; i < m_groupBy.size(); ++i)
+		if (m_groupBy[i] == col && m_groupPaths[i].empty() && !m_groupExprs[i])
+			return *this;
 	if (col) {   // plain key — empty parallel path / no expression
 		m_groupBy.push_back(col);
 		m_groupPaths.emplace_back();
