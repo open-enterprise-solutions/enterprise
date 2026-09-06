@@ -327,15 +327,15 @@ public:
 			if (m_binderCount > 0) f(m_binder0);
 			for (const auto& e : m_binders) f(e);
 		}
-		// Build state. A rebuild may be triggered SEQUENTIALLY by any thread (the owner
-		// in normal runtime; the debugger inspecting cross-thread), but NEVER in PARALLEL
-		// for the same helper — two threads clearing+appending m_props/m_methods at once
-		// corrupts them. One atomic byte gives a lock-free claim: CAS Stale->Building wins
+		// Build state. Several web-session threads may reach the same shared helper.
+		// They must never rebuild it in parallel: two threads clearing and appending
+		// m_props/m_methods at once corrupt them. One atomic byte gives a lock-free
+		// claim: CAS Stale->Building wins
 		// the right to Build(); a loser just waits for the winner's cache (it must not
 		// race a second Build()). No mutex object → zero per-instance footprint, no global
 		// serialization. acquire/release: seeing Built implies all the build's writes are
 		// visible. Steady state (already Built) is a single relaxed-ish load — no cost.
-		enum BuildState : uint8_t { kStale = 0, kBuilding = 1, kBuilt = 2 };
+		enum BuildState : uint8_t { kStale = 0, kBuilding = 1, kBuilt = 2, kInvalidating = 3 };
 		std::atomic<uint8_t> m_buildState{ kStale };
 
 		// Lazy name->index acceleration for FindProp / FindMethod (the runtime
@@ -347,46 +347,75 @@ public:
 		// first lookup after a structural change. An empty map allocates nothing,
 		// so a small or never-searched helper costs zero.
 		static constexpr size_t kFindIndexMin = 12;
-		// Both name->index maps + their dirty flags live in ONE heap node, allocated
+		// Both name->index maps live in ONE heap node, allocated
 		// lazily only when a surface first crosses kFindIndexMin. The common case (a
 		// small or never-searched helper) carries just this null pointer — not two
 		// inline std::unordered_map objects (~80 B in Debug). emplace = keep first
-		// (lowest index), identical to the old linear "first wins" scan.
+		// (lowest index), identical to the old linear "first wins" scan. The atomic
+		// state beside it serializes cold construction without a mutex per value.
 		struct FindIndex {
 			std::unordered_map<std::wstring, long> prop;
 			std::unordered_map<std::wstring, long> method;
-			bool propDirty = true;
-			bool methodDirty = true;
 		};
-		mutable std::unique_ptr<FindIndex> m_findIndex;
+		mutable std::shared_ptr<const FindIndex> m_findIndex;
+		enum FindIndexState : uint8_t { kFindStale = 0, kFindBuilding = 1, kFindBuilt = 2 };
+		mutable std::atomic<uint8_t> m_findIndexState{ kFindStale };
 
-		void MarkPropDirty()   const { if (m_findIndex) m_findIndex->propDirty = true; }
-		void MarkMethodDirty() const { if (m_findIndex) m_findIndex->methodDirty = true; }
+		void MarkFindIndexDirty() const {
+			while (m_findIndexState.load(std::memory_order_acquire) == kFindBuilding)
+				std::this_thread::yield();
+			m_findIndexState.store(kFindStale, std::memory_order_release);
+		}
+		void MarkPropDirty()   const { MarkFindIndexDirty(); }
+		void MarkMethodDirty() const { MarkFindIndexDirty(); }
+
+		// Build both maps behind one atomic claim. Shared member tables are read by
+		// several web sessions at once, so their first lookup must not allocate or
+		// populate the same unordered_map concurrently.
+		std::shared_ptr<const FindIndex> EnsureFindIndex() const {
+			for (;;) {
+				const uint8_t state = m_findIndexState.load(std::memory_order_acquire);
+				if (state == kFindBuilt)
+					return std::atomic_load_explicit(&m_findIndex, std::memory_order_acquire);
+				if (state == kFindBuilding) {
+					std::this_thread::yield();
+					continue;
+				}
+
+				uint8_t expected = kFindStale;
+				if (!m_findIndexState.compare_exchange_strong(expected, kFindBuilding,
+						std::memory_order_acq_rel, std::memory_order_acquire))
+					continue;
+				// Invalidation changes kBuilt to kInvalidating before it waits for this
+				// builder. Recheck after claiming so it cannot mutate the vectors while
+				// this thread is indexing them.
+				if (m_buildState.load(std::memory_order_acquire) != kBuilt) {
+					m_findIndexState.store(kFindStale, std::memory_order_release);
+					std::this_thread::yield();
+					continue;
+				}
+
+				try {
+					auto index = std::make_shared<FindIndex>();
+					index->prop.reserve(m_props.size());
+					for (long i = 0; i < (long)m_props.size(); ++i)
+						index->prop.emplace(m_props[i].m_fieldName.Upper().ToStdWstring(), i);
+					index->method.reserve(m_methods.size());
+					for (long i = 0; i < (long)m_methods.size(); ++i)
+						index->method.emplace(m_methods[i].m_fieldName.Upper().ToStdWstring(), i);
+					std::shared_ptr<const FindIndex> published = std::move(index);
+					std::atomic_store_explicit(&m_findIndex, published, std::memory_order_release);
+					m_findIndexState.store(kFindBuilt, std::memory_order_release);
+					return published;
+				}
+				catch (...) {
+					m_findIndexState.store(kFindStale, std::memory_order_release);
+					throw;
+				}
+			}
+		}
 
 		// Allocate-on-demand + rebuild-if-stale; callers gate on size >= kFindIndexMin.
-		const std::unordered_map<std::wstring, long>& PropIndex() const {
-			if (!m_findIndex) m_findIndex = std::make_unique<FindIndex>();
-			if (m_findIndex->propDirty) {
-				m_findIndex->prop.clear();
-				m_findIndex->prop.reserve(m_props.size());
-				for (long i = 0; i < (long)m_props.size(); ++i)
-					m_findIndex->prop.emplace(m_props[i].m_fieldName.Upper().ToStdWstring(), i);
-				m_findIndex->propDirty = false;
-			}
-			return m_findIndex->prop;
-		}
-		const std::unordered_map<std::wstring, long>& MethodIndex() const {
-			if (!m_findIndex) m_findIndex = std::make_unique<FindIndex>();
-			if (m_findIndex->methodDirty) {
-				m_findIndex->method.clear();
-				m_findIndex->method.reserve(m_methods.size());
-				for (long i = 0; i < (long)m_methods.size(); ++i)
-					m_findIndex->method.emplace(m_methods[i].m_fieldName.Upper().ToStdWstring(), i);
-				m_findIndex->methodDirty = false;
-			}
-			return m_findIndex->method;
-		}
-
 	public:
 
 		ibMemberTable() {}
@@ -467,34 +496,53 @@ public:
 		// a member-contributor call needs the complete ibValue.
 		void Build();
 		// Lazy trigger for GetPMethods(): no-op once built or when nothing is bound.
-		// Lock-free claim — exactly one thread builds; a concurrent caller (debugger)
-		// waits for that build instead of starting a second one on the same cache.
+		// Lock-free claim — exactly one thread builds; a concurrent caller waits for
+		// that build instead of starting a second one on the same cache.
 		void EnsureBuilt() {
 			if (!HasBinders()) return;
-			if (m_buildState.load(std::memory_order_acquire) == kBuilt) return;
-			uint8_t expected = kStale;
-			if (m_buildState.compare_exchange_strong(expected, kBuilding,
-					std::memory_order_acq_rel, std::memory_order_acquire)) {
+			for (;;) {
+				const uint8_t state = m_buildState.load(std::memory_order_acquire);
+				if (state == kBuilt)
+					return;
+				if (state == kBuilding || state == kInvalidating) {
+					std::this_thread::yield();
+					continue;
+				}
+				uint8_t expected = kStale;
+				if (!m_buildState.compare_exchange_strong(expected, kBuilding,
+						std::memory_order_acq_rel, std::memory_order_acquire))
+					continue;
 				try {
 					Build();   // sets kBuilt (release) at its end
+					return;
 				}
 				catch (...) {
 					// Don't get stuck in kBuilding — let a later access retry the build.
 					m_buildState.store(kStale, std::memory_order_release);
 					throw;
 				}
-			} else {
-				// Another thread already claimed the build — wait for it to finish
-				// (kBuilt) or fail (kStale); never start a second Build() on the same
-				// cache. Virtually never taken: a helper has a single owner thread, and
-				// a debugger inspects only while the debuggee is frozen (not mid-Build).
-				while (m_buildState.load(std::memory_order_acquire) == kBuilding)
-					std::this_thread::yield();
 			}
 		}
-		// Mark the surface stale (mutating values — e.g. Map keys); the next
-		// EnsureBuilt() rebuilds from the binders.
-		void Invalidate() { m_buildState.store(kStale, std::memory_order_release); }
+		// Mark the surface stale (mutating values — e.g. Map keys). Do not turn an
+		// in-progress build back into an acquirable Stale state: another session
+		// could otherwise enter Build() and clear the same vectors concurrently.
+		void Invalidate() {
+			for (;;) {
+				uint8_t state = m_buildState.load(std::memory_order_acquire);
+				if (state == kStale)
+					return;
+				if (state == kBuilding || state == kInvalidating) {
+					std::this_thread::yield();
+					continue;
+				}
+				if (m_buildState.compare_exchange_weak(state, kInvalidating,
+						std::memory_order_acq_rel, std::memory_order_acquire)) {
+					MarkFindIndexDirty();
+					m_buildState.store(kStale, std::memory_order_release);
+					return;
+				}
+			}
+		}
 		bool IsBuilt() const { return m_buildState.load(std::memory_order_acquire) == kBuilt; }
 
 		// Reusable SHARED helper for a TYPE-INVARIANT name surface: one helper
@@ -629,7 +677,8 @@ public:
 
 		long FindProp(const wxString& strPropName) const {
 			if (m_props.size() >= kFindIndexMin) {
-				const auto& idx = PropIndex();
+				const auto snapshot = EnsureFindIndex();
+				const auto& idx = snapshot->prop;
 				const auto it = idx.find(strPropName.Upper().ToStdWstring());
 				return it != idx.end() ? it->second : wxNOT_FOUND;
 			}
@@ -730,7 +779,8 @@ public:
 
 		long FindMethod(const wxString& strMethodName) const {
 			if (m_methods.size() >= kFindIndexMin) {
-				const auto& idx = MethodIndex();
+				const auto snapshot = EnsureFindIndex();
+				const auto& idx = snapshot->method;
 				const auto it = idx.find(strMethodName.Upper().ToStdWstring());
 				return it != idx.end() ? it->second : wxNOT_FOUND;
 			}
