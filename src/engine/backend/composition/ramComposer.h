@@ -52,6 +52,10 @@ public:
 	// the model's own doing on the display side (RunStoragePage folds the levels) and is not repeated here.
 	virtual bool Run(ibCompositionDriver& driver) override;
 
+	// ⚠ The no-argument Run comes with it — an override hides the whole name, and a caller holding
+	// this concrete type would lose the outputs-and-their-drivers one. Same note as the DB composer.
+	using ibDataComposer::Run;
+
 	// …and a copy of itself — see ibDataComposer::Clone. The storage pointer rides along: a copy reads the
 	// SAME rows, which is the whole point of taking one.
 	virtual ibDataRamComposer* Clone() const override { return new ibDataRamComposer(*this); }

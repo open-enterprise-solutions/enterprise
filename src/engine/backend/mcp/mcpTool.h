@@ -329,7 +329,7 @@ BACKEND_API size_t ibMcpWordsFound(const wxString& haystack, const wxString& que
 // output, nothing selected. Written where the report verbs live (mcpToolReport.cpp) and declared
 // here because the configuration-wide audit asks the same question of every composer there is: two
 // implementations of "what is missing" would answer differently within a week.
-BACKEND_API void ibMcpComposerComplaints(const class ibCompositionDescription& composition,
+BACKEND_API void ibMcpComposerComplaints(const struct ibCompositionDescription& composition,
 	std::vector<wxString>& missing);
 
 // ⭐⭐ WHICH REQUIRED ARGUMENT DID NOT COME — empty when they all did. Asked OF THE ARGUMENTS, not of

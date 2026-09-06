@@ -72,7 +72,11 @@ BACKEND_API void ibSyncParametersWithTexts(std::vector<ibParameterDescription>& 
 // sites, where the second one would sooner or later count something different.
 BACKEND_API void ibSyncParameters(struct ibCompositionDescription& composition);
 
-class BACKEND_API ibValueDataComposition : public ibValueSpreadsheetModel, public ibSourceDataObject, public ibPropertyObject {
+// ⭐ ibCompositionHolder LAST — ibValue stays the FIRST base (offset 0), which every runtime
+// value's layout is read through. The composer VALUE is the third holder of a composition, beside
+// the report metaobject and the dynamic list, and it already answers with these very signatures.
+class BACKEND_API ibValueDataComposition : public ibValueSpreadsheetModel, public ibSourceDataObject,
+                                          public ibPropertyObject, public ibCompositionHolder {
 public:
 
 	// The source may be passed here — null means "set it later" (SetSource).

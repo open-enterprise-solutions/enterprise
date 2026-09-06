@@ -817,6 +817,9 @@
     <ClInclude Include="job\jobManager.h">
       <Filter>job</Filter>
     </ClInclude>
+    <ClInclude Include="job\jobRunByteCode.h">
+      <Filter>job</Filter>
+    </ClInclude>
     <ClInclude Include="job\platformJobs.h">
       <Filter>job</Filter>
     </ClInclude>
@@ -1950,6 +1953,9 @@
     <ClCompile Include="job\jobBackground.cpp">
       <Filter>job</Filter>
     </ClCompile>
+    <ClCompile Include="job\jobRunByteCode.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
     <ClCompile Include="job\jobRegister.cpp">
       <Filter>job</Filter>
     </ClCompile>
@@ -2326,6 +2332,9 @@
     <ClCompile Include="composition\ramComposer.cpp">
       <Filter>composition</Filter>
     </ClCompile>
+    <ClCompile Include="composition\composeRunSchema.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
     <ClCompile Include="system\value\valueComposer.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
@@ -2491,6 +2500,12 @@
     </ClInclude>
     <ClInclude Include="composition\drivers\listFetchDriver.h">
       <Filter>composition\drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\drivers\tableComposeDriver.h">
+      <Filter>composition\drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\composeRunSchema.h">
+      <Filter>composition</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueComposer.h">
       <Filter>system\value</Filter>

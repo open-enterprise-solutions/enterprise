@@ -1,4 +1,4 @@
-////////////////////////////////////////////////////////////////////////////
+﻿////////////////////////////////////////////////////////////////////////////
 //	L4 — lowering: BOTH front-ends land here — L4-1 text (Execute / ExecuteTotals) and
 //	L4-2 LINQ (LowerLambda*) -> ibDataQueryBuilder, executed (queryLowering.h)
 ////////////////////////////////////////////////////////////////////////////
@@ -3146,6 +3146,13 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// wrote.
 	if (!ibDbTableProvider::CanDeclareAsNamedQuery(inner))
 		CteDecline(wxT("its source tree has no single server-side form (a join that does not co-locate)"));
+
+	// ⚠ A DOT-WALKED OUTPUT IS FINE HERE, and this is worth saying because it was refused outright
+	// for one build. The declaration publishes it and AttachNamedQueries writes it — BuildPageIR
+	// projects a walked field and the lift carries that item into the declaration's select list.
+	// What was broken was one branch further in: the body took the CO-LOCATED JOIN road, which
+	// builds no projection at all, so there was nothing to lift. That road now asks the same question
+	// the READ asks and steps aside for a dot-walk (dbTableProvider.cpp).
 
 	// ⭐ WHAT THE DECLARATION PUBLISHES IS WHAT ITS STATEMENT CAN WRITE. A column the layout gives no
 	// fields for has nothing to project, so publishing it would name something the CTE's own SELECT
@@ -6670,7 +6677,40 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			continue;
 		}
 
-		b.OrderBy(ls.m_col, levelAscending[li]);
+		// 🛑⭐⭐ AND THE COLUMN ROAD ASKS THE SAME QUESTION THE NAME ROAD ABOVE ASKS. It did not, and
+		// that is the whole defect: a level with no output name went straight to ordering by its
+		// COLUMN OBJECT — which, for anything reached through a join, belongs to the JOINED table and
+		// not to the source this read actually has. Out here the source is the declared query
+		// (`q_sub0`), and it publishes no such field, so the statement ordered by a name nothing
+		// wrote: `-206 Column unknown OUT_UNIT_RRREF`, on a report that had composed a moment earlier
+		// (measured 2026-09-06, from the person's own screen).
+		//
+		// The guard for this was written once, for the name road, and stopped there — so a level that
+		// arrived WITHOUT a name walked past it. One rule now, asked of the source in both branches:
+		// order by what it owns, by the same name if it has one, and otherwise leave the level
+		// unsorted and SAY SO. An order the source cannot satisfy is not a preference to honour.
+		const ibBackendQueryable* const primary = b.GetPrimarySource();
+		if (primary != nullptr && ls.m_col != nullptr && primary->OwnsColumn(ls.m_col)) {
+			b.OrderBy(ls.m_col, levelAscending[li]);
+			continue;
+		}
+
+		// ⚠ NOT OURS — so resolve it by NAME against the source we actually have, exactly as the
+		// branch above does, and leave the level unsorted when it is not there. Written this way
+		// round on purpose: the first attempt guarded only the case where a source EXISTS and
+		// disowns the column, and fell through to the raw column whenever there was no primary
+		// source at all — which is the same hole in different clothes, and it still produced the
+		// `-206` on the very next run.
+		if (const ibBackendQueryColumn* named = (primary != nullptr && ls.m_col != nullptr)
+			? primary->ResolveColumnByName(ls.m_col->GetName()) : nullptr) {
+			b.OrderBy(named, levelAscending[li]);
+			continue;
+		}
+
+		ibJournalInfo(wxT("query.road"),
+			wxT("level sort '%s' is not owned by the source this read has - the level is left "
+			    "unsorted rather than ordering by a name the statement never writes"),
+			ls.m_col != nullptr ? ls.m_col->GetName() : wxString(wxT("(no column)")));
 	}
 
 	// ⭐ SAID IN THE JOURNAL, AS TWO NUMBERS — because "the sort does not react" is a complaint about

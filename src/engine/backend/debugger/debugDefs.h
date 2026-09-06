@@ -116,7 +116,59 @@ enum CommandId
 	// 🛑 AND IT IS NEVER SILENT: the far end asks its user, showing them why, and a refusal comes
 	// back as empty bytes. A screen holds whatever happened to be open, and no caller on this side
 	// may photograph it by deciding to.
-	CommandId_Screenshot = 32
+	CommandId_Screenshot = 32,
+
+	// ⭐⭐ PUTTING DATA IN — the sandbox's road, WITHOUT the sandbox's stop, and keeping what it
+	// wrote. Three commands rather than one with a mode, because they are three different requests
+	// about one run; they share a REPLY shape, since all three answer with the state of that run.
+	//
+	// ⭐⭐ WHY IT COMES OVER THIS WIRE AT ALL, and it is not a preference. The MCP server lives in
+	// the DESIGNER, and a designer builds no runtime for anybody: `ibSession::EnsureRoot` returns
+	// early on `appData->DesignerMode()` — "Designer never executes script". So a background job
+	// started there gets a session with no root module and nothing to call, every time. The runtime
+	// is in the application, on the other side of this socket, and that is the only reason a fill
+	// travels as a debugger command.
+	//
+	// ⭐ AND IT NEEDS NO BREAKPOINT, which is the difference from CommandId_RunSandbox and the same
+	// exemption CommandId_Screenshot already has. A sandbox borrows the PARKED session's frame and
+	// connection, so without a stop it has neither; a fill asks for a background job in its own
+	// session, which a running application can start at any moment. So these are deliberately not
+	// guarded by IsEnterLoop / IsDebugLooped.
+	//
+	// ⚠ WHICH IS ALSO WHY A FILL CANNOT BE STEPPED THROUGH (Max, 2026-09-06: "you will check it, but
+	// you will not be able to debug it"). Parking nobody and having a frame to inspect are one
+	// choice, not two features. Whoever needs to step through the code sends it as a SANDBOX
+	// instead, at a stop, and pays for it with the person's session waiting.
+	//
+	// ⭐⭐ AND WHAT TRAVELS ON FillStart IS COMPILED BYTECODE, not a name and not source — the only
+	// command on this wire that carries a program. Having no frame here to compile against was first
+	// read as "so the caller must name a procedure the configuration already has", which made trying
+	// a fill require editing somebody's configuration. The designer has the compiler; it compiles,
+	// and the far end runs what arrives (Max, 2026-09-06: *"you can pass the bytecode you compiled
+	// and send it there so it executes there — what's the problem?"*). Calls inside it bind at THIS
+	// end by module-descriptor guid, versions checked, so a program built against a configuration
+	// this application is not running is refused rather than answered wrongly.
+	CommandId_JobStart  = 33,
+	CommandId_JobStatus = 34,
+	CommandId_JobCancel = 35,
+
+	// ⭐⭐ READING A REPORT, and it is here for a reason of RIGHTS rather than of plumbing (Max,
+	// 2026-09-06: *"we do not work with data in the designer, we get it through the wire — and the
+	// wire is what the user sees, that they really gave access"*). A designer holds a CONFIGURATION;
+	// the rows belong to the application somebody started, and starting it with the debugger
+	// attached is the visible act that grants access. Reading them over the designer's own
+	// connection would take them by deciding to — which is what the screenshot command already
+	// refuses to do with a window.
+	//
+	// ⭐⭐ WHAT CROSSES IS A SCHEMA, NOT THE NAME OF ONE, and that single choice is what makes the
+	// interesting case possible: the caller may send a composition that EXISTS NOWHERE. Assembling
+	// one and running it is then the same act as running a report — the far end builds a composer
+	// out of what arrived and has nothing to look up. Both directions carry a serialised node, so
+	// the payload is the tool's own request and the tool's own answer.
+	//
+	// ⚠ NO STOP REQUIRED either: what happens over there is a rented read, and a running application
+	// can start one whenever. It does not block the person — the rental is a connection of its own.
+	CommandId_Compose = 36
 };
 
 enum ConnectionType {

@@ -182,7 +182,12 @@ const ibSourceDataObject::ibSourceExplorer* ibValueModelTable::GetSourceExplorer
 		// The column-info IS the source-column descriptor: col (ibValuePtr) -> the column-info* (operator T*)
 		// -> its ibBackendSourceColumn base. id passed explicitly (a RAM source column has no query id of its own).
 		const ibBackendSourceColumn* descriptor = col;
-		m_sourceExplorer.AppendColumn(descriptor, col->GetColumnID());
+		// ⚠ THE ID IS SAID AS AN ID. `GetColumnID` answers unsigned, which converts equally well to
+		// `ibMetaID` and to `bool` — and since a deleted `(column, bool)` overload now guards against
+		// a FLAG being mistaken for an id (srcDataObject.h), an unsigned argument is ambiguous between
+		// the two. The cast is not ceremony: this parameter is the id, and saying so is what makes it
+		// impossible for the next reader to think it is the `enabled` flag.
+		m_sourceExplorer.AppendColumn(descriptor, static_cast<ibMetaID>(col->GetColumnID()));
 	}
 	return &m_sourceExplorer;
 }

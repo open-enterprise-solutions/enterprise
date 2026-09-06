@@ -32,6 +32,12 @@ struct ibLogFilter {
     wxLongLong_t to_ms     = 0;     // exclusive; 0 = no upper bound
     int          min_level = -1;    // -1 = any; otherwise rows with level >= this
     wxString     user_name;         // empty = any
+    // ⭐⭐ ONE RUN'S OWN ROWS. Every row already carries `session_id` — it is written on the way in —
+    // and a background job returns the session it runs as, so this is the two ends of an existing
+    // number meeting. Without it, watching what one run is doing meant reading everybody's rows and
+    // guessing which were whose; a background job cannot send its caller a message (its session is
+    // tied to nobody), so the journal filtered by session IS the channel.
+    wxString     session_id;        // empty = any
     wxString     source;            // empty = any
     wxString     event_type;        // empty = any
     wxString     ref_guid;          // drill-down by object identity

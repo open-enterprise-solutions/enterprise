@@ -151,9 +151,20 @@ void ibMcpTool::ibMcpArgument::Declare(ibDataNode& schema) const
 	schema.SetField(kSchemaRequired, ibDataValue::Array(required));
 }
 
+// 🛑⭐⭐ BOTH AREAS, WHICH IS WHAT THIS ALWAYS CLAIMED TO DO. A node has two of them — its FIELDS and
+// its PROPERTIES — and the JSON reader sorts by shape: a scalar becomes a field, a SUB-NODE becomes a
+// property (jsonProvider.cpp). This looked only in the fields, so an argument of Kind::Node was
+// invisible to it: every REQUIRED node argument was reported missing, however plainly it had been
+// sent, and the refusal named it as not having come.
+//
+// ⚠ The note beside ibMcpMissingArgument already said "Given() is the same BOTH-AREAS lookup the
+// tool's own body uses" — and the body reads a node with FindChild while this read only FindField.
+// The description was right about the intention and the code did half of it; nothing compares the
+// two, and the half that was missing is the one nobody exercises until a node argument is required.
+// (Found 2026-09-06, by a required `value` that had come.)
 bool ibMcpTool::ibMcpArgument::Given(const ibDataNode& params) const
 {
-	return params.FindField(m_name) != nullptr;
+	return params.FindField(m_name) != nullptr || params.FindChild(m_name) != nullptr;
 }
 
 wxString ibMcpTool::ibMcpArgument::Text(const ibDataNode& params) const

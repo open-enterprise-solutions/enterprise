@@ -62,6 +62,7 @@
     <ClInclude Include="lock\lockKeyHash.h" />
     <ClInclude Include="lock\lockManager.h" />
     <ClInclude Include="job\jobManager.h" />
+    <ClInclude Include="job\jobRunByteCode.h" />
     <ClInclude Include="mcp\mcpClipboard.h" />
     <ClInclude Include="mcp\mcpMessage.h" />
     <ClInclude Include="mcp\mcpServer.h" />
@@ -277,6 +278,8 @@
     <ClInclude Include="composition\dataComposerInternal.h" />
     <ClInclude Include="composition\drivers\spreadsheetComposeDriver.h" />
     <ClInclude Include="composition\drivers\listFetchDriver.h" />
+    <ClInclude Include="composition\drivers\tableComposeDriver.h" />
+    <ClInclude Include="composition\composeRunSchema.h" />
     <ClInclude Include="compositionDescription.h" />
     <ClInclude Include="system\value\composition\valueComposerField.h" />
     <ClInclude Include="system\value\composition\valueComposerSettings.h" />
@@ -446,6 +449,10 @@
     <ClCompile Include="mcp\mcpServer.cpp" />
     <ClCompile Include="mcp\mcpTool.cpp" />
     <ClCompile Include="mcp\tools\mcpToolChat.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolCompose.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolRunCode.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolSchema.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolValue.cpp" />
     <ClCompile Include="mcp\tools\mcpToolClipboard.cpp" />
     <ClCompile Include="mcp\mcpDebugBridge.cpp" />
     <ClCompile Include="mcp\tools\mcpToolDebug.cpp" />
@@ -473,6 +480,7 @@
     <ClCompile Include="mcp\tools\mcpToolScript.cpp" />
     <ClCompile Include="mcp\tools\mcpToolLanguage.cpp" />
     <ClCompile Include="job\jobBackground.cpp" />
+    <ClCompile Include="job\jobRunByteCode.cpp" />
     <ClCompile Include="job\jobRegister.cpp" />
     <ClCompile Include="job\platformJobs.cpp" />
     <ClCompile Include="job\jobSchedule.cpp" />
@@ -745,6 +753,7 @@
     <ClCompile Include="composition\dataComposerRun.cpp" />
     <ClCompile Include="composition\drivers\spreadsheetComposeDriver.cpp" />
     <ClCompile Include="composition\ramComposer.cpp" />
+    <ClCompile Include="composition\composeRunSchema.cpp" />
     <ClCompile Include="compositionDescription.cpp" />
     <ClCompile Include="system\value\composition\valueComposerField.cpp" />
     <ClCompile Include="system\value\composition\valueComposerSettings.cpp" />

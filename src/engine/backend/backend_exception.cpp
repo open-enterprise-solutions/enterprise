@@ -9,6 +9,7 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/debugger/debugServer.h"
 #include "backend/appData.h"
+#include "backend/logger/logger.h"   // a runtime failure is recorded where it can be read tomorrow
 #include "backend/compiler/procUnit.h"
 #include "backend/session/session.h"
 
@@ -269,19 +270,33 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 			if (!isEvalMode && strFileName.IsEmpty()) {
 				const ibGuid& guidDocPath = error.m_strDocPath;
 				const ibValueMetaObjectModuleBase* foundedDoc = activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectModuleBase>(guidDocPath, true);
-				wxASSERT(foundedDoc);
-				strModuleData = foundedDoc->GetModuleText();
+				// 🛑⭐⭐ NOT EVERY FAILING BYTECODE BELONGS TO A MODULE, and this asserted that it
+				// did — then dereferenced. The module text is wanted for ONE thing: quoting the
+				// offending source line. A program that is not in the configuration has no line to
+				// quote, which is a smaller loss than the crash: MEASURED 2026-09-06, `code_run`
+				// sending a compiled program that calls `Raise("...")` reached here with a docPath
+				// that names no metaobject, and the run died on the assert with the actual failure
+				// never reported at all — so the caller saw a hang rather than their own error.
+				//
+				// ⚠ THE SAME SHAPE IS ONE BRANCH DOWN, for a module in an external file, and it is
+				// fixed with it: a file that has been moved or deleted is ordinary, and a reporter
+				// that crashes while reporting is the worst possible failure of a reporter.
+				if (foundedDoc != nullptr)
+					strModuleData = foundedDoc->GetModuleText();
 			}
 			else if (!isEvalMode && !strFileName.IsEmpty()) {
 				// Frame from the session's CurrentFrame() shortcut —
 				// reaches this thread's pinned session via worker scope.
 				if (auto* frame = ibSession::CurrentFrame()) {
 					const ibMetaData* metadata = frame->FindMetadataByPath(strFileName);
-					wxASSERT(metadata);
-					const ibGuid& guidDocPath = error.m_strDocPath;
-					const ibValueMetaObjectModuleBase* foundedDoc = metadata->FindAnyObjectByFilter<ibValueMetaObjectModuleBase>(guidDocPath, true);
-					wxASSERT(foundedDoc);
-					strModuleData = foundedDoc->GetModuleText();
+					// Same rule as the branch above: a source line is worth having and is not worth
+					// crashing for. An external report whose file has moved answers null here.
+					const ibValueMetaObjectModuleBase* foundedDoc = metadata != nullptr
+						? metadata->FindAnyObjectByFilter<ibValueMetaObjectModuleBase>(
+							(const ibGuid&)error.m_strDocPath, true)
+						: nullptr;
+					if (foundedDoc != nullptr)
+						strModuleData = foundedDoc->GetModuleText();
 				}
 			}
 
@@ -294,6 +309,23 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 				strCodeError, wxNOT_FOUND, err.GetErrorDescription(),
 				ibDiagnosticKind::Runtime   // reached from procUnit's catch — the code ran
 			);
+
+			// ⭐⭐ AND INTO THE REGISTRATION JOURNAL, because a failure nobody was watching is
+			// otherwise not recorded anywhere. MEASURED 2026-09-06: the journal was written from
+			// twenty places in the whole backend, none of them this one — so "scan the journal for
+			// the errors" found nothing, and a run that failed at three in the morning left no trace
+			// at all. A background or scheduled job cannot MESSAGE anybody (its session is tied to
+			// no one), which makes this its only account of having failed.
+			//
+			// ⚠ NOT IN EVAL MODE. A watch expression, a tooltip and an autocomplete probe fail
+			// constantly and by design; recording those would bury the failures that matter under
+			// the ones nobody asked about.
+			if (!isEvalMode) {
+				if (ibLogger* const logger = ibApplicationData::GetLogger())
+					logger->Error(wxT("script"), wxT("runtime.error"),
+						wxString::Format(wxT("%s (%s, line %d)"),
+							err.GetErrorDescription(), strModuleName, (int)error.m_numLine + 1));
+			}
 		}
 		else {
 

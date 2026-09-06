@@ -7,7 +7,54 @@
 #include "backend/backend_exception.h"
 #include "backend/fileSystem/fs.h"            // ibReaderMemory / ibWriterMemory
 #include "backend/serialize/jsonProvider.h"
-#include "backend/compositionDescription.h"   // ibCompositionNodeName — a composition's parts, in words
+#include "backend/compositionDescription.h"   // ibCompositionNodeName / …Clsid — a composition's parts, both ways
+#include "backend/metadataConfiguration.h"    // activeMetaData — the registered types, for the lookup
+
+// ⭐⭐ THE MIRROR OF THE RESOLVER BELOW, and the pair is what makes a schema READ, EDITED AND SENT
+// BACK possible. An answer renders a node's type as a WORD; a request carrying that word back was
+// read as clsid 0, because the parsing side had no lookup at all. So a caller could take report_get's
+// answer, change one field and return it — and every typed part of it (its parameters, its outputs,
+// its fields) arrived as untyped nodes, leaving a composition that was simply EMPTY. Nothing failed;
+// the refusal said "this schema asks for no parameters" about a schema that declared one (measured
+// 2026-09-06).
+//
+// ⚠ CHAINED, NOT CHOSEN — the same mistake the resolver below made once and says so. The metadata
+// answers for registered types; a composition's own parts are registered nowhere, so they are the
+// FLOOR under it. Asking only one of the two is how a lookup exists and never fires.
+void ibMcpInstallTypeLookup(ibJsonProvider& provider)
+{
+	provider.SetTypeLookup([](const wxString& name) -> ibClassID {
+		// ⚠ THE COMPOSITION'S OWN PARTS FIRST, AND NOT ONLY FOR SPEED. A lookup runs INSIDE the JSON
+		// parse, and `GetIDObjectFromString` does not answer 0 for a name it does not know — it
+		// THROWS ("Object '%s' is not exist"). Asked first, it threw on `CompositionVariant`, the
+		// parse unwound, and the error reply was then assembled with no request id: a MALFORMED
+		// ENVELOPE, which the far end reports as the server having broken rather than as a request
+		// having failed. Every request carrying a node type the metadata does not know would have
+		// done it (measured 2026-09-06, sending a hand-built schema).
+		//
+		// 🛑 I WROTE "CHAINED, NOT CHOSEN" AND CHAINED THEM THE WRONG WAY ROUND. The order of a
+		// fallback chain is not a detail when one of its links can throw: the one that answers
+		// quietly goes first, and the one that raises is wrapped.
+		if (const ibClassID part = ibCompositionNodeClsid(name); part != ibClassID(0))
+			return part;
+
+		// ⭐⭐ AND IT IS THE METADATA'S LOOKUP, NOT THE VALUE FACTORY'S — the two are not
+		// interchangeable and the order between them is the point (Max, 2026-09-06). `ibMetaData::
+		// GetIDObjectFromString` searches the METAOBJECTS first and only then falls through to
+		// `ibValue::GetIDObjectFromString`: reference types live in the metaobjects, so asking the
+		// value factory alone finds no reference at all, and neither stage may be skipped.
+		if (activeMetaData != nullptr) {
+			try {
+				return activeMetaData->GetIDObjectFromString(name);
+			}
+			catch (const ibBackendException&) {
+				// Neither stage knew it — which is where that call raises. A node keeps clsid 0 and
+				// is read as an untyped one, which is what an unknown name has always meant here.
+			}
+		}
+		return ibClassID(0);
+	});
+}
 
 wxString ibMcpRenderNode(const ibDataNode& node, const std::function<wxString(ibClassID)>& typeResolver)
 {
@@ -72,6 +119,7 @@ bool ibMcpParseRequest(const wxString& text, ibMcpRequest& request, wxString& er
 	try {
 		ibReaderMemory reader(buffer);
 		ibJsonProvider provider;
+		ibMcpInstallTypeLookup(provider);
 		if (!provider.Read(reader, root)) {
 			error = wxT("the request could not be read as JSON");
 			return false;
@@ -117,6 +165,7 @@ bool ibMcpParseResponse(const wxString& text, ibDataValue& id, wxString& payload
 	try {
 		ibReaderMemory reader(buffer);
 		ibJsonProvider provider;
+		ibMcpInstallTypeLookup(provider);
 		if (!provider.Read(reader, root))
 			return false;
 	}

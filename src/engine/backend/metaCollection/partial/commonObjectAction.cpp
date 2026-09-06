@@ -30,7 +30,19 @@ void ibValueMetaObjectRecordDataRef::FillSourceExplorer(ibSourceDataObject::ibSo
 {
 	for (const ibValueMetaObjectAttributeBase* a : GetGenericAttributeArrayObject())
 		if (a != nullptr)
-			explorer.AppendColumn(a, /*enabled*/true, /*visible*/ IsDataReference(a->GetMetaID()));
+			// 🛑⭐⭐ THE FACADE, NOT THE ATTRIBUTE — and the difference is a SILENT OVERLOAD SHIFT. An
+			// attribute stopped being an `ibBackendQueryColumn` when it began HOLDING one, so this
+			// call stopped binding to `AppendColumn(const ibBackendQueryColumn*, bool, bool, …)` and
+			// began binding to `AppendColumn(const ibBackendSourceColumn*, const ibMetaID& id, bool,
+			// bool, …)` — whose SECOND parameter is the id. `true` converted to 1, every column was
+			// appended under the same id, and the flags shifted one place along.
+			//
+			// ⚠ IT COMPILED, because bool converts to an integer without a word. What it produced was
+			// a list whose every column header read the same and whose values could not be found at
+			// all — an assert deep in GetValueByMetaID, three tiers from here (Max, 2026-09-06,
+			// pointing straight at this line: "the id is lost here").
+			explorer.AppendColumn(a->GetQueryColumn(), /*enabled*/true,
+				/*visible*/ IsDataReference(a->GetMetaID()));
 }
 
 // DOCUMENT variant — reference / deletion mark / data version hidden; number / date / posted / attributes visible.
@@ -40,7 +52,7 @@ void ibValueMetaObjectRecordDataMutableRef::FillSourceExplorer(ibSourceDataObjec
 		if (a == nullptr) continue;
 		const ibMetaID id = a->GetMetaID();
 		const bool hidden = IsDataReference(id) || IsDataDeletionMark(id) || IsDataVersion(id);
-		explorer.AppendColumn(a, /*enabled*/true, /*visible*/ !hidden);
+		explorer.AppendColumn(a->GetQueryColumn(), /*enabled*/true, /*visible*/ !hidden);
 	}
 
 }
@@ -86,7 +98,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::FillSourceExplorer(ibSource
 		const bool hidden = IsDataReference(id) || IsDataDeletionMark(id) || IsDataVersion(id)
 		                 || IsDataPredefinedName(id) || IsDataFolder(id)
 		                 || (IsDataParent(id) && parentIsTheTree);
-		explorer.AppendColumn(a, /*enabled*/true, /*visible*/ !hidden);
+		explorer.AppendColumn(a->GetQueryColumn(), /*enabled*/true, /*visible*/ !hidden);
 	}
 
 	// ⭐ AND NO MOMENT HERE. A moment is a DATE plus the record standing at it, and a catalogue has no
@@ -383,7 +395,7 @@ void ibValueMetaObjectRegisterData::FillSourceExplorer(ibSourceDataObject::ibSou
 {
 	for (const ibValueMetaObjectAttributeBase* a : GetGenericAttributeArrayObject())
 		if (a != nullptr)
-			explorer.AppendColumn(a, /*enabled*/true, /*visible*/ true);
+			explorer.AppendColumn(a->GetQueryColumn(), /*enabled*/true, /*visible*/ true);
 }
 
 // (Default presentation sort REMOVED from here — it is now set at LIST CREATION (CreateSourceObject / GetListForm)

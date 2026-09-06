@@ -1,4 +1,4 @@
-#include "value.h"
+﻿#include "value.h"
 #include "valueSerialization.h"
 
 #include "backend/serialize/dataBuilder.h"
@@ -171,12 +171,34 @@ bool ibValue::DoDeserialize(const ibDataNode& node)
 	case ibValueTypes::TYPE_STRING:
 		SetString(node.GetValue<wxString>(kFieldData));
 		return true;
-	case ibValueTypes::TYPE_DATE:
-		// Straight into the scalar: SetDate takes a STRING (the script-facing
-		// conversion), and going through text here would parse what the codec
-		// just formatted.
+	case ibValueTypes::TYPE_DATE: {
+		// Straight into the scalar where the format kept one: SetDate takes a STRING (the
+		// script-facing conversion), and going through text would parse what the codec just
+		// formatted.
+		//
+		// 🛑⭐⭐ BUT A TEXT FORMAT CANNOT KEEP ONE, and this is where that stopped being somebody
+		// else's problem. JSON has no date: the writer emits an ISO string and the reader hands back
+		// a String, deliberately — "an ISO string and a string that looks like one are the same
+		// text" (jsonProvider.cpp), and guessing would corrupt every string that resembles a date.
+		// So a value written by Serialize, carried as JSON and read by Deserialize used to THROW on
+		// the way in — the platform's own round trip, broken for the one type most often stored in a
+		// report's parameters (measured 2026-09-06: "wrong value kind (expected 3, got 4)").
+		//
+		// ⭐ TAKING THE TEXT HERE IS NOT A GUESS, and that is what makes it right here and wrong in
+		// the reader: THIS value already knows it is a Date — m_typeClass says so, resolved by
+		// whoever created it from the type the node declares. Converting a stated type is an
+		// instruction; converting an unknown one is the table that never ends.
+		const ibDataValue* const stored = node.FindField(kFieldData);
+		if (stored != nullptr && stored->Kind() == ibDataKind::String) {
+			ibValue text;
+			if (!text.SetDate(stored->AsString()))
+				return false;   // it says it is a date and the text is not one — that is a failure
+			m_dData = text.GetDate();
+			return true;
+		}
 		m_dData = node.GetValue<wxDateTime>(kFieldData).GetValue().GetValue();
 		return true;
+	}
 	default:
 		break;
 	}

@@ -167,6 +167,30 @@ public:
 		// overload (a DB / queryable column that carries its own GetColumnId), a plain source column (e.g. a
 		// RAM value-table column) has no query identity, so the id is passed explicitly. The descriptor is
 		// KEPT (m_col) so WalkColumns returns it as the leaf — the header / type resolve through it.
+		// 🛑⭐⭐ A FLAG IS NOT AN ID, and this overload exists to say so at COMPILE time. `ibMetaID` is an
+		// integer, so `AppendColumn(col, /*enabled*/true, /*visible*/false)` on a plain source column
+		// binds to the overload below with `true` silently becoming id 1 — every column appended under
+		// the same id, the flags shifted one place along, and not a word from the compiler.
+		//
+		// ⚠ IT HAPPENED. An attribute stopped being an ibBackendQueryColumn and began HOLDING one, so
+		// call sites that had been binding to the query-column overload above quietly moved here. The
+		// lists they built showed every column under one header and could not find a single value
+		// (2026-09-06). A refactor driven by the COMPILER's error list cannot see this by
+		// construction: nothing failed to compile.
+		//
+		// ⭐⭐ AND THE COUNT IS THE POINT. A grep for the shape found NINE; this line found FOURTEEN
+		// MORE, in files the search had not thought to look at — a catalogue's Code, a document's
+		// Number, a constant, a register's dimensions. The neighbouring call was often already
+		// correct, because it took ONE argument and so failed to compile; the two-argument one beside
+		// it did not, and stayed.
+		//
+		// ⚠ ITS PRICE, so nobody removes it wondering: an id passed as anything but `ibMetaID` is now
+		// AMBIGUOUS rather than silently converted, and has to be said as one (valueTable.cpp). That
+		// is a cast at a call site against a class of defect that costs a day, and the cast makes the
+		// parameter read as what it is.
+		void AppendColumn(const ibBackendSourceColumn* col, bool enabled, bool visible = true,
+			const wxString& group = wxEmptyString) = delete;
+
 		void AppendColumn(const ibBackendSourceColumn* col, const ibMetaID& id, bool enabled = true, bool visible = true,
 			const wxString& group = wxEmptyString) {
 			if (col == nullptr || !col->IsAllowed()) return;

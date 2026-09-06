@@ -12,6 +12,12 @@ public:
 
 	static void SetDebuggerClientBridge(ibDebuggerClientBridge* bridge);
 
+	// ⭐ WHAT A BRIDGE IS BORN WITH, and both of these are the same kind of fact: an identity nobody
+	// else may mint, and the SESSION it belongs to. Both are read HERE, at construction, on the
+	// thread of whoever installs the listener — which is the only moment either is knowable. Read on
+	// the socket thread instead, the session answers null, because nothing is bound there.
+	ibDebuggerClientBridge();
+
 	virtual ~ibDebuggerClientBridge() {}
 
 	// ⭐⭐ WHO ASKED — minted here, by the bridge itself, and never spoken by anyone else.
@@ -26,6 +32,12 @@ public:
 	// Generated once, here, and handed out as TEXT — which is what a question carries and what an
 	// answer brings back. Nothing takes it apart; it is only ever compared.
 	const wxString& GetBridgeId() const { return m_bridgeId; }
+
+	// (⛔ NO SESSION HERE. A bridge briefly carried the one it was built under, so a reply could be
+	//  routed to its worker — and every bridge answered with the SAME one, because they are all
+	//  installed in the same process by the same person. A fact that is identical on every instance
+	//  is not a property of the instance: it belongs to the adapter, which is where it now lives.
+	//  Max, 2026-09-06: *"remove the sessions from the bridges, they duplicate"*.)
 
 	//commands 
 	virtual void OnSessionStart(wxSocketClient* sock) = 0;
@@ -67,10 +79,25 @@ public:
 	// mean they declined — the one outcome a listener must not mistake for a broken transfer.
 	virtual void OnScreenshot(const wxMemoryBuffer& png, const wxString& focus) {}
 
+	// The state of a filling run over there: one shape for start, status and cancel alike, since all
+	// three ask about the same run. `which` is the CommandId being answered, so a waiter can tell an
+	// answer to its own request from an answer to somebody else's; `accepted` false means the far end
+	// refused, and `refusal` says why.
+	//
+	// ⚠ EMPTY BODY, LIKE ITS NEIGHBOURS ABOVE, and appended rather than inserted: the designer's own
+	// bridge wants none of this, and moving a vtable slot under a partially rebuilt DLL is a fault
+	// with no message.
+	virtual void OnJobState(unsigned int which, const struct ibJobRunByteCodeState& state) {}
+
+	// What a composition answered: `answered` true and the tables in `result`, or false and the
+	// reason in `refusal`. One or the other, and never silence — a read that produced nothing
+	// because a parameter was not set is a sentence, not an empty table.
+	virtual void OnComposed(bool answered, const wxString& refusal, const wxMemoryBuffer& result) {}
+
 private:
-	// Its own, from birth. Nothing hands it in, so two bridges cannot be given the same one and a
-	// bridge cannot be created without one.
-	wxString m_bridgeId = ibGuid(ibGuid::newGuid()).str();
+	// Its own, from birth — see the constructor. Nothing hands it in, so two bridges cannot be given
+	// the same one and a bridge cannot be created without one.
+	wxString m_bridgeId;
 };
 
 

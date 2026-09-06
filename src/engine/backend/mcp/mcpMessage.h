@@ -97,6 +97,12 @@ BACKEND_API bool ibMcpParseResponse(const wxString& text, ibDataValue& id,
 BACKEND_API wxString ibMcpRenderNode(const ibDataNode& node,
 	const std::function<wxString(ibClassID)>& typeResolver = {});
 
+// ⭐⭐ THE MIRROR OF THAT RESOLVER, installed on a provider that is about to READ. A node's type goes
+// out as a word; without this it comes back as clsid 0, and a schema read, edited and returned loses
+// every typed part it was made of — silently, since an untyped node parses perfectly well and simply
+// means nothing. Registered types first, a composition's own parts under them.
+BACKEND_API void ibMcpInstallTypeLookup(class ibJsonProvider& provider);
+
 // The two answers. `id` is the request's, verbatim: the protocol matches a
 // reply to its call by that value and by nothing else.
 BACKEND_API wxString ibMcpWriteResult(const ibDataValue& id, const ibDataNode& result);

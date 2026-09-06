@@ -1093,7 +1093,10 @@ void ibValidateSettings(const ibSettingsDescription& settings)
 // ⭐ THE NAMES THE IDS WERE MADE FROM — see the note in the header. One list, built from the same
 // literals the constants above use, so a name and its id cannot part company: each entry is the
 // constant itself beside the word it was spelled with.
-wxString ibCompositionNodeName(ibClassID clsid)
+// ⭐⭐ ONE TABLE, READ BOTH WAYS. A second list would be a second thing to keep in step, and the day
+// it fell behind the failure would be a node silently arriving as type 0 — which is exactly the
+// failure this pair exists to end.
+static const std::pair<ibClassID, const wxChar*>* ibCompositionNodeTable(size_t& count)
 {
 	static const std::pair<ibClassID, const wxChar*> s_names[] = {
 		{ g_variantNodeClsid,   wxT("CompositionVariant")    },
@@ -1109,9 +1112,42 @@ wxString ibCompositionNodeName(ibClassID clsid)
 		{ g_fieldInfoNodeClsid, wxT("CompositionFieldInfo")  },
 	};
 
-	for (const auto& entry : s_names)
-		if (entry.first == clsid)
-			return entry.second;
+	count = sizeof(s_names) / sizeof(s_names[0]);
+	return s_names;
+}
+
+wxString ibCompositionNodeName(ibClassID clsid)
+{
+	size_t count = 0;
+	const std::pair<ibClassID, const wxChar*>* const names = ibCompositionNodeTable(count);
+
+	for (size_t i = 0; i < count; ++i)
+		if (names[i].first == clsid)
+			return names[i].second;
 
 	return wxEmptyString;
+}
+
+// ⭐⭐ AND BACK, WHICH IS WHAT MAKES A ROUND TRIP POSSIBLE. An answer renders these types as WORDS so
+// a reader sees `"NodeType": "CompositionParameter"` instead of seventeen digits — and until this
+// existed, that answer could not be handed back: the JSON reader turned an unknown word into clsid 0,
+// so a schema read, edited and returned lost every part it was made of, silently. The composition
+// then had no parameters, no outputs and no fields, and refused as though the caller had sent an
+// empty one (measured 2026-09-06, building a two-output schema by hand).
+//
+// ⚠ IT IS THE SAME TABLE. The names ARE the literals the ids are made from, so this cannot drift
+// from the writer without both being edited at once.
+ibClassID ibCompositionNodeClsid(const wxString& name)
+{
+	if (name.IsEmpty())
+		return ibClassID(0);
+
+	size_t count = 0;
+	const std::pair<ibClassID, const wxChar*>* const names = ibCompositionNodeTable(count);
+
+	for (size_t i = 0; i < count; ++i)
+		if (name == names[i].second)
+			return names[i].first;
+
+	return ibClassID(0);
 }

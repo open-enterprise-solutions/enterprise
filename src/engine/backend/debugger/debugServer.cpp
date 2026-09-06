@@ -26,6 +26,9 @@
 #include "backend/fileSystem/fs.h"
 #include "backend/system/systemManager.h"     // Message — the person is told before code runs
 #include "backend/databaseLayer/databaseLayer.h"   // …and the transaction that undoes it
+#include "backend/job/jobRunByteCode.h"       // sent code is a background job, and it lives with them
+#include "backend/compiler/byteCode.h"        // ...and what arrives for it to run is compiled code
+#include "backend/composition/composeRunSchema.h"  // …and a report is run here, where the data is
 #if _USE_NET_COMPRESSOR == 1
 #include "utils/fs/lz/lzhuf.h"
 #endif
@@ -1734,6 +1737,96 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		commandChannel.w_u32((unsigned int)png.GetDataLen());
 		if (png.GetDataLen() > 0)
 			commandChannel.w(png.GetData(), (u32)png.GetDataLen());
+
+		SendCommand(commandChannel.pointer(), commandChannel.size());
+	}
+	// ⭐⭐ PUTTING DATA IN — the second command here that does not need a stop, and for the same kind
+	// of reason the picture does not: what is asked for is a BACKGROUND JOB, and a running
+	// application can start one at any moment. It does not borrow the parked frame, so it does not
+	// need one to exist.
+	//
+	// ⭐ WHY IT ARRIVES OVER THIS SOCKET AT ALL: the MCP server lives in the designer, and a designer
+	// builds no runtime for any session (ibSession::EnsureRoot returns early on DesignerMode). The
+	// runtime is here. Everything the work itself needs is in ibJobRunByteCode; this marshals.
+	//
+	// ⚠ ONE REPLY SHAPE FOR ALL THREE, because all three answer with the state of one run — a caller
+	// that has just started one and a caller checking on one an hour later are asking the same
+	// question. The leading byte says whether the request was accepted; the rest is the state.
+	else if (commandFromClient == CommandId_JobStart ||
+	         commandFromClient == CommandId_JobStatus ||
+	         commandFromClient == CommandId_JobCancel) {
+
+		ibJobRunByteCodeState state;
+
+		if (commandFromClient == CommandId_JobStart) {
+			// ⭐⭐ THE CODE ARRIVES AS TEXT and is compiled HERE, against this application's own
+			// configuration. It was built the other way first — compiled in the designer and sent
+			// as bytecode, which worked — but that made four standing promises that two processes
+			// agree (format version, dependency guids, parent, slot numbering), and the day the
+			// compiler numbers something differently, sent bytecode points at the wrong thing
+			// silently. Compiling where it runs retires all four.
+			ibJobRunRequest request;
+			request.Read(commandReader);
+			state.m_accepted = ibJobRunByteCode::Start(request, state);
+		}
+		else {
+			wxString token;
+			commandReader.r_stringZ(token);
+			state.m_accepted = commandFromClient == CommandId_JobStatus
+				? ibJobRunByteCode::Status(token, state)
+				: ibJobRunByteCode::Cancel(token, state);
+		}
+
+		// ⚠ ANSWERED EVEN WHEN IT CANNOT RUN — the same rule the sandbox states one branch up. A
+		// caller that waits deserves a sentence it can act on; silence is one it can only time out
+		// on, and a timeout says nothing about why.
+		ibWriterMemory commandChannel;
+		commandChannel.w_u16(commandFromClient);
+		state.Write(commandChannel);
+
+		SendCommand(commandChannel.pointer(), commandChannel.size());
+	}
+	// ⭐⭐ READING A REPORT HERE, because this is where data may be touched. What arrives is a SCHEMA
+	// — resolved in the designer, or assembled by the caller out of nothing — plus the settings
+	// section and the parameters. Nothing is looked up on this side; ibComposeRunSchema builds a composer
+	// out of what came and runs it, on a rented connection so nobody's window waits for it.
+	else if (commandFromClient == CommandId_Compose) {
+
+		const u32 given = commandReader.r_u32();
+
+		ibDataNode request;
+		if (given > 0) {
+			// ⚠ THE NODE TRAVELS IN THE INTERNAL BINARY FORMAT, not as JSON. A report's whole point
+			// here is EXACT figures, and a decimal that goes out through a double comes back as
+			// nearly itself — which is the one failure this pair of tools must not have.
+			//
+			// ⚠ And the buffer is a NAMED LOCAL: a reader borrows its bytes, so handing it a
+			// temporary leaves it reading freed memory (fs.h spells this out and deletes the
+			// rvalue overload for it).
+			wxMemoryBuffer blob;
+			blob.SetBufSize(given);
+			commandReader.r(blob.GetWriteBuf(given), given);
+			blob.SetDataLen(given);
+
+			ibReaderMemory nodeReader(blob);
+			ibBinaryProvider().Read(nodeReader, request);
+		}
+
+		ibDataNode result;
+		wxString   refusal;
+		const bool answered = ibComposeRunSchema::Run(request, result, refusal);
+
+		ibWriterMemory payload;
+		if (answered)
+			ibBinaryProvider().Write(result, payload);
+
+		ibWriterMemory commandChannel;
+		commandChannel.w_u16(CommandId_Compose);
+		commandChannel.w_u8(answered ? 1 : 0);
+		commandChannel.w_stringZ(refusal);
+		commandChannel.w_u32((unsigned int)payload.size());
+		if (payload.size() > 0)
+			commandChannel.w(payload.pointer(), (u32)payload.size());
 
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}

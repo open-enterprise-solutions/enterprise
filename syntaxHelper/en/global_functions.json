@@ -1103,7 +1103,29 @@
       "example": "Message(\"Document saved successfully.\");\nMessage(\"The document did not post: no stock left.\", StatusMessage.Error);",
       "availability": "Enterprise, Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
-        "fn.SetStatus"
+        "fn.SetStatus",
+        "fn.WriteJournalEvent"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "fn.WriteJournalEvent",
+      "name_local": "WriteJournalEvent",
+      "name_en": "WriteJournalEvent",
+      "kind": "system_procedure",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "WriteJournalEvent(<String>, [<Marker>], [<Category>], [<Object>])",
+      "description": "Writes a line into the registration journal - the durable record, stamped with the session that wrote it and readable afterwards by anyone. Think of it as Message for things that must still be readable TOMORROW: the same act of saying what happened, aimed at a reader who is not there yet.\n\nTHAT IS WHAT IT IS FOR. A critical stretch of code that keeps going wrong, a posting that fails for one document in a hundred, a place where somebody's data changes and nobody can afterwards say when or why - leave journal lines through it, and the chain can be followed after the fact instead of reproduced. A message shown once is gone; a journal line is still there next week, with its session, its time and the object it was about.\n\nGIVE IT A MARKER YOU CAN FILTER BY. The <Category> is that marker: pick one distinctive word for a run - \"nightly.close\", \"import.2026-01\" - and put it on every line the run writes. Afterwards those lines pull out as a set, in order, while everybody else's stay out of the way. Without a marker a journal is a haystack; with one it is a trace.\n\nIt is also NOT a second Message in one hard sense. A message is addressed to whoever is watching a window; a BACKGROUND or SCHEDULED job is tied to nobody, so its messages reach no one at all. Code that runs unattended - a data load, a bulk reposting, a nightly closing routine, anything started as a background or scheduled job - has no other way to say what it is doing, which is why reporting there means writing here.",
+      "syntax_block": "WriteJournalEvent(<String>, [<Marker>], [<Category>], [<Object>])",
+      "parameters": "<String> — the text.\n<Marker> — StatusMessage.Information (the default), StatusMessage.Warning or StatusMessage.Error. It becomes the line's level, which is what a reader filters by.\n<Category> — the event type, for grouping lines of one kind: \"import.line\", \"posting.skipped\". Defaults to \"script.event\".\n<Object> — the value the line is ABOUT: a reference, or anything else worth naming. Its presentation is appended to the text, so the line reads '... [Sales order 000012]' and is found with a `contains` search. It is TEXT, not a link: the journal has a structured payload column and nothing fills it yet, so there is no click-through to the object today.",
+      "return_descr": "",
+      "example": "WriteJournalEvent(\"Import started: 1240 rows\");\nWriteJournalEvent(\"Row 17 skipped: no such item\", StatusMessage.Warning, \"import.line\");\nWriteJournalEvent(\"Reposted\", StatusMessage.Information, \"posting\", Doc.Ref);",
+      "availability": "Enterprise, Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "fn.Message"
       ],
       "reviewed": true
     },

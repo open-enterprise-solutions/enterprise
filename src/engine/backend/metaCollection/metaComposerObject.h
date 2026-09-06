@@ -27,6 +27,7 @@
 #include "backend/query/queryColumn.h"                   // ibBackendSourceColumn — a composer IS a column of its report
 #include "backend/system/value/valueDataComposition.h"
 #include "backend/propertyManager/property/propertyComposition.h"   // the composition lives in a PROPERTY, like a template's sheet
+#include "backend/composition/dataComposer.h"                    // ibCompositionHolder - named in the base list below
 
 // ⭐ AND IT IS A COLUMN OF THE OBJECT THAT DECLARES IT — the same way an attribute is. That is not
 // decoration: the source-binding walk (WalkColumns) returns an ibBackendSourceColumn as the LEAF, so
@@ -34,7 +35,11 @@
 // the picker and nowhere else: the inspector fell back to the owner's type ("ReportObject.Report1"
 // instead of the composition) and dragging one onto a form created nothing at all, because the drop
 // asks the walk for the leaf's type first (Max, 2026-08-20).
-class BACKEND_API ibValueMetaObjectComposer : public ibValueMetaObject, public ibBackendSourceColumn {
+// ⭐ …and ibCompositionHolder LAST, so the base order above is untouched: a metaobject's first base
+// is what its layout is read through. The interface adds no data and no slot ordering of its own —
+// the three methods it declares are the ones already written below, unchanged.
+class BACKEND_API ibValueMetaObjectComposer : public ibValueMetaObject, public ibBackendSourceColumn,
+                                              public ibCompositionHolder {
 protected:
 
 public:

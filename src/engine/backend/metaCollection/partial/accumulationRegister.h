@@ -809,7 +809,7 @@ inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRe
 				reg->HasRecorder() && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : wxString()))
 			continue;
 		if (const ibValueMetaObjectAttributeBase* attribute = attributeById(col->GetColumnId()))
-			explorer.AppendColumn(attribute, /*enabled*/ true, /*visible*/ true);
+			explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
 		else
 			explorer.AppendColumn(col);
 	}
@@ -943,7 +943,7 @@ inline void ibAccumRegisterBalanceDescriptor::FillConditionExplorer(ibSourceData
 		return;
 	for (const ibValueMetaObjectAttributeBase* dimension : m_reg->GetDimensionArrayObject())
 		if (dimension != nullptr)
-			explorer.AppendColumn(dimension, /*enabled*/ true, /*visible*/ true);
+			explorer.AppendColumn(dimension->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
 }
 
 inline ibAccumRegisterTurnoverDescriptor::~ibAccumRegisterTurnoverDescriptor() = default;
@@ -1029,7 +1029,7 @@ inline void ibAccumRegisterTurnoverDescriptor::FillConditionExplorer(ibSourceDat
 		return;
 	for (const ibValueMetaObjectAttributeBase* dimension : m_reg->GetDimensionArrayObject())
 		if (dimension != nullptr)
-			explorer.AppendColumn(dimension, /*enabled*/ true, /*visible*/ true);
+			explorer.AppendColumn(dimension->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
 }
 
 inline ibAccumRegisterBalanceAndTurnoverDescriptor::~ibAccumRegisterBalanceAndTurnoverDescriptor() = default;
@@ -1137,7 +1137,7 @@ inline void ibAccumRegisterBalanceAndTurnoverDescriptor::FillConditionExplorer(i
 		return;
 	for (const ibValueMetaObjectAttributeBase* dimension : m_reg->GetDimensionArrayObject())
 		if (dimension != nullptr)
-			explorer.AppendColumn(dimension, /*enabled*/ true, /*visible*/ true);
+			explorer.AppendColumn(dimension->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
 }
 
 //********************************************************************************************

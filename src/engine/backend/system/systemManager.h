@@ -103,6 +103,26 @@ public:
 
 	//--- Notifications:
 	static void Message(const wxString& strMessage, ibStatusMessage status = ibStatusMessage::ibStatusMessage_Information);
+
+	// ⭐⭐ WRITE A LINE INTO THE REGISTRATION JOURNAL — the durable record, stamped with the session
+	// that wrote it, readable afterwards by anyone (journal_read, and the person's own journal).
+	//
+	// ⚠ IT IS NOT A SECOND `Message`, AND THE DIFFERENCE MATTERS MOST WHERE `Message` FAILS. A
+	// message is addressed to whoever is watching a window; a BACKGROUND session is tied to nobody,
+	// so its messages reach no one at all. Code run as a background job therefore has no way to say
+	// what it is doing except this — which is why filling code, posting code and anything else sent
+	// to run unattended reports HERE.
+	// ⚠ THE ARGUMENTS ARE THE ROW'S OWN COLUMNS, not a shape invented here: a journal line already
+	// has a level, a text, a CATEGORY (event_type) and the OBJECT it is about (ref_guid +
+	// ref_meta_id). Handing a reference in `object` is what makes a line findable later by the thing
+	// it happened to, rather than by reading messages.
+	//
+	// Message first, because it is the one a caller always has; everything else has a default, so
+	// the shortest useful call is one argument - the same shape as `Message` beside it.
+	static void WriteJournalEvent(const wxString& strMessage,
+		ibStatusMessage status = ibStatusMessage::ibStatusMessage_Information,
+		const wxString& strEvent = wxEmptyString,
+		const ibValue& objectValue = ibValue());
 	static void Alert(const wxString& strMessage);
 	static ibValue Question(const wxString& strMessage, ibQuestionMode mode = ibQuestionMode::ibQuestionMode_OK);
 	static void SetStatus(const wxString& sStatus);

@@ -47,7 +47,11 @@ enum ibDynamicListView {
 // object (like ibValueSizerItem): its properties surface onto the form attribute. The attribute
 // merely casts its runtime value to ibPropertyObject and shows that object's properties — it
 // knows nothing about "a dynamic list" (anything property-bearing can sit there).
-class BACKEND_API ibValueDynamicList : public ibValueModelCursor, public ibSourceDataObject, public ibPropertyObject {
+// ⭐ ibCompositionHolder LAST — ibValue must stay the FIRST base (offset 0), which is what every
+// runtime value's layout is read through. A list holds the SAME composition a report does, so it
+// answers the same question; the methods below already have these signatures.
+class BACKEND_API ibValueDynamicList : public ibValueModelCursor, public ibSourceDataObject,
+                                       public ibPropertyObject, public ibCompositionHolder {
 public:
 
 	// (ibDynamicListNode REMOVED — the dynamic list's rows are ibComposerNode now, produced by the

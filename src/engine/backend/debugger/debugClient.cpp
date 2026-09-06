@@ -19,6 +19,7 @@
 #include "backend/system/systemManager.h"   // Message — the standard door to whoever is watching
 
 #include "backend/fileSystem/fs.h"
+#include "backend/job/jobRunByteCode.h"      // the request and the state that cross this wire whole
 #if _USE_NET_COMPRESSOR == 1
 #include "utils/fs/lz/lzhuf.h"
 #endif 
@@ -549,6 +550,51 @@ void ibDebuggerClient::RequestScreenshot(const wxString& reason, const wxString&
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 }
 
+// ⭐⭐ PUTTING DATA IN, AND NOT GUARDED BY IsEnterLoop EITHER — for the same reason the screenshot is
+// not. A sandbox needs the stop because it borrows the parked session's frame and connection; a fill
+// asks for a background job in a session of its own, which a running application can start whenever.
+//
+// ⭐ AND IT TRAVELS THIS WAY BECAUSE THE RUNTIME IS OVER THERE. The MCP server is in the designer,
+// and a designer builds no runtime for any session (ibSession::EnsureRoot returns early on
+// DesignerMode) — so the work cannot be done on this side at all, only asked for.
+void ibDebuggerClient::StartJob(const ibJobRunRequest& request)
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_JobStart);
+	request.Write(commandChannel);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
+void ibDebuggerClient::AskJobStatus(const wxString& token)
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_JobStatus);
+	commandChannel.w_stringZ(token);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
+void ibDebuggerClient::CancelJob(const wxString& token)
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_JobCancel);
+	commandChannel.w_stringZ(token);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
+// ⭐⭐ AND READING A REPORT GOES THE SAME WAY, for a reason of rights rather than of plumbing: the
+// designer does not work with data. What is sent is a SCHEMA — which is why the caller may send one
+// that exists nowhere — and no breakpoint is needed, because what happens over there is a rented
+// read on a connection of its own.
+void ibDebuggerClient::RequestCompose(const wxMemoryBuffer& request)
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_Compose);
+	commandChannel.w_u32((unsigned int)request.GetDataLen());
+	if (request.GetDataLen() > 0)
+		commandChannel.w(request.GetData(), (u32)request.GetDataLen());
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
 void ibDebuggerClient::EvaluateAutocomplete(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression, const wxString& keyWord, int currline)
 {
 	if (ibDebuggerClient::IsEnterLoop()) {
@@ -972,6 +1018,44 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 
 		ms_debugClient->CallAfter(
 			&ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult, ran, answer, json, microseconds
+		);
+	}
+	// The three fill requests answer with one shape — see debugDefs.h. `commandFromServer` is
+	// carried through as `which` so a waiter can tell an answer to its own request from an answer
+	// to somebody else's.
+	else if (commandFromServer == CommandId_JobStart ||
+	         commandFromServer == CommandId_JobStatus ||
+	         commandFromServer == CommandId_JobCancel) {
+
+		ibJobRunByteCodeState state;
+		state.Read(commandReader);
+
+		ms_debugClient->CallAfter(
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnJobState,
+			(unsigned int)commandFromServer, state
+		);
+	}
+	else if (commandFromServer == CommandId_Compose) {
+
+		const bool answered = commandReader.r_u8() != 0;
+
+		wxString refusal;
+		commandReader.r_stringZ(refusal);
+
+		// LENGTH FIRST, THEN THE BYTES — the same shape the screenshot uses, and for the same reason:
+		// what comes back is a blob whose size only the sender knows. (Named apart from the enclosing
+		// `length` parameter: a shadow here would be read as the packet's length by anybody skimming.)
+		const unsigned int payloadLength = commandReader.r_u32();
+
+		wxMemoryBuffer answer;
+		if (payloadLength > 0) {
+			answer.SetBufSize(payloadLength);
+			commandReader.r(answer.GetWriteBuf(payloadLength), payloadLength);
+			answer.SetDataLen(payloadLength);
+		}
+
+		ms_debugClient->CallAfter(
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnComposed, answered, refusal, answer
 		);
 	}
 	else if (commandFromServer == CommandId_EvalAutocomplete) {

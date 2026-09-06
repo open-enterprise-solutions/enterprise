@@ -73,6 +73,7 @@ enum
 	enActiveWindow,
 	//--- Special:
 	enMessage,
+	enWriteJournalEvent,
 	enAlert,
 	enQuestion,
 	enSetStatus,
@@ -194,6 +195,11 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("ActiveWindow"), wxT("ActiveWindow()"));
 	//--- Special:
 	helper.AppendProc(wxT("Message"), 2, wxT("Message(message : string, statusMessage : statusMessage)"));
+	// ⭐ THE DURABLE TWIN OF `Message` — see systemManager.h. Registered beside it because that is
+	// where a reader looks for it: the two answer the same need for two different readers, one
+	// watching now and one reading tomorrow.
+	helper.AppendProc(wxT("WriteJournalEvent"), 4,
+		wxT("WriteJournalEvent(message : string, statusMessage : statusMessage, category : string, object)"));
 	helper.AppendFunc(wxT("Alert"), 1, wxT("Alert(message : string)"));
 	helper.AppendFunc(wxT("Question"), 2, wxT("Question(message : string, questionMode)"));
 	helper.AppendFunc(wxT("SetStatus"), 1, wxT("SetStatus(text : string)"));
@@ -341,6 +347,12 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			Message(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
 			return true;
+		case enWriteJournalEvent:
+			WriteJournalEvent(paParams[0]->GetString(),
+				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information,
+				lSizeArray > 2 ? paParams[2]->GetString() : wxString(),
+				lSizeArray > 3 ? *paParams[3] : ibValue());
+			return true;
 		case enAlert: Alert(paParams[0]->GetString()); return true;
 		case enQuestion: pvarRetValue = Question(paParams[0]->GetString(),
 			lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibQuestionMode>() : ibQuestionMode::ibQuestionMode_OK);
@@ -442,6 +454,12 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		case enMessage:
 			Message(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
+			return true;
+		case enWriteJournalEvent:
+			WriteJournalEvent(paParams[0]->GetString(),
+				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information,
+				lSizeArray > 2 ? paParams[2]->GetString() : wxString(),
+				lSizeArray > 3 ? *paParams[3] : ibValue());
 			return true;
 		case enAlert: Alert(paParams[0]->GetString()); return true;
 		case enSetStatus: SetStatus(paParams[0]->GetString()); return true;

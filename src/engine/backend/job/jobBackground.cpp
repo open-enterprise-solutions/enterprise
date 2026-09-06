@@ -89,6 +89,16 @@ wxString ibBackgroundRun::Activity() const
 	return m_activity;
 }
 
+wxString ibBackgroundRun::SessionGuid() const
+{
+	std::lock_guard<std::mutex> lk(m_mtx);
+	// ⚠ THE HOLDER MAY BE EMPTY — a run that has finished and let its session go. Answering with
+	// nothing is right: the row is gone, and inventing a name for it would send the caller looking
+	// in Active Users for something that is no longer there.
+	const ibSession* const session = m_holder.Get();
+	return session != nullptr ? session->Identity().m_guid.str() : wxString();
+}
+
 void ibBackgroundRun::Cancel()
 {
 	// Cooperative — raises the flag and wakes the worker; the interpreter throws

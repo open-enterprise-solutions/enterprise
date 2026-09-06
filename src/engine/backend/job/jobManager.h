@@ -293,6 +293,17 @@ public:
 	// sys_session.currentActivity, so the same text shows in Active Users.
 	wxString Activity() const;
 
+	// ⭐⭐ WHICH SESSION IS DOING IT — sys_session.session, the row a person sees in Active Users.
+	// A background run has a session of its own, so it already HAS an identity in the platform's
+	// own terms; anything that hands a caller a private handle instead is asking them to learn a
+	// second name for the same thing. With this, a run that was started here is the same row the
+	// person can look at, and stop, through the doors that already exist (Max, 2026-09-06: *"the
+	// background job starts a session — you return its session number and you can work from that;
+	// you have access to Active Users and you can check there"*).
+	//
+	// Empty for a run whose session has already been let go.
+	wxString SessionGuid() const;
+
 private:
 	friend class ibJobManager;
 

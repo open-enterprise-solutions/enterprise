@@ -7,6 +7,7 @@
 #include "backend/appData.h"
 #include "backend/debugger/debugClient.h"
 #include "backend/mcp/mcpServer.h"
+#include "backend/fileSystem/fs.h"   // ibWriterMemory / ibReaderMemory - the node on the wire
 
 #include <chrono>
 
@@ -222,6 +223,156 @@ void ibMcpDebugBridge::OnScreenshot(const wxMemoryBuffer& png, const wxString& f
 		m_picture.SetDataLen(0);
 		if (png.GetDataLen() > 0)
 			m_picture.AppendData(png.GetData(), png.GetDataLen());
+
+		m_pending = Pending::None;
+	}
+	m_answered.notify_all();
+}
+
+// ⭐⭐ PUTTING DATA IN — one round trip per request, and the three share everything but the sending.
+// What is waited for is the far end ACCEPTING: a fill that runs for an hour answers this at once and
+// is watched afterwards, which is the whole point of it not blocking anybody.
+//
+// ⚠ NO STOP REQUIRED, as with the screenshot and unlike the sandbox: what is asked for is a
+// background job in a session of its own, and a running application can start one at any moment.
+// Connected is the whole precondition.
+bool ibMcpDebugBridge::SendJob(unsigned int which, const wxString& token,
+	const ibJobRunRequest& request, ibJobRunByteCodeState& state, int timeoutMs)
+{
+	state = ibJobRunByteCodeState();
+
+	if (debugClient == nullptr)
+		return false;
+
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if (!m_stop.m_connected)
+			return false;
+
+		m_pending   = Pending::Fill;
+		m_jobWhich  = which;
+		m_job       = ibJobRunByteCodeState();
+	}
+
+	if (which == (unsigned int)CommandId_JobStart)
+		debugClient->StartJob(request);
+	else if (which == (unsigned int)CommandId_JobStatus)
+		debugClient->AskJobStatus(token);
+	else
+		debugClient->CancelJob(token);
+
+	std::unique_lock<std::mutex> lock(m_mutex);
+	const bool arrived = m_answered.wait_for(lock,
+		std::chrono::milliseconds(timeoutMs),
+		[this]() { return m_pending == Pending::None; });
+
+	if (arrived)
+		state = m_job;
+
+	m_pending = Pending::None;
+	return arrived;
+}
+
+bool ibMcpDebugBridge::StartJob(const ibJobRunRequest& request, ibJobRunByteCodeState& state,
+	int timeoutMs)
+{
+	return SendJob((unsigned int)CommandId_JobStart, wxEmptyString, request, state, timeoutMs);
+}
+
+bool ibMcpDebugBridge::JobStatus(const wxString& token, ibJobRunByteCodeState& state, int timeoutMs)
+{
+	return SendJob((unsigned int)CommandId_JobStatus, token, ibJobRunRequest(), state, timeoutMs);
+}
+
+bool ibMcpDebugBridge::JobCancel(const wxString& token, ibJobRunByteCodeState& state, int timeoutMs)
+{
+	return SendJob((unsigned int)CommandId_JobCancel, token, ibJobRunRequest(), state, timeoutMs);
+}
+
+void ibMcpDebugBridge::OnJobState(unsigned int which, const ibJobRunByteCodeState& state)
+{
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if (m_pending != Pending::Fill)
+			return;             // nobody is waiting — a late answer to a request that timed out
+
+		// ⚠ AND IT MUST BE AN ANSWER TO *THIS* REQUEST. Two assistants on one application, or one
+		// that timed out and asked again, would otherwise let a status reply satisfy a wait for a
+		// start — and the caller would read somebody else's run as their own.
+		if (m_jobWhich != which)
+			return;
+
+		m_job = state;
+
+		m_pending = Pending::None;
+	}
+	m_answered.notify_all();
+}
+
+// ⭐⭐ RUNNING A REPORT WHERE THE DATA IS. The node goes out in the INTERNAL BINARY format, not as
+// JSON: this pair of tools exists to compare EXACT figures, and a decimal that leaves through a
+// double comes back as nearly itself.
+//
+// ⚠ NO STOP REQUIRED — what happens over there is a rented read on a connection of its own, so the
+// person at that application keeps working while it runs. The deadline is long for the same reason
+// the screenshot's is: what is being waited for is work, not a lookup.
+bool ibMcpDebugBridge::Compose(const ibDataNode& request, ibDataNode& result, bool& answered,
+	wxString& refusal, int timeoutMs)
+{
+	answered = false;
+	refusal.Clear();
+
+	if (debugClient == nullptr)
+		return false;
+
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if (!m_stop.m_connected)
+			return false;
+
+		m_pending         = Pending::Composition;
+		m_composeAnswered = false;
+		m_composeRefusal.Clear();
+		m_composed.SetDataLen(0);
+	}
+
+	ibWriterMemory payload;
+	ibBinaryProvider().Write(request, payload);
+	debugClient->RequestCompose(payload.buffer());
+
+	std::unique_lock<std::mutex> lock(m_mutex);
+	const bool arrived = m_answered.wait_for(lock,
+		std::chrono::milliseconds(timeoutMs),
+		[this]() { return m_pending == Pending::None; });
+
+	if (arrived) {
+		answered = m_composeAnswered;
+		refusal  = m_composeRefusal;
+		if (answered && m_composed.GetDataLen() > 0) {
+			// ⚠ A NAMED LOCAL, because a reader BORROWS its bytes: handing it a temporary leaves it
+			// reading freed memory, which is why fs.h deletes that overload outright.
+			ibReaderMemory reader(m_composed);
+			ibBinaryProvider().Read(reader, result);
+		}
+	}
+
+	m_pending = Pending::None;
+	return arrived;
+}
+
+void ibMcpDebugBridge::OnComposed(bool answered, const wxString& refusal, const wxMemoryBuffer& result)
+{
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if (m_pending != Pending::Composition)
+			return;             // nobody is waiting — a late answer to a request that timed out
+
+		m_composeAnswered = answered;
+		m_composeRefusal  = refusal;
+
+		m_composed.SetDataLen(0);
+		if (result.GetDataLen() > 0)
+			m_composed.AppendData(result.GetData(), result.GetDataLen());
 
 		m_pending = Pending::None;
 	}

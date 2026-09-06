@@ -17,10 +17,34 @@
 
 class BACKEND_API ibDebuggerClient {
 
-	class BACKEND_API ibDebuggerClientAdapter : public wxEvtHandler {
+	// ⭐⭐ NOT A wxEvtHandler ANY MORE. It was one for a single reason — to be something
+	// `wxQueueEvent` could deliver a deferred call to — which made the DEBUG TRANSPORT know about a
+	// GUI, and put every reply, a whole report's tables included, onto the window thread whether or
+	// not anybody there wanted it (Max, 2026-09-06: *"untie the adapter from wxEvtHandler, and the
+	// deferred call goes to the worker"*).
+	//
+	// ⭐ THE WORKER ALREADY ANSWERS THE THREAD QUESTION, and it is the only one who can: the desktop
+	// session's pool IS `wxTheApp::CallAfter` made into an object, the web server's is that session's
+	// FIFO worker, and a headless host has none and runs the task where it stands. *"One question,
+	// one door, three honest answers"* (guiSession.h). So nothing here asks which thread it is on,
+	// and nothing here should: the hop belongs to whoever knows, and that is not the transport.
+	class BACKEND_API ibDebuggerClientAdapter {
 	public:
 
-		ibDebuggerClientAdapter() {}
+		// ⭐ THE SESSION IS TAKEN HERE, at birth, like a bridge's id — and this is the moment it is
+		// knowable. The debug client is built from the registry's first-connect notification, so a
+		// session exists and is the current one; the socket thread, where replies arrive, has
+		// nothing bound and could never be asked. Out-of-line: the complete ibSession is not wanted
+		// in this header.
+		ibDebuggerClientAdapter();
+
+		// 🛑 NOT COPYABLE, AND NOW IT HAS TO SAY SO. It never was — it owns its bridges through
+		// unique_ptr — but the prohibition was BORROWED from wxEvtHandler, whose own copy is deleted.
+		// With that base gone the compiler set about defining these, and `BACKEND_API` is what forced
+		// it to: dllexport instantiates every implicitly-declared member whether or not anybody calls
+		// it, so an assignment nobody wanted became an error in <vector>.
+		ibDebuggerClientAdapter(const ibDebuggerClientAdapter&) = delete;
+		ibDebuggerClientAdapter& operator=(const ibDebuggerClientAdapter&) = delete;
 
 		// THE BRIDGE IS A LIST. There was one, and one is why the IDE's windows
 		// and anything else watching the same session were mutually exclusive:
@@ -37,6 +61,11 @@ class BACKEND_API ibDebuggerClient {
 		}
 		void AddBridge(ibDebuggerClientBridge* bridge);
 		void RemoveBridge(ibDebuggerClientBridge* bridge);
+
+		// ⭐ HAND A CALL TO THE WORKER — the one place a reply changes threads, and the only thing
+		// this class knows about threads. How many listeners are attached does not enter into it:
+		// one hop, then the fan-out.
+		void Defer(std::function<void()> call);
 
 		// The first one installed — the IDE's, in the process that has one. Kept
 		// because callers ask "is anybody bridged", not "which".
@@ -76,8 +105,23 @@ class BACKEND_API ibDebuggerClient {
 		// failure of the run).
 		void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, wxLongLong_t microseconds);
 
+		// The state of a filling run — one shape for all three requests, because starting one,
+		// asking after one and stopping one are the same question about the same thing. `which`
+		// says which of the three is being answered; `accepted` false means the request was
+		// refused and `refusal` says why.
+		void OnJobState(unsigned int which, const struct ibJobRunByteCodeState& state);
+
+		// What a composition answered, still serialised — the tables, or a refusal saying why there
+		// are none. Left as bytes because only the asker knows what to do with them.
+		void OnComposed(bool answered, const wxString& refusal, const wxMemoryBuffer& result);
+
 	private:
 		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
+
+		// ⚠ WHOSE WORKER — one answer for the whole fan-out, not one per listener. Every bridge in a
+		// process is installed by the same person in the same session, so a session held per bridge
+		// was the same fact written twice.
+		class ibSession* m_session = nullptr;
 	};
 
 	class BACKEND_API ibDebuggerClientConnection : public wxThread {
@@ -319,6 +363,28 @@ public:
 	// Unlike everything above it, this does not need the runtime to be stopped.
 	void RequestScreenshot(const wxString& reason, const wxString& area, const wxString& format);
 
+	// ⭐⭐ PUTTING DATA IN — start a configuration procedure over there as a background job, then
+	// watch it and stop it by the token that comes back. All three answer as OnFillState.
+	//
+	// ⚠ LIKE THE SCREENSHOT AND UNLIKE THE SANDBOX, these do not need a stop: what is asked for is a
+	// job in a session of its own, which a running application can start at any moment. Which is
+	// also why a fill cannot be stepped through — there is no frame to stop in. See debugDefs.h.
+	//
+	// ⚠ THE CODE GOES OVER AS TEXT and is compiled at the far end, against the configuration that
+	// will run it. This side compiles it too, but only to CHECK it — see jobRunByteCode.h.
+	void StartJob(const struct ibJobRunRequest& request);
+	void AskJobStatus(const wxString& token);
+	void CancelJob(const wxString& token);
+
+	// ⭐⭐ RUN A COMPOSITION over there and bring back what it answered. `request` is the whole schema
+	// — resolved from a report, or assembled by the caller out of nothing — with its settings and
+	// parameters, already serialised. The answer arrives as OnComposed.
+	//
+	// ⚠ It carries a SCHEMA rather than the name of one, which is what lets a caller run a report
+	// that exists nowhere. And, like the fill, it needs no breakpoint: what happens over there is a
+	// rented read on a connection of its own.
+	void RequestCompose(const wxMemoryBuffer& request);
+
 	//support calc strExpression in debugloop
 	void EvaluateAutocomplete(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression, const wxString& keyWord, int currline);
 
@@ -392,21 +458,18 @@ public:
 	//
 	// ⚠ THE ARGUMENTS ARE COPIED INTO THE CLOSURE, which is the whole contract of a deferred call:
 	// this runs later, on another thread, when every stack it was called from is gone.
+	// ⚠ THE ARGUMENTS ARE COPIED INTO THE CLOSURE, which is the whole contract of a deferred call:
+	// this runs later, on another thread, when every stack it was called from is gone.
+	//
+	// ⭐⭐ AND THE ONLY THING THAT CHANGED IS WHO CARRIES IT. This used to build the same closure and
+	// queue it as a wx event at the adapter; now the adapter hands it to the WORKER. Everything else
+	// is where it was — one hop here, the fan-out on the far side of it — because everything else
+	// was right: the shape was never the problem, the transport knowing about a GUI was.
 	template <typename T, typename... TArgs, typename... PArgs>
 	void CallAfter(void (T::* method)(TArgs...), PArgs... args) {
 		if (m_adapter != nullptr) {
 			T* const target = static_cast<T*>(m_adapter);
-			std::function<void()> call = [target, method, args...]() {
-				(target->*method)(args...); };
-			wxQueueEvent(m_adapter,
-				new wxAsyncMethodCallEventFunctor<std::function<void()> >(m_adapter, call));
-		}
-	}
-
-	template <typename T>
-	void CallAfter(const T& fn) {
-		if (m_adapter != nullptr) {
-			wxQueueEvent(m_adapter, new wxAsyncMethodCallEventFunctor<T>(m_adapter, fn));
+			m_adapter->Defer([target, method, args...]() { (target->*method)(args...); });
 		}
 	}
 

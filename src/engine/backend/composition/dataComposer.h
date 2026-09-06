@@ -1376,6 +1376,12 @@ public:
 	// The full cycle into the given driver.
 	bool Run(ibCompositionDriver& driver) override;
 
+	// ⚠ AND THE NO-ARGUMENT Run COMES WITH IT. Declaring an override of one overload HIDES the whole
+	// name, so a caller holding this concrete type — rather than an ibDataComposer& — could not call
+	// the outputs-and-their-drivers Run at all, and got "does not take 0 arguments" for a member that
+	// is right there on the base. The two are one door with two ways in; the hiding was never meant.
+	using ibDataComposer::Run;
+
 	// ⭐⭐ A CLONE IS A COMPOSER THAT READS THE SAME THING — never a bit-copy of the machinery that was
 	// reading it. Written by hand because the difference is the point: what carries over is the
 	// DECLARATION (the sources, and everything the base holds — settings, variants, outputs), while the
@@ -1532,6 +1538,33 @@ private:
 	// Transient (RAM / temp) sources registered via FromSource(queryable) without a metaobject identity —
 	// keyed by the unique local name rendered into the text (t0, t1, …). NON-OWNING.
 	std::map<wxString, const ibBackendQueryable*> m_directSources;
+};
+
+
+// ==========================================================================
+// ⭐⭐ WHAT HOLDS A COMPOSITION — a report, a dynamic list, a composition value. One interface,
+// because they already agreed and nobody had said so.
+//
+// A dynamic list IS a composer, degenerately: the same ibCompositionDescription, the same filter,
+// sort and grouping. What differs is the SETTINGS WINDOW — a list's leads with the query and shows a
+// flat grouping, a report's leads with the output structure — and a window is not a difference in
+// what a setting IS (ibPropertyDynamicList says exactly this).
+//
+// ⭐ AND THE CONVERGENCE WAS ALREADY THERE, unnamed: all three declare `GetCompositionDesc()` and
+// `SetCompositionDesc()` with these very signatures. Declaring the interface renames nothing and
+// changes no call site; it only lets one door ask the question all three could already answer —
+// "give me the schema" — without knowing which of them it is holding.
+//
+// The shape is the one ibBackendQueryableHolder already uses for sources: the thing HOLDS the
+// query object rather than being it (docs/ownership-authority.md).
+// ==========================================================================
+class BACKEND_API ibCompositionHolder {
+public:
+	virtual ~ibCompositionHolder() = default;
+
+	virtual ibCompositionDescription&       GetCompositionDesc()       = 0;
+	virtual const ibCompositionDescription& GetCompositionDesc() const = 0;
+	virtual void SetCompositionDesc(const ibCompositionDescription& description) = 0;
 };
 
 #endif

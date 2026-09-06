@@ -42,7 +42,7 @@ const ibSourceExplorer* ibValueRecordDataObjectParameterizedJob::GetSourceExplor
 	ibValueMetaObjectParameterizedJob* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode()->GetQueryColumn(), false);
 		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription()->GetQueryColumn());
 		m_sourceExplorer.AppendColumn(metaRef->GetDataParent()->GetQueryColumn());
 		// The job's own four. They are ordinary columns of the row, which is exactly why the list,

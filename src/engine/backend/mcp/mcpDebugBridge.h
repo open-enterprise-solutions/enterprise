@@ -4,6 +4,8 @@
 #include "backend/backend.h"
 #include "backend/debugger/debugClientBridge.h"
 #include "backend/debugger/debugDefs.h"
+#include "backend/serialize/dataBuilder.h"   // a composition travels as a node, both ways
+#include "backend/job/jobRunByteCode.h"      // …and a job request/state travels as itself
 
 #include <condition_variable>
 #include <mutex>
@@ -105,6 +107,37 @@ public:
 	bool Sandbox(const wxString& code, bool& ran, wxString& answer, wxString& json,
 		std::vector<wxString>& printed, wxLongLong_t& microseconds, int timeoutMs = 30000);
 
+	// ⭐⭐ PUTTING DATA IN, over there. What comes back for all three requests is the state of one
+	// run — starting one, asking after one and stopping one are the same question about the same
+	// thing, so they answer in the same shape.
+	//
+	// ⚠ `accepted` false is a REFUSAL and not a failure of the wire: the far end considered the
+	// request and said no, in `refusal`. A false RETURN is the other thing — no answer arrived
+	// before the deadline, and nothing is known.
+	// ⚠ THE SHAPE IS THE RUNTIME'S OWN (job/jobRunByteCode.h) rather than a copy of it here: two
+	// declarations of one answer drift, and the drift is invisible because every field is a string.
+	//
+	// ⚠ NEITHER OF THESE NEEDS A STOP, which is what separates them from Sandbox above. A job runs
+	// in a session of its own; a running application starts one whenever asked. That is also why it
+	// cannot be stepped through — nobody is parked, so there is no frame.
+	//
+	// The wait is for the far end to ACCEPT the request, not for the run to finish: a run that takes
+	// an hour answers this in milliseconds and is then watched with JobStatus.
+	bool StartJob(const struct ibJobRunRequest& request, struct ibJobRunByteCodeState& state,
+		int timeoutMs = 15000);
+	bool JobStatus(const wxString& token, struct ibJobRunByteCodeState& state, int timeoutMs = 10000);
+	bool JobCancel(const wxString& token, struct ibJobRunByteCodeState& state, int timeoutMs = 10000);
+
+	// ⭐⭐ RUN A COMPOSITION over there and read what it answered. `request` carries the whole SCHEMA
+	// with its settings and parameters — so a caller may run a report that exists nowhere — and
+	// `result` comes back as the tables. `answered` false means the far end refused and said why in
+	// `refusal`; a false RETURN is the other thing, that nothing arrived in time.
+	//
+	// ⚠ NO STOP REQUIRED. What happens over there is a rented read on a connection of its own, so
+	// nobody's window waits for it. The deadline is long because a report is work, not a lookup.
+	bool Compose(const ibDataNode& request, ibDataNode& result, bool& answered, wxString& refusal,
+		int timeoutMs = 120000);
+
 	// ⭐⭐ ASK THE RUNNING APPLICATION FOR A PICTURE OF ITS WINDOW, and wait for the answer. `reason`
 	// is shown to the PERSON at that window, who decides — this is the one verb here whose outcome
 	// belongs to somebody else, and `allowed` comes back false when they say no.
@@ -134,12 +167,20 @@ public:
 	void OnEvalMessage(const wxString& message, MessageType type) override;
 	void OnScreenshot(const wxMemoryBuffer& png, const wxString& focus) override;
 	void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, wxLongLong_t microseconds) override;
+	void OnJobState(unsigned int which, const struct ibJobRunByteCodeState& state) override;
+	void OnComposed(bool answered, const wxString& refusal, const wxMemoryBuffer& result) override;
 
 private:
 
 	// Tells the assistant's window that the runtime has stopped. The wake-up road
 	// already exists — this is the same one a chat message travels.
 	void Announce(const wxString& text) const;
+
+	// The one round trip the three job requests share — they differ only in which command goes out,
+	// so the sending is the only thing that branches. A start carries `request`; status and cancel
+	// carry `token`.
+	bool SendJob(unsigned int which, const wxString& token, const struct ibJobRunRequest& request,
+		struct ibJobRunByteCodeState& state, int timeoutMs);
 
 	// Both watch events carry the same shape; `complete` says whether this one
 	// ends the wait.
@@ -153,7 +194,7 @@ private:
 	// meaningfully answer anyway. Two kinds because the runtime answers them
 	// through two different events, and mixing them would let a tooltip satisfy
 	// a request for structure.
-	enum class Pending { None, Value, Members, Sandbox, Picture };
+	enum class Pending { None, Value, Members, Sandbox, Picture, Fill, Composition };
 
 	std::condition_variable m_answered;
 	Pending                 m_pending = Pending::None;
@@ -166,6 +207,16 @@ private:
 	// What the RUN printed outside any sandbox — the application talking, kept for whoever asked
 	// for the run. Trimmed from the front; see OnEvalMessage.
 	std::vector<Printed>    m_output;
+
+	// The state of the filling run last asked about — see FillState. `m_fillWhich` is the request it
+	// belongs to, so an answer to somebody else's fill cannot satisfy this wait.
+	ibJobRunByteCodeState   m_job;
+	unsigned int            m_jobWhich = 0;
+
+	// The composition last asked for: the tables still serialised, or the reason there are none.
+	wxMemoryBuffer          m_composed;
+	bool                    m_composeAnswered = false;
+	wxString                m_composeRefusal;
 
 	// The picture asked for, and whether its owner allowed it at all — empty bytes with allowed
 	// true would be a broken transfer, which is a different answer from "they said no".

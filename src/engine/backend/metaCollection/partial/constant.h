@@ -109,7 +109,7 @@ class BACKEND_API ibValueMetaObjectConstant :
 	// the tree as a leaf with no field to select — visible, addable, and useless.
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const {
 		if (m_column != nullptr)
-			explorer.AppendColumn(m_column, /*enabled*/ true, /*visible*/ true);
+			explorer.AppendColumn(m_column->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
 	}
 
 	// --- the composite face — answered directly now, with no cast anywhere --------------------

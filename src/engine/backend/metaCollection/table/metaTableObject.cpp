@@ -64,7 +64,7 @@ void ibTabularSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceE
 	// to the section tomorrow shows up with nothing edited in this file.
 	for (const ibValueMetaObjectAttributeBase* attribute : m_meta->GetGenericAttributeArrayObject())
 		if (attribute != nullptr)
-			explorer.AppendColumn(attribute, /*enabled*/ true, /*visible*/ true);
+			explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
 }
 
 ibTypeDescription ibValueMetaObjectTableData::GetTypeDesc() const

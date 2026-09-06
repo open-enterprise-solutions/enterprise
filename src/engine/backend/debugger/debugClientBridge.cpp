@@ -3,6 +3,13 @@
 
 #include "backend/backend_exception.h"
 
+// MINTED HERE AND BY NOBODY ELSE — see GetBridgeId. A bridge cannot be constructed without one, and
+// two cannot be given the same.
+ibDebuggerClientBridge::ibDebuggerClientBridge()
+	: m_bridgeId(ibGuid(ibGuid::newGuid()).str())
+{
+}
+
 void ibDebuggerClientBridge::SetDebuggerClientBridge(ibDebuggerClientBridge* bridge) {
 	// Both nullptr cases are bugs to surface, not states to silently
 	// tolerate. Old behaviour was to no-op when debugClient was null —

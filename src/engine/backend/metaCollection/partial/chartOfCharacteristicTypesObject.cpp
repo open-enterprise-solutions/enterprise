@@ -40,7 +40,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSo
 	ibValueMetaObjectChartOfCharacteristicTypes* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode()->GetQueryColumn(), false);
 		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription()->GetQueryColumn());
 		m_sourceExplorer.AppendColumn(metaRef->GetDataParent()->GetQueryColumn());
 		// TYPE BELONGS TO AN ITEM, NOT TO A FOLDER — a group of characteristics is not itself a

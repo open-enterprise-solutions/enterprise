@@ -1,4 +1,4 @@
-////////////////////////////////////////////////////////////////////////////
+﻿////////////////////////////////////////////////////////////////////////////
 //	Description : ibDataMover — L3-3 row mover. The generic per-table dump /
 //	              restore that used to be copy-pasted across the record /
 //	              register metaobjects, now driven purely by the L3-2 STRUCTURE

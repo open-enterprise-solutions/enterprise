@@ -61,7 +61,7 @@ const ibSourceExplorer* ibValueRecordDataObjectDocument::GetSourceExplorer() con
 	ibValueMetaObjectDocument* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		m_sourceExplorer.AppendColumn(metaRef->GetDocumentNumber(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDocumentNumber()->GetQueryColumn(), false);
 		m_sourceExplorer.AppendColumn(metaRef->GetDocumentDate()->GetQueryColumn());
 	}
 

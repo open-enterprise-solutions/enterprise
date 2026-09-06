@@ -3269,7 +3269,7 @@ void FillExplorerFromShape(const ibValueMetaObjectAccountingRegister* reg, ibAcc
 		if (col == nullptr)
 			continue;
 		if (const ibValueMetaObjectAttributeBase* attribute = AttributeById(reg, col->GetColumnId()))
-			explorer.AppendColumn(attribute, /*enabled*/ true, /*visible*/ true);
+			explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
 		else
 			explorer.AppendColumn(col);
 	}
@@ -3629,7 +3629,7 @@ void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceE
 			break;
 		for (unsigned int idx = 0; idx < m_reg->GetAccountDimensionCount(); idx++)
 			if (const ibValueMetaObjectAttributeBase* slot = m_reg->GetAccountDimensionSlot(creditSide, idx))
-				explorer.AppendColumn(slot, /*enabled*/ true, /*visible*/ true);
+				explorer.AppendColumn(slot->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
 	}
 
 	// ⚠ AND THE DIMENSIONS, which are NOT in the attribute list: a dimension is its own metaclass
@@ -3637,7 +3637,7 @@ void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceE
 	// the ordinary `Condition` slot of everything a filter is normally written with.
 	for (const ibValueMetaObjectAttributeBase* dimension : m_reg->GetDimensionArrayObject())
 		if (dimension != nullptr)
-			explorer.AppendColumn(dimension, /*enabled*/ true, /*visible*/ true);
+			explorer.AppendColumn(dimension->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
 }
 
 // ⭐⭐ THE ACCOUNT SLOTS ADMIT ACCOUNTS AND NOTHING ELSE — so that is all they are offered.
@@ -3665,7 +3665,9 @@ void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceE
 	// neither. Reading the name is not a lettering trick — these are the slot names this same
 	// descriptor publishes in DescribeParameters, a few lines up.
 	const bool creditSide = slot.Contains(wxT("Cr"));
-	explorer.AppendColumn(creditSide ? m_reg->GetRegisterAccountCr() : m_reg->GetRegisterAccount(),
+	const ibValueMetaObjectAttributeBase* const account =
+		creditSide ? m_reg->GetRegisterAccountCr() : m_reg->GetRegisterAccount();
+	explorer.AppendColumn(account != nullptr ? account->GetQueryColumn() : nullptr,
 	                      /*enabled*/ true, /*visible*/ true);
 }
 

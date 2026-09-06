@@ -78,6 +78,7 @@ BoundFilter BuildWhere(const ibLogFilter& f)
     if (f.to_ms   != 0)        { andAdd(wxT("ts_ms <  ?")); b.nums.push_back(f.to_ms);   b.kinds.push_back('L'); }
     if (f.min_level >= 0)      { andAdd(wxT("level >= ?")); b.nums.push_back(f.min_level); b.kinds.push_back('I'); }
     if (!f.user_name.IsEmpty()){ andAdd(wxT("user_name = ?")); b.strs.push_back(f.user_name); b.kinds.push_back('S'); }
+    if (!f.session_id.IsEmpty()){ andAdd(wxT("session_id = ?")); b.strs.push_back(f.session_id); b.kinds.push_back('S'); }
     if (!f.source.IsEmpty())   { andAdd(wxT("source = ?"));    b.strs.push_back(f.source);    b.kinds.push_back('S'); }
     if (!f.event_type.IsEmpty()){andAdd(wxT("event_type = ?"));b.strs.push_back(f.event_type);b.kinds.push_back('S'); }
     if (!f.ref_guid.IsEmpty()) { andAdd(wxT("ref_guid = ?"));  b.strs.push_back(f.ref_guid);  b.kinds.push_back('S'); }

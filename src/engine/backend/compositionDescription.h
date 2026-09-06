@@ -1162,4 +1162,11 @@ public:
 // them back, so a reader of the tree sees `"NodeType": "CompositionOutput"`.
 BACKEND_API wxString ibCompositionNodeName(ibClassID clsid);
 
+// ⭐⭐ …AND BACK. The pair is what makes a schema READ, EDITED AND RETURNED possible at all: an answer
+// renders these types as words, and without this the reader turns an unknown word into clsid 0 — so
+// the parts a composition is made of arrive as untyped nodes and the description comes out empty,
+// with nothing failing anywhere. Empty for a name that is not one of these, which is the answer a
+// chained lookup needs. Same table as the name above, read the other way.
+BACKEND_API ibClassID ibCompositionNodeClsid(const wxString& name);
+
 #endif // !__COMPOSITION_DESCRIPTION_H__

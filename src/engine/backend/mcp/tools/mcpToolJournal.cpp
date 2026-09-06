@@ -61,6 +61,11 @@ const ibArg& ArgLevel() { static const ibArg a(wxT("level"), ibArg::Kind::Text, 
 const ibArg& ArgSource() { static const ibArg a(wxT("source"), ibArg::Kind::Text, ibMcpText("Only this subsystem. script = a running module, auth = logins, and so on.")); return a; }
 const ibArg& ArgEvent() { static const ibArg a(wxT("event"), ibArg::Kind::Text, ibMcpText("Only this event type, for example runtime.error.")); return a; }
 const ibArg& ArgUser() { static const ibArg a(wxT("user"), ibArg::Kind::Text, ibMcpText("Only this user's rows.")); return a; }
+const ibArg& ArgSession() { static const ibArg a(wxT("session"), ibArg::Kind::Text,
+	ibMcpText("Only ONE SESSION's rows, by the id in `session`. This is how you watch a background "
+		  "run: code_run answers with the session it runs as, and a background session cannot "
+		  "send anybody a message - it is tied to no one - so its rows here are the only account "
+		  "of what it is doing. Ask again as it goes.")); return a; }
 const ibArg& ArgContains() { static const ibArg a(wxT("contains"), ibArg::Kind::Text, ibMcpText("Only rows whose message contains this text - a module name, a field, a phrase.")); return a; }
 const ibArg& ArgLimit() { static const ibArg a(wxT("limit"), ibArg::Kind::Whole, ibMcpText("How many rows at most. Default 50.")); return a; }
 
@@ -378,6 +383,21 @@ public:
 			"with its module, line and call stack. Ask this after asking someone to run "
 			"something: a module that compiled cleanly reports its runtime failure here and "
 			"nowhere else this side of the debugger.\n\n"
+			"ASK IT BEFORE ANYBODY COMPLAINS. Every runtime failure lands here as it happens, so "
+			"`level: error` over the last hour tells you what went wrong in this base while nobody "
+			"was looking - which document would not post, which module raised, at what line. "
+			"Knowing that before the person says 'something is broken' turns the conversation from "
+			"a description into a diagnosis. It is the cheapest call there is: it costs one query "
+			"and needs nothing running.\n\n"
+			"IT IS FOR SEARCHING, and that is the whole shape of it: a journal is not read, it is "
+			"FILTERED. `session` for one background run's own lines - code_run answers with the id "
+			"and this is how you watch what it is doing, since a background session can message "
+			"nobody. `level: error` for failures alone. `contains` or `event` for a MARKER somebody "
+			"put there on purpose. Narrow first, then read.\n\n"
+			"AND THE OTHER HALF OF IT IS `WriteJournalEvent`, the global procedure configuration "
+			"code calls to put a line here (syntax_get 'fn.WriteJournalEvent'). That is the pair: "
+			"code writes a marked line as it goes, this verb pulls the marked lines back out. Code "
+			"that runs unattended and writes nothing here cannot be followed at all.\n\n"
 			"This is the ACCOUNTANT'S journal - business events, the record an auditor asks for. "
 			"For what the ENGINE did - the SQL exactly as sent, the road a query took, driver "
 			"traffic, a raise with its site - ask trace_read instead.");
@@ -387,7 +407,7 @@ public:
 	{
 		static const std::vector<ibMcpArgument> s_arguments = {
 			ArgSinceMinutes(), ArgLevel(), ArgSource(), ArgEvent(),
-			ArgUser(), ArgContains(), ArgLimit() };
+			ArgUser(), ArgSession(), ArgContains(), ArgLimit() };
 		return s_arguments;
 	}
 
@@ -419,6 +439,7 @@ public:
 		}
 
 		filter.user_name  = ArgUser().Text(params);
+		filter.session_id = ArgSession().Text(params);
 		filter.source     = ArgSource().Text(params);
 		filter.event_type = ArgEvent().Text(params);
 		filter.search     = ArgContains().Text(params);

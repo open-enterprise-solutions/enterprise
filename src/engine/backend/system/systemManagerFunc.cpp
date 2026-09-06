@@ -22,6 +22,7 @@
 #include "backend/metaCollection/metaIntrospect.h"   // …and the type names the writing needs
 
 #include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
+#include "backend/logger/logger.h"                   // the registration journal — the durable channel
 
 //--- Basic:
 bool ibValueSystemFunction::Boolean(const ibValue& cValue)
@@ -586,6 +587,51 @@ ibBackendValueForm* ibValueSystemFunction::ActiveWindow()
 }
 
 //--- Special:
+
+// ⭐⭐ THE DURABLE CHANNEL, and the only one a background run has. `Message` below is addressed to
+// whoever is watching a window; a background session is tied to nobody, so its messages reach no one
+// at all — measured, and the reason this exists (Max, 2026-09-06: *"a background job cannot send a
+// message… but you can add yourself a function like writing to the registration journal"*).
+//
+// ⚠ THE ARGUMENTS ARE THE ROW'S OWN COLUMNS. The journal already stores a level, a category, a text
+// and the OBJECT a line is about; nothing here is a shape invented for the occasion. The session is
+// NOT among them — the logger stamps it, because a caller naming its own session could name somebody
+// else's.
+void ibValueSystemFunction::WriteJournalEvent(const wxString& strMessage, ibStatusMessage status,
+	const wxString& strEvent, const ibValue& objectValue)
+{
+	ibLogger* const logger = ibApplicationData::GetLogger();
+	if (logger == nullptr)
+		return;             // no journal in this process — saying so is not this function's business
+
+	// The category a caller did not give: "script" is where code written in the configuration lands,
+	// which is what a person filters by when they want to see what an assistant's run did.
+	const wxString source = wxT("script");
+	const wxString event  = strEvent.IsEmpty() ? wxT("script.event") : strEvent;
+
+	// 🛑⭐⭐ THE OBJECT IS APPENDED TO THE TEXT, and that is a RETREAT from what this first did — for
+	// a measured reason. The obvious road was `Audit`'s details overload, which takes an ibValue and
+	// looks exactly right. It is not, twice over, and both are silent:
+	//   · `ibLogger::Emit` ends with `(void)details;` — the structured payload is a deferred phase, so
+	//     the value is accepted and DROPPED. Nothing ever reads it back;
+	//   · `Audit` also FORCES the row's level to audit, so a caller writing
+	//     `WriteJournalEvent(text, StatusMessage.Error, …, obj)` would not find their line under
+	//     `level: error`. An argument stated and then ignored is worse than one refused.
+	//
+	// So the level is honoured always, and the object goes in as its PRESENTATION — visible, findable
+	// by `contains`, and honest about being text rather than a link. When the details column is
+	// filled in for real, this is the one place that changes.
+	const wxString text = objectValue.IsEmpty()
+		? strMessage
+		: wxString::Format(wxT("%s [%s]"), strMessage, objectValue.GetString());
+
+	switch (status) {
+	case ibStatusMessage::ibStatusMessage_Error:   logger->Error(source, event, text); break;
+	case ibStatusMessage::ibStatusMessage_Warning: logger->Warn (source, event, text); break;
+	default:                                       logger->Info (source, event, text); break;
+	}
+}
+
 void ibValueSystemFunction::Message(const wxString& strMessage, ibStatusMessage status)
 {
 	// 🛑⭐⭐ IN EVAL MODE IT USED TO GO NOWHERE, AND THAT IS WHY A SANDBOX PRINTED INTO SILENCE.

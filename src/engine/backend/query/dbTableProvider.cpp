@@ -1691,6 +1691,10 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 			q.Where(predicate);
 
 		std::vector<ibQueryProjItem> projection;
+		// ⭐⭐ WHAT THIS STATEMENT ACTUALLY WRITES UNDER AN OUTPUT NAME. Collected as the projection is
+		// built, and read by the ORDER BY below — because "sort by the name the projection published"
+		// is only true of names the projection published, and nothing was checking.
+		std::vector<wxString> projectedAliases;
 		for (size_t gi = 0; gi < spec.m_groupBy->size(); ++gi) {
 			// A COMPUTED key (GroupByExpr) occupies the same slot with a null column: lower the tree
 			// and project it under its alias. One GROUP BY item, not a field spread — an expression
@@ -1706,6 +1710,7 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 				// "the month is missing" rather than as a naming mismatch (measured 2026-09-05:
 				// `GROUP BY MONTH(Period)` returned five correct sums against five blank months).
 				projection.push_back(ibQueryProjItem{ gexpr, ibSqlAliasOf((*spec.m_groupAliases)[gi]) });
+				projectedAliases.push_back(ibSqlAliasOf((*spec.m_groupAliases)[gi]));
 				continue;
 			}
 			const ibBackendQueryColumn* gcol = (*spec.m_groupBy)[gi];
@@ -1733,6 +1738,7 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 				args.push_back(a.m_col != nullptr ? qualCol(qual, FirstSqlFieldOfColumn(a.m_col)) : ibCol(wxT("*")));
 			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct),
 				ibSqlAliasOf(a.m_alias) });   // the STATEMENT's spelling — the author's name may be SQL's word
+			projectedAliases.push_back(ibSqlAliasOf(a.m_alias));
 		}
 		q.Project(std::move(projection));
 
@@ -1756,6 +1762,27 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 		for (const ibQuerySortItem& s : *spec.m_sorts) {
 			if (s.m_outputAlias.IsEmpty())
 				continue;
+			// 🛑⭐⭐ …ONLY IF THIS STATEMENT WROTE THAT NAME. The sentence above is true of an
+			// AGGREGATE, which is what this branch was written for — and it was taken on trust for
+			// every other output. A field reached THROUGH A JOIN (`Goods.Unit`) is a sort key with an
+			// output alias and no projection of its own, so this wrote `ORDER BY out_Unit_RRRef`
+			// against a select list that carries `fld*` names and nothing else: `-206 Column unknown
+			// OUT_UNIT_RRREF`, on an ordinary report the moment somebody grouped by the unit
+			// (measured 2026-09-06, reproduced through compose_run).
+			//
+			// ⚠ THE LEVEL IS LEFT UNSORTED RATHER THAN THE QUERY REFUSED. Sorting is the weakest of
+			// the promises here — the figures are right either way — and a report that composes with
+			// its groups in an unspecified order is worth far more than one that will not compose.
+			// The journal says which key was dropped, because silence about a missing sort is how a
+			// person ends up believing the engine ignores their ordering.
+			if (std::find(projectedAliases.begin(), projectedAliases.end(),
+					ibSqlAliasOf(s.m_outputAlias)) == projectedAliases.end()) {
+				ibJournalInfo(wxT("query.order"),
+					wxT("sort by output '%s' dropped: this statement projects no such name (a field "
+					    "reached through a join is not written into the select list)"),
+					s.m_outputAlias);
+				continue;
+			}
 			ibQuerySortKey key;
 			key.m_expr = ibCol(ibSqlAliasOf(s.m_outputAlias));
 			key.m_dir  = s.m_ascending ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
@@ -4192,7 +4219,18 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 			// tree has no single table to qualify a keyset against anyway.
 			ColocatedLeaves leaves;
 			ibQueryIR innerIR;
-			if (ColocatableJoinTree(innerSpec, leaves)) {
+			// ⚠ …AND NOT WHEN IT HAS A DOT-WALK, which aligns this with the question the READ asks:
+			// `CanColocateBase` runs the same tree test and then refuses a dot-walk outright ("their
+			// own paths"), because a walked field is written by machinery this branch does not have —
+			// the body it builds carries From, Where and Limit and NO PROJECTION at all.
+			//
+			// ⚠ HONESTLY: THIS WAS NOT THE 2026-09-06 DEFECT. It was added as a hypothesis and then
+			// measured to be a no-op for it — that body was taking BuildPageIR all along (it carries
+			// an ORDER BY, which this branch never writes). The cause was the lift below. It is kept
+			// because the inconsistency it removes is real and one-sided: were a body ever to reach
+			// the co-located branch carrying a walk, it would publish the field and write nothing,
+			// which is the failure this file has now paid for three times.
+			if (innerSpec.m_dotWalks->empty() && ColocatableJoinTree(innerSpec, leaves)) {
 				ibDatabaseQueryBuilder jq(innerSpec.m_holder);
 				jq.From(BuildColocatedFrom(innerSpec.m_root, leaves));
 				if (ibQueryExprPtr where = ColocatedWhere(innerSpec, leaves))
@@ -4387,8 +4425,30 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 				// SELECT — the outer list wins and the inner is dropped — which is how the walked fields
 				// went missing to begin with. Taking the items out and then reading from underneath says
 				// the same thing the renderer would do, in the open.
+				// 🛑⭐⭐ …AND THE PROJECTION IS NOT ALWAYS THE ROOT. This looked at `m_root` alone, so
+				// it found the projection only when nothing stood above it — and BuildPageIR puts a
+				// SORT on top the moment the body has an ORDER BY, which a declared read of a
+				// register balance always does (its keyset order). The walked items were then sitting
+				// one level down, untouched, while the list rebuilt below replaced them.
+				//
+				// MEASURED 2026-09-06 after three wrong fixes, by asking the three conditions
+				// directly: `lift? dotWalks=1 root=3 isProject=0` — the walk was there, the root was a
+				// Sort. That one line is what ended a long chase, and it should have been the first
+				// move rather than the fourth.
+				//
+				// ⭐ SO THE WRAPPERS ARE WALKED THROUGH — Sort, Limit, Distinct all pass rows along
+				// unchanged, and a projection under any of them is still this body's projection. The
+				// slot is held by pointer so splicing it out relinks whoever owned it, rather than
+				// only ever the root.
+				std::shared_ptr<ibQueryRel>* slot = &innerIR.m_root;
+				while (*slot != nullptr && (*slot)->m_kind != ibQueryRelKind::Project
+					&& ((*slot)->m_kind == ibQueryRelKind::Sort
+						|| (*slot)->m_kind == ibQueryRelKind::Limit
+						|| (*slot)->m_kind == ibQueryRelKind::Distinct))
+					slot = &(*slot)->m_input;
+
 				if (innerSpec.m_dotWalks != nullptr && !innerSpec.m_dotWalks->empty()
-					&& innerIR.m_root != nullptr && innerIR.m_root->m_kind == ibQueryRelKind::Project) {
+					&& *slot != nullptr && (*slot)->m_kind == ibQueryRelKind::Project) {
 
 					const auto belongsToWalk = [&](const wxString& alias) {
 						return std::any_of(innerSpec.m_dotWalks->begin(), innerSpec.m_dotWalks->end(),
@@ -4403,7 +4463,7 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 					};
 
 					std::vector<ibQueryProjItem> lifted;
-					for (const ibQueryProjItem& item : innerIR.m_root->m_projection) {
+					for (const ibQueryProjItem& item : (*slot)->m_projection) {
 						// The `*` item carries no alias — this projection enumerates instead of it.
 						if (item.m_alias.IsEmpty() || !belongsToWalk(item.m_alias))
 							continue;
@@ -4415,7 +4475,7 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 
 					if (!lifted.empty()) {
 						proj.insert(proj.end(), lifted.begin(), lifted.end());
-						innerIR.m_root = innerIR.m_root->m_input;   // read from under the projection we just emptied
+						*slot = (*slot)->m_input;   // read from under the projection we just emptied
 					}
 				}
 

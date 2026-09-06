@@ -40,7 +40,7 @@ const ibSourceExplorer* ibValueRecordDataObjectCatalog::GetSourceExplorer() cons
 	ibValueMetaObjectCatalog* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode()->GetQueryColumn(), false);
 		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription()->GetQueryColumn());
 		ibValueMetaObjectAttributePredefined* defOwner = metaRef->GetCatalogOwner();
 		if (defOwner != nullptr && defOwner->GetClsidCount() > 0) {

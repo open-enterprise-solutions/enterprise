@@ -2442,7 +2442,7 @@ const ibSourceExplorer* ibValueRecordDataObjectRef::GetSourceExplorer() const
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-			m_sourceExplorer.AppendColumn(object, object != attribute);
+			m_sourceExplorer.AppendColumn(object->GetQueryColumn(), object != attribute);
 		}
 	}
 
@@ -2607,7 +2607,7 @@ const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer()
 			if (attrUse == ibItemMode::ibItemMode_Item
 				|| attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					m_sourceExplorer.AppendColumn(object, object != attribute);
+					m_sourceExplorer.AppendColumn(object->GetQueryColumn(), object != attribute);
 				}
 			}
 		}
@@ -2615,7 +2615,7 @@ const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer()
 			if (attrUse == ibItemMode::ibItemMode_Folder ||
 				attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					m_sourceExplorer.AppendColumn(object, object != attribute);
+					m_sourceExplorer.AppendColumn(object->GetQueryColumn(), object != attribute);
 				}
 			}
 		}

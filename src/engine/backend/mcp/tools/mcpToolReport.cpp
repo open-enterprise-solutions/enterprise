@@ -258,7 +258,20 @@ public:
 		return ibMcpText("A composer as the tree it is: the query it reads, the fields and resources it "
 			"declares, and its outputs - each with the levels it groups by, down the rows and "
 			"across the columns. This is what a report IS; the query below it is what the "
-			"composer renders into.");
+			"composer renders into.\n"
+			  "\n"
+			"AND WHAT IT ANSWERS IS compose_run - the same schema, executed, with its figures. That "
+			"is the other half of working on a report and it is where you go when somebody says a "
+			"number is wrong: this verb says what the report is, that one says what it produced, and "
+			"compose_settings says WHOSE settings they were looking at when they said it. The tree "
+			"this answers with also goes straight into compose_run's `schema`, so a change can be "
+			"tried before it is written anywhere.\n"
+			  "\n"
+			"NOTE - THE PARAMETER VALUES IN HERE ARE PACKED, and a packed value does not read as what it "
+			"is - a date, a reference and an enum member all arrive as a small node. `value_unpack` "
+			"says what one actually holds: its type, its presentation, its identifier. That is the "
+			"verb for 'what is this report filtering by, exactly', and `value_pack` is its mirror "
+			"when you need to STATE one - a period above all, which no JSON scalar can carry.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override

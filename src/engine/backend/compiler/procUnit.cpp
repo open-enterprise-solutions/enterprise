@@ -2062,11 +2062,20 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 
 	//check the conformity of modules (compiled and running)
 	if (GetParent() && GetParent()->m_pByteCode != m_pByteCode->m_parent) {
+		// 🛑⭐⭐ THE REPORT USED TO CRASH WHILE REPORTING. Both names were read straight off pointers
+		// that this very branch exists because they DISAGREE — and the commonest disagreement is
+		// that one of them is NULL: a parent unit that has never executed anything has no bytecode.
+		// MEASURED 2026-09-06 from a crash dump: a background session's root ProcUnit carries no
+		// bytecode (a background session does not run the main module), so this branch fired,
+		// dereferenced `GetParent()->m_pByteCode` and took the whole application down — with no
+		// error reported anywhere, because the reporting is what died.
+		const wxString parentOfCode = cByteCode.m_parent != nullptr
+			? cByteCode.m_parent->m_strModuleName : wxString(wxT("(none)"));
+		const wxString parentOfUnit = GetParent()->m_pByteCode != nullptr
+			? GetParent()->m_pByteCode->m_strModuleName : wxString(wxT("(nothing executed yet)"));
 		m_pByteCode = nullptr;
 		ibBackendCoreException::Error(_("System error - compilation failed (#1)\nModule:%s\nParent1:%s\nParent2:%s"),
-			cByteCode.m_strModuleName,
-			cByteCode.m_parent->m_strModuleName,
-			GetParent()->m_pByteCode->m_strModuleName
+			cByteCode.m_strModuleName, parentOfCode, parentOfUnit
 		);
 	}
 	else if (!GetParent() && m_pByteCode->m_parent) {
