@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -41,7 +42,17 @@ SOURCE_MAP_PATTERN = re.compile(
     r"(?://[#@]\s*sourceMappingURL=[^\r\n]*|/\*[#@]\s*sourceMappingURL=.*?\*/)",
     re.DOTALL,
 )
+JSON_DYNAMIC_IMPORT_PATTERN = re.compile(
+    r"(?P<prefix>\bimport\s*\(\s*(?:/\*.*?\*/\s*)?)"
+    r"(?P<quote>[\"'])(?P<specifier>[^\"']+\.json)(?P=quote)",
+    re.DOTALL,
+)
 DISALLOWED_SUFFIXES = (".d.ts", ".ts", ".map")
+
+
+def relative_module_url(module_path: Path, resource_path: Path) -> str:
+    relative = Path(os.path.relpath(resource_path, module_path.parent)).as_posix()
+    return relative if relative.startswith(".") else f"./{relative}"
 
 
 def package_name(specifier: str) -> str:
@@ -300,6 +311,68 @@ def write_consolidated_licenses(staged: Path, packages: dict) -> None:
     (staged / "THIRD_PARTY_LICENSES.txt").write_text("\n".join(lines).rstrip() + "\n")
 
 
+def local_module_target(staged: Path, module_path: Path, specifier: str) -> Path:
+    if not specifier.startswith("."):
+        raise RuntimeError(
+            f"JSON module import is not package-relative: {module_path}: {specifier}"
+        )
+    target = (module_path.parent / specifier).resolve()
+    staged_resolved = staged.resolve()
+    if target != staged_resolved and staged_resolved not in target.parents:
+        raise RuntimeError(f"JSON module import escapes staged tree: {module_path}: {specifier}")
+    return target
+
+
+def convert_json_module_imports(staged: Path) -> None:
+    # UI5's generated JSON imports expect a bundler. Browser-native modules
+    # need JavaScript siblings instead; JSON retained for new URL resources
+    # still serves fetch callers with its original MIME type.
+    resource_targets = set()
+    javascript_paths = sorted(staged.rglob("*.js"))
+    for module_path in javascript_paths:
+        source = module_path.read_text()
+        for resource in module_resources(source):
+            if resource.endswith(".json"):
+                resource_targets.add(local_module_target(staged, module_path, resource))
+
+    converted_targets = set()
+    for module_path in javascript_paths:
+        source = module_path.read_text()
+
+        def replace_json_import(match):
+            specifier = match.group("specifier")
+            target = local_module_target(staged, module_path, specifier)
+            if not target.is_file():
+                raise RuntimeError(f"JSON module target is absent: {module_path}: {specifier}")
+            converted_targets.add(target)
+            rewritten = specifier[: -len(".json")] + ".js"
+            return match.group("prefix") + match.group("quote") + rewritten + match.group("quote")
+
+        rewritten = JSON_DYNAMIC_IMPORT_PATTERN.sub(replace_json_import, source)
+        if rewritten != source:
+            module_path.write_text(rewritten)
+
+    for json_path in sorted(converted_targets):
+        payload = json.loads(json_path.read_text())
+        module_path = json_path.with_suffix(".js")
+        module_path.write_text(
+            "export default " + json.dumps(payload, separators=(",", ":")) + ";\n"
+        )
+        if json_path not in resource_targets:
+            json_path.unlink()
+
+    surviving_imports = []
+    for module_path in sorted(staged.rglob("*.js")):
+        for specifier in module_specifiers(module_path.read_text()):
+            if specifier.endswith(".json"):
+                surviving_imports.append(f"{module_path}: {specifier}")
+    if surviving_imports:
+        raise RuntimeError(
+            "JSON module imports remain after conversion: "
+            + ", ".join(surviving_imports)
+        )
+
+
 asset_root = Path(__file__).resolve().parents[1]
 ui5_root = asset_root / "ui5"
 destination = ui5_root / VERSION
@@ -397,13 +470,25 @@ with tempfile.TemporaryDirectory(prefix="oes-ui5-", dir="/private/tmp") as temp:
         source = prune_locale_loader(relative, source)
         source = prune_asset_parameters(relative, source)
         source = SOURCE_MAP_PATTERN.sub("", source).rstrip() + "\n"
+        rewritten_module_resources = set()
 
-        local_cldr = (
-            f"./assets/ui5/{VERSION}/@ui5/webcomponents-localization/"
-            "dist/generated/assets/cldr/en.json"
+        cldr_target = (
+            staged
+            / "@ui5/webcomponents-localization"
+            / "dist/generated/assets/cldr/en.json"
         )
         if OPENUI5_CLDR in source:
-            source = source.replace(OPENUI5_CLDR, local_cldr)
+            local_cldr = relative_module_url(destination_path, cldr_target)
+            quoted_cldr = re.compile(
+                rf'(?P<quote>["\'`]){re.escape(OPENUI5_CLDR)}(?P=quote)'
+            )
+            source, replacement_count = quoted_cldr.subn(
+                lambda _match: f"new URL({json.dumps(local_cldr)}, import.meta.url).href",
+                source,
+            )
+            if replacement_count != 1:
+                raise RuntimeError("could not rewrite the fallback CLDR module URL")
+            rewritten_module_resources.add(local_cldr)
             localization = find_installed_package(
                 installed, scratch, "@ui5/webcomponents-localization"
             )
@@ -424,10 +509,18 @@ with tempfile.TemporaryDirectory(prefix="oes-ui5-", dir="/private/tmp") as temp:
                 )
             dependency_path = match.group("path")
             enqueue(dependency_name, dependency, dependency_path)
-            local_url = (
-                f"./assets/ui5/{VERSION}/{dependency_name}/{dependency_path}"
+            resource_target = staged / dependency_name / dependency_path
+            local_url = relative_module_url(destination_path, resource_target)
+            if relative.as_posix() != "dist/generated/css/FontFace.css.js":
+                raise RuntimeError(
+                    f"unhandled CDN runtime URL context in {name}/{relative}"
+                )
+            module_expression = (
+                "${new URL("
+                + json.dumps(local_url)
+                + ", import.meta.url).href}"
             )
-            source = source.replace(match.group(0), local_url)
+            source = source.replace(match.group(0), module_expression)
 
         destination_path.write_text(source)
 
@@ -445,6 +538,8 @@ with tempfile.TemporaryDirectory(prefix="oes-ui5-", dir="/private/tmp") as temp:
             enqueue(imported_name, imported, imported_relative)
 
         for resource in module_resources(source):
+            if resource in rewritten_module_resources:
+                continue
             if resource.startswith((".", "/")):
                 enqueue(name, installed, relative.parent / resource)
 
@@ -459,6 +554,22 @@ with tempfile.TemporaryDirectory(prefix="oes-ui5-", dir="/private/tmp") as temp:
             )
             bare_specifiers.add(icon_specifier)
             enqueue(icon_package, icon_installed, icon_relative)
+
+    convert_json_module_imports(staged)
+    for package_name_with_themes in (
+        "@ui5/webcomponents-theming",
+        "@ui5/webcomponents",
+    ):
+        for required_theme in ("sap_horizon", "sap_horizon_dark"):
+            required_bundle = (
+                staged
+                / package_name_with_themes
+                / "dist/generated/assets/themes"
+                / required_theme
+                / "parameters-bundle.css.js"
+            )
+            if not required_bundle.is_file():
+                raise RuntimeError(f"required theme bundle was pruned: {required_bundle}")
 
     write_consolidated_licenses(staged, packages)
 
@@ -498,6 +609,16 @@ with tempfile.TemporaryDirectory(prefix="oes-ui5-", dir="/private/tmp") as temp:
         raise RuntimeError("source maps were staged")
     if any("sourceMappingURL" in path.read_text(errors="ignore") for path in staged.rglob("*.js")):
         raise RuntimeError("source-map requests remain in staged JavaScript")
+    document_relative_urls = [
+        path
+        for path in staged.rglob("*.js")
+        if f"./assets/ui5/{VERSION}/" in path.read_text(errors="ignore")
+    ]
+    if document_relative_urls:
+        raise RuntimeError(
+            "document-relative runtime URLs remain: "
+            + ", ".join(map(str, document_relative_urls))
+        )
     for dropped in (
         "@ui5/webcomponents-icons-tnt",
         "@ui5/webcomponents-icons-business-suite",

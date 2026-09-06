@@ -124,7 +124,7 @@ const registerLocaleDataLoader = (localeId, loader) => {
 // register default loader for "en" from ui5 CDN (dev workflow without assets)
 registerLocaleDataLoader("en", async () => {
     console.warn(`[LocaleData] Falling back to loading "en" locale data from CDN.`, /* eslint-disable-line */ `For production usage, please configure locale data loading via the "Assets.js" module of the webcomponents package you are using.`); /* eslint-disable-line */
-    const cldrContent = await fetch(`./assets/ui5/2.26.0/@ui5/webcomponents-localization/dist/generated/assets/cldr/en.json`);
+    const cldrContent = await fetch(new URL("../../../webcomponents-localization/dist/generated/assets/cldr/en.json", import.meta.url).href);
     return cldrContent.json();
 });
 // When the language changes dynamically (the user calls setLanguage),

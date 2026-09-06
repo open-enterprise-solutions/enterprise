@@ -2,16 +2,16 @@
 import { registerThemePropertiesLoader } from "@ui5/webcomponents-base/dist/asset-registries/Themes.js";
 const loadThemeProperties = async (themeName) => {
     switch (themeName) {
-        case "sap_fiori_3": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-fiori_3-parameters-bundle" */ "../assets/themes/sap_fiori_3/parameters-bundle.css.json")).default;
-        case "sap_fiori_3_dark": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-fiori_3_dark-parameters-bundle" */ "../assets/themes/sap_fiori_3_dark/parameters-bundle.css.json")).default;
-        case "sap_fiori_3_hcb": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-fiori_3_hcb-parameters-bundle" */ "../assets/themes/sap_fiori_3_hcb/parameters-bundle.css.json")).default;
-        case "sap_fiori_3_hcw": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-fiori_3_hcw-parameters-bundle" */ "../assets/themes/sap_fiori_3_hcw/parameters-bundle.css.json")).default;
-        case "sap_horizon": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-horizon-parameters-bundle" */ "../assets/themes/sap_horizon/parameters-bundle.css.json")).default;
-        case "sap_horizon_auto": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-horizon_auto-parameters-bundle" */ "../assets/themes/sap_horizon_auto/parameters-bundle.css.json")).default;
-        case "sap_horizon_dark": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-horizon_dark-parameters-bundle" */ "../assets/themes/sap_horizon_dark/parameters-bundle.css.json")).default;
-        case "sap_horizon_hc_auto": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-horizon_hc_auto-parameters-bundle" */ "../assets/themes/sap_horizon_hc_auto/parameters-bundle.css.json")).default;
-        case "sap_horizon_hcb": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-horizon_hcb-parameters-bundle" */ "../assets/themes/sap_horizon_hcb/parameters-bundle.css.json")).default;
-        case "sap_horizon_hcw": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-horizon_hcw-parameters-bundle" */ "../assets/themes/sap_horizon_hcw/parameters-bundle.css.json")).default;
+        case "sap_fiori_3": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-fiori_3-parameters-bundle" */ "../assets/themes/sap_fiori_3/parameters-bundle.css.js")).default;
+        case "sap_fiori_3_dark": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-fiori_3_dark-parameters-bundle" */ "../assets/themes/sap_fiori_3_dark/parameters-bundle.css.js")).default;
+        case "sap_fiori_3_hcb": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-fiori_3_hcb-parameters-bundle" */ "../assets/themes/sap_fiori_3_hcb/parameters-bundle.css.js")).default;
+        case "sap_fiori_3_hcw": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-fiori_3_hcw-parameters-bundle" */ "../assets/themes/sap_fiori_3_hcw/parameters-bundle.css.js")).default;
+        case "sap_horizon": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-horizon-parameters-bundle" */ "../assets/themes/sap_horizon/parameters-bundle.css.js")).default;
+        case "sap_horizon_auto": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-horizon_auto-parameters-bundle" */ "../assets/themes/sap_horizon_auto/parameters-bundle.css.js")).default;
+        case "sap_horizon_dark": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-horizon_dark-parameters-bundle" */ "../assets/themes/sap_horizon_dark/parameters-bundle.css.js")).default;
+        case "sap_horizon_hc_auto": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-horizon_hc_auto-parameters-bundle" */ "../assets/themes/sap_horizon_hc_auto/parameters-bundle.css.js")).default;
+        case "sap_horizon_hcb": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-horizon_hcb-parameters-bundle" */ "../assets/themes/sap_horizon_hcb/parameters-bundle.css.js")).default;
+        case "sap_horizon_hcw": return (await import(/* webpackChunkName: "ui5-webcomponents-sap-horizon_hcw-parameters-bundle" */ "../assets/themes/sap_horizon_hcw/parameters-bundle.css.js")).default;
         default: throw "unknown theme";
     }
 };

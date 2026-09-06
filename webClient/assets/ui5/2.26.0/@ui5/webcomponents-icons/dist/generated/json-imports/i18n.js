@@ -2,9 +2,9 @@
 import { registerI18nLoader } from "@ui5/webcomponents-base/dist/asset-registries/i18n.js";
 const importMessageBundle = async (localeId) => {
     switch (localeId) {
-        case "en": return (await import(/* webpackChunkName: "ui5-webcomponents-icons-messagebundle-en" */ "../assets/i18n/messagebundle_en.json")).default;
-        case "ru": return (await import(/* webpackChunkName: "ui5-webcomponents-icons-messagebundle-ru" */ "../assets/i18n/messagebundle_ru.json")).default;
-        case "uk": return (await import(/* webpackChunkName: "ui5-webcomponents-icons-messagebundle-uk" */ "../assets/i18n/messagebundle_uk.json")).default;
+        case "en": return (await import(/* webpackChunkName: "ui5-webcomponents-icons-messagebundle-en" */ "../assets/i18n/messagebundle_en.js")).default;
+        case "ru": return (await import(/* webpackChunkName: "ui5-webcomponents-icons-messagebundle-ru" */ "../assets/i18n/messagebundle_ru.js")).default;
+        case "uk": return (await import(/* webpackChunkName: "ui5-webcomponents-icons-messagebundle-uk" */ "../assets/i18n/messagebundle_uk.js")).default;
         default: throw "unknown locale";
     }
 };

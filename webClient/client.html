@@ -26,6 +26,7 @@ window.OES = window.OES || {};
 })();
 </script>
 <link rel="stylesheet" href="./assets/oes/oes-tokens.css">
+<!-- Import-map targets are relative to this document at /w/<prefix>/. -->
 <script type="importmap">
 {"imports":{
   "@sap-theming/theming-base-content/":"./assets/ui5/2.26.0/@sap-theming/theming-base-content/",
@@ -525,6 +526,7 @@ const L = window.OES.L || (window.OES.L = {});
 
 const API=location.pathname.replace(/\/$/,'');
 const runtime=window.OES.runtime;
+const rendererHarness=new URLSearchParams(location.search).get('harness')==='1';
 for(const select of document.querySelectorAll('#oes-dev-switcher select')){
   const axis=select.dataset.axis;
   select.value=runtime[axis];
@@ -1039,8 +1041,11 @@ function genTabSid(){
     + '-' + ((8 + ((Math.random()*4)|0)).toString(16)) + hex.slice(17,20)
     + '-' + hex.slice(20,32);
 }
-let tabSid = sessionStorage.getItem('oes_tab_sid') || genTabSid();
-sessionStorage.setItem('oes_tab_sid', tabSid);
+// Same-origin harness frames share sessionStorage, so keep their two
+// development sessions separate without changing the product key.
+const tabSidStorageKey=rendererHarness?'oes_tab_sid_'+runtime.ui:'oes_tab_sid';
+let tabSid = sessionStorage.getItem(tabSidStorageKey) || genTabSid();
+sessionStorage.setItem(tabSidStorageKey, tabSid);
 
 // "Duplicate tab" copies sessionStorage verbatim — both tabs boot
 // with the same oes_tab_sid, slam the same server-side ibWebSession,
@@ -1064,7 +1069,7 @@ if (typeof BroadcastChannel !== 'undefined') {
   setTimeout(() => {
     if (conflicted) {
       tabSid = genTabSid();
-      sessionStorage.setItem('oes_tab_sid', tabSid);
+      sessionStorage.setItem(tabSidStorageKey, tabSid);
       // Clean reload — server mints a fresh session on the first hit
       // with the new tabSid. The original tab keeps its session intact.
       location.reload();
@@ -2382,6 +2387,21 @@ function stopLive(){
   if (liveSource) { liveSource.close(); liveSource = null; }
 }
 
+// The development harness injects one captured host tree into the real
+// renderer. This path is query-gated and accepts only its same-origin parent.
+if(rendererHarness){
+  window.addEventListener('message',event=>{
+    const data=event.data;
+    if(event.origin!==location.origin || event.source!==parent ||
+       !data || data.type!=='oes-render-fixture' ||
+       !data.fixture || typeof data.fixture!=='object') return;
+    stopLive();
+    stopPolling();
+    main.innerHTML='';
+    main.appendChild(render(data.fixture));
+  });
+}
+
 // Session-lost banner — fires when /active returns 401 (server restart,
 // idle-timeout eviction, or explicit destroy). Blocks the page so the
 // user doesn't keep typing into inputs whose commits will silently fail,
@@ -2426,7 +2446,7 @@ async function showSessionLost(){
 }
 document.addEventListener('visibilitychange', ()=>{
   if (document.hidden) { stopLive(); stopPolling(); }
-  else { startLive(); }
+  else if(!rendererHarness) { startLive(); }
 });
 
 // On session start, OnStart may have opened forms (auto-populated tabs)
@@ -2497,10 +2517,14 @@ async function paintActiveTab(){
     refreshTabs().catch(() => {}),
     paintActiveTab().catch(() => {}),
   ]);
-  startLive();
+  if(!rendererHarness) startLive();
   if (bootOverlay) {
     bootOverlay.classList.add('hide');
     setTimeout(() => bootOverlay.remove(), 200);
+  }
+  if(rendererHarness){
+    await window.OES.ui5Ready;
+    parent.postMessage({type:'oes-renderer-ready',ui:runtime.ui},location.origin);
   }
   // Debug indicator: a "DEBUG" pill in the sidebar status line while
   // the wes process is in --debug mode. When this tab's session parks
