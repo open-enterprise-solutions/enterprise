@@ -646,6 +646,19 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 
 	for (size_t i = 0; i < out.GetCount(); ++i) SetItemParent(out[i], parent);
 
+	// ⭐⭐ THE GENERATION CHANGES HERE, AND NOT ONE LINE EARLIER. Everything above ran while the
+	// PREVIOUS page was still held, which is the whole point: a reference that page had is still
+	// alive, so the register answers this fetch's lookup with it (ibReferenceRegistry::Find) instead
+	// of building a twin and reading its row again. Assigning releases the old page now, having
+	// served exactly the fetch that needed it.
+	//
+	// ⭐ ONE HANDLE PER ROW, NOT A COPY OF ITS CELLS. The item holds the node, the node holds the
+	// row, and the row already holds its references — so a single refcount is the whole of what
+	// keeping a generation costs, whatever a row turns out to contain. A dynamic list joins several
+	// sources and a row may carry several references; nothing here has to know which columns those
+	// are (Max, 2026-09-07: *"hold the data view item, and it will hold the whole row"*).
+	m_lastPage = out;
+
 	return fetched;
 }
 

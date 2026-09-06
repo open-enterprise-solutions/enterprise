@@ -349,7 +349,9 @@ public:
 	// register exists to prevent.
 	static void Remember(ibValueReferenceDataObject* ref);
 
-	// The last holder let go — called from ~ibValueReferenceDataObject, and nowhere else.
+	// The last holder let go — called from ~ibValueReferenceDataObject, and from ONE other place:
+	// PrepareRef re-homing an UNREAD reference into the session that is asking it to read (see the
+	// note there). Both are the same act — striking it from the table it is leaving.
 	//
 	// ⚠ It strikes itself from the session it REGISTERED in, which need not be the current one: a
 	// value can travel and be released elsewhere. Erasing from "whatever session is current now"

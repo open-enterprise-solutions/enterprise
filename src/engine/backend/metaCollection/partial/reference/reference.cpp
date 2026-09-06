@@ -20,6 +20,7 @@
 #include "backend/diagnostics/journal.h"   // a read refused across sessions is said out loud
 #include "backend/utils/debugTrace.h"      // ibDebugTraceEnabled — the register measurement is opt-in
 #include <unordered_map>
+#include <mutex>                 // the table is read by a rented read on another thread
 #include <cstring>
 //////////////////////////////////////////////////////////////////////
 // ⭐⭐ ONE REFERENCE PER OBJECT, FOR AS LONG AS SOMEBODY HOLDS IT
@@ -96,7 +97,15 @@ bool NamesAnObject(const ibGuidImpl& guid)
 }
 
 // The table itself — one per session, created on first use and destroyed with the session.
+//
+// ⚠ THE LOCK IS NOT FOR ITS OWNER, IT IS FOR THE GUEST. Every write to a table comes from the
+// session that owns it, on that session's own thread, so an owner alone would need no lock at all —
+// and until 2026-09-07 there was none, correctly. What changed is that a RENTED READ now looks in
+// its HOST's table (TableOfCurrentSession below), so the fetch's thread and the owner's thread now
+// share one map — and a torn read of an unordered_map is not a stale answer, it is a crash. Every
+// operation takes this lock; it is uncontended except at exactly the crossing it exists for.
 struct ibReferenceTable {
+	std::mutex m_mtx;
 	std::unordered_map<ibRefKey, ibValueReferenceDataObject*, ibRefKeyHash> m_live;
 };
 
@@ -108,6 +117,33 @@ std::shared_ptr<ibReferenceTable> TableOfCurrentSession(bool createIfMissing)
 	ibSession* const session = ibSession::Current();
 	if (session == nullptr)
 		return nullptr;
+
+	// ⭐⭐ A RENTED READ USES THE TABLE OF THE SESSION IT READS FOR. It is minted to fetch one page on
+	// somebody's behalf and released, so a table of its own is empty when the page starts and gone
+	// when it ends — every page rebuilt every reference it showed and read every row again.
+	//
+	// MEASURED, and the measuring is the point: three separate attempts to fix this by LOOKING
+	// somewhere else all bought exactly nothing (24 pages, 25 identities, ~292 reads, unchanged
+	// across them), because the table they looked in was one nobody filled. A probe on the miss said
+	// so in one line — `own=yes/9 host=no/0`, on all 1056 of them: the host had no table at all,
+	// since the tenant creates AND reads the references and the host only displays them.
+	//
+	// So the tenant does not keep a register of its own; it files into the one that outlives the
+	// page. That is also the only thing that makes a NEXT page's lookup hit.
+	//
+	// ⚠ TWO THREADS NOW SHARE A TABLE, which is why ibReferenceTable carries a mutex and every
+	// operation on it takes one. Nothing else about the register changed: it still indexes what is
+	// alive and owns nothing.
+	//
+	// ⚠ THE HOST'S, NOT A GLOBAL ONE. A rented read already borrows the host's ACCESS POLICY for the
+	// same reason (ibSession::GetAccessPolicy — "no policy of its own, borrow the host's"): it reads
+	// AS that session, under its rights. And only a RENTED one asks — a web client has a Server() too
+	// and is a different person, so `IsUnlisted` is the honest question.
+	if (session->IsUnlisted()) {
+		if (const std::shared_ptr<ibSession> host = session->Server())
+			return host->Local<ibReferenceTable>(createIfMissing);
+	}
+
 	return session->Local<ibReferenceTable>(createIfMissing);
 }
 
@@ -121,9 +157,6 @@ ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibMetaID& id, const 
 {
 	if (!NamesAnObject(objGuid))
 		return nullptr;
-	const std::shared_ptr<ibReferenceTable> table = TableOfCurrentSession(/*createIfMissing*/false);
-	if (!table)
-		return nullptr;
 	// ⚠ NOT WHILE THIS IDENTITY IS BEING READ. A row's own attribute can name the row it belongs to —
 	// a Parent pointing at itself, or A -> B -> A, the shapes ibRefReadGuard exists for. Materialising
 	// that attribute asks here, and answering with the very object doing the reading would have it
@@ -133,9 +166,42 @@ ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibMetaID& id, const 
 	if (IsBeingRead(id, objGuid))
 		return nullptr;
 
-	const auto it = table->m_live.find(ibRefKey{ id, objGuid });
-	if (it == table->m_live.end())
+	// ⚠ ONE TABLE, AND IT IS THE ONE THAT OUTLIVES THE PAGE — TableOfCurrentSession sends a rented
+	// read to its host's, which is what makes a next page's lookup able to hit at all.
+	//
+	// ⚠ LOCKED, ON THE HOTTEST PATH THERE IS — one call per reference per cell. That is the price of
+	// the table being shared between the fetch's thread and the owner's, and it is the smaller half
+	// of the trade: an uncontended lock against a round trip to the database.
+	const std::shared_ptr<ibReferenceTable> own = TableOfCurrentSession(/*createIfMissing*/false);
+
+	ibValueReferenceDataObject* it = nullptr;
+	if (own) {
+		std::lock_guard<std::mutex> lock(own->m_mtx);
+		const auto found = own->m_live.find(ibRefKey{ id, objGuid });
+		if (found != own->m_live.end())
+			it = found->second;
+	}
+
+	if (it == nullptr) {
+		// ⚠ A PROBE, NOT A DIAGNOSTIC THE PRODUCT NEEDS — behind the same gate as hit / read, and
+		// there for one question: WHY does a miss happen while the object is demonstrably alive?
+		// Three answers are possible and they want three different fixes — the guest road never
+		// fires (no host to ask), it fires against an empty table (the adoption files elsewhere), or
+		// it fires against a full one and still misses (the identity differs). The line says which,
+		// and none of them can be told apart by reasoning about the code.
+		static const bool s_traceRefs = ibDebugTraceEnabled("OES_TRACE_REFS");
+		if (s_traceRefs) {
+			std::size_t size = 0;
+			if (own) {
+				std::lock_guard<std::mutex> lock(own->m_mtx);
+				size = own->m_live.size();
+			}
+			ibJournalInfo(wxT("reference"), wxT("miss %s <%i> table=%s/%u"),
+				ibGuid(objGuid).str(), static_cast<int>(id),
+				own ? wxT("yes") : wxT("no"), static_cast<unsigned>(size));
+		}
 		return nullptr;
+	}
 
 	// ⭐ A REUSE, SAID OUT LOUD. Beside the "read" line this is the whole measurement of the register:
 	// reads are rows fetched, hits are asks answered by an object somebody already had. A burst with
@@ -147,7 +213,7 @@ ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibMetaID& id, const 
 	static const bool s_traceRefs = ibDebugTraceEnabled("OES_TRACE_REFS");
 	if (s_traceRefs)
 		ibJournalInfo(wxT("reference"), wxT("hit %s <%i>"), ibGuid(objGuid).str(), static_cast<int>(id));
-	return it->second;
+	return it;
 }
 
 ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibValueMetaObjectRecordDataRef* metaObject,
@@ -181,7 +247,13 @@ void ibReferenceRegistry::Remember(ibValueReferenceDataObject* ref)
 	// cycle case above builds one deliberately — and overwriting would unregister a reference that is
 	// still alive, leaving it findable by nobody and its own Forget a no-op. The newcomer simply goes
 	// unregistered, which is the ordinary state for a reference built before there was a session.
-	table->m_live.emplace(ibRefKey{ ref->m_metaObject->GetMetaID(), key }, ref);
+	{
+		// Locked because a rented read may be walking this map right now — see the note in Find.
+		// The writer is always this table's own thread, so the lock is uncontended except against
+		// a guest, which is exactly what it is for.
+		std::lock_guard<std::mutex> lock(table->m_mtx);
+		table->m_live.emplace(ibRefKey{ ref->m_metaObject->GetMetaID(), key }, ref);
+	}
 
 	// ⭐ THE REFERENCE KEEPS ITS OWN TABLE, not a way to find one later. A value can travel — into a
 	// background job, into another session's call — and be released there; asking "which session is
@@ -204,6 +276,8 @@ void ibReferenceRegistry::Forget(const ibValueReferenceDataObject* ref)
 	// born before there was a session registered nowhere, and a later one, made once a session existed,
 	// holds the entry. Erasing by key alone would then remove the LIVING one and leave the table
 	// pointing at freed memory — the very failure the register is here to make impossible.
+	// Locked for the same reason as the insert — a guest may be reading this map.
+	std::lock_guard<std::mutex> lock(table->m_mtx);
 	const auto it = table->m_live.find(ibRefKey{ ref->m_metaObject->GetMetaID(), ref->m_objGuid });
 	if (it != table->m_live.end() && it->second == ref)
 		table->m_live.erase(it);
@@ -303,10 +377,33 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 	// object means a raw pointer crossed a boundary, and that is still worth saying out loud.
 	const std::shared_ptr<ibReferenceTable> current = TableOfCurrentSession(false);
 
+	// 🛑⭐⭐ AN UNREAD REFERENCE CARRIES NO RIGHTS, SO IT IS ADOPTED RATHER THAN REFUSED — and the
+	// ordering above is what makes that exact rather than lenient. `m_initializedRef` returns at the
+	// top of this function, so ANY object reaching this line has read NOTHING. There is no foreign
+	// row in it, no foreign policy applied to it, nothing of the other session but the table it was
+	// filed in. Refusing it protected nobody: what it produced was an unread reference whose
+	// presentation says "Not found" about a row plainly in the base.
+	//
+	// ⚠ AND THE CASE THE REFUSAL WAS WRITTEN FOR NEVER ARRIVES HERE. An object that DID read under
+	// another session is `m_initializedRef` and left three dozen lines above, carrying that
+	// session's answer with it - so this guard could only ever catch the harmless half. The rule it
+	// states is right; the place it stated it could not enforce it.
+	//
+	// MEASURED 2026-09-07: a list fetches its page on a worker (t21528), the values carry the
+	// reference objects, and the GUI thread asks them what they are 16 ms later (t7556). That is two
+	// sessions by construction, and it became reachable the moment the read moved from the fetch to
+	// the presentation (columnLayout.h, `createData`). One run recorded 4754 refusals and showed a
+	// screen of "Not found" against counterparties and currencies that were all there.
+	//
+	// So the object is RE-HOMED into the asking session's table and read under ITS rights, which is
+	// what the serialisation road would have produced anyway - the same identity, rebuilt on the far
+	// side - without the round trip. The first-one-keeps-the-slot rule in Remember means an identity
+	// already live in the new table simply leaves this object unregistered, which is the ordinary
+	// state of a reference built before there was a session.
 	if (m_registryTable && current && m_registryTable.get() != current.get()) {
-		ibJournalInfo(wxT("reference"), wxT("refused: read attempted from a session other than the one it belongs to <%i:%s>"),
-			m_metaObject->GetMetaID(), m_objGuid.str());
-		return;
+		ibReferenceRegistry::Forget(this);
+		m_registryTable.reset();
+		ibReferenceRegistry::Remember(this);
 	}
 
 	if (ibValueReferenceDataObject::IsEmpty()) {

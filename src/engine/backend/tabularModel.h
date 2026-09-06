@@ -1655,6 +1655,26 @@ protected:
 
 	mutable ibDataDBComposer m_composer;   // the DB composer (bound to the queryable by the concrete subclass ctor)
 
+	// ⭐⭐ THE PAGE JUST SERVED, HELD UNTIL THE NEXT ONE REPLACES IT — one generation, no more.
+	//
+	// A reference is an object with an identity, and the register hands out the LIVE one when asked
+	// (ibReferenceRegistry::Find). "Live" means somebody is holding it: the page on screen holds its
+	// own, and when that page is dropped the objects go with it. So consecutive pages shared nothing
+	// — every fetch rebuilt the same counterparties and the same three currencies and read every row
+	// again. MEASURED 2026-09-07: 24 page fetches, 25 distinct identities, 292 reads.
+	//
+	// Consecutive pages OVERLAP almost entirely — the same currencies on every row, counterparties
+	// repeating within twenty — so holding the previous generation ACROSS the fetch is what turns
+	// those reads into register hits. It is released the moment the new page takes its place, which
+	// is also the bound: one page's worth, never a growing cache, and nothing survives a list closing.
+	//
+	// ⭐ AND IT HOLDS ITEMS, WHICH IS WHY THIS CODE NEED KNOW NOTHING ABOUT WHAT A ROW CONTAINS. The
+	// item holds the node, the node holds the row, the row holds its own values — so one refcount per
+	// row keeps a whole generation alive, and when the row finally dies it releases all of it itself.
+	// A dynamic list joins several sources and a row may carry several references; which columns
+	// those are is the list's business and never has to become this member's.
+	mutable ibDataViewItemArray m_lastPage;
+
 	// Whole-list RAM snapshot — ONLY populated when IsDynamicRead() is false. m_snapshotComposer sources from
 	// m_snapshot (bound in the ctor); it re-materialises when the view generation moves past m_snapshotGen (a refresh
 	// / filter / sort change bumps the generation; a scroll does not).

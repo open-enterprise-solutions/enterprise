@@ -742,6 +742,16 @@ private:
 	bool m_listed = true;
 	void SetUnlisted() { m_listed = false; }
 
+public:
+	// ⭐ IS THIS A RENTED READ? The registry row is the honest signature — a session minted to fetch
+	// one page on somebody's behalf takes none, and nothing else in the tree is unlisted. Asked by
+	// callers that must treat "reading FOR a session" differently from "being a session": the
+	// reference register keeps such a read's objects in the HOST's table rather than in a table that
+	// dies with the page (reference.cpp, TableOfCurrentSession).
+	bool IsUnlisted() const { return !m_listed; }
+
+private:
+
 	// The teardown: quiesce the worker, then Remove@Urgent so the
 	// registry drops us, DELETEs the sys_session row and fires
 	// OnDisconnect (where DetachRuntime + DestroyRoot live). Reached ONLY
