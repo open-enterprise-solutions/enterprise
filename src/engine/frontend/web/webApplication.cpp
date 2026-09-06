@@ -24,8 +24,10 @@
 #include "webFrame.h"
 #include "webChildFrame.h"
 #include "webWindow.h"
+#include "webTableBox.h"
 
 #include "visualView/ctrl/form.h"
+#include "visualView/ctrl/tableBox.h"
 #include "visualView/ctrl/widgets.h"
 #include "visualView/visualHostClient.h"
 
@@ -281,7 +283,18 @@ bool ibWebApplication::Dispatch(int controlId, const wxString& kind, const wxStr
 		return false;
 	ibWebWindow* web = static_cast<ibWebWindow*>(obj);
 
-	if (!web->HandleRequest(kind, value))
+	// A table has no back-pointer to its control (its shim outlives
+	// nothing and owns nothing), so the cursor move is handed the
+	// control the dispatcher just resolved, for the length of the call.
+	if (auto* table = dynamic_cast<ibWebTableBox*>(web))
+		table->SetRequestControl(dynamic_cast<ibValueModelTableBox*>(ctrl));
+
+	const bool handled = web->HandleRequest(kind, value);
+
+	if (auto* table = dynamic_cast<ibWebTableBox*>(web))
+		table->SetRequestControl(nullptr);
+
+	if (!handled)
 		return false;
 
 	// Handler chain unwound — safe to actually destroy any tabs the
@@ -302,6 +315,25 @@ bool ibWebApplication::Dispatch(int controlId, const wxString& kind, const wxStr
 	// MarkDirty wakes any SSE subscriber so the new JSON ships out.
 	MarkDirty();
 	return true;
+}
+
+std::string ibWebApplication::FetchRows(int controlId, const wxString& dir, int count)
+{
+	ibVisualHostClient* host = GetActiveHost();
+	ibValueForm* form = host != nullptr ? host->GetValueForm() : nullptr;
+	ibValueFrame* ctrl = form != nullptr ? form->FindControlByID(controlId) : nullptr;
+	if (ctrl == nullptr)
+		return R"({"ok":false,"reason":"no control"})";
+
+	// The same (frame -> wxObject) map every other request goes
+	// through; both halves are alive for the length of this call
+	// because the map holds the pair.
+	auto* table = dynamic_cast<ibWebTableBox*>(host->GetWxObject(ctrl));
+	auto* model = dynamic_cast<ibValueModelTableBox*>(ctrl);
+	if (table == nullptr || model == nullptr)
+		return R"({"ok":false,"reason":"not a tablebox"})";
+
+	return table->FetchPage(model, dir, count).dump(2);
 }
 
 void ibWebApplication::MarkDirty()

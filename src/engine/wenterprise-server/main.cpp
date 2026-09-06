@@ -493,13 +493,16 @@ int main(int argc, char** argv)
 			<< std::endl;
 	}
 	else {
-		// UI5 directories include an exact version, so their contents can be
-		// cached indefinitely. Register this mount before the general asset
-		// mount because cpp-httplib checks mount points in registration order.
+		// UI5 and Tabulator directories include an exact version, so their
+		// contents can be cached indefinitely. Register these mounts before
+		// the general asset mount because cpp-httplib checks mount points in
+		// registration order.
 		const httplib::Headers versionedHeaders = {
 			{ "Cache-Control", "public, max-age=31536000, immutable" }
 		};
 		svr.set_mount_point(prefix + "/assets/ui5", assetDir + "/ui5",
+			versionedHeaders);
+		svr.set_mount_point(prefix + "/assets/tabulator", assetDir + "/tabulator",
 			versionedHeaders);
 		if (!svr.set_mount_point(prefix + "/assets", assetDir)) {
 			std::cerr << "Web asset directory could not be mounted: " << assetDir
@@ -672,7 +675,11 @@ int main(int argc, char** argv)
 		if (!RequireSessionId(req, res, id)) return;
 		const int controlID = std::atoi(req.matches[1].str().c_str());
 		const std::string kind = req.matches[2].str();
-		res.set_content(wfrontendFireKind(id, controlID, kind),
+		// Optional payload — a kind that carries one (a table's "row"
+		// takes the row key) reads it here; a kind that does not, like
+		// a button's "click", simply sees an empty string.
+		const std::string value = req.get_param_value("value");
+		res.set_content(wfrontendFireKind(id, controlID, kind, value),
 			"application/json; charset=utf-8");
 	});
 
@@ -688,6 +695,21 @@ int main(int argc, char** argv)
 		std::cerr << "[HTTP] POST /change/" << controlID
 			<< " session=" << id << std::endl;
 		res.set_content(wfrontendFireTextChange(id, controlID, value),
+			"application/json; charset=utf-8");
+	});
+
+	// GET /fetch/<controlID>?dir=first|next|prev&count=N — one page of a
+	// tablebox's rows. A GET because it reads: the same request twice
+	// returns the same page, and the browser may cache nothing of it.
+	svr.Get(prefix + R"(/fetch/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+		std::string id;
+		if (!RequireSessionId(req, res, id)) return;
+		const int controlID = std::atoi(req.matches[1].str().c_str());
+		const std::string dir = req.has_param("dir") ? req.get_param_value("dir") : "first";
+		const int count = req.has_param("count")
+			? std::atoi(req.get_param_value("count").c_str()) : 0;
+		res.set_header("Cache-Control", "no-store");
+		res.set_content(wfrontendFetchRows(id, controlID, dir, count),
 			"application/json; charset=utf-8");
 	});
 

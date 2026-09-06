@@ -35,7 +35,8 @@ window.OES = window.OES || {};
   "@ui5/webcomponents-icons/":"./assets/ui5/2.26.0/@ui5/webcomponents-icons/",
   "@ui5/webcomponents-localization/":"./assets/ui5/2.26.0/@ui5/webcomponents-localization/",
   "@ui5/webcomponents-theming/":"./assets/ui5/2.26.0/@ui5/webcomponents-theming/",
-  "@ui5/webcomponents-base/jsx-runtime":"./assets/ui5/2.26.0/@ui5/webcomponents-base/dist/jsx-runtime.js"
+  "@ui5/webcomponents-base/jsx-runtime":"./assets/ui5/2.26.0/@ui5/webcomponents-base/dist/jsx-runtime.js",
+  "tabulator-tables":"./assets/tabulator/6.5.2/tabulator.js"
 }}
 </script>
 <script type="module">
@@ -227,6 +228,34 @@ html[data-oes-ui="ui5"] .form-host{
    `align-items:stretch` would give every child full width, which is
    not what desktop does. applyLayout overrides per-child with
    align-self:stretch when wxEXPAND is present. */
+/* TableBox. The outer host carries the wxSizer layout the form gave it
+   (proportion / EXPAND through applyLayout); the inner div is what
+   Tabulator measures, and it needs a floor — a grid in a container of
+   indefinite height would otherwise compute to nothing and draw no
+   rows at all. */
+.oes-tablebox{display:flex;flex-direction:column;min-height:0;flex:1 1 auto}
+.oes-tablebox-grid{flex:1 1 auto;min-height:240px}
+/* Tabulator ships a light palette of its own. In UI5 mode the theme
+   decides instead — every colour below comes from a token, so the two
+   themes and both densities follow without a second rule. */
+html[data-oes-ui="ui5"] .oes-tablebox .tabulator{
+  background:var(--oes-table-bg);color:var(--oes-table-text);
+  border-color:var(--oes-table-border)}
+html[data-oes-ui="ui5"] .oes-tablebox .tabulator-header,
+html[data-oes-ui="ui5"] .oes-tablebox .tabulator-col{
+  background:var(--oes-table-header-bg);color:var(--oes-table-header-text);
+  border-color:var(--oes-table-border)}
+html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row{
+  background:var(--oes-table-bg);color:var(--oes-table-text);
+  border-color:var(--oes-table-border)}
+html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row.tabulator-row-even{
+  background:var(--oes-table-row-alt-bg)}
+html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row:hover{
+  background:var(--oes-table-row-hover-bg)}
+html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row.tabulator-selected{
+  background:var(--oes-table-row-selected-bg)}
+html[data-oes-ui="ui5"] .oes-tablebox .tabulator-cell{
+  border-color:var(--oes-table-border)}
 .boxsizer{display:flex;gap:6px;margin:4px 0;align-items:flex-start}
 .boxsizer.vert{flex-direction:column}
 .boxsizer.horz{flex-direction:row}
@@ -2131,6 +2160,163 @@ class UI5TextCtrl extends BaseControl{
 }
 
 
+// ---------------------------------------------------------------------------
+// TableBox — the one grid engine (ADR-003).
+//
+// Two roads meet here. The shape (columns, captions, widths, value
+// types) arrives in the form JSON, pushed by the controls themselves.
+// The rows arrive on their own, one page per request, from
+// GET /fetch/<id> — a list is paged in the engine by architecture, and
+// pretending otherwise on the way to the browser would only mean
+// reading a whole catalogue to draw twenty lines of it.
+//
+// Row keys are minted by the server and stay valid for the life of its
+// window, so a page fetched on scroll does not renumber what is already
+// on screen. The client never invents one.
+// ---------------------------------------------------------------------------
+
+// 700 KB of grid arrives only when a form actually has a table on it.
+let tabulatorPromise=null;
+function loadTabulator(){
+  if(tabulatorPromise) return tabulatorPromise;
+  tabulatorPromise=(async()=>{
+    const link=document.createElement('link');
+    link.rel='stylesheet';
+    link.href=new URL('./assets/tabulator/6.5.2/tabulator.css',document.baseURI).href;
+    const styled=new Promise(done=>{
+      link.addEventListener('load',done);
+      link.addEventListener('error',done);
+    });
+    document.head.appendChild(link);
+    const mod=await import('tabulator-tables');
+    await styled;
+    return mod.TabulatorFull;
+  })();
+  return tabulatorPromise;
+}
+
+// Columns, in the order the header draws them. A group is transparent
+// unless it is a HORIZONTAL group with a title, which is the one kind
+// Tabulator also has: its columns sit side by side under one caption.
+// OES vertical and in-cell groups are a row BAND — the row grows taller
+// instead of wider — which Tabulator has no notion of, so those flatten
+// here and their columns stay side by side. See docs-web/web/tablebox.md.
+function tableboxColumns(node){
+  const out=[];
+  for(const kid of (node.children||[])){
+    if(kid.type==='tableboxcolumngroup'){
+      if(kid.visible===false) continue;
+      const inner=tableboxColumns(kid);
+      if(!inner.length) continue;
+      if(kid.showTitle&&kid.grouping==='horizontal')
+        out.push({title:kid.caption||'',headerHozAlign:kid.align||'center',columns:inner});
+      else out.push(...inner);
+      continue;
+    }
+    if(kid.type!=='tableboxcolumn'||kid.visible===false) continue;
+    const col={
+      title:kid.caption||'',
+      field:kid.field,
+      hozAlign:kid.align||'left',
+      headerHozAlign:kid.headerAlign||'left',
+      resizable:kid.resizable!==false,
+      // The stored width is what the column asks for; the surplus is
+      // shared, so a table fills the space the form gave it instead of
+      // leaving a bare strip on the right — which is what the desktop
+      // grid does with the same numbers.
+      widthGrow:1,
+      // Sorting a list is the server's — it is an ORDER BY over the
+      // whole table, not a reshuffle of the page in hand. Until the
+      // composer is reachable from here the header stays inert rather
+      // than sorting the fifty rows that happen to be loaded and
+      // calling that a sorted list.
+      headerSort:false,
+    };
+    if(kid.width>0) col.minWidth=kid.width;
+    out.push(col);
+  }
+  return out;
+}
+
+function tableboxRows(payload){
+  return (payload.rows||[]).map(r=>Object.assign(
+    {_key:r.key,_container:!!r.container,_group:r.group||''}, r.cells||{}));
+}
+
+class TableBox extends BaseControl{
+  get ownsChildren(){ return true; }
+  render(node){
+    const host=document.createElement('div');
+    host.className='oes-tablebox';
+    host.dataset.ctrlId=node.id;
+    const grid=document.createElement('div');
+    grid.className='oes-tablebox-grid';
+    host.appendChild(grid);
+
+    const columns=tableboxColumns(node);
+    const pageSize=node.pageSize>0?node.pageSize:50;
+
+    // Built after the host lands in the document: Tabulator measures the
+    // element it is given, and a detached div measures zero.
+    requestAnimationFrame(async()=>{
+      let Tabulator;
+      try { Tabulator=await loadTabulator(); }
+      catch(e){ grid.textContent='Grid engine failed to load: '+e.message; return; }
+
+      let hasMore=false, loading=false;
+      const table=new Tabulator(grid,{
+        height:'100%',
+        layout:'fitColumns',
+        columns,
+        data:[],
+        index:'_key',
+        headerVisible:node.header!==false,
+        placeholder:'—',
+        selectableRows:1,
+        columnDefaults:{headerSort:false},
+      });
+
+      const fetchPage=async(dir)=>{
+        if(loading) return;
+        loading=true;
+        try{
+          const r=await netFetch(API+'/fetch/'+node.id+'?dir='+dir+'&count='+pageSize);
+          if(!r.ok) return;
+          const payload=await r.json();
+          if(!payload.ok) return;
+          const rows=tableboxRows(payload);
+          if(payload.reset) await table.setData(rows);
+          else if(rows.length) await table.addData(rows,false);
+          hasMore=!!payload.hasMore;
+        } finally { loading=false; }
+      };
+
+      table.on('tableBuilt',()=>fetchPage('first'));
+
+      // Scroll-driven prefetch: the same shape the desktop control uses
+      // (ibDataViewCtrl::OnScrollEvent asks the model for the next page
+      // as the viewport approaches the end).
+      table.on('scrollVertical',top=>{
+        const holder=grid.querySelector('.tabulator-tableholder');
+        if(!holder||!hasMore) return;
+        if(top+holder.clientHeight>=holder.scrollHeight-holder.clientHeight/2)
+          fetchPage('next');
+      });
+
+      // The cursor is the server's current line — the row a command runs
+      // against. Selection in the grid is only how it is shown.
+      table.on('rowClick',async(e,row)=>{
+        const key=row.getData()._key;
+        if(key===undefined) return;
+        await netFetch(API+'/fire/'+node.id+'/row?value='+encodeURIComponent(key),
+          {method:'POST',credentials:'same-origin'});
+      });
+    });
+
+    return host;
+  }
+}
+
 const legacyRenderers={
   'visualHost':    new HostControl(),
   'mdiChild':      new HostControl(),
@@ -2145,6 +2331,7 @@ const legacyRenderers={
   'toolbar':       new Toolbar(),
   'tool':          new Tool(),
   'toolseparator': new ToolSeparator(),
+  'tablebox':      new TableBox(),
 };
 const ui5Renderers={
   'button':   new UI5Button(),
@@ -2192,6 +2379,9 @@ function render(node){
   const ctrl=renderers[node.type]||fallback;
   const el=ctrl.render(node);
   ctrl.applyCommon(el,node);
+  // A control whose children are not widgets draws its own subtree: a
+  // table's columns are a header, not eight boxes stacked under it.
+  if(ctrl.ownsChildren) return el;
   for(const kid of (node.children||[])){
     const childEl=render(kid);
     applyLayout(childEl, kid.layout);

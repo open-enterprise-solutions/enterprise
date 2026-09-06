@@ -243,7 +243,7 @@ WFRONTEND_API std::string wfrontendFireAction(const std::string& sessionId,
 // pick any kind a control understands. Returns the rebuilt form JSON
 // (same shape as wfrontendFireAction).
 WFRONTEND_API std::string wfrontendFireKind(const std::string& sessionId,
-	int controlID, const std::string& kind);
+	int controlID, const std::string& kind, const std::string& value = std::string());
 
 // Commit a textctrl value edit from the browser. newValue is the raw
 // UTF-8 string the user typed. Server coerces through the backing
@@ -252,6 +252,18 @@ WFRONTEND_API std::string wfrontendFireKind(const std::string& sessionId,
 // value re-emitted, or "{}" on invalid session / control.
 WFRONTEND_API std::string wfrontendFireTextChange(const std::string& sessionId,
 	int controlID, const std::string& newValue);
+
+// One page of a tablebox's rows, as its own JSON document:
+// {"ok":true,"control":N,"rows":[{"key":0,"container":false,
+//  "cells":{"c1000032":"..."}}],"count":N,"hasMore":true}.
+// `dir` is "first" | "next" | "prev"; next/prev page from the anchors
+// the server kept from the page it last handed out, so the browser
+// never has to hold a row handle of its own. `count` <= 0 takes the
+// table's page size. Rows travel here rather than in the form JSON
+// because a list is paged by architecture — see
+// ibValueModel::GetFirstFetch.
+WFRONTEND_API std::string wfrontendFetchRows(const std::string& sessionId,
+	int controlID, const std::string& dir, int count);
 
 // Toggle a checkbox from the browser. `checked` is the new state sent
 // from the client (after the user click). Returns the updated form

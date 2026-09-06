@@ -85,3 +85,18 @@ level deeper, and there all 24 faces aborted with a doubled `assets/assets/`. Th
 are built with `new URL('…', import.meta.url).href` now, so page depth stops
 mattering. An importmap is a different case — it *is* resolved against the
 document, so each page carries a prefix correct for its own depth.
+
+## Tabulator 6.5.2
+
+`webClient/assets/tabulator/6.5.2/` — the grid engine (ADR-003), vendored by
+`webClient/assets/tools/vendor-tabulator.py`. Two files (`tabulator.js`, the ESM
+build, 742 KB; `tabulator.css`, 28 KB), plus `LICENSE.txt` and a `manifest.json`
+recording the SHA-256 of each. Re-running the script reproduces the same digests.
+
+Source-map comments are stripped: shipping one without the map means a 404 on
+every load. The stylesheet is Tabulator's unstyled base — the look comes from
+`--oes-table-*` tokens, not from one of its shipped themes.
+
+Served under `Cache-Control: public, max-age=31536000, immutable`, like the UI5
+tree, because the path carries the exact version. Imported lazily, so a form with
+no table on it never loads it.

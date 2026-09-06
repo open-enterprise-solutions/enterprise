@@ -256,9 +256,12 @@ public:
 	// Defined after OpenFormInSession below — needs the helper in scope.
 	std::string OpenForm(const std::string& id, int metaID);
 	std::string FireAction(const std::string& id, int controlID);
-	std::string FireKind(const std::string& id, int controlID, const std::string& kind);
+	std::string FireKind(const std::string& id, int controlID, const std::string& kind,
+		const std::string& value);
 	std::string FireTextChange(const std::string& id, int controlID, const std::string& newValue);
 	std::string FireToggle(const std::string& id, int controlID, bool checked);
+	std::string FetchRows(const std::string& id, int controlID,
+		const std::string& dir, int count);
 	bool        ModalReply(const std::string& id, const std::string& modalId, int result);
 	std::string ActiveHostJSON(const std::string& id);
 
@@ -1340,16 +1343,17 @@ WFRONTEND_API std::string wfrontendFireAction(const std::string& sessionId, int 
 
 namespace {
 std::string FireKindInSession(ibWebSession* session, int controlID,
-	const std::string& kind)
+	const std::string& kind, const std::string& value)
 {
 	if (session == nullptr || !session->IsAuthenticated()) return "{}";
 	ibWebApplication* app = session->App();
 	if (app == nullptr) return "{}";
 
-	return app->RunOnWorker([app, controlID, kind]() -> std::string {
+	return app->RunOnWorker([app, controlID, kind, value]() -> std::string {
 		try {
 			const wxString wkind(kind.c_str(), wxConvUTF8);
-			if (!app->Dispatch(controlID, wkind, wxString()))
+			const wxString wvalue(value.c_str(), wxConvUTF8);
+			if (!app->Dispatch(controlID, wkind, wvalue))
 				return "{}";
 		}
 		catch (const ibBackendException& e) {
@@ -1365,7 +1369,7 @@ std::string FireKindInSession(ibWebSession* session, int controlID,
 } // namespace
 
 std::string SessionManager::FireKind(const std::string& id, int controlID,
-	const std::string& kind)
+	const std::string& kind, const std::string& value)
 {
 	std::shared_ptr<ibWebSession> keeper;
 	ibWebSession* s = nullptr;
@@ -1376,14 +1380,59 @@ std::string SessionManager::FireKind(const std::string& id, int controlID,
 		keeper = it->second;
 		s = keeper.get();
 	}
-	return FireKindInSession(s, controlID, kind);
+	return FireKindInSession(s, controlID, kind, value);
 }
 
 WFRONTEND_API std::string wfrontendFireKind(const std::string& sessionId,
-	int controlID, const std::string& kind)
+	int controlID, const std::string& kind, const std::string& value)
 {
 	Sessions().Touch(sessionId);
-	return Sessions().FireKind(sessionId, controlID, kind);
+	return Sessions().FireKind(sessionId, controlID, kind, value);
+}
+
+namespace {
+std::string FetchRowsInSession(ibWebSession* session, int controlID,
+	const std::string& dir, int count)
+{
+	if (session == nullptr || !session->IsAuthenticated()) return R"({"ok":false,"reason":"no session"})";
+	ibWebApplication* app = session->App();
+	if (app == nullptr) return R"({"ok":false,"reason":"no session"})";
+
+	return app->RunOnWorker([app, controlID, dir, count]() -> std::string {
+		try {
+			const wxString wdir(dir.c_str(), wxConvUTF8);
+			return app->FetchRows(controlID, wdir, count);
+		}
+		catch (const ibBackendException& e) {
+			return ExceptionToJson(e);
+		}
+		catch (...) {
+			return R"({"ok":false,"error":"unknown exception"})";
+		}
+	}).get();
+}
+} // namespace
+
+std::string SessionManager::FetchRows(const std::string& id, int controlID,
+	const std::string& dir, int count)
+{
+	std::shared_ptr<ibWebSession> keeper;
+	ibWebSession* s = nullptr;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		auto it = m_sessions.find(id);
+		if (it == m_sessions.end()) return R"({"ok":false,"reason":"no session"})";
+		keeper = it->second;
+		s = keeper.get();
+	}
+	return FetchRowsInSession(s, controlID, dir, count);
+}
+
+WFRONTEND_API std::string wfrontendFetchRows(const std::string& sessionId,
+	int controlID, const std::string& dir, int count)
+{
+	Sessions().Touch(sessionId);
+	return Sessions().FetchRows(sessionId, controlID, dir, count);
 }
 
 namespace {

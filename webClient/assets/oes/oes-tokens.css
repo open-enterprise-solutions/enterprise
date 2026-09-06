@@ -11,4 +11,15 @@
   --oes-form-surface:var(--sapGroup_ContentBackground);
   --oes-form-text:var(--sapTextColor);
   --oes-form-border:var(--sapGroup_ContentBorderColor);
+  /* The grid. Tabulator ships its own light palette; these are what
+     replaces it, so a table follows the theme like everything else.
+     Provisional until a themed list reference screen validates them. */
+  --oes-table-bg:var(--sapList_Background);
+  --oes-table-text:var(--sapList_TextColor);
+  --oes-table-border:var(--sapList_BorderColor);
+  --oes-table-header-bg:var(--sapList_HeaderBackground);
+  --oes-table-header-text:var(--sapList_HeaderTextColor);
+  --oes-table-row-alt-bg:var(--sapList_AlternatingBackground);
+  --oes-table-row-hover-bg:var(--sapList_Hover_Background);
+  --oes-table-row-selected-bg:var(--sapList_SelectionBackgroundColor);
 }

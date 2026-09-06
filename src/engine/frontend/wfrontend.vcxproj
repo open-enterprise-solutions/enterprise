@@ -150,6 +150,7 @@
     <ClCompile Include="web\webApplication.cpp" />
     <ClCompile Include="web\webFrame.cpp" />
     <ClCompile Include="web\webWindow.cpp" />
+    <ClCompile Include="web\webTableBox.cpp" />
     <ClCompile Include="web\webSizer.cpp" />
     <ClCompile Include="web\webTimer.cpp" />
     <ClCompile Include="web\webChildFrame.cpp" />
@@ -244,6 +245,7 @@
     <ClInclude Include="web\webApplication.h" />
     <ClInclude Include="web\webFrame.h" />
     <ClInclude Include="web\webWindow.h" />
+    <ClInclude Include="web\webTableBox.h" />
     <ClInclude Include="web\webSizer.h" />
     <ClInclude Include="web\webTimer.h" />
     <ClInclude Include="web\webChildFrame.h" />

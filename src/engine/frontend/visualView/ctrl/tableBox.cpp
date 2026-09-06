@@ -24,7 +24,7 @@
 
 
 #ifdef OES_USE_WEB
-#include "frontend/web/webWindow.h"
+#include "frontend/web/webTableBox.h"
 #endif
 
 //***********************************************************************************
@@ -553,7 +553,7 @@ wxObject* ibValueModelTableBox::Create(ibFrontendWindow* wxparent, ibVisualHost*
 {
 #ifdef OES_USE_WEB
 	(void)wxparent; (void)visualHost;
-	return new ibWebStubControl(wxT("tablebox"));
+	return new ibWebTableBox(GetControlID());
 #else
 	ibTableViewCtrl* dataViewCtrl = new ibTableViewCtrl(wxparent, wxID_ANY,
 		wxDefaultPosition,
@@ -658,6 +658,27 @@ void ibValueModelTableBox::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	if (dataViewCtrl != nullptr) {
 		UpdateWindow(dataViewCtrl);
 	}
+#else
+	(void)visualHost;
+	// The table's own SHAPE — what the browser needs before it has a
+	// single row. The rows travel on their own road (ibWebTableBox::
+	// FetchPage), because a list is paged by architecture and folding a
+	// page into the form tree would throw that away.
+	ibWebTableBox* webTable = static_cast<ibWebTableBox*>(wxobject);
+
+	UpdateWindow(webTable);
+
+	wxString viewMode = wxT("hierarchical");
+	switch (m_propertyViewMode->GetValueAsEnum()) {
+	case ibDataViewViewMode::ibDataViewTree: viewMode = wxT("tree"); break;
+	case ibDataViewViewMode::ibDataViewList: viewMode = wxT("list"); break;
+	default: break;
+	}
+
+	webTable->SetShowHeader(m_propertyHeader->GetValueAsBoolean());
+	webTable->SetShowFooter(m_propertyFooter->GetValueAsBoolean());
+	webTable->SetViewMode(viewMode);
+	webTable->SetChoiceMode(IsChoiceMode());
 #endif
 }
 

@@ -108,6 +108,14 @@ public:
 	bool DispatchTextChange(int controlId, const wxString& value)  { return Dispatch(controlId, wxT("text"),  value);                           }
 	bool DispatchToggle(int controlId, bool checked)               { return Dispatch(controlId, wxT("toggle"), checked ? wxT("1") : wxT("0")); }
 
+	// One page of a tablebox's rows. Not a Dispatch kind: Dispatch
+	// answers "did the control take it" and returns the whole form
+	// again, and rows are neither — they are a page, asked for
+	// repeatedly as the user scrolls, and they carry no side effect on
+	// the form at all. Returns the page JSON as its own document.
+	// `dir` is "first" | "next" | "prev".
+	std::string FetchRows(int controlId, const wxString& dir, int count);
+
 	// Session task dispatch — forwards to the process-wide ibWorkerPool
 	// (appData->GetWorkerPool()), which preserves per-session FIFO +
 	// lease semantics across all concurrent web sessions sharing the

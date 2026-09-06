@@ -13,7 +13,7 @@
 
 
 #ifdef OES_USE_WEB
-#include "frontend/web/webWindow.h"
+#include "frontend/web/webTableBox.h"
 #endif
 
 //****************************************************************************
@@ -148,7 +148,7 @@ wxObject* ibValueModelTableBoxColumn::Create(ibFrontendWindow* wxparent, ibVisua
 {
 #ifdef OES_USE_WEB
 	(void)wxparent; (void)visualHost;
-	return new ibWebStubControl(wxT("tableboxcolumn"));
+	return new ibWebTableBoxColumn(GetControlID());
 #else
 	ibDataViewColumnObject* dataViewColumn = new ibDataViewColumnObject(this, wxT(""),
 		wxNOT_FOUND, wxDVC_DEFAULT_WIDTH, wxALIGN_CENTER, wxDATAVIEW_COL_REORDERABLE);
@@ -239,6 +239,26 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 	dataViewColumn->SyncSortArrowFromModel();
 
 	dataViewColumn->SetColumnModel(source_column);
+#else
+	// The web shim gets the same answers this method just gave the
+	// desktop column, in the browser's spelling. Alignment is TWO
+	// answers, as it is on desktop: the header takes the property, the
+	// cells take the value type — a number reads right-aligned next to
+	// text that does not (the desktop renderer decides it per cell, in
+	// CheckedGetValue).
+	ibWebTableBoxColumn* webColumn = static_cast<ibWebTableBoxColumn*>(wxobject);
+
+	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == wxNOT_FOUND;
+	const wxString valueType = ibWebValueTypeName(GetTypeDesc());
+
+	webColumn->SetCaption(GetControlTitle());
+	webColumn->SetFieldKey(ibWebTableBoxColumnKey(GetControlID()));
+	webColumn->SetWidth(m_propertyWidth->GetValueAsUInteger());
+	webColumn->SetHeaderAlign(ibWebAlignName(m_propertyHeaderAlign->GetValueAsEnum()));
+	webColumn->SetAlign(valueType == wxT("number") ? wxT("right") : wxT("left"));
+	webColumn->SetValueType(valueType);
+	webColumn->SetVisibleColumn(m_propertyVisible->GetValueAsBoolean() && !sourceMissing);
+	webColumn->SetResizable(m_propertyResizable->GetValueAsBoolean());
 #endif
 }
 
