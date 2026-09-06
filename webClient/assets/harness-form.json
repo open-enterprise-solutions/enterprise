@@ -1,0 +1,18 @@
+{
+  "children": [{
+    "children": [
+      {"bg":"#FFFFFF","enableClearButton":true,"enableSelectButton":true,"enabled":false,"fg":"#3F5C77","font":{"bold":false,"family":"Segoe UI","italic":false,"size":13,"underline":false},"id":3,"label":"Number","layout":{"border":5,"flag":4336,"proportion":0},"multilineMode":false,"passwordMode":false,"showClearButton":false,"showOpenButton":false,"showSelectButton":false,"shown":true,"type":"textctrl","value":""},
+      {"bg":"#FFFFFF","enableClearButton":true,"enableSelectButton":true,"enabled":true,"fg":"#3F5C77","font":{"bold":false,"family":"Segoe UI","italic":false,"size":13,"underline":false},"id":5,"label":"Date","layout":{"border":5,"flag":4336,"proportion":0},"multilineMode":false,"passwordMode":false,"showClearButton":true,"showOpenButton":false,"showSelectButton":true,"shown":true,"type":"textctrl","value":"31.12.0000 15:00:00"},
+      {"bg":"#FFFFFF","enableClearButton":true,"enableSelectButton":true,"enabled":true,"fg":"#3F5C77","font":{"bold":false,"family":"Segoe UI","italic":false,"size":13,"underline":false},"id":7,"label":"Warehouse","layout":{"border":5,"flag":4336,"proportion":0},"multilineMode":false,"passwordMode":false,"showClearButton":true,"showOpenButton":false,"showSelectButton":true,"shown":true,"type":"textctrl","value":""},
+      {"bg":"#FFFFFF","enableClearButton":true,"enableSelectButton":true,"enabled":true,"fg":"#3F5C77","font":{"bold":false,"family":"Segoe UI","italic":false,"size":13,"underline":false},"id":9,"label":"Counterparty","layout":{"border":5,"flag":4336,"proportion":0},"multilineMode":false,"passwordMode":false,"showClearButton":true,"showOpenButton":false,"showSelectButton":true,"shown":true,"type":"textctrl","value":""},
+      {"children":[{"enabled":true,"id":1000035,"label":"","shown":true,"type":"tableboxcolumn"},{"enabled":true,"id":1000036,"label":"","shown":true,"type":"tableboxcolumn"},{"enabled":true,"id":1000037,"label":"","shown":true,"type":"tableboxcolumn"},{"enabled":true,"id":1000038,"label":"","shown":true,"type":"tableboxcolumn"},{"enabled":true,"id":1000039,"label":"","shown":true,"type":"tableboxcolumn"}],"enabled":true,"id":1000034,"label":"","layout":{"border":5,"flag":8432,"proportion":1},"shown":true,"type":"tablebox"}
+    ],
+    "orient": 8,
+    "type": "boxsizer"
+  }],
+  "enabled": true,
+  "id": 1000033,
+  "label": "",
+  "shown": true,
+  "type": "visualHost"
+}

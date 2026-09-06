@@ -162,6 +162,8 @@ std::string LoadClient()
 // Adding a caption: a row here, `L.<key>` in the client.
 
 const char* const kI18nMarker = "<!--OES_I18N-->";
+const char* const kUiDefaultMarker = "<!--OES_UI_DEFAULT-->";
+std::string s_uiDefault = "legacy";
 
 // A JS string literal, single-quoted: the injected block sits inside HTML, so a
 // caption containing a quote or a newline must not be able to end the script.
@@ -232,6 +234,16 @@ std::string WithCaptions(std::string html)
 	return html.replace(at, std::strlen(kI18nMarker), TranslatedDictionary());
 }
 
+std::string WithRuntimeDefaults(std::string html)
+{
+	const std::size_t at = html.find(kUiDefaultMarker);
+	if (at == std::string::npos)
+		return html;
+	const std::string script = "<script>window.OES=window.OES||{};window.OES.uiDefault="
+		+ JsQuote(wxString::FromUTF8(s_uiDefault)) + ";</script>";
+	return html.replace(at, std::strlen(kUiDefaultMarker), script);
+}
+
 // SAID OUT LOUD, not served blank. A missing client is a deployment mistake —
 // the pack was not copied, the directory was not shipped — and an empty page
 // sends whoever sees it looking in the wrong place.
@@ -245,6 +257,11 @@ const char* const kMissingClient =
 
 } // namespace
 
+extern "C" WFRONTEND_API void wfrontendSetClientUIDefault(const char* ui)
+{
+	s_uiDefault = ui != nullptr && std::strcmp(ui, "ui5") == 0 ? "ui5" : "legacy";
+}
+
 extern "C" WFRONTEND_API const char* wfrontendClientHTML()
 {
 	// Loaded once, and the failure is explicit: an empty load falls back to the
@@ -253,7 +270,7 @@ extern "C" WFRONTEND_API const char* wfrontendClientHTML()
 	static std::string    s_client;
 
 	std::call_once(s_once, [] {
-		s_client = WithCaptions(LoadClient());
+		s_client = WithRuntimeDefaults(WithCaptions(LoadClient()));
 	});
 
 	return s_client.empty() ? kMissingClient : s_client.c_str();

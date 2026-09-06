@@ -1,0 +1,9 @@
+/* Provisional until the Iteration 1 reference screen validates these mappings. */
+:root{
+  --oes-text:var(--sapTextColor);
+  --oes-surface:var(--sapField_Background);
+  --oes-border:var(--sapField_BorderColor);
+  --oes-action:var(--sapButton_Emphasized_Background);
+  --oes-focus:var(--sapContent_FocusColor);
+  --oes-status-error:var(--sapNegativeColor);
+}

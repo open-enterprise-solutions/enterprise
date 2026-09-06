@@ -13,8 +13,10 @@
 // wx first so its ssize_t alias is picked up before cpp-httplib's own
 // typedef, otherwise MSVC sees two incompatible ssize_t definitions.
 #include <wx/app.h>
+#include <wx/filename.h>
 #include <wx/init.h>
 #include <wx/socket.h>
+#include <wx/stdpaths.h>
 #include <wx/types.h>
 
 // Trick cpp-httplib into skipping its own ssize_t typedef when it comes
@@ -132,6 +134,7 @@ struct CmdArgs {
 	std::string ibPassword;
 
 	std::string locale     = "en";
+	std::string ui         = "legacy";
 
 	// URL prefix: defaults to file base name or --db name.
 	std::string urlPrefix;
@@ -147,6 +150,34 @@ bool StartsWith(const std::string& s, const char* prefix)
 {
 	const std::size_t n = std::strlen(prefix);
 	return s.size() >= n && s.compare(0, n, prefix) == 0;
+}
+
+std::string ResolveAssetDirectory()
+{
+	wxFileName exeFile(wxStandardPaths::Get().GetExecutablePath());
+	const wxString exeDir = exeFile.GetPath();
+
+	// A packed client has no asset-directory analogue yet.
+	// First try the unpacked release layout beside the executable.
+	const wxString beside = exeDir + wxFILE_SEP_PATH + wxT("web")
+		+ wxFILE_SEP_PATH + wxT("assets");
+	if (wxFileName::DirExists(beside))
+		return beside.utf8_string();
+
+	// Then use the development tree, with the same six-level bound as
+	// LoadClient().
+	wxFileName walk(exeDir, wxEmptyString);
+	for (int i = 0; i < 6; ++i) {
+		const wxString candidate = walk.GetPath() + wxFILE_SEP_PATH
+			+ wxT("webClient") + wxFILE_SEP_PATH + wxT("assets");
+		if (wxFileName::DirExists(candidate))
+			return candidate.utf8_string();
+		if (walk.GetDirCount() == 0)
+			break;
+		walk.RemoveLastDir();
+	}
+
+	return std::string();
 }
 
 CmdArgs ParseArgs(int argc, char** argv)
@@ -165,6 +196,7 @@ CmdArgs ParseArgs(int argc, char** argv)
 		else if (StartsWith(arg, "--ibuser="))    a.ibUser      = arg.substr(9);
 		else if (StartsWith(arg, "--ibpwd="))     a.ibPassword  = arg.substr(8);
 		else if (StartsWith(arg, "--locale="))    a.locale      = arg.substr(9);
+		else if (StartsWith(arg, "--ui="))        a.ui          = arg.substr(5);
 		else if (StartsWith(arg, "--url="))       a.urlPrefix   = arg.substr(6);
 		else if (StartsWith(arg, "--manifest="))  a.manifest    = arg.substr(11);
 		else if (arg == "--debug")                a.debugEnable = true;
@@ -189,9 +221,15 @@ CmdArgs ParseArgs(int argc, char** argv)
 				"    --ibuser=<n>      (default 'admin')\n"
 				"    --ibpwd=<s>\n"
 				"\n"
-				"    --locale=<code>   (default 'en')\n";
+				"    --locale=<code>   (default 'en')\n"
+				"    --ui=<legacy|ui5> Renderer default (default 'legacy')\n";
 			std::exit(0);
 		}
+	}
+	if (a.ui != "legacy" && a.ui != "ui5") {
+		std::cerr << "Invalid --ui value '" << a.ui
+			<< "' (expected legacy or ui5)" << std::endl;
+		std::exit(2);
 	}
 
 	// Default URL prefix from --db or --file basename.
@@ -369,6 +407,7 @@ int main(int argc, char** argv)
 	BuildUtf8Argv(argc, argv);
 #endif
 	const CmdArgs args = ParseArgs(argc, argv);
+	wfrontendSetClientUIDefault(args.ui.c_str());
 
 	// wxInitializer + wxSocketBase::Initialize + ibCrashGuard::Install
 	// in one shot. wes is headless — no wxApp, faults need the persistent
@@ -418,6 +457,28 @@ int main(int argc, char** argv)
 	// doesn't exist.
 	svr.set_read_timeout(5);
 	svr.set_write_timeout(5);
+
+	const std::string assetDir = ResolveAssetDirectory();
+	if (assetDir.empty()) {
+		std::cerr << "Web asset directory not found; static assets are unavailable."
+			<< std::endl;
+	}
+	else {
+		// UI5 directories include an exact version, so their contents can be
+		// cached indefinitely. Register this mount before the general asset
+		// mount because cpp-httplib checks mount points in registration order.
+		const httplib::Headers versionedHeaders = {
+			{ "Cache-Control", "public, max-age=31536000, immutable" }
+		};
+		svr.set_mount_point(prefix + "/assets/ui5", assetDir + "/ui5",
+			versionedHeaders);
+		if (!svr.set_mount_point(prefix + "/assets", assetDir)) {
+			std::cerr << "Web asset directory could not be mounted: " << assetDir
+				<< std::endl;
+		}
+		// cpp-httplib already maps js, css, json, woff2, and svg to their
+		// standard MIME types.
+	}
 
 	// Top-level exception handler — catches anything that escapes one
 	// of the per-route lambdas below. Pre-2026-05-26 the lambdas had
@@ -565,6 +626,8 @@ int main(int argc, char** argv)
 		std::string id;
 		if (!RequireSessionId(req, res, id)) return;
 		const int controlID = std::atoi(req.matches[1].str().c_str());
+		std::cerr << "[HTTP] POST /action/" << controlID
+			<< " session=" << id << std::endl;
 		res.set_content(wfrontendFireAction(id, controlID),
 			"application/json; charset=utf-8");
 	});
@@ -593,6 +656,8 @@ int main(int argc, char** argv)
 		if (!RequireSessionId(req, res, id)) return;
 		const int controlID = std::atoi(req.matches[1].str().c_str());
 		const std::string value = req.get_param_value("value");
+		std::cerr << "[HTTP] POST /change/" << controlID
+			<< " session=" << id << std::endl;
 		res.set_content(wfrontendFireTextChange(id, controlID, value),
 			"application/json; charset=utf-8");
 	});
@@ -607,6 +672,8 @@ int main(int argc, char** argv)
 		const int controlID = std::atoi(req.matches[1].str().c_str());
 		const std::string checkedStr = req.get_param_value("checked");
 		const bool checked = (checkedStr == "1" || checkedStr == "true");
+		std::cerr << "[HTTP] POST /toggle/" << controlID
+			<< " session=" << id << std::endl;
 		res.set_content(wfrontendFireToggle(id, controlID, checked),
 			"application/json; charset=utf-8");
 	});

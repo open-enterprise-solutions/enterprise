@@ -5,6 +5,51 @@
      client falls back to the English defaults further down, so a client served
      by anything else still works. -->
 <!--OES_I18N-->
+<!-- OES_UI_DEFAULT is replaced by the server with the renderer default.
+     A directly served development client falls back to legacy. -->
+<!--OES_UI_DEFAULT-->
+<script>
+window.OES = window.OES || {};
+(function(){
+  const params=new URLSearchParams(location.search);
+  const oneOf=(value,allowed,fallback)=>allowed.includes(value)?value:fallback;
+  const serverUI=oneOf(window.OES.uiDefault,['legacy','ui5'],'legacy');
+  const runtime={
+    ui:oneOf(params.get('ui'),['legacy','ui5'],serverUI),
+    theme:oneOf(params.get('theme'),['light','dark'],'light'),
+    density:oneOf(params.get('density'),['compact','comfortable'],'compact'),
+  };
+  window.OES.runtime=runtime;
+  document.documentElement.dataset.oesUi=runtime.ui;
+  document.documentElement.dataset.oesTheme=runtime.theme;
+  document.documentElement.classList.toggle('ui5-content-density-compact',runtime.density==='compact');
+})();
+</script>
+<link rel="stylesheet" href="./assets/oes/oes-tokens.css">
+<script type="importmap">
+{"imports":{
+  "@sap-theming/theming-base-content/":"./assets/ui5/2.26.0/@sap-theming/theming-base-content/",
+  "@ui5/webcomponents/":"./assets/ui5/2.26.0/@ui5/webcomponents/",
+  "@ui5/webcomponents-base/":"./assets/ui5/2.26.0/@ui5/webcomponents-base/",
+  "@ui5/webcomponents-icons/":"./assets/ui5/2.26.0/@ui5/webcomponents-icons/",
+  "@ui5/webcomponents-localization/":"./assets/ui5/2.26.0/@ui5/webcomponents-localization/",
+  "@ui5/webcomponents-theming/":"./assets/ui5/2.26.0/@ui5/webcomponents-theming/",
+  "@ui5/webcomponents-base/jsx-runtime":"./assets/ui5/2.26.0/@ui5/webcomponents-base/dist/jsx-runtime.js"
+}}
+</script>
+<script type="module">
+const runtime=window.OES.runtime;
+window.OES.ui5Ready=runtime.ui==='ui5'?(async()=>{
+  await import('@ui5/webcomponents/dist/Assets.js');
+  const {setTheme}=await import('@ui5/webcomponents-base/dist/config/Theme.js');
+  await setTheme(runtime.theme==='dark'?'sap_horizon_dark':'sap_horizon');
+  await Promise.all([
+    import('@ui5/webcomponents/dist/Button.js'),
+    import('@ui5/webcomponents/dist/CheckBox.js'),
+    import('@ui5/webcomponents/dist/Input.js'),
+  ]);
+})():Promise.resolve();
+</script>
 <style>
 /* Window chrome: title bar + status bar wrap the sidebar+main area.
    Body is flex-column so the middle row stretches; titlebar / statusbar
@@ -21,6 +66,10 @@ body{margin:0;font:14px/1.4 system-ui,sans-serif;display:flex;
   background:linear-gradient(#ffffff,#c8d3ee);display:inline-block;
   box-shadow:0 0 0 1px rgba(255,255,255,.35) inset}
 #menubar{display:flex;gap:1px;flex:1 1 auto;min-width:0}
+#oes-dev-switcher{display:flex;align-items:center;gap:.5rem;font-size:.75rem}
+#oes-dev-switcher strong{font-weight:600;white-space:nowrap}
+#oes-dev-switcher label{display:flex;align-items:center;gap:.25rem}
+#oes-dev-switcher select{font:inherit}
 #menubar button{background:transparent;border:0;color:#fff;
   padding:3px 10px;cursor:pointer;border-radius:3px;font:inherit;
   line-height:1.2}
@@ -227,6 +276,18 @@ input.ctrl{padding:3px 6px;border:1px solid #aaa;border-radius:3px}
   background:transparent;flex-shrink:0}
 .texted > button:hover:not(:disabled){background:rgba(0,0,0,.06)}
 .texted > button:active:not(:disabled){background:rgba(0,0,0,.12)}
+/* UI5 hosts must be non-inline flex items. The text field consumes the
+   fixed editor width while its side buttons take space from the field. */
+.oes-ui5-button,.oes-ui5-checkbox{display:inline-block;color:var(--oes-text)}
+.oes-ui5-textctrl{display:flex;align-items:stretch;gap:.375rem;min-height:0}
+.oes-ui5-textctrl-group{display:flex;align-items:stretch;box-sizing:border-box;
+  flex:0 0 12.5rem;width:12.5rem;min-width:0;color:var(--oes-text);
+  background:var(--oes-surface);border:var(--sapField_BorderWidth) solid var(--oes-border)}
+.oes-ui5-textctrl-group:focus-within{outline:var(--sapContent_FocusWidth)
+  var(--sapContent_FocusStyle) var(--oes-focus)}
+.oes-ui5-textctrl-group>ui5-input{display:block;flex:1 1 0;width:0;min-width:0}
+.oes-ui5-textctrl-group>ui5-button{display:block;flex:0 0 auto;color:var(--oes-action)}
+.oes-ui5-textctrl-group[data-error="true"]{color:var(--oes-status-error)}
 .toolbar{display:flex;align-items:center;gap:2px;background:#eef1f4;border:1px solid #c9ced3;border-radius:3px;padding:3px 4px;margin:2px 0}
 .tool{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1px solid transparent;border-radius:3px;background:transparent;font:inherit;color:inherit;cursor:pointer;line-height:1.3}
 .tool:hover:not(:disabled){background:#dde6f0;border-color:#b5c4d6}
@@ -386,6 +447,14 @@ body.modal-dragging,body.modal-dragging *{cursor:move !important;user-select:non
 <header id="titlebar">
   <span id="app-title">OES Enterprise</span>
   <nav id="menubar"></nav>
+  <!-- Temporary development control. Remove when product settings own
+       renderer, theme, and density selection. -->
+  <div id="oes-dev-switcher" aria-label="Temporary development display settings">
+    <strong>DEV ONLY</strong>
+    <label>UI <select data-axis="ui"><option>legacy</option><option>ui5</option></select></label>
+    <label>Theme <select data-axis="theme"><option>light</option><option>dark</option></select></label>
+    <label>Density <select data-axis="density"><option>compact</option><option>comfortable</option></select></label>
+  </div>
 </header>
 <!-- app-row: middle stretchable section containing sidebar + main. -->
 <div id="app-row">
@@ -455,6 +524,16 @@ window.OES = window.OES || {};
 const L = window.OES.L || (window.OES.L = {});
 
 const API=location.pathname.replace(/\/$/,'');
+const runtime=window.OES.runtime;
+for(const select of document.querySelectorAll('#oes-dev-switcher select')){
+  const axis=select.dataset.axis;
+  select.value=runtime[axis];
+  select.addEventListener('change',()=>{
+    const next=new URL(location.href);
+    next.searchParams.set(axis,select.value);
+    location.assign(next);
+  });
+}
 
 // Tab-close cleanup: on pagehide fire a sendBeacon to /logout so the
 // server DELETEs the session row immediately instead of waiting for the
@@ -1682,6 +1761,7 @@ class TextCtrl extends BaseControl{
     wrap.dataset.labelrow='1';
     const lbl=document.createElement('span');
     lbl.className='statictext';
+    lbl.dataset.labelHost='1';
     lbl.textContent=node.label||'';
     lbl.style.flexShrink='0';
     lbl.style.alignSelf='center';
@@ -1888,8 +1968,157 @@ class CheckBox extends BaseControl{
   }
 }
 
+// UI5 is an overlay registry: these classes do not modify the legacy
+// renderer implementations or the form JSON vocabulary.
+class UI5Button extends BaseControl{
+  render(node){
+    const el=document.createElement('ui5-button');
+    el.className='oes-ui5-button';
+    const semantic=String(node.semantic||'default').toLowerCase();
+    el.design={default:'Default',primary:'Emphasized',transparent:'Transparent'}[semantic]||'Default';
+    const rep=node.representation;
+    const wantPic=node.hasPicture&&node.picture&&rep!==1;
+    const wantText=rep!==2;
+    if(wantPic){
+      const img=document.createElement('img');
+      img.src=node.picture;img.alt='';
+      img.style.height='1em';
+      if(wantText) img.style.marginRight='.25rem';
+      el.appendChild(img);
+    }
+    if(wantText) el.appendChild(document.createTextNode(node.label||''));
+    if(node.enabled===false) el.disabled=true;
+    if(node.id){
+      el.addEventListener('click',async()=>{
+        const r=await netFetch(API+'/action/'+node.id,{method:'POST',credentials:'same-origin'});
+        if(r.ok){
+          const tree=await r.json();
+          if(tree&&!tree.error){main.innerHTML='';main.appendChild(render(tree));}
+          else OES.handleBackendError(tree);
+        }
+      });
+    }
+    return el;
+  }
+}
 
-const renderers={
+class UI5CheckBox extends BaseControl{
+  render(node){
+    const el=document.createElement('ui5-checkbox');
+    el.className='oes-ui5-checkbox';
+    const third=node.indeterminate===true||node.value===null||node.value==='indeterminate';
+    el.checked=third||!!node.value;
+    el.indeterminate=third;
+    el.text=node.label||'';
+    el.readonly=node.readOnly===true;
+    el.disabled=node.enabled===false;
+    if(node.id){
+      el.addEventListener('change',async()=>{
+        const body=new URLSearchParams({checked:el.checked?'1':'0'});
+        const r=await netFetch(API+'/toggle/'+node.id,{
+          method:'POST',credentials:'same-origin',
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:body.toString()
+        });
+        if(r.ok){
+          const tree=await r.json();
+          if(tree&&!tree.error){main.innerHTML='';main.appendChild(render(tree));}
+          else OES.handleBackendError(tree);
+        }
+      });
+    }
+    return el;
+  }
+}
+
+class UI5TextCtrl extends BaseControl{
+  render(node){
+    const wrap=document.createElement('div');
+    wrap.className='labelrow oes-ui5-textctrl';
+    wrap.dataset.labelrow='1';
+    const lbl=document.createElement('span');
+    lbl.className='statictext';
+    lbl.dataset.labelHost='1';
+    lbl.textContent=node.label||'';
+    lbl.style.flexShrink='0';
+    lbl.style.alignSelf='center';
+    wrap.appendChild(lbl);
+
+    const group=document.createElement('div');
+    group.className='oes-ui5-textctrl-group';
+    group.dataset.error=String(node.error===true);
+    if(node.id) group.dataset.ctrlId=node.id;
+    const el=document.createElement('ui5-input');
+    el.value=node.value||'';
+    el.type=node.passwordMode?'Password':'Text';
+    const readOnly=node.readOnly===true||node.editable===false||node.textEditMode===false;
+    el.readonly=readOnly;
+    el.disabled=node.enabled===false;
+    if(node.error===true) el.valueState='Negative';
+    group.appendChild(el);
+
+    let inputTimer=null;
+    let lastSent=el.value;
+    const commit=async()=>{
+      if(!node.id||readOnly||node.enabled===false||el.value===lastSent) return;
+      lastSent=el.value;
+      const body=new URLSearchParams({value:el.value});
+      const r=await netFetch(API+'/change/'+node.id,{
+        method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:body.toString()
+      });
+      if(r.ok){
+        const tree=await r.json();
+        if(tree&&!tree.error){main.innerHTML='';main.appendChild(render(tree));}
+        else OES.handleBackendError(tree);
+      }
+    };
+    el.addEventListener('input',()=>{
+      clearTimeout(inputTimer);
+      inputTimer=setTimeout(commit,350);
+    });
+    el.addEventListener('change',()=>{
+      clearTimeout(inputTimer);
+      commit();
+    });
+
+    const makeSideBtn=(label,kind,title,enabled=true)=>{
+      const btn=document.createElement('ui5-button');
+      btn.design='Transparent';
+      btn.textContent=label;
+      btn.tooltip=title;
+      btn.accessibleName=title;
+      btn.disabled=node.enabled===false||!enabled;
+      btn.addEventListener('mousedown',e=>e.preventDefault());
+      btn.addEventListener('click',async()=>{
+        clearTimeout(inputTimer);
+        const r=await netFetch(API+'/fire/'+node.id+'/'+kind,
+          {method:'POST',credentials:'same-origin'});
+        if(r.ok){
+          const tree=await r.json();
+          if(tree&&!tree.error&&Object.keys(tree).length>0){
+            main.innerHTML='';main.appendChild(render(tree));
+            if(kind==='buttonClear'){
+              const ed=main.querySelector(`[data-ctrl-id="${node.id}"] ui5-input`);
+              if(ed) ed.focus();
+            }
+          }
+          if(kind==='buttonSelect'||kind==='buttonOpen') refreshTabs();
+        }
+      });
+      group.appendChild(btn);
+    };
+    if(node.id&&node.showSelectButton) makeSideBtn('…','buttonSelect','Select',!readOnly&&node.enableSelectButton!==false);
+    if(node.id&&node.showOpenButton) makeSideBtn('▷','buttonOpen','Open');
+    if(node.id&&node.showClearButton) makeSideBtn('×','buttonClear','Clear',!readOnly&&node.enableClearButton!==false);
+    wrap.appendChild(group);
+    return wrap;
+  }
+}
+
+
+const legacyRenderers={
   'visualHost':    new HostControl(),
   'mdiChild':      new HostControl(),
   'boxsizer':      new BoxSizer(),
@@ -1904,6 +2133,14 @@ const renderers={
   'tool':          new Tool(),
   'toolseparator': new ToolSeparator(),
 };
+const ui5Renderers={
+  'button':   new UI5Button(),
+  'textctrl': new UI5TextCtrl(),
+  'checkbox': new UI5CheckBox(),
+};
+const renderers=runtime.ui==='ui5'
+  ?Object.assign({},legacyRenderers,ui5Renderers)
+  :legacyRenderers;
 const fallback=new BaseControl();
 
 // wx layout flag constants (match wx/defs.h) — used to turn each
@@ -1975,7 +2212,9 @@ function render(node){
 // Idempotent (re-running resets minWidth/display first).
 function alignLabelsGlobal(rootEl){
   if(!rootEl) return;
-  const labels=rootEl.querySelectorAll('[data-labelrow] > .statictext');
+  // Labels are explicit light-DOM hosts. Never inspect a control's
+  // shadowRoot: UI5 internals are private and do not carry OES layout.
+  const labels=rootEl.querySelectorAll('[data-labelrow] > [data-label-host]');
   for(const lbl of labels){
     lbl.style.minWidth='';
     lbl.style.display='';
@@ -2009,7 +2248,7 @@ function applyLabelColumnWalk(node, maxW, parentOrient){
       const childOrient=cls.contains('horz') ? 'horz' : 'vert';
       applyLabelColumnWalk(c, maxW, childOrient);
     } else if(c.dataset && c.dataset.labelrow){
-      const lbl=c.querySelector(':scope > .statictext');
+      const lbl=c.querySelector(':scope > [data-label-host]');
       if(lbl){
         if(parentOrient==='horz' && horzColumnTaken){
           // Column already consumed by an earlier sibling in this horz

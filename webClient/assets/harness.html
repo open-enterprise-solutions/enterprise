@@ -1,0 +1,60 @@
+<!doctype html>
+<html class="ui5-content-density-compact"><head><meta charset="utf-8">
+<title>OES renderer development harness</title>
+<link rel="stylesheet" href="./oes/oes-tokens.css">
+<script type="importmap">
+{"imports":{
+  "@sap-theming/theming-base-content/":"./ui5/2.26.0/@sap-theming/theming-base-content/",
+  "@ui5/webcomponents/":"./ui5/2.26.0/@ui5/webcomponents/",
+  "@ui5/webcomponents-base/":"./ui5/2.26.0/@ui5/webcomponents-base/",
+  "@ui5/webcomponents-icons/":"./ui5/2.26.0/@ui5/webcomponents-icons/",
+  "@ui5/webcomponents-localization/":"./ui5/2.26.0/@ui5/webcomponents-localization/",
+  "@ui5/webcomponents-theming/":"./ui5/2.26.0/@ui5/webcomponents-theming/",
+  "@ui5/webcomponents-base/jsx-runtime":"./ui5/2.26.0/@ui5/webcomponents-base/dist/jsx-runtime.js"
+}}
+</script>
+<style>
+body{margin:1rem;font:var(--sapFontSize) var(--sapFontFamily);color:var(--oes-text);background:var(--sapBackgroundColor)}
+header{margin-bottom:1rem} h1{font-size:1.25rem;margin:0} header p{margin:.25rem 0}
+#comparison{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.sample{border:var(--sapElement_BorderWidth) solid var(--oes-border);background:var(--oes-surface);padding:1rem;min-width:0}
+.sample h2{font-size:1rem;margin:0 0 .75rem}.host,.boxsizer{display:flex;flex-direction:column;gap:.375rem;align-items:flex-start}.host{min-height:20rem}
+.labelrow{display:flex;align-items:stretch;gap:.375rem}.statictext{display:inline-block;align-self:center}.legacy-field,.ui5-field{display:flex;flex:0 0 12.5rem;width:12.5rem;min-width:0}.legacy-field input{flex:1 1 0;width:0;min-width:0}.legacy-field button{flex:0 0 auto}
+.ui5-field{border:var(--sapField_BorderWidth) solid var(--oes-border)}.ui5-field:focus-within{outline:var(--sapContent_FocusWidth) var(--sapContent_FocusStyle) var(--oes-focus)}
+.ui5-field>ui5-input{display:block;flex:1 1 0;width:0;min-width:0}.ui5-field>ui5-button{display:block;flex:0 0 auto;color:var(--oes-action)}
+ui5-button,ui5-checkbox{display:inline-block}.fallback{font-size:.75rem;color:var(--sapContent_LabelColor)}
+</style></head><body>
+<header><h1>Development harness — not a product page</h1>
+<p>Captured Goods receipt form JSON with development-only control fixtures and deliberately mixed label lengths.</p></header>
+<main id="comparison"><section class="sample"><h2>Legacy renderer</h2><div id="legacy"></div></section><section class="sample"><h2>UI5 renderer</h2><div id="ui5"></div></section></main>
+<script type="module">
+await import('@ui5/webcomponents/dist/Assets.js');
+const {setTheme}=await import('@ui5/webcomponents-base/dist/config/Theme.js');
+await setTheme('sap_horizon');
+await Promise.all([import('@ui5/webcomponents/dist/Button.js'),import('@ui5/webcomponents/dist/CheckBox.js'),import('@ui5/webcomponents/dist/Input.js')]);
+const captured=await fetch('./harness-form.json').then(r=>r.json());
+const fixture=structuredClone(captured);
+const column=fixture.children[0].children;
+column[0].label='ID';
+column[1].label='Posting date';
+column[2].label='Warehouse destination with a deliberately very long caption';
+column[3].readOnly=true;
+column.push({type:'checkbox',id:9001,label:'Approved',value:null,enabled:true,shown:true});
+column.push({type:'button',id:9002,label:'Default',semantic:'default',enabled:true,shown:true});
+column.push({type:'button',id:9003,label:'Primary',semantic:'primary',enabled:true,shown:true});
+column.push({type:'button',id:9004,label:'Transparent',semantic:'transparent',enabled:true,shown:true});
+
+const base={
+  visualHost:n=>make('div','host'),
+  boxsizer:n=>make('div','boxsizer'),
+};
+function make(tag,cls){const el=document.createElement(tag);if(cls)el.className=cls;return el;}
+function labelRow(node,field){const row=make('div','labelrow');row.dataset.labelrow='1';const label=make('span','statictext');label.dataset.labelHost='1';label.textContent=node.label||'';row.append(label,field);return row;}
+function legacyText(node){const group=make('div','legacy-field');const input=document.createElement('input');input.value=node.value||'';input.disabled=node.enabled===false;group.append(input);for(const [show,label] of [[node.showSelectButton,'…'],[node.showOpenButton,'▷'],[node.showClearButton,'×']])if(show){const button=document.createElement('button');button.textContent=label;group.append(button);}return labelRow(node,group);}
+function ui5Text(node){const group=make('div','ui5-field');const input=document.createElement('ui5-input');input.value=node.value||'';input.disabled=node.enabled===false;group.append(input);for(const [show,label] of [[node.showSelectButton,'…'],[node.showOpenButton,'▷'],[node.showClearButton,'×']])if(show){const button=document.createElement('ui5-button');button.design='Transparent';button.textContent=label;group.append(button);}return labelRow(node,group);}
+const legacy={...base,textctrl:legacyText,checkbox:n=>{const label=document.createElement('label');const input=document.createElement('input');input.type='checkbox';input.checked=!!n.value;label.append(input,document.createTextNode(' '+(n.label||'')));return label;},button:n=>{const el=document.createElement('button');el.textContent=n.label||'';return el;}};
+const ui5={...base,textctrl:ui5Text,checkbox:n=>{const el=document.createElement('ui5-checkbox');el.text=n.label||'';el.checked=n.value===null||!!n.value;el.indeterminate=n.value===null;return el;},button:n=>{const el=document.createElement('ui5-button');el.textContent=n.label||'';el.design={default:'Default',primary:'Emphasized',transparent:'Transparent'}[n.semantic]||'Default';return el;}};
+function render(node,map){const factory=map[node.type]||(()=>{const el=make('div','fallback');el.textContent='['+node.type+']';return el;});const el=factory(node);for(const child of node.children||[])el.appendChild(render(child,map));return el;}
+function align(root){const labels=root.querySelectorAll('[data-labelrow]>[data-label-host]');let width=0;for(const label of labels)width=Math.max(width,label.offsetWidth);for(const label of labels)label.style.minWidth=width+'px';}
+for(const [id,map] of [['legacy',legacy],['ui5',ui5]]){const root=render(fixture,map);document.getElementById(id).append(root);requestAnimationFrame(()=>align(root));}
+</script></body></html>
