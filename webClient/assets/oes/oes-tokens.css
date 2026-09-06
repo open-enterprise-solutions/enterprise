@@ -6,4 +6,9 @@
   --oes-action:var(--sapButton_Emphasized_Background);
   --oes-focus:var(--sapContent_FocusColor);
   --oes-status-error:var(--sapNegativeColor);
+  /* Provisional until a themed form reference screen validates these mappings. */
+  --oes-form-canvas:var(--sapBackgroundColor);
+  --oes-form-surface:var(--sapGroup_ContentBackground);
+  --oes-form-text:var(--sapTextColor);
+  --oes-form-border:var(--sapGroup_ContentBorderColor);
 }

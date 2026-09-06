@@ -206,12 +206,20 @@ li:hover{background:#e3e9f0}
    the content area. min-height:0 is mandatory for nested flex
    children to actually shrink below their content size. */
 #tab-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+html[data-oes-ui="ui5"] #main,
+html[data-oes-ui="ui5"] #tab-body{
+  background:var(--oes-form-canvas);color:var(--oes-form-text)
+}
 /* form-host stretches to fill #tab-body (which is itself flex-col +
    flex:1 inside #main → #app-row → body), so the hardcoded
    100vh-90px is no longer needed — the new layout (titlebar +
    app-row + statusbar) does the math via flex grow chain. */
 .form-host{border:1px solid #ddd;border-radius:4px;padding:10px;
   display:flex;flex-direction:column;min-height:0;flex:1 1 auto}
+html[data-oes-ui="ui5"] .form-host{
+  background:var(--oes-form-surface);color:var(--oes-form-text);
+  border-color:var(--oes-form-border)
+}
 .form-host > .boxsizer{flex:1;min-height:0}
 /* align-items:flex-start so children stay at their natural cross-axis
    size by default. wxSizer semantics: a vertical sizer does NOT stretch
