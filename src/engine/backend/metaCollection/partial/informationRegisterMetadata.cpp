@@ -52,7 +52,7 @@ ibBackendValueForm* ibValueMetaObjectInformationRegister::GetListForm(const wxSt
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectInformationRegister::eFormList,
-		ownerControl, ibCreateList(GetQueryable(), HasPeriod() ? GetRegisterPeriod() : nullptr),   // migrated onto the universal dynamic list
+		ownerControl, ibCreateList(GetQueryable(), HasPeriod() ? GetRegisterPeriod()->GetQueryColumn() : nullptr),   // migrated onto the universal dynamic list
 		formGuid
 	);
 }
@@ -356,7 +356,7 @@ ibSourceDataObject* ibValueMetaObjectInformationRegister::CreateSourceObject(con
 	case eFormRecord:
 		return CreateRecordManagerObjectValue();
 	case eFormList:
-		return ibCreateList(GetQueryable(), HasPeriod() ? GetRegisterPeriod() : nullptr);   // migrated onto the universal dynamic list
+		return ibCreateList(GetQueryable(), HasPeriod() ? GetRegisterPeriod()->GetQueryColumn() : nullptr);   // migrated onto the universal dynamic list
 	}
 
 	return nullptr;

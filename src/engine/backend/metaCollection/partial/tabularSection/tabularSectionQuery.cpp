@@ -51,7 +51,9 @@ const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const wxStri
 {
 	if (name.IsSameAs(wxT("Ref"), false))
 		return OwnerRefColumn();
-	return m_meta->FindAnyAttributeObjectByFilter(name);
+	// The attribute's QUERY FACE — it holds one rather than being one (docs/ownership-authority.md).
+	const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(name);
+	return attribute != nullptr ? attribute->GetQueryColumn() : nullptr;
 }
 
 std::vector<const ibBackendQueryColumn*> ibTabularQueryable::GetColumns() const
@@ -59,7 +61,7 @@ std::vector<const ibBackendQueryColumn*> ibTabularQueryable::GetColumns() const
 	std::vector<const ibBackendQueryColumn*> columns;
 	columns.push_back(OwnerRefColumn());
 	for (const auto attribute : m_meta->GetGenericAttributeArrayObject())
-		columns.push_back(attribute);
+		if (attribute != nullptr) columns.push_back(attribute->GetQueryColumn());
 	return columns;
 }
 // ⚠ ANSWERED HERE, and it is not the duplicate the others were. Everywhere else the guid and the
@@ -103,7 +105,7 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 			for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 				if (m_metaTable->IsNumberLine(object->GetMetaID()))
 					continue;
-				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object);
+				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
 			}
 			ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 		}
@@ -172,10 +174,10 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 			if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
 				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
 				wxASSERT(node);
-				q.SetValue(object, node->GetTableValue(object->GetMetaID()));
+				q.SetValue(object->GetQueryColumn(), node->GetTableValue(object->GetMetaID()));
 			}
 			else {
-				q.SetValue(object, ibValue(numberLine++));
+				q.SetValue(object->GetQueryColumn(), ibValue(numberLine++));
 			}
 		}
 	}

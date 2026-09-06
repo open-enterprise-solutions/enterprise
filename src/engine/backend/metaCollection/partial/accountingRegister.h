@@ -1237,13 +1237,13 @@ public:
 			return cols;
 
 		if (m_reg->GetRegisterRecorder() != nullptr)
-			cols.push_back(m_reg->GetRegisterRecorder());
+			cols.push_back(m_reg->GetRegisterRecorder()->GetQueryColumn());
 
 		if (m_reg->GetRegisterLineNumber() != nullptr)
-			cols.push_back(m_reg->GetRegisterLineNumber());
+			cols.push_back(m_reg->GetRegisterLineNumber()->GetQueryColumn());
 
 		if (m_reg->GetRegisterPeriod() != nullptr)
-			cols.push_back(m_reg->GetRegisterPeriod());
+			cols.push_back(m_reg->GetRegisterPeriod()->GetQueryColumn());
 
 		return cols;
 	}

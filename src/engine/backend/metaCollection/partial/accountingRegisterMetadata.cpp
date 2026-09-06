@@ -38,7 +38,7 @@ ibValueMetaObjectFormBase* ibValueMetaObjectAccountingRegister::GetDefaultFormBy
 ibBackendValueForm* ibValueMetaObjectAccountingRegister::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(strFormName, eFormList, ownerControl,
-		ibCreateList(GetQueryable(), GetRegisterPeriod()), formGuid);   // migrated onto the universal dynamic list
+		ibCreateList(GetQueryable(), GetRegisterPeriod()->GetQueryColumn()), formGuid);   // migrated onto the universal dynamic list
 }
 #pragma endregion
 
@@ -829,7 +829,7 @@ ibValueRecordSetObject* ibValueMetaObjectAccountingRegister::CreateRecordSetObje
 ibSourceDataObject* ibValueMetaObjectAccountingRegister::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
 {
 	switch (metaObject->GetTypeForm()) {
-	case eFormList: return ibCreateList(GetQueryable(), GetRegisterPeriod());   // migrated onto the universal dynamic list
+	case eFormList: return ibCreateList(GetQueryable(), GetRegisterPeriod()->GetQueryColumn());   // migrated onto the universal dynamic list
 	}
 	return nullptr;
 }
@@ -869,7 +869,7 @@ void ibValueMetaObjectAccountingRegister::FillSourceExplorer(ibSourceDataObject:
 			return;
 		// The GROUP goes with the column: the register knows which of its columns are one
 		// thing (the dimension slots of a side), the form decides how that is shown.
-		explorer.AppendColumn(attribute, /*enabled*/true, /*visible*/ !IsAccountDimensionKindColumn(attribute),
+		explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/true, /*visible*/ !IsAccountDimensionKindColumn(attribute),
 			GetSourceGroupOf(attribute));
 	};
 

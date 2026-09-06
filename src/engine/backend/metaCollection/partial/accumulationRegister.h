@@ -585,17 +585,17 @@ protected:
 			return cols;
 
 		if (fold.HasPeriod() && m_reg->HasPeriod() && m_reg->GetRegisterPeriod() != nullptr)
-			cols.push_back(m_reg->GetRegisterPeriod());
+			cols.push_back(m_reg->GetRegisterPeriod()->GetQueryColumn());
 
 		if (fold.FromMovements() && m_reg->HasRecorder()) {
 			if (m_reg->GetRegisterRecorder() != nullptr)
-				cols.push_back(m_reg->GetRegisterRecorder());
+				cols.push_back(m_reg->GetRegisterRecorder()->GetQueryColumn());
 			if (fold.HasLineNumber() && m_reg->GetRegisterLineNumber() != nullptr)
-				cols.push_back(m_reg->GetRegisterLineNumber());
+				cols.push_back(m_reg->GetRegisterLineNumber()->GetQueryColumn());
 		}
 
 		for (const ibValueMetaObjectAttributeBase* dimension : m_reg->GetDimensionArrayObject())
-			cols.push_back(dimension);
+			cols.push_back(dimension->GetQueryColumn());
 
 		return cols;
 	}

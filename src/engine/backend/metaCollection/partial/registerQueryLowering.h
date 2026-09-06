@@ -308,7 +308,7 @@ inline std::vector<std::pair<wxString, ibQueryExprPtr>> ibRegRecorderTuple(
 
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int pos = 1;
-	ibColumnCodec::WriteValue(reg->GetRegisterRecorder(), reg->GetMetaData(), recorder, &capture, pos);
+	ibColumnCodec::WriteValue(reg->GetRegisterRecorder()->GetQueryColumn(), reg->GetMetaData(), recorder, &capture, pos);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 
 	for (size_t i = 0; i < slots.size() && i < consts.size(); i++) {
@@ -328,7 +328,7 @@ inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
 	if (reg == nullptr || !reg->HasRecorder() || reg->GetRegisterRecorder() == nullptr)
 		return;   // this view has one arm; there is nothing to cut
 
-	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(reg->GetRegisterRecorder());
+	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(reg->GetRegisterRecorder()->GetQueryColumn());
 	if (slots.empty())
 		return;
 
@@ -378,20 +378,20 @@ inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
 // wrappers derive the metadata from the attribute so register lowering reads cleanly — the SQL-field
 // machinery lives in the tier, NOT on the attribute. The structured ibSQLField is GONE: a register
 // builds the comma-joined field list with ibRegFieldList, or picks the _TYPE tag / first value field.
-inline wxString       ibRegFieldList (const ibValueMetaObjectAttributeBase* a, const wxString& aggr = wxEmptyString) { return ColumnFieldList(a, aggr); }
-inline wxString       ibRegComposite (const ibValueMetaObjectAttributeBase* a, const wxString& cmp = wxT("=")) { return ColumnComparePredicate(a, cmp); }
+inline wxString       ibRegFieldList (const ibValueMetaObjectAttributeBase* a, const wxString& aggr = wxEmptyString) { return ColumnFieldList(a->GetQueryColumn(), aggr); }
+inline wxString       ibRegComposite (const ibValueMetaObjectAttributeBase* a, const wxString& cmp = wxT("=")) { return ColumnComparePredicate(a->GetQueryColumn(), cmp); }
 
 // All physical fields of an attribute (the TYPE tag + per-type fields; a reference
 // expands to _RTRef + _RRRef), in the order SetValueAttribute binds them.
 inline std::vector<wxString> ibRegFieldsOf(const ibValueMetaObjectAttributeBase* a)
 {
-	return ColumnFieldNames(a);
+	return ColumnFieldNames(a->GetQueryColumn());
 }
 
 // The _TYPE discriminator field name (the first physical field of a composite column).
 inline wxString ibRegTypeField(const ibValueMetaObjectAttributeBase* a)
 {
-	const std::vector<wxString> fields = ColumnFieldNames(a);
+	const std::vector<wxString> fields = ColumnFieldNames(a->GetQueryColumn());
 	return fields.empty() ? wxString() : fields[0];   // [0] is always the _TYPE tag
 }
 
@@ -399,7 +399,7 @@ inline wxString ibRegTypeField(const ibValueMetaObjectAttributeBase* a)
 // register resource / record-type aggregate operates on (res_N, recordType_N / _E).
 inline wxString ibRegValueField(const ibValueMetaObjectAttributeBase* a)
 {
-	const std::vector<wxString> fields = ColumnFieldNames(a);
+	const std::vector<wxString> fields = ColumnFieldNames(a->GetQueryColumn());
 	return fields.size() > 1 ? fields[1] : wxString();   // [0] is the _TYPE tag; [1] is the first value field
 }
 
@@ -481,7 +481,7 @@ inline ibQueryPredicatePtr ibRegFilterPredicate(const TRegister* reg, const ibVa
 			continue;
 
 		ibQueryCondition leaf;
-		leaf.m_col   = dimension;
+		leaf.m_col   = dimension->GetQueryColumn();
 		leaf.m_op    = ibQueryFilterOp::Equal;
 		leaf.m_value = value;
 
@@ -890,7 +890,7 @@ private:
 inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* attribute)
 {
 	// [0] is the _TYPE tag; anything past [1] means the value itself needs more than one field.
-	const std::vector<wxString> fields = ColumnFieldNames(attribute);
+	const std::vector<wxString> fields = ColumnFieldNames(attribute->GetQueryColumn());
 	const bool spreads = fields.size() > 2;
 
 	return spreads
@@ -958,7 +958,7 @@ inline void ibRegGuardInForce(ibSchemaMaterialize& m, const ibValueMetaObjectAtt
 	if (active == nullptr)
 		return;
 	m.Guard(wxT("{row}.") + ibRegValueField(active) + wxT(" <> 0"),
-		ibQueryPredicate::Leaf(ibQueryCondition{ active, ibQueryFilterOp::Equal, ibValue(true) }));
+		ibQueryPredicate::Leaf(ibQueryCondition{ active->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(true) }));
 }
 
 // ⭐⭐ AN ACCUMULATING COLUMN, IN THE RESOURCE'S OWN PRECISION. Declared flat it came out

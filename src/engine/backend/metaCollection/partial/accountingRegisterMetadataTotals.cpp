@@ -158,7 +158,9 @@ const ibBackendQueryColumn* ColumnOn(const ibBackendQueryable* source, const ibV
 	if (source == nullptr || attribute == nullptr)
 		return nullptr;
 	const ibBackendQueryColumn* here = source->ResolveColumnByName(attribute->GetName());
-	return here != nullptr ? here : attribute;
+	// …and the attribute's own face when this source does not name it — an attribute HOLDS a query
+	// column rather than being one (docs/ownership-authority.md).
+	return here != nullptr ? here : attribute->GetQueryColumn();
 }
 
 // ⭐⭐ ONE BREAKDOWN COLUMN — where its value comes from, and how it is read back.
@@ -793,20 +795,20 @@ ibQueryColumnExprPtr SideFigure(const ibValueMetaObjectAccountingRegister* reg,
 		return nullptr;
 
 	if (reg->IsCorrespondence())
-		return ibQueryColumnExpr::Col(resource);   // the pass decides the side; the row carries no flag
+		return ibQueryColumnExpr::Col(resource->GetQueryColumn());   // the pass decides the side; the row carries no flag
 
 	const ibValueMetaObjectAttributeBase* recordType = reg->GetRegisterRecordType();
 	if (recordType == nullptr)
-		return ibQueryColumnExpr::Col(resource);
+		return ibQueryColumnExpr::Col(resource->GetQueryColumn());
 
 	ibQueryCondition leaf;
-	leaf.m_col   = recordType;
+	leaf.m_col   = recordType->GetQueryColumn();
 	leaf.m_op    = ibQueryFilterOp::Equal;
 	leaf.m_value = ibValue::CreateEnumObject<ibValueEnumAccountingRegisterRecordType>(
 		credit ? ibAccountingRecordType::eCredit : ibAccountingRecordType::eDebit);
 
 	std::vector<std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>> cases;
-	cases.push_back({ ibQueryPredicate::Leaf(leaf), ibQueryColumnExpr::Col(resource) });
+	cases.push_back({ ibQueryPredicate::Leaf(leaf), ibQueryColumnExpr::Col(resource->GetQueryColumn()) });
 	return ibQueryColumnExpr::Case(std::move(cases), ibQueryColumnExpr::Const(ibValue(ibNumber())));
 }
 
@@ -1440,8 +1442,8 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 	// surface a given pass then reads. What the walk needs is the column's TARGET (the chart of
 	// accounts) and the chart's own parent map, and neither depends on whether this pass stands on the
 	// totals view or on the lines: the hierarchy is the chart's, not the surface's.
-	const ibQueryHierarchyScope scopeDr = ScopeFromAccountCondition(movements, GetRegisterAccount(),   accountDr);
-	const ibQueryHierarchyScope scopeCr = ScopeFromAccountCondition(movements, GetRegisterAccountCr(), accountCr);
+	const ibQueryHierarchyScope scopeDr = ScopeFromAccountCondition(movements, GetRegisterAccount()->GetQueryColumn(),   accountDr);
+	const ibQueryHierarchyScope scopeCr = ScopeFromAccountCondition(movements, GetRegisterAccountCr()->GetQueryColumn(), accountCr);
 	ibAcctRowList rows;   // insertion-ordered; the map is the index into it
 	ibAcctIndex index;
 	std::vector<ibAcctKeyLayout> layouts;              // one per pass — see ibAcctKeyLayout
@@ -1672,8 +1674,8 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 	// surface a given pass then reads. What the walk needs is the column's TARGET (the chart of
 	// accounts) and the chart's own parent map, and neither depends on whether this pass stands on the
 	// totals view or on the lines: the hierarchy is the chart's, not the surface's.
-	const ibQueryHierarchyScope scopeDr = ScopeFromAccountCondition(movements, GetRegisterAccount(),   accountDr);
-	const ibQueryHierarchyScope scopeCr = ScopeFromAccountCondition(movements, GetRegisterAccountCr(), accountCr);
+	const ibQueryHierarchyScope scopeDr = ScopeFromAccountCondition(movements, GetRegisterAccount()->GetQueryColumn(),   accountDr);
+	const ibQueryHierarchyScope scopeCr = ScopeFromAccountCondition(movements, GetRegisterAccountCr()->GetQueryColumn(), accountCr);
 
 	for (const ibAcctPass& pass : PassesOf(this)) {
 		if (pass.m_account == nullptr)
@@ -1883,16 +1885,16 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 	// surface a given pass then reads. What the walk needs is the column's TARGET (the chart of
 	// accounts) and the chart's own parent map, and neither depends on whether this pass stands on the
 	// totals view or on the lines: the hierarchy is the chart's, not the surface's.
-	const ibQueryHierarchyScope scopeDr = ScopeFromAccountCondition(movements, GetRegisterAccount(),   accountDr);
-	const ibQueryHierarchyScope scopeCr = ScopeFromAccountCondition(movements, GetRegisterAccountCr(), accountCr);
+	const ibQueryHierarchyScope scopeDr = ScopeFromAccountCondition(movements, GetRegisterAccount()->GetQueryColumn(),   accountDr);
+	const ibQueryHierarchyScope scopeCr = ScopeFromAccountCondition(movements, GetRegisterAccountCr()->GetQueryColumn(), accountCr);
 	ibDataQueryBuilder b;
 	b.From(movements);
 	b.WithAccessPolicy(nullptr);
 
-	WherePeriodRange(b, GetRegisterPeriod(), begin, end);
+	WherePeriodRange(b, GetRegisterPeriod()->GetQueryColumn(), begin, end);
 	WhereActive(b, this, movements, /*onMovements*/ true);
-	WhereAccount(b, GetRegisterAccount(),   scopeDr);
-	WhereAccount(b, GetRegisterAccountCr(), scopeCr);
+	WhereAccount(b, GetRegisterAccount()->GetQueryColumn(),   scopeDr);
+	WhereAccount(b, GetRegisterAccountCr()->GetQueryColumn(), scopeCr);
 	WhereCondition(b, movements, filter);
 
 	// ⭐⭐ A PAIRED ROW HAS TWO SETS OF SLOTS, AND THE CONDITION IS ABOUT THE ROW.
@@ -1907,8 +1909,8 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 			AccountDimensionCondition(this, movements, /*creditSide*/ true,  condition)))
 		b.Where(slots);
 
-	b.GroupBy(GetRegisterAccount());
-	b.GroupBy(GetRegisterAccountCr());
+	b.GroupBy(GetRegisterAccount()->GetQueryColumn());
+	b.GroupBy(GetRegisterAccountCr()->GetQueryColumn());
 
 	std::vector<ibAcctBreakdownColumn> breakdownDr, breakdownCr;
 	AddBreakdown(b, this, movements, ibAcctShape::DrCrTurnovers, /*creditSide*/ false, kindsDr, /*group*/ true, breakdownDr);
@@ -1916,7 +1918,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 
 	std::vector<const ibValueMetaObjectAttributeBase*> dimensions;
 	for (const auto dimension : GetDimensionArrayObject())
-		if (dimension != nullptr) { b.GroupBy(dimension); dimensions.push_back(dimension); }
+		if (dimension != nullptr) { b.GroupBy(dimension->GetQueryColumn()); dimensions.push_back(dimension); }
 
 	// ONE figure per resource: a pair of accounts has no sides of its own — what moved from that credit
 	// to that debit is a single number, and calling it TurnoverDr would be the same value twice.
@@ -1925,7 +1927,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 		if (resource == nullptr)
 			continue;
 		const wxString name = FigureName(resource, ibAcctFigure::Turnover);
-		b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, ibQueryColumnExpr::Col(resource), name);
+		b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, ibQueryColumnExpr::Col(resource->GetQueryColumn()), name);
 		figures.push_back(name);
 	}
 
@@ -1944,11 +1946,11 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 	ibDataQueryResult sel = b.SelectAggregate();
 	while (sel.Next()) {
 		std::vector<ibValue> key;
-		key.push_back(sel.GetValue(GetRegisterAccount()));
-		key.push_back(sel.GetValue(GetRegisterAccountCr()));
+		key.push_back(sel.GetValue(GetRegisterAccount()->GetQueryColumn()));
+		key.push_back(sel.GetValue(GetRegisterAccountCr()->GetQueryColumn()));
 		AppendBreakdownValues(sel, breakdownDr, key);
 		AppendBreakdownValues(sel, breakdownCr, key);
-		for (const auto dimension : dimensions) key.push_back(sel.GetValue(dimension));
+		for (const auto dimension : dimensions) key.push_back(sel.GetValue(dimension->GetQueryColumn()));
 
 		ibAcctRow row{ key, {}, 0 };
 		for (const wxString& figure : figures)
@@ -1983,8 +1985,8 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 	if (movements == nullptr || GetRegisterAccountCr() == nullptr)
 		return nullptr;
 
-	const ibQueryHierarchyScope scopeDr = ScopeFromAccountCondition(movements, GetRegisterAccount(),   accountDr);
-	const ibQueryHierarchyScope scopeCr = ScopeFromAccountCondition(movements, GetRegisterAccountCr(), accountCr);
+	const ibQueryHierarchyScope scopeDr = ScopeFromAccountCondition(movements, GetRegisterAccount()->GetQueryColumn(),   accountDr);
+	const ibQueryHierarchyScope scopeCr = ScopeFromAccountCondition(movements, GetRegisterAccountCr()->GetQueryColumn(), accountCr);
 
 	ibDataQueryBuilder b;
 	b.From(movements);
@@ -1993,10 +1995,10 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 	// this composable at all: the door refuses to hand out a relation for a query carrying a policy.
 	b.WithAccessPolicy(nullptr);
 
-	WherePeriodRange(b, GetRegisterPeriod(), begin, end);
+	WherePeriodRange(b, GetRegisterPeriod()->GetQueryColumn(), begin, end);
 	WhereActive(b, this, movements, /*onMovements*/ true);
-	WhereAccount(b, GetRegisterAccount(),   scopeDr);
-	WhereAccount(b, GetRegisterAccountCr(), scopeCr);
+	WhereAccount(b, GetRegisterAccount()->GetQueryColumn(),   scopeDr);
+	WhereAccount(b, GetRegisterAccountCr()->GetQueryColumn(), scopeCr);
 	WhereCondition(b, movements, filter);
 
 	if (const ibQueryPredicatePtr slots = OrWith(
@@ -2004,8 +2006,8 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 			AccountDimensionCondition(this, movements, /*creditSide*/ true,  condition)))
 		b.Where(slots);
 
-	b.GroupBy(GetRegisterAccount());
-	b.GroupBy(GetRegisterAccountCr());
+	b.GroupBy(GetRegisterAccount()->GetQueryColumn());
+	b.GroupBy(GetRegisterAccountCr()->GetQueryColumn());
 
 	std::vector<ibAcctBreakdownColumn> breakdownDr, breakdownCr;
 	AddBreakdown(b, this, movements, ibAcctShape::DrCrTurnovers, /*creditSide*/ false, kindsDr, /*group*/ true, breakdownDr);
@@ -2013,11 +2015,11 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 
 	for (const auto dimension : GetDimensionArrayObject())
 		if (dimension != nullptr)
-			b.GroupBy(dimension);
+			b.GroupBy(dimension->GetQueryColumn());
 
 	for (const auto resource : GetResourceArrayObject())
 		if (resource != nullptr)
-			b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, ibQueryColumnExpr::Col(resource),
+			b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, ibQueryColumnExpr::Col(resource->GetQueryColumn()),
 				FigureName(resource, ibAcctFigure::Turnover));
 
 	return b.BuildRelation();
@@ -2494,7 +2496,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeRecords(
 
 	ibDataQueryBuilder b;
 	b.From(movements);
-	WherePeriodRange(b, GetRegisterPeriod(), begin, end);
+	WherePeriodRange(b, GetRegisterPeriod()->GetQueryColumn(), begin, end);
 	WhereCondition(b, movements, filter);
 
 	// Both sides of a paired line answer the same question — see the correspondence matrix above. A
@@ -2540,7 +2542,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeRecords(
 	while (sel.Next()) {
 		const long row = retTable.AppendRow();
 		for (const ibValueMetaObjectAttributeBase* attribute : straight)
-			retTable.SetCell(row, attribute->GetMetaID(), sel.GetValue(attribute));
+			retTable.SetCell(row, attribute->GetMetaID(), sel.GetValue(attribute->GetQueryColumn()));
 		const auto pourBreakdown = [&](const std::vector<ibAcctBreakdownColumn>& breakdown) {
 			for (const ibAcctBreakdownColumn& column : breakdown) {
 				if (BreakdownCarriesKind(column))
@@ -2574,7 +2576,7 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildRecordsRelation(
 	ibDataQueryBuilder b;
 	b.From(movements);
 	b.WithAccessPolicy(nullptr);
-	WherePeriodRange(b, GetRegisterPeriod(), begin, end);
+	WherePeriodRange(b, GetRegisterPeriod()->GetQueryColumn(), begin, end);
 	WhereCondition(b, movements, filter);
 
 	if (const ibQueryPredicatePtr slots = OrWith(
@@ -2776,7 +2778,7 @@ bool AnyTurnoverOnlyKind(const ibValueMetaObjectChartOfAccounts* chart)
 	try {
 		ibDataQueryBuilder b;
 		b.From(rows);
-		b.Where(flag, ibValue(true));
+		b.Where(flag->GetQueryColumn(), ibValue(true));
 		ibReadPageRequest page;
 		page.m_count = 1;   // the existence of ONE such row is the whole answer
 		ibDataQueryResult sel = b.Execute(page);
@@ -3313,7 +3315,7 @@ ibAcctCallArgs ibAcctParseCall(const ibValueMetaObjectAccountingRegister* reg, i
 		if (named.empty())
 			return nullptr;   // nothing named is not a filter — it means every account
 		ibQueryCondition leaf;
-		leaf.m_col    = accountAttr;
+		leaf.m_col    = accountAttr->GetQueryColumn();
 		leaf.m_op     = ibQueryFilterOp::In;
 		leaf.m_values = named;
 		leaf.m_unfold = ibQueryDimUnfold::Hierarchy;

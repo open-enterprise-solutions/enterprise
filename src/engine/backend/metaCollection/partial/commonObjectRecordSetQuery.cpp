@@ -43,7 +43,7 @@ bool ibValueRecordSetObject::LockByKeys()
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 				continue;
-			q.Where(object, m_keyValues.at(object->GetMetaID()));
+			q.Where(object->GetQueryColumn(), m_keyValues.at(object->GetMetaID()));
 			anyKey = true;
 		}
 		// No key fields populated — nothing to scope the lock to; the UPSERT path catches any
@@ -140,7 +140,7 @@ bool ibValueRecordSetObject::ExistData()
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 				continue;
-			q.Where(object, ibQueryFilterOp::Equal,
+			q.Where(object->GetQueryColumn(), ibQueryFilterOp::Equal,
 				m_keyValues.at(object->GetMetaID()));
 		}
 		ibReadPageRequest page;
@@ -173,9 +173,9 @@ bool ibValueRecordSetObject::ExistData(ibNumber& lastNum)
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 				continue;
-			q.Where(object, m_keyValues.at(object->GetMetaID()));
+			q.Where(object->GetQueryColumn(), m_keyValues.at(object->GetMetaID()));
 		}
-		q.Max(m_metaObject->GetRegisterLineNumber(), wxT("maxLine"));
+		q.Max(m_metaObject->GetRegisterLineNumber()->GetQueryColumn(), wxT("maxLine"));
 		ibDataQueryResult selection = q.SelectAggregate();
 		if (selection.Next()) {
 			const ibValue maxLine = selection.GetColumn(wxT("maxLine"));
@@ -203,7 +203,7 @@ bool ibValueRecordSetObject::ReadData(const ibUniqueKeyPair& key)
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!key.FindKey(object->GetMetaID()))
 				continue;
-			q.Where(object, ibQueryFilterOp::Equal,
+			q.Where(object->GetQueryColumn(), ibQueryFilterOp::Equal,
 				key.GetKey(object->GetMetaID()));
 		}
 		ibReadPageRequest page;
@@ -212,9 +212,9 @@ bool ibValueRecordSetObject::ReadData(const ibUniqueKeyPair& key)
 		while (selection.Next()) {
 			ibComposerNode* rowData = new ibComposerNode();
 			for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
-				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object);
+				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
 			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
-				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object);
+				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
 			ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 			m_selected = true;
 		}
@@ -235,7 +235,7 @@ bool ibValueRecordSetObject::ReadData()
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 				continue;
-			q.Where(object, ibQueryFilterOp::Equal,
+			q.Where(object->GetQueryColumn(), ibQueryFilterOp::Equal,
 				m_keyValues.at(object->GetMetaID()));
 		}
 		ibReadPageRequest page;
@@ -244,9 +244,9 @@ bool ibValueRecordSetObject::ReadData()
 		while (selection.Next()) {
 			ibComposerNode* rowData = new ibComposerNode();
 			for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
-				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object);
+				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
 			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
-				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object);
+				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
 			ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 			m_selected = true;
 		}
@@ -323,13 +323,13 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 			// The question of WHICH keys are in the filter belongs to whoever built the set, not here.
 			auto foundedKey = m_keyValues.find(object->GetMetaID());
 			if (foundedKey != m_keyValues.end())
-				q.SetValue(object, foundedKey->second);
+				q.SetValue(object->GetQueryColumn(), foundedKey->second);
 			else if (m_metaObject->IsRegisterLineNumber(object->GetMetaID()))
-				q.SetValue(object, ibValue(numberLine++));
+				q.SetValue(object->GetQueryColumn(), ibValue(numberLine++));
 			else {
 				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
 				wxASSERT(node);
-				q.SetValue(object, node->GetTableValue(object->GetMetaID()));
+				q.SetValue(object->GetQueryColumn(), node->GetTableValue(object->GetMetaID()));
 			}
 		}
 	};
@@ -394,7 +394,7 @@ bool ibValueRecordSetObject::DeleteData()
 	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
-		q.Where(object, m_keyValues.at(object->GetMetaID()));
+		q.Where(object->GetQueryColumn(), m_keyValues.at(object->GetMetaID()));
 		keyed = true;
 	}
 

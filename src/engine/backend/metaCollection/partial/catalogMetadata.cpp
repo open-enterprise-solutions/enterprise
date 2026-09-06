@@ -96,11 +96,11 @@ ibSourceDataObject* ibValueMetaObjectCatalog::CreateSourceObject(const ibValueMe
 		// (columns / commands / open / select). The TREE comes from the queryable's hierarchy (parent) column;
 		// folders are ordinary creation-time settings — folder-first sort here, an IsFolder = true filter for
 		// the folder-select variant — not a structural column.
-		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription());
+		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn());
 	case eFormSelect:
-		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice);   // select is front-driven — the list is the dynamic list in choice mode
+		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice);   // select is front-driven — the list is the dynamic list in choice mode
 	case eFormFolderSelect:
-		return ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice);   // folder-select = choice list + fixed IsFolder = true predicate (added at generation)
+		return ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice);   // folder-select = choice list + fixed IsFolder = true predicate (added at generation)
 	}
 
 	return nullptr;
@@ -132,7 +132,7 @@ ibBackendValueForm* ibValueMetaObjectCatalog::GetListForm(const wxString& strFor
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectCatalog::eFormList,
-		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription()),   // PILOT — catalog main list on the universal dynamic list
+		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn()),   // PILOT — catalog main list on the universal dynamic list
 		formGuid
 	);
 }
@@ -142,7 +142,7 @@ ibBackendValueForm* ibValueMetaObjectCatalog::GetSelectForm(const wxString& strF
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectCatalog::eFormSelect,
-		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice),   // select front-driven — dynamic list, choice mode
+		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice),   // select front-driven — dynamic list, choice mode
 		formGuid
 	);
 }
@@ -152,7 +152,7 @@ ibBackendValueForm* ibValueMetaObjectCatalog::GetFolderSelectForm(const wxString
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectCatalog::eFormFolderSelect,
-		ownerControl, ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice),   // folder-select = choice list + fixed IsFolder = true predicate
+		ownerControl, ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice),   // folder-select = choice list + fixed IsFolder = true predicate
 		formGuid
 	);
 }

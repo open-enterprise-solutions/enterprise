@@ -80,7 +80,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 			ibSchemaTable& idleTable = out.Shared(idle->GetMetaID(), GetRegisterTableNameDB(idleKind));
 			idleTable.Scaffold(ibBackendColumnRawDB::Date(periodField));
 			for (const auto dimension : GetDimensionArrayObject())
-				idleTable.Add(dimension);
+				idleTable.Add(dimension->GetQueryColumn());
 		}
 	}
 
@@ -92,12 +92,12 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// --- structure: the period, the dimensions, and a stored pair per resource -----------------
 	const ibBackendQueryColumn* periodCol = t.Scaffold(ibBackendColumnRawDB::Date(periodField));
 	for (const auto dimension : GetDimensionArrayObject())
-		t.Add(dimension);   // same physical fields as the movements, so a trigger reads NEW.<field> directly
+		t.Add(dimension->GetQueryColumn());   // same physical fields as the movements, so a trigger reads NEW.<field> directly
 
 	std::vector<const ibBackendQueryColumn*> keyCols;
 	keyCols.push_back(periodCol);
 	for (const auto dimension : GetDimensionArrayObject())
-		keyCols.push_back(dimension);
+		keyCols.push_back(dimension->GetQueryColumn());
 
 	// SPLIT TOTALS: the shard column joins the KEY, which is what makes several physical rows
 	// legal for one logical key. It exists only when the switch is on — turning the switch changes
@@ -143,7 +143,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// It wants to become a per-register property: a register posted once a month per key gains
 	// nothing from daily rows, and one that must answer hourly cannot use them. Introducing it later
 	// is a property plus a regeneration — the mechanism already reads this value rather than assuming.
-	m.Period(periodField, GetRegisterPeriod(), wxT("{row}.") + periodField, GetTotalsPeriodUnit());
+	m.Period(periodField, GetRegisterPeriod()->GetQueryColumn(), wxT("{row}.") + periodField, GetTotalsPeriodUnit());
 
 	// ⭐⭐ AN INACTIVE MOVEMENT EXISTS AND COUNTS FOR NOTHING.
 	//
@@ -179,7 +179,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// emitted each of those two twice: `NEW.shard_` (a column that does not exist, so CREATE TRIGGER
 	// failed and took the restructuring with it) and the period once truncated and once raw.
 	for (const auto dimension : GetDimensionArrayObject())
-		m.Key(dimension);
+		m.Key(dimension->GetQueryColumn());
 
 	// --- the stored columns + what a movement contributes to each ------------------------------
 	struct Pair { wxString m_in, m_out, m_name; };
@@ -205,7 +205,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		if (!withSign) {
 			// No record type — nothing signs a movement, so there is no expense side to keep apart.
 			const ibBackendQueryColumn* c = ibRegAccumulatorColumn(t, inName, idIn, res);
-			m.Accumulate(c, wxT("{row}.") + resField, ibQueryColumnExpr::Col(res));
+			m.Accumulate(c, wxT("{row}.") + resField, ibQueryColumnExpr::Col(res->GetQueryColumn()));
 			pairs.push_back({ inName, wxString(), res->GetName() });
 			continue;
 		}
@@ -230,14 +230,14 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 
 		m.Accumulate(cIn,  wxT("CASE WHEN {row}.") + recField + wxT(" = ") + receiptTagText + wxT(" THEN {row}.") + resField + wxT(" ELSE 0 END"),
 			ibQueryColumnExpr::Case(
-				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType(), ibQueryFilterOp::Equal, ibValue(receiptTag) }),
-				    ibQueryColumnExpr::Col(res) } },
+				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType()->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(receiptTag) }),
+				    ibQueryColumnExpr::Col(res->GetQueryColumn()) } },
 				ibQueryColumnExpr::Const(ibValue(0.0))));
 		m.Accumulate(cOut, wxT("CASE WHEN {row}.") + recField + wxT(" = ") + receiptTagText + wxT(" THEN 0 ELSE {row}.") + resField + wxT(" END"),
 			ibQueryColumnExpr::Case(
-				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType(), ibQueryFilterOp::Equal, ibValue(receiptTag) }),
+				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType()->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(receiptTag) }),
 				    ibQueryColumnExpr::Const(ibValue(0.0)) } },
-				ibQueryColumnExpr::Col(res)));
+				ibQueryColumnExpr::Col(res->GetQueryColumn())));
 
 		pairs.push_back({ inName, outName, res->GetName() });
 	}
@@ -283,9 +283,9 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 			v.m_withMovements = true;
 			// Name AND type — the stored arm stands a CAST null in their place (see the accounting
 			// register's twin of this block, and ibMaterializeView::m_movementColumns).
-			for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterRecorder()))
+			for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterRecorder()->GetQueryColumn()))
 				v.m_movementColumns.push_back({ s.m_name, s.m_type });
-			for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterLineNumber()))
+			for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterLineNumber()->GetQueryColumn()))
 				v.m_movementColumns.push_back({ s.m_name, s.m_type });
 		}
 

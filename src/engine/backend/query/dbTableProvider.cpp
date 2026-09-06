@@ -4445,18 +4445,18 @@ std::vector<ibValue> ibDbTableProvider::BuildExternal(const ibReadPageRequest& /
 //     to ibColumnCodec::WriteValue / ReadValue at their call sites — no second name for the tier.
 void ibDbTableProvider::SetValueAttribute(const ibValueMetaObjectAttributeBase* attr, const ibValue& cValue, ibQueryStatement* statement, int& position)
 {
-	ibColumnCodec::WriteValue(attr, attr->GetMetaData(), cValue, statement, position);
+	ibColumnCodec::WriteValue(attr->GetQueryColumn(), attr->GetMetaData(), cValue, statement, position);
 }
 
 bool ibDbTableProvider::GetValueAttribute(const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData)
 {
-	return attr->ReadValue(attr->GetPhysicalName(), attr->GetMetaData(), retValue, result, createData);
+	return attr->GetQueryColumn()->ReadValue(attr->GetPhysicalName(), attr->GetMetaData(), retValue, result, createData);
 }
 
 bool ibDbTableProvider::GetValueAttribute(const wxString& fieldName, ibFieldTypes fieldType,
 	const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData)
 {
-	return ibColumnCodec::ReadField(fieldName, static_cast<int>(fieldType), attr, attr->GetMetaData(), retValue, result, createData);
+	return ibColumnCodec::ReadField(fieldName, static_cast<int>(fieldType), attr->GetQueryColumn(), attr->GetMetaData(), retValue, result, createData);
 }
 
 // ==========================================================================

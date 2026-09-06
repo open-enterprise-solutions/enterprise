@@ -65,6 +65,26 @@ public:
 	virtual ibValue* GetImplValueRef() const = 0;
 };
 
+// 🛑⭐⭐ ACCESS CONTROL CANNOT FENCE OFF THE RUNTIME'S OWNERSHIP — tried 2026-09-06, and the reason
+// it fails is worth keeping so nobody spends the day on it twice.
+//
+// The idea was to hide `operator delete` on a base of ibValue: then `delete p`, `unique_ptr<T>` and
+// `shared_ptr<T>(new T)` would all fail to compile from outside, while `delete this` inside DecrRef
+// stayed legal. It does do that. It also breaks CONSTRUCTION — a `new T` expression requires the
+// matching deallocation function to be ACCESSIBLE at the point of the new, because that is what the
+// language calls if the constructor throws. Every `new ibValueArray()`, every `new ibValue[n]` for a
+// frame's locals, stops compiling: 966 errors across 64 sites, none of them a delete anybody wrote.
+//
+// So the protection and the permission are THE SAME FUNCTION, and there is no version of this that
+// forbids one without forbidding the other. A private destructor is no better — every derived class
+// declares a public one of its own, so `delete derived*` sails past it.
+//
+// What remains is real and stands on the other side of the boundary: a query COLUMN carries its own
+// control block (ibBackendQueryColumn : enable_shared_from_this), so nobody needs to invent a second
+// owner for one, and a runtime value travels by ibValuePtr, which counts rather than deletes. The
+// rule itself lives in docs/ownership-authority.md; on this side it is a rule people keep, not one
+// the compiler keeps for them.
+
 constexpr ibClassID g_valueBooleanCLSID = primitive_to_clsid("VL_BOOL");
 constexpr ibClassID g_valueNumberCLSID = primitive_to_clsid("VL_NUMB");
 constexpr ibClassID g_valueDateCLSID = primitive_to_clsid("VL_DATE");
@@ -844,7 +864,6 @@ public:
 		!std::is_base_of<ibBackendValue, T>::value>::type>
 	ibValue(T*) = delete;
 
-	//destructor:
 	virtual ~ibValue();
 
 	//clear values
@@ -856,6 +875,32 @@ public:
 		wxASSERT_MSG(m_refCount.load(std::memory_order_relaxed) > 0, "invalid ref data count");
 		if (m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this;
 	}
+
+	// 🛑⭐⭐ THIS OWNERSHIP CANNOT BE FENCED OFF BY ACCESS CONTROL, and the reason is not a detail of
+	// which member to hide — it is what ibValue IS. Three attempts, 2026-09-06, kept so that nobody
+	// spends the day on them again:
+	//
+	//   * Hide `operator delete`. It does stop `delete p`, unique_ptr and shared_ptr — and it also
+	//     stops CONSTRUCTION, because a `new T` expression needs the matching deallocation function
+	//     accessible for the case where the constructor throws. 966 errors, 64 sites, every one of
+	//     them a plain `new ibValueArray()` or `new ibValue[n]` for a frame's locals.
+	//   * Hide the DESTRUCTOR — the canonical shape for a reference-counted type, and `new` does not
+	//     need it. 17969 errors: an ibValue is not a heap-only object. It is the engine's universal
+	//     VALUE — on the stack, as a member (`ibValue m_defValue;`), inside containers — and every
+	//     one of those needs the destructor.
+	//   * A trap inside `operator delete`. The legitimate release above IS a `delete this`, so the
+	//     trap would have to be told apart from it: either free by hand (`::operator delete(this)`,
+	//     wrong under multiple inheritance where ibValue is not the first base — the block address
+	//     is not `this`) or keep a re-entrant "release in progress" counter on the hottest path in
+	//     the runtime. Both cost more than a debug check is worth.
+	//
+	// ⭐ THE ROOT: ibValue wears two natures at once — a value that lives anywhere, and a
+	// reference-counted object that lives on the heap. Every protection the language offers a
+	// refcounted type assumes the second WITHOUT the first. So on this side the rule is one people
+	// keep, not one the compiler keeps for them: release with DecrRef, travel by ibValuePtr, and
+	// never hand a runtime value to another owner. The QUERY side is a different matter and is
+	// closed by construction — a column carries its own control block, so no second owner is ever
+	// needed (query/queryColumn.h). (docs/ownership-authority.md)
 
 	//operators:
 	void operator = (const ibValue& cParam);

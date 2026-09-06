@@ -43,15 +43,15 @@ const ibSourceExplorer* ibValueRecordDataObjectParameterizedJob::GetSourceExplor
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
 		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), false);
-		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription());
-		m_sourceExplorer.AppendColumn(metaRef->GetDataParent());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataParent()->GetQueryColumn());
 		// The job's own four. They are ordinary columns of the row, which is exactly why the list,
 		// the filters and any report over "which jobs fail most" cost this subsystem nothing.
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
-			m_sourceExplorer.AppendColumn(metaRef->GetDataActive());
-			m_sourceExplorer.AppendColumn(metaRef->GetDataSchedule());
-			m_sourceExplorer.AppendColumn(metaRef->GetDataLastRun());
-			m_sourceExplorer.AppendColumn(metaRef->GetDataNextRun());
+			m_sourceExplorer.AppendColumn(metaRef->GetDataActive()->GetQueryColumn());
+			m_sourceExplorer.AppendColumn(metaRef->GetDataSchedule()->GetQueryColumn());
+			m_sourceExplorer.AppendColumn(metaRef->GetDataLastRun()->GetQueryColumn());
+			m_sourceExplorer.AppendColumn(metaRef->GetDataNextRun()->GetQueryColumn());
 		}
 	}
 
@@ -61,7 +61,7 @@ const ibSourceExplorer* ibValueRecordDataObjectParameterizedJob::GetSourceExplor
 			? (attrUse == ibItemMode::ibItemMode_Item || attrUse == ibItemMode::ibItemMode_Folder_Item)
 			: (attrUse == ibItemMode::ibItemMode_Folder || attrUse == ibItemMode::ibItemMode_Folder_Item);
 		if (wanted && !m_metaObject->IsDataReference(object->GetMetaID()))
-			m_sourceExplorer.AppendColumn(object);
+			m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 	}
 
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
@@ -72,7 +72,7 @@ const ibSourceExplorer* ibValueRecordDataObjectParameterizedJob::GetSourceExplor
 		if (wanted && object != nullptr && !object->IsDeleted()) {
 			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject())
-				tblNode.AppendColumn(tblCol);
+				tblNode.AppendColumn(tblCol->GetQueryColumn());
 		}
 	}
 

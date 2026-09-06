@@ -253,7 +253,11 @@ ibValueMetaObjectReport* ibMetaDataReport::BuildFreshRoot()
 	auto* root = new ibValueMetaObjectExternalReport();
 	root->SetName(ibMetaData::GetNewName(g_metaExternalReportCLSID, nullptr, root->GetClassName()));
 	if (!root->OnCreateMetaObject(this, newObjectFlag)) {
-		delete root; // refcount 0 — never IncrRef'd
+		// ⚠ RELEASED BY THE RUNTIME, not by `delete`. It IS at refcount 0 and nobody adopted it —
+		// but a runtime value is destroyed THROUGH the count that owns it, never past it, and that
+		// is now said in the language rather than in a comment (ibBackendRuntimeOwned). The handle
+		// adopts it (1) and lets go at the end of this scope (0), which destroys it the ordinary way.
+		ibValuePtr<ibValueMetaObjectExternalReport> discard(root);
 		return nullptr;
 	}
 	if (!root->OnLoadMetaObject(this)) {

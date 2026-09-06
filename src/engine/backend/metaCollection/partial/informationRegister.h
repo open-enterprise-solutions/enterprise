@@ -332,17 +332,17 @@ public:
 			return cols;
 
 		if (m_reg->HasRecorder()) {
-			if (m_reg->GetRegisterPeriod()     != nullptr) cols.push_back(m_reg->GetRegisterPeriod());
-			if (m_reg->GetRegisterLineNumber() != nullptr) cols.push_back(m_reg->GetRegisterLineNumber());
-			if (m_reg->GetRegisterRecorder()   != nullptr) cols.push_back(m_reg->GetRegisterRecorder());
+			if (m_reg->GetRegisterPeriod()     != nullptr) cols.push_back(m_reg->GetRegisterPeriod()->GetQueryColumn());
+			if (m_reg->GetRegisterLineNumber() != nullptr) cols.push_back(m_reg->GetRegisterLineNumber()->GetQueryColumn());
+			if (m_reg->GetRegisterRecorder()   != nullptr) cols.push_back(m_reg->GetRegisterRecorder()->GetQueryColumn());
 		}
 		else if (m_reg->HasPeriod() && m_reg->GetRegisterPeriod() != nullptr) {
-			cols.push_back(m_reg->GetRegisterPeriod());
+			cols.push_back(m_reg->GetRegisterPeriod()->GetQueryColumn());
 		}
 
 		for (auto* dimension : m_reg->GetDimensionArrayObject())
 			if (dimension != nullptr)
-				cols.push_back(dimension);
+				cols.push_back(dimension->GetQueryColumn());
 
 		return cols;
 	}

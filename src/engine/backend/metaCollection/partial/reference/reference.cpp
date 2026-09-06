@@ -678,7 +678,7 @@ const ibSourceExplorer* ibValueReferenceDataObject::GetSourceExplorer() const
 		return nullptr;   // unresolved / empty reference — no target type to describe, so the hop stops here
 	m_sourceExplorer.Reset(wxT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(), false, false);
 	for (const auto object : metaObject->GetGenericAttributeArrayObject())
-		m_sourceExplorer.AppendColumn(object);
+		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 	return &m_sourceExplorer;
 }
 

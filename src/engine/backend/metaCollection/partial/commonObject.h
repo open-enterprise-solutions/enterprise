@@ -438,19 +438,22 @@ class ibRecordQueryable : public ibBackendQueryable {
 public:
 	explicit ibRecordQueryable(const TMeta* meta) : m_meta(meta) {}
 
-	// The attribute by name AS a column (an attribute IS-A ibBackendQueryColumn). The L3 surface
-	// returns a column; the DB provider static_casts it back to the attribute when it needs the field
-	// machinery — the queryable itself names no attribute on its contract.
+	// The attribute by name, answered with ITS QUERY FACE. An attribute is not a query column: it
+	// HOLDS one, because the two live under different ownerships (docs/ownership-authority.md). The
+	// L3 surface is unchanged — it still receives an ibBackendQueryColumn and still names no
+	// attribute on its contract.
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
-		return m_meta->template FindObjectByFilter<ibValueMetaObjectAttributeBase>(name,
-			{ g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID, g_metaCommonAttributeColumnCLSID });
+		const ibValueMetaObjectAttributeBase* attribute =
+			m_meta->template FindObjectByFilter<ibValueMetaObjectAttributeBase>(name,
+				{ g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID, g_metaCommonAttributeColumnCLSID });
+		return attribute != nullptr ? attribute->GetQueryColumn() : nullptr;
 	}
 
-	// All generic attributes (predefined + plain) — each IS-A column. Drives SELECT * over this source.
+	// All generic attributes (predefined + plain), each by its query face. Drives SELECT * over this source.
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override {
 		std::vector<const ibBackendQueryColumn*> cols;
 		for (const ibValueMetaObjectAttributeBase* a : m_meta->GetGenericAttributeArrayObject())
-			cols.push_back(a);
+			if (a != nullptr) cols.push_back(a->GetQueryColumn());
 		return cols;
 	}
 
@@ -468,7 +471,7 @@ public:
 		const ibValueMetaObjectAttributeBase* refAttr = m_meta->GetDataReference();
 		if (refAttr == nullptr)
 			return {};
-		return { refAttr };
+		return { refAttr->GetQueryColumn() };
 	}
 	// (ResolveReferenceTarget/Targets moved to ibDbTableProvider — the provider owns metadata.)
 

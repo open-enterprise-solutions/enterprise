@@ -28,5 +28,5 @@ void ibValueMetaObjectConstant::ContributeTables(ibSchemaSnapshot& out) const
 	// very same column it recorded before the value column existed as an object of its own: no ALTER,
 	// no re-add, no migration. If it ever starts reporting an identity of its own, the differ reads
 	// that as "old column gone, new column added" — a DROP plus an ADD that empties every constant.
-	out.Shared(kSysConstTableId, GetPhysicalTableName()).External(GetQueryable()).Add(m_column);
+	out.Shared(kSysConstTableId, GetPhysicalTableName()).External(GetQueryable()).Add(m_column->GetQueryColumn());
 }

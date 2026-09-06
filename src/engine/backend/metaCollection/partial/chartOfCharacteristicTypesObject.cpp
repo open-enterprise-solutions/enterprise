@@ -41,8 +41,8 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSo
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
 		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), false);
-		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription());
-		m_sourceExplorer.AppendColumn(metaRef->GetDataParent());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataParent()->GetQueryColumn());
 		// TYPE BELONGS TO AN ITEM, NOT TO A FOLDER — a group of characteristics is not itself a
 		// characteristic and has no type to declare. So the field is offered only where it exists,
 		// by the same rule the write now checks (ibItemModeFits): a folder's form never shows it,
@@ -53,7 +53,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSo
 		// with it the Select button, so the only way to give a characteristic its type was gone
 		// while the write still refused to save without one.
 		if (ibItemModeFits(metaRef->GetDataType()->GetItemMode(), m_objMode))
-			m_sourceExplorer.AppendColumn(metaRef->GetDataType());
+			m_sourceExplorer.AppendColumn(metaRef->GetDataType()->GetQueryColumn());
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
@@ -62,7 +62,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSo
 			if (attrUse == ibItemMode::ibItemMode_Item
 				|| attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					m_sourceExplorer.AppendColumn(object);
+					m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 				}
 			}
 		}
@@ -70,7 +70,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSo
 			if (attrUse == ibItemMode::ibItemMode_Folder ||
 				attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					m_sourceExplorer.AppendColumn(object);
+					m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 				}
 			}
 		}
@@ -83,7 +83,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSo
 				|| tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol);
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
 				}
 			}
 		}
@@ -92,7 +92,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSo
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol);
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
 				}
 			}
 		}

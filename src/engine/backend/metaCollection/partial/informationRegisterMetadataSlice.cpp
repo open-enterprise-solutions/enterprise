@@ -45,7 +45,7 @@ static wxString RecorderIdField(const ibValueMetaObjectInformationRegister* meta
 	if (recorder == nullptr)
 		return wxString();
 
-	for (const ibColumnSlot& slot : DescribeColumnLayout(recorder))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(recorder->GetQueryColumn()))
 		if (slot.m_role == ibColumnRole::ReferenceId)
 			return slot.m_name;
 	return wxString();
@@ -74,7 +74,7 @@ static ibQueryExprPtr SliceBoundaryPredicate(const ibValueMetaObjectInformationR
 	if (bound.m_date.IsEmpty())
 		return nullptr;
 
-	const ibQueryExprPtr plain = ibRegCompositeIR(periodAttr, metaData, bound.m_date, periodOp);
+	const ibQueryExprPtr plain = ibRegCompositeIR(periodAttr->GetQueryColumn(), metaData, bound.m_date, periodOp);
 	if (!bound.HasRecorder() || !meta->HasRecorder() || meta->GetRegisterRecorder() == nullptr)
 		return plain;
 
@@ -83,10 +83,10 @@ static ibQueryExprPtr SliceBoundaryPredicate(const ibValueMetaObjectInformationR
 	const ibQueryBinOp within   = periodOp;   // carries the Including / Excluding side already
 
 	return ibBinOp(ibQueryBinOp::Or,
-		ibRegCompositeIR(periodAttr, metaData, bound.m_date, strictly),
+		ibRegCompositeIR(periodAttr->GetQueryColumn(), metaData, bound.m_date, strictly),
 		ibBinOp(ibQueryBinOp::And,
-			ibRegCompositeIR(periodAttr, metaData, bound.m_date, ibQueryBinOp::Eq),
-			ibRegCompositeIR(meta->GetRegisterRecorder(), metaData, bound.m_recorder, within)));
+			ibRegCompositeIR(periodAttr->GetQueryColumn(), metaData, bound.m_date, ibQueryBinOp::Eq),
+			ibRegCompositeIR(meta->GetRegisterRecorder()->GetQueryColumn(), metaData, bound.m_recorder, within)));
 }
 
 ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
@@ -224,7 +224,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 			ibDatabaseQueryBuilder ranked;
 			ranked.From(table);
 			if (meta->HasRecorder())
-				ranked.Where(ibRegCompositeIR(meta->GetRegisterActive(), GetMetaData(), ibValue(true), ibQueryBinOp::Eq));
+				ranked.Where(ibRegCompositeIR(meta->GetRegisterActive()->GetQueryColumn(), GetMetaData(), ibValue(true), ibQueryBinOp::Eq));
 			ranked.Where(SliceBoundaryPredicate(meta, GetMetaData(), periodAttr, bound, last, periodOp));
 
 			std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> keptOutside;
@@ -302,7 +302,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		// does not have; the exception was swallowed by the catch below and the slice came back
 		// EMPTY — which reads as "no data yet", not as "the query was wrong".
 		if (meta->HasRecorder())
-			l1.Where(ibRegCompositeIR(meta->GetRegisterActive(), GetMetaData(), ibValue(true), ibQueryBinOp::Eq));
+			l1.Where(ibRegCompositeIR(meta->GetRegisterActive()->GetQueryColumn(), GetMetaData(), ibValue(true), ibQueryBinOp::Eq));
 
 		l1.Where(SliceBoundaryPredicate(meta, GetMetaData(), periodAttr, bound, last, periodOp))
 		  .Project(l1proj);

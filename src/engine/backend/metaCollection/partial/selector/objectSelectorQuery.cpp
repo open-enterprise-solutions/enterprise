@@ -92,10 +92,10 @@ void ibValueSelectorRecordDataObject::MaterialiseRow(const ibDataQueryResult& se
 	// non-reference attribute + the row's tabular sections.
 	m_listObjectValue.clear();
 	m_listObjectValue.insert_or_assign(m_metaObject->GetMetaID(),
-		selection.GetValue(m_metaObject->GetDataReference()));
+		selection.GetValue(m_metaObject->GetDataReference()->GetQueryColumn()));
 	for (const auto object : m_metaObject->GetAttributeArrayObject())
 		if (!m_metaObject->IsDataReference(object->GetMetaID()))
-			m_listObjectValue[object->GetMetaID()] = selection.GetValue(object);
+			m_listObjectValue[object->GetMetaID()] = selection.GetValue(object->GetQueryColumn());
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
 		ibValueTabularSectionDataObjectRef* tabularSection = new ibValueTabularSectionDataObjectRef(this, object);
 		tabularSection->LoadData(m_objGuid);
@@ -143,15 +143,15 @@ void ibValueSelectorRegisterDataObject::MaterialiseRow(const ibDataQueryResult& 
 		ibValueMetaObjectAttributePredefined* attrRecorder = m_metaObject->GetRegisterRecorder();
 		ibValueMetaObjectAttributePredefined* attrLine     = m_metaObject->GetRegisterLineNumber();
 		wxASSERT(attrRecorder && attrLine);
-		m_keyValues[attrRecorder->GetMetaID()] = selection.GetValue(attrRecorder);
-		m_keyValues[attrLine->GetMetaID()]     = selection.GetValue(attrLine);
+		m_keyValues[attrRecorder->GetMetaID()] = selection.GetValue(attrRecorder->GetQueryColumn());
+		m_keyValues[attrLine->GetMetaID()]     = selection.GetValue(attrLine->GetQueryColumn());
 	}
 	else {
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
-			m_keyValues[object->GetMetaID()] = selection.GetValue(object);
+			m_keyValues[object->GetMetaID()] = selection.GetValue(object->GetQueryColumn());
 	}
 
 	m_current.clear();
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
-		m_current[object->GetMetaID()] = selection.GetValue(object);
+		m_current[object->GetMetaID()] = selection.GetValue(object->GetQueryColumn());
 }

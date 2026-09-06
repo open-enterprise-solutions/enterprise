@@ -1923,13 +1923,13 @@ const ibSourceExplorer* ibValueRecordDataObject::GetSourceExplorer() const
 	);
 
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
-		m_sourceExplorer.AppendColumn(object);
+		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 	}
 
 	for (const auto object : metaObject->GetGenericTableArrayObject()) {
 		if (object != nullptr && !object->IsDeleted()) {
 			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol);
+			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
 		}
 	}
 
@@ -2449,7 +2449,7 @@ const ibSourceExplorer* ibValueRecordDataObjectRef::GetSourceExplorer() const
 	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object != nullptr && !object->IsDeleted()) {
 			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol);
+			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
 		}
 	}
 
@@ -2628,7 +2628,7 @@ const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer()
 				|| tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol);
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
 				}
 			}
 		}
@@ -2637,7 +2637,7 @@ const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer()
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol);
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
 				}
 			}
 		}
@@ -3475,7 +3475,7 @@ const ibSourceExplorer* ibValueRecordManagerObject::GetSourceExplorer() const
 	);
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		m_sourceExplorer.AppendColumn(object);
+		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 	}
 
 	return &m_sourceExplorer;

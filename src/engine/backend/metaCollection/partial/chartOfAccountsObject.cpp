@@ -108,18 +108,18 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplore
 		// mints, so it is shown and not edited; in a chart of accounts the code IS the account — "51",
 		// "60.01" — and it is the first thing a person writes when adding one. Locking it made an
 		// account impossible to name at all.
-		m_sourceExplorer.AppendColumn(metaRef->GetDataCode());
-		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription());
-		m_sourceExplorer.AppendColumn(metaRef->GetDataParent());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataParent()->GetQueryColumn());
 		// WHAT KIND OF ACCOUNT THIS IS. It was missing here, so a generated form showed an account as
 		// if it were a plain catalog item — code, description, parent — with no way to say whether it
 		// is active, passive or both. It is a declared TYPE (the AccountType enumeration), so the form
 		// builds the editor from the attribute itself; nothing here spells the three members out.
-		m_sourceExplorer.AppendColumn(metaRef->GetAccountType());
+		m_sourceExplorer.AppendColumn(metaRef->GetAccountType()->GetQueryColumn());
 		// Off-balance belongs beside it: it is not a way of KEEPING the account, it is a statement
 		// about the account itself — this one stands outside the balance — and it is answered once,
 		// per account, like the kind is.
-		m_sourceExplorer.AppendColumn(metaRef->GetOffBalance());
+		m_sourceExplorer.AppendColumn(metaRef->GetOffBalance()->GetQueryColumn());
 
 		// Quantitative / Currency are deliberately NOT here, and they are not standard attributes of
 		// an account at all. They are two booleans spelling out ONE fact — how the account is KEPT —
@@ -137,11 +137,11 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplore
 		ibItemMode attrUse = object->GetItemMode();
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
 			if (attrUse == ibItemMode::ibItemMode_Item || attrUse == ibItemMode::ibItemMode_Folder_Item) {
-				if (!m_metaObject->IsDataReference(object->GetMetaID())) m_sourceExplorer.AppendColumn(object);
+				if (!m_metaObject->IsDataReference(object->GetMetaID())) m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 			}
 		} else {
 			if (attrUse == ibItemMode::ibItemMode_Folder || attrUse == ibItemMode::ibItemMode_Folder_Item) {
-				if (!m_metaObject->IsDataReference(object->GetMetaID())) m_sourceExplorer.AppendColumn(object);
+				if (!m_metaObject->IsDataReference(object->GetMetaID())) m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 			}
 		}
 	}
@@ -152,14 +152,14 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplore
 			if (tableUse == ibItemMode::ibItemMode_Item || tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol);
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
 				}
 			}
 		} else {
 			if (tableUse == ibItemMode::ibItemMode_Folder || tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol);
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
 				}
 			}
 		}

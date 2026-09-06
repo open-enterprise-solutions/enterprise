@@ -12,9 +12,16 @@
 // on this interface. No statement, no cursor, no positions here.
 //
 // Lives in its OWN light header (only typeDescription.h) so the fundamental
-// attribute metaobject can derive from it without dragging in the full queryable.h
-// (and model.h) weight: ibValueMetaObjectAttributeBase IS a query column — it
-// implements this interface directly, no adapter.
+// attribute metaobject can name it without dragging in the full queryable.h (and
+// model.h) weight.
+//
+// ⚠ AN ATTRIBUTE IS NOT ONE OF THESE — IT HOLDS ONE. It stays an ibBackendSourceColumn (the
+// descriptive face the form binding walks to) and carries its QUERY face as a member,
+// ibValueMetaObjectAttributeBase::ibMetaAttributeColumn, held by shared_ptr. The reason is
+// ownership: the attribute lives under the runtime's own reference count and this interface is
+// held by std::shared_ptr, and two counts over one object each believe they may destroy it.
+// See docs/ownership-authority.md. Nothing on THIS side changed — every tier below the L3 door
+// still meets a plain ibBackendQueryColumn and knows nothing about where it came from.
 
 #include "backend/typeDescription.h"    // ibTypeDescription (the column's L3 type)
 #include "backend/databaseLayer/columnType.h"   // ibColumnType — the canonical type a column's field declares
@@ -25,6 +32,7 @@
 // two files that DEFINE such a body need the real header, and they already include it.
 class wxIcon;
 
+#include <memory>   // enable_shared_from_this — a column carries its own control block (see below)
 #include <vector>
 
 // The role a physical field plays in a logical column's spread (an L3 layout concept — L2 never sees
@@ -149,7 +157,26 @@ public:
 	virtual wxIcon GetColumnIcon() const;
 };
 
-class BACKEND_API ibBackendQueryColumn : public ibBackendSourceColumn
+// ⭐⭐ A COLUMN CARRIES ITS OWN CONTROL BLOCK, so nobody ever has to invent a second one.
+//
+// A `shared_ptr` built from a raw pointer CANNOT tell that the object is already owned: it makes
+// its OWN control block, with its own count, and both of them delete at zero. There is no
+// diagnostic for that — not in the compiler, not at runtime. The only defence is to never need the
+// wrapping, and `enable_shared_from_this` is exactly that: the weak reference it keeps INSIDE the
+// object points at the control block that already exists.
+//
+//     col->weak_from_this().lock()   ->  the real holder, or empty
+//
+// Empty is a fact, not a failure: a column the configuration owns, or one that lives as a member,
+// has no shared owner and nothing to hand out. This is the same discriminator ibRunContext uses to
+// tell a heap-promoted frame from a stack one (compiler/procContext.h) — no second flag, no map of
+// who owns what.
+//
+// It also retires the question `ibBackendQueryable::ShareColumn` was invented to answer. That asks
+// every SOURCE in turn "did you mint this column, and if so give me its storage"; asking the column
+// itself needs no loop and no knowledge of where it came from. (docs/ownership-authority.md)
+class BACKEND_API ibBackendQueryColumn : public ibBackendSourceColumn,
+                                         public std::enable_shared_from_this<ibBackendQueryColumn>
 {
 public:
 	virtual ~ibBackendQueryColumn() = default;

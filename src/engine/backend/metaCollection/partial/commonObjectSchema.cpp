@@ -37,8 +37,8 @@ void ContributeAttributeIndexes(ibSchemaTable& t,
 		const ibIndexingMode mode = attr->GetIndexingMode();
 		if (mode == ibIndexingMode::ibIndexingMode_DontIndex)
 			continue;
-		std::vector<const ibBackendQueryColumn*> cols = { attr };
-		if (mode == ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder && orderRef != nullptr && orderRef != attr)
+		std::vector<const ibBackendQueryColumn*> cols = { attr->GetQueryColumn() };
+		if (mode == ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder && orderRef != nullptr && orderRef != attr->GetQueryColumn())
 			cols.push_back(orderRef);
 		t.Index(wxString::Format(wxT("%s_%i_IX"), t.m_name, (int)attr->GetColumnId()), std::move(cols));
 	}
@@ -66,23 +66,23 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	// there, for the same reason Code and Description are not: it belongs to the
 	// declaration, not to this object.
 	for (const auto object : GetGenericAttributeArrayObject())
-		t.Add(object);
+		t.Add(object->GetQueryColumn());
 
 	if (const ibValueMetaObjectAttributeBase* refAttr = GetDataReference())
-		t.Index(t.m_name + wxT("_REF_UQ"), { refAttr }, true);               // _REF_UQ — the identity, and the only one
+		t.Index(t.m_name + wxT("_REF_UQ"), { refAttr->GetQueryColumn() }, true);               // _REF_UQ — the identity, and the only one
 
 	// Per-attribute secondary indexes (plain + predefined: Code / Description / Parent / ...) —
 	// the row reference is the additional-order column. Each carries its own Indexing flag.
 	// Same list as the columns above — each attribute carries its own Indexing flag, and a
 	// common attribute may be indexed exactly like the object's own.
-	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject(), GetDataReference());
+	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject(), GetDataReference()->GetQueryColumn());
 
 	// --- tabular sections — each its own table ---
 	for (const auto tab : GetTableArrayObject()) {
 		ibSchemaTable& tt = out.CreateSchemaTable(tab->GetQueryable());
 		const ibBackendQueryColumn* tabUuid = tt.Scaffold(ibOwnerRefColumn());
 		for (const auto object : tab->GetGenericAttributeArrayObject())
-			tt.Add(object);
+			tt.Add(object->GetQueryColumn());
 		tt.Index(tt.m_name + wxT("_INDEX"), { tabUuid });                     // tabular uuid index — NOT unique (repeats per owner)
 		// Per-attribute secondary indexes on the section's own columns — no single row reference
 		// (browsing is per-owner by line), so the ordered variant degrades to a plain index here.
@@ -107,12 +107,12 @@ void ibValueMetaObjectRecordDataEnumRef::ContributeTables(ibSchemaSnapshot& out)
 	// happen to be declared rather than entered. Storing them costs nothing worth counting either — an
 	// enumeration holds ten or fifteen values, not a million.
 	for (const auto object : GetGenericAttributeArrayObject())
-		t.Add(object);
+		t.Add(object->GetQueryColumn());
 
 	// The data-reference unique key, as on the record side: each row's own reference, unique per row.
 	const ibValueMetaObjectAttributeBase* reference = GetDataReference();
 	if (reference != nullptr)
-		t.Index(t.m_name + wxT("_REF_UQ"), { reference }, true);
+		t.Index(t.m_name + wxT("_REF_UQ"), { reference->GetQueryColumn() }, true);
 
 	const ibValueMetaObjectAttributeBase* order = GetDataOrder();
 
@@ -128,10 +128,10 @@ void ibValueMetaObjectRecordDataEnumRef::ContributeTables(ibSchemaSnapshot& out)
 		// about to create. Five SELECTs against a table that does not exist yet, five swallowed
 		// exceptions, on every apply. (The record family writes its own reference the same way.)
 		if (reference != nullptr)
-			row.Set(reference, ibValuePtr<ibValueReferenceDataObject>(
+			row.Set(reference->GetQueryColumn(), ibValuePtr<ibValueReferenceDataObject>(
 				ibValueReferenceDataObject::Create(this, object->GetGuid(), ibReferenceLoad::OnDemand)));
 		if (order != nullptr)
-			row.Set(order, ibValue(position));
+			row.Set(order->GetQueryColumn(), ibValue(position));
 		position++;
 	}
 }
@@ -147,13 +147,13 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 	ibSchemaTable& t = out.CreateSchemaTable(GetQueryable());
 
 	for (const auto object : GetPredefinedAttributeArrayObject())
-		t.Add(object);
+		t.Add(object->GetQueryColumn());
 	for (const auto object : GetDimensionArrayObject())
-		t.Add(object);
+		t.Add(object->GetQueryColumn());
 	for (const auto object : GetResourceArrayObject())
-		t.Add(object);
+		t.Add(object->GetQueryColumn());
 	for (const auto object : GetAttributeArrayObject())
-		t.Add(object);
+		t.Add(object->GetQueryColumn());
 
 	// The key index: recorder + line for a subordinate register, else the dimension columns
 	// (period + dimensions when periodic — GetGenericDimensionArrayObject prepends the period).
@@ -162,12 +162,12 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 	// ExistData probe alone (a fragile string compare) let dimension-key duplicates slip in.
 	std::vector<const ibBackendQueryColumn*> idxCols;
 	if (HasRecorder()) {
-		idxCols.push_back(GetRegisterRecorder());
-		idxCols.push_back(GetRegisterLineNumber());
+		idxCols.push_back(GetRegisterRecorder()->GetQueryColumn());
+		idxCols.push_back(GetRegisterLineNumber()->GetQueryColumn());
 	}
 	else {
 		for (const auto object : GetGenericDimensionArrayObject())
-			idxCols.push_back(object);
+			idxCols.push_back(object->GetQueryColumn());
 	}
 	if (!idxCols.empty())
 		t.Index(t.m_name + wxT("_INDEX"), idxCols, true);
@@ -190,7 +190,7 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 	// it is a small integer repeated across every document — an index the planner would never choose
 	// and every INSERT would pay for. A fold over the tail sums lines, and a sum has no order.
 	if (HasRecorder() && GetRegisterPeriod() != nullptr && GetRegisterRecorder() != nullptr)
-		t.Index(t.m_name + wxT("_PIX"), { GetRegisterPeriod(), GetRegisterRecorder() });
+		t.Index(t.m_name + wxT("_PIX"), { GetRegisterPeriod()->GetQueryColumn(), GetRegisterRecorder()->GetQueryColumn() });
 
 	// Per-field secondary indexes. Dimensions, resources, attributes and predefined all carry the
 	// Indexing flag (each is-a ibValueMetaObjectAttribute), so GetGenericAttributeArrayObject covers
@@ -305,15 +305,15 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 		const wxObjectDataPtr<ibPredefinedValueObject>& parent = object->GetPredefinedParent();
 
 		t.AddRow(object->GetPredefinedGuid(), object->GetPredefinedName())
-			.Set(GetDataReference(),
+			.Set(GetDataReference()->GetQueryColumn(),
 				ibValuePtr<ibValueReferenceDataObject>(
 					ibValueReferenceDataObject::Create(this, object->GetPredefinedGuid(), ibReferenceLoad::OnDemand)))
-			.Set(m_propertyAttributePredefined->GetMetaObject(), ibValue(object->GetPredefinedName()))
-			.Set(m_propertyAttributeCode->GetMetaObject(), ibValue(object->GetPredefinedCode()))
-			.Set(m_propertyAttributeDescription->GetMetaObject(), ibValue(object->GetPredefinedDescription()))
-			.Set(m_propertyAttributeIsFolder->GetMetaObject(), ibValue(object->IsPredefinedFolder()))
-			.Set(m_propertyAttributeDeletionMark->GetMetaObject(), ibValue(false))
-			.Set(m_propertyAttributeParent->GetMetaObject(),
+			.Set(m_propertyAttributePredefined->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedName()))
+			.Set(m_propertyAttributeCode->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedCode()))
+			.Set(m_propertyAttributeDescription->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedDescription()))
+			.Set(m_propertyAttributeIsFolder->GetMetaObject()->GetQueryColumn(), ibValue(object->IsPredefinedFolder()))
+			.Set(m_propertyAttributeDeletionMark->GetMetaObject()->GetQueryColumn(), ibValue(false))
+			.Set(m_propertyAttributeParent->GetMetaObject()->GetQueryColumn(),
 				ibValuePtr<ibValueReferenceDataObject>(
 					ibValueReferenceDataObject::Create(this, parent != nullptr ? parent->GetPredefinedGuid() : wxNullGuid,
 						ibReferenceLoad::OnDemand)));

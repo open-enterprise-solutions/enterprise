@@ -18,6 +18,28 @@
 
 #include "backend/objCtor.h"
 
+// ⭐ THE QUERY FACE, ASKING ITS OWNER — the two answers that cannot be one-liners in the header,
+// because the interface hands back a REFERENCE and a detached facade has no owner to borrow one
+// from. It answers with a shared empty description instead of a dangling one: a column that outlived
+// its attribute has no type, which is a fact, and saying it costs nothing. (Nothing may write through
+// a type description a column hands out — that is already true of every one of them.)
+// See docs/ownership-authority.md for why the facade exists at all.
+static ibTypeDescription& ibDetachedColumnTypeDesc()
+{
+	static ibTypeDescription s_none;
+	return s_none;
+}
+
+ibTypeDescription& ibValueMetaObjectAttributeBase::ibMetaAttributeColumn::GetTypeDesc() const
+{
+	return m_owner != nullptr ? m_owner->GetTypeDesc() : ibDetachedColumnTypeDesc();
+}
+
+ibTypeDescription& ibValueMetaObjectAttributeBase::ibMetaAttributeColumn::GetTypeValueDesc() const
+{
+	return m_owner != nullptr ? m_owner->GetTypeValueDesc() : ibDetachedColumnTypeDesc();
+}
+
 // WHAT A VALUE HERE MAY BE. Ordinary declarations answer with themselves; a characteristic answers
 // with the list its CHART declares — the owner keeps it, the field borrows it, so a chart that gains
 // a type widens every field declared through it at once, with nothing copied or recomputed.

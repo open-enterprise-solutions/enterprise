@@ -251,7 +251,9 @@ ibValueMetaObjectDataProcessor* ibMetaDataDataProcessor::BuildFreshRoot()
 	auto* root = new ibValueMetaObjectExternalDataProcessor;
 	root->SetName(ibMetaData::GetNewName(g_metaExternalDataProcessorCLSID, nullptr, root->GetClassName()));
 	if (!root->OnCreateMetaObject(this, newObjectFlag)) {
-		delete root; // refcount 0 — never IncrRef'd
+		// Released by the RUNTIME, not by `delete` — see the twin of this in metadataReport.cpp
+		// and ibBackendRuntimeOwned (compiler/value.h) for why that is now a compile-time matter.
+		ibValuePtr<ibValueMetaObjectExternalDataProcessor> discard(root);
 		return nullptr;
 	}
 	if (!root->OnLoadMetaObject(this)) {

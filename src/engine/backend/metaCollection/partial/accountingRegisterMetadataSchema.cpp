@@ -164,11 +164,11 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 
 		// --- structure: the period, the account, its breakdown, the register's dimensions ----------
 		const ibBackendQueryColumn* periodCol = t.Scaffold(ibBackendColumnRawDB::Date(periodField));
-		t.Add(account);   // same physical fields as the movements, so a trigger reads NEW.<field> directly
+		t.Add(account->GetQueryColumn());   // same physical fields as the movements, so a trigger reads NEW.<field> directly
 
 		std::vector<const ibBackendQueryColumn*> keyCols;
 		keyCols.push_back(periodCol);
-		keyCols.push_back(account);
+		keyCols.push_back(account->GetQueryColumn());
 
 		// ⭐ THE BREAKDOWN IS PART OF THE KEY, KIND AND VALUE BOTH. The kind column is not decoration
 		// here: the same slot holds a counterparty on one account and an item on another, so a key made
@@ -179,17 +179,17 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			const ibValueMetaObjectAttributeBase* slot     = GetAccountDimensionSlot(creditSide, idx);
 			if (kindSlot == nullptr || slot == nullptr)
 				continue;
-			t.Add(kindSlot);
-			t.Add(slot);
-			keyCols.push_back(kindSlot);
-			keyCols.push_back(slot);
+			t.Add(kindSlot->GetQueryColumn());
+			t.Add(slot->GetQueryColumn());
+			keyCols.push_back(kindSlot->GetQueryColumn());
+			keyCols.push_back(slot->GetQueryColumn());
 		}
 
 		for (const auto dimension : GetDimensionArrayObject()) {
 			if (dimension == nullptr)
 				continue;
-			t.Add(dimension);
-			keyCols.push_back(dimension);
+			t.Add(dimension->GetQueryColumn());
+			keyCols.push_back(dimension->GetQueryColumn());
 		}
 
 		// SPLIT TOTALS: the shard column joins the KEY, which is what makes several physical rows legal
@@ -227,7 +227,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// STORED GRANULARITY = DAY. It is the FLOOR on what can be read back — a projection is
 		// derivable only into a unit no finer than the stored one — and everything below it (an hour, a
 		// recorder, a line) is answered from the MOVEMENTS, which is where those questions belong.
-		m.Period(periodField, GetRegisterPeriod(), wxT("{row}.") + periodField, GetTotalsPeriodUnit());
+		m.Period(periodField, GetRegisterPeriod()->GetQueryColumn(), wxT("{row}.") + periodField, GetTotalsPeriodUnit());
 
 		// ⭐⭐ AN INACTIVE MOVEMENT EXISTS AND COUNTS FOR NOTHING. Active separates a record that is
 		// THERE from a record that is IN FORCE: an entry written but not in effect occupies its row and
@@ -271,20 +271,20 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 
 			if (!typeRefField.IsEmpty()) {
 				m.Guard(wxT("{row}.") + typeRefField + wxT(" <> 0"),
-					ibQueryPredicate::Leaf(ibQueryCondition{ account, ibQueryFilterOp::NotEqual, ibValue() }));
+					ibQueryPredicate::Leaf(ibQueryCondition{ account->GetQueryColumn(), ibQueryFilterOp::NotEqual, ibValue() }));
 			}
 		}
 
-		m.Key(account);
+		m.Key(account->GetQueryColumn());
 		for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
 			const ibValueMetaObjectAttributeBase* kindSlot = GetAccountDimensionKindSlot(creditSide, idx);
 			const ibValueMetaObjectAttributeBase* slot     = GetAccountDimensionSlot(creditSide, idx);
-			if (kindSlot != nullptr) m.Key(kindSlot);
-			if (slot     != nullptr) m.Key(slot);
+			if (kindSlot != nullptr) m.Key(kindSlot->GetQueryColumn());
+			if (slot     != nullptr) m.Key(slot->GetQueryColumn());
 		}
 		for (const auto dimension : GetDimensionArrayObject())
 			if (dimension != nullptr)
-				m.Key(dimension);
+				m.Key(dimension->GetQueryColumn());
 
 		// --- the stored columns + what a movement contributes to each ------------------------------
 		struct Figure { wxString m_field, m_name; bool m_credit; };
@@ -315,7 +315,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 				// The row IS a posting: what it contributes to THIS table is the whole amount, and which
 				// side that is was decided by which account keyed the table.
 				const ibBackendQueryColumn* c = declareColumn(creditSide);
-				m.Accumulate(c, wxT("{row}.") + resField, ibQueryColumnExpr::Col(res));
+				m.Accumulate(c, wxT("{row}.") + resField, ibQueryColumnExpr::Col(res->GetQueryColumn()));
 				continue;
 			}
 
@@ -341,15 +341,15 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			m.Accumulate(cDr,
 				wxT("CASE WHEN {row}.") + recField + wxT(" = ") + debitTagText + wxT(" THEN {row}.") + resField + wxT(" ELSE 0 END"),
 				ibQueryColumnExpr::Case(
-					{ { ibQueryPredicate::Leaf(ibQueryCondition{ recordType, ibQueryFilterOp::Equal, ibValue(debitTag) }),
-					    ibQueryColumnExpr::Col(res) } },
+					{ { ibQueryPredicate::Leaf(ibQueryCondition{ recordType->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(debitTag) }),
+					    ibQueryColumnExpr::Col(res->GetQueryColumn()) } },
 					ibQueryColumnExpr::Const(ibValue(0.0))));
 			m.Accumulate(cCr,
 				wxT("CASE WHEN {row}.") + recField + wxT(" = ") + debitTagText + wxT(" THEN 0 ELSE {row}.") + resField + wxT(" END"),
 				ibQueryColumnExpr::Case(
-					{ { ibQueryPredicate::Leaf(ibQueryCondition{ recordType, ibQueryFilterOp::Equal, ibValue(debitTag) }),
+					{ { ibQueryPredicate::Leaf(ibQueryCondition{ recordType->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(debitTag) }),
 					    ibQueryColumnExpr::Const(ibValue(0.0)) } },
-					ibQueryColumnExpr::Col(res)));
+					ibQueryColumnExpr::Col(res->GetQueryColumn())));
 		}
 
 		// --- the totals table AS A SOURCE -----------------------------------------------------------
@@ -380,9 +380,9 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 				// NAME AND TYPE TOGETHER — the stored arm has neither of these columns and stands a
 				// null in their place, and a null has to be CAST or the view will not compile.
 				// DescribeColumnLayout is the same spread ColumnFieldNames walks, carrying the type.
-				for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterRecorder()))
+				for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterRecorder()->GetQueryColumn()))
 					v.m_movementColumns.push_back({ s.m_name, s.m_type });
-				for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterLineNumber()))
+				for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterLineNumber()->GetQueryColumn()))
 					v.m_movementColumns.push_back({ s.m_name, s.m_type });
 			}
 

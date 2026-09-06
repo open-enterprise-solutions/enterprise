@@ -21,7 +21,7 @@ ibValueReferenceDataObject* FindByAttributeLike(const ibValueMetaObjectRecordDat
 		return ibValueReferenceDataObject::Create(meta);
 	try {
 		ibDataQueryBuilder q;
-		q.From(meta->GetQueryable()).WhereLike(attr, attr->AdjustValue(cParam));
+		q.From(meta->GetQueryable()).WhereLike(attr->GetQueryColumn(), attr->AdjustValue(cParam));
 		ibReadPageRequest page;
 		page.m_count = 1;
 		ibDataQueryResult sel = q.Execute(page);
@@ -33,7 +33,7 @@ ibValueReferenceDataObject* FindByAttributeLike(const ibValueMetaObjectRecordDat
 			// of its own (an enumeration sorts by Order first) puts something else there. And the guid
 			// was read out of the value's TEXT, which for a reference is its PRESENTATION: a
 			// description, or "Not found <…>". Identity by appearance is not identity.
-			const ibValue rowValue = sel.GetValue(meta->GetDataReference());
+			const ibValue rowValue = sel.GetValue(meta->GetDataReference()->GetQueryColumn());
 			if (const ibValueReferenceDataObject* const found = rowValue.ConvertToType<ibValueReferenceDataObject>())
 				return ibValueReferenceDataObject::Create(meta, found->GetGuid().GetGuid());
 		}

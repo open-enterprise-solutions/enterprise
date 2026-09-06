@@ -87,10 +87,10 @@ ibSourceDataObject* ibValueMetaObjectDocument::CreateSourceObject(const ibValueM
 	{
 	case eFormObject: return CreateObjectValue(); break;
 	case eFormList:
-		return ibCreateList(GetQueryable(), GetDocumentNumber());   // migrated onto the universal dynamic list
+		return ibCreateList(GetQueryable(), GetDocumentNumber()->GetQueryColumn());   // migrated onto the universal dynamic list
 		break;
 	case eFormSelect:
-		return ibCreateList(GetQueryable(), GetDocumentNumber(), ibDynamicListView_Choice);   // select front-driven — choice mode
+		return ibCreateList(GetQueryable(), GetDocumentNumber()->GetQueryColumn(), ibDynamicListView_Choice);   // select front-driven — choice mode
 		break;
 	}
 
@@ -113,7 +113,7 @@ ibBackendValueForm* ibValueMetaObjectDocument::GetListForm(const wxString& strFo
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectDocument::eFormList,
-		ownerControl, ibCreateList(GetQueryable(), GetDocumentNumber()),   // migrated onto the universal dynamic list
+		ownerControl, ibCreateList(GetQueryable(), GetDocumentNumber()->GetQueryColumn()),   // migrated onto the universal dynamic list
 		formGuid
 	);
 }
@@ -123,7 +123,7 @@ ibBackendValueForm* ibValueMetaObjectDocument::GetSelectForm(const wxString& str
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectDocument::eFormSelect,
-		ownerControl, ibCreateList(GetQueryable(), GetDocumentNumber(), ibDynamicListView_Choice),   // select front-driven — choice mode
+		ownerControl, ibCreateList(GetQueryable(), GetDocumentNumber()->GetQueryColumn(), ibDynamicListView_Choice),   // select front-driven — choice mode
 		formGuid
 	);
 }

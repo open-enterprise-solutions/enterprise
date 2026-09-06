@@ -4,7 +4,9 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/backend_type.h"
 #include "backend/objCtorDefs.h"
-#include "backend/query/queryColumn.h"   // ibBackendQueryColumn — an attribute IS a query column
+#include "backend/query/queryColumn.h"   // ibBackendSourceColumn (the attribute's own face) + ibBackendQueryColumn (the face it HOLDS)
+
+#include <memory>   // the query face is held, not inherited — see ibMetaAttributeColumn below
 
 #include "metaAttributeObjectEnum.h"
 
@@ -12,9 +14,69 @@ class ibQueryResult;         // L2 cursor — GetBinaryData reads through it (du
 class ibQueryStatement;      // L2 statement — SetBinaryData binds through it (restore); no raw L1 here
 class ibStructureBatch;      // per-table DDL/seed batch — ProcessAttribute pours its column DDL into it
 
+// ⭐⭐ AN ATTRIBUTE IS A DESCRIPTIVE COLUMN AND *HOLDS* A QUERY ONE.
+//
+// It stays an ibBackendSourceColumn — a name, a synonym, a type, an icon — because that is what the
+// form binding walks to (ibBackendTypeSourceFactory::WalkSource returns exactly this) and what the
+// composer's own metaobject already models the same way. What it no longer IS is a QUERY column.
+//
+// The reason is ownership, and it is written down once in docs/ownership-authority.md: this object
+// lives under the runtime's own reference count (ibValueMetaObject -> ibValue, whose DecrRef does
+// `delete this` at zero), while the query tier holds columns by std::shared_ptr, whose count lives
+// in a control block outside the object. Neither count can see the other and BOTH delete. Fused by
+// inheritance the two do not touch, they overlap — and an overlap has no safe outcome. Held as a
+// member they have exactly one point of contact: when the attribute dies, its destructor destroys
+// the member, which is one `-1` in the control block. Nobody sweeps and nobody is notified.
 class BACKEND_API ibValueMetaObjectAttributeBase :
-	public ibValueMetaObject, public ibBackendTypeConfigFactory, public ibBackendQueryColumn {
+	public ibValueMetaObject, public ibBackendTypeConfigFactory, public ibBackendSourceColumn {
 	public:
+
+	// ⭐ THE QUERY FACE OF THIS ATTRIBUTE — and nothing else. It IS an ibBackendQueryColumn, so the
+	// query tiers meet what they always met; they are not touched by any of this. It STORES no
+	// answer of its own: every one is read through the way back, because two objects each holding a
+	// name and a type would be two truths about one thing, disagreeing the first time the attribute
+	// is renamed.
+	//
+	// The way back is NON-OWNING and the attribute CLEARS it as it dies. An attribute lives as long
+	// as the metadata does, so for every ordinary read this pointer is exactly as good as the
+	// attribute's own address; but a query RESULT may outlive the configuration it was read from,
+	// and it holds this facade by shared_ptr. Detached, the facade answers as a column with nothing
+	// behind it rather than reading freed memory. It must never keep the attribute alive: that would
+	// put the runtime's count under the shared_ptr's, one indirection away from the very mixture
+	// this arrangement exists to prevent.
+	class BACKEND_API ibMetaAttributeColumn : public ibBackendQueryColumn {
+	public:
+		explicit ibMetaAttributeColumn(const ibValueMetaObjectAttributeBase* owner) : m_owner(owner) {}
+
+		// Said by the owner, in its destructor — the only one who knows it is going.
+		void Detach() { m_owner = nullptr; }
+		const ibValueMetaObjectAttributeBase* Owner() const { return m_owner; }
+
+		wxString GetName() const override         { return m_owner != nullptr ? m_owner->GetName() : wxString(); }
+		wxString GetSynonym() const override      { return m_owner != nullptr ? m_owner->GetSynonym() : wxString(); }
+		wxString GetComment() const override      { return m_owner != nullptr ? m_owner->GetComment() : wxString(); }
+		bool     IsAllowed() const override       { return m_owner != nullptr && m_owner->IsAllowed(); }
+		wxIcon   GetColumnIcon() const override   { return m_owner != nullptr ? m_owner->GetColumnIcon() : wxIcon(); }
+		wxString GetPhysicalName() const override { return m_owner != nullptr ? m_owner->GetPhysicalName() : wxString(); }
+		ibMetaID GetColumnId() const override     { return m_owner != nullptr ? m_owner->GetColumnId() : 0; }
+		// ⚠ A DETACHED COLUMN HAS NO TYPE, and the interface returns a REFERENCE — so it answers with
+		// a shared empty description rather than with a dangling one. Nothing may write through it,
+		// which is already true of every type description a column hands out.
+		ibTypeDescription& GetTypeDesc() const override;
+		ibTypeDescription& GetTypeValueDesc() const override;
+
+	private:
+		const ibValueMetaObjectAttributeBase* m_owner;   // NON-OWNING; cleared on the owner's death
+	};
+
+	// The face to hand to anything that reads, joins or projects. Never `this` — see above.
+	const ibBackendQueryColumn* GetQueryColumn() const { return m_column.get(); }
+	// …and the same face as a co-owned handle, for a result that outlives the query that made it.
+	std::shared_ptr<ibBackendQueryColumn> ShareQueryColumn() const { return m_column; }
+
+	~ibValueMetaObjectAttributeBase() override {
+		if (m_column) m_column->Detach();   // the whole interaction between the two ownerships
+	}
 
 	// A METAOBJECT COLUMN WEARS ITS OWN PICTURE. The column face asks (queryColumn.h), the
 	// metaobject answers with the icon its class registered — so a dimension, a resource and a
@@ -85,13 +147,21 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// GetSynonym is now ALSO declared by ibBackendSourceColumn (the column base) — same single-
 	// overrider trick as GetName: the column synonym IS the metaobject synonym (the UI caption).
 	virtual wxString GetSynonym() const override      { return ibValueMetaObject::GetSynonym(); }
+	// …and GetComment the same way. It was ambiguous all along (ibValueMetaObject declares one and
+	// ibBackendAbstractColumn declares another); nothing had called it THROUGH the attribute until
+	// the query facade began forwarding to it, and an ambiguity nobody exercises is silent.
+	virtual wxString GetComment() const override      { return ibValueMetaObject::GetComment(); }
 	// IsAllowed (column base) routes to the metaobject's (IsEnabled && !IsDeleted) — so the source
 	// explorer skips deleted / disabled fields without touching the metaobject.
 	virtual bool IsAllowed() const override           { return ibValueMetaObject::IsAllowed(); }
-	virtual wxString GetPhysicalName() const override { return wxString::Format(wxT("fld%i"), m_metaId); }
+	// ⚠ NOT `override` ANY MORE, and deliberately still HERE. These two are the query face's
+	// questions, but the schema tier asks them of the ATTRIBUTE directly (an index name, a column
+	// being renamed) and it is right to: both are derived from the metaID, which is the attribute's
+	// own. The facade forwards to them, so there is still exactly one answer.
+	virtual wxString GetPhysicalName() const { return wxString::Format(wxT("fld%i"), m_metaId); }
 	// The column's model/read id — for a DB attribute it IS the metaID (RAM tables key
 	// their rows by it; the DB path keys its fields off the same id via GetPhysicalName).
-	virtual ibMetaID GetColumnId() const override      { return GetMetaID(); }
+	virtual ibMetaID GetColumnId() const      { return GetMetaID(); }
 
 	// (No GetValueFields here — the attribute is just a column; its value-field split is the tier free
 	//  function ColumnValueFields(col) over DescribeColumnLayout, metadata-free, asked by the provider.)
@@ -121,6 +191,12 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 
 protected:
 	ibValue m_defValue;
+
+private:
+	// ⭐ MADE ONCE, HERE, SO EVERY CONSTRUCTOR GETS IT — there are eight of them across this family
+	// and none has to remember. Its life is exactly this attribute's, and this attribute's is the
+	// metadata's; a result that outlives the query keeps it alive on its own account.
+	std::shared_ptr<ibMetaAttributeColumn> m_column = std::make_shared<ibMetaAttributeColumn>(this);
 };
 
 class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttributeBase {

@@ -21,7 +21,7 @@
 const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const wxString& name) const
 {
 	const ibValueMetaObjectConstant::ibValueMetaObjectConstantColumn* column = m_meta->GetValueColumn();
-	return column != nullptr && name.IsSameAs(column->GetName(), false) ? column : nullptr;
+	return column != nullptr && name.IsSameAs(column->GetName(), false) ? column->GetQueryColumn() : nullptr;
 }
 // The metaobject behind this source — the guid and the metaID are READ OFF IT (see
 // ibBackendQueryable::GetQueryTableGuid), not answered a second time here.
@@ -171,7 +171,7 @@ const ibSourceExplorer* ibValueRecordDataObjectConstant::GetSourceExplorer() con
 		false, true
 	);
 
-	m_sourceExplorer.AppendColumn(m_metaObject->GetValueColumn());
+	m_sourceExplorer.AppendColumn(m_metaObject->GetValueColumn()->GetQueryColumn());
 	return &m_sourceExplorer;
 }
 
@@ -291,7 +291,7 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 				page.m_count = 1;
 				ibDataQueryResult selection = q.Execute(page);
 				if (selection.Next())
-					ret = m_metaObject->AdjustValue(selection.GetValue(m_metaObject->GetValueColumn()));
+					ret = m_metaObject->AdjustValue(selection.GetValue(m_metaObject->GetValueColumn()->GetQueryColumn()));
 				else
 					ret = m_metaObject->CreateValue();
 			}
@@ -397,7 +397,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 	if (!ibDataQueryBuilder()
 		.From(m_metaObject->GetQueryable())
 		.SetValue(ibBackendColumnRawDB::String(wxT("RECORD_KEY")), ibValue(wxT("6")))   // raw primary -> MATCHING
-		.SetValue(m_metaObject->GetValueColumn(), m_constValue)                        // the value column
+		.SetValue(m_metaObject->GetValueColumn()->GetQueryColumn(), m_constValue)                        // the value column
 		.Upsert()) {
 		rollback();
 		ibBackendCoreException::Error(_("Constant '%s': failed to store the value"),

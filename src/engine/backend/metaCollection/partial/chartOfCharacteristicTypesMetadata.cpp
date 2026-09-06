@@ -88,11 +88,11 @@ ibSourceDataObject* ibValueMetaObjectChartOfCharacteristicTypes::CreateSourceObj
 	case eFormFolder:
 		return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
 	case eFormList:
-		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription());   // migrated onto the universal dynamic list (hierarchy via queryable)
+		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn());   // migrated onto the universal dynamic list (hierarchy via queryable)
 	case eFormSelect:
-		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice);   // select front-driven — choice mode
+		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice);   // select front-driven — choice mode
 	case eFormFolderSelect:
-		return ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true
+		return ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true
 	}
 
 	return nullptr;
@@ -124,7 +124,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetListForm(con
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormList,
-		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription()),   // migrated onto the universal dynamic list (hierarchy via queryable)
+		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn()),   // migrated onto the universal dynamic list (hierarchy via queryable)
 		formGuid
 	);
 }
@@ -134,7 +134,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetSelectForm(c
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormSelect,
-		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice),   // select front-driven — choice mode
+		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice),   // select front-driven — choice mode
 		formGuid
 	);
 }
@@ -144,7 +144,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderSelect
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormFolderSelect,
-		ownerControl, ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice),   // folder-select = choice + IsFolder = true
+		ownerControl, ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice),   // folder-select = choice + IsFolder = true
 		formGuid
 	);
 }

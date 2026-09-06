@@ -331,7 +331,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 	try {
 		ibDataQueryBuilder query;
 		query.From(queryable)
-			.Where(GetDataIsFolder(), ibValue(false));   // a folder is not a job
+			.Where(GetDataIsFolder()->GetQueryColumn(), ibValue(false));   // a folder is not a job
 
 		ibReadPageRequest page;
 		page.m_count = 0;   // all of them — this is the start-up census, not a paged read
@@ -342,16 +342,16 @@ bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 			// The identity column by NAME, and the guid from the reference itself — see the same read in
 			// catalogManager_impl.cpp for what the two guesses on this line used to cost.
 			const ibValueReferenceDataObject* const rowReference =
-				selection.GetValue(GetDataReference()).ConvertToType<ibValueReferenceDataObject>();
+				selection.GetValue(GetDataReference()->GetQueryColumn()).ConvertToType<ibValueReferenceDataObject>();
 			if (rowReference == nullptr)
 				continue;
 			const ibGuid rowGuid = rowReference->GetGuid().GetGuid();
 			if (!rowGuid.isValid())
 				continue;
 
-			const ibValue activeValue = selection.GetValue(GetDataActive());
-			const ibValue scheduleValue = selection.GetValue(GetDataSchedule());
-			const ibValue description = selection.GetValue(GetDataDescription());
+			const ibValue activeValue = selection.GetValue(GetDataActive()->GetQueryColumn());
+			const ibValue scheduleValue = selection.GetValue(GetDataSchedule()->GetQueryColumn());
+			const ibValue description = selection.GetValue(GetDataDescription()->GetQueryColumn());
 
 			ibValueSchedule* schedule = nullptr;
 			if (!scheduleValue.ConvertToValue(schedule) || schedule == nullptr)

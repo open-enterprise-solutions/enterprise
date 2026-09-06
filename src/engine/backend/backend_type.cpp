@@ -23,10 +23,31 @@ ibValue* ibBackendTypeFactory::CreateValueRef() const
 			const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
 			if (so->GetObjectTypeCtor() == ibCtorObjectType::ibCtorObjectType_object_enum) {
 				try {
-					std::shared_ptr<ibValueEnumerationWrapper> enumVal(
+					// ⚠⚠ THE VALUE BELONGS TO THE ENUMERATION, AND THE ENUMERATION DIES HERE.
+					//
+					// This read used to hold the enumeration in a std::shared_ptr — a second owner over
+					// an object the runtime's own count already owns — and that is what stopped
+					// compiling when ibValue became ibBackendRuntimeOwned. Refusing it uncovered a
+					// live defect behind it: the variant is the enumeration's MEMBER
+					// (ibValuePtr m_value), so `return enumVal->GetEnumVariantValue()` copies the
+					// pointer, the enumeration is then destroyed, its member releases the variant to
+					// zero — and the caller IncrRef's freed memory (ibValue::operator=(ibValue*)).
+					//
+					// So the value is given a reference of its OWN before its holder goes. It comes
+					// back at refcount 1 and the caller's assignment takes it to 2.
+					//
+					// 🛑 THAT LEAVES ONE REFERENCE UNRELEASED, and it is deliberate and TEMPORARY:
+					// a leaked count on a rarely-taken path is not a use-after-free, and the honest
+					// fix is a different question — this enumeration should be reached from the
+					// registry that already keeps one, not built and thrown away per read. Named here
+					// rather than hidden, because the balanced-looking version was the broken one.
+					ibValuePtr<ibValueEnumerationWrapper> enumVal(
 						ibValue::CreateAndConvertObjectRef<ibValueEnumerationWrapper>(so->GetClassName())
 					);
-					return enumVal->GetEnumVariantValue();
+					ibValue* const variant = enumVal ? enumVal->GetEnumVariantValue() : nullptr;
+					if (variant != nullptr)
+						variant->IncrRef();
+					return variant;
 				}
 				catch (...) {
 				}

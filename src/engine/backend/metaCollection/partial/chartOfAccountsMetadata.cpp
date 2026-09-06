@@ -76,9 +76,9 @@ ibSourceDataObject* ibValueMetaObjectChartOfAccounts::CreateSourceObject(const i
 	// a person reads, so the name is the order. In a chart of accounts the CODE IS THE ACCOUNT — "51",
 	// "60.01" — and its order is the plan itself: sorted by name, 51 lands between two unrelated
 	// account names and the chart stops reading as a chart.
-	case eFormList: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetAttributeForCode());   // migrated onto the universal dynamic list (hierarchy via queryable)
-	case eFormSelect: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetAttributeForCode(), ibDynamicListView_Choice);   // select front-driven — choice mode
-	case eFormFolderSelect: return ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetAttributeForCode(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true
+	case eFormList: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetAttributeForCode()->GetQueryColumn());   // migrated onto the universal dynamic list (hierarchy via queryable)
+	case eFormSelect: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetAttributeForCode()->GetQueryColumn(), ibDynamicListView_Choice);   // select front-driven — choice mode
+	case eFormFolderSelect: return ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetAttributeForCode()->GetQueryColumn(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true
 	}
 	return nullptr;
 }
@@ -97,19 +97,19 @@ ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetFolderForm(const wxStri
 ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	return CreateAndBuildForm(strFormName, eFormList, ownerControl,
-		ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription()), formGuid);   // migrated onto the universal dynamic list (hierarchy via queryable)
+		ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn()), formGuid);   // migrated onto the universal dynamic list (hierarchy via queryable)
 }
 
 ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	return CreateAndBuildForm(strFormName, eFormSelect, ownerControl,
-		ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice), formGuid);   // select front-driven — choice mode
+		ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice), formGuid);   // select front-driven — choice mode
 }
 
 ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetFolderSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	return CreateAndBuildForm(strFormName, eFormFolderSelect, ownerControl,
-		ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice), formGuid);   // folder-select = choice + IsFolder = true
+		ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice), formGuid);   // folder-select = choice + IsFolder = true
 }
 #pragma endregion
 

@@ -45,7 +45,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cFilter)
 			ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 			wxASSERT(retLine);
 			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
-				retLine->SetValueByMetaID(object->GetMetaID(), selection.GetValue(object));
+				retLine->SetValueByMetaID(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
 			wxDELETE(retLine);
 		}
 	}
@@ -82,7 +82,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cPeriod,
 		try {
 			ibDataQueryBuilder q;
 			q.From(m_metaObject->GetQueryable());
-			q.Where(m_metaObject->GetRegisterPeriod(), ibQueryFilterOp::Equal, cPeriod);
+			q.Where(m_metaObject->GetRegisterPeriod()->GetQueryColumn(), ibQueryFilterOp::Equal, cPeriod);
 							q.Where(filter);
 			ibReadPageRequest page;
 			page.m_count = 0;   // every matching record
@@ -91,7 +91,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cPeriod,
 				ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 				wxASSERT(retLine);
 				for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
-					retLine->SetValueByMetaID(object->GetMetaID(), selection.GetValue(object));
+					retLine->SetValueByMetaID(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
 				wxDELETE(retLine);
 			}
 		}
@@ -120,7 +120,7 @@ static ibValue SelectionToTable(ibDataQueryResult& selection,
 		ibValueModelTable::ibValueModelTableReturnLine* line = table->GetRowAt(table->AppendRow());
 		wxASSERT(line);
 		for (const auto object : meta->GetGenericAttributeArrayObject())
-			line->SetValueByMetaID(object->GetMetaID(), selection.GetValue(object));
+			line->SetValueByMetaID(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
 		wxDELETE(line);
 	}
 	return table;
@@ -134,7 +134,7 @@ static ibValue SelectionToRecord(ibDataQueryResult& selection,
 		record->SetAt(object->GetName(), ibValue());
 	if (selection.Next())
 		for (const auto object : meta->GetGenericAttributeArrayObject())
-			record->SetAt(object->GetName(), selection.GetValue(object));
+			record->SetAt(object->GetName(), selection.GetValue(object->GetQueryColumn()));
 	return record;
 }
 

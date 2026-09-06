@@ -38,7 +38,7 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 		if (selection.Next()) {
 			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
 				if (!m_metaObject->IsDataReference(object->GetMetaID()))
-					m_listObjectValue[object->GetMetaID()] = selection.GetValue(object);
+					m_listObjectValue[object->GetMetaID()] = selection.GetValue(object->GetQueryColumn());
 
 			// ⭐ ONE LINE PER ROW ACTUALLY READ — the other half of the register's measurement, paired
 			// with the "hit" line and behind the same gate for the same reason: rendering a guid and
@@ -96,7 +96,7 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 			// back into the value map would only restate the key the object already carries.
 			for (const auto object : metaObject->GetGenericAttributeArrayObject())
 				if (!metaObject->IsDataReference(object->GetMetaID()))
-					m_listObjectValue[object->GetMetaID()] = selection.GetValue(object);
+					m_listObjectValue[object->GetMetaID()] = selection.GetValue(object->GetQueryColumn());
 		}
 
 		// Does this row answer to `findData`? The SEARCHED attributes first (a catalog's code and
@@ -152,7 +152,7 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 		//
 		// The reference IS the identity of a reference object and the metaobject says so directly, so
 		// there is nothing to infer and nothing that a change of sort can move out from under this.
-		const ibBackendQueryColumn* const keyCol = m_metaObject->GetDataReference();
+		const ibBackendQueryColumn* const keyCol = m_metaObject->GetDataReference()->GetQueryColumn();
 
 		// ⭐ AN EMPTY REQUEST IS "EVERYTHING", and it is the commonest one — it is what a quick choice
 		// asks. `Contains(wxEmptyString)` is true of every string, so the old code proved that per row

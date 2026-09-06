@@ -168,7 +168,7 @@ std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetColumns() const
 std::vector<ibColumnSlot> ibRecorderQueryable::ibBackendColumnPointInTime::DescribeLayout() const
 {
 	std::vector<ibColumnSlot> slots;
-	for (const ibBackendQueryColumn* part : { m_owner->GetDocumentDate(), m_owner->GetDataReference() }) {
+	for (const ibBackendQueryColumn* part : { m_owner->GetDocumentDate()->GetQueryColumn(), m_owner->GetDataReference()->GetQueryColumn() }) {
 		if (part == nullptr) continue;
 		for (const ibColumnSlot& slot : DescribeColumnLayout(part)) {
 			// ⚠ WITHOUT THE PARTS' TYPE TAGS. A `_TYPE` field says WHICH of a column's admissible types
@@ -193,8 +193,8 @@ ibTypeDescription& ibRecorderQueryable::ibBackendColumnPointInTime::GetTypeDesc(
 bool ibRecorderQueryable::ibBackendColumnPointInTime::ReadValue(const wxString& fieldName,
 	const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData) const
 {
-	const ibBackendQueryColumn* date = m_owner->GetDocumentDate();
-	const ibBackendQueryColumn* ref = m_owner->GetDataReference();
+	const ibBackendQueryColumn* date = m_owner->GetDocumentDate()->GetQueryColumn();
+	const ibBackendQueryColumn* ref = m_owner->GetDataReference()->GetQueryColumn();
 	if (date == nullptr || ref == nullptr)
 		return false;
 
@@ -295,7 +295,7 @@ const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetH
 	//
 	// A FLAT list still answers null, which is what keeps a tree from being built over a column that
 	// is not there.
-	return HasParentLink() ? GetDataParent() : nullptr;
+	return HasParentLink() ? GetDataParent()->GetQueryColumn() : nullptr;
 }
 // ResolveReferenceTarget / ResolveReferenceTargets moved to ibDbTableProvider (query/dbTableProvider.cpp)
 // — the ONE provider that owns metadata. The record queryable only vends GetMetaData(); the provider
@@ -311,15 +311,20 @@ const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetH
 
 // registers — no single row-key; composite identity (recorder+line / period?+dims),
 // carried as real attributes; the consumer assembles the row identity. No reference.
-const ibBackendQueryColumn* ibRegisterDataQueryable::ResolveColumnByName(const wxString& name) const { return m_meta->FindAnyAttributeObjectByFilter(name); }
+// ⭐ Answered with the attribute's QUERY FACE throughout this file: an attribute is not a query
+// column, it holds one (docs/ownership-authority.md). The signatures are untouched.
+const ibBackendQueryColumn* ibRegisterDataQueryable::ResolveColumnByName(const wxString& name) const {
+	const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(name);
+	return attribute != nullptr ? attribute->GetQueryColumn() : nullptr;
+}
 std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetColumns() const {
 	// All generic attributes — the register's generic array ALREADY spans the
 	// predefineds (recorder / line / period), the dimensions, the resources and
-	// the plain attributes; each IS-A column. Mirrors ibRecordQueryable. Drives
-	// the L5 composer's default projection and SELECT * of a nested subquery.
+	// the plain attributes. Mirrors ibRecordQueryable. Drives the L5 composer's
+	// default projection and SELECT * of a nested subquery.
 	std::vector<const ibBackendQueryColumn*> cols;
 	for (const ibValueMetaObjectAttributeBase* a : m_meta->GetGenericAttributeArrayObject())
-		cols.push_back(a);
+		if (a != nullptr) cols.push_back(a->GetQueryColumn());
 	return cols;
 }
 wxString ibRegisterDataQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
@@ -331,16 +336,21 @@ const ibValueMetaObjectGenericData* ibRegisterDataQueryable::GetSourceMetaObject
 // the authority — no per-column / per-attribute flag. (docs/query-language-arc.md §22.1)
 std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetPrimaryKeyColumns() const {
 	std::vector<const ibBackendQueryColumn*> cols;
+	// The key's parts, each by its query face — asked in one place so a missing one cannot slip in
+	// as a null and be discovered by whoever hashes the key.
+	auto add = [&cols](const ibValueMetaObjectAttributeBase* a) {
+		if (a != nullptr) cols.push_back(a->GetQueryColumn());
+	};
 	if (m_meta->HasRecorder()) {
-		cols.push_back(m_meta->GetRegisterRecorder());
-		cols.push_back(m_meta->GetRegisterLineNumber());
-		cols.push_back(m_meta->GetRegisterPeriod());
+		add(m_meta->GetRegisterRecorder());
+		add(m_meta->GetRegisterLineNumber());
+		add(m_meta->GetRegisterPeriod());
 		return cols;
 	}
 	if (m_meta->HasPeriod())
-		cols.push_back(m_meta->GetRegisterPeriod());
+		add(m_meta->GetRegisterPeriod());
 	for (auto* dim : m_meta->GetGenericDimensionArrayObject())
-		cols.push_back(dim);
+		add(dim);
 	return cols;
 }
 

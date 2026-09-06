@@ -25,9 +25,9 @@ ibValueReferenceDataObject* ibValueManagerDataObjectDocument::FindByNumber(const
 	// dies with the move to a structured predicate.)
 	try {
 		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable()).WhereLike(attributeNumber, attributeNumber->AdjustValue(vNumber));
+		q.From(m_metaObject->GetQueryable()).WhereLike(attributeNumber->GetQueryColumn(), attributeNumber->AdjustValue(vNumber));
 		if (!vPeriod.IsEmpty())
-			q.WhereCompare(attributeDate, ibQueryFilterOp::LessEqual, attributeDate->AdjustValue(vPeriod));
+			q.WhereCompare(attributeDate->GetQueryColumn(), ibQueryFilterOp::LessEqual, attributeDate->AdjustValue(vPeriod));
 
 		ibReadPageRequest page;
 		page.m_count = 1;
@@ -35,7 +35,7 @@ ibValueReferenceDataObject* ibValueManagerDataObjectDocument::FindByNumber(const
 		if (sel.Next()) {
 			// The identity column by NAME, and the guid from the reference itself — see the same read in
 			// catalogManager_impl.cpp for what the two guesses on this line used to cost.
-			const ibValue rowValue = sel.GetValue(m_metaObject->GetDataReference());
+			const ibValue rowValue = sel.GetValue(m_metaObject->GetDataReference()->GetQueryColumn());
 			const ibValueReferenceDataObject* const found = rowValue.ConvertToType<ibValueReferenceDataObject>();
 			const ibGuid foundedGuid = found != nullptr ? found->GetGuid().GetGuid() : ibGuid();
 			if (foundedGuid.isValid())

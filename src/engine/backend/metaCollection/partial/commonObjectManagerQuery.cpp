@@ -37,7 +37,7 @@ bool ibValueRecordManagerObject::ExistData()
 			q.From(m_metaObject->GetQueryable());
 			for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 				ibValue retValue; m_recordLine->GetValueByMetaID(object->GetMetaID(), retValue);
-				q.Where(object, ibQueryFilterOp::Equal, retValue);
+				q.Where(object->GetQueryColumn(), ibQueryFilterOp::Equal, retValue);
 			}
 			ibReadPageRequest page;
 			page.m_count = 1;

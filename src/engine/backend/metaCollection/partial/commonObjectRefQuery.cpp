@@ -57,7 +57,7 @@ bool ibValueRecordDataObjectRef::ReadData(const ibGuid& srcGuid)
 		//load other attributes
 		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 			if (!m_metaObject->IsDataReference(object->GetMetaID()))
-				m_listObjectValue[object->GetMetaID()] = selection.GetValue(object);
+				m_listObjectValue[object->GetMetaID()] = selection.GetValue(object->GetQueryColumn());
 		}
 		for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 			ibValueTabularSectionDataObjectRef* tabularSection = new ibValueTabularSectionDataObjectRef(this, object);
@@ -129,7 +129,7 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 		ibDataQueryResult sel = q.Execute(page);
 
 		const bool rowFound = sel.Next();
-		const wxString dbVer = rowFound ? sel.GetValue(dvAttr).GetString() : wxString();
+		const wxString dbVer = rowFound ? sel.GetValue(dvAttr->GetQueryColumn()).GetString() : wxString();
 
 		// Row disappeared between our load and write — somebody else
 		// committed a DELETE. Treat as a version conflict for UX
@@ -357,7 +357,7 @@ bool ibValueRecordDataObjectRef::SaveData()
 			if (it != m_listObjectValue.end())
 				value = it->second;
 		}
-		writer.SetValue(object, value);
+		writer.SetValue(object->GetQueryColumn(), value);
 	}
 	// The object already knows the event: a NEW object is a CREATE — plain INSERT; an EXISTING object is a
 	// REWRITE — a guarded UPDATE (WHERE key AND the folded RLS predicate), so a write Restrict actually bites
@@ -426,8 +426,8 @@ bool ibValueRecordDataObjectRef::DeleteData()
 		if (const ibValueMetaObjectAttributePredefined* parent = hierarchy->GetDataParent()) {
 			ibDataQueryBuilder()
 				.From(m_metaObject->GetQueryable())
-				.Where(parent, ibValue(ibValueReferenceDataObject::Create(m_metaObject, m_objGuid, ibReferenceLoad::OnDemand)))
-				.SetValue(parent, parent->CreateValue())
+				.Where(parent->GetQueryColumn(), ibValue(ibValueReferenceDataObject::Create(m_metaObject, m_objGuid, ibReferenceLoad::OnDemand)))
+				.SetValue(parent->GetQueryColumn(), parent->CreateValue())
 				.Update();
 		}
 	}
@@ -569,7 +569,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 		// this a second writer of the lettering — and one that would keep compiling after a change.
 		const ibColumnRole role = isNumber ? ibColumnRole::Number : ibColumnRole::String;
 		wxString field;
-		for (const ibColumnSlot& slot : DescribeColumnLayout(attribute))
+		for (const ibColumnSlot& slot : DescribeColumnLayout(attribute->GetQueryColumn()))
 			if (slot.m_role == role) { field = slot.m_name; break; }
 		if (field.IsEmpty())
 			return maxFound;
