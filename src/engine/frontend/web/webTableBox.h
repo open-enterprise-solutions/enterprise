@@ -132,7 +132,10 @@ public:
 	nlohmann::json FetchPage(ibValueModelTableBox* control,
 		const wxString& dir, int count);
 
-	// "row" — the client moved the cursor onto the row carrying that key.
+	// Two kinds, both carrying a row key:
+	//   "row"      — the client moved the cursor onto that row;
+	//   "activate" — it opened that row (a double-click), which for a
+	//                list means raising the object's own form.
 	virtual bool HandleRequest(const wxString& kind,
 		const wxString& value) override;
 

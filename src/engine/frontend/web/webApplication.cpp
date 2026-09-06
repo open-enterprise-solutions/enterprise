@@ -28,6 +28,7 @@
 
 #include "visualView/ctrl/form.h"
 #include "visualView/ctrl/tableBox.h"
+#include "visualView/layers/commandBar.h"
 #include "visualView/ctrl/widgets.h"
 #include "visualView/visualHostClient.h"
 
@@ -334,6 +335,24 @@ std::string ibWebApplication::FetchRows(int controlId, const wxString& dir, int 
 		return R"({"ok":false,"reason":"not a tablebox"})";
 
 	return table->FetchPage(model, dir, count).dump(2);
+}
+
+bool ibWebApplication::DispatchCommand(int actionId)
+{
+	ibVisualHostClient* host = GetActiveHost();
+	ibValueForm* form = host != nullptr ? host->GetValueForm() : nullptr;
+	ibValueCommandBar* cbar = form != nullptr ? form->GetCommandBar() : nullptr;
+	if (cbar == nullptr)
+		return false;
+
+	cbar->ExecuteCommand(actionId, form);
+
+	// Same tail as Dispatch: a command may have closed a tab while the
+	// handler chain was still on the stack.
+	if (m_frame != nullptr)
+		m_frame->DrainPendingCloses();
+	MarkDirty();
+	return true;
 }
 
 void ibWebApplication::MarkDirty()

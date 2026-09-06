@@ -116,6 +116,12 @@ public:
 	// `dir` is "first" | "next" | "prev".
 	std::string FetchRows(int controlId, const wxString& dir, int count);
 
+	// Run a command off the form's own command bar. Not a Dispatch kind:
+	// the bar is chrome, not a control, so it has no entry in the
+	// (frame -> wxObject) map and FindControlByID would never reach it.
+	// The action id names the command; the form is asked for its bar.
+	bool DispatchCommand(int actionId);
+
 	// Session task dispatch — forwards to the process-wide ibWorkerPool
 	// (appData->GetWorkerPool()), which preserves per-session FIFO +
 	// lease semantics across all concurrent web sessions sharing the

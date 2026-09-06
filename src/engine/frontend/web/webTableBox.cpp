@@ -1,6 +1,7 @@
 #include "webTableBox.h"
 
 #include "frontend/visualView/ctrl/tableBox.h"
+#include "frontend/visualView/ctrl/form.h"   // the owner form IS the backend form ActivateItem takes
 
 #include "backend/backend_type.h"          // ibTypeDescription
 #include "backend/compiler/value.h"        // the primitive clsids
@@ -276,7 +277,9 @@ nlohmann::json ibWebTableBox::FetchPage(ibValueModelTableBox* control,
 
 bool ibWebTableBox::HandleRequest(const wxString& kind, const wxString& value)
 {
-	if (kind != wxT("row"))
+	const bool cursor   = kind == wxT("row");
+	const bool activate = kind == wxT("activate");
+	if (!cursor && !activate)
 		return false;
 	if (m_requestControl == nullptr)
 		return false;
@@ -296,6 +299,18 @@ bool ibWebTableBox::HandleRequest(const wxString& kind, const wxString& value)
 	if (!found->item.IsOk() || !found->item.GetID()->IsAttached())
 		return false;
 
+	// Opening a row moves the cursor onto it first: a command run from
+	// the form that opens next reads the current line, and a double
+	// click is also a click.
 	m_requestControl->ApplyCurrentLine(model->GetRowAt(found->item));
+
+	if (activate) {
+		// The desktop road is ActivateRow, which decides between choice,
+		// an inline editor and opening the value. Two of those three do
+		// not exist here yet — a picker has no web flow and the web
+		// table is read-only — so what is left is the one that matters
+		// for a list: the model raises the row's own form.
+		model->ActivateItem(found->item, m_requestControl->GetOwnerForm());
+	}
 	return true;
 }

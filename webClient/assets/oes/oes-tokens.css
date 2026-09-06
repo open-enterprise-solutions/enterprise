@@ -1,5 +1,8 @@
 /* Provisional until the Iteration 1 reference screen validates these mappings. */
 :root{
+  /* What stands behind a control's stored font name. UI5 answers with
+     the theme's family; without UI5 loaded the tail carries it. */
+  --oes-font-ui:var(--sapFontFamily,system-ui),-apple-system,"Segoe UI",Roboto,sans-serif;
   --oes-text:var(--sapTextColor);
   --oes-surface:var(--sapField_Background);
   --oes-border:var(--sapField_BorderColor);

@@ -996,11 +996,60 @@ void ibValueModelTableBox::OnPropertyCreated(ibProperty* /*property*/) {}
 bool ibValueModelTableBox::OnPropertyChanging(ibProperty* /*property*/, const wxVariant& /*newValue*/) { return true; }
 void ibValueModelTableBox::OnPropertyChanged(ibProperty* /*property*/, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/) {}
 
-ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardCommands(const ibFormID& /*formType*/)
+// The commands a table contributes to the bar, and running one.
+//
+// The desktop pair lives in tableBoxAction.cpp, which the web build does not
+// compile: it reaches into the wxDataView control for the drill anchor and the
+// current column, and half its verbs open a dialog. What CAN be answered here
+// is the part that has no window in it — the model's OWN command set, which is
+// the source descriptor's, and which is what a list actually needs: Create,
+// Copy, Change, Mark for deletion, Refresh.
+//
+// The table's own view-state band (Filter, ViewMode, saved settings, Output
+// list) is deliberately absent rather than present and dead: each of those IS
+// a window, and none of them has a web door yet.
+ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardCommands(const ibFormID& formType)
 {
-	return ibStandardCommandSet();
+	// The created model, or — on the unbound path — the one the bound form
+	// attribute resolves to. Same two candidates the desktop tries.
+	ibValuePtr<ibValueModel> resolved;
+	ibValueModel* model = m_tableModel;
+	if (model == nullptr && !m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
+		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), resolved))
+		model = resolved;
+
+	if (model == nullptr)
+		return ibStandardCommandSet();
+
+	ibStandardCommandSet actionData(this);
+	std::vector<ibCommandItem> commands;
+	model->GetCommandCollection(formType, commands);
+	for (const ibCommandItem& command : commands) {
+		if (command.m_actionId == wxNOT_FOUND)
+			actionData.AddSeparator();
+		else
+			actionData.AddAction(command.m_name, command.m_caption, command.m_pictureDescription,
+				command.m_pictureAndText, command.m_actionId).SetModify(command.m_modifiesData);
+	}
+	return actionData;
 }
-void ibValueModelTableBox::CallAsAction(const ibActionID& /*lNumAction*/, ibBackendValueForm* /*srcForm*/) {}
+
+void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm)
+{
+	if (m_tableModel == nullptr)
+		return;
+
+	// The rows a command runs against. Selection is the current line, as on
+	// the desktop. There is no anchor and no current column: both are read off
+	// the grid control there, and the web has neither a drill nor a cell
+	// cursor yet — so a new element lands at the root, which is what the flat
+	// list view does on the desktop too.
+	ibDataViewCommandContext ctx;
+	ctx.m_selection = m_tableCurrentLine != nullptr
+		? m_tableCurrentLine->GetLineItem() : ibDataViewItem();
+
+	m_tableModel->CallAsCommand(lNumAction, ctx, srcForm);
+}
 
 void ibValueModelTableBox::PrepareDefaultMenu(wxMenu* /*m_menu*/) {}
 void ibValueModelTableBox::ExecuteMenu(ibVisualHost* /*visualHost*/, int /*id*/) {}

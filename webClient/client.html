@@ -1697,7 +1697,13 @@ class BaseControl{
     if(node.bg) el.style.backgroundColor=node.bg;
     if(node.font){
       if(node.font.size)   el.style.fontSize=node.font.size+'pt';
-      if(node.font.family) el.style.fontFamily=node.font.family;
+      // The stored family is a Windows-era name for "the UI font" —
+      // Segoe UI, which no Mac or Linux box has. Named alone it matches
+      // nothing and the browser falls back to its default, which is a
+      // serif: that is why every table and label came out in Times.
+      // The theme's own font stands behind it.
+      if(node.font.family)
+        el.style.fontFamily='"'+String(node.font.family).replace(/"/g,'')+'", var(--oes-font-ui)';
       if(node.font.bold)   el.style.fontWeight='bold';
       if(node.font.italic) el.style.fontStyle='italic';
       if(node.font.underline) el.style.textDecoration='underline';
@@ -1957,6 +1963,24 @@ class Tool extends BaseControl{
       el.appendChild(lbl);
     }
     if (node.enabled===false) el.disabled=true;
+    // A tool on the form's own command bar names a COMMAND by action id
+    // and has no control id: the bar is chrome, so the control
+    // dispatcher cannot reach it and the click goes to /command.
+    if(node.action!==undefined){
+      el.onclick=async()=>{
+        const r=await netFetch(API+'/command/'+node.action,{method:'POST',credentials:'same-origin'});
+        if(r.ok){
+          const tree=await r.json();
+          if(tree&&!tree.error){
+            main.innerHTML='';
+            if(Object.keys(tree).length>0) main.appendChild(render(tree));
+          }
+          else OES.handleBackendError(tree);
+          refreshTabs();
+        }
+      };
+      return el;
+    }
     if(node.id){
       el.onclick=async()=>{
         const r=await netFetch(API+'/action/'+node.id,{method:'POST',credentials:'same-origin'});
@@ -2305,11 +2329,25 @@ class TableBox extends BaseControl{
 
       // The cursor is the server's current line — the row a command runs
       // against. Selection in the grid is only how it is shown.
+      const send=async(kind,key)=>{
+        const r=await netFetch(API+'/fire/'+node.id+'/'+kind+'?value='+encodeURIComponent(key),
+          {method:'POST',credentials:'same-origin'});
+        if(!r.ok) return null;
+        const tree=await r.json();
+        return tree&&!tree.error&&Object.keys(tree).length>0?tree:null;
+      };
       table.on('rowClick',async(e,row)=>{
         const key=row.getData()._key;
+        if(key!==undefined) await send('row',key);
+      });
+      // Opening a row raises the object's own form — a new tab, so the
+      // tab strip is re-read and the returned tree replaces the view.
+      table.on('rowDblClick',async(e,row)=>{
+        const key=row.getData()._key;
         if(key===undefined) return;
-        await netFetch(API+'/fire/'+node.id+'/row?value='+encodeURIComponent(key),
-          {method:'POST',credentials:'same-origin'});
+        const tree=await send('activate',key);
+        if(tree){ main.innerHTML=''; main.appendChild(render(tree)); }
+        refreshTabs();
       });
     });
 

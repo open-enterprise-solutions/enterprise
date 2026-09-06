@@ -100,6 +100,45 @@ The renderer sits in the **shared** map, not the UI5-only one: a grid is not a
 UI5 component, and leaving `ui=legacy` with a dashed `[tablebox]` box would have
 made the side-by-side comparison useless.
 
+## The bar above it, and opening a row
+
+Two things a list is useless without, both landed with the grid.
+
+**The form's command bar.** Desktop builds it in `CreateFormLayers` through
+`BuildCommandBarToolBar`, which is a `wxAuiToolBar` and has no web twin. What
+both roads share is the model — `ibValueCommandBar::BuildCommands()` returns the
+entries, `ExecuteCommand` runs one — so the web host reads the same list and
+emits the toolbar nodes the browser already knew how to draw. The nodes hold no
+back-pointer: a tool names its command by action id, and `POST /command/<id>`
+asks the form for its bar. The bar is chrome, not a control, so it has no entry
+in the (frame → wxObject) map and the control dispatcher could never reach it.
+
+A table also contributes to that bar, and on web it contributed nothing: the
+`GetStandardCommands` / `CallAsAction` pair lives in `tableBoxAction.cpp`, which
+the web build does not compile — it reaches into the wxDataView control for the
+drill anchor and the current column, and half its verbs open a dialog. The web
+pair answers the part with no window in it: the model's own command set, which
+is the source descriptor's, and which is what a list needs — Add, Add folder,
+Copy, Edit, Delete, Mark as delete. The table's view-state band (Filter,
+ViewMode, saved settings, Output list) is absent rather than present and dead.
+
+**Double-click opens the row.** `POST /fire/<id>/activate?value=<key>` moves the
+cursor onto the row and then asks the model to raise its form
+(`ibValueModel::ActivateItem` → the source descriptor's `ShowValueByKey`). The
+desktop road, `ActivateRow`, decides between choice, an inline editor and
+opening the value; two of those three have no web flow yet.
+
+## The font every control was drawn in
+
+Worth recording because it looked like a table problem and was not.
+`ibValueWindow::UpdateWindow` pushes the control's font, and the stored family
+is `Segoe UI` — a Windows-era name for "the UI font". Named alone in
+`style.fontFamily`, it matches nothing on a Mac or a Linux box and the browser
+falls back to its default, which is a **serif**. Every label, every cell and
+every header came out in Times. `applyCommon` now puts `--oes-font-ui` behind
+it, which resolves to the UI5 theme's family and, with UI5 not loaded, to the
+system stack.
+
 ## What this does NOT do yet
 
 Named rather than implied, because each is a road not started.
@@ -118,4 +157,6 @@ Named rather than implied, because each is a road not started.
   See `docs/column-groups.md` for what the desktop does.
 - **Editing.** Every column reports `readOnly:true`. Iteration 2 is read-only
   throughout.
+- **Choice mode.** A table opened as a picker has no web flow, so activating a
+  row there falls through to opening the object rather than returning it.
 - **Footers.** `footer` is reported and ignored.

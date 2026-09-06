@@ -698,6 +698,17 @@ int main(int argc, char** argv)
 			"application/json; charset=utf-8");
 	});
 
+	// POST /command/<actionID> — run a command off the form's own command
+	// bar. The bar is chrome, not a control, so it does not go through
+	// the control dispatcher; the action id names the command.
+	svr.Post(prefix + R"(/command/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+		std::string id;
+		if (!RequireSessionId(req, res, id)) return;
+		const int actionID = std::atoi(req.matches[1].str().c_str());
+		res.set_content(wfrontendFireCommand(id, actionID),
+			"application/json; charset=utf-8");
+	});
+
 	// GET /fetch/<controlID>?dir=first|next|prev&count=N — one page of a
 	// tablebox's rows. A GET because it reads: the same request twice
 	// returns the same page, and the browser may cache nothing of it.

@@ -262,6 +262,7 @@ public:
 	std::string FireToggle(const std::string& id, int controlID, bool checked);
 	std::string FetchRows(const std::string& id, int controlID,
 		const std::string& dir, int count);
+	std::string FireCommand(const std::string& id, int actionID);
 	bool        ModalReply(const std::string& id, const std::string& modalId, int result);
 	std::string ActiveHostJSON(const std::string& id);
 
@@ -1388,6 +1389,51 @@ WFRONTEND_API std::string wfrontendFireKind(const std::string& sessionId,
 {
 	Sessions().Touch(sessionId);
 	return Sessions().FireKind(sessionId, controlID, kind, value);
+}
+
+namespace {
+std::string FireCommandInSession(ibWebSession* session, int actionID)
+{
+	if (session == nullptr || !session->IsAuthenticated()) return "{}";
+	ibWebApplication* app = session->App();
+	if (app == nullptr) return "{}";
+
+	return app->RunOnWorker([app, actionID]() -> std::string {
+		try {
+			if (!app->DispatchCommand(actionID))
+				return "{}";
+		}
+		catch (const ibBackendException& e) {
+			return ExceptionToJson(e);
+		}
+		catch (...) {
+			return R"({"error":"unknown exception"})";
+		}
+		ibVisualHostClient* host = app->GetActiveHost();
+		return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+	}).get();
+}
+} // namespace
+
+std::string SessionManager::FireCommand(const std::string& id, int actionID)
+{
+	std::shared_ptr<ibWebSession> keeper;
+	ibWebSession* s = nullptr;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		auto it = m_sessions.find(id);
+		if (it == m_sessions.end()) return "{}";
+		keeper = it->second;
+		s = keeper.get();
+	}
+	return FireCommandInSession(s, actionID);
+}
+
+WFRONTEND_API std::string wfrontendFireCommand(const std::string& sessionId,
+	int actionID)
+{
+	Sessions().Touch(sessionId);
+	return Sessions().FireCommand(sessionId, actionID);
 }
 
 namespace {

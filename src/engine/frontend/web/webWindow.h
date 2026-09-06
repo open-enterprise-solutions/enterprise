@@ -417,6 +417,30 @@ private:
 	wxString m_pictureDataUri;
 };
 
+// A tool on the FORM's command bar — the chrome strip above the
+// controls, not a toolbar control someone dropped on the form. It is
+// pure presentation: the command it stands for is named by its action
+// id, and running it goes straight to the form's command bar, so this
+// node holds no pointer to anything.
+class ibWebCommandTool : public ibWebToolBarItem {
+public:
+	explicit ibWebCommandTool(int action) : ibWebToolBarItem(0), m_action(action) {}
+
+	virtual nlohmann::json ToJSON() const override {
+		auto node = ibWebToolBarItem::ToJSON();
+		node["action"] = m_action;
+		return node;
+	}
+
+	// The click road is POST /command/<action>, not the control
+	// dispatcher: a chrome node is not in the form's control tree, so
+	// FindControlByID would never reach it.
+	virtual bool HandleRequest(const wxString&, const wxString&) override { return false; }
+
+private:
+	int m_action;
+};
+
 class ibWebToolBarSeparator : public ibWebWindow {
 public:
 	explicit ibWebToolBarSeparator(int id = 0) : ibWebWindow(id) {}

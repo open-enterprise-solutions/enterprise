@@ -41,6 +41,9 @@ ibValueFrame* ibControlIndex::FindControl(const wxObject* wx_object) const
 #include "ctrl/window.h"
 #include "formdefs.h"
 #include "frontend/web/webSizer.h"
+#include "layers/commandBar.h"        // ibValueCommandBar — the model both roads read
+#include "backend/backend_picture.h"  // ibBackendPicture — bitmap -> data URI
+#include "backend/metaData.h"
 
 namespace {
 
@@ -185,6 +188,76 @@ void AppendChildControls(ibValueFrame* node,
 
 } // namespace
 
+// The chrome — the form's own command bar, above the controls.
+//
+// Desktop builds this in CreateFormLayers through BuildCommandBarToolBar,
+// which is a wxAuiToolBar and so has no web twin. What both roads share is
+// the model: ibValueCommandBar::BuildCommands() returns the entries and
+// ExecuteCommand runs one. So the web side reads the same list and emits
+// toolbar nodes the browser already knows how to draw.
+//
+// The nodes hold no back-pointer: a tool names its command by action id,
+// and the click goes to ibWebApplication::DispatchCommand, which asks the
+// form for its bar. Nothing here outlives the form that owns it.
+static void AppendCommandBar(ibValueForm* form, ibWebSizer* rootSizer)
+{
+	ibValueCommandBar* cbar = form != nullptr ? form->GetCommandBar() : nullptr;
+	if (cbar == nullptr || rootSizer == nullptr)
+		return;
+
+	const std::vector<ibCommandEntry>& commands = cbar->BuildCommands();
+	if (commands.empty())
+		return;
+
+	const ibMetaData* metaData = form->GetMetaData();
+	auto* bar = new ibWebToolbar();
+	bool anyTool = false;
+
+	for (const ibCommandEntry& command : commands) {
+		if (command.id == wxNOT_FOUND) {
+			if (anyTool) {
+				auto* separator = new ibWebToolBarSeparator();
+				separator->SetParent(bar);
+			}
+			continue;
+		}
+
+		// The command's own live bitmap wins; a picture description is
+		// the fallback. Same order as the desktop fill.
+		wxBitmap bitmap = command.bitmap.IsOk() ? command.bitmap
+			: (command.picture.IsEmptyPicture() ? wxNullBitmap
+				: ibBackendPicture::CreatePicture(command.picture, metaData));
+		wxString caption = command.caption;
+		if (command.representation == ibRepresentation_Picture) caption = wxEmptyString;
+		else if (command.representation == ibRepresentation_Text) bitmap = wxNullBitmap;
+
+		auto* tool = new ibWebCommandTool(command.id);
+		tool->SetLabel(caption);
+		tool->SetToolTip(command.caption);
+		tool->SetRepresentation(static_cast<int>(command.representation));
+		tool->SetHasPicture(bitmap.IsOk());
+		if (bitmap.IsOk()) {
+			const wxString b64 = ibBackendPicture::CreateBase64Image(bitmap.ConvertToImage());
+			if (!b64.IsEmpty())
+				tool->SetPictureDataUri(wxT("data:image/png;base64,") + b64);
+		}
+		tool->Enable(command.enabled);
+		tool->SetParent(bar);
+		anyTool = true;
+	}
+
+	if (!anyTool) {
+		delete bar;
+		return;
+	}
+
+	// First item of the root sizer, spanning its width — where the
+	// desktop chrome puts it (mainSizer->Insert(0, part, 0, wxEXPAND)).
+	ibWebSizer::AddParams params;
+	params.flag = wxEXPAND;
+	rootSizer->Add(bar, params);
+}
+
 bool ibVisualHost::CreateVisualHost()
 {
 	ibValueForm* form = GetValueForm();
@@ -217,6 +290,9 @@ bool ibVisualHost::CreateVisualHost()
 	// the root via the walker's `parentSizer->Add(siz)` branch, and
 	// nested controls follow the same pattern as before.
 	auto* rootSizer = static_cast<ibWebSizer*>(GetSizer());
+	// Chrome first, so the bar sits above the controls in the sizer the
+	// same way it does on the desktop.
+	AppendCommandBar(form, rootSizer);
 	AppendChildControls(form, nullptr, rootSizer, this, nullptr);
 	return true;
 }
