@@ -409,22 +409,29 @@ void ibWebApplication::OnExit()
 	if (m_frame != nullptr) {
 		RunOnWorker([this]() {
 			if (m_frame == nullptr) return true;
-			const std::size_t n = m_frame->TabCount();
-			for (std::size_t i = 0; i < n; ++i) {
-				ibWebDocChildFrame* tab = m_frame->Tab(i);
-				if (tab == nullptr) continue;
-				auto* doc = dynamic_cast<ibFormVisualDocument*>(tab->GetDocument());
-				if (doc == nullptr) continue;
-				// Detach the tab from its view before deleting that view, the
-				// same way DrainPendingCloses does. m_tabs owns the child frame;
-				// ibView::~ibView otherwise follows its back-link and calls
-				// Destroy() on it, and ~ibWebFrame's m_tabs.clear() then deletes
-				// the same shell a second time. That dtor's comment -- "only the
-				// tab shells remain" -- is only true once this has run.
-				if (ibView* const dyingView = tab->GetView())
-					dyingView->SetDocChildFrame(nullptr);
-				tab->SetView(nullptr);
-				doc->DeleteAllViews();
+			// Close the front tab until there is none, rather than walking
+			// an index range: one document's teardown cascades into the
+			// others — an object form goes down with the list it was
+			// opened from — and each tab the cascade takes leaves m_tabs
+			// through ~ibView -> Destroy -> DropTab as it goes. A range
+			// captured up front would name positions that have moved, and
+			// a shell held back from that cascade would be left pointing
+			// at a document nobody has.
+			while (m_frame->TabCount() > 0) {
+				const std::size_t before = m_frame->TabCount();
+				ibWebDocChildFrame* tab = m_frame->Tab(0);
+				if (tab == nullptr) break;
+				if (auto* doc = dynamic_cast<ibFormVisualDocument*>(tab->GetDocument()))
+					doc->DeleteAllViews();
+				// Ask for it either way. The cascade may already have
+				// taken this tab out on its way through ~ibView, and
+				// DropTab then finds nothing and says so; a tab with no
+				// form document had no cascade to leave on and is still
+				// here. Either way the front of the list must move, or
+				// the next turn would read a document nobody has.
+				m_frame->DropTab(tab);
+				if (m_frame->TabCount() >= before)
+					break;   // nothing moved — stop rather than spin
 			}
 			return true;
 		}).get();

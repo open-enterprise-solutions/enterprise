@@ -1,6 +1,7 @@
 #include "webChildFrame.h"
 
 #include "visualView/visualHostClient.h"
+#include "webFrame.h"
 
 ibWebChildFrame::ibWebChildFrame(ibWebWindow* parent, const wxString& title)
 {
@@ -19,4 +20,17 @@ ibVisualHostClient* ibWebDocChildFrame::GetHost() const
 	// migration this used the hand-rolled m_view, same dynamic_cast logic.
 	auto* view = dynamic_cast<ibFormVisualEditView*>(m_childView);
 	return view != nullptr ? view->GetVisualHost() : nullptr;
+}
+
+bool ibWebDocChildFrame::Destroy()
+{
+	// Owned shells leave through their owner, so the vector never keeps
+	// a pointer to freed memory. DropTab takes this one out and deletes
+	// it — except while the frame is already emptying its tab list, when
+	// it answers "done" and deletes nothing, because the delete being
+	// asked for is the one running right now.
+	if (m_ownerFrame != nullptr)
+		return m_ownerFrame->DropTab(this);
+	delete this;
+	return true;
 }

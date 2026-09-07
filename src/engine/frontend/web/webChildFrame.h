@@ -32,6 +32,7 @@
 #include "frontend/docView/docView.h"
 
 class ibVisualHostClient;
+class ibWebFrame;
 
 // One "tab" in ibWebFrame's tab strip. Lives as a child ibWebWindow
 // directly under the frame, so the session JSON renders it as a page
@@ -116,6 +117,30 @@ public:
 		m_childDocument = nullptr;
 	}
 
+	// The frame's m_tabs is the one owner of this shell, and the shared
+	// doc/view code reaches for the other door: ~ibView calls
+	// m_docChildFrame->GetWindow()->Destroy(), and OnCloseWindow calls
+	// this->Destroy(). The inherited ibWebWindow::Destroy is `delete
+	// this`, which leaves the owning unique_ptr holding freed memory —
+	// and the second delete lands later, in ~ibWebFrame, on a vptr that
+	// by then belongs to somebody else. Route the request to the owner
+	// instead: it erases the entry, which deletes this exactly once.
+	// A shell with no owner (never adopted) still deletes itself.
+	virtual bool Destroy() override;
+
+	// Set by ibWebFrame::AdoptTab when the shell enters m_tabs, cleared
+	// when it leaves. Borrowed — the frame outlives every tab it owns.
+	void       SetOwnerFrame(ibWebFrame* frame) { m_ownerFrame = frame; }
+	ibWebFrame* GetOwnerFrame() const           { return m_ownerFrame; }
+
+	// The form this tab was opened for, recorded when it is adopted.
+	// Borrowed, and read as a plain value — the frame needs to know
+	// which form a tab stands for while closing its neighbours, and
+	// asking the document would mean dereferencing one that the same
+	// close may already have taken away.
+	void         SetTabForm(class ibValueForm* form) { m_tabForm = form; }
+	ibValueForm* GetTabForm() const                  { return m_tabForm; }
+
 	// GetDocument() / GetView() inherited from ibDocChildFrameAnyBase.
 
 	// Host is owned by the view (ibFormVisualEditView::m_visualHost,
@@ -124,6 +149,10 @@ public:
 	// ibWebWindow JSON tree without double-ownership. The dynamic_cast
 	// picks the view subclass that actually carries a visual host.
 	ibVisualHostClient* GetHost() const;
+
+private:
+	ibWebFrame*  m_ownerFrame = nullptr;
+	ibValueForm* m_tabForm    = nullptr;
 };
 
 #endif

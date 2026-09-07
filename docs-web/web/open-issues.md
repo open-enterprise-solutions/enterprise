@@ -6,36 +6,39 @@ rather than a surprise. Dated when first recorded.
 **Fixed since:** *a second session cannot open a form* (recorded 2026-09-05,
 fixed 2026-09-07) — the open-document registry was process-wide and the second
 session found the first one's document. See
-[session-scoping.md](session-scoping.md).
+[session-scoping.md](session-scoping.md). And *the web server dies during session
+teardown* (recorded 2026-09-05, fixed 2026-09-07) — see
+[tab-ownership.md](tab-ownership.md).
 
 ## Blocking the next iteration
 
-**The web server dies during session teardown.** *2026-09-05.* Seen three times,
-always the same tail and nothing after it:
+Nothing. The teardown crash that stood here is fixed —
+[tab-ownership.md](tab-ownership.md) has the finding and what it cost.
 
-```
-[life] ~ibVisualHostClient …        (one pair per open tab)
-[life] ~ibFormVisualDocument …
-[app] ExitMainModule: done
-[app] delete m_frame: begin
-<exit 1>
-```
+## The session a page load throws away
 
-Every sighting was a session that **owned open form tabs** — one, two, three —
-being swept while a new `GET /` arrived. `ibCrashGuard` writes nothing for it: no
-dump, no terminate log, no signal, and neither of the two messages `main` prints
-on its failure roads, so the process leaves by a road nobody instrumented. Not
-reproducible headlessly: 25 rounds at six-clients-at-once and 10 rounds of
-tearing down a session with tabs all survive, because a headless click on "All
-functions" does not open a form and the sessions end up with no tabs. A real
-browser opens them. Two neighbouring faults in the same area are fixed and should
-not be confused with this one: a double delete of the child frame at tab close,
-and an unsynchronized build of `ibMemberTable`'s name index when sessions start
-together.
+**Every navigation mints a session nobody uses.** *2026-09-07.* `GET /` creates a
+session and hands its id back as a cookie, but the client keys off its own
+`sessionStorage` id and never adopts that one: login, forms and every XHR go to
+the client's id, and the cookie session sits there unauthenticated until the idle
+sweep takes it. Found while reading why an `F5` reported `tabCount=0` for a
+session that plainly had two tabs — it was reading the orphan, correctly. Costs a
+`sys_session` row and a sweep entry per page load, and makes the reload road
+(read the cookie session, re-mint it if empty) reason about a session that is
+never the one holding the forms. The shape that fixes it is for `GET /` to mint
+nothing and let the first XHR create the session under the id the client already
+has.
 
-**`ibCrashGuard` is silent on these exits.** *2026-09-05.* Filed separately
-because it is what made the above expensive: with no dump and no message, every
-hunt starts from a log tail. Worth closing before the next control is written.
+## The guard that says nothing
+
+**`ibCrashGuard` is silent on a segfault in the web server.** *2026-09-05, still
+true 2026-09-07.* The teardown crash produced no dump, no terminate log, no
+signal message, and neither of the two lines `main` prints on its failure roads —
+the process left by a road nobody instrumented. It cost two days, and it was
+found in the end by running the server under `lldb` rather than by anything the
+program said. macOS wrote a `.ips` report for some of the sightings and not for
+others, so even that is not a floor. Worth closing before the next control is
+written: the next fault of this shape starts from a log tail again.
 
 ## Metadata over MCP
 
