@@ -9,6 +9,7 @@
 #include "backend/compiler/cache/byteCodeCache.h"              // AOT cache Load / Save
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModuleBase full type for GetGuid/GetClassType
 #include "backend/metaData.h"                         // ibMetaData::GetConfigMD5 — the cache key's second half
+#include "backend/compiler/parseCode.h"                // ibParseCode — the export names a TEXT declares
 
 // The single ctor is inline in moduleInfo.h (it must reference ExportThunk +
 // BindTail). Only the dtor lives out-of-line.
@@ -78,6 +79,95 @@ ibCompileModule* ibRuntimeModuleDataObject::EnsureCompileModule()
 // access (ThisForm.Controls / ThisObject.RegisterRecords) resolves them via the
 // descriptor's ProcUnit, exactly like ExportNamesToHelper does for module
 // exports. Context binds are the self-handles — skipped (no ThisForm.ThisForm).
+// THE NAMES A MODULE EXPORTS, AND THE TWO PLACES THEY COME FROM.
+//
+// ⭐⭐ THE DESIGNER HAS NO RUNTIME, so it cannot be asked for bytecode — and bytecode is the only
+// thing this used to read. Everything built on it therefore said NOTHING in the designer: a common
+// module offered no exports after its dot, a manager host (Catalogs.Goods., commonObject.cpp)
+// missed its manager module's exports, an object module's own exported procedures were invisible
+// on ThisObject — while the designer's "Procedures and functions" window listed all of them,
+// because IT read the TEXT (ibParseCode). One question, two answers, and one of them empty.
+//
+// ⚠ AND THE TEST IS "DESIGNER", NOT "NO BYTECODE" — which is the tempting one and is wrong. At
+// RUNTIME a descriptor can also be without bytecode: a module that failed to compile is exactly
+// that. Naming its exports there would advertise something nobody can call, and the failure moves
+// from an honest "method not found" to a call into an absent ProcUnit. The designer executes
+// nothing, so there a name read off the text is a promise it can keep. Asked the same way by the
+// neighbour in this class: Compile() steps aside on appData->DesignerMode().
+static void ibExportNamesFromText(const ibValueMetaObjectModuleBase* moduleObject,
+	ibValue::ibMemberTable* helper, long alias, bool methods)
+{
+	if (moduleObject == nullptr)
+		return;
+
+	ibParseCode parser;
+
+	// A refusal is ordinary and says nothing: the text is somebody's work in progress, and half a
+	// declaration is what a module looks like while it is being typed. No names, no noise.
+	if (!parser.ParseModule(moduleObject->GetModuleText()))
+		return;
+
+	for (const ibModuleElement& element : parser.GetAllContent()) {
+
+		// EXPORTED ONLY — the same line the bytecode road draws (IsExport). A private procedure is
+		// reachable from inside its module and nowhere else, and offering it here would name
+		// something the compiler then refuses.
+		if (methods) {
+			if (element.m_eType == eExportFunction)
+				helper->AppendFunc(element.m_name, element.m_paramCount, wxEmptyString, wxNOT_FOUND, alias);
+			else if (element.m_eType == eExportProcedure)
+				helper->AppendProc(element.m_name, element.m_paramCount, wxEmptyString, wxNOT_FOUND, alias);
+		}
+		else if (element.m_eType == eExportVariable) {
+			helper->AppendProp(element.m_name, wxNOT_FOUND, alias);
+		}
+	}
+}
+
+void ibRuntimeModuleDataObject::ExportMethodsToHelper(ibValue::ibMemberTable* helper, long alias) const
+{
+	if (helper == nullptr)
+		return;
+
+	if (appData->DesignerMode()) {
+		ibExportNamesFromText(GetMetaObject(), helper, alias, /*methods*/ true);
+		return;
+	}
+
+	const auto pu = GetProcUnit();
+	if (!pu) return;
+	const ibByteCode* bc = pu->GetByteCode();
+	if (bc == nullptr) return;
+	for (const auto& fn : bc->m_listFunc) {
+		if (!fn.IsExport()) continue;
+		helper->AppendMethod(fn.m_strRealName,
+			bc->GetNParams(fn),
+			bc->HasRetVal(fn),
+			(long)fn,
+			alias);
+	}
+}
+
+void ibRuntimeModuleDataObject::ExportPropsToHelper(ibValue::ibMemberTable* helper, long alias) const
+{
+	if (helper == nullptr)
+		return;
+
+	if (appData->DesignerMode()) {
+		ibExportNamesFromText(GetMetaObject(), helper, alias, /*methods*/ false);
+		return;
+	}
+
+	const auto pu = GetProcUnit();
+	if (!pu) return;
+	const ibByteCode* bc = pu->GetByteCode();
+	if (bc == nullptr) return;
+	for (const auto& v : bc->m_listVar) {
+		if (!v.IsExport()) continue;
+		helper->AppendProp(v.m_strRealName, v, alias);
+	}
+}
+
 void ibRuntimeModuleDataObject::FillHelperFromBinds(ibValue::ibMemberTable* helper, long alias) const
 {
 	if (helper == nullptr) return;

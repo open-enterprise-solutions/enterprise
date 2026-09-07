@@ -53,6 +53,7 @@
 #include "backend/composition/composeRunSchema.h"                     // …and the field names the far end reads
 #include "backend/settings/settingsComposer.h"                   // saved settings, restored INTO a composer
 #include "backend/userInfo.h"                                    // ibUserInfo - WHOSE setting
+#include "backend/system/value/valueDataComposition.h"           // ibSyncParametersWithQuery - what the TEXT asks for
 #include "backend/mcp/mcpDebugBridge.h"                          // the figures are asked for over the wire
 #include "backend/debugger/debugClient.h"                        // …and there has to BE one to ask over
 
@@ -467,6 +468,21 @@ public:
 			// is constructed with. So there is nothing to assemble — the text goes in and the walk
 			// reads the query's own rows.
 			description.SetQuery(bareQuery);
+
+			// 🛑⭐⭐ …AND THE PARAMETERS THE TEXT ASKS FOR HAVE TO BE DECLARED, or `parameters` has
+			// nothing to bind to. A composition applies values BY NAME onto parameters the
+			// description carries; a schema handed over already carries them, and a report's own
+			// were written when its query was last saved — a bare query has never been through
+			// either, so `&Period` in the text was a parameter nobody had declared and every run
+			// with a date came back "parameter '&P' is not set" (measured 2026-09-07, on the road
+			// this file had just grown, against a description that promised parameters work here).
+			//
+			// ⭐ THE SYNC IS THE COMPOSER'S OWN — `ibSyncParametersWithQuery`, the same call a
+			// composer makes when its query text changes and the settings window makes over the copy
+			// it edits. Nothing new is read out of the text here; a third reader of `&name` would be
+			// a third answer to what a parameter is.
+			ibSyncParametersWithQuery(description.m_parameters, bareQuery);
+
 			subject = ibMcpText("the query given");
 		}
 		else if (givenSchema != nullptr) {

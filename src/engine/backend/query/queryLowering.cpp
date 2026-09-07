@@ -721,9 +721,28 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 		return {};
 	}
 
+	// The segment just walked through, when it held SEVERAL types — see the absent leaf below.
+	wxString composite;
+
 	for (size_t k = i; k < path.size(); ++k) {
 		const ibBackendQueryColumn* col = cur->ResolveColumnByName(path[k]);
 		if (col == nullptr) {
+			// ⭐⭐ AND THE LINE IS DRAWN BETWEEN A ROW AND A NAME. A composite's types are not
+			// obliged to agree: where the row's own type does not carry the field, the path does not
+			// reach and the value is NULL — that is a legitimate shape and it is answered by the
+			// provider, which joins only the types that HAVE the name. But a name NO type carries is
+			// not a row's silence, it is a mistake in the query, and it is refused.
+			//
+			// Refused NAMING THE FIELD, not a table: one of the types was picked to stand for the
+			// walk, so the old message pointed at a table the query never mentioned and read as
+			// though that one table were at fault.
+			if (!composite.IsEmpty()) {
+				ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+					_("unknown attribute '%s' - none of the types '%s' may hold has it"),
+					path[k], composite));
+				return {};
+			}
+
 			// The source is named for the same reason as above — and here it is the one that matters
 			// most, because a WALK moves from table to table: the name that failed may belong to the
 			// third hop, and without saying where it was asked the message points at the query rather
@@ -732,6 +751,7 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 				_("unknown attribute '%s' on source '%s'"), path[k], SpokenSourceName(sources, cur)));
 			return {};
 		}
+		composite.clear();
 		cols.push_back(col);
 		if (k + 1 < path.size()) {
 			const ibBackendQueryable* next = cur->GetProvider().ResolveReferenceTarget(cur, col);
@@ -746,7 +766,28 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 						wxString::Format(_("'%s' is not a single-target reference (cannot walk)"), path[k]));
 					return {};
 				}
+
+				// ⭐⭐ THE REPRESENTATIVE IS ONE THAT CARRIES THE NEXT NAME — not simply the first
+				// alternative. A walk through a composite matches BY NAME: `Recorder.Organisation`
+				// asks every document type that has an `Organisation`, and the ones that do not
+				// answer NULL. That is already what the provider builds (dbTableProvider joins only
+				// the targets carrying the next segment and COALESCEs an empty in), so taking the
+				// first alternative here was this layer disagreeing with the one below it: the walk
+				// was refused, naming a source the query never mentioned ("unknown attribute
+				// 'Organisation' on source 'GoodsReceipt'"), for a field the register's other
+				// recorders have.
+				//
+				// A name NO alternative carries still falls through to the ordinary refusal on the
+				// next turn of the loop, which is the honest answer — nothing to walk into.
 				next = targets.front();
+				for (const ibBackendQueryable* target : targets) {
+					if (target != nullptr && target->ResolveColumnByName(path[k + 1]) != nullptr) {
+						next = target;
+						break;
+					}
+				}
+
+				composite = path[k];   // so a refusal one segment on names the FIELD, not a stand-in
 			}
 			cur = next;
 		}

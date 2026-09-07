@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "codeEditor.h"
-#include "codeEditorParser.h"
+#include "backend/compiler/parseCode.h"
 
 #include "backend/metaCollection/partial/commonObject.h"
 
@@ -49,7 +49,7 @@ void ibCodeEditor::AddKeywordFromObject(const ibValue& vObject)
 		if (moduleDataObject != nullptr) {
 			const ibValueMetaObjectModuleBase* computeModuleObject = moduleDataObject->GetMetaObject();
 			if (computeModuleObject != nullptr) {
-				ibParserModule cParser;
+				ibParseCode cParser;
 				if (cParser.ParseModule(computeModuleObject->GetModuleText())) {
 					for (auto code : cParser.GetAllContent()) {
 						if (code.m_eType == eExportVariable) {
@@ -81,7 +81,7 @@ void ibCodeEditor::AddKeywordFromObject(const ibValue& vObject)
 		if (managerDataObject != nullptr) {
 			const ibValueMetaObjectCommonModule* computeManagerModule = managerDataObject->GetManagerModule();
 			if (computeManagerModule != nullptr) {
-				ibParserModule cParser;
+				ibParseCode cParser;
 				if (cParser.ParseModule(computeManagerModule->GetModuleText())) {
 					for (auto code : cParser.GetAllContent()) {
 						if (code.m_eType == eExportVariable) {
@@ -113,87 +113,6 @@ void ibCodeEditor::AddKeywordFromObject(const ibValue& vObject)
 			);
 		}
 	}
-}
-
-bool ibCodeEditor::PrepareExpression(unsigned int currPos, wxString& expression, wxString& keyword, wxString& currentWord, bool& outHasPoint)
-{
-	bool hasPoint = false, hasKeyword = false;
-	for (unsigned int i = 0; i < m_precompileModule->GetLexems().size(); i++)
-	{
-		if (m_precompileModule->GetLexems()[i].m_lexType == IDENTIFIER)
-		{
-			if (hasPoint) expression += m_precompileModule->GetLexems()[i].m_valData.GetString();
-			else expression = m_precompileModule->GetLexems()[i].m_valData.GetString();
-
-			currentWord = m_precompileModule->GetLexems()[i].m_valData.GetString();
-
-			if (i < m_precompileModule->GetLexems().size() - 1) {
-				if (m_precompileModule->GetLexems()[i + 1].m_numString >= currPos)
-					break;
-				const ibLexem& lex = m_precompileModule->GetLexems()[i + 1];
-				if (lex.m_lexType == DELIMITER && lex.m_numData == '(')
-					expression = wxEmptyString;
-				if (lex.m_lexType == DELIMITER && lex.m_numData == '(' && !hasPoint)
-					keyword = currentWord;
-
-				if (lex.m_lexType != ENDPROGRAM)
-					hasPoint = lex.m_lexType == DELIMITER && lex.m_numData == '.';
-			}
-
-			hasKeyword = hasKeyword ? i == m_precompileModule->GetLexems().size() - 1 : false;
-		}
-		else if (m_precompileModule->GetLexems()[i].m_lexType == KEYWORD && m_precompileModule->GetLexems()[i].m_numData == KEY_NEW)
-		{
-			expression = wxEmptyString; currentWord = wxEmptyString;
-			keyword = m_precompileModule->GetLexems()[i].m_valData.GetString(); hasKeyword = true;
-		}
-		else if (m_precompileModule->GetLexems()[i].m_lexType == CONSTANT)
-		{
-			// Special-keyword contexts where the autocomplete dropdown
-			// should be filtered by the literal currently being typed
-			// inside the call's argument string — e.g.
-			// showCommonForm("...|") completes against form names.
-			//
-			// Outside those contexts a literal MUST NOT leak into
-			// currentWord — otherwise an unrelated string constant
-			// earlier in the source (var = "hello"; <caret>) would
-			// poison the autocomplete filter and hide everything.
-			const bool inSpecialCall =
-				stringUtils::CompareString(keyword, wxT("type"))
-				|| stringUtils::CompareString(keyword, wxT("showCommonForm"))
-				|| (stringUtils::CompareString(keyword, wxT("getCommonForm")) && !hasPoint);
-
-			if (inSpecialCall) {
-				currentWord = m_precompileModule->GetLexems()[i].m_valData.GetString();
-				hasKeyword = true;
-			}
-			else {
-				currentWord = wxEmptyString;
-				hasKeyword = false;
-			}
-		}
-		else if (m_precompileModule->GetLexems()[i].m_lexType == DELIMITER
-			&& m_precompileModule->GetLexems()[i].m_numData == '.')
-		{
-			if (!expression.IsEmpty())
-				expression += '.';
-
-			currentWord = wxEmptyString; hasPoint = true; hasKeyword = false;
-		}
-		else
-		{
-			if (m_precompileModule->GetLexems()[i].m_lexType != ENDPROGRAM) {
-				expression = wxEmptyString; currentWord = wxEmptyString;
-			}
-
-			hasKeyword = false;
-		}
-
-		if (i < m_precompileModule->GetLexems().size() - 1 &&
-			m_precompileModule->GetLexems()[i + 1].m_numString >= currPos) break;
-	}
-
-	outHasPoint = hasPoint; return hasKeyword;
 }
 
 void ibCodeEditor::PrepareTooTipExpression(unsigned int currPos, wxString& expression, wxString& currentWord, bool& outHasPoint)
@@ -802,7 +721,7 @@ void ibCodeEditor::LoadAutoComplete()
 	if (m_ct.Active())
 		m_ct.Cancel();
 
-	const bool hasKeyword = PrepareExpression(realPos, expression, keyword, currentWord, hasPoint);
+	const bool hasKeyword = m_precompileModule->PrepareExpression(realPos, expression, keyword, currentWord, hasPoint);
 
 	// User stands AT a word boundary (Ctrl+Space at the very start of an
 	// identifier, or in trailing whitespace). PrepareExpression greedily
@@ -860,7 +779,7 @@ void ibCodeEditor::LoadCallTip()
 
 	wxString expression, keyword, currentWord, sDescription; bool hasPoint = true;
 
-	if (!PrepareExpression(currentPos, expression, keyword, currentWord, hasPoint)) {
+	if (!m_precompileModule->PrepareExpression(currentPos, expression, keyword, currentWord, hasPoint)) {
 		if (hasPoint) {
 			m_precompileModule->SetCurrentPos(GetRealPosition());
 			//Collect text
@@ -878,7 +797,7 @@ void ibCodeEditor::LoadCallTip()
 				if (moduleDataObject) {
 					const ibValueMetaObjectModuleBase* computeModuleObject = moduleDataObject->GetMetaObject();
 					if (computeModuleObject) {
-						ibParserModule cParser;
+						ibParseCode cParser;
 						if (cParser.ParseModule(computeModuleObject->GetModuleText())) {
 							for (auto code : cParser.GetAllContent()) {
 								if (code.m_eType == eExportProcedure || code.m_eType == eExportFunction) {
@@ -896,7 +815,7 @@ void ibCodeEditor::LoadCallTip()
 				if (managerDataObject) {
 					const ibValueMetaObjectCommonModule* computeManagerModule = managerDataObject->GetManagerModule();
 					if (computeManagerModule) {
-						ibParserModule cParser;
+						ibParseCode cParser;
 						if (cParser.ParseModule(computeManagerModule->GetModuleText())) {
 							for (auto code : cParser.GetAllContent()) {
 								if (stringUtils::CompareString(code.m_name, currentWord)) {

@@ -87,6 +87,21 @@ bool ibValueMetaObjectModuleBase::OnAfterCloseMetaObject()
 	return ibValueMetaObject::OnAfterCloseMetaObject();
 }
 
+// ⭐ WHAT WAS BUILT FROM THIS TEXT IS NOW STALE, and in the designer that is not a detail: a
+// module's exports are READ FROM THE TEXT there (ibRuntimeModuleDataObject::ExportMethodsToHelper
+// — nothing compiles a module in the designer, so there is no bytecode to read them from), and a
+// name surface is built once and then cached. Nobody would notice the missing word until an export
+// added five minutes ago failed to appear after the dot for the rest of the session.
+//
+// Said through the verb that already means it: InvalidateCompileModule is what the form editor
+// calls on a form-edit commit (metaFormObject.cpp). It is a no-op for a module nothing has asked
+// about yet, and it never CONSTRUCTS anything — an entry that is only a rebuilder stays one.
+void ibValueMetaObjectModuleBase::InvalidateBuiltFromText()
+{
+	if (ibCompileValueCache* compileCache = m_metaData != nullptr ? m_metaData->GetCompileCache() : nullptr)
+		compileCache->InvalidateCompileModule(this);
+}
+
 //***********************************************************************
 //*                          default procedures						    *
 //***********************************************************************

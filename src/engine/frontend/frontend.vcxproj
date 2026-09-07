@@ -380,7 +380,6 @@
     <ClCompile Include="win\editor\codeEditor\codeEditorInterpreter.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditorInterpreterContext.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditorLoader.cpp" />
-    <ClCompile Include="win\editor\codeEditor\codeEditorParser.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditorPrintOut.cpp" />
     <ClCompile Include="win\editor\codeEditor\components\autoComplete.cpp" />
     <ClCompile Include="win\editor\codeEditor\components\callTip.cpp" />
@@ -778,7 +777,6 @@
     <ClInclude Include="win\editor\textEditor\textEditorPrintOut.h" />
     <ClInclude Include="win\editor\codeEditor\codeEditor.h" />
     <ClInclude Include="win\editor\codeEditor\codeEditorInterpreter.h" />
-    <ClInclude Include="win\editor\codeEditor\codeEditorParser.h" />
     <ClInclude Include="win\editor\codeEditor\codeEditorPrintOut.h" />
     <ClInclude Include="win\editor\codeEditor\components\autoComplete.h" />
     <ClInclude Include="win\editor\codeEditor\components\callTip.h" />

@@ -48,8 +48,8 @@ ibDataValue FieldEntry(const ibQueryConstructorField& field)
 	if (!field.m_source.IsEmpty())
 		node->SetValue(wxT("source"), field.m_source);
 
-	// A reference can be walked one level further; a composite one cannot, and
-	// says so by answering zero.
+	// A reference can be walked one level further — a COMPOSITE one too: the query branches per
+	// alternative and coalesces the leaf, so what is offered here is what the walk can then do.
 	if (field.m_reference)
 		node->AddField(wxT("reference"), ibDataValue::Bool(true));
 
@@ -70,7 +70,9 @@ const ibArg& ArgContains()
 const ibArg& ArgPath()
 {
 	static const ibArg s_a(wxT("path"), ibArg::Kind::Text,
-		ibMcpText("The source's dotted path, as query_sources gives it."), /*required*/ true);
+		ibMcpText("The source's dotted path, as query_sources gives it - optionally followed by "
+			"reference fields to step through, exactly as a query would write them "
+			"(`AccumulationRegister.GoodsInWarehouses.Recorder`)."), /*required*/ true);
 	return s_a;
 }
 
@@ -161,7 +163,11 @@ public:
 	wxString GetDescription() const override
 	{
 		return ibMcpText("The fields of one query source, with the name a query writes and the words a "
-			"person reads. A field marked as a reference can be walked further with a dot.");
+			"person reads. A field marked as a reference can be walked further with a dot - and "
+			"ASKING WHAT IS BEHIND IT IS THIS SAME VERB: name the source and then the reference "
+			"fields to step through, as a query would write them. A reference to several types is "
+			"walked too, and answers with what all of them offer, the same names merged - which is "
+			"what the query does with them, one column whichever type a row turns out to hold.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -196,7 +202,58 @@ public:
 			source.m_name.push_back(segments.GetNextToken());
 
 		const ibQueryPackage empty;
-		const std::vector<ibQueryConstructorField> fields = model.GetFields(source, empty, 0);
+		std::vector<ibQueryConstructorField> fields = model.GetFields(source, empty, 0);
+
+		// ⭐⭐ AND IF THAT IS NOT A SOURCE, THE TAIL IS A WALK. A path names a source, then possibly
+		// fields to step THROUGH — which is the same [+] the designer's field tree makes, and the
+		// only way to ask what is behind a reference. Asked here by shortening the source until it
+		// resolves, because a source is itself two or three segments (a register and its virtual
+		// table), so where the source ends cannot be assumed — it has to be found.
+		//
+		// Until this, a caller was told a field was a reference and then refused when asking what
+		// was behind it.
+		if (fields.empty() && source.m_name.size() > 1) {
+
+			for (size_t tail = 1; tail < source.m_name.size() && fields.empty(); ++tail) {
+
+				ibQuerySource head;
+				head.m_name.assign(source.m_name.begin(), source.m_name.end() - tail);
+
+				std::vector<ibQueryConstructorField> level = model.GetFields(head, empty, 0);
+				if (level.empty())
+					continue;
+
+				// Step through the remaining segments, each of which must name a reference field of
+				// the level above it.
+				for (size_t i = source.m_name.size() - tail; i < source.m_name.size(); ++i) {
+
+					const ibQueryConstructorField* found = nullptr;
+					for (const ibQueryConstructorField& field : level)
+						if (field.m_name.IsSameAs(source.m_name[i], false)) { found = &field; break; }
+
+					if (found == nullptr || !found->m_reference) {
+						level.clear();
+						break;   // not a name of this level, or a leaf — nothing is behind it
+					}
+
+					// ⭐ ONE TYPE, ONE SET OF FIELDS — and a composite is answered per type rather
+					// than merged. Two documents both have a `Date`, and one merged line would hide
+					// that they are two; `source` says which type each came out of, the same way
+					// the query constructor draws a level per type. What the query DOES with them
+					// is the other question — there they are one column, coalesced.
+					const std::vector<ibQueryConstructorField> branches =
+						model.GetReferenceBranches(found->m_type);
+
+					level.clear();
+					for (const ibQueryConstructorField& branch : branches)
+						for (ibQueryConstructorField& behind
+						     : model.GetReferenceFields(branch.m_referenceClsid, branch.m_name))
+							level.push_back(std::move(behind));
+				}
+
+				fields = std::move(level);
+			}
+		}
 
 		if (fields.empty()) {
 			refusal = wxString::Format(

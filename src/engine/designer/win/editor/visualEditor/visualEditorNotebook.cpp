@@ -3,7 +3,7 @@
 #include "frontend/win/theme/luna_tabart.h"
 
 #include "frontend/win/editor/codeEditor/codeEditor.h"
-#include "frontend/win/editor/codeEditor/codeEditorParser.h"
+#include "backend/compiler/parseCode.h"
 #include "frontend/visualView/layers/commandBar.h"       // ibValueCommandBarItem (tree reveal)
 
 void ibVisualEditorNotebook::CreateVisualEditor(ibMetaDocument* document, wxWindow* parent, wxWindowID id, long flags)
@@ -61,7 +61,7 @@ bool ibVisualEditorNotebook::CanRedo() const
 
 void ibVisualEditorNotebook::ModifyEvent(ibEvent* event, const wxVariant& oldValue, const wxVariant& newValue)
 {
-	ibParserModule parser; bool procFounded = false;
+	ibParseCode parser; bool procFounded = false;
 
 	const wxString& strEvent = newValue.GetString();
 

@@ -30,7 +30,7 @@
 #include "backend/value_ptr.h"                     // ibValuePtr - metaobjects are reference-counted
 
 #include "frontend/win/editor/codeEditor/codeEditorInterpreter.h"
-#include "frontend/win/editor/codeEditor/codeEditorParser.h"
+#include "backend/compiler/parseCode.h"
 
 #include <memory>
 
@@ -165,8 +165,118 @@ const ibArg& ArgText()
 const ibArg& ArgPosition()
 {
 	static const ibArg s_a(wxT("position"), ibArg::Kind::Whole,
-		ibMcpText("Character offset to stand at - normally just after the dot you want completed."), /*required*/ true);
+		ibMcpText("Character offset to stand at - just after the dot you want completed, or anywhere "
+			"in open code to be told what is in scope there. Pass 0 with empty `text` to ask what "
+			"a module starts with."), /*required*/ true);
 	return s_a;
+}
+
+// WHAT MAY BE WRITTEN IN OPEN CODE — the caret is not after a dot, so the answer is not the members
+// of anything: it is the names that ARE in scope right there. The editor's other list
+// (ibCodeEditor::LoadSysKeyword), which this verb never had.
+//
+// ⚠ KEYWORDS ARE LEFT OUT ON PURPOSE, and that is the one place this deliberately says less than the
+// dropdown. The editor lists them because a person is choosing from one popup; a caller here has
+// syntax_search, which answers "what does this language have" properly — with the help text, the
+// call form and the kind — and would only be repeated worse by a bare list of words. Names in scope,
+// by contrast, are answerable NOWHERE else.
+// ⭐⭐ AND EACH NAME SAYS WHERE IT CAME FROM, which is what makes a list of a hundred and seventy
+// usable at all. A hundred and forty of them are the same at every caret in every module; the ten
+// that make THIS place different are what a caller is actually looking for, and without the origin
+// they sit in the middle of the alphabet indistinguishable from `Chars` and `BeginTransaction`.
+// Sorting is then the caller's to do, on a fact rather than on a guess about names.
+wxString ibOriginName(ibNameOrigin origin)
+{
+	switch (origin) {
+	case ibNameOrigin::Platform:     return wxT("platform");
+	case ibNameOrigin::Global:       return wxT("global");
+	case ibNameOrigin::GlobalModule: return wxT("globalModule");
+	case ibNameOrigin::Context:      return wxT("context");
+	case ibNameOrigin::Bound:        return wxT("bound");
+	case ibNameOrigin::Member:       return wxT("member");
+	case ibNameOrigin::Inherited:    return wxT("inherited");
+	default:                         return wxT("declared");
+	}
+}
+
+bool ibAnswerWithScope(const ibPrecompileCode& precompile, int caretPos, ibDataNode& result)
+{
+	std::vector<ibDataValue> names;
+
+	const auto append = [&names](const wxString& name, const wxString& kind, bool exported,
+		const wxString& signature, ibNameOrigin origin, bool inBody) {
+
+		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+		entry->SetValue(wxT("name"), name);
+		entry->SetValue(wxT("kind"), kind);
+		if (!signature.IsEmpty())
+			entry->SetValue(wxT("signature"), signature);
+		entry->AddField(wxT("exported"), ibDataValue::Bool(exported));
+
+		// TWO SEPARATE FACTS, kept apart on purpose. `origin` says where the name came FROM; `local`
+		// says it belongs to the body the caret is standing in rather than to the module. Folding
+		// "local" into the origin list would have made a frame position look like a source.
+		entry->SetValue(wxT("origin"), ibOriginName(origin));
+		if (inBody)
+			entry->AddField(wxT("local"), ibDataValue::Bool(true));
+
+		names.push_back(ibDataValue::Child(entry));
+	};
+
+	const ibPrecompileContext* rootContext = precompile.GetContext();
+	if (rootContext == nullptr)
+		return false;
+
+	for (const auto& variable : rootContext->m_variables) {
+
+		const ibPrecompileVariable& declared = variable.second;
+		if (declared.m_isTempVar)
+			continue;
+
+		// DECLARED BELOW THE CARET IS NOT YET A NAME — the same gate the dropdown applies. A
+		// parameter or an injected context name carries declPos 0 and is always visible.
+		if (declared.m_declPos > caretPos)
+			continue;
+
+		append(declared.m_realName, wxT("variable"), declared.m_isExport, wxEmptyString,
+			declared.m_origin, /*inBody*/ false);
+	}
+
+	for (const auto& function : rootContext->m_functions) {
+
+		const ibPrecompileFunction* declared = function.second;
+		if (declared == nullptr)
+			continue;
+
+		// Function or procedure: calling a procedure where a value is wanted is a compile error,
+		// and this is what tells them apart — the same distinction the member answer carries as
+		// `returnsValue`.
+		const bool returnsValue = declared->m_context == nullptr
+			|| declared->m_context->m_returnKind == RETURN_FUNCTION;
+
+		append(declared->m_realName, returnsValue ? wxT("function") : wxT("procedure"),
+			declared->m_isExport, declared->m_shortDescription, declared->m_origin, /*inBody*/ false);
+	}
+
+	// AND THE BODY THE CARET IS STANDING IN, whose locals belong to nobody else. GetCurrentContext
+	// is the frame the walk stopped in; at module level it is the root, already listed above.
+	const ibPrecompileContext* currentContext = precompile.GetCurrentContext();
+	if (currentContext != nullptr && currentContext != rootContext) {
+		for (const auto& variable : currentContext->m_variables) {
+
+			const ibPrecompileVariable& declared = variable.second;
+			if (declared.m_isTempVar)
+				continue;
+			if (declared.m_declPos > caretPos)
+				continue;
+
+			append(declared.m_realName, wxT("variable"), declared.m_isExport, wxEmptyString,
+				declared.m_origin, /*inBody*/ true);
+		}
+	}
+
+	result.AddField(wxT("names"), ibDataValue::Array(names));
+	return true;
 }
 
 } // namespace
@@ -186,10 +296,21 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("What may be written at a given place - the same list the editor shows after "
-			"a dot. Send the text you are about to write and the offset you are standing at (just "
-			"after the dot), and the answer is what that expression actually offers: its methods "
-			"with their call form, and its properties.\n\n"
+		return ibMcpText("What may be written at a given place - the list the editor shows there. "
+			"Send the text you are about to write and the offset you are standing at, and WHERE YOU "
+			"STAND DECIDES WHICH ANSWER YOU GET. Just after a dot: what that expression offers - "
+			"`methods` with their call form and whether each returns a value, and `properties`. "
+			"Anywhere else: `names`, everything in scope at that point - the variables and the "
+			"functions, including the ones this module declares above the caret. Keywords are not in "
+			"it; syntax_search answers those properly.\n\n"
+			"READ `origin` BEFORE READING THE LIST. Most of those names are the same at every caret "
+			"in every module, and the few that make THIS place different are the point: `member` is "
+			"the object's own attributes and tabular sections, `context` is ThisObject / ThisForm, "
+			"`bound` is RegisterRecords / Filter / a constant's Value, `declared` is written in this "
+			"text (with `local` true when it belongs to the body you are standing in), `inherited` "
+			"comes from a module above this one. `platform`, `global` and `globalModule` are the "
+			"ones you already know - the configuration's collections, the system functions, global "
+			"constants and common modules.\n\n"
 			"USE IT INSTEAD OF GUESSING AN OBJECT'S API, and the reason is not politeness: the help "
 			"corpus covers functions and keywords, and THE OBJECT MODEL IS NOT IN IT. A catalog "
 			"manager's methods, what a document object offers, what a register record set will "
@@ -280,6 +401,19 @@ public:
 			return false;
 		}
 
+		// ⭐⭐ WHICH OF THE TWO QUESTIONS IS BEING ASKED, and the text is what answers it — the same
+		// way the editor decides between its two lists (ibCodeEditor::OnShowAutoComplete: hasPoint
+		// → the members of what precedes the dot, otherwise what is in scope). This verb only ever
+		// answered the first half, so standing anywhere but just after a dot produced an empty
+		// answer that read like "nothing here" — including at the very start of an empty module,
+		// where in fact the whole configuration is available.
+		wxString expression, keyword, currentWord;
+		bool afterDot = false;
+		precompile.PrepareExpression((unsigned int)position, expression, keyword, currentWord, afterDot);
+
+		if (!afterDot)
+			return ibAnswerWithScope(precompile, (int)position, result);
+
 		const ibValue value = precompile.GetComputeValue();
 
 		std::vector<ibDataValue> methods;
@@ -322,7 +456,7 @@ MCP_TOOL_REGISTER(ibMcpToolScriptComplete);
 //
 // WHAT A MODULE ALREADY DECLARES — its procedures, functions and variables,
 // each with the lines it occupies. The parser is the editor's
-// (ibParserModule): the same walk that fills the "Procedures and functions"
+// (ibParseCode): the same walk that fills the "Procedures and functions"
 // window, so a caller sees exactly what a person opening that window sees.
 //
 // It reads TEXT, not a saved module, and it does not compile — so it answers
@@ -358,7 +492,7 @@ public:
 	{
 		const wxString text = ArgText().Text(params);
 
-		ibParserModule parser;
+		ibParseCode parser;
 		if (!parser.ParseModule(text)) {
 			refusal = ibMcpText("The text could not be read far enough to list what it declares.");
 			return false;

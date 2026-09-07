@@ -3773,10 +3773,28 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			// branch (the path columns were resolved against the representative type at lowering). Returns
 			// nullptr for a PURE single-target path (caller keeps the existing qualified-alias path / full spread)
 			// or a non-scalar leaf. (docs/query-language-arc.md §22.4b)
-			auto pathCompositeScalarExpr = [&](const std::vector<const ibBackendQueryColumn*>& path) -> ibQueryExprPtr {
+			// ⭐⭐ AND THE TYPED EMPTY IS THE PROJECTION'S NEED, NOT THE WALK'S. A read must hand back a
+			// VALUE for a row whose type has no such field, and an empty of the leaf's own type is that
+			// value — which is why a non-scalar leaf (a reference, an enum) is deferred: there is no
+			// scalar empty to end the COALESCE with.
+			//
+			// A NULL TEST WANTS THE OPPOSITE. `Recorder.Organisation IS NULL` asks exactly whether the
+			// walk reached anything, and coalescing an empty in would answer "no" for every row — the
+			// question would be destroyed by the answer's own padding. Without the tail the same walk
+			// serves it, and it serves REFERENCE leaves too, which is the everyday case: `Organisation`
+			// and `Counterparty` are references, and "where the document has none" is the filter this
+			// whole shape exists for.
+			//
+			// The distinction it draws is the right one: NULL means the path did not reach (this row's
+			// type has no such field), while an EMPTY reference means it reached and the field is blank.
+			auto pathCompositeLeafExpr = [&](const std::vector<const ibBackendQueryColumn*>& path,
+			                                 bool withTypedEmpty) -> ibQueryExprPtr {
 				if (path.size() < 2) return nullptr;
-				ibQueryExprPtr empty = scalarEmpty(path.back());
-				if (!empty) return nullptr;                                   // non-scalar leaf — not handled here
+				ibQueryExprPtr empty;
+				if (withTypedEmpty) {
+					empty = scalarEmpty(path.back());
+					if (!empty) return nullptr;                               // non-scalar leaf — not handled here
+				}
 
 				bool sawComposite = false;
 				std::function<void(const wxString&, const ibBackendQueryable*, size_t, std::vector<ibQueryExprPtr>&)> walk =
@@ -3811,13 +3829,46 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				std::vector<ibQueryExprPtr> out;
 				walk(mainTable, queryable, 0, out);
 				if (!sawComposite || out.empty()) return nullptr;            // pure single-target — caller's path
-				out.push_back(empty);
+				if (empty) out.push_back(empty);
 				return out.size() == 1 ? out.front() : ibFunc(wxT("COALESCE"), out);
+			};
+
+			// The projection's and the sort's form of the above — the one that ends in a typed empty.
+			auto pathCompositeScalarExpr = [&](const std::vector<const ibBackendQueryColumn*>& path) {
+				return pathCompositeLeafExpr(path, /*withTypedEmpty*/ true);
 			};
 			auto condOp = [](const ibQueryCondition& c) { return FilterOpToBinOp(c.m_op); };
 
 			std::vector<ibQueryProjItem> projection;
-			projection.push_back(ibQueryProjItem{ ibCol(mainTable, wxT("*")), wxString() });
+
+			// 🛑⭐⭐ THE MAIN TABLE'S STAR IS WHAT A READ IS FOR — AND IT IS WHAT DISTINCT CANNOT HAVE.
+			// The result picks the source's own columns out of the row afterwards, so an ordinary
+			// projected read carries `Document1265.*` beside the walked leaves. Under DISTINCT that
+			// is fatal in the quiet way: the row's KEY rides in the star, a key never repeats, and
+			// every duplicate comes back looking like data. MEASURED 2026-09-07:
+			// `SELECT DISTINCT Currency.Description FROM Document.Payment` answered 209 rows where
+			// the same column under GROUP BY answered 4.
+			//
+			// So a DISTINCT statement projects the SELECTED columns and nothing else: the walked
+			// leaves are appended below under their own aliases, and the main table's own selected
+			// fields are named here — qualified by the main alias, which is where they do live.
+			if (!spec.m_distinct)
+				projection.push_back(ibQueryProjItem{ ibCol(mainTable, wxT("*")), wxString() });
+			else if (spec.m_distinctBy != nullptr) {
+				std::vector<wxString> written;
+				for (const ibBackendQueryColumn* col : *spec.m_distinctBy) {
+					if (col == nullptr || col->IsSyntheticColumn())
+						continue;   // its parts are somebody else's fields — they project themselves
+					if (!queryable->OwnsColumn(col))
+						continue;   // a walked leaf — appended below, qualified by its join alias
+					for (const wxString& field : ColumnFieldNames(col)) {
+						if (std::find(written.begin(), written.end(), field) != written.end())
+							continue;
+						written.push_back(field);
+						projection.push_back(ibQueryProjItem{ ibCol(mainTable, field), field });
+					}
+				}
+			}
 			for (const ibDotWalkColumn& dw : *spec.m_dotWalks) {
 				const std::vector<const ibBackendQueryColumn*>& fp = dw.m_path;
 				if (fp.size() < 2) continue;
@@ -4025,11 +4076,27 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					return in ? ibNot(in) : nullptr;
 				}
 				case ibQueryPredicateKind::IsNull: {
+					// ⭐⭐ A COMPOSITE LEAF IS AN EXPRESSION, NOT AN ALIAS — the same first step the
+					// WHERE conditions and the ORDER BY keys above already take, and the one line
+					// this branch was missing. A dot-walk through a composite reference has no ONE
+					// join to qualify by: it is a COALESCE over the branches, and asking THAT
+					// whether it is null is the whole question. Without this the path fell straight
+					// to resolvePath, which cannot resolve a composite, and the failure left as a
+					// raw std::logic_error — reaching the caller as "unknown exception" with nothing
+					// in the journal either. `WHERE Recorder.Date IS NULL` is the everyday shape,
+					// and it is the condition that ADMITS the null a composite walk produces.
+					if (!p->m_path.empty()) {
+						if (ibQueryExprPtr composite = pathCompositeLeafExpr(p->m_path, /*withTypedEmpty*/ false)) {
+							const ibQueryExprPtr isNull = ibIsNull(composite, false);
+							return p->m_negated ? ibNot(isNull) : isNull;
+						}
+					}
+
 					wxString qual = mainQual;   // a dot-walk IS NULL qualifies by its join alias, else main table
 					if (!p->m_path.empty()) {
 						wxString a; const ibBackendQueryable* tq = nullptr;
 						if (!resolvePath(p->m_path, a, tq) || tq == nullptr)
-							throw std::logic_error("BuildPageIR: a dot-walk IS NULL did not resolve its join");
+							throw std::logic_error("BuildPageIR: a dot-walk IS NULL on a composite non-scalar leaf is not yet supported");
 						qual = a;
 					}
 					ibQueryExprPtr allNull;
@@ -4139,9 +4206,27 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		// aliases — so the read side is untouched: GetValue(col) goes on finding `fld<metaID>…`
 		// exactly where it did. A reference dedupes by its type+id pair, which IS its identity.
 		if (spec.m_distinct) {
+			// 🛑⭐⭐ AND ONLY WHEN THE STATEMENT DOES NOT ALREADY PROJECT. The paragraph above is about
+			// the PLAIN read — `SELECT *`, where DISTINCT compares the whole physical row and so
+			// removes nothing. A statement with a dot-walk, a computed column or a walked dimension
+			// took the other road a few hundred lines up and has ALREADY projected exactly the
+			// selected columns, each qualified by the alias it actually lives on (`dw0.fld…`).
+			// Building a second projection over that one re-derives the list from bare columns, and
+			// a bare column does not know which table it came from — so every field was qualified
+			// with the MAIN one:
+			//
+			//     SELECT DISTINCT Document1265.CurrencyDescription … LEFT JOIN Catalog1234 AS dw0 …
+			//
+			// which Firebird refuses with -206, column unknown. MEASURED 2026-09-07:
+			// `SELECT DISTINCT Currency.Description FROM Document.Payment` failed while the same
+			// projection without DISTINCT answered 209 rows and the same one under GROUP BY answered
+			// 4. Deduplicating over what is already selected is what DISTINCT means; there is
+			// nothing left to narrow.
+			const bool alreadyProjected = hasDotWalk;
+
 			std::vector<ibQueryProjItem> distinctProj;
 			std::vector<wxString> written;
-			if (spec.m_distinctBy != nullptr)
+			if (!alreadyProjected && spec.m_distinctBy != nullptr)
 				for (const ibBackendQueryColumn* col : *spec.m_distinctBy) {
 					if (col == nullptr || col->IsSyntheticColumn())
 						continue;   // its parts are somebody else's fields — they project themselves

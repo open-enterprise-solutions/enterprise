@@ -148,9 +148,20 @@ public:
 	// metaID of what it refers to (docs, clsid.h §dynamic) — so the referenced source is the one
 	// the factory already has under that id. A type added tomorrow unfolds the day it registers.
 	//
-	// Empty for anything that is not a single-target reference. A COMPOSITE reference (several
-	// clsids) has no one answer, and the lowering refuses a composite mid-segment for the same
-	// reason — offering a walk the engine would then reject is worse than not offering it.
+	// Empty for anything that is not a reference at all.
+	//
+	// ⭐⭐ A COMPOSITE REFERENCE IS WALKED TOO, and this used to say the opposite: that the lowering
+	// refuses a composite mid-segment, so offering the walk would be offering something the engine
+	// then rejects. That stopped being true and the note outlived the code — ResolveReferenceTargets
+	// yields one queryable per alternative, and the lowering resolves a representative chain while
+	// the provider BRANCHES per type, one join sub-tree each, COALESCING the leaf
+	// (queryLowering.cpp). Measured 2026-09-07: `SELECT R.Recorder.Date FROM
+	// AccumulationRegister.GoodsInWarehouses AS R` returns the dates, while this model was still
+	// calling Recorder a leaf and query_fields was refusing the path.
+	//
+	// So the overload below takes the WHOLE type and answers with the UNION of its alternatives,
+	// SAME NAMES COLLAPSED — which is what the query itself does with them: `Recorder.Date` is one
+	// column whichever document the row points at.
 	//
 	// `sourceLabel` — WHICH TABLE THE WALK STARTED FROM, carried down every level. A field five hops
 	// inside a reference still belongs to the table it hangs off, and the trees group by that; a
@@ -159,6 +170,26 @@ public:
 	// re-derive it from a dotted path, which is exactly what a dot-walk makes ambiguous.
 	std::vector<ibQueryConstructorField> GetReferenceFields(ibClassID clsid,
 	                                                        const wxString& sourceLabel = wxEmptyString) const;
+
+	// The same walk asked of a whole TYPE rather than of one target: every reference alternative is
+	// unfolded and their fields merged by name, so a composite answers with what all of it offers.
+	// A field carried by several alternatives keeps the union of their types, which is what lets the
+	// next hop through it stay walkable.
+	std::vector<ibQueryConstructorField> GetReferenceFields(const ibTypeDescription& typeDesc,
+	                                                        const wxString& sourceLabel = wxEmptyString) const;
+
+	// ⭐ THE ALTERNATIVES THEMSELVES, when a field points at SEVERAL types — one entry per type,
+	// named the way a query names it. A tree draws these as a level of their own and unfolds each
+	// into its own fields, because that is the only way to say WHICH type offers what: two
+	// documents both have a `Date`, and merging them would hide that they are two.
+	//
+	// The merged overload above is the other question — what the WALK offers — and it collapses the
+	// same names, because that is what the query does when it runs. Discovery separates; execution
+	// merges.
+	//
+	// One alternative (an ordinary reference) answers with one entry, and a tree showing branches
+	// only for several will just unfold it: a plain [+], no type level in between.
+	std::vector<ibQueryConstructorField> GetReferenceBranches(const ibTypeDescription& typeDesc) const;
 
 	// THE FIELD A PATH ENDS IN — the walk the trees make when somebody clicks [+], asked all at once
 	// instead of one level at a time: find the source the first segment belongs to, then hop through

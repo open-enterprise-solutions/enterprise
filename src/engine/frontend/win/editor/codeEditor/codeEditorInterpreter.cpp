@@ -84,7 +84,7 @@ void ibPrecompileCode::Clear()
 }
 
 #include "backend/compiler/enumFactory.h"
-#include "codeEditorParser.h"
+#include "backend/compiler/parseCode.h"
 
 void ibPrecompileCode::PrepareModuleData()
 {
@@ -125,6 +125,7 @@ void ibPrecompileCode::PrepareModuleData()
 				variables.m_number = i;
 				variables.m_isContext = true;
 				variables.m_isExport = true;
+				variables.m_origin = ibNameOrigin::Platform;   // the manager's context — Catalogs, Documents, …
 
 				variables.m_valContext = managerVariable;
 
@@ -143,6 +144,7 @@ void ibPrecompileCode::PrepareModuleData()
 				pFunction->m_shortDescription = managerVariable->GetMethodHelper(i);
 				pFunction->m_isContext = true;
 				pFunction->m_isExport = true;
+				pFunction->m_origin = ibNameOrigin::Platform;   // the system functions
 
 				pFunction->m_valContext = managerVariable;
 
@@ -161,7 +163,7 @@ void ibPrecompileCode::PrepareModuleData()
 				if (modulePtr == nullptr || !modulePtr->IsGlobalModule())
 					continue;
 				{
-					ibParserModule cParser;
+					ibParseCode cParser;
 					if (cParser.ParseModule(modulePtr->GetModuleText())) {
 						for (auto code : cParser.GetAllContent()) {
 							if (code.m_eType == eExportVariable) {
@@ -176,6 +178,7 @@ void ibPrecompileCode::PrepareModuleData()
 								variables.m_number = nNumberAttr;
 								variables.m_isContext = true;
 								variables.m_isExport = true;
+								variables.m_origin = ibNameOrigin::GlobalModule;
 
 								variables.m_valContext = modulePtr;
 
@@ -194,6 +197,7 @@ void ibPrecompileCode::PrepareModuleData()
 								pFunction->m_shortDescription = code.m_shortDescription;
 								pFunction->m_isContext = true;
 								pFunction->m_isExport = true;
+								pFunction->m_origin = ibNameOrigin::GlobalModule;
 
 								pFunction->m_valContext = modulePtr;
 
@@ -213,6 +217,7 @@ void ibPrecompileCode::PrepareModuleData()
 								pFunction->m_shortDescription = code.m_shortDescription;
 								pFunction->m_isContext = true;
 								pFunction->m_isExport = true;
+								pFunction->m_origin = ibNameOrigin::GlobalModule;
 
 								pFunction->m_valContext = modulePtr;
 
@@ -259,6 +264,7 @@ void ibPrecompileCode::PrepareModuleData()
 				variable.m_realName = kv.first;
 				variable.m_isContext = true;
 				variable.m_isExport = true;
+				variable.m_origin = ibNameOrigin::Context;   // ThisObject / ThisForm
 				// NON-owning capture (const → TYPE_CONST_REFFER): the bound cell may be a
 				// MEMBER ibValue (refCount 0, e.g. a form attribute's m_value). An owning
 				// reffer would IncrRef it here and DecrRef it to 0 on Clear → delete of a
@@ -279,6 +285,7 @@ void ibPrecompileCode::PrepareModuleData()
 				variable.m_realName = kv.first;
 				variable.m_isContext = true;
 				variable.m_isExport = true;
+				variable.m_origin = ibNameOrigin::Bound;   // RegisterRecords / Filter / Controls / DataSource
 				// NON-owning (const → TYPE_CONST_REFFER) — see the context loop above. DataSource
 				// binds to the MAIN attribute's m_value MEMBER cell (refCount 0); an owning reffer
 				// deletes it on the next Clear (the original designer-keydown double-free).
@@ -315,6 +322,7 @@ void ibPrecompileCode::PrepareModuleData()
 					variable.m_realName = kv.first;
 					variable.m_isContext = false;
 					variable.m_isExport = false;
+					variable.m_origin = ibNameOrigin::Bound;   // a constant's Value — bound, though writable
 					variable.m_valObject = kv.second->GetValue();
 					GetContext()->m_variables[stringUtils::MakeUpper(kv.first)] = variable;
 				}
@@ -350,6 +358,7 @@ void ibPrecompileCode::PrepareModuleData()
 						variables.m_number = i;
 						variables.m_isContext = true;
 						variables.m_isExport = true;
+						variables.m_origin = ibNameOrigin::Member;   // the object's attributes / tabular sections
 
 						variables.m_valContext = pRefData;
 
@@ -375,6 +384,7 @@ void ibPrecompileCode::PrepareModuleData()
 						pFunction->m_shortDescription = pRefData->GetMethodHelper(i);
 						pFunction->m_isContext = true;
 						pFunction->m_isExport = true;
+						pFunction->m_origin = ibNameOrigin::Member;   // the object's own methods
 
 						pFunction->m_valContext = pRefData;
 
@@ -383,7 +393,7 @@ void ibPrecompileCode::PrepareModuleData()
 					}
 
 					if (moduleObject != nullptr) {
-						ibParserModule cParser;
+						ibParseCode cParser;
 						if (cParser.ParseModule(moduleObject->GetModuleText())) {
 							unsigned int nNumberAttr = pRefData->GetNProps() + 1;
 							unsigned int nNumberFunc = pRefData->GetNMethods() + 1;
@@ -400,6 +410,7 @@ void ibPrecompileCode::PrepareModuleData()
 									cVariable.m_number = nNumberAttr;
 									cVariable.m_isContext = true;
 									cVariable.m_isExport = true;
+									cVariable.m_origin = ibNameOrigin::Inherited;
 
 									cVariable.m_valContext = pRefData;
 
@@ -419,6 +430,7 @@ void ibPrecompileCode::PrepareModuleData()
 									pFunction->m_shortDescription = code.m_shortDescription;
 									pFunction->m_isContext = true;
 									pFunction->m_isExport = true;
+									pFunction->m_origin = ibNameOrigin::Inherited;
 
 									pFunction->m_valContext = pRefData;
 
@@ -439,6 +451,7 @@ void ibPrecompileCode::PrepareModuleData()
 									pFunction->m_shortDescription = code.m_shortDescription;
 									pFunction->m_isContext = true;
 									pFunction->m_isExport = true;
+									pFunction->m_origin = ibNameOrigin::Inherited;
 
 									pFunction->m_valContext = pRefData;
 
@@ -863,6 +876,90 @@ void ibPrecompileCode::PrepareLexem(unsigned int line, int line_offset, const in
 	ReclassifyMemberKeywords();
 }
 
+// Moved here from ibCodeEditor — see the note on the declaration. Body unchanged: it reads the
+// lexem stream and decides what kind of place the caret is standing in.
+bool ibPrecompileCode::PrepareExpression(unsigned int currPos, wxString& expression, wxString& keyword,
+	wxString& currentWord, bool& outHasPoint) const
+{
+	bool hasPoint = false, hasKeyword = false;
+	for (unsigned int i = 0; i < m_listLexem.size(); i++)
+	{
+		if (m_listLexem[i].m_lexType == IDENTIFIER)
+		{
+			if (hasPoint) expression += m_listLexem[i].m_valData.GetString();
+			else expression = m_listLexem[i].m_valData.GetString();
+
+			currentWord = m_listLexem[i].m_valData.GetString();
+
+			if (i < m_listLexem.size() - 1) {
+				if (m_listLexem[i + 1].m_numString >= currPos)
+					break;
+				const ibLexem& lex = m_listLexem[i + 1];
+				if (lex.m_lexType == DELIMITER && lex.m_numData == '(')
+					expression = wxEmptyString;
+				if (lex.m_lexType == DELIMITER && lex.m_numData == '(' && !hasPoint)
+					keyword = currentWord;
+
+				if (lex.m_lexType != ENDPROGRAM)
+					hasPoint = lex.m_lexType == DELIMITER && lex.m_numData == '.';
+			}
+
+			hasKeyword = hasKeyword ? i == m_listLexem.size() - 1 : false;
+		}
+		else if (m_listLexem[i].m_lexType == KEYWORD && m_listLexem[i].m_numData == KEY_NEW)
+		{
+			expression = wxEmptyString; currentWord = wxEmptyString;
+			keyword = m_listLexem[i].m_valData.GetString(); hasKeyword = true;
+		}
+		else if (m_listLexem[i].m_lexType == CONSTANT)
+		{
+			// Special-keyword contexts where the autocomplete dropdown
+			// should be filtered by the literal currently being typed
+			// inside the call's argument string — e.g.
+			// showCommonForm("...|") completes against form names.
+			//
+			// Outside those contexts a literal MUST NOT leak into
+			// currentWord — otherwise an unrelated string constant
+			// earlier in the source (var = "hello"; <caret>) would
+			// poison the autocomplete filter and hide everything.
+			const bool inSpecialCall =
+				stringUtils::CompareString(keyword, wxT("type"))
+				|| stringUtils::CompareString(keyword, wxT("showCommonForm"))
+				|| (stringUtils::CompareString(keyword, wxT("getCommonForm")) && !hasPoint);
+
+			if (inSpecialCall) {
+				currentWord = m_listLexem[i].m_valData.GetString();
+				hasKeyword = true;
+			}
+			else {
+				currentWord = wxEmptyString;
+				hasKeyword = false;
+			}
+		}
+		else if (m_listLexem[i].m_lexType == DELIMITER
+			&& m_listLexem[i].m_numData == '.')
+		{
+			if (!expression.IsEmpty())
+				expression += '.';
+
+			currentWord = wxEmptyString; hasPoint = true; hasKeyword = false;
+		}
+		else
+		{
+			if (m_listLexem[i].m_lexType != ENDPROGRAM) {
+				expression = wxEmptyString; currentWord = wxEmptyString;
+			}
+
+			hasKeyword = false;
+		}
+
+		if (i < m_listLexem.size() - 1 &&
+			m_listLexem[i + 1].m_numString >= currPos) break;
+	}
+
+	outHasPoint = hasPoint; return hasKeyword;
+}
+
 bool ibPrecompileCode::Compile()
 {
 	Clear();
@@ -881,7 +978,9 @@ bool ibPrecompileCode::Compile()
 			for (auto variable : moduleManager->GetGlobalVariables()) {
 				if (variable.second == nullptr)
 					continue;
-				AddVariable(variable.first, *variable.second);
+				// The manager's extern map: global constants, and every non-global common module
+				// standing under its own name.
+				AddVariable(variable.first, *variable.second, ibNameOrigin::Global);
 			}
 		}
 	}
@@ -2780,12 +2879,19 @@ ibParamValue ibPrecompileCode::GetCallFunction(const wxString& name)
  *   names are ignored. Used to surface externally-supplied locals
  *   (e.g. parent module's exports) before compilation starts.
  */
-void ibPrecompileCode::AddVariable(const wxString& varName, const ibValue& value)
+void ibPrecompileCode::AddVariable(const wxString& varName, const ibValue& value, ibNameOrigin origin)
 {
 	if (varName.IsEmpty())
 		return;
 
 	m_rootContext.GetVariable(varName, false, false, value);
+
+	// Stamped after the fact rather than passed down: GetVariable answers with the PARAM value the
+	// walk uses, not with the entry it filled, and threading an origin through every overload of a
+	// name-resolution method to reach one caller would be a wide change for a narrow fact.
+	const auto entry = m_rootContext.m_variables.find(stringUtils::MakeUpper(varName));
+	if (entry != m_rootContext.m_variables.end())
+		entry->second.m_origin = origin;
 }
 
 /**

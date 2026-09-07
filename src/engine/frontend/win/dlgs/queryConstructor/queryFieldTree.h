@@ -50,11 +50,16 @@ public:
 	int                   m_sourceIndex = -1;  // chosen-table node: 0 = FROM, 1..n = joins[i-1]
 	wxString              m_field;             // field node: the path (empty = the table row itself)
 
-	// A REFERENCE FIELD CAN BE UNFOLDED. Non-zero says what it points at, which is both "this node
-	// has children" and the key those children are asked for — so the tree needs no second question
-	// and no type lookup of its own. Filled lazily: a config with deep reference chains would
-	// otherwise walk the whole graph to draw one table.
-	ibClassID             m_referenceClsid = 0;
+	// A REFERENCE FIELD CAN BE UNFOLDED. The TYPE says both "this node has children" and what those
+	// children are asked for — so the tree needs no second question and no lookup of its own.
+	// Filled lazily: a config with deep reference chains would otherwise walk the whole graph to
+	// draw one table.
+	//
+	// ⭐ THE WHOLE TYPE, not the one clsid it used to carry. A reference to SEVERAL types is walked
+	// by the engine — one join sub-tree per alternative, the leaf coalesced — so a composite has
+	// children like any other reference; holding a single clsid meant it was drawn as a dead leaf
+	// and the [+] never appeared. A register's Recorder is the everyday case.
+	ibTypeDescription     m_type;
 	bool                  m_expanded = false;   // its fields have been asked for already
 
 	// The TABLE this row belongs to, as a person reads it. Carried down every level of a walk so a
@@ -85,7 +90,7 @@ inline void ibQueryAddFieldNode(wxTreeCtrl* tree, const wxTreeItemId& parent,
 	const wxString path = pathPrefix.IsEmpty() ? field.m_name : pathPrefix + wxT(".") + field.m_name;
 
 	ibQueryTreeNode* node = new ibQueryTreeNode(sourceIndex, path);
-	node->m_referenceClsid = field.m_referenceClsid;
+	node->m_type           = field.m_type;
 	node->m_path           = tablePath;   // the table this field came out of — carried all the way down
 	// At the TOP level the field itself says which source it came from; below it, the walk inherits
 	// what its parent carried, because the model has no way of knowing that from a clsid alone.
@@ -94,8 +99,29 @@ inline void ibQueryAddFieldNode(wxTreeCtrl* tree, const wxTreeItemId& parent,
 
 	// A PLACEHOLDER, so the [+] is there to click. wxTreeCtrl shows one only for a node that has
 	// children, and the children are not known until somebody asks.
-	if (field.m_referenceClsid != 0)
+	if (field.m_reference)
 		tree->AppendItem(item, wxT("..."));
+}
+
+// A TYPE UNDER A COMPOSITE FIELD — a level of its own, standing for one of the types the field may
+// hold. It is a GROUPING, not a segment: the path does not grow through it, because the query walks
+// `Recorder.Date` whichever document the row turns out to hold. What it adds is the answer to which
+// type offers what, which is the whole reason two `Date`s must not be merged into one row here.
+inline void ibQueryAddBranchNode(wxTreeCtrl* tree, const wxTreeItemId& parent,
+                                 const ibQueryConstructorField& branch, int icon,
+                                 int sourceIndex, const wxString& path,
+                                 const std::vector<wxString>& tablePath, const wxString& sourceLabel)
+{
+	if (tree == nullptr)
+		return;
+
+	ibQueryTreeNode* node = new ibQueryTreeNode(sourceIndex, path);   // the SAME path as the parent
+	node->m_type        = branch.m_type;
+	node->m_path        = tablePath;
+	node->m_sourceLabel = sourceLabel;
+
+	const wxTreeItemId item = tree->AppendItem(parent, branch.m_presentation, icon, icon, node);
+	tree->AppendItem(item, wxT("..."));   // it unfolds into that type's fields
 }
 
 // THE DOT WALK, answered when the [+] is clicked. `Supplier.Region.Country` has always parsed and
@@ -106,16 +132,32 @@ inline void ibQueryExpandFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item,
                                    const ibQueryConstructorModel& model, int icon)
 {
 	ibQueryTreeNode* node = ibQueryNodeOf(tree, item);
-	if (node == nullptr || node->m_referenceClsid == 0 || node->m_expanded)
+	if (node == nullptr || node->m_expanded)
 		return;
+
+	const std::vector<ibQueryConstructorField> branches = model.GetReferenceBranches(node->m_type);
+	if (branches.empty())
+		return;   // not a reference — nothing is behind it
 
 	node->m_expanded = true;
 	tree->DeleteChildren(item);   // the placeholder that made the [+] appear
 
+	// ⭐ SEVERAL TYPES GET A LEVEL OF THEIR OWN; one type is just opened. An ordinary reference has
+	// always shown its fields straight under the [+], and putting a single type node in between
+	// would add a click and say nothing. A composite cannot do that: two documents both have a
+	// `Date`, and one merged row would hide that they are two — so the types are drawn, and each
+	// unfolds into its own fields.
+	if (branches.size() > 1) {
+		for (const ibQueryConstructorField& branch : branches)
+			ibQueryAddBranchNode(tree, item, branch, icon, node->m_sourceIndex, node->m_field,
+			                     node->m_path, node->m_sourceLabel);
+		return;
+	}
+
 	// The walk inherits the SOURCE it started from — a field five hops in still belongs to the table
 	// it hangs off, and the trees group by that.
 	for (const ibQueryConstructorField& behind
-	     : model.GetReferenceFields(node->m_referenceClsid, node->m_sourceLabel))
+	     : model.GetReferenceFields(node->m_type, node->m_sourceLabel))
 		ibQueryAddFieldNode(tree, item, behind, icon, node->m_sourceIndex, node->m_field, node->m_path,
 		                    node->m_sourceLabel);
 }

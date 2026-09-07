@@ -80,6 +80,11 @@ public:
 		// ibRuntimeModuleDataObject ctor (DoGetPMethods + by-value m_members come
 		// from ibValueDynamicMembers). No FillMembers — exports are the whole surface.
 
+		// ⭐ IN THE DESIGNER THOSE EXPORTS COME FROM THE TEXT, not from bytecode — there is none
+		// (AddCommonModule below says why). Nothing extra is bound here for it: the tail already
+		// asks ExportMethodsToHelper, and that is where the second road lives, so every descriptor
+		// gets it and not just this one — see moduleInfo.cpp.
+
 		//method call
 		virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;

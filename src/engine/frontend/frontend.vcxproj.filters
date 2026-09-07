@@ -1061,9 +1061,6 @@
     <ClCompile Include="win\editor\codeEditor\codeEditorLoader.cpp">
       <Filter>win\editor\codeEditor</Filter>
     </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorParser.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
     <ClCompile Include="win\editor\codeEditor\codeEditorPrintOut.cpp">
       <Filter>win\editor\codeEditor</Filter>
     </ClCompile>
@@ -1906,9 +1903,6 @@
       <Filter>win\editor\codeEditor</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\codeEditor\codeEditorInterpreter.h">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\codeEditorParser.h">
       <Filter>win\editor\codeEditor</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\codeEditor\codeEditorPrintOut.h">

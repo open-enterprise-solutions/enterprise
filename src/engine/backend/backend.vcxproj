@@ -95,6 +95,7 @@
     <ClInclude Include="compiler\compileContext.h" />
     <ClInclude Include="compiler\compileContextLinqData.h" />
     <ClInclude Include="compiler\compileModule.h" />
+    <ClInclude Include="compiler\parseCode.h" />
     <ClInclude Include="compiler\scriptCheck.h" />
     <ClInclude Include="compiler\enumFactory.h" />
     <ClInclude Include="compiler\enumUnit.h" />
@@ -520,6 +521,7 @@
     <ClCompile Include="compiler\compileCode.cpp" />
     <ClCompile Include="compiler\compileContext.cpp" />
     <ClCompile Include="compiler\compileModule.cpp" />
+    <ClCompile Include="compiler\parseCode.cpp" />
     <ClCompile Include="compiler\scriptCheck.cpp" />
     <ClCompile Include="compiler\enumUnit.cpp" />
     <ClCompile Include="compiler\enumFactory.cpp" />

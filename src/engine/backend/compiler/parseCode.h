@@ -1,7 +1,21 @@
-#ifndef __IB_CODE_EDITOR_PARSER_H__
-#define __IB_CODE_EDITOR_PARSER_H__
+#ifndef __IB_PARSE_CODE_H__
+#define __IB_PARSE_CODE_H__
 
-#include "codeEditor.h"
+// WHAT A MODULE TEXT DECLARES, read WITHOUT compiling it — the walk that fills the designer's
+// "Procedures and functions" window, the editor's autocomplete, and module_outline.
+//
+// ⭐ IT LIVES IN THE BACKEND BECAUSE THE ANSWER IS NEEDED ON BOTH SIDES. It began in the code
+// editor, and by location it looked like an editor concern; it is not. A module's exports are ALSO
+// its own value's member surface (ibRuntimeModuleDataObject::ExportMethodsToHelper), and that
+// surface reads BYTECODE — which the designer does not have, because it compiles nothing. So the
+// same question — "what does this text export" — was answered by this parser on one side and by
+// nothing at all on the other: `StockManagement.` offered nothing while module_outline listed its
+// exports from the very same text.
+//
+// One walk, one answer, both readers. It derives from ibTranslateCode, which was always a backend
+// class, and it touches no widget — the move is where it belonged.
+
+#include "translateCode.h"
 
 enum ibContentType
 {
@@ -29,11 +43,16 @@ struct ibModuleElement
 	int           m_lineStart  = -1;   // first source line where the element appears
 	int           m_lineEnd    = -1;   // last source line where the element appears
 
+	// How many formal parameters the declaration takes. The walk already steps over them one by
+	// one; keeping the count is what lets a module's export surface built from TEXT say the same
+	// thing as one built from BYTECODE, where it arrives as ibByteCode::GetNParams.
+	int           m_paramCount = 0;
+
 	wxString      m_moduleName;        // owning module name
 	ibContentType m_eType      = eEmpty;
 };
 
-class FRONTEND_API ibParserModule : public ibTranslateCode
+class BACKEND_API ibParseCode : public ibTranslateCode
 {
 	int                          m_cursor = wxNOT_FOUND;  // current position in the lexem array
 	std::vector<ibModuleElement> m_content;
@@ -53,7 +72,7 @@ protected:
 
 public:
 
-	ibParserModule();
+	ibParseCode();
 	bool ParseModule(const wxString& sModule);
 
 	// Module elements collected by ParseModule — list of every

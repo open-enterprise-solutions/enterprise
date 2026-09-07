@@ -13,11 +13,38 @@ struct ibParamValue {
 class ibPrecompileCode;
 struct ibPrecompileFunction;
 
+// ⭐ WHERE A NAME CAME FROM — a different question from what it IS, and the one a reader of the
+// list has to answer before the list is worth anything. A hundred and sixty names arrive at every
+// caret; the same hundred and forty of them arrive at EVERY caret, and the handful that make this
+// place different are invisible in the middle of them. `m_isContext` cannot answer it: `Catalogs`
+// and a document's `Ref` are both injected, and only one of them is the same everywhere.
+//
+// Nobody sees this in the editor — the dropdown stays one merged list, which is right for a person
+// choosing from a popup. It is carried for readers that must SORT rather than scroll:
+// script_complete reports it per name.
+//
+// ⭐ ONE VALUE PER ROAD, not three buckets. PrepareModuleData brings names in through eight
+// distinct passes, and each pass knows exactly what it is carrying — so the fact is free to record
+// and impossible to compute afterwards: by the time the names are in one map they all look alike.
+// Declared is the default because it is the only one the walk produces by itself.
+enum class ibNameOrigin {
+	Declared = 0,   // written in this text — a `var`, a procedure, a parameter
+	Platform,       // the manager's context: Catalogs / Documents / Enums, and the system functions
+	Global,         // the manager's extern map: global constants, and common modules reachable by name
+	GlobalModule,   // exported by a GLOBAL common module — flat, reachable with no prefix
+	Context,        // a context bind on this module's descriptor: ThisObject / ThisForm
+	Bound,          // an export or local bind: RegisterRecords / Filter / DataSource / a constant's Value
+	Member,         // the object's own surface: its attributes and tabular sections
+	Inherited,      // exported by a module ABOVE this one in the descriptor chain
+};
+
 struct ibPrecompileVariable
 {
 	bool m_isExport  = false;
 	bool m_isContext = false;
 	bool m_isTempVar = false;
+
+	ibNameOrigin m_origin = ibNameOrigin::Declared;
 
 	int  m_number    = 0;
 	int  m_declPos   = 0;  // source-text offset of the declaration; 0 = always
@@ -86,6 +113,8 @@ struct ibPrecompileFunction
 	std::vector<ibParamValue> m_params;
 	bool m_isExport  = false;
 	bool m_isContext = false;
+
+	ibNameOrigin m_origin = ibNameOrigin::Declared;   // see the note on ibNameOrigin
 	ibPrecompileContext* m_context = nullptr; // private function context (locals + params); owned
 
 	ibValue m_valContext;
@@ -161,6 +190,18 @@ public:
 	// Lexem stream produced by PrepareLexem — read-only view for
 	// fold-level scanning and intellisense walkers.
 	const std::vector<ibLexem>& GetLexems() const { return m_listLexem; }
+
+	// ⭐ WHAT THE CARET IS STANDING IN — the question that decides WHICH list to answer with, and
+	// the only one that has to be asked of the TEXT rather than of a value. `hasPoint` says a
+	// member access is being written (offer the members of what precedes the dot); a keyword
+	// return says `New` / `Type` is being completed (offer type names); neither means the caret is
+	// in open code, where what may be written is whatever is IN SCOPE.
+	//
+	// It walks this object's lexem stream and nothing else — it sat on ibCodeEditor because that
+	// is where it was written, not because it needs a widget, and the second reader (script_complete)
+	// could not reach it there. Same story as ibParseCode, one floor down.
+	bool PrepareExpression(unsigned int currPos, wxString& expression, wxString& keyword,
+		wxString& currentWord, bool& outHasPoint) const;
 
 	// Cursor + computation-mode setters — driven by codeEditorLoader to
 	// pin the IntelliSense walk to the user's cursor position and to
@@ -258,7 +299,8 @@ protected:
 	ibParamValue GetCurrentIdentifier(int& isSet);
 	ibParamValue GetCallFunction(const wxString& name);
 
-	void AddVariable(const wxString& varName, const ibValue& value);
+	void AddVariable(const wxString& varName, const ibValue& value,
+		ibNameOrigin origin = ibNameOrigin::Declared);
 
 	ibParamValue GetVariable(const wxString& varName, bool checkError = false, int declPos = 0);
 	ibParamValue GetVariable();

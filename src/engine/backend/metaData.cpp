@@ -158,12 +158,21 @@ bool ibCompileValueCache::InvalidateCompileModule(const ibValueMetaObject* modul
 	auto it = m_cache.find(moduleObject);
 	if (it == m_cache.end()) return false;
 
-	// No rebuilder — entry was registered as an already-built value
-	// (e.g. catalog/document module). Nothing to invalidate; rebuild
-	// requires a fresh AddCompileModule(meta, value) by the registering
-	// side.
-	if (!it->second.m_deferred)
-		return false;
+	// No rebuilder — entry was registered as an already-built value (a catalog / document module,
+	// a common module's unit). The VALUE stays: it is owned by the registering side, and only a
+	// fresh AddCompileModule(meta, value) replaces it.
+	//
+	// ⭐ BUT ITS NAMES CAN GO STALE ON THEIR OWN, and for such an entry that is the whole of what
+	// "this module changed" means. In the designer a module's exports are read from its TEXT
+	// (ibRuntimeModuleDataObject::ExportMethodsToHelper — there is no bytecode there), and that
+	// surface is built once and cached. Returning false here left the caller with nothing done and
+	// nothing said, so `Module.` went on offering the exports of an older edit.
+	if (!it->second.m_deferred) {
+		if (!it->second.m_value)
+			return false;
+		it->second.m_value->InvalidateNames();
+		return true;
+	}
 
 	// Drop the cached built value; rebuilder stays so the next Find
 	// triggers a Construct.

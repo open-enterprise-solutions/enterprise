@@ -54,6 +54,9 @@
     <ClInclude Include="compiler\compileModule.h">
       <Filter>compiler</Filter>
     </ClInclude>
+    <ClInclude Include="compiler\parseCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
     <ClInclude Include="appData.h" />
     <ClInclude Include="appDataCtorToken.h" />
     <ClInclude Include="uniqueKey.h" />
@@ -1029,6 +1032,9 @@
       <Filter>moduleManager</Filter>
     </ClCompile>
     <ClCompile Include="compiler\compileModule.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\parseCode.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="appData.cpp" />

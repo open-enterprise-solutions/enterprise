@@ -114,15 +114,25 @@ class BACKEND_API ibValueMetaObjectModuleBase : public ibValueMetaObject {
 	//get property
 	virtual ibProperty* GetModuleProperty() const = 0;
 
-	//module manager is started or exit 
+	//module manager is started or exit
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterCloseMetaObject();
 
-	//set module code
+	// ⭐ THE WRITE STAYS WITH WHOEVER OWNS THE CELL — a module's property holds the text and
+	// nothing else, a form's holds the text AND the control tree — so each says it with the setter
+	// that names which half is meant. What every one of them must do AFTER is the same, and that
+	// half is shared below.
 	virtual void SetModuleText(const wxString& moduleText) = 0;
 	virtual wxString GetModuleText() const = 0;
 
+protected:
 
+	// The shared half: say that whatever was built from this text is stale. Called by every
+	// SetModuleText — the one thing a writer must not forget, and the reason they are worth
+	// reading side by side.
+	void InvalidateBuiltFromText();
+
+public:
 
 	//set default procedures
 	void SetDefaultProcedure(const wxString& procName, const ibContentHelper& contentHelper, std::vector<wxString> args = {});
@@ -182,8 +192,10 @@ class BACKEND_API ibValueMetaObjectModule : public ibValueMetaObjectModuleBase {
 	//get property
 	virtual ibProperty* GetModuleProperty() const { return m_propertyModule; }
 
-	//set module code 
-	virtual void SetModuleText(const wxString& moduleText) { m_propertyModule->SetValue(moduleText); }
+	//set module code
+	virtual void SetModuleText(const wxString& moduleText) override {
+		m_propertyModule->SetValue(moduleText); InvalidateBuiltFromText();
+	}
 	virtual wxString GetModuleText() const { return m_propertyModule->GetValueAsString(); }
 
 protected:
@@ -225,8 +237,10 @@ public:
 	//get property
 	virtual ibProperty* GetModuleProperty() const { return m_propertyModule; }
 
-	//set module code 
-	virtual void SetModuleText(const wxString& moduleText) { m_propertyModule->SetValue(moduleText); }
+	//set module code
+	virtual void SetModuleText(const wxString& moduleText) override {
+		m_propertyModule->SetValue(moduleText); InvalidateBuiltFromText();
+	}
 	virtual wxString GetModuleText() const { return m_propertyModule->GetValueAsString(); }
 
 	//prepare menu for item

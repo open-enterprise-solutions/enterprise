@@ -84,8 +84,8 @@ public:
 		const ibUniqueKey& formGuid = wxNullGuid) const = 0;
 #pragma endregion
 
-	//set module code
-	virtual void SetModuleText(const wxString& moduleText) = 0;
+	//set module code — see the two implementations below: a form's cell holds this text AND the
+	//form data, so the write names which half is meant
 	virtual wxString GetModuleText() const = 0;
 
 	//set form data 
@@ -185,8 +185,10 @@ public:
 	//get property
 	virtual ibProperty* GetModuleProperty() const { return m_propertyForm; }
 
-	//set module code 
-	virtual void SetModuleText(const wxString& moduleText) { m_propertyForm->SetValue(moduleText); }
+	//set module code — the typed setter, because this cell also holds the form data
+	virtual void SetModuleText(const wxString& moduleText) override {
+		m_propertyForm->SetValue(moduleText); InvalidateBuiltFromText();
+	}
 	virtual wxString GetModuleText() const { return m_propertyForm->GetValueAsString(); }
 
 	//set form data 
@@ -266,8 +268,10 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 	//get property
 	virtual ibProperty* GetModuleProperty() const { return m_propertyForm; }
 
-	//set module code 
-	virtual void SetModuleText(const wxString& moduleText) { m_propertyForm->SetValue(moduleText); }
+	//set module code — the typed setter, because this cell also holds the form data
+	virtual void SetModuleText(const wxString& moduleText) override {
+		m_propertyForm->SetValue(moduleText); InvalidateBuiltFromText();
+	}
 	virtual wxString GetModuleText() const { return m_propertyForm->GetValueAsString(); }
 
 	//set form data 

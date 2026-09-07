@@ -40,6 +40,10 @@ public:
 	virtual bool CopyNodeValue(ibDataValue& value) const override;
 	virtual bool PasteNodeValue(const ibDataValue& value) override;
 
+	// 🛑 AND THE VALUE IS NEVER TAKEN OFF A BARE VARIANT HERE. This cell holds TWO things — the
+	// module text AND the form data — so "the value" has no single reading: taken as a string it
+	// would write the text and silently drop the control tree beside it. Whoever writes says which
+	// half they mean, with SetValue(wxString) or SetValue(buffer).
 public:
 
 };

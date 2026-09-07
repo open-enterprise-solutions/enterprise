@@ -200,38 +200,24 @@ public:
 	// runtime ProcUnit's bytecode; AttachRuntime's split Init/Run guarantees the
 	// wrapper's ProcUnit is wired (Run(false)) before any business code resolves it.
 	// Public on purpose: the caller is a sibling value, not a subclass.
-	void ExportMethodsToHelper(ibValue::ibMemberTable* helper, long alias) const {
-		if (helper == nullptr) return;
-		const auto pu = GetProcUnit();
-		if (!pu) return;
-		const ibByteCode* bc = pu->GetByteCode();
-		if (bc == nullptr) return;
-		for (const auto& fn : bc->m_listFunc) {
-			if (!fn.IsExport()) continue;
-			helper->AppendMethod(fn.m_strRealName,
-				bc->GetNParams(fn),
-				bc->HasRetVal(fn),
-				(long)fn,
-				alias);
-		}
-	}
+	//
+	// ⭐⭐ AND WHERE THERE IS NO BYTECODE, THE TEXT IS ASKED INSTEAD — same question, same
+	// answer, second road. The designer never emits bytecode for a module, so everything
+	// built on this said nothing there: `Module.` offered no exports in the code editor or
+	// in script_complete, and a manager host (Catalogs.Goods., commonObject.cpp) missed its
+	// manager module's exports the same way — while the designer's own "Procedures and
+	// functions" window listed them perfectly, because IT read the text (ibParseCode).
+	//
+	// Out-of-line since: reading the text needs the parser and the module object, and this
+	// header is included nearly everywhere.
+	void ExportMethodsToHelper(ibValue::ibMemberTable* helper, long alias) const;
 
 	// Symmetric export-var (prop) half of ExportNamesToHelper. Public to keep the
 	// method/prop split parallel. A module-backed manager host surfaces only the
 	// method half (export-vars resolve through the host's own ProcUnit alias, which a
 	// manager doesn't have); descriptors that own their runtime surface both via
-	// ExportNamesToHelper.
-	void ExportPropsToHelper(ibValue::ibMemberTable* helper, long alias) const {
-		if (helper == nullptr) return;
-		const auto pu = GetProcUnit();
-		if (!pu) return;
-		const ibByteCode* bc = pu->GetByteCode();
-		if (bc == nullptr) return;
-		for (const auto& v : bc->m_listVar) {
-			if (!v.IsExport()) continue;
-			helper->AppendProp(v.m_strRealName, v, alias);
-		}
-	}
+	// ExportNamesToHelper. Falls back to the text for the same reason as the method half.
+	void ExportPropsToHelper(ibValue::ibMemberTable* helper, long alias) const;
 
 protected:
 	// Method call (array form). Resolves the runtime through

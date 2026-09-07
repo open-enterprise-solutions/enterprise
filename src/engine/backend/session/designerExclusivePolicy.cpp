@@ -3,6 +3,7 @@
 #include "sessionSnapshot.h"
 
 #include "backend/appData.h"
+#include "backend/diagnostics/journal.h"   // the veto is written down, not only shown
 
 ibDesignerExclusivePolicy::ibDesignerExclusivePolicy(ibSessionRegistry* registry)
 	: m_registry(registry)
@@ -61,6 +62,17 @@ bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, wxString& reaso
 			snap.GetStartedDate(i),
 			snap.GetComputerName(i),
 			snap.GetUserName(i));
+
+		// ⚠ AND WRITTEN DOWN, not only shown. This veto stops the process before there is a window
+		// to explain it in, and the only account of it was a modal box — which needs somebody
+		// sitting in front of the screen to read and dismiss it. A start driven by anything else —
+		// a script, a tool, a service, a rebuild-and-relaunch — sees nothing but "it did not come
+		// up", and the previous designer still closing is indistinguishable from a crash. The box
+		// stays for the person; the line is for whoever reads afterwards, and it names WHICH peer.
+		ibJournalWarning(wxT("session"), wxT("designer refused to start - another designer is ")
+			wxT("running: started %s, computer %s, user %s"),
+			snap.GetStartedDate(i), snap.GetComputerName(i), snap.GetUserName(i));
+
 		return false;
 	}
 

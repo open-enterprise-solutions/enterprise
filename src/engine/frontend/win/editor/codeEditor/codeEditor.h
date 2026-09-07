@@ -596,7 +596,8 @@ private:
 	// Private func
 	void AddKeywordFromObject(const ibValue& vObject);
 
-	bool PrepareExpression(unsigned int currPos, wxString& expression, wxString& keyword, wxString& currentWord, bool& hasPoint);
+	// PrepareExpression moved to ibPrecompileCode — it reads the lexem stream and nothing of this
+	// widget, and a second reader (script_complete) needed it.
 	void PrepareTooTipExpression(unsigned int currPos, wxString& expression, wxString& currentWord, bool& hasPoint);
 
 	void PrepareTABs();

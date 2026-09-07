@@ -606,8 +606,17 @@ bool ibValueModuleManagerDesigner::AddCommonModule(ibValueMetaObjectCommonModule
 		BindExportVariable(strModuleName, moduleValue);
 	}
 
+	// ⭐⭐ AND THE SURFACE IS TOLD, because a bind is not only a map entry: FillHelperFromBinds
+	// writes every extern binding into this manager's OWN member table, and that table is built
+	// once and then cached. Changing the map under a built table changes nothing anybody can see —
+	// which is how a module registered here stayed invisible, and, the other way round, how a name
+	// UNBOUND in RemoveCommonModule went on being offered by every completion for the rest of the
+	// session (2026-09-07, script_complete's scratch `JobCode`: the metadata tree had never heard
+	// of it and the map no longer held it, but the built table still did).
+	InvalidateNames();
+
 	// NB: the designer does NOT compile/execute the unit. The editor reads a
-	// common module's exports by parsing its live text (ibParserModule in
+	// common module's exports by parsing its live text (ibParseCode in
 	// PrepareModuleData). Driving ibCompileModule::Compile() here would enter the
 	// Designer-mode parent-recompile walk and deref a stale meta-object (AV in
 	// GetFullName). The unit just needs to exist in the cache so FindCompileModule
@@ -648,6 +657,7 @@ bool ibValueModuleManagerDesigner::RenameCommonModule(ibValueMetaObjectCommonMod
 	if (!commonModule->IsGlobalModule()) {
 		BindExportVariable(newName, moduleValue);
 		UnbindVariable(commonModule->GetName());
+		InvalidateNames();   // both halves of a rename change the surface — see AddCommonModule
 	}
 
 	return true;
@@ -663,20 +673,32 @@ bool ibValueModuleManagerDesigner::RemoveCommonModule(ibValueMetaObjectCommonMod
 	if (auto* cc = m_metaManager->GetMetaData()->GetCompileCache())
 		cc->RemoveCompileModule(commonModule);
 
-	// 🛑 SAME ORDINARY CASE AS THE RENAME ABOVE: a module that was created but never run was never
-	// bound here, and deleting it is a perfectly normal thing to do. The assert turned that into a
-	// debug break — twice over, because the delete then continued into OnBeforeCloseMetaObject and
-	// asserted again on the half-torn-down object.
+	// 🛑⭐ AND SO IS THE NAME, FOR THE SAME REASON AND ONE MORE. Unbinding used to sit past two
+	// early returns, so whenever the unit could not be found the NAME stayed bound — and a name in
+	// the manager's extern map is offered by every completion in every module for the rest of the
+	// session, resolving to nothing when it is asked what it holds.
+	//
+	// Found 2026-09-07 with script_complete's scratch module: when the first completion of a
+	// process was one that builds a `JobCode` module for the duration, `JobCode` was still in the
+	// name list afterwards, though the metadata tree had never heard of it. Unbinding a name that
+	// was never bound is a no-op, so there is nothing to guard against by doing it late.
+	if (!commonModule->IsGlobalModule())
+		UnbindVariable(commonModule->GetName());
+
+	// The other half of the pair in AddCommonModule — see the note there for why unbinding alone
+	// is not enough.
+	InvalidateNames();
+
+	// SAME ORDINARY CASE AS THE RENAME ABOVE: a module that was created but never run was never
+	// taken in here, and deleting it is a perfectly normal thing to do. The assert this replaced
+	// turned that into a debug break — twice over, because the delete then continued into
+	// OnBeforeCloseMetaObject and asserted again on the half-torn-down object.
 	if (!moduleValue)
 		return false;
 
 	auto iterator = std::find(m_listCommonModule.begin(), m_listCommonModule.end(), moduleValue);
 	if (iterator == m_listCommonModule.end())
 		return false;
-
-	if (!commonModule->IsGlobalModule()) {
-		UnbindVariable(commonModule->GetName());
-	}
 
 	m_listCommonModule.erase(iterator);
 

@@ -3,13 +3,13 @@
 //	Description : parser for autocomplete 
 ////////////////////////////////////////////////////////////////////////////
 
-#include "codeEditorParser.h"
+#include "parseCode.h"
 
 #pragma warning(disable : 4018)
 
-ibParserModule::ibParserModule() = default;
+ibParseCode::ibParseCode() = default;
 
-bool ibParserModule::ParseModule(const wxString& sModule)
+bool ibParseCode::ParseModule(const wxString& sModule)
 {
 	m_content.clear();
 
@@ -194,6 +194,8 @@ bool ibParserModule::ParseModule(const wxString& sModule)
 			wxString strFuncName = ExpectIdentifier(true);
 
 			// compile the list of formal parameters + register them as local
+			int paramCount = 0;
+
 			ExpectDelimeter('(');
 			if (!IsNextDelimeter(')'))
 			{
@@ -205,6 +207,7 @@ bool ibParserModule::ParseModule(const wxString& sModule)
 					}
 
 					/*wxString name =*/ (void)ExpectIdentifier(true);
+					paramCount++;
 
 					if (IsNextDelimeter('['))// this is an array
 					{
@@ -241,6 +244,7 @@ bool ibParserModule::ParseModule(const wxString& sModule)
 			data.m_shortDescription = shortDescription;
 			data.m_lineStart = lex.m_numLine;
 			data.m_lineEnd = lex.m_numLine;
+			data.m_paramCount = paramCount;
 
 			if (isFunction) {
 				data.m_imageIndex = 353;
@@ -338,7 +342,7 @@ bool ibParserModule::ParseModule(const wxString& sModule)
  *   Advance to the next lexem and return it. Returns gs_nullLexem if
  *   the cursor is past the end of the list.
  */
-const ibLexem& ibParserModule::GetLexem()
+const ibLexem& ibParseCode::GetLexem()
 {
 	if (m_cursor + 1 < m_listLexem.size())
 		return m_listLexem[++m_cursor];
@@ -351,7 +355,7 @@ const ibLexem& ibParserModule::GetLexem()
  *   Skips both ';' and '\n' delimiters — same designer-side behaviour
  *   as ibPrecompileCode::PreviewGetLexem.
  */
-const ibLexem& ibParserModule::PreviewGetLexem()
+const ibLexem& ibParseCode::PreviewGetLexem()
 {
 	while (true) {
 		const ibLexem& lex = GetLexem();
@@ -369,7 +373,7 @@ const ibLexem& ibParserModule::PreviewGetLexem()
  *   parser walk only collects module elements and doesn't surface
  *   compile errors to the user.
  */
-const ibLexem& ibParserModule::ExpectLexem()
+const ibLexem& ibParseCode::ExpectLexem()
 {
 	return GetLexem();
 }
@@ -379,7 +383,7 @@ const ibLexem& ibParserModule::ExpectLexem()
  *   Consume lexems until the matching delimiter is found, or the lexem
  *   list is exhausted.
  */
-void ibParserModule::ExpectDelimeter(const wxUniChar& c)
+void ibParseCode::ExpectDelimeter(const wxUniChar& c)
 {
 	while (m_cursor + 1 < m_listLexem.size()) {
 		const ibLexem& lex = ExpectLexem();
@@ -391,7 +395,7 @@ void ibParserModule::ExpectDelimeter(const wxUniChar& c)
  * IsNextDelimeter
  *   Predicate: is the next lexem the given delimiter? Does not advance.
  */
-bool ibParserModule::IsNextDelimeter(const wxUniChar& c)
+bool ibParseCode::IsNextDelimeter(const wxUniChar& c)
 {
 	if (m_cursor + 1 < m_listLexem.size()) {
 		const ibLexem& lex = m_listLexem[m_cursor + 1];
@@ -405,7 +409,7 @@ bool ibParserModule::IsNextDelimeter(const wxUniChar& c)
  * IsNextKeyWord
  *   Predicate: is the next lexem the given keyword? Does not advance.
  */
-bool ibParserModule::IsNextKeyWord(int nKey)
+bool ibParseCode::IsNextKeyWord(int nKey)
 {
 	if (m_cursor + 1 < m_listLexem.size()) {
 		const ibLexem& lex = m_listLexem[m_cursor + 1];
@@ -420,7 +424,7 @@ bool ibParserModule::IsNextKeyWord(int nKey)
  *   Consume lexems until the given keyword is matched, or the lexem
  *   list is exhausted.
  */
-void ibParserModule::ExpectKeyword(int nKey)
+void ibParseCode::ExpectKeyword(int nKey)
 {
 	ibLexem lex = ExpectLexem();
 	while (!(lex.m_lexType == KEYWORD && lex.m_numData == nKey)) {
@@ -436,7 +440,7 @@ void ibParserModule::ExpectKeyword(int nKey)
  *   string (real-cased version when strRealName=true), or empty
  *   string if the next lexem is not an identifier.
  */
-wxString ibParserModule::ExpectIdentifier(bool strRealName)
+wxString ibParseCode::ExpectIdentifier(bool strRealName)
 {
 	const ibLexem& lex = ExpectLexem();
 
@@ -457,7 +461,7 @@ wxString ibParserModule::ExpectIdentifier(bool strRealName)
  *   Consume the next lexem as a (possibly signed) numeric constant.
  *   Handles unary +/- prefix and flips the sign on negation.
  */
-ibValue ibParserModule::ExpectConstant()
+ibValue ibParseCode::ExpectConstant()
 {
 	ibLexem lex;
 	int sign = 0;

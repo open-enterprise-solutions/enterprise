@@ -17,11 +17,25 @@
 // was nothing. The question is whether that one type is a REFERENCE, which the id answers by its
 // kind alone (clsid.h — the high byte IS the kind, no metadata lookup).
 //
-// A COMPOSITE reference (several clsids) is deliberately not walkable: it has no one set of fields
-// behind it, and the lowering refuses a composite mid-segment for the same reason.
+// A COMPOSITE reference names several, so there is no ONE target — this stays the answer to "what
+// does it refer to", and it is zero for a composite. Whether the field can be WALKED is a different
+// question, asked below.
 static ibClassID SingleReferenceOf(const std::vector<ibClassID>& clsids)
 {
 	return clsids.size() == 1 && IsReference(clsids.front()) ? clsids.front() : 0;
+}
+
+// ⭐ CAN IT BE WALKED — and the honest test is "is there ANY reference here", not "is there exactly
+// one". The engine walks a composite: the lowering resolves a representative chain and the provider
+// branches per alternative, COALESCING the leaf (queryLowering.cpp, ResolveReferenceTargets). While
+// this model asked the single-target question, a register's Recorder was shown as a leaf and
+// query_fields refused the path — for a walk that runs and returns rows.
+static bool HasReference(const std::vector<ibClassID>& clsids)
+{
+	for (const ibClassID& clsid : clsids)
+		if (IsReference(clsid))
+			return true;
+	return false;
 }
 
 ibQueryConstructorModel::ibQueryConstructorModel(const ibMetaData* metaData)
@@ -186,9 +200,11 @@ ibQueryConstructorField ibQueryConstructorModel::FieldOfPath(const ibQuerySelect
 
 		leaf = *found;
 		if (i + 1 < path.size()) {
-			if (leaf.m_referenceClsid == 0)
+			if (!leaf.m_reference)
 				return ibQueryConstructorField();   // asked to walk THROUGH something that is not a reference
-			fields = GetReferenceFields(leaf.m_referenceClsid);
+			// The whole type, not the single target: a composite hop offers what all its
+			// alternatives offer, merged the way the query merges them.
+			fields = GetReferenceFields(leaf.m_type);
 		}
 	}
 	return leaf;
@@ -245,7 +261,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::FieldsOfSelect(
 			const ibQueryConstructorField of = FieldOfPath(select, projection.m_expr->m_path,
 			                                              package, beforeStatement);
 			field.m_referenceClsid = of.m_referenceClsid;
-			field.m_reference      = field.m_referenceClsid != 0;
+			field.m_reference      = of.m_reference;   // a composite stays walkable across the projection
 			field.m_type           = of.m_type;
 			if (of.m_icon.IsOk())
 				field.m_icon = of.m_icon;   // the column's own picture, when it has one
@@ -365,12 +381,13 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetFields(
 			// A reference field can be dot-walked further (Supplier.Region.Country) — the shell
 			// shows it with a [+] and asks again with the leaf's own source.
 			//
-			// A SINGLE target is what can be walked. A composite reference names several types and
-			// has no one set of fields behind it; the lowering refuses a composite mid-segment for
-			// the same reason, so it stays a leaf here rather than offering a walk that would then
-			// be rejected.
+			// WALKABLE IS "ANY REFERENCE", not "exactly one". A composite names several types and
+			// the engine walks it — one join sub-tree per alternative, the leaf COALESCEd — so what
+			// is offered here matches what the query can then do. The single clsid is still
+			// recorded beside it, because "what does it refer to" has one answer only when there
+			// IS one.
 			field.m_referenceClsid = SingleReferenceOf(node->GetClsidList());
-			field.m_reference      = field.m_referenceClsid != 0;
+			field.m_reference      = HasReference(node->GetClsidList());
 			field.m_type           = node->GetTypeDesc();
 			field.m_icon           = node->GetSourceIcon();   // the column's own picture, asked not deduced
 			out.push_back(std::move(field));
@@ -412,11 +429,82 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetReferenceFields
 		field.m_name         = node->GetSourceName();
 		field.m_presentation = node->GetSourceSynonym().IsEmpty() ? node->GetSourceName() : node->GetSourceSynonym();
 		field.m_referenceClsid = SingleReferenceOf(node->GetClsidList());
-		field.m_reference      = field.m_referenceClsid != 0;
+		field.m_reference      = HasReference(node->GetClsidList());
 		field.m_type           = node->GetTypeDesc();
 		field.m_source         = sourceLabel;   // the walk stays under the table it started from
 		out.push_back(std::move(field));
 	}
+	return out;
+}
+
+// ONE ENTRY PER ALTERNATIVE — see the note on the declaration. Named as a query names the type
+// (`Document.GoodsIssue`), which is both what a tree shows and what a person would have to write to
+// cast to it.
+std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetReferenceBranches(const ibTypeDescription& typeDesc) const
+{
+	std::vector<ibQueryConstructorField> out;
+
+	ibQueryableFactory* factory = Factory();
+	if (factory == nullptr)
+		return out;
+
+	for (const ibClassID& clsid : typeDesc.GetClsidList()) {
+		if (!IsReference(clsid))
+			continue;
+
+		ibQueryableSourceDescriptor* descriptor =
+			factory->ResolveDescriptorById(static_cast<ibMetaID>(clsid & kIbClsidBodyMask));
+		if (descriptor == nullptr)
+			continue;   // a type with no queryable (a report, a data processor) — not a table
+
+		ibQueryConstructorField branch;
+		branch.m_name         = descriptor->GetNamespace() + wxT(".") + descriptor->GetName();
+		branch.m_presentation = branch.m_name;
+		branch.m_referenceClsid = clsid;
+		branch.m_reference      = true;
+		branch.m_type.SetDefaultMetaType(clsid);   // the branch IS that one type, so it unfolds like any reference
+
+		out.push_back(std::move(branch));
+	}
+
+	return out;
+}
+
+// EVERY ALTERNATIVE OF A TYPE, MERGED BY NAME — see the note on the declaration. The merge is the
+// one the query performs on the same walk: a name carried by several alternatives is ONE field,
+// because `Recorder.Date` is one column whichever document a row points at.
+std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetReferenceFields(const ibTypeDescription& typeDesc,
+                                                                                const wxString& sourceLabel) const
+{
+	std::vector<ibQueryConstructorField> out;
+
+	for (const ibClassID& clsid : typeDesc.GetClsidList()) {
+		if (!IsReference(clsid))
+			continue;   // a non-reference alternative of a composite carries no fields behind it
+
+		for (ibQueryConstructorField& field : GetReferenceFields(clsid, sourceLabel)) {
+
+			const auto same = std::find_if(out.begin(), out.end(),
+				[&field](const ibQueryConstructorField& have) { return have.m_name.IsSameAs(field.m_name, false); });
+
+			if (same == out.end()) {
+				out.push_back(std::move(field));
+				continue;
+			}
+
+			// ⭐ THE SAME NAME FROM A SECOND BRANCH WIDENS THE TYPE rather than being dropped. Two
+			// documents' `Contract` may point at different catalogs, and a walk one hop further has
+			// to be offered the fields of BOTH — which is exactly what this same function then does
+			// with the widened type. Dropping the duplicate would have quietly narrowed the walk to
+			// whichever branch happened to be enumerated first.
+			for (const ibClassID& alternative : field.m_type.GetClsidList())
+				same->m_type.AppendMetaType(alternative);
+
+			same->m_reference = HasReference(same->m_type.GetClsidList());
+			same->m_referenceClsid = SingleReferenceOf(same->m_type.GetClsidList());
+		}
+	}
+
 	return out;
 }
 
@@ -469,7 +557,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetConditionFields
 		field.m_name           = node->GetSourceName();
 		field.m_presentation   = node->GetSourceSynonym().IsEmpty() ? node->GetSourceName() : node->GetSourceSynonym();
 		field.m_referenceClsid = SingleReferenceOf(node->GetClsidList());
-		field.m_reference      = field.m_referenceClsid != 0;
+		field.m_reference      = HasReference(node->GetClsidList());
 		field.m_type           = node->GetTypeDesc();
 		field.m_icon           = node->GetSourceIcon();
 		out.push_back(std::move(field));
