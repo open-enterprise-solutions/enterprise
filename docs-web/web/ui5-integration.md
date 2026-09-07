@@ -69,6 +69,37 @@ the group owns the row.
 No OES counterpart: `valueStateMessage`, `showSuggestions`, `maxlength`,
 `placeholder`, `required`, `name`.
 
+## Staticboxsizer -> `fieldset` + `legend`
+
+The group box is not a UI5 component: a `fieldset` with a `legend` is what the
+platform's static box means, and the theme reaches it through tokens like every
+other strip that stayed ours.
+
+Its caption arrives as **`title`**, not `label` -- a sizer names its caption
+`title` (`ibWebStaticBoxSizer::ToJSON`), and only a *window* carries `label`. The
+renderer read `label` alone, so every group box on every form drew an empty
+legend and the group's name was simply not on the screen. Found 2026-09-07 on the
+first hand-laid form; nothing before that had a group box on it.
+
+## What the renderer does not draw yet
+
+Twelve of the platform's twenty-six control classes have a renderer here:
+`boxsizer`, `wrapsizer`, `staticboxsizer`, `gridsizer`, `sizeritem` (as layout on
+its child), `statictext`, `button`, `textctrl`, `checkbox`, `tablebox`,
+`toolbar` / `tool` / `toolseparator`.
+
+The rest reach the browser as a node nothing claims, and `BaseControl` draws
+them as an empty element: `Notebook` / `NotebookPage`, `Radiobutton`, `Textbox`,
+`Gridbox`, `Chartbox`, `Htmlbox`, `Gauge`, `Slider`, `Staticline`, `ClientForm`.
+A form using one of those has a hole in it rather than a placeholder, which is
+worth knowing before a demo is built on one.
+
+**A button with no command is not a gap.** `ibValueButton::Update` hides a button
+whose bound command does not resolve -- deliberately, and on the desktop too:
+"a button carries ONLY a command", so an unbound one has nothing to do. It shows
+up here as three buttons that render `display: none`, which reads like a
+renderer fault and is not one.
+
 ## The window's own chrome
 
 Iteration 1 put UI5 on three form controls. On a catalog list — a command bar

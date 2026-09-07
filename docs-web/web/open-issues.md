@@ -51,6 +51,37 @@ workaround is `#if defined(_WIN32)` now, and the read timeout is 30s off Windows
 because on a kept-alive connection that value is the idle window between a
 browser's requests, not a stall.
 
+## Building a form over MCP
+
+Four things found on 2026-09-07 while laying out the Goods receipt form that this
+program uses as its rich-layout reference. None is a web defect; all four are in
+the way, and nothing else records them.
+
+**A numeric control property cannot be set at all.** `form_set` declares `value`
+as a string. Send `"1"` for `Proportion` and the platform refuses it by kind
+("expected 2, got 4"); send `1` and the tool refuses it by schema. So
+`Proportion`, `BorderSize` and `Wrap` are unreachable, and a table that should
+share the remaining height cannot be told to.
+
+**A caption with an apostrophe in it round-trips wrong.** `form_set` on `Title`
+with *Lines are priced from the warehouse's current price list.* stored
+`en = 'en = 'en = 'Lines are priced ... price list.';';';` -- the caption's own
+serialised form, wrapped three times, and that is what the form then displays.
+The apostrophe is the serialiser's quote character. Captions without one are
+fine, which is why nothing had caught it.
+
+**A `Button` cannot be made to do anything.** A button carries only a command,
+and hides itself when none resolves. `form_bind` on `Command` answers "There is
+no command called 'Post' here. Available: none", and there is no verb that
+creates a form command -- `metadata_accepts` on a Form lists no child kinds. So
+every button placed through MCP is an invisible one.
+
+**`form_paste` of a container at form level does not wrap it in a `SizerItem`.**
+The pasted control arrives with no layout flags, so a tablebox that filled the
+width in the generated layout renders at its natural size in the stored one. The
+way round is `form_add class=SizerItem` and pasting into that -- and a fresh
+SizerItem defaults to `Shrink`, where the generated one is `Expand`.
+
 ## A pointer without a pin
 
 **`SessionManager::FindApp` hands out a raw `ibWebApplication*`.** *2026-09-07.*

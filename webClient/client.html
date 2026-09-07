@@ -359,6 +359,11 @@ html[data-oes-ui="ui5"] .oes-ui5-sidenav{width:100%}
 .labelrow{display:flex;align-items:stretch;gap:6px;min-height:0}
 .gridsizer{display:grid;gap:6px;margin:4px 0}
 .staticboxsizer{border:1px solid #bbb;border-radius:4px;padding:8px;margin:4px 0}
+/* The group box is ours to paint: a fieldset is not a UI5 component, and
+   its default rule was written for the light client. */
+html[data-oes-ui="ui5"] .staticboxsizer{border-color:var(--oes-form-border)}
+html[data-oes-ui="ui5"] .staticboxsizer > legend{color:var(--oes-form-text);
+  padding:0 .25rem;font-weight:600}
 .staticboxsizer>legend{padding:0 6px;color:#555;font-weight:600}
 /* pre-line preserves explicit \n in the caption while still wrapping
    at whitespace. Desktop's static text control draws multi-line
@@ -1903,7 +1908,11 @@ class WrapSizer extends BaseControl{
 class StaticBoxSizer extends BaseControl{
   render(node){
     const el=document.createElement('fieldset');el.className='staticboxsizer';
-    const lg=document.createElement('legend');lg.textContent=node.label||'';
+    // A sizer names its caption `title`; only a WINDOW carries `label`. This
+    // read `label` alone, so every group box on every form drew an empty
+    // legend and the group's name was simply not on the screen.
+    const lg=document.createElement('legend');
+    lg.textContent=node.title||node.label||'';
     el.appendChild(lg);
     return el;
   }
