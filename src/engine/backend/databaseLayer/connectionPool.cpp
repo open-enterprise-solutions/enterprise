@@ -43,33 +43,49 @@ void ibConnectionPool::SetActiveTxConnection(std::shared_ptr<ibDatabaseLayer> co
 	if (!conn) return;
 	auto* pool = ibApplicationData::GetConnectionPool();
 	if (pool == nullptr) return;
-	// Resolve the holder for the TX pin, in priority:
-	//   1. The conn's already-pinned holder (set by an earlier ReserveTx).
-	//   2. The conn's scope-binding — the holder whose scope checked it out.
-	//   3. CurrentHolder() — the calling thread's db_query channel.
+	// ⭐⭐ A TRANSACTION TAKES THE CALLING THREAD'S db_query CHANNEL — UNLESS SOMEBODY IS ALREADY IN IT.
 	//
-	// 🛑⭐⭐ THE CONNECTION'S OWN HOLDER COMES FIRST, AND THE ORDER USED TO BE THE OTHER WAY ROUND.
-	// CurrentHolder() is a thread_local singleton and therefore NEVER null, so the two fallbacks
-	// below were unreachable: every transaction, on every connection, pinned itself to the calling
-	// THREAD. A subsystem with a private holder — the lock manager writes sys_lock on a dedicated
-	// connection of its own, so its rows are visible to other sessions — then reserved the thread's
-	// channel on its way in and RELEASED IT on its way out, taking with it the pin of whoever was
-	// already there.
+	// Capturing the channel is the point of the pin, and it is what makes a session's transaction
+	// mean what a person expects: `db_query` reads inside it — the AOT cache, an information
+	// register's slice, anything through the L2/L3 door — see the rows that transaction has written
+	// and not the rows it replaced. Pin it elsewhere and a run stops seeing its own writes.
+	//
+	// 🛑⭐⭐ BUT THE CHANNEL IS NOT FREE FOR THE TAKING, AND THAT IS THE WHOLE DEFECT THIS CARRIES.
+	// `CurrentHolder()` is a thread_local singleton and therefore NEVER null, so this used to pin
+	// EVERY transaction on EVERY connection to the calling thread — including a subsystem with a
+	// private holder of its own. The lock manager writes `sys_lock` on a dedicated connection,
+	// deliberately, so its rows are visible to other sessions; its short transaction reserved the
+	// thread's channel on the way in and RELEASED IT on the way out, taking with it the pin of the
+	// long-running transaction that was already there.
 	//
 	// ⭐ MEASURED 2026-09-07, and it deadlocked a run against itself. A background job posting
 	// documents holds ONE transaction for the whole run (jobRunByteCode.cpp). Posting the first
-	// document takes a pessimistic lock; that lock's own commit cleared the run's pin, so every
-	// later `db_query` left the run's transaction and landed on a fresh pooled connection. The
-	// bytecode cache is such a caller: on the second document it could no longer see the row it had
-	// written itself, called it a miss, and re-inserted the same primary key — which Firebird made
-	// wait for the uncommitted row held by the run's own transaction, which was waiting on this
-	// insert. Nothing failed, nothing was logged; the job simply stopped, one document in.
+	// document takes a pessimistic lock; that lock's own commit cleared the run's pin, so every later
+	// `db_query` left the run's transaction for a fresh pooled connection. The bytecode cache is such
+	// a caller: on the second document it could no longer see the row it had written itself, called
+	// that a miss, and re-inserted the same primary key — which Firebird made wait for the
+	// uncommitted row held by the run's own transaction, which was waiting on that insert. Nothing
+	// failed, nothing was logged; the job simply stopped, one document in.
 	//
-	// A connection handed to a holder is that holder's work. Only a connection nobody owns — a
-	// session layer the pool never handed out — falls through to the calling thread.
-	ibDatabaseConnectionHolder* holder = conn->GetHolder();
-	if (holder == nullptr) holder = pool->FindBoundHolder(conn.get());
-	if (holder == nullptr) holder = CurrentHolder();
+	// ⚠ THE FIRST FIX WENT TOO FAR — it put the connection's own holder FIRST, which stopped the
+	// theft and also stopped a session's transaction from ever capturing the channel, since a session
+	// connection is scope-bound to the session's holder. Measured within the hour, the same way: a
+	// run wrote a rate into an information register and the slice read back the previous one, while a
+	// plain query in the same run saw the new row. Two readers of one transaction disagreeing is
+	// worse than the deadlock, because it answers.
+	//
+	// So the rule is OCCUPANCY, not ownership: take the thread's channel when it is free, and step
+	// aside onto your own holder when another connection is already in it.
+	ibDatabaseConnectionHolder* holder = CurrentHolder();
+	if (holder != nullptr) {
+		const std::shared_ptr<ibDatabaseLayer> taken = pool->GetReservedTx(holder);
+		if (taken && taken.get() != conn.get())
+			holder = nullptr;   // somebody else's transaction owns this channel — do not evict it
+	}
+	if (holder == nullptr) {
+		if (auto* own = conn->GetHolder()) holder = own;
+		else                               holder = pool->FindBoundHolder(conn.get());
+	}
 	if (holder == nullptr) return;
 	pool->ReserveTx(holder, std::move(conn));
 }
