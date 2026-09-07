@@ -12,14 +12,41 @@ from pathlib import Path
 
 VERSION = "2.26.0"
 ROOT_PACKAGE = "@ui5/webcomponents"
+# Installed alongside the root. The graph walk only ever *finds* packages
+# npm has already put on disk, and webcomponents-fiori is a sibling of the
+# root rather than a dependency of it -- the chrome (shell bar, side
+# navigation) lives there.
+COMPANION_PACKAGES = ("@ui5/webcomponents-fiori",)
 ENTRYPOINTS = (
     "@ui5/webcomponents/dist/Assets.js",
+    # Form controls.
     "@ui5/webcomponents/dist/Button.js",
     "@ui5/webcomponents/dist/Input.js",
     "@ui5/webcomponents/dist/CheckBox.js",
+    # Chrome: the command bar, the tab strip, the window's own bars.
+    # ui5-bar takes arbitrary slotted content, which ui5-toolbar does not
+    # -- a command carries a raster icon out of the metadata, and only a
+    # free slot can hold one.
+    "@ui5/webcomponents/dist/Bar.js",
+    "@ui5/webcomponents/dist/Toolbar.js",
+    "@ui5/webcomponents/dist/ToolbarButton.js",
+    "@ui5/webcomponents/dist/ToolbarSeparator.js",
+    "@ui5/webcomponents/dist/ToolbarSpacer.js",
+    "@ui5/webcomponents/dist/TabContainer.js",
+    "@ui5/webcomponents/dist/Tab.js",
+    "@ui5/webcomponents/dist/TabSeparator.js",
+    "@ui5/webcomponents/dist/Title.js",
+    "@ui5/webcomponents/dist/Label.js",
+    "@ui5/webcomponents/dist/Panel.js",
+    "@ui5/webcomponents-fiori/dist/ShellBar.js",
+    "@ui5/webcomponents-fiori/dist/ShellBarItem.js",
+    "@ui5/webcomponents-fiori/dist/SideNavigation.js",
+    "@ui5/webcomponents-fiori/dist/SideNavigationItem.js",
     "@ui5/webcomponents-icons/dist/value-help.js",
     "@ui5/webcomponents-icons/dist/decline.js",
     "@ui5/webcomponents-icons/dist/slim-arrow-down.js",
+    "@ui5/webcomponents-icons/dist/overflow.js",
+    "@ui5/webcomponents-icons/dist/menu2.js",
 )
 # This list tracks the platform's lang/ directory.
 LOCALES = ("en", "ru", "uk")
@@ -390,6 +417,7 @@ with tempfile.TemporaryDirectory(prefix="oes-ui5-", dir="/private/tmp") as temp:
             "--no-audit",
             "--no-fund",
             f"{ROOT_PACKAGE}@{VERSION}",
+            *(f"{name}@{VERSION}" for name in COMPANION_PACKAGES),
         ],
         check=True,
     )
@@ -400,6 +428,13 @@ with tempfile.TemporaryDirectory(prefix="oes-ui5-", dir="/private/tmp") as temp:
         raise RuntimeError(
             f"npm returned {ROOT_PACKAGE}@{root_manifest.get('version')}"
         )
+    for name in COMPANION_PACKAGES:
+        manifest_path = scratch / "node_modules" / name / "package.json"
+        if not manifest_path.is_file():
+            raise RuntimeError(f"npm did not install {name}")
+        companion_version = json.loads(manifest_path.read_text()).get("version")
+        if companion_version != VERSION:
+            raise RuntimeError(f"npm returned {name}@{companion_version}")
 
     staged = scratch / "staged" / VERSION
     queue = deque()

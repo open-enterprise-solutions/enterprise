@@ -18,6 +18,19 @@
 #include <wx/colour.h>   // wxColour
 #include <wx/font.h>     // wxFont
 
+// The desktop's own paper. Every control's colour properties START at
+// these two -- #FAF7F0 cream and #3F5C77 dusty blue, the platform's
+// palette -- so a form that was never given a colour still arrives
+// carrying them. On the desktop that is right: they ARE the window. In a
+// browser they are a foreign surface painted over whatever theme the
+// page is wearing, and in a dark one they read as pale boxes under the
+// labels. So the web nodes emit a colour only when it is something the
+// author actually chose. The price is that choosing exactly that cream
+// is indistinguishable from choosing nothing, which is the smaller of
+// the two losses.
+bool ibWebIsPlatformPaper(const wxColour& colour);
+bool ibWebIsPlatformInk(const wxColour& colour);
+
 #include "jsonAdapter.h"
 
 class ibWebWindow;
@@ -176,9 +189,11 @@ public:
 		n["shown"]   = m_shown;
 		if (!m_tooltip.IsEmpty())
 			n["tooltip"] = m_tooltip;
-		if (m_fg.IsOk())
+		// Same rule as ibWebWindow: the platform's own paper is not a
+		// choice the author made, and the page has a theme of its own.
+		if (m_fg.IsOk() && !ibWebIsPlatformInk(m_fg))
 			n["fg"] = m_fg.GetAsString(wxC2S_HTML_SYNTAX);
-		if (m_bg.IsOk())
+		if (m_bg.IsOk() && !ibWebIsPlatformPaper(m_bg))
 			n["bg"] = m_bg.GetAsString(wxC2S_HTML_SYNTAX);
 		if (m_font.IsOk()) {
 			nlohmann::json fj;

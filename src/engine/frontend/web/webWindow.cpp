@@ -3,6 +3,18 @@
 
 #include <algorithm>
 
+#include "frontend/visualView/ctrl/frame.h"   // wxDefaultStype{BG,FG}Colour
+
+bool ibWebIsPlatformPaper(const wxColour& colour)
+{
+	return colour == wxDefaultStypeBGColour;
+}
+
+bool ibWebIsPlatformInk(const wxColour& colour)
+{
+	return colour == wxDefaultStypeFGColour;
+}
+
 // Definitions for the textctrl side-button events declared in webWindow.h
 // (web build). Kept here so wfrontend.dll has its own symbols, parallel
 // to the desktop definitions in win/ctrls/controlTextEditor.cpp. The
@@ -120,10 +132,10 @@ nlohmann::json ibWebWindow::ToJSON() const
 	// font as a small object the browser can stitch into inline
 	// style. Tooltip is just the plain string, surfaces as the
 	// element's `title` attribute client-side.
-	if (m_fg.IsOk()) {
+	if (m_fg.IsOk() && !ibWebIsPlatformInk(m_fg)) {
 		node["fg"] = m_fg.GetAsString(wxC2S_HTML_SYNTAX);
 	}
-	if (m_bg.IsOk()) {
+	if (m_bg.IsOk() && !ibWebIsPlatformPaper(m_bg)) {
 		node["bg"] = m_bg.GetAsString(wxC2S_HTML_SYNTAX);
 	}
 	if (m_font.IsOk()) {

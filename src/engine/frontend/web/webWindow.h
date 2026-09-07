@@ -33,6 +33,7 @@
 #include <wx/string.h>
 
 #include "jsonAdapter.h"
+#include "webSizer.h"   // ibWebSizer + the platform-paper rule both nodes share
 
 #ifdef OES_USE_WEB
 // Textctrl side-button events — mirror the three custom wx events

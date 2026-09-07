@@ -17,14 +17,15 @@ webClient/assets/
     ├── importmap.json
     ├── THIRD_PARTY_LICENSES.txt
     ├── @sap-theming/theming-base-content/    24 font files
-    ├── @ui5/webcomponents/                   135 files
-    ├── @ui5/webcomponents-base/              143 files
-    ├── @ui5/webcomponents-icons/              54 files
+    ├── @ui5/webcomponents/                   198 files
+    ├── @ui5/webcomponents-base/              151 files
+    ├── @ui5/webcomponents-fiori/              42 files
+    ├── @ui5/webcomponents-icons/              90 files
     ├── @ui5/webcomponents-localization/        6 files
     └── @ui5/webcomponents-theming/            13 files
 ```
 
-376 files, 5.1 MB. The server mounts the directory at `<prefix>/assets`,
+524 files, 6.4 MB. The server mounts the directory at `<prefix>/assets`,
 resolving it the same three ways `LoadClient()` resolves the client itself:
 `<exeDir>/web/assets`, then a walk up to `webClient/assets` bounded at six levels.
 The versioned path is served `immutable` with a year's cache.
@@ -53,8 +54,18 @@ copy someone then trims by hand.
   obligation is kept, consolidated, in `THIRD_PARTY_LICENSES.txt`), tests,
   fixtures, and the `package.json` files used only to resolve exports.
 - Icon sets: `webcomponents-icons-tnt` and `-business-suite` are dropped entirely.
-  From `webcomponents-icons`, only the icons the import graph reaches — sixteen of
-  them, in both the v4 and v5 shapes, because each wrapper picks by theme family.
+  From `webcomponents-icons`, only the icons the import graph reaches — twenty-eight
+  of them, in both the v4 and v5 shapes, because each wrapper picks by theme family.
+  The script prints the list it ended up with, so a new entrypoint that quietly
+  pulls a hundred icons is visible in the run rather than in a diff.
+
+`@ui5/webcomponents-fiori` arrived with the chrome (2026-09-07): `ui5-shellbar`
+and `ui5-side-navigation` live there and nowhere else. It is a SIBLING of the
+root package, not a dependency, so the graph walk could never find it on disk —
+`COMPANION_PACKAGES` at the top of the script is what npm installs alongside, and
+its version is checked against `VERSION` the same way the root's is. Adding
+another package is one entry there plus its entrypoints. The whole chrome cost
+1.0 MB and 148 files.
 - Locales: `en`, `ru`, `uk`, matching what the build stages as `*.hlk`. The list is
   a named constant at the top of the script; adding a locale is one line.
 

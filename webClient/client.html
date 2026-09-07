@@ -32,6 +32,7 @@ window.OES = window.OES || {};
   "@sap-theming/theming-base-content/":"./assets/ui5/2.26.0/@sap-theming/theming-base-content/",
   "@ui5/webcomponents/":"./assets/ui5/2.26.0/@ui5/webcomponents/",
   "@ui5/webcomponents-base/":"./assets/ui5/2.26.0/@ui5/webcomponents-base/",
+  "@ui5/webcomponents-fiori/":"./assets/ui5/2.26.0/@ui5/webcomponents-fiori/",
   "@ui5/webcomponents-icons/":"./assets/ui5/2.26.0/@ui5/webcomponents-icons/",
   "@ui5/webcomponents-localization/":"./assets/ui5/2.26.0/@ui5/webcomponents-localization/",
   "@ui5/webcomponents-theming/":"./assets/ui5/2.26.0/@ui5/webcomponents-theming/",
@@ -46,9 +47,19 @@ window.OES.ui5Ready=runtime.ui==='ui5'?(async()=>{
   const {setTheme}=await import('@ui5/webcomponents-base/dist/config/Theme.js');
   await setTheme(runtime.theme==='dark'?'sap_horizon_dark':'sap_horizon');
   await Promise.all([
+    // Form controls.
     import('@ui5/webcomponents/dist/Button.js'),
     import('@ui5/webcomponents/dist/CheckBox.js'),
     import('@ui5/webcomponents/dist/Input.js'),
+    // Chrome: the command bar, the tab strip, the window's own frame.
+    import('@ui5/webcomponents/dist/Bar.js'),
+    import('@ui5/webcomponents/dist/ToolbarSeparator.js'),
+    import('@ui5/webcomponents/dist/TabContainer.js'),
+    import('@ui5/webcomponents/dist/Tab.js'),
+    import('@ui5/webcomponents-fiori/dist/ShellBar.js'),
+    import('@ui5/webcomponents-fiori/dist/ShellBarItem.js'),
+    import('@ui5/webcomponents-fiori/dist/SideNavigation.js'),
+    import('@ui5/webcomponents-fiori/dist/SideNavigationItem.js'),
   ]);
 })():Promise.resolve();
 </script>
@@ -271,6 +282,50 @@ html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row.tabulator-selected:hover{
   box-shadow:inset 3px 0 0 0 var(--oes-table-row-selected-accent)}
 html[data-oes-ui="ui5"] .oes-tablebox .tabulator-cell{
   border-color:var(--oes-table-border)}
+/* Chrome in ui5 mode. Three pieces ARE UI5 components and need no
+   colours from us: the shell bar, the command bar (ui5-bar carrying
+   ui5-buttons), the side navigation. These are the strips that stayed
+   ours -- the tab row, the output panel, the status bar -- painted from
+   the same tokens so the window reads as one surface.
+   The tab row stayed because ui5-tabcontainer has no room for what a
+   tab here carries: a raster icon out of the metadata, and a close box.
+   Losing either would cost the user more than the component gains. */
+html[data-oes-ui="ui5"] body{background:var(--oes-page-bg);color:var(--oes-chrome-text)}
+html[data-oes-ui="ui5"] #titlebar{background:none;border:0;padding:0;color:inherit;display:block}
+/* The menu and the development switcher moved into the shell bar, which
+   is a light surface — the white-on-gradient colours they were written
+   for would leave them invisible there. */
+html[data-oes-ui="ui5"] #menubar{flex:0 0 auto}
+html[data-oes-ui="ui5"] #menubar button{color:var(--sapShell_TextColor)}
+html[data-oes-ui="ui5"] #menubar button:hover:not(:disabled){background:var(--oes-chrome-hover-bg)}
+html[data-oes-ui="ui5"] #menubar button:active:not(:disabled){background:var(--oes-chrome-hover-bg)}
+html[data-oes-ui="ui5"] #oes-dev-switcher{color:var(--sapShell_TextColor)}
+html[data-oes-ui="ui5"] #sidebar{background:var(--oes-chrome-bg);
+  border-right:1px solid var(--oes-chrome-border);color:var(--oes-chrome-text)}
+html[data-oes-ui="ui5"] #interfaces h3{color:var(--oes-chrome-text);opacity:.7}
+html[data-oes-ui="ui5"] #tabs-row{background:var(--oes-chrome-bg);
+  border-bottom:1px solid var(--oes-chrome-border);padding-top:0}
+html[data-oes-ui="ui5"] .tab{background:transparent;color:var(--oes-chrome-text);
+  border:0;border-bottom:3px solid transparent;border-radius:0;top:0;padding:6px 12px}
+html[data-oes-ui="ui5"] .tab:hover{background:var(--oes-chrome-hover-bg);color:var(--oes-chrome-text)}
+html[data-oes-ui="ui5"] .tab.active{background:transparent;color:var(--oes-chrome-selected);
+  border-bottom-color:var(--oes-chrome-selected)}
+html[data-oes-ui="ui5"] .tab-close:hover{background:var(--oes-chrome-selected);color:var(--oes-chrome-bg)}
+html[data-oes-ui="ui5"] #outputpanel,
+html[data-oes-ui="ui5"] #output-header{background:var(--oes-chrome-bg);
+  color:var(--oes-chrome-text);border-color:var(--oes-chrome-border)}
+html[data-oes-ui="ui5"] #output-header:hover{background:var(--oes-chrome-hover-bg)}
+html[data-oes-ui="ui5"] #output-body{background:var(--oes-chrome-bg);color:var(--oes-chrome-text)}
+html[data-oes-ui="ui5"] #statusbar{background:var(--oes-footer-bg);color:var(--oes-footer-text);
+  border-top:1px solid var(--oes-chrome-border)}
+html[data-oes-ui="ui5"] #statusbar > .sep{background:var(--oes-chrome-border)}
+/* The command bar. ui5-bar lays the row out and paints it; the tools
+   inside are real ui5-buttons, so all that is left is to let a long bar
+   scroll instead of clipping its tail. */
+html[data-oes-ui="ui5"] .oes-ui5-toolbar{width:100%;margin:2px 0}
+html[data-oes-ui="ui5"] .oes-ui5-tool img{vertical-align:-.15em}
+/* Side navigation fills the sidebar it sits in. */
+html[data-oes-ui="ui5"] .oes-ui5-sidenav{width:100%}
 .boxsizer{display:flex;gap:6px;margin:4px 0;align-items:flex-start}
 .boxsizer.vert{flex-direction:column}
 .boxsizer.horz{flex-direction:row}
@@ -1560,6 +1615,33 @@ async function openForm(id){
   main.appendChild(render(tree));
   refreshTabs();
 }
+// The window's top strip. In ui5 mode it IS a ui5-shellbar: the caption
+// becomes its primary title, and the "All functions" menu and the
+// development switcher move -- the nodes themselves, so whatever has
+// already been wired to them keeps working -- into its content slot. The
+// hand-painted gradient goes away with them.
+//
+// Runs before the element is defined and that is fine: a custom element
+// upgrades when its definition lands, and OES.ui5Ready is what imports
+// it. Idempotent, so a second call is a no-op rather than a second bar.
+function applyUI5Chrome(){
+  if(runtime.ui!=='ui5') return;
+  const bar=document.getElementById('titlebar');
+  if(!bar||bar.dataset.ui5==='1') return;
+  const title=document.getElementById('app-title');
+  const shell=document.createElement('ui5-shellbar');
+  shell.setAttribute('primary-title',(title&&title.textContent.trim())||'OES Enterprise');
+  for(const id of ['menubar','oes-dev-switcher']){
+    const node=document.getElementById(id);
+    if(node===null) continue;
+    node.setAttribute('slot','content');
+    shell.appendChild(node);
+  }
+  if(title) title.remove();
+  bar.appendChild(shell);
+  bar.dataset.ui5='1';
+}
+
 // Subsystem navigation — sidebar's Interfaces block. Mirrors desktop's
 // ibSubSystemWindow: a row of buttons (one per interface). Click opens
 // a popup with command sections (Default / Create / Combined / Reports
@@ -1584,6 +1666,31 @@ async function loadInterfaces(){
   const header = document.createElement('h3');
   header.textContent = 'Sections';
   root.appendChild(header);
+  if (runtime.ui === 'ui5') {
+    // ui5-side-navigation is the list UI5 has for exactly this, and it
+    // brings selection, keyboard walking and the theme with it. One
+    // thing it does not bring: the subsystem's own picture. Its item
+    // takes an icon by NAME from UI5's set, and has no slot that renders
+    // in the row, so an interface icon out of the metadata cannot be
+    // shown here. Decoration on a handful of subsystems, weighed against
+    // a navigation list that behaves — but it IS a loss, and if it turns
+    // out to matter the way back is our own button list under tokens.
+    const nav = document.createElement('ui5-side-navigation');
+    nav.className = 'oes-ui5-sidenav';
+    const byItem = new Map();
+    for (const iface of ifaces) {
+      const item = document.createElement('ui5-side-navigation-item');
+      item.text = iface.synonym || iface.name || '#' + iface.id;
+      byItem.set(item, iface);
+      nav.appendChild(item);
+    }
+    nav.addEventListener('selection-change', (ev) => {
+      const iface = byItem.get(ev.detail && ev.detail.item);
+      if (iface) showInterfacePopup(iface);
+    });
+    root.appendChild(nav);
+    return;
+  }
   for (const iface of ifaces) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -1708,8 +1815,23 @@ class BaseControl{
         for(const c of inner) c.disabled=true;
       }
     }
-    if(node.fg) el.style.color=node.fg;
-    if(node.bg) el.style.backgroundColor=node.bg;
+    // A control that renders as a label PLUS a field returns the row as
+    // its element, and the row is not what the colour was set on: the
+    // field is. Painting the row puts the field's white behind the label
+    // too, which under a dark theme is a pale box with the caption lost
+    // in it. A renderer that has an inner surface names it.
+    const look=el.oesLookTarget||el;
+    if(node.fg) look.style.color=node.fg;
+    if(node.bg){
+      look.style.backgroundColor=node.bg;
+      // Ink follows the surface when the author named one and no ink to
+      // go on it. Only under a theme: legacy has no second palette to
+      // get this wrong in, and the tokens are not there to read.
+      if(!node.fg&&runtime.ui==='ui5'){
+        const ink=readableInkOn(node.bg);
+        if(ink) look.style.color=ink;
+      }
+    }
     if(node.font){
       if(node.font.size)   el.style.fontSize=node.font.size+'pt';
       // The stored family is a Windows-era name for "the UI font" —
@@ -1837,12 +1959,11 @@ class TextCtrl extends BaseControl{
     // data-ctrl-id lets post-render refocus logic (e.g. after Clear)
     // find the specific input even though main.innerHTML was replaced.
     if(node.id) group.dataset.ctrlId=node.id;
-    // .texted has a hardcoded #fff background that would otherwise mask
-    // the fg/bg that applyCommon just set on the outer wrap. Push node
-    // colours onto the group directly so the input (background:transparent)
-    // inherits through.
-    if(node.bg) group.style.backgroundColor=node.bg;
-    if(node.fg) group.style.color=node.fg;
+    // The input group is the surface the colours were set on, not the
+    // row that carries the label beside it. applyCommon paints whatever
+    // a renderer names here; .texted's hardcoded #fff gives way to the
+    // inline value, and the input (background:transparent) inherits it.
+    wrap.oesLookTarget=group;
     const el=document.createElement(multi?'textarea':'input');
     // No .ctrl class — border/padding is on .texted now.
     if(!multi) el.type=node.passwordMode?'password':'text';
@@ -1935,6 +2056,35 @@ class Toolbar extends BaseControl{
   render(){ const el=document.createElement('div');el.className='toolbar';return el; }
 }
 
+// A tool activates one of two things, and which one it is the node says.
+// A tool on the form's own command bar names a COMMAND by action id and
+// carries no control id — the bar is chrome, so the control dispatcher
+// cannot reach it and the click goes to /command. Everything else is a
+// control action. Both answers are the form again.
+//
+// Lives outside the renderers because two of them draw a tool: the plain
+// button and the ui5-button, and only the element differs.
+function bindToolActivation(el, node){
+  const road = node.action!==undefined ? API+'/command/'+node.action
+             : node.id                 ? API+'/action/'+node.id
+             : null;
+  if(road===null) return;
+  el.addEventListener('click', async()=>{
+    const r=await netFetch(road,{method:'POST',credentials:'same-origin'});
+    if(!r.ok) return;
+    const tree=await r.json();
+    if(tree&&!tree.error){
+      main.innerHTML='';
+      if(Object.keys(tree).length>0) main.appendChild(render(tree));
+    }
+    else OES.handleBackendError(tree);
+    // A tool can close / open / switch forms (ActionClose, a script that
+    // calls OpenForm), so the strip is re-read rather than waited for:
+    // the dying tab goes now instead of on the next poll tick.
+    refreshTabs();
+  });
+}
+
 class Tool extends BaseControl{
   // Representation modes from the server (ibRepresentation enum):
   //   0 Auto  — server resolves before sending; browser never sees 0
@@ -1978,43 +2128,7 @@ class Tool extends BaseControl{
       el.appendChild(lbl);
     }
     if (node.enabled===false) el.disabled=true;
-    // A tool on the form's own command bar names a COMMAND by action id
-    // and has no control id: the bar is chrome, so the control
-    // dispatcher cannot reach it and the click goes to /command.
-    if(node.action!==undefined){
-      el.onclick=async()=>{
-        const r=await netFetch(API+'/command/'+node.action,{method:'POST',credentials:'same-origin'});
-        if(r.ok){
-          const tree=await r.json();
-          if(tree&&!tree.error){
-            main.innerHTML='';
-            if(Object.keys(tree).length>0) main.appendChild(render(tree));
-          }
-          else OES.handleBackendError(tree);
-          refreshTabs();
-        }
-      };
-      return el;
-    }
-    if(node.id){
-      el.onclick=async()=>{
-        const r=await netFetch(API+'/action/'+node.id,{method:'POST',credentials:'same-origin'});
-        if(r.ok){
-          const tree=await r.json();
-          if(tree&&!tree.error){
-            main.innerHTML='';
-            if(Object.keys(tree).length>0) main.appendChild(render(tree));
-          }
-          else OES.handleBackendError(tree);
-          // Tool actions can close / open / switch forms (ActionClose,
-          // custom scripts that call OpenForm). Refresh the tab strip
-          // so the dying tab disappears immediately instead of waiting
-          // for the next 2s poll tick — fast now that localhost
-          // requests redirect to 127.0.0.1 (no IPv6 fallback tax).
-          refreshTabs();
-        }
-      };
-    }
+    bindToolActivation(el, node);
     return el;
   }
 }
@@ -2137,6 +2251,8 @@ class UI5TextCtrl extends BaseControl{
     el.disabled=node.enabled===false;
     if(node.error===true) el.valueState='Negative';
     group.appendChild(el);
+    // The field is what a background colour was set on, not the row.
+    wrap.oesLookTarget=el;
 
     let inputTimer=null;
     let lastSent=el.value;
@@ -2402,6 +2518,57 @@ class TableBox extends BaseControl{
   }
 }
 
+// Chrome in ui5 mode. The command bar is a ui5-bar and every tool on it
+// a real ui5-button: the metadata's raster icon goes into the button's
+// own slot, which is the reason the bar is a ui5-bar and not a
+// ui5-toolbar -- a ui5-toolbar-button takes an icon by NAME out of UI5's
+// own set, and a command here brings its picture with it.
+class UI5Toolbar extends BaseControl{
+  render(){
+    const el=document.createElement('ui5-bar');
+    el.className='oes-ui5-toolbar';
+    el.design='Subheader';
+    return el;
+  }
+}
+
+class UI5Tool extends BaseControl{
+  render(node){
+    const el=document.createElement('ui5-button');
+    el.className='oes-ui5-tool';
+    // ui5-bar lays its content out by slot; the child names its own.
+    el.setAttribute('slot','startContent');
+    el.design='Transparent';
+    // Representation, same three answers as the plain tool: 1 Text,
+    // 2 Picture, 3 PictureAndText (0 Auto is resolved server-side).
+    const rep=node.representation|0;
+    const showIcon=(rep===2||rep===3)&&!!node.hasPicture&&!!node.picture;
+    const showText=!!node.label&&(rep===1||rep===3);
+    if(showIcon){
+      const ic=document.createElement('img');
+      ic.src=node.picture; ic.alt='';
+      ic.style.height='1em';
+      if(showText) ic.style.marginInlineEnd='.25rem';
+      el.appendChild(ic);
+    }
+    if(showText) el.appendChild(document.createTextNode(node.label));
+    // A picture-only tool still has to say what it is to a screen reader
+    // and to a hover.
+    if(!showText&&node.label){ el.accessibleName=node.label; el.title=node.label; }
+    if(node.enabled===false) el.disabled=true;
+    bindToolActivation(el,node);
+    return el;
+  }
+}
+
+class UI5ToolSeparator extends BaseControl{
+  render(){
+    const el=document.createElement('ui5-toolbar-separator');
+    el.setAttribute('slot','startContent');
+    return el;
+  }
+}
+
 const legacyRenderers={
   'visualHost':    new HostControl(),
   'mdiChild':      new HostControl(),
@@ -2419,9 +2586,12 @@ const legacyRenderers={
   'tablebox':      new TableBox(),
 };
 const ui5Renderers={
-  'button':   new UI5Button(),
-  'textctrl': new UI5TextCtrl(),
-  'checkbox': new UI5CheckBox(),
+  'button':        new UI5Button(),
+  'textctrl':      new UI5TextCtrl(),
+  'checkbox':      new UI5CheckBox(),
+  'toolbar':       new UI5Toolbar(),
+  'tool':          new UI5Tool(),
+  'toolseparator': new UI5ToolSeparator(),
 };
 const renderers=runtime.ui==='ui5'
   ?Object.assign({},legacyRenderers,ui5Renderers)
@@ -2437,6 +2607,21 @@ const WX_LEFT=0x0010, WX_RIGHT=0x0020, WX_TOP=0x0040, WX_BOTTOM=0x0080;
 const WX_ALIGN_RIGHT=0x0200, WX_ALIGN_CENTER_H=0x0100;
 const WX_ALIGN_BOTTOM=0x0400, WX_ALIGN_CENTER_V=0x0800;
 const WX_EXPAND=0x2000;
+
+// Which end of the theme's text scale reads on a colour the form chose.
+// Relative luminance per WCAG, so the answer is the one a contrast check
+// would give rather than a guess at "looks light".
+function readableInkOn(css){
+  const hex=String(css).trim().replace(/^#/,'');
+  const full=hex.length===3?hex.split('').map(c=>c+c).join(''):hex;
+  if(!/^[0-9a-fA-F]{6}$/.test(full)) return '';
+  const channel=i=>{
+    const v=parseInt(full.substr(i*2,2),16)/255;
+    return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4);
+  };
+  const luminance=.2126*channel(0)+.7152*channel(1)+.0722*channel(2);
+  return luminance>.45?'var(--oes-ink-on-light)':'var(--oes-ink-on-dark)';
+}
 
 function applyLayout(el, layout){
   if(!layout) return;
@@ -2791,6 +2976,7 @@ async function paintActiveTab(){
     authenticated = true;
   }
   status.textContent = 'connected';
+  applyUI5Chrome();
   // Step 3: initial fetches in parallel so the boot overlay hides only
   // after sidebar, tab strip, and active host have all landed — user
   // sees a finished page rather than elements popping in one by one.
