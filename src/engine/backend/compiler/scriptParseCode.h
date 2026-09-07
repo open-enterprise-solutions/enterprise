@@ -1,5 +1,5 @@
-#ifndef __IB_PARSE_CODE_H__
-#define __IB_PARSE_CODE_H__
+#ifndef __IB_SCRIPT_PARSE_CODE_H__
+#define __IB_SCRIPT_PARSE_CODE_H__
 
 // WHAT A MODULE TEXT DECLARES, read WITHOUT compiling it — the walk that fills the designer's
 // "Procedures and functions" window, the editor's autocomplete, and module_outline.

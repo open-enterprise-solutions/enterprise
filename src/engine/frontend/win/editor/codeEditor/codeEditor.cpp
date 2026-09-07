@@ -160,19 +160,16 @@ ibCodeEditor::ibCodeEditor(ibMetaDocument* document, wxWindow* parent, wxWindowI
 	//Turn the fold markers red when the caret is a line in the group (optional)
 	MarkerEnableHighlight(true);
 
-	// Construct the precompiler upfront — sessionless hosts (codeRunner)
-	// pass nullptr for the document, so the precompiler initialises with
-	// an empty module name and no metadata. Local variable / function
-	// names parsed from the live editor text still feed autocomplete;
-	// metadata-driven props are simply absent.
-	ibValueMetaObjectModuleBase* moduleObject = m_document != nullptr
-		? m_document->ConvertMetaObjectToType<ibValueMetaObjectModuleBase>()
-		: nullptr;
-	m_precompileModule = new ibPrecompileCode(moduleObject);
+	// The stream needs no module and no metadata: what the text MEANS is asked of the compiler, and
+	// the module is passed at the moment of asking. So a sessionless host (codeRunner, which has no
+	// document) gets the same stream as any other — folding, brace matching and the caret question
+	// all work; only the answers that need a configuration are absent, and they are absent there
+	// anyway.
+	m_tc.SetLexemMode(ibLexemMode::Editing);
 
 	// For document-less hosts there is no LoadModule() to flip the
 	// "initial text loaded" gate — start initialised so OnTextChange
-	// runs the precompile pass right away.
+	// re-lexes right away.
 	if (m_document == nullptr)
 		m_initialized = true;
 }
@@ -192,7 +189,6 @@ ibCodeEditor::~ibCodeEditor()
 		}
 	}
 
-	wxDELETE(m_precompileModule);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -426,12 +422,10 @@ void ibCodeEditor::SetFontColorSettings(const ibFontColorSettings& settings)
 bool ibCodeEditor::LoadModule()
 {
 	ClearAll();
-	wxDELETE(m_precompileModule);
 
 	if (m_document != nullptr) {
 		ibValueMetaObjectModuleBase* moduleObject = m_document->ConvertMetaObjectToType<ibValueMetaObjectModuleBase>();
 		if (moduleObject != nullptr) {
-			m_precompileModule = new ibPrecompileCode(moduleObject);
 
 			if (IsEditable()) {
 				SetText(moduleObject->GetModuleText()); m_initialized = true;
@@ -442,10 +436,10 @@ bool ibCodeEditor::LoadModule()
 				SetReadOnly(true);
 			}
 
-			m_precompileModule->Load(moduleObject->GetModuleText());
+			m_tc.Load(moduleObject->GetModuleText());
 
 			try {
-				m_precompileModule->PrepareLexem();
+				m_tc.PrepareLexem();
 			}
 			catch (...) {
 			}
@@ -770,17 +764,15 @@ void ibCodeEditor::OnTextChange(wxStyledTextEvent& event)
 		(modFlags & (wxSTC_MOD_DELETETEXT)) == 0)
 		return;
 
-	if (!m_initialized || m_precompileModule == nullptr)
+	if (!m_initialized)
 		return;
 
 	const wxString& codeText = GetText();
 	const int line = LineFromPosition(event.GetPosition());
 
-	// Precompile pass — fires for every host (codeRunner included).
-	// Tracks local declarations + functions parsed out of the live
-	// editor text; metadata-driven props come in only when a backing
-	// document exists (PrepareModuleData early-returns otherwise).
-	m_precompileModule->Load(codeText);
+	// Re-lex — fires for every host (codeRunner included). The stream feeds folding, brace
+	// matching and the caret question; nothing here compiles anything.
+	m_tc.Load(codeText);
 
 	if (event.m_linesAdded != 0) {
 
@@ -805,37 +797,28 @@ void ibCodeEditor::OnTextChange(wxStyledTextEvent& event)
 
 	try {
 #if _USE_OLD_TEXT_PARSER_IN_CODE_EDITOR == 0
-		// First-time-empty buffer (codeRunner initial SetText, or any
-		// host that hasn't called LoadModule) — incremental PrepareLexem
-		// early-returns when m_listLexem is empty, so the fold parser
-		// gets no KEYWORD lexems and folding doesn't kick in. Bootstrap
-		// with a full pass so subsequent edits have a baseline to patch.
-		if (m_precompileModule->GetLexems().empty()) {
-			m_precompileModule->PrepareLexem();
+		// First-time-empty buffer (codeRunner initial SetText, or any host that hasn't called
+		// LoadModule) — a patch has no baseline to work from, so bootstrap with a full pass and
+		// let subsequent edits patch it.
+		if (!m_tc.HasLexem()) {
+			m_tc.PrepareLexem();
 		}
-		else {
-			const wxString& patchText = event.GetString();
-			const int str_length = patchText.Length();
-			const int str_utf8_length = event.GetLength();
-			if ((modFlags & (wxSTC_MOD_INSERTTEXT)) != 0) {
-				m_precompileModule->PrepareLexem(line,
+		else if ((modFlags & (wxSTC_MOD_INSERTTEXT | wxSTC_MOD_DELETETEXT)) != 0) {
+
+			const bool deleted = (modFlags & wxSTC_MOD_DELETETEXT) != 0;
+			const int  sign = deleted ? -1 : 1;
+
+			ibTranslateCode::ibTextEdit edit;
+			edit.m_line = line;
+			edit.m_lineOffset = event.m_linesAdded;
+			edit.m_posOffset = sign * (int)event.GetString().Length();
 #ifdef UTF8_LEXEM_TRANSLATE
-					event.m_linesAdded, str_length, str_utf8_length);
-#else
-					event.m_linesAdded, str_length);
+			edit.m_posOffsetUtf8 = sign * event.GetLength();
 #endif
-			}
-			else if ((modFlags & (wxSTC_MOD_DELETETEXT)) != 0) {
-				m_precompileModule->PrepareLexem(line,
-#ifdef UTF8_LEXEM_TRANSLATE
-					event.m_linesAdded, -str_length, str_utf8_length);
-#else
-					event.m_linesAdded, -str_length);
-#endif
-			}
+			m_tc.PrepareLexem(edit);
 		}
 #else
-		m_precompileModule->PrepareLexem();
+		m_tc.PrepareLexem();
 #endif
 	}
 	catch (...)

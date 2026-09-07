@@ -511,6 +511,10 @@ public:
 	// rolled back.
 	bool IsEvalSandbox() const { return IsEvalMode() == eval_sandbox; }
 
+	// …and the finer degree of the same kind, asked by whoever decides what to ANSWER rather than
+	// what to write. See eval_complete (backend_core.h).
+	bool IsEvalComplete() const { return IsEvalMode() == eval_complete; }
+
 	// Processing-backend-error flag — re-entrancy guard for
 	// ibBackendException::ProcessError so a logging path can't re-throw
 	// into itself. Same per-session rationale as eval-mode.

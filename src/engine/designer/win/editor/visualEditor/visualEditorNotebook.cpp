@@ -3,7 +3,7 @@
 #include "frontend/win/theme/luna_tabart.h"
 
 #include "frontend/win/editor/codeEditor/codeEditor.h"
-#include "backend/compiler/parseCode.h"
+#include "backend/compiler/scriptParseCode.h"
 #include "frontend/visualView/layers/commandBar.h"       // ibValueCommandBarItem (tree reveal)
 
 void ibVisualEditorNotebook::CreateVisualEditor(ibMetaDocument* document, wxWindow* parent, wxWindowID id, long flags)

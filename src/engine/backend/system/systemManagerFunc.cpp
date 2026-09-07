@@ -1271,6 +1271,19 @@ ibValue ibValueSystemFunction::GetCommonTemplate(const wxString& strTemplateName
 			return new ibValueSpreadsheetDocument(creator->GetSpreadsheetDesc());
 	}
 
+	// ⭐⭐ AN EDITOR WORKING OUT WHAT IS AT A CARET IS NOT ASKING FOR THIS TEMPLATE — it is asking
+	// what a template OFFERS, and a name that is not there yet is the ordinary state of a text
+	// somebody is still typing. Raising turns that question into an error and leaves the asker with
+	// nothing, so an EMPTY template is handed back: same type, same surface, no content (Max,
+	// 2026-09-07: *"instead of undefined just return an empty table"*).
+	//
+	// ⚠ AND IT IS THE PRECOMPILE KIND SPECIFICALLY, not eval mode at large. A WATCH is a question
+	// about a run in progress and its answer has to be exact — handing a debugger an empty template
+	// where the script named a missing one would hide the very fault it is watching for. The two
+	// only differ here, which is why the kind exists (backend_core.h, eval_complete).
+	if (ibBackendException::IsEvalComplete())
+		return new ibValueSpreadsheetDocument();
+
 	ibBackendCoreException::Error(_("Common template not found '%s'"), strTemplateName);
 	return wxEmptyValue;
 }

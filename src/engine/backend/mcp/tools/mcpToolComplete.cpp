@@ -13,15 +13,18 @@
 // has no entry — but the object knows, and it will say so the moment it is
 // asked at a place where it exists.
 //
-// ⚠ IT LIVES IN THE FRONT because ibPrecompileCode does — by location, not by
-// nature: the class touches no widget, it is simply where the editor kept it.
-// The tool registry is exported from the backend, so registering from here
-// works exactly as it does there.
+// ⭐ AND IT LIVES BESIDE THE COMPILER, which it did not always. It sat in the front for one reason:
+// the editor's own precompiler was there, and this verb called it. That precompiler is gone — both
+// answers now come from the compiler itself (ibValueAtCaret / ibNamesAtCaret) and the token stream
+// from the lexer next to it — so the tool followed the mechanism it asks (Max, 2026-09-08:
+// *"autocomplete is part of the backend now — the tool can live there"*).
 //
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/mcp/mcpTool.h"
 
+#include "backend/backend_exception.h"              // ibEvalModeScope - which kind of evaluation this call is
+#include "backend/compiler/scriptComplete.h"        // ibValueAtCaret / ibFieldTypesOf - off the bytecode and the metadata
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metadataConfiguration.h"
@@ -29,8 +32,8 @@
 #include "backend/moduleManager/moduleManager.h"   // ibValueModuleManagerDesigner - AddCommonModule
 #include "backend/value_ptr.h"                     // ibValuePtr - metaobjects are reference-counted
 
-#include "frontend/win/editor/codeEditor/codeEditorInterpreter.h"
-#include "backend/compiler/parseCode.h"
+#include "backend/compiler/translateCode.h"        // the lexem stream - what the caret stands in
+#include "backend/compiler/scriptParseCode.h"
 
 #include <memory>
 
@@ -42,16 +45,15 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // A MODULE THAT EXISTS FOR ONE ANSWER
 //---------------------------------------------------------------------------
 //
-// ⭐⭐ WHY COMPLETION DID NOT WORK ON ARBITRARY CODE, and it is not what it looks like. The
-// interpreter is perfectly able to complete a free-standing snippet — what it cannot do is reach
-// the configuration without a METAOBJECT to reach it through. Every global it offers arrives by
-// one road: `m_moduleObject->GetMetaData()` → the compile cache → the designer's module manager →
-// its global names and its common modules' exports (ibPrecompileCode::Compile and
-// PrepareModuleData). With no module that road is not taken at all, and the answer falls back to
-// whatever the snippet itself declares. So the path breaks exactly between the global functions
-// and the text being written — which is why `Catalogs.` completed inside a module and nowhere
-// else (Max, 2026-09-06: *"your path breaks between the common functions and the current
-// module"*).
+// ⭐⭐ WHY COMPLETION DID NOT WORK ON ARBITRARY CODE, and it is not what it looks like. The walk is
+// perfectly able to complete a free-standing snippet — what it cannot do is reach the configuration
+// without a METAOBJECT to reach it through. Every global it offers arrives by one road:
+// `moduleObject->GetMetaData()` → the compile cache → the designer's module manager → its global
+// names and its common modules' exports. With no module that road is not taken at all, and the
+// answer falls back to whatever the snippet itself declares. So the path breaks exactly between the
+// global functions and the text being written — which is why `Catalogs.` completed inside a module
+// and nowhere else (Max, 2026-09-06: *"your path breaks between the common functions and the
+// current module"*).
 //
 // ⭐ SO ONE IS MADE FOR THE DURATION. Shaped like a common module, because that is what a body of
 // free-standing statements most resembles — with the one difference that it may declare variables
@@ -60,11 +62,11 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // (Max: *"it just lives in the moment — you computed the value, it worked, goodbye"*).
 //
 // ⚠ AND BINDING IT TO THE METADATA IS NOT ENOUGH, which is worth writing down because it looks
-// like it would be. Two of the three things the interpreter offers do come straight off the
-// metadata — the manager's global variables and its context names. The third does not: it walks
-// the DESCRIPTOR chain (`FindCompileModule` → `ibRuntimeModuleDataObject::GetParent`, the loop in
-// PrepareModuleData) to collect what each module above contributes. An unregistered module has no
-// descriptor, so that walk starts at null and the chain to the root is simply not there.
+// like it would be. Two of the three things the answer offers do come straight off the metadata —
+// the manager's global variables and its context names. The third does not: it walks the DESCRIPTOR
+// chain (`FindCompileModule` → `ibRuntimeModuleDataObject::GetParent`) to collect what each module
+// above contributes. An unregistered module has no descriptor, so that walk starts at null and the
+// chain to the root is simply not there.
 //
 // ⭐ SO IT IS REGISTERED AS A COMMON MODULE FOR THE DURATION. That is the call which builds the
 // descriptor AND parents it on the root — the module object that holds Catalogs, Documents and the
@@ -199,80 +201,74 @@ wxString ibOriginName(ibNameOrigin origin)
 	}
 }
 
-bool ibAnswerWithScope(const ibPrecompileCode& precompile, int caretPos, ibDataNode& result)
+// ⭐⭐ THE LIST, OFF THE SAME BYTECODE THE PATH IS WALKED OVER. Nothing here reads the text: the
+// names are the symbol tables of the compiled snippet and of every module above it in the ladder,
+// and the declaration gate comes free — the text is compiled UP TO the caret, so a name written
+// below it was never declared (scriptComplete.cpp).
+// 🛑 DESCRIBING A VALUE MUST NOT MAKE IT READ ITSELF. Asking a value what CLASS it is looks free
+// and is not: a reference names its class through the metadata it points at, and for a document
+// created and not written that reaches the database and throws — taking the caret answer with it
+// (measured 2026-09-08: two chains that had worked all evening turned into refusals the moment the
+// question was added). So a value that will not describe itself simply describes itself less. The
+// members are the answer; the type beside them is a courtesy, and a courtesy must not be able to
+// cost the answer.
+//
+// The other half of that debt is paid rather than guarded: what a field is DECLARED as is asked of
+// the METADATA now (ibFieldTypesOf), where it cannot touch a database at all.
+wxString ClassNameOf(const ibValue& value)
 {
-	std::vector<ibDataValue> names;
+	try {
+		return value.GetClassName();
+	}
+	catch (...) {
+		return wxEmptyString;
+	}
+}
 
-	const auto append = [&names](const wxString& name, const wxString& kind, bool exported,
-		const wxString& signature, ibNameOrigin origin, bool inBody) {
-
-		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-		entry->SetValue(wxT("name"), name);
-		entry->SetValue(wxT("kind"), kind);
-		if (!signature.IsEmpty())
-			entry->SetValue(wxT("signature"), signature);
-		entry->AddField(wxT("exported"), ibDataValue::Bool(exported));
-
-		// TWO SEPARATE FACTS, kept apart on purpose. `origin` says where the name came FROM; `local`
-		// says it belongs to the body the caret is standing in rather than to the module. Folding
-		// "local" into the origin list would have made a frame position look like a source.
-		entry->SetValue(wxT("origin"), ibOriginName(origin));
-		if (inBody)
-			entry->AddField(wxT("local"), ibDataValue::Bool(true));
-
-		names.push_back(ibDataValue::Child(entry));
-	};
-
-	const ibPrecompileContext* rootContext = precompile.GetContext();
-	if (rootContext == nullptr)
+bool ibAnswerWithScope(const wxString& text, int caretPos,
+	const ibValueMetaObject* module, ibDataNode& result)
+{
+	std::vector<ibCaretName> found;
+	if (!ibNamesAtCaret(text, (unsigned int)caretPos, module, found))
 		return false;
 
-	for (const auto& variable : rootContext->m_variables) {
+	std::vector<ibDataValue> names;
+	names.reserve(found.size());
 
-		const ibPrecompileVariable& declared = variable.second;
-		if (declared.m_isTempVar)
-			continue;
+	for (const ibCaretName& name : found) {
 
-		// DECLARED BELOW THE CARET IS NOT YET A NAME — the same gate the dropdown applies. A
-		// parameter or an injected context name carries declPos 0 and is always visible.
-		if (declared.m_declPos > caretPos)
-			continue;
-
-		append(declared.m_realName, wxT("variable"), declared.m_isExport, wxEmptyString,
-			declared.m_origin, /*inBody*/ false);
-	}
-
-	for (const auto& function : rootContext->m_functions) {
-
-		const ibPrecompileFunction* declared = function.second;
-		if (declared == nullptr)
-			continue;
+		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+		entry->SetValue(wxT("name"), name.m_name);
 
 		// Function or procedure: calling a procedure where a value is wanted is a compile error,
 		// and this is what tells them apart — the same distinction the member answer carries as
 		// `returnsValue`.
-		const bool returnsValue = declared->m_context == nullptr
-			|| declared->m_context->m_returnKind == RETURN_FUNCTION;
+		// wxString, not a bare literal: the ternary would settle on `const wchar_t*`, which the
+		// data-node codec has no encoding for — and outside MSVC the two branches are ambiguous
+		// against each other (portability.md §1.10, the same trap eight times over).
+		entry->SetValue(wxT("kind"), wxString(!name.m_callable ? wxT("variable")
+			: name.m_returnsValue ? wxT("function") : wxT("procedure")));
 
-		append(declared->m_realName, returnsValue ? wxT("function") : wxT("procedure"),
-			declared->m_isExport, declared->m_shortDescription, declared->m_origin, /*inBody*/ false);
-	}
+		if (!name.m_signature.IsEmpty())
+			entry->SetValue(wxT("signature"), name.m_signature);
+		entry->AddField(wxT("exported"), ibDataValue::Bool(name.m_exported));
 
-	// AND THE BODY THE CARET IS STANDING IN, whose locals belong to nobody else. GetCurrentContext
-	// is the frame the walk stopped in; at module level it is the root, already listed above.
-	const ibPrecompileContext* currentContext = precompile.GetCurrentContext();
-	if (currentContext != nullptr && currentContext != rootContext) {
-		for (const auto& variable : currentContext->m_variables) {
+		// ⭐ PROTECTED IS SAID ONLY WHEN IT IS TRUE, because it is the rare one and a field that is
+		// false on nine names in ten is noise on every one of them. It is not the opposite of
+		// `exported` either: exported reaches the whole configuration, protected reaches the
+		// modules BELOW this one and stops there, and what a list must never do is offer a name
+		// that cannot be written — see ibNamesAtCaret's note on the runtime's own rule.
+		if (name.m_protected)
+			entry->AddField(wxT("protected"), ibDataValue::Bool(true));
 
-			const ibPrecompileVariable& declared = variable.second;
-			if (declared.m_isTempVar)
-				continue;
-			if (declared.m_declPos > caretPos)
-				continue;
+		// TWO SEPARATE FACTS, kept apart on purpose. `origin` says where the name came FROM; `local`
+		// says it belongs to the body the caret is standing in rather than to the module. Folding
+		// "local" into the origin list would have made a frame position look like a source.
+		entry->SetValue(wxT("origin"), ibOriginName(name.m_origin));
+		if (name.m_local)
+			entry->AddField(wxT("local"), ibDataValue::Bool(true));
 
-			append(declared.m_realName, wxT("variable"), declared.m_isExport, wxEmptyString,
-				declared.m_origin, /*inBody*/ true);
-		}
+		names.push_back(ibDataValue::Child(entry));
 	}
 
 	result.AddField(wxT("names"), ibDataValue::Array(names));
@@ -303,14 +299,25 @@ public:
 			"Anywhere else: `names`, everything in scope at that point - the variables and the "
 			"functions, including the ones this module declares above the caret. Keywords are not in "
 			"it; syntax_search answers those properly.\n\n"
+			"`place` SAYS WHICH OF THOSE YOU GOT, so you never have to work it out from which field "
+			"came back: `afterDot` (members of the expression to the left, which `expression` names), "
+			"`inKeyword` (a keyword or call whose own domain is being completed - `keyword` names it), "
+			"or `openCode` (everything in scope). `word` is the identifier under the caret, which is "
+			"what a list filters by rather than part of the question.\n\n"
 			"READ `origin` BEFORE READING THE LIST. Most of those names are the same at every caret "
 			"in every module, and the few that make THIS place different are the point: `member` is "
-			"the object's own attributes and tabular sections, `context` is ThisObject / ThisForm, "
-			"`bound` is RegisterRecords / Filter / a constant's Value, `declared` is written in this "
-			"text (with `local` true when it belongs to the body you are standing in), `inherited` "
-			"comes from a module above this one. `platform`, `global` and `globalModule` are the "
-			"ones you already know - the configuration's collections, the system functions, global "
-			"constants and common modules.\n\n"
+			"THE OBJECT'S OWN SURFACE - its attributes, its tabular sections and its methods "
+			"(Write / Fill / Lock on a document); `context` is the binding itself, ThisObject / "
+			"ThisForm; `bound` is a handle this module was given, such as a constant's Value; "
+			"`declared` is written in this text (with `local` true when it belongs to the body you "
+			"are standing in); `inherited` comes from a module above this one. `platform`, `global` "
+			"and `globalModule` are the ones you already know - the configuration's collections, "
+			"the system functions, global constants and common modules.\n\n"
+			"EVERY NAME IN IT CAN BE WRITTEN HERE - it is what the runtime itself sees at that "
+			"point, not everything that exists. This text's own names, the globals, and from each "
+			"module above only what that module lets out: its exports and its `protected` (flagged, "
+			"and reaching the modules below it rather than the whole configuration). A parent's "
+			"private names are absent, because writing one is an error rather than a completion.\n\n"
 			"USE IT INSTEAD OF GUESSING AN OBJECT'S API, and the reason is not politeness: the help "
 			"corpus covers functions and keywords, and THE OBJECT MODEL IS NOT IN IT. A catalog "
 			"manager's methods, what a document object offers, what a register record set will "
@@ -338,6 +345,13 @@ public:
 			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
+
+		// ⭐⭐ EVERYTHING THIS CALL RUNS, RUNS AS A COMPLETION. Answering takes real execution — a
+		// module is registered and compiled to reach the configuration, values are constructed,
+		// methods on them are called — and each of those asks the session what kind of evaluation
+		// it is inside. Saying it once, here, means no evaluation started by this call can be
+		// mistaken for a watch or for ordinary work (backend_core.h, eval_complete).
+		const ibBackendException::ibEvalModeScope answering(eval_complete);
 
 		const wxString text = ArgText().Text(params);
 		s32 position = 0;
@@ -369,81 +383,163 @@ public:
 			module = scratch->Get();
 		}
 
-		// THE EDITOR'S THREE CALLS. Compiled and discarded: the module is not
-		// written, and the configuration never learns this happened.
-		ibPrecompileCode precompile(module);
-		precompile.Load(text);
+		// ⭐⭐ WHICH OF THE TWO QUESTIONS IS BEING ASKED, and the TOKENS are what answer it — the
+		// same way the editor decides between its two lists. This verb only ever answered the first
+		// half, so standing anywhere but just after a dot produced an empty answer that read like
+		// "nothing here" — including at the very start of an empty module, where in fact the whole
+		// configuration is available.
+		//
+		// A lexer, not a compiler: what the text MEANS is asked below, of the compiler itself.
+		ibTranslateCode lexem;
+		lexem.SetLexemMode(ibLexemMode::Editing);
+		lexem.Load(text);
+		lexem.PrepareLexem();
 
-		// ⚠ AND THE LEXEMS PREPARED, which is not optional. The editor does
-		// Load → PrepareLexem → compile, and the middle step is easy to miss
-		// because it looks like an optimisation: it is not. Without it the
-		// compile has no token stream to walk and answers false, which reads as
-		// "your text is wrong" when the text was never read.
-		precompile.PrepareLexem();
+		const ibTranslateCode::ibCaretText at = lexem.CaretAt((unsigned int)position);
 
-		precompile.SetCurrentPos((unsigned int)position);
-		precompile.SetCalcValue(true);
+		// ⭐⭐ THE ANSWER SAYS WHICH QUESTION IT ANSWERED. Two shapes come back from one verb, and
+		// until now a caller told them apart by which FIELD happened to be present — inferring the
+		// question from the shape of the answer, which is the same guessing this arc exists to
+		// remove. `place` names it outright; `word` is what a list filters by and `expression` what
+		// stands to the left, both of which a caller would otherwise re-derive from the text it
+		// already sent.
+		result.SetValue(wxT("place"),
+			at.m_place == ibTranslateCode::ibCaretPlace::AfterDot   ? wxString(wxT("afterDot"))
+			: at.m_place == ibTranslateCode::ibCaretPlace::InKeyword ? wxString(wxT("inKeyword"))
+			:                                                          wxString(wxT("openCode")));
 
-		bool compiled = false;
-		try {
-			compiled = precompile.Compile();
-		}
-		catch (...) {
-			// A refusal mid-way is ordinary here — the text is unfinished by
-			// construction, that is what standing after a dot means.
-		}
+		if (!at.m_word.IsEmpty())
+			result.SetValue(wxT("word"), at.m_word);
+		if (!at.m_expression.IsEmpty())
+			result.SetValue(wxT("expression"), at.m_expression);
+		if (!at.m_keyword.IsEmpty())
+			result.SetValue(wxT("keyword"), at.m_keyword);
 
-		precompile.SetCalcValue(false);
+		if (at.m_place != ibTranslateCode::ibCaretPlace::AfterDot)
+			return ibAnswerWithScope(text, (int)position, module, result);
 
-		if (!compiled) {
-			refusal = ibMcpText("The text could not be compiled up to that point, so there is nothing "
-				"to offer. Check it with script_check first.");
+		// ⭐⭐ AND THE MEMBERS COME FROM THE COMPILER, not from a second reader of the same text.
+		// The text is compiled tolerantly and the walk steps over the INSTRUCTIONS it produced:
+		// `Catalogs.Goods.` emits "member Catalogs of the scope" and "attribute Goods" before the
+		// trailing dot refuses, so what the caret stands on is already there to be read. Whatever
+		// the language grows next — a type a plugin registered, a new step in a chain — is answered
+		// here the moment the compiler understands it, because it IS the compiler
+		// (compiler-ast-arc.md § Update 2026-09-07).
+		// The position is handed over AS THE CALLER GAVE IT: what a caret means — a word still
+		// being typed, the text read only up to it — is the walk's own definition and lives there
+		// (scriptComplete.cpp), not in each caller that happens to hold a position.
+		// ⭐⭐ AND WHEN IT REFUSES, IT SAYS WHERE IT BROKE. The compile keeps every refusal it made,
+		// with a position on each; handing that back turns "no" into something a caller can act on
+		// — and tells the two faults apart, because they need different fixes: a text that would
+		// not compile, and a text that compiled while the chain stopped part way along it.
+		std::vector<ibCaretValue> values;
+		wxString refused;
+		if (!ibValueAtCaret(text, (unsigned int)position, module, values, &refused)) {
+			refusal = refused.IsEmpty()
+				? ibMcpText("That text compiles, but the expression at that position does not "
+					"resolve to a value — so there is nothing to offer its members. Something in "
+					"the chain leads nowhere: a member that is not there, a method that returns "
+					"nothing, a name this module was never given.")
+				: wxString::Format(
+					ibMcpText("Nothing at that position resolves to a value, and the text did not "
+						"compile up to it:%s%s"), wxT("\n"), refused);
 			return false;
 		}
 
-		// ⭐⭐ WHICH OF THE TWO QUESTIONS IS BEING ASKED, and the text is what answers it — the same
-		// way the editor decides between its two lists (ibCodeEditor::OnShowAutoComplete: hasPoint
-		// → the members of what precedes the dot, otherwise what is in scope). This verb only ever
-		// answered the first half, so standing anywhere but just after a dot produced an empty
-		// answer that read like "nothing here" — including at the very start of an empty module,
-		// where in fact the whole configuration is available.
-		wxString expression, keyword, currentWord;
-		bool afterDot = false;
-		precompile.PrepareExpression((unsigned int)position, expression, keyword, currentWord, afterDot);
+		// ⭐⭐ ONE ENTRY PER BRANCH, because a composite path arrives at more than one thing and each
+		// of them is a different set of members. Merging them would hand back a list nothing
+		// actually has; naming only the first would pick a branch on the caller behalf. One branch
+		// is the ordinary case and reads exactly as a single answer always did (Max, 2026-09-08:
+		// "two references are two separate outputs").
+		std::vector<ibDataValue> branches;
+		for (ibCaretValue& branchValue : values) {
 
-		if (!afterDot)
-			return ibAnswerWithScope(precompile, (int)position, result);
+			ibValue& value = branchValue.m_value;
+			std::shared_ptr<ibDataNode> branch = std::make_shared<ibDataNode>();
 
-		const ibValue value = precompile.GetComputeValue();
+			// ⭐⭐ WHOSE THIS VALUE IS, said in the same words the name list uses. The members say
+			// what may be written next and the type says what it is; neither says whether the
+			// reader is looking at the configuration's own data, at something this module bound, or
+			// at the platform's built-in surface — and that is usually the first thing a reader
+			// wants to know. It is read off the STEP that produced the value, so it costs nothing
+			// and cannot be recovered anywhere else (scriptComplete.h).
+			branch->SetValue(wxT("origin"), ibOriginName(branchValue.m_origin));
 
-		std::vector<ibDataValue> methods;
-		for (long i = 0; i < value.GetNMethods(); i++) {
+			// ⭐⭐ WHAT THE EXPRESSION TURNED OUT TO BE, AND IT IS SAID PER BRANCH. The members alone
+			// say what may be written next; they do not say WHAT is being written on, and a caller
+			// reading only a member list has to infer the thing from its parts — a catalog manager
+			// from `CreateElement`, an array from `Add`. That is the same guessing this arc removes
+			// everywhere else, so the value says its own name: it is the one fact the walk holds and
+			// nobody else can recover. Said once for the whole answer it would name the last branch
+			// and describe the others wrongly, which is worse than saying nothing.
+			const wxString className = ClassNameOf(value);
+			if (!className.IsEmpty())
+				branch->SetValue(wxT("type"), className);
 
-			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("name"), value.GetMethodName(i));
+			std::vector<ibDataValue> methods;
+			for (long i = 0; i < value.GetNMethods(); i++) {
 
-			const wxString helper = value.GetMethodHelper(i);
-			if (!helper.IsEmpty())
-				entry->SetValue(wxT("signature"), helper);
+				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+				entry->SetValue(wxT("name"), value.GetMethodName(i));
 
-			// Function or procedure: calling a procedure where a value is wanted
-			// is a compile error, and only this tells them apart.
-			entry->AddField(wxT("returnsValue"), ibDataValue::Bool(value.HasRetVal(i)));
-			methods.push_back(ibDataValue::Child(entry));
+				const wxString helper = value.GetMethodHelper(i);
+				if (!helper.IsEmpty())
+					entry->SetValue(wxT("signature"), helper);
+
+				// Function or procedure: calling a procedure where a value is wanted
+				// is a compile error, and only this tells them apart.
+				entry->AddField(wxT("returnsValue"), ibDataValue::Bool(value.HasRetVal(i)));
+				methods.push_back(ibDataValue::Child(entry));
+			}
+
+			// 🛑 WHAT A FIELD IS DECLARED AS IS ASKED OF THE METADATA, and that is a measurement,
+			// not a preference: building a source explorer on a LIVE object reaches the database,
+			// and for an object with no record yet it throws — leaving the object half-built, so
+			// the very next question about it throws too, outside any guard. Three chains that had
+			// answered all evening began refusing. The same door the walk widens through answers it
+			// here for free (ibFieldTypesOf), so the type beside a name and the branch stepped into
+			// can never disagree.
+			std::vector<ibDataValue> properties;
+			for (long i = 0; i < value.GetNProps(); i++) {
+				// The same filter the editor applies: a scope-local name belongs to
+				// the frame it was declared in, not to the object reached through a
+				// chain.
+				if (value.IsPropScoped(i))
+					continue;
+
+				const wxString name = value.GetPropName(i);
+
+				std::vector<ibFieldType> types;
+				ibFieldTypesOf(module, value, name, types);
+
+				// ⭐⭐ A COMPOSITE FIELD ARRIVES ONCE PER TYPE. It is one name in the text and
+				// several things to walk into: `Owner` that may be a Goods or a Warehouses
+				// reference offers two different sets of members, and one entry saying "it is both"
+				// leaves the next hop to be guessed. Repeating the name, each with the type it
+				// stands for, makes the branch a CHOICE the caller can make instead of an ambiguity
+				// it has to resolve (Max, 2026-09-08: *"composite fields should be duplicated"*).
+				if (!types.empty()) {
+					for (const ibFieldType& type : types) {
+						std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+						entry->SetValue(wxT("name"), name);
+						if (!type.m_name.IsEmpty())
+							entry->SetValue(wxT("type"), type.m_name);
+						properties.push_back(ibDataValue::Child(entry));
+					}
+					continue;
+				}
+
+				// Nothing declares it — a property of a platform object rather than a field of a
+				// source.
+				properties.push_back(ibDataValue::String(name));
+			}
+
+			branch->AddField(wxT("methods"), ibDataValue::Array(methods));
+			branch->AddField(wxT("properties"), ibDataValue::Array(properties));
+			branches.push_back(ibDataValue::Child(branch));
 		}
 
-		std::vector<ibDataValue> properties;
-		for (long i = 0; i < value.GetNProps(); i++) {
-			// The same filter the editor applies: a scope-local name belongs to
-			// the frame it was declared in, not to the object reached through a
-			// chain.
-			if (value.IsPropScoped(i))
-				continue;
-			properties.push_back(ibDataValue::String(value.GetPropName(i)));
-		}
-
-		result.AddField(wxT("methods"), ibDataValue::Array(methods));
-		result.AddField(wxT("properties"), ibDataValue::Array(properties));
+		result.AddField(wxT("values"), ibDataValue::Array(branches));
 		return true;
 	}
 };

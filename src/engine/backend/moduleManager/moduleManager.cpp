@@ -615,9 +615,10 @@ bool ibValueModuleManagerDesigner::AddCommonModule(ibValueMetaObjectCommonModule
 	// of it and the map no longer held it, but the built table still did).
 	InvalidateNames();
 
-	// NB: the designer does NOT compile/execute the unit. The editor reads a
-	// common module's exports by parsing its live text (ibParseCode in
-	// PrepareModuleData). Driving ibCompileModule::Compile() here would enter the
+	// NB: the designer does NOT compile/execute the unit. A common module's exports are read from
+	// its live TEXT there (ibParseCode, reached through ExportMethodsToHelper /
+	// ExportPropsToHelper, which take that road on DesignerMode). Driving ibCompileModule::Compile()
+	// here would enter the
 	// Designer-mode parent-recompile walk and deref a stale meta-object (AV in
 	// GetFullName). The unit just needs to exist in the cache so FindCompileModule
 	// resolves the module being edited. runModule is unused for the designer.

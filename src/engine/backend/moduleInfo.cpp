@@ -9,7 +9,7 @@
 #include "backend/compiler/cache/byteCodeCache.h"              // AOT cache Load / Save
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModuleBase full type for GetGuid/GetClassType
 #include "backend/metaData.h"                         // ibMetaData::GetConfigMD5 — the cache key's second half
-#include "backend/compiler/parseCode.h"                // ibParseCode — the export names a TEXT declares
+#include "backend/compiler/scriptParseCode.h"          // ibParseCode — the export names a TEXT declares
 
 // The single ctor is inline in moduleInfo.h (it must reference ExportThunk +
 // BindTail). Only the dtor lives out-of-line.

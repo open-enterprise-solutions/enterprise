@@ -478,11 +478,8 @@ void ibValueRecordSetObjectAccountingRegister::FillMembers(ibMemberTable& helper
 	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
 	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 
-	// ⭐ THE FILTER, AS A PROPERTY. It is also bound as a module export (InitializeObject), which is
-	// what lets the set's own module say `Filter.X` — but an export is invisible from outside and to
-	// the editor's completion. Declared here, a caller can address the set before writing it, which
-	// is the difference between "replace these records" and "replace the table".
-	helper.AppendProp(wxT("Filter"), ibValueRecordSetObject::enPropFilter);
+	// `Filter` is NOT declared here — see informationRegisterObject.cpp: it is an export variable of
+	// the set, bound in InitializeObject, and that reaches this table on its own.
 }
 
 bool ibValueRecordSetObjectAccountingRegister::SetPropVal(const long lPropNum, const ibValue& varPropVal)

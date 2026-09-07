@@ -11,7 +11,7 @@
 #include "frontend/docView/docView.h"
 
 #include "frontend/win/editor/codeEditor/codeEditor.h"
-#include "backend/compiler/parseCode.h"
+#include "backend/compiler/scriptParseCode.h"
 
 #define ICON_SIZE 16
 

@@ -4,15 +4,21 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "codeEditor.h"
-#include "backend/compiler/parseCode.h"
+#include "backend/backend_exception.h"   // ibEvalModeScope — which kind of evaluation the dropdown is
+#include "backend/compiler/scriptParseCode.h"
 
 #include "backend/metaCollection/partial/commonObject.h"
 
+// ⚠ docView.h IS load-bearing and looks unused: `ibMetaDocument` is not spelled anywhere in this
+// file — the member is declared in codeEditor.h and only ever used through `->`, so a search for
+// the class name finds nothing while removing the include gives thirteen "incomplete type" errors.
 #include "frontend/docView/docView.h"
 
 #include <wx/file.h>
 #include <wx/stdpaths.h>
+#include <algorithm>
 #include <cstring>
+#include <memory>
 
 void ibCodeEditor::AddKeywordFromObject(const ibValue& vObject)
 {
@@ -98,49 +104,67 @@ void ibCodeEditor::AddKeywordFromObject(const ibValue& vObject)
 			}
 		}
 	}
-	else if (IsDebuggerEnterLoop() && m_document != nullptr) {
-		ibPrecompileContext* currContext = m_precompileModule->GetCurrentContext();
-		if (currContext && currContext->FindVariable(m_precompileModule->GetLastParentKeyword())) {
-			m_ac.Cancel();
-			const ibValueMetaObject* metaObject = m_document->GetMetaObject();
-			wxASSERT(metaObject);
-			OnEvaluateAutocomplete(
-				metaObject->GetFileName(),
-				metaObject->GetDocPath(),
-				m_precompileModule->GetLastExpression(),
-				m_precompileModule->GetLastKeyword(),
-				GetCurrentPos()
-			);
-		}
-	}
+}
+
+// ⭐ WHEN THE RUNTIME IS THE ONE THAT KNOWS. Stopped in the debugger, a name can hold a value no
+// static walk can reach — it was put there by code that has already run. So a caret the compiler
+// could not resolve is handed to the paused session, which answers about its own frame.
+//
+// It is asked only about a path that STARTS from a name in scope here: everything else would send
+// the debugger an expression this text never mentions.
+void ibCodeEditor::LoadFromDebugger(const ibTranslateCode::ibCaretText& at)
+{
+	if (!IsDebuggerEnterLoop() || m_document == nullptr || at.m_expression.IsEmpty())
+		return;
+
+	const wxString root = at.m_expression.BeforeFirst(wxT('.'));
+
+	std::vector<ibCaretName> names;
+	if (!ibNamesAtCaret(GetText(), (unsigned int)GetRealPosition(),
+		m_document->ConvertMetaObjectToType<ibValueMetaObjectModuleBase>(), names))
+		return;
+
+	const bool known = std::any_of(names.begin(), names.end(),
+		[&](const ibCaretName& name) { return stringUtils::CompareString(name.m_name, root); });
+
+	if (!known)
+		return;
+
+	m_ac.Cancel();
+
+	const ibValueMetaObject* metaObject = m_document->GetMetaObject();
+	wxASSERT(metaObject);
+
+	OnEvaluateAutocomplete(metaObject->GetFileName(), metaObject->GetDocPath(),
+		at.m_expression, at.m_keyword, GetCurrentPos());
 }
 
 void ibCodeEditor::PrepareTooTipExpression(unsigned int currPos, wxString& expression, wxString& currentWord, bool& outHasPoint)
 {
 	bool hasPoint = false;
 
-	for (unsigned int i = 0; i < m_precompileModule->GetLexems().size(); i++)
+	for (unsigned int i = 0; i < m_tc.GetLexems().size(); i++)
 	{
-		if (m_precompileModule->GetLexems()[i].m_numString > currPos
+		if (m_tc.GetLexems()[i].m_numString > currPos
 			&& !hasPoint) break;
 
-		if (m_precompileModule->GetLexems()[i].m_lexType == IDENTIFIER)
+		if (m_tc.GetLexems()[i].m_lexType == IDENTIFIER)
 		{
-			if (hasPoint) expression += m_precompileModule->GetLexems()[i].m_valData.GetString();
-			else expression = m_precompileModule->GetLexems()[i].m_valData.GetString();
+			if (hasPoint) expression += m_tc.GetLexems()[i].m_valData.GetString();
+			else expression = m_tc.GetLexems()[i].m_valData.GetString();
 
-			currentWord = m_precompileModule->GetLexems()[i].m_valData.GetString();
+			currentWord = m_tc.GetLexems()[i].m_valData.GetString();
 
-			if (i < m_precompileModule->GetLexems().size() - 1) {
-				const ibLexem& lex = m_precompileModule->GetLexems()[i + 1];
+			if (i < m_tc.GetLexems().size() - 1) {
+				const ibLexem& lex = m_tc.GetLexems()[i + 1];
 				if (lex.m_lexType == DELIMITER && lex.m_numData == '(')
 					expression = wxEmptyString;
 				hasPoint = lex.m_lexType == DELIMITER && lex.m_numData == '.';
 			}
 			else hasPoint = false;
 		}
-		else if (m_precompileModule->GetLexems()[i].m_lexType == DELIMITER
-			&& m_precompileModule->GetLexems()[i].m_numData == '.')
+		else if (m_tc.GetLexems()[i].m_lexType == DELIMITER
+			&& m_tc.GetLexems()[i].m_numData == '.')
 		{
 			if (!expression.IsEmpty())
 				expression += '.';
@@ -716,30 +740,36 @@ void ibCodeEditor::LoadAutoComplete()
 	// Display the autocompletion list
 	int lenEntered = currentPos - wordStartPos;
 
-	wxString expression, keyword, currentWord; bool hasPoint = true;
-
 	if (m_ct.Active())
 		m_ct.Cancel();
 
-	const bool hasKeyword = m_precompileModule->PrepareExpression(realPos, expression, keyword, currentWord, hasPoint);
+	const ibTranslateCode::ibCaretText at = m_tc.CaretAt((unsigned int)realPos);
 
-	// User stands AT a word boundary (Ctrl+Space at the very start of an
-	// identifier, or in trailing whitespace). PrepareExpression greedily
-	// captures the full identifier from the lex stream which then lands as
-	// the Append filter — and `Find("MESSAGE")` rejects every system keyword
-	// like `If`, `Then`, etc. Force-clear currentWord here so the dropdown
+	// User stands AT a word boundary (Ctrl+Space at the very start of an identifier, or in
+	// trailing whitespace). The word under the caret then lands as the Append filter — and
+	// `Find("MESSAGE")` rejects every system keyword like `If`, `Then`. Clear it so the dropdown
 	// shows all candidates; the user filters live by typing forward.
-	if (lenEntered == 0)
-		currentWord = wxEmptyString;
+	const wxString currentWord = (lenEntered == 0) ? wxString() : at.m_word;
 
-	if (!hasKeyword) {
-		m_ac.Start(currentWord, currentPos, lenEntered, TextHeight(GetCurrentLine()));
-		if (hasPoint) LoadIntelliList();
-		else          LoadSysKeyword();
-	}
-	else {
-		m_ac.Start(currentWord, currentPos, lenEntered, TextHeight(GetCurrentLine()));
-		LoadFromKeyWord(keyword);
+	m_ac.Start(currentWord, currentPos, lenEntered, TextHeight(GetCurrentLine()));
+
+	switch (at.m_place) {
+
+	case ibTranslateCode::ibCaretPlace::AfterDot:
+		LoadIntelliList();
+		break;
+
+	// ⭐ A CALL WHOSE ARGUMENT NAMES NOTHING IS OPEN CODE. The stream reports every call the caret
+	// stands inside; only some of them have names to offer, and that is this side's knowledge. When
+	// it has none, the question was never about the call — fall through to what is in scope.
+	case ibTranslateCode::ibCaretPlace::InKeyword:
+		if (!LoadFromKeyWord(at.m_keyword))
+			LoadSysKeyword();
+		break;
+
+	default:
+		LoadSysKeyword();
+		break;
 	}
 
 	wxPoint position = PointFromPosition(wordStartPos);
@@ -772,108 +802,89 @@ void ibCodeEditor::LoadToolTip(const wxPoint& pos)
 	);
 }
 
+// ⭐ THE CALL FORM OF WHAT IS BEING WRITTEN — the same two doors as the dropdown, asked for one
+// name instead of all of them. A member's help comes from the value that holds it; a written
+// function's from its declared parameters, which ibNamesAtCaret already builds as `m_signature`.
 void ibCodeEditor::LoadCallTip()
 {
-	// Find the word start
-	int currentPos = GetRealPosition();
+	// ⚠ TWO POSITIONS, AND THEY ARE NOT THE SAME NUMBER. The compiler measures a caret in
+	// CHARACTERS (GetRealPosition counts them); wxSTC places a window by its own document position,
+	// which is a BYTE offset. Any non-ASCII text above the caret pulls them apart — measured
+	// 2026-09-07 on a module whose messages are in Russian: the call tip was drawn four lines above
+	// the call it described.
+	const int currentPos = GetRealPosition();
+	const int screenPos = GetCurrentPos();
 
-	wxString expression, keyword, currentWord, sDescription; bool hasPoint = true;
+	const ibTranslateCode::ibCaretText at = m_tc.CaretAt((unsigned int)currentPos);
+	if (at.m_word.IsEmpty())
+		return;
 
-	if (!m_precompileModule->PrepareExpression(currentPos, expression, keyword, currentWord, hasPoint)) {
-		if (hasPoint) {
-			m_precompileModule->SetCurrentPos(GetRealPosition());
-			//Collect text
-			if (m_precompileModule->Compile()) {
-				ibValue vObject = m_precompileModule->GetComputeValue();
-				for (long i = 0; i < vObject.GetNMethods(); i++) {
-					wxString sMethod = vObject.GetMethodName(i);
-					if (stringUtils::CompareString(sMethod, currentWord)) {
-						sDescription = vObject.GetMethodHelper(i);
-						break;
-					}
-				}
+	const ibBackendException::ibEvalModeScope answering(eval_complete);
 
-				ibRuntimeModuleDataObject* moduleDataObject = dynamic_cast<ibRuntimeModuleDataObject*>(vObject.GetRef());
-				if (moduleDataObject) {
-					const ibValueMetaObjectModuleBase* computeModuleObject = moduleDataObject->GetMetaObject();
-					if (computeModuleObject) {
-						ibParseCode cParser;
-						if (cParser.ParseModule(computeModuleObject->GetModuleText())) {
-							for (auto code : cParser.GetAllContent()) {
-								if (code.m_eType == eExportProcedure || code.m_eType == eExportFunction) {
-									if (stringUtils::CompareString(code.m_name, currentWord)) {
-										sDescription = code.m_shortDescription;
-										break;
-									}
-								}
-							}
-						}
-					}
-				}
+	const ibValueMetaObject* moduleObject = m_document != nullptr
+		? m_document->ConvertMetaObjectToType<ibValueMetaObjectModuleBase>()
+		: nullptr;
 
-				ibValueManagerDataObject* managerDataObject = dynamic_cast<ibValueManagerDataObject*>(vObject.GetRef());
-				if (managerDataObject) {
-					const ibValueMetaObjectCommonModule* computeManagerModule = managerDataObject->GetManagerModule();
-					if (computeManagerModule) {
-						ibParseCode cParser;
-						if (cParser.ParseModule(computeManagerModule->GetModuleText())) {
-							for (auto code : cParser.GetAllContent()) {
-								if (stringUtils::CompareString(code.m_name, currentWord)) {
-									sDescription = code.m_shortDescription;
-									break;
-								}
-							}
-						}
-					}
-				}
-			}
+	wxString description;
+
+	switch (at.m_place) {
+
+	// `New <Class>` — the constructor's own help, which only the class can give.
+	case ibTranslateCode::ibCaretPlace::InKeyword: {
+
+		if (!stringUtils::CompareString(at.m_keyword, wxT("new")) || !ibValue::IsRegisterCtor(at.m_expression))
+			break;
+
+		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(at.m_expression);
+		std::unique_ptr<ibValue> newObject(ctor->CreateObject());
+		if (ibValue::ibMemberTable* members = newObject->GetPMethods()) {
+			for (long idx = 0; idx < members->GetNConstructors(); idx++)
+				description = members->GetConstructorHelper(idx);
 		}
-		else
-		{
-			//Collect text
-			m_precompileModule->SetCurrentPos(GetRealPosition());
-
-			if (m_precompileModule->Compile()) {
-				ibPrecompileContext* rootContext = m_precompileModule->GetContext();
-				for (auto function : rootContext->m_functions) {
-					ibPrecompileFunction* functionContext = function.second;
-					if (stringUtils::CompareString(function.first, currentWord)) {
-						sDescription = functionContext->m_shortDescription;
-						break;
-					}
-				}
-			}
-		}
-	}
-	else {
-
-		if (stringUtils::CompareString(keyword, wxT("new"))) {
-			if (ibValue::IsRegisterCtor(expression)) {
-				const ibCtorAbstractType* objectValueAbstract =
-					ibValue::GetAvailableCtor(expression);
-				ibValue* newObject = objectValueAbstract->CreateObject();
-				ibValue::ibMemberTable* methodHelper = newObject->GetPMethods();
-				if (methodHelper != nullptr) {
-					for (long idx = 0; idx < methodHelper->GetNConstructors(); idx++) {
-						sDescription = methodHelper->GetConstructorHelper(idx);
-					}
-				}
-				wxDELETE(newObject);
-			}
-		}
+		break;
 	}
 
-	if (!sDescription.IsEmpty()) {
-		m_ct.Show(currentPos, sDescription);
+	case ibTranslateCode::ibCaretPlace::AfterDot: {
+
+		std::vector<ibCaretValue> holders;
+		if (!ibValueAtCaret(GetText(), (unsigned int)currentPos, moduleObject, holders))
+			break;
+
+		for (ibCaretValue& holder : holders)
+		for (long i = 0; i < holder.m_value.GetNMethods(); i++) {
+			if (stringUtils::CompareString(holder.m_value.GetMethodName(i), at.m_word)) {
+				description = holder.m_value.GetMethodHelper(i);
+				break;
+			}
+		}
+		break;
 	}
 
-	m_precompileModule->Clear();
+	default: {
+
+		std::vector<ibCaretName> names;
+		if (!ibNamesAtCaret(GetText(), (unsigned int)currentPos, moduleObject, names))
+			break;
+
+		for (const ibCaretName& name : names) {
+			if (name.m_callable && stringUtils::CompareString(name.m_name, at.m_word)) {
+				description = name.m_signature;
+				break;
+			}
+		}
+		break;
+	}
+	}
+
+	if (!description.IsEmpty())
+		m_ct.Show(screenPos, description);
 }
 
+// ⭐⭐ WHAT MAY BE WRITTEN HERE — the keywords, which are the language's own, and then every name in
+// scope, which is the COMPILER's answer. This used to run a second compiler over the text to build
+// a second scope tree; now it asks the one that will actually compile this module.
 void ibCodeEditor::LoadSysKeyword()
 {
-	m_precompileModule->SetCurrentPos(GetRealPosition());
-
 	for (int i = 0; i < LastKeyWord; i++) {
 		m_ac.Append(ibContentType::eVariable,
 			s_listKeyWord[i].m_strKeyWord,
@@ -881,73 +892,64 @@ void ibCodeEditor::LoadSysKeyword()
 		);
 	}
 
-	if (m_precompileModule->Compile()) {
-		ibPrecompileContext* rootContext = m_precompileModule->GetContext();
-		const int caretPos = (int)GetRealPosition();
-		for (const auto& variable : rootContext->m_variables) {
-			const ibPrecompileVariable& v = variable.second;
-			if (v.m_isTempVar)
-				continue;
-			// declPos > caret → declared below current line; not yet visible.
-			if (v.m_declPos > caretPos)
-				continue;
-			m_ac.Append(v.m_isExport ?
-				ibContentType::eExportVariable : ibContentType::eVariable, v.m_realName, wxEmptyString
-			);
-		}
+	// The mode covers the whole answer, not just the value door: building the list compiles the
+	// text, and a name half-written is ordinary here rather than an error (backend_core.h).
+	const ibBackendException::ibEvalModeScope answering(eval_complete);
 
-		for (auto function : rootContext->m_functions) {
-			ibPrecompileFunction* functionContext = function.second;
-			if (functionContext->m_context) {
-				if (functionContext->m_context->m_returnKind == RETURN_FUNCTION) {
-					m_ac.Append(functionContext->m_isExport ? ibContentType::eExportFunction : ibContentType::eFunction, functionContext->m_realName, functionContext->m_shortDescription);
-				}
-				else {
-					m_ac.Append(functionContext->m_isExport ? ibContentType::eExportProcedure : ibContentType::eProcedure, functionContext->m_realName, functionContext->m_shortDescription);
-				}
-			}
-			else {
-				m_ac.Append(functionContext->m_isExport ? ibContentType::eExportFunction : ibContentType::eFunction, functionContext->m_realName, functionContext->m_shortDescription);
-			}
+	std::vector<ibCaretName> names;
+	if (!ibNamesAtCaret(GetText(), (unsigned int)GetRealPosition(),
+		m_document != nullptr ? m_document->ConvertMetaObjectToType<ibValueMetaObjectModuleBase>() : nullptr,
+		names))
+		return;
 
-			if (m_precompileModule->GetCurrentContext() && m_precompileModule->GetCurrentContext() == functionContext->m_context) {
-				for (const auto& variable : m_precompileModule->GetCurrentContext()->m_variables) {
-					const ibPrecompileVariable& v = variable.second;
-					if (v.m_isTempVar)
-						continue;
-					// Same declared-above-caret gate as for root context. Function
-					// parameters keep declPos=0 so they always show up; only
-					// in-body `var x` / implicit `x = expr` declarations are
-					// position-gated.
-					if (v.m_declPos > caretPos)
-						continue;
-					m_ac.Append(v.m_isExport ?
-						ibContentType::eExportVariable : ibContentType::eVariable, v.m_realName, wxEmptyString
-					);
-				}
-			}
-		}
+	// The declaration order and the ladder's visibility are decided on the other side — see
+	// ibNamesAtCaret. What is left here is which ICON each name wears, which is presentation.
+	for (const ibCaretName& name : names) {
+
+		const ibContentType kind = !name.m_callable
+			? (name.m_exported ? ibContentType::eExportVariable : ibContentType::eVariable)
+			: name.m_returnsValue
+				? (name.m_exported ? ibContentType::eExportFunction : ibContentType::eFunction)
+				: (name.m_exported ? ibContentType::eExportProcedure : ibContentType::eProcedure);
+
+		m_ac.Append(kind, name.m_name, name.m_signature);
 	}
-
-	m_precompileModule->Clear();
 }
 
+// ⭐⭐ THE MEMBERS OF WHAT THE CARET STANDS AFTER. The value is COMPUTED — by the compiler, over the
+// instructions it emitted for this very text — and this side only asks the value what it offers.
+// That is the whole of the change: the walk that used to live here, with its own contexts and its
+// own variables, was a second implementation of the language.
 void ibCodeEditor::LoadIntelliList()
 {
-	m_precompileModule->SetCurrentPos(GetRealPosition());
-	m_precompileModule->SetCalcValue(true);
+	// Constructors run and methods on values already in hand are called, and every one of those
+	// asks the session what kind of evaluation it is inside. Saying it here is what makes a name
+	// that has not been typed yet ordinary rather than an error (backend_core.h, eval_complete).
+	const ibBackendException::ibEvalModeScope answering(eval_complete);
 
-	if (m_precompileModule->Compile())
-		AddKeywordFromObject(m_precompileModule->GetComputeValue());
+	// ⭐ EVERY BRANCH GOES IN — a composite field is one name and several things to walk into, and a
+	// dropdown is a merged list by nature: a member two branches share appears twice, which is the
+	// choice itself (scriptComplete.h).
+	std::vector<ibCaretValue> values;
+	if (ibValueAtCaret(GetText(), (unsigned int)GetRealPosition(),
+		m_document != nullptr ? m_document->ConvertMetaObjectToType<ibValueMetaObjectModuleBase>() : nullptr,
+		values)) {
+		for (const ibCaretValue& value : values)
+			AddKeywordFromObject(value.m_value);
+		return;
+	}
 
-	m_precompileModule->SetCalcValue(false);
-	m_precompileModule->Clear();
+	// Nothing resolved statically — in a paused session the runtime may still know.
+	LoadFromDebugger(m_tc.CaretAt((unsigned int)GetRealPosition()));
 }
 
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
 
-void ibCodeEditor::LoadFromKeyWord(const wxString& keyword)
+// ⭐ WHICH CALLS HAVE NAMES TO OFFER — and the answer lives HERE, with the metadata that holds
+// them, not in the lexer. The stream names the call the caret stands inside; a `false` back means
+// this one has nothing, and the caret is then in open code like any other.
+bool ibCodeEditor::LoadFromKeyWord(const wxString& keyword)
 {
 	if (stringUtils::CompareString(keyword, wxT("new"))) {
 		for (auto class_obj : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_value))
@@ -992,6 +994,9 @@ void ibCodeEditor::LoadFromKeyWord(const wxString& keyword)
 	else if (stringUtils::CompareString(keyword, wxT("showCommonForm"))
 		|| stringUtils::CompareString(keyword, wxT("getCommonForm")))
 	{
+		if (m_document == nullptr)
+			return false;
+
 		const ibValueMetaObject* metaObject = m_document->GetMetaObject();
 		wxASSERT(metaObject);
 		const ibMetaData* metaData = metaObject->GetMetaData();
@@ -1000,6 +1005,11 @@ void ibCodeEditor::LoadFromKeyWord(const wxString& keyword)
 		for (const auto object : metaData->GetAnyArrayObject(g_metaCommonFormCLSID))
 			m_ac.Append(ibContentType::eVariable, object->GetName(), wxEmptyString);
 	}
+	else {
+		return false;
+	}
+
+	return true;
 }
 
 #include "backend/fileSystem/fs.h"

@@ -305,6 +305,25 @@ void ibCompileCode::DoSetError(int codeError,
 	unsigned int currPos, unsigned int currLine,
 	const wxString& strErrorDesc) const
 {
+	// ⭐⭐ THE SENTENCE IS KEPT EITHER WAY — this is where refusals accumulate. It used to travel on
+	// the exception, so a compile that raises nothing would have lost it, and "why did that dot not
+	// resolve" is precisely the question it answers. Written before the fork, so both modes record
+	// the same line and only the CONSEQUENCE differs.
+	m_strRefusal << wxString::Format(wxT("[%u:%u] "), currLine, currPos)
+	              << ibBackendException::Format(codeError, strErrorDesc) << wxT("\n");
+
+	// ⭐⭐ A TOLERANT COMPILE STOPS FOR NOTHING. It is READING — working out what is at a caret — and
+	// a reader has nobody to raise to: no window, no subscriber, no exception. It does not raise,
+	// and then there is nothing to catch either; the ~50 refusal sites that already `return` after
+	// SetError ARE the recovery, exactly as they read.
+	//
+	// That is how the precompiler has always worked — one SetError and zero throws in 2900 lines —
+	// and it is what lets somebody edit at line one thousand of a module broken at line three
+	// (Max, 2026-09-07: *"I do not want anything going into the exception when you are computing
+	// autocomplete — what are you going to say with it, and to whom?"*).
+	if (m_compileMode == ibCompileMode::Tolerant)
+		return;
+
 	const wxString& strCodeError =
 		ibBackendException::FindErrorCodeLine(m_strBuffer, currPos);
 
@@ -400,10 +419,16 @@ const ibLexem& ibCompileCode::GETLexem()
 void ibCompileCode::GETDelimeter(const wxUniChar& c)
 {
 	const ibLexem& lex = GetLexem();
-	if (!(lex.m_lexType == DELIMITER && c == lex.m_numData)) {
-		m_numCurrentCompile--;
-		SetError(ERROR_DELIMETER, c);
-	}
+	if (lex.m_lexType == DELIMITER && c == lex.m_numData)
+		return;
+
+	// ⚠ AND IT DOES NOT GO HUNTING FOR THE TOKEN. The precompiler's twin (ExpectDelimeter) does
+	// search forward, and its own call sites document what that costs: *"whose miss-path skips
+	// lexems to EOF and would swallow the rest of the module"* — which is why that walker grew
+	// special cases for `++` / `--` / `;` / `{` / `}` rather than let the search run. It is an
+	// emergency exit there, not the mechanism, and copying it here would import the emergency.
+	m_numCurrentCompile--;
+	SetError(ERROR_DELIMETER, c);
 }
 
 /**
@@ -488,12 +513,14 @@ bool ibCompileCode::IsNextDelimeter(const wxUniChar& c)
 void ibCompileCode::GETKeyWord(int nKey)
 {
 	const ibLexem& lex = GetLexem();
-	if (!(lex.m_lexType == KEYWORD && lex.m_numData == nKey)) {
-		m_numCurrentCompile--;
-		SetError(ERROR_KEYWORD,
-			wxString::Format(wxT("%s"), s_listKeyWord[nKey].m_strKeyWord)
-		);
-	}
+	if (lex.m_lexType == KEYWORD && lex.m_numData == nKey)
+		return;
+
+	// See GETDelimeter on why this does not search forward either.
+	m_numCurrentCompile--;
+	SetError(ERROR_KEYWORD,
+		wxString::Format(wxT("%s"), s_listKeyWord[nKey].m_strKeyWord)
+	);
 }
 
 /**
@@ -515,7 +542,15 @@ wxString ibCompileCode::GETIdentifier(bool strRealName, bool acceptKeyword)
 		if (acceptKeyword && lex.m_lexType == KEYWORD) {
 			return lex.m_strData;
 		}
-		m_numCurrentCompile--;
+
+		// ⚠ THE STEP BACK IS FOR THE MESSAGE — it puts the cursor on the offending lexem so the
+		// report points at it. A tolerant compile reports nothing and keeps reading, and handing
+		// the caller back the lexem it just refused is how a loop meets it forever; the
+		// precompiler's twin CONSUMES it for the same reason (ExpectIdentifier takes what is
+		// there and moves on).
+		if (m_compileMode != ibCompileMode::Tolerant)
+			m_numCurrentCompile--;
+
 		SetError(ERROR_IDENTIFIER_DEFINE);
 		return wxEmptyString;
 	}
@@ -1025,6 +1060,7 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
  * true,false
 */
 
+
 bool ibCompileCode::CompileModule()
 {
 	// set the cursor to the beginning of the token array
@@ -1059,7 +1095,12 @@ bool ibCompileCode::CompileModule()
 			}
 		}
 		else if (KEYWORD == lex.m_lexType && (KEY_PROCEDURE == lex.m_numData || KEY_FUNCTION == lex.m_numData)) {
+
 			// don't forget to restore the current module context (if necessary)...
+			//
+			// ⚠ NO GUARD HERE, AND THAT IS THE POINT. A tolerant compile does not raise
+			// (DoSetError), so there is nothing to catch and nothing to skip: a refusal is reported
+			// and the parse walks on by itself. A runtime compile raises and the caller ends.
 			CompileFunction(mainContext); // load function declaration
 		}
 		else break;
@@ -1067,7 +1108,14 @@ bool ibCompileCode::CompileModule()
 
 	// load the executable body of the module
 	m_cByteCode.m_lStartModule = 0;
+
+	// The module's own span starts where its BODY does — after the declarations, which own theirs.
+	// That is what keeps the two from claiming the same caret (see NoteCaret).
+	const long bodyStart = CaretCursor();
+
 	CompileBlock(mainContext);
+
+	NoteCaret(bodyStart, kCaretAtModule);
 
 	mainContext->CreateLabels();
 
@@ -1082,10 +1130,37 @@ bool ibCompileCode::CompileModule()
 	// we finish processing procedures and functions that were called before they were declared
 	// for this, at the end of the bytecode array, add new code to call such functions,
 	// and for correct operation we insert GOTO statements into places of early calls
+	// ⚠ THE CURSOR IS A REPORTING DEVICE HERE, NOT A PARSE POSITION. The whole token stream has
+	// already been read by the time this loop runs, and PushCallFunction REWINDS
+	// (`m_numCurrentCompile = callFunc->m_numError`) so a refusal points at the call rather than at
+	// the end of the module. With a raise that never mattered — nothing looked at the cursor again.
+	// Surviving the refusal, something does: the end-of-stream check below then sees a cursor
+	// standing in the middle of the text and reports "unexpected program code termination" about a
+	// module that was read to its end (measured 2026-09-07 — three unresolved calls answered with
+	// four diagnostics).
+	const int cursorAtStreamEnd = m_numCurrentCompile;
+
 	for (auto& callFunc : m_listCallFunc) {
 		m_cByteCode.m_listCode[callFunc->m_numAddLine].m_param1.m_numIndex =
 			m_cByteCode.m_listCode.size(); // go to function call
-		if (PushCallFunction(callFunc)) {
+
+		// ⭐ HERE THE UNIT OF FAILURE IS THE CALL — finer than a declaration, and the loop was
+		// already written for it: PushCallFunction returns false and the GOTO is simply not
+		// emitted. Only the throw stood in the way, so one unresolved name hid every other in the
+		// module. A tolerant compile answers about all of them; a runtime compile still stops at
+		// the first, because half a module is not worth executing.
+		if (m_compileMode == ibCompileMode::Tolerant) {
+			bool resolved = false;
+			try { resolved = PushCallFunction(callFunc); }
+			catch (const ibBackendException&) { resolved = false; }
+			if (!resolved)
+				continue;
+		}
+		else if (!PushCallFunction(callFunc)) {
+			continue;
+		}
+
+		{
 			// correcting labels
 			ibByteUnit gotoCode;
 			AddLineInfo(gotoCode);
@@ -1096,6 +1171,8 @@ bool ibCompileCode::CompileModule()
 			m_cByteCode.m_listCode.emplace_back(std::move(gotoCode));
 		}
 	}
+
+	m_numCurrentCompile = cursorAtStreamEnd;   // see the note above the loop
 
 	// Mirror the compile-context symbol table into the bytecode's
 	// unified m_listVar (std::vector).
@@ -1666,9 +1743,18 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 		ret.m_param1 = GetExpression(functionContext);
 		m_cByteCode.m_listCode.emplace_back(std::move(ret));
 	}
-	else {
+	// ⭐⭐ A BODY THAT IS NOT FINISHED YET IS NOT A FAILED DECLARATION — it is a declaration somebody
+	// is in the middle of writing, and in a tolerant compile that is the ordinary state of the text.
+	// The refusal is still SAID (SetError publishes before it throws, so a check still lists it);
+	// what changes is that the declaration is still CLOSED and REGISTERED below. That matters
+	// because its name, its parameters and the locals it already has are exactly what a reader
+	// standing INSIDE it is asking about — and by this point they exist. Same rule as the dangling
+	// dot in GetCurrentIdentifier: keep what the compiler already has rather than unwind past it.
+	// Where this body's span begins — see NoteCaret, which closes it at the end.
+	const long bodyStart = CaretCursor();
+
+	if (!bareExprBody)
 		CompileBlock(functionContext);
-	}
 
 	functionContext->CreateLabels();
 
@@ -1691,7 +1777,13 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	ibByteUnit code;
 	AddLineInfo(code);
 	code.m_numOper = isLambda ? OPER_ENDLFUNC : OPER_ENDFUNC;
+
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
+
+	// ⭐⭐ THE DECLARATION THE CARET IS STANDING IN, SAID HERE. See NoteCaret: this is the moment
+	// both ends of this body's span are known, and the parser is standing on the token that closed
+	// it. Nothing about it is written into the tape.
+	NoteCaret(bodyStart, lAddress);
 
 	createdFunction->m_nFinish = m_cByteCode.m_listCode.size() - 1;
 	createdFunction->m_lVarCount = functionContext->m_listVariable.size();
@@ -4333,6 +4425,34 @@ loopLabel:
 
 	if (IsNextDelimeter('.')) { // this is a method call ��� �������� ����������� �������
 		GETDelimeter('.');
+
+		// ⭐⭐ THE TEXT ENDED ON THE DOT, and refusing here would throw away the one thing that was
+		// asked about. The compiler has the RECEIVER resolved and in hand; what is missing is a name
+		// nobody has typed yet. In a runtime compile that is still an error — an unfinished module
+		// is broken — but a tolerant compile was asked "tell me what you can about this text", and
+		// what it can tell is exactly this: the chain got this far, to this value.
+		//
+		// So the step is emitted with NO attribute name, and it costs no new notion: a reader that
+		// walks the instructions finds a member step whose name is empty and answers with the
+		// parent, which is what standing on a dot means (scriptComplete.cpp). The instruction is never
+		// executed — a tolerant compile produces no runtime artefact.
+		if (m_compileMode == ibCompileMode::Tolerant && IsEndOfProgram()) {
+
+			// The refusal is still SAID — in this mode SetError reports and returns, so a check
+			// asked about a finished text still hears about the dangling dot.
+			SetError(ERROR_IDENTIFIER_DEFINE);
+
+			ibByteUnit code;
+			AddLineInfo(code);
+			code.m_numOper = OPER_GET_A;
+			code.m_param2 = variable;                                 // the receiver, still in hand
+			code.m_param3.m_numIndex = GetConstString(wxEmptyString);  // the name nobody typed yet
+			variable = context->CreateVariable();
+			code.m_param1 = variable;
+			m_cByteCode.m_listCode.emplace_back(std::move(code));
+			return variable;
+		}
+
 		// acceptKeyword=true: contextual LINQ keywords (Where/Select/...)
 		// must work as method names in property-access positions.
 		wxString strIdentifier = GETIdentifier(true, /*acceptKeyword*/true);

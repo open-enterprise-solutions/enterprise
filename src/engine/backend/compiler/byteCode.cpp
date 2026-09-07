@@ -1,5 +1,7 @@
 #include "byteCode.h"
 
+#include "codeDef.h"        // the opcode vocabulary — FindCaret reads the declaration opcodes
+
 #include <shared_mutex>
 #include <unordered_map>
 
@@ -231,4 +233,52 @@ ibByteCode::ResolvedFunc ResolveFunctionAt(const ibByteCode* bc, const wxString&
 ibByteCode::ResolvedFunc ibByteCode::ResolveFunction(const wxString& funcName, int fullVisDepth) const
 {
 	return ResolveFunctionAt(this, funcName, 0, fullVisDepth);
+}
+// WHERE A CARET STANDS — see the note on ibCaretPoint.
+//
+// One walk of the instruction stream, because both answers come off the same pass: the last
+// instruction at or before the position, and the function that was open when it was emitted. The
+// stream is in emission order, so "open" is a depth counter over the declaration opcodes — depth,
+// not a boolean, because a lambda body sits inside a function body and closes with its own opcode.
+//
+// ⚠ THE LAST INSTRUCTION AT OR BEFORE, not the nearest. A caret sits in TEXT, and the text between
+// two instructions is what is being typed right now; the instruction before it is the last thing
+// the compiler understood, which is exactly the context the caret inherits.
+bool ibByteCode::FindCaret(ibCaretPoint& point) const
+{
+	if (m_listCode.empty())
+		return false;
+
+	point.m_instruction = -1;
+
+	for (size_t ip = 0; ip < m_listCode.size(); ++ip) {
+
+		const ibByteUnit& code = m_listCode[ip];
+
+		const bool boundary =
+			code.m_numOper == OPER_FUNC || code.m_numOper == OPER_LFUNC ||
+			code.m_numOper == OPER_ENDFUNC || code.m_numOper == OPER_ENDLFUNC ||
+			code.m_numOper == OPER_END;
+
+		// An instruction with no position of its own (a synthesised jump, a fixup) carries zero and
+		// must not drag the answer back to the top of the file.
+		if (code.m_numString == 0 && ip > 0)
+			continue;
+
+		if (code.m_numString > point.m_position)
+			break;
+
+		// ⭐⭐ A BOUNDARY IS WHERE CODE ENDS, NOT WHERE A CARET STANDS. The module's closing marker
+		// carries the END of the text as its position and has no destination at all, so answering
+		// with it says "nothing here" for every caret at the end of a text that COMPILED — while a
+		// text that refused, and so never reached the marker, answered correctly. Measured
+		// 2026-09-07: `Catalogs.` (which refuses: a bare expression is not a statement) resolved,
+		// and `x = Catalogs.` (which compiles clean) did not. That was the entire difference.
+		if (boundary)
+			continue;
+
+		point.m_instruction = (long)ip;
+	}
+
+	return true;
 }

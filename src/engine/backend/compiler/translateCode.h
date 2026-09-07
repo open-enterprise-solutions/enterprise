@@ -45,6 +45,22 @@ enum {
 	LEXEM_IGNORE,
 };
 
+// ⭐⭐ WHAT THIS PASS OVER THE TEXT IS FOR. The jobs differ as JOBS, not as a switch per behaviour:
+// a text about to become bytecode wants the language entire, a text somebody is typing into wants
+// the parts that are stable under a half-written line. Naming the job is what lets the next one —
+// a pass that only needs block structure, say — arrive as a mode rather than as another flag.
+//
+// `Editing` differs from `Compile` in exactly one thing today, and it is the whole reason the editor
+// used to carry a tokeniser of its own: the preprocessor does not run. Compiling, `#define`
+// registers a name, `#ifdef` HIDES the code it excludes and a malformed `#region` is an error —
+// while somebody is typing, they are LOOKING at the code `#ifdef` would hide, and the directive
+// under the caret is half-written by definition. So a directive line is read past as what it then
+// is: a line that is not code.
+enum class ibLexemMode {
+	Compile = 0,   // everything the language says, the preprocessor included
+	Editing,       // a text being written: a directive's line is not code
+};
+
 //definitions
 #define UTF8_LEXEM_TRANSLATE 
 
@@ -304,7 +320,66 @@ public:
 	size_t GetLexemCount() const { return m_listLexem.size(); } // token count after PrepareLexem (diagnostics / tests)
 	const std::vector<ibLexem>& GetLexems() const { return m_listLexem; } // read-only lexem stream (lambda expr recorder / tests)
 
+	// HAS IT BEEN LEXED. The question a caller actually asks — the editor asks it before patching,
+	// because a patch has no baseline without a full pass first. Reaching through GetLexems() to
+	// call empty() says HOW the answer is stored; this says what is being asked.
+	bool HasLexem() const { return !m_listLexem.empty(); }
+
+	// What this pass is for — see ibLexemMode. Set before lexing; a compile never touches it.
+	void SetLexemMode(ibLexemMode mode) { m_lexemMode = mode; }
+
 	bool PrepareLexem();
+
+	// WHAT AN EDIT DID TO THE TEXT, in the terms the stream is stored in. One argument rather than
+	// three-or-four, and the `#ifdef` stops travelling to every call site: whether coordinates are
+	// counted in UTF-8 as well is the STREAM's business, so it is settled here once.
+	struct ibTextEdit {
+		unsigned int m_line = 0;     // line the edit landed on
+		int m_lineOffset = 0;        // lines added (> 0) or removed (< 0)
+		int m_posOffset = 0;         // characters added (> 0) or removed (< 0)
+#ifdef UTF8_LEXEM_TRANSLATE
+		int m_posOffsetUtf8 = 0;
+#endif
+	};
+
+	// ⭐ THE PATCH — re-lex what the edit touched and SHIFT the rest, instead of re-reading the
+	// module. It lives here because m_listLexem lives here: the editor owned this walk while the
+	// data every line of it rewrites belonged to the translator.
+	//
+	// Everything from the edit onwards is re-tokenised to the end of the affected line; everything
+	// after it keeps its lexems and has its coordinates moved.
+	//
+	// Why it exists at all: a full pass over a large module is fractions of a second, which per
+	// KEYSTROKE is not slow — it is unusable.
+	void PrepareLexem(const ibTextEdit& edit);
+
+	// ⭐⭐ WHAT THE CARET IS STANDING IN — the question that decides WHICH answer a completion
+	// wants, and the only one that has to be asked of the TOKENS rather than of a value.
+	//
+	// THREE PLACES, AND A BOOL CANNOT CARRY THREE. This was a bool return (`hasKeyword`) beside a
+	// bool out-parameter (`hasPoint`) — four combinations standing for three states, with the
+	// precedence between them written out again at each of the two call sites. Naming the places
+	// puts that precedence in one place and lets a reader see the whole answer at once.
+	enum class ibCaretPlace {
+		OpenCode,    // anything in scope may be written here
+		AfterDot,    // a member access — offer what the expression to the left holds
+		InKeyword,   // completing a keyword's own domain: `New` / `Type` want type names
+	};
+
+	// The answer, whole. `m_expression` is the dotted expression to the left of the caret, `m_keyword`
+	// the keyword being completed or the call being written into, `m_word` the identifier under the
+	// caret — which is what a list filters by, not part of the question.
+	struct ibCaretText {
+		ibCaretPlace m_place = ibCaretPlace::OpenCode;
+		wxString     m_expression;
+		wxString     m_keyword;
+		wxString     m_word;
+	};
+
+	// It walks this object's lexem stream and nothing else, which is why it belongs to the stream's
+	// owner: it sat on the editor because that is where it was written, and the second reader
+	// (script_complete) had to include an editor header to reach it.
+	ibCaretText CaretAt(unsigned int caret) const;
 
 	// Was the token just emitted a `.`? Asked while classifying the NEXT word:
 	// in a property position (`sel.Where`, `q.Select`) a contextual keyword is a
@@ -332,6 +407,15 @@ protected:
 public:
 
 	inline void SkipSpaces() const;
+
+	// THE REST OF THIS LINE IS NOT CODE — read past it. A preprocessor directive's effect IS its
+	// line, so while editing (ibLexemMode) the line goes as one thing rather than token by token;
+	// its argument word would otherwise arrive as a stray identifier. Same bookkeeping as the
+	// comment skip inside SkipSpaces, which is the other thing that is not code.
+	void SkipLine() const;
+
+	// The dotted expression ending at the `.` at `dotAt` — see the definition.
+	wxString ExpressionEndingAt(size_t dotAt) const;
 
 	bool IsByte(const wxUniChar& c) const;
 #pragma region get_byte
@@ -372,6 +456,15 @@ public:
 	bool IsEnd() const;
 
 	static int IsKeyWord(const wxString& sKeyWord);
+
+	// The words the preprocessor owns. Asked from the full pass and from the patch, written out
+	// once — a ninth directive must not be able to reach only one of them.
+	static bool IsDirective(short keyword) {
+		return keyword == KEY_DEFINE || keyword == KEY_UNDEF
+			|| keyword == KEY_IFDEF || keyword == KEY_IFNDEF
+			|| keyword == KEY_ELSEDEF || keyword == KEY_ENDIFDEF
+			|| keyword == KEY_REGION || keyword == KEY_ENDREGION;
+	}
 	static wxString GetKeyWord(int keyword);
 
 	wxString GetStrToEndLine() const;
@@ -462,6 +555,9 @@ protected:
 
 	bool m_bAutoDeleteDefList;
 	int m_nModePreparing;
+
+	// See ibLexemMode. Compile by default: everything that becomes bytecode wants the whole language.
+	ibLexemMode m_lexemMode = ibLexemMode::Compile;
 
 	//attributes:
 	wxString m_strModuleName;//name of the compiled module (to display information in case of errors)

@@ -2698,23 +2698,22 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 		return new ibValueRecordSetObjectRegisterReturnLine(this, line);
 	}
 
-	// ⭐⭐ THE FILTER IS PART OF THE SET'S SURFACE, NOT A PRIVILEGE OF ITS OWN MODULE.
-	//
-	// It was bound only as a module EXPORT (InitializeObject), so `Filter.Warehouse` worked inside
-	// the set's own module and NOWHERE else — including the editor's completion, which reads the
-	// member table (Max, 2026-09-05: "the filter did not resolve either, IntelliSense did not see
-	// it"). And addressing a set is done from OUTSIDE far more often than from within: a script that
-	// rewrites one warehouse's records says which warehouse before it says anything else.
+	// ⭐⭐ THE FILTER IS PART OF THE SET'S SURFACE, NOT A PRIVILEGE OF ITS OWN MODULE — and it is ONE
+	// declaration, the EXPORT VARIABLE bound in InitializeObject. `Filter.Warehouse` must work inside
+	// the set's own module and from outside alike, and addressing a set is done from OUTSIDE far more
+	// often: a script that rewrites one warehouse's records says which warehouse before anything else.
 	//
 	// The filter is what makes a write mean "replace THESE records" rather than "replace the table":
 	// a set read or built without one and then written IS the whole table, which is exactly how it
 	// should read — but only a caller who can SAY the filter gets to choose between the two.
 	//
-	// It is the record set's ONE property, and the index is NAMED in both places (the same
-	// arrangement the Query's TempTablesManager uses) — a bare 0 in one of them is how a property
-	// ends up answered by the wrong number.
-	// separately (their own enum per register — see the note there about order being the call number).
-	enum { enPropFilter = 1 };   // the TAG carried in the member table, read back with GetPropData
+	// 🛑 IT WAS ONCE DECLARED A SECOND TIME, as a member-table property with a tag of its own, because
+	// back then a bound name reached the list but not its VALUE (Max, 2026-09-08: *"this is probably
+	// left over from when IntelliSense did not work"*). That is a symptom hidden, not a road built:
+	// the same gap silently affected every other bound name on a set. The tag is gone and the set now
+	// answers bound names the way a document already did — one road, and the list stopped saying
+	// `Filter` twice as a side effect rather than as a fix.
+	enum { eProcUnit = g_aliasExport };   // module exports + binds, appended by the descriptor autobind
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 
 	class ibValueRecordSetObjectRegisterColumnCollection : public ibValueModel::ibValueModelColumnCollection {

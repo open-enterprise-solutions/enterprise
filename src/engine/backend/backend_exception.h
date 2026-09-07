@@ -212,6 +212,12 @@ public:
 	// writes and is rolled back.
 	static bool IsEvalSandbox();
 
+	// …and the finer one, asked by the few places that ANSWER differently. `IsEvalMode()` still
+	// holds here — completion is an evaluation like any other, so every gate that skips writes or
+	// keeps the message pane quiet keeps working untouched. This only separates a watch from a
+	// caret where their answers genuinely part. See eval_complete.
+	static bool IsEvalComplete();
+
 	// Saves the current eval-mode flag in ctor, restores it in dtor.
 	// Use to wrap ibProcUnit::Evaluate so an inner throw doesn't leak
 	// the flag onto the session.

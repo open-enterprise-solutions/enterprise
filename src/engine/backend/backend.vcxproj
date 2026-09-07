@@ -95,7 +95,8 @@
     <ClInclude Include="compiler\compileContext.h" />
     <ClInclude Include="compiler\compileContextLinqData.h" />
     <ClInclude Include="compiler\compileModule.h" />
-    <ClInclude Include="compiler\parseCode.h" />
+    <ClInclude Include="compiler\scriptComplete.h" />
+    <ClInclude Include="compiler\scriptParseCode.h" />
     <ClInclude Include="compiler\scriptCheck.h" />
     <ClInclude Include="compiler\enumFactory.h" />
     <ClInclude Include="compiler\enumUnit.h" />
@@ -451,6 +452,7 @@
     <ClCompile Include="mcp\mcpServer.cpp" />
     <ClCompile Include="mcp\mcpTool.cpp" />
     <ClCompile Include="mcp\tools\mcpToolChat.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolComplete.cpp" />
     <ClCompile Include="mcp\tools\mcpToolCompose.cpp" />
     <ClCompile Include="mcp\tools\mcpToolRunCode.cpp" />
     <ClCompile Include="mcp\tools\mcpToolSchema.cpp" />
@@ -521,7 +523,8 @@
     <ClCompile Include="compiler\compileCode.cpp" />
     <ClCompile Include="compiler\compileContext.cpp" />
     <ClCompile Include="compiler\compileModule.cpp" />
-    <ClCompile Include="compiler\parseCode.cpp" />
+    <ClCompile Include="compiler\scriptComplete.cpp" />
+    <ClCompile Include="compiler\scriptParseCode.cpp" />
     <ClCompile Include="compiler\scriptCheck.cpp" />
     <ClCompile Include="compiler\enumUnit.cpp" />
     <ClCompile Include="compiler\enumFactory.cpp" />

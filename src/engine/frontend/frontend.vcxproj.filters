@@ -4,9 +4,6 @@
     <ClCompile Include="mainFrame\settings\mcpsettingspanel.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\mcpToolComplete.cpp">
-      <Filter>mcp\tools</Filter>
-    </ClCompile>
     <ClCompile Include="mcp\tools\mcpToolForms.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>
@@ -1052,12 +1049,6 @@
     <ClCompile Include="win\editor\codeEditor\codeEditor.cpp">
       <Filter>win\editor\codeEditor</Filter>
     </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorInterpreter.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorInterpreterContext.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
     <ClCompile Include="win\editor\codeEditor\codeEditorLoader.cpp">
       <Filter>win\editor\codeEditor</Filter>
     </ClCompile>
@@ -1900,9 +1891,6 @@
       <Filter>session</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\codeEditor\codeEditor.h">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\codeEditorInterpreter.h">
       <Filter>win\editor\codeEditor</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\codeEditor\codeEditorPrintOut.h">

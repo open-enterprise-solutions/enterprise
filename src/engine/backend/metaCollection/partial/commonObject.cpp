@@ -3605,18 +3605,25 @@ void ibValueRecordManagerObject::PrepareEmptyObject(const ibValueRecordManagerOb
 //						  ibValueRecordSetObject							//
 //////////////////////////////////////////////////////////////////////
 
-// The set's one property — see the declaration for why it is one at all. Index 0 because Filter is
-// the only AppendProp on every register's record-set member table; the verbs live in their own
-// numbering beside it.
+// The set declares no property of its own — see the declaration for why `Filter` is a bind.
 bool ibValueRecordSetObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	// The number handed in is the property's POSITION; what identifies it is the TAG the member table
-	// carries beside it (GetPropData) — the arrangement every other register property here uses. Read
-	// as a position, the first property of any register would have answered as the filter.
-	if (m_members.GetPropData(lPropNum) != enPropFilter)
+	// The set's exported names — `Filter` among them — resolve exactly as a document's do: through
+	// the ProcUnit where there is one, and through the BIND itself where there is not (the designer
+	// has no runtime, and the bind map is present in both). Nothing here knows the name `Filter`;
+	// it is bound in InitializeObject and reaches the member table through the descriptor autobind.
+	if (m_members.GetPropAlias(lPropNum) != eProcUnit)
 		return false;
-	pvarPropVal = m_recordSetKeyValue;
-	return true;
+
+	if (m_procUnit != nullptr && m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
+		return true;
+
+	if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
+		pvarPropVal = bound;
+		return true;
+	}
+
+	return false;
 }
 
 void ibValueRecordSetObject::CreateEmptyKey()

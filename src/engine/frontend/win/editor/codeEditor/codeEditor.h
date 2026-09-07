@@ -12,7 +12,8 @@
 #include <array>
 #include <map>
 
-#include "codeEditorInterpreter.h"
+#include "backend/compiler/translateCode.h"   // the lexem stream, and what the caret stands in
+#include "backend/compiler/scriptComplete.h"  // ibValueAtCaret / ibNamesAtCaret - the two answers
 
 #include "frontend/mainFrame/settings/editorsettings.h"
 #include "frontend/mainFrame/settings/fontcolorsettings.h"
@@ -289,7 +290,7 @@ private:
 			// Mode is read from ibCompileCode (process-global).
 			const bool isCES = (ibCompileCode::GetCodeStyle() == CODE_CES);
 
-			const auto& lexems = m_codeEditor->m_precompileModule->GetLexems();
+			const auto& lexems = m_codeEditor->m_tc.GetLexems();
 			for (size_t i = 0; i < lexems.size(); ++i) {
 				const ibLexem& lex = lexems[i];
 
@@ -516,7 +517,13 @@ public:
 	void ShowAutoComplete(
 		const ibDebugAutoCompleteData& autoCompleteData);
 
-	void ShowCallTip(const wxString& title) { m_ct.Show(GetRealPosition(), title); }
+	// ⚠ THE EDITOR'S OWN POSITION, NOT THE COMPILER'S. GetRealPosition counts CHARACTERS, which is
+	// what a caret means to the compiler; a window is placed by wxSTC's document position, which is
+	// a byte offset. Any non-ASCII above the caret pulls the two apart, and the tip is drawn that
+	// much too early — measured 2026-09-07 on a module whose messages are in Russian, where it
+	// landed four lines above the call it described. This is the SECOND caller that had it; the
+	// other is LoadCallTip.
+	void ShowCallTip(const wxString& title) { m_ct.Show(GetCurrentPos(), title); }
 
 	// hook the document manager into event handling chain here
 	virtual bool TryBefore(wxEvent& event) override {
@@ -596,15 +603,20 @@ private:
 	// Private func
 	void AddKeywordFromObject(const ibValue& vObject);
 
-	// PrepareExpression moved to ibPrecompileCode — it reads the lexem stream and nothing of this
-	// widget, and a second reader (script_complete) needed it.
+	// The debugger's own answer — see the definition.
+	void LoadFromDebugger(const ibTranslateCode::ibCaretText& at);
+
 	void PrepareTooTipExpression(unsigned int currPos, wxString& expression, wxString& currentWord, bool& hasPoint);
 
 	void PrepareTABs();
 
 	void LoadSysKeyword();
 	void LoadIntelliList();
-	void LoadFromKeyWord(const wxString& keyWord);
+
+	// True when the keyword names something to offer. A caret inside ANY call reports the call it
+	// is in — deciding which calls have names worth listing is this side's knowledge, and a `false`
+	// is what lets the dropdown fall back to everything in scope.
+	bool LoadFromKeyWord(const wxString& keyWord);
 
 	void LoadAutoComplete();
 	void LoadToolTip(const wxPoint& pos);
@@ -622,10 +634,15 @@ protected:
 	ibMetaDocument*   m_document         = nullptr;
 
 private:
-	ibPrecompileCode* m_precompileModule = nullptr;
-
 	ibAutoComplete    m_ac;
 	ibCallTip         m_ct;
+
+	// ⭐⭐ THE EDITOR KEEPS A LEXER, NOT A COMPILER — and it already had one. What it needs of the
+	// text is the token stream: for syntax colouring, for folding, for brace matching, and to know
+	// what the caret is standing in. Everything the old ibPrecompileCode did BEYOND that — a second
+	// scope tree, a second set of variables, values computed by a second walker over a fake
+	// context — is answered by the compiler now, through one door each: ibValueAtCaret for what an
+	// expression arrived at, ibNamesAtCaret for what may be written.
 	ibTranslateCode   m_tc;
 	ibFoldLevelParser m_fp;
 

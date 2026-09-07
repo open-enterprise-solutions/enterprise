@@ -54,7 +54,10 @@
     <ClInclude Include="compiler\compileModule.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\parseCode.h">
+    <ClInclude Include="compiler\scriptComplete.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\scriptParseCode.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="appData.h" />
@@ -915,6 +918,9 @@
     <ClCompile Include="mcp\tools\mcpToolChat.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolComplete.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
     <ClCompile Include="mcp\tools\mcpToolClipboard.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>
@@ -1034,7 +1040,10 @@
     <ClCompile Include="compiler\compileModule.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
-    <ClCompile Include="compiler\parseCode.cpp">
+    <ClCompile Include="compiler\scriptComplete.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\scriptParseCode.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="appData.cpp" />

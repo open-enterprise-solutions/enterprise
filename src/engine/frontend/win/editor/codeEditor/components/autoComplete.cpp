@@ -100,7 +100,7 @@ void ibAutoComplete::Append(short type, const wxString& strName, const wxString&
 
 	// Filter only against the visible portion of the typed word — strip
 	// control / whitespace chars (`\r`, `\n`, `\t`, spaces). Without the
-	// trim a stray newline / CR that PrepareExpression leaves in
+	// trim a stray newline / CR that the caret answer leaves in
 	// m_currentWord when the caret is on a blank line slips past
 	// IsEmpty() (length > 0), the Upper'd Find sees no match against
 	// real identifiers, and the dropdown ends up empty.

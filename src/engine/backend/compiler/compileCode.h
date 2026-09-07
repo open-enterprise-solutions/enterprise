@@ -159,12 +159,112 @@ public:
 	// derived class.
 	virtual bool IsExpressionOnly() const { return false; }
 
+	// ⭐⭐ WHAT THIS COMPILE IS FOR — and there are two answers, not two compilers.
+	//
+	// Runtime is the demanding one: the first refusal ends the compile, because the artefact is
+	// going to be EXECUTED and half of it is worth nothing. It raises, and the raise is what ends
+	// it.
+	//
+	// Tolerant is the same compiler READING. It is answering "what is at this caret" for an editor,
+	// and a reader has nobody to tell and nowhere to stop: it says nothing at all and never
+	// unwinds. That is not a weaker demand, it is a different act — and it is exactly how the
+	// precompiler this replaces has always worked (one SetError and zero throws in 2900 lines),
+	// which is what lets somebody edit at line one thousand of a module broken at line three.
+	//
+	// ⚠ SILENCE IS THE POINT, NOT A SIDE EFFECT. A raise leaves the loop that has to keep going, so
+	// a compile that both REPORTS and CONTINUES is a contradiction on this road (Max, 2026-09-07:
+	// *"any publication is an exception — an exit from the loop, and you need to continue it"*). A
+	// reader that genuinely wants the messages accumulated gives the compile somewhere to write
+	// them; it does not ask the refusal to carry them.
+	enum class ibCompileMode {
+		Runtime = 0,   // the first refusal ends the compile, and is reported
+		Tolerant,      // a refusal is not reported and ends nothing; the read goes on
+	};
+
+	void SetCompileMode(ibCompileMode mode) { m_compileMode = mode; }
+	ibCompileMode GetCompileMode() const { return m_compileMode; }
+
+	// ⭐⭐ WHAT THIS COMPILE REFUSED, AS TEXT, WHETHER OR NOT ANYTHING WAS RAISED. A refusal used to
+	// be an exception and carried its own sentence to whoever caught it; a tolerant compile raises
+	// nothing, so those sentences would simply be gone — and "why did that dot not resolve" is
+	// exactly the question they answer (Max, 2026-09-07: *"since it used to be an exception, you
+	// now have to log it somewhere — a logger on the compiler's side, a string variable"*).
+	//
+	// One line per refusal, in the order they happened. A runtime compile stops at the first, so
+	// its log holds one line; a tolerant compile reads on and collects them all.
+	const wxString& GetRefusal() const { return m_strRefusal; }
+
 	// Compile-time block-scope nesting depth. ++ on `{` (RETURN_BLOCK
 	// CompileBlock entry), -- on matching `}`. Stamped into each var
 	// at PushVariable time as ibVariable::m_scopeDepth → mirrors into
 	// ibByteCodeVarInfo::m_scopeDepth → SendLocalVariables filter at
 	// runtime. Function / lambda body envelopes don't push.
 	int m_compileScopeDepth = 0;
+
+	ibCompileMode m_compileMode = ibCompileMode::Runtime;   // see SetCompileMode
+
+	// See GetRefusal. Mutable because DoSetError is const — reporting a refusal does not change
+	// what the compile IS, and the const there predates this by years.
+	mutable wxString m_strRefusal;
+
+	// See SetCaret. -1 = nobody asked, and then NoteCaret does nothing at all.
+	long m_caretPos = -1;
+	long m_caretOwner = kCaretNowhere;
+
+	// The caret fell inside [spanStart, here] — so `owner` is the declaration holding it. The
+	// INNERMOST one wins: a body finishes before the body enclosing it, so the first claim is the
+	// tightest, and an enclosing span must not take it back.
+	void NoteCaret(long spanStart, long owner) {
+		if (m_caretPos < 0 || m_caretOwner != kCaretNowhere)
+			return;
+		if (m_caretPos >= spanStart && m_caretPos <= CaretCursor())
+			m_caretOwner = owner;
+	}
+
+	// ⭐ THE STREAM IS EXHAUSTED — a different fact from "what you wrote is wrong", and the
+	// difference only matters in a tolerant compile. A malformed name is the text's fault; a name
+	// that is not there yet is the text being UNFINISHED, which is the ordinary state of a module
+	// somebody is typing into. The lexer marks the end with ENDPROGRAM, so this asks it rather than
+	// counting.
+	bool IsEndOfProgram() const {
+		const int next = m_numCurrentCompile + 1;
+		return next >= (int)m_listLexem.size() || m_listLexem[next].m_lexType == ENDPROGRAM;
+	}
+
+	// Where the parse has read up TO, in the text — the END of the token just consumed, not its
+	// start. The difference is one token wide and it decides a span: a body closed by `}` at 41
+	// holds every caret up to 42, and 42 is exactly where a caret sits when the text was cut at it,
+	// which is how the value door compiles (scriptComplete.cpp, upToCaret). Measured 2026-09-07:
+	// comparing against the START lost that caret, the declaration went unclaimed, and the name
+	// search then found a slot of the same number in a table one floor up.
+	long CaretCursor() const {
+		return (m_numCurrentCompile >= 0 && m_numCurrentCompile < (int)m_listLexem.size())
+			? (long)m_listLexem[m_numCurrentCompile].EndPos() : 0;
+	}
+
+	// ⭐⭐ THE DECLARATION A CARET IS STANDING IN, CAUGHT WHILE COMPILING — not read back out of the
+	// tape afterwards. A body owns the span from where it began to the token that closed it, and
+	// the only moment BOTH ends are in hand is the end of that body: the parser is standing on the
+	// closer, and where it started was noted on the way in. So the answer is taken there.
+	//
+	// EACH SPAN IS THE ONE ITS OWNER ACTUALLY HOLDS, which is what keeps two of them from claiming
+	// the same caret: a declaration's span is its body, and the MODULE's span starts after the
+	// declarations rather than at the top of the file. An inner body finishes first and is recorded
+	// first; the outer one no longer contains the caret and does not overwrite it.
+	//
+	// ⚠ THIS IS THE MECHANISM THE PRECOMPILER USED, and it is here because the alternative was
+	// worse: reading the answer back off the tape means the tape has to carry it, and the position
+	// on a closing instruction was never a boundary — it is what AddLineInfo stamped, the token
+	// AFTER the body, which for the last declaration in a module is the end of the text. Every
+	// patch to make that field mean something else is a patch to a field somebody else owns.
+	void SetCaret(long position) { m_caretPos = position; m_caretOwner = kCaretNowhere; }
+
+	// The entry IP of the declaration the caret stands in; kCaretAtModule when it stands in the
+	// module body, kCaretNowhere when no caret was set or the text never reached it.
+	long GetCaretOwner() const { return m_caretOwner; }
+
+	static const long kCaretNowhere = -2;
+	static const long kCaretAtModule = -1;
 
 	// matching external variables
 	std::map<wxString, ibValue*> m_listExternValue;

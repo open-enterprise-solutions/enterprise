@@ -76,6 +76,16 @@ std::vector<ibDiagnostic> ibCheckScript(const wxString& text, const wxString& mo
 		// configuration never learns this happened.
 		ibCompileCode compiler(moduleName, wxT("check"), false);
 
+		// ⚠ AND IT COMPILES THE ORDINARY WAY — the first refusal ends it, exactly as the designer's
+		// own Syntax button behaves. The tolerant mode is NOT for this: it exists so a reader
+		// working out what is at a caret can go on reading, and it says nothing to anybody
+		// (compileCode.cpp, DoSetError). A check that used it would come back silent.
+		//
+		// So one refusal is what a check answers with. Listing every one of them would mean a
+		// compile that both reports AND continues, and continuing is precisely what a raise cannot
+		// do: it leaves the loop that has to keep going (Max, 2026-09-07: *"any publication is an
+		// exception — an exit from the loop, and you need to continue it"*).
+
 		// ⭐ …BUT NOT IN A VACUUM, when a configuration was named. The module manager this
 		// configuration compiles against IS the context every module of it is parented to — the
 		// globals among them — so a snippet judged without it is judged against a language that

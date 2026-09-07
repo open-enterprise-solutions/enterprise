@@ -467,6 +467,36 @@ bool ibTranslateCode::GetByte(wxUniChar* c) const
 * true,false
 */
 
+void ibTranslateCode::SkipLine() const
+{
+#ifdef UTF8_LEXEM_TRANSLATE
+	unsigned int i_utf8 = m_currentUtf8Pos, i_utf8_offset = i_utf8;
+#endif
+	for (unsigned int i = m_currentPos; i < m_bufferSize; i++) {
+
+		const auto& c = m_strBuffer[i];
+#ifdef UTF8_LEXEM_TRANSLATE
+		i_utf8 = i_utf8_offset;
+		unsigned int i_utf8_step = 0;
+		(void)SetUtf8CharOffset(c, i_utf8_step);
+		i_utf8_offset = i_utf8 + i_utf8_step;
+#endif
+		m_currentPos = i;
+#ifdef UTF8_LEXEM_TRANSLATE
+		m_currentUtf8Pos = i_utf8;
+#endif
+		if (c == wxT('\n') || c == wxT('\r')) {
+			SkipSpaces();   // steps over the break itself and counts the line
+			return;
+		}
+	}
+
+	m_currentPos = m_bufferSize;
+#ifdef UTF8_LEXEM_TRANSLATE
+	m_currentUtf8Pos = i_utf8_offset;
+#endif
+}
+
 bool ibTranslateCode::IsWord() const
 {
 	SkipSpaces();
@@ -632,14 +662,19 @@ bool ibTranslateCode::IsNumber() const
 
 bool ibTranslateCode::GetNumber(wxString* strNumber) const
 {
+	// 🛑 `return false`, NOT `return wxEmptyString` — this returned a POINTER from a bool function,
+	// left over from when the signature was `wxString GetNumber()`. It compiles, and a non-null
+	// pointer is TRUE, so both of these error paths were reporting SUCCESS. Every sibling Get* in
+	// this file returns false here. (It went unnoticed because SetError above already records the
+	// failure, so the compile still refused — but a caller reading the RESULT was told it worked.)
 	if (!IsNumber()) {
 		SetError(ERROR_TRANSLATE_NUMBER, m_currentPos);
-		return wxEmptyString;
+		return false;
 	}
 	SkipSpaces();
 	if (m_currentPos >= m_bufferSize) {
 		SetError(ERROR_TRANSLATE_NUMBER, m_currentPos);
-		return wxEmptyString;
+		return false;
 	}
 	unsigned int next_pos = m_currentPos, error_pos = m_currentPos, point_pos = 0;
 #ifdef UTF8_LEXEM_TRANSLATE
@@ -1042,6 +1077,7 @@ bool ibTranslateCode::PrepareLexem()
 		m_bAutoDeleteDefList = true;//indication that the array with definitions was created by us (and not passed as a definition translation)
 	}
 
+
 #ifdef UTF8_LEXEM_TRANSLATE
 	unsigned int total_line = 0,
 		total_pos = 0, total_pos_utf8 = 0;
@@ -1224,6 +1260,14 @@ bool ibTranslateCode::PrepareLexem()
 		}
 		m_current_lex.m_strData = s;
 		if (m_current_lex.m_lexType == KEYWORD) {
+			// ⭐⭐ EDITING: A DIRECTIVE IS A LINE THAT IS NOT CODE. Every branch below ACTS on one —
+			// registers a name, hides an excluded region, demands an `#endregion` — and raises when
+			// the line is malformed. See ibLexemMode for why none of that is wanted about a text
+			// being typed into. A directive's effect IS its line, so the line is what is read past.
+			if (m_lexemMode == ibLexemMode::Editing && IsDirective(m_current_lex.m_numData)) {
+				SkipLine();
+				continue;
+			}
 			if (m_current_lex.m_numData == KEY_DEFINE && m_nModePreparing != LEXEM_ADDDEF) { //setting an arbitrary identifier
 				if (!IsWord()) {
 					SetError(ERROR_IDENTIFIER_DEFINE, m_currentPos);
@@ -1350,6 +1394,349 @@ bool ibTranslateCode::PrepareLexem()
 	return true;
 }
 
+// ⭐ THE PATCH — see the declaration. Moved here from the editor's own copy of this class, which is
+// where it was written and not where its data lives: every line of it rewrites m_listLexem.
+void ibTranslateCode::PrepareLexem(const ibTextEdit& edit)
+{
+	// A patch has no baseline: without a prior full pass the index math below has not even the
+	// trailing ENDPROGRAM marker to stand on.
+	if (!HasLexem())
+		return;
+
+	const unsigned int line = edit.m_line;
+	const int line_offset = edit.m_lineOffset;
+	const int pos_offset = edit.m_posOffset;
+#ifdef UTF8_LEXEM_TRANSLATE
+	const int pos_offset_utf8 = edit.m_posOffsetUtf8;
+#endif
+
+	m_currentLine = m_currentPos = 0;
+
+	// Rewind the tokenizer to one lexem BEFORE the first lexem at or past `line` (or before the
+	// ENDPROGRAM marker if the edit is past the last real lexem). Re-tokenization restarts at that
+	// lexem's start position — the erase pass below drops it together with the edited region, and
+	// the tokenizer then re-emits it as the first new lexem. This minimises the rewind to a single
+	// lexem of replay.
+	unsigned int lexem_idx = 0;
+	bool insert_after = false;
+	auto hint = m_listLexem.begin();
+
+	for (size_t i = 0; i < m_listLexem.size(); ++i) {
+
+		const bool atTriggerLine = m_listLexem[i].m_numLine >= line;
+		const bool atEndProgram = m_listLexem[i].m_lexType == ENDPROGRAM;
+
+		if (!atTriggerLine && !atEndProgram)
+			continue;
+
+		if (i > 0) {
+			m_currentLine = m_listLexem[i - 1].m_numLine;
+			m_currentPos = m_listLexem[i - 1].m_numString;
+#ifdef UTF8_LEXEM_TRANSLATE
+			m_currentUtf8Pos = m_listLexem[i - 1].m_numUtf8String;
+#endif
+			lexem_idx = (unsigned int)(i - 1);
+			if (lexem_idx > 0) std::advance(hint, lexem_idx - 1);
+			insert_after = atEndProgram ? true : (lexem_idx > 0);
+		}
+		break;
+	}
+
+	wxString s;
+
+	const bool insert_text = pos_offset > 0;
+	const bool delete_text = pos_offset < 0;
+
+	m_listLexem.erase(
+		std::remove_if(m_listLexem.begin() + lexem_idx, m_listLexem.end() - 1,
+			[&](const auto& e) {
+				if (insert_text) return e.m_numLine <= line;
+				if (delete_text) return e.m_numLine <= (line - line_offset);
+				return false;
+			}),
+		m_listLexem.end() - 1
+	);
+
+	if (m_listLexem.size() <= 1) {
+		hint = m_listLexem.begin();
+		insert_after = false;
+	}
+
+	while (!IsEnd()) {
+
+		if (insert_text && m_currentLine > (line + line_offset)) break;
+		else if (delete_text && (m_currentLine > line)) break;
+
+		m_current_lex.m_numLine = m_currentLine;
+		m_current_lex.m_numString = m_currentPos;
+#ifdef UTF8_LEXEM_TRANSLATE
+		m_current_lex.m_numUtf8String = m_currentUtf8Pos;
+#endif // UTF8_LEXEM_TRANSLATE
+
+		if (IsWord()) {
+
+			wxString strOrig;
+
+			if (GetWord(s, strOrig)) {
+
+				const int k = IsKeyWord(s);
+
+				//undefined
+				if (k == KEY_UNDEFINED) {
+					m_current_lex.m_lexType = CONSTANT;
+					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_EMPTY);
+				}
+				//boolean
+				else if (k == KEY_TRUE || k == KEY_FALSE) {
+					m_current_lex.m_lexType = CONSTANT;
+					m_current_lex.m_valData.SetBoolean(s);
+				}
+				//null
+				else if (k == KEY_NULL) {
+					m_current_lex.m_lexType = CONSTANT;
+					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_NULL);
+				}
+				else {
+
+					// After a `.` a keyword is a MEMBER NAME — `sel.Where(...)`. Asked here, at
+					// classification time, exactly as the full pass asks it; that is what makes a
+					// second sweep over the whole list unnecessary — and a sweep would have undone
+					// this walk's entire reason for existing.
+					if (k >= 0 && !PreviousLexemIsDot()) {
+						m_current_lex.m_lexType = KEYWORD;
+						m_current_lex.m_numData = k;
+					}
+					else {
+						m_current_lex.m_lexType = IDENTIFIER;
+					}
+
+					m_current_lex.m_valData = strOrig;
+				}
+			}
+
+			m_current_lex.m_strData = s;
+		}
+		else if (IsNumber() || IsString() || IsDate()) {
+			m_current_lex.m_lexType = CONSTANT;
+			if (IsNumber()) {
+
+				GetNumber(s); m_current_lex.m_valData.SetNumber(s);
+
+				if (hint != m_listLexem.begin() && hint->m_lexType == DELIMITER && (hint->m_numData == '-' || hint->m_numData == '+')) {
+					auto prev = std::prev(hint, 1);
+					if (prev != m_listLexem.begin() && prev->m_lexType == DELIMITER && (prev->m_numData == '[' || prev->m_numData == '(' || prev->m_numData == ',' || prev->m_numData == '<' || prev->m_numData == '>' || prev->m_numData == '=')) {
+						if (hint->m_numData == '-')
+							m_current_lex.m_valData.m_fData = -m_current_lex.m_valData.m_fData;
+						*hint = std::move(m_current_lex);
+						continue;
+					}
+				}
+			}
+			else {
+				if (IsString()) {
+					GetString(s); m_current_lex.m_valData.SetString(s);
+				}
+				else if (IsDate()) {
+					GetDate(s); m_current_lex.m_valData.SetDate(s);
+				}
+			}
+
+			if (insert_after) {
+				hint = m_listLexem.emplace(
+					std::next(hint, 1), std::move(m_current_lex));
+			}
+			else {
+				hint = m_listLexem.emplace(
+					hint, std::move(m_current_lex));
+				insert_after = true;
+			}
+
+			continue;
+		}
+		else if (IsByte('~')) {
+			s.clear();
+			GetByte();
+			continue;
+		}
+		else {
+
+			s.clear();
+
+			m_current_lex.m_lexType = DELIMITER;
+			wxUniChar byte; GetByte(byte);
+			m_current_lex.m_numData = byte;
+
+			if (m_current_lex.m_numData <= 13) continue;
+		}
+		m_current_lex.m_strData = s;
+		// The same rule the full pass makes, and it has to be here too: this walk re-lexes the
+		// edited lines, which is exactly where a half-written directive lives. See ibLexemMode.
+		if (m_current_lex.m_lexType == KEYWORD
+			&& m_lexemMode == ibLexemMode::Editing && IsDirective(m_current_lex.m_numData)) {
+			SkipLine();
+			continue;
+		}
+
+		if (insert_after) {
+			hint = m_listLexem.emplace(
+				std::next(hint, 1), std::move(m_current_lex));
+		}
+		else {
+			hint = m_listLexem.emplace(
+				hint, std::move(m_current_lex));
+			insert_after = true;
+		}
+	}
+
+	const size_t lex_size = m_listLexem.size() - 1;
+
+	if (lex_size > 0) {
+
+		const size_t lex_distance = std::distance(m_listLexem.begin(), insert_after ? hint + 1 : hint);
+
+		for (unsigned int i = (unsigned int)lex_distance; i < lex_size; i++) {
+			m_listLexem[i].m_numLine += line_offset;
+			m_listLexem[i].m_numString += pos_offset;
+#ifdef UTF8_LEXEM_TRANSLATE
+			m_listLexem[i].m_numUtf8String += pos_offset_utf8;
+#endif // UTF8_LEXEM_TRANSLATE
+		}
+	}
+
+	m_listLexem[lex_size].m_numString += pos_offset;
+#ifdef UTF8_LEXEM_TRANSLATE
+	m_listLexem[lex_size].m_numUtf8String += pos_offset_utf8;
+#endif
+}
+
+// ⭐⭐ WHAT THE CARET IS STANDING IN — see the declaration.
+//
+// IT ASKS ABOUT THE TOKENS AT THE CARET, NOT ABOUT THE ONES IT PASSED. The version this replaces
+// replayed the stream from the first token, carrying `expression` / `hasPoint` / `hasKeyword`
+// forward and resetting them on anything unrelated — so the answer was "the last interesting thing
+// I saw", and it had to defend itself against its own memory (a string literal earlier in the
+// module poisoning the filter, and a hardcoded list of three platform functions to decide when a
+// literal counted). A completion is about what is being written HERE; three tokens back is the
+// whole of what that needs.
+ibTranslateCode::ibCaretText ibTranslateCode::CaretAt(unsigned int caret) const
+{
+	ibCaretText answer;
+
+	if (m_listLexem.empty())
+		return answer;
+
+	// The last token that begins before the caret — the one being typed, or the one just closed.
+	size_t at = 0;
+	bool found = false;
+	for (size_t i = 0; i < m_listLexem.size(); i++) {
+		if (m_listLexem[i].m_numString >= caret)
+			break;
+		if (m_listLexem[i].m_lexType == ENDPROGRAM)
+			break;
+		at = i; found = true;
+	}
+
+	if (!found)
+		return answer;   // the caret is before any code: open, and nothing typed yet
+
+	const ibLexem& here = m_listLexem[at];
+
+	// WHAT A LIST FILTERS BY. The word under the caret, whatever kind it is — an identifier being
+	// typed, or the contents of a string literal being typed inside a call. It is not part of the
+	// question, which is why it is filled the same way in every branch below.
+	if (here.m_lexType == IDENTIFIER || here.m_lexType == CONSTANT)
+		answer.m_word = here.m_valData.GetString();
+
+	// A MEMBER ACCESS: the caret is on the dot, or on the name being typed after one.
+	const bool onDot = here.m_lexType == DELIMITER && here.m_numData == '.';
+	const bool afterDot = here.m_lexType == IDENTIFIER && at > 0
+		&& m_listLexem[at - 1].m_lexType == DELIMITER && m_listLexem[at - 1].m_numData == '.';
+
+	if (onDot || afterDot) {
+		answer.m_place = ibCaretPlace::AfterDot;
+		answer.m_expression = ExpressionEndingAt(onDot ? at : at - 1);
+		return answer;
+	}
+
+	// `New <name>` — the keyword names what may follow it, and what follows is the path so far.
+	{
+		const size_t nameAt = (here.m_lexType == IDENTIFIER && at > 0) ? at - 1 : at;
+		if (m_listLexem[nameAt].m_lexType == KEYWORD && m_listLexem[nameAt].m_numData == KEY_NEW) {
+			answer.m_place = ibCaretPlace::InKeyword;
+			answer.m_keyword = m_listLexem[nameAt].m_valData.GetString();
+			answer.m_expression = (nameAt == at) ? wxString() : answer.m_word;
+			return answer;
+		}
+	}
+
+	// ⭐ INSIDE A CALL'S ARGUMENTS, AND THE CALL IS ALL THIS SAYS. Which calls have names worth
+	// offering — `Type`, `GetCommonForm`, `ShowCommonForm` — is the CALLER's knowledge, and the
+	// caller already holds that list; carrying a second copy here made the lexer know about
+	// platform functions, and made every OTHER call's argument answer with nothing at all.
+	{
+		int depth = 0;
+		for (size_t i = at + 1; i-- > 0; ) {
+			const ibLexem& lex = m_listLexem[i];
+			if (lex.m_lexType != DELIMITER)
+				continue;
+
+			// 🛑 A CALL DOES NOT SPAN STATEMENTS. Without this the search for an unmatched `(` runs
+			// to the top of the module and finds one left open by a line somebody is still writing —
+			// so a caret several statements below reported itself as being inside THAT call, and the
+			// list it wanted (the members after a dot) never came. Measured 2026-09-07: an unclosed
+			// `Catalogs.Property(` four lines up silenced `TitleLocation.` completely.
+			if (lex.m_numData == ';' || lex.m_numData == '{' || lex.m_numData == '}')
+				break;
+
+			if (lex.m_numData == ')') { depth++; continue; }
+			if (lex.m_numData != '(') continue;
+			if (depth > 0) { depth--; continue; }
+
+			// An unmatched `(` — the caret is inside its arguments. Named by whatever it opened on.
+			if (i > 0 && m_listLexem[i - 1].m_lexType == IDENTIFIER) {
+				answer.m_place = ibCaretPlace::InKeyword;
+				answer.m_keyword = m_listLexem[i - 1].m_valData.GetString();
+			}
+			break;
+		}
+	}
+
+	return answer;
+}
+
+// The dotted path ENDING at `dotAt` — `Catalogs.Goods` for a caret in `Catalogs.Goods.`. Walked
+// backwards over `name . name . name`, which is the only shape a path has.
+wxString ibTranslateCode::ExpressionEndingAt(size_t dotAt) const
+{
+	std::vector<wxString> parts;
+
+	for (size_t i = dotAt + 1; i-- > 0; ) {
+
+		const ibLexem& lex = m_listLexem[i];
+
+		if (lex.m_lexType == DELIMITER && lex.m_numData == '.')
+			continue;
+
+		if (lex.m_lexType != IDENTIFIER)
+			break;
+
+		parts.push_back(lex.m_valData.GetString());
+
+		// A name reached through a call (`f().x`) is not a path anyone can spell back.
+		if (i > 0 && m_listLexem[i - 1].m_lexType == DELIMITER && m_listLexem[i - 1].m_numData == ')')
+			break;
+		if (i == 0 || m_listLexem[i - 1].m_lexType != DELIMITER || m_listLexem[i - 1].m_numData != '.')
+			break;
+	}
+
+	wxString path;
+	for (size_t i = parts.size(); i-- > 0; ) {
+		if (!path.IsEmpty()) path += wxT('.');
+		path += parts[i];
+	}
+	return path;
+}
+
 /**
 * create lexemes starting from the current position
 */
@@ -1403,6 +1790,12 @@ void ibTranslateCode::PrepareFromCurrent(int nMode, const wxString& strName)
 		m_currentLine = translate.m_currentLine;
 		m_currentPos = translate.m_currentPos;
 #ifdef UTF8_LEXEM_TRANSLATE
+		// ⚠ WRITES INTO `translate`, AND THAT IS NOT THE TYPO IT LOOKS LIKE. The two lines above
+		// read OUT of it and the else-branch below does too, so an audit reads this as reversed —
+		// it was "fixed" that way on 2026-09-08 and the sweep over real modules fell from 224/285
+		// to 146/285 in one run. This branch has taken lexems from a DIFFERENT buffer, whose
+		// character count is its own; carrying it back would corrupt the caret's own count, which
+		// is measured in characters. Byte position re-anchors, character position does not.
 		translate.m_currentUtf8Pos = m_currentUtf8Pos;
 #endif
 	}

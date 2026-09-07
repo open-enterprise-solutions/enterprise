@@ -495,6 +495,12 @@ bool ibBackendException::IsEvalSandbox()
 	return sess != nullptr && sess->IsEvalSandbox();
 }
 
+bool ibBackendException::IsEvalComplete()
+{
+	auto* sess = ibSession::Current();
+	return sess != nullptr && sess->IsEvalComplete();
+}
+
 ////////////////////////////////////////////////////////////////////
 
 #if !wxUSE_UTF8_LOCALE_ONLY

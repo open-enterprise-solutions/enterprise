@@ -3,7 +3,7 @@
 //	Description : parser for autocomplete 
 ////////////////////////////////////////////////////////////////////////////
 
-#include "parseCode.h"
+#include "scriptParseCode.h"
 
 #pragma warning(disable : 4018)
 
@@ -353,7 +353,7 @@ const ibLexem& ibParseCode::GetLexem()
  * PreviewGetLexem
  *   Peek the next non-trivial lexem without advancing the cursor.
  *   Skips both ';' and '\n' delimiters — same designer-side behaviour
- *   as ibPrecompileCode::PreviewGetLexem.
+ *   as the designer-side precompiler did, before it was removed.
  */
 const ibLexem& ibParseCode::PreviewGetLexem()
 {

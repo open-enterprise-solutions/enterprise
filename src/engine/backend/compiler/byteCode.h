@@ -1,9 +1,8 @@
 #ifndef __BYTE_CODE_H__
 #define __BYTE_CODE_H__
 
-#include "backend/compiler/value.h"
-#include "backend/guid.h"
 #include "backend/compiler/value.h"     // ibValue::GetIDObjectFromString — the type registry
+#include "backend/guid.h"
 
 // A TYPE NAME AS WRITTEN → its class id; nothing declared → no id.
 //
@@ -543,6 +542,38 @@ public:
 			[lCodeLine](const auto& fn) { return lCodeLine == (long)fn; });
 		return iterator != m_listFunc.end() ? &(*iterator) : nullptr;
 	}
+
+	// ⭐⭐ A CARET, AS DATA — one place a text position and everything it implies travel together.
+	//
+	// The editor's question is always the same shape ("I am HERE — what is true here?"), and the
+	// answers to it are not independent: the frame decides which locals are visible, the instruction
+	// decides what was being written. Passing them as loose arguments is how two callers end up
+	// asking with a position and a frame that do not belong to each other.
+	//
+	// ⚠ IT ADDS NOTHING TO THE BYTECODE. The struct is a query, not a field: every answer is READ
+	// from what the compile already emitted, so the base object stays exactly what the runtime
+	// executes and what the AOT writer stores. `m_numString` is on every instruction (AddLineInfo)
+	// and is an absolute text offset — the same unit the editor measures a caret in.
+	struct ibCaretPoint {
+
+		unsigned int m_position = 0;   // IN — the caret, as an offset into the compiled text
+
+		// ⚠ WHICH DECLARATION THE CARET STANDS IN IS NOT ASKED HERE, and the attempt is instructive:
+		// it was answered by walking the tape and comparing the caret against the source position on
+		// each FUNC / ENDFUNC. That position was never a boundary — AddLineInfo stamps the token the
+		// parser was standing on, which after a body is the token AFTER it, and for the last
+		// declaration in a module that is the end of the text. The body then claimed to close where
+		// the text ends and a caret on the last line read as inside it. The compile knows the answer
+		// while it still holds both ends of the span; it says so there (compileCode.h, SetCaret).
+
+		// OUT — the last instruction emitted at or before the caret, as an index into m_listCode.
+		// -1 = the caret precedes everything this text emitted (an empty module, a comment header).
+		long m_instruction = -1;
+	};
+
+	// Fill in what the compile knows about a caret. False = the bytecode is empty, so there is
+	// nothing to be said; the point is left as it was.
+	BACKEND_API bool FindCaret(ibCaretPoint& point) const;
 
 	// AOT persistence — see byteCodeAOT.cpp. Writes / reads the
 	// fields needed to reconstruct a compiled bytecode in a fresh

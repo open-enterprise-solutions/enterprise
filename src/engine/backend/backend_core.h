@@ -193,10 +193,27 @@ enum ibProgramSyntax {
 // The difference is a KIND, not a second flag beside the first. Two booleans have four states and
 // only three mean anything; a kind cannot be set half way, and a fourth kind is one enumerator
 // rather than another flag every existing site must learn to consider.
+// ⭐⭐ AND THE FAMILY SPLITS IN TWO. The first two evaluations happen ON SOMETHING RUNNING — a watch
+// and a sandbox both answer about a program that exists and is executing, so their answers have to
+// be exact. The last one happens where NOTHING runs: an editor asking what may be written at a
+// caret. Everything the gates already do about eval mode — skipping writes, keeping the message
+// pane quiet — is true of all of them, which is why they are one family; the split matters only
+// where an ANSWER would differ.
 enum ibEvalMode : unsigned char {
 	eval_none = 0,   // ordinary execution — work the person's own actions started
-	eval_watch,      // a watch, a tooltip, an autocomplete probe: reads, changes nothing
+
+	// --- on something running ---------------------------------------------
+	eval_watch,      // a watch, a tooltip: reads, changes nothing, and answers about THIS run
 	eval_sandbox,    // the debugger's sandbox: writes and fires handlers, inside a rolled-back transaction
+
+	// --- on a text being written ------------------------------------------
+	// ⭐ THE SAME KIND AS A WATCH, ONE DEGREE FINER — a reading evaluation, told apart from a watch
+	// only where the two would answer differently. A watch is a question about a RUN and its answer
+	// has to be exact; this is a question about a text somebody is still typing, where a name that
+	// is not there yet is ordinary rather than wrong. So `GetCommonTemplate(<a name nobody typed>)`
+	// raises for a watch and hands back an empty template here. Everywhere else it behaves as a
+	// watch does, which is why it sits in this family rather than opening an axis of its own.
+	eval_complete,
 };
 
 //*******************************************************************************************
