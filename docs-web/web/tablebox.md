@@ -83,6 +83,25 @@ Selection in the grid is only how that is shown. An unknown key is refused
 `/fire/<id>/<kind>` gained an optional `value` parameter for this; a kind that
 carries no payload, like a button's `click`, sees an empty string as before.
 
+**And the grid is told which row that is.** Every page carries `currentKey` when
+the current line falls inside the window it is answering with, and the client
+selects that row rather than remembering which `<tr>` was last clicked. So the
+mark survives anything that rebuilds the grid — a sort, a command, a re-render —
+and it means *the row the server is standing on*, which is the only thing a
+person can act on. Absent from the payload when the control has no current line,
+or when the line is outside the window in hand.
+
+A click still marks the row before the round trip finishes: the server decides,
+but a click that shows nothing until the answer comes back reads as a click that
+did not land.
+
+The mark itself is the theme's selection fill **plus** an accent bar down the
+leading edge (`--oes-table-row-selected-accent`, UI5's
+`sapList_SelectionBorderColor`). The fill alone is one shade off the row beside
+it — `#ebf8ff` against `#ffffff` in light — and was reported as no selection at
+all. Hover over the selected row keeps the selection colour: moving the pointer
+must not look like losing the row.
+
 ## The grid
 
 Tabulator 6.5.2 (ADR-003), vendored by `webClient/assets/tools/vendor-tabulator.py`

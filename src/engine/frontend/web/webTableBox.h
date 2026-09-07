@@ -166,7 +166,9 @@ private:
 	// the old way.
 	void SyncSortOrders(ibValueModelTableBox* control);
 
-public:
+	// Window key of the control's current line, -1 when it has none or
+	// the line is outside the window in hand.
+	int CurrentKey(ibValueModelTableBox* control) const;
 
 private:
 	// One row of the window the client currently holds: the key it was

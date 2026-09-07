@@ -25,4 +25,8 @@
   --oes-table-row-alt-bg:var(--sapList_AlternatingBackground);
   --oes-table-row-hover-bg:var(--sapList_Hover_Background);
   --oes-table-row-selected-bg:var(--sapList_SelectionBackgroundColor);
+  /* The leading-edge bar on the selected row. UI5 lists mark the
+     selected item with the accent colour rather than the fill alone,
+     and the fill on its own is a shade off the row beside it. */
+  --oes-table-row-selected-accent:var(--sapList_SelectionBorderColor);
 }

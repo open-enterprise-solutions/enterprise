@@ -147,6 +147,26 @@ bool ReadCell(const ibValueModelTableBox* table, ibValueModel* model,
 
 } // namespace
 
+// The window key of the control's current line, or -1 when the control
+// has none or it names a row this window does not hold. Items compare by
+// identity, which is what the window stores.
+int ibWebTableBox::CurrentKey(ibValueModelTableBox* control) const
+{
+	if (control == nullptr)
+		return -1;
+	ibValueModel::ibValueModelReturnLine* const line = control->GetCurrentLine();
+	if (line == nullptr)
+		return -1;
+	const ibDataViewItem current = line->GetLineItem();
+	if (!current.IsOk())
+		return -1;
+	for (const WindowRow& row : m_window) {
+		if (row.item == current)
+			return row.key;
+	}
+	return -1;
+}
+
 nlohmann::json ibWebTableBox::FetchPage(ibValueModelTableBox* control,
 	const wxString& dir, int count)
 {
@@ -270,6 +290,13 @@ nlohmann::json ibWebTableBox::FetchPage(ibValueModelTableBox* control,
 	out["reset"] = first;
 	out["rows"]  = std::move(rows);
 	out["count"] = static_cast<int>(page.size());
+	// Which row the CONTROL is standing on. The browser highlights a row
+	// because the server's current line says so, not because a click
+	// happened in this particular DOM — so the mark survives a sort, a
+	// command, or any other answer that rebuilds the grid. Absent when
+	// the current line is outside the window we are holding.
+	if (const int key = CurrentKey(control); key >= 0)
+		out["currentKey"] = key;
 	// "There is more that way" is only ever answered by asking, so what
 	// is reported is what this page knows: a short page is the end.
 	out["hasMore"] = static_cast<int>(page.size()) >= count;

@@ -239,6 +239,9 @@ html[data-oes-ui="ui5"] .form-host{
    whole-attribute column, or a model with no Sorting feature) stays as
    it is rather than inviting a click that would do nothing. */
 .oes-tablebox .tabulator-col[tabulator-field]{cursor:default}
+.oes-tablebox .tabulator-row{cursor:default}
+.oes-tablebox .tabulator-row.tabulator-selected{
+  box-shadow:inset 3px 0 0 0 var(--oes-table-row-selected-accent)}
 /* Tabulator ships a light palette of its own. In UI5 mode the theme
    decides instead — every colour below comes from a token, so the two
    themes and both densities follow without a second rule. */
@@ -256,8 +259,16 @@ html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row.tabulator-row-even{
   background:var(--oes-table-row-alt-bg)}
 html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row:hover{
   background:var(--oes-table-row-hover-bg)}
-html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row.tabulator-selected{
-  background:var(--oes-table-row-selected-bg)}
+/* The selected row is the one the server is standing on, so it has to be
+   readable at a glance rather than a tint a shade off white: the theme's
+   selection fill, plus an accent bar down the leading edge that carries
+   the mark on any background and in either theme. Hover over the
+   selected row keeps the selection colour — moving the pointer must not
+   look like losing the row. */
+html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row.tabulator-selected,
+html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row.tabulator-selected:hover{
+  background:var(--oes-table-row-selected-bg);
+  box-shadow:inset 3px 0 0 0 var(--oes-table-row-selected-accent)}
 html[data-oes-ui="ui5"] .oes-tablebox .tabulator-cell{
   border-color:var(--oes-table-border)}
 .boxsizer{display:flex;gap:6px;margin:4px 0;align-items:flex-start}
@@ -2308,6 +2319,17 @@ class TableBox extends BaseControl{
         columnDefaults:{headerSort:false},
       });
 
+      // The highlight is the SERVER's current row, not a memory of which
+      // <tr> was clicked: every page carries currentKey when the cursor
+      // is inside the window, and the grid is made to agree with it.
+      const showCurrent=key=>{
+        if(key===undefined||key===null) return;
+        const row=table.getRow(key);
+        if(!row) return;
+        for(const s of table.getSelectedRows()) if(s!==row) s.deselect();
+        row.select();
+      };
+
       const fetchPage=async(dir)=>{
         if(loading) return;
         loading=true;
@@ -2320,6 +2342,7 @@ class TableBox extends BaseControl{
           if(payload.reset) await table.setData(rows);
           else if(rows.length) await table.addData(rows,false);
           hasMore=!!payload.hasMore;
+          showCurrent(payload.currentKey);
         } finally { loading=false; }
       };
 
@@ -2346,7 +2369,13 @@ class TableBox extends BaseControl{
       };
       table.on('rowClick',async(e,row)=>{
         const key=row.getData()._key;
-        if(key!==undefined) await send('row',key);
+        if(key===undefined) return;
+        // Mark it before the round trip. The server is what decides the
+        // current row, but a click that shows nothing until the answer
+        // comes back reads as a click that did not land.
+        for(const s of table.getSelectedRows()) if(s!==row) s.deselect();
+        row.select();
+        await send('row',key);
       });
       // A header click sorts on the server. The answer is the whole form
       // again, carrying the new arrow on the column, and re-rendering it
