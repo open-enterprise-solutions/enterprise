@@ -120,6 +120,29 @@ public:
 	// what the caller WANTS PERMITTED instead of what they ARE — so every gate downstream would
 	// have had to be told separately about the next thing a sandbox may do. Ask what it is; derive
 	// what it may.
+	// 🛑⭐⭐ THE CONTEXT YOU PASS **IS** DEPTH 1 — and it has to be a REAL frame, not a descriptor you
+	// filled in. The eval unit is laid out as own = depth 0, HOST = depth 1, the host's parents
+	// above (see the comment at CompileExpression's call site), and the host is exactly this
+	// argument. It must carry BOTH halves:
+	//
+	//   * the module's BYTECODE — `ibCompileEval` reads it straight off the context and the
+	//     expression's names are compiled against it. Without it nothing resolves: `compile failed`.
+	//   * the module's SLOTS — where those names land at run time. Without them every global raises
+	//     "Outer frame not bound at depth 1 / idx N (the frame holds 0 slots)".
+	//
+	// ⚠ TWO THINGS THAT LOOK RIGHT AND ARE NOT, both tried on the composition road (2026-09-07,
+	// composition/composeEvaluate.cpp) and both failing at opposite ends:
+	//
+	//   ibRunContext frame; frame.SetProcUnit(root);        // bytecode, NO slots  → depth-1 raise
+	//   ibRunContext frame; frame.SetProcUnit(lambdaUnit);  // slots, NO bytecode  → compile failed
+	//
+	// The lambda runtime borrows the root's scope (`BorrowScopeFrom`) and hosts no module of its
+	// own, which is right for running a lambda BODY and wrong for compiling an expression.
+	//
+	// ⭐ SO PASS A FRAME THAT IS ACTUALLY RUNNING: `GetPUState()->GetCurrentRunContext()` inside
+	// running code, and outside it the ROOT's own — which the session hands over, because the frame
+	// is not a thing to publish: `ibSession::EvaluateInRoot` does the evaluation and answers with a
+	// value (session.h).
 	static bool Evaluate(const wxString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue,
 		bool bCompileBlock, ibEvalMode evalMode = eval_watch);
 	bool CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetValue, ibCompileCode& cModule, bool bCompileBlock);
@@ -153,6 +176,24 @@ public:
 	void CallAsProc(const long lCodeLine, ibValue** ppParams, const long lSizeArray);
 	void CallAsFunc(const long lCodeLine, ibValue& pvarRetValue, ibValue** ppParams, const long lSizeArray);
 
+	// 🛑⭐ BY NAME MEANS **EXPORT** — and a plain `var` is not one. FindProp walks the bytecode's
+	// variables and skips everything that is not `kind = Export`, correctly: an export is a property
+	// of the module's VALUE, while a local is private to its frame and External / Context /
+	// ContextProp do not even index a frame slot.
+	//
+	// ⚠ SO A BODY'S OWN VARIABLE IS NOT FINDABLE THIS WAY, and the miss is silent — `false`, which
+	// reads exactly like "there is no such thing" (measured 2026-09-07: a run that assigns `Result`
+	// came back with nothing, twice, because a few loose statements declare a LOCAL and that is the
+	// natural thing to write).
+	//
+	// ⭐ TO READ ONE ANYWAY, take the slot from the bytecode you compiled and use the NUMERIC
+	// overload — accepting Local and Export and nothing else:
+	//
+	//     for (const auto& v : bc.m_listVar)
+	//         if ((v.IsLocal() || v.IsExport()) && stringUtils::CompareString(name, v.m_strRealName))
+	//             unit.GetPropVal((long)v, value);
+	//
+	// (job/jobRunByteCode.cpp does exactly this to carry a run's `Result` back.)
 	long FindProp(const wxString& strPropName) const;
 
 	bool SetPropVal(const wxString& strPropName, const ibValue& varPropVal);

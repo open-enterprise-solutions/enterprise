@@ -163,6 +163,38 @@ const ibArg& ArgSchema()
 	return s_a;
 }
 
+// ⭐⭐ A QUERY AND NOTHING ELSE — the short way to ASK THE DATA SOMETHING, and the reason it exists is
+// that the long way was invisible. Everything a bare question needs was already here: `schema` runs a
+// composition that exists nowhere, and a composition with a query and one empty variant answers with
+// the query's own rows. But saying that meant knowing to write
+//
+//     {"Query": "...", "NodeChildren": [{"NodeType": "CompositionVariant"}]}
+//
+// — an incantation nobody guesses, in an argument described as "a composition", on a verb described
+// as "run a report". So the road was there and went unused: a whole day's measurements were taken
+// the long way round instead — write a script, run it as a background job, mark the journal, read
+// the journal back — three calls and a hand-parse for one number (measured on this server,
+// 2026-09-07).
+//
+// ⚠ It builds the same description `schema` would have carried and hands it to the same code. A
+// shorthand, not a second road: anything past a plain question — groupings, resources, a period —
+// is `schema`, and this refuses to grow into it.
+const ibArg& ArgQuery()
+{
+	static const ibArg s_a(wxT("query"), ibArg::Kind::Text,
+		ibMcpText("ASK THE DATA A QUESTION DIRECTLY - the query text, and nothing else to write. Use "
+			  "this whenever you want to KNOW something about the base rather than run a report: "
+			  "how many documents are unposted, what a register holds for one counterparty, what "
+			  "the ten largest payments are. The answer is the rows, in the same shape a report's "
+			  "output comes back in.\n"
+			  "\n"
+			  "It is the whole of what a bare question needs. Anything more - groupings, totals, a "
+			  "period the person fills in - is a composition, and that is `schema`; `id` runs one "
+			  "the configuration already has. Parameters work here too: `parameters` applies to "
+			  "this exactly as it does to the other two."));
+	return s_a;
+}
+
 // WHOSE SETTING. Empty means the session's own, which is what a person asking about their own
 // report means and should not have to say. A name that resolves to nobody is a REFUSAL rather than a
 // silent fall back to the caller's own settings: "show me Ivanov's" answered with mine is a wrong
@@ -251,7 +283,21 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("RUN A REPORT AND READ ITS FIGURES - one table per output. report_get says "
+		return ibMcpText("ASK THE DATA SOMETHING AND READ THE ANSWER - with a report, with a composition "
+			"you hand over, or with A QUERY AND NOTHING ELSE. This is the READING verb of the "
+			"platform: `query: \"SELECT ...\"` answers with the rows, one call, nothing stored and "
+			"nothing written. Reach for it whenever you want to KNOW something about the base - how "
+			"many documents are unposted, what a register holds, what the largest payments are - "
+			"and not only when there is a report involved.\n"
+			  "\n"
+			"🛑 THE OTHER ROAD IS THE WRONG ONE FOR A QUESTION. `code_run` executes configuration "
+			"code as a BACKGROUND JOB: it answers with a session id, never with a value, so the only "
+			"way to see what it worked out is to have it write journal lines and read them back - "
+			"three calls and a hand-parse for one number. That is right for WRITING (it is how 205 "
+			"documents get posted) and wrong for asking. Measured on this server, 2026-09-07: a "
+			"whole day of measurements taken the long way round while this verb was one call away.\n"
+			  "\n"
+			"WITH A REPORT it does the rest of what is below - one table per output. report_get says "
 			"what a report IS; this says what it produces. It is the verb for every question about "
 			"NUMBERS: 'my numbers do not add up', 'why does this report show that', 'BUILD me a NEW "
 			"REPORT', 'show me an EXAMPLE of how it would work', and TESTING or CHECKING a report "
@@ -379,7 +425,7 @@ public:
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
 		static const std::vector<ibMcpArgument> s_arguments = {
-			ArgId(/*required*/ false), ArgSchema(), ArgVariant(), ArgSettings(), ArgUser(),
+			ArgId(/*required*/ false), ArgQuery(), ArgSchema(), ArgVariant(), ArgSettings(), ArgUser(),
 			ArgParameters() };
 		return s_arguments;
 	}
@@ -400,14 +446,30 @@ public:
 
 		const ibDataNode* givenSchema = params.FindChild(ArgSchema().Name());
 		const bool        namedReport = params.FindField(ArgId(false).Name()) != nullptr;
+		const wxString    bareQuery   = ArgQuery().Text(params);
 
-		if (givenSchema != nullptr && namedReport) {
-			refusal = ibMcpText("Pass one or the other: `id` runs a report's own schema, `schema` runs the "
-				"one you are handing over. Two of them is two answers to 'what is being run'.");
+		// ⚠ THREE SOURCES FOR ONE FIELD, AND EXACTLY ONE MAY SPEAK. Two of them is two answers to
+		// "what is being run", and picking a winner silently is how a caller comes to believe they
+		// ran something they did not.
+		const int given = (givenSchema != nullptr ? 1 : 0) + (namedReport ? 1 : 0)
+			+ (bareQuery.IsEmpty() ? 0 : 1);
+
+		if (given > 1) {
+			refusal = ibMcpText("Pass ONE of them: `id` runs a report the configuration has, `schema` runs "
+				"a composition you are handing over, `query` runs a bare question. More than one is "
+				"more than one answer to 'what is being run'.");
 			return false;
 		}
 
-		if (givenSchema != nullptr) {
+		if (!bareQuery.IsEmpty()) {
+			// THE SAME DESCRIPTION `schema` WOULD HAVE CARRIED. A composition is a query plus a
+			// variant; the variant a bare question wants is the default one, which every description
+			// is constructed with. So there is nothing to assemble — the text goes in and the walk
+			// reads the query's own rows.
+			description.SetQuery(bareQuery);
+			subject = ibMcpText("the query given");
+		}
+		else if (givenSchema != nullptr) {
 			if (!ibCompositionDescriptionMemory::ReadNode(*givenSchema, description, activeMetaData)) {
 				refusal = ibMcpText("`schema` could not be read as a composition. report_get on any report "
 					"shows the shape one has.");

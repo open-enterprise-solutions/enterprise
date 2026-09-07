@@ -16,6 +16,7 @@
 #include "backend/compiler/compileCode.h"   // the code is COMPILED here, against this application
 #include "backend/compiler/compileModule.h" // ...parented to the root, which is what it must see
 #include "backend/moduleInfo.h"             // GetCompileModule - which is how the root is asked for
+#include "backend/stringUtils.h"            // CompareString - how this tree compares a NAME
 #include "backend/fileSystem/fs.h"          // ibWriterMemory / ibReaderMemory - the wire format below
 
 #include <wx/app.h>                         // wxTheApp - the thread that may touch a window
@@ -268,6 +269,46 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 			// declarations and is registered without running; this is the opposite kind of code, a
 			// body written to be executed once.
 			runner.Execute(compiler.m_cByteCode, answer, /*delta*/ true);
+
+			// ⭐⭐ AND WHAT IT CAME OUT WITH — the variable called `Result`, which is the word the
+			// sandbox already uses for exactly this ("the last value, or `Result`, comes back as the
+			// answer", mcpToolDebug.cpp). Not a new convention: the same one, arriving at the other
+			// road that runs somebody's statements.
+			//
+			// 🛑 A MODULE BODY YIELDS NOTHING, AND `Return` IS REFUSED IN ONE — "Operator Return
+			// cannot be used outside the procedure or function", which is correct and is not a way
+			// out. So the whole plumbing for a result stood built and always empty: `m_result` on the
+			// state, a field on the wire, a `result` key in the answer, `run.Result()` behind them —
+			// and nothing ever put a value in. Measured 2026-09-07: every question that needed CODE
+			// rather than a query was asked by writing journal lines and reading them back, three
+			// calls and a hand-parse, because a run had no answer to give.
+			//
+			// ⚠ ASKED OF THE FRAME THAT JUST RAN, by SLOT — and the slot is looked up here rather
+			// than through `GetPropVal(name)`, because that one answers only for EXPORT variables
+			// (`FindProp` skips every other kind, correctly: an export is a property of the module's
+			// value and a local is not). `Result = 42;` declares a LOCAL, which is exactly what
+			// somebody writing a few statements writes, so asking by name found nothing and the run
+			// came back empty anyway (measured 2026-09-07, first try).
+			//
+			// ⚠ LOCAL AND EXPORT, AND NOTHING ELSE: an External / Context / ContextProp entry's
+			// `m_slotIndex` is not a frame slot at all — reading the frame at that index would
+			// answer with whatever happens to live there.
+			//
+			// Absent is not a failure: a run that writes documents has nothing to return and says
+			// so by leaving the key out.
+			for (const auto& declared : compiler.m_cByteCode.m_listVar) {
+
+				if (!declared.IsLocal() && !declared.IsExport())
+					continue;
+
+				if (!stringUtils::CompareString(wxT("Result"), declared.m_strRealName))
+					continue;
+
+				ibValue produced;
+				if (runner.GetPropVal((long)declared, produced))
+					answer = produced;
+				break;
+			}
 		}
 		catch (...) {
 			// ⚠ THE ROLLBACK IS OUTSIDE EVERY EXIT. A throw is a likely end for sent code, and a

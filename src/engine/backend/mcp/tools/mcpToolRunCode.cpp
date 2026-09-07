@@ -126,7 +126,17 @@ const ibArg& ArgText()
 			  "is a perfectly good run, and so is fifty lines that select documents and repost "
 			  "them. Writing the code as a common module first is still worth doing when somebody "
 			  "will want to read it or run it again next month - but it is a choice about the "
-			  "configuration, not a toll on trying something once."), /*required*/ true);
+			  "configuration, not a toll on trying something once.\n"
+			  "\n"
+			  "TO HAND SOMETHING BACK, ASSIGN IT TO `Result` - `Result = someValue;` - and it comes "
+			  "back under `result` when the run finishes. `Return` does not work here and cannot: "
+			  "this is a module body, not a function. Without it a run has no answer at all, and the "
+			  "only way to see what it worked out is to have it write journal lines and read them "
+			  "back afterwards.\n"
+			  "\n"
+			  "🛑 AND IF THE QUESTION IS ABOUT DATA, THIS IS THE WRONG VERB. `compose_run {query: "
+			  "\"SELECT ...\"}` answers with the rows in ONE call. Use this one for what only CODE "
+			  "can do: posting documents, calling a common module, filling a base."), /*required*/ true);
 	return s_a;
 }
 
