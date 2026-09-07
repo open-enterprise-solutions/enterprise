@@ -149,6 +149,19 @@ class BACKEND_API ibDebuggerClient {
 		wxString GetComputerName() const { return m_compName; }
 		wxString GetUserName() const { return m_userName; }
 
+		// ⭐⭐ WHICH REVISION THE PROCESS OVER THERE IS RUNNING. The handshake has always carried
+		// both halves — the configuration's GUID and its digest — and only the GUID was ever asked:
+		// `m_verifiedConnection` answers "the same configuration", which is the right question for
+		// deciding whether to attach at all, and says nothing about whether it is the same VERSION
+		// of it. An application keeps what it read at startup — metadata, bytecode, which registers
+		// a document posts to — so a change applied afterwards leaves it correct for a
+		// configuration nobody is looking at any more.
+		//
+		// That is the one failure this surface cannot show as a failure: the code runs, nothing
+		// raises, and the change simply does not appear. The digest was on the wire all along
+		// (debugClient.cpp, CommandId_VerifyConnection); it only needed asking.
+		wxString GetConfigMD5() const { return m_md5Hash; }
+
 		ConnectionType GetConnectionType() const { return m_connectionType; }
 
 		void AttachConnection();

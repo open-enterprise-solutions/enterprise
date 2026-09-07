@@ -477,8 +477,22 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 		m_configNew = false;
 	}
 	else {
+		// ⭐ THE PAIR IS HOW THE LATCH IS CUT, and that is the FIRST call's whole job: `Modify(false)`
+		// re-arms `m_metaSetModify` from `IsConfigSave()` (metadataConfiguration.h), which is what
+		// makes the star go out when a save is what the person asked for.
 		Modify(false);
-		Modify(true);
+
+		// 🛑⭐⭐ …AND THE SECOND ONLY WHEN THERE IS SOMETHING TO SAY. It states "this differs from the
+		// database", which is true of a save that did not publish — and false the moment the base
+		// already holds this configuration. Said unconditionally, `config_apply` followed by an
+		// ordinary `config_save` left BOTH marks lit on a configuration the database holds: the
+		// pane's caption showed `Configuration *` with `database_diff` answering 0, and
+		// `platform_state` reported `editedSinceApplied` with nothing edited (measured over MCP,
+		// 2026-09-07). Max, watching it: *"the star is lit, and there is nothing behind it"*.
+		//
+		// The latch above is cut either way; what is conditional is the CLAIM.
+		if (!IsConfigSave())
+			Modify(true);
 	}
 
 	return !db_query->IsActiveTransaction();

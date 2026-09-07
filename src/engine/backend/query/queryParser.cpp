@@ -1255,7 +1255,19 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 		return ParseCase();
 
 	// aggregate function
-	if (IsAggregateKw(tk))
+	//
+	// ⭐⭐ AN AGGREGATE NAME WITHOUT A `(` IS A COLUMN, and this is the FOURTH place that rule has
+	// been needed — ORDER BY items, names after a `.`, the keyword branch below, and now here. A
+	// configuration is entitled to call an attribute `Sum`, `Count` or `Min`; our grammar is not a
+	// fact about the user's data, and a document line that stores its total in a field called `Sum`
+	// is the most ordinary thing in an accounting base there is.
+	//
+	// MEASURED 2026-09-07: `SELECT SUM(Sum) FROM Document.GoodsIssue.Goods` died with "expected '('
+	// after an aggregate function" pointing at the INNER word — a message that describes the
+	// parser's state rather than the caller's mistake, and that reads as if the query language were
+	// broken. `SUM(g.Sum)` worked, which made it look like a rule about qualification. It was not;
+	// it was this branch taking the word before asking whether a call follows.
+	if (IsAggregateKw(tk) && PeekIsPunct(1, wxT('(')))
 		return ParseAggregate();
 
 	// ranking function — ROW_NUMBER() / RANK() / DENSE_RANK() OVER (…)

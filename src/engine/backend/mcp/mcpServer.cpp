@@ -1450,6 +1450,39 @@ static wxString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const wxString& giv
 			names += wxT(", ");
 		names += declared.first;
 
+		// ⭐⭐ AND WHICH OF THEM IS THE ONE THE VERB CANNOT WORK WITHOUT. A bare list of four names
+		// still leaves the caller choosing between them, and the choice is not always obvious from
+		// the word: `code_run` takes `text`, `said`, `commit`, `understood`, and which of those
+		// carries the CODE is a guess until something says `text` is required (measured 2026-09-07 —
+		// two wasted calls on one tool, `code` and then `session`). A shape is added only when it is
+		// not a string, because passing a word where a flag or a number belongs is the other half
+		// of the same mistake.
+		for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
+
+			if (!argument.Name().IsSameAs(declared.first, false))
+				continue;
+
+			wxString marks;
+			if (argument.IsRequired())
+				marks = ibMcpText("required");
+
+			switch (argument.KindOf()) {
+				case ibMcpTool::ibMcpArgument::Kind::Whole:
+					marks += (marks.IsEmpty() ? wxT("") : wxT(", ")); marks += ibMcpText("integer"); break;
+				case ibMcpTool::ibMcpArgument::Kind::Flag:
+					marks += (marks.IsEmpty() ? wxT("") : wxT(", ")); marks += ibMcpText("boolean"); break;
+				case ibMcpTool::ibMcpArgument::Kind::Many:
+					marks += (marks.IsEmpty() ? wxT("") : wxT(", ")); marks += ibMcpText("array");   break;
+				case ibMcpTool::ibMcpArgument::Kind::Node:
+					marks += (marks.IsEmpty() ? wxT("") : wxT(", ")); marks += ibMcpText("object");  break;
+				default: break;
+			}
+
+			if (!marks.IsEmpty())
+				names += wxT(" (") + marks + wxT(")");
+			break;
+		}
+
 		// NEAR ENOUGH TO BE A TYPO: one name inside the other (`parent` in `parent_id`, `value` in
 		// `values`). Deliberately not a distance measure — this is a nudge, and a wrong nudge is
 		// worse than none when the full list is right beside it.
@@ -2852,6 +2885,26 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 					!missing.IsEmpty()) {
 					refusal = wxString::Format(
 						_("'%s' needs '%s', and it did not come. Nothing was done."), name, missing);
+
+					// ⭐ AND WHAT THAT ARGUMENT IS, in the words the schema already uses. A name on
+					// its own sends the caller off to read the schema — the same round trip the
+					// unknown-name refusal above exists to avoid — and for an argument whose word
+					// does not carry its meaning (`position`, `understood`, `said`) the trip is the
+					// only way to find out. One sentence, taken from the declaration, ends it.
+					for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
+
+						if (!argument.Name().IsSameAs(missing, false))
+							continue;
+
+						wxString says = argument.Description();
+						const int stop = says.Find(wxT(". "));
+						if (stop != wxNOT_FOUND)
+							says = says.Left(stop + 1);
+
+						if (!says.IsEmpty())
+							refusal += wxT(" ") + missing + wxT(" - ") + says;
+						break;
+					}
 				}
 				// …AND THE THIRD HALF OF THE SAME GATE: an argument that came in the wrong SHAPE, or
 				// a word outside the closed set the schema publishes. The name gate and the missing

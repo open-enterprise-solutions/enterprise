@@ -499,6 +499,97 @@ public:
 			result.SetValue(wxT("note"),
 				ibMcpText("A trial: everything this writes will be undone. What comes back is what really "
 					  "happened - read it before running the same thing with commit."));
+
+		// ⭐⭐ SAID WITH THE ANSWER, BECAUSE THE SYMPTOM IS AN ANSWER THAT LOOKS FINE. The application
+		// read the configuration as it came up and kept it — metadata, bytecode, which registers a
+		// document posts to. Change any of that afterwards and the run over there goes on being
+		// right for the configuration it is holding: the code executes, nothing raises, and the
+		// change simply does not appear. That is the one failure this surface cannot show as a
+		// failure, so it is reported beside the result rather than instead of it.
+		//
+		// ⚠ A NOTE AND NOT A REFUSAL. Reading data, watching a journal, running a query against the
+		// base a colleague is using are all perfectly good things to do while a configuration is
+		// half-edited here; refusing them would trade a rare wrong belief for a constant obstacle.
+		//
+		// TWO DIFFERENT STATES, AND THEY NEED DIFFERENT DOORS. Changes the base does not have yet
+		// cannot be reached by restarting anything — config_apply first. Changes the base HAS, made
+		// after the run started, need the run to come up again.
+		// ⭐⭐ ASKED OF THE DEBUGGER, WHICH IS ALREADY HOLDING THE ANSWER. The run this verb speaks
+		// to is attached over that wire, and its handshake carries the configuration's GUID and its
+		// DIGEST (CommandId_VerifyConnection). The GUID has always been checked — it is the guard
+		// that stops two designers on physically different bases from attaching to one another,
+		// which is a question about IDENTITY. The digest, arriving in the same message, answers a
+		// different one: same configuration, is it the same VERSION. Nothing asked it.
+		//
+		// 🛑 The first version of this remembered the digest at `app_run` in a static of its own —
+		// a second number for a fact already on the wire, and one that could not speak for a run
+		// somebody else had started (Max, 2026-09-07: *"the running application is there in the
+		// debugger"*).
+		wxString running;
+		if (debugClient != nullptr) {
+			for (const auto* connection : debugClient->GetListConnection()) {
+				if (connection == nullptr)
+					continue;
+				const wxString digest = connection->GetConfigMD5();
+				if (!digest.IsEmpty()) {
+					running = digest;
+					break;
+				}
+			}
+		}
+
+		// ⭐⭐ THE SAME PAIR THE DESIGNER'S OWN CAPTION PAINTS, and asked the same way round — so the
+		// window and this answer cannot say different things about one configuration. The metadata
+		// pane writes `Configuration *<!>`: the star for `IsEdited()`, edits that exist in THIS
+		// PROCESS and nowhere else; the `<!>` for `!IsConfigSave()`, the database not holding this
+		// configuration (mainFrameDesigner.cpp, and the state lives on the metadata precisely so
+		// that anything else can reach it).
+		//
+		// 🛑 BOTH MARKS CAN BE LIT AT ONCE, which is the whole reason the caption paints two of them
+		// rather than choosing (Max, 2026-09-07: *"they can both be true — then it is a
+		// combination"*). Written here as `if edited … else if …`, the second fact disappeared the
+		// moment the first held.
+		const bool edited     = activeMetaData != nullptr && activeMetaData->IsEdited();
+		const bool notApplied = activeMetaData != nullptr && !activeMetaData->IsConfigSave();
+
+		// …AND THE THIRD CASE, which neither flag can see: nothing pending at all, and the run
+		// simply older than the last applying. That comes off the debugger's own handshake, above.
+		const bool moved = !running.IsEmpty() && activeMetaData != nullptr
+			&& !running.IsSameAs(activeMetaData->GetConfigMD5());
+
+		// EACH FACT ITS OWN CLAUSE. "Edited here" and "the database has not got this configuration"
+		// together are the ordinary state of an afternoon's work, not an exotic one — and a reader
+		// told only the first would apply their edits and expect to be level, being wrong by however
+		// much the base was behind to begin with.
+		wxString what;
+
+		if (edited)
+			what = ibMcpText("it has been edited in this process and nowhere else");
+
+		if (notApplied) {
+			if (!what.IsEmpty())
+				what += ibMcpText(", and besides that ");
+			what += ibMcpText("the database does not hold this configuration at all");
+		}
+
+		if (what.IsEmpty() && moved)
+			what = ibMcpText("nothing is pending, but the run came up before the last applying");
+
+		if (!what.IsEmpty()) {
+			// ⭐ AND THE DOOR IS CHOSEN BY WHAT IS TRUE, not by which clause was written first. A
+			// restart alone is enough only when the base already holds everything; anything pending
+			// has to be published before a restart can pick it up.
+			result.SetValue(wxT("configuration"), wxString::Format(
+				ibMcpText("THE RUN IS NOT WORKING FROM WHAT IS OPEN HERE: %s. An application works "
+				  "from what the DATABASE holds and keeps what it read at startup - modules, and "
+				  "which registers a document posts to. %s"),
+				what,
+				(edited || notApplied)
+					? ibMcpText("database_diff says what of it reaches the schema, config_apply "
+						  "publishes it, and app_run {restart: true} after that.")
+					: ibMcpText("app_run {restart: true} brings it up on the current one.")));
+		}
+
 		return true;
 	}
 };

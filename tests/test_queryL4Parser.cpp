@@ -147,6 +147,33 @@ TEST(QueryL4Parser, AggregateGroupByHaving)
 	EXPECT_EQ(sel->m_having->m_lhs->m_kind, ibQueryAstExprKind::Func);
 }
 
+TEST(QueryL4Parser, AnAggregateNameWithoutACallIsAColumn)
+{
+	// THE SAME RULE AS `OrderByStillReadsAKeywordAsAName`, ARRIVING AT THE AGGREGATES. A document
+	// line that keeps its total in a field called `Sum` is the most ordinary thing in an accounting
+	// base there is, and `SUM(Sum)` used to die on "expected '(' after an aggregate function"
+	// pointing at the INNER word — a message about the parser's state, not about the query. The
+	// branch took the word before asking whether a call followed.
+	//
+	// Qualifying it (`SUM(g.Sum)`) worked, which made the refusal look like a rule about
+	// qualification. It was not.
+	auto sel = Parse(wxT("SELECT SUM(Sum) AS s, Count FROM Document.GoodsIssue.Goods"));
+	ASSERT_TRUE(sel != nullptr);
+	ASSERT_EQ(sel->m_projections.size(), 2u);
+
+	const ibQueryAstExprPtr& agg = sel->m_projections[0].m_expr;
+	ASSERT_EQ(agg->m_kind, ibQueryAstExprKind::Func);
+	EXPECT_EQ(agg->m_func, ibQueryKeyword::Sum);
+	ASSERT_TRUE(agg->m_arg != nullptr);
+	EXPECT_EQ(agg->m_arg->m_kind, ibQueryAstExprKind::Column);
+	ASSERT_EQ(agg->m_arg->m_path.size(), 1u);
+	EXPECT_EQ(agg->m_arg->m_path[0], wxT("Sum"));
+
+	// …and one standing on its own in the select list, with no call anywhere near it.
+	EXPECT_EQ(sel->m_projections[1].m_expr->m_kind, ibQueryAstExprKind::Column);
+	EXPECT_EQ(sel->m_projections[1].m_expr->m_path[0], wxT("Count"));
+}
+
 TEST(QueryL4Parser, CountStar)
 {
 	auto sel = Parse(wxT("SELECT COUNT(*) AS n FROM Document.Orders"));
