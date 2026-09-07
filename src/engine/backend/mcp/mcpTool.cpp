@@ -918,8 +918,21 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			entry->SetValue(wxT("select"), wxString(
 				mode == ibPropertyChoiceMode::Mult ? wxT("multiple") : wxT("single")));
 
-			// The current one as a word too, so reading and writing speak the same language.
-			entry->SetValue(wxT("value"), current);
+			// 🛑⭐⭐ A SET IS NEVER EQUAL TO ONE CANDIDATE. The loop above compares the held value
+			// against each choice in turn, which answers for a property that holds ONE of them and
+			// cannot answer for a property whose value IS the set: `current` stayed empty for every
+			// relationship in the configuration, so a document posting to two registers and a
+			// document posting to none read exactly alike (measured over this server, 2026-09-07,
+			// while wiring a shipment to the settlements register — the only way to see the binding
+			// was metadata_bind, and nothing here said so).
+			//
+			// ⭐ THE TWO HALVES ARE ASKED OF THE TWO THINGS THAT HOLD THEM: what it IS, of the
+			// VALUE — the variant renders the whole relationship itself, which is the same string
+			// the designer's property sheet shows; what it ACCEPTS, of the LIST, which is already
+			// beside it. Nothing here takes the value apart, and nothing resolves an id against the
+			// configuration: the value can say itself and the list is already the vocabulary.
+			entry->SetValue(wxT("value"),
+				mode == ibPropertyChoiceMode::Mult ? held.MakeString() : current);
 		}
 		else if (const ibPropertyTString* caption =
 					dynamic_cast<const ibPropertyTString*>(property)) {

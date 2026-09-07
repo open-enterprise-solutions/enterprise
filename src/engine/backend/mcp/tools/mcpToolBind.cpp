@@ -127,6 +127,11 @@ Binding BindingNamed(ibValueMetaObject* object, const wxString& name, wxString& 
 
 // What the binding holds, as names — the reading side, so a caller can see what a write did
 // instead of being told it succeeded.
+//
+// ⚠ AN ARRAY HERE, A STRING IN metadata_get, AND BOTH ARE RIGHT. This tool is ABOUT the binding, so
+// it answers with the members one by one and names an id that resolves to nothing — a binding
+// pointing at a deleted object is exactly what somebody asking this verb wants to see. A property
+// walk is about the object, and there the value says itself the way the variant renders it.
 std::vector<ibDataValue> BoundNames(ibMetaData* metaData, const ibMetaDescription& description)
 {
 	std::vector<ibDataValue> names;
@@ -298,12 +303,14 @@ public:
 
 			result.SetValue(wxT("target"), choices.GetName(index));
 
-			// ⚠ ASKED AGAIN, NOT REUSED. The write replaced the variant `binding.held` points into,
-			// so reading it here would report the value that has just been let go.
-			if (const ibVariantDataMetaDesc* now =
-					binding.property->find_cell_variant<ibVariantDataMetaDesc>())
-				result.AddField(wxT("bound"),
-					ibDataValue::Array(BoundNames(activeMetaData, now->GetMetaDesc())));
+			// ⭐ SAID FROM THE SET THAT WAS PLACED, and there is nothing left to go and read. This
+			// used to reach back into the property's cell for a fresh variant — for a good reason
+			// that had stopped applying: `binding.held` points into the value the write let go, so
+			// reporting THAT would report the old relationship. But the new one is not somewhere
+			// else to be found; it is `set`, composed three lines up out of what GetValueList
+			// offered, and placed through the gate, which returned false if it did not land.
+			// Asking the property to hand it back again is one more cast for a value already held.
+			result.AddField(wxT("bound"), ibDataValue::Array(BoundNames(activeMetaData, set)));
 			break;
 		}
 
@@ -321,12 +328,15 @@ public:
 			return false;
 		}
 
-		// ⭐ THE ANSWER IS THE READING, not a claim of success. If the platform declined the
-		// target, `bound` says so by not containing it — which is the only report that cannot be
-		// wrong.
+		// ⭐ THE ANSWER IS THE SET THAT WAS PLACED, and the sentence says that rather than promising
+		// a re-reading it no longer does. A write that the platform declined does not reach here at
+		// all — ibMcpApplyByHand returns false and the refusal is the answer — so what `bound` is
+		// worth is exactly "this is what went in". A caller who wants the other kind of assurance
+		// asks this verb again without a target, which reads the binding and nothing else.
 		result.SetValue(wxT("note"),
-			ibMcpText("`bound` is read back from the binding after the change - if the target is not in "
-			  "it, the platform did not take it."));
+			ibMcpText("`bound` is the set as it was placed. A change the platform declined would have "
+			  "come back as a refusal instead of an answer; to read the binding on its own, ask "
+			  "again without a target."));
 
 		return true;
 	}

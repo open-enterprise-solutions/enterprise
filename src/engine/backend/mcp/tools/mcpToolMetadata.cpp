@@ -1563,6 +1563,34 @@ public:
 			return false;
 		}
 
+		// 🛑⭐⭐ A PROPERTY WHOSE VALUE IS A SET IS REFUSED HERE, AND IT USED TO GO THROUGH — BY
+		// REPLACEMENT. This tool's own description has said for weeks that relationships belong to
+		// metadata_bind "because they hold METAOBJECTS and several of them at once"; nothing
+		// enforced it. So the VALUE was checked — a name outside the candidate list was refused,
+		// naming the list — while the VERB was not, and one accepted name replaced the whole set.
+		//
+		// MEASURED 2026-09-07: `metadata_set {GoodsIssue, ListRegisterRecord, "Settlements"}` was
+		// accepted, and it unbound the document from the warehouse register it had always written.
+		// The next posting died on `RegisterRecords.GoodsInWarehouses` — a line nobody had touched,
+		// in a module nobody had edited. A refusal that names the right verb costs one call; this
+		// cost a broken document and the hour it takes to suspect a binding.
+		//
+		// ⭐ THE PROPERTY IS ASKED, NOT THE VALUE. `Mult` is its own answer to "how many of these at
+		// once" (propertyObject.h), and it is the whole test — no cast, no reaching into what the
+		// variant holds. A property that starts answering Mult tomorrow is covered the same day.
+		ibPropertyChoiceList offered;
+		if (property->GetValueList(offered) == ibPropertyChoiceMode::Mult) {
+			refusal = wxString::Format(
+				ibMcpText("'%s' holds SEVERAL AT ONCE - its value is the set, not one member - so "
+					  "setting it here would replace everything in it with the one thing named. "
+					  "Use metadata_bind {id: %i, property: \"%s\", target: \"...\"}, which ADDS to "
+					  "the set and tells the other end of the relationship; pass `remove` to take "
+					  "one out, or `only` when replacing the set really is what you mean. Called "
+					  "without a target it reads back what is bound."),
+				name, (int)object->GetMetaID(), name);
+			return false;
+		}
+
 		// ⭐⭐ THROUGH THE ONE DOOR, not through a copy of it. `ibMcpSetProperty` (mcpTool.cpp) is
 		// where a value is placed on a property: the word of a closed set, the cell of ONE language
 		// of a caption, the shape a composite takes, and the refusals that name what was wrong.
