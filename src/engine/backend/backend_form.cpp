@@ -75,9 +75,20 @@ ibBackendValueForm* ibBackendValueForm::FindFormBySourceUniqueKey(const ibUnique
 	return nullptr;
 }
 
+// ⭐⭐ AND THIS ONE IS THE OTHER KIND — IT TELLS, IT DOES NOT ASK. Every function above hands a form
+// BACK, so a process with no windows cannot answer them and must say so. This one hands a form
+// nothing but news: a record whose key floats over its dimensions has just been re-keyed, and any
+// window still showing it under the old key needs to know. Where there are no windows the honest
+// answer is "nobody was re-keyed" — false — and not a refusal, because nothing was asked for.
+//
+// 🛑 MEASURED 2026-09-07: it raised, and it took the WRITE with it. `RecordManager.Write()` calls
+// this between storing the row and committing (informationRegisterObject.cpp), so filling an
+// information register from a background job — no frame, by construction — failed on its first
+// record with "context functions are not available: this is a server". Nothing about that write
+// needed a window. The rule lives here rather than in a try/catch at the call site for the usual
+// reason: the next caller of a TELL verb would have to remember, and would not.
 bool ibBackendValueForm::UpdateFormUniqueKey(const ibUniqueKeyPair& guid)
 {
 	if (ibSession::CurrentFrame() != nullptr) return ibSession::CurrentFrame()->UpdateFormUniqueKey(guid);
-	ibBackendFormException::Error();
-	return false;
+	return false;   // no windows in this process — nothing showing the old key, nothing to re-key
 }
