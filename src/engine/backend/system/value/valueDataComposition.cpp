@@ -1,5 +1,6 @@
 #include "backend/system/value/valueDataComposition.h"
 #include "backend/compositionDescription.h"   // WHAT a saved composition consists of — the one file
+#include "backend/composition/composeEvaluate.h"   // …and how a parameter WORKED OUT is worked out
 #include "backend/appData.h"                         // appData / GetActiveMetaData
 #include "backend/query/queryable.h"                 // ibBackendQueryable
 #include "backend/query/queryableFactory.h"          // ibQueryableSourceDescriptor (source holder + its command surface)
@@ -526,48 +527,13 @@ void ibValueDataComposition::SyncParametersWithQuery()
 // even show there was an error").
 //
 // `produced` still carries the reason on failure, so the caller has something to show.
-static bool ibEvaluateInRoot(const wxString& expression, ibValue& produced,
-	const ibMetaData* metaData)
-{
-	produced = ibValue();
-	if (expression.IsEmpty())
-		return true;   // nothing to evaluate is not a failure
-
-	auto* state = ibSession::GetPUState();
-	ibRunContext* current = state != nullptr ? state->GetCurrentRunContext() : nullptr;
-
-	if (current != nullptr)
-		return ibProcUnit::Evaluate(expression, current, produced, false);
-
-	// NO FRAME OF OUR OWN — borrow the root module's. The context is a frame descriptor: it carries
-	// the ProcUnit whose bytecode the expression is compiled against, which is exactly what "attached
-	// to the root" means.
-	ibSession* session = ibSession::Current();
-	ibValueModuleManagerRuntimeConfiguration* root = session != nullptr ? session->GetManagerModule() : nullptr;
-	auto rootUnit = root != nullptr ? root->GetProcUnit() : nullptr;
-
-	// ⭐⭐ AND IN THE DESIGNER THE ROOT IS THE EDIT MANAGER. There is no runtime root there, and this
-	// used to answer "true, nothing produced" — success with an empty value, which the caller cannot
-	// tell from an expression that legitimately evaluated to nothing. So a composer's parameter
-	// expression was silently ignored for everyone building a report, which is precisely where it is
-	// written (Max, 2026-09-01, pointing at it: *"look at how the expression in a report works —
-	// there is exactly the same problem"*).
-	//
-	// ibSession::GetEditModuleManager is the seam for this: the manager whose context a module
-	// compiled against THIS configuration parents to — the Designer's lightweight one, the session's
-	// root at runtime. The same door script checking was just given.
-	if (!rootUnit) {
-		if (ibValueModuleManager* editManager = ibSession::EditModuleManagerFor(metaData))
-			rootUnit = editManager->GetProcUnit();
-	}
-
-	if (!rootUnit)
-		return true;   // no context at all — nothing to evaluate against, and nothing invented
-
-	ibRunContext rootFrame;
-	rootFrame.SetProcUnit(rootUnit.get());
-	return ibProcUnit::Evaluate(expression, &rootFrame, produced, false);
-}
+//
+// ⭐ AND IT LIVES IN composeEvaluate.{h,cpp} NOW. It stood here as a static and again, file-local, in
+// composeRunSchema.cpp — each with a comment pointing at the other and an obligation to agree. They
+// had already stopped agreeing: this one knew about the designer's edit manager and that one did
+// not, so an expression evaluated when a report was generated from script and refused when the same
+// report was read over the wire. Everything the note above says is still true of it; what changed is
+// that there is one of it.
 // ⭐⭐ WHAT A RUN IS GIVEN — WORKED OUT HERE AND KEPT HERE. Nothing is written back into the
 // description: a description is DATA, and an evaluated parameter is a runtime value — a reference
 // with a session behind it, the result of an expression. Writing them into the description put

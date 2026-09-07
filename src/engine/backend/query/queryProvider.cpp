@@ -943,6 +943,13 @@ bool SubtreeProvides(const ibQueryNode* node, const ibBackendQueryColumn* col)
 // IsReferenceAttribute. (docs §22.1)
 const ibBackendQueryColumn* SelfReferenceColumn(const ibBackendQueryable* q)
 {
+	// ⚠ NO SOURCE, NO KEY — and this is asked of things that legitimately have none. The callers
+	// hand over whatever `ResolveReferenceTarget` answered, and a COMPOSITE reference has no single
+	// target to answer with: it returns null by design and the caller is meant to skip the hop.
+	// Taking a pointer and dereferencing it regardless made "there is no such target" into a crash.
+	if (q == nullptr)
+		return nullptr;
+
 	const std::vector<const ibBackendQueryColumn*> keys = q->GetPrimaryKeyColumns();
 	return keys.empty() ? nullptr : keys.front();
 }
@@ -1004,10 +1011,25 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 		for (size_t i = 0; i + 1 < path.size(); ++i) {
 			const ibBackendQueryColumn* refCol = path[i];
 			const ibBackendQueryable*   tgtQ   = (curQ != nullptr) ? curQ->GetProvider().ResolveReferenceTarget(curQ, refCol) : nullptr;
+
+			// 🛑⭐⭐ THE GUARD STOOD ONE LINE TOO LATE, AND THE CASE IT GUARDS IS THE COMMON ONE. A
+			// COMPOSITE reference — a register's Recorder, which is a shipment or a payment — has no
+			// single target, so ResolveReferenceTarget answers null ON PURPOSE and this hop is meant
+			// to be skipped. The skip was written; it just sat below a line that had already walked
+			// through the null.
+			//
+			// MEASURED 2026-09-07 from a crash dump: asking to see the RECORDER in a settlements
+			// report's detailed records took the composer down (`ShowUserSettings` → Compose →
+			// ResolveComputedDotWalks → SelfReferenceColumn, access violation, faulting local `q`).
+			// Looking at the document behind a movement is the most ordinary thing anybody does with
+			// a turnover report.
+			if (tgtQ == nullptr)
+				break;   // not a single-target reference — the leaf stays absent, a null cell
+
 			const ibBackendQueryColumn* tgtKey = SelfReferenceColumn(tgtQ);
 			const ibBackendQueryColumn* bring  = path[i + 1];   // the next hop's ref column, or the final leaf
-			if (tgtQ == nullptr || tgtKey == nullptr)
-				break;   // not a single-target reference — the leaf stays absent (a null cell), like the door's guard
+			if (tgtKey == nullptr)
+				break;   // a target that is not a reference TARGET (a register, a temp) — same answer
 			prefixKey += wxString::Format(wxT("%p|"), (const void*)refCol);
 			if (joined.find(prefixKey) == joined.end()) {
 				const ibQueryRamTable tgt = MaterialiseLeaf(tgtQ, spec.m_holder, {}, { tgtKey, bring });

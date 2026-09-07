@@ -60,8 +60,35 @@ void ibMcpDebugBridge::Detach()
 
 ibMcpDebugBridge::Stop ibMcpDebugBridge::GetStop() const
 {
-	std::lock_guard<std::mutex> lock(m_mutex);
-	return m_stop;
+	Stop answer;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		answer = m_stop;
+	}
+
+	// ⭐⭐ "IS ANYTHING RUNNING" IS ASKED OF THE CLIENT, WHICH HOLDS THE CONNECTIONS — it is not this
+	// bridge's fact to remember. The rest of a Stop genuinely is: where the runtime halted, its stack,
+	// its locals, all of which exist only as the standing consequence of an event. Connectedness is
+	// different — the debug client keeps the list, and a list is the answer.
+	//
+	// 🛑 REMEMBERED, IT WAS ONE BIT FOR A SET. `OnSessionEnd` wipes the whole Stop, and it arrives
+	// once per runtime that goes: with two applications attached, closing either one told everything
+	// reading this bridge that nothing was running. `debug_sessions` — which counts the live
+	// connections — went on answering "1 attached, ready" in the same breath, and `compose_run`
+	// refused with "no application is running" against an application that was running perfectly
+	// well (measured 2026-09-07 with two clients on one base).
+	answer.m_connected = false;
+
+	if (debugClient != nullptr) {
+		for (const auto* connection : debugClient->GetListConnection()) {
+			if (connection != nullptr && connection->IsConnected()) {
+				answer.m_connected = true;
+				break;
+			}
+		}
+	}
+
+	return answer;
 }
 
 void ibMcpDebugBridge::Running()
@@ -455,6 +482,12 @@ void ibMcpDebugBridge::OnSessionEnd(wxSocketClient* sock)
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
+
+		// ⚠ THE STOP IS DROPPED, AND THAT IS RIGHT WHICHEVER RUNTIME LEFT: a stack and its locals
+		// belong to one halted process, and keeping them past its going would let a reader take a
+		// dead frame for a live one. Whether anything is still attached is NOT settled here — see
+		// GetStop, which asks the client rather than this bit, because one bit cannot speak for a
+		// set and this event arrives once per member of it.
 		m_stop = Stop();
 	}
 	Announce(wxT("debugger: the runtime disconnected"));

@@ -1,6 +1,21 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClCompile Include="mainFrame\settings\mcpsettingspanel.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolComplete.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolForms.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="settings\formSettings.cpp">
+      <Filter>settings</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\selectPredefined.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
     <ClCompile Include="syntaxHelper\helpChooserDialog.cpp">
       <Filter>syntaxHelper</Filter>
     </ClCompile>
@@ -1075,6 +1090,15 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="mainFrame\settings\mcpsettingspanel.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="settings\formSettings.h">
+      <Filter>settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\selectPredefined.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\settings\composer\composerSettings.h">
       <Filter>win\dlgs\settings\composer</Filter>
     </ClInclude>
@@ -1922,6 +1946,15 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <Filter Include="mcp">
+      <UniqueIdentifier>{19477372-8d4a-4d98-8f30-75d214b66ba8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mcp\tools">
+      <UniqueIdentifier>{784720bb-97bf-4ba9-acec-35050c1fe4a9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="settings">
+      <UniqueIdentifier>{45c6dce8-29d0-4d90-9db8-d258bf191b80}</UniqueIdentifier>
+    </Filter>
     <Filter Include="uikit">
       <UniqueIdentifier>{b1f1a342-9f1a-4e21-9c5a-0a11b3a8d101}</UniqueIdentifier>
     </Filter>

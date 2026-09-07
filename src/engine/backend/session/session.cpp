@@ -773,6 +773,26 @@ bool ibSession::CompileRoot()
 	return true;
 }
 
+bool ibSession::EvaluateInRoot(const wxString& expression, ibValue& produced)
+{
+	produced = ibValue();
+	if (expression.IsEmpty())
+		return true;   // nothing to evaluate is not a failure
+
+	ibValueModuleManagerRuntimeConfiguration* const root = GetManagerModule();
+	const std::shared_ptr<ibProcUnit> rootUnit = root != nullptr ? root->GetProcUnit() : nullptr;
+
+	if (!rootUnit) {
+		produced = ibValue(_("this session has no root to evaluate against"));
+		return false;
+	}
+
+	// THE ROOT'S OWN FRAME, and it never leaves this call — see the note in the header. It is the
+	// only thing that carries both halves an evaluation needs: the bytecode the names compile
+	// against, and the slots they resolve into.
+	return ibProcUnit::Evaluate(expression, &rootUnit->m_cCurContext, produced, false);
+}
+
 bool ibSession::DestroyRoot()
 {
 	if (!m_root) return false;

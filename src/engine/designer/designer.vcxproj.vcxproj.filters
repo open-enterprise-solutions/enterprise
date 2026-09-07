@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClCompile Include="docManager\templates\docViewAssistant.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpDesignerMessages.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolMessages.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\homePageEditor.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\textEditor.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
     <ClCompile Include="mainApp.cpp" />
     <ClCompile Include="mainAppEvent.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesignerMenu.cpp">
@@ -155,6 +170,15 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="docManager\templates\docViewAssistant.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\homePageEditor.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\textEditor.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
     <ClInclude Include="mainApp.h" />
     <ClInclude Include="resource.h">
       <Filter>res</Filter>
@@ -272,6 +296,12 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <Filter Include="mcp">
+      <UniqueIdentifier>{864b57d5-e7aa-4d8e-b1cd-3e761884e653}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mcp\tools">
+      <UniqueIdentifier>{f000b85f-7517-4a4b-8f2d-962e68dd18cb}</UniqueIdentifier>
+    </Filter>
     <Filter Include="res">
       <UniqueIdentifier>{d3f4bf29-6f86-43b3-b079-064ad3a64eb7}</UniqueIdentifier>
     </Filter>

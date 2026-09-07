@@ -1,6 +1,33 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClInclude Include="compiler\scriptCheck.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerDiagnosticSink.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpClipboard.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpDebugBridge.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpMessage.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpServer.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpTool.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaIntrospect.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\declaredPresentation.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
     <ClInclude Include="backend.h" />
     <ClInclude Include="backend_form.h" />
     <ClInclude Include="metaCtor.h" />
@@ -855,6 +882,120 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="compiler\scriptCheck.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\loggerDiagnosticSink.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpClipboard.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpDebugBridge.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpMessage.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpServer.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpTool.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolApp.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolBind.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolChat.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolClipboard.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolCompose.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolDatabase.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolDebug.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolEnvelope.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolHelp.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolJournal.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolLanguage.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolLocks.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolMetadata.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolModule.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolNotes.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolPatterns.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolPicture.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolPlatform.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolPredefined.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolQuery.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolReport.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolRoles.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolRunCode.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolSchema.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolScreen.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolScript.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolSection.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolSession.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolSheet.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolValue.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaIntrospect.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="backend_form.cpp" />
     <ClCompile Include="metaData.cpp" />
@@ -2000,6 +2141,12 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <Filter Include="mcp">
+      <UniqueIdentifier>{519ca79a-6240-43ae-9637-76d4703e2a93}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mcp\tools">
+      <UniqueIdentifier>{47f007aa-54f8-4d79-81ac-462ac7fbcd79}</UniqueIdentifier>
+    </Filter>
     <Filter Include="query">
       <UniqueIdentifier>{c2e2b453-0a2b-4f32-8d6b-1b22c4b9e201}</UniqueIdentifier>
     </Filter>
@@ -2332,6 +2479,9 @@
     <ClCompile Include="composition\ramComposer.cpp">
       <Filter>composition</Filter>
     </ClCompile>
+    <ClCompile Include="composition\composeEvaluate.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
     <ClCompile Include="composition\composeRunSchema.cpp">
       <Filter>composition</Filter>
     </ClCompile>
@@ -2503,6 +2653,9 @@
     </ClInclude>
     <ClInclude Include="composition\drivers\tableComposeDriver.h">
       <Filter>composition\drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\composeEvaluate.h">
+      <Filter>composition</Filter>
     </ClInclude>
     <ClInclude Include="composition\composeRunSchema.h">
       <Filter>composition</Filter>

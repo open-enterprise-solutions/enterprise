@@ -6,6 +6,8 @@
 
 #include "backend/composition/composeRunSchema.h"
 
+#include "backend/composition/composeEvaluate.h"   // a parameter WORKED OUT where the data is
+
 #include "backend/compositionDescription.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/composition/dataComposer.h"                 // ibDataDBComposer - the composer this builds
@@ -94,39 +96,10 @@ ibValue ValueFrom(const ibDataValue& given)
 // carries the ProcUnit whose bytecode the expression is compiled against, which is what "attached to
 // the root" means.
 //
-// 🛑 A SECOND COPY of ibEvaluateInRoot (valueDataComposition.cpp), which is file-local there. Marked
-// rather than hidden: the two are obliged to agree, and converging them means giving that helper a
-// home of its own — a change to the composition value's file, not made from here.
-bool EvaluateInRoot(const wxString& expression, ibValue& produced)
-{
-	produced = ibValue();
-	if (expression.IsEmpty())
-		return true;   // nothing to evaluate is not a failure
-
-	// Inside running code the caller's own frame is the truthful one — the same rule the built-in
-	// Evaluate follows.
-	if (ibProcUnitState* const state = ibSession::GetPUState()) {
-		if (ibRunContext* const current = state->GetCurrentRunContext())
-			return ibProcUnit::Evaluate(expression, current, produced, false);
-	}
-
-	ibSession* const session = ibSession::Current();
-	ibValueModuleManagerRuntimeConfiguration* const root =
-		session != nullptr ? session->GetManagerModule() : nullptr;
-	std::shared_ptr<ibProcUnit> rootUnit = root != nullptr ? root->GetProcUnit() : nullptr;
-
-	// ⚠ NO RUNTIME, NO PRETENDING. Answering "true, produced nothing" here is indistinguishable from
-	// an expression that legitimately evaluated to empty — which is how a computed parameter can be
-	// silently ignored and the report merely look wrong.
-	if (!rootUnit) {
-		produced = ibValue(ibComposeText("there is no runtime in this process to evaluate against"));
-		return false;
-	}
-
-	ibRunContext rootFrame;
-	rootFrame.SetProcUnit(rootUnit.get());
-	return ibProcUnit::Evaluate(expression, &rootFrame, produced, false);
-}
+// ⭐ THE HELPER MOVED OUT — composeEvaluate.{h,cpp}, beside this file. It stood here file-local and
+// again as a static in valueDataComposition.cpp, each with a note pointing at the other, and the
+// two had already drifted: that one knew the designer's edit manager and this one did not. One
+// home, one answer.
 
 // --- what a driver accumulated, as a node --------------------------------------------------------
 
@@ -353,7 +326,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 			// makes a report composed on an unfilled parameter look exactly like one with no data.
 			if (!expression.IsEmpty()) {
 				ibValue produced;
-				if (!EvaluateInRoot(expression, produced)) {
+				if (!ibEvaluateInRoot(expression, produced, activeMetaData)) {
 					refusal = wxString::Format(
 						ibComposeText("Parameter '%s' could not be evaluated: %s"),
 						parameter.m_name, produced.GetString());

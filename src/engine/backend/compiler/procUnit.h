@@ -29,6 +29,17 @@ public:
 
 	friend class ibValueFunction;
 
+	// ⭐⭐ AND THE SESSION, FOR ITS ROOT'S FRAME AND NOTHING ELSE. A run context is deliberately not
+	// public: it is a live frame, and a pointer to one held past its moment is a dangling frame. But
+	// an expression evaluated "against the root" needs precisely that frame — it carries BOTH halves
+	// the eval needs, the module's BYTECODE to compile the names against (ibCompileEval reads it
+	// straight off the context) and the SLOTS those names resolve into at depth 1.
+	//
+	// So the one who owns the root is the one who may hand it over: ibSession::EvaluateInRoot does
+	// the evaluation and answers with a VALUE. The frame never leaves (Max, 2026-09-07: *"the context
+	// does not go outside its bounds here"*).
+	friend class ibSession;
+
 	//Constructors/destructors
 	ibProcUnit() : m_numAutoDeleteParent(0),
 		m_pByteCode(nullptr),

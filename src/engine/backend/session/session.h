@@ -253,6 +253,25 @@ public:
 	// at entry so re-entrant lambdas don't clobber the outer view.
 	ibProcUnit* GetLambdaRuntime() { return m_lambdaRuntime.get(); }
 
+	// ⭐⭐ EVALUATE AN EXPRESSION AGAINST THIS SESSION'S ROOT, and answer with the VALUE. The scope is
+	// what makes it worth having: `Catalogs`, `Documents`, every common module and the platform's own
+	// functions are names on the root, so this is where a computed composition parameter is worked
+	// out — the current moment, a rate, a list a common module assembles. None of that is expressible
+	// in a query, and the parameter is the seam it enters through.
+	//
+	// 🛑 THE FRAME STAYS INSIDE. What an evaluation needs is the root's own run context, and it needs
+	// BOTH halves of it: the module's BYTECODE, which is what the expression's names are compiled
+	// against, and the SLOTS they resolve into at depth 1. A caller that built a bare ibRunContext and
+	// set the root's ProcUnit on it had neither — every global landed in a frame of no slots — and one
+	// that borrowed the lambda runtime's scope had the slots and no bytecode, so nothing compiled at
+	// all. Both were tried on this road (composition/composeEvaluate.cpp, 2026-09-07); the frame is
+	// not a thing to hand out, so the session performs the evaluation instead.
+	//
+	// False means it could NOT be evaluated, with the reason in `produced` — a caller must refuse
+	// rather than carry on: an expression that failed and one that legitimately came out empty are
+	// the same emptiness afterwards.
+	bool EvaluateInRoot(const wxString& expression, class ibValue& produced);
+
 	// ⭐⭐ STATE THAT LIVES ONCE PER SESSION — ASKED FOR BY ITS TYPE.
 	//
 	// A subsystem that needs something per session (the live reference table is the first: one
