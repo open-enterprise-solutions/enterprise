@@ -268,7 +268,15 @@ ibFrontendWindow* ibWebFrame::CreateChildFrame(
 	ibSession* session = ibSession::Current();
 	auto* webFrame = session != nullptr
 		? dynamic_cast<ibWebFrame*>(session->GetFrame()) : nullptr;
-	if (webFrame == nullptr) return nullptr;
+	if (webFrame == nullptr) {
+		// Returning nullptr here means the form opens with no tab, and the
+		// caller has no way to tell that from an ordinary refusal. Say so:
+		// a whole afternoon went into finding a form that silently landed
+		// in nobody's window.
+		std::cerr << "[tabs] CreateChildFrame: no web frame for the current session"
+			<< " (session=" << (void*)session << ")" << std::endl;
+		return nullptr;
+	}
 
 	ibDocument* doc = view->GetDocument();
 	// doc->GetTitle() is still empty at this stage — the doc was just

@@ -3,17 +3,12 @@
 What is known to be wrong or unfinished, so the next iteration inherits a list
 rather than a surprise. Dated when first recorded.
 
-## Blocking the next iteration
+**Fixed since:** *a second session cannot open a form* (recorded 2026-09-05,
+fixed 2026-09-07) — the open-document registry was process-wide and the second
+session found the first one's document. See
+[session-scoping.md](session-scoping.md).
 
-**A second session cannot open a form.** *2026-09-05.* On a freshly started
-`wenterprise-server`, the first session that opens a form gets its tree; every
-later session gets `{}` from `POST /open-meta/<id>` — while the server log still
-prints `[tabs] CreateNewForm creator=…` for it, so the form IS created and the
-answer is empty anyway. No `AdoptTab` line follows, unlike the successful case.
-Reproducible every time: run any browser check twice against one server, or run
-two of them in a row. Found while verifying Iteration 2, which is why every
-verification in that iteration restarts the server per case. Nothing to do with
-the UI flag — legacy and ui5 both fail as the second session.
+## Blocking the next iteration
 
 **The web server dies during session teardown.** *2026-09-05.* Seen three times,
 always the same tail and nothing after it:
