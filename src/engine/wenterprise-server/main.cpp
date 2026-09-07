@@ -7,7 +7,10 @@
 
 #include <atomic>
 #include <cstdlib>
+#include <cstdio>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -207,6 +210,68 @@ std::string ResolveAssetDirectory()
 	}
 
 	return std::string();
+}
+
+// The page names its own stylesheet at a fixed URL, and the bytes behind that
+// URL change whenever the chrome does. A browser is allowed to invent a
+// freshness lifetime for a response that carries no Cache-Control, and one did:
+// it drew a current client.html against a token stylesheet two commits old, so
+// every panel whose colour came from a token that file did not yet define fell
+// through to the bare canvas. The mount now says no-cache, but that only
+// governs the next answer -- a copy already held as fresh is never asked about.
+// Putting a digest of the file's own bytes in the URL settles it in the one
+// place a cache cannot second-guess: different bytes, different URL.
+std::string StampAssetURLs(std::string html, const std::string& assetDir)
+{
+	if (assetDir.empty())
+		return html;
+
+	// FNV-1a, the same hash the class ids use. Eight hex digits is plenty to
+	// tell one revision of a file from the next.
+	const auto digest = [](const std::string& bytes) {
+		std::uint64_t h = 14695981039346656037ULL;
+		for (const unsigned char c : bytes) {
+			h ^= c;
+			h *= 1099511628211ULL;
+		}
+		char out[9];
+		std::snprintf(out, sizeof(out), "%08x",
+			static_cast<unsigned>(h ^ (h >> 32)));
+		return std::string(out);
+	};
+
+	const std::string needle = "\"./assets/";
+	for (std::size_t at = html.find(needle); at != std::string::npos;
+		at = html.find(needle, at + 1)) {
+		const std::size_t start = at + 1;                  // past the quote
+		const std::size_t end   = html.find('"', start);
+		if (end == std::string::npos)
+			break;
+
+		const std::string url = html.substr(start, end - start);
+		// A directory prefix (the import map's entries) and a URL that already
+		// carries a query are both left as they are.
+		if (url.back() == '/' || url.find('?') != std::string::npos)
+			continue;
+		// The two versioned mounts carry their identity in the path already,
+		// which is what lets them be served immutable; a stamp there would say
+		// the same thing twice.
+		if (StartsWith(url, "./assets/ui5/") || StartsWith(url, "./assets/tabulator/"))
+			continue;
+
+		const std::string file = assetDir + url.substr(std::strlen("./assets"));
+		std::ifstream in(file, std::ios::binary);
+		if (!in)
+			continue;
+		const std::string bytes((std::istreambuf_iterator<char>(in)),
+			std::istreambuf_iterator<char>());
+
+		const std::string stamp = "?v=" + digest(bytes);
+		html.insert(end, stamp);
+		at = end + stamp.size();
+	}
+
+	return html;
 }
 
 CmdArgs ParseArgs(int argc, char** argv)
@@ -520,13 +585,30 @@ int main(int argc, char** argv)
 			versionedHeaders);
 		svr.set_mount_point(prefix + "/assets/tabulator", assetDir + "/tabulator",
 			versionedHeaders);
-		if (!svr.set_mount_point(prefix + "/assets", assetDir)) {
+		// Everything else under /assets is the client's own -- the token
+		// stylesheet, the icons -- served from a path that does not change
+		// when the file does. With no Cache-Control a browser is free to
+		// invent a freshness lifetime from Last-Modified and reuse the
+		// bytes without asking, which is how a browser ended up drawing
+		// the current client.html against a token stylesheet two commits
+		// old: the chrome tokens it named did not exist there, so every
+		// panel that reads one fell back to the bare canvas. no-cache
+		// keeps the copy and makes the browser revalidate it; the ETag
+		// cpp-httplib already sends turns the usual answer into a 304.
+		const httplib::Headers revalidateHeaders = {
+			{ "Cache-Control", "no-cache" }
+		};
+		if (!svr.set_mount_point(prefix + "/assets", assetDir, revalidateHeaders)) {
 			std::cerr << "Web asset directory could not be mounted: " << assetDir
 				<< std::endl;
 		}
 		// cpp-httplib already maps js, css, json, woff2, and svg to their
 		// standard MIME types.
 	}
+
+	// Stamped once: the client HTML is read once per process, so everything it
+	// names is pinned to the same run.
+	const std::string clientHTML = StampAssetURLs(wfrontendClientHTML(), assetDir);
 
 	// Top-level exception handler — catches anything that escapes one
 	// of the per-route lambdas below. Pre-2026-05-26 the lambdas had
@@ -575,7 +657,7 @@ int main(int argc, char** argv)
 		res.set_content(body, "application/json; charset=utf-8");
 	});
 
-	svr.Get(prefix + "/", [prefix](const httplib::Request& req, httplib::Response& res) {
+	svr.Get(prefix + "/", [prefix, clientHTML](const httplib::Request& req, httplib::Response& res) {
 		// Windows IPv6-first "localhost" fallback adds ~200ms cold
 		// connect per request, which stacks up on every tab switch /
 		// click. If the browser came in via `Host: localhost...`,
@@ -636,7 +718,7 @@ int main(int argc, char** argv)
 
 		// Client HTML/CSS/JS lives in wfrontend.dll so Apache/IIS/CGI
 		// hosts can serve the same bytes from a single source of truth.
-		res.set_content(wfrontendClientHTML(), "text/html; charset=utf-8");
+		res.set_content(clientHTML, "text/html; charset=utf-8");
 	});
 
 	svr.Get(prefix + "/ping", [](const httplib::Request&, httplib::Response& res) {

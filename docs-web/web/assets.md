@@ -28,7 +28,34 @@ webClient/assets/
 540 files, 6.5 MB. The server mounts the directory at `<prefix>/assets`,
 resolving it the same three ways `LoadClient()` resolves the client itself:
 `<exeDir>/web/assets`, then a walk up to `webClient/assets` bounded at six levels.
-The path is served `immutable` with a year's cache.
+
+## Two kinds of URL, and a header for each
+
+`ui5/` and `tabulator/` carry their identity in the path, so those two mounts
+are served `public, max-age=31536000, immutable` — the bytes at one of those
+URLs are the same bytes forever, and a browser is right never to ask again.
+
+Everything else under `/assets` is the client's own and lives at a path that
+does not move when the file does. Those are served `no-cache`, which keeps the
+copy and requires the browser to revalidate it; cpp-httplib's `ETag` turns the
+usual answer into a `304`. And the URLs the page names are **stamped**:
+`StampAssetURLs` in the server walks the client HTML for `"./assets/…"`, reads
+each one that resolves to a file outside the two versioned mounts, and appends
+`?v=<FNV-1a of its bytes>`. The stamp is computed once, when the client HTML is
+read, so everything a page names is pinned to the run that served it.
+
+The reason is the same as the one below, one layer up. Before the header, the
+token stylesheet went out with only `ETag` and `Last-Modified`, which lets a
+browser invent a freshness lifetime and reuse the file without asking. One did:
+a current `client.html` was drawn against an `oes-tokens.css` from two commits
+earlier, which did not yet define the chrome tokens the page names. Every panel
+that reads one — the sidebar, the output pane, the status bar — fell through to
+the bare canvas and rendered white, while `#main`, whose token had survived,
+stayed dark. Reported from Firefox as "криво", 2026-09-07; reproduced by serving
+the old stylesheet to a current page and confirmed identical. A header alone
+would not have freed that browser, since a copy already held as fresh is never
+asked about — the stamp changes the URL, which is the one thing a cache cannot
+second-guess.
 
 ## The directory is named after its contents
 
@@ -56,7 +83,9 @@ and any older `ui5/*` directory is removed so one tree is served.
 `assets/tabulator/<version>/` still keys on the bare version. Its files are
 copied verbatim from the package rather than transformed, so the same version
 has always meant the same bytes — but that is a habit, not a mechanism, and the
-day its vendoring starts rewriting anything it should grow the same digest.
+day its vendoring starts rewriting anything it should grow the same digest. It
+is deliberately left out of the stamping above: a URL that promises immutability
+should say so in one place, not two.
 
 ## Updating
 
