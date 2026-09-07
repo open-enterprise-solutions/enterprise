@@ -259,6 +259,26 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 	webColumn->SetValueType(valueType);
 	webColumn->SetVisibleColumn(m_propertyVisible->GetValueAsBoolean() && !sourceMissing);
 	webColumn->SetResizable(m_propertyResizable->GetValueAsBoolean());
+
+	// Sortability is the model's feature, as on the desktop; the direction
+	// is read off the composer, matching this column's own bound field —
+	// the same pair SyncSortArrowFromModel reads there.
+	ibValueModelTableBox* const owner = GetOwner();
+	ibValueModel* const model = owner != nullptr ? owner->GetTableModel() : nullptr;
+	const wxString field = GetSourceFieldName();
+	const bool sortable = model != nullptr && !field.IsEmpty()
+		&& model->GetFeatures().Has(ibValueModel::Features::Sorting);
+	webColumn->SetSortable(sortable);
+
+	wxString order = wxT("none");
+	for (size_t i = 0; sortable && i < model->GetModelComposer().SortCount(); ++i) {
+		wxString sortField; bool ascending = true;
+		if (model->GetModelComposer().GetSortAt(i, sortField, ascending) && sortField == field) {
+			order = ascending ? wxT("asc") : wxT("desc");
+			break;
+		}
+	}
+	webColumn->SetSortOrder(order);
 #endif
 }
 

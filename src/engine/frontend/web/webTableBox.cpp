@@ -63,9 +63,11 @@ nlohmann::json ibWebTableBoxColumn::ToJSON() const
 	node["align"]       = m_align;
 	node["headerAlign"] = m_headerAlign;
 	node["valueType"]   = m_valueType;
-	node["visible"]   = m_visible;
-	node["resizable"] = m_resizable;
-	node["readOnly"]  = m_readOnly;
+	node["visible"]     = m_visible;
+	node["resizable"]   = m_resizable;
+	node["readOnly"]    = m_readOnly;
+	node["sortable"]    = m_sortable;
+	node["sortOrder"]   = m_sortOrder;
 	return node;
 }
 
@@ -275,13 +277,111 @@ nlohmann::json ibWebTableBox::FetchPage(ibValueModelTableBox* control,
 	return out;
 }
 
+// Sorting a list is an ORDER BY over the whole table, committed to the
+// composer — not a reshuffle of the page in hand. The shape is the desktop's
+// OnColumnClick verbatim, minus the header arrow it sets on the widget: read
+// the column's own bound field, toggle it against what the composer already
+// says, clear and re-sort, then read the list again from the top. The paged
+// keyset anchor was built for the old order and is worthless now, which is why
+// the window is thrown away rather than continued.
+static bool SortByColumn(ibValueModelTableBox* table, int columnControlId)
+{
+	ibValueModel* model = table->GetTableModel();
+	if (model == nullptr || !model->GetFeatures().Has(ibValueModel::Features::Sorting))
+		return false;
+
+	std::vector<ibValueModelTableBoxColumn*> columns;
+	CollectColumns(table, columns);
+	const auto found = std::find_if(columns.begin(), columns.end(),
+		[columnControlId](const ibValueModelTableBoxColumn* column) {
+			return column->GetControlID() == columnControlId;
+		});
+	if (found == columns.end())
+		return false;
+
+	const wxString field = (*found)->GetSourceFieldName();
+	if (field.IsEmpty())
+		return false;   // whole-attribute / foreign / unresolvable — nothing to sort by
+
+	ibDataComposer& composer = model->GetModelComposer();
+	bool ascending = true;
+	wxString currentField; bool currentAscending = true;
+	if (composer.SortCount() == 1 && composer.GetSortAt(0, currentField, currentAscending)
+		&& currentField == field)
+		ascending = !currentAscending;
+
+	composer.ClearSorts();
+	composer.Sort(field, ascending);
+	model->RefetchAll();
+	return true;
+}
+
+namespace {
+// Every ibWebTableBoxColumn under this node, groups walked through.
+void CollectWebColumns(const ibWebWindow* node, std::vector<ibWebTableBoxColumn*>& out)
+{
+	for (ibWebWindow* child : node->GetChildren()) {
+		if (auto* column = dynamic_cast<ibWebTableBoxColumn*>(child))
+			out.push_back(column);
+		else
+			CollectWebColumns(child, out);
+	}
+}
+} // namespace
+
+void ibWebTableBox::SyncSortOrders(ibValueModelTableBox* control)
+{
+	ibValueModel* model = control != nullptr ? control->GetTableModel() : nullptr;
+	if (model == nullptr)
+		return;
+
+	std::vector<ibValueModelTableBoxColumn*> columns;
+	CollectColumns(control, columns);
+	std::vector<ibWebTableBoxColumn*> webColumns;
+	CollectWebColumns(this, webColumns);
+
+	const ibDataComposer& composer = model->GetModelComposer();
+	for (const ibValueModelTableBoxColumn* column : columns) {
+		wxString order = wxT("none");
+		const wxString field = column->GetSourceFieldName();
+		for (size_t i = 0; !field.IsEmpty() && i < composer.SortCount(); ++i) {
+			wxString sortField; bool ascending = true;
+			if (composer.GetSortAt(i, sortField, ascending) && sortField == field) {
+				order = ascending ? wxT("asc") : wxT("desc");
+				break;
+			}
+		}
+		// The two trees are paired by the key both sides derive from the
+		// same control id, which is why neither has to hold the other.
+		const wxString key = ibWebTableBoxColumnKey(column->GetControlID());
+		for (ibWebTableBoxColumn* webColumn : webColumns)
+			if (webColumn->GetFieldKey() == key)
+				webColumn->SetSortOrder(order);
+	}
+}
+
 bool ibWebTableBox::HandleRequest(const wxString& kind, const wxString& value)
 {
+	if (m_requestControl == nullptr)
+		return false;
+
+	if (kind == wxT("sort")) {
+		long columnId = 0;
+		if (!value.ToLong(&columnId))
+			return false;
+		if (!SortByColumn(m_requestControl, static_cast<int>(columnId)))
+			return false;
+		SyncSortOrders(m_requestControl);
+		// The order changed under the window, so the keys in it name rows
+		// nobody is looking at any more. The client re-fetches from the top.
+		m_window.clear();
+		m_nextKey = 0;
+		return true;
+	}
+
 	const bool cursor   = kind == wxT("row");
 	const bool activate = kind == wxT("activate");
 	if (!cursor && !activate)
-		return false;
-	if (m_requestControl == nullptr)
 		return false;
 
 	long key = 0;

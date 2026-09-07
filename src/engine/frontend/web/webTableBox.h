@@ -58,6 +58,12 @@ public:
 	void SetVisibleColumn(bool visible)        { m_visible = visible; }
 	void SetResizable(bool resizable)          { m_resizable = resizable; }
 	void SetReadOnly(bool readOnly)            { m_readOnly = readOnly; }
+	// Whether a click on this header sorts, and which way it sorts now:
+	// "none" until the composer says otherwise, then "asc" or "desc".
+	void SetSortable(bool sortable)            { m_sortable = sortable; }
+	void SetSortOrder(const wxString& order)   { m_sortOrder = order; }
+
+	const wxString& GetFieldKey() const { return m_field; }
 
 	virtual nlohmann::json ToJSON() const override;
 
@@ -68,9 +74,11 @@ private:
 	wxString m_headerAlign = wxT("left");
 	wxString m_valueType   = wxT("string");
 	int      m_width     = 80;
+	wxString m_sortOrder = wxT("none");
 	bool     m_visible   = true;
 	bool     m_resizable = true;
 	bool     m_readOnly  = true;   // iteration 2 is read-only throughout
+	bool     m_sortable  = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -132,10 +140,14 @@ public:
 	nlohmann::json FetchPage(ibValueModelTableBox* control,
 		const wxString& dir, int count);
 
-	// Two kinds, both carrying a row key:
+	// Three kinds. Two carry a row key:
 	//   "row"      — the client moved the cursor onto that row;
 	//   "activate" — it opened that row (a double-click), which for a
 	//                list means raising the object's own form.
+	// The third carries a COLUMN's control id:
+	//   "sort"     — it clicked that header. Sorting a list is an ORDER BY
+	//                over the whole table, so it is committed to the
+	//                composer and the list is read again from the top.
 	virtual bool HandleRequest(const wxString& kind,
 		const wxString& value) override;
 
@@ -143,6 +155,18 @@ public:
 	// reach the CONTROL (ApplyCurrentLine lives there), and the shim is
 	// deliberately without a back-pointer of its own.
 	void SetRequestControl(ibValueModelTableBox* control) { m_requestControl = control; }
+
+private:
+	// Re-read the composer's order onto the column nodes.
+	//
+	// Every other property reaches a node through its control's Update, and
+	// the tree is serialised from the nodes without running that again. A
+	// sort goes straight to the composer and touches no control, so without
+	// this the rows come back in the new order under an arrow still pointing
+	// the old way.
+	void SyncSortOrders(ibValueModelTableBox* control);
+
+public:
 
 private:
 	// One row of the window the client currently holds: the key it was

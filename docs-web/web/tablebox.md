@@ -139,14 +139,39 @@ every header came out in Times. `applyCommon` now puts `--oes-font-ui` behind
 it, which resolves to the UI5 theme's family and, with UI5 not loaded, to the
 system stack.
 
+## Sorting
+
+`POST /fire/<id>/sort?value=<column control id>`. The shape is the desktop's
+`OnColumnClick` verbatim, minus the header arrow it sets on the widget: read the
+column's own bound field (`GetSourceFieldName`), toggle it against what the
+composer already says, `ClearSorts()` + `Sort(field, ascending)`, then
+`RefetchAll()`. Tabulator's own sort is never used — it would reorder the page
+in hand and call that a sorted list.
+
+Two consequences worth stating.
+
+The paged keyset anchor was built for the old ORDER BY, so the window is thrown
+away rather than continued: the client re-renders and asks for `first`. And the
+arrow has to be pushed onto the column nodes by hand — every other property
+reaches a node through its control's `Update`, and the tree is serialised from
+the nodes without running that again, but a sort touches no control at all. That
+is what `ibWebTableBox::SyncSortOrders` is for; without it the rows came back in
+the new order under an arrow still pointing the old way. The two trees pair by
+the key both sides derive from the same control id, so neither holds the other.
+
+A column reports `sortable:false` when the model has no `Sorting` feature or the
+column has no resolvable bound field (a whole-attribute or foreign column) —
+the header then does nothing rather than inviting a click that would.
+
+The first click on a column the form already ordered by does not appear to
+change anything: the author's order is not the reader's, and clicking adopts it
+as theirs. The second flips it. That is the desktop's behaviour, from the same
+lines.
+
 ## What this does NOT do yet
 
 Named rather than implied, because each is a road not started.
 
-- **Sorting.** The header is inert (`headerSort:false`). Sorting a list is an
-  ORDER BY over the whole table, committed to the composer — not a reshuffle of
-  the page in hand. The desktop path (`ibValueModelTableBox::OnColumnClick` →
-  composer → `RefetchAll`) is desktop-only today.
 - **Tree drill.** `container` is reported per row, but expanding one does not
   fetch its children. The fetch always asks the top level (or, in `list` view
   mode, every row in one order through `s_constIgnoreParent`).
