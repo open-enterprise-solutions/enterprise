@@ -57,6 +57,15 @@ buttons take their space from it. A field with three buttons and a field with no
 have the same right edge — visible in the harness, where the long-caption row sits
 under four others and all five box edges line up.
 
+**The group is layout, not a frame.** It used to paint a field background and a
+1px border in `sapField_BorderColor` so that the input and its side buttons would
+read as one control, the way a UI5 combo does. But `ui5-input` draws a themed
+field of its own inside it, so what came out was a box around a box — and in the
+dark theme `sapField_BorderColor` is a light grey meant for a single underline,
+not for a full rectangle. The result was a pale frame, taller than the field it
+held, around a white slab. Reported 2026-09-07. The input owns the field's look;
+the group owns the row.
+
 No OES counterpart: `valueStateMessage`, `showSuggestions`, `maxlength`,
 `placeholder`, `required`, `name`.
 
@@ -151,14 +160,22 @@ colour only when it is something else (`ibWebIsPlatformPaper` / `…Ink` in
 `webWindow.cpp`). On the desktop those colours ARE the window; in a browser they
 are a foreign surface over whatever theme the page is wearing.
 
-**A surface a form DID choose still needs ink.** The demo's text controls carry
-`#FFFFFF`, saved in the configuration, and that is a real choice — made against
-the desktop's dark-on-light. Honouring it under a dark theme, while the theme
-supplies the text colour, is how white ends up on white. So when a node names a
-background and no foreground, the client puts the readable end of the theme's own
-text scale on it (`readableInkOn`, WCAG relative luminance, resolving to
-`--oes-ink-on-light` / `--oes-ink-on-dark`). Only in ui5 mode: legacy has no
-second palette to get this wrong in.
+**Plain white is on that list too.** It was read as a choice at first — the demo's
+text controls all carry `#FFFFFF`, so it looked like something saved in the
+configuration. It is not: `ibValueTextCtrl`'s constructor sets it, on every text
+control ever built, because on the desktop a field is white. Under a dark theme
+that came out as a white slab per field, and no form had asked for it. So
+`ibWebIsPlatformPaper` answers to white as well. The cost is that an author who
+genuinely wants a white field does not get one — and on a light theme the field
+is white regardless.
+
+**A surface a form DID choose still needs ink.** A background that survives the
+test above was named by somebody, and named against the desktop's dark-on-light.
+Honouring it under a dark theme, while the theme supplies the text colour, is how
+white ends up on white. So when a node names a background and no foreground, the
+client puts the readable end of the theme's own text scale on it (`readableInkOn`,
+WCAG relative luminance, resolving to `--oes-ink-on-light` / `--oes-ink-on-dark`).
+Only in ui5 mode: legacy has no second palette to get this wrong in.
 
 Both rules apply to the *control*, not to the row around it. A text control
 renders as a label plus a field, and the colour was set on the field —

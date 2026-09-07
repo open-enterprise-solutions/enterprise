@@ -19,15 +19,17 @@
 #include <wx/font.h>     // wxFont
 
 // The desktop's own paper. Every control's colour properties START at
-// these two -- #FAF7F0 cream and #3F5C77 dusty blue, the platform's
-// palette -- so a form that was never given a colour still arrives
-// carrying them. On the desktop that is right: they ARE the window. In a
-// browser they are a foreign surface painted over whatever theme the
-// page is wearing, and in a dark one they read as pale boxes under the
-// labels. So the web nodes emit a colour only when it is something the
-// author actually chose. The price is that choosing exactly that cream
-// is indistinguishable from choosing nothing, which is the smaller of
-// the two losses.
+// these -- #FAF7F0 cream and #3F5C77 dusty blue, the platform's palette,
+// plus plain white, which ibValueTextCtrl's constructor puts on every
+// text control ever built. On the desktop that is right: they ARE the
+// window, and a field is white. In a browser they are a foreign surface
+// painted over whatever theme the page is wearing, and in a dark one
+// they read as pale boxes under the labels -- a white slab per field,
+// which is what a themed object form looked like. So the web nodes emit
+// a colour only when it is something the author actually chose. The
+// price is that choosing exactly one of these is indistinguishable from
+// choosing nothing, which is the smaller of the two losses: on a light
+// theme the field is that colour anyway.
 bool ibWebIsPlatformPaper(const wxColour& colour);
 bool ibWebIsPlatformInk(const wxColour& colour);
 

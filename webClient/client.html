@@ -408,11 +408,16 @@ input.ctrl{padding:3px 6px;border:1px solid #aaa;border-radius:3px}
    fixed editor width while its side buttons take space from the field. */
 .oes-ui5-button,.oes-ui5-checkbox{display:inline-block;color:var(--oes-text)}
 .oes-ui5-textctrl{display:flex;align-items:stretch;gap:.375rem;min-height:0}
-.oes-ui5-textctrl-group{display:flex;align-items:stretch;box-sizing:border-box;
-  flex:0 0 12.5rem;width:12.5rem;min-width:0;color:var(--oes-text);
-  background:var(--oes-surface);border:var(--sapField_BorderWidth) solid var(--oes-border)}
-.oes-ui5-textctrl-group:focus-within{outline:var(--sapContent_FocusWidth)
-  var(--sapContent_FocusStyle) var(--oes-focus)}
+/* Layout only. It was drawing a frame of its own -- a field background and
+   a 1px border in sapField_BorderColor -- so that the input and its side
+   buttons would read as one control. But ui5-input draws a themed field
+   inside it, so the result was a box around a box, and in the dark theme
+   sapField_BorderColor is a light grey meant for a single underline, not a
+   full rectangle: a pale frame, taller than the field it held, around a
+   white slab. The input owns the field's look; this owns the row. */
+.oes-ui5-textctrl-group{display:flex;align-items:center;gap:.125rem;
+  box-sizing:border-box;flex:0 0 12.5rem;width:12.5rem;min-width:0;
+  color:var(--oes-text)}
 .oes-ui5-textctrl-group>ui5-input{display:block;flex:1 1 0;width:0;min-width:0}
 .oes-ui5-textctrl-group>ui5-button{display:block;flex:0 0 auto;color:var(--oes-action)}
 .oes-ui5-textctrl-group[data-error="true"]{color:var(--oes-status-error)}

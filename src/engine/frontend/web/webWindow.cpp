@@ -7,7 +7,7 @@
 
 bool ibWebIsPlatformPaper(const wxColour& colour)
 {
-	return colour == wxDefaultStypeBGColour;
+	return colour == wxDefaultStypeBGColour || colour == *wxWHITE;
 }
 
 bool ibWebIsPlatformInk(const wxColour& colour)
