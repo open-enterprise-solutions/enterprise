@@ -43,7 +43,15 @@ window.OES = window.OES || {};
 <script type="module">
 const runtime=window.OES.runtime;
 window.OES.ui5Ready=runtime.ui==='ui5'?(async()=>{
-  await import('@ui5/webcomponents/dist/Assets.js');
+  // Both Assets.js files, one per package that has components on the
+  // page: Assets.js is what REGISTERS a package's theme parameters, and
+  // a package whose parameters were never registered renders with the
+  // base ones. The chrome (shell bar, side navigation) lives in the
+  // fiori package, so its own parameters have to be asked for by name.
+  await Promise.all([
+    import('@ui5/webcomponents/dist/Assets.js'),
+    import('@ui5/webcomponents-fiori/dist/Assets.js'),
+  ]);
   const {setTheme}=await import('@ui5/webcomponents-base/dist/config/Theme.js');
   await setTheme(runtime.theme==='dark'?'sap_horizon_dark':'sap_horizon');
   await Promise.all([
@@ -61,7 +69,15 @@ window.OES.ui5Ready=runtime.ui==='ui5'?(async()=>{
     import('@ui5/webcomponents-fiori/dist/SideNavigation.js'),
     import('@ui5/webcomponents-fiori/dist/SideNavigationItem.js'),
   ]);
-})():Promise.resolve();
+  document.documentElement.dataset.oesUi5='ready';
+})().catch(err=>{
+  // A theme that did not arrive is not a silent condition: every colour
+  // on the page comes from it, and without it the tokens fall back to
+  // the plain palette while the components render uncoloured. Say so
+  // where it can be read, and let the page carry on rather than stop.
+  document.documentElement.dataset.oesUi5='failed';
+  console.error('OES: UI5 did not load — the page is running unthemed.', err);
+}):Promise.resolve();
 </script>
 <style>
 /* Window chrome: title bar + status bar wrap the sidebar+main area.
@@ -2976,6 +2992,14 @@ async function paintActiveTab(){
     authenticated = true;
   }
   status.textContent = 'connected';
+  // Let the theme land before anything is painted. Half a window in the
+  // theme and half in the fallback palette is worse than either, and the
+  // module graph is 450 requests on a cold cache — long enough to see.
+  // Bounded: a theme that never arrives must not hold the client hostage.
+  await Promise.race([
+    window.OES.ui5Ready,
+    new Promise(r=>setTimeout(r,8000)),
+  ]).catch(()=>{});
   applyUI5Chrome();
   // Step 3: initial fetches in parallel so the boot overlay hides only
   // after sidebar, tab strip, and active host have all landed — user

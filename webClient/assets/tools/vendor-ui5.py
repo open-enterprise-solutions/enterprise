@@ -38,6 +38,12 @@ ENTRYPOINTS = (
     "@ui5/webcomponents/dist/Title.js",
     "@ui5/webcomponents/dist/Label.js",
     "@ui5/webcomponents/dist/Panel.js",
+    # Assets.js is what REGISTERS a package's own theme parameters. The
+    # graph walk cannot find it from a component: the component asks for
+    # its bundle by name at run time, so without this entry the fiori
+    # parameters are simply absent and its components fall back to the
+    # base ones.
+    "@ui5/webcomponents-fiori/dist/Assets.js",
     "@ui5/webcomponents-fiori/dist/ShellBar.js",
     "@ui5/webcomponents-fiori/dist/ShellBarItem.js",
     "@ui5/webcomponents-fiori/dist/SideNavigation.js",

@@ -103,6 +103,42 @@ Measured on the Goods list and one object form, per mode:
 | `ui=ui5` | 15 UI5 elements | 22 |
 | `ui=legacy` | 0 | 0 |
 
+## When the theme is not there
+
+450 module requests land on a cold cache before the theme does, and until
+then — or if it never arrives — every `--sap*` is undefined. An unresolved
+`var()` does not fall back to anything sensible: `border-color` collapses to
+`currentColor`, which is the text colour, which is black. That is what an
+unthemed page looked like when it was photographed: heavy black table borders,
+a black tab underline, fields with no box at all. It read as a broken screen
+rather than a plain one.
+
+Three things now stand between that and the user:
+
+- **Every token carries a fallback.** `var(--sapList_BorderColor, #d9d9d9)`, and
+  so on for all nineteen. A page without the theme looks like the page without
+  the theme.
+- **The boot waits for it.** `await Promise.race([OES.ui5Ready, 8s])` before the
+  first paint, so half a window in the theme and half in the fallback is not a
+  state anyone sees. Bounded, because a theme that never arrives must not hold
+  the client hostage.
+- **A failure says so.** `OES.ui5Ready` catches, writes
+  `data-oes-ui5="failed"` on `<html>` and logs one line. `"ready"` when it
+  landed. Before this it failed silently and the only evidence was the colour of
+  a border.
+
+Verified by aborting every `parameters-bundle.css.js` in the browser: the flag
+reads `failed`, `--sapSelectedColor` is unset, and `--oes-chrome-selected`
+answers `#3b50a0` instead of nothing — the tab underline and the table borders
+stay in the plain palette.
+
+**And a package's parameters have to be asked for.** `Assets.js` is what
+registers a package's theme bundle, and it is loaded by name at run time, not
+imported by any component — so the vendoring's import-graph walk cannot find it.
+`@ui5/webcomponents-fiori`'s bundle was missing for exactly that reason (found
+2026-09-07, on the same hunt), and its components were quietly rendering with
+the base package's parameters. Both `Assets.js` files are entrypoints now.
+
 ## Colour a form chose, and colour it inherited
 
 Two rules, both about telling one from the other.

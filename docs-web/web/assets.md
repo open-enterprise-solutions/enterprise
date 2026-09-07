@@ -19,13 +19,13 @@ webClient/assets/
     ├── @sap-theming/theming-base-content/    24 font files
     ├── @ui5/webcomponents/                   198 files
     ├── @ui5/webcomponents-base/              151 files
-    ├── @ui5/webcomponents-fiori/              42 files
+    ├── @ui5/webcomponents-fiori/              58 files
     ├── @ui5/webcomponents-icons/              90 files
     ├── @ui5/webcomponents-localization/        6 files
     └── @ui5/webcomponents-theming/            13 files
 ```
 
-524 files, 6.4 MB. The server mounts the directory at `<prefix>/assets`,
+540 files, 6.5 MB. The server mounts the directory at `<prefix>/assets`,
 resolving it the same three ways `LoadClient()` resolves the client itself:
 `<exeDir>/web/assets`, then a walk up to `webClient/assets` bounded at six levels.
 The versioned path is served `immutable` with a year's cache.
@@ -65,7 +65,14 @@ root package, not a dependency, so the graph walk could never find it on disk �
 `COMPANION_PACKAGES` at the top of the script is what npm installs alongside, and
 its version is checked against `VERSION` the same way the root's is. Adding
 another package is one entry there plus its entrypoints. The whole chrome cost
-1.0 MB and 148 files.
+1.1 MB and 164 files.
+
+**A package's `Assets.js` is an entrypoint of its own.** It is what registers
+that package's theme parameters, and nothing imports it — a component asks for
+its bundle by name at run time, which the graph walk cannot see. The fiori
+parameters were therefore absent on the first pass, and its components rendered
+with the base package's. Every package with components on the page needs its
+`Assets.js` listed.
 - Locales: `en`, `ru`, `uk`, matching what the build stages as `*.hlk`. The list is
   a named constant at the top of the script; adding a locale is one line.
 
