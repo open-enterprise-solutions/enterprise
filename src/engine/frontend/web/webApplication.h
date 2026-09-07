@@ -20,6 +20,7 @@
 // handler thread) will route events into this handler.
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <functional>
 #include <future>
@@ -27,6 +28,65 @@
 #include <mutex>
 
 #include <wx/event.h>
+
+// The live-update signal, held by shared_ptr because a waiter outlives the
+// thing that wakes it. An SSE subscriber blocks here for up to 25 seconds
+// while its browser is idle, and the session behind it can be swept in that
+// window -- destroying the application whose mutex and condition variable the
+// waiter is parked on. Owning the signal separately means the waiter's own
+// reference keeps it alive, and Close() tells it the reason it is being woken
+// is that nothing more is coming.
+class ibWebLiveSignal {
+public:
+	// A state change happened: wake everyone parked here.
+	void Bump()
+	{
+		m_seq.fetch_add(1, std::memory_order_acq_rel);
+		std::lock_guard<std::mutex> lk(m_mutex);
+		m_cv.notify_all();
+	}
+
+	// The application is going away. Waiters return at once and every later
+	// wait answers immediately, so a subscriber cannot park on a session that
+	// no longer exists.
+	void Close()
+	{
+		{
+			std::lock_guard<std::mutex> lk(m_mutex);
+			m_closed = true;
+		}
+		m_cv.notify_all();
+	}
+
+	bool IsClosed() const
+	{
+		std::lock_guard<std::mutex> lk(m_mutex);
+		return m_closed;
+	}
+
+	uint64_t Current() const { return m_seq.load(); }
+
+	// Block until the sequence moves past lastSeen, the signal closes, or the
+	// timeout runs out. A timeout of zero or less waits without one.
+	uint64_t Wait(uint64_t lastSeen, int timeoutMs)
+	{
+		std::unique_lock<std::mutex> lk(m_mutex);
+		const auto ready = [this, lastSeen] {
+			return m_closed || m_seq.load() != lastSeen;
+		};
+		if (timeoutMs <= 0)
+			m_cv.wait(lk, ready);
+		else
+			m_cv.wait_for(lk, std::chrono::milliseconds(timeoutMs), ready);
+		return m_seq.load();
+	}
+
+private:
+	std::atomic<uint64_t>   m_seq { 1 };
+	mutable std::mutex      m_mutex;
+	std::condition_variable m_cv;
+	bool                    m_closed = false;
+};
 
 // value_ptr.h only forward-declares ibValue (via backend_core.h); we need
 // the complete ibValue base for ibValuePtr<T> instantiation below.
@@ -77,8 +137,8 @@ public:
 
 	// Live-update sequence counter. Every state-changing action
 	// (Dispatch, timer tick, tab switch/close, CreateAndUpdateVisualHost
-	// from script) calls MarkDirty() which bumps m_seq and wakes every
-	// waiter on m_seqCv. SSE subscribers call WaitForChange(lastSeen,
+	// from script) calls MarkDirty() which bumps the live signal and wakes
+	// every waiter on it. SSE subscribers call WaitForChange(lastSeen,
 	// timeoutMs) — block until seq advances past lastSeen OR timeout,
 	// return the current seq. Multiple subscribers on one session (e.g.
 	// multiple browser tabs of the same user) each track their own
@@ -87,8 +147,12 @@ public:
 	// with lastSeen=0 returns immediately — new SSE clients get current
 	// state without waiting for the next event.
 	void     MarkDirty();
-	uint64_t CurrentSeq() const { return m_seq.load(); }
+	uint64_t CurrentSeq() const { return m_live->Current(); }
 	uint64_t WaitForChange(uint64_t lastSeen, int timeoutMs);
+
+	// The signal itself, for a caller that must wait outside the lock that
+	// found this application -- see ibWebLiveSignal.
+	std::shared_ptr<ibWebLiveSignal> LiveSignal() const { return m_live; }
 
 	// Session dispatcher — single generic entry. HTTP handlers hand off
 	// here: given a controlId + kind ("click" | "text" | "toggle" | …)
@@ -161,9 +225,8 @@ private:
 	bool                                          m_initialized   = false;
 
 	// Live-update state. See MarkDirty/WaitForChange docs above.
-	std::atomic<uint64_t>                         m_seq { 1 };
-	std::mutex                                    m_seqMtx;
-	std::condition_variable                       m_seqCv;
+	std::shared_ptr<ibWebLiveSignal>              m_live
+		= std::make_shared<ibWebLiveSignal>();
 };
 
 // Reach the current session's ibWebApplication from arbitrary web

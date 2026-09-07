@@ -6,9 +6,11 @@ rather than a surprise. Dated when first recorded.
 **Fixed since:** *a second session cannot open a form* (recorded 2026-09-05,
 fixed 2026-09-07) — the open-document registry was process-wide and the second
 session found the first one's document. See
-[session-scoping.md](session-scoping.md). And *the web server dies during session
+[session-scoping.md](session-scoping.md). *The web server dies during session
 teardown* (recorded 2026-09-05, fixed 2026-09-07) — see
-[tab-ownership.md](tab-ownership.md).
+[tab-ownership.md](tab-ownership.md). And *closing a tab with a live stream
+aborts the server* (2026-09-07, same day) — see
+[live-updates.md](live-updates.md).
 
 ## Blocking the next iteration
 
@@ -31,6 +33,13 @@ has.
 
 ## Firefox
 
+**The SSE stream was answered `401 no session`.** *2026-09-07, fixed the same
+day.* `EventSource` cannot send a header, so the stream leaned on the cookie
+while every other request used the tab's own `sessionStorage` id. It carries
+`?sid=` now, which the server has always read for requests that can only send a
+URL — see [live-updates.md](live-updates.md). The 401 was invisible in use: the
+client falls back to polling, so the page kept working a second or two behind.
+
 **The SSE stream would not connect.** *2026-09-07, fixed the same day.*
 `svr.set_keep_alive_max_count(1)` was applied on every platform, though the
 reason written beside it is a Windows one — a cpp-httplib keep-alive stall on
@@ -42,6 +51,20 @@ workaround is `#if defined(_WIN32)` now, and the read timeout is 30s off Windows
 because on a kept-alive connection that value is the idle window between a
 browser's requests, not a stall.
 
+## A pointer without a pin
+
+**`SessionManager::FindApp` hands out a raw `ibWebApplication*`.** *2026-09-07.*
+The manager's map owns `shared_ptr<ibWebSession>`, and three of its methods
+(`Login`, `TabIconPNG`, `ModalReply`) take a copy under the lock for exactly the
+reason each says: the session can be destroyed the moment the lock is released.
+`FindApp` does not, and `wfrontendOpenMetaObject` then runs a worker task
+through the pointer after the lock is gone. Found while fixing the SSE waiter,
+which was the same defect with a 25-second window instead of a menu click's —
+see [live-updates.md](live-updates.md). A pin is not the whole answer here
+either: `OnExit` resets the application's `unique_ptr`, so holding the session
+keeps the session, not the application. The shape that fixes it is the one the
+signal uses — hand back something the caller owns.
+
 ## The guard that says nothing
 
 **`ibCrashGuard` is silent on a segfault in the web server.** *2026-09-05, still
@@ -52,6 +75,13 @@ found in the end by running the server under `lldb` rather than by anything the
 program said. macOS wrote a `.ips` report for some of the sightings and not for
 others, so even that is not a floor. Worth closing before the next control is
 written: the next fault of this shape starts from a log tail again.
+
+The stream crash the same day made the case sharper. It aborted — `SIGABRT`, not
+a segfault — and still printed nothing: no `libc++abi` line on the merged
+stderr, no `.ips`. What identified it was wrapping the process in a shell that
+echoed `$?`, and `134` was the whole diagnosis. Under `lldb` it would not
+reproduce at all, the debugger's own timing being enough to close the race, so
+the road the earlier bug was caught on was shut for this one.
 
 ## Metadata over MCP
 

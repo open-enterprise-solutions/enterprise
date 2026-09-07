@@ -952,6 +952,13 @@ int main(int argc, char** argv)
 				// knows we're alive and intermediaries don't close us.
 				const auto upd = wfrontendLiveWait(sid, *lastSeen, 25000);
 
+				// The session went away while we were parked -- swept for
+				// idleness, or destroyed with the tab. Ending the response is
+				// what tells the browser; answering with heartbeats forever
+				// would spin this thread on a wait that now returns at once.
+				if (!wfrontendSessionExists(sid))
+					return false;
+
 				if (upd.seq == *lastSeen) {
 					static const char kPing[] = ": ping\n\n";
 					return sink.write(kPing, sizeof(kPing) - 1);

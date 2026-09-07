@@ -273,6 +273,11 @@ public:
 	// meantime; the caller's `wait_for` timeout is the safety net.
 	ibWebApplication* FindApp(const std::string& id);
 
+	// The session's live signal, pinned. Unlike FindApp this hands back
+	// something the caller may hold on to after the lock is gone -- which is
+	// what an SSE subscriber needs, since it then blocks for half a minute.
+	std::shared_ptr<ibWebLiveSignal> FindLiveSignal(const std::string& id);
+
 	std::string SessionInfo(const std::string& id);
 	std::string ActivateTab(const std::string& id, int tabIndex);
 	std::string CloseTab(const std::string& id, int tabIndex);
@@ -1766,6 +1771,15 @@ WFRONTEND_API std::string wfrontendOpenMetaObject(const std::string& sessionId,
 	}).get();
 }
 
+std::shared_ptr<ibWebLiveSignal> SessionManager::FindLiveSignal(const std::string& id)
+{
+	std::lock_guard<std::mutex> lock(m_mutex);
+	auto it = m_sessions.find(id);
+	if (it == m_sessions.end() || it->second == nullptr) return nullptr;
+	ibWebApplication* app = it->second->App();
+	return app != nullptr ? app->LiveSignal() : nullptr;
+}
+
 ibWebApplication* SessionManager::FindApp(const std::string& id)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
@@ -1837,25 +1851,26 @@ WFRONTEND_API std::string wfrontendActiveHostJSON(const std::string& sessionId)
 WFRONTEND_API WfrontendLiveUpdate wfrontendLiveWait(
 	const std::string& sessionId, std::uint64_t lastSeen, int timeoutMs)
 {
-	// Pin the session in scope so it can't be swept out from under the
-	// waiter. `Sessions().m_mutex` only guards the map — the session
-	// object itself is owned by the unique_ptr in the map, which the
-	// idle-sweep may erase. Take the mutex briefly, grab the raw ptr,
-	// drop the mutex, wait on the app's CV. If the session dies mid-wait
-	// the CV won't fire from our side — rely on the timeout to release.
-	// Future hardening: shared_ptr<ibWebSession> so the waiter pins
-	// lifetime. For today's synchronous flow the timeout is acceptable.
+	// The waiter parks here for up to 25 seconds, and the session behind it
+	// can be swept in that window. Waiting on the application's own mutex and
+	// condition variable meant waiting on an object the sweep was free to
+	// destroy, and the process aborted when it did: close a browser tab that
+	// had an open stream, and the next session teardown ran into a waiter
+	// still parked on the freed application. The signal is owned by
+	// shared_ptr and pinned here for the whole wait, and the application
+	// closes it on the way out -- so the waiter is woken by the teardown
+	// rather than outliving it.
 	Sessions().Touch(sessionId);
 
-	ibWebApplication* app = Sessions().FindApp(sessionId);
-	if (app == nullptr) {
+	std::shared_ptr<ibWebLiveSignal> live = Sessions().FindLiveSignal(sessionId);
+	if (!live) {
 		WfrontendLiveUpdate r;
 		r.seq  = lastSeen;
 		r.json = "{}";
 		return r;
 	}
 
-	const std::uint64_t newSeq = app->WaitForChange(lastSeen, timeoutMs);
+	const std::uint64_t newSeq = live->Wait(lastSeen, timeoutMs);
 
 	WfrontendLiveUpdate r;
 	r.seq  = newSeq;

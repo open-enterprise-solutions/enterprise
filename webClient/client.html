@@ -2853,7 +2853,15 @@ function startLive(){
   if (liveSource) return;
   if (typeof EventSource === 'undefined') { startPolling(); return; }
   try {
-    liveSource = new EventSource(API + '/stream', { withCredentials: true });
+    // EventSource cannot carry a header, so the per-tab session id goes
+    // in the query string -- the server reads ?sid= for exactly the
+    // requests that can only send a URL. The cookie would answer too,
+    // but it names ONE session for the whole browser, and every tab
+    // here has its own; a second tab would have been listening to the
+    // first tab's stream, and a browser that dropped the cookie got a
+    // 401 and fell back to polling for the rest of the session.
+    liveSource = new EventSource(API + '/stream?sid=' + encodeURIComponent(tabSid),
+      { withCredentials: true });
   } catch (e) {
     console.log('SSE unavailable, falling back to polling', e);
     startPolling();

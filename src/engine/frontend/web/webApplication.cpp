@@ -164,6 +164,9 @@ ibWebApplication::~ibWebApplication()
 {
 	if (m_initialized)
 		OnExit();
+	// Belt to OnExit's braces: an application that never initialised still has
+	// a signal, and a waiter that found it must not be left parked on it.
+	m_live->Close();
 }
 
 ibValueModuleManagerRuntimeConfiguration* ibWebApplication::GetManagerModule() const
@@ -357,21 +360,12 @@ bool ibWebApplication::DispatchCommand(int actionId)
 
 void ibWebApplication::MarkDirty()
 {
-	m_seq.fetch_add(1, std::memory_order_acq_rel);
-	std::lock_guard<std::mutex> lk(m_seqMtx);
-	m_seqCv.notify_all();
+	m_live->Bump();
 }
 
 uint64_t ibWebApplication::WaitForChange(uint64_t lastSeen, int timeoutMs)
 {
-	std::unique_lock<std::mutex> lk(m_seqMtx);
-	if (timeoutMs <= 0) {
-		m_seqCv.wait(lk, [this, lastSeen]{ return m_seq.load() != lastSeen; });
-	} else {
-		m_seqCv.wait_for(lk, std::chrono::milliseconds(timeoutMs),
-			[this, lastSeen]{ return m_seq.load() != lastSeen; });
-	}
-	return m_seq.load();
+	return m_live->Wait(lastSeen, timeoutMs);
 }
 
 void ibWebApplication::PostWork(std::function<void()> fn)
@@ -393,6 +387,11 @@ void ibWebApplication::OnExit()
 {
 	if (!m_initialized)
 		return;
+
+	// First, before anything is torn down: release the SSE subscribers. They
+	// are parked on the signal for up to 25 seconds, and every one of them is
+	// holding an HTTP worker thread while this session stops existing.
+	m_live->Close();
 
 	// Timers now live on the form (ibValueForm::m_idleHandlerArray) —
 	// same ownership model as desktop; the form's dtor / CloseDocForm
