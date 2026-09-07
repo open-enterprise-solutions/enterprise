@@ -63,5 +63,5 @@ moved, so it would write a heartbeat and ask again, forever.
 `SessionManager::FindApp` returns `ibWebApplication*` with no pin, and
 `wfrontendOpenMetaObject` runs a worker task through it after the lock is gone.
 The window is far narrower than the stream's — it is the length of one menu
-click, not half a minute — but it is the same shape. Recorded in
-[open-issues.md](open-issues.md).
+click, not half a minute — but it is the same shape. Filed as
+[#105](https://github.com/open-enterprise-solutions/enterprise/issues/105).

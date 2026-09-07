@@ -83,7 +83,8 @@ and any older `ui5/*` directory is removed so one tree is served.
 `assets/tabulator/<version>/` still keys on the bare version. Its files are
 copied verbatim from the package rather than transformed, so the same version
 has always meant the same bytes — but that is a habit, not a mechanism, and the
-day its vendoring starts rewriting anything it should grow the same digest. It
+day its vendoring starts rewriting anything it should grow the same digest —
+[#107](https://github.com/open-enterprise-solutions/enterprise/issues/107). It
 is deliberately left out of the stamping above: a URL that promises immutability
 should say so in one place, not two.
 

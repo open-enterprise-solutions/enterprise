@@ -92,7 +92,9 @@ The rest reach the browser as a node nothing claims, and `BaseControl` draws
 them as an empty element: `Notebook` / `NotebookPage`, `Radiobutton`, `Textbox`,
 `Gridbox`, `Chartbox`, `Htmlbox`, `Gauge`, `Slider`, `Staticline`, `ClientForm`.
 A form using one of those has a hole in it rather than a placeholder, which is
-worth knowing before a demo is built on one.
+worth knowing before a demo is built on one. Filed as
+[#104](https://github.com/open-enterprise-solutions/enterprise/issues/104), with
+the placeholder and the build-out named as separable pieces of work.
 
 **A button with no command is not a gap.** `ibValueButton::Update` hides a button
 whose bound command does not resolve -- deliberately, and on the desktop too:
