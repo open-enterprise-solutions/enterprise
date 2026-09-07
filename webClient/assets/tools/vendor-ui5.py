@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import hashlib
 import json
 import os
 import re
@@ -407,9 +408,28 @@ def convert_json_module_imports(staged: Path) -> None:
 
 
 asset_root = Path(__file__).resolve().parents[1]
+repo_root  = Path(__file__).resolve().parents[3]
 ui5_root = asset_root / "ui5"
-destination = ui5_root / VERSION
 smoke_page = asset_root / "smoke.html"
+client_page = repo_root / "webClient" / "client.html"
+
+
+def tree_digest(root: Path) -> str:
+    # Every file's path and bytes, in one order. The served directory is
+    # named after this, because `immutable` is a promise that the bytes at
+    # a URL never change -- and re-vendoring the same VERSION with a
+    # different tree breaks it. A browser that cached the old
+    # json-imports/Themes.js kept importing a parameters bundle this tree
+    # no longer has, for the whole year the header promised, and the theme
+    # never loaded. Found in Firefox on 2026-09-07; a fresh browser could
+    # not see it, which is the shape of every cache bug.
+    digest = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()[:12]
 
 with tempfile.TemporaryDirectory(prefix="oes-ui5-", dir="/private/tmp") as temp:
     scratch = Path(temp)
@@ -614,9 +634,15 @@ with tempfile.TemporaryDirectory(prefix="oes-ui5-", dir="/private/tmp") as temp:
 
     write_consolidated_licenses(staged, packages)
 
+    # Everything staged is final now, so the tree can be named after its
+    # own contents.
+    build_id = f"{VERSION}-{tree_digest(staged)}"
+    asset_prefix = f"./assets/ui5/{build_id}"
+    destination = ui5_root / build_id
+
     imports = {}
     for name in sorted(packages):
-        imports[f"{name}/"] = f"./assets/ui5/{VERSION}/{name}/"
+        imports[f"{name}/"] = f"{asset_prefix}/{name}/"
 
     for specifier in sorted(bare_specifiers):
         name = package_name(specifier)
@@ -629,7 +655,7 @@ with tempfile.TemporaryDirectory(prefix="oes-ui5-", dir="/private/tmp") as temp:
         if not (staged / name / relative).is_file():
             raise RuntimeError(f"vendored import has no target: {specifier} -> {relative}")
         if not subpath or relative != subpath:
-            imports[specifier] = f"./assets/ui5/{VERSION}/{name}/{relative}"
+            imports[specifier] = f"{asset_prefix}/{name}/{relative}"
 
     import_map = json.dumps({"imports": imports}, indent=2) + "\n"
     (staged / "importmap.json").write_text(import_map)
@@ -653,7 +679,7 @@ with tempfile.TemporaryDirectory(prefix="oes-ui5-", dir="/private/tmp") as temp:
     document_relative_urls = [
         path
         for path in staged.rglob("*.js")
-        if f"./assets/ui5/{VERSION}/" in path.read_text(errors="ignore")
+        if "./assets/ui5/" in path.read_text(errors="ignore")
     ]
     if document_relative_urls:
         raise RuntimeError(
@@ -667,21 +693,32 @@ with tempfile.TemporaryDirectory(prefix="oes-ui5-", dir="/private/tmp") as temp:
         if (staged / dropped).exists():
             raise RuntimeError(f"unused icon package was staged: {dropped}")
 
-    smoke = smoke_page.read_text()
-    indented_map = "\n".join(f"  {line}" for line in import_map.rstrip().splitlines())
-    replacement = f'<script type="importmap">\n{indented_map}\n  </script>'
-    smoke, replacements = re.subn(
-        r'<script type="importmap">.*?</script>', replacement, smoke, flags=re.DOTALL
-    )
-    if replacements != 1:
-        raise RuntimeError("smoke.html must contain exactly one import map")
+    # Both pages that carry an import map are repointed at the new
+    # directory. A prefix substitution rather than a whole-map rewrite:
+    # the client's map has entries of its own (tabulator), and they are
+    # none of this script's business.
+    prefix_pattern = re.compile(r"\./assets/ui5/[^/\"']+/")
+    for page in (smoke_page, client_page):
+        if not page.is_file():
+            raise RuntimeError(f"page with an import map is missing: {page}")
+        text = page.read_text()
+        patched, count = prefix_pattern.subn(f"{asset_prefix}/", text)
+        if count == 0:
+            raise RuntimeError(f"no asset prefix to repoint in {page}")
+        page.write_text(patched)
 
+    # One tree is served, and it is this one. An older build left in place
+    # would be dead weight in the repository and a second answer to the
+    # same question.
+    for stale in sorted(ui5_root.glob("*")) if ui5_root.is_dir() else []:
+        if stale.is_dir() and stale.name != build_id:
+            shutil.rmtree(stale, ignore_errors=True)
     shutil.rmtree(destination, ignore_errors=True)
     ui5_root.mkdir(parents=True, exist_ok=True)
     shutil.copytree(staged, destination)
-    smoke_page.write_text(smoke)
 
 print(f"Vendored {ROOT_PACKAGE}@{VERSION} in {destination}")
+print(f"  build id: {build_id} (content digest — the cache key)")
 for name in sorted(packages):
     package_files = sum(1 for path in (destination / name).rglob("*") if path.is_file())
     print(f"  {name}@{packages[name]['version']}: {package_files} files")

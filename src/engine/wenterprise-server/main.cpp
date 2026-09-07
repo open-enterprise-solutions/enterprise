@@ -473,18 +473,34 @@ int main(int argc, char** argv)
 	// TCP_NODELAY — disable Nagle/delayed-ACK on accepted sockets.
 	// Default was OFF → localhost round-trip picked up ~200ms each.
 	svr.set_tcp_nodelay(true);
-	// Disable keep-alive: serve one request per TCP connection. The
-	// browser's 2s poll hit a cpp-httplib keep-alive issue on Windows
-	// where the server thread's blocking select() doesn't wake up on
-	// a new request from the same connection — every poll tick waited
-	// the full read_timeout (5s→30s) before returning. Cold connect
-	// on 127.0.0.1 is ~200ms; that's the price we pay for now, but
-	// it's bounded and consistent versus the 5-30s stall.
+	// Keep-alive is off on WINDOWS ONLY. The browser's 2s poll hit a
+	// cpp-httplib keep-alive issue there: the server thread's blocking
+	// select() does not wake on a second request from the same
+	// connection, so every poll tick waited out the full read_timeout
+	// before returning. One request per connection costs a ~200ms cold
+	// connect on 127.0.0.1, which is bounded and consistent against a
+	// 5-30s stall.
+	//
+	// It was applied to every platform, and the cost showed up the day
+	// the UI5 module graph did: a cold page load is ~450 requests, and
+	// with keep-alive off that is ~450 TCP connections through the six
+	// a browser will hold open. Firefox failed to open the SSE stream
+	// under that churn (reported 2026-09-07) and fell back to polling.
+	// The reason named above is a Windows one, so the workaround is
+	// Windows-only now.
+#if defined(_WIN32)
 	svr.set_keep_alive_max_count(1);
-	// Short read/write timeouts are fine once keep-alive is off —
-	// each connection is single-request, so the read-idle window
-	// doesn't exist.
+#endif
+	// Read timeout is the idle window on a kept-alive connection, so it
+	// has to outlast a browser's think time between requests; five
+	// seconds would close a connection the page is about to reuse.
+	// Where each connection serves one request the window does not
+	// exist and the short value is free.
+#if defined(_WIN32)
 	svr.set_read_timeout(5);
+#else
+	svr.set_read_timeout(30);
+#endif
 	svr.set_write_timeout(5);
 
 	const std::string assetDir = ResolveAssetDirectory();

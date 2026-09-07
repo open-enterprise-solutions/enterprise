@@ -13,7 +13,7 @@ webClient/assets/
 ├── harness-form.json              the fixture both iframes render
 ├── oes/oes-tokens.css             Layer 2/3 semantic tokens
 ├── tools/vendor-ui5.py            reproduces everything under ui5/
-└── ui5/2.26.0/
+└── ui5/2.26.0-<digest>/
     ├── importmap.json
     ├── THIRD_PARTY_LICENSES.txt
     ├── @sap-theming/theming-base-content/    24 font files
@@ -28,7 +28,35 @@ webClient/assets/
 540 files, 6.5 MB. The server mounts the directory at `<prefix>/assets`,
 resolving it the same three ways `LoadClient()` resolves the client itself:
 `<exeDir>/web/assets`, then a walk up to `webClient/assets` bounded at six levels.
-The versioned path is served `immutable` with a year's cache.
+The path is served `immutable` with a year's cache.
+
+## The directory is named after its contents
+
+`ui5/<version>-<digest>/`, where the digest is a SHA-256 over every staged
+file's path and bytes. `immutable` is a promise that the bytes at a URL never
+change, and the tree under a bare `2.26.0/` is not upstream's — it is what this
+script *makes*, and it changed when the script did.
+
+It cost a day. An early run staged the theme parameters as
+`parameters-bundle.css.json`; a later one converted them to `.css.js` and
+rewrote the loader's import to match. A browser holding the old
+`json-imports/Themes.js` — for the year the header had promised — kept asking
+for a `.json` that no longer existed, got a 404 with no content type, and
+reported `blocked because of a disallowed MIME type ("")`. The theme never
+loaded, every `--sap*` stayed undefined, and the page rendered with black
+borders. No fresh browser could reproduce it, which is the shape of every cache
+bug. Reported from Firefox, 2026-09-07.
+
+The digest is computed over the staged tree before the import map is written
+into it, so it is stable: two runs produce the same id. Both pages that carry an
+import map — `assets/smoke.html` and `webClient/client.html` — are repointed by
+prefix substitution, which leaves the client's own entries (tabulator) alone,
+and any older `ui5/*` directory is removed so one tree is served.
+
+`assets/tabulator/<version>/` still keys on the bare version. Its files are
+copied verbatim from the package rather than transformed, so the same version
+has always meant the same bytes — but that is a habit, not a mechanism, and the
+day its vendoring starts rewriting anything it should grow the same digest.
 
 ## Updating
 

@@ -29,14 +29,14 @@ window.OES = window.OES || {};
 <!-- Import-map targets are relative to this document at /w/<prefix>/. -->
 <script type="importmap">
 {"imports":{
-  "@sap-theming/theming-base-content/":"./assets/ui5/2.26.0/@sap-theming/theming-base-content/",
-  "@ui5/webcomponents/":"./assets/ui5/2.26.0/@ui5/webcomponents/",
-  "@ui5/webcomponents-base/":"./assets/ui5/2.26.0/@ui5/webcomponents-base/",
-  "@ui5/webcomponents-fiori/":"./assets/ui5/2.26.0/@ui5/webcomponents-fiori/",
-  "@ui5/webcomponents-icons/":"./assets/ui5/2.26.0/@ui5/webcomponents-icons/",
-  "@ui5/webcomponents-localization/":"./assets/ui5/2.26.0/@ui5/webcomponents-localization/",
-  "@ui5/webcomponents-theming/":"./assets/ui5/2.26.0/@ui5/webcomponents-theming/",
-  "@ui5/webcomponents-base/jsx-runtime":"./assets/ui5/2.26.0/@ui5/webcomponents-base/dist/jsx-runtime.js",
+  "@sap-theming/theming-base-content/":"./assets/ui5/2.26.0-08a258f2cb56/@sap-theming/theming-base-content/",
+  "@ui5/webcomponents/":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents/",
+  "@ui5/webcomponents-base/":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents-base/",
+  "@ui5/webcomponents-fiori/":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents-fiori/",
+  "@ui5/webcomponents-icons/":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents-icons/",
+  "@ui5/webcomponents-localization/":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents-localization/",
+  "@ui5/webcomponents-theming/":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents-theming/",
+  "@ui5/webcomponents-base/jsx-runtime":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents-base/dist/jsx-runtime.js",
   "tabulator-tables":"./assets/tabulator/6.5.2/tabulator.js"
 }}
 </script>
@@ -2372,12 +2372,17 @@ function loadTabulator(){
 // OES vertical and in-cell groups are a row BAND — the row grows taller
 // instead of wider — which Tabulator has no notion of, so those flatten
 // here and their columns stay side by side. See docs-web/web/tablebox.md.
-function tableboxColumns(node){
+// Returns the column definitions, and fills `sortableBy` (field -> the
+// column control's id) as it goes. The id used to ride on the definition
+// itself, which Tabulator validates against its own option list and warns
+// about by name — a private key does not belong in somebody else's
+// vocabulary. The field is already unique per column, so it is the join.
+function tableboxColumns(node,sortableBy){
   const out=[];
   for(const kid of (node.children||[])){
     if(kid.type==='tableboxcolumngroup'){
       if(kid.visible===false) continue;
-      const inner=tableboxColumns(kid);
+      const inner=tableboxColumns(kid,sortableBy);
       if(!inner.length) continue;
       if(kid.showTitle&&kid.grouping==='horizontal')
         out.push({title:kid.caption||'',headerHozAlign:kid.align||'center',columns:inner});
@@ -2403,10 +2408,10 @@ function tableboxColumns(node){
       // list again from the top. The column carries its own id so the
       // click knows which one it was.
       headerSort:false,
-      // Which control this header belongs to, so the table-level
-      // headerClick knows what the server should sort by.
-      oesColumnId:kid.sortable?kid.id:undefined,
     };
+    // Which control this header belongs to, so the table-level
+    // headerClick knows what the server should sort by.
+    if(sortableBy&&kid.sortable) sortableBy.set(kid.field,kid.id);
     if(kid.width>0) col.minWidth=kid.width;
     out.push(col);
   }
@@ -2428,7 +2433,8 @@ class TableBox extends BaseControl{
     grid.className='oes-tablebox-grid';
     host.appendChild(grid);
 
-    const columns=tableboxColumns(node);
+    const sortableBy=new Map();
+    const columns=tableboxColumns(node,sortableBy);
     const pageSize=node.pageSize>0?node.pageSize:50;
 
     // Built after the host lands in the document: Tabulator measures the
@@ -2514,7 +2520,7 @@ class TableBox extends BaseControl{
       // rebuilds the grid — which asks for the first page of the NEW
       // order. The old page keys named rows in the old one.
       table.on('headerClick',async(e,column)=>{
-        const id=column.getDefinition().oesColumnId;
+        const id=sortableBy.get(column.getField());
         if(id===undefined) return;
         const tree=await send('sort',id);
         if(tree){ main.innerHTML=''; main.appendChild(render(tree)); }

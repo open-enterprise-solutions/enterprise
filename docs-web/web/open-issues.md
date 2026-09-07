@@ -29,6 +29,19 @@ never the one holding the forms. The shape that fixes it is for `GET /` to mint
 nothing and let the first XHR create the session under the id the client already
 has.
 
+## Firefox
+
+**The SSE stream would not connect.** *2026-09-07, fixed the same day.*
+`svr.set_keep_alive_max_count(1)` was applied on every platform, though the
+reason written beside it is a Windows one — a cpp-httplib keep-alive stall on
+the browser's poll. One request per connection is cheap at a handful of
+requests and not at 450, which is what a cold UI5 page load is: Firefox has six
+connections to a host and had to churn all 450 through them, and `EventSource`
+could not get one. It fell back to polling, so nothing broke visibly. The
+workaround is `#if defined(_WIN32)` now, and the read timeout is 30s off Windows
+because on a kept-alive connection that value is the idle window between a
+browser's requests, not a stall.
+
 ## The guard that says nothing
 
 **`ibCrashGuard` is silent on a segfault in the web server.** *2026-09-05, still
