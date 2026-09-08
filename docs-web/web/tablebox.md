@@ -295,6 +295,40 @@ leaves the cell reading "Кофе в зёрнах, 1 кг". Clicking the line-nu
 opens no editor. A list is unchanged: no editors, and a double-click still opens
 the object's form.
 
+### The buttons inside a cell
+
+A cell's editor carries the same three a form field's does — Select (`…`), Open
+(`▷`), Clear (`×`) — read from the same three column properties the desktop
+renderer reads onto its inline editor (`GetSelectButton` / `GetOpenButton` /
+`GetClearButton`).
+
+Select and Open are narrowed to a **reference**, and the narrowing is about what
+exists rather than about what is declared. Both properties default to true on
+every column, and the desktop can honour that on a number: its Select opens the
+quick-choice popup, its Open shows the value. Neither has a web road, and a
+button that does nothing when pressed is worse than one that is not there — the
+same reason the table's view-state band is absent here rather than present and
+dead. Clear needs no road: an empty value of the type the cell holds is a value.
+
+A button is the act, not the text beside it. The edit is cancelled first, so the
+editor's own commit road and the button's cannot both reach the same line; then
+the cursor moves to the row and the kind goes to the column —
+`cellSelect` / `cellOpen` / `cellClear`, the same shape as `cell`.
+
+`…` walks the one route a form field walks: `ChooseValue` → `ProcessChoice`
+opens the list as a picker with the COLUMN as its owner, and the row comes back
+through `ibValueModelTableBoxColumn::ChoiceProcessing` — which is a real body on
+the web now, and was a no-op stub. It writes the value onto the current line and
+fires `OnChange`; it does not call `SetControlValue`, because the choice
+machinery refreshes the owner form itself (`ibValueForm::ChoiceDocForm`), which
+is what the desktop relies on too.
+
+Measured on a fresh Goods receipt line: the Goods cell's editor carries `…` and
+`×`; `…` opens the Goods list as a third tab; picking a row — by double-click or
+by the picker's own Select tool — closes it and the cell reads the goods. `×`
+empties the cell and opens nothing. A number cell carries `×` alone. Typing a
+name still works beside all of it.
+
 ## The font every control was drawn in
 
 Worth recording because it looked like a table problem and was not.
@@ -346,10 +380,4 @@ Named rather than implied, because each is a road not started.
   *in-cell* group is a row BAND — the row grows taller instead of wider — which
   Tabulator has no notion of; those flatten, and their columns stay side by side.
   See `docs/column-groups.md` for what the desktop does.
-- **Picking a reference IN A CELL.** A reference cell is edited by typing the
-  name, which the server resolves through `FindValue` — the same road the
-  desktop's inline editor takes when somebody types rather than presses `…`.
-  The `…` itself has no cell flow: `ibValueModelTableBoxColumn::ChoiceProcessing`
-  is still a no-op stub in the web build, so a picker opened from a cell would
-  return to nothing.
 - **Footers.** `footer` is reported and ignored.

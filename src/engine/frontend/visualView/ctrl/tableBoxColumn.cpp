@@ -291,6 +291,22 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 		&& owner != nullptr && !owner->IsPathColumn(this) && !owner->IsForeignColumn(this)
 		&& GetTextEditMode();
 	webColumn->SetReadOnly(!editable);
+
+	// The three buttons the cell's editor carries — the column's own properties,
+	// the same three the desktop renderer reads onto its inline editor.
+	//
+	// Select and Open are narrowed to a REFERENCE, and the narrowing is about
+	// what exists rather than about what is declared. Both properties default to
+	// true on every column, and the desktop can honour that on a number too: its
+	// Select opens the quick-choice popup and its Open shows the value. Neither
+	// has a web road, and a button that does nothing when pressed is worse than
+	// one that is not there — the same reason the table's view-state band is
+	// absent here rather than present and dead. Clear needs no road: an empty
+	// value of the type the cell holds is a value.
+	const bool referenceCell = valueType == wxT("reference");
+	webColumn->SetShowSelectButton(GetSelectButton() && referenceCell);
+	webColumn->SetShowOpenButton(GetOpenButton() && referenceCell);
+	webColumn->SetShowClearButton(GetClearButton());
 #endif
 }
 
@@ -451,7 +467,69 @@ void ibValueModelTableBoxColumn::OnPropertyCreated(ibProperty* /*property*/) {}
 void ibValueModelTableBoxColumn::OnPropertyRefresh() {}
 bool ibValueModelTableBoxColumn::OnPropertyChanging(ibProperty* /*property*/,
 	const wxVariant& /*newValue*/) { return true; }
-void ibValueModelTableBoxColumn::ChoiceProcessing(ibValue& /*vSelected*/) {}
+// A PICKER CAME BACK. The desktop body (tableBoxColumnEvent.cpp) writes the row
+// and then puts the text into the open inline editor; there is no such editor
+// here — the browser's is gone by the time this runs, and the form tree that
+// goes back carries the new cell. What is left is the part that is not the
+// widget, and it is the same: the script may take the choice over, then the
+// value goes onto the current line, then OnChange.
+//
+// Not through SetControlValue: the choice machinery refreshes the owner form
+// itself (ibValueForm::ChoiceDocForm), which is what the desktop relies on too.
+void ibValueModelTableBoxColumn::ChoiceProcessing(ibValue& vSelected)
+{
+	ibValue standartProcessing = true;
+	ibValueControl::CallAsEvent(m_eventChoiceProcessing, GetValue(), vSelected, standartProcessing);
+	if (!standartProcessing.GetBoolean())
+		return;
+
+	if (ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine())
+		currentLine->SetValueByMetaID(GetModelColumn(), vSelected);
+
+	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
+}
+
+// The three buttons a cell's editor carries, one method each. Same bodies as the
+// desktop's OnSelect / OnOpen / OnClearButtonPressed minus the editor widget they
+// reach for: which column asked is the request's address, and the row is the one
+// the table is standing on.
+bool ibValueModelTableBoxColumn::WebCellChoose()
+{
+	ibValue standartProcessing = true;
+	ibValueControl::CallAsEvent(m_eventStartChoice, GetValue(), standartProcessing);
+	if (!standartProcessing.GetBoolean())
+		return true;   // a script took the choice over — and said so
+
+	// THE ONE ROUTE, the same one a form field walks: settle the type, then choose
+	// a value of it. The form the author named in the property grid, or the
+	// metaobject's own.
+	const ibMetaID& formId = m_propertyChoiceForm->GetValueAsInteger();
+	const ibMetaData* metaData = GetMetaData();
+	const ibValueMetaObject* choiceForm = (formId != wxNOT_FOUND && metaData != nullptr)
+		? metaData->FindAnyObjectByFilter(formId) : nullptr;
+	return ibTypeControlFactory::ChooseValue(this, choiceForm, nullptr);
+}
+
+bool ibValueModelTableBoxColumn::WebCellOpen()
+{
+	ibValue standartProcessing = true;
+	ibValueControl::CallAsEvent(m_eventOpening, GetValue(), standartProcessing);
+	if (standartProcessing.GetBoolean()) {
+		ibValue selValue;
+		if (GetControlValue(selValue) && !selValue.IsEmpty())
+			selValue.ShowValue();
+	}
+	return true;
+}
+
+bool ibValueModelTableBoxColumn::WebCellClear()
+{
+	ibValue standartProcessing = true;
+	ibValueControl::CallAsEvent(m_eventClearing, GetValue(), standartProcessing);
+	if (standartProcessing.GetBoolean())
+		SetControlValue();
+	return true;
+}
 
 // A cell edited in the browser. The desktop equivalent is TextProcessing, run
 // when the inline editor commits, and this is the same three steps: coerce the

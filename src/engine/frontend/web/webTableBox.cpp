@@ -68,6 +68,9 @@ nlohmann::json ibWebTableBoxColumn::ToJSON() const
 	node["readOnly"]    = m_readOnly;
 	node["sortable"]    = m_sortable;
 	node["sortOrder"]   = m_sortOrder;
+	node["showSelectButton"] = m_showSelectButton;
+	node["showOpenButton"]   = m_showOpenButton;
+	node["showClearButton"]  = m_showClearButton;
 	return node;
 }
 
@@ -76,9 +79,13 @@ nlohmann::json ibWebTableBoxColumn::ToJSON() const
 // script and a source-object update happen exactly as they do there.
 bool ibWebTableBoxColumn::HandleRequest(const wxString& kind, const wxString& value)
 {
-	if (kind != wxT("cell") || m_requestControl == nullptr)
+	if (m_requestControl == nullptr)
 		return false;
-	return m_requestControl->WebCellChanged(value);
+	if (kind == wxT("cell"))       return m_requestControl->WebCellChanged(value);
+	if (kind == wxT("cellSelect")) return m_requestControl->WebCellChoose();
+	if (kind == wxT("cellOpen"))   return m_requestControl->WebCellOpen();
+	if (kind == wxT("cellClear"))  return m_requestControl->WebCellClear();
+	return false;
 }
 
 nlohmann::json ibWebTableBoxColumnGroup::ToJSON() const

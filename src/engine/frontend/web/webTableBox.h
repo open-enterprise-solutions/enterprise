@@ -62,13 +62,18 @@ public:
 	// "none" until the composer says otherwise, then "asc" or "desc".
 	void SetSortable(bool sortable)            { m_sortable = sortable; }
 	void SetSortOrder(const wxString& order)   { m_sortOrder = order; }
+	// The three buttons the cell's editor carries, exactly as a form field's does.
+	void SetShowSelectButton(bool show)        { m_showSelectButton = show; }
+	void SetShowOpenButton(bool show)          { m_showOpenButton = show; }
+	void SetShowClearButton(bool show)         { m_showClearButton = show; }
 
 	const wxString& GetFieldKey() const { return m_field; }
 
 	// A cell edit arrives here: kind "cell", the payload being the text the
-	// person typed. The row is the table's CURRENT one — the same rule the
-	// desktop has, where a cell cannot be edited without the cursor standing
-	// on it, and the client moves the cursor before it sends this.
+	// person typed; or one of the editor's three buttons — "cellSelect",
+	// "cellOpen", "cellClear". The row is the table's CURRENT one — the same
+	// rule the desktop has, where a cell cannot be edited without the cursor
+	// standing on it, and the client moves the cursor before it sends this.
 	virtual bool HandleRequest(const wxString& kind, const wxString& value) override;
 
 	// Set by the dispatcher for the length of one call, like the table's:
@@ -95,6 +100,9 @@ private:
 	// TextEdit off is not typed into.
 	bool     m_readOnly  = true;
 	bool     m_sortable  = false;
+	bool     m_showSelectButton = false;
+	bool     m_showOpenButton   = false;
+	bool     m_showClearButton  = false;
 };
 
 // ---------------------------------------------------------------------------

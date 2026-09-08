@@ -719,6 +719,10 @@ public:
 	// Public because the web shim is what calls it, the way the table's own shim
 	// calls the commands.
 	bool WebCellChanged(const wxString& text);
+	// …and of the three buttons its inline editor carries.
+	bool WebCellChoose();
+	bool WebCellOpen();
+	bool WebCellClear();
 #endif
 
 private:

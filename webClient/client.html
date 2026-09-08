@@ -302,6 +302,17 @@ input.ctrl{padding:3px 6px;border:1px solid #aaa;border-radius:3px}
   background:transparent;flex-shrink:0}
 .texted > button:hover:not(:disabled){background:rgba(0,0,0,.06)}
 .texted > button:active:not(:disabled){background:rgba(0,0,0,.12)}
+/* A cell's editor: the same shared-frame look as a form field's group, sized to
+   the cell it replaces rather than to a form row. */
+.oes-cell-editor{display:flex;align-items:stretch;width:100%;height:100%;
+  box-sizing:border-box;background:#fff}
+.oes-cell-editor > input{border:0;padding:2px 4px;outline:none;font:inherit;
+  color:inherit;background:transparent;flex:1 1 auto;min-width:0}
+.oes-cell-editor > button{border:0;border-left:1px solid rgba(0,0,0,.08);
+  padding:0 6px;cursor:pointer;font:inherit;color:inherit;background:transparent;
+  flex:0 0 auto;line-height:1}
+.oes-cell-editor > button:hover{background:rgba(0,0,0,.06)}
+.oes-cell-editor > button:active{background:rgba(0,0,0,.12)}
 .toolbar{display:flex;align-items:center;gap:2px;background:#eef1f4;border:1px solid #c9ced3;border-radius:3px;padding:3px 4px;margin:2px 0}
 .tool{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1px solid transparent;border-radius:3px;background:transparent;font:inherit;color:inherit;cursor:pointer;line-height:1.3}
 .tool:hover:not(:disabled){background:#dde6f0;border-color:#b5c4d6}
@@ -2051,12 +2062,66 @@ function loadTabulator(){
 // itself, which Tabulator validates against its own option list and warns
 // about by name — a private key does not belong in somebody else's
 // vocabulary. The field is already unique per column, so it is the join.
-function tableboxColumns(node,sortableBy,editableBy){
+// The cell's own editor: the text, plus the buttons the column declares — Select
+// (…), Open (▷), Clear (×). The same three a form field carries, read from the
+// same three properties, which is why a number column shows them too: the
+// desktop's inline editor reads exactly these and shows exactly these.
+//
+// A button is the act, not the text beside it: the edit is cancelled first, so
+// the editor's own commit road and the button's cannot both reach the same line.
+// Then the cursor moves to the row and the kind goes to the COLUMN — the shape
+// every cell request has.
+function oesCellEditor(tableId,columnId,buttons){
+  return function(cell,onRendered,success,cancel){
+    let settled=false;
+    const group=document.createElement('div');
+    group.className='oes-cell-editor';
+    const input=document.createElement('input');
+    input.type='text';
+    input.value=cell.getValue()??'';
+    group.appendChild(input);
+    onRendered(()=>{ input.focus(); input.select(); });
+    const commit=()=>{ if(settled) return; settled=true; success(input.value); };
+    input.addEventListener('blur',commit);
+    input.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){ e.preventDefault(); commit(); }
+      else if(e.key==='Escape'){ e.preventDefault(); settled=true; cancel(); }
+    });
+    const key=cell.getRow().getData()._key;
+    for(const [glyph,kind,title] of buttons){
+      const btn=document.createElement('button');
+      btn.type='button'; btn.textContent=glyph; btn.title=title;
+      // Keep the focus where it is: a blur here commits the cell through the
+      // editor's own road at the same moment the button takes its own, and the
+      // two would race for one line.
+      btn.addEventListener('mousedown',e=>e.preventDefault());
+      btn.addEventListener('click',async()=>{
+        settled=true; cancel();
+        const moved=await netFetch(API+'/fire/'+tableId+'/row?value='+encodeURIComponent(key),
+          {method:'POST',credentials:'same-origin'});
+        if(!moved.ok) return;
+        const r=await netFetch(API+'/fire/'+columnId+'/'+kind,
+          {method:'POST',credentials:'same-origin'});
+        if(!r.ok) return;
+        const tree=await r.json();
+        if(tree&&tree.error){ OES.handleBackendError(tree); return; }
+        if(tree&&Object.keys(tree).length>0){ main.innerHTML=''; main.appendChild(render(tree)); }
+        // Select and Open can raise a form of their own — a picker, the
+        // referenced object — so the tab strip is re-read at once.
+        if(kind!=='cellClear') refreshTabs();
+      });
+      group.appendChild(btn);
+    }
+    return group;
+  };
+}
+
+function tableboxColumns(node,sortableBy,editableBy,tableId){
   const out=[];
   for(const kid of (node.children||[])){
     if(kid.type==='tableboxcolumngroup'){
       if(kid.visible===false) continue;
-      const inner=tableboxColumns(kid,sortableBy,editableBy);
+      const inner=tableboxColumns(kid,sortableBy,editableBy,tableId);
       if(!inner.length) continue;
       if(kid.showTitle&&kid.grouping==='horizontal')
         out.push({title:kid.caption||'',headerHozAlign:kid.align||'center',columns:inner});
@@ -2092,8 +2157,12 @@ function tableboxColumns(node,sortableBy,editableBy){
     // road the desktop's inline editor takes, so there is one parser and not
     // one per value type in the browser.
     if(editableBy&&kid.readOnly===false){
-      col.editor='input';
       editableBy.set(kid.field,kid.id);
+      const buttons=[];
+      if(kid.showSelectButton) buttons.push(['…','cellSelect','Select']);
+      if(kid.showOpenButton)   buttons.push(['▷','cellOpen','Open']);
+      if(kid.showClearButton)  buttons.push(['×','cellClear','Clear']);
+      col.editor=buttons.length?oesCellEditor(tableId,kid.id,buttons):'input';
     }
     if(kid.width>0) col.minWidth=kid.width;
     out.push(col);
@@ -2129,7 +2198,7 @@ class TableBox extends BaseControl{
 
     const sortableBy=new Map();
     const editableBy=new Map();
-    const columns=tableboxColumns(node,sortableBy,editableBy);
+    const columns=tableboxColumns(node,sortableBy,editableBy,node.id);
     const pageSize=node.pageSize>0?node.pageSize:50;
 
     // Built after the host lands in the document: Tabulator measures the
