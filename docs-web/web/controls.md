@@ -95,6 +95,94 @@ The markup is drawn in **an iframe with `sandbox=""`** — no scripts, no origin
 It is the application's markup, not the client's, and it does not get to reach
 into the page around it.
 
+## The renderer lifecycle
+
+The client keeps its DOM. Every answer the server gives is the whole form tree
+again, and the client folds it into what is already on screen rather than
+drawing it afresh — control by control, keyed by control id. What a rebuild
+threw away is what survives: the scroll position, the caret, the grid with the
+pages it had loaded, the row somebody was standing on.
+
+So a renderer is three calls, not one:
+
+| Call | When | What it answers |
+|---|---|---|
+| `render(node)` | no element stands for this node yet | the element |
+| `update(el, node, prev)` | an element with the same key exists | `true` when it brought the element up to date in place, `false` when it cannot and the element is to be rebuilt |
+| `dispose(el)` | the element is leaving the DOM | nothing; it lets go of what lives outside the DOM (a Tabulator instance) |
+
+`BaseControl` supplies a default `update` that answers `true` when the node's
+own properties are deep-equal to the previous ones and `false` otherwise — so
+a class that overrides nothing is correct, just not cheap. The common
+properties (`shown`, `enabled`, colours, font, tooltip, sizes, `layout`) are
+left out of that comparison: `applyCommon` and `applyLayout` run on every pass
+and reset everything they can set, so a change to one of them is never a
+rebuild. A wrapper's `enabled` reaches the controls that are its own — those
+with no managed element between them and it — and not a field on a notebook
+page or a tool on a grid's bar, which are that child's to set whichever of the
+two is reconciled first; what Tabulator draws inside its grid is nobody's.
+
+**To keep its element, a renderer overrides `update` and changes the element.**
+StaticText writes the label; Button and Tool redraw their content when the
+caption key (representation, label, picture) moved; CheckBox, RadioButton,
+Gauge and Slider write the value; StaticBoxSizer writes the legend; HtmlBox
+sets `srcdoc` only when the page changed, because setting it reloads the
+frame. A renderer answers `false` for what was decided at creation — a text
+field's element kind (`input` / `textarea`) and its `type`, a tool's road, a
+gauge's orientation.
+
+**The key** is the control id, and `type@index` among its siblings for a
+sizer, which has none. A different key or type in the same place is a new
+element in place of the old; the old is disposed. Children of an ordinary
+container are matched by key, moved into place, and the leftovers disposed. A
+renderer that draws its own subtree (`ownsChildren`) reconciles it itself: the
+notebook reconciles the page in front into its body, so a page switch replaces
+the page and nothing else; the tablebox reconciles its command bar and compares
+its column shape — a caption, a width, a sort arrow moved is a new grid, and
+the same shape with a `dataVersion` past the one its rows were read at (every
+page answer carries that; the previous tree's number is the fallback for a
+server that does not stamp pages) is the same grid asked to re-read its rows
+([tablebox.md](tablebox.md)). Its pages go out one at a time on a single
+chain, and every `first` opens a new generation, so a `next` from a window the
+server has thrown away cannot land on fresh rows under the same keys.
+
+**Typing wins.** A text field's `update` writes the value while nobody is in
+the field, or while the field still shows what the client last wrote there
+(`oesApplied`). Otherwise the server's value waits in `oesPending` and lands on
+blur when the field is left with no net change — the one case no `change`
+event covers. A commit counts the sent text as applied, so the server's answer
+to it is written even with the caret still in the field, under the caret rather
+than after it; while an older commit is still unanswered the field counts as
+being typed in, so its answer cannot overwrite the newer text.
+
+**Focus** is captured before a pass and restored after it only when the element
+that held it was rebuilt: the input of the same control id gets it back,
+selection range included. An element brought up to date keeps its focus by
+itself.
+
+**Mounts.** There is one retained DOM per host, keyed by the root id the tree
+carries (`mounts` in `client.html`), inside `#tab-body`; the active one is
+shown and the others hidden, so a tab switch brings back the DOM it left. Each
+mount remembers the last `seq` it applied, and a tree whose `seq` is not past it
+is the same state again — the stream echoing a direct answer — and is dropped
+([live-updates.md](live-updates.md)). The sequence is the session's and only
+goes up, so the highest `seq` applied anywhere is a floor as well: a late frame
+for a host that has since been closed finds no mount to compare against, and
+without the floor would be mounted — a dead picker back on screen. After each
+read of `/session`, a hidden mount whose host is on no tab is disposed; an
+empty strip disposes every mount. An empty answer (`{}`, no active host) to any
+road blanks the content area, takes a picker down, and brings the "Pick a form"
+line back — except on the cell roads, where `{}` means the server refused the
+value and the cell is put back instead. The picker dialog's body is a mount
+like any other, and so is the harness: `?harness=1` posts fixtures through the
+same `paintTree`, which is what lets a second fixture with the same root id be
+reconciled into the first.
+
+The label-alignment pass runs once per pass of a mount, in an animation frame,
+as before. `.form-host` carries `overflow-anchor: none`: left on, the browser
+moved the offset when content above the viewport was re-measured, and a host
+shown again after its tab was hidden came back 138px above where it was left.
+
 ## What is still not on the shelf
 
 **Combobox, Choice, Listbox** are empty shells on the DESKTOP as well: no items,

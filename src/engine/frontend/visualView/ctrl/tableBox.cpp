@@ -1016,6 +1016,20 @@ void ibValueModelTableBox::OnPropertyCreated(ibProperty* /*property*/) {}
 bool ibValueModelTableBox::OnPropertyChanging(ibProperty* /*property*/, const wxVariant& /*newValue*/) { return true; }
 void ibValueModelTableBox::OnPropertyChanged(ibProperty* /*property*/, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/) {}
 
+void ibValueModelTableBox::SyncWebNode(wxObject* node) const
+{
+	ibWebTableBox* webTable = dynamic_cast<ibWebTableBox*>(node);
+	if (webTable == nullptr)
+		return;
+	// The generation is bumped by every row notification the model sends
+	// (RowChanged, NotifyRowAppended, NotifyReset, ...), so the browser sees
+	// it move exactly when the rows it holds may be out of date. A table
+	// with no model has no rows to be out of date about.
+	webTable->SetDataVersion(m_tableModel != nullptr ? m_tableModel->GetViewGeneration() : 0);
+	// The shim takes the control as an argument rather than remembering it.
+	webTable->SyncSortOrders(this);
+}
+
 // The commands a table contributes to the bar, and running one.
 //
 // The desktop pair lives in tableBoxAction.cpp, which the web build does not

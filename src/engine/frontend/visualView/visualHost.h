@@ -44,6 +44,14 @@ public:
 	wxObject* FindObject(const ibValueFrame* control) const;
 	ibValueFrame* FindControl(const wxObject* wx_object) const;
 
+	// Every pair, in no particular order — for a pass that has to reach each
+	// control once, such as the web host's sync before it serialises.
+	template <class Fn>
+	void ForEach(Fn&& fn) const {
+		for (const auto& pair : m_objects)
+			fn(pair.first, pair.second);
+	}
+
 private:
 	std::unordered_map<ibValueFrame*, wxObject*> m_objects;
 };

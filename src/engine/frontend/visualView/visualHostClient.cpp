@@ -59,6 +59,15 @@ bool ibVisualHostClient::IsPickerHost() const
 
 nlohmann::json ibVisualHostClient::ToJSON() const
 {
+	// The nodes are written by the controls' Update and read from here without
+	// running it again, so anything that moved underneath a control since —
+	// a model's rows, a sort on the composer — is pushed now, once per control,
+	// through the pairs the index holds. A sizer has no entry and no such state.
+	m_controls.ForEach([](ibValueFrame* control, wxObject* object) {
+		if (control != nullptr && object != nullptr)
+			control->SyncWebNode(object);
+	});
+
 	auto node = ibWebWindow::ToJSON();
 
 	if (IsPickerHost())

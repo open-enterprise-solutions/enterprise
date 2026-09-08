@@ -189,6 +189,15 @@ public:
 	// are per-bar, so the owner is what tells two "Add" commands apart.
 	bool DispatchCommand(int actionId, int ownerControlId = 0);
 
+	// The tail every road that ran script on the worker ends with: destroy
+	// the tabs the script closed (safe now that the handler chain is off the
+	// stack) and bump the sequence for whatever the tree now shows. Dispatch
+	// and DispatchCommand end here, and so does a timer tick — a handler that
+	// changes a label from a timer produces a tree the browser has not seen,
+	// and it is the bump that makes the stream carry it and the browser
+	// apply it.
+	void SettleAfterScript();
+
 	// Session task dispatch — forwards to the process-wide ibWorkerPool
 	// (appData->GetWorkerPool()), which preserves per-session FIFO +
 	// lease semantics across all concurrent web sessions sharing the

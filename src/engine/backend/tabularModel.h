@@ -910,7 +910,12 @@ protected:
 	// Monotonic change counter — bumped on any value / row mutation the model notifies the GUI of (the
 	// structural-mutation reset path bumps it). Subclasses bump through BumpViewGeneration(), not the field.
 	void BumpViewGeneration() const { ++m_viewGeneration; }   // m_viewGeneration is mutable (a view counter, not model state)
-	uint32_t GetViewGeneration() const { return m_viewGeneration; }   // read it — the RAM snapshot re-materialises when it moves
+
+public:
+	// Read it — the RAM snapshot re-materialises when it moves. Public because the web
+	// tablebox publishes it on its node as `dataVersion`: the browser keeps its grid across
+	// form trees and re-reads the rows only when this counter has moved.
+	uint32_t GetViewGeneration() const { return m_viewGeneration; }
 
 private:
 

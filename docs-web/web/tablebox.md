@@ -73,12 +73,14 @@ stored minimum raises a floor and never lowers one.
 `ibWebTableBoxColumn` and `ibWebTableBoxColumnGroup`
 (`src/engine/frontend/web/webTableBox.{h,cpp}`) hold what the browser needs
 before it has a single row, pushed into them by the controls' own
-`Update` / `OnUpdated` — the same way a button pushes its caption. Nothing
-holds a back-pointer to a control.
+`Update` / `OnUpdated` — the same way a button pushes its caption — and, for the
+two facts that change underneath a control, by a sync pass right before the
+tree is serialised (see *The rows have a version*). Nothing holds a
+back-pointer to a control.
 
 ```json
 {"type":"tablebox","id":3,"header":true,"footer":false,
- "viewMode":"hierarchical","choiceMode":false,"pageSize":50,
+ "viewMode":"hierarchical","choiceMode":false,"pageSize":50,"dataVersion":0,
  "children":[
    {"type":"tableboxcolumn","id":8,"caption":"Code","field":"c8",
     "width":80,"align":"left","headerAlign":"left","valueType":"string",
@@ -98,7 +100,7 @@ GET /fetch/<controlId>?dir=first|next|prev&count=N
 ```
 
 ```json
-{"ok":true,"control":3,"reset":true,"count":2,"hasMore":true,
+{"ok":true,"control":3,"reset":true,"count":2,"hasMore":true,"dataVersion":3,
  "rows":[{"key":0,"container":false,"cells":{"c8":"00000001","c9":"Кофе…"}}]}
 ```
 
@@ -106,6 +108,54 @@ A list is paged in the engine by architecture (`ibValueModel::GetFirstFetch` /
 `GetNextFetch` / `GetPrevFetch`), and folding a page into the form tree would
 have thrown that away — a catalogue of fifty thousand rows would be read to draw
 twenty lines of it.
+
+## The rows have a version
+
+The form tree says nothing about the rows on purpose — they travel on their own
+road — and until 2026-09-07 it said nothing about whether they had *changed*
+either. The one thing that refreshed a grid was rebuilding it, which asked for
+the first page again and lost the scroll position and every page beyond the
+first with it. A browser that keeps its grid across trees needs the tree to
+carry the one fact about the rows it cannot see: whether they are still the
+rows it holds.
+
+`dataVersion` on the tablebox node is that fact. It is the model's view
+generation — `ibValueModel::GetViewGeneration()`, a counter every row
+notification bumps: `RowChanged`, `RowValueChanged`, `NotifyRowAppended` /
+`Inserted` / `Deleted`, `NotifyReset`, a refetch. It is `0` when the control has
+no model. It says *the rows may differ*, not *which ones*: the browser answers it
+by reading again, which is the only honest answer a paged list can give.
+
+**How it reaches the node.** `ibWebTableBox::ToJSON` runs without an Update
+pass and the shim holds no back-pointer, so the value is written in at
+serialisation time by the control. `ibValueFrame::SyncWebNode(wxObject*)`
+(`visualView/ctrl/frame.h`) is a virtual the web host calls on every control in
+its index right before it serialises — `ibVisualHostClient::ToJSON` walks the
+(frame → wxObject) pairs and calls it on each; the base does nothing and the
+desktop never calls it. `ibValueModelTableBox::SyncWebNode` pushes the
+generation onto its node and then calls `SyncSortOrders`, which makes the sort
+arrows a case of the same rule rather than a special one: a sort goes straight
+to the composer and touches no control, so the arrows are read off the composer
+in the same pass. The column's own `Update` no longer writes an order; there is
+one place that does.
+
+**The page carries it too.** Every `/fetch` answer with `ok:true` carries
+`dataVersion` as well — the generation read *after* the page was read. It has
+to be after: a list served from the RAM snapshot (`DynamicRead` off,
+`tabularModelDb.cpp`) bumps the generation once per row while it materialises,
+so the first page moves the counter, and a browser comparing the next tree
+against the tree before it would re-read rows it had just received — once per
+real change, not a loop, but a full page for nothing. So the browser keeps the
+version its rows were *read at*, from the page, and compares the tree's
+`dataVersion` against that.
+
+**What the browser does with it.** A tablebox whose column shape is unchanged —
+same columns, captions, arrows — keeps its Tabulator instance. When the tree's
+`dataVersion` is above the one its rows were read at, the grid re-reads them —
+`GET /fetch/<id>?dir=first&count=<rows currently loaded>`, at least a page and
+at most the window cap — and replaces the data in place (`replaceData`, which
+keeps the scroll position, where `setData` would reset it), then re-applies
+`currentKey`. When the shape changed, the grid is rebuilt as before.
 
 ## Row keys
 
@@ -410,13 +460,16 @@ in hand and call that a sorted list.
 Two consequences worth stating.
 
 The paged keyset anchor was built for the old ORDER BY, so the window is thrown
-away rather than continued: the client re-renders and asks for `first`. And the
-arrow has to be pushed onto the column nodes by hand — every other property
-reaches a node through its control's `Update`, and the tree is serialised from
-the nodes without running that again, but a sort touches no control at all. That
-is what `ibWebTableBox::SyncSortOrders` is for; without it the rows came back in
-the new order under an arrow still pointing the old way. The two trees pair by
-the key both sides derive from the same control id, so neither holds the other.
+away rather than continued: the client asks for `first`. And the arrow has to be
+read onto the column nodes — every other property reaches a node through its
+control's `Update`, and the tree is serialised from the nodes without running
+that again, but a sort touches no control at all. That is what
+`ibWebTableBox::SyncSortOrders` is for; without it the rows came back in the new
+order under an arrow still pointing the old way. It is the one place a column's
+arrow is written, and the table's `SyncWebNode` is the one caller, before every
+serialisation; the sort handler commits the order and writes nothing. The two
+trees pair by the key both sides derive from the same control id, so neither
+holds the other.
 
 A column reports `sortable:false` when the model has no `Sorting` feature or the
 column has no resolvable bound field (a whole-attribute or foreign column) —

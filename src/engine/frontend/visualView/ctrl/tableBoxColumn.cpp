@@ -260,25 +260,16 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 	webColumn->SetVisibleColumn(m_propertyVisible->GetValueAsBoolean() && !sourceMissing);
 	webColumn->SetResizable(m_propertyResizable->GetValueAsBoolean());
 
-	// Sortability is the model's feature, as on the desktop; the direction
-	// is read off the composer, matching this column's own bound field —
-	// the same pair SyncSortArrowFromModel reads there.
+	// Sortability is the model's feature, as on the desktop. The direction is
+	// not written here: it is read off the composer by the table's
+	// SyncSortOrders before every serialisation, so that a sort committed
+	// straight to the composer and the arrow drawn for it come from one place.
 	ibValueModelTableBox* const owner = GetOwner();
 	ibValueModel* const model = owner != nullptr ? owner->GetTableModel() : nullptr;
 	const wxString field = GetSourceFieldName();
 	const bool sortable = model != nullptr && !field.IsEmpty()
 		&& model->GetFeatures().Has(ibValueModel::Features::Sorting);
 	webColumn->SetSortable(sortable);
-
-	wxString order = wxT("none");
-	for (size_t i = 0; sortable && i < model->GetModelComposer().SortCount(); ++i) {
-		wxString sortField; bool ascending = true;
-		if (model->GetModelComposer().GetSortAt(i, sortField, ascending) && sortField == field) {
-			order = ascending ? wxT("asc") : wxT("desc");
-			break;
-		}
-	}
-	webColumn->SetSortOrder(order);
 
 	// Whether this column carries an editor. Three answers, all of them the
 	// desktop's: the MODEL says whether the column is edited in place at all

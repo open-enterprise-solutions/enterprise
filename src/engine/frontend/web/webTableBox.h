@@ -29,6 +29,7 @@
 // server keeps the ends of the window, which is what paging anchors
 // from.
 
+#include <cstdint>
 #include <vector>
 
 #include "backend/tabularModelView.h"   // ibDataViewItem — the page anchors
@@ -145,6 +146,11 @@ public:
 	void SetViewMode(const wxString& mode) { m_viewMode = mode; }
 	void SetChoiceMode(bool choice)        { m_choiceMode = choice; }
 	void SetPageSize(int size)             { m_pageSize = size > 0 ? size : 1; }
+	// The model's view generation as of the last sync — the one fact the form
+	// tree carries about the ROWS. The browser keeps its grid across trees and
+	// re-reads the rows only when this moves. Written by the control's
+	// SyncWebNode before every serialisation; zero when there is no model.
+	void SetDataVersion(std::uint32_t version) { m_dataVersion = version; }
 
 	int GetPageSize() const { return m_pageSize; }
 
@@ -180,16 +186,17 @@ public:
 	// deliberately without a back-pointer of its own.
 	void SetRequestControl(ibValueModelTableBox* control) { m_requestControl = control; }
 
-private:
-	// Re-read the composer's order onto the column nodes.
+	// Re-read the composer's order onto the column nodes. The one place a
+	// column's sort arrow is written.
 	//
 	// Every other property reaches a node through its control's Update, and
 	// the tree is serialised from the nodes without running that again. A
-	// sort goes straight to the composer and touches no control, so without
-	// this the rows come back in the new order under an arrow still pointing
-	// the old way.
-	void SyncSortOrders(ibValueModelTableBox* control);
+	// sort goes straight to the composer and touches no control, so the
+	// arrows are read off the composer instead, by the control's SyncWebNode
+	// before every serialisation.
+	void SyncSortOrders(const ibValueModelTableBox* control);
 
+private:
 	// Window key of the control's current line, -1 when it has none or
 	// the line is outside the window in hand.
 	int CurrentKey(ibValueModelTableBox* control) const;
@@ -222,6 +229,7 @@ private:
 	bool     m_footer     = false;
 	bool     m_choiceMode = false;
 	int      m_pageSize   = 50;
+	std::uint32_t m_dataVersion = 0;
 };
 
 // The key a cell is filed under in a fetched row, and the same string a

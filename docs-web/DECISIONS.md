@@ -271,3 +271,47 @@ change.
 
 ADR-006's mapping table lived in `web/ui5-integration.md`, which is deleted:
 there is no vendor left to map to.
+
+---
+
+## ADR-016 — The client keeps its DOM; the server tree is reconciled into it
+*2026-09-08*
+
+**Context.** Every answer from the server is the whole active form tree, and the
+client drew it by emptying the content area and rendering from scratch — on a
+value commit, a checkbox, a notebook page, a row click, a timer tick, a tab
+switch, and once more when the stream echoed the tree the direct answer had
+already delivered. On the Goods document form that read as a page that jumped to
+the top on every change. Underneath it, keyboard focus went with every commit,
+the grid was torn down and asked for its first page again, and a page switch
+redrew the form the page sat on.
+
+The full tree is the right thing for the server to send: it is small, it needs
+no state on either side, and a client that missed a frame is never behind after
+the next. The rebuild was the client's choice, and it was load-bearing in one
+place — a grid only refreshed its rows because it was re-created.
+
+**Decision.** The client keeps one DOM per open form and reconciles each
+incoming tree into it, control by control, keyed by control id. A renderer has a
+lifecycle — render, update, dispose — and answers whether it brought its element
+up to date in place; only an element whose renderer refuses is rebuilt. A
+notebook page switch replaces the page, not the form. Typing wins over the
+server on a focused field.
+
+Two facts travel with the tree so that this is correct rather than hopeful.
+Every tree carries `seq`, the session's live sequence read after the request's
+own bump and before serialisation, and a tree that is not newer than the one on
+screen is not applied — the stream's echo of a direct answer is that case.
+Every tablebox carries `dataVersion`, the model's view generation written onto
+the node at serialisation time, so a grid whose columns have not changed keeps
+its instance and re-reads its rows exactly when they moved. Each tab in
+`/session` names its host, so a tab's DOM is retained while the tab lives and
+disposed when it closes.
+
+**Consequences.** Scroll position, focus, the grid's loaded pages and its scroll
+survive a change, on the form and across tab switches, the way they do on the
+desktop. The form JSON contract (ADR-007) gains two OES-semantic fields and one
+on the session; nothing is removed. A renderer that cannot update in place still
+works — it is rebuilt, and focus is put back — so a new control is not obliged
+to be incremental on day one. The old exact-text comparison of stream frames is
+gone; `seq` is the one answer to "is this newer than what I show".

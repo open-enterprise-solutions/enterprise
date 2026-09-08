@@ -55,9 +55,18 @@ void ibWebTimer::TickLoop()
 		// events. The worker is the sole script-runner (ibProcUnit is
 		// thread-affine); posting+drain from any other thread would
 		// corrupt procUnit state.
+		// The handler ran script that may have changed the form, and
+		// nothing else on this road bumps the sequence, so the task ends
+		// the way a dispatch does. The drain in that tail may destroy the
+		// form the timer belongs to, and the timer with it: nothing here
+		// touches `self` after the handler returns.
 		if (m_app != nullptr) {
 			ibWebTimer* self = this;
-			m_app->PostWork([self]{ self->ProcessPendingEvents(); });
+			ibWebApplication* app = m_app;
+			m_app->PostWork([self, app]{
+				self->ProcessPendingEvents();
+				app->SettleAfterScript();
+			});
 		}
 
 		if (m_oneShot) return;

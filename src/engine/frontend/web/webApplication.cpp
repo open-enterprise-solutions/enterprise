@@ -307,14 +307,6 @@ bool ibWebApplication::Dispatch(int controlId, const wxString& kind, const wxStr
 	if (!handled)
 		return false;
 
-	// Handler chain unwound — safe to actually destroy any tabs the
-	// script closed while we were deep in ProcessPendingEvents. Drain
-	// happens HERE, not inside CloseForm, so the toolbar/control that
-	// bubbled the event no longer sits on the stack when its parent
-	// tab's host gets torn down.
-	if (m_frame != nullptr)
-		m_frame->DrainPendingCloses();
-
 	// No explicit rebuild here: unified control Update methods push
 	// property changes through setters on existing ibWebWindow nodes
 	// (mirror of how desktop wx propagates through its window tree),
@@ -322,8 +314,7 @@ bool ibWebApplication::Dispatch(int controlId, const wxString& kind, const wxStr
 	// emits the fresh JSON from the same tree — no Clear+Create pass
 	// needed. CreateAndUpdateVisualHost belongs only in
 	// ibFormVisualEditView::OnCreate (first build after form open).
-	// MarkDirty wakes any SSE subscriber so the new JSON ships out.
-	MarkDirty();
+	SettleAfterScript();
 	return true;
 }
 
@@ -369,13 +360,20 @@ bool ibWebApplication::DispatchCommand(int actionId, int ownerControlId)
 		return false;
 
 	cbar->ExecuteCommand(actionId, form);
+	SettleAfterScript();
+	return true;
+}
 
-	// Same tail as Dispatch: a command may have closed a tab while the
-	// handler chain was still on the stack.
+void ibWebApplication::SettleAfterScript()
+{
+	// The handler chain has unwound, so the tabs a script closed can be
+	// destroyed now. The drain happens here rather than inside CloseForm so
+	// the control that bubbled the event no longer sits on the stack when its
+	// tab's host is torn down.
 	if (m_frame != nullptr)
 		m_frame->DrainPendingCloses();
+	// Whatever the tree shows now is new to the browser: wake the stream.
 	MarkDirty();
-	return true;
 }
 
 void ibWebApplication::MarkDirty()

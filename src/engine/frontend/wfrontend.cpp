@@ -1119,6 +1119,31 @@ WFRONTEND_API std::string wfrontendTabIconPNG(const std::string& sessionId, int 
 
 namespace {
 
+// The active tree as the browser receives it: the host's JSON with the
+// session's live sequence on its root, or "{}" when there is no host.
+//
+// The sequence is read AFTER the road's own MarkDirty and BEFORE the tree
+// is built, so the number a payload carries is never newer than the state
+// it shows. Most roads run on the session worker, where nothing can change
+// the tree between the read and the serialisation; /form runs on the HTTP
+// thread under a session scope, where a worker task can land in between —
+// and that only makes this tree go out under a number older than its
+// state, which is the safe direction. The browser keeps the last sequence
+// it applied per host and drops a tree whose sequence is not above it: the
+// stream echoing the state a direct response already delivered arrives
+// under the same number and is ignored, while a bump that landed after this
+// read only makes the next tree arrive under a higher one — a repeat, never
+// a loss.
+std::string HostTreeJSON(ibWebApplication* app, ibVisualHostClient* host)
+{
+	if (host == nullptr)
+		return "{}";
+	const std::uint64_t seq = app != nullptr ? app->CurrentSeq() : 0;
+	nlohmann::json tree = host->ToJSON();
+	tree["seq"] = seq;
+	return tree.dump(2);
+}
+
 // Open-form implementation, reached via the session manager's slot.
 std::string OpenFormInSession(ibWebSession* session, int metaID)
 {
@@ -1195,7 +1220,7 @@ std::string OpenFormInSession(ibWebSession* session, int metaID)
 	// host's tree is fresh — just serialise.
 	app->MarkDirty();
 
-	return host->ToJSON().dump(2);
+	return HostTreeJSON(app, host);
 }
 
 } // namespace
@@ -1320,8 +1345,7 @@ std::string FireActionInSession(ibWebSession* session, int controlID)
 		catch (...) {
 			return R"({"error":"unknown exception"})";
 		}
-		ibVisualHostClient* host = app->GetActiveHost();
-		return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+		return HostTreeJSON(app, app->GetActiveHost());
 	}).get();
 }
 
@@ -1368,8 +1392,7 @@ std::string FireKindInSession(ibWebSession* session, int controlID,
 		catch (...) {
 			return R"({"error":"unknown exception"})";
 		}
-		ibVisualHostClient* host = app->GetActiveHost();
-		return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+		return HostTreeJSON(app, app->GetActiveHost());
 	}).get();
 }
 } // namespace
@@ -1414,8 +1437,7 @@ std::string FireCommandInSession(ibWebSession* session, int actionID, int ownerC
 		catch (...) {
 			return R"({"error":"unknown exception"})";
 		}
-		ibVisualHostClient* host = app->GetActiveHost();
-		return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+		return HostTreeJSON(app, app->GetActiveHost());
 	}).get();
 }
 } // namespace
@@ -1506,8 +1528,7 @@ std::string FireTextChangeInSession(ibWebSession* session, int controlID,
 		catch (...) {
 			return R"({"error":"unknown exception"})";
 		}
-		ibVisualHostClient* host = app->GetActiveHost();
-		return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+		return HostTreeJSON(app, app->GetActiveHost());
 	}).get();
 }
 } // namespace
@@ -1552,8 +1573,7 @@ std::string FireToggleInSession(ibWebSession* session, int controlID, bool check
 		catch (...) {
 			return R"({"error":"unknown exception"})";
 		}
-		ibVisualHostClient* host = app->GetActiveHost();
-		return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+		return HostTreeJSON(app, app->GetActiveHost());
 	}).get();
 }
 } // namespace
@@ -1762,9 +1782,12 @@ WFRONTEND_API std::string wfrontendOpenMetaObject(const std::string& sessionId,
 		const auto type = static_cast<ibInterfaceCommandType>(cmdType);
 		if (!cmdItem->Execute(type))
 			return "{}";
-		ibVisualHostClient* host = app->GetActiveHost();
+		// Execute may have opened a form (which bumps on its own) or only
+		// activated a tab that was already open (which does not); the tree
+		// returned is new to the browser either way.
+		app->MarkDirty();
 		try {
-			return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+			return HostTreeJSON(app, app->GetActiveHost());
 		} catch (...) {
 			return std::string("{}");
 		}
@@ -1832,9 +1855,8 @@ std::string SessionManager::ActiveHostJSON(const std::string& id)
 	ibWebApplication* app = s->App();
 	if (app == nullptr) return "{}";
 	return app->RunOnWorker([app]() -> std::string {
-		ibVisualHostClient* host = app->GetActiveHost();
 		try {
-			return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+			return HostTreeJSON(app, app->GetActiveHost());
 		}
 		catch (...) {
 			return std::string("{}");
@@ -1948,6 +1970,10 @@ std::string SessionInfoFromSession(ibWebSession* s)
 			t["title"] = tab->GetTitle();
 			t["hasIcon"] = tab->GetIcon().IsOk();
 			if (auto* host = tab->GetHost()) {
+				// The id the host's tree carries at its root. The browser keeps
+				// one mounted DOM per host and needs to know, from the strip
+				// alone, which mounts still have a tab behind them.
+				t["host"] = host->GetControlId();
 				// A picker is drawn as a dialog over the form that asked, so the
 				// strip does not offer it as somewhere to go.
 				t["modal"] = host->IsPickerHost();
@@ -2021,9 +2047,10 @@ WFRONTEND_API std::string wfrontendSessionInfoJSON(const std::string& sessionId)
 
 namespace {
 
-// Shared helper: switch the frame's active tab index and re-walk the new
-// active host so the browser gets the switched-to form's JSON back as
-// the response body. "{}" on any precondition miss.
+// Shared helper: switch the frame's active tab index and serialise the
+// new active host, which has stayed current through its controls'
+// setters — no rebuild — so the browser gets the switched-to form's JSON
+// back as the response body. "{}" on any precondition miss.
 std::string ActivateTabInSession(ibWebSession* session, int tabIndex)
 {
 	if (session == nullptr || !session->IsAuthenticated())
@@ -2031,10 +2058,10 @@ std::string ActivateTabInSession(ibWebSession* session, int tabIndex)
 	ibWebApplication* app = session->App();
 	if (app == nullptr) return "{}";
 
-	// Route through the session worker — tab switching rebuilds the
-	// control tree, same shared state the worker's script runs touch.
-	// Doing it on the HTTP thread lets timer ticks / pending dispatches
-	// race with the rebuild and crash on half-destroyed nodes.
+	// Route through the session worker — the tab list and the host trees
+	// are the same shared state the worker's script runs touch. Doing it
+	// on the HTTP thread would let timer ticks / pending dispatches race
+	// with the switch.
 	return app->RunOnWorker([app, tabIndex]() -> std::string {
 		ibWebFrame* frame = app->GetFrame();
 		if (frame == nullptr) return "{}";
@@ -2052,7 +2079,7 @@ std::string ActivateTabInSession(ibWebSession* session, int tabIndex)
 		// Switching active tab is metadata-only (frame->SetActiveTab) —
 		// the destination host's JSON is already current.
 		app->MarkDirty();
-		return host->ToJSON().dump(2);
+		return HostTreeJSON(app, host);
 	}).get();
 }
 
@@ -2080,8 +2107,11 @@ std::string CloseTabInSession(ibWebSession* session, int tabIndex)
 		if (!frame->CloseTab(static_cast<std::size_t>(tabIndex))) {
 			ibWebDocChildFrame* tab = frame->Tab(frame->ActiveTab());
 			if (tab == nullptr) return "{}";
-			ibVisualHostClient* host = tab->GetHost();
-			return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+			// beforeClose ran and may have changed the form; and a tree the
+			// browser must apply has to arrive under a sequence it has not
+			// seen, or the retained DOM would treat it as a repeat.
+			app->MarkDirty();
+			return HostTreeJSON(app, tab->GetHost());
 		}
 
 		// CloseTab now only marks the form for close. Drain here so the
@@ -2097,7 +2127,7 @@ std::string CloseTabInSession(ibWebSession* session, int tabIndex)
 		// No rebuild: the now-active tab's tree has been kept in sync
 		// with its form's state through control setters; just serialise.
 		app->MarkDirty();
-		return host->ToJSON().dump(2);
+		return HostTreeJSON(app, host);
 	}).get();
 }
 

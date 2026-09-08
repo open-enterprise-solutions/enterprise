@@ -27,7 +27,9 @@
 //   ↓
 //   worker thread drains: calls ProcessPendingEvents on the timer
 //   handler, which dispatches to whatever bound wxEVT_TIMER on this
-//   instance (typically ibValueForm::OnIdleHandler).
+//   instance (typically ibValueForm::OnIdleHandler), then ends the
+//   task as a dispatch does (ibWebApplication::SettleAfterScript), so
+//   a change the handler made reaches the stream under a new sequence.
 
 #include <atomic>
 #include <chrono>

@@ -209,6 +209,13 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
+#ifdef OES_USE_WEB
+	// Before the host tree is serialised: the model's view generation onto the
+	// table node, and the composer's order onto the column nodes. Neither passes
+	// through a control setter — rows change under a script, a sort goes to the
+	// composer — and the shim holds no back-pointer to read them itself.
+	virtual void SyncWebNode(wxObject* node) const override;
+#endif
 
 	//get component type
 	virtual int GetComponentType() const { return COMPONENT_TYPE_WINDOW; }

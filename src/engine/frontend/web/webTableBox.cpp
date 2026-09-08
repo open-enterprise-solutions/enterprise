@@ -107,6 +107,7 @@ nlohmann::json ibWebTableBox::ToJSON() const
 	node["viewMode"]   = m_viewMode;
 	node["choiceMode"] = m_choiceMode;
 	node["pageSize"]   = m_pageSize;
+	node["dataVersion"] = m_dataVersion;
 	return node;
 }
 
@@ -255,6 +256,7 @@ nlohmann::json ibWebTableBox::FetchPage(ibValueModelTableBox* control,
 		out["ok"]      = true;
 		out["hasMore"] = false;
 		out["reason"]  = "window limit";
+		out["dataVersion"] = model->GetViewGeneration();
 		return out;
 	}
 
@@ -333,6 +335,13 @@ nlohmann::json ibWebTableBox::FetchPage(ibValueModelTableBox* control,
 	// "There is more that way" is only ever answered by asking, so what
 	// is reported is what this page knows: a short page is the end.
 	out["hasMore"] = static_cast<int>(page.size()) >= count;
+	// The generation these rows were read at, taken AFTER the read: a
+	// snapshot list bumps it per row while it materialises, so a number
+	// taken before would already be stale by the time the page is out.
+	// The browser compares the tree's dataVersion against this one, not
+	// against the tree it last saw, so a fetch that moved the counter is
+	// not mistaken for a change to the rows it just received.
+	out["dataVersion"] = model->GetViewGeneration();
 	out.erase("reason");
 	return out;
 }
@@ -389,7 +398,7 @@ void CollectWebColumns(const ibWebWindow* node, std::vector<ibWebTableBoxColumn*
 }
 } // namespace
 
-void ibWebTableBox::SyncSortOrders(ibValueModelTableBox* control)
+void ibWebTableBox::SyncSortOrders(const ibValueModelTableBox* control)
 {
 	ibValueModel* model = control != nullptr ? control->GetTableModel() : nullptr;
 	if (model == nullptr)
@@ -431,7 +440,8 @@ bool ibWebTableBox::HandleRequest(const wxString& kind, const wxString& value)
 			return false;
 		if (!SortByColumn(m_requestControl, static_cast<int>(columnId)))
 			return false;
-		SyncSortOrders(m_requestControl);
+		// The arrows are read off the composer by SyncSortOrders before the
+		// tree is serialised, so nothing has to be written here.
 		// The order changed under the window, so the keys in it name rows
 		// nobody is looking at any more. The client re-fetches from the top.
 		m_window.clear();
