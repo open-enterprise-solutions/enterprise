@@ -2051,12 +2051,12 @@ function loadTabulator(){
 // itself, which Tabulator validates against its own option list and warns
 // about by name — a private key does not belong in somebody else's
 // vocabulary. The field is already unique per column, so it is the join.
-function tableboxColumns(node,sortableBy){
+function tableboxColumns(node,sortableBy,editableBy){
   const out=[];
   for(const kid of (node.children||[])){
     if(kid.type==='tableboxcolumngroup'){
       if(kid.visible===false) continue;
-      const inner=tableboxColumns(kid,sortableBy);
+      const inner=tableboxColumns(kid,sortableBy,editableBy);
       if(!inner.length) continue;
       if(kid.showTitle&&kid.grouping==='horizontal')
         out.push({title:kid.caption||'',headerHozAlign:kid.align||'center',columns:inner});
@@ -2086,6 +2086,15 @@ function tableboxColumns(node,sortableBy){
     // Which control this header belongs to, so the table-level
     // headerClick knows what the server should sort by.
     if(sortableBy&&kid.sortable) sortableBy.set(kid.field,kid.id);
+    // An editable column gets a plain text editor whatever it holds. The
+    // server coerces the typed string through the type the cell already has
+    // — a number, a date, a reference found by its name — which is the same
+    // road the desktop's inline editor takes, so there is one parser and not
+    // one per value type in the browser.
+    if(editableBy&&kid.readOnly===false){
+      col.editor='input';
+      editableBy.set(kid.field,kid.id);
+    }
     if(kid.width>0) col.minWidth=kid.width;
     out.push(col);
   }
@@ -2119,7 +2128,8 @@ class TableBox extends BaseControl{
     host.appendChild(grid);
 
     const sortableBy=new Map();
-    const columns=tableboxColumns(node,sortableBy);
+    const editableBy=new Map();
+    const columns=tableboxColumns(node,sortableBy,editableBy);
     const pageSize=node.pageSize>0?node.pageSize:50;
 
     // Built after the host lands in the document: Tabulator measures the
@@ -2210,11 +2220,53 @@ class TableBox extends BaseControl{
         const tree=await send('sort',id);
         if(tree){ main.innerHTML=''; main.appendChild(render(tree)); }
       });
+      // A cell committed. Two posts, in this order and awaited: the cursor
+      // moves to the row, then the column is told what was typed. The column
+      // writes through the current line — the same rule the desktop has, where
+      // a cell cannot be edited without standing on its row — so the move is a
+      // precondition and not a convenience; if it fails, nothing is written.
+      //
+      // The answer is the whole form again: a committed cell can move anything
+      // (a price recalculating an amount, a script on the column), and the row
+      // that comes back is the row the server holds rather than the text that
+      // was typed at it.
+      table.on('cellEdited',async(cell)=>{
+        const id=editableBy.get(cell.getField());
+        const key=cell.getRow().getData()._key;
+        if(id===undefined||key===undefined) return;
+        // A REFUSED EDIT PUTS THE CELL BACK. The server answers a form tree when
+        // it took the value and nothing when it did not — a name no goods answer
+        // to, a number that will not parse. Left alone, the browser would go on
+        // showing text the row does not hold, which is the one outcome worse than
+        // refusing: the desktop's editor restores the old text in exactly this
+        // case, and so does this.
+        const restore=()=>{ try{ cell.restoreOldValue(); }catch(e){} };
+        const moved=await netFetch(API+'/fire/'+node.id+'/row?value='+encodeURIComponent(key),
+          {method:'POST',credentials:'same-origin'});
+        if(!moved.ok) return restore();
+        const r=await netFetch(API+'/fire/'+id+'/cell?value='+encodeURIComponent(cell.getValue()??''),
+          {method:'POST',credentials:'same-origin'});
+        if(!r.ok) return restore();
+        const tree=await r.json();
+        if(tree&&tree.error){ OES.handleBackendError(tree); return restore(); }
+        if(tree&&Object.keys(tree).length>0){
+          main.innerHTML=''; main.appendChild(render(tree));
+        }
+        else restore();
+      });
       // Opening a row raises the object's own form — a new tab, so the
       // tab strip is re-read and the returned tree replaces the view.
+      //
+      // Unless the row is EDITABLE, in which case the double click is already
+      // doing its work: the first of its two clicks opened the cell's editor,
+      // and asking the server for the form again would replace the grid — and
+      // the editor with it — while somebody is typing in it. The same branch
+      // the desktop takes in ActivateRow, where an editable row starts the
+      // editor and opens nothing.
       table.on('rowDblClick',async(e,row)=>{
         const key=row.getData()._key;
         if(key===undefined) return;
+        if(editableBy.size>0&&!row.getData()._container) return;
         const tree=await send('activate',key);
         if(tree){ main.innerHTML=''; main.appendChild(render(tree)); }
         refreshTabs();

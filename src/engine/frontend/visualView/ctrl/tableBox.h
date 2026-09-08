@@ -714,6 +714,12 @@ public:
 
 	//choice processing
 	virtual void ChoiceProcessing(ibValue& vSelected);
+#ifdef OES_USE_WEB
+	// The browser's equivalent of TextProcessing: a cell committed from the grid.
+	// Public because the web shim is what calls it, the way the table's own shim
+	// calls the commands.
+	bool WebCellChanged(const wxString& text);
+#endif
 
 private:
 

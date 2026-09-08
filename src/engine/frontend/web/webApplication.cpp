@@ -292,11 +292,17 @@ bool ibWebApplication::Dispatch(int controlId, const wxString& kind, const wxStr
 	// control the dispatcher just resolved, for the length of the call.
 	if (auto* table = dynamic_cast<ibWebTableBox*>(web))
 		table->SetRequestControl(dynamic_cast<ibValueModelTableBox*>(ctrl));
+	// A COLUMN is addressed the same way and for the same reason: a cell edit
+	// names the column it lands in, and the shim has no back-pointer either.
+	if (auto* column = dynamic_cast<ibWebTableBoxColumn*>(web))
+		column->SetRequestControl(dynamic_cast<ibValueModelTableBoxColumn*>(ctrl));
 
 	const bool handled = web->HandleRequest(kind, value);
 
 	if (auto* table = dynamic_cast<ibWebTableBox*>(web))
 		table->SetRequestControl(nullptr);
+	if (auto* column = dynamic_cast<ibWebTableBoxColumn*>(web))
+		column->SetRequestControl(nullptr);
 
 	if (!handled)
 		return false;

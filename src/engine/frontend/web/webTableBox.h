@@ -65,9 +65,21 @@ public:
 
 	const wxString& GetFieldKey() const { return m_field; }
 
+	// A cell edit arrives here: kind "cell", the payload being the text the
+	// person typed. The row is the table's CURRENT one — the same rule the
+	// desktop has, where a cell cannot be edited without the cursor standing
+	// on it, and the client moves the cursor before it sends this.
+	virtual bool HandleRequest(const wxString& kind, const wxString& value) override;
+
+	// Set by the dispatcher for the length of one call, like the table's:
+	// the shim carries no back-pointer of its own.
+	void SetRequestControl(ibValueModelTableBoxColumn* column) { m_requestControl = column; }
+
 	virtual nlohmann::json ToJSON() const override;
 
 private:
+	ibValueModelTableBoxColumn* m_requestControl = nullptr;
+
 	wxString m_caption;
 	wxString m_field;
 	wxString m_align       = wxT("left");
@@ -77,7 +89,11 @@ private:
 	wxString m_sortOrder = wxT("none");
 	bool     m_visible   = true;
 	bool     m_resizable = true;
-	bool     m_readOnly  = true;   // iteration 2 is read-only throughout
+	// Whether this column carries an editor. The model answers the column half
+	// (EditableColumn) and the table the rest — a dot-path or foreign-rooted
+	// column reads through something that is not this row, and a column with
+	// TextEdit off is not typed into.
+	bool     m_readOnly  = true;
 	bool     m_sortable  = false;
 };
 

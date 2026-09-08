@@ -279,6 +279,18 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 		}
 	}
 	webColumn->SetSortOrder(order);
+
+	// Whether this column carries an editor. Three answers, all of them the
+	// desktop's: the MODEL says whether the column is edited in place at all
+	// (a list is not, a tabular section is except its line number); the TABLE
+	// says whether the column reads through something other than this row —
+	// a dot-path or a foreign root, both read-only there too; and the column's
+	// own TextEdit property says whether it is typed into.
+	const bool editable = model != nullptr
+		&& model->EditableColumn(GetModelColumn())
+		&& owner != nullptr && !owner->IsPathColumn(this) && !owner->IsForeignColumn(this)
+		&& GetTextEditMode();
+	webColumn->SetReadOnly(!editable);
 #endif
 }
 
@@ -440,6 +452,40 @@ void ibValueModelTableBoxColumn::OnPropertyRefresh() {}
 bool ibValueModelTableBoxColumn::OnPropertyChanging(ibProperty* /*property*/,
 	const wxVariant& /*newValue*/) { return true; }
 void ibValueModelTableBoxColumn::ChoiceProcessing(ibValue& /*vSelected*/) {}
+
+// A cell edited in the browser. The desktop equivalent is TextProcessing, run
+// when the inline editor commits, and this is the same three steps: coerce the
+// typed string through the type the cell already holds, write it through
+// SetControlValue — which is where the current line, the source-object update
+// and RefreshForm live — and fire the column's OnChange.
+//
+// A string that does not parse is REFUSED rather than written: the value stands,
+// and the form tree that goes back re-states it, so the browser's cell snaps
+// back to what the row actually holds.
+bool ibValueModelTableBoxColumn::WebCellChanged(const wxString& text)
+{
+	const ibMetaData* metaData = GetMetaData();
+	if (metaData == nullptr)
+		return false;
+
+	ibValue current; GetControlValue(current);
+	const ibValue& typed = metaData->CreateObject(current.GetClassType());
+	if (typed.GetType() == ibValueTypes::TYPE_EMPTY)
+		return false;   // the cell has no settled type — nothing to coerce into
+
+	if (text.IsEmpty()) {
+		SetControlValue(typed);   // cleared → the empty value of that type
+	}
+	else {
+		std::vector<ibValue> found;
+		if (!typed.FindValue(text, found) || found.empty())
+			return false;
+		SetControlValue(found.front());
+	}
+
+	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
+	return true;
+}
 #endif // OES_USE_WEB
 
 //***********************************************************************

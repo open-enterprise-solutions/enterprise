@@ -71,6 +71,16 @@ nlohmann::json ibWebTableBoxColumn::ToJSON() const
 	return node;
 }
 
+// A cell edit. The column writes it through the same door the desktop's inline
+// editor writes through — SetControlValue on the current line — so an OnChange
+// script and a source-object update happen exactly as they do there.
+bool ibWebTableBoxColumn::HandleRequest(const wxString& kind, const wxString& value)
+{
+	if (kind != wxT("cell") || m_requestControl == nullptr)
+		return false;
+	return m_requestControl->WebCellChanged(value);
+}
+
 nlohmann::json ibWebTableBoxColumnGroup::ToJSON() const
 {
 	auto node = ibWebWindow::ToJSON();
@@ -143,6 +153,22 @@ bool ReadCell(const ibValueModelTableBox* table, ibValueModel* model,
 	text = variant.MakeString();
 	kind = variant.GetType();
 	return true;
+}
+
+// Whether any column of this row carries an inline editor. The desktop asks the
+// same question through EditCurrentRow, which walks the columns looking for one
+// the model calls editable and starts the editor there; here the browser has
+// already started it, so all that is wanted is the yes or no.
+bool EditableRow(const ibValueModelTableBox* table, ibValueModel* model,
+	const ibDataViewItem& item)
+{
+	std::vector<ibValueModelTableBoxColumn*> columns;
+	CollectColumns(table, columns);
+	for (const ibValueModelTableBoxColumn* column : columns) {
+		if (model->EditableLine(item, column->GetModelColumn()))
+			return true;
+	}
+	return false;
 }
 
 } // namespace
@@ -432,19 +458,25 @@ bool ibWebTableBox::HandleRequest(const wxString& kind, const wxString& value)
 	m_requestControl->ApplyCurrentLine(model->GetRowAt(found->item));
 
 	if (activate) {
-		// The desktop road is ActivateRow, and this walks the same two of its
-		// three answers. A PICKER hands the row back to whoever opened it —
-		// double-clicking a row is how a person picks one, and it was opening
-		// the row's own form instead, which is the list looking at itself.
-		// Otherwise the model raises the row's own form. The third answer,
-		// an inline editor, has no web flow yet.
-		// Through the dispatcher rather than straight at the handler: a click on the
-		// bar's Select tool arrives the same way, so the two gestures are one road.
-		if (m_requestControl->IsChoiceMode())
+		// The desktop road is ActivateRow, and this walks all three of its answers.
+		//
+		// A PICKER hands the row back to whoever opened the list — through the
+		// dispatcher rather than straight at the handler, so a click on the bar's
+		// Select tool and a double click are one road.
+		//
+		// An EDITABLE row raises nothing: the desktop starts its inline editor
+		// there (EditCurrentRow), the browser has already started its own, and
+		// opening a form on top of it would take the row out from under what is
+		// being typed.
+		//
+		// Anything else — a list row — has the model raise the row's own value.
+		if (m_requestControl->IsChoiceMode()) {
 			m_requestControl->CallAsAction(ibValueModelTableBox::enTableSelect,
 				m_requestControl->GetOwnerForm());
-		else
+		}
+		else if (!EditableRow(m_requestControl, model, found->item)) {
 			model->ActivateItem(found->item, m_requestControl->GetOwnerForm());
+		}
 	}
 	return true;
 }

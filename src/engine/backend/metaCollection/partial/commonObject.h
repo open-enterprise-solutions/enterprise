@@ -2889,7 +2889,8 @@ public:
 #pragma endregion
 
 	virtual bool AutoCreateColumn() const { return false; }
-	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const {
+	// A register record set is not edited cell by cell — no column of it carries an editor.
+	virtual bool EditableColumn(unsigned int col) const {
 		return false;
 	}
 

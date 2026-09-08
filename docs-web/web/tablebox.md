@@ -238,6 +238,63 @@ click a row, then Select, and `Counterparty` reads `ООО Ромашка`. A li
 not a picker is unchanged — no Select on its bar, and a double-click still opens
 the object.
 
+## Editing a cell
+
+A column says whether it carries an editor, and the answer is composed of three
+that are all the desktop's:
+
+- the **model** — `EditableColumn(col)`, the half of `EditableLine` that needs no
+  row. A dynamic list says no to every column (a list is opened or picked, not
+  typed into); a tabular section says no to its line number and yes to the rest;
+  a register record set says no. It was split out of `EditableLine` because the
+  browser has to decide whether a column carries an editor *before* it has
+  fetched a single row — the desktop asks per cell, having the row in hand, and
+  `EditableLine` now composes the two halves so a model overrides one, not both;
+- the **table** — a dot-path or foreign-rooted column reads through something
+  that is not this row, and is read-only on the desktop for the same reason;
+- the **column** — its own `TextEdit` property.
+
+The result rides on the column node as `readOnly`, and the browser puts a plain
+text editor on the ones that are false. One editor for every type: the server
+coerces the typed string through the type the cell already holds — a number, a
+date, a reference found by its name — which is the road
+`ibValueModelTableBoxColumn::TextProcessing` takes on the desktop. One parser,
+on the side that owns the types.
+
+**A commit is two posts, in order and awaited.** `POST /fire/<table>/row` moves
+the cursor to the edited row, then `POST /fire/<column>/cell?value=<text>` tells
+the column what was typed. The column writes through `SetControlValue` — the
+current line, the source-object update, `RefreshForm`, then its `OnChange` — so
+nothing about the write is web-specific. The cursor move is a precondition and
+not a convenience: the column writes to the line the table is standing on, which
+is the desktop's rule too (a cell cannot be edited without the cursor on its
+row), and if the move fails nothing is sent.
+
+The answer is the whole form again, because a committed cell can move anything —
+a price recalculating an amount, a script on the column — and the row that comes
+back is the row the server holds rather than the text that was typed at it.
+
+**A refused edit puts the cell back.** The server answers a form tree when it
+took the value and nothing when it did not (a name no goods answer to, a number
+that will not parse). The browser restores the cell's previous text on the empty
+answer; left alone it would go on showing something the row does not hold, which
+is worse than the refusal. The desktop's editor restores the old text in exactly
+this case.
+
+**Double-click on an editable row opens nothing.** Its first click already
+opened the cell's editor, and asking the server for the form again would replace
+the grid — and the editor with it — while somebody is typing. Both sides take
+that branch: the client does not send `activate` for an editable row, and the
+web activate path checks `EditableRow` before raising anything, which is the
+desktop's `if (!EditCurrentRow(item)) ActivateItem(...)`.
+
+Measured on a fresh Goods receipt line: `Goods` by typing "Кофе в зёрнах, 1 кг",
+`Quantity` 3, `Price` 480; a second line added and its quantity set to 9 — the
+cursor follows, and each row keeps its own. Typing a name nothing answers to
+leaves the cell reading "Кофе в зёрнах, 1 кг". Clicking the line-number column
+opens no editor. A list is unchanged: no editors, and a double-click still opens
+the object's form.
+
 ## The font every control was drawn in
 
 Worth recording because it looked like a table problem and was not.
@@ -289,6 +346,10 @@ Named rather than implied, because each is a road not started.
   *in-cell* group is a row BAND — the row grows taller instead of wider — which
   Tabulator has no notion of; those flatten, and their columns stay side by side.
   See `docs/column-groups.md` for what the desktop does.
-- **Editing.** Every column reports `readOnly:true`. Iteration 2 is read-only
-  throughout.
+- **Picking a reference IN A CELL.** A reference cell is edited by typing the
+  name, which the server resolves through `FindValue` — the same road the
+  desktop's inline editor takes when somebody types rather than presses `…`.
+  The `…` itself has no cell flow: `ibValueModelTableBoxColumn::ChoiceProcessing`
+  is still a no-op stub in the web build, so a picker opened from a cell would
+  return to nothing.
 - **Footers.** `footer` is reported and ignored.
