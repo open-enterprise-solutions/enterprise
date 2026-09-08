@@ -31,6 +31,7 @@
 #include "backend/databaseLayer/databaseLayer.h"            // ibTxOptions (the lock TX still rides the driver's tpb)
 #include "backend/databaseLayer/databaseQueryBuilder.h"     // L2 door — pessimistic SELECT via ir.m_lockForUpdate/m_lockNoWait
 #include "backend/databaseLayer/databaseErrorCodes.h"
+#include "backend/diagnostics/journal.h"              // a release that did not complete is a line, not a stop
 #include "backend/session/session.h"
 #include "backend/userInfo.h"
 
@@ -227,26 +228,43 @@ void ibLockManager::ReleaseRows(const std::vector<ibGuid>& lockGuids)
 	if (lockGuids.empty())
 		return;
 
-	ibDatabaseQueryBuilder q(&m_lockHolder);
-	if (!q.IsOpen())
-		return;  // best-effort — silent fail if DB closed (process shutdown)
-
-	q.BeginTransaction();
+	// The whole thing is inside the try, transaction calls included. They were
+	// outside it, and BeginTransaction and Commit throw like everything else in
+	// the database layer: a shutdown with a document still open crashed the web
+	// server here twice on 2026-09-07, because the exception left this function,
+	// left ibLockHandle::Release, and reached the destructor that called it,
+	// where an escaping exception is std::terminate.
+	//
+	// Swallowing is the contract, not a shortcut: releasing a lock row is
+	// best-effort, and a row that survives is collected by the zombie sweep.
 	try {
-		std::vector<ibQueryExprPtr> guids;
-		guids.reserve(lockGuids.size());
-		for (const auto& g : lockGuids)
-			guids.push_back(ibConst(ibValue(g.str())));
-		q.Execute(ibDelete(kSysLockTable, ibIn(ibCol(wxT("lockGuid")), std::move(guids))));
+		ibDatabaseQueryBuilder q(&m_lockHolder);
+		if (!q.IsOpen())
+			return;  // DB closed — process shutdown
+
+		q.BeginTransaction();
+		try {
+			std::vector<ibQueryExprPtr> guids;
+			guids.reserve(lockGuids.size());
+			for (const auto& g : lockGuids)
+				guids.push_back(ibConst(ibValue(g.str())));
+			q.Execute(ibDelete(kSysLockTable, ibIn(ibCol(wxT("lockGuid")), std::move(guids))));
+		}
+		catch (const ibBackendException&) {
+			if (q.IsActiveTransaction())
+				q.RollBack();
+			return;
+		}
+		q.Commit();
 	}
-	catch (const ibBackendException&) {
-		if (q.IsActiveTransaction())
-			q.RollBack();
-		// Swallow — Release is best-effort. Stale rows get cleaned
-		// up by the zombie sweep eventually.
-		return;
+	catch (const ibBackendException& err) {
+		ibJournalInfo(wxT("lock"), wxT("release of %d row(s) did not complete: %s"),
+			static_cast<int>(lockGuids.size()), err.GetErrorDescription());
 	}
-	q.Commit();
+	catch (...) {
+		ibJournalInfo(wxT("lock"), wxT("release of %d row(s) did not complete"),
+			static_cast<int>(lockGuids.size()));
+	}
 }
 
 void ibLockManager::OnSessionEnd(const ibGuid& sessionGuid)

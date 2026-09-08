@@ -40,11 +40,22 @@ void ibLockHandle::Release()
 {
 	if (m_lockGuids.empty())
 		return;
-	// Manager takes the row list, issues DELETE, clears the vector
-	// regardless of DB outcome — best-effort release; if the row
-	// already vanished (cluster cleanup, force-release from admin)
-	// we still want our handle to forget it.
-	if (auto* lm = ibApplicationData::GetLockManager())
-		lm->ReleaseRows(m_lockGuids);
+
+	// The handle forgets its rows first, and does not remember them again
+	// whatever the database answers. Best-effort release: a row that already
+	// vanished — cluster cleanup, a force-release from an administrator — is
+	// not ours to chase, and a retry from a destructor would only fail again.
+	const std::vector<ibGuid> rows = std::move(m_lockGuids);
 	m_lockGuids.clear();
+
+	// Nothing escapes. Release runs from the destructor and from a noexcept
+	// move-assignment, and in both an exception leaving here is std::terminate
+	// rather than an error anyone reads. The manager swallows its own already;
+	// this is the boundary the language actually requires it at.
+	try {
+		if (auto* lm = ibApplicationData::GetLockManager())
+			lm->ReleaseRows(rows);
+	}
+	catch (...) {
+	}
 }
