@@ -310,7 +310,13 @@ html[data-oes-ui="ui5"] .oes-tablebox .tabulator-cell{
    The tab row stayed because ui5-tabcontainer has no room for what a
    tab here carries: a raster icon out of the metadata, and a close box.
    Losing either would cost the user more than the component gains. */
-html[data-oes-ui="ui5"] body{background:var(--oes-page-bg);color:var(--oes-chrome-text)}
+/* One face for the whole window. The UI5 components draw their own text in
+   the theme's family; ours was drawing in the browser's system-ui, and the
+   two sat side by side in every row. It used to arrive on each control as
+   part of the font the desktop stored -- which is exactly the font that
+   should not be sent, so the family belongs here instead. */
+html[data-oes-ui="ui5"] body{background:var(--oes-page-bg);color:var(--oes-chrome-text);
+  font-family:var(--oes-font-ui)}
 html[data-oes-ui="ui5"] #titlebar{background:none;border:0;padding:0;color:inherit;display:block}
 /* The menu and the development switcher moved into the shell bar, which
    is a light surface — the white-on-gradient colours they were written

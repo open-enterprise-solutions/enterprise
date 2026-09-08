@@ -202,6 +202,22 @@ that came out as a white slab per field, and no form had asked for it. So
 genuinely wants a white field does not get one — and on a light theme the field
 is white regardless.
 
+**The desktop's type is not a choice either.** Every control's `Font` property
+starts at what `wxFontContainer::InitDefaults` leaves behind: face *Segoe UI*,
+and a point size of **-1**, meaning nothing was chosen. `GetFont()` then
+substitutes the host's system size for that -1 — 13pt on macOS — and the web
+node carried it out as an absolute `font-size: 13pt` with a face that does not
+exist on the machine rendering it. Every label, field, group title and table cell
+came out a third larger than the window around it. `ibWebIsPlatformFont` compares
+against `wxFontContainer().GetFont()`, so what it tests is what an unchosen
+property resolves to *on this machine* rather than a number written down in the
+comparison.
+
+The face then has to come from somewhere, since it used to arrive on each
+control: `html[data-oes-ui="ui5"] body` takes `--oes-font-ui`, so the window is
+one face. Before that the UI5 components drew their text in the theme's family
+and ours drew in the browser's `system-ui`, side by side in every row.
+
 **A surface a form DID choose still needs ink.** A background that survives the
 test above was named by somebody, and named against the desktop's dark-on-light.
 Honouring it under a dark theme, while the theme supplies the text colour, is how

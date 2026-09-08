@@ -4,6 +4,7 @@
 #include <algorithm>
 
 #include "frontend/visualView/ctrl/frame.h"   // wxDefaultStype{BG,FG}Colour
+#include "backend/fontcontainer.h"            // what an unchosen Font resolves to
 
 bool ibWebIsPlatformPaper(const wxColour& colour)
 {
@@ -13,6 +14,22 @@ bool ibWebIsPlatformPaper(const wxColour& colour)
 bool ibWebIsPlatformInk(const wxColour& colour)
 {
 	return colour == wxDefaultStypeFGColour;
+}
+
+bool ibWebIsPlatformFont(const wxFont& font)
+{
+	// What an unchosen Font property resolves to on THIS machine: the container's
+	// defaults, put through the same GetFont() the value layer uses, so the
+	// substituted system size is the one being compared against rather than a
+	// number written down here.
+	static const wxFont platform = wxFontContainer().GetFont();
+
+	return font.IsOk() && platform.IsOk()
+		&& font.GetPointSize()  == platform.GetPointSize()
+		&& font.GetFaceName()   == platform.GetFaceName()
+		&& font.GetWeight()     == platform.GetWeight()
+		&& font.GetStyle()      == platform.GetStyle()
+		&& font.GetUnderlined() == platform.GetUnderlined();
 }
 
 // Definitions for the textctrl side-button events declared in webWindow.h
@@ -138,7 +155,7 @@ nlohmann::json ibWebWindow::ToJSON() const
 	if (m_bg.IsOk() && !ibWebIsPlatformPaper(m_bg)) {
 		node["bg"] = m_bg.GetAsString(wxC2S_HTML_SYNTAX);
 	}
-	if (m_font.IsOk()) {
+	if (m_font.IsOk() && !ibWebIsPlatformFont(m_font)) {
 		nlohmann::json f = {
 			{ "size",   m_font.GetPointSize() },
 			{ "family", m_font.GetFaceName() },

@@ -33,6 +33,16 @@
 bool ibWebIsPlatformPaper(const wxColour& colour);
 bool ibWebIsPlatformInk(const wxColour& colour);
 
+// And the desktop's own type. Every control's Font property starts at what
+// wxFontContainer::InitDefaults leaves behind -- face "Segoe UI", and a point
+// size of -1, meaning "not chosen". GetFont() then substitutes the host's
+// system size for that -1, which is 13pt on macOS, and the web nodes carried it
+// out as an absolute `font-size: 13pt` on every label, field and group title.
+// The page's own type is 14px, so a form arrived a third larger than the window
+// around it, in a face that does not exist on the machine rendering it. Same
+// rule as the colours: emit a font only when it is one somebody chose.
+bool ibWebIsPlatformFont(const wxFont& font);
+
 #include "jsonAdapter.h"
 
 class ibWebWindow;
@@ -197,7 +207,7 @@ public:
 			n["fg"] = m_fg.GetAsString(wxC2S_HTML_SYNTAX);
 		if (m_bg.IsOk() && !ibWebIsPlatformPaper(m_bg))
 			n["bg"] = m_bg.GetAsString(wxC2S_HTML_SYNTAX);
-		if (m_font.IsOk()) {
+		if (m_font.IsOk() && !ibWebIsPlatformFont(m_font)) {
 			nlohmann::json fj;
 			fj["family"] = m_font.GetFaceName();
 			fj["size"]   = m_font.GetPointSize();
