@@ -197,6 +197,7 @@ wxString ibOriginName(ibNameOrigin origin)
 	case ibNameOrigin::Bound:        return wxT("bound");
 	case ibNameOrigin::Member:       return wxT("member");
 	case ibNameOrigin::Inherited:    return wxT("inherited");
+	case ibNameOrigin::Keyword:      return wxT("keyword");
 	default:                         return wxT("declared");
 	}
 }
@@ -297,8 +298,13 @@ public:
 			"STAND DECIDES WHICH ANSWER YOU GET. Just after a dot: what that expression offers - "
 			"`methods` with their call form and whether each returns a value, and `properties`. "
 			"Anywhere else: `names`, everything in scope at that point - the variables and the "
-			"functions, including the ones this module declares above the caret. Keywords are not in "
-			"it; syntax_search answers those properly.\n\n"
+			"functions, including the ones this module declares above the caret. The general "
+			"keywords are not in it; syntax_search answers those properly.\n\n"
+			"THE QUERY KEYWORDS ARE THE ONE EXCEPTION, and they carry `origin: keyword`. A query is "
+			"WRITTEN in them - `from o in Catalogs.Goods where … select …` - so which of them may be "
+			"written where the caret stands is part of this question, not a lookup: inside a query "
+			"you are offered its clauses, inside a `restrict` the two it takes, and in open code the "
+			"two openers. `linq_methods` gives the full form of each clause.\n\n"
 			"`place` SAYS WHICH OF THOSE YOU GOT, so you never have to work it out from which field "
 			"came back: `afterDot` (members of the expression to the left, which `expression` names), "
 			"`inKeyword` (a keyword or call whose own domain is being completed - `keyword` names it), "

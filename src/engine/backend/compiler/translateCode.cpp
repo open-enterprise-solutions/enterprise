@@ -1644,12 +1644,23 @@ ibTranslateCode::ibCaretText ibTranslateCode::CaretAt(unsigned int caret) const
 	// WHAT A LIST FILTERS BY. The word under the caret, whatever kind it is — an identifier being
 	// typed, or the contents of a string literal being typed inside a call. It is not part of the
 	// question, which is why it is filled the same way in every branch below.
-	if (here.m_lexType == IDENTIFIER || here.m_lexType == CONSTANT)
+	// …and only while the caret is still in it: a word the caret has walked past is not what a list
+	// filters by — see the note below on `stillInside`.
+	if ((here.m_lexType == IDENTIFIER || here.m_lexType == CONSTANT) && caret <= here.EndPos())
 		answer.m_word = here.m_valData.GetString();
 
+	// ⭐⭐ A TOKEN THE CARET HAS LEFT IS NOT THE TOKEN BEING TYPED. Everything below asks what the
+	// caret is standing IN, and the search above found the last token that BEGAN before it — which
+	// is the same token whether the caret sits inside it, right at its end, or a space further on.
+	// The gap decides: with whitespace between them the word is finished and what is being written
+	// is the NEXT one. Measured 2026-09-08: `from o in Data.Catalogs.Goods |` was answered as a
+	// member access on `Goods`, so the clause keywords that may be written there were never
+	// offered and the walk was sent looking for a value nobody asked about.
+	const bool stillInside = caret <= here.EndPos();
+
 	// A MEMBER ACCESS: the caret is on the dot, or on the name being typed after one.
-	const bool onDot = here.m_lexType == DELIMITER && here.m_numData == '.';
-	const bool afterDot = here.m_lexType == IDENTIFIER && at > 0
+	const bool onDot = stillInside && here.m_lexType == DELIMITER && here.m_numData == '.';
+	const bool afterDot = stillInside && here.m_lexType == IDENTIFIER && at > 0
 		&& m_listLexem[at - 1].m_lexType == DELIMITER && m_listLexem[at - 1].m_numData == '.';
 
 	if (onDot || afterDot) {

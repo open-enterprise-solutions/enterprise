@@ -6,7 +6,7 @@
 #include "valueArray.h"
 #include "backend/backend_exception.h"
 #include "backend/compiler/procUnit.h"        // InvokeLambdaWithArg for selector overloads
-#include "backend/compiler/procUnitValues.h"  // CopyValue / SetTypeNumber / SetTypeBoolean / IsHasValue
+#include "backend/compiler/procUnitLambda.h"  // CopyValue / SetTypeNumber / SetTypeBoolean / IsHasValue
 
 #include <algorithm>   // lexicographical_compare / equal — the element walk
 

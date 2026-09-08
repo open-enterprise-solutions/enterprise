@@ -30,14 +30,10 @@
 // pVariable2->DispatchLinqMethod(...).
 ////////////////////////////////////////////////////////////////////////////
 
-#include "procUnit.h"
-#include "procUnitValues.h"   // ibValueFunction full def + AsFunction / AsIterator
+#include "procUnitLambda.h"   // ibValueFunction full def + AsFunction / AsIterator
 #include "backend/query/queryException.h"   // ibBackendQueryLinqException — the pipeline refuses in its own variety
-#include "procUnitState.h"
-#include "session/session.h"
 
-#include "system/value/valueArray.h"  // ToArray() materialiser
-#include "system/value/valueMap.h"    // ibValueStructure / ibValueContainer (GroupBy)
+#include "system/value/valueTable.h"  // ibValueModelTable — what a query ANSWERS with: columns and rows
 #include "system/value/valueQueryable.h"  // ibValueQueryable::TryJoinThroughL3 — RAM-receiver join push-down (Layer 2)
 
 #include <algorithm>
@@ -102,6 +98,18 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	// no inner lambda is not flagged and still binds by pointer.
 	const bool bHeapFrame = bfn->m_needsHeapFrame;
 
+	// 🛑 THE FRAME IS BUILT PER CALL, AND REUSING IT IS NOT A ONE-LINE SAVING. Tried and taken out
+	// the same hour (2026-09-08): a pipeline calls this once per row, so a frame built per row is
+	// most of the cost of a row, and a frame whose slots are all parameters looks like it carries
+	// nothing between calls — every slot is rebound below. It carries the CALL'S OWN STATE. A body
+	// written `{ return … }` opens a block scope and leaves through the RET, so the matching scope
+	// exit never runs and `m_currentScopeDepth` climbs by one every row; the reused frame keeps the
+	// previous line, the previous depth, and whatever else a frame accumulates while it runs. The
+	// run died on an assertion inside the standard library, three hundred thousand rows in.
+	//
+	// The saving is real and the way to it is not a reset list that has to stay complete forever —
+	// it is for the body to have NO FRAME OF ITS OWN, compiled into the caller's the way a loop body
+	// is (docs/linq.md §0.2g). Then there is nothing to reuse and nothing to reset.
 	std::shared_ptr<ibRunContext> spHeapCtx;
 	// The stack frame leases its slots; the heap-promoted one cannot, because it is
 	// the case that OUTLIVES the call — a lambda captured it. procUnitState.h, ibRunStack.
@@ -476,10 +484,448 @@ private:
 // intent — group-by keeps its emission order in a separate vector (m_groups),
 // join has no order at all — so the tree was buying ordering nobody read.
 
+// ⭐⭐ LINQ'S OWN COLLECTION — what a chain COMPILED AS A LOOP works in (compileCode.cpp), as opposed
+// to the state classes around it, which is what a chain BUILT AS OBJECTS works in.
+//
+// The obvious collection is the script's `Array`, and it is the wrong one twice over:
+//
+//   * IT IS HEAVY. `ibValueArray` is a USER-VISIBLE type — a member table, dynamic members, script
+//     semantics, and a `Contains` that walks the whole thing comparing values. `Distinct` written
+//     that way costs O(n) PER ROW: fifty million comparisons over ten thousand rows, for a question
+//     a set answers in log n.
+//   * IT IS BUILT BY NAME. `New Array` compiles to `OPER_NEW` carrying a const STRING, and the
+//     runtime resolves the class through `ibValue::CreateObject(className, …)` — a name lookup, at
+//     run time, for an object nobody can see, reach or name.
+//
+// None of that belongs to machinery the person never sees. A pipeline needs a few plain containers
+// and no surface at all, and that is this class. Script meets it in exactly one place: where the
+// person ASKED for a collection, `ibLinqResult` builds one Array, once, at the end.
+//
+// ⚠ It is an ibValue only because a frame slot holds ibValues — that is the mechanism for "a thing
+// that lives as long as this loop does", and reusing it costs nothing. No member table, no methods,
+// no name, no ctor registration: nothing in the language can reach it, call it or write to it.
+// ⭐⭐ THE LIGHT CLASS A COMPILED PIPELINE WORKS IN — and the ONE thing it works in.
+//
+// What a chain needs at run time is small and completely known: keep a row, ask whether a value has
+// been seen, put a row under a key, take the rows under a key, order what was kept, and hand the
+// answer back. The engine's own collections can all do that — and each of them costs what a
+// USER-VISIBLE value costs:
+//
+//   * `Array` is created through `OPER_NEW` carrying a const STRING, so the class is resolved BY
+//     NAME at run time; `Contains` then walks the whole thing, so `Distinct` is O(n) per row.
+//   * `Structure` and `Container` key their members by STRING: every `g.Key` is a lookup.
+//
+// None of that is needed by machinery nobody can see. Here there is no name anywhere: members are
+// declared once, so the compiler turns `Key` and `Values` into the ordinals 0 and 1 while it is
+// compiling and the access is a switch on a number; a bucket is found by its key in log n; and
+// iterating what was kept walks the vector IN PLACE, building nothing per row.
+//
+// It is an ibValue because a frame slot holds ibValues — that is how a thing lives exactly as long
+// as its loop does. It is registered (at the bottom, with its neighbours) because a frame slot is
+// ENUMERATED: the debugger lists locals and asks each what it is, and a type the engine has never
+// heard of has no answer. What keeps it out of the language is that nothing names it and no ctor is
+// published — not that it is unknown.
+
+// ⭐⭐ THE FOUR CLASS IDS, DECLARED HERE AND REGISTERED AT THE BOTTOM. They sit above the classes
+// because each class ANSWERS with its own id — see GetClassType on each — and a constant cannot be
+// used before it is written down. The registration itself stays at the bottom with its neighbours.
+//
+// 🛑 WHY THE CLASSES ANSWER AT ALL, INSTEAD OF LETTING THE BASE ANSWER FOR THEM. `ibValue::
+// GetClassType()` for an object tag ends in `GetTypeIDByRef(this)`, which takes `typeid(*this)` and
+// looks the result up in the ctor REGISTRY (valueFactory.cpp) — RTTI plus a map probe to learn a
+// number the class has known since it was compiled. These four are the values a query is MADE of,
+// so that question is asked per row and, in a projection, per field.
+constexpr ibClassID g_valueLinqRows   = system_to_clsid("VL_LQRW");
+constexpr ibClassID g_valueLinqShape  = system_to_clsid("VL_LQSH");
+constexpr ibClassID g_valueLinqRecord = system_to_clsid("VL_LQRC");
+constexpr ibClassID g_valueLinqGroup  = system_to_clsid("VL_LQGR");
+
+// ⭐ "IS THIS ONE OF OURS" — AN INTEGER COMPARE, NOT A TYPE WALK. Every wrapper below answers its
+// own id, so the question needs no `dynamic_cast`: ask the value what it is, and cast only once the
+// answer says so. Still CHECKED — a bare `static_cast` would be a claim rather than a question, and
+// these values reach here from frame slots the walk does not own.
+//
+// ⚠ AND IT IS NOT A SPEEDUP — MEASURED, so that nobody spends the day rediscovering it. Five of
+// these run per projected row, and A/B against `dynamic_cast` under identical conditions (min of
+// three runs each, the bench alone) reads: project 1 field 1085.3 → 1049.8, project 3 fields
+// 1657.3 → 1662.2, block select n=16000 709.1 → 691.7. Inside the noise. On this hierarchy — single
+// inheritance, no virtual bases — MSVC's dynamic_cast is cheap enough not to show.
+//
+// It stays because of what it removes ELSEWHERE: the base `GetClassType()` for an object tag ends
+// in RTTI plus a ctor-registry probe, and that is asked by the debugger's locals view, by a watch
+// and by `TypeOf`, not only here.
+template <class T>
+inline T* LinqCast(ibValue* held, ibClassID clsid)
+{
+	return (held != nullptr && held->GetClassType() == clsid) ? static_cast<T*>(held) : nullptr;
+}
+
+// The two members of a group — declared ONCE, which is exactly what makes them ordinals.
+inline void ibBindLinqGroupMembers(ibValue::ibMemberTable& helper, const ibValue*)
+{
+	helper.AppendProp(wxT("Key"),    true, false, 0);
+	helper.AppendProp(wxT("Values"), true, false, 1);
+}
+
+class ibValueLinqRows;
+
+// A GROUP: its key, and the rows under it. Nothing is copied to make one — the rows are the
+// collection's own, handed out as a view.
+class ibValueLinqGroup : public ibValueStaticMembers<&ibBindLinqGroupMembers> {
+public:
+	ibValueLinqGroup() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}
+	ibValueLinqGroup(const ibValue& key, const ibValue& rows)
+		: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_key(key), m_rows(rows) {}
+
+	// Its own id, not the registry's copy of it — see the note beside the constants.
+	virtual ibClassID GetClassType() const override { return g_valueLinqGroup; }
+
+	// ⭐ AND ITS OWN ORDINALS, like the record's below. The shared member table still DESCRIBES the
+	// surface — a watch and a property grid enumerate it — but turning a name into a number is a
+	// question two names can answer outright, without the virtual hop into the general machinery.
+	// It is asked once per `g.Key` and once per `g.Values`, i.e. per group of every grouped loop.
+	virtual long FindProp(const wxString& name) const override {
+		if (stringUtils::CompareString(name, wxT("Key")))    return 0;
+		if (stringUtils::CompareString(name, wxT("Values"))) return 1;
+		return wxNOT_FOUND;
+	}
+
+	virtual bool     IsEmpty()   const override { return false; }
+	virtual wxString GetString() const override { return m_key.GetString(); }
+
+	// BY ORDINAL — the names became these numbers at compile time.
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override {
+		switch (lPropNum) {
+		case 0: pvarPropVal = m_key;  return true;
+		case 1: pvarPropVal = m_rows; return true;
+		}
+		return false;
+	}
+	virtual bool SetPropVal(const long, const ibValue&) override { return false; }
+
+private:
+	ibValue m_key;
+	ibValue m_rows;
+};
+
+// ⭐⭐ THE SHAPE OF A PROJECTED ROW — the field names of one `select { … }`, in the order they were
+// written, which is exactly what makes them ordinals.
+//
+// A shape is built ONCE per query: the compiler writes the names down as a single constant, the
+// first row that needs it splits that constant here, and every row of that query then points at
+// this one object. So a name is turned into a number once per QUERY, never per row and never per
+// field — and the instruction that fills a row does not carry names at all, only positions.
+class ibValueLinqShape : public ibValue {
+public:
+	ibValueLinqShape() : ibValue(ibValueTypes::TYPE_VALUE) {}
+	explicit ibValueLinqShape(const wxString& names) : ibValue(ibValueTypes::TYPE_VALUE) {
+		// One constant, split once. `\n` separates the fields — an identifier cannot contain it.
+		wxString rest = names;
+		while (!rest.IsEmpty()) {
+			const int at = rest.Find(wxT('\n'));
+			if (at == wxNOT_FOUND) { m_fields.push_back(rest); break; }
+			m_fields.push_back(rest.Left(at));
+			rest = rest.Mid(at + 1);
+		}
+	}
+
+	virtual ibClassID GetClassType() const override { return g_valueLinqShape; }
+
+	virtual bool     IsEmpty()   const override { return m_fields.empty(); }
+	virtual wxString GetString() const override { return wxT("<row shape>"); }
+
+	long Count() const { return (long)m_fields.size(); }
+	const wxString& NameAt(long i) const { return m_fields[(size_t)i]; }
+
+	// The ONLY place a name becomes a number, and it is asked by whoever did NOT get the number
+	// baked in at compile time. A projection has a handful of fields, so this is a short walk over
+	// a contiguous vector — no map, no member table, nothing built to answer it.
+	long Ordinal(const wxString& name) const {
+		for (size_t i = 0; i < m_fields.size(); ++i)
+			if (stringUtils::CompareString(m_fields[i], name))
+				return (long)i;
+		return wxNOT_FOUND;
+	}
+
+private:
+	std::vector<wxString> m_fields;
+};
+
+// ⭐⭐ A PROJECTED ROW. What `select { name = expr, … }` produces, and what a `Structure` used to.
+//
+// The Structure it replaces cost, PER ROW: `OPER_NEW` resolving the class `Structure` through the
+// object factory BY NAME, then one `Insert(name, value)` per field — a method resolved by name, its
+// arguments loaded through a call frame, and the name stored again inside the object so that every
+// later `row.Field` could look it up. For a three-field projection over ten thousand rows that is
+// thirty thousand name lookups to express something the compiler knew in full while compiling.
+//
+// Here the names live in the SHAPE, once per query, and a row is a vector of values in field order.
+// Filling one is a store at a known index. Reading one back by name is answered by this class
+// itself — `FindProp` walks the shape's names rather than a member table, because a light class
+// answers its own questions and does not go through the general machinery to do it.
+class ibValueLinqRecord : public ibValue {
+public:
+	ibValueLinqRecord() : ibValue(ibValueTypes::TYPE_VALUE) {}
+	ibValueLinqRecord(ibValueLinqShape* shape, long count)
+		: ibValue(ibValueTypes::TYPE_VALUE), m_shape(shape), m_values((size_t)(count < 0 ? 0 : count)) {
+		if (m_shape != nullptr) m_shape->IncrRef();
+	}
+	virtual ~ibValueLinqRecord() { if (m_shape != nullptr) m_shape->DecrRef(); }
+
+	virtual ibClassID GetClassType() const override { return g_valueLinqRecord; }
+
+	// A row EXISTS: it is not empty because a field of it happens to be.
+	virtual bool IsEmpty() const override { return m_values.empty(); }
+
+	virtual wxString GetString() const override {
+		// What a watch shows. Names included — the person reading it did not write the ordinals.
+		wxString text;
+		for (size_t i = 0; i < m_values.size(); ++i) {
+			if (i != 0) text << wxT(", ");
+			if (m_shape != nullptr && (long)i < m_shape->Count()) text << m_shape->NameAt((long)i) << wxT("=");
+			text << m_values[i].GetString();
+		}
+		return text;
+	}
+
+	// ⭐ ITS OWN ANSWERS. Four overrides and no member table: the surface IS the shape, so there is
+	// nothing to build, nothing to cache and nothing to invalidate.
+	virtual long     GetNProps() const override { return (long)m_values.size(); }
+	virtual long     FindProp(const wxString& name) const override {
+		return m_shape != nullptr ? m_shape->Ordinal(name) : wxNOT_FOUND;
+	}
+	virtual wxString GetPropName(const long lPropNum) const override {
+		// ⚠ `wxString(wxEmptyString)`: outside MSVC the bare constant is a `const wxChar*`, both arms
+		// convert to each other and the conditional is AMBIGUOUS — it builds here and fails on macOS
+		// and Linux (portability.md §1.10).
+		return (m_shape != nullptr && lPropNum >= 0 && lPropNum < m_shape->Count())
+			? m_shape->NameAt(lPropNum) : wxString(wxEmptyString);
+	}
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override {
+		if (lPropNum < 0 || (size_t)lPropNum >= m_values.size()) return false;
+		pvarPropVal = m_values[(size_t)lPropNum];
+		return true;
+	}
+	// A projected row is an answer, not a variable: what produced it is gone by the time anyone
+	// holds it, so writing a field would change nothing anybody can observe. And it SAYS so —
+	// without the override the base answers "writable" from an absent member table, which is how a
+	// property grid ends up offering an edit that silently does nothing.
+	virtual bool SetPropVal(const long, const ibValue&) override { return false; }
+	virtual bool IsPropReadable(const long) const override { return true;  }
+	virtual bool IsPropWritable(const long) const override { return false; }
+
+	// The columns this row was made with — the same object for every row of the query, which is what
+	// lets the answer be built out of it once instead of asked of every row.
+	const ibValueLinqShape* Shape() const { return m_shape; }
+
+	// Filled by the instruction that projects — BY POSITION, which is the position the compiler
+	// wrote the field at.
+	void SetField(long ordinal, const ibValue& value) {
+		if (ordinal >= 0 && (size_t)ordinal < m_values.size())
+			m_values[(size_t)ordinal] = value;
+	}
+
+private:
+	ibValueLinqShape*    m_shape = nullptr;   // shared by every row of the query; refcounted
+	std::vector<ibValue> m_values;            // field order = the order they were written in
+};
+
+// The collection itself. One object per loop, and everything a pipeline does lives on it.
+class ibValueLinqRows : public ibValue {
+public:
+	ibValueLinqRows() : ibValue(ibValueTypes::TYPE_VALUE) {}
+	// A VIEW over somebody else's rows — what a bucket lookup hands out. It keeps the owner alive
+	// and copies nothing.
+	ibValueLinqRows(ibValueLinqRows* owner, const std::vector<ibValue>* view)
+		: ibValue(ibValueTypes::TYPE_VALUE), m_owner(owner), m_view(view) {
+		if (m_owner != nullptr) m_owner->IncrRef();
+	}
+	virtual ~ibValueLinqRows() { if (m_owner != nullptr) m_owner->DecrRef(); }
+
+	virtual ibClassID GetClassType() const override { return g_valueLinqRows; }
+
+	// 🛑 EMPTY MEANS THIS COLLECTION HOLDS NOTHING — rows, BUCKETS or values seen — and it has to,
+	// because that is the question a JOIN asks it. The hash a join builds lives entirely in the
+	// buckets, so a version of this that answered from the rows alone said "empty" forever: the
+	// `!hashSlot` guard read that as "not built yet" and rebuilt the hash on EVERY outer row,
+	// appending the whole inner side again each time. Measured on the base — one outer row gave the
+	// right answer, the second gave its match twice, the third three times.
+	//
+	// A VIEW borrows somebody else's rows and has nothing else, so it answers about those.
+	virtual bool IsEmpty() const override {
+		return m_view != nullptr
+			? m_view->empty()
+			: (m_rows.empty() && m_buckets.empty() && m_seen.empty());
+	}
+	virtual wxString GetString() const override { return wxT("<linq>"); }   // watch-safe, and dull
+
+	// ⭐ FIRST TIME? — `Distinct`, entire. ORDERED rather than hashed, and see the note on the
+	// buckets below for the measurement that says to keep it that way.
+	bool FirstTime(const ibValue& value) { return m_seen.insert(value).second; }
+
+	void Keep(const ibValue& row)    { m_rows.push_back(row); }
+
+	// ⭐⭐ A ROW MAY BE KEYED BY SEVERAL VALUES, and they arrive one at a time. `orderby a, b` is
+	// how anybody sorts a report — by warehouse, then by item — and one key per row could not say
+	// it: the second clause had nowhere to go, so the language refused it and the only way round
+	// was a second pass in script. The keys of a row are kept together and compared in order, which
+	// is what "then by" MEANS; the row itself is added once, by the first key.
+	//
+	// ⚠ THE INDEX IS THE COMPILER'S, not a counter here: it emits one KEEP per key and numbers
+	// them, so a key that computes to nothing still occupies its position and the columns stay
+	// aligned with the clause that named them.
+	void KeepKey(const ibValue& key, long at)
+	{
+		if (at < 0)
+			return;
+		if (m_keys.size() < m_rows.size())
+			m_keys.resize(m_rows.size());
+		if (m_keys.empty())
+			return;                                   // a key with no row to belong to
+		std::vector<ibValue>& forRow = m_keys.back();
+		if ((size_t)at >= forRow.size())
+			forRow.resize((size_t)at + 1);
+		forRow[(size_t)at] = key;
+	}
+
+	long           Count()    const { return (long)Rows().size(); }
+	const ibValue& At(long i) const { return Rows()[(size_t)i]; }
+	bool           HasKeys()  const { return !m_keys.empty() && m_keys.size() == m_rows.size(); }
+
+	// ⭐ GROUPING AND JOINING. A bucket is found by its key in log n; the order the keys first
+	// appeared in is kept apart, because that is the order the answer comes out in and it is not
+	// key order.
+	//
+	// 🛑 A TREE, AND HASHING IT WAS TRIED AND MEASURED SLOWER (2026-09-09). The one key policy for
+	// hash containers exists and the CHAIN road uses it — `ibValueJoinState` and
+	// `ibValueGroupByState` key `unordered_map` with `ibValueHash` / `ibValueEqual` (value.h) — so
+	// this looked like a road left unconverged. Swapping both indexes here to that same pair, join
+	// alone, min of three runs each:
+	//
+	//   n            250      1 000     4 000    16 000
+	//   tree      1467.6    1525.2    1715.1    1932.3   ns/row
+	//   hash      1622.8    1679.7    1772.2    1986.0   ns/row   (+10.6 / +10.1 / +3.3 / +2.8 %)
+	//
+	// Slower at every point. `GetValueHash` on each key plus the bucket array and its rehashes cost
+	// more than fourteen `CompareValueLS` at n=16000 — those comparisons are cheap since the
+	// tag-equality fast path landed (value.cpp, §9). The chain road's containers are not being
+	// judged here: they build ONE index and probe it per outer row, which is a different shape.
+	//
+	// ⚠ AND THE RISE WITH n IS NOT THE INDEX. Both containers rise the same ~30% from n=250 to
+	// 16000, so it is not tree depth and not hashing — it is what §8 predicted for scale: more live
+	// ibValue, more allocations, worse locality. A `a + b·log₂(n)` fit matched the series and named
+	// the wrong cause; the fit was reading warm-up, which is why the same bench run ALONE gives a
+	// different curve than run after its neighbours.
+	void KeepInBucket(const ibValue& key, const ibValue& row) {
+		const auto found = m_buckets.find(key);
+		if (found == m_buckets.end()) {
+			m_bucketOrder.push_back(key);
+			m_buckets.emplace(key, std::vector<ibValue>{ row });
+			return;
+		}
+		found->second.push_back(row);
+	}
+	const std::vector<ibValue>* Bucket(const ibValue& key) const {
+		const auto found = m_buckets.find(key);
+		return found == m_buckets.end() ? nullptr : &found->second;
+	}
+	const std::vector<ibValue>& BucketOrder() const { return m_bucketOrder; }
+
+	// Rows into key order. A STABLE sort over an INDEX: equal keys keep the order they arrived in,
+	// and each row moves once instead of being swapped through every comparison.
+	// ⭐ REVERSAL IS AN ORDERING WITHOUT KEYS — the rows already carry the order they arrived in, so
+	// turning it round is the whole operation. It is here rather than in a state class of its own
+	// for the same reason everything else is: one collection, one place the rows live.
+	void ReverseRows() { std::reverse(m_rows.begin(), m_rows.end()); }
+
+	void SortByKeys(bool descending) {
+		if (!HasKeys())
+			return;                                   // nothing to pair them by; leave row order
+		std::vector<size_t> order(m_rows.size());
+		for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+		// Lexicographic over the row's keys — the first that differs decides, exactly as the clauses
+		// were written. A row with fewer keys than another (a clause that produced nothing) sorts
+		// before it, which keeps the order total and the sort valid.
+		// 🛑 ONE THREE-WAY ANSWER PER KEY, NOT TWO BOOLEANS. `a < b` is `CompareValueLS(b) < 0` — a
+		// full comparison — so asking `l < r` and then `r < l` runs the whole thing TWICE, and it
+		// does so exactly when the keys are EQUAL, which is the only case a second key exists for.
+		//
+		// This is the same waste the engine already removed one level down: value.cpp's comparison
+		// says outright that `a < b ? -1 : (b < a ? 1 : 0)` "runs the comparison twice to learn what
+		// one call returns", and was rewritten to ask each type for one three-way answer. The
+		// three-way answer is right here; taking it back through `operator<` threw it away again.
+		const auto before = [](const std::vector<ibValue>& l, const std::vector<ibValue>& r) {
+			const size_t n = std::min(l.size(), r.size());
+			for (size_t i = 0; i < n; ++i) {
+				const int decided = l[i].CompareValueLS(r[i]);
+				if (decided != 0)
+					return decided < 0;
+			}
+			return l.size() < r.size();
+		};
+
+		std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+			return descending ? before(m_keys[b], m_keys[a]) : before(m_keys[a], m_keys[b]);
+		});
+		std::vector<ibValue> sorted;
+		sorted.reserve(m_rows.size());
+		for (const size_t i : order) sorted.push_back(m_rows[i]);
+		m_rows.swap(sorted);
+	}
+
+	// ⭐⭐ ITERATED IN PLACE. `foreach` over what a pipeline kept builds nothing per row: the state
+	// walks the vector the collection already holds, and holds the collection while it does.
+	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override {
+		class RowWalk : public ibValueIteratorState {
+		public:
+			RowWalk(ibValueLinqRows* owner, const std::vector<ibValue>& rows)
+				: m_owner(owner), m_rows(rows) { if (m_owner) m_owner->IncrRef(); }
+			~RowWalk() override { if (m_owner) m_owner->DecrRef(); }
+			bool MoveNext(ibValue& current) override {
+				if (m_pos >= m_rows.size()) return false;
+				current = m_rows[m_pos++];
+				return true;
+			}
+			void Reset() override { m_pos = 0; }
+			// A ROW IS THE SAMPLE OF A ROW. Every row of one query is made the same way, so the
+			// first one describes all of them — which is what a reader standing after the dot of a
+			// `foreach` variable is asking for. Nothing is consumed: the cursor does not move.
+			bool PeekSample(ibValue& current) const override {
+				if (m_rows.empty()) return false;
+				current = m_rows[0];
+				return true;
+			}
+		private:
+			ibValueLinqRows*            m_owner;
+			const std::vector<ibValue>& m_rows;
+			size_t                      m_pos = 0;
+		};
+		return std::make_shared<RowWalk>(this, Rows());
+	}
+
+	const std::vector<ibValue>& Rows() const { return m_view != nullptr ? *m_view : m_rows; }
+
+private:
+	// A VIEW borrows: it has no rows of its own and reads the owner's.
+	ibValueLinqRows*             m_owner = nullptr;
+	const std::vector<ibValue>*  m_view  = nullptr;
+
+	std::vector<ibValue> m_rows;
+
+	// One entry per kept row, holding that row's ordering keys in clause order — see KeepKey. It
+	// was one value per row until 2026-09-08, which is why `orderby a, b` had no way to compile.
+	std::vector<std::vector<ibValue>> m_keys;
+	// THE ONE KEY POLICY, taken from where it is written (ibValueHash / ibValueEqual, value.h):
+	// *"grouping, joining and de-duplicating all need the same pair … every index takes them from
+	// here."* These two are indexes by value, so they take them from there.
+	std::set<ibValue, std::less<ibValue>>                       m_seen;
+	std::map<ibValue, std::vector<ibValue>, std::less<ibValue>> m_buckets;
+	std::vector<ibValue>                                        m_bucketOrder;
+};
 // GroupBy node — bucket upstream by key extracted via fn(elem).
 // On first MoveNext drain upstream + build buckets, then emit one
-// `Structure{Key, Values:Array}` per group, in FIRST-APPEARANCE order
-// (m_groups keeps it; the index below only finds a key).
+// GROUP per key, in FIRST-APPEARANCE order (m_groups keeps it; the
+// index below only finds a key).
 class ibValueGroupByState : public ibValueIteratorState {
 public:
 	ibValueGroupByState(std::shared_ptr<ibValueIteratorState> upstream,
@@ -493,13 +939,16 @@ public:
 		EnsureGrouped();
 		if (m_pos >= (long)m_groups.size()) return false;
 
-		ibValueStructure* row = new ibValueStructure();
-		row->Insert(ibValue(wxT("Key")),    m_groups[m_pos].first);
-		ibValueArray* values = new ibValueArray();
-		for (auto& v : m_groups[m_pos].second) values->Add(v);
-		ibValue valuesVal(values);
-		row->Insert(ibValue(wxT("Values")), valuesVal);
-		CopyValue(current, ibValue(row));
+		// ⭐ A GROUP IS A GROUP — the same light one the compiled road hands out, so `g.Key` and
+		// `g.Values` mean one thing in this language and are read by ORDINAL on both roads.
+		//
+		// What stood here built a `Structure` and inserted both members BY NAME, then filled an
+		// `Array` a value at a time — three script objects and two name lookups per group, to say
+		// something that has exactly two members and always the same two.
+		ibValueLinqRows* const values = new ibValueLinqRows();
+		for (const ibValue& one : m_groups[m_pos].second)
+			values->Keep(one);
+		CopyValue(current, ibValue(new ibValueLinqGroup(m_groups[m_pos].first, ibValue(values))));
 
 		++m_pos;
 		return true;
@@ -509,7 +958,17 @@ public:
 		m_pos = 0;
 	}
 
-	bool PeekSample(ibValue& /*current*/) const override { return false; }
+	// ⭐⭐ WHAT THIS YIELDS IS KNOWN WITHOUT RUNNING IT, and that is the whole point of a sample. A
+	// grouping answers with one GROUP per key, and a group is `Key` and `Values` whatever the rows
+	// turned out to be — so an empty group is a complete answer to "what will I be looking at".
+	//
+	// It used to say nothing, and the cost was visible one hop later: `foreach (g in rows.GroupBy(f))`
+	// left `g.` with no members to offer, on a value whose shape was never in doubt. Nothing is
+	// drained to answer this — the upstream is not touched at all.
+	bool PeekSample(ibValue& current) const override {
+		current = ibValue(new ibValueLinqGroup());
+		return true;
+	}
 
 private:
 	void EnsureGrouped() {
@@ -886,12 +1345,22 @@ private:
 // sequence) work because Reset rewinds the chain. Forking
 // (q2 = q.Where(...); iterate both q and q2 interleaved) shares
 // upstream state and will misbehave — deferred to Phase 2.
-class ibValueQuery : public ibValue {
+// ⭐⭐ AND IT NAMES WHAT MAY BE WRITTEN NEXT. `ibValueQuery` was a bare ibValue, so the tail of every
+// chain answered with NOTHING after the dot: `a.Where(…).` offered no `Select`, no `Count`, no
+// `ToArray` — the one shape in which LINQ is actually written was the one shape the editor and the
+// completion tool could not help with. The table of ops has existed all along and says in its own
+// comment that it drives name resolution AND IntelliSense; it simply had no reader on this side.
+//
+// The surface is the same for every query — a pipeline tail is a pipeline tail — so it is a SHARED
+// helper built once (ibValueStaticMembers), not a table per value. It is declared in
+// system/value/valueQueryable.h because the DB-backed carrier answers with the SAME list: one
+// binder, both ends of the chain.
+class ibValueQuery : public ibValueStaticMembers<&ibBindLinqMethods> {
 	public:
-	ibValueQuery() : ibValue(ibValueTypes::TYPE_VALUE) {}
+	ibValueQuery() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}
 
 	explicit ibValueQuery(std::shared_ptr<ibValueIteratorState> state)
-		: ibValue(ibValueTypes::TYPE_VALUE)
+		: ibValueStaticMembers(ibValueTypes::TYPE_VALUE)
 		, m_state(std::move(state))
 	{
 	}
@@ -911,6 +1380,23 @@ private:
 constexpr ibClassID g_valueQuery = system_to_clsid("VL_QRY");
 
 SYSTEM_TYPE_REGISTER(ibValueQuery, "LinqQuery", g_valueQuery);
+
+namespace {
+
+// ⭐ ONE TABLE-BUILDER, TWO CALLERS — declared here and defined below, beside the query's own
+// answer. `ToTable` on a collection and the last instruction of a compiled query ask the same three
+// questions of the same rows, and a second builder would be a second set of column names.
+struct ibRowColumns {
+	std::vector<wxString> m_names;
+	bool m_rowIsTheCell = false;   // nothing to take apart: the row goes into the single column
+};
+
+std::vector<wxString> ColumnsOf(const ibValueLinqRows& kept);
+ibRowColumns          ColumnsOfRowItself(const ibValueLinqRows& kept);
+ibValue               TableOfRows(ibValueLinqRows& kept, const std::vector<wxString>& columns,
+                                  bool rowIsTheCell = false);
+
+} // namespace
 
 // LINQ dispatcher — reached via the OPER_CALL_LINQ handler in Execute,
 // which reads the ibLinqMethod enum id from m_param3.m_numIndex and
@@ -1343,11 +1829,32 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		}
 
 		case M::ToTable:
-			// Meaningful only on a data source (Data.* / Queryable, which overrides the
-			// dispatch) — a plain RAM iterable has no column schema to materialise.
-			ibBackendQueryLinqException::Error(
-				_("ToTable is supported on data sources (Data.*) only"));
+		{
+			// ⭐⭐ A TABLE OUT OF WHATEVER THE ROWS ARE. This used to REFUSE — *"ToTable is supported
+			// on data sources (Data.*) only"* — on the grounds that a RAM iterable has no column
+			// schema. It has one: the ROW does. A projected row names its fields, a group is Key and
+			// Values, an object row lends its own properties, and a plain value is itself the single
+			// column — the same question a query's own answer is built from (ColumnsOf /
+			// ColumnsOfRowItself / TableOfRows above), asked here of a collection instead of a loop.
+			//
+			// A data source never reaches this: `ibValueQueryable` overrides the dispatch and builds
+			// the table from the SCHEMA, typed and read server-side, which is the better answer and
+			// the reason the compiler leaves `ToTable` to this road rather than folding it into a
+			// loop (compileCode.cpp, the terminals the door answers by itself).
+			ibValueLinqRows rows;
+			ibValue current;
+			while (upstream->MoveNext(current))
+				rows.Keep(current);
+
+			const std::vector<wxString> named = ColumnsOf(rows);
+			if (!named.empty()) {
+				CopyValue(ret, TableOfRows(rows, named));
+				break;
+			}
+			const ibRowColumns own = ColumnsOfRowItself(rows);
+			CopyValue(ret, TableOfRows(rows, own.m_names, own.m_rowIsTheCell));
 			break;
+		}
 
 		default:
 			ibBackendQueryLinqException::Error(
@@ -1395,7 +1902,7 @@ const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {
 		{ M::Distinct,           L"Distinct",           L"Filter duplicates (uses ibValue equality)" },
 		{ M::OrderBy,            L"OrderBy",            L"Sort ascending by fn(elem) -> key" },
 		{ M::OrderByDescending,  L"OrderByDescending",  L"Sort descending by fn(elem) -> key" },
-		{ M::GroupBy,            L"GroupBy",            L"Group by fn(elem) -> key; emits Structure{Key, Values}" },
+		{ M::GroupBy,            L"GroupBy",            L"Group by fn(elem) -> key; yields one group per key, with Key and Values" },
 		{ M::Join,               L"Join",               L"Inner equi-join: Join(inner, leftKey, rightKey, projection)" },
 		{ M::Skip,               L"Skip",               L"Skip the first n elements" },
 		{ M::Take,               L"Take",               L"Take at most n elements from the front" },
@@ -1438,3 +1945,328 @@ long ibValue::FindLinqMethodByName(const wxString& name) {
 	}
 	return -1;
 }
+
+////////////////////////////////////////////////////////////////////////////
+//	What a COMPILED pipeline does to its own collection — the three verbs behind
+//	OPER_LINQ_SEEN / KEEP / RESULT. See ibValueLinqRows above for why that collection is
+//	not a script Array, and procUnit.h for the declarations.
+////////////////////////////////////////////////////////////////////////////
+
+namespace {
+
+// The collection lives in a frame slot and is made there on first use — which is the whole of its
+// lifetime management: it goes when the frame does, exactly like every other local.
+ibValueLinqRows& LinqResultIn(ibValue& scratch)
+{
+	// ⚠ THIS IS THE HOTTEST OF THE FIVE. Every KEEP, every bucket write and every bucket probe comes
+	// through here, so it runs at least once per row and, with several ordering keys, once per key.
+	ibValueLinqRows* held = LinqCast<ibValueLinqRows>(scratch.GetRef(), g_valueLinqRows);
+	if (held == nullptr) {
+		held = new ibValueLinqRows();
+		scratch = held;
+	}
+	return *held;
+}
+
+// WHAT COLUMNS THESE ROWS HAVE — asked of the FIRST row, because every row of one query is made the
+// same way. Empty when the rows are plain values, which is the one case that has no columns to name.
+//
+// The question itself lives one level down (`ibLinqNamedColumns`, below) because the EDITOR asks it
+// too, of a sample row rather than a real one — see the note on the exported form.
+std::vector<wxString> ColumnsOf(const ibValueLinqRows& kept)
+{
+	if (kept.Count() == 0)
+		return {};
+
+	std::vector<wxString> names;
+	ibLinqNamedColumns(kept.At(0), names);
+	return names;
+}
+
+// ⭐⭐ …AND WHEN NOTHING NAMED THEM, THE ROW STILL CAN — with the SECOND HALF OF THE ANSWER beside
+// it, because that half decides how a cell is then read.
+//
+// A catalog element, a value-table row, anything with a surface lists its own properties and its
+// cells are read off them by ordinal. A plain number has no surface: it is ITSELF the one column,
+// and reading property 0 of it answers with nothing. Those are two different reads, and which one
+// applies is decided HERE, once, where the columns are decided — asking the row again at the read
+// would be deciding it twice, and two decisions about one fact drift. (`ibRowColumns` is declared
+// above the dispatcher, which is this builder's other caller.)
+//
+// 🛑 NOTHING IS FILTERED OUT OF THE NAMES, and that is not laziness. The cells are read BY ORDINAL —
+// `GetPropVal(i)` against `m_names[i]` — so dropping a name without dropping the same ordinal from
+// the read would slide every column after it onto the wrong value.
+ibRowColumns ColumnsOfRowItself(const ibValueLinqRows& kept)
+{
+	ibRowColumns answer;
+
+	if (kept.Count() == 0)
+		return answer;
+
+	ibValue* const first = kept.At(0).GetRef();
+	if (first == nullptr)
+		return answer;
+
+	const long count = first->GetNProps();
+	for (long i = 0; i < count; ++i)
+		answer.m_names.push_back(first->GetPropName(i));
+
+	if (answer.m_names.empty()) {
+		// `Value` is what this house calls the one column of a table it had to invent a name for.
+		answer.m_names.push_back(wxT("Value"));
+		answer.m_rowIsTheCell = true;
+	}
+	return answer;
+}
+
+// ⭐⭐ THE ANSWER OF A PROJECTION IS A TABLE — the columns the select named, filled with the rows it
+// produced.
+//
+// A `select { Country = …, Total = … }` NAMES COLUMNS. The thing in this house that HAS columns is
+// the value table, so that is what the query answers with: a person can show it in a grid, hand it
+// to a report, keep working with it — and feed it straight back into another query, because a table
+// is iterable and therefore a LINQ source. An Array of anonymous rows was none of that.
+//
+// Division of labour: the light record is the row WHILE the query works — it is what `distinct`
+// compares, what `orderby` sorts and what a bucket holds — and the table is the ANSWER, built once,
+// here, at the same single place every other shape of query becomes a value the language holds.
+//
+// No name is used to build it: the columns come from the shape and every cell is written by the
+// column's ID.
+ibValue TableOfRows(ibValueLinqRows& kept, const std::vector<wxString>& columns,
+	bool rowIsTheCell)
+{
+	ibValueModelTable* const table = new ibValueModelTable();
+	auto* const cols = table->GetColumnCollection();
+	if (cols == nullptr)
+		return ibValue(table);
+
+	std::vector<unsigned int> columnIds;
+	columnIds.reserve(columns.size());
+	for (const wxString& name : columns) {
+		// ⚠ AN UNDECLARED COLUMN IS A STRING COLUMN — the value table says so itself (valueTable.cpp,
+		// enAddColumn), and everything then compares as text: `5` sorts after `100`. A projected
+		// column holds whatever its expression produced, so it must DECLARE that: an empty type
+		// description admits anything, because AdjustValue hands the value back untouched when the
+		// description says nothing (valueType.cpp).
+		auto* const col = cols->AddColumn(name, ibTypeDescription(), name);
+		columnIds.push_back(col != nullptr ? col->GetColumnID() : 0);
+	}
+
+	// 🛑 THE ROWS GO IN WITHOUT TELLING ANYBODY, and that is the difference between an answer and a
+	// standstill. `AppendRow` is the door a PERSON adds a row through: it fills the new row from the
+	// filter in force, asks the composer about groups, and NOTIFIES the model — and the notify makes
+	// the view's order stale, which is recomputed over every row there is. Once per row that is
+	// O(n²): measured on this base, a 50 000-row answer took SEVENTY SECONDS to hand back.
+	//
+	// Nothing here is a person adding a row. The table is being BUILT, nobody is watching it yet,
+	// there is no filter and no grouping to obey, and every cell is written explicitly — so the row
+	// is made and put in, and the notify is not sent. Same door (the storage's own Append), one
+	// argument different.
+	for (const ibValue& row : kept.Rows()) {
+		ibValue* const source = row.GetRef();
+		if (source == nullptr)
+			continue;
+
+		ibComposerNode* const node = new ibComposerNode();
+
+		// WHICH READ THIS IS WAS DECIDED WHERE THE COLUMNS WERE — see ibRowColumns. A row with a
+		// surface hands over its properties by ordinal; a row that IS the value goes in whole.
+		if (rowIsTheCell) {
+			node->AppendTableValue(columnIds[0], row);
+		}
+		else {
+			for (size_t i = 0; i < columns.size(); ++i) {
+				ibValue cell;
+				source->GetPropVal((long)i, cell);             // by ordinal on both sides
+				node->AppendTableValue(columnIds[i], cell);    // absent reads land as an empty cell
+			}
+		}
+		table->Append(node, /*notify*/ false);
+	}
+	return ibValue(table);
+}
+
+} // namespace
+
+bool ibLinqSeen(ibValue& scratch, const ibValue& value)
+{
+	return LinqResultIn(scratch).FirstTime(value);
+}
+
+// ⭐⭐ ONE INSTRUCTION PER ORDERING KEY, and only the FIRST carries the row. `orderby a, b` emits a
+// KEEP that adds the row with key 0, then one KEEP per further key which adds nothing but the key —
+// so several keys reach a row without a second opcode and without widening the one there is
+// (compileCodeLINQ.cpp emits them; the fourth operand carries the position).
+void ibLinqKeep(ibValue& scratch, const ibValue* row, const ibValue* key, long keyAt)
+{
+	ibValueLinqRows& kept = LinqResultIn(scratch);
+	if (row != nullptr)
+		kept.Keep(*row);
+	if (key != nullptr)
+		kept.KeepKey(*key, keyAt);
+}
+
+void ibLinqResult(ibValue& out, ibValue& scratch, int ordering, bool wantFirst)
+{
+	ibValueLinqRows& kept = LinqResultIn(scratch);
+	// 1 descending by key · 2 ascending · 3 simply reversed (no keys involved)
+	if (ordering == 3)      kept.ReverseRows();
+	else if (ordering != 0) kept.SortByKeys(ordering == 1);
+
+	if (wantFirst) {
+		// An empty source answers with an empty value, which is what `First` over nothing IS — not
+		// an error, and not a reason for the caller to have emitted a guard.
+		if (kept.Count() > 0)
+			CopyValue(out, kept.At(0));
+		return;
+	}
+
+	// ⭐ THE ONE PLACE LINQ'S OWN COLLECTION BECOMES SOMETHING THE LANGUAGE HOLDS. Built once, at the
+	// end, with the size known — not grown a row at a time through a script method call.
+	//
+	// ⭐⭐ AND WHAT IT BECOMES IS A TABLE — always, when the rows have columns, which after the
+	// compiler's projection they always do: a `select` names columns whichever way it is written
+	// (compileCode.cpp), a `group` is Key and Values, and one exit for every query is the point.
+	//
+	// The Array below is for rows that are plain values with nothing to call a column — a chain
+	// asked to end in `ToArray`, which says in its own name what it wants back.
+	const std::vector<wxString> columns = ColumnsOf(kept);
+	if (!columns.empty()) {
+		out = TableOfRows(kept, columns);
+		return;
+	}
+
+	ibValueArray* const array = new ibValueArray();
+	for (const ibValue& row : kept.Rows())
+		array->Add(row);
+	out = array;
+}
+
+void ibLinqBucket(ibValue& scratch, const ibValue& key, const ibValue& row)
+{
+	LinqResultIn(scratch).KeepInBucket(key, row);
+}
+
+// ⭐⭐ A VIEW, NOT A COPY. This is a join's per-row lookup: building an Array here would construct
+// one object and copy every matched row FOR EVERY OUTER ROW, which is exactly the cost the whole
+// arrangement exists to avoid. The value handed back points at the bucket and keeps the collection
+// alive while it is read.
+void ibLinqBucketGet(ibValue& out, ibValue& scratch, const ibValue& key)
+{
+	ibValueLinqRows& kept = LinqResultIn(scratch);
+	const std::vector<ibValue>* const bucket = kept.Bucket(key);
+	if (bucket == nullptr) { out = ibValue(); return; }   // no match is an ordinary answer
+	out = new ibValueLinqRows(&kept, bucket);
+}
+
+// The groups come back as a LIGHT COLLECTION, like everything else here — a `group … into g` loop
+// iterates it, and a terminal `group` hands it to the one instruction that ends every query, which
+// is where it becomes an Array. There is exactly one place LINQ's own collection turns into a value
+// the language holds, and this is not it.
+//
+// The groups themselves stay light either way: a group's `Values` is a VIEW of its bucket, and it
+// answers Count / Where / anything else through CreateIterator — nothing is copied to make it
+// usable.
+void ibLinqGroups(ibValue& out, ibValue& scratch)
+{
+	ibValueLinqRows& kept = LinqResultIn(scratch);
+	ibValueLinqRows* const groups = new ibValueLinqRows();
+	// In FIRST-APPEARANCE order — the order the rows arrived in, not key order, which would be a
+	// different answer and one nobody asked for. Each group's rows are a VIEW of the bucket.
+	for (const ibValue& key : kept.BucketOrder()) {
+		const std::vector<ibValue>* const bucket = kept.Bucket(key);
+		if (bucket == nullptr) continue;
+		groups->Keep(ibValue(new ibValueLinqGroup(key, ibValue(new ibValueLinqRows(&kept, bucket)))));
+	}
+	out = groups;
+}
+
+// ⭐⭐ THE PROJECTION. `select { a = …, b = … }` makes ONE of these per row, and it is the last place
+// the compiled road went through the object factory by name.
+//
+// The shape is made in `shapeSlot` by the first row and read by every row after it — a frame slot is
+// how a thing lives exactly as long as its loop does, and the rows that outlive the loop hold the
+// shape themselves. So the names are turned into positions once per QUERY; per row there is one
+// allocation of exactly the right size, and then stores at known indexes.
+void ibLinqRow(ibValue& out, ibValue& shapeSlot, const wxString& names, long count)
+{
+	ibValueLinqShape* shape = LinqCast<ibValueLinqShape>(shapeSlot.GetRef(), g_valueLinqShape);
+	if (shape == nullptr) {
+		shape = new ibValueLinqShape(names);
+		shapeSlot = shape;
+	}
+	out = new ibValueLinqRecord(shape, count);
+}
+
+void ibLinqField(ibValue& row, const ibValue& value, long ordinal)
+{
+	ibValueLinqRecord* const record = LinqCast<ibValueLinqRecord>(row.GetRef(), g_valueLinqRecord);
+
+	// 🛑 THIS CAST CANNOT FAIL, AND THAT IS WHY THE FAILURE HAS TO SPEAK. `OPER_LINQ_ROW` and every
+	// `OPER_LINQ_FIELD` after it are emitted together, into the SAME cell, by one lambda
+	// (compileCodeLINQ.cpp) — so a row that is not a record means the tape is not the tape the
+	// compiler wrote. Silently skipping the store would lose a COLUMN of the answer and leave no
+	// trace of it: the query would come back with a field quietly empty, which is the worst shape a
+	// defect can take. A raise says which ordinal, and stops.
+	if (record == nullptr)
+		ibBackendQueryLinqException::Error(
+			_("The projected row is missing where field %d should be stored"), (int)ordinal);
+
+	record->SetField(ordinal, value);
+}
+
+void ibLinqGroupedSample(ibValue& out)
+{
+	ibValueLinqRows* const rows = new ibValueLinqRows();
+	rows->Keep(ibValue(new ibValueLinqGroup()));
+	out = rows;
+}
+
+bool ibLinqNamedColumns(const ibValue& row, std::vector<wxString>& outNames)
+{
+	outNames.clear();
+
+	ibValue* const held = row.GetRef();
+
+	// A projected row carries the shape the `select` named.
+	if (const ibValueLinqRecord* const record = LinqCast<ibValueLinqRecord>(held, g_valueLinqRecord)) {
+		const ibValueLinqShape* const shape = record->Shape();
+		for (long i = 0; shape != nullptr && i < shape->Count(); ++i)
+			outNames.push_back(shape->NameAt(i));
+		return true;
+	}
+
+	// A group is two columns and names them itself — the same two ordinals its members answer by.
+	if (LinqCast<ibValueLinqGroup>(held, g_valueLinqGroup) != nullptr) {
+		outNames.push_back(wxT("Key"));
+		outNames.push_back(wxT("Values"));
+		return true;
+	}
+
+	return false;
+}
+
+// ⭐ REGISTERED, AND IT HAS TO BE — being unreachable from script is not the same as being unknown
+// to the engine. This value lives in a FRAME SLOT, and frame slots are enumerated: the debugger
+// lists locals, a watch renders them, `TypeOf` can be asked. Every one of those asks the value what
+// type it is, and a type with no registration has no answer — `GetNameObjectFromID` raises on an id
+// nobody registered. So it is registered like its neighbours; what keeps it out of the language is
+// that nothing NAMES it and no ctor is published, not that the engine has never heard of it.
+// 🛑 …AND THE GROUP WAS THE ONE LEFT OUT, which cost an assert the day something finally asked it.
+// Three of the four were registered when this note was written; a group was not, because at that
+// point it never left the RUNTIME — it lived inside a grouped answer and nothing ever asked it what
+// it was. The moment a READER was handed one (`ibLinqGroupedSample`, so the caret can say what a
+// grouping will look like without running it) `ClassNameOf` asked, `GetTypeIDByRef` found no ctor,
+// and the designer stopped on an assert.
+//
+// ⭐ THE RULE, and it is wider than this file: a value that never leaves the runtime can skip
+// registration and nobody notices — the bill arrives when somebody READS it. So a type is either
+// registered with its neighbours or it is genuinely unreachable, and "unreachable" is a claim that
+// stops being true the first time a door hands one out.
+// The ids themselves are declared with the classes, which now ANSWER with them (GetClassType) —
+// so the number is written once and both the registry and the value read the same constant.
+SYSTEM_TYPE_REGISTER(ibValueLinqRows,   "LinqRows",  g_valueLinqRows);
+SYSTEM_TYPE_REGISTER(ibValueLinqShape,  "LinqShape", g_valueLinqShape);
+SYSTEM_TYPE_REGISTER(ibValueLinqRecord, "LinqRow",   g_valueLinqRecord);
+SYSTEM_TYPE_REGISTER(ibValueLinqGroup,  "LinqGroup", g_valueLinqGroup);

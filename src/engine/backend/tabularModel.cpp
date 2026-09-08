@@ -243,6 +243,43 @@ private:
 	bool m_exhausted;
 };
 
+// ⭐⭐ A TABLE NOBODY HAS FILTERED, SORTED OR GROUPED IS WALKED IN PLACE — the display order IS the
+// storage order, so there is nothing to compute and nothing to look for.
+//
+// The paged state above exists because a list is a WINDOW onto something arranged: filtered, sorted,
+// possibly grouped, possibly a database away. Every batch of it asks the composer for the order of
+// the whole table (ComputeOrder), finds the anchor by scanning the rows for it, then scans the order
+// for that index — three passes over everything, once per 64 rows. Over a table that arrangement
+// does not apply to, all of it computes the sequence 0, 1, 2, …
+//
+// Measured on this base, 2026-09-08: a 20 000-row answer took ELEVEN SECONDS to count and twelve to
+// walk, while building it took under one. That is the quadratic reading a query pays for its own
+// answer, and script `foreach` over any plain value table paid it too.
+class ibValueModelRowWalk : public ibValueIteratorState {
+public:
+	explicit ibValueModelRowWalk(ibValueModel* model) : m_model(model) {}
+
+	bool MoveNext(ibValue& current) override {
+		if (m_model == nullptr || m_pos >= m_model->GetRowCount())
+			return false;
+		const ibDataViewItem item = m_model->GetItem(m_pos++);
+		auto* const line = m_model->GetRowAt(item);
+		current = (line != nullptr) ? ibValue(static_cast<ibValue*>(line)) : ibValue();
+		return true;
+	}
+
+	void Reset() override { m_pos = 0; }
+
+	bool PeekSample(ibValue& current) const override {
+		current = m_model->GetEmptyRow();
+		return current.m_typeClass != ibValueTypes::TYPE_EMPTY;
+	}
+
+private:
+	ibValueModel* m_model;
+	long          m_pos = 0;
+};
+
 } // namespace
 
 // RAM-backed models have NO source primary key (RunComposerPage stamps an EMPTY row-key for them) → restore by
@@ -276,7 +313,17 @@ std::shared_ptr<ibValueIteratorState> ibValueModel::CreateIterator()
 	// Every ibValueModel is paged (fetch is uniform through RunComposerPage), so iteration drives the Get*Fetch
 	// cursor — UNLESS the composer currently GROUPS, in which case it is shaped as a TREE (ANY list with grouping
 	// is a tree — Max) and the flat iterator would walk only one level.
-	if (GetModelComposer().GroupCount() == 0)
+	const ibDataComposer& composer = GetModelComposer();
+
+	// ⭐ NOTHING IS ARRANGED — so walk the rows where they are. No filter, no sort, no grouping means
+	// the paged fetch would compute the order of the whole table per batch and hand back exactly the
+	// rows in storage order; this is that answer, at the price it should cost. Any arrangement at
+	// all, and the question goes back to the composer, which is the only thing that can answer it.
+	if (composer.GroupCount() == 0 && composer.SortCount() == 0
+		&& !composer.GetCurrentFilterDesc().IsOk())
+		return std::make_shared<ibValueModelRowWalk>(this);
+
+	if (composer.GroupCount() == 0)
 		return std::make_shared<ibValueModelPagedIteratorState>(this);
 	return ibValue::CreateIterator();
 }
@@ -299,7 +346,8 @@ enum Prop {
 	enColumnName,
 	enColumnTypes,
 	enColumnCaption,
-	enColumnWidth
+	enColumnWidth,
+	enColumnIndexing
 };
 
 void ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::FillMembers(ibMemberTable& helper) const
@@ -308,6 +356,7 @@ void ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::FillMem
 	helper.AppendProp(wxT("Types"));
 	helper.AppendProp(wxT("Caption"));
 	helper.AppendProp(wxT("Width"));
+	helper.AppendProp(wxT("Indexing"));
 }
 
 bool ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
@@ -325,6 +374,22 @@ bool ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::GetProp
 		return true;
 	case enColumnWidth:
 		pvarPropVal = GetColumnWidth();
+		return true;
+	case enColumnIndexing:
+		pvarPropVal = IsColumnIndexed();
+		return true;
+	}
+
+	return false;
+}
+
+// The only WRITABLE one so far, and it is written from script rather than only from the inspector:
+// asking for an index is a decision about how this table will be used, and that is known where the
+// table is filled, not in a form designer.
+bool ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::SetPropVal(const long lPropNum, const ibValue& varPropVal)
+{
+	if (lPropNum == enColumnIndexing) {
+		SetColumnIndexed(varPropVal.GetBoolean());
 		return true;
 	}
 

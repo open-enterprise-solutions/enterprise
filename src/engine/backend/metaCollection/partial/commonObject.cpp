@@ -4027,6 +4027,7 @@ ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueR
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::ibValueRecordSetObjectRegisterReturnLine(ibValueRecordSetObject* ownerTable, const ibDataViewItem& line)
 	: ibValueModelReturnLine(line), m_ownerTable(ownerTable)
 {
+	HoldOwnerModel(ownerTable);   // the row speaks through the set; see the base
 	m_members.Bind(this, &ibValueRecordSetObjectRegisterReturnLine::FillMembers);
 }
 

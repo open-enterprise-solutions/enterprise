@@ -684,6 +684,101 @@ TEST(RuntimeBench, DISABLED_LinqGroupByScale) {
     SUCCEED();
 }
 
+// --- orderby: one key, and what a SECOND one costs -------------------------
+//
+// ⚠ THERE WAS NO ORDERING ROW IN THIS FILE AT ALL. `orderby` learned to take
+// several keys on 2026-09-09 and its cost went unmeasured, which is a hole in
+// the reading rather than a good result: the whole point of a bench beside a
+// feature is that "it works" and "it is affordable" are different claims.
+//
+// The two rows are read TOGETHER and only their difference means anything. A
+// second key adds one more `OPER_LINQ_KEEP` per row (the row operand marked
+// DEF_VAR_SKIP, the key index in p4) and turns the comparison lexicographic —
+// `m_keys` is a vector per row rather than one value. So the difference is what
+// a key costs, and the single-key row is the control that says the vector did
+// not make the ordinary case pay for the new one.
+//
+// One distinct value per row, so the sort never short-circuits and the second
+// key is REACHED on every comparison the first cannot settle — which for
+// `i % 7` it frequently cannot.
+TEST(RuntimeBench, DISABLED_LinqOrderByKeys) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var src public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  src = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do src.Add(New Structure(\"A, B\", i % 7, n - i)); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function One() Public\n")
+        wxT("  var q; q = from r in src orderby r.A select { V = r.B };\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function Two() Public\n")
+        wxT("  var q; q = from r in src orderby r.A, r.B select { V = r.B };\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    for (long rows : { 1000L, 16000L }) {
+        ibValue argRows((int)rows), ret;
+        pu.CallAsProc(wxT("Fill"), argRows);
+
+        const double one = BestTotalNs(3, [&]{
+            pu.CallAsFunc(wxT("One"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+        const double two = BestTotalNs(3, [&]{
+            pu.CallAsFunc(wxT("Two"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+
+        std::ostringstream l1, l2;
+        l1 << "orderby 1 key n=" << rows << " (ns/row)";
+        l2 << "orderby 2 keys n=" << rows << " (ns/row)";
+        RowOes(l1.str().c_str(), one / double(rows), "ns", one);
+        RowOes(l2.str().c_str(), two / double(rows), "ns", two);
+    }
+    SUCCEED();
+}
+
+// --- what one more PROJECTED FIELD costs -----------------------------------
+//
+// The two rows differ by nothing but the width of the `select`, so their
+// difference is the per-field price of building a projected row and nothing
+// else. It is asked because that path pays a `dynamic_cast` PER FIELD
+// (`ibLinqField`, procUnitLINQ.cpp) to reach the record the instruction before
+// it just created — a cast whose own comment says it "cannot fail", since the
+// compiler emits OPER_LINQ_ROW and every OPER_LINQ_FIELD after it into the same
+// cell from one lambda. A check of something already guaranteed, once per field
+// per row, is the kind of cost that is invisible until it is divided out.
+TEST(RuntimeBench, DISABLED_LinqProjectionWidth) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var src public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  src = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do src.Add(New Structure(\"A, B, C\", i, i, i)); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function One() Public\n")
+        wxT("  var q; q = from r in src select { X = r.A };\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function Three() Public\n")
+        wxT("  var q; q = from r in src select { X = r.A, Y = r.B, Z = r.C };\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    const long rows = 16000;
+    ibValue argRows((int)rows), ret;
+    pu.CallAsProc(wxT("Fill"), argRows);
+
+    const double one = BestTotalNs(3, [&]{
+        pu.CallAsFunc(wxT("One"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+    const double three = BestTotalNs(3, [&]{
+        pu.CallAsFunc(wxT("Three"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+
+    RowOes("project 1 field (ns/row)", one   / double(rows), "ns", one);
+    RowOes("project 3 fields (ns/row)", three / double(rows), "ns", three);
+    SUCCEED();
+}
+
 // --- does the flat per-row cost survive a MILLION rows? --------------------
 //
 // Every scale bench above stops at 16 000, and "flat up to 16k" is a different

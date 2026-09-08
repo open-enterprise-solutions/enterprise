@@ -2,7 +2,7 @@
 #define __QUERY_AST_H__
 
 // L4-1 — text query language AST. (Its `ibQueryAstExpr` expression sub-tree is SHARED with
-// L4-2: the LINQ lambda recorder builds the SAME expr nodes — compiler/lambdaQueryAst — and
+// L4-2: the LINQ lambda recorder builds the SAME expr nodes — compiler/lambdaQueryAST — and
 // lowers them through the same builders. `ibQuerySelect` below is L4-1-only.)
 //
 // A POD tree, L2/L3-FREE (it names ibValue + wxString only, like the L2 IR names
@@ -94,6 +94,25 @@ struct ibQueryAstExpr
 	std::vector<wxString> m_path;        // Column: dotted segments
 	ibValue               m_literal;     // Literal
 	wxString              m_paramName;   // Param
+
+	// ⭐⭐ WHERE A CAPTURED LOCAL LIVES — the address the compiler already worked out.
+	//
+	// `&Name` means two different things wearing one node. In the text query language it is a
+	// PARAMETER the caller supplies by name at run time, and a name is all there is. In a LINQ
+	// lambda it is a local of an enclosing function, and the body's own instruction says exactly
+	// where: `so many frames out, this cell` — which is also, verbatim, how the invoked lambda
+	// reads it (ibValueFunction::m_capturedFrames[frame - 1]->m_pRefLocVars[slot]).
+	//
+	// Recording only the name threw that away and made the fold LOOK FOR IT: every captured frame,
+	// every local of it, a case-insensitive string compare — per name, per fold, for a value whose
+	// address was in hand at compile time. It also gave the capture a way to FAIL (a name not
+	// found drops the whole step to RAM), which an address does not have.
+	//
+	// m_capturedFrame == 0 means "by name" — a capture is always at least one frame out, so zero
+	// is not a coordinate a lambda can produce, and the text-query road keeps working untouched
+	// without a second flag saying which kind of Param this is.
+	long                  m_capturedFrame = 0;
+	long                  m_capturedSlot  = 0;
 
 	ibQueryKeyword        m_func = ibQueryKeyword::None;  // Func: Sum/Count/Min/Max/Avg
 	// ScalarCall: which call, and its arguments IN WRITTEN ORDER. The unit of a period call

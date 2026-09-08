@@ -34,7 +34,7 @@
 #include <wx/treectrl.h>
 #include <wx/stc/stc.h>
 
-#include "backend/query/queryAst.h"
+#include "backend/query/queryAST.h"
 #include "backend/query/queryConstructorModel.h"
 
 #include <vector>

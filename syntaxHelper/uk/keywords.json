@@ -1053,7 +1053,11 @@
       "return_descr": "",
       "example": "#Define DEBUG\n\n#Ifdef DEBUG\n    Message(\"debug build\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["kw.PpUndef", "kw.PpIfdef", "kw.PpIfndef"],
+      "see_also": [
+        "kw.PpUndef",
+        "kw.PpIfdef",
+        "kw.PpIfndef"
+      ],
       "reviewed": true
     },
     {
@@ -1072,7 +1076,10 @@
       "return_descr": "",
       "example": "#Define DEBUG\n// …\n#Undef DEBUG",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["kw.PpDefine", "kw.PpIfdef"],
+      "see_also": [
+        "kw.PpDefine",
+        "kw.PpIfdef"
+      ],
       "reviewed": true
     },
     {
@@ -1091,7 +1098,12 @@
       "return_descr": "",
       "example": "#Ifdef SERVER\n    doc.Write();\n#Else\n    Message(\"client side\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["kw.PpIfndef", "kw.PpElse", "kw.PpEndif", "kw.PpDefine"],
+      "see_also": [
+        "kw.PpIfndef",
+        "kw.PpElse",
+        "kw.PpEndif",
+        "kw.PpDefine"
+      ],
       "reviewed": true
     },
     {
@@ -1110,7 +1122,11 @@
       "return_descr": "",
       "example": "#Ifndef PRODUCTION\n    Message(\"not a production build\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["kw.PpIfdef", "kw.PpElse", "kw.PpEndif"],
+      "see_also": [
+        "kw.PpIfdef",
+        "kw.PpElse",
+        "kw.PpEndif"
+      ],
       "reviewed": true
     },
     {
@@ -1129,7 +1145,11 @@
       "return_descr": "",
       "example": "#Ifdef DEBUG\n    Message(\"debug\");\n#Else\n    Message(\"release\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["kw.PpIfdef", "kw.PpIfndef", "kw.PpEndif"],
+      "see_also": [
+        "kw.PpIfdef",
+        "kw.PpIfndef",
+        "kw.PpEndif"
+      ],
       "reviewed": true
     },
     {
@@ -1148,7 +1168,11 @@
       "return_descr": "",
       "example": "#Ifdef DEBUG\n    Message(\"debug\");\n#Endif",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["kw.PpIfdef", "kw.PpIfndef", "kw.PpElse"],
+      "see_also": [
+        "kw.PpIfdef",
+        "kw.PpIfndef",
+        "kw.PpElse"
+      ],
       "reviewed": true
     },
     {
@@ -1167,7 +1191,9 @@
       "return_descr": "",
       "example": "#Region EventHandlers\n\nProcedure OnOpen() Public\n    // …\nEndProcedure\n\n#EndRegion",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["kw.PpEndRegion"],
+      "see_also": [
+        "kw.PpEndRegion"
+      ],
       "reviewed": true
     },
     {
@@ -1186,7 +1212,9 @@
       "return_descr": "",
       "example": "#Region Helpers\n// …\n#EndRegion",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["kw.PpRegion"],
+      "see_also": [
+        "kw.PpRegion"
+      ],
       "reviewed": true
     },
     {
@@ -1280,12 +1308,12 @@
         "common_lang",
         "linq"
       ],
-      "signature": "orderby <Expression> [ascending|descending]",
-      "description": "Клауза сортування LINQ-запиту. Напрямок за замовчуванням — зростання; додайте `descending` для спадання. Один ключ сортування — для багатоколонного використовуйте складений вираз.",
-      "syntax_block": "from x in arr orderby x select x;\nfrom x in arr orderby x descending select x;",
+      "signature": "orderby <Expression>[, <Expression>...] [ascending|descending]",
+      "description": "Sort clause for a LINQ query. SEVERAL KEYS, comma-separated, in the order they decide: `orderby Warehouse, Item` sorts by warehouse and, within each warehouse, by item — the second key is consulted only where the first is equal. Default direction ascending; `descending` written after the last key reverses the whole ordering.",
+      "syntax_block": "orderby <Expression>[, <Expression>...] [ascending|descending]",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "// by warehouse, then by date within it\nvar moves = from m in Data.AccumulationRegisters.GoodsInWarehouses\n            orderby m.Warehouse, m.Period descending\n            select { W = m.Warehouse, P = m.Period };",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "guide.linq",

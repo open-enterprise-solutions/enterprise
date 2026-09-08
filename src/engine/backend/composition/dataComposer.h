@@ -33,7 +33,7 @@
 
 #include "backend/backend_core.h"
 #include "backend/compiler/value.h"        // ibValue — driver rows / parameters
-#include "backend/query/queryAst.h"        // ibQuerySelectPtr — the cached parse
+#include "backend/query/queryAST.h"        // ibQuerySelectPtr — the cached parse
 #include "backend/query/queryLowering.h"   // ibQueryLowering::OutputColumn (+ ibBackendQueryColumn)
 #include "backend/query/queryTempStore.h"  // ibQueryTempTableStore — what the preparing statements made
 #include "drivers/compositionDriver.h"             // ibCompositionDriver / ibCompositionOutputInfo — the contract, cut out on 2026-08-28

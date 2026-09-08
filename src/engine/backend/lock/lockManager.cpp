@@ -58,6 +58,10 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 	if (items.empty())
 		return ibLockHandle();   // empty batch → empty handle, no-op
 
+	// Every path that touches the lock table takes this — see ibLockManager::m_mtx: the holder
+	// owns ONE connection and does not serialise the threads that ask it for one.
+	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
+
 	// Resolve owner identity. Custom holder wins when supplied; else
 	// fall back to the active session. Either is required — no
 	// "anonymous" lock owners.
@@ -216,6 +220,10 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 
 void ibLockManager::ReleaseRows(const std::vector<ibGuid>& lockGuids)
 {
+	// Every path that touches the lock table takes this - see ibLockManager::m_mtx: the
+	// holder owns ONE connection and does not serialise the threads that ask it for one.
+	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
+
 	if (lockGuids.empty())
 		return;
 
@@ -243,6 +251,10 @@ void ibLockManager::ReleaseRows(const std::vector<ibGuid>& lockGuids)
 
 void ibLockManager::OnSessionEnd(const ibGuid& sessionGuid)
 {
+	// Every path that touches the lock table takes this - see ibLockManager::m_mtx: the
+	// holder owns ONE connection and does not serialise the threads that ask it for one.
+	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
+
 	if (!sessionGuid.isValid())
 		return;
 
@@ -265,6 +277,10 @@ void ibLockManager::OnSessionEnd(const ibGuid& sessionGuid)
 
 void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 {
+	// Every path that touches the lock table takes this - see ibLockManager::m_mtx: the
+	// holder owns ONE connection and does not serialise the threads that ask it for one.
+	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
+
 	ibDatabaseQueryBuilder q(&m_lockHolder);
 	if (!q.IsOpen())
 		return;
@@ -296,6 +312,10 @@ void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 
 std::vector<ibLockSnapshotRow> ibLockManager::GetSnapshot() const
 {
+	// Every path that touches the lock table takes this - see ibLockManager::m_mtx: the
+	// holder owns ONE connection and does not serialise the threads that ask it for one.
+	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
+
 	std::vector<ibLockSnapshotRow> rows;
 
 	ibDatabaseQueryBuilder q(&m_lockHolder);

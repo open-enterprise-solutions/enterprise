@@ -136,11 +136,23 @@ private:
 	// for the holder/scope discipline.
 	mutable ibSingleConnectionHolder m_lockHolder;
 
-	// Acquire is multi-step (SELECT-then-INSERT inside its own TX);
-	// the holder discipline already serialises DB ops on the holder's
-	// connection. The mutex here only protects in-process bookkeeping
-	// (counters / diagnostics if added) — kept for future use.
-	mutable std::mutex m_mtx;
+	// ⭐⭐ THE HOLDER DOES NOT SERIALISE ANYTHING — this mutex is what does, and until 2026-09-08 it
+	// was declared and never taken ("kept for future use", under a comment claiming the holder's
+	// discipline was enough). It is not: a holder OWNS one connection, and two threads asking that
+	// holder both get it. The lock table is reached from at least two of them — the UI thread
+	// releasing a lock when a form closes, and the session watchdog sweeping orphans on its timer —
+	// so a driver cursor was being read by one while the other ran a DELETE down the same handle.
+	//
+	// Measured 2026-09-08, on Max's own screen, and the journal shows the pair to the millisecond:
+	//     19:23:22.329  t28172  DELETE FROM sys_lock WHERE (lockGuid IN (?))   ← a form was closed
+	//     19:23:22.938  t26940  SELECT sessionGuid FROM sys_lock               ← the sweeper, meanwhile
+	//     19:23:32.342  t26940  Error retrieving Next record                   ← ten seconds later
+	// then `invalid request handle` and a dump. The same shape, on other days, arrives as `invalid
+	// transaction handle`: one connection, two drivers of it.
+	//
+	// ⚠ RECURSIVE, because SweepOrphans calls OnSessionEnd per orphan and both touch the database —
+	// a plain mutex would deadlock the sweep against itself on the first orphan it found.
+	mutable std::recursive_mutex m_mtx;
 };
 
 #endif // _IB_LOCK_MANAGER_H_

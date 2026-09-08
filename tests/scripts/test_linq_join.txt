@@ -19,5 +19,5 @@ var q = from o in arr1
         select o.Name + "=" + c.Value;
 
 foreach (s in q) {
-    Message(s);
+    Message(s.Field1);
 }

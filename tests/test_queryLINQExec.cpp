@@ -2,10 +2,10 @@
 // L4-2 — LINQ push-down EXECUTION parity. The gap the recorder / dispatch tests leave.
 //
 // The recorder tests (test_lambdaRecorder) stop at the AST SHAPE; the method-table
-// tests (test_linqMethod) stop at name -> enum dispatch. NEITHER runs the lowered
+// tests (test_LINQMethod) stop at name -> enum dispatch. NEITHER runs the lowered
 // predicate against data. This harness closes the loop end to end:
 //
-//   lambda body text --(script lexer + ibBuildLambdaQueryAst)--> ibQueryAstExpr   [L4-2 recorder]
+//   lambda body text --(compile + ibBuildLambdaQueryAstFromCode)--> ibQueryAstExpr [L4-2 recorder]
 //                    --(ibQueryLowering::LowerLambdaPredicate)--> ibQueryPredicate [L4-2 lowering]
 //                    --(ibQueryComposer::FilterRows)------------> rows             [L3 RAM core]
 //
@@ -30,8 +30,10 @@
 
 #include "backend/compiler/value.h"           // ibValue / ibNumber
 #include "backend/compiler/compileCode.h"     // ibCompileCode — the script lexer feeding the recorder
-#include "backend/compiler/lambdaQueryAst.h"  // ibBuildLambdaQueryAst (L4-2 recorder)
-#include "backend/query/queryAst.h"           // ibQueryAstExpr
+#include "backend/compiler/lambdaQueryAST.h"  // ibBuildLambdaQueryAstFromCode (L4-2 recorder)
+#include "backend/query/queryAST.h"           // ibQueryAstExpr
+
+#include "lambdaRecordFix.h"                  // ibTestRecordLambda — body -> compiled lambda -> AST
 #include "backend/query/queryLowering.h"      // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
 #include "backend/query/queryProvider.h"      // ibQueryComposer::FilterRows + ibQueryRamTable
 #include "backend/query/queryable.h"          // ibBackendQueryable / ibQueryPredicate(Ptr)
@@ -136,19 +138,12 @@ int SqlCount(ibDatabaseLayerSQLite& db, const wxString& where)
 	return n;
 }
 
-// Tokenize a lambda BODY snippet and record it into the L4-2 query AST (as test_lambdaRecorder does):
-// the SCRIPT lexer produces the lexemes, the recorder builds the ibQueryAstExpr — no compiler run,
-// no metadata, no database.
-std::shared_ptr<ibQueryAstExpr> Record(const wxString& body, const wxString& rowParam = wxT("x"))
+// Record a lambda BODY into the L4-2 query AST (as test_lambdaRecorder does): the body is compiled
+// as a real lambda and the recorder reads its instructions — no metadata, no database.
+std::shared_ptr<ibQueryAstExpr> Record(const wxString& body, const wxString& rowParam = wxT("x"),
+	const wxString& outerNames = wxEmptyString)
 {
-	ibCompileCode cc;
-	cc.Load(body);
-	if (!cc.PrepareLexem())
-		return nullptr;
-	const std::vector<ibLexem>& lex = cc.GetLexems();
-	size_t to = lex.size();
-	while (to > 0 && lex[to - 1].m_lexType == ENDPROGRAM) --to;
-	return ibBuildLambdaQueryAst(lex, 0, to, rowParam);
+	return ibTestRecordLambda(body, rowParam, outerNames);
 }
 
 } // namespace
@@ -170,7 +165,15 @@ struct LinqExecFix : ::testing::Test {
 
 	// The full L4-2 chain: lambda body text -> recorded AST -> lowered predicate (null on bail).
 	ibQueryPredicatePtr Lower(const wxString& body, const std::map<wxString, ibValue>& captured = {}) {
-		auto expr = Record(body);
+		// The captured map's KEYS are the names the body reads from outside it, so they are also
+		// exactly what has to be declared around the lambda for it to compile at all. One list,
+		// used for both — a second one written by hand would drift from this the first time a test
+		// captured something new.
+		wxString outerNames;
+		for (const auto& one : captured)
+			outerNames << (outerNames.IsEmpty() ? wxT("") : wxT(", ")) << one.first;
+
+		auto expr = Record(body, wxT("x"), outerNames);
 		if (expr == nullptr) return nullptr;
 		return ibQueryLowering::LowerLambdaPredicate(&src, *expr, captured);
 	}
@@ -181,28 +184,31 @@ struct LinqExecFix : ::testing::Test {
 
 TEST_F(LinqExecFix, Eq_ParityWithSql)
 {
-	auto p = Lower(wxT("{ return x.region == \"North\"; }"));
+	// ⚠ `=` AND `<>`, NOT `==` AND `!=`. These bodies used to be written with the C spellings, which
+	// the deleted lexeme reader accepted and the LANGUAGE never had — see the note on Record in
+	// test_lambdaRecorder.cpp. Compiling them for real is what surfaced it.
+	auto p = Lower(wxT("{ return x.region = \"North\"; }"));
 	ASSERT_TRUE(p != nullptr) << "a translatable lambda body must lower to a predicate";
 	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("region = 'North'")));   // 1 == 1
 }
 
 TEST_F(LinqExecFix, Or_ParityWithSql)
 {
-	auto p = Lower(wxT("{ return x.region == \"North\" Or x.region == \"South\"; }"));
+	auto p = Lower(wxT("{ return x.region = \"North\" Or x.region = \"South\"; }"));
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(RamCount(p.get()),
 	          SqlCount(db, wxT("region = 'North' OR region = 'South'")));   // 2 == 2
 }
 
-// THE LINQ TRAP through the LINQ front-end: `!=` over a NULL operand. SQL three-valued logic
+// THE LINQ TRAP through the LINQ front-end: `<>` over a NULL operand. SQL three-valued logic
 // drops the NULL-region row (NULL <> 'North' is UNKNOWN); the lowered predicate + RAM core
 // must agree. This is the executable proof the L4-2 path inherits Kleene NULL semantics.
 TEST_F(LinqExecFix, NotEq_NullThreeValued_ParityWithSql)
 {
-	auto p = Lower(wxT("{ return x.region != \"North\"; }"));
+	auto p = Lower(wxT("{ return x.region <> \"North\"; }"));
 	ASSERT_TRUE(p != nullptr);
-	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("region <> 'North'")))   // South, East -> 2 == 2
-		<< "L4-2 lowered `!=` must drop the NULL-region row (three-valued), like SQL.";
+	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("region <> 'North'")))   // South, East -> 2
+		<< "L4-2 lowered `<>` must drop the NULL-region row (three-valued), like SQL.";
 }
 
 TEST_F(LinqExecFix, NumericGt_ParityWithSql)
@@ -214,7 +220,7 @@ TEST_F(LinqExecFix, NumericGt_ParityWithSql)
 
 TEST_F(LinqExecFix, AndLogic_ParityWithSql)
 {
-	auto p = Lower(wxT("{ return x.qty >= 5 And x.region != \"South\"; }"));
+	auto p = Lower(wxT("{ return x.qty >= 5 And x.region <> \"South\"; }"));
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(RamCount(p.get()),
 	          SqlCount(db, wxT("qty >= 5 AND region <> 'South'")));   // North, East -> 2 == 2

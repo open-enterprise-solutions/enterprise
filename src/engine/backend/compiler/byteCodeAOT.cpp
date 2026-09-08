@@ -34,7 +34,6 @@
 // successful Deserialize).
 
 #include "backend/compiler/byteCode.h"
-#include "backend/query/queryAst.h"      // ibQueryAstExpr — m_lambdaExprAst payload (v14)
 #include "backend/fileSystem/fs.h"
 
 namespace {
@@ -175,7 +174,45 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // question to ask of the NEXT field added here is theirs: not "does it compile" but "who
 // writes it back, and what does its absence look like". Absence looks like a feature that
 // was never reachable — and a feature nobody can call has no symptoms to report.
-constexpr uint16_t kAOTFormatVersion = 24;
+// v25 (2026-09-08): the lambda AST carries `In`. The recorder has always produced that kind and the
+// serialiser did not accept it — and an unserialisable tree is stored as ABSENT, so
+// `.Where(x => x.Status in (…))` pushed down on a fresh compile and silently reverted to a full scan
+// on every cache hit. The absence looked exactly like "this predicate cannot be translated", which
+// is the same lesson the block above states: ask what the FIELD'S ABSENCE looks like, because that
+// is what a cache hit actually delivers.
+// v26 (2026-09-08): a Param node of a LAMBDA tree carries the CAPTURE'S ADDRESS — the frame and the
+// cell the compiler had already worked out — beside the name. The fold used to re-derive it at run
+// time by walking every captured frame and comparing every local's name; now it reads the value
+// where the invoked lambda itself would read it. Two s32 after the name, on Param only.
+// ⚠ Ask this field the question the block above asks: its ABSENCE reads as "no coordinate", which
+// falls back to the name search — correct, only slower — so a stale blob degrades rather than lies.
+// The version still moves, because a v25 blob mis-aligns on the two new numbers.
+// v27 (2026-09-08): the lambda query TREE is no longer part of the format at all. It was a second
+// representation of a body the instructions already hold, and it is derived from them now
+// (compiler/lambdaQueryAST.h) — so the blob carries what the runtime executes and nothing beside
+// it. LINQ's own instruction set landed with it — NARROW, SEEN, KEEP, RESULT, BUCKET, BUCKET_GET,
+// ROW, FIELD — and every added opcode moves TYPE_DELTA1, which renumbers every TYPED opcode: a v26
+// blob would execute different instructions, not merely misread a field.
+//
+// ⭐⭐ AND THIS IS WHERE THE SLICE HAPPENS. Max, 2026-09-08: *"when you take the bytecode and throw
+// it into the cache, THAT is when it gets sliced."* Every door here is typed on `ibByteCode` — the
+// BASE — so handing it the compiler's `ibByteExtCode` writes the instructions, the constants and the
+// symbol tables, and the LINQ section that object also carries is simply not part of what a base is.
+// Nothing filters it out: the type does. The compiler keeps its tree (IntelliSense reads it there);
+// the blob never had one.
+// ⚠ 27 → 28 (2026-09-08): `orderby a, b` compiles to SEVERAL `OPER_LINQ_KEEP` — the first carrying
+// the row with key 0, each further one carrying only its key, numbered in the fourth operand. The
+// instructions are the same width and a cached blob from before this change is still readable, but
+// it was written by a compiler that could not express a second key: a row kept from it would order
+// by one key while the source text says two. The layout did not move; the MEANING did, which is
+// exactly what this number is for.
+// 🛑 28 → 29 (2026-09-09): `OPER_NEW` now carries the CLASS ID in `m_param3.m_numIndex`, decided at
+// compile time, and the runtime creates from it instead of reading the class NAME back out of the
+// const pool and resolving it again on every execution. A v28 blob has a ZERO there, and zero is
+// not a class — it would raise on the first `New` rather than misbehave quietly, but a cache that
+// cannot run is still a cache that must not be loaded. The layout did not move; a previously unused
+// operand acquired a meaning, which is the same kind of change as the one above.
+constexpr uint16_t kAOTFormatVersion = 29;
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against
@@ -360,123 +397,16 @@ void ReadParam(const ibReaderMemory& r, ibByteCode::ibByteParam& p) {
 	r.r_stringZ(p.m_strName);
 }
 
-// --- m_lambdaExprAst (L4-2) — the recorded lambda body as the L4 query AST.
-// The recorder's subset is closed and SMALL (Column / Literal / Param / Arith /
-// Compare / Logical / Not; literals are primitives only), so the encoding is a
-// straight recursive kind-tagged dump. A node outside the subset (future
-// recorder growth before this list is extended) makes the AST UNSERIALISABLE —
-// the writer then stores "absent" (presence byte 0): the cached module loses
-// only the pushdown (RAM floor), never correctness. The reader validates kinds
-// and depth; any mismatch fails the whole load → ordinary cache miss.
-
-constexpr uint32_t kAOTMaxAstDepth = 256;
-
-bool AstSerializable(const ibQueryAstExpr& e, uint32_t depth = 0)
-{
-	if (depth > kAOTMaxAstDepth) return false;
-	switch (e.m_kind) {
-	case ibQueryAstExprKind::Column:
-	case ibQueryAstExprKind::Param:
-		return true;
-	case ibQueryAstExprKind::Literal:
-		switch (e.m_literal.GetType()) {
-		case ibValueTypes::TYPE_EMPTY: case ibValueTypes::TYPE_NULL:
-		case ibValueTypes::TYPE_BOOLEAN: case ibValueTypes::TYPE_NUMBER:
-		case ibValueTypes::TYPE_DATE: case ibValueTypes::TYPE_STRING:
-			return true;
-		default:
-			return false;
-		}
-	case ibQueryAstExprKind::Not:
-		return e.m_lhs && AstSerializable(*e.m_lhs, depth + 1);
-	case ibQueryAstExprKind::Arith:
-	case ibQueryAstExprKind::Compare:
-	case ibQueryAstExprKind::Logical:
-		return e.m_lhs && e.m_rhs
-			&& AstSerializable(*e.m_lhs, depth + 1) && AstSerializable(*e.m_rhs, depth + 1);
-	default:
-		return false;
-	}
-}
-
-void WriteLambdaAst(ibWriterMemory& w, const ibQueryAstExpr& e)
-{
-	w.w_u8((uint8_t)e.m_kind);
-	w.w_u32(e.m_line);
-	w.w_u32(e.m_col);
-	switch (e.m_kind) {
-	case ibQueryAstExprKind::Column:
-		w.w_u32((uint32_t)e.m_path.size());
-		for (const wxString& s : e.m_path) w.w_stringZ(s);
-		break;
-	case ibQueryAstExprKind::Literal:
-		WriteConstValue(w, e.m_literal);
-		break;
-	case ibQueryAstExprKind::Param:
-		w.w_stringZ(e.m_paramName);
-		break;
-	case ibQueryAstExprKind::Not:
-		WriteLambdaAst(w, *e.m_lhs);
-		break;
-	case ibQueryAstExprKind::Arith:
-		w.w_u8((uint8_t)e.m_arith);
-		WriteLambdaAst(w, *e.m_lhs); WriteLambdaAst(w, *e.m_rhs);
-		break;
-	case ibQueryAstExprKind::Compare:
-		w.w_u8((uint8_t)e.m_cmp);
-		WriteLambdaAst(w, *e.m_lhs); WriteLambdaAst(w, *e.m_rhs);
-		break;
-	case ibQueryAstExprKind::Logical:
-		w.w_u8(e.m_isOr ? 1 : 0);
-		WriteLambdaAst(w, *e.m_lhs); WriteLambdaAst(w, *e.m_rhs);
-		break;
-	default:
-		break;   // unreachable — AstSerializable gates the call
-	}
-}
-
-ibQueryAstExprPtr ReadLambdaAst(const ibReaderMemory& r, uint32_t depth = 0)
-{
-	if (depth > kAOTMaxAstDepth) return nullptr;
-	const ibQueryAstExprKind kind = (ibQueryAstExprKind)r.r_u8();
-	ibQueryAstExprPtr e = ibQueryAstExpr::Make(kind);
-	e->m_line = r.r_u32();
-	e->m_col  = r.r_u32();
-	switch (kind) {
-	case ibQueryAstExprKind::Column: {
-		const uint32_t count = r.r_u32();
-		if (count == 0 || count > kAOTSanityMax) return nullptr;
-		e->m_path.resize(count);
-		for (uint32_t i = 0; i < count; ++i) r.r_stringZ(e->m_path[i]);
-		return e;
-	}
-	case ibQueryAstExprKind::Literal:
-		return ReadConstValue(r, e->m_literal) ? e : nullptr;
-	case ibQueryAstExprKind::Param:
-		r.r_stringZ(e->m_paramName);
-		return e->m_paramName.IsEmpty() ? nullptr : e;
-	case ibQueryAstExprKind::Not:
-		e->m_lhs = ReadLambdaAst(r, depth + 1);
-		return e->m_lhs ? e : nullptr;
-	case ibQueryAstExprKind::Arith:
-		e->m_arith = (ibQueryArithOp)r.r_u8();
-		e->m_lhs = ReadLambdaAst(r, depth + 1);
-		e->m_rhs = e->m_lhs ? ReadLambdaAst(r, depth + 1) : nullptr;
-		return e->m_rhs ? e : nullptr;
-	case ibQueryAstExprKind::Compare:
-		e->m_cmp = (ibQueryCompareOp)r.r_u8();
-		e->m_lhs = ReadLambdaAst(r, depth + 1);
-		e->m_rhs = e->m_lhs ? ReadLambdaAst(r, depth + 1) : nullptr;
-		return e->m_rhs ? e : nullptr;
-	case ibQueryAstExprKind::Logical:
-		e->m_isOr = (r.r_u8() != 0);
-		e->m_lhs = ReadLambdaAst(r, depth + 1);
-		e->m_rhs = e->m_lhs ? ReadLambdaAst(r, depth + 1) : nullptr;
-		return e->m_rhs ? e : nullptr;
-	default:
-		return nullptr;   // unknown kind — corrupt / future format
-	}
-}
+// ⭐⭐ THE QUERY-TREE SERIALISER IS GONE, and with it a whole class of defect.
+//
+// It was a whitelist (AstSerializable) deciding which node kinds could travel, plus a recursive
+// writer and reader. A kind the whitelist did not know made the tree UNSERIALISABLE, and an
+// unserialisable tree was stored as ABSENT — which downstream reads as "this predicate cannot be
+// translated". So a filter using such a kind pushed down on a fresh compile and silently reverted
+// to a full scan on every cache hit, and a cache hit is the normal case.
+//
+// Nothing replaces it: the tree is DERIVED from the instructions wherever it is wanted
+// (compiler/lambdaQueryAST.h), so there is no second representation to keep, to gate or to version.
 
 bool WriteFunction(ibWriterMemory& w, const ibByteCode::ibByteFunction& f) {
 	w.w_s32((int32_t)f.m_lCodeLine);
@@ -508,13 +438,10 @@ bool WriteFunction(ibWriterMemory& w, const ibByteCode::ibByteFunction& f) {
 	for (const auto& v : f.m_listLocals)
 		WriteVarInfo(w, v);
 
-	// m_lambdaExprAst (v14) — presence byte + the recursive dump. An AST outside
-	// the serialisable subset stores as ABSENT: the cached module degrades to the
-	// RAM pipeline for that lambda, correctness unaffected.
-	const bool hasAst = f.m_lambdaExprAst && AstSerializable(*f.m_lambdaExprAst);
-	w.w_u8(hasAst ? 1 : 0);
-	if (hasAst)
-		WriteLambdaAst(w, *f.m_lambdaExprAst);
+	// ⭐ NOTHING IS WRITTEN FOR THE QUERY TREE. It used to travel here as a presence byte plus a
+	// recursive dump, gated by a whitelist — and an unserialisable tree was stored as ABSENT, which
+	// read downstream as "this predicate cannot be translated". It is derived from the instructions
+	// now, so the cache carries what the runtime executes and nothing beside it.
 
 	return true;
 }
@@ -544,12 +471,6 @@ bool ReadFunction(const ibReaderMemory& r, ibByteCode::ibByteFunction& f) {
 	for (uint32_t i = 0; i < localsCount; ++i)
 		ReadVarInfo(r, f.m_listLocals[i]);
 
-	// m_lambdaExprAst (v14) — presence byte + the recursive dump; a malformed
-	// payload fails the whole load (ordinary cache miss → recompile).
-	if (r.r_u8() != 0) {
-		f.m_lambdaExprAst = ReadLambdaAst(r);
-		if (!f.m_lambdaExprAst) return false;
-	}
 
 	return true;
 }

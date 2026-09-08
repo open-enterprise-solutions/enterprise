@@ -42,9 +42,11 @@
 #include "backend/query/queryColumn.h"
 #include "backend/query/columnLayout.h"       // ColumnFieldNames — the metadata column's physical field spelling
 #include "backend/query/queryLowering.h"      // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
-#include "backend/query/queryAst.h"           // ibQueryAstExpr (recorded lambda)
+#include "backend/query/queryAST.h"           // ibQueryAstExpr (recorded lambda)
 #include "backend/compiler/compileCode.h"     // ibCompileCode — script lexer feeding the LINQ recorder
-#include "backend/compiler/lambdaQueryAst.h"  // ibBuildLambdaQueryAst (L4-2 recorder)
+#include "backend/compiler/lambdaQueryAST.h"  // ibBuildLambdaQueryAstFromCode (L4-2 recorder)
+
+#include "lambdaRecordFix.h"                  // ibTestRecordLambda — body -> compiled lambda -> AST
 
 namespace {
 
@@ -123,15 +125,9 @@ private:
 	std::vector<const ibBackendQueryColumn*> m_cols;
 };
 
-// Record a lambda BODY into the L4-2 query AST (script lexer -> recorder), as test_queryLinqExec does.
+// Record a lambda BODY into the L4-2 query AST (compile -> recorder), as test_queryLINQExec does.
 std::shared_ptr<ibQueryAstExpr> RecordLambda(const wxString& body, const wxString& rowParam = wxT("x")) {
-	ibCompileCode cc;
-	cc.Load(body);
-	if (!cc.PrepareLexem()) return nullptr;
-	const std::vector<ibLexem>& lex = cc.GetLexems();
-	size_t to = lex.size();
-	while (to > 0 && lex[to - 1].m_lexType == ENDPROGRAM) --to;
-	return ibBuildLambdaQueryAst(lex, 0, to, rowParam);
+	return ibTestRecordLambda(body, rowParam);
 }
 
 } // namespace
@@ -205,7 +201,7 @@ TEST_F(ComputedServerFix, Aggregate_PromotesToServer)
 
 // A LINQ lambda WHERE, lowered and run over a PHYSICAL DB source, executes as SERVER SQL on SQLite (not a
 // RAM fold): x.region == "North" -> door.Where(predicate) -> ExecuteRead -> SELECT ... FROM t WHERE
-// region = 'North'. Proves the LINQ front-end PUSHES to the DBMS, not just the RAM-parity test_queryLinqExec
+// region = 'North'. Proves the LINQ front-end PUSHES to the DBMS, not just the RAM-parity test_queryLINQExec
 // proves. (The predicate is scalar, so no metaData is needed -- the config-layer wall is not hit here.)
 TEST_F(ComputedServerFix, Linq_WherePushesToServer)
 {
@@ -221,7 +217,8 @@ TEST_F(ComputedServerFix, Linq_WherePushesToServer)
 	src.AddCol(&region);
 	src.AddCol(&qty);
 
-	auto expr = RecordLambda(wxT("{ return x.region == \"North\"; }"));
+	// `=`, not `==` — the language has no `==`; see the note on Record in test_lambdaRecorder.cpp.
+	auto expr = RecordLambda(wxT("{ return x.region = \"North\"; }"));
 	ASSERT_NE(expr, nullptr);
 	ibQueryPredicatePtr pred = ibQueryLowering::LowerLambdaPredicate(&src, *expr, {});
 	ASSERT_NE(pred, nullptr) << "a translatable LINQ body must lower to a predicate";

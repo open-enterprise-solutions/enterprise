@@ -172,7 +172,7 @@
     <ClInclude Include="compiler\compileContext.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\compileContextLinqData.h">
+    <ClInclude Include="compiler\byteCodeLINQ.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\enumFactory.h">
@@ -187,7 +187,7 @@
     <ClInclude Include="compiler\procUnit.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\procUnitValues.h">
+    <ClInclude Include="compiler\procUnitLambda.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\translateCode.h">
@@ -1139,7 +1139,7 @@
     <ClCompile Include="compiler\procUnit.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
-    <ClCompile Include="compiler\procUnitLinq.cpp">
+    <ClCompile Include="compiler\procUnitLINQ.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\translateCode.cpp">
@@ -1149,6 +1149,9 @@
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\compileCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\compileCodeLINQ.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\compileContext.cpp">
@@ -2476,7 +2479,7 @@
     <ClCompile Include="query\queryRewrite.cpp">
       <Filter>query</Filter>
     </ClCompile>
-    <ClCompile Include="compiler\lambdaQueryAst.cpp">
+    <ClCompile Include="compiler\lambdaQueryAST.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="query\queryableFactory.cpp">
@@ -2617,7 +2620,7 @@
     <ClInclude Include="query\queryLexer.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="query\queryAst.h">
+    <ClInclude Include="query\queryAST.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryRender.h" />
@@ -2645,7 +2648,7 @@
     <ClInclude Include="query\queryRewrite.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\lambdaQueryAst.h">
+    <ClInclude Include="compiler\lambdaQueryAST.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="query\queryableFactory.h">

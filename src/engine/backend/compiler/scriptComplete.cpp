@@ -1,17 +1,24 @@
 #include "backend/compiler/scriptComplete.h"
 
 #include "backend/backend_exception.h"
-#include "backend/compiler/compileCode.h"        // and with it codeDef, value, compileContext
 #include "backend/compiler/compileModule.h"      // ibCompileModule — the contextual compile
+#include "backend/compiler/procUnitLambda.h"     // ibValueFunction, and through it procUnit.h —
+                                                 // ibLinqRow / ibLinqNamedColumns, the query's own rules
+#include "backend/system/value/valueTable.h"     // ibValueModelTable — and with a table when they are named
 #include "backend/metaData.h"                    // ibCompileValueCache::FindCompileModule
 #include "backend/metaCollection/metaObject.h"   // ibValueMetaObject::GetMetaData
 #include "backend/moduleInfo.h"                  // ibRuntimeModuleDataObject::GetCompileModule
+#include "backend/moduleManager/moduleManager.h" // ibValueModuleManager — the context a snippet parents to
+#include "backend/session/session.h"             // ibSession::EditModuleManagerFor
 #include "backend/diagnostics/journal.h"         // where the refusals are read out when nothing resolved
 #include "backend/typeDescription.h"             // ibTypeDescription - a type, possibly several
 #include "backend/objCtor.h"                     // ibCtorMetaValueType - one door: the metaobject AND the maker
 #include "backend/metaCollection/metaObjectComposite.h"   // where fields live: catalog, document, register, tabular section
 
+#include <limits>   // the "no closing position" sentinel is named, not spelled as a cast
 #include <memory>
+#include <set>       // one name, one entry — the ladder is walked nearest first
+#include <algorithm> // the refusal dump is bounded
 
 namespace {
 
@@ -145,7 +152,8 @@ public:
 			if (!ConstName(code.m_param3.m_numIndex).IsEmpty())
 				continue;
 
-			return ValuesOfSlot(code.m_param2, out);
+			// From HERE, not from wherever the caret's position was matched — see ValuesOfSlot.
+			return ValuesOfSlot(code.m_param2, out, 0, at);
 		}
 
 		return false;
@@ -168,11 +176,29 @@ public:
 	// takes a callee's return. For those the value IS the answer, so dropping the origin here left
 	// the whole road reading `platform` no matter what the step below had found (measured
 	// 2026-09-08: the context map said `ThisObject` and the wire said `platform`).
+	// ⭐⭐ `from` IS WHERE THE PRODUCER IS LOOKED FOR, AND A STEP SHOULD PASS ITS OWN INSTRUCTION.
+	// An operand is written before the instruction that reads it — always — so scanning back from
+	// the instruction finds it. Scanning back from the CARET finds it only while the caret happens
+	// to sit below, which is true of ordinary code and false of a query: its clauses are emitted in
+	// the order the compiler needs, not the order they are written, so a join's source `OPER_LET`
+	// lands PAST the caret that reads its alias. Measured 2026-09-08, twice in one trace: first the
+	// loop header could not resolve its source, then the LET under it could not resolve its own.
 	bool ValueOfSlot(const ibParamRunUnit& slot, ibValue& out, int depth = 0,
-		ibNameOrigin* outOrigin = nullptr) const
+		ibNameOrigin* outOrigin = nullptr, long from = -1) const
 	{
 		std::vector<ibCaretValue> values;
-		if (!ValuesOfSlot(slot, values, depth) || values.empty())
+		const bool answered = ValuesOfSlot(slot, values, depth, from);
+
+		// ⚠ TRUE WITH NOTHING IN IT IS A THIRD OUTCOME, and it reads exactly like the second. A step
+		// may report success and leave the vector empty — a branch that widened into no branches, a
+		// member that resolved to nothing — and the caller then says "did not resolve" about a slot
+		// that DID. Named apart because a trace that cannot tell them apart sends the next hour to
+		// the wrong place.
+		if (answered && values.empty())
+			m_trace << wxString::Format(wxT("  [(%d,%d) answered with nothing]"),
+				(int)slot.m_numArray, (int)slot.m_numIndex);
+
+		if (!answered || values.empty())
 			return false;
 		if (outOrigin != nullptr)
 			*outOrigin = values.front().m_origin;
@@ -183,7 +209,16 @@ public:
 	// ⭐⭐ EVERYTHING `slot` RESOLVED TO. One entry is the ordinary case; several mean a composite
 	// declaration was crossed on the way here, and the set travels onward rather than being
 	// collapsed at the step that made it.
-	bool ValuesOfSlot(const ibParamRunUnit& slot, std::vector<ibCaretValue>& out, int depth = 0) const
+	// `from` is where the search for a producer BEGINS, and it matters as soon as a lambda is in the
+	// text. The caret's own step is found by ValueAt, and that step can sit INSIDE a lambda body
+	// while the instruction its POSITION matched sits after the body closed. Starting the scan at
+	// the latter walks out of the caret's frame through the lambda's ENDLFUNC/LFUNC pair and answers
+	// with whatever holds the same slot NUMBER in the enclosing procedure — measured 2026-09-08:
+	// `a.Where(Function(row) { return row.` answered about `a`, because `row` is the lambda's slot 0
+	// and `a` is the procedure's. Resolving from where the STEP is keeps the guard inside the right
+	// body. -1 means "from the end", which is what every caller but ValueAt wants.
+	bool ValuesOfSlot(const ibParamRunUnit& slot, std::vector<ibCaretValue>& out, int depth = 0,
+		long from = -1) const
 	{
 		if (depth > kMaxChain)
 			return false;   // a chain this long is not a dotted path; refuse rather than recurse
@@ -214,14 +249,41 @@ public:
 		// ends; meeting an opener at depth zero is the start of the caret's OWN frame, and there is
 		// nothing above it that belongs to this one.
 		long foreign = 0;
+		bool producerRefused = false;   // see the LINQ row below — the one case with a second road
 
-		for (long ip = m_lastCode; ip >= m_firstCode; --ip) {
+		for (long ip = (from >= 0 ? from : m_lastCode); ip >= m_firstCode; --ip) {
 
 			const ibByteUnit& code = m_byteCode.m_listCode[(size_t)ip];
 			const short oper = code.m_numOper % TYPE_DELTA1;
 
 			if (oper == OPER_ENDFUNC || oper == OPER_ENDLFUNC) { foreign++; continue; }
 			if (oper == OPER_FUNC || oper == OPER_LFUNC) {
+
+				// ⭐⭐ A LAMBDA'S OPENER IS TWO THINGS AT ONCE, and reading it as one of them was
+				// why the compiler could not type `a.Where(x => …)`. OPER_LFUNC opens a body — the
+				// guard above and below counts it as such — AND it PRODUCES a value: the runtime
+				// materialises an ibValueFunction into m_param1 there (procUnit.cpp). Counted only
+				// as a marker, the lambda's slot had no producer at all, so the argument arrived
+				// empty and the pipeline verb refused: "Argument must be a Function or Procedure".
+				//
+				// Depth 1 is exactly "a lambda written inside the body the caret is in": scanning
+				// backwards its ENDLFUNC was met first (foreign 0 → 1) and its own body skipped, so
+				// its opener arrives with one level still open. Deeper is somebody else's lambda.
+				if (oper == OPER_LFUNC && foreign == 1 && SameSlot(code.m_param1, slot)) {
+					const long funcIdx = (long)code.m_param3.m_numIndex;
+					if (funcIdx >= 0 && funcIdx < (long)m_byteCode.m_listFunc.size()) {
+						// No captured frames: nothing here is ever CALLED. The verb stores the
+						// function in an iterator state and answers its shape from upstream, and
+						// what a lowering would want off it — the recorded query AST — travels on
+						// the bytecode entry this value names.
+						out.emplace_back(new ibValueFunction(&m_byteCode, funcIdx),
+							ibNameOrigin::Declared);
+						m_trace << wxString::Format(wxT("\n  %*sop %3d at %-5u -> lambda #%ld"),
+							depth * 2, wxT(""), (int)oper, code.m_numString, funcIdx);
+						return true;
+					}
+				}
+
 				if (foreign == 0)
 					break;              // the top of the body the caret is in
 				foreign--; continue;
@@ -244,7 +306,34 @@ public:
 			const ibStep step = StepValues(code, ip, out, depth);
 			if (step == ibStep::NotAStep)
 				continue;
-			return step == ibStep::Value;
+			if (step == ibStep::Value) {
+				// ⭐⭐ AND WHATEVER WAS DONE TO THIS CELL IS DONE NOW. A collection is built empty
+				// and filled by calls that produce nothing — `people.Add(...)` — so a walk that only
+				// resolves producers sees an empty Array and can say nothing about its rows. The
+				// calls stand on THIS slot on the tape; playing them here, where the cell has just
+				// been given its value, is what the old precompiler did by evaluating as it read.
+				//
+				// ⚠ ON THE CELL THAT WAS FILLED, NOT THE ONE THAT IS READ. A loop reads a COPY of
+				// its source (`@in_` gets an OPER_LET), and the fills stand on the original — so
+				// doing this at the loop header found nothing. Here every cell replays its own.
+				for (ibCaretValue& answer : out)
+					ReplayCallsOn(slot, answer.m_value, depth);
+				return true;
+			}
+
+			// ⭐⭐ A PRODUCER THAT COULD NOT ANSWER IS NOT ALWAYS THE ONLY PRODUCER. A join writes
+			// its alias TWICE: once from the loop that builds the hash, and again from the loop
+			// over the matched bucket — and the bucket's source arrives through a step this walk
+			// does not know, so the nearer of the two refuses. Reading that as the final answer
+			// left `join b in … where b.` offering nothing while the tree answered with all ten
+			// fields (measured 2026-09-08, with the tape in view).
+			//
+			// So a query's own row gets its second chance below, at the header the compiler
+			// recorded for it. Nothing else does: for ordinary code a producer that cannot answer
+			// IS the answer, and falling through to the name lookup would let a slot be described
+			// by whoever else happens to be called that.
+			producerRefused = true;
+			break;
 		}
 
 		// ⭐ NOTHING WROTE IT, AND THAT IS ITSELF THE ANSWER: code always writes a variable before
@@ -256,6 +345,58 @@ public:
 		// This is the one lookup by NAME in the whole walk — the START of a chain, the same single
 		// table the 2026-08 attempt arrived at ("one table, one lookup"). Everything after it is
 		// asked of a VALUE.
+		// ⭐⭐ …EXCEPT INSIDE A LAMBDA, WHERE ONE SLOT IS FILLED BY THE VERB THAT TAKES IT. A pipeline
+		// lambda's first parameter is the ROW, and nothing in its body writes it — so by the rule
+		// above it would be looked up as a bound name, find nothing, and the caret inside
+		// `t.Where(Function(row) { return row.` would answer about the TABLE instead of the row.
+		// That is the whole reason writing a predicate got no help from the editor.
+		//
+		// It is not a special case bolted on: parameter i lives at frame slot i (compileCode.cpp
+		// stamps `m_param1.m_numIndex = slot (= i)`), so slot 0 of a lambda IS its row, and what the
+		// row is comes from the source the verb reads — asked with the same CreateIterator /
+		// PeekSample pair `foreach` uses. Nothing is executed: a sample is a type, not a row.
+		// ⭐⭐ …AND A QUERY'S ROW COMES OUT OF ITS OWN HEADER, wherever the caret happens to stand.
+		// The scan above walks BACKWARDS from the caret and that is right for ordinary code, where
+		// a value is written before it is read. A query is not written in that order: its clauses
+		// are read by moving the cursor, a join's inner source is replayed into instructions that
+		// sit far from the text they came from, and the header that produces the row can end up
+		// behind the scan's own frame guard. Measured 2026-09-08: `join b in … where b.` refused,
+		// while the SAME row asked through the tree answered with its ten fields — the difference
+		// being only where the walk started.
+		//
+		// The compiler wrote the answer down: `foreachStartIp` is the header that produces this
+		// cell (byteCodeLINQ.h), and starting there is what the tree already does for its offers.
+		// One rule, both readers.
+		//
+		// ⚠ LAST, not first: an ordinary producer found by the scan is the caret's own frame
+		// talking, and it wins. This is the road for the row nobody else could reach.
+		for (const ibLinqQuery& query : m_chain.front()->m_cByteCode.m_listLinq) {
+			for (const ibLinqBinding& binding : query.m_bindings) {
+
+				if (binding.foreachStartIp < 0
+					|| (size_t)binding.foreachStartIp >= m_byteCode.m_listCode.size())
+					continue;
+				if (!SameSlot(binding.valueSlot, slot))
+					continue;
+
+				const ibByteUnit& header = m_byteCode.m_listCode[(size_t)binding.foreachStartIp];
+				if (StepValues(header, (long)binding.foreachStartIp, out, depth) == ibStep::Value)
+					return true;
+			}
+		}
+
+		// A producer was found and it refused. That IS the answer for ordinary code — reading on
+		// would describe this cell by whatever else carries its name.
+		if (producerRefused)
+			return false;
+
+		// ⭐⭐ …EXCEPT INSIDE A LAMBDA, WHERE ONE SLOT IS FILLED BY THE VERB THAT TAKES IT — see the
+		// note above; the row a pipeline hands its predicate is written by nobody in the body.
+		if (m_frame != nullptr && !m_frame->m_listParam.empty()
+			&& FrameOf(slot) == 0 && slot.m_numIndex == 0
+			&& ElementOfLambdaSource(out, depth))
+			return true;
+
 		out.emplace_back();
 		if (!BoundValue(NameOfSlot(slot), out.back().m_value, &out.back().m_origin)) {
 			out.pop_back();
@@ -308,9 +449,17 @@ private:
 			return step;
 		}
 
+		// ⚠ FROM THIS INSTRUCTION, like every other operand — see ValueOfSlot. This branch kept the
+		// old default (search back from the caret) after the single-value road was corrected, and
+		// that split was invisible: an attribute step resolved its receiver by one rule and every
+		// other step by another. It showed up as an instruction two places above being "not found"
+		// while it sat plainly on the tape — because the scan had started twenty places earlier.
 		std::vector<ibCaretValue> parents;
-		if (!ValuesOfSlot(code.m_param2, parents, depth + 1))
+		if (!ValuesOfSlot(code.m_param2, parents, depth + 1, ip)) {
+			m_trace << wxString::Format(wxT("  [receiver (%d,%d) did not resolve]"),
+				(int)code.m_param2.m_numArray, (int)code.m_param2.m_numIndex);
 			return ibStep::Failed;
+		}
 
 		// An empty name is the caret's own dot — every branch is the answer, origin and all.
 		const wxString name = ConstName(code.m_param3.m_numIndex);
@@ -411,8 +560,12 @@ private:
 		case OPER_GET_SCOPE:
 		case OPER_GET_A: {
 			ibValue parent;
-			if (!ValueOfSlot(code.m_param2, parent, depth + 1))
+			if (!ValueOfSlot(code.m_param2, parent, depth + 1, nullptr, ip)) {
+				// The receiver is the whole of an attribute step, so naming it names the failure.
+				m_trace << wxString::Format(wxT("  [receiver (%d,%d) did not resolve]"),
+					(int)code.m_param2.m_numArray, (int)code.m_param2.m_numIndex);
 				return ibStep::Failed;
+			}
 
 			// ⭐ AN EMPTY NAME MEANS THE CARET IS ON THE DOT, and then the PARENT is the answer —
 			// there is nothing to take off it yet, which is exactly what is being asked. The
@@ -439,17 +592,81 @@ private:
 		// the precompiler used for exactly this (its CompileForeach, since deleted) — the
 		// answer was in the tree, and asking the collection is what makes a foreach over a query
 		// selection offer the selection's own columns instead of nothing.
-		case OPER_FOREACH: {
-			ibValue collection;
-			if (!ValueOfSlot(code.m_param2, collection, depth + 1))
+		// ⭐⭐ AN ELEMENT TAKEN BY INDEX IS A SAMPLE OF WHAT THE COLLECTION YIELDS — the same
+		// question `foreach` asks, so it is asked the same way. `q[0]` was not a step at all here,
+		// and a step the walk does not know is not a refusal: the search for the slot's producer
+		// simply carried on past it and answered with whatever ELSE had written that cell — the
+		// global context, offered confidently. Measured 2026-09-08: `a[0].` and `t[0].` both listed
+		// `CommonModules, CommonForms, Constants, Catalogs`, while the same row reached through a
+		// `foreach` answered with its own columns. Answering wrong is worse than answering nothing,
+		// which is why an unknown opcode must not be able to leave a plausible trail.
+		//
+		// The INDEX is not read: a sample says what the elements ARE, and that is what a reader
+		// standing after the dot is asking. An associative container answers the same way.
+		case OPER_GET_ARRAY: {
+			// From the instruction, for the same reason the loop below does — see there.
+			std::vector<ibCaretValue> holders;
+			if (!ValuesOfSlot(code.m_param2, holders, depth + 1, ip) || holders.empty())
 				return ibStep::Failed;
+			ibValue collection = holders.front().m_value;
 
+			// The fills were already played when the slot was resolved, on the cell they stand on —
+			// see ValuesOfSlot. Nothing to do here but ask what an element looks like.
 			const std::shared_ptr<ibValueIteratorState> state = collection.CreateIterator();
 			if (!state)
 				return ibStep::Failed;
 
 			try { return state->PeekSample(out) ? ibStep::Value : ibStep::Failed; }
 			catch (...) { return ibStep::Failed; }
+		}
+
+		case OPER_FOREACH: {
+			// ⭐ A LOOP CAN FAIL IN THREE PLACES AND THE TRACE USED TO SAY ONLY "FAILED". Which of
+			// them it was decides where to look next — the source that would not resolve, a value
+			// that yields nothing, or a collection whose element type is not knowable — and each
+			// sends the reading somewhere else entirely. Named here because this is the step every
+			// query row comes through.
+			// ⚠ THE SEARCH STARTS AT THE HEADER, NOT AT THE CARET. A loop's source is written just
+			// before the loop, so scanning back from the header always finds it — while scanning
+			// back from the caret finds it only when the caret happens to be BELOW. A query breaks
+			// that assumption on purpose: a join's build loop is emitted after the clauses that
+			// read its alias, so its `OPER_LET` sits past the caret and the source "did not
+			// resolve" (measured 2026-09-08 — the trace said exactly that, once it was asked to).
+			std::vector<ibCaretValue> sources;
+			if (!ValuesOfSlot(code.m_param2, sources, depth + 1, ip) || sources.empty()) {
+				m_trace << wxT("  [foreach: the source slot did not resolve]");
+				return ibStep::Failed;
+			}
+			ibValue collection = sources.front().m_value;
+
+			// ⭐⭐ A COLLECTION BUILT IN CODE IS EMPTY UNTIL THE CODE RUNS — and by here it has been
+			// run: the calls standing on the source cell were played when that cell was resolved
+			// (ValuesOfSlot). `New Array` alone answers nothing about its rows; `people.Add(New
+			// Structure("Country, Name", …))` is what says what a row IS, and it is an instruction
+			// nobody used to execute. Max, on the old precompiler: *"the interesting part is that
+			// the old precompiler could do this"* — it could, because it EVALUATED as it read
+			// instead of emitting. Measured 2026-09-08 over the project's own LINQ suite: 66 of 197
+			// carets refused, every one of them a collection filled in code.
+			//
+			// ⚠ AND A FILLED COLLECTION STILL NEED NOT HAVE AN ELEMENT TYPE. An Array is
+			// heterogeneous by construction — `Add` may put a structure, a number and a reference
+			// into the same array — so "no sample" here is frequently the correct answer rather
+			// than a refusal to look (Max, 2026-09-09: an array may hold several values with
+			// different columns that do not agree, and there is nothing single to offer).
+			const std::shared_ptr<ibValueIteratorState> state = collection.CreateIterator();
+			if (!state) {
+				m_trace << wxT("  [foreach: the source is not iterable]");
+				return ibStep::Failed;
+			}
+
+			try {
+				if (state->PeekSample(out))
+					return ibStep::Value;
+				m_trace << wxT("  [foreach: the source yields no sample]");
+			}
+			catch (...) { m_trace << wxT("  [foreach: asking for a sample raised]"); }
+
+			return ibStep::Failed;
 		}
 
 		// A bound handle read into a temp, and a plain copy — the value is whatever was on the
@@ -463,7 +680,152 @@ private:
 		case OPER_GET_EXTERN:
 		case OPER_GET_CONTEXT:
 		case OPER_CONST:
-			return ValueOfSlot(code.m_param2, out, depth + 1, outOrigin) ? ibStep::Value : ibStep::Failed;
+			if (ValueOfSlot(code.m_param2, out, depth + 1, outOrigin, ip))
+				return ibStep::Value;
+			// Which slot it was — a forward that fails says nothing about WHAT it was forwarding,
+			// and that operand is the next question every time.
+			//
+			// ⚠ "did not resolve" covers BOTH outcomes and must not claim either: the producer may
+			// have been missing, or found and unable to answer. Saying "found nothing" cost a round
+			// here — the trace was read as proof the instruction two places up was invisible, when
+			// it had been reached and had refused.
+			m_trace << wxString::Format(wxT("  [(%d,%d) did not resolve, searched from %ld down to %ld]"),
+				(int)code.m_param2.m_numArray, (int)code.m_param2.m_numIndex, ip, m_firstCode);
+			return ibStep::Failed;
+
+		// ⭐⭐ A NUMBER THE INSTRUCTION CARRIES ITSELF. `OPER_CONSTN` holds its value in the operand
+		// rather than in the constant pool, so there is no slot to forward and nothing answered —
+		// a plain `n = 0` was a value the walk could not describe. It can: the opcode says it is a
+		// number, which is the whole of what a reader standing after the dot needs.
+		case OPER_CONSTN: {
+			ibValue made;
+			SetTypeNumber(made, ibNumber((wxLongLong_t)code.m_param2.m_numIndex));
+			out = made;
+			if (outOrigin != nullptr) *outOrigin = ibNameOrigin::Declared;
+			return ibStep::Value;
+		}
+
+		// ⭐⭐ A PROJECTED ROW ANSWERS WITH ITS OWN FIELDS. `select { N = o.N, V = doubled }` writes
+		// the field names down as one constant and the row is shaped by them — so the reader after
+		// the dot needs no lambda, no execution and no guess: it makes the same empty row the
+		// instruction would make and asks IT what it has. This is the third mode of the one tape
+		// working as intended — the compiler wrote the shape, and the reader reads it.
+		case OPER_LINQ_ROW: {
+			ibValue shape;      // the row holds it; this hand-off is the only reason it is named
+			ibValue made;
+			ibLinqRow(made, shape, ConstName(code.m_param3.m_numIndex), (long)code.m_param3.m_numArray);
+			out = made;
+			if (outOrigin != nullptr) *outOrigin = ibNameOrigin::Declared;
+			return ibStep::Value;
+		}
+
+		// ⭐⭐ AND WHAT THE QUERY ANSWERS WITH — the instruction that turns LINQ's own collection into
+		// something the language holds. Without this case the walk stopped at the very last step of
+		// every query: `t = from o in Goods select { … };` then `t.` offered nothing, because the
+		// answer moved from a verb the reader knew to an instruction it did not. That is the failure
+		// mode this file exists to prevent, and it grew with every terminal that learned to compile.
+		//
+		// 🛑 NOTHING IS GUESSED ABOUT THE SHAPE. The rows went into that collection through
+		// `OPER_LINQ_KEEP`, and the KEEP names the cell the row was in — so the row is resolved by
+		// the same walk, one step down, and whatever IT turns out to be (a projected row, a group, a
+		// catalog element) is what the columns are named from. The collection's own slot is the key
+		// that ties the two instructions together; there is nothing else to match on.
+		case OPER_LINQ_RESULT: {
+
+			ibValue row;
+			bool haveRow = false;
+			for (long back = ip - 1; back >= m_firstCode && !haveRow; --back) {
+				const ibByteUnit& kept = m_byteCode.m_listCode[(size_t)back];
+				if ((kept.m_numOper % TYPE_DELTA1) != OPER_LINQ_KEEP)
+					continue;
+				if (!SameSlot(kept.m_param1, code.m_param2))
+					continue;
+				haveRow = ValueOfSlot(kept.m_param2, row, depth + 1, nullptr);
+			}
+
+			// 1 = the first row of the answer, which IS a row and not a collection.
+			if (code.m_param3.m_numIndex == 1) {
+				if (!haveRow)
+					return ibStep::Failed;
+				out = row;
+				if (outOrigin != nullptr) *outOrigin = ibNameOrigin::Declared;
+				return ibStep::Value;
+			}
+
+			// 2 = the GROUPS. Their shape is settled before any row is seen — one group per key,
+			// and a group is Key and Values — so the sample is made rather than searched for, and
+			// it is made by the engine's own maker so the reader cannot describe it differently
+			// from the run. A `foreach` over it then answers about a group, which is the hop this
+			// case exists to keep open.
+			if (code.m_param3.m_numIndex == 2) {
+				ibLinqGroupedSample(out);
+				if (outOrigin != nullptr) *outOrigin = ibNameOrigin::Declared;
+				return ibStep::Value;
+			}
+
+			// ⭐⭐ AND THEN THE SAME QUESTION THE RUNTIME ASKS, asked of the sample instead of a real
+			// row: does this row NAME its columns? A projection does and a group does, and then the
+			// answer is a TABLE carrying those names — the one exit every query has (docs/linq.md
+			// §0.2h-quater). A plain value does not, and then the answer is an Array, which is what
+			// `ToArray` over such rows means.
+			//
+			// 🛑 IT IS THE EXPORTED RULE (`ibLinqNamedColumns`, procUnit.h) and not a second copy of
+			// it here. Two readings of "does it have columns" would eventually disagree, and the one
+			// that drifts is this one — it would go on describing an Array as a table.
+			std::vector<wxString> named;
+			if (haveRow && ibLinqNamedColumns(row, named)) {
+				ibValueModelTable* const table = new ibValueModelTable();
+				if (auto* const columns = table->GetColumnCollection())
+					for (const wxString& name : named)
+						columns->AddColumn(name, ibTypeDescription(), name);
+				out = table;
+			}
+			else
+				out = new ibValueArray();
+
+			if (outOrigin != nullptr) *outOrigin = ibNameOrigin::Declared;
+			return ibStep::Value;
+		}
+
+		// ⭐⭐ ARITHMETIC ANSWERS WITH ITS LEFT OPERAND — and it had to learn to, because the
+		// pipeline compiled as a loop counts with an ordinary `OPER_ADD` (compileCode.cpp,
+		// CompileLinqChain). Before this, `n = src.Where(…).Count()` came back as a value
+		// the walk could not name: the answer moved from a verb it knew to instructions it did not.
+		// That is the third mode of the same tape, and a mode that stops reading is a mode that
+		// stopped working.
+		//
+		// An operand is the honest answer: the type of `a + b` is the type of what it adds, string
+		// concatenation included.
+		//
+		// 🛑 …BUT NOT ALWAYS THE LEFT ONE. An accumulator is written `n = n + 1`, so the left operand
+		// IS the destination, and asking what wrote it finds this same instruction again — the walk
+		// goes round rather than back. That is exactly the shape a counted loop emits, which is to
+		// say the shape this case exists for. When the left operand is the destination, the OTHER
+		// side is the one that says something.
+		case OPER_ADD:
+		case OPER_SUB:
+		case OPER_MULT:
+		case OPER_DIV:
+		case OPER_MOD: {
+			const bool leftIsSelf = code.m_param2.m_numArray == code.m_param1.m_numArray
+				&& code.m_param2.m_numIndex == code.m_param1.m_numIndex;
+			const ibParamRunUnit& other = leftIsSelf ? code.m_param3 : code.m_param2;
+			if (ValueOfSlot(other, out, depth + 1, outOrigin))
+				return ibStep::Value;
+
+			// The other side said nothing — `Sum()` over a collection whose element type is not
+			// known, for instance. Then the ACCUMULATOR itself is the answer, and what it is was
+			// decided where it was INITIALISED. Asking for it plainly finds this same instruction
+			// again (it writes the slot it reads), so the search starts BEFORE here — the same
+			// `from` the lambda guard needs, for the same reason: resolve from where the question
+			// is, not from the end of the tape.
+			std::vector<ibCaretValue> init;
+			if (!ValuesOfSlot(code.m_param1, init, depth + 1, ip - 1) || init.empty())
+				return ibStep::Failed;
+			if (outOrigin != nullptr) *outOrigin = init.front().m_origin;
+			out = std::move(init.front().m_value);
+			return ibStep::Value;
+		}
 
 		// A METHOD ON A VALUE ALREADY IN HAND may be called; see the header for why a bare-name
 		// call (OPER_CALL) never is.
@@ -476,7 +838,7 @@ private:
 		// here. Dispatched exactly as the runtime dispatches it, by enum id straight off the
 		// operand: one road, so LINQ cannot drift away from the rest of the language.
 		case OPER_CALL_LINQ:
-			return LinqStep(code, out, depth) ? ibStep::Value : ibStep::Failed;
+			return LinqStep(code, out, depth, ip) ? ibStep::Value : ibStep::Failed;
 
 		// ⭐⭐ A CALL IS A STEP INTO ANOTHER RANGE OF THE SAME STREAM — and walking it is the whole
 		// point of the mechanism (Max, 2026-09-07: *"function A calls function B, I get its value —
@@ -489,7 +851,7 @@ private:
 		// something the walk cannot resolve simply answers nothing, at no risk.
 		case OPER_CALL:
 		case OPER_CALL_CLOSURE:
-			return CallStep(code, out, depth, outOrigin);
+			return CallStep(code, ip, out, depth, outOrigin);
 
 		default:
 			return ibStep::NotAStep;   // not a step of the language; keep looking for the producer
@@ -650,15 +1012,39 @@ private:
 
 	// m_param3.m_numIndex is the ibLinqMethod enum value itself, NOT a const-pool index — the one
 	// place in the walk where an operand is read straight rather than through the pool.
-	bool LinqStep(const ibByteUnit& code, ibValue& out, int depth) const
+	// ⭐⭐ AND ITS ARGUMENTS ARE THE ONES THE COMPILER WROTE DOWN, exactly as CallMethod's are. This
+	// step used to pass NONE — `DispatchLinqMethod(method, out, nullptr, 0)` — and half of LINQ is
+	// spelled `Where(x => …)`: the dispatch answers "Method requires a function argument" and
+	// refuses, so the compiler could not say what ANY chain arrives at. Measured 2026-09-08: a
+	// thirteen-probe battery answered 6, and every miss was a pipeline verb.
+	//
+	// `OPER_CALL_LINQ` lays its arguments out the way `OPER_CALL_METHOD` does — the count in
+	// m_param3.m_numArray, one OPER_SET per argument after the call (compileCode.cpp) — so this is
+	// the same LoadArguments the neighbour already uses, not a second road.
+	//
+	// ⚠ NOTHING IS EXECUTED BY THIS. A pipeline verb builds an ITERATOR STATE over its upstream and
+	// hands it back; the lambda is stored, not called. `Where`'s state answers PeekSample by
+	// forwarding upstream (procUnitLINQ.cpp), which is exactly the type hint wanted here — so the
+	// element type survives a chain without a single row being read or a line of the lambda run.
+	bool LinqStep(const ibByteUnit& code, ibValue& out, int depth, long ip) const
 	{
 		ibValue receiver;
 		if (!ValueOfSlot(code.m_param2, receiver, depth + 1))
 			return false;
 
+		const long passed = (long)code.m_param3.m_numArray;
+		const long room   = std::max<long>(passed, 1);
+
+		std::vector<ibValue>  storage((size_t)room);
+		std::vector<ibValue*> args((size_t)room);
+		LoadArguments(ip, passed, storage, depth);
+		for (long i = 0; i < room; i++)
+			args[(size_t)i] = &storage[(size_t)i];
+
 		try {
 			receiver.DispatchLinqMethod(
-				static_cast<ibValue::ibLinqMethod>(code.m_param3.m_numIndex), out, nullptr, 0);
+				static_cast<ibValue::ibLinqMethod>(code.m_param3.m_numIndex), out,
+				args.data(), passed);
 			return out.GetType() != ibValueTypes::TYPE_EMPTY;
 		}
 		catch (...) {
@@ -669,12 +1055,32 @@ private:
 	// Walk INTO the callee: its entry is `m_param2.m_numIndex` (procUnit reads the same operand as
 	// `cRunContext.m_lStart`), its body ends at its own closer, and what it hands back is the
 	// operand of its `OPER_RET`. A procedure has none, and then there is nothing to step to.
-	ibStep CallStep(const ibByteUnit& code, ibValue& out, int depth,
+	ibStep CallStep(const ibByteUnit& code, long callIp, ibValue& out, int depth,
 		ibNameOrigin* outOrigin = nullptr) const
 	{
 		const long entry = (long)code.m_param2.m_numIndex;
 		if (entry < 0 || (size_t)entry >= m_byteCode.m_listCode.size())
 			return ibStep::Failed;
+
+		// ⭐⭐ A FUNCTION THAT ANSWERS WITH ONE OF ITS PARAMETERS ANSWERS WITH WHAT WAS PASSED. The
+		// callee's own frame writes nothing into a parameter slot — the CALLER does, in the
+		// `OPER_SET` instructions the compiler lays down right after the call, one per declared
+		// parameter and in order (compileCode.cpp). So a body whose `return` names a parameter has
+		// its answer in the caller's frame, and the walk stays on this side to read it.
+		//
+		// Measured 2026-09-08: `Function Take(r) { return r; }` then `Take(q.First()).` offered
+		// nothing, while the very same `q.First().` offered the row — the only difference being a
+		// call that passes it straight through, which is how half of a person's own helpers look.
+		const auto argumentOf = [this, callIp, depth, outOrigin](long slotIndex, ibValue& into) {
+			const long argIp = callIp + 1 + slotIndex;
+			if (argIp <= callIp || (size_t)argIp >= m_byteCode.m_listCode.size())
+				return false;
+			const ibByteUnit& arg = m_byteCode.m_listCode[(size_t)argIp];
+			const short argOper = arg.m_numOper % TYPE_DELTA1;
+			if (argOper != OPER_SET && argOper != OPER_SETREF)
+				return false;   // not the argument tape after all — say nothing rather than guess
+			return ValueOfSlot(arg.m_param1, into, depth + 1, outOrigin);
+		};
 
 		for (long ip = entry + 1; (size_t)ip < m_byteCode.m_listCode.size(); ip++) {
 
@@ -686,10 +1092,28 @@ private:
 			if (oper != OPER_RET)
 				continue;
 
+			const ibParamRunUnit& returned = m_byteCode.m_listCode[(size_t)ip].m_param1;
+
+			// Is the slot it returns one of its own PARAMETERS? Then nothing in the callee wrote
+			// it and the answer is on this side — see argumentOf. A parameter is one of the first
+			// `paramCount` slots of the frame, which is how the runtime fills them (procUnit.cpp,
+			// phase 1 of the call).
+			const ibByteCode::ibByteFunction* const callee = m_byteCode.FindFunctionByEntry(entry);
+			if (callee != nullptr && returned.m_numArray <= 0
+				&& returned.m_numIndex >= 0
+				&& returned.m_numIndex < (wxLongLong_t)callee->m_listParam.size()) {
+
+				ibValue passed;
+				if (argumentOf((long)returned.m_numIndex, passed)) {
+					out = passed;
+					return ibStep::Value;
+				}
+			}
+
 			// The return's own slot, resolved WITHIN the callee — bounded at its entry so a name
 			// that means one thing in B is not answered from the caller's frame.
-			const ibCaretWalk callee(m_chain, m_byteCode.FindFunctionByEntry(entry), ip, m_metaData, entry);
-			return callee.ValueOfSlot(m_byteCode.m_listCode[(size_t)ip].m_param1, out, depth + 1, outOrigin)
+			const ibCaretWalk inside(m_chain, callee, ip, m_metaData, entry);
+			return inside.ValueOfSlot(returned, out, depth + 1, outOrigin)
 				? ibStep::Value : ibStep::Failed;
 		}
 
@@ -800,6 +1224,157 @@ private:
 		}
 
 		return ibNameOrigin::Platform;
+	}
+
+	// THE ROW A PIPELINE LAMBDA IS WRITTEN AGAINST — found by following the instructions back to the
+	// verb that takes it, which is the only place that knows.
+	//
+	// Three hops, each of them a fact the compiler already wrote down: this frame is entry N of
+	// m_listFunc; the OPER_LFUNC that materialises entry N names the slot the lambda value went
+	// into; the OPER_CALL_LINQ that lists that slot among its arguments names the SOURCE in its
+	// receiver operand. The source's element is then asked for exactly as `foreach` asks.
+	//
+	// ⚠ The receiver is resolved in the frame that CONTAINS the call, not in the lambda's — a walk
+	// bounded at the call site, the same construction CallStep uses to read a callee's return.
+	// ⭐⭐ WHAT A COLLECTION HOLDS, READ FROM WHAT WAS PUT IN IT. An Array built in code is EMPTY
+	// while the text is being read — `Add` is an instruction, not something a compile executes — so
+	// asking it for a sample answers nothing, and every caret downstream of it went dark:
+	//
+	//     var people = New Array;
+	//     people.Add(New Structure("Country, Name", "USA", "Alice"));
+	//     var q = from p in people group p.Name by p.|      ← nothing offered
+	//
+	// while `New Structure(...)` on its own line offers `Country, Name` perfectly well. Measured
+	// 2026-09-08 over the project's own LINQ suite: 66 of 197 carets refused, and every one of them
+	// was this — a row of a collection filled in code, and then the group built from it.
+	//
+	// The answer is on the tape already. The compiler wrote each `Add` down as an OPER_CALL_METHOD
+	// on that very slot, with its argument in the OPER_SET that follows; so the element is whatever
+	// was passed there, resolved by this same walk. Nothing is executed and nothing is guessed —
+	// the fill is READ, exactly as a loop header or a return is read elsewhere here.
+	//
+	// ⚠ NO LIST OF METHOD NAMES. The first attempt matched `Add` and `Insert` as strings, and Max
+	// stopped it: an array fills with `Add`, a map with `Insert`, a table with its own — a list
+	// here would fall behind the next container silently. Nothing needs to be recognised. The tape
+	// says a method was called ON THIS COLLECTION; calling it is what the runtime would do, and
+	// whether it may be called is a question the runtime already answers for itself (backend_core.h,
+	// ibEvalMode — `eval_complete` is the mode this whole walk runs inside).
+	//
+	// ⚠ AND PROCEDURES ESPECIALLY. `CallMethod` above refuses anything without a return value,
+	// which is correct for it — it is asked for a VALUE — but it means `Add` was never once called
+	// while reading a text. Here the return is beside the point: the effect is.
+	void ReplayCallsOn(const ibParamRunUnit& collection, ibValue& target, int depth) const
+	{
+		if (depth > kMaxChain)
+			return;
+
+		long foreign = 0;
+
+		for (long ip = m_firstCode; ip <= m_lastCode && (size_t)ip < m_byteCode.m_listCode.size(); ip++) {
+
+			const ibByteUnit& code = m_byteCode.m_listCode[(size_t)ip];
+			const short oper = code.m_numOper % TYPE_DELTA1;
+
+			// Another declaration's body — its slot numbers are not ours (the same guard the
+			// producer scan carries, for the same reason).
+			if (oper == OPER_FUNC || oper == OPER_LFUNC)   { foreign++; continue; }
+			if (oper == OPER_ENDFUNC || oper == OPER_ENDLFUNC) { if (foreign > 0) foreign--; continue; }
+			if (foreign > 0)
+				continue;
+
+			if (oper != OPER_CALL_METHOD || !SameSlot(code.m_param2, collection))
+				continue;
+
+			const long method = target.FindMethod(ConstName(code.m_param3.m_numIndex));
+			if (method == wxNOT_FOUND)
+				continue;
+
+			const long passed   = (long)code.m_param3.m_numArray;
+			const long declared = target.GetNParams(method);
+			const long room     = std::max<long>(std::max(declared, passed), 1);
+
+			std::vector<ibValue>  storage((size_t)room);
+			std::vector<ibValue*> args((size_t)room);
+			LoadArguments(ip, passed, storage, depth + 1);
+			for (long i = 0; i < room; i++)
+				args[(size_t)i] = &storage[(size_t)i];
+
+			try {
+				ibValue ignored;
+				if (target.HasRetVal(method)) target.CallAsFunc(method, ignored, args.data(), passed);
+				else                          target.CallAsProc(method, args.data(), passed);
+			}
+			catch (...) {
+				// A method that will not run while a text is being read is an ordinary outcome —
+				// the collection simply stays as empty as it was, and the caret says nothing rather
+				// than something wrong.
+			}
+		}
+	}
+
+	bool ElementOfLambdaSource(std::vector<ibCaretValue>& out, int depth) const
+	{
+		if (depth > kMaxChain)
+			return false;
+
+		long frameIdx = wxNOT_FOUND;
+		for (size_t i = 0; i < m_byteCode.m_listFunc.size(); i++)
+			if (&m_byteCode.m_listFunc[i] == m_frame) { frameIdx = (long)i; break; }
+		if (frameIdx == wxNOT_FOUND)
+			return false;
+
+		long lfuncIp = wxNOT_FOUND;
+		for (size_t ip = 0; ip < m_byteCode.m_listCode.size(); ip++) {
+			const ibByteUnit& unit = m_byteCode.m_listCode[ip];
+			if ((unit.m_numOper % TYPE_DELTA1) == OPER_LFUNC
+				&& (long)unit.m_param3.m_numIndex == frameIdx) { lfuncIp = (long)ip; break; }
+		}
+		if (lfuncIp == wxNOT_FOUND)
+			return false;
+
+		const ibParamRunUnit lambdaSlot = m_byteCode.m_listCode[(size_t)lfuncIp].m_param1;
+
+		for (size_t ip = (size_t)lfuncIp; ip < m_byteCode.m_listCode.size(); ip++) {
+
+			const ibByteUnit& call = m_byteCode.m_listCode[ip];
+			if ((call.m_numOper % TYPE_DELTA1) != OPER_CALL_LINQ)
+				continue;
+
+			const long passed = (long)call.m_param3.m_numArray;
+			bool takesTheLambda = false;
+			for (long a = 0; a < passed && !takesTheLambda; a++) {
+				const size_t argIp = ip + 1 + (size_t)a;
+				if (argIp >= m_byteCode.m_listCode.size())
+					break;
+				takesTheLambda = SameSlot(m_byteCode.m_listCode[argIp].m_param1, lambdaSlot);
+			}
+			if (!takesTheLambda)
+				continue;
+
+			const ibCaretWalk outer(m_chain, nullptr, (long)ip, m_metaData, 0);
+			ibValue source;
+			if (!outer.ValueOfSlot(call.m_param2, source, depth + 1))
+				return false;
+
+			const std::shared_ptr<ibValueIteratorState> state = source.CreateIterator();
+			if (!state)
+				return false;
+
+			out.emplace_back();
+			try {
+				if (state->PeekSample(out.back().m_value)) {
+					out.back().m_origin = ibNameOrigin::Declared;
+					m_trace << wxString::Format(wxT("\n  %*slambda row <- the source of the verb at %u"),
+						depth * 2, wxT(""), call.m_numString);
+					return true;
+				}
+			}
+			catch (...) {}
+			out.pop_back();
+			return false;
+		}
+
+		return false;
 	}
 
 	// ⭐ WHICH MAP ANSWERED IS THE ORIGIN. The two are different facts about a name and the caller
@@ -983,6 +1558,16 @@ public:
 	const ibCompileChain& Chain() const { return m_chain; }
 	const ibByteCode& ByteCode() const { return m_compiler.m_cByteCode; }
 
+	// The tokens this compile read, for the one question that is about the GRAMMAR of a position
+	// rather than about a value: which clause the caret is being typed into. Nothing is re-lexed —
+	// the stream is the one the compile just used.
+	const std::vector<ibLexem>& Lexems() const { return m_compiler.GetLexems(); }
+
+	// ⭐ THE SAME TAPE, NOT SLICED. The question above wants the instructions, which the base type
+	// carries; the LINQ tree lives only on the compiler's own full form (byteCode.h), and a reader
+	// that needs it has to be handed that form.
+	const ibByteExtCode& FullByteCode() const { return m_compiler.m_cByteCode; }
+
 	// What the compile refused, with a position on every line — enough to see roughly where the
 	// chain broke. Empty when the text compiled cleanly.
 	const wxString& Refusal() const { return m_compiler.GetRefusal(); }
@@ -1090,7 +1675,12 @@ wxString SignatureOf(const ibByteCode::ibByteFunction& fn, const ibCompileChain&
 
 		ibValue& value = *const_cast<ibValue*>(owner);
 		const long numMethod = value.FindMethod(fn.m_strRealName);
-		return numMethod != wxNOT_FOUND ? value.GetMethodHelper(numMethod) : wxEmptyString;
+		// ⚠ `wxString(wxEmptyString)` and not the bare constant: outside MSVC `wxEmptyString` is a
+		// `const wxChar*`, both arms of the conditional convert to each other, and the expression is
+		// AMBIGUOUS — green here, a build failure on macOS and Linux (portability.md §1.10). The tree
+		// writes it this way in every other place; this one was the exception, and CI said so.
+		return numMethod != wxNOT_FOUND
+			? value.GetMethodHelper(numMethod) : wxString(wxEmptyString);
 	}
 
 	wxString signature = fn.m_strRealName + wxT("(");
@@ -1132,8 +1722,17 @@ bool ibValueAtCaret(const wxString& text, unsigned int caret,
 	{
 		const ibByteCode& bc = compiled.ByteCode();
 
+		// ⭐ A REFUSAL IS READ WITH THE WHOLE TAPE IN VIEW. Four instructions before the caret are
+		// enough to see what it stood on, and useless for seeing why a step further down could not
+		// resolve — a query emits its clauses out of text order, so the producer that failed can
+		// sit twenty instructions back. When the walk RESOLVED there is nothing to hunt for and the
+		// window stays small; when it refused, the tape is what the next question is asked of.
+		const long windowFrom = resolved ? point.m_instruction - 4 : 0;
+		const long windowTo   = resolved ? point.m_instruction + 1
+			: (long)std::min<size_t>(bc.m_listCode.size(), 80u) - 1;
+
 		wxString window;
-		for (long ip = point.m_instruction - 4; ip <= point.m_instruction + 1; ip++) {
+		for (long ip = windowFrom; ip <= windowTo; ip++) {
 			if (ip < 0 || (size_t)ip >= bc.m_listCode.size())
 				continue;
 			const ibByteUnit& code = bc.m_listCode[(size_t)ip];
@@ -1153,9 +1752,13 @@ bool ibValueAtCaret(const wxString& text, unsigned int caret,
 				code.m_numString);
 		}
 
-		ibJournalInfo(wxT("complete"), wxT("caret %u -> instruction %ld, %s%s%s"),
+		const ibByteCode::ibByteFunction* const caretFrame = compiled.CaretFrame();
+		ibJournalInfo(wxT("complete"), wxT("caret %u -> instruction %ld, %s [frame=%s params=%d]%s%s"),
 			compiled.Caret(), point.m_instruction,
-			resolved ? wxT("resolved") : wxT("REFUSED"), window, walkTrace);
+			resolved ? wxT("resolved") : wxT("REFUSED"),
+			caretFrame != nullptr ? caretFrame->m_strRealName : wxString(wxT("(module)")),
+			caretFrame != nullptr ? (int)caretFrame->m_listParam.size() : -1,
+			window, walkTrace);
 	}
 
 	// ⭐⭐ AND WHEN IT DID NOT RESOLVE, WHAT THE COMPILE REFUSED GOES BACK TO WHOEVER ASKED. Writing
@@ -1207,6 +1810,19 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 	// ⚠ ONLY WHAT DEPENDS ON ORDER IS GATED. Parameters are visible throughout their body, and a
 	// FUNCTION is callable from above its own declaration — so neither is asked this question.
 	std::map<wxLongLong_t, unsigned int> declaredAt;
+
+	// ⭐⭐ AND WHERE A NAME THE COMPILER MADE UP FIRST APPEARS IN THE TEXT. `a = X;` with no `var`
+	// is an implicit local, and the compiler deliberately writes NO declarator for one — so the
+	// gate above has nothing to compare it against, and such a name was offered at EVERY caret in
+	// the body, including twelve lines ABOVE the statement that creates it (Max, 2026-09-09: `a`
+	// stood in the dropdown at a caret above `a = Attribute.GetMetadata()`).
+	//
+	// The position was never missing, only unrecorded in that one place: every instruction carries
+	// the source position it was emitted from, so the FIRST instruction that mentions the cell is
+	// where the name first appears. The MINIMUM rather than the first one met, because a query's
+	// instructions are not emitted in text order (a join's build loop is emitted after the clauses
+	// that read its alias) — taking the first met would date such a name by its loop header.
+	std::map<wxLongLong_t, unsigned int> firstTouchAt;
 	{
 		const ibByteCode& bc = compiled.ByteCode();
 		long openEntry = -1;
@@ -1220,20 +1836,54 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 			if (oper == OPER_FUNC || oper == OPER_LFUNC) {
 				openStack.push_back((long)ip);
 				openEntry = (long)ip;
+				continue;
 			}
-			else if (oper == OPER_ENDFUNC || oper == OPER_ENDLFUNC) {
+			if (oper == OPER_ENDFUNC || oper == OPER_ENDLFUNC) {
 				if (!openStack.empty()) openStack.pop_back();
 				openEntry = openStack.empty() ? -1 : openStack.back();
+				continue;
 			}
-			else if (oper == OPER_FUNC_LOCAL) {
-				// The module's own table, or the body the caret stands in — the two the list reads.
-				const bool mine = (openEntry < 0)
-					|| (frame != nullptr && openEntry == frame->m_lCodeLine);
-				if (mine)
-					declaredAt.emplace(code.m_param1.m_numIndex, code.m_numString);
+
+			// The module's own table, or the body the caret stands in — the two the list reads.
+			const bool mine = (openEntry < 0)
+				|| (frame != nullptr && openEntry == frame->m_lCodeLine);
+			if (!mine)
+				continue;
+
+			if (oper == OPER_FUNC_LOCAL) {
+				declaredAt.emplace(code.m_param1.m_numIndex, code.m_numString);
+				continue;
+			}
+
+			// Any instruction, any operand: a cell of THIS frame that this instruction touches.
+			// `FrameOf` folds the negative markers onto frame 0 the same way the walk does, so a
+			// temporary and a named local are told apart by their index, as everywhere else.
+			const ibParamRunUnit* const operands[4] = {
+				&code.m_param1, &code.m_param2, &code.m_param3, &code.m_param4 };
+
+			for (const ibParamRunUnit* operand : operands) {
+				if (FrameOf(*operand) != 0 || operand->m_numIndex < 0)
+					continue;
+				const auto seen = firstTouchAt.find(operand->m_numIndex);
+				if (seen == firstTouchAt.end())
+					firstTouchAt.emplace(operand->m_numIndex, code.m_numString);
+				else if (code.m_numString < seen->second)
+					seen->second = code.m_numString;
 			}
 		}
 	}
+
+	// The open frame's formal parameters, by name — the one group the order gate must not judge
+	// (see the exemption inside it). Read off the frame's own record, which carries them beside the
+	// locals rather than mixed into them.
+	const auto isAParameter = [frame](const wxString& name) {
+		if (frame == nullptr)
+			return false;
+		for (const ibByteCode::ibByteParam& parameter : frame->m_listParam)
+			if (stringUtils::CompareString(parameter.m_strName, name))
+				return true;
+		return false;
+	};
 
 	// ⚠ AT THE CARET COUNTS AS NOT YET DECLARED, and the boundary is where the word being typed
 	// STARTS — which is exactly what Caret() is, the position backed up over the identifier under
@@ -1246,18 +1896,67 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 		if (at != declaredAt.end())
 			return at->second >= compiled.Caret();
 
-		// ⭐ A NAME WITH NO DECLARATOR IS ONE THE COMPILER MADE UP, and the word being typed is
-		// exactly that: `cat` on its own line is a statement, and an unknown identifier in a
-		// statement gets an implicit variable — the compiler says so where it emits the declarator
-		// and skips it ("implicit creates from GetVariable's fallback don't get a tape
-		// declarator"). With no declarator there is no position, so the order gate above cannot see
-		// it, and the dropdown listed `cat` above `Catalogs` — a name offering itself as its own
-		// completion (measured 2026-09-07).
+		// ⭐ A NAME WITH NO DECLARATOR IS ONE THE COMPILER MADE UP — `a = X;` with no `var`, and
+		// equally the word being typed, since `cat` alone on a line is a statement and an unknown
+		// identifier in a statement gets an implicit variable. The compiler says so where it emits
+		// declarators and skips it ("implicit creates from GetVariable's fallback don't get a tape
+		// declarator").
 		//
-		// The word is the discriminator, not the missing declarator: an implicit variable created
-		// EARLIER in the text is a real name and stays.
+		// ⭐⭐ SO ITS POSITION IS ASKED OF THE TAPE INSTEAD, and the order gate is the SAME gate: an
+		// implicit variable created BELOW the caret is not a name that can be written here, and one
+		// created above it is an ordinary name that stays. Reading it off the first instruction
+		// that mentions the cell is what makes the two tellable apart at all — without it the only
+		// discriminator left was the typed word, so every implicit variable in the body was offered
+		// at every caret above its own creation (measured 2026-09-09).
+		//
+		// 🛑 A PARAMETER IS EXEMPT, AND NOT AS A SPECIAL CASE: it is visible throughout its body by
+		// the language's own rule, so it does not depend on order and must not be asked an order
+		// question. It reaches here only because the frame's locals table holds the parameters too
+		// (compileCode.cpp writes every non-temporary of the function context into m_listLocals) —
+		// and it has no tape declarator either, so without this it would have been dated by its
+		// FIRST USE and hidden from every caret above that.
+		if (!isAParameter(var.m_strRealName)) {
+			const auto touched = firstTouchAt.find((wxLongLong_t)var.m_slotIndex);
+			if (touched != firstTouchAt.end())
+				return touched->second >= compiled.Caret();
+		}
+
+		// Nothing on the tape mentions the cell: all that is left to say is whether this is the
+		// half-written word itself, which is never a candidate for its own completion — typing
+		// `cat` listed `cat` above `Catalogs` (measured 2026-09-07).
 		return !compiled.TypedWord().IsEmpty()
 			&& stringUtils::CompareString(var.m_strRealName, compiled.TypedWord());
+	};
+
+	// Is this spelling one that a query in THIS text bound? The queries are on the tape's own record
+	// (byteCodeLINQ.h), so this asks the compile rather than re-reading the text. Used with the
+	// declarator test above — see there for why one alone is not enough.
+	const auto boundByAQuery = [&compiled](const wxString& name) {
+		for (const ibLinqQuery& query : compiled.FullByteCode().m_listLinq)
+			for (const ibLinqBinding& binding : query.m_bindings)
+				if (stringUtils::CompareString(binding.name, name))
+					return true;
+		return false;
+	};
+
+	// ⭐⭐ ONE NAME, ONE ENTRY — AND THE NEAREST LINK WINS. The ladder is walked from the text
+	// outward, and a name that exists on more than one rung is not two names: it is one name that
+	// the nearer rung SHADOWS, exactly as the runtime resolves it. Without this the dropdown
+	// printed the same word twice with the same icon, and a reader could only wonder which to pick.
+	//
+	// Measured 2026-09-08, from Max's own screen: an external data processor's module is one rung
+	// further out than a configuration module, so `Data` and `Metadata` — reachable from both —
+	// were offered twice. My own texts, compiled with a shorter chain, never showed it.
+	//
+	// ⚠ CASE-INSENSITIVELY, because the language is: `Data` and `data` are the same name here, and
+	// offering both would be the same defect wearing different letters.
+	std::set<wxString> alreadyOffered;
+	const auto offerOnce = [&alreadyOffered, &outNames](ibCaretName&& entry) {
+		if (entry.m_name.IsEmpty())
+			return;
+		if (!alreadyOffered.insert(entry.m_name.Lower()).second)
+			return;
+		outNames.push_back(std::move(entry));
 	};
 
 	const ibCompileChain& chain = compiled.Chain();
@@ -1279,6 +1978,23 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 			// Only this text's own names can be written below the caret; a module above it was
 			// finished long ago.
 			if (depth == 0 && writtenBelowCaret(var))
+				continue;
+
+			// ⭐⭐ A NAME A QUERY BOUND IS NOT A LOCAL OF THIS BODY, however much the symbol table
+			// looks like it holds one. `from o in Goods select o;` puts `o` in m_listVar because the
+			// query's own scope is a RETURN_BLOCK context and AddVariable there delegates upward to
+			// the enclosing frame — but the compiler declines to write a tape declarator for exactly
+			// those (compileCode.cpp: "block-scope @context vars are not real frame slots"), and
+			// that missing declarator is the discriminator. So the name is offered by the query
+			// block below, which knows the span it is alive in, and NOT from here, where it would be
+			// alive for the rest of the module. Measured 2026-09-08: `o` was offered on the line
+			// AFTER the query that bound it.
+			//
+			// ⚠ Both halves are required. A name with no declarator can also be an implicit variable
+			// (`x = 1` with no `var`), which is a real local; and a real local may legitimately share
+			// a query alias's spelling, in which case it HAS a declarator and stays.
+			if (depth == 0 && boundByAQuery(var.m_strRealName)
+				&& declaredAt.find((wxLongLong_t)var.m_slotIndex) == declaredAt.end())
 				continue;
 
 			// ⭐⭐ A PARENT'S PRIVATE LOCAL IS NOT IN SCOPE HERE, and the runtime already says so in
@@ -1309,7 +2025,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 			entry.m_exported  = var.IsExport();
 			entry.m_protected = var.IsProtected();
 			entry.m_origin    = OriginOfVar(var.m_kind, depth, chain.size(), globalModule);
-			outNames.push_back(std::move(entry));
+			offerOnce(std::move(entry));
 		}
 
 		for (const auto& fn : byteCode.m_listFunc) {
@@ -1332,7 +2048,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 			entry.m_exported      = fn.IsExport();
 			entry.m_protected     = fn.IsProtected();
 			entry.m_origin        = OriginOfFunc(fn.m_kind, depth, chain.size(), globalModule);
-			outNames.push_back(std::move(entry));
+			offerOnce(std::move(entry));
 		}
 	}
 
@@ -1351,9 +2067,344 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 			entry.m_exported = var.IsExport();
 			entry.m_origin   = ibNameOrigin::Declared;
 			entry.m_local    = true;
-			outNames.push_back(std::move(entry));
+			offerOnce(std::move(entry));
+		}
+	}
+
+	// ⭐⭐ …AND THE NAMES A QUERY BINDS, WHICH ARE IN NO SYMBOL TABLE AT ALL.
+	//
+	// `from o in Goods where o.` — `o` is not a local of the module or of the function: it is a cell
+	// with an alias pushed onto a compile scope that dies with the query, so a list read off the
+	// symbol tables offers everything EXCEPT the one name the person is standing inside. It was the
+	// most conspicuous hole in this answer and it could not be filled from the tape alone.
+	//
+	// It can now: the compiler KEEPS what it understood about each query (byteCodeLINQ.h), and both
+	// numbers this needs are already written there. `foreachStartIp` is where the binding's loop
+	// header sits; that header's fourth operand is where the loop ENDS — so the span a name is alive
+	// in is the span between those two instructions, and every instruction carries the source
+	// position it came from. A caret inside that span is a caret inside the query.
+	//
+	// Max, on why the tree was kept at all: *"IntelliSense can now build along the tree itself,
+	// because the tree stays."*
+	{
+		const ibByteExtCode& full = compiled.FullByteCode();
+		const unsigned int at = compiled.Caret();
+
+		// A query the compiler never finished has no closing position, and then the name is alive to
+		// the end of what was read. Named rather than written `(unsigned int)-1` at the two places
+		// that need it: there the cast MEANT something instead of converting something, which is the
+		// one use of a cast that a reader cannot check.
+		const unsigned int kToTheEnd = std::numeric_limits<unsigned int>::max();
+
+		const auto positionOf = [&full](long ip) -> unsigned int {
+			return (ip >= 0 && (size_t)ip < full.m_listCode.size())
+				? full.m_listCode[(size_t)ip].m_numString : 0;
+		};
+
+		// Which KIND of query the caret stands in, if any — the keyword block below writes the
+		// clauses that are legal there, and a restriction takes a different (shorter) set than a
+		// query does. Both spans come off the compile's own record of the text it read.
+		bool insideQuery = false, insideRestrict = false;
+
+		for (const ibLinqQuery& query : full.m_listLinq) {
+
+			{
+				const unsigned int from = query.m_textFrom;
+				const unsigned int to = query.m_textTo > from ? query.m_textTo : kToTheEnd;
+				if (at >= from && at <= to) {
+					if (query.m_restrict) insideRestrict = true;
+					else                  insideQuery = true;
+				}
+			}
+
+			for (const ibLinqBinding& binding : query.m_bindings) {
+
+				if (binding.name.IsEmpty())
+					continue;
+
+				unsigned int from = 0, to = 0;
+
+				// ⚠ A JOIN'S HEADER IS NOT ITS SCOPE. The alias now carries the header its row comes
+				// out of — which is what the VALUE door walks — but that header belongs to the pass
+				// that builds the join's hash and closes before `where` is even read. Measuring the
+				// name's life by it would take `b` out of scope exactly where it is written, so a
+				// join keeps the query's own span, below (compileCodeLINQ.cpp says the same at the
+				// place the header is recorded).
+				if (binding.origin != ibLinqBinding::FromJoin
+					&& binding.foreachStartIp >= 0
+					&& (size_t)binding.foreachStartIp < full.m_listCode.size()) {
+
+					// The header's own position is where the source expression was read, so the
+					// name is offered from there to the loop's last instruction — a join alias is
+					// not in scope above its own `join`. An unclosed loop (the text ends mid-query,
+					// which is exactly when somebody is typing in one) has no end written yet, and
+					// then the query reaches to the end of what was compiled.
+					const ibByteUnit& header = full.m_listCode[(size_t)binding.foreachStartIp];
+					const long endIp = (long)header.m_param4.m_numIndex;
+					from = positionOf(binding.foreachStartIp);
+					to   = endIp > binding.foreachStartIp
+						? positionOf(endIp - 1) : kToTheEnd;
+				}
+				else if (query.m_restrict || binding.origin == ibLinqBinding::FromJoin) {
+					// A RESTRICTION HAS NO LOOP, so its names are alive for as long as its TEXT is —
+					// which the compiler bracketed when it read it. There is no ordering question
+					// here: a restriction's alias is bound by its first clause and every clause
+					// after it reads the same one.
+					from = query.m_textFrom;
+					to   = query.m_textTo > query.m_textFrom ? query.m_textTo : kToTheEnd;
+				}
+				else
+					continue;                    // nothing says where this name is alive
+
+				if (at < from || at > to)
+					continue;
+
+				ibCaretName entry;
+				entry.m_name   = binding.name;
+				entry.m_origin = ibNameOrigin::Declared;
+				entry.m_local  = true;
+				offerOnce(std::move(entry));
+			}
+		}
+
+		// ⭐⭐ …AND THE WORDS THEMSELVES. A query in this language is written in KEYWORDS — the
+		// method chain is the other spelling of the same thing, not the primary one — so a list
+		// that offers only names leaves the person who is standing inside a `from` with nothing to
+		// pick and a grammar to remember. Which words are offered is decided by WHERE the caret is,
+		// which the spans above have just established: the clauses of a query inside one, the three
+		// a restriction takes inside that, and the two openers everywhere else.
+		//
+		// 🛑 MODIFIERS ARE NOT OFFERED — `by`, `into`, `on`, `equals`, `ascending`, `descending`.
+		// Each is written as part of a clause it cannot be separated from (`group X by K`), so
+		// offering it standalone would suggest a line that does not compile. The clause forms
+		// themselves are what `linq_methods` hands back, and that is where a whole grammar belongs.
+		{
+			const auto offerKeyword = [&offerOnce](int key) {
+				const wxString word = ibTranslateCode::GetKeyWord(key);
+				if (word.IsEmpty())
+					return;
+				ibCaretName entry;
+				entry.m_name      = word;
+				entry.m_signature = s_listKeyWord[key].m_strShortDescription;
+				entry.m_origin    = ibNameOrigin::Keyword;
+				offerOnce(std::move(entry));
+			};
+
+			// ⭐⭐ WHICH WORD MAY BE WRITTEN HERE DEPENDS ON THE LAST ONE THAT WAS. A query is a
+			// SEQUENCE of clauses, and offering the whole set at every position says `join` after
+			// `select` and `where` where the grammar wants `in` — a list that has to be filtered by
+			// the reader is barely better than no list. The last query keyword before the caret is
+			// the whole of what this needs, and it is read off the compile's own token stream.
+			const int spoken = [&]() -> int {
+				int last = -1;
+				for (const ibLexem& lex : compiled.Lexems()) {
+					if (lex.m_numString >= at)
+						break;
+					if (lex.m_lexType != KEYWORD)
+						continue;
+					switch (lex.m_numData) {
+					case KEY_FROM: case KEY_IN: case KEY_JOIN: case KEY_ON: case KEY_EQUALS:
+					case KEY_WHERE: case KEY_GROUP: case KEY_BY: case KEY_INTO:
+					case KEY_ORDERBY: case KEY_ASCENDING: case KEY_DESCENDING:
+					case KEY_TAKE: case KEY_SKIP: case KEY_DISTINCT: case KEY_SELECT:
+					case KEY_RESTRICT:
+						last = lex.m_numData;
+						break;
+					default: break;
+					}
+				}
+				return last;
+			}();
+
+			// A source is being named (`from o |`, `join b |`) — the language wants `in` and
+			// nothing else, and after `on <key> |` it wants `equals`. These are the positions where
+			// a full clause list is not merely noisy but wrong.
+			const bool wantsIn     = (spoken == KEY_FROM || spoken == KEY_JOIN);
+			const bool wantsEquals = (spoken == KEY_ON);
+			const bool wantsBy     = (spoken == KEY_GROUP);
+
+			if (wantsIn)
+				offerKeyword(KEY_IN);
+			else if (wantsEquals)
+				offerKeyword(KEY_EQUALS);
+			else if (wantsBy)
+				offerKeyword(KEY_BY);
+			else if (insideRestrict) {
+				for (const int key : { KEY_JOIN, KEY_WHERE })
+					offerKeyword(key);
+			}
+			else if (insideQuery) {
+				// The clauses that may still follow. `select` closes the query, so after it only
+				// `distinct` remains; `into` belongs to a `group` that has its key.
+				if (spoken == KEY_SELECT)
+					offerKeyword(KEY_DISTINCT);
+				else if (spoken == KEY_BY)
+					for (const int key : { KEY_INTO, KEY_ORDERBY, KEY_SELECT })
+						offerKeyword(key);
+				else
+					// `from` again: a second source is how this language spells a cross product.
+					for (const int key : { KEY_WHERE, KEY_SELECT, KEY_ORDERBY, KEY_GROUP, KEY_JOIN,
+					                       KEY_TAKE, KEY_SKIP, KEY_FROM })
+						offerKeyword(key);
+			}
+			else {
+				for (const int key : { KEY_FROM, KEY_RESTRICT })
+					offerKeyword(key);
+			}
+
+			// ⭐⭐ …AND THE REST OF THE LANGUAGE'S WORDS, FROM HERE TOO — because there must be ONE
+			// place that answers "what may be written", and the editor was a second one: it walked
+			// s_listKeyWord itself and appended every word before asking this function for the
+			// names. With the query clauses answered here that became visible as a plain
+			// duplicate — `From` twice in the dropdown, same icon, same word (Max's screen,
+			// 2026-09-08) — but the doubling was only the symptom. The disagreement was the defect:
+			// this side knows WHERE the caret is and could withhold `equals` outside a join, while
+			// the editor's list could not, and the MCP door got no keywords at all.
+			//
+			// The query words are skipped here: the block above has already decided which of them
+			// this position admits, and offerOnce would keep the first answer anyway.
+			//
+			// 🛑 AND NOT INSIDE A QUERY AT ALL. A query is an EXPRESSION — `if`, `while`,
+			// `Procedure`, `Return` cannot be written in the middle of one, and offering them there
+			// says a line that will not compile. Inside, the clauses above are the whole answer;
+			// the rest of the language resumes where the query ends.
+			if (!insideQuery && !insideRestrict) {
+				for (int key = 0; key < LastKeyWord; key++) {
+					if (key >= KEY_FROM && key <= KEY_RESTRICT)
+						continue;
+					offerKeyword(key);
+				}
+			}
 		}
 	}
 
 	return true;
+}
+
+//---------------------------------------------------------------------------
+// The same compile, asked what it UNDERSTOOD about a QUERY.
+//---------------------------------------------------------------------------
+
+std::vector<ibQueryOutline> ibOutlineScriptQueries(const wxString& text, const wxString& moduleName,
+	const ibMetaData* metaData)
+{
+	std::vector<ibQueryOutline> outlines;
+
+	// The walk below reaches into the platform to ask a source for a sample of what it yields, the
+	// same way the caret's own question does — so it answers under the same mode, and a refusal
+	// down there goes to whoever asked rather than to the designer's message pane.
+	const ibBackendException::ibEvalModeScope answering{ eval_complete };
+
+	// ⚠ COMPILED AND DISCARDED — and the answer is taken BEFORE the compiler dies, because the tree
+	// lives on the compiler's own bytecode and nowhere else. That is the whole arrangement: the
+	// runtime's type has no such member (byteCode.h), so nothing downstream could hand it back.
+	//
+	// ⭐ TOLERANTLY, because a person writing a query is mid-text by definition. The queries read
+	// before the compiler stopped are still what it understood, and a refusal is a question for
+	// `ibCheckScript`, which is the door that answers it.
+	ibCompileCode compiler(moduleName, wxT("outline"), false);
+	compiler.SetCompileMode(ibCompileCode::ibCompileMode::Tolerant);
+
+	ibCompileChain chain;
+	chain.push_back(&compiler);
+
+	// ⭐ NOT IN A VACUUM, when a configuration was named — the module manager it compiles against is
+	// the context every module of it is parented to, and without it `Catalogs` is not a name. Same
+	// reasoning, and the same trap, as ibCheckScript documents: a manager nobody compiled carries
+	// an empty bytecode, so it is compiled first.
+	if (metaData != nullptr) {
+		if (ibValueModuleManager* manager = ibSession::EditModuleManagerFor(metaData)) {
+			if (ibCompileModule* host = manager->GetCompileModule()) {
+				try { host->Compile(); }
+				catch (const ibBackendException&) { /* the snippet's own context, best effort */ }
+				compiler.SetParent(host);
+				for (const ibCompileModule* up = host; up != nullptr; up = up->GetParent())
+					chain.push_back(up);
+			}
+		}
+	}
+
+	// A tolerant compile reports and keeps reading, so an ordinary refusal raises nothing. What CAN
+	// still come out of here is the compiler's own structural refusals — recursion guards and the
+	// like — and this door is called from the MCP server's thread, where taking the caller down to
+	// report a malformed text is the wrong trade. Whatever WAS read is still the answer.
+	try { compiler.Compile(text); }
+	catch (const ibBackendException&) {}
+	catch (...) {}
+
+	for (const ibLinqQuery& query : compiler.m_cByteCode.m_listLinq) {
+
+		ibQueryOutline outline;
+		outline.m_columns          = query.m_columns;
+		outline.m_isRestrict       = query.m_restrict;
+		outline.m_groups           = query.m_grouped;
+		outline.m_groupInto        = query.m_groupIntoName;
+		outline.m_orders           = query.m_hasOrderBy;
+		outline.m_orderDescending  = query.m_orderByDescending;
+
+		// The query as it was written — see ibQueryOutline::m_text. Bounds-checked because a
+		// tolerant compile may have stopped mid-query, and then there is no closing position yet.
+		outline.m_textFrom = query.m_textFrom;
+		outline.m_textTo   = query.m_textTo;
+		if (query.m_textTo > query.m_textFrom && query.m_textTo <= (unsigned int)text.length())
+			outline.m_text = text.Mid(query.m_textFrom, query.m_textTo - query.m_textFrom);
+		else if (query.m_textFrom < (unsigned int)text.length())
+			outline.m_text = text.Mid(query.m_textFrom);   // unfinished: what there is of it
+
+		// The SPAN reaches the next token so that a caret in the whitespace after the last clause is
+		// still inside the query it is being typed into (compileCode.h, FindQueryTextEnd). What is
+		// SHOWN should not: the trailing blank is the gap, not the query.
+		outline.m_text.Trim();
+
+		for (const ibLinqBinding& binding : query.m_bindings) {
+			ibQueryOutlineBinding said;
+			said.m_name    = binding.name;
+			said.m_rowCell = binding.valueSlot.m_numIndex;
+			switch (binding.origin) {
+			case ibLinqBinding::FromSource:   said.m_origin = wxT("from");     break;
+			case ibLinqBinding::FromLet:      said.m_origin = wxT("let");      break;
+			case ibLinqBinding::FromJoin:     said.m_origin = wxT("join");     break;
+			case ibLinqBinding::FromGroup:    said.m_origin = wxT("group");    break;
+			case ibLinqBinding::FromRestrict: said.m_origin = wxT("restrict"); break;
+			}
+
+			// ⭐⭐ AND WHAT THE NAME OFFERS, asked of the instructions rather than of the text.
+			//
+			// The number needed was already written down: `foreachStartIp` is where this binding's
+			// loop header sits, and that header IS the producer of the row cell. So the walk starts
+			// THERE — the row is resolved inside its own query and not by scanning the tape from
+			// the end, which would leave the frame the query is compiled in and answer about
+			// whatever else holds the same slot number.
+			if (binding.foreachStartIp >= 0
+				&& (size_t)binding.foreachStartIp < compiler.m_cByteCode.m_listCode.size()) {
+
+				const ibCaretWalk walk(chain, /*frame*/ nullptr,
+					(long)binding.foreachStartIp, metaData, /*firstCode*/ 0);
+
+				ibValue sample;
+				try {
+					if (walk.ValueOfSlot(binding.valueSlot, sample)) {
+						for (long i = 0; i < sample.GetNProps(); i++) {
+							// The editor's own filter: a scope-local name belongs to the frame it
+							// was declared in, not to a row reached through a source.
+							if (sample.IsPropScoped(i))
+								continue;
+							said.m_offers.push_back(sample.GetPropName(i));
+						}
+					}
+				}
+				catch (...) {
+					// The walk may end in the platform — and a platform function is not run while
+					// designing (see the header). A name with nothing listed under it is a smaller
+					// answer, not a wrong one.
+				}
+			}
+
+			outline.m_bindings.push_back(said);
+		}
+
+		outlines.push_back(outline);
+	}
+
+	return outlines;
 }

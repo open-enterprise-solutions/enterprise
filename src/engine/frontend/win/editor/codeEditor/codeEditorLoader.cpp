@@ -885,12 +885,11 @@ void ibCodeEditor::LoadCallTip()
 // a second scope tree; now it asks the one that will actually compile this module.
 void ibCodeEditor::LoadSysKeyword()
 {
-	for (int i = 0; i < LastKeyWord; i++) {
-		m_ac.Append(ibContentType::eVariable,
-			s_listKeyWord[i].m_strKeyWord,
-			s_listKeyWord[i].m_strShortDescription
-		);
-	}
+	// ⚠ THE KEYWORDS ARE NOT WALKED HERE ANY MORE. This loop appended every word of the language at
+	// every caret, and `ibNamesAtCaret` now answers them WITH the names — one list, decided where
+	// the position is known, so `equals` is offered inside a join and not in open code. Kept as a
+	// note rather than deleted silently: the words did not stop being offered, they moved
+	// (scriptComplete.cpp, the keyword block). Walking them here as well printed each twice.
 
 	// The mode covers the whole answer, not just the value door: building the list compiles the
 	// text, and a name half-written is ordinary here rather than an error (backend_core.h).

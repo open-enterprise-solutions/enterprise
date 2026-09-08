@@ -30,9 +30,9 @@
         "common_lang",
         "linq"
       ],
-      "signature": "from <item> in <source> [where ...] [orderby ...] [group ... by ... [into ...]] select ...",
-      "description": "LINQ — вбудовані в мову запити до колекцій у памʼяті. Два паралельні синтаксиси компілюються в одні й ті ж примітиви.\n\n**Блочний синтаксис** (eager): `from <var> in <source>` відкриває запит; далі клаузи `where / var / orderby [asc|desc] / group X by K [into g] / join b in Y on a.K equals b.K / skip N / take N / distinct`; закривається `select <expr>` або `select { F = expr, ... }`. Одразу матеріалізується в Array.\n\n**Ланцюговий синтаксис** (lazy): `arr.Where(λ).Select(λ).Distinct().Take(10).ToArray()`. Доступно 31 операція — конвеєрні (Where / Select / Distinct / OrderBy / OrderByDescending / GroupBy / Join / Skip / Take / SkipWhile / TakeWhile / Reverse / Concat / Union / Intersect / Except / WhereIndexed / SelectIndexed), термінальні (Count / ToArray / First / Last / Single / Any / ElementAt / Contains / SequenceEqual / Aggregate плюс *OrDefault варіанти), агрегації (Sum / Min / Max / Average — опційно з лямбда-селектором).\n\nЛямбди захоплюють локальні змінні зовнішнього scope: `var k = 5; arr.Where(Function(x) { return x > k; })`.\n\nLINQ-ключові слова компілюються однаково в режимах CES і VES.",
-      "syntax_block": "var q = from o in orders\n        where o.Total > 100\n        var doubled = o.Total * 2\n        orderby o.Date descending\n        select { N = o.N, V = doubled };",
+      "signature": "from <item> in <source> [where ...] [orderby K1[, K2...] [ascending|descending]] [group ... by ... [into ...]] select ...",
+      "description": "LINQ — вбудовані в мову запити до колекцій у памʼяті. Два паралельні синтаксиси компілюються в одні й ті ж примітиви.\n\n**Блочний синтаксис** (eager): `from <var> in <source>` відкриває запит; далі клаузи `where / var / orderby K1[, K2...] [asc|desc] / group X by K [into g] / join b in Y on a.K equals b.K / skip N / take N / distinct`; закривається `select <expr>` або `select { F = expr, ... }`. Одразу матеріалізується в Array.\n\n**Ланцюговий синтаксис** (lazy): `arr.Where(λ).Select(λ).Distinct().Take(10).ToArray()`. Доступно 31 операція — конвеєрні (Where / Select / Distinct / OrderBy / OrderByDescending / GroupBy / Join / Skip / Take / SkipWhile / TakeWhile / Reverse / Concat / Union / Intersect / Except / WhereIndexed / SelectIndexed), термінальні (Count / ToArray / First / Last / Single / Any / ElementAt / Contains / SequenceEqual / Aggregate плюс *OrDefault варіанти), агрегації (Sum / Min / Max / Average — опційно з лямбда-селектором).\n\nЛямбди захоплюють локальні змінні зовнішнього scope: `var k = 5; arr.Where(Function(x) { return x > k; })`.\n\nLINQ-ключові слова компілюються однаково в режимах CES і VES.",
+      "syntax_block": "var q = from o in orders\n        where o.Total > 100\n        var doubled = o.Total * 2\n        orderby o.Warehouse, o.Date descending\n        select { N = o.N, V = doubled };",
       "parameters": "",
       "return_descr": "Масив вибраних рядків (блочний синтаксис) або лінивий ітератор (ланцюговий синтаксис).",
       "example": "// ланцюговий синтаксис — лінивий конвеєр\nvar bigOnes = arr.Where(Function(x) { return x > 5; })\n                 .OrderByDescending(Function(x) { return x; })\n                 .Take(10)\n                 .ToArray();\n\n// агрегації з лямбда-селектором\nvar total = arr.Sum();\nvar avgK  = arr.Average(Function(x) { return x.K; });\n\n// group-into continuation\nvar pairs = from p in people\n            group p.Name by p.Country into g\n            where g.Values.Count() > 1\n            select { Country = g.Key, Names = g.Values };",
@@ -44,6 +44,28 @@
         "kw.OrderBy",
         "kw.Join",
         "kw.Group"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "guide.lambda",
+      "name_local": "Lambdas — functions as values (callback, handler)",
+      "name_en": "Lambdas — functions as values (callback, handler)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "var <name> = Function([<Param1>, ...]) { <body> Return <value>; };",
+      "description": "A FUNCTION CAN BE A VALUE. `Function(x) { return x * 2; }` written where a value is expected produces a callable that can be stored, passed, returned and called later. Same keyword as a declaration; what makes it a value is the position it stands in.\n\nWHAT THEY ARE FOR — three jobs, and finding yourself in one of them is how to know a lambda is wanted:\n\n1. A CALLBACK — work handed to somebody else to run: `arr.Where(Function(x) { return x > k; })`. The collection decides WHEN to call it and with what; you only say what to do with one element.\n\n2. AN EVENT HANDLER — behaviour attached to something that will happen later, without declaring a named procedure for it.\n\n3. A RULE PASSED AS AN ARGUMENT — a comparison, a filter, a projection given to a routine that would otherwise be fixed: `Function Apply(f, v) { return f(v); }`.\n\nTHEY REMEMBER WHERE THEY WERE WRITTEN (closure). A lambda reads the locals around it — of the procedure and of the module — and reads them AT CALL TIME, not when it was written:\n\n    var n = 1;\n    var f = Function(x) { return x + n; };\n    n = 100;\n    f(0)   // 100\n\nA parameter of the same name shadows the captured one, and the outer value is left untouched.\n\nCALLING ONE THAT LIVES IN A CONTAINER GOES THROUGH A VARIABLE: `s.f(1)` and `a[0](1)` do not compile, while `var g = s.f; g(1)` does.\n\n⚠ DO NOT REACH FOR A LAMBDA WHERE A CLAUSE SAYS IT SHORTER. Filtering, projecting, sorting and grouping a collection are written with KEYWORDS, and every lambda those would need is text you do not have to write:\n\n    from x in arr where x > limit select x                      // short\n    arr.Where(Function(x) { return x > limit; }).ToArray()      // the same thing, twice as long\n\nKeep lambdas for the three jobs above — a callback, a handler, a rule handed to somebody else. See guide.linq for the clause order.",
+      "syntax_block": "var <name> = Function([<Param1>, ...]) { <body> Return <value>; };",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// a callback given to a pipeline\nvar limit = 3;\nvar big = arr.Where(Function(x) { return x > limit; }).ToArray();\n\n// a rule passed to a generic routine\nFunction Apply(f, v) { return f(v); }\nvar doubled = Apply(Function(x) { return x * 2; }, 21);\n\n// a function that answers with a function\nvar adder = Function(n) { return Function(x) { return x + n; }; };\nvar add10 = adder(10);\nadd10(7);   // 17",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "guide.linq"
       ],
       "reviewed": true
     }

@@ -42,8 +42,6 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "backend/backend_core.h"
-#include "backend/clsid.h"
 #include "backend/compiler/value.h"   // a branch HOLDS its value, and holding it is owning it
 
 #include <wx/string.h>
@@ -70,6 +68,18 @@ enum class ibNameOrigin {
 	Bound,          // an export or local bind: RegisterRecords / Filter / DataSource / a constant's Value
 	Member,         // the object's own surface: its attributes and tabular sections
 	Inherited,      // exported by a module ABOVE this one in the descriptor chain
+
+	// ⭐⭐ A WORD OF THE LANGUAGE ITSELF, which is not a name of anything and so had no origin to
+	// come from. It is here because a query can be written entirely in keywords — `from o in X where
+	// … select …` — and a reader who is only ever offered NAMES has to already know the clause it is
+	// about to type. Max, 2026-09-08: *"so that every LINQ keyword can be used simply as a keyword"*
+	// — the keyword form is the intended way to write a query, not a sugar coating over the
+	// methods, so the completion has to know it as a first-class answer.
+	//
+	// ⚠ It says WHAT the entry is, in the same field that says where every other entry came from,
+	// because to a reader both answer one question: "may I write this here, and what is it?" The
+	// alternative — a second boolean beside the origin — would make every consumer ask twice.
+	Keyword,
 };
 
 // One name in scope. `m_local` is deliberately NOT an origin: origin says where the name came FROM,
@@ -198,5 +208,78 @@ BACKEND_API bool ibFieldTypesOf(const ibValueMetaObject* moduleObject, const ibV
 // list that suggests an error is worse than one that says nothing.
 BACKEND_API bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 	const ibValueMetaObject* moduleObject, std::vector<ibCaretName>& outNames);
+
+// ⭐⭐ WHAT THE COMPILER UNDERSTOOD ABOUT A QUERY — the third question off the same artefact.
+//
+// A LINQ query is not a call a reader can look up; it is a SHAPE: which names it binds and where
+// they came from, which columns the answer will have, whether it groups, whether it orders. All of
+// that is what the compiler works out while it reads the query, and since 2026-09-08 it KEEPS it —
+// the tree lives in the compiler's own bytecode (byteCodeLINQ.h) and is not part of the base type
+// the runtime and the AOT cache hold.
+//
+// Max, on why it is handed out: *"you can now build a LINQ query in context — build along it as
+// along a tree, you have everything now"*, and *"a model of access, so that we can write a query
+// constructor in LINQ later"*. Writing a query becomes READING what is already bound instead of
+// guessing at it.
+//
+// ⭐ IT LIVES HERE AND NOT BESIDE THE SYNTAX CHECK, because the half that makes it worth having is
+// the walk over the instructions that is already in this file. A binding is a cell of the tape; ask
+// the walk what fills that cell and the answer is a SAMPLE of the row — which is exactly what the
+// caret's own question asks one hop further along. Two doors, one machine, and neither can drift.
+struct ibQueryOutlineBinding {
+	wxString m_name;          // as the person wrote it
+	wxString m_origin;        // "from" · "let" · "join" · "group" · "restrict"
+	// The frame cell the row lives in — the same number the instructions carry. Declared as the
+	// operand's own width (`wxLongLong_t`, byteCode.h) rather than a `long`, so the number that
+	// travels is the number that was written.
+	wxLongLong_t m_rowCell = 0;
+
+	// ⭐⭐ WHAT THIS NAME OFFERS — the row's own fields, read by asking the source for a sample of
+	// what it yields, exactly as a `foreach` variable is answered after a dot. Empty when the source
+	// is not resolvable while designing (a platform call in the way, no configuration open), which
+	// is a smaller answer rather than a wrong one.
+	//
+	// ⚠ ALWAYS EMPTY FOR A `restrict`, and for a structural reason rather than a missing feature: a
+	// restriction's names are LAMBDA PARAMETERS — one set per clause — with no cell of the frame to
+	// resolve, and what fills them is decided by the pipeline verb that receives the lambda. The
+	// names, their origins and the text are what a restriction has to give, and it gives them.
+	std::vector<wxString> m_offers;
+};
+
+struct ibQueryOutline {
+	std::vector<ibQueryOutlineBinding> m_bindings;
+	std::vector<wxString>              m_columns;    // what the answer's table will be made of
+
+	// WHICH OF THE TWO THINGS THIS IS — a query, or a `restrict` that narrows one. Said outright
+	// rather than left to be inferred from "it has no columns", which is also true of a query the
+	// compiler stopped reading halfway.
+	bool     m_isRestrict      = false;
+
+	bool     m_groups          = false;
+	wxString m_groupInto;                            // empty unless `group … into <name>`
+	bool     m_orders          = false;
+	bool     m_orderDescending = false;
+
+	// ⭐⭐ AND THE QUERY ITSELF, as it was written — the exact stretch of text the compiler read to
+	// arrive at everything above, with the two character positions that bracket it.
+	//
+	// Structure alone cannot be written back out: "it filters" is not "it filters by this". So the
+	// text is not regenerated from the structure, it is HANDED BACK — the compiler noted where the
+	// query began and where it ended (byteCodeLINQ.h), and those numbers are what make editing a
+	// query and re-reading its shape one loop rather than two representations to keep in step.
+	wxString     m_text;
+	unsigned int m_textFrom = 0;
+	unsigned int m_textTo   = 0;
+};
+
+// The text is compiled and thrown away, the same way the two doors above compile it, and it is
+// compiled TOLERANTLY: somebody writing a query is mid-text by definition, and the queries read
+// before a refusal are still what the compiler understood.
+//
+// `metaData` is the configuration the snippet is judged inside — passed, never reached for, since
+// several can be open. Null answers about the bare language.
+BACKEND_API std::vector<ibQueryOutline> ibOutlineScriptQueries(const wxString& text,
+	const wxString& moduleName = wxT("module"),
+	const class ibMetaData* metaData = nullptr);
 
 #endif

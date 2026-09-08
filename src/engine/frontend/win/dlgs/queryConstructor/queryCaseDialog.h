@@ -30,7 +30,7 @@
 
 #include <vector>
 
-#include "backend/query/queryAst.h"
+#include "backend/query/queryAST.h"
 #include "backend/query/queryConstructorModel.h"
 
 #include "frontend/win/ctrls/dataview/dataview.h"

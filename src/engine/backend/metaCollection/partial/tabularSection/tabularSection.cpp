@@ -321,6 +321,7 @@ bool ibValueTabularSectionDataObjectRef::GetValueByMetaID(const ibDataViewItem& 
 
 ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::ibValueTabularSectionDataObjectReturnLine(ibValueTabularSectionDataObjectBase* ownerTable, const ibDataViewItem& line)
 	: ibValueModelReturnLine(line), m_ownerTable(ownerTable) {
+	HoldOwnerModel(ownerTable);   // the row speaks through the section; see the base
 	m_members.Bind(this, &ibValueTabularSectionDataObjectReturnLine::FillMembers);
 }
 

@@ -178,7 +178,7 @@ private:
 // query layer refused" still catches both with one handler.
 //
 // It replaces a classification that already existed and was written by hand: all 39 refusals in
-// procUnitLinq spelled a literal "LINQ: " prefix into their message. A prefix repeated at every
+// procUnitLINQ spelled a literal "LINQ: " prefix into their message. A prefix repeated at every
 // callsite is a type wearing a disguise — it cannot be caught, cannot be checked by the compiler,
 // and stays correct only as long as nobody forgets it.
 class BACKEND_API ibBackendQueryLinqException : public ibBackendQueryException

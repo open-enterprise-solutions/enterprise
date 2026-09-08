@@ -41,7 +41,7 @@
 
 #include "backend/backend.h"          // BACKEND_API
 #include "backend/compiler/value.h"   // ibValue
-#include "queryAst.h"                 // ibQueryDimUnfold - the three words, spelled once for both venues
+#include "queryAST.h"                 // ibQueryDimUnfold - the three words, spelled once for both venues
 
 // ⚠ NAMED, NOT INHERITED — MSVC hands these over transitively and GCC / Clang do not.
 // See docs/portability.md.

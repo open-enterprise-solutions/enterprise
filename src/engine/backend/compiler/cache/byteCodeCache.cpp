@@ -81,7 +81,6 @@ static wxString CacheKey(const wxString& configDigest)
 bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
 {
 	if (db_query == nullptr) return false;
-	if (!db_query->TableExists(bytecode_cache_table)) return false;
 
 	// Serialize first — if AOT writer rejects the bytecode (e.g. a
 	// non-primitive constant pool entry like TYPE_REFFER), we don't
@@ -100,6 +99,9 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
 	// connection, so there is no cross-connection isolation concern.
 	try {
 		ibDatabaseQueryBuilder q;
+		if (!q.TableExists(bytecode_cache_table))
+			return false;   // the same connection asks  see Load
+
 		// WEED THE PREVIOUS CONFIGURATIONS OUT, ONCE. Rows keyed on an older digest can never be found
 		// again — which is the whole point — but "never found" is not "gone". The table cannot GROW
 		// without bound (descriptor_id is its primary key, so one row per descriptor, and a recompile
@@ -155,7 +157,6 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
 bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxString& configDigest)
 {
 	if (db_query == nullptr) return false;
-	if (!db_query->TableExists(bytecode_cache_table)) return false;
 
 	wxASSERT(descId.isValid());
 
@@ -170,7 +171,24 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxStri
 		// the whole class of "somebody forgot the check" and makes a save self-invalidating: saving
 		// recomputes the configuration's digest, so every previously cached row falls out of reach in
 		// the same instant, without a single DELETE having to run first.
+		// ⭐⭐ THE TABLE CHECK RIDES THIS BUILDER, NOT `db_query`. Both ask the same question, but of
+		// DIFFERENT CONNECTIONS: the builder opens a scope and gets one of its own, while `db_query`
+		// with no transaction and no scope falls back to the pool's PRIMARY connection — the one
+		// every other thread without a scope also lands on (connectionPool.cpp, GetDatabaseLayer).
+		// Two threads then drive one connection: this one preparing `SELECT COUNT(*) FROM
+		// RDB$RELATIONS` while the lock sweeper finishes its own statement on the same handle.
+		//
+		// Measured twice on 2026-09-08, at the same instant in the journal both times — the sweeper
+		// deleting a dead session's `sys_lock` rows one millisecond before the failure:
+		//     [error] db.firebird  Error retrieving Next record
+		//     [warning] module     Common module init failed … invalid request handle
+		// and earlier, the same collision arriving as `invalid transaction handle`. The startup is
+		// exactly when it happens: modules are being compiled while the sweeper cleans up after a
+		// runtime that was killed rather than closed.
 		ibDatabaseQueryBuilder q;
+		if (!q.TableExists(bytecode_cache_table))
+			return false;
+
 		ibQueryIR ir(
 			ibProject(
 				ibFilter(
@@ -238,12 +256,14 @@ void ibByteCodeCache::Invalidate(const ibGuid& descId)
 		return;
 	}
 
-	if (!db_query->TableExists(bytecode_cache_table)) return;   // nothing cached yet — nothing stale
 
 	wxASSERT(descId.isValid());
 
 	try {
 		ibDatabaseQueryBuilder q;
+		if (!q.TableExists(bytecode_cache_table))
+			return;   // nothing cached yet, nothing stale; asked on THIS connection (see Load)
+
 		q.Execute(ibDelete(bytecode_cache_table,
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")),
 			        ibConst(ibValue(wxString(descId))))));
@@ -261,9 +281,11 @@ void ibByteCodeCache::Invalidate(const ibGuid& descId)
 void ibByteCodeCache::InvalidateAll()
 {
 	if (db_query == nullptr) return;
-	if (!db_query->TableExists(bytecode_cache_table)) return;
 	try {
 		ibDatabaseQueryBuilder q;
+		if (!q.TableExists(bytecode_cache_table))
+			return;   // see Load  the check belongs on the builder's own connection
+
 		q.Execute(ibDelete(bytecode_cache_table));   // no WHERE = all rows
 	}
 	catch (...) { /* best-effort */ }

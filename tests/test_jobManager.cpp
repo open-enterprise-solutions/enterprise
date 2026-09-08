@@ -14,7 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "backend/job/jobManager.h"
-#include "backend/compiler/procUnitValues.h"   // ibValueIterator — a session-bound value
+#include "backend/compiler/procUnitLambda.h"   // ibValueIterator — a session-bound value
 #include "backend/backend_exception.h"         // ibBackendException — what the gate throws
 
 // ---------------------------------------------------------------------------

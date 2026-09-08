@@ -923,6 +923,27 @@ bool ibMcpServer::Start(ibSession* session, wxString& refusal)
 
 void ibMcpServer::Stop()
 {
+	// 🛑 OFF THE METADATA FIRST, AND BEFORE THE `IsRunning` GATE. The bridge holds a bare pointer to
+	// the configuration it watches, and the process tears down in the other order:
+	// `~ibApplicationData` destroys `m_activeMetaData` (it needs db_query on the way out, so it goes
+	// early) and reaches `m_mcpServer` several fields later — where the bridge's own destructor
+	// called `RemoveNotifier` on a vector that had been freed, and the designer died on every exit
+	// with a configuration open (crash dump 2026-09-08 09:43, `_Adopt_unlocked` inside
+	// `ibMetaData::RemoveNotifier`).
+	//
+	// The subscription comes off HERE because this is the pre-dtor hook `~ibApplicationData` already
+	// calls first (step 0), while everything the server points at is still alive — the same
+	// arrangement the file's teardown contract uses for every other subsystem. Unconditional and
+	// idempotent: the server can be watching a configuration while switched off, so the gate below
+	// must not be able to skip it.
+	//
+	// ⚠ The third instance this week of an owner outlived by a bare back-pointer (the value table's
+	// row, its column collection, and now this). Where the owner cannot hold the watcher and the
+	// watcher cannot hold the owner, someone has to SAY GOODBYE — and it must be said at a moment
+	// that is reached on every road, not only the tidy one.
+	if (m_metaBridge != nullptr)
+		m_metaBridge->Watch(nullptr);
+
 	if (!IsRunning())
 		return;
 

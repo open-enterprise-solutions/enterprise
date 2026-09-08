@@ -30,9 +30,9 @@
         "common_lang",
         "linq"
       ],
-      "signature": "from <item> in <source> [where ...] [orderby ...] [group ... by ... [into ...]] select ...",
-      "description": "LINQ — встроенные в язык запросы к коллекциям в памяти. Два параллельных синтаксиса компилируются в одни и те же примитивы.\n\n**Блочный синтаксис** (eager): `from <var> in <source>` открывает запрос; затем клаузы `where / var / orderby [asc|desc] / group X by K [into g] / join b in Y on a.K equals b.K / skip N / take N / distinct`; закрывается `select <expr>` или `select { F = expr, ... }`. Сразу материализуется в Array.\n\n**Чейн-синтаксис** (lazy): `arr.Where(λ).Select(λ).Distinct().Take(10).ToArray()`. Доступно 31 операция — конвейерные (Where / Select / Distinct / OrderBy / OrderByDescending / GroupBy / Join / Skip / Take / SkipWhile / TakeWhile / Reverse / Concat / Union / Intersect / Except / WhereIndexed / SelectIndexed), терминальные (Count / ToArray / First / Last / Single / Any / ElementAt / Contains / SequenceEqual / Aggregate плюс *OrDefault варианты), агрегации (Sum / Min / Max / Average — опционально с лямбда-селектором).\n\nЛямбды захватывают локальные переменные внешнего scope: `var k = 5; arr.Where(Function(x) { return x > k; })`.\n\nLINQ-ключевые слова компилируются одинаково в режимах CES и VES.",
-      "syntax_block": "var q = from o in orders\n        where o.Total > 100\n        var doubled = o.Total * 2\n        orderby o.Date descending\n        select { N = o.N, V = doubled };",
+      "signature": "from <item> in <source> [where ...] [orderby K1[, K2...] [ascending|descending]] [group ... by ... [into ...]] select ...",
+      "description": "LINQ — встроенные в язык запросы к коллекциям в памяти. Два параллельных синтаксиса компилируются в одни и те же примитивы.\n\n**Блочный синтаксис** (eager): `from <var> in <source>` открывает запрос; затем клаузы `where / var / orderby K1[, K2...] [asc|desc] / group X by K [into g] / join b in Y on a.K equals b.K / skip N / take N / distinct`; закрывается `select <expr>` или `select { F = expr, ... }`. Сразу материализуется в Array.\n\n**Чейн-синтаксис** (lazy): `arr.Where(λ).Select(λ).Distinct().Take(10).ToArray()`. Доступно 31 операция — конвейерные (Where / Select / Distinct / OrderBy / OrderByDescending / GroupBy / Join / Skip / Take / SkipWhile / TakeWhile / Reverse / Concat / Union / Intersect / Except / WhereIndexed / SelectIndexed), терминальные (Count / ToArray / First / Last / Single / Any / ElementAt / Contains / SequenceEqual / Aggregate плюс *OrDefault варианты), агрегации (Sum / Min / Max / Average — опционально с лямбда-селектором).\n\nЛямбды захватывают локальные переменные внешнего scope: `var k = 5; arr.Where(Function(x) { return x > k; })`.\n\nLINQ-ключевые слова компилируются одинаково в режимах CES и VES.",
+      "syntax_block": "var q = from o in orders\n        where o.Total > 100\n        var doubled = o.Total * 2\n        orderby o.Warehouse, o.Date descending\n        select { N = o.N, V = doubled };",
       "parameters": "",
       "return_descr": "Массив выбранных строк (блочный синтаксис) или ленивый итератор (чейн-синтаксис).",
       "example": "// чейн-синтаксис — ленивый конвейер\nvar bigOnes = arr.Where(Function(x) { return x > 5; })\n                 .OrderByDescending(Function(x) { return x; })\n                 .Take(10)\n                 .ToArray();\n\n// агрегации с лямбда-селектором\nvar total = arr.Sum();\nvar avgK  = arr.Average(Function(x) { return x.K; });\n\n// group-into continuation\nvar pairs = from p in people\n            group p.Name by p.Country into g\n            where g.Values.Count() > 1\n            select { Country = g.Key, Names = g.Values };",
@@ -44,6 +44,28 @@
         "kw.OrderBy",
         "kw.Join",
         "kw.Group"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "guide.lambda",
+      "name_local": "Лямбды — функции как значения (колбэк, обработчик)",
+      "name_en": "Lambdas — functions as values (callback, handler)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "var <имя> = Function([<Параметр1>, ...]) { <тело> Return <значение>; };",
+      "description": "ФУНКЦИЯ МОЖЕТ БЫТЬ ЗНАЧЕНИЕМ. Запись `Function(x) { return x * 2; }` там, где ожидается значение, даёт вызываемое: его можно сохранить, передать, вернуть и вызвать позже. Ключевое слово то же, что и у объявления; значением её делает позиция.\n\nДЛЯ ЧЕГО ОНИ — три задачи, и если вы в одной из них, значит нужна лямбда:\n\n1. КОЛБЭК — работа, отданная другому: `arr.Where(Function(x) { return x > k; })`. Коллекция сама решает, КОГДА и с чем вызвать; вы говорите только, что делать с одним элементом.\n\n2. ОБРАБОТЧИК СОБЫТИЯ — поведение, привязанное к тому, что произойдёт позже, без объявления отдельной именованной процедуры.\n\n3. ПРАВИЛО, ПЕРЕДАННОЕ АРГУМЕНТОМ — сравнение, отбор, проекция для процедуры, которая иначе была бы жёсткой: `Function Apply(f, v) { return f(v); }`.\n\nОНИ ПОМНЯТ МЕСТО, ГДЕ НАПИСАНЫ (замыкание). Лямбда читает окружающие переменные — и процедуры, и модуля — причём В МОМЕНТ ВЫЗОВА, а не написания:\n\n    var n = 1;\n    var f = Function(x) { return x + n; };\n    n = 100;\n    f(0)   // 100\n\nОдноимённый параметр перекрывает захваченную переменную, внешнее значение остаётся нетронутым.\n\nВЫЗОВ ЛЯМБДЫ ИЗ КОНТЕЙНЕРА — ТОЛЬКО ЧЕРЕЗ ПЕРЕМЕННУЮ: `s.f(1)` и `a[0](1)` не компилируются, а `var g = s.f; g(1)` — да.\n\n⚠ НЕ БЕРИТЕ ЛЯМБДУ ТАМ, ГДЕ КЛАУЗА КОРОЧЕ. Отбор, проекция, сортировка и группировка коллекции пишутся КЛЮЧЕВЫМИ СЛОВАМИ, и каждая лямбда, которая была бы для этого нужна, — лишний текст:\n\n    from x in arr where x > limit select x                      // коротко\n    arr.Where(Function(x) { return x > limit; }).ToArray()      // то же самое, вдвое длиннее\n\nЛямбды берегите для трёх задач выше — колбэк, обработчик, правило, отданное другому. Порядок клауз — в guide.linq.",
+      "syntax_block": "var <имя> = Function([<Параметр1>, ...]) { <тело> Return <значение>; };",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// колбэк для конвейера\nvar limit = 3;\nvar big = arr.Where(Function(x) { return x > limit; }).ToArray();\n\n// правило, переданное аргументом\nFunction Apply(f, v) { return f(v); }\nvar doubled = Apply(Function(x) { return x * 2; }, 21);\n\n// функция, отвечающая функцией\nvar adder = Function(n) { return Function(x) { return x + n; }; };\nvar add10 = adder(10);\nadd10(7);   // 17",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "guide.linq"
       ],
       "reviewed": true
     }

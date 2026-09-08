@@ -8,16 +8,13 @@
 
 #include "backend/tabularModelView.h"
 
-#include "backend/system/value/valueType.h"
 
 #include "backend/standardCommand.h"
-#include "backend/sourceDescription.h"   // ibSourceDescription — the command context carries a COLUMN, and a column IS one
 #include "backend/tabularDataObject.h"   // ibTabularDataObject — ibValueModel IS one (the table hop gate)
 
 // L5-1 declarative composer — held BY VALUE (mutable ibDataDBComposer m_composer). The cycle that used to
 // force a forward-decl + unique_ptr (dataComposer.h → queryLowering.h → queryable.h → tabularModel.h) is
 // broken: queryable.h now takes ibComparisonType/ibMetaID from tabularModelView.h (above), NOT tabularModel.h.
-#include "backend/composition/dataComposer.h"
 #include "backend/composition/ramComposer.h"   // ibDataRamComposer — ibValueModelStorage holds one BY VALUE
 
 // L3 Selector tree (folded from a flat snapshot) — mirrored into the RAM tree model by
@@ -375,11 +372,19 @@ public:
 
 			virtual void SetColumnWidth(int width) {};
 
+			// Whether this column asks to be INDEXED — a lookup structure keyed by its cells, so a
+			// search on it stops scanning. Most columns of most models cannot carry one (a column
+			// over a database source is indexed by the DATABASE), so the base answers "no" and the
+			// value table, which owns its rows in RAM, is the one that says otherwise.
+			virtual bool IsColumnIndexed() const { return false; }
+			virtual void SetColumnIndexed(bool /*on*/) {}
+
 			ibValueModelColumnInfo();
 			virtual ~ibValueModelColumnInfo();
 
 			void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 			virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
+			virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 		};
 	public:
 
@@ -451,6 +456,32 @@ public:
 			wxRefCounter* refCounter = static_cast<wxRefCounter*>(m_lineItem.GetID());
 			if (refCounter != nullptr)
 				refCounter->DecRef();
+			if (m_heldOwner != nullptr)
+				m_heldOwner->DecrRef();
+		}
+
+		// ⭐⭐ A ROW HOLDS ITS MODEL, exactly as it already holds its LINE two lines up. Everything a
+		// row answers is answered BY the model — its columns, its values, its select value — and
+		// every one of the redirects below dereferences GetOwnerModel() with no guard, because a
+		// model that has gone is not a state this class can represent.
+		//
+		// 🛑 IT WAS A BARE BACK-POINTER, and that is a use-after-free the moment a row outlives the
+		// model: measured 2026-09-08 from a crash dump. `t = New Table(); foreach (row in t) { row.`
+		// made the completion walk build a sample row over a TEMPORARY table; the table died with
+		// the step, and the first question to the row walked a freed column vector. It crashed the
+		// designer from the editor as readily as from the tool.
+		//
+		// The line's own refcount does NOT cover this: `IsLineAttached` says the row left the model,
+		// which is an ordinary state (Clear/Remove) and is guarded. A model that no longer EXISTS is
+		// a different fact, and holding it is the only honest answer — a row is not a weak view.
+		void HoldOwnerModel(ibValue* owner) {
+			if (m_heldOwner == owner)
+				return;
+			if (m_heldOwner != nullptr)
+				m_heldOwner->DecrRef();
+			m_heldOwner = owner;
+			if (m_heldOwner != nullptr)
+				m_heldOwner->IncrRef();
 		}
 
 		// True iff the cached line still refers to a row attached to
@@ -526,6 +557,12 @@ public:
 
 	protected:
 		ibDataViewItem m_lineItem;
+
+	private:
+		// The model this row speaks through, held (see HoldOwnerModel). Typed as ibValue because the
+		// only thing wanted here is its lifetime; the TYPED pointer stays with the subclass that
+		// knows which model it is.
+		ibValue* m_heldOwner = nullptr;
 	};
 
 public:
@@ -1757,6 +1794,61 @@ public:
 	ibRamValueStorage&       Storage()       { return m_storage; }
 	const ibRamValueStorage& Storage() const { return m_storage; }
 
+	// ⭐⭐ AN INDEX BELONGS TO WHOEVER HOLDS THE ROWS — and that is THIS class, not any one of the
+	// three things built on it. A value table, a tabular section and a register's record set all
+	// keep their rows here, in `m_storage`, and all three are searched by a cell; an index living on
+	// only one of them is the same mechanism owed to the other two.
+	//
+	// So the index is maintained AT THE TOP and what each place decides is only whether it is ready
+	// to use one (Max, 2026-09-08). The decision is a COLUMN'S — `IsColumnIndexed()`, which the base
+	// column info answers `false` to and an indexable column overrides — so a model that has not
+	// thought about indexing pays exactly nothing: no map is created and no pass is made.
+	//
+	// WHAT AN INDEX IS: a map from a column's CELL to the rows holding it. Ordered rather than
+	// hashed, because ibValue already has a TOTAL order (value.cpp, Compare — written so that
+	// std::map over ibValue is well-defined) while it has no hash at all; ordered also leaves range
+	// lookups open without a second structure. Multi, because a column is not a key: equal cells are
+	// ordinary.
+	//
+	// ⭐⭐ AND IT KNOWS IT IS STALE BY A NUMBER THAT ALREADY EXISTS. The model keeps a monotonic
+	// change counter — `BumpViewGeneration`, bumped by every row and cell mutation because the view
+	// has to re-fetch on each — so the index needs no invalidating from the outside at all: it
+	// remembers the generation it was built at and rebuilds when that has moved.
+	//
+	// That is the whole difference between this and an index with a `MarkStale` on every mutator:
+	// there is no call site to forget. A stale index that is still consulted is worse than no index,
+	// and the only way to be sure is not to depend on somebody remembering.
+	class BACKEND_API ibColumnIndex {
+	public:
+		// Builds on first use and whenever the model has changed since. One pass, no incremental
+		// maintenance — a rebuild is O(rows) and a wrong answer is unbounded.
+		void EnsureBuilt(const ibValueModelStorage* model, unsigned int columnID);
+
+		// Every row whose cell equals `value`, in row order; null when there is none.
+		const std::vector<ibDataViewItem>* Rows(const ibValue& value) const;
+
+	private:
+		std::map<ibValue, std::vector<ibDataViewItem>> m_rows;
+		uint32_t m_builtAt = 0;
+		bool     m_built = false;
+	};
+
+	// THE LOOKUP, asked of the model rather than reached for. Every row whose `columnID` cell equals
+	// `value`, in row order — null when there is none. The caller decides WHETHER to ask (its column
+	// declared an index); this decides nothing and only answers.
+	const std::vector<ibDataViewItem>* GetRowsByValue(unsigned int columnID, const ibValue& value) const {
+		ibColumnIndex& index = m_columnIndexes[columnID];
+		index.EnsureBuilt(this, columnID);
+		return index.Rows(value);
+	}
+
+	// The FIRST row in row order whose cell equals `value` — the row a scan would have stopped on.
+	// Empty item when there is none.
+	ibDataViewItem GetRowByValue(unsigned int columnID, const ibValue& value) const {
+		const std::vector<ibDataViewItem>* const rows = GetRowsByValue(columnID, value);
+		return rows != nullptr && !rows->empty() ? rows->front() : ibDataViewItem(nullptr);
+	}
+
 	// ⭐ THE ROW-ORDER VERBS — move a row by hand, or order the rows by the column the cursor is on. THE
 	// WORK LIVES HERE, on the RAM base, and only the work: every table that owns its rows declares those
 	// commands itself, head-on, in its OWN enum and its OWN switch, and the case bodies call straight down
@@ -1804,6 +1896,12 @@ public:
 protected:
 	mutable ibRamValueStorage m_storage;      // OWNS the live nodes (the RAM source — the queryable analog)
 	mutable ibDataRamComposer  m_composer;    // the RAM composer (sources from m_storage; NO queryable)
+
+	// One index per column that has been ASKED for one, keyed by the column's id — so a model whose
+	// columns declare no index carries an empty map and nothing else. Mutable because a lookup is a
+	// const question that may have to build its own answer, the same reason the member table's name
+	// index is mutable (value.h).
+	mutable std::map<unsigned int, ibColumnIndex> m_columnIndexes;
 };
 
 // The universal fetch row — nested in the abstract base, surfaced as a plain name (DB copies, RAM live rows,

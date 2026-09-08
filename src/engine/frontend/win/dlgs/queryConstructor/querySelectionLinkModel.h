@@ -24,7 +24,7 @@
 #include "frontend/win/ctrls/dataview/dataview.h"
 #include "queryLinkModel.h"                     // the column ids — one grid shape, one set of ids
 
-#include "backend/query/queryAst.h"
+#include "backend/query/queryAST.h"
 
 #include <functional>
 

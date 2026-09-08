@@ -7,7 +7,6 @@
 #include "backend/tabularModel.h"
 #include "backend/picturePredefined.h"                 // g_pic*CLSID — this model emits its own standard command icons
 #include "backend/srcDataObject.h"                    // ibSourceDataObject / ibSourceExplorer — the table IS a form data source
-#include "backend/query/queryColumn.h"                 // ibBackendSourceColumn — a RAM column IS its own source-column presentation (header/type via the explorer)
 #include "backend/propertyManager/propertyManager.h"  // ibPropertyObject / ibPropertyUString / ibPropertyType — columns surface / persist AND edit with the form attribute
 #include "backend/stringUtils.h"                       // stringUtils::GenerateSynonym — Caption-empty header fallback (mirror ibFormAttribute)
 
@@ -39,6 +38,13 @@ private:
 		enDelete,
 		enClear,
 		enSort,
+		// ⭐⭐ THE VERB THAT LETS A RESULT ALWAYS BE A TABLE. Max, 2026-09-07: the more shapes a
+		// pipeline can hand back, the likelier a caller guesses wrong — so a scalar, a reference and
+		// a total are all a TABLE (of one column), and the bare values come out by an EXPLICIT ask.
+		// Without this verb there is no way to make that trade, which is why it is the first half of
+		// "one return type": a table describes its columns ONCE instead of hashing every column name
+		// into every row, and it says what it holds (`Columns`) instead of being guessed at.
+		enUnloadColumn,
 	};
 	//attributes:
 	enum Prop {
@@ -87,6 +93,14 @@ public:
 			virtual int GetColumnWidth() const { return m_columnWidth; }
 			virtual void SetColumnWidth(int width) { m_columnWidth = width; }
 
+			// ⭐⭐ AN INDEX IS DECLARED ON THE COLUMN, because the column is what it is about — the same
+			// place a catalog attribute declares `Indexing`, so the vocabulary a person already knows
+			// carries over. It is a REQUEST, not the index: the table builds one lazily on first use
+			// and drops it when the rows change, so declaring it on a table nobody searches costs an
+			// allocation that never happens.
+			virtual bool IsColumnIndexed() const { return m_propertyIndexed->GetValueAsBoolean(); }
+			virtual void SetColumnIndexed(bool on) { m_propertyIndexed->SetValue(on); }
+
 			// --- ibPropertyObject — inspector identity. GetClassName resolves through the registered clsid
 			// (VL_TVCLI) and DISAMBIGUATES the two same-name bases (ibValue + ibPropertyObject). --------------
 			virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
@@ -134,6 +148,7 @@ public:
 			ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("Column name"), wxT(""));
 			ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Caption"), _("Caption"), _("Column caption (header)"), wxT(""));
 			ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, wxT("Type"), _("Type"), ibValueTypes::TYPE_STRING);
+			ibPropertyBoolean* m_propertyIndexed = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryCommon, wxT("Indexing"), _("Indexing"), _("Keep a lookup index on this column, so Find and an equality search stop scanning"), false);
 
 			friend ibValueModelTableColumnCollection;
 		};
@@ -143,10 +158,19 @@ public:
 		ibValueModelTableColumnCollection(ibValueModelTable* ownerTable = nullptr);
 		virtual ~ibValueModelTableColumnCollection();
 
+		// Called by the table as it goes: see the destructor. Afterwards this collection still
+		// ANSWERS — its columns are its own — but it no longer speaks for a table.
+		void DetachOwnerTable() { m_ownerTable = nullptr; }
+
 		ibValueModelColumnInfo* AddColumn(const wxString& colName,
 			const ibTypeDescription& typeData,
 			const wxString& caption,
 			int width = wxDVC_DEFAULT_WIDTH) override {
+
+			// Adding a column WRITES a cell into every existing row, so it needs the table. Without
+			// one there is nothing to add a column to, and saying so beats dereferencing.
+			if (m_ownerTable == nullptr)
+				return nullptr;
 
 			unsigned int max_id = 0;
 
@@ -172,6 +196,10 @@ public:
 		}
 
 		virtual void RemoveColumn(unsigned int col) {
+
+			// Same reason as AddColumn: dropping a column erases a cell from every row.
+			if (m_ownerTable == nullptr)
+				return;
 
 			for (long row = 0; row < m_ownerTable->GetRowCount(); row++) {
 				ibComposerNode* node = m_ownerTable->GetViewData<ibComposerNode>(m_ownerTable->GetItem(row));
@@ -236,6 +264,11 @@ public:
 
 public:
 
+	// ⚠ THE INDEX ITSELF IS NOT HERE ANY MORE — it belongs to every model that holds its rows in
+	// memory, not to the value table alone (`ibValueModelStorage::ibColumnIndex`, tabularModel.h).
+	// What is left on this side is the DECISION: this column declared `Indexing`, so ask the index;
+	// that column did not, so scan.
+
 	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const;
 
 	virtual bool AutoCreateColumn() const { return true; }
@@ -248,10 +281,20 @@ public:
 		return new ibValueModelTableReturnLine(this, GetItem(line));
 	}
 
+	// 🛑 THE ROW IS ALREADY IN HAND — DO NOT GO LOOKING FOR IT. This used to answer by turning the
+	// ITEM into an index (`GetRow` → `IndexOf`, a linear scan of every row in the table) and the
+	// index straight back into the same item. A search, and a round trip, for something the caller
+	// had passed in.
+	//
+	// It is on the hot path: script iteration asks for one row at a time (tabularModel.cpp, the
+	// paged iterator), so the scan ran once per row and made every walk over a table quadratic.
+	// Measured on this base, 2026-09-08, with a 20 000-row answer: `foreach` over it took TWELVE
+	// SECONDS and `Count()` eleven; at 50 000 rows it was seventy. The rows were built in under a
+	// second — all of it was this.
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) {
 		if (!line.IsOk())
 			return nullptr;
-		return GetRowAt(GetRow(line));
+		return new ibValueModelTableReturnLine(this, line);
 	}
 
 	// ibSourceDataObject hop gate. Set: many rows, no single cell -> no-op.

@@ -251,6 +251,17 @@ bool ibByteCode::FindCaret(ibCaretPoint& point) const
 
 	point.m_instruction = -1;
 
+	// ⭐⭐ IF THE COMPILE CLAIMED AN INSTRUCTION FOR THIS CARET, THAT IS THE ANSWER. It knew while it
+	// was standing on the dot; the scan below can only guess afterwards, and where an unfinished
+	// construct closes itself the guess is not merely uncertain but impossible — see
+	// m_numCaretInstruction.
+	if (m_numCaretInstruction >= 0 && m_numCaretInstruction < (long)m_listCode.size()) {
+		point.m_instruction = m_numCaretInstruction;
+		return true;
+	}
+
+	long best = -1;
+
 	for (size_t ip = 0; ip < m_listCode.size(); ++ip) {
 
 		const ibByteUnit& code = m_listCode[ip];
@@ -265,8 +276,23 @@ bool ibByteCode::FindCaret(ibCaretPoint& point) const
 		if (code.m_numString == 0 && ip > 0)
 			continue;
 
+		// 🛑 NOT `break` — AND THAT ONE WORD COST EVERY CARET INSIDE A QUERY.
+		//
+		// Stopping at the first instruction past the caret assumes the tape is emitted in TEXT
+		// ORDER, which is true of an ordinary statement and false of everything this compiler does
+		// out of order: the LINQ block road reads its clauses by moving the cursor, the chain road
+		// parks a position and replays the span later, a join's trampoline is emitted after the loop
+		// it belongs inside. So an instruction written EARLY can carry a LATE position, the scan
+		// stopped on it, and the caret's own instruction — sitting further down the list — was never
+		// reached. Measured 2026-09-08 with the caret battery: `o.` after a dot ANYWHERE inside a
+		// query or a lambda body answered with nothing, while the same question one statement later
+		// answered correctly. That was the entire difference.
+		//
+		// The answer wanted is the LAST instruction at or before the caret, and finding it costs one
+		// pass whether or not the positions rise. The `break` was an optimisation that quietly
+		// encoded an assumption the compiler had already stopped keeping.
 		if (code.m_numString > point.m_position)
-			break;
+			continue;
 
 		// ⭐⭐ A BOUNDARY IS WHERE CODE ENDS, NOT WHERE A CARET STANDS. The module's closing marker
 		// carries the END of the text as its position and has no destination at all, so answering
@@ -277,8 +303,12 @@ bool ibByteCode::FindCaret(ibCaretPoint& point) const
 		if (boundary)
 			continue;
 
-		point.m_instruction = (long)ip;
+		// THE NEAREST ONE FROM BELOW, and among equals the LAST written: an attribute step is
+		// emitted after the receiver it reads, and both carry the position of the same token.
+		if (best < 0 || code.m_numString >= m_listCode[(size_t)best].m_numString)
+			best = (long)ip;
 	}
 
+	point.m_instruction = best;
 	return true;
 }

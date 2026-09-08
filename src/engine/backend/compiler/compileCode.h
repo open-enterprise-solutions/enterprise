@@ -135,8 +135,11 @@ public:
 	//attributes:
 	bool m_onlyFunction; // true - only functions and export functions
 
-	// current context of variables, functions and labels
-	ibByteCode		m_cByteCode;        // output array of bytecodes for execution by the virtual machine
+	// ⭐⭐ THE COMPILER'S FORM, and this declaration is the whole of what makes it one. `ibByteExtCode`
+	// IS an `ibByteCode` plus the tree (byteCode.h): everyone downstream — the runtime, the AOT
+	// cache, the binder — takes the base type and therefore cannot reach the tree at all, while the
+	// compiler, which builds it, is the only one who names it.
+	ibByteExtCode		m_cByteCode;        // output array of bytecodes for execution by the virtual machine
 
 	ibCompileContext* m_rootContext; // root context 
 
@@ -310,6 +313,48 @@ protected:
 
 	void AddLineInfo(ibByteUnit& code);
 
+	// ⭐⭐ THE FIVE VERBS THIS COMPILER NAMES ITS METHODS WITH, and what each one PROMISES. Written
+	// down because it had drifted twice: a `Compile…` that emitted nothing, and an `Emit…` beside a
+	// `Compile…` doing the same job one level apart. A reader who cannot tell them apart has to open
+	// each one to find out what it does to the cursor and to the tape.
+	//
+	// The distinction is NOT "does it read tokens" — all but the last do. It is WHO DECIDED, and
+	// WHAT COMES BACK:
+	//
+	//   Compile<X>  the construct is RECOGNISED HERE, at the cursor, from the stream. This function
+	//               owns the decision that this is an X, consumes it, and puts it on the tape.
+	//               CompileIf · CompileForeach · CompileLinqExpression · CompileLambdaExpression.
+	//
+	//   Emit<X>     the CALLER already decided there is an X and where it is; this lays its
+	//               instructions down. It may still read the tokens — the decision moved, not the
+	//               reading — and it may answer with the cell the value landed in.
+	//               EmitFunctionBody · EmitLambdaBody · EmitRestrictBody · EmitLinqChainClauses.
+	//
+	//   Get<X>      the EXPRESSION GRAMMAR: the product is an OPERAND for the caller to use.
+	//               GetExpression · GetCurrentIdentifier · GetCallFunction · GETIdentifier.
+	//
+	//   Try<X>      a GATE: looks at what follows, and true means THIS ROAD TOOK IT — the tokens are
+	//               consumed and the caller is done. Nothing is put on the tape here; the road that
+	//               claimed it emits later. The name is the tree's own for this contract
+	//               (ibValueQueryable::TryJoinThroughL3, TryFoldTotalsInDbms).
+	//               TryFoldLinqChainSource.
+	//
+	//   Find<X>     a LOOK-UP that answers with a position or a handle and moves NOTHING — not the
+	//               cursor, not the tape. It may be asked before a thing is read, which is usually
+	//               the only moment its answer is of any use. The word is the tree's own for this
+	//               (ibByteCode::FindVariable / FindFunctionByEntry).
+	//               FindConst · FindForeachHeaderEnd · (file-static) FindLinqChain.
+	//
+	//   Parse<X>    reads and fills structures, and puts NOTHING on the tape.
+	//               ParseFunctionSignature.
+	//
+	//   Add<X>      one instruction, from data already in hand. Reads no tokens.
+	//               AddTypeSet · AddLineInfo.
+	//
+	// ⚠ The test is mechanical and worth applying to a new name: does the body contain a single
+	// `m_listCode.emplace_back`? Every `Compile…` in this class does — the one that did not was
+	// misnamed, and it is now the `Try…` above.
+
 	bool CompileModule();
 	bool CompileFunction(ibCompileContext* context);
 
@@ -375,10 +420,9 @@ protected:
 	// deepest level. On unwind each level emits its own OPER_NEXT_ITER
 	// + back-patches.
 	//
-	// LINQ block compile state lives on ibCompileContext::m_linqData
-	// (non-owning pointer at a stack-allocated struct owned by
-	// CompileLinqExpression). CompileLinqBlock reads from the linq
-	// context's m_linqData — no extra parameter needed.
+	// The query being compiled lives in the BYTECODE (ibByteExtCode::m_listLinq); the LINQ scope
+	// only names it through ibCompileContext::m_linqQuery, so CompileLinqBlock reads it from the
+	// context it is given — no extra parameter needed.
 	ibParamUnit CompileLinqExpression(ibCompileContext* context);
 
 	// Access-policy restriction (RLS query patch) —
@@ -405,13 +449,61 @@ protected:
 	// are shared between the two entries.
 	void CompileLinqBlock(ibCompileContext* linqCtx);
 	void CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBinding& preBound);
+
+	// ⭐⭐ THE CHAIN SYNTAX, COMPILED THE WAY THE BLOCK SYNTAX ALREADY IS — as a LOOP.
+	//
+	// `src.Where(Function(x){ return P; }).Count()` and `from x in src where P` are the same
+	// question, and until now they compiled to two different things: the block to
+	// OPER_FOREACH + OPER_IF + OPER_NEXT_ITER — ordinary instructions with ordinary branching —
+	// and the chain to a row of OPER_CALL_LINQ that builds C++ state objects and calls a lambda
+	// VALUE once per row, paying a frame, an argument binding and a virtual step for each one
+	// (measured: 1.31x a loop written by hand). The loop was never missing; the chain simply did
+	// not take it.
+	//
+	// So this is not a new machine — it is the same one, entered from the other syntax. The
+	// lambda's parameter becomes the loop's binding: an ordinary local of the enclosing frame,
+	// chosen by the compiler. Nothing is captured, because there is nothing to capture from; no
+	// frame is built, because the body is not a call.
+	//
+	// Called with the receiver already in hand and BEFORE the dot is consumed. Answers false for
+	// anything outside the slice it is sure of — a lambda that is not written inline, a body that
+	// is not one `return <expr>`, a verb it does not compile, a chain that does not end in a
+	// terminal — and the caller then emits the ordinary OPER_CALL_LINQ, which is always correct.
+	bool CompileLinqChain(ibCompileContext* context, const ibParamUnit& receiver,
+	                               ibParamUnit& outResult);
+
+	// Everything a chain IS lives in the lexemes and, once emitted, in the instructions. The reading
+	// of it — link spans, whether the lambdas are written here, whether it may leave the door — is
+	// file-static in compileCodeLINQ.cpp, because none of it is state and none of it is anyone
+	// else's business. Declaring it here would put a struct and four signatures into a header the
+	// whole tree includes, for a thing that lives for one statement — and it is also what let the
+	// LINQ half move to a file of its own without opening anything.
+
+	// Called from the postfix walker with the receiver in hand and BEFORE the dot is consumed.
+	// True = the links are parked and the chain's tokens are consumed, so the caller keeps the
+	// RECEIVER as the value of the expression; the verbs are emitted later, inside the loop.
+	bool TryFoldLinqChainSource(ibCompileContext* context, const ibParamUnit& receiver);
+
+	// Emit the parked verbs into the body of a foreach that has just been opened, and answer with
+	// the `Where` jumps that still need the address of the next iteration. `rowSlot` is the loop's
+	// own variable — a `Select` writes the projection straight back into it, which is what makes
+	// the body see the projected value under the name the person wrote.
+	void EmitLinqChainClauses(ibCompileContext* context, const ibParamUnit& rowSlot,
+	                           std::vector<int>& outSkipIps);
+
+	// The body of a lambda that is becoming somebody else's instructions. Cursor just before the
+	// body's `{`; leaves it on the matching `}`; answers with the cell the body's value is in. One
+	// `return <expr>` compiles to exactly what it always did; anything wider goes through
+	// CompileBlock with a return-capture (ibReturnCapture, compileContext.h). `outSingleReturn`
+	// reports which — a filter is only offered to its source when the body is one expression.
+	ibParamUnit EmitLambdaBody(ibCompileContext* context, bool* outSingleReturn = nullptr);
 	// JOIN lookup emit — KEY_JOIN already consumed by caller. Parses
 	// `b in T on K1 equals K2`, binds b, emits per-iter lookup + a
 	// placeholder OPER_GOTO to the (yet-unemitted) trampoline, pushes
 	// an ibLinqPendingJoin into the caller-owned `pendingJoins` vector.
 	// Trampoline is emitted after THIS level's NEXT_ITER by the
 	// matching CompileLinqBlock call. Local-per-level vector (not
-	// stored on ibLinqContextData) so nested from-levels don't share
+	// stored on ibLinqQuery) so nested from-levels don't share
 	// pending-trampoline state — each level emits trampolines for its
 	// own joins only.
 	void CompileLinqJoin(ibCompileContext* linqCtx,
@@ -451,11 +543,89 @@ protected:
 
 private:
 
+	// ⭐ ARMED FOR EXACTLY ONE SOURCE READ, AND DISARMED ON EVERY EXIT — a raise out of the source
+	// expression included. It used to be two bare assignments around the read, and a refusal between
+	// them left the compiler armed: `Reset()` does not clear compile-time scratch, so a REUSED
+	// compiler (Recompile, the designer rebuilding a module) would claim the first chain it met
+	// anywhere in the next module — consuming its verbs from the token stream and emitting none of
+	// them, which is a `Where` that silently disappears.
+	//
+	// The house already answers this shape the same way (ibBackendException::ibEvalModeScope): a
+	// thing that must be true for exactly one act is a scope, not a pair of assignments.
+	class ibLinqSourceScope {
+	public:
+		ibLinqSourceScope(ibCompileCode* owner, int closerAt)
+			: m_owner(owner) {
+			m_owner->m_numLinqSourceEnd = closerAt;
+			m_owner->m_numLinqChainAt   = -1;
+		}
+		~ibLinqSourceScope() { m_owner->m_numLinqSourceEnd = -1; }
+
+		ibLinqSourceScope(const ibLinqSourceScope&) = delete;
+		ibLinqSourceScope& operator=(const ibLinqSourceScope&) = delete;
+	private:
+		ibCompileCode* m_owner;
+	};
+
+	// The token that closes a `foreach` header, scanned from `at` (the `In` keyword) with brackets
+	// balanced: the first `)` at depth zero in the braces dialect, the first `Do` at depth zero in
+	// the other. wxNOT_FOUND when there is none — a malformed header, which simply means no chain is
+	// folded and the ordinary parser reports what is wrong with it.
+	int FindForeachHeaderEnd(int at) const;
+
+	// ⭐⭐ WHERE A QUERY'S TEXT ENDS — the START of the first token the query did NOT read, not the
+	// end of the last one it did. The two differ by the whitespace between them, and that gap is
+	// exactly where a person stands while typing the next clause: `restrict s in Source where |;`
+	// puts the caret one character past the end of `where`, and a span measured to the token's end
+	// dropped it out of the query it is plainly inside — the alias `s` then went unoffered
+	// (measured 2026-09-08, caret battery). Everything up to the next token belongs to the
+	// construct that was being written; there is nothing else it could belong to.
+	//
+	// The end of what was READ when there is no next token — a query at the very end of the text.
+	unsigned int FindQueryTextEnd() const;
+
 	// methods for displaying errors during compilation::
 	void SetError(int nErr, const wxString& strError = wxEmptyString);
 	void SetError(int nErr, const wxUniChar& c);
 
 	wxString m_strCurFuncName;//name of the current compiled function (for processing the recursive function call option)
+
+	// ⭐⭐ `foreach (r in src.Where(λ))` — THE SAME FOLD, INTO A LOOP THAT ALREADY EXISTS.
+	//
+	// A chain with no terminal cannot own a loop, and it does not need to: `foreach` is emitting one
+	// anyway. So the verbs are folded INTO its body — the filter becomes an `OPER_IF` skipping to
+	// the next iteration, the projection an assignment over the loop variable — and the state
+	// objects, the per-row lambda call and its frame all go, exactly as in the terminal road.
+	//
+	// It is the shape most RAM code is written in, and since the gate now also admits a database
+	// source whose predicate cannot travel, it is the shape that pays most there too.
+	//
+	// Two halves, because the chain is READ before the loop exists and COMPILED after it — and what
+	// travels between them is ONE NUMBER: the lexeme the chain starts at. The verbs are read again
+	// from there when the body is emitted; re-reading costs nothing (it is a scan over lexemes
+	// already in memory) and it means no structure, no vector and no second representation of the
+	// program is kept anywhere. -1 = nothing parked.
+	// ⭐⭐ WHICH HEADER'S SOURCE IS BEING READ — AS A POSITION, NOT AS A FLAG, and that is the whole of
+	// the difference. A bool could only say "a source is being read", and the fold then had to guess
+	// whether the chain it found was THE source or something nested inside it. The guess was the
+	// closing token: what follows a source is `)` in the braces dialect and `Do` in the other — true,
+	// and not enough. In `foreach (r in f(a.Where(g)))` the token after `Where(g)` is also a `)`, the
+	// one that closes `f(`, so the chain was claimed, `a` went to `f` unfiltered and the filter was
+	// applied to the ROWS OF `f(a)`. A different program, compiled silently.
+	//
+	// The position cannot be mistaken: the header's closer is found once, by a balanced scan, and a
+	// chain is the source only when it ends exactly there. The dialect branch goes with it — one
+	// comparison says the same thing for both.
+	//
+	// -1 means no source is being read, so the same field arms the fold and identifies it.
+	int m_numLinqSourceEnd = -1;
+
+	// …and where the chain that WAS claimed begins. Two halves, because the chain is READ before the
+	// loop exists and COMPILED after it — and what travels between them is ONE NUMBER: the lexeme the
+	// chain starts at. The verbs are read again from there when the body is emitted; re-reading costs
+	// nothing (a scan over lexemes already in memory) and it means no structure, no vector and no
+	// second representation of the program is kept anywhere. -1 = nothing parked.
+	int m_numLinqChainAt = -1;
 
 	friend struct ibCompileContext;
 };

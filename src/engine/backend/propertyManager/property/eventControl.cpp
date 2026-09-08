@@ -1,6 +1,6 @@
 #include "eventControl.h"
 #include "backend/system/value/valueEvent.h"
-#include "backend/compiler/procUnitValues.h"   // AsFunction / ibValueFunction — a lambda value (IS-A dispatcher)
+#include "backend/compiler/procUnitLambda.h"   // AsFunction / ibValueFunction — a lambda value (IS-A dispatcher)
 #include "backend/eventDispatcher.h"           // ibEventDispatcher — the facet GetDispatcher vends
 #include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 

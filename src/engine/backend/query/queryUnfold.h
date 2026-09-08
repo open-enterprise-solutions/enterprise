@@ -15,7 +15,7 @@
 // FOLD by it rather than merely select). Three tiers, and a report, a filter and a reading that all
 // say "in hierarchy" have to mean the same thing by it.
 //
-// It used to sit in queryAst.h, which is deliberately L2/L3-FREE — so an L3 condition could not name
+// It used to sit in queryAST.h, which is deliberately L2/L3-FREE — so an L3 condition could not name
 // it without dragging the whole L4 tree down a tier. A file with one enum and no dependencies is the
 // cheapest thing both tiers can include, and it is the reason this header exists at all.
 //

@@ -552,7 +552,7 @@ TEST(ValueThroughReference, ReferenceToNumberIsNotEqualToItsSpelling) {
 // THE HASH CONTRACT — order-equal implies hash-equal.
 //
 // GetValueHash exists so a hashed index can replace an ordered one (the LINQ
-// join, procUnitLinq.cpp). That substitution is only sound while every pair the
+// join, procUnitLINQ.cpp). That substitution is only sound while every pair the
 // ORDER calls equal lands in the same bucket; the converse is free, since a
 // collision costs one comparison and nothing else.
 //

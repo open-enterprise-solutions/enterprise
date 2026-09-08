@@ -90,11 +90,12 @@ add_executable(oes_tests
     test_columnCodec.cpp
     test_queryPredicate.cpp
     test_queryColumnExpr.cpp
-    test_linqMethod.cpp
+    test_LINQMethod.cpp
     test_methodArity.cpp
-    test_queryLinqExec.cpp
+    test_queryLINQExec.cpp
     test_queryComputedDotWalk.cpp
     test_queryComputedServer.cpp
+    test_scriptComplete.cpp
     test_typeDescription.cpp
     test_dialectDictionary.cpp
     test_materializationDialect.cpp
@@ -107,6 +108,8 @@ add_executable(oes_tests
     test_accountingTotals.cpp
     test_uniqueKey.cpp
     test_valueArray.cpp
+    test_valueTableIndex.cpp
+    test_valueTableWalk.cpp
     test_valueContainer.cpp
     test_valueStructure.cpp
     test_valueGeometry.cpp

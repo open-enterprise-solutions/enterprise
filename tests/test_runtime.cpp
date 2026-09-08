@@ -625,7 +625,12 @@ TEST(RuntimeTest, LinqBlockJoin_WhereFiltersPerMatch) {
 		wxT("  s = New Structure; s.Insert(\"K\", 1); s.Insert(\"V\", 2); inner.Add(s);\n")
 		wxT("  q = from a in outer join b in inner on a equals b.K where b.V > 1 select b.V;\n")
 		wxT("  If q.Count() <> 1 Then Return -1; EndIf;\n")
-		wxT("  Return q.Get(0);\n")
+		// ⭐ A QUERY ANSWERS WITH A TABLE, so a row is reached by index and a value by its COLUMN.
+		// `select b.V` is a walk, and a walk names the column after itself — `V`. This read used to
+		// be `q.Get(0)`, which was the Array the block query used to build; the two roads (a written
+		// query and a query written in the language) now answer with the same thing, and that is
+		// what makes one vocabulary instead of two (procUnitLINQ.cpp, TableOfRows).
+		wxT("  Return q[0].V;\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
 
@@ -720,7 +725,10 @@ TEST(RuntimeTest, LinqBlockSkip_NoJoin) {
 		wxT("  outer = New Array; outer.Add(1); outer.Add(2); outer.Add(3);\n")
 		wxT("  q = from a in outer skip 1 select a;\n")
 		wxT("  If q.Count() <> 2 Then Return -1; EndIf;\n")
-		wxT("  Return q.Get(0) * 10 + q.Get(1);\n")
+		// `select a` projects the row itself: one column, and having no natural name it is `Field1`
+		// (the query engine's own rule, queryRewrite.h). See KeptPayload above for why this is a
+		// table rather than the array it used to be.
+		wxT("  Return q[0].Field1 * 10 + q[1].Field1;\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
 
@@ -766,7 +774,7 @@ TEST(RuntimeTest, LinqBlockJoin_SkipCountsJoinedRows) {
 		wxT("  inner = New Array; inner.Add(1); inner.Add(1); inner.Add(2);\n")
 		wxT("  q = from a in outer join b in inner on a equals b skip 1 select a;\n")
 		wxT("  If q.Count() <> 2 Then Return -1; EndIf;\n")
-		wxT("  Return q.Get(0) * 10 + q.Get(1);\n")
+		wxT("  Return q[0].Field1 * 10 + q[1].Field1;\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
 
@@ -778,6 +786,144 @@ TEST(RuntimeTest, LinqBlockJoin_SkipCountsJoinedRows) {
 	// Joined rows in order: (1,1) (1,1) (2,2); skip 1 keeps the SECOND match of
 	// a=1 and the a=2 row. Counting outer rows would have kept only a=2.
 	EXPECT_EQ(ret.GetInteger(), 12);
+}
+
+// ⚠ THE TABLE A QUERY ANSWERS WITH MUST BE THE SAME SIZE TO EVERY READER, and it has two of them:
+// `Count()` on a query result is a LINQ method, so it ITERATES; everything else a table offers —
+// indexing, UnloadColumn, Sort, and the grid — asks the MODEL through GetRowCount. A query builds
+// its table by putting rows straight into the storage without notifying anybody (procUnitLINQ.cpp,
+// TableOfRows, deliberately: notifying per row is O(n²) and cost seventy seconds on 50 000 rows),
+// so "did the model come out the same size as the iteration" is exactly the question that
+// arrangement has to answer, and nothing was asking it.
+TEST(RuntimeTest, LinqResultTable_TheModelIsTheSameSizeAsTheIteration) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function BothSides() Public\n")
+		wxT("  var flat; var q;\n")
+		wxT("  flat = New Array; flat.Add(3); flat.Add(1); flat.Add(2);\n")
+		wxT("  q = from r in flat select { V = r };\n")
+		wxT("  Return q.Count() * 100 + q.UnloadColumn(\"V\").Count();\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("BothSides"), ret);
+	// 3 rows either way. A 300 here means the iteration sees three rows and the model sees none.
+	EXPECT_EQ(ret.GetInteger(), 303);
+}
+
+// --- orderby with SEVERAL keys ----------------------------------------------
+//
+// A second key is not a second sort: `orderby A, B` is ONE ordering whose keys
+// are consulted in the order they were written, and B is looked at only where A
+// is equal. Sorting twice — once by B, then by A — is a different thing that
+// happens to agree when the sort is stable, and reading these as two passes is
+// exactly the mistake the wire form has to rule out.
+//
+// The three below pin the three claims that can each be wrong on their own: the
+// tie-break, what `descending` applies to, and that a THIRD key is still
+// reached. A single-key case is kept beside them because the multi-key emission
+// changed the shape of the one-key emission too (the row now travels on the
+// first KEEP only), and nothing else in the suite would have noticed.
+TEST(RuntimeTest, LinqOrderBy_SecondKeyBreaksTheTie) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function TwoKeys() Public\n")
+		wxT("  var rows; var q;\n")
+		wxT("  rows = New Array;\n")
+		wxT("  rows.Add(New Structure(\"A, B\", 2, 1));\n")
+		wxT("  rows.Add(New Structure(\"A, B\", 1, 2));\n")
+		wxT("  rows.Add(New Structure(\"A, B\", 1, 1));\n")
+		wxT("  q = from r in rows orderby r.A, r.B select { V = r.A * 10 + r.B };\n")
+		wxT("  If q.Count() <> 3 Then Return -1; EndIf;\n")
+		// The column is NAMED here on purpose: what the synthetic name would be is a separate rule
+		// with its own tests, and an ordering test should fail for the ordering.
+		wxT("  Return q[0].V * 10000 + q[1].V * 100 + q[2].V;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("TwoKeys"), ret);
+	// (1,1) (1,2) (2,1) -> 11, 12, 21. By the FIRST key alone the two A=1 rows
+	// would have kept the order they were added in, giving 12 before 11.
+	EXPECT_EQ(ret.GetInteger(), 111221);
+}
+
+TEST(RuntimeTest, LinqOrderBy_DescendingReversesTheWholeOrdering) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function TwoKeysDown() Public\n")
+		wxT("  var rows; var q;\n")
+		wxT("  rows = New Array;\n")
+		wxT("  rows.Add(New Structure(\"A, B\", 2, 1));\n")
+		wxT("  rows.Add(New Structure(\"A, B\", 1, 2));\n")
+		wxT("  rows.Add(New Structure(\"A, B\", 1, 1));\n")
+		wxT("  q = from r in rows orderby r.A, r.B descending select { V = r.A * 10 + r.B };\n")
+		wxT("  If q.Count() <> 3 Then Return -1; EndIf;\n")
+		wxT("  Return q[0].V * 10000 + q[1].V * 100 + q[2].V;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("TwoKeysDown"), ret);
+	// The direction is written ONCE, after the last key, and turns the whole
+	// ordering round: (2,1) (1,2) (1,1) -> 21, 12, 11. Applying it to the LAST
+	// key only would have given 12 before 11 but left A ascending: 11, 12, 21.
+	EXPECT_EQ(ret.GetInteger(), 211211);
+}
+
+TEST(RuntimeTest, LinqOrderBy_ThirdKeyIsStillConsulted) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function ThreeKeys() Public\n")
+		wxT("  var rows; var q;\n")
+		wxT("  rows = New Array;\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 1, 1, 2));\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 1, 1, 1));\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 1, 0, 9));\n")
+		wxT("  q = from r in rows orderby r.A, r.B, r.C select { V = r.C };\n")
+		wxT("  If q.Count() <> 3 Then Return -1; EndIf;\n")
+		wxT("  Return q[0].V * 100 + q[1].V * 10 + q[2].V;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("ThreeKeys"), ret);
+	// A is equal everywhere, B separates the (1,0,9) row out to the front, and
+	// only C tells the remaining two apart: 9, 1, 2.
+	EXPECT_EQ(ret.GetInteger(), 912);
+}
+
+TEST(RuntimeTest, LinqOrderBy_ASingleKeyStillOrders) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function OneKey() Public\n")
+		wxT("  var flat; var q;\n")
+		wxT("  flat = New Array; flat.Add(3); flat.Add(1); flat.Add(2);\n")
+		wxT("  q = from r in flat orderby r select { V = r };\n")
+		wxT("  If q.Count() <> 3 Then Return -1; EndIf;\n")
+		wxT("  Return q[0].V * 100 + q[1].V * 10 + q[2].V;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("OneKey"), ret);
+	EXPECT_EQ(ret.GetInteger(), 123);
 }
 
 // Case-sensitivity of string join keys is covered by LinqBlockJoin_StringKeysBlockOnly
@@ -1321,7 +1467,7 @@ TEST_F(BuiltInRuntime, AFreshNumericValueIsUsableWithoutBeingReadFirst) {
 // to a constant value", and the suspicion is that it is not a third defect but
 // the SAME one as the nested-join failure: capture on the pipeline invoke path,
 // which builds a C-stack frame and never promotes
-// (procUnitLinq.cpp, CallLambdaWithArgs — see the note there).
+// (procUnitLINQ.cpp, CallLambdaWithArgs — see the note there).
 //
 // Written to find out, not to assert a belief. If it reproduces, three corpus
 // failures collapse into one arc; if it passes, the two scripts fail for some
@@ -1512,7 +1658,7 @@ TEST_F(BuiltInRuntime, AModuleVarAfterAPipelineLambda) {
 // `test_linq_nested_join.txt` dies on it with "a variable is not an aggregate
 // object", i.e. the captured row arrives as nothing.
 //
-// The suspected cause is that the pipeline invoke path (procUnitLinq.cpp,
+// The suspected cause is that the pipeline invoke path (procUnitLINQ.cpp,
 // CallLambdaWithArgs) builds a C-stack frame and never honours
 // `m_needsHeapFrame`, so the inner lambda's weak_from_this() on the outer frame
 // is already expired. Promoting it was tried once and made things worse; the
@@ -1529,7 +1675,7 @@ TEST_F(BuiltInRuntime, AModuleVarAfterAPipelineLambda) {
 // a pipeline those point into the iterator state, which dies before a captured
 // frame does. A promoted frame then read its own parameters through a dangling
 // pointer — that was the access violation, not the capture machinery. A frame that
-// can be captured now COPIES its arguments (`procUnitLinq.cpp`,
+// can be captured now COPIES its arguments (`procUnitLINQ.cpp`,
 // `CallLambdaWithArgs`).
 //
 // The emission side was verified separately rather than inferred from this test
@@ -1697,8 +1843,13 @@ TEST(RuntimeTest, ACorrelatedJoinPairsEachKeyWithItsOwnRowsMeta) {
 		wxT("        join m in c.Meta on k equals m.Id\n")
 		wxT("        select m.Tag + k;\n")
 		wxT("r = \"\";\n")
+		// ⭐ WALKING A QUERY YIELDS ROWS, NOT VALUES — a query answers with a table, so `t` is the
+		// row and the value is its column. `select m.Tag + k` is an expression with no natural
+		// name, so the column is `Field1` (queryRewrite.h's rule, shared with the written query
+		// language). This used to add `t` itself, which stringified the ROW: the answer read
+		// "TableValueRowTableValueRow…" instead of "AaBbCc".
 		wxT("Foreach t In q Do\n")
-		wxT("  r = r + t;\n")
+		wxT("  r = r + t.Field1;\n")
 		wxT("EndDo\n")));
 
 	ibProcUnit pu;

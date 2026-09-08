@@ -47,7 +47,7 @@
 // See docs/query-language-arc.md §14 / §23.
 
 #include "queryLexer.h"
-#include "queryAst.h"
+#include "queryAST.h"
 
 class BACKEND_API ibQueryParser
 {

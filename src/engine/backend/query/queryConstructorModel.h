@@ -27,7 +27,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "queryAst.h"
+#include "queryAST.h"
 #include "queryableFactory.h"
 
 #include <vector>

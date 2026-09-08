@@ -11,7 +11,7 @@ Message("=== T01: from + select ===");
 var nums = New Array;
 nums.Add(1); nums.Add(2); nums.Add(3); nums.Add(4); nums.Add(5);
 var q01 = from x in nums select x;
-foreach (v in q01) { Message(v); }
+foreach (v in q01) { Message(v.Field1); }
 
 // ======================================================================
 // T02 — where filter
@@ -19,7 +19,7 @@ foreach (v in q01) { Message(v); }
 // ======================================================================
 Message("=== T02: where ===");
 var q02 = from x in nums where x >= 3 select x;
-foreach (v in q02) { Message(v); }
+foreach (v in q02) { Message(v.Field1); }
 
 // ======================================================================
 // T03 — let intermediate
@@ -29,7 +29,7 @@ Message("=== T03: let ===");
 var q03 = from x in nums
           var sq = x * x
           select sq;
-foreach (v in q03) { Message(v); }
+foreach (v in q03) { Message(v.Field1); }
 
 // ======================================================================
 // T04 — skip / take
@@ -37,7 +37,7 @@ foreach (v in q03) { Message(v); }
 // ======================================================================
 Message("=== T04: skip+take ===");
 var q04 = from x in nums skip 1 take 2 select x;
-foreach (v in q04) { Message(v); }
+foreach (v in q04) { Message(v.Field1); }
 
 // ======================================================================
 // T05 — distinct (dup-removal)
@@ -47,7 +47,7 @@ Message("=== T05: distinct ===");
 var dups = New Array;
 dups.Add(1); dups.Add(2); dups.Add(1); dups.Add(3); dups.Add(2);
 var q05 = from x in dups select x distinct;
-foreach (v in q05) { Message(v); }
+foreach (v in q05) { Message(v.Field1); }
 
 // ======================================================================
 // T06 — orderby ascending (default)
@@ -58,7 +58,7 @@ var scattered = New Array;
 scattered.Add(3); scattered.Add(1); scattered.Add(4); scattered.Add(1);
 scattered.Add(5); scattered.Add(9); scattered.Add(2); scattered.Add(6);
 var q06 = from x in scattered orderby x select x;
-foreach (v in q06) { Message(v); }
+foreach (v in q06) { Message(v.Field1); }
 
 // ======================================================================
 // T07 — orderby descending
@@ -66,7 +66,7 @@ foreach (v in q06) { Message(v); }
 // ======================================================================
 Message("=== T07: orderby desc ===");
 var q07 = from x in scattered orderby x descending select x;
-foreach (v in q07) { Message(v); }
+foreach (v in q07) { Message(v.Field1); }
 
 // ======================================================================
 // T08 — orderby with negation (regression: was the trigger for the
@@ -75,7 +75,7 @@ foreach (v in q07) { Message(v); }
 // ======================================================================
 Message("=== T08: orderby -x ===");
 var q08 = from x in scattered orderby -x select x;
-foreach (v in q08) { Message(v); }
+foreach (v in q08) { Message(v.Field1); }
 
 // ======================================================================
 // T09 — Array aggregations no-arg
@@ -106,7 +106,7 @@ Message("=== T11: nested from ===");
 var a = New Array; a.Add(1); a.Add(2); a.Add(3);
 var b = New Array; b.Add(10); b.Add(20); b.Add(30);
 var q11 = from x in a from y in b select x + y;
-foreach (v in q11) { Message(v); }
+foreach (v in q11) { Message(v.Field1); }
 
 // ======================================================================
 // T12 — JOIN inner (outer + customers)
@@ -127,7 +127,7 @@ arr2.Add(New Structure("Id, Value", 3, 30));
 var q12 = from o in arr1
           join c in arr2 on o.Id equals c.Id
           select o.Name + "=" + c.Value;
-foreach (s in q12) { Message(s); }
+foreach (s in q12) { Message(s.Field1); }
 
 // ======================================================================
 // T13 — JOIN + WHERE combo
@@ -140,7 +140,7 @@ var q13 = from o in arr1
           join c in arr2 on o.Id equals c.Id
           where c.Value >= 20
           select o.Name + "=" + c.Value;
-foreach (s in q13) { Message(s); }
+foreach (s in q13) { Message(s.Field1); }
 
 // ======================================================================
 // T14 — JOIN + nested FROM (validates per-level state refactor)
@@ -162,7 +162,7 @@ var q14 = from o in orders
           join c in customers on o.CustId equals c.Id
           from item in o.Items
           select c.Name + ": " + item;
-foreach (s in q14) { Message(s); }
+foreach (s in q14) { Message(s.Field1); }
 
 // ======================================================================
 // T15 — GROUP BY simple (terminal)
@@ -258,7 +258,7 @@ var q18 = from cat in cats2
           from key in cat.Keys
           join meta in cat.Meta on key equals meta.Id
           select cat.Name + "/" + key + ": " + meta.Tag;
-foreach (s in q18) { Message(s); }
+foreach (s in q18) { Message(s.Field1); }
 
 // ======================================================================
 // T19 — empty source → empty result (no rows iterated)
@@ -295,6 +295,6 @@ var q22 = from x in scattered
           where x >= 3
           orderby x descending
           select x;
-foreach (v in q22) { Message(v); }
+foreach (v in q22) { Message(v.Field1); }
 
 Message("=== DONE ===");

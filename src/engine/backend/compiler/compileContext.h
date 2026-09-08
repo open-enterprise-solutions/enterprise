@@ -3,8 +3,7 @@
 
 #include <memory>
 
-#include "backend/compiler/byteCode.h"
-#include "backend/compiler/compileContextLinqData.h"
+#include "backend/compiler/byteCode.h"   // and with it byteCodeLINQ.h — ibLinqQuery lives in the bytecode now
 
 class BACKEND_API ibCompileCode;
 
@@ -60,6 +59,33 @@ enum {
 enum {
 	CODE_VES = ibProgramSyntax::syntax_ves,
 	CODE_CES = ibProgramSyntax::syntax_ces
+};
+
+// ⭐⭐ WHERE A `return` GOES WHEN THERE IS NO FRAME TO LEAVE.
+//
+// A lambda folded into somebody else's loop has no frame of its own — that IS the fold — so its
+// `return <expr>` cannot become an OPER_RET: the frame that instruction would leave belongs to the
+// procedure the loop is written in, and returning from THAT is a different program. What the body
+// means is "this is the value, and the body is over", and that is two ordinary instructions: write
+// the value into the cell the fold is waiting on, and jump past the rest of the body.
+//
+// The jump is the pattern this compiler uses wherever it has to name an address it does not know
+// yet — record the position, keep going, write the answer into that position when the body closes.
+// So a folded body may be as wide as any block: an `if`, a nested block, several returns. Before
+// this, the fold demanded a body of exactly one `return <expr>` and everything else fell to the
+// road that builds state objects — which was never a statement about the loop, only about where a
+// value could be put.
+// 🛑 …AND IT HAS TO CLOSE WHAT IT JUMPS OUT OF. A block scope is a PAIR of instructions, and a jump
+// that leaves a block without running the exit leaves the runtime's scope depth one higher forever.
+// Inside a per-call frame that is invisible — the frame dies with the call. Folded into the caller's
+// loop there is no such frame: the depth would climb once a row and never come down, which is the
+// same defect that killed a 300k-row run this morning from the other side (procUnitLINQ.cpp). So the
+// capture remembers how deep the body started, and each `return` closes exactly what it is inside of
+// before it jumps.
+struct ibReturnCapture {
+	ibParamUnit      m_valueCell;   // what `return <expr>` writes into
+	std::vector<int> m_jumps;       // the OPER_GOTO positions, patched when the body closes
+	int              m_scopeDepth = 0;  // the compiler's block depth OUTSIDE the body
 };
 
 struct ibCompileContext {
@@ -435,6 +461,7 @@ struct ibCompileContext {
 		m_numDoNumber = 0;
 		m_numReturn = 0;
 		m_numTempVar = 0;
+		m_returnCapture = nullptr;
 
 		m_numFindLocalInParent = 1;
 
@@ -470,22 +497,39 @@ struct ibCompileContext {
 
 	short m_numReturn;//RETURN operator processing mode: RETURN_NONE,RETURN_PROCEDURE,RETURN_FUNCTION
 
-	// LINQ — exclusive ownership of LINQ-scope compile state. Non-null
-	// only on the RETURN_BLOCK-kind context that CompileLinqExpression
-	// allocates for the LINQ scope. Lifetime tied to the context's
-	// shared_ptr lifetime. Allocated via std::make_unique in
-	// CompileLinqExpression; freed automatically when the context dies.
-	std::unique_ptr<ibLinqContextData> m_linqData;
+	// Non-null only while a FOLDED LAMBDA BODY is being compiled — see ibReturnCapture above.
+	// Non-owning: the record is a local of the fold that installed it and dies with it.
+	ibReturnCapture* m_returnCapture = nullptr;
+
+	// ⚠ CLIMBS ONLY THROUGH BLOCKS, exactly as `return` itself does. A nested function or lambda
+	// definition inside a folded body opens a context that is not RETURN_BLOCK, and its own
+	// `return` is its own business — the walk stops there and the ordinary OPER_RET is emitted.
+	ibReturnCapture* FindReturnCapture() {
+		for (ibCompileContext* ctx = this; ctx != nullptr; ctx = ctx->m_parentContext) {
+			if (ctx->m_returnCapture != nullptr)
+				return ctx->m_returnCapture;
+			if (ctx->m_numReturn != RETURN_BLOCK)
+				break;
+		}
+		return nullptr;
+	}
+
+	// LINQ — WHICH QUERY THIS SCOPE IS INSIDE, and nothing more. The query itself lives in the
+	// bytecode's full form (ibByteExtCode::m_listLinq, byteCodeLINQ.h): the tape is the tree, so
+	// what a query is made of belongs to the tape and not to a scope that happens to be open while
+	// it is read. Non-null only on the RETURN_BLOCK-kind context CompileLinqExpression opens for the
+	// LINQ scope; a deque entry does not move, so the pointer stays good for the whole compilation.
+	ibLinqQuery* m_linqQuery = nullptr;
 
 	// LINQ-scope predicate helpers. IsLinq() — this context IS the
-	// LINQ scope (carries m_linqData itself). IsInLinq() — this
+	// LINQ scope (it names the query). IsInLinq() — this
 	// context or any ancestor is a LINQ scope; used by IntelliSense /
 	// validation hooks that need to know "are we inside a LINQ block?"
 	// without caring which level introduced the scope.
-	bool IsLinq() const { return m_linqData != nullptr; }
+	bool IsLinq() const { return m_linqQuery != nullptr; }
 	bool IsInLinq() const {
 		for (const ibCompileContext* c = this; c; c = c->m_parentContext)
-			if (c->m_linqData) return true;
+			if (c->m_linqQuery != nullptr) return true;
 		return false;
 	}
 

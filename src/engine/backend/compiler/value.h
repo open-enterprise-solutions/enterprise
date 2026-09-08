@@ -1522,7 +1522,7 @@ public:
 	// stringization (`Where` enumerator ↔ `"Where"` script-side
 	// method name). Adding a new op = append here AND an entry in
 	// GetLinqMethodTable() + a case in the dispatch switch
-	// (procUnitLinq.cpp). Runtime arg-count validation lives inside
+	// (procUnitLINQ.cpp). Runtime arg-count validation lives inside
 	// each dispatch case.
 	enum class ibLinqMethod : long {
 		Where,

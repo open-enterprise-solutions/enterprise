@@ -23,7 +23,7 @@
 //
 // See docs/query-language-arc.md §14 / §22 / §23.
 
-#include "queryAst.h"
+#include "queryAST.h"
 #include "dataQueryBuilder.h"   // ibDataQueryResult / ibDataQueryBuilder
 #include "queryable.h"          // ibBackendQueryColumn
 
@@ -396,14 +396,14 @@ public:
 	                                       const ibTotalsLayout& layout = ibTotalsLayout{});
 
 	// === L4-2 (LINQ pushdown) — recorded-lambda lowering against ONE source ===
-	// The lambda recorder (compiler/lambdaQueryAst.*) emits the same
+	// The lambda recorder (compiler/lambdaQueryAST.*) emits the same
 	// ibQueryAstExpr the text parser does; these wrap the file-local builders so
 	// the Queryable fold reuses them verbatim. `captured` maps the lambda's
 	// captured outer locals (Param nodes) to their values — the &parameter
 	// analogy. Both return EMPTY (null / {}) instead of throwing on anything
 	// untranslatable: the fold then falls back to RAM (bail-out, not an error).
 	// BACKEND_API: exported so the L4-2 lowering is unit-testable across the DLL (like the
-	// ibDbTableProvider::Can* gates) — see tests/test_queryLinqExec.cpp.
+	// ibDbTableProvider::Can* gates) — see tests/test_queryLINQExec.cpp.
 	static BACKEND_API ibQueryPredicatePtr LowerLambdaPredicate(const ibBackendQueryable* source,
 	                                                const ibQueryAstExpr& expr,
 	                                                const std::map<wxString, ibValue>& captured);

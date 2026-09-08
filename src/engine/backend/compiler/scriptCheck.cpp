@@ -5,7 +5,6 @@
 #include "backend/compiler/scriptCheck.h"
 
 #include "backend/backend_exception.h"
-#include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileModule.h"     // ibCompileModule — the contextual compile
 #include "backend/metaData.h"                   // ibCompileValueCache::FindCompileModule
 #include "backend/metaCollection/metaObject.h"  // ibValueMetaObject::GetMetaData
@@ -158,3 +157,8 @@ ibScriptCheckAnswer ibCheckModule(const ibValueMetaObject* metaObject)
 	answer.m_outcome = ibScriptCheckOutcome::Checked;
 	return answer;
 }
+
+// ⚠ THE THIRD DOOR MOVED. `ibOutlineScriptQueries` — the same compile asked what it UNDERSTOOD
+// about a query — is implemented in scriptComplete.cpp, where the walk over the instructions lives:
+// telling a caller what each bound name offers means asking that walk for a sample of the row, and
+// a door is better placed beside the machine it needs than beside the compile it shares.

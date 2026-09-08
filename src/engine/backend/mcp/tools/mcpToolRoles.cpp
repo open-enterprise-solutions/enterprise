@@ -21,6 +21,9 @@
 
 #include "backend/mcp/mcpTool.h"
 
+#include "backend/compiler/scriptCheck.h"        // ibCheckScript — a composed restriction is compiled
+#include "backend/compiler/scriptComplete.h"     // ibOutlineScriptQueries — …and taken apart
+#include "backend/compiler/translateCode.h"      // ibTranslateCode::GetKeyWord — the parser spells its words
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaSectionObject.h"
 #include "backend/metadataConfiguration.h"
@@ -711,3 +714,208 @@ public:
 };
 
 MCP_TOOL_REGISTER(ibMcpToolRoleGrant);
+
+//---------------------------------------------------------------------------
+// role_restrict — writing the row filter, in the shape this platform expects
+//---------------------------------------------------------------------------
+//
+// WHY A VERB OF ITS OWN. A restriction is not a query somebody runs; it is a HANDLER on a role that
+// folds a filter into a query somebody ELSE is running — and almost everything that goes wrong with
+// one goes wrong before any SQL: the wrong handler name, a missing `Allowed = True` (which fails
+// CLOSED and reads to a user as "the data vanished"), the other dialect's block syntax, an alias
+// that is not bound. None of that is visible in a text editor and all of it is answerable here.
+//
+// So this composes the whole handler out of the clauses, compiles it in THIS configuration's
+// context, and hands back the text with what the compiler made of it. Installing it is a separate
+// act (module_write): composing and installing are different amounts of consent.
+//
+//---------------------------------------------------------------------------
+
+namespace {
+
+const ibArg& ArgWhere()
+{
+	static const ibArg s_a(wxT("where"), ibArg::Kind::Text,
+		ibMcpText("The condition rows must hold, written over the aliases - `s.Company = "
+		  "SessionParameters.Company`. Omit it only when the joins alone are the restriction "
+		  "(an inner join drops what it does not match)."));
+	return s_a;
+}
+
+const ibArg& ArgJoins()
+{
+	static const ibArg s_a(wxT("joins"), ibArg::Kind::Many,
+		ibMcpText("Tables to bring in, each written as the clause tail exactly as the language takes "
+		  "it: `a in Data.From(InformationRegisters.UserWarehouses) on s.Warehouse = a.Warehouse`. "
+		  "The word `join` is added for you; everything after it is yours. May be repeated."));
+	return s_a;
+}
+
+const ibArg& ArgAlias()
+{
+	static const ibArg s_a(wxT("alias"), ibArg::Kind::Text,
+		ibMcpText("The name bound to one row of the query being narrowed. Defaults to `s`."));
+	return s_a;
+}
+
+const ibArg& ArgOperation()
+{
+	static const ibArg s_a(wxT("operation"), ibArg::Kind::Text,
+		ibMcpText("Which handler this is for - `read` narrows what a role SEES (OnAccessRead), "
+		  "`write` what it may change (OnAccessWrite). Defaults to read."),
+		/*required*/ false, { wxT("read"), wxT("write") });
+	return s_a;
+}
+
+} // namespace
+
+class ibMcpToolRoleRestrict : public ibMcpTool {
+public:
+
+	wxString GetName() const override { return wxT("role_restrict"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return ibMcpText("writing a row restriction");
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("WRITE A ROW-LEVEL RESTRICTION IN THE SHAPE THIS PLATFORM EXPECTS. Give it the "
+			"clauses - a condition, and the tables to join - and it composes the whole handler, "
+			"compiles it against this configuration, and answers with the text plus what the COMPILER "
+			"made of it: which names are bound, and any refusal.\n\n"
+			"WHAT A RESTRICTION IS HERE: not an SQL template woven into queries, but a PROCEDURE on a "
+			"Role - `OnAccessRead(Source, Operation, Allowed)` - that folds a filter into `Source` and "
+			"then sets `Allowed = True`. It is a real module, so the debugger steps into it, and the "
+			"query door runs it on every read, so nothing bypasses it.\n\n"
+			"THE TRAP IT EXISTS TO CLOSE: the handler FAILS CLOSED. Not setting `Allowed = True` - "
+			"falling through, swallowing an exception - DENIES the query, and a denial reads to a user "
+			"as 'the data vanished'. The composed text always sets it.\n\n"
+			"It composes and checks; it does not install. Write the text into the role's module with "
+			"`module_write` when it says what you meant. `linq_methods` gives the clause grammar and "
+			"`script_query` takes an existing restriction apart.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = {
+			ArgRole(), ArgWhere(), ArgJoins(), ArgAlias(), ArgOperation()
+		};
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
+			refusal = ibMcpText("No configuration is open, and a restriction is written against one.");
+			return false;
+		}
+
+		// ⭐ THE ROLE IS OPTIONAL AND CHECKED WHEN GIVEN. Composing needs no role at all; naming one
+		// is how a caller learns, before writing anything, that it exists.
+		const wxString roleName = ArgRole().Text(params);
+		ibValueMetaObject* roleObject = nullptr;
+		if (!roleName.IsEmpty()) {
+			roleObject = ibFindMetaObject(activeMetaData, wxT("Role"), roleName);
+			if (roleObject == nullptr) {
+				refusal = wxString::Format(
+					ibMcpText("This configuration has no role named '%s'."), roleName);
+				return false;
+			}
+		}
+
+		std::vector<wxString> joins;
+		if (const ibDataValue* several = params.FindField(ArgJoins().Name()))
+			if (several->Kind() == ibDataKind::Array)
+				for (const ibDataValue& one : several->AsArray())
+					if (one.Kind() == ibDataKind::String && !one.AsString().IsEmpty())
+						joins.push_back(one.AsString());
+
+		const wxString where = ArgWhere().Text(params);
+		if (where.IsEmpty() && joins.empty()) {
+			refusal = ibMcpText("A restriction with neither a condition nor a join restricts nothing - "
+				"say which rows are to be kept.");
+			return false;
+		}
+
+		wxString alias = ArgAlias().Text(params);
+		if (alias.IsEmpty())
+			alias = wxT("s");
+
+		const bool forWrite = ArgOperation().Text(params).IsSameAs(wxT("write"), false);
+		const wxString handler = forWrite ? wxT("OnAccessWrite") : wxT("OnAccessRead");
+
+		// 🛑 THE KEYWORDS COME FROM THE PARSER'S OWN TABLE, and the BLOCK SYNTAX from the
+		// configuration that will hold this. Composing a braced body for a configuration written in
+		// words yields a text that cannot compile — and the failure would read as a mistake in the
+		// restriction rather than in the wrapper around it.
+		const auto word = [](int key) { return ibTranslateCode::GetKeyWord(key); };
+		const bool inWords = ibConfigurationWritesInWords(activeMetaData);
+
+		wxString restriction = word(KEY_RESTRICT) + wxT(" ") + alias
+			+ wxT(" ") + word(KEY_IN) + wxT(" Source");
+		for (const wxString& one : joins)
+			restriction += wxT("\n\t\t") + word(KEY_JOIN) + wxT(" ") + one;
+		if (!where.IsEmpty())
+			restriction += wxT("\n\t\t") + word(KEY_WHERE) + wxT(" ") + where;
+
+		wxString text;
+		text << wxT("Procedure ") << handler << wxT("(Source, Operation, Allowed)")
+		     << (inWords ? wxT("\n") : wxT(" {\n"))
+		     << wxT("\t") << restriction << wxT(";\n")
+		     << wxT("\tAllowed = True;\n")
+		     << (inWords ? wxT("EndProcedure\n") : wxT("}\n"));
+
+		// ⭐⭐ AND THEN IT IS COMPILED, because a composed text that does not compile is a worse
+		// answer than no text: it looks finished. Two doors read the one compile — one for what it
+		// refused, one for what it understood.
+		const std::vector<ibDiagnostic> found = ibCheckScript(text, handler, activeMetaData);
+		const std::vector<ibQueryOutline> outlines =
+			ibOutlineScriptQueries(text, handler, activeMetaData);
+
+		result.SetValue(wxT("handler"), handler);
+		result.SetValue(wxT("syntax"), wxString(inWords ? wxT("words") : wxT("braces")));
+		result.SetValue(wxT("restriction"), restriction);
+		result.SetValue(wxT("text"), text);
+		if (roleObject != nullptr) {
+			result.SetValue(wxT("role"), roleObject->GetName());
+			result.AddField(wxT("roleId"), ibDataValue::Int((s64)roleObject->GetMetaID()));
+		}
+
+		// The names the restriction binds, as the compiler read them — the half that says the
+		// aliases in the condition are the aliases the clauses actually declared.
+		std::vector<ibDataValue> binds;
+		for (const ibQueryOutline& outline : outlines)
+			for (const ibQueryOutlineBinding& binding : outline.m_bindings) {
+				std::shared_ptr<ibDataNode> one = std::make_shared<ibDataNode>();
+				one->SetValue(wxT("name"), binding.m_name);
+				one->SetValue(wxT("from"), binding.m_origin);
+				binds.push_back(ibDataValue::Child(one));
+			}
+		result.AddField(wxT("binds"), ibDataValue::Array(binds));
+
+		result.AddField(wxT("compiles"), ibDataValue::Bool(found.empty()));
+		if (!found.empty()) {
+			// The FIRST refusal, which is the one that ended the compile — the rest would be
+			// consequences of it. `script_check` is the door for a full report.
+			std::shared_ptr<ibDataNode> why = std::make_shared<ibDataNode>();
+			why->SetValue(wxT("message"), found.front().m_message);
+			why->AddField(wxT("line"), ibDataValue::Int((s64)found.front().m_line));
+			if (!found.front().m_codeLine.IsEmpty())
+				why->SetValue(wxT("at"), found.front().m_codeLine);
+			result.AddField(wxT("refused"), ibDataValue::Child(why));
+		}
+
+		result.SetValue(wxT("next"), roleObject != nullptr
+			? wxString::Format(
+				ibMcpText("Write this into role '%s' with module_write when it says what you meant. "
+				  "The query door runs it on every read; the debugger steps into it."),
+				roleObject->GetName())
+			: ibMcpText("Name a role to be told where this goes, then write it in with module_write. "
+			  "The query door runs it on every read, and the debugger steps into it."));
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolRoleRestrict);

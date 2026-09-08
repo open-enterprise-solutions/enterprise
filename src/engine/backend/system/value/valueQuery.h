@@ -19,13 +19,13 @@
 // tree); res.Select() picks the backing from the query (TotalBy present → grouped, else flat).
 //
 // > NOTE: the C++ class is `ibValueQueryExec` — `ibValueQuery` is already the LINQ chain wrapper
-// > (compiler/procUnitLinq.cpp). Script-visible names: `Query` / `QueryResult` / `QuerySelect`.
+// > (compiler/procUnitLINQ.cpp). Script-visible names: `Query` / `QueryResult` / `QuerySelect`.
 //
 // See docs/query-language-arc.md §14 / §22 / §23.
 
 #include "backend/compiler/value.h"
 #include "backend/compiler/enumUnit.h"          // ibValueEnumeration — runtime enum reflecting ibSelectKind
-#include "backend/query/queryAst.h"
+#include "backend/query/queryAST.h"
 #include "backend/query/queryLowering.h"
 #include "backend/query/queryTempStore.h"        // ibQueryTempTableStore — what TempTablesManager holds
 #include "backend/query/dataQueryBuilder.h"     // ibDataQueryResult / ibSelectKind

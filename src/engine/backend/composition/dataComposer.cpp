@@ -237,7 +237,7 @@ ibQueryAstExprPtr ibBuildFilterCondition(ibDataComposer& composer, const ibFilte
 
 	// ⭐⭐ «IN HIERARCHY» IS AN *IN* CARRYING A WORD — one node kind, two comparisons.
 	//
-	// The AST already holds the unfold word on the In node (queryAst.h: `m_unfold`), and L4 resolves
+	// The AST already holds the unfold word on the In node (queryAST.h: `m_unfold`), and L4 resolves
 	// the subtree into the values it stands for before anything below sees it — so both comparisons
 	// reuse the whole mechanism by choosing that node, and «in hierarchy» differs from «in» by the
 	// word alone. An operator of its own would have been a second way to ask what the language asks.

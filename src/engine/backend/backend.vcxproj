@@ -93,7 +93,7 @@
     <ClInclude Include="compiler\codeDef.h" />
     <ClInclude Include="compiler\compileCode.h" />
     <ClInclude Include="compiler\compileContext.h" />
-    <ClInclude Include="compiler\compileContextLinqData.h" />
+    <ClInclude Include="compiler\byteCodeLINQ.h" />
     <ClInclude Include="compiler\compileModule.h" />
     <ClInclude Include="compiler\scriptComplete.h" />
     <ClInclude Include="compiler\scriptParseCode.h" />
@@ -102,7 +102,7 @@
     <ClInclude Include="compiler\enumUnit.h" />
     <ClInclude Include="compiler\procContext.h" />
     <ClInclude Include="compiler\procUnit.h" />
-    <ClInclude Include="compiler\procUnitValues.h" />
+    <ClInclude Include="compiler\procUnitLambda.h" />
     <ClInclude Include="compiler\translateCode.h" />
     <ClInclude Include="compiler\typeCtor.h" />
     <ClInclude Include="compiler\value.h" />
@@ -263,7 +263,7 @@
     <ClInclude Include="query\queryRowCursor.h" />
     <ClInclude Include="query\queryKeywords.h" />
     <ClInclude Include="query\queryLexer.h" />
-    <ClInclude Include="query\queryAst.h" />
+    <ClInclude Include="query\queryAST.h" />
     <ClInclude Include="query\queryRender.h" />
     <ClInclude Include="query\queryConstructorModel.h" />
     <ClInclude Include="query\queryTempStore.h" />
@@ -273,7 +273,7 @@
     <ClInclude Include="query\queryHierarchy.h" />
     <ClInclude Include="query\queryUnfold.h" />
     <ClInclude Include="query\queryRewrite.h" />
-    <ClInclude Include="compiler\lambdaQueryAst.h" />
+    <ClInclude Include="compiler\lambdaQueryAST.h" />
     <ClInclude Include="query\queryableFactory.h" />
     <ClInclude Include="composition\dataComposer.h" />
     <ClInclude Include="composition\drivers\compositionDriver.h" />
@@ -521,6 +521,7 @@
     <ClCompile Include="backend_type.cpp" />
     <ClCompile Include="compiler\byteCode.cpp" />
     <ClCompile Include="compiler\compileCode.cpp" />
+    <ClCompile Include="compiler\compileCodeLINQ.cpp" />
     <ClCompile Include="compiler\compileContext.cpp" />
     <ClCompile Include="compiler\compileModule.cpp" />
     <ClCompile Include="compiler\scriptComplete.cpp" />
@@ -530,7 +531,7 @@
     <ClCompile Include="compiler\enumFactory.cpp" />
     <ClCompile Include="compiler\procContext.cpp" />
     <ClCompile Include="compiler\procUnit.cpp" />
-    <ClCompile Include="compiler\procUnitLinq.cpp" />
+    <ClCompile Include="compiler\procUnitLINQ.cpp" />
     <ClCompile Include="compiler\translateCode.cpp" />
     <ClCompile Include="compiler\value.cpp" />
     <ClCompile Include="compiler\valueFactory.cpp" />
@@ -753,7 +754,7 @@
     <ClCompile Include="query\queryException.cpp" />
     <ClCompile Include="query\queryHierarchy.cpp" />
     <ClCompile Include="query\queryRewrite.cpp" />
-    <ClCompile Include="compiler\lambdaQueryAst.cpp" />
+    <ClCompile Include="compiler\lambdaQueryAST.cpp" />
     <ClCompile Include="query\queryableFactory.cpp" />
     <ClCompile Include="composition\dataComposer.cpp" />
     <ClCompile Include="composition\dataComposerRun.cpp" />

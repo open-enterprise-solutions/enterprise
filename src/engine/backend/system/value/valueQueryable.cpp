@@ -11,23 +11,56 @@
 #include "valueTable.h"                          // ibValueModelTable — the ToTable materialised result
 
 #include "backend/query/queryable.h"             // ibBackendQueryable / ibBackendQueryColumn
+#include "backend/diagnostics/journal.h"         // says which step fell to the RAM floor, and why
+#include "backend/system/value/valueType.h"      // ibValueTypeDescription::AdjustValue — an empty value of a declared type
 #include "backend/query/queryReadState.h"        // ibQueryReadState — one state for a whole pipeline
-#include "backend/query/queryAst.h"              // ibQueryAstExpr — the recorded lambda body
+#include "backend/query/queryAST.h"              // ibQueryAstExpr — the tree a predicate lowers from
+#include "backend/compiler/lambdaQueryAST.h"    // it is READ off the instructions, never stored
 #include "backend/query/queryLowering.h"         // LowerLambdaPredicate / LowerLambdaColumnPath
 #include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — wrap a RAM value-table Join argument
 #include "backend/query/tempTableManager.h"      // ibTempTableManager — materialise a computed RLS inner to a DB temp (semi-join server-side)
-#include "backend/compiler/procUnitValues.h"     // ibValueFunction (the lambda value)
+#include "backend/compiler/procUnitLambda.h"     // ibValueFunction (the lambda value)
 #include "backend/compiler/procUnit.h"           // InvokeLambdaWith2Args — run the Join result-selector in RAM
 #include "backend/compiler/procContext.h"        // ibRunContext — captured-frame name lookup
 #include "backend/compiler/typeCtor.h"           // SYSTEM_TYPE_REGISTER
 #include "backend/backend_exception.h"
 
+#include <optional>
+
 namespace {
+
+// ⭐⭐ AT THE ADDRESS THE COMPILER WORKED OUT — no search at all.
+//
+// The lambda body's own instruction says `frame, cell`, and that is verbatim how the INVOKED lambda
+// addresses the same value: `m_capturedFrames[k]` IS depth k+1 for the call duration
+// (procUnitLambda.h, the OPER_CALL_LAMBDA shim). So the fold reads what the interpreter would read,
+// by the same coordinates, with nothing to look up.
+//
+// What this replaces ran on every fold: for each captured frame, for each local of its function, a
+// case-insensitive compare of the name. Two nested loops and a string compare to re-derive a number
+// that had been computed at compile time and thrown away.
+bool ResolveCapturedAt(const ibValueFunction* fn, long frame, long slot, ibValue& out)
+{
+	const long k = frame - 1;   // frame 1 = the context the lambda was written in
+	if (k < 0 || (size_t)k >= fn->m_capturedFrames.size())
+		return false;
+	const ibRunContext* const ctx = fn->m_capturedFrames[(size_t)k].get();
+	if (ctx == nullptr || ctx->m_pRefLocVars == nullptr)
+		return false;
+	if (slot < 0 || slot >= ctx->GetLocalCount() || ctx->m_pRefLocVars[slot] == nullptr)
+		return false;
+	out = *ctx->m_pRefLocVars[slot];
+	return true;
+}
 
 // Resolve a captured outer local BY NAME from the lambda's captured frames —
 // each frame knows its function (m_currentFunction) whose m_listLocals carries
 // name -> slot. Module-body frames (null function) are skipped; an unresolved
 // name makes the whole fold bail to RAM.
+//
+// ⚠ STILL HERE FOR THE TREE THAT HAS NO COORDINATES: an AST that came back from an older AOT blob,
+// or one the text query language built, carries a name and nothing else. A lambda compiled by this
+// engine takes the road above.
 bool ResolveCapturedByName(const ibValueFunction* fn, const wxString& name, ibValue& out)
 {
 	for (const std::shared_ptr<ibRunContext>& sp : fn->m_capturedFrames) {
@@ -56,7 +89,10 @@ bool CollectCaptured(const ibQueryAstExpr& e, const ibValueFunction* fn,
 		if (out.find(e.m_paramName) != out.end())
 			return true;
 		ibValue v;
-		if (!ResolveCapturedByName(fn, e.m_paramName, v))
+		// The coordinate first — a capture is always at least one frame out, so a zero frame means
+		// this node never had one (see queryAST.h) and the name is all there is.
+		if (!(e.m_capturedFrame > 0 && ResolveCapturedAt(fn, e.m_capturedFrame, e.m_capturedSlot, v))
+			&& !ResolveCapturedByName(fn, e.m_paramName, v))
 			return false;
 		out.emplace(e.m_paramName, v);
 		return true;
@@ -81,15 +117,25 @@ ibValueFunction* LambdaOf(ibValue** args, long n)
 	return dynamic_cast<ibValueFunction*>(args[0]->GetRef());
 }
 
-// The recorded body AST of a lambda; null = not recorded (an untranslatable body or a
-// multi-parameter lambda). An AOT-cache hit is NOT one of the reasons any more: the AST travels in
-// the cache since format v14 (byteCodeAOT.cpp), and the line that named it here outlived that fact.
+// ⭐⭐ THE QUERY TREE OF A LAMBDA, DERIVED — not stored, not serialised, not versioned.
+//
+// It used to be a field on the function record, written at compile time and carried through the AOT
+// cache (format v14). That is a SECOND representation of a body the bytecode already holds in full,
+// and it cost what a second representation always costs: a whitelist deciding what could travel,
+// which silently dropped what it did not know, and a format version that had to move whenever the
+// tree changed shape.
+//
+// It is read off the instructions instead, here, once per fold — a fold happens once per chain, not
+// once per row — which is what lets the runtime's bytecode be the SLICED form: instructions and
+// nothing else.
+//
+// Null = the body is outside the translatable subset (or has more than two parameters), and the
+// step takes the RAM floor, which is always correct.
 std::shared_ptr<ibQueryAstExpr> AstOf(const ibValueFunction* fn)
 {
-	if (fn == nullptr)
+	if (fn == nullptr || fn->GetParentBc() == nullptr)
 		return nullptr;
-	const ibByteCode::ibByteFunction* bfn = fn->GetFunction();
-	return bfn != nullptr ? bfn->m_lambdaExprAst : nullptr;
+	return ibBuildLambdaQueryAstFromCode(*fn->GetParentBc(), fn->GetFuncIndex());
 }
 
 // One result row as a script value: a REFERENCE object when the source has a
@@ -125,15 +171,56 @@ public:
 	                         const ibBackendQueryColumn* projectCol = nullptr,
 	                         const wxString& projectAlias = wxEmptyString)
 		: m_builder(builder), m_take(take), m_refCol(refCol), m_cols(std::move(cols)),
-		  m_ownedSource(std::move(ownedSource)), m_projectCol(projectCol), m_projectAlias(projectAlias),
-		  m_sel(Run(builder, take)) {}   // m_readState stays null — see queryReadState.h
+		  m_ownedSource(std::move(ownedSource)), m_projectCol(projectCol), m_projectAlias(projectAlias)
+		  {}   // m_readState stays null — see queryReadState.h
 
 	bool MoveNext(ibValue& current) override {
-		if (!m_sel.Next()) return false;
-		current = RowValue(m_sel, m_refCol, m_cols, m_projectCol, m_projectAlias);
+		if (!m_sel)
+			m_sel.emplace(Run(m_builder, m_take));
+		if (!m_sel->Next()) return false;
+		current = RowValue(*m_sel, m_refCol, m_cols, m_projectCol, m_projectAlias);
 		return true;
 	}
-	void Reset() override { m_sel = Run(m_builder, m_take); }
+	// Drop the cursor rather than re-open it: the next MoveNext runs the query, and a Reset that is
+	// never followed by a read (the compile-time walk does exactly that) costs nothing.
+	void Reset() override { m_sel.reset(); }
+
+	// ⭐⭐ WHAT A ROW OF THIS PIPELINE LOOKS LIKE, WITHOUT READING ONE. The editor and the completion
+	// walk ask a source what its element IS — that is how `foreach (row in …) { row.` and a lambda's
+	// row parameter get their members — and a Queryable could not answer, so the most common shape
+	// LINQ is written in got no help at all.
+	//
+	// It costs no query: the SHAPE is already in hand. A single-key source yields a reference (an
+	// empty one of the right type says exactly as much about its members as a filled one), and every
+	// other source yields a structure of the SAME columns MoveNext would fill. A projection yields
+	// nothing, because a projected scalar's members depend on the value and there is none yet.
+	bool PeekSample(ibValue& current) const override {
+		if (!m_projectAlias.IsEmpty() || m_projectCol != nullptr)
+			return false;
+
+		if (m_refCol != nullptr) {
+			const ibTypeDescription& declared = m_refCol->GetTypeValueDesc();
+			if (declared.m_listTypeClass.size() != 1)
+				return false;   // composite: several shapes, and picking one would be picking for the reader
+
+			// 🛑 THE VALUE IS MADE FROM ITS TYPE DESCRIPTION, not from the platform's ctor registry:
+			// `ibValue::GetAvailableCtor` does not know configuration types at all, so a reference
+			// column would have produced nothing — silently. AdjustValue is the door the value table
+			// already uses to make an empty cell of a declared type.
+			ibValue made = ibValueTypeDescription::AdjustValue(declared);
+			if (made.GetType() == ibValueTypes::TYPE_EMPTY)
+				return false;
+			current = std::move(made);
+			return true;
+		}
+
+		ibValueStructure* const row = new ibValueStructure();
+		current = ibValue(row);
+		for (const ibBackendQueryColumn* c : m_cols)
+			if (c != nullptr)
+				row->Insert(c->GetName(), ibValue());
+		return true;
+	}
 
 private:
 	static ibDataQueryResult Run(const ibDataQueryBuilder& builder, long take) {
@@ -157,7 +244,14 @@ private:
 	// Reset() re-executes and therefore reads whatever is current then — deliberately: re-running a
 	// loop is a new question, not a continuation of the old one.
 	std::shared_ptr<ibQueryReadState> m_readState;
-	ibDataQueryResult           m_sel;
+
+	// 🛑 THE CURSOR OPENS WHEN A ROW IS ASKED FOR, NOT WHEN THE ITERATOR IS MADE. It used to run in
+	// the member init list, which made `CreateIterator()` a SELECT — and the completion walk asks a
+	// source for its element shape through exactly that door, so every caret press inside
+	// `foreach (row in Catalogs.Goods) { row.` issued a query against the live base to learn a TYPE
+	// it could read off the columns. A sample is a type, not a row (scriptComplete.cpp says so in
+	// its own comment); now that is true.
+	std::optional<ibDataQueryResult> m_sel;
 };
 
 } // namespace
@@ -167,13 +261,13 @@ private:
 //////////////////////////////////////////////////////////////////////
 
 ibValueQueryable::ibValueQueryable(const ibBackendQueryable* queryable, const wxString& sourceName)
-	: ibValue(ibValueTypes::TYPE_VALUE), m_queryable(queryable), m_sourceName(sourceName)
+	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_queryable(queryable), m_sourceName(sourceName)
 {
 	m_builder.From(queryable);
 }
 
 ibValueQueryable::ibValueQueryable(std::shared_ptr<const ibBackendQueryable> owned, const wxString& sourceName)
-	: ibValue(ibValueTypes::TYPE_VALUE), m_queryable(owned.get()), m_sourceName(sourceName),
+	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_queryable(owned.get()), m_sourceName(sourceName),
 	  m_ownedSource(std::move(owned))
 {
 	m_builder.From(m_queryable);
@@ -232,8 +326,22 @@ wxString ibValueQueryable::GetString() const
 	return wxString::Format(wxT("Queryable(%s | %s)"), m_sourceName, ops);
 }
 
-void ibValueQueryable::MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibValue** args, long n)
+void ibValueQueryable::MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibValue** args, long n,
+	const wxChar* why)
 {
+	// ⭐⭐ AND IT SAYS SO. Dropping to RAM changes what this step COSTS — every row leaves the
+	// database and the op runs over the materialised set — and it used to happen in silence, at five
+	// different call sites. One line, here, because here is where they all arrive: which op fell,
+	// why, and off which source. Said at INFO: a diagnostic must never interrupt the person (a
+	// warning in this engine comes back as a modal dialog).
+	wxString opName = wxString::Format(wxT("#%d"), (int)method);
+	for (const ibValue::ibLinqMethodInfo& info : ibValue::GetLinqMethodTable())
+		if (info.id == method) { opName = info.name; break; }
+
+	// GetString already spells the pipeline as it stands — `Queryable(source | Where, OrderBy)` —
+	// so the line says WHICH query fell to RAM, not just which verb.
+	ibJournalInfo(wxT("linq"), wxT("%s runs in RAM: %s [%s]"), opName, why, GetString());
+
 	// The RAM floor: stream the ACCUMULATED query into an Array (references for
 	// single-key sources, structures otherwise — folded Where/OrderBy/Take stay
 	// server-side), then run the op there with the ordinary RAM machinery.
@@ -447,7 +555,10 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 				}
 			}
 		}
-		MaterialiseThenRam(method, ret, args, n);   // untranslatable -> the RAM floor
+		// The predicate could not be lowered: either the lambda recorded no query tree (the compile
+		// journal says which construct stopped it) or a captured name was not found in any frame.
+		MaterialiseThenRam(method, ret, args, n,
+			wxT("the predicate does not lower to SQL - see the compile line for this lambda"));
 		return;
 	}
 
@@ -469,7 +580,8 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 				}
 			}
 		}
-		MaterialiseThenRam(method, ret, args, n);
+		MaterialiseThenRam(method, ret, args, n,
+			wxT("the sort key is not a plain column of this source"));
 		return;
 	}
 
@@ -557,7 +669,8 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		// slice fall to the RAM floor — the unchanged ibValueJoinState path.
 		if (JoinPushDown(ret, args, n))
 			return;
-		MaterialiseThenRam(method, ret, args, n);
+		MaterialiseThenRam(method, ret, args, n,
+			wxT("the join could not be folded into the query - see JoinPushDown"));
 		return;
 	}
 
@@ -609,16 +722,98 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 				}
 			}
 		}
-		MaterialiseThenRam(method, ret, args, n);
+		MaterialiseThenRam(method, ret, args, n,
+			wxT("the projection is not a column or a dot-walk this source can answer"));
 		return;
 	}
 
 	default:
 		// GroupBy / Skip / Distinct / Contains / ... — the RAM floor: the folded
 		// prefix still runs server-side, the rest runs over the materialised refs.
-		MaterialiseThenRam(method, ret, args, n);
+		MaterialiseThenRam(method, ret, args, n,
+			wxT("this operator has no server-side form yet (GroupBy / Skip / Distinct / aggregates / set ops)"));
 		return;
 	}
+}
+
+namespace {
+
+// ⭐⭐ A CAPTURED VALUE IS PUT IN PLACE, NOT CARRIED IN A MAP.
+//
+// The old road passed `std::map<wxString, ibValue>` from the fold down to the lowering, which then
+// looked each value up BY NAME — a container and a string compare to move something the tree already
+// pointed at. Both existed only because the capture used to be known by name.
+//
+// It is known by ADDRESS now (queryAST.h, m_capturedFrame / m_capturedSlot), and this tree is
+// transient — built here, lowered here, dropped here — so the value simply REPLACES the node. No
+// container, no keys, no lookup, and the lowering sees a literal, which it already knew how to read.
+//
+// False = something is not readable from here, and the caller leaves the filter to the loop.
+bool ResolveCapturesInPlace(ibQueryAstExpr& e, const ibRunContext* frame)
+{
+	if (e.m_kind == ibQueryAstExprKind::Param) {
+		if (frame == nullptr || frame->m_pRefLocVars == nullptr)
+			return false;
+		if (e.m_capturedFrame != 0)
+			return false;                       // an outer frame: not this loop's business
+		if (e.m_capturedSlot < 0 || e.m_capturedSlot >= frame->GetLocalCount())
+			return false;
+		const ibValue* const cell = frame->m_pRefLocVars[e.m_capturedSlot];
+		if (cell == nullptr)
+			return false;
+		e.m_kind    = ibQueryAstExprKind::Literal;
+		e.m_literal = *cell;
+		return true;
+	}
+	ibQueryAstExprPtr* children[] = { &e.m_arg, &e.m_lhs, &e.m_rhs, &e.m_low, &e.m_high, &e.m_else };
+	for (ibQueryAstExprPtr* c : children)
+		if (*c && !ResolveCapturesInPlace(**c, frame)) return false;
+	for (ibQueryAstExprPtr& i : e.m_list)
+		if (i && !ResolveCapturesInPlace(*i, frame)) return false;
+	for (ibQueryAstExprPtr& i : e.m_args)
+		if (i && !ResolveCapturesInPlace(*i, frame)) return false;
+	return true;
+}
+
+} // namespace
+
+bool ibValueQueryable::NarrowByInstructions(const ibByteCode& byteCode, long from, long to,
+	const ibParamRunUnit& rowSlot, const ibParamRunUnit& resultSlot, const ibRunContext* frame)
+{
+	if (m_queryable == nullptr)
+		return false;
+
+	// ⭐⭐ THE TREE IS READ, NOT FETCHED. The loop's predicate is a stretch of ordinary instructions,
+	// and the same def-use walk that answers the caret turns it into the query tree — so a chain
+	// compiled as a loop reaches the database with nothing stored for it anywhere. See
+	// OPER_LINQ_NARROW.
+	wxString refused;
+	const std::shared_ptr<ibQueryAstExpr> ast =
+		ibBuildQueryAstFromRange(byteCode, from, to, rowSlot, resultSlot, &refused);
+	if (!ast) {
+		// Ordinary, and worth saying once: this is the difference between a server-side filter and
+		// streaming every row to be filtered here.
+		ibJournalInfo(wxT("linq"), wxT("%s: the loop's filter stays in RAM: %s"),
+			m_sourceName, refused.IsEmpty() ? wxString(wxT("(no reason)")) : refused);
+		return false;
+	}
+
+	// A capture is read where the compiler put it and PUT IN PLACE — no map, no name, no lookup.
+	if (!ResolveCapturesInPlace(*ast, frame))
+		return false;
+
+	const ibQueryPredicatePtr pred =
+		ibQueryLowering::LowerLambdaPredicate(m_queryable, *ast, {});
+	if (!pred) {
+		ibJournalInfo(wxT("linq"), wxT("%s: the loop's filter does not lower to SQL"), m_sourceName);
+		return false;
+	}
+
+	// Narrowed IN PLACE: the loop is about to iterate this very value, so there is no new link to
+	// hand back and nobody to hand it to.
+	m_builder.Where(pred);
+	m_ops.push_back(wxT("Where"));
+	return true;
 }
 
 std::shared_ptr<ibValueIteratorState> ibValueQueryable::CreateIterator()

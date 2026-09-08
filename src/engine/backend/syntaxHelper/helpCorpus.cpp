@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <set>        // one posting per token per entry — see the token index
 #include <utility>
 
 namespace {
@@ -229,15 +230,34 @@ void ibHelpCorpus::BuildIndexes() {
 		if (!e.nameEn.empty() && e.nameEn != e.nameLocal)
 			m_prefixIndex[NormaliseKey(e.nameEn)].push_back(i);
 
-		// Token index — name + signature only in Phase 1 (no description
-		// tokens, see §3.5). Each token maps to a vector of entry slots.
-		auto addTokens = [this, i](const wxString& text) {
+		// ⭐⭐ THE DESCRIPTION IS INDEXED TOO, and leaving it out was the whole of why this corpus
+		// could not be found by what it is ABOUT. Name and signature answer somebody who already
+		// knows the word — `From`, `AddColumn` — which is the one caller who needs help least. A
+		// person (or an assistant) arrives with the JOB: "write a query", "fold a table",
+		// "callback". Those words are in the prose and nowhere else, so every such search returned
+		// nothing, and nothing does not read as "say it differently" — it reads as "this platform
+		// has no such thing" (ibMcpTool::GetSearchText carries the same lesson, learned the same
+		// way). Measured 2026-09-08: `lambda` found the new guide entry only because the word had
+		// been put in its NAME; `write a query` found nothing at all while guide.linq says exactly
+		// that in its first line.
+		//
+		// The cost is a wider index and commoner tokens. That is the right trade for a corpus of
+		// this size — a few hundred entries, read by search far more often than by browsing — and
+		// the ranking already requires EVERY query token to hit, so prose does not drown a name:
+		// a one-word query still puts the name-exact match first (SearchText's bonus).
+		// ⚠ ONE POSTING PER TOKEN PER ENTRY. SearchText scores by counting postings and then
+		// requires the count to reach the number of query tokens — so an entry listed twice for one
+		// word would satisfy a TWO-word query on the strength of that word alone. Names and
+		// signatures rarely repeat a word and the flaw stayed hidden; a description repeats them
+		// constantly, and adding it without this would have turned "all words must hit" into "any
+		// word, often enough".
+		std::set<wxString> unique;
+		for (const wxString& text : { e.nameLocal, e.nameEn, e.signature, e.description })
 			for (const wxString& t : Tokenise(text))
-				m_tokenIndex[t].push_back(i);
-		};
-		addTokens(e.nameLocal);
-		addTokens(e.nameEn);
-		addTokens(e.signature);
+				unique.insert(t);
+
+		for (const wxString& t : unique)
+			m_tokenIndex[t].push_back(i);
 	}
 }
 

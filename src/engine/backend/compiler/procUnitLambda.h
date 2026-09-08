@@ -1,7 +1,14 @@
-#ifndef _IB_PROC_UNIT_VALUES_H__
-#define _IB_PROC_UNIT_VALUES_H__
+#ifndef _IB_PROC_UNIT_LAMBDA_H__
+#define _IB_PROC_UNIT_LAMBDA_H__
 
-// Runtime-internal first-class ibValue subclasses:
+// THE LAMBDA AS A VALUE, and the cursor that comes with it — the two runtime-internal ibValue
+// subclasses the interpreter makes for itself.
+//
+// ⭐ NAMED FOR THE LAMBDA rather than for "values", 2026-09-08: what a reader comes here for is
+// `ibValueFunction` — a function held in a slot, with its captured frames — and the iterator is
+// beside it because a lambda is what a pipeline calls per row. A file named after the category it
+// belongs to says nothing a reader could not have guessed from the folder.
+//
 //   - ibValueIterator   (TYPE_ITERATOR) — holds an ibValueIteratorState
 //                       cursor + the "hot-from-NEXT_ITER" flag used by
 //                       OPER_FOREACH to detect a fresh entry vs Break
@@ -14,15 +21,13 @@
 //                       granted via friend declaration in procUnit.h.
 //
 // Declared here (not inline in procUnit.cpp anymore) so other TUs in
-// the same DLL — currently procUnitLinq.cpp — can hold these by value
+// the same DLL — currently procUnitLINQ.cpp — can hold these by value
 // (state classes embed an ibValueFunction predicate / projection).
 // The g_value{Iterator,Function} CLSIDs are header-defined inline constexpr
 // below (constexpr + ODR-safe across DLLs); wxIMPLEMENT_DYNAMIC_CLASS still
 // lives in procUnit.cpp.
 
-#include "compileCode.h"
 #include "procUnit.h"          // class ibProcUnit (friend grant for ibValueFunction)
-#include "procUnitState.h"     // ibProcUnitState::GetLambdaRuntime()
 #include "session/session.h"   // ibSession::GetPUState() — used by ibValueFunction::Execute
 #include "backend/eventDispatcher.h"   // ibValueFunction IS-A dispatcher — a lambda dispatches by running its own body
 // ibBackendCoreException reaches us transitively via compileCode.h's chain.
@@ -135,6 +140,29 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 	// m_capturedFrames[k]->m_pRefLocVars for the call duration.
 	std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames;
 
+	// ⭐⭐ AND THE MODULE'S OWN FRAME, WHICH IS NOT ONE OF THEM. The chain above holds frames that
+	// had to be HEAP-PROMOTED to survive the call that made them; a module body's frame needs no
+	// promoting because it never ends while the module is loaded — it is a member of the
+	// ibProcUnit (ibRunLifetime::Retained). So `weak_from_this().lock()` returns nothing for it and
+	// the capture walk skipped it, silently: a lambda could not see the module's own variables at
+	// all, and read whatever sat at that depth in the shim instead.
+	//
+	// Measured 2026-09-08, and it was quiet in the worst way — an ANSWER, not a refusal:
+	//     var s = "hi"; var f = Function(x){ return s; };  f(0)  →  "Data"
+	// The depth the compiler emitted (one frame up) landed on the session shim's parent layer,
+	// whose slot 0 is the platform's `Data` scope. A named function reading the same variable was
+	// always correct, which is what says this is a defect and not a rule: two roads to one name.
+	//
+	// It sits AFTER the captured frames in the installed list, because that is the order the
+	// compiler counts in — a lambda inside a procedure reaches its procedure's locals at depth 1
+	// and the module's at depth 2 (ibCompileContext::GetVariable, numParent - numContext).
+	//
+	// ⚠ A BARE POINTER, deliberately: the frame belongs to the module's ibProcUnit and outlives
+	// every lambda made in it, exactly as `m_parentBc` — the bytecode of that same module — does.
+	// This value already may not outlive its session (IsTransferable is false, and the note above
+	// says why); this adds no lifetime that was not already there.
+	ibRunContext* m_moduleFrame = nullptr;
+
 	// Cached at OPER_LFUNC materialise from the bytecode-side fn's
 	// m_needsHeapFrame. OPER_CALL_LAMBDA reads it as a single field
 	// access on the lambda value, no need to dereference through
@@ -178,15 +206,41 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 		// modules) shift from positions [1..] to [N+1..] so the
 		// previously-emitted depths still hit the correct frames.
 		// Allocation done per invoke (could pool later); freed on
-		// unwind. Empty m_capturedFrames → original list untouched,
-		// zero-overhead fast path.
+		// unwind. Nothing captured and no module frame → original list
+		// untouched, zero-overhead fast path.
 		ibRunContext** prevList = runtime->m_ppArrayContext;
 		ibRunContext** newList  = nullptr;
+		bool           ownsList = false;   // true = this invoke malloc'd it and must free it
 		unsigned int origSize = 0;
 		const unsigned int N  = (unsigned int)m_capturedFrames.size();
-		if (N > 0) {
+
+		// The module's own frame is one more layer, and it goes AFTER the captured ones — the
+		// order the compiler counted the depths in. See ibValueFunction::m_moduleFrame.
+		const unsigned int M  = (m_moduleFrame != nullptr) ? 1u : 0u;
+		const unsigned int L  = N + M;   // layers this invoke inserts
+
+		if (L > 0) {
 			origSize = runtime->GetParentCount() + 2;
-			newList  = new ibRunContext*[origSize + N];
+
+			// 🛑 NOT A FRESH ARRAY PER INVOKE. A pipeline calls its lambda ONCE PER ROW, and this
+			// allocated and freed a context list every time — a malloc/free pair per row of every
+			// filter and every projection that captured anything, for a list whose CONTENTS are
+			// rebuilt identically each time. The buffer belongs to the lambda, which is the thing
+			// that is invoked repeatedly; it is refilled (a handful of pointer writes) instead of
+			// re-obtained.
+			//
+			// ⚠ ONE BUFFER, SO ONE USER AT A TIME. A lambda that re-enters itself — recursion, or
+			// an inner pipeline over the same function value — would refill the list the outer
+			// invoke is still reading. The depth counter says when that is happening and that
+			// invoke allocates, exactly as before; the common path never does.
+			if (m_listInUse == 0) {
+				m_contextScratch.resize((size_t)origSize + L);
+				newList = m_contextScratch.data();
+			}
+			else {
+				newList  = new ibRunContext*[origSize + L];
+				ownsList = true;
+			}
 			// [0] stays own — depth=0 in macros reads pRefLocVars directly,
 			// m_ppArrayContext[0] is unused in normal execution but kept for
 			// the bDelta=true case where slot=-1 lands here.
@@ -194,10 +248,13 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 			for (unsigned int k = 0; k < N; ++k) {
 				newList[k + 1] = m_capturedFrames[k].get();
 			}
+			if (M != 0)
+				newList[N + 1] = m_moduleFrame;
 			for (unsigned int i = 1; i < origSize; ++i) {
-				newList[i + N] = prevList ? prevList[i] : nullptr;
+				newList[i + L] = prevList ? prevList[i] : nullptr;
 			}
 			runtime->m_ppArrayContext = newList;
+			++m_listInUse;
 		}
 
 		try {
@@ -207,14 +264,16 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 			runtime->m_pByteCode = prevBc;
 			if (newList) {
 				runtime->m_ppArrayContext = prevList;
-				delete[] newList;
+				--m_listInUse;
+				if (ownsList) delete[] newList;
 			}
 			throw;
 		}
 		runtime->m_pByteCode = prevBc;
 		if (newList) {
 			runtime->m_ppArrayContext = prevList;
-			delete[] newList;
+			--m_listInUse;
+			if (ownsList) delete[] newList;
 		}
 	}
 
@@ -222,6 +281,14 @@ private:
 
 	const ibByteCode* m_parentBc  = nullptr;
 	long              m_funcIndex = -1;
+
+	// The context list this lambda installs while it runs — see Execute. Held here because the
+	// lambda is the thing that gets invoked over and over, so the buffer's life should be the
+	// lambda's, not the call's. m_listInUse counts live invokes, so a re-entrant one does not
+	// refill a buffer an outer invoke is still reading.
+	std::vector<ibRunContext*> m_contextScratch;
+	int                        m_listInUse = 0;
+
 };
 
 // Typed-tag fast casts — replace RTTI walk (ConvertToType<T>() →
@@ -255,7 +322,7 @@ inline ibValueIterator* AsIterator(const ibValue& v) { return AsIterator(&v); }
 
 #pragma region value_helpers
 // File-scope helpers shared by procUnit.cpp's Execute switch and
-// procUnitLinq.cpp's LINQ runtime. Kept inline (defined in this
+// procUnitLINQ.cpp's LINQ runtime. Kept inline (defined in this
 // header) so both TUs see identical semantics; ODR holds because
 // every TU sees the same single definition.
 
@@ -473,4 +540,4 @@ inline void SetTypeNumber(ibValue& cValue1, const ibNumber& fValue)
 
 #pragma endregion
 
-#endif // _IB_PROC_UNIT_VALUES_H__
+#endif // _IB_PROC_UNIT_LAMBDA_H__

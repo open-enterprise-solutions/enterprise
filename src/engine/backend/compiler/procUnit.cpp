@@ -3,16 +3,13 @@
 //	Description : Processor unit 
 ////////////////////////////////////////////////////////////////////////////
 
-#include "compileCode.h"
 #include "procUnit.h"
-#include "procUnitValues.h"    // ibValueIterator / ibValueFunction / AsFunction / AsIterator
-#include "procUnitState.h"
+#include "procUnitLambda.h"    // ibValueIterator / ibValueFunction / AsFunction / AsIterator
 
 #include "debugger/debugServer.h"
 #include "system/systemManager.h"
-#include "session/session.h"   // ibSession::GetPUState() / GetLambdaRuntime()
+#include "system/value/valueQueryable.h"   // OPER_LINQ_NARROW offers the loop's predicate to a SOURCE
 
-#include "appData.h"
 
 #include <algorithm>
 #include <utility>   // std::forward — the variadic Raise below
@@ -712,7 +709,7 @@ inline void ModValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 	}
 }
 
-// Definition of the LINQ-filter three-valued NULL flag (declared in procUnitValues.h).
+// Definition of the LINQ-filter three-valued NULL flag (declared in procUnitLambda.h).
 thread_local bool ts_threeValuedNullCompare = false;
 
 
@@ -784,7 +781,7 @@ inline void CompareValueNE(ibValue& cValue1, const ibValue& cValue2, const ibVal
 }
 
 // CopyValue / MoveValue / IsEmptyValue / IsHasValue / SetTypeBoolean /
-// SetTypeNumber moved to procUnitValues.h — procUnitLinq.cpp uses
+// SetTypeNumber moved to procUnitLambda.h — procUnitLINQ.cpp uses
 // them as well. Math + compare helpers stay below (only Execute uses
 // them).
 
@@ -849,17 +846,17 @@ inline ibValue GetValue(const ibValue& cValue1)
 }
 
 // ibValueIterator / ibValueFunction class definitions moved to
-// procUnitValues.h so procUnitLinq.cpp (and any other future LINQ-
+// procUnitLambda.h so procUnitLINQ.cpp (and any other future LINQ-
 // adjacent TU) can hold them by value. Implementation-side artefacts —
 // wxIMPLEMENT_DYNAMIC_CLASS + the CLSID statics + ibValueFunction's
 // out-of-line bits — stay in this TU.
 
-// g_valueIterator / g_valueFunction are now header-defined inline constexpr (procUnitValues.h).
+// g_valueIterator / g_valueFunction are now header-defined inline constexpr (procUnitLambda.h).
 
 // LINQ machinery — CallLambdaWithArg / CallLambdaWith2Args /
 // InvokeLambdaWithArg, the iterator-state classes, ibValueQuery,
 // ibValueLinqDispatchImpl, ibValue::DispatchLinqMethod, and the
-// FindLinqMethodByName resolver all live in procUnitLinq.cpp.
+// FindLinqMethodByName resolver all live in procUnitLINQ.cpp.
 
 //////////////////////////////////////////////////////////////////////
 //						Construction/Destruction                    //
@@ -1096,7 +1093,16 @@ start_label:
 				ibValue* pRetValue = &variable1;
 				ibRunContextSmall cRunContext(array2, ibRunLifetime::PerCall);
 				cRunContext.m_lParamCount = array2;
-				const wxString className = m_pByteCode->m_listConst[index2].GetString();
+
+				// 🛑 READ BEFORE THE LOOP. `index3` is a macro over `curCode`, which is
+				// `m_listCode[lCodeLine]` — and the argument loop below ADVANCES lCodeLine. Reading
+				// the class after it would read the LAST ARGUMENT's third operand, which is zero,
+				// and the refusal says "Error creating object '0'" (measured 2026-09-09: every test
+				// whose `New` had arguments; `New Array` with none was fine, which is what made it
+				// look like a type problem rather than a cursor one). The name this replaces was
+				// read here for exactly the same reason.
+				const ibClassID classId = (ibClassID)index3;
+
 				//load parameters
 				for (long i = 0; i < cRunContext.m_lParamCount; i++) {
 					lCodeLine++;
@@ -1123,7 +1129,18 @@ start_label:
 						}
 					}
 				}
-				CopyValue(*pRetValue, ibValue::CreateObject(className, cRunContext.m_lParamCount > 0 ? cRunContext.m_pRefLocVars : nullptr, cRunContext.m_lParamCount));
+				// ⭐⭐ BY ID, AND THE COMPILER WROTE IT DOWN. This used to read the class NAME out of
+				// the const pool — a wxString built and destroyed per execution, through a DLL
+				// import — and hand it to `CreateObject(name, …)`, which is `GetIDObjectFromString`
+				// followed by the very call below. The compiler had already proved the name names a
+				// registered value ctor (compileCode.cpp refuses to emit otherwise), so the lookup
+				// was re-deciding at runtime, per `New`, a question already answered at compile time.
+				//
+				// The id round-trips through the operand as a signed 64 (`w_s64` / `r_s64`), which
+				// preserves the bit pattern of the uint64 it is; the cast back is what makes it the
+				// same number, not a conversion.
+				CopyValue(*pRetValue, ibValue::CreateObject(classId,
+					cRunContext.m_lParamCount > 0 ? cRunContext.m_pRefLocVars : nullptr, cRunContext.m_lParamCount));
 			} break;
 			case OPER_SET_A:
 			case OPER_SET_SCOPE://writable member of a scope binding — identical parent+prop write
@@ -1342,6 +1359,68 @@ start_label:
 					pVariable2->CallAsProc(lMethodNum, cRunContext.m_pRefLocVars, realParamCount);
 				} break;
 			}
+			// ⭐⭐ THE LOOP OFFERS ITS PREDICATE TO THE SOURCE — see OPER_LINQ_NARROW in codeDef.h.
+			//
+			// The tree is READ off the instructions standing right here, so nothing had to be stored
+			// for this: no query tree in the bytecode, no serialisation of one, no version for it.
+			// A source that can run the predicate server-side replaces itself with a narrowed one;
+			// anything else leaves the slot exactly as it was and the loop filters as it would have.
+			//
+			// Silent by design: this is an OFFER, and a refusal is the ordinary answer. What the
+			// step DID is said by the source itself when it matters (valueQueryable.cpp).
+			case OPER_LINQ_NARROW:
+			{
+				if (index2 != 0) {
+					ibValueQueryable* const source = dynamic_cast<ibValueQueryable*>(variable1.GetRef());
+					if (source != nullptr)
+						source->NarrowByInstructions(*m_pByteCode, (long)index2,
+							(long)curCode.m_param2.m_numArray, curCode.m_param4, curCode.m_param3,
+							pContext);
+				}
+				break;
+			}
+
+			// ⭐⭐ WHAT A COMPILED PIPELINE DOES TO ITS OWN COLLECTION — see codeDef.h for the operands
+			// and procUnitLINQ.cpp for why that collection is not a script Array. Three instructions
+			// and no object built by name: the collection is made in its frame slot on first use.
+			case OPER_LINQ_SEEN:
+				SetTypeBoolean(variable1, ibLinqSeen(variable2, cvariable3));
+				break;
+
+			// p2 = the row (SKIP when this instruction carries only a further key), p3 = the key
+			// (SKIP when the query does not order), p4 = which key it is. See ibLinqKeep.
+			case OPER_LINQ_KEEP:
+				ibLinqKeep(variable1,
+					array2 == DEF_VAR_SKIP ? nullptr : &cvariable2,
+					array3 == DEF_VAR_SKIP ? nullptr : &cvariable3,
+					(long)curCode.m_param4.m_numIndex);
+				break;
+
+			case OPER_LINQ_BUCKET:
+				ibLinqBucket(variable1, cvariable2, cvariable3);
+				break;
+
+			case OPER_LINQ_BUCKET_GET:
+				ibLinqBucketGet(variable1, variable2, cvariable3);
+				break;
+
+			case OPER_LINQ_RESULT:
+				// index3: 0 the rows · 1 the first row · 2 the GROUPS · 3 a table, asked for by name.
+				if (index3 == 2) ibLinqGroups(variable1, variable2);
+				else             ibLinqResult(variable1, variable2, (int)array3, index3 == 1);
+				break;
+
+			// The projection. The names are read from the const pool only while the shape is being
+			// made — once per query; the field stores that follow carry positions, not names.
+			case OPER_LINQ_ROW:
+				ibLinqRow(variable1, variable2,
+					m_pByteCode->m_listConst[index3].GetString(), (long)array3);
+				break;
+
+			case OPER_LINQ_FIELD:
+				ibLinqField(variable1, cvariable2, (long)index3);
+				break;
+
 			case OPER_CALL_LINQ:
 			{ //universal pipeline method on an iterable receiver — Where /
 				// Select / OrderBy / GroupBy / Join / Skip / Take / ... .
@@ -1369,7 +1448,7 @@ start_label:
 				// PER ELEMENT.
 				//
 				// It is safe because the LINQ contract is checked rather than
-				// assumed: every handler in procUnitLinq.cpp gates on `n` before
+				// assumed: every handler in procUnitLINQ.cpp gates on `n` before
 				// touching args[i] (`if (n < 1 || args[0] == nullptr)`), unlike the
 				// member-method implementations above, which index by their own
 				// declared arity and are why THAT frame is sized by GetNParams.
@@ -1512,7 +1591,17 @@ start_label:
 				tryList.emplace_back(lCodeLine, index1);
 				break; //transition on error
 			case OPER_RAISE: ibBackendCoreException::Error(ibBackendException::GetLastError()); break;
-			case OPER_RAISE_T: ibBackendCoreException::Error(m_pByteCode->m_listConst[index1].GetString()); break;
+			// 🛑 THE OPERAND IS A SLOT, NOT A CONST-POOL INDEX. `Raise(<expr>)` compiles its argument
+			// with GetExpression — which yields the SLOT the computed value landed in — and this read
+			// `m_listConst[index1]`, i.e. it took that slot NUMBER as a position in the constant pool.
+			// So the message was whatever constant happened to sit at that ordinal, and in a procedure
+			// with more slots than constants it walked off the end: `vector subscript out of range`
+			// inside the standard library, from a line of script that only wanted to raise an error
+			// (measured 2026-09-08, stack straight through ibProcUnit::Execute).
+			//
+			// Read like every other operand in this switch — through ResolveRead, which knows the
+			// difference between a frame slot and a constant because the operand says which it is.
+			case OPER_RAISE_T: ibBackendCoreException::Error(cvariable1.GetString()); break;
 			case OPER_RET:
 				if (index1 != DEF_VAR_NORET) {
 					if (pvarRetValue == nullptr)
@@ -1670,6 +1759,19 @@ start_label:
 				// (numParent - numContext counting): emit depth = 1
 				// reads m_capturedFrames[0], depth = 2 reads [1], etc.
 				for (ibRunContext* p = pContext; p != nullptr; p = p->m_parentRunContext) {
+
+					// ⭐⭐ THE MODULE BODY'S FRAME IS TAKEN SEPARATELY, and it has to be: it is
+					// Retained rather than heap-promoted, so the lock() below never sees it, and a
+					// lambda was left unable to read the module's own variables — see
+					// ibValueFunction::m_moduleFrame for the measurement. The FIRST one found wins:
+					// walking further would reach a parent module, whose variables this lambda
+					// reaches by name through the bytecode chain, not by frame depth.
+					if (p->IsModuleBody()) {
+						if (newFn->m_moduleFrame == nullptr)
+							newFn->m_moduleFrame = p;
+						continue;
+					}
+
 					std::shared_ptr<ibRunContext> sp = p->weak_from_this().lock();
 					if (sp)
 						newFn->m_capturedFrames.push_back(std::move(sp));
@@ -1754,7 +1856,7 @@ start_label:
 				// something sensible.
 				pNewCtx->m_parentRunContext = !fn->m_capturedFrames.empty()
 					? fn->m_capturedFrames[0].get()
-					: pContext;
+					: (fn->m_moduleFrame != nullptr ? fn->m_moduleFrame : pContext);
 				ibValue* pRetValue = &variable1;
 
 				// Phase 1 — consume caller-supplied OPER_SET / OPER_SETCONST.
@@ -2582,8 +2684,8 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 	// where it meant: depth 1 was supposed to reach the block's own frame and instead landed on the
 	// host's, one layer further out.
 	//
-	// 🛑 That is a WRONG VALUE, not an error: `wanted = "Болт"; f = Function(x) { Return x = wanted; }`
-	// compared against somebody else's slot — `f("Болт")` answered False, `Where(f)` answered 0, and
+	// 🛑 That is a WRONG VALUE, not an error: `wanted = "Bolt"; f = Function(x) { Return x = wanted; }`
+	// compared against somebody else's slot — `f("Bolt")` answered False, `Where(f)` answered 0, and
 	// on the pipeline road the slot held no ibValue at all and the process went down (dump 2026-09-04:
 	// N = 0 captured frames, then CompareValueEQ on 0x0077002e). Everything worked in an ordinary
 	// module frame, so it read as "LINQ is broken in the sandbox" for an hour.
@@ -2594,7 +2696,7 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 	// with no place to declare anything, so they keep the member frame and pay nothing.
 	//
 	// ⚠ `m_ppArrayContext[0]` still points at the member frame and that is correct: depth 0 is read
-	// straight from `m_pRefLocVars` (procUnitValues.h), so slot 0 of the list is unused in normal
+	// straight from `m_pRefLocVars` (procUnitLambda.h), so slot 0 of the list is unused in normal
 	// execution — the note there says so, and this relies on it rather than restating it.
 	std::shared_ptr<ibRunContext> spBlockFrame;
 	ibRunContext* pEvalFrame = &runEvaluate->m_cCurContext;
@@ -2757,5 +2859,5 @@ bool ibProcUnit::CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetVa
 
 SYSTEM_TYPE_REGISTER(ibValueIterator, "Iterator", g_valueIterator);
 SYSTEM_TYPE_REGISTER(ibValueFunction, "Function", g_valueFunction);
-// ibValueQuery + g_valueQuery moved to procUnitLinq.cpp along with the
+// ibValueQuery + g_valueQuery moved to procUnitLINQ.cpp along with the
 // rest of the LINQ runtime; SYSTEM_TYPE_REGISTER for it lives there.

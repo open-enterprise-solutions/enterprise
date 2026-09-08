@@ -44,6 +44,32 @@
 // went away, the numbering came back, and these values are the originals again.
 // The suite had faithfully reported a global change; the right answer was to
 // stop making it.
+//
+// RE-BASELINED AGAIN 2026-09-09, and this time the global change had to happen.
+// All sixteen moved at once — the same signature as both episodes above — and
+// the cause is the same shape with a different verdict: eight LINQ opcodes were
+// added to the instruction set (OPER_LINQ_NARROW … OPER_LINQ_FIELD), and they
+// went in BEFORE `OPER_END`, so `OPER_END` shifted from 74 to 82. It ends every
+// module, so every digest here carries it.
+//
+// ⭐⭐ AND IT COULD NOT HAVE GONE ANYWHERE ELSE. `OPER_END` is not merely the last
+// opcode, it is the COUNT the typed-opcode space is measured from —
+// `#define TYPE_DELTA1 (1 * (OPER_END + 1))` (codeDef.h) — so an opcode added
+// after it would be indistinguishable from a typed variant of an existing one.
+// Unlike the `Cached` episode, there is nothing to move and nothing to undo.
+//
+// The AOT format version carries the consequence for stored blobs, and this is
+// the third time it has: byteCodeAOT.cpp records the same shift at v9 (+1) and
+// v13 (+6), and now v28. A v27 blob holds raw m_numOper values that mean
+// different opcodes today, which is exactly what a format version is for.
+//
+// AND TWO OF THEM MOVED AGAIN 2026-09-09 — `ForeachLoop` and `MethodCallChain`,
+// the two sources here that contain a `New`. `OPER_NEW` now carries the CLASS ID
+// in `m_param3.m_numIndex`, decided at compile time, instead of leaving the
+// runtime to resolve the class name out of the const pool on every execution.
+// EXACTLY TWO, and that is the reading that justifies pasting: an operand that
+// changed for one construct moves the digests of the sources using it and no
+// others. Sixteen at once would have meant something global again. (AOT v29.)
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -275,7 +301,7 @@ TEST(CompilerContract, ArithmeticPrecedence) {
 		wxT("a = 1 + 2 * 3 - 4 / 2;\n")
 		wxT("b = (1 + 2) * (3 - 4);\n")
 		wxT("c = 10 % 3 + a * b;\n"),
-		8637331872626389594ULL);
+		5643730180419156171ULL);
 }
 
 TEST(CompilerContract, UnaryAndNot) {
@@ -284,7 +310,7 @@ TEST(CompilerContract, UnaryAndNot) {
 		wxT("a = -5;\n")
 		wxT("b = 2 * -a;\n")
 		wxT("b = Not (a > b);\n"),
-		12881780156291619749ULL);
+		11620107006812665909ULL);
 }
 
 TEST(CompilerContract, ComparisonAndLogical) {
@@ -294,7 +320,7 @@ TEST(CompilerContract, ComparisonAndLogical) {
 		wxT("r = a < b And b > 0 Or a = b;\n")
 		wxT("r = a <> b;\n")
 		wxT("r = a <= b And a >= b;\n"),
-		16427525471423789782ULL);
+		9926730261470300737ULL);
 }
 
 // `x = a op b` emits ONE opcode writing `x`, not an opcode into a temp and a LET
@@ -310,7 +336,7 @@ TEST(CompilerContract, CompoundAssignmentFusion) {
 		wxT("i = i * 2;\n")
 		wxT("s = \"a\";\n")
 		wxT("s = s + \"b\";\n"),
-		14445145491289715289ULL);
+		3815150277359227768ULL);
 }
 
 TEST(CompilerContract, NestedExpressionTemporaries) {
@@ -318,7 +344,7 @@ TEST(CompilerContract, NestedExpressionTemporaries) {
 		wxT("var a; var b; var c; var d; var r;\n")
 		wxT("a = 1; b = 2; c = 3; d = 4;\n")
 		wxT("r = (a + b) * (c - d) + (a * c) / (b + 1);\n"),
-		10059689396912253845ULL);
+		13859179706644134736ULL);
 }
 
 // ===========================================================================
@@ -348,7 +374,7 @@ TEST(CompilerContract, IfElseIfElse) {
 		// long as the break was steady. The emission was read before this number was replaced —
 		// the two conditionals now jump to 7 and 11, both arms jump to 12, and instruction 0
 		// carries a clean operand.
-		6857540215827998380ULL);
+		8744460667167399924ULL);
 }
 
 TEST(CompilerContract, WhileWithTwoBreaksAndTwoContinues) {
@@ -362,7 +388,7 @@ TEST(CompilerContract, WhileWithTwoBreaksAndTwoContinues) {
 		wxT("  If i = 30 Then Break; EndIf;\n")
 		wxT("  If i = 40 Then Break; EndIf;\n")
 		wxT("EndDo;\n"),
-		11728157248793000939ULL);
+		10205036441203862171ULL);
 }
 
 TEST(CompilerContract, ForLoop) {
@@ -372,7 +398,7 @@ TEST(CompilerContract, ForLoop) {
 		wxT("For i = 1 To 10 Do\n")
 		wxT("  s = s + i;\n")
 		wxT("EndDo;\n"),
-		7274276515444987384ULL);
+		16193131315832706463ULL);
 }
 
 TEST(CompilerContract, ForeachLoop) {
@@ -383,7 +409,7 @@ TEST(CompilerContract, ForeachLoop) {
 		wxT("Foreach it In arr Do\n")
 		wxT("  s = s + 1;\n")
 		wxT("EndDo;\n"),
-		17806177553391291511ULL);
+		1730109863474551500ULL);
 }
 
 TEST(CompilerContract, TryExcept) {
@@ -394,7 +420,7 @@ TEST(CompilerContract, TryExcept) {
 		wxT("Except\n")
 		wxT("  r = 0;\n")
 		wxT("EndTry;\n"),
-		13876428176927115487ULL);
+		5201982589343693378ULL);
 }
 
 // ===========================================================================
@@ -413,7 +439,7 @@ TEST(CompilerContract, FunctionsAndForwardReference) {
 		wxT("Procedure Entry()\n")
 		wxT("  var r; r = Caller(3);\n")
 		wxT("EndProcedure\n"),
-		8150511625823305062ULL);
+		17872137707533945073ULL);
 }
 
 TEST(CompilerContract, TypedParametersAndLocals) {
@@ -423,7 +449,7 @@ TEST(CompilerContract, TypedParametersAndLocals) {
 		wxT("  label = \"x\";\n")
 		wxT("  If cancel Then depth = depth + 1; EndIf;\n")
 		wxT("EndProcedure\n"),
-		5320152434076089702ULL);
+		17263237664001252769ULL);
 }
 
 TEST(CompilerContract, MethodCallChain) {
@@ -433,7 +459,7 @@ TEST(CompilerContract, MethodCallChain) {
 		wxT("  arr.Add(1); arr.Add(2);\n")
 		wxT("  Return arr.Count();\n")
 		wxT("EndFunction\n"),
-		6304013196489271024ULL);
+		17752133319479305487ULL);
 }
 
 // ===========================================================================
@@ -447,7 +473,7 @@ TEST(CompilerContract, LambdaWithCapture) {
 		wxT("           Return x + n;\n")
 		wxT("         EndFunction;\n")
 		wxT("EndFunction\n"),
-		16191912890559523292ULL);
+		15162364356553405039ULL);
 }
 
 TEST(CompilerContract, LambdaWithoutCapture) {
@@ -457,7 +483,7 @@ TEST(CompilerContract, LambdaWithoutCapture) {
 		wxT("           Return x * 2;\n")
 		wxT("         EndFunction;\n")
 		wxT("EndFunction\n"),
-		10339020335899397534ULL);
+		11654458325135447023ULL);
 }
 
 TEST(CompilerContract, MethodStyleLinqPipeline) {
@@ -466,5 +492,5 @@ TEST(CompilerContract, MethodStyleLinqPipeline) {
 		wxT("  Return arr.Where(Function(x) Return x > 100 EndFunction)")
 		wxT(".Select(Function(x) Return x * 2 EndFunction).Count();\n")
 		wxT("EndFunction\n"),
-		7548915054214959683ULL);
+		16600608637943105378ULL);
 }

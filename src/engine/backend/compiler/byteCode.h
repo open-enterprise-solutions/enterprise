@@ -107,6 +107,11 @@ struct ibParamUnit : ibParamRunUnit {
 	ibClassID    m_clsid = 0;
 };
 
+// ⭐⭐ THE LINQ SECTION OF THE COMPILER'S BYTECODE — included HERE because it is built out of
+// ibParamUnit above and is a member of ibByteExtCode below. What it holds, and why it lives in
+// the bytecode rather than in a compile scope, is written at the top of the file itself.
+#include "backend/compiler/byteCodeLINQ.h"
+
 //storing one program step
 struct ibByteUnit {
 
@@ -352,19 +357,14 @@ struct ibByteCode {
 		// at depth=1 from an eval expression.
 		std::vector<ibByteCodeVarInfo> m_listLocals;
 
-		// L4-2 LINQ pushdown — the lambda body recorded as the L4 query AST
-		// (compiler/lambdaQueryAst.*), set ONLY for a single-parameter
-		// lambda whose body is a translatable single expression; null = the
-		// pipeline runs in RAM (the always-correct floor).
+		// ⭐⭐ THE QUERY TREE IS NOT KEPT HERE, and that is the point. It was: a second representation
+		// of a body the instructions already hold in full, written at compile time, carried through
+		// the AOT cache, gated by a whitelist that silently dropped kinds it did not know, and
+		// versioned whenever its shape moved.
 		//
-		// !! THIS USED TO SAY THE AST IS "deliberately NOT serialised into the AOT
-		// cache", and that it therefore degrades to RAM on a cache hit. It IS
-		// serialised: v14 added it (`AstSerializable` gates what can travel,
-		// `WriteLambdaAst` / `ReadLambdaAst` carry it), and the format is at v20.
-		// The stale sentence read as a DESIGN REASON, which is the worst kind of
-		// wrong comment: it argued for a behaviour the code had stopped having.
-		// (docs/query-language-arc.md 23.5)
-		std::shared_ptr<struct ibQueryAstExpr> m_lambdaExprAst;
+		// It is DERIVED where it is wanted instead — off these very instructions
+		// (compiler/lambdaQueryAST.h) — which is what lets the runtime hold the SLICED bytecode:
+		// instructions and nothing else.
 
 		ibByteFunction() = default;
 
@@ -575,6 +575,25 @@ public:
 	// nothing to be said; the point is left as it was.
 	BACKEND_API bool FindCaret(ibCaretPoint& point) const;
 
+	// ⭐⭐ THE INSTRUCTION THE COMPILER WROTE FOR THE CARET ITSELF, when it wrote one. -1 = nobody
+	// claimed it and the position scan in FindCaret decides.
+	//
+	// A caret standing on a dot is the one case where the answer is not a matter of looking: the
+	// tolerant compile EMITS a step for it (compileCode.cpp, the dangling-dot gate) and knows, at
+	// that instant, that this instruction and no other is what was asked about. Everything after it
+	// on the tape is the compiler finishing a construct the typist has not finished — the closing
+	// `OPER_CTX_END` of an unclosed block, a query's `OPER_LINQ_RESULT`, the loop's
+	// `OPER_NEXT_ITER` — and all of them carry the SAME source position, because the parser never
+	// moved past the last token it read. Measured 2026-09-08: `foreach (o in Catalogs.Goods) { o.`
+	// emitted the dangling step at index 5 and four more instructions at the same offset after it,
+	// so a scan for "the last instruction at or before the caret" answered with `OPER_NEXT_ITER`
+	// and the caret resolved to nothing. No tie-break over positions can separate those — they are
+	// genuinely equal — which is why this is recorded rather than searched for.
+	//
+	// ⚠ NOT PERSISTED, and it must not be: it belongs to one tolerant compile of one text with one
+	// caret in it. A runtime compile never sets it, and Reset() clears it.
+	long m_numCaretInstruction = -1;
+
 	// AOT persistence — see byteCodeAOT.cpp. Writes / reads the
 	// fields needed to reconstruct a compiled bytecode in a fresh
 	// session: identity (m_id, m_version, m_descriptorClsid),
@@ -638,6 +657,7 @@ public:
 		m_dependencyIds.clear();
 		m_dependencyVersions.clear();
 		m_version = ibGuid();
+		m_numCaretInstruction = -1;
 	}
 
 	//Attributes:
@@ -827,6 +847,36 @@ public:
 	// helper). ContextMethod entries reference their parent Context
 	// binding (a variable in m_listVar) via m_parentRef.
 	std::vector<ibByteFunction>    m_listFunc;
+};
+
+// ⭐⭐ THE SAME BYTECODE, WITH MORE INFORMATION ON IT — not a second kind of bytecode.
+//
+// Max, 2026-09-08: *"ibByteCode — for the runtime. The extended one — for the compiler, for
+// IntelliSense, for LINQ; it inherits from ibByteCode, and it is the extended one the compiler
+// drives, while the runtime drives the ordinary bytecode, the one the AOT cache holds."* And: *"it
+// must be clear that it is THE SAME one that gets generated — it simply carries extended
+// information, and when it goes into the cache it is sliced."*
+//
+// This is the tape the compiler generates, entire: every instruction, constant and symbol here is
+// the one that will run. What the extension adds is what only the COMPILER needs while it reads
+// that tape as a tree.
+//
+// The slice is then not an operation at all — it is the BASE. The runtime, the AOT cache and the
+// binder are typed on ibByteCode, so the tree is not merely unused there, it is unreachable; and
+// the compiler, the only one who builds it, is the only one who can name it. Nothing has to
+// remember to cut anything away, which is the difference between a rule and a habit.
+//
+// It stays a plain struct with no virtuals: nobody deletes a bytecode through a base pointer (the
+// compiler owns its own by value), and a copy INTO the base type is exactly the slicing this
+// arrangement is for.
+struct ibByteExtCode : ibByteCode {
+
+	// One entry per LINQ query, added when compilation reaches it — a std::deque because the compile
+	// scope inside a query holds a POINTER to its entry, and a nested query must not move the one
+	// that contains it. It is NOT cleared when compilation ends: the compiler keeps its tree, and
+	// IntelliSense — which runs on this side, on this very object — is the reader that still wants
+	// it. What the runtime and the cache hold is the BASE, where it does not exist.
+	std::deque<ibLinqQuery> m_listLinq;
 };
 
 // Runtime binding session — slot table for a bytecode's required

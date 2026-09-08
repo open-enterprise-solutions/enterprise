@@ -250,7 +250,7 @@ struct ibSortDescription {
 // A grouping line carries its UNFOLD kind, and that is load-bearing: a hierarchy
 // grouping IS what makes a list a tree, so dropping the kind reloads every tree
 // as a flat grouping and reads as data loss.
-// ⭐⭐ GROUPED BY PERIODS — the stored twin of `ibQueryTotalPeriods` (queryAst.h), which is what the
+// ⭐⭐ GROUPED BY PERIODS — the stored twin of `ibQueryTotalPeriods` (queryAST.h), which is what the
 // query text already says: `BY <field> PERIODS(Month, &From, &To)`. Same three parts, one shape, so
 // the settings window and the query constructor cannot mean different things by one word.
 //

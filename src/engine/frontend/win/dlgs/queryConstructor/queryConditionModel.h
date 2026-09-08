@@ -26,7 +26,7 @@
 
 #include "frontend/win/ctrls/dataview/dataview.h"
 
-#include "backend/query/queryAst.h"
+#include "backend/query/queryAST.h"
 
 #include <functional>
 #include <vector>

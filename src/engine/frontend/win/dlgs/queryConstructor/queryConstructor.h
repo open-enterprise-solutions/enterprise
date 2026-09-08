@@ -52,7 +52,7 @@
 #include <map>
 #include <vector>
 
-#include "backend/query/queryAst.h"
+#include "backend/query/queryAST.h"
 #include "backend/query/queryConstructorModel.h"
 
 // The links grid is an ibDataViewCtrl with its own model — cells edited IN PLACE.

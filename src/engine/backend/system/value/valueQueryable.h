@@ -9,13 +9,15 @@
 // through, so the script surface and `FROM Catalogs.X` are one world by
 // construction.
 //
-// ONLY LINQ speaks to it. The value exposes NO properties and NO own methods —
-// the single entry is the LINQ dispatch (DispatchLinqMethod override) plus the
-// iteration protocol (CreateIterator — what Foreach uses):
+// ONLY LINQ speaks to it. The value exposes NO properties and no own methods
+// beyond the pipeline verbs it NAMES for the editor (ibBindLinqMethods below,
+// shared with the RAM tail) — the single entry is the LINQ dispatch
+// (DispatchLinqMethod override) plus the iteration protocol (CreateIterator —
+// what Foreach uses):
 //
 //   - a TRANSLATABLE pipeline op FOLDS into the accumulated L3 door builder and
 //     returns a NEW Queryable (the chain is lazy):
-//       Where(λ)  — the lambda's recorded AST (compiler/lambdaQueryAst.*)
+//       Where(λ)  — the lambda's recorded AST (compiler/lambdaQueryAST.*)
 //                   lowers to a predicate tree; captured outer locals resolve
 //                   BY NAME from the lambda's captured frames AT FOLD TIME;
 //       OrderBy / OrderByDescending(λ) — a pure member-path selector;
@@ -50,7 +52,24 @@
 
 class ibBackendQueryable;
 
-class BACKEND_API ibValueQueryable : public ibValue
+// ⭐⭐ THE PIPELINE SURFACE, DECLARED ONCE FOR BOTH VENDORS OF IT. A LINQ chain has two carriers —
+// this one (a DB-backed source and every fold over it) and `ibValueQuery` (the RAM pipeline tail in
+// procUnitLINQ.cpp) — and only the second one used to name its operations, so `q.Where(…).` offered
+// the full list while `Data.Catalogs.Goods.` offered NOTHING. Same verbs, same dispatch, two answers:
+// the second road, not a missing feature. It lives in this header because it is the one both
+// carriers already include.
+//
+// Name and help only, and no dispatch number: a pipeline op is invoked through OPER_CALL_LINQ by
+// ENUM ID off the operand, never through CallAsFunc — a method number here would be a promise
+// neither value keeps. The list comes from the same table the emitter resolves against, so a new op
+// appears here by itself.
+inline void ibBindLinqMethods(ibValue::ibMemberTable& helper, const ibValue*)
+{
+	for (const ibValue::ibLinqMethodInfo& info : ibValue::GetLinqMethodTable())
+		helper.AppendFunc(wxString(info.name), wxString(info.helper));
+}
+
+class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMethods>
 {
 	const ibBackendQueryable* m_queryable = nullptr;
 	wxString                  m_sourceName;          // "Catalogs.Goods" — watch / diagnostics
@@ -78,7 +97,13 @@ class BACKEND_API ibValueQueryable : public ibValue
 	ibDataQueryResult ExecuteAccumulated() const;
 
 	// The RAM floor: materialise into an Array of references and re-dispatch.
-	void MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibValue** args, long n);
+	// ⭐⭐ THE ONE DOOR TO THE RAM FLOOR — and it now takes the REASON. Five call sites reach it, each
+	// for a different cause, and until now all five were silent: the step simply stopped being a
+	// server-side query and started streaming every row, with nothing anywhere saying so. `why` is
+	// said by the caller because only the caller knows; it is REPORTED here, once, because that is
+	// the one place every fallback passes through.
+	void MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibValue** args, long n,
+		const wxChar* why);
 
 	// L4-2 JOIN push-down: when the inner argument is ALSO a queryable and the two key
 	// selectors each lower to one column, build the JOIN on the L3 door and run the
@@ -95,7 +120,7 @@ class BACKEND_API ibValueQueryable : public ibValue
 	bool JoinPushDown(ibValue& ret, ibValue** args, long n);
 
 public:
-	ibValueQueryable() : ibValue(ibValueTypes::TYPE_VALUE) {}
+	ibValueQueryable() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}
 	ibValueQueryable(const ibBackendQueryable* queryable, const wxString& sourceName);
 	// Data.From — an OWNED in-memory source (the wrapper dies with the last chain link).
 	ibValueQueryable(std::shared_ptr<const ibBackendQueryable> owned, const wxString& sourceName);
@@ -130,7 +155,7 @@ public:
 	// queryable, wrap the receiver as a computed leaf and run server-side through
 	// JoinPushDown (the composer temp-promotes the RAM side into a DB temp table). Returns
 	// true when handled; false -> the caller stays on the RAM hash-join (ibValueJoinState),
-	// always correct. Called from the base LINQ dispatch (procUnitLinq.cpp, case Join), so
+	// always correct. Called from the base LINQ dispatch (procUnitLINQ.cpp, case Join), so
 	// BOTH receiver kinds (queryable / RAM table) reach the one L3 join executor.
 	static bool TryJoinThroughL3(ibValue& receiver, ibValue& ret, ibValue** args, long n);
 
@@ -142,6 +167,25 @@ public:
 	// The single consumer surface — LINQ ops fold / execute (see the header note).
 	virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 	                                ibValue** args, long n) override;
+
+	// ⭐⭐ TAKE THE LOOP'S PREDICATE, IF YOU CAN RUN IT. A chain compiled as a loop (compileCode.cpp)
+	// would otherwise stream every row here to filter it in the client; this is the instruction that
+	// keeps the filter on the server without the chain having to build state objects for it.
+	//
+	// The tree is READ off the instructions of the loop itself — the same def-use walk the caret
+	// answer uses (lambdaQueryAST.h, ibBuildQueryAstFromRange) — so nothing is stored, serialised or
+	// versioned for it. `from`/`to` bound the predicate, `rowSlot` says which cell the row arrives
+	// in, `resultSlot` which cell its answer lands in.
+	//
+	// `frame` is the RUNNING frame the loop is in — how a cell the predicate reads but does not
+	// compute (a variable from around the query) is turned into the value it holds. Without it such
+	// a predicate can only be refused, which is correct but slower.
+	//
+	// Refusing is ordinary and costs nothing: the loop filters exactly as it would have. True means
+	// this value has NARROWED ITSELF and will hand out fewer rows.
+	bool NarrowByInstructions(const struct ibByteCode& byteCode, long from, long to,
+		const struct ibParamRunUnit& rowSlot, const struct ibParamRunUnit& resultSlot,
+		const struct ibRunContext* frame);
 
 	// Foreach — stream the selection as row references (no materialised Array).
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;

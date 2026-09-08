@@ -22,7 +22,6 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "backend/backend_core.h"
 #include "backend/backend_diagnostic.h"
 
 #include <vector>
@@ -77,5 +76,10 @@ struct ibScriptCheckAnswer {
 };
 
 BACKEND_API ibScriptCheckAnswer ibCheckModule(const class ibValueMetaObject* metaObject);
+
+// ⚠ THE THIRD QUESTION — what the compiler UNDERSTOOD about a query rather than what it refused —
+// is `ibOutlineScriptQueries`, and it lives in scriptComplete.h. It belongs beside the walk over
+// the instructions, because the half worth having is what each bound name OFFERS, and that walk is
+// already written there.
 
 #endif // _IB_SCRIPT_CHECK_H_

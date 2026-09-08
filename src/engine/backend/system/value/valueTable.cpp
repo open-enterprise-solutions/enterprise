@@ -19,6 +19,18 @@ ibDataViewItem ibValueModelTable::FindRowValue(const ibValue& varValue, const wx
 {
 	ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_tableColumnCollection->GetColumnByName(colName);
 	if (colInfo != nullptr) {
+
+		// ⭐⭐ THE INDEX ANSWERS FIRST WHEN THE COLUMN ASKED FOR ONE, and this line is the WHOLE of
+		// what this class has to say about indexing: the machinery is maintained one level up, by
+		// the model that holds the rows (ibValueModelStorage), because a tabular section and a
+		// record set hold theirs the same way and are searched the same way.
+		//
+		// What is decided HERE is only whether to ask — and the decision is the COLUMN'S
+		// (`Indexing`), an author's statement about THIS column rather than a policy the table
+		// imposes. The scan below stays as the answer for every column that declared none.
+		if (colInfo->IsColumnIndexed())
+			return GetRowByValue(colInfo->GetColumnID(), varValue);
+
 		for (long row = 0; row < GetRowCount(); row++) {
 			const ibDataViewItem& item = GetItem(row);
 			ibComposerNode* node = GetViewData<ibComposerNode>(item);
@@ -47,6 +59,17 @@ m_tableColumnCollection(valueTable.m_tableColumnCollection)
 
 ibValueModelTable::~ibValueModelTable()
 {
+	// 🛑 THE COLUMNS OUTLIVE THE TABLE, so the table says goodbye rather than leaving a pointer at
+	// itself. `t.Columns` hands the collection out as a value: whoever holds it keeps it alive, and
+	// its back-pointer here was BARE — after the table went, AddColumn walked the rows of freed
+	// memory (measured 2026-09-08 from a crash dump, on `c = t.Columns.AddColumn("Code"); c.`).
+	//
+	// ⚠ The row's fix — hold the owner — cannot be used here: the table OWNS the collection, so an
+	// owning back-pointer is a cycle and the table would never be freed. Detaching is the honest
+	// shape for that direction, and it is the one the row base already uses for a detached line: an
+	// object that has outlived its owner answers "no owner", it does not dereference one.
+	if (m_tableColumnCollection != nullptr)
+		m_tableColumnCollection->DetachOwnerTable();
 }
 
 // NOTE: a table-of-values is a RAM model — it has NO source queryable. The RAM composer (ibDataRamComposer)
@@ -62,6 +85,7 @@ void ibValueModelTable::FillMembers(ibMemberTable& helper) const
 	helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(row : tableRow)"));
 	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
 	helper.AppendFunc(wxT("Sort"), 2, wxT("Sort(column : string, ascending = true : boolean)"));
+	helper.AppendFunc(wxT("UnloadColumn"), 1, wxT("UnloadColumn(column : string) : array"));
 
 	helper.AppendProp(wxT("Columns"));
 }
@@ -115,6 +139,29 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	case enClear:
 		Clear();
 		return true;
+
+	// ⭐⭐ THE BARE VALUES OF ONE COLUMN, ASKED FOR EXPLICITLY. This is the other half of "a result is
+	// always a table": a caller that wants plain values says so, instead of the pipeline guessing
+	// from context whether to hand back a row, a reference or a scalar. In row order, so it lines up
+	// with the table it came from.
+	case enUnloadColumn: {
+		ibValueArray* const values = new ibValueArray();
+		pvarRetValue = values;   // the wrapper owns it
+
+		const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
+			m_tableColumnCollection != nullptr
+				? m_tableColumnCollection->GetColumnByName(paParams[0]->GetString()) : nullptr;
+		if (colInfo == nullptr)
+			return true;   // no such column: an empty array, not an error — the same answer Find gives
+
+		for (long row = 0; row < GetRowCount(); row++) {
+			ibComposerNode* const node = GetViewData<ibComposerNode>(GetItem(row));
+			if (node != nullptr)
+				values->Add(node->GetTableValue((ibMetaID)colInfo->GetColumnID()));
+		}
+		return true;
+	}
+
 	case enSort: {
 		// ONE MEANING OF "SORT" for this table: the script's Sort() re-seats the rows, exactly as the two
 		// order commands do. A script that sorts a table and then walks it must walk it sorted.
@@ -135,7 +182,12 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 {
 	const long index = varKeyValue.GetUInteger();
-	if (index >= GetRowCount() && !appData->DesignerMode()) {
+	// ⚠ THE DESIGNER EXEMPTION IS ASKED OF SOMETHING THAT NEED NOT BE THERE. `appData` is null in a
+	// headless host — a test binary, a tool linking the backend alone — and this dereferenced it
+	// with no guard, so an out-of-range index answered with an ACCESS VIOLATION instead of the
+	// message one line below (measured 2026-09-09, oes_tests). No appData means no designer, which
+	// is also the stricter reading: the bounds error is raised rather than waved through.
+	if (index >= GetRowCount() && (appData == nullptr || !appData->DesignerMode())) {
 		ibBackendCoreException::Error(_("Array index out of bounds"));
 		return false;
 	}
@@ -147,7 +199,6 @@ bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 //   ibValueModelTable as a form data source + property object       //
 //////////////////////////////////////////////////////////////////////
 
-#include "backend/srcDataObject.h"           // ibSourceExplorer::AppendColumn (already via valueTable.h; explicit)
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — column collection round-trip
 #include "backend/typeDescription.h"         // ibTypeDescriptionMemory — column type node round-trip
 #include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase : ibMetaData — GetActiveMetaData() base cast
@@ -328,7 +379,7 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::GetAt(const ibValue& 
 	// `index` is unsigned, so `index < 0` was dead code, and && binds tighter than ||
 	// — the condition already meant "out of range AND not in the designer". Spelled out;
 	// the designer-mode exemption is preserved, not introduced (see docs/portability.md).
-	if (index >= m_listColumnInfo.size() && !appData->DesignerMode()) {
+	if (index >= m_listColumnInfo.size() && (appData == nullptr || !appData->DesignerMode())) {
 		ibBackendCoreException::Error(_("Index goes beyond array")); 
 		return false;
 	}
@@ -403,6 +454,7 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColu
 
 ibValueModelTable::ibValueModelTableReturnLine::ibValueModelTableReturnLine(ibValueModelTable* ownerTable, const ibDataViewItem& line) :
 	ibValueModelReturnLine(line), m_ownerTable(ownerTable) {
+	HoldOwnerModel(ownerTable);   // the row speaks through the table; see the base
 	m_members.Bind(this, &ibValueModelTableReturnLine::FillMembers);
 }
 
@@ -411,6 +463,11 @@ ibValueModelTable::ibValueModelTableReturnLine::~ibValueModelTableReturnLine() {
 
 void ibValueModelTable::ibValueModelTableReturnLine::FillMembers(ibMemberTable& helper) const
 {
+	// A row with no table names nothing. The default ctor allows one (`ownerTable = nullptr`), and a
+	// surface built from it used to walk a null column collection.
+	if (m_ownerTable == nullptr || m_ownerTable->m_tableColumnCollection == nullptr)
+		return;
+
 	for (auto& colInfo : m_ownerTable->m_tableColumnCollection->m_listColumnInfo) {
 		wxASSERT(colInfo);
 		helper.AppendProp(
@@ -422,7 +479,8 @@ void ibValueModelTable::ibValueModelTableReturnLine::FillMembers(ibMemberTable& 
 
 bool ibValueModelTable::ibValueModelTableReturnLine::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	if (appData->DesignerMode())
+	// See GetPropVal below for why the null is asked about at all.
+	if (appData != nullptr && appData->DesignerMode())
 		return false;
 	return SetValueByMetaID(
 		m_members.GetPropData(lPropNum),
@@ -432,7 +490,12 @@ bool ibValueModelTable::ibValueModelTableReturnLine::SetPropVal(const long lProp
 
 bool ibValueModelTable::ibValueModelTableReturnLine::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	if (appData->DesignerMode())
+	// 🛑 `appData` NEED NOT EXIST. It is the running application, and the backend is also linked by
+	// hosts that have none — the test binary is one. Reading a column off a query's answer row went
+	// straight through here and took the process down with an ACCESS VIOLATION (measured 2026-09-09,
+	// oes_tests: `q[0].V` on a LINQ result). No application means no designer, so the read proceeds,
+	// which is what a headless host wants; the designer's refusal is unchanged where it applies.
+	if (appData != nullptr && appData->DesignerMode())
 		return false;
 
 	return GetValueByMetaID(

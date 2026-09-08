@@ -11,8 +11,6 @@
 
 #include "tabularModel.h"
 
-#include "backend/tabularModelView.h"           // s_constIgnoreParent / ibDataViewItem
-#include "backend/composition/ramComposer.h"    // ibDataRamComposer (pulls dataComposer.h) — m_composer.ComputeOrder()
 #include "backend/srcDataObject.h"               // ibSourceDataObject / ibSourceExplorer — ResolveField dot-walk over reference cells
 
 // ibRamValueStorage::ColumnIdByName — resolve a field name → column id via the model's column collection
@@ -249,6 +247,40 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 	int count, ibFetchDirection dir, ibDataViewItemArray& out) const
 {
 	return RunStoragePage(m_storage, m_composer, parent, anchor, count, dir, out);
+}
+
+// ⭐⭐ ONE PASS, AND ONLY WHEN THE ANSWER IS STALE. The generation is the model's own change counter
+// — every row and cell mutation bumps it because the view has to re-fetch on each — so this needs no
+// invalidation call site anywhere, which is the point: a call site can be forgotten and a number
+// cannot. See ibValueModelStorage::ibColumnIndex (tabularModel.h) for why it lives on this class.
+//
+// ⚠ THE ROWS ARE READ IN STORAGE ORDER, not in display order, and that is deliberate: a `Find` is
+// asked of the DATA. The first row a scan would have stopped on is the first row here.
+void ibValueModelStorage::ibColumnIndex::EnsureBuilt(const ibValueModelStorage* model, unsigned int columnID)
+{
+	if (model == nullptr)
+		return;
+
+	const uint32_t generation = model->GetViewGeneration();
+	if (m_built && m_builtAt == generation)
+		return;
+
+	m_rows.clear();
+	for (long row = 0; row < model->GetRowCount(); row++) {
+		const ibDataViewItem& item = model->GetItem(row);
+		ibComposerNode* node = model->GetViewData<ibComposerNode>(item);
+		if (node != nullptr)
+			m_rows[node->GetTableValue((ibMetaID)columnID)].push_back(item);
+	}
+
+	m_builtAt = generation;
+	m_built = true;
+}
+
+const std::vector<ibDataViewItem>* ibValueModelStorage::ibColumnIndex::Rows(const ibValue& value) const
+{
+	const auto found = m_rows.find(value);
+	return found != m_rows.end() ? &found->second : nullptr;
 }
 
 // ibValueModelStorage::BuildAncestorBreadcrumb — the ancestor GROUP chain of a RAM row, so a selection inside a

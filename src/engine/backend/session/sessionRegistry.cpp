@@ -2033,6 +2033,24 @@ void ibSessionRegistry::ThreadBody() noexcept
 				}
 			}
 
+			// ⭐⭐ AND AGAIN BEFORE EVERY PHASE THAT TOUCHES THE DATABASE. `m_stop` was read once, at
+			// the top of the tick, so a Stop() arriving one instruction later still bought the whole
+			// remainder: the queue drain, the heartbeat, the snapshot and the sweep — every one of
+			// them a round trip. Stop() waits two seconds and then DETACHES the thread ("process
+			// will exit anyway"), and the detached thread goes on working while the registry deletes
+			// sessions underneath it and the pool shuts down.
+			//
+			// Measured 2026-09-08, on an ORDINARY close of the designer — the last two lines of the
+			// journal, 14 ms apart:
+			//     t24868  DELETE FROM sys_session WHERE (session = ?)   ← the registry, tearing down
+			//     t2948   DELETE FROM sys_lock    WHERE (sessionGuid = ?)  ← this thread, still going
+			// The same thread had been polling once a second right up to that point. Max named it
+			// before the journal did: the session manager is already dying while its own threads are
+			// still running, and they have to be stopped, not asked.
+			//
+			// Cheap: an atomic load per phase against a round trip each.
+			if (m_stop.load(std::memory_order_acquire)) break;
+
 			// Refresh every second — UI polling sees updates within a
 			// frame of each other instead of waiting a full sweep.
 			const auto now = clock::now();
@@ -2046,6 +2064,10 @@ void ibSessionRegistry::ThreadBody() noexcept
 			// latency for dead-session pickup is fine. Signal check piggy-
 			// backs on the same tick since it's cheap and similarly
 			// latency-tolerant.
+			// The sweep is the longest phase of the tick — a read of every session row, then a
+			// DELETE per orphan through the lock manager — so it is the one most worth not starting.
+			if (m_stop.load(std::memory_order_acquire)) break;
+
 			if (now >= nextSweep) {
 				JobSweepStale();
 					JobCheckSignal();

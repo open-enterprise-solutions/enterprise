@@ -24,6 +24,58 @@ BACKEND_API bool InvokeLambda(ibValue& callable, ibValue** argPtrs, long n, ibVa
 // Convenience over InvokeLambda for the common single-argument call (argPtrs = { &arg }).
 BACKEND_API bool InvokeLambdaWithArg(ibValue& callable, ibValue& arg, ibValue& retVal);
 
+// ⭐⭐ WHAT A COMPILED PIPELINE DOES TO ITS OWN COLLECTION — the three verbs behind OPER_LINQ_SEEN /
+// KEEP / RESULT (codeDef.h). The collection is LINQ's OWN runtime class, not a script `Array`: a
+// user-visible Array is heavy, is built by NAME through the object factory, and answers "seen this
+// before?" in linear time where a set answers in log n. It lives beside the pipeline's other state
+// classes, in procUnitLINQ.cpp, and reaches script in exactly one place — `ibLinqResult` building an
+// Array when the person asked for a collection.
+//
+// `scratch` is a frame slot: the collection is created there on first use and lives as long as the
+// loop does, which is what a frame slot means.
+BACKEND_API bool ibLinqSeen(ibValue& scratch, const ibValue& value);
+// `row` null = this instruction carries only a further ordering key for the row already kept;
+// `keyAt` is that key's position among the clause's keys. See the definition.
+BACKEND_API void ibLinqKeep(ibValue& scratch, const ibValue* row, const ibValue* key, long keyAt);
+// `ordering`: 0 leave as they came · 1 descending by key · 2 ascending · 3 simply reversed.
+// `wantFirst` asks for the first row instead of all of them (an empty value when there are none).
+//
+// What the rest becomes is READ OFF THE ROWS: a table when they carry named columns — which after a
+// projection they always do — and an Array when they do not, which is what `ToArray` over plain
+// values means. `ToTable` does not come through here at all: on a data source the queryable builds
+// the table from the SCHEMA, and on a collection the dispatcher builds it from the rows.
+BACKEND_API void ibLinqResult(ibValue& out, ibValue& scratch, int ordering, bool wantFirst);
+
+// Grouping and joining, in the same collection: a row goes under its key, and the rows under a key
+// come back as one value — as a VIEW, so a join's per-row lookup builds nothing. `ibLinqGroups`
+// turns the buckets into the answer, one light group per key, in the order the keys first appeared.
+BACKEND_API void ibLinqBucket(ibValue& scratch, const ibValue& key, const ibValue& row);
+BACKEND_API void ibLinqBucketGet(ibValue& out, ibValue& scratch, const ibValue& key);
+BACKEND_API void ibLinqGroups(ibValue& out, ibValue& scratch);
+
+// The projection — `select { a = …, b = … }`. `names` is the field list as ONE constant (separated
+// by `\n`), read only when the shape is made: once per query, in `shapeSlot`. Every row after that
+// is an allocation of `count` values, filled BY POSITION — `ibLinqField` is handed the ordinal the
+// compiler assigned while it was compiling, so no name is looked up per row or per field.
+BACKEND_API void ibLinqRow(ibValue& out, ibValue& shapeSlot, const wxString& names, long count);
+BACKEND_API void ibLinqField(ibValue& row, const ibValue& value, long ordinal);
+
+// ⭐⭐ DOES THIS ROW NAME ITS COLUMNS? — the one question that decides whether a query answers with a
+// TABLE or with an Array, and it is exported because TWO readers ask it. The runtime asks it of a
+// real row on its way to building the answer; the editor asks it of a SAMPLE row, standing after the
+// dot, to say what the answer will be. Asked in two places it would be two rules, and the reader
+// would eventually describe an Array as a table.
+//
+// True with the names filled for a projected row (`select { … }`) and for a group (Key / Values);
+// false for a plain value, an object, a reference — anything whose columns nobody named.
+BACKEND_API bool ibLinqNamedColumns(const ibValue& row, std::vector<wxString>& outNames);
+
+// ⭐ AND A SAMPLE OF WHAT A GROUPING ANSWERS WITH — the collection a grouped query hands back, with
+// one empty group in it. Exported for the same reason as the rule above: the editor has to say what
+// a query will look like WITHOUT running it, and a grouping's shape is settled before a single row
+// is seen — one group per key, and a group is Key and Values whatever the rows were.
+BACKEND_API void ibLinqGroupedSample(ibValue& out);
+
 class BACKEND_API ibProcUnit {
 public:
 

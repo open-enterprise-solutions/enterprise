@@ -12,7 +12,7 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/query/queryAst.h"
+#include "backend/query/queryAST.h"
 #include "backend/query/queryParser.h"
 #include "backend/query/queryRender.h"
 #include "backend/query/queryRewrite.h"
@@ -614,7 +614,7 @@ TEST(QueryConstructorModelPaths, AnUnresolvablePathIsEmptyNotAGuess)
 }
 
 // ===========================================================================
-//  OVERALL — the level above every dimension (queryAst.h m_totalsOverall)
+//  OVERALL — the level above every dimension (queryAST.h m_totalsOverall)
 // ===========================================================================
 
 TEST(QueryTotalsOverall, ItIsReadWhereItIsWrittenAndWrittenBackFirst)

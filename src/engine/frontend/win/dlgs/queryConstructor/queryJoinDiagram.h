@@ -26,7 +26,7 @@
 #include <wx/panel.h>
 #include <wx/dc.h>
 
-#include "backend/query/queryAst.h"
+#include "backend/query/queryAST.h"
 
 #include <functional>
 #include <vector>
