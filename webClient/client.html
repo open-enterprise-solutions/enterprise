@@ -106,6 +106,9 @@ body{margin:0;font:14px/1.4 system-ui,sans-serif;display:flex;
 #tabs{display:flex;gap:1px;margin:0;padding:0 8px 0;flex:1 1 auto;
   overflow-x:auto;scroll-behavior:smooth;scrollbar-width:none}
 #tabs::-webkit-scrollbar{display:none}
+/* `display` is set on the class below, which outranks the [hidden] attribute's
+   own rule — so a hidden tab has to be told again. */
+.tab[hidden]{display:none}
 .tab{padding:4px 10px 5px;border:1px solid #bbb;border-bottom:none;
   border-radius:6px 6px 0 0;background:#dcdcdc;font-size:.9em;
   cursor:pointer;display:inline-flex;align-items:center;gap:6px;
@@ -302,6 +305,15 @@ input.ctrl{padding:3px 6px;border:1px solid #aaa;border-radius:3px}
   background:transparent;flex-shrink:0}
 .texted > button:hover:not(:disabled){background:rgba(0,0,0,.06)}
 .texted > button:active:not(:disabled){background:rgba(0,0,0,.12)}
+/* A FORM inside a dialog — a value picker. Two things it needs that a message
+   box does not: ROOM, because the dialog's own ceiling is 640px and a list has
+   columns; and a HEIGHT, because a form's body is a flex column that shares one
+   out, and without it the grid inside computes to nothing and draws no rows.
+   Both are bounded by the window rather than by the form. */
+.modal-dialog.oes-form-dialog{max-width:min(60rem,calc(100vw - 48px))}
+.oes-modal-form{display:flex;flex-direction:column;
+  width:min(58rem,calc(100vw - 96px));height:min(34rem,70vh);min-height:0}
+.oes-modal-form > div{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 /* A cell's editor: the same shared-frame look as a form field's group, sized to
    the cell it replaces rather than to a form row. */
 .oes-cell-editor{display:flex;align-items:stretch;width:100%;height:100%;
@@ -618,7 +630,9 @@ function showDialog(opts){
   // covers its opener — start at 3000 (matching CSS), each new layer +10.
   backdrop.style.zIndex = String(3000 + openDialogStack.length * 10);
   const dlg = document.createElement('div');
-  dlg.className = 'modal-dialog';
+  // A caller may widen the box for what it is putting in — a form needs more
+  // room than a sentence does.
+  dlg.className = 'modal-dialog' + (opts.dialogClass ? ' ' + opts.dialogClass : '');
   dlg.setAttribute('role','dialog');
   dlg.setAttribute('aria-modal','true');
   // Header
@@ -1376,6 +1390,11 @@ async function refreshTabs(){
   (info.tabs||[]).filter(t=>{ const k=(t.index|0); if(seen.has(k)) return false; seen.add(k); return true; }).forEach((t,i)=>{
     const el=document.createElement('div');
     el.className='tab'+(i===info.activeTab?' active':'')+(t.modified?' modified':'');
+    // A picker is drawn as a dialog over the form that asked, so the strip does
+    // not offer it as somewhere to go. HIDDEN rather than left out: the close
+    // handler below reads a tab's server index off its position in this strip,
+    // and a missing element would shift every index after it.
+    el.hidden=!!t.modal;
     // Column-wrap: icon on top, title below. Matches desktop tab convention
     // (wxAuiMDIChildFrame paints icon then caption). No icon → column
     // collapses to text-only, no layout jump.
@@ -1404,10 +1423,7 @@ async function refreshTabs(){
       document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
       el.classList.add('active');
       const tree=await netFetch(API+'/tab/'+i,{method:'POST',credentials:'same-origin'}).then(r=>r.json());
-      if(tree&&!tree.error){
-        main.innerHTML='';
-        main.appendChild(render(tree));
-      }
+      paintTree(tree);
     };
     el.appendChild(body);
     const close=document.createElement('span');
@@ -1435,10 +1451,7 @@ async function refreshTabs(){
       const tFetchEnd=performance.now();
       const tree=await r.json();
       const tJsonEnd=performance.now();
-      if(tree&&!tree.error&&Object.keys(tree).length>0){
-        main.innerHTML='';
-        main.appendChild(render(tree));
-      }
+      paintTree(tree);
       const tRenderEnd=performance.now();
       if (wasActive) {
         const siblings=tabsBar.querySelectorAll('.tab');
@@ -1510,8 +1523,7 @@ function promptLogin(){
 async function loadForms(){}
 async function openForm(id){
   const tree=await netFetch(API+'/form/'+id,{credentials:'same-origin'}).then(r=>r.json());
-  main.innerHTML='';
-  main.appendChild(render(tree));
+  paintTree(tree);
   refreshTabs();
 }
 // Subsystem navigation — sidebar's Interfaces block. Mirrors desktop's
@@ -1765,7 +1777,7 @@ class Button extends BaseControl{
         const r=await netFetch(API+'/action/'+node.id,{method:'POST',credentials:'same-origin'});
         if(r.ok){
           const tree=await r.json();
-          if(tree&&!tree.error){ main.innerHTML=''; main.appendChild(render(tree)); }
+          if(tree&&!tree.error) paintTree(tree);
           else OES.handleBackendError(tree);
         }
       };
@@ -1831,7 +1843,7 @@ class TextCtrl extends BaseControl{
         });
         if(r.ok){
           const tree=await r.json();
-          if(tree&&!tree.error){ main.innerHTML=''; main.appendChild(render(tree)); }
+          if(tree&&!tree.error) paintTree(tree);
           else OES.handleBackendError(tree);
         }
       };
@@ -1870,8 +1882,7 @@ class TextCtrl extends BaseControl{
           {method:'POST',credentials:'same-origin'});
         if(r.ok){
           const tree=await r.json();
-          if(tree&&!tree.error&&Object.keys(tree).length>0){
-            main.innerHTML=''; main.appendChild(render(tree));
+          if(paintTree(tree)){
             // Clear refocuses the (now empty) input with cursor at 0 —
             // matches desktop ibControlTextEditor::SetInsertionPoint(wxNOT_FOUND).
             if(kind==='buttonClear'){
@@ -1927,8 +1938,9 @@ function bindToolActivation(el, node){
     if(!r.ok) return;
     const tree=await r.json();
     if(tree&&!tree.error){
-      main.innerHTML='';
-      if(Object.keys(tree).length>0) main.appendChild(render(tree));
+      // An EMPTY answer here is a form that closed with nothing behind it, so
+      // the content area is blanked rather than left showing a dead form.
+      if(!paintTree(tree)){ closeModalForm(); main.innerHTML=''; }
     }
     else OES.handleBackendError(tree);
     // A tool can close / open / switch forms (ActionClose, a script that
@@ -2005,7 +2017,7 @@ class CheckBox extends BaseControl{
         });
         if(r.ok){
           const tree=await r.json();
-          if(tree&&!tree.error){ main.innerHTML=''; main.appendChild(render(tree)); }
+          if(tree&&!tree.error) paintTree(tree);
           else OES.handleBackendError(tree);
         }
       });
@@ -2105,7 +2117,7 @@ function oesCellEditor(tableId,columnId,buttons){
         if(!r.ok) return;
         const tree=await r.json();
         if(tree&&tree.error){ OES.handleBackendError(tree); return; }
-        if(tree&&Object.keys(tree).length>0){ main.innerHTML=''; main.appendChild(render(tree)); }
+        paintTree(tree);
         // Select and Open can raise a form of their own — a picker, the
         // referenced object — so the tab strip is re-read at once.
         if(kind!=='cellClear') refreshTabs();
@@ -2287,7 +2299,7 @@ class TableBox extends BaseControl{
         const id=sortableBy.get(column.getField());
         if(id===undefined) return;
         const tree=await send('sort',id);
-        if(tree){ main.innerHTML=''; main.appendChild(render(tree)); }
+        paintTree(tree);
       });
       // A cell committed. Two posts, in this order and awaited: the cursor
       // moves to the row, then the column is told what was typed. The column
@@ -2318,10 +2330,7 @@ class TableBox extends BaseControl{
         if(!r.ok) return restore();
         const tree=await r.json();
         if(tree&&tree.error){ OES.handleBackendError(tree); return restore(); }
-        if(tree&&Object.keys(tree).length>0){
-          main.innerHTML=''; main.appendChild(render(tree));
-        }
-        else restore();
+        if(!paintTree(tree)) restore();
       });
       // Opening a row raises the object's own form — a new tab, so the
       // tab strip is re-read and the returned tree replaces the view.
@@ -2337,7 +2346,7 @@ class TableBox extends BaseControl{
         if(key===undefined) return;
         if(editableBy.size>0&&!row.getData()._container) return;
         const tree=await send('activate',key);
-        if(tree){ main.innerHTML=''; main.appendChild(render(tree)); }
+        paintTree(tree);
         refreshTabs();
       });
     });
@@ -2393,6 +2402,97 @@ function applyLayout(el, layout){
   // Explicit align flags override the default flex-start.
   if(f & WX_ALIGN_CENTER_V || f & WX_ALIGN_CENTER_H) el.style.alignSelf='center';
   else if(f & WX_ALIGN_RIGHT || f & WX_ALIGN_BOTTOM) el.style.alignSelf='flex-end';
+}
+
+// WHERE A FORM TREE IS PAINTED, decided once. Every road that gets a form back —
+// a command, a control action, a cell commit, a tab switch, the live stream —
+// has to make this decision, and each of them was making it by hand.
+//
+// A form the server opened as a value PICKER says so, and it is drawn OVER the
+// form that asked rather than beside it: a choice is a question, and the form
+// underneath must not be usable while the question stands. Anything else is the
+// active form and replaces the content area — closing whatever dialog was up,
+// because the server has moved on from it.
+//
+// Returns true when it painted something.
+let modalForm = null;   // {handle, id, following} — the picker currently up
+function paintTree(tree){
+  if(!tree || tree.error || Object.keys(tree).length===0) return false;
+  if(tree.modal) return paintModalForm(tree);
+  closeModalForm();
+  main.innerHTML='';
+  main.appendChild(render(tree));
+  return true;
+}
+
+// The picker, in the dialog framework the client already has. Painted again
+// while the same one is up (a click inside it answers with the same form) the
+// dialog stays and only its body is replaced — rebuilding it would throw away
+// the scroll position and the row somebody is standing on.
+function paintModalForm(tree){
+  if(modalForm && modalForm.id===tree.id){
+    modalForm.handle.bodyEl.innerHTML='';
+    modalForm.handle.bodyEl.appendChild(modalFormBody(tree));
+    return true;
+  }
+  closeModalForm();
+  const record={id:tree.id, following:false, handle:null};
+  record.handle=OES.showDialog({
+    dialogClass:'oes-form-dialog',
+    title:tree.caption||'',
+    body:modalFormBody(tree),
+    // One button, and it is the way OUT. Choosing is the picker's own Select —
+    // its toolbar carries it, first, the way the desktop's select form does —
+    // so a second one in the footer would be two doors to one act. The default
+    // footer is a lone "OK", which here would be an OK that cancels.
+    buttons:[{label:L.cancel, onClick:(d)=>d.close()}],
+    dismissible:true,
+    // Walking away from the question is an answer too, and the server has to
+    // hear it: the form is still open there, holding the control that asked.
+    // `following` marks the closes that came FROM the server, which must not
+    // be echoed back to it.
+    onClose:()=>{
+      if(record.following) return;
+      if(modalForm===record) modalForm=null;
+      closeModalFormOnServer();
+    },
+  });
+  modalForm=record;
+  return true;
+}
+
+// Walking away from the question is an answer, and the server has to hear it:
+// the picker is still a form there, still holding the control that asked. It is
+// closed the way any tab is (DELETE /tab/<i>), which runs beforeClose / onClose
+// and tells the owner nothing — which is what a cancelled choice means.
+//
+// The index is asked for at the moment of dismissal rather than remembered: one
+// noted when the dialog opened is a guess by the time it closes.
+async function closeModalFormOnServer(){
+  const info=await netFetch(API+'/session',{credentials:'same-origin'})
+    .then(r=>r.json()).catch(()=>null);
+  const tab=((info&&info.tabs)||[]).find(t=>t.modal);
+  if(!tab) return;
+  const r=await netFetch(API+'/tab/'+(tab.index|0),{method:'DELETE',credentials:'same-origin'});
+  if(r.ok) paintTree(await r.json());
+  refreshTabs();
+}
+
+function modalFormBody(tree){
+  const body=document.createElement('div');
+  body.className='oes-modal-form';
+  body.appendChild(render(tree));
+  return body;
+}
+
+// The server closed it (a choice was made, a script closed the form): take the
+// dialog down without telling the server what it already knows.
+function closeModalForm(){
+  if(!modalForm) return;
+  const record=modalForm;
+  modalForm=null;
+  record.following=true;
+  record.handle.close();
 }
 
 function render(node){
@@ -2523,10 +2623,7 @@ async function pollActive(){
     lastActiveJson = text;
     const tree = JSON.parse(text);
     const tParse = performance.now();
-    if (tree && !tree.error) {
-      main.innerHTML = '';
-      main.appendChild(render(tree));
-    }
+    paintTree(tree);
     const tRender = performance.now();
     if (tRender - t0 > 300)
       console.log(`poll /active: fetch=${(tFetch-t0).toFixed(1)}ms read=${(tText-tFetch).toFixed(1)}ms parse=${(tParse-tText).toFixed(1)}ms render=${(tRender-tParse).toFixed(1)}ms`);
@@ -2567,10 +2664,7 @@ function applyActiveJsonText(text){
   lastActiveJson = text;
   try {
     const tree = JSON.parse(text);
-    if (tree && !tree.error) {
-      main.innerHTML = '';
-      main.appendChild(render(tree));
-    }
+    paintTree(tree);
   } catch (e) {
     console.log('sse parse failed', e);
   }
@@ -2688,10 +2782,7 @@ async function paintActiveTab(){
   if(!info||!info.tabs||info.tabs.length===0) return;
   const active=info.activeTab|0;
   const tree=await netFetch(API+'/tab/'+active,{method:'POST',credentials:'same-origin'}).then(r=>r.json());
-  if(tree&&!tree.error&&Object.keys(tree).length>0){
-    main.innerHTML='';
-    main.appendChild(render(tree));
-  }
+  paintTree(tree);
 }
 
 // Tab strip overflow controls. The strip is overflow-x:auto; when the

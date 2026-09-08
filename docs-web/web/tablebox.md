@@ -230,6 +230,65 @@ The two gestures are one road: the double-click goes through
 `CallAsAction(enTableSelect, …)`, which is exactly where a click on the Select
 tool arrives.
 
+### A picker is a dialog, not a tab
+
+It opened as a tab first, and that was wrong in the way a question asked in
+another room is wrong: the form that asked stayed usable underneath, the strip
+grew an entry that was not a place anyone meant to go, and walking away from the
+question left it standing open. It is a modal dialog now — the client's own
+dialog framework, the same one every other blocking window uses — over the form
+that asked.
+
+**What marks a picker.** `ibVisualHostClient::IsPickerHost()`: the form's command
+provider is a tablebox in **choice mode**. Choice mode reaches a form from one
+place only — the source a select form is built on (`ibDynamicListView_Choice` in
+`GetSelectForm` / `GetFolderSelectForm`), carried onto the main table at form
+build — so a list in choice mode was opened to hand a value back, and nothing
+else opens one.
+
+Not "the form has an owner control", which was the first test and was wrong
+twice over. An object form opened from a list carries an owner too, so it can
+tell the list what was created — with that test a new document came back marked
+as a dialog. And `GetOwnerControl()` casts to `ibValueFrame`, which the quick
+filter's owner is not, so it would have quietly missed the picker that opens.
+
+**On the wire.** The form's own node carries `modal` and `caption` — the caption
+being `GetControlTitle()`, the form's live resolved title, not the tab's copy
+(the web front never calls `SetCaption`, so the tab's is frozen at open time,
+and the host is not parented to its tab yet the first time the tree is
+serialised). Each entry in the `/session` tab list carries `modal` too.
+
+**In the browser.** `paintTree(tree)` is the one place that decides where a form
+is painted, and every road that gets a form back goes through it — a command, a
+control action, a cell commit, a tab switch, the live stream. A `modal` tree
+goes into the dialog; anything else replaces the content area and closes
+whatever dialog was up, because the server has moved on from it. Painted again
+while the same picker is up, the dialog stays and only its body is replaced —
+rebuilding it would throw away the row somebody is standing on.
+
+The picker's tab is `hidden` rather than left out of the strip: the close
+handler reads a tab's server index off its position there, and a missing
+element would shift every index after it.
+
+**Walking away is an answer.** Esc, the backdrop, the `×` and the Cancel button
+all take the dialog down, and the picker is then closed on the server the way
+any tab is (`DELETE /tab/<i>`), which runs `beforeClose` / `onClose` and tells
+the owner nothing — which is exactly what a cancelled choice means: no value is
+written and the control keeps what it had. The index is asked for at the moment
+of dismissal rather than remembered, because one noted when the dialog opened is
+a guess by the time it closes.
+
+There is one button in the footer and it is the way out. Choosing is the
+picker's own Select, first on its toolbar, the way the desktop's select form has
+it — a second one in the footer would be two doors to one act.
+
+Measured: `…` on Warehouse raises a dialog titled "Warehouses" over the
+document, three tabs on the server and two in the strip; Esc closes it, the
+server is back to two tabs and the field is still empty; opening it again and
+double-clicking a row fills the field and takes the dialog down. The same from a
+grid cell, titled "Goods". An ordinary list and an object form opened from it
+are still tabs and raise no dialog.
+
 Measured on the Goods receipt form: `Warehouse` empty → picker opens with
 `["Select","Add",…]` → double-click "Основной склад" → picker closes, field
 reads `Основной склад`. And through the tool: Select with no row standing does

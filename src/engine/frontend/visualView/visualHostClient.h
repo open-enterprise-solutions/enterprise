@@ -43,6 +43,16 @@ public:
 	// runs, which turns into UAF during the nested sizer/child teardown.
 	// Body in visualHostClient.cpp (web branch).
 	virtual ~ibVisualHostClient() override;
+
+	// A PICKER: a form opened to hand a value back to the control that asked for
+	// one. The browser draws it OVER that control's form rather than beside it,
+	// and leaves it out of the tab strip — a question is not a place you go.
+	bool IsPickerHost() const;
+
+	// The form's tree says what KIND of window it is, because the browser has two
+	// ways to draw one, and carries the caption: a dialog has a title bar of its
+	// own, and the tab's label lives in a different payload.
+	virtual nlohmann::json ToJSON() const override;
 #else
 	ibVisualHostClient(ibFormVisualDocument* document, ibValueForm* valueForm, ibFrontendWindow* parent);
 	virtual ~ibVisualHostClient();

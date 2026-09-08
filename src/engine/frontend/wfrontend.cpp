@@ -1948,6 +1948,9 @@ std::string SessionInfoFromSession(ibWebSession* s)
 			t["title"] = tab->GetTitle();
 			t["hasIcon"] = tab->GetIcon().IsOk();
 			if (auto* host = tab->GetHost()) {
+				// A picker is drawn as a dialog over the form that asked, so the
+				// strip does not offer it as somewhere to go.
+				t["modal"] = host->IsPickerHost();
 				if (auto* form = host->GetValueForm()) {
 					wxString name = form->GetControlTitle();
 					if (name.IsEmpty()) {
