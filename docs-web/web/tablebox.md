@@ -15,18 +15,41 @@ rows at all. It was not a missing renderer: there was nothing for a renderer to
 draw. Every list form in the demo base is a tablebox and nothing else, so the
 three controls Iteration 1 built could not be seen on a real form either.
 
-## No command bar, and what that costs
+## The table's own command bar
 
-A tablebox bound to a tabular section has one on the desktop — Add / Copy / Edit
-/ Delete above the grid — and none here. `ibValueWindowComposite::CreateWithLayers`
-builds the chrome wrapper and its toolbar layer under `#ifndef OES_USE_WEB`; the
-web branch creates the inner control alone, so the command bar object the value
-carries is never read. Until it is built, a tabular section in the browser is
-read-only in practice, whatever the rights say. Filed as
-[#108](https://github.com/open-enterprise-solutions/enterprise/issues/108), with
-the three pieces it needs — emit, route, draw — and why routing is the awkward
-one: `POST /command/<action>` resolves against the form's bar only, and a
-control's bar is a second store with action ids of its own.
+A tablebox bound to a **tabular section** carries the strip the desktop puts
+above it — Add / Copy / Edit / Delete, the two row moves, the two sorts — and a
+tablebox bound to the form's MAIN source carries none, because the form's own
+toolbar already serves those commands. That rule is the platform's, not ours:
+`ibValueModelTableBox::HasCommandBar` decides it, and the web reads the same
+answer the desktop does.
+
+Three pieces, and the middle one is the reason it took a while.
+
+**Beside the children, not among them.** `ibWebWindow` owns an optional
+`ibWebToolbar` and emits it as `commandbar`. It cannot be a child: a table's
+children are its COLUMNS, and the browser draws those as a header, so a toolbar
+among them would be read as one more column.
+
+**The owner is what tells two bars apart.** Action ids are unique within a bar
+and not across bars — the table's *Add* and the form's *Add* are both `1`. A
+tool therefore carries `owner`, the control id of the bar it belongs to, and
+zero means the form's own; `POST /command/<action>` takes it as a form field and
+`ibWebApplication::DispatchCommand` resolves against that control's bar instead
+of the form's. Without it, clicking Add on a table added a document.
+
+**One builder for both.** `ibWebBuildCommandBar` (`web/webCommandBar.{h,cpp}`)
+turns a command store into the toolbar node; the visual host calls it for the
+form's bar with owner 0, and `ibValueWindowComposite::UpdateWithLayers` calls it
+for a control's with its own id. The composite's web branch is now the twin of
+the desktop's layer refresh, including the suppression: `HasCommandBar()` false
+means the field is simply absent.
+
+**And the walker had to go through the wrappers.** The web walker called
+`Create` / `Update` directly where the desktop calls `CreateWithLayers` /
+`UpdateWithLayers`. The base forwards, so nothing without chrome noticed — but a
+composite builds its bar in the wrapper, which is why the bar existed on the
+value and reached nobody. That single substitution is what made the rest work.
 
 ## The height floor is on the HOST, not on the grid
 

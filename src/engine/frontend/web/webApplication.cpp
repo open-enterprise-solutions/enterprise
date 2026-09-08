@@ -340,11 +340,25 @@ std::string ibWebApplication::FetchRows(int controlId, const wxString& dir, int 
 	return table->FetchPage(model, dir, count).dump(2);
 }
 
-bool ibWebApplication::DispatchCommand(int actionId)
+bool ibWebApplication::DispatchCommand(int actionId, int ownerControlId)
 {
 	ibVisualHostClient* host = GetActiveHost();
 	ibValueForm* form = host != nullptr ? host->GetValueForm() : nullptr;
-	ibValueCommandBar* cbar = form != nullptr ? form->GetCommandBar() : nullptr;
+	if (form == nullptr)
+		return false;
+
+	// WHOSE bar. Zero is the form's own; anything else names a control that
+	// carries one of its own -- a tablebox over a tabular section. Action ids
+	// are unique within a bar and not across bars, so asking the form for a
+	// table's "Add" would have run whatever the form calls by that number.
+	ibValueCommandBar* cbar = nullptr;
+	if (ownerControlId != 0) {
+		if (ibValueFrame* ctrl = form->FindControlByID(ownerControlId))
+			cbar = ctrl->GetCommandBar();
+	}
+	else {
+		cbar = form->GetCommandBar();
+	}
 	if (cbar == nullptr)
 		return false;
 

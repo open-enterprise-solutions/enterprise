@@ -262,7 +262,7 @@ public:
 	std::string FireToggle(const std::string& id, int controlID, bool checked);
 	std::string FetchRows(const std::string& id, int controlID,
 		const std::string& dir, int count);
-	std::string FireCommand(const std::string& id, int actionID);
+	std::string FireCommand(const std::string& id, int actionID, int ownerControlID);
 	bool        ModalReply(const std::string& id, const std::string& modalId, int result);
 	std::string ActiveHostJSON(const std::string& id);
 
@@ -1397,15 +1397,15 @@ WFRONTEND_API std::string wfrontendFireKind(const std::string& sessionId,
 }
 
 namespace {
-std::string FireCommandInSession(ibWebSession* session, int actionID)
+std::string FireCommandInSession(ibWebSession* session, int actionID, int ownerControlID)
 {
 	if (session == nullptr || !session->IsAuthenticated()) return "{}";
 	ibWebApplication* app = session->App();
 	if (app == nullptr) return "{}";
 
-	return app->RunOnWorker([app, actionID]() -> std::string {
+	return app->RunOnWorker([app, actionID, ownerControlID]() -> std::string {
 		try {
-			if (!app->DispatchCommand(actionID))
+			if (!app->DispatchCommand(actionID, ownerControlID))
 				return "{}";
 		}
 		catch (const ibBackendException& e) {
@@ -1420,7 +1420,7 @@ std::string FireCommandInSession(ibWebSession* session, int actionID)
 }
 } // namespace
 
-std::string SessionManager::FireCommand(const std::string& id, int actionID)
+std::string SessionManager::FireCommand(const std::string& id, int actionID, int ownerControlID)
 {
 	std::shared_ptr<ibWebSession> keeper;
 	ibWebSession* s = nullptr;
@@ -1431,14 +1431,14 @@ std::string SessionManager::FireCommand(const std::string& id, int actionID)
 		keeper = it->second;
 		s = keeper.get();
 	}
-	return FireCommandInSession(s, actionID);
+	return FireCommandInSession(s, actionID, ownerControlID);
 }
 
 WFRONTEND_API std::string wfrontendFireCommand(const std::string& sessionId,
-	int actionID)
+	int actionID, int ownerControlID)
 {
 	Sessions().Touch(sessionId);
-	return Sessions().FireCommand(sessionId, actionID);
+	return Sessions().FireCommand(sessionId, actionID, ownerControlID);
 }
 
 namespace {

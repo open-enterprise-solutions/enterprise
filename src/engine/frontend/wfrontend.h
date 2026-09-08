@@ -253,12 +253,14 @@ WFRONTEND_API std::string wfrontendFireKind(const std::string& sessionId,
 WFRONTEND_API std::string wfrontendFireTextChange(const std::string& sessionId,
 	int controlID, const std::string& newValue);
 
-// Run a command off the form's own command bar. `actionID` is the
-// "action" field on a toolbar tool in the form JSON. The bar is chrome
-// rather than a control, so this does not go through the control
-// dispatcher. Returns the rebuilt form JSON, like the other verbs.
+// Run a command off a command bar. `actionID` is the "action" field on a
+// toolbar tool in the form JSON, and `ownerControlID` its "owner": zero for the
+// form's own bar, otherwise the control whose bar it is -- a tablebox over a
+// tabular section carries one. A bar is chrome rather than a control, so this
+// does not go through the control dispatcher. Returns the rebuilt form JSON,
+// like the other verbs.
 WFRONTEND_API std::string wfrontendFireCommand(const std::string& sessionId,
-	int actionID);
+	int actionID, int ownerControlID = 0);
 
 // One page of a tablebox's rows, as its own JSON document:
 // {"ok":true,"control":N,"rows":[{"key":0,"container":false,

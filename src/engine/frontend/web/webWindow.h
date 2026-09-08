@@ -58,6 +58,7 @@ wxDECLARE_EVENT(wxEVT_CONTROL_TEXT_CLEAR,    wxCommandEvent);
 #endif
 
 class ibWebSizer;
+class ibWebToolbar;
 
 class ibWebWindow : public wxEvtHandler {
 public:
@@ -148,6 +149,14 @@ public:
 	ibWebSizer* GetSizer() const { return m_sizer; }
 	void        SetSizer(ibWebSizer* sizer);
 
+	// The control's OWN command bar — the strip the desktop puts above a
+	// tablebox, built by ibValueWindowComposite. Owned; setting a new one
+	// deletes the previous. It is emitted as its own field rather than as a
+	// child because a table's children are its COLUMNS, and the browser draws
+	// those as a header: a toolbar among them would be read as one more column.
+	ibWebToolbar* GetCommandBar() const { return m_commandBar; }
+	void          SetCommandBar(ibWebToolbar* bar);
+
 	// Back-link set by ibWebSizer::Add when this window is placed into
 	// a sizer. Used only for dtor unlink — layout params live on the
 	// sizer's Item, not here.
@@ -211,6 +220,8 @@ private:
 	// foreground/background/font/tooltip. Default-constructed values
 	// are wxNullColour / wxNullFont / empty string, which ToJSON
 	// omits so unset windows don't carry redundant JSON fields.
+	ibWebToolbar*             m_commandBar = nullptr;
+
 	wxColour                  m_fg;
 	wxColour                  m_bg;
 	wxFont                    m_font;
@@ -425,11 +436,18 @@ private:
 // node holds no pointer to anything.
 class ibWebCommandTool : public ibWebToolBarItem {
 public:
-	explicit ibWebCommandTool(int action) : ibWebToolBarItem(0), m_action(action) {}
+	// `owner` is the control whose bar this tool belongs to, and zero means the
+	// FORM's own. Action ids are unique within a bar and not across bars, so a
+	// table's "Add" and a form's are the same number: without the owner the
+	// click would run whichever the form happened to have.
+	explicit ibWebCommandTool(int action, int owner = 0)
+		: ibWebToolBarItem(0), m_action(action), m_owner(owner) {}
 
 	virtual nlohmann::json ToJSON() const override {
 		auto node = ibWebToolBarItem::ToJSON();
 		node["action"] = m_action;
+		if (m_owner != 0)
+			node["owner"] = m_owner;
 		return node;
 	}
 
@@ -440,6 +458,7 @@ public:
 
 private:
 	int m_action;
+	int m_owner;
 };
 
 class ibWebToolBarSeparator : public ibWebWindow {

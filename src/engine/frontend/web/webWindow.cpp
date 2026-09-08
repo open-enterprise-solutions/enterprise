@@ -89,6 +89,17 @@ ibWebWindow::~ibWebWindow()
 	// briefly while Remove() runs on them.
 	delete m_sizer;
 	m_sizer = nullptr;
+
+	delete m_commandBar;
+	m_commandBar = nullptr;
+}
+
+void ibWebWindow::SetCommandBar(ibWebToolbar* bar)
+{
+	if (m_commandBar == bar)
+		return;
+	delete m_commandBar;
+	m_commandBar = bar;
 }
 
 void ibWebWindow::SetParent(ibWebWindow* parent)
@@ -183,6 +194,10 @@ nlohmann::json ibWebWindow::ToJSON() const
 		if (m_maxSize.GetHeight() > 0) s["h"] = m_maxSize.GetHeight();
 		if (!s.empty()) node["maxSize"] = std::move(s);
 	}
+
+	// Beside the children, not among them: a table's children are its columns.
+	if (m_commandBar != nullptr)
+		node["commandbar"] = m_commandBar->ToJSON();
 
 	if (!m_children.empty() || m_sizer != nullptr) {
 		nlohmann::json arr = nlohmann::json::array();

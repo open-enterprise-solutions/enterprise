@@ -125,6 +125,7 @@ set(WFRONTEND_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webApplication.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webFrame.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webWindow.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/web/webCommandBar.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webTableBox.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webSizer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webTimer.cpp

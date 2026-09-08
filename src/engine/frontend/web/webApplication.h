@@ -184,7 +184,10 @@ public:
 	// the bar is chrome, not a control, so it has no entry in the
 	// (frame -> wxObject) map and FindControlByID would never reach it.
 	// The action id names the command; the form is asked for its bar.
-	bool DispatchCommand(int actionId);
+	// `ownerControlId` names WHOSE bar: zero is the form's own, anything else a
+	// control that carries one -- a tablebox over a tabular section. Action ids
+	// are per-bar, so the owner is what tells two "Add" commands apart.
+	bool DispatchCommand(int actionId, int ownerControlId = 0);
 
 	// Session task dispatch — forwards to the process-wide ibWorkerPool
 	// (appData->GetWorkerPool()), which preserves per-session FIFO +

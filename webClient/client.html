@@ -276,6 +276,8 @@ html[data-oes-ui="ui5"] .form-host{
    minimum: the form grows, and the frame scrolls when there is nowhere left. */
 .oes-tablebox{display:flex;flex-direction:column;flex:1 1 auto;
   --oes-min-h:240px;min-height:240px}
+/* The table's own bar sits above the grid and takes no part in its height. */
+.oes-tablebox-bar{flex:0 0 auto;margin:0 0 2px 0}
 .oes-tablebox-grid{flex:1 1 auto;min-height:0}
 /* A header that sorts says so under the pointer; one that cannot (a
    whole-attribute column, or a model with no Sorting feature) stays as
@@ -2131,8 +2133,16 @@ function bindToolActivation(el, node){
              : node.id                 ? API+'/action/'+node.id
              : null;
   if(road===null) return;
+  // Whose bar. Action ids are unique within a bar and not across bars, so a
+  // table's "Add" and the form's are the same number; `owner` is what tells
+  // the server which one was clicked. Absent means the form's own.
+  const body = node.owner ? new URLSearchParams({owner:String(node.owner)}) : null;
   el.addEventListener('click', async()=>{
-    const r=await netFetch(road,{method:'POST',credentials:'same-origin'});
+    const r=await netFetch(road, body===null
+      ? {method:'POST',credentials:'same-origin'}
+      : {method:'POST',credentials:'same-origin',
+         headers:{'Content-Type':'application/x-www-form-urlencoded'},
+         body:body.toString()});
     if(!r.ok) return;
     const tree=await r.json();
     if(tree&&!tree.error){
@@ -2475,6 +2485,17 @@ class TableBox extends BaseControl{
     const host=document.createElement('div');
     host.className='oes-tablebox';
     host.dataset.ctrlId=node.id;
+
+    // The table's OWN command bar, above the grid -- Add / Copy / Delete for a
+    // tabular section. It arrives beside the children rather than among them,
+    // because the children of a table are its columns; drawn here through the
+    // ordinary toolbar renderer so it looks like every other strip.
+    if(node.commandbar){
+      const bar=render(node.commandbar);
+      bar.classList.add('oes-tablebox-bar');
+      host.appendChild(bar);
+    }
+
     const grid=document.createElement('div');
     grid.className='oes-tablebox-grid';
     host.appendChild(grid);

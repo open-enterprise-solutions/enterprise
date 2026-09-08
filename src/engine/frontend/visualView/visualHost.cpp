@@ -34,6 +34,7 @@ ibValueFrame* ibControlIndex::FindControl(const wxObject* wx_object) const
 }
 
 #ifdef OES_USE_WEB
+#include "frontend/web/webCommandBar.h"   // one builder for both bars
 
 #include "ctrl/frame.h"
 #include "ctrl/form.h"
@@ -109,7 +110,12 @@ void AppendChildControls(ibValueFrame* node,
 		// controls that loaded with m_controlId == 0 get freshly minted.
 		if (child->GetControlID() == 0 && child->GetOwnerForm() != nullptr)
 			child->GenerateNewID();
-		wxObject* created = child->Create(createParent, host);
+		// Through the *WithLayers wrappers, as the desktop walker does. The base
+		// forwards to the plain method, so nothing without chrome notices --
+		// but a COMPOSITE builds its command bar there, and calling Create /
+		// Update directly is why a tablebox over a tabular section reached the
+		// browser as a grid with no way to add a line to it.
+		wxObject* created = child->CreateWithLayers(createParent, host);
 
 		// ibNoObject is the "empty" sentinel ibValueFrame::Create
 		// returns when a subclass isn't ported to web (base returns
@@ -171,7 +177,7 @@ void AppendChildControls(ibValueFrame* node,
 		// Self-Update: push property values into the raw shim Create
 		// produced. Runs BEFORE recursing into children, so children
 		// see the parent's state already applied.
-		child->Update(created, host);
+		child->UpdateWithLayers(created, host);
 
 		// Pending params consumed by the first real Add/SetSizer
 		// above; clear for recursive descent.
@@ -181,8 +187,8 @@ void AppendChildControls(ibValueFrame* node,
 		// their own Create + Update passes — matches desktop's
 		// GenerateControl order (post-order OnCreated), so parent
 		// hooks can assume their children are wired up.
-		child->OnCreated(created, createParent, host, /*firstCreated*/ true);
-		child->OnUpdated(created, createParent, host);
+		child->OnCreatedWithLayers(created, createParent, host, /*firstCreated*/ true);
+		child->OnUpdatedWithLayers(created, createParent, host);
 	}
 }
 
@@ -201,55 +207,15 @@ void AppendChildControls(ibValueFrame* node,
 // form for its bar. Nothing here outlives the form that owns it.
 static void AppendCommandBar(ibValueForm* form, ibWebSizer* rootSizer)
 {
-	ibValueCommandBar* cbar = form != nullptr ? form->GetCommandBar() : nullptr;
-	if (cbar == nullptr || rootSizer == nullptr)
+	if (form == nullptr || rootSizer == nullptr)
 		return;
 
-	const std::vector<ibCommandEntry>& commands = cbar->BuildCommands();
-	if (commands.empty())
+	// Zero owner: the FORM's bar is the one DispatchCommand resolves against
+	// when a tool names nobody else.
+	ibWebToolbar* bar = ibWebBuildCommandBar(form->GetCommandBar(),
+		form->GetMetaData(), /*ownerControlId*/ 0);
+	if (bar == nullptr)
 		return;
-
-	const ibMetaData* metaData = form->GetMetaData();
-	auto* bar = new ibWebToolbar();
-	bool anyTool = false;
-
-	for (const ibCommandEntry& command : commands) {
-		if (command.id == wxNOT_FOUND) {
-			if (anyTool) {
-				auto* separator = new ibWebToolBarSeparator();
-				separator->SetParent(bar);
-			}
-			continue;
-		}
-
-		// The command's own live bitmap wins; a picture description is
-		// the fallback. Same order as the desktop fill.
-		wxBitmap bitmap = command.bitmap.IsOk() ? command.bitmap
-			: (command.picture.IsEmptyPicture() ? wxNullBitmap
-				: ibBackendPicture::CreatePicture(command.picture, metaData));
-		wxString caption = command.caption;
-		if (command.representation == ibRepresentation_Picture) caption = wxEmptyString;
-		else if (command.representation == ibRepresentation_Text) bitmap = wxNullBitmap;
-
-		auto* tool = new ibWebCommandTool(command.id);
-		tool->SetLabel(caption);
-		tool->SetToolTip(command.caption);
-		tool->SetRepresentation(static_cast<int>(command.representation));
-		tool->SetHasPicture(bitmap.IsOk());
-		if (bitmap.IsOk()) {
-			const wxString b64 = ibBackendPicture::CreateBase64Image(bitmap.ConvertToImage());
-			if (!b64.IsEmpty())
-				tool->SetPictureDataUri(wxT("data:image/png;base64,") + b64);
-		}
-		tool->Enable(command.enabled);
-		tool->SetParent(bar);
-		anyTool = true;
-	}
-
-	if (!anyTool) {
-		delete bar;
-		return;
-	}
 
 	// First item of the root sizer, spanning its width — where the
 	// desktop chrome puts it (mainSizer->Insert(0, part, 0, wxEXPAND)).

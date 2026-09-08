@@ -796,14 +796,18 @@ int main(int argc, char** argv)
 			"application/json; charset=utf-8");
 	});
 
-	// POST /command/<actionID> — run a command off the form's own command
-	// bar. The bar is chrome, not a control, so it does not go through
-	// the control dispatcher; the action id names the command.
+	// POST /command/<actionID> [owner=<controlID>] — run a command off a command
+	// bar. The bar is chrome, not a control, so it does not go through the
+	// control dispatcher; the action id names the command and `owner` names
+	// whose bar it is. No owner means the form's own, which is where every bar
+	// lived until a tablebox got one of its own.
 	svr.Post(prefix + R"(/command/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
 		std::string id;
 		if (!RequireSessionId(req, res, id)) return;
 		const int actionID = std::atoi(req.matches[1].str().c_str());
-		res.set_content(wfrontendFireCommand(id, actionID),
+		const int ownerID = req.has_param("owner")
+			? std::atoi(req.get_param_value("owner").c_str()) : 0;
+		res.set_content(wfrontendFireCommand(id, actionID, ownerID),
 			"application/json; charset=utf-8");
 	});
 

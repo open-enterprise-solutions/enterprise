@@ -14,7 +14,7 @@ Standing as of 2026-09-07: [#100](https://github.com/open-enterprise-solutions/e
 · [#105](https://github.com/open-enterprise-solutions/enterprise/issues/105)
 · [#106](https://github.com/open-enterprise-solutions/enterprise/issues/106)
 · [#107](https://github.com/open-enterprise-solutions/enterprise/issues/107)
-· [#108](https://github.com/open-enterprise-solutions/enterprise/issues/108),
+· [#108](https://github.com/open-enterprise-solutions/enterprise/issues/108) *(built the same day)*,
 plus what was added to [#86](https://github.com/open-enterprise-solutions/enterprise/issues/86)
 (two embedded engines on one file — it deadlocks the first process, not just the
 second) and [#96](https://github.com/open-enterprise-solutions/enterprise/issues/96)
