@@ -278,6 +278,55 @@ button.ctrl:hover:not(:disabled){background:linear-gradient(#f2f6fc,#dde6f0);
 button.ctrl:active:not(:disabled){background:#c6d5e8;border-color:#6b88ae}
 button.ctrl:disabled{opacity:.55;cursor:default}
 input.ctrl{padding:3px 6px;border:1px solid #aaa;border-radius:3px}
+/* A rule drawn across the form or down it. wx draws a groove; one line in the
+   colour the rest of the chrome is bordered in is what that reads as here. */
+.staticline{border:0;background:#c9ced3;flex:0 0 auto}
+.staticline.horz{height:1px;min-height:1px;align-self:stretch}
+.staticline.vert{width:1px;min-width:1px;align-self:stretch;min-height:1em}
+.radiobutton{display:inline-flex;align-items:center;gap:4px;padding:2px 0}
+/* The browser gives a radio a left margin of its own, which put a column of
+   them a few pixels right of the column of check boxes above. */
+.radiobutton>input{margin:0}
+/* One control turned round rather than two: the track holds a fill, and which
+   way it grows is the only difference between the two orientations. The fill
+   is positioned rather than laid out -- a percentage height inside a flex box
+   measured as zero, and the vertical gauge drew an empty track. */
+.gauge{position:relative;border:1px solid #aaa;border-radius:3px;background:#fff;
+  overflow:hidden;flex:0 0 auto}
+.gauge.horz{height:14px;min-width:120px}
+.gauge.vert{width:14px;min-height:120px}
+.gauge>.fill{position:absolute;background:#4a7cc0}
+.gauge.horz>.fill{left:0;top:0;bottom:0}
+.gauge.vert>.fill{left:0;right:0;bottom:0}
+input.slider{padding:0;border:0;background:none;min-width:120px;accent-color:#4a7cc0}
+input.slider.vert{writing-mode:vertical-lr;direction:rtl;min-width:0;min-height:120px}
+/* A notebook is a strip and one page. The strip is a row of buttons rather than
+   a link list: nothing is being navigated to, a page is being brought forward. */
+.notebook{display:flex;flex-direction:column;min-width:0;min-height:0;
+  flex:1 1 auto;align-self:stretch}
+.notebook.bottom{flex-direction:column-reverse}
+.nb-strip{display:flex;gap:2px;flex-wrap:wrap;padding:0 2px;
+  border-bottom:1px solid #c9ced3}
+.notebook.bottom>.nb-strip{border-bottom:0;border-top:1px solid #c9ced3}
+.nb-tab{display:inline-flex;align-items:center;gap:4px;font:inherit;
+  padding:4px 12px;cursor:pointer;color:#222;
+  border:1px solid #c9ced3;border-bottom:0;border-radius:3px 3px 0 0;
+  background:linear-gradient(#f4f6f8,#e6eaee);margin-bottom:-1px}
+.notebook.bottom>.nb-strip>.nb-tab{border-bottom:1px solid #c9ced3;border-top:0;
+  border-radius:0 0 3px 3px;margin:-1px 0 0}
+.nb-tab:hover{background:linear-gradient(#fbfcfd,#eef2f6)}
+.nb-tab[aria-selected="true"]{background:#fff;color:#000;font-weight:600}
+.nb-tab>img{height:1em}
+.nb-body{flex:1 1 auto;min-height:0;min-width:0;padding:6px 4px;
+  display:flex;flex-direction:column}
+.notebookpage{display:flex;flex-direction:column;min-width:0;min-height:0;
+  flex:1 1 auto}
+/* Whatever a script handed SetPage, in a frame of its own: it is the
+   application's markup, not the client's, and it does not get to reach into
+   this page. sandbox="" refuses it scripts and an origin both. */
+.htmlbox{border:1px solid #aaa;background:#fff;overflow:hidden;
+  display:flex;min-height:60px}
+.htmlbox>iframe{border:0;flex:1 1 auto;min-height:inherit}
 /* Text editor group: input + inline side-buttons share one border,
    mirroring desktop ibControlTextEditor where the Select/Open/Clear
    glyphs sit INSIDE the control's frame. Inner input has no own
@@ -2355,6 +2404,156 @@ class TableBox extends BaseControl{
   }
 }
 
+class StaticLine extends BaseControl{
+  render(node){
+    const el=document.createElement('div');
+    el.className='staticline '+(node.orient===WX_VERTICAL?'vert':'horz');
+    return el;
+  }
+}
+
+class RadioButton extends BaseControl{
+  render(node){
+    const wrap=document.createElement('label');wrap.className='ctrl radiobutton';
+    const el=document.createElement('input');el.type='radio';
+    // Which buttons are one choice is not a question the page can answer: the
+    // server names the group, being the side that holds the control tree.
+    el.name='oes-radio-'+(node.group||0);
+    el.checked=!!node.value;
+    if(node.id){
+      el.addEventListener('change',async()=>{
+        if(!el.checked) return;
+        const r=await netFetch(API+'/fire/'+node.id+'/select',
+          {method:'POST',credentials:'same-origin'});
+        if(r.ok){
+          const tree=await r.json();
+          if(tree&&!tree.error) paintTree(tree);
+          else OES.handleBackendError(tree);
+        }
+      });
+    }
+    wrap.appendChild(el);
+    if(node.label){ const s=document.createElement('span');s.textContent=node.label;wrap.appendChild(s); }
+    return wrap;
+  }
+}
+
+class Gauge extends BaseControl{
+  render(node){
+    const vert=node.orient===WX_VERTICAL;
+    const el=document.createElement('div');
+    el.className='gauge '+(vert?'vert':'horz');
+    const range=Math.max(1,node.range|0);
+    const value=Math.max(0,Math.min(range,node.value|0));
+    const fill=document.createElement('div');fill.className='fill';
+    fill.style[vert?'height':'width']=(value/range*100)+'%';
+    el.appendChild(fill);
+    el.setAttribute('role','progressbar');
+    el.setAttribute('aria-valuemin','0');
+    el.setAttribute('aria-valuemax',String(range));
+    el.setAttribute('aria-valuenow',String(value));
+    return el;
+  }
+}
+
+class Slider extends BaseControl{
+  render(node){
+    const el=document.createElement('input');el.type='range';
+    el.className='ctrl slider'+(node.orient===WX_VERTICAL?' vert':'');
+    el.min=String(node.min|0);
+    el.max=String(node.max|0);
+    el.value=String(node.value|0);
+    if(node.id){
+      // On release, not per pixel: the position is committed to a property on
+      // the server, and a drag would post a hundred times to say one thing.
+      el.addEventListener('change',async()=>{
+        const r=await netFetch(API+'/fire/'+node.id+'/value?value='+encodeURIComponent(el.value),
+          {method:'POST',credentials:'same-origin'});
+        if(r.ok){
+          const tree=await r.json();
+          if(tree&&!tree.error) paintTree(tree);
+          else OES.handleBackendError(tree);
+        }
+      });
+    }
+    return el;
+  }
+}
+
+// A notebook draws its own children: the pages are a strip of captions plus
+// ONE page, not a stack of panels. Which one is in front comes from the
+// server -- a page brought forward runs the form's OnPageChanged, and a
+// choice the browser kept to itself would be undone by the next answer.
+class Notebook extends BaseControl{
+  get ownsChildren(){ return true; }
+  render(node){
+    const el=document.createElement('div');
+    // `orient` here is the OrientPage property (wxAUI_NB_TOP / _BOTTOM), which
+    // is a different enum from the sizer orientation of the same field name.
+    el.className='notebook'+(node.orient===WX_AUI_NB_BOTTOM?' bottom':'');
+    const strip=document.createElement('div');strip.className='nb-strip';
+    const body=document.createElement('div');body.className='nb-body';
+
+    const pages=(node.children||[]).filter(
+      kid=>kid && kid.type==='notebookpage' && kid.shown!==false);
+    const active=pages.find(p=>p.id===node.active)||pages[0]||null;
+
+    for(const page of pages){
+      const tab=document.createElement('button');
+      tab.type='button';tab.className='nb-tab';
+      // Same three ways a tool reads its own caption (0=Auto resolved on the
+      // server, 1=Text, 2=Picture, 3=PictureAndText).
+      const rep=page.representation;
+      if(page.hasPicture && page.picture && rep!==1){
+        const img=document.createElement('img');
+        img.src=page.picture;img.alt='';
+        tab.appendChild(img);
+      }
+      if(rep!==2) tab.appendChild(document.createTextNode(page.label||''));
+      tab.setAttribute('aria-selected',String(page===active));
+      if(node.id && page.id){
+        tab.onclick=async()=>{
+          if(page===active) return;
+          const r=await netFetch(API+'/fire/'+node.id+'/page?value='+encodeURIComponent(page.id),
+            {method:'POST',credentials:'same-origin'});
+          if(r.ok){
+            const tree=await r.json();
+            if(tree&&!tree.error) paintTree(tree);
+            else OES.handleBackendError(tree);
+          }
+        };
+      }
+      strip.appendChild(tab);
+    }
+
+    if(active) body.appendChild(render(active));
+    el.appendChild(strip);
+    el.appendChild(body);
+    return el;
+  }
+}
+
+class NotebookPage extends BaseControl{
+  render(){
+    const el=document.createElement('div');el.className='notebookpage';
+    return el;
+  }
+}
+
+class HtmlBox extends BaseControl{
+  render(node){
+    const el=document.createElement('div');el.className='htmlbox';
+    const frame=document.createElement('iframe');
+    // The markup is the application's, and it stays in its own frame: no
+    // scripts, no origin, nothing it can reach in the page around it.
+    frame.setAttribute('sandbox','');
+    frame.title=node.label||'';
+    frame.srcdoc=node.page||'';
+    el.appendChild(frame);
+    return el;
+  }
+}
+
 const renderers={
   'visualHost':    new HostControl(),
   'mdiChild':      new HostControl(),
@@ -2370,6 +2569,13 @@ const renderers={
   'tool':          new Tool(),
   'toolseparator': new ToolSeparator(),
   'tablebox':      new TableBox(),
+  'staticline':    new StaticLine(),
+  'radiobutton':   new RadioButton(),
+  'gauge':         new Gauge(),
+  'slider':        new Slider(),
+  'notebook':      new Notebook(),
+  'notebookpage':  new NotebookPage(),
+  'htmlbox':       new HtmlBox(),
 };
 const fallback=new BaseControl();
 
@@ -2382,6 +2588,11 @@ const WX_LEFT=0x0010, WX_RIGHT=0x0020, WX_TOP=0x0040, WX_BOTTOM=0x0080;
 const WX_ALIGN_RIGHT=0x0200, WX_ALIGN_CENTER_H=0x0100;
 const WX_ALIGN_BOTTOM=0x0400, WX_ALIGN_CENTER_V=0x0800;
 const WX_EXPAND=0x2000;
+// Orientation, as the sizer enum has it (wxHORIZONTAL / wxVERTICAL) -- read by
+// the static line, the gauge and the slider. A NOTEBOOK's `orient` is a
+// different enum in the same field: which edge its tab strip runs along.
+const WX_VERTICAL=8;
+const WX_AUI_NB_BOTTOM=8;
 
 function applyLayout(el, layout){
   if(!layout) return;

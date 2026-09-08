@@ -527,6 +527,18 @@ class ibValueRadioButton : public ibValueWindow {
 	virtual bool ReadData(const ibDataNode& node);
 	virtual bool WriteData(ibDataNode& node) const;
 
+	// The group this button belongs to: the nearest container above it, sizer
+	// items skipped. Its id is what tells one row of choices from another.
+	ibValueFrame* GetGroupHolder() const;
+	// Turn the group off and this one on -- what a native radio group does for
+	// itself, and what nothing does here, the state being ours to keep.
+	void SelectInGroup();
+
+#ifdef OES_USE_WEB
+	//events
+	void OnWebRadioSelected(wxCommandEvent& event);
+#endif
+
 private:
 	ibPropertyCategory* m_categoryRadioButton = ibPropertyObject::CreatePropertyCategory(wxT("RadioButton"), _("Radio button"));
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryRadioButton, wxT("Title"), _("Title"), wxT("Radio button"));
@@ -581,6 +593,12 @@ class ibValueSlider : public ibValueWindow {
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
 	virtual bool WriteData(ibDataNode& node) const;
+
+#ifdef OES_USE_WEB
+	//events -- the browser reports where the handle was let go; the property is
+	//where the position lives, so that is where it is written
+	void OnWebSliderChanged(wxCommandEvent& event);
+#endif
 
 private:
 	ibPropertyCategory* m_categorySlider = ibPropertyObject::CreatePropertyCategory(wxT("Slider"), _("Slider"));

@@ -23,7 +23,11 @@
           "enableClearButton": true,
           "enabled": true,
           "shown": true,
-          "layout": {"proportion": 0, "flag": 4336, "border": 5}
+          "layout": {
+            "proportion": 0,
+            "flag": 4336,
+            "border": 5
+          }
         },
         {
           "type": "textctrl",
@@ -39,7 +43,11 @@
           "enableClearButton": true,
           "enabled": true,
           "shown": true,
-          "layout": {"proportion": 0, "flag": 4336, "border": 5}
+          "layout": {
+            "proportion": 0,
+            "flag": 4336,
+            "border": 5
+          }
         },
         {
           "type": "textctrl",
@@ -56,7 +64,11 @@
           "enableClearButton": false,
           "enabled": true,
           "shown": true,
-          "layout": {"proportion": 0, "flag": 4336, "border": 5}
+          "layout": {
+            "proportion": 0,
+            "flag": 4336,
+            "border": 5
+          }
         },
         {
           "type": "textctrl",
@@ -72,7 +84,11 @@
           "enableClearButton": false,
           "enabled": false,
           "shown": true,
-          "layout": {"proportion": 0, "flag": 4336, "border": 5}
+          "layout": {
+            "proportion": 0,
+            "flag": 4336,
+            "border": 5
+          }
         },
         {
           "type": "textctrl",
@@ -88,7 +104,11 @@
           "enableClearButton": true,
           "enabled": true,
           "shown": true,
-          "layout": {"proportion": 0, "flag": 4336, "border": 5}
+          "layout": {
+            "proportion": 0,
+            "flag": 4336,
+            "border": 5
+          }
         },
         {
           "type": "checkbox",
@@ -156,6 +176,294 @@
           "hasPicture": false,
           "enabled": false,
           "shown": true
+        },
+        {
+          "enabled": true,
+          "shown": true,
+          "type": "staticline",
+          "id": 9200,
+          "orient": 4,
+          "label": "",
+          "layout": {
+            "proportion": 0,
+            "flag": 8192,
+            "border": 4
+          }
+        },
+        {
+          "enabled": true,
+          "shown": true,
+          "type": "notebook",
+          "id": 9201,
+          "label": "",
+          "orient": 1,
+          "active": 9210,
+          "layout": {
+            "proportion": 1,
+            "flag": 8192,
+            "border": 5
+          },
+          "children": [
+            {
+              "enabled": true,
+              "shown": true,
+              "type": "notebookpage",
+              "id": 9210,
+              "label": "Widgets",
+              "representation": 1,
+              "hasPicture": false,
+              "children": [
+                {
+                  "enabled": true,
+                  "shown": true,
+                  "type": "boxsizer",
+                  "orient": 8,
+                  "children": [
+                    {
+                      "enabled": true,
+                      "shown": true,
+                      "type": "statictext",
+                      "id": 9211,
+                      "label": "Radio buttons, one group:",
+                      "layout": {
+                        "proportion": 0,
+                        "flag": 4336,
+                        "border": 5
+                      }
+                    },
+                    {
+                      "enabled": true,
+                      "shown": true,
+                      "type": "radiobutton",
+                      "id": 9212,
+                      "label": "Daily",
+                      "value": false,
+                      "group": 9299,
+                      "layout": {
+                        "proportion": 0,
+                        "flag": 4336,
+                        "border": 5
+                      }
+                    },
+                    {
+                      "enabled": true,
+                      "shown": true,
+                      "type": "radiobutton",
+                      "id": 9213,
+                      "label": "Weekly",
+                      "value": true,
+                      "group": 9299,
+                      "layout": {
+                        "proportion": 0,
+                        "flag": 4336,
+                        "border": 5
+                      }
+                    },
+                    {
+                      "enabled": true,
+                      "shown": true,
+                      "type": "radiobutton",
+                      "id": 9214,
+                      "label": "Monthly",
+                      "value": false,
+                      "group": 9299,
+                      "layout": {
+                        "proportion": 0,
+                        "flag": 4336,
+                        "border": 5
+                      }
+                    },
+                    {
+                      "enabled": true,
+                      "shown": true,
+                      "type": "staticline",
+                      "id": 9215,
+                      "orient": 4,
+                      "layout": {
+                        "proportion": 0,
+                        "flag": 8192,
+                        "border": 6
+                      }
+                    },
+                    {
+                      "enabled": true,
+                      "shown": true,
+                      "type": "statictext",
+                      "id": 9216,
+                      "label": "Gauge and slider:",
+                      "layout": {
+                        "proportion": 0,
+                        "flag": 4336,
+                        "border": 5
+                      }
+                    },
+                    {
+                      "enabled": true,
+                      "shown": true,
+                      "type": "gauge",
+                      "id": 9217,
+                      "range": 100,
+                      "value": 64,
+                      "orient": 4,
+                      "layout": {
+                        "proportion": 0,
+                        "flag": 4336,
+                        "border": 5
+                      }
+                    },
+                    {
+                      "enabled": true,
+                      "shown": true,
+                      "type": "slider",
+                      "id": 9218,
+                      "min": 0,
+                      "max": 100,
+                      "value": 35,
+                      "orient": 4,
+                      "layout": {
+                        "proportion": 0,
+                        "flag": 4336,
+                        "border": 5
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "enabled": true,
+              "shown": true,
+              "type": "notebookpage",
+              "id": 9220,
+              "label": "Vertical",
+              "representation": 1,
+              "hasPicture": false,
+              "children": [
+                {
+                  "enabled": true,
+                  "shown": true,
+                  "type": "boxsizer",
+                  "orient": 8,
+                  "children": [
+                    {
+                      "enabled": true,
+                      "shown": true,
+                      "type": "boxsizer",
+                      "orient": 4,
+                      "children": [
+                        {
+                          "enabled": true,
+                          "shown": true,
+                          "type": "gauge",
+                          "id": 9221,
+                          "range": 10,
+                          "value": 7,
+                          "orient": 8,
+                          "layout": {
+                            "proportion": 0,
+                            "flag": 4336,
+                            "border": 5
+                          }
+                        },
+                        {
+                          "enabled": true,
+                          "shown": true,
+                          "type": "staticline",
+                          "id": 9222,
+                          "orient": 8,
+                          "layout": {
+                            "proportion": 0,
+                            "flag": 8192,
+                            "border": 6
+                          }
+                        },
+                        {
+                          "enabled": true,
+                          "shown": true,
+                          "type": "slider",
+                          "id": 9223,
+                          "min": 0,
+                          "max": 10,
+                          "value": 3,
+                          "orient": 8,
+                          "layout": {
+                            "proportion": 0,
+                            "flag": 4336,
+                            "border": 5
+                          }
+                        },
+                        {
+                          "enabled": true,
+                          "shown": true,
+                          "type": "statictext",
+                          "id": 9224,
+                          "label": "A vertical line stands between them.",
+                          "layout": {
+                            "proportion": 0,
+                            "flag": 4336,
+                            "border": 5
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "enabled": true,
+              "shown": true,
+              "type": "notebookpage",
+              "id": 9230,
+              "label": "HTML",
+              "representation": 1,
+              "hasPicture": false,
+              "children": [
+                {
+                  "enabled": true,
+                  "shown": true,
+                  "type": "boxsizer",
+                  "orient": 8,
+                  "children": [
+                    {
+                      "enabled": true,
+                      "shown": true,
+                      "type": "htmlbox",
+                      "id": 9231,
+                      "label": "Report preview",
+                      "page": "<h3 style=\"font:600 15px system-ui;margin:0 0 6px\">Turnover</h3><table style=\"font:13px system-ui;border-collapse:collapse\"><tr><th style=\"text-align:left;padding:2px 12px 2px 0\">Warehouse</th><th style=\"text-align:right\">Amount</th></tr><tr><td style=\"padding:2px 12px 2px 0\">Central</td><td align=\"right\">12 400,00</td></tr><tr><td style=\"padding:2px 12px 2px 0\">Retail</td><td align=\"right\">3 180,50</td></tr></table>",
+                      "minSize": {
+                        "h": 120
+                      },
+                      "layout": {
+                        "proportion": 1,
+                        "flag": 8192,
+                        "border": 4
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "enabled": true,
+              "shown": false,
+              "type": "notebookpage",
+              "id": 9240,
+              "label": "Hidden one",
+              "representation": 1,
+              "hasPicture": false,
+              "children": [
+                {
+                  "enabled": true,
+                  "shown": true,
+                  "type": "boxsizer",
+                  "orient": 8,
+                  "children": []
+                }
+              ]
+            }
+          ]
         }
       ]
     }

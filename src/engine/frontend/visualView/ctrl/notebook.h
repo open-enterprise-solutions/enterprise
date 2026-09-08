@@ -61,11 +61,27 @@ public:
 private:
 
 	//Events
+#ifdef OES_USE_WEB
+	// The browser names the page by its control id -- there is no notebook
+	// widget here to hold an index into.
+	void OnWebPageChanged(wxCommandEvent& event);
+#else
 	void OnPageChanged(wxAuiNotebookEvent& event);
 	void OnBGDClick(wxAuiNotebookEvent& event);
 	void OnEndDrag(wxAuiNotebookEvent& event);
+#endif
 
+	// Which page is in front. It is the notebook's, not the widget's: on the
+	// web road the tree is written out afresh on every answer, and a choice
+	// kept only in the browser would not survive one.
 	ibValueNotebookPage* m_activePage;
+
+#ifdef OES_USE_WEB
+	// The page that should be in front when nobody has picked one: the first
+	// visible one. Also repairs an m_activePage that has gone invisible or is
+	// no longer a child.
+	ibValueNotebookPage* ResolveActivePage();
+#endif
 	std::vector< ibValueNotebookPage*> m_pageArray;
 
 	ibPropertyCategory* m_categoryNotebook = ibPropertyObject::CreatePropertyCategory(wxT("Notebook"), _("Notebook"));

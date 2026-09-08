@@ -42,6 +42,7 @@ wxDEFINE_EVENT(wxEVT_CONTROL_BUTTON_CLEAR,  wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_CONTROL_TEXT_ENTER,    wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_CONTROL_TEXT_INPUT,    wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_CONTROL_TEXT_CLEAR,    wxCommandEvent);
+wxDEFINE_EVENT(wxEVT_WEB_NOTEBOOK_PAGE_CHANGED, wxCommandEvent);
 
 // Web-local id generator: the same shape wx events themselves use —
 // an event carries an id, either passed explicitly or auto-assigned

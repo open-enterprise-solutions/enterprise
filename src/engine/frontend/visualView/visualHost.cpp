@@ -154,6 +154,15 @@ void AppendChildControls(ibValueFrame* node,
 			host->AppendInnerControl(child, win);   // windows only
 			nextWindow = win;
 			nextSizer  = nullptr;
+			// A window that came with a sizer of its own takes its children
+			// INTO it, not alongside it -- the notebook page is built that way,
+			// as ibPanelPage is on the desktop. Without this the page's
+			// contents hang off the window directly and every layout param
+			// they carry (proportion, border, expand) is dropped on the floor.
+			if (ibWebSizer* const own = win->GetSizer()) {
+				nextWindow = nullptr;
+				nextSizer  = own;
+			}
 			break;
 		}
 		case COMPONENT_TYPE_SIZER: {

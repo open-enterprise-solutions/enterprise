@@ -25,6 +25,13 @@ class ibValueHTMLBox : public ibValueWindow {
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
 	virtual bool WriteData(ibDataNode& node) const;
+
+#ifdef OES_USE_WEB
+private:
+	// What SetPage was last given. The render shim is re-read on every
+	// refresh, so the text has to live on the side that outlives one.
+	wxString m_page;
+#endif
 };
 
 #endif // ! _HTMLBOX_H__

@@ -2,7 +2,9 @@
 #include "widgets.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
-
+#ifdef OES_USE_WEB
+#include "frontend/web/webWindow.h"
+#endif
 
 //****************************************************************************
 //*                             Gauge                                        *
@@ -12,22 +14,37 @@ ibValueGauge::ibValueGauge() : ibValueWindow()
 {
 }
 
-wxObject* ibValueGauge::Create(wxWindow* wxparent, ibVisualHost* visualHost)
+wxObject* ibValueGauge::Create(ibFrontendWindow* wxparent, ibVisualHost* visualHost)
 {
+#ifdef OES_USE_WEB
+	(void)wxparent;
+	(void)visualHost;
+	return new ibWebGauge(GetControlID());
+#else
 	return new wxGauge(wxparent, wxID_ANY,
 		m_propertyRange->GetValueAsInteger(),
 		wxDefaultPosition,
 		wxDefaultSize,
 		m_propertyOrient->GetValueAsInteger()
 	);
+#endif
 }
 
-void ibValueGauge::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
+void ibValueGauge::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 
 void ibValueGauge::Update(wxObject* wxobject, ibVisualHost* visualHost)
 {
+#ifdef OES_USE_WEB
+	(void)visualHost;
+	auto* gauge = static_cast<ibWebGauge*>(wxobject);
+	if (gauge != nullptr) {
+		gauge->SetRange(m_propertyRange->GetValueAsInteger());
+		gauge->SetValue(m_propertyValue->GetValueAsInteger());
+		gauge->SetOrientation(m_propertyOrient->GetValueAsInteger());
+	}
+#else
 	wxGauge* gauge = dynamic_cast<wxGauge*>(wxobject);
 	if (gauge != nullptr) {
 		wxWindow *winParent = gauge->GetParent(); 
@@ -45,11 +62,12 @@ void ibValueGauge::Update(wxObject* wxobject, ibVisualHost* visualHost)
 		gauge->SetValue(m_propertyValue->GetValueAsInteger());
 		gauge->Show(isShown);
 	}
+#endif
 
 	UpdateWindow(gauge);
 }
 
-void ibValueGauge::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost)
+void ibValueGauge::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost)
 {
 }
 

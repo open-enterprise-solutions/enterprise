@@ -55,6 +55,11 @@ wxDECLARE_EVENT(wxEVT_CONTROL_BUTTON_CLEAR,  wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_CONTROL_TEXT_ENTER,    wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_CONTROL_TEXT_INPUT,    wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_CONTROL_TEXT_CLEAR,    wxCommandEvent);
+// A notebook page was picked in the browser. Desktop carries this as
+// wxEVT_AUINOTEBOOK_PAGE_CHANGED on a wxAuiNotebookEvent, which names an
+// index into a wxAuiNotebook nobody built here; the page is named by its
+// control id in the event's int instead.
+wxDECLARE_EVENT(wxEVT_WEB_NOTEBOOK_PAGE_CHANGED, wxCommandEvent);
 #endif
 
 class ibWebSizer;
@@ -548,6 +553,235 @@ private:
 	bool     m_showClearButton   = false;
 	bool     m_enableSelectButton = true;
 	bool     m_enableClearButton  = true;
+};
+
+// A rule and nothing else: a line drawn across the form, or down it.
+class ibWebStaticLine : public ibWebWindow {
+public:
+	explicit ibWebStaticLine(int id = 0) : ibWebWindow(id) {}
+
+	virtual wxString GetControlType() const override { return wxT("staticline"); }
+
+	void SetOrientation(int o) { m_orient = o; }
+	int  GetOrientation() const { return m_orient; }
+
+	virtual nlohmann::json ToJSON() const override {
+		auto node = ibWebWindow::ToJSON();
+		node["orient"] = m_orient;   // wxHORIZONTAL / wxVERTICAL
+		return node;
+	}
+
+private:
+	int m_orient = wxHORIZONTAL;
+};
+
+// One of several. The group is named rather than inferred from the DOM:
+// which buttons belong together is a question about the CONTROL tree, and
+// the server is the side holding it.
+class ibWebRadioButton : public ibWebWindow {
+public:
+	explicit ibWebRadioButton(int id = 0) : ibWebWindow(id) {}
+
+	virtual wxString GetControlType() const override { return wxT("radiobutton"); }
+
+	void SetValue(bool v) { m_value = v; }
+	bool GetValue() const { return m_value; }
+
+	void SetGroup(int group) { m_group = group; }
+
+	// wxEVT_RADIOBUTTON is the desktop event for the same act, so a handler
+	// written against it works on either road.
+	bool FireSelect() {
+		m_value = true;
+		wxCommandEvent ev(wxEVT_RADIOBUTTON);
+		ev.SetInt(1);
+		return FireEvent(ev);
+	}
+
+	virtual bool HandleRequest(const wxString& kind,
+		const wxString& /*value*/) override
+	{
+		if (kind == wxT("select")) return FireSelect();
+		return false;
+	}
+
+	virtual nlohmann::json ToJSON() const override {
+		auto node = ibWebWindow::ToJSON();
+		node["value"] = m_value;
+		node["group"] = m_group;
+		return node;
+	}
+
+private:
+	bool m_value = false;
+	int  m_group = 0;
+};
+
+// A quantity somebody is being shown, not one they set.
+class ibWebGauge : public ibWebWindow {
+public:
+	explicit ibWebGauge(int id = 0) : ibWebWindow(id) {}
+
+	virtual wxString GetControlType() const override { return wxT("gauge"); }
+
+	void SetRange(int r)       { m_range = r; }
+	void SetValue(int v)       { m_value = v; }
+	void SetOrientation(int o) { m_orient = o; }
+
+	virtual nlohmann::json ToJSON() const override {
+		auto node = ibWebWindow::ToJSON();
+		node["range"]  = m_range;
+		node["value"]  = m_value;
+		node["orient"] = m_orient;
+		return node;
+	}
+
+private:
+	int m_range  = 100;
+	int m_value  = 0;
+	int m_orient = wxHORIZONTAL;
+};
+
+// A quantity somebody sets by dragging it.
+class ibWebSlider : public ibWebWindow {
+public:
+	explicit ibWebSlider(int id = 0) : ibWebWindow(id) {}
+
+	virtual wxString GetControlType() const override { return wxT("slider"); }
+
+	void SetRange(int lo, int hi) { m_min = lo; m_max = hi; }
+	void SetValue(int v)          { m_value = v; }
+	int  GetValue() const         { return m_value; }
+	void SetOrientation(int o)    { m_orient = o; }
+
+	// wxEVT_SLIDER, as on the desktop, carrying the new position in the int.
+	bool FireValueChange(int v) {
+		m_value = v;
+		wxCommandEvent ev(wxEVT_SLIDER);
+		ev.SetInt(v);
+		return FireEvent(ev);
+	}
+
+	virtual bool HandleRequest(const wxString& kind,
+		const wxString& value) override
+	{
+		if (kind == wxT("value")) {
+			long v = 0;
+			if (!value.ToLong(&v)) return false;
+			return FireValueChange(static_cast<int>(v));
+		}
+		return false;
+	}
+
+	virtual nlohmann::json ToJSON() const override {
+		auto node = ibWebWindow::ToJSON();
+		node["min"]    = m_min;
+		node["max"]    = m_max;
+		node["value"]  = m_value;
+		node["orient"] = m_orient;
+		return node;
+	}
+
+private:
+	int m_min    = 0;
+	int m_max    = 100;
+	int m_value  = 0;
+	int m_orient = wxHORIZONTAL;
+};
+
+// The pages are the children; which one is in front is the notebook's own
+// state, because the tree is rebuilt from the server on every answer and a
+// choice held only in the browser would not survive one.
+class ibWebNotebook : public ibWebWindow {
+public:
+	explicit ibWebNotebook(int id = 0) : ibWebWindow(id) {}
+
+	virtual wxString GetControlType() const override { return wxT("notebook"); }
+
+	// wxAUI_NB_TOP / wxAUI_NB_BOTTOM — which edge the tab strip runs along.
+	void SetOrientation(int o) { m_orient = o; }
+
+	void SetActivePage(int controlId) { m_active = controlId; }
+	int  GetActivePage() const        { return m_active; }
+
+	bool FirePageChanged(int pageControlId) {
+		m_active = pageControlId;
+		wxCommandEvent ev(wxEVT_WEB_NOTEBOOK_PAGE_CHANGED);
+		ev.SetInt(pageControlId);
+		return FireEvent(ev);
+	}
+
+	virtual bool HandleRequest(const wxString& kind,
+		const wxString& value) override
+	{
+		if (kind == wxT("page")) {
+			long v = 0;
+			if (!value.ToLong(&v)) return false;
+			return FirePageChanged(static_cast<int>(v));
+		}
+		return false;
+	}
+
+	virtual nlohmann::json ToJSON() const override {
+		auto node = ibWebWindow::ToJSON();
+		node["orient"] = m_orient;
+		node["active"] = m_active;
+		return node;
+	}
+
+private:
+	int m_orient = 0;
+	int m_active = 0;
+};
+
+// A page is a container with a caption on a tab. Its own contents hang from
+// the box sizer it is built with, the way the desktop page carries one.
+class ibWebNotebookPage : public ibWebWindow {
+public:
+	explicit ibWebNotebookPage(int id = 0) : ibWebWindow(id) {}
+
+	virtual wxString GetControlType() const override { return wxT("notebookpage"); }
+
+	// Same three fields a tool carries, and for the same reason: a page may
+	// be captioned, pictured, or both (ibRepresentation).
+	void SetRepresentation(int r)               { m_representation = r; }
+	void SetHasPicture(bool v)                  { m_hasPicture     = v; }
+	void SetPictureDataUri(const wxString& uri) { m_pictureDataUri = uri; }
+
+	virtual nlohmann::json ToJSON() const override {
+		auto node = ibWebWindow::ToJSON();
+		node["representation"] = m_representation;
+		node["hasPicture"]     = m_hasPicture;
+		if (!m_pictureDataUri.IsEmpty())
+			node["picture"] = m_pictureDataUri;
+		return node;
+	}
+
+private:
+	int      m_representation = 3;   // PictureAndText, as the tool's default is
+	bool     m_hasPicture     = false;
+	wxString m_pictureDataUri;
+};
+
+// Whatever a script last handed SetPage. The text is held HERE rather than in
+// the browser because the shim is what a refresh re-reads.
+class ibWebHtmlBox : public ibWebWindow {
+public:
+	explicit ibWebHtmlBox(int id = 0) : ibWebWindow(id) {}
+
+	virtual wxString GetControlType() const override { return wxT("htmlbox"); }
+
+	void SetPage(const wxString& html) { m_page = html; }
+	const wxString& GetPage() const    { return m_page; }
+
+	virtual nlohmann::json ToJSON() const override {
+		auto node = ibWebWindow::ToJSON();
+		node["page"] = m_page;
+		return node;
+	}
+
+private:
+	wxString m_page;
 };
 
 #endif
