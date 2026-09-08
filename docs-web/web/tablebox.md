@@ -190,11 +190,53 @@ is the source descriptor's, and which is what a list needs — Add, Add folder,
 Copy, Edit, Delete, Mark as delete. The table's view-state band (Filter,
 ViewMode, saved settings, Output list) is absent rather than present and dead.
 
-**Double-click opens the row.** `POST /fire/<id>/activate?value=<key>` moves the
-cursor onto the row and then asks the model to raise its form
-(`ibValueModel::ActivateItem` → the source descriptor's `ShowValueByKey`). The
-desktop road, `ActivateRow`, decides between choice, an inline editor and
-opening the value; two of those three have no web flow yet.
+**Double-click opens the row — or picks it.** `POST /fire/<id>/activate?value=<key>`
+moves the cursor onto the row and then takes the same branch the desktop's
+`ActivateRow` takes: a table in **choice mode** hands the row back to whoever
+opened the list (below), and any other table asks the model to raise the row's
+form (`ibValueModel::ActivateItem` → the source descriptor's `ShowValueByKey`).
+The third desktop answer, an inline editor, has no web flow yet.
+
+## Picking a value
+
+A reference field's `…` button opens a list, and until 2026-09-07 that was all
+it did: the list opened and there was no way to take anything out of it. The
+machinery was whole on both sides of the gap. `ibTypeControlFactory::ChooseValue`
+→ `ProcessChoice` already opens the list with the asking control as its owner and
+`choiceMode` set — the JSON has carried `"choiceMode":true` all along — and
+`ibValueForm::NotifyChoice` already writes the picked value into that control and
+closes the picker. What was missing was the verb in between.
+
+Two things were missing, and both were in the web build's own copy of the
+tablebox's command layer (`tableBox.cpp` under `OES_USE_WEB`, because
+`tableBoxAction.cpp` reaches into the wxDataView control and is not compiled
+here):
+
+- **The Select command was not composed.** The desktop band puts Select first
+  when `IsChoiceMode()`; the web band listed only the model's object commands, so
+  the picker's toolbar offered Add / Copy / Edit / Delete and no way to choose.
+- **Activating a row did not check for it.** The web activate path went straight
+  to `ActivateItem`, so double-clicking a row in a picker opened that row's own
+  form — the list looking at itself.
+
+Both bands now name the same id: the action ids moved from a file-scope enum in
+`tableBoxAction.cpp` onto the class (`tableBox.h`), because a tool built in one
+front and a tool built in the other have to mean the same command.
+`Command_Choose` moved to the shared part of `tableBox.cpp` for the same reason —
+it is the one command in that band with no window in it (the current line, its
+select value, the form it goes to), so both fronts run one body.
+
+The two gestures are one road: the double-click goes through
+`CallAsAction(enTableSelect, …)`, which is exactly where a click on the Select
+tool arrives.
+
+Measured on the Goods receipt form: `Warehouse` empty → picker opens with
+`["Select","Add",…]` → double-click "Основной склад" → picker closes, field
+reads `Основной склад`. And through the tool: Select with no row standing does
+nothing and leaves the picker open (there is no current line to hand back);
+click a row, then Select, and `Counterparty` reads `ООО Ромашка`. A list that is
+not a picker is unchanged — no Select on its bar, and a double-click still opens
+the object.
 
 ## The font every control was drawn in
 
@@ -249,6 +291,4 @@ Named rather than implied, because each is a road not started.
   See `docs/column-groups.md` for what the desktop does.
 - **Editing.** Every column reports `readOnly:true`. Iteration 2 is read-only
   throughout.
-- **Choice mode.** A table opened as a picker has no web flow, so activating a
-  row there falls through to opening the object rather than returning it.
 - **Footers.** `footer` is reported and ignored.

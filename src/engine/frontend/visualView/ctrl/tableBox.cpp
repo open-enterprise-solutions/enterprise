@@ -17,6 +17,7 @@
 #include "formAttribute.h"                              // the attribute this box is bound to — its source IS the address
 #include "backend/srcDataObject.h"                      // …and the source answers with the guid of what it reads
 #include "backend/appData.h"
+#include "backend/picturePredefined.h"                 // g_picSelectCLSID — the picker's own command
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
@@ -987,6 +988,25 @@ bool ibValueModelTableBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	return ibValueFrame::GetPropVal(lPropNum, pvarPropVal);
 }
 
+// A PICKER HANDS BACK A ROW. Choice returns the CURRENT ROW as a value — the ReturnLine, which
+// itself pins the model alive for as long as the caller (the opener) holds it. NotifyChoice hands
+// it over; no reference re-resolution on the model.
+//
+// Shared: the rest of the band reaches into the grid control for a drill anchor or a current
+// column, and this reaches into nothing. It is what a list opened as a picker exists to do, so
+// both fronts run this one body rather than a copy each.
+void ibValueModelTableBox::Command_Choose(ibBackendValueForm* srcForm)
+{
+	ibValueModel::ibValueModelReturnLine* line = GetCurrentLine();
+	if (line == nullptr || srcForm == nullptr)
+		return;
+
+	// The picker returns the row's SELECT value — a reference / key, defined PER LINE TYPE
+	// (GetSelectValue), not the generic row value.
+	ibValue selectValue = line->GetSelectValue();
+	srcForm->NotifyChoice(selectValue);
+}
+
 #ifdef OES_USE_WEB
 // Methods declared in tableBox.h but normally implemented in the
 // auxiliary tableBox*.cpp files (Event/Property/Action/Menu) — those
@@ -1008,6 +1028,10 @@ void ibValueModelTableBox::OnPropertyChanged(ibProperty* /*property*/, const wxV
 // The table's own view-state band (Filter, ViewMode, saved settings, Output
 // list) is deliberately absent rather than present and dead: each of those IS
 // a window, and none of them has a web door yet.
+//
+// Select is the exception, and it is not decoration: a list opened as a picker
+// exists to hand a row back, and without this command it could only be looked
+// at. It opens no window — the row it returns goes to the control that asked.
 ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardCommands(const ibFormID& formType)
 {
 	// The created model, or — on the unbound path — the one the bound form
@@ -1022,6 +1046,12 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 		return ibStandardCommandSet();
 
 	ibStandardCommandSet actionData(this);
+
+	// Select — first, and only when this table is a picker. Same id as the desktop band, so a
+	// tool built here and a tool built there name the same command.
+	if (IsChoiceMode())
+		actionData.AddAction(wxT("Select"), _("Select"), g_picSelectCLSID, true, enTableSelect).SetModify(false);
+
 	std::vector<ibCommandItem> commands;
 	model->GetCommandCollection(formType, commands);
 	for (const ibCommandItem& command : commands) {
@@ -1044,6 +1074,13 @@ void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendV
 	// the grid control there, and the web has neither a drill nor a cell
 	// cursor yet — so a new element lands at the root, which is what the flat
 	// list view does on the desktop too.
+	// Select is the table's own, not the model's: it hands the current row back to whoever opened
+	// this list as a picker. Everything else in this build is an object command.
+	if (lNumAction == enTableSelect) {
+		Command_Choose(srcForm);
+		return;
+	}
+
 	ibDataViewCommandContext ctx;
 	ctx.m_selection = m_tableCurrentLine != nullptr
 		? m_tableCurrentLine->GetLineItem() : ibDataViewItem();

@@ -432,12 +432,19 @@ bool ibWebTableBox::HandleRequest(const wxString& kind, const wxString& value)
 	m_requestControl->ApplyCurrentLine(model->GetRowAt(found->item));
 
 	if (activate) {
-		// The desktop road is ActivateRow, which decides between choice,
-		// an inline editor and opening the value. Two of those three do
-		// not exist here yet — a picker has no web flow and the web
-		// table is read-only — so what is left is the one that matters
-		// for a list: the model raises the row's own form.
-		model->ActivateItem(found->item, m_requestControl->GetOwnerForm());
+		// The desktop road is ActivateRow, and this walks the same two of its
+		// three answers. A PICKER hands the row back to whoever opened it —
+		// double-clicking a row is how a person picks one, and it was opening
+		// the row's own form instead, which is the list looking at itself.
+		// Otherwise the model raises the row's own form. The third answer,
+		// an inline editor, has no web flow yet.
+		// Through the dispatcher rather than straight at the handler: a click on the
+		// bar's Select tool arrives the same way, so the two gestures are one road.
+		if (m_requestControl->IsChoiceMode())
+			m_requestControl->CallAsAction(ibValueModelTableBox::enTableSelect,
+				m_requestControl->GetOwnerForm());
+		else
+			model->ActivateItem(found->item, m_requestControl->GetOwnerForm());
 	}
 	return true;
 }
