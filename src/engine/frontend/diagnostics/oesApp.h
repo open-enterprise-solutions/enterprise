@@ -23,6 +23,7 @@
 //   OnUnhandledException  → log + wxDebugReport
 //   OnFatalException      → wxDebugReport (main thread) /
 //                            native MessageBox + TerminateProcess (bg)
+//   OnAssertFailure       → journal + stderr, once per site, NO dialog
 //
 // Subclass contract:
 //   - GetExeName() — pure virtual, e.g. "enterprise" / "designer".
@@ -34,6 +35,7 @@
 // through ibCrashGuard directly — backend symbols, no wrapper needed.
 
 #include "backend/diagnostics/crashGuard.h"
+#include "backend/diagnostics/journal.h"   // ibJournalInfo — where a failed assertion is said
 #include "backend/backend_exception.h"
 
 #include <wx/app.h>
@@ -45,9 +47,13 @@
 #include <wx/string.h>
 #include <wx/thread.h>
 
+#include <cstdio>    // stderr, for an assertion raised before the journal is open
 #include <cstdlib>   // EXIT_FAILURE
 #include <exception>
 #include <functional>
+#include <mutex>
+#include <set>
+#include <utility>
 
 class ibWxApp : public wxApp {
 public:
@@ -243,6 +249,53 @@ public:
 		if (preview.Show(report)) report.Process();
 	}
 #endif // wxUSE_EXCEPTIONS
+
+#if wxDEBUG_LEVEL
+	// A FAILED ASSERTION IS A RECORD, NOT A WINDOW. wx answers one with a modal
+	// message box, and it does that wherever the assertion happened to fire —
+	// including inside a paint handler, which is where this was found on
+	// 2026-09-07: a `wxAuiToolBar` painted before layout had given it a size
+	// asserted in `wxGCDC::DoDrawBitmap` ("invalid bitmap"), the dialog opened
+	// from inside the paint, and the client stopped with no window a person
+	// could see and no line anyone could read. Opening a document looked like a
+	// hang. It was worse than a plain modal, too: AppKit logs a call stack when
+	// a modal session starts nested like that, and the process spent every cycle
+	// it had symbolicating it, so the box never finished drawing either.
+	//
+	// The same rule the engine already follows (CLAUDE.md: do not raise a modal
+	// from a caller that may not be a person) applies here for the same reason.
+	// The assertion still gets said, in the place things are said: the journal,
+	// at Info, which reaches the file and not the screen — plus stderr, because
+	// an assertion during startup fires before the journal is open.
+	//
+	// ONCE PER SITE. An assertion in a paint handler fires on every paint; the
+	// hundredth copy of a line carries nothing the first did not, and the flood
+	// is what would make the journal unreadable at the moment it matters.
+	void OnAssertFailure(const wxChar* file, int line, const wxChar* func,
+		const wxChar* cond, const wxChar* msg) override
+	{
+		static std::mutex          s_mutex;
+		static std::set<std::pair<wxString, int>> s_seen;
+		{
+			std::lock_guard<std::mutex> lock(s_mutex);
+			if (!s_seen.emplace(wxString(file != nullptr ? file : wxT("?")), line).second)
+				return;
+		}
+
+		const wxString where = wxString::Format(wxT("%s:%d"),
+			file != nullptr ? file : wxT("?"), line);
+		wxString what = cond != nullptr ? wxString(cond) : wxString(wxT("(no condition)"));
+		if (msg != nullptr && *msg != wxT('\0'))
+			what += wxT(" -- ") + wxString(msg);
+		if (func != nullptr && *func != wxT('\0'))
+			what += wxT(" [in ") + wxString(func) + wxT("]");
+
+		ibJournalInfo(wxT("assert"), wxT("%s: %s"), where, what);
+		std::fprintf(stderr, "OES assert %s: %s\n",
+			static_cast<const char*>(where.utf8_str()),
+			static_cast<const char*>(what.utf8_str()));
+	}
+#endif // wxDEBUG_LEVEL
 
 #if wxUSE_ON_FATAL_EXCEPTION && wxUSE_STACKWALKER
 	void OnFatalException() override
