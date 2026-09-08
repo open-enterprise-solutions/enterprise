@@ -15,6 +15,35 @@ rows at all. It was not a missing renderer: there was nothing for a renderer to
 draw. Every list form in the demo base is a tablebox and nothing else, so the
 three controls Iteration 1 built could not be seen on a real form either.
 
+## No command bar, and what that costs
+
+A tablebox bound to a tabular section has one on the desktop — Add / Copy / Edit
+/ Delete above the grid — and none here. `ibValueWindowComposite::CreateWithLayers`
+builds the chrome wrapper and its toolbar layer under `#ifndef OES_USE_WEB`; the
+web branch creates the inner control alone, so the command bar object the value
+carries is never read. Until it is built, a tabular section in the browser is
+read-only in practice, whatever the rights say. Filed as
+[#108](https://github.com/open-enterprise-solutions/enterprise/issues/108), with
+the three pieces it needs — emit, route, draw — and why routing is the awkward
+one: `POST /command/<action>` resolves against the form's bar only, and a
+control's bar is a second store with action ids of its own.
+
+## The height floor is on the HOST, not on the grid
+
+`.oes-tablebox` carries `min-height: 240px`; `.oes-tablebox-grid` carries none.
+The floor exists because a grid in a container of indefinite height computes to
+nothing and draws no rows — but on the grid it was a size the flex parent never
+heard about. A form with 86px of room left still laid out 240px of grid and drew
+the difference over everything below it, outside the form's own border. On the
+host the same floor is a flex minimum: the form asks for its natural height, and
+`.form-host` scrolls when there is nowhere left to put it.
+
+The stored minimum meets it through `max()`. A tablebox's `MinimumSize` is
+`150x75` — set in `ibValueModelTableBox`'s constructor, chosen by nobody — and
+written as a plain inline value it *replaced* the floor, leaving a header with no
+rows under it. `applyCommon` writes `max(<stored>, var(--oes-min-h, 0px))`, so a
+stored minimum raises a floor and never lowers one.
+
 ## Two roads
 
 **The shape** travels with the form JSON. `ibWebTableBox`,

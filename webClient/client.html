@@ -246,8 +246,12 @@ html[data-oes-ui="ui5"] #tab-body{
    flex:1 inside #main → #app-row → body), so the hardcoded
    100vh-90px is no longer needed — the new layout (titlebar +
    app-row + statusbar) does the math via flex grow chain. */
+/* overflow:auto because a form that does not fit has to scroll INSIDE its frame.
+   Left visible, a table taller than the room left for it simply drew past the
+   bottom border and over the window -- the frame said one thing and the content
+   did another. */
 .form-host{border:1px solid #ddd;border-radius:4px;padding:10px;
-  display:flex;flex-direction:column;min-height:0;flex:1 1 auto}
+  display:flex;flex-direction:column;min-height:0;flex:1 1 auto;overflow:auto}
 html[data-oes-ui="ui5"] .form-host{
   background:var(--oes-form-surface);color:var(--oes-form-text);
   border-color:var(--oes-form-border)
@@ -264,8 +268,15 @@ html[data-oes-ui="ui5"] .form-host{
    Tabulator measures, and it needs a floor — a grid in a container of
    indefinite height would otherwise compute to nothing and draw no
    rows at all. */
-.oes-tablebox{display:flex;flex-direction:column;min-height:0;flex:1 1 auto}
-.oes-tablebox-grid{flex:1 1 auto;min-height:240px}
+/* The floor is on the HOST, not on the grid inside it. A grid in a container of
+   indefinite height computes to nothing and draws no rows, which is what the
+   floor is for -- but put on the grid it was a size the flex parent never heard
+   about, so a table with 86px of room still laid out 240px of grid and spilled
+   the difference over everything below. On the host the same floor is a flex
+   minimum: the form grows, and the frame scrolls when there is nowhere left. */
+.oes-tablebox{display:flex;flex-direction:column;flex:1 1 auto;
+  --oes-min-h:240px;min-height:240px}
+.oes-tablebox-grid{flex:1 1 auto;min-height:0}
 /* A header that sorts says so under the pointer; one that cannot (a
    whole-attribute column, or a model with no Sorting feature) stays as
    it is rather than inviting a click that would do nothing. */
@@ -353,6 +364,11 @@ html[data-oes-ui="ui5"] .oes-ui5-tool img{vertical-align:-.15em}
 /* Side navigation fills the sidebar it sits in. */
 html[data-oes-ui="ui5"] .oes-ui5-sidenav{width:100%}
 .boxsizer{display:flex;gap:6px;margin:4px 0;align-items:flex-start}
+/* A sizer item already carries the border the form asked for, as a margin on
+   its own box. Ours on top of that is a second helping nobody wrote down,
+   and it counts once per nesting level -- which is what made a column of
+   check boxes read as a column of gaps. */
+html[data-oes-ui="ui5"] .boxsizer{margin:0}
 .boxsizer.vert{flex-direction:column}
 .boxsizer.horz{flex-direction:row}
 /* Label-column alignment: TextCtrl (and any future labelrow control)
@@ -1883,8 +1899,14 @@ class BaseControl{
     }
     if(node.tooltip) el.title=node.tooltip;
     if(node.minSize){
-      if(node.minSize.w) el.style.minWidth =node.minSize.w+'px';
-      if(node.minSize.h) el.style.minHeight=node.minSize.h+'px';
+      // A stored minimum RAISES a floor; it does not lower one. Written as a
+      // plain value it replaced whatever the stylesheet had, and a tablebox --
+      // whose class default is 150x75, set in its constructor and chosen by
+      // nobody -- came out at 75px: a header and no rows, in a form that had
+      // room to scroll. max() keeps both, and the larger wins whichever side
+      // it came from.
+      if(node.minSize.w) el.style.minWidth =`max(${node.minSize.w}px, var(--oes-min-w, 0px))`;
+      if(node.minSize.h) el.style.minHeight=`max(${node.minSize.h}px, var(--oes-min-h, 0px))`;
     }
     if(node.maxSize){
       if(node.maxSize.w) el.style.maxWidth =node.maxSize.w+'px';
