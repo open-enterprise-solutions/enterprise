@@ -105,17 +105,41 @@ ship three empty boxes. They need designing before they need rendering.
 library the no-CDN rule would have to be answered for first, and **GridBox** is
 the spreadsheet — each a piece of work in its own right rather than a port.
 
-## Verification, and its limit
+## Verification
 
 The client half is measured against the harness fixture
 (`webClient/assets/harness-form.json`, drawn through the real client by
-`assets/harness.html`): tabs, the hidden page, both orientations of gauge, slider
-and line, the sandboxed frame, and the click posting
+`assets/harness.html`): tabs, the hidden page, both orientations of gauge,
+slider and line, the sandboxed frame, and the click posting
 `/fire/<notebook>/page?value=<page>` with the answer deciding what is drawn.
 
-The SERVER half of the notebook — `ToJSON`, `ResolveActivePage`,
-`OnWebPageChanged` — is **not exercised end to end**, because the demo
-configuration has no form with a notebook, a static line, a radio button, a
-gauge, a slider or an HTML box on it. What is verified server-side is that all
-seven types now register in the web build (`GET /diag/ctors`), which is the thing
-that decides whether a form carrying one can open at all.
+The server half is measured on a REAL form. The demo configuration had no
+control of any of these kinds on it, so one was built through the designer's
+MCP: a notebook `ExtraPages` at the foot of the Goods-receipt document form,
+with four pages — *Delivery* (three radio buttons in one group, a rule),
+*Progress* (a gauge and a slider), *Help* (an HTML box), and a fourth with
+`Visible` false. Its `OnPageChanged` writes a line and fills the HTML box.
+
+What that showed, in the browser, against the running server:
+
+* three tabs, and the invisible page has none;
+* a tab click answers with `active` naming the page that was clicked, and the
+  page's contents are drawn from that answer;
+* `OnPageChanged` runs on the SERVER — its `Message` line appears in the output
+  pane the moment the tab is clicked — and what it writes reaches the browser:
+  the Help page's frame carries the markup the module put there;
+* the gauge draws its stored value, the slider its stored position, and the
+  three radio buttons come back grouped (`group` = the page they share).
+
+Two things the round turned up, neither of them the web client's:
+
+**A control with no VALUE is not on `ThisForm`.** The handler was first written
+`ThisForm.HelpPane.SetPage(…)`, which compiles and then fails at run time —
+`ibValueForm::FillFormMembers` keeps only controls that answer
+`HasValueInControl()`. `Controls.HelpPane` is the road that works.
+[#149](https://github.com/open-enterprise-solutions/enterprise/issues/149).
+
+**The radio buttons' captions read "Radio button"** on that form, because the
+configuration was written by a designer binary from before the `ReadData` /
+`WriteData` fix above: the property genuinely was never stored. The fix is in
+this tree; a form saved by a designer built from it keeps the caption.
