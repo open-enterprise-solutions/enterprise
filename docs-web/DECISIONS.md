@@ -22,6 +22,7 @@ area. The Designer is out of scope entirely.
 ---
 
 ## ADR-002 — UI5 Web Components v2.x, self-hosted, no bundler
+**Superseded by ADR-015.**
 *2026-09-05*
 
 **Context.** The standard controls need a component library with an enterprise
@@ -71,6 +72,7 @@ its own display to remain a flex child.
 ---
 
 ## ADR-005 — Theme and Density are independent axes
+**Superseded by ADR-015.**
 *2026-09-05*
 
 **Context.** A combined mode set (Light-Compact, Dark-Comfortable, …) multiplies
@@ -151,6 +153,7 @@ does not strand a scroll position.
 ---
 
 ## ADR-011 — Feature flag `ui=legacy|ui5`
+**Superseded by ADR-015.**
 *2026-09-05*
 
 **Context.** The renderer sets must be comparable side by side, and a bad
@@ -178,6 +181,7 @@ available. A machine without WebView2 needs a clear error and the native fallbac
 ---
 
 ## ADR-013 — Vendored assets live in the repository, not in a submodule
+**Superseded by ADR-015.**
 *2026-09-05*
 
 **Context.** UI5 has to be served from beside the binary. The obvious instinct is
@@ -210,3 +214,60 @@ is the `enterprise-docs` submodule. That repository does not resolve.
 
 **Consequences.** They reach commits and reviews. When the submodule returns the
 directory moves wholesale, which is a rename. See `README.md` beside this file.
+
+
+---
+
+## ADR-015 — UI5 Web Components are removed; the client draws its own controls
+*2026-09-07*
+
+**Context.** ADR-002 took a component library for its theme system, its density
+story and its enterprise controls. Ten days of building on it is enough to say
+what it actually cost.
+
+What the library gave was a palette and a set of drawn controls. What it took
+was a second surface with its own opinions, sitting between the metadata and the
+screen, and every defect of the last week was on that seam rather than inside
+either side of it. A text control drew a frame, and the renderer drew one too, so
+a field sat inside a box inside a box. A group box is a `fieldset` and not a
+component, so it had to be painted by hand anyway. A side navigation could not
+show a subsystem's own picture, which the metadata carries, so the sidebar lost
+the icons it had. The theme's font arrived on some rows and the browser's on
+others. None of these were the library being wrong; they were the cost of having
+two answers to the same question in one window.
+
+And the platform already guarantees what a component library is usually bought
+for. A form is described once, in metadata, and the same description drives the
+desktop and the web; the controls, their layout, their commands and their
+enabling all come from there. Consistency between two screens of the same
+application does not come from the widgets being someone else's — it comes from
+both screens being generated from one description. That was true before the
+library and stays true without it.
+
+**Decision.** UI5 Web Components are removed: the vendored tree, the import map
+entries, the renderer overlay, the theme loader, the `ui=` flag with its
+`--ui=` server default, and the `theme` / `density` axes that existed only to
+steer them. The client's own renderers — the ones that had been kept intact and
+reachable throughout, per ADR-011 — are now the only ones. Tabulator stays; it
+was never part of this (ADR-003).
+
+**Consequences.** One renderer, and the seam is gone with the second one. A cold
+page load is **17 requests**, measured, where the module graph made it ~450: the
+keep-alive workaround that churn forced (see `web/open-issues.md`) is no longer
+under that pressure. 6.8 MB and some 520 files leave the repository, and the
+vendor script with them.
+
+The palette is now the client's own, in `webClient/assets/oes/oes-tokens.css`,
+holding what is still read: the font that stands behind a control's stored face,
+and the grid's colours — Tabulator ships a grey slab and a strong blue selection
+otherwise. Token names stay OES-semantic (ADR-006); they now map to values
+rather than to a vendor's parameters, which is what ADR-006 said should be
+possible.
+
+**A dark theme is not built.** It was the library's, and it leaves with it. The
+client renders in one light palette. Building a second one is a decision of its
+own — the tokens are the place it would go, and nothing else would have to
+change.
+
+ADR-006's mapping table lived in `web/ui5-integration.md`, which is deleted:
+there is no vendor left to map to.

@@ -5,26 +5,6 @@
      client falls back to the English defaults further down, so a client served
      by anything else still works. -->
 <!--OES_I18N-->
-<!-- OES_UI_DEFAULT is replaced by the server with the renderer default.
-     A directly served development client falls back to legacy. -->
-<!--OES_UI_DEFAULT-->
-<script>
-window.OES = window.OES || {};
-(function(){
-  const params=new URLSearchParams(location.search);
-  const oneOf=(value,allowed,fallback)=>allowed.includes(value)?value:fallback;
-  const serverUI=oneOf(window.OES.uiDefault,['legacy','ui5'],'legacy');
-  const runtime={
-    ui:oneOf(params.get('ui'),['legacy','ui5'],serverUI),
-    theme:oneOf(params.get('theme'),['light','dark'],'light'),
-    density:oneOf(params.get('density'),['compact','comfortable'],'compact'),
-  };
-  window.OES.runtime=runtime;
-  document.documentElement.dataset.oesUi=runtime.ui;
-  document.documentElement.dataset.oesTheme=runtime.theme;
-  document.documentElement.classList.toggle('ui5-content-density-compact',runtime.density==='compact');
-})();
-</script>
 <!-- The tab icon, inline so it costs no request. Without a link the browser
      asks the ORIGIN for /favicon.ico, which is outside every route this
      server serves and answers 404 in the console on every load. -->
@@ -33,55 +13,8 @@ window.OES = window.OES || {};
 <!-- Import-map targets are relative to this document at /w/<prefix>/. -->
 <script type="importmap">
 {"imports":{
-  "@sap-theming/theming-base-content/":"./assets/ui5/2.26.0-08a258f2cb56/@sap-theming/theming-base-content/",
-  "@ui5/webcomponents/":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents/",
-  "@ui5/webcomponents-base/":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents-base/",
-  "@ui5/webcomponents-fiori/":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents-fiori/",
-  "@ui5/webcomponents-icons/":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents-icons/",
-  "@ui5/webcomponents-localization/":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents-localization/",
-  "@ui5/webcomponents-theming/":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents-theming/",
-  "@ui5/webcomponents-base/jsx-runtime":"./assets/ui5/2.26.0-08a258f2cb56/@ui5/webcomponents-base/dist/jsx-runtime.js",
   "tabulator-tables":"./assets/tabulator/6.5.2/tabulator.js"
 }}
-</script>
-<script type="module">
-const runtime=window.OES.runtime;
-window.OES.ui5Ready=runtime.ui==='ui5'?(async()=>{
-  // Both Assets.js files, one per package that has components on the
-  // page: Assets.js is what REGISTERS a package's theme parameters, and
-  // a package whose parameters were never registered renders with the
-  // base ones. The chrome (shell bar, side navigation) lives in the
-  // fiori package, so its own parameters have to be asked for by name.
-  await Promise.all([
-    import('@ui5/webcomponents/dist/Assets.js'),
-    import('@ui5/webcomponents-fiori/dist/Assets.js'),
-  ]);
-  const {setTheme}=await import('@ui5/webcomponents-base/dist/config/Theme.js');
-  await setTheme(runtime.theme==='dark'?'sap_horizon_dark':'sap_horizon');
-  await Promise.all([
-    // Form controls.
-    import('@ui5/webcomponents/dist/Button.js'),
-    import('@ui5/webcomponents/dist/CheckBox.js'),
-    import('@ui5/webcomponents/dist/Input.js'),
-    // Chrome: the command bar, the tab strip, the window's own frame.
-    import('@ui5/webcomponents/dist/Bar.js'),
-    import('@ui5/webcomponents/dist/ToolbarSeparator.js'),
-    import('@ui5/webcomponents/dist/TabContainer.js'),
-    import('@ui5/webcomponents/dist/Tab.js'),
-    import('@ui5/webcomponents-fiori/dist/ShellBar.js'),
-    import('@ui5/webcomponents-fiori/dist/ShellBarItem.js'),
-    import('@ui5/webcomponents-fiori/dist/SideNavigation.js'),
-    import('@ui5/webcomponents-fiori/dist/SideNavigationItem.js'),
-  ]);
-  document.documentElement.dataset.oesUi5='ready';
-})().catch(err=>{
-  // A theme that did not arrive is not a silent condition: every colour
-  // on the page comes from it, and without it the tokens fall back to
-  // the plain palette while the components render uncoloured. Say so
-  // where it can be read, and let the page carry on rather than stop.
-  document.documentElement.dataset.oesUi5='failed';
-  console.error('OES: UI5 did not load — the page is running unthemed.', err);
-}):Promise.resolve();
 </script>
 <style>
 /* Window chrome: title bar + status bar wrap the sidebar+main area.
@@ -99,10 +32,6 @@ body{margin:0;font:14px/1.4 system-ui,sans-serif;display:flex;
   background:linear-gradient(#ffffff,#c8d3ee);display:inline-block;
   box-shadow:0 0 0 1px rgba(255,255,255,.35) inset}
 #menubar{display:flex;gap:1px;flex:1 1 auto;min-width:0}
-#oes-dev-switcher{display:flex;align-items:center;gap:.5rem;font-size:.75rem}
-#oes-dev-switcher strong{font-weight:600;white-space:nowrap}
-#oes-dev-switcher label{display:flex;align-items:center;gap:.25rem}
-#oes-dev-switcher select{font:inherit}
 #menubar button{background:transparent;border:0;color:#fff;
   padding:3px 10px;cursor:pointer;border-radius:3px;font:inherit;
   line-height:1.2}
@@ -238,10 +167,6 @@ li:hover{background:#e3e9f0}
    the content area. min-height:0 is mandatory for nested flex
    children to actually shrink below their content size. */
 #tab-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
-html[data-oes-ui="ui5"] #main,
-html[data-oes-ui="ui5"] #tab-body{
-  background:var(--oes-form-canvas);color:var(--oes-form-text)
-}
 /* form-host stretches to fill #tab-body (which is itself flex-col +
    flex:1 inside #main → #app-row → body), so the hardcoded
    100vh-90px is no longer needed — the new layout (titlebar +
@@ -252,10 +177,6 @@ html[data-oes-ui="ui5"] #tab-body{
    did another. */
 .form-host{border:1px solid #ddd;border-radius:4px;padding:10px;
   display:flex;flex-direction:column;min-height:0;flex:1 1 auto;overflow:auto}
-html[data-oes-ui="ui5"] .form-host{
-  background:var(--oes-form-surface);color:var(--oes-form-text);
-  border-color:var(--oes-form-border)
-}
 .form-host > .boxsizer{flex:1;min-height:0}
 /* align-items:flex-start so children stay at their natural cross-axis
    size by default. wxSizer semantics: a vertical sizer does NOT stretch
@@ -284,93 +205,46 @@ html[data-oes-ui="ui5"] .form-host{
    it is rather than inviting a click that would do nothing. */
 .oes-tablebox .tabulator-col[tabulator-field]{cursor:default}
 .oes-tablebox .tabulator-row{cursor:default}
-.oes-tablebox .tabulator-row.tabulator-selected{
-  box-shadow:inset 3px 0 0 0 var(--oes-table-row-selected-accent)}
-/* Tabulator ships a light palette of its own. In UI5 mode the theme
-   decides instead — every colour below comes from a token, so the two
-   themes and both densities follow without a second rule. */
-html[data-oes-ui="ui5"] .oes-tablebox .tabulator{
+/* Tabulator ships a palette of its own -- a grey slab, a strong blue
+   selection -- written for a page that brings nothing with it. Every colour
+   below comes from a token instead, so the grid reads as part of the window
+   rather than as a component dropped into it.
+
+   The `.tabulator` in the middle of each selector is doing work, not
+   decoration: Tabulator's stylesheet is appended to the head when the grid
+   loads, so it comes AFTER this one and wins every tie. Its own rules run
+   three classes deep (`.tabulator .tabulator-header .tabulator-col`), and
+   these have to stand one deeper to be read at all. */
+.oes-tablebox .tabulator{
   background:var(--oes-table-bg);color:var(--oes-table-text);
   border-color:var(--oes-table-border)}
-html[data-oes-ui="ui5"] .oes-tablebox .tabulator-header,
-html[data-oes-ui="ui5"] .oes-tablebox .tabulator-col{
+.oes-tablebox .tabulator .tabulator-header,
+.oes-tablebox .tabulator .tabulator-header .tabulator-col{
   background:var(--oes-table-header-bg);color:var(--oes-table-header-text);
   border-color:var(--oes-table-border)}
-html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row{
+.oes-tablebox .tabulator .tabulator-row{
   background:var(--oes-table-bg);color:var(--oes-table-text);
   border-color:var(--oes-table-border)}
-html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row.tabulator-row-even{
+.oes-tablebox .tabulator .tabulator-row.tabulator-row-even{
   background:var(--oes-table-row-alt-bg)}
-html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row:hover{
+.oes-tablebox .tabulator .tabulator-row:hover{
   background:var(--oes-table-row-hover-bg)}
 /* The selected row is the one the server is standing on, so it has to be
-   readable at a glance rather than a tint a shade off white: the theme's
-   selection fill, plus an accent bar down the leading edge that carries
-   the mark on any background and in either theme. Hover over the
-   selected row keeps the selection colour — moving the pointer must not
-   look like losing the row. */
-html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row.tabulator-selected,
-html[data-oes-ui="ui5"] .oes-tablebox .tabulator-row.tabulator-selected:hover{
+   readable at a glance rather than a tint a shade off white: a selection fill,
+   plus an accent bar down the leading edge that carries the mark on any
+   background. Hover over the selected row keeps the selection colour --
+   moving the pointer must not look like losing the row. */
+.oes-tablebox .tabulator .tabulator-row.tabulator-selected,
+.oes-tablebox .tabulator .tabulator-row.tabulator-selected:hover{
   background:var(--oes-table-row-selected-bg);
   box-shadow:inset 3px 0 0 0 var(--oes-table-row-selected-accent)}
-html[data-oes-ui="ui5"] .oes-tablebox .tabulator-cell{
+.oes-tablebox .tabulator .tabulator-row .tabulator-cell{
   border-color:var(--oes-table-border)}
-/* Chrome in ui5 mode. Three pieces ARE UI5 components and need no
-   colours from us: the shell bar, the command bar (ui5-bar carrying
-   ui5-buttons), the side navigation. These are the strips that stayed
-   ours -- the tab row, the output panel, the status bar -- painted from
-   the same tokens so the window reads as one surface.
-   The tab row stayed because ui5-tabcontainer has no room for what a
-   tab here carries: a raster icon out of the metadata, and a close box.
-   Losing either would cost the user more than the component gains. */
-/* One face for the whole window. The UI5 components draw their own text in
-   the theme's family; ours was drawing in the browser's system-ui, and the
-   two sat side by side in every row. It used to arrive on each control as
-   part of the font the desktop stored -- which is exactly the font that
-   should not be sent, so the family belongs here instead. */
-html[data-oes-ui="ui5"] body{background:var(--oes-page-bg);color:var(--oes-chrome-text);
-  font-family:var(--oes-font-ui)}
-html[data-oes-ui="ui5"] #titlebar{background:none;border:0;padding:0;color:inherit;display:block}
-/* The menu and the development switcher moved into the shell bar, which
-   is a light surface — the white-on-gradient colours they were written
-   for would leave them invisible there. */
-html[data-oes-ui="ui5"] #menubar{flex:0 0 auto}
-html[data-oes-ui="ui5"] #menubar button{color:var(--sapShell_TextColor)}
-html[data-oes-ui="ui5"] #menubar button:hover:not(:disabled){background:var(--oes-chrome-hover-bg)}
-html[data-oes-ui="ui5"] #menubar button:active:not(:disabled){background:var(--oes-chrome-hover-bg)}
-html[data-oes-ui="ui5"] #oes-dev-switcher{color:var(--sapShell_TextColor)}
-html[data-oes-ui="ui5"] #sidebar{background:var(--oes-chrome-bg);
-  border-right:1px solid var(--oes-chrome-border);color:var(--oes-chrome-text)}
-html[data-oes-ui="ui5"] #interfaces h3{color:var(--oes-chrome-text);opacity:.7}
-html[data-oes-ui="ui5"] #tabs-row{background:var(--oes-chrome-bg);
-  border-bottom:1px solid var(--oes-chrome-border);padding-top:0}
-html[data-oes-ui="ui5"] .tab{background:transparent;color:var(--oes-chrome-text);
-  border:0;border-bottom:3px solid transparent;border-radius:0;top:0;padding:6px 12px}
-html[data-oes-ui="ui5"] .tab:hover{background:var(--oes-chrome-hover-bg);color:var(--oes-chrome-text)}
-html[data-oes-ui="ui5"] .tab.active{background:transparent;color:var(--oes-chrome-selected);
-  border-bottom-color:var(--oes-chrome-selected)}
-html[data-oes-ui="ui5"] .tab-close:hover{background:var(--oes-chrome-selected);color:var(--oes-chrome-bg)}
-html[data-oes-ui="ui5"] #outputpanel,
-html[data-oes-ui="ui5"] #output-header{background:var(--oes-chrome-bg);
-  color:var(--oes-chrome-text);border-color:var(--oes-chrome-border)}
-html[data-oes-ui="ui5"] #output-header:hover{background:var(--oes-chrome-hover-bg)}
-html[data-oes-ui="ui5"] #output-body{background:var(--oes-chrome-bg);color:var(--oes-chrome-text)}
-html[data-oes-ui="ui5"] #statusbar{background:var(--oes-footer-bg);color:var(--oes-footer-text);
-  border-top:1px solid var(--oes-chrome-border)}
-html[data-oes-ui="ui5"] #statusbar > .sep{background:var(--oes-chrome-border)}
-/* The command bar. ui5-bar lays the row out and paints it; the tools
-   inside are real ui5-buttons, so all that is left is to let a long bar
-   scroll instead of clipping its tail. */
-html[data-oes-ui="ui5"] .oes-ui5-toolbar{width:100%;margin:2px 0}
-html[data-oes-ui="ui5"] .oes-ui5-tool img{vertical-align:-.15em}
-/* Side navigation fills the sidebar it sits in. */
-html[data-oes-ui="ui5"] .oes-ui5-sidenav{width:100%}
-.boxsizer{display:flex;gap:6px;margin:4px 0;align-items:flex-start}
-/* A sizer item already carries the border the form asked for, as a margin on
-   its own box. Ours on top of that is a second helping nobody wrote down,
-   and it counts once per nesting level -- which is what made a column of
-   check boxes read as a column of gaps. */
-html[data-oes-ui="ui5"] .boxsizer{margin:0}
+/* No margin of our own: a sizer item already carries the border the form
+   asked for, as a margin on its own box. Ours on top of that is a second
+   helping nobody wrote down, and it counts once per nesting level -- which is
+   what made a column of check boxes read as a column of gaps. */
+.boxsizer{display:flex;gap:6px;margin:0;align-items:flex-start}
 .boxsizer.vert{flex-direction:column}
 .boxsizer.horz{flex-direction:row}
 /* Label-column alignment: TextCtrl (and any future labelrow control)
@@ -383,11 +257,6 @@ html[data-oes-ui="ui5"] .boxsizer{margin:0}
 .labelrow{display:flex;align-items:stretch;gap:6px;min-height:0}
 .gridsizer{display:grid;gap:6px;margin:4px 0}
 .staticboxsizer{border:1px solid #bbb;border-radius:4px;padding:8px;margin:4px 0}
-/* The group box is ours to paint: a fieldset is not a UI5 component, and
-   its default rule was written for the light client. */
-html[data-oes-ui="ui5"] .staticboxsizer{border-color:var(--oes-form-border)}
-html[data-oes-ui="ui5"] .staticboxsizer > legend{color:var(--oes-form-text);
-  padding:0 .25rem;font-weight:600}
 .staticboxsizer>legend{padding:0 6px;color:#555;font-weight:600}
 /* pre-line preserves explicit \n in the caption while still wrapping
    at whitespace. Desktop's static text control draws multi-line
@@ -433,23 +302,6 @@ input.ctrl{padding:3px 6px;border:1px solid #aaa;border-radius:3px}
   background:transparent;flex-shrink:0}
 .texted > button:hover:not(:disabled){background:rgba(0,0,0,.06)}
 .texted > button:active:not(:disabled){background:rgba(0,0,0,.12)}
-/* UI5 hosts must be non-inline flex items. The text field consumes the
-   fixed editor width while its side buttons take space from the field. */
-.oes-ui5-button,.oes-ui5-checkbox{display:inline-block;color:var(--oes-text)}
-.oes-ui5-textctrl{display:flex;align-items:stretch;gap:.375rem;min-height:0}
-/* Layout only. It was drawing a frame of its own -- a field background and
-   a 1px border in sapField_BorderColor -- so that the input and its side
-   buttons would read as one control. But ui5-input draws a themed field
-   inside it, so the result was a box around a box, and in the dark theme
-   sapField_BorderColor is a light grey meant for a single underline, not a
-   full rectangle: a pale frame, taller than the field it held, around a
-   white slab. The input owns the field's look; this owns the row. */
-.oes-ui5-textctrl-group{display:flex;align-items:center;gap:.125rem;
-  box-sizing:border-box;flex:0 0 12.5rem;width:12.5rem;min-width:0;
-  color:var(--oes-text)}
-.oes-ui5-textctrl-group>ui5-input{display:block;flex:1 1 0;width:0;min-width:0}
-.oes-ui5-textctrl-group>ui5-button{display:block;flex:0 0 auto;color:var(--oes-action)}
-.oes-ui5-textctrl-group[data-error="true"]{color:var(--oes-status-error)}
 .toolbar{display:flex;align-items:center;gap:2px;background:#eef1f4;border:1px solid #c9ced3;border-radius:3px;padding:3px 4px;margin:2px 0}
 .tool{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1px solid transparent;border-radius:3px;background:transparent;font:inherit;color:inherit;cursor:pointer;line-height:1.3}
 .tool:hover:not(:disabled){background:#dde6f0;border-color:#b5c4d6}
@@ -609,14 +461,6 @@ body.modal-dragging,body.modal-dragging *{cursor:move !important;user-select:non
 <header id="titlebar">
   <span id="app-title">OES Enterprise</span>
   <nav id="menubar"></nav>
-  <!-- Temporary development control. Remove when product settings own
-       renderer, theme, and density selection. -->
-  <div id="oes-dev-switcher" aria-label="Temporary development display settings">
-    <strong>DEV ONLY</strong>
-    <label>UI <select data-axis="ui"><option>legacy</option><option>ui5</option></select></label>
-    <label>Theme <select data-axis="theme"><option>light</option><option>dark</option></select></label>
-    <label>Density <select data-axis="density"><option>compact</option><option>comfortable</option></select></label>
-  </div>
 </header>
 <!-- app-row: middle stretchable section containing sidebar + main. -->
 <div id="app-row">
@@ -686,17 +530,7 @@ window.OES = window.OES || {};
 const L = window.OES.L || (window.OES.L = {});
 
 const API=location.pathname.replace(/\/$/,'');
-const runtime=window.OES.runtime;
 const rendererHarness=new URLSearchParams(location.search).get('harness')==='1';
-for(const select of document.querySelectorAll('#oes-dev-switcher select')){
-  const axis=select.dataset.axis;
-  select.value=runtime[axis];
-  select.addEventListener('change',()=>{
-    const next=new URL(location.href);
-    next.searchParams.set(axis,select.value);
-    location.assign(next);
-  });
-}
 
 // Tab-close cleanup: on pagehide fire a sendBeacon to /logout so the
 // server DELETEs the session row immediately instead of waiting for the
@@ -1202,9 +1036,9 @@ function genTabSid(){
     + '-' + ((8 + ((Math.random()*4)|0)).toString(16)) + hex.slice(17,20)
     + '-' + hex.slice(20,32);
 }
-// Same-origin harness frames share sessionStorage, so keep their two
-// development sessions separate without changing the product key.
-const tabSidStorageKey=rendererHarness?'oes_tab_sid_'+runtime.ui:'oes_tab_sid';
+// The harness frame shares sessionStorage with the page around it, so keep
+// its development session separate without changing the product key.
+const tabSidStorageKey=rendererHarness?'oes_tab_sid_harness':'oes_tab_sid';
 let tabSid = sessionStorage.getItem(tabSidStorageKey) || genTabSid();
 sessionStorage.setItem(tabSidStorageKey, tabSid);
 
@@ -1669,33 +1503,6 @@ async function openForm(id){
   main.appendChild(render(tree));
   refreshTabs();
 }
-// The window's top strip. In ui5 mode it IS a ui5-shellbar: the caption
-// becomes its primary title, and the "All functions" menu and the
-// development switcher move -- the nodes themselves, so whatever has
-// already been wired to them keeps working -- into its content slot. The
-// hand-painted gradient goes away with them.
-//
-// Runs before the element is defined and that is fine: a custom element
-// upgrades when its definition lands, and OES.ui5Ready is what imports
-// it. Idempotent, so a second call is a no-op rather than a second bar.
-function applyUI5Chrome(){
-  if(runtime.ui!=='ui5') return;
-  const bar=document.getElementById('titlebar');
-  if(!bar||bar.dataset.ui5==='1') return;
-  const title=document.getElementById('app-title');
-  const shell=document.createElement('ui5-shellbar');
-  shell.setAttribute('primary-title',(title&&title.textContent.trim())||'OES Enterprise');
-  for(const id of ['menubar','oes-dev-switcher']){
-    const node=document.getElementById(id);
-    if(node===null) continue;
-    node.setAttribute('slot','content');
-    shell.appendChild(node);
-  }
-  if(title) title.remove();
-  bar.appendChild(shell);
-  bar.dataset.ui5='1';
-}
-
 // Subsystem navigation — sidebar's Interfaces block. Mirrors desktop's
 // ibSubSystemWindow: a row of buttons (one per interface). Click opens
 // a popup with command sections (Default / Create / Combined / Reports
@@ -1720,31 +1527,6 @@ async function loadInterfaces(){
   const header = document.createElement('h3');
   header.textContent = 'Sections';
   root.appendChild(header);
-  if (runtime.ui === 'ui5') {
-    // ui5-side-navigation is the list UI5 has for exactly this, and it
-    // brings selection, keyboard walking and the theme with it. One
-    // thing it does not bring: the subsystem's own picture. Its item
-    // takes an icon by NAME from UI5's set, and has no slot that renders
-    // in the row, so an interface icon out of the metadata cannot be
-    // shown here. Decoration on a handful of subsystems, weighed against
-    // a navigation list that behaves — but it IS a loss, and if it turns
-    // out to matter the way back is our own button list under tokens.
-    const nav = document.createElement('ui5-side-navigation');
-    nav.className = 'oes-ui5-sidenav';
-    const byItem = new Map();
-    for (const iface of ifaces) {
-      const item = document.createElement('ui5-side-navigation-item');
-      item.text = iface.synonym || iface.name || '#' + iface.id;
-      byItem.set(item, iface);
-      nav.appendChild(item);
-    }
-    nav.addEventListener('selection-change', (ev) => {
-      const iface = byItem.get(ev.detail && ev.detail.item);
-      if (iface) showInterfacePopup(iface);
-    });
-    root.appendChild(nav);
-    return;
-  }
   for (const iface of ifaces) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -1871,21 +1653,11 @@ class BaseControl{
     }
     // A control that renders as a label PLUS a field returns the row as
     // its element, and the row is not what the colour was set on: the
-    // field is. Painting the row puts the field's white behind the label
-    // too, which under a dark theme is a pale box with the caption lost
-    // in it. A renderer that has an inner surface names it.
+    // field is. Painting the row puts the field's background behind the
+    // caption too. A renderer that has an inner surface names it.
     const look=el.oesLookTarget||el;
     if(node.fg) look.style.color=node.fg;
-    if(node.bg){
-      look.style.backgroundColor=node.bg;
-      // Ink follows the surface when the author named one and no ink to
-      // go on it. Only under a theme: legacy has no second palette to
-      // get this wrong in, and the tokens are not there to read.
-      if(!node.fg&&runtime.ui==='ui5'){
-        const ink=readableInkOn(node.bg);
-        if(ink) look.style.color=ink;
-      }
-    }
+    if(node.bg) look.style.backgroundColor=node.bg;
     if(node.font){
       if(node.font.size)   el.style.fontSize=node.font.size+'pt';
       // The stored family is a Windows-era name for "the UI font" —
@@ -2126,8 +1898,6 @@ class Toolbar extends BaseControl{
 // cannot reach it and the click goes to /command. Everything else is a
 // control action. Both answers are the form again.
 //
-// Lives outside the renderers because two of them draw a tool: the plain
-// button and the ui5-button, and only the element differs.
 function bindToolActivation(el, node){
   const road = node.action!==undefined ? API+'/command/'+node.action
              : node.id                 ? API+'/action/'+node.id
@@ -2234,158 +2004,6 @@ class CheckBox extends BaseControl{
     return wrap;
   }
 }
-
-// UI5 is an overlay registry: these classes do not modify the legacy
-// renderer implementations or the form JSON vocabulary.
-class UI5Button extends BaseControl{
-  render(node){
-    const el=document.createElement('ui5-button');
-    el.className='oes-ui5-button';
-    const semantic=String(node.semantic||'default').toLowerCase();
-    el.design={default:'Default',primary:'Emphasized',transparent:'Transparent'}[semantic]||'Default';
-    const rep=node.representation;
-    const wantPic=node.hasPicture&&node.picture&&rep!==1;
-    const wantText=rep!==2;
-    if(wantPic){
-      const img=document.createElement('img');
-      img.src=node.picture;img.alt='';
-      img.style.height='1em';
-      if(wantText) img.style.marginRight='.25rem';
-      el.appendChild(img);
-    }
-    if(wantText) el.appendChild(document.createTextNode(node.label||''));
-    if(node.enabled===false) el.disabled=true;
-    if(node.id){
-      el.addEventListener('click',async()=>{
-        const r=await netFetch(API+'/action/'+node.id,{method:'POST',credentials:'same-origin'});
-        if(r.ok){
-          const tree=await r.json();
-          if(tree&&!tree.error){main.innerHTML='';main.appendChild(render(tree));}
-          else OES.handleBackendError(tree);
-        }
-      });
-    }
-    return el;
-  }
-}
-
-class UI5CheckBox extends BaseControl{
-  render(node){
-    const el=document.createElement('ui5-checkbox');
-    el.className='oes-ui5-checkbox';
-    const third=node.indeterminate===true||node.value===null||node.value==='indeterminate';
-    el.checked=third||!!node.value;
-    el.indeterminate=third;
-    el.text=node.label||'';
-    el.readonly=node.readOnly===true;
-    el.disabled=node.enabled===false;
-    if(node.id){
-      el.addEventListener('change',async()=>{
-        const body=new URLSearchParams({checked:el.checked?'1':'0'});
-        const r=await netFetch(API+'/toggle/'+node.id,{
-          method:'POST',credentials:'same-origin',
-          headers:{'Content-Type':'application/x-www-form-urlencoded'},
-          body:body.toString()
-        });
-        if(r.ok){
-          const tree=await r.json();
-          if(tree&&!tree.error){main.innerHTML='';main.appendChild(render(tree));}
-          else OES.handleBackendError(tree);
-        }
-      });
-    }
-    return el;
-  }
-}
-
-class UI5TextCtrl extends BaseControl{
-  render(node){
-    const wrap=document.createElement('div');
-    wrap.className='labelrow oes-ui5-textctrl';
-    wrap.dataset.labelrow='1';
-    const lbl=document.createElement('span');
-    lbl.className='statictext';
-    lbl.dataset.labelHost='1';
-    lbl.textContent=node.label||'';
-    lbl.style.flexShrink='0';
-    lbl.style.alignSelf='center';
-    wrap.appendChild(lbl);
-
-    const group=document.createElement('div');
-    group.className='oes-ui5-textctrl-group';
-    group.dataset.error=String(node.error===true);
-    if(node.id) group.dataset.ctrlId=node.id;
-    const el=document.createElement('ui5-input');
-    el.value=node.value||'';
-    el.type=node.passwordMode?'Password':'Text';
-    const readOnly=node.readOnly===true||node.editable===false||node.textEditMode===false;
-    el.readonly=readOnly;
-    el.disabled=node.enabled===false;
-    if(node.error===true) el.valueState='Negative';
-    group.appendChild(el);
-    // The field is what a background colour was set on, not the row.
-    wrap.oesLookTarget=el;
-
-    let inputTimer=null;
-    let lastSent=el.value;
-    const commit=async()=>{
-      if(!node.id||readOnly||node.enabled===false||el.value===lastSent) return;
-      lastSent=el.value;
-      const body=new URLSearchParams({value:el.value});
-      const r=await netFetch(API+'/change/'+node.id,{
-        method:'POST',credentials:'same-origin',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:body.toString()
-      });
-      if(r.ok){
-        const tree=await r.json();
-        if(tree&&!tree.error){main.innerHTML='';main.appendChild(render(tree));}
-        else OES.handleBackendError(tree);
-      }
-    };
-    el.addEventListener('input',()=>{
-      clearTimeout(inputTimer);
-      inputTimer=setTimeout(commit,350);
-    });
-    el.addEventListener('change',()=>{
-      clearTimeout(inputTimer);
-      commit();
-    });
-
-    const makeSideBtn=(label,kind,title,enabled=true)=>{
-      const btn=document.createElement('ui5-button');
-      btn.design='Transparent';
-      btn.textContent=label;
-      btn.tooltip=title;
-      btn.accessibleName=title;
-      btn.disabled=node.enabled===false||!enabled;
-      btn.addEventListener('mousedown',e=>e.preventDefault());
-      btn.addEventListener('click',async()=>{
-        clearTimeout(inputTimer);
-        const r=await netFetch(API+'/fire/'+node.id+'/'+kind,
-          {method:'POST',credentials:'same-origin'});
-        if(r.ok){
-          const tree=await r.json();
-          if(tree&&!tree.error&&Object.keys(tree).length>0){
-            main.innerHTML='';main.appendChild(render(tree));
-            if(kind==='buttonClear'){
-              const ed=main.querySelector(`[data-ctrl-id="${node.id}"] ui5-input`);
-              if(ed) ed.focus();
-            }
-          }
-          if(kind==='buttonSelect'||kind==='buttonOpen') refreshTabs();
-        }
-      });
-      group.appendChild(btn);
-    };
-    if(node.id&&node.showSelectButton) makeSideBtn('…','buttonSelect','Select',!readOnly&&node.enableSelectButton!==false);
-    if(node.id&&node.showOpenButton) makeSideBtn('▷','buttonOpen','Open');
-    if(node.id&&node.showClearButton) makeSideBtn('×','buttonClear','Clear',!readOnly&&node.enableClearButton!==false);
-    wrap.appendChild(group);
-    return wrap;
-  }
-}
-
 
 // ---------------------------------------------------------------------------
 // TableBox — the one grid engine (ADR-003).
@@ -2607,58 +2225,7 @@ class TableBox extends BaseControl{
   }
 }
 
-// Chrome in ui5 mode. The command bar is a ui5-bar and every tool on it
-// a real ui5-button: the metadata's raster icon goes into the button's
-// own slot, which is the reason the bar is a ui5-bar and not a
-// ui5-toolbar -- a ui5-toolbar-button takes an icon by NAME out of UI5's
-// own set, and a command here brings its picture with it.
-class UI5Toolbar extends BaseControl{
-  render(){
-    const el=document.createElement('ui5-bar');
-    el.className='oes-ui5-toolbar';
-    el.design='Subheader';
-    return el;
-  }
-}
-
-class UI5Tool extends BaseControl{
-  render(node){
-    const el=document.createElement('ui5-button');
-    el.className='oes-ui5-tool';
-    // ui5-bar lays its content out by slot; the child names its own.
-    el.setAttribute('slot','startContent');
-    el.design='Transparent';
-    // Representation, same three answers as the plain tool: 1 Text,
-    // 2 Picture, 3 PictureAndText (0 Auto is resolved server-side).
-    const rep=node.representation|0;
-    const showIcon=(rep===2||rep===3)&&!!node.hasPicture&&!!node.picture;
-    const showText=!!node.label&&(rep===1||rep===3);
-    if(showIcon){
-      const ic=document.createElement('img');
-      ic.src=node.picture; ic.alt='';
-      ic.style.height='1em';
-      if(showText) ic.style.marginInlineEnd='.25rem';
-      el.appendChild(ic);
-    }
-    if(showText) el.appendChild(document.createTextNode(node.label));
-    // A picture-only tool still has to say what it is to a screen reader
-    // and to a hover.
-    if(!showText&&node.label){ el.accessibleName=node.label; el.title=node.label; }
-    if(node.enabled===false) el.disabled=true;
-    bindToolActivation(el,node);
-    return el;
-  }
-}
-
-class UI5ToolSeparator extends BaseControl{
-  render(){
-    const el=document.createElement('ui5-toolbar-separator');
-    el.setAttribute('slot','startContent');
-    return el;
-  }
-}
-
-const legacyRenderers={
+const renderers={
   'visualHost':    new HostControl(),
   'mdiChild':      new HostControl(),
   'boxsizer':      new BoxSizer(),
@@ -2674,17 +2241,6 @@ const legacyRenderers={
   'toolseparator': new ToolSeparator(),
   'tablebox':      new TableBox(),
 };
-const ui5Renderers={
-  'button':        new UI5Button(),
-  'textctrl':      new UI5TextCtrl(),
-  'checkbox':      new UI5CheckBox(),
-  'toolbar':       new UI5Toolbar(),
-  'tool':          new UI5Tool(),
-  'toolseparator': new UI5ToolSeparator(),
-};
-const renderers=runtime.ui==='ui5'
-  ?Object.assign({},legacyRenderers,ui5Renderers)
-  :legacyRenderers;
 const fallback=new BaseControl();
 
 // wx layout flag constants (match wx/defs.h) — used to turn each
@@ -2696,21 +2252,6 @@ const WX_LEFT=0x0010, WX_RIGHT=0x0020, WX_TOP=0x0040, WX_BOTTOM=0x0080;
 const WX_ALIGN_RIGHT=0x0200, WX_ALIGN_CENTER_H=0x0100;
 const WX_ALIGN_BOTTOM=0x0400, WX_ALIGN_CENTER_V=0x0800;
 const WX_EXPAND=0x2000;
-
-// Which end of the theme's text scale reads on a colour the form chose.
-// Relative luminance per WCAG, so the answer is the one a contrast check
-// would give rather than a guess at "looks light".
-function readableInkOn(css){
-  const hex=String(css).trim().replace(/^#/,'');
-  const full=hex.length===3?hex.split('').map(c=>c+c).join(''):hex;
-  if(!/^[0-9a-fA-F]{6}$/.test(full)) return '';
-  const channel=i=>{
-    const v=parseInt(full.substr(i*2,2),16)/255;
-    return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4);
-  };
-  const luminance=.2126*channel(0)+.7152*channel(1)+.0722*channel(2);
-  return luminance>.45?'var(--oes-ink-on-light)':'var(--oes-ink-on-dark)';
-}
 
 function applyLayout(el, layout){
   if(!layout) return;
@@ -2774,8 +2315,9 @@ function render(node){
 // Idempotent (re-running resets minWidth/display first).
 function alignLabelsGlobal(rootEl){
   if(!rootEl) return;
-  // Labels are explicit light-DOM hosts. Never inspect a control's
-  // shadowRoot: UI5 internals are private and do not carry OES layout.
+  // A label marks itself: the renderer that draws one tags the row and the
+  // caption inside it, so this reads two attributes rather than guessing at
+  // which child of a row is the label.
   const labels=rootEl.querySelectorAll('[data-labelrow] > [data-label-host]');
   for(const lbl of labels){
     lbl.style.minWidth='';
@@ -3073,15 +2615,6 @@ async function paintActiveTab(){
     authenticated = true;
   }
   status.textContent = 'connected';
-  // Let the theme land before anything is painted. Half a window in the
-  // theme and half in the fallback palette is worse than either, and the
-  // module graph is 450 requests on a cold cache — long enough to see.
-  // Bounded: a theme that never arrives must not hold the client hostage.
-  await Promise.race([
-    window.OES.ui5Ready,
-    new Promise(r=>setTimeout(r,8000)),
-  ]).catch(()=>{});
-  applyUI5Chrome();
   // Step 3: initial fetches in parallel so the boot overlay hides only
   // after sidebar, tab strip, and active host have all landed — user
   // sees a finished page rather than elements popping in one by one.
@@ -3097,8 +2630,7 @@ async function paintActiveTab(){
     setTimeout(() => bootOverlay.remove(), 200);
   }
   if(rendererHarness){
-    await window.OES.ui5Ready;
-    parent.postMessage({type:'oes-renderer-ready',ui:runtime.ui},location.origin);
+    parent.postMessage({type:'oes-renderer-ready'},location.origin);
   }
   // Debug indicator: a "DEBUG" pill in the sidebar status line while
   // the wes process is in --debug mode. When this tab's session parks

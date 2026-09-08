@@ -45,10 +45,6 @@ extern "C" WFRONTEND_API const char* wfrontendVersion();
 // duplicated blobs in each host.
 extern "C" WFRONTEND_API const char* wfrontendClientHTML();
 
-// Sets the renderer default embedded in the page before the first call to
-// wfrontendClientHTML(). Invalid values resolve to the legacy renderer.
-extern "C" WFRONTEND_API void wfrontendSetClientUIDefault(const char* ui);
-
 // Process-level init / shutdown. Call once at startup / shutdown of the
 // host process.
 //

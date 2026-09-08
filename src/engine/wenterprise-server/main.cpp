@@ -166,7 +166,6 @@ struct CmdArgs {
 	std::string ibPassword;
 
 	std::string locale     = "en";
-	std::string ui         = "legacy";
 
 	// URL prefix: defaults to file base name or --db name.
 	std::string urlPrefix;
@@ -253,10 +252,10 @@ std::string StampAssetURLs(std::string html, const std::string& assetDir)
 		// carries a query are both left as they are.
 		if (url.back() == '/' || url.find('?') != std::string::npos)
 			continue;
-		// The two versioned mounts carry their identity in the path already,
-		// which is what lets them be served immutable; a stamp there would say
-		// the same thing twice.
-		if (StartsWith(url, "./assets/ui5/") || StartsWith(url, "./assets/tabulator/"))
+		// The versioned mount carries its identity in the path already, which
+		// is what lets it be served immutable; a stamp there would say the same
+		// thing twice.
+		if (StartsWith(url, "./assets/tabulator/"))
 			continue;
 
 		const std::string file = assetDir + url.substr(std::strlen("./assets"));
@@ -290,7 +289,6 @@ CmdArgs ParseArgs(int argc, char** argv)
 		else if (StartsWith(arg, "--ibuser="))    a.ibUser      = arg.substr(9);
 		else if (StartsWith(arg, "--ibpwd="))     a.ibPassword  = arg.substr(8);
 		else if (StartsWith(arg, "--locale="))    a.locale      = arg.substr(9);
-		else if (StartsWith(arg, "--ui="))        a.ui          = arg.substr(5);
 		else if (StartsWith(arg, "--url="))       a.urlPrefix   = arg.substr(6);
 		else if (StartsWith(arg, "--manifest="))  a.manifest    = arg.substr(11);
 		else if (arg == "--debug")                a.debugEnable = true;
@@ -315,17 +313,10 @@ CmdArgs ParseArgs(int argc, char** argv)
 				"    --ibuser=<n>      (default 'admin')\n"
 				"    --ibpwd=<s>\n"
 				"\n"
-				"    --locale=<code>   (default 'en')\n"
-				"    --ui=<legacy|ui5> Renderer default (default 'legacy')\n";
+				"    --locale=<code>   (default 'en')\n";
 			std::exit(0);
 		}
 	}
-	if (a.ui != "legacy" && a.ui != "ui5") {
-		std::cerr << "Invalid --ui value '" << a.ui
-			<< "' (expected legacy or ui5)" << std::endl;
-		std::exit(2);
-	}
-
 	// Default URL prefix from --db or --file basename.
 	if (a.urlPrefix.empty()) {
 		if (!a.database.empty()) {
@@ -501,7 +492,6 @@ int main(int argc, char** argv)
 	BuildUtf8Argv(argc, argv);
 #endif
 	const CmdArgs args = ParseArgs(argc, argv);
-	wfrontendSetClientUIDefault(args.ui.c_str());
 
 	// wxInitializer + wxSocketBase::Initialize + ibCrashGuard::Install
 	// in one shot. wes is headless — no wxApp, faults need the persistent
@@ -546,13 +536,12 @@ int main(int argc, char** argv)
 	// connect on 127.0.0.1, which is bounded and consistent against a
 	// 5-30s stall.
 	//
-	// It was applied to every platform, and the cost showed up the day
-	// the UI5 module graph did: a cold page load is ~450 requests, and
-	// with keep-alive off that is ~450 TCP connections through the six
-	// a browser will hold open. Firefox failed to open the SSE stream
-	// under that churn (reported 2026-09-07) and fell back to polling.
-	// The reason named above is a Windows one, so the workaround is
-	// Windows-only now.
+	// It was applied to every platform, and the cost showed the day a page
+	// load ran to some 450 requests: with keep-alive off that is 450 TCP
+	// connections through the six a browser will hold open. Firefox failed
+	// to open the SSE stream under that churn (reported 2026-09-07) and fell
+	// back to polling. The reason named above is a Windows one, so the
+	// workaround is Windows-only now.
 #if defined(_WIN32)
 	svr.set_keep_alive_max_count(1);
 #endif
@@ -574,15 +563,13 @@ int main(int argc, char** argv)
 			<< std::endl;
 	}
 	else {
-		// UI5 and Tabulator directories include an exact version, so their
-		// contents can be cached indefinitely. Register these mounts before
-		// the general asset mount because cpp-httplib checks mount points in
-		// registration order.
+		// The Tabulator directory includes an exact version, so its contents
+		// can be cached indefinitely. Register this mount before the general
+		// asset mount because cpp-httplib checks mount points in registration
+		// order.
 		const httplib::Headers versionedHeaders = {
 			{ "Cache-Control", "public, max-age=31536000, immutable" }
 		};
-		svr.set_mount_point(prefix + "/assets/ui5", assetDir + "/ui5",
-			versionedHeaders);
 		svr.set_mount_point(prefix + "/assets/tabulator", assetDir + "/tabulator",
 			versionedHeaders);
 		// Everything else under /assets is the client's own -- the token

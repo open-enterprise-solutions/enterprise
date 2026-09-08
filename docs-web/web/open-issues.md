@@ -63,9 +63,9 @@ client falls back to polling, so the page kept working a second or two behind.
 `svr.set_keep_alive_max_count(1)` was applied on every platform, though the
 reason written beside it is a Windows one — a cpp-httplib keep-alive stall on
 the browser's poll. One request per connection is cheap at a handful of
-requests and not at 450, which is what a cold UI5 page load is: Firefox has six
-connections to a host and had to churn all 450 through them, and `EventSource`
-could not get one. It fell back to polling, so nothing broke visibly. The
+requests and not at 450, which is what a cold page load was while the client ran
+on a component library: Firefox has six connections to a host and had to churn
+all 450 through them, and `EventSource` could not get one. It fell back to polling, so nothing broke visibly. The
 workaround is `#if defined(_WIN32)` now, and the read timeout is 30s off Windows
 because on a kept-alive connection that value is the idle window between a
 browser's requests, not a stall.
@@ -158,19 +158,16 @@ fix that.
 
 ## Carried into later iterations
 
-**The shell is not tokenized.** *2026-09-05.* Iteration 1 tokenized only the
-surfaces a form is drawn on (`#main`, `#tab-body`, `.form-host`), because dark
-theme was unreadable without it. Still hardcoded, and each will fight the dark
-theme the same way: the body's default foreground and outer canvas; the title bar,
-app badge, menu and the temporary switcher; the sidebar, its navigation and its
-status line; the tab strip with its active/inactive tabs, scroll and close
-controls; the status bar and output toggle; the output panel, header, body,
-messages and resize affordance; the network banner; the boot, auth and session
-overlays; dialogs and spinners.
+**The shell is not tokenized.** *2026-09-05, and now the only palette there is.*
+The client's chrome — the title bar and its badge, the sidebar and its
+navigation, the tab strip, the status bar, the output panel, the network banner,
+the boot / auth / session overlays, dialogs and spinners — is written in literal
+colours where it is used rather than read from a token. That was a defect while a
+theme could change under it; with one light palette it is merely a place a second
+one cannot reach. Whoever builds a dark theme starts here.
 
-**The dev switcher shows in `ui=legacy`.** *2026-09-05.* It is marked DEV ONLY,
-but the program asks that legacy render exactly as it does today, and a control in
-the title bar is not exactly that. Hide it under `ui5`, or accept it and say so.
+*(The dev switcher, filed here on 2026-09-05, is gone: its three axes existed to
+steer the component library and left with it — ADR-015.)*
 
 **`ERR_EMPTY_RESPONSE` on asset modules under load.** *2026-09-05.* Seen twice
 during harness loads, on three i18n/CLDR modules. Probably the same death as the

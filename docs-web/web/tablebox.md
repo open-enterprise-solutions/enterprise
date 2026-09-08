@@ -147,10 +147,9 @@ A click still marks the row before the round trip finishes: the server decides,
 but a click that shows nothing until the answer comes back reads as a click that
 did not land.
 
-The mark itself is the theme's selection fill **plus** an accent bar down the
-leading edge (`--oes-table-row-selected-accent`, UI5's
-`sapList_SelectionBorderColor`). The fill alone is one shade off the row beside
-it — `#ebf8ff` against `#ffffff` in light — and was reported as no selection at
+The mark itself is a selection fill **plus** an accent bar down the leading edge
+(`--oes-table-row-selected-accent`). The fill alone is one shade off the row
+beside it — `#e5f2fb` against `#ffffff` — and was reported as no selection at
 all. Hover over the selected row keeps the selection colour: moving the pointer
 must not look like losing the row.
 
@@ -162,14 +161,12 @@ digests, and the licence. Re-running the script reproduces the same digests. It
 is served from our own origin under an immutable cache header, and it is imported
 **lazily**: 700 KB of grid arrives only when a form actually has a table on it.
 
-Colours come from `--oes-table-*` tokens in `webClient/assets/oes/oes-tokens.css`,
-which map onto UI5's list theming parameters — so both themes and both densities
-follow with no second rule. Measured on the Goods list: text on rows 16.86:1 in
-light, 14.64:1 in dark.
-
-The renderer sits in the **shared** map, not the UI5-only one: a grid is not a
-UI5 component, and leaving `ui=legacy` with a dashed `[tablebox]` box would have
-made the side-by-side comparison useless.
+Colours come from `--oes-table-*` tokens in `webClient/assets/oes/oes-tokens.css`.
+Tabulator's own palette is a grey slab with a strong blue selection, written for
+a page that brings nothing with it; the tokens are what make the grid read as
+part of the window. The overrides stand one class deeper than Tabulator's own
+rules on purpose — its stylesheet is appended to the head when the grid loads,
+so it comes after the client's and wins every tie.
 
 ## The bar above it, and opening a row
 
@@ -207,8 +204,7 @@ is `Segoe UI` — a Windows-era name for "the UI font". Named alone in
 `style.fontFamily`, it matches nothing on a Mac or a Linux box and the browser
 falls back to its default, which is a **serif**. Every label, every cell and
 every header came out in Times. `applyCommon` now puts `--oes-font-ui` behind
-it, which resolves to the UI5 theme's family and, with UI5 not loaded, to the
-system stack.
+it, which resolves to the system stack.
 
 ## Sorting
 

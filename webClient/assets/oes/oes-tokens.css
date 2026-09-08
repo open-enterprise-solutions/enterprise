@@ -1,67 +1,25 @@
-/* Provisional until the Iteration 1 reference screen validates these mappings. */
+/* The client's palette, in one place. Two things read it: the grid, whose own
+   stylesheet would otherwise paint a component rather than a part of the
+   window, and a control that arrived carrying a font name. */
 :root{
-  /* What stands behind a control's stored font name. UI5 answers with
-     the theme's family; without UI5 loaded the tail carries it. */
-  --oes-font-ui:var(--sapFontFamily,system-ui),-apple-system,"Segoe UI",Roboto,sans-serif;
-  --oes-text:var(--sapTextColor);
-  --oes-surface:var(--sapField_Background);
-  --oes-border:var(--sapField_BorderColor);
-  --oes-action:var(--sapButton_Emphasized_Background);
-  --oes-focus:var(--sapContent_FocusColor);
-  --oes-status-error:var(--sapNegativeColor);
-  /* Provisional until a themed form reference screen validates these mappings. */
-  --oes-form-canvas:var(--sapBackgroundColor);
-  --oes-form-surface:var(--sapGroup_ContentBackground);
-  --oes-form-text:var(--sapTextColor);
-  --oes-form-border:var(--sapGroup_ContentBorderColor);
-  /* Every token below carries a FALLBACK after its UI5 parameter. The
-     theme is 450 module requests on a cold cache, and until it lands --
-     or if it never does -- an unresolved var() does not fall back to
-     anything sensible: a border-color collapses to currentColor, which
-     is the text colour, which is black. That is what an unthemed page
-     looked like, and it read as a broken screen rather than a plain
-     one. The fallbacks are the client's own palette, so a page without
-     the theme looks like the page without the theme.
+  /* What stands behind a control's stored font name. A form's font property
+     names a Windows face -- Segoe UI -- and a machine without it falls back to
+     the browser's default, which is a serif. This is what stands after it. */
+  --oes-font-ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 
-     The grid. Tabulator ships its own light palette; these are what
-     replaces it, so a table follows the theme like everything else.
-     Provisional until a themed list reference screen validates them. */
-  --oes-table-bg:var(--sapList_Background,#fff);
-  --oes-table-text:var(--sapList_TextColor,#222);
-  --oes-table-border:var(--sapList_BorderColor,#d9d9d9);
-  --oes-table-header-bg:var(--sapList_HeaderBackground,#f2f3f4);
-  --oes-table-header-text:var(--sapList_HeaderTextColor,#222);
-  --oes-table-row-alt-bg:var(--sapList_AlternatingBackground,#f7f8f9);
-  --oes-table-row-hover-bg:var(--sapList_Hover_Background,#eaecee);
-  --oes-table-row-selected-bg:var(--sapList_SelectionBackgroundColor,#e5f2fb);
-  /* The leading-edge bar on the selected row. UI5 lists mark the
-     selected item with the accent colour rather than the fill alone,
-     and the fill on its own is a shade off the row beside it. */
-  --oes-table-row-selected-accent:var(--sapList_SelectionBorderColor,#3b50a0);
-  /* The window's own chrome. Where a UI5 component carries everything
-     the platform's data carries, the chrome IS that component -- the
-     shell bar, the command bar, the side navigation. Where it cannot,
-     the element stays ours and takes its colours from here, so the
-     window is one surface and not two. */
-  --oes-chrome-bg:var(--sapObjectHeader_Background,#fff);
-  --oes-chrome-text:var(--sapTextColor,#222);
-  --oes-chrome-border:var(--sapGroup_ContentBorderColor,#d9d9d9);
-  --oes-chrome-hover-bg:var(--sapButton_Lite_Hover_Background,#eaecee);
-  --oes-chrome-selected:var(--sapSelectedColor,#3b50a0);
-  --oes-page-bg:var(--sapBackgroundColor,#f5f6f7);
-  --oes-footer-bg:var(--sapPageFooter_Background,#ececec);
-  --oes-footer-text:var(--sapPageFooter_TextColor,#222);
-  /* Ink for a surface the FORM chose, when the form chose no ink to go
-     with it. A form author picking a background picked it against the
-     desktop's dark-on-light, and under a theme that supplies its own
-     text colour, honouring half of that assumption is how white ends up
-     on white. The theme's own two ends, named by which surface each
-     reads on rather than by which theme is running. */
-  --oes-ink-on-light:var(--sapTextColor,#222);
-  --oes-ink-on-dark:var(--sapContent_ContrastTextColor,#fff);
-}
-
-:root[data-oes-theme="dark"]{
-  --oes-ink-on-light:var(--sapContent_ContrastTextColor,#222);
-  --oes-ink-on-dark:var(--sapTextColor,#fff);
+  /* The grid. Tabulator ships its own palette -- a grey slab, a strong blue
+     selection -- written for a page that brings nothing with it; these are what
+     replace it, so a table reads like the rest of the window. */
+  --oes-table-bg:#fff;
+  --oes-table-text:#222;
+  --oes-table-border:#d9d9d9;
+  --oes-table-header-bg:#f2f3f4;
+  --oes-table-header-text:#222;
+  --oes-table-row-alt-bg:#f7f8f9;
+  --oes-table-row-hover-bg:#eaecee;
+  --oes-table-row-selected-bg:#e5f2fb;
+  /* The leading-edge bar on the selected row. The fill on its own is a shade
+     off the row beside it, and the selected row is the one the server is
+     standing on -- it has to be readable at a glance. */
+  --oes-table-row-selected-accent:#3b50a0;
 }
