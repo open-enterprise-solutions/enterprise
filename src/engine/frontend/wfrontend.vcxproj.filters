@@ -45,6 +45,8 @@
     <ClCompile Include="web\webApplication.cpp"> <Filter>web</Filter></ClCompile>
     <ClCompile Include="web\webFrame.cpp">       <Filter>web</Filter></ClCompile>
     <ClCompile Include="web\webWindow.cpp">      <Filter>web</Filter></ClCompile>
+    <ClCompile Include="web\webCommandBar.cpp">      <Filter>web</Filter></ClCompile>
+    <ClCompile Include="web\webTableBox.cpp">    <Filter>web</Filter></ClCompile>
     <ClCompile Include="web\webSizer.cpp">       <Filter>web</Filter></ClCompile>
     <ClCompile Include="web\webTimer.cpp">       <Filter>web</Filter></ClCompile>
     <ClCompile Include="web\webChildFrame.cpp">  <Filter>web</Filter></ClCompile>
@@ -120,6 +122,8 @@
     <ClInclude Include="web\webApplication.h">  <Filter>web</Filter></ClInclude>
     <ClInclude Include="web\webFrame.h">        <Filter>web</Filter></ClInclude>
     <ClInclude Include="web\webWindow.h">       <Filter>web</Filter></ClInclude>
+    <ClInclude Include="web\webCommandBar.h">       <Filter>web</Filter></ClInclude>
+    <ClInclude Include="web\webTableBox.h">     <Filter>web</Filter></ClInclude>
     <ClInclude Include="web\webSizer.h">        <Filter>web</Filter></ClInclude>
     <ClInclude Include="web\webTimer.h">        <Filter>web</Filter></ClInclude>
     <ClInclude Include="web\webChildFrame.h">   <Filter>web</Filter></ClInclude>

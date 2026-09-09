@@ -209,6 +209,13 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
+#ifdef OES_USE_WEB
+	// Before the host tree is serialised: the model's view generation onto the
+	// table node, and the composer's order onto the column nodes. Neither passes
+	// through a control setter — rows change under a script, a sort goes to the
+	// composer — and the shim holds no back-pointer to read them itself.
+	virtual void SyncWebNode(wxObject* node) const override;
+#endif
 
 	//get component type
 	virtual int GetComponentType() const { return COMPONENT_TYPE_WINDOW; }
@@ -244,6 +251,33 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	/**
 	* Override actionData
 	*/
+
+	// The TableBox composes its command interface the way a form does (formAction.cpp): it MERGES the bound
+	// model's OWN narrow command set and DECORATES it with the standard, table-generic band — Select (choice),
+	// Filter / FilterByColumn / FilterClear, ViewMode. The ids are the TableBox's own (high base, like the
+	// form's enClose) so they never collide with a model's object-command ids; unknown ids are OBJECT commands
+	// and go to the model.
+	//
+	// In the class rather than in tableBoxAction.cpp because the web build does not compile that file and
+	// composes its own, narrower band — and the one id both bands share, Select, has to be the same number in
+	// both or a click lands on nothing.
+	enum {
+		enTableSelect = 20000,
+		enTableFilter,
+		enTableFilterByColumn,
+		enTableFilterClear,
+		enTableViewMode,
+		// ⭐ THE READER'S OWN SETTINGS — a LIST HAS THEM TOO (Max, 2026-08-26). Not the variants question,
+		// which a list legitimately has none of: a variant is something the AUTHOR named in the
+		// configuration, while these are what THIS person arranged and chose to keep. They live under
+		// their own category, addressed by this control's guid rather than by a composer's.
+		enTableSettingsRestore,
+		enTableSettingsSave,
+		// ⭐⭐ OUTPUT LIST — what is on the screen, as a spreadsheet document. A verb of the TABLE, so every
+		// list and every table of values has it for nothing (Max, 2026-08-29). It READS: the same rows, the
+		// same filter, the same sort and the same groupings, printed the way a report is.
+		enTableOutputList,
+	};
 
 	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
 	// The command bar calls this (generic id, form). The TableBox reads the rows a command runs against — the
@@ -328,7 +362,8 @@ protected:
 	void UpdateExpanderColumn();
 
 	// The TableBox's OWN command handlers — the view-state band it composes runs DIRECTLY against the live control
-	// runtime (no model → notifier shim). Desktop-only bodies (the web front runs its own command path).
+	// runtime (no model → notifier shim). Desktop-only bodies, with one exception: Choose has no window in it
+	// (the current line, its select value, the form it is handed to) and both fronts run the same one.
 	void Command_Choose(ibBackendValueForm* srcForm);
 	
 	void Command_FilterByCurrentColumn();
@@ -686,6 +721,16 @@ public:
 
 	//choice processing
 	virtual void ChoiceProcessing(ibValue& vSelected);
+#ifdef OES_USE_WEB
+	// The browser's equivalent of TextProcessing: a cell committed from the grid.
+	// Public because the web shim is what calls it, the way the table's own shim
+	// calls the commands.
+	bool WebCellChanged(const wxString& text);
+	// …and of the three buttons its inline editor carries.
+	bool WebCellChoose();
+	bool WebCellOpen();
+	bool WebCellClear();
+#endif
 
 private:
 

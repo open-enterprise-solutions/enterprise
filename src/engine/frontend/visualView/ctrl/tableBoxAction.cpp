@@ -22,28 +22,8 @@
 //*                              actionData                                  *
 //****************************************************************************
 
-// The TableBox composes its command interface the way a form does (formAction.cpp): it MERGES the bound model's
-// OWN narrow command set and DECORATES it with the standard, table-generic band — Select (choice), Filter /
-// FilterByColumn / FilterClear, ViewMode. The ids are the TableBox's own (high base, like the form's enClose)
-// so they never collide with a model's object-command ids; unknown ids are OBJECT commands and go to the model.
-enum
-{
-	enTableSelect = 20000,
-	enTableFilter,
-	enTableFilterByColumn,
-	enTableFilterClear,
-	enTableViewMode,
-	// ⭐ THE READER'S OWN SETTINGS — a LIST HAS THEM TOO (Max, 2026-08-26). Not the variants question,
-	// which a list legitimately has none of: a variant is something the AUTHOR named in the
-	// configuration, while these are what THIS person arranged and chose to keep. They live under
-	// their own category, addressed by this control's guid rather than by a composer's.
-	enTableSettingsRestore,
-	enTableSettingsSave,
-	// ⭐⭐ OUTPUT LIST — what is on the screen, as a spreadsheet document. A verb of the TABLE, so every
-	// list and every table of values has it for nothing (Max, 2026-08-29). It READS: the same rows, the
-	// same filter, the same sort and the same groupings, printed the way a report is.
-	enTableOutputList,
-};
+// The action ids this file composes and dispatches live on the class (tableBox.h): the web front
+// composes a band of its own out of the same numbers.
 
 ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardCommands(const ibFormID& formType)
 {
@@ -211,19 +191,7 @@ bool ibValueModelTableBox::EditCurrentRow(const ibDataViewItem& item)
 //*   Command handlers — the view-state band, driven DIRECTLY on the control *
 //****************************************************************************
 
-void ibValueModelTableBox::Command_Choose(ibBackendValueForm* srcForm)
-{
-	// Choice returns the CURRENT ROW as a value — the ReturnLine, which itself pins the model alive for as long
-	// as the caller (the opener) holds it. NotifyChoice hands it over; no reference re-resolution on the model.
-	ibValueModel::ibValueModelReturnLine* line = GetCurrentLine();
-	if (line == nullptr || srcForm == nullptr)
-		return;
-
-	// The picker returns the row's SELECT value — a reference / key, defined PER LINE TYPE (GetSelectValue),
-	// not the generic row value.
-	ibValue selectValue = line->GetSelectValue();
-	srcForm->NotifyChoice(selectValue);
-}
+// Command_Choose lives in tableBox.cpp — it is the one command in this band both fronts run.
 
 // ⭐ ASKED FOR BY NAME — the settings window's own door, the same one the gridbox uses for a report.
 // It used to be reached through a method of the CONTROL, which is a widget carrying the settings

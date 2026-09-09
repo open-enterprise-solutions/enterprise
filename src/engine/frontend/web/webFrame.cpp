@@ -61,6 +61,11 @@ ibWebFrame::~ibWebFrame()
 	// (already-dangling) m_view/m_doc, no UB.
 	m_pendingCloses.clear();
 	m_activeForm = nullptr;
+	// From here on the vector is the only thing deleting tabs. A shell
+	// whose dtor re-enters through the doc/view code (~ibView calls
+	// Destroy on its child frame) reaches DropTab, which sees this and
+	// declines.
+	m_tabsUnwinding = true;
 	m_tabs.clear();
 	// Release any worker threads parked on ShowModalMessage promises —
 	// setting value=0 unblocks them with a "cancelled" return so the
@@ -240,6 +245,8 @@ void ibWebFrame::AdoptTab(std::unique_ptr<ibWebDocChildFrame> tab, ibValueForm* 
 {
 	if (tab == nullptr) return;
 	m_activeTab  = m_tabs.size();
+	tab->SetOwnerFrame(this);
+	tab->SetTabForm(form);
 	m_tabs.push_back(std::move(tab));
 	if (form != nullptr) m_activeForm = form;
 	std::cerr << "[tabs] AdoptTab form=" << (void*)form
@@ -268,7 +275,15 @@ ibFrontendWindow* ibWebFrame::CreateChildFrame(
 	ibSession* session = ibSession::Current();
 	auto* webFrame = session != nullptr
 		? dynamic_cast<ibWebFrame*>(session->GetFrame()) : nullptr;
-	if (webFrame == nullptr) return nullptr;
+	if (webFrame == nullptr) {
+		// Returning nullptr here means the form opens with no tab, and the
+		// caller has no way to tell that from an ordinary refusal. Say so:
+		// a whole afternoon went into finding a form that silently landed
+		// in nobody's window.
+		std::cerr << "[tabs] CreateChildFrame: no web frame for the current session"
+			<< " (session=" << (void*)session << ")" << std::endl;
+		return nullptr;
+	}
 
 	ibDocument* doc = view->GetDocument();
 	// doc->GetTitle() is still empty at this stage — the doc was just
@@ -344,39 +359,73 @@ void ibWebFrame::DrainPendingCloses()
 	std::cerr << "[life] DrainPendingCloses count=" << pending.size() << std::endl;
 	for (const ibValueForm* form : pending) {
 		for (std::size_t i = 0; i < m_tabs.size(); ++i) {
-			auto* visualDoc = dynamic_cast<ibFormVisualDocument*>(
-				m_tabs[i]->GetDocument());
-			if (visualDoc == nullptr || visualDoc->GetValueForm() != form)
+			ibWebDocChildFrame* const dyingTab = m_tabs[i].get();
+			if (dyingTab->GetTabForm() != form)
 				continue;
+			auto* visualDoc = dynamic_cast<ibFormVisualDocument*>(
+				dyingTab->GetDocument());
 			std::cerr << "[life] DeleteAllViews form=" << (void*)form
 				<< " doc=" << (void*)visualDoc << std::endl;
-			// Now — outside any control's event handler — we can safely
-			// destroy the view, which cascades into host and all its
-			// child controls (toolbar, tools, textctrl etc.). ibDocument's
-			// DeleteAllViews contract also deletes the doc itself when
-			// the last view goes, so m_tabs[i]->m_doc becomes dangling
-			// (tab dtor nulls it, doesn't delete).
-			visualDoc->DeleteAllViews();
+			// Now — outside any control's event handler — we can destroy
+			// the view, which cascades into host and all its child
+			// controls (toolbar, tools, textctrl etc.), and can reach
+			// other tabs too: an object form goes down with the list it
+			// was opened from. ~ibView calls Destroy on each dying view's
+			// child frame, and that road leads to DropTab, so a tab that
+			// the cascade took is already out of m_tabs by the time we
+			// get back here.
+			if (visualDoc != nullptr)
+				visualDoc->DeleteAllViews();
 			std::cerr << "[life] after DeleteAllViews" << std::endl;
 
-			if (i == m_activeTab)
-				m_activeForm = nullptr;
-			std::unique_ptr<ibWebDocChildFrame> dying =
-				std::move(*(m_tabs.begin() + i));
-			m_tabs.erase(m_tabs.begin() + i);
-			if (m_tabs.empty()) {
-				m_activeTab  = 0;
-				m_activeForm = nullptr;
-			} else {
-				if (m_activeTab >= m_tabs.size())
-					m_activeTab = m_tabs.size() - 1;
-				auto* newDoc = dynamic_cast<ibFormVisualDocument*>(
-					m_tabs[m_activeTab]->GetDocument());
-				m_activeForm = newDoc != nullptr ? newDoc->GetValueForm() : nullptr;
-			}
+			DropTab(dyingTab);
 			break;
 		}
 	}
+}
+
+void ibWebFrame::EraseTabAt(std::size_t i)
+{
+	if (i >= m_tabs.size())
+		return;
+	if (i == m_activeTab)
+		m_activeForm = nullptr;
+	// Clear the back-pointer BEFORE the erase: the unique_ptr's delete
+	// runs the shell's dtor, and anything it wakes must not find an
+	// owner still claiming to hold it.
+	m_tabs[i]->SetOwnerFrame(nullptr);
+	m_tabs.erase(m_tabs.begin() + i);
+	if (m_tabs.empty()) {
+		m_activeTab  = 0;
+		m_activeForm = nullptr;
+		return;
+	}
+	if (m_activeTab >= m_tabs.size())
+		m_activeTab = m_tabs.size() - 1;
+	// From the shell, not from its document: an erase can run inside a
+	// close that is taking several tabs down at once, and the neighbour's
+	// document may be part of the same cascade.
+	m_activeForm = m_tabs[m_activeTab]->GetTabForm();
+}
+
+bool ibWebFrame::DropTab(ibWebDocChildFrame* tab)
+{
+	if (tab == nullptr)
+		return false;
+	// Already inside m_tabs.clear() — the delete this call is asking for
+	// is the one running right now.
+	if (m_tabsUnwinding)
+		return true;
+	for (std::size_t i = 0; i < m_tabs.size(); ++i) {
+		if (m_tabs[i].get() != tab)
+			continue;
+		EraseTabAt(i);
+		return true;
+	}
+	// Owned by us on paper but absent from the vector. Refuse rather
+	// than delete: an unowned shell frees itself, and this one is not
+	// that — the pointer we would free is somebody else's now.
+	return false;
 }
 
 bool ibWebFrame::CloseTab(std::size_t i)

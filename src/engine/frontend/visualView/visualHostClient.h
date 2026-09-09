@@ -43,6 +43,16 @@ public:
 	// runs, which turns into UAF during the nested sizer/child teardown.
 	// Body in visualHostClient.cpp (web branch).
 	virtual ~ibVisualHostClient() override;
+
+	// A PICKER: a form opened to hand a value back to the control that asked for
+	// one. The browser draws it OVER that control's form rather than beside it,
+	// and leaves it out of the tab strip — a question is not a place you go.
+	bool IsPickerHost() const;
+
+	// The form's tree says what KIND of window it is, because the browser has two
+	// ways to draw one, and carries the caption: a dialog has a title bar of its
+	// own, and the tab's label lives in a different payload.
+	virtual nlohmann::json ToJSON() const override;
 #else
 	ibVisualHostClient(ibFormVisualDocument* document, ibValueForm* valueForm, ibFrontendWindow* parent);
 	virtual ~ibVisualHostClient();
@@ -205,10 +215,28 @@ public:
 
 	static bool UpdateFormUniqueKey(const ibUniqueKeyPair& guid);
 
+	// Whether a lookup running now may see this document.
+	//
+	// The registry every Find* below walks is one static set for the whole
+	// process. A desktop window owns one session, so that was the same
+	// thing as "every document there is". A web server holds many at once,
+	// and without this the second session to open the Goods list finds the
+	// FIRST session's document, activates a tab in somebody else's window
+	// and returns as though it had opened one — the session it was asked
+	// on ends up with no tab at all.
+	//
+	// A document made outside any session answers to everyone: a null
+	// owner means "belongs to nobody", not "private to nobody".
+	bool IsVisibleToCurrentSession() const;
+
 protected:
 	virtual ibView* DoCreateView() override;
 private:
 	ibValuePtr<ibValueForm> m_valueForm;
+	// The session that opened this document, remembered where it is made.
+	// Borrowed and compared by identity only — never dereferenced, so a
+	// session that ends before the document does cannot be followed.
+	const class ibSession* m_ownerSession = nullptr;
 };
 
 class FRONTEND_API ibFormVisualDocumentDemo : public ibFormVisualDocument {

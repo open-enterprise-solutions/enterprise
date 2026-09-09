@@ -185,7 +185,9 @@ public:
 	virtual ibValueModelColumnCollection* GetColumnCollection() const override { return m_columns; }
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override;
 	virtual Features GetFeatures() const override;
-	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const override { return false; }
+	// A list is not edited in place: a row is opened, or picked. (Add/Copy/Edit/Delete are not overridden
+	// either — list mutation goes through the choice/keyset path.)
+	virtual bool EditableColumn(unsigned int col) const override { return false; }
 
 	// DynamicRead OFF → the base ibValueModelCursor serves the WHOLE list from its RAM snapshot instead of the live
 	// keyset cursor (EnsureSnapshot / RunStoragePage). Read straight off the designer property (default = live).

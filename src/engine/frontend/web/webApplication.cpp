@@ -24,8 +24,11 @@
 #include "webFrame.h"
 #include "webChildFrame.h"
 #include "webWindow.h"
+#include "webTableBox.h"
 
 #include "visualView/ctrl/form.h"
+#include "visualView/ctrl/tableBox.h"
+#include "visualView/layers/commandBar.h"
 #include "visualView/ctrl/widgets.h"
 #include "visualView/visualHostClient.h"
 
@@ -161,6 +164,9 @@ ibWebApplication::~ibWebApplication()
 {
 	if (m_initialized)
 		OnExit();
+	// Belt to OnExit's braces: an application that never initialised still has
+	// a signal, and a waiter that found it must not be left parked on it.
+	m_live->Close();
 }
 
 ibValueModuleManagerRuntimeConfiguration* ibWebApplication::GetManagerModule() const
@@ -281,16 +287,25 @@ bool ibWebApplication::Dispatch(int controlId, const wxString& kind, const wxStr
 		return false;
 	ibWebWindow* web = static_cast<ibWebWindow*>(obj);
 
-	if (!web->HandleRequest(kind, value))
-		return false;
+	// A table has no back-pointer to its control (its shim outlives
+	// nothing and owns nothing), so the cursor move is handed the
+	// control the dispatcher just resolved, for the length of the call.
+	if (auto* table = dynamic_cast<ibWebTableBox*>(web))
+		table->SetRequestControl(dynamic_cast<ibValueModelTableBox*>(ctrl));
+	// A COLUMN is addressed the same way and for the same reason: a cell edit
+	// names the column it lands in, and the shim has no back-pointer either.
+	if (auto* column = dynamic_cast<ibWebTableBoxColumn*>(web))
+		column->SetRequestControl(dynamic_cast<ibValueModelTableBoxColumn*>(ctrl));
 
-	// Handler chain unwound — safe to actually destroy any tabs the
-	// script closed while we were deep in ProcessPendingEvents. Drain
-	// happens HERE, not inside CloseForm, so the toolbar/control that
-	// bubbled the event no longer sits on the stack when its parent
-	// tab's host gets torn down.
-	if (m_frame != nullptr)
-		m_frame->DrainPendingCloses();
+	const bool handled = web->HandleRequest(kind, value);
+
+	if (auto* table = dynamic_cast<ibWebTableBox*>(web))
+		table->SetRequestControl(nullptr);
+	if (auto* column = dynamic_cast<ibWebTableBoxColumn*>(web))
+		column->SetRequestControl(nullptr);
+
+	if (!handled)
+		return false;
 
 	// No explicit rebuild here: unified control Update methods push
 	// property changes through setters on existing ibWebWindow nodes
@@ -299,28 +314,76 @@ bool ibWebApplication::Dispatch(int controlId, const wxString& kind, const wxStr
 	// emits the fresh JSON from the same tree — no Clear+Create pass
 	// needed. CreateAndUpdateVisualHost belongs only in
 	// ibFormVisualEditView::OnCreate (first build after form open).
-	// MarkDirty wakes any SSE subscriber so the new JSON ships out.
-	MarkDirty();
+	SettleAfterScript();
 	return true;
+}
+
+std::string ibWebApplication::FetchRows(int controlId, const wxString& dir, int count)
+{
+	ibVisualHostClient* host = GetActiveHost();
+	ibValueForm* form = host != nullptr ? host->GetValueForm() : nullptr;
+	ibValueFrame* ctrl = form != nullptr ? form->FindControlByID(controlId) : nullptr;
+	if (ctrl == nullptr)
+		return R"({"ok":false,"reason":"no control"})";
+
+	// The same (frame -> wxObject) map every other request goes
+	// through; both halves are alive for the length of this call
+	// because the map holds the pair.
+	auto* table = dynamic_cast<ibWebTableBox*>(host->GetWxObject(ctrl));
+	auto* model = dynamic_cast<ibValueModelTableBox*>(ctrl);
+	if (table == nullptr || model == nullptr)
+		return R"({"ok":false,"reason":"not a tablebox"})";
+
+	return table->FetchPage(model, dir, count).dump(2);
+}
+
+bool ibWebApplication::DispatchCommand(int actionId, int ownerControlId)
+{
+	ibVisualHostClient* host = GetActiveHost();
+	ibValueForm* form = host != nullptr ? host->GetValueForm() : nullptr;
+	if (form == nullptr)
+		return false;
+
+	// WHOSE bar. Zero is the form's own; anything else names a control that
+	// carries one of its own -- a tablebox over a tabular section. Action ids
+	// are unique within a bar and not across bars, so asking the form for a
+	// table's "Add" would have run whatever the form calls by that number.
+	ibValueCommandBar* cbar = nullptr;
+	if (ownerControlId != 0) {
+		if (ibValueFrame* ctrl = form->FindControlByID(ownerControlId))
+			cbar = ctrl->GetCommandBar();
+	}
+	else {
+		cbar = form->GetCommandBar();
+	}
+	if (cbar == nullptr)
+		return false;
+
+	cbar->ExecuteCommand(actionId, form);
+	SettleAfterScript();
+	return true;
+}
+
+void ibWebApplication::SettleAfterScript()
+{
+	// The handler chain has unwound, so the tabs a script closed can be
+	// destroyed now. The drain happens here rather than inside CloseForm so
+	// the control that bubbled the event no longer sits on the stack when its
+	// tab's host is torn down.
+	if (m_frame != nullptr)
+		m_frame->DrainPendingCloses();
+	// Whatever the tree shows now is new to the browser: wake the stream.
+	MarkDirty();
 }
 
 void ibWebApplication::MarkDirty()
 {
-	m_seq.fetch_add(1, std::memory_order_acq_rel);
-	std::lock_guard<std::mutex> lk(m_seqMtx);
-	m_seqCv.notify_all();
+	m_live->Bump();
 }
 
 uint64_t ibWebApplication::WaitForChange(uint64_t lastSeen, int timeoutMs)
 {
-	std::unique_lock<std::mutex> lk(m_seqMtx);
-	if (timeoutMs <= 0) {
-		m_seqCv.wait(lk, [this, lastSeen]{ return m_seq.load() != lastSeen; });
-	} else {
-		m_seqCv.wait_for(lk, std::chrono::milliseconds(timeoutMs),
-			[this, lastSeen]{ return m_seq.load() != lastSeen; });
-	}
-	return m_seq.load();
+	return m_live->Wait(lastSeen, timeoutMs);
 }
 
 void ibWebApplication::PostWork(std::function<void()> fn)
@@ -343,6 +406,11 @@ void ibWebApplication::OnExit()
 	if (!m_initialized)
 		return;
 
+	// First, before anything is torn down: release the SSE subscribers. They
+	// are parked on the signal for up to 25 seconds, and every one of them is
+	// holding an HTTP worker thread while this session stops existing.
+	m_live->Close();
+
 	// Timers now live on the form (ibValueForm::m_idleHandlerArray) —
 	// same ownership model as desktop; the form's dtor / CloseDocForm
 	// path stops and deletes them. No separate app-level teardown.
@@ -358,12 +426,29 @@ void ibWebApplication::OnExit()
 	if (m_frame != nullptr) {
 		RunOnWorker([this]() {
 			if (m_frame == nullptr) return true;
-			const std::size_t n = m_frame->TabCount();
-			for (std::size_t i = 0; i < n; ++i) {
-				ibWebDocChildFrame* tab = m_frame->Tab(i);
-				if (tab == nullptr) continue;
+			// Close the front tab until there is none, rather than walking
+			// an index range: one document's teardown cascades into the
+			// others — an object form goes down with the list it was
+			// opened from — and each tab the cascade takes leaves m_tabs
+			// through ~ibView -> Destroy -> DropTab as it goes. A range
+			// captured up front would name positions that have moved, and
+			// a shell held back from that cascade would be left pointing
+			// at a document nobody has.
+			while (m_frame->TabCount() > 0) {
+				const std::size_t before = m_frame->TabCount();
+				ibWebDocChildFrame* tab = m_frame->Tab(0);
+				if (tab == nullptr) break;
 				if (auto* doc = dynamic_cast<ibFormVisualDocument*>(tab->GetDocument()))
 					doc->DeleteAllViews();
+				// Ask for it either way. The cascade may already have
+				// taken this tab out on its way through ~ibView, and
+				// DropTab then finds nothing and says so; a tab with no
+				// form document had no cascade to leave on and is still
+				// here. Either way the front of the list must move, or
+				// the next turn would read a document nobody has.
+				m_frame->DropTab(tab);
+				if (m_frame->TabCount() >= before)
+					break;   // nothing moved — stop rather than spin
 			}
 			return true;
 		}).get();

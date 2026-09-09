@@ -208,8 +208,9 @@ public:
 	long DisplayNumberOf(const ibDataViewItem& row) const;
 
 	virtual bool AutoCreateColumn() const { return false; }
-	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const {
-		return ibValueModel::EditableLine(item, col) && !m_metaTable->IsNumberLine(col);
+	// Every column but the line number, which the section keeps for itself.
+	virtual bool EditableColumn(unsigned int col) const {
+		return !m_metaTable->IsNumberLine(col);
 	}
 
 

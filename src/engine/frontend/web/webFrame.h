@@ -179,6 +179,15 @@ public:
 		class ibValueForm* form);
 
 	void SetActiveTab(std::size_t i);
+
+	// Erase one tab from m_tabs — the single place a tab shell is
+	// deleted. Called by ibWebDocChildFrame::Destroy (the shared
+	// doc/view code's door: ~ibView and OnCloseWindow) and by the
+	// close paths below, so the vector and the object agree about
+	// who is alive. Answers false while ~ibWebFrame is already
+	// clearing m_tabs: the delete is in flight, and a second one is
+	// exactly the fault this routing exists to prevent.
+	bool DropTab(class ibWebDocChildFrame* tab);
 	// Returns false when the form's beforeClose script vetoed; tab
 	// stays open in that case, caller should leave m_activeTab alone
 	// and return {} to the client.
@@ -219,6 +228,15 @@ private:
 	// host, then view, then document (mirrors ibAuiDocChildFrame order).
 	std::vector<std::unique_ptr<ibWebDocChildFrame>> m_tabs;
 	std::size_t                                      m_activeTab = 0;
+	// True from the moment ~ibWebFrame starts emptying m_tabs. Read by
+	// DropTab so a tab dtor that re-enters through the doc/view code
+	// does not ask for a delete that is already happening.
+	bool                                             m_tabsUnwinding = false;
+
+	// Erase at index i and fix up the active tab / active form. The
+	// tail of both close roads; DropTab and DrainPendingCloses differ
+	// only in how they find the index.
+	void EraseTabAt(std::size_t i);
 
 	// Forms pending tab removal. Populated by MarkTabForCloseByForm;
 	// drained after the event handler chain unwinds.

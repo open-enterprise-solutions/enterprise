@@ -34,6 +34,7 @@ ibValueFrame* ibControlIndex::FindControl(const wxObject* wx_object) const
 }
 
 #ifdef OES_USE_WEB
+#include "frontend/web/webCommandBar.h"   // one builder for both bars
 
 #include "ctrl/frame.h"
 #include "ctrl/form.h"
@@ -41,6 +42,9 @@ ibValueFrame* ibControlIndex::FindControl(const wxObject* wx_object) const
 #include "ctrl/window.h"
 #include "formdefs.h"
 #include "frontend/web/webSizer.h"
+#include "layers/commandBar.h"        // ibValueCommandBar — the model both roads read
+#include "backend/backend_picture.h"  // ibBackendPicture — bitmap -> data URI
+#include "backend/metaData.h"
 
 namespace {
 
@@ -106,7 +110,12 @@ void AppendChildControls(ibValueFrame* node,
 		// controls that loaded with m_controlId == 0 get freshly minted.
 		if (child->GetControlID() == 0 && child->GetOwnerForm() != nullptr)
 			child->GenerateNewID();
-		wxObject* created = child->Create(createParent, host);
+		// Through the *WithLayers wrappers, as the desktop walker does. The base
+		// forwards to the plain method, so nothing without chrome notices --
+		// but a COMPOSITE builds its command bar there, and calling Create /
+		// Update directly is why a tablebox over a tabular section reached the
+		// browser as a grid with no way to add a line to it.
+		wxObject* created = child->CreateWithLayers(createParent, host);
 
 		// ibNoObject is the "empty" sentinel ibValueFrame::Create
 		// returns when a subclass isn't ported to web (base returns
@@ -145,6 +154,15 @@ void AppendChildControls(ibValueFrame* node,
 			host->AppendInnerControl(child, win);   // windows only
 			nextWindow = win;
 			nextSizer  = nullptr;
+			// A window that came with a sizer of its own takes its children
+			// INTO it, not alongside it -- the notebook page is built that way,
+			// as ibPanelPage is on the desktop. Without this the page's
+			// contents hang off the window directly and every layout param
+			// they carry (proportion, border, expand) is dropped on the floor.
+			if (ibWebSizer* const own = win->GetSizer()) {
+				nextWindow = nullptr;
+				nextSizer  = own;
+			}
 			break;
 		}
 		case COMPONENT_TYPE_SIZER: {
@@ -168,7 +186,7 @@ void AppendChildControls(ibValueFrame* node,
 		// Self-Update: push property values into the raw shim Create
 		// produced. Runs BEFORE recursing into children, so children
 		// see the parent's state already applied.
-		child->Update(created, host);
+		child->UpdateWithLayers(created, host);
 
 		// Pending params consumed by the first real Add/SetSizer
 		// above; clear for recursive descent.
@@ -178,12 +196,42 @@ void AppendChildControls(ibValueFrame* node,
 		// their own Create + Update passes — matches desktop's
 		// GenerateControl order (post-order OnCreated), so parent
 		// hooks can assume their children are wired up.
-		child->OnCreated(created, createParent, host, /*firstCreated*/ true);
-		child->OnUpdated(created, createParent, host);
+		child->OnCreatedWithLayers(created, createParent, host, /*firstCreated*/ true);
+		child->OnUpdatedWithLayers(created, createParent, host);
 	}
 }
 
 } // namespace
+
+// The chrome — the form's own command bar, above the controls.
+//
+// Desktop builds this in CreateFormLayers through BuildCommandBarToolBar,
+// which is a wxAuiToolBar and so has no web twin. What both roads share is
+// the model: ibValueCommandBar::BuildCommands() returns the entries and
+// ExecuteCommand runs one. So the web side reads the same list and emits
+// toolbar nodes the browser already knows how to draw.
+//
+// The nodes hold no back-pointer: a tool names its command by action id,
+// and the click goes to ibWebApplication::DispatchCommand, which asks the
+// form for its bar. Nothing here outlives the form that owns it.
+static void AppendCommandBar(ibValueForm* form, ibWebSizer* rootSizer)
+{
+	if (form == nullptr || rootSizer == nullptr)
+		return;
+
+	// Zero owner: the FORM's bar is the one DispatchCommand resolves against
+	// when a tool names nobody else.
+	ibWebToolbar* bar = ibWebBuildCommandBar(form->GetCommandBar(),
+		form->GetMetaData(), /*ownerControlId*/ 0);
+	if (bar == nullptr)
+		return;
+
+	// First item of the root sizer, spanning its width — where the
+	// desktop chrome puts it (mainSizer->Insert(0, part, 0, wxEXPAND)).
+	ibWebSizer::AddParams params;
+	params.flag = wxEXPAND;
+	rootSizer->Add(bar, params);
+}
 
 bool ibVisualHost::CreateVisualHost()
 {
@@ -217,6 +265,9 @@ bool ibVisualHost::CreateVisualHost()
 	// the root via the walker's `parentSizer->Add(siz)` branch, and
 	// nested controls follow the same pattern as before.
 	auto* rootSizer = static_cast<ibWebSizer*>(GetSizer());
+	// Chrome first, so the bar sits above the controls in the sizer the
+	// same way it does on the desktop.
+	AppendCommandBar(form, rootSizer);
 	AppendChildControls(form, nullptr, rootSizer, this, nullptr);
 	return true;
 }

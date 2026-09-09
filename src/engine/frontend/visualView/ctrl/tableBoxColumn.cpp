@@ -13,7 +13,7 @@
 
 
 #ifdef OES_USE_WEB
-#include "frontend/web/webWindow.h"
+#include "frontend/web/webTableBox.h"
 #endif
 
 //****************************************************************************
@@ -148,7 +148,7 @@ wxObject* ibValueModelTableBoxColumn::Create(ibFrontendWindow* wxparent, ibVisua
 {
 #ifdef OES_USE_WEB
 	(void)wxparent; (void)visualHost;
-	return new ibWebStubControl(wxT("tableboxcolumn"));
+	return new ibWebTableBoxColumn(GetControlID());
 #else
 	ibDataViewColumnObject* dataViewColumn = new ibDataViewColumnObject(this, wxT(""),
 		wxNOT_FOUND, wxDVC_DEFAULT_WIDTH, wxALIGN_CENTER, wxDATAVIEW_COL_REORDERABLE);
@@ -239,6 +239,65 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 	dataViewColumn->SyncSortArrowFromModel();
 
 	dataViewColumn->SetColumnModel(source_column);
+#else
+	// The web shim gets the same answers this method just gave the
+	// desktop column, in the browser's spelling. Alignment is TWO
+	// answers, as it is on desktop: the header takes the property, the
+	// cells take the value type — a number reads right-aligned next to
+	// text that does not (the desktop renderer decides it per cell, in
+	// CheckedGetValue).
+	ibWebTableBoxColumn* webColumn = static_cast<ibWebTableBoxColumn*>(wxobject);
+
+	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == wxNOT_FOUND;
+	const wxString valueType = ibWebValueTypeName(GetTypeDesc());
+
+	webColumn->SetCaption(GetControlTitle());
+	webColumn->SetFieldKey(ibWebTableBoxColumnKey(GetControlID()));
+	webColumn->SetWidth(m_propertyWidth->GetValueAsUInteger());
+	webColumn->SetHeaderAlign(ibWebAlignName(m_propertyHeaderAlign->GetValueAsEnum()));
+	webColumn->SetAlign(valueType == wxT("number") ? wxT("right") : wxT("left"));
+	webColumn->SetValueType(valueType);
+	webColumn->SetVisibleColumn(m_propertyVisible->GetValueAsBoolean() && !sourceMissing);
+	webColumn->SetResizable(m_propertyResizable->GetValueAsBoolean());
+
+	// Sortability is the model's feature, as on the desktop. The direction is
+	// not written here: it is read off the composer by the table's
+	// SyncSortOrders before every serialisation, so that a sort committed
+	// straight to the composer and the arrow drawn for it come from one place.
+	ibValueModelTableBox* const owner = GetOwner();
+	ibValueModel* const model = owner != nullptr ? owner->GetTableModel() : nullptr;
+	const wxString field = GetSourceFieldName();
+	const bool sortable = model != nullptr && !field.IsEmpty()
+		&& model->GetFeatures().Has(ibValueModel::Features::Sorting);
+	webColumn->SetSortable(sortable);
+
+	// Whether this column carries an editor. Three answers, all of them the
+	// desktop's: the MODEL says whether the column is edited in place at all
+	// (a list is not, a tabular section is except its line number); the TABLE
+	// says whether the column reads through something other than this row —
+	// a dot-path or a foreign root, both read-only there too; and the column's
+	// own TextEdit property says whether it is typed into.
+	const bool editable = model != nullptr
+		&& model->EditableColumn(GetModelColumn())
+		&& owner != nullptr && !owner->IsPathColumn(this) && !owner->IsForeignColumn(this)
+		&& GetTextEditMode();
+	webColumn->SetReadOnly(!editable);
+
+	// The three buttons the cell's editor carries — the column's own properties,
+	// the same three the desktop renderer reads onto its inline editor.
+	//
+	// Select and Open are narrowed to a REFERENCE, and the narrowing is about
+	// what exists rather than about what is declared. Both properties default to
+	// true on every column, and the desktop can honour that on a number too: its
+	// Select opens the quick-choice popup and its Open shows the value. Neither
+	// has a web road, and a button that does nothing when pressed is worse than
+	// one that is not there — the same reason the table's view-state band is
+	// absent here rather than present and dead. Clear needs no road: an empty
+	// value of the type the cell holds is a value.
+	const bool referenceCell = valueType == wxT("reference");
+	webColumn->SetShowSelectButton(GetSelectButton() && referenceCell);
+	webColumn->SetShowOpenButton(GetOpenButton() && referenceCell);
+	webColumn->SetShowClearButton(GetClearButton());
 #endif
 }
 
@@ -399,7 +458,103 @@ void ibValueModelTableBoxColumn::OnPropertyCreated(ibProperty* /*property*/) {}
 void ibValueModelTableBoxColumn::OnPropertyRefresh() {}
 bool ibValueModelTableBoxColumn::OnPropertyChanging(ibProperty* /*property*/,
 	const wxVariant& /*newValue*/) { return true; }
-void ibValueModelTableBoxColumn::ChoiceProcessing(ibValue& /*vSelected*/) {}
+// A PICKER CAME BACK. The desktop body (tableBoxColumnEvent.cpp) writes the row
+// and then puts the text into the open inline editor; there is no such editor
+// here — the browser's is gone by the time this runs, and the form tree that
+// goes back carries the new cell. What is left is the part that is not the
+// widget, and it is the same: the script may take the choice over, then the
+// value goes onto the current line, then OnChange.
+//
+// Not through SetControlValue: the choice machinery refreshes the owner form
+// itself (ibValueForm::ChoiceDocForm), which is what the desktop relies on too.
+void ibValueModelTableBoxColumn::ChoiceProcessing(ibValue& vSelected)
+{
+	ibValue standartProcessing = true;
+	ibValueControl::CallAsEvent(m_eventChoiceProcessing, GetValue(), vSelected, standartProcessing);
+	if (!standartProcessing.GetBoolean())
+		return;
+
+	if (ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine())
+		currentLine->SetValueByMetaID(GetModelColumn(), vSelected);
+
+	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
+}
+
+// The three buttons a cell's editor carries, one method each. Same bodies as the
+// desktop's OnSelect / OnOpen / OnClearButtonPressed minus the editor widget they
+// reach for: which column asked is the request's address, and the row is the one
+// the table is standing on.
+bool ibValueModelTableBoxColumn::WebCellChoose()
+{
+	ibValue standartProcessing = true;
+	ibValueControl::CallAsEvent(m_eventStartChoice, GetValue(), standartProcessing);
+	if (!standartProcessing.GetBoolean())
+		return true;   // a script took the choice over — and said so
+
+	// THE ONE ROUTE, the same one a form field walks: settle the type, then choose
+	// a value of it. The form the author named in the property grid, or the
+	// metaobject's own.
+	const ibMetaID& formId = m_propertyChoiceForm->GetValueAsInteger();
+	const ibMetaData* metaData = GetMetaData();
+	const ibValueMetaObject* choiceForm = (formId != wxNOT_FOUND && metaData != nullptr)
+		? metaData->FindAnyObjectByFilter(formId) : nullptr;
+	return ibTypeControlFactory::ChooseValue(this, choiceForm, nullptr);
+}
+
+bool ibValueModelTableBoxColumn::WebCellOpen()
+{
+	ibValue standartProcessing = true;
+	ibValueControl::CallAsEvent(m_eventOpening, GetValue(), standartProcessing);
+	if (standartProcessing.GetBoolean()) {
+		ibValue selValue;
+		if (GetControlValue(selValue) && !selValue.IsEmpty())
+			selValue.ShowValue();
+	}
+	return true;
+}
+
+bool ibValueModelTableBoxColumn::WebCellClear()
+{
+	ibValue standartProcessing = true;
+	ibValueControl::CallAsEvent(m_eventClearing, GetValue(), standartProcessing);
+	if (standartProcessing.GetBoolean())
+		SetControlValue();
+	return true;
+}
+
+// A cell edited in the browser. The desktop equivalent is TextProcessing, run
+// when the inline editor commits, and this is the same three steps: coerce the
+// typed string through the type the cell already holds, write it through
+// SetControlValue — which is where the current line, the source-object update
+// and RefreshForm live — and fire the column's OnChange.
+//
+// A string that does not parse is REFUSED rather than written: the value stands,
+// and the form tree that goes back re-states it, so the browser's cell snaps
+// back to what the row actually holds.
+bool ibValueModelTableBoxColumn::WebCellChanged(const wxString& text)
+{
+	const ibMetaData* metaData = GetMetaData();
+	if (metaData == nullptr)
+		return false;
+
+	ibValue current; GetControlValue(current);
+	const ibValue& typed = metaData->CreateObject(current.GetClassType());
+	if (typed.GetType() == ibValueTypes::TYPE_EMPTY)
+		return false;   // the cell has no settled type — nothing to coerce into
+
+	if (text.IsEmpty()) {
+		SetControlValue(typed);   // cleared → the empty value of that type
+	}
+	else {
+		std::vector<ibValue> found;
+		if (!typed.FindValue(text, found) || found.empty())
+			return false;
+		SetControlValue(found.front());
+	}
+
+	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
+	return true;
+}
 #endif // OES_USE_WEB
 
 //***********************************************************************

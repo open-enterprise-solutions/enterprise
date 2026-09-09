@@ -17,6 +17,7 @@
 #include "formAttribute.h"                              // the attribute this box is bound to — its source IS the address
 #include "backend/srcDataObject.h"                      // …and the source answers with the guid of what it reads
 #include "backend/appData.h"
+#include "backend/picturePredefined.h"                 // g_picSelectCLSID — the picker's own command
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
@@ -24,7 +25,7 @@
 
 
 #ifdef OES_USE_WEB
-#include "frontend/web/webWindow.h"
+#include "frontend/web/webTableBox.h"
 #endif
 
 //***********************************************************************************
@@ -553,7 +554,7 @@ wxObject* ibValueModelTableBox::Create(ibFrontendWindow* wxparent, ibVisualHost*
 {
 #ifdef OES_USE_WEB
 	(void)wxparent; (void)visualHost;
-	return new ibWebStubControl(wxT("tablebox"));
+	return new ibWebTableBox(GetControlID());
 #else
 	ibTableViewCtrl* dataViewCtrl = new ibTableViewCtrl(wxparent, wxID_ANY,
 		wxDefaultPosition,
@@ -658,6 +659,27 @@ void ibValueModelTableBox::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	if (dataViewCtrl != nullptr) {
 		UpdateWindow(dataViewCtrl);
 	}
+#else
+	(void)visualHost;
+	// The table's own SHAPE — what the browser needs before it has a
+	// single row. The rows travel on their own road (ibWebTableBox::
+	// FetchPage), because a list is paged by architecture and folding a
+	// page into the form tree would throw that away.
+	ibWebTableBox* webTable = static_cast<ibWebTableBox*>(wxobject);
+
+	UpdateWindow(webTable);
+
+	wxString viewMode = wxT("hierarchical");
+	switch (m_propertyViewMode->GetValueAsEnum()) {
+	case ibDataViewViewMode::ibDataViewTree: viewMode = wxT("tree"); break;
+	case ibDataViewViewMode::ibDataViewList: viewMode = wxT("list"); break;
+	default: break;
+	}
+
+	webTable->SetShowHeader(m_propertyHeader->GetValueAsBoolean());
+	webTable->SetShowFooter(m_propertyFooter->GetValueAsBoolean());
+	webTable->SetViewMode(viewMode);
+	webTable->SetChoiceMode(IsChoiceMode());
 #endif
 }
 
@@ -966,6 +988,25 @@ bool ibValueModelTableBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	return ibValueFrame::GetPropVal(lPropNum, pvarPropVal);
 }
 
+// A PICKER HANDS BACK A ROW. Choice returns the CURRENT ROW as a value — the ReturnLine, which
+// itself pins the model alive for as long as the caller (the opener) holds it. NotifyChoice hands
+// it over; no reference re-resolution on the model.
+//
+// Shared: the rest of the band reaches into the grid control for a drill anchor or a current
+// column, and this reaches into nothing. It is what a list opened as a picker exists to do, so
+// both fronts run this one body rather than a copy each.
+void ibValueModelTableBox::Command_Choose(ibBackendValueForm* srcForm)
+{
+	ibValueModel::ibValueModelReturnLine* line = GetCurrentLine();
+	if (line == nullptr || srcForm == nullptr)
+		return;
+
+	// The picker returns the row's SELECT value — a reference / key, defined PER LINE TYPE
+	// (GetSelectValue), not the generic row value.
+	ibValue selectValue = line->GetSelectValue();
+	srcForm->NotifyChoice(selectValue);
+}
+
 #ifdef OES_USE_WEB
 // Methods declared in tableBox.h but normally implemented in the
 // auxiliary tableBox*.cpp files (Event/Property/Action/Menu) — those
@@ -975,11 +1016,91 @@ void ibValueModelTableBox::OnPropertyCreated(ibProperty* /*property*/) {}
 bool ibValueModelTableBox::OnPropertyChanging(ibProperty* /*property*/, const wxVariant& /*newValue*/) { return true; }
 void ibValueModelTableBox::OnPropertyChanged(ibProperty* /*property*/, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/) {}
 
-ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardCommands(const ibFormID& /*formType*/)
+void ibValueModelTableBox::SyncWebNode(wxObject* node) const
 {
-	return ibStandardCommandSet();
+	ibWebTableBox* webTable = dynamic_cast<ibWebTableBox*>(node);
+	if (webTable == nullptr)
+		return;
+	// The generation is bumped by every row notification the model sends
+	// (RowChanged, NotifyRowAppended, NotifyReset, ...), so the browser sees
+	// it move exactly when the rows it holds may be out of date. A table
+	// with no model has no rows to be out of date about.
+	webTable->SetDataVersion(m_tableModel != nullptr ? m_tableModel->GetViewGeneration() : 0);
+	// The shim takes the control as an argument rather than remembering it.
+	webTable->SyncSortOrders(this);
 }
-void ibValueModelTableBox::CallAsAction(const ibActionID& /*lNumAction*/, ibBackendValueForm* /*srcForm*/) {}
+
+// The commands a table contributes to the bar, and running one.
+//
+// The desktop pair lives in tableBoxAction.cpp, which the web build does not
+// compile: it reaches into the wxDataView control for the drill anchor and the
+// current column, and half its verbs open a dialog. What CAN be answered here
+// is the part that has no window in it — the model's OWN command set, which is
+// the source descriptor's, and which is what a list actually needs: Create,
+// Copy, Change, Mark for deletion, Refresh.
+//
+// The table's own view-state band (Filter, ViewMode, saved settings, Output
+// list) is deliberately absent rather than present and dead: each of those IS
+// a window, and none of them has a web door yet.
+//
+// Select is the exception, and it is not decoration: a list opened as a picker
+// exists to hand a row back, and without this command it could only be looked
+// at. It opens no window — the row it returns goes to the control that asked.
+ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardCommands(const ibFormID& formType)
+{
+	// The created model, or — on the unbound path — the one the bound form
+	// attribute resolves to. Same two candidates the desktop tries.
+	ibValuePtr<ibValueModel> resolved;
+	ibValueModel* model = m_tableModel;
+	if (model == nullptr && !m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
+		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), resolved))
+		model = resolved;
+
+	if (model == nullptr)
+		return ibStandardCommandSet();
+
+	ibStandardCommandSet actionData(this);
+
+	// Select — first, and only when this table is a picker. Same id as the desktop band, so a
+	// tool built here and a tool built there name the same command.
+	if (IsChoiceMode())
+		actionData.AddAction(wxT("Select"), _("Select"), g_picSelectCLSID, true, enTableSelect).SetModify(false);
+
+	std::vector<ibCommandItem> commands;
+	model->GetCommandCollection(formType, commands);
+	for (const ibCommandItem& command : commands) {
+		if (command.m_actionId == wxNOT_FOUND)
+			actionData.AddSeparator();
+		else
+			actionData.AddAction(command.m_name, command.m_caption, command.m_pictureDescription,
+				command.m_pictureAndText, command.m_actionId).SetModify(command.m_modifiesData);
+	}
+	return actionData;
+}
+
+void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm)
+{
+	if (m_tableModel == nullptr)
+		return;
+
+	// The rows a command runs against. Selection is the current line, as on
+	// the desktop. There is no anchor and no current column: both are read off
+	// the grid control there, and the web has neither a drill nor a cell
+	// cursor yet — so a new element lands at the root, which is what the flat
+	// list view does on the desktop too.
+	// Select is the table's own, not the model's: it hands the current row back to whoever opened
+	// this list as a picker. Everything else in this build is an object command.
+	if (lNumAction == enTableSelect) {
+		Command_Choose(srcForm);
+		return;
+	}
+
+	ibDataViewCommandContext ctx;
+	ctx.m_selection = m_tableCurrentLine != nullptr
+		? m_tableCurrentLine->GetLineItem() : ibDataViewItem();
+
+	m_tableModel->CallAsCommand(lNumAction, ctx, srcForm);
+}
 
 void ibValueModelTableBox::PrepareDefaultMenu(wxMenu* /*m_menu*/) {}
 void ibValueModelTableBox::ExecuteMenu(ibVisualHost* /*visualHost*/, int /*id*/) {}

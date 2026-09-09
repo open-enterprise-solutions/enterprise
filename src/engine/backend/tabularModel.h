@@ -785,10 +785,19 @@ public:
 	virtual bool AutoCreateColumn() const { return false; }
 
 
+	// The half of the question a HEADER can answer, with no row in hand: is this column editable at ALL.
+	// A model that is never edited in place says so once (a dynamic list, a register record set); a
+	// tabular section excludes the line number. Split out because the web front has to decide whether a
+	// column carries an editor BEFORE it has fetched a single row — the desktop asks per cell, having the
+	// row already, and gets the same answer through EditableLine below.
+	virtual bool EditableColumn(unsigned int col) const { return true; }
+
 	// A CONTAINER row (a grouping header — its cell is the group's own dimension value, not a real data row) is
-	// never inline-editable; only a leaf row is. Subclasses compose this (AND their own rule). The one place the
-	// "you can't edit a group cell" rule lives.
-	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const { return !IsContainer(item); }
+	// never inline-editable; only a leaf row is. The one place the "you can't edit a group cell" rule lives —
+	// composed with the column's own answer above, so a subclass overrides one of the two, not both.
+	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const {
+		return EditableColumn(col) && !IsContainer(item);
+	}
 
 	// (ActivateItem removed — the double-click is fully a FRONT concern now: the TableBox DECIDES choice → select /
 	// editable → edit the cell / read-only → ActivateRow. The model only EXECUTES the read-only open (per type),
@@ -949,7 +958,12 @@ protected:
 	// Monotonic change counter — bumped on any value / row mutation the model notifies the GUI of (the
 	// structural-mutation reset path bumps it). Subclasses bump through BumpViewGeneration(), not the field.
 	void BumpViewGeneration() const { ++m_viewGeneration; }   // m_viewGeneration is mutable (a view counter, not model state)
-	uint32_t GetViewGeneration() const { return m_viewGeneration; }   // read it — the RAM snapshot re-materialises when it moves
+
+public:
+	// Read it — the RAM snapshot re-materialises when it moves. Public because the web
+	// tablebox publishes it on its node as `dataVersion`: the browser keeps its grid across
+	// form trees and re-reads the rows only when this counter has moved.
+	uint32_t GetViewGeneration() const { return m_viewGeneration; }
 
 private:
 

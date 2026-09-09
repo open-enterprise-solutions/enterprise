@@ -5,16 +5,22 @@
 // smoke-test endpoints (/, /ping, /login, /logout) on top of a real
 // database connection.
 
+#include <atomic>
 #include <cstdlib>
+#include <cstdio>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
 
 // wx first so its ssize_t alias is picked up before cpp-httplib's own
 // typedef, otherwise MSVC sees two incompatible ssize_t definitions.
 #include <wx/app.h>
+#include <wx/filename.h>
 #include <wx/init.h>
 #include <wx/socket.h>
+#include <wx/stdpaths.h>
 #include <wx/types.h>
 
 // Trick cpp-httplib into skipping its own ssize_t typedef when it comes
@@ -52,6 +58,34 @@ namespace {
 // mid-listen and leave the row around until another wes sweep cleans it.
 httplib::Server* g_svr = nullptr;
 
+enum class StopReason {
+	None,
+	ConsoleControl,
+	Signal,
+	BackendRequest,
+};
+
+std::atomic<StopReason> g_stopReason{StopReason::None};
+
+void RequestServerStop(StopReason reason)
+{
+	StopReason expected = StopReason::None;
+	g_stopReason.compare_exchange_strong(expected, reason,
+		std::memory_order_acq_rel, std::memory_order_acquire);
+	if (g_svr) g_svr->stop();
+}
+
+const char* StopReasonText(StopReason reason)
+{
+	switch (reason) {
+	case StopReason::ConsoleControl: return "console control event";
+	case StopReason::Signal:         return "process signal";
+	case StopReason::BackendRequest: return "backend lifecycle request";
+	case StopReason::None:           break;
+	}
+	return "unknown request";
+}
+
 #if defined(_WIN32)
 void LogShutdownLine(const char* msg) {
 	// Goes to both stderr (visible while console still exists) and the
@@ -70,7 +104,7 @@ BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType) {
 		// Console still live — main has time to clean up after
 		// listen_after_bind returns. Just break the listener.
 		LogShutdownLine("[ctrl] Ctrl+C/Break - svr.stop() + let main cleanup");
-		if (g_svr) g_svr->stop();
+		RequestServerStop(StopReason::ConsoleControl);
 		return TRUE;
 
 	case CTRL_CLOSE_EVENT:
@@ -83,7 +117,7 @@ BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType) {
 		// the handler so the sys_session DELETE reaches the DB before
 		// Windows kills us, then ExitProcess instead of returning.
 		LogShutdownLine("[ctrl] close event - direct in-handler shutdown");
-		if (g_svr) g_svr->stop();
+		RequestServerStop(StopReason::ConsoleControl);
 		wfrontendShutdown();
 		LogShutdownLine("[ctrl] shutdown complete, ExitProcess(0)");
 		ExitProcess(0);
@@ -95,7 +129,7 @@ BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType) {
 }
 #else
 void PosixSignalHandler(int /*sig*/) {
-	if (g_svr) g_svr->stop();
+	RequestServerStop(StopReason::Signal);
 }
 #endif
 
@@ -149,6 +183,96 @@ bool StartsWith(const std::string& s, const char* prefix)
 	return s.size() >= n && s.compare(0, n, prefix) == 0;
 }
 
+std::string ResolveAssetDirectory()
+{
+	wxFileName exeFile(wxStandardPaths::Get().GetExecutablePath());
+	const wxString exeDir = exeFile.GetPath();
+
+	// A packed client has no asset-directory analogue yet.
+	// First try the unpacked release layout beside the executable.
+	const wxString beside = exeDir + wxFILE_SEP_PATH + wxT("web")
+		+ wxFILE_SEP_PATH + wxT("assets");
+	if (wxFileName::DirExists(beside))
+		return beside.utf8_string();
+
+	// Then use the development tree, with the same six-level bound as
+	// LoadClient().
+	wxFileName walk(exeDir, wxEmptyString);
+	for (int i = 0; i < 6; ++i) {
+		const wxString candidate = walk.GetPath() + wxFILE_SEP_PATH
+			+ wxT("webClient") + wxFILE_SEP_PATH + wxT("assets");
+		if (wxFileName::DirExists(candidate))
+			return candidate.utf8_string();
+		if (walk.GetDirCount() == 0)
+			break;
+		walk.RemoveLastDir();
+	}
+
+	return std::string();
+}
+
+// The page names its own stylesheet at a fixed URL, and the bytes behind that
+// URL change whenever the chrome does. A browser is allowed to invent a
+// freshness lifetime for a response that carries no Cache-Control, and one did:
+// it drew a current client.html against a token stylesheet two commits old, so
+// every panel whose colour came from a token that file did not yet define fell
+// through to the bare canvas. The mount now says no-cache, but that only
+// governs the next answer -- a copy already held as fresh is never asked about.
+// Putting a digest of the file's own bytes in the URL settles it in the one
+// place a cache cannot second-guess: different bytes, different URL.
+std::string StampAssetURLs(std::string html, const std::string& assetDir)
+{
+	if (assetDir.empty())
+		return html;
+
+	// FNV-1a, the same hash the class ids use. Eight hex digits is plenty to
+	// tell one revision of a file from the next.
+	const auto digest = [](const std::string& bytes) {
+		std::uint64_t h = 14695981039346656037ULL;
+		for (const unsigned char c : bytes) {
+			h ^= c;
+			h *= 1099511628211ULL;
+		}
+		char out[9];
+		std::snprintf(out, sizeof(out), "%08x",
+			static_cast<unsigned>(h ^ (h >> 32)));
+		return std::string(out);
+	};
+
+	const std::string needle = "\"./assets/";
+	for (std::size_t at = html.find(needle); at != std::string::npos;
+		at = html.find(needle, at + 1)) {
+		const std::size_t start = at + 1;                  // past the quote
+		const std::size_t end   = html.find('"', start);
+		if (end == std::string::npos)
+			break;
+
+		const std::string url = html.substr(start, end - start);
+		// A directory prefix (the import map's entries) and a URL that already
+		// carries a query are both left as they are.
+		if (url.back() == '/' || url.find('?') != std::string::npos)
+			continue;
+		// The versioned mount carries its identity in the path already, which
+		// is what lets it be served immutable; a stamp there would say the same
+		// thing twice.
+		if (StartsWith(url, "./assets/tabulator/"))
+			continue;
+
+		const std::string file = assetDir + url.substr(std::strlen("./assets"));
+		std::ifstream in(file, std::ios::binary);
+		if (!in)
+			continue;
+		const std::string bytes((std::istreambuf_iterator<char>(in)),
+			std::istreambuf_iterator<char>());
+
+		const std::string stamp = "?v=" + digest(bytes);
+		html.insert(end, stamp);
+		at = end + stamp.size();
+	}
+
+	return html;
+}
+
 CmdArgs ParseArgs(int argc, char** argv)
 {
 	CmdArgs a;
@@ -193,7 +317,6 @@ CmdArgs ParseArgs(int argc, char** argv)
 			std::exit(0);
 		}
 	}
-
 	// Default URL prefix from --db or --file basename.
 	if (a.urlPrefix.empty()) {
 		if (!a.database.empty()) {
@@ -405,19 +528,74 @@ int main(int argc, char** argv)
 	// TCP_NODELAY — disable Nagle/delayed-ACK on accepted sockets.
 	// Default was OFF → localhost round-trip picked up ~200ms each.
 	svr.set_tcp_nodelay(true);
-	// Disable keep-alive: serve one request per TCP connection. The
-	// browser's 2s poll hit a cpp-httplib keep-alive issue on Windows
-	// where the server thread's blocking select() doesn't wake up on
-	// a new request from the same connection — every poll tick waited
-	// the full read_timeout (5s→30s) before returning. Cold connect
-	// on 127.0.0.1 is ~200ms; that's the price we pay for now, but
-	// it's bounded and consistent versus the 5-30s stall.
+	// Keep-alive is off on WINDOWS ONLY. The browser's 2s poll hit a
+	// cpp-httplib keep-alive issue there: the server thread's blocking
+	// select() does not wake on a second request from the same
+	// connection, so every poll tick waited out the full read_timeout
+	// before returning. One request per connection costs a ~200ms cold
+	// connect on 127.0.0.1, which is bounded and consistent against a
+	// 5-30s stall.
+	//
+	// It was applied to every platform, and the cost showed the day a page
+	// load ran to some 450 requests: with keep-alive off that is 450 TCP
+	// connections through the six a browser will hold open. Firefox failed
+	// to open the SSE stream under that churn (reported 2026-09-07) and fell
+	// back to polling. The reason named above is a Windows one, so the
+	// workaround is Windows-only now.
+#if defined(_WIN32)
 	svr.set_keep_alive_max_count(1);
-	// Short read/write timeouts are fine once keep-alive is off —
-	// each connection is single-request, so the read-idle window
-	// doesn't exist.
+#endif
+	// Read timeout is the idle window on a kept-alive connection, so it
+	// has to outlast a browser's think time between requests; five
+	// seconds would close a connection the page is about to reuse.
+	// Where each connection serves one request the window does not
+	// exist and the short value is free.
+#if defined(_WIN32)
 	svr.set_read_timeout(5);
+#else
+	svr.set_read_timeout(30);
+#endif
 	svr.set_write_timeout(5);
+
+	const std::string assetDir = ResolveAssetDirectory();
+	if (assetDir.empty()) {
+		std::cerr << "Web asset directory not found; static assets are unavailable."
+			<< std::endl;
+	}
+	else {
+		// The Tabulator directory includes an exact version, so its contents
+		// can be cached indefinitely. Register this mount before the general
+		// asset mount because cpp-httplib checks mount points in registration
+		// order.
+		const httplib::Headers versionedHeaders = {
+			{ "Cache-Control", "public, max-age=31536000, immutable" }
+		};
+		svr.set_mount_point(prefix + "/assets/tabulator", assetDir + "/tabulator",
+			versionedHeaders);
+		// Everything else under /assets is the client's own -- the token
+		// stylesheet, the icons -- served from a path that does not change
+		// when the file does. With no Cache-Control a browser is free to
+		// invent a freshness lifetime from Last-Modified and reuse the
+		// bytes without asking, which is how a browser ended up drawing
+		// the current client.html against a token stylesheet two commits
+		// old: the chrome tokens it named did not exist there, so every
+		// panel that reads one fell back to the bare canvas. no-cache
+		// keeps the copy and makes the browser revalidate it; the ETag
+		// cpp-httplib already sends turns the usual answer into a 304.
+		const httplib::Headers revalidateHeaders = {
+			{ "Cache-Control", "no-cache" }
+		};
+		if (!svr.set_mount_point(prefix + "/assets", assetDir, revalidateHeaders)) {
+			std::cerr << "Web asset directory could not be mounted: " << assetDir
+				<< std::endl;
+		}
+		// cpp-httplib already maps js, css, json, woff2, and svg to their
+		// standard MIME types.
+	}
+
+	// Stamped once: the client HTML is read once per process, so everything it
+	// names is pinned to the same run.
+	const std::string clientHTML = StampAssetURLs(wfrontendClientHTML(), assetDir);
 
 	// Top-level exception handler — catches anything that escapes one
 	// of the per-route lambdas below. Pre-2026-05-26 the lambdas had
@@ -466,7 +644,7 @@ int main(int argc, char** argv)
 		res.set_content(body, "application/json; charset=utf-8");
 	});
 
-	svr.Get(prefix + "/", [prefix](const httplib::Request& req, httplib::Response& res) {
+	svr.Get(prefix + "/", [prefix, clientHTML](const httplib::Request& req, httplib::Response& res) {
 		// Windows IPv6-first "localhost" fallback adds ~200ms cold
 		// connect per request, which stacks up on every tab switch /
 		// click. If the browser came in via `Host: localhost...`,
@@ -527,7 +705,7 @@ int main(int argc, char** argv)
 
 		// Client HTML/CSS/JS lives in wfrontend.dll so Apache/IIS/CGI
 		// hosts can serve the same bytes from a single source of truth.
-		res.set_content(wfrontendClientHTML(), "text/html; charset=utf-8");
+		res.set_content(clientHTML, "text/html; charset=utf-8");
 	});
 
 	svr.Get(prefix + "/ping", [](const httplib::Request&, httplib::Response& res) {
@@ -565,6 +743,8 @@ int main(int argc, char** argv)
 		std::string id;
 		if (!RequireSessionId(req, res, id)) return;
 		const int controlID = std::atoi(req.matches[1].str().c_str());
+		std::cerr << "[HTTP] POST /action/" << controlID
+			<< " session=" << id << std::endl;
 		res.set_content(wfrontendFireAction(id, controlID),
 			"application/json; charset=utf-8");
 	});
@@ -580,7 +760,11 @@ int main(int argc, char** argv)
 		if (!RequireSessionId(req, res, id)) return;
 		const int controlID = std::atoi(req.matches[1].str().c_str());
 		const std::string kind = req.matches[2].str();
-		res.set_content(wfrontendFireKind(id, controlID, kind),
+		// Optional payload — a kind that carries one (a table's "row"
+		// takes the row key) reads it here; a kind that does not, like
+		// a button's "click", simply sees an empty string.
+		const std::string value = req.get_param_value("value");
+		res.set_content(wfrontendFireKind(id, controlID, kind, value),
 			"application/json; charset=utf-8");
 	});
 
@@ -593,7 +777,39 @@ int main(int argc, char** argv)
 		if (!RequireSessionId(req, res, id)) return;
 		const int controlID = std::atoi(req.matches[1].str().c_str());
 		const std::string value = req.get_param_value("value");
+		std::cerr << "[HTTP] POST /change/" << controlID
+			<< " session=" << id << std::endl;
 		res.set_content(wfrontendFireTextChange(id, controlID, value),
+			"application/json; charset=utf-8");
+	});
+
+	// POST /command/<actionID> [owner=<controlID>] — run a command off a command
+	// bar. The bar is chrome, not a control, so it does not go through the
+	// control dispatcher; the action id names the command and `owner` names
+	// whose bar it is. No owner means the form's own, which is where every bar
+	// lived until a tablebox got one of its own.
+	svr.Post(prefix + R"(/command/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+		std::string id;
+		if (!RequireSessionId(req, res, id)) return;
+		const int actionID = std::atoi(req.matches[1].str().c_str());
+		const int ownerID = req.has_param("owner")
+			? std::atoi(req.get_param_value("owner").c_str()) : 0;
+		res.set_content(wfrontendFireCommand(id, actionID, ownerID),
+			"application/json; charset=utf-8");
+	});
+
+	// GET /fetch/<controlID>?dir=first|next|prev&count=N — one page of a
+	// tablebox's rows. A GET because it reads: the same request twice
+	// returns the same page, and the browser may cache nothing of it.
+	svr.Get(prefix + R"(/fetch/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+		std::string id;
+		if (!RequireSessionId(req, res, id)) return;
+		const int controlID = std::atoi(req.matches[1].str().c_str());
+		const std::string dir = req.has_param("dir") ? req.get_param_value("dir") : "first";
+		const int count = req.has_param("count")
+			? std::atoi(req.get_param_value("count").c_str()) : 0;
+		res.set_header("Cache-Control", "no-store");
+		res.set_content(wfrontendFetchRows(id, controlID, dir, count),
 			"application/json; charset=utf-8");
 	});
 
@@ -607,6 +823,8 @@ int main(int argc, char** argv)
 		const int controlID = std::atoi(req.matches[1].str().c_str());
 		const std::string checkedStr = req.get_param_value("checked");
 		const bool checked = (checkedStr == "1" || checkedStr == "true");
+		std::cerr << "[HTTP] POST /toggle/" << controlID
+			<< " session=" << id << std::endl;
 		res.set_content(wfrontendFireToggle(id, controlID, checked),
 			"application/json; charset=utf-8");
 	});
@@ -724,6 +942,13 @@ int main(int argc, char** argv)
 				// lastSeen. Timeout = we send a heartbeat so the peer
 				// knows we're alive and intermediaries don't close us.
 				const auto upd = wfrontendLiveWait(sid, *lastSeen, 25000);
+
+				// The session went away while we were parked -- swept for
+				// idleness, or destroyed with the tab. Ending the response is
+				// what tells the browser; answering with heartbeats forever
+				// would spin this thread on a wait that now returns at once.
+				if (!wfrontendSessionExists(sid))
+					return false;
 
 				if (upd.seq == *lastSeen) {
 					static const char kPing[] = ": ping\n\n";
@@ -979,7 +1204,7 @@ int main(int argc, char** argv)
 	// returns and main proceeds to wfrontendShutdown — same orderly
 	// path as Ctrl+C.
 	wfrontendSetProcessExitHook([]() {
-		if (g_svr) g_svr->stop();
+		RequestServerStop(StopReason::BackendRequest);
 	});
 
 	// 0.0.0.0 is a wildcard bind, not a routable address — browsers
@@ -1013,6 +1238,12 @@ int main(int argc, char** argv)
 	}
 
 	const bool ok = svr.listen_after_bind();
+	const StopReason stopReason = g_stopReason.load(std::memory_order_acquire);
+	g_svr = nullptr;
+	if (stopReason != StopReason::None) {
+		std::cerr << "wenterprise-server stop requested by "
+			<< StopReasonText(stopReason) << "; shutting down" << std::endl;
+	}
 
 #if defined(_WIN32)
 	LogShutdownLine("[main] listen_after_bind returned, entering wfrontendShutdown");
@@ -1022,6 +1253,8 @@ int main(int argc, char** argv)
 	LogShutdownLine("[main] wfrontendShutdown returned");
 #endif
 
+	if (stopReason != StopReason::None)
+		return 0;
 	if (!ok) {
 		std::cerr << "listen_after_bind failed on " << args.host << ":" << boundPort << std::endl;
 		return 1;

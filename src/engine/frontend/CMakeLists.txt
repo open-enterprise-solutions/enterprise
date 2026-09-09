@@ -125,6 +125,8 @@ set(WFRONTEND_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webApplication.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webFrame.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webWindow.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/web/webCommandBar.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/web/webTableBox.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webSizer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webTimer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webChildFrame.cpp
@@ -156,6 +158,20 @@ set(WFRONTEND_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/checkboxEvent.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/checkboxProperty.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/checkbox_res.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/radiobutton.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/radiobutton_res.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/staticline.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/staticline_res.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/gauge.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/gauge_res.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/slider.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/slider_res.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/notebook.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/notebook_res.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/notebookPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/notebookPage_res.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/htmlBox.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/htmlBox_res.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/layers/commandBar.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/layers/commandReceiver.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/layerObject.cpp

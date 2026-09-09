@@ -1,0 +1,25 @@
+/* The client's palette, in one place. Two things read it: the grid, whose own
+   stylesheet would otherwise paint a component rather than a part of the
+   window, and a control that arrived carrying a font name. */
+:root{
+  /* What stands behind a control's stored font name. A form's font property
+     names a Windows face -- Segoe UI -- and a machine without it falls back to
+     the browser's default, which is a serif. This is what stands after it. */
+  --oes-font-ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+
+  /* The grid. Tabulator ships its own palette -- a grey slab, a strong blue
+     selection -- written for a page that brings nothing with it; these are what
+     replace it, so a table reads like the rest of the window. */
+  --oes-table-bg:#fff;
+  --oes-table-text:#222;
+  --oes-table-border:#d9d9d9;
+  --oes-table-header-bg:#f2f3f4;
+  --oes-table-header-text:#222;
+  --oes-table-row-alt-bg:#f7f8f9;
+  --oes-table-row-hover-bg:#eaecee;
+  --oes-table-row-selected-bg:#e5f2fb;
+  /* The leading-edge bar on the selected row. The fill on its own is a shade
+     off the row beside it, and the selected row is the one the server is
+     standing on -- it has to be readable at a glance. */
+  --oes-table-row-selected-accent:#3b50a0;
+}

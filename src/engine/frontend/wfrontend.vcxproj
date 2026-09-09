@@ -150,6 +150,8 @@
     <ClCompile Include="web\webApplication.cpp" />
     <ClCompile Include="web\webFrame.cpp" />
     <ClCompile Include="web\webWindow.cpp" />
+    <ClCompile Include="web\webCommandBar.cpp" />
+    <ClCompile Include="web\webTableBox.cpp" />
     <ClCompile Include="web\webSizer.cpp" />
     <ClCompile Include="web\webTimer.cpp" />
     <ClCompile Include="web\webChildFrame.cpp" />
@@ -181,6 +183,20 @@
     <ClCompile Include="visualView\ctrl\checkboxEvent.cpp" />
     <ClCompile Include="visualView\ctrl\checkboxProperty.cpp" />
     <ClCompile Include="visualView\ctrl\checkbox_res.cpp" />
+    <ClCompile Include="visualView\ctrl\radiobutton.cpp" />
+    <ClCompile Include="visualView\ctrl\radiobutton_res.cpp" />
+    <ClCompile Include="visualView\ctrl\staticline.cpp" />
+    <ClCompile Include="visualView\ctrl\staticline_res.cpp" />
+    <ClCompile Include="visualView\ctrl\gauge.cpp" />
+    <ClCompile Include="visualView\ctrl\gauge_res.cpp" />
+    <ClCompile Include="visualView\ctrl\slider.cpp" />
+    <ClCompile Include="visualView\ctrl\slider_res.cpp" />
+    <ClCompile Include="visualView\ctrl\notebook.cpp" />
+    <ClCompile Include="visualView\ctrl\notebook_res.cpp" />
+    <ClCompile Include="visualView\ctrl\notebookPage.cpp" />
+    <ClCompile Include="visualView\ctrl\notebookPage_res.cpp" />
+    <ClCompile Include="visualView\ctrl\htmlBox.cpp" />
+    <ClCompile Include="visualView\ctrl\htmlBox_res.cpp" />
     <!-- Toolbar is ported, not stubbed: ibWebToolbar / ibWebToolBarItem
          / ibWebToolBarSeparator (web/webWindow.h) are real widgets, and
          the toolbar plus every companion file below is in this project,
@@ -244,6 +260,8 @@
     <ClInclude Include="web\webApplication.h" />
     <ClInclude Include="web\webFrame.h" />
     <ClInclude Include="web\webWindow.h" />
+    <ClInclude Include="web\webCommandBar.h" />
+    <ClInclude Include="web\webTableBox.h" />
     <ClInclude Include="web\webSizer.h" />
     <ClInclude Include="web\webTimer.h" />
     <ClInclude Include="web\webChildFrame.h" />

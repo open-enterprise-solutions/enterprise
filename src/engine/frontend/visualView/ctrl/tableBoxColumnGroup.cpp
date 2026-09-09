@@ -14,7 +14,7 @@
 // The runtime participants (column object + group object) live here.
 #include "tableBoxColumnRenderer.h"
 #else
-#include "frontend/web/webWindow.h"
+#include "frontend/web/webTableBox.h"
 #endif
 
 //***********************************************************************************
@@ -88,7 +88,7 @@ wxObject* ibValueModelTableBoxColumnGroup::Create(ibFrontendWindow* wxparent, ib
 {
 #ifdef OES_USE_WEB
 	(void)wxparent; (void)visualHost;
-	return new ibWebStubControl(wxT("tableboxcolumngroup"));
+	return new ibWebTableBoxColumnGroup(GetControlID());
 #else
 	return new ibDataViewColumnGroupObject(this, GetControlTitle(), GetGrouping(),
 		(wxAlignment)m_propertyHeaderAlign->GetValueAsEnum());
@@ -126,6 +126,16 @@ void ibValueModelTableBoxColumnGroup::OnUpdated(wxObject* wxobject, ibFrontendWi
 	// re-derive — the group is only data. The control is asked OF THE GROUP.
 	if (ibDataViewCtrl* dataViewCtrl = group->GetOwner())
 		dataViewCtrl->InvalidateColumnLayout();
+#else
+	// Same five answers, in the browser's spelling. The geometry a
+	// group decides is the client's to re-derive from them.
+	ibWebTableBoxColumnGroup* webGroup = static_cast<ibWebTableBoxColumnGroup*>(wxobject);
+
+	webGroup->SetCaption(GetControlTitle());
+	webGroup->SetGrouping(ibWebGroupingName(GetGrouping()));
+	webGroup->SetShowTitle(m_propertyShowTitle->GetValueAsBoolean());
+	webGroup->SetAlign(ibWebAlignName(m_propertyHeaderAlign->GetValueAsEnum()));
+	webGroup->SetVisibleGroup(m_propertyVisible->GetValueAsBoolean());
 #endif
 }
 

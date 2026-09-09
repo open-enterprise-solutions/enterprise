@@ -7,6 +7,7 @@
 
 #ifdef OES_USE_WEB
 #include <iostream>
+#include "frontend/visualView/ctrl/tableBox.h"   // a picker is a list in choice mode
 #include "frontend/web/webChildFrame.h"
 #include "frontend/web/webSizer.h"
 
@@ -34,6 +35,52 @@ void ibVisualHostClient::SetCaption(const wxString& strCaption)
 {
 	if (auto* tab = dynamic_cast<ibWebDocChildFrame*>(GetParent()))
 		tab->SetTitle(strCaption);
+}
+
+// A PICKER is a form whose list is in CHOICE MODE, and that is the whole test.
+// Choice mode reaches a form from one place only — the source a select form is
+// built on (ibDynamicListView_Choice in GetSelectForm / GetFolderSelectForm),
+// carried onto the main table at form build — so a list in choice mode was
+// opened to hand a value back and nothing else opens one.
+//
+// NOT "has an owner control", which was the first test here and was wrong twice
+// over. An object form opened from a list carries an owner too, so it can tell
+// the list what was created — and a new document came back marked as a dialog.
+// And GetOwnerControl() casts to ibValueFrame, which the quick filter's owner is
+// not, so that test would have quietly missed the picker it opens.
+bool ibVisualHostClient::IsPickerHost() const
+{
+	ibValueForm* const form = GetValueForm();
+	if (form == nullptr)
+		return false;
+	const auto* table = dynamic_cast<const ibValueModelTableBox*>(form->GetCommandProvider());
+	return table != nullptr && table->IsChoiceMode();
+}
+
+nlohmann::json ibVisualHostClient::ToJSON() const
+{
+	// The nodes are written by the controls' Update and read from here without
+	// running it again, so anything that moved underneath a control since —
+	// a model's rows, a sort on the composer — is pushed now, once per control,
+	// through the pairs the index holds. A sizer has no entry and no such state.
+	m_controls.ForEach([](ibValueFrame* control, wxObject* object) {
+		if (control != nullptr && object != nullptr)
+			control->SyncWebNode(object);
+	});
+
+	auto node = ibWebWindow::ToJSON();
+
+	if (IsPickerHost())
+		node["modal"] = true;
+
+	// The form's own resolved title — its Title property, or the synonym of what
+	// it shows. Not the tab's copy: that one is taken when the tab is made and
+	// never moves again on this front, and the host is not parented to its tab
+	// yet the first time this runs.
+	if (const ibValueForm* const form = GetValueForm())
+		node["caption"] = form->GetControlTitle();
+
+	return node;
 }
 
 #else  // !OES_USE_WEB
@@ -96,6 +143,7 @@ void ibVisualHostClient::OnClickFromApp(wxWindow* currentWindow, wxMouseEvent& e
 	}
 }
 
+#include "frontend/visualView/ctrl/tableBox.h"   // a picker is a list in choice mode
 #include "backend/metaCollection/partial/commonObject.h"
 
 void ibVisualHostClient::SetCaption(const wxString& strCaption)

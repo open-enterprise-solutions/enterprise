@@ -3,6 +3,35 @@
 
 #include <algorithm>
 
+#include "frontend/visualView/ctrl/frame.h"   // wxDefaultStype{BG,FG}Colour
+#include "backend/fontcontainer.h"            // what an unchosen Font resolves to
+
+bool ibWebIsPlatformPaper(const wxColour& colour)
+{
+	return colour == wxDefaultStypeBGColour || colour == *wxWHITE;
+}
+
+bool ibWebIsPlatformInk(const wxColour& colour)
+{
+	return colour == wxDefaultStypeFGColour;
+}
+
+bool ibWebIsPlatformFont(const wxFont& font)
+{
+	// What an unchosen Font property resolves to on THIS machine: the container's
+	// defaults, put through the same GetFont() the value layer uses, so the
+	// substituted system size is the one being compared against rather than a
+	// number written down here.
+	static const wxFont platform = wxFontContainer().GetFont();
+
+	return font.IsOk() && platform.IsOk()
+		&& font.GetPointSize()  == platform.GetPointSize()
+		&& font.GetFaceName()   == platform.GetFaceName()
+		&& font.GetWeight()     == platform.GetWeight()
+		&& font.GetStyle()      == platform.GetStyle()
+		&& font.GetUnderlined() == platform.GetUnderlined();
+}
+
 // Definitions for the textctrl side-button events declared in webWindow.h
 // (web build). Kept here so wfrontend.dll has its own symbols, parallel
 // to the desktop definitions in win/ctrls/controlTextEditor.cpp. The
@@ -13,6 +42,7 @@ wxDEFINE_EVENT(wxEVT_CONTROL_BUTTON_CLEAR,  wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_CONTROL_TEXT_ENTER,    wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_CONTROL_TEXT_INPUT,    wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_CONTROL_TEXT_CLEAR,    wxCommandEvent);
+wxDEFINE_EVENT(wxEVT_WEB_NOTEBOOK_PAGE_CHANGED, wxCommandEvent);
 
 // Web-local id generator: the same shape wx events themselves use —
 // an event carries an id, either passed explicitly or auto-assigned
@@ -60,6 +90,17 @@ ibWebWindow::~ibWebWindow()
 	// briefly while Remove() runs on them.
 	delete m_sizer;
 	m_sizer = nullptr;
+
+	delete m_commandBar;
+	m_commandBar = nullptr;
+}
+
+void ibWebWindow::SetCommandBar(ibWebToolbar* bar)
+{
+	if (m_commandBar == bar)
+		return;
+	delete m_commandBar;
+	m_commandBar = bar;
 }
 
 void ibWebWindow::SetParent(ibWebWindow* parent)
@@ -120,13 +161,13 @@ nlohmann::json ibWebWindow::ToJSON() const
 	// font as a small object the browser can stitch into inline
 	// style. Tooltip is just the plain string, surfaces as the
 	// element's `title` attribute client-side.
-	if (m_fg.IsOk()) {
+	if (m_fg.IsOk() && !ibWebIsPlatformInk(m_fg)) {
 		node["fg"] = m_fg.GetAsString(wxC2S_HTML_SYNTAX);
 	}
-	if (m_bg.IsOk()) {
+	if (m_bg.IsOk() && !ibWebIsPlatformPaper(m_bg)) {
 		node["bg"] = m_bg.GetAsString(wxC2S_HTML_SYNTAX);
 	}
-	if (m_font.IsOk()) {
+	if (m_font.IsOk() && !ibWebIsPlatformFont(m_font)) {
 		nlohmann::json f = {
 			{ "size",   m_font.GetPointSize() },
 			{ "family", m_font.GetFaceName() },
@@ -154,6 +195,10 @@ nlohmann::json ibWebWindow::ToJSON() const
 		if (m_maxSize.GetHeight() > 0) s["h"] = m_maxSize.GetHeight();
 		if (!s.empty()) node["maxSize"] = std::move(s);
 	}
+
+	// Beside the children, not among them: a table's children are its columns.
+	if (m_commandBar != nullptr)
+		node["commandbar"] = m_commandBar->ToJSON();
 
 	if (!m_children.empty() || m_sizer != nullptr) {
 		nlohmann::json arr = nlohmann::json::array();

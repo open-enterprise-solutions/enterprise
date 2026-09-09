@@ -1,0 +1,9 @@
+{
+  "license": "MIT",
+  "package": "tabulator-tables",
+  "sha256": {
+    "tabulator.css": "04db955d165fa3b47f67a9cc45fe1a36e5e30756c6e4d5f9f4b270c32300f15c",
+    "tabulator.js": "9b0a22f64e2df07a211859e67f842209b1265f413bd7cd93539bf69ddbbe2022"
+  },
+  "version": "6.5.2"
+}

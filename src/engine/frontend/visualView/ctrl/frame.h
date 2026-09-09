@@ -316,6 +316,15 @@ public:
 	 */
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) {};
 
+	// Bring the control's web node up to date right before the host tree is
+	// serialised. Every other property reaches the node through Update, and the
+	// tree is serialised from the nodes without running that again; what changes
+	// underneath a control without passing through it — a model's row counter, a
+	// sort committed straight to the composer — is pushed here. The web host calls
+	// this on every control in its index before each ToJSON. Nothing on desktop
+	// calls it, and the base does nothing.
+	virtual void SyncWebNode(wxObject* node) const { (void)node; }
+
 public:
 
 	// call current event — ask the event for its dispatcher (a named-event value or a lambda, both ibEventDispatcher)

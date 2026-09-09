@@ -9,6 +9,9 @@
 #include "frontend/visualView/layers/commandBar.h"  // ibValueCommandBar (store, web-safe) + BuildCommandBarToolBar
 #ifndef OES_USE_WEB
 #include "frontend/visualView/canvasWindow.h"   // ibCanvasWindow — layer canvas
+#else
+#include "frontend/web/webWindow.h"             // ibWebWindow — the node a bar hangs on
+#include "frontend/web/webCommandBar.h"         // ibWebBuildCommandBar
 #endif
 
 
@@ -257,8 +260,21 @@ void ibValueWindowComposite::UpdateWithLayers(wxObject* wxobject, ibVisualHost* 
 		chrome->Show(!IsSourceMissing());
 		return;
 	}
-#else 
+#else
 	Update(wxobject, visualHost);
+
+	// The web twin of the layer refresh above. There is no chrome window to
+	// hang parts on, so the bar is a field of the control's own node -- and the
+	// same suppression applies: HasCommandBar() is false while the control is
+	// bound to the form's main source, and the field goes away rather than
+	// duplicating the form's own strip.
+	if (auto* web = dynamic_cast<ibWebWindow*>(wxobject)) {
+		ibValueForm* const owner = GetOwnerForm();
+		web->SetCommandBar(ibWebBuildCommandBar(
+			HasCommandBar() ? GetCommandBar() : nullptr,
+			owner != nullptr ? owner->GetMetaData() : nullptr,
+			GetControlID()));
+	}
 #endif
 }
 

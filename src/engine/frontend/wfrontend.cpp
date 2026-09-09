@@ -256,9 +256,13 @@ public:
 	// Defined after OpenFormInSession below — needs the helper in scope.
 	std::string OpenForm(const std::string& id, int metaID);
 	std::string FireAction(const std::string& id, int controlID);
-	std::string FireKind(const std::string& id, int controlID, const std::string& kind);
+	std::string FireKind(const std::string& id, int controlID, const std::string& kind,
+		const std::string& value);
 	std::string FireTextChange(const std::string& id, int controlID, const std::string& newValue);
 	std::string FireToggle(const std::string& id, int controlID, bool checked);
+	std::string FetchRows(const std::string& id, int controlID,
+		const std::string& dir, int count);
+	std::string FireCommand(const std::string& id, int actionID, int ownerControlID);
 	bool        ModalReply(const std::string& id, const std::string& modalId, int result);
 	std::string ActiveHostJSON(const std::string& id);
 
@@ -268,6 +272,11 @@ public:
 	// while the session is in the map — idle-sweep may erase in the
 	// meantime; the caller's `wait_for` timeout is the safety net.
 	ibWebApplication* FindApp(const std::string& id);
+
+	// The session's live signal, pinned. Unlike FindApp this hands back
+	// something the caller may hold on to after the lock is gone -- which is
+	// what an SSE subscriber needs, since it then blocks for half a minute.
+	std::shared_ptr<ibWebLiveSignal> FindLiveSignal(const std::string& id);
 
 	std::string SessionInfo(const std::string& id);
 	std::string ActivateTab(const std::string& id, int tabIndex);
@@ -950,9 +959,12 @@ WFRONTEND_API void wfrontendSetProcessExitHook(void (*hook)())
 		auto* reg = ibApplicationData::GetSessionRegistry();
 		if (reg == nullptr) return;
 
-		// Keep-alive predicate: wes process stays up while at least
-		// one WebClient session is registered against the WebServer.
+		// A plain wes is a persistent multi-user service; zero clients is
+		// an ordinary idle state. Only a debug-spawned one-shot wes lets
+		// its client count decline process keep-alive.
 		reg->OnShouldKeepAlive([]() {
+			if (!wfrontendDebugMode())
+				return true;
 			auto* r = ibApplicationData::GetSessionRegistry();
 			return r != nullptr && r->HasClients();
 		});
@@ -1107,6 +1119,31 @@ WFRONTEND_API std::string wfrontendTabIconPNG(const std::string& sessionId, int 
 
 namespace {
 
+// The active tree as the browser receives it: the host's JSON with the
+// session's live sequence on its root, or "{}" when there is no host.
+//
+// The sequence is read AFTER the road's own MarkDirty and BEFORE the tree
+// is built, so the number a payload carries is never newer than the state
+// it shows. Most roads run on the session worker, where nothing can change
+// the tree between the read and the serialisation; /form runs on the HTTP
+// thread under a session scope, where a worker task can land in between —
+// and that only makes this tree go out under a number older than its
+// state, which is the safe direction. The browser keeps the last sequence
+// it applied per host and drops a tree whose sequence is not above it: the
+// stream echoing the state a direct response already delivered arrives
+// under the same number and is ignored, while a bump that landed after this
+// read only makes the next tree arrive under a higher one — a repeat, never
+// a loss.
+std::string HostTreeJSON(ibWebApplication* app, ibVisualHostClient* host)
+{
+	if (host == nullptr)
+		return "{}";
+	const std::uint64_t seq = app != nullptr ? app->CurrentSeq() : 0;
+	nlohmann::json tree = host->ToJSON();
+	tree["seq"] = seq;
+	return tree.dump(2);
+}
+
 // Open-form implementation, reached via the session manager's slot.
 std::string OpenFormInSession(ibWebSession* session, int metaID)
 {
@@ -1183,7 +1220,7 @@ std::string OpenFormInSession(ibWebSession* session, int metaID)
 	// host's tree is fresh — just serialise.
 	app->MarkDirty();
 
-	return host->ToJSON().dump(2);
+	return HostTreeJSON(app, host);
 }
 
 } // namespace
@@ -1308,8 +1345,7 @@ std::string FireActionInSession(ibWebSession* session, int controlID)
 		catch (...) {
 			return R"({"error":"unknown exception"})";
 		}
-		ibVisualHostClient* host = app->GetActiveHost();
-		return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+		return HostTreeJSON(app, app->GetActiveHost());
 	}).get();
 }
 
@@ -1337,16 +1373,17 @@ WFRONTEND_API std::string wfrontendFireAction(const std::string& sessionId, int 
 
 namespace {
 std::string FireKindInSession(ibWebSession* session, int controlID,
-	const std::string& kind)
+	const std::string& kind, const std::string& value)
 {
 	if (session == nullptr || !session->IsAuthenticated()) return "{}";
 	ibWebApplication* app = session->App();
 	if (app == nullptr) return "{}";
 
-	return app->RunOnWorker([app, controlID, kind]() -> std::string {
+	return app->RunOnWorker([app, controlID, kind, value]() -> std::string {
 		try {
 			const wxString wkind(kind.c_str(), wxConvUTF8);
-			if (!app->Dispatch(controlID, wkind, wxString()))
+			const wxString wvalue(value.c_str(), wxConvUTF8);
+			if (!app->Dispatch(controlID, wkind, wvalue))
 				return "{}";
 		}
 		catch (const ibBackendException& e) {
@@ -1355,14 +1392,13 @@ std::string FireKindInSession(ibWebSession* session, int controlID,
 		catch (...) {
 			return R"({"error":"unknown exception"})";
 		}
-		ibVisualHostClient* host = app->GetActiveHost();
-		return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+		return HostTreeJSON(app, app->GetActiveHost());
 	}).get();
 }
 } // namespace
 
 std::string SessionManager::FireKind(const std::string& id, int controlID,
-	const std::string& kind)
+	const std::string& kind, const std::string& value)
 {
 	std::shared_ptr<ibWebSession> keeper;
 	ibWebSession* s = nullptr;
@@ -1373,14 +1409,103 @@ std::string SessionManager::FireKind(const std::string& id, int controlID,
 		keeper = it->second;
 		s = keeper.get();
 	}
-	return FireKindInSession(s, controlID, kind);
+	return FireKindInSession(s, controlID, kind, value);
 }
 
 WFRONTEND_API std::string wfrontendFireKind(const std::string& sessionId,
-	int controlID, const std::string& kind)
+	int controlID, const std::string& kind, const std::string& value)
 {
 	Sessions().Touch(sessionId);
-	return Sessions().FireKind(sessionId, controlID, kind);
+	return Sessions().FireKind(sessionId, controlID, kind, value);
+}
+
+namespace {
+std::string FireCommandInSession(ibWebSession* session, int actionID, int ownerControlID)
+{
+	if (session == nullptr || !session->IsAuthenticated()) return "{}";
+	ibWebApplication* app = session->App();
+	if (app == nullptr) return "{}";
+
+	return app->RunOnWorker([app, actionID, ownerControlID]() -> std::string {
+		try {
+			if (!app->DispatchCommand(actionID, ownerControlID))
+				return "{}";
+		}
+		catch (const ibBackendException& e) {
+			return ExceptionToJson(e);
+		}
+		catch (...) {
+			return R"({"error":"unknown exception"})";
+		}
+		return HostTreeJSON(app, app->GetActiveHost());
+	}).get();
+}
+} // namespace
+
+std::string SessionManager::FireCommand(const std::string& id, int actionID, int ownerControlID)
+{
+	std::shared_ptr<ibWebSession> keeper;
+	ibWebSession* s = nullptr;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		auto it = m_sessions.find(id);
+		if (it == m_sessions.end()) return "{}";
+		keeper = it->second;
+		s = keeper.get();
+	}
+	return FireCommandInSession(s, actionID, ownerControlID);
+}
+
+WFRONTEND_API std::string wfrontendFireCommand(const std::string& sessionId,
+	int actionID, int ownerControlID)
+{
+	Sessions().Touch(sessionId);
+	return Sessions().FireCommand(sessionId, actionID, ownerControlID);
+}
+
+namespace {
+std::string FetchRowsInSession(ibWebSession* session, int controlID,
+	const std::string& dir, int count)
+{
+	if (session == nullptr || !session->IsAuthenticated()) return R"({"ok":false,"reason":"no session"})";
+	ibWebApplication* app = session->App();
+	if (app == nullptr) return R"({"ok":false,"reason":"no session"})";
+
+	return app->RunOnWorker([app, controlID, dir, count]() -> std::string {
+		try {
+			const wxString wdir(dir.c_str(), wxConvUTF8);
+			return app->FetchRows(controlID, wdir, count);
+		}
+		catch (const ibBackendException& e) {
+			return ExceptionToJson(e);
+		}
+		catch (...) {
+			return R"({"ok":false,"error":"unknown exception"})";
+		}
+	}).get();
+}
+} // namespace
+
+std::string SessionManager::FetchRows(const std::string& id, int controlID,
+	const std::string& dir, int count)
+{
+	std::shared_ptr<ibWebSession> keeper;
+	ibWebSession* s = nullptr;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		auto it = m_sessions.find(id);
+		if (it == m_sessions.end()) return R"({"ok":false,"reason":"no session"})";
+		keeper = it->second;
+		s = keeper.get();
+	}
+	return FetchRowsInSession(s, controlID, dir, count);
+}
+
+WFRONTEND_API std::string wfrontendFetchRows(const std::string& sessionId,
+	int controlID, const std::string& dir, int count)
+{
+	Sessions().Touch(sessionId);
+	return Sessions().FetchRows(sessionId, controlID, dir, count);
 }
 
 namespace {
@@ -1403,8 +1528,7 @@ std::string FireTextChangeInSession(ibWebSession* session, int controlID,
 		catch (...) {
 			return R"({"error":"unknown exception"})";
 		}
-		ibVisualHostClient* host = app->GetActiveHost();
-		return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+		return HostTreeJSON(app, app->GetActiveHost());
 	}).get();
 }
 } // namespace
@@ -1449,8 +1573,7 @@ std::string FireToggleInSession(ibWebSession* session, int controlID, bool check
 		catch (...) {
 			return R"({"error":"unknown exception"})";
 		}
-		ibVisualHostClient* host = app->GetActiveHost();
-		return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+		return HostTreeJSON(app, app->GetActiveHost());
 	}).get();
 }
 } // namespace
@@ -1659,13 +1782,25 @@ WFRONTEND_API std::string wfrontendOpenMetaObject(const std::string& sessionId,
 		const auto type = static_cast<ibInterfaceCommandType>(cmdType);
 		if (!cmdItem->Execute(type))
 			return "{}";
-		ibVisualHostClient* host = app->GetActiveHost();
+		// Execute may have opened a form (which bumps on its own) or only
+		// activated a tab that was already open (which does not); the tree
+		// returned is new to the browser either way.
+		app->MarkDirty();
 		try {
-			return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+			return HostTreeJSON(app, app->GetActiveHost());
 		} catch (...) {
 			return std::string("{}");
 		}
 	}).get();
+}
+
+std::shared_ptr<ibWebLiveSignal> SessionManager::FindLiveSignal(const std::string& id)
+{
+	std::lock_guard<std::mutex> lock(m_mutex);
+	auto it = m_sessions.find(id);
+	if (it == m_sessions.end() || it->second == nullptr) return nullptr;
+	ibWebApplication* app = it->second->App();
+	return app != nullptr ? app->LiveSignal() : nullptr;
 }
 
 ibWebApplication* SessionManager::FindApp(const std::string& id)
@@ -1720,9 +1855,8 @@ std::string SessionManager::ActiveHostJSON(const std::string& id)
 	ibWebApplication* app = s->App();
 	if (app == nullptr) return "{}";
 	return app->RunOnWorker([app]() -> std::string {
-		ibVisualHostClient* host = app->GetActiveHost();
 		try {
-			return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+			return HostTreeJSON(app, app->GetActiveHost());
 		}
 		catch (...) {
 			return std::string("{}");
@@ -1739,25 +1873,26 @@ WFRONTEND_API std::string wfrontendActiveHostJSON(const std::string& sessionId)
 WFRONTEND_API WfrontendLiveUpdate wfrontendLiveWait(
 	const std::string& sessionId, std::uint64_t lastSeen, int timeoutMs)
 {
-	// Pin the session in scope so it can't be swept out from under the
-	// waiter. `Sessions().m_mutex` only guards the map — the session
-	// object itself is owned by the unique_ptr in the map, which the
-	// idle-sweep may erase. Take the mutex briefly, grab the raw ptr,
-	// drop the mutex, wait on the app's CV. If the session dies mid-wait
-	// the CV won't fire from our side — rely on the timeout to release.
-	// Future hardening: shared_ptr<ibWebSession> so the waiter pins
-	// lifetime. For today's synchronous flow the timeout is acceptable.
+	// The waiter parks here for up to 25 seconds, and the session behind it
+	// can be swept in that window. Waiting on the application's own mutex and
+	// condition variable meant waiting on an object the sweep was free to
+	// destroy, and the process aborted when it did: close a browser tab that
+	// had an open stream, and the next session teardown ran into a waiter
+	// still parked on the freed application. The signal is owned by
+	// shared_ptr and pinned here for the whole wait, and the application
+	// closes it on the way out -- so the waiter is woken by the teardown
+	// rather than outliving it.
 	Sessions().Touch(sessionId);
 
-	ibWebApplication* app = Sessions().FindApp(sessionId);
-	if (app == nullptr) {
+	std::shared_ptr<ibWebLiveSignal> live = Sessions().FindLiveSignal(sessionId);
+	if (!live) {
 		WfrontendLiveUpdate r;
 		r.seq  = lastSeen;
 		r.json = "{}";
 		return r;
 	}
 
-	const std::uint64_t newSeq = app->WaitForChange(lastSeen, timeoutMs);
+	const std::uint64_t newSeq = live->Wait(lastSeen, timeoutMs);
 
 	WfrontendLiveUpdate r;
 	r.seq  = newSeq;
@@ -1835,6 +1970,13 @@ std::string SessionInfoFromSession(ibWebSession* s)
 			t["title"] = tab->GetTitle();
 			t["hasIcon"] = tab->GetIcon().IsOk();
 			if (auto* host = tab->GetHost()) {
+				// The id the host's tree carries at its root. The browser keeps
+				// one mounted DOM per host and needs to know, from the strip
+				// alone, which mounts still have a tab behind them.
+				t["host"] = host->GetControlId();
+				// A picker is drawn as a dialog over the form that asked, so the
+				// strip does not offer it as somewhere to go.
+				t["modal"] = host->IsPickerHost();
 				if (auto* form = host->GetValueForm()) {
 					wxString name = form->GetControlTitle();
 					if (name.IsEmpty()) {
@@ -1905,9 +2047,10 @@ WFRONTEND_API std::string wfrontendSessionInfoJSON(const std::string& sessionId)
 
 namespace {
 
-// Shared helper: switch the frame's active tab index and re-walk the new
-// active host so the browser gets the switched-to form's JSON back as
-// the response body. "{}" on any precondition miss.
+// Shared helper: switch the frame's active tab index and serialise the
+// new active host, which has stayed current through its controls'
+// setters — no rebuild — so the browser gets the switched-to form's JSON
+// back as the response body. "{}" on any precondition miss.
 std::string ActivateTabInSession(ibWebSession* session, int tabIndex)
 {
 	if (session == nullptr || !session->IsAuthenticated())
@@ -1915,10 +2058,10 @@ std::string ActivateTabInSession(ibWebSession* session, int tabIndex)
 	ibWebApplication* app = session->App();
 	if (app == nullptr) return "{}";
 
-	// Route through the session worker — tab switching rebuilds the
-	// control tree, same shared state the worker's script runs touch.
-	// Doing it on the HTTP thread lets timer ticks / pending dispatches
-	// race with the rebuild and crash on half-destroyed nodes.
+	// Route through the session worker — the tab list and the host trees
+	// are the same shared state the worker's script runs touch. Doing it
+	// on the HTTP thread would let timer ticks / pending dispatches race
+	// with the switch.
 	return app->RunOnWorker([app, tabIndex]() -> std::string {
 		ibWebFrame* frame = app->GetFrame();
 		if (frame == nullptr) return "{}";
@@ -1936,7 +2079,7 @@ std::string ActivateTabInSession(ibWebSession* session, int tabIndex)
 		// Switching active tab is metadata-only (frame->SetActiveTab) —
 		// the destination host's JSON is already current.
 		app->MarkDirty();
-		return host->ToJSON().dump(2);
+		return HostTreeJSON(app, host);
 	}).get();
 }
 
@@ -1964,8 +2107,11 @@ std::string CloseTabInSession(ibWebSession* session, int tabIndex)
 		if (!frame->CloseTab(static_cast<std::size_t>(tabIndex))) {
 			ibWebDocChildFrame* tab = frame->Tab(frame->ActiveTab());
 			if (tab == nullptr) return "{}";
-			ibVisualHostClient* host = tab->GetHost();
-			return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+			// beforeClose ran and may have changed the form; and a tree the
+			// browser must apply has to arrive under a sequence it has not
+			// seen, or the retained DOM would treat it as a repeat.
+			app->MarkDirty();
+			return HostTreeJSON(app, tab->GetHost());
 		}
 
 		// CloseTab now only marks the form for close. Drain here so the
@@ -1981,7 +2127,7 @@ std::string CloseTabInSession(ibWebSession* session, int tabIndex)
 		// No rebuild: the now-active tab's tree has been kept in sync
 		// with its form's state through control setters; just serialise.
 		app->MarkDirty();
-		return host->ToJSON().dump(2);
+		return HostTreeJSON(app, host);
 	}).get();
 }
 

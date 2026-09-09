@@ -1,0 +1,36 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>OES renderer development harness</title>
+<style>
+:root{color-scheme:light dark}
+body{margin:0;font:14px/1.4 system-ui,sans-serif;background:Canvas;color:CanvasText}
+header{padding:.75rem 1rem;border-bottom:1px solid ButtonBorder}
+h1{font-size:1.25rem;margin:0}header p{margin:.25rem 0 0}
+#comparison{display:grid;grid-template-columns:1fr;gap:1rem;padding:1rem}
+.sample{display:flex;flex-direction:column;min-width:0;height:calc(100vh - 7rem);border:1px solid ButtonBorder;background:Canvas}
+.sample h2{font-size:1rem;margin:0;padding:.5rem .75rem;border-bottom:1px solid ButtonBorder}
+iframe{display:block;flex:1 1 auto;width:100%;min-height:0;border:0;background:white}
+</style></head><body>
+<header><h1>Development harness — not a product page</h1>
+<p>A captured form JSON is injected into a real client page, so a form can be
+drawn and looked at without a server standing behind it.</p></header>
+<main id="comparison">
+  <section class="sample"><h2>Renderer</h2><iframe title="Renderer"></iframe></section>
+</main>
+<script type="module">
+const fixtureResponse=await fetch('./harness-form.json');
+if(!fixtureResponse.ok) throw new Error('Fixture request failed: '+fixtureResponse.status);
+const fixture=await fixtureResponse.json();
+const frame=document.querySelector('iframe');
+
+window.addEventListener('message',event=>{
+  if(event.origin!==location.origin || !event.data || event.data.type!=='oes-renderer-ready') return;
+  if(event.source!==frame.contentWindow) return;
+  event.source.postMessage({type:'oes-render-fixture',fixture},location.origin);
+});
+
+// The client URL is one level above this assets page.
+const clientUrl=new URL('../',location.href);
+clientUrl.searchParams.set('harness','1');
+frame.src=clientUrl;
+</script></body></html>

@@ -1,6 +1,7 @@
 #include "visualHostClient.h"
 
 #include "backend/metaCollection/partial/commonObject.h"
+#include "backend/session/session.h"   // ibSession::Current — whose document is whose
 
 #ifdef OES_USE_WEB
 #include <iostream>
@@ -164,7 +165,7 @@ ibView* ibFormVisualDocument::DoCreateView()
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 ibFormVisualDocument::ibFormVisualDocument(ibValueForm* valueForm)
-	: m_valueForm(valueForm) {
+	: m_valueForm(valueForm), m_ownerSession(ibSession::Current()) {
 
 	if (m_valueForm != nullptr) {
 
@@ -172,6 +173,13 @@ ibFormVisualDocument::ibFormVisualDocument(ibValueForm* valueForm)
 	}
 
 	s_createdDocFormArray.insert(this);
+}
+
+bool ibFormVisualDocument::IsVisibleToCurrentSession() const
+{
+	const ibSession* const current = ibSession::Current();
+	return m_ownerSession == nullptr || current == nullptr
+		|| m_ownerSession == current;
 }
 
 ibFormVisualDocument::~ibFormVisualDocument()
@@ -226,7 +234,8 @@ ibValueForm* ibFormVisualDocument::FindFormByUniqueKey(const ibUniqueKey& formKe
 		std::set<ibFormVisualDocument*>::iterator foundedForm =
 			std::find_if(s_createdDocFormArray.begin(), s_createdDocFormArray.end(),
 				[formKey](const ibFormVisualDocument* visualDoc) {
-					return visualDoc->CompareFormKey(formKey);
+					return visualDoc->IsVisibleToCurrentSession()
+						&& visualDoc->CompareFormKey(formKey);
 				}
 			);
 
@@ -247,6 +256,7 @@ ibValueForm* ibFormVisualDocument::FindFormByControlUniqueKey(const ibUniqueKey&
 			std::find_if(s_createdDocFormArray.begin(), s_createdDocFormArray.end(),
 				[formKey](const ibFormVisualDocument* visualDoc) {
 					wxASSERT(visualDoc);
+					if (!visualDoc->IsVisibleToCurrentSession()) return false;
 					ibValueForm* valueForm = visualDoc->GetValueForm();
 					wxASSERT(valueForm);
 					ibValueFrame* ownerControl = valueForm->GetOwnerControl();
@@ -271,6 +281,7 @@ ibValueForm* ibFormVisualDocument::FindFormBySourceUniqueKey(const ibUniqueKey& 
 		std::set<ibFormVisualDocument*>::iterator foundedSourceForm =
 			std::find_if(s_createdDocFormArray.begin(), s_createdDocFormArray.end(),
 				[formKey](const ibFormVisualDocument* visualDoc) {
+					if (!visualDoc->IsVisibleToCurrentSession()) return false;
 					ibValueForm* valueForm = visualDoc->GetValueForm();
 					wxASSERT(valueForm);
 					ibSourceDataObject* sourceObject = valueForm->GetSourceObject();
@@ -293,6 +304,7 @@ ibFormVisualDocument* ibFormVisualDocument::FindDocByUniqueKey(const ibUniqueKey
 {
 	for (auto& visualDocument : s_createdDocFormArray) {
 		if (visualDocument != nullptr &&
+			visualDocument->IsVisibleToCurrentSession() &&
 			visualDocument->CompareFormKey(formKey))
 		{
 			return visualDocument;
@@ -320,6 +332,7 @@ bool ibFormVisualDocument::UpdateFormUniqueKey(const ibUniqueKeyPair& formKey)
 		std::find_if(s_createdDocFormArray.begin(), s_createdDocFormArray.end(),
 			[formKey](const ibFormVisualDocument* visualDoc) {
 				return visualDoc != nullptr &&
+					visualDoc->IsVisibleToCurrentSession() &&
 					visualDoc->GetFormKey().GetGuid() == formKey.GetGuid();
 			}
 		);

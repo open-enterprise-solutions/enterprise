@@ -2,6 +2,10 @@
 #include "widgets.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
+#include "form.h"
+#ifdef OES_USE_WEB
+#include "frontend/web/webWindow.h"
+#endif
 
 
 //****************************************************************************
@@ -12,8 +16,15 @@ ibValueSlider::ibValueSlider() : ibValueWindow()
 {
 }
 
-wxObject* ibValueSlider::Create(wxWindow* wxparent, ibVisualHost* visualHost)
+wxObject* ibValueSlider::Create(ibFrontendWindow* wxparent, ibVisualHost* visualHost)
 {
+#ifdef OES_USE_WEB
+	(void)wxparent;
+	(void)visualHost;
+	auto* slider = new ibWebSlider(GetControlID());
+	slider->Bind(wxEVT_SLIDER, &ibValueSlider::OnWebSliderChanged, this);
+	return slider;
+#else
 	wxSlider* slider = new wxSlider(wxparent, wxID_ANY,
 		m_propertyValue->GetValueAsInteger(),
 		m_propertyMinValue->GetValueAsInteger(),
@@ -24,14 +35,26 @@ wxObject* ibValueSlider::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	);
 
 	return slider;
+#endif
 }
 
-void ibValueSlider::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
+void ibValueSlider::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 
 void ibValueSlider::Update(wxObject* wxobject, ibVisualHost* visualHost)
 {
+#ifdef OES_USE_WEB
+	(void)visualHost;
+	auto* slider = static_cast<ibWebSlider*>(wxobject);
+
+	if (slider != nullptr) {
+		slider->SetRange(m_propertyMinValue->GetValueAsInteger(),
+			m_propertyMaxValue->GetValueAsInteger());
+		slider->SetValue(m_propertyValue->GetValueAsInteger());
+		slider->SetOrientation(m_propertyOrient->GetValueAsInteger());
+	}
+#else
 	wxSlider* slider = dynamic_cast<wxSlider*>(wxobject);
 
 	if (slider != nullptr) {
@@ -51,17 +74,38 @@ void ibValueSlider::Update(wxObject* wxobject, ibVisualHost* visualHost)
 		);
 		slider->Show(isShown);	
 	}
+#endif
 
 	UpdateWindow(slider);
 }
 
-void ibValueSlider::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost)
+void ibValueSlider::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost)
 {
 }
 
 void ibValueSlider::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 {
+#ifdef OES_USE_WEB
+	(void)visualHost;
+	if (auto* slider = static_cast<ibWebSlider*>(obj))
+		slider->Unbind(wxEVT_SLIDER, &ibValueSlider::OnWebSliderChanged, this);
+#endif
 }
+
+#ifdef OES_USE_WEB
+//*******************************************************************
+//*                             Events                              *
+//*******************************************************************
+
+void ibValueSlider::OnWebSliderChanged(wxCommandEvent& event)
+{
+	// Nothing else holds a slider's position -- no source binding, no script
+	// member -- so the property is the only place it can be kept, and a
+	// position not kept anywhere would snap back on the next refresh.
+	m_propertyValue->SetValue(event.GetInt());
+	event.Skip();
+}
+#endif
 
 //*******************************************************************
 //*                           Property                              *

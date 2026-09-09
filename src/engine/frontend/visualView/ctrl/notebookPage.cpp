@@ -1,6 +1,12 @@
 #include "notebook.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#ifdef OES_USE_WEB
+#include "frontend/web/webWindow.h"
+#include "frontend/web/webSizer.h"
+#include "backend/backend_picture.h"   // bitmap -> data URI
+#else
 #include "frontend/visualView/pageWindow.h"
+#endif
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -15,13 +21,33 @@ ibValueNotebookPage::ibValueNotebookPage() : ibValueControl()
 {
 }
 
-wxObject* ibValueNotebookPage::Create(wxWindow* wxparent, ibVisualHost* visualHost)
+wxObject* ibValueNotebookPage::Create(ibFrontendWindow* wxparent, ibVisualHost* visualHost)
 {
+#ifdef OES_USE_WEB
+    (void)wxparent;
+    (void)visualHost;
+    auto* page = new ibWebNotebookPage(GetControlID());
+    // The page carries a box sizer of its own, as ibPanelPage does, and the
+    // walker hands its contents to that rather than to the page: it is what
+    // the layout params on them are addressed to.
+    page->SetSizer(new ibWebBoxSizer(m_propertyOrient->GetValueAsInteger()));
+    return page;
+#else
     return new ibPanelPage(wxparent, wxID_ANY);
+#endif
 }
 
-void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
+void ibValueNotebookPage::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
+#ifdef OES_USE_WEB
+    // The notebook adopts its pages through the walker's SetParent, and which
+    // one is in front is the notebook's own state -- there is nothing to add
+    // to a strip here.
+    (void)wxobject;
+    (void)wxparent;
+    (void)visualHost;
+    (void)firstCreated;
+#else
     ibPanelPage* page = dynamic_cast<ibPanelPage*>(wxobject);
     wxASSERT(page);
 
@@ -43,10 +69,46 @@ void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVi
     if (visualHost->IsDesignerHost()) {
         page->PushEventHandler(g_visualHostContext->GetHighlightPaintHandler(page));
     }
+#endif
 }
 
-void ibValueNotebookPage::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost)
+void ibValueNotebookPage::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost)
 {
+#ifdef OES_USE_WEB
+    (void)wxparent;
+    (void)visualHost;
+    auto* page = static_cast<ibWebNotebookPage*>(wxobject);
+    if (page == nullptr)
+        return;
+
+    // Representation reads the same four ways a tool's does, Auto meaning
+    // "whatever there is": the caption, the picture, or both.
+    const wxBitmap bmp = m_propertyPicture->GetValueAsBitmap();
+    const bool hasPicture = bmp.IsOk();
+    ibRepresentation rep = m_propertyRepresentation->GetValueAsEnum();
+    if (rep == ibRepresentation::ibRepresentation_Auto) {
+        rep = hasPicture ? ibRepresentation::ibRepresentation_PictureAndText
+                         : ibRepresentation::ibRepresentation_Text;
+    }
+
+    wxString pictureUri;
+    if (hasPicture) {
+        const wxString b64 = ibBackendPicture::CreateBase64Image(bmp.ConvertToImage());
+        if (!b64.IsEmpty())
+            pictureUri = wxT("data:image/png;base64,") + b64;
+    }
+
+    page->SetLabel(m_propertyTitle->GetValueAsTranslateString());
+    page->SetRepresentation(static_cast<int>(rep));
+    page->SetHasPicture(hasPicture);
+    page->SetPictureDataUri(pictureUri);
+    // An invisible page has no tab and no contents -- the same thing Visible
+    // means on the desktop, where such a page is simply never added.
+    page->Show(m_propertyVisible->GetValueAsBoolean());
+
+    if (auto* box = dynamic_cast<ibWebBoxSizer*>(page->GetSizer()))
+        box->SetOrientation(m_propertyOrient->GetValueAsInteger());
+#else
     ibValueFrame* parentControl = GetParent(); int pos = wxNOT_FOUND;
     if (m_propertyVisible->GetValueAsBoolean()) {
         for (unsigned int i = 0; i < parentControl->GetChildCount(); i++) {
@@ -93,10 +155,14 @@ void ibValueNotebookPage::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVi
         wxASSERT(page);
         page->SetOrientation(m_propertyOrient->GetValueAsInteger());
     }
+#endif
 }
 
 void ibValueNotebookPage::OnSelected(wxObject* wxobject)
 {
+#ifdef OES_USE_WEB
+    (void)wxobject;
+#else
     wxAuiNotebook* notebook = dynamic_cast<wxAuiNotebook*>(GetParent()->GetWxObject());
     wxASSERT(notebook);
     if (notebook != nullptr) {
@@ -104,10 +170,15 @@ void ibValueNotebookPage::OnSelected(wxObject* wxobject)
         if (pos != notebook->GetSelection())
             notebook->SetSelection(pos);
     }
+#endif
 }
 
 void ibValueNotebookPage::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
 {
+#ifdef OES_USE_WEB
+    (void)wxobject;
+    (void)visualHost;
+#else
     wxAuiNotebook* notebook = dynamic_cast<wxAuiNotebook*>(visualHost->GetWxObject(GetParent()));
     wxASSERT(notebook);
     if (notebook != nullptr) {
@@ -120,6 +191,7 @@ void ibValueNotebookPage::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
         wxASSERT(page);
         page->PopEventHandler(true);
     }
+#endif
 }
 
 bool ibValueNotebookPage::CanDeleteControl() const

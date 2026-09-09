@@ -5,6 +5,17 @@
      client falls back to the English defaults further down, so a client served
      by anything else still works. -->
 <!--OES_I18N-->
+<!-- The tab icon, inline so it costs no request. Without a link the browser
+     asks the ORIGIN for /favicon.ico, which is outside every route this
+     server serves and answers 404 in the console on every load. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%233b50a0'/%3E%3Ctext x='8' y='12' font-family='system-ui,sans-serif' font-size='10' font-weight='700' fill='%23fff' text-anchor='middle'%3EO%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="./assets/oes/oes-tokens.css">
+<!-- Import-map targets are relative to this document at /w/<prefix>/. -->
+<script type="importmap">
+{"imports":{
+  "tabulator-tables":"./assets/tabulator/6.5.2/tabulator.js"
+}}
+</script>
 <style>
 /* Window chrome: title bar + status bar wrap the sidebar+main area.
    Body is flex-column so the middle row stretches; titlebar / statusbar
@@ -95,6 +106,9 @@ body{margin:0;font:14px/1.4 system-ui,sans-serif;display:flex;
 #tabs{display:flex;gap:1px;margin:0;padding:0 8px 0;flex:1 1 auto;
   overflow-x:auto;scroll-behavior:smooth;scrollbar-width:none}
 #tabs::-webkit-scrollbar{display:none}
+/* `display` is set on the class below, which outranks the [hidden] attribute's
+   own rule — so a hidden tab has to be told again. */
+.tab[hidden]{display:none}
 .tab{padding:4px 10px 5px;border:1px solid #bbb;border-bottom:none;
   border-radius:6px 6px 0 0;background:#dcdcdc;font-size:.9em;
   cursor:pointer;display:inline-flex;align-items:center;gap:6px;
@@ -160,8 +174,20 @@ li:hover{background:#e3e9f0}
    flex:1 inside #main → #app-row → body), so the hardcoded
    100vh-90px is no longer needed — the new layout (titlebar +
    app-row + statusbar) does the math via flex grow chain. */
+/* overflow:auto because a form that does not fit has to scroll INSIDE its frame.
+   Left visible, a table taller than the room left for it simply drew past the
+   bottom border and over the window -- the frame said one thing and the content
+   did another. */
 .form-host{border:1px solid #ddd;border-radius:4px;padding:10px;
-  display:flex;flex-direction:column;min-height:0;flex:1 1 auto}
+  display:flex;flex-direction:column;min-height:0;flex:1 1 auto;overflow:auto;
+  overflow-anchor:none}
+/* overflow-anchor: the offset is the one the user set. Left on, the browser
+   moves it when content above the viewport is re-measured -- which every
+   reconciled answer does, and a host shown again after its tab was hidden came
+   back 138px above where it was left. */
+/* One host per open tab is kept in the content area; the inactive ones are
+   hidden, and `display` on the class above outranks the attribute's own rule. */
+.form-host[hidden]{display:none}
 .form-host > .boxsizer{flex:1;min-height:0}
 /* align-items:flex-start so children stay at their natural cross-axis
    size by default. wxSizer semantics: a vertical sizer does NOT stretch
@@ -169,7 +195,67 @@ li:hover{background:#e3e9f0}
    `align-items:stretch` would give every child full width, which is
    not what desktop does. applyLayout overrides per-child with
    align-self:stretch when wxEXPAND is present. */
-.boxsizer{display:flex;gap:6px;margin:4px 0;align-items:flex-start}
+/* TableBox. The outer host carries the wxSizer layout the form gave it
+   (proportion / EXPAND through applyLayout); the inner div is what
+   Tabulator measures, and it needs a floor — a grid in a container of
+   indefinite height would otherwise compute to nothing and draw no
+   rows at all. */
+/* The floor is on the HOST, not on the grid inside it. A grid in a container of
+   indefinite height computes to nothing and draws no rows, which is what the
+   floor is for -- but put on the grid it was a size the flex parent never heard
+   about, so a table with 86px of room still laid out 240px of grid and spilled
+   the difference over everything below. On the host the same floor is a flex
+   minimum: the form grows, and the frame scrolls when there is nowhere left. */
+.oes-tablebox{display:flex;flex-direction:column;flex:1 1 auto;
+  --oes-min-h:240px;min-height:240px}
+/* The table's own bar sits above the grid and takes no part in its height. */
+.oes-tablebox-bar{flex:0 0 auto;margin:0 0 2px 0}
+.oes-tablebox-grid{flex:1 1 auto;min-height:0}
+/* A header that sorts says so under the pointer; one that cannot (a
+   whole-attribute column, or a model with no Sorting feature) stays as
+   it is rather than inviting a click that would do nothing. */
+.oes-tablebox .tabulator-col[tabulator-field]{cursor:default}
+.oes-tablebox .tabulator-row{cursor:default}
+/* Tabulator ships a palette of its own -- a grey slab, a strong blue
+   selection -- written for a page that brings nothing with it. Every colour
+   below comes from a token instead, so the grid reads as part of the window
+   rather than as a component dropped into it.
+
+   The `.tabulator` in the middle of each selector is doing work, not
+   decoration: Tabulator's stylesheet is appended to the head when the grid
+   loads, so it comes AFTER this one and wins every tie. Its own rules run
+   three classes deep (`.tabulator .tabulator-header .tabulator-col`), and
+   these have to stand one deeper to be read at all. */
+.oes-tablebox .tabulator{
+  background:var(--oes-table-bg);color:var(--oes-table-text);
+  border-color:var(--oes-table-border)}
+.oes-tablebox .tabulator .tabulator-header,
+.oes-tablebox .tabulator .tabulator-header .tabulator-col{
+  background:var(--oes-table-header-bg);color:var(--oes-table-header-text);
+  border-color:var(--oes-table-border)}
+.oes-tablebox .tabulator .tabulator-row{
+  background:var(--oes-table-bg);color:var(--oes-table-text);
+  border-color:var(--oes-table-border)}
+.oes-tablebox .tabulator .tabulator-row.tabulator-row-even{
+  background:var(--oes-table-row-alt-bg)}
+.oes-tablebox .tabulator .tabulator-row:hover{
+  background:var(--oes-table-row-hover-bg)}
+/* The selected row is the one the server is standing on, so it has to be
+   readable at a glance rather than a tint a shade off white: a selection fill,
+   plus an accent bar down the leading edge that carries the mark on any
+   background. Hover over the selected row keeps the selection colour --
+   moving the pointer must not look like losing the row. */
+.oes-tablebox .tabulator .tabulator-row.tabulator-selected,
+.oes-tablebox .tabulator .tabulator-row.tabulator-selected:hover{
+  background:var(--oes-table-row-selected-bg);
+  box-shadow:inset 3px 0 0 0 var(--oes-table-row-selected-accent)}
+.oes-tablebox .tabulator .tabulator-row .tabulator-cell{
+  border-color:var(--oes-table-border)}
+/* No margin of our own: a sizer item already carries the border the form
+   asked for, as a margin on its own box. Ours on top of that is a second
+   helping nobody wrote down, and it counts once per nesting level -- which is
+   what made a column of check boxes read as a column of gaps. */
+.boxsizer{display:flex;gap:6px;margin:0;align-items:flex-start}
 .boxsizer.vert{flex-direction:column}
 .boxsizer.horz{flex-direction:row}
 /* Label-column alignment: TextCtrl (and any future labelrow control)
@@ -200,6 +286,55 @@ button.ctrl:hover:not(:disabled){background:linear-gradient(#f2f6fc,#dde6f0);
 button.ctrl:active:not(:disabled){background:#c6d5e8;border-color:#6b88ae}
 button.ctrl:disabled{opacity:.55;cursor:default}
 input.ctrl{padding:3px 6px;border:1px solid #aaa;border-radius:3px}
+/* A rule drawn across the form or down it. wx draws a groove; one line in the
+   colour the rest of the chrome is bordered in is what that reads as here. */
+.staticline{border:0;background:#c9ced3;flex:0 0 auto}
+.staticline.horz{height:1px;min-height:1px;align-self:stretch}
+.staticline.vert{width:1px;min-width:1px;align-self:stretch;min-height:1em}
+.radiobutton{display:inline-flex;align-items:center;gap:4px;padding:2px 0}
+/* The browser gives a radio a left margin of its own, which put a column of
+   them a few pixels right of the column of check boxes above. */
+.radiobutton>input{margin:0}
+/* One control turned round rather than two: the track holds a fill, and which
+   way it grows is the only difference between the two orientations. The fill
+   is positioned rather than laid out -- a percentage height inside a flex box
+   measured as zero, and the vertical gauge drew an empty track. */
+.gauge{position:relative;border:1px solid #aaa;border-radius:3px;background:#fff;
+  overflow:hidden;flex:0 0 auto}
+.gauge.horz{height:14px;min-width:120px}
+.gauge.vert{width:14px;min-height:120px}
+.gauge>.fill{position:absolute;background:#4a7cc0}
+.gauge.horz>.fill{left:0;top:0;bottom:0}
+.gauge.vert>.fill{left:0;right:0;bottom:0}
+input.slider{padding:0;border:0;background:none;min-width:120px;accent-color:#4a7cc0}
+input.slider.vert{writing-mode:vertical-lr;direction:rtl;min-width:0;min-height:120px}
+/* A notebook is a strip and one page. The strip is a row of buttons rather than
+   a link list: nothing is being navigated to, a page is being brought forward. */
+.notebook{display:flex;flex-direction:column;min-width:0;min-height:0;
+  flex:1 1 auto;align-self:stretch}
+.notebook.bottom{flex-direction:column-reverse}
+.nb-strip{display:flex;gap:2px;flex-wrap:wrap;padding:0 2px;
+  border-bottom:1px solid #c9ced3}
+.notebook.bottom>.nb-strip{border-bottom:0;border-top:1px solid #c9ced3}
+.nb-tab{display:inline-flex;align-items:center;gap:4px;font:inherit;
+  padding:4px 12px;cursor:pointer;color:#222;
+  border:1px solid #c9ced3;border-bottom:0;border-radius:3px 3px 0 0;
+  background:linear-gradient(#f4f6f8,#e6eaee);margin-bottom:-1px}
+.notebook.bottom>.nb-strip>.nb-tab{border-bottom:1px solid #c9ced3;border-top:0;
+  border-radius:0 0 3px 3px;margin:-1px 0 0}
+.nb-tab:hover{background:linear-gradient(#fbfcfd,#eef2f6)}
+.nb-tab[aria-selected="true"]{background:#fff;color:#000;font-weight:600}
+.nb-tab>img{height:1em}
+.nb-body{flex:1 1 auto;min-height:0;min-width:0;padding:6px 4px;
+  display:flex;flex-direction:column}
+.notebookpage{display:flex;flex-direction:column;min-width:0;min-height:0;
+  flex:1 1 auto}
+/* Whatever a script handed SetPage, in a frame of its own: it is the
+   application's markup, not the client's, and it does not get to reach into
+   this page. sandbox="" refuses it scripts and an origin both. */
+.htmlbox{border:1px solid #aaa;background:#fff;overflow:hidden;
+  display:flex;min-height:60px}
+.htmlbox>iframe{border:0;flex:1 1 auto;min-height:inherit}
 /* Text editor group: input + inline side-buttons share one border,
    mirroring desktop ibControlTextEditor where the Select/Open/Clear
    glyphs sit INSIDE the control's frame. Inner input has no own
@@ -227,6 +362,26 @@ input.ctrl{padding:3px 6px;border:1px solid #aaa;border-radius:3px}
   background:transparent;flex-shrink:0}
 .texted > button:hover:not(:disabled){background:rgba(0,0,0,.06)}
 .texted > button:active:not(:disabled){background:rgba(0,0,0,.12)}
+/* A FORM inside a dialog — a value picker. Two things it needs that a message
+   box does not: ROOM, because the dialog's own ceiling is 640px and a list has
+   columns; and a HEIGHT, because a form's body is a flex column that shares one
+   out, and without it the grid inside computes to nothing and draws no rows.
+   Both are bounded by the window rather than by the form. */
+.modal-dialog.oes-form-dialog{max-width:min(60rem,calc(100vw - 48px))}
+.oes-modal-form{display:flex;flex-direction:column;
+  width:min(58rem,calc(100vw - 96px));height:min(34rem,70vh);min-height:0}
+.oes-modal-form > div{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+/* A cell's editor: the same shared-frame look as a form field's group, sized to
+   the cell it replaces rather than to a form row. */
+.oes-cell-editor{display:flex;align-items:stretch;width:100%;height:100%;
+  box-sizing:border-box;background:#fff}
+.oes-cell-editor > input{border:0;padding:2px 4px;outline:none;font:inherit;
+  color:inherit;background:transparent;flex:1 1 auto;min-width:0}
+.oes-cell-editor > button{border:0;border-left:1px solid rgba(0,0,0,.08);
+  padding:0 6px;cursor:pointer;font:inherit;color:inherit;background:transparent;
+  flex:0 0 auto;line-height:1}
+.oes-cell-editor > button:hover{background:rgba(0,0,0,.06)}
+.oes-cell-editor > button:active{background:rgba(0,0,0,.12)}
 .toolbar{display:flex;align-items:center;gap:2px;background:#eef1f4;border:1px solid #c9ced3;border-radius:3px;padding:3px 4px;margin:2px 0}
 .tool{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1px solid transparent;border-radius:3px;background:transparent;font:inherit;color:inherit;cursor:pointer;line-height:1.3}
 .tool:hover:not(:disabled){background:#dde6f0;border-color:#b5c4d6}
@@ -455,6 +610,7 @@ window.OES = window.OES || {};
 const L = window.OES.L || (window.OES.L = {});
 
 const API=location.pathname.replace(/\/$/,'');
+const rendererHarness=new URLSearchParams(location.search).get('harness')==='1';
 
 // Tab-close cleanup: on pagehide fire a sendBeacon to /logout so the
 // server DELETEs the session row immediately instead of waiting for the
@@ -496,8 +652,8 @@ function hideNetStatus(){ netStatus.style.display='none'; }
 const spinner=document.createElement('div');
 spinner.id='spinner';
 spinner.innerHTML='<div class="ring"></div>';
-// Fixed-position overlay — append to body so main.innerHTML=''
-// during tree rebuilds doesn't wipe the spinner out.
+// Fixed-position overlay, appended to the body rather than to the content
+// area it covers.
 document.body.appendChild(spinner);
 function showSpinner(){ spinner.classList.add('show'); }
 function hideSpinner(){ spinner.classList.remove('show'); }
@@ -531,7 +687,9 @@ function showDialog(opts){
   // covers its opener — start at 3000 (matching CSS), each new layer +10.
   backdrop.style.zIndex = String(3000 + openDialogStack.length * 10);
   const dlg = document.createElement('div');
-  dlg.className = 'modal-dialog';
+  // A caller may widen the box for what it is putting in — a form needs more
+  // room than a sentence does.
+  dlg.className = 'modal-dialog' + (opts.dialogClass ? ' ' + opts.dialogClass : '');
   dlg.setAttribute('role','dialog');
   dlg.setAttribute('aria-modal','true');
   // Header
@@ -960,8 +1118,11 @@ function genTabSid(){
     + '-' + ((8 + ((Math.random()*4)|0)).toString(16)) + hex.slice(17,20)
     + '-' + hex.slice(20,32);
 }
-let tabSid = sessionStorage.getItem('oes_tab_sid') || genTabSid();
-sessionStorage.setItem('oes_tab_sid', tabSid);
+// The harness frame shares sessionStorage with the page around it, so keep
+// its development session separate without changing the product key.
+const tabSidStorageKey=rendererHarness?'oes_tab_sid_harness':'oes_tab_sid';
+let tabSid = sessionStorage.getItem(tabSidStorageKey) || genTabSid();
+sessionStorage.setItem(tabSidStorageKey, tabSid);
 
 // "Duplicate tab" copies sessionStorage verbatim — both tabs boot
 // with the same oes_tab_sid, slam the same server-side ibWebSession,
@@ -985,7 +1146,7 @@ if (typeof BroadcastChannel !== 'undefined') {
   setTimeout(() => {
     if (conflicted) {
       tabSid = genTabSid();
-      sessionStorage.setItem('oes_tab_sid', tabSid);
+      sessionStorage.setItem(tabSidStorageKey, tabSid);
       // Clean reload — server mints a fresh session on the first hit
       // with the new tabSid. The original tab keeps its session intact.
       location.reload();
@@ -1023,10 +1184,11 @@ window.addEventListener('pagehide', () => {
   } catch (e) { /* best-effort */ }
 });
 
-// In-flight guard so overlapping refresh calls don't race on the DOM.
-// The server-side /session is authoritative, so dropping a concurrent
-// call is safe — the first one's result already reflects current state.
-let refreshingTabs=false;
+// In-flight guard so overlapping refresh calls don't race on the DOM. A call
+// made while one is in flight is not dropped but run once more after it: it
+// came after something changed, and the answer already on its way may
+// predate that change.
+let refreshingTabs=false, refreshTabsAgain=false;
 // metaGeneration captured on first successful /session read. Set to
 // null until the first /session response arrives. See showSessionLost
 // for how it distinguishes "config changed" from "session lost".
@@ -1236,15 +1398,9 @@ async function openAllFunctionsDialog(){
       row.appendChild(lbl);
       row.onclick = async () => {
         try {
-          const r = await netFetch(API+'/open-meta/'+it.id, {
-            method:'POST', credentials:'same-origin'
-          });
-          if (r.ok) {
-            const text = await r.text();
-            if (text && text !== '{}') applyActiveJsonText(text);
-            // Also refresh tabs / chrome so the new tab + title shows.
-            refreshTabs();
-          }
+          await paintFrom(API+'/open-meta/'+it.id, {method:'POST'});
+          // Also refresh tabs / chrome so the new tab + title shows.
+          refreshTabs();
         } catch (e) { /* ignore network blip */ }
         handle.close();
       };
@@ -1268,7 +1424,7 @@ async function openAllFunctionsDialog(){
 }
 
 async function refreshTabs(){
-  if(refreshingTabs) return;
+  if(refreshingTabs){ refreshTabsAgain=true; return; }
   refreshingTabs=true;
   try{
   const info=await netFetch(API+'/session',{credentials:'same-origin'}).then(r=>r.json());
@@ -1286,6 +1442,11 @@ async function refreshTabs(){
   (info.tabs||[]).filter(t=>{ const k=(t.index|0); if(seen.has(k)) return false; seen.add(k); return true; }).forEach((t,i)=>{
     const el=document.createElement('div');
     el.className='tab'+(i===info.activeTab?' active':'')+(t.modified?' modified':'');
+    // A picker is drawn as a dialog over the form that asked, so the strip does
+    // not offer it as somewhere to go. HIDDEN rather than left out: the close
+    // handler below reads a tab's server index off its position in this strip,
+    // and a missing element would shift every index after it.
+    el.hidden=!!t.modal;
     // Column-wrap: icon on top, title below. Matches desktop tab convention
     // (wxAuiMDIChildFrame paints icon then caption). No icon → column
     // collapses to text-only, no layout jump.
@@ -1313,11 +1474,9 @@ async function refreshTabs(){
       // polling reconciles server-side changes within 2s anyway.
       document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
       el.classList.add('active');
-      const tree=await netFetch(API+'/tab/'+i,{method:'POST',credentials:'same-origin'}).then(r=>r.json());
-      if(tree&&!tree.error){
-        main.innerHTML='';
-        main.appendChild(render(tree));
-      }
+      // The answer is reconciled into the DOM this tab left behind, so its
+      // scroll position and loaded pages are where they were.
+      paintFrom(API+'/tab/'+i,{method:'POST'});
     };
     el.appendChild(body);
     const close=document.createElement('span');
@@ -1339,17 +1498,10 @@ async function refreshTabs(){
       // the DOM index == server index.
       const realIndex=Array.from(tabsBar.children).indexOf(el);
       el.remove();
-      if(wasActive) main.innerHTML='';
-      const tFetchStart=performance.now();
-      const r=await netFetch(API+'/tab/'+realIndex,{method:'DELETE',credentials:'same-origin'});
-      const tFetchEnd=performance.now();
-      const tree=await r.json();
-      const tJsonEnd=performance.now();
-      if(tree&&!tree.error&&Object.keys(tree).length>0){
-        main.innerHTML='';
-        main.appendChild(render(tree));
-      }
-      const tRenderEnd=performance.now();
+      // The content area shows nothing until the answer names the next host;
+      // the closed tab's own mount is disposed when the strip is re-read.
+      if(wasActive) hideMounts();
+      await paintFrom(API+'/tab/'+realIndex,{method:'DELETE'});
       if (wasActive) {
         const siblings=tabsBar.querySelectorAll('.tab');
         if (siblings.length>0) siblings[siblings.length-1].classList.add('active');
@@ -1358,16 +1510,19 @@ async function refreshTabs(){
       // indices refreshed to match the server's new numbering. Without
       // this, the next click still carries stale `i` values.
       refreshTabs();
-      console.log(`close tab ${realIndex}: total=${(tRenderEnd-t0).toFixed(1)}ms`
-        + ` fetch=${(tFetchEnd-tFetchStart).toFixed(1)}ms`
-        + ` json=${(tJsonEnd-tFetchEnd).toFixed(1)}ms`
-        + ` render=${(tRenderEnd-tJsonEnd).toFixed(1)}ms`
+      console.log(`close tab ${realIndex}: ${(performance.now()-t0).toFixed(1)}ms`
         + ` inflight_now=${inflight}`);
     };
     el.appendChild(close);
     tabsBar.appendChild(el);
   });
-  } finally { refreshingTabs=false; }
+  // A host that is on no tab any more is closed on the server; its retained
+  // DOM goes with it.
+  disposeOrphanMounts(info.tabs||[]);
+  } finally {
+    refreshingTabs=false;
+    if(refreshTabsAgain){ refreshTabsAgain=false; refreshTabs(); }
+  }
 }
 
 
@@ -1419,9 +1574,7 @@ function promptLogin(){
 // /forms endpoint stays available for diagnostic / future use.
 async function loadForms(){}
 async function openForm(id){
-  const tree=await netFetch(API+'/form/'+id,{credentials:'same-origin'}).then(r=>r.json());
-  main.innerHTML='';
-  main.appendChild(render(tree));
+  await paintFrom(API+'/form/'+id);
   refreshTabs();
 }
 // Subsystem navigation — sidebar's Interfaces block. Mirrors desktop's
@@ -1516,16 +1669,10 @@ function showInterfacePopup(iface){
           // (browse/list), 150=Create (new-record form), 151=List, 152=
           // Select. Backend's Execute branches on it.
           const body = new URLSearchParams({cmd: String(sec.section|0)});
-          const r = await netFetch(API+'/open-meta/'+it.id, {
-            method:'POST', credentials:'same-origin',
-            headers:{'Content-Type':'application/x-www-form-urlencoded'},
-            body: body.toString()
+          await paintFrom(API+'/open-meta/'+it.id, {
+            method:'POST', headers:FORM_HEADERS, body: body.toString()
           });
-          if (r.ok) {
-            const text = await r.text();
-            if (text && text !== '{}') applyActiveJsonText(text);
-            refreshTabs();
-          }
+          refreshTabs();
         } catch (e) { /* ignore */ }
         handle.close();
       };
@@ -1539,10 +1686,65 @@ function showInterfacePopup(iface){
     buttons: [{label:L.close, onClick:(d)=>d.close()}]
   });
 }
-// Per-type control classes. Each owns its own render(node)->HTMLElement
-// — new control = new class here, no need to touch the central switch.
-// The registry at the bottom maps ibWebWindow::GetControlType() strings
-// to the class that knows how to draw them.
+// A request that answers with a form tree. Every road that gets one back — a
+// button, a commit, a tab switch, a cell — used to spell the same four lines.
+// requestTree returns the tree, or null when the request failed or the answer
+// was an error (which it has already shown). paintFrom paints it as well and
+// returns what paintTree returned: true when something was painted, false for
+// an empty answer, null when there was nothing to paint.
+const FORM_HEADERS={'Content-Type':'application/x-www-form-urlencoded'};
+async function requestTree(url,opts){
+  const r=await netFetch(url,Object.assign({credentials:'same-origin'},opts||{}));
+  if(!r.ok) return null;
+  const tree=await r.json();
+  if(tree&&tree.error){ OES.handleBackendError(tree); return null; }
+  return tree;
+}
+// An empty answer is a session with no active host: the form closed with
+// nothing behind it, so the content area is blanked and any picker taken down
+// rather than left showing a dead form. A road on which `{}` means "refused"
+// instead — a cell the server would not take — says so with `refusable`, and
+// gets false with nothing touched.
+async function paintFrom(url,opts,refusable){
+  const tree=await requestTree(url,opts);
+  if(tree===null) return null;
+  if(Object.keys(tree).length===0){
+    if(!refusable){ closeModalForm(); hideMounts(); }
+    return false;
+  }
+  return paintTree(tree);
+}
+
+// Per-type control classes. Each owns render(node) -> HTMLElement, and the two
+// calls the reconciler makes on an element it already has: update(el, node,
+// prev) brings it up to date in place and answers false when it cannot, and
+// dispose(el) lets go of whatever the element holds outside the DOM (a grid
+// instance). The registry at the bottom maps ibWebWindow::GetControlType()
+// strings to the class that knows how to draw them.
+
+// Properties every node may carry and that the reconciler handles itself:
+// children, layout, the sequence number, and what applyCommon sets. The
+// default update leaves them out of its comparison, so a change to one of them
+// never forces a rebuild. A tablebox's `commandbar` is not here: only the
+// tablebox has one, and it reconciles it itself.
+const COMMON_KEYS=new Set(['children','layout','seq','enabled','shown','fg','bg',
+  'font','tooltip','minSize','maxSize']);
+
+function deepEqual(a,b){
+  if(a===b) return true;
+  if(typeof a!=='object'||typeof b!=='object'||a===null||b===null) return false;
+  if(Array.isArray(a)!==Array.isArray(b)) return false;
+  const ka=Object.keys(a), kb=Object.keys(b);
+  if(ka.length!==kb.length) return false;
+  for(const k of ka) if(!deepEqual(a[k],b[k])) return false;
+  return true;
+}
+// A node's own properties: everything the reconciler does not handle itself.
+function ownProps(node){
+  const out={};
+  for(const k in node) if(!COMMON_KEYS.has(k)) out[k]=node[k];
+  return out;
+}
 
 class BaseControl{
   render(node){
@@ -1551,50 +1753,72 @@ class BaseControl{
     el.textContent='['+node.type+']';
     return el;
   }
-  // Shared post-pass applied by the dispatcher to every node.
-  // Applies shown/enabled plus the visual-style fields pushed from
-  // ibValueWindow::UpdateWindow (fg/bg/font/tooltip) — one place so
-  // every control gets them without per-class code.
+  // The element stands as long as the node's own properties have not moved;
+  // classes that can do better override this and change the element instead.
+  update(el,node,prev){ return deepEqual(ownProps(node),ownProps(prev)); }
+  dispose(el){}
+  // Applied by the reconciler to every element, on every pass: shown / enabled
+  // plus the visual-style fields pushed from ibValueWindow::UpdateWindow
+  // (fg / bg / font / tooltip / sizes). Everything it can set it also resets,
+  // so a property that went away goes away here too.
   applyCommon(el,node){
-    if(node.shown===false) el.style.display='none';
-    if(node.enabled===false){
-      // Native form controls (input/button/select/textarea) carry a
-      // 'disabled' DOM property — flipping it blocks user interaction.
-      // For wrappers (TextCtrl's outer <div> with input+buttons inside)
-      // walk all descendant interactive controls and disable them too,
-      // plus dim the wrap and kill pointer events so the whole row
-      // reads as non-interactive.
-      if('disabled' in el) el.disabled=true;
-      else {
-        el.style.opacity='.5';
-        el.style.pointerEvents='none';
-        const inner=el.querySelectorAll('input,button,select,textarea');
-        for(const c of inner) c.disabled=true;
+    el.style.display=node.shown===false?'none':'';
+    const off=node.enabled===false;
+    if('disabled' in el){
+      // A native control carries the flag itself. oesOwnDisabled is a reason of
+      // the renderer's own (a side button the server switched off) and holds
+      // whatever the node says.
+      el.disabled=off||el.oesOwnDisabled===true;
+    } else {
+      // A wrapper (a text field's row, a grid's host) dims as a whole, and the
+      // interactive controls that are its own take the flag: those with no
+      // managed element between them and it. A control under a managed child
+      // (a field on a notebook page, a tool on a grid's bar) is that child's
+      // to set, whichever of the two is reconciled first; a grid's own inputs
+      // (oesForeign) are nobody's.
+      el.style.opacity=off?'.5':'';
+      el.style.pointerEvents=off?'none':'';
+      for(const c of el.querySelectorAll('input,button,select,textarea')){
+        if(c.oesKey!==undefined) continue;
+        let own=true;
+        for(let p=c.parentElement; p && p!==el; p=p.parentElement)
+          if(p.oesKey!==undefined || p.oesForeign){ own=false; break; }
+        if(own) c.disabled=off||c.oesOwnDisabled===true;
       }
     }
-    if(node.fg) el.style.color=node.fg;
-    if(node.bg) el.style.backgroundColor=node.bg;
-    if(node.font){
-      if(node.font.size)   el.style.fontSize=node.font.size+'pt';
-      if(node.font.family) el.style.fontFamily=node.font.family;
-      if(node.font.bold)   el.style.fontWeight='bold';
-      if(node.font.italic) el.style.fontStyle='italic';
-      if(node.font.underline) el.style.textDecoration='underline';
-    }
-    if(node.tooltip) el.title=node.tooltip;
-    if(node.minSize){
-      if(node.minSize.w) el.style.minWidth =node.minSize.w+'px';
-      if(node.minSize.h) el.style.minHeight=node.minSize.h+'px';
-    }
-    if(node.maxSize){
-      if(node.maxSize.w) el.style.maxWidth =node.maxSize.w+'px';
-      if(node.maxSize.h) el.style.maxHeight=node.maxSize.h+'px';
-    }
+    // A control that renders as a label PLUS a field returns the row as its
+    // element, and the row is not what the colour was set on: the field is.
+    // A renderer that has an inner surface names it.
+    const look=el.oesLookTarget||el;
+    look.style.color=node.fg||'';
+    look.style.backgroundColor=node.bg||'';
+    const font=node.font||{};
+    el.style.fontSize=font.size?font.size+'pt':'';
+    // The stored family is a Windows-era name for "the UI font" — Segoe UI,
+    // which no Mac or Linux box has. Named alone it matches nothing and the
+    // browser falls back to a serif; the theme's own font stands behind it.
+    el.style.fontFamily=font.family
+      ?'"'+String(font.family).replace(/"/g,'')+'", var(--oes-font-ui)':'';
+    el.style.fontWeight=font.bold?'bold':'';
+    el.style.fontStyle=font.italic?'italic':'';
+    el.style.textDecoration=font.underline?'underline':'';
+    if(node.tooltip) el.title=node.tooltip; else el.removeAttribute('title');
+    // A stored minimum raises a floor; it does not lower one. Written as a plain
+    // value it replaced whatever the stylesheet had, and a tablebox — whose
+    // class default is 150x75, chosen by nobody — came out at 75px. max() keeps
+    // both, and the larger wins whichever side it came from.
+    const mn=node.minSize||{}, mx=node.maxSize||{};
+    el.style.minWidth =mn.w?`max(${mn.w}px, var(--oes-min-w, 0px))`:'';
+    el.style.minHeight=mn.h?`max(${mn.h}px, var(--oes-min-h, 0px))`:'';
+    el.style.maxWidth =mx.w?mx.w+'px':'';
+    el.style.maxHeight=mx.h?mx.h+'px':'';
   }
 }
 
 class HostControl extends BaseControl{
   render(){ const el=document.createElement('div');el.className='form-host';return el; }
+  // The root is a box; whatever changed is in its children.
+  update(){ return true; }
 }
 class BoxSizer extends BaseControl{
   // orient: wxHORIZONTAL=4, wxVERTICAL=8.
@@ -1614,9 +1838,16 @@ class WrapSizer extends BaseControl{
 class StaticBoxSizer extends BaseControl{
   render(node){
     const el=document.createElement('fieldset');el.className='staticboxsizer';
-    const lg=document.createElement('legend');lg.textContent=node.label||'';
+    // A sizer names its caption `title`; only a WINDOW carries `label`.
+    const lg=document.createElement('legend');
     el.appendChild(lg);
+    el.oesLegend=lg;
+    this.update(el,node,{});
     return el;
+  }
+  update(el,node){
+    el.oesLegend.textContent=node.title||node.label||'';
+    return true;
   }
 }
 class GridSizer extends BaseControl{
@@ -1632,13 +1863,28 @@ class StaticText extends BaseControl{
     el.textContent=node.label||'';
     return el;
   }
+  update(el,node){ el.textContent=node.label||''; return true; }
 }
+
+// What a button or a tool shows: caption, picture, or both, by the
+// representation the server resolved (0=Auto never arrives, 1=Text,
+// 2=Picture, 3=PictureAndText). Compared as one string so the content is
+// rebuilt only when it changed.
+function captionKey(node){
+  return JSON.stringify([node.representation,node.label||'',
+    node.hasPicture?node.picture||'':null]);
+}
+
 class Button extends BaseControl{
   render(node){
     const el=document.createElement('button');el.className='ctrl';
-    // Representation (0=Auto, 1=Text, 2=Picture, 3=PictureAndText) —
-    // server resolves Auto before pushing, so 0 shouldn't arrive. Picture
-    // is a data:image/png;base64 URI straight from ibBackendPicture.
+    this.fill(el,node);
+    if(node.id) el.onclick=()=>paintFrom(API+'/action/'+node.id,{method:'POST'});
+    return el;
+  }
+  // Picture is a data:image/png;base64 URI straight from ibBackendPicture.
+  fill(el,node){
+    el.replaceChildren();
     const rep=node.representation;
     const wantPic=node.hasPicture && node.picture && rep!==1;
     const wantText=rep!==2;
@@ -1649,245 +1895,868 @@ class Button extends BaseControl{
       el.appendChild(img);
     }
     if(wantText) el.appendChild(document.createTextNode(node.label||''));
-    if(node.id){
-      el.onclick=async()=>{
-        const r=await netFetch(API+'/action/'+node.id,{method:'POST',credentials:'same-origin'});
-        if(r.ok){
-          const tree=await r.json();
-          if(tree&&!tree.error){ main.innerHTML=''; main.appendChild(render(tree)); }
-          else OES.handleBackendError(tree);
-        }
-      };
-    }
-    return el;
+    el.oesCaption=captionKey(node);
+  }
+  update(el,node){
+    if(el.oesCaption!==captionKey(node)) this.fill(el,node);
+    return true;
   }
 }
 
 class TextCtrl extends BaseControl{
   render(node){
     const multi=!!node.multilineMode;
-    // Outer row: label (prefix) + input-group (input + side buttons
-    // sharing one border). Matches desktop ibControlTextEditor layout
-    // where the caption sits left-of-frame and the Select/Open/Clear
-    // glyphs sit INSIDE the frame flush to the right edge.
+    // Outer row: label (prefix) + input group (input + side buttons sharing one
+    // border). Matches desktop ibControlTextEditor, where the caption sits left
+    // of the frame and the Select/Open/Clear glyphs sit inside it, flush right.
     const wrap=document.createElement('div');
-    // .labelrow → display:flex (label + input row). data-labelrow is
-    // the selector hook for the post-render label-width alignment pass
-    // (alignLabelsIn): empty placeholder span when no node.label is set
-    // still participates in the max-width measurement so all sibling
-    // inputs start at the same x. Mirrors desktop's
-    // ibVisualHost::CalculateLabelSize which reserves a slot for every
-    // ibControlDynamicBorder regardless of caption presence.
+    // .labelrow is the flex row; data-labelrow is the hook for the label-width
+    // alignment pass (alignLabelsGlobal). An empty placeholder span still takes
+    // part in the measurement so sibling inputs start at the same x, the way
+    // ibVisualHost::CalculateLabelSize reserves a slot for every caption.
     wrap.className='labelrow';
     wrap.dataset.labelrow='1';
     const lbl=document.createElement('span');
     lbl.className='statictext';
-    lbl.textContent=node.label||'';
+    lbl.dataset.labelHost='1';
     lbl.style.flexShrink='0';
     lbl.style.alignSelf='center';
     wrap.appendChild(lbl);
-    // Input group — shared border wraps input + inline side-buttons.
     const group=document.createElement('div');
     group.className='texted';
-    // No inline flex — .texted's CSS pins flex-basis to 200px so the
-    // group keeps a fixed width regardless of side-button count.
-    // data-ctrl-id lets post-render refocus logic (e.g. after Clear)
-    // find the specific input even though main.innerHTML was replaced.
     if(node.id) group.dataset.ctrlId=node.id;
-    // .texted has a hardcoded #fff background that would otherwise mask
-    // the fg/bg that applyCommon just set on the outer wrap. Push node
-    // colours onto the group directly so the input (background:transparent)
-    // inherits through.
-    if(node.bg) group.style.backgroundColor=node.bg;
-    if(node.fg) group.style.color=node.fg;
+    // The input group is the surface the colours were set on, not the row that
+    // carries the label beside it.
+    wrap.oesLookTarget=group;
     const el=document.createElement(multi?'textarea':'input');
-    // No .ctrl class — border/padding is on .texted now.
     if(!multi) el.type=node.passwordMode?'password':'text';
     el.value=node.value||'';
-    // commit declared at render scope so side-button handlers below
-    // can removeEventListener it before teardown — prevents a racing
-    // synthetic 'change' on the about-to-be-removed input.
-    let commit=null;
+    wrap.oesLabel=lbl;
+    wrap.oesInput=el;
+    // What the client last wrote into the input from a server node. While the
+    // input holds anything else, somebody is typing in it and the server's
+    // value waits in oesPending.
+    wrap.oesApplied=el.value;
+    wrap.oesPending=undefined;
+    // Commits not yet answered. While an older one is still out, the field is
+    // treated as being typed in: its answer must not overwrite the newer text.
+    wrap.oesCommits=0;
     if(node.id){
-      // Commit on blur + Enter. wxEVT_CONTROL_TEXT_INPUT per-keystroke
-      // would be noisy for HTTP; send once when the user is done.
-      commit=async()=>{
-        const body=new URLSearchParams({value:el.value});
-        const r=await netFetch(API+'/change/'+node.id,{
-          method:'POST',credentials:'same-origin',
-          headers:{'Content-Type':'application/x-www-form-urlencoded'},
-          body:body.toString()
-        });
-        if(r.ok){
-          const tree=await r.json();
-          if(tree&&!tree.error){ main.innerHTML=''; main.appendChild(render(tree)); }
-          else OES.handleBackendError(tree);
-        }
+      // Commit on change (blur) and Enter, not per keystroke. The answer is
+      // what the server made of the text, and it takes the input even while
+      // the caret is still in it: the sent text counts as applied.
+      const commit=async()=>{
+        const sent=el.value;
+        wrap.oesApplied=sent;
+        wrap.oesPending=undefined;
+        wrap.oesCommits++;
+        try{
+          return await paintFrom(API+'/change/'+node.id,{method:'POST',headers:FORM_HEADERS,
+            body:new URLSearchParams({value:sent}).toString()});
+        } finally { wrap.oesCommits--; }
       };
       el.addEventListener('change',commit);
       if(!multi){
         el.addEventListener('keydown',ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); commit(); } });
       }
     }
+    // A value the server sent while the field was being typed in lands when
+    // the field is left with no net change — the case no change event covers.
+    el.addEventListener('blur',()=>{
+      if(wrap.oesPending===undefined) return;
+      if(el.value===wrap.oesApplied){ el.value=wrap.oesPending; wrap.oesApplied=el.value; }
+      wrap.oesPending=undefined;
+    });
     group.appendChild(el);
-    // Desktop ibControlTextEditor side buttons: Select (…), Open (▷),
-    // Clear (×). Rendered INSIDE the input group's border, flush to
-    // the right, same shared-frame look as desktop. Each click fires
-    // /fire/<id>/<kind> → ibWebTextCtrl::HandleRequest → FireCommand
-    // → ibValueTextCtrl's OnSelect/Open/ClearButtonPressed handler.
+    // Desktop ibControlTextEditor side buttons: Select (…), Open (▷), Clear (×),
+    // inside the group's border. Each click fires /fire/<id>/<kind> →
+    // ibWebTextCtrl::HandleRequest → FireCommand → the control's handler. All
+    // three exist and show or hide by the node, so a change to the set is not
+    // a rebuild.
+    wrap.oesButtons={};
     const makeSideBtn=(label,kind,title)=>{
       const btn=document.createElement('button');
       btn.type='button';
       btn.textContent=label;
       btn.title=title;
-      // Prevent focus theft: without this the input blurs on mousedown,
-      // which fires its 'change' listener and POSTs /change concurrently
-      // with our /fire. The two requests race — user saw Clear needing
-      // two clicks because /change arrived AFTER /fire and re-set the
-      // just-cleared value. preventDefault on mousedown keeps focus on
-      // the input, no blur, no change event, no race.
+      // Keep the focus where it is: a blur here would fire the input's change
+      // and POST /change beside the /fire, and the two would race for one value.
       btn.addEventListener('mousedown', e => e.preventDefault());
       btn.onclick=async()=>{
-        // Detach the input's commit listener BEFORE the fetch. When the
-        // response's innerHTML='' removes the input, some browsers fire a
-        // synthetic 'change' on the dirty node — that would POST /change
-        // with uncommitted text right after /fire cleared it. User saw
-        // Clear leaving a partial prefix of a long typed string. Removing
-        // the listener makes the teardown silent.
-        if(commit) el.removeEventListener('change', commit);
-        const r=await netFetch(API+'/fire/'+node.id+'/'+kind,
-          {method:'POST',credentials:'same-origin'});
-        if(r.ok){
-          const tree=await r.json();
-          if(tree&&!tree.error&&Object.keys(tree).length>0){
-            main.innerHTML=''; main.appendChild(render(tree));
-            // Clear refocuses the (now empty) input with cursor at 0 —
-            // matches desktop ibControlTextEditor::SetInsertionPoint(wxNOT_FOUND).
-            if(kind==='buttonClear'){
-              const ed=main.querySelector(`[data-ctrl-id="${node.id}"] input, [data-ctrl-id="${node.id}"] textarea`);
-              if(ed){ ed.focus(); try{ ed.setSelectionRange(0,0); }catch(_){ } }
-            }
-          }
-          // Select/Open buttons can spawn a new tab (selector form, related
-          // record open). Refresh the tab strip immediately instead of
-          // waiting for the next 2s /session poll — otherwise the new tab
-          // doesn't show up until the user clicks somewhere else.
-          if(kind==='buttonSelect'||kind==='buttonOpen') refreshTabs();
+        // The button acts on the field as it stands; text typed and not yet
+        // committed is let go, so the answer's value is written whatever the
+        // input holds.
+        wrap.oesApplied=el.value;
+        wrap.oesPending=undefined;
+        const painted=await paintFrom(API+'/fire/'+node.id+'/'+kind,{method:'POST'});
+        // Clear puts the caret at the start of the (now empty) field, as
+        // ibControlTextEditor::SetInsertionPoint(wxNOT_FOUND) does.
+        if(painted && kind==='buttonClear'){
+          el.focus({preventScroll:true});
+          try{ el.setSelectionRange(0,0); }catch(_){ }
         }
+        // Select and Open can raise a form of their own (a picker, the related
+        // record), so the tab strip is re-read at once rather than on the next
+        // poll tick.
+        if(kind==='buttonSelect'||kind==='buttonOpen') refreshTabs();
       };
       group.appendChild(btn);
+      wrap.oesButtons[kind]=btn;
     };
-    if(node.id && node.showSelectButton) makeSideBtn('…','buttonSelect','Select');
-    if(node.id && node.showOpenButton)   makeSideBtn('▷','buttonOpen','Open');
-    if(node.id && node.showClearButton)  makeSideBtn('×','buttonClear','Clear');
+    if(node.id){
+      makeSideBtn('…','buttonSelect','Select');
+      makeSideBtn('▷','buttonOpen','Open');
+      makeSideBtn('×','buttonClear','Clear');
+    }
     wrap.appendChild(group);
+    this.sync(wrap,node);
     return wrap;
+  }
+  sync(wrap,node){
+    wrap.oesLabel.textContent=node.label||'';
+    wrap.oesInput.readOnly=!!node.readOnly;
+    const b=wrap.oesButtons;
+    if(b.buttonSelect){
+      b.buttonSelect.hidden=!node.showSelectButton;
+      b.buttonOpen.hidden=!node.showOpenButton;
+      b.buttonClear.hidden=!node.showClearButton;
+      b.buttonSelect.oesOwnDisabled=node.enableSelectButton===false;
+      b.buttonClear.oesOwnDisabled=node.enableClearButton===false;
+    }
+  }
+  update(wrap,node,prev){
+    // The element kind and the input type are decided at creation.
+    if(!!node.multilineMode!==!!prev.multilineMode) return false;
+    if(!!node.passwordMode!==!!prev.passwordMode) return false;
+    this.sync(wrap,node);
+    // Typing wins over the server. The value is written while nobody is in the
+    // field, or while the field still shows what the client last wrote there
+    // and no older commit is still unanswered; otherwise it waits for the blur.
+    const el=wrap.oesInput, v=node.value||'';
+    const focused=document.activeElement===el;
+    if(!focused || (el.value===wrap.oesApplied && wrap.oesCommits<=1)){
+      if(el.value!==v){
+        // The server's reformatted text lands under the caret, not after it.
+        let start=null, end=null;
+        if(focused){ try{ start=el.selectionStart; end=el.selectionEnd; }catch(_){} }
+        el.value=v;
+        if(start!==null){ try{ el.setSelectionRange(Math.min(start,v.length),Math.min(end,v.length)); }catch(_){} }
+      }
+      wrap.oesApplied=v;
+      wrap.oesPending=undefined;
+    } else {
+      wrap.oesPending=v;
+    }
+    return true;
   }
 }
 
 class Toolbar extends BaseControl{
-  // Container. The children render themselves (Tool / ToolSeparator);
-  // the toolbar's job is just to lay them out horizontally on a
-  // panel-style strip background.
+  // Container. The children render themselves (Tool / ToolSeparator); the
+  // toolbar's job is just to lay them out horizontally on a strip.
   render(){ const el=document.createElement('div');el.className='toolbar';return el; }
 }
 
+// A tool activates one of two things, and which one it is the node says.
+// A tool on the form's own command bar names a COMMAND by action id and
+// carries no control id — the bar is chrome, so the control dispatcher
+// cannot reach it and the click goes to /command. Everything else is a
+// control action. Both answers are the form again.
+function toolRoad(node){
+  return node.action!==undefined ? API+'/command/'+node.action
+       : node.id                 ? API+'/action/'+node.id
+       : null;
+}
+function bindToolActivation(el, node){
+  const road=toolRoad(node);
+  if(road===null) return;
+  // Whose bar. Action ids are unique within a bar and not across bars, so a
+  // table's "Add" and the form's are the same number; `owner` is what tells
+  // the server which one was clicked. Absent means the form's own.
+  const opts={method:'POST'};
+  if(node.owner){
+    opts.headers=FORM_HEADERS;
+    opts.body=new URLSearchParams({owner:String(node.owner)}).toString();
+  }
+  el.addEventListener('click', async()=>{
+    await paintFrom(road,opts);
+    // A tool can close / open / switch forms (ActionClose, a script that calls
+    // OpenForm), so the strip is re-read rather than waited for: the dying tab
+    // goes now instead of on the next poll tick.
+    refreshTabs();
+  });
+}
+
 class Tool extends BaseControl{
-  // Representation modes from the server (ibRepresentation enum):
-  //   0 Auto  — server resolves before sending; browser never sees 0
-  //   1 Text            — label only, no icon
-  //   2 Picture         — icon only, no label
-  //   3 PictureAndText  — icon + label
-  //
-  // node.picture, when present, is a data:image/png;base64,... URI
-  // produced server-side via ibBackendPicture::CreateBase64Image.
-  // hasPicture=true with empty node.picture falls back to a CSS block.
   render(node){
     const el=document.createElement('button');el.className='tool';
     el.type='button';
-
+    this.fill(el,node);
+    bindToolActivation(el, node);
+    return el;
+  }
+  // node.picture, when present, is a data:image/png;base64 URI produced by
+  // ibBackendPicture::CreateBase64Image; hasPicture without data falls back
+  // to a CSS block.
+  fill(el,node){
+    el.replaceChildren();
     const rep = node.representation|0;
     const showIcon = (rep === 2 || rep === 3) && !!node.hasPicture;
-    // Picture mode = icon only, Text = label only, PictureAndText =
-    // both, Auto (0) resolved server-side.
     const showText = !!node.label && (rep === 1 || rep === 3);
-    if (rep === 2 && node.hasPicture) el.classList.add('tool-picture-only');
-
+    el.classList.toggle('tool-picture-only', rep === 2 && !!node.hasPicture);
     if (showIcon) {
-      if (node.picture) {
-        // Server-encoded PNG data URI — render directly.
-        const ic = document.createElement('img');
-        ic.className = 'tool-icon';
-        ic.src = node.picture;
-        ic.alt = node.label || '';
-        el.appendChild(ic);
-      } else {
-        // Placeholder when hasPicture is true but no data — e.g. a
-        // picture ref that didn't resolve to a bitmap.
-        const ic = document.createElement('span');
-        ic.className = 'tool-icon';
-        el.appendChild(ic);
-      }
+      const ic = document.createElement(node.picture ? 'img' : 'span');
+      ic.className = 'tool-icon';
+      if (node.picture) { ic.src = node.picture; ic.alt = node.label || ''; }
+      el.appendChild(ic);
     }
     if (showText) {
       const lbl = document.createElement('span');
       lbl.textContent = node.label;
       el.appendChild(lbl);
     }
-    if (node.enabled===false) el.disabled=true;
-    if(node.id){
-      el.onclick=async()=>{
-        const r=await netFetch(API+'/action/'+node.id,{method:'POST',credentials:'same-origin'});
-        if(r.ok){
-          const tree=await r.json();
-          if(tree&&!tree.error){
-            main.innerHTML='';
-            if(Object.keys(tree).length>0) main.appendChild(render(tree));
-          }
-          else OES.handleBackendError(tree);
-          // Tool actions can close / open / switch forms (ActionClose,
-          // custom scripts that call OpenForm). Refresh the tab strip
-          // so the dying tab disappears immediately instead of waiting
-          // for the next 2s poll tick — fast now that localhost
-          // requests redirect to 127.0.0.1 (no IPv6 fallback tax).
-          refreshTabs();
-        }
-      };
-    }
-    return el;
+    el.oesCaption=captionKey(node);
+  }
+  update(el,node,prev){
+    // The click handler was bound to a road and an owner; a different one is a
+    // different tool.
+    if(toolRoad(node)!==toolRoad(prev) || node.owner!==prev.owner) return false;
+    if(el.oesCaption!==captionKey(node)) this.fill(el,node);
+    return true;
   }
 }
 
 class ToolSeparator extends BaseControl{
   render(){ const el=document.createElement('span');el.className='toolseparator';return el; }
+  update(){ return true; }
 }
 
 class CheckBox extends BaseControl{
   render(node){
     const wrap=document.createElement('label');wrap.className='ctrl checkbox';
     const el=document.createElement('input');el.type='checkbox';
-    el.checked=!!node.value;
     if(node.id){
-      el.addEventListener('change',async()=>{
-        const body=new URLSearchParams({checked:el.checked?'1':'0'});
-        const r=await netFetch(API+'/toggle/'+node.id,{
-          method:'POST',credentials:'same-origin',
-          headers:{'Content-Type':'application/x-www-form-urlencoded'},
-          body:body.toString()
-        });
-        if(r.ok){
-          const tree=await r.json();
-          if(tree&&!tree.error){ main.innerHTML=''; main.appendChild(render(tree)); }
-          else OES.handleBackendError(tree);
-        }
-      });
+      el.addEventListener('change',()=>paintFrom(API+'/toggle/'+node.id,{method:'POST',
+        headers:FORM_HEADERS,body:new URLSearchParams({checked:el.checked?'1':'0'}).toString()}));
     }
     wrap.appendChild(el);
-    if(node.label){ const s=document.createElement('span');s.textContent=' '+node.label;wrap.appendChild(s); }
+    const s=document.createElement('span');
+    wrap.appendChild(s);
+    wrap.oesInput=el; wrap.oesText=s;
+    this.update(wrap,node,{});
     return wrap;
+  }
+  update(wrap,node){
+    wrap.oesInput.checked=!!node.value;
+    wrap.oesText.textContent=node.label?' '+node.label:'';
+    return true;
   }
 }
 
+// ---------------------------------------------------------------------------
+// TableBox — the one grid engine (ADR-003).
+//
+// Two roads meet here. The shape (columns, captions, widths, value
+// types) arrives in the form JSON, pushed by the controls themselves.
+// The rows arrive on their own, one page per request, from
+// GET /fetch/<id> — a list is paged in the engine by architecture, and
+// pretending otherwise on the way to the browser would only mean
+// reading a whole catalogue to draw twenty lines of it.
+//
+// Row keys are minted by the server and stay valid for the life of its
+// window, so a page fetched on scroll does not renumber what is already
+// on screen. The client never invents one.
+//
+// The tree carries no rows, so it says when they moved instead: `dataVersion`
+// is the model's view generation. A grid whose columns are unchanged keeps its
+// instance across answers and re-reads its rows when that number moves.
+// ---------------------------------------------------------------------------
+
+// 700 KB of grid arrives only when a form actually has a table on it.
+let tabulatorPromise=null;
+function loadTabulator(){
+  if(tabulatorPromise) return tabulatorPromise;
+  tabulatorPromise=(async()=>{
+    const link=document.createElement('link');
+    link.rel='stylesheet';
+    link.href=new URL('./assets/tabulator/6.5.2/tabulator.css',document.baseURI).href;
+    const styled=new Promise(done=>{
+      link.addEventListener('load',done);
+      link.addEventListener('error',done);
+    });
+    document.head.appendChild(link);
+    const mod=await import('tabulator-tables');
+    await styled;
+    return mod.TabulatorFull;
+  })();
+  return tabulatorPromise;
+}
+
+// The server keeps at most this many rows in a window; a re-read never asks
+// for more.
+const TABLEBOX_WINDOW_CAP=5000;
+
+// The cell's own editor: the text, plus the buttons the column declares — Select
+// (…), Open (▷), Clear (×). The same three a form field carries, read from the
+// same three properties, which is why a number column shows them too: the
+// desktop's inline editor reads exactly these and shows exactly these.
+//
+// A button is the act, not the text beside it: the edit is cancelled first, so
+// the editor's own commit road and the button's cannot both reach the same line.
+// Then the cursor moves to the row and the kind goes to the COLUMN — the shape
+// every cell request has.
+function oesCellEditor(tableId,columnId,buttons){
+  return function(cell,onRendered,success,cancel){
+    let settled=false;
+    const group=document.createElement('div');
+    group.className='oes-cell-editor';
+    const input=document.createElement('input');
+    input.type='text';
+    input.value=cell.getValue()??'';
+    group.appendChild(input);
+    onRendered(()=>{ input.focus(); input.select(); });
+    const commit=()=>{ if(settled) return; settled=true; success(input.value); };
+    input.addEventListener('blur',commit);
+    input.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){ e.preventDefault(); commit(); }
+      else if(e.key==='Escape'){ e.preventDefault(); settled=true; cancel(); }
+    });
+    const key=cell.getRow().getData()._key;
+    for(const [glyph,kind,title] of buttons){
+      const btn=document.createElement('button');
+      btn.type='button'; btn.textContent=glyph; btn.title=title;
+      // Keep the focus where it is: a blur here commits the cell through the
+      // editor's own road at the same moment the button takes its own, and the
+      // two would race for one line.
+      btn.addEventListener('mousedown',e=>e.preventDefault());
+      btn.addEventListener('click',async()=>{
+        settled=true; cancel();
+        const moved=await netFetch(API+'/fire/'+tableId+'/row?value='+encodeURIComponent(key),
+          {method:'POST',credentials:'same-origin'});
+        if(!moved.ok) return;
+        const painted=await paintFrom(API+'/fire/'+columnId+'/'+kind,{method:'POST'},true);
+        if(!painted) return;
+        // Select and Open can raise a form of their own — a picker, the
+        // referenced object — so the tab strip is re-read at once.
+        if(kind!=='cellClear') refreshTabs();
+      });
+      group.appendChild(btn);
+    }
+    return group;
+  };
+}
+
+// Columns, in the order the header draws them. A group is transparent
+// unless it is a HORIZONTAL group with a title, which is the one kind
+// Tabulator also has: its columns sit side by side under one caption.
+// OES vertical and in-cell groups are a row BAND — the row grows taller
+// instead of wider — which Tabulator has no notion of, so those flatten
+// here and their columns stay side by side. See docs-web/web/tablebox.md.
+// Returns the column definitions, and fills `sortableBy` (field -> the
+// column control's id) as it goes. The field is unique per column, so it
+// is the join; a private key on the definition itself would be validated
+// against Tabulator's own option list and warned about by name.
+function tableboxColumns(node,sortableBy,editableBy,tableId){
+  const out=[];
+  for(const kid of (node.children||[])){
+    if(kid.type==='tableboxcolumngroup'){
+      if(kid.visible===false) continue;
+      const inner=tableboxColumns(kid,sortableBy,editableBy,tableId);
+      if(!inner.length) continue;
+      if(kid.showTitle&&kid.grouping==='horizontal')
+        out.push({title:kid.caption||'',headerHozAlign:kid.align||'center',columns:inner});
+      else out.push(...inner);
+      continue;
+    }
+    if(kid.type!=='tableboxcolumn'||kid.visible===false) continue;
+    const arrow=kid.sortOrder==='asc'?' ▲':kid.sortOrder==='desc'?' ▼':'';
+    const col={
+      title:(kid.caption||'')+arrow,
+      field:kid.field,
+      hozAlign:kid.align||'left',
+      headerHozAlign:kid.headerAlign||'left',
+      resizable:kid.resizable!==false,
+      // The stored width is what the column asks for; the surplus is
+      // shared, so a table fills the space the form gave it instead of
+      // leaving a bare strip on the right — which is what the desktop
+      // grid does with the same numbers.
+      widthGrow:1,
+      // Tabulator's own sort is never used: it would reorder the page in
+      // hand and call that a sorted list. A header click goes to the
+      // server, which commits an ORDER BY to the composer and reads the
+      // list again from the top.
+      headerSort:false,
+    };
+    if(sortableBy&&kid.sortable) sortableBy.set(kid.field,kid.id);
+    // An editable column gets a plain text editor whatever it holds. The
+    // server coerces the typed string through the type the cell already has
+    // — a number, a date, a reference found by its name — which is the same
+    // road the desktop's inline editor takes, so there is one parser and not
+    // one per value type in the browser.
+    if(editableBy&&kid.readOnly===false){
+      editableBy.set(kid.field,kid.id);
+      const buttons=[];
+      if(kid.showSelectButton) buttons.push(['…','cellSelect','Select']);
+      if(kid.showOpenButton)   buttons.push(['▷','cellOpen','Open']);
+      if(kid.showClearButton)  buttons.push(['×','cellClear','Clear']);
+      col.editor=buttons.length?oesCellEditor(tableId,kid.id,buttons):'input';
+    }
+    if(kid.width>0) col.minWidth=kid.width;
+    out.push(col);
+  }
+  return out;
+}
+
+function tableboxRows(payload){
+  return (payload.rows||[]).map(r=>Object.assign(
+    {_key:r.key,_container:!!r.container,_group:r.group||''}, r.cells||{}));
+}
+
+// Everything that decides how the grid is built: the columns (caption, arrow,
+// width, editor) and the table's own options. A different shape is a different
+// grid; the data version and the command bar are not part of it.
+function tableboxShape(node){
+  const own=ownProps(node);
+  delete own.dataVersion;
+  delete own.commandbar;
+  own.children=node.children||[];
+  return JSON.stringify(own);
+}
+
+class TableBox extends BaseControl{
+  get ownsChildren(){ return true; }
+  render(node){
+    const host=document.createElement('div');
+    host.className='oes-tablebox';
+    host.dataset.ctrlId=node.id;
+    host.oesShape=tableboxShape(node);
+    host.oesBar=null;
+    host.oesGrid=null;
+
+    const grid=document.createElement('div');
+    grid.className='oes-tablebox-grid';
+    // What Tabulator draws inside is its own; applyCommon leaves it alone.
+    grid.oesForeign=true;
+    host.appendChild(grid);
+    this.syncBar(host,node);
+
+    const sortableBy=new Map();
+    const editableBy=new Map();
+    const columns=tableboxColumns(node,sortableBy,editableBy,node.id);
+    const pageSize=node.pageSize>0?node.pageSize:50;
+
+    // Built after the host lands in the document: Tabulator measures the
+    // element it is given, and a detached div measures zero.
+    requestAnimationFrame(async()=>{
+      if(host.oesDisposed) return;
+      let Tabulator;
+      try { Tabulator=await loadTabulator(); }
+      catch(e){ grid.textContent='Grid engine failed to load: '+e.message; return; }
+      if(host.oesDisposed) return;
+
+      let hasMore=false;
+      const table=new Tabulator(grid,{
+        height:'100%',
+        layout:'fitColumns',
+        columns,
+        data:[],
+        index:'_key',
+        headerVisible:node.header!==false,
+        placeholder:'—',
+        selectableRows:1,
+        columnDefaults:{headerSort:false},
+      });
+      // Held from this moment, so a host disposed before the grid is built
+      // still destroys it.
+      host.oesTable=table;
+
+      // The highlight is the SERVER's current row, not a memory of which
+      // <tr> was clicked: every page carries currentKey when the cursor
+      // is inside the window, and the grid is made to agree with it.
+      const showCurrent=key=>{
+        if(key===undefined||key===null) return;
+        const row=table.getRow(key);
+        if(!row) return;
+        for(const s of table.getSelectedRows()) if(s!==row) s.deselect();
+        row.select();
+      };
+
+      // One road for every page. Requests run one at a time on a single
+      // chain, so a small `next` cannot land ahead of the big `first` it was
+      // asked after; and every `first` opens a new generation, so an answer
+      // issued under an older one — a `next` from a window the server has
+      // since thrown away — is discarded rather than added onto fresh rows
+      // under the same keys. A page that is queued and not yet sent is not
+      // queued twice, since it reads its count when it goes; a `next` is one
+      // request while it is out as well, so a scroll that fires while its
+      // page is on the way asks for nothing more.
+      let chain=Promise.resolve(), generation=0;
+      const pending={first:false,next:false}, inflight={first:false,next:false};
+      const request=(dir,howMany,apply)=>{
+        if(pending[dir] || (dir==='next' && inflight[dir])) return chain;
+        pending[dir]=true;
+        const run=async()=>{
+          pending[dir]=false;
+          inflight[dir]=true;
+          try{ await send(); } finally { inflight[dir]=false; }
+        };
+        const send=async()=>{
+          if(host.oesDisposed) return;
+          const gen=dir==='first'?++generation:generation;
+          const count=typeof howMany==='function'?howMany():howMany;
+          const r=await netFetch(API+'/fetch/'+node.id+'?dir='+dir+'&count='+count);
+          if(!r.ok||host.oesDisposed||gen!==generation) return;
+          const payload=await r.json();
+          if(!payload.ok||host.oesDisposed||gen!==generation) return;
+          await apply(payload);
+          // The version the rows on screen were read at (the server reads it
+          // after the page), which the next tree is compared against.
+          if(typeof payload.dataVersion==='number') host.oesRowsVersion=payload.dataVersion;
+          hasMore=!!payload.hasMore;
+          showCurrent(payload.currentKey);
+        };
+        chain=chain.then(run,run).catch(e=>console.log('fetch page failed',e));
+        return chain;
+      };
+      const fetchPage=dir=>request(dir,pageSize,async payload=>{
+        const rows=tableboxRows(payload);
+        if(payload.reset) await table.setData(rows);
+        else if(rows.length) await table.addData(rows,false);
+      });
+
+      // The rows moved on the server (the tree's dataVersion is past the one
+      // the rows were read at). Read again from the top as many rows as are
+      // on screen, so the pages scrolled to are kept, and put them in place:
+      // replaceData keeps the scroll position, setData would reset it. A
+      // version already asked for is not asked for twice.
+      const refetch=version=>{
+        if(version!==undefined && host.oesRowsWanted===version) return;
+        host.oesRowsWanted=version;
+        request('first',()=>Math.min(TABLEBOX_WINDOW_CAP,Math.max(pageSize,table.getDataCount())),
+          payload=>table.replaceData(tableboxRows(payload)))
+          .finally(()=>{ if(host.oesRowsWanted===version) host.oesRowsWanted=undefined; });
+      };
+
+      table.on('tableBuilt',()=>{
+        if(host.oesDisposed) return;
+        host.oesGrid={table,refetch};
+        fetchPage('first');
+      });
+
+      // Scroll-driven prefetch: the same shape the desktop control uses
+      // (ibDataViewCtrl::OnScrollEvent asks the model for the next page
+      // as the viewport approaches the end).
+      table.on('scrollVertical',top=>{
+        const holder=grid.querySelector('.tabulator-tableholder');
+        if(!holder||!hasMore) return;
+        if(top+holder.clientHeight>=holder.scrollHeight-holder.clientHeight/2)
+          fetchPage('next');
+      });
+
+      // The cursor is the server's current line — the row a command runs
+      // against. Selection in the grid is only how it is shown. An empty or
+      // failed answer is null, and painting null paints nothing.
+      const send=async(kind,key)=>{
+        const r=await netFetch(API+'/fire/'+node.id+'/'+kind+'?value='+encodeURIComponent(key),
+          {method:'POST',credentials:'same-origin'});
+        if(!r.ok) return null;
+        const tree=await r.json();
+        return tree&&!tree.error&&Object.keys(tree).length>0?tree:null;
+      };
+      table.on('rowClick',async(e,row)=>{
+        const key=row.getData()._key;
+        if(key===undefined) return;
+        // Mark it before the round trip. The server is what decides the
+        // current row, but a click that shows nothing until the answer
+        // comes back reads as a click that did not land.
+        for(const s of table.getSelectedRows()) if(s!==row) s.deselect();
+        row.select();
+        await send('row',key);
+      });
+      // A header click sorts on the server. The answer is the whole form
+      // again with the arrow moved on the column; the arrow is part of the
+      // column shape, so the grid is rebuilt and asks for the first page of
+      // the new order. The old page keys named rows in the old one.
+      table.on('headerClick',async(e,column)=>{
+        const id=sortableBy.get(column.getField());
+        if(id===undefined) return;
+        paintTree(await send('sort',id));
+      });
+      // A cell committed. Two posts, in this order and awaited: the cursor
+      // moves to the row, then the column is told what was typed. The column
+      // writes through the current line — the same rule the desktop has, where
+      // a cell cannot be edited without standing on its row — so the move is a
+      // precondition and not a convenience; if it fails, nothing is written.
+      //
+      // The answer is the whole form again: a committed cell can move anything
+      // (a price recalculating an amount, a script on the column), and the row
+      // that comes back is the row the server holds rather than the text that
+      // was typed at it.
+      table.on('cellEdited',async(cell)=>{
+        const id=editableBy.get(cell.getField());
+        const key=cell.getRow().getData()._key;
+        if(id===undefined||key===undefined) return;
+        // A refused edit puts the cell back. The server answers a form tree
+        // when it took the value and nothing when it did not — a name no goods
+        // answer to, a number that will not parse. Left alone, the browser
+        // would go on showing text the row does not hold; the desktop's editor
+        // restores the old text in exactly this case, and so does this.
+        const restore=()=>{ try{ cell.restoreOldValue(); }catch(e){} };
+        const moved=await netFetch(API+'/fire/'+node.id+'/row?value='+encodeURIComponent(key),
+          {method:'POST',credentials:'same-origin'});
+        if(!moved.ok) return restore();
+        const painted=await paintFrom(API+'/fire/'+id+'/cell?value='+encodeURIComponent(cell.getValue()??''),
+          {method:'POST'},true);
+        if(!painted) restore();
+      });
+      // Opening a row raises the object's own form — a new tab, so the
+      // tab strip is re-read and the returned tree is painted.
+      //
+      // Unless the row is EDITABLE, in which case the double click is already
+      // doing its work: the first of its two clicks opened the cell's editor.
+      // The same branch the desktop takes in ActivateRow, where an editable row
+      // starts the editor and opens nothing.
+      table.on('rowDblClick',async(e,row)=>{
+        const key=row.getData()._key;
+        if(key===undefined) return;
+        if(editableBy.size>0&&!row.getData()._container) return;
+        paintTree(await send('activate',key));
+        refreshTabs();
+      });
+    });
+
+    return host;
+  }
+  // The table's own command bar, above the grid — Add / Copy / Delete for a
+  // tabular section. It arrives beside the children rather than among them,
+  // because the children of a table are its columns; drawn through the
+  // ordinary toolbar renderer so it looks like every other strip.
+  syncBar(host,node){
+    if(node.commandbar){
+      const bar=reconcile(host,host.oesBar,node.commandbar,undefined,'commandbar');
+      bar.classList.add('oes-tablebox-bar');
+      if(host.firstChild!==bar) host.insertBefore(bar,host.firstChild);
+      host.oesBar=bar;
+    } else if(host.oesBar){
+      disposeEl(host.oesBar);
+      host.oesBar=null;
+    }
+  }
+  update(host,node,prev){
+    if(host.oesShape!==tableboxShape(node)) return false;
+    this.syncBar(host,node);
+    // The rows are stale when the tree's version is past the one they were
+    // read at — the page answer carries that (a list over a database snapshot
+    // moves the generation while it materialises its first page, so the
+    // previous tree's number would say "moved" once per mutation for
+    // nothing). A server that does not stamp the page leaves only the trees
+    // to compare.
+    if(node.dataVersion!==undefined && host.oesGrid){
+      const readAt=host.oesRowsVersion;
+      const moved=typeof readAt==='number' ? node.dataVersion>readAt
+                                          : node.dataVersion!==prev.dataVersion;
+      if(moved) host.oesGrid.refetch(node.dataVersion);
+    }
+    return true;
+  }
+  dispose(host){
+    host.oesDisposed=true;
+    host.oesGrid=null;
+    if(host.oesTable){ try{ host.oesTable.destroy(); }catch(e){} host.oesTable=null; }
+  }
+}
+
+class StaticLine extends BaseControl{
+  render(node){
+    const el=document.createElement('div');
+    el.className='staticline '+(node.orient===WX_VERTICAL?'vert':'horz');
+    return el;
+  }
+}
+
+class RadioButton extends BaseControl{
+  render(node){
+    const wrap=document.createElement('label');wrap.className='ctrl radiobutton';
+    const el=document.createElement('input');el.type='radio';
+    if(node.id){
+      el.addEventListener('change',()=>{
+        if(!el.checked) return;
+        paintFrom(API+'/fire/'+node.id+'/select',{method:'POST'});
+      });
+    }
+    wrap.appendChild(el);
+    const s=document.createElement('span');
+    wrap.appendChild(s);
+    wrap.oesInput=el; wrap.oesText=s;
+    this.update(wrap,node,{});
+    return wrap;
+  }
+  update(wrap,node){
+    // Which buttons are one choice is not a question the page can answer: the
+    // server names the group, being the side that holds the control tree.
+    wrap.oesInput.name='oes-radio-'+(node.group||0);
+    wrap.oesInput.checked=!!node.value;
+    wrap.oesText.textContent=node.label||'';
+    return true;
+  }
+}
+
+class Gauge extends BaseControl{
+  render(node){
+    const vert=node.orient===WX_VERTICAL;
+    const el=document.createElement('div');
+    el.className='gauge '+(vert?'vert':'horz');
+    const fill=document.createElement('div');fill.className='fill';
+    el.appendChild(fill);
+    el.oesFill=fill;
+    el.setAttribute('role','progressbar');
+    el.setAttribute('aria-valuemin','0');
+    this.update(el,node,{orient:node.orient});
+    return el;
+  }
+  update(el,node,prev){
+    if(node.orient!==prev.orient) return false;
+    const vert=node.orient===WX_VERTICAL;
+    const range=Math.max(1,node.range|0);
+    const value=Math.max(0,Math.min(range,node.value|0));
+    el.oesFill.style[vert?'height':'width']=(value/range*100)+'%';
+    el.setAttribute('aria-valuemax',String(range));
+    el.setAttribute('aria-valuenow',String(value));
+    return true;
+  }
+}
+
+class Slider extends BaseControl{
+  render(node){
+    const el=document.createElement('input');el.type='range';
+    el.className='ctrl slider'+(node.orient===WX_VERTICAL?' vert':'');
+    if(node.id){
+      // On release, not per pixel: the position is committed to a property on
+      // the server, and a drag would post a hundred times to say one thing.
+      el.addEventListener('change',()=>{
+        el.oesApplied=el.value;
+        paintFrom(API+'/fire/'+node.id+'/value?value='+encodeURIComponent(el.value),{method:'POST'});
+      });
+    }
+    this.update(el,node,{orient:node.orient});
+    return el;
+  }
+  update(el,node,prev){
+    if(node.orient!==prev.orient) return false;
+    el.min=String(node.min|0);
+    el.max=String(node.max|0);
+    // The same rule as a text field: a slider under the pointer keeps its
+    // position until it is released.
+    const v=String(node.value|0);
+    if(document.activeElement!==el || el.value===el.oesApplied){ el.value=v; el.oesApplied=v; }
+    return true;
+  }
+}
+
+// A notebook draws its own children: the pages are a strip of captions plus
+// ONE page, not a stack of panels. Which one is in front comes from the
+// server — a page brought forward runs the form's OnPageChanged, and a
+// choice the browser kept to itself would be undone by the next answer.
+// A page switch reconciles the body alone: a different page id is a new
+// element in place of the old, and nothing else on the form is touched.
+class Notebook extends BaseControl{
+  get ownsChildren(){ return true; }
+  render(node){
+    const el=document.createElement('div');
+    // `orient` here is the OrientPage property (wxAUI_NB_TOP / _BOTTOM), which
+    // is a different enum from the sizer orientation of the same field name.
+    el.className='notebook';
+    const strip=document.createElement('div');strip.className='nb-strip';
+    const body=document.createElement('div');body.className='nb-body';
+    el.appendChild(strip);
+    el.appendChild(body);
+    el.oesStrip=strip; el.oesBody=body; el.oesActiveId=null;
+    this.update(el,node,{});
+    return el;
+  }
+  update(el,node){
+    el.classList.toggle('bottom',node.orient===WX_AUI_NB_BOTTOM);
+    const pages=(node.children||[]).filter(
+      kid=>kid && kid.type==='notebookpage' && kid.shown!==false);
+    const active=pages.find(p=>p.id===node.active)||pages[0]||null;
+    el.oesActiveId=active?active.id:null;
+
+    // The strip: one button per visible page, kept by page id and put in page
+    // order; a caption is redrawn only when it changed.
+    const strip=el.oesStrip;
+    const spare=new Map();
+    for(const b of Array.from(strip.children)) spare.set(b.dataset.pageId,b);
+    pages.forEach((page,i)=>{
+      const pid=page.id!=null?String(page.id):'@'+i;
+      let tab=spare.get(pid);
+      if(tab) spare.delete(pid);
+      else {
+        tab=document.createElement('button');
+        tab.type='button';tab.className='nb-tab';
+        tab.dataset.pageId=pid;
+        if(node.id && page.id){
+          tab.onclick=()=>{
+            if(page.id===el.oesActiveId) return;
+            paintFrom(API+'/fire/'+node.id+'/page?value='+encodeURIComponent(page.id),{method:'POST'});
+          };
+        }
+      }
+      // Same three ways a tool reads its own caption.
+      const cap=captionKey(page);
+      if(tab.oesCaption!==cap){
+        tab.replaceChildren();
+        const rep=page.representation;
+        if(page.hasPicture && page.picture && rep!==1){
+          const img=document.createElement('img');
+          img.src=page.picture;img.alt='';
+          tab.appendChild(img);
+        }
+        if(rep!==2) tab.appendChild(document.createTextNode(page.label||''));
+        tab.oesCaption=cap;
+      }
+      tab.setAttribute('aria-selected',String(page===active));
+      if(strip.children[i]!==tab) strip.insertBefore(tab,strip.children[i]||null);
+    });
+    for(const b of spare.values()) b.remove();
+
+    // The body: the page in front, reconciled against whatever is there.
+    const body=el.oesBody;
+    const current=body.firstElementChild;
+    if(active) reconcile(body,current,active,undefined,nodeKey(active,0));
+    else if(current) disposeEl(current);
+    return true;
+  }
+}
+
+class NotebookPage extends BaseControl{
+  render(){
+    const el=document.createElement('div');el.className='notebookpage';
+    return el;
+  }
+  // The caption is the strip's business; the page itself is a box.
+  update(){ return true; }
+}
+
+class HtmlBox extends BaseControl{
+  render(node){
+    const el=document.createElement('div');el.className='htmlbox';
+    const frame=document.createElement('iframe');
+    // The markup is the application's, and it stays in its own frame: no
+    // scripts, no origin, nothing it can reach in the page around it.
+    frame.setAttribute('sandbox','');
+    frame.title=node.label||'';
+    frame.srcdoc=node.page||'';
+    el.appendChild(frame);
+    el.oesFrame=frame;
+    return el;
+  }
+  update(el,node,prev){
+    el.oesFrame.title=node.label||'';
+    // Setting srcdoc reloads the frame, so only a page that changed is set.
+    if((node.page||'')!==(prev.page||'')) el.oesFrame.srcdoc=node.page||'';
+    return true;
+  }
+}
 
 const renderers={
   'visualHost':    new HostControl(),
@@ -1903,6 +2772,14 @@ const renderers={
   'toolbar':       new Toolbar(),
   'tool':          new Tool(),
   'toolseparator': new ToolSeparator(),
+  'tablebox':      new TableBox(),
+  'staticline':    new StaticLine(),
+  'radiobutton':   new RadioButton(),
+  'gauge':         new Gauge(),
+  'slider':        new Slider(),
+  'notebook':      new Notebook(),
+  'notebookpage':  new NotebookPage(),
+  'htmlbox':       new HtmlBox(),
 };
 const fallback=new BaseControl();
 
@@ -1915,67 +2792,334 @@ const WX_LEFT=0x0010, WX_RIGHT=0x0020, WX_TOP=0x0040, WX_BOTTOM=0x0080;
 const WX_ALIGN_RIGHT=0x0200, WX_ALIGN_CENTER_H=0x0100;
 const WX_ALIGN_BOTTOM=0x0400, WX_ALIGN_CENTER_V=0x0800;
 const WX_EXPAND=0x2000;
+// Orientation, as the sizer enum has it (wxHORIZONTAL / wxVERTICAL) — read by
+// the static line, the gauge and the slider. A NOTEBOOK's `orient` is a
+// different enum in the same field: which edge its tab strip runs along.
+const WX_VERTICAL=8;
+const WX_AUI_NB_BOTTOM=8;
 
+// Applied on every pass, so everything it can set it also clears: a layout
+// block that went away leaves nothing behind.
 function applyLayout(el, layout){
-  if(!layout) return;
-  const p=layout.proportion|0, f=layout.flag|0, b=layout.border|0;
+  const l=layout||{};
+  const p=l.proportion|0, f=l.flag|0, b=l.border|0;
   // Main axis: proportion > 0 → share the remaining space.
   // Cross axis: only wxEXPAND stretches. proportion alone does NOT
   // imply cross-axis growth — desktop wxSizer treats them as
   // independent axes (form1 textctrl: prop=1, no EXPAND → grows
   // vertically, width stays natural).
-  if(p>0) el.style.flexGrow=String(p);
-  if(f & WX_EXPAND) el.style.alignSelf='stretch';
-  if(b>0){
-    if(f & WX_LEFT)   el.style.marginLeft  =b+'px';
-    if(f & WX_RIGHT)  el.style.marginRight =b+'px';
-    if(f & WX_TOP)    el.style.marginTop   =b+'px';
-    if(f & WX_BOTTOM) el.style.marginBottom=b+'px';
-  }
+  el.style.flexGrow=p>0?String(p):'';
+  el.style.marginLeft  =(b>0&&(f & WX_LEFT))  ?b+'px':'';
+  el.style.marginRight =(b>0&&(f & WX_RIGHT)) ?b+'px':'';
+  el.style.marginTop   =(b>0&&(f & WX_TOP))   ?b+'px':'';
+  el.style.marginBottom=(b>0&&(f & WX_BOTTOM))?b+'px':'';
   // Explicit align flags override the default flex-start.
-  if(f & WX_ALIGN_CENTER_V || f & WX_ALIGN_CENTER_H) el.style.alignSelf='center';
-  else if(f & WX_ALIGN_RIGHT || f & WX_ALIGN_BOTTOM) el.style.alignSelf='flex-end';
+  let align=(f & WX_EXPAND)?'stretch':'';
+  if(f & WX_ALIGN_CENTER_V || f & WX_ALIGN_CENTER_H) align='center';
+  else if(f & WX_ALIGN_RIGHT || f & WX_ALIGN_BOTTOM) align='flex-end';
+  el.style.alignSelf=align;
 }
 
-function render(node){
-  if(!node||typeof node!=='object') return document.createTextNode('');
+// ---------------------------------------------------------------------------
+// The reconciler. The DOM is kept, and each incoming tree is folded into it
+// control by control: an element is found by its key (the control id, or
+// type@index for a sizer, which has none), asked to bring itself up to date,
+// and created afresh only when it says it cannot. What survives is what a
+// rebuild threw away: the scroll position, the focus, the grid and its loaded
+// pages.
+//
+// Every managed element carries oesCtrl (its renderer), oesKey, oesType and
+// oesNode — the previous node without its children, which is what update
+// compares against.
+// ---------------------------------------------------------------------------
+function nodeKey(node,index){
+  return node.id!=null ? '#'+node.id : node.type+'@'+index;
+}
+function nodeMemo(node){
+  const memo=Object.assign({},node);
+  delete memo.children;
+  return memo;
+}
+
+// Reconciles one node against the element that stood for it (or null) and
+// returns the element that stands for it now. When existingEl is in parentEl
+// the new element takes its place; otherwise a new element is appended.
+function reconcile(parentEl, existingEl, node, layout, key){
+  if(key===undefined) key=nodeKey(node,0);
   const ctrl=renderers[node.type]||fallback;
-  const el=ctrl.render(node);
+  let el=null;
+  if(existingEl && existingEl.oesKey===key && existingEl.oesCtrl===ctrl
+     && ctrl.update(existingEl,node,existingEl.oesNode||{})){
+    el=existingEl;
+  } else {
+    el=ctrl.render(node);
+    el.oesCtrl=ctrl; el.oesKey=key; el.oesType=node.type;
+    if(node.id!=null) el.dataset.oesId=node.id;
+    if(existingEl){
+      if(existingEl.parentNode===parentEl) parentEl.replaceChild(el,existingEl);
+      disposeEl(existingEl);
+    } else if(parentEl) parentEl.appendChild(el);
+  }
+  el.oesNode=nodeMemo(node);
   ctrl.applyCommon(el,node);
-  for(const kid of (node.children||[])){
-    const childEl=render(kid);
-    applyLayout(childEl, kid.layout);
-    el.appendChild(childEl);
-  }
-  // Label-row post-processing for box-sizers. After the browser lays
-  // out (rAF), walk direct [data-labelrow] children and decide:
-  //   • Vertical sizer with ≥1 labelled sibling → set min-width on every
-  //     label = max non-empty label width across siblings, so all
-  //     trailing controls align on the same x. Equivalent in effect to
-  //     desktop's ibVisualHost::CalculateLabelSize.
-  //   • Horizontal sizer, or all-empty vertical sizer → hide the empty
-  //     placeholder spans so the flex gap doesn't add visible indent
-  //     before each input.
-  // Flex layout itself stays intact; wxSizer's per-child proportion/
-  // flag/border still apply through applyLayout.
-  // Form-level label-column alignment lands on the host root — single
-  // post-render pass walks the form tree once, mirroring desktop's
-  // ibVisualHost::CalculateAndApply: every label-bearing control gets
-  // min-width = global max, EXCEPT within a horizontal sizer where only
-  // the FIRST labelrow takes the column (subsequent siblings keep their
-  // natural width, the column "breaks" — see Apply()'s
-  // `parentSizer == wxHORIZONTAL → maxLabelWidth = wxNOT_FOUND` reset
-  // in visualHost.cpp).
-  if(node.type==='visualHost' || node.type==='mdiChild'){
-    requestAnimationFrame(()=>alignLabelsGlobal(el));
-  }
+  applyLayout(el,layout);
+  // A control whose children are not widgets draws its own subtree: a
+  // table's columns are a header, not eight boxes stacked under it.
+  if(!ctrl.ownsChildren) reconcileChildren(el,node.children||[]);
   return el;
 }
+
+// The children of an ordinary container, matched by key: an element the
+// renderer put there itself (a legend) carries no key and stays in front.
+function reconcileChildren(parentEl, children){
+  const spare=new Map();
+  let lead=0;
+  for(const c of Array.from(parentEl.children)){
+    if(c.oesKey!==undefined) spare.set(c.oesKey,c);
+    else if(spare.size===0) lead++;
+  }
+  const els=children.map((kid,i)=>{
+    if(!kid||typeof kid!=='object') return null;
+    const key=nodeKey(kid,i);
+    const existing=spare.get(key)||null;
+    spare.delete(key);
+    return reconcile(parentEl,existing,kid,kid.layout,key);
+  }).filter(Boolean);
+  for(const c of spare.values()) disposeEl(c);
+  els.forEach((el,i)=>{
+    const at=parentEl.children[lead+i]||null;
+    if(at!==el) parentEl.insertBefore(el,at);
+  });
+}
+
+// Removes an element and lets every renderer below it let go of what it holds.
+function disposeEl(el){
+  el.remove();
+  const stack=[el];
+  while(stack.length){
+    const e=stack.pop();
+    if(e.oesCtrl) e.oesCtrl.dispose(e);
+    for(const c of e.children) stack.push(c);
+  }
+}
+
+// Focus across a pass. An element that is brought up to date keeps its focus
+// by itself; one that had to be rebuilt loses it, and the input of the same
+// control id gets it back, caret included.
+function captureFocus(root){
+  const a=document.activeElement;
+  if(!a||!root.contains(a)) return null;
+  const owner=a.closest('[data-oes-id]');
+  const memo={el:a, id:owner?owner.dataset.oesId:null, start:null, end:null, dir:null};
+  try{ memo.start=a.selectionStart; memo.end=a.selectionEnd; memo.dir=a.selectionDirection; }catch(_){}
+  return memo;
+}
+function restoreFocus(memo, root){
+  if(!memo || memo.el.isConnected || memo.id===null) return;
+  const owner=root.querySelector(`[data-oes-id="${memo.id}"]`);
+  if(!owner) return;
+  // The same kind of element it lost: a text field's input, not the first
+  // button that happens to be inside the control (a grid's command bar).
+  const focusable=memo.el.matches('input,textarea')?'input,textarea':'button,select';
+  const target=owner.matches(focusable)?owner:owner.querySelector(focusable);
+  if(!target) return;
+  target.focus({preventScroll:true});
+  if(memo.start!==null && memo.start!==undefined){
+    try{ target.setSelectionRange(memo.start,memo.end,memo.dir||'none'); }catch(_){}
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mounts. One retained DOM per host, keyed by the host's root id; a host
+// object lives as long as its tab, and its id with it. The active one is
+// shown and the others hidden, so a tab switch brings back the DOM it left —
+// scroll position, loaded pages, the row somebody stood on.
+//
+// Each mount remembers the last `seq` it applied. A tree whose seq is not past
+// it is the same state again (the stream echoing a direct answer) and is
+// dropped; a tree without one is always applied.
+//
+// The sequence is the session's, not the host's, and it only goes up — so the
+// highest seq applied anywhere is a floor as well. Without it a late frame for
+// a host that has since been closed (a picker, a tab) would find no mount to
+// compare against and be mounted: a dead form back on screen. The floor is
+// reset only with the session.
+// ---------------------------------------------------------------------------
+const mounts=new Map();   // host id -> {el, container, seq}
+let seqFloor=null;
+
+function isStaleTree(tree){
+  if(typeof tree.seq!=='number') return false;
+  if(seqFloor!==null && tree.seq<=seqFloor) return true;
+  const m=mounts.get(tree.id);
+  return !!m && typeof m.seq==='number' && tree.seq<=m.seq;
+}
+
+// The single entry for every road that gets a tree.
+function mount(container, tree){
+  const key=nodeKey(tree,0);
+  let m=mounts.get(tree.id);
+  if(m && m.container!==container){ unmount(tree.id); m=null; }
+  const memo=m?captureFocus(m.el):null;
+  if(m){
+    m.el=reconcile(container,m.el,tree,undefined,key);
+  } else {
+    m={el:reconcile(container,null,tree,undefined,key), container, seq:null};
+    mounts.set(tree.id,m);
+  }
+  m.el.oesHostId=tree.id;
+  if(typeof tree.seq==='number'){
+    m.seq=tree.seq;
+    if(seqFloor===null || tree.seq>seqFloor) seqFloor=tree.seq;
+  }
+  for(const o of mounts.values()) if(o.container===container) showMount(o,o===m);
+  restoreFocus(memo,m.el);
+  // The label column is measured once per pass, after layout.
+  requestAnimationFrame(()=>alignLabelsGlobal(m.el));
+  return m.el;
+}
+function showMount(m, visible){
+  const wasHidden=m.el.hidden;
+  m.el.hidden=!visible;
+  // A grid laid out while its mount was hidden measured nothing, and rows
+  // that arrived meanwhile were never laid out; a full redraw does both.
+  if(visible && wasHidden)
+    for(const host of m.el.querySelectorAll('.oes-tablebox'))
+      if(host.oesGrid) host.oesGrid.table.redraw(true);
+  syncPlaceholder();
+}
+function hideMounts(){
+  for(const o of mounts.values()) showMount(o,false);
+}
+function unmount(id){
+  const m=mounts.get(id);
+  if(!m) return;
+  mounts.delete(id);
+  disposeEl(m.el);
+  syncPlaceholder();
+}
+// The "Pick a form" line stands whenever no host is on screen in the content
+// area.
+const placeholder=main.querySelector('p');
+function syncPlaceholder(){
+  if(!placeholder) return;
+  let shown=false;
+  for(const o of mounts.values()) if(o.container===main && !o.el.hidden) shown=true;
+  placeholder.hidden=shown;
+}
+// After the tab strip is re-read: a hidden mount whose host is on no tab is
+// gone on the server, and goes here. The one on screen is left alone — a
+// /session answer can predate the tree that mounted it, and a host that is
+// truly gone is hidden by the next answer and disposed on the read after —
+// unless the strip is empty, when nothing is open and every mount goes. A
+// server that does not name hosts on its tabs gives nothing to compare
+// against, so then too only an empty strip disposes.
+function disposeOrphanMounts(tabs){
+  const live=new Set();
+  let named=false;
+  for(const t of tabs){ if(t.host!==undefined){ named=true; live.add(t.host); } }
+  if(tabs.length===0){ for(const id of Array.from(mounts.keys())) unmount(id); return; }
+  if(!named) return;
+  for(const [id,m] of Array.from(mounts)) if(!live.has(id) && m.el.hidden) unmount(id);
+}
+
+// Where a form tree is painted, decided once. Every road that gets a form back —
+// a command, a control action, a cell commit, a tab switch, the live stream —
+// has to make this decision, and each of them was making it by hand.
+//
+// A form the server opened as a value PICKER says so, and it is drawn OVER the
+// form that asked rather than beside it: a choice is a question, and the form
+// underneath must not be usable while the question stands. Anything else is the
+// active form and goes to the content area — closing whatever dialog was up,
+// because the server has moved on from it.
+//
+// Returns true when the tree is on screen (painted now, or already there).
+let modalForm = null;   // {handle, id, following, body} — the picker currently up
+function paintTree(tree){
+  if(!tree || tree.error || Object.keys(tree).length===0) return false;
+  if(isStaleTree(tree)){
+    console.log(`tree ${tree.seq} for host ${tree.id} is already shown, dropped`);
+    return true;
+  }
+  if(tree.modal) return paintModalForm(tree);
+  closeModalForm();
+  mount(main,tree);
+  return true;
+}
+
+// The picker, in the dialog framework the client already has. Its body is a
+// mount like any other, so an answer that carries the same picker again is
+// reconciled into it rather than drawn afresh.
+function paintModalForm(tree){
+  if(modalForm && modalForm.id===tree.id){
+    mount(modalForm.body,tree);
+    return true;
+  }
+  closeModalForm();
+  const body=document.createElement('div');
+  body.className='oes-modal-form';
+  const record={id:tree.id, following:false, handle:null, body};
+  mount(body,tree);
+  record.handle=OES.showDialog({
+    dialogClass:'oes-form-dialog',
+    title:tree.caption||'',
+    body,
+    // One button, and it is the way OUT. Choosing is the picker's own Select —
+    // its toolbar carries it, first, the way the desktop's select form does —
+    // so a second one in the footer would be two doors to one act. The default
+    // footer is a lone "OK", which here would be an OK that cancels.
+    buttons:[{label:L.cancel, onClick:(d)=>d.close()}],
+    dismissible:true,
+    // Walking away from the question is an answer too, and the server has to
+    // hear it: the form is still open there, holding the control that asked.
+    // `following` marks the closes that came FROM the server, which must not
+    // be echoed back to it.
+    onClose:()=>{
+      if(record.following) return;
+      if(modalForm===record) modalForm=null;
+      unmount(record.id);
+      closeModalFormOnServer();
+    },
+  });
+  modalForm=record;
+  return true;
+}
+
+// Walking away from the question is an answer, and the server has to hear it:
+// the picker is still a form there, still holding the control that asked. It is
+// closed the way any tab is (DELETE /tab/<i>), which runs beforeClose / onClose
+// and tells the owner nothing — which is what a cancelled choice means.
+//
+// The index is asked for at the moment of dismissal rather than remembered: one
+// noted when the dialog opened is a guess by the time it closes.
+async function closeModalFormOnServer(){
+  const info=await netFetch(API+'/session',{credentials:'same-origin'})
+    .then(r=>r.json()).catch(()=>null);
+  const tab=((info&&info.tabs)||[]).find(t=>t.modal);
+  if(!tab) return;
+  await paintFrom(API+'/tab/'+(tab.index|0),{method:'DELETE'});
+  refreshTabs();
+}
+
+// The server closed it (a choice was made, a script closed the form): take the
+// dialog down without telling the server what it already knows.
+function closeModalForm(){
+  if(!modalForm) return;
+  const record=modalForm;
+  modalForm=null;
+  record.following=true;
+  record.handle.close();
+  unmount(record.id);
+}
+
 
 // Idempotent (re-running resets minWidth/display first).
 function alignLabelsGlobal(rootEl){
   if(!rootEl) return;
-  const labels=rootEl.querySelectorAll('[data-labelrow] > .statictext');
+  // A label marks itself: the renderer that draws one tags the row and the
+  // caption inside it, so this reads two attributes rather than guessing at
+  // which child of a row is the label.
+  const labels=rootEl.querySelectorAll('[data-labelrow] > [data-label-host]');
   for(const lbl of labels){
     lbl.style.minWidth='';
     lbl.style.display='';
@@ -2009,7 +3153,7 @@ function applyLabelColumnWalk(node, maxW, parentOrient){
       const childOrient=cls.contains('horz') ? 'horz' : 'vert';
       applyLabelColumnWalk(c, maxW, childOrient);
     } else if(c.dataset && c.dataset.labelrow){
-      const lbl=c.querySelector(':scope > .statictext');
+      const lbl=c.querySelector(':scope > [data-label-host]');
       if(lbl){
         if(parentOrient==='horz' && horzColumnTaken){
           // Column already consumed by an earlier sibling in this horz
@@ -2030,42 +3174,24 @@ function applyLabelColumnWalk(node, maxW, parentOrient){
 }
 
 
-// Poll the active host every few seconds so timer-driven updates
-// surface between user actions. Diff by JSON string to avoid pointless
-// DOM rebuilds. Pauses when the tab is hidden (visibility API) — no
-// point fetching when the user isn't looking. Replace-on-change keeps
-// the server's state authoritative; pending local edits on form
-// inputs are preserved by the browser between polls only up to the
-// next mismatch, which is the expected desktop-like behaviour.
-let lastActiveJson = null;
+// Poll the active host every few seconds so timer-driven updates surface
+// between user actions. The tree is reconciled into the retained DOM, and one
+// the mount has already shown (by seq) is dropped in paintTree. Pauses when
+// the tab is hidden (visibility API) — no point fetching when the user isn't
+// looking.
 async function pollActive(){
   if (inflight > 0) return;
   const t0 = performance.now();
   try {
     const r = await netFetch(API+'/active', {credentials:'same-origin'});
-    const tFetch = performance.now();
     // 401 = session expired / server restarted / idle-timeout evicted.
     // Show a sticky banner with a reload button and stop polling — the
     // user has to reload to mint a fresh session + re-run OnStart.
     if (r.status === 401) { showSessionLost(); return; }
-    if (!r.ok) { console.log(`poll /active: fetch=${(tFetch-t0).toFixed(1)}ms NOT OK`); return; }
-    const text = await r.text();
-    const tText = performance.now();
-    if (text === lastActiveJson || text === '{}') {
-      if (tText - t0 > 300)
-        console.log(`poll /active: fetch=${(tFetch-t0).toFixed(1)}ms read=${(tText-tFetch).toFixed(1)}ms (no change)`);
-      return;
-    }
-    lastActiveJson = text;
-    const tree = JSON.parse(text);
-    const tParse = performance.now();
-    if (tree && !tree.error) {
-      main.innerHTML = '';
-      main.appendChild(render(tree));
-    }
-    const tRender = performance.now();
-    if (tRender - t0 > 300)
-      console.log(`poll /active: fetch=${(tFetch-t0).toFixed(1)}ms read=${(tText-tFetch).toFixed(1)}ms parse=${(tParse-tText).toFixed(1)}ms render=${(tRender-tParse).toFixed(1)}ms`);
+    if (!r.ok) { console.log(`poll /active: ${(performance.now()-t0).toFixed(1)}ms NOT OK`); return; }
+    paintTree(await r.json());
+    const dt = performance.now() - t0;
+    if (dt > 300) console.log(`poll /active: ${dt.toFixed(1)}ms`);
   } catch (e) {
     console.log(`poll /active failed after ${(performance.now()-t0).toFixed(1)}ms`, e);
   }
@@ -2098,24 +3224,29 @@ function stopPolling(){
 // (SSE costs one open socket per tab — no point keeping it alive while
 // the user isn't looking).
 let liveSource = null;
-function applyActiveJsonText(text){
-  if (text === lastActiveJson || text === '{}' || !text) return;
-  lastActiveJson = text;
+// A frame off the stream. It is the same tree a direct answer carries, and
+// most often the same seq: the mount drops the second of the pair.
+function applyTreeText(text){
+  if (!text || text === '{}') return;
   try {
-    const tree = JSON.parse(text);
-    if (tree && !tree.error) {
-      main.innerHTML = '';
-      main.appendChild(render(tree));
-    }
+    paintTree(JSON.parse(text));
   } catch (e) {
-    console.log('sse parse failed', e);
+    console.log('stream frame unreadable', e);
   }
 }
 function startLive(){
   if (liveSource) return;
   if (typeof EventSource === 'undefined') { startPolling(); return; }
   try {
-    liveSource = new EventSource(API + '/stream', { withCredentials: true });
+    // EventSource cannot carry a header, so the per-tab session id goes
+    // in the query string -- the server reads ?sid= for exactly the
+    // requests that can only send a URL. The cookie would answer too,
+    // but it names ONE session for the whole browser, and every tab
+    // here has its own; a second tab would have been listening to the
+    // first tab's stream, and a browser that dropped the cookie got a
+    // 401 and fell back to polling for the rest of the session.
+    liveSource = new EventSource(API + '/stream?sid=' + encodeURIComponent(tabSid),
+      { withCredentials: true });
   } catch (e) {
     console.log('SSE unavailable, falling back to polling', e);
     startPolling();
@@ -2125,7 +3256,7 @@ function startLive(){
   // first, then fetch /session for chrome updates (title, status,
   // messages) the same event likely produced. Single round-trip latency
   // instead of waiting for the 2s pollChrome tick.
-  liveSource.onmessage = ev => { applyActiveJsonText(ev.data); pollChrome(); };
+  liveSource.onmessage = ev => { applyTreeText(ev.data); pollChrome(); };
   liveSource.onerror = () => {
     // Either the server dropped us or the network flapped. Tear down
     // the EventSource and fall back to polling — polling renews the
@@ -2136,12 +3267,29 @@ function startLive(){
     startPolling();
   };
   // If we upgrade to SSE mid-session, make sure the polling loop isn't
-  // also firing — doubles up on server work and fights with lastActiveJson.
+  // also firing — it would double up on server work.
   stopPolling();
 }
 function stopLive(){
   if (liveSource) { liveSource.close(); liveSource = null; }
 }
+
+// The development harness injects captured host trees into the real renderer
+// through the same door every server answer takes, so a second fixture with
+// the same root id is reconciled into the first. This path is query-gated and
+// accepts only its same-origin parent.
+if(rendererHarness){
+  window.addEventListener('message',event=>{
+    const data=event.data;
+    if(event.origin!==location.origin || event.source!==parent ||
+       !data || data.type!=='oes-render-fixture' ||
+       !data.fixture || typeof data.fixture!=='object') return;
+    stopLive();
+    stopPolling();
+    paintTree(data.fixture);
+  });
+}
+
 
 // Session-lost banner — fires when /active returns 401 (server restart,
 // idle-timeout eviction, or explicit destroy). Blocks the page so the
@@ -2165,6 +3313,8 @@ async function showSessionLost(){
   if (sessionLostShown) return;
   sessionLostShown = true;
   stopPolling(); stopLive();
+  // The next session starts its sequence afresh.
+  seqFloor = null;
   const configChanged = await checkMetaChanged();
   const overlay = document.createElement('div');
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);'
@@ -2187,24 +3337,18 @@ async function showSessionLost(){
 }
 document.addEventListener('visibilitychange', ()=>{
   if (document.hidden) { stopLive(); stopPolling(); }
-  else { startLive(); }
+  else if(!rendererHarness) { startLive(); }
 });
 
-// On session start, OnStart may have opened forms (auto-populated tabs)
-// before the walker ever ran — /active alone returns a bare visualHost
-// with no children. POST /tab/<active> forces CreateAndUpdateVisualHost
-// on the active tab's host and returns its tree, so the body paints on
-// first load without waiting for a user click. No-op when the session
-// has no tabs.
+// On session start, OnStart may have opened forms already. POST /tab/<active>
+// activates the active tab on the server and answers with its tree, so the
+// body paints on first load without waiting for a user click. No-op when the
+// session has no tabs.
 async function paintActiveTab(){
   const info=await netFetch(API+'/session',{credentials:'same-origin'}).then(r=>r.json());
   if(!info||!info.tabs||info.tabs.length===0) return;
   const active=info.activeTab|0;
-  const tree=await netFetch(API+'/tab/'+active,{method:'POST',credentials:'same-origin'}).then(r=>r.json());
-  if(tree&&!tree.error&&Object.keys(tree).length>0){
-    main.innerHTML='';
-    main.appendChild(render(tree));
-  }
+  await paintFrom(API+'/tab/'+active,{method:'POST'});
 }
 
 // Tab strip overflow controls. The strip is overflow-x:auto; when the
@@ -2258,10 +3402,13 @@ async function paintActiveTab(){
     refreshTabs().catch(() => {}),
     paintActiveTab().catch(() => {}),
   ]);
-  startLive();
+  if(!rendererHarness) startLive();
   if (bootOverlay) {
     bootOverlay.classList.add('hide');
     setTimeout(() => bootOverlay.remove(), 200);
+  }
+  if(rendererHarness){
+    parent.postMessage({type:'oes-renderer-ready'},location.origin);
   }
   // Debug indicator: a "DEBUG" pill in the sidebar status line while
   // the wes process is in --debug mode. When this tab's session parks

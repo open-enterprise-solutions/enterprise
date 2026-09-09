@@ -2,7 +2,9 @@
 #include "widgets.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
-
+#ifdef OES_USE_WEB
+#include "frontend/web/webWindow.h"
+#endif
 
 //****************************************************************************
 //*                             StaticLine                                   *
@@ -12,8 +14,15 @@ ibValueStaticLine::ibValueStaticLine() : ibValueWindow()
 {
 }
 
-wxObject* ibValueStaticLine::Create(wxWindow* wxparent, ibVisualHost* visualHost)
+wxObject* ibValueStaticLine::Create(ibFrontendWindow* wxparent, ibVisualHost* visualHost)
 {
+#ifdef OES_USE_WEB
+	(void)wxparent;
+	(void)visualHost;
+	auto* staticline = new ibWebStaticLine(GetControlID());
+	staticline->SetOrientation(m_propertyOrient->GetValueAsInteger());
+	return staticline;
+#else
 	wxStaticLine* staticline = new wxStaticLine(wxparent, wxID_ANY,
 		wxDefaultPosition,
 		wxDefaultSize,
@@ -21,14 +30,21 @@ wxObject* ibValueStaticLine::Create(wxWindow* wxparent, ibVisualHost* visualHost
 	);
 
 	return staticline;
+#endif
 }
 
-void ibValueStaticLine::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
+void ibValueStaticLine::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 
 void ibValueStaticLine::Update(wxObject* wxobject, ibVisualHost* visualHost)
 {
+#ifdef OES_USE_WEB
+	(void)visualHost;
+	auto* staticline = static_cast<ibWebStaticLine*>(wxobject);
+	if (staticline != nullptr)
+		staticline->SetOrientation(m_propertyOrient->GetValueAsInteger());
+#else
 	wxStaticLine* staticline = dynamic_cast<wxStaticLine*>(wxobject);
 
 	if (staticline != nullptr) {
@@ -44,11 +60,12 @@ void ibValueStaticLine::Update(wxObject* wxobject, ibVisualHost* visualHost)
 		);
 		staticline->Show(isShown);
 	}
+#endif
 
 	UpdateWindow(staticline);
 }
 
-void ibValueStaticLine::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost)
+void ibValueStaticLine::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost)
 {
 }
 
