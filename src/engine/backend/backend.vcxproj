@@ -478,6 +478,7 @@
     <ClCompile Include="mcp\tools\mcpToolSheet.cpp" />
     <ClCompile Include="mcp\tools\mcpToolRoles.cpp" />
     <ClCompile Include="mcp\tools\mcpToolDatabase.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolComposition.cpp" />
     <ClCompile Include="mcp\tools\mcpToolSection.cpp" />
     <ClCompile Include="mcp\tools\mcpToolPlatform.cpp" />
     <ClCompile Include="mcp\tools\mcpToolBind.cpp" />

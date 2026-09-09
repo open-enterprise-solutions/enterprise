@@ -990,6 +990,9 @@
     <ClCompile Include="mcp\tools\mcpToolScript.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolComposition.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
     <ClCompile Include="mcp\tools\mcpToolSection.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>

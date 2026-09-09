@@ -768,6 +768,79 @@ MCP_TOOL_REGISTER(ibMcpToolMetadataGet);
 // designer's menu is built from. No list here decides what goes where, so a
 // metatype that becomes legal somewhere becomes creatable here on the same day.
 //
+// ⭐ NEARLY THAT NAME, ALREADY HERE. Two names are neighbours when one contains the other or they
+// share five leading characters, compared without case. Deliberately dumb: the case this exists for
+// is `Organization` beside a catalog `Organisations`, which diverge at the SIXTH letter — no
+// equality, no substring and no plural rule reaches it, and anything cleverer would start being
+// wrong without saying so.
+bool NearlyTheSameName(const wxString& a, const wxString& b)
+{
+	const wxString left = a.Lower(), right = b.Lower();
+	if (left.IsEmpty() || right.IsEmpty())
+		return false;
+	if (left.Contains(right) || right.Contains(left))
+		return true;
+
+	const size_t limit = std::min(left.length(), right.length());
+	size_t shared = 0;
+	while (shared < limit && left[shared] == right[shared])
+		shared++;
+	return shared >= 5;
+}
+
+// …and the walk that finds them. The whole tree, skipping the object just created and everything
+// under it: a fresh attribute is not its own neighbour, and its owner is the thing it was asked to
+// live in rather than a coincidence worth reporting.
+void CollectNeighbours(const ibValueMetaObject* node, const ibValueMetaObject* skip,
+	const wxString& name, std::vector<ibDataValue>& into)
+{
+	if (node == nullptr || node == skip || into.size() >= 8)
+		return;
+
+	for (unsigned int idx = 0; idx < node->GetChildCount(); idx++) {
+
+		const ibValueMetaObject* child = node->GetChild(idx);
+		if (child == nullptr || child == skip || child->IsDeleted())
+			continue;
+
+		if (NearlyTheSameName(name, child->GetName()) && into.size() < 8) {
+			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+			entry->AddField(wxT("id"), ibDataValue::Int((s64)child->GetMetaID()));
+			entry->SetValue(wxT("name"), child->GetName());
+			entry->SetValue(wxT("kind"), child->GetClassName());
+			// WHERE IT BELONGS — the half that turns "something similar exists" into a decision.
+			if (const ibValueMetaObject* owner = child->GetParent())
+				entry->SetValue(wxT("in"), owner->GetName());
+			into.push_back(ibDataValue::Child(entry));
+		}
+
+		CollectNeighbours(child, skip, name, into);
+	}
+}
+
+void SayNeighbours(ibMetaData* metaData, const ibValueMetaObject* created, ibDataNode& result)
+{
+	if (metaData == nullptr || created == nullptr)
+		return;
+
+	std::vector<ibDataValue> neighbours;
+	CollectNeighbours(metaData->GetCommonMetaObject(), created, created->GetName(), neighbours);
+	if (neighbours.empty())
+		return;
+
+	result.AddField(wxT("similar"), ibDataValue::Array(neighbours));
+	// ⚠ A REMARK, NOT A REFUSAL. The object is made and the name is legal; this is the one thing the
+	// configuration knows that the caller may not, said once, in the only breath where acting on it
+	// is still cheap. Stating the reference spelling as a PATTERN rather than as advice about this
+	// particular object keeps it honest: whether the new thing should point at a neighbour is a
+	// question about the model, and nothing here is entitled to answer it.
+	result.SetValue(wxT("similarNote"), ibMcpText(
+		"This configuration already holds objects by nearly this name - listed above with their kind "
+		"and where they live. If the new object was meant to POINT AT one of them rather than stand "
+		"beside it, that is a type: `<kind>Ref.<name>`, set with metadata_set_type. If it was meant "
+		"to be its own thing, nothing here is wrong."));
+}
+
 class ibMcpToolMetadataCreate : public ibMcpTool {
 public:
 
@@ -1044,6 +1117,30 @@ public:
 		// to be false.
 		result.AddField(wxT("created"), ibDataValue::Bool(true));
 		ibMcpSayObject(created, result);
+
+		// ⭐⭐ AND WHAT THIS CONFIGURATION ALREADY HAS BY NEARLY THAT NAME — said at the one moment it
+		// can still change the caller's mind, and said whether or not it was asked for.
+		//
+		// 🛑 THE MISTAKE IT EXISTS TO PREVENT (measured over this wire, 2026-09-09): a separator
+		// attribute called `Organization` was created and typed as a STRING while the configuration
+		// already carried a catalog `Organisations`. Nothing refused it — a string is a perfectly
+		// good type — and the result was a parallel vocabulary for something the model already had.
+		// Only a person reading the tree caught it - Max, looking at the same configuration: you are
+		// adding a catalog when the base already has one. A create that answers "made" and nothing
+		// else cannot be told apart
+		// from a create that was a good idea.
+		//
+		// ⭐ THE MATCH IS DELIBERATELY DUMB, because a clever one would be wrong quietly. A shared
+		// PREFIX of five characters or one name inside the other — that is the whole rule, and it
+		// spans the case that bit us (`Organization` / `Organisations` diverge at the sixth letter,
+		// so no equality, substring or plural rule would have caught it). It over-answers rather than
+		// under-answers: a neighbour that is not relevant costs a line to read, one that is missing
+		// costs a parallel model.
+		//
+		// ⭐ AND IT SAYS WHERE THE NEIGHBOUR LIVES AND HOW TO POINT AT IT. The kind and the owner are
+		// what turn "there is something similar" into a decision, and for a stored object the
+		// reference spelling is the answer the caller most likely wanted in the first place.
+		SayNeighbours(metaData, created, result);
 
 		// ⭐ AND WHAT IT WILL TAKE, asked of the object that now exists. This is the half that lets
 		// the tool know nothing about any particular kind: a caller creates, reads back the whole
