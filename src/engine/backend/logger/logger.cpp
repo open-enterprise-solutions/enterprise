@@ -7,6 +7,7 @@
 #include "backend/logger/loggerSweep.h"
 #include "backend/logger/loggerWriter.h"
 
+#include "backend/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider — the details payload
 #include "backend/session/session.h"
 #include "backend/userInfo.h"
 
@@ -181,11 +182,29 @@ void ibLogger::Emit(ibLogLevel level,
         e.ref_meta_id = refMetaId;
     }
 
-    // ibValue serialisation of `details` deferred — needs the
-    // metadataSerialization wrapper which pulls in heavier headers. For
-    // Phase 1 the BLOB column stays empty; structured payload is a
-    // Phase 3 follow-up alongside the integration sites that need it.
-    (void)details;
+    // ⭐ THE STRUCTURED PAYLOAD, PACKED WHERE IT ARRIVES. A value knows how to write itself into a
+    // node (`ibValue::Serialize` — the header is the base's, the contents the child's), and a node
+    // becomes bytes through the provider every other stored node in this tree goes through. Three
+    // lines, no wrapper: the "heavier headers" this was deferred for are `dataBuilder.h`, which the
+    // logger's own sink already sits beside.
+    //
+    // 🛑 IT WAS `(void)details;` FOR TWO AND A HALF MONTHS, and both ends looked finished from every
+    // side except the one that goes looking for the value: the column existed, the buffer existed,
+    // the sink bound it, `Audit` took a `const ibValue&` — and every row's BLOB was empty. A door
+    // that accepts an argument and discards it reads as working, which is why `WriteJournalEvent`
+    // became a caller relying on it (2026-09-06).
+    //
+    // ⚠ AND THE GATE IS THE VALUE'S OWN. `Serialize` refuses what cannot travel (a live form, an
+    // open connection) by answering false, so nothing here keeps a list of what may be logged —
+    // an unpackable value simply leaves the BLOB empty, exactly as before.
+    if (details != nullptr) {
+        ibDataNode node;
+        if (details->Serialize(node)) {
+            ibWriterMemory payload;
+            if (ibBinaryProvider().Write(node, payload))
+                e.details = payload.buffer();
+        }
+    }
 
     m_queue->Push(std::move(e));
 }

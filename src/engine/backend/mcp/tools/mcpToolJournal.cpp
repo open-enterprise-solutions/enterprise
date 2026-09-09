@@ -37,8 +37,12 @@
 
 #include "backend/appData.h"
 #include "backend/diagnostics/journal.h"
+#include "backend/compiler/value.h"      // ibValue - the payload journal_write carries
+#include "backend/system/value/valueMap.h"   // ibValueStructure - what a sent object becomes
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerReader.h"
+#include "backend/metadataConfiguration.h"   // activeMetaData - the door that knows configuration types
+#include "backend/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
 
 #include <wx/datetime.h>
 #include <wx/dir.h>
@@ -467,6 +471,55 @@ public:
 
 			entry->SetValue(wxT("message"), row.message);
 
+			// ⭐ AND WHAT THE ENTRY CARRIED, when it carried anything. The BLOB is a node written by
+			// ibBinaryProvider, so it is read back the same way and handed over as its FIELDS - a
+			// caller wants what was logged, not the bytes it was logged as.
+			//
+			// 🛑 THREE PLACES HAD TO AGREE AND ONLY TWO DID: the column existed, the sink bound it,
+			// and `ibLogger::Emit` discarded the value while the reader's SELECT stopped one field
+			// short. Filling the writer alone would have written into a column nobody reads.
+			if (row.details.GetDataLen() > 0) {
+				ibReaderMemory reader(row.details);
+				ibDataNode payload;
+				if (ibBinaryProvider().Read(reader, payload)) {
+					// ⚠ THE HEADER IS NOT THE PAYLOAD. A container writes a HEAD - its type and how
+					// many pairs - and puts the pairs themselves in its CHILDREN, so rendering the
+					// node's own fields answered `{type: Structure, n: 4}` and none of the four
+					// (measured 2026-09-09). The value knows its own shape: handed the whole node it
+					// rebuilds itself, and what a reader wants is what it then holds.
+					// 🛑 AND `Deserialize` ON A BLANK VALUE IS NOT THE DOOR - it answered true and left
+					// an Undefined, because a value cannot become a TYPE it is not yet.
+					//
+					// 🛑🛑 NOR IS `ibValue::FromNode` ON ITS OWN, AND THAT ONE MATTERS MORE. It reads the
+					// VALUE registry - the built-in classes, the ones that exist whether or not a
+					// configuration is open - and a REFERENCE is not among them: its clsid comes from
+					// a metaID no static table knows, so it THROWS. Which is exactly the payload worth
+					// journalling: "this document was written", "that item was retyped". Caught and
+					// reported as unreadable, the most valuable entries would have been the ones that
+					// never rendered (Max, 2026-09-09: *FromNode throws on a reference*).
+					//
+					// The metadata is the step IN FRONT of that registry, not a copy of it: it makes
+					// the types only it has and redirects everything else to the same mechanism. So
+					// the configuration answers when there is one, and the registry when there is not
+					// - the shape compositionDescription.cpp already uses at its own door.
+					std::shared_ptr<ibDataNode> carried = std::make_shared<ibDataNode>();
+					try {
+						const ibValue rebuilt = activeMetaData != nullptr
+							? activeMetaData->Deserialize(payload)
+							: ibValue::FromNode(payload);
+						carried->SetValue(wxT("type"), rebuilt.GetClassName());
+						carried->SetValue(wxT("value"), rebuilt.GetString());
+					}
+					catch (...) {
+						// A payload written by a version that is no longer here, or a type this
+						// process does not have. The row is still worth showing; the bytes are not.
+						carried->SetValue(wxT("type"), wxString(wxT("unreadable")));
+					}
+
+					entry->AddField(wxT("details"), ibDataValue::Child(carried));
+				}
+			}
+
 			// A row about a business object carries the object. That is what makes
 			// the journal navigable rather than merely readable.
 			if (!row.ref_guid.IsEmpty()) {
@@ -691,5 +744,197 @@ public:
 	}
 };
 
+//---------------------------------------------------------------------------
+// Writing INTO the registration journal
+//---------------------------------------------------------------------------
+//
+// ⭐ THE OTHER DIRECTION, WHICH DID NOT EXIST. Everything above reads; until now the only way for an
+// assistant to leave a line of its own was `WriteJournalEvent` from a SCRIPT, which needs a running
+// application - so from a designer alone, with nothing started, there was no road at all. A note
+// about what was just changed, a marker before a long run, a measurement worth finding again
+// tomorrow: none of it could be written where it would be looked for.
+//
+// ⭐ AND THE PAIR IS WHAT MAKES IT WORTH HAVING. `details` carries a VALUE, not a rendered string,
+// so what is written comes back as FIELDS rather than as prose to be parsed again - the same
+// payload road journal_read now reads. That road had to be repaired first: ibLogger::Emit ended
+// `(void)details;` and the reader's SELECT stopped one field short of the column, so both ends were
+// finished-looking and empty.
+//
+// 🛑 THE SOURCE IS NOT THE CALLER'S TO CHOOSE. Every row written here is signed `assistant`, and
+// that is a rule rather than a default: a journal is evidence, and a verb that let its caller sign
+// a line `metadata` or `auth` would let the assistant forge the platform's own record. What the
+// caller names is the EVENT - its own vocabulary, inside its own source.
+
+const ibArg& ArgWriteMessage()
+{
+	static const ibArg a(wxT("message"), ibArg::Kind::Text,
+		ibMcpText("The line itself, written for whoever reads the journal later - which may be a "
+			  "person scrolling it in the designer, so a sentence beats a token."), /*required*/ true);
+	return a;
+}
+
+const ibArg& ArgWriteEvent()
+{
+	static const ibArg a(wxT("event"), ibArg::Kind::Text,
+		ibMcpText("What kind of line this is, in your own words - `probe`, `measurement`, `before "
+			  "restructure`. It is what the journal's Event column shows and what journal_read "
+			  "{event} filters on, so reuse a spelling rather than inventing one per call."));
+	return a;
+}
+
+const ibArg& ArgWriteLevel()
+{
+	static const ibArg a(wxT("level"), ibArg::Kind::Text,
+		ibMcpText("info (default), warn, error - or audit, which is not a severity but the BUSINESS "
+			  "TRAIL an auditor reads. A note about your own work is info; use audit only for "
+			  "something the installation actually did."));
+	return a;
+}
+
+const ibArg& ArgWriteDetails()
+{
+	static const ibArg a(wxT("details"), ibArg::Kind::Node,
+		ibMcpText("Anything structured worth keeping beside the line - numbers, ids, a before/after "
+			  "pair. Stored as a VALUE and read back as fields, so it does not have to be squeezed "
+			  "into the message and parsed out again later. A payload rides the audit road, which "
+			  "is the overload a value travels through."));
+	return a;
+}
+
+class ibMcpToolJournalWrite : public ibMcpTool {
+public:
+
+	wxString GetName() const override { return wxT("journal_write"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return ibMcpText("writing a line into the registration journal");
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("LEAVE A LINE IN THE REGISTRATION JOURNAL - the record this installation "
+			"keeps, and the one a person actually scrolls. Use it to fix something you will want "
+			"BACK: what you measured before a change, which of two roads a run took, a marker around "
+			"a long operation, a note to the person at the designer. journal_read finds it again, "
+			"filtered by event, by text, or by the session it was written in. Everything written "
+			"here is signed `assistant` - the source is not a caller's to choose, because a journal "
+			"is evidence; what you name is the EVENT. `details` takes a structured value and comes "
+			"back as fields, so numbers stay numbers.");
+	}
+
+	wxString GetSearchText() const override
+	{
+		return ibMcpText("journal write note record log entry remember leave a line audit trail "
+			"measurement marker");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = {
+			ArgWriteMessage(), ArgWriteEvent(), ArgWriteLevel(), ArgWriteDetails() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		if (appData == nullptr || appData->GetLogger() == nullptr) {
+			refusal = ibMcpText("There is no journal open to write into.");
+			return false;
+		}
+
+		const wxString message = ArgWriteMessage().Text(params);
+		if (message.IsEmpty()) {
+			refusal = ibMcpText("An empty line is not a record - say what happened.");
+			return false;
+		}
+
+		const wxString asked = ArgWriteEvent().Text(params);
+		const wxString event = asked.IsEmpty() ? wxString(wxT("note")) : asked;
+
+		// ⚠ THE WORD IS CHECKED RATHER THAN MAPPED SILENTLY. A misspelled level that quietly became
+		// `info` would put the line somewhere the caller does not look for it afterwards - and a
+		// journal entry nobody finds is the one failure this verb exists to prevent.
+		const wxString levelWord = ArgWriteLevel().Text(params);
+		const int level = levelWord.IsEmpty() ? 0 : LevelFromWord(levelWord);
+		if (level < 0) {
+			refusal = wxString::Format(
+				ibMcpText("'%s' is not a level. It is info, warn or error - or audit, which is the "
+					  "business trail rather than a severity."), levelWord);
+			return false;
+		}
+
+		ibLogger* const logger = appData->GetLogger();
+		const wxString source = wxT("assistant");
+
+		// 🛑 WHAT ARRIVES IS NOT A SERIALISED VALUE, and reading it as one fails silently. A caller
+		// sends an ordinary JSON object; `ibValue::Deserialize` expects a node with the TYPE HEADER
+		// its own writer put there, so handed a bare object it answers false and the payload
+		// disappears while the line still lands (measured on the first run of this verb). What the
+		// caller means is a STRUCTURE, so one is built - which is also the value they would have
+		// written in script.
+		// ⚠ AND IT ARRIVES IN THE PROPERTY BAG, NOT AMONG THE FIELDS. `ibJsonProvider::Read` puts a
+		// nested object into the node's PROPERTIES - the two areas are one key set on the way in, and
+		// a Child lands on the property side. Reading only `FindField` found nothing and the payload
+		// vanished while the line still landed, twice, before the areas were checked (2026-09-09).
+		const ibDataValue* details = params.FindField(ArgWriteDetails().Name());
+		if (details == nullptr)
+			details = params.FindProperty(ArgWriteDetails().Name());
+
+		ibValue carried;
+		bool hasPayload = false;
+
+		if (details != nullptr && details->Kind() == ibDataKind::Child) {
+			const std::shared_ptr<ibDataNode> sent = details->AsChild();
+			ibValueStructure* const built = new ibValueStructure();
+			for (const std::pair<wxString, ibDataValue>& field : sent->Fields()) {
+				// Scalars only, and deliberately: a nested object in a journal line is a report, not
+				// a note, and quietly flattening one would store something the caller did not write.
+				switch (field.second.Kind()) {
+					case ibDataKind::Bool:   built->Insert(field.first, ibValue(field.second.AsBool())); break;
+					case ibDataKind::Number: built->Insert(field.first, ibValue(ibNumber(field.second.AsInt()))); break;
+					case ibDataKind::String: built->Insert(field.first, ibValue(field.second.AsString())); break;
+					default: break;
+				}
+			}
+			carried = ibValue(built);
+			hasPayload = true;
+		}
+
+		if (hasPayload) {
+			// A value travels on the audit overload and nowhere else. Rather than mint a second road
+			// for one argument, the row is said to be an audit row - and SAID SO in the answer, so a
+			// caller that asked for `info` and got the business trail is told why.
+			logger->Audit(source, event, message, carried);
+			result.SetValue(wxT("level"), wxString(wxT("audit")));
+			if (level != 3)
+				result.SetValue(wxT("levelNote"), ibMcpText(
+					"A payload travels on the audit road, so this line is an audit row whatever "
+					"level was asked for. Leave `details` off to write at a severity."));
+		}
+		else {
+			switch (level) {
+				case 1:  logger->Warn (source, event, message); break;
+				case 2:  logger->Error(source, event, message); break;
+				case 3:  logger->Audit(source, event, message); break;
+				default: logger->Info (source, event, message); break;
+			}
+			result.SetValue(wxT("level"), LevelName(level));
+		}
+
+		result.SetValue(wxT("written"), true);
+		result.SetValue(wxT("source"), source);
+		result.SetValue(wxT("event"), event);
+		// ⚠ THE QUEUE IS ASYNCHRONOUS, so "written" means ACCEPTED rather than on disk. Saying which
+		// of the two this is costs one line and saves a caller reading an empty answer back a moment
+		// later and concluding the write was lost.
+		result.SetValue(wxT("note"), ibMcpText(
+			"Accepted into the journal's queue - a read a moment later finds it. journal_read "
+			"{event} or {contains} is how to get it back."));
+		return true;
+	}
+};
+
 MCP_TOOL_REGISTER(ibMcpToolJournalRead);
 MCP_TOOL_REGISTER(ibMcpToolTraceRead);
+MCP_TOOL_REGISTER(ibMcpToolJournalWrite);

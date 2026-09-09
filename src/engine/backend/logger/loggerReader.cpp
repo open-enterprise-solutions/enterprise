@@ -164,7 +164,7 @@ std::vector<ibLogRow> ibLoggerReader::Query(const ibLogFilter& filter)
 
     BoundFilter bf = BuildWhere(filter);
     wxString sql = wxT("SELECT ts_ms, level, session_id, user_name, host,"
-                       " source, event_type, message, ref_guid, ref_meta_id"
+                       " source, event_type, message, ref_guid, ref_meta_id, details"
                        " FROM log_entry");
     if (!bf.where.IsEmpty()) sql += wxT(" WHERE ") + bf.where;
     sql += wxT(" ORDER BY ts_ms DESC, id DESC");
@@ -208,6 +208,12 @@ std::vector<ibLogRow> ibLoggerReader::Query(const ibLogFilter& filter)
                 r.message     = rs->GetResultString(8);
                 r.ref_guid    = rs->GetResultString(9);
                 r.ref_meta_id = rs->GetResultInt(10);
+
+                // …and the payload, read back as the bytes it was stored as. Asked for LAST because a blob
+
+                // is the one field worth not fetching until the row is otherwise wanted.
+
+                rs->GetResultBlob(11, r.details);
                 rows.push_back(std::move(r));
                 if (rows.size() >= cap) break;
             }

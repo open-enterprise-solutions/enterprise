@@ -23,6 +23,13 @@ struct ibLogRow {
     wxString     message;
     wxString     ref_guid;
     int          ref_meta_id = 0;
+    // …AND THE STRUCTURED PAYLOAD THE ENTRY CARRIED, as it was stored: a node written by
+    // ibBinaryProvider. Empty for the rows that carried none, which is most of them.
+    //
+    // 🛑 IT WAS WRITTEN AND NEVER SELECTED. The column has existed since 2026-06-28 and the reader's
+    // SELECT stopped one field short of it, so even after the writer was fixed the value would have
+    // gone into a column nobody reads — the same defect twice, at the two ends of one row.
+    wxMemoryBuffer details;
 };
 
 // Filter passed to ibLoggerReader::Query / Count. Zero / empty fields
