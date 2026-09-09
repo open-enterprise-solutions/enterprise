@@ -963,6 +963,10 @@ public:
 	const std::vector<std::shared_ptr<ibBackendQueryColumn>>& SharedColumns() const { return m_ownedColumns; }
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override { return Column(name); }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_columns; }
+	// ⭐ …AND WHICH OF THEM IS THE ROW — the inner source's key, republished as THIS wrapper's own
+	// columns. Same shape ibAliasQueryable answers with, for the same reason: a wrapper is the same
+	// rows under new column identities, so "which column is the row" has to travel with them.
+	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // out-of-line — needs the inner builder
 
 	ibBackendQueryProvider& GetProvider() const override;            // out-of-line — vends the computed provider
 	bool IsComputedInRam() const override { return true; }

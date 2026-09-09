@@ -3288,6 +3288,13 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// a published set and a select list that disagree is the shape of that error.
 	std::vector<ibCteQueryable::Field> fields;
 	fields.reserve(innerSchema.size());
+	// ⭐ WHICH OF THE INNER SOURCE'S COLUMNS IS THE ROW — asked HERE, because this is the last place
+	// that still has the source. Past this point the declaration is a table with no storage behind it,
+	// and "which column is the row" is unanswerable from the outside. Only a single-source body can
+	// carry an identity across: a join publishes rows that are no one table's.
+	std::vector<const ibBackendQueryColumn*> innerKeys;
+	if (innerSources.size() == 1 && innerSources[0].m_q != nullptr)
+		innerKeys = innerSources[0].m_q->GetPrimaryKeyColumns();
 	// Every physical field this declaration actually writes, so the synthetic columns below can be
 	// asked the only question that decides them: are the fields you are made of in here?
 	std::vector<wxString> writtenFields;
@@ -3362,12 +3369,17 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		// author cannot name two outputs alike.
 		const bool spelledByAlias = oc.m_byAlias && !oc.m_alias.IsEmpty();
 
-		fields.push_back({ oc.m_name,
+		ibCteQueryable::Field field{ oc.m_name,
 			spelledByAlias ? ibSqlAliasOf(oc.m_alias)   // …in the STATEMENT's spelling, which is what was written
 			               : ((oc.m_col != nullptr && !repeated) ? oc.m_col->GetPhysicalName() : oc.m_name),
 			oc.m_type,
 			computed ? ibBackendQueryColumn::Kind::Computed
-			         : ibBackendQueryColumn::Kind::Composite });
+			         : ibBackendQueryColumn::Kind::Composite };
+		// …and whether this output IS the row. A repeated projection of the key is the same column
+		// under a second name, and only the first one published stands for it.
+		field.m_isKey = !repeated && oc.m_col != nullptr
+			&& std::find(innerKeys.begin(), innerKeys.end(), oc.m_col) != innerKeys.end();
+		fields.push_back(field);
 		// What this output really puts in the statement — the spread of the column behind it. A
 		// repeated alias writes the SAME fields under its own name, so it adds nothing here.
 		if (oc.m_col != nullptr && !repeated && !spelledByAlias)

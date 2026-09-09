@@ -3307,12 +3307,17 @@ public:
 		int DepthOfDetails() const { return static_cast<int>(m_depth + (m_to - m_from) - 1); }
 	};
 
-	// `identity` = the column that IS the row (the source's single reference key), 0 when it has none.
-	// The snapshot fold reads it off the source into its DimCtx; this one is told, for the same use.
+	// ⚠ NO `identity` HERE, AND THAT IS AN ANSWER RATHER THAN AN OMISSION. The snapshot fold reads the
+	// row's identity into its `DimCtx` because its headings ARE the rows; this road was taught the same
+	// rule, it was RUN, and it was taken out again the next day — the note at the top of `FeedLadder`
+	// says what the sheet looked like. It used to be TOLD the identity anyway, and the parameter then
+	// sat unread, which reads from the outside exactly like a rule that failed to arrive: a reader
+	// coming from the snapshot road found a field nothing touched and a compiler warning agreeing with
+	// them. Read `FeedLadder` before adding it back.
 	ibStreamingFold(ibSelectorTree& tree, const std::vector<ibTotalLevel>& levels,
 	                const std::vector<ibDataQueryBuilder::AggregateItem>& aggs,
-	                const std::vector<ibQueryRamColumn>& rowColumns, ibMetaID identity = 0)
-		: m_levels(levels), m_aggs(aggs), m_rowColumns(rowColumns), m_identity(identity)
+	                const std::vector<ibQueryRamColumn>& rowColumns)
+		: m_levels(levels), m_aggs(aggs), m_rowColumns(rowColumns)
 	{
 		// WHERE THE PAGE STOPS AND THE PAGE-WIDTH STARTS — asked of the levels, which say which way
 		// they read. Everything from here on is a column key of a cross-table.
@@ -3680,7 +3685,6 @@ private:
 	const std::vector<ibTotalLevel>&                      m_levels;
 	const std::vector<ibDataQueryBuilder::AggregateItem>& m_aggs;
 	const std::vector<ibQueryRamColumn>&                  m_rowColumns;   // what a DETAIL row writes
-	ibMetaID                                              m_identity = 0; // …and the column that IS the row
 	std::vector<FoldNode>                                 m_pool;
 	// THE LADDERS THIS FOLD BUILDS — one without `SPLIT`, and then one per branch. What used to be
 	// three fields about "the levels" now belongs to each section, because with branches there is no
@@ -4706,15 +4710,10 @@ ibSelectorTree ibQueryComposer::BuildDimensionTree(ibQueryRowCursor& rows,
 		tree.AddColumn(col.m_id, col.m_name, col.m_type);
 	AddSyntheticAggColumns(tree, aggregates);
 
-	// …AND WHICH COLUMN IS THE ROW'S IDENTITY. The parameter arrived here all along and only the
-	// SNAPSHOT road read it, so an ordinary grouping — which streams — folded without ever knowing.
-	ibMetaID identity = 0;
-	if (source != nullptr) {
-		const std::vector<const ibBackendQueryColumn*> keys = source->GetPrimaryKeyColumns();
-		if (keys.size() == 1 && keys.front() != nullptr)
-			identity = keys.front()->GetColumnId();
-	}
-	ibStreamingFold fold(tree, levels, aggregates, rows.Columns(), identity);
+	// ⚠ AND THE ROW'S IDENTITY IS NOT ASKED FOR ON THIS ROAD — see the note over `ibStreamingFold`'s
+	// constructor. The snapshot road asks the source for it (`BuildDimensionTree` below) because its
+	// headings ARE the rows; a streamed ladder is read literally, one heading per rung.
+	ibStreamingFold fold(tree, levels, aggregates, rows.Columns());
 	long read = 0;
 	while (rows.Next()) { fold.Feed(rows); ++read; }
 	fold.Finish();

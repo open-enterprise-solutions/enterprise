@@ -122,6 +122,42 @@ std::vector<const ibBackendQueryColumn*> ibAliasQueryable::GetPrimaryKeyColumns(
 	return keys;
 }
 
+// ⭐ THE NESTED QUERY'S KEY — the inner source's, republished as the columns THIS wrapper exposes.
+//
+// 🛑 IT WAS NOT ANSWERED AT ALL, and the silence reached every report. A COMPOSITION always renders
+// its source as a nested query (queryLowering.cpp, the note over `q_sub<n>`), so a report reads
+// through this wrapper; the base's empty answer left `DimCtx::identity` at 0, and a level keyed by
+// the row's own identity then stopped BEING the row — a catalog grouped by Reference printed its
+// headings with Code and Description blank, which is the exact defect `AttachDimValue`'s rule exists
+// to prevent. Measured 2026-09-09: source `q_sub0` keys=0 against `Goods` keys=1 on the road that
+// does not wrap, same query, same settings.
+//
+// ⚠ ALL OR NOTHING. A key half-projected is not a key: if any of the inner source's key columns is
+// not published here, this wrapper genuinely does not carry the identity, and saying so with an
+// empty answer beats handing back a partial key that reads exactly like a whole one.
+std::vector<const ibBackendQueryColumn*> ibSubqueryQueryable::GetPrimaryKeyColumns() const
+{
+	std::vector<const ibBackendQueryColumn*> keys;
+	if (!m_inner)
+		return keys;
+	const ibBackendQueryable* const inner = m_inner->GetPrimarySource();
+	if (inner == nullptr)
+		return keys;
+	for (const ibBackendQueryColumn* k : inner->GetPrimaryKeyColumns()) {
+		const ibBackendQueryColumn* published = nullptr;
+		// The exposed column IS the inner one where nothing was renamed; where the inner query gave
+		// an alias, `m_readFrom` is what names the real column behind it (they run in parallel).
+		for (std::size_t i = 0; i < m_columns.size(); ++i) {
+			const ibBackendQueryColumn* const from = (i < m_readFrom.size()) ? m_readFrom[i] : nullptr;
+			if (m_columns[i] == k || from == k) { published = m_columns[i]; break; }
+		}
+		if (published == nullptr)
+			return std::vector<const ibBackendQueryColumn*>();   // the key is not carried — say nothing
+		keys.push_back(published);
+	}
+	return keys;
+}
+
 const ibBackendQueryColumn* ibAliasQueryable::GetHierarchyColumn() const
 {
 	const ibBackendQueryColumn* h = m_origin->GetHierarchyColumn();

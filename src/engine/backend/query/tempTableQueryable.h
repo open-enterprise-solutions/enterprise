@@ -344,6 +344,10 @@ public:
 		ibTypeDescription           m_type;
 		ibBackendQueryColumn::Kind  m_kind = ibBackendQueryColumn::Kind::Composite;
 		const ibBackendQueryColumn* m_borrowed = nullptr;   // published as-is; the four above are then unused
+		// ⭐ …AND WHETHER THIS FIELD IS THE ROW ITSELF — the inner source's uniqueness key, carried
+		// across the declaration. A CTE has no storage to ask, so the only honest moment to know it is
+		// where the declaration is built and the inner source is still in hand.
+		bool                        m_isKey = false;
 	};
 
 	// `firstOrdinal` — the ORDINARY number the minted columns are counted from, one per declaration
@@ -367,6 +371,7 @@ public:
 				// what makes it readable at all: the fields it names are the ones the SELECT wrote for
 				// the columns it is made of.
 				m_columns.push_back(field.m_borrowed);
+				if (field.m_isKey) m_keys.push_back(field.m_borrowed);
 				continue;
 			}
 			if (field.m_name.IsEmpty())
@@ -377,6 +382,7 @@ public:
 				ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Subquery, ordinal++),
 				wxEmptyString, field.m_kind));
 			m_columns.push_back(m_owned.back().get());
+			if (field.m_isKey) m_keys.push_back(m_columns.back());
 		}
 	}
 
@@ -393,6 +399,21 @@ public:
 	ibGuid            GetQueryTableGuid() const override { return m_guid; }
 	ibMetaID          GetQueryTableId()   const override { return 0; }          // not a metaobject
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }
+
+	// ⭐⭐ WHICH COLUMN IS THE ROW — carried across the declaration instead of being lost at it.
+	//
+	// 🛑 THIS ANSWERED NOTHING, and the silence reached every report. A COMPOSITION always renders its
+	// source as a nested query (queryLowering.cpp, the note over `q_sub<n>`), and that nested query is
+	// declared as one of these — so `ibQueryComposer`'s `DimCtx::identity` came back 0 for every
+	// composed report there has ever been. A level keyed by the row's own identity then stopped BEING
+	// the row: a catalog grouped by Reference printed its headings with Code and Description BLANK,
+	// which is the exact defect `AttachDimValue`'s rule exists to prevent. Measured 2026-09-09 on a
+	// live base: source `q_sub0` keys=0, against `Goods` keys=1 on the road that does not wrap.
+	//
+	// ⚠ It is the DECLARATION's own columns that are published, not the inner source's — the same
+	// shape `ibAliasQueryable` answers with, and for the same reason: a wrapper is the same rows under
+	// new column identities, so the answer has to be in the identities the outer query will see.
+	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return m_keys; }
 
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
 	{
@@ -413,6 +434,7 @@ private:
 	ibGuid                                   m_guid;
 	std::vector<std::shared_ptr<ibTempColumn>> m_owned;    // the columns this source publishes — minted here, SHARED so a reader may keep one
 	std::vector<const ibBackendQueryColumn*> m_columns;    // …and the same ones as the interface hands them out
+	std::vector<const ibBackendQueryColumn*> m_keys;       // …and the subset of them that IS the row (see GetPrimaryKeyColumns)
 	const ibMetaData*                        m_metaData;
 };
 
