@@ -1251,9 +1251,9 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 			const ibValueMetaObjectAttributeBase* kindSlot = GetAccountDimensionKindSlot(creditSide, no);
 			if (kinds.empty() && kindSlot != nullptr)
 				columns.push_back(ibTempColumn(name + wxT("Kind"), name + wxT("Kind"),
-				                               kindSlot->GetTypeDesc(), synthetic++));
+				                               kindSlot->GetTypeDesc(), ibRegDerivedColumnId(synthetic++)));
 
-			columns.push_back(ibTempColumn(name, name, sample->GetTypeDesc(), synthetic++));
+			columns.push_back(ibTempColumn(name, name, sample->GetTypeDesc(), ibRegDerivedColumnId(synthetic++)));
 		}
 	};
 	addBreakdown(/*creditSide*/ false, kindsDr);
@@ -1276,7 +1276,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 		const wxString suffix = ibRegSidedFigure(figure, credit);
 		columns.push_back(ibTempColumn(resource->GetName() + suffix,
 		                               resource->GetName() + wxT("_") + suffix,
-		                               resource->GetTypeDesc(), synthetic++,
+		                               resource->GetTypeDesc(), ibRegDerivedColumnId(synthetic++),
 		                               ibRegFigureColumnCaption(resource->GetSynonym(), ibRegSidedCaption(figure, credit))));
 	};
 
@@ -1285,7 +1285,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 	const auto addSidelessFigure = [&](const ibValueMetaObjectAttributeBase* resource, const wxString& figure) {
 		columns.push_back(ibTempColumn(resource->GetName() + figure,
 		                               resource->GetName() + wxT("_") + figure,
-		                               resource->GetTypeDesc(), synthetic++,
+		                               resource->GetTypeDesc(), ibRegDerivedColumnId(synthetic++),
 		                               ibRegFigureColumnCaption(resource->GetSynonym(), ibRegFigureCaption(figure))));
 	};
 

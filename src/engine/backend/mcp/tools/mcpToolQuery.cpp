@@ -352,7 +352,12 @@ public:
 		return ibMcpText("Read a query the way the engine will: parse it, then resolve every name in it "
 			"against this configuration. ALWAYS ASK THIS BEFORE PUTTING A QUERY IN A MODULE - "
 			"a query lives inside a string, so script_check answers 'ok' for a module whose "
-			"query names a table that does not exist.");
+			"query names a table that does not exist.\n"
+			"It also answers `composer`: whether a COMPOSER could read this query. That is a "
+			"narrower question than `ok`, because a composer reads its query as a nested source "
+			"rather than running it as a statement, and a nested source does not carry every word "
+			"a statement does - TOTALS is the composer's own to place, with report_level and "
+			"report_resource. A JOIN is fine.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -379,9 +384,13 @@ public:
 		s32      line = 0;
 		s32      column = 0;
 
+		// Kept beyond the try: the composer verdict below is read off the AST that was just
+		// parsed, rather than off the text — a JOIN inside a string literal is not a join.
+		ibQueryPackage package;
+
 		try {
 			ibQueryParser parser;
-			const ibQueryPackage package = parser.ParsePackage(text);
+			package = parser.ParsePackage(text);
 
 			// AGAINST THIS CONFIGURATION, and said so explicitly. A query in a
 			// module sets no scope of its own and still means the tree it lives in;
@@ -424,8 +433,47 @@ public:
 
 		result.AddField(wxT("ok"), ibDataValue::Bool(complaint.IsEmpty()));
 
-		if (complaint.IsEmpty())
+		if (complaint.IsEmpty()) {
+
+			// ⭐ CAN A COMPOSER READ THIS? A narrower question than `ok`, because a composer reads
+			// its author's query as a NESTED SOURCE rather than running it as a statement, and a
+			// nested source does not carry every word a statement does.
+			//
+			// 🛑 JOIN IS NOT ONE OF THEM ANY MORE, and the day it was is worth remembering: a
+			// report joining two virtual tables saved, applied, and refused at RUN time with a
+			// message about a subquery and a UNION its author had never written (2026-09-09). The
+			// query was legitimate; the nested-source road simply built its FROM on one table by
+			// hand and had nowhere to put the second. It uses BuildSourceTree now — the statement
+			// road's own — so a join in a composer's query is an ordinary query.
+			//
+			// TOTALS is still the composer's own to place, so it stays here. Asked of the AST, not
+			// of the text: the word TOTALS inside a string literal is not one.
+			wxString cannot;
+
+			for (const ibQueryAstStatement& statement : package.m_statements) {
+
+				const ibQuerySelectPtr select = statement.m_select;
+				if (!select)
+					continue;
+
+				if (select->m_hasTotals) {
+					cannot = ibMcpText("it carries TOTALS");
+					break;
+				}
+			}
+
+			result.AddField(wxT("composer"), ibDataValue::Bool(cannot.IsEmpty()));
+
+			if (!cannot.IsEmpty()) {
+				result.SetValue(wxT("composerNote"), wxString::Format(
+					ibMcpText("Good as a query in a MODULE, but a composer cannot read it: %s, and a "
+					  "composer reads its query as a nested source, which does not carry that yet. "
+					  "Subtotals over a composer are the composer's own to place - report_level "
+					  "groups the rows and report_resource says what each level folds."), cannot));
+			}
+
 			return true;
+		}
 
 		result.SetValue(wxT("stage"), stage);
 		result.SetValue(wxT("problem"), complaint);

@@ -32,6 +32,7 @@
 // two files that DEFINE such a body need the real header, and they already include it.
 class wxIcon;
 
+#include <limits>   // numeric_limits — the ceiling a composed id may not pass (CanComposeSyntheticId)
 #include <memory>   // enable_shared_from_this — a column carries its own control block (see below)
 #include <vector>
 
@@ -231,6 +232,14 @@ public:
 		Aggregate,    // the slot a fold's figure lands in when it cannot roll into its input's column
 		GroupKey,     // a computed GROUP BY key — grouped by an expression, so it has no column
 		Subquery,     // what a nested query publishes for its own folds and walks
+		Derived,      // a register surface's own column — a figure, a coarser period projection
+
+		// 🛑 AND THAT IS THE LAST ONE. Kind 0 is the floor mark of a chain and the radix is 8, so the
+		// kinds are 1..7 and `Derived` is the seventh. A NEW KIND FROM HERE COSTS A WIDER RADIX, and
+		// widening it renumbers every id already composed — nothing persists them, so it is a
+		// recompile rather than a migration, but every hardcoded expectation in the tests moves with
+		// it. Before adding an eighth, ask whether the thing being numbered is really a new KIND or
+		// an existing one over a different body.
 	};
 	// ⭐⭐ THE VALUE GOES IN AS IT IS — ordinary or already synthetic — AND A NEW ONE COMES OUT.
 	//
@@ -245,12 +254,57 @@ public:
 	//
 	// ⚠ So `id + 1` is NOT "the next value of this kind" — it is another KIND. Whoever numbers a run
 	// of these composes each one (`SyntheticId(kind, i++)`), never increments a composed id.
-	static constexpr unsigned kSyntheticKinds = 8;
+	//
+	// 🛑⭐⭐ …AND WHERE THE VALUE ENDS HAS TO BE WRITTEN DOWN, or two different columns get one number.
+	//
+	// Taking `|value|` threw away the one thing that says whether a chain is being STARTED or
+	// CONTINUED: the SIGN. Without it the digits read `[body][kind][kind]…` with no mark for where
+	// the body ends, so the body's own low digit was read as one more stamp:
+	//
+	//     Alias(Alias(col 2)) == Alias(col 18) == -146
+	//
+	// — a THIRD reading of one table colliding with the second reading of another column, and a row
+	// is a `std::map<ibMetaID, ibValue>` (queryRamTable.h), so the second column simply lands in the
+	// first one's cell. 2876 such pairs over ids 0..2000 at depths 1..4.
+	//
+	// So THE FLOOR OF A CHAIN CARRIES A 0 DIGIT. No kind is 0, so the first zero from the right IS
+	// the boundary: `[body][0][kind₁][kind₂]…` reads one way only, and two equal numbers mean an
+	// equal body AND an equal chain. A value that is already synthetic (negative) just grows by one
+	// digit, exactly as before — the sign was the question all along, it was simply not listened to
+	// (Max, 2026-09-09: *"let it understand that this is the second group, and it just adds a third,
+	// so that we cannot have repeating numbers"*).
+	//
+	// ⚠ The price is ONE octal digit, paid once at the floor: a body of 1000 takes six wrappings
+	// before an `int` runs out, a body of 10000 takes four. And KIND 0 IS SPOKEN FOR — the enum
+	// starts at 1 and there is room for seven kinds, not eight.
+	static constexpr unsigned kSyntheticKinds = 8;   // the radix: kinds 1..7, plus 0 as the floor mark
 	static constexpr ibMetaID SyntheticId(SyntheticKind kind, ibMetaID value) {
-		return -((value < 0 ? -value : value) * static_cast<ibMetaID>(kSyntheticKinds)
-		         + static_cast<ibMetaID>(kind));
+		return value < 0
+			// already a chain — one more digit on top of it
+			? -(-value * static_cast<ibMetaID>(kSyntheticKinds) + static_cast<ibMetaID>(kind))
+			// an ordinary number — the floor mark (a 0 digit) first, then the kind
+			: -(value * static_cast<ibMetaID>(kSyntheticKinds) * static_cast<ibMetaID>(kSyntheticKinds)
+			    + static_cast<ibMetaID>(kind));
 	}
 	static bool IsSyntheticId(ibMetaID id) { return id < 0; }
+
+	// ⚠⭐ WILL ANOTHER STAMP STILL FIT? Every stamp multiplies the number by the radix and an
+	// `ibMetaID` is an `int`, so a chain has a CEILING — and walking past it is the worst failure
+	// this whole scheme is built to avoid: the multiplication overflows, the number wraps into the
+	// POSITIVE half, and there it reads as the metaID of a DECLARED attribute. Silently.
+	//
+	// ⭐ ASKED BY WHOEVER GROWS THE CHAIN, not by this function: composing is arithmetic and has
+	// nobody to refuse to, while the place that mints a further reading has a query to name and a
+	// person to answer (queryLowering, `RequireAnotherReadingFits`). The room is real — a body of
+	// 1000 takes six wrappings, a table read four times uses three — so this is a guard, not a limit
+	// anybody is expected to meet.
+	static constexpr ibMetaID kMaxSyntheticKind = static_cast<ibMetaID>(kSyntheticKinds) - 1;
+	static constexpr bool CanComposeSyntheticId(ibMetaID value) {
+		return (value < 0 ? -value : value)
+		       <= (std::numeric_limits<ibMetaID>::max() - kMaxSyntheticKind)
+		          / (value < 0 ? static_cast<ibMetaID>(kSyntheticKinds)
+		                       : static_cast<ibMetaID>(kSyntheticKinds) * static_cast<ibMetaID>(kSyntheticKinds));
+	}
 
 	// (The column's value-field split — a composite / variant / reference column expands to several
 	// physical fields — is NOT a column method: it is the tier free function ColumnValueFields(col)

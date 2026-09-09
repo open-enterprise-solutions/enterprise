@@ -790,22 +790,27 @@ protected:
 
 			if (stringUtils::CompareString(name, child->GetName())) {
 
-				if (filter.size() > 0) {
+				if (filter.size() == 0)
+					return dynamic_cast<_T1*>(child);
 
-					bool success = false;
-					ibClassID child_clsid = child->GetClassType();
-					for (const auto filter_clsid : filter) {
-						if (child_clsid == filter_clsid) {
-							success = true;
-							break;
-						}
-					}
-
-					return success ?
-						static_cast<_T1*>(child) : nullptr;
+				const ibClassID child_clsid = child->GetClassType();
+				for (const auto filter_clsid : filter) {
+					if (child_clsid == filter_clsid)
+						return static_cast<_T1*>(child);
 				}
 
-				return dynamic_cast<_T1*>(child);
+				// 🛑⭐ A NAMESAKE OF THE WRONG KIND DOES NOT END THE SEARCH. This used to
+				// `return nullptr` here, so the FIRST object carrying the name decided the answer
+				// for every kind at once: a Section called FixedAssets became unreachable by name
+				// because a Catalog of that name came earlier in the tree, and the refusal read
+				// "No section is called 'FixedAssets'. There is: Stock, FixedAssets" — listing the
+				// very thing it had just declined to find (2026-09-09).
+				//
+				// Names are unique WITHIN a kind and not across kinds, which is exactly why the
+				// filter exists; abandoning on the first namesake makes the filter select the
+				// search's victim rather than its subject. The ID overload keeps that shape on
+				// purpose: an id IS unique across the tree, so "that id is not one of these kinds"
+				// is a complete answer there.
 			}
 
 			if (use_child_filter) {
@@ -837,6 +842,12 @@ protected:
 
 			if (child->CompareId(id)) {
 
+				// ⭐ AND HERE ABANDONING IS RIGHT, unlike the by-NAME overload above — do not
+				// "make them consistent". An id is an identity: it belongs to exactly one object
+				// in the tree, so "that object exists and is not one of these kinds" is a complete
+				// answer, and carrying on could only ever find a SECOND holder of a unique id,
+				// which is a defect somewhere else and must not be papered over here. A name is
+				// unique only WITHIN a kind, which is why that one had to keep looking.
 				if (filter.size() > 0) {
 
 					bool success = false;
@@ -884,6 +895,9 @@ protected:
 
 			if (child->CompareGuid(id)) {
 
+				// Same as the by-id overload above and for the same reason: a guid is an identity,
+				// not a label, so the first holder is the only holder and the kind check is a
+				// verdict rather than a step in a search.
 				if (filter.size() > 0) {
 
 					bool success = false;

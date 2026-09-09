@@ -44,12 +44,22 @@ const KindRow s_kinds[] = {
 	{ wxT("metaValue"), ibCtorObjectType_object_meta_value },
 };
 
-void AppendKind(const KindRow& row, std::vector<ibDataValue>& types)
+// The name filter, in one place so the engine's types and the configuration's own are narrowed by
+// the same rule. An empty query keeps everything — "no filter" is not "match nothing".
+bool NameWanted(const wxString& name, const wxString& query)
+{
+	return query.IsEmpty() || ibMcpWordsFound(name, query) > 0;
+}
+
+void AppendKind(const KindRow& row, const wxString& query, std::vector<ibDataValue>& types)
 {
 	for (const ibCtorAbstractType* ctor : ibValue::GetListCtorsByType(row.m_kind)) {
 
 		if (ctor == nullptr)
 			return;
+
+		if (!NameWanted(ctor->GetClassName(), query))
+			continue;
 
 		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 		entry->SetValue(wxT("name"), ctor->GetClassName());
@@ -67,7 +77,29 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgName()
 {
 	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
-		ibMcpText("The type's name as type_list gives it - 'Array', 'Structure', 'ValueTable'..."), /*required*/ true);
+		ibMcpText("The type's name as type_list gives it - 'Array', 'Structure', 'ValueTable'... "
+			"Give this OR `typeId`."));
+	return s_a;
+}
+
+// ⭐⭐ A TYPE ADDRESSED BY ITS CLASS ID — and the id is not a label, it is the whole handle.
+//
+// type_list answers with an `id` beside every name and there was no door that took one back. For a
+// configuration type that matters twice over: the NAME of a reference type carries the object's own
+// name (`CatalogRef.Goods`), so a rename breaks every note that quoted it, while the id does not
+// move (Max, 2026-09-09: *"a converter from classID to metaID, name, kind and so on"*).
+//
+// And the id resolves to more than the type: through the ctor it names the METAOBJECT that declares
+// it and WHAT KIND of thing it is — a reference, a manager, an object — so one number answers
+// "what is this, whose is it, and what can it do" in a single call.
+const ibArg& ArgTypeId()
+{
+	static const ibArg s_a(wxT("typeId"), ibArg::Kind::Whole,
+		ibMcpText("The type's CLASS ID instead of its name - the `id` type_list gives beside each. "
+			"Steadier than the name, because a reference type's name contains the object's own name "
+			"and a rename moves it. Answers the same as `name` does, plus what the id resolves to: "
+			"the metaobject that declares the type, and whether it is a reference, a manager, an "
+			"object, a selection or a record set."));
 	return s_a;
 }
 
@@ -105,13 +137,27 @@ public:
 				"context, metadata, metaValue, configuration. Omit for all of them. This is not a "
 				"search - it filters by kind, and a word that is not one of these is refused."));
 
-		static const std::vector<ibMcpArgument> s_arguments = { s_kind };
+		// ⭐ NARROWING BY NAME, because the question is almost never "list everything" — it is
+		// "does this platform HAVE an X". Answering that with the whole vocabulary costs the caller
+		// several kilobytes to learn one yes or no (measured 2026-09-09: asking whether a `Map`
+		// exists returned some three hundred names). The matcher is the SAME one mcp_search uses,
+		// so `map`, `Ref\..*` and `table|array` mean here exactly what they mean there — a second
+		// spelling of "search" is a second thing for a caller to hold.
+		static const ibMcpArgument s_name(wxT("name"), ibMcpArgument::Kind::Text,
+			ibMcpText("Narrow it to types whose NAME matches - words, or a regular expression when "
+				"the query carries | \\ [ ] ^ $ or .* ('map', 'table|array', 'CatalogRef\\..*'). "
+				"Combines with `kind`. Omit for all of them; a query that matches nothing answers "
+				"with an empty list rather than a refusal, because 'this platform has no such type' "
+				"is the answer."));
+
+		static const std::vector<ibMcpArgument> s_arguments = { s_kind, s_name };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		const wxString wanted = params.GetValue<wxString>(wxT("kind"));
+		const wxString query = params.GetValue<wxString>(wxT("name"));
 
 		std::vector<ibDataValue> types;
 		bool matched = false;
@@ -121,7 +167,7 @@ public:
 				continue;
 
 			matched = true;
-			AppendKind(row, types);
+			AppendKind(row, query, types);
 		}
 
 		// A KIND NOBODY HAS IS A REFUSAL, not an empty answer: "there are no
@@ -151,6 +197,9 @@ public:
 					if (ctor == nullptr)
 						continue;
 
+					if (!NameWanted(ctor->GetClassName(), query))
+						continue;
+
 					std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 					entry->SetValue(wxT("name"), ctor->GetClassName());
 					entry->SetValue(wxT("kind"), wxString(wxT("configuration")));
@@ -161,7 +210,19 @@ public:
 			}
 		}
 
+		result.AddField(wxT("found"), ibDataValue::Int((s64)types.size()));
 		result.AddField(wxT("types"), ibDataValue::Array(types));
+
+		// ⭐ "THIS PLATFORM HAS NO SUCH TYPE" IS AN ANSWER, and it is usually the one being asked
+		// for. Said in words rather than left as an empty array, because an empty array is also
+		// what a mistyped filter looks like — and the two want opposite next moves.
+		if (types.empty() && !query.IsEmpty()) {
+			result.SetValue(wxT("note"), wxString::Format(
+				ibMcpText("No type's name matches '%s'. If that was the question, the answer is that this "
+				  "platform has none - do not reach for it in script. If it was a guess at the "
+				  "spelling, ask again without `name` and read the vocabulary."), query));
+		}
+
 		return true;
 	}
 };
@@ -204,49 +265,144 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgName() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgName(), ArgTypeId() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
-		const wxString name = ArgName().Text(params);
-		if (name.IsEmpty()) {
-			refusal = ibMcpText("No type named.");
-			return false;
-		}
+		wxString name = ArgName().Text(params);
 
-		if (ibValue::GetAvailableCtor(name) == nullptr) {
+		// BY ID: turned into the name this tool already works in, so there is ONE road below and
+		// the two addresses cannot answer differently.
+		if (const ibDataValue* asked = params.FindField(ArgTypeId().Name());
+			asked != nullptr && asked->Kind() == ibDataKind::Number) {
 
-			// 🛑 TWO REGISTRIES, ONE VOCABULARY — and answering out of one of them made this verb
-			// contradict its own neighbour. type_list lists the CONFIGURATION's types too
-			// (`CatalogRef.Goods`, `DocumentObject.GoodsReceipt`), because they are real names a
-			// script writes; those live in the metadata's registry, not the engine's, so asking the
-			// engine alone answered "not a type this platform knows" about a name type_list had
-			// just given. Two doors to one type system must not disagree about what exists.
-			if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()
-				&& activeMetaData->GetTypeCtor(name) != nullptr) {
+			const ibClassID clsid = (ibClassID)asked->AsUInt();
 
+			if (activeMetaData != nullptr && activeMetaData->IsConfigOpen())
+				if (const ibCtorMetaValueType* byId = activeMetaData->GetTypeCtor(clsid))
+					name = byId->GetClassName();
+
+			if (name.IsEmpty())
+				if (const ibCtorAbstractType* byId = ibValue::GetAvailableCtor(clsid))
+					name = byId->GetClassName();
+
+			if (name.IsEmpty()) {
 				refusal = wxString::Format(
-					ibMcpText("'%s' is a type of this configuration, and its members are not listed "
-					  "this way - it exists against the object that declares it. Read that object "
-					  "with metadata_get, its fields with query_fields."), name);
+					ibMcpText("No type carries the class id %s. type_list gives the id beside every name."),
+					asked->AsNumber().ToString());
 				return false;
 			}
 
-			refusal = wxString::Format(
-				ibMcpText("'%s' is not a type this platform knows. Use type_list to see what is."), name);
+			result.AddField(wxT("typeId"), ibDataValue::UInt((u64)clsid));
+		}
+
+		if (name.IsEmpty()) {
+			refusal = ibMcpText("No type named - give `name`, or `typeId` for the class id type_list "
+				"answers with.");
 			return false;
 		}
 
+		result.SetValue(wxT("name"), name);
+
 		ibValue value;
-		try {
-			value = ibValue::CreateObject(name);
+
+		if (ibValue::GetAvailableCtor(name) != nullptr) {
+			try {
+				value = ibValue::CreateObject(name);
+			}
+			catch (...) {
+				refusal = wxString::Format(
+					ibMcpText("'%s' cannot be built without arguments, so its members cannot be listed this "
+					  "way."), name);
+				return false;
+			}
 		}
-		catch (...) {
+		// ⭐⭐ …AND THE CONFIGURATION'S OWN TYPES ARE BUILT THROUGH THE CONFIGURATION'S REGISTRY.
+		//
+		// 🛑 TWO REGISTRIES, ONE VOCABULARY — and this verb used to answer out of one of them and
+		// REFUSE the other. type_list lists the configuration's types (`CatalogManager.Goods`,
+		// `DocumentObject.GoodsReceipt`) because they are real names a script writes; they live in
+		// the metadata's registry, so asking the engine alone answered "not a type this platform
+		// knows" about a name type_list had just given. That was softened once into a refusal that
+		// pointed at metadata_get — better words for the same silence.
+		//
+		// ⚠ AND IT IS THE MANAGERS THAT MADE IT COST SOMETHING. `Catalogs.<name>` is where DATA IS
+		// WRITTEN — CreateElement, CreateFolder, CreateGroup, the finders — and the one verb that
+		// exists to answer "what can this value do" refused precisely there. Measured 2026-09-09:
+		// the way to find the item-creating verb was to guess `CreateItem`, be refused by the
+		// runtime, and guess again. A vocabulary that cannot be asked is a vocabulary somebody
+		// brings from another platform.
+		//
+		// The ctor knows how to build one (ibCtorMetaValueType::CreateObject), which is the same
+		// road the runtime itself takes when a script names the type — so the answer is the one a
+		// script would get, not a description of it.
+		else if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
+
+			ibCtorMetaValueType* const ctor = activeMetaData->GetTypeCtor(name);
+
+			if (ctor == nullptr) {
+				refusal = wxString::Format(
+					ibMcpText("'%s' is not a type this platform knows. Use type_list to see what is."), name);
+				return false;
+			}
+
+			// HELD IN AN ibValue, never on the stack as a raw pointer: these are refcounted, and a
+			// bare pointer here is the shape that has produced heap corruption in this tree before.
+			ibValue* const made = ctor->CreateObject();
+
+			if (made == nullptr) {
+				refusal = wxString::Format(
+					ibMcpText("'%s' is a type of this configuration, but one cannot be built to ask - it "
+					  "exists only against the object that declares it. Read that object with "
+					  "metadata_get, its fields with query_fields."), name);
+				return false;
+			}
+
+			value = ibValue(made);
+
+			// ⭐⭐ AND THE CLASS ID SAYS MORE THAN "IT EXISTS" — it says WHAT KIND OF THING this is
+			// and WHICH METAOBJECT declares it, and both are answers a caller otherwise infers from
+			// the spelling of the name (Max, 2026-09-09: *"from the class id you can find out that
+			// it is a reference, that it is a manager, that it is an object — and even pull out the
+			// metadata that holds that reference"*).
+			//
+			// Inferring it from the name is exactly the habit this platform keeps refusing: a name
+			// is text and a role is a fact the ctor already holds. `CatalogManager.Goods` is where
+			// data is WRITTEN, `CatalogRef.Goods` is what a field HOLDS, `CatalogObject.Goods` is
+			// what is edited and saved — three different vocabularies behind three similar words,
+			// and the answer now says which one arrived.
+			const auto roleWord = [](ibCtorObjectMetaType kind) -> const char* {
+				switch (kind) {
+				case ibCtorObjectMetaType::ibCtorObjectMetaType_Reference:     return "reference";
+				case ibCtorObjectMetaType::ibCtorObjectMetaType_Manager:       return "manager";
+				case ibCtorObjectMetaType::ibCtorObjectMetaType_Object:        return "object";
+				case ibCtorObjectMetaType::ibCtorObjectMetaType_Selection:     return "selection";
+				case ibCtorObjectMetaType::ibCtorObjectMetaType_List:          return "list";
+				case ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection: return "tabularSection";
+				case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet:     return "recordSet";
+				case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordKey:     return "recordKey";
+				case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordManager: return "recordManager";
+				case ibCtorObjectMetaType::ibCtorObjectMetaType_Characteristic: return "characteristic";
+				}
+				return "";
+			};
+
+			if (const char* const role = roleWord(ctor->GetMetaTypeCtor()); *role != '\0')
+				result.SetValue(wxT("role"), wxString::FromAscii(role));
+
+			// WHOSE IT IS — said by the one function that says an object, so the id, the name and
+			// the kind read the same here as everywhere else.
+			if (const ibValueMetaObject* const owner = ctor->GetMetaObject()) {
+				std::shared_ptr<ibDataNode> declaredBy = std::make_shared<ibDataNode>();
+				ibMcpSayObject(owner, *declaredBy);
+				result.AddField(wxT("declaredBy"), ibDataValue::Child(declaredBy));
+			}
+		}
+		else {
 			refusal = wxString::Format(
-				ibMcpText("'%s' cannot be built without arguments, so its members cannot be listed this "
-				  "way."), name);
+				ibMcpText("'%s' is not a type this platform knows. Use type_list to see what is."), name);
 			return false;
 		}
 

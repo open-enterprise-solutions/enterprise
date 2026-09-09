@@ -65,7 +65,14 @@ public:
 	{
 		return ibMcpText("Compile a module text and report what is wrong with it. The text is compiled and "
 			"thrown away: nothing is stored and no module is replaced. An empty diagnostics list "
-			"means it compiles.");
+			"means it compiles.\n"
+			"🛑 IT COMPILES A BARE TEXT, WITH NO OWNER. The configuration's globals, managers and "
+			"metatype collections resolve; the OWN NAMES OF AN OBJECT MODULE do not - a document's "
+			"attribute, a catalog's tabular section. So `Var is not found (FixedAsset)` about a "
+			"document's own attribute is this tool's limit and not a fault in the code. For an "
+			"object module use `module_write`: it compiles against the metaobject that owns the "
+			"module, which is the road the designer's own Syntax control takes, and it answers "
+			"`checked` with the diagnostics beside it.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -121,7 +128,36 @@ public:
 		// stopped being text-only, which is a lie in the one field a caller reads to know how much
 		// to trust the verdict.
 		result.SetValue(wxT("scope"), wxString(context != nullptr
-			? ibMcpText("this configuration's context") : wxT("text-only")));
+			? ibMcpText("this configuration's context, but NO owning object - see ownNames if there are any")
+			: wxT("text-only")));
+
+		// ⭐⭐ AND AN UNRESOLVED NAME SAYS WHICH OF THE TWO IT IS. `Var is not found` is what this
+		// tool answers about a document's OWN attribute, because a bare text has no owner — and a
+		// caller acting on it goes and edits code that was already correct. It cost exactly that
+		// here on 2026-09-09: a posting handler naming its document's `FixedAsset` was reported
+		// broken by this tool and compiled clean the moment `module_write` put it where it belongs.
+		//
+		// The diagnostic is not suppressed — it is real for a text with no owner — but it is
+		// named, because "this may be my blind spot" is the part the caller cannot work out.
+		bool unresolved = false;
+		for (const ibDiagnostic& one : mine) {
+			if (one.m_code == 39) {           // Var is not found
+				unresolved = true;
+				break;
+			}
+		}
+
+		if (unresolved) {
+			result.SetValue(wxT("ownNames"),
+				ibMcpText("At least one name did not resolve. If this text is an OBJECT MODULE, that is "
+				  "expected here and is not a fault in it: a document's or catalog's own attributes "
+				  "belong to the object, and this check compiles the text with no owner. Write it "
+				  "with `module_write` instead - that compiles against the owning metaobject, the "
+				  "way the designer's Syntax control does, and its `diagnostics` are the ones to act "
+				  "on. For a common module, where there is no owner to miss, the name really is "
+				  "unknown."));
+		}
+
 		return true;
 	}
 };

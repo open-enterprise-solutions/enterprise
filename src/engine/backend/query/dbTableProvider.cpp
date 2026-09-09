@@ -630,8 +630,69 @@ bool CollectColocatedLeaves(const ibQueryNode* node, ColocatedLeaves& out)
 // requires it), so ownership is unambiguous for qualification.
 const ibBackendQueryable* ColocatedOwner(const ColocatedLeaves& leaves, const ibBackendQueryColumn* col)
 {
+	// 🛑⭐⭐ TWO LEAVES CAN BOTH CLAIM ONE COLUMN, AND THIS LOOP GIVES IT TO THE FIRST. A real defect,
+	// left standing on purpose after two attempts to fix it here were measured and reverted — the
+	// reasoning is kept so the third attempt starts further along than the first two did.
+	//
+	// `OwnsColumn` decides by MODEL-ID, on a premise written over it: *"the model-id (attribute
+	// metaID) is config-unique, so each column belongs to exactly one"*. True of attributes, and
+	// FALSE of the sources that REPUBLISH them. A register's derived surfaces (Balance, Turnovers,
+	// the totals bundle) publish the register's attributes AS THEMSELVES, metaID included — and
+	// deliberately so, because that id is the contract a composed `Value(dimension)` read arrives by
+	// (registerQueryLowering.h says it in as many words). Two surfaces in one query therefore each
+	// answer yes about the other's column.
+	//
+	// MEASURED 2026-09-09, and it is the silent kind:
+	//     SELECT B.Goods, B.QuantityBalance, T.Goods, T.QuantityTurnover
+	//     FROM …GoodsInWarehouses.Balance(, ) AS B
+	//     LEFT JOIN …GoodsInWarehouses.Turnovers(&from, &to, , ) AS T ON T.Goods = B.Goods
+	// over a period with NO movements (the same Turnovers read ALONE returns 0 rows) renders as
+	//     …Balance.fld1067 AS ocol0, …Balance.fld1067 AS ocol2
+	// so `T.Goods` — written with its alias, and resolved correctly against T — is projected off B.
+	// The unmatched side of an outer join shows the matched side's item, the figures beside it are
+	// right, and nothing looks wrong.
+	//
+	// ⚠ WHAT WAS TRIED, AND WHY IT IS NOT ENOUGH. Answering by the exact column OBJECT first (the
+	// column handed in here came from the source the author NAMED, so its identity is already exact)
+	// does fix the SQL: `ocol2` then reads Turnovers. It is still not the cure — the reference cells
+	// come back EMPTY on both sides, with the figures still right, so the routing is only one half of
+	// what a reference needs. Preferring an owner that carries metadata does not change that either.
+	// Both were built, measured on a live base and reverted the same evening.
+	//
+	// 🛑 AND THE OBVIOUS CURE IS CLOSED: renumbering a surface's republished attributes would break
+	// the contract above. Whoever takes this next should start from what a REFERENCE is assembled
+	// from after the routing is right — three fields, a type table and a presentation — rather than
+	// from ownership again; ownership is where it shows, not where it lives.
+	// ⭐⭐ THE EXACT OBJECT FIRST, and only then the question that has to reason.
+	//
+	// `OwnsColumn` decides by MODEL-ID, on a premise written over it: *"the model-id (attribute
+	// metaID) is config-unique, so each column belongs to exactly one"*. True of attributes, and
+	// FALSE of the sources that REPUBLISH them — a register's derived surfaces (Balance, Turnovers,
+	// the totals bundle) publish the register's attributes AS THEMSELVES, metaID included, because
+	// that id is the contract a composed `Value(dimension)` read arrives by. Two surfaces in one
+	// query therefore each answer yes about the other's column, and a first-match loop hands it to
+	// whichever came first.
+	//
+	// The column arriving here came from the source the author NAMED — ResolveColumnSingle asks that
+	// source by alias — so its identity is already exact. It only had to be asked for.
+	//
+	// MEASURED with a probe on this very decision (2026-09-09), which is what settled it after three
+	// rebuilds spent on hypotheses:
+	//     col 'Goods' id=1067 -> | Balance [by-id] meta=yes | Turnovers [object] meta=yes   (T.Goods)
+	//     col 'Goods' id=1067 -> | Balance [object] meta=yes | Turnovers [by-id] meta=yes   (B.Goods)
+	// Both claim it; the OBJECT answers correctly in both directions; and `meta=yes` everywhere,
+	// which retired a second hypothesis in the same line.
+	//
+	// The id road stays underneath for the callers that legitimately pass an equivalent column
+	// rather than the object itself (a locally-made twin — derivedStateBuilder).
+	for (const ibBackendQueryable* q : leaves)
+		if (q != nullptr)
+			for (const ibBackendQueryColumn* c : q->GetColumns())
+				if (c == col) return q;
+
 	for (const ibBackendQueryable* q : leaves)
 		if (q != nullptr && q->OwnsColumn(col)) return q;
+
 	return nullptr;
 }
 
@@ -2070,17 +2131,48 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 		// the cross-table filter ran in the DBMS; only the projected result transits.
 		ibQueryResult cursor = RunSpecStatement(spec, q);
 
+		// ⭐⭐ ONE KEY PER OUTPUT, NOT PER SOURCE COLUMN — because two outputs can stand for one
+		// column id, and then they are ONE CELL.
+		//
+		// A register's derived surfaces republish the register's attributes AS THEMSELVES, metaID
+		// included (deliberately: that id is the contract a composed `Value(dimension)` read arrives
+		// by). So `SELECT B.Goods, T.Goods FROM …Balance AS B LEFT JOIN …Turnovers AS T` produces two
+		// outputs both keyed 1067: the second AddColumn shadows the first, and the second SetCell
+		// overwrites it every row.
+		//
+		// 🛑 IT HID BEHIND A SECOND DEFECT, which is why it read as correct for so long. While the
+		// projection ALSO routed `T.Goods` to B (ColocatedOwner handing the column to whichever leaf
+		// claimed it first), both plans read the same field, so the overwrite wrote the same value
+		// and nothing showed. Fixing the routing made both cells go EMPTY — B's item written, then
+		// T's null written over it — and that looked like a new fault when it was this one becoming
+		// visible. Measured 2026-09-09, with a probe on the ownership decision.
+		//
+		// The duplicate takes an id of its own, by OUTPUT POSITION, the way the computed outputs
+		// below already do. `Output` rather than `Stitch` so the two cannot meet.
 		ibQueryRamTable out;
-		for (const OutPlan& p : plans)
-			out.AddColumn(p.col->GetColumnId(), p.alias, p.col->GetTypeDesc());
+		std::vector<ibMetaID> keys;
+		keys.reserve(plans.size());
+
+		for (size_t i = 0; i < plans.size(); ++i) {
+
+			ibMetaID id = plans[i].col->GetColumnId();
+
+			if (std::find(keys.begin(), keys.end(), id) != keys.end())
+				id = ibBackendQueryColumn::SyntheticId(
+					ibBackendQueryColumn::SyntheticKind::Output, static_cast<ibMetaID>(i));
+
+			keys.push_back(id);
+			out.AddColumn(id, plans[i].alias, plans[i].col->GetTypeDesc());
+		}
 
 		while (cursor.Next()) {
 			const long r = out.AppendRow();
-			for (const OutPlan& p : plans) {
+			for (size_t i = 0; i < plans.size(); ++i) {
+				const OutPlan& p = plans[i];
 				ibValue v;
 				if (p.raw) v = ReadScalarByAlias(p.col, p.alias, p.meta, cursor);
 				else       p.col->ReadValue(p.prefix, p.meta, v, cursor);   // asked of the COLUMN — the codec is its default
-				out.SetCell(r, p.col->GetColumnId(), v);
+				out.SetCell(r, keys[i], v);
 			}
 		}
 

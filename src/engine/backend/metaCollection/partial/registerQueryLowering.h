@@ -16,6 +16,7 @@
 #include "backend/query/dataQueryBuilder.h"  // ibDataQueryResult — the selection those rows come off
 #include "backend/query/tempTableQueryable.h" // ibTempColumn / ibDbTempTableQueryable — a derived surface IS one
 #include "backend/query/schemaSnapshot.h"     // ibSchemaTable / ibSchemaMaterialize — the totals bundle's own vocabulary
+#include "backend/query/queryColumn.h"        // ibBackendQueryColumn::SyntheticId — a derived column's number
 
 // ⚠ NAMED, NOT INHERITED — MSVC hands these over transitively and GCC / Clang do not.
 #include <functional>
@@ -785,11 +786,30 @@ inline bool ibRegisterFoldOffersColumn(const TReg* reg,
 }
 
 
-// ⭐ THE ID BAND A DERIVED COLUMN IS NUMBERED IN — clear of every metaID, so a surface's own columns
-// (a figure, a coarser period projection) cannot be mistaken for an attribute's. It was re-declared
-// as a local constant at each builder, which is a constant nobody owns: the next one is claimed by
-// reading a comment.
-inline constexpr ibMetaID ibRegDerivedColumnBand = 0x50000000u;
+// ⭐⭐ A DERIVED COLUMN IS NUMBERED AS A SYNTHETIC ONE — its ORDINAL on the surface, stamped with
+// SyntheticKind::Derived. Not a band any more.
+//
+// 🛑 IT WAS THE LAST POSITIVE BAND, and it outlived the thing that replaced it. `0x50000000` was one
+// of five hand-carved ranges in the positive space; the sign scheme took over from all of them
+// (queryColumn.h, `SyntheticId`) precisely because a band map has to be READ before every addition
+// and nothing makes anybody read it — and this one simply was not migrated with the rest. So the
+// invariant that file states as structural, *"a column nobody declared says so by its sign"*, was
+// false for every register surface: `Turnovers` published `Charged` as `0x50000007`, positive,
+// indistinguishable by that rule from a declared attribute (measured 2026-09-09).
+//
+// Nothing acted on it — `IsSyntheticId` has no callers at all — so no defect was reachable. That is
+// exactly why it is worth closing NOW: the first reader of the invariant would have been the one to
+// find out, on a register column, in whatever they were building.
+//
+// ⚠ THE ORDINAL GOES IN, NOT A COMPOSED ID. `SyntheticId(kind, n)` composes; `id + 1` is not the
+// next column of a kind, it is another KIND (queryColumn.h). The counter handed to a builder is a
+// plain 0-based ordinal and each site composes its own — the same rule the CTE road broke one file
+// away and had corrected on 2026-09-09.
+inline ibMetaID ibRegDerivedColumnId(ibMetaID ordinal)
+{
+	return ibBackendQueryColumn::SyntheticId(
+		ibBackendQueryColumn::SyntheticKind::Derived, ordinal);
+}
 
 // ⭐⭐ WHAT A SURFACE WAS BUILT FROM — names and types, in order.
 //
@@ -838,7 +858,10 @@ public:
 		}
 
 		std::vector<ibTempColumn> columns;
-		ibMetaID synthetic = ibRegDerivedColumnBand;
+		// A PLAIN ORDINAL from zero — each builder composes its own id off it (ibRegDerivedColumnId).
+		// Seeding this with an already-composed number is what made `synthetic++` mean "the next
+		// KIND" instead of "the next column".
+		ibMetaID synthetic = 0;
 		build(columns, synthetic);
 
 		auto surface = std::make_unique<ibDbTempTableQueryable>(table, std::move(columns), metaData);

@@ -44,6 +44,8 @@
 #include "backend/query/queryParser.h"
 #include "backend/query/queryable.h"
 
+#include <algorithm>   // std::remove_if — taking a grouping level back out
+
 namespace {
 
 using ibArg = ibMcpTool::ibMcpArgument;
@@ -153,7 +155,25 @@ const ibArg& ArgOutput()
 const ibArg& ArgGroupBy()
 {
 	static const ibArg s_a(wxT("groupBy"), ibArg::Kind::Text,
-		ibMcpText("The field to group by. Omit for a DETAIL level - the rows themselves."));
+		ibMcpText("The field to group by. Omit for a DETAIL level - the rows themselves. "
+			"With `remove`, the level to take out, named by this same field."));
+	return s_a;
+}
+
+// ⭐⭐ SEVERAL FIELDS IN ONE LEVEL, because an object's own facts are not a hierarchy.
+//
+// A level's grouping has always been a LIST (ibLevelDescription::m_group is Appended to), and this
+// tool only ever put one thing in it — so the only way to show an asset's inventory number, method
+// and life beside its name was a level each, and the report came out as a four-deep ladder repeating
+// one row four times. They are not four questions; they are one row's four columns.
+const ibArg& ArgGroupByMany()
+{
+	static const ibArg s_a(wxT("groupByAll"), ibArg::Kind::Many,
+		ibMcpText("Several fields forming ONE level, in the order they read - "
+			"[\"FixedAsset\", \"InventoryNumber\", \"Method\"] gives one line per asset carrying all "
+			"three, where a level each would nest them and repeat the row. Use this whenever the "
+			"extra fields are FACTS OF the thing already grouped rather than groupings of their own; "
+			"a level each is right only when each one genuinely subdivides the one above it."));
 	return s_a;
 }
 
@@ -1458,12 +1478,19 @@ public:
 	{
 		return ibMcpText("Add a grouping level to an output - down the ROWS by default, across the "
 			"COLUMNS when asked, which is what makes a cross table. The path must be one the "
-			"query projects: report_fields lists them, and a path that is not there is refused.");
+			"query projects: report_fields lists them, and a path that is not there is refused.\n"
+			"⭐ `groupByAll` puts SEVERAL fields in ONE level, which is what an object's own facts "
+			"want: [\"FixedAsset\", \"InventoryNumber\", \"Method\"] is one line per asset carrying "
+			"all three, where a level each nests them and repeats the row once per level. Reach for "
+			"a level each only when every one of them genuinely subdivides the one above it.\n"
+			"`remove` takes a level out again, named by the field it groups by (or with neither "
+			"field given, the DETAIL level).");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgOutput(), ArgGroupBy(), ArgColumns(), ArgVariant() };
+		static const std::vector<ibMcpArgument> s_arguments =
+			{ ArgId(), ArgOutput(), ArgGroupBy(), ArgGroupByMany(), ArgColumns(), ArgVariant(), ArgRemove() };
 		return s_arguments;
 	}
 
@@ -1498,27 +1525,90 @@ public:
 			return false;
 		}
 
-		const wxString path = ArgGroupBy().Text(params);
+		// ONE FIELD OR SEVERAL, read into one list so everything below knows only the list — the
+		// same shape report_select uses for `path` / `paths`.
+		std::vector<wxString> wanted;
+
+		if (const ibDataValue* many = params.FindField(ArgGroupByMany().Name())) {
+			if (many->Kind() == ibDataKind::Array)
+				for (const ibDataValue& one : many->AsArray())
+					if (one.Kind() == ibDataKind::String && !one.AsString().IsEmpty())
+						wanted.push_back(one.AsString());
+		}
+
+		if (const wxString one = ArgGroupBy().Text(params); !one.IsEmpty())
+			wanted.push_back(one);
+
+		const bool columns = ArgColumns().Flag(params);
+		std::vector<ibLevelDescription>& levels = columns ? output->m_columnGroups : output->m_rowGroups;
+
+		// ⭐⭐ A LEVEL CAN BE TAKEN OUT AGAIN, and until now it could not — a grouping added to see
+		// what it looked like stayed for good, and the only way back was to rewrite the whole
+		// composition with report_set. Named by the field it groups by, because that is what the
+		// caller knows about it; with no field named it is the DETAIL level, which has no field by
+		// construction.
+		if (ArgRemove().Flag(params)) {
+
+			const auto matches = [&wanted](const ibLevelDescription& level) {
+				if (wanted.empty())
+					return level.m_kind == ibCompositionLevelKind::Details;
+				if (level.m_kind != ibCompositionLevelKind::Grouping)
+					return false;
+				for (const ibGroupLineDescription& field : level.m_settings.m_group.m_lines)
+					for (const wxString& name : wanted)
+						if (field.m_path.IsSameAs(name, false))
+							return true;
+				return false;
+			};
+
+			const size_t before = levels.size();
+			levels.erase(std::remove_if(levels.begin(), levels.end(), matches), levels.end());
+
+			if (levels.size() == before) {
+				// SAID RATHER THAN REPORTED AS DONE. "Removed" about a level that is still there is
+				// the answer that costs the next hour.
+				wxString has;
+				for (const ibLevelDescription& level : levels)
+					for (const ibGroupLineDescription& field : level.m_settings.m_group.m_lines)
+						has << (has.IsEmpty() ? wxT("") : wxT(", ")) << field.m_path;
+				refusal = has.IsEmpty()
+					? ibMcpText("This output has no such level. Nothing was removed.")
+					: wxString::Format(ibMcpText("This output has no level grouped by that. It groups by: %s. "
+						"Nothing was removed."), has);
+				return false;
+			}
+
+			composer->SetCompositionDesc(composition);
+			activeMetaData->Modify(true);
+
+			result.AddField(wxT("removed"), ibDataValue::Int((s64)(before - levels.size())));
+			result.SetValue(wxT("output"), outputName);
+			ibMcpSayComposerComplaints(composition, result);
+			return true;
+		}
 
 		ibLevelDescription level;
 
-		if (path.IsEmpty()) {
+		if (wanted.empty()) {
 			// A DETAIL LEVEL groups by nothing on purpose: it is the rows. Said by
 			// its KIND rather than by an empty grouping, so "nothing yet" and
 			// "nothing, deliberately" stay different things.
 			level.m_kind = ibCompositionLevelKind::Details;
 		}
 		else {
-			if (!PathIsOffered(composition, path, refusal))
-				return false;
+			for (const wxString& one : wanted)
+				if (!PathIsOffered(composition, one, refusal))
+					return false;
 
+			// ⭐ ALL OF THEM INTO ONE LEVEL. The grouping is a list and always was; putting each
+			// field in a level of its own is what turned an asset's three facts into three nested
+			// headings repeating the same row.
 			level.m_kind = ibCompositionLevelKind::Grouping;
-			level.m_settings.m_group.Append(path, ibQueryDimUnfold::Elements);
+			for (const wxString& one : wanted)
+				level.m_settings.m_group.Append(one, ibQueryDimUnfold::Elements);
 		}
 
-		const bool columns = ArgColumns().Flag(params);
-		if (columns) output->m_columnGroups.push_back(level);
-		else         output->m_rowGroups.push_back(level);
+		levels.push_back(level);
 
 		composer->SetCompositionDesc(composition);
 		activeMetaData->Modify(true);
@@ -1527,10 +1617,18 @@ public:
 		result.SetValue(wxT("output"), outputName);
 		result.SetValue(wxT("where"), wxString(columns ? wxT("columns") : wxT("rows")));
 		ibMcpSayComposerComplaints(composition, result);
-		if (!path.IsEmpty())
-			result.SetValue(wxT("groupBy"), path);
-		else
+
+		// WHAT THE LEVEL ACTUALLY GROUPS BY — all of it, in order, because a level of several is
+		// now an ordinary answer and reporting only the first would describe a different report.
+		if (wanted.empty()) {
 			result.AddField(wxT("detail"), ibDataValue::Bool(true));
+		}
+		else {
+			std::vector<ibDataValue> by;
+			for (const wxString& one : wanted)
+				by.push_back(ibDataValue::String(one));
+			result.AddField(wxT("groupBy"), ibDataValue::Array(by));
+		}
 
 		return true;
 	}
@@ -1711,6 +1809,26 @@ public:
 				// Against THIS configuration, named explicitly: a tool is not standing inside one.
 				const ibSourceMetaDataScope resolveAgainst(activeMetaData);
 				ibQueryLowering::CheckNames(package, std::map<wxString, ibValue>());
+
+				// 🛑⭐⭐ A JOIN IS NOT REFUSED HERE, and the attempt to refuse it is worth keeping as
+				// a warning to whoever reads this next. A composer's query with a JOIN used to fail
+				// at RUN time — the composer reads its author's query as a nested source, and that
+				// road would not carry joins — so this tool briefly turned that into a refusal at
+				// the write, on the reasoning that catching it early beats catching it in front of
+				// the person.
+				//
+				// The reasoning was right and the target was wrong: the query was LEGITIMATE (Max,
+				// 2026-09-09: *"your query is completely legitimate, it is the composer that
+				// handled it wrongly — you must not cut your own hands off"*). Refusing it made the
+				// tool enforce a defect instead of reporting one, and it would have gone on
+				// refusing correct queries long after the defect was gone.
+				//
+				// The defect is fixed where it lived: WrapSelectAsQueryable now builds its source
+				// tree with BuildSourceTree, the same builder the statement road and the CTE road
+				// use, so a nested source carries joins like any other query.
+				//
+				// THE RULE THIS LEAVES: a door may refuse what is WRONG. What is merely unsupported
+				// today is the engine's business to finish, not this tool's to forbid.
 			}
 			// THE TWO VARIETIES, CAUGHT BY TYPE — a name that does not exist, and a text that does not
 			// parse. This used to read the POSITION to tell them apart (0:0 meant a name), which

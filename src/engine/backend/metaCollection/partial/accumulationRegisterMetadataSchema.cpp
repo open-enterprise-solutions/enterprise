@@ -393,7 +393,7 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		// not with the knowledge, so this half kept the old shape until a reading that spells fields
 		// through the column layout came past it (a turnover folded by the recorder, 2026-09-02).
 		columns.push_back(ibTempColumn(periodName, periodField,
-		                               GetRegisterPeriod()->GetTypeDesc(), synthetic++,
+		                               GetRegisterPeriod()->GetTypeDesc(), ibRegDerivedColumnId(synthetic++),
 		                               GetRegisterPeriod()->GetSynonym(),
 		                               ibBackendQueryColumn::Kind::Computed));
 
@@ -411,7 +411,7 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 			if (u.first > GetTotalsPeriodUnit())
 				columns.push_back(ibTempColumn(periodName + u.second,
 				                               periodField + wxT("_") + u.second,
-				                               GetRegisterPeriod()->GetTypeDesc(), synthetic++,
+				                               GetRegisterPeriod()->GetTypeDesc(), ibRegDerivedColumnId(synthetic++),
 				                               wxEmptyString, ibBackendQueryColumn::Kind::Computed));
 	}
 
@@ -445,7 +445,7 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	auto add = [&](const ibValueMetaObjectAttributeBase* res, const wxString& suffix) {
 		columns.push_back(ibTempColumn(res->GetName() + suffix,
 		                               res->GetName() + wxT("_") + suffix,
-		                               res->GetTypeDesc(), synthetic++,
+		                               res->GetTypeDesc(), ibRegDerivedColumnId(synthetic++),
 		                               ibRegFigureColumnCaption(res->GetSynonym(), ibRegFigureCaption(suffix)),
 		                               ibBackendQueryColumn::Kind::Computed));
 	};

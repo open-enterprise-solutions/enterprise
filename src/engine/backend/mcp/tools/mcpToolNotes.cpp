@@ -29,6 +29,9 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metadataConfiguration.h"
 
+#include <set>      // the link check keeps one entry per id
+#include <vector>
+
 namespace {
 
 ibMetaData* OpenConfiguration(wxString& refusal)
@@ -257,6 +260,65 @@ public:
 		if (!target.IsSameAs(wxT("notes"), false) && !target.IsSameAs(wxT("help"), false)) {
 			refusal = ibMcpText("Say which text: 'notes' for the engineering intent, 'help' for what the "
 				"person using the application reads. Nothing was written.");
+			return false;
+		}
+
+		// ⭐⭐ A LINK IS CHECKED WHEN IT IS WRITTEN, not counted forever afterwards on every read.
+		//
+		// The root note of this very configuration carried FOURTEEN `oes:` links of which THIRTEEN
+		// named something else — `Warehouses` opening UnitsOfMeasure, `GoodsInWarehouses` opening a
+		// resource, `Stock` opening a predefined attribute (measured 2026-09-09). Not one of them
+		// was broken; every one resolved, to the wrong thing, and read as perfectly normal.
+		//
+		// 🛑 AND THE IDS HAD NOT MOVED. `SetMetaID` has no callers anywhere in the tree: an id is
+		// assigned once at creation and restored from storage on load, so a live object's number is
+		// stable. The drift was structural — 0, then +12, then +24, exactly one catalog's span each
+		// time — which is not ids sliding but a note written against a DIFFERENT BUILD of the
+		// configuration and carried across when it was rebuilt. Nothing connected the two, so the
+		// text outlived the tree it described.
+		//
+		// That is what makes the write the right place to ask: at the read there is nobody left who
+		// knows what was meant, while here the author is still holding it.
+		std::vector<ibDataValue> links;
+		std::set<wxLongLong_t> seen;
+
+		if (ibMcpSayObjectLinks(text, metaData, links, seen) > 0) {
+
+			// Only the OFFENDING links are named. A note may carry a dozen good ones, and a
+			// refusal that lists them all makes the caller find the fault itself.
+			wxString says;
+			for (const ibDataValue& one : links) {
+
+				const std::shared_ptr<ibDataNode>& link = one.AsChild();
+				if (!link)
+					continue;
+
+				const wxString label = link->GetValue<wxString>(wxT("label"));
+
+				// The id is stored as a number, so it is read as one — GetValue<wxString> on an
+				// Int answers empty, and the refusal would name every bad link as `oes:`.
+				const ibDataValue* number = link->FindField(wxT("id"));
+				const wxString said = wxString::Format(wxT("[%s](oes:%d)"), label,
+					(number != nullptr) ? (int)number->AsInt() : 0);
+
+				if (link->FindField(wxT("broken")) != nullptr) {
+					says << wxT("\n  ") << said
+						 << wxT(" - nothing in this configuration carries that id");
+				}
+				else if (link->FindField(wxT("agrees")) != nullptr) {
+					says << wxT("\n  ") << said << wxT(" - that id is ")
+						 << link->GetValue<wxString>(wxT("resolves")) << wxT(", a ")
+						 << link->GetValue<wxString>(wxT("kind"));
+				}
+			}
+
+			refusal = ibMcpText("NOTHING WAS WRITTEN. Some `oes:<id>` links in this text do not name what "
+				"they say, and a link like that is worse than a missing one: it resolves, so whoever "
+				"follows it reads a different object and nothing looks wrong. Correct the ids - "
+				"`metadata_tree` depth 1 gives the current ones - and write it again. A link whose "
+				"visible text is a phrase rather than a bare name is not checked, so describing an "
+				"object instead of naming it is always allowed.") + says;
+
 			return false;
 		}
 

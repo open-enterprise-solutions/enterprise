@@ -28,6 +28,7 @@
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // a field with no type
 #include "backend/metaCollection/metaComposerObject.h"              // …and a composer with no name
 #include "backend/metaCollection/partial/dataReport.h"              // …and a report with no composer
+#include "backend/metaCollection/metaSectionObject.h"                // …and an object no section leads to
 
 namespace {
 
@@ -695,10 +696,46 @@ public:
 		if (metaData == nullptr || !metaData->IsConfigOpen())
 			return;
 
+		// ⭐⭐ AN OBJECT THE COMMAND INTERFACE COULD SHOW AND NO SECTION DOES. It saves, it applies,
+		// it works perfectly — and nobody can reach it, which is exactly the silence this audit is
+		// for. It reads as "the feature was never built" from where the person is sitting, and as
+		// "done" from where it was built, and nothing in between says otherwise.
+		//
+		// WHO MAY BE IN A SECTION IS THE OBJECT'S OWN ANSWER (`IsInterfaceAllowed`) — the same one
+		// section_include refuses on and the same one the editor draws its checkbox from. A list
+		// of kinds kept here would be right until somebody adds a kind.
+		//
+		// The sections are gathered ONCE rather than per object: this walk is already the whole
+		// tree, and asking it again inside itself is where a check turns quadratic.
+		const std::vector<ibValueMetaObjectSection*> sections =
+			metaData->GetAnyArrayObject<ibValueMetaObjectSection>(true);
+
 		for (ibValueMetaObject* object : metaData->GetAnyArrayObject<ibValueMetaObject>(true)) {
 
 			if (object == nullptr)
 				continue;
+
+			// ⚠ Only once a section EXISTS. In a configuration that has none, "in no section" is
+			// true of everything and says nothing about any of it — that is a base at the start,
+			// not a base with a fault, and an audit that fires on all of it teaches people to skip
+			// the audit.
+			if (!sections.empty() && object->IsInterfaceAllowed() && !object->IsDeleted()) {
+
+				bool reachable = false;
+				for (const ibValueMetaObjectSection* section : sections) {
+					if (section != nullptr && !section->IsDeleted()
+						&& object->IsSetInterface(section->GetMetaID())) {
+						reachable = true;
+						break;
+					}
+				}
+
+				if (!reachable) {
+					complain(object, ibMcpText("in no section - nothing in the command interface leads to "
+						"it, so the person using the application cannot open it at all. "
+						"`section_include` puts it in one; `section_content` says what each holds."));
+				}
+			}
 
 			// A COMPOSER DECLARED IN THE METADATA — the same list the report verbs answer with, so
 			// a rule added there arrives here without being written twice.

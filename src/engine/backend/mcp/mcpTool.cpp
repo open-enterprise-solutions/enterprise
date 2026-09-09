@@ -19,7 +19,10 @@
 #include <wx/regex.h>     // …unless it is written as a pattern, which is also a way to ask
 #include <wx/log.h>       // a query that does not compile is not the person's error to read
 
+#include "backend/stringUtils.h"   // names compare case-insensitively here, as everywhere else
+
 #include <memory>
+#include <set>      // one link per id — the same object named twice is one fact
 #include <atomic>   // how deep the host is in modal dialogs — read from any thread
 #include <mutex>
 
@@ -686,6 +689,90 @@ wxString ibMcpLineNaming(const wxString& text, const wxString& name)
 	return wxEmptyString;
 }
 
+int ibMcpSayObjectLinks(const wxString& text, ibMetaData* metaData,
+	std::vector<ibDataValue>& into, std::set<wxLongLong_t>& seen)
+{
+	if (metaData == nullptr || text.IsEmpty())
+		return 0;
+
+	int wrong = 0;
+
+	// `](oes:<digits>)` is the only place an id is a LINK — the target half of a markdown link.
+	// A bare number in prose is a number.
+	static const wxString s_marker = wxT("](oes:");
+
+	for (size_t at = 0;;) {
+
+		const size_t open = text.find(s_marker, at);
+		if (open == wxString::npos)
+			break;
+
+		const size_t first = open + s_marker.length();
+		size_t last = first;
+		while (last < text.length() && wxIsdigit(text[last]))
+			++last;
+
+		at = last;
+
+		if (last == first || last >= text.length() || text[last] != wxT(')'))
+			continue;
+
+		long id = 0;
+		if (!text.Mid(first, last - first).ToLong(&id))
+			continue;
+
+		if (!seen.insert((wxLongLong_t)id).second)
+			continue;      // the same object linked twice is one fact, not two
+
+		// The label is what the WRITER believed the id names, and comparing the two is the whole
+		// check. Scanned back to the opening bracket, stopping at a newline: a `[` on an earlier
+		// line belongs to something else.
+		wxString label;
+		for (size_t back = open; back-- > 0; ) {
+			if (text[back] == wxT('\n'))
+				break;
+			if (text[back] == wxT('[')) {
+				label = text.Mid(back + 1, open - back - 1);
+				break;
+			}
+		}
+
+		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+		entry->AddField(wxT("id"), ibDataValue::Int((s64)id));
+		if (!label.IsEmpty())
+			entry->SetValue(wxT("label"), label);
+
+		ibValueMetaObject* target = ibFindMetaObjectById(metaData, (ibMetaID)id);
+
+		if (target == nullptr) {
+			entry->AddField(wxT("broken"), ibDataValue::Bool(true));
+			++wrong;
+		}
+		else {
+			entry->SetValue(wxT("resolves"), target->GetName());
+			entry->SetValue(wxT("kind"), target->GetClassName());
+
+			// 🛑 ONLY A LABEL WRITTEN AS A NAME IS COMPARED WITH THE NAME. A link's visible text is
+			// prose and is under no obligation to be an identifier — `[the balance register](oes:…)`
+			// is good writing, and comparing that against `GoodsInWarehouses` would report every
+			// well-written note as broken. A single word with no space in it, though, IS somebody
+			// writing the object's name, and then a disagreement is a disagreement.
+			const bool namedRatherThanDescribed =
+				!label.IsEmpty() && label.Find(wxT(' ')) == wxNOT_FOUND
+				&& label.Find(wxT('\t')) == wxNOT_FOUND;
+
+			if (namedRatherThanDescribed && !stringUtils::CompareString(label, target->GetName())) {
+				entry->AddField(wxT("agrees"), ibDataValue::Bool(false));
+				++wrong;
+			}
+		}
+
+		into.push_back(ibDataValue::Child(entry));
+	}
+
+	return wrong;
+}
+
 void ibMcpSayObject(const ibValueMetaObject* object, ibDataNode& node, bool withText)
 {
 	if (object == nullptr)
@@ -726,6 +813,36 @@ void ibMcpSayObject(const ibValueMetaObject* object, ibDataNode& node, bool with
 	const wxString note = object->GetNoteContent();
 	if (!note.IsEmpty())
 		node.SetValue(wxT("note"), note);
+
+	// ⭐⭐ A LINK BY NUMBER GOES STALE WITHOUT BREAKING, and that is the whole reason this is here.
+	// Notes address other objects as `[Goods](oes:1005)` — by id, because an id survives a rename.
+	// It does NOT survive the id itself moving, and when one moves the link still resolves: to the
+	// NEXT object along. Nothing reads as wrong. The reader follows it, opens a different register,
+	// and carries on confidently. Measured on this tree 2026-09-09: a root note pointed at 1029 /
+	// 1041 / 1068 for objects that are 1017 / 1029 / 1056 — every link landed on its neighbour.
+	//
+	// So what the links resolve to NOW travels beside the text. The text itself is deliberately
+	// NOT rewritten: note_read is also how a caller reads a note in order to edit it, and an
+	// annotation added on the way out would be written back as part of it.
+	if (ibMetaData* metaData = const_cast<ibMetaData*>(object->GetMetaData())) {
+
+		std::vector<ibDataValue> links;
+		std::set<wxLongLong_t> seen;
+		int wrong = ibMcpSayObjectLinks(note, metaData, links, seen);
+		wrong += ibMcpSayObjectLinks(help, metaData, links, seen);
+		wrong += ibMcpSayObjectLinks(comment, metaData, links, seen);
+
+		if (!links.empty()) {
+			node.AddField(wxT("links"), ibDataValue::Array(links));
+			if (wrong > 0) {
+				node.SetValue(wxT("linksNote"),
+					ibMcpText("Some links here do not name what they used to. `agrees: false` means the id "
+					  "resolves, but to a DIFFERENT object than the link's own text says — following it "
+					  "reads the wrong object and looks perfectly normal; `broken: true` means nothing "
+					  "carries that id at all. Trust `resolves`, not the text, and correct the note."));
+			}
+		}
+	}
 }
 
 namespace {

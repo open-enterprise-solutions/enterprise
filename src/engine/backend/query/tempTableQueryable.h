@@ -346,14 +346,21 @@ public:
 		const ibBackendQueryColumn* m_borrowed = nullptr;   // published as-is; the four above are then unused
 	};
 
-	// `firstColumnId` — the id the minted columns are numbered from. A CTE's columns stand for
-	// nothing stored, so their ids exist only to tell them apart; the caller passes a base out of the
-	// synthetic range it already uses, so two named queries in one statement cannot collide.
-	ibCteQueryable(wxString name, const std::vector<Field>& fields, ibMetaID firstColumnId,
+	// `firstOrdinal` — the ORDINARY number the minted columns are counted from, one per declaration
+	// (its place among this run's named queries, times its block). A CTE's columns stand for nothing
+	// stored, so their ids exist only to tell them apart.
+	//
+	// 🛑 THE ORDINAL ADVANCES, THE ID IS COMPOSED — the rule queryColumn.h states over SyntheticId,
+	// and this is where it was broken: the caller handed in an ALREADY COMPOSED base and the loop ran
+	// `id++` over it. Composed ids do not sit next to each other — `base + 1` is the same value under
+	// ANOTHER KIND — so the first declaration's columns came out as Subquery(0), GroupKey(0),
+	// Aggregate(0), Stitch(0), Alias(0), Output(0), and then 0, 1, 2… : from the seventh field on,
+	// POSITIVE ids, indistinguishable from the metaIDs of declared attributes.
+	ibCteQueryable(wxString name, const std::vector<Field>& fields, ibMetaID firstOrdinal,
 	               const ibMetaData* metaData = nullptr)
 		: m_name(std::move(name)), m_guid(wxNewUniqueGuid), m_metaData(metaData)
 	{
-		ibMetaID id = firstColumnId;
+		ibMetaID ordinal = firstOrdinal;
 		for (const Field& field : fields) {
 			if (field.m_borrowed != nullptr) {
 				// Published as it stands — its id, its type and its layout are the source's, which is
@@ -366,7 +373,8 @@ public:
 				continue;   // a field with no name cannot be read back by one
 			// The name IS the physical name: a CTE exposes exactly the aliases its select wrote.
 			m_owned.push_back(std::make_shared<ibTempColumn>(field.m_name,
-				field.m_physical.IsEmpty() ? field.m_name : field.m_physical, field.m_type, id++,
+				field.m_physical.IsEmpty() ? field.m_name : field.m_physical, field.m_type,
+				ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Subquery, ordinal++),
 				wxEmptyString, field.m_kind));
 			m_columns.push_back(m_owned.back().get());
 		}

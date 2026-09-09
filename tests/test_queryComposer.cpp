@@ -17,6 +17,8 @@
 #include <vector>
 #include <algorithm>   // stable_sort — RamSortCompareKey null-placement test
 #include <functional>  // std::function — the recording computed queryable's row builder
+#include <map>         // the minted-id ledger — SyntheticId collision sweep
+#include <set>         // distinct ids a declaration mints
 
 #include "backend/query/queryProvider.h"     // ibQueryComposer + ibQueryRamTable
 #include "backend/query/querySelector.h"     // ibSelector — traversal façade over a snapshot
@@ -1488,6 +1490,82 @@ TEST(QuerySelector, AnOrderIsNotInheritedByADescent)
 }
 
 // ===========================================================================
+// SyntheticId — THE NUMBER A COLUMN NOBODY DECLARED GOES BY
+//
+// A row is a map keyed by these (queryRamTable.h), so two columns that come out with one number
+// share one cell and the second silently overwrites the first. The hard case is DEPTH: a third
+// reading of one table wraps the second, so one number is a chain of stamps over a body — and it
+// must not read as a shorter chain over a different body. It used to: `|value|` dropped the sign,
+// which was the only thing saying where the body ended (`Alias(Alias(col 2)) == Alias(col 18)`).
+// ===========================================================================
+
+TEST(SyntheticId, ChainsAndKindsNeverCollide)
+{
+	using Col  = ibBackendQueryColumn;
+	using Kind = ibBackendQueryColumn::SyntheticKind;
+
+	std::map<ibMetaID, std::string> seen;
+	const auto claim = [&](ibMetaID id, const std::string& who) {
+		EXPECT_TRUE(Col::IsSyntheticId(id)) << who << " is not negative: " << id;
+		const auto it = seen.find(id);
+		if (it != seen.end() && it->second != who)
+			ADD_FAILURE() << "id " << id << ": " << who << " == " << it->second;
+		seen.emplace(id, who);
+	};
+
+	// Every kind over an ordinary ordinal — how all but the twin mint theirs. The TWIN is left to the
+	// loop below, which covers its depth 1 as well: naming one and the same minting twice would make
+	// the ledger report a collision with itself.
+	for (unsigned k = 1; k <= 6; ++k) {
+		if (k == static_cast<unsigned>(Kind::Alias))
+			continue;
+		for (ibMetaID i = 0; i <= 3000; ++i)
+			claim(Col::SyntheticId(static_cast<Kind>(k), i),
+			      "kind " + std::to_string(k) + "(" + std::to_string(i) + ")");
+	}
+
+	// …and the twin chains: a second reading over a column, a third over the second, and further.
+	for (ibMetaID body = 0; body <= 3000; ++body) {
+		ibMetaID id = body;
+		for (int depth = 1; depth <= 4; ++depth) {
+			id = Col::SyntheticId(Kind::Alias, id);
+			claim(id, "Alias^" + std::to_string(depth) + "(col " + std::to_string(body) + ")");
+		}
+	}
+}
+
+// The exact pair that used to land on one number, kept as itself: reading a table a third time
+// against reading another of its columns a second time.
+TEST(SyntheticId, ADeeperChainIsNotAShallowerOneOverAnotherColumn)
+{
+	using Col  = ibBackendQueryColumn;
+	using Kind = ibBackendQueryColumn::SyntheticKind;
+
+	EXPECT_NE(Col::SyntheticId(Kind::Alias, Col::SyntheticId(Kind::Alias, 2)),
+	          Col::SyntheticId(Kind::Alias, 18));
+	EXPECT_NE(Col::SyntheticId(Kind::Alias, Col::SyntheticId(Kind::Alias, 1)),
+	          Col::SyntheticId(Kind::Alias, 10));
+}
+
+// ⚠ THE CEILING IS ANSWERED BEFORE IT IS PASSED. An id is an `int` and every stamp multiplies it, so
+// a chain runs out — and an overflow would wrap the number into the positive half, where it reads as
+// a declared attribute's metaID. The guard is asked, so the chain ends by refusal, never by wrapping.
+TEST(SyntheticId, TheCeilingIsAskedRatherThanMet)
+{
+	using Col  = ibBackendQueryColumn;
+	using Kind = ibBackendQueryColumn::SyntheticKind;
+
+	ibMetaID id = 10000;            // an ordinary attribute number, on the large side
+	int depth = 0;
+	while (Col::CanComposeSyntheticId(id)) {
+		id = Col::SyntheticId(Kind::Alias, id);
+		EXPECT_TRUE(Col::IsSyntheticId(id)) << "wrapped at depth " << depth;
+		ASSERT_LT(++depth, 12);     // it must end by the guard, not by running away
+	}
+	EXPECT_GE(depth, 4);            // …and the room is real: four readings of one table, and deeper
+}
+
+// ===========================================================================
 // ibCteQueryable — WHAT A DECLARED QUERY PUBLISHES
 //
 // Most of it is minted: one field per output, named by the alias the select wrote. A SYNTHETIC
@@ -1501,12 +1579,34 @@ TEST(CteQueryable, MintsAFieldPerOutput)
 	fields[0].m_name     = wxT("Date");
 	fields[0].m_physical = wxT("fld1025");
 
-	const ibCteQueryable cte(wxT("q_sub0"), fields, 0x60000000);
+	const ibCteQueryable cte(wxT("q_sub0"), fields, 0);   // the ORDINAL — the kind is stamped on inside
 	ASSERT_EQ(cte.GetColumns().size(), 1u);
 	const ibBackendQueryColumn* date = cte.ResolveColumnByName(wxT("Date"));
 	ASSERT_NE(date, nullptr);
 	EXPECT_EQ(date->GetPhysicalName(), wxT("fld1025"));
 	EXPECT_NE(cte.ShareColumn(date), nullptr);        // minted here, so this wrapper can keep it alive
+	// …and the id it minted is SYNTHETIC — a declared attribute's metaID is positive, and a column
+	// nobody declared must never be mistaken for one (this is what `id++` over a composed base broke).
+	EXPECT_TRUE(ibBackendQueryColumn::IsSyntheticId(date->GetColumnId()));
+}
+
+// ⭐ AND A WHOLE DECLARATION'S WORTH OF THEM STAYS SYNTHETIC AND DISTINCT. Ten fields is where the
+// old numbering went wrong: it counted UP from a composed base, so the seventh field onwards came
+// out positive — a declared attribute's number.
+TEST(CteQueryable, EveryMintedIdIsSyntheticAndDistinct)
+{
+	std::vector<ibCteQueryable::Field> fields(10);
+	for (size_t i = 0; i < fields.size(); ++i)
+		fields[i].m_name = wxString::Format(wxT("F%u"), static_cast<unsigned>(i));
+
+	const ibCteQueryable cte(wxT("q_sub0"), fields, 0);
+	ASSERT_EQ(cte.GetColumns().size(), 10u);
+	std::set<ibMetaID> ids;
+	for (const ibBackendQueryColumn* c : cte.GetColumns()) {
+		EXPECT_TRUE(ibBackendQueryColumn::IsSyntheticId(c->GetColumnId())) << c->GetName();
+		ids.insert(c->GetColumnId());
+	}
+	EXPECT_EQ(ids.size(), 10u);                       // ten fields, ten different cells in a row
 }
 
 // ⭐ A BORROWED COLUMN IS THE SOURCE'S OWN — same pointer, same id, same layout. This is how the
@@ -1521,7 +1621,7 @@ TEST(CteQueryable, PublishesABorrowedColumnAsItself)
 	fields[1].m_name     = wxT("PointInTime");
 	fields[1].m_borrowed = &moment;
 
-	const ibCteQueryable cte(wxT("q_sub0"), fields, 0x60000000);
+	const ibCteQueryable cte(wxT("q_sub0"), fields, 0);
 	ASSERT_EQ(cte.GetColumns().size(), 2u);
 	const ibBackendQueryColumn* found = cte.ResolveColumnByName(wxT("PointInTime"));
 	ASSERT_EQ(found, &moment);                        // the very column, not a copy of its name

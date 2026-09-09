@@ -476,6 +476,38 @@ const ibSourceBinding* LatestReadingOf(const std::vector<ibSourceBinding>& sourc
 	return latest;
 }
 
+// 🛑⭐⭐ TWO SURFACES OF ONE REGISTER SHARE THEIR COLUMN NUMBERS — A REAL DEFECT, AND THE ALIAS
+// WRAPPER IS NOT ITS CURE. Recorded here because the obvious fix was tried, measured, and is wrong.
+//
+// A register has several derived surfaces — Balance, Turnovers, the totals bundle — and each
+// republishes the register's own attributes AS THEMSELVES: same name, same storage field, same
+// METAID (registerQueryLowering.h does this deliberately, so a surface stays interchangeable with
+// the register as a source). Two of them in one query are two DIFFERENT objects with two different
+// origins, so LatestReadingOf above cannot see them, and both publish `Goods` as 1067. A row is a
+// `std::map<ibMetaID, ibValue>` (queryRamTable.h), so they are one cell.
+//
+// MEASURED 2026-09-09 on a live base, and it answers plausibly rather than failing — the worst kind:
+//
+//     SELECT B.Goods, B.QuantityBalance, T.Goods, T.QuantityTurnover
+//     FROM …GoodsInWarehouses.Balance(, ) AS B
+//     LEFT JOIN …GoodsInWarehouses.Turnovers(&P1, &P2, , ) AS T ON T.Goods = B.Goods
+//
+// over a period with NO movements (the same Turnovers read ALONE returns 0 rows). `T.QuantityTurnover`
+// correctly reads 0 — it has an id of its own — while `T.Goods`, sharing 1067, shows the LEFT side's
+// item. An outer join's unmatched side reporting the matched side's value, silently.
+//
+// ⚠ WHAT WAS TRIED AND FAILED: wrapping the colliding source in ibAliasQueryable, the cure for "one
+// table read twice". Both variants — wrapping the prior reading, and wrapping this source — turned 8
+// rows into 521 and answered a movement-free period with movement figures: the wrapper republishes
+// columns off the ORIGIN, and a derived surface's origin is the unfiltered temp table, so the
+// surface's own parameters are lost. The wrapper fixes NUMBERING; the thing that needs fixing here
+// is numbering AND the surface stays the surface.
+//
+// WHERE THE CURE PROBABLY IS, for whoever takes this next: either a surface stamps the attributes it
+// republishes with an id of its own (SyntheticKind::Derived over the attribute's metaID, which keeps
+// the name and the type and changes only the number), or a row stops being keyed by column id alone.
+// The first is local to registerQueryLowering.h and does not touch the join at all.
+
 // The single source that OWNS a bare (unqualified) column. Fails on AMBIGUITY — a bare column that
 // exists in more than one joined source must be qualified with an alias (SQL "ambiguous column"). Returns
 // null only when no source owns it (the caller reports "unknown attribute") or sources is empty.
@@ -504,6 +536,24 @@ void RequireAliasFree(const std::vector<ibSourceBinding>& sources, const wxStrin
 	if (!alias.empty() && SourceForAlias(sources, alias) != nullptr)
 		ThrowQueryException(line, col, wxString::Format(
 			_("duplicate source alias '%s': each FROM / JOIN source needs a distinct alias"), alias));
+}
+
+// ⚠ HOW MANY TIMES ONE TABLE MAY BE READ IN ONE QUERY — asked HERE, because here is where a further
+// reading is minted, and here there is a query to name and a person to answer.
+//
+// Each reading stamps its kind onto the ids of the reading before it (queryColumn.h, SyntheticId),
+// and an id is an `int`. Past the ceiling the multiplication wraps into the POSITIVE half, where an
+// id means "a declared attribute" — a silently wrong answer of exactly the kind this whole scheme
+// exists to prevent. The room is deep (a table read four times uses three wrappings, an ordinary
+// attribute id carries six), so this refuses what nobody is expected to write, out loud rather than
+// by handing back a number that lies about what it is.
+void RequireAnotherReadingFits(const ibBackendQueryable& source, const wxString& alias, int line, int col)
+{
+	for (const ibBackendQueryColumn* c : source.GetColumns())
+		if (c != nullptr && !ibBackendQueryColumn::CanComposeSyntheticId(c->GetColumnId()))
+			ThrowQueryException(line, col, wxString::Format(
+				_("too many readings of one table in one query (at '%s'): a column id cannot carry another"),
+				alias));
 }
 
 // ⭐⭐ THE NAME THE AUTHOR CALLS IT BY — for a refusal, which is read by whoever wrote the query and
@@ -1502,7 +1552,12 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 	}
 
 	default:
-		ThrowQueryException(e.m_line, e.m_col, _("unsupported WHERE expression"));
+		// ⭐ IT SAYS WHICH ONE. A refusal that names only its own category leaves the author to find
+		// the offending fragment by bisecting their own WHERE — and the position alone is not enough
+		// when the condition spans lines. The engine can already write an expression back out
+		// (ibRenderQueryExpr), so the refusal quotes the author's own text.
+		ThrowQueryException(e.m_line, e.m_col,
+			wxString::Format(_("unsupported WHERE expression: %s"), ibRenderQueryExpr(e)));
 		return nullptr;
 	}
 }
@@ -1901,11 +1956,14 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 			}
 			return ibQueryColumnExpr::OutputRef(aggAlias);
 		}
-		ThrowQueryException(e.m_line, e.m_col, _("unsupported expression in a computed column"));
+		// Named, like the WHERE one: the author's own fragment, not just the category it fell into.
+		ThrowQueryException(e.m_line, e.m_col,
+			wxString::Format(_("unsupported expression in a computed column: %s"), ibRenderQueryExpr(e)));
 		return nullptr;
 
 	default:
-		ThrowQueryException(e.m_line, e.m_col, _("unsupported expression in a computed column"));
+		ThrowQueryException(e.m_line, e.m_col,
+			wxString::Format(_("unsupported expression in a computed column: %s"), ibRenderQueryExpr(e)));
 		return nullptr;
 	}
 }
@@ -2705,7 +2763,12 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				oc.m_byAlias = true;
 			}
 			else {
-				ThrowQueryException(e.m_line, e.m_col, _("unsupported projection expression"));
+				// Named, like its two siblings. This message in particular has a history of being
+				// wrong about a query that was not (the note above: `SELECT 2 AS x`), and a refusal
+				// that quotes what it refused is the one that makes such a case obvious on sight
+				// rather than after a bisect.
+				ThrowQueryException(e.m_line, e.m_col,
+					wxString::Format(_("unsupported projection expression: %s"), ibRenderQueryExpr(e)));
 			}
 			giveIdentity(oc);
 			outSchema.push_back(oc);
@@ -3013,24 +3076,46 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
                                                 const std::map<wxString, ibValue>& params,
                                                 ibSubqueryOwner& owner)
 {
-	if (!sel.m_joins.empty() || sel.m_hasTotals)
-		ThrowQueryException(0, 0, _("a subquery / UNION branch may not use JOIN or TOTALS yet"));
+	// ⭐⭐ A JOIN IS NO LONGER REFUSED HERE EITHER, and the CTE road's own note says why it never
+	// should have been: the refusal was about the DOOR and not about the query. This road opened its
+	// inner door on ONE source by hand, so a joined select had nowhere to put the second table — and
+	// the blanket "a subquery may not use JOIN" was that gap wearing a rule's clothes.
+	//
+	// 🛑 THE TWIN ROAD WAS FIXED AND THIS ONE WAS NOT. DeclareNamedResultAsCte moved to
+	// BuildSourceTree and lost the same refusal; the rows road kept it, and every reader that lands
+	// here — a UNION branch, `FROM (SELECT …) AS x`, and the COMPOSER, which wraps its author's query
+	// as a nested source — went on being told that a perfectly ordinary query was not allowed.
+	//
+	// What that cost, in the words of the person it happened to: a report whose query joined two
+	// virtual tables saved, applied, and then refused at RUN time with a message about a subquery
+	// and a UNION they had never written (2026-09-09). The query was legitimate. The door was not.
+	//
+	// TOTALS STAYS REFUSED, deliberately: BuildSourceTree builds FROM and JOINs, and hierarchical
+	// subtotals are a different mechanism that this wrapper still has no place for. Lifting both
+	// because one was proved would be trading a measured fix for a guess.
+	if (sel.m_hasTotals)
+		ThrowQueryException(0, 0, _("a subquery / UNION branch may not use TOTALS yet"));
 
-	const std::shared_ptr<const ibBackendQueryable> qi = ResolveFrom(sel.m_from, params, owner);   // recurse — nested subqueries
 	ibDataQueryBuilder inner;
-	inner.From(qi, sel.m_from.m_alias);   // owning handle — a nested wrapper stays alive through this builder
 
 	std::vector<OutputColumn> innerSchema;
-	// ⚠ BOUND BY THE ONE NAME A SOURCE HAS — the alias if written, the last segment of its name if
-	// not (ibQuerySourceName). Binding by `m_alias` alone leaves an UNALIASED source bound to the
-	// empty string, and then its own qualified fields (`Sales.Partner`) resolve against nothing:
-	// "left over from a table this query does not read", about the table it is reading. The
-	// statement road already learnt this (BuildSourceTree); the two inner roads had not.
-	const std::vector<ibSourceBinding> innerSources{ { ibQuerySourceName(sel.m_from), qi.get() } };
+	// ⭐ THE WHOLE SOURCE TREE, BY THE ONE BUILDER THAT BUILDS ONE — FROM plus every JOIN, the
+	// ref-path joins, the cross joins, the ON key rules, the duplicate-alias check and the
+	// self-join wrapping. It is the statement road's own BuildSourceTree, so a subquery now reads
+	// its sources exactly as an ordinary query does, and a rule added there arrives here without
+	// being written twice.
+	//
+	// It also carries the binding rule this road used to spell out by hand: a source is bound by
+	// ibQuerySourceName — the alias if written, the last segment of the name if not — so an
+	// unaliased source's own qualified fields resolve instead of landing against the empty string.
+	std::vector<ibSourceBinding> innerSources;
+	std::vector<ibQueryAstExprPtr> innerSourceConditions;   // conditions written INSIDE a virtual table call
+	BuildSourceTree(sel, params, owner, innerSources, inner, &innerSourceConditions);
+
 	// A FOLDING inner (GROUP BY, with or without aggregate projections) is fine: the wrapper reads the
 	// fold off the builder and ComputeRows runs SelectAggregate — the unpaged, full-spread read a
 	// grouped query needs. The outer's pushed-down conditions post-filter the materialised rows.
-	PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true);
+	PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions);
 
 	// ibSubqueryQueryable copies the inner door (shares its owned raw columns via shared_ptr), so the
 	// local 'inner' may die here — the copy is self-sufficient. The wrapper itself lives in 'owner'.
@@ -3346,10 +3431,13 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// from anybody: the ordinal is simply this run's count of sources, times the block a named query
 	// needs for its own columns. (The `+ 100000` that used to sit here was pure band-thinking — a
 	// distance from ranges that no longer exist.)
-	const ibMetaID base = ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Subquery,
-		static_cast<ibMetaID>(owner.size()) * kCteColumnStride);
+	//
+	// ⭐ WHAT GOES IN IS THE ORDINARY NUMBER — the declaration's place in this run. The KIND is
+	// stamped on by the column that is made, one composition per column, because a composed id
+	// cannot be counted from (queryColumn.h, SyntheticId).
+	const ibMetaID firstOrdinal = static_cast<ibMetaID>(owner.size()) * kCteColumnStride;
 	std::shared_ptr<ibCteQueryable> source =
-		std::make_shared<ibCteQueryable>(name, fields, base, ibSourceMetaDataScope::Get());
+		std::make_shared<ibCteQueryable>(name, fields, firstOrdinal, ibSourceMetaDataScope::Get());
 	owner.push_back(source);
 	return source;
 }
@@ -3544,8 +3632,11 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 		// stamps a number that already carries a kind, and the two twins land apart.
 		const ibSourceBinding* const prior = LatestReadingOf(sources, resolved.get());
 		std::shared_ptr<const ibBackendQueryable> qi = resolved;
-		if (prior != nullptr)
-			qi = std::make_shared<const ibAliasQueryable>(prior->m_hold ? prior->m_hold : resolved, alias);
+		if (prior != nullptr) {
+			const std::shared_ptr<const ibBackendQueryable> inner = prior->m_hold ? prior->m_hold : resolved;
+			RequireAnotherReadingFits(*inner, alias, 0, 0);   // …while the ids can still carry a stamp
+			qi = std::make_shared<const ibAliasQueryable>(inner, alias);
+		}
 		sources.push_back({ alias, qi.get(), qi });
 		if (j.m_on && j.m_on->m_kind == ibQueryAstExprKind::Literal && j.m_on->m_literal.GetBoolean()) {
 			b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)
@@ -3592,8 +3683,16 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			}
 			if (!otherTerms.empty() && (keyTerms.size() + otherTerms.size()) > 1 && kind != ibQueryJoinKind::Inner)
 				ThrowQueryException(j.m_on->m_line, j.m_on->m_col,
-					_("an outer JOIN ON takes a key of column comparisons (a.x = b.y AND a.z = b.w); "
-					  "anything else belongs in WHERE"));
+					// 🛑 THE SAME CORRECTION AS THE CONSTANT-ON REFUSAL BELOW: this used to end
+					// "anything else belongs in WHERE", and the note four lines above says why that
+					// is not true here — on an outer join, moving a one-sided term to WHERE removes
+					// the null-padded rows and makes the join inner. The refusal stands; the remedy
+					// it named did not.
+					_("an outer JOIN ON takes a key of column comparisons (a.x = b.y AND a.z = b.w). "
+					  "A term that filters ONE side cannot ride with it, and moving that term to WHERE "
+					  "is NOT the same query - it drops the null-padded rows and makes the join inner. "
+					  "Put it inside the joined source instead (a subquery, or a virtual table's own "
+					  "parameters), or make the join inner if that is what was meant"));
 
 			// The key terms lead, so the first of them becomes the join key proper and the rest ride
 			// with it; a non-key term keeps the old road (an INNER join's extra filter).
@@ -3619,7 +3718,19 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			const bool rhsVal = isValueExpr(*on->m_rhs);
 			if (lhsVal != rhsVal) {
 				if (kind != ibQueryJoinKind::Inner)
-					ThrowQueryException(on->m_line, on->m_col, _("a constant JOIN ON (column <op> value/&param) is only supported for an INNER join: put the condition in WHERE for an outer join"));
+					// 🛑 AND THE ADVICE MUST NOT BE THE THING THAT CHANGES THE ANSWER. This used to end
+					// "put the condition in WHERE for an outer join" — which is precisely what the
+					// note above says is NOT the same query: a condition on the null-producing side,
+					// moved to WHERE, removes the padded rows and turns the outer join into an inner
+					// one. An author who follows that gets a result, no warning, and fewer rows than
+					// they asked for. A refusal may say what it cannot do; it may not hand out a
+					// remedy that quietly means something else.
+					ThrowQueryException(on->m_line, on->m_col,
+						_("a constant JOIN ON (column <op> value/&param) can only be carried on an INNER join. "
+						  "Moving it to WHERE is NOT the same query on an outer join - it drops the "
+						  "null-padded rows and makes the join inner. Either the join is inner, or the "
+						  "condition belongs inside the joined source itself (a subquery, or a virtual "
+						  "table's own parameters)"));
 				const ibQueryAstExpr& colE = rhsVal ? *on->m_lhs : *on->m_rhs;
 				const ibQueryAstExpr& valE = rhsVal ? *on->m_rhs : *on->m_lhs;
 				// When the value is on the LEFT the comparison direction flips for `col <op> value`.

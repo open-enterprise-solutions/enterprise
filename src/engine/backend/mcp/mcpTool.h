@@ -32,6 +32,7 @@
 #include "backend/serialize/dataBuilder.h"
 
 #include <functional>   // an argument may carry a function that writes its shape
+#include <set>          // one object link per id, across the three texts an object carries
 #include <vector>
 
 #include <wx/string.h>
@@ -424,6 +425,18 @@ BACKEND_API const ibMcpTool::ibMcpArgument& ibMcpLanguageArgument();
 
 BACKEND_API void ibMcpSayObject(const class ibValueMetaObject* object, ibDataNode& node,
 	bool withText = false);
+
+// ⭐⭐ WHAT THE `oes:<id>` LINKS IN A TEXT RESOLVE TO NOW. A link by number goes stale WITHOUT
+// breaking — when an id moves, the link still resolves, to the next object along — so a reader
+// following it opens the wrong object and nothing reads as wrong. Appends one entry per distinct
+// id (`id`, the writer's own `label`, what it `resolves` to and its `kind`, `agrees: false` when
+// those two disagree, `broken: true` when nothing carries the id) and RETURNS how many of them
+// are not what their text claims. `seen` carries across calls so one object's note, help and
+// comment answer with one list rather than three.
+//
+// The text is never rewritten — note_read is also how a note is read in order to be edited.
+BACKEND_API int ibMcpSayObjectLinks(const wxString& text, class ibMetaData* metaData,
+	std::vector<ibDataValue>& into, std::set<wxLongLong_t>& seen);
 
 // ⭐⭐ EVERY PROPERTY THE OBJECT HAS — asked of the object, so a property added tomorrow is in the
 // answer tomorrow, with nothing here edited.

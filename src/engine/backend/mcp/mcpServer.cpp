@@ -262,6 +262,32 @@ private:
 		return given.Mid(7).Trim(true).Trim(false) == expected;
 	}
 
+	// ⭐⭐ THE REFUSAL SAYS WHAT IS MISSING AND WHERE IT LIVES — because this is the FIRST thing a
+	// new client ever meets here, and it used to be the one refusal on this server that told the
+	// caller nothing. `{"error":"unauthorized"}`: not the JSON-RPC shape its own neighbour two
+	// lines down answers with, no `WWW-Authenticate`, and not a word about where a token comes
+	// from. Every other refusal here names the alternative — `'type_list' takes no argument called
+	// 'query'. Nothing was done. It takes: kind.` — and a caller who has met that one reasonably
+	// reads silence as "there is nothing to say".
+	//
+	// The token is not guessable and is deliberately not derivable, so saying WHERE it is shown
+	// gives away nothing: without the designer's own settings page in front of you, the sentence
+	// is useless. What it saves is the half hour spent deciding whether the server is even up.
+	static void RefuseUnauthorised(httplib::Response& res)
+	{
+		res.status = 401;
+		// The scheme, as the HTTP spec asks — a client that reads headers can act on this one
+		// without parsing a body it has no reason to expect.
+		res.set_header("WWW-Authenticate", "Bearer realm=\"OES Enterprise MCP\"");
+		res.set_content("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32001,"
+			"\"message\":\"Unauthorized: this server requires an Authorization: Bearer <token> "
+			"header on every request, including the event stream.\","
+			"\"data\":{\"where\":\"The token is minted with the server and shown in the designer, "
+			"under the assistant settings page, with a Copy button and a ready-made mcpServers "
+			"block beside it. It is persisted, so it does not change between starts.\","
+			"\"scheme\":\"Bearer\"}}}", "application/json");
+	}
+
 	// ⭐ WHERE THE CALLER IS SPEAKING FROM — a DIFFERENT question from who they are, and the
 	// transport requires both. A browser on any web page can POST to 127.0.0.1; DNS rebinding
 	// makes that page's own origin look local to the network stack, and nothing about the packet
@@ -384,8 +410,7 @@ private:
 			// machine, and this one edits a configuration and runs code as the developer whose
 			// session it lives in. "Only local" answers where a caller is, never who.
 			if (!IsAuthorised(req)) {
-				res.status = 401;
-				res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+				RefuseUnauthorised(res);
 				return;
 			}
 
@@ -468,8 +493,7 @@ private:
 			// being built, what failed, what a person typed into the assistant window. An
 			// unauthorised listener would need to ask for nothing at all.
 			if (!IsAuthorised(req)) {
-				res.status = 401;
-				res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+				RefuseUnauthorised(res);
 				return;
 			}
 
@@ -2114,6 +2138,27 @@ wxString BuildOrientation()
 			<< wxT("It is the concept: what is being built, which way it is going, what it is ")
 			<< wxT("deliberately not. Everything below is a detail of it.\n\n")
 			<< direction << wxT("\n\n");
+
+		// ⭐⭐ AND ITS LINKS ARE CHECKED BEFORE THEY ARE BELIEVED, because this is the ONE text a
+		// caller reads before it knows anything else — so a link that lands on the wrong object
+		// here is followed with full confidence. An id link goes stale WITHOUT breaking: when an
+		// id moves the link still resolves, to the next object along, and nothing reads as wrong.
+		// Measured on this tree 2026-09-09: the root named 1029 / 1041 / 1068 for objects that are
+		// 1017 / 1029 / 1056.
+		//
+		// Said INLINE here, unlike note_read's separate `links` field: nobody reads the handshake
+		// in order to edit it, and a warning that arrives beside the sentence it is about is the
+		// one that gets read.
+		std::vector<ibDataValue> links;
+		std::set<wxLongLong_t> seen;
+		if (ibMcpSayObjectLinks(direction, metaData, links, seen) > 0) {
+			out << wxT("STOP - THE LINKS ABOVE DO NOT ALL NAME WHAT THEY SAY. An `oes:<id>` link is ")
+				<< wxT("by number so it survives a rename; it does NOT survive the id moving, and ")
+				<< wxT("then it still resolves - to a DIFFERENT object, which reads as perfectly ")
+				<< wxT("normal. Resolve them with `metadata_get` before following any, and correct ")
+				<< wxT("the root note once you know what it meant. Which ones, and what they point ")
+				<< wxT("at now: `note_read` on the root answers with a `links` list.\n\n");
+		}
 	}
 
 	// ⭐ AN EMPTY ROOT IS A TASK, NOT A FACT ABOUT THE PLACE. It means nobody wrote the direction

@@ -486,7 +486,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetTurnoverViewQu
 
 		columns.push_back(ibTempColumn(
 			figureName, figureName,
-			resource->GetTypeDesc(), synthetic++,
+			resource->GetTypeDesc(), ibRegDerivedColumnId(synthetic++),
 			// …and the caption, from the same pair the name is built from.
 			ibRegFigureColumnCaption(resource->GetSynonym(), ibRegSidedCaption(ibRegFigure::Turnover, credit)),
 			ibBackendQueryColumn::Kind::Computed));
