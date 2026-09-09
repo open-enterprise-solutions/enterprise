@@ -376,18 +376,36 @@ TEST(RegisterSurface, AChangedShapeRebuildsAndTheOldPointerStaysAlive) {
     EXPECT_EQ(1u, before->GetColumns().size());
 }
 
-TEST(RegisterSurface, TheIdBandIsOneConventionForEverySurface) {
-    // Derived columns are numbered clear of every metaID. It was re-declared as a local constant at
-    // each builder, which is a constant nobody owns.
+TEST(RegisterSurface, ADerivedColumnSaysByItsSignThatNobodyDeclaredIt) {
+    // ⭐⭐ THE SEED IS A PLAIN ORDINAL AND EACH SITE COMPOSES ITS OWN ID off it. `id + 1` is the next
+    // COLUMN only while the number is ordinary — added to an already composed one it means another
+    // KIND (queryColumn.h, SyntheticId).
+    //
+    // 🛑 It used to be a positive BAND, 0x50000000: the last of five hand-carved ranges to outlive
+    // the sign scheme that replaced them (§ 31.2 of the query-language arc). A surface therefore
+    // published columns nobody declared under ids indistinguishable from an attribute's metaID —
+    // against the invariant `GetColumnId`'s own note calls structural. Pinned here as the RULE
+    // rather than as the constant, so the next renumbering has to keep the property and not the
+    // number.
     ibRegSurfaceCache cache;
     ibTypeDescription type;
-    ibMetaID seen = 0;
+
+    ibMetaID seed = -1;
+    ibMetaID first = 0, second = 0;
+
     cache.Obtain(wxT("k"), wxT("sig"), wxT("T"), nullptr,
         [&](std::vector<ibTempColumn>& columns, ibMetaID& synthetic) {
-            seen = synthetic;
-            columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, synthetic++));
+            seed   = synthetic;
+            first  = ibRegDerivedColumnId(synthetic++);
+            second = ibRegDerivedColumnId(synthetic++);
+            columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, first));
+            columns.push_back(ibTempColumn(wxT("B"), wxT("fldB"), type, second));
         });
-    EXPECT_EQ(ibRegDerivedColumnBand, seen);
+
+    EXPECT_EQ(0, seed);                                             // an ordinal, not a composed base
+    EXPECT_TRUE(ibBackendQueryColumn::IsSyntheticId(first));        // negative: nobody declared it
+    EXPECT_TRUE(ibBackendQueryColumn::IsSyntheticId(second));
+    EXPECT_NE(first, second);                                       // …and one per column
 }
 
 // =============================================================================
