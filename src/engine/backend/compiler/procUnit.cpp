@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, 2�-team
+//	Author		: Maxim Kornienko, 2C-team
 //	Description : Processor unit 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -560,6 +560,60 @@ if(cValue1.m_typeClass==ibValueTypes::TYPE_REFFER\
  && &cValue1!=&cValue2 && &cValue1!=&cValue3)\
  cValue1.m_pRef->DecrRef();\
 
+// Append a value's text onto `out`.
+//
+// A STRING NEEDS NOTHING PASSED IN, because it is already holding the buffer:
+// `m_pStr` is a pointer to a live ibString. That is the whole reason
+// `GetString(ibString&)` takes a scratch — not for the string, which never
+// touches it, but for a value that has no text yet and must build some. Handing
+// every caller a buffer to carry, on a path where it is used by the rare operand
+// and not the common one, is the cost being removed here: the rare one now builds
+// its text straight into the destination instead of into a scratch that is then
+// copied out of.
+//
+// A reference to a string IS a string, so the chain is followed rather than
+// coerced — the same hop `GetString(ibString&)` makes for the same reason.
+inline void AddStringValue(ibString& out, const ibValue& value)
+{
+	const ibValue* held = &value;
+	while (held->m_typeClass == ibValueTypes::TYPE_REFFER && held->m_pRef != nullptr)
+		held = held->m_pRef;
+
+	if (held->m_typeClass == ibValueTypes::TYPE_STRING) {
+		if (held->m_pStr != nullptr) out += *held->m_pStr;   // null = the empty string
+	}
+	else {
+		out += ibString(held->GetString());                  // number / date / object: build it
+	}
+}
+
+// Make `dest` a string holding a LIVE, EMPTY buffer, to be filled in place.
+//
+// The destination is going to own an ibString whatever happens — SetString() makes
+// one on the heap and moves the caller's local into it — so it is made HERE and
+// written through directly: one object instead of two, nothing to move out of, and
+// no way for an lvalue ibString to slide into SetString(const wxString&) through
+// ibString's implicit conversion and pay for a wxString on the way in.
+//
+// The buffer dest ALREADY holds is reused rather than freed and remade, so a loop
+// assigning into the same slot allocates once instead of once per iteration.
+//
+// 🛑 The caller must have established that dest is neither an operand — clearing it
+// would wipe text that is about to be read — nor read-only, which SetString handles
+// by redirecting the write into the referenced value.
+static inline ibString& MakeStringValue(ibValue& dest)
+{
+	if (dest.m_typeClass == ibValueTypes::TYPE_STRING && dest.m_pStr != nullptr) {
+		dest.m_pStr->Clear();          // keep the allocation, drop the text
+		return *dest.m_pStr;
+	}
+
+	dest.Reset();
+	dest.m_typeClass = ibValueTypes::TYPE_STRING;
+	dest.m_pStr = new ibString();
+	return *dest.m_pStr;
+}
+
 //Functions for quickly working with the ibValue type
 inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
 {
@@ -609,11 +663,26 @@ inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 		// (GetString() is null-safe, so `"" + expr` is the correct result).
 		if (&cValue1 == &cValue2 && &cValue1 != &cValue3 &&
 			cValue1.m_typeClass == ibValueTypes::TYPE_STRING && cValue1.m_pStr) {
-			ibString scratch;
-			*cValue1.m_pStr += cValue3.GetString(scratch);
+			AddStringValue(*cValue1.m_pStr, cValue3);
+		}
+		else if (&cValue1 != &cValue2 && &cValue1 != &cValue3) {
+			// THE DESTINATION'S OWN BUFFER IS THE ONLY BUFFER. It is going to hold an
+			// ibString either way, so it is opened here and both operands append
+			// straight into it — no local to build and move out of, and the buffer
+			// survives from one execution of this instruction to the next.
+			ibString& out = MakeStringValue(cValue1);
+			AddStringValue(out, cValue2);
+			AddStringValue(out, cValue3);
 		}
 		else {
-			cValue1.SetString(cValue2.GetString() + cValue3.GetString());
+			// The destination IS one of the operands and is not the in-place case
+			// above, so its buffer cannot be opened — clearing it would wipe text
+			// still to be read. Build beside it and hand the buffer over: the result
+			// is complete before SetString()'s Reset() runs.
+			ibString result;
+			AddStringValue(result, cValue2);
+			AddStringValue(result, cValue3);
+			cValue1.SetString(std::move(result));
 		}
 	}
 }
@@ -936,6 +1005,27 @@ void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDe
 
 start_label:
 
+	// 🛑 NO SCRATCH BUFFERS LIVE HERE, and the attempt that put four of them here is
+	// worth recording rather than repeating.
+	//
+	// A member read spells its property name out of the const pool through
+	// `GetString()`, which returns a wxString BY VALUE — so the obvious move was
+	// the allocation-free `GetString(ibString&)` plus one assign into a wxString
+	// hoisted out of the loop. THE LISTING SAYS IT BUYS NOTHING: `FindProp` takes
+	// a wxString, so a wxString must exist either way, and `wxString::assign` is
+	// itself an `__imp_` call — every wxString operation in this build crosses the
+	// DLL boundary. One imported call was traded for another, plus an indirection.
+	//
+	// ⚠ AND HOISTING HAS ITS OWN PRICE, which the loop hides: `Execute` is
+	// RE-ENTERED — a nested module, a call, a method — so a buffer declared here is
+	// constructed and destroyed once per CALL, not once per run. What looks like
+	// amortising over a long loop is a tax on every short one (Max, 2026-09-09).
+	//
+	// The only place a saving was real is where wxString leaves the path
+	// ENTIRELY — the string opcodes below, which carry `ibString` end to end. Their
+	// scratches are locals in the case, and cost nothing: `GetString(scratch)`
+	// hands back the LIVE buffer for a string value and never touches the scratch,
+	// so an empty one never allocates.
 	try { //slower by 2-3% for each nested module
 		while (lCodeLine < lFinish) {
 
@@ -1412,6 +1502,11 @@ start_label:
 
 			// The projection. The names are read from the const pool only while the shape is being
 			// made — once per query; the field stores that follow carry positions, not names.
+			// ⚠ THE NAMES ARE READ PER ROW EVEN THOUGH THE SHAPE IS BUILT ONCE — `ibLinqRow`
+			// splits them for the FIRST row only, but the argument is evaluated on every one.
+			// Reading them through the native buffer instead does NOT help: the callee takes
+			// a wxString, so one is built either way (measured 2026-09-09 — it read WORSE).
+			// The saving is in `ibLinqRow` taking the const-pool value itself, not here.
 			case OPER_LINQ_ROW:
 				ibLinqRow(variable1, variable2,
 					m_pByteCode->m_listConst[index3].GetString(), (long)array3);
@@ -1988,8 +2083,59 @@ start_label:
 				break; //getting the array value
 			case OPER_IF + TYPE_DELTA1: if (cvariable1.m_fData.IsZero()) lCodeLine = index2 - 1; break;
 				//STRING
-			case OPER_ADD + TYPE_DELTA2: variable1.SetString(cvariable2.GetString() + cvariable3.GetString()); break;
-			case OPER_LET + TYPE_DELTA2: variable1.SetString(cvariable2.GetString()); break;
+			// ⭐⭐ NATIVE END TO END — the one string site where wxString leaves the path
+			// entirely rather than being obtained a different way. `a + b` used to build two
+			// wxStrings out of native buffers, join them into a third and convert the result
+			// back: four crossings of the boundary type to join two strings that were already
+			// native. `ibString` has its own `operator+` and `SetString(ibString&&)` STEALS
+			// the buffer. Verified in the /FAsc listing: not one `__imp_wxString` left here.
+			//
+			// AND NO SCRATCH IS PASSED IN, because a string value is already holding the
+			// buffer — `m_pStr` IS the pointer. The destination is holding one too, so it
+			// is opened and written through directly: no local built to be moved out of,
+			// and no lvalue ibString that could slide into SetString(const wxString&) via
+			// the implicit conversion. An operand with no text yet builds it straight into
+			// the destination rather than into a scratch somebody had to carry.
+			//
+			// 🛑 THE OPERANDS ARE MACROS — every mention is another ResolveWrite/ResolveRead
+			// call — so each is bound to a reference ONCE here. The address comparisons that
+			// follow are free only because of that binding; written against the macros they
+			// would be three extra resolves per instruction.
+			case OPER_ADD + TYPE_DELTA2: {
+				ibValue& dest = variable1;
+				const ibValue& left = cvariable2;
+				const ibValue& right = cvariable3;
+				if (&dest == &left && &dest != &right &&
+					dest.m_typeClass == ibValueTypes::TYPE_STRING && dest.m_pStr != nullptr) {
+					AddStringValue(*dest.m_pStr, right);          // fused `s = s + expr`, in place
+				}
+				else if (&dest != &left && &dest != &right && !dest.m_bReadOnly) {
+					ibString& out = MakeStringValue(dest);
+					AddStringValue(out, left);
+					AddStringValue(out, right);
+				}
+				else {
+					ibString result;                              // dest aliases an operand, or is read-only
+					AddStringValue(result, left);
+					AddStringValue(result, right);
+					dest.SetString(std::move(result));
+				}
+				break;
+			}
+			case OPER_LET + TYPE_DELTA2: {
+				ibValue& dest = variable1;
+				const ibValue& src = cvariable2;
+				if (&dest == &src) break;                         // `a = a` — nothing to do
+				if (!dest.m_bReadOnly) {
+					AddStringValue(MakeStringValue(dest), src);
+				}
+				else {
+					ibString text;                                // read-only: SetString redirects the write
+					AddStringValue(text, src);
+					dest.SetString(std::move(text));
+				}
+				break;
+			}
 			case OPER_SET_ARRAY + TYPE_DELTA2:
 				if (!SetArrayValue(variable1, cvariable2, GetValue(cvariable3)))
 					Raise(ERROR_ARRAY_SET, cvariable3);

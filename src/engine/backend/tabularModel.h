@@ -5,6 +5,7 @@
 #include <functional>
 #include <map>      // ibComposerNode holds the driver row's std::map<ibMetaID, ibValue>
 #include <memory>   // std::shared_ptr (CreateIterator)
+#include <utility>  // std::forward — the two handovers below; transitive on MSVC, not on GCC/Clang
 
 #include "backend/tabularModelView.h"
 
@@ -119,9 +120,19 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 
 	public:
 
+		// 🛑 THE SAME MISSED HANDOVER AS AppendTableValue, one class up. `T` is the CLASS's parameter,
+		// so `T&&` is NOT a forwarding reference — it is a plain rvalue reference, and only a
+		// TEMPORARY can bind to it. `m_cValue(cValue)` then COPIED that temporary, because a named
+		// rvalue reference is an lvalue inside the function: `ValueToVariant` builds `ibValue(value)`
+		// expressly to hand it over, and the handover was a second copy.
+		//
+		// ⭐ `std::forward<T>` rather than `std::move`, because the class has TWO instantiations that
+		// mean different things: `<ibValue>` owns its value and wants the move, `<const ibValue&>`
+		// (the read-only view below) has a REFERENCE member and must keep binding one. forward is
+		// right for both; move would be meaningless for the second.
 		ibVariantDataValueImpl(T&& cValue)
 			:
-			m_cValue(cValue)
+			m_cValue(std::forward<T>(cValue))
 		{
 		}
 
@@ -1078,8 +1089,15 @@ public:
 
 		/////////////////////////////////////////////////////////////////////////////
 
+		// 🛑 A FORWARDING REFERENCE THAT DID NOT FORWARD. `variant` is named, so inside the function
+		// it is an LVALUE whatever it was bound from — `insert_or_assign(id, variant)` therefore
+		// COPIED even a temporary handed in to be consumed. Every caller passing a freshly built
+		// value paid a copy of a refcounted `ibValue` for nothing, and the signature said the
+		// opposite of what the body did.
 		template <class varType>
-		inline void AppendTableValue(const ibMetaID& id, varType&& variant) { m_nodeValues.insert_or_assign(id, variant); }
+		inline void AppendTableValue(const ibMetaID& id, varType&& variant) {
+			m_nodeValues.insert_or_assign(id, std::forward<varType>(variant));
+		}
 		inline ibValue& AppendTableValue(const ibMetaID& id) { return m_nodeValues[id]; }
 
 		/////////////////////////////////////////////////////////////////////////////

@@ -779,6 +779,79 @@ TEST(RuntimeBench, DISABLED_LinqProjectionWidth) {
     SUCCEED();
 }
 
+// --- what a STRING costs to move through the runtime ------------------------
+//
+// WHY THIS ROW EXISTS. A value is copied through TWO doors and they were not the
+// same code. `ibValue::Copy` (value.cpp, what `operator=` calls) copies the
+// buffer straight — `new ibString(*src)` — and that is the door
+// DISABLED_IbValueCopyCost measures. The OTHER door is the inline
+// CopyValue/MoveValue pair in procUnitLambda.h, which is what the interpreter
+// and the LINQ pipeline call (89 sites, 32 of them in procUnitLINQ.cpp), and it
+// went ibString -> wxString -> ibString: two conversions and two allocations per
+// copied string, both across the backend.dll import boundary. Nothing in this
+// file exercised that door with a STRING — every projection bench above fills
+// its rows with numbers — so the wxString round trip sat on the interpreter's
+// per-instruction path unmeasured.
+//
+// Each shape is measured against its NUMBER twin under identical conditions, so
+// the reading is the string's surcharge over a value that never touches the
+// string path, rather than a nanosecond count on this CPU.
+TEST(RuntimeBench, DISABLED_StringValueCopy) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var src public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  src = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    src.Add(New Structure(\"A, B\", \"a moderately ordinary string\", i));\n")
+        wxT("    i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("EndProcedure\n")
+        // Assignment through the interpreter: the LET road into CopyValue.
+        wxT("Function LetString(n) Public\n")
+        wxT("  var a; var b; var i; a = \"a moderately ordinary string\"; b = \"\"; i = 0;\n")
+        wxT("  While i < n Do b = a; i = i + 1; EndDo;\n")
+        wxT("  Return b;\n")
+        wxT("EndFunction\n")
+        wxT("Function LetNumber(n) Public\n")
+        wxT("  var a; var b; var i; a = 12345; b = 0; i = 0;\n")
+        wxT("  While i < n Do b = a; i = i + 1; EndDo;\n")
+        wxT("  Return b;\n")
+        wxT("EndFunction\n")
+        // Projection: the LINQ road into CopyValue, one field either way so the
+        // only difference between the two runs is the type of the field.
+        wxT("Function ProjectString() Public\n")
+        wxT("  var q; q = from r in src select { X = r.A };\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function ProjectNumber() Public\n")
+        wxT("  var q; q = from r in src select { X = r.B };\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    const long iters = 200000;
+    ibValue argIters((int)iters), ret;
+    const double letString = BestTotalNs(3, [&]{
+        pu.CallAsFunc(wxT("LetString"), ret, argIters); g_sink += ret.GetString().length(); });
+    const double letNumber = BestTotalNs(3, [&]{
+        pu.CallAsFunc(wxT("LetNumber"), ret, argIters); g_sink += (uint64_t)ret.GetInteger(); });
+
+    const long rows = 16000;
+    ibValue argRows((int)rows);
+    pu.CallAsProc(wxT("Fill"), argRows);
+    const double projString = BestTotalNs(3, [&]{
+        pu.CallAsFunc(wxT("ProjectString"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+    const double projNumber = BestTotalNs(3, [&]{
+        pu.CallAsFunc(wxT("ProjectNumber"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+
+    RowOes("let string (ns/assign)", letString / double(iters), "ns", letString);
+    RowOes("let number (ns/assign)", letNumber / double(iters), "ns", letNumber);
+    RowOes("project string field (ns/row)", projString / double(rows), "ns", projString);
+    RowOes("project number field (ns/row)", projNumber / double(rows), "ns", projNumber);
+    SUCCEED();
+}
+
 // --- does the flat per-row cost survive a MILLION rows? --------------------
 //
 // Every scale bench above stops at 16 000, and "flat up to 16k" is a different
@@ -1035,6 +1108,101 @@ TEST(RuntimeBench, DISABLED_JoinIndexContainer) {
         RowOes(l4.str().c_str(), probeLong  / double(n), "ns", probeLong);
         RowOes(l5.str().c_str(), makeKey    / double(n), "ns", makeKey);
     }
+    SUCCEED();
+}
+
+// --- THE ATOM: what one ibValue costs to copy -----------------------------
+//
+// ⚠ NOTHING IN THIS FILE MEASURED IT, and every row above is built out of it.
+// A projected field, a probe of an index, a row kept by a query, a cell written
+// into a table — each is a handful of ibValue copies wearing different names, so
+// "the copy is the cost" was an argument nobody could check and "it is not" was
+// equally unfalsifiable. Three rounds of 2026-09-09 ended pointing here (the
+// tree was innocent, the dynamic_cast was innocent, removing a virtual call and
+// a temporary bought nothing), which is what a missing atom looks like from the
+// outside.
+//
+// The three shapes are separate because `ibValue::Copy` treats them differently
+// and only the disassembly says so today: a NUMBER copies its payload, a STRING
+// runs `new ibString(*other)` — a heap allocation per copy — and an OBJECT
+// becomes a REFERENCE to the source with an atomic increment (value.cpp, Copy).
+// One number would have hidden the other two.
+TEST(RuntimeBench, DISABLED_IbValueCopyCost) {
+    const long n = 200000;
+
+    // Sources built once, outside the timing: this asks what a COPY costs, not
+    // what making the original costs.
+    const ibValue srcNumber((int)12345);
+    const ibValue srcString(wxT("a moderately ordinary string"));
+    ibValue srcObject(new ibValueArray());
+
+    // 🛑 NOTHING IS CONSUMED INSIDE THE LOOP, and the first version of this row was
+    // wrong for exactly that. It sank each copy through a different reader —
+    // `GetInteger()` on the number (a decimal conversion), `GetString()` on the
+    // string (which returns a wxString BY VALUE, so an allocation), `IsEmpty()`
+    // on the object (a cheap call) — and reported the result as the cost of
+    // COPYING. The ordering it produced was the ordering of the READERS.
+    //
+    // Nothing is needed: `ibValue::operator=` is out of line and imported from
+    // backend.dll, so the call cannot be elided and the loop cannot be folded
+    // away. The sink is taken once, after the timing, purely to keep `dst` live.
+    ibValue dst;
+    const double copyNumber = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i) dst = srcNumber;
+    });
+    g_sink += (uint64_t)dst.GetInteger();
+
+    const double copyString = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i) dst = srcString;
+    });
+    g_sink += dst.GetString().length();
+
+    const double copyObject = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i) dst = srcObject;
+    });
+    g_sink += (uint64_t)dst.IsEmpty();
+
+    // Construct + destruct, with nothing to release — the floor under every row
+    // that says "a temporary was removed".
+    const double emptyPair = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i) { ibValue tmp; g_sink += (uint64_t)tmp.IsEmpty(); }
+    });
+
+    // ⭐⭐ WHAT A NON-NUMBER PAYS FOR THE NUMBER. `ibNumber m_fData` is a member OUTSIDE
+    // the union, so it is default-constructed by every ibValue — the ctor's
+    // initialiser list does not even name it — and `~ibNumber()` runs on every
+    // destruction, checking the heap tier. A string value carries a number; so
+    // does an object; so does an empty. (Max, 2026-09-09: *"the string always
+    // comes packaged with a number"*.)
+    //
+    // Its 8 bytes could live in the union — the payload IS one uint64 with a
+    // tier bit, exactly a pointer's width — with the tag owning the lifetime the
+    // way it already owns m_pStr's. This row is what says whether that is worth
+    // doing: the pair below is the price every non-number value pays today.
+    const double numberPair = BestTotalNs(5, [&]{
+        // The ADDRESS, not a reader: taking it stops the object being elided
+        // without pulling a conversion into the timing (which is the mistake the
+        // note above records).
+        for (long i = 0; i < n; ++i) { ibNumber tmp; g_sink += (uint64_t)(uintptr_t)&tmp; }
+    });
+
+    // The same three against a native baseline, so the numbers read as a factor
+    // rather than as nanoseconds on this CPU.
+    long nativeDst = 0; const long nativeSrc = 12345;
+    const double copyLong = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i) { nativeDst = nativeSrc; g_sink += (uint64_t)nativeDst; }
+    });
+
+    RowOes("ibValue copy: number (ns)", copyNumber / double(n), "ns", copyNumber);
+    RowOes("ibValue copy: string (ns)", copyString / double(n), "ns", copyString);
+    RowOes("ibValue copy: object (ns)", copyObject / double(n), "ns", copyObject);
+    RowOes("ibValue empty ctor+dtor (ns)", emptyPair / double(n), "ns", emptyPair);
+    RowOes("ibNumber ctor+dtor alone (ns)", numberPair / double(n), "ns", numberPair);
+    RowOes("long copy - control (ns)", copyLong / double(n), "ns", copyLong);
+
+    // The footprint the union question is about, said once rather than argued.
+    std::cout << "  sizeof(ibValue) = " << sizeof(ibValue)
+              << "   sizeof(ibNumber) = " << sizeof(ibNumber) << "\n";
     SUCCEED();
 }
 

@@ -331,6 +331,17 @@ inline void CopyValue(ibValue& cValue1, ibValue& cValue2)
 	if (&cValue1 == &cValue2)
 		return;
 
+	// STRING ONTO STRING KEEPS THE BUFFER, and the check has to come BEFORE Reset()
+	// because Reset() is exactly what throws the buffer away. Overwriting the text
+	// reuses the allocation, so a loop assigning into the same slot pays for one.
+	if (!cValue1.m_bReadOnly &&
+		cValue1.m_typeClass == ibValueTypes::TYPE_STRING && cValue1.m_pStr != nullptr &&
+		cValue2.m_typeClass == ibValueTypes::TYPE_STRING) {
+		if (cValue2.m_pStr != nullptr) *cValue1.m_pStr = *cValue2.m_pStr;
+		else cValue1.m_pStr->Clear();                 // null source = the empty string
+		return;
+	}
+
 	//checking variable availability and checking references
 	if (cValue1.m_bReadOnly) {
 		cValue1.SetValue(cValue2);
@@ -358,7 +369,12 @@ inline void CopyValue(ibValue& cValue1, ibValue& cValue2)
 		cValue1.m_fData = cValue2.m_fData;
 		break;
 	case ibValueTypes::TYPE_STRING:
-		cValue1.SetString(cValue2.GetString());
+		// Buffer copy, exactly like ibValue::Copy. SetString(GetString()) went
+		// ibString -> wxString -> ibString: two conversions and two allocations
+		// per copied string, on the interpreter's per-instruction path. The
+		// destination was Reset() above, so its m_pStr is already null — no
+		// second Reset needed either.
+		cValue1.m_pStr = cValue2.m_pStr ? new ibString(*cValue2.m_pStr) : nullptr;
 		break;
 	case ibValueTypes::TYPE_DATE:
 		cValue1.m_dData = cValue2.m_dData;
@@ -401,6 +417,24 @@ inline void CopyValue(ibValue& cValue1, ibValue&& cValue2)
 // stays cast-free.
 inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 {
+	// 🛑 THE DESTINATION'S PREVIOUS TAG, read before it is overwritten. It is the only
+	// thing that says whether m_pStr is a buffer WE own — to be reused or released —
+	// or a stale alias of m_pRef that must never be touched. Without it this function
+	// either leaks the old buffer or deletes a pointer that was never an ibString;
+	// SetString() used to supply the answer by Reset()ing, at the price of the buffer.
+	const ibValueTypes destWas = cValue1.m_typeClass;
+	ibString* const destBuffer =
+		(destWas == ibValueTypes::TYPE_STRING) ? cValue1.m_pStr : nullptr;
+
+	// A destination that HELD a string and is about to become something else releases
+	// it here — once the tag has moved on, nothing downstream knows the pointer was a
+	// buffer. (The old SetString() road freed it only when the new value was a string
+	// too, so a string overwritten by a number was simply lost.)
+	if (destBuffer != nullptr && cValue2.m_typeClass != ibValueTypes::TYPE_STRING) {
+		delete cValue1.m_pStr;
+		cValue1.m_pStr = nullptr;
+	}
+
 	cValue1.m_typeClass = cValue2.m_typeClass;
 	switch (cValue2.m_typeClass)
 	{
@@ -413,7 +447,16 @@ inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 		cValue1.m_fData = cValue2.m_fData;
 		break;
 	case ibValueTypes::TYPE_STRING:
-		cValue1.SetString(cValue2.GetString());
+		// STRING ONTO STRING KEEPS THE BUFFER. This is the LET road — `b = a` — so a
+		// loop assigning into the same slot would otherwise free and remake the buffer
+		// on every iteration; overwriting the text reuses the allocation instead.
+		if (destBuffer != nullptr) {
+			if (cValue2.m_pStr != nullptr) *destBuffer = *cValue2.m_pStr;
+			else destBuffer->Clear();                    // null source = the empty string
+		}
+		else {
+			cValue1.m_pStr = cValue2.m_pStr ? new ibString(*cValue2.m_pStr) : nullptr;
+		}
 		break;
 	case ibValueTypes::TYPE_DATE:
 		cValue1.m_dData = cValue2.m_dData;
@@ -456,7 +499,10 @@ inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 		cValue1.m_fData = std::move(cValue2.m_fData);
 		break;
 	case ibValueTypes::TYPE_STRING:
-		cValue1.SetString(cValue2.GetString());
+		// A move MOVES the buffer — same as ibValue::Move. The source is an
+		// expiring value (Reset() at the tail of this function), so nulling
+		// m_pStr here is what keeps that Reset from freeing what we took.
+		cValue1.m_pStr = cValue2.m_pStr; cValue2.m_pStr = nullptr;
 		break;
 	case ibValueTypes::TYPE_DATE:
 		cValue1.m_dData = std::move(cValue2.m_dData);

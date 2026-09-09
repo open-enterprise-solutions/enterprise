@@ -273,6 +273,16 @@ protected:
 
 	//attributes:
 	int m_numAutoDeleteParent; //flag for deleting the parent module
+
+	// 🛑 NO SCRATCH BUFFER LIVES HERE, and the two that briefly did are worth a line
+	// so nobody adds them back. They were the runtime's copy of the buffer
+	// `ibValue::GetString(ibString&)` wants, hoisted here because a local is built
+	// per call and `Execute` is RE-ENTERED. Both true, and both beside the point: a
+	// STRING value is already holding its buffer (`m_pStr` IS the pointer), so the
+	// scratch was only ever for an operand with no text yet — and that one now builds
+	// its text straight into the destination. The parameter went away with the need
+	// for it; see AddStringValue in procUnit.cpp.
+
 	const ibByteCode* m_pByteCode = nullptr;
 	// THE FRAMES THEMSELVES, not their innards. (0 - local variables, 1 - variables
 	// of the current module, 2 and higher - variables of parent modules.)

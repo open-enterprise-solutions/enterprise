@@ -236,6 +236,22 @@ void ibValue::Copy(const ibValue& cOld)
 	if (this == &cOld)
 		return;
 
+	// STRING ONTO STRING KEEPS THE BUFFER, and the check has to come BEFORE Reset(),
+	// because Reset() is exactly what throws it away. Overwriting the text reuses the
+	// allocation, so a value assigned into repeatedly pays for one buffer instead of
+	// one per copy — this is the road `operator=` takes, i.e. everything outside the
+	// interpreter: table cells, array elements, record fields.
+	//
+	// Read-only is excluded deliberately: writing through the tag would step over
+	// Reset()'s write-denied check, which is where that error is raised.
+	if (!m_bReadOnly && m_pStr != nullptr &&
+		m_typeClass == ibValueTypes::TYPE_STRING &&
+		cOld.m_typeClass == ibValueTypes::TYPE_STRING) {
+		if (cOld.m_pStr != nullptr) *m_pStr = *cOld.m_pStr;
+		else m_pStr->Clear();          // null source = the empty string
+		return;
+	}
+
 	Reset();
 
 	m_typeClass = cOld.m_typeClass;
@@ -616,6 +632,15 @@ bool ibValue::SetString(const wxString& strString)
 		return m_pRef->SetString(strString);
 	}
 
+	// Already a string with a live buffer: overwrite the text and keep the object.
+	// Before Reset(), which would free it. (An empty result is left as a live EMPTY
+	// buffer rather than nullptr — IsEmpty() reads both as empty, and the buffer is
+	// then there for the next write.)
+	if (!m_bReadOnly && m_typeClass == ibValueTypes::TYPE_STRING && m_pStr != nullptr) {
+		*m_pStr = ibString(strString);
+		return true;
+	}
+
 	Reset();
 
 	m_typeClass = ibValueTypes::TYPE_STRING;
@@ -628,6 +653,13 @@ bool ibValue::SetString(ibString&& strString)
 {
 	if (m_bReadOnly && m_typeClass == ibValueTypes::TYPE_REFFER)
 		return m_pRef->SetString(strString.ToWxString());
+
+	// Already a string with a live buffer: move into the object we have instead of
+	// deleting it and allocating another to hold the same stolen buffer.
+	if (!m_bReadOnly && m_typeClass == ibValueTypes::TYPE_STRING && m_pStr != nullptr) {
+		*m_pStr = std::move(strString);
+		return true;
+	}
 
 	Reset();
 
@@ -684,9 +716,19 @@ void ibValue::SetData(const ibValue& varValue)
 	case ibValueTypes::TYPE_NUMBER:
 		SetNumber(varValue.GetString());
 		return;
-	case ibValueTypes::TYPE_STRING:
-		SetString(varValue.GetString());
+	case ibValueTypes::TYPE_STRING: {
+		// A string source hands back its live buffer, so the assign is one buffer
+		// copy instead of the ibString -> wxString -> ibString round trip. A
+		// coerced source (number/bool/date) already owns its text in `scratch`,
+		// which is ours to give away. Both branches finish producing the value
+		// BEFORE SetString()'s Reset() runs, because varValue may be a reference
+		// that resolves back to this very value's buffer.
+		ibString scratch;
+		const ibString& text = varValue.GetString(scratch);
+		if (&text == &scratch) SetString(std::move(scratch));
+		else SetString(ibString(text));
 		return;
+	}
 	case ibValueTypes::TYPE_DATE:
 		SetDate(varValue.GetString());
 		return;

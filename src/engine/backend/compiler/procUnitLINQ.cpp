@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, 2x-team
+//	Author		: Maxim Kornienko
 //	Description : LINQ runtime — split out of procUnit.cpp.
 //
 // What lives here:
@@ -725,6 +725,17 @@ public:
 			m_values[(size_t)ordinal] = value;
 	}
 
+	// ⭐ THE CELL WHERE IT LIVES, not a copy of it. `GetPropVal` has to answer through the general
+	// surface and therefore hands back a copy; the one caller that KNOWS this is a record and is
+	// about to hand the value straight on (TableOfRows) needs neither the copy nor the temporary
+	// it lands in. Empty for an ordinal this row does not have, which is the same answer
+	// GetPropVal's `false` produced one copy later.
+	const ibValue& ValueAt(long ordinal) const {
+		static const ibValue s_absent;
+		return (ordinal >= 0 && (size_t)ordinal < m_values.size())
+			? m_values[(size_t)ordinal] : s_absent;
+	}
+
 private:
 	ibValueLinqShape*    m_shape = nullptr;   // shared by every row of the query; refcounted
 	std::vector<ibValue> m_values;            // field order = the order they were written in
@@ -774,23 +785,32 @@ public:
 	// ⚠ THE INDEX IS THE COMPILER'S, not a counter here: it emits one KEEP per key and numbers
 	// them, so a key that computes to nothing still occupies its position and the columns stay
 	// aligned with the clause that named them.
+	// ⭐⭐ ONE FLAT BLOCK, NOT A VECTOR PER ROW. Every row of a query carries the SAME number of keys
+	// — the compiler emits one KEEP per key and does it identically for each row — so the width is a
+	// property of the QUERY, not of a row, and a `vector<vector<ibValue>>` allocated one inner
+	// vector per row to store something whose shape was fixed before the first row arrived.
+	//
+	// The width is not carried on the tape, so it is learned from the first row (a `at` beyond the
+	// current width widens the block, which is why `Rewiden` exists at all) and then never moves.
 	void KeepKey(const ibValue& key, long at)
 	{
-		if (at < 0)
-			return;
-		if (m_keys.size() < m_rows.size())
-			m_keys.resize(m_rows.size());
-		if (m_keys.empty())
+		if (at < 0 || m_rows.empty())
 			return;                                   // a key with no row to belong to
-		std::vector<ibValue>& forRow = m_keys.back();
-		if ((size_t)at >= forRow.size())
-			forRow.resize((size_t)at + 1);
-		forRow[(size_t)at] = key;
+
+		if ((size_t)at >= m_keyStride)
+			Rewiden((size_t)at + 1);
+
+		const size_t base = (m_rows.size() - 1) * m_keyStride;
+		if (m_keys.size() < base + m_keyStride)
+			m_keys.resize(base + m_keyStride);
+		m_keys[base + (size_t)at] = key;
 	}
 
 	long           Count()    const { return (long)Rows().size(); }
 	const ibValue& At(long i) const { return Rows()[(size_t)i]; }
-	bool           HasKeys()  const { return !m_keys.empty() && m_keys.size() == m_rows.size(); }
+	bool           HasKeys()  const {
+		return m_keyStride > 0 && m_keys.size() == m_rows.size() * m_keyStride;
+	}
 
 	// ⭐ GROUPING AND JOINING. A bucket is found by its key in log n; the order the keys first
 	// appeared in is kept apart, because that is the order the answer comes out in and it is not
@@ -816,11 +836,16 @@ public:
 	// ibValue, more allocations, worse locality. A `a + b·log₂(n)` fit matched the series and named
 	// the wrong cause; the fit was reading warm-up, which is why the same bench run ALONE gives a
 	// different curve than run after its neighbours.
+	// ⭐⭐ THE ORDER LIST HOLDS THE ENTRY, NOT A COPY OF THE KEY. It used to push the key a second
+	// time — the map already had it — and every reader then looked that key UP AGAIN to reach the
+	// bucket standing right beside it (`ibLinqGroups`: a find per group, with ibValue comparisons,
+	// for an address that was in hand at insert). A `std::map` node never moves, so keeping the
+	// entry is keeping both halves: the key to name the group and the rows to be its Values.
 	void KeepInBucket(const ibValue& key, const ibValue& row) {
 		const auto found = m_buckets.find(key);
 		if (found == m_buckets.end()) {
-			m_bucketOrder.push_back(key);
-			m_buckets.emplace(key, std::vector<ibValue>{ row });
+			const auto added = m_buckets.emplace(key, std::vector<ibValue>{ row });
+			m_bucketOrder.push_back(&*added.first);
 			return;
 		}
 		found->second.push_back(row);
@@ -829,7 +854,9 @@ public:
 		const auto found = m_buckets.find(key);
 		return found == m_buckets.end() ? nullptr : &found->second;
 	}
-	const std::vector<ibValue>& BucketOrder() const { return m_bucketOrder; }
+	// The buckets in FIRST-APPEARANCE order, each entry carrying its key and its rows together.
+	using ibBucketEntry = std::pair<const ibValue, std::vector<ibValue>>;
+	const std::vector<const ibBucketEntry*>& BucketOrder() const { return m_bucketOrder; }
 
 	// Rows into key order. A STABLE sort over an INDEX: equal keys keep the order they arrived in,
 	// and each row moves once instead of being swapped through every comparison.
@@ -854,23 +881,44 @@ public:
 		// says outright that `a < b ? -1 : (b < a ? 1 : 0)` "runs the comparison twice to learn what
 		// one call returns", and was rewritten to ask each type for one three-way answer. The
 		// three-way answer is right here; taking it back through `operator<` threw it away again.
-		const auto before = [](const std::vector<ibValue>& l, const std::vector<ibValue>& r) {
-			const size_t n = std::min(l.size(), r.size());
-			for (size_t i = 0; i < n; ++i) {
-				const int decided = l[i].CompareValueLS(r[i]);
+		//
+		// ⚠ AND EVERY ROW HAS THE SAME NUMBER OF KEYS, so the "one has fewer" arm the previous
+		// shape needed is gone with the shape: the keys live in one flat block of a fixed width.
+		const auto before = [this](size_t l, size_t r) {
+			const size_t lhs = l * m_keyStride, rhs = r * m_keyStride;
+			for (size_t i = 0; i < m_keyStride; ++i) {
+				const int decided = m_keys[lhs + i].CompareValueLS(m_keys[rhs + i]);
 				if (decided != 0)
 					return decided < 0;
 			}
-			return l.size() < r.size();
+			return false;
 		};
 
 		std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
-			return descending ? before(m_keys[b], m_keys[a]) : before(m_keys[a], m_keys[b]);
+			return descending ? before(b, a) : before(a, b);
 		});
+		// ⭐ MOVED, NOT COPIED. Each row is an `ibValue` holding a counted reference; copying one
+		// here would take and release a reference per row for values that are going straight back
+		// into this same vector. The old row is left empty and dies with the temporary.
 		std::vector<ibValue> sorted;
 		sorted.reserve(m_rows.size());
-		for (const size_t i : order) sorted.push_back(m_rows[i]);
+		for (const size_t i : order) sorted.push_back(std::move(m_rows[i]));
 		m_rows.swap(sorted);
+	}
+
+	// Widen the key block, which happens on the FIRST row and never again: the compiler emits the
+	// same KEEPs for every row, so by the time a second row arrives the width is settled.
+	void Rewiden(size_t width) {
+		if (width <= m_keyStride)
+			return;
+		if (m_keyStride == 0 || m_keys.empty()) { m_keyStride = width; return; }
+
+		std::vector<ibValue> wider(m_keys.size() / m_keyStride * width);
+		for (size_t row = 0, rows = m_keys.size() / m_keyStride; row < rows; ++row)
+			for (size_t i = 0; i < m_keyStride; ++i)
+				wider[row * width + i] = std::move(m_keys[row * m_keyStride + i]);
+		m_keys.swap(wider);
+		m_keyStride = width;
 	}
 
 	// ⭐⭐ ITERATED IN PLACE. `foreach` over what a pipeline kept builds nothing per row: the state
@@ -914,13 +962,16 @@ private:
 
 	// One entry per kept row, holding that row's ordering keys in clause order — see KeepKey. It
 	// was one value per row until 2026-09-08, which is why `orderby a, b` had no way to compile.
-	std::vector<std::vector<ibValue>> m_keys;
+	// The ordering keys of every row, in ONE block of `m_keyStride` values per row — see KeepKey for
+	// why the width belongs to the query rather than to a row.
+	std::vector<ibValue> m_keys;
+	size_t               m_keyStride = 0;
 	// THE ONE KEY POLICY, taken from where it is written (ibValueHash / ibValueEqual, value.h):
 	// *"grouping, joining and de-duplicating all need the same pair … every index takes them from
 	// here."* These two are indexes by value, so they take them from there.
 	std::set<ibValue, std::less<ibValue>>                       m_seen;
 	std::map<ibValue, std::vector<ibValue>, std::less<ibValue>> m_buckets;
-	std::vector<ibValue>                                        m_bucketOrder;
+	std::vector<const ibBucketEntry*>                           m_bucketOrder;
 };
 // GroupBy node — bucket upstream by key extracted via fn(elem).
 // On first MoveNext drain upstream + build buckets, then emit one
@@ -2075,6 +2126,16 @@ ibValue TableOfRows(ibValueLinqRows& kept, const std::vector<wxString>& columns,
 		if (rowIsTheCell) {
 			node->AppendTableValue(columnIds[0], row);
 		}
+		// ⭐ A PROJECTED ROW HANDS ITS CELLS OVER, it does not have them asked for. Every row of
+		// every `select { … }` is one of these, and going through the general surface cost a
+		// temporary plus a copy INTO it before the copy into the node — three touches of a
+		// refcounted value to move it one place. The general path below stays for a row that is
+		// not ours (an object lending its own properties).
+		else if (const ibValueLinqRecord* const projected =
+					LinqCast<ibValueLinqRecord>(source, g_valueLinqRecord)) {
+			for (size_t i = 0; i < columns.size(); ++i)
+				node->AppendTableValue(columnIds[i], projected->ValueAt((long)i));
+		}
 		else {
 			for (size_t i = 0; i < columns.size(); ++i) {
 				ibValue cell;
@@ -2174,10 +2235,10 @@ void ibLinqGroups(ibValue& out, ibValue& scratch)
 	ibValueLinqRows* const groups = new ibValueLinqRows();
 	// In FIRST-APPEARANCE order — the order the rows arrived in, not key order, which would be a
 	// different answer and one nobody asked for. Each group's rows are a VIEW of the bucket.
-	for (const ibValue& key : kept.BucketOrder()) {
-		const std::vector<ibValue>* const bucket = kept.Bucket(key);
-		if (bucket == nullptr) continue;
-		groups->Keep(ibValue(new ibValueLinqGroup(key, ibValue(new ibValueLinqRows(&kept, bucket)))));
+	for (const ibValueLinqRows::ibBucketEntry* const entry : kept.BucketOrder()) {
+		if (entry == nullptr) continue;
+		groups->Keep(ibValue(new ibValueLinqGroup(
+			entry->first, ibValue(new ibValueLinqRows(&kept, &entry->second)))));
 	}
 	out = groups;
 }
