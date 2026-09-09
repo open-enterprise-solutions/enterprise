@@ -22,6 +22,7 @@
 // RLS — the concrete access policy lives here (session side); the L3 door sees
 // only the ibAccessPolicy interface.
 #include "backend/query/dataQueryBuilder.h"          // ibAccessPolicy / ibDataQueryBuilder
+#include "backend/query/rolePolicyFold.h"            // ibFoldRolePolicy - how the roles combine
 #include "backend/query/queryable.h"                 // ibBackendQueryable — GetMetaData / GetQueryName / GetPrimaryKeyColumns
 #include "backend/system/value/valueQueryable.h"     // ibValueQueryable — a role-module restriction returned as a set
 #include "backend/metaCollection/metaRoleObject.h"   // ibValueMetaObjectRole — GetRoleModule()
@@ -421,20 +422,33 @@ private:
 		// here — migration-safe, and the same answer the single-role NoHandler path gives. Note this is why
 		// an empty union is TRUE rather than the empty set: the door has a separate right-on-the-table
 		// stage, so a union role narrows an already-permitted table instead of granting it.
-		if (unionParticipated && !unionUnrestricted) {
-			if (unionPredicates.empty())                  // roles participated but ALL failed -> fail-closed
-				ibBackendAccessException::Error(wxString::Format(
-					_("%s on '%s' was refused by every role's access policy"), operation, sourceName));
-			ibQueryPredicatePtr orPred = unionPredicates.front();
-			for (size_t i = 1; i < unionPredicates.size(); ++i)
-				orPred = ibQueryPredicate::Compose(ibQueryPredicateKind::Or, orPred, unionPredicates[i]);
-			query.Where(orPred);                          // (role1 WHERE) OR (role2 WHERE) OR …
-		}
+		// ⭐ THE VERDICT IS ASKED, NOT COMPUTED HERE. Running the handlers needs a runtime, a
+		// configuration and a live user; deciding what their answers ADD UP TO needs none of those,
+		// and while the two lived in one body only the whole platform could exercise the rule — which
+		// is why it shipped "compiles and starts, but the fold itself is unverified". The rule now
+		// lives in `ibFoldRolePolicy` (query/rolePolicyFold.h), where a test can ask it directly, and
+		// this stays what it always was: the place that runs the roles and applies what comes back.
+		ibRolePolicyInput folded;
+		folded.m_unionParticipated = unionParticipated;
+		folded.m_unionUnrestricted = unionUnrestricted;
+		folded.m_union             = unionPredicates;
+		folded.m_intersection      = intersectionPredicates;
 
-		// The INTERSECTION half applies ALWAYS — that is what makes it a separator rather than a right.
-		// Where() AND-folds, so each one narrows whatever survived the union half and the ones before it,
-		// and the ORDER the roles were assigned in cannot change the answer.
-		for (const ibQueryPredicatePtr& pred : intersectionPredicates)
+		const ibRolePolicyVerdict verdict = ibFoldRolePolicy(folded);
+
+		// …and the refusal is worded HERE, because the names belong to this side. The fold answers
+		// "every role that spoke refused"; only this frame knows which operation and which source to
+		// say it about.
+		if (verdict.m_failClosed)
+			ibBackendAccessException::Error(wxString::Format(
+				_("%s on '%s' was refused by every role's access policy"), operation, sourceName));
+
+		if (verdict.m_union)
+			query.Where(verdict.m_union);                 // (role1 WHERE) OR (role2 WHERE) OR …
+
+		// Where() AND-folds, so each restricting role narrows whatever survived the union half and
+		// whatever the ones before it left.
+		for (const ibQueryPredicatePtr& pred : verdict.m_intersection)
 			query.Where(pred);
 	}
 

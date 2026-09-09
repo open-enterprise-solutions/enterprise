@@ -60,6 +60,7 @@ add_executable(oes_tests
     test_metadataTree.cpp
     test_commonAttribute.cpp
     test_roleComposition.cpp
+    test_rolePolicyFold.cpp
     test_dataNode.cpp
     test_pointInTime.cpp
     test_jsonProvider.cpp

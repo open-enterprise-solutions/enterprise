@@ -246,6 +246,7 @@
     <ClInclude Include="metaCollection\partial\informationRegisterEnum.h" />
     <ClInclude Include="metaCollection\partial\informationRegisterManager.h" />
     <ClInclude Include="query\queryable.h" />
+    <ClInclude Include="query\rolePolicyFold.h" />
     <ClInclude Include="query\dataQueryBuilder.h" />
     <ClInclude Include="query\queryProvider.h" />
     <ClInclude Include="query\queryReadState.h" />

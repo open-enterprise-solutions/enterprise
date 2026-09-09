@@ -2572,6 +2572,9 @@
     <ClInclude Include="query\queryable.h">
       <Filter>query</Filter>
     </ClInclude>
+    <ClInclude Include="query\rolePolicyFold.h">
+      <Filter>query</Filter>
+    </ClInclude>
     <ClInclude Include="query\dataQueryBuilder.h">
       <Filter>query</Filter>
     </ClInclude>
