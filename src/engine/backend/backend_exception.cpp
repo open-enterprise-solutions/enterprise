@@ -354,7 +354,18 @@ void ibBackendException::ProcessError(const wxString& strFileName,
 	//throw this exception
 	// COMPILE side: the only caller is ibCompileCode::DoSetError, i.e. the text
 	// was refused before it ever ran.
-	ibBackendCoreException::Error(
+	//
+	// 🛑 THE ASSEMBLED MESSAGE IS DATA, AND IT WAS BEING PASSED AS A FORMAT. It embeds the offending
+	// SOURCE LINE, and `Error()` is printf-style — its first argument IS the format. So a per cent
+	// sign in the author's own text became a conversion specifier, `FormatV` read an argument that
+	// was never pushed, and the process fast-failed with 0xC0000409: no message, no dump, nothing
+	// naming the module that did it.
+	//
+	// ⚠ AND THE TRIGGER IS ORDINARY TEXT, not an edge case. `"discount 20 %"` in a string literal is
+	// enough, and a configuration written in Russian or Ukrainian hits it the same way — which is how
+	// it was found: by bisecting a whole 1C import down to one manager module that crashed the
+	// compiler at base open (2026-08-24).
+	ibBackendCoreException::Error(wxT("%s"),
 		ibBackendException::ProcessExceptionError(strFileName, strModuleName, strDocPath, currPos, currLine, strCodeError, codeError, strErrorDesc,
 			ibDiagnosticKind::Compile));
 }

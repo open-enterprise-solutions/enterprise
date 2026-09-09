@@ -448,7 +448,9 @@ BACKEND_API const wxChar* KeyHashColumnName();
 // cannot compute a digest in SQL — in the last case the caller declares the plain unique index and
 // the engine says what it thinks at apply time, which is better than a table with an identity nothing
 // enforces.
-BACKEND_API bool ibKeyNeedsHash(const ibDatabaseLayer& conn, size_t keyFieldCount);
+// `keyByteWidth` 0 = not measured, and then only the field count decides (the behaviour before the
+// byte ceiling existed). See the body for why both are asked.
+BACKEND_API bool ibKeyNeedsHash(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t keyByteWidth = 0);
 
 // How many physical fields one index may cover here — 0 when the engine declares no limit.
 //

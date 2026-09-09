@@ -11,8 +11,15 @@
 #include "frontend/visualView/layers/commandBar.h"   // ibFrontendCommandReceiver (the door) + GatherFormCommands / ibCommandSourceEntry
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // ibValueMetaObjectAttribute::GetIconGroup (tree default icon)
 
+// OES: "New command" affordance — create a form command + its handler straight from the button's
+// command picker (the 1C "create handler from the button" flow the picker was missing).
+#include "frontend/visualView/ctrl/form.h"           // ibValueForm — AddFormCommand / MakeUniqueFormCommandName
+#include "frontend/visualView/ctrl/formCommand.h"    // ibFormCommandValue — the created command (Action event / id / name)
+#include "frontend/visualView/visualHost.h"          // ibFrontendVisualEditorNotebook::FindEditorByForm + ModifyEvent (generate + open handler)
+
 #include <map>   // std::map — pre-create the fixed command sections (shown even empty)
 #include <wx/treectrl.h>
+#include <wx/button.h>   // OES: the "New command" dialog button
 
 // -----------------------------------------------------------------------
 // ibPGCommandSourceProperty
@@ -170,8 +177,25 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 				tc->EnsureVisible(selNode);
 			}
 
+			// OES: bottom row = [New command…]  <stretch>  [OK] [Cancel]. The New button creates a fresh
+			// FORM COMMAND (with its handler) right here, so a designer can bind a button to a brand-new
+			// handler without first hand-authoring the command — the missing 1C "create handler" step.
+			ibFormCommandValue* createdFc = nullptr;
+			wxBoxSizer* bottom = new wxBoxSizer(wxHORIZONTAL);
+			wxButton* newBtn = new wxButton(dlg, wxID_ANY, _("New command..."));
+			bottom->Add(newBtn, wxSizerFlags(0).CenterVertical().Border(wxLEFT, spacing));
+			bottom->AddStretchSpacer(1);
 			wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
-			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
+			bottom->Add(buttonSizer, wxSizerFlags(0).CenterVertical());
+			topsizer->Add(bottom, wxSizerFlags(0).Expand().Border(wxBOTTOM | wxRIGHT, spacing));
+
+			newBtn->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) {
+				// Register a new form-local command; its handler procedure is generated after the modal
+				// closes (so the code page can come forward), and the button is bound to it — all below.
+				createdFc = form->AddFormCommand(form->MakeUniqueFormCommandName());
+				dlg->EndModal(wxID_OK);
+			});
+
 			dlg->SetSizer(topsizer);
 			topsizer->SetSizeHints(dlg);
 			if (!wxPropertyGrid::IsSmallScreen()) {
@@ -183,7 +207,36 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 			const int res = dlg->ShowModal();
 			const wxTreeItemId sel = tc->GetSelection();
 			bool applied = false;
-			if (res == wxID_OK && sel.IsOk()) {
+			if (createdFc != nullptr) {
+				// OES: the designer pressed "New command". Bind the button to the freshly created command
+				// NOW (a lightweight value set, exactly like the existing pick path), and DEFER generating
+				// the Action handler + opening the code editor.
+				//
+				// Why defer: ibFrontendVisualEditorNotebook::ModifyEvent switches the notebook to the code
+				// page, edits the code control, runs an undo command and rebuilds the canvas/inspector. Doing
+				// that synchronously here re-enters the property grid while it is still processing THIS button
+				// event — the rebuild frees the very property/adapter we are running in (use-after-free →
+				// fast-fail 0xC0000409 abort, the observed crash). CallAfter runs it on a clean stack once the
+				// grid has finished committing this edit.
+				const ibBackendCommandReceiver* owner =
+					dynamic_cast<const ibBackendCommandReceiver*>(dlgProp->GetPropertyObject());
+				SetValue(new ibVariantDataCommandSource(owner, ibCommandDescription(createdFc->GetId()), createdFc->GetFullName()));
+				applied = true;
+#ifndef OES_USE_WEB
+				// Designer-only: the editor notebook interface lives outside the web build. createdFc is owned
+				// by the form (stable), so capturing it and the form by value is safe across the deferral.
+				ibFormCommandValue* fc = createdFc;
+				ibValueForm* theForm = form;
+				pg->CallAfter([fc, theForm]() {
+					try {
+						if (ibFrontendVisualEditorNotebook* ed = ibFrontendVisualEditorNotebook::FindEditorByForm(theForm))
+							ed->ModifyEvent(fc->GetActionEvent(), wxVariant(wxString()), wxVariant(fc->GetName()));
+					}
+					catch (...) { /* never let handler generation take the designer down */ }
+				});
+#endif
+			}
+			else if (res == wxID_OK && sel.IsOk()) {
 				// A GROUP node has no desc (IsOk() false) — ignored, so only a real command commits.
 				if (ibTreeItemCommand* d = dynamic_cast<ibTreeItemCommand*>(tc->GetItemData(sel))) {
 					if (d->m_desc.IsOk()) {

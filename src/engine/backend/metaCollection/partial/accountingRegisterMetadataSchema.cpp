@@ -307,7 +307,13 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 				// flat, the column was NUMERIC(18,0) and a resource carrying kopecks lost them on the way
 				// INTO the totals, whatever the movements held.
 				const ibBackendQueryColumn* c = ibRegAccumulatorColumn(t, name, id, res);
-				figures.push_back({ name, res->GetName(), credit });
+				// 🛑 THE SECOND FIELD IS THE PHYSICAL BASE the view's columns are spelled from
+				// (`+ "TurnoverCr"` …), so it reaches CREATE VIEW as a real SQL identifier and must be
+				// ASCII. Taken from the resource's USER name, a Cyrillic resource made Firebird refuse
+				// the deferred view and the failed rollback then deadlocked the apply — the same defect
+				// as in accumulationRegisterMetadataSchema.cpp, in the register that copies its shape.
+				// The user name stays the logical query name; the query layer maps it.
+				figures.push_back({ name, resField, credit });
 				return c;
 			};
 

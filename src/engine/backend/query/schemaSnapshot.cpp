@@ -59,6 +59,31 @@ ibMaterializeSpec ibSchemaMaterialize::ToRenderSpec(const wxString& tableName) c
 	return out;
 }
 
+// A physical field's DECLARED width in BYTES, for the index-key estimate. Deliberately GENEROUS —
+// UTF8 worst case, slack on the numerics — because the two errors are not symmetrical:
+// overestimating moves a borderline key to the hashed identity sooner, which costs one column and is
+// always safe, while underestimating lets CREATE INDEX overflow and takes the whole apply down.
+//
+// ⚠ A STRING IS DECLARED IN CHARACTERS AND INDEXED IN BYTES, which is the whole reason this exists:
+// VARCHAR(255) in a UTF8 database is 1020 bytes, so two of them pass Firebird's ceiling on a key of
+// two fields — far under any segment limit, where nothing was looking.
+static size_t ibIndexFieldByteWidth(const ibColumnType& t)
+{
+	switch (t.m_kind) {
+	case ibCanonicalKind::Boolean: return 2;
+	case ibCanonicalKind::Integer: return 4;
+	case ibCanonicalKind::BigInt:  return 8;
+	case ibCanonicalKind::Date:    return 8;
+	case ibCanonicalKind::Guid:    return 16;
+	case ibCanonicalKind::Binary:  return (t.m_length > 0 ? (size_t)t.m_length : (size_t)16);
+	case ibCanonicalKind::Number:  return (t.m_precision <= 4 ? 2u : t.m_precision <= 9 ? 4u
+	                                     : t.m_precision <= 18 ? 8u : 16u) + 1u;
+	case ibCanonicalKind::Blob:    return 32767u;   // never index a blob — force the hash
+	case ibCanonicalKind::String:  return (size_t)((t.m_length > 0 ? t.m_length : 255) * 4 + 2);
+	}
+	return 8;
+}
+
 void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
                          const std::vector<const ibBackendQueryColumn*>& keyCols,
                          ibMetaID hashColumnId)
@@ -74,9 +99,20 @@ void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
 	for (const ibBackendQueryColumn* col : keyCols)
 		fieldCount += ColumnFieldNames(col).size();
 
+	// …AND HOW WIDE IN BYTES, which the count cannot see. An index key has two ceilings and a string
+	// column is declared in CHARACTERS but indexed in BYTES, so a key of two columns overflows where
+	// a key of fifteen fields does not (databaseLayer.h, m_maxIndexKeyBytes).
+	//
+	// ⚠ DELIBERATELY GENEROUS. Overestimating moves a borderline key to the hashed identity sooner,
+	// which is always safe; underestimating lets CREATE INDEX overflow and takes the apply down.
+	size_t keyBytes = 0;
+	for (const ibBackendQueryColumn* col : keyCols)
+		for (const ibColumnSlot& field : DescribeColumnLayout(col))
+			keyBytes += ibIndexFieldByteWidth(field.m_type);
+
 	// The key must be UNIQUE: it is what the delta upserts against, and a duplicate would let two rows
 	// accumulate half the movements each — totals that are individually plausible and jointly wrong.
-	if (db_query == nullptr || !ibKeyNeedsHash(*db_query, fieldCount)) {
+	if (db_query == nullptr || !ibKeyNeedsHash(*db_query, fieldCount, keyBytes)) {
 		table.Index(indexName, keyCols, /*unique*/ true);
 		return;
 	}

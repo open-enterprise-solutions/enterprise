@@ -1398,11 +1398,18 @@ wxString ibDataViewToggleRenderer::GetAccessibleDescription() const
 
 bool ibDataViewToggleRenderer::Render(wxRect cell, wxDC* dc, int WXUNUSED(state))
 {
+	// The owning control, reached through the column — null while the column is momentarily detached
+	// during a model rebuild. Same guard and same reason as ibDataViewCustomRendererBase::RenderText
+	// (datavcmn.cpp); the draw calls below need a real window.
+	wxWindow* const win = GetOwner() != nullptr ? GetOwner()->GetOwner() : nullptr;
+	if (win == nullptr)
+		return true;
+
 	int flags = 0;
 	if (m_toggle)
 		flags |= wxCONTROL_CHECKED;
 	if (GetMode() != wxDATAVIEW_CELL_ACTIVATABLE ||
-		!(GetOwner()->GetOwner()->IsEnabled() && GetEnabled()))
+		!(win->IsEnabled() && GetEnabled()))
 		flags |= wxCONTROL_DISABLED;
 
 	// Ensure that the check boxes always have at least the minimal required
@@ -1414,7 +1421,7 @@ bool ibDataViewToggleRenderer::Render(wxRect cell, wxDC* dc, int WXUNUSED(state)
 	cell.SetSize(size);
 
 	wxRendererNative& renderer = wxRendererNative::Get();
-	wxWindow* const win = GetOwner()->GetOwner();
+
 	if (m_radio)
 		renderer.DrawRadioBitmap(win, *dc, cell, flags);
 	else

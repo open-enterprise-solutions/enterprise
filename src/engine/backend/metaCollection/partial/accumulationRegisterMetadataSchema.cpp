@@ -206,7 +206,18 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 			// No record type — nothing signs a movement, so there is no expense side to keep apart.
 			const ibBackendQueryColumn* c = ibRegAccumulatorColumn(t, inName, idIn, res);
 			m.Accumulate(c, wxT("{row}.") + resField, ibQueryColumnExpr::Col(res->GetQueryColumn()));
-			pairs.push_back({ inName, wxString(), res->GetName() });
+			// 🛑 THE THIRD FIELD IS THE PHYSICAL BASE OF THE VIEW'S COLUMNS (`m_name + "_Turnover"`), so
+			// it becomes a REAL SQL IDENTIFIER in CREATE VIEW and must be ASCII. Spelled from the
+			// resource's USER name, a Cyrillic resource took the whole apply down on Firebird: the
+			// deferred CREATE VIEW was refused ("Dynamic SQL Error"), the failed maintenance rolled
+			// back, and UndoCreatedTables' DROP then deadlocked against the unclosed cursor — an
+			// apply that hung at 0% CPU with nothing to read (2026-08-30, on an import that
+			// carried Cyrillic resource names).
+			//
+			// ⭐ The user name stays the LOGICAL query name on the read side — the query layer already
+			// maps it to the physical field, which is this file's own principle: the SQL layer does
+			// not know words.
+			pairs.push_back({ inName, wxString(), resField });
 			continue;
 		}
 
@@ -239,7 +250,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 				    ibQueryColumnExpr::Const(ibValue(0.0)) } },
 				ibQueryColumnExpr::Col(res->GetQueryColumn())));
 
-		pairs.push_back({ inName, outName, res->GetName() });
+		pairs.push_back({ inName, outName, resField });   // physical base — see the note above
 	}
 
 	// --- the totals table AS A SOURCE -----------------------------------------------------------

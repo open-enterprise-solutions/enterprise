@@ -483,7 +483,12 @@ struct ibProcStackGuard {
 			}
 			flush();
 
-			ibBackendCoreException::Error(_("Number of recursive calls exceeded the maximum allowed value!\nCall stack :") + strError);
+			// ⚠ THE STACK IS DATA. Concatenating it onto the literal made the WHOLE thing the format
+			// argument, and a frame carries names the author wrote — a per cent sign in one of them
+			// is a conversion specifier `FormatV` then reads a missing argument for. Same shape as
+			// the compile-error site in backend_exception.cpp; passed as an argument here too.
+			ibBackendCoreException::Error(wxT("%s"),
+				_("Number of recursive calls exceeded the maximum allowed value!\nCall stack :") + strError);
 		}
 		state->m_recCount++;
 		m_currentContext = runContext;

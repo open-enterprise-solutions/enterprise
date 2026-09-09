@@ -331,6 +331,22 @@ bool ibBackendLocalization::GetTranslateFromArray(const wxString& strLangCode, c
 		}
 	}
 
+	// ⭐ LAST RESORT: NEITHER THE REQUESTED LANGUAGE NOR THE ACTIVE ONE IS HERE, and a caption a person
+	// can read beats an empty one. Returning blank made content authored in one set of languages
+	// INVISIBLE under another UI language — every notebook tab, every decoration, every group heading
+	// silently empty, with nothing on screen saying a translation was merely missing.
+	//
+	// ⚠ It matters here more than it looks: this configuration declares three languages, so a caption
+	// written in two of them and read under the third hits this exact path. An object whose name a
+	// person cannot see is, from where they sit, an object without a name.
+	//
+	// The FIRST entry rather than a guessed one: the array is in the order the author wrote it, so the
+	// first is the one they started from (2026-08-19).
+	if (!array.empty()) {
+		strResult = array.front().m_data;
+		return true;
+	}
+
 	strResult.Clear();
 	return false;
 }

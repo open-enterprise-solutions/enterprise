@@ -224,6 +224,24 @@ struct ibDialectDictionary
 	// decision taken before any DDL is emitted.
 	unsigned int m_maxIndexSegments = 0;
 
+	// ⭐⭐ HOW MANY BYTES AN INDEX KEY MAY HOLD. 0 (default) = no byte ceiling worth declaring.
+	//
+	// The COMPANION to m_maxIndexSegments, and it catches what a field COUNT cannot: a key of FEW
+	// columns still overflows if one of them is wide. Firebird bounds an index key at roughly a
+	// quarter of the page size, and a string column is declared in CHARACTERS but indexed in BYTES —
+	// a VARCHAR(255) in a UTF8 database is 1020 bytes, so TWO of them pass the ceiling on a key of
+	// two fields, far under any segment limit. Firebird then refuses CREATE INDEX with "key size
+	// exceeds implementation restriction", which — exactly like the segment overflow — takes the
+	// whole restructuring down and names a table that is not the cause.
+	//
+	// 🛑 The failure it produced was worse than a refusal: the rolled-back apply left a cursor open,
+	// and the cleanup DROP then deadlocked against it — an apply that hung at 0% CPU with nothing
+	// to read (2026-08-30, a register with a wide string key).
+	//
+	// Declared rather than discovered, for the same reason as the segment count: the identity moves
+	// into one hashed field BEFORE any DDL is emitted.
+	unsigned int m_maxIndexKeyBytes = 0;
+
 	// Physical row identifier, used to drop duplicate-key rows (keep one) BEFORE a UNIQUE index is created
 	// over existing data: FB "RDB$DB_KEY", SQLite "rowid", PG "ctid". EMPTY (default) => no dedup, so the
 	// UNIQUE create fails loudly on duplicates. Used by ibSchemaBuilder::Execute.

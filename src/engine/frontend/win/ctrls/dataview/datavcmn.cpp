@@ -756,10 +756,21 @@ ibDataViewCustomRendererBase::RenderText(const wxString& text,
 	rectText.x += xoffset;
 	rectText.width -= xoffset;
 
+	// ⚠ THE CONTROL IS REACHED THROUGH THE COLUMN — renderer → column → ctrl — and during a model
+	// rebuild a renderer can be asked to paint while its column is momentarily DETACHED, so the
+	// control is null. Dereferencing crashed in `IsEnabled`, and `DrawItemText` below needs a real
+	// window anyway. There is nothing to draw into a control that is not attached.
+	//
+	// ⭐ The same pointer is already null-checked one file over (datavgen.cpp, the client DC) — so the
+	// possibility was known there and not carried here. (2026-08-20).
+	wxWindow* const owner = GetOwner() != nullptr ? GetOwner()->GetOwner() : nullptr;
+	if (owner == nullptr)
+		return;
+
 	int flags = 0;
 	if (state & wxDATAVIEW_CELL_SELECTED)
 		flags |= wxCONTROL_SELECTED;
-	if (!(GetOwner()->GetOwner()->IsEnabled() && GetEnabled()))
+	if (!(owner->IsEnabled() && GetEnabled()))
 		flags |= wxCONTROL_DISABLED;
 
 	// ⭐⭐ THE ORDINARY CELL IS DRAWN AS TEXT, not as a themed item, and that is most of them: not
@@ -786,7 +797,7 @@ ibDataViewCustomRendererBase::RenderText(const wxString& text,
 	}
 
 	wxRendererNative::Get().DrawItemText(
-		GetOwner()->GetOwner(),
+		owner,
 		*dc,
 		text,
 		rectText,

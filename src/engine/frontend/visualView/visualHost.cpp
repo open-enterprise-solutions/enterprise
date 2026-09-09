@@ -1135,10 +1135,28 @@ bool ibVisualHost::ibContentWindow::CalculateLabelSize(ibValueFrame* control)
 void ibVisualHost::ibContentWindow::UpdateVirtualSize()
 {
 	// This window scrolls what it holds, and its virtual size is what the controls ACTUALLY
-	// need (FitInside = max(client size, best size)) — so the scrollbars show up only when the
-	// form does not fit, instead of always, as a fixed margin over the window's own size did.
+	// need — so the scrollbars show up only when the form does not fit, instead of always, as a
+	// fixed margin over the window's own size did.
 	Layout();
-	FitInside();
+
+	if (GetSizer() != nullptr) {
+		// RUNTIME: the controls live in this window's sizer, so FitInside — max(client size, sizer
+		// best size) — is exactly the scroll range.
+		FitInside();
+	}
+	else {
+		// ⚠ DESIGNER: the form CARD is a free-positioned child with NO sizer, so `FitInside` finds
+		// nothing to fit and leaves the range at the client size — no scrollbars however tall the
+		// form grows, and the bottom of a long form is simply unreachable. The range comes from the
+		// children's bounding box instead. (2026-08-20).
+		int right = 0, bottom = 0;
+		for (wxWindow* child : GetChildren()) {
+			const wxRect r = child->GetRect();
+			if (r.GetRight()  > right)  right  = r.GetRight();
+			if (r.GetBottom() > bottom) bottom = r.GetBottom();
+		}
+		SetVirtualSize(right + 10, bottom + 10);   // +10 — the card's own inset margin
+	}
 	Refresh();
 }
 

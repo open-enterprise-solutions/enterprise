@@ -758,11 +758,29 @@ unsigned int ibIndexFieldCapacity(const ibDatabaseLayer& conn)
 	return conn.GetDialect().m_maxIndexSegments;
 }
 
-bool ibKeyNeedsHash(const ibDatabaseLayer& conn, size_t keyFieldCount)
+bool ibKeyNeedsHash(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t keyByteWidth)
 {
-	const unsigned int ceiling = ibIndexFieldCapacity(conn);
-	if (ceiling == 0 || keyFieldCount <= ceiling)
-		return false;   // no ceiling declared, or the key is under it — the plain unique index stands
+	// ⭐⭐ TWO CEILINGS, AND EITHER ONE FORCES THE HASH. The field COUNT — a reference dimension is
+	// three physical fields, so a key of five columns is already fifteen segments — and the byte
+	// WIDTH, which a count cannot see: a string is declared in CHARACTERS and indexed in BYTES, so a
+	// UTF8 VARCHAR(255) is 1020 bytes and TWO of them overflow a key of two fields.
+	//
+	// 🛑 ONLY THE COUNT WAS ASKED, and the width went unnoticed until a register with a wide string
+	// key met Firebird: CREATE INDEX refused with "key size exceeds implementation restriction", the
+	// failed apply rolled back leaving a cursor open, and the cleanup DROP deadlocked against it —
+	// an apply hung at 0% CPU naming a table that was not the cause (2026-08-30).
+	//
+	// `keyByteWidth` 0 means the caller did not measure, which is the old behaviour exactly: only the
+	// count decides. Both ceilings are read here, before any DDL, so the identity can move into the
+	// hashed field instead of the engine refusing the index later.
+	const unsigned int segCeiling  = ibIndexFieldCapacity(conn);
+	const unsigned int byteCeiling = conn.GetDialect().m_maxIndexKeyBytes;
+
+	const bool overSegments = (segCeiling  != 0 && keyFieldCount > segCeiling);
+	const bool overBytes    = (byteCeiling != 0 && keyByteWidth  > byteCeiling);
+
+	if (!overSegments && !overBytes)
+		return false;   // no ceiling declared, or the key is under both — the plain unique index stands
 
 	// The ceiling is passed and the engine has no digest to offer. Say so by saying NO: the caller
 	// then declares the index it meant, and the engine refuses it at apply time in its own words. A

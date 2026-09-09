@@ -999,7 +999,11 @@ long ibApplicationData::RunApplication(const wxString& strAppName, const wxStrin
 			executeCmd += wxString::Format(wxT(" --password=%s"), m_strPassword);
 	}
 	else {
-		executeCmd += wxString::Format(wxT(" --file=%s"), m_strFile);
+		// QUOTED, for the same reason the binary above is: wxExecute splits the command on spaces, so
+		// a base under "C:\My Bases\…" reached the child as two arguments and the second one was not a
+		// flag anything declared. The path is the one thing here a person chooses, so it is the one
+		// most likely to carry a space (2026-08-20).
+		executeCmd += wxString::Format(wxT(" --file=\"%s\""), m_strFile);
 	}
 
 	if (searchDebug)
