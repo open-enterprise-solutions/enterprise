@@ -124,9 +124,9 @@
       "signature": "Area(row : number, col : number = 0)",
       "description": "ONE CELL, by number, to be read or changed in place — the only way into a cell the template does not name. What comes back carries the whole of what a cell is: Value, Font, AlignHorizontal and AlignVertical, TextColour and BackgroundColour, TextOrient, BorderLeft / BorderRight / BorderTop / BorderBottom, Size (how many cells it is merged across) and ReadOnly. All of them read AND write. A named area is better wherever there is one — a name survives rows being inserted above it and a number does not.",
       "syntax_block": "Area(row : number, col : number = 0)",
-      "parameters": "row, col — the cell's position.",
-      "return_descr": "The cell. Empty when there is no such cell, which is worth testing before writing.",
-      "example": "Cell = Sheet.Area(1, 1);\nMessage(Cell.Value);              // read it back\nCell.Value = \"Report title\";\nCell.AlignHorizontal = SpreadsheetHorizontalAlignment.Center;\nCell.Font = New Font(\"Arial\", 10, True);",
+      "parameters": "row, col — the cell's position, COUNTED FROM ZERO. The editor's margin and the designer's tools show the same cell as row 1, column 1, so a number copied from there addresses the NEXT one. Area(0, 0) is the top-left cell.",
+      "return_descr": "The cell. Empty when there is no such cell — but a column PAST the last one answers with the last one again rather than empty, so a loop that runs one too far reports a duplicate instead of an end.",
+      "example": "Cell = Sheet.Area(0, 0);          // top-left: zero, not one\nMessage(Cell.Value);              // read it back\nCell.Value = \"Report title\";\nCell.AlignHorizontal = SpreadsheetHorizontalAlignment.Center;\nCell.Font = New Font(\"Arial\", 10, True);",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
       "see_also": ["sd.Range", "sd.Areas"],
       "reviewed": true

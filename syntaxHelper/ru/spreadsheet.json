@@ -124,9 +124,9 @@
       "signature": "Area(row : number, col : number = 0)",
       "description": "ОДНА ЯЧЕЙКА по номеру — прочитать её или изменить на месте; единственный путь к ячейке, которую макет не называет. Возвращённое несёт всё, чем ячейка является: Value, Font, AlignHorizontal и AlignVertical, TextColour и BackgroundColour, TextOrient, BorderLeft / BorderRight / BorderTop / BorderBottom, Size (на сколько ячеек объединена) и ReadOnly. Всё это и читается, и пишется. Там, где имя есть, лучше именованная область: имя переживает вставку строк выше, а номер — нет.",
       "syntax_block": "Area(row : number, col : number = 0)",
-      "parameters": "row, col — положение ячейки.",
-      "return_descr": "Ячейка. Пусто, если такой ячейки нет, — стоит проверить перед записью.",
-      "example": "Cell = Sheet.Area(1, 1);\nMessage(Cell.Value);              // прочитать обратно\nCell.Value = \"Report title\";\nCell.AlignHorizontal = SpreadsheetHorizontalAlignment.Center;\nCell.Font = New Font(\"Arial\", 10, True);",
+      "parameters": "row, col — положение ячейки, СЧЁТ ОТ НУЛЯ. Поле редактора и инструменты конструктора показывают ту же ячейку как строку 1, колонку 1, поэтому число, взятое оттуда, адресует СОСЕДНЮЮ. Area(0, 0) — левая верхняя.",
+      "return_descr": "Ячейка. Пусто, если такой ячейки нет, — но колонка ЗА последней отвечает последней же, а не пустотой, поэтому цикл, прошедший на одну дальше, покажет повтор вместо конца.",
+      "example": "Cell = Sheet.Area(0, 0);          // левая верхняя: ноль, не единица\nMessage(Cell.Value);              // прочитать обратно\nCell.Value = \"Report title\";\nCell.AlignHorizontal = SpreadsheetHorizontalAlignment.Center;\nCell.Font = New Font(\"Arial\", 10, True);",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
       "see_also": ["sd.Range", "sd.Areas"],
       "reviewed": true

@@ -124,9 +124,9 @@
       "signature": "Area(row : number, col : number = 0)",
       "description": "ОДНА КОМІРКА за номером — прочитати її або змінити на місці; єдиний шлях до комірки, якої макет не називає. Повернуте несе все, чим комірка є: Value, Font, AlignHorizontal і AlignVertical, TextColour і BackgroundColour, TextOrient, BorderLeft / BorderRight / BorderTop / BorderBottom, Size (на скільки комірок об'єднана) і ReadOnly. Усе це і читається, і пишеться. Там, де ім'я є, краще іменована область: ім'я переживає вставку рядків вище, а номер — ні.",
       "syntax_block": "Area(row : number, col : number = 0)",
-      "parameters": "row, col — положення комірки.",
-      "return_descr": "Комірка. Порожньо, якщо такої комірки немає, — варто перевірити перед записом.",
-      "example": "Cell = Sheet.Area(1, 1);\nMessage(Cell.Value);              // прочитати назад\nCell.Value = \"Report title\";\nCell.AlignHorizontal = SpreadsheetHorizontalAlignment.Center;\nCell.Font = New Font(\"Arial\", 10, True);",
+      "parameters": "row, col — положення комірки, ЛІЧБА ВІД НУЛЯ. Поле редактора та інструменти конструктора показують ту саму комірку як рядок 1, колонку 1, тож число, взяте звідти, адресує СУСІДНЮ. Area(0, 0) — ліва верхня.",
+      "return_descr": "Комірка. Порожньо, якщо такої комірки немає, — але колонка ЗА останньою відповідає тією ж останньою, а не порожнечею, тож цикл, що пройшов на одну далі, покаже повтор замість кінця.",
+      "example": "Cell = Sheet.Area(0, 0);          // ліва верхня: нуль, не одиниця\nMessage(Cell.Value);              // прочитати назад\nCell.Value = \"Report title\";\nCell.AlignHorizontal = SpreadsheetHorizontalAlignment.Center;\nCell.Font = New Font(\"Arial\", 10, True);",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
       "see_also": ["sd.Range", "sd.Areas"],
       "reviewed": true
