@@ -49,7 +49,8 @@ void ibValueManagerDataObjectChartOfCharacteristicTypes::FillManagerMethods(ibMe
 
 bool ibValueManagerDataObjectChartOfCharacteristicTypes::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum)
+	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
+	switch (BuiltinMethodNum(lMethodNum))
 	{
 	case eCreateElement:
 		pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_ITEM);

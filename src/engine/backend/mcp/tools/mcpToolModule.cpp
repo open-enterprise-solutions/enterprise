@@ -311,6 +311,60 @@ public:
 		result.AddField(wxT("lines"), ibDataValue::Int(
 			(s64)(text.IsEmpty() ? 0 : text.Freq('\n') + 1)));
 
+		// 🛑⭐ WHAT THE PLATFORM WILL CALL IN HERE, which it has always known and never said. A
+		// module is not a free-form file: the platform calls handlers in it BY NAME, with a fixed
+		// argument list, and a handler spelled any other way is simply never reached - written,
+		// saved, correct and dead. The designer's editor pre-fills them from exactly this table,
+		// so a person gets the skeleton for free and a caller writing through this door got
+		// nothing at all.
+		//
+		// It cost a whole detour on 2026-09-09: a command module was written, saved and applied
+		// before its handler's name (`CommandProcessing`) was found by reading the ENGINE'S OWN
+		// SOURCE - which is not a road a caller of this door has.
+		//
+		// ⭐ AND IT IS THE SAME TABLE FOR EVERY KIND. A form's BeforeOpen / OnOpen / ChoiceProcessing,
+		// the configuration module's BeforeStart, a command's CommandProcessing: one reader, so a
+		// kind that grows a handler tomorrow answers here without this verb being touched.
+		std::vector<ibDataValue> handlers;
+
+		for (size_t idx = 0; idx < module->GetDefaultProcedureCount(); ++idx) {
+
+			const wxString name = module->GetDefaultProcedureName(idx);
+			if (name.IsEmpty())
+				continue;
+
+			const std::vector<wxString> args = module->GetDefaultProcedureArgs(idx);
+			const bool isFunction =
+				module->GetDefaultProcedureType(idx) == ibContentHelper::eFunctionHelper;
+
+			// The CALL FORM, not the name alone: the argument list is part of the contract, and a
+			// handler declared with the wrong arity is as unreachable as one misnamed.
+			wxString signature = name + wxT("(");
+			for (size_t argIdx = 0; argIdx < args.size(); ++argIdx) {
+				if (argIdx > 0)
+					signature += wxT(", ");
+				signature += args[argIdx];
+			}
+			signature += wxT(")");
+
+			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+			entry->SetValue(wxT("name"), name);
+			entry->SetValue(wxT("declare"),
+				(isFunction ? wxT("Function ") : wxT("Procedure ")) + signature);
+			entry->AddField(wxT("returnsValue"), ibDataValue::Bool(isFunction));
+
+			handlers.push_back(ibDataValue::Child(entry));
+		}
+
+		if (!handlers.empty()) {
+			result.AddField(wxT("handlers"), ibDataValue::Array(handlers));
+			result.SetValue(wxT("handlersNote"),
+				ibMcpText("The platform calls these in this module, by these names and with these "
+				  "arguments. A handler spelled otherwise is never reached - it is not an error, "
+				  "it simply never runs. Declaring one is optional; declaring it wrongly is the "
+				  "failure that leaves no trace."));
+		}
+
 		// ⭐ AN EMPTY MODULE IS AN ANSWER, and one worth spelling out: it looks exactly like a
 		// module whose code failed to arrive, and the difference decides what to do next.
 		if (text.IsEmpty())
@@ -360,7 +414,16 @@ public:
 			"manager module. The whole text, not an addition: module_patch edits a part and "
 			"module_read shows what is there now. Compiled afterwards IN ITS OWN CONTEXT and "
 			"the diagnostics come back, so a mistake is known immediately. The text is kept "
-			"either way, exactly as it would be if a person typed it.");
+			"either way, exactly as it would be if a person typed it.\n"
+			"\xF0\x9F\x9B\x91 WHAT OTHER CODE MAY CALL IS WHAT SAYS `Public`. A procedure or "
+			"function without it is reachable from inside its own module and NOWHERE ELSE - the "
+			"call from outside is answered 'field not found', which reads like a misspelling "
+			"rather than a visibility rule. It compiles cleanly either way, so nothing warns "
+			"you: this is the one thing about a module that a clean compile does not tell you.\n"
+			"AND THE HANDLERS THE PLATFORM ITSELF CALLS ARE THE EXCEPTION - Posting, OnOpen, "
+			"CommandProcessing and the rest are reached by the platform whether or not they say "
+			"it. module_read lists them for the module you are about to write, by name and with "
+			"their arguments; a handler spelled otherwise is never reached at all.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override

@@ -569,6 +569,18 @@ MCP_TOOL_REGISTER(ibMcpToolScriptComplete);
 class ibMcpToolModuleOutline : public ibMcpTool {
 public:
 
+	// 🛑 ITS TEXT IS OPTIONAL, WHICH ArgText's IS NOT — hence a local one rather than the shared
+	// helper. This verb answers about a SAVED module just as readily as about a draft, and the
+	// shared argument is required because script_complete beside it has nothing to fall back on.
+	static const ibArg& ArgOutlineText()
+	{
+		static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
+			ibMcpText("The module text to read, when it is a DRAFT - work in progress, an edit you "
+				  "have not written yet, a snippet. Leave it out and pass `id` instead to read a "
+				  "module that is already saved."), /*required*/ false);
+		return s_a;
+	}
+
 	wxString GetName() const override { return wxT("module_outline"); }
 
 	wxString GetActivity(const ibDataNode& params) const override
@@ -578,21 +590,42 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("What a module text declares: its procedures, functions and variables, which of "
-			"them are exported, and the lines each one occupies. Reads the text as given and does "
-			"not compile it - ask this before adding a handler, to see whether it is already "
-			"written.");
+		return ibMcpText("What a module declares: its procedures, functions and variables, which of "
+			"them are exported, and the lines each one occupies. Does not compile - ask this before "
+			"adding a handler, to see whether it is already written.\n"
+			"EITHER A SAVED MODULE OR A DRAFT: pass `id` for one that is stored, `text` for work in "
+			"progress. Text that does not compile yet is read all the same, which is the point - "
+			"'what is in here already' comes before 'is it correct'.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgText() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgOutlineText() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
-		const wxString text = ArgText().Text(params);
+		// ⭐ AN ID IS WHAT EVERY OTHER MODULE VERB TAKES, and this one took only a text — so the
+		// question "what is in this module" had no answer that named the module, and a caller
+		// holding an id had to read the whole text first just to list what was in it (2026-09-09).
+		wxString text = ArgOutlineText().Text(params);
+
+		if (text.IsEmpty() && ArgId().Given(params)) {
+
+			ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
+			if (object == nullptr)
+				return false;
+
+			// ibMcpModuleOf, not a cast of our own: it accepts the OWNER of a module as readily as
+			// the module itself and words the refusal, which is the same courtesy every other
+			// module verb in this tree extends.
+			ibValueMetaObjectModuleBase* module = ibMcpModuleOf(object, refusal);
+			if (module == nullptr)
+				return false;
+
+			text = module->GetModuleText();
+		}
 
 		ibParseCode parser;
 		if (!parser.ParseModule(text)) {
@@ -621,6 +654,12 @@ public:
 			entry->SetValue(wxT("name"), element.m_name);
 			entry->SetValue(wxT("kind"), kind);
 			entry->AddField(wxT("exported"), ibDataValue::Bool(exported));
+
+			// HOW IT IS CALLED, for the things that are called. The same one line the member
+			// surface publishes, so what is read here and what autocomplete offers cannot drift.
+			if (!element.m_params.empty() || kind != wxT("variable"))
+				entry->SetValue(wxT("declare"), ibModuleCallForm(element));
+
 			entry->AddField(wxT("lineFrom"), ibDataValue::Int((s64)(element.m_lineStart + 1)));
 			entry->AddField(wxT("lineTo"), ibDataValue::Int((s64)(element.m_lineEnd + 1)));
 

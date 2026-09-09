@@ -545,11 +545,11 @@
         "global_functions"
       ],
       "signature": "Tstr(text : string, langCode : string)",
-      "description": "Переклад тексту названою мовою, узятий зі сховища локалізації конфігурації. Застосовується там, де повідомлення має з'явитися мовою, відмінною від поточної, — наприклад, у документі, що друкується для контрагента.",
+      "description": "Обирає ОДНУ мову з тексту, який несе кілька. Сам текст містить усі переклади — це та сама багатомовна форма, що в синоніма та в комірки макета, — а функція читає з неї потрібний. Застосовується скрізь, де модуль БУДУЄ рядок для людини: повідомлення, заголовок табличного документа, напис, зібраний під час роботи. До таких рядків код мови макета не дотягується, і саме вони тихо лишаються одномовними.",
       "syntax_block": "Tstr(text : string, langCode : string)",
-      "parameters": "text — вихідний текст. langCode — код мови, під яким зберігається переклад.",
-      "return_descr": "Рядок — переклад або вихідний текст, якщо перекладу немає.",
-      "example": "Message(Tstr(\"Total\", \"uk\"));",
+      "parameters": "text — вихідний рядок з усіма мовами: \"en = 'Total'; ru = 'Итого'; uk = 'Разом';\". langCode — яку мову прочитати ('en', 'ru', 'uk'); мови, оголошені конфігурацією, перелічує platform_state.",
+      "return_descr": "Рядок — текст названої мови; якщо мов у рядку немає взагалі, повертається сам рядок, щоб звичайний текст не зникав.",
+      "example": "Message(Tstr(\"en = 'Total'; ru = 'Итого'; uk = 'Разом';\", \"uk\"));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": ["fn.GeneralLanguage", "fn.String"],
       "reviewed": true
@@ -1643,7 +1643,7 @@
       "syntax_block": "GeneralLanguage()",
       "parameters": "Немає.",
       "return_descr": "Рядок — код мови.",
-      "example": "Message(Tstr(\"Total\", GeneralLanguage()));",
+      "example": "Message(Tstr(\"en = 'Total'; ru = 'Итого'; uk = 'Разом';\", GeneralLanguage()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": ["fn.Tstr", "fn.UserName"],
       "reviewed": true

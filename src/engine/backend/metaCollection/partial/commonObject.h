@@ -1931,6 +1931,26 @@ class BACKEND_API ibValueManagerDataObject : public ibValueManagerObject {
 
 	virtual wxString GetClassName() const;
 	virtual wxString GetString() const;
+
+protected:
+
+	// 🛑 A TABLE INDEX IS NOT A VERB'S OWN NUMBER. The manager's surface is composed of two
+	// blocks — the manager MODULE's exported methods (contributed here) and the manager's own
+	// BUILT-IN verbs (contributed by the subclass) — and they share one numbering space. So a
+	// subclass that switches on the raw index is right only while the module declares nothing:
+	// declare one method in it and every built-in answers as its neighbour. Measured
+	// 2026-09-09 on a document manager whose module declared a single procedure:
+	// CreateDocument() returned a DocumentSelection, GetTemplate() an empty DocumentRef, and
+	// EmptyRef() walked off the end into Undefined. Silent wrong values, not refusals.
+	//
+	// The table already carries what is needed and nothing read it: every entry records WHO
+	// contributed it (alias) and ITS OWN number (data). This translates a table index into the
+	// subclass's own ordinal, and answers wxNOT_FOUND when the entry belongs to the module.
+	// The same shape ibValueTabularSectionDataObjectBase::CallAsFunc has always used.
+	//
+	// Counted rather than subtracted deliberately: an offset would encode WHICH BLOCK COMES
+	// FIRST, which is a fact about ctor binding order that nothing else in this file depends on.
+	long BuiltinMethodNum(const long lMethodNum) const;
 };
 
 class BACKEND_API ibValueManagerDataObjectPredefined : public ibValueManagerDataObject {

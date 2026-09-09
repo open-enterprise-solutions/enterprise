@@ -53,7 +53,8 @@ void ibValueManagerDataObjectInformationRegister::FillManagerMethods(ibMemberTab
 
 bool ibValueManagerDataObjectInformationRegister::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum)
+	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
+	switch (BuiltinMethodNum(lMethodNum))
 	{
 	case eCreateRecordSet:
 		pvarRetValue = m_metaObject->CreateRecordSetObjectValue();

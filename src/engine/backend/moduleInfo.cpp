@@ -10,6 +10,11 @@
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModuleBase full type for GetGuid/GetClassType
 #include "backend/metaData.h"                         // ibMetaData::GetConfigMD5 — the cache key's second half
 #include "backend/compiler/scriptParseCode.h"          // ibParseCode — the export names a TEXT declares
+// DEF_VAR_SKIP — the sentinel a parameter's default-value slot carries when there is NO default.
+// ⚠ It lives on the COMPILE side while the field it marks (ibByteParam::m_defaultValue) lives in
+// byteCode.h, which describes it in a comment and cannot see it. Included rather than duplicated;
+// the pair belongs together and moving it is wider than this change.
+#include "backend/compiler/compileContext.h"
 
 // The single ctor is inline in moduleInfo.h (it must reference ExportThunk +
 // BindTail). Only the dtor lives out-of-line.
@@ -113,10 +118,19 @@ static void ibExportNamesFromText(const ibValueMetaObjectModuleBase* moduleObjec
 		// reachable from inside its module and nowhere else, and offering it here would name
 		// something the compiler then refuses.
 		if (methods) {
+			// ⭐ THE CALL FORM, NOT ONLY THE ARITY. This passed an empty helper string, so every
+			// method a configuration declares arrived at a caller as a bare name while the
+			// platform's own came with `GetTemplate(name : string)` beside them — the arity was
+			// known and the names were not shown (2026-09-09, reading a document manager's
+			// members: `Print` with nothing to say how to call it).
+			//
+			// Written here rather than at each reader: the parser is the one that saw the text.
+			const wxString signature = ibModuleCallForm(element);
+
 			if (element.m_eType == eExportFunction)
-				helper->AppendFunc(element.m_name, element.m_paramCount, wxEmptyString, wxNOT_FOUND, alias);
+				helper->AppendFunc(element.m_name, element.ParamCount(), signature, wxNOT_FOUND, alias);
 			else if (element.m_eType == eExportProcedure)
-				helper->AppendProc(element.m_name, element.m_paramCount, wxEmptyString, wxNOT_FOUND, alias);
+				helper->AppendProc(element.m_name, element.ParamCount(), signature, wxNOT_FOUND, alias);
 		}
 		else if (element.m_eType == eExportVariable) {
 			helper->AppendProp(element.m_name, wxNOT_FOUND, alias);
@@ -140,7 +154,34 @@ void ibRuntimeModuleDataObject::ExportMethodsToHelper(ibValue::ibMemberTable* he
 	if (bc == nullptr) return;
 	for (const auto& fn : bc->m_listFunc) {
 		if (!fn.IsExport()) continue;
+
+		// ⭐ THE SAME CALL FORM THE TEXT ROAD WRITES, spelled from the bytecode's own parameter
+		// records — the names travel there too (ibByteParam::m_strName), and this passed an empty
+		// helper string beside them. One convention, both roads: a caller must not be able to tell
+		// which side of the designer/runtime line answered it.
+		wxString signature = fn.m_strRealName + wxT("(");
+		for (size_t index = 0; index < fn.m_listParam.size(); ++index) {
+
+			const auto& param = fn.m_listParam[index];
+			const bool optional = param.m_defaultValue.m_numArray != DEF_VAR_SKIP;
+
+			if (index > 0)
+				signature += wxT(", ");
+
+			if (optional)
+				signature += wxT("[");
+			if (param.m_bByValue)
+				signature += wxT("Val ");
+
+			signature += param.m_strName;
+
+			if (optional)
+				signature += wxT("]");
+		}
+		signature += wxT(")");
+
 		helper->AppendMethod(fn.m_strRealName,
+			signature,
 			bc->GetNParams(fn),
 			bc->HasRetVal(fn),
 			(long)fn,

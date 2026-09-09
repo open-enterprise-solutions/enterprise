@@ -1,5 +1,7 @@
 #include "valueSpreadsheet.h"
 
+#include "backend/backend_localization.h"   // the cell's Value resolves the localisation envelope
+
 
 enum
 {
@@ -210,7 +212,23 @@ bool ibValueSpreadsheetDocumentArea::GetPropVal(const long lPropNum, ibValue& pv
 	}
 	case eValue:
 	{
-		pvarPropVal = m_spreadsheetDoc->GetCellValue(m_row, m_col);
+		// ⭐ WHAT THE CELL SAYS, NOT HOW IT IS STORED. A cell filled by parameter substitution
+		// keeps its text in the localisation envelope — ComputeStringValueFromParameters ends
+		// on CreateLocalizationRawLocText for both the parameter and the template fill — while
+		// a caption typed into the template is stored as it stands. The renderer resolves the
+		// envelope on its way to the paper, so the printout is right; a SCRIPT asking a cell
+		// what it holds got `en = 'Автомобиль';` from one cell and plain text from the caption
+		// beside it (2026-09-09, reading a built printout back cell by cell).
+		//
+		// The unwrap ANSWERS FALSE AND CLEARS on a string that is not an envelope, so the raw
+		// value is the fallback rather than the empty string that would otherwise be handed
+		// back for every caption on the sheet.
+		const wxString strRaw = m_spreadsheetDoc->GetCellValue(m_row, m_col);
+		wxString strText;
+		if (!ibBackendLocalization::GetTranslateGetRawLocText(
+				m_spreadsheetDoc->GetLangCode(), strRaw, strText))
+			strText = strRaw;
+		pvarPropVal = strText;
 		return true;
 	}
 	}

@@ -60,7 +60,8 @@ bool ibValueManagerDataObjectEnumeration::GetPropVal(const long lPropNum, ibValu
 
 bool ibValueManagerDataObjectEnumeration::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum)
+	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
+	switch (BuiltinMethodNum(lMethodNum))
 	{
 	case eGetForm:
 	{

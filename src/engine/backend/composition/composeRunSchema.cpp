@@ -327,9 +327,23 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 			if (!expression.IsEmpty()) {
 				ibValue produced;
 				if (!ibEvaluateInRoot(expression, produced, activeMetaData)) {
+
+					// ⭐ AND THE COMPILER'S OWN WORDS BESIDE IT — the same cure the debugger's eval
+					// road already carries (debugServer.cpp, "the compiler's own words beside it"),
+					// which was never brought across to this one. The value slot holds a generic
+					// `<error: compile failed>` when the compile aborted before it could describe
+					// itself, so a caller was told THAT their expression failed and never WHY:
+					// `Date` misspelt as `DateTime` came back indistinguishable from a name that
+					// does not exist (measured 2026-09-09, and it cost a round trip).
+					wxString said = produced.GetString();
+
+					const wxString reason = ibBackendException::GetLastError();
+					if (!reason.IsEmpty())
+						said = said.IsEmpty() ? reason : (said + wxT(" ") + reason);
+
 					refusal = wxString::Format(
 						ibComposeText("Parameter '%s' could not be evaluated: %s"),
-						parameter.m_name, produced.GetString());
+						parameter.m_name, said);
 					return false;
 				}
 				value = produced;

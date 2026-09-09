@@ -33,7 +33,8 @@ bool ibValueManagerDataObjectReport::CallAsFunc(const long lMethodNum, ibValue& 
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
 	wxASSERT(metaData);
 
-	switch (lMethodNum)
+	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
+	switch (BuiltinMethodNum(lMethodNum))
 	{
 	case eCreate:
 		pvarRetValue = m_metaObject->CreateObjectValue();

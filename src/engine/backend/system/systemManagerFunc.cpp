@@ -351,10 +351,32 @@ short ibValueSystemFunction::Asc(const ibValue& cSource)
 	return static_cast<short>(s[0]);
 }
 
+// Tstr — pick ONE language out of a text that carries several.
+//
+// 🛑 A STRING IT DOES NOT RECOGNISE MUST NOT VANISH. The source is expected in the every-language
+// form (`en = 'Total'; ru = 'Itogo'; uk = 'Razom';`), and GetTranslateGetRawLocText answers with
+// an EMPTY string for anything else — a plain caption, a name assembled at run time, a text whose
+// languages were never written. So `Tstr("Total", "uk")` printed nothing at all, and printing
+// nothing is the one failure a person cannot see: the message is simply absent, and the code that
+// produced it looks fine.
+//
+// The syntax helper had already promised the right behaviour in as many words - "the translation,
+// or the source text when there is none" - and the function did not keep it (2026-09-09; the
+// helper's own example, `Message(Tstr("Total", "uk"));`, showed an empty line).
+//
+// The three-argument reader is the one that says WHETHER it found anything, which is what makes
+// the fallback possible at all - the string-returning overload cannot tell "no translation" from
+// "translated to nothing".
 wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)
 {
-	return ibBackendLocalization::GetTranslateGetRawLocText(
-		cLanguage.GetString(), cSource.GetString());
+	const wxString source = cSource.GetString();
+
+	wxString translated;
+	if (ibBackendLocalization::GetTranslateGetRawLocText(
+			cLanguage.GetString(), source, translated))
+		return translated;
+
+	return source;
 }
 
 //--- Date and time:

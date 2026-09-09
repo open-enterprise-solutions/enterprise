@@ -545,11 +545,11 @@
         "global_functions"
       ],
       "signature": "Tstr(text : string, langCode : string)",
-      "description": "The translation of a text into the named language, taken from the configuration's localisation store. Use it where a message has to appear in a language other than the current one — a document printed for a counterparty, say.",
+      "description": "Picks ONE language out of a text that carries several. The text itself holds every translation — that is the every-language form a synonym and a template cell use — and this reads one of them out. Use it wherever a module BUILDS a string a person will read: a message, a sheet title, a caption assembled at run time. Those are the strings a template's own language code does not reach, so they are the ones that quietly stay monolingual.",
       "syntax_block": "Tstr(text : string, langCode : string)",
-      "parameters": "text — the source text. langCode — the language code the translation is stored under.",
-      "return_descr": "String — the translation, or the source text when there is none.",
-      "example": "Message(Tstr(\"Total\", \"uk\"));",
+      "parameters": "text — the source, carrying every language: \"en = 'Total'; ru = 'Itogo'; uk = 'Razom';\". langCode — which one to read out ('en', 'ru', 'uk'); platform_state lists the languages this configuration declares.",
+      "return_descr": "String — the named language's text; the source unchanged when it carries no languages at all, so a plain string passes through rather than vanishing.",
+      "example": "Message(Tstr(\"en = 'Total'; ru = 'Itogo'; uk = 'Razom';\", \"uk\"));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": ["fn.GeneralLanguage", "fn.String"],
       "reviewed": true
@@ -1643,7 +1643,7 @@
       "syntax_block": "GeneralLanguage()",
       "parameters": "None.",
       "return_descr": "String — the language code.",
-      "example": "Message(Tstr(\"Total\", GeneralLanguage()));",
+      "example": "Message(Tstr(\"en = 'Total'; ru = 'Itogo'; uk = 'Razom';\", GeneralLanguage()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": ["fn.Tstr", "fn.UserName"],
       "reviewed": true

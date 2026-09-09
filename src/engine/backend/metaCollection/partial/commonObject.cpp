@@ -1697,6 +1697,11 @@ void ibValueManagerDataObject::FillMembers(ibMemberTable& helper) const
 		pRefData->ExportMethodsToHelper(&helper, g_aliasExport);
 }
 
+// ⭐ THE MODULE IS ASKED BY THE NUMBER IT GAVE US, not by where its entry landed in the table.
+// ExportMethodsToHelper writes the bytecode function index into the entry's data, and reading
+// it back is what makes the module's dispatch independent of anything the subclass appends
+// before or after. It agreed with the table index only while the module's block came first and
+// in bytecode order — true today, and nothing said so.
 bool ibValueManagerDataObject::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
@@ -1705,11 +1710,14 @@ bool ibValueManagerDataObject::CallAsProc(const long lMethodNum, ibValue** paPar
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	wxASSERT(metaData);
 
+	if (m_members.GetMethodAlias(lMethodNum) != g_aliasExport)
+		return false;
+
 	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
 	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
 
 	if (pRefData != nullptr)
-		return pRefData->CallAsProc(lMethodNum, paParams, lSizeArray);
+		return pRefData->CallAsProc(m_members.GetMethodData(lMethodNum), paParams, lSizeArray);
 
 	return false;
 }
@@ -1722,11 +1730,14 @@ bool ibValueManagerDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRe
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	wxASSERT(metaData);
 
+	if (m_members.GetMethodAlias(lMethodNum) != g_aliasExport)
+		return false;
+
 	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
 	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
 
 	if (pRefData != nullptr)
-		return pRefData->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
+		return pRefData->CallAsFunc(m_members.GetMethodData(lMethodNum), pvarRetValue, paParams, lSizeArray);
 
 	return false;
 }
@@ -1762,6 +1773,24 @@ wxString ibValueManagerDataObject::GetString() const
 		valueMetaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);
 	wxASSERT(clsFactory);
 	return clsFactory->GetClassName();
+}
+
+// See the header for what this is for. The entry says who owns it; only the module's carry
+// g_aliasExport, because that is the alias FillMembers hands ExportMethodsToHelper.
+long ibValueManagerDataObject::BuiltinMethodNum(const long lMethodNum) const
+{
+	if (lMethodNum < 0 || lMethodNum >= m_members.GetNMethods())
+		return wxNOT_FOUND;
+
+	if (m_members.GetMethodAlias(lMethodNum) == g_aliasExport)
+		return wxNOT_FOUND;
+
+	long ordinal = 0;
+	for (long i = 0; i < lMethodNum; ++i) {
+		if (m_members.GetMethodAlias(i) != g_aliasExport)
+			++ordinal;
+	}
+	return ordinal;
 }
 
 //***********************************************************************

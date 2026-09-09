@@ -194,20 +194,26 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 			wxString strFuncName = ExpectIdentifier(true);
 
 			// compile the list of formal parameters + register them as local
-			int paramCount = 0;
+			//
+			// ⭐ THE NAMES ARE KEPT NOW. Everything below was already read and thrown away — the
+			// name, the `Val`, the default — leaving a bare count, which is why a configuration's
+			// own methods offered no call form anywhere a caller could see one.
+			std::vector<ibModuleParam> params;
 
 			ExpectDelimeter('(');
 			if (!IsNextDelimeter(')'))
 			{
 				while (m_cursor + 1 < m_listLexem.size())
 				{
+					ibModuleParam param;
+
 					if (IsNextKeyWord(KEY_VAL))
 					{
 						ExpectKeyword(KEY_VAL);
+						param.m_byValue = true;
 					}
 
-					/*wxString name =*/ (void)ExpectIdentifier(true);
-					paramCount++;
+					param.m_name = ExpectIdentifier(true);
 
 					if (IsNextDelimeter('['))// this is an array
 					{
@@ -218,7 +224,10 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 					{
 						ExpectDelimeter('=');
 						ibValue vConstant = ExpectConstant();
+						param.m_optional = true;
 					}
+
+					params.push_back(param);
 
 					if (IsNextDelimeter(')')) break;
 
@@ -244,7 +253,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 			data.m_shortDescription = shortDescription;
 			data.m_lineStart = lex.m_numLine;
 			data.m_lineEnd = lex.m_numLine;
-			data.m_paramCount = paramCount;
+			data.m_params = params;
 
 			if (isFunction) {
 				data.m_imageIndex = 353;

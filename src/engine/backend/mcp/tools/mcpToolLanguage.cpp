@@ -313,9 +313,17 @@ public:
 				value = ibValue::CreateObject(name);
 			}
 			catch (...) {
+				// ⭐ WHY, NOT JUST THAT. This used to say "cannot be built without arguments", which
+				// reads as a limitation of this verb and sends a caller looking for the arguments.
+				// There are none to find: what is left here after 2026-09-09 is two small families,
+				// and neither has a value to show.
 				refusal = wxString::Format(
-					ibMcpText("'%s' cannot be built without arguments, so its members cannot be listed this "
-					  "way."), name);
+					ibMcpText("'%s' has no empty form, so there is nothing to read members off. Either it "
+					  "is a type CONSTRAINT - what a value is ALLOWED to be, like `Any` - and there was "
+					  "never a value behind it; or it exists only against the thing that owns it (a "
+					  "module unit, a row of a list), and one standing alone would answer about "
+					  "nothing. If you are HOLDING one, ask what it offers where you got it: the "
+					  "value's own members are in script_complete after a dot."), name);
 				return false;
 			}
 		}

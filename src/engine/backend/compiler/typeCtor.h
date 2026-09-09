@@ -3,6 +3,7 @@
 
 #include "backend/backend_core.h"   // ibClassID, ib_clsid_hash, g_valueUndefinedCLSID
 #include <typeinfo>             // std::type_info — Phase 3 pilot (typeid registry)
+#include <type_traits>          // std::is_default_constructible_v — does this type HAVE an empty form
 
 class ibValue;
 class ibCtorAbstractType;
@@ -224,7 +225,32 @@ public:
 			T::OnUnRegisterObject(GetClassName());
 	}
 
-	virtual ibValue* CreateObject() const { return nullptr; }
+	// ⭐⭐ AN EMPTY ONE IS STILL ONE. This answered `nullptr` for every system type — and that was
+	// never a decision that a system type MAY NOT BE BUILT, only the fact that the base class
+	// could not build one. The difference matters, because the nullptr was doing a second job by
+	// accident: it was the whole of what stopped `New SpreadsheetArea()` in a script. That rule
+	// is stated properly elsewhere and earlier — compileCode.cpp refuses to emit OPER_NEW unless
+	// the name is registered as an `object_value` — so a script still cannot write one, and this
+	// was a duplicate enforcement whose cost fell somewhere else entirely.
+	//
+	// 🛑 THE COST FELL ON THE ONE VERB THAT ASKS WHAT A TYPE OFFERS. type_members builds a value
+	// and reads its member table, so a whole family answered "cannot be built without arguments"
+	// — no members, no call forms, nothing. A caller HOLDING a SpreadsheetArea, handed to them by
+	// the platform, could not ask what it was made of and guessed member names instead
+	// (2026-09-09, reading a printout back cell by cell).
+	//
+	// ⭐ AND THE GUARD IS NOT A COMPROMISE, IT IS THE FACT. Of the 56 system types, 52 already
+	// carry an empty form — deliberately, and some say so in their own comment. The four that do
+	// not are one family: a value that exists only against its owner (a module unit, a list row,
+	// a runtime configuration manager), and ibValueModuleUnit states the reason in writing —
+	// a managerless one "can only fail to resolve every name outside itself", and the variant
+	// that allowed it was REMOVED. Forcing a constructor on those would undo a decision; asking
+	// the type whether it HAS an empty form asks exactly the right question.
+	virtual ibValue* CreateObject() const {
+		if constexpr (std::is_default_constructible_v<T>)
+			return new T();	
+		return nullptr;
+	}
 };
 
 // 3-arg (legacy): explicit clsid.

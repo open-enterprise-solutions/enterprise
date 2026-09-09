@@ -545,11 +545,11 @@
         "global_functions"
       ],
       "signature": "Tstr(text : string, langCode : string)",
-      "description": "Перевод текста на названный язык, взятый из хранилища локализации конфигурации. Применяется там, где сообщение должно появиться на языке, отличном от текущего, — например, в документе, печатаемом для контрагента.",
+      "description": "Выбирает ОДИН язык из текста, который несёт несколько. Сам текст содержит все переводы — это та же многоязычная форма, что у синонима и у ячейки макета, — а функция читает из неё нужный. Применяется везде, где модуль СТРОИТ строку для человека: сообщение, заголовок табличного документа, надпись, собранная во время работы. До таких строк код языка макета не дотягивается, и именно они тихо остаются одноязычными.",
       "syntax_block": "Tstr(text : string, langCode : string)",
-      "parameters": "text — исходный текст. langCode — код языка, под которым хранится перевод.",
-      "return_descr": "Строка — перевод либо исходный текст, если перевода нет.",
-      "example": "Message(Tstr(\"Total\", \"uk\"));",
+      "parameters": "text — исходная строка со всеми языками: \"en = 'Total'; ru = 'Итого'; uk = 'Разом';\". langCode — какой язык прочитать ('en', 'ru', 'uk'); языки, объявленные конфигурацией, перечисляет platform_state.",
+      "return_descr": "Строка — текст названного языка; если языков в строке нет вовсе, возвращается сама строка, чтобы обычный текст не исчезал.",
+      "example": "Message(Tstr(\"en = 'Total'; ru = 'Итого'; uk = 'Разом';\", \"uk\"));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": ["fn.GeneralLanguage", "fn.String"],
       "reviewed": true
@@ -1643,7 +1643,7 @@
       "syntax_block": "GeneralLanguage()",
       "parameters": "Нет.",
       "return_descr": "Строка — код языка.",
-      "example": "Message(Tstr(\"Total\", GeneralLanguage()));",
+      "example": "Message(Tstr(\"en = 'Total'; ru = 'Итого'; uk = 'Разом';\", GeneralLanguage()));",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": ["fn.Tstr", "fn.UserName"],
       "reviewed": true
