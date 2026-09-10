@@ -99,6 +99,8 @@ enum
 	enChartsOfCharacteristicTypes,
 	enChartsOfAccounts,
 	enAccountingRegisters,
+	enChartsOfCalculationTypes,
+	enCalculationRegisters,
 	enScheduledJobs,
 	enSessionParameters
 };
@@ -118,6 +120,8 @@ void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
 	helper.AppendProp(wxT("ChartsOfCharacteristicTypes"));
 	helper.AppendProp(wxT("ChartsOfAccounts"));
 	helper.AppendProp(wxT("AccountingRegisters"));
+	helper.AppendProp(wxT("ChartsOfCalculationTypes"));
+	helper.AppendProp(wxT("CalculationRegisters"));
 	// ONE entry point for scheduled work, two forks inside it — Predefined and Parameterized. See
 	// ibValueScheduledJobsManager above for why both live behind one name.
 	helper.AppendProp(wxT("ScheduledJobs"));
@@ -172,6 +176,12 @@ bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarP
 		return true;
 	case enAccountingRegisters:
 		pvarPropVal = new ibValueGlobalContextStructureManager(g_metaAccountingRegisterCLSID, m_metaData);
+		return true;
+	case enChartsOfCalculationTypes:
+		pvarPropVal = new ibValueGlobalContextStructureManager(g_metaChartOfCalculationTypesCLSID, m_metaData);
+		return true;
+	case enCalculationRegisters:
+		pvarPropVal = new ibValueGlobalContextStructureManager(g_metaCalculationRegisterCLSID, m_metaData);
 		return true;
 	case enScheduledJobs:
 		pvarPropVal = new ibValueScheduledJobsManager(m_metaData);

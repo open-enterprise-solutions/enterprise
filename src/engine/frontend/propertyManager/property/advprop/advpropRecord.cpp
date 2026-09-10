@@ -169,6 +169,7 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
                 FillByClsid(metaData, g_metaInformationRegisterCLSID, tc, data);
                 FillByClsid(metaData, g_metaAccumulationRegisterCLSID, tc, data);
                 FillByClsid(metaData, g_metaAccountingRegisterCLSID, tc, data);
+                FillByClsid(metaData, g_metaCalculationRegisterCLSID, tc, data);
             }
             tc->ExpandAll(); int res = dlg->ShowModal();
             ibVariantDataRecord* clone = data->Clone();

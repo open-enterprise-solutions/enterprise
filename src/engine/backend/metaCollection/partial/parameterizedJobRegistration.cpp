@@ -339,10 +339,11 @@ bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 		ibDataQueryResult selection = query.Execute(page);
 		while (selection.Next()) {
 
-			// The identity column by NAME, and the guid from the reference itself — see the same read in
-			// catalogManager_impl.cpp for what the two guesses on this line used to cost.
-			const ibValueReferenceDataObject* const rowReference =
-				selection.GetValue(GetDataReference()->GetQueryColumn()).ConvertToType<ibValueReferenceDataObject>();
+			// The identity column by NAME, and the guid from the reference itself. HELD by a local for as
+			// long as it is read: taken off the temporary, the pointer outlived the only value holding
+			// it (commonObjectManagerQuery.cpp, FindByCode, is where that cost a crash).
+			const ibValue rowValue = selection.GetValue(GetDataReference()->GetQueryColumn());
+			const ibValueReferenceDataObject* const rowReference = rowValue.ConvertToType<ibValueReferenceDataObject>();
 			if (rowReference == nullptr)
 				continue;
 			const ibGuid rowGuid = rowReference->GetGuid().GetGuid();

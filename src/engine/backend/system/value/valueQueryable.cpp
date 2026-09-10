@@ -645,6 +645,15 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		// the source becomes a typed table column, rows fill by model id — the result is
 		// UI-bindable and round-trips straight back through Data.From.
 		ibValueModelTable* table = new ibValueModelTable();
+		// 🛑⭐⭐ HOLD THE TABLE WHILE ITS ROWS ARE MADE. Since 7090aa6f (2026-09-09) a return line HOLDS its
+		// model (tabularModel.h, HoldOwnerModel) — the right fix for a row outliving a temporary table. Its
+		// other face is this loop: a table fresh from `new` has refcount 0, the first GetRowAt takes it to
+		// 1, and `wxDELETE(line)` brings it back to 0 — which DELETES THE TABLE, so the second row is
+		// written into freed memory. MEASURED 2026-09-10: `Data.Catalogs.Goods.ToTable()` on a nine-row
+		// catalog took the whole application down; the same rows iterated by foreach came back fine.
+		// Every "new table + GetRowAt + wxDELETE" builder has the same shape — see the other sites that
+		// cite this note. A reference held here keeps the count off zero between rows.
+		const ibValue keep(table);
 		ibValueModelTable::ibValueModelColumnCollection* tcols = table->GetColumnCollection();
 		const std::vector<const ibBackendQueryColumn*> cols = m_queryable->GetColumns();
 		for (const ibBackendQueryColumn* c : cols) {

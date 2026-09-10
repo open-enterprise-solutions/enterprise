@@ -11,6 +11,7 @@
 
 #include "backend/appData.h"
 #include "backend/compiler/byteCode.h"
+#include "backend/databaseLayer/connectionHolder.h"   // ibSingleConnectionHolder — the save's own channel
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: descriptor pilot
@@ -29,6 +30,8 @@
 // scope (pool not up) makes Execute throw NoConnection, which the surrounding
 // try/catch turns into a cache miss → recompile — the same graceful degradation
 // as the old `db_query == nullptr` guard. See docs/query-language-arc.md §17.
+// The SAVE is the exception: it writes on a holder of its own, never inside the
+// caller's business transaction (see Save).
 
 // 🛑⭐⭐ THE KEY IS THE PLATFORM AND THE CONFIGURATION, NOT THE CONFIGURATION ALONE.
 //
@@ -95,11 +98,26 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
 	const wxString configMd5 = CacheKey(configDigest);
 
 	// UPSERT via DELETE-then-INSERT (uniform across drivers; FB has no ON
-	// CONFLICT). Both statements run on one builder = one CurrentHolder
-	// connection, so there is no cross-connection isolation concern.
+	// CONFLICT). Both statements run on one builder = one connection.
+	//
+	// ⭐⭐ ON A CONNECTION OF ITS OWN, IN A TRANSACTION OF ITS OWN, AND NEVER WAITING — the lock
+	// manager's rule (lockManager.h, m_lockHolder), for the same reason. The cache is disposable: a
+	// save that does not happen costs one recompile. It was written through the SESSION's connection,
+	// which is to say inside whatever business transaction happened to be open when a module was first
+	// compiled — and that transaction then held the cache row until it committed. Every other session
+	// compiling the same module met the row in its DELETE and waited, with no timeout at all.
+	//
+	// Measured 2026-09-10: a script filling the payroll demo ran for twenty minutes in one transaction;
+	// pressing "Add" on a list of absences in the same application froze the window — a new document
+	// builds its register records, the record set's module was compiled, and its save stood behind the
+	// script's uncommitted row (stack under cdb: ibByteCodeCache::Save → RunQuery → the Firebird lock
+	// wait). In production the same shape is one person posting a large document while another
+	// cannot open a form. So the row commits the moment it is written, and a row somebody else holds
+	// is simply not written this time (noWait: the conflict comes back at once and is swallowed below).
 	try {
-		ibDatabaseQueryBuilder q;
-		if (!q.TableExists(bytecode_cache_table))
+		ibSingleConnectionHolder own;
+		ibDatabaseQueryBuilder q(&own);
+		if (!q.IsOpen() || !q.TableExists(bytecode_cache_table))
 			return false;   // the same connection asks  see Load
 
 		// WEED THE PREVIOUS CONFIGURATIONS OUT, ONCE. Rows keyed on an older digest can never be found
@@ -127,21 +145,32 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
 			}
 		}
 
-		if (bWeedNow) {
-			try {
-				q.Execute(ibDelete(bytecode_cache_table,
-					ibBinOp(ibQueryBinOp::Ne, ibCol(wxT("config_md5")), ibConst(ibValue(configMd5)))));
-			} catch (...) { /* hygiene, not correctness — a stale row is unreachable either way */ }
+		ibDatabaseLayer::ibTxOptions txOpts;
+		txOpts.noWait = true;   // a row another session is writing right now is its save, not ours
+		q.BeginTransaction(txOpts);
+		try {
+			if (bWeedNow) {
+				try {
+					q.Execute(ibDelete(bytecode_cache_table,
+						ibBinOp(ibQueryBinOp::Ne, ibCol(wxT("config_md5")), ibConst(ibValue(configMd5)))));
+				} catch (...) { /* hygiene, not correctness — a stale row is unreachable either way */ }
+			}
+			q.Execute(ibDelete(bytecode_cache_table,
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")), ibConst(ibValue(descIdStr)))));
+			q.Execute(ibInsert(bytecode_cache_table, {
+				{ wxT("descriptor_id"),    ibConst(ibValue(descIdStr)) },
+				{ wxT("bytecode_version"), ibConst(ibValue(bcVerStr)) },
+				{ wxT("config_md5"),       ibConst(ibValue(configMd5)) },
+				{ wxT("bc_blob"),          ibConstBlob(blob.GetData(),
+				                                       static_cast<size_t>(blob.GetDataLen())) },
+			}));
+			q.Commit();
 		}
-		q.Execute(ibDelete(bytecode_cache_table,
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")), ibConst(ibValue(descIdStr)))));
-		q.Execute(ibInsert(bytecode_cache_table, {
-			{ wxT("descriptor_id"),    ibConst(ibValue(descIdStr)) },
-			{ wxT("bytecode_version"), ibConst(ibValue(bcVerStr)) },
-			{ wxT("config_md5"),       ibConst(ibValue(configMd5)) },
-			{ wxT("bc_blob"),          ibConstBlob(blob.GetData(),
-			                                       static_cast<size_t>(blob.GetDataLen())) },
-		}));
+		catch (...) {
+			if (q.IsActiveTransaction())
+				q.RollBack();
+			throw;   // → the catch below: not saved this time, recompiled next time
+		}
 
 		// THE OTHER HALF OF THE PAIR — see Load. Names the descriptor, the digest this row is written
 		// under, and the bytecode's own version guid, so a row that is later TAKEN can be traced back

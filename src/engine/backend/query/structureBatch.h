@@ -16,7 +16,7 @@
 //     same TX that created it. "See a create and an insert in the batch -> move the inserts past the
 //     commit." The deferral re-uses ibSchemaBuilder's per-save queue (run by the orchestrator's Flush).
 
-#include "backend.h"
+#include "backend/backend.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // ibDdlColumn / ibAlterClause / ibDdlStatement
 #include "backend/query/columnLayout.h"                    // ibColumnSlot + DescribeColumnLayout (the layout tier)
 

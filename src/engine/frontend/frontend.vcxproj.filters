@@ -1037,10 +1037,7 @@
     <ClCompile Include="propertyManager\property\private\propertyRegistry.cpp">
       <Filter>propertyManager\property\private</Filter>
     </ClCompile>
-    <ClCompile Include="propertyManager\property\advprop\advpropChartOfCharacteristicTypes.cpp">
-      <Filter>propertyManager\property\advprop</Filter>
-    </ClCompile>
-    <ClCompile Include="propertyManager\property\advprop\advpropChartOfAccounts.cpp">
+    <ClCompile Include="propertyManager\property\advprop\advpropChartBinding.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
     <ClCompile Include="session\workerPoolGUI.cpp">
@@ -1881,10 +1878,7 @@
     <ClInclude Include="propertyManager\property\advprop\advpropType.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
-    <ClInclude Include="propertyManager\property\advprop\advpropChartOfCharacteristicTypes.h">
-      <Filter>propertyManager\property\advprop</Filter>
-    </ClInclude>
-    <ClInclude Include="propertyManager\property\advprop\advpropChartOfAccounts.h">
+    <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
     <ClInclude Include="session\workerPoolGUI.h">

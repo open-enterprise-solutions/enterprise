@@ -140,21 +140,31 @@ void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
 	// the first dimensions, which is where the selectivity is. A key column is taken whole or not at
 	// all — half a reference is not a comparison anything can ride.
 	//
+	ibDeclareLookupIndex(table, tableName + wxT("_KL"), keyCols);
+}
+
+void ibDeclareLookupIndex(ibSchemaTable& table, const wxString& indexName,
+                          const std::vector<const ibBackendQueryColumn*>& cols)
+{
 	// ⚠ ASKED THROUGH L2-2, never read off a dialect from here. A dictionary is the level below's to
 	// read; this floor knows that it wants "as many leading columns as an index will hold" and nothing
-	// about which engine answers.
-	const unsigned int ceiling = ibIndexFieldCapacity(*db_query);
+	// about which engine answers. BOTH ceilings — the count alone let a key of wide strings through to a
+	// CREATE INDEX the engine refused (see ibKeyNeedsHash).
 	std::vector<const ibBackendQueryColumn*> lookup;
-	size_t used = 0;
-	for (const ibBackendQueryColumn* col : keyCols) {
-		const size_t width = ColumnFieldNames(col).size();
-		if (used + width > ceiling)
+	size_t fields = 0, bytes = 0;
+	for (const ibBackendQueryColumn* col : cols) {
+		const std::vector<ibColumnSlot> slots = DescribeColumnLayout(col);
+		size_t width = 0;
+		for (const ibColumnSlot& field : slots)
+			width += ibIndexFieldByteWidth(field.m_type);
+		if (db_query != nullptr && !ibIndexKeyFits(*db_query, fields + slots.size(), bytes + width))
 			break;
 		lookup.push_back(col);
-		used += width;
+		fields += slots.size();
+		bytes += width;
 	}
 	if (!lookup.empty())
-		table.Index(tableName + wxT("_KL"), lookup, /*unique*/ false);
+		table.Index(indexName, lookup, /*unique*/ false);
 }
 
 const ibSchemaTable* ibSchemaSnapshot::Find(ibMetaID id) const

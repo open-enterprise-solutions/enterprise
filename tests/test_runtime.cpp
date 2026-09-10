@@ -2342,6 +2342,57 @@ TEST_F(BuiltInRuntime, ACalendarDateKeepsItsOwnComponents) {
 	ASSERT_TRUE(pu.GetPropVal(wxT("woy"), v)); EXPECT_EQ(v.GetInteger(), 1)    << "week of year";
 }
 
+// The difference of two dates is in SECONDS, the unit a number added to a date is read in — so the two
+// operations undo each other. It was milliseconds: a two-week vacation counted `(to - from) / 86400 + 1`
+// came out 13001 days.
+TEST_F(BuiltInRuntime, TheDifferenceOfTwoDatesIsInSeconds) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var day public; var span public; var back public;\n")
+		wxT("day  = (Date(2026, 4, 2) - Date(2026, 4, 1));\n")
+		wxT("span = (Date(2026, 4, 14) - Date(2026, 4, 1)) / 86400 + 1;\n")
+		wxT("back = ((Date(2026, 4, 1) + 3600) - Date(2026, 4, 1));\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("day"), v));  EXPECT_EQ(v.GetInteger(), 86400) << "one day apart";
+	ASSERT_TRUE(pu.GetPropVal(wxT("span"), v)); EXPECT_EQ(v.GetInteger(), 14)    << "the 1st to the 14th, both ends";
+	ASSERT_TRUE(pu.GetPropVal(wxT("back"), v)); EXPECT_EQ(v.GetInteger(), 3600)  << "adding seconds and subtracting the date gives them back";
+}
+
+// …and both are read on the CALENDAR, not the clock: across the night the clocks move (the last Sunday
+// of March in much of Europe) a day is still 86400 seconds, so March is 31 days and two days after the
+// 28th is the 30th at midnight. Read off moments they came out an hour short. (On a machine whose zone
+// has no switch the old arithmetic passes too; this locks the calendar reading where one does.)
+TEST_F(BuiltInRuntime, DateArithmeticIgnoresTheClockChange) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var march public; var later public; var year public;\n")
+		wxT("march = (Date(2026, 4, 1) - Date(2026, 3, 1)) / 86400;\n")
+		wxT("later = (Date(2026, 3, 28) + 2 * 86400) - Date(2026, 3, 30);\n")
+		wxT("year  = (Date(2027, 1, 1) - Date(2026, 1, 1)) / 86400;\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("march"), v)); EXPECT_EQ(v.GetInteger(), 31)  << "March is 31 whole days";
+	ASSERT_TRUE(pu.GetPropVal(wxT("later"), v)); EXPECT_EQ(v.GetInteger(), 0)   << "two days after the 28th is the 30th at midnight";
+	ASSERT_TRUE(pu.GetPropVal(wxT("year"), v));  EXPECT_EQ(v.GetInteger(), 365) << "a year both of whose switches fall inside it";
+}
+
 // ===========================================================================
 // A BUILT-IN OF NEGATIVE ARITY TAKES WHAT IT IS GIVEN
 //

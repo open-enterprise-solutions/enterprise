@@ -344,7 +344,11 @@ std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetPrimaryKeyC
 	if (m_meta->HasRecorder()) {
 		add(m_meta->GetRegisterRecorder());
 		add(m_meta->GetRegisterLineNumber());
-		add(m_meta->GetRegisterPeriod());
+		// The period only where the register HAS one as a column: a calculation register is dated by its
+		// registration period and carries no family Period at all — keyed on it, its every write would
+		// name a field the table does not have.
+		if (m_meta->HasPeriod())
+			add(m_meta->GetRegisterPeriod());
 		return cols;
 	}
 	if (m_meta->HasPeriod())

@@ -38,6 +38,29 @@ static bool HasReference(const std::vector<ibClassID>& clsids)
 	return false;
 }
 
+// ⭐ ONE FIELD OF A SOURCE, AS THE CONSTRUCTOR OFFERS IT — written once for the three lists that offer
+// fields (a source's own, one hop down a reference, a virtual table's condition), which each spelled it
+// out for themselves.
+//
+// ⭐⭐ SHOWN BY ITS NAME, the one the query writes (Max, 2026-09-10: "in the query constructor it must
+// be the name, not the synonym"). The sources were already listed by name and the fields by synonym,
+// so a person picked a Russian synonym in the tree and read `Employee` in the text beside it — two
+// vocabularies for one field, and the synonym in whichever language happened to be filled. The query
+// constructor is where the query language is written; its tree speaks that language.
+static ibQueryConstructorField FieldOfExplorer(const ibSourceDataObject::ibSourceExplorer& node)
+{
+	ibQueryConstructorField field;
+	field.m_name           = node.GetSourceName();
+	field.m_presentation   = node.GetSourceName();
+	// A reference field can be dot-walked further (Supplier.Region.Country) — the shell shows it with
+	// a [+] and asks again with the leaf's own source.
+	field.m_referenceClsid = SingleReferenceOf(node.GetClsidList());
+	field.m_reference      = HasReference(node.GetClsidList());
+	field.m_type           = node.GetTypeDesc();
+	field.m_icon           = node.GetSourceIcon();   // the column's own picture, asked not deduced
+	return field;
+}
+
 ibQueryConstructorModel::ibQueryConstructorModel(const ibMetaData* metaData)
 	: m_metaData(metaData)
 {
@@ -375,22 +398,10 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetFields(
 			if (node == nullptr || node->IsTableSection())
 				continue;   // a section is a table of its own, not a field of this one
 
-			ibQueryConstructorField field;
-			field.m_name         = node->GetSourceName();
-			field.m_presentation = node->GetSourceSynonym().IsEmpty() ? node->GetSourceName() : node->GetSourceSynonym();
-			// A reference field can be dot-walked further (Supplier.Region.Country) — the shell
-			// shows it with a [+] and asks again with the leaf's own source.
-			//
-			// WALKABLE IS "ANY REFERENCE", not "exactly one". A composite names several types and
-			// the engine walks it — one join sub-tree per alternative, the leaf COALESCEd — so what
-			// is offered here matches what the query can then do. The single clsid is still
-			// recorded beside it, because "what does it refer to" has one answer only when there
-			// IS one.
-			field.m_referenceClsid = SingleReferenceOf(node->GetClsidList());
-			field.m_reference      = HasReference(node->GetClsidList());
-			field.m_type           = node->GetTypeDesc();
-			field.m_icon           = node->GetSourceIcon();   // the column's own picture, asked not deduced
-			out.push_back(std::move(field));
+			// WALKABLE IS "ANY REFERENCE", not "exactly one" — see FieldOfExplorer. A composite names
+			// several types and the engine walks it (one join sub-tree per alternative, the leaf
+			// COALESCEd), so what is offered matches what the query can then do.
+			out.push_back(FieldOfExplorer(*node));
 		}
 		break;
 	}
@@ -425,13 +436,8 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetReferenceFields
 		if (node == nullptr || node->IsTableSection())
 			continue;
 
-		ibQueryConstructorField field;
-		field.m_name         = node->GetSourceName();
-		field.m_presentation = node->GetSourceSynonym().IsEmpty() ? node->GetSourceName() : node->GetSourceSynonym();
-		field.m_referenceClsid = SingleReferenceOf(node->GetClsidList());
-		field.m_reference      = HasReference(node->GetClsidList());
-		field.m_type           = node->GetTypeDesc();
-		field.m_source         = sourceLabel;   // the walk stays under the table it started from
+		ibQueryConstructorField field = FieldOfExplorer(*node);
+		field.m_source = sourceLabel;   // the walk stays under the table it started from
 		out.push_back(std::move(field));
 	}
 	return out;
@@ -553,14 +559,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetConditionFields
 		if (node == nullptr || node->IsTableSection())
 			continue;
 
-		ibQueryConstructorField field;
-		field.m_name           = node->GetSourceName();
-		field.m_presentation   = node->GetSourceSynonym().IsEmpty() ? node->GetSourceName() : node->GetSourceSynonym();
-		field.m_referenceClsid = SingleReferenceOf(node->GetClsidList());
-		field.m_reference      = HasReference(node->GetClsidList());
-		field.m_type           = node->GetTypeDesc();
-		field.m_icon           = node->GetSourceIcon();
-		out.push_back(std::move(field));
+		out.push_back(FieldOfExplorer(*node));
 	}
 	return out;
 }

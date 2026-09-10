@@ -47,7 +47,12 @@ ibPropertyChoiceMode ibPropertyRecord::GetValueList(ibPropertyChoiceList& list)
 	return CreateValueList(list, ibPropertyChoiceMode::Mult, {
 			g_metaInformationRegisterCLSID,
 			g_metaAccumulationRegisterCLSID,
-			g_metaAccountingRegisterCLSID },
+			g_metaAccountingRegisterCLSID,
+			// A calculation register is posted into exactly like the others, and more strictly: it is
+			// ALWAYS subordinate to a recorder, so it can never be the case that one does not qualify
+			// under the rule below. Left out of this list it was invisible to every document, which
+			// made the metatype unreachable — a register nothing could ever write to.
+			g_metaCalculationRegisterCLSID },
 		// ONLY A REGISTER WITH A RECORDER. A document posts by recording itself as the recorder; a
 		// register that has none cannot hold its movements, so offering it would be offering an
 		// impossible binding. This rule was inside the front editor's fill loop and would have been

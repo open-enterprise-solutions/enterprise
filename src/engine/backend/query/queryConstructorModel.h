@@ -66,7 +66,7 @@ struct ibQueryConstructorSource
 struct ibQueryConstructorField
 {
 	wxString m_name;           // the technical name — this is what the AST carries
-	wxString m_presentation;   // synonym, falling back to the name
+	wxString m_presentation;   // what the tree shows — the NAME, the constructor speaks the query's language
 	// WHICH SOURCE IT CAME OUT OF, by the name the query calls that source. Carried on the field so
 	// every list of fields can GROUP by it — a flat merge of two tables' fields is unreadable the
 	// moment both have a `Code`, and the reader cannot tell which is which without the prefix on

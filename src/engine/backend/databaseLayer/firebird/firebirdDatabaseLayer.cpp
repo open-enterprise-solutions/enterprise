@@ -86,7 +86,12 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_features.m_grouping = false;
 		d.m_features.m_cte    = true;                 // WITH … AS (…) — FB 2.1+
 		// m_multiRowValues stays FALSE — Firebird has no multi-row VALUES at any version. A batched
-		// INSERT is rendered as INSERT … SELECT … UNION ALL SELECT … instead (see RenderDML).
+		// INSERT is rendered as INSERT … SELECT … UNION ALL SELECT … instead (see RenderDML)…
+		// …except where the rows reach L2 as one batch: there they go as ONE one-row INSERT prepared once
+		// and executed per row, which the engine compiles once instead of once per arm (the measurement
+		// is on the flag). The collection restores each slot's described type before a bind, which is
+		// what makes executing the statement again safe (firebirdParameterCollection.cpp).
+		d.m_features.m_batchByReexecution = true;
 		// type map
 		d.m_typeBoolean       = wxT("SMALLINT");
 		d.m_typeDate          = wxT("TIMESTAMP");

@@ -218,6 +218,36 @@ TEST_F(FirebirdBatchInsert, RenderedBatchWritesEveryRow)
 	layer->CloseResultSet(rs);
 }
 
+// ⭐ EXECUTED AGAIN, A STATEMENT BINDS FROM ITS DESCRIBED SLOTS. A batch now reaches Firebird as ONE
+// one-row INSERT prepared once and executed per row (ibSqlFeatures::m_batchByReexecution), and a string
+// bind used to overwrite its slot's described length with the value's own: the next row's string was
+// clamped to the previous one's — "E10" after "E1" went in as "E1", and the write reported success.
+TEST_F(FirebirdBatchInsert, ReexecutedStatementKeepsEveryString)
+{
+	ibPreparedStatement* stmt = layer->PrepareStatement(wxT("%s"),
+		wxString(wxT("INSERT INTO oes_batch_probe (Row_RRRef, fld_TYPE, fld_N, fld_S) VALUES (?, ?, ?, ?)")));
+	ASSERT_NE(stmt, nullptr);
+	const wxString values[] = { wxT("E1"), wxT("E10"), wxT("a line longer than both") };
+	int n = 0;
+	for (const wxString& value : values) {
+		stmt->SetParamString(1, wxString::Format(wxT("owner-%d"), n));
+		stmt->SetParamNumber(2, ibNumber(1));
+		stmt->SetParamNumber(3, ibNumber(n++));
+		stmt->SetParamString(4, value);
+		EXPECT_EQ(stmt->RunQuery(), 1);
+	}
+	layer->CloseStatement(stmt);
+	layer->Commit();
+
+	ibDatabaseResultSet* rs = layer->RunQueryWithResults(wxT("SELECT fld_S FROM oes_batch_probe ORDER BY fld_N"));
+	ASSERT_NE(rs, nullptr);
+	for (const wxString& value : values) {
+		ASSERT_TRUE(rs->Next());
+		EXPECT_EQ(rs->GetResultString(1).ToStdString(), value.ToStdString());
+	}
+	layer->CloseResultSet(rs);
+}
+
 // THE WIDTH QUESTION. A cast is ~50 characters where a bare `?` was one, and the
 // batch chunk is 50 rows. On the widest thing that writes this way — a register
 // line or a tabular section with twenty-odd physical columns — that is a statement

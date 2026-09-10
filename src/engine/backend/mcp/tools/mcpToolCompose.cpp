@@ -307,6 +307,13 @@ public:
 			"been ignored - it has not, it is in `axis`. (Measured 2026-09-09: reported as an "
 			"unfinished feature by a caller who printed `columns` and `rows` and stopped there.)\n"
 			  "\n"
+			"EVERY OUTPUT CARRIES `query` - THE TEXT THE COMPOSER SENT TO THE ENGINE FOR IT: the "
+			"author's query as a nested source, the settings written over it, the TOTALS it folds by. "
+			"When a figure looks wrong, read it before anything else: it says whether the author's "
+			"query, the settings or the engine is to blame, and query_check or compose_run with "
+			"`query` can then ask about exactly that text. (The report's FILTER is applied beside it "
+			"as a condition and is not in the text.)\n"
+			  "\n"
 			"WITH A REPORT it does the rest of what is below - one table per output. report_get says "
 			"what a report IS; this says what it produces. It is the verb for every question about "
 			"NUMBERS: 'my numbers do not add up', 'why does this report show that', 'BUILD me a NEW "
@@ -618,8 +625,8 @@ public:
 		ibDataNode answer;
 		bool       accepted = false;
 		if (!bridge->Compose(request, answer, accepted, refusal)) {
-			refusal = ibMcpText("The application did not answer in time. A report that reads for minutes "
-				"can outlast the wait - it is still running over there, and nothing was changed.");
+			refusal = ibMcpNoAnswer(ibMcpText("The application did not answer in time. A report that reads "
+				"for minutes can outlast the wait - it is still running over there, and nothing was changed."));
 			return false;
 		}
 		if (!accepted) {

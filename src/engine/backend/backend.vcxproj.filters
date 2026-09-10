@@ -421,6 +421,27 @@
     <ClInclude Include="metaCollection\partial\chartOfAccountsEnum.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfCalculationTypesEnum.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfCalculationTypes.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfCalculationTypesManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfCalculationTypesRelationTable.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\calculationRegister.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\calculationRegisterManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="calculation\calculation.h">
+      <Filter>calculation</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\partial\commonObjectEnum.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
@@ -792,6 +813,9 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertyChartOfAccounts.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyChartOfCalculationTypes.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="characteristicCtor.h" />
@@ -1467,9 +1491,6 @@
     <ClCompile Include="metaCollection\partial\catalogManager.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\catalogManager_impl.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
     <ClCompile Include="metaCollection\partial\catalogMetadata.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -1512,13 +1533,73 @@
     <ClCompile Include="metaCollection\partial\chartOfAccountsEnum.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesEnum.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadataProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesRelationTable.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterManager_impl.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataSchema.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadataSchema.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="calculation\calculation.cpp">
+      <Filter>calculation</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\partial\commonObjectEnum.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\chartOfAccountsManager.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\chartOfAccountsManager_impl.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\chartOfAccountsMetadata.cpp">
@@ -1546,9 +1627,6 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesManager.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesManager_impl.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadata.cpp">
@@ -2065,6 +2143,9 @@
     <ClCompile Include="propertyManager\property\propertyChartOfCharacteristicTypes.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyChartOfCalculationTypes.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
     <ClCompile Include="characteristicCtor.cpp" />
     <ClCompile Include="vcs\gitService.cpp">
       <Filter>vcs</Filter>
@@ -2332,6 +2413,9 @@
     </Filter>
     <Filter Include="sheetFormat">
       <UniqueIdentifier>{8c1d4a92-6f30-4b7e-a58d-2e94c07b6a15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="calculation">
+      <UniqueIdentifier>{4b6e1d93-7a25-4c8f-b31e-9d0a5c2f7e64}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

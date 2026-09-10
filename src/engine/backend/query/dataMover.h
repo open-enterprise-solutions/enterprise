@@ -18,7 +18,7 @@
 // cell — sub-chunk 0 (when the table has a uuid key) is the row's uuid string, and sub-chunk = a
 // column's id carries that column's codec output. The caller frames the per-table blob by table id.
 
-#include "backend.h"
+#include "backend/backend.h"
 
 struct ibSchemaTable;     // L3-2 structure — the mover's single input (query/schemaSnapshot.h)
 class ibBackendQueryColumn;

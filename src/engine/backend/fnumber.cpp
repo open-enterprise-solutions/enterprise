@@ -1561,6 +1561,22 @@ wxString ibNumber::ToString(const Format& fmt) const
 		if (fracDigitsEmit == 0 && fracLeadingEmit == 0) hasFraction = false;
 	}
 
+	// ⭐ `fracDigits` IS A FIXED NUMBER OF DIGITS AFTER THE POINT, not only a rounding: 1250.5 at two
+	// prints 1250.50 and 5 prints 5.00. That is what a script's `Format(x, "NFD=2")` promises in the help
+	// (its own example is 1250.5), and what a money column needs to line up; it used to round and stop,
+	// so the example printed 1250.5. Past the rounding above there is nothing but zeros to add or drop.
+	size_t fracTrailingPad = 0;
+	if (fmt.fracDigits >= 0) {
+		const size_t want = static_cast<size_t>(fmt.fracDigits);
+		if (!hasFraction) { fracLeadingEmit = 0; fracDigitsEmit = 0; }
+		const size_t have = fracLeadingEmit + fracDigitsEmit;
+		if (have > want)
+			fracDigitsEmit -= std::min(fracDigitsEmit, have - want);   // zeros the rounding left behind
+		else
+			fracTrailingPad = want - have;
+		hasFraction = want > 0;
+	}
+
 	// minIntDigits: pad integer part with leading '0' to this width.
 	// "0" placeholder for an empty int part counts as one digit.
 	const size_t baseIntEmit = (intLen == 0) ? 1u : intLen;
@@ -1579,7 +1595,7 @@ wxString ibNumber::ToString(const Format& fmt) const
 	const size_t totalSize  = (b.negative && !b.IsZero() ? 1u : 0u)
 	                        + emitIntLen + groupSepCount
 	                        + (hasFraction ? 1u : 0u)
-	                        + fracLeadingEmit + fracDigitsEmit;
+	                        + fracLeadingEmit + fracDigitsEmit + fracTrailingPad;
 
 	wxString result;
 	result.reserve(totalSize);
@@ -1614,6 +1630,7 @@ wxString ibNumber::ToString(const Format& fmt) const
 		result += fmt.decimalSep;
 		if (fracLeadingEmit > 0) result.append(fracLeadingEmit, wxT('0'));
 		if (fracDigitsEmit > 0)  result.append(fracStart, fracDigitsEmit);
+		if (fracTrailingPad > 0) result.append(fracTrailingPad, wxT('0'));
 	}
 	return result;
 }

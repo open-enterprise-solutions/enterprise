@@ -20,6 +20,9 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cFilter)
 	ibRequireOpenBase();
 
 	ibValueModelTable* retTable = new ibValueModelTable();
+	// 🛑 Held while its rows are made: a row holds its table, so without this the first
+	// `wxDELETE(retLine)` deletes a table nobody else holds yet. See valueQueryable.cpp, M::ToTable.
+	const ibValue keep(retTable);
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -29,7 +32,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cFilter)
 
 	// The Structure a script passes becomes the condition here — the SAME converter the query door
 	// uses, so a script's filter and a query's condition are one thing from this point on.
-	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_metaObject, cFilter);
+	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_metaObject, cFilter, ibRegFilterOver::Records);
 
 	// Filtered read through the L3 door: each selected dimension is an Eq condition,
 	// decomposed inside L3 across its physical fields. Rows come from the L3
@@ -59,6 +62,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cPeriod,
 	ibRequireOpenBase();
 
 	ibValueModelTable* retTable = new ibValueModelTable();
+	const ibValue keep(retTable);   // held while its rows are made — see Get(filter) above
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -73,7 +77,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cPeriod,
 
 	if (m_metaObject->GetPeriodicity() != ibPeriodicity::eNonPeriodic ||
 		m_metaObject->GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
-		const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_metaObject, cFilter);
+		const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_metaObject, cFilter, ibRegFilterOver::Records);
 
 		// Period + dimension filtered read through the L3 door: the period is an Eq
 		// condition like any selected dimension; L3 decomposes each across its physical
@@ -109,6 +113,7 @@ static ibValue SelectionToTable(ibDataQueryResult& selection,
                                 const ibValueMetaObjectInformationRegister* meta)
 {
 	ibValueModelTable* table = new ibValueModelTable();
+	const ibValue keep(table);   // held while its rows are made — see Get(filter) above
 	ibValueModelTable::ibValueModelColumnCollection* cols = table->GetColumnCollection();
 	wxASSERT(cols);
 	for (const auto object : meta->GetGenericAttributeArrayObject()) {

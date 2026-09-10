@@ -605,6 +605,26 @@ BACKEND_API void ibMcpBusyEnter(const wxString& what);
 BACKEND_API void ibMcpBusyLeave();
 BACKEND_API wxString ibMcpBusyWith();
 
+// ⭐⭐ "IT DID NOT ANSWER" IS TWO FACTS, AND ONLY ONE OF THEM IS PATIENCE. A request to the application
+// waits for its answer, and a wait that expires used to be reported one way whatever caused it — "it did
+// not answer in time, it may still be running" — about an application that had CRASHED a second after
+// the request went out (2026-09-10, three times in one evening; the process list and the Windows event
+// log were what told them apart). The process THIS designer started (app_run) is remembered by id, so
+// an expired wait asks whether it is still there before it counsels patience.
+BACKEND_API void ibMcpRememberStartedApplication(long pid);
+BACKEND_API long ibMcpStartedApplication();   // 0 when app_run has started nothing
+
+// The refusal for a wait that expired: `usual` while the application's process is there (or unknown —
+// started by somebody else), and "it is gone" when the process this designer started has exited.
+BACKEND_API wxString ibMcpNoAnswer(const wxString& usual);
+
+// ⭐⭐ A CAPTION GOES IN EVERY LANGUAGE THE CONFIGURATION DECLARES. True when `text` already carries
+// its languages (`en = '...'; ru = '...';`), is empty, or the configuration has one language at most;
+// otherwise false with a refusal naming the declared languages and the form. Asked by every road that
+// writes a caption without naming a language — a synonym through the setter, a template cell's text.
+BACKEND_API bool ibMcpCaptionInEveryLanguage(const class ibMetaData* owner, const wxString& text,
+	const wxString& what, wxString& refusal);
+
 // ⭐⭐ WHAT MAY RUN BEFORE A CLIENT HAS SAID WHO IT IS — and the answer is: exactly what saying so
 // requires. There is a person in front of this designer, and a connection is invisible to them until
 // something speaks; a client reading their whole configuration in silence is indistinguishable from

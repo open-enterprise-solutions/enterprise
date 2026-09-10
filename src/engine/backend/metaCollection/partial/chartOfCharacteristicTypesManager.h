@@ -7,9 +7,6 @@ class ibValueManagerDataObjectChartOfCharacteristicTypes :
 	public ibValueManagerDataObjectPredefined {
 	public:
 
-	ibValueReferenceDataObject* FindByCode(const ibValue& vCode) const;
-	ibValueReferenceDataObject* FindByDescription(const ibValue& cParam) const;
-
 	ibValueReferenceDataObject* EmptyRef() const;
 
 	ibValueManagerDataObjectChartOfCharacteristicTypes(const ibValueMetaObjectChartOfCharacteristicTypes* metaObject = nullptr) : m_metaObject(metaObject) { m_members.Bind(this, &ibValueManagerDataObjectChartOfCharacteristicTypes::FillManagerMethods); }

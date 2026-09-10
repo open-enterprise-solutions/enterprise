@@ -32,7 +32,7 @@
 //
 // (docs/register-totals-strategy.md §4)
 
-#include "backend.h"
+#include "backend/backend.h"
 #include "databaseLayer.h"          // ibMaterializationDialect / ibDialectDictionary / ibTotalsPeriod
 #include "databaseQueryBuilder.h"   // ibQueryRelPtr — the READ half hands back an L2-1 relation
 
@@ -451,6 +451,11 @@ BACKEND_API const wxChar* KeyHashColumnName();
 // `keyByteWidth` 0 = not measured, and then only the field count decides (the behaviour before the
 // byte ceiling existed). See the body for why both are asked.
 BACKEND_API bool ibKeyNeedsHash(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t keyByteWidth = 0);
+
+// Does one index on this engine hold a key this wide — under BOTH ceilings, fields and bytes? The plain
+// question beneath the one above, for a declaration that wants a lookup index over as many leading
+// columns as will go (ibDeclareLookupIndex) and has no identity to move into a hash.
+BACKEND_API bool ibIndexKeyFits(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t keyByteWidth);
 
 // How many physical fields one index may cover here — 0 when the engine declares no limit.
 //

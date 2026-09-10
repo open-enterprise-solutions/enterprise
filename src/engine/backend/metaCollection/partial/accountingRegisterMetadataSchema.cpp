@@ -16,6 +16,16 @@
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"       // ibCanMaterialize — ask L2-2, never a dialect
 #include "backend/appData.h"                                        // db_query
 
+// ⭐⭐ THE STORED NAME OF A SIDE'S TURNOVER COLUMN — `<the resource's own field>TurnoverDr|Cr`, spelled
+// HERE and only here, for the CREATE VIEW that makes it and for the source a query reads the view
+// through (GetTurnoverViewQueryable). The twin of ibAccumFigureField, and the same story: cb1edbae moved
+// the view's columns from the resource's user name to its field and left the source asking for
+// `AmountTurnoverDr`, which no view applied since then has.
+static wxString ibAcctTurnoverField(const wxString& resourceField, bool credit)
+{
+	return resourceField + ibRegSidedFigure(ibRegFigure::Turnover, credit);
+}
+
 // ============================================================================
 // What this file DECLARES (it renders nothing):
 //
@@ -393,7 +403,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			}
 
 			for (const Figure& figure : figures)
-				v.m_columns.push_back({ figure.m_name + (figure.m_credit ? wxT("TurnoverCr") : wxT("TurnoverDr")),
+				v.m_columns.push_back({ ibAcctTurnoverField(figure.m_name, figure.m_credit),
 				                        figure.m_field, wxString(), ibMaterializeAgg::Value });
 		}
 	};
@@ -487,11 +497,16 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetTurnoverViewQu
 		// over this register failed earlier on a doubled suffix and never reached the name. Both
 		// halves of that are fixed here: ONE spelling, and the kind that says it is one field
 		// (`-206 FLD1217_N_DR`, then `FLD1217_N_DR_N`, measured 2026-08-31).
+		//
+		// ⚠ AND THE VIEW'S COLUMN IS NO LONGER THE WORD. Since cb1edbae the view keeps the figure under
+		// the resource's FIELD (`fld1217_NTurnoverDr`, ibAcctTurnoverField) and the word is only what a
+		// query writes — so the two names part here: the query name from the word, the stored one from
+		// the function the view's CREATE is spelled with.
 		const wxString figureName =
 			resource->GetName() + ibRegSidedFigure(ibRegFigure::Turnover, credit);
 
 		columns.push_back(ibTempColumn(
-			figureName, figureName,
+			figureName, ibAcctTurnoverField(ibRegValueField(resource), credit),
 			resource->GetTypeDesc(), ibRegDerivedColumnId(synthetic++),
 			// …and the caption, from the same pair the name is built from.
 			ibRegFigureColumnCaption(resource->GetSynonym(), ibRegSidedCaption(ibRegFigure::Turnover, credit)),

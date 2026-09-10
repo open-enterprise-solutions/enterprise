@@ -446,6 +446,12 @@ struct ibResourceDescription {
 	//  refers to a field; it is the field that should hold the title, and the resource reaches it
 	//  through the field"). A caption of its own would be a second place to say one thing, and the
 	//  two would drift the first time a person renamed the field.)
+
+	// THE NAME IT ANSWERS TO — its alias where it has one, its path where it does not. What a person
+	// picks in the fields table, what the composer asks the selection about, and what makes two
+	// declarations the same resource. Asked here so the three cannot come to disagree.
+	const wxString& AnswersTo() const { return m_alias.IsEmpty() ? m_path : m_alias; }
+
 	bool operator==(const ibResourceDescription& o) const {
 		return m_func == o.m_func && m_path == o.m_path && m_alias == o.m_alias && m_scope == o.m_scope;
 	}

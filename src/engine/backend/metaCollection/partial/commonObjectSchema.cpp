@@ -189,7 +189,8 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 	// ⚠ NOT the line number. It already rides the key index above, where it is asked for; on its own
 	// it is a small integer repeated across every document — an index the planner would never choose
 	// and every INSERT would pay for. A fold over the tail sums lines, and a sum has no order.
-	if (HasRecorder() && GetRegisterPeriod() != nullptr && GetRegisterRecorder() != nullptr)
+	// (Only where the register HAS a Period column — a calculation register is dated otherwise, HasPeriod.)
+	if (HasRecorder() && HasPeriod() && GetRegisterPeriod() != nullptr && GetRegisterRecorder() != nullptr)
 		t.Index(t.m_name + wxT("_PIX"), { GetRegisterPeriod()->GetQueryColumn(), GetRegisterRecorder()->GetQueryColumn() });
 
 	// Per-field secondary indexes. Dimensions, resources, attributes and predefined all carry the

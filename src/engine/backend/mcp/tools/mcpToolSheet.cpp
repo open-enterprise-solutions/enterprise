@@ -146,9 +146,11 @@ const ibArg& ArgValue()
 {
 	static const ibArg s_a(wxT("value"), ibArg::Kind::Text,
 		ibMcpText("The text shown. For a caption this is all there is - and it is a LOCALISED string: "
-			  "it is translated when the sheet is put out, so it may carry the every-language form "
-			  "(`en = 'Goods'; ru = 'Tovary';`) exactly as a synonym does. A `template` text is "
-			  "translated the same way, before its [holes] are filled."));
+			  "it is translated when the sheet is put out, so it carries EVERY language the configuration "
+			  "declares, in one string (`en = 'Goods'; ru = 'Tovary'; uk = 'Tovary';`), exactly as a "
+			  "synonym does. A plain text is REFUSED where the configuration has several languages: it "
+			  "would be stored as the configuration's own language and leave the others blank. A "
+			  "`template` text is translated the same way, before its [holes] are filled."));
 	return s_a;
 }
 
@@ -892,6 +894,16 @@ public:
 
 		const bool gaveValue     = params.FindField(ArgValue().Name())     != nullptr;
 		const bool gaveParameter = params.FindField(ArgParameter().Name()) != nullptr;
+
+		// ⭐ A CELL'S TEXT IS A CAPTION, and it goes in every language the configuration declares — the
+		// rule every caption follows (ibMcpCaptionInEveryLanguage). A Russian word sent bare was stored
+		// as the English text of a configuration whose own language is English (2026-09-10). A PARAMETER
+		// cell's text is a name the module fills in, not a caption, and is not asked.
+		if (gaveValue && !gaveParameter
+		    && !ibMcpCaptionInEveryLanguage(sheet->GetMetaData(), ArgValue().Text(params),
+		                                    wxString::Format(ibMcpText("The text of cell R%dC%d"), (int)row + 1, (int)col + 1),
+		                                    refusal))
+			return false;
 
 		if (gaveValue)
 			cell->SetValue(ArgValue().Text(params));

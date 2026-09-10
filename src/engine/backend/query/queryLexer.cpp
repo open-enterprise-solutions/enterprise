@@ -182,6 +182,14 @@ bool ibQueryScalarFnUnitArg(ibQueryScalarFn fn, size_t& outIndex)
 	return true;
 }
 
+bool ibQueryScalarArgIsWord(ibQueryScalarFn fn, size_t index)
+{
+	if (fn == ibQueryScalarFn::Type)
+		return index == 0;             // its one argument is the name of a type
+	size_t unit = 0;
+	return ibQueryScalarFnUnitArg(fn, unit) && unit == index;
+}
+
 wxString ibAllQueryScalarFns()
 {
 	wxString out;

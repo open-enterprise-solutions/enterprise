@@ -63,6 +63,12 @@ constexpr ibClassID g_metaTableRefCLSID = metadata_to_clsid("MD_TBLR");   // DB-
 // The KEY stays "MD_SKTB" deliberately: it is an opaque body key that stored configurations and
 // DB rows already carry, not a name. Renaming it would change every id derived from it.
 constexpr ibClassID g_metaAccountDimensionKindsTableCLSID = metadata_to_clsid("MD_SKTB");
+// The relations of a chart of calculation types (Displacing, Base, Leading — one class, three
+// instances) — a predefined section of the same shape, declared HERE rather than beside the calculation
+// ids below, because what decides where an id must be written is the FAMILY it joins (a tabular section)
+// and not the subject it is about. The KEY stays "MD_DSTB" for the reason given for MD_SKTB just above:
+// the class began as the displacement table alone, and a stored chart already carries the key.
+constexpr ibClassID g_metaCalculationTypeRelationTableCLSID = metadata_to_clsid("MD_DSTB");
 
 // EVERY id whose class derives from ibValueMetaObjectTableData — the RAM and DB-backed variants plus
 // each PREDEFINED section registered under an id of its own. The metadata walks filter tabular
@@ -77,7 +83,8 @@ constexpr ibClassID g_metaAccountDimensionKindsTableCLSID = metadata_to_clsid("M
 // call site keeps its braces and this one passes by name — the backing array of a namespace-scope
 // initializer_list has static storage duration, so there is nothing to outlive.
 inline constexpr std::initializer_list<ibClassID> g_tabularSectionCLSIDs = {
-	g_metaTableCLSID, g_metaTableRefCLSID, g_metaAccountDimensionKindsTableCLSID
+	g_metaTableCLSID, g_metaTableRefCLSID, g_metaAccountDimensionKindsTableCLSID,
+	g_metaCalculationTypeRelationTableCLSID
 };
 constexpr ibClassID g_metaEnumCLSID = metadata_to_clsid("MD_ENUM");
 constexpr ibClassID g_metaDimensionCLSID = metadata_to_clsid("MD_DMNT");
@@ -112,6 +119,11 @@ constexpr ibClassID g_metaParameterizedJobCLSID = metadata_to_clsid("MD_PJOB");
 constexpr ibClassID g_metaChartOfCharacteristicTypesCLSID = metadata_to_clsid("MD_CHRC");
 constexpr ibClassID g_metaChartOfAccountsCLSID = metadata_to_clsid("MD_CHOA");
 constexpr ibClassID g_metaAccountingRegisterCLSID = metadata_to_clsid("MD_AREG");
+
+//CALCULATION OBJECTS
+constexpr ibClassID g_metaChartOfCalculationTypesCLSID = metadata_to_clsid("MD_CHCL");
+constexpr ibClassID g_metaCalculationRegisterCLSID = metadata_to_clsid("MD_CREG");
+constexpr ibClassID g_metaRecalculationCLSID = metadata_to_clsid("MD_RCLC");   // subordinate: Recalculation under a calc register
 
 // EXTERNAL
 constexpr ibClassID g_metaExternalDataProcessorCLSID = metadata_to_clsid("MD_EDPR");

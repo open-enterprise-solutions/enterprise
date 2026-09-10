@@ -42,7 +42,7 @@ const ibArg& ArgId() { static const ibArg a(wxT("id"), ibArg::Kind::Whole, ibMcp
 const ibArg& ArgProperty() { static const ibArg a(wxT("property"), ibArg::Kind::Text, ibMcpText("Which binding. Naming one the object does not have is refused WITH the list of the ones it does, so a wrong guess costs one call."), true); return a; }
 const ibArg& ArgTarget() { static const ibArg a(wxT("target"), ibArg::Kind::Text, ibMcpText("The metaobject to bind to, by name. Omit to read the binding instead of changing it.")); return a; }
 const ibArg& ArgRemove() { static const ibArg a(wxT("remove"), ibArg::Kind::Flag, ibMcpText("Take the target OUT of the binding instead of putting it in.")); return a; }
-const ibArg& ArgOnly() { static const ibArg a(wxT("only"), ibArg::Kind::Flag, ibMcpText("Make the target the ONLY thing bound, clearing whatever else was there. Off by default, because most bindings legitimately hold several.")); return a; }
+const ibArg& ArgOnly() { static const ibArg a(wxT("only"), ibArg::Kind::Flag, ibMcpText("Make the target the ONLY thing bound, clearing whatever else was there. Off by default, because most bindings legitimately hold several; a binding that holds one (a register's chart) is replaced either way.")); return a; }
 
 // ONE BINDING, WHICHEVER OF THE THREE CLASSES IT IS.
 //
@@ -232,8 +232,9 @@ public:
 		// binding read back correctly and the OTHER END was never made: the configuration stood, and
 		// refused to save with "Doesn't have any recorder".
 		ibPropertyChoiceList choices;
+		const ibPropertyChoiceMode mode = binding.property->GetValueList(choices);
 
-		if (binding.property->GetValueList(choices) == ibPropertyChoiceMode::None) {
+		if (mode == ibPropertyChoiceMode::None) {
 			refusal = wxString::Format(
 				ibMcpText("'%s' offers nothing to choose from."), binding.property->GetName());
 			return false;
@@ -275,7 +276,12 @@ public:
 				return false;
 			}
 
-			ibMetaDescription set = ArgOnly().Flag(params) ? ibMetaDescription() : *binding.held;
+			// ⭐ A SINGLE BINDING IS REPLACED, NOT ADDED TO — the property says which it is (the mode its
+			// list came back with). Adding to it would give a calculation register two charts, a binding
+			// its every reader takes as one.
+			const bool replaces = ArgOnly().Flag(params) ||
+				(mode == ibPropertyChoiceMode::Single && !ArgRemove().Flag(params));
+			ibMetaDescription set = replaces ? ibMetaDescription() : *binding.held;
 			const ibMetaID id = other->GetMetaID();
 
 			if (ArgRemove().Flag(params)) {

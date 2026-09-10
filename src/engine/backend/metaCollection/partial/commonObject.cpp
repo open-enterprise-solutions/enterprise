@@ -1697,11 +1697,26 @@ void ibValueManagerDataObject::FillMembers(ibMemberTable& helper) const
 		pRefData->ExportMethodsToHelper(&helper, g_aliasExport);
 }
 
-// ⭐ THE MODULE IS ASKED BY THE NUMBER IT GAVE US, not by where its entry landed in the table.
-// ExportMethodsToHelper writes the bytecode function index into the entry's data, and reading
-// it back is what makes the module's dispatch independent of anything the subclass appends
-// before or after. It agreed with the table index only while the module's block came first and
-// in bytecode order — true today, and nothing said so.
+// ⭐⭐ THE MODULE IS ASKED BY THE NAME, AND ANSWERS WITH ITS OWN NUMBER. The entry's data is the
+// function's ENTRY POINT in the bytecode (ExportMethodsToHelper writes `(long)fn`, m_lCodeLine), and
+// the unit's CallAsFunc takes the index into ITS OWN export table and turns it back into a name. The
+// two numbers agree for a function whose entry point happens to be the unit's index of it - the
+// first function of a module, and nothing after it: a Public function written below a private helper
+// was called as some other function or not at all, and the caller got Undefined without a word
+// (the payroll demo's printed forms, 2026-09-10; a probe first in the module answered 42, the same
+// probe last answered nothing). The name is the one fact both tables share.
+//
+// ⚠ AND A NAME THE MODULE DOES NOT HAVE IS SAID OUT LOUD. The runtime reads neither answer of a call
+// (procUnit ignores CallAsFunc's bool), so a lookup that found nothing was the same silent Undefined
+// the numbering gave — the one symptom that hid this defect for the whole life of the manager.
+static long ibModuleMethodNum(const ibValue& unit, const wxString& methodName)
+{
+	const long found = unit.FindMethod(methodName);
+	if (found == wxNOT_FOUND)
+		ibBackendCoreException::Error(_("The manager module has no Public method '%s'"), methodName);
+	return found;
+}
+
 bool ibValueManagerDataObject::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
@@ -1717,7 +1732,7 @@ bool ibValueManagerDataObject::CallAsProc(const long lMethodNum, ibValue** paPar
 	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
 
 	if (pRefData != nullptr)
-		return pRefData->CallAsProc(m_members.GetMethodData(lMethodNum), paParams, lSizeArray);
+		return pRefData->CallAsProc(ibModuleMethodNum(*pRefData, m_members.GetMethodName(lMethodNum)), paParams, lSizeArray);
 
 	return false;
 }
@@ -1737,7 +1752,7 @@ bool ibValueManagerDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRe
 	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
 
 	if (pRefData != nullptr)
-		return pRefData->CallAsFunc(m_members.GetMethodData(lMethodNum), pvarRetValue, paParams, lSizeArray);
+		return pRefData->CallAsFunc(ibModuleMethodNum(*pRefData, m_members.GetMethodName(lMethodNum)), pvarRetValue, paParams, lSizeArray);
 
 	return false;
 }
@@ -3952,9 +3967,20 @@ bool ibValueRecordSetObject::SetValueByMetaID(const ibDataViewItem& item, const 
 		if (node != nullptr) {
 			const ibValueMetaObjectAttributeBase* attribute = m_metaObject->FindAnyAttributeObjectByFilter(id);
 			if (attribute != nullptr) {
-				return node->SetValue(
+				// 🛑 A LINE THAT WAS CHANGED MAKES ITS SET CHANGED. The posting pass writes only the sets
+				// that say they are modified (ibRecorderRegister::WriteRecordSet — a set already written as
+				// it stands must not be written again, because that write replaces). Adding and clearing
+				// said so; changing a value in a line did not. MEASURED 2026-09-10 on a payroll document:
+				// the handler wrote its lines, asked the base, read them back and put the results in — and
+				// the pass skipped the set as unmodified, so every result stayed 0 with the document posted
+				// and no word. Reading fills the lines past this door (AppendTableValue), so a set fresh from
+				// the database still answers "not modified".
+				const bool set = node->SetValue(
 					id, attribute->AdjustValue(varMetaVal), true
 				);
+				if (set)
+					Modify(true);
+				return set;
 			}
 		}
 	}

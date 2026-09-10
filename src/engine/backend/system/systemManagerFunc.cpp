@@ -406,12 +406,20 @@ ibValue ibValueSystemFunction::WorkingDate() {
 ibValue ibValueSystemFunction::AddMonth(const ibValue& cData, int nMonthAdd)
 {
 	int nYear, nMonth, nDay;
-	cData.FromDate(nYear, nMonth, nDay);
+	unsigned short nHour, nMinute, nSecond;
+	cData.FromDate(nYear, nMonth, nDay, nHour, nMinute, nSecond);
 	int SummaMonth = nYear * 12 + nMonth - 1;
 	SummaMonth += nMonthAdd;
 	nYear = SummaMonth / 12;
 	nMonth = SummaMonth % 12 + 1;
-	return ibValue(nYear, nMonth, nDay);
+	// ⚠ A DAY THE TARGET MONTH DOES NOT HAVE IS ITS LAST ONE: the 31st of January plus a month is the
+	// 28th of February. Built as the 31st it was no date at all, and the value came back holding
+	// whatever its storage held (ibValue's date constructor keeps nothing from an invalid one).
+	const int lastDay = wxDateTime::GetNumberOfDays(static_cast<wxDateTime::Month>(nMonth - 1), nYear);
+	if (nDay > lastDay)
+		nDay = lastDay;
+	// …and the time of day travels with the date: a month after 10:30 is 10:30.
+	return ibValue(nYear, nMonth, nDay, nHour, nMinute, nSecond);
 }
 
 ibValue ibValueSystemFunction::BegOfMonth(const ibValue& cData)
@@ -426,7 +434,9 @@ ibValue ibValueSystemFunction::EndOfMonth(const ibValue& cData)
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
 
-	ibValue m_date = ibValue(nYear, nMonth, 1, 23, 59, 59);
+	// The first of the NEXT month at midnight, one second back. (It started from 23:59:59 on the 1st,
+	// which gave the right answer only because AddMonth used to drop the time of day.)
+	ibValue m_date = ibValue(nYear, nMonth, 1);
 	return AddMonth(m_date, 1) - 1;
 }
 
@@ -978,13 +988,19 @@ wxString ibValueSystemFunction::Format(ibValue& cData, const wxString& fmt)
 	wxString leftParam, rightParam;
 	std::map<wxString, wxString> paParams;
 	bool bLeftParam = true;
+	// ⚠ A VALUE THAT IS ALL SPACE IS A SPACE, not nothing: `NGS= ` asks for a space between the digit
+	// groups - the help's own example - and trimming it to empty left the number ungrouped.
+	const auto commit = [&]() {
+		leftParam.Trim(true); leftParam.Trim(false);
+		const bool allSpace = !rightParam.IsEmpty() && wxString(rightParam).Trim(true).Trim(false).IsEmpty();
+		rightParam.Trim(true); rightParam.Trim(false);
+		paParams.insert_or_assign(leftParam, allSpace ? wxString(wxT(" ")) : rightParam);
+		bLeftParam = true; leftParam = ""; rightParam = "";
+	};
 	for (unsigned int i = 0; i < fmt.length(); i++) {
 		auto c = fmt.at(i);
 		if (c == ';') {
-			leftParam.Trim(true); leftParam.Trim(false);
-			rightParam.Trim(true); rightParam.Trim(false);
-			paParams.insert_or_assign(leftParam, rightParam);
-			bLeftParam = true; leftParam = ""; rightParam = "";
+			commit();
 			continue;
 		}
 		else if (c == '=') {
@@ -1000,12 +1016,8 @@ wxString ibValueSystemFunction::Format(ibValue& cData, const wxString& fmt)
 			}
 		}
 
-		if (i == fmt.length() - 1) {
-			leftParam.Trim(true); leftParam.Trim(false);
-			rightParam.Trim(true); rightParam.Trim(false);
-			paParams.insert_or_assign(leftParam, rightParam);
-			bLeftParam = true; leftParam = ""; rightParam = "";
-		}
+		if (i == fmt.length() - 1)
+			commit();
 	}
 
 	switch (cData.GetType()) {
@@ -1046,7 +1058,10 @@ wxString ibValueSystemFunction::Format(ibValue& cData, const wxString& fmt)
 		fnd = paParams.find(NDS);
 		if (fnd != paParams.end() && !fnd->second.IsEmpty()) numFmt.decimalSep = fnd->second[0];
 		fnd = paParams.find(NGS);
-		if (fnd != paParams.end() && !fnd->second.IsEmpty()) numFmt.groupSep   = fnd->second[0];
+		if (fnd != paParams.end() && !fnd->second.IsEmpty()) {
+			numFmt.groupSep  = fnd->second[0];
+			numFmt.groupSize = 3;   // a separator names no group size of its own: thousands, unless NG says
+		}
 		fnd = paParams.find(NG);
 		if (fnd != paParams.end()) numFmt.groupSize  = wxAtoi(fnd->second);
 

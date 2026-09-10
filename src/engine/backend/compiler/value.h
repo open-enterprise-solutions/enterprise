@@ -409,7 +409,28 @@ public:
 				// Invalidation changes kBuilt to kInvalidating before it waits for this
 				// builder. Recheck after claiming so it cannot mutate the vectors while
 				// this thread is indexing them.
-				if (m_buildState.load(std::memory_order_acquire) != kBuilt) {
+				//
+				// 🛑⭐⭐ WAIT ONLY FOR A BUILDER THAT IS ACTUALLY WORKING. The reason to wait is that
+				// a build in flight MUTATES m_props/m_methods under us — so kBuilding and
+				// kInvalidating are worth waiting for, and they end. kStale is not: it means nobody
+				// is building and nobody here will start one, so waiting for it yields FOREVER.
+				//
+				// Two ordinary states reach here as kStale: a table populated by hand (the mode
+				// HasBinders() is written to support — "SAFE on a helper still populated" — which
+				// EnsureBuilt leaves kStale by design), and a bound table whose reader took the raw
+				// pointer instead of going through ibValue::GetPMethods (the one place that builds).
+				//
+				// It hangs the PROCESS, not the call: `std::this_thread::yield` keeps a core busy, so
+				// the symptom is a script that never returns while the CPU burns. MEASURED 2026-09-10:
+				// the emitter was RaiseMemberNotFound — the ERROR path, which asks the shared globals
+				// table whether the missing name is a global function. So a plain "no such member"
+				// stopped being a refusal and became a hung process, on any surface past
+				// kFindIndexMin (12).
+				//
+				// Indexing a kStale table is safe: nothing is mutating it at this moment, and any
+				// later change goes through MarkFindIndexDirty, which retires this snapshot.
+				const uint8_t buildState = m_buildState.load(std::memory_order_acquire);
+				if (buildState == kBuilding || buildState == kInvalidating) {
 					m_findIndexState.store(kFindStale, std::memory_order_release);
 					std::this_thread::yield();
 					continue;
@@ -1199,6 +1220,15 @@ public:
 	void FromDate(int& nYear, int& nMonth, int& nDay) const;
 	void FromDate(int& nYear, int& nMonth, int& nDay, unsigned short& nHour, unsigned short& nMinute, unsigned short& nSecond) const;
 	void FromDate(int& nYear, int& nMonth, int& nDay, int& DayOfWeek, int& DayOfYear, int& WeekOfYear) const;
+
+	// ⭐ DATE ARITHMETIC READS THE CALENDAR, NOT THE CLOCK. A date is held as a moment (m_dData), and
+	// a day on which the clocks move is 23 or 25 hours long as a moment — so `date + 86400` and
+	// `to - from` read off moments came out an hour wrong across a switch: a 90-day base period
+	// counted 89.958 days (the payroll demo, 2026-09-10). Both are worked out on the wall-clock reading
+	// instead, where every day is 86400 seconds, which is what a date written in a document means.
+	// Milliseconds in and out, as m_dData is held.
+	static wxLongLong_t ShiftDate(wxLongLong_t date, wxLongLong_t milliseconds);
+	static wxLongLong_t DateSpan(wxLongLong_t later, wxLongLong_t earlier);
 
 #pragma region serialization
 

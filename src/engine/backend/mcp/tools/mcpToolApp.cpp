@@ -68,15 +68,16 @@ const ibArg& ArgRestart()
 	static const ibArg s_a(wxT("restart"), ibArg::Kind::Flag,
 		ibMcpText("End the run that is already going, then start a fresh one. This is what to pass "
 		  "after changing a module: a running application keeps the bytecode it started with, so "
-		  "the change is invisible until it comes up again."));
+		  "the change is invisible until it comes up again. A run started from here WITHOUT the "
+		  "debugger is ended too - it has no debug connection, but this designer knows its process."));
 	return s_a;
 }
 
-// The last run STARTED FROM HERE. Kept so a restart can wait for the process to actually go before
-// starting its replacement — two of them on one file base is a lock fight, and the loser is silent.
-// Zero when this designer has started nothing, which is honest: a run somebody else started is one
-// this cannot watch, and the wait falls back to a fixed one.
-long s_lastStartedPid = 0;
+// The last run STARTED FROM HERE is remembered in mcpTool.cpp (ibMcpStartedApplication) — so a
+// restart can wait for the process to actually go before starting its replacement (two of them on one
+// file base is a lock fight, and the loser is silent), and so every tool whose wait expires can ask
+// whether the application is still there. Zero when this designer has started nothing, which is
+// honest: a run somebody else started is one this cannot watch, and the wait falls back to a fixed one.
 
 } // namespace
 
@@ -137,6 +138,7 @@ public:
 			withDebug = ArgDebug().Flag(params);
 
 		const bool restart = ArgRestart().Flag(params);
+		const long lastStarted = ibMcpStartedApplication();   // see the note above the namespace's end
 
 		// ONE DEBUGGER AT A TIME — the same guard the menu keeps. A second debug launch attaches
 		// nothing and leaves the caller waiting at a breakpoint that will never be hit.
@@ -168,14 +170,28 @@ public:
 				// then unwinds, closes its session and lets go of the base; starting the
 				// replacement before that is two processes on one file base — Firebird gives the
 				// second one a lock error that reads like a corrupt installation.
-				if (s_lastStartedPid != 0) {
-					for (int waited = 0; waited < 100 && wxProcess::Exists((int)s_lastStartedPid); ++waited)
+				if (lastStarted != 0) {
+					for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
 						wxMilliSleep(50);
 				}
 				else {
 					wxMilliSleep(1000);   // started by somebody else - there is no pid to watch
 				}
 			}
+		}
+		// ⚠ …AND A RUN STARTED WITHOUT THE DEBUGGER HAS NO CONNECTION TO END, so the branch above never
+		// saw it: `restart` then started a SECOND application beside the first — two processes on one
+		// file base — and the old one had to be killed from outside (2026-09-10). A run THIS designer
+		// started has its pid, so it is asked to close, and then made to.
+		else if (restart && lastStarted != 0 && wxProcess::Exists((int)lastStarted)) {
+			wxProcess::Kill((int)lastStarted, wxSIGTERM, wxKILL_CHILDREN);
+			for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
+				wxMilliSleep(50);
+			if (wxProcess::Exists((int)lastStarted))
+				wxProcess::Kill((int)lastStarted, wxSIGKILL, wxKILL_CHILDREN);
+			for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
+				wxMilliSleep(50);
+			ended = true;
 		}
 
 		// ⚠ THE CONFIGURATION MUST ALREADY BE IN THE BASE. The application reads the database's
@@ -202,7 +218,7 @@ public:
 			return false;
 		}
 
-		s_lastStartedPid = pid;
+		ibMcpRememberStartedApplication(pid);
 
 		result.SetValue(wxT("started"), application);
 		result.AddField(wxT("pid"), ibDataValue::Int((s64)pid));

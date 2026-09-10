@@ -306,6 +306,12 @@ public:
 	// (`TotalExpr(expr)` DELETED — a one-line convenience for the empty-function form, with no
 	//  caller. RAM grouping is still a deferred follow-up: the RAM composer reads filter and sort.)
 	ibDataComposer& Resource(const wxString& func, const wxString& path);
+	// …AND A DECLARED ONE, WHOLE — its name (`AS People`) and its area (`OVER Item`) with it. The two
+	// runs of a stored report (the report form's, compose_run's) filled the composer through the pair
+	// above, so every resource arrived nameless and arealess: a head count declared as People was
+	// neither computed nor found when a reader ticked People (the payroll demo, 2026-09-10). Forward
+	// the whole description; every future field rides for free.
+	ibDataComposer& Resource(const ibResourceDescription& resource);
 	// The grouping VID (kind): Elements / Hierarchy / HierarchyOnly — the ONE switch between a flat and a
 	// hierarchical view (lifted to L5 — the list settings carry it).
 	ibDataComposer& TotalBy(const wxString& path, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements);

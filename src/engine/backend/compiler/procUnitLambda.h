@@ -30,6 +30,8 @@
 #include "procUnit.h"          // class ibProcUnit (friend grant for ibValueFunction)
 #include "session/session.h"   // ibSession::GetPUState() — used by ibValueFunction::Execute
 #include "backend/eventDispatcher.h"   // ibValueFunction IS-A dispatcher — a lambda dispatches by running its own body
+
+#include <memory>   // std::unique_ptr — the string buffer and the object a destination lets go of
 // ibBackendCoreException reaches us transitively via compileCode.h's chain.
 
 #pragma region iterator_support
@@ -408,6 +410,12 @@ inline void CopyValue(ibValue& cValue1, ibValue&& cValue2)
 	CopyValue(cValue1, tmp);
 }
 
+// Lets go of one reference — the deleter of a guard that ADOPTS the reference a destination held, so the
+// object is released once, when the guard goes, and never counted up and down in between.
+struct ibReleaseRef {
+	void operator()(ibValue* ref) const { ref->DecrRef(); }
+};
+
 // CopyValue from const source — direct field-copy without going
 // through CloneValue(). Same semantics as the mutable overload: simple
 // types are value-copied, TYPE_REFFER shares the m_pRef pointer,
@@ -434,6 +442,22 @@ inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 		delete cValue1.m_pStr;
 		cValue1.m_pStr = nullptr;
 	}
+
+	// 🛑⭐⭐ AND A DESTINATION THAT HELD AN OBJECT LETS IT GO — this overload never did. It is the LET road
+	// (`r = …` in a script: procUnit's OPER_LET reads its source const), and it overwrote an object
+	// reference without the DecrRef every other road makes (the mutable overload through Reset(), the
+	// destructor too). So the object a variable held before an assignment was never released: MEASURED
+	// 2026-09-10 with a data breakpoint on one record set line's count — +1 when the call handed it back,
+	// +1 when `r = rs.Add()` copied it in, -1 when the call's temporary died, and nothing at `r = Undefined`.
+	// The line kept its set alive, and the set its rows: ~5 KB per register row a posting wrote, never
+	// returned (a 32-bit client ran out of address space on a bench).
+	//
+	// The destination's reference passes to a guard that releases the object once the copy is done:
+	// `x = x.Child` reads its source out of the object the destination is letting go, and the guard lets
+	// it go on every way out of here, a throwing copy included. A bare pointer, not an ibValuePtr — that
+	// one IS an ibValue, built and torn down on every assignment, and it cost the LET road 24% (measured
+	// 2026-09-10: 1M × 3 assignments, 110 → 136 ms).
+	const std::unique_ptr<ibValue, ibReleaseRef> destHeld(destWas == ibValueTypes::TYPE_REFFER ? cValue1.m_pRef : nullptr);
 
 	cValue1.m_typeClass = cValue2.m_typeClass;
 	switch (cValue2.m_typeClass)
@@ -481,10 +505,20 @@ inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 	}
 }
 
+// 🛑 A MOVE LETS GO OF WHAT THE DESTINATION HELD — a string buffer it owned, or the object it referenced —
+// as ibValue::Move always did (through Reset) and the const CopyValue above does now. This one stamped the
+// new value over both, the same defect as the LET road. It has no caller today, which is how it outlived
+// that fix; it is kept correct so the next caller does not inherit the leak. Both are carried by guards
+// and go when the function does — after the source is reset, since a source that lives inside the object
+// the destination held must not be reset in freed memory.
 inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 {
 	if (&cValue1 == &cValue2)
 		return;
+
+	const ibValueTypes destWas = cValue1.m_typeClass;
+	const std::unique_ptr<ibString> destBuffer(destWas == ibValueTypes::TYPE_STRING ? cValue1.m_pStr : nullptr);
+	const std::unique_ptr<ibValue, ibReleaseRef> destHeld(destWas == ibValueTypes::TYPE_REFFER ? cValue1.m_pRef : nullptr);   // adopts the destination's reference
 
 	cValue1.m_typeClass = cValue2.m_typeClass;
 

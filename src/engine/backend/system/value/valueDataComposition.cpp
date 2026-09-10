@@ -26,6 +26,7 @@
 #include "backend/value_cast.h"                      // CastValue — the script argument to its type
 #include "backend/job/jobManager.h"                  // ibJobManager / ibBackgroundRun — the rented read
 #include "backend/settings/settingsComposer.h"       // the reader's saved settings — and the one marked for open
+#include "backend/backend_localization.h"            // a variant's name, read in the reader's language
 
 namespace {
 
@@ -752,7 +753,7 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 		// none of them (Max, 2026-08-24).
 		composer.ClearResources();
 		for (const ibResourceDescription& resource : desc.m_resources)
-			composer.Resource(resource.m_func, resource.m_path);
+			composer.Resource(resource);   // whole — its name and its area with it
 
 		// ⭐ …AND WHAT THE QUERY'S SELECTS SAY ABOUT THEIR FIELDS, from the same place and for the
 		// same reason. A title belongs to a FIELD, a field belongs to a SELECT, and everything that
@@ -1013,6 +1014,19 @@ wxString ibValueDataComposition::GetSourceCaption() const
 	if (const ibBackendQueryable* q = GetSourceQueryable())
 		return GetSourceMetaObject() ?
 			stringUtils::GenerateSynonym(GetSourceMetaObject()->GetClassName()) + wxT(": ") + GetSourceMetaObject()->GetSynonym() : q->GetQueryName();
+
+	// ⭐ A COMPOSITION OVER A QUERY HAS NO OBJECT TO BE NAMED AFTER — a person knows it by its report,
+	// and the name the report carries for them is its variant's, in their language. It answered with
+	// its own class name, so every report built on a query opened under the heading "DataComposition"
+	// (the payroll demo, 2026-09-10).
+	const ibCompositionDescription& desc = GetCompositionDesc();
+	if (!desc.m_variants.empty() && !desc.m_variants.front().m_synonym.IsEmpty()) {
+		const wxString& synonym = desc.m_variants.front().m_synonym;
+		wxString caption;
+		if (ibBackendLocalization::GetTranslateGetRawLocText(synonym, caption) && !caption.IsEmpty())
+			return caption;
+		return synonym;   // one written plainly is its own caption
+	}
 
 	return GetClassName();
 }

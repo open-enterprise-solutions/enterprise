@@ -293,9 +293,9 @@ void DescribeRun(const ibJobRunByteCodeState& state, ibDataNode& into)
 bool Answered(bool sent, const ibJobRunByteCodeState& state, wxString& refusal)
 {
 	if (!sent) {
-		refusal = ibMcpText("The application did not answer in time. That is not the same as 'it did "
-			"not happen' - if a run was being started, it may be running. code_status with the "
-			"token, when you have one, is the only thing that settles it.");
+		refusal = ibMcpNoAnswer(ibMcpText("The application did not answer in time. That is not the same "
+			"as 'it did not happen' - if a run was being started, it may be running. code_status "
+			"with the token, when you have one, is the only thing that settles it."));
 		return false;
 	}
 	if (!state.m_accepted) {
@@ -408,6 +408,15 @@ public:
 			"ATTACHED (app_run with debug true), and the code is sent to that process over the same "
 			"wire the sandbox uses. It does NOT need to be stopped at a breakpoint: it runs beside "
 			"the person, in a session of its own, and nobody is blocked.\n"
+			"\n"
+			"AND IT MUST NOT BE STOPPED FOR A COMMIT. While the application stands at a breakpoint, "
+			"what is run in it goes through the debugger's sandbox, which rolls EVERYTHING back - the "
+			"run comes back complete, without an error, and keeps nothing. A committing run is refused "
+			"in that state; debug_state says whether it is stopped, debug_run with action continue lets "
+			"it go, and debug_breakpoint with all + remove clears breakpoints nobody needs - a copied "
+			"base brings its breakpoints with it, and app_run with debug true then stops in BeforeStart "
+			"before you have done anything. After a committing run, READ BACK WHAT IT WROTE (count the "
+			"rows): 'complete' says it finished, not that anything was kept.\n"
 			  "\n"
 			"AND SO IT CANNOT BE STEPPED THROUGH. That is the same fact as 'nobody is blocked', read "
 			"the other way: a run that parks nobody has no frame to stop in and no locals to look at. "
@@ -483,6 +492,27 @@ public:
 		ibMcpDebugBridge* const bridge = JobBridge(refusal);
 		if (bridge == nullptr)
 			return false;
+
+		// 🛑⭐⭐ NOT WHILE THE APPLICATION STANDS AT A BREAKPOINT. A stopped process is the debugger's, and
+		// what is run in it then goes the debugger's road — the sandbox, which rolls everything back (Max,
+		// 2026-09-10: *"if you are in the debugger, in the sandbox, it rolls everything back — and you have
+		// a separate mode for that"*). Nothing says so on the way: the run comes back complete, without an
+		// error, having kept nothing it was meant to — measured on a thousand employees' payroll, started
+		// while a breakpoint the copied base had brought along held the application in BeforeStart. A
+		// trial is undone anyway, so only the committing half is refused, and the refusal names the way out.
+		if (commit) {
+			const ibMcpDebugBridge::Stop stop = bridge->GetStop();
+			if (stop.m_stopped) {
+				refusal = wxString::Format(
+					ibMcpText("The application is stopped at a breakpoint (%s). A run started now goes "
+						  "through the debugger's sandbox, which rolls everything back - it would come back "
+						  "complete and keep nothing. Let the application go first: debug_run with action "
+						  "continue, and debug_breakpoint with all + remove if the stop is a breakpoint "
+						  "nobody needs (a copied base brings its breakpoints with it). Then commit."),
+					stop.m_where.IsEmpty() ? stop.m_module : stop.m_where);
+				return false;
+			}
+		}
 
 		// ⭐⭐ CHECKED HERE, RUN THERE. This side compiles the code only to JUDGE it — same compiler
 		// the designer's Syntax control button uses, so the answer carries line numbers — and then

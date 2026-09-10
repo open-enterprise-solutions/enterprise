@@ -370,22 +370,20 @@ public:
 
 	unsigned int GetEnumCount() const { return m_listEnumData.size(); }
 
+	// ⚠ THE PROPERTY NUMBER COUNTS IN DECLARATION ORDER (FillMembers lists m_listEnumStr), and the
+	// member table is a map ordered by VALUE. Stepping through the map by that number agreed only while
+	// an enumeration happened to be declared in ascending order: `Chars` is not (CR = 13 first, Tab = 9
+	// fifth), so `Chars.LF` came back as VTab (measured 2026-09-10). The name at that position is the
+	// one fact both orders share.
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override { //attribute value
-		auto itEnums = m_listEnumData.begin();
-		std::advance(itEnums, lPropNum);
-		if (itEnums != m_listEnumData.end()) {
-			ibValueEnumerationVariant<valT>* enumValue =
-				new ibValueEnumerationVariant<valT>(itEnums->first, ibValue::GetClassType());
-			if (enumValue != nullptr) {
-				enumValue->CreateEnumeration(
-					GetEnumName(itEnums->first),
-					GetEnumDescription(itEnums->first),
-					itEnums->first
-				);
-				pvarPropVal = enumValue;
-				return true;
-			}
+		if (lPropNum < 0 || static_cast<size_t>(lPropNum) >= this->m_listEnumStr.size())
 			return false;
+		const wxString& name = this->m_listEnumStr[lPropNum];
+		for (const auto& e : m_listEnumData) {
+			if (e.second != name)
+				continue;
+			pvarPropVal = CreateEnumVariantValue(e.first);
+			return true;
 		}
 		return false;
 	}

@@ -9,7 +9,7 @@
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 door — FindByNumber via WhereLike / WhereCompare
 
-ibValueReferenceDataObject* ibValueManagerDataObjectDocument::FindByNumber(const ibValue& vNumber, const ibValue& vPeriod)
+ibValue ibValueManagerDataObjectDocument::FindByNumber(const ibValue& vNumber, const ibValue& vPeriod)
 {
 	if (appData->DesignerMode())
 		return ibValueReferenceDataObject::Create(m_metaObject);
@@ -33,13 +33,12 @@ ibValueReferenceDataObject* ibValueManagerDataObjectDocument::FindByNumber(const
 		page.m_count = 1;
 		ibDataQueryResult sel = q.Execute(page);
 		if (sel.Next()) {
-			// The identity column by NAME, and the guid from the reference itself — see the same read in
-			// catalogManager_impl.cpp for what the two guesses on this line used to cost.
+			// The row's own reference, handed out HELD — the same read, and the same dangling pointer it
+			// used to return, as FindByCode's (commonObjectManagerQuery.cpp): a Create by the guid found
+			// this very instance, bare, and the local here let go of it on the way out.
 			const ibValue rowValue = sel.GetValue(m_metaObject->GetDataReference()->GetQueryColumn());
-			const ibValueReferenceDataObject* const found = rowValue.ConvertToType<ibValueReferenceDataObject>();
-			const ibGuid foundedGuid = found != nullptr ? found->GetGuid().GetGuid() : ibGuid();
-			if (foundedGuid.isValid())
-				return ibValueReferenceDataObject::Create(m_metaObject, foundedGuid);
+			if (rowValue.ConvertToType<ibValueReferenceDataObject>() != nullptr)
+				return rowValue;
 		}
 	}
 	catch (...) { /* fall through to an empty reference */ }

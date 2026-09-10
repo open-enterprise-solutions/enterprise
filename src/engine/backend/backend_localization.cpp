@@ -83,7 +83,36 @@ bool ibBackendLocalization::CreateLocalizationArray(const wxString& strRawLocale
 	entry.m_code.Clear();
 	entry.m_data.Clear();
 
-	for (const auto& c : strRawLocale.ToStdWstring()) {
+	// One language done — kept, or replacing an earlier one of the same code.
+	const auto commit = [&array]() {
+		const wxString& code = entry.m_code;
+		const auto iterator = std::find_if(array.begin(), array.end(),
+			[code](const ibBackendLocalizationEntry& e) {
+				return stringUtils::CompareString(code, e.m_code); });
+
+		if (iterator == array.end()) {
+			array.emplace_back(std::move(entry));
+		}
+		else {
+			*iterator = std::move(entry);
+		}
+		entry.m_code.Clear();
+		entry.m_data.Clear();
+	};
+
+	const std::wstring raw = strRawLocale.ToStdWstring();
+	for (size_t i = 0; i < raw.size(); ++i) {
+		const wchar_t c = raw[i];
+
+		// ⭐ A DOUBLED QUOTE INSIDE THE TEXT IS AN APOSTROPHE — `en = 'the document''s movements';`.
+		// Read as two toggles it closed the text and opened it again, and the apostrophe vanished from
+		// every caption that had one (the payroll demo's English texts, 2026-09-10). GetRawLocText
+		// writes it back doubled.
+		if (open_text && open_symbol && c == wxT('\'') && i + 1 < raw.size() && raw[i + 1] == wxT('\'')) {
+			entry.m_data += c;
+			++i;
+			continue;
+		}
 
 		if ((!open_text && (c == wxT(' ') || c == wxT('\n'))) || c == wxT('\'')) {
 			if (open_text && c == wxT('\''))
@@ -95,18 +124,7 @@ bool ibBackendLocalization::CreateLocalizationArray(const wxString& strRawLocale
 			continue;
 		}
 		else if (open_text && !open_symbol && c == wxT(';')) {
-			const wxString& code = entry.m_code;
-			const auto iterator = std::find_if(array.begin(), array.end(),
-				[code](const ibBackendLocalizationEntry& e) {
-					return stringUtils::CompareString(code, e.m_code); });
-
-			if (iterator == array.end()) {
-				array.emplace_back(std::move(entry));
-			}
-			else {
-				*iterator = std::move(entry);
-			}
-
+			commit();
 			open_text = open_symbol = false;
 			continue;
 		}
@@ -116,6 +134,10 @@ bool ibBackendLocalization::CreateLocalizationArray(const wxString& strRawLocale
 		else if (!open_text && !open_symbol)
 			entry.m_code += c;
 	}
+
+	// …AND THE LAST LANGUAGE MAY END WITH THE STRING, without its `;` (see IsLocalizationString).
+	if (open_text && !open_symbol)
+		commit();
 
 	return array.size() > 0;
 }
@@ -127,7 +149,9 @@ wxString ibBackendLocalization::CreateLocalizationRawLocText(const wxString& str
 	if (CreateLocalizationArray(strLocale, array))
 		return GetTranslateFromArray(activeLang, array);
 
-	return wxString::Format(wxT("%s = '%s';"), activeLang, strLocale);
+	wxString text = strLocale;
+	text.Replace(wxT("'"), wxT("''"));   // an apostrophe is written doubled (CreateLocalizationArray)
+	return wxString::Format(wxT("%s = '%s';"), activeLang, text);
 }
 
 bool ibBackendLocalization::IsLocalizationString(const wxString& strRawLocale)
@@ -139,17 +163,22 @@ bool ibBackendLocalization::IsLocalizationString(const wxString& strRawLocale)
 		open_symbol = false;
 
 	bool success = false;
+	bool closed  = false;   // the current language's text has been closed by its quote
 
 	for (const auto& c : strRawLocale.ToStdWstring()) {
 
 		if ((!open_text && (c == wxT(' ') || c == wxT('\n'))) || c == wxT('\'')) {
-			if (open_text && c == wxT('\''))
+			if (open_text && c == wxT('\'')) {
 				open_symbol = !open_symbol;
+				if (!open_symbol)
+					closed = true;
+			}
 			success = false;
 			continue;
 		}
 		else if (!open_text && !open_symbol && c == wxT('=')) {
 			open_text = true;
+			closed = false;
 			success = false;
 			continue;
 		}
@@ -159,6 +188,13 @@ bool ibBackendLocalization::IsLocalizationString(const wxString& strRawLocale)
 			continue;
 		}
 	}
+
+	// ⭐ THE LAST LANGUAGE MAY END WITH THE STRING. `en = 'June'; ru = 'Iyun'` is how a person writes it
+	// — the separator is BETWEEN languages — and it was not recognised at all: Tstr handed the whole
+	// text back and a heading read "en = 'June'; ru = ..." (the payroll demo's month names, 2026-09-10).
+	// A closed quote at the end is the end of that language, exactly as `;` would have been.
+	if (!success && open_text && !open_symbol && closed)
+		success = true;
 
 	return success;
 }
@@ -174,8 +210,10 @@ bool ibBackendLocalization::GetRawLocText(const ibBackendLocalizationEntryArray&
 {
 	strResult.Clear();
 	for (const auto& pair : array) {
+		wxString text = pair.m_data;
+		text.Replace(wxT("'"), wxT("''"));   // an apostrophe is written doubled (CreateLocalizationArray)
 		strResult += wxString::Format(
-			wxT("%s = '%s';"), pair.m_code, pair.m_data);
+			wxT("%s = '%s';"), pair.m_code, text);
 	}
 	return array.size() > 0;
 }
@@ -189,6 +227,7 @@ bool ibBackendLocalization::IsEmptyLocalizationString(const wxString& strRawLoca
 		open_symbol = false;
 
 	bool success = false;
+	bool closed  = false;   // see IsLocalizationString — the last language may end with the string
 
 	thread_local wxString code, data;
 	code.Clear(); data.Clear();
@@ -196,13 +235,17 @@ bool ibBackendLocalization::IsEmptyLocalizationString(const wxString& strRawLoca
 	for (const auto& c : strRawLocale.ToStdWstring()) {
 
 		if ((!open_text && (c == wxT(' ') || c == wxT('\n'))) || c == wxT('\'')) {
-			if (open_text && c == wxT('\''))
+			if (open_text && c == wxT('\'')) {
 				open_symbol = !open_symbol;
+				if (!open_symbol)
+					closed = true;
+			}
 			success = false;
 			continue;
 		}
 		else if (!open_text && !open_symbol && c == wxT('=')) {
 			open_text = true;
+			closed = false;
 			success = false;
 			continue;
 		}
@@ -219,6 +262,9 @@ bool ibBackendLocalization::IsEmptyLocalizationString(const wxString& strRawLoca
 		else if (!open_text && !open_symbol)
 			code += c;
 	}
+
+	if (!success && open_text && !open_symbol && closed)
+		success = true;
 
 	if (success && stringUtils::CompareString(GetUserLanguage(), code))
 		return data.IsEmpty();

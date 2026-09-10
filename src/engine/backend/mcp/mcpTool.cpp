@@ -24,6 +24,7 @@
 #include <memory>
 #include <set>      // one link per id — the same object named twice is one fact
 #include <atomic>   // how deep the host is in modal dialogs — read from any thread
+#include <wx/process.h>   // wxProcess::Exists — is the application app_run started still there
 #include <mutex>
 
 #include <map>   // property name -> the category it was declared into
@@ -313,6 +314,38 @@ wxString ibMcpBusyWith()
 
 	// A dialog with no title is still a dialog in the way — saying so beats answering "free".
 	return BusyTitle().IsEmpty() ? wxString(wxT("a dialog")) : BusyTitle();
+}
+
+// The application app_run started — see the header. An atomic, because the tools that wait on the
+// application run off the main thread (NeedsMainThread), and app_run on it.
+static std::atomic<long>& StartedApplication()
+{
+	static std::atomic<long> s_pid{ 0 };
+	return s_pid;
+}
+
+void ibMcpRememberStartedApplication(long pid)
+{
+	StartedApplication().store(pid);
+}
+
+long ibMcpStartedApplication()
+{
+	return StartedApplication().load();
+}
+
+wxString ibMcpNoAnswer(const wxString& usual)
+{
+	const long pid = ibMcpStartedApplication();
+	if (pid == 0 || wxProcess::Exists((int)pid))
+		return usual;
+	return wxString::Format(
+		ibMcpText("The application is GONE - its process (%ld, started by app_run) is no longer running, "
+			  "so nothing is waiting to answer. If nobody closed it, it crashed while this request was "
+			  "in hand: the Windows event log (Application, 'Application Error') names the faulting "
+			  "module, and a debugger attached before the repeat gives the stack. Whatever it was "
+			  "writing is rolled back with it. app_run starts it again."),
+		pid);
 }
 
 // ⭐ THE GREETING'S OWN VERBS. Each one is here because the greeting cannot be made without it:
@@ -1415,6 +1448,26 @@ bool ibMcpLanguageDeclared(const ibMetaData* owner, const wxString& code, wxStri
 
 } // namespace
 
+bool ibMcpCaptionInEveryLanguage(const ibMetaData* owner, const wxString& text, const wxString& what,
+	wxString& refusal)
+{
+	if (text.IsEmpty() || ibBackendLocalization::IsLocalizationString(text))
+		return true;   // nothing to write, or it already carries its languages
+	wxString declared;
+	ibMcpLanguageDeclared(owner, wxEmptyString, declared);   // asked only for the list
+	if (!declared.Contains(wxT(",")))
+		return true;   // one language or none: a plain text IS every language there is
+	refusal = wxString::Format(
+		ibMcpText("%s is a caption, and this configuration declares %s. A text sent without a language "
+			  "fills only the configuration's own one and leaves the others BLANK for everybody who reads "
+			  "in them - a Russian word written this way is stored as the English caption. Send every "
+			  "language in one string: `en = '...'; ru = '...'; uk = '...';` - the form a synonym, a "
+			  "template cell and Tstr all read; an apostrophe inside a text is written doubled "
+			  "(`en = 'the document''s date';`) - or, for a correction of one, name it with `language`."),
+		what, declared);
+	return false;
+}
+
 bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	ibDataNode& result, wxString& refusal)
 {
@@ -1643,6 +1696,16 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		value = *scalar;
 	else if (const ibDataNode* composite = params.FindChild(ibMcpValueArgument().Name()))
 		value = ibDataValue::Child(std::make_shared<ibDataNode>(*composite));
+
+	// 🛑⭐⭐ A CAPTION IN ONE LANGUAGE, WHERE THE CONFIGURATION DECLARES SEVERAL, IS REFUSED — every
+	// session meets this door, which is the only way every session knows the rule (Max, 2026-09-10:
+	// *"I should not have to remind you — you should know it yourself, in every session"*). Measured the
+	// evening it was written: a payroll demo's synonyms and template texts went in Russian without a
+	// language, landed in the English cells of a configuration whose own language is English, and the
+	// Russian cells stayed empty — "you broke the translation".
+	if (dynamic_cast<const ibPropertyTString*>(property) != nullptr && value.Kind() == ibDataKind::String
+	    && !ibMcpCaptionInEveryLanguage(owner, value.AsString(), wxString::Format(wxT("'%s'"), name), refusal))
+		return false;
 
 	// Held before the write so the closing half can report what it replaced — the same two facts
 	// the other roads carry, taken the only way this one allows.

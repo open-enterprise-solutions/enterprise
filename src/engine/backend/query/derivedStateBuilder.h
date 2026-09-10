@@ -25,7 +25,7 @@
 //
 // (docs/register-totals-strategy.md § Engine integration)
 
-#include "backend.h"
+#include "backend/backend.h"
 
 struct ibSchemaTable;
 class ibSchemaSnapshot;

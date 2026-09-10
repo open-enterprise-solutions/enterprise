@@ -16,7 +16,7 @@
 // (which is enforced separately by exclusive mode + the registry). Helpers
 // here are not synchronised.
 
-#include "backend.h"
+#include "backend/backend.h"
 
 #include <vector>
 

@@ -111,21 +111,23 @@ const ibBackendQueryable* FakeComputedProvider::ResolveReferenceTarget(const ibB
 }
 
 // Column ids for the shared scenario.
-const ibMetaID ITEM_KEY = 10, ITEM_NAME = 11, BAL_ITEM = 20, BAL_QTY = 21, BAL_PRICE = 22;
+const ibMetaID ITEM_KEY = 10, ITEM_NAME = 11, ITEM_COLOUR = 12, BAL_ITEM = 20, BAL_QTY = 21, BAL_PRICE = 22;
 
-// target items:  K1 -> Apple, K2 -> Pear   (keyed on itemKey)
+// target items:  K1 -> Apple (red), K2 -> Pear (green)   (keyed on itemKey)
 ibQueryRamTable BuildItems()
 {
 	ibQueryRamTable it;
-	it.AddColumn(ITEM_KEY,  wxT("itemKey"), kNoType);
-	it.AddColumn(ITEM_NAME, wxT("name"),    kNoType);
-	auto add = [&](const wxString& k, const wxString& n) {
+	it.AddColumn(ITEM_KEY,    wxT("itemKey"), kNoType);
+	it.AddColumn(ITEM_NAME,   wxT("name"),    kNoType);
+	it.AddColumn(ITEM_COLOUR, wxT("colour"),  kNoType);
+	auto add = [&](const wxString& k, const wxString& n, const wxString& c) {
 		const long r = it.AppendRow();
-		it.SetCell(r, ITEM_KEY,  ibValue(k));
-		it.SetCell(r, ITEM_NAME, ibValue(n));
+		it.SetCell(r, ITEM_KEY,    ibValue(k));
+		it.SetCell(r, ITEM_NAME,   ibValue(n));
+		it.SetCell(r, ITEM_COLOUR, ibValue(c));
 	};
-	add(wxT("K1"), wxT("Apple"));
-	add(wxT("K2"), wxT("Pear"));
+	add(wxT("K1"), wxT("Apple"), wxT("red"));
+	add(wxT("K2"), wxT("Pear"),  wxT("green"));
 	return it;
 }
 
@@ -152,6 +154,7 @@ ibQueryRamTable BuildBalance()
 struct ComputedFix : ::testing::Test {
 	TestCol   itemKey{ wxT("itemKey"), ITEM_KEY };
 	TestCol   itemName{ wxT("name"),   ITEM_NAME };
+	TestCol   itemColour{ wxT("colour"), ITEM_COLOUR };
 	TestCol   balItem{ wxT("item"),    BAL_ITEM };
 	TestCol   balQty{ wxT("qty"),      BAL_QTY };
 	TestCol   balPrice{ wxT("price"),  BAL_PRICE };
@@ -161,6 +164,7 @@ struct ComputedFix : ::testing::Test {
 	void SetUp() override {
 		items.AddCol(&itemKey);
 		items.AddCol(&itemName);
+		items.AddCol(&itemColour);
 		items.SetPrimaryKey(&itemKey);
 		items.SetBuilder(&BuildItems);
 
@@ -189,6 +193,28 @@ TEST_F(ComputedFix, DotWalk_Projection)
 	while (res.Next())
 		got.push_back(res.GetValue(&itemName).GetString().ToStdString());
 	EXPECT_EQ(got, (std::vector<std::string>{ "Apple", "Pear", "Apple" }));
+}
+
+// SELECT Balance.Item.Name, Balance.Item.Colour — two fields of ONE referenced object. The join over the
+// shared reference was known by the reference alone, so the second sibling was taken for a repeat and its
+// leaf never reached the rows (a register slice read `A.Benefit.Percent` and lost `A.Benefit.PerChild`,
+// 2026-09-11). Both have to arrive.
+TEST_F(ComputedFix, DotWalk_TwoFieldsOfOneReference)
+{
+	ibDataQueryBuilder q(nullptr);
+	q.From(&balance);
+	q.SelectPath({ &balItem, &itemName }, wxT("itemName"));
+	q.SelectPath({ &balItem, &itemColour }, wxT("itemColour"));
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	std::vector<std::string> names, colours;
+	while (res.Next()) {
+		names.push_back(res.GetValue(&itemName).GetString().ToStdString());
+		colours.push_back(res.GetValue(&itemColour).GetString().ToStdString());
+	}
+	EXPECT_EQ(names,   (std::vector<std::string>{ "Apple", "Pear", "Apple" }));
+	EXPECT_EQ(colours, (std::vector<std::string>{ "red", "green", "red" }));
 }
 
 // WHERE Item.Name = 'Apple' — the register can't filter by a dot-walk; the provider joins the leaf and
@@ -256,6 +282,29 @@ TEST_F(ComputedFix, ComputedExpr_Where)
 	while (res.Next())
 		qtys.push_back(res.GetValue(&balQty).GetInteger());
 	EXPECT_EQ(qtys, (std::vector<long>{ 100, 50 }));   // qty of the 200 and 150 rows
+}
+
+// WHERE Qty > Price * 20 — the RIGHT side reads a field of the row too (m_valueExpr), which the
+// lowering once refused as "expected a literal or a parameter". Rows: 100 > 40 (keep), 50 > 60 (drop),
+// 30 > 40 (drop).
+TEST_F(ComputedFix, ComputedExpr_WhereComparesTwoFieldsOfTheRow)
+{
+	ibDataQueryBuilder q(nullptr);
+	q.From(&balance);
+	q.Select(&balQty, wxT("qty"));
+	ibQueryCondition c;
+	c.m_op        = ibQueryFilterOp::Greater;
+	c.m_expr      = ibQueryColumnExpr::Col(&balQty);
+	c.m_valueExpr = ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(&balPrice),
+	                                         ibQueryColumnExpr::Const(ibValue(ibNumber(20))));
+	q.Where(c);
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	std::vector<long> qtys;
+	while (res.Next())
+		qtys.push_back(res.GetValue(&balQty).GetInteger());
+	EXPECT_EQ(qtys, (std::vector<long>{ 100 }));
 }
 
 // SELECT Item, SUM(Qty * Price) GROUP BY Item — a CALCULATED MEASURE aggregated per group (the report core).

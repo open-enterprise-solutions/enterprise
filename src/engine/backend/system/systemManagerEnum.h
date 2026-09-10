@@ -36,7 +36,7 @@ class ibValueEnumQuestionReturnCode : public ibValueEnumeration<ibQuestionReturn
 
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_Yes, wxT("Yes"), _("Yes"));
-		AddEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_No, wxT("No"), _("Yes"));
+		AddEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_No, wxT("No"), _("No"));
 		AddEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_OK, wxT("Ok"), _("Ok"));
 		AddEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_Cancel, wxT("Cancel"), _("Cancel"));
 	}
@@ -58,17 +58,21 @@ class ibValueChars : public ibValueEnumeration<ibChars> {
 	ibValueChars() : ibValueEnumeration() {}
 	//ibValueChars(ibChars c) : ibValueEnumeration(c) {}
 
+	// A CHARACTER READS AS ITSELF: `"a" + Chars.LF` is a line break, not the word "LF". What a member
+	// shows is its description (ibValueEnumerationVariant::GetString), so the character is the
+	// description. (It used to live in a GetDescription that overrode nothing and was never called.)
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibChars::eCR, wxT("CR"));
-		AddEnumeration(ibChars::eFF, wxT("FF"));
-		AddEnumeration(ibChars::eLF, wxT("LF"));
-		AddEnumeration(ibChars::eNBSp, wxT("NBSp"));
-		AddEnumeration(ibChars::eTab, wxT("Tab"));
-		AddEnumeration(ibChars::eVTab, wxT("VTab"));
+		AddChar(ibChars::eCR, wxT("CR"));
+		AddChar(ibChars::eFF, wxT("FF"));
+		AddChar(ibChars::eLF, wxT("LF"));
+		AddChar(ibChars::eNBSp, wxT("NBSp"));
+		AddChar(ibChars::eTab, wxT("Tab"));
+		AddChar(ibChars::eVTab, wxT("VTab"));
 	}
 
-	virtual wxString GetDescription(ibChars val) const {
-		return (char)val;
+private:
+	void AddChar(ibChars c, const wxString& name) {
+		AddEnumeration(c, name, wxString(static_cast<wxChar>(c)));
 	}
 };
 

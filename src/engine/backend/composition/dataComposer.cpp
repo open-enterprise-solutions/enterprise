@@ -380,6 +380,14 @@ ibDataComposer& ibDataComposer::Resource(const wxString& func, const wxString& p
 	return *this;
 }
 
+ibDataComposer& ibDataComposer::Resource(const ibResourceDescription& resource)
+{
+	if (resource.m_path.IsEmpty())
+		return *this;   // the same absence as above
+	m_resources.push_back(resource);
+	return *this;
+}
+
 ibDataComposer& ibDataComposer::TotalBy(const wxString& path, ibQueryDimUnfold kind)
 {
 	if (path.IsEmpty())
@@ -747,6 +755,60 @@ std::vector<wxString> ibDataComposer::ProjectionFor(const Output& output) const
 	return selected;
 }
 
+// ⭐ A RESOURCE IS PICKED BY ITS NAME AND READ BY WHAT IT FOLDS.
+//
+// The fields table offers a resource under the name it was given — `COUNT(Employee) AS People` is
+// "People" to whoever ticks it — and that name exists only in TOTALS. Projected as it was, it went to
+// the author's query as a column: `unknown attribute 'People' on source 'AuthorQuery'` (payroll demo,
+// 2026-09-10), and the way round it — ticking `Employee` instead — printed the head count under the
+// heading "Employee". So a name that is a resource's own (an alias its path does not share) is read as
+// the fields the resource folds: its path, or the columns its expression mentions. A resource whose
+// alias IS its path (`SUM(Days) AS Days`) is also a column, and stays one.
+static void AppendColumnsOf(const ibQueryAstExprPtr& e, std::vector<wxString>& into)
+{
+	if (!e)
+		return;
+	if (e->m_kind == ibQueryAstExprKind::Column) {
+		wxString path;
+		for (const wxString& segment : e->m_path)
+			path += (path.IsEmpty() ? wxString() : wxT(".")) + segment;
+		if (!path.IsEmpty())
+			ibDataComposer::AppendFields(into, { path });
+		return;
+	}
+	ibQueryForEachOperand(*e, [&into](const ibQueryAstExprPtr& child) { AppendColumnsOf(child, into); });
+}
+
+static std::vector<wxString> ReadOf(const std::vector<wxString>& projected,
+                                    const std::vector<ibResourceDescription>& resources)
+{
+	std::vector<wxString> read;
+	for (const wxString& name : projected) {
+		const ibResourceDescription* named = nullptr;
+		for (const ibResourceDescription& resource : resources)
+			if (!resource.m_alias.IsEmpty() && resource.m_alias.IsSameAs(name, false)
+			    && !resource.m_alias.IsSameAs(resource.m_path, false)) {
+				named = &resource;
+				break;
+			}
+		if (named == nullptr) {
+			ibDataComposer::AppendFields(read, { name });
+			continue;
+		}
+		if (!named->m_func.IsEmpty()) {
+			if (named->m_path != wxT("*"))
+				ibDataComposer::AppendFields(read, { named->m_path });
+			continue;
+		}
+		// NO FUNCTION: the path is the expression (see the TOTALS writer below), and what it folds is
+		// every column it names. Read by the query's own parser; a text that does not parse reads
+		// nothing here and is refused where TOTALS is parsed, in the parser's words.
+		try { AppendColumnsOf(ibQueryParser().ParseExpression(named->m_path), read); }
+		catch (const ibBackendException&) {}
+	}
+	return read;
+}
+
 wxString ibDataDBComposer::RenderText() const
 {
 	// THE FIRST OUTPUT is what "the composer's query" has always meant — a list has exactly one.
@@ -767,7 +829,7 @@ wxString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 	// would publish two columns answering to one name, and a reader would get whichever came first.
 	std::vector<wxString> projected;
 	for (const Output* out : outputs) {
-		for (const wxString& name : ProjectionFor(*out)) {
+		for (const wxString& name : ReadOf(ProjectionFor(*out), m_resources)) {
 			bool already = false;
 			for (const wxString& have : projected)
 				if (have.IsSameAs(name, false)) { already = true; break; }
@@ -813,7 +875,7 @@ wxString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 	// to pick from (a dynamic list vends them as its column collection) — the same names, both sides.
 	if (!m_sourceText.IsEmpty()) {
 		wxString authorProj;
-		for (const wxString& name : ProjectionFor(output)) {
+		for (const wxString& name : ReadOf(ProjectionFor(output), m_resources)) {
 			if (!authorProj.IsEmpty())
 				authorProj += wxT(", ");
 			authorProj += name;
@@ -1100,9 +1162,8 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const std::vector<c
 		const auto resourceIsShown = [&](const ibResourceDescription& resource) {
 			if (ReadsEveryField())
 				return true;
-			const wxString& answersTo = resource.m_alias.IsEmpty() ? resource.m_path : resource.m_alias;
 			for (const wxString& name : shown)
-				if (name.IsSameAs(answersTo, false) || name.IsSameAs(resource.m_path, false))
+				if (name.IsSameAs(resource.AnswersTo(), false) || name.IsSameAs(resource.m_path, false))
 					return true;
 			return false;
 		};

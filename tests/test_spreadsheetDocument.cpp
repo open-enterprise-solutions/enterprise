@@ -181,6 +181,31 @@ TEST(SpreadsheetDocument, FillTypeTemplate_ReplacesBracketedTokens)
 	EXPECT_FALSE(out.Contains(wxT("[")));
 }
 
+// ⭐ AN APOSTROPHE SURVIVES THE ENVELOPE. A computed cell travels as `en = '...';`, and the quote
+// that closes the text used to swallow every apostrophe inside it: a surname like O'Brien — and
+// every Ukrainian one written with an apostrophe — printed without it (2026-09-10). The writer
+// doubles it, the reader reads a doubled quote back as one.
+TEST(SpreadsheetDocument, FillTypeParameter_KeepsAnApostrophe)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("Name"), ibValue(wxT("O'Brien")));
+
+	EXPECT_EQ(wxT("O'Brien"), Translated(doc->ComputeStringValueFromParameters(
+		wxT("Name"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter)));
+	EXPECT_EQ(wxT("the document's movements"), Translated(wxT("en = 'the document''s movements';")));
+}
+
+// ⭐ THE LAST LANGUAGE MAY END WITH THE STRING. `;` separates languages; written without one after
+// the last, the text was not recognised at all and a tab title read "en = 'June'; ru = ..." in full
+// (the payroll demo, 2026-09-10).
+TEST(SpreadsheetDocument, LocalisedText_WithoutTheLastSemicolon)
+{
+	EXPECT_TRUE(ibBackendLocalization::IsLocalizationString(wxT("en = 'June'; ru = 'Iyun'")));
+	EXPECT_EQ(wxT("June"), Translated(wxT("en = 'June'; ru = 'Iyun'")));
+	EXPECT_EQ(wxT("June"), Translated(wxT("ru = 'Iyun'; en = 'June'")));   // the last one is found too
+	EXPECT_FALSE(ibBackendLocalization::IsLocalizationString(wxT("June")));
+}
+
 // An unknown token disappears rather than staying on the page as `[Whoever]`.
 TEST(SpreadsheetDocument, FillTypeTemplate_UnknownTokenRendersEmpty)
 {

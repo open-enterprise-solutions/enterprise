@@ -16,7 +16,7 @@ public:
 
 	const ibPropertyObject* GetPropertyObject() const { return m_ownerProperty; }
 
-	// The choices arrive — the property answers what may fill it. See advpropChartOfCharacteristicTypes.h.
+	// The choices arrive — the property answers what may fill it. See advpropChartBinding.h.
 	ibPGGenerationProperty(const ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant,
 		const ibPropertyChoiceList& choices = ibPropertyChoiceList());

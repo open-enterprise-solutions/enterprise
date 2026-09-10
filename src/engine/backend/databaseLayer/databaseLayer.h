@@ -111,6 +111,21 @@ struct ibSqlFeatures
 	// live Firebird or PostgreSQL met it. Default false — an engine we know nothing about (ODBC,
 	// and the MSSQL layer that will derive from it) gets the form that works everywhere.
 	bool m_multiRowValues = false;
+
+	// ⭐⭐ SEVERAL ROWS AS ONE ONE-ROW INSERT, PREPARED ONCE AND EXECUTED PER ROW — where that is the
+	// FAST form and the one-statement form is the slow one. Asked only when m_multiRowValues is false.
+	//
+	// The UNION ALL spelling above is one statement, and on Firebird it is an expensive one: every row is
+	// an arm of its own and every value a CAST, so the engine compiles a fifty-row insert as fifty
+	// selects. MEASURED 2026-09-10 on the embedded Firebird 5, Debug: 170 ms per fifty-row statement —
+	// 3.4 ms a row, two thirds of a payroll write of 200 employees. A prepared one-row INSERT executed
+	// again with new values is what the engine's own API is built for, and in-process there is no round
+	// trip for the repetition to cost.
+	//
+	// TRUE promises that the driver's prepared statement can be EXECUTED AGAIN after new values are bound
+	// to it — which is not automatic: a Firebird string bind used to overwrite its slot's described
+	// length, and the next row's string was cut to the previous one's (firebirdParameterCollection.cpp).
+	bool m_batchByReexecution = false;
 };
 
 // A period truncation unit — "start of the minute / week / month / … containing this moment".

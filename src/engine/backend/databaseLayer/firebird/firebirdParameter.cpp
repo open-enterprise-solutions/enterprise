@@ -276,7 +276,40 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 
 	m_nBufferLength = sizeof(ISC_TIMESTAMP);
 
-	m_pParameter->sqldata = (char*)&m_Date;
+	// ⭐⭐ THE DECLARED TYPE DECIDES WHERE THE VALUE GOES — AND WHOSE BYTES THOSE ARE.
+	//
+	// AllocateParameterSpace decides about sqldata per type: a TIMESTAMP gets the deliberate nullptr a
+	// setter later points at a member of its own; a DATE and a TIME get a buffer of their own size,
+	// which FreeParameterSpace releases with delete[]. This constructor pointed sqldata at m_Date for
+	// all three. For a DATE that leaked the buffer and handed delete[] the address of a member, and
+	// the debug heap stopped the process on the first write of a date-only column (a calculation
+	// register's periods, 2026-09-10); a TIME did the same and sent the day number as the time.
+	//
+	// So a buffer the describe made is written INTO — the rule the INT64 branch keeps — and only the
+	// timestamp points at the member. ISC_TIMESTAMP is {ISC_DATE, ISC_TIME}: each narrower type is one
+	// half of the value already encoded.
+	const int nType = (m_pParameter->sqltype & ~1);
+	if (nType == SQL_TIMESTAMP)
+	{
+		m_pParameter->sqldata = (char*)&m_Date;
+	}
+	else if (nType == SQL_TYPE_DATE)
+	{
+		RequireParameterBuffer();
+		memcpy(m_pParameter->sqldata, &m_Date.timestamp_date, sizeof(ISC_DATE));
+	}
+	else if (nType == SQL_TYPE_TIME)
+	{
+		RequireParameterBuffer();
+		memcpy(m_pParameter->sqldata, &m_Date.timestamp_time, sizeof(ISC_TIME));
+	}
+	else
+	{
+		// Raises for the same reason the number branch above does — see the note there.
+		ibBackendCoreException::Error(
+			_("Firebird: a date was bound to a parameter the statement declares as SQL type %d"),
+			nType);
+	}
 
 	m_nNullFlag = 0;
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator

@@ -43,6 +43,8 @@ enum
 	enDataChartsOfCharacteristicTypes,
 	enDataChartsOfAccounts,
 	enDataAccountingRegisters,
+	enDataChartsOfCalculationTypes,
+	enDataCalculationRegisters,
 };
 
 // One kind namespace: Name -> Queryable for every metaobject of the kind that
@@ -92,6 +94,8 @@ void ibValueModuleManager::ibValueDataUnit::FillMembers(ibMemberTable& helper) c
 	helper.AppendProp("ChartsOfCharacteristicTypes", true, false, static_cast<long>(g_metaChartOfCharacteristicTypesCLSID));
 	helper.AppendProp("ChartsOfAccounts", true, false, static_cast<long>(g_metaChartOfAccountsCLSID));
 	helper.AppendProp("AccountingRegisters", true, false, static_cast<long>(g_metaAccountingRegisterCLSID));
+	helper.AppendProp("ChartsOfCalculationTypes", true, false, static_cast<long>(g_metaChartOfCalculationTypesCLSID));
+	helper.AppendProp("CalculationRegisters", true, false, static_cast<long>(g_metaCalculationRegisterCLSID));
 }
 
 bool ibValueModuleManager::ibValueDataUnit::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -150,6 +154,12 @@ bool ibValueModuleManager::ibValueDataUnit::GetPropVal(const long lPropNum, ibVa
 		return true;
 	case enDataAccountingRegisters:
 		pvarPropVal = BuildKindNamespace(m_metaData, g_metaAccountingRegisterCLSID, wxT("AccountingRegisters"));
+		return true;
+	case enDataChartsOfCalculationTypes:
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaChartOfCalculationTypesCLSID, wxT("ChartsOfCalculationTypes"));
+		return true;
+	case enDataCalculationRegisters:
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaCalculationRegisterCLSID, wxT("CalculationRegisters"));
 		return true;
 	}
 	return false;

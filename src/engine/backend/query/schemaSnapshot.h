@@ -13,7 +13,7 @@
 // Identity, not name, is the match key: a table is its metaID, a column its model id. So a renamed /
 // retyped object is an ALTER (matched by id), and a vanished id is a DROP. (docs/query-language-arc.md)
 
-#include "backend.h"
+#include "backend/backend.h"
 #include "backend/query/queryColumn.h"   // ibBackendColumnRawDB (the snapshot OWNS its scaffold raw columns)
 #include "backend/compiler/value.h"      // ibValue — a seed row is a column-id -> value map
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"   // L2-2 — ibMaterializeSpec / ibTotalsPeriod (pulls databaseLayer.h)
@@ -372,6 +372,14 @@ struct ibSchemaTable
 BACKEND_API void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
                                      const std::vector<const ibBackendQueryColumn*>& keyCols,
                                      ibMetaID hashColumnId);
+
+// A PLAIN (non-unique) index over the LEADING columns of `cols` that one index holds on this engine — a
+// column taken whole or not at all, because half a reference is not a comparison anything can ride. The
+// lookup path for reads that name those columns first: the second index of a hashed totals key above,
+// and a calculation register's "records of this employee". Both ceilings are the engine's (segments,
+// and bytes — a string is declared in characters and indexed in bytes); nothing fits = no index.
+BACKEND_API void ibDeclareLookupIndex(ibSchemaTable& table, const wxString& indexName,
+                                      const std::vector<const ibBackendQueryColumn*>& cols);
 
 class BACKEND_API ibSchemaSnapshot
 {

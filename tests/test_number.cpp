@@ -650,6 +650,26 @@ TEST(NumberFormat, FracDigitsRounds) {
     EXPECT_EQ(n.ToString(fmt), wxT("1.23"));
 }
 
+// fracDigits is a FIXED number of digits after the point: it rounds AND pads, so a money column lines
+// up - `Format(1250.5, "NFD=2")` is the help's own example and printed 1250.5.
+TEST(NumberFormat, FracDigitsPadsToAFixedWidth) {
+    ibNumber::Format fmt; fmt.fracDigits = 2;
+    EXPECT_EQ(ibNumber(wxString(wxT("1250.5"))).ToString(fmt), wxT("1250.50"));
+    EXPECT_EQ(ibNumber(5).ToString(fmt), wxT("5.00"));
+    EXPECT_EQ(ibNumber().ToString(fmt), wxT("0.00"));
+    EXPECT_EQ(ibNumber(wxString(wxT("-0.5"))).ToString(fmt), wxT("-0.50"));
+}
+
+TEST(NumberFormat, FracDigitsZeroDropsThePoint) {
+    ibNumber::Format fmt; fmt.fracDigits = 0;
+    EXPECT_EQ(ibNumber(wxString(wxT("1250.5"))).ToString(fmt), wxT("1251"));
+}
+
+TEST(NumberFormat, FracDigitsWithGroups) {
+    ibNumber::Format fmt; fmt.fracDigits = 2; fmt.groupSep = wxT(' '); fmt.groupSize = 3;
+    EXPECT_EQ(ibNumber(wxString(wxT("1234567.5"))).ToString(fmt), wxT("1 234 567.50"));
+}
+
 TEST(NumberFormat, GroupSepThousands) {
     ibNumber n(1234567);
     ibNumber::Format fmt; fmt.groupSep = wxT(' '); fmt.groupSize = 3;

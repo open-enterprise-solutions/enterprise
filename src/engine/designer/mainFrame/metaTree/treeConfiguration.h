@@ -658,8 +658,9 @@ private:
 		return group;
 	}
 
-	// TABULAR SECTIONS — the one group whose rows are groups themselves: each table shows its own
-	// columns. A table survives a search if IT matched or one of its columns did.
+	// TABLES — the one group whose rows are groups themselves: each table shows its own columns. A
+	// table survives a search if IT matched or one of its columns did. Tabular sections and a
+	// calculation register's recalculations both come here — see TableColumns.
 	template <typename TArray>
 	wxTreeItemId AppendTableGroup(const wxTreeItemId& parent, const ibClassID& tableClsid,
 		const wxString& label, const TArray& tables) {
@@ -671,13 +672,16 @@ private:
 			// are edited on the account, not declared here.
 			if (!metaTable->IsAcceptedByParent())
 				continue;
-			const wxTreeItemId hTable = AppendGroupItem(group, g_metaAttributeCLSID, metaTable);
-			for (auto attribute : metaTable->GetAttributeArrayObject()) {
-				if (!attribute->IsAcceptedByParent())
+			ibClassID columnClsid = 0;
+			std::vector<ibValueMetaObject*> columns;
+			TableColumns(metaTable, columnClsid, columns);
+			const wxTreeItemId hTable = AppendGroupItem(group, columnClsid, metaTable);
+			for (auto column : columns) {
+				if (!column->IsAcceptedByParent())
 					continue;
-				if (!MatchesSearch(attribute))
+				if (!MatchesSearch(column))
 					continue;
-				AppendItem(hTable, attribute);
+				AppendItem(hTable, column);
 			}
 			if (!m_strSearch.IsEmpty() && !MatchesSearch(metaTable)
 				&& !m_metaTreeCtrl->HasChildren(hTable))
@@ -767,6 +771,12 @@ private:
 	// Does this object answer the search box — asked in one place, case-insensitive, name OR synonym.
 	bool MatchesSearch(const ibValueMetaObject* metaObject) const;
 
+	// IS THIS A TABLE, and what are its columns — the one question the three places that draw a
+	// table ask (the group fill, a new row, the unfolding). A tabular section's columns are its
+	// attributes; a recalculation is the same shape with another meaning (Max, 2026-09-10), and its
+	// columns are its dimensions. `columnClsid` is what "New" on the table adds. False = not a table.
+	bool TableColumns(ibValueMetaObject* table, ibClassID& columnClsid, std::vector<ibValueMetaObject*>& columns) const;
+
 	// Close every editor opened from this navigator. Part of LEAVING a configuration — deliberately
 	// not part of ClearTree, which a search runs on every keystroke.
 
@@ -779,6 +789,7 @@ private:
 	void AddReportItem(ibValueMetaObject* obj, const wxTreeItemId& item);
 	void AddInformationRegisterItem(ibValueMetaObject* obj, const wxTreeItemId& item);
 	void AddAccumulationRegisterItem(ibValueMetaObject* obj, const wxTreeItemId& item);
+	void AddCalculationRegisterItem(ibValueMetaObject* obj, const wxTreeItemId& item);
 
 	void FillData();
 

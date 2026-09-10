@@ -26,6 +26,22 @@ static void ibBindParam(ibPreparedStatement* stmt, int pos, const ibValue& v)
 	}
 }
 
+// What a constant in the IR becomes in a bind plan — its value, or its bytes when it carries a blob. The
+// renderer spells every constant this way (RenderExpr), and a batch executed per row builds its later
+// rows' plans with it rather than rendering each row again (ibRunInsertPerRow): one rule, two callers.
+static ibQueryParam ibParamOfConst(const ibQueryExpr& expr)
+{
+	ibQueryParam p;
+	p.m_external = false;
+	if (expr.m_blob.GetDataLen() > 0) {
+		p.m_isBlob = true;
+		p.m_blob   = expr.m_blob;
+	} else {
+		p.m_value = expr.m_const;
+	}
+	return p;
+}
+
 // Bind a whole render plan in placeholder order (1-based). Inline Const values
 // bind directly; Param entries pull from the caller-supplied vector.
 static void ibBindPlan(ibPreparedStatement* stmt,
@@ -312,6 +328,73 @@ int ibDatabaseQueryBuilder::Execute(const ibDdlStatement& ddl)
 	return conn->RunQuery(sql);
 }
 
+// ⭐⭐ A BATCH OF ROWS AS ONE ONE-ROW INSERT, PREPARED ONCE — the form ibSqlFeatures::m_batchByReexecution
+// promises is the fast one on its engine (the measurement is on the flag).
+//
+// The statement is prepared again only when a row would render to a DIFFERENT text — which the rows of one
+// batch do not do (same table, same columns in the same order: that is what m_extraRows means), but a guard
+// that trusted it would bind one row's values into another's placeholders the day some row did. A row whose
+// every value is a constant, after a first row that was the same, renders to the first row's text by
+// construction — one placeholder per constant — so its plan is built straight from its values and the
+// text is not made again (and not journalled again: one statement, one line). The caller said "these
+// rows"; which statement carries them stays L2's business, as it already was for the UNION ALL spelling.
+static bool ibConstPlanOf(const std::vector<ibQueryExprPtr>& values, std::vector<ibQueryParam>& plan)
+{
+	plan.clear();
+	for (const ibQueryExprPtr& value : values) {
+		if (!value || value->m_kind != ibQueryExprKind::Const)
+			return false;
+		plan.push_back(ibParamOfConst(*value));
+	}
+	return true;
+}
+
+static int ibRunInsertPerRow(const std::shared_ptr<ibDatabaseLayer>& conn, const ibDialectDictionary& dialect,
+                             const ibDmlStatement& dml, const std::vector<ibValue>& externalParams)
+{
+	ibDmlStatement one = dml;   // everything the statement says, but one row at a time
+	one.m_extraRows.clear();
+
+	std::vector<ibQueryExprPtr> firstValues;
+	for (const ibDmlAssign& assign : one.m_assignments)
+		firstValues.push_back(assign.m_value);
+	std::vector<ibQueryParam> plan;
+	const bool firstIsConst = ibConstPlanOf(firstValues, plan);
+
+	ibStatementGuard guard(conn, nullptr);
+	wxString prepared;     // the text the statement in `guard` was prepared from
+	wxString constShape;   // the text every all-constant row renders to — the first row's, when it was one
+	int total = 0;
+	for (size_t row = 0; row <= dml.m_extraRows.size(); ++row) {
+		const std::vector<ibQueryExprPtr>* values = row > 0 ? &dml.m_extraRows[row - 1] : nullptr;
+		const bool asPrepared = values != nullptr && !constShape.IsEmpty() && prepared == constShape
+			&& values->size() == firstValues.size() && ibConstPlanOf(*values, plan);
+		if (!asPrepared) {
+			if (values != nullptr)
+				for (size_t i = 0; i < one.m_assignments.size() && i < values->size(); ++i)
+					one.m_assignments[i].m_value = (*values)[i];
+			ibQueryRenderer renderer(dialect);
+			const ibRenderedQuery rendered = renderer.RenderDML(one);
+			if (!guard || rendered.m_sql != prepared) {
+				guard.reset(conn->PrepareStatement(rendered.m_sql));
+				if (!guard)
+					ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+						wxString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
+				prepared = rendered.m_sql;
+			}
+			if (values == nullptr && firstIsConst)
+				constShape = rendered.m_sql;
+			plan = rendered.m_params;
+		}
+		ibBindPlan(guard.get(), plan, externalParams);
+		const int n = guard->RunQuery();
+		if (n < 0)
+			return n;   // a refused row stops the batch — the caller's transaction decides the rest
+		total += n;
+	}
+	return total;
+}
+
 int ibDatabaseQueryBuilder::Execute(const ibDmlStatement& dml, const std::vector<ibValue>& externalParams)
 {
 	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
@@ -320,6 +403,10 @@ int ibDatabaseQueryBuilder::Execute(const ibDmlStatement& dml, const std::vector
 			_("Query layer could not obtain a database connection from the holder."));
 
 	const ibDialectDictionary& dialect = conn->GetDialect();
+
+	if (dml.m_kind == ibDmlKind::Insert && !dml.m_selectSource && !dml.m_extraRows.empty()
+		&& !dialect.m_features.m_multiRowValues && dialect.m_features.m_batchByReexecution)
+		return ibRunInsertPerRow(conn, dialect, dml, externalParams);
 
 	ibQueryRenderer renderer(dialect);
 	const ibRenderedQuery rendered = renderer.RenderDML(dml);
@@ -699,15 +786,7 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 	}
 
 	case ibQueryExprKind::Const: {
-		ibQueryParam p;
-		p.m_external = false;
-		if (expr->m_blob.GetDataLen() > 0) {
-			p.m_isBlob = true;
-			p.m_blob   = expr->m_blob;
-		} else {
-			p.m_value = expr->m_const;
-		}
-		m_out.m_params.push_back(p);
+		m_out.m_params.push_back(ibParamOfConst(*expr));
 		return RenderPlaceholder();
 	}
 

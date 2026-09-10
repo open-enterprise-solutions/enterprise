@@ -196,6 +196,11 @@ BACKEND_API bool ibQueryScalarFnArity(ibQueryScalarFn fn, size_t& outMin, size_t
 // DATEDIFF wrong and does it silently.
 BACKEND_API bool ibQueryScalarFnUnitArg(ibQueryScalarFn fn, size_t& outIndex);
 
+// IS THIS ARGUMENT A WORD rather than an expression — the period unit above, or the type name of
+// `TYPE(Catalog.Goods)`. Both arrive as a Column node (the parser was deliberately not taught them),
+// and a walker collecting COLUMNS must not take them for one.
+BACKEND_API bool ibQueryScalarArgIsWord(ibQueryScalarFn fn, size_t index);
+
 // EVERY SCALAR CALL, space-separated — the twin of ibAllQueryKeywords, and for the same reader: the
 // editor highlights what the language HAS rather than a list somebody remembered to update.
 BACKEND_API wxString ibAllQueryScalarFns();

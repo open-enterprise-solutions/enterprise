@@ -652,7 +652,8 @@ inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 			cValue1.m_fData = numResult;
 		}
 		else {
-			const wxLongLong_t dateResult = cValue2.m_dData + cValue3.GetDate();
+			// On the calendar, not the clock — see ibValue::ShiftDate.
+			const wxLongLong_t dateResult = ibValue::ShiftDate(cValue2.m_dData, cValue3.GetDate());
 			cValue1.m_typeClass = ibValueTypes::TYPE_DATE;
 			cValue1.m_dData = dateResult;
 		}
@@ -704,13 +705,19 @@ inline void SubValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 		cValue1.m_fData = numResult;
 	}
 	else if (resultType == ibValueTypes::TYPE_DATE) {
-		if (cValue3.m_typeClass == ibValueTypes::TYPE_DATE) { //date - date -> number
-			const ibNumber numResult = cValue2.GetDate() - cValue3.GetDate();
+		if (cValue3.m_typeClass == ibValueTypes::TYPE_DATE) { //date - date -> seconds
+			// ⚠ SECONDS — THE UNIT `date ± number` SPEAKS. A date is held in milliseconds and a number added
+			// to one is read as seconds (GetDate multiplies it by 1000), so the difference has to come back
+			// in seconds for `(d + 86400) - d` to be 86400. It came back in milliseconds, a thousand times
+			// the span: a day count written the ordinary way, `(to - from) / 86400 + 1`, gave 13001 for a
+			// two-week vacation (the payroll demo, 2026-09-10).
+			// …and counted on the calendar, where every day is 86400 seconds (ibValue::DateSpan).
+			const ibNumber numResult = ibNumber((long long)ibValue::DateSpan(cValue2.GetDate(), cValue3.GetDate())) / ibNumber(1000LL);
 			cValue1.m_typeClass = ibValueTypes::TYPE_NUMBER;
 			cValue1.m_fData = numResult;
 		}
 		else {
-			const wxLongLong_t dateResult = cValue2.m_dData - cValue3.GetDate();
+			const wxLongLong_t dateResult = ibValue::ShiftDate(cValue2.m_dData, -cValue3.GetDate());
 			cValue1.m_typeClass = ibValueTypes::TYPE_DATE;
 			cValue1.m_dData = dateResult;
 		}

@@ -12,7 +12,7 @@
 // Metadata's only job is to BUILD snapshots (ContributeTables), hand them in, and drive the three save
 // events; it keeps no knowledge of how the builder migrates or which transaction it runs in.
 
-#include "backend.h"
+#include "backend/backend.h"
 #include "backend/restructureInfo.h"   // ibRestructureInfo — the builder OWNS its change log (member below)
 
 class ibSchemaSnapshot;

@@ -52,7 +52,6 @@
 
 #include "accountingRegister.h"
 #include "chartOfAccounts.h"
-#include "backend/metaCollection/table/metaTableObject.h"   // ibTabularQueryable — the section as a source (OwnerRefColumn)
 #include "reference/reference.h"                                   // ibValueReferenceDataObject — reading what an ACCOUNT declares
 
 #include "backend/query/dataQueryBuilder.h"                        // L3 door — From(source).Select() / SelectAggregate()
@@ -1064,8 +1063,7 @@ ibAcctSummaryMap SummaryOnlyKindsByAccount(const ibValueMetaObjectChartOfAccount
 
 				if (rows != nullptr && kindColumn != nullptr && summaryColumn != nullptr) {
 
-					const ibTabularQueryable* section = dynamic_cast<const ibTabularQueryable*>(rows);
-					const ibBackendQueryColumn* ownerCol = section != nullptr ? section->OwnerRefColumn() : nullptr;
+					const ibBackendQueryColumn* ownerCol   = rows->ResolveColumnByName(wxT("Ref"));   // the owning account — `Ref`, as a query names it
 					const ibBackendQueryColumn* kindCol    = ColumnOn(rows, kindColumn);
 					const ibBackendQueryColumn* summaryCol = ColumnOn(rows, summaryColumn);
 

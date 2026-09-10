@@ -7,9 +7,6 @@ class ibValueManagerDataObjectCatalog :
 	public ibValueManagerDataObjectPredefined {
 	public:
 
-	ibValueReferenceDataObject* FindByCode(const ibValue& vCode) const;
-	ibValueReferenceDataObject* FindByDescription(const ibValue& cParam) const;
-
 	ibValueReferenceDataObject* EmptyRef() const;
 
 	ibValueManagerDataObjectCatalog(const ibValueMetaObjectCatalog* metaObject = nullptr) : m_metaObject(metaObject) {

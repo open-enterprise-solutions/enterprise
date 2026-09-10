@@ -27,53 +27,71 @@ ibDatabaseParameterFirebirdCollection::~ibDatabaseParameterFirebirdCollection()
 	m_Parameters.clear();
 }
 
+// ⭐⭐ EVERY BIND STARTS FROM THE SLOT AS THE STATEMENT DESCRIBED IT.
+//
+// A string bind rewrites its XSQLVAR — the type to SQL_TEXT, the length to the value's own — and every
+// other bind reads those two fields to decide what to write and how much room there is. Bound once and
+// executed once, nobody noticed. Executed AGAIN with new values (a batch of rows through one prepared
+// INSERT — ibSqlFeatures::m_batchByReexecution), the second row's string was clamped to the FIRST row's
+// length: "E10" after "E1" went in as "E1", silently; and a date after a string met SQL_TEXT and was
+// refused. So the describe's answer is kept, and put back before each bind.
+XSQLVAR* ibDatabaseParameterFirebirdCollection::DescribedSlot(int nPosition)
+{
+	XSQLVAR* pVar = &m_FirebirdParameters->sqlvar[nPosition - 1];
+	if (nPosition >= 1 && (size_t)nPosition <= m_described.size()) {
+		pVar->sqltype = m_described[nPosition - 1].first;
+		pVar->sqllen = m_described[nPosition - 1].second;
+	}
+	return pVar;
+}
+
 // set field
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, int nValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], nValue);
+	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), nValue);
 	SetParam(nPosition, pParameter);
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, double dblValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], dblValue);
+	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), dblValue);
 	SetParam(nPosition, pParameter);
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const ibNumber& dblValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], dblValue);
+	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), dblValue);
 	SetParam(nPosition, pParameter);
 }
 
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const wxString& strValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], strValue, GetEncoding());
+	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), strValue, GetEncoding());
 	SetParam(nPosition, pParameter);
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1]);
+	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition));
 	SetParam(nPosition, pParameter);
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const void* pData, long nDataLength)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], pData, nDataLength);
+	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), pData, nDataLength);
 	SetParam(nPosition, pParameter);
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const wxDateTime& dateValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], dateValue);
+	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), dateValue);
 	SetParam(nPosition, pParameter);
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, bool bValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], bValue);
+	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), bValue);
 	SetParam(nPosition, pParameter);
 }
 
@@ -129,9 +147,11 @@ void ibDatabaseParameterFirebirdCollection::AllocateParameterSpace()
 	if (m_FirebirdParameters == nullptr)
 		return;
 
+	m_described.clear();
 	for (int i = 0; i < m_FirebirdParameters->sqld; i++)
 	{
 		XSQLVAR* pVar = &(m_FirebirdParameters->sqlvar[i]);
+		m_described.emplace_back(pVar->sqltype, pVar->sqllen);   // before any bind can rewrite them — see DescribedSlot
 		switch (pVar->sqltype & ~1)
 		{
 		case SQL_ARRAY:

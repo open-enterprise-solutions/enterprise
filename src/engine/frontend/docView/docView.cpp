@@ -2213,7 +2213,16 @@ bool ibDocChildFrameAnyBase::TryProcessEvent(wxEvent& event)
     // document manager itself. And if we forwarded the event directly to the
     // view, then the document manager would do it once again when we forwarded
     // it to it.
-    return m_childDocument->GetDocumentManager()->ProcessEventLocally(event);
+    //
+    // ⚠ …AND THE MANAGER MAY HAVE GONE FIRST. Closing the application destroys the main frame, whose
+    // destroy event is routed through the active child frame while that child's document has
+    // already been let go by its manager: the manager came back null and the event was handed to
+    // nobody — an access violation on exit, with a report still composing in the frame (the payroll
+    // demo, 2026-09-10; stack from the WER dump). Nothing is left to forward to, so nothing is.
+    ibDocManager* const manager = m_childDocument != nullptr ? m_childDocument->GetDocumentManager() : nullptr;
+    if ( manager == nullptr )
+        return false;
+    return manager->ProcessEventLocally(event);
 }
 
 bool ibDocChildFrameAnyBase::CloseView(wxCloseEvent& event)

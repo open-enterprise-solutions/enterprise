@@ -758,6 +758,13 @@ unsigned int ibIndexFieldCapacity(const ibDatabaseLayer& conn)
 	return conn.GetDialect().m_maxIndexSegments;
 }
 
+bool ibIndexKeyFits(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t keyByteWidth)
+{
+	const unsigned int segCeiling  = ibIndexFieldCapacity(conn);
+	const unsigned int byteCeiling = conn.GetDialect().m_maxIndexKeyBytes;
+	return (segCeiling == 0 || keyFieldCount <= segCeiling) && (byteCeiling == 0 || keyByteWidth <= byteCeiling);
+}
+
 bool ibKeyNeedsHash(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t keyByteWidth)
 {
 	// ⭐⭐ TWO CEILINGS, AND EITHER ONE FORCES THE HASH. The field COUNT — a reference dimension is
@@ -773,13 +780,7 @@ bool ibKeyNeedsHash(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t ke
 	// `keyByteWidth` 0 means the caller did not measure, which is the old behaviour exactly: only the
 	// count decides. Both ceilings are read here, before any DDL, so the identity can move into the
 	// hashed field instead of the engine refusing the index later.
-	const unsigned int segCeiling  = ibIndexFieldCapacity(conn);
-	const unsigned int byteCeiling = conn.GetDialect().m_maxIndexKeyBytes;
-
-	const bool overSegments = (segCeiling  != 0 && keyFieldCount > segCeiling);
-	const bool overBytes    = (byteCeiling != 0 && keyByteWidth  > byteCeiling);
-
-	if (!overSegments && !overBytes)
+	if (ibIndexKeyFits(conn, keyFieldCount, keyByteWidth))
 		return false;   // no ceiling declared, or the key is under both — the plain unique index stands
 
 	// The ceiling is passed and the engine has no digest to offer. Say so by saying NO: the caller

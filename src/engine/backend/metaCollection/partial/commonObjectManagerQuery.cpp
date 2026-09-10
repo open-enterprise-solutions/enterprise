@@ -1,6 +1,8 @@
 ﻿////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : ibValueRecordManagerObject — manager-style operations
+//	Description : the managers' own reads — FindByCode / FindByDescription
+//	              of a manager with predefined items, and
+//	              ibValueRecordManagerObject's manager-style operations
 //	              over a record-set (Exist / Read / Save / Delete). Thin
 //	              wrappers over m_recordSet that adapt the unique-key API
 //	              to the manager surface.
@@ -19,9 +21,60 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 
-#include "backend/query/dataQueryBuilder.h"   // L3 door — composite-key existence probe
+#include "backend/query/dataQueryBuilder.h"   // L3 door — composite-key existence probe, FindBy*
+
+#include "backend/metaCollection/attribute/metaAttributeObject.h"   // FindBy* — the attribute read
+#include "backend/metaCollection/partial/reference/reference.h"     // …and the reference it answers with
 
 #include "backend/system/systemManager.h"
+
+// ⭐⭐ FIND BY CODE / BY DESCRIPTION — ONE BODY. Five managers (catalog, the charts of accounts,
+// calculation types and characteristic types, the parameterized job) each carried a copy of this, and
+// all five handed back FREED MEMORY: the row's reference was held by a local value, the Create that
+// followed found that very instance in the session's register and returned it bare, and the local let
+// go of it on the way out — the last hold. The caller's first method call on the result took the
+// application down (2026-09-10, `Catalogs.Employees.FindByDescription(...).IsEmpty()`, heap corruption),
+// and a report parameter worked out through it came back empty. One copy (the calculation types') also
+// still read the identity out of the reference's TEXT — its presentation — and so found nothing ever.
+//
+// The answer leaves as a VALUE: the row's own reference, held by the value that carries it out. The
+// query goes through the L3 door (the engine's FIRST / LIMIT fork is L2's), the pattern as a bound value.
+static ibValue ibFindRefLike(const ibValueMetaObjectRecordDataHierarchyMutableRef* meta,
+                             ibValueMetaObjectAttributePredefined* attribute, const ibValue& pattern)
+{
+	if (meta == nullptr)
+		return ibValue();
+	if (attribute == nullptr || pattern.IsEmpty() || appData->DesignerMode())
+		return ibValueReferenceDataObject::Create(meta);
+	try {
+		ibDataQueryBuilder q;
+		q.From(meta->GetQueryable()).WhereLike(attribute->GetQueryColumn(), attribute->AdjustValue(pattern));
+		ibReadPageRequest page;
+		page.m_count = 1;
+		ibDataQueryResult sel = q.Execute(page);
+		if (sel.Next()) {
+			// The identity column by NAME, not the last item of the identity sort (an ordering of the
+			// object's own puts something else there).
+			const ibValue found = sel.GetValue(meta->GetDataReference()->GetQueryColumn());
+			if (found.ConvertToType<ibValueReferenceDataObject>() != nullptr)
+				return found;
+		}
+	}
+	catch (...) { /* fall through to an empty reference */ }
+	return ibValueReferenceDataObject::Create(meta);
+}
+
+ibValue ibValueManagerDataObjectPredefined::FindByCode(const ibValue& code) const
+{
+	const ibValueMetaObjectRecordDataHierarchyMutableRef* meta = GetMetaObject();
+	return ibFindRefLike(meta, meta != nullptr ? meta->GetDataCode() : nullptr, code);
+}
+
+ibValue ibValueManagerDataObjectPredefined::FindByDescription(const ibValue& description) const
+{
+	const ibValueMetaObjectRecordDataHierarchyMutableRef* meta = GetMetaObject();
+	return ibFindRefLike(meta, meta != nullptr ? meta->GetDataDescription() : nullptr, description);
+}
 
 bool ibValueRecordManagerObject::ExistData()
 {

@@ -465,24 +465,63 @@ inline wxString ibRegQualifiedEqParams(const ibValueMetaObjectAttributeBase* a, 
 // AND-folded, the values riding as bound comparison values exactly as a parameter does. Everything
 // downstream then sees a predicate and stops caring which door the reader came through.
 //
-// ⚠ Only DIMENSIONS are filterable here. A resource is what the table FOLDED, and a condition over a
-// fold belongs to the result rather than to an argument of the source — the same rule
-// FillConditionExplorer offers to the window, so the two cannot disagree about what may be filtered.
+// ⭐ WHAT A FILTER MAY NAME IS DECIDED BY WHAT THE READING DOES TO THE RECORDS — not by the register.
+// A balance, a turnover, a totals row FOLD: a resource there is the folded value, and a condition over
+// a fold belongs to the result rather than to an argument of the source — the same rule
+// FillConditionExplorer offers to the window, so the two cannot disagree. Such a reading is filtered
+// by its DIMENSIONS. A reading of the records as they were written folds nothing: every column of a
+// record is still a column there, and the name is resolved exactly as a query's `WHERE Recorder = …`
+// resolves it — by the register's own source (ResolveColumnByName), so the two producers of a
+// predicate keep one vocabulary.
+//
+// 🛑 IT KNEW ONLY THE FOLDED ANSWER, AND WHAT IT COULD NOT PLACE IT DROPPED WITHOUT A WORD. Measured
+// 2026-09-10 on a payroll base: `GetBase(Accruals, New Structure("Recorder", doc))` — the one condition
+// a calculation always has, "the base of MY records" — named no dimension, so it came back as no
+// filter at all and every record of every document was scored. A dropped condition is a wrong answer
+// that looks right; a key that names nothing is now refused by its name.
+enum class ibRegFilterOver {
+	Folded,    // balance / turnover / totals — dimensions only
+	Records,   // the records themselves — any column the register's source carries
+};
+
 template <typename TRegister>
-inline ibQueryPredicatePtr ibRegFilterPredicate(const TRegister* reg, const ibValue& filter)
+inline ibQueryPredicatePtr ibRegFilterPredicate(const TRegister* reg, const ibValue& filter,
+	const ibRegFilterOver over = ibRegFilterOver::Folded)
 {
 	ibValueStructure* structure = nullptr;
 	if (reg == nullptr || !filter.ConvertToValue(structure) || structure == nullptr)
 		return nullptr;   // nothing was asked for — which is not an empty filter, but no filter at all
 
+	const ibBackendQueryable* const source = reg->GetQueryable();
 	ibQueryPredicatePtr folded;
-	for (const auto dimension : reg->GetDimensionArrayObject()) {
+	for (long key = 0; key < structure->GetNProps(); ++key) {
+		const wxString name = structure->GetPropName(key);
+
+		const ibBackendQueryColumn* col = nullptr;
+		if (over == ibRegFilterOver::Records) {
+			col = source != nullptr ? source->ResolveColumnByName(name) : nullptr;
+		}
+		else {
+			for (const auto dimension : reg->GetDimensionArrayObject()) {
+				if (dimension != nullptr && stringUtils::CompareString(name, dimension->GetName())) {
+					col = dimension->GetQueryColumn();
+					break;
+				}
+			}
+		}
+		if (col == nullptr) {
+			if (over == ibRegFilterOver::Records)
+				ibBackendCoreException::Error(_("filter names '%s', which is not a field of '%s'"), name, reg->GetName());
+			ibBackendCoreException::Error(
+				_("filter names '%s', which is not a dimension of '%s' - this reading folds the records and is filtered by dimensions only"),
+				name, reg->GetName());
+		}
+
 		ibValue value;
-		if (dimension == nullptr || !structure->Property(dimension->GetName(), value))
-			continue;
+		structure->GetPropVal(key, value);
 
 		ibQueryCondition leaf;
-		leaf.m_col   = dimension->GetQueryColumn();
+		leaf.m_col   = col;
 		leaf.m_op    = ibQueryFilterOp::Equal;
 		leaf.m_value = value;
 
@@ -556,6 +595,41 @@ inline ibQueryExprPtr ibRegCompositeIR(const ibBackendQueryColumn* a, const ibMe
 		ibQueryExprPtr col = qualifier.empty() ? ibCol(fields[i]) : ibCol(qualifier, fields[i]);
 		ibQueryExprPtr term = ibBinOp(tag ? ibQueryBinOp::Eq : op, col, c);
 		pred = pred ? ibBinOp(ibQueryBinOp::And, pred, term) : term;
+	}
+	return pred;
+}
+
+// The physical field of a column that plays `role` — empty when the column lays out no such field. The
+// question a join asks of a column it compares by one part only (a reference's id, a date's value).
+inline wxString ibRegFieldOfRole(const ibBackendQueryColumn* col, ibColumnRole role)
+{
+	for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+		if (slot.m_role == role)
+			return slot.m_name;
+	return wxString();
+}
+
+// The same VALUE in two columns of two qualified tables: every field both columns lay out, paired by role
+// and compared EQUAL. The ROW twin of ibRegCompositeIR, which compares a column to a value.
+//
+// ⚠ PLAIN EQUALITY, AND THE INDEX IS WHY. An empty value is a typed empty in this storage, never SQL NULL
+// (databaseLayer.h, queryRewrite.h lean on the same fact), so `a = b` already matches two empties. It
+// was written `a = b OR (a IS NULL AND b IS NULL)` first — and an OR in each field is a condition no
+// compound index can ride: a calculation register's lookup index (employee, type) was there and the base
+// read walked the pieces anyway (MEASURED 2026-09-10 at 1000 employees, debug: 4 s for one statement).
+inline ibQueryExprPtr ibRegSameValueIR(const ibBackendQueryColumn* a, const wxString& qa,
+	const ibBackendQueryColumn* b, const wxString& qb)
+{
+	ibQueryExprPtr pred;
+	const std::vector<ibColumnSlot> right = DescribeColumnLayout(b);
+	for (const ibColumnSlot& x : DescribeColumnLayout(a)) {
+		for (const ibColumnSlot& y : right) {
+			if (x.m_role != y.m_role)
+				continue;
+			const ibQueryExprPtr term = ibBinOp(ibQueryBinOp::Eq, ibCol(qa, x.m_name), ibCol(qb, y.m_name));
+			pred = pred ? ibBinOp(ibQueryBinOp::And, pred, term) : term;
+			break;
+		}
 	}
 	return pred;
 }
@@ -1037,6 +1111,9 @@ inline void ibRegSelfSourceFromDeclaration(ibSchemaTable& t, const ibMetaData* m
 inline ibValue ibRegSelectionToTable(ibDataQueryResult& selection, const ibBackendQueryable* shape)
 {
 	ibValueModelTable* table = new ibValueModelTable();
+	// 🛑 Held while its rows are made: a row holds its table, so without this the first
+	// `wxDELETE(line)` deletes a table nobody else holds yet. See valueQueryable.cpp, M::ToTable.
+	const ibValue keep(table);
 	ibValueModelTable::ibValueModelColumnCollection* cols = table->GetColumnCollection();
 	wxASSERT(cols);
 

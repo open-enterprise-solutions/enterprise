@@ -215,6 +215,12 @@ struct ibQueryCondition
 	// sources do not evaluate it. Declared after m_path so the flat struct stays POD-ordered.
 	std::shared_ptr<struct ibQueryColumnExpr> m_expr;
 
+	// …AND A COMPUTED RIGHT-HAND SIDE, when the other side is not a constant either: `WHERE
+	// ActionPeriod < RegistrationPeriod` compares two fields of one row. Set only together with m_expr,
+	// and m_value is then unused — the provider compares the two lowered expressions, the RAM evaluator
+	// the two values it reads off the row.
+	std::shared_ptr<struct ibQueryColumnExpr> m_valueExpr;
+
 	// RLS `restrict … join …` SEMI-JOIN payload: when set, this condition IS a correlated EXISTS over the
 	// inner permission source (m_col / m_value / m_path all unused). The provider renders it FIRST in
 	// BuildConditionExpr, so it rides EVERY WHERE path (read single / co-located / write / aggregate) — no

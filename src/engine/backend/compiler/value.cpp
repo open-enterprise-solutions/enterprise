@@ -122,6 +122,9 @@ ibValue::ibValue(int nYear, int nMonth, int nDay, unsigned short nHour, unsigned
 		const wxLongLong& llData = dataVal.GetValue();
 		m_dData = llData.GetValue();
 	}
+	else {
+		m_dData = emptyDate;   // no such day is the empty date, not whatever the storage held
+	}
 	DEBUG_VALUE_CREATE();
 }
 
@@ -900,6 +903,77 @@ void ibValue::ShowValue()
 		return m_pRef->ShowValue();
 }
 
+// THE WALL-CLOCK READING of a held date: the calendar day it shows, counted from 1970-01-01, and the
+// time on that day — as milliseconds of a calendar in which every day is 86400 seconds long. The two
+// day-number conversions are the civil-calendar algorithms (proleptic Gregorian), exact for any year.
+namespace {
+
+long long ibDaysFromCivil(long long year, unsigned month, unsigned day)
+{
+	year -= month <= 2 ? 1 : 0;
+	const long long era = (year >= 0 ? year : year - 399) / 400;
+	const unsigned yoe = static_cast<unsigned>(year - era * 400);
+	const unsigned doy = (153 * (month > 2 ? month - 3 : month + 9) + 2) / 5 + day - 1;
+	const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+	return era * 146097 + static_cast<long long>(doe) - 719468;
+}
+
+void ibCivilFromDays(long long days, int& year, unsigned& month, unsigned& day)
+{
+	days += 719468;
+	const long long era = (days >= 0 ? days : days - 146096) / 146097;
+	const unsigned doe = static_cast<unsigned>(days - era * 146097);
+	const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+	const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+	const unsigned mp = (5 * doy + 2) / 153;
+	day   = doy - (153 * mp + 2) / 5 + 1;
+	month = mp < 10 ? mp + 3 : mp - 9;
+	year  = static_cast<int>(static_cast<long long>(yoe) + era * 400 + (month <= 2 ? 1 : 0));
+}
+
+constexpr long long kMsPerDay = 86400000LL;
+
+long long ibWallOf(wxLongLong_t date)
+{
+	const wxDateTime::Tm tm = wxDateTime(wxLongLong(date)).GetTm();
+	const long long days = ibDaysFromCivil(tm.year, static_cast<unsigned>(tm.mon) + 1, tm.mday);
+	return days * kMsPerDay
+		+ ((tm.hour * 60LL + tm.min) * 60LL + tm.sec) * 1000LL + tm.msec;
+}
+
+wxLongLong_t ibDateOfWall(long long wall)
+{
+	long long days = wall / kMsPerDay, rest = wall % kMsPerDay;
+	if (rest < 0) { rest += kMsPerDay; --days; }
+	int year = 0; unsigned month = 1, day = 1;
+	ibCivilFromDays(days, year, month, day);
+	const long long seconds = rest / 1000;
+	const wxDateTime moment(static_cast<wxDateTime::wxDateTime_t>(day), static_cast<wxDateTime::Month>(month - 1), year,
+		static_cast<wxDateTime::wxDateTime_t>(seconds / 3600), static_cast<wxDateTime::wxDateTime_t>(seconds / 60 % 60),
+		static_cast<wxDateTime::wxDateTime_t>(seconds % 60), static_cast<wxDateTime::wxDateTime_t>(rest % 1000));
+	return moment.GetValue().GetValue();
+}
+
+} // namespace
+
+wxLongLong_t ibValue::ShiftDate(wxLongLong_t date, wxLongLong_t milliseconds)
+{
+	// A shift that leaves the years a date can be (a date minus another date read as a number of
+	// seconds, say) names no calendar day — the arithmetic it always had answers for it, rather than
+	// a wxDateTime built out of range.
+	static const long long kFirst = ibDaysFromCivil(1, 1, 1) * kMsPerDay;
+	static const long long kLast  = ibDaysFromCivil(10000, 1, 1) * kMsPerDay;
+	const long long wall = ibWallOf(date) + milliseconds;
+	if (wall < kFirst || wall >= kLast)
+		return date + milliseconds;
+	return ibDateOfWall(wall);
+}
+
+wxLongLong_t ibValue::DateSpan(wxLongLong_t later, wxLongLong_t earlier)
+{
+	return ibWallOf(later) - ibWallOf(earlier);
+}
+
 void ibValue::FromDate(int& nYear, int& nMonth, int& nDay) const
 {
 	const wxLongLong& llData = wxLongLong(GetDate());
@@ -1390,7 +1464,10 @@ const ibValue& ibValue::operator+(const ibValue& cParam)
 		m_fData = m_fData + cParam.GetNumber();
 		break;
 	case ibValueTypes::TYPE_DATE:
-		m_dData = m_dData + cParam.GetDate();
+		// A number of seconds moves the date on the calendar (ShiftDate); a date is not a distance
+		// and keeps the arithmetic it always had.
+		m_dData = cParam.GetType() == ibValueTypes::TYPE_DATE ? m_dData + cParam.GetDate()
+		                                                     : ShiftDate(m_dData, cParam.GetDate());
 		break;
 	default:
 		break;      // '+' is defined for number and date only; others unchanged
@@ -1407,7 +1484,8 @@ const ibValue& ibValue::operator-(const ibValue& cParam)
 		m_fData = m_fData - cParam.GetNumber();
 		break;
 	case ibValueTypes::TYPE_DATE:
-		m_dData = m_dData - cParam.GetDate();
+		m_dData = cParam.GetType() == ibValueTypes::TYPE_DATE ? m_dData - cParam.GetDate()
+		                                                     : ShiftDate(m_dData, -cParam.GetDate());
 		break;
 	default:
 		break;      // '-' is defined for number and date only; others unchanged

@@ -1,0 +1,17 @@
+#include "calculationRegister.h"
+
+/* PNG — reuses the calculation-register icon (a recalculation is a subordinate of it; no new art). */
+static const wxString s_recalculation_16_png = wxT("iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAA3NCSVQICAjb4U/gAAABcVBMVEUAAAGKdKCMdqOQe6ePeaWMdqKQe6aOeJ2QeaSOeqSun8TGu9zSyunY0u/Gu92MeKWNd6PLwuLc1fLLweGMd6ORfKevoMXSyemLdaHSyee1p8ugjraWgauPeKSgjre2qMvMwuPV0u6dxsd2yZ5rzI9vypaEvbB/fZ6tncPFudvLyOaExbF73I6N7YyO8YaO74qE5YxpvpFIsJPUy+m4qs+hj7Z1mKCS8ouO8Ie69beb8ZaR8oqJ6YxewpAAd5eN7YuQ8YqW8ZG/9b2X8ZKP8IqR8Yt22I5EsJNszJCP8ImV8ZDj++Oe8ZqO8ImR8ouA4I1Fr5RqxZGP74uR8IuH74HZ+dd83Y5HsJPBtteKxbeE5IyO8Yem8qLu/O7H9saL8IVoyo89qJOMd6GikLnBtde5wdlyyZmJ6YuS8YyT8oyT8o1z1Y5Qt5GRbaOLdqCPe6V9gp5pr5R21Y6A4Y1oyZBQtpEAeJdGsZNEr5RGsJM7p5KXH/14AAAAAXRSTlMAQObYZgAAAMdJREFUGJVjYMACGJmYWVhZWdiY2CF8Dk4ubh5eXh4+Lk5+sICAoBAUCItABETFuMV5ecW5uUQhAhKSUtIysrIycvKSEhABBaBqRSVlFVU1dYiAqIamlraOrp6+gaERWMDYxNRMx9zC0sraxtYOqkXZ3sHRydnF1c0dqsXD3NPL28fXzz8AqiUwKDgk1MfXNSwcKMAZISQUGRUdExsXH5SQCBRIEklOSU1Lz8jMCsrOAdubm8eWX1BYVBxWUork5bLyisoqIA0AC6Yjvx2DzekAAAAASUVORK5CYII=");
+
+wxIcon ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::GetIcon() const
+{
+	return GetIconGroup();
+}
+
+wxIcon ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::GetIconGroup()
+{
+	static wxIcon icon =
+		ibBackendPicture::GetIconFromBase64(s_recalculation_16_png, wxSize(16, 16));
+
+	return icon;
+}

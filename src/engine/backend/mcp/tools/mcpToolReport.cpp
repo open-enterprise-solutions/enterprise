@@ -132,8 +132,10 @@ const ibArg& ArgAt()
 const ibArg& ArgSynonym()
 {
 	static const ibArg s_a(wxT("synonym"), ibArg::Kind::Text,
-		ibMcpText("What the PERSON sees in the picker, in their language. Omit and the name is read out "
-			  "loud instead."));
+		ibMcpText("What the PERSON sees in the picker - in EVERY language the configuration declares, in "
+			  "one string: `en = 'Main'; ru = '...'; uk = '...';`. A plain text is refused where there "
+			  "are several languages: it would fill the configuration's own one and leave the rest blank. "
+			  "Omit and the name is read out loud instead."));
 	return s_a;
 }
 
@@ -1052,10 +1054,25 @@ public:
 			if (params.FindField(ArgForUser().Name()) != nullptr)
 				found->m_userSettable = ArgForUser().Flag(params);
 
-			// The value is stored as it arrived - the blob the composition keeps, which is what a
-			// reader's setting will later carry too.
-			if (const ibDataValue* value = params.FindField(ibMcpValueArgument().Name()))
-				found->m_value.SetField(wxT("value"), *value);
+			// ⭐ THE VALUE IS STORED AS THE PACKED NODE ITSELF - the shape ibStoredValue reads back when the
+			// composition runs, and the shape compose_run takes. A packed value (value_pack's answer, or
+			// what report_get shows) arrives as an OBJECT, so it is a CHILD of the arguments; a scalar is
+			// a field, and packs itself. This used to look for a field only - so a packed date, the one
+			// way to state a period, was never found - and to nest a scalar under "value", a shape
+			// nothing reads: a default set here never applied (the payroll demo, 2026-09-10).
+			if (const ibDataNode* packed = params.FindChild(ibMcpValueArgument().Name())) {
+				found->m_value = *packed;
+			}
+			else if (const ibDataValue* scalar = params.FindField(ibMcpValueArgument().Name())) {
+				ibValue given;
+				switch (scalar->Kind()) {
+					case ibDataKind::String: given = ibValue(scalar->AsString()); break;
+					case ibDataKind::Number: given = ibValue(scalar->AsNumber()); break;
+					case ibDataKind::Bool:   given = ibValue(scalar->AsBool()); break;
+					default: break;
+				}
+				ibStoreValue(found->m_value, given);
+			}
 		}
 
 		composer->SetCompositionDesc(composition);
@@ -1182,7 +1199,15 @@ public:
 			// ⚠ A FIELD THE QUERY DOES NOT PROJECT stores happily and shows nothing - the same
 			// silent emptiness a level with a wrong path produces, which is why both are checked
 			// against what the query actually offers rather than accepted on trust.
-			else if (!PathIsOffered(composition, path, fault)) {
+			//
+			// ⭐ …UNLESS IT NAMES A RESOURCE. A figure the composition declares (`COUNT(DISTINCT
+			// Employee) AS People`) is shown by the name it answers to - that is what the composer asks
+			// the selection about - and it is no field of the query. Refused here, a resource written as
+			// an expression could never be shown: the payroll demo's head count stayed off the page
+			// (2026-09-10).
+			else if (!std::any_of(composition.m_resources.begin(), composition.m_resources.end(),
+			                      [&path](const ibResourceDescription& r) { return r.AnswersTo().IsSameAs(path, false); })
+			         && !PathIsOffered(composition, path, fault)) {
 				// fault already says what the query does offer
 			}
 			else if (found != selected.end()) {
@@ -1280,6 +1305,13 @@ public:
 
 		const wxString name = ArgName().Text(params);
 		const wxString synonym = ArgSynonym().Text(params);
+
+		// A variant's synonym is a caption like any other — every language the configuration declares
+		// (ibMcpCaptionInEveryLanguage).
+		if (params.FindField(ArgSynonym().Name()) != nullptr
+		    && !ibMcpCaptionInEveryLanguage(composer->GetMetaData(), synonym,
+		                                    ibMcpText("The variant's synonym"), refusal))
+			return false;
 
 		if (composition.m_variants.empty())
 			composition.m_variants.emplace_back();
@@ -1655,7 +1687,9 @@ public:
 		return ibMcpText("Declare a resource - what the levels FOLD. Either a function over a field "
 			"(SUM over Quantity) or a whole expression, which is checked by the compiler. The "
 			"resource has no caption of its own: it is built on a field, and the field holds "
-			"the title. Pass remove:true with the same path to take one out again.");
+			"the title. A resource is known by its name: declaring one under a name already taken "
+			"REPLACES it, so running the same build twice leaves one. Pass remove:true with the "
+			"same path to take one out again.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -1716,12 +1750,23 @@ public:
 		resource.m_alias = ArgName().Text(params);
 		resource.m_scope = ArgOver().Text(params);
 
-		composition.m_resources.push_back(resource);
+		// ⭐ ONE FIGURE PER NAME — stating a resource again REPLACES it, the way stating a parameter
+		// again does. The name is what the figure is read back under (the query's `AS`, `res["Qty"]`),
+		// so two resources answering to one name cannot both be read. This verb appended, and a build
+		// script run twice declared every resource twice: the reports then failed where the query was
+		// lowered, and came back empty (the payroll demo, 2026-09-10).
+		auto same = std::find_if(composition.m_resources.begin(), composition.m_resources.end(),
+			[&](const ibResourceDescription& existing) { return existing.AnswersTo().IsSameAs(resource.AnswersTo(), false); });
+		const bool replaced = same != composition.m_resources.end();
+		if (replaced)
+			*same = resource;
+		else
+			composition.m_resources.push_back(resource);
 
 		composer->SetCompositionDesc(composition);
 		activeMetaData->Modify(true);
 
-		result.AddField(wxT("added"), ibDataValue::Bool(true));
+		result.AddField(replaced ? wxT("replaced") : wxT("added"), ibDataValue::Bool(true));
 		if (function.IsEmpty()) {
 			result.SetValue(wxT("expression"), path);
 			result.SetValue(wxT("note"),

@@ -113,8 +113,10 @@ wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 	if (clsid == g_metaInformationRegisterCLSID)        return _("Information Registers");
 	if (clsid == g_metaAccumulationRegisterCLSID)       return _("Accumulation Registers");
 	if (clsid == g_metaChartOfCharacteristicTypesCLSID) return _("Charts of characteristic types");
+	if (clsid == g_metaChartOfCalculationTypesCLSID)    return _("Charts of calculation types");
 	if (clsid == g_metaChartOfAccountsCLSID)            return _("Charts of accounts");
 	if (clsid == g_metaAccountingRegisterCLSID)         return _("Accounting registers");
+	if (clsid == g_metaCalculationRegisterCLSID)        return _("Calculation registers");
 
 	if (clsid == g_metaAttributeCLSID)                  return _("Attributes");
 	if (clsid == g_metaFormCLSID)                       return _("Forms");
@@ -129,6 +131,7 @@ wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 	if (clsid == g_metaAccountDimensionKindsTableCLSID)         return _("Account dimension kinds tables");
 	if (clsid == g_metaEnumCLSID)                       return _("Enum values");
 	if (clsid == g_metaDimensionCLSID)                  return _("Dimensions");
+	if (clsid == g_metaRecalculationCLSID)              return _("Recalculations");
 	if (clsid == g_metaResourceCLSID)                   return _("Resources");
 	if (clsid == g_metaPredefinedAttributeCLSID)        return _("Predefined attributes");
 
@@ -177,7 +180,9 @@ int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 		// and its analytics. Listing the registers first put the dependants above the things they
 		// depend on, so reading the tree top to bottom met a register before anything it is about.
 		{ g_metaChartOfCharacteristicTypesCLSID, 160 },
+		{ g_metaChartOfCalculationTypesCLSID,    165 },
 		{ g_metaChartOfAccountsCLSID,            170 },
+		{ g_metaCalculationRegisterCLSID,        175 },
 		{ g_metaInformationRegisterCLSID,        180 },
 		{ g_metaAccumulationRegisterCLSID,       190 },
 		{ g_metaAccountingRegisterCLSID,         200 },
@@ -191,6 +196,7 @@ int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 		{ g_metaTableCLSID,                      350 },
 		{ g_metaTableRefCLSID,                   351 },
 		{ g_metaAccountDimensionKindsTableCLSID,         360 },
+		{ g_metaRecalculationCLSID,              365 },   // Recalculation subordinate tables (under a calc register)
 		{ g_metaFormCLSID,                       370 },
 		{ g_metaCommandCLSID,                    375 },   // an object's own commands sit between forms and templates
 		{ g_metaTemplateCLSID,                   380 },

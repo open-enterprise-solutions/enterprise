@@ -176,8 +176,9 @@ class BACKEND_API ibValueMetaObjectRecordData
 	public:
 
 	// EVERY STORED KIND MAY GO INTO A SECTION — catalogs and documents, processors and
-	// reports, all three register families. This is the line they share, so the answer is
-	// given once here instead of being spelled out as a branch per metatype in the editor.
+	// reports here, and the register families on their own line (ibValueMetaObjectRegisterData),
+	// which does not pass through this one. Given once per line instead of being spelled out as a
+	// branch per metatype in the editor.
 	virtual bool IsInterfaceAllowed() const override { return true; }
 
 public:
@@ -1556,6 +1557,12 @@ class BACKEND_API ibValueMetaObjectRegisterData :
 	static constexpr unsigned s_features =
 		ibMetaFeature_Manager | ibMetaFeature_RecordSet | ibMetaFeature_Selection;
 
+	// …AND IT GOES INTO A SECTION LIKE ANY STORED KIND. The record-data line below said so for "all
+	// three register families" and a register is not record data, so none of them could: the payroll
+	// demo's benefit applications were reachable only through All operations (2026-09-11). A click on
+	// the section's button runs the generic Execute every data metaobject has — it opens the list.
+	virtual bool IsInterfaceAllowed() const override { return true; }
+
 protected:
 	ibValueMetaObjectRegisterData();
 	virtual ~ibValueMetaObjectRegisterData();
@@ -1959,6 +1966,13 @@ class BACKEND_API ibValueManagerDataObjectPredefined : public ibValueManagerData
 	ibValueManagerDataObjectPredefined() { m_members.Bind(this, &ibValueManagerDataObjectPredefined::FillPredefined); }
 
 	virtual const ibValueMetaObjectRecordDataHierarchyMutableRef* GetMetaObject() const = 0;
+
+	// THE FIRST ITEM WHOSE CODE / DESCRIPTION IS LIKE THE PATTERN, as a reference — empty when none is.
+	// Here once, for every manager whose items have both (catalog, the three charts, the parameterized
+	// job): each of them carried its own copy, and every copy handed back freed memory (see the body).
+	// A VALUE, not a pointer — the reference found is held by the value that carries it out.
+	ibValue FindByCode(const ibValue& code) const;
+	ibValue FindByDescription(const ibValue& description) const;
 
 	void FillPredefined(ibMemberTable& helper) const;    // predefined-value props (composes onto FillMembers)
 

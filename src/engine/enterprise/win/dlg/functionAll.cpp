@@ -93,6 +93,11 @@ void ibDialogFunctionAll::BuildTree()
 		const int imageIndex = imageList->Add(chartOfAccounts->GetIcon());
 		m_treeCtrlElements->AppendItem(chartsOfAccounts, chartOfAccounts->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(chartOfAccounts));
 	}
+	wxTreeItemId chartsOfCalculationTypes = AppendGroupItem(root, g_metaChartOfCalculationTypesCLSID, _("Charts of calculation types"));
+	for (auto chartOfCalculationTypes : activeMetaData->GetAnyArrayObject(g_metaChartOfCalculationTypesCLSID)) {
+		const int imageIndex = imageList->Add(chartOfCalculationTypes->GetIcon());
+		m_treeCtrlElements->AppendItem(chartsOfCalculationTypes, chartOfCalculationTypes->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(chartOfCalculationTypes));
+	}
 	// ⭐ THE REGISTERS COME LAST — same reading order as the metadata tree and the compare tree. A
 	// register is expressed in terms of what stands above it: its dimensions, and for an accounting
 	// register the chart of accounts that types the account and every analytics slot. Listing the
@@ -111,6 +116,11 @@ void ibDialogFunctionAll::BuildTree()
 	for (auto accountingRegister : activeMetaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
 		const int imageIndex = imageList->Add(accountingRegister->GetIcon());
 		m_treeCtrlElements->AppendItem(accountingRegisters, accountingRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(accountingRegister));
+	}
+	wxTreeItemId calculationRegisters = AppendGroupItem(root, g_metaCalculationRegisterCLSID, _("Calculation registers"));
+	for (auto calculationRegister : activeMetaData->GetAnyArrayObject(g_metaCalculationRegisterCLSID)) {
+		const int imageIndex = imageList->Add(calculationRegister->GetIcon());
+		m_treeCtrlElements->AppendItem(calculationRegisters, calculationRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(calculationRegister));
 	}
 
 	// SCHEDULED JOBS come LAST, and deliberately so. They are reachable — somebody has to be able

@@ -35,6 +35,8 @@ enum
 	enChartsOfCharacteristicTypes,
 	enChartsOfAccounts,
 	enAccountingRegisters,
+	enChartsOfCalculationTypes,
+	enCalculationRegisters,
 };
 
 void ibValueModuleManager::ibValueMetadataUnit::FillMembers(ibMemberTable& helper) const
@@ -56,6 +58,8 @@ void ibValueModuleManager::ibValueMetadataUnit::FillMembers(ibMemberTable& helpe
 	helper.AppendProp("ChartsOfCharacteristicTypes", true, false, static_cast<long>(g_metaChartOfCharacteristicTypesCLSID));
 	helper.AppendProp("ChartsOfAccounts", true, false, static_cast<long>(g_metaChartOfAccountsCLSID));
 	helper.AppendProp("AccountingRegisters", true, false, static_cast<long>(g_metaAccountingRegisterCLSID));
+	helper.AppendProp("ChartsOfCalculationTypes", true, false, static_cast<long>(g_metaChartOfCalculationTypesCLSID));
+	helper.AppendProp("CalculationRegisters", true, false, static_cast<long>(g_metaCalculationRegisterCLSID));
 }
 
 //****************************************************************************
@@ -142,6 +146,18 @@ bool ibValueModuleManager::ibValueMetadataUnit::GetPropVal(const long lPropNum, 
 	}
 	case enAccountingRegisters: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
+			valStruct->Insert(object->GetName(), object);
+		}
+		break;
+	}
+	case enChartsOfCalculationTypes: {
+		for (const auto object : m_metaData->GetAnyArrayObject(g_metaChartOfCalculationTypesCLSID)) {
+			valStruct->Insert(object->GetName(), object);
+		}
+		break;
+	}
+	case enCalculationRegisters: {
+		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCalculationRegisterCLSID)) {
 			valStruct->Insert(object->GetName(), object);
 		}
 		break;

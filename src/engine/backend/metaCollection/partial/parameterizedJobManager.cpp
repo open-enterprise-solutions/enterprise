@@ -6,7 +6,6 @@
 
 #include "backend/appData.h"
 #include "backend/metaData.h"
-#include "backend/query/dataQueryBuilder.h"   // L3 door — FindBy* via WhereLike
 #include "commonObject.h"
 #include "reference/reference.h"
 #include "selector/objectSelector.h"
@@ -22,48 +21,8 @@ ibValueReferenceDataObject* ibValueManagerDataObjectJob::EmptyRef() const
 	return ibValueReferenceDataObject::Create(m_metaObject);
 }
 
-namespace {
-
-// The same shared FindBy* the catalog manager uses: locate the first row whose `attribute LIKE
-// pattern` and return its reference, through the L3 door. Empty reference on no match.
-ibValueReferenceDataObject* FindByAttributeLike(const ibValueMetaObjectRecordDataMutableRef* meta,
-	ibValueMetaObjectAttributePredefined* attr, const ibValue& cParam)
-{
-	if (attr == nullptr || cParam.IsEmpty())
-		return ibValueReferenceDataObject::Create(meta);
-	try {
-		ibDataQueryBuilder q;
-		q.From(meta->GetQueryable()).WhereLike(attr->GetQueryColumn(), attr->AdjustValue(cParam));
-		ibReadPageRequest page;
-		page.m_count = 1;
-		ibDataQueryResult sel = q.Execute(page);
-		if (sel.Next()) {
-			// The identity column by NAME, and the guid from the reference itself — see the same read in
-			// catalogManager_impl.cpp for what the two guesses on this line used to cost.
-			const ibValue rowValue = sel.GetValue(meta->GetDataReference()->GetQueryColumn());
-			if (const ibValueReferenceDataObject* const found = rowValue.ConvertToType<ibValueReferenceDataObject>())
-				return ibValueReferenceDataObject::Create(meta, found->GetGuid().GetGuid());
-		}
-	}
-	catch (...) { /* fall through to an empty reference */ }
-	return ibValueReferenceDataObject::Create(meta);
-}
-
-} // namespace
-
-ibValueReferenceDataObject* ibValueManagerDataObjectJob::FindByCode(const ibValue& cParam) const
-{
-	if (appData->DesignerMode())
-		return ibValueReferenceDataObject::Create(m_metaObject);
-	return FindByAttributeLike(m_metaObject, m_metaObject->GetDataCode(), cParam);
-}
-
-ibValueReferenceDataObject* ibValueManagerDataObjectJob::FindByDescription(const ibValue& cParam) const
-{
-	if (appData->DesignerMode())
-		return ibValueReferenceDataObject::Create(m_metaObject);
-	return FindByAttributeLike(m_metaObject, m_metaObject->GetDataDescription(), cParam);
-}
+// (FindByCode / FindByDescription are the base's — ibValueManagerDataObjectPredefined, in
+//  commonObjectManagerQuery.cpp, which says why this copy had to go.)
 
 enum Func {
 	eCreateElement = 0,

@@ -41,8 +41,10 @@ void ibDebuggerClient::ibDebuggerClientAdapter::AddBridge(ibDebuggerClientBridge
 // one. Later there is no such moment, because replies arrive on the socket thread, where nothing is
 // bound at all.
 ibDebuggerClient::ibDebuggerClientAdapter::ibDebuggerClientAdapter()
-	: m_session(ibSession::Current())
 {
+	ibSession* const current = ibSession::Current();
+	m_session = ibSessionWatch(current);
+	m_bound   = current != nullptr;
 }
 
 // ⭐⭐ THE ONE PLACE A REPLY CHANGES THREADS. It used to be a wx event queued at this class, which is
@@ -98,10 +100,14 @@ void ibDebuggerClient::ibDebuggerClientAdapter::Defer(std::function<void()> call
 
 	// No session bound yet — nothing has installed a listener — so there is no other thread to hand
 	// this to, and running it here is the only honest answer.
-	if (m_session != nullptr)
-		m_session->Submit(std::move(call));
-	else
+	if (!m_bound) {
 		call();
+		return;
+	}
+	// …and a session that has GONE took its listeners with it: the reply has nobody left to reach,
+	// and running it here would hand the windows of a closed session to the socket thread.
+	if (const std::shared_ptr<ibSession> session = m_session.Share())
+		session->Submit(std::move(call));
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::RemoveBridge(ibDebuggerClientBridge* bridge)

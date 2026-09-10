@@ -572,7 +572,7 @@ public:
 
 		wxString answer;
 		if (!bridge->Evaluate(expression, answer)) {
-			refusal = ibMcpText("The runtime did not answer in time.");
+			refusal = ibMcpNoAnswer(ibMcpText("The runtime did not answer in time."));
 			return false;
 		}
 
@@ -992,9 +992,9 @@ public:
 		wxLongLong_t microseconds = 0;
 
 		if (!bridge->Sandbox(code, ran, answer, json, printed, microseconds)) {
-			refusal = ibMcpText("The runtime did not answer in time. Whatever the code did was still "
-				"rolled back - the transaction is on the far end and does not depend on this "
-				"answer arriving.");
+			refusal = ibMcpNoAnswer(ibMcpText("The runtime did not answer in time. Whatever the code did "
+				"was still rolled back - the transaction is on the far end and does not depend on this "
+				"answer arriving."));
 			return false;
 		}
 

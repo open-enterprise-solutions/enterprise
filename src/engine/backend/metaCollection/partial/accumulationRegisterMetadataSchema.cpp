@@ -34,6 +34,22 @@
 // tables without changing anything underneath.
 // ============================================================================
 
+// ⭐⭐ THE STORED NAME OF A FIGURE COLUMN — `<the resource's own field>_<figure>`, spelled HERE and only
+// here, for BOTH sides of the one contract: the CREATE VIEW that makes the column, and the source a query
+// reads that view through (GetViewQueryable). From the resource's FIELD, never its user name: the name
+// reaches CREATE VIEW as an identifier, and a Cyrillic one took the whole apply down.
+//
+// 🛑 THE TWO SIDES WERE SPELLED APART, AND ONLY ONE OF THEM MOVED. cb1edbae took the view's columns from
+// the user name to the field (`fld1410_N_Turnover`) and left the source on the user name
+// (`Amount_Turnover`), so after the next apply every report over the turnovers asked the view for a
+// column it no longer had — `-206 Column unknown AMOUNT_TURNOVER`, "Fixed assets statement", measured
+// 2026-09-10. A base not applied since still had the old view and kept working, which is why it read as a
+// report that broke by itself.
+static wxString ibAccumFigureField(const wxString& resourceField, const wxString& figure)
+{
+	return resourceField + wxT("_") + figure;
+}
+
 void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& out) const
 {
 	// The movements table, its indexes and its columns.
@@ -206,7 +222,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 			// No record type — nothing signs a movement, so there is no expense side to keep apart.
 			const ibBackendQueryColumn* c = ibRegAccumulatorColumn(t, inName, idIn, res);
 			m.Accumulate(c, wxT("{row}.") + resField, ibQueryColumnExpr::Col(res->GetQueryColumn()));
-			// 🛑 THE THIRD FIELD IS THE PHYSICAL BASE OF THE VIEW'S COLUMNS (`m_name + "_Turnover"`), so
+			// 🛑 THE THIRD FIELD IS THE PHYSICAL BASE OF THE VIEW'S COLUMNS (ibAccumFigureField), so
 			// it becomes a REAL SQL IDENTIFIER in CREATE VIEW and must be ASCII. Spelled from the
 			// resource's USER name, a Cyrillic resource took the whole apply down on Firebird: the
 			// deferred CREATE VIEW was refused ("Dynamic SQL Error"), the failed maintenance rolled
@@ -301,13 +317,13 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		}
 
 		for (const Pair& p : pairs) {
-			v.m_columns.push_back({ p.m_name + wxT("_Receipt"),  p.m_in,  wxString(), ibMaterializeAgg::Value });
+			v.m_columns.push_back({ ibAccumFigureField(p.m_name, ibRegFigure::Receipt),  p.m_in,  wxString(), ibMaterializeAgg::Value });
 			if (p.m_out.IsEmpty()) {
-				v.m_columns.push_back({ p.m_name + wxT("_Turnover"), p.m_in, wxString(), ibMaterializeAgg::Value });
+				v.m_columns.push_back({ ibAccumFigureField(p.m_name, ibRegFigure::Turnover), p.m_in, wxString(), ibMaterializeAgg::Value });
 				continue;
 			}
-			v.m_columns.push_back({ p.m_name + wxT("_Expense"),  p.m_out, wxString(), ibMaterializeAgg::Value });
-			v.m_columns.push_back({ p.m_name + wxT("_Turnover"), p.m_in,  p.m_out,    ibMaterializeAgg::Difference });
+			v.m_columns.push_back({ ibAccumFigureField(p.m_name, ibRegFigure::Expense),  p.m_out, wxString(), ibMaterializeAgg::Value });
+			v.m_columns.push_back({ ibAccumFigureField(p.m_name, ibRegFigure::Turnover), p.m_in,  p.m_out,    ibMaterializeAgg::Difference });
 		}
 	}
 
@@ -320,7 +336,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	{
 		ibMaterializeView& v = m.View(GetBalanceViewName(), /*withPeriod*/ false, /*dropZeroRows*/ true);
 		for (const Pair& p : pairs)
-			v.m_columns.push_back({ p.m_name + wxT("_Balance"), p.m_in, p.m_out, ibMaterializeAgg::Difference });
+			v.m_columns.push_back({ ibAccumFigureField(p.m_name, ibRegFigure::Balance), p.m_in, p.m_out, ibMaterializeAgg::Difference });
 	}
 
 	// There is NO third view for balance-and-turnovers. It is not a third thing to store — it is
@@ -453,9 +469,11 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	// …and a figure is ONE FIELD too, said with the kind for the same reason as the period above:
 	// the view keeps `Quantity_Turnover`, and a column that still calls itself composite is asked for
 	// `Quantity_Turnover_N`.
+	// …and the stored name is the VIEW's, from the one function its CREATE VIEW spells it with
+	// (ibAccumFigureField) — the field the view keeps, not the word a query writes.
 	auto add = [&](const ibValueMetaObjectAttributeBase* res, const wxString& suffix) {
 		columns.push_back(ibTempColumn(res->GetName() + suffix,
-		                               res->GetName() + wxT("_") + suffix,
+		                               ibAccumFigureField(ibRegValueField(res), suffix),
 		                               res->GetTypeDesc(), ibRegDerivedColumnId(synthetic++),
 		                               ibRegFigureColumnCaption(res->GetSynonym(), ibRegFigureCaption(suffix)),
 		                               ibBackendQueryColumn::Kind::Computed));

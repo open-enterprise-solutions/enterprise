@@ -14,6 +14,7 @@
 #define debugClient           (ibDebuggerClient::Get())
 
 #include "debugClientBridge.h"
+#include "backend/session/sessionHolder.h"   // ibSessionWatch — whose worker a reply goes to, watched
 
 class BACKEND_API ibDebuggerClient {
 
@@ -121,7 +122,12 @@ class BACKEND_API ibDebuggerClient {
 		// ⚠ WHOSE WORKER — one answer for the whole fan-out, not one per listener. Every bridge in a
 		// process is installed by the same person in the same session, so a session held per bridge
 		// was the same fact written twice.
-		class ibSession* m_session = nullptr;
+		//
+		// 🛑 WATCHED, NOT POINTED AT. It was a raw pointer taken at birth, and the session is gone
+		// before the client stops its socket thread: a reply arriving in that window submitted to freed
+		// memory, and the designer died on its way out. A watch answers "gone" instead (sessionHolder.h).
+		ibSessionWatch m_session;
+		bool           m_bound = false;   // there was a session to watch at all — see Defer
 	};
 
 	class BACKEND_API ibDebuggerClientConnection : public wxThread {

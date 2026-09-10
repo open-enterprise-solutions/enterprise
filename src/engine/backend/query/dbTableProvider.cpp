@@ -1089,9 +1089,11 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 
 	if (c.m_expr) {
 		// COMPUTED left-hand side (WHERE Qty * Price > value) — lower the expression tree and
-		// compare to the value. Checked BEFORE the null-column branch: an expr condition carries
-		// m_col == null but is NOT a row-key lookup.
-		return ibBinOp(op, BuildColumnExpr(queryable, c.m_expr, mainQual), ibConst(c.m_value));
+		// compare to the value, or to the other expression when the right side names a field too.
+		// Checked BEFORE the null-column branch: an expr condition carries m_col == null but is NOT
+		// a row-key lookup.
+		return ibBinOp(op, BuildColumnExpr(queryable, c.m_expr, mainQual),
+			c.m_valueExpr ? BuildColumnExpr(queryable, c.m_valueExpr, mainQual) : ibConst(c.m_value));
 	}
 	if (c.m_col == nullptr) {
 		// Row-key condition — a lookup by the row's own key (uuid, the identity tail), never

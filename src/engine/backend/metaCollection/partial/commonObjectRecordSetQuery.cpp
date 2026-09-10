@@ -259,7 +259,17 @@ bool ibValueRecordSetObject::ReadData()
 bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 {
 	//check fill attributes
+	//
+	// 🛑⭐⭐ A FAILED FILL CHECK RAISES, AND IT SAYS WHICH FIELD — the same decision the delete below
+	// made for the same reason. Each missing field is still posted as a Message (an interactive session
+	// shows them against the form), but a Message has nowhere to go in a BACKGROUND JOB or on a server,
+	// and the bool this used to return reached WriteRecordSet as its one sentence for every ending,
+	// "failed to store the records". MEASURED 2026-09-10 on a calculation register written from a
+	// background run: the reason was lost entirely — the refusal named the register and nothing else,
+	// while the actual cause was an empty required field. Payroll is exactly the work that runs as a
+	// background job, so this is where a person would have met a refusal with no reason in it.
 	bool fillCheck = true; long currLine = 1;
+	wxString fillErrors;
 	for (long row = 0; row < GetRowCount(); row++) {
 		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 			if (object->FillCheck()) {
@@ -269,6 +279,9 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 					wxString fillError =
 						wxString::Format(_("The %s is required on line %i of the %s"), object->GetSynonym(), currLine, m_metaObject->GetSynonym());
 					ibValueSystemFunction::Message(fillError, ibStatusMessage::ibStatusMessage_Information);
+					if (!fillErrors.IsEmpty())
+						fillErrors += wxT("; ");
+					fillErrors += fillError;
 					fillCheck = false;
 				}
 			}
@@ -277,7 +290,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	}
 
 	if (!fillCheck)
-		return false;
+		ibBackendCoreException::Error(wxT("%s"), fillErrors);   // an assembled sentence is DATA, not a format
 
 	ibNumber numberLine = 1, oldNumberLine = 1;
 

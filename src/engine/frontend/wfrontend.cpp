@@ -1527,6 +1527,8 @@ WFRONTEND_API std::string wfrontendAllFunctionsJSON()
 		{ g_metaChartOfCharacteristicTypesCLSID,  "Charts of characteristic types" },
 		{ g_metaChartOfAccountsCLSID,             "Charts of accounts" },
 		{ g_metaAccountingRegisterCLSID,          "Accounting registers" },
+		{ g_metaChartOfCalculationTypesCLSID,     "Charts of calculation types" },
+		{ g_metaCalculationRegisterCLSID,         "Calculation registers" },
 	};
 	for (const auto& s : specs) {
 		nlohmann::json g;

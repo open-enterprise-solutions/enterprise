@@ -11,6 +11,7 @@
 #include "backend/backend_exception.h"     // an engine refusal arrives as an exception
 #include "backend/mcp/mcpTool.h"           // ibMcpActing — who is the source, before anything asks
 #include "backend/metadataConfiguration.h" // SaveDatabase / the four apply stages
+#include "backend/metaCollection/partial/calculationRegister.h"   // GetRecalculationArrayObject
 #include "backend/restructureInfo.h"       // …and the ledger the decision reads
 #include "frontend/mainFrame/objinspect/objinspect.h"
 #include "frontend/docView/docView.h"
@@ -43,6 +44,7 @@
 #define objectComposersName _("Composers")
 #define objectTablesName _("Tables")
 #define objectEnumerationsName _("Enums")
+#define objectRecalculationsName _("Recalculations")
 
 //***********************************************************************
 //*								metadata                                * 
@@ -748,8 +750,10 @@ wxTreeItemId ibConfigurationTree::FillItem(ibValueMetaObject* metaItem, const wx
 	m_metaTreeCtrl->Freeze();
 
 	wxTreeItemId createdItem = nullptr;
-	if (metaItem->GetClassType() == g_metaTableCLSID || metaItem->GetClassType() == g_metaTableRefCLSID) {
-		createdItem = AppendGroupItem(item, g_metaAttributeCLSID, metaItem);
+	ibClassID columnClsid = 0;
+	std::vector<ibValueMetaObject*> columns;
+	if (TableColumns(metaItem, columnClsid, columns)) {
+		createdItem = AppendGroupItem(item, columnClsid, metaItem);
 	}
 	else if (metaItem->GetClassType() == g_metaSectionCLSID) {
 		createdItem = AppendGroupItem(item, g_metaSectionCLSID, metaItem);
@@ -1509,6 +1513,31 @@ void ibConfigurationTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObj
 	AddInformationRegisterItem(metaObject, hParentID);   // same shape — an accounting register too
 }
 
+// A CALCULATION REGISTER — the register's groups, with its RECALCULATIONS right after the attributes:
+// the place a reference object keeps its tabular sections, and they are drawn the same way, as tables
+// whose columns are dimensions (Max, 2026-09-10). Written out rather than borrowed from the
+// information register, because appending to that put them after the forms and templates.
+void ibConfigurationTree::AddCalculationRegisterItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
+{
+	ibValueMetaObjectCalculationRegister* metaObjectValue =
+		metaObject->ConvertToType<ibValueMetaObjectCalculationRegister>();
+	wxASSERT(metaObjectValue);
+
+	AppendObjectGroup(hParentID, g_metaDimensionCLSID, objectDimensionsName,
+		metaObjectValue->GetDimensionArrayObject());
+	AppendObjectGroup(hParentID, g_metaResourceCLSID, objectResourcesName,
+		metaObjectValue->GetResourceArrayObject());
+	AppendObjectGroup(hParentID, g_metaAttributeCLSID, objectAttributesName,
+		metaObjectValue->GetAttributeArrayObject());
+	AppendTableGroup(hParentID, g_metaRecalculationCLSID, objectRecalculationsName,
+		metaObjectValue->GetRecalculationArrayObject());
+	AppendObjectGroup(hParentID, g_metaFormCLSID, objectFormsName,
+		metaObjectValue->GetFormArrayObject());
+	AppendCommandGroup(hParentID, objectCommandsName, metaObjectValue->GetCommandArrayObject());
+	AppendObjectGroup(hParentID, g_metaTemplateCLSID, objectTemplatesName,
+		metaObjectValue->GetTemplateArrayObject());
+}
+
 #include "frontend/artProvider/artProvider.h"
 
 ////////////////////////////////////////////////////////////////////////////
@@ -1595,9 +1624,11 @@ const ibMetaTreeGroupDef s_groups[] = {
 	// metaDiff.cpp; the two lists are separate copies of one decision, § metadata-tree.md.)
 	{ g_metaChartOfCharacteristicTypesCLSID, wxTRANSLATE("Charts of characteristic types"), ibMetaBand::Metadata, 0, ibMetaRow::Item },
 	{ g_metaChartOfAccountsCLSID,            wxTRANSLATE("Charts of accounts"),      ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaChartOfCalculationTypesCLSID,    wxTRANSLATE("Charts of calculation types"), ibMetaBand::Metadata, 0, ibMetaRow::Item },
 	{ g_metaInformationRegisterCLSID,        wxTRANSLATE("Information Registers"),  ibMetaBand::Metadata, 0, ibMetaRow::Item },
 	{ g_metaAccumulationRegisterCLSID,       wxTRANSLATE("Accumulation Registers"), ibMetaBand::Metadata, 0, ibMetaRow::Item },
 	{ g_metaAccountingRegisterCLSID,         wxTRANSLATE("Accounting registers"),    ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaCalculationRegisterCLSID,        wxTRANSLATE("Calculation registers"),   ibMetaBand::Metadata, 0, ibMetaRow::Item },
 };
 
 } // namespace
@@ -1622,8 +1653,10 @@ void ibConfigurationTree::ExpandMetaItem(ibValueMetaObject* metaItem, const wxTr
 	else if (clsid == g_metaAccumulationRegisterCLSID)       AddAccumulationRegisterItem(metaItem, item);
 	else if (clsid == g_metaParameterizedJobCLSID)           AddCatalogItem(metaItem, item);
 	else if (clsid == g_metaChartOfCharacteristicTypesCLSID) AddCatalogItem(metaItem, item);
+	else if (clsid == g_metaChartOfCalculationTypesCLSID)    AddCatalogItem(metaItem, item);
 	else if (clsid == g_metaChartOfAccountsCLSID)            AddCatalogItem(metaItem, item);
 	else if (clsid == g_metaAccountingRegisterCLSID)         AddAccumulationRegisterItem(metaItem, item);
+	else if (clsid == g_metaCalculationRegisterCLSID)        AddCalculationRegisterItem(metaItem, item);
 	else if (clsid == g_metaSectionCLSID)                    AddInterfaceItem(metaItem, item);
 
 	// A COMMAND HOLDS COMMANDS. The fill path always knew this (it goes through AppendCommandNode);
@@ -1634,19 +1667,45 @@ void ibConfigurationTree::ExpandMetaItem(ibValueMetaObject* metaItem, const wxTr
 			AppendCommandNode(item, sub);
 	}
 
-	// A TABULAR SECTION shows its own columns. It reaches this dispatcher from the create path
-	// only — a table is never a top-level group — but it belongs here rather than beside the call,
-	// so "how does a kind unfold" has one answer wherever it is asked.
-	else if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID) {
-		ibValueMetaObjectTableData* metaTable = metaItem->ConvertToType<ibValueMetaObjectTableData>();
-		wxASSERT(metaTable);
-		for (auto attribute : metaTable->GetAttributeArrayObject()) {
-			if (!attribute->IsAcceptedByParent())
-				continue;
-			AppendItem(item, attribute);
+	// A TABLE shows its own columns — a tabular section, or a recalculation (TableColumns). It reaches
+	// this dispatcher from the create path only — a table is never a top-level group — but it belongs
+	// here rather than beside the call, so "how does a kind unfold" has one answer wherever it is asked.
+	else {
+		ibClassID columnClsid = 0;
+		std::vector<ibValueMetaObject*> columns;
+		if (TableColumns(metaItem, columnClsid, columns)) {
+			for (auto column : columns) {
+				if (!column->IsAcceptedByParent())
+					continue;
+				AppendItem(item, column);
+			}
 		}
 	}
 	// Anything else is a leaf row — a module, a form, a picture, a role, a language.
+}
+
+bool ibConfigurationTree::TableColumns(ibValueMetaObject* table, ibClassID& columnClsid, std::vector<ibValueMetaObject*>& columns) const
+{
+	const ibClassID clsid = table->GetClassType();
+	if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID) {
+		ibValueMetaObjectTableData* metaTable = table->ConvertToType<ibValueMetaObjectTableData>();
+		wxASSERT(metaTable);
+		columnClsid = g_metaAttributeCLSID;
+		if (metaTable != nullptr)
+			for (auto attribute : metaTable->GetAttributeArrayObject())
+				columns.push_back(attribute);
+		return true;
+	}
+	if (clsid == g_metaRecalculationCLSID) {
+		auto* recalculation = table->ConvertToType<ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation>();
+		wxASSERT(recalculation);
+		columnClsid = g_metaDimensionCLSID;
+		if (recalculation != nullptr)
+			for (auto dimension : recalculation->GetDimensionArrayObject())
+				columns.push_back(dimension);
+		return true;
+	}
+	return false;
 }
 
 // DOES THIS OBJECT ANSWER THE SEARCH BOX. One predicate, asked in one place, so a filtered tree

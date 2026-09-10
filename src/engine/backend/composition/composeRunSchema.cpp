@@ -20,6 +20,7 @@
 #include "backend/compiler/procUnitState.h"                   // GetCurrentRunContext - the caller's own frame
 #include "backend/compiler/procContext.h"                     // ibRunContext - the frame it is given
 #include "backend/system/value/valueType.h"                   // AdjustValue - the declared type wins
+#include "backend/system/value/valueDataComposition.h"        // ibSyncParameters - the text declares its parameters
 #include "backend/backend_exception.h"
 #include "backend/stringUtils.h"                              // CompareString - how this tree compares a NAME
 
@@ -212,6 +213,14 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 		return false;
 	}
 
+	// ⭐ THE TEXT DECLARES ITS PARAMETERS HERE TOO. A report's list follows its query — `&Month` in the
+	// text IS a parameter called Month (ibSyncParameters, run whenever a report's text is set) — and a
+	// schema handed over whole never passed through that door. So its query named a parameter the run
+	// did not know: a stated Month was neither applied nor refused, and the engine answered "parameter
+	// '&Month' is not set" (2026-09-10). For a report's own schema this changes nothing: its list
+	// already follows the same text.
+	ibSyncParameters(description);
+
 	ibDataDBComposer composer;
 	composer.SetMetaData(activeMetaData);
 	if (description.HasQuery())
@@ -223,7 +232,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	// two fields", nor "a second output", nor "an axis of columns".
 	composer.ClearResources();
 	for (const ibResourceDescription& resource : description.m_resources)
-		composer.Resource(resource.m_func, resource.m_path);
+		composer.Resource(resource);   // whole — its name and its area with it
 	composer.Selects()        = description.m_selects;
 	composer.CommonSelected() = description.m_selected;
 	composer.LoadVariants(description.m_variants);
@@ -401,8 +410,13 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 		// nothing and says nothing, so `StartDate` on a report that asks for `From` runs with the
 		// period unset — and the engine's complaint then names `&From`, a name the caller never used,
 		// which reads as a defect in the report rather than a typo in the call.
+		// 🛑 BOTH AREAS OF THE NODE. A scalar is a FIELD, while a packed value and an `expression` are
+		// CHILDREN, which live among the properties — and only the fields were asked, so an undeclared
+		// name sent the second way was neither applied nor refused (2026-09-10).
 		if (given != nullptr) {
-			for (const std::pair<wxString, ibDataValue>& field : given->Fields()) {
+			std::vector<std::pair<wxString, ibDataValue>> stated = given->Fields();
+			stated.insert(stated.end(), given->Properties().begin(), given->Properties().end());
+			for (const std::pair<wxString, ibDataValue>& field : stated) {
 				const bool declared = std::any_of(
 					description.m_parameters.begin(), description.m_parameters.end(),
 					// ⚠ CompareString, like every other name lookup here. `==` on wxString is
@@ -528,12 +542,21 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 
 	std::vector<ibDataValue> tables;
 	tables.reserve(drivers.size());
-	for (const std::unique_ptr<ibComposedDriverBase>& driver : drivers) {
+	for (size_t i = 0; i < drivers.size(); ++i) {
+		const std::unique_ptr<ibComposedDriverBase>& driver = drivers[i];
 		std::shared_ptr<ibDataNode> table = std::make_shared<ibDataNode>();
 		if (!driver->Name().IsEmpty())
 			table->SetValue(wxT("name"), driver->Name());
 		if (driver->Totals())
 			table->SetValue(wxT("totals"), true);
+		// ⭐ WHAT WAS ASKED, beside what came back. The figures alone could not be argued with: a column
+		// of zeros said nothing about whether the author's query, the settings written over it, or the
+		// engine was wrong, and the text that would have said so went only to a journal a Release build
+		// does not keep (the payroll demo, 2026-09-10: a timesheet of zeros taken apart by reasoning).
+		// The same render the read used, so it cannot describe a different query. (A report's FILTER is
+		// ANDed into the parsed query as a condition — dataComposer.h, AndWhere — and is not in the text.)
+		try { table->SetValue(wxT("query"), composer.RenderTextFor(outputs[i])); }
+		catch (const ibBackendException&) { /* it rendered for the read; a second refusal says nothing new */ }
 		WriteColumns(*table, *driver);
 
 		if (const ibCrossComposeDriver* cross = dynamic_cast<const ibCrossComposeDriver*>(driver.get())) {

@@ -147,6 +147,9 @@ ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSel
 	FillByClsid(selectorDataType, g_metaEnumerationCLSID);
 	FillByClsid(selectorDataType, g_metaChartOfCharacteristicTypesCLSID);
 	FillByClsid(selectorDataType, g_metaChartOfAccountsCLSID);
+	// Left out, a calculation type could not be picked as an attribute's type with the mouse — a
+	// payroll document's line names one, and it could only be typed so through a script.
+	FillByClsid(selectorDataType, g_metaChartOfCalculationTypesCLSID);
 
 	if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
 		FillByClsid(selectorDataType, g_metaDataProcessorCLSID);
@@ -157,6 +160,7 @@ ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSel
 		FillByClsid(selectorDataType, g_metaInformationRegisterCLSID);
 		FillByClsid(selectorDataType, g_metaAccumulationRegisterCLSID);
 		FillByClsid(selectorDataType, g_metaAccountingRegisterCLSID);
+		FillByClsid(selectorDataType, g_metaCalculationRegisterCLSID);
 	}
 
 	SetValue(value);

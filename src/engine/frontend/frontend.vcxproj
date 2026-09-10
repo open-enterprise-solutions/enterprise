@@ -72,8 +72,7 @@
     <ClCompile Include="propertyManager\property\advprop\advpropModule.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropNumber.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropOwner.cpp" />
-    <ClCompile Include="propertyManager\property\advprop\advpropChartOfCharacteristicTypes.cpp" />
-    <ClCompile Include="propertyManager\property\advprop\advpropChartOfAccounts.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropChartBinding.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropPicture.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropPoint.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropRecord.cpp" />
@@ -539,8 +538,7 @@
     <ClInclude Include="propertyManager\property\advprop\advpropList.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropNumber.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropOwner.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropChartOfCharacteristicTypes.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropChartOfAccounts.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropPicture.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropPoint.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropRecord.h" />

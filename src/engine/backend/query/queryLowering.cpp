@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <wx/tokenzr.h>   // the OVER area may name several groupings, comma-separated
 #include <set>          // the aggregate inputs already claimed in one TOTALS clause
+#include <optional>     // a condition that reads no field is known before any row is — or is not
 
 // --- the AUXILIARY per-query temp-source registry (decl in queryable.h) ------------
 // Thread-local so concurrent sessions don't see each other's transient sources; RAII so a
@@ -1132,8 +1133,25 @@ ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& pa
 		// factory a FROM source uses, then read the member's value straight off the queryable's metaobject (Max:
 		// "you just get the runtime value off the queryable by name"). The metaobject try-resolves (bool + out); the
 		// engine raises the exception HERE so it carries the query source span (Max).
+		// ⭐ TWO SEGMENTS NAME A MEMBER OF A SYSTEM ENUMERATION — `VALUE(AccumulationRecordType.Receipt)`,
+		// the way a script writes `AccumulationRecordType.Receipt`: the enumeration is made by its type
+		// name and asked for the member by name, so a query and a module read the same value. It was
+		// refused as "needs <Kind>.<Name>.<Member>", and a balance could not be taken from a register's
+		// movements, whose sign is their record type (a receivables report, 2026-09-11).
+		if (e.m_path.size() == 2) {
+			ibValue enumeration;
+			try { enumeration = ibValue::CreateObject(e.m_path[0]); }
+			catch (...) { enumeration = ibValue(); }
+			const long member = enumeration.IsEmpty() ? wxNOT_FOUND : enumeration.FindProp(e.m_path[1]);
+			ibValue out;
+			if (member == wxNOT_FOUND || !enumeration.GetPropVal(member, out))
+				ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+					_("value(%s.%s): '%s' is not a member of a system enumeration '%s'"),
+					e.m_path[0], e.m_path[1], e.m_path[1], e.m_path[0]));
+			return out;
+		}
 		if (e.m_path.size() < 3)
-			ThrowQueryException(e.m_line, e.m_col, _("value(...) needs <Kind>.<Name>.<Member>"));
+			ThrowQueryException(e.m_line, e.m_col, _("value(...) needs <Kind>.<Name>.<Member>, or <Enumeration>.<Member> for a system one"));
 		const wxString& ns     = e.m_path.front();
 		const wxString& member = e.m_path.back();
 		wxString name = e.m_path[1];
@@ -1264,6 +1282,112 @@ void GateComputedExpr(const std::vector<ibSourceBinding>& sources, const ibQuery
 		ThrowQueryException(e.m_line, e.m_col, _("an arithmetic / CASE expression here is not yet supported over a JOIN"));
 }
 
+// Does this side of a comparison read a field of the row — anywhere inside it, not only as itself?
+bool NamesAField(const ibQueryAstExpr& e)
+{
+	if (e.m_kind == ibQueryAstExprKind::Column)
+		return true;
+	bool found = false;
+	ibQueryForEachOperand(e, [&found](const ibQueryAstExprPtr& child) {
+		if (!found && child && NamesAField(*child)) found = true;
+	});
+	return found;
+}
+
+// ⭐ A COMPARISON OVER COMPUTED SIDES — built here once for both WHERE roads, the flat AND list and
+// the predicate tree. The left side is an expression when it computes (`Qty * Price > 100`), and BOTH
+// sides are when the right one reads a field: `WHERE ActionPeriod < RegistrationPeriod` compares two
+// values of one row, as ordinary a sentence as a comparison gets. Both roads took COLUMN <op> VALUE,
+// so it was refused with "expected a literal or a parameter as the comparison value" (the payroll
+// demo, 2026-09-10: counting the corrections — the movements whose month is earlier than the month
+// they were registered in).
+bool ComparesComputed(const ibQueryAstExpr& e)
+{
+	return IsComputedExprAst(*e.m_lhs) || NamesAField(*e.m_rhs);
+}
+
+// ⭐ A CONDITION THAT READS NO FIELD IS DECIDED HERE, ONCE. `&Employee = VALUE(Catalog.Employees.EmptyRef)`
+// compares two things known before a single row is read, and that is how a report makes a parameter
+// optional: `WHERE (&Employee = VALUE(Catalog.Employees.EmptyRef) OR A.Employee = &Employee)` — nobody
+// chosen means everybody. Both WHERE roads took the left side for a column and refused it ("expected a
+// column here"), although the parameter verb's own description offers this very form for switching a
+// branch off (the payroll demo, 2026-09-10: an employee's calculations would not form until one was
+// picked). Answered for a comparison whose sides are constants, and for AND / OR / NOT over such;
+// anything reading a field is left to the roads below.
+bool IsConstantSide(const ibQueryAstExpr& e)
+{
+	return e.m_kind == ibQueryAstExprKind::Literal || e.m_kind == ibQueryAstExprKind::Param
+	    || e.m_kind == ibQueryAstExprKind::Value
+	    || (e.m_kind == ibQueryAstExprKind::ScalarCall
+	        && (e.m_scalar == ibQueryScalarFn::DateTime || e.m_scalar == ibQueryScalarFn::Type));
+}
+
+std::optional<bool> KnownBeforeRows(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
+{
+	switch (e.m_kind) {
+	case ibQueryAstExprKind::Compare: {
+		if (!e.m_lhs || !e.m_rhs || !IsConstantSide(*e.m_lhs) || !IsConstantSide(*e.m_rhs))
+			return std::nullopt;
+		const ibValue lhs = EvalValue(*e.m_lhs, params);
+		const ibValue rhs = EvalValue(*e.m_rhs, params);
+		switch (e.m_cmp) {
+		case ibQueryCompareOp::Eq: return  lhs.CompareValueEQ(rhs);
+		case ibQueryCompareOp::Ne: return !lhs.CompareValueEQ(rhs);
+		case ibQueryCompareOp::Lt: return lhs.CompareValueLS(rhs) < 0;
+		case ibQueryCompareOp::Le: return lhs.CompareValueLE(rhs);
+		case ibQueryCompareOp::Gt: return lhs.CompareValueGT(rhs) > 0;
+		case ibQueryCompareOp::Ge: return lhs.CompareValueGE(rhs);
+		}
+		return std::nullopt;
+	}
+	case ibQueryAstExprKind::Logical: {
+		const std::optional<bool> l = e.m_lhs ? KnownBeforeRows(*e.m_lhs, params) : std::nullopt;
+		const std::optional<bool> r = e.m_rhs ? KnownBeforeRows(*e.m_rhs, params) : std::nullopt;
+		const bool absorbing = e.m_isOr;   // TRUE decides an OR, FALSE decides an AND
+		if ((l && *l == absorbing) || (r && *r == absorbing))
+			return absorbing;
+		if (l && r)
+			return !absorbing;
+		return std::nullopt;
+	}
+	case ibQueryAstExprKind::Not: {
+		const std::optional<bool> inner = e.m_lhs ? KnownBeforeRows(*e.m_lhs, params) : std::nullopt;
+		return inner ? std::optional<bool>(!*inner) : std::nullopt;
+	}
+	default:
+		return std::nullopt;
+	}
+}
+
+// The two answers as conditions every road already evaluates — a constant compared with a constant
+// (`1 = 1`, `1 = 0`), through the computed comparison both SQL and RAM know.
+ibQueryCondition ConditionThatIs(bool truth)
+{
+	ibQueryCondition c;
+	c.m_expr  = ibQueryColumnExpr::Const(ibValue(ibNumber(1)));
+	c.m_value = ibValue(ibNumber(truth ? 1 : 0));
+	return c;
+}
+
+ibQueryCondition ComputedComparison(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& e,
+                                    const std::map<wxString, ibValue>& params)
+{
+	GateComputedExpr(sources, *e.m_lhs);
+	ibQueryCondition c;
+	c.m_expr = BuildColumnExprFromAst(sources, *e.m_lhs, params);
+	if (NamesAField(*e.m_rhs)) c.m_valueExpr = BuildColumnExprFromAst(sources, *e.m_rhs, params);
+	else                       c.m_value     = EvalValue(*e.m_rhs, params);
+	switch (e.m_cmp) {
+	case ibQueryCompareOp::Eq:                                       break;   // m_op defaults to Equal
+	case ibQueryCompareOp::Ne: c.m_op = ibQueryFilterOp::NotEqual;     break;
+	case ibQueryCompareOp::Lt: c.m_op = ibQueryFilterOp::Less;         break;
+	case ibQueryCompareOp::Le: c.m_op = ibQueryFilterOp::LessEqual;    break;
+	case ibQueryCompareOp::Gt: c.m_op = ibQueryFilterOp::Greater;      break;
+	case ibQueryCompareOp::Ge: c.m_op = ibQueryFilterOp::GreaterEqual; break;
+	}
+	return c;
+}
+
 // Build the full boolean WHERE as an L3 predicate TREE (ibQueryPredicate). The door lowers it to
 // the L2 IR (OR/NOT/IS NULL all expressible there). IN expands to Or(Eq …), BETWEEN to And(>=, <=),
 // NOT IN / NOT BETWEEN / NOT LIKE wrap the positive form in Not — so the tree needs no dedicated node.
@@ -1274,8 +1398,18 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
                                         const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params,
                                         bool allowDotWalk, bool keepUnfold)
 {
+	// A condition known before any row is read is one of the two answers (KnownBeforeRows).
+	if (const std::optional<bool> known = KnownBeforeRows(e, params))
+		return ibQueryPredicate::Leaf(ConditionThatIs(*known));
+
 	switch (e.m_kind) {
 	case ibQueryAstExprKind::Logical:
+		// A side known before the rows, when the whole is not, is the one that changes nothing — TRUE
+		// in an AND, FALSE in an OR — so the other side is the whole condition.
+		if (e.m_lhs && KnownBeforeRows(*e.m_lhs, params))
+			return BuildWherePredicate(sources, *e.m_rhs, params, allowDotWalk);
+		if (e.m_rhs && KnownBeforeRows(*e.m_rhs, params))
+			return BuildWherePredicate(sources, *e.m_lhs, params, allowDotWalk);
 		return ibQueryPredicate::Compose(
 			e.m_isOr ? ibQueryPredicateKind::Or : ibQueryPredicateKind::And,
 			BuildWherePredicate(sources, *e.m_lhs, params, allowDotWalk),
@@ -1352,23 +1486,10 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 			}
 		}
 
-		// COMPUTED lhs — `Qty * Price > value`, a CASE: the leaf carries the lowered expression
-		// (m_expr); the provider compares BuildColumnExpr(lhs) to the value. Gated single-source DB.
-		if (IsComputedExprAst(*e.m_lhs)) {
-			GateComputedExpr(sources, *e.m_lhs);
-			ibQueryCondition c;
-			c.m_value = EvalValue(*e.m_rhs, params);
-			c.m_expr  = BuildColumnExprFromAst(sources, *e.m_lhs, params);
-			switch (e.m_cmp) {
-			case ibQueryCompareOp::Eq:                                       break;   // m_op defaults to Equal
-			case ibQueryCompareOp::Ne: c.m_op = ibQueryFilterOp::NotEqual;     break;
-			case ibQueryCompareOp::Lt: c.m_op = ibQueryFilterOp::Less;         break;
-			case ibQueryCompareOp::Le: c.m_op = ibQueryFilterOp::LessEqual;    break;
-			case ibQueryCompareOp::Gt: c.m_op = ibQueryFilterOp::Greater;      break;
-			case ibQueryCompareOp::Ge: c.m_op = ibQueryFilterOp::GreaterEqual; break;
-			}
-			return ibQueryPredicate::Leaf(c);
-		}
+		// COMPUTED lhs — `Qty * Price > value`, a CASE — or a field on the right: the leaf carries the
+		// lowered expression(s) (ComputedComparison). Gated single-source DB.
+		if (ComparesComputed(e))
+			return ibQueryPredicate::Leaf(ComputedComparison(sources, e, params));
 		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, *e.m_lhs, allowDotWalk);
 		const ibValue val = EvalValue(*e.m_rhs, params);
 		switch (e.m_cmp) {
@@ -1602,19 +1723,16 @@ void LowerFlatWhere(ibDataQueryBuilder& b, const std::vector<ibSourceBinding>& s
 		return;
 
 	case ibQueryAstExprKind::Compare: {
-		// COMPUTED lhs — route to the door's expression verbs (single DB source; gated).
-		if (IsComputedExprAst(*e.m_lhs)) {
-			GateComputedExpr(sources, *e.m_lhs);
-			const ibQueryColumnExprPtr lhs = BuildColumnExprFromAst(sources, *e.m_lhs, params);
-			const ibValue val = EvalValue(*e.m_rhs, params);
-			switch (e.m_cmp) {
-			case ibQueryCompareOp::Eq: b.WhereExpr(lhs, ibQueryFilterOp::Equal,    val); break;
-			case ibQueryCompareOp::Ne: b.WhereExpr(lhs, ibQueryFilterOp::NotEqual, val); break;
-			case ibQueryCompareOp::Lt: b.WhereExprCompare(lhs, ibQueryFilterOp::Less,         val); break;
-			case ibQueryCompareOp::Le: b.WhereExprCompare(lhs, ibQueryFilterOp::LessEqual,    val); break;
-			case ibQueryCompareOp::Gt: b.WhereExprCompare(lhs, ibQueryFilterOp::Greater,      val); break;
-			case ibQueryCompareOp::Ge: b.WhereExprCompare(lhs, ibQueryFilterOp::GreaterEqual, val); break;
-			}
+		// Known before any row is read (KnownBeforeRows): TRUE asks nothing of the rows, FALSE keeps none.
+		if (const std::optional<bool> known = KnownBeforeRows(e, params)) {
+			if (!*known)
+				b.Where(ConditionThatIs(false));
+			return;
+		}
+		// COMPUTED lhs, or a field on the right — the same condition the predicate tree builds
+		// (ComputedComparison), handed to the door whole (single DB source; gated).
+		if (ComparesComputed(e)) {
+			b.Where(ComputedComparison(sources, e, params));
 			return;
 		}
 		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, *e.m_lhs, allowDotWalk);
@@ -1992,6 +2110,21 @@ private:
 	ibMetaID m_id;
 };
 
+// ⭐⭐ A HANDLE ON A PROJECTION READS THE STATEMENT'S SPELLING. What `b.SelectExpr(expr, alias)` projects
+// is written into the SQL as ibSqlAliasOf(alias) — `out_Twice` — and a raw column reads the result set by
+// its own physical name. Named after the bare alias, the handle asked for a field the statement never
+// had: "Field 'Twice' not found in the resultset" for every computed measure (`TOTALS SUM(Twice)` over
+// `A.Days * 2 AS Twice`), every second aggregate over one column (`SUM(Days), COUNT(Days)` — its repeat
+// is projected as `agg<N>`) and every windowed receiver, since the prefix arrived (2026-09-02). Found by
+// the payroll demo on 2026-09-10, where reports declaring one resource twice came back empty; the
+// composer's own reports had kept working only because they read such a field as a COLUMN of the
+// nested author query. The RAM road reads a column by its id, so the spelling asks nothing of it.
+std::shared_ptr<ibSyntheticScalarColumn> ProjectionHandle(const wxString& alias, ibMetaID id,
+	ibBackendColumnRawDB::RawType type = ibBackendColumnRawDB::RawType::Number)
+{
+	return std::make_shared<ibSyntheticScalarColumn>(ibSqlAliasOf(alias), id, type);
+}
+
 // ⭐ AN OUTPUT COLUMN THAT IS A COLUMN. Name, TYPE (whole, reference and all) and an id of its own.
 //
 // A query's output used to be a column only when a real source column stood behind it. Everything
@@ -2120,6 +2253,40 @@ static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
 		default:
 			return ibTypeDescription();
 		}
+
+	case ibQueryAstExprKind::ScalarCall: {
+		// 🛑 THE CALLS WERE NOT HERE, so every one of them went out untyped: `MONTH(Date)`,
+		// `DATEDIFF(a, b, Day)`, and `DATEDIFF(…) + 1` with them (the arithmetic above needs both sides
+		// typed). The statement road did not mind; a report did — the composer reads its author's query
+		// as a nested source, the nested source is declared as a CTE, and the untyped field came back as
+		// an empty cell: a timesheet of zeros over days the query plainly counted (payroll demo,
+		// 2026-09-10). Each answer below is certain from the call alone.
+		ibDatePart part = ibDatePart::Year;
+		if (ReadDatePartOf(e.m_scalar, part))
+			return number;   // a part of a date is a number: the month is 9
+		const ibTypeDescription date(g_valueDateCLSID);
+		// A date moved or truncated keeps the argument's own date type (its qualifiers included) when it
+		// has one; a DATEDIFF counts.
+		const auto dateOfFirst = [&]() {
+			const ibTypeDescription t = e.m_args.empty() || !e.m_args.front()
+				? ibTypeDescription() : TypeOfExpr(sources, *e.m_args.front(), params);
+			return t.GetClsidCount() == 1 && t.ContainType(ibValueTypes::TYPE_DATE) ? t : date;
+		};
+		switch (e.m_scalar) {
+		case ibQueryScalarFn::DateDiff:
+			return number;
+		case ibQueryScalarFn::BeginOfPeriod:
+		case ibQueryScalarFn::EndOfPeriod:
+		case ibQueryScalarFn::DateAdd:
+			return dateOfFirst();
+		case ibQueryScalarFn::DateTime:
+			return date;
+		case ibQueryScalarFn::Substring:
+			return ibTypeDescription(g_valueStringCLSID);
+		default:
+			return ibTypeDescription();
+		}
+	}
 
 	default:
 		return ibTypeDescription();
@@ -3072,6 +3239,94 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 // door and wrap it in ibSubqueryQueryable (owned in `owner`). Used for a subquery source AND for each
 // branch of a UNION (the branch is itself a sub-SELECT). The wrapper exposes the branch's output
 // columns (by their Select alias) — so the outer query / the UNION matches columns by name.
+// ⭐⭐ THE STACK OF A UNION, built into `b` — ONE builder for both places a union is read. The first
+// branch's core is wrapped as a queryable and read as the union's columns (by name); every further branch
+// is checked for width against it and stacked under it with its own UNION / UNION ALL flag. Returns the
+// first branch, whose columns ARE the union's.
+//
+// 🛑 IT LIVED ONLY IN THE STATEMENT ROAD (LowerUnion), and the other reader of a union - a SUBQUERY,
+// `FROM (… UNION ALL …) AS x` - built its source from the first branch alone and dropped the rest
+// without a word. The composer wraps every author's query exactly that way, so a report over a union
+// showed half its rows: the payroll demo's statement lost its whole income-tax branch and summed to the
+// accruals alone (2026-09-10). A `Query` over the same text was right, which is what made it look like
+// the report's fault.
+std::shared_ptr<ibSubqueryQueryable> BuildUnionStack(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
+                                                     ibDataQueryBuilder& b, std::vector<OutputColumn>& outSchema,
+                                                     ibSubqueryOwner& owner)
+{
+	// First branch = ast's CORE (strip the whole-union ORDER / TOTALS / the union list itself).
+	// Its TOP is stripped too: on the first core it means the WHOLE-union limit (like the trailing
+	// ORDER BY) and applies to the whole; a later branch's TOP limits that branch only.
+	ibQuerySelect core0 = ast;
+	core0.m_orderBy.clear();
+	core0.m_unions.clear();
+	core0.m_totalsBy.clear();
+	core0.m_totalsAggregates.clear();
+	core0.m_totalsOverall = false;
+	core0.m_hasTotals = false;
+	core0.m_top = 0;
+
+	const std::shared_ptr<ibSubqueryQueryable> b0 = WrapSelectAsQueryable(core0, params, owner);
+
+	b.From(b0);   // the branch is owned by the builder too, and travels on to the result it stamps
+	b.Allowed(ast.m_allowed);   // the flag reaches every read of this statement, the stack included
+
+	// The union's output = the first branch's columns (read back by name); each is the output schema.
+	outSchema.clear();
+	for (const ibBackendQueryColumn* c : b0->GetColumns()) {
+		if (c == nullptr) continue;
+		b.Select(c, c->GetName());
+		OutputColumn oc; oc.m_name = c->GetName(); oc.m_alias = c->GetName(); oc.m_byAlias = true;
+		outSchema.push_back(oc);
+	}
+
+	// Each branch carries its UNION-vs-ALL flag: plain UNION dedupes the accumulated rows at its
+	// operator (SQL left-assoc semantics), UNION ALL keeps duplicates.
+	//
+	// ⭐⭐ EVERY BRANCH SELECTS THE SAME NUMBER OF COLUMNS, and this is where that is checked.
+	//
+	// Unchecked, a mismatch reached the SERVER, which answered in its own words about its own
+	// generated column names — a message that names nothing the author wrote and points at no line
+	// of their query. Worse, some engines do not refuse at all: they line the columns up by position
+	// and hand back a result where one branch's value sits under another branch's heading, which is
+	// not an error anywhere and is wrong everywhere.
+	//
+	// So the count is compared here, against the FIRST branch (whose columns are the union's own
+	// output), and the complaint names both numbers and the branch that differs.
+	int branchNumber = 1;
+	for (const std::shared_ptr<ibQuerySelect>& u : ast.m_unions) {
+		// ⭐ A LATER BRANCH IS NAMED BY THE FIRST, POSITION BY POSITION — the way a union is read, and the
+		// way it is written: `SELECT a AS Amount … UNION ALL SELECT -b …` names its columns once. The
+		// stack lines branches up BY NAME, so a later column that carried no alias (or another one)
+		// matched nothing and arrived EMPTY - a tax branch of `-D.Result` summed to zero without a word
+		// (the payroll demo, 2026-09-10). Where the branch lists its columns one by one, each is given
+		// the first branch's name at its position; a `*` branch keeps the names its source gives.
+		ibQuerySelect branch = *u;
+		const bool listed = !branch.m_selectAll && branch.m_projections.size() == outSchema.size()
+			&& std::none_of(branch.m_projections.begin(), branch.m_projections.end(),
+				[](const ibQueryProjection& p) { return p.m_star; });
+		if (listed)
+			for (size_t i = 0; i < branch.m_projections.size(); ++i)
+				branch.m_projections[i].m_alias = outSchema[i].m_name;
+
+		const std::shared_ptr<ibSubqueryQueryable> bn = WrapSelectAsQueryable(branch, params, owner);
+		branchNumber++;
+
+		size_t width = 0;
+		for (const ibBackendQueryColumn* c : bn->GetColumns())
+			if (c != nullptr) width++;
+
+		if (width != outSchema.size())
+			ThrowQueryException(0, 0, wxString::Format(
+				_("UNION branch %d selects %u column(s) while the first selects %u - every branch of a "
+				  "union must select the same columns, in the same order"),
+				branchNumber, static_cast<unsigned int>(width), static_cast<unsigned int>(outSchema.size())));
+
+		b.Union(bn, wxEmptyString, /*keepDuplicates*/ u->m_unionAll);
+	}
+	return b0;
+}
+
 std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& sel,
                                                 const std::map<wxString, ibValue>& params,
                                                 ibSubqueryOwner& owner)
@@ -3095,6 +3350,29 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 	// because one was proved would be trading a measured fix for a guess.
 	if (sel.m_hasTotals)
 		ThrowQueryException(0, 0, _("a subquery / UNION branch may not use TOTALS yet"));
+
+	// A UNION IS WRAPPED WHOLE — every branch stacked by the one builder of a union (BuildUnionStack),
+	// its columns published by name as the statement road reads them. It used to fall through to the
+	// single-source road below, which read the first branch only.
+	if (!sel.m_unions.empty()) {
+		ibDataQueryBuilder stack;
+		std::vector<OutputColumn> stackSchema;
+		const std::shared_ptr<ibSubqueryQueryable> first = BuildUnionStack(sel, params, stack, stackSchema, owner);
+
+		std::vector<ibSubqueryOutput> published;
+		for (const ibBackendQueryColumn* c : first->GetColumns()) {
+			if (c == nullptr) continue;
+			ibSubqueryOutput out;
+			out.m_name  = c->GetName();
+			out.m_alias = c->GetName();   // the stack selects each column under its own name
+			out.m_type  = c->GetTypeDesc();
+			published.push_back(out);
+		}
+		std::shared_ptr<ibSubqueryQueryable> wrapped =
+			std::make_shared<ibSubqueryQueryable>(stack, sel.m_top, published);   // TOP = the whole union's limit
+		owner.push_back(wrapped);
+		return wrapped;
+	}
 
 	ibDataQueryBuilder inner;
 
@@ -3472,60 +3750,8 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<wxString, 
 	if (ast.m_forUpdate)
 		ThrowQueryException(0, 0, _("FOR UPDATE cannot be used with UNION: a composed result holds no rows to lock"));
 
-	ibQuerySelect core0 = ast;
-	core0.m_orderBy.clear();
-	core0.m_unions.clear();
-	core0.m_totalsBy.clear();
-	core0.m_totalsAggregates.clear();
-	core0.m_totalsOverall = false;
-	core0.m_hasTotals = false;
-	core0.m_top = 0;
-
-	const std::shared_ptr<ibSubqueryQueryable> b0 = WrapSelectAsQueryable(core0, params, owner);
-
 	ibDataQueryBuilder b;
-	b.From(b0);   // the branch is owned by the builder too, and travels on to the result it stamps
-	b.Allowed(ast.m_allowed);   // the flag reaches every read of this statement, the stack included
-
-	// The union's output = the first branch's columns (read back by name); each is the output schema.
-	outSchema.clear();
-	for (const ibBackendQueryColumn* c : b0->GetColumns()) {
-		if (c == nullptr) continue;
-		b.Select(c, c->GetName());
-		OutputColumn oc; oc.m_name = c->GetName(); oc.m_alias = c->GetName(); oc.m_byAlias = true;
-		outSchema.push_back(oc);
-	}
-
-	// Each branch carries its UNION-vs-ALL flag: plain UNION dedupes the accumulated rows at its
-	// operator (SQL left-assoc semantics), UNION ALL keeps duplicates.
-	//
-	// ⭐⭐ EVERY BRANCH SELECTS THE SAME NUMBER OF COLUMNS, and this is where that is checked.
-	//
-	// Unchecked, a mismatch reached the SERVER, which answered in its own words about its own
-	// generated column names — a message that names nothing the author wrote and points at no line
-	// of their query. Worse, some engines do not refuse at all: they line the columns up by position
-	// and hand back a result where one branch's value sits under another branch's heading, which is
-	// not an error anywhere and is wrong everywhere.
-	//
-	// So the count is compared here, against the FIRST branch (whose columns are the union's own
-	// output), and the complaint names both numbers and the branch that differs.
-	int branchNumber = 1;
-	for (const std::shared_ptr<ibQuerySelect>& u : ast.m_unions) {
-		const std::shared_ptr<ibSubqueryQueryable> bn = WrapSelectAsQueryable(*u, params, owner);
-		branchNumber++;
-
-		size_t width = 0;
-		for (const ibBackendQueryColumn* c : bn->GetColumns())
-			if (c != nullptr) width++;
-
-		if (width != outSchema.size())
-			ThrowQueryException(0, 0, wxString::Format(
-				_("UNION branch %d selects %u column(s) while the first selects %u - every branch of a "
-				  "union must select the same columns, in the same order"),
-				branchNumber, static_cast<unsigned int>(width), static_cast<unsigned int>(outSchema.size())));
-
-		b.Union(bn, wxEmptyString, /*keepDuplicates*/ u->m_unionAll);
-	}
+	const std::shared_ptr<ibSubqueryQueryable> b0 = BuildUnionStack(ast, params, b, outSchema, owner);
 
 	// ORDER BY on the whole union — resolve against the first branch's columns (by name).
 	const std::vector<ibSourceBinding> usrc{ { wxEmptyString, b0.get() } };
@@ -3832,18 +4058,10 @@ void CollectColumns(const ibQueryAstExprPtr& e, std::vector<const ibQueryAstExpr
 	// hand the checker a path with no source to start on.
 	if (e->m_kind == ibQueryAstExprKind::Column) { out.push_back(e.get()); return; }
 
-	CollectColumns(e->m_lhs, out);
-	CollectColumns(e->m_rhs, out);
-	CollectColumns(e->m_arg, out);
-	CollectColumns(e->m_low, out);
-	CollectColumns(e->m_high, out);
-	CollectColumns(e->m_else, out);
-	for (const ibQueryAstExprPtr& item : e->m_list)
-		CollectColumns(item, out);
-	for (const auto& branch : e->m_cases) {
-		CollectColumns(branch.first, out);
-		CollectColumns(branch.second, out);
-	}
+	// The one walk, minus the words (queryAST.h). This collector spelled its own list of children and
+	// was the walker that never learned m_args: a column inside `YEAR(Period)` or `DATEDIFF(a, b, Day)`
+	// went unchecked here while the execution resolved it.
+	ibQueryForEachOperand(*e, [&out](const ibQueryAstExprPtr& child) { CollectColumns(child, out); });
 }
 
 void CheckSelectNames(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params);
@@ -3982,7 +4200,8 @@ bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValu
 // both. An expression is a TREE; the rule reads it as one.
 void CollectFoldedAndFree(const ibQueryAstExprPtr& e, bool insideAggregate,
                           std::vector<const ibQueryAstExpr*>& folded,
-                          std::vector<const ibQueryAstExpr*>& free)
+                          std::vector<const ibQueryAstExpr*>& free,
+                          const std::vector<wxString>* groupedExprs = nullptr)
 {
 	if (!e)
 		return;
@@ -3990,13 +4209,24 @@ void CollectFoldedAndFree(const ibQueryAstExprPtr& e, bool insideAggregate,
 		(insideAggregate ? folded : free).push_back(e.get());
 		return;
 	}
+	// ⭐ A SUBTREE THAT IS ITSELF A GROUP KEY reads nothing free. `SELECT BEGINOFPERIOD(Date, Month) AS M,
+	// COUNT(*) … GROUP BY BEGINOFPERIOD(Date, Month)` groups by the month, and `Date` inside it is fixed
+	// for the group by that key — the execution matches the two as TEXT (the GROUP BY branch of
+	// PopulateBuilder), so the check does too. Refused here, it was the check against the engine, and the
+	// constructor's "complete the grouping" would have added the raw date — a different query.
+	if (!insideAggregate && groupedExprs != nullptr && IsComputedExprAst(*e)) {
+		const wxString written = ibRenderQueryExpr(*e);
+		for (const wxString& key : *groupedExprs)
+			if (key.IsSameAs(written, false))
+				return;
+	}
 	// AN AGGREGATE FOLDS EVERYTHING BENEATH IT, however deep. Nested calls change nothing — once
 	// inside, inside stays.
 	const bool fold = insideAggregate
 		|| (e->m_kind == ibQueryAstExprKind::Func && ibIsAggregateKeyword(e->m_func));
 
-	ibQueryForEachChild(*e, [&](const ibQueryAstExprPtr& child) {
-		CollectFoldedAndFree(child, fold, folded, free);
+	ibQueryForEachOperand(*e, [&](const ibQueryAstExprPtr& child) {
+		CollectFoldedAndFree(child, fold, folded, free, groupedExprs);
 	});
 }
 
@@ -4050,11 +4280,16 @@ std::vector<ibQueryAstExprPtr> CollectUngrouped(const ibQuerySelect& ast,
 	// itself; for `SUM(Qty)` there are none; for `SUM(Qty) / Price` it is Price alone — exactly the
 	// field that has to be a group key, and the one the old shape never looked at.
 	bool grouping = !ast.m_groupBy.empty();
+	// The COMPUTED keys, in the text the execution matches them by (see CollectFoldedAndFree).
+	std::vector<wxString> groupedExprs;
+	for (const ibQueryAstExprPtr& key : ast.m_groupBy)
+		if (key && IsComputedExprAst(*key))
+			groupedExprs.push_back(ibRenderQueryExpr(*key));
 	std::vector<std::vector<const ibQueryAstExpr*>> freePerProjection;
 	freePerProjection.reserve(ast.m_projections.size());
 	for (const ibQueryProjection& projection : ast.m_projections) {
 		std::vector<const ibQueryAstExpr*> folded, free;
-		CollectFoldedAndFree(projection.m_expr, false, folded, free);
+		CollectFoldedAndFree(projection.m_expr, false, folded, free, &groupedExprs);
 		if (!folded.empty())
 			grouping = true;
 		freePerProjection.push_back(std::move(free));
@@ -4089,6 +4324,22 @@ std::vector<ibQueryAstExprPtr> CollectUngrouped(const ibQuerySelect& ast,
 				for (size_t k = 0; k < key.size() && prefix; ++k)
 					prefix = (key[k] == projCols[k]);
 				if (prefix) { grouped = true; break; }
+			}
+			// ⭐ …AND THE SAME WORDS ARE THE SAME COLUMN. Within one query `M.Month` in the projection and
+			// `M.Month` in GROUP BY name one field, whatever the resolution hands back for each. For a
+			// column of a SUBQUERY source standing in a JOIN it handed back no match, and the check refused
+			// a grouping the execution ran without a word: "'Month' is neither grouped nor aggregated",
+			// with `GROUP BY M.Month` in the text (a receivables report over months joined to turnovers,
+			// 2026-09-11). The resolved comparison above stays the first answer — it is what equates two
+			// spellings of one column; this one only stops identical spellings from being told apart.
+			for (size_t i = 0; !grouped && i < ast.m_groupBy.size(); ++i) {
+				const ibQueryAstExprPtr& key = ast.m_groupBy[i];
+				if (!key || key->m_kind != ibQueryAstExprKind::Column || key->m_path.size() != column->m_path.size())
+					continue;
+				bool same = true;
+				for (size_t k = 0; k < key->m_path.size() && same; ++k)
+					same = key->m_path[k].IsSameAs(column->m_path[k], false);
+				grouped = same;
 			}
 			if (!grouped)
 				out.push_back(ColumnCopy(*column));
@@ -4340,8 +4591,22 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 		if (e->m_subquery) CheckSelectNames(*e->m_subquery, params);
 	};
 
-	for (const ibQuerySelectPtr& branch : ast.m_unions)
-		if (branch) CheckSelectNames(*branch, params);
+	// ⭐ A LATER BRANCH IS JUDGED UNDER THE FIRST BRANCH'S NAMES, position by position — which is how the
+	// execution builds it (BuildUnionStack). Judged under its own, `SELECT … AS Month, … AS ForMonth …
+	// UNION ALL SELECT D.RegistrationPeriod, …, D.RegistrationPeriod …` was refused for two outputs called
+	// RegistrationPeriod: names the union never uses (the payroll demo, 2026-09-10).
+	for (const ibQuerySelectPtr& branch : ast.m_unions) {
+		if (!branch)
+			continue;
+		ibQuerySelect named = *branch;
+		const bool listed = !named.m_selectAll && named.m_projections.size() == ast.m_projections.size()
+			&& std::none_of(named.m_projections.begin(), named.m_projections.end(),
+				[](const ibQueryProjection& p) { return p.m_star; });
+		if (listed)
+			for (size_t i = 0; i < named.m_projections.size(); ++i)
+				named.m_projections[i].m_alias = ibQueryOutputName(ast.m_projections[i]);
+		CheckSelectNames(named, params);
+	}
 
 	std::vector<ibSourceBinding> sources;
 	if (!BuildCheckSources(ast, params, sources, /*reportMissing=*/true, /*tolerateOpaque=*/true)) {
@@ -4464,8 +4729,9 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 	}
 
 	// ⚠ TWO OUTPUT FIELDS CANNOT SHARE A NAME, and in THIS engine that is not a style rule. The
-	// output is read back BY NAME: a union lines its branches up by it, a temp table's columns are
-	// these names and its index is built over them, and a totals level answers to one. Two columns
+	// output is read back BY NAME: a temp table's columns are these names and its index is built over
+	// them, and a totals level answers to one. (A union's later branches take the first one's names by
+	// position — see the branch loop above — so it is the first branch's names that must be unique.) Two columns
 	// called the same thing make every one of those ambiguous, and the ambiguity is silent — the
 	// query runs and one of them wins.
 	//
@@ -6503,13 +6769,24 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 					col = mit->second;   // already projected for an earlier aggregate over the same field
 				else {
 					b.SelectExpr(BuildColumnExprFromAst(sources, *pit->second->m_expr, params), alias);
-					owned = std::make_shared<ibSyntheticScalarColumn>(alias, nextSynthId++);   // RawType::Number measure
+					owned = ProjectionHandle(alias, nextSynthId++);   // RawType::Number measure
 					col   = owned.get();
 					measureCol[alias] = col;
 				}
 			}
 			else if (pit != selectByName.end()) {
 				col = ResolvePath(sources, *pit->second->m_expr).back();   // a SELECTed real column, named by alias
+			}
+			// ⭐ AN EXPRESSION WRITTEN IN PLACE — `SUM(CASE WHEN Balance > 0 THEN Balance ELSE 0 END)` — takes
+			// the road a computed SELECT field takes just above: projected once under a synthetic name,
+			// folded through a column of its own. It was handed to the column resolver, which has no
+			// name to resolve in a CASE and refused with "'' walks through a reference" about the
+			// composer's own text (a receivables report folding only what is owed, 2026-09-11).
+			else if (IsComputedExprAst(*agg->m_arg)) {
+				const wxString alias = wxString::Format(wxT("expr%u"), static_cast<unsigned>(nextSynthId));
+				b.SelectExpr(BuildColumnExprFromAst(sources, *agg->m_arg, params), alias);
+				owned = ProjectionHandle(alias, nextSynthId++);   // RawType::Number measure
+				col   = owned.get();
 			}
 			// A selected field spelled its SOURCE way (`Catalog1.Parent`) — resolved against the
 			// sources. That it IS selected was settled above, before anything was built.
@@ -6536,7 +6813,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				// is not a reading: `COUNT(Date)` projected `fld1025_D` and then read it as a number,
 				// which the driver answers with "Invalid field type" — the whole report, for a column
 				// nobody looked at (Max, 2026-08-25, on `TOTALS COUNT(Number), COUNT(Date) BY (Ref, Date)`).
-				owned = std::make_shared<ibSyntheticScalarColumn>(alias, nextSynthId++, aggRaw);
+				owned = ProjectionHandle(alias, nextSynthId++, aggRaw);
 				col   = owned.get();
 			}
 		}
@@ -6606,8 +6883,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				             windowAlias);
 				// The receiver the fold reads it back through — a column of its own, so the figure does
 				// not land on top of the one it was computed from.
-				b.AggregateReceiver(outName,
-					std::make_shared<ibSyntheticScalarColumn>(windowAlias, nextSynthId++, overRaw));
+				b.AggregateReceiver(outName, ProjectionHandle(windowAlias, nextSynthId++, overRaw));
 			}
 			if (!serverComputes)
 				col = nullptr;   // folded here, into a slot of its own — so it is read by NAME

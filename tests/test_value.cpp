@@ -8,7 +8,10 @@
 
 #include <gtest/gtest.h>
 #include "backend/compiler/value.h"
+#include "backend/compiler/procUnitLambda.h"   // CopyValue — the LET road a script's `r = …` takes
 #include "backend/system/value/valueArray.h"   // ValueHashContract — composite keys
+
+#include <utility>   // std::move — the ValueMove cases
 
 // ===========================================================================
 // Footprint probe — reports the real sizeof on this build/platform.
@@ -342,6 +345,66 @@ TEST(ValueConstRef, CopyIsWeakAndReadOnly) {
     EXPECT_TRUE(copy.IsConstReference());
     EXPECT_EQ(copy.GetRef(), &probe);
     EXPECT_FALSE(deleted);
+}
+
+// ===========================================================================
+// THE LET ROAD RELEASES WHAT THE VARIABLE HELD — CopyValue(ibValue&, const ibValue&), the one a
+// script's `r = …` takes (OPER_LET reads its source const). It overwrote an object reference without
+// the DecrRef the mutable overload and the destructor both make, so an object a variable held before
+// an assignment outlived it for ever: a record set line kept its set and the set its rows, ~5 KB per
+// register row a posting wrote (measured 2026-09-10, a data breakpoint on the line's count).
+// ===========================================================================
+
+TEST(ValueLet, AssigningOverAnObjectReleasesIt) {
+    bool deleted = false;
+    ibValue slot;
+    slot = static_cast<ibValue*>(new ConstRefProbe(&deleted));   // the slot holds the only reference
+    const ibValue undefined;
+    CopyValue(slot, undefined);                                  // `r = Undefined`
+    EXPECT_TRUE(deleted);
+    EXPECT_EQ(slot.GetType(), ibValueTypes::TYPE_EMPTY);
+}
+
+TEST(ValueLet, AssigningAnotherObjectReleasesTheFirst) {
+    bool firstDeleted = false, secondDeleted = false;
+    ibValue slot; slot = static_cast<ibValue*>(new ConstRefProbe(&firstDeleted));
+    ibValue other; other = static_cast<ibValue*>(new ConstRefProbe(&secondDeleted));
+    CopyValue(slot, static_cast<const ibValue&>(other));         // `r = other`
+    EXPECT_TRUE(firstDeleted);
+    EXPECT_FALSE(secondDeleted);                                 // held twice now
+    slot.Reset();
+    other.Reset();
+    EXPECT_TRUE(secondDeleted);
+}
+
+TEST(ValueLet, AssigningAVariableToItselfKeepsItsObject) {
+    bool deleted = false;
+    ibValue slot; slot = static_cast<ibValue*>(new ConstRefProbe(&deleted));
+    CopyValue(slot, static_cast<const ibValue&>(slot));          // `x = x` — the copy comes first
+    EXPECT_FALSE(deleted);
+    slot.Reset();
+    EXPECT_TRUE(deleted);
+}
+
+// The move road the same way: MoveValue stamped the moved value over the destination's own object
+// and never let it go — the LET defect, on a function no caller had reached yet.
+TEST(ValueMove, MovingOverAnObjectReleasesIt) {
+    bool deleted = false;
+    ibValue slot; slot = static_cast<ibValue*>(new ConstRefProbe(&deleted));
+    MoveValue(std::move(slot), ibValue(42));
+    EXPECT_TRUE(deleted);
+    EXPECT_EQ(slot.GetType(), ibValueTypes::TYPE_NUMBER);
+}
+
+TEST(ValueMove, MovingAReferenceLeavesOneHolder) {
+    bool deleted = false;
+    ibValue source; source = static_cast<ibValue*>(new ConstRefProbe(&deleted));
+    ibValue slot;
+    MoveValue(std::move(slot), std::move(source));
+    EXPECT_FALSE(deleted);                                       // the destination holds it now
+    EXPECT_EQ(source.GetType(), ibValueTypes::TYPE_EMPTY);
+    slot.Reset();
+    EXPECT_TRUE(deleted);
 }
 
 // ===========================================================================

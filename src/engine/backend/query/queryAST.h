@@ -216,6 +216,23 @@ void ibQueryForEachChild(ibQueryAstExpr& e, Fn visit)
 	}
 }
 
+// …AND THE SAME WALK WITHOUT THE WORDS. `DATEDIFF(a, b, Day)` holds `Day` as a Column node, and so
+// does `TYPE(Catalog.Goods)` its type name (ibQueryScalarArgIsWord). Walking m_args made those two
+// visible to the column readers as columns: `SUM(DATEDIFF(a, b, Day))` was refused with `Day`
+// unknown (measured 2026-09-10 on the payroll demo). A reader of COLUMNS walks this; CloneExpr keeps
+// the full walk above, because a copy copies the words too.
+template <typename Fn>
+void ibQueryForEachOperand(const ibQueryAstExpr& e, Fn visit)
+{
+	ibQueryForEachChild(e, [&e, &visit](const ibQueryAstExprPtr& child) {
+		if (e.m_kind == ibQueryAstExprKind::ScalarCall)
+			for (size_t i = 0; i < e.m_args.size(); ++i)
+				if (e.m_args[i] == child && ibQueryScalarArgIsWord(e.m_scalar, i))
+					return;
+		visit(child);
+	});
+}
+
 // One SELECT output column: an expression (column path or aggregate) + an optional
 // alias. SELECT * sets m_star (whole-row, no expr).
 struct ibQueryProjection

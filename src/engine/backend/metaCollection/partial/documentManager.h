@@ -7,7 +7,9 @@ class ibValueManagerDataObjectDocument :
 	public ibValueManagerDataObject {
 	public:
 
-	ibValueReferenceDataObject* FindByNumber(const ibValue& vCode, const ibValue& vPeriod);
+	// A VALUE, not a pointer: the reference found is held by the value that carries it out
+	// (commonObjectManagerQuery.cpp says what the pointer cost).
+	ibValue FindByNumber(const ibValue& vCode, const ibValue& vPeriod);
 	ibValueReferenceDataObject* EmptyRef();
 
 	ibValueManagerDataObjectDocument(const ibValueMetaObjectDocument* metaObject = nullptr) : m_metaObject(metaObject) { m_members.Bind(this, &ibValueManagerDataObjectDocument::FillManagerMethods); }
