@@ -29,7 +29,7 @@
 
 #include <wx/string.h>
 
-#include <atomic>
+#include <functional>
 
 class ibInterfaceFirebird;
 
@@ -60,9 +60,9 @@ public:
 	// Synchronous: blocks the calling thread until sweep completes.
 	// Typical duration on a 5 GB database with light bloat: 5-30 s.
 	//
-	// `cancelToken` — optional pointer to an atomic flag the caller
-	// can flip to abort an in-progress wait. Polled inside the
-	// service-query loop; on cancel the in-flight isc_service is
+	// `cancelled` — optional: asked inside the service-query loop
+	// whether to stop (the caller's own cancel — the scheduler asks
+	// its session's run); on true the in-flight isc_service is
 	// detached and the function returns Status::Timeout. Without
 	// this, a process-shutdown Stop() that comes mid-sweep could
 	// detach the worker thread, which then uses `iface` after the
@@ -71,7 +71,7 @@ public:
 		ibInterfaceFirebird* iface,
 		const wxString& databasePath,
 		const ServiceConnection& conn,
-		const std::atomic<bool>* cancelToken = nullptr);
+		const std::function<bool()>& cancelled = {});
 
 	// Backup + Restore cycle. Runs gbak -B to a temp `.fbk` file,
 	// then gbak -R into a temp `.fdb` file, then atomic-renames the
@@ -100,7 +100,7 @@ public:
 	// directory as the source .fdb — for shared-folder deployments
 	// this means a gigabytes-over-SMB roundtrip. Prefer running BR
 	// after copying the .fdb to local disk for the maintenance run.
-	// `cancelToken` semantics — same as RunSweep above. BR cycle is
+	// `cancelled` semantics — same as RunSweep above. BR cycle is
 	// the long one (minutes for large DBs); without cancel the
 	// shutdown race becomes a near-certainty if a user closes during
 	// a maintenance window.
@@ -108,7 +108,7 @@ public:
 		ibInterfaceFirebird* iface,
 		const wxString& databasePath,
 		const ServiceConnection& conn,
-		const std::atomic<bool>* cancelToken = nullptr);
+		const std::function<bool()>& cancelled = {});
 
 	// Human-readable error string for a status.
 	static wxString StatusToString(Status s);

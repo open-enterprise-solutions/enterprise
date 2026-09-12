@@ -841,7 +841,7 @@ bool ibDatabaseLayerFirebird::Open()
 // (firebird.sweep / firebird.backup, see firebirdMaintenanceScheduler.cpp), where the interval, the
 // night window and the shared sys_job clock decide together, once, across every process on the base.
 // What is left here is the pass itself.
-bool ibDatabaseLayerFirebird::RunSweepNow(const std::atomic<bool>* cancelToken)
+bool ibDatabaseLayerFirebird::RunSweepNow(const std::function<bool()>& cancelled)
 {
 	if (!m_pInterface || m_strDatabase.IsEmpty())
 		return false;
@@ -851,11 +851,11 @@ bool ibDatabaseLayerFirebird::RunSweepNow(const std::atomic<bool>* cancelToken)
 	conn.password = m_strPassword;
 	// conn.server stays empty -> service_mgr on the local host.
 
-	return ibFirebirdMaintenance::RunSweep(m_pInterface.get(), m_strDatabase, conn, cancelToken)
+	return ibFirebirdMaintenance::RunSweep(m_pInterface.get(), m_strDatabase, conn, cancelled)
 	    == ibFirebirdMaintenance::Status::Ok;
 }
 
-bool ibDatabaseLayerFirebird::RunBackupRestoreNow(const std::atomic<bool>* cancelToken)
+bool ibDatabaseLayerFirebird::RunBackupRestoreNow(const std::function<bool()>& cancelled)
 {
 	if (!m_pInterface || m_strDatabase.IsEmpty())
 		return false;
@@ -864,7 +864,7 @@ bool ibDatabaseLayerFirebird::RunBackupRestoreNow(const std::atomic<bool>* cance
 	conn.username = m_strUser;
 	conn.password = m_strPassword;
 
-	return ibFirebirdMaintenance::RunBackupRestoreCycle(m_pInterface.get(), m_strDatabase, conn, cancelToken)
+	return ibFirebirdMaintenance::RunBackupRestoreCycle(m_pInterface.get(), m_strDatabase, conn, cancelled)
 	    == ibFirebirdMaintenance::Status::Ok;
 }
 // ⭐⭐ THE CANCEL — see ibDatabaseLayer::Cancel. fb_cancel_operation is the one call Firebird takes on an

@@ -58,8 +58,8 @@ public:
 	ibValue GetCell(long row, ibMetaID id) const              { if (row < 0 || row >= RowCount()) return ibValue();
 	                                                             const ibValue* v = m_rows[static_cast<size_t>(row)].find_value(id);
 	                                                             return v != nullptr ? *v : ibValue(); }
-	// The cell WHERE IT LIES, or null — for a reader that only looks (a scan for references), so looking
-	// costs no copy of the value.
+	// The cell WHERE IT LIES, or null — for a reader that only looks, so looking costs no copy of the value
+	// (and tells a cell that is not there from one that is empty: how the tests see a move was a move).
 	const ibValue* FindCell(long row, ibMetaID id) const      { if (row < 0 || row >= RowCount()) return nullptr;
 	                                                             return m_rows[static_cast<size_t>(row)].find_value(id); }
 	// ⭐ A CELL MOVED, NOT COPIED — for a stitch that is done with the table it reads from. Copying a value
@@ -109,21 +109,13 @@ public:
 			m_rows.resize(static_cast<size_t>(keep));
 	}
 
-	// ⭐⭐ …AND A ROW MOVED UNDER NEW KEYS — for a stitch whose source keys its cells by columns of its own
+	// ⭐⭐ …AND THE ROWS MOVED UNDER NEW KEYS — for a stitch whose source keys its cells by columns of its own
 	// (a union's later branch, a nested query publishing its inner columns under its own). The cell held
 	// under `rekey[k].first` lands under `rekey[k].second`: the value itself is moved, never copied. A cell
 	// under an id the list does not name rides along unread, as it does in AppendRowFrom; a named cell the
 	// row does not hold reads here as empty, exactly as a copy of an empty cell would. Each source id at
 	// most once — a column read twice needs a copy, not a move.
-	long    AppendRowRekeyed(ibQueryRamTable& src, long row, const std::vector<std::pair<ibMetaID, ibMetaID>>& rekey)
-	{
-		Row& r = src.m_rows[static_cast<size_t>(row)];
-		Row::container_type cells;
-		RekeyRow(r, rekey, cells);
-		m_rows.push_back(std::move(r));
-		return static_cast<long>(m_rows.size()) - 1;
-	}
-	// …every row of `src`: re-keyed where it stands, then handed on whole (AppendRowsFrom). One buffer
+	// Every row of `src`: re-keyed where it stands, then handed on whole (AppendRowsFrom). One buffer
 	// serves every row: each re-keyed row takes it, and hands back the memory it had (RekeyRow).
 	void    AppendRowsRekeyed(ibQueryRamTable& src, const std::vector<std::pair<ibMetaID, ibMetaID>>& rekey)
 	{
@@ -143,7 +135,7 @@ public:
 	                                                                m_rows.erase(m_rows.begin() + static_cast<size_t>(row)); }
 
 private:
-	// One row's cells re-labelled — see AppendRowRekeyed. Built anew beside the old one rather than edited
+	// One row's cells re-labelled — see AppendRowsRekeyed. Built anew beside the old one rather than edited
 	// where it stands, so a new key that is another pair's old one can never meet the cell still waiting to
 	// be moved away from it: the named cells under their new ids, then the riders — except where a named
 	// pair claims a rider's id, which it does whether or not it brought a cell (a pair with nothing to

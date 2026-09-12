@@ -26,7 +26,7 @@
 #include "backend/query/queryRender.h"        // ibQueryColumnFromPath
 #include "backend/query/queryKeywords.h"      // ibQueryKeywordText
 #include "backend/query/queryLexer.h"         // ibQueryLexer::IsIdentifier
-#include "backend/session/session.h"          // ibSession::CancelFlag — the walk hears a cancel
+#include "backend/session/session.h"          // ibSession::RunState — the walk hears a cancel
 
 #include <deque>   // the walk's descents and closing buffers, one per depth
 
@@ -314,13 +314,13 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// opened a scope to bound that; the scope was the wrong shape, because knowing every place a
 	// reference gets reused is knowing nearly every place there is.
 
-	// ⭐ THE CANCEL IS HEARD ON THE WALK — the flag of the session composing (ibSession::CancelFlag), taken once
+	// ⭐ THE CANCEL IS HEARD ON THE WALK — the run of the session composing (ibSession::RunState), taken once
 	// here and asked at every line handed to the driver. A report is folded and walked in the engine's own
 	// loops, where no interpreter polls: a window closed on a report composing waited for the whole of it.
 	ibSession* const composing = ibSession::Current();
-	const std::atomic<bool>* const cancel = composing != nullptr ? composing->CancelFlag() : nullptr;
+	const std::atomic<ibRunState>* const cancel = composing != nullptr ? composing->RunState() : nullptr;
 	const auto hearCancel = [cancel]() {
-		if (cancel != nullptr && cancel->load(std::memory_order_relaxed))
+		if (ibRunCancelled(cancel))
 			ibBackendInterruptException::Error();
 	};
 

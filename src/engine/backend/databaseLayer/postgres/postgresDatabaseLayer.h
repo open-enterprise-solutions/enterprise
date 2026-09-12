@@ -16,6 +16,8 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/preparedStatement.h"
 
+#include <mutex>   // m_cancelGuard
+
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 class ibInterfacePostgres;
 #endif
@@ -151,6 +153,10 @@ private:
 
 	void* m_pDatabase;
 	void* m_pCancel = nullptr;   // PGcancel*, made with the connection (Open) — what Cancel hands PQcancel
+	// ⭐ WHO MAY FREE WHAT THE CANCEL IS USING. Cancel runs on whatever thread asks, the owner may be closing or
+	// reopening at that moment, and PQcancel on a PGcancel that PQfreeCancel has just freed reads freed memory.
+	// Held by Cancel for the call and by every place m_pCancel is freed or replaced (audit 2026-09-12).
+	std::mutex m_cancelGuard;
 
 	// Stashed by SetLastSqlState() — the most recent SQLSTATE libpq
 	// surfaced via PQresultErrorField(PG_DIAG_SQLSTATE). Travels with

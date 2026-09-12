@@ -481,9 +481,12 @@ bool ibDatabaseLayerPostgres::Open()
 	}
 
 	if (m_pDatabase != nullptr) {
-		if (m_pCancel != nullptr) {
-			m_pInterface->GetPQfreeCancel()((PGcancel*)m_pCancel);
-			m_pCancel = nullptr;
+		{
+			std::lock_guard<std::mutex> guard(m_cancelGuard);   // not under a Cancel still using it
+			if (m_pCancel != nullptr) {
+				m_pInterface->GetPQfreeCancel()((PGcancel*)m_pCancel);
+				m_pCancel = nullptr;
+			}
 		}
 		m_pInterface->GetPQfinish()((PGconn*)m_pDatabase);
 		m_pDatabase = nullptr;
@@ -503,7 +506,9 @@ bool ibDatabaseLayerPostgres::Open()
 
 		// Made here, on the thread that owns the connection: PQcancel may use it from any other (Cancel),
 		// PQgetCancel may not.
-		m_pCancel = m_pInterface->GetPQgetCancel()((PGconn*)m_pDatabase);
+		PGcancel* const made = m_pInterface->GetPQgetCancel()((PGconn*)m_pDatabase);
+		std::lock_guard<std::mutex> guard(m_cancelGuard);
+		m_pCancel = made;
 	}
 
 	return true;
@@ -562,10 +567,13 @@ bool ibDatabaseLayerPostgres::Close()
 	CloseResultSets();
 	CloseStatements();
 
-	if (m_pCancel != nullptr)
 	{
-		m_pInterface->GetPQfreeCancel()((PGcancel*)m_pCancel);
-		m_pCancel = nullptr;
+		std::lock_guard<std::mutex> guard(m_cancelGuard);   // not under a Cancel still using it
+		if (m_pCancel != nullptr)
+		{
+			m_pInterface->GetPQfreeCancel()((PGcancel*)m_pCancel);
+			m_pCancel = nullptr;
+		}
 	}
 
 	if (m_pDatabase)
@@ -589,11 +597,13 @@ bool ibDatabaseLayerPostgres::IsOpen()
 // SQLSTATE 57014 to its own caller. Nothing running, nothing to stop.
 void ibDatabaseLayerPostgres::Cancel()
 {
-	PGcancel* const pCancel = (PGcancel*)m_pCancel;   // read once: the owning thread may be closing
-	if (pCancel == nullptr)
+	// Held for the whole call: the owner closing or reopening meanwhile waits for it rather than freeing the
+	// PGcancel under it (m_cancelGuard).
+	std::lock_guard<std::mutex> guard(m_cancelGuard);
+	if (m_pCancel == nullptr)
 		return;
 	char errbuf[256];
-	m_pInterface->GetPQcancel()(pCancel, errbuf, sizeof(errbuf));
+	m_pInterface->GetPQcancel()((PGcancel*)m_pCancel, errbuf, sizeof(errbuf));
 }
 
 // transaction support

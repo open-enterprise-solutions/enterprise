@@ -63,10 +63,19 @@ void LogSession(const std::string& msg)
 
 // THE HEARTBEAT. Every own row's lastActive moves once a beat (JobHeartbeatOwn, from ThreadBody), and that is
 // the whole of what "alive" means to a peer — so the beat is one number, read by the loop that keeps it and
-// by the question that asks it of somebody else (SettleSilentPeers): a row that stays still for kSilentBeats
-// of them has no owner.
+// by both roads that ask it of somebody else: a row that stays still for kSilentBeats of them has no owner.
+//
+// ⭐ ONE SILENCE FOR BOTH ROADS — the sweep that runs over every row unasked (JobSweepStale) and the question
+// asked of a few rows by somebody about to be refused (SettleSilentPeers). The question had three beats of
+// its own while the sweep kept ten, so a live peer whose heart stalls for a few seconds — stopped in a native
+// debugger, its beat waiting on a database lock — lost its row to the question, and with it the guard that one
+// designer is open (audit 2026-09-12). A live peer still costs the question one beat: it stops watching a row
+// the moment it moves.
 constexpr auto kHeartbeatInterval = std::chrono::seconds(1);
-constexpr int  kSilentBeats       = 3;
+constexpr int  kSilentBeats       = 10;
+// …the same silence in the seconds lastActive is compared in.
+constexpr int  kSilentSeconds     = static_cast<int>(
+	std::chrono::duration_cast<std::chrono::seconds>(kSilentBeats * kHeartbeatInterval).count());
 
 } // namespace
 
@@ -1581,9 +1590,9 @@ void ibSessionRegistry::JobSweepStale()
 	// docs/session-registry.md §4). Without HoldRowLocks the probe
 	// just succeeds on *every* row, making it useless for
 	// distinguishing alive from dead.
-	constexpr int kStaleCutoffSec = 10;   // 10× heartbeat interval — force-killed
-	                                      // owners disappear from Active Users
-	                                      // within ~10s of their last heartbeat
+	// The silence both roads use (kSilentBeats) — force-killed owners disappear
+	// from Active Users within ~10 s of their last heartbeat.
+	constexpr int kStaleCutoffSec = kSilentSeconds;
 
 	wxDateTime cutoff = wxDateTime::Now();
 	(void)cutoff.Subtract(wxTimeSpan(0, 0, kStaleCutoffSec));
@@ -1681,11 +1690,12 @@ void ibSessionRegistry::JobHeartbeatOwn()
 	}
 }
 
-// ⭐⭐ ASKED, NOT WAITED OUT — see the declaration. lastActive of the named rows, read again every half beat
-// for at most kSilentBeats beats, and done as soon as every one of them has moved: a live peer costs a beat,
-// a dead one the whole window. The stale sweep keeps its own cutoff (JobSweepStale, 10 s) — that one runs
-// unasked over every row and must not take a slow peer for a dead one; this one is asked about a few rows by
-// somebody about to be refused, and watches them.
+// ⭐⭐ ASKED, NOT WAITED OUT — see the declaration. lastActive of the named rows, read again every half beat,
+// and each row settled as soon as it can be: moved — its owner is alive, a beat's cost; still, and its last
+// beat older than the silence both roads use (kSilentSeconds, the stale sweep's cutoff) — no owner, removed
+// now rather than at the sweep's next tick. A row killed a moment ago is watched until its beat is that old,
+// never less: neither road may take a slow peer for a dead one. The watch itself is bounded by the same
+// silence, so a lastActive ahead of our clock cannot hold the caller longer than a row standing still would.
 //
 // 🛑 OUR OWN HEART KEEPS BEATING WHILE WE WATCH. This runs on the registry thread, which is the thread that
 // beats; sitting still for the window, it would let a peer asking the same question about US at the same
@@ -1719,7 +1729,22 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
 
 	using clock = std::chrono::steady_clock;
 	const auto deadline = clock::now() + kSilentBeats * kHeartbeatInterval;
-	while (!still.empty() && clock::now() < deadline) {
+	const wxTimeSpan silence(0, 0, kSilentSeconds);
+	std::set<wxString> silent;   // stood still until its last beat was older than the silence
+	for (;;) {
+		// Settled by age where the age already says it — the sweep's own rule, asked now.
+		const wxDateTime at = wxDateTime::Now();
+		for (auto it = still.begin(); it != still.end(); ) {
+			const wxDateTime& beat = first[*it];   // no beat recorded at all: only the watch can settle it
+			if (beat.IsValid() && at - beat >= silence) {
+				silent.insert(*it);
+				it = still.erase(it);
+			}
+			else
+				++it;
+		}
+		if (still.empty() || clock::now() >= deadline)
+			break;
 		std::this_thread::sleep_for(std::chrono::milliseconds(kHeartbeatInterval) / 2);
 		if (m_stop.load(std::memory_order_acquire))
 			return 0;
@@ -1735,16 +1760,18 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
 				++it;
 		}
 	}
+	// What is still watched here stood still for the whole silence by our own clock — no owner either.
+	silent.insert(still.begin(), still.end());
 
-	for (const wxString& silent : still) {
-		SESSION_LOG("[session settle] removing " << silent.ToStdString()
-		          << " - its lastActive stood still for " << kSilentBeats << " beats");
-		DeleteSessionRow(m_writeHolder, silent);
+	for (const wxString& row : silent) {
+		SESSION_LOG("[session settle] removing " << row.ToStdString()
+		          << " - its lastActive stood still for " << kSilentSeconds << " s");
+		DeleteSessionRow(m_writeHolder, row);
 	}
-	if (!still.empty()) {
+	if (!silent.empty()) {
 		try { JobRefreshSnapshot(); } catch (...) { /* swallowed: the next tick refreshes; the caller re-reads either way */ }
 	}
-	return still.size();
+	return silent.size();
 }
 
 // Shared UPDATE path for admin directives. Uses the global `db_query`

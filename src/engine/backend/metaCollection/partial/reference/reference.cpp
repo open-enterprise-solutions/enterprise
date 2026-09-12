@@ -20,6 +20,7 @@
 #include "backend/diagnostics/journal.h"   // a read refused across sessions is said out loud
 #include "backend/utils/debugTrace.h"      // ibDebugTraceEnabled — the register measurement is opt-in
 #include <unordered_map>
+#include <unordered_set>         // Unread — an identity filed twice is told once
 #include <mutex>                 // the table is read by a rented read on another thread
 #include <cstring>
 //////////////////////////////////////////////////////////////////////
@@ -115,6 +116,10 @@ struct ibReferenceTable {
 	};
 	std::mutex m_mtx;
 	std::unordered_map<ibRefKey, ibFiled, ibRefKeyHash> m_live;
+	// ⭐ THE ONES FILED SINCE A BATCH LAST ASKED (Unread) — by key, so one that has gone is simply not found
+	// again. A batch takes these instead of walking every live reference: a payroll sheet holds some 120
+	// thousand, and every in-memory result asked for the unread among all of them (audit 2026-09-12).
+	std::vector<ibRefKey> m_unread;
 };
 
 // The current session's table, made if this is the first reference it holds. Null when there is no
@@ -235,7 +240,13 @@ ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibValueMetaObjectRec
 // ⭐ THE REGISTER ALREADY KNOWS EVERY REFERENCE THE SESSION MADE, so a batch asks it rather than walking
 // the lists the references went into: a query's flat list was scanned cell by cell for them, three times
 // over for one payroll sheet (read, stitched, sorted), some 300 ms a time (MEASURED 2026-09-12).
-std::vector<ibValuePtr<ibValueReferenceDataObject>> ibReferenceRegistry::Find(ibReferenceState state)
+//
+// …AND IT KNOWS WHICH OF THEM ARE NEW. The batch used to walk every live reference for the raw ones, and every
+// in-memory result asks it — the cost grew with what the session had ever made, per result, inside a script's
+// loop as much as anywhere (audit 2026-09-12). Now it takes the keys filed since it last asked: each is asked
+// of a batch once, and one a batch could not tell (a read that failed, a row not there) reads itself when it
+// is asked, instead of being read again by every batch after.
+std::vector<ibValuePtr<ibValueReferenceDataObject>> ibReferenceRegistry::Unread()
 {
 	std::vector<ibValuePtr<ibValueReferenceDataObject>> found;
 	ibSession* const session = ibSession::Current();
@@ -244,13 +255,22 @@ std::vector<ibValuePtr<ibValueReferenceDataObject>> ibReferenceRegistry::Find(ib
 		return found;
 	// ⚠ ITS OWN, NOT THE TABLE'S. A rented run shares its host's table, and the host's thread may be asking
 	// the host's references what they are while this one runs: telling those from here would write to one
-	// object from two threads. What this session filed, only this session is working with.
+	// object from two threads. What this session filed, only this session is working with — the others' keys
+	// stay for their own batch.
 	const std::weak_ptr<ibSession> self = session->weak_from_this();
 	std::lock_guard<std::mutex> lock(own->m_mtx);   // a guest may be reading this map — see Find above
-	for (const auto& live : own->m_live)
-		if (live.second.m_ref->m_state == state
-			&& !live.second.m_by.owner_before(self) && !self.owner_before(live.second.m_by))
-			found.emplace_back(live.second.m_ref);
+	std::vector<ibRefKey> others;
+	std::unordered_set<const ibValueReferenceDataObject*> taken;   // an identity filed twice is told once
+	for (const ibRefKey& key : own->m_unread) {
+		const auto live = own->m_live.find(key);
+		if (live == own->m_live.end() || live->second.m_ref->m_state != ibReferenceState::Raw)
+			continue;   // gone, or told since it was filed
+		if (live->second.m_by.owner_before(self) || self.owner_before(live->second.m_by))
+			others.push_back(key);
+		else if (taken.insert(live->second.m_ref).second)
+			found.emplace_back(live->second.m_ref);
+	}
+	own->m_unread.swap(others);
 	return found;
 }
 
@@ -287,8 +307,20 @@ void ibReferenceRegistry::Remember(ibValueReferenceDataObject* ref)
 		if (session != nullptr)
 			by = session->weak_from_this();
 		std::lock_guard<std::mutex> lock(table->m_mtx);
-		table->m_live.emplace(ibRefKey{ ref->m_metaObject->GetMetaID(), key },
+		const auto filed = table->m_live.emplace(ibRefKey{ ref->m_metaObject->GetMetaID(), key },
 			ibReferenceTable::ibFiled{ ref, std::move(by) });
+		if (filed.second) {
+			table->m_unread.push_back(filed.first->first);   // for the next batch (Unread)
+			// …kept no longer than what it names: a session that never asks a batch would grow it with every
+			// reference it ever made. Pruned to the live and unread once it is twice what is alive.
+			if (table->m_unread.size() > 2 * table->m_live.size() + 64) {
+				std::vector<ibRefKey>& unread = table->m_unread;
+				unread.erase(std::remove_if(unread.begin(), unread.end(), [&table](const ibRefKey& k) {
+					const auto live = table->m_live.find(k);
+					return live == table->m_live.end() || live->second.m_ref->m_state != ibReferenceState::Raw;
+				}), unread.end());
+			}
+		}
 	}
 
 	// ⭐ THE REFERENCE KEEPS ITS OWN TABLE, not a way to find one later. A value can travel — into a

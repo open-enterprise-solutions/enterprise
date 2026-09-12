@@ -1,4 +1,3 @@
-#include <atomic>   // std::atomic — MSVC supplied this transitively
 #include "firebirdMaintenance.h"
 #include "firebirdInterface.h"
 #include "backend/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
@@ -84,22 +83,21 @@ void AppendSpbInt32(std::string& spb, char tag, int32_t value) {
 // service thread once its internal write buffer fills (long gbak
 // runs hit this within a few minutes).
 //
-// `cancelToken` — when not nullptr and *cancelToken == true the
-// loop bails out fast (returns false). The caller treats this as
-// the same exit path as timeout — service handle is detached,
-// status is Timeout. The token must remain alive for the whole
-// call; the scheduler owns the atomic and outlives the worker.
+// `cancelled` — when given and it answers true the loop bails out
+// fast (returns false). The caller treats this as the same exit
+// path as timeout — service handle is detached, status is Timeout.
+// Whatever it asks must stay alive for the whole call; the
+// scheduler asks its session's run, which outlives the worker.
 bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
                               isc_svc_handle& svc,
                               ISC_STATUS_ARRAY& status,
                               int timeoutSeconds,
-                              const std::atomic<bool>* cancelToken)
+                              const std::function<bool()>& cancelled)
 {
 	using namespace std::chrono;
 	const auto deadline = steady_clock::now() + seconds(timeoutSeconds);
-	auto canceled = [cancelToken]() {
-		return cancelToken != nullptr
-		    && cancelToken->load(std::memory_order_acquire);
+	auto canceled = [&cancelled]() {
+		return cancelled && cancelled();
 	};
 
 	// We query both `isc_info_svc_running` (still going?) and
@@ -215,7 +213,7 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunSweep(
 	ibInterfaceFirebird* iface,
 	const wxString& databasePath,
 	const ServiceConnection& conn,
-	const std::atomic<bool>* cancelToken)
+	const std::function<bool()>& cancelled)
 {
 	if (iface == nullptr
 	 || iface->GetIscServiceAttach() == nullptr
@@ -268,7 +266,7 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunSweep(
 
 	// Sweep on a multi-GB DB can take several minutes; give it 30.
 	const bool ok = WaitForServiceCompletion(
-		iface, svc, status, /*timeoutSeconds=*/1800, cancelToken);
+		iface, svc, status, /*timeoutSeconds=*/1800, cancelled);
 
 	iface->GetIscServiceDetach()(status, &svc);
 	return ok ? Status::Ok : Status::Timeout;
@@ -278,7 +276,7 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 	ibInterfaceFirebird* iface,
 	const wxString& databasePath,
 	const ServiceConnection& conn,
-	const std::atomic<bool>* cancelToken)
+	const std::function<bool()>& cancelled)
 {
 	if (iface == nullptr
 	 || iface->GetIscServiceAttach() == nullptr
@@ -337,7 +335,7 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 		// Backup on a 100 GB DB: ~5-15 minutes on modern SSD. Give
 		// it 30.
 		const bool ok = WaitForServiceCompletion(
-			iface, svc, status, 1800, cancelToken);
+			iface, svc, status, 1800, cancelled);
 		iface->GetIscServiceDetach()(status, &svc);
 
 		if (!ok) {
@@ -378,7 +376,7 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 		}
 
 		const bool ok = WaitForServiceCompletion(
-			iface, svc, status, 1800, cancelToken);
+			iface, svc, status, 1800, cancelled);
 		iface->GetIscServiceDetach()(status, &svc);
 
 		if (!ok) {

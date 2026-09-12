@@ -12,6 +12,7 @@
 // interpreter still reads/writes its TLS, the swap helpers come later.
 
 #include <atomic>
+#include <cstdint>     // uint8_t — ibRunState's width, which the opaque declarations repeat
 #include <map>
 #include <utility>
 #include <vector>
@@ -25,6 +26,22 @@
 class ibProcUnit;
 struct ibRunContext;
 struct ibByteCode;
+
+// ⭐ WHERE A SESSION'S RUN STANDS, as the one who cancels it and those who listen see it — ONE value, so every
+// change is one atomic step and no reader can catch two flags half-way (ibProcUnitState::m_runState).
+// Declared opaque (`enum class ibRunState : uint8_t;`) by the headers that only hand its address on.
+enum class ibRunState : uint8_t {
+	Idle,        // nothing running — a cancel that finds this on a host session is for nothing
+	Running,     // a script is on the stack, there to hear a cancel
+	Cancelled,   // …and it has been told: every level throws the interruption until the run is out
+};
+
+// The one question every listener asks — the interpreter between opcodes, the engine's long loops between
+// rows and lines, a Services API poll — asked one way. No state to watch (a read nobody can cancel) is never
+// cancelled.
+inline bool ibRunCancelled(const std::atomic<ibRunState>* run) noexcept {
+	return run != nullptr && run->load(std::memory_order_relaxed) == ibRunState::Cancelled;
+}
 
 // Where the most recently-raised script exception originated. Mirrored
 // from procUnit.cpp where the file-static `s_errorPlace` lives; the
@@ -135,11 +152,13 @@ struct ibProcUnitState {
 	// MAX_REC_COUNT in procUnit.cpp.
 	short                       m_recCount = 0;
 
-	// ⭐ THE CANCEL — raised by ibSession::Cancel from any thread, heard by the interpreter between opcodes,
-	// which throws the interruption. Hearing it does not lower it: it stays up while the run unwinds, so every
-	// level that meets it throws again, and it is lowered where no run is left — the stack at empty
-	// (ibProcStackGuard).
-	std::atomic<bool>           m_cancel { false };
+	// ⭐ THE RUN AND ITS CANCEL, one value (ibRunState). The guard of the stack at empty makes it Running as a
+	// script starts and Idle as the last frame leaves (ibProcStackGuard); ibSession::Cancel, from any thread,
+	// makes a Running one Cancelled — and a job's session Cancelled whatever it finds, a job's session being its
+	// run. Heard by the interpreter between opcodes and by the engine's long loops (ibRunCancelled), all of
+	// which throw the interruption; hearing it changes nothing, so every level that meets it throws again
+	// until the run is out.
+	std::atomic<ibRunState>     m_runState { ibRunState::Idle };
 
 	// Scratch buffer the OPER_FUNC entry builds a `Cached` call's argument tuple
 	// in before looking it up. It belongs HERE, beside the call stack, for the

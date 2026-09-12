@@ -32,10 +32,12 @@
 #include "backend/databaseLayer/columnType.h"        // ibColumnType — Cast target + ibDdlColumn type (dialect TYPE-MAP renders it)
 
 #include <atomic>          // ibQueryResult — the cancel it hears
+#include <cstdint>
 #include <deque>           // ibQueryResult — its fields, found once per result
 #include <memory>
 #include <vector>
 
+enum class ibRunState : uint8_t;   // backend/compiler/procUnitState.h — the run whose cancel a read hears
 class ibDatabaseConnectionHolder;
 class ibDatabaseResultSet;
 class ibResultSetMetaData;
@@ -1142,7 +1144,7 @@ public:
 	ibQueryResult(std::shared_ptr<ibDatabaseLayer> conn,
 	              ibPreparedStatement* stmt,
 	              ibDatabaseResultSet* rs,
-	              const std::atomic<bool>* cancel = nullptr);
+	              const std::atomic<ibRunState>* cancel = nullptr);
 	// …and the same statement run again for each of `runs` once the rows before are read (ExecuteIR over
 	// several) — one cursor over them all. Opaque here; the runs are made where they are defined. Null runs
 	// is a single run.
@@ -1150,7 +1152,7 @@ public:
 	              ibPreparedStatement* stmt,
 	              ibDatabaseResultSet* rs,
 	              std::unique_ptr<struct ibQueryRuns> runs,
-	              const std::atomic<bool>* cancel);
+	              const std::atomic<ibRunState>* cancel);
 	~ibQueryResult();
 
 	ibQueryResult(ibQueryResult&& other) noexcept;
@@ -1242,12 +1244,12 @@ private:
 	// The runs of this statement still to come (ExecuteIR over several); null for a single run. What was
 	// found above stays good across them: every run is the same statement, so the same columns.
 	std::unique_ptr<struct ibQueryRuns> m_runs;
-	// ⭐ THE CANCEL OF WHOSE READ THIS IS — the flag (ibSession::CancelFlag) of the session whose connection it
-	// is read on, heard on every row. Every read of the engine draws its rows through Next, so a cancel stops
-	// a read wherever it has got to, and not only a statement the database happens to be running at that
-	// moment. A read on a connection taken for anyone else — a service thread's own holder — hears nobody's:
-	// the session a thread falls back to is not the one reading there.
-	const std::atomic<bool>* m_cancel = nullptr;
+	// ⭐ THE CANCEL OF WHOSE READ THIS IS — the run's state (ibSession::RunState) of the session whose
+	// connection it is read on, heard on every row (ibRunCancelled). Every read of the engine draws its rows
+	// through Next, so a cancel stops a read wherever it has got to, and not only a statement the database
+	// happens to be running at that moment. A read on a connection taken for anyone else — a service thread's
+	// own holder — hears nobody's: the session a thread falls back to is not the one reading there.
+	const std::atomic<ibRunState>* m_cancel = nullptr;
 };
 
 // ==========================================================================

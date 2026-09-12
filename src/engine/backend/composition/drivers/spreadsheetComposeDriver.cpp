@@ -1,6 +1,6 @@
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"
 #include "backend/system/value/valueSpreadsheetDetails.h"   // what a cell is stamped with — value + its links
-#include "backend/session/session.h"                        // ibSession::CancelFlag — the lines hear a cancel
+#include "backend/session/session.h"                        // ibSession::RunState — the lines hear a cancel
 
 #include <algorithm>   // std::min — MSVC drags it in transitively, libstdc++ does not
 #include <map>         // the per-level field counts the dimension layout is built from
@@ -1471,10 +1471,10 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	const size_t width = static_cast<size_t>(std::max(totalCols, 0));
 	std::vector<wxString> cellText(width), cellLink(width);
 	std::vector<char>     cellSaid(width), cellRight(width);
-	// …AND A CANCEL IS HEARD LINE BY LINE — the composing session's own flag (ibSession::CancelFlag), as on
-	// the composer's walk: these lines are written after the walk has ended, so it cannot hear it for them.
+	// …AND A CANCEL IS HEARD LINE BY LINE — the composing session's own run (ibSession::RunState), as on the
+	// composer's walk: these lines are written after the walk has ended, so it cannot hear it for them.
 	ibSession* const composing = ibSession::Current();
-	const std::atomic<bool>* const cancel = composing != nullptr ? composing->CancelFlag() : nullptr;
+	const std::atomic<ibRunState>* const cancel = composing != nullptr ? composing->RunState() : nullptr;
 	// WHICH COLUMNS A LEVEL'S HEADING STANDS IN — asked of the schema once per level: each of forty thousand
 	// lines asked it again, and made and freed a vector to hold the answer (stack samples 2026-09-12, Debug).
 	std::vector<std::vector<size_t>> headingAtLevel;
@@ -1482,7 +1482,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	// each — so the sheet is told once, and sizes its indexes for them rather than as they fill.
 	m_document->GetSpreadsheetDesc().ReserveSpreadsheet(m_crossRows.size(), m_crossRows.size() * width);
 	for (const CrossRow& source : m_crossRows) {
-		if (cancel != nullptr && cancel->load(std::memory_order_relaxed))
+		if (ibRunCancelled(cancel))
 			ibBackendInterruptException::Error();
 		const int at = m_document->GetNumberRows();   // the row this line becomes
 		std::fill(cellSaid.begin(), cellSaid.end(), 0);
@@ -1570,14 +1570,14 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		};
 		// BY SLOT, because a slot is what a column IS — a key's figures, or an upper heading's own.
 		for (size_t s = 0; s < slots.size(); ++s) {
-			const int at = dimWidth + static_cast<int>(s) * perKey;
+			const int slotCol = dimWidth + static_cast<int>(s) * perKey;   // the slot's first column (`at` is the row)
 			if (!slots[s].m_subtotal) {
 				if (const std::vector<ibValue>* cell = source.m_cells.find_value(slots[s].m_at))
-					writeFigures(at, *cell, slotChain[s]);
+					writeFigures(slotCol, *cell, slotChain[s]);
 				continue;
 			}
 			for (const std::pair<CrossKey, std::vector<ibValue>>& kept : source.m_subtotals)
-				if (kept.first == slots[s].m_key) { writeFigures(at, kept.second, slotChain[s]); break; }
+				if (kept.first == slots[s].m_key) { writeFigures(slotCol, kept.second, slotChain[s]); break; }
 		}
 		// THE ROW TOTAL stands under the ROW only — it is what this heading adds up to across every
 		// column, so naming one of them would be a link that is not true.

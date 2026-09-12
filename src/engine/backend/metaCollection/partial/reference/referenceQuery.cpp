@@ -79,10 +79,10 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 
 void ibValueReferenceDataObject::ReadBatch()
 {
-	// THE RAW ONES, asked of the register — every reference this session made that nobody has told what it
-	// says, held while they are told. Grouped a table at a time; the register holds one object per
-	// identity, so a key is one reference here, and the row that comes back for it is that very object.
-	const std::vector<ibValuePtr<ibValueReferenceDataObject>> raw = ibReferenceRegistry::Find(ibReferenceState::Raw);
+	// THE RAW ONES, asked of the register — every reference this session made since the last batch that nobody
+	// has told what it says, held while they are told. Grouped a table at a time; the register holds one object
+	// per identity, so a key is one reference here, and the row that comes back for it is that very object.
+	const std::vector<ibValuePtr<ibValueReferenceDataObject>> raw = ibReferenceRegistry::Unread();
 	if (raw.empty())
 		return;
 	std::vector<ibValueReferenceDataObject*> byTable(raw.begin(), raw.end());

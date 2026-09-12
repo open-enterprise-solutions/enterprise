@@ -50,6 +50,13 @@ enum {
 	wxID_DESIGNER_ABOUT,
 	wxID_DESIGNER_END
 };
+
+// ⚠ A PERSON'S KEYS ARE KEPT BY THESE NUMBERS (ibKeyBinder::Save, the profile's "shortcuts"), so a command
+// inserted in the middle moves every changed key after it onto another command — Step Out did (2026-09-12),
+// and that profile was dropped for it. A new command goes LAST, before the end marker; these checks break the
+// build on an insertion or a removal instead of moving somebody's keys. The numbers are the day the
+// "shortcuts" profile began.
+static_assert(wxID_DESIGNER_ABOUT == 10026, "append new designer commands before wxID_DESIGNER_END - the key profile keeps keys by number");
 // Note: Syntax-helper command ids live in frontend/mainFrame/mainFrame.h
 // (wxID_FRONTEND_SYNTAX_HELPER / wxID_FRONTEND_SYNTAX_HELPER_LOOKUP) so
 // frontend widgets (e.g. ibCodeEditor's context menu) can post them
@@ -69,6 +76,8 @@ enum {
 	wxID_APPLICATION_MCP_SERVER,
 	wxID_APPLICATION_MCP_ASSISTANT,
 };
+// …and the same for these (see above): a new one goes last.
+static_assert(wxID_APPLICATION_MCP_ASSISTANT == wxID_HIGHEST + 8, "append new application commands last - the key profile keeps keys by number");
 
 #define mainFrame	(ibFrontendMainFrameDesigner::GetFrame())
 

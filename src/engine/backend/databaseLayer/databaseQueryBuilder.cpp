@@ -7,7 +7,7 @@
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/resultSetMetaData.h"
-#include "backend/session/session.h"   // ibQueryResult hears its reader's cancel (ibSession::CancelFlag)
+#include "backend/session/session.h"   // ibQueryResult hears its reader's cancel (ibSession::RunState)
 
 // --------------------------------------------------------------------------
 // Parameter binding: ibValue -> ibPreparedStatement::SetParam* by type.
@@ -79,17 +79,17 @@ struct ibQueryRuns {
 // WHOSE CANCEL A READ HEARS (ibQueryResult::m_cancel) — the session's whose holder its connection was taken
 // for: the road the cancel itself takes to the database (ibSession::Cancel -> Holder()->Cancel()). A service
 // thread reads on a holder of its own and falls back to somebody else's session, whose cancel is not its.
-static const std::atomic<bool>* ibCancelOfReader(const ibConnectionScope& scope)
+static const std::atomic<ibRunState>* ibCancelOfReader(const ibConnectionScope& scope)
 {
 	ibSession* const session = ibSession::Current();
 	return session != nullptr && scope.Holder() != nullptr && scope.Holder() == session->Holder()
-		? session->CancelFlag() : nullptr;
+		? session->RunState() : nullptr;
 }
 
 // Run a rendered SELECT and wrap the cursor. Shared by Execute() and ExecuteIR() — and by the runs of one
 // statement, which ride along in `runs`.
 static ibQueryResult ibRunRendered(const std::shared_ptr<ibDatabaseLayer>& conn,
-                                   const std::atomic<bool>* cancel,
+                                   const std::atomic<ibRunState>* cancel,
                                    const ibRenderedQuery& rendered,
                                    const std::vector<ibValue>& externalParams,
                                    std::unique_ptr<ibQueryRuns> runs = nullptr)
@@ -501,7 +501,7 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteReturning(const ibDmlStatement& dml
 ibQueryResult::ibQueryResult(std::shared_ptr<ibDatabaseLayer> conn,
                              ibPreparedStatement* stmt,
                              ibDatabaseResultSet* rs,
-                             const std::atomic<bool>* cancel)
+                             const std::atomic<ibRunState>* cancel)
 	: m_conn(std::move(conn)), m_stmt(stmt), m_rs(rs), m_cancel(cancel)
 {
 }
@@ -510,7 +510,7 @@ ibQueryResult::ibQueryResult(std::shared_ptr<ibDatabaseLayer> conn,
                              ibPreparedStatement* stmt,
                              ibDatabaseResultSet* rs,
                              std::unique_ptr<ibQueryRuns> runs,
-                             const std::atomic<bool>* cancel)
+                             const std::atomic<ibRunState>* cancel)
 	: m_conn(std::move(conn)), m_stmt(stmt), m_rs(rs), m_runs(std::move(runs)), m_cancel(cancel)
 {
 }
@@ -598,7 +598,7 @@ bool ibQueryResult::Next()
 {
 	// A CANCEL IS HEARD BETWEEN ROWS (m_cancel), and it leaves the way the interpreter's does — so whoever
 	// started the read hears one interruption, whether it arrived through the statement or through here.
-	if (m_cancel != nullptr && m_cancel->load(std::memory_order_relaxed))
+	if (ibRunCancelled(m_cancel))
 		ibBackendInterruptException::Error();
 	while (m_rs != nullptr) {
 		if (m_rs->Next())
@@ -716,8 +716,12 @@ ibQueryResult::FieldSlots& ibQueryResult::FieldsOf(const wxString& base)
 
 int ibQueryResult::FieldIndex(FieldSlots& slots, const wxString& base, unsigned slot, const wxString& suffix)
 {
-	if (m_rs == nullptr || slot >= kFieldSlots)
+	if (m_rs == nullptr)
 		return 0;   // no cursor — every read below answers as the named read does with none
+	// A role past the slots a base keeps is asked by name every time — found as the named read finds it, only
+	// not remembered. It answered "no cursor" and read empty, without a word (audit 2026-09-12).
+	if (slot >= kFieldSlots)
+		return m_rs->LookupField(suffix.IsEmpty() ? base : base + suffix);
 	int& index = slots.m_index[slot];
 	// A refusal throws out of LookupField and is not remembered — the next row asks again, and is
 	// refused again, exactly as the named read was. A driver that answers "absent" with -1 instead is

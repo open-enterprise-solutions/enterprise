@@ -17,6 +17,8 @@
 #include "backend/databaseLayer/databaseLayerDef.h"
 #include "backend/databaseLayer/databaseLayer.h"
 
+#include <mutex>   // m_cancelGuard
+
 class ibPreparedStatement;
 
 class BACKEND_API ibDatabaseLayerSQLite : public ibDatabaseLayer
@@ -113,6 +115,11 @@ private:
 	//sqlite3* m_pDatabase;
 	void* m_pDatabase;
 	wxString m_strDatabasePath;
+	// ⭐ WHO MAY CLOSE WHAT THE CANCEL IS USING. sqlite3_interrupt is safe from another thread, but not on a
+	// connection that is closed or closes before it returns (SQLite's own words) — and Cancel runs on whatever
+	// thread asks while the owner may be closing. Held by Cancel for the call and wherever m_pDatabase is opened
+	// or closed (audit 2026-09-12).
+	std::mutex m_cancelGuard;
 };
 
 #endif // __SQLITE_DATABASE_LAYER_H__

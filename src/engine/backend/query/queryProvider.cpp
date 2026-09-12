@@ -5476,7 +5476,7 @@ void ibQueryComposer::AppendUnionBranch(ibQueryRamTable& out, ibQueryRamTable&& 
 		return;
 	}
 	// …and a branch with columns of its own is RE-KEYED, its cells staying the nodes they are
-	// (ibQueryRamTable::AppendRowRekeyed) — unless it offers one column to two outputs, which is a copy.
+	// (ibQueryRamTable::AppendRowsRekeyed) — unless it offers one column to two outputs, which is a copy.
 	std::vector<std::pair<ibMetaID, ibMetaID>> rekey;
 	bool eachOnce = true;
 	for (size_t k = 0; k < outCols.size() && eachOnce; ++k) {

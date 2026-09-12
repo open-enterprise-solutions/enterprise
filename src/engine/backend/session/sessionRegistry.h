@@ -328,8 +328,9 @@ public:
 	// ⭐ A ROW OUTLIVES A KILLED PROCESS until the stale sweep's cutoff passes (JobSweepStale), and a
 	// question answered from the table in that window — "is another designer here?", "am I alone?" — is
 	// answered about somebody who is not there. A live owner moves its row's lastActive every heartbeat, so
-	// the question is ASKED instead of waited out: the named rows are watched for a few beats, and a row that
-	// never moves has no owner — it is removed (the sweep's own DELETE) and the snapshot refreshed. Returns
+	// the question is ASKED instead of waited out: the named rows are watched, a row that moves has an owner,
+	// and one that stands still until its last beat is as old as the sweep's own cutoff has none — it is
+	// removed then (the sweep's own DELETE), not at the sweep's next tick, and the snapshot refreshed. Returns
 	// how many went. REGISTRY THREAD ONLY — a policy (ProcessAdd) or ProcessSetExclusive asks it.
 	size_t SettleSilentPeers(const std::vector<wxString>& peers);
 

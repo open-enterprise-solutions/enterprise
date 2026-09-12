@@ -19,6 +19,7 @@
 #include <stdexcept>
 
 #include "backend/backend_exception.h"   // ibBackendInterruptException — what a cancelled read throws
+#include "backend/compiler/procUnitState.h"   // ibRunState — the run whose cancel a read hears
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseResultSet.h"
@@ -144,8 +145,8 @@ TEST(QueryLifecycle, MoveAssignReleasesPriorHandles) {
 }
 
 // ---------------------------------------------------------------------------
-// THE ROWS HEAR THE READER'S CANCEL (ibQueryResult::m_cancel) — the flag of the
-// session whose connection the read is on, handed in by the builder. Raised between
+// THE ROWS HEAR THE READER'S CANCEL (ibQueryResult::m_cancel) — the run of the
+// session whose connection the read is on, handed in by the builder. Cancelled between
 // two rows, the next Next() throws what the interpreter throws for a cancel, and the
 // cursor is still released exactly once on the way out.
 // ---------------------------------------------------------------------------
@@ -154,12 +155,12 @@ TEST(QueryLifecycle, CancelRaisedBetweenRows_NextThrowsTheInterruption) {
 	CountingStatement stmt;
 	RowsResultSet rs(5);
 	auto conn = std::make_shared<CountingConn>();
-	std::atomic<bool> cancel { false };
+	std::atomic<ibRunState> run { ibRunState::Running };
 	{
-		ibQueryResult r(conn, &stmt, &rs, &cancel);
+		ibQueryResult r(conn, &stmt, &rs, &run);
 		EXPECT_TRUE(r.Next());
 		EXPECT_TRUE(r.Next());
-		cancel = true;
+		run = ibRunState::Cancelled;
 		EXPECT_THROW(r.Next(), ibBackendInterruptException);
 	}
 	EXPECT_EQ(rs.m_closeCount, 1);
@@ -167,7 +168,7 @@ TEST(QueryLifecycle, CancelRaisedBetweenRows_NextThrowsTheInterruption) {
 }
 
 // No flag — a read nobody can cancel (a service thread's own holder) — reads to its end.
-TEST(QueryLifecycle, NoCancelFlag_ReadsEveryRow) {
+TEST(QueryLifecycle, NoRun_ReadsEveryRow) {
 	CountingStatement stmt;
 	RowsResultSet rs(3);
 	auto conn = std::make_shared<CountingConn>();
@@ -183,10 +184,34 @@ TEST(QueryLifecycle, MovedResult_StillHearsTheCancel) {
 	CountingStatement stmt;
 	RowsResultSet rs(5);
 	auto conn = std::make_shared<CountingConn>();
-	std::atomic<bool> cancel { false };
-	ibQueryResult a(conn, &stmt, &rs, &cancel);
+	std::atomic<ibRunState> run { ibRunState::Running };
+	ibQueryResult a(conn, &stmt, &rs, &run);
 	ibQueryResult b(std::move(a));
 	EXPECT_TRUE(b.Next());
-	cancel = true;
+	run = ibRunState::Cancelled;
 	EXPECT_THROW(b.Next(), ibBackendInterruptException);
+}
+
+// Only a cancelled run is heard: an idle one and a running one read on, and so does a read with no run at all.
+TEST(QueryLifecycle, OnlyACancelledRunIsHeard) {
+	std::atomic<ibRunState> run { ibRunState::Idle };
+	EXPECT_FALSE(ibRunCancelled(&run));
+	run = ibRunState::Running;
+	EXPECT_FALSE(ibRunCancelled(&run));
+	run = ibRunState::Cancelled;
+	EXPECT_TRUE(ibRunCancelled(&run));
+	EXPECT_FALSE(ibRunCancelled(nullptr));
+}
+
+// A run that is only running is not a cancel: every row is read.
+TEST(QueryLifecycle, RunningRun_ReadsEveryRow) {
+	CountingStatement stmt;
+	RowsResultSet rs(3);
+	auto conn = std::make_shared<CountingConn>();
+	std::atomic<ibRunState> run { ibRunState::Running };
+	ibQueryResult r(conn, &stmt, &rs, &run);
+	int rows = 0;
+	while (r.Next())
+		++rows;
+	EXPECT_EQ(rows, 3);
 }

@@ -604,18 +604,18 @@ void ibSession::Teardown()
 	// trivially when there is no pool. So the future is ready before Submit
 	// returns and this never deadlocks against itself.
 	//
-	// The flag only, not Cancel(): every session passes through here, a rented read once per scrolled page,
-	// and a close that is not a forced one lets a statement it is waiting on finish (OnClose).
-	m_procUnitState.m_cancel = true;
+	// The run's state only, not Cancel(): every session passes through here, a rented read once per scrolled
+	// page, and a close that is not a forced one lets a statement it is waiting on finish (OnClose).
+	m_procUnitState.m_runState = ibRunState::Cancelled;
 	{
 		std::future<void> drained = Submit([] {});
 		if (drained.valid())
 			drained.wait_for(std::chrono::seconds(5));
 	}
-	// Lower the flag again: the teardown below still runs script-visible
+	// Idle again: the teardown below still runs script-visible
 	// handlers (per-kind hooks, module OnDestroy through DestroyRoot),
 	// and a latched cancel would abort them at their first loop check.
-	m_procUnitState.m_cancel = false;
+	m_procUnitState.m_runState = ibRunState::Idle;
 
 	// NEVER TAKEN IN, SO NOTHING TO GIVE BACK. An unlisted session (a rented read —
 	// see m_listed) has no row to DELETE, no index entry to drop and nothing that
@@ -912,7 +912,20 @@ void ibSession::Cancel()
 	// The database first, then the runtime: the statement running now answers with the interruption, and
 	// the runtime, told next, throws it again at every level until the run is out — and lowers it itself.
 	Holder()->Cancel();
-	m_procUnitState.m_cancel = true;
+	// ⭐ A CANCEL IS FOR WHAT IS RUNNING. A job's session is its run — made for one and ended with it — so there
+	// it stands whatever it finds, for the script or the native loops still to come. A host's (the
+	// application's, a web client's) runs one script after another, so there it is only for a script that is
+	// running: Running becomes Cancelled, and Idle stays Idle. A cancel raised between two scripts used to stay
+	// up with nobody to lower it — the debugger's Pause on an idle application left every native read of that
+	// session throwing the interruption until some script happened to start (audit 2026-09-12). One atomic step
+	// either way, so a script that starts or ends meanwhile is never left holding a cancel it was not given; the
+	// statement in flight, if any, has already been told above by its connection.
+	if (IsJobSessionKind(GetKind()))
+		m_procUnitState.m_runState = ibRunState::Cancelled;
+	else {
+		ibRunState running = ibRunState::Running;
+		m_procUnitState.m_runState.compare_exchange_strong(running, ibRunState::Cancelled);
+	}
 	for (const std::shared_ptr<ibSession>& tenant : tenants)
 		tenant->Cancel();
 }

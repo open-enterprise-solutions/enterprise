@@ -84,7 +84,7 @@ bool ibFirebirdMaintenanceJob::RunSweep(ibSession* session)
 {
 	std::shared_ptr<ibDatabaseLayer> keepAlive;
 	if (ibDatabaseLayerFirebird* const fb = DriverOf(session, keepAlive))
-		fb->RunSweepNow(session->CancelFlag());
+		fb->RunSweepNow([run = session->RunState()] { return ibRunCancelled(run); });
 	return false;   // one pass does the whole thing — nothing to continue next tick
 }
 
@@ -92,6 +92,6 @@ bool ibFirebirdMaintenanceJob::RunBackupRestore(ibSession* session)
 {
 	std::shared_ptr<ibDatabaseLayer> keepAlive;
 	if (ibDatabaseLayerFirebird* const fb = DriverOf(session, keepAlive))
-		fb->RunBackupRestoreNow(session->CancelFlag());
+		fb->RunBackupRestoreNow([run = session->RunState()] { return ibRunCancelled(run); });
 	return false;
 }

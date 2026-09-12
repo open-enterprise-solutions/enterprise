@@ -5,8 +5,8 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/firebird/engine/ibase.h"
 
-#include <atomic>   // std::atomic<bool> — the maintenance cancel token, borrowed from the calling session
-#include <memory>   // std::shared_ptr — m_pInterface is ref-counted (shared with the maintenance scheduler)
+#include <functional>   // the maintenance pass's cancel — the calling session's run, asked
+#include <memory>       // std::shared_ptr — m_pInterface is ref-counted (shared with the maintenance scheduler)
 
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 class ibInterfaceFirebird;
@@ -131,20 +131,20 @@ public:
 	// so the blocking Services API calls are on a worker rather than on any
 	// thread someone is waiting on.
 	//
-	// `cancelToken` — watched on every poll iteration of the Services API
+	// `cancelled` — asked on every poll iteration of the Services API
 	// wait, and the ONLY way out of a pass in flight: a sweep is allowed 30
 	// minutes and a worker still inside one holds up the pool's shutdown for
 	// exactly that long. No default argument on purpose — a caller with
 	// nothing to offer here is a caller nobody can stop, and that shape is
-	// what hung shutdown until 2026-08-03. Must outlive the call; the job
-	// passes its session's flag, and the session outlives the task.
+	// what hung shutdown until 2026-08-03. What it asks must outlive the call;
+	// the job asks its session's run, and the session outlives the task.
 	// One maintenance pass each, run unconditionally — the caller (the platform jobs
-	// firebird.sweep / firebird.backup) already decided that it is due. The cancel token is the
+	// firebird.sweep / firebird.backup) already decided that it is due. The cancel is the
 	// running session's: a Services API pass is minutes of polling with no interpreter boundary in
 	// it, so it is the only thing that can stop it — the pool's shutdown and an administrator's
 	// cancel both arrive through it. Returns whether the operation reported success.
-	bool RunSweepNow(const std::atomic<bool>* cancelToken);
-	bool RunBackupRestoreNow(const std::atomic<bool>* cancelToken);
+	bool RunSweepNow(const std::function<bool()>& cancelled);
+	bool RunBackupRestoreNow(const std::function<bool()>& cancelled);
 
 	// May WE maintain this base ourselves? See m_localMaintenanceEligible below — decided here,
 	// acted on by the startup sequence once sys_job exists.

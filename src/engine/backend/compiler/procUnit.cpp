@@ -429,9 +429,9 @@ struct ibProcStackGuard {
 	// above for what a lookup costs, and why entering and leaving one call through
 	// two independently-resolved states would be a bug rather than a saving.
 	//
-	// ⭐ A CANCEL IS FOR WHAT IS RUNNING (ibProcUnitState::m_cancel). The stack at empty is where no run
-	// is left, so the runtime lowers it there itself: as a run begins (a cancel that came while nothing
-	// ran) and as it ends (the run it stopped is over).
+	// ⭐ A CANCEL IS FOR WHAT IS RUNNING (ibProcUnitState::m_runState). The stack at empty is where a run
+	// begins and ends, so the guard says so there: Running as the first frame comes, Idle as the last goes —
+	// which is also where a cancel that stopped the run comes down.
 	ibProcStackGuard(ibRunContext* runContext, ibProcUnitState* state) {
 		// Active state is required — ibProcUnit::Execute is reached only
 		// through a bound session (ibSessionScope / ibSessionThreadBinding).
@@ -509,8 +509,12 @@ struct ibProcStackGuard {
 		m_prevRunModule = state->GetCurrentRunModule();
 		state->SetCurrentRunModule(runContext->GetProcUnit());
 
-		if (state->GetCountRunContext() == 0)
-			state->m_cancel = false;
+		// Idle -> Running, and nothing else: a job's session cancelled before its script began stays Cancelled,
+		// and the script hears it at its first poll.
+		if (state->GetCountRunContext() == 0) {
+			ibRunState idle = ibRunState::Idle;
+			state->m_runState.compare_exchange_strong(idle, ibRunState::Running);
+		}
 		BeginByteCode(state, runContext);
 	}
 
@@ -529,7 +533,7 @@ struct ibProcStackGuard {
 		}
 		EndByteCode(m_state);
 		if (m_state != nullptr && m_state->GetCountRunContext() == 0)
-			m_state->m_cancel = false;
+			m_state->m_runState = ibRunState::Idle;
 	}
 
 private:
@@ -1066,7 +1070,7 @@ start_label:
 			if (((++opTick & (kCancelPoll - 1)) == 0) && cancelSession != nullptr) {
 				if (cancelSession->IsForceExit())
 					break;
-				if (state->m_cancel)
+				if (ibRunCancelled(&state->m_runState))
 					ibBackendInterruptException::Error();
 			}
 
@@ -2294,11 +2298,11 @@ start_label:
 	// out of, or of its code - and while the cancel stands it throws on: the frame that called this one hears
 	// it at the call, its own block walks it out of ITS loops, and so on - and past the outermost frame to the
 	// caller of the run (a form's command, a job, an assistant's code_run), which is the one to say what it
-	// was. The flag comes down as the last frame unwinds (ibProcStackGuard).
+	// was. The cancel comes down as the last frame unwinds (ibProcStackGuard).
 	//
 	// ONE SENTENCE FOR ONE CANCEL: the outermost frame of the run says it as the cancel leaves it (this frame is
 	// still on the stack here, so the outermost counts one) - the exception's own words.
-	if (state->m_cancel) {
+	if (ibRunCancelled(&state->m_runState)) {
 		if (state->GetCountRunContext() == 1)
 			ibValueSystemFunction::Message(_("The program was stopped by the user!"), ibStatusMessage::ibStatusMessage_Error);
 		ibBackendInterruptException::Error();

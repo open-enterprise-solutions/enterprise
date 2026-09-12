@@ -663,11 +663,11 @@ protected:
 	// breakpoint condition there; a host with no debugger adds nothing. Last in the class: a virtual
 	// added between others moves every one after it in the table, and an object built before reads
 	// the wrong slot.
-	virtual void AppendDebugMenu(wxMenu& menu, int line) {}
+	virtual void AppendDebugMenu(wxMenu& /*menu*/, int /*line*/) {}
 
 	// What the breakpoint margin says about the line under the mouse - the designer answers with the
 	// breakpoint's condition. False: nothing to say, `hint` untouched.
-	virtual bool GetDebugPointHint(int line, wxString& hint) { return false; }
+	virtual bool GetDebugPointHint(int /*line*/, wxString& /*hint*/) { return false; }
 };
 
 #endif 

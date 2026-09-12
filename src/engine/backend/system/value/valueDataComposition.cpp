@@ -886,7 +886,7 @@ void ibValueDataComposition::SubmitFetchAsync(std::function<void()> work)
 }
 
 // Cooperative: the flag is raised and the run is waited out — it stops at its next row or line
-// (ibSession::CancelFlag says who listens).
+// (ibSession::RunState says who listens).
 void ibValueDataComposition::CancelFetch()
 {
 	if (!m_fetchRun)

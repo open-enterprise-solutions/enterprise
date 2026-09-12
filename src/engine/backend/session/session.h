@@ -460,19 +460,20 @@ public:
 	// passes it on to everything that is doing its work:
 	//   - its connection first — the statement running on it is cancelled (a thread inside the database cannot
 	//     see a flag), and it answers with the interruption;
-	//   - then its runtime — the flag in m_procUnitState, heard by the interpreter between opcodes and by the
-	//     engine's own long loops between rows (CancelFlag below);
+	//   - then its runtime — the run's state in m_procUnitState, heard by the interpreter between opcodes and
+	//     by the engine's own long loops between rows (RunState below);
 	//   - its tenants — the rented runs reading for it (ibJobTenancy::Tenant) get the same command, and pass
 	//     it on in turn.
 	// Each unwinds with ibBackendInterruptException, one after another. Nothing else in the engine cancels a
-	// session; everything that wants to calls this.
+	// session; everything that wants to calls this. A cancel is for what is running: on a job's session (which
+	// is its run) it stands, on a host's it is taken back when no script is running there.
 	void Cancel();
 
-	// The flag ITSELF, for work that polls instead of running bytecode.
+	// The run's state ITSELF, for work that polls instead of running bytecode — asked with ibRunCancelled.
 	// The Firebird Services API is the reason this exists: a sweep or a
 	// backup/restore cycle sits in its own poll loop for up to 30 minutes
 	// and never reaches an interpreter loop boundary, so the one signal
-	// it can watch is this address. The flag lives in the session's runtime
+	// it can watch is this address. It lives in the session's runtime
 	// state, which outlives the task running on it — the pool cancels in
 	// Stop() before waiting for the workers, and the poll bails within one tick.
 	//
@@ -481,7 +482,7 @@ public:
 	// walk and the lines a sheet is written in. A report is folded and written where no
 	// interpreter polls, so before them a window closed on a report composing — and a process
 	// exiting under one — waited for the whole of it (2026-09-12).
-	const std::atomic<bool>* CancelFlag() const { return &m_procUnitState.m_cancel; }
+	const std::atomic<ibRunState>* RunState() const { return &m_procUnitState.m_runState; }
 
 	// Force-exit flag — "voluntary kick" of this session. The interpreter
 	// breaks out of its loop at the next iteration and the window is told

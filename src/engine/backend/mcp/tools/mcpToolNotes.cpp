@@ -185,8 +185,11 @@ public:
 		if (query.IsEmpty())
 			return;
 
-		ibMetaData* const metaData = activeMetaData;
-		if (metaData == nullptr || !metaData->IsConfigOpen())
+		// Through the notes' one door to the configuration, as the notes' own commands go; with nothing open
+		// there is simply nothing of this configuration to offer, and the refusal is nobody's to hear.
+		wxString refusal;
+		ibMetaData* const metaData = OpenConfiguration(refusal);
+		if (metaData == nullptr)
 			return;
 
 		std::vector<ibNotedPlace> scored;

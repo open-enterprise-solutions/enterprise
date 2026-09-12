@@ -1712,7 +1712,13 @@ ibDataQueryResult ibDbTableProvider::ExecuteRead(const ibDataQuerySpec& spec, co
 		// (ibDatabaseQueryBuilder::ExecuteIR over runs). A whole read only — a page is counted per statement.
 		constexpr std::size_t kKeysPerStatement = 500;
 		const std::vector<ibValue>* const keys = spec.m_keyIn;
-		if (keys != nullptr && keys->size() > kKeysPerStatement && req.m_count == 0) {
+		// …and only where the answer does not depend on one statement seeing every row: an order asked for, a
+		// DISTINCT or a TOP would each hold inside a part and come back wrong for the whole, without a word (audit
+		// 2026-09-12). Those read as one statement — a list too long for it is a refusal the database says out
+		// loud, never a quietly wrong answer.
+		const bool partsAnswerAsOne = (spec.m_sorts == nullptr || spec.m_sorts->empty())
+			&& !spec.m_distinct && spec.m_topCount == 0;
+		if (keys != nullptr && keys->size() > kKeysPerStatement && req.m_count == 0 && partsAnswerAsOne) {
 			const size_t parts = (keys->size() + kKeysPerStatement - 1) / kKeysPerStatement;
 			const size_t size  = (keys->size() + parts - 1) / parts;
 			std::vector<ibValue> part;

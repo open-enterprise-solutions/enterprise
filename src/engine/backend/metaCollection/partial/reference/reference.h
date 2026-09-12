@@ -362,10 +362,11 @@ public:
 	static ibValueReferenceDataObject* Find(const ibValueMetaObjectRecordDataRef* metaObject,
 	                                        const ibGuidImpl& objGuid);
 
-	// …and every live reference in `state` that the current session FILED — what ReadBatch tells, and a
-	// list the query made never has to be walked for. Its own only: a rented read files into its host's
-	// table, and each tells what it made itself. Held, so none of them can go while the caller works.
-	static std::vector<ibValuePtr<ibValueReferenceDataObject>> Find(ibReferenceState state);
+	// …and the references the current session FILED since it last asked that are still raw — what ReadBatch
+	// tells, and a list the query made never has to be walked for; taken, so each is asked of a batch once.
+	// Its own only: a rented read files into its host's table, and each tells what it made itself. Held, so
+	// none of them can go while the caller works.
+	static std::vector<ibValuePtr<ibValueReferenceDataObject>> Unread();
 
 	// Take note of a newly built one. Called by the CONSTRUCTOR, not by the doors: every reference
 	// is born through it, so one call covers every way of making one — including the raw door and

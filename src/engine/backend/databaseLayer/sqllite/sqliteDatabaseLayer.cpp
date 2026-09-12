@@ -264,7 +264,10 @@ bool ibDatabaseLayerSQLite::Open(const wxString& strDatabase)
 	wxCharBuffer databaseNameBuffer = ConvertToUnicodeStream(strDatabase);
 	sqlite3* pDbPtr = (sqlite3*)m_pDatabase;
 	int nReturn = sqlite3_open(databaseNameBuffer, &pDbPtr);
-	m_pDatabase = pDbPtr;
+	{
+		std::lock_guard<std::mutex> guard(m_cancelGuard);   // what Cancel reads
+		m_pDatabase = pDbPtr;
+	}
 
 	if (nReturn != SQLITE_OK)
 	{
@@ -291,6 +294,7 @@ bool ibDatabaseLayerSQLite::Close()
 
 	if (m_pDatabase != nullptr)
 	{
+		std::lock_guard<std::mutex> guard(m_cancelGuard);   // not under a Cancel still using it
 		int nReturn = sqlite3_close((sqlite3*)m_pDatabase);
 		if (nReturn != SQLITE_OK)
 		{
@@ -314,9 +318,10 @@ bool ibDatabaseLayerSQLite::IsOpen()
 // SQLITE_INTERRUPT to its own caller. Nothing running, nothing to stop.
 void ibDatabaseLayerSQLite::Cancel()
 {
-	sqlite3* const pDbPtr = (sqlite3*)m_pDatabase;   // read once: the owning thread may be closing
-	if (pDbPtr != nullptr)
-		sqlite3_interrupt(pDbPtr);
+	// Held for the call: the owner closing meanwhile waits for it rather than closing under it (m_cancelGuard).
+	std::lock_guard<std::mutex> guard(m_cancelGuard);
+	if (m_pDatabase != nullptr)
+		sqlite3_interrupt((sqlite3*)m_pDatabase);
 }
 
 void ibDatabaseLayerSQLite::DoBeginTransaction(const ibTxOptions& opts)
