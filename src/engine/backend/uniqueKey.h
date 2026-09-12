@@ -40,7 +40,7 @@ public:
 	bool isValid() const;
 	void reset();
 
-	ibGuid GetGuid() const { return m_objGuid; }
+	const ibGuid& GetGuid() const { return m_objGuid; }
 
 	// Composite key-values (register recorder+line / period+dimensions). Empty for a plain reference (guid) key.
 	// A ibUniqueKey holds EITHER a reference (guid) OR dimensions (composite) — GetItemKey fills whichever fits

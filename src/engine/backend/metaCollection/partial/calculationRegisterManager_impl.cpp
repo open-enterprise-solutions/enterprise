@@ -10,6 +10,7 @@
 #include "backend/system/value/valueMap.h"
 #include "backend/system/value/valueTable.h"
 #include "backend/appData.h"
+#include "backend/metaData.h"   // GetAnyArrayObject — the registers a base may come from (GetBaseRegisters)
 #include "backend/session/session.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 door — From() + Where materialises the read through L3
 #include "backend/query/dbTableProvider.h"    // ibDbTableProvider::GetValueAttribute — the DB value-assembly
@@ -228,11 +229,18 @@ static void ibCalcReadBase(const ibValueMetaObjectCalculationRegister* self, con
 		q.Join(ibScan(base->GetPhysicalTableName(), wxT("p")), onBase, ibQueryJoinType::Inner);
 	}
 
-	// The dependent records asked about — the caller's filter, on d.
+	// The dependent records asked about — the caller's filter, on d. Its flat equalities NARROW the
+	// statement; the full condition chooses the records afterwards (ibCalcBaseQueryable::ComputeRows), so what is left
+	// out here costs rows and never answers. Only the register's OWN columns: a condition written in a
+	// query may walk a reference (`Employee.Department = &D`), and its leaf is then a column of another
+	// table, which `d` does not have.
+	std::set<const ibBackendQueryColumn*> own;
+	for (const ibValueMetaObjectAttributeBase* attribute : self->GetGenericAttributeArrayObject())
+		own.insert(attribute->GetQueryColumn());
 	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
 	ibRegFlatLeaves(filter, leaves);
 	for (const auto& leaf : leaves)
-		if (leaf.first != nullptr)
+		if (leaf.first != nullptr && own.count(leaf.first) != 0)
 			q.Where(ibRegCompositeIR(leaf.first, self->GetMetaData(), leaf.second, ibQueryBinOp::Eq, wxT("d")));
 
 	// Projected under the fields' own names, so each value is read back the way every register reads it.
@@ -275,30 +283,20 @@ static void ibCalcReadBase(const ibValueMetaObjectCalculationRegister* self, con
 	}
 }
 
-// GetBase(BaseRegister, Filter) — see the header. The dependent records are read through the door as
-// every register's are; their base comes from the database in one statement (ibCalcReadBase). Matching
-// is by shared-name dimension VALUES: a base record contributes to a dependent record only when every
-// dimension they have in common holds an equal value.
+// GetBase(BaseRegister, Filter) — see the header. ⭐ THE MANAGER KNOCKS WHERE A QUERY KNOCKS: it builds
+// the base source a query reads as `<Register>.Base<BaseRegister>` and reads it through the door, the way
+// a slice's manager reads its slice (informationRegisterManager_impl.cpp) — it computes nothing of its own
+// (Max, 2026-09-11: "the manager just knocks where the queryable knocks"). A script's filter becomes the
+// source's condition, as it does for a slice.
 ibValue ibValueManagerDataObjectCalculationRegister::GetBase(const ibValue& cBaseRegister, const ibValue& cFilter)
 {
 	ibRequireOpenBase();
 
-	// The base is meaningful only when the dependent register has a base period. Missing it -> an empty
-	// (columns-only) table, not a guess. Which period of a base record counts is the chart's (below).
 	ibValueManagerDataObjectCalculationRegister* baseMgr =
 		cBaseRegister.ConvertToType<ibValueManagerDataObjectCalculationRegister>();
 	const ibValueMetaObjectCalculationRegister* baseMeta = baseMgr ? baseMgr->GetMetaObject() : nullptr;
 
-	// Base resources become the value columns; a "Base<Resource>" name and a SYNTHETIC id keep them from
-	// colliding with the dependent register's own attribute columns — the id the tree gives a column
-	// nobody declared (queryColumn.h: negative, its kind composed on), asked in one place for both the
-	// column and the cell. It was the base resource's metaID with the high bit set: a band in the
-	// positive space, the scheme that header retired after one band came to hold two tenants.
-	std::vector<ibValueMetaObjectResource*> baseResources =
-		baseMeta ? baseMeta->GetResourceArrayObject() : std::vector<ibValueMetaObjectResource*>();
-	const auto baseColumnId = [](const ibValueMetaObjectResource* res) {
-		return ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Derived, res->GetMetaID());
-	};
+	const ibCalcBaseQueryable base(m_metaObject, baseMeta, ibRegFilterPredicate(m_metaObject, cFilter, ibRegFilterOver::Records));
 
 	ibValueModelTable* retTable = new ibValueModelTable();
 	const ibValue keep(retTable);   // held while its rows are made — see Get(filter) above
@@ -308,13 +306,96 @@ ibValue ibValueManagerDataObjectCalculationRegister::GetBase(const ibValue& cBas
 		auto* colInfo = colCollection->AddColumn(object->GetName(), object->GetTypeDesc(), object->GetSynonym());
 		colInfo->SetColumnID(object->GetMetaID());
 	}
-	for (const auto res : baseResources) {
-		auto* colInfo = colCollection->AddColumn(wxT("Base") + res->GetName(), res->GetTypeDesc(), res->GetSynonym());
-		colInfo->SetColumnID(baseColumnId(res));
+	for (const std::shared_ptr<ibBackendColumnRawDB>& column : base.GetBaseColumns()) {
+		auto* colInfo = colCollection->AddColumn(column->GetName(), column->GetTypeDesc(), column->GetSynonym());
+		colInfo->SetColumnID(column->GetColumnId());
 	}
 
-	if (baseMeta == nullptr || !m_metaObject->IsUseBasePeriod())
-		return retTable;
+	ibDataQueryResult selection = ibDataQueryBuilder().From(&base).Execute(ibReadPageRequest{});
+	while (selection.Next()) {
+		ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
+		wxASSERT(retLine);
+		for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
+			retLine->SetValueByMetaID(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
+		for (const std::shared_ptr<ibBackendColumnRawDB>& column : base.GetBaseColumns())
+			retLine->SetValueByMetaID(column->GetColumnId(), selection.GetValue(column.get()));
+		wxDELETE(retLine);
+	}
+	return retTable;
+}
+
+//***********************************************************************
+//*                      The base, as a source                           *
+//***********************************************************************
+
+std::vector<const ibValueMetaObjectCalculationRegister*> ibValueMetaObjectCalculationRegister::GetBaseRegisters() const
+{
+	std::vector<const ibValueMetaObjectCalculationRegister*> out;
+	const ibValueMetaObjectChartOfCalculationTypes* chart = GetChartOfCalculationTypes();
+	if (!IsUseBasePeriod() || chart == nullptr || m_metaData == nullptr)
+		return out;
+	const ibMetaDescription& otherCharts = chart->GetBaseCharts();
+	for (const ibValueMetaObjectCalculationRegister* candidate :
+		m_metaData->GetAnyArrayObject<ibValueMetaObjectCalculationRegister>(g_metaCalculationRegisterCLSID)) {
+		const ibValueMetaObjectChartOfCalculationTypes* theirs = candidate->GetChartOfCalculationTypes();
+		if (theirs != nullptr && (theirs == chart || otherCharts.ContainMetaType(theirs->GetMetaID())))
+			out.push_back(candidate);
+	}
+	return out;
+}
+
+// One `Base<Resource>` column per resource of the base register, in the resources' order. A SYNTHETIC id
+// keeps it from colliding with the register's own attribute columns — the id the tree gives a column
+// nobody declared (queryColumn.h: negative, its kind composed on). It was the base resource's metaID with
+// the high bit set: a band in the positive space, the scheme that header retired after one band came to
+// hold two tenants.
+ibCalcBaseQueryable::ibCalcBaseQueryable(const ibValueMetaObjectCalculationRegister* reg,
+	const ibValueMetaObjectCalculationRegister* base, const ibQueryPredicatePtr& condition)
+	: ibComputedRegisterQueryable(reg), m_base(base), m_condition(condition)
+{
+	if (m_base == nullptr)
+		return;
+	for (const ibValueMetaObjectResource* res : m_base->GetResourceArrayObject()) {
+		auto column = std::make_shared<ibBackendColumnRawDB>(ibBackendColumnRawDB::Number(wxT("Base") + res->GetName(),
+			ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Derived, res->GetMetaID()),
+			res->GetTypeDesc().GetPrecision(), res->GetTypeDesc().GetScale()));
+		column->GetTypeDesc() = res->GetTypeDesc();   // what a figure of the base is: the resource's own number
+		m_baseColumns.push_back(std::move(column));
+	}
+}
+
+const ibBackendQueryColumn* ibCalcBaseQueryable::ResolveColumnByName(const wxString& name) const
+{
+	for (const std::shared_ptr<ibBackendColumnRawDB>& column : m_baseColumns)
+		if (column->GetName().IsSameAs(name, false))
+			return column.get();
+	return ibComputedRegisterQueryable::ResolveColumnByName(name);
+}
+
+std::vector<const ibBackendQueryColumn*> ibCalcBaseQueryable::GetColumns() const
+{
+	std::vector<const ibBackendQueryColumn*> columns = ibComputedRegisterQueryable::GetColumns();
+	for (const std::shared_ptr<ibBackendColumnRawDB>& column : m_baseColumns)
+		columns.push_back(column.get());
+	return columns;
+}
+
+// ⭐ THE ONE COMPUTATION OF THE BASE — a query reading `<Register>.Base<BaseRegister>` and a module's
+// GetBase both arrive here. Matching is by shared-name dimension VALUES: a base record contributes to a
+// dependent record only when every dimension they have in common holds an equal value. The dependent
+// records are read through the door, the base from the database in one statement (ibCalcReadBase).
+ibQueryRamTable ibCalcBaseQueryable::ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const
+{
+	ibQueryRamTable out;
+	for (const auto object : m_reg->GetGenericAttributeArrayObject())
+		out.AddColumn(object->GetMetaID(), object->GetName(), object->GetTypeDesc());
+	for (const std::shared_ptr<ibBackendColumnRawDB>& column : m_baseColumns)
+		out.AddColumn(column->GetColumnId(), column->GetName(), column->GetTypeDesc());
+
+	// The base is meaningful only when the dependent register has a base period. Missing it -> the
+	// columns alone, not a guess. Which period of a base record counts is the chart's (below).
+	if (m_base == nullptr || !m_reg->IsUseBasePeriod())
+		return out;
 
 	// 🛑 A BASE IS MADE OF THE TYPES THE CHART NAMES, and of nothing else. This reading used to take
 	// every base record whose dimensions matched — MEASURED 2026-09-10: a bonus with no base declared came
@@ -322,8 +403,8 @@ ibValue ibValueManagerDataObjectCalculationRegister::GetBase(const ibValue& cBas
 	// same employee. A dependent type with no Base rows has no base; that is an answer, not a gap.
 	// The relation is the DEPENDENT register's chart's: the bonus says what its base is, whichever register
 	// the base is then read from (a base register on another chart names no type of this one and so feeds
-	// nothing). It is joined in the database now (ibCalcReadBase), not read here.
-	const ibValueMetaObjectChartOfCalculationTypes* ownChart = m_metaObject->GetChartOfCalculationTypes();
+	// nothing). It is joined in the database (ibCalcReadBase), not read here.
+	const ibValueMetaObjectChartOfCalculationTypes* ownChart = m_reg->GetChartOfCalculationTypes();
 
 	// ---- WHICH PERIOD OF A BASE RECORD COUNTS: the dependent chart's answer (BaseDependence) ----------
 	// It used to be decided by what the BASE register happened to have — its pieces if it kept action
@@ -334,41 +415,88 @@ ibValue ibValueManagerDataObjectCalculationRegister::GetBase(const ibValue& cBas
 	const ibBaseDependence dependence = ownChart != nullptr ? ownChart->GetBaseDependence() : ibBaseDependence::eBaseNone;
 	if (dependence == ibBaseDependence::eBaseNone) {
 		ibBackendCoreException::Error(_("Register '%s': its chart of calculation types takes no base - set the chart's 'Base dependence'"),
-			m_metaObject->GetSynonym());
+			m_reg->GetSynonym());
 	}
-	if (dependence == ibBaseDependence::eBaseByActionPeriod && baseMeta->GetActualActionPeriodQueryable() == nullptr) {
+	if (dependence == ibBaseDependence::eBaseByActionPeriod && m_base->GetActualActionPeriodQueryable() == nullptr) {
 		ibBackendCoreException::Error(_("Register '%s' takes its base by action period, but the base register '%s' keeps no action periods"),
-			m_metaObject->GetSynonym(), baseMeta->GetSynonym());
+			m_reg->GetSynonym(), m_base->GetSynonym());
 	}
 
 	// ---- the base of every dependent record asked about, from the database -----------------------------
-	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_metaObject, cFilter, ibRegFilterOver::Records);
+	const std::vector<ibValueMetaObjectResource*> baseResources = m_base->GetResourceArrayObject();
 	std::map<std::pair<ibValue, ibValue>, std::vector<ibNumber>> baseOf;   // (recorder, line) -> per base resource
-	ibCalcReadBase(m_metaObject, baseMeta, ownChart, dependence, filter, baseResources, baseOf);
+	ibCalcReadBase(m_reg, m_base, ownChart, dependence, m_condition, baseResources, baseOf);
 
 	// ---- the dependent records, each with its base -----------------------------------------------------
-	{
-		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable());
-		q.Where(filter);
-		ibReadPageRequest page;
-		page.m_count = 0;
-		ibDataQueryResult sel = q.Execute(page);
-		while (sel.Next()) {
-			ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
-			wxASSERT(retLine);
-			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
-				retLine->SetValueByMetaID(object->GetMetaID(), sel.GetValue(object->GetQueryColumn()));
+	ibDataQueryBuilder q;
+	q.From(m_reg->GetQueryable());
+	q.Where(m_condition);
+	ibReadPageRequest page;
+	page.m_count = 0;
+	ibDataQueryResult sel = q.Execute(page);
+	while (sel.Next()) {
+		const long row = out.AppendRow();
+		for (const auto object : m_reg->GetGenericAttributeArrayObject())
+			out.SetCell(row, object->GetMetaID(), sel.GetValue(object->GetQueryColumn()));
 
-			const auto found = baseOf.find({ sel.GetValue(m_metaObject->GetRegisterRecorder()->GetQueryColumn()),
-				sel.GetValue(m_metaObject->GetRegisterLineNumber()->GetQueryColumn()) });
-			for (size_t c = 0; c < baseResources.size(); ++c) {
-				const ibNumber sum = found != baseOf.end() ? found->second[c] : ibNumber(0);
-				retLine->SetValueByMetaID(baseColumnId(baseResources[c]), ibValue(sum));
-			}
-			wxDELETE(retLine);
-		}
+		const auto found = baseOf.find({ sel.GetValue(m_reg->GetRegisterRecorder()->GetQueryColumn()),
+			sel.GetValue(m_reg->GetRegisterLineNumber()->GetQueryColumn()) });
+		for (size_t c = 0; c < baseResources.size() && c < m_baseColumns.size(); ++c)   // the resource rounds to its own scale
+			out.SetCell(row, m_baseColumns[c]->GetColumnId(),
+				baseResources[c]->AdjustValue(ibValue(found != baseOf.end() ? found->second[c] : ibNumber(0))));
 	}
+	return out;
+}
 
-	return retTable;
+wxString ibCalcBaseSourceDescriptor::GetNamespace() const
+{
+	return ibValue::GetNameObjectFromID(m_reg->GetClassType());
+}
+
+wxString ibCalcBaseSourceDescriptor::GetName() const
+{
+	return m_reg->GetName() + wxT(".Base") + m_base->GetName();
+}
+
+const ibBackendQueryable* ibCalcBaseSourceDescriptor::GetConditionScope() const
+{
+	return m_reg->GetQueryable();
+}
+
+const ibBackendQueryable* ibCalcBaseSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+	const std::vector<ibQueryPredicatePtr>& conditions)
+{
+	m_pendingCondition = conditions.empty() ? nullptr : conditions.front();
+	const ibBackendQueryable* q = CreateQueryable(paParams, lSizeArray);
+	m_pendingCondition.reset();
+	return q;
+}
+
+const ibBackendQueryable* ibCalcBaseSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
+{
+	// A condition that came through the other entrance wins; a SCRIPT's call has no other entrance, and
+	// its value-built condition (a structure over the register's fields) is read from the slot.
+	ibQueryPredicatePtr condition = m_pendingCondition;
+	if (!condition && lSizeArray > 0 && paParams != nullptr && paParams[0] != nullptr)
+		condition = ibRegFilterPredicate(m_reg, *paParams[0], ibRegFilterOver::Records);
+	// …and the condition is part of the call (MakeCompanionFor): its slot in paParams is empty.
+	return MakeCompanionFor<ibCalcBaseQueryable>({ m_pendingCondition }, paParams, lSizeArray, m_reg, m_base, condition);
+}
+
+void ibCalcBaseSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
+{
+	ibQuerySourceParameter condition;
+	condition.m_name = wxT("Condition");
+	condition.m_condition = true;
+	condition.m_consumedBySource = true;
+	condition.m_description = _("Which records take a base - a condition on the register's own fields; the base is computed for those alone");
+	out.push_back(condition);
+}
+
+void ibCalcBaseSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	if (!m_catalogue)
+		m_catalogue = std::make_unique<ibCalcBaseQueryable>(m_reg, m_base, nullptr);
+	for (const ibBackendQueryColumn* column : m_catalogue->GetColumns())
+		explorer.AppendColumn(column, /*enabled*/ true, /*visible*/ true);
 }

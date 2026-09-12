@@ -67,7 +67,9 @@ private:
 // A computed (RAM) queryable, rows built by a builder each call (ibQueryRamTable is move-only).
 class ComputedQ : public ibBackendQueryable {
 public:
-	ComputedQ(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {}
+	ComputedQ(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {
+		ibGuidImpl i{}; i.m_data1 = static_cast<unsigned long>(id); m_key = ibGuid(i);
+	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
 	void SetBuilder(std::function<ibQueryRamTable()> b) { m_build = std::move(b); }
 
@@ -87,11 +89,12 @@ public:
 	}
 	wxString GetQueryTableName() const override { return m_name; }
 	ibMetaID GetQueryTableId()   const override { return m_id; }
-	ibGuid   GetQueryTableGuid() const override { ibGuidImpl i{}; i.m_data1 = static_cast<unsigned long>(m_id); return ibGuid(i); }
+	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 private:
 	wxString m_name;
 	ibMetaID m_id;
+	ibUniqueKey m_key;   // its table guid, the id in the first word
 	std::vector<const ibBackendQueryColumn*> m_cols;
 	std::function<ibQueryRamTable()> m_build;
 };
@@ -103,7 +106,9 @@ const ibMetaID S_ITEM = 20, S_QTY = 21;
 // the DBMS (ibDbTableProvider::ExecuteRead), not a RAM fold.
 class PhysicalQ : public ibBackendQueryable {
 public:
-	PhysicalQ(const wxString& table, ibMetaID id) : m_table(table), m_id(id) {}
+	PhysicalQ(const wxString& table, ibMetaID id) : m_table(table), m_id(id) {
+		ibGuidImpl i{}; i.m_data1 = static_cast<unsigned long>(id); m_key = ibGuid(i);
+	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
 	bool     IsComputedInRam()   const override { return false; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
@@ -117,11 +122,12 @@ public:
 	}
 	wxString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()   const override { return m_id; }
-	ibGuid   GetQueryTableGuid() const override { ibGuidImpl i{}; i.m_data1 = static_cast<unsigned long>(m_id); return ibGuid(i); }
+	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 private:
 	wxString m_table;
 	ibMetaID m_id;
+	ibUniqueKey m_key;   // its table guid, the id in the first word
 	std::vector<const ibBackendQueryColumn*> m_cols;
 };
 

@@ -9,6 +9,7 @@
 #include "backend/calculation/calculation.h"   // the calculation logic — this file reads and writes, calculation.h decides
 #include "backend/query/dataQueryBuilder.h"                 // L3 door — the reads and the marks
 #include "backend/databaseLayer/databaseQueryBuilder.h"     // L2 — what the database copies and names itself (the pieces)
+#include "backend/databaseLayer/databaseMaterializeBuilder.h"   // ibFillKeyHashes — a wide mark key's digest, filled by the database
 #include "backend/query/dbTableProvider.h"                  // ibDbTableProvider::GetValueAttribute — an L2 row read back as values
 #include "backend/query/columnLayout.h"                     // ibOwnerRefField — the Displacing row's owner, as a field
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldOfRole / ibRegSameValueIR / ibRegCompositeIR
@@ -195,11 +196,82 @@ void MarkLedRecords(const ibValueMetaObjectCalculationRegister* dependent, const
 				within(meta->GetBasePeriodStart(), meta->GetBasePeriodEnd(), actionStart, actionEnd));
 	}
 
-	std::vector<ibCalcRecordFacts> candidates = ReadStored(meta, [&](ibDataQueryBuilder& q) {
-		q.Where(ofDependentType);
-		q.Where(meta->GetRegisterRecorder()->GetQueryColumn(), ibQueryFilterOp::NotEqual, recorder);
-		q.Where(inTime);
-	});
+	// ⭐⭐ …AND ONLY THE RECORDS HOLDING THE VALUES THAT CHANGED. The rule leads a candidate only when it holds a
+	// changed record's values on the recalculation's dimensions (ibFindLedRecords compares `key`), and this
+	// read used to take every record of the dependent types in the span, for everyone: one sick leave of one
+	// employee read the salaries of all of them, and the rule threw nearly every one away — a read no index
+	// could serve either, since the lookup index leads with the dimensions (ibCalcLookupKey). Narrowed now by
+	// the dimensions EVERY recalculation of this register keys on (by name, as the rule matches them), in lists
+	// of at most kListPerRead keys, the way the pieces' window is read (KeepActualActionPeriods). A
+	// recalculation keyed on nothing leaves nothing to narrow by, and then the span is read whole, as before.
+	constexpr size_t kListPerRead = 64;   // a statement listing every key is not one a server takes
+	std::vector<wxString> commonNames;   // upper-cased, as the facts keep them
+	for (size_t i = 0; i < recalculations.size(); ++i) {
+		std::vector<wxString> names;
+		for (const ibValueMetaObjectDimension* dimension : recalculations[i]->GetDimensionArrayObject())
+			names.push_back(dimension->GetName().Upper());
+		if (i == 0)
+			commonNames = names;
+		else
+			commonNames.erase(std::remove_if(commonNames.begin(), commonNames.end(), [&names](const wxString& name) {
+				return std::find(names.begin(), names.end(), name) == names.end(); }), commonNames.end());
+	}
+	std::vector<const ibValueMetaObjectDimension*> narrowBy;   // this register's own columns for those names
+	for (const wxString& name : commonNames)
+		for (const ibValueMetaObjectDimension* dimension : meta->GetDimensionArrayObject())
+			if (dimension->GetName().Upper() == name) {
+				narrowBy.push_back(dimension);
+				break;
+			}
+
+	std::vector<ibCalcRecordFacts> candidates;
+	const auto readCandidates = [&](const ibQueryPredicatePtr& ofKeys) {
+		for (ibCalcRecordFacts& facts : ReadStored(meta, [&](ibDataQueryBuilder& q) {
+				q.Where(ofDependentType);
+				q.Where(meta->GetRegisterRecorder()->GetQueryColumn(), ibQueryFilterOp::NotEqual, recorder);
+				q.Where(inTime);
+				if (ofKeys)
+					q.Where(ofKeys);
+			}))
+			candidates.push_back(std::move(facts));
+	};
+	if (narrowBy.empty())
+		readCandidates(nullptr);
+	else {
+		std::set<std::vector<ibValue>> keys;
+		for (const ibCalcRecordFacts& facts : changed) {
+			std::vector<ibValue> key;
+			for (const ibValueMetaObjectDimension* dimension : narrowBy) {
+				const auto found = facts.dims.find(dimension->GetName().Upper());
+				key.push_back(found != facts.dims.end() ? found->second : ibValue());
+			}
+			keys.insert(std::move(key));
+		}
+		std::set<std::vector<ibValue>> list;
+		const auto readList = [&]() {
+			ibQueryPredicatePtr any;   // an OR of AND-ed dimension equalities
+			for (const std::vector<ibValue>& key : list) {
+				ibQueryPredicatePtr all;
+				for (size_t d = 0; d < narrowBy.size(); ++d) {
+					ibQueryCondition leaf;
+					leaf.m_col = narrowBy[d]->GetQueryColumn();
+					leaf.m_value = key[d];
+					ibQueryPredicatePtr one = ibQueryPredicate::Leaf(leaf);
+					all = all ? ibQueryPredicate::Compose(ibQueryPredicateKind::And, all, one) : one;
+				}
+				any = any ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, any, all) : all;
+			}
+			readCandidates(any);
+			list.clear();
+		};
+		for (const std::vector<ibValue>& key : keys) {
+			list.insert(key);
+			if (list.size() == kListPerRead)
+				readList();
+		}
+		if (!list.empty())
+			readList();
+	}
 
 	// ⭐ ONLY WHAT IS IN FORCE CAN BE STALE. A storno, and a record a later storno reversed, stand for
 	// nothing any more: the correction beside the storno is the record a change leads. The stornos this
@@ -230,22 +302,107 @@ void MarkLedRecords(const ibValueMetaObjectCalculationRegister* dependent, const
 		const ibBackendQueryColumn* typeColumn = recalculation->GetCalculationTypeColumn();
 		if (objectColumn == nullptr || typeColumn == nullptr)
 			continue;
+		const ibBackendQueryColumn* monthColumn = recalculation->GetActionPeriodColumn();   // null: no months kept
 		const std::vector<ibValueMetaObjectDimension*> dimensions = recalculation->GetDimensionArrayObject();
 		std::vector<wxString> dimensionNames;   // upper-cased, as the facts keep them
 		for (const ibValueMetaObjectDimension* dimension : dimensions)
 			dimensionNames.push_back(dimension->GetName().Upper());
 
+		// ⭐⭐ THE MARKS OF A WRITE GO IN ONE STATEMENT, NOT ONE EACH. A mark was an UPSERT per led
+		// record — a statement built, rendered, prepared and run for every one, and a correction of a
+		// month for forty thousand employees leads forty thousand of them. A mark is a KEY and carries
+		// nothing else, so "upsert" is "insert unless it is there": the keys are gathered (the rule can
+		// lead one record from several changes, and two records to one key), the ones already standing
+		// are read in one statement per list of recorders, and the rest are written as the rows of ONE
+		// insert — the door batches the rows of a statement, as the pieces' write does.
+		std::set<std::vector<ibValue>> marks;   // object, type, dimension values, [month]
 		for (const ibCalcLedMark& led : ibCalcLedMarks(changed, candidates, dimensionNames, typeIndex, leads, baseByRegistration)) {
 			const ibCalcRecordFacts& stale = candidates[led.candidate];
-			ibDataQueryBuilder mark;
-			mark.From(recalculation->GetQueryable());
-			mark.WithAccessPolicy(nullptr);
-			mark.SetValue(objectColumn, stale.recorder);
-			mark.SetValue(typeColumn, stale.type);
-			for (size_t d = 0; d < dimensions.size() && d < led.values.size(); ++d)
-				mark.SetValue(dimensions[d]->GetQueryColumn(), led.values[d]);
-			if (!mark.Upsert())
-				ibBackendCoreException::Error(_("Register '%s': failed to mark a record for the recalculation '%s'"),
+			std::vector<ibValue> key{ stale.recorder, stale.type };
+			for (size_t d = 0; d < dimensions.size(); ++d)
+				key.push_back(d < led.values.size() ? led.values[d] : ibValue());
+			if (monthColumn != nullptr)
+				key.push_back(stale.actionPeriod);   // the position it is — its own month or a correction's
+			marks.insert(std::move(key));
+		}
+		if (marks.empty())
+			continue;
+
+		const auto keyOfRow = [&](ibDataQueryResult& row) {
+			std::vector<ibValue> key{ row.GetValue(objectColumn), row.GetValue(typeColumn) };
+			for (const ibValueMetaObjectDimension* dimension : dimensions)
+				key.push_back(row.GetValue(dimension->GetQueryColumn()));
+			if (monthColumn != nullptr)
+				key.push_back(row.GetValue(monthColumn));
+			return key;
+		};
+		std::set<ibValue> recorders;
+		for (const std::vector<ibValue>& key : marks)
+			recorders.insert(key.front());
+		std::vector<ibValue> list;
+		const auto readStanding = [&]() {
+			// One OR of equalities rather than an IN, as for the types above: the recorder is a reference.
+			ibQueryPredicatePtr ofRecorders;
+			for (const ibValue& recorder : list) {
+				ibQueryCondition leaf;
+				leaf.m_col = objectColumn;
+				leaf.m_value = recorder;
+				ibQueryPredicatePtr one = ibQueryPredicate::Leaf(leaf);
+				ofRecorders = ofRecorders ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, ofRecorders, one) : one;
+			}
+			ibDataQueryBuilder standing;
+			standing.From(recalculation->GetQueryable());
+			standing.WithAccessPolicy(nullptr);
+			standing.Where(ofRecorders);
+			ibReadPageRequest page;
+			page.m_count = 0;
+			ibDataQueryResult rows = standing.Execute(page);
+			while (rows.Next())
+				marks.erase(keyOfRow(rows));
+			list.clear();
+		};
+		for (const ibValue& recorder : recorders) {
+			list.push_back(recorder);
+			if (list.size() == kListPerRead)
+				readStanding();
+		}
+		if (!list.empty())
+			readStanding();
+		if (marks.empty())
+			continue;
+
+		ibDataQueryBuilder write;
+		write.From(recalculation->GetQueryable());
+		write.WithAccessPolicy(nullptr);
+		bool any = false;
+		for (const std::vector<ibValue>& key : marks) {
+			if (any)
+				write.NextRow();
+			any = true;
+			write.SetValue(objectColumn, key[0]);
+			write.SetValue(typeColumn, key[1]);
+			for (size_t d = 0; d < dimensions.size(); ++d)
+				write.SetValue(dimensions[d]->GetQueryColumn(), key[2 + d]);
+			if (monthColumn != nullptr)
+				write.SetValue(monthColumn, key[2 + dimensions.size()]);
+		}
+		if (!write.Insert())
+			ibBackendCoreException::Error(_("Register '%s': failed to mark records for the recalculation '%s'"),
+				meta->GetSynonym(), recalculation->GetSynonym());
+
+		// …and where the key is too wide for an index, its identity lives in a digest column the door
+		// does not know how to fill (GetKeyHashColumn). The database digests the rows that have none, by
+		// the expression a rebuilt totals table is finished with — the same function of the same fields.
+		const wxString digest = recalculation->GetKeyHashColumn();
+		if (!digest.IsEmpty()) {
+			ibMaterializeSpec spec;
+			spec.m_table = recalculation->GetPhysicalTableName();
+			spec.m_keyHashColumn = digest;
+			for (const ibBackendQueryColumn* column : recalculation->GetQueryable()->GetPrimaryKeyColumns())
+				for (const wxString& field : ColumnFieldNames(column))
+					spec.m_keyColumns.push_back(field);
+			if (db_query == nullptr || !ibFillKeyHashes(*db_query, spec))
+				ibBackendCoreException::Error(_("Register '%s': failed to identify the marks of the recalculation '%s'"),
 					meta->GetSynonym(), recalculation->GetSynonym());
 		}
 	}
@@ -310,6 +467,12 @@ void ResolveReversedMarks(const ibValueMetaObjectCalculationRegister* meta, cons
 					if (found != storno.dims.end())
 						answer.Where(dimension->GetQueryColumn(), found->second);
 				}
+				// …and the storno's MONTH, where marks keep one: a correction answers the position it
+				// corrects, and the same recorder's record of that type for another month stays marked. (A mark
+				// written before marks kept a month has none, and is answered the first way — by posting its
+				// recorder, which clears every mark it carries.)
+				if (const ibBackendQueryColumn* monthColumn = recalculation->GetActionPeriodColumn())
+					answer.Where(monthColumn, storno.actionPeriod);
 				if (!answer.Delete())
 					ibBackendCoreException::Error(_("Register '%s': failed to answer the recalculation '%s' of a corrected record"),
 						meta->GetSynonym(), recalculation->GetSynonym());
@@ -371,6 +534,30 @@ ibQueryPredicatePtr AnyOfKeys(const ibValueMetaObjectCalculationRegister* meta, 
 		}
 		if (all)
 			any = any ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, any, all) : all;
+	}
+	return any;
+}
+
+// "Any of these lines of this recorder" — an OR of (recorder AND line), the recorder REPEATED in every
+// branch. Said once beside a list of lines it reached the pieces' key (recorder, line, start) for the
+// recorder alone, and the list was weighed against every piece the recorder holds — see RewriteWindow.
+ibQueryPredicatePtr AnyOfLines(const ibValueMetaObjectCalculationRegister* meta, const ibValue& recorder,
+	const std::vector<ibValue>& lines)
+{
+	const auto equal = [](const ibBackendQueryColumn* column, const ibValue& value) {
+		ibQueryCondition leaf;
+		leaf.m_col = column;
+		leaf.m_op = ibQueryFilterOp::Equal;
+		leaf.m_value = value;
+		return ibQueryPredicate::Leaf(leaf);
+	};
+	const ibBackendQueryColumn* recorderColumn = meta->GetRegisterRecorder()->GetQueryColumn();
+	const ibBackendQueryColumn* lineColumn = meta->GetRegisterLineNumber()->GetQueryColumn();
+	ibQueryPredicatePtr any;
+	for (const ibValue& line : lines) {
+		const ibQueryPredicatePtr one = ibQueryPredicate::Compose(ibQueryPredicateKind::And,
+			equal(recorderColumn, recorder), equal(lineColumn, line));
+		any = any ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, any, one) : one;
 	}
 	return any;
 }
@@ -608,9 +795,6 @@ void RewriteWindow(const ibValueMetaObjectCalculationRegister* meta, const ibQue
 	int64_t windowStart, int64_t windowEnd, const std::map<ibValue, int>& typeIndex,
 	const std::vector<std::pair<int, int>>& edges)
 {
-	const ibBackendQueryColumn* recorderColumn = meta->GetRegisterRecorder()->GetQueryColumn();
-	const ibBackendQueryColumn* lineColumn = meta->GetRegisterLineNumber()->GetQueryColumn();
-
 	// The records of the touched keys meeting [from, to) — whole: a piece row is its record's row with
 	// its own bounds. Compared on the stored dates, both ends included. What calculation.h weighs
 	// (`window`) and what is written back (`rows`) run side by side, one entry per record.
@@ -673,16 +857,24 @@ void RewriteWindow(const ibValueMetaObjectCalculationRegister* meta, const ibQue
 	}();
 	if (recorderAt == columns.size() || lineAt == columns.size())
 		return;
+	//
+	// ⭐⭐ EACH LINE LOOKED UP, NOT EACH PIECE WEIGHED. Written as one recorder equality beside a list of lines,
+	// the delete reached the pieces' key for the recorder alone: the server walked every piece of that
+	// recorder and tested the whole list against each. A run for forty thousand people holds 80 000 pieces,
+	// and the window pass visits it once per list of keys — MEASURED 2026-09-11 (Release, Firebird trace):
+	// 380 such deletes at 1.5 s, 563 s of a 950 s posting, quadratic in the size of the run (N/64 statements
+	// of N pieces each). With the recorder inside every branch (AnyOfLines) each branch is a prefix of the
+	// key, and the server looks each line up. The lists stay short, as the key lists do (kKeyListLimit).
 	std::map<ibValue, std::vector<ibValue>> linesOf;   // recorder -> its lines in S1
 	for (size_t i = 0; i < window.size(); ++i)
 		if (ibCalcOverlaps(window[i].start, window[i].end, windowStart, windowEnd))
 			linesOf[rows[i][recorderAt]].push_back(rows[i][lineAt]);
-	constexpr size_t kLinesPerStatement = 500;
+	constexpr size_t kLinesPerStatement = 64;
 	for (const auto& entry : linesOf) {
 		for (size_t from = 0; from < entry.second.size(); from += kLinesPerStatement) {
 			const std::vector<ibValue> chunk(entry.second.begin() + from,
 				entry.second.begin() + std::min(entry.second.size(), from + kLinesPerStatement));
-			ErasePieces(meta, [&](ibDataQueryBuilder& d) { d.Where(recorderColumn, entry.first); d.WhereIn(lineColumn, chunk); });
+			ErasePieces(meta, [&](ibDataQueryBuilder& d) { d.Where(AnyOfLines(meta, entry.first, chunk)); });
 		}
 	}
 

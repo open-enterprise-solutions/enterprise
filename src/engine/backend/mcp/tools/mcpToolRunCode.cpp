@@ -90,6 +90,7 @@
 
 #include "backend/compiler/scriptCheck.h"     // the code is CHECKED here, before anything is sent
 #include "backend/metadataConfiguration.h"    // activeMetaData - whose configuration it checks against
+#include "backend/system/systemEnum.h"        // ibStatusMessage - the level of what the code said
 
 namespace {
 
@@ -285,6 +286,21 @@ void DescribeRun(const ibJobRunByteCodeState& state, ibDataNode& into)
 		into.SetValue(wxT("error"), state.m_error);
 	else if (state.m_complete && !state.m_result.IsEmpty())
 		into.SetValue(wxT("result"), state.m_result);
+
+	// ⭐ WHAT THE CODE SAID — its `Message` lines, the last of them, in the shape debug_state gives an
+	// application's: what a person running it in a window would have read.
+	std::vector<ibDataValue> said;
+	for (const ibJobRunByteCodeState::ibLine& line : state.m_output) {
+		std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+		node->SetValue(wxT("text"), line.m_text);
+		node->SetValue(wxT("level"), wxString(
+			  line.m_status == ibStatusMessage_Error   ? wxT("error")
+			: line.m_status == ibStatusMessage_Warning ? wxT("warning")
+			                                           : wxT("info")));
+		said.push_back(ibDataValue::Child(node));
+	}
+	if (!said.empty())
+		into.AddField(wxT("output"), ibDataValue::Array(said));
 }
 
 // ⚠ THREE OUTCOMES, AND A BOOL CANNOT CARRY THEM. `sent` false means no answer came back before the
@@ -397,11 +413,11 @@ public:
 			"runs for an hour.\n"
 			"\n"
 			"* WRITE TO THE REGISTRATION JOURNAL as you go - what is about to be done, how many rows, "
-			"what came of each stage. NOT `Message`: a background session is tied to nobody, so "
-			"whatever it says reaches no one at all. The journal is the only channel there is, and "
-			"it is the better one anyway - it is durable, the person can read it too, and "
-			"journal_read with the `session` this returns shows exactly this run's rows and nobody "
-			"else's. THAT IS HOW ARBITRARY CODE IS CHECKED.\n"
+			"what came of each stage. It is durable, the person can read it too, and journal_read with "
+			"the `session` this returns shows exactly this run's rows and nobody else's. THAT IS HOW "
+			"ARBITRARY CODE IS CHECKED. `Message` is heard as well, but only by you: a background "
+			"session has no window, so the run keeps the last lines it said and code_status answers "
+			"with them as `output` - which is how code written for a person's window is checked here.\n"
 			  "\n"
 			"WHERE IT RUNS, because that decides what you can do about it. It needs a RUNTIME, which a "
 			"designer does not have - so the application has to be RUNNING WITH THE DEBUGGER "
@@ -655,8 +671,10 @@ public:
 	wxString GetDescription() const override
 	{
 		return ibMcpText("How a run is getting on: `activity` - where it says it has got to - "
-			"plus whether it has finished and what it answered or failed with. It does not block: a "
-			"run is meant to be watched while the person carries on working.\n"
+			"plus whether it has finished and what it answered or failed with, and `output` - what its "
+			"code said with `Message`, the last lines of it, which a background session shows in no "
+			"window. It does not block: a run is meant to be watched while the person carries on "
+			"working.\n"
 			  "\n"
 			"`activity` is THE SAME LINE the person at the designer reads in Active Users, not a "
 			"second account of the run written for a caller. So what you read here and what they see "
@@ -708,7 +726,7 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Stop a run. COOPERATIVE: the flag is raised and the code unwinds at its "
+		return ibMcpText("Stop a background run - one code_run started. COOPERATIVE: the flag is raised and the code unwinds at its "
 			"next loop boundary, so code that does not loop cannot be stopped at all - which is why "
 			"looping is a requirement on the code and not a style note.\n"
 			"IF IT WILL NOT STOP - a run that is wedged, or one written without a loop - the session "

@@ -16,12 +16,47 @@
 #include <wx/hashset.h>
 #include <wx/datetime.h>
 
+#include <unordered_map>   // StringToIntMap — the field-name index
+
 #include "databaseLayerDef.h"
 #include "databaseErrorReporter.h"
 #include "databaseStringConverter.h"
 #include "resultSetMetaData.h"
 
-WX_DECLARE_STRING_HASH_MAP(int, StringToIntMap);
+// ⭐ A FIELD IS FOUND BY ITS NAME WHATEVER THE CASE — AND WITHOUT A COPY OF THE NAME. Every cell of every
+// row is read by its field's name (the column codec reads that way), and the drivers answered the
+// case-insensitive question by upper-casing: the names were stored upper-cased and every lookup made an
+// upper-cased COPY of the name it was asked for — a string allocated and hashed per cell, on the path
+// every read of every report takes. This map ignores case in the hash and in the comparison, reading the
+// name's own characters where they lie (no copy, no library call per character), so a name is looked up
+// exactly as it was written. A field name is an identifier: folding the ASCII letters is the whole of
+// the case it has.
+inline wchar_t ibFieldNameFold(wchar_t c) { return (c >= L'a' && c <= L'z') ? static_cast<wchar_t>(c - (L'a' - L'A')) : c; }
+struct ibFieldNameHash {
+	size_t operator()(const wxString& name) const {
+		// `auto`: a pointer into the string where wxString holds wide characters, a buffer that must
+		// outlive the loop where it holds UTF-8 — held either way, read the same way.
+		const auto chars = name.wc_str();
+		size_t h = static_cast<size_t>(2166136261u);   // FNV-1a over the folded characters
+		for (const wchar_t* p = chars; *p != 0; ++p)
+			h = (h ^ static_cast<size_t>(ibFieldNameFold(*p))) * static_cast<size_t>(16777619u);
+		return h;
+	}
+};
+struct ibFieldNameEqual {
+	bool operator()(const wxString& a, const wxString& b) const {
+		if (a.length() != b.length())
+			return false;
+		const auto ac = a.wc_str();
+		const auto bc = b.wc_str();
+		// The characters as they are first; the case is looked at only where they differ.
+		for (const wchar_t *p = ac, *q = bc; *p != 0; ++p, ++q)
+			if (*p != *q && ibFieldNameFold(*p) != ibFieldNameFold(*q))
+				return false;
+		return true;
+	}
+};
+typedef std::unordered_map<wxString, int, ibFieldNameHash, ibFieldNameEqual> StringToIntMap;
 WX_DECLARE_HASH_SET(ibResultSetMetaData*, wxPointerHash, wxPointerEqual, MetaDataHashSet);
 
 // ⭐⭐ WHOEVER KEEPS BOOKS ON A RESULT SET. There are two of them — the layer for a result it produced

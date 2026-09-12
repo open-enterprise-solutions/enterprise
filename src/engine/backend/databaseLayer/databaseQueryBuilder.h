@@ -31,6 +31,8 @@
 #include "backend/databaseLayer/preparedStatement.h" // ibPreparedStatement (ibQueryStatement base)
 #include "backend/databaseLayer/columnType.h"        // ibColumnType — Cast target + ibDdlColumn type (dialect TYPE-MAP renders it)
 
+#include <atomic>          // ibQueryResult — the cancel it hears
+#include <deque>           // ibQueryResult — its fields, found once per result
 #include <memory>
 #include <vector>
 
@@ -1110,9 +1112,45 @@ BACKEND_API bool ibAlterTableMultiClause(const ibDatabaseLayer* layer);
 class BACKEND_API ibQueryResult
 {
 public:
+	// ⭐⭐ A FIELD IS FOUND ONCE PER RESULT, NOT ONCE PER CELL.
+	//
+	// The reads below take a NAME, and a cell's value is several fields of one column — its tag, its
+	// value, a reference's type and key — each spelled `base + suffix` and looked up again on every row.
+	// On the payroll sheet that was most of what reading a cell cost: three or four strings built and
+	// hashed per cell, 126 thousand rows of them, and again per field of every row a batch of references
+	// read (MEASURED 2026-09-12, Debug stack samples).
+	//
+	// So a cell names its fields by a BASE and a SLOT — a small number the caller keeps for each suffix
+	// it uses (the column codec numbers them by role). The name is spelled and looked up the first time a
+	// slot is asked for, and every later row reads the field by its index. A field this result does not
+	// carry is refused exactly as the named read refuses it — the driver's own lookup answers the first
+	// time, and an answer that was a refusal is not remembered, so it is given again.
+	static constexpr unsigned kFieldSlots = 16;
+	struct FieldSlots {
+		int m_index[kFieldSlots] = {};   // 0 = not looked up yet
+		// …and, per stored TAG, whether the column read through this base can spread to it. That is a
+		// fact of the column's TYPE, which does not change while a result is read, so it is asked once
+		// here and not once per cell (the column codec's TagFitsColumn — its type comes from the
+		// metadata's properties, and asking per cell was a fifth of reading one: 2026-09-12, Debug).
+		// `m_fitsFor` is the column it was asked for, opaque to this layer; 0 = not asked, 1 = fits,
+		// -1 = does not.
+		signed char m_fits[kFieldSlots] = {};
+		const void* m_fitsFor = nullptr;
+	};
+
+	// `cancel` is what the rows hear (m_cancel below), handed in by the builder.
 	ibQueryResult(std::shared_ptr<ibDatabaseLayer> conn,
 	              ibPreparedStatement* stmt,
-	              ibDatabaseResultSet* rs);
+	              ibDatabaseResultSet* rs,
+	              const std::atomic<bool>* cancel = nullptr);
+	// …and the same statement run again for each of `runs` once the rows before are read (ExecuteIR over
+	// several) — one cursor over them all. Opaque here; the runs are made where they are defined. Null runs
+	// is a single run.
+	ibQueryResult(std::shared_ptr<ibDatabaseLayer> conn,
+	              ibPreparedStatement* stmt,
+	              ibDatabaseResultSet* rs,
+	              std::unique_ptr<struct ibQueryRuns> runs,
+	              const std::atomic<bool>* cancel);
 	~ibQueryResult();
 
 	ibQueryResult(ibQueryResult&& other) noexcept;
@@ -1120,13 +1158,16 @@ public:
 	ibQueryResult(const ibQueryResult&)            = delete;
 	ibQueryResult& operator=(const ibQueryResult&) = delete;
 
-	// Advance to the next row; false past the last row.
+	// Advance to the next row; false past the last row — of the last run, where there are several.
 	bool Next();
 
 	// Read the current row's column as a normalized ibValue (1-based index, or
 	// by name). A NULL column yields a TYPE_NULL value.
 	ibValue GetValue(int column);
 	ibValue GetValue(const wxString& name);
+	// The index GetValue(name) reads — the first column of that name, without case — or -1. For a reader
+	// that asks for the same column on every row and would rather find it once.
+	int     ColumnIndex(const wxString& name);
 
 	// Typed field reads by name — the dialect-NORMALISED form of the row's physical fields
 	// (the "same shape as L1, minus the dialect"). The provider's value-assembly reads the
@@ -1156,6 +1197,21 @@ public:
 	// server road say it too, instead of guessing from a value that has no way to be absent.
 	bool        IsResultNull(const wxString& name);
 
+	// A cell's fields found once per result (FieldSlots above): the slots of a base, one lookup per cell
+	// whatever it reads, and a field's index the first time a slot is asked for.
+	FieldSlots& FieldsOf(const wxString& base);
+	int         FieldIndex(FieldSlots& slots, const wxString& base, unsigned slot, const wxString& suffix);
+
+	// …and the typed reads of a field found that way, answering exactly what the named reads answer.
+	wxString    GetResultString(int field);
+	int         GetResultInt(int field);
+	long long   GetResultLong(int field);
+	bool        GetResultBool(int field);
+	wxDateTime  GetResultDate(int field);
+	ibNumber    GetResultNumber(int field);
+	void*       GetResultBlob(int field, wxMemoryBuffer& buffer);
+	bool        IsResultNull(int field);
+
 	int      ColumnCount();
 	wxString ColumnName(int column);
 
@@ -1173,6 +1229,25 @@ private:
 	ibPreparedStatement* m_stmt = nullptr;
 	ibDatabaseResultSet* m_rs   = nullptr;
 	ibResultSetMetaData* m_meta = nullptr;      // lazy, owned by m_rs
+	// The fields found so far, by base (see FieldsOf) — and the columns by the name the statement gave
+	// them, for GetValue(name): first one wins, as the walk it replaced answered. Both built as asked.
+	// ⚠ A DEQUE WALKED BY INDEX, not a hash map: a result has a handful of bases, read in the same order
+	// row after row, so the one after the last is almost always the next — one comparison — where a hash
+	// map hashed the name and, in a checked build, locked for every iterator it made (2026-09-12). A
+	// deque keeps a FieldSlots where it is while the next base is added (ibCellFields holds one).
+	std::deque<std::pair<wxString, FieldSlots>> m_fields;
+	size_t         m_lastFields = 0;
+	StringToIntMap m_columnsByName;
+	bool           m_columnsByNameBuilt = false;
+	// The runs of this statement still to come (ExecuteIR over several); null for a single run. What was
+	// found above stays good across them: every run is the same statement, so the same columns.
+	std::unique_ptr<struct ibQueryRuns> m_runs;
+	// ⭐ THE CANCEL OF WHOSE READ THIS IS — the flag (ibSession::CancelFlag) of the session whose connection it
+	// is read on, heard on every row. Every read of the engine draws its rows through Next, so a cancel stops
+	// a read wherever it has got to, and not only a statement the database happens to be running at that
+	// moment. A read on a connection taken for anyone else — a service thread's own holder — hears nobody's:
+	// the session a thread falls back to is not the one reading there.
+	const std::atomic<bool>* m_cancel = nullptr;
 };
 
 // ==========================================================================
@@ -1239,6 +1314,11 @@ public:
 
 	// --- direct paths (prebuilt IR / DDL / DML) ---------------------------
 	[[nodiscard]] ibQueryResult ExecuteIR(const ibQueryIR& ir,
+	                                       const std::vector<ibValue>& externalParams = {});
+	// …or ONE statement run once per IR of `runs`, read as one cursor. The caller makes them render to one
+	// text, and it is prepared once where the driver runs a prepared statement again
+	// (ibSqlFeatures::m_batchByReexecution) — elsewhere once per run.
+	[[nodiscard]] ibQueryResult ExecuteIR(const std::vector<ibQueryIR>& runs,
 	                                       const std::vector<ibValue>& externalParams = {});
 	int Execute(const ibDdlStatement& ddl);
 	int Execute(const ibDmlStatement& dml, const std::vector<ibValue>& externalParams = {});

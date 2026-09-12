@@ -298,7 +298,8 @@ struct ibCalcLedMark {
 };
 
 // The marks a recalculation keyed by `dimensionNames` (upper-cased, its own order) is to hold after
-// `changed`: every candidate the rule leads, ONCE per the table's own key (recorder, type, values).
+// `changed`: every candidate the rule leads, ONCE per the table's own key (recorder, type, values, and
+// the month the record is for — a mark names the position).
 // A recalculation dimension is matched to the register's by NAME — the same rule GetBase uses between
 // a register and its base register. `baseByRegistration` as ibFindLedRecords reads it.
 BACKEND_API std::vector<ibCalcLedMark> ibCalcLedMarks(const std::vector<ibCalcRecordFacts>& changed,

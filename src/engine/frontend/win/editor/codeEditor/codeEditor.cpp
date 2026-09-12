@@ -94,6 +94,14 @@ ibCodeEditor::ibCodeEditor(ibMetaDocument* document, wxWindow* parent, wxWindowI
 	MarkerDefineBitmap(CurrentLine, wxMEMORY_BITMAP(Currentline_png));
 	MarkerDefineBitmap(BreakLine, wxMEMORY_BITMAP(Breakline_png));
 
+	// THE SAME DOT, ANOTHER COLOUR, for a breakpoint with a condition: the shape still reads as "a breakpoint",
+	// the colour says "not every time". Turned from the red one rather than drawn anew, so the two never drift.
+	// BLUE, not amber: amber read as a darker red beside the red dot, and the yellow run arrow drawn on top of
+	// it disappeared (Max, 2026-09-11).
+	wxImage conditionalBreakpoint = wxMEMORY_IMAGE(Breakpoint_png);
+	conditionalBreakpoint.RotateHue(0.62);   // red -> blue
+	MarkerDefineBitmap(ConditionalBreakpoint, wxBitmap(conditionalBreakpoint));
+
 	//markers
 	MarkerDefine(wxSTC_MARKNUM_FOLDER, wxSTC_MARK_BOXPLUS, *wxWHITE, *wxBLACK);
 	MarkerDefine(wxSTC_MARKNUM_FOLDEROPEN, wxSTC_MARK_BOXMINUS, *wxWHITE, *wxBLACK);
@@ -203,6 +211,7 @@ void ibCodeEditor::EditDebugPoint(int line_to_edit)
 void ibCodeEditor::RefreshBreakpoint(bool deleteCurrentBreakline)
 {
 	MarkerDeleteAll(ibCodeEditor::Breakpoint);
+	MarkerDeleteAll(ibCodeEditor::ConditionalBreakpoint);
 	RefreshBreakpointMarkers();
 }
 
@@ -1052,6 +1061,33 @@ void ibCodeEditor::InsertStringLiteral(int position, const wxString& text)
 	InsertText(position, SpellStringLiteral(text, indent));
 }
 
+void ibCodeEditor::OnMouseMove(wxMouseEvent& event)
+{
+	// OVER THE BREAKPOINT MARGIN the hint is the margin's: what the breakpoint on that line stops on. The
+	// margins stand side by side in their order, so this one starts where the line numbers end.
+	const wxPoint at = event.GetPosition();
+	const int marginLeft = GetMarginWidth(DEF_LINENUMBER_ID);
+	if (at.x >= marginLeft && at.x < marginLeft + GetMarginWidth(DEF_BREAKPOINT_ID)) {
+		wxString hint;
+		if (!GetDebugPointHint(LineFromPosition(PositionFromPoint(at)), hint))
+			hint.clear();
+		if (hint != m_marginHint) {
+			if (hint.IsEmpty()) UnsetToolTip();
+			else                SetToolTip(hint);
+			m_marginHint = hint;
+		}
+	}
+	else {
+		// Off the margin its hint comes down, before the text's own (a debugger's value) goes up.
+		if (!m_marginHint.IsEmpty()) {
+			UnsetToolTip();
+			m_marginHint.clear();
+		}
+		LoadToolTip(at);
+	}
+	event.Skip();
+}
+
 #include "frontend/mainFrame/mainFrame.h"  // wxID_FRONTEND_SYNTAX_HELPER_LOOKUP
 #include "frontend/win/dlgs/queryConstructor/queryConstructor.h"   // the constructor, opened on the literal
 #include "frontend/artProvider/artProvider.h"                      // wxART_QUERY_CONSTRUCTOR — the icon, registered not embedded
@@ -1060,6 +1096,12 @@ void ibCodeEditor::InsertStringLiteral(int position, const wxString& text)
 void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 {
 	wxMenu menu;
+
+	// The line the menu is about: the one under the mouse, or the caret's when it came from the keyboard.
+	const wxPoint clickAt = event.GetPosition();
+	const int menuLine = clickAt == wxDefaultPosition
+		? LineFromPosition(GetCurrentPos())
+		: LineFromPosition(PositionFromPoint(ScreenToClient(clickAt)));
 
 	// Syntax helper lookup goes first — primary action for an
 	// identifier-aware editor. Disabled when the cursor isn't over
@@ -1094,6 +1136,8 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		if (literal.Found()) ReplaceStringLiteral(literal, text);
 		else                 InsertStringLiteral(caret, text);
 	}, miConstruct->GetId());
+
+	AppendDebugMenu(menu, menuLine);
 
 	menu.AppendSeparator();
 

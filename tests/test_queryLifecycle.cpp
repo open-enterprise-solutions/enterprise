@@ -14,9 +14,11 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <memory>
 #include <stdexcept>
 
+#include "backend/backend_exception.h"   // ibBackendInterruptException — what a cancelled read throws
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseResultSet.h"
@@ -61,6 +63,14 @@ public:
 	ibNumber   GetResultNumber(int) override { return ibNumber(); }
 	bool       IsFieldNull(int) override { return true; }
 	ibResultSetMetaData* GetMetaData() override { return nullptr; }
+};
+
+// A result set with rows to give — `m_rows` of them, then the end.
+class RowsResultSet : public CountingResultSet {
+public:
+	explicit RowsResultSet(int rows) : m_rows(rows) {}
+	int m_rows;
+	bool Next() override { return m_rows-- > 0; }
 };
 
 // Connection whose Close* forward to the object's Close() so the test can
@@ -131,4 +141,52 @@ TEST(QueryLifecycle, MoveAssignReleasesPriorHandles) {
 	}                       // b (now holding stmt1/rs1) releases on scope exit
 	EXPECT_EQ(rs1.m_closeCount, 1);
 	EXPECT_EQ(stmt1.m_closeCount, 1);
+}
+
+// ---------------------------------------------------------------------------
+// THE ROWS HEAR THE READER'S CANCEL (ibQueryResult::m_cancel) — the flag of the
+// session whose connection the read is on, handed in by the builder. Raised between
+// two rows, the next Next() throws what the interpreter throws for a cancel, and the
+// cursor is still released exactly once on the way out.
+// ---------------------------------------------------------------------------
+
+TEST(QueryLifecycle, CancelRaisedBetweenRows_NextThrowsTheInterruption) {
+	CountingStatement stmt;
+	RowsResultSet rs(5);
+	auto conn = std::make_shared<CountingConn>();
+	std::atomic<bool> cancel { false };
+	{
+		ibQueryResult r(conn, &stmt, &rs, &cancel);
+		EXPECT_TRUE(r.Next());
+		EXPECT_TRUE(r.Next());
+		cancel = true;
+		EXPECT_THROW(r.Next(), ibBackendInterruptException);
+	}
+	EXPECT_EQ(rs.m_closeCount, 1);
+	EXPECT_EQ(stmt.m_closeCount, 1);
+}
+
+// No flag — a read nobody can cancel (a service thread's own holder) — reads to its end.
+TEST(QueryLifecycle, NoCancelFlag_ReadsEveryRow) {
+	CountingStatement stmt;
+	RowsResultSet rs(3);
+	auto conn = std::make_shared<CountingConn>();
+	ibQueryResult r(conn, &stmt, &rs, nullptr);
+	int rows = 0;
+	while (r.Next())
+		++rows;
+	EXPECT_EQ(rows, 3);
+}
+
+// The flag travels with the cursor: a result moved on still hears the cancel it was made with.
+TEST(QueryLifecycle, MovedResult_StillHearsTheCancel) {
+	CountingStatement stmt;
+	RowsResultSet rs(5);
+	auto conn = std::make_shared<CountingConn>();
+	std::atomic<bool> cancel { false };
+	ibQueryResult a(conn, &stmt, &rs, &cancel);
+	ibQueryResult b(std::move(a));
+	EXPECT_TRUE(b.Next());
+	cancel = true;
+	EXPECT_THROW(b.Next(), ibBackendInterruptException);
 }

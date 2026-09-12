@@ -484,16 +484,35 @@ void ibDebuggerServer::EnterDebugger(ibRunContext* runContext, const ibByteUnit&
 			}
 			else
 			{
-				//arbitrary breakpoint 
+				//arbitrary breakpoint
 				if (byteCode.m_numLine >= 0) {
 					auto list_breakpoint_iterator = m_listBreakpoint.find(byteCode.m_strDocPath);
 					if (list_breakpoint_iterator != m_listBreakpoint.end()) {
 
 						const auto& list_current_breakpoint = list_breakpoint_iterator->second;
-						auto list_current_breakpoint_iterator = std::find(
-							list_current_breakpoint.begin(), list_current_breakpoint.end(), byteCode.m_numLine);
+						auto list_current_breakpoint_iterator = list_current_breakpoint.find(byteCode.m_numLine);
 
-						doLoop = list_current_breakpoint_iterator != list_current_breakpoint.end();
+						if (list_current_breakpoint_iterator != list_current_breakpoint.end()) {
+							const wxString& condition = list_current_breakpoint_iterator->second;
+							if (condition.IsEmpty()) {
+								doLoop = true;
+							}
+							else {
+								// ⭐ A CONDITION IS ASKED OF THE FRAME THAT REACHED THE LINE - the same evaluation the
+								// watch window uses, on this very thread, with this run's locals. A condition that
+								// cannot be answered (does not compile, fails on this value) STOPS, and says why: a
+								// breakpoint that silently never fires is the one nobody can debug.
+								ibValue answer;
+								if (ibProcUnit::Evaluate(condition, runContext, answer, false))
+									doLoop = answer.GetBoolean();
+								else {
+									doLoop = true;
+									SendErrorToClient(byteCode.m_strFileName, byteCode.m_strDocPath, byteCode.m_numLine + 1,
+										wxString::Format(_("The breakpoint condition '%s' could not be evaluated: %s"),
+											condition, ibBackendException::GetLastError()));
+								}
+							}
+						}
 					}
 				}
 			}
@@ -1096,17 +1115,21 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			unsigned int countBreakPoints = commandReader.r_u32();
 			wxString strModuleName; commandReader.r_stringZ(strModuleName);
 			auto& module_breakpoints = ms_debugServer->m_listBreakpoint[strModuleName];
-			module_breakpoints.reserve(module_breakpoints.size() + countBreakPoints);
 			for (unsigned int j = 0; j < countBreakPoints; j++) {
-				module_breakpoints.push_back(commandReader.r_u32());
+				const unsigned int line = commandReader.r_u32();
+				wxString condition; commandReader.r_stringZ(condition);
+				module_breakpoints[line] = condition;
 			}
 		}
 		ms_debugServer->m_bUseDebug = true;
 	}
 	else if (commandFromClient == CommandId_ToggleBreakpoint) {
+		// Sets the line's breakpoint, or gives the one there a new condition - one per line, the last sent.
 		wxString strModuleName; commandReader.r_stringZ(strModuleName);
 		unsigned int line = commandReader.r_u32();
-		ms_debugServer->m_listBreakpoint[strModuleName].push_back(line);
+		commandReader.r_s32();   // the offset the designer's edits have moved it by - the runtime counts committed lines
+		wxString condition; commandReader.r_stringZ(condition);
+		ms_debugServer->m_listBreakpoint[strModuleName][line] = condition;
 	}
 	else if (commandFromClient == CommandId_RemoveBreakpoint) {
 
@@ -1114,10 +1137,8 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		unsigned int line = commandReader.r_u32();
 		auto it = ms_debugServer->m_listBreakpoint.find(strModuleName);
 		if (it != ms_debugServer->m_listBreakpoint.end()) {
-			auto& module_breakpoint = it->second;
-			module_breakpoint.erase(
-				std::remove(module_breakpoint.begin(), module_breakpoint.end(), line), module_breakpoint.end());
-			if (module_breakpoint.empty())
+			it->second.erase(line);
+			if (it->second.empty())
 				ms_debugServer->m_listBreakpoint.erase(it);
 		}
 	}
@@ -1641,6 +1662,19 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			ms_debugServer->WakeDebugSession(sid);
 		}
 	}
+	// STEP OUT IS STEP OVER ONE FRAME UP. Step over stops at the first line whose frame is no deeper than
+	// this one (EnterDebugger, "step through"); asking for one frame less stops at the first line back in
+	// the caller. From the outermost frame there is no caller: 0 turns the step off and it runs on as
+	// Continue does, to the next breakpoint.
+	else if (commandFromClient == CommandId_StepOut) {
+		wxString sid; commandReader.r_stringZ(sid);
+		if (ms_debugServer->IsDebugLooped()) {
+			auto* puState = ibSession::GetPUState();
+			const unsigned int depth = puState ? puState->GetCountRunContext() : 0;
+			ms_debugServer->m_numCurrentNumberStopContext = depth > 1 ? depth - 1 : 0;
+			ms_debugServer->WakeDebugSession(sid);
+		}
+	}
 	// ⭐⭐ "SHOW ME WHAT YOU ARE SEEING." The one command here that does not speak to a PARKED
 	// runtime: it asks a window to draw itself, which a running application can do at any moment —
 	// and that is the point, since the person is looking at the wrong list right now, not at a stop.
@@ -1837,24 +1871,22 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		ms_debugServer->m_bDebugStopLine = true;
 		// Hard escape hatch: if the script is in a tight loop without
 		// line markers or in a native blocking call, the soft path
-		// never fires. CancelSession flips the per-session cancel flag
-		// so the interpreter throws ibBackendInterruptException at the
-		// next opcode (any kind) and the script unwinds. Trade-off: on
-		// a normally-running script Cancel fires before EnterDebugger,
-		// so this turns Pause into abort rather than pause-and-inspect.
-		// Acceptable for now — users should set breakpoints for
-		// inspection; Pause is the "I gave up, stop it" button.
+		// never fires. ibSession::Cancel makes the interpreter throw
+		// ibBackendInterruptException at the next opcode (any kind) and
+		// the script unwinds. Trade-off: on a normally-running script
+		// Cancel fires before EnterDebugger, so this turns Pause into
+		// abort rather than pause-and-inspect. Acceptable for now — users
+		// should set breakpoints for inspection; Pause is the "I gave up,
+		// stop it" button.
 		if (auto* reg = ibApplicationData::GetSessionRegistry()) {
-			if (auto* pool = reg->GetWorkerPool()) {
-				// Find() now resolves via the live m_own map (see
-				// WakeDebugSession). Fall back to the parked session (front of
-				// the debug queue) so a sid drift still cancels the right
-				// worker instead of silently dropping the hard-abort.
-				ibSessionWatch target = reg->Find(sid);
-				if (!target) target = reg->GetActiveDebugTarget();
-				if (auto sess = target.Share())
-					pool->CancelSession(sess.get());
-			}
+			// Find() now resolves via the live m_own map (see
+			// WakeDebugSession). Fall back to the parked session (front of
+			// the debug queue) so a sid drift still cancels the right
+			// worker instead of silently dropping the hard-abort.
+			ibSessionWatch target = reg->Find(sid);
+			if (!target) target = reg->GetActiveDebugTarget();
+			if (auto sess = target.Share())
+				sess->Cancel();
 		}
 	}
 	else if (commandFromClient == CommandId_Detach) {

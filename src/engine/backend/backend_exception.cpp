@@ -233,7 +233,9 @@ ibBackendException::ibBackendException(const wxString& strErrorDescription)
 	: m_errorHandled(false), m_errorDescriptionUtf8(strErrorDescription.utf8_string())
 {
 #ifdef DEBUG
-	ibJournalInfo(wxT("exception"), wxT("%s"), strErrorDescription);
+	// "thrown", said as such: a line per exception MADE — every level a cancel walks out of makes one — and
+	// not a line per thing a person was shown; read as the latter, it counted four messages that were one.
+	ibJournalInfo(wxT("exception"), wxT("thrown: %s"), strErrorDescription);
 #endif // !DEBUG
 
 	// EVERY refusal, in the same file as the ids and the SQL — the point of the trace is the ORDER of
@@ -465,7 +467,7 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 	PushLastError(strErrorMessage);
 
 #ifdef DEBUG
-	ibJournalInfo(wxT("exception"), wxT("%s"), strErrorMessage);
+	ibJournalInfo(wxT("exception"), wxT("reported: %s"), strErrorMessage);   // the formatted one, with its place
 #endif // !DEBUG
 
 	return strErrorMessage;

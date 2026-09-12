@@ -559,7 +559,8 @@ public:
 	// → NOT_FOUND → broken init. metaId is config-local but consistent across a same-config
 	// save/load. Copy-awareness here would need a DEFERRED (post-tree) pass, not load-time.
 	static bool ReadNode(const ibDataValue& value, ibMetaDescription& metaDesc);
-	static bool WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc);
+	// `metaData` given, an id naming no object of it — or one marked deleted — is left out (see the body).
+	static bool WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc, const ibMetaData* metaData = nullptr);
 };
 
 #endif

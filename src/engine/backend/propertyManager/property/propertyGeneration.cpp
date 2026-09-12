@@ -36,14 +36,18 @@ void ibPropertyGeneration::DoSetValue(const wxVariant& val)
 	ibProperty::DoSetValue(val);
 }
 
-// Everything a document can be generated into. The list used to sit in advpropGeneration.cpp.
+// Everything a document can be generated into. The list used to sit in advpropGeneration.cpp — and a
+// copy of it stayed there, in the editor's dialog, so a chart of calculation types was offered by
+// neither: the metatype that has the property (it is a mutable reference like the other charts) could
+// not be named as a target of it. The dialog now lists what this answers.
 ibPropertyChoiceMode ibPropertyGeneration::GetValueList(ibPropertyChoiceList& list)
 {
 	return CreateValueList(list, ibPropertyChoiceMode::Mult, {
 		g_metaCatalogCLSID,
 		g_metaDocumentCLSID,
 		g_metaChartOfCharacteristicTypesCLSID,
-		g_metaChartOfAccountsCLSID });
+		g_metaChartOfAccountsCLSID,
+		g_metaChartOfCalculationTypesCLSID });
 }
 
 //base property for "generation"
@@ -67,5 +71,6 @@ bool ibPropertyGeneration::ReadNodeValue(const ibDataValue& value)
 
 bool ibPropertyGeneration::WriteNodeValue(ibDataValue& value) const
 {
-	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc());
+	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
+	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

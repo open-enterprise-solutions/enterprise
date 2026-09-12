@@ -52,7 +52,6 @@ bool ibPreparedStatementFirebird::AddPreparedStatement(const wxString& strSQL)
 
 	if (pWrapper->Prepare())
 	{
-		pWrapper->SetEncoding(GetEncoding());
 		m_Statements.push_back(pWrapper);
 
 		return true;
@@ -61,7 +60,7 @@ bool ibPreparedStatementFirebird::AddPreparedStatement(const wxString& strSQL)
 	return false;
 }
 
-ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL, const wxCSConv* conv)
+ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL)
 {
 	wxArrayString Queries = ParseQueries(strSQL);
 
@@ -73,7 +72,6 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 	if (Queries.size() < 1)
 	{
 		pStatement = new ibPreparedStatementFirebird(pInterface, pDatabase, pTransaction);
-		pStatement->SetEncoding(conv);
 
 		pStatement->SetErrorCode(DATABASE_LAYER_ERROR);
 		pStatement->SetErrorMessage(wxT("No SQL Statements found"));
@@ -99,7 +97,6 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 
 		int nReturn = pInterface->GetIscStartTransaction()(status, &pTransaction, 1, &pDatabase, 0, NULL);
 		pStatement = new ibPreparedStatementFirebird(pInterface, pDatabase, pTransaction);
-		pStatement->SetEncoding(conv);
 		if (nReturn != 0)
 		{
 			long nSqlCode = pInterface->GetIscSqlcode()(status);
@@ -121,7 +118,6 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 	else
 	{
 		pStatement = new ibPreparedStatementFirebird(pInterface, pDatabase, pTransaction);
-		pStatement->SetEncoding(conv);
 		pStatement->SetManageTransaction(false);
 	}
 
@@ -336,8 +332,6 @@ ibDatabaseResultSet* ibPreparedStatementFirebird::RunQueryWithResults()
 		}
 
 		ibDatabaseResultSet* pResultSet = pLastStatement->DoRunQueryWithResults();
-		if (pResultSet)
-			pResultSet->SetEncoding(GetEncoding());
 		if (pLastStatement->GetErrorCode() != DATABASE_LAYER_OK)
 		{
 			SetErrorCode(pLastStatement->GetErrorCode());
@@ -402,7 +396,8 @@ void ibPreparedStatementFirebird::InterpretErrorCodes()
 	// "I'm in this function" — see firebirdResultSet for the same
 	// strip rationale.
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
-	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode));
+	// A system error by its status code, as the layer records one (an interrupted statement is isc_cancelled).
+	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode < -900 ? (int)m_Status[1] : (int)nSqlCode));
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, m_Status));
 }
 

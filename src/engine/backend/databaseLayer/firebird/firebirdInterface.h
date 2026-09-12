@@ -77,6 +77,9 @@ typedef ISC_STATUS(ISC_EXPORT *isc_service_queryType)(ISC_STATUS*, isc_svc_handl
 	isc_resv_handle*, unsigned short, const ISC_SCHAR*, unsigned short,
 	const ISC_SCHAR*, unsigned short, ISC_SCHAR*);
 
+// The one call Firebird takes from ANOTHER thread on a busy attachment: raise interrupts what it is running.
+typedef ISC_STATUS(ISC_EXPORT *fb_cancel_operationType)(ISC_STATUS*, isc_db_handle*, ISC_USHORT);
+
 class ibInterfaceFirebird
 {
 public:
@@ -120,6 +123,8 @@ public:
 	isc_service_detachType GetIscServiceDetach() { return m_pIscServiceDetach; }
 	isc_service_startType  GetIscServiceStart()  { return m_pIscServiceStart;  }
 	isc_service_queryType  GetIscServiceQuery()  { return m_pIscServiceQuery;  }
+
+	fb_cancel_operationType GetFbCancelOperation() { return m_pFbCancelOperation; }
 
 private:
 	wxDynamicLibrary m_FirebirdDLL;
@@ -172,6 +177,10 @@ private:
 	isc_service_detachType m_pIscServiceDetach = nullptr;
 	isc_service_startType  m_pIscServiceStart  = nullptr;
 	isc_service_queryType  m_pIscServiceQuery  = nullptr;
+
+	// Best-effort like the services above: without it a statement cannot be interrupted from outside, and
+	// a cancel waits for it to finish, as it always did.
+	fb_cancel_operationType m_pFbCancelOperation = nullptr;
 };
 
 #endif // __FIREBIRD_INTERFACES_H__

@@ -64,16 +64,14 @@ private:
 // lambda's member paths through. (Same shape as test_queryComposer's mock queryable.)
 class TestQueryable : public ibBackendQueryable {
 public:
-	TestQueryable(const wxString& table, ibMetaID metaId) : m_table(table), m_metaId(metaId) {}
+	TestQueryable(const wxString& table, ibMetaID metaId) : m_table(table), m_metaId(metaId) {
+		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(metaId); m_key = ibGuid(impl);
+	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
 
 	wxString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()   const override { return m_metaId; }
-	ibGuid   GetQueryTableGuid() const override {
-		ibGuidImpl impl{};
-		impl.m_data1 = static_cast<unsigned long>(m_metaId);
-		return ibGuid(impl);
-	}
+	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	bool     IsComputedInRam()   const override { return false; }   // physical source (dot-walk allowed; unused here)
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
@@ -88,6 +86,7 @@ public:
 private:
 	wxString m_table;
 	ibMetaID m_metaId;
+	ibUniqueKey m_key;   // its table guid, the id in the first word
 	std::vector<const ibBackendQueryColumn*> m_cols;
 };
 

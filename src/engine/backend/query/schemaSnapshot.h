@@ -369,9 +369,19 @@ struct ibSchemaTable
 // `hashColumnId` gives the hash column an IDENTITY, so the differ can ADD it to an existing table and
 // DROP it again when a key narrows — a scaffold column is created with its table and never migrated,
 // which would leave a register that gained an analytic with a table shaped for the old key.
+//
+// `indexName` names the unique index; empty = `<tableName>_PK`, the totals' name. A table that had its
+// unique index under another name before it could be hashed keeps that name (a recalculation's is
+// `_INDEX`): renamed by code, it would be the change a diff cannot see (schema-authority.md § 6).
 BACKEND_API void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
                                      const std::vector<const ibBackendQueryColumn*>& keyCols,
-                                     ibMetaID hashColumnId);
+                                     ibMetaID hashColumnId, const wxString& indexName = wxEmptyString);
+
+// THE ONE QUESTION ibDeclareDerivedKey asks — does this key pass one of the engine's two index ceilings
+// (fields or bytes), so that its identity moves into a digest column? Asked again by a WRITER that fills
+// that column itself (a recalculation's marks are written through the door, where no trigger digests
+// them), and it must be the same answer the schema was given.
+BACKEND_API bool ibDerivedKeyNeedsHash(const std::vector<const ibBackendQueryColumn*>& keyCols);
 
 // A PLAIN (non-unique) index over the LEADING columns of `cols` that one index holds on this engine — a
 // column taken whole or not at all, because half a reference is not a comparison anything can ride. The

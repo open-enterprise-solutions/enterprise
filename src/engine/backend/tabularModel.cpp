@@ -112,14 +112,14 @@ ibValueModel::~ibValueModel()
 // tells it to stop when its window is going away (Max, 2026-08-19: "it has to understand it must break
 // off, forcibly").
 //
-// Cooperative and blocking, in that order: raise the cancel flag, then wait the run out — a read that
-// is already inside a query finishes that query, and returning before it did would let the worker walk
-// a model the caller is about to release.
+// Cooperative and blocking, in that order: raise the cancel flag, then wait the run out — a read stops
+// at its next row, and returning before it did would let the worker walk a model the caller is about to
+// release.
 void ibValueModel::CancelFetch()
 {
 	if (!m_fetchRun)
 		return;
-	m_fetchRun->Cancel();   // cooperative — a query already in flight still finishes
+	m_fetchRun->Cancel();   // cooperative — heard at the read's next row
 	m_fetchRun->Wait();
 	m_fetchRun.reset();
 }

@@ -332,7 +332,7 @@ ibValue ReadBreakdown(ibDataQueryResult& sel, const ibAcctBreakdownColumn& colum
 {
 	if (column.m_slot == nullptr)
 		return ibValue();
-	return column.m_byKind ? sel.GetColumnObject(column.m_alias, column.m_slot)
+	return column.m_byKind ? sel.GetColumn(column.m_alias, column.m_slot)
 	                       : sel.GetValue(column.m_slot);
 }
 
@@ -3394,26 +3394,29 @@ const ibBackendQueryable* ibAcctSourceDescriptor::CreateQueryable(ibValue** paPa
 	if (m_pendingAccountCr) call.m_accountCr = m_pendingAccountCr;
 
 	// Built and KEPT by the base — the same call gives the same object back, and a query that reads
-	// this table twice keeps both alive.
+	// this table twice keeps both alive. ⚠ THE CONSUMED CONDITIONS ARE PART OF THE CALL: their slots in
+	// paParams are empty, so a key of paParams alone handed a query with one account the companion
+	// built for another (MakeCompanionFor, queryableFactory.h).
+	const std::vector<ibQueryPredicatePtr> consumed{ m_pendingAccountDr, m_pendingAccountCr };
 	switch (m_shape) {
 	case ibAcctShape::Balance:
-		return MakeCompanion<ibAcctBalanceQueryable>(paParams, lSizeArray, m_reg,
+		return MakeCompanionFor<ibAcctBalanceQueryable>(consumed, paParams, lSizeArray, m_reg,
 			call.m_begin, call.m_accountDr, call.m_accountCr, call.m_kindsDr, call.m_kindsCr, call.m_filter, call.m_condition);
 	case ibAcctShape::Turnovers:
-		return MakeCompanion<ibAcctTurnoverQueryable>(paParams, lSizeArray, m_reg,
+		return MakeCompanionFor<ibAcctTurnoverQueryable>(consumed, paParams, lSizeArray, m_reg,
 			call.m_begin, call.m_end, call.m_accountDr, call.m_accountCr,
 			call.m_kindsDr, call.m_kindsCr, call.m_filter, call.m_fold, call.m_condition);
 	case ibAcctShape::DrCrTurnovers:
-		return MakeCompanion<ibAcctDrCrTurnoverQueryable>(paParams, lSizeArray, m_reg,
+		return MakeCompanionFor<ibAcctDrCrTurnoverQueryable>(consumed, paParams, lSizeArray, m_reg,
 			call.m_begin, call.m_end, call.m_accountDr, call.m_accountCr,
 			call.m_kindsDr, call.m_kindsCr, call.m_filter, call.m_condition);
 	case ibAcctShape::BalanceAndTurnovers:
-		return MakeCompanion<ibAcctBalanceAndTurnoverQueryable>(paParams, lSizeArray, m_reg,
+		return MakeCompanionFor<ibAcctBalanceAndTurnoverQueryable>(consumed, paParams, lSizeArray, m_reg,
 			call.m_begin, call.m_end, call.m_accountDr, call.m_accountCr,
 			call.m_kindsDr, call.m_kindsCr, call.m_filter, call.m_fold, call.m_condition,
 			call.m_fillEmptyPeriods);
 	case ibAcctShape::Records:
-		return MakeCompanion<ibAcctRecordsQueryable>(paParams, lSizeArray, m_reg,
+		return MakeCompanionFor<ibAcctRecordsQueryable>(consumed, paParams, lSizeArray, m_reg,
 			call.m_begin, call.m_end, call.m_kindsDr, call.m_kindsCr, call.m_filter, call.m_condition,
 			call.m_order, call.m_top);
 	}

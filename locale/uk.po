@@ -2756,6 +2756,10 @@ msgstr "Крок в"
 msgid "Step over"
 msgstr "Крок через"
 
+#: src/engine/designer/mainFrame/mainFrameDesignerMenu.cpp:130
+msgid "Step out"
+msgstr "Крок з"
+
 #: src/engine/designer/mainFrame/mainFrameDesignerMenu.cpp:120
 #: src/engine/designer/mainFrameDesignerMenu.cpp:105
 msgid "Stop debugging"
@@ -5463,10 +5467,6 @@ msgid "drops the temp table %s"
 msgstr "знищує тимчасову таблицю %s"
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
-msgid "Grouping field"
-msgstr "Поле групування"
-
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
 msgid "Indexed field"
 msgstr "Індексоване поле"
 
@@ -5565,3 +5565,65 @@ msgstr "Ієрархія папок та елементів"
 #: src/engine/backend/metaCollection/partial/commonObject.h
 msgid "Hierarchy type"
 msgstr "Вид ієрархії"
+
+#: src/engine/designer/win/editor/codeEditor/codeEditorDesigner.cpp
+msgid "Breakpoint condition..."
+msgstr "Умова точки зупинки..."
+
+#: src/engine/designer/win/editor/codeEditor/codeEditorDesigner.cpp
+msgid "Breakpoint condition"
+msgstr "Умова точки зупинки"
+
+#: src/engine/designer/win/editor/codeEditor/codeEditorDesigner.cpp
+#, c-format
+msgid "Breakpoint condition: %s"
+msgstr "Умова точки зупинки: %s"
+
+#: src/engine/designer/win/editor/codeEditor/codeEditorDesigner.cpp
+msgid "Stop on this line only when the condition is true, for example: i > 500. Leave it empty to stop every time."
+msgstr "Зупинятися на цьому рядку, лише якщо умова істинна, наприклад: i > 500. Залиште порожнім, щоб зупинятися завжди."
+
+#: src/engine/backend/debugger/debugServer.cpp
+#, c-format
+msgid "The breakpoint condition '%s' could not be evaluated: %s"
+msgstr "Не вдалося обчислити умову точки зупинки '%s': %s"
+
+#: src/engine/backend/metaCollection/partial/commonObject.h
+msgid "from"
+msgstr "від"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp
+#, c-format
+msgid "%s: failed to clear the movements of the previous posting"
+msgstr "%s: не вдалося очистити рухи попереднього проведення"
+
+#: src/engine/backend/metaCollection/partial/calculationRegister.h
+msgid "Action period"
+msgstr "Період дії"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterManager_impl.cpp
+msgid "Which records take a base - a condition on the register's own fields; the base is computed for those alone"
+msgstr "Для яких записів береться база - умова на власні поля регістру; база обчислюється лише для них"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterObject.cpp
+#, c-format
+msgid "Register '%s': failed to mark records for the recalculation '%s'"
+msgstr "Регістр '%s': не вдалося позначити записи для перерахунку '%s'"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterObject.cpp
+#, c-format
+msgid "Register '%s': failed to identify the marks of the recalculation '%s'"
+msgstr "Регістр '%s': не вдалося визначити позначки перерахунку '%s'"
+
+#: src/engine/backend/databaseLayer/databaseQueryBuilder.cpp
+msgid "Query layer could not obtain a database connection from the holder."
+msgstr "Шар запитів не отримав з'єднання з базою даних від тримача."
+
+#: src/engine/backend/databaseLayer/databaseQueryBuilder.cpp
+#, c-format
+msgid "Query layer failed to prepare statement: %s"
+msgstr "Шару запитів не вдалося підготувати оператор: %s"
+
+#: src/engine/backend/metaCollection/partial/reference/referenceQuery.cpp
+msgid "unknown exception"
+msgstr "невідомий виняток"

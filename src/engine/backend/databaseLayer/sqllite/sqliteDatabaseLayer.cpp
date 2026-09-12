@@ -214,16 +214,12 @@ ibDatabaseLayerSQLite::ibDatabaseLayerSQLite()
 	: ibDatabaseLayer()
 {
 	m_pDatabase = nullptr; //&m_Database; //new sqlite3;
-	wxCSConv conv(wxT("UTF-8"));
-	SetEncoding(&conv);
 }
 
 ibDatabaseLayerSQLite::ibDatabaseLayerSQLite(const wxString& strDatabase, bool mustExist /*= false*/)
 	: ibDatabaseLayer()
 {
 	m_pDatabase = nullptr; //new sqlite3;
-	wxCSConv conv(wxT("UTF-8"));
-	SetEncoding(&conv);
 	Open(strDatabase, mustExist);
 }
 
@@ -231,8 +227,6 @@ ibDatabaseLayerSQLite::ibDatabaseLayerSQLite(const ibDatabaseLayerSQLite& src)
 	: ibDatabaseLayer()
 {
 	m_pDatabase = nullptr;
-	wxCSConv conv(wxT("UTF-8"));
-	SetEncoding(&conv);
 	if (!src.m_strDatabasePath.IsEmpty())
 		Open(src.m_strDatabasePath);
 	else
@@ -314,6 +308,15 @@ bool ibDatabaseLayerSQLite::Close()
 bool ibDatabaseLayerSQLite::IsOpen()
 {
 	return (m_pDatabase != nullptr);
+}
+
+// The one call SQLite takes from another thread on a busy connection: the statement running there returns
+// SQLITE_INTERRUPT to its own caller. Nothing running, nothing to stop.
+void ibDatabaseLayerSQLite::Cancel()
+{
+	sqlite3* const pDbPtr = (sqlite3*)m_pDatabase;   // read once: the owning thread may be closing
+	if (pDbPtr != nullptr)
+		sqlite3_interrupt(pDbPtr);
 }
 
 void ibDatabaseLayerSQLite::DoBeginTransaction(const ibTxOptions& opts)
@@ -421,8 +424,6 @@ ibDatabaseResultSet* ibDatabaseLayerSQLite::DoRunQueryWithResults(const wxString
 		// Create a Prepared statement for the last SQL statement and get a result set from it
 		ibPreparedStatementSQLite* pStatement = (ibPreparedStatementSQLite*)DoPrepareStatement(QueryArray[QueryArray.size() - 1], false);
 		ibDatabaseResultSetSQLite* pResultSet = new ibDatabaseResultSetSQLite(pStatement, true);
-		if (pResultSet)
-			pResultSet->SetEncoding(GetEncoding());
 
 		LogResultSetForCleanup(pResultSet);
 		return pResultSet;
@@ -445,8 +446,6 @@ ibPreparedStatement* ibDatabaseLayerSQLite::DoPrepareStatement(const wxString& s
 	if (m_pDatabase != nullptr)
 	{
 		ibPreparedStatementSQLite* pReturnStatement = new ibPreparedStatementSQLite((sqlite3*)m_pDatabase);
-		if (pReturnStatement)
-			pReturnStatement->SetEncoding(GetEncoding());
 
 		wxArrayString QueryArray = ParseQueries(strQuery);
 
@@ -719,6 +718,10 @@ wxArrayString ibDatabaseLayerSQLite::GetColumns(const wxString& table)
 
 int ibDatabaseLayerSQLite::TranslateErrorCode(int nCode)
 {
+	// An interrupted statement (Cancel -> sqlite3_interrupt) is the cancel, recorded as the platform's.
+	if ((nCode & 0xFF) == SQLITE_INTERRUPT)
+		return DATABASE_LAYER_QUERY_CANCELLED;
+
 	// Ultimately, this will probably be a map of SQLite database error code values to ibDatabaseLayer values
 	// For now though, we'll just return error
 	int nReturn = nCode;

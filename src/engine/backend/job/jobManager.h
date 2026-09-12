@@ -47,12 +47,14 @@
 #include "backend/job/jobSchedule.h"       // ibJobScheduleDescription — when a job is due
 #include "backend/lock/lockHandle.h"       // ibLockHandle held per running job
 #include "backend/lock/lockHolder.h"       // ibLockHolder — base for the job's claim identity
+#include "backend/system/systemEnum.h"     // ibStatusMessage — the level of what a run's code said
 
 #include <wx/datetime.h>
 
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <deque>
 #include <functional>
 #include <future>
 #include <memory>
@@ -304,6 +306,19 @@ public:
 	// Empty for a run whose session has already been let go.
 	wxString SessionGuid() const;
 
+	// ⭐ WHAT ITS CODE SAID. `Message` in a session with no window reached nothing at all — a background
+	// session is tied to nobody — so the run it is doing keeps the lines itself, the last kKeptLines of them,
+	// oldest first, for whoever asks about it: code_status answers with them, as debug_state answers with
+	// what an application printed. Current() is the run THIS THREAD is doing, set for as long as its body
+	// runs — how `Message` finds it, the same way ibSession::Current() finds the session.
+	struct ibSaid {
+		wxString        m_text;
+		ibStatusMessage m_status = ibStatusMessage_Information;
+	};
+	static ibBackgroundRun* Current();
+	void                Say(const wxString& text, ibStatusMessage status);
+	std::vector<ibSaid> Said() const;
+
 private:
 	friend class ibJobManager;
 
@@ -313,6 +328,7 @@ private:
 	ibValue            m_result;
 	wxString           m_error;
 	wxString           m_activity;
+	std::deque<ibSaid> m_said;
 	std::atomic<bool>  m_done { false };
 };
 
@@ -436,6 +452,12 @@ public:
 	std::shared_ptr<ibBackgroundRun> StartBackground(ibBackgroundBody body,
 	                                                 const wxString& activity,
 	                                                 ibJobTenancy tenancy = ibJobTenancy::Standalone);
+
+	// The rented runs still reading for `landlord` — the sessions whose host it is. Asked by ibSession::Cancel,
+	// so a cancel reaches the reads done on a session's behalf and not only the session itself. Read off the
+	// runs this manager already holds (m_background); handed back as owners, so the caller acts on them after
+	// every lock here is let go.
+	std::vector<std::shared_ptr<ibSession>> TenantsOf(const ibSession* landlord) const;
 
 	// Run one job now, ignoring interval and window. Returns false when the name is
 	// unknown or that job is already running.

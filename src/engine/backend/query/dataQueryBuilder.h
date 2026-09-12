@@ -302,9 +302,15 @@ public:
 	// alias) that have no source column. Group columns still read via GetValue(col).
 	ibValue GetColumn(const wxString& alias) const;
 
-	// A dot-walk leaf that is a reference / enum / composite — reassembled from its field spread projected
-	// under `prefix` (vs GetColumn, which reads one scalar field). An empty / broken ref reads as the empty value.
-	ibValue GetColumnObject(const wxString& prefix, const ibBackendQueryColumn* col) const;
+	// …or a dot-walk leaf that is a reference / enum / composite — reassembled from its field spread projected
+	// under `prefix` (vs the one above, which reads one scalar field). An empty / broken ref reads as the empty value.
+	ibValue GetColumn(const wxString& prefix, const ibBackendQueryColumn* col) const;
+
+	// ⭐ THE ROWS AS THE TABLE THEY ALREADY ARE — for a caller about to copy every row cell by cell into a
+	// table of its own (a leaf materialised for a stitch): it moves them out, and they are gone from here.
+	// Null where the rows are read one by one — a cursor, a walk already begun, or columns this result
+	// answers for itself. (ibDataResultSource::Table)
+	ibQueryRamTable* GetTable();
 
 	// TRAVERSAL — selection = result.Select(mode). Drains the cursor ONCE into a flat snapshot
 	// (the materialise-columns the door stamped) and hands it to an ibSelector, which decides HOW to
@@ -402,7 +408,7 @@ private:
 
 	// ⭐ HOW A DOT-WALKED DIMENSION IS READ. Its value is not one projected field: a reference /
 	// enum / composite leaf is projected as its whole physical SPREAD under an alias PREFIX, and it
-	// reassembles from those fields (ColumnObject). The pair is stamped by the builder — the door
+	// reassembles from those fields (Column(prefix, col)). The pair is stamped by the builder — the door
 	// knows it, the snapshot does not — keyed by the dimension column's own id.
 	struct ibObjectRead { wxString m_prefix; const ibBackendQueryColumn* m_leaf = nullptr; };
 	std::map<ibMetaID, ibObjectRead> m_objectReads;
@@ -968,9 +974,13 @@ public:
 	ibDataQueryBuilder& Select(const ibBackendQueryColumn* col, const wxString& alias);
 
 	// Row-identity (guidName) lookups — by the row's OWN key, not an attribute.
-	// WhereKey: one row; WhereKeyIn: a set (rendered as OR-of-equals).
+	// WhereKey: one row; WhereKeyIn: a set (rendered as an IN list behind the index prefix).
 	ibDataQueryBuilder& WhereKey(const ibGuid& rowGuid);
 	ibDataQueryBuilder& WhereKeyIn(const std::vector<ibGuid>& rowGuids);
+	// …or by the keys as VALUES — the references themselves, which spell their key in the column's form
+	// straight from their bytes (ColumnConst). A guid handed over as a guid travels as TEXT to be parsed
+	// back, which forty thousand keys of a report's batch did (MEASURED 2026-09-12, stack samples).
+	ibDataQueryBuilder& WhereKeyIn(const std::vector<ibValue>& rowKeys);
 
 	// --- write surface (by COLUMN — no statement, no positions) --------
 	// SetValue accumulates one COLUMN assignment for INSERT / UPSERT (the values to write,
@@ -1202,7 +1212,7 @@ private:
 	// index-aligned so a provider walks one loop, exactly as it already does for the dot-walk paths.
 	std::vector<ibQueryColumnExprPtr> m_groupExprs;
 	std::vector<wxString>             m_groupAliases;
-	std::vector<ibValue>          m_keyIn;          // .WhereKeyIn() — row-key IN (OR-of-equals)
+	std::vector<ibValue>          m_keyIn;          // .WhereKeyIn() — row-key IN list
 	// A WRITE IS A SET OF ROWS, AND ONE ROW IS THE DEGENERATE CASE.
 	//
 	// It used to be a single assignment list, so writing N lines meant N doors, N statements and N

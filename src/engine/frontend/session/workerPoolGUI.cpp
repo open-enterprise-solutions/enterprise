@@ -80,14 +80,6 @@ void ibWorkerPoolGUI::DropSession(ibSession* /*session*/)
 	// which has no per-session partition. Nothing to drop.
 }
 
-void ibWorkerPoolGUI::CancelSession(ibSession* session)
-{
-	// Same cooperative-cancel contract as the headless pool: set the
-	// flag, the interpreter sees it on the next opcode and unwinds.
-	if (session != nullptr)
-		session->RequestCancel();
-}
-
 void ibWorkerPoolGUI::Stop()
 {
 	// Flag-only stop. wx handles pending CallAfter events through its

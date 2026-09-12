@@ -60,7 +60,9 @@ public:
 // ResolveComputedDotWalks can walk + join.
 class ComputedQ : public ibBackendQueryable {
 public:
-	ComputedQ(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {}
+	ComputedQ(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {
+		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(id); m_key = ibGuid(impl);
+	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
 	void SetBuilder(std::function<ibQueryRamTable()> b) { m_build = std::move(b); }
 	void SetRefTarget(const ibBackendQueryColumn* refCol, const ibBackendQueryable* tgt) { m_refs[refCol] = tgt; }
@@ -91,13 +93,12 @@ public:
 	}
 	wxString GetQueryTableName() const override { return m_name; }
 	ibMetaID GetQueryTableId()   const override { return m_id; }
-	ibGuid   GetQueryTableGuid() const override {
-		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(m_id); return ibGuid(impl);
-	}
+	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 private:
 	wxString m_name;
 	ibMetaID m_id;
+	ibUniqueKey m_key;   // its table guid, the id in the first word
 	std::vector<const ibBackendQueryColumn*> m_cols;
 	std::function<ibQueryRamTable()> m_build;
 	std::map<const ibBackendQueryColumn*, const ibBackendQueryable*> m_refs;

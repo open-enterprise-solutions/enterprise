@@ -121,7 +121,9 @@ void ibFrontendMainFrameDesigner::LoadOptions()
 				else if (node->GetName() == "fontcolor") {
 					m_fontColorSettings.Load(node);
 				}
-				else if (node->GetName() == "keybindings") {
+				// "shortcuts", not the old "keybindings": that one held EVERY binding under numbers that
+				// have since moved (see ibKeyBinder::Save), so it is left unread and dropped on the next save.
+				else if (node->GetName() == "shortcuts") {
 					// Save the node and we'll load when we're done.
 					keyBindingNode = node;
 				}
@@ -136,12 +138,11 @@ void ibFrontendMainFrameDesigner::LoadOptions()
 
 	m_keyBinder.AddCommandsFromMenuBar(mb);
 
-	if (keyBindingNode != nullptr) {
+	// The defaults ALWAYS, then what the person changed over them. It used to be one or the other, so once
+	// a profile existed the code's defaults never applied again - a new command never got its key.
+	SetDefaultHotKeys();
+	if (keyBindingNode != nullptr)
 		m_keyBinder.Load(keyBindingNode);
-	}
-	else {
-		SetDefaultHotKeys();
-	}
 
 	m_keyBinder.UpdateWindow(this);
 	m_keyBinder.UpdateMenuBar(mb);
@@ -166,7 +167,7 @@ void ibFrontendMainFrameDesigner::SaveOptions()
 	root->AddChild(m_editorSettings.Save("editor"));
 
 	// Save the key bindings.
-	root->AddChild(m_keyBinder.Save("keybindings"));
+	root->AddChild(m_keyBinder.Save("shortcuts"));
 
 	wxString directory =
 		wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache) + wxT("\\OES");
@@ -178,41 +179,16 @@ void ibFrontendMainFrameDesigner::SaveOptions()
 	document.Save(strFileName.GetFullPath());
 }
 
-#pragma region debugger 
-void ibFrontendMainFrameDesigner::Debugger_OnSessionStart()
+#pragma region debugger
+void ibFrontendMainFrameDesigner::Debugger_OnStateChanged()
 {
-	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_STEP_INTO, true);
-	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_STEP_OVER, true);
-	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_PAUSE, true);
-	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_STOP_DEBUGGING, true);
-	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_STOP_PROGRAM, true);
-	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_NEXT_POINT, false);
+	// Asked again now, and not left to the next time the menu is opened: a shortcut goes through the
+	// menu item (wxFrameBase::ProcessCommand refuses a disabled one), and on Windows the menu is only
+	// brought up to date when it opens.
+	if (m_menuDebug != nullptr)
+		m_menuDebug->UpdateUI();
 }
-
-void ibFrontendMainFrameDesigner::Debugger_OnSessionEnd()
-{
-	if (!debugClient->HasConnections()) {
-		m_menuDebug->Enable(wxID_DESIGNER_DEBUG_STEP_INTO, false);
-		m_menuDebug->Enable(wxID_DESIGNER_DEBUG_STEP_OVER, false);
-		m_menuDebug->Enable(wxID_DESIGNER_DEBUG_PAUSE, false);
-		m_menuDebug->Enable(wxID_DESIGNER_DEBUG_STOP_DEBUGGING, false);
-		m_menuDebug->Enable(wxID_DESIGNER_DEBUG_STOP_PROGRAM, false);
-		m_menuDebug->Enable(wxID_DESIGNER_DEBUG_NEXT_POINT, false);
-	}
-}
-
-void ibFrontendMainFrameDesigner::Debugger_OnEnterLoop()
-{
-	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_PAUSE, false);
-	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_NEXT_POINT, true);
-}
-
-void ibFrontendMainFrameDesigner::Debugger_OnLeaveLoop()
-{
-	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_PAUSE, true);
-	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_NEXT_POINT, false);
-}
-#pragma endregion 
+#pragma endregion
 
 bool ibFrontendMainFrameDesigner::AllowRun()
 {

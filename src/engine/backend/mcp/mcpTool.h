@@ -326,6 +326,15 @@ BACKEND_API wxString ibMcpNameOf(const ibDataNode& params,
 BACKEND_API size_t ibMcpWordsFound(const wxString& haystack, const wxString& query,
 	size_t* asked = nullptr);
 
+// …and WHICH of them landed, one flag per word of the query in its order (one for a regular expression).
+// The same rule, asked word by word — for a finder that weighs the words instead of counting them.
+BACKEND_API void ibMcpWordsPresent(const wxString& haystack, const wxString& query, std::vector<bool>& met);
+
+// The line of `body` a reader would have found themselves — the first one carrying any word of the
+// query, trimmed — so a place can be judged before it is opened. Found by the same rule as the words
+// (ibMcpWordsFound); every finder that quotes a line asks this, so the line quoted is the one that met.
+BACKEND_API wxString ibMcpMatchingLine(const wxString& body, const wxString& query);
+
 // WHAT A COMPOSITION STILL LACKS to produce a report somebody can read — a nameless variant, no
 // output, nothing selected. Written where the report verbs live (mcpToolReport.cpp) and declared
 // here because the configuration-wide audit asks the same question of every composer there is: two

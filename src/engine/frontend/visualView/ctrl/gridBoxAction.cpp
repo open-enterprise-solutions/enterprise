@@ -75,21 +75,30 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 		ibValueGridBox* self = this;
 		model->SubmitFetchAsync([self, alive, keepModel]() {
 			wxString failure;
+			bool cancelled = false;
 			try {
 				// THE MODEL FILLS ITS OWN SHEET — this control asked for data, not for a document.
 				keepModel->Compose();
+			}
+			catch (const ibBackendInterruptException&) {
+				// ⭐ STOPPED, NOT FAILED — the form was closed, or Compose pressed again, while this run read.
+				// Nothing to report: whoever cancelled it is the one who asked.
+				cancelled = true;
 			}
 			catch (const ibBackendException& error) {
 				failure = error.GetErrorDescription();
 			}
 
 			// BACK ON THE UI THREAD to show it — the redraw is GUI, and so is a refusal.
-			wxTheApp->CallAfter([self, alive, keepModel, failure]() {
+			wxTheApp->CallAfter([self, alive, keepModel, failure, cancelled]() {
 				if (!*alive)
 					return;   // the form closed while the report was being built
 				ibGridEditor* target = dynamic_cast<ibGridEditor*>(self->GetInnerWx());
 				if (target != nullptr)
 					target->ShowComposeProgress(false);
+
+				if (cancelled)
+					return;   // the sheet on screen stays what it was; the run that replaced this one draws its own
 
 				if (!failure.IsEmpty()) {
 					// 🛑 SAID WHERE IT IS SEEN. A refusal routed to the log ends up in a panel that

@@ -33,7 +33,11 @@ void ibDatabaseErrorReporter::SetErrorCode(int nErrorCode)
 
 void ibDatabaseErrorReporter::ResetErrorCodes()
 {
-	m_strErrorMessage.Clear();
+	// Every read of every field and every fetch starts here, and there is almost never a message to
+	// forget — so an empty one is left alone: clearing a string, even an empty one, drops every
+	// iterator it ever had under a checked build's global lock (stack samples 2026-09-12).
+	if (!m_strErrorMessage.empty())
+		m_strErrorMessage.Clear();
 	m_nErrorCode = DATABASE_LAYER_OK;
 }
 
@@ -57,6 +61,15 @@ void ibDatabaseErrorReporter::ThrowDatabaseException()
 	// per-driver override so admin logs see what the engine actually
 	// reported. Kind / native_code / sqlstate / message all travel on
 	// the exception; the catch site decides what to surface.
+
+	// ⭐ AN INTERRUPTED STATEMENT IS THE CANCEL, SAID AS ONE — the platform's own interruption. Somebody stopped
+	// it (ibSession::Cancel — a closed report, a cancelled run, an ended session); thrown as a database failure
+	// it would be shown as one, and every catch above would have to guess whose it was. The driver says which it
+	// was — it records DATABASE_LAYER_QUERY_CANCELLED, only it knows its DBMS's word for that — and from here it
+	// is the same exception as the runtime's: the interpreter walks out of its loops, the job boundary files it
+	// as cancelled, a composing form says nothing.
+	if (m_nErrorCode == DATABASE_LAYER_QUERY_CANCELLED)
+		ibBackendInterruptException::Error();
 
 	ibDatabaseLayerException::Throw(
 		ClassifyDatabaseError(m_nErrorCode),

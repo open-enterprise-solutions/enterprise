@@ -1,5 +1,6 @@
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"
 #include "backend/system/value/valueSpreadsheetDetails.h"   // what a cell is stamped with — value + its links
+#include "backend/session/session.h"                        // ibSession::CancelFlag — the lines hear a cancel
 
 #include <algorithm>   // std::min — MSVC drags it in transitively, libstdc++ does not
 #include <map>         // the per-level field counts the dimension layout is built from
@@ -58,11 +59,18 @@ ibSpreadsheetBorderDescription GridPen()
 	return pen;
 }
 
+// One pen for the whole grid, made once — every edge of every cell is drawn with it.
+const ibSpreadsheetBorderDescription& TheGridPen()
+{
+	static const ibSpreadsheetBorderDescription pen = GridPen();
+	return pen;
+}
+
 // ONE CELL'S SHARE OF THE GRID — its verticals always, its horizontals when it is on an edge. Both
 // the header and the rows draw through here, so the table cannot come out with two kinds of line.
 void BoxCell(ibBackendSpreadsheetObject& area, int row, int col, bool top, bool bottom)
 {
-	const ibSpreadsheetBorderDescription pen = GridPen();
+	const ibSpreadsheetBorderDescription& pen = TheGridPen();
 	area.SetCellBorderLeft(row, col, pen);
 	area.SetCellBorderRight(row, col, pen);
 	if (top)
@@ -760,7 +768,7 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 		wxString text = value.GetString();
 		// The indent rides on the FIRST field of the level — the column the grouping is read down.
 		if (isDimension && page > 0 && m_layout[i] == 0)
-			text = wxString(wxT(' '), page * kIndentPerLevel) + text;
+			text.insert(0, page * kIndentPerLevel, wxT(' '));
 
 		row->SetCellValue(0, col, text);
 
@@ -931,11 +939,16 @@ wxString ibHeadingText(const std::vector<ibValue>& values)
 
 size_t ibSpreadsheetComposeDriver::ColumnKeyIndex(const CrossKey& key)
 {
+	// THE ONE AFTER THE LAST FIRST — a row's cells arrive in the order the columns were met, so the
+	// next cell is usually the next column; only a miss walks them all. Asked per cell of the table.
+	const size_t next = m_colKeyHint + 1;
+	if (next < m_colKeys.size() && m_colKeys[next] == key)
+		return m_colKeyHint = next;
 	for (size_t i = 0; i < m_colKeys.size(); ++i)
 		if (m_colKeys[i] == key)
-			return i;
+			return m_colKeyHint = i;
 	m_colKeys.push_back(key);
-	return m_colKeys.size() - 1;
+	return m_colKeyHint = m_colKeys.size() - 1;
 }
 
 void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const std::vector<ibValue>& values)
@@ -994,20 +1007,29 @@ void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const std::vector<ibV
 	// node, so a table gets its row totals for nothing and needs no second pass for them.
 	if (depth <= m_rowLevels) {
 		m_colPath.clear();   // out of the columns of the row before: a new heading starts a new sweep
-		CrossRow row;
+		// Built where it lives — one per row heading, forty thousand of them, none copied or moved.
+		CrossRow& row = m_crossRows.emplace_back();
 		row.m_level    = level;
 		row.m_heading  = ibValuesOfLevel(m_schema, values, level - 1);
-		row.m_measures = measures;
-		m_crossRows.push_back(row);
+		row.m_measures = std::move(measures);
 		return;
 	}
 
 	// A COLUMN HEADING, under the row heading that is open. Its depth INSIDE the column axis says
 	// how much of the current key it replaces — everything from here down is new.
 	const size_t inColumns = depth - m_rowLevels;             // 1-based within the column axis
-	if (m_colPath.size() >= inColumns)
-		m_colPath.resize(inColumns - 1);
-	m_colPath.push_back(ibValuesOfLevel(m_schema, values, level - 1));
+	if (m_colPath.size() >= inColumns) {
+		// THE SLOT THIS LEVEL HAD, REFILLED — the same key the removal and the push made, without a
+		// vector freed and another made for every cell of the table (a cell per row per column key).
+		m_colPath.resize(inColumns);
+		std::vector<ibValue>& own = m_colPath[inColumns - 1];
+		own.clear();
+		for (size_t i = 0; i < m_schema.size() && i < values.size(); ++i)
+			if (m_schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension && m_schema[i].m_level == level - 1)
+				own.push_back(values[i]);   // …exactly what ibValuesOfLevel collects
+	}
+	else
+		m_colPath.push_back(ibValuesOfLevel(m_schema, values, level - 1));
 	// (A column with no row open at all is the ROOT's — the column total — and it was taken above.)
 
 	// ⭐ THE DEEPEST COLUMN HEADING IS A CELL; THE ONES ABOVE IT ARE SUBTOTALS. A column axis of
@@ -1015,7 +1037,7 @@ void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const std::vector<ibV
 	// computed both — the upper node carries its own. They are kept under their PREFIX key, which is
 	// what a subtotal is: the answer for everything that starts this way.
 	if (inColumns == m_colLevels) {
-		m_crossRows.back().m_cells[ColumnKeyIndex(m_colPath)] = measures;
+		m_crossRows.back().m_cells[ColumnKeyIndex(m_colPath)] = std::move(measures);
 		return;
 	}
 	std::vector<std::pair<CrossKey, std::vector<ibValue>>>& held = m_crossRows.back().m_subtotals;
@@ -1428,13 +1450,78 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		m_document->SetRowFreeze(m_document->GetNumberRows());
 
 	// ---- the rows ---------------------------------------------------------
+	// ⭐⭐ WRITTEN WHERE THEY LAND. Each line used to be built as an area of its own — a whole document
+	// object per row, every cell styled there — and PutArea then copied each cell across, renamed its
+	// link and filed it in the sheet: forty thousand documents made, copied and freed for one payroll
+	// sheet, the heaviest single thing in composing it (MEASURED 2026-09-12, Debug: 17 s of 52). The
+	// sheet now takes the same values, styles, links and row groups directly, at the row the line
+	// becomes. (The header and the bottom line are one area each and keep the area road.)
+	//
+	// ⚠ A CELL'S LINK IS FILED AS `Link_<row>_<col>` (see linkName below). PutArea spells the name by
+	// gluing the area's own name to the row and the column with nothing between them — `Cell_1` + 121 +
+	// 1 and `Cell_11` + 2 + 11 are both `Cell_11211` — so past ten columns and a hundred rows two cells
+	// could share a link and one breakdown answered for the other. A separator makes it one name per
+	// cell by construction.
+	wxFont boldFont = s_defaultSpreadsheetFont;
+	boldFont.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
+	const int areaRowHeight = ibBackendSpreadsheetObject().GetRowSize(0);   // what PutArea gave each line
+	// WHAT EACH CELL OF A LINE SAYS, gathered first and written in ONE call per cell (SetCell) — its
+	// text, its alignment, its link and its look — instead of a setter per attribute, each finding the
+	// cell again. Kept across the lines so their storage is reused.
+	const size_t width = static_cast<size_t>(std::max(totalCols, 0));
+	std::vector<wxString> cellText(width), cellLink(width);
+	std::vector<char>     cellSaid(width), cellRight(width);
+	// …AND A CANCEL IS HEARD LINE BY LINE — the composing session's own flag (ibSession::CancelFlag), as on
+	// the composer's walk: these lines are written after the walk has ended, so it cannot hear it for them.
+	ibSession* const composing = ibSession::Current();
+	const std::atomic<bool>* const cancel = composing != nullptr ? composing->CancelFlag() : nullptr;
+	// WHICH COLUMNS A LEVEL'S HEADING STANDS IN — asked of the schema once per level: each of forty thousand
+	// lines asked it again, and made and freed a vector to hold the answer (stack samples 2026-09-12, Debug).
+	std::vector<std::vector<size_t>> headingAtLevel;
+	// THE LINES AND CELLS ABOUT TO BE WRITTEN ARE KNOWN — one line per row of the table, every column of
+	// each — so the sheet is told once, and sizes its indexes for them rather than as they fill.
+	m_document->GetSpreadsheetDesc().ReserveSpreadsheet(m_crossRows.size(), m_crossRows.size() * width);
 	for (const CrossRow& source : m_crossRows) {
-		wxObjectDataPtr<ibBackendSpreadsheetObject> row(new ibBackendSpreadsheetObject());
+		if (cancel != nullptr && cancel->load(std::memory_order_relaxed))
+			ibBackendInterruptException::Error();
+		const int at = m_document->GetNumberRows();   // the row this line becomes
+		std::fill(cellSaid.begin(), cellSaid.end(), 0);
+		std::fill(cellRight.begin(), cellRight.end(), 0);
+		for (wxString& link : cellLink)
+			link.clear();
+		// ⚠ THE DIGITS BY HAND. `wxString << int` formats through a printf, and this name is spelled
+		// for every cell of the table — a quarter of the writing, in the samples (2026-09-12, Debug).
+		// ⚠ …AND AT A FIXED WIDTH, `Link_<row:8>_<col:4>`, so the names come out in increasing order and
+		// each lands at the end of the sheet's parameters without a search (SetParameter is hinted there).
+		// `Link_` sorts after the `Cell_` names PutArea gives an area's links, so those never get in front.
+		const auto linkName = [at](int col) {
+			wchar_t text[32];
+			size_t  n = 0;
+			const auto put = [&text, &n](int value, size_t width) {
+				wchar_t digits[12];
+				size_t  count = 0;
+				unsigned int u = static_cast<unsigned int>(value < 0 ? 0 : value);
+				do { digits[count++] = static_cast<wchar_t>(L'0' + u % 10); u /= 10; } while (u != 0);
+				while (count < width && count < sizeof(digits) / sizeof(digits[0]))
+					digits[count++] = L'0';
+				while (count > 0)
+					text[n++] = digits[--count];
+			};
+			for (const wchar_t* p = L"Link_"; *p != 0; ++p)
+				text[n++] = *p;
+			put(at, 8);
+			text[n++] = L'_';
+			put(col, 4);
+			return wxString(text, n);
+		};
 
 		// ⭐ THE ROW'S CHAIN — its own heading fields, one under the next, under the heading above it.
 		// The same ladder the streaming layout builds, kept in the same place, so a cell of a table
 		// and a cell of a grouping are followed back the same way.
-		const std::vector<size_t> headingAt = ibColumnsOfLevel(m_schema, source.m_level - 1);
+		const size_t levelAt = static_cast<size_t>(std::max(source.m_level, 0));
+		while (headingAtLevel.size() <= levelAt)
+			headingAtLevel.push_back(ibColumnsOfLevel(m_schema, static_cast<int>(headingAtLevel.size()) - 1));
+		const std::vector<size_t>& headingAt = headingAtLevel[levelAt];
 		ibValue rowChain = ChainAbove(source.m_level);
 
 		// The heading, indented by its depth — the same indent the streaming layout uses, so a
@@ -1442,17 +1529,17 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		for (size_t f = 0; f < source.m_heading.size() && static_cast<int>(f) < dimWidth; ++f) {
 			wxString text = source.m_heading[f].GetString();
 			if (f == 0)
-				text = wxString(wxT(' '), source.m_level * kIndentPerLevel) + text;
-			row->SetCellValue(0, static_cast<int>(f), text);
-			if (!source.m_heading[f].IsEmpty()) {
-				const wxString name = wxString::Format(wxT("Cell_%d"), static_cast<int>(f));
-				rowChain = PackDetails(f < headingAt.size() ? headingAt[f] : m_schema.size(),
-					source.m_heading[f], rowChain);
-				row->SetParameter(name, rowChain);
-				row->SetCellDetailsParameter(0, static_cast<int>(f), name);
-			}
+				text.insert(0, source.m_level * kIndentPerLevel, wxT(' '));
 			if (f < m_widest.size())
 				m_widest[f] = std::max(m_widest[f], text.length());
+			cellText[f] = std::move(text);
+			cellSaid[f] = 1;
+			if (!source.m_heading[f].IsEmpty()) {
+				cellLink[f] = linkName(static_cast<int>(f));
+				rowChain = PackDetails(f < headingAt.size() ? headingAt[f] : m_schema.size(),
+					source.m_heading[f], rowChain);
+				m_document->SetParameter(cellLink[f], rowChain);
+			}
 		}
 		KeepChain(source.m_level, rowChain);
 
@@ -1463,31 +1550,30 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				const int col = firstCol + static_cast<int>(m);
 				if (col >= totalCols)
 					break;
-				const wxString text = figures[m].GetString();
-				row->SetCellValue(0, col, text);
+				const size_t c = static_cast<size_t>(col);
+				cellText[c] = figures[m].GetString();
+				cellSaid[c] = 1;
 				if (figures[m].GetType() == ibValueTypes::TYPE_NUMBER)
-					row->SetCellAlignment(0, col, wxALIGN_RIGHT, wxALIGN_CENTER);
+					cellRight[c] = 1;
 				// ⭐ A CELL OF A TABLE STANDS UNDER TWO HEADINGS — its row and its column — and that
 				// is the whole difference between a table's figure and a grouping's. Both links, or
 				// the breakdown of a cell would silently drop one of the two things that made it.
 				if (!figures[m].IsEmpty()) {
-					const wxString name = wxString::Format(wxT("Cell_%d"), col);
-					row->SetParameter(name, PackDetails(
+					cellLink[c] = linkName(col);
+					m_document->SetParameter(cellLink[c], PackDetails(
 						m < m_measureAt.size() ? m_measureAt[m] : m_schema.size(),
 						figures[m], rowChain, colChain));
-					row->SetCellDetailsParameter(0, col, name);
 				}
-				if (static_cast<size_t>(col) < m_widest.size())
-					m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], text.length());
+				if (c < m_widest.size())
+					m_widest[c] = std::max(m_widest[c], cellText[c].length());
 			}
 		};
 		// BY SLOT, because a slot is what a column IS — a key's figures, or an upper heading's own.
 		for (size_t s = 0; s < slots.size(); ++s) {
 			const int at = dimWidth + static_cast<int>(s) * perKey;
 			if (!slots[s].m_subtotal) {
-				const auto cell = source.m_cells.find(slots[s].m_at);
-				if (cell != source.m_cells.end())
-					writeFigures(at, cell->second, slotChain[s]);
+				if (const std::vector<ibValue>* cell = source.m_cells.find_value(slots[s].m_at))
+					writeFigures(at, *cell, slotChain[s]);
 				continue;
 			}
 			for (const std::pair<CrossKey, std::vector<ibValue>>& kept : source.m_subtotals)
@@ -1501,17 +1587,36 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		// A HEADING IS TINTED BY ITS LEVEL AND BOLD; A RECORD IS NEITHER — same rule the streaming
 		// layout follows (OnRow), so a table and a grouping dress their lines alike.
 		const wxColour fill = source.m_detail ? kDetailFill : ibGroupFillForLevel(source.m_level);
-		wxFont font = s_defaultSpreadsheetFont;
-		font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
+		// …and closed at both ends, like every row of a grouping: each line is an area of its own, so
+		// the horizontal edge is on its outside and belongs to it. One description of the line's cell,
+		// set in one call per cell — the same text, alignment, link, fill, font and edges the single
+		// setters gave it, the cell found once instead of nine times. What a cell does not say stays as
+		// a new cell has it.
+		ibSpreadsheetCellDescription cell(0, 0);
+		const int plainHorz = cell.m_alignHorz, plainVert = cell.m_alignVert;
+		cell.m_backgroundColour = fill;
+		if (!source.m_detail)
+			cell.m_font = boldFont;
+		for (ibSpreadsheetBorderDescription& edge : cell.m_borderAt)
+			edge = TheGridPen();
 		for (int col = 0; col < totalCols; ++col) {
-			row->SetCellBackgroundColour(0, col, fill);
-			if (!source.m_detail)
-				row->SetCellFont(0, col, font);
-			// …and closed at both ends, like every row of a grouping: each line is an area of its own,
-			// so the horizontal edge is on its outside and belongs to it.
-			BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true);
+			const size_t c = static_cast<size_t>(col);
+			if (cellSaid[c])
+				cell.m_value = std::move(cellText[c]);   // the line's texts are written afresh for the next
+			else
+				cell.m_value.clear();
+			cell.m_alignHorz = cellRight[c] ? wxALIGN_RIGHT : plainHorz;
+			cell.m_alignVert = cellRight[c] ? wxALIGN_CENTER : plainVert;
+			cell.m_detailsParameter = std::move(cellLink[c]);   // …and its links cleared at its top
+			m_document->SetCell(at, col, cell);
 		}
-		m_document->PutArea(row, static_cast<unsigned int>(std::max(0, source.m_level)));
+		// …and what PutArea said about the line besides its cells: its height, the end of the printed
+		// rows, and the group it folds into at its depth.
+		m_document->SetRowSize(at, areaRowHeight);
+		m_document->SetRowBrake(at);
+		if (source.m_level > 0)
+			m_document->GetSpreadsheetDesc().AddRowGroup(static_cast<unsigned int>(at), static_cast<unsigned int>(at),
+				static_cast<unsigned int>(source.m_level));
 		++m_rowsWritten;
 	}
 

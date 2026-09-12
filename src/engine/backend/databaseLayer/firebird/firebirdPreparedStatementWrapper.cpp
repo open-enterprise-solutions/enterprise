@@ -118,7 +118,6 @@ bool ibPreparedStatementFirebirdWrapper::Prepare()
 	}
 
 	m_pParameterCollection = new ibDatabaseParameterFirebirdCollection(m_pInterface, m_pParameters);
-	m_pParameterCollection->SetEncoding(GetEncoding());
 
 	return true;
 }
@@ -275,8 +274,6 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 
 	// Create the result set object
 	ibDatabaseResultSetFirebird* pResultSet = new ibDatabaseResultSetFirebird(m_pInterface, m_pDatabase, m_pTransaction, m_pStatement, pOutputSqlda);
-	if (pResultSet)
-		pResultSet->SetEncoding(GetEncoding());
 	if (pResultSet->GetErrorCode() != DATABASE_LAYER_OK)
 	{
 		SetErrorCode(pResultSet->GetErrorCode());
@@ -332,7 +329,8 @@ void ibPreparedStatementFirebirdWrapper::InterpretErrorCodes()
 	ibJournalInfo(wxT("db.firebird"),wxT("FirebirdPreparesStatementWrapper::InterpretErrorCodes()\n"));
 
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
-	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode));
+	// A system error by its status code, as the layer records one (an interrupted statement is isc_cancelled).
+	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode < -900 ? (int)m_Status[1] : (int)nSqlCode));
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, m_Status));
 }
 

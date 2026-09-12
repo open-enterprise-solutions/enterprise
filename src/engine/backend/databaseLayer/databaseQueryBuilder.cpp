@@ -7,6 +7,7 @@
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/resultSetMetaData.h"
+#include "backend/session/session.h"   // ibQueryResult hears its reader's cancel (ibSession::CancelFlag)
 
 // --------------------------------------------------------------------------
 // Parameter binding: ibValue -> ibPreparedStatement::SetParam* by type.
@@ -65,10 +66,33 @@ static void ibBindPlan(ibPreparedStatement* stmt,
 	}
 }
 
-// Run a rendered SELECT and wrap the cursor. Shared by Execute() and ExecuteIR().
+// THE RUNS OF ONE STATEMENT STILL TO COME (ExecuteIR over several) — one cursor that, at the end of a run's
+// rows, binds the next run's values and runs the same statement again (ibQueryResult::Next).
+struct ibQueryRuns {
+	std::vector<ibRenderedQuery> m_rendered;         // every run, in order; the first is running
+	size_t                       m_next = 1;
+	std::vector<ibValue>         m_external;
+	wxString                     m_prepared;         // the text the statement in hand was prepared from
+	bool                         m_again = false;    // the driver runs a prepared statement again (m_batchByReexecution)
+};
+
+// WHOSE CANCEL A READ HEARS (ibQueryResult::m_cancel) — the session's whose holder its connection was taken
+// for: the road the cancel itself takes to the database (ibSession::Cancel -> Holder()->Cancel()). A service
+// thread reads on a holder of its own and falls back to somebody else's session, whose cancel is not its.
+static const std::atomic<bool>* ibCancelOfReader(const ibConnectionScope& scope)
+{
+	ibSession* const session = ibSession::Current();
+	return session != nullptr && scope.Holder() != nullptr && scope.Holder() == session->Holder()
+		? session->CancelFlag() : nullptr;
+}
+
+// Run a rendered SELECT and wrap the cursor. Shared by Execute() and ExecuteIR() — and by the runs of one
+// statement, which ride along in `runs`.
 static ibQueryResult ibRunRendered(const std::shared_ptr<ibDatabaseLayer>& conn,
+                                   const std::atomic<bool>* cancel,
                                    const ibRenderedQuery& rendered,
-                                   const std::vector<ibValue>& externalParams)
+                                   const std::vector<ibValue>& externalParams,
+                                   std::unique_ptr<ibQueryRuns> runs = nullptr)
 {
 	try {
 		ibPreparedStatement* stmt = conn->PrepareStatement(rendered.m_sql);
@@ -79,7 +103,7 @@ static ibQueryResult ibRunRendered(const std::shared_ptr<ibDatabaseLayer>& conn,
 		ibBindPlan(stmt, rendered.m_params, externalParams);
 
 		ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
-		return ibQueryResult(conn, stmt, rs);
+		return ibQueryResult(conn, stmt, rs, std::move(runs), cancel);
 	}
 	// ⭐⭐ THE STATEMENT RIDES WITH THE REFUSAL. A database's complaint is about a text the engine
 	// wrote and the caller has never seen: "Column unknown FLD1043_D. At line 1, column 57" — a
@@ -257,7 +281,37 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteIR(const ibQueryIR& ir, const std::
 
 	// The generated SQL contains only "?"/"$n" placeholders + identifiers +
 	// keywords — no user data, no '%'. Safe through the vararg PrepareStatement.
-	return ibRunRendered(conn, rendered, externalParams);
+	return ibRunRendered(conn, ibCancelOfReader(m_scope), rendered, externalParams);
+}
+
+// ⭐ ONE STATEMENT, RUN ONCE PER SET OF VALUES — a set of keys longer than one statement carries, cut into
+// parts that render to one text (ibDbTableProvider::ExecuteRead). Prepared ONCE and the next part's values
+// bound at the end of the rows before, where the driver runs a prepared statement again — the form
+// ibSqlFeatures::m_batchByReexecution promises is the fast one on its engine, as the INSERT batch below
+// already uses it. The eighty parts of a payroll sheet's employees were eighty statements prepared anew.
+ibQueryResult ibDatabaseQueryBuilder::ExecuteIR(const std::vector<ibQueryIR>& runs, const std::vector<ibValue>& externalParams)
+{
+	if (runs.size() == 1)
+		return ExecuteIR(runs.front(), externalParams);
+
+	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
+	if (!conn)
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
+			_("Query layer could not obtain a database connection from the holder."));
+	if (runs.empty())
+		return ibQueryResult(conn, nullptr, nullptr);   // nothing to run: a cursor with no rows
+
+	const ibDialectDictionary& dialect = conn->GetDialect();
+	ibQueryRenderer renderer(dialect);
+	std::unique_ptr<ibQueryRuns> all = std::make_unique<ibQueryRuns>();
+	all->m_rendered.reserve(runs.size());
+	for (const ibQueryIR& ir : runs)
+		all->m_rendered.push_back(renderer.Render(ir));
+	all->m_external = externalParams;
+	all->m_again    = dialect.m_features.m_batchByReexecution;
+	all->m_prepared = all->m_rendered.front().m_sql;
+	const ibRenderedQuery& first = all->m_rendered.front();   // lives on in `all`, which the cursor keeps
+	return ibRunRendered(conn, ibCancelOfReader(m_scope), first, externalParams, std::move(all));
 }
 
 ibRenderedQuery ibDatabaseQueryBuilder::Render(const ibQueryIR& ir)
@@ -279,7 +333,7 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteRendered(const ibRenderedQuery& ren
 		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
 			_("Query layer could not obtain a database connection from the holder."));
 
-	return ibRunRendered(conn, rendered, externalParams);
+	return ibRunRendered(conn, ibCancelOfReader(m_scope), rendered, externalParams);
 }
 
 bool ibDatabaseQueryBuilder::TableExists(const wxString& table)
@@ -437,7 +491,7 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteReturning(const ibDmlStatement& dml
 
 	// Same door as a SELECT from here on: a RETURNING write yields a cursor, so it runs
 	// through the shared rendered-statement helper and comes back as an ibQueryResult.
-	return ibRunRendered(conn, renderer.RenderDML(dml), externalParams);
+	return ibRunRendered(conn, ibCancelOfReader(m_scope), renderer.RenderDML(dml), externalParams);
 }
 
 // ==========================================================================
@@ -446,8 +500,18 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteReturning(const ibDmlStatement& dml
 
 ibQueryResult::ibQueryResult(std::shared_ptr<ibDatabaseLayer> conn,
                              ibPreparedStatement* stmt,
-                             ibDatabaseResultSet* rs)
-	: m_conn(std::move(conn)), m_stmt(stmt), m_rs(rs)
+                             ibDatabaseResultSet* rs,
+                             const std::atomic<bool>* cancel)
+	: m_conn(std::move(conn)), m_stmt(stmt), m_rs(rs), m_cancel(cancel)
+{
+}
+
+ibQueryResult::ibQueryResult(std::shared_ptr<ibDatabaseLayer> conn,
+                             ibPreparedStatement* stmt,
+                             ibDatabaseResultSet* rs,
+                             std::unique_ptr<ibQueryRuns> runs,
+                             const std::atomic<bool>* cancel)
+	: m_conn(std::move(conn)), m_stmt(stmt), m_rs(rs), m_runs(std::move(runs)), m_cancel(cancel)
 {
 }
 
@@ -461,10 +525,20 @@ ibQueryResult::ibQueryResult(ibQueryResult&& other) noexcept
 	, m_stmt(other.m_stmt)
 	, m_rs(other.m_rs)
 	, m_meta(other.m_meta)
+	, m_fields(std::move(other.m_fields))
+	, m_lastFields(other.m_lastFields)
+	, m_columnsByName(std::move(other.m_columnsByName))
+	, m_columnsByNameBuilt(other.m_columnsByNameBuilt)
+	, m_runs(std::move(other.m_runs))
+	, m_cancel(other.m_cancel)
 {
 	other.m_stmt = nullptr;
 	other.m_rs   = nullptr;
 	other.m_meta = nullptr;
+	other.m_fields.clear();
+	other.m_lastFields = 0;
+	other.m_columnsByName.clear();
+	other.m_columnsByNameBuilt = false;
 }
 
 ibQueryResult& ibQueryResult::operator=(ibQueryResult&& other) noexcept
@@ -475,9 +549,19 @@ ibQueryResult& ibQueryResult::operator=(ibQueryResult&& other) noexcept
 		m_stmt = other.m_stmt;
 		m_rs   = other.m_rs;
 		m_meta = other.m_meta;
+		m_fields             = std::move(other.m_fields);
+		m_lastFields         = other.m_lastFields;
+		m_columnsByName      = std::move(other.m_columnsByName);
+		m_columnsByNameBuilt = other.m_columnsByNameBuilt;
+		m_runs               = std::move(other.m_runs);
+		m_cancel             = other.m_cancel;
 		other.m_stmt = nullptr;
 		other.m_rs   = nullptr;
 		other.m_meta = nullptr;
+		other.m_fields.clear();
+		other.m_lastFields = 0;
+		other.m_columnsByName.clear();
+		other.m_columnsByNameBuilt = false;
 	}
 	return *this;
 }
@@ -495,6 +579,12 @@ void ibQueryResult::Release()
 		m_stmt = nullptr;
 	}
 	m_meta = nullptr;  // owned by m_rs
+	// …and what was found in it: an index means nothing without the result set it indexes.
+	m_fields.clear();
+	m_lastFields = 0;
+	m_columnsByName.clear();
+	m_columnsByNameBuilt = false;
+	m_runs.reset();
 }
 
 ibResultSetMetaData* ibQueryResult::Meta()
@@ -506,7 +596,37 @@ ibResultSetMetaData* ibQueryResult::Meta()
 
 bool ibQueryResult::Next()
 {
-	return m_rs != nullptr ? m_rs->Next() : false;
+	// A CANCEL IS HEARD BETWEEN ROWS (m_cancel), and it leaves the way the interpreter's does — so whoever
+	// started the read hears one interruption, whether it arrived through the statement or through here.
+	if (m_cancel != nullptr && m_cancel->load(std::memory_order_relaxed))
+		ibBackendInterruptException::Error();
+	while (m_rs != nullptr) {
+		if (m_rs->Next())
+			return true;
+		if (m_runs == nullptr || m_runs->m_next >= m_runs->m_rendered.size())
+			return false;
+		// …THE NEXT RUN OF THE SAME STATEMENT, the rows before it read to their end: its cursor closed, the
+		// next values bound, run again. Prepared again only where the driver cannot run it twice, or where
+		// a run came out a different text than the one in hand.
+		const ibRenderedQuery& run = m_runs->m_rendered[m_runs->m_next++];
+		// Each handle is forgotten as it is closed: preparing, binding or running the next run can throw (a
+		// cancel arrives exactly so), and Release must not close what is already closed.
+		m_conn->CloseResultSet(m_rs);
+		m_rs   = nullptr;
+		m_meta = nullptr;   // owned by the result set just closed
+		if (!m_runs->m_again || run.m_sql != m_runs->m_prepared) {
+			m_conn->CloseStatement(m_stmt);
+			m_stmt = nullptr;
+			m_stmt = m_conn->PrepareStatement(run.m_sql);
+			if (m_stmt == nullptr)
+				ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+					wxString::Format(_("Query layer failed to prepare statement: %s"), run.m_sql));
+			m_runs->m_prepared = run.m_sql;
+		}
+		ibBindPlan(m_stmt, run.m_params, m_runs->m_external);
+		m_rs = m_stmt->RunQueryWithResults();
+	}
+	return false;
 }
 
 int ibQueryResult::ColumnCount()
@@ -552,12 +672,72 @@ ibValue ibQueryResult::GetValue(int column)
 
 ibValue ibQueryResult::GetValue(const wxString& name)
 {
-	ibResultSetMetaData* md = Meta();
-	const int col = md != nullptr ? md->FindColumnByName(name) : -1;
+	const int col = ColumnIndex(name);
 	if (col < 0)
 		return ibValue();
 	return GetValue(col);  // NB: assumes metadata column ids are 1-based (matches GetResult*)
 }
+
+int ibQueryResult::ColumnIndex(const wxString& name)
+{
+	// ⭐ THE COLUMNS ARE INDEXED ONCE, NOT WALKED PER CELL. This asked the metadata to find the name,
+	// and the metadata walked every column converting each one's name out of the driver's buffer to
+	// compare it — once per cell of every aliased output: a computed `-D.Result AS Amount` paid for a
+	// walk of the whole row on each of 40 thousand rows (MEASURED 2026-09-12, Debug stack samples).
+	// Same answer — the FIRST column of that name, compared as the walk compared, without case.
+	if (!m_columnsByNameBuilt) {
+		m_columnsByNameBuilt = true;
+		if (ibResultSetMetaData* md = Meta())
+			for (int i = 1; i <= md->GetColumnCount(); ++i)
+				m_columnsByName.emplace(md->GetColumnName(i), i);
+	}
+	const auto found = m_columnsByName.find(name);
+	return found != m_columnsByName.end() ? found->second : -1;
+}
+
+ibQueryResult::FieldSlots& ibQueryResult::FieldsOf(const wxString& base)
+{
+	// The one after the last first — the bases of a row are read in the same order every row — then the
+	// rest, then a new entry. Compared as LookupField compares, without case (ibFieldNameEqual).
+	const ibFieldNameEqual same;
+	const size_t count = m_fields.size();
+	if (count > 0) {
+		const size_t next = m_lastFields + 1 < count ? m_lastFields + 1 : 0;
+		if (same(m_fields[next].first, base))
+			return m_fields[m_lastFields = next].second;
+		for (size_t i = 0; i < count; ++i)
+			if (same(m_fields[i].first, base))
+				return m_fields[m_lastFields = i].second;
+	}
+	m_fields.emplace_back(base, FieldSlots());
+	m_lastFields = m_fields.size() - 1;
+	return m_fields.back().second;
+}
+
+int ibQueryResult::FieldIndex(FieldSlots& slots, const wxString& base, unsigned slot, const wxString& suffix)
+{
+	if (m_rs == nullptr || slot >= kFieldSlots)
+		return 0;   // no cursor — every read below answers as the named read does with none
+	int& index = slots.m_index[slot];
+	// A refusal throws out of LookupField and is not remembered — the next row asks again, and is
+	// refused again, exactly as the named read was. A driver that answers "absent" with -1 instead is
+	// remembered as absent, and the reads below give that driver's absent answers.
+	if (index == 0)
+		index = m_rs->LookupField(suffix.IsEmpty() ? base : base + suffix);
+	return index;
+}
+
+// Each read answers what its NAMED twin answers — with no cursor (0) the ibQueryResult defaults, for an
+// absent field (-1) the driver-base defaults (databaseResultSet.cpp) — so the two roads cannot be told
+// apart by what comes back.
+wxString   ibQueryResult::GetResultString(int field)                   { return m_rs == nullptr || field == 0 ? wxString()  : field < 0 ? wxString()        : m_rs->GetResultString(field); }
+int        ibQueryResult::GetResultInt(int field)                      { return m_rs == nullptr || field == 0 ? 0           : field < 0 ? -1                : m_rs->GetResultInt(field); }
+long long  ibQueryResult::GetResultLong(int field)                     { return m_rs == nullptr || field == 0 ? 0           : field < 0 ? -1                : m_rs->GetResultLong(field); }
+bool       ibQueryResult::GetResultBool(int field)                     { return m_rs == nullptr || field == 0 ? false       : field < 0 ? false             : m_rs->GetResultBool(field); }
+wxDateTime ibQueryResult::GetResultDate(int field)                     { return m_rs == nullptr || field == 0 ? wxDateTime(): field < 0 ? wxDefaultDateTime : m_rs->GetResultDate(field); }
+ibNumber   ibQueryResult::GetResultNumber(int field)                   { return m_rs == nullptr || field == 0 ? ibNumber()  : field < 0 ? ibNumber(-1)      : m_rs->GetResultNumber(field); }
+void*      ibQueryResult::GetResultBlob(int field, wxMemoryBuffer& b)  { return m_rs == nullptr || field <= 0 ? nullptr : m_rs->GetResultBlob(field, b); }
+bool       ibQueryResult::IsResultNull(int field)                      { return m_rs == nullptr || field <= 0 || m_rs->IsFieldNull(field); }
 
 // Typed field reads by name — delegate to the borrowed driver cursor (the dialect-normalised
 // physical field). The provider's value-assembly reads through these, never the raw L1 cursor.

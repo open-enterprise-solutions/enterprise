@@ -1508,7 +1508,8 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Add a grouping level to an output - down the ROWS by default, across the "
+		return ibMcpText("Add a grouping level to an output - a report grouped by month, by department - "
+			"down the ROWS by default, across the "
 			"COLUMNS when asked, which is what makes a cross table. The path must be one the "
 			"query projects: report_fields lists them, and a path that is not there is refused.\n"
 			"⭐ `groupByAll` puts SEVERAL fields in ONE level, which is what an object's own facts "

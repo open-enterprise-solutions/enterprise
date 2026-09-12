@@ -9,7 +9,6 @@
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/objCtor.h"                                // ibCtorMetaValueType — the chart's own reference type
-#include "backend/metadataConfiguration.h"                  // ibConfigType — which copy of the configuration this is
 #include "backend/query/dataQueryBuilder.h"                 // L3 door — a relation read as data, in one statement
 
 #include <algorithm>
@@ -342,8 +341,11 @@ bool ibValueMetaObjectChartOfCalculationTypes::OnBeforeRunMetaObject(int flags)
 	// the database has no table for, or the diff never creates one (see StampIfNeverSaved). A section it
 	// leaves at 0 does not run either — the section refuses that itself, since the tree's own walk
 	// (RunSubtree) reaches it without passing through here.
-	const ibMetaDataConfigurationBase* config = dynamic_cast<const ibMetaDataConfigurationBase*>(m_metaData);
-	const bool savesItself = config != nullptr && config->GetConfigType() != ibConfigType::ibConfigType_Load;
+	//
+	// WHICH COPY THIS IS, THE RUN ALREADY SAYS: the designer's baseline is run with loadConfigFlag, and
+	// the running application is not the designer — the pair a module's debugger set-up asks by
+	// (metaModuleObject.cpp). It was a cast of the metadata to a configuration, to read its type.
+	const bool savesItself = (flags & loadConfigFlag) == 0 && appData->DesignerMode();
 	for (auto* relation : GetRelationTables()) {
 		if (savesItself && !relation->StampIfNeverSaved(m_metaData))
 			return false;

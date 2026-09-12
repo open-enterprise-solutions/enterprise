@@ -24,6 +24,7 @@ enum {
 	wxID_DESIGNER_DEBUG_EDIT_POINT,
 	wxID_DESIGNER_DEBUG_STEP_OVER,
 	wxID_DESIGNER_DEBUG_STEP_INTO,
+	wxID_DESIGNER_DEBUG_STEP_OUT,
 	wxID_DESIGNER_DEBUG_PAUSE,
 	wxID_DESIGNER_DEBUG_STOP_DEBUGGING,
 	wxID_DESIGNER_DEBUG_STOP_PROGRAM,
@@ -154,12 +155,11 @@ public:
 	void LoadOptions();
 	void SaveOptions();
 
-#pragma region debugger 
-	void Debugger_OnSessionStart();
-	void Debugger_OnSessionEnd();
-	void Debugger_OnEnterLoop();
-	void Debugger_OnLeaveLoop();
-#pragma endregion 
+#pragma region debugger
+	// The debugger's state changed (attached, detached, stopped, running): the Debug menu asks again
+	// (OnUpdateDebugCommand) - it does not carry a state of its own.
+	void Debugger_OnStateChanged();
+#pragma endregion
 
 	virtual bool Show(bool show = true) override;
 
@@ -212,6 +212,7 @@ protected:
 
 	void OnConfiguration(wxCommandEvent& event);
 	void OnRunDebugCommand(wxCommandEvent& event);
+	void OnUpdateDebugCommand(wxUpdateUIEvent& event);
 	void OnToolsSettings(wxCommandEvent& event);
 	void OnUsers(wxCommandEvent& event);
 	void OnActiveUsers(wxCommandEvent& event);

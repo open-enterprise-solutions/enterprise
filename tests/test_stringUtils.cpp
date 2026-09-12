@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 #include <initializer_list>
+#include <map>
 #include "backend/stringUtils.h"
 
 using namespace stringUtils;
@@ -93,6 +94,55 @@ TEST(StringUtils, CompareStringCaseInsensitiveByDefault) {
 TEST(StringUtils, CompareStringLengthAndContent) {
     EXPECT_FALSE(CompareString(wxT("abc"), wxT("abcd")));   // length differs
     EXPECT_FALSE(CompareString(wxT("abc"), wxT("abd")));    // content differs
+}
+
+// ---------------------------------------------------------------------------
+// ibCaseFoldLess — the ORDER that CompareString's equality belongs to, for a map
+// whose names are matched without case (a document's parameters, the lexer's
+// keywords). Names CompareString calls equal must be ONE key of such a map.
+// ---------------------------------------------------------------------------
+
+TEST(StringUtils, CaseFoldLessNamesEqualWithoutCaseAreOneKey) {
+    const ibCaseFoldLess less;
+    EXPECT_TRUE(CompareString(wxT("Partner"), wxT("PARTNER")));
+    EXPECT_FALSE(less(wxT("Partner"), wxT("PARTNER")));
+    EXPECT_FALSE(less(wxT("PARTNER"), wxT("Partner")));
+}
+
+TEST(StringUtils, CaseFoldLessOrdersByTheFirstCharacterThatDiffers) {
+    const ibCaseFoldLess less;
+    EXPECT_TRUE(less(wxT("abc"), wxT("ABD")));
+    EXPECT_FALSE(less(wxT("ABD"), wxT("abc")));
+    // names sharing a long prefix part at one character — how a composed sheet names its links
+    EXPECT_TRUE(less(wxT("Link_00000001_0002"), wxT("link_00000001_0003")));
+    EXPECT_FALSE(less(wxT("link_00000001_0003"), wxT("Link_00000001_0002")));
+}
+
+// A sign is compared as it stands, but against a LETTER it is compared with the letter folded — '[' lies
+// between 'Z' and 'a', so the raw order and the folded one disagree about it, and the folded one is the rule.
+TEST(StringUtils, CaseFoldLessComparesASignWithTheLetterFolded) {
+    const ibCaseFoldLess less;
+    EXPECT_FALSE(less(wxT("["), wxT("a")));   // '[' after 'A'
+    EXPECT_TRUE(less(wxT("a"), wxT("[")));
+    EXPECT_TRUE(less(wxT("9"), wxT("a")));    // a digit before any letter, either way
+    EXPECT_TRUE(less(wxT("1"), wxT("2")));    // signs and digits by themselves
+}
+
+TEST(StringUtils, CaseFoldLessShorterPrefixIsTheLesser) {
+    const ibCaseFoldLess less;
+    EXPECT_TRUE(less(wxT("ab"), wxT("ABC")));
+    EXPECT_FALSE(less(wxT("ABC"), wxT("ab")));
+    EXPECT_FALSE(less(wxEmptyString, wxEmptyString));
+}
+
+TEST(StringUtils, CaseFoldLessMapFindsANameInAnotherCase) {
+    std::map<wxString, int, ibCaseFoldLess> names;
+    names[wxT("Partner")] = 1;
+    names[wxT("PARTNER")] = 2;   // the same key, written again
+    EXPECT_EQ(names.size(), 1u);
+    const auto found = names.find(wxT("partner"));
+    ASSERT_NE(found, names.end());
+    EXPECT_EQ(found->second, 2);
 }
 
 // ---------------------------------------------------------------------------

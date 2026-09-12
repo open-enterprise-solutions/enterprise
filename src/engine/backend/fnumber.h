@@ -90,19 +90,24 @@ public:
 	// Results are bit-identical either way — the fast path only fires when it
 	// fits immediate, which is the same condition the cold path would settle on.
 	ibNumber& operator+=(const ibNumber& rhs) {
-		// 47-bit + 47-bit can't overflow int64; store if the sum fits immediate.
+		// Aligned to one exponent (TryImmAligned — integers are the case where it is 0), the sum cannot
+		// overflow int64; stored if it fits immediate. A zero is stored as (0, 0), as StoreBig does.
 		int64_t am, bm;
-		if (TryImmInts(rhs, am, bm)) {
+		int32_t e;
+		if (TryImmAligned(rhs, am, bm, e)) {
 			const int64_t r = am + bm;
-			if (CanBeImmediate(r, 0)) { StoreImmediate(r, 0); return *this; }
+			if (r == 0) { StoreImmediate(0, 0); return *this; }
+			if (CanBeImmediate(r, e)) { StoreImmediate(r, e); return *this; }
 		}
 		return AddBig(rhs);
 	}
 	ibNumber& operator-=(const ibNumber& rhs) {
 		int64_t am, bm;
-		if (TryImmInts(rhs, am, bm)) {
+		int32_t e;
+		if (TryImmAligned(rhs, am, bm, e)) {
 			const int64_t r = am - bm;
-			if (CanBeImmediate(r, 0)) { StoreImmediate(r, 0); return *this; }
+			if (r == 0) { StoreImmediate(0, 0); return *this; }
+			if (CanBeImmediate(r, e)) { StoreImmediate(r, e); return *this; }
 		}
 		return SubBig(rhs);
 	}
@@ -259,6 +264,14 @@ public:
 	void To128Bytes(uint8_t out[16]) const;
 	void From128Bytes(const uint8_t bytes[16]);
 
+	// ⭐ THE DECIMAL POINT MOVED, NOT DIVIDED FOR — the value times 10^exp10, exactly. A scaled integer
+	// column (NUMERIC(18,6) is an int64 and a scale of -6) IS its digits times 10^scale, and the readers
+	// used to get there by dividing by ten, scale times over: six long divisions on the heap for every
+	// money cell a report read (MEASURED 2026-09-12, Debug stack samples: GetResultNumber -> operator/=).
+	// Here the exponent moves and the fraction's trailing zeros are trimmed, which is the very number —
+	// and the very form — those divisions left behind: each was exact and trimmed its own zeros.
+	void ShiftDecimal(int32_t exp10);
+
 	// Binary buffer accessor — value-as-bytes, in OES property-getter style
 	// (mirrors propertyForm's GetValueAsMemoryBuffer / SetValue pair).
 	// Layout (little-endian):
@@ -332,6 +345,44 @@ private:
 			return true;
 		}
 		return false;
+	}
+
+	// ⭐ BOTH IMMEDIATE, WHATEVER THEIR DECIMAL PLACES — the gate of the ADDITIVE fast paths. The two
+	// mantissas are brought to ONE exponent, the smaller of the two, exactly where the cold path's
+	// AlignExp takes them (the one with the larger exponent is multiplied by 10^difference), so what
+	// operator+= / -= then store is bit for bit what AddBig / SubBig would have stored.
+	//
+	// It exists because money has cents. The gate above admits integers only, so every sum of amounts
+	// — a report's totals, a register's figures — took the cold path and built a heap number to add two
+	// values that each fit in 47 bits: the payroll sheet's fold did that twice per node on every row
+	// (MEASURED 2026-09-12, Debug stack samples: ibAggAcc::Feed -> AddBig -> BigImpl).
+	//
+	// Refuses (and the cold path runs) when the scaled mantissa could overflow the sum: the other side is
+	// at most 2^46, so a scaled side kept under 2^62 leaves the sum inside int64 with room to spare.
+	bool TryImmAligned(const ibNumber& rhs, int64_t& a, int64_t& b, int32_t& exp10) const {
+		if (!IsImmediate() || !rhs.IsImmediate())
+			return false;
+		a = ImmMantissa();
+		b = rhs.ImmMantissa();
+		const int ea = ImmExp(), eb = rhs.ImmExp();
+		if (ea == eb) {
+			exp10 = ea;
+			return true;
+		}
+		static constexpr int64_t kPow10[] = { 1LL, 10LL, 100LL, 1000LL, 10000LL, 100000LL, 1000000LL,
+			10000000LL, 100000000LL, 1000000000LL, 10000000000LL, 100000000000LL, 1000000000000LL,
+			10000000000000LL, 100000000000000LL, 1000000000000000LL };
+		const int diff = ea > eb ? ea - eb : eb - ea;
+		if (diff >= static_cast<int>(sizeof(kPow10) / sizeof(kPow10[0])))
+			return false;
+		int64_t& up = ea > eb ? a : b;
+		static constexpr int64_t kScaledMax = 1LL << 62;
+		const int64_t limit = kScaledMax / kPow10[diff];
+		if (up > limit || up < -limit)
+			return false;
+		up *= kPow10[diff];
+		exp10 = ea < eb ? ea : eb;
+		return true;
 	}
 
 	// Cold half of Compare — both operands are not plain immediate integers.

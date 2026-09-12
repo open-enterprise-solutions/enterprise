@@ -28,6 +28,8 @@
 #include "backend/metaCollection/metaRoleObject.h"   // ibValueMetaObjectRole — GetRoleModule()
 #include "backend/metaCollection/genericData.h"      // AccessRight_Show / _Modify / _Erase — the rights, as the metadata already answers them
 #include "backend/backend_exception.h"               // ibBackendAccessException
+#include "backend/diagnostics/journal.h"             // ibJournalInfo — a cancel says what it reached
+#include "backend/job/jobManager.h"                  // TenantsOf — a cancel reaches the runs reading for this session
 
 namespace {
 
@@ -548,9 +550,15 @@ bool ibSession::Close(bool force)
 
 	// Force also stops whatever is running: the interpreter sees the flag
 	// at its next opcode and unwinds, so nothing executes while the close
-	// goes through.
-	if (force)
+	// goes through — and the current operation is cancelled (Cancel: its
+	// statement, its tenants), so nothing the session waits on holds the
+	// close up. HERE, not in OnClose: a window and a web tab close their own
+	// way and never reach the base, and a forced close of either must not
+	// be the one that hangs.
+	if (force) {
 		RequestForceExit();
+		Cancel();
+	}
 
 	// And that is all Close does — start the close of whatever owns us.
 	// It deliberately does NOT tear the session down itself, not even
@@ -595,7 +603,10 @@ void ibSession::Teardown()
 	// the GUI pool when we are on the wx main thread it drains onto, and
 	// trivially when there is no pool. So the future is ready before Submit
 	// returns and this never deadlocks against itself.
-	RequestCancel();
+	//
+	// The flag only, not Cancel(): every session passes through here, a rented read once per scrolled page,
+	// and a close that is not a forced one lets a statement it is waiting on finish (OnClose).
+	m_procUnitState.m_cancel = true;
 	{
 		std::future<void> drained = Submit([] {});
 		if (drained.valid())
@@ -604,7 +615,7 @@ void ibSession::Teardown()
 	// Lower the flag again: the teardown below still runs script-visible
 	// handlers (per-kind hooks, module OnDestroy through DestroyRoot),
 	// and a latched cancel would abort them at their first loop check.
-	ClearCancel();
+	m_procUnitState.m_cancel = false;
 
 	// NEVER TAKEN IN, SO NOTHING TO GIVE BACK. An unlisted session (a rented read —
 	// see m_listed) has no row to DELETE, no index entry to drop and nothing that
@@ -891,6 +902,21 @@ const ibAccessPolicy* ibSession::GetAccessPolicy() const
 	return nullptr;
 }
 
+void ibSession::Cancel()
+{
+	const std::vector<std::shared_ptr<ibSession>> tenants =
+		ibApplicationData::GetJobManager() != nullptr ? ibApplicationData::GetJobManager()->TenantsOf(this)
+		                                              : std::vector<std::shared_ptr<ibSession>>();
+	ibJournalInfo(wxT("cancel"), wxT("session %s: cancel - its connection, its runtime, %u tenant(s)"),
+		GetId(), static_cast<unsigned>(tenants.size()));
+	// The database first, then the runtime: the statement running now answers with the interruption, and
+	// the runtime, told next, throws it again at every level until the run is out — and lowers it itself.
+	Holder()->Cancel();
+	m_procUnitState.m_cancel = true;
+	for (const std::shared_ptr<ibSession>& tenant : tenants)
+		tenant->Cancel();
+}
+
 ibSession* ibSession::Current()
 {
 	// Hot path — runs from BackendError handlers, logging, every script
@@ -1118,14 +1144,9 @@ void ibSession::WakeDebugLoop()
 	m_debug->m_cv.notify_all();
 }
 
-bool ibSession::OnClose(bool force)
+bool ibSession::OnClose(bool /*force*/)
 {
-	// See the declaration: cancel before teardown so the queue this is about to wait behind is idle.
-	// Only under force — a polite close is a request, and a request does not interrupt work.
-	if (force) {
-		if (ibWorkerPool* const pool = GetWorkerPool())
-			pool->CancelSession(this);
-	}
+	// A forced close has already cancelled the work (Close), so the queue Teardown waits behind is idle.
 	Teardown();
 	return true;
 }
@@ -1327,13 +1348,20 @@ ibSessionThreadBinding::~ibSessionThreadBinding()
 
 std::shared_ptr<void> ibSession::FindLocal(const std::type_index& key) const
 {
-	const auto it = m_locals.find(key);
-	return it != m_locals.end() ? it->second : std::shared_ptr<void>();
+	for (std::size_t i = 0; i < m_locals.size(); ++i)   // by index — no iterator to register (see m_locals)
+		if (m_locals[i].first == key)
+			return m_locals[i].second;
+	return std::shared_ptr<void>();
 }
 
 void ibSession::SetLocal(const std::type_index& key, const std::shared_ptr<void>& value)
 {
-	m_locals[key] = value;
+	for (std::size_t i = 0; i < m_locals.size(); ++i)
+		if (m_locals[i].first == key) {
+			m_locals[i].second = value;
+			return;
+		}
+	m_locals.emplace_back(key, value);
 }
 
 // --- ibSessionScope -----------------------------------------------------

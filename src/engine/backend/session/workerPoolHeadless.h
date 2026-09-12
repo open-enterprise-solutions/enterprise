@@ -43,7 +43,6 @@ public:
 
 	std::future<void> Submit(ibSession* session, Task task) override;
 	void              DropSession(ibSession* session) override;
-	void              CancelSession(ibSession* session) override;
 	void              Stop() override;
 
 	// Diagnostics — current worker counts. Useful for /admin endpoints

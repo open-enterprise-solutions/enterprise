@@ -41,7 +41,10 @@ public:
 	// Is the connection to the database open?
 	virtual bool IsOpen();
 
-	/// clone database  
+	// Cancel what this connection is running — sqlite3_interrupt, from any thread (see the base).
+	virtual void Cancel();
+
+	/// clone database
 	virtual ibDatabaseLayer* Clone() { return new ibDatabaseLayerSQLite(*this); }
 
 	// IsActiveTransaction inherits the base-class default

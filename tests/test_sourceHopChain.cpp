@@ -52,7 +52,7 @@ public:
 	void SourceIncrRef() override {}
 	void SourceDecrRef() override {}
 	bool IsEmpty() const override { return m_fields.empty(); }
-	ibUniqueKey GetGuid() const override { return ibUniqueKey(); }
+	const ibUniqueKey& GetGuid() const override { static const ibUniqueKey none; return none; }
 	const ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return nullptr; }
 	const ibSourceExplorer* GetSourceExplorer() const override { return nullptr; }
 	const ibMetaData* GetSourceMetaData() const override { return nullptr; }

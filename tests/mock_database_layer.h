@@ -18,6 +18,7 @@ public:
     bool Open(const wxString&) override { m_open = true; return true; }
     bool Close() override                { m_open = false; return true; }
     bool IsOpen() override               { return m_open; }
+    void Cancel() override               {}   // no DBMS to tell
     ibDatabaseLayer* Clone() override    { auto* c = new MockDatabaseLayer(); c->m_open = true; return c; }
 
     bool TableExists(const wxString&) override { return false; }

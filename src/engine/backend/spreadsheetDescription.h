@@ -4,7 +4,9 @@
 #include "backend/compiler/value.h"
 
 #include <unordered_map>   // the cell index — MSVC drags it in transitively, libstdc++ does not
-#include <deque>          // the cells — see m_cellAt: their addresses must survive a later insert
+#include <memory>          // the cells' blocks — see m_cellAt: their addresses must survive a later insert
+#include <new>             // …and each cell is made in place inside its block
+#include <vector>
 #include <cstdint>
 #include <algorithm>
 
@@ -332,8 +334,8 @@ struct ibSpreadsheetDescription {
 
 	void ClearSpreadsheet(int count = 0) {
 
-		// (no reserve for the cells: they live in a deque now, whose whole point is that it does
-		//  not relocate — see m_cellAt. The index still reserves, being a hash map.)
+		// (no reserve for the cells: they live in blocks, whose whole point is that they do not
+		//  relocate — see m_cellAt. The index still reserves, being a hash map.)
 		m_cellAt.clear();
 		m_cellIndex.clear();
 		m_cellIndex.reserve(count);
@@ -346,6 +348,17 @@ struct ibSpreadsheetDescription {
 
 		m_rowAreaAt.clear();
 		m_colAreaAt.clear();
+	}
+
+	// …AND ROOM FOR WHAT IS COMING, with nothing cleared. A writer that knows how many lines and cells it
+	// is about to add — a composed table knows both before its first line — says so once, and the two
+	// indexes are sized for them instead of rehashing as they fill: 400 thousand cells of the payroll
+	// sheet went into the cell index one at a time, the largest single cost of writing it (6 of 22 stack
+	// samples, 2026-09-12, Debug), and each of its 40 thousand lines declared a height the same way.
+	void ReserveSpreadsheet(size_t rows, size_t cells) {
+		m_cellIndex.reserve(m_cellIndex.size() + cells);
+		m_rowSizeIndex.reserve(m_rowSizeIndex.size() + rows);
+		m_rowHeightAt.reserve(m_rowHeightAt.size() + rows);
 	}
 
 	bool IsEmptySpreadsheet() const {
@@ -381,12 +394,12 @@ struct ibSpreadsheetDescription {
 		if (row < 0 || col < 0)
 			return nullptr;
 
-		const uint64_t key = CellKey(row, col);
-		const auto iterator = m_cellIndex.find(key);
-		if (iterator != m_cellIndex.end())
-			return &m_cellAt[iterator->second];
-
-		m_cellIndex.emplace(key, m_cellAt.size());
+		// ONE question to the index, not two: asked where the cell is and, when it is nowhere, told where it
+		// will be in the same breath — a find and then an emplace hashed the address twice for every new
+		// cell, and a table writes a new cell for every figure it has (2026-09-12, the payroll sheet).
+		const auto placed = m_cellIndex.try_emplace(CellKey(row, col), m_cellAt.size());
+		if (!placed.second)
+			return &m_cellAt[placed.first->second];
 
 		ibSpreadsheetCellDescription& entry =
 			m_cellAt.emplace_back(row, col);
@@ -962,12 +975,24 @@ struct ibSpreadsheetDescription {
 			cell->m_detailsParameter = s;
 	}
 
-	//special string return 
+	//special string return
 	wxString GetCellDetailsParameter(int row, int col) const {
 		const ibSpreadsheetCellDescription* cell = GetCell(row, col);
 		if (cell != nullptr)
 			return cell->m_detailsParameter;
 		return wxT("");
+	}
+
+	// The whole cell at once, from a description of one — found once instead of once per thing it says.
+	// Its place and its span stay its own: a span is set by SetCellSize, which marks what it covers.
+	void SetCell(int row, int col, const ibSpreadsheetCellDescription& desc) {
+		ibSpreadsheetCellDescription* cell = GetOrCreateCell(row, col);
+		if (cell == nullptr)
+			return;
+		const int rowSize = cell->m_row_size, colSize = cell->m_col_size;
+		cell->SetCell(&desc);
+		cell->m_row_size = rowSize;
+		cell->m_col_size = colSize;
 	}
 
 	bool operator == (const ibSpreadsheetDescription& rhs) const {
@@ -1004,6 +1029,99 @@ struct ibSpreadsheetDescription {
 
 private:
 
+	// The cells, in blocks that never move what they hold — see m_cellAt for why.
+	class CellBlocks {
+	public:
+		CellBlocks() = default;
+		CellBlocks(const CellBlocks& src) { CopyFrom(src); }
+		CellBlocks(CellBlocks&& src) noexcept : m_blocks(std::move(src.m_blocks)), m_size(src.m_size) { src.m_size = 0; }
+		CellBlocks& operator=(const CellBlocks& src) {
+			if (this != &src) {
+				clear();
+				CopyFrom(src);
+			}
+			return *this;
+		}
+		CellBlocks& operator=(CellBlocks&& src) noexcept {
+			if (this != &src) {
+				clear();
+				m_blocks = std::move(src.m_blocks);
+				m_size = src.m_size;
+				src.m_size = 0;
+			}
+			return *this;
+		}
+		~CellBlocks() { clear(); }
+
+		size_t size() const { return m_size; }
+		ibSpreadsheetCellDescription&       operator[](size_t i)       { return *At(i); }
+		const ibSpreadsheetCellDescription& operator[](size_t i) const { return *At(i); }
+
+		template <class... Args>
+		ibSpreadsheetCellDescription& emplace_back(Args&&... args) {
+			size_t block, offset;
+			Locate(m_size, block, offset);
+			if (block == m_blocks.size())
+				m_blocks.emplace_back(new unsigned char[Capacity(block) * sizeof(ibSpreadsheetCellDescription)]);
+			ibSpreadsheetCellDescription* const cell = new (m_blocks[block].get() + offset * sizeof(ibSpreadsheetCellDescription))
+				ibSpreadsheetCellDescription(std::forward<Args>(args)...);
+			++m_size;
+			return *cell;
+		}
+
+		void clear() {
+			for (size_t i = m_size; i > 0; --i)
+				At(i - 1)->~ibSpreadsheetCellDescription();
+			m_size = 0;
+			m_blocks.clear();
+		}
+
+		bool operator==(const CellBlocks& rhs) const {
+			if (m_size != rhs.m_size)
+				return false;
+			for (size_t i = 0; i < m_size; ++i)
+				if (!((*this)[i] == rhs[i]))
+					return false;
+			return true;
+		}
+		bool operator!=(const CellBlocks& rhs) const { return !(*this == rhs); }
+
+	private:
+		// Blocks 0..3 hold 16, 32, 64 and 128 cells — 240 in all — and every block after them 256.
+		static constexpr size_t kFirst = 16, kGrowing = 4, kGrown = 240, kLast = 256;
+		static size_t Capacity(size_t block) { return block < kGrowing ? (kFirst << block) : kLast; }
+		static void Locate(size_t i, size_t& block, size_t& offset) {
+			if (i >= kGrown) {
+				block  = kGrowing + (i - kGrown) / kLast;
+				offset = (i - kGrown) % kLast;
+				return;
+			}
+			size_t start = 0;
+			for (block = 0; i >= start + Capacity(block); ++block)
+				start += Capacity(block);
+			offset = i - start;
+		}
+
+		ibSpreadsheetCellDescription* At(size_t i) const {
+			size_t block, offset;
+			Locate(i, block, offset);
+			return reinterpret_cast<ibSpreadsheetCellDescription*>(m_blocks[block].get() + offset * sizeof(ibSpreadsheetCellDescription));
+		}
+		void CopyFrom(const CellBlocks& src) {
+			try {
+				for (size_t i = 0; i < src.m_size; ++i)
+					emplace_back(src[i]);
+			}
+			catch (...) {
+				clear();   // the cells made so far are destroyed, not leaked, and the copy says why it failed
+				throw;
+			}
+		}
+
+		std::vector<std::unique_ptr<unsigned char[]>> m_blocks;
+		size_t m_size = 0;
+	};
+
 	// default font
 	wxFont m_labelFont;
 
@@ -1031,13 +1149,18 @@ private:
 	// exactly that — one cell became six, the container moved, and the designer died on the next
 	// line (dump designer_24140, 2026-09-02; the frame is ibMcpToolSheetCell::Call).
 	//
-	// ⭐ SO THE FIX IS THE CONTAINER, NOT THE TWO CALLERS. A deque never moves the elements it
-	// already holds when it grows at the end, which is the only way cells are ever added here - so
-	// every pointer stays good and the whole class of defect is gone, including from code nobody
-	// has written yet. Insertion order, indexing and equality are what this needs from it, and a
-	// deque gives all three; only `reserve` had to go, which was an optimisation and not a
-	// contract.
-	std::deque<ibSpreadsheetCellDescription> m_cellAt;
+	// ⭐ SO THE FIX IS THE CONTAINER, NOT THE TWO CALLERS. A container that never moves the elements
+	// it already holds when it grows at the end — the only way cells are ever added here — keeps
+	// every pointer good, and the whole class of defect is gone, including from code nobody has
+	// written yet. Insertion order, indexing and equality are what this needs from it.
+	//
+	// 🛑 …AND IT IS BLOCKS, NOT A DEQUE, because of what a deque costs on MSVC: it keeps ONE element
+	// per block for anything larger than eight bytes, so every cell was an allocation of its own, made
+	// on the way in and freed on the way out — 400 thousand of each for one payroll sheet (2026-09-12,
+	// Debug stack samples). CellBlocks keeps the promise the deque kept and allocates once per block.
+	// The blocks grow 16, 32, 64, 128 cells and then 256 at a time, so a one-row area document does
+	// not pay for a block it will never fill.
+	CellBlocks m_cellAt;
 
 	// WHERE each cell is, keyed by its address. Kept in step with m_cellAt by the two
 	// places that touch it — GetOrCreateCell (insert) and ClearSpreadsheet (drop);

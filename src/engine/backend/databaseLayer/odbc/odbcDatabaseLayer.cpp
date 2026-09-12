@@ -420,10 +420,7 @@ ibPreparedStatement* ibDatabaseLayerODBC::DoPrepareStatement(const wxString& str
 	else
 		QueryArray.push_back(strQuery);
 
-	ibPreparedStatementODBC* pReturnStatement = new ibPreparedStatementODBC(m_pInterface, (SQLHENV)m_sqlEnvHandle, (SQLHDBC)m_sqlHDBC);
-
-	if (pReturnStatement)
-		pReturnStatement->SetEncoding(GetEncoding());
+	ibPreparedStatementODBC* pReturnStatement = new ibPreparedStatementODBC(m_pInterface, (SQLHENV)m_sqlEnvHandle, (SQLHDBC)m_sqlHDBC, &m_executing);
 
 	for (unsigned int i = 0; i < (QueryArray.size()); i++)
 	{
@@ -704,14 +701,32 @@ void ibDatabaseLayerODBC::InterpretErrorCodes(long nCode, void* stmth_ptr)
 			m_pInterface->GetSQLGetDiagRec()(SQL_HANDLE_DBC, (SQLHDBC)m_sqlHDBC, 1, strState, &iNativeCode,
 				strBuffer, ERR_BUFFER_LEN, &iMsgLen);
 
-		SetErrorCode((int)iNativeCode);
+		const wxString strSqlState = ConvertFromUnicodeStream((char*)strState);
+		SetErrorCode(TranslateErrorCode((int)iNativeCode, strSqlState));
 		//SetErrorMessage(wxString((wxChar*)strBuffer));
 		SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
 		// Stash the 5-char SQLSTATE for ClassifyDatabaseError + the
 		// exception's GetSqlState() — without this the override
 		// returns empty and class-digit dispatch can't fire.
-		SetLastSqlState(ConvertFromUnicodeStream((char*)strState));
+		SetLastSqlState(strSqlState);
 	}
+}
+
+int ibDatabaseLayerODBC::TranslateErrorCode(int nNativeCode, const wxString& strSqlState)
+{
+	// An interrupted statement (Cancel -> SQLCancel) is the cancel, recorded as the platform's.
+	if (strSqlState == wxT("HY008"))   // operation canceled
+		return DATABASE_LAYER_QUERY_CANCELLED;
+	return nNativeCode;
+}
+
+// The one call ODBC takes from another thread on a busy connection — on the statement handle that is executing:
+// SQLExecute returns HY008 to its own caller. Nothing executing, nothing to stop.
+void ibDatabaseLayerODBC::Cancel()
+{
+	void* const hstmt = m_executing.load();
+	if (hstmt != nullptr)
+		m_pInterface->GetSQLCancel()((SQLHSTMT)hstmt);
 }
 
 ibBackendDatabaseException::Kind ibDatabaseLayerODBC::ClassifyDatabaseError(int nativeCode) const

@@ -450,12 +450,13 @@ ibValueModel::ibValueModelReturnLine* ibValueDynamicList::GetRowAt(const ibDataV
 	return new ibDynamicListReturnLine(this, line);
 }
 
-ibUniqueKey ibValueDynamicList::GetGuid() const
+const ibUniqueKey& ibValueDynamicList::GetGuid() const
 {
 	if (const ibBackendQueryable* q = GetSourceQueryable())
-		return q->GetQueryTableGuid();
+		return q->GetQueryTableGuid();   // the key its source's metaobject keeps
 
-	return wxNullGuid;
+	static const ibUniqueKey none;   // no source picked yet
+	return none;
 }
 
 // The dynamic list creates its own row key (the cursor base makes none): the row's primary-key REFERENCE (guid),

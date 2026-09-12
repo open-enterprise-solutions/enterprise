@@ -324,6 +324,15 @@ public:
 	// the pointer — pass via std::make_unique.
 	void AddPolicy(std::unique_ptr<ibSessionPolicy> policy);
 
+	// ---- Is a peer alive? Asked ----
+	// ⭐ A ROW OUTLIVES A KILLED PROCESS until the stale sweep's cutoff passes (JobSweepStale), and a
+	// question answered from the table in that window — "is another designer here?", "am I alone?" — is
+	// answered about somebody who is not there. A live owner moves its row's lastActive every heartbeat, so
+	// the question is ASKED instead of waited out: the named rows are watched for a few beats, and a row that
+	// never moves has no owner — it is removed (the sweep's own DELETE) and the snapshot refreshed. Returns
+	// how many went. REGISTRY THREAD ONLY — a policy (ProcessAdd) or ProcessSetExclusive asks it.
+	size_t SettleSilentPeers(const std::vector<wxString>& peers);
+
 	// ---- Lifecycle events ----
 	// Process-wide event hooks fired by registry as sessions move through
 	// their lifecycle. Listeners are wired once during app bootstrap (in

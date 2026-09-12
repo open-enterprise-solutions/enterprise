@@ -36,7 +36,11 @@ enum class ibSelectorNodeKind { Group, Detail, Branch };
 class BACKEND_API ibSelectorTree
 {
 public:
-	using Row = std::map<ibMetaID, ibValue>;   // a node's values, keyed by column model id
+	// A node's values, keyed by column model id — ONE SORTED VECTOR, like a row of the snapshot it is
+	// folded from (queryRamTable.h, rowValues.h). A tree gave every value a heap node, and a node is
+	// born as a copy of its parent's values: the payroll sheet's fold opened 160 thousand nodes with
+	// the best part of a million value nodes under them, and freed them all at the end (2026-09-12).
+	using Row = ibRowMetaValues;
 
 	// A tree node: its values (group-key path + aggregates), its level (0 = root / grand total),
 	// its child nodes, and whether it is EXPANDABLE — set from the data even before children load
@@ -63,7 +67,15 @@ public:
 		// rather than a gap: there is nothing to ask for it by.
 		wxString                           m_branch;
 
-		Node* AddChild(int level) { m_children.push_back(std::make_unique<Node>()); m_children.back()->m_level = level; return m_children.back().get(); }
+		// Room for a few is made with the first child: a heading of a table has a cell per column key, and
+		// growing the list one at a time reallocated it twice for every employee of a payroll sheet.
+		Node* AddChild(int level) {
+			if (m_children.empty())
+				m_children.reserve(4);
+			m_children.push_back(std::make_unique<Node>());
+			m_children.back()->m_level = level;
+			return m_children.back().get();
+		}
 
 		// ⭐ A CHILD AT A POSITION — what a CROSS-TABLE needs and an ordinary report never asks for.
 		// A heading in a table stands over two different kinds of children: the cells that read
@@ -72,8 +84,10 @@ public:
 		// discovered as the rows arrive, interleaved with the sub-headings. Inserting keeps the two
 		// blocks apart without a second list on the node or a second question for the walk.
 		Node* InsertChild(std::size_t at, int level) {
-			if (at > m_children.size())
-				at = m_children.size();
+			// …AT THE END when nothing stands after it yet, which is the ordinary case (a row's cells,
+			// opened one after another) — appended, with no iterator made to say where.
+			if (at >= m_children.size())
+				return AddChild(level);
 			auto it = m_children.insert(m_children.begin() + static_cast<std::ptrdiff_t>(at), std::make_unique<Node>());
 			(*it)->m_level = level;
 			return it->get();

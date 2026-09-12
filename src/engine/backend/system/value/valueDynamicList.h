@@ -222,7 +222,7 @@ public:
 	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
 	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
 	virtual bool IsEmpty() const override { return false; }
-	virtual ibUniqueKey GetGuid() const override;
+	virtual const ibUniqueKey& GetGuid() const override;
 
 	// Key on the dynamic LIST comes from the METAOBJECT through the source descriptor (the node has no metaobject
 	// id): the key = the family-correct identity (record → reference guid, register → composite key). GetGuid()

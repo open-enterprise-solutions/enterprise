@@ -428,6 +428,10 @@ struct ibProcStackGuard {
 	// already resolved the session for its own cancel check. See BeginByteCode
 	// above for what a lookup costs, and why entering and leaving one call through
 	// two independently-resolved states would be a bug rather than a saving.
+	//
+	// ⭐ A CANCEL IS FOR WHAT IS RUNNING (ibProcUnitState::m_cancel). The stack at empty is where no run
+	// is left, so the runtime lowers it there itself: as a run begins (a cancel that came while nothing
+	// ran) and as it ends (the run it stopped is over).
 	ibProcStackGuard(ibRunContext* runContext, ibProcUnitState* state) {
 		// Active state is required — ibProcUnit::Execute is reached only
 		// through a bound session (ibSessionScope / ibSessionThreadBinding).
@@ -505,6 +509,8 @@ struct ibProcStackGuard {
 		m_prevRunModule = state->GetCurrentRunModule();
 		state->SetCurrentRunModule(runContext->GetProcUnit());
 
+		if (state->GetCountRunContext() == 0)
+			state->m_cancel = false;
 		BeginByteCode(state, runContext);
 	}
 
@@ -522,6 +528,8 @@ struct ibProcStackGuard {
 				state->m_errorPlace.Reset();
 		}
 		EndByteCode(m_state);
+		if (m_state != nullptr && m_state->GetCountRunContext() == 0)
+			m_state->m_cancel = false;
 	}
 
 private:
@@ -1053,15 +1061,13 @@ start_label:
 			// — the hot-loop win; abort latency stays sub-microsecond.
 			//   force-exit: admin kick / GUI close / debug Destroy -> break, let
 			//               the host clean up.
-			//   cancel:     admin Kick / pool CancelSession -> unwind via
+			//   cancel:     ibSession::Cancel (from anyone) -> unwind via
 			//               ibBackendInterruptException.
 			if (((++opTick & (kCancelPoll - 1)) == 0) && cancelSession != nullptr) {
 				if (cancelSession->IsForceExit())
 					break;
-				if (cancelSession->IsCancelRequested()) {
-					cancelSession->ClearCancel();
+				if (state->m_cancel)
 					ibBackendInterruptException::Error();
-				}
 			}
 
 			//enter in debugger
@@ -2227,10 +2233,16 @@ start_label:
 			lCodeLine++;
 		}
 	}
-	catch (const ibBackendInterruptException& err) {
+	catch (const ibBackendInterruptException&) {
 
-		ibValueSystemFunction::Message(err.GetErrorDescription(),
-			ibStatusMessage::ibStatusMessage_Error);
+		// (Said once, by the outermost frame as the cancel leaves the run - see below - not here: this block
+		// runs at every level the cancel walks through, and printed the same sentence at each.)
+
+		// The next instruction asks the cancel again, not the 1024th: out of this loop, the code after it
+		// must not run while the cancel still stands - it throws there and this block walks it out of the
+		// next loop, level by level (measured 2026-09-11: asked 1024 opcodes later, the question was put
+		// inside the NEXT pass of the outer loop, and the run went on pass after pass).
+		opTick = kCancelPoll - 1;
 
 		while (lCodeLine < lFinish) {
 			if (curCode.m_numOper != OPER_GOTO
@@ -2277,6 +2289,20 @@ start_label:
 		//show and throw error message (ProcessError rethrows via `throw;`)
 		ibBackendException::ProcessError(err, m_pByteCode->m_listCode[lCodeLine]);
 	}
+
+	// ⭐ THE CANCEL GOES UP, TO WHOEVER CALLED. This frame has run out - of the loops the block above walked it
+	// out of, or of its code - and while the cancel stands it throws on: the frame that called this one hears
+	// it at the call, its own block walks it out of ITS loops, and so on - and past the outermost frame to the
+	// caller of the run (a form's command, a job, an assistant's code_run), which is the one to say what it
+	// was. The flag comes down as the last frame unwinds (ibProcStackGuard).
+	//
+	// ONE SENTENCE FOR ONE CANCEL: the outermost frame of the run says it as the cancel leaves it (this frame is
+	// still on the stack here, so the outermost counts one) - the exception's own words.
+	if (state->m_cancel) {
+		if (state->GetCountRunContext() == 1)
+			ibValueSystemFunction::Message(_("The program was stopped by the user!"), ibStatusMessage::ibStatusMessage_Error);
+		ibBackendInterruptException::Error();
+	}
 }
 
 //nRunModule parameters:
@@ -2310,13 +2336,6 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 	auto* state = ibSession::GetPUState();
 	wxASSERT(state != nullptr);
 	if (state != nullptr) state->m_recCount = 0;
-
-	// Clear any leftover cancel request from a previous task that may
-	// have set the flag right after that task already exited the loop.
-	// Each Execute starts with a clean slate; the flag is only checked
-	// inside the dispatch loop below.
-	if (auto* s = ibSession::Current())
-		s->ClearCancel();
 
 	m_pByteCode = &cByteCode;
 

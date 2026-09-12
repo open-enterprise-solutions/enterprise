@@ -24,7 +24,7 @@ public:
 	virtual wxString GetQueryTableName() const override;
 	virtual wxString GetQueryName() const override;   // the section's user-facing name (change ledger)
 	virtual const ibMetaData* GetMetaData() const override;                  // metadata context for column-based value reads
-	virtual ibGuid GetQueryTableGuid() const override;    // stated, not derived — see the body (its metaobject is a composite)
+	virtual const ibUniqueKey& GetQueryTableGuid() const override;    // stated, not derived — see the body (its metaobject is a composite)
 	virtual ibMetaID GetQueryTableId() const override;
 	// The owner reference, as a field of the section — built on demand, kept because a queryable
 	// hands out column POINTERS.

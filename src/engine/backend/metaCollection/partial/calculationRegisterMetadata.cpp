@@ -345,6 +345,16 @@ bool ibValueMetaObjectCalculationRegister::OnAfterRunMetaObject(int flags)
 	if (IsUseActionPeriod())
 		m_metaData->RegisterSource(&m_actualPeriodsSource);
 
+	// …and the base from every register a base may come from, one source each (`<this>.Base<that>`).
+	// Rebuilt: which registers those are is configuration, and a run is where it may have changed.
+	for (const std::unique_ptr<ibCalcBaseSourceDescriptor>& source : m_baseSources)
+		m_metaData->UnregisterSource(source.get());
+	m_baseSources.clear();
+	for (const ibValueMetaObjectCalculationRegister* base : GetBaseRegisters()) {
+		m_baseSources.push_back(std::make_unique<ibCalcBaseSourceDescriptor>(this, base));
+		m_metaData->RegisterSource(m_baseSources.back().get());
+	}
+
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -363,6 +373,9 @@ bool ibValueMetaObjectCalculationRegister::OnAfterRunMetaObject(int flags)
 bool ibValueMetaObjectCalculationRegister::OnBeforeCloseMetaObject()
 {
 	m_metaData->UnregisterSource(&m_actualPeriodsSource);   // mirror of the run's RegisterSource
+	for (const std::unique_ptr<ibCalcBaseSourceDescriptor>& source : m_baseSources)
+		m_metaData->UnregisterSource(source.get());
+	m_baseSources.clear();
 
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject())
 		return false;

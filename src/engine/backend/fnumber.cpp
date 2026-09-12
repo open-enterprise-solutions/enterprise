@@ -1859,6 +1859,35 @@ void ibNumber::From128Bytes(const uint8_t bytes[16])
 	StoreBig(b);
 }
 
+void ibNumber::ShiftDecimal(int32_t exp10)
+{
+	if (exp10 == 0)
+		return;
+	// The inline form moves its exponent and drops the zeros the fraction does not need, in int64 —
+	// a zero is (0, 0), the form every other road stores it in.
+	if (IsImmediate()) {
+		int64_t m = ImmMantissa();
+		if (m == 0) {
+			StoreImmediate(0, 0);
+			return;
+		}
+		int32_t e = ImmExp() + exp10;
+		while (e < 0 && m % 10 == 0) {
+			m /= 10;
+			++e;
+		}
+		if (CanBeImmediate(m, e)) {
+			StoreImmediate(m, e);
+			return;
+		}
+	}
+	BigImpl b;
+	LoadBig(b);
+	b.exp += exp10;
+	TrimFractionZeros(b);
+	StoreBig(b);
+}
+
 // ---- stream insertion ----------------------------------------------------------------
 
 std::ostream& operator<<(std::ostream& os, const ibNumber& n)

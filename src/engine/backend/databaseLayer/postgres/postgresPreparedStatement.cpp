@@ -36,7 +36,6 @@ void ibPreparedStatementPostgres::Close()
 void ibPreparedStatementPostgres::AddStatement(PGconn* pDatabase, const wxString& strSQL, const wxString& strStatementName)
 {
 	ibPreparedStatementPostgresWrapper Statement(m_pInterface, pDatabase, strSQL, strStatementName);
-	Statement.SetEncoding(GetEncoding());
 	m_Statements.push_back(Statement);
 }
 
@@ -48,15 +47,12 @@ ibPreparedStatementPostgres* ibPreparedStatementPostgres::CreateStatement(ibInte
 	wxArrayString::iterator stop = Queries.end();
 
 	ibPreparedStatementPostgres* pStatement = new ibPreparedStatementPostgres(pInterface);
-	const char* strEncoding = pInterface->GetPQencodingToChar()(pInterface->GetPQclientEncoding()(pDatabase));
-	wxCSConv conv((const char*)strEncoding);
-	pStatement->SetEncoding(&conv);
 	while (start != stop)
 	{
 		wxString strName = ibPreparedStatementPostgres::GenerateRandomStatementName();
 		pStatement->AddStatement(pDatabase, (*start), strName);
-		wxCharBuffer nameBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(strName, strEncoding);
-		wxCharBuffer sqlBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(TranslateSQL((*start)), strEncoding);
+		wxCharBuffer nameBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(strName);
+		wxCharBuffer sqlBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(TranslateSQL((*start)));
 		PGresult* pResult = pInterface->GetPQprepare()(pDatabase, nameBuffer, sqlBuffer, 0, nullptr);
 		if (pResult == nullptr)
 		{
@@ -66,9 +62,10 @@ ibPreparedStatementPostgres* ibPreparedStatementPostgres::CreateStatement(ibInte
 
 		if (pInterface->GetPQresultStatus()(pResult) != PGRES_COMMAND_OK)
 		{
-			pStatement->SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(pInterface->GetPQresultStatus()(pResult)));
+			pStatement->SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(pInterface->GetPQresultStatus()(pResult),
+				pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)));
 			pStatement->SetErrorMessage(ibDatabaseStringConverter::ConvertFromUnicodeStream(
-				pInterface->GetPQresultErrorMessage()(pResult), strEncoding));
+				pInterface->GetPQresultErrorMessage()(pResult)));
 			pInterface->GetPQclear()(pResult);
 			pStatement->ThrowDatabaseException();
 			return pStatement;

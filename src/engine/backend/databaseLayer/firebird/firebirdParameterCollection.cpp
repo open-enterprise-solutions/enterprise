@@ -67,7 +67,7 @@ void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const ibNumb
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const wxString& strValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), strValue, GetEncoding());
+	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), strValue);
 	SetParam(nPosition, pParameter);
 }
 

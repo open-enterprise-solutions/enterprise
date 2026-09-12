@@ -23,6 +23,7 @@
 #include "backend/mcp/mcpTool.h"
 
 #include <algorithm>   // the bar is the best score there was
+#include <cmath>       // std::log - what a word is worth
 
 
 namespace {
@@ -39,18 +40,10 @@ namespace {
 // one answer a finder must not give lightly: it does not read as "say it differently", it reads
 // as "this platform has no such thing", and the caller goes off and builds it by hand.
 //
-// ⭐ SO THE COUNT DECIDES, NOT A YES. Everything that matched EVERY word wins if anything did —
-// the old behaviour exactly, for the queries where it worked. Only when that set is empty does
-// the best partial answer, saying how much of the question it actually met. Narrowing still
-// narrows; a word too many no longer erases the answer.
-size_t Score(const ibMcpTool* tool, const wxString& query, size_t* asked)
+// ⭐ SO THE COUNT DECIDES, NOT A YES — and since 2026-09-11 not the count either, but what the words
+// found are WORTH (see Call): a word every tool carries tells no tool apart.
+wxString Haystack(const ibMcpTool* tool)
 {
-	if (query.IsEmpty()) {
-		if (asked != nullptr)
-			*asked = 0;
-		return 0;
-	}
-
 	// The name, the description and the corpus are searched as ONE text: all three answer "is this
 	// the tool", and a match in any is the same answer. Joined here rather than walked three
 	// times, so the one rule in ibMcpWordsFound has a single haystack to work on.
@@ -72,7 +65,25 @@ size_t Score(const ibMcpTool* tool, const wxString& query, size_t* asked)
 	if (!carried.IsEmpty())
 		haystack << wxT("\n") << carried;
 
-	return ibMcpWordsFound(haystack, query, asked);
+	return haystack;
+}
+
+// WHAT THE TOOL SAYS IT IS: its name, and the first sentence of its description - the summary every
+// description here opens with ("Add a metadata object, ...", "Ask the RUNNING APPLICATION for a picture
+// of its window"). Read apart from the rest by the finder (see Call).
+wxString Identity(const ibMcpTool* tool)
+{
+	const wxString description = tool->GetDescription();
+	size_t end = description.length();
+	for (size_t i = 0; i + 1 < description.length(); ++i) {
+		const wxChar c = description[i];
+		if (c == wxT('\n')
+			|| ((c == wxT('.') || c == wxT('?') || c == wxT('!')) && wxIsspace(description[i + 1]))) {
+			end = i;
+			break;
+		}
+	}
+	return tool->GetName() + wxT("\n") + description.Left(end);
 }
 
 using ibArg = ibMcpTool::ibMcpArgument;
@@ -90,9 +101,10 @@ const ibArg& ArgSchema()
 const ibArg& ArgQuery()
 {
 	static const ibArg s_a(wxT("query"), ibArg::Kind::Text,
-		ibMcpText("What the job is, in words. Ranked by how many of them land in a tool's name, its "
-			  "description or the text it carries: everything that matched them all if anything "
-			  "did, otherwise the best there was, marked '2 of your 4 words'. A REGULAR EXPRESSION "
+		ibMcpText("What the job is, in words. Ranked by what the words that land in a tool's name, its "
+			  "description or the text it carries are WORTH: a word few tools carry counts for much, "
+			  "one nearly every tool carries for almost nothing - best first, and whatever comes close "
+			  "to the best; a partial match is marked '2 of your 4 words'. A REGULAR EXPRESSION "
 			  "is read as one whenever it carries | \\ [ ] ^ $ .* - 'lock|block', 'report.*print'. "
 			  "\nASK FOR THE WHOLE FAMILY AT ONCE when you are about to work in one - 'metadata_.*', "
 			  "'report_.*', 'form_.*' - and the schemas of all of them come back together. Tools of "
@@ -195,56 +207,105 @@ public:
 		// SCORED FIRST, CHOSEN SECOND. Which tools are good enough cannot be known while they are
 		// still being read — the bar is the best score there was, and that is only final once
 		// every tool has answered.
-		struct ibScored { const ibMcpTool* m_tool; size_t m_score; };
+		//
+		// ⭐⭐ A WORD COUNTS FOR AS MUCH AS IT TELLS THE TOOLS APART. Counted, every word weighed the same, and
+		// the words a question is mostly made of - "how", "was", "to", "each", met by nearly every description
+		// (a short one as a piece of a longer: "to" in "tool", "each" in "reach") - gave every tool four or
+		// five points for nothing, the longest descriptions the most; and the list came in registry order.
+		// The verb asked about stood first in 2 of 24 real questions, behind compose_run and code_run
+		// (measured 2026-09-11). So a word is worth what it separates: its worth falls with the number of
+		// tools that carry it - one every tool carries is worth nearly nothing, one two tools carry decides -
+		// and the list comes best first. The number is the tools' own, so there is no list of little words.
+		struct ibScored { const ibMcpTool* m_tool; size_t m_found; double m_worth; };
 
 		std::vector<ibScored> scored;
-		size_t asked = 0, best = 0;
+		size_t asked = 0;
 
-		for (const ibMcpTool* tool : ibMcpTools()) {
+		if (!wanted.IsEmpty() || query.IsEmpty()) {
+			for (const ibMcpTool* tool : ibMcpTools())
+				if (wanted.IsEmpty() || tool->GetName().IsSameAs(wanted, false))   // no query: the whole list
+					scored.push_back({ tool, 0, 0.0 });
+		}
+		else {
+			std::vector<const ibMcpTool*> tools;
+			std::vector<std::vector<bool>> met, named;
+			std::vector<double> length;
+			for (const ibMcpTool* tool : ibMcpTools()) {
+				const wxString haystack = Haystack(tool);
+				tools.push_back(tool);
+				length.push_back((double)haystack.length());
+				met.emplace_back();
+				ibMcpWordsPresent(haystack, query, met.back());
+				named.emplace_back();
+				ibMcpWordsPresent(Identity(tool), query, named.back());
+			}
+			asked = met.empty() ? 0 : met.front().size();
 
-			if (!wanted.IsEmpty()) {
-				if (tool->GetName().IsSameAs(wanted, false))
-					scored.push_back({ tool, 0 });
-				continue;
+			double average = 0.0;
+			for (const double one : length)
+				average += one;
+			average = length.empty() ? 1.0 : std::max(1.0, average / (double)length.size());
+
+			// How many tools carry each word, and what the word is worth for it (the usual inverse document
+			// frequency: log(1 + (all - carriers + 0.5) / (carriers + 0.5))).
+			std::vector<size_t> carriers(asked, 0);
+			for (const std::vector<bool>& words : met)
+				for (size_t w = 0; w < asked; ++w)
+					carriers[w] += words[w] ? 1 : 0;
+
+			const double all = (double)tools.size();
+			std::vector<double> worth(asked, 0.0);
+			for (size_t w = 0; w < asked; ++w)
+				worth[w] = std::log(1.0 + (all - (double)carriers[w] + 0.5) / ((double)carriers[w] + 0.5));
+
+			// ⭐ AND A WORD IN WHAT THE TOOL SAYS IT IS COUNTS TWICE - its name and the first sentence of its
+			// description (Identity). That is the tool saying what it is in a line; the rest says it in two
+			// hundred, and a word can stand there for any reason. When every word of a question is a common
+			// one - "read the text of the configuration module" - worth alone cannot tell the tools apart,
+			// and module_read is the one whose NAME says both.
+			//
+			// ⭐ …AND A LONG TEXT MEETS WORDS BY CHANCE. What the description finds is scaled by its length,
+			// the way BM25 does it: a text three times the average length meets a word about as often by
+			// chance as by meaning, so what it meets counts for about half, and a short one's for more.
+			// Without it compose_run and code_run - the two longest descriptions here - stood in front of
+			// the verb asked about in most of the questions they led. The identity line is not scaled: it
+			// says the same whatever the description around it - without that, a long description's own
+			// opening ("Add a metadata object") lost to a short neighbour's (predefined_add), measured.
+			constexpr double k1 = 1.2, b = 0.75;
+			for (size_t t = 0; t < tools.size(); ++t) {
+				const double scale = (k1 + 1.0) / (1.0 + k1 * (1.0 - b + b * length[t] / average));
+				size_t landed = 0;
+				double sum = 0.0;
+				for (size_t w = 0; w < asked; ++w) {
+					if (met[t][w]) {
+						landed++;
+						sum += worth[w] * scale + (named[t][w] ? worth[w] : 0.0);
+					}
+				}
+				if (landed > 0)
+					scored.push_back({ tools[t], landed, sum });
 			}
 
-			if (query.IsEmpty()) {         // no query at all — the whole list, as before
-				scored.push_back({ tool, 0 });
-				continue;
-			}
-
-			const size_t score = Score(tool, query, &asked);
-			if (score == 0)
-				continue;
-
-			best = std::max(best, score);
-			scored.push_back({ tool, score });
+			std::stable_sort(scored.begin(), scored.end(),
+				[](const ibScored& a, const ibScored& b) { return a.m_worth > b.m_worth; });
 		}
 
-		const bool partial = !query.IsEmpty() && best > 0 && best < asked;
+		const double best = scored.empty() ? 0.0 : scored.front().m_worth;
 
-		// ⭐ THE RUNNERS-UP, WHEN THERE IS ROOM FOR THEM. Taking only the best score is right when
-		// it means something and wrong when it means one word: asking for "report variant selected
-		// fields filter" answered `report_filter` and hid `report_select` and `report_variant`,
-		// which are the two verbs that question is about, because each matched one word fewer
-		// (measured 2026-09-02). A tool list is read whole, so a handful of near misses costs
-		// nothing and a missing verb costs the caller the job.
-		size_t bar = best;
-		if (best > 1) {
-			size_t atBest = 0;
-			for (const ibScored& candidate : scored)
-				atBest += (candidate.m_score == best) ? 1 : 0;
-
-			if (atBest < 5)
-				bar = best - 1;
-		}
+		// ⭐ THE RUNNERS-UP, WHEN THEY ARE CLOSE. Taking only the best is wrong when two verbs answer one
+		// question: "report variant selected fields filter" is about report_select AND report_variant, and a
+		// best-only answer hid them (measured 2026-09-02). So whatever comes within kNear of the best stays -
+		// a handful, never a list the answer has to be looked for in again.
+		constexpr double kNear = 0.6;
+		constexpr size_t kMost = 8;
 
 		std::vector<ibDataValue> found;
 
 		for (const ibScored& candidate : scored) {
 
-			if (!query.IsEmpty() && wanted.IsEmpty() && candidate.m_score < bar)
-				continue;
+			if (!query.IsEmpty() && wanted.IsEmpty()
+				&& (candidate.m_worth < best * kNear || found.size() >= kMost))
+				break;   // best first, so nothing after this one is closer
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 			entry->SetValue(wxT("name"), candidate.m_tool->GetName());
@@ -252,9 +313,9 @@ public:
 
 			// Said on the ENTRY and not only in a note, because a partial answer that looks like
 			// an exact one is worse than no answer: it is acted on.
-			if (partial || candidate.m_score < best)
+			if (!query.IsEmpty() && wanted.IsEmpty() && candidate.m_found < asked)
 				entry->SetValue(wxT("matched"), wxString::Format(
-					ibMcpText("%i of your %i words"), (int)candidate.m_score, (int)asked));
+					ibMcpText("%i of your %i words"), (int)candidate.m_found, (int)asked));
 
 			if (withSchema)
 				candidate.m_tool->DescribeInput(entry->Child(wxT("inputSchema")));
@@ -272,6 +333,14 @@ public:
 			for (const ibMcpTool* tool : ibMcpTools())
 				tool->FindInside(query, places);
 
+		// ⭐ THIS CONFIGURATION'S OWN ANSWER FIRST. A place that names an object (it carries the object's `id` -
+		// note_read's) is where the thing asked about is built HERE; a pattern says how such a thing is built
+		// anywhere. Both are worth reading, but the trim below must not cut the first for the second.
+		std::stable_partition(places.begin(), places.end(), [](const ibDataValue& place) {
+			const std::shared_ptr<ibDataNode>& node = place.AsChild();
+			return node && node->FindField(wxT("id")) != nullptr;
+		});
+
 		// ⚠ A HANDFUL, BECAUSE THIS IS THE TOOL FINDER. The corpus can answer a common word from
 		// two dozen places, and that list arriving under a question about VERBS buries the verbs.
 		// Whoever wants all of them asks the corpus directly — pattern_read {query} — which is
@@ -285,12 +354,16 @@ public:
 
 		if (!places.empty()) {
 			result.AddField(wxT("places"), ibDataValue::Array(places));
-			result.SetValue(wxT("reading"), trimmed
+			result.SetValue(wxT("reading"), wxString(trimmed
 				? ibMcpText("`places` are passages that answer this in words, not verbs to call - the "
 				  "first few of more. Read one with pattern_read {name, topic}, quoting the topic "
 				  "given; pattern_read {query} with the same words lists them all.")
 				: ibMcpText("`places` are passages that answer this in words, not verbs to call. Read one "
-				  "with pattern_read {name, topic}, quoting the topic given."));
+				  "with pattern_read {name, topic}, quoting the topic given."))
+				+ ibMcpText(" A place with an `id` is an object of THIS configuration whose help or notes "
+				  "speak to the question - where it is built here: note_read {id, help: true} reads its "
+				  "texts, metadata_get the object itself, and when it is a report, compose_run reads the "
+				  "answer out of it."));
 		}
 
 		if (found.empty() && places.empty()) {

@@ -1543,10 +1543,20 @@ TEST(RuntimeBench, DISABLED_TypeCheckCost) {
 // the weight is the member table and the fields are noise — and that is the
 // question any fix depends on, which is why this is measured BEFORE one is made.
 //
-// Read the second row as a HIGH-WATER DIFFERENCE. The allocator does not return
-// freed pages, so the fields shape reuses what the empty one released: its
-// increment reads as the ADDITIONAL cost of two fields, not as the full cost of
-// a row measured independently. Do not quote the two as separate readings.
+// EVERY SHAPE LANDS IN FRESH MEMORY, and nothing is freed until the end. The
+// probe reads the resident set, and a fill that lands in memory freed earlier in
+// the process does not move it: on 2026-09-11 both rows read 0 ("n/a"). Before
+// 43e7cdd9 that could not happen — an assignment never released the object it
+// replaced, so `keep = New Array` in Drop() freed nothing and every fill grew the
+// process. Once Drop() really freed, the measured fill landed in the rows the
+// warm-up had just released. So each shape now has a holder of its own and all
+// of them stay alive to the end: each reading is a WHOLE row of its shape, and
+// what two fields add is the difference of two whole readings — not an increment
+// over reused pages.
+//
+// ⚠ RUN IT IN A PROCESS OF ITS OWN (CI does — ci.yml, benchmarks-linux). In a
+// full *Bench* run MillionRowScale releases ~2.4 GB just before it, glibc keeps
+// small freed blocks, and the rows here would land in those instead.
 TEST(RuntimeBench, DISABLED_StructureFootprint) {
     if (ResidentBytes() == 0) {
         std::cout << "\n  (no resident-set probe on this platform -- footprint not measured)\n";
@@ -1556,57 +1566,81 @@ TEST(RuntimeBench, DISABLED_StructureFootprint) {
 
     ibCompileCode cc(wxT("test"), wxT("memory"), false);
     ASSERT_TRUE(Build(cc,
-        wxT("var keep public;\n")
+        wxT("var warm public; var keepEmpty public; var keepFields public;\n")
         // Rows are HELD, not built and dropped — a footprint needs them alive
-        // at the moment the process is asked how much it is holding.
-        wxT("Function Empty(n) Public\n")
-        wxT("  keep = New Array; var i; i = 0;\n")
-        wxT("  While i < n Do var row; row = New Structure; keep.Add(row); i = i + 1; EndDo;\n")
-        wxT("  Return keep.Count();\n")
-        wxT("EndFunction\n")
-        wxT("Function TwoFields(n) Public\n")
-        wxT("  keep = New Array; var i; i = 0;\n")
+        // at the moment the process is asked how much it is holding. And each
+        // shape has a holder of its own, so filling one never releases another.
+        wxT("Function Warm(n) Public\n")
+        wxT("  warm = New Array; var i; i = 0;\n")
         wxT("  While i < n Do\n")
         wxT("    var row; row = New Structure;\n")
         wxT("    row.Insert(\"Qty\", i);\n")
         wxT("    row.Insert(\"Price\", 2);\n")
-        wxT("    keep.Add(row);\n")
+        wxT("    warm.Add(row);\n")
         wxT("    i = i + 1;\n")
         wxT("  EndDo;\n")
-        wxT("  Return keep.Count();\n")
+        wxT("  Return warm.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function Empty(n) Public\n")
+        wxT("  keepEmpty = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do var row; row = New Structure; keepEmpty.Add(row); i = i + 1; EndDo;\n")
+        wxT("  Return keepEmpty.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function TwoFields(n) Public\n")
+        wxT("  keepFields = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    var row; row = New Structure;\n")
+        wxT("    row.Insert(\"Qty\", i);\n")
+        wxT("    row.Insert(\"Price\", 2);\n")
+        wxT("    keepFields.Add(row);\n")
+        wxT("    i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return keepFields.Count();\n")
         wxT("EndFunction\n")
         wxT("Procedure Drop() Public\n")
-        wxT("  keep = New Array;\n")
+        wxT("  warm = New Array; keepEmpty = New Array; keepFields = New Array;\n")
         wxT("EndProcedure\n")));
     ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
 
     const long n = 200000;
     ibValue argN((int)n), ret;
 
-    // Warm-up: the first fill grows the allocator's arenas, and arena growth is
-    // not per-row cost. Taking the baseline after it means the rows below are rows.
-    pu.CallAsFunc(wxT("Empty"), ret, argN);
-    pu.CallAsProc(wxT("Drop"));
+    // Warm-up primes what a first fill pays ONCE — the code paths, the keys
+    // "Qty" and "Price", the tables a Structure's members bind through — and is
+    // HELD like everything below. It is small on purpose: a full-size warm-up that
+    // was then freed is exactly the memory the measured fill used to land in.
+    ibValue argWarm((int)(n / 100));
+    pu.CallAsFunc(wxT("Warm"), ret, argWarm);
 
     const size_t base = ResidentBytes();
     pu.CallAsFunc(wxT("Empty"), ret, argN);
     const size_t afterEmpty = ResidentBytes();
-    pu.CallAsProc(wxT("Drop"));
-    pu.CallAsFunc(wxT("TwoFields"), ret, argN);
+    pu.CallAsFunc(wxT("TwoFields"), ret, argN);      // the empty rows are still held
     const size_t afterFields = ResidentBytes();
     pu.CallAsProc(wxT("Drop"));
 
     const size_t emptyCost  = afterEmpty  > base       ? afterEmpty  - base       : 0;
     const size_t fieldsCost = afterFields > afterEmpty ? afterFields - afterEmpty : 0;
 
-    std::cout << "\n[ Structure footprint | n=" << n << " rows held live | resident set, high-water ]\n";
+    // A zero is not a free row, it is a probe that saw nothing — say which.
+    const bool blind = emptyCost == 0 || fieldsCost == 0;
+
+    std::cout << "\n[ Structure footprint | n=" << n << " rows held live | resident-set growth per fill ]\n";
     std::cout << std::fixed << std::setprecision(0);
     std::cout << "  empty Structure             " << std::setw(9) << FmtBytes(emptyCost)
               << "  " << std::setw(7) << double(emptyCost) / double(n) << " bytes/row\n";
-    std::cout << "  + two inserted fields       " << std::setw(9) << FmtBytes(fieldsCost)
-              << "  " << std::setw(7) << double(fieldsCost) / double(n) << " bytes/row (increment)\n";
+    std::cout << "  Structure + two fields      " << std::setw(9) << FmtBytes(fieldsCost)
+              << "  " << std::setw(7) << double(fieldsCost) / double(n) << " bytes/row\n";
+    if (!blind)
+        std::cout << "  what the two fields add     " << std::setw(9) << " "
+                  << "  " << std::setw(7) << (double(fieldsCost) - double(emptyCost)) / double(n)
+                  << " bytes/row (difference of the two)\n";
     std::cout << "  two ibValue, for scale      " << std::setw(9) << " "
               << "  " << std::setw(7) << double(2 * sizeof(ibValue)) << " bytes — what the DATA is\n";
+    if (blind)
+        std::cout << "  (!) BLIND: the resident set did not grow, so the rows landed in memory freed\n"
+                  << "      earlier in this process. Run this bench in a process of its own:\n"
+                  << "      --gtest_also_run_disabled_tests --gtest_filter=*StructureFootprint*\n";
     SUCCEED();
 }
 

@@ -11,6 +11,7 @@
 // to provide this struct on ibSession with no behaviour change — the
 // interpreter still reads/writes its TLS, the swap helpers come later.
 
+#include <atomic>
 #include <map>
 #include <utility>
 #include <vector>
@@ -133,6 +134,12 @@ struct ibProcUnitState {
 	// Recursion-depth counter — gates against runaway scripts via
 	// MAX_REC_COUNT in procUnit.cpp.
 	short                       m_recCount = 0;
+
+	// ⭐ THE CANCEL — raised by ibSession::Cancel from any thread, heard by the interpreter between opcodes,
+	// which throws the interruption. Hearing it does not lower it: it stays up while the run unwinds, so every
+	// level that meets it throws again, and it is lowered where no run is left — the stack at empty
+	// (ibProcStackGuard).
+	std::atomic<bool>           m_cancel { false };
 
 	// Scratch buffer the OPER_FUNC entry builds a `Cached` call's argument tuple
 	// in before looking it up. It belongs HERE, beside the call stack, for the

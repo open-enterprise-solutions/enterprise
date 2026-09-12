@@ -340,7 +340,7 @@ public:
 	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
 	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
 	virtual bool IsEmpty() const override { return false; }
-	virtual ibUniqueKey GetGuid() const override;
+	virtual const ibUniqueKey& GetGuid() const override;
 
 	virtual const ibSourceExplorer* GetSourceExplorer() const override;
 

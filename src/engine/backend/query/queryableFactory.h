@@ -31,6 +31,7 @@
 #include "queryable.h"                 // ibQueryPredicatePtr — a condition the source consumes itself
 
 #include <wx/string.h>
+#include <algorithm>   // std::max — SameConditions
 #include <map>
 #include <vector>
 
@@ -134,9 +135,10 @@ private:
 	// kept because a void one cannot be cast back without knowing what it was.
 	struct Companion
 	{
-		std::vector<ibValue>  m_call;
-		std::shared_ptr<void> m_owned;
-		const void*           m_q = nullptr;
+		std::vector<ibValue>             m_call;
+		std::vector<ibQueryPredicatePtr> m_conditions;   // the conditions the source consumed — arguments too
+		std::shared_ptr<void>            m_owned;
+		const void*                      m_q = nullptr;
 	};
 	std::vector<Companion> m_companions;
 
@@ -154,6 +156,49 @@ private:
 			if (!equal)
 				return false;
 		}
+		return true;
+	}
+
+	// …AND A CONDITION THE SOURCE CONSUMED IS AN ARGUMENT OF THE CALL. The lowering hands it over beside
+	// `paParams` and leaves its slot there EMPTY (queryLowering.cpp), so a key made of `paParams` alone
+	// said two calls were one call whatever their conditions: the second query got the first one's
+	// companion and read the rows of the first condition, quietly — an accounting balance «in hierarchy»
+	// of one account answered with another's, a calculation register's base for the records the last
+	// query chose (found 2026-09-11, writing the second). Compared by shape and values. CONSERVATIVE on
+	// purpose: a computed side or a semi-join makes two conditions different, since a condition wrongly
+	// taken for another is a wrong answer and one wrongly taken for new is only a companion more.
+	static bool SameCondition(const ibQueryPredicatePtr& a, const ibQueryPredicatePtr& b)
+	{
+		if (a == b)
+			return true;
+		if (a == nullptr || b == nullptr)
+			return false;
+		if (a->m_kind != b->m_kind || a->m_col != b->m_col || a->m_negated != b->m_negated
+		    || a->m_path != b->m_path || a->m_refTypeClsid != b->m_refTypeClsid
+		    || a->m_expr != nullptr || b->m_expr != nullptr
+		    || a->m_children.size() != b->m_children.size())
+			return false;
+		const ibQueryCondition& x = a->m_leaf;
+		const ibQueryCondition& y = b->m_leaf;
+		if (x.m_col != y.m_col || x.m_op != y.m_op || x.m_unfold != y.m_unfold || x.m_path != y.m_path
+		    || x.m_asExists != y.m_asExists
+		    || x.m_expr != nullptr || y.m_expr != nullptr || x.m_valueExpr != nullptr || y.m_valueExpr != nullptr
+		    || x.m_semiJoin != nullptr || y.m_semiJoin != nullptr
+		    || !SameCall({ x.m_value }, { y.m_value }) || !SameCall(x.m_values, y.m_values))
+			return false;
+		for (size_t i = 0; i < a->m_children.size(); ++i)
+			if (!SameCondition(a->m_children[i], b->m_children[i]))
+				return false;
+		return true;
+	}
+
+	static bool SameConditions(const std::vector<ibQueryPredicatePtr>& a, const std::vector<ibQueryPredicatePtr>& b)
+	{
+		// A call with no conditions and a call with a list of nulls are the same call.
+		const size_t n = std::max(a.size(), b.size());
+		for (size_t i = 0; i < n; ++i)
+			if (!SameCondition(i < a.size() ? a[i] : nullptr, i < b.size() ? b[i] : nullptr))
+				return false;
 		return true;
 	}
 
@@ -213,17 +258,27 @@ public:
 	template <typename TCompanion, typename... TArgs>
 	const TCompanion* MakeCompanion(ibValue** paParams, long lSizeArray, TArgs&&... args)
 	{
+		return MakeCompanionFor<TCompanion>(std::vector<ibQueryPredicatePtr>(), paParams, lSizeArray,
+			std::forward<TArgs>(args)...);
+	}
+
+	// The same, for a call that carries conditions the source consumed (see SameCondition): they are part
+	// of what makes two calls one call. A source that consumes conditions builds through this one.
+	template <typename TCompanion, typename... TArgs>
+	const TCompanion* MakeCompanionFor(const std::vector<ibQueryPredicatePtr>& conditions,
+		ibValue** paParams, long lSizeArray, TArgs&&... args)
+	{
 		std::vector<ibValue> call;
 		for (long i = 0; i < lSizeArray; ++i)
 			call.push_back(paParams != nullptr && paParams[i] != nullptr ? *paParams[i] : ibValue());
 
 		for (const Companion& made : m_companions)
-			if (SameCall(made.m_call, call))
+			if (SameCall(made.m_call, call) && SameConditions(made.m_conditions, conditions))
 				return static_cast<const TCompanion*>(made.m_q);
 
 		std::shared_ptr<TCompanion> built = std::make_shared<TCompanion>(std::forward<TArgs>(args)...);
 		const TCompanion* borrowed = built.get();
-		m_companions.push_back({ std::move(call), std::move(built), borrowed });
+		m_companions.push_back({ std::move(call), conditions, std::move(built), borrowed });
 		return borrowed;
 	}
 

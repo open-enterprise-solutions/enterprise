@@ -258,8 +258,10 @@ public:
 	{
 		const ibSelectorTree::Node* n = Current();
 		if (n == nullptr || col == nullptr) return ibValue(ibValueTypes::TYPE_NULL);
-		const auto it = n->m_values.find(col->GetColumnId());
-		return it != n->m_values.end() ? it->second : ibValue(ibValueTypes::TYPE_NULL);
+		// find_value: the value where it lies, and no iterator made to reach it (rowValues.h) — a walk
+		// asks this for every column of every node it prints.
+		const ibValue* v = n->m_values.find_value(col->GetColumnId());
+		return v != nullptr ? *v : ibValue(ibValueTypes::TYPE_NULL);
 	}
 	ibValue GetColumn(const wxString& alias) const
 	{
@@ -267,8 +269,8 @@ public:
 		if (n == nullptr || !m_walk) return ibValue(ibValueTypes::TYPE_NULL);
 		for (const ibQueryRamColumn& c : m_walk->Columns())
 			if (c.m_name == alias) {
-				const auto it = n->m_values.find(c.m_id);
-				return it != n->m_values.end() ? it->second : ibValue(ibValueTypes::TYPE_NULL);
+				const ibValue* v = n->m_values.find_value(c.m_id);
+				return v != nullptr ? *v : ibValue(ibValueTypes::TYPE_NULL);
 			}
 		return ibValue(ibValueTypes::TYPE_NULL);
 	}
@@ -279,6 +281,12 @@ public:
 	// added. See ibSelectorTree::Node::m_indent.
 	int  Indent()      const { const ibSelectorTree::Node* n = Current(); return n ? n->m_indent : 0; }
 	bool HasChildren() const { const ibSelectorTree::Node* n = Current(); return n ? n->m_hasChildren : false; }      // expandable (folder)
+	// ⭐ WOULD A DESCENT FROM HERE FIND ANYTHING TO WALK — answered without building the selection that
+	// would find out. A folded node answers from its own children; a selection that can DRILL (it knows
+	// its row key, see Select) may still read children the fold did not, so there the answer is yes and
+	// the descent asks. A report walks every heading it prints, cells included, and building an empty
+	// selection under each childless one was a selection per node for nothing (2026-09-12).
+	bool HasNodesUnder() const { const ibSelectorTree::Node* n = Current(); return n != nullptr && (!n->m_children.empty() || m_rowKeyCol != nullptr); }
 	// A HEADING OR A ROW — asked of the node, never guessed from the depth. A fold with a detail
 	// level yields both in one walk, and only the node knows which of the two this visit is.
 	ibSelectorNodeKind Kind() const { const ibSelectorTree::Node* n = Current(); return n ? n->m_kind : ibSelectorNodeKind::Group; }
@@ -315,6 +323,15 @@ public:
 	// which is why this is an argument and not a second kind of selection. Named nothing, the walk
 	// goes through every branch in order — see CollectVisits.
 	ibSelector Select(ibSelectKind kind, const wxString& branch) const;
+
+	// ⭐ …OR INTO A SELECTION ALREADY IN HAND — the same descent as Select(kind), written over `into`. A
+	// report walks every heading it prints and descends into each, and every descent built a whole
+	// selection — a dozen containers, all empty, made and freed — for each of forty thousand employees
+	// (2026-09-12, Debug stack samples). A walk that keeps one selection per depth hands it here: when
+	// `into` is a view already and this one is a view too, the tree, the node and the branch are written
+	// over it and nothing is allocated. Anything else — the first descent at a depth, a lazy drill that
+	// reads its children — is made exactly as Select makes it.
+	void SelectInto(ibSelector& into, ibSelectKind kind) const;
 
 	// THE ROWS AS A TABLE — draining the cursor first if nothing has needed them all at once yet.
 	// Holding the whole detail is what the cursor exists to avoid, so this is for the callers that
@@ -408,8 +425,8 @@ private:
 		// NULL for anything else — which is why a sort by an ordinary FIELD does not come here: it is
 		// stated as the order the detail is READ in, and the group then stands where its first row
 		// does (dataComposer, AppendSettingsClauses).
-		const auto it = node->m_values.find(id);
-		return it != node->m_values.end() ? it->second : ibValue(ibValueTypes::TYPE_NULL);
+		const ibValue* v = node->m_values.find_value(id);
+		return v != nullptr ? *v : ibValue(ibValueTypes::TYPE_NULL);
 	}
 
 	// ⭐ ONE COMPARISON FOR THE WHOLE HOUSE. The keys are compared by the same function a RAM ORDER BY
@@ -612,7 +629,16 @@ inline ibSelector ibSelector::Select(ibSelectKind kind) const
 	//
 	// The re-execution road stays for what it was built for: a LAZY drill, where a node is expandable
 	// but its children were deliberately not read yet.
-	if (n != nullptr && !n->m_children.empty() && m_walk != nullptr) {
+	//
+	// ⭐ …AND A NODE THE FOLD LEFT WITHOUT CHILDREN IS A VIEW TOO — of nothing. A report walks every
+	// heading it prints, the cells and the records included, and asks each for what stands under it.
+	// Sent down the other road, a childless node got a selection of its own over an empty snapshot,
+	// whose first Next() folded that nothing into a tree of its own: once per record and per cell, the
+	// heaviest part of the payroll sheet's output walk (MEASURED 2026-09-12, Debug stack samples). A view
+	// of a node with no children walks nothing and builds nothing. Where a drill is possible at all — a
+	// selection that knows its row key — a childless node still goes to be read, exactly as before;
+	// without one the answer was an empty selection anyway, and now it costs nothing to give.
+	if (n != nullptr && m_walk != nullptr && (!n->m_children.empty() || m_rowKeyCol == nullptr)) {
 		ibSelector child(ibQueryRamTable{}, kind);
 		child.m_walk     = m_walk;      // the same tree, kept alive by the pointer
 		child.m_viewNode = n;           // …entered here
@@ -628,6 +654,27 @@ inline ibSelector ibSelector::Select(ibSelectKind kind) const
 	const auto it = n->m_values.find(m_rowKeyCol->GetColumnId());
 	const ibValue key = (it != n->m_values.end()) ? it->second : ibValue();
 	return MakeChild(key, n->m_level + m_baseLevel, kind);          // children continue DEEPER
+}
+
+inline void ibSelector::SelectInto(ibSelector& into, ibSelectKind kind) const
+{
+	const ibSelectorTree::Node* n = Current();
+	// A VIEW OVER A VIEW: `into` holds nothing but what a view is made of (the view road of Select sets
+	// only these), so writing this descent over it is the same as making it anew — minus the dozen
+	// containers. Its visits and its order are the previous heading's and are dropped; the memory stays.
+	if (into.m_viewNode != nullptr && n != nullptr && m_walk != nullptr
+	    && (!n->m_children.empty() || m_rowKeyCol == nullptr)) {
+		into.m_kind      = kind;
+		into.m_walk      = m_walk;
+		into.m_viewNode  = n;
+		into.m_baseLevel = m_baseLevel;
+		into.m_branch    = m_branch;
+		into.m_visits.clear();
+		into.m_pos       = -1;
+		into.m_order.clear();
+		return;
+	}
+	into = Select(kind);
 }
 
 // ONE BRANCH OF THE DESCENT. The descent itself is the one above — the branch is carried on the

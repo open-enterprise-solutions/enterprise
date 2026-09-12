@@ -41,7 +41,10 @@ public:
 
 	wxString GetQueryTableName() const override { return wxT("T"); }
 	ibMetaID GetQueryTableId()   const override { return 1; }
-	ibGuid   GetQueryTableGuid() const override { ibGuidImpl impl{}; impl.m_data1 = 1; return ibGuid(impl); }
+	const ibUniqueKey& GetQueryTableGuid() const override {
+		static const ibUniqueKey key = [] { ibGuidImpl impl{}; impl.m_data1 = 1; return ibGuid(impl); }();
+		return key;
+	}
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {

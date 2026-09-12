@@ -19,11 +19,15 @@ public:
 	// has no row-key, so it yields empty). No separate GuidString accessor. (docs §22.4d)
 	virtual ibValue  Value(const ibBackendQueryColumn* col) const = 0;
 	virtual ibValue  Column(const wxString& alias)          const = 0;   // by output name (aggregates)
-	// Reconstruct a METADATA-OBJECT column (reference / enum / composite) from its field spread projected
-	// under `prefix` (a dot-walk leaf joined as <prefix>_TYPE/_RTRef/_RRRef/…). Reassembles the value the
-	// way a normal metadata column reads — vs Column(alias), which reads ONE scalar field. Default: a plain
-	// read by the prefix as alias (a RAM backing already holds the reassembled value under that name).
-	virtual ibValue  ColumnObject(const wxString& prefix, const ibBackendQueryColumn* /*col*/) const { return Column(prefix); }
+	// …or a METADATA-OBJECT column (reference / enum / composite), reconstructed from its field spread
+	// projected under `prefix` (a dot-walk leaf joined as <prefix>_TYPE/_RTRef/_RRRef/…). Reassembles the
+	// value the way a normal metadata column reads — vs the one above, which reads ONE scalar field. Default:
+	// a plain read by the prefix as alias (a RAM backing already holds the reassembled value under that name).
+	virtual ibValue  Column(const wxString& prefix, const ibBackendQueryColumn* /*col*/) const { return Column(prefix); }
+	// ⭐ A BACKING THAT ALREADY IS A TABLE hands the table over, to a caller that was about to copy every
+	// row of it cell by cell into a table of its own: the rows are moved out of it. Only before the first
+	// Next(); null — a cursor's answer, and the default — means the rows are read one by one.
+	virtual class ibQueryRamTable* Table() { return nullptr; }
 };
 
 #endif // __RESULT_SOURCE_H__

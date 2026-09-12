@@ -29,7 +29,8 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metadataConfiguration.h"
 
-#include <set>      // the link check keeps one entry per id
+#include <algorithm> // std::max - the best score there was
+#include <set>       // the link check keeps one entry per id
 #include <vector>
 
 namespace {
@@ -66,6 +67,37 @@ void Collect(ibValueMetaObject* object, bool wantNotes, bool wantHelp,
 
 	for (unsigned int index = 0; index < object->GetChildCount(); ++index)
 		Collect(object->GetChild(index), wantNotes, wantHelp, into);
+}
+
+// One object that carries a text, scored against the words — see ibMcpToolNoteRead::FindInside.
+struct ibNotedPlace {
+	const ibValueMetaObject* m_object;
+	size_t                   m_score;
+};
+
+void Score(ibValueMetaObject* object, const wxString& query, size_t& asked, size_t& best,
+	std::vector<ibNotedPlace>& into)
+{
+	if (object == nullptr || object->IsDeleted())
+		return;
+
+	const wxString help = object->GetHelpContent();
+	const wxString notes = object->GetNoteContent();
+
+	// Only what carries a text: a bare name is what metadata_list answers, and every attribute called
+	// Stock would stand in front of the one report that says what stock is.
+	if (!help.IsEmpty() || !notes.IsEmpty()) {
+		const wxString haystack = object->GetName() + wxT("\n") + object->GetSynonym() + wxT("\n")
+			+ help + wxT("\n") + notes;
+		const size_t score = ibMcpWordsFound(haystack, query, &asked);
+		if (score > 0) {
+			best = std::max(best, score);
+			into.push_back({ object, score });
+		}
+	}
+
+	for (unsigned int index = 0; index < object->GetChildCount(); ++index)
+		Score(object->GetChild(index), query, asked, best, into);
 }
 
 using ibArg = ibMcpTool::ibMcpArgument;
@@ -138,6 +170,63 @@ public:
 		return s_arguments;
 	}
 
+	// ⭐⭐ THE CONFIGURATION'S OWN ANSWER, ASKED BESIDE THE VERBS. A question in the words of the trade - "how
+	// much is left in stock" - is answered best by what THIS configuration built for it, and the object that
+	// answers it says so in the texts it carries: its help, in the words of the person using it, and its notes.
+	// So mcp_search asks here too, and an object whose texts meet the words comes back as a place: which
+	// object, which of its texts, and the line that met them (Max, 2026-09-11: *"you write it every time you
+	// add an object - your answer is simply in the technical documentation"*). The patterns answer how such a
+	// thing is built anywhere; this answers where it is built HERE, and the envelope puts it first.
+	//
+	// Ranked the corpus's way: everything that met every word if anything did, otherwise the best there was,
+	// marked "k of your n words".
+	void FindInside(const wxString& query, std::vector<ibDataValue>& places) const override
+	{
+		if (query.IsEmpty())
+			return;
+
+		ibMetaData* const metaData = activeMetaData;
+		if (metaData == nullptr || !metaData->IsConfigOpen())
+			return;
+
+		std::vector<ibNotedPlace> scored;
+		size_t asked = 0, best = 0;
+		Score(metaData->GetCommonMetaObject(), query, asked, best, scored);
+
+		const bool partial = best > 0 && best < asked;
+		size_t given = 0;
+
+		for (const ibNotedPlace& place : scored) {
+
+			if (place.m_score < best)
+				continue;
+			if (++given > 8)
+				break;
+
+			std::shared_ptr<ibDataNode> hit = std::make_shared<ibDataNode>();
+			ibMcpSayObject(place.m_object, *hit, /*withText*/ false);
+
+			if (partial)
+				hit->SetValue(wxT("matched"), wxString::Format(
+					ibMcpText("%i of your %i words"), (int)place.m_score, (int)asked));
+
+			// The line that met the words, and which text it stands in - the help first, because it is
+			// written in the words of the people who ask.
+			wxString line = ibMcpMatchingLine(place.m_object->GetHelpContent(), query);
+			wxString text = wxT("help");
+			if (line.IsEmpty()) {
+				line = ibMcpMatchingLine(place.m_object->GetNoteContent(), query);
+				text = wxT("notes");
+			}
+			if (!line.IsEmpty()) {
+				hit->SetValue(wxT("text"), text);
+				hit->SetValue(wxT("line"), line);
+			}
+
+			places.push_back(ibDataValue::Child(hit));
+		}
+	}
+
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		ibMetaData* metaData = OpenConfiguration(refusal);
@@ -205,9 +294,14 @@ public:
 	{
 		return ibMcpText("Write one of the two texts an object carries, saying WHICH every time. `notes` "
 			"records what a later reader could not work out from the object itself - why it "
-			"exists, which shape was chosen, what was rejected. `help` is what the person USING "
-			"the application reads when they press F1: what this is and what to put in it, in "
-			"their words and not in engineering ones. Markdown; empty clears it.");
+			"exists, how it works inside, which shape was chosen, what was rejected. `help` is what "
+			"the person USING the application reads when they press F1: what this is and what to put "
+			"in it, in their words and not in engineering ones. Markdown; empty clears it.\n\n"
+			"WRITE THEM AS YOU BUILD, in the words somebody will ASK with: mcp_search reads every "
+			"object's help and notes and answers a question with the object that speaks to it. A "
+			"stock report whose help says 'how much is left in each warehouse' is what 'how much is "
+			"left in stock' lands on - straight to the report, and the data is read from there. An "
+			"object nobody described is found by nobody who does not already know its name.");
 	}
 
 	// WHAT IS ABOUT TO BE WRITTEN, shown to the person it is being written about. Notes and help

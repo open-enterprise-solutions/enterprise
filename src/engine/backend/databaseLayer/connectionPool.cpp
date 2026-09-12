@@ -5,6 +5,7 @@
 #include "connectionHolder.h"
 #include "connectionScope.h"
 #include "databaseLayer.h"
+#include "backend/diagnostics/journal.h"   // ibJournalInfo — what an interruption found to interrupt
 
 ibDatabaseConnectionHolder* ibConnectionPool::ThreadHolder()
 {
@@ -264,6 +265,21 @@ std::shared_ptr<ibDatabaseLayer> ibDatabaseConnectionHolder::EnsureConnection(
 		? wait : std::chrono::milliseconds(ibConnectionPool::kCheckoutTimeout));
 	if (conn) pool->BindScopeHolder(this, conn);
 	return conn;
+}
+
+void ibDatabaseConnectionHolder::Cancel()
+{
+	auto* pool = ibApplicationData::GetConnectionPool();
+	if (pool == nullptr) return;
+	// Read under the pool's lock, cancelled outside it — a driver call never runs under m_mutex.
+	const std::shared_ptr<ibDatabaseLayer> tx    = pool->GetReservedTx(this);
+	const std::shared_ptr<ibDatabaseLayer> scope = pool->GetScopeConn(this);
+	ibJournalInfo(wxT("cancel"), wxT("cancelling the holder's connections: transaction %s, scope %s"),
+		tx ? wxT("bound") : wxT("none"), scope ? (scope == tx ? wxT("(the same)") : wxT("bound")) : wxT("none"));
+	if (tx)
+		tx->Cancel();
+	if (scope && scope != tx)
+		scope->Cancel();
 }
 
 void ibConnectionPool::BindScopeHolder(ibDatabaseConnectionHolder* holder,

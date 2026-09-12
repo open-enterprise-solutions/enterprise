@@ -21,16 +21,15 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxString& strValue, const wxCSConv* conv) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_STRING), m_strValue(strValue)
+ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxString& strValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_STRING), m_strValue(strValue)
 {
 	m_pInterface = pInterface;
 	m_pParameter = pVar;
 
-	SetEncoding(conv);
-
-	// Set to SQL_TEXT manually
-	wxCharBuffer valueBuffer = ConvertToUnicodeStream(m_strValue);
-	unsigned int length = GetEncodedStreamLength(m_strValue);
+	// Set to SQL_TEXT manually. The bytes are made once and their length read off them — asking for the
+	// length separately converted the whole string a second time.
+	const wxCharBuffer valueBuffer = ConvertToUnicodeStream(m_strValue);
+	unsigned int length = static_cast<unsigned int>(valueBuffer.length());
 
 	m_pParameter->sqltype = SQL_TEXT | 1;
 

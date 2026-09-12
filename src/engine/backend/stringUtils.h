@@ -278,3 +278,41 @@ namespace stringUtils
 		return wxNOT_FOUND;
 	}
 }
+
+// ⭐ …AND THE ORDER THAT EQUALITY BELONGS TO — for a map whose names are matched case-insensitively (the
+// lexer's keywords and #Defines, a document's parameters): the folding of stringUtils::CompareString, so
+// the names it calls equal are one key, and a lookup is a find rather than a walk over every name.
+// Shaped like CompareString for the same measured reasons (see there): the wide storage by reference, and a
+// character that matches as it is needs no folding — names that share a long prefix compare at the price
+// of the one character where they part.
+//
+// ⚠ READ OFF THE BUFFERS, and a LETTER is the only thing folded. A checked build makes every `[]` of a
+// std::wstring a call, and its towupper updates the locale on every call; a composed sheet files some 400
+// thousand links in a map of this order, named `Link_<row>_<col>`, which part at a digit — a tenth of the
+// sheet's writing went here (stack samples 2026-09-12, Debug). A character below 0x80 that is no letter
+// folds to itself in every locale, so it decides as it stands, and the answer is CompareString's still.
+struct ibCaseFoldLess {
+	bool operator()(const wxString& lhs, const wxString& rhs) const noexcept {
+		const auto& stl_lhs = lhs.ToStdWstring();
+		const auto& stl_rhs = rhs.ToStdWstring();
+		const wchar_t* const l = stl_lhs.data();
+		const wchar_t* const r = stl_rhs.data();
+		const size_t length = stl_lhs.length() < stl_rhs.length() ? stl_lhs.length() : stl_rhs.length();
+		for (size_t idx = 0; idx < length; ++idx) {
+			const wchar_t& c1 = l[idx];
+			const wchar_t& c2 = r[idx];
+			if (c1 == c2)
+				continue;
+			if (c1 < 0x80 && c2 < 0x80 && !IsLatinLetter(c1) && !IsLatinLetter(c2))
+				return c1 < c2;
+			const auto f1 = ::towupper(c1);
+			const auto f2 = ::towupper(c2);
+			if (f1 != f2)
+				return f1 < f2;
+		}
+		return stl_lhs.length() < stl_rhs.length();   // one ran out first: the shorter is the lesser
+	}
+
+private:
+	static bool IsLatinLetter(wchar_t c) noexcept { return (c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z'); }
+};

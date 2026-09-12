@@ -149,7 +149,7 @@ All database access goes through the abstract `ibDatabaseLayer` interface (`src/
 - `sizeof(ibNumber) == 8` always. Single tagged `uint64_t`: bit 0 = tag, bits [16:1] = exp10, bits [63:17] = 47-bit signed mantissa. Most values stay inline (immediate tier).
 - Heap tier: `BigImpl { std::vector<uint32_t> limbs; bool negative; int32_t exp; }` — exact decimal, magnitude grows by demand. Supports 200+ fractional digits (high-precision decimal).
 - Self-contained: no ttmath dependency. Schoolbook Add/Sub/Mul + base-2 long-division Div live in `fnumber.cpp`. MSVC x86/x64 use `_addcarry_u32`/`_subborrow_u32` intrinsics; portable fallback elsewhere.
-- **Immediate fast paths.** `+` / `-` / `*` / `/` and `Compare` short-circuit two immediate-INTEGER operands (`exp10 == 0`) through a single `int64` op — no `BigImpl`, no `10^30` inflate, no long division — via the private `TryImmInts` gate. They fire only when the result fits immediate (and, for `/`, the division is exact), so the result is **bit-identical** to the `BigImpl` path; exactness is preserved. Common integer arithmetic / comparison is a few ns; non-exact decimal division still pays the full exact long-division cost (inherent, not a regression).
+- **Immediate fast paths.** `*` / `/` and `Compare` short-circuit two immediate-INTEGER operands (`exp10 == 0`) through a single `int64` op — no `BigImpl`, no `10^30` inflate, no long division — via the private `TryImmInts` gate. `+` / `-` (`+=` / `-=`) go further, through `TryImmAligned`: two immediate operands are aligned to the smaller exponent (integers are the case where it is 0) and added as `int64`, so money arithmetic — `SUM(Amount)` over a register, `1518500.00 + 17000.00` — no longer drops to `BigImpl` either (2026-09-12). Every fast path fires only when the result fits immediate (and, for `/`, the division is exact), so the value is exactly the one the `BigImpl` path computes; exactness is preserved. Common arithmetic / comparison is a few ns; non-exact decimal division still pays the full exact long-division cost (inherent, not a regression). ⚠ Build a zero with the default constructor, not `0.00`: `ibNumber(double)` prints the double and parses the text back to be exact about it, which on a per-cell path is the whole cost of the read (the Firebird `GetResultNumber` did exactly that until 2026-09-12).
 - Buffer / wire: `wxMemoryBuffer GetBuffer()` plus `bool GetBuffer(ibWriterMemory&)` / `bool SetBuffer(const ibReaderMemory&)` — chunk-encapsulated I/O with internal `kIbNumberChunk` ID. Compact-zero encoding: zero produces 0-byte buffer, no allocation.
 - 128-bit raw: `To128Bytes(uint8_t[16])` / `From128Bytes` for Firebird SQL_INT128 columns.
 - Tests: `enterprise/tests/test_number.cpp` (gtest). Micro-benchmarks (DISABLED by default) live in `enterprise/tests/bench_runtime.cpp` — `RuntimeBench` (interpreter) / `NumberBench` (ibNumber) / `ParserBench` (compile), each printed next to a native-C++ baseline. Build Release and run:
@@ -538,6 +538,15 @@ See `docs/eval-scope-refactor.md` for the full architecture.
 - Do not commit changes to `enterprise.sln` project GUIDs or global section entries unless you are adding/removing a project
 - Do not define `NDEBUG` in Debug configurations
 - Do not catch `const ibBackendException*` and swallow it silently
+- **Do not wave off a slow Debug build with "Release will be fast".** Speed is accepted in the DEBUG
+  build (Max, 2026-09-12: *"if debug works at a normal level, release will work fine — the debug
+  build is the most serious examiner"*). What a checked build (MSVC, `_ITERATOR_DEBUG_LEVEL=2`) makes
+  expensive is a real fault it magnifies. Every iterator is registered under ONE global lock, so
+  count iterators, not comparisons. Every allocation fills its memory, so count allocations, not
+  bytes. Every container, even an empty one, allocates a proxy, so a node full of empty containers
+  pays for each. On a hot path: look values up by position (`ibRowValues::find_value`), keep a row in
+  one `ibRowMetaValues` rather than a `std::map`, and move or swap what a stitch hands on. The payroll
+  sheet at 40 000 employees ([docs/payroll-arc.md § 11.9](docs/payroll-arc.md)) is the worked example.
 
 ---
 

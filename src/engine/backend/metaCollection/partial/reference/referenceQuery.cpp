@@ -13,6 +13,9 @@
 #include "backend/diagnostics/journal.h"  // every read is counted — how many there are is a measurement, not a guess
 #include "backend/utils/debugTrace.h"     // ibDebugTraceEnabled — the same gate as the hit line
 
+#include <algorithm>    // the batch's list, sorted and halved
+#include <functional>   // std::less over the tables' addresses
+
 
 bool ibValueReferenceDataObject::ReadData(bool createData)
 {
@@ -22,7 +25,7 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 	// ⭐ NO CACHE OF ROWS HERE, deliberately. There used to be one, keyed by (metaobject, guid), and it
 	// existed to stop the SAME row being read once per reference object holding that identity. The
 	// register removed the twins it was compensating for: there is now one object per identity per
-	// session, its own m_initializedRef says the read already happened, and a row read twice would
+	// session, its own state (Full) says the read already happened, and a row read twice would
 	// mean two objects — which can no longer occur. A cache on top of that would only add a second
 	// answer to the question the object already answers, and one that goes stale after a write.
 
@@ -46,7 +49,7 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 			static const bool s_traceRefs = ibDebugTraceEnabled("OES_TRACE_REFS");
 			if (s_traceRefs)
 				ibJournalInfo(wxT("reference"), wxT("read %s <%i>"),
-					m_objGuid.str(), static_cast<int>(m_metaObject->GetMetaID()));
+					m_objGuid.GetGuid().str(), static_cast<int>(m_metaObject->GetMetaID()));
 			return true;
 		}
 		return false;   // NO SUCH ROW - a legitimate answer, and the only one this returns quietly
@@ -72,6 +75,107 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 				m_metaObject->GetPhysicalTableName() + wxT(": ") + _("unknown exception"));
 	}
 	return false;
+}
+
+void ibValueReferenceDataObject::ReadBatch()
+{
+	// THE RAW ONES, asked of the register — every reference this session made that nobody has told what it
+	// says, held while they are told. Grouped a table at a time; the register holds one object per
+	// identity, so a key is one reference here, and the row that comes back for it is that very object.
+	const std::vector<ibValuePtr<ibValueReferenceDataObject>> raw = ibReferenceRegistry::Find(ibReferenceState::Raw);
+	if (raw.empty())
+		return;
+	std::vector<ibValueReferenceDataObject*> byTable(raw.begin(), raw.end());
+	std::sort(byTable.begin(), byTable.end(), [](const ibValueReferenceDataObject* a, const ibValueReferenceDataObject* b) {
+		return std::less<const ibValueMetaObjectRecordDataRef*>()(a->m_metaObject, b->m_metaObject);
+	});
+
+	size_t tableAt = 0;
+	while (tableAt < byTable.size()) {
+		const ibValueMetaObjectRecordDataRef* const metaObject = byTable[tableAt]->m_metaObject;
+		size_t tableEnd = tableAt;
+		while (tableEnd < byTable.size() && byTable[tableEnd]->m_metaObject == metaObject)
+			++tableEnd;
+		const size_t count = tableEnd - tableAt;
+		// ⭐ WHAT THE KIND IS SAID BY — its template, once for the table. A kind said without a field (an
+		// enumeration) is read whole, each on its own: its values are few, and its order is data a sort needs.
+		ibValueMetaObjectRecordDataRef::ibDataDescParameter parameter;
+		if (!metaObject->GenerateDataDesc(parameter) || parameter.m_first == nullptr) {
+			for (size_t i = tableAt; i < tableEnd; ++i)
+				byTable[i]->PrepareRef();
+			tableAt = tableEnd;
+			continue;
+		}
+		const ibBackendQueryColumn* const keyColumn = metaObject->GetDataReference()->GetQueryColumn();
+		// The KEY travels as the value that names it: the statement spells it straight from the reference's
+		// bytes (WhereKeyIn over values), never through text.
+		std::vector<ibValue> keys;
+		keys.reserve(count);
+		for (size_t i = tableAt; i < tableEnd; ++i)
+			keys.emplace_back(byTable[i]);
+		const size_t fields = parameter.m_second != nullptr ? 2 : 1;
+		// Where a table's batch spends its time: the statement, the cursor's rows, the saying of each row.
+		ibJournalStopwatch execute, fetch, fill;
+		try {
+			// ALL THE TABLE'S KEYS IN ONE READ — the provider carries them in as few runs of one statement as
+			// its driver takes (ibDbTableProvider::ExecuteRead).
+			// …and the row brings what is read of it: the key that says whose row it is, and the template's
+			// fields — a read by keys that names its columns projects them and no others.
+			ibDataQueryBuilder q;
+			q.From(metaObject->GetQueryable()).WhereKeyIn(keys).Select(keyColumn, wxEmptyString)
+				.Select(parameter.m_first->GetQueryColumn(), wxEmptyString);
+			if (parameter.m_second != nullptr)
+				q.Select(parameter.m_second->GetQueryColumn(), wxEmptyString);
+			execute.Resume();
+			ibDataQueryResult selection = q.Execute(ibReadPageRequest{});   // every row the keys name
+			execute.Pause();
+			for (;;) {
+				fetch.Resume();
+				const bool more = selection.Next();
+				fetch.Pause();
+				if (!more)
+					break;
+				fill.Resume();
+				// WHICH REFERENCE THIS ROW IS — its own key, which comes back as the very object waiting for it:
+				// the register hands out the one live instance of an identity, and makes no read to do it.
+				const ibValuePtr<ibValueReferenceDataObject> told(selection.GetValue(keyColumn));
+				if (told != nullptr && told->m_metaObject == metaObject && told->m_state == ibReferenceState::Raw) {
+					// …and WHAT IT SAYS: the fields its template names, moved into its own values — room for
+					// exactly them, and each value made once, where the row is read. The kind's own rule says
+					// them when it is asked (GetString), and a full read later lays the rest beside them.
+					told->m_listObjectValue.reserve(fields);
+					told->m_listObjectValue.insert_or_assign(parameter.m_first->GetMetaID(),
+						selection.GetValue(parameter.m_first->GetQueryColumn()));
+					if (parameter.m_second != nullptr)
+						told->m_listObjectValue.insert_or_assign(parameter.m_second->GetMetaID(),
+							selection.GetValue(parameter.m_second->GetQueryColumn()));
+					told->m_state = ibReferenceState::Presentation;
+				}
+				fill.Pause();
+			}
+		}
+		// A CANCELLED read is not a failed one: the cancel belongs to whoever started the work, so it goes on
+		// up to them rather than being said here as an error, table after table.
+		catch (const ibBackendInterruptException&) {
+			throw;
+		}
+		// A read that FAILED — or a key that did not come back, deleted or refused by its rights — leaves
+		// its references raw: each reads itself when it is asked, and says there what it found, with the
+		// object it happened on.
+		catch (const ibBackendException& err) {
+			if (ibLogger* const log = ibApplicationData::GetLogger())
+				log->Error(wxT("reference"), wxT("read"),
+					metaObject->GetPhysicalTableName() + wxT(": ") + err.GetErrorDescription());
+		}
+		catch (...) {
+			if (ibLogger* const log = ibApplicationData::GetLogger())
+				log->Error(wxT("reference"), wxT("read"),
+					metaObject->GetPhysicalTableName() + wxT(": ") + _("unknown exception"));
+		}
+		ibJournalInfo(wxT("reference"), wxT("batch %s: %u keys - execute %lld ms, fetch %lld ms, fill %lld ms"),
+			metaObject->GetPhysicalTableName(), static_cast<unsigned>(count), execute.Ms(), fetch.Ms(), fill.Ms());
+		tableAt = tableEnd;
+	}
 }
 
 bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector<ibValue>& listValue) const

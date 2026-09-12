@@ -1118,7 +1118,7 @@ public:
 		// `const wxChar *`, and a conditional whose arms are wxString and const wxChar * is
 		// AMBIGUOUS — each converts to the other. The wrapper is what the rest of the tree writes
 		// (portability.md 1.10, which already records this trap in eight other places).
-		return m_metaObject != nullptr ? m_metaObject->GetGuid().str() : wxString(wxEmptyString);
+		return m_metaObject != nullptr ? m_metaObject->GetGuid().GetGuid().str() : wxString(wxEmptyString);
 	}
 
 	ibMetaDocument(ibMetaDocument* docParent = nullptr);

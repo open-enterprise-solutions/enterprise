@@ -109,6 +109,10 @@ public:
 	// driver calls.
 	const std::shared_ptr<ibDatabaseLayer>& shared() const { return m_conn; }
 
+	// …and whom it was taken for: a session's own holder (ibSession::Holder), or a thread's db_query
+	// channel. That is whose work a read on it is — the builder asks it whose cancel the rows hear.
+	ibDatabaseConnectionHolder* Holder() const { return m_holder; }
+
 	// Transaction API — merged into the scope. The scope tracks
 	// whether it has an unresolved Begin; the dtor rolls back any
 	// unmatched Begin so an exception between Begin and Commit cleans

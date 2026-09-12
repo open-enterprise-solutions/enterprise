@@ -36,41 +36,48 @@ wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection3;
 
 namespace {
 
+// The offset in either map's entry: the offset map holds it bare, the breakpoint map beside a condition.
+static int& OffsetOf(int& entry) { return entry; }
+static int& OffsetOf(ibDebuggerClient::ibBreakpoint& entry) { return entry.m_offset; }
+
 // Module maps (m_listBreakpoint / m_listOffsetBreakpoint) are keyed by module GUID, matched
 // case-insensitively via stringUtils::CompareString — so map::find can't be used. This is the
-// one lookup the methods here kept inlining. Returns the inner (line -> offset) map, or null.
-static std::map<unsigned int, int>* FindModuleLines(
-	std::map<wxString, std::map<unsigned int, int>>& modules, const wxString& guid)
+// one lookup the methods here kept inlining. Returns the inner (line -> entry) map, or null.
+template <typename Entry>
+static std::map<unsigned int, Entry>* FindModuleLines(
+	std::map<wxString, std::map<unsigned int, Entry>>& modules, const wxString& guid)
 {
 	auto it = std::find_if(modules.begin(), modules.end(),
 		[&guid](const auto& pair) { return stringUtils::CompareString(pair.first, guid); });
 	return it != modules.end() ? &it->second : nullptr;
 }
 
-// Shift one module's (committedLine -> offset) entries by `line_offset` lines for an edit at editor
-// `line`. Each entry's CURRENT editor line is first + second.
+// Shift one module's (committedLine -> entry) map by `line_offset` lines for an edit at editor
+// `line`. Each entry's CURRENT editor line is its committed line + its offset. A breakpoint's
+// condition rides in the entry, so it moves with the line and needs nothing of its own.
 //   atLineStart        — the edit was at column 0 of `line` (the whole line moved), so an entry
 //                        sitting ON `line` shifts too; an edit later in the line leaves it in place.
 //   collapseCollisions — on insert, when a following entry now lands on the same editor line as the
 //                        one just shifted: true ERASES it (two breakpoints on one line collapse to
 //                        one), false shifts it too (two committed lines must both keep moving).
-static void ShiftLineMap(std::map<unsigned int, int>& lines, unsigned int line, int line_offset,
+template <typename Entry>
+static void ShiftLineMap(std::map<unsigned int, Entry>& lines, unsigned int line, int line_offset,
                          bool atLineStart, bool collapseCollisions)
 {
 	auto it = lines.begin();
 	while (it != lines.end()) {
 
-		const unsigned int calc_line = it->first + it->second;
+		const unsigned int calc_line = it->first + OffsetOf(it->second);
 
 		if (calc_line > line || (atLineStart && calc_line == line))
-			it->second += line_offset;
+			OffsetOf(it->second) += line_offset;
 
 		it = std::next(it);
 
-		while (line_offset > 0 && it != lines.end() && (it->first + it->second) == calc_line) {
+		while (line_offset > 0 && it != lines.end() && (it->first + OffsetOf(it->second)) == calc_line) {
 			if (collapseCollisions)
 				it = lines.erase(it);
-			else { it->second += line_offset; it = std::next(it); }
+			else { OffsetOf(it->second) += line_offset; it = std::next(it); }
 		}
 	}
 }
@@ -83,9 +90,8 @@ ibDebuggerClient::ibDebuggerClient() :
 	m_adapter(new ibDebuggerClientAdapter),
 	m_enterLoop(false), m_connectionSuccess(false)
 {
-	if (!ibDebuggerClient::TableAlreadyCreated()) {
-		ibDebuggerClient::CreateBreakpointDatabase();
-	}
+	// Always: it creates the table when it is missing and adds the condition column to one from before it.
+	ibDebuggerClient::CreateBreakpointDatabase();
 	ms_debugClient = this;
 }
 
@@ -125,6 +131,14 @@ void ibDebuggerClient::StepInto()
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 }
 
+void ibDebuggerClient::StepOut()
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_StepOut);
+	commandChannel.w_stringZ(m_currentSessionGuid);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
 void ibDebuggerClient::Pause()
 {
 	ibWriterMemory commandChannel;
@@ -133,19 +147,19 @@ void ibDebuggerClient::Pause()
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 }
 
-std::map<wxString, std::vector<unsigned int>> ibDebuggerClient::GetBreakpoints() const
+std::map<wxString, std::map<unsigned int, wxString>> ibDebuggerClient::GetBreakpoints() const
 {
-	std::map<wxString, std::vector<unsigned int>> out;
+	std::map<wxString, std::map<unsigned int, wxString>> out;
 
 	for (const auto& module : m_listBreakpoint) {
 
-		std::vector<unsigned int>& lines = out[module.first];
+		std::map<unsigned int, wxString>& lines = out[module.first];
 
 		// THE SUM IS THE ADDRESS. A row is (committed line -> offset the edits since have moved it
 		// by); either half alone points at a line nobody is looking at. Same arithmetic ShiftLineMap
 		// does when it decides which rows an edit moves.
 		for (const auto& line : module.second)
-			lines.push_back(line.first + line.second);
+			lines[line.first + line.second.m_offset] = line.second.m_condition;
 	}
 
 	// A module whose last breakpoint was taken off keeps an empty row in the map, and reporting it
@@ -203,18 +217,14 @@ bool ibDebuggerClient::SaveModule(const wxString& strModuleName, unsigned int li
 
 	if (breakpoint_iterator != m_listBreakpoint.end()) {
 
-		std::map<unsigned int, int>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
+		std::map<unsigned int, ibBreakpoint>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
 		for (auto it = list_breakpoint.begin(); it != list_breakpoint.end(); it++) {
-			if (!OffsetBreakpointInDB(breakpoint_iterator->first, it->first, it->second))
+			if (!OffsetBreakpointInDB(breakpoint_iterator->first, it->first, it->second.m_offset, it->second.m_condition))
 				return false;
-			moduleBreakpointsNew.emplace(it->first + it->second, 0);
+			moduleBreakpointsNew.emplace(it->first + it->second.m_offset, ibBreakpoint{ 0, it->second.m_condition });
 		}
 
-		list_breakpoint.clear();
-
-		for (auto it = moduleBreakpointsNew.begin(); it != moduleBreakpointsNew.end(); it++) {
-			list_breakpoint.emplace(it->first, it->second);
-		}
+		list_breakpoint = std::move(moduleBreakpointsNew);
 	}
 
 	//initialize offsets 
@@ -268,16 +278,13 @@ bool ibDebuggerClient::SaveAllBreakpoints()
 {
 	//initialize breakpoint 
 	for (auto breakpoint_iterator = m_listBreakpoint.begin(); breakpoint_iterator != m_listBreakpoint.end(); breakpoint_iterator++) {
-		std::map<unsigned int, int>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
+		std::map<unsigned int, ibBreakpoint>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
 		for (auto it = list_breakpoint.begin(); it != list_breakpoint.end(); it++) {
-			if (!OffsetBreakpointInDB(breakpoint_iterator->first, it->first, it->second))
+			if (!OffsetBreakpointInDB(breakpoint_iterator->first, it->first, it->second.m_offset, it->second.m_condition))
 				return false;
-			moduleBreakpointsNew.emplace(it->first + it->second, 0);
+			moduleBreakpointsNew.emplace(it->first + it->second.m_offset, ibBreakpoint{ 0, it->second.m_condition });
 		}
-		list_breakpoint.clear();
-		for (auto it = moduleBreakpointsNew.begin(); it != moduleBreakpointsNew.end(); it++) {
-			list_breakpoint.emplace(it->first, it->second);
-		}
+		list_breakpoint = std::move(moduleBreakpointsNew);
 	}
 
 	//initialize offsets 
@@ -329,7 +336,7 @@ std::map<unsigned int, int>::iterator ibDebuggerClient::ResolveOriginalLine(
 // Now the sentence travels with the answer and the caller decides what to do with it: the code
 // editor shows it, the tool returns it.
 bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned int line,
-	wxString* refusal)
+	wxString* refusal, const wxString& condition)
 {
 	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
 	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
@@ -353,23 +360,29 @@ bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned 
 
 		return false;
 	}
-	std::map<unsigned int, int>& list_breakpoint = m_listBreakpoint[strModuleName];
-	std::map<unsigned int, int>::iterator breakpoint_iterator = list_breakpoint.find(itOffset->first);
-	unsigned int currLine = itOffset->first; int offset = itOffset->second;
-	if (breakpoint_iterator == list_breakpoint.end()) {
-		if (ToggleBreakpointInDB(strModuleName, currLine)) {
-			list_breakpoint.emplace(currLine, offset);
-			ibWriterMemory commandChannel;
-			commandChannel.w_u16(CommandId_ToggleBreakpoint);
-			commandChannel.w_stringZ(strModuleName);
-			commandChannel.w_u32(currLine);
-			commandChannel.w_s32(offset);
-			SendCommand(commandChannel.pointer(), commandChannel.size());
-		}
-		else {
-			return false;
-		}
-	}
+	std::map<unsigned int, ibBreakpoint>& list_breakpoint = m_listBreakpoint[strModuleName];
+	auto breakpoint_iterator = list_breakpoint.find(itOffset->first);
+	const unsigned int currLine = itOffset->first;
+	const int offset = breakpoint_iterator != list_breakpoint.end() ? breakpoint_iterator->second.m_offset : itOffset->second;
+
+	// Already there, with this very condition: nothing to write and nothing to tell the runtime.
+	if (breakpoint_iterator != list_breakpoint.end() && breakpoint_iterator->second.m_condition == condition)
+		return true;
+
+	// A NEW BREAKPOINT, OR THE SAME ONE WITH ANOTHER CONDITION - one row and one message either way: the
+	// store upserts by (module, line), and the runtime keeps one condition per line, the last it was sent.
+	if (!ToggleBreakpointInDB(strModuleName, currLine, condition))
+		return false;
+
+	list_breakpoint[currLine] = ibBreakpoint{ offset, condition };
+
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_ToggleBreakpoint);
+	commandChannel.w_stringZ(strModuleName);
+	commandChannel.w_u32(currLine);
+	commandChannel.w_s32(offset);
+	commandChannel.w_stringZ(condition);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
 
 	return true;
 }
@@ -380,8 +393,8 @@ bool ibDebuggerClient::RemoveBreakpoint(const wxString& strModuleName, unsigned 
 	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
 	if (itOffset == list_module_offset.end())
 		return false;
-	std::map<unsigned int, int>& list_breakpoint = m_listBreakpoint[strModuleName];
-	std::map<unsigned int, int>::iterator breakpoint_iterator = list_breakpoint.find(itOffset->first);
+	std::map<unsigned int, ibBreakpoint>& list_breakpoint = m_listBreakpoint[strModuleName];
+	auto breakpoint_iterator = list_breakpoint.find(itOffset->first);
 	unsigned int currLine = itOffset->first;
 	if (breakpoint_iterator != list_breakpoint.end()) {
 		if (RemoveBreakpointInDB(strModuleName, currLine)) {
@@ -609,17 +622,12 @@ void ibDebuggerClient::EvaluateAutocomplete(const wxString& strFileName, const w
 	}
 }
 
-std::vector<unsigned int> ibDebuggerClient::GetDebugList(const wxString& strModuleName)
+std::map<unsigned int, wxString> ibDebuggerClient::GetDebugList(const wxString& strModuleName)
 {
-	auto breakpoint_iterator = std::find_if(m_listBreakpoint.begin(), m_listBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
-
-	if (breakpoint_iterator == m_listBreakpoint.end())
-		return std::vector<unsigned int>();
-
-	std::vector<unsigned int> listBreakpoint;
-	for (auto& breakpoint : breakpoint_iterator->second)
-		listBreakpoint.push_back(breakpoint.first + breakpoint.second);
+	std::map<unsigned int, wxString> listBreakpoint;
+	if (auto* breakpoints = FindModuleLines(m_listBreakpoint, strModuleName))
+		for (const auto& breakpoint : *breakpoints)
+			listBreakpoint[breakpoint.first + breakpoint.second.m_offset] = breakpoint.second.m_condition;
 	return listBreakpoint;
 }
 
@@ -648,9 +656,6 @@ void ibDebuggerClient::ibDebuggerClientConnection::DetachConnection(bool kill)
 {
 	if (m_connectionType == ConnectionType::ConnectionType_Debugger) {
 
-		// Send the exit event message to the UI.
-		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
-
 		m_connectionType = ConnectionType::ConnectionType_Scanner;
 
 		ibWriterMemory commandChannel;
@@ -661,6 +666,9 @@ void ibDebuggerClient::ibDebuggerClientConnection::DetachConnection(bool kill)
 			m_socketClient->Close();
 
 		m_verifiedConnection = false;
+
+		// Told last, once this connection no longer counts as one - see the bottom of EntryClient.
+		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
 	}
 }
 
@@ -722,6 +730,8 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 		bool connected = m_socketClient->Connect(addr, false);
 		if (!connected && m_socketClient->Wait())
 			connected = m_socketClient->IsConnected();
+
+		bool sessionEnded = false;   // said to the UI at the bottom of this pass, see there
 
 		if (!TestDestroy() && connected) {
 
@@ -823,10 +833,8 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 					if (TestDestroy()) break;
 				}
 
-				if (ms_debugClient != nullptr && m_connectionType == ConnectionType::ConnectionType_Debugger) {
-					// Send the exit event message to the UI.
-					ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
-				}
+				if (ms_debugClient != nullptr && m_connectionType == ConnectionType::ConnectionType_Debugger)
+					sessionEnded = true;
 			}
 
 			if (m_socketClient != nullptr)
@@ -841,6 +849,13 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 			m_connectionType = ConnectionType::ConnectionType_Scanner;
 
 		m_verifiedConnection = false;
+
+		// ⭐ THE UI HEARS "THE SESSION ENDED" ONLY NOW - with the socket closed and this connection a scanner
+		// again. It used to be told from inside the read loop, before either, so the window asked
+		// HasConnections while this one still answered "connected" and left the Debug menu lit with
+		// nothing attached (2026-09-11).
+		if (sessionEnded && ms_debugClient != nullptr)
+			ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
 	}
 
 	m_number_connection_attempts = -1;
@@ -908,6 +923,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 
 			for (const auto& line : breakpoint.second) {
 				commandChannel.w_u32(line.first);
+				commandChannel.w_stringZ(line.second.m_condition);
 			}
 		}
 

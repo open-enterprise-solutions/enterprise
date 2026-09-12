@@ -105,8 +105,16 @@ bool NamesAnObject(const ibGuidImpl& guid)
 // share one map — and a torn read of an unordered_map is not a stale answer, it is a crash. Every
 // operation takes this lock; it is uncontended except at exactly the crossing it exists for.
 struct ibReferenceTable {
+	// A live reference and the session that FILED it. A rented read files into its host's table (see
+	// TableOfCurrentSession), and a batch tells only what its own session made (Find(state)) — so a rented
+	// run and its host never write to one reference at once. Weak, so a later session can never be taken
+	// for one that has gone: its block outlives it while an entry names it.
+	struct ibFiled {
+		ibValueReferenceDataObject* m_ref;
+		std::weak_ptr<ibSession>    m_by;
+	};
 	std::mutex m_mtx;
-	std::unordered_map<ibRefKey, ibValueReferenceDataObject*, ibRefKeyHash> m_live;
+	std::unordered_map<ibRefKey, ibFiled, ibRefKeyHash> m_live;
 };
 
 // The current session's table, made if this is the first reference it holds. Null when there is no
@@ -179,7 +187,7 @@ ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibMetaID& id, const 
 		std::lock_guard<std::mutex> lock(own->m_mtx);
 		const auto found = own->m_live.find(ibRefKey{ id, objGuid });
 		if (found != own->m_live.end())
-			it = found->second;
+			it = found->second.m_ref;
 	}
 
 	if (it == nullptr) {
@@ -224,6 +232,28 @@ ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibValueMetaObjectRec
 	return Find(static_cast<const ibValueMetaObject*>(metaObject)->GetMetaID(), objGuid);
 }
 
+// ⭐ THE REGISTER ALREADY KNOWS EVERY REFERENCE THE SESSION MADE, so a batch asks it rather than walking
+// the lists the references went into: a query's flat list was scanned cell by cell for them, three times
+// over for one payroll sheet (read, stitched, sorted), some 300 ms a time (MEASURED 2026-09-12).
+std::vector<ibValuePtr<ibValueReferenceDataObject>> ibReferenceRegistry::Find(ibReferenceState state)
+{
+	std::vector<ibValuePtr<ibValueReferenceDataObject>> found;
+	ibSession* const session = ibSession::Current();
+	const std::shared_ptr<ibReferenceTable> own = TableOfCurrentSession(/*createIfMissing*/false);
+	if (session == nullptr || !own)
+		return found;
+	// ⚠ ITS OWN, NOT THE TABLE'S. A rented run shares its host's table, and the host's thread may be asking
+	// the host's references what they are while this one runs: telling those from here would write to one
+	// object from two threads. What this session filed, only this session is working with.
+	const std::weak_ptr<ibSession> self = session->weak_from_this();
+	std::lock_guard<std::mutex> lock(own->m_mtx);   // a guest may be reading this map — see Find above
+	for (const auto& live : own->m_live)
+		if (live.second.m_ref->m_state == state
+			&& !live.second.m_by.owner_before(self) && !self.owner_before(live.second.m_by))
+			found.emplace_back(live.second.m_ref);
+	return found;
+}
+
 void ibReferenceRegistry::Remember(ibValueReferenceDataObject* ref)
 {
 	// ⚠ THE FIELDS, NOT THE ACCESSORS. This runs from the CONSTRUCTOR, where a virtual call answers
@@ -251,8 +281,14 @@ void ibReferenceRegistry::Remember(ibValueReferenceDataObject* ref)
 		// Locked because a rented read may be walking this map right now — see the note in Find.
 		// The writer is always this table's own thread, so the lock is uncontended except against
 		// a guest, which is exactly what it is for.
+		// …and WHO FILED IT — the session asking now, a rented run's own and not its host's (Find(state)).
+		ibSession* const session = ibSession::Current();
+		std::weak_ptr<ibSession> by;
+		if (session != nullptr)
+			by = session->weak_from_this();
 		std::lock_guard<std::mutex> lock(table->m_mtx);
-		table->m_live.emplace(ibRefKey{ ref->m_metaObject->GetMetaID(), key }, ref);
+		table->m_live.emplace(ibRefKey{ ref->m_metaObject->GetMetaID(), key },
+			ibReferenceTable::ibFiled{ ref, std::move(by) });
 	}
 
 	// ⭐ THE REFERENCE KEEPS ITS OWN TABLE, not a way to find one later. A value can travel — into a
@@ -279,7 +315,7 @@ void ibReferenceRegistry::Forget(const ibValueReferenceDataObject* ref)
 	// Locked for the same reason as the insert — a guest may be reading this map.
 	std::lock_guard<std::mutex> lock(table->m_mtx);
 	const auto it = table->m_live.find(ibRefKey{ ref->m_metaObject->GetMetaID(), ref->m_objGuid });
-	if (it != table->m_live.end() && it->second == ref)
+	if (it != table->m_live.end() && it->second.m_ref == ref)
 		table->m_live.erase(it);
 }
 // Re-entrancy guard for the eager reference read. A self / cyclic reference (a document
@@ -343,7 +379,7 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 {
 	wxASSERT(m_metaObject != nullptr);
 
-	if (m_initializedRef)
+	if (m_state == ibReferenceState::Full)
 		return;
 
 	// ⭐⭐ ONLY ITS OWN SESSION MAY READ INTO IT. There is one reference object per identity per
@@ -378,14 +414,14 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 	const std::shared_ptr<ibReferenceTable> current = TableOfCurrentSession(false);
 
 	// 🛑⭐⭐ AN UNREAD REFERENCE CARRIES NO RIGHTS, SO IT IS ADOPTED RATHER THAN REFUSED — and the
-	// ordering above is what makes that exact rather than lenient. `m_initializedRef` returns at the
+	// ordering above is what makes that exact rather than lenient. A Full reference returns at the
 	// top of this function, so ANY object reaching this line has read NOTHING. There is no foreign
 	// row in it, no foreign policy applied to it, nothing of the other session but the table it was
 	// filed in. Refusing it protected nobody: what it produced was an unread reference whose
 	// presentation says "Not found" about a row plainly in the base.
 	//
 	// ⚠ AND THE CASE THE REFUSAL WAS WRITTEN FOR NEVER ARRIVES HERE. An object that DID read under
-	// another session is `m_initializedRef` and left three dozen lines above, carrying that
+	// another session is Full and left three dozen lines above, carrying that
 	// session's answer with it - so this guard could only ever catch the harmless half. The rule it
 	// states is right; the place it stated it could not enforce it.
 	//
@@ -433,13 +469,13 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 	}
 
 	if (createData) {
-		m_initializedRef = true;
+		m_state = ibReferenceState::Full;
 	}
 	// Name surface is lazy (FillMembers built on first GetPMethods).
 }
 
 ibValueReferenceDataObject::ibValueReferenceDataObject(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), ibValueDataObject(objGuid, !objGuid.isValid()),
-m_initializedRef(false), m_metaObject(metaObject), m_reference_impl(nullptr), m_foundedRef(false)
+m_metaObject(metaObject), m_reference_impl(nullptr), m_foundedRef(false)
 {
 	m_members.Bind(this, &ibValueReferenceDataObject::FillMembers);
 	// The stored key (_RRRef) is the pure object guid; the type is carried separately (metaObject / _RTRef).
@@ -468,6 +504,15 @@ m_initializedRef(false), m_metaObject(metaObject), m_reference_impl(nullptr), m_
 // the house — a grouping, a join, a fold's children — takes its notion of "same" from here.
 int ibValueReferenceDataObject::CompareValueLS(const ibValue& cParam) const
 {
+	// ⭐ THE VERY SAME OBJECT IS THE SAME REFERENCE — asked before anything else, because it is the
+	// commonest comparison there is: the rows of one department all hold ONE reference object (one per
+	// identity per session), and a sort or a fold compares them with each other over and over. The
+	// pointers already say it; the kind, the metatype and the guid below would only say it again
+	// (2026-09-12, the payroll sheet's sort and fold over 120 thousand rows). Asked HERE, of the object,
+	// and not by the value that holds it — what "the same" means is the reference's to say (Max).
+	if (cParam.GetRef() == this)
+		return 0;
+
 	// ⭐⭐ THE CHEAP QUESTION FIRST, AND IT IS EXACT: the KIND is in the clsid, in its top byte, so
 	// `IsReference` is a shift and a compare — no metadata, no RTTI (clsid.h). A comparison runs once per
 	// pair in every sort, group and dedup there is, and the common mismatch is a reference against an
@@ -512,20 +557,27 @@ int ibValueReferenceDataObject::CompareValueLS(const ibValue& cParam) const
 	if (lm != rm)
 		return lm < rm ? -1 : 1;
 
-	// 3. WITHIN ONE METATYPE, THE METATYPE DECIDES. Everything a comparison can know about the DATA is
+	// 3. ONE METATYPE AND ONE GUID ARE ONE ROW — whatever that metatype orders by, so it is not asked.
+	// This is the commonest comparison there is: every hash lookup a fold makes ends with a key being
+	// compared to the one already in its bucket, which is itself. Asked of the metatype, an identity
+	// order built four keys by value to say so (ibCompareByIdentity, GetGuid) — and once the references
+	// of a report were read in a batch, the sort and the fold over 126 thousand rows paid for that on
+	// every comparison (MEASURED 2026-09-12: the sort before the payroll sheet's output 15 s -> 30 s, Debug).
+	if (m_objGuid.GetGuid() == rhs->m_objGuid.GetGuid())
+		return 0;
+
+	// 4. WITHIN ONE METATYPE, THE METATYPE DECIDES. Everything a comparison can know about the DATA is
 	// the metaobject's own business: an enumeration follows the sequence its author declared, a catalog
 	// says identity, and this class never learns which is which (`CompareDataValues`, commonObject.h).
 	//
 	// ⚠ THE ONE PRECONDITION THAT STAYS HERE IS THE REFERENCE'S OWN: a comparison must never become a
 	// database read — a sort would do it thousands of times — so the metatype is asked only when both
-	// rows are already in hand. `m_initializedRef` is a fact about this object, not about its kind.
+	// rows are already in hand. Full is a fact about this object, not about its kind.
 	// Unread, the identity is all that is honestly known, and the guid is exactly that.
-	if (m_metaObject != nullptr && m_initializedRef && rhs->m_initializedRef)
+	if (m_metaObject != nullptr && m_state == ibReferenceState::Full && rhs->m_state == ibReferenceState::Full)
 		return m_metaObject->CompareDataValues(this, rhs);
 
-	if (m_objGuid < rhs->m_objGuid) return -1;
-	if (rhs->m_objGuid < m_objGuid) return 1;
-	return 0;   // same guid AND same type -> the same reference
+	return m_objGuid.GetGuid() < rhs->m_objGuid.GetGuid() ? -1 : 1;   // the guids differ — step 3 settled the equal ones
 }
 
 ibValueReferenceDataObject::~ibValueReferenceDataObject()
@@ -636,6 +688,15 @@ bool ibValueReferenceDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& p
 		}
 		pvarMetaVal = ibValueReferenceDataObject::Create(m_metaObject);
 		return true;
+	}
+
+	// A reference told what it says holds the fields its kind is said by (ReadBatch) — those answer
+	// without reading the rest, which is what lets GetString say it by the kind's own rule.
+	if (m_state == ibReferenceState::Presentation) {
+		if (const ibValue* const told = m_listObjectValue.find_value(id)) {
+			pvarMetaVal = *told;
+			return true;
+		}
 	}
 
 	// …ANY OTHER FIELD IS THE ROW, so this is the asking that resolves it — the same rule GetString
@@ -788,7 +849,15 @@ wxString ibValueReferenceDataObject::GetString() const
 	// statements about DATA, which is not what a reference stands for while one is being WRITTEN.
 	if (appData->DesignerMode()) {
 		wxString declared;
-		return m_metaObject->GenerateDataDesc(this, declared) ? declared : wxString();
+		return m_metaObject->GenerateDataDesc(this, declared) ? std::move(declared) : wxString();
+	}
+
+	// ⭐ …UNLESS ReadBatch ALREADY TOLD IT WHAT IT SAYS — the fields its kind is said by are in its values,
+	// and the kind says them by its own rule; the object behind it stays unread: a printed list needs
+	// names, not objects.
+	if (m_state == ibReferenceState::Presentation) {
+		wxString desc;
+		return m_metaObject->GenerateDataDesc(this, desc) ? std::move(desc) : wxString();
 	}
 
 	// ⭐⭐ ASKING WHAT THIS REFERENCE IS *IS* THE ASKING — so the row is read here if nobody has read
@@ -803,11 +872,11 @@ wxString ibValueReferenceDataObject::GetString() const
 	if (m_newObject)
 		return wxEmptyString;
 	else if (!m_foundedRef)   // deleted, or refused by access policy — the same answer on purpose
-		return wxString::Format(wxT("%s <%i:%s>"), _("Not found"), m_metaObject->GetMetaID(), m_objGuid.str());
+		return wxString::Format(wxT("%s <%i:%s>"), _("Not found"), m_metaObject->GetMetaID(), m_objGuid.GetGuid().str());
 
 	wxASSERT(m_metaObject);
 	wxString desc;
-	return m_metaObject->GenerateDataDesc(this, desc) ? desc : wxString();
+	return m_metaObject->GenerateDataDesc(this, desc) ? std::move(desc) : wxString();
 }
 
 wxString ibValueReferenceDataObject::GetClassName() const
@@ -1033,7 +1102,7 @@ bool ibValueReferenceDataObject::DoDeserialize(const ibDataNode& node)
 	// which is the same defect wearing different clothes.
 	m_objGuid = restored;
 	m_newObject = !restored.isValid();
-	m_initializedRef = false;
+	m_state = ibReferenceState::Raw;   // what it said was what the identity it was a moment ago says
 	m_foundedRef = false;
 	PrepareRef(true);
 	return true;

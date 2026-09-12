@@ -136,7 +136,7 @@ public:
 	{
 		return ibMcpText("Everything the platform has said in the designer - a metaobject explaining "
 			"why it cannot be stored, a refused save, a modal warning, AND what the RUNNING "
-			"APPLICATION reports back over the debugger. These also arrive on their own as "
+			"APPLICATION reports back over the debugger - what it printed and warned about. These also arrive on their own as "
 			"they happen; this is for the history, and for checking after building something.");
 	}
 

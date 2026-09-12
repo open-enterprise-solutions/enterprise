@@ -139,18 +139,6 @@ void ibWorkerPoolHeadless::DropSession(ibSession* session)
 	m_sessions.erase(it);
 }
 
-void ibWorkerPoolHeadless::CancelSession(ibSession* session)
-{
-	if (session == nullptr) return;
-	session->RequestCancel();
-	// Notify in case a worker is parked on the CV (no work for any
-	// session) — wake-up gives the interpreter a chance to observe the
-	// flag immediately if a script in this session is running on the
-	// hot loop. The flag itself is the actual cancel signal; the notify
-	// is just to shorten the latency.
-	m_cv.notify_all();
-}
-
 std::pair<ibSession*, ibWorkerPoolHeadless::ibSessionQueue*>
 ibWorkerPoolHeadless::ClaimSessionLocked()
 {
@@ -289,16 +277,17 @@ void ibWorkerPoolHeadless::Stop()
 	{
 		std::unique_lock<std::mutex> lk(m_mtx);
 		m_stop.store(true);
-		// RAISE CANCEL ON EVERY KNOWN SESSION. m_stop alone is only read
+		// CANCEL EVERY KNOWN SESSION. m_stop alone is only read
 		// between tasks — a task already running reads nothing, and a task
 		// that blocks for minutes (the Firebird maintenance poll) turns
-		// this wait into a hang with no way out. The session's cancel flag
-		// is the signal such a task can watch, so shutdown raises it here,
-		// before waiting for anyone. Safe under m_mtx: RequestCancel is one
-		// atomic store and takes no lock of its own, and the queue entry
-		// pins nothing beyond the pointer we already hold.
+		// this wait into a hang with no way out. The session's cancel
+		// is what such a task hears, so shutdown sends it here, before
+		// waiting for anyone. Under m_mtx because the queue entry pins
+		// nothing beyond the pointer we hold; Cancel takes the connection
+		// pool's lock and the job manager's, and neither ever calls back
+		// into this pool.
 		for (auto& kv : m_sessions)
-			if (kv.first != nullptr) kv.first->RequestCancel();
+			if (kv.first != nullptr) kv.first->Cancel();
 	}
 	m_cv.notify_all();
 

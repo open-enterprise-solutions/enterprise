@@ -601,6 +601,12 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereKeyIn(const std::vector<ibGuid>& ro
 	return *this;
 }
 
+ibDataQueryBuilder& ibDataQueryBuilder::WhereKeyIn(const std::vector<ibValue>& rowKeys)
+{
+	m_keyIn.insert(m_keyIn.end(), rowKeys.begin(), rowKeys.end());
+	return *this;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const ibBackendQueryColumn* column, const ibValue& value)
 {
 	m_writeRows.back().emplace_back(column, value);

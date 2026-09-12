@@ -120,6 +120,9 @@ add_executable(oes_tests
     test_metaDescription.cpp
     test_backendColumnRawDB.cpp
     test_rowValues.cpp
+    test_queryRamTable.cpp
+    test_physicalFieldName.cpp
+    test_databaseStringConverter.cpp
     test_readerWriterMemory.cpp
     test_passwordHash.cpp
     test_md5.cpp

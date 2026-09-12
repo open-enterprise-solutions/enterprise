@@ -328,7 +328,7 @@ bool ibValueRecordDataObjectRef::SaveData()
 		return false;
 	}
 
-	m_objGuid = m_reference_impl->m_guid;
+	m_objGuid = ibGuid(m_reference_impl->m_guid);
 
 	// WRITE the main row through the L3 door — BY COLUMN, no statement, no positions visible
 	// here: From(meta) + SetValue(col, value)* + Insert()/Update(). uuid is the row-key — a RAW primary

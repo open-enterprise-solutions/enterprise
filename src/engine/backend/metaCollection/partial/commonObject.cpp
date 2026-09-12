@@ -171,8 +171,13 @@ int ibCompareByIdentity(const ibValueDataObject* lhs, const ibValueDataObject* r
 {
 	if (lhs == nullptr || rhs == nullptr)
 		return 0;
-	if (lhs->GetGuid() < rhs->GetGuid()) return -1;
-	if (rhs->GetGuid() < lhs->GetGuid()) return 1;
+	// THE GUID AS IT LIES — the raw guid of the key each side hands out by reference. When GetGuid built
+	// an ibUniqueKey BY VALUE, this asked for four of them per comparison, on the path every sort of read
+	// references takes (the payroll sheet's sort before output: 15 s -> 30 s, MEASURED 2026-09-12, Debug).
+	const ibGuid& l = lhs->GetGuid().GetGuid();
+	const ibGuid& r = rhs->GetGuid().GetGuid();
+	if (l < r) return -1;
+	if (r < l) return 1;
 	return 0;   // the same row
 }
 
@@ -410,6 +415,38 @@ ibValueReferenceDataObject* ibValueMetaObjectRecordDataRef::FindObjectValue(cons
 	if (!objGuid.isValid())
 		return nullptr;
 	return ibValueReferenceDataObject::Create(this, objGuid);
+}
+
+// A VALUE SAYS WHAT ITS KIND'S TEMPLATE SAYS — its fields asked of the value in hand. A field it cannot
+// answer for is `false`: nothing to show, which is not the same as showing nothing.
+//
+// ⭐ ONE VALUE FOR THE FIELDS, THEIR TEXTS GLUED INTO ONE STRING. Each field is written into the same value
+// in turn — a string written onto a string keeps its buffer (ibValue::Copy) — and its text is taken from
+// there as it lies (GetString(scratch)): only a field that is not text yet, a number or a date, is made
+// into the scratch. Each text is laid down before the next field is written over it.
+bool ibValueMetaObjectRecordDataRef::GenerateDataDesc(const ibValueDataObject* objValue, wxString& out) const
+{
+	if (objValue == nullptr)
+		return false;
+	ibDataDescParameter parameter;
+	if (!GenerateDataDesc(parameter) || parameter.m_first == nullptr)
+		return false;
+	ibValue field;
+	ibString scratch;
+	if (!objValue->GetValueByMetaID(parameter.m_first->GetMetaID(), field))
+		return false;
+	const ibString& first = field.GetString(scratch);
+	out.reserve(parameter.m_prefix.length() + first.Len() + parameter.m_separator.length());
+	out.assign(parameter.m_prefix).append(first.wc_str(), first.Len());
+	if (parameter.m_second == nullptr)
+		return true;
+	if (!objValue->GetValueByMetaID(parameter.m_second->GetMetaID(), field)) {
+		out.clear();
+		return false;
+	}
+	const ibString& second = field.GetString(scratch);
+	out.append(parameter.m_separator).append(second.wc_str(), second.Len());
+	return true;
 }
 
 //***********************************************************************
@@ -874,13 +911,7 @@ bool ibValueMetaObjectRecordDataRecorderRef::GenerateDataDesc(const ibValueDataO
 		}
 	}
 
-	ibValue vDate, vNumber;
-	if (!objValue->GetValueByMetaID(GetDocumentDate()->GetMetaID(), vDate))
-		return false;
-	if (!objValue->GetValueByMetaID(GetDocumentNumber()->GetMetaID(), vNumber))
-		return false;
-	out = GetSynonym() + wxT(" ") + vNumber.GetString() + wxT(" ") + vDate.GetString();
-	return true;
+	return ibValueMetaObjectRecordDataMutableRef::GenerateDataDesc(objValue, out);   // by its template
 }
 
 // …and no order of its own: two records are told apart by identity.
@@ -981,15 +1012,10 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::GenerateDataDesc(const ibVa
 			}
 	}
 
-	// …and at run time the row's own Description. TRUE even when it comes back EMPTY: a row whose
-	// description nobody filled in HAS a presentation and it is blank. `false` is kept for "there is
-	// nothing here to read at all".
-	ibValue vDescription;
-	if (objValue->GetValueByMetaID((*m_propertyAttributeDescription)->GetMetaID(), vDescription)) {
-		out = vDescription.GetString();
-		return true;
-	}
-	return false;
+	// …and at run time the row's own Description, by its template. TRUE even when it comes back EMPTY: a
+	// row whose description nobody filled in HAS a presentation and it is blank. `false` is kept for
+	// "there is nothing here to read at all".
+	return ibValueMetaObjectRecordDataMutableRef::GenerateDataDesc(objValue, out);
 }
 
 // …and no order of its own: the rows of a catalog, a chart of accounts or a chart of characteristic
@@ -3022,11 +3048,15 @@ bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::WriteRecordSet()
 	return true;
 }
 
-bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::DeleteRecordSet()
+bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::DeleteRecordSet(bool unmodifiedOnly)
 {
 	for (auto& pair : m_records) {
 		ibValueRecordSetObject* record = pair.second;
 		wxASSERT(record);
+		// The mirror of WriteRecordSet's rule: a set that says it is modified holds rows somebody put there,
+		// and it replaces what is stored when it is written — the delete would only take its flag away.
+		if (unmodifiedOnly && record->IsModified())
+			continue;
 		// Same as WriteRecordSet — the register speaks for itself; this only names the one that
 		// returned a plain false without saying anything.
 		if (!record->DeleteRecordSet())
@@ -3185,6 +3215,8 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	// A server has none, and that is not a reason for a write to fail.
 	ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 	const bool newObject = IsNewObject();
+	// Asked before the write marks it posted (ApplyPostedAttributeOnWrite below): is this a posting AGAIN.
+	const bool reposting = !newObject && IsPosted();
 
 	// Every failure below says WHICH STAGE refused and on WHICH OBJECT. A posting run walks a long
 	// chain — handler, row, movements per register, handler again — and "failed to write object in
@@ -3231,6 +3263,21 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	// row-lock from BeginWriteScope, so concurrent re-posts on the same
 	// recorder serialise here.
 	if (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting) {
+		// ⭐⭐ A POSTING AGAIN STARTS FROM A BASE WITHOUT THIS DOCUMENT'S OWN MOVEMENTS. The handler reads the
+		// base to compute what it writes — a correction reads the pieces of the record it corrects — and
+		// what it read used to include what this very document wrote the last time: its own storno still
+		// took the corrected record out of force, and the second posting of a payroll counted 0 days where
+		// the first had counted the month (the ATB bench, 2026-09-11). So they go first, in this
+		// transaction and through the door undoing a posting uses; the handler then writes the document's
+		// movements from nothing. A register the handler leaves alone therefore keeps none — its movements
+		// are what its handler writes. (A set somebody filled before the write is left to replace its own.)
+		if (reposting && !m_registerRecords->DeleteRecordSet(true)) {
+			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("%s: failed to clear the movements of the previous posting"),
+				GetSourceCaption());
+			return false;
+		}
 		ibValue cancel = false;
 		ExecAsProc(wxT("Posting"), cancel,
 			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode));

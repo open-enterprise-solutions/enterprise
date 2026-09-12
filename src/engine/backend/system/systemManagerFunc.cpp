@@ -23,6 +23,7 @@
 
 #include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
 #include "backend/logger/logger.h"                   // the registration journal — the durable channel
+#include "backend/job/jobManager.h"                  // ibBackgroundRun — keeps what a windowless run says
 
 //--- Basic:
 bool ibValueSystemFunction::Boolean(const ibValue& cValue)
@@ -699,6 +700,12 @@ void ibValueSystemFunction::Message(const wxString& strMessage, ibStatusMessage 
 	// per-session worker thread on web.
 	if (auto* frame = ibSession::CurrentFrame())
 		frame->Message(strMessage, status);
+	// ⭐ …AND WITH NO WINDOW, THE BACKGROUND RUN KEEPS IT. A background session is tied to nobody, so what its
+	// code said reached nothing at all — a trial run could not be heard, only its result read. The run this
+	// thread is doing keeps the lines for whoever asks about it (code_status). Not a second road beside the
+	// frame: where there is no frame there was no first one.
+	else if (ibBackgroundRun* const run = ibBackgroundRun::Current())
+		run->Say(strMessage, status);
 
 	// ⭐⭐ AND UP THE DEBUG CHANNEL, WHEN SOMEBODY IS ATTACHED. The road has been there all along —
 	// `CommandId_MessageFromServer`, which the designer parses and hands to every bridge on it —

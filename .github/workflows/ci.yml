@@ -548,14 +548,32 @@ jobs:
         run: cmake --build --preset linux-release --target oes_tests
 
       # Bench cases are DISABLED_ so the normal suite never pays for them; they
-      # only run with --gtest_also_run_disabled_tests.
+      # only run with --gtest_also_run_disabled_tests. StructureFootprint is held
+      # out of this run and given a process of its own in the next step.
       - name: Run benchmarks
         working-directory: build/linux-release
         run: |
           ./bin/Release/oes_tests \
             --gtest_also_run_disabled_tests \
-            --gtest_filter='*Bench*' \
+            --gtest_filter='*Bench*-*StructureFootprint*' \
             --gtest_color=no 2>&1 | tee benchmarks.txt || true
+
+      # A FOOTPRINT IS MEASURED IN A PROCESS OF ITS OWN.
+      #
+      # It reads the resident set, and a fill that lands in memory the process
+      # freed earlier does not move it. In the shared run it came right after
+      # MillionRowScale, which releases ~2.4 GB, and glibc keeps small freed
+      # blocks — so on 2026-09-11 both of its rows read 0 and printed "n/a": a
+      # blind probe that looked like a free structure. A fresh process has nothing
+      # freed before it. Appended to the same file, so the summary and the
+      # artifact carry it like every other row.
+      - name: Run the footprint bench alone
+        working-directory: build/linux-release
+        run: |
+          ./bin/Release/oes_tests \
+            --gtest_also_run_disabled_tests \
+            --gtest_filter='*StructureFootprint*' \
+            --gtest_color=no 2>&1 | tee -a benchmarks.txt || true
 
       # The summary DROPS THE SCAFFOLDING, it does not pick the rows.
       #

@@ -773,6 +773,14 @@ public:
 	/// Is the connection to the database open?
 	virtual bool IsOpen() = 0;
 
+	// ⭐ THE CANCEL, AT THE CONNECTION (ibSession::Cancel) — the standard mechanism of every DBMS, and the one call
+	// that may come from ANOTHER thread while this connection is working. EVERY DRIVER OVERRIDES IT with its own
+	// DBMS's cancel. The statement running there answers its own thread with an error, the driver records it as
+	// DATABASE_LAYER_QUERY_CANCELLED, and ThrowDatabaseException throws the platform's ibBackendInterruptException -
+	// up the stack to whoever ran the statement, met there as the runtime's own. Nothing running, nothing to stop:
+	// the runtime's cancel alone does the rest.
+	virtual void Cancel() = 0;
+
 	/// clone database  
 	virtual ibDatabaseLayer *Clone() = 0;
 

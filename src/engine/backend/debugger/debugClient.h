@@ -407,13 +407,14 @@ public:
 	//support calc strExpression in debugloop
 	void EvaluateAutocomplete(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression, const wxString& keyWord, int currline);
 
-	//get debug list
-	std::vector<unsigned int> GetDebugList(const wxString& strModuleName);
+	// The module's breakpoints as the editor draws them: editor line (from 0) -> condition (empty stops always).
+	std::map<unsigned int, wxString> GetDebugList(const wxString& strModuleName);
 
 	//special functions:
 	void Continue();
 	void StepOver();
 	void StepInto();
+	void StepOut();
 	void Pause();
 	void Stop(bool kill);
 
@@ -427,10 +428,20 @@ public:
 
 	bool SaveAllBreakpoints();
 
+	// One breakpoint, as the maps below keep it: the offset the edits since the last save have moved it by
+	// (its committed line is the map's key - see ShiftLineMap), and the CONDITION it stops on. An empty
+	// condition stops every time; any other is an expression of the language, evaluated in the frame that
+	// reaches the line, and the run stops only when it is true.
+	struct ibBreakpoint {
+		int      m_offset = 0;
+		wxString m_condition;
+	};
+
 	// `refusal`, when given, comes back carrying WHY it was refused — the engine states the reason
 	// and the caller decides whether that is a dialog, a log line or an answer over a socket.
+	// Sets the breakpoint, or gives one already there the condition passed (an empty one stops always).
 	bool ToggleBreakpoint(const wxString& strModuleName, unsigned int line,
-		wxString* refusal = nullptr);
+		wxString* refusal = nullptr, const wxString& condition = wxEmptyString);
 	bool RemoveBreakpoint(const wxString& strModuleName, unsigned int line);
 	// Same shape as ToggleBreakpoint: the reason travels to whoever asked, or is said through the
 	// platform's own Message when nobody did.
@@ -440,9 +451,11 @@ public:
 
 		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
 
+		// ANY of them. It answered for the FIRST debugger connection in the list, so with two applications
+		// attached the answer was whichever one happened to come first.
 		for (auto connection : m_listConnection) {
-			if (ConnectionType::ConnectionType_Debugger == connection->GetConnectionType())
-				return connection->IsConnected();
+			if (ConnectionType::ConnectionType_Debugger == connection->GetConnectionType() && connection->IsConnected())
+				return true;
 		}
 
 		return false;
@@ -458,7 +471,9 @@ public:
 	// 🛑 Measured on myself, 2026-09-04: a forgotten breakpoint parked a run on its second line, I
 	// read "only the first message arrived", and spent several turns building a theory about a lost
 	// channel. The state was knowable the whole time and nothing offered it.
-	std::map<wxString, std::vector<unsigned int>> GetBreakpoints() const;
+	//
+	// (module guid -> (editor line -> condition)); the lines count from 0, as the editor's do.
+	std::map<wxString, std::map<unsigned int, wxString>> GetBreakpoints() const;
 
 public:
 
@@ -517,9 +532,9 @@ protected:
 	//db support
 	void LoadBreakpointCollection(const wxString& strModuleName);
 
-	bool ToggleBreakpointInDB(const wxString& strModuleName, unsigned int line);
+	bool ToggleBreakpointInDB(const wxString& strModuleName, unsigned int line, const wxString& condition);
 	bool RemoveBreakpointInDB(const wxString& strModuleName, unsigned int line);
-	bool OffsetBreakpointInDB(const wxString& strModuleName, unsigned int line, int offset);
+	bool OffsetBreakpointInDB(const wxString& strModuleName, unsigned int line, int offset, const wxString& condition);
 	bool RemoveAllBreakpointInDB();
 
 	//commands:
@@ -584,7 +599,7 @@ private:
 
 	std::vector<ibDebuggerClientConnection*>	m_listConnection;
 
-	std::map <wxString, std::map<unsigned int, int>> m_listBreakpoint; //list of points 
+	std::map <wxString, std::map<unsigned int, ibBreakpoint>> m_listBreakpoint; //list of points: committed line -> offset + condition
 	std::map <wxString, std::map<unsigned int, int>> m_listOffsetBreakpoint; //list of changed transitions
 
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1

@@ -49,7 +49,7 @@ public:
 	virtual int RunQuery();
 	virtual ibDatabaseResultSet* RunQueryWithResults();
 
-	static ibPreparedStatementFirebird* CreateStatement(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL, const wxCSConv* conv);
+	static ibPreparedStatementFirebird* CreateStatement(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL);
 
 	void SetManageTransaction(bool bManageTransaction) { m_bManageTransaction = bManageTransaction; }
 

@@ -2168,6 +2168,11 @@ const std::vector<ibMcpPattern>& Patterns()
 		"the person and the job, or the department, and it answers for exactly that key. The same\n"
 		"question is genuinely asked twice at different widths (once per person for a ceiling, once\n"
 		"per job for an allocation), and one parameterised reader beats two.\n"
+		"* AND IT IS A TABLE A QUERY CAN READ, not only a function a script can call. \"What was this\n"
+		"bonus computed on\" is a report, and a base reachable from code alone leaves the report to\n"
+		"repeat the rule - the second copy that drifts. Read it through the same computation the run\n"
+		"uses, with the condition that chooses the records INSIDE the reading (the base is then\n"
+		"computed for those alone), not around it.\n"
 		"* AND WHERE THE ENGINE'S OWN BASE TABLE IS TOO COARSE, REPLACING IT WITH A HAND-WRITTEN JOIN\n"
 		"IS LEGITIMATE - it is what the engine would have written - but say so where it is written,\n"
 		"because the two then have to be kept in step by discipline.\n"
@@ -2202,6 +2207,10 @@ const std::vector<ibMcpPattern>& Patterns()
 		"* AND A RECALCULATION MARK ON A CLOSED MONTH MUST BE ANSWERABLE BY THE REVERSAL. Nobody\n"
 		"re-posts a paid month, so a mark that only re-posting clears stays for ever; the run that writes\n"
 		"the reversal has computed the position anew and is what answers the mark.\n"
+		"* AND A MARK NAMES THE POSITION, NOT ONLY THE DOCUMENT. One run holds, for one person and one\n"
+		"kind, its own month AND corrections of earlier months; a mark that says only (document, kind,\n"
+		"person) sends every one of them back to be computed, and the reversal answering one month clears\n"
+		"the mark of the other. The month the record is FOR belongs in the mark.\n"
 		"* AND THE SWEEP MUST READ A DEPENDANT'S BASE THE WAY THAT BASE IS GATHERED. A tax gathered by\n"
 		"REGISTRATION period is led by what is REGISTERED in its month, not by what acts in it: asked by\n"
 		"period of action, a June sick leave registered in July marks June's tax - a closed month, a\n"
@@ -9199,34 +9208,8 @@ size_t LinesIn(const wxString& body)
 	return lines;
 }
 
-// The line a reader would have found themselves - the first one carrying any word of the query,
-// so a hit can be judged before it is opened.
-wxString MatchingLine(const wxString& body, const wxString& query)
-{
-	// ⭐ THE LINE IS FOUND BY THE SAME RULE THAT FOUND THE TOPIC (ibMcpWordsFound) - stems, and a
-	// regular expression when that is what was written. Anything else and the two disagree: the
-	// hit is real, the line quoted under it is not the one that matched, and the caller judges the
-	// passage by a sentence that has nothing to do with their question.
-	size_t at = 0;
-
-	while (at <= body.length()) {
-
-		const size_t end = body.find(wxT('\n'), at);
-		const wxString line = body.Mid(at, (end == wxString::npos ? body.length() : end) - at);
-
-		if (ibMcpWordsFound(line, query) > 0) {
-			wxString trimmed = line;
-			trimmed.Trim(true).Trim(false);
-			return trimmed.length() > 200 ? trimmed.Left(197) + wxT("...") : trimmed;
-		}
-
-		if (end == wxString::npos)
-			break;
-		at = end + 1;
-	}
-
-	return wxEmptyString;
-}
+// (The line a hit quotes is found by ibMcpMatchingLine, in mcpTool.cpp — the configuration's own notes are
+// searched the same way, so the rule lives where both reach it.)
 
 // The heading as a LABEL - the sentence a reader picks from, not the paragraph it opens.
 wxString TopicLabel(const wxString& title)
@@ -9343,27 +9326,13 @@ public:
 			"the one wrong move.");
 	}
 
-	// ⭐⭐ THE CORPUS IS THE INDEX. This tool is a door onto a body of text written in the WORDS OF
-	// THE PEOPLE WHO ASK — "how much is left", "I want to see it monthly", "the account it goes
-	// to" — and those are exactly the words a caller searches with. The description above says
-	// what the door is; it does not contain them, so searching it missed every one.
-	//
-	// Handing the whole corpus over is what keeps this true without a second list to maintain: an
-	// entry added tomorrow is findable by its own sentences the moment it is written. Held once,
-	// built on first use — the texts are already static, so this is a concatenation and not a copy
-	// of anything.
-	wxString GetSearchText() const override
-	{
-		static wxString s_index;
-
-		if (s_index.IsEmpty()) {
-			for (const ibMcpPattern& pattern : Patterns())
-				s_index << pattern.m_name << wxT("\n")
-					<< pattern.m_summary << wxT("\n") << pattern.m_text << wxT("\n");
-		}
-
-		return s_index;
-	}
+	// 🛑 THE CORPUS IS NOT THIS TOOL'S SEARCH TEXT, and it was. It was handed over whole (GetSearchText) so
+	// the words of the people who ask would find this door — and a body of text that size holds nearly every
+	// word, so this tool met every word of almost any query and stood in front of the verb the query was
+	// about: "stop the program at a line only when a variable has a certain value" answered pattern_read
+	// alone, and debug_breakpoint not at all (measured 2026-09-11). The words of the trade are answered as
+	// PLACES instead — FindInside below, which mcp_search asks beside the verbs and hands back as `places`
+	// with the way to read them — so they still arrive, as passages, and no longer outrank a verb.
 
 	// ⭐⭐ WHERE IN THE CORPUS THE ANSWER IS - written once and asked by both doors: this tool's own
 	// `query`, and mcp_search with the same words. Two implementations of "find the passage" would
@@ -9424,7 +9393,7 @@ public:
 					ibMcpText("%i of your %i words"), (int)place.m_score, (int)asked));
 
 			// The line that matched, so a caller can judge the hit without fetching it.
-			const wxString line = MatchingLine(place.m_topic.m_body, query);
+			const wxString line = ibMcpMatchingLine(place.m_topic.m_body, query);
 			if (!line.IsEmpty())
 				hit->SetValue(wxT("line"), line);
 

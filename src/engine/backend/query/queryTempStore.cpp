@@ -145,7 +145,6 @@ public:
 	}
 
 	wxString GetQueryTableName() const override { return wxEmptyString; }
-	ibGuid   GetQueryTableGuid() const override { return wxNullGuid; }
 	ibMetaID GetQueryTableId()   const override { return 0; }
 
 private:

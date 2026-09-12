@@ -1018,9 +1018,12 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 			// one statement, exactly like the register-direct path. On Firebird (no temp dialect) Materialise
 			// returns null and we fall back to the RAM-composer INNER JOIN (multiplies — the known FB gap until the
 			// pure-SQL-subquery-EXISTS lands; docs/access-policy-rls.md).
-			ibQueryRamTable rows = innerSource->ComputeRows({});
-			std::shared_ptr<ibTempTableManager> mgr =
-				ibTempTableManager::Materialise(m_target->GetHolder(), rows, innerSource->GetMetaData());
+			// …and CAN is asked BEFORE the rows are computed: without temp tables the RAM join below computes
+			// the inner again, so rows taken first would be read twice (ibTempTableManager::CanMaterialise).
+			std::shared_ptr<ibTempTableManager> mgr;
+			if (ibTempTableManager::CanMaterialise(m_target->GetHolder()))
+				mgr = ibTempTableManager::Materialise(m_target->GetHolder(), innerSource->ComputeRows({}),
+				                                      innerSource->GetMetaData());
 			const ibDbTempTableQueryable* temp     = mgr ? mgr->Queryable() : nullptr;
 			const ibBackendQueryColumn*   innerKey = temp ? temp->ResolveColumnByName(rcols.front()->GetName()) : nullptr;
 			if (temp != nullptr && innerKey != nullptr) {

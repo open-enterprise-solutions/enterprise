@@ -370,7 +370,7 @@ ibValue ibValueQuerySelect::ReadColumn(const ibQueryLowering::OutputColumn& oc) 
 	// A reference / enum / composite dot-walk leaf reassembles from its prefixed field spread.
 	if (m_flat != nullptr) {
 		if (!oc.m_objectPrefix.empty() && oc.m_col != nullptr)
-			return m_flat->GetColumnObject(oc.m_objectPrefix, oc.m_col);
+			return m_flat->GetColumn(oc.m_objectPrefix, oc.m_col);
 		return oc.m_byAlias ? m_flat->GetColumn(oc.m_alias) : m_flat->GetValue(oc.m_col);
 	}
 	if (m_tree != nullptr)

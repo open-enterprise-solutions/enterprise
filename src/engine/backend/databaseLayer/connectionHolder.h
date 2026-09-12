@@ -77,6 +77,12 @@ public:
 	// (via session façade).
 	class ibConnectionScope OpenConnectionScope();
 
+	// The session's cancel (ibSession::Cancel), passed to its connections — its transaction pin and its scope
+	// binding — from any thread (ibDatabaseLayer::Cancel): a cancelled session stops the statement it is
+	// waiting on instead of waiting for it to end. Nothing bound, nothing to do; nothing is checked out.
+	// Defined in connectionPool.cpp beside EnsureConnection.
+	void Cancel();
+
 	// --- DDL/DML barrier state (the current restructuring save) -----------------------------------
 	// The state lives here, not in process-wide statics, because the barrier is tied to THIS holder's
 	// connection / transaction — so the SEVERAL ibSchemaBuilder instances of one save (Reset /

@@ -24,6 +24,7 @@
                                         // model include cycle). (ibComparisonType is no longer used here — the
                                         // L3 condition op is ibQueryFilterOp now, defined below.)
 #include "backend/compiler/value.h"     // ibValue
+#include "backend/uniqueKey.h"          // ibUniqueKey — GetQueryTableGuid hands out the source's key
 #include "queryColumn.h"                // ibBackendQueryColumn (the column counterpart)
 #include "queryUnfold.h"                // ibQueryDimUnfold — a condition may carry the word, so a source can FOLD by it
 #include "queryRamTable.h"              // ibQueryRamTable — ComputeRows produces the L3 table (no runtime type)
@@ -526,7 +527,7 @@ struct ibQueryColumnExpr
 	// several fields and has to be REBUILT on the other side: a CASE over an accounting register's
 	// dimension slot must be written once PER FIELD (the type tag, each admissible type's field,
 	// a reference's pair), all projected under one prefix, so the reader can reassemble the value
-	// through GetColumnObject(prefix, col). Reduced to the first field it would carry the type tag
+	// through GetColumn(prefix, col). Reduced to the first field it would carry the type tag
 	// and nothing else — a column that plainly reports a reference and returns a number.
 	//
 	// Empty name = the first value field, i.e. exactly what Col() has always meant.
@@ -765,7 +766,7 @@ public:
 	// says nothing: it already said which metaobject it is. Still virtual, because a source can own an
 	// identity WITHOUT a metaobject — a temp table has a guid of its own and nothing to read it off.
 	// (Body in queryProvider.cpp, where the metaobject type is complete.)
-	virtual ibGuid GetQueryTableGuid() const;
+	virtual const ibUniqueKey& GetQueryTableGuid() const;
 
 	// The USER-facing name (as in the metadata tree, e.g. "Enumeration3") — for the restructure change
 	// ledger, NOT for SQL. A metaobject-backed source returns its metaobject's name; the default is the
@@ -981,7 +982,6 @@ public:
 	// trivial L3 surface for a non-metaobject (derived) source — no metadata guid, no table name
 	// (matches the RAM temp-table queryable).
 	wxString GetQueryTableName() const override { return wxEmptyString; }
-	ibGuid   GetQueryTableGuid() const override { return wxNullGuid; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
 
 	// ⭐ BUT IT DOES KNOW WHICH CONFIGURATION IT READS — the inner query's own. Answering "no
@@ -1136,7 +1136,7 @@ public:
 	// carries the author's alias down here rather than leaving it in the statement.
 	wxString  GetQueryTableAlias()             const override { return m_sqlAlias; }
 	ibQueryRelPtr GetSourceRelation(const wxString& alias) const override { return m_origin->GetSourceRelation(alias); }
-	ibGuid    GetQueryTableGuid()              const override { return m_origin->GetQueryTableGuid(); }
+	const ibUniqueKey& GetQueryTableGuid()     const override { return m_origin->GetQueryTableGuid(); }
 	ibMetaID  GetQueryTableId()                const override { return m_origin->GetQueryTableId(); }
 	wxString  GetQueryName()                   const override { return m_origin->GetQueryName(); }
 	const ibMetaData* GetMetaData()            const override { return m_origin->GetMetaData(); }

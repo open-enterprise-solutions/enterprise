@@ -57,8 +57,13 @@ class FRONTEND_API ibCodeEditor : public wxStyledTextCtrl {
 protected:
 	// Marker IDs — protected so designer's ibCodeEditorDesigner subclass
 	// (which manages breakpoint markers via debugClient) can reach them.
+	//
+	// ⚠ THE NUMBER IS THE DRAWING ORDER: Scintilla draws a higher-numbered marker over a lower one. The dots come
+	// first so the arrows land on top of them - a conditional dot numbered after the arrows hid the arrow of a
+	// run stopped on it.
 	enum {
 		Breakpoint = 1,
+		ConditionalBreakpoint,   // a breakpoint that stops only when its condition is true - the same dot, another colour
 		CurrentLine,
 		BreakLine,
 	};
@@ -556,10 +561,7 @@ protected:
 	void OnKeyDown(wxKeyEvent& event);
 	void OnCharAdded(wxStyledTextEvent& event);
 	void OnUpdateUI(wxStyledTextEvent& event);
-	void OnMouseMove(wxMouseEvent& event) {
-		LoadToolTip(event.GetPosition());
-		event.Skip();
-	}
+	void OnMouseMove(wxMouseEvent& event);
 
 	// ---- Debugger integration hooks ----
 	// Frontend's ibCodeEditor doesn't know about backend's debugClient;
@@ -651,6 +653,21 @@ private:
 	bool m_enableAutoComplete = false;
 
 	int  m_lineBreakpoint     = wxNOT_FOUND;
+
+	// The hint the breakpoint margin put up (OnMouseMove) - taken down when the mouse leaves the margin,
+	// so it does not stand over the text. Empty when the margin has none up.
+	wxString m_marginHint;
+
+protected:
+	// The context menu's debugger part, for the line it was opened on - the designer adds the
+	// breakpoint condition there; a host with no debugger adds nothing. Last in the class: a virtual
+	// added between others moves every one after it in the table, and an object built before reads
+	// the wrong slot.
+	virtual void AppendDebugMenu(wxMenu& menu, int line) {}
+
+	// What the breakpoint margin says about the line under the mouse - the designer answers with the
+	// breakpoint's condition. False: nothing to say, `hint` untouched.
+	virtual bool GetDebugPointHint(int line, wxString& hint) { return false; }
 };
 
 #endif 

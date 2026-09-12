@@ -20,9 +20,9 @@
 // wants nobody waiting, so it takes a session of its own (Standalone) and runs beside them.
 //
 // ⚠ SO IT CANNOT BE STEPPED THROUGH, and that is the same fact read the other way. What a caller
-// has instead is the trial stage and the REGISTRATION JOURNAL: a background session's `Message`
-// reaches nobody — it is not tied to the caller's session — so the journal, filtered by m_session,
-// is the channel.
+// has instead is the trial stage, what the code SAID — a background session's `Message` reaches no
+// window, so the run keeps the lines and every status answers with them (m_output) — and the
+// REGISTRATION JOURNAL, filtered by m_session, for what the run itself records.
 //
 // ⭐ IT IS LISTED, deliberately. A rented read is minted UNLISTED because it changes nothing; a run
 // that can change the base must be findable by the person whose base it is — it takes a row, writes
@@ -33,6 +33,7 @@
 #include <wx/string.h>
 
 #include <memory>
+#include <vector>
 
 // ⭐ WHAT IS BEING ASKED FOR — a shape rather than four arguments, because it crosses four layers
 // (tool, bridge, adapter, server) and four spellings of one list is four chances to put `said` where
@@ -69,6 +70,14 @@ struct BACKEND_API ibJobRunByteCodeState {
 	wxString m_result;     // what the code came out with, once it has finished
 	bool     m_complete = false;
 	bool     m_known    = false;   // …because a token that names nothing is not a finished run
+
+	// ⭐ WHAT THE CODE SAID — its `Message` lines, which reach no window from a background session; the run
+	// keeps the last of them (ibBackgroundRun::Said). The level is the platform's ibStatusMessage, as a number.
+	struct ibLine {
+		wxString m_text;
+		int      m_status = 0;
+	};
+	std::vector<ibLine> m_output;
 
 	// ⭐ THE WIRE FORMAT LIVES WITH THE STRUCT — writer and reader as each other's mirror, three
 	// lines apart, instead of two matching sequences in two files two thousand lines apart.

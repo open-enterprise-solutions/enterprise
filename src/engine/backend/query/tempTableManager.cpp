@@ -100,6 +100,21 @@ bool ProbeTempCapability(ibDatabaseConnectionHolder* holder, const ibTempTableDi
 
 } // namespace
 
+// ⭐⭐ CAN, ASKED BEFORE THE ROWS ARE PAID FOR. Every promote site computed its source first and only then
+// called Materialise, which on a driver with no temp tables answers null on its first lines — and that
+// driver is Firebird, the default engine. So the computed source was read whole, held, and thrown away,
+// and the RAM road it fell back to read it again: the payroll sheet read its 86 thousand accrual lines
+// twice, 37 s each in Debug (MEASURED 2026-09-12). The question is the same one Materialise asks, the
+// dialect's presence and then the probe, only asked of a caller that has nothing in hand yet.
+bool ibTempTableManager::CanMaterialise(ibDatabaseConnectionHolder* holder)
+{
+	ibConnectionScope scope(holder);
+	if (!scope)
+		return false;
+	const ibTempTableDialect* dialect = scope->GetTempTableDialect();
+	return dialect != nullptr && ProbeTempCapability(holder, *dialect);
+}
+
 std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseConnectionHolder* holder,
                                                                     const ibQueryRamTable& rows,
                                                                     const ibMetaData* metaData)
@@ -113,11 +128,10 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 	if (!scope)
 		return nullptr;   // no connection (pool passive / saturated) -> RAM
 
-	// Capability = the L1 temp dialect's PRESENCE, and this is deliberately NOT wrapped in a capability
-	// accessor of its own: the caller needs the facts themselves two lines down (the CREATE's lexical
-	// bits come from them), so a `CanUseTempTables()` beside this would be a second spelling of the
-	// same null test — a question that removes no knowledge from this tier. nullptr => the driver has
-	// no DB temp tables (FB) => the caller stays on the RAM composer.
+	// Capability = the L1 temp dialect's PRESENCE, read here as facts rather than through CanMaterialise:
+	// the CREATE's lexical bits come from them two lines down. (CanMaterialise exists for the callers that
+	// must know BEFORE computing their rows; this is the insurance for one that did not ask.) nullptr =>
+	// the driver has no DB temp tables (FB) => the caller stays on the RAM composer.
 	const ibTempTableDialect* dialect = scope->GetTempTableDialect();
 	if (dialect == nullptr)
 		return nullptr;

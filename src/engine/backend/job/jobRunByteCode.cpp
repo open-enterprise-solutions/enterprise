@@ -76,6 +76,8 @@ void Describe(const ibBackgroundRun& run, const wxString& session, ibJobRunByteC
 	// which is also written to sys_session.currentActivity and shows in Active Users. So what a
 	// caller reads and what they see cannot drift apart, because there is nothing to drift from.
 	state.m_activity = run.Activity();
+	for (const ibBackgroundRun::ibSaid& said : run.Said())
+		state.m_output.push_back({ said.m_text, (int)said.m_status });
 	if (run.IsComplete()) {
 		state.m_error = run.Error();
 		if (state.m_error.IsEmpty())
@@ -127,6 +129,11 @@ void ibJobRunByteCodeState::Write(ibWriterMemory& to) const
 	to.w_stringZ(m_result);
 	to.w_u8(m_complete ? 1 : 0);
 	to.w_u8(m_known ? 1 : 0);
+	to.w_u32((u32)m_output.size());
+	for (const ibLine& line : m_output) {
+		to.w_stringZ(line.m_text);
+		to.w_u8((u8)line.m_status);
+	}
 }
 
 void ibJobRunByteCodeState::Read(const ibReaderMemory& from)
@@ -139,6 +146,11 @@ void ibJobRunByteCodeState::Read(const ibReaderMemory& from)
 	from.r_stringZ(m_result);
 	m_complete = from.r_u8() != 0;
 	m_known    = from.r_u8() != 0;
+	m_output.resize(from.r_u32());
+	for (ibLine& line : m_output) {
+		from.r_stringZ(line.m_text);
+		line.m_status = from.r_u8();
+	}
 }
 
 bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeState& state)

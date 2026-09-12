@@ -75,6 +75,17 @@ const ibArg& ArgRemove()
 	return s_a;
 }
 
+const ibArg& ArgCondition()
+{
+	static const ibArg s_a(wxT("condition"), ibArg::Kind::Text,
+		ibMcpText("Stop only when this is true - an expression in the module's own dialect, evaluated in "
+			  "the frame that reaches the line, with its locals (`Employee.Code = \"0042\"`, `i > 500`). "
+			  "Leave it out to stop every time. Setting a breakpoint that is already there gives it the "
+			  "new condition. A condition that cannot be evaluated stops, and the reason arrives as a "
+			  "message."));
+	return s_a;
+}
+
 const ibArg& ArgAll()
 {
 	static const ibArg s_a(wxT("all"), ibArg::Kind::Flag,
@@ -116,8 +127,9 @@ const ibArg& ArgAction()
 {
 	static const ibArg s_a(wxT("action"), ibArg::Kind::Text,
 		ibMcpText("What to do with the stopped runtime: continue it, step over the line, step into "
-			  "the call, or pause a runtime that is running."),
-			/*required*/ true, { wxT("continue"), wxT("over"), wxT("into"), wxT("pause") });
+			  "the call, step out to the line after the call that entered this procedure, or pause "
+			  "a runtime that is running."),
+			/*required*/ true, { wxT("continue"), wxT("over"), wxT("into"), wxT("out"), wxT("pause") });
 	return s_a;
 }
 
@@ -239,16 +251,22 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Put a breakpoint on a line of a module, or take one off. The line is the one "
-			"the journal reported, counted the way the editor counts. Set the breakpoints "
-			"first, then ask for the application to be run - the stop arrives as a message. "
+		return ibMcpText("Put a breakpoint on a line of a module, or take one off - the line where the "
+			"program stops, so its variables can be read (debug_evaluate) and stepped on from (debug_run: "
+			"over, into, out to the caller). The line is the one the journal reported, counted the way "
+			"the editor counts. With `condition` it stops only when that expression is true there - when "
+			"a variable has a certain value, on the 500th iteration of a loop (`i = 500`), for one record "
+			"(`Employee.Code = \"0042\"`). Set the breakpoints first, then ask for the application to be "
+			"run - the stop arrives as a message. A module edited in the designer gets to the running "
+			"application only after config_apply and a restart (app_run restart): until then a "
+			"breakpoint on an edited line is refused, and says so. "
 			"`all: true` with nothing else clears every breakpoint there is, which is the menu's "
 			"Remove all breakpoints and the way to leave a base as you found it.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgModule(), ArgLine(), ArgRemove(), ArgAll() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgModule(), ArgLine(), ArgCondition(), ArgRemove(), ArgAll() };
 		return s_arguments;
 	}
 
@@ -285,6 +303,7 @@ public:
 		}
 
 		const bool remove = ArgRemove().Flag(params);
+		const wxString condition = ArgCondition().Text(params).Strip(wxString::both);
 
 		// ⭐ THE REASON IS ASKED FOR. Without the out-parameter the engine states it through the
 		// window the session owns — right for a person at the designer, useless to a caller on a
@@ -292,9 +311,14 @@ public:
 		// to a modal box in front of Max, and this tool answered "the debugger did not accept it").
 		wxString said;
 
+		// 🛑 THE CLIENT COUNTS LINES FROM 0, as the editor's margin does (LineFromPosition); this tool is
+		// told them from 1. It used to pass the number straight on, so every breakpoint set here landed on
+		// the line BELOW the one named - and debug_state listed them from 0 (2026-09-11).
+		const unsigned int editorLine = (unsigned int)(line - 1);
+
 		const bool done = remove
-			? debugClient->RemoveBreakpoint(docPath, (unsigned int)line)
-			: debugClient->ToggleBreakpoint(docPath, (unsigned int)line, &said);
+			? debugClient->RemoveBreakpoint(docPath, editorLine)
+			: debugClient->ToggleBreakpoint(docPath, editorLine, &said, condition);
 
 		// WHAT HAPPENED, ALWAYS. A breakpoint that was refused and a breakpoint
 		// that was set look identical from outside unless the answer says which.
@@ -302,6 +326,8 @@ public:
 		result.SetValue(wxT("module"), moduleName);
 		result.AddField(wxT("line"), ibDataValue::Int((s64)line));
 		result.SetValue(wxT("action"), wxString(remove ? wxT("removed") : wxT("set")));
+		if (!remove && !condition.IsEmpty())
+			result.SetValue(wxT("condition"), condition);
 
 		if (!done)
 			result.SetValue(wxT("note"), said.IsEmpty()
@@ -431,11 +457,21 @@ public:
 					}
 				}
 
-				std::vector<ibDataValue> lines;
-				for (unsigned int line : module.second)
-					lines.push_back(ibDataValue::Int((s64)line));
+				// From 1, as the editor shows them and as debug_breakpoint takes them (the client keeps them from 0).
+				std::vector<ibDataValue> lines, conditions;
+				for (const auto& line : module.second) {
+					lines.push_back(ibDataValue::Int((s64)line.first + 1));
+					if (!line.second.IsEmpty()) {
+						std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+						entry->AddField(wxT("line"), ibDataValue::Int((s64)line.first + 1));
+						entry->SetValue(wxT("condition"), line.second);
+						conditions.push_back(ibDataValue::Child(entry));
+					}
+				}
 
 				node->AddField(wxT("lines"), ibDataValue::Array(lines));
+				if (!conditions.empty())
+					node->AddField(wxT("conditions"), ibDataValue::Array(conditions));
 				set.push_back(ibDataValue::Child(node));
 			}
 
@@ -596,6 +632,7 @@ public:
 		const wxString action = ArgAction().Text(params).Lower();
 		if (action == wxT("over"))  return ibMcpText("stepping over a line");
 		if (action == wxT("into"))  return ibMcpText("stepping into a call");
+		if (action == wxT("out"))   return ibMcpText("stepping out to the caller");
 		if (action == wxT("pause")) return ibMcpText("pausing the runtime");
 		return ibMcpText("letting the runtime carry on");
 	}
@@ -603,7 +640,8 @@ public:
 	wxString GetDescription() const override
 	{
 		return ibMcpText("Let the stopped runtime carry on: continue to the next breakpoint, step over "
-			"the current line, step into the call on it, or pause a running one. After "
+			"the current line, step into the call on it, step out of the current procedure to "
+			"the caller (from the outermost one it continues), or pause a running one. After "
 			"continuing or stepping, ask debug_state again - the next stop arrives as a "
 			"message.");
 	}
@@ -637,10 +675,11 @@ public:
 		if (action == wxT("continue"))   debugClient->Continue();
 		else if (action == wxT("over"))  debugClient->StepOver();
 		else if (action == wxT("into"))  debugClient->StepInto();
+		else if (action == wxT("out"))   debugClient->StepOut();
 		else {
 			// An unknown word must not fall through to a default action - a
 			// misspelling would then silently do something else.
-			refusal = ibMcpText("Unknown action. Use continue, over, into or pause.");
+			refusal = ibMcpText("Unknown action. Use continue, over, into, out or pause.");
 			return false;
 		}
 

@@ -6,10 +6,6 @@
 class BACKEND_API ibValueMetaObjectEnum : public ibValueMetaObject {
 	public:
 
-	ibGuid GetGuid() const {
-		return m_metaGuid;
-	}
-
 	//support icons
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();

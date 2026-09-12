@@ -47,6 +47,10 @@ public:
 	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
 	std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
 
+	// The flat list read from this base is in hand: the references it made — this base's own — are told
+	// what they say together, a table at a time (ibValueReferenceDataObject::ReadBatch). See the base's note.
+	void ReadReferences() const override;
+
 	// --- multi-source: co-located server-side JOIN (docs/query-language-arc.md §22.1a) -------
 	// CanColocateJoin — is the spec's relational tree an N-way INNER/LEFT join of DISTINCT real DB
 	// tables on resolvable (explicit OR reference-derived) single-field keys, every output column

@@ -150,6 +150,48 @@ TEST(SpreadsheetDocument, MissingParameter_AnswersFalse)
 	EXPECT_FALSE(doc->GetParameter(wxT("Nobody"), out));
 }
 
+// A NAME IS FOUND WITHOUT CASE — the rule this lookup always had when it walked every name with
+// CompareString, kept now that it is a find in a map ordered by the same folding (ibCaseFoldLess).
+TEST(SpreadsheetDocument, Parameter_IsFoundWithoutCase)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")));
+
+	ibValue out;
+	EXPECT_TRUE(doc->GetParameter(wxT("PARTNER"), out));
+	EXPECT_EQ(wxT("Alpha"), out.GetString());
+	EXPECT_TRUE(doc->GetParameter(wxT("partner"), out));
+	EXPECT_EQ(wxT("Alpha"), out.GetString());
+}
+
+// …and so ONE NAME IN TWO CASES IS ONE PARAMETER: the second write replaces the first rather than
+// standing beside it, where a lookup would have found whichever came first.
+TEST(SpreadsheetDocument, Parameter_SameNameInAnotherCase_IsTheSameParameter)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")));
+	doc->SetParameter(wxT("PARTNER"), ibValue(wxT("Beta")));
+
+	ibValue out;
+	EXPECT_TRUE(doc->GetParameter(wxT("Partner"), out));
+	EXPECT_EQ(wxT("Beta"), out.GetString());
+}
+
+// NAMES WRITTEN OUT OF ORDER ARE STILL FOUND — the write is hinted at the end for a writer that names
+// its links in increasing order (a composed table), and a name that belongs elsewhere must still land
+// where it belongs.
+TEST(SpreadsheetDocument, Parameter_WrittenOutOfOrder_AllFound)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("Link_00000002_0001"), ibValue(wxT("second")));
+	doc->SetParameter(wxT("Link_00000001_0001"), ibValue(wxT("first")));
+	doc->SetParameter(wxT("Link_00000003_0001"), ibValue(wxT("third")));
+
+	EXPECT_EQ(wxT("first"),  doc->GetParameter(wxT("Link_00000001_0001")).GetString());
+	EXPECT_EQ(wxT("second"), doc->GetParameter(wxT("Link_00000002_0001")).GetString());
+	EXPECT_EQ(wxT("third"),  doc->GetParameter(wxT("Link_00000003_0001")).GetString());
+}
+
 // FILL TYPE "PARAMETER": the cell's whole text IS the parameter name.
 TEST(SpreadsheetDocument, FillTypeParameter_ResolvesWholeText)
 {
@@ -949,4 +991,34 @@ TEST(SpreadsheetDescription, SetColBrake_OverwritesTheMaximumAndClampsToTheConte
 	EXPECT_FALSE(desc.IsColBrake(9));   // clamped back to the last written column
 	EXPECT_TRUE(desc.IsColBrake(2));    // the other entry is untouched
 	EXPECT_EQ(4, desc.GetMaxColBrake());
+}
+
+// The cells live in blocks that grow (16, 32, 64, 128, then 256 at a time), and a pointer handed out
+// by GetOrCreateCell must stay good however many cells come after it — the crash the store exists to
+// rule out. Written across every block boundary, then read back by address and by position, copied
+// and compared.
+TEST(SpreadsheetDescription, Cells_KeepTheirAddressesAcrossEveryBlockBoundary)
+{
+	ibSpreadsheetDescription desc;
+	ibSpreadsheetCellDescription* first = desc.GetOrCreateCell(0, 0);
+	ASSERT_NE(first, nullptr);
+	first->m_value = wxT("first");
+
+	const int rows = 1000;                      // past 240 (the growing blocks) and several 256-blocks
+	for (int row = 1; row < rows; ++row)
+		desc.GetOrCreateCell(row, 0)->m_value = wxString::Format(wxT("r%d"), row);
+
+	EXPECT_EQ(first, desc.GetOrCreateCell(0, 0));   // the same cell, found — not a new one
+	EXPECT_EQ(first->m_value, wxT("first"));        // …and still where it was
+	EXPECT_EQ(rows, desc.GetCellCount());
+	for (int row : { 15, 16, 47, 48, 111, 112, 239, 240, 495, 496, 999 })
+		EXPECT_EQ(desc.GetCellByIdx(static_cast<size_t>(row))->m_value, wxString::Format(wxT("r%d"), row));
+
+	const ibSpreadsheetDescription copy = desc;     // a copy owns cells of its own, equal to these
+	EXPECT_TRUE(copy == desc);
+	EXPECT_NE(copy.GetCell(500, 0), desc.GetCell(500, 0));
+
+	desc.ClearSpreadsheet();
+	EXPECT_EQ(0, desc.GetCellCount());
+	EXPECT_EQ(copy.GetCellByIdx(999)->m_value, wxT("r999"));   // the copy outlives the original's cells
 }

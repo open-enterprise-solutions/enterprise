@@ -5,13 +5,14 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 // ctor
-ibPreparedStatementODBC::ibPreparedStatementODBC(ibInterfaceODBC* pInterface, SQLHENV sqlEnvHandle, SQLHDBC sqlHDBC)
+ibPreparedStatementODBC::ibPreparedStatementODBC(ibInterfaceODBC* pInterface, SQLHENV sqlEnvHandle, SQLHDBC sqlHDBC, std::atomic<void*>* pExecuting)
 	: ibPreparedStatement()
 {
 	m_pInterface = pInterface;
 	m_sqlEnvHandle = sqlEnvHandle;
 	m_sqlHDBC = sqlHDBC;
 	m_bOneTimeStatement = false;
+	m_pExecuting = pExecuting;
 }
 
 ibPreparedStatementODBC::ibPreparedStatementODBC(ibInterfaceODBC* pInterface, SQLHENV sqlEnvHandle, SQLHDBC sqlHDBC, SQLHSTMT sqlStatementHandle)
@@ -202,7 +203,7 @@ int ibPreparedStatementODBC::RunQuery()
 		}
 
 		// Execute the current statement
-		nRet = m_pInterface->GetSQLExecute()((SQLHSTMT)(*start));
+		nRet = Execute((SQLHSTMT)(*start));
 		if (nRet != SQL_SUCCESS && nRet != SQL_SUCCESS_WITH_INFO && nRet != SQL_NO_DATA && nRet != SQL_NEED_DATA)
 		{
 			InterpretErrorCodes(nRet, (SQLHSTMT)(*start));
@@ -282,7 +283,7 @@ ibDatabaseResultSet* ibPreparedStatementODBC::RunQueryWithResults(bool bLogForCl
 				return nullptr;
 			}
 
-			nRet = m_pInterface->GetSQLExecute()(m_Statements[i]);
+			nRet = Execute(m_Statements[i]);
 			if (nRet != SQL_SUCCESS && nRet != SQL_SUCCESS_WITH_INFO)
 			{
 				InterpretErrorCodes(nRet, m_Statements[i]);
@@ -401,6 +402,16 @@ void ibPreparedStatementODBC::SetParam(int nPosition, ibDatabaseParameterODBC* p
 	m_Parameters[nPosition - 1] = pParameter;
 }
 
+SQLRETURN ibPreparedStatementODBC::Execute(SQLHSTMT hstmt)
+{
+	if (m_pExecuting != nullptr)
+		m_pExecuting->store(hstmt);
+	const SQLRETURN nRet = m_pInterface->GetSQLExecute()(hstmt);
+	if (m_pExecuting != nullptr)
+		m_pExecuting->store(nullptr);
+	return nRet;
+}
+
 void ibPreparedStatementODBC::InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr)
 {
 	ibJournalInfo(wxT("db.odbc"),wxT("ibPreparedStatementODBC::InterpretErrorCodes()\n"));
@@ -422,7 +433,7 @@ void ibPreparedStatementODBC::InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr
 			m_pInterface->GetSQLGetDiagRec()(SQL_HANDLE_DBC, m_sqlHDBC, 1, strState, &iNativeCode,
 				strBuffer, ERR_BUFFER_LEN, &iMsgLen);
 
-		SetErrorCode((int)iNativeCode);
+		SetErrorCode(ibDatabaseLayerODBC::TranslateErrorCode((int)iNativeCode, ConvertFromUnicodeStream((char*)strState)));
 		//SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
 		SetErrorMessage(wxString((wxChar*)strBuffer));
 	}

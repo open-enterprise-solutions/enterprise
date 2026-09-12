@@ -971,9 +971,12 @@ public:
 	//
 	// The question is not "does this output group by anything" but "is there anywhere to show rows",
 	// and a detail node IS that somewhere. It says what it is, so it is asked rather than counted.
-	static bool WantsDetails(const Output& output) {
-		return HasGroupingFields(output) || DetailLevelOf(output) != nullptr;
-	}
+	//
+	// ⭐⭐ …AND WHETHER THE ROWS HAVE ANYTHING TO SAY. A record shows "what is left under the headings
+	// above", and an output that shows only its grouping fields and its resources has nothing left: the
+	// headings printed every field it names, and the figures are theirs. There, by definition, there are
+	// no detail records (Max, 2026-09-12). Body in dataComposer.cpp — it reads the selection in force.
+	bool WantsDetails(const Output& output) const;
 
 	// ⭐⭐ HOW MANY LEVELS READ DOWN THE PAGE — the one place the seam of a cross-table is decided,
 	// and the number the FOLD is told (ibQueryLowering::ExecuteTotals) so the cells hang under every

@@ -456,7 +456,7 @@ public:
 	// — a stable unique identity per RAM-table instance (no shared null key -> no collisions).
 	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
 	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
-	virtual ibUniqueKey GetGuid() const override;
+	virtual const ibUniqueKey& GetGuid() const override;
 #pragma endregion
 
 #pragma region _property_object_

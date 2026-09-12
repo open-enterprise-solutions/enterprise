@@ -104,7 +104,7 @@ int ibPreparedStatementPostgresWrapper::DoRunQuery()
 		ExecStatusType status = m_pInterface->GetPQresultStatus()(pResult);
 		if ((status != PGRES_COMMAND_OK) && (status != PGRES_TUPLES_OK))
 		{
-			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status));
+			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status, m_pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)));
 			SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQresultErrorMessage()(pResult)));
 		}
 
@@ -146,7 +146,7 @@ ibDatabaseResultSet* ibPreparedStatementPostgresWrapper::DoRunQueryWithResults()
 		ExecStatusType status = m_pInterface->GetPQresultStatus()(pResult);
 		if ((status != PGRES_COMMAND_OK) && (status != PGRES_TUPLES_OK))
 		{
-			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status));
+			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status, m_pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)));
 			SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQresultErrorMessage()(pResult)));
 		}
 		else
@@ -156,7 +156,6 @@ ibDatabaseResultSet* ibPreparedStatementPostgresWrapper::DoRunQueryWithResults()
 			delete[]paramFormats;
 
 			ibDatabaseResultSetPostgres* pResultSet = new ibDatabaseResultSetPostgres(m_pInterface, pResult);
-			pResultSet->SetEncoding(GetEncoding());
 			return pResultSet;
 		}
 		m_pInterface->GetPQclear()(pResult);

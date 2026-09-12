@@ -168,7 +168,9 @@ enum CommandId
 	//
 	// ⚠ NO STOP REQUIRED either: what happens over there is a rented read, and a running application
 	// can start one whenever. It does not block the person — the rental is a connection of its own.
-	CommandId_Compose = 36
+	CommandId_Compose = 36,
+
+	CommandId_StepOut = 37,   // Runs to the first line of the frame that called this one; from the outermost frame, as Continue.
 };
 
 enum ConnectionType {

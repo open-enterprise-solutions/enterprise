@@ -159,7 +159,6 @@ public:
 	// (No attribute resolution / DB-row materialisation here — a temp source is computed
 	//  in RAM, so those concerns do not exist; the base interface names none of them.)
 	wxString GetQueryTableName() const override { return wxEmptyString; }
-	ibGuid GetQueryTableGuid() const override { return wxNullGuid; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
 
 private:
@@ -189,7 +188,7 @@ public:
 		: m_tableName(std::move(tableName)), m_tableGuid(wxNewUniqueGuid), m_columns(std::move(columns)), m_metaData(metaData) {}
 
 	wxString          GetQueryTableName() const override { return m_tableName; }
-	ibGuid          GetQueryTableGuid() const override { return m_tableGuid; }
+	const ibUniqueKey& GetQueryTableGuid() const override { return m_tableGuid; }
 	ibMetaID          GetQueryTableId()    const override { return 0; }                 // not a metaobject
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }        // reference / enum reconstruction context
 
@@ -217,7 +216,7 @@ public:
 
 private:
 	wxString                  m_tableName;   // the real temp table name (the manager owns its DB lifetime)
-	ibGuid					  m_tableGuid;   // the real temp table GUID (the manager owns its DB lifetime)	
+	ibUniqueKey				  m_tableGuid;   // the real temp table GUID (the manager owns its DB lifetime)	
 	std::vector<ibTempColumn> m_columns;     // metadata-format columns (real type), read via the DB spread
 	const ibMetaData*         m_metaData;    // reference / enum reconstruction context
 };
@@ -260,7 +259,7 @@ public:
 	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return m_keyColumns; }
 
 	wxString          GetQueryTableName() const override { return m_tableName; }
-	ibGuid            GetQueryTableGuid() const override { return m_tableGuid; }
+	const ibUniqueKey& GetQueryTableGuid() const override { return m_tableGuid; }
 	ibMetaID          GetQueryTableId()   const override { return m_tableId; }
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }
 	// No row key and no keyset: a derived table is addressed by its declared key columns, never
@@ -282,7 +281,7 @@ public:
 
 private:
 	wxString                                 m_tableName;
-	ibGuid                                   m_tableGuid;
+	ibUniqueKey                              m_tableGuid;
 	ibMetaID                                 m_tableId;
 	std::vector<const ibBackendQueryColumn*> m_columns;    // NOT owned — the schema table / the config own them
 	const ibMetaData*                        m_metaData;   // reference / enum reconstruction context
@@ -396,7 +395,7 @@ public:
 	}
 
 	wxString          GetQueryTableName() const override { return m_name; }
-	ibGuid            GetQueryTableGuid() const override { return m_guid; }
+	const ibUniqueKey& GetQueryTableGuid() const override { return m_guid; }
 	ibMetaID          GetQueryTableId()   const override { return 0; }          // not a metaobject
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }
 
@@ -431,7 +430,7 @@ public:
 
 private:
 	wxString                                 m_name;
-	ibGuid                                   m_guid;
+	ibUniqueKey                              m_guid;
 	std::vector<std::shared_ptr<ibTempColumn>> m_owned;    // the columns this source publishes — minted here, SHARED so a reader may keep one
 	std::vector<const ibBackendQueryColumn*> m_columns;    // …and the same ones as the interface hands them out
 	std::vector<const ibBackendQueryColumn*> m_keys;       // …and the subset of them that IS the row (see GetPrimaryKeyColumns)

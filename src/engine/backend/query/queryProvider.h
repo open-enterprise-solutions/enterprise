@@ -98,6 +98,13 @@ public:
 		return one != nullptr ? std::vector<const ibBackendQueryable*>{ one }
 		                      : std::vector<const ibBackendQueryable*>{};
 	}
+
+	// ⭐⭐ A FLAT LIST IS WHOLE, AND ITS REFERENCES ARE MADE — the event, raised by the one door every RAM
+	// road ends at (the RAM-backed ibDataQueryResult), of the provider of the source it was read from. It
+	// carries no rows: the references the list holds are in the register already, and that is where they
+	// are read from. Nothing to do by default; the provider of OUR base tells them what they say
+	// (ibDbTableProvider), and the computed provider forwards there, its rows made out of the same base.
+	virtual void ReadReferences() const {}
 };
 
 // Computed virtual table provider — register slice / balance / turnover. Stateless:
@@ -116,6 +123,8 @@ public:
 	// metadata owner); this layer names no metadata. Makes Balance.Item.Name resolve on the RAM path.
 	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
 	std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
+	// …and the references in its rows are the DB provider's business too — forwarded, as above.
+	void ReadReferences() const override;
 };
 
 // ⭐ ONE FOLD'S WHOLE ORDER — the levels it groups by and the figures it rolls, which is everything
@@ -243,6 +252,10 @@ public:
 	// same-named column (branchCols, by position; null = absent -> NULL cell). The RAM UNION
 	// stacking core, pure (no DB) — unit-testable.
 	static void              AppendUnionBranch(ibQueryRamTable& out, const ibQueryRamTable& branch,
+	                                           const std::vector<const ibBackendQueryColumn*>& outCols,
+	                                           const std::vector<const ibBackendQueryColumn*>& branchCols);
+	// …from a branch nobody reads again: its cells moved, its rows moved whole where it keys them as `out` does.
+	static void              AppendUnionBranch(ibQueryRamTable& out, ibQueryRamTable&& branch,
 	                                           const std::vector<const ibBackendQueryColumn*>& outCols,
 	                                           const std::vector<const ibBackendQueryColumn*>& branchCols);
 	// Drop duplicate rows, keyed by the IDENTITY hash (GetHashKey) of every `cols` cell — the RAM

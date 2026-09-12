@@ -325,11 +325,15 @@ std::vector<ibCalcLedMark> ibCalcLedMarks(const std::vector<ibCalcRecordFacts>& 
 	for (const ibCalcRecordFacts& facts : candidates)
 		candidateFacts.push_back(factOf(facts));
 
+	// The table's own key: recorder, type, values — and the MONTH the record is for, since a mark names the
+	// position (a run holds its own month and a correction of an earlier one for one person and one type;
+	// deduplicated without the month, the second was dropped here before its mark was written). Empty in a
+	// register that keeps no action periods, where the key is what it was.
 	std::vector<ibCalcLedMark> marks;
-	std::set<std::tuple<ibValue, ibValue, int>> marked;   // the table's own key: recorder, type, values
+	std::set<std::tuple<ibValue, ibValue, int, ibValue>> marked;
 	for (const size_t led : ibFindLedRecords(changedFacts, candidateFacts, leads, baseByRegistration)) {
 		const ibCalcRecordFacts& stale = candidates[led];
-		if (!marked.emplace(stale.recorder, stale.type, candidateFacts[led].key).second)
+		if (!marked.emplace(stale.recorder, stale.type, candidateFacts[led].key, stale.actionPeriod).second)
 			continue;
 		marks.push_back({ led, valuesOf(stale) });
 	}

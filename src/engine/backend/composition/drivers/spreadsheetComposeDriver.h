@@ -34,7 +34,10 @@
 #include "backend/composition/drivers/compositionDriver.h"   // a DRIVER needs the contract, not the composer
 #include "backend/backend_spreadsheet.h"
 
-#include <map>      // a cross row's cells are sparse — column key index -> figures
+#include "backend/rowValues.h"   // a cross row's cells — sparse, column key index -> figures
+
+#include <deque>    // the cross rows — see m_crossRows
+#include <map>      // the column total's cells — see m_columnTotalCells
 #include <vector>
 
 class BACKEND_API ibSpreadsheetComposeDriver : public ibCompositionDriver
@@ -221,7 +224,10 @@ private:
 		// column key index -> the figures where that column meets this row. Sparse on purpose: a
 		// pair that never occurred has no cell, and an empty cell is what "never happened" looks
 		// like — printing a zero there would state a fact nobody measured.
-		std::map<size_t, std::vector<ibValue>> m_cells;
+		// ONE SORTED VECTOR (rowValues.h), not a tree: a row holds a cell per column key — three for
+		// an employee — and a tree gave each a heap node and every row a head of its own, 120
+		// thousand nodes for one payroll sheet (2026-09-12).
+		ibRowValues<size_t, std::vector<ibValue>> m_cells;
 		// …and the SUBTOTALS, under the prefix they total. A column axis deeper than one level has a
 		// figure per upper heading too, and the fold computed it at that node — so it costs nothing
 		// to keep and would cost a third read to recover.
@@ -283,11 +289,15 @@ private:
 	std::vector<size_t> m_measureAt;   // schema indices of the measures, in the order declared
 	CrossKey              m_colPath;   // the column key being walked — one entry per column level
 	std::vector<CrossKey> m_colKeys;   // the distinct column keys, in first-seen order
+	size_t m_colKeyHint = static_cast<size_t>(-1);   // the key found last — see ColumnKeyIndex
 	// …and the distinct PREFIXES that carry a subtotal — the upper column headings. Held for the
 	// whole table, not per row: a column exists or it does not, and one row having nothing under a
 	// heading is not the heading going away.
 	std::vector<CrossKey> m_colSubtotalKeys;
-	std::vector<CrossRow> m_crossRows;
+	// ⚠ A DEQUE — a line is added per row heading, forty thousand of them on a payroll sheet, and a
+	// vector moved every line it held at each doubling: a moved map is a fresh one allocated (MSVC), and
+	// the moves stood in the stack samples of the walk (2026-09-12).
+	std::deque<CrossRow> m_crossRows;
 	// DO THE RECORDS READ ACROSS THE PAGE? Told by the output (ibCompositionOutputInfo::m_detailsAxis),
 	// because a node says it IS a record and never says which axis it belongs to.
 	bool m_detailsAcross = false;

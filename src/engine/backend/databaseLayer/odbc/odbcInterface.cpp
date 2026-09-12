@@ -280,6 +280,16 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
+	symbol = wxT("SQLCancel");
+	if (m_ODBCDLL.HasSymbol(symbol))
+	{
+		m_pSQLCancel = (SQLCancelType)m_ODBCDLL.GetSymbol(symbol);
+	}
+	else
+	{
+		return false;
+	}
+
 	return true;
 }
 

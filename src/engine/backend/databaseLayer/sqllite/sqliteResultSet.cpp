@@ -26,8 +26,7 @@ ibDatabaseResultSetSQLite::ibDatabaseResultSetSQLite(ibPreparedStatementSQLite* 
 	int nFieldCount = sqlite3_column_count(m_pSqliteStatement);
 	for (int i = 0; i < nFieldCount; i++)
 	{
-		wxString strField = ConvertFromUnicodeStream(sqlite3_column_name(m_pSqliteStatement, i));
-		m_FieldLookupMap[strField] = i;
+		m_FieldLookupMap[ConvertFromUnicodeStream(sqlite3_column_name(m_pSqliteStatement, i))] = i;   // as written: the map is case-blind
 	}
 }
 
@@ -64,8 +63,9 @@ bool ibDatabaseResultSetSQLite::Next()
 
 	if ((nReturn != SQLITE_ROW) && (nReturn != SQLITE_DONE))
 	{
-		ibJournalError(wxT("db.sqlite"),wxT("Error with RunQueryWithResults\n"));
 		SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
+		if (GetErrorCode() != DATABASE_LAYER_QUERY_CANCELLED)   // a cancel is no error - see firebirdResultSet.cpp
+			ibJournalError(wxT("db.sqlite"),wxT("Error with RunQueryWithResults\n"));
 #if SQLITE_VERSION_NUMBER>=3002002
 		// sqlite3_db_handle wasn't added to the SQLite3 API until version 3.2.2
 		SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(sqlite3_db_handle(m_pSqliteStatement))));
@@ -203,8 +203,8 @@ bool ibDatabaseResultSetSQLite::IsFieldNull(int nField)
 
 int ibDatabaseResultSetSQLite::LookupField(const wxString& strField)
 {
-	StringToIntMap::iterator SearchIterator = std::find_if(m_FieldLookupMap.begin(), m_FieldLookupMap.end(),
-		[strField](const auto pair) { return stringUtils::CompareString(pair.first, strField); });
+	// Found, not walked — see firebirdResultSet.cpp.
+	StringToIntMap::iterator SearchIterator = m_FieldLookupMap.find(strField);
 
 	if (SearchIterator == m_FieldLookupMap.end())
 	{

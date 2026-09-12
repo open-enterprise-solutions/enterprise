@@ -291,8 +291,6 @@ ibDatabaseResultSet* ibPreparedStatementSQLite::RunQueryWithResults()
 	// Work off the assumption that only the last statement will return result
 
 	ibDatabaseResultSetSQLite* pResultSet = new ibDatabaseResultSetSQLite(this);
-	if (pResultSet)
-		pResultSet->SetEncoding(GetEncoding());
 
 	LogResultSetForCleanup(pResultSet);
 	return pResultSet;

@@ -931,9 +931,11 @@ TEST(QueryDistinctAggregate, ItWorksInTotalsToo)
 TEST(QueryComposerDetails, ADetailLevelWritesNothingIntoTheQuery)
 {
 	ibDataDBComposer composer;
-	composer.FromText(wxT("SELECT Partner, Amount FROM Document.Sales"));
+	composer.FromText(wxT("SELECT Partner, Number, Amount FROM Document.Sales"));
 	composer.Resource(wxT("SUM"), wxT("Amount"));
 	composer.TotalBy(wxT("Partner"));
+	// A field no heading prints — without one a record would have nothing to show (see the next pin).
+	composer.Select(wxT("Number"));
 
 	const wxString grouped = composer.RenderText();
 	EXPECT_TRUE(grouped.Contains(wxT("TOTALS")));
@@ -949,7 +951,31 @@ TEST(QueryComposerDetails, ADetailLevelWritesNothingIntoTheQuery)
 	EXPECT_FALSE(composer.RenderText().Contains(wxT("BY ,")));
 
 	// What DID change is what the read is asked for.
-	EXPECT_TRUE(ibDataComposer::WantsDetails(composer.Root()));
+	EXPECT_TRUE(composer.WantsDetails(composer.Root()));
+}
+
+// ⭐⭐ A RECORD SHOWS WHAT IS LEFT UNDER THE HEADINGS — and an output that shows only what its headings
+// print and what its figures fold has nothing left, so it reads no records (Max, 2026-09-12: *"if you
+// added only the grouping columns to the selection and no others, there can be no detail records by
+// definition"*). The payroll sheet read 126 thousand of them that it never printed.
+TEST(QueryComposerDetails, AnOutputShowingOnlyItsGroupingsAndFiguresReadsNoRecords)
+{
+	ibDataDBComposer composer;
+	composer.FromText(wxT("SELECT Partner, Number, Amount FROM Document.Sales"));
+	composer.Resource(wxT("SUM"), wxT("Amount"));
+	composer.TotalBy(wxT("Partner"));
+
+	// Nothing chosen: a report that groups reads its grouping fields alone — nothing is left.
+	EXPECT_FALSE(composer.WantsDetails(composer.Root()));
+
+	// The heading's key and the figure are what the headings already print.
+	composer.Select(wxT("Partner"));
+	composer.Select(wxT("Amount"));
+	EXPECT_FALSE(composer.WantsDetails(composer.Root()));
+
+	// A field no heading prints is what a record is for.
+	composer.Select(wxT("Number"));
+	EXPECT_TRUE(composer.WantsDetails(composer.Root()));
 }
 
 // AN OUTPUT THAT GROUPS BY NOTHING asks for nothing special while nobody has said otherwise — its
@@ -965,12 +991,12 @@ TEST(QueryComposerDetails, AnUngroupedOutputWantsDetailsOnlyWhenAskedTo)
 	ibDataDBComposer composer;
 	composer.FromText(wxT("SELECT Partner, Amount FROM Document.Sales"));
 
-	EXPECT_FALSE(ibDataComposer::WantsDetails(composer.Root()));
+	EXPECT_FALSE(composer.WantsDetails(composer.Root()));
 
 	ibDataComposer::GroupNode details;
 	details.m_kind = ibCompositionLevelKind::Details;
 	composer.Root().m_rowGroups.push_back(details);
-	EXPECT_TRUE(ibDataComposer::WantsDetails(composer.Root()));
+	EXPECT_TRUE(composer.WantsDetails(composer.Root()));
 	EXPECT_FALSE(ibDataComposer::HasGroupingFields(composer.Root()));   // still nothing to fold BY
 }
 

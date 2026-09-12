@@ -26,6 +26,8 @@ protected:
 	                        const wxString& docPath,
 	                        const wxString& expression) override;
 	void RefreshBreakpointMarkers() override;
+	void AppendDebugMenu(wxMenu& menu, int line) override;
+	bool GetDebugPointHint(int line, wxString& hint) override;
 };
 
 #endif // __IB_CODE_DESIGNER_H__

@@ -695,6 +695,9 @@ void ibFrontendMainFrameDesigner::OnRunDebugCommand(wxCommandEvent& event)
 	case wxID_DESIGNER_DEBUG_STEP_INTO:
 		debugClient->StepInto();
 		break;
+	case wxID_DESIGNER_DEBUG_STEP_OUT:
+		debugClient->StepOut();
+		break;
 	case wxID_DESIGNER_DEBUG_PAUSE:
 		debugClient->Pause();
 		break;
@@ -709,6 +712,30 @@ void ibFrontendMainFrameDesigner::OnRunDebugCommand(wxCommandEvent& event)
 		break;
 	case wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS:
 		debugClient->RemoveAllBreakpoint();
+		break;
+	}
+}
+
+// ⭐ THE DEBUG COMMANDS ASK THE CLIENT, AT THE MOMENT THEY ARE SHOWN. They used to be switched on and off by
+// the debugger's events, and "the session ended" arrived while the connection it was about still counted as
+// connected - so Pause, the steps and both stops stayed lit with nothing attached (2026-09-11). A state read
+// when it is needed cannot run ahead of the thing it describes; the events only ask for it to be read again
+// (Debugger_OnStateChanged).
+void ibFrontendMainFrameDesigner::OnUpdateDebugCommand(wxUpdateUIEvent& event)
+{
+	const bool attached = debugClient != nullptr && debugClient->HasConnections();
+	const bool stopped  = attached && debugClient->IsEnterLoop();
+
+	switch (event.GetId())
+	{
+	case wxID_DESIGNER_DEBUG_NEXT_POINT:           // continue - from a stop
+		event.Enable(stopped);
+		break;
+	case wxID_DESIGNER_DEBUG_PAUSE:                // pause - a runtime that is going
+		event.Enable(attached && !stopped);
+		break;
+	default:                                       // the steps and both stops - whenever something is attached
+		event.Enable(attached);
 		break;
 	}
 }

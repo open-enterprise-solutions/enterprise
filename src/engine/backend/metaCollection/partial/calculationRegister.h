@@ -19,6 +19,8 @@
 
 class ibValueMetaObjectCalculationRegister;
 class ibValueMetaObjectChartOfCalculationTypes;
+class ibValueMetaObjectResource;
+class ibCalcBaseSourceDescriptor;   // the base, as a source — defined below the register
 
 // (What a period of a record MEANS in days — whole days, the end included — and every other rule the
 // register's records are computed by, are in backend/calculation/calculation.h.)
@@ -176,6 +178,11 @@ public:
 	bool IsUseBasePeriod() const { return m_propertyUseBasePeriod->GetValueAsBoolean(); }
 	ibValueMetaObjectAttributePredefined* GetBasePeriodStart() const { return m_propertyAttributeBasePeriodStart->GetMetaObject(); }
 	ibValueMetaObjectAttributePredefined* GetBasePeriodEnd()   const { return m_propertyAttributeBasePeriodEnd->GetMetaObject(); }
+
+	// The registers this one can take a base FROM — each one a source `<this>.Base<that>`: every
+	// calculation register bound to this register's chart or to one of the charts its BaseCharts lists
+	// (the charts whose types the Base section may name). None when this register keeps no base period.
+	std::vector<const ibValueMetaObjectCalculationRegister*> GetBaseRegisters() const;
 
 	//support icons
 	virtual wxIcon GetIcon() const;
@@ -362,6 +369,10 @@ private:
 	mutable std::unique_ptr<ibSchemaTableQueryable> m_actualPeriodsQueryable;   // rebuilt on every run
 	ibCalcActualPeriodSourceDescriptor m_actualPeriodsSource{ this };
 
+	// The base from each register GetBaseRegisters names, as a source — built afresh on every run (the
+	// registers a base may come from are configuration, and a run is where it may have changed).
+	std::vector<std::unique_ptr<ibCalcBaseSourceDescriptor>> m_baseSources;
+
 	// The calculation-type standard attribute — an empty-typed reference whose type is set to the bound
 	// chart of calculation types by SetChartOfCalculationTypes (like the recorder's type is set by its
 	// posting documents). Always a predefined attribute of a calculation register.
@@ -406,9 +417,15 @@ private:
 // stores a guid and no way to know what it points at. Their ids were `metaID | 0x20000000` and
 // `| 0x40000000` — positive bands, the scheme queryColumn.h retired because a band has to be read
 // before every addition and nothing makes anybody read it.
+//
+// ⭐ AND A THIRD, WHEN THE REGISTER KEEPS ACTION PERIODS: THE MONTH THE MARKED RECORD IS FOR (2026-09-11).
+// A mark named (recorder, type, dimension values), and one payroll run holds two positions of one type for
+// one employee — its own month and a correction of an earlier one — so a mark on either sent BOTH back to
+// be computed. The month is what tells the two apart (it is part of a position, calculation.h), and it is
+// written beside the type. Its type is lent by the register's ActionPeriod.
 class BACKEND_API ibRecalculationStandardColumn : public ibBackendQueryColumn {
 public:
-	enum class Role { RecalculationObject, CalculationType };
+	enum class Role { RecalculationObject, CalculationType, ActionPeriod };
 
 	ibRecalculationStandardColumn(const ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation* meta, Role role) : m_meta(meta), m_role(role) {}
 
@@ -433,11 +450,12 @@ public:
 	explicit ibRecalculationQueryable(const ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation* meta)
 		: m_meta(meta),
 		  m_recalcObject(meta, ibRecalculationStandardColumn::Role::RecalculationObject),
-		  m_calcType(meta, ibRecalculationStandardColumn::Role::CalculationType) {}
+		  m_calcType(meta, ibRecalculationStandardColumn::Role::CalculationType),
+		  m_actionPeriod(meta, ibRecalculationStandardColumn::Role::ActionPeriod) {}
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;
 	virtual wxString GetQueryTableName() const override;
-	virtual ibGuid GetQueryTableGuid() const override;
+	virtual const ibUniqueKey& GetQueryTableGuid() const override;
 	virtual wxString GetQueryName() const override;
 	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;
@@ -452,11 +470,14 @@ public:
 	// otherwise write a field named `fld0` gets nothing to write into.
 	const ibBackendQueryColumn* RecalculationObjectColumn() const;
 	const ibBackendQueryColumn* CalculationTypeColumn() const;
+	// Null as well when the register keeps no action periods — there is no month to name then.
+	const ibBackendQueryColumn* ActionPeriodColumn() const;
 
 private:
 	const ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation* m_meta;
 	ibRecalculationStandardColumn                                               m_recalcObject;
 	ibRecalculationStandardColumn                                               m_calcType;
+	ibRecalculationStandardColumn                                               m_actionPeriod;
 };
 
 // ibRecalculationSourceDescriptor — the recalculation's L4 source descriptor. It CONTAINS the vended
@@ -514,10 +535,27 @@ public:
 	// means a recalculation saved before they existed: it has no such columns until it is created anew.
 	const ibValueMetaObjectAttributeBase* GetRecalculationObject() const { return m_propertyRecalculationObject->GetMetaObject(); }
 	const ibValueMetaObjectAttributeBase* GetCalculationType() const { return m_propertyCalculationType->GetMetaObject(); }
+	const ibValueMetaObjectAttributeBase* GetActionPeriod() const { return m_propertyActionPeriod->GetMetaObject(); }
+
+	// The register this recalculation belongs to — its parent, and never anything else (ResolveChild),
+	// lifted the way a child lifts its parent (GetParentAsType): for the columns' type and the month's question.
+	const ibValueMetaObjectCalculationRegister* GetRegister() const;
+
+	// Does a mark here name the month its record is for — the register keeps action periods, and this
+	// recalculation has an identity for the column (see StampActionPeriodIfNeverSaved).
+	bool KeepsActionPeriod() const;
 
 	// …and the COLUMNS themselves — what a reader or a writer of this table names.
 	const ibBackendQueryColumn* GetRecalculationObjectColumn() const { return m_queryable.GetQueryable()->RecalculationObjectColumn(); }
 	const ibBackendQueryColumn* GetCalculationTypeColumn() const { return m_queryable.GetQueryable()->CalculationTypeColumn(); }
+	const ibBackendQueryColumn* GetActionPeriodColumn() const { return m_queryable.GetQueryable()->ActionPeriodColumn(); }
+
+	// ⭐ WHERE A MARK'S IDENTITY LIVES WHEN THE INDEX CANNOT HOLD THE KEY — empty in the ordinary case.
+	// A recorder, a type and a few reference dimensions pass Firebird's sixteen index segments quickly (a
+	// reference is three fields), and past them the uniqueness moves into a digest column, as a register's
+	// totals key does (ibDeclareDerivedKey). Asked by the schema that declares the column and by the write
+	// that fills it, through one question (ibDerivedKeyNeedsHash), so the two cannot disagree.
+	wxString GetKeyHashColumn() const;
 
 	//the dimension children of this recalculation.
 	std::vector<ibValueMetaObjectDimension*> GetDimensionArrayObject() const {
@@ -571,7 +609,8 @@ protected:
 	// attribute's own column would answer with the attribute's own (empty) type, and the columns that
 	// answer with the register's are the queryable's — every road to this table goes through those.
 	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
-		for (ibValueMetaObjectAttributeBase* identity : { m_propertyRecalculationObject->GetMetaObject(), m_propertyCalculationType->GetMetaObject() })
+		for (ibValueMetaObjectAttributeBase* identity : { m_propertyRecalculationObject->GetMetaObject(),
+				m_propertyCalculationType->GetMetaObject(), m_propertyActionPeriod->GetMetaObject() })
 			if (identity != nullptr && identity->GetMetaID() != 0)
 				array.push_back(identity);
 		return true;
@@ -579,11 +618,26 @@ protected:
 
 private:
 
+	// ⚠ THE MONTH'S COLUMN WAS BORN AFTER RECALCULATIONS WERE FIRST SAVED, so a saved one has no node for it
+	// and loads it at id 0. The id is handed out in before-run, and ONLY by the copy that saves itself —
+	// schema-authority.md § 6.1, the rule the chart's sections follow (StampIfNeverSaved): stamped in the
+	// copy that mirrors the database too, the column would be in both snapshots and never be added.
+	bool StampActionPeriodIfNeverSaved(int flags);
+
+	// The month's attribute once it has a number; null while it is 0 — not part of this configuration yet,
+	// and run at 0 it would register under 0, so it takes no part in the events until then.
+	ibValueMetaObjectAttributeBase* NumberedActionPeriod() const {
+		ibValueMetaObjectAttributeBase* month = m_propertyActionPeriod->GetMetaObject();
+		return month != nullptr && month->GetMetaID() != 0 ? month : nullptr;
+	}
+
 	ibPropertyCategory* m_categoryStandard = ibPropertyObject::CreatePropertyCategory(wxT("Standard"), _("Standard"));
 	ibPropertyContainer<>* m_propertyRecalculationObject = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryStandard,
 		CreateEmptyType(wxT("RecalculationObject"), _("Recalculation object"), wxEmptyString, ibItemMode::ibItemMode_Item));
 	ibPropertyContainer<>* m_propertyCalculationType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryStandard,
 		CreateEmptyType(wxT("CalculationType"), _("Calculation type"), wxEmptyString, ibItemMode::ibItemMode_Item));
+	ibPropertyContainer<>* m_propertyActionPeriod = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryStandard,
+		CreateEmptyType(wxT("ActionPeriod"), _("Action period"), wxEmptyString, ibItemMode::ibItemMode_Item));
 
 	// the L4 source descriptor — CONTAINS the vended queryable (stable for this recalculation's life)
 	// and is registered with the factory on run / close; GetQueryable() forwards to it.
@@ -600,6 +654,72 @@ ibValueMetaObjectCalculationRegister::GetRecalculationArrayObject(std::vector<ib
 	FillArrayObjectByFilter<ibValueMetaObjectRecalculation>(array, { g_metaRecalculationCLSID });
 	return array;
 }
+
+//********************************************************************************************
+//*                                  The base, as a source                                   *
+//********************************************************************************************
+
+// ⭐⭐ THE BASE, AS A SOURCE — `CalculationRegister.<Register>.Base<BaseRegister>(Condition)` (Max,
+// 2026-09-11: "move the base onto a queryable"). The register's own records, each with the base it takes
+// from <BaseRegister>: one `Base<Resource>` column per resource of the base register, summed over the
+// record's base period. ONE ROAD: a module's GetBase builds this very table and reads it through the door,
+// as a slice's manager reads its slice — so a report and a payroll run cannot read two different bases.
+// Until now the base was reachable from a script alone, and a report showing what a bonus was computed
+// on had nothing to read it from.
+//
+// COMPUTED IN MEMORY, AND NOT BY CHOICE: which base pieces meet which record is one statement on the
+// server (ibCalcReadBase), but each piece's share is a division, and a NUMERIC divided in SQL keeps its
+// operands' scale and cuts at the cent on every piece. So the rows are made here, and the query around
+// them joins, groups and filters them as it does any computed table (a register's balance, a slice).
+//
+// ⭐ THE CONDITION IS THE SOURCE'S OWN. Written in the parentheses it chooses WHICH RECORDS take a base,
+// and the base is computed for those alone; written in the WHERE around the table it chooses among rows
+// already computed for the whole register — correct, and as slow as the register is long.
+
+class ibCalcBaseQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectCalculationRegister> {
+public:
+	ibCalcBaseQueryable(const ibValueMetaObjectCalculationRegister* reg, const ibValueMetaObjectCalculationRegister* base,
+		const ibQueryPredicatePtr& condition);
+
+	// The register's columns, and the base's after them.
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;
+	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;
+
+	// The records the condition chooses (every record, with none), each with its base. Refuses a chart that
+	// takes no base, and a base by action period from a register that keeps none; a record whose type takes
+	// no base reads 0.
+	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
+
+	const std::vector<std::shared_ptr<ibBackendColumnRawDB>>& GetBaseColumns() const { return m_baseColumns; }
+
+private:
+	const ibValueMetaObjectCalculationRegister*        m_base;
+	ibQueryPredicatePtr                                m_condition;     // which records take a base — consumed here
+	std::vector<std::shared_ptr<ibBackendColumnRawDB>> m_baseColumns;   // Base<Resource>, shared: a column is shared by its owner
+};
+
+class ibCalcBaseSourceDescriptor : public ibQueryableSourceDescriptor {
+public:
+	ibCalcBaseSourceDescriptor(const ibValueMetaObjectCalculationRegister* reg, const ibValueMetaObjectCalculationRegister* base)
+		: m_reg(reg), m_base(base) {}
+
+	wxString GetNamespace() const override;
+	wxString GetName() const override;
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
+		const std::vector<ibQueryPredicatePtr>& conditions) override;
+	// The condition names the REGISTER'S fields — which records take a base — so it is resolved against
+	// the register, which exists before any companion does.
+	const ibBackendQueryable* GetConditionScope() const override;
+	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
+	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+
+private:
+	const ibValueMetaObjectCalculationRegister* m_reg;
+	const ibValueMetaObjectCalculationRegister* m_base;
+	ibQueryPredicatePtr                         m_pendingCondition;   // the consumed condition, for the length of one call
+	mutable std::unique_ptr<ibCalcBaseQueryable> m_catalogue;         // the explorer's columns: no condition, never read
+};
 
 //********************************************************************************************
 //*                                      Object                                              *

@@ -154,11 +154,26 @@ bool ibMetaDescriptionMemory::ReadNode(const ibDataValue& value, ibMetaDescripti
 	return true;
 }
 
-bool ibMetaDescriptionMemory::WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc)
+// ⭐ A BINDING WRITES THE OBJECTS IT NAMES THAT ARE STILL THERE. Deleting an object marks it and leaves
+// it standing until the configuration is saved; nothing took its id out of the bindings that named it,
+// so a document went on posting "into" a register that no longer existed — `#<id> (missing)` in its
+// register list for good, and the same for an owner, a generation target or a chart. This is the one
+// door all six bindings save through, so the rule is said once: an id that names no object, or names
+// one marked deleted, is not written. Nothing in memory changes — a deletion taken back before the
+// save finds its bindings as they were.
+bool ibMetaDescriptionMemory::WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc,
+	const ibMetaData* metaData)
 {
 	std::vector<ibDataValue> ids;
-	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++)
-		ids.push_back(ibDataValue::Int(metaDesc.GetByIdx(idx)));
+	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
+		const ibMetaID id = metaDesc.GetByIdx(idx);
+		if (metaData != nullptr) {
+			const ibValueMetaObject* named = metaData->FindAnyObjectByFilter(id);
+			if (named == nullptr || named->IsDeleted())
+				continue;
+		}
+		ids.push_back(ibDataValue::Int(id));
+	}
 	value = ibDataValue::Array(ids);
 	return true;
 }

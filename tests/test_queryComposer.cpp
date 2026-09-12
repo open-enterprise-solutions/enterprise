@@ -102,7 +102,9 @@ private:
 //     every register today) still comes back correctly filtered.
 class RecordingComputedQ : public ibBackendQueryable {
 public:
-	RecordingComputedQ(const wxString& table, ibMetaID metaId) : m_table(table), m_metaId(metaId) {}
+	RecordingComputedQ(const wxString& table, ibMetaID metaId) : m_table(table), m_metaId(metaId) {
+		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(metaId); m_key = ibGuid(impl);
+	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
 	void SetRows(std::function<ibQueryRamTable()> b) { m_build = std::move(b); }
 	const std::vector<ibQueryCondition>& Seen() const { return m_seen; }
@@ -116,9 +118,7 @@ public:
 
 	wxString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()   const override { return m_metaId; }
-	ibGuid   GetQueryTableGuid() const override {
-		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(m_metaId); return ibGuid(impl);
-	}
+	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
@@ -132,6 +132,7 @@ public:
 private:
 	wxString m_table;
 	ibMetaID m_metaId;
+	ibUniqueKey m_key;   // its table guid, the id in the first word
 	std::vector<const ibBackendQueryColumn*> m_cols;
 	std::function<ibQueryRamTable()>         m_build;
 	mutable std::vector<ibQueryCondition>    m_seen;

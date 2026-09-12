@@ -7,6 +7,7 @@
 #include "backend/databaseLayer/databaseLayerException.h"
 
 #include <cstdlib>   // std::strtol — the affected-row count off libpq's ASCII buffer
+#include <cstring>   // std::strcmp — the SQLSTATE of a cancelled statement (TranslateErrorCode)
 
 // The PostgreSQL SQL dialect lives WITH its driver — no central factory, no
 // type-switch. Static so a test (or anyone) can read it WITHOUT constructing
@@ -453,8 +454,6 @@ bool ibDatabaseLayerPostgres::Open()
 	else
 	{
 		m_pInterface->GetPQsetClientEncoding()((PGconn*)m_pDatabase, "UTF-8");
-		wxCSConv conv((const char*)(m_pInterface->GetPQencodingToChar()(m_pInterface->GetPQclientEncoding()((PGconn*)m_pDatabase))));
-		SetEncoding(&conv);
 	}
 
 	// The connection above deliberately carries no database name: it lands on the server's
@@ -482,6 +481,10 @@ bool ibDatabaseLayerPostgres::Open()
 	}
 
 	if (m_pDatabase != nullptr) {
+		if (m_pCancel != nullptr) {
+			m_pInterface->GetPQfreeCancel()((PGcancel*)m_pCancel);
+			m_pCancel = nullptr;
+		}
 		m_pInterface->GetPQfinish()((PGconn*)m_pDatabase);
 		m_pDatabase = nullptr;
 	}
@@ -497,8 +500,10 @@ bool ibDatabaseLayerPostgres::Open()
 	else
 	{
 		m_pInterface->GetPQsetClientEncoding()((PGconn*)m_pDatabase, "UTF-8");
-		wxCSConv conv((const char*)(m_pInterface->GetPQencodingToChar()(m_pInterface->GetPQclientEncoding()((PGconn*)m_pDatabase))));
-		SetEncoding(&conv);
+
+		// Made here, on the thread that owns the connection: PQcancel may use it from any other (Cancel),
+		// PQgetCancel may not.
+		m_pCancel = m_pInterface->GetPQgetCancel()((PGconn*)m_pDatabase);
 	}
 
 	return true;
@@ -557,6 +562,12 @@ bool ibDatabaseLayerPostgres::Close()
 	CloseResultSets();
 	CloseStatements();
 
+	if (m_pCancel != nullptr)
+	{
+		m_pInterface->GetPQfreeCancel()((PGcancel*)m_pCancel);
+		m_pCancel = nullptr;
+	}
+
 	if (m_pDatabase)
 	{
 		m_pInterface->GetPQfinish()((PGconn*)m_pDatabase);
@@ -572,6 +583,17 @@ bool ibDatabaseLayerPostgres::IsOpen()
 		return (m_pInterface->GetPQstatus()((PGconn*)m_pDatabase) != CONNECTION_BAD);
 	else
 		return false;
+}
+
+// The server is asked, on a connection of its own, to stop what this one is running: the statement returns
+// SQLSTATE 57014 to its own caller. Nothing running, nothing to stop.
+void ibDatabaseLayerPostgres::Cancel()
+{
+	PGcancel* const pCancel = (PGcancel*)m_pCancel;   // read once: the owning thread may be closing
+	if (pCancel == nullptr)
+		return;
+	char errbuf[256];
+	m_pInterface->GetPQcancel()(pCancel, errbuf, sizeof(errbuf));
 }
 
 // transaction support
@@ -621,7 +643,8 @@ int ibDatabaseLayerPostgres::DoRunQuery(const wxString& strQuery, bool WXUNUSED(
 	PGresult* pResultCode = m_pInterface->GetPQexec()((PGconn*)m_pDatabase, sqlBuffer);
 	if ((pResultCode == nullptr) || (m_pInterface->GetPQresultStatus()(pResultCode) != PGRES_COMMAND_OK))
 	{
-		SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(m_pInterface->GetPQresultStatus()(pResultCode)));
+		SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(m_pInterface->GetPQresultStatus()(pResultCode),
+			m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE)));
 		SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQerrorMessage()((PGconn*)m_pDatabase)));
 		m_pInterface->GetPQclear()(pResultCode);
 		ThrowDatabaseException();
@@ -654,7 +677,8 @@ ibDatabaseResultSet* ibDatabaseLayerPostgres::DoRunQueryWithResults(const wxStri
 	PGresult* pResultCode = m_pInterface->GetPQexec()((PGconn*)m_pDatabase, sqlBuffer);
 	if ((pResultCode == nullptr) || (m_pInterface->GetPQresultStatus()(pResultCode) != PGRES_TUPLES_OK))
 	{
-		SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(m_pInterface->GetPQstatus()((PGconn*)m_pDatabase)));
+		SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(m_pInterface->GetPQstatus()((PGconn*)m_pDatabase),
+			m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE)));
 		SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQerrorMessage()((PGconn*)m_pDatabase)));
 		m_pInterface->GetPQclear()(pResultCode);
 		ThrowDatabaseException();
@@ -663,7 +687,6 @@ ibDatabaseResultSet* ibDatabaseLayerPostgres::DoRunQueryWithResults(const wxStri
 	else
 	{
 		ibDatabaseResultSetPostgres* pResultSet = new ibDatabaseResultSetPostgres(m_pInterface, pResultCode);
-		pResultSet->SetEncoding(GetEncoding());
 		LogResultSetForCleanup(pResultSet);
 		return pResultSet;
 	}
@@ -956,8 +979,12 @@ wxArrayString ibDatabaseLayerPostgres::GetColumns(const wxString& table)
 	return returnArray;
 }
 
-int ibDatabaseLayerPostgres::TranslateErrorCode(int nCode)
+int ibDatabaseLayerPostgres::TranslateErrorCode(int nCode, const char* sqlState)
 {
+	// An interrupted statement (Cancel -> PQcancel) is the cancel, recorded as the platform's.
+	if (sqlState != nullptr && std::strcmp(sqlState, "57014") == 0)   // query_canceled
+		return DATABASE_LAYER_QUERY_CANCELLED;
+
 	// Ultimately, this will probably be a map of Postgresql database error code values to ibDatabaseLayer values
 	// For now though, we'll just return error
 	return nCode;

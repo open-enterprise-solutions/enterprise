@@ -47,6 +47,12 @@ typedef void(*PQfreememType)(void*);
 typedef Oid(*PQftypeType)(const PGresult*, int);
 typedef int(*PQfsizeType)(const PGresult*, int);
 typedef int(*PQnfieldsType)(const PGresult*);
+// The cancel (ibDatabaseLayer::Cancel): the handle is made with the connection, PQcancel may use it from any
+// thread; and the SQLSTATE that says a statement was the one cancelled (57014). All in libpq since 8.0.
+typedef PGcancel* (*PQgetCancelType)(PGconn*);
+typedef void(*PQfreeCancelType)(PGcancel*);
+typedef int(*PQcancelType)(PGcancel*, char*, int);
+typedef char* (*PQresultErrorFieldType)(const PGresult*, int);
 
 class ibInterfacePostgres
 {
@@ -80,6 +86,11 @@ public:
 	PQfsizeType GetPQfsize() { return m_pPQfsize; }
 	PQnfieldsType GetPQnfields() { return m_pPQnfields; }
 
+	PQgetCancelType GetPQgetCancel() { return m_pPQgetCancel; }
+	PQfreeCancelType GetPQfreeCancel() { return m_pPQfreeCancel; }
+	PQcancelType GetPQcancel() { return m_pPQcancel; }
+	PQresultErrorFieldType GetPQresultErrorField() { return m_pPQresultErrorField; }
+
 private:
 
 	wxDynamicLibrary m_PostgresDLL;
@@ -109,6 +120,10 @@ private:
 	PQftypeType m_pPQftype;
 	PQfsizeType m_pPQfsize;
 	PQnfieldsType m_pPQnfields;
+	PQgetCancelType m_pPQgetCancel;
+	PQfreeCancelType m_pPQfreeCancel;
+	PQcancelType m_pPQcancel;
+	PQresultErrorFieldType m_pPQresultErrorField;
 };
 
 #endif // __POSTGRESQL_INTERFACES_H__

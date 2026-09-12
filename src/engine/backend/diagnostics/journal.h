@@ -44,6 +44,7 @@
 
 #include <wx/wx.h>          // WX_DEFINE_VARARG_FUNC + wxFormatString
 #include <wx/string.h>
+#include <chrono>           // ibJournalStopwatch (Debug)
 
 // ⭐ THE KIND IN THE FIRST COLUMN — spelled out and bracketed, because it is what a person scans a
 // thousand lines by: `[info]`, `[warning]`, `[error]`. A word rather than a symbol, so it survives
@@ -153,6 +154,31 @@ private:
 #	define ibJournalIf  if (false)
 #else
 #	define ibJournalIf  if (ibTechJournal::IsOpen())
+#endif
+
+// ⭐ A PROBE'S STOPWATCH — how long one stage of a read took, in Debug, and nothing at all in Release,
+// exactly like the line that reports it. Resume / Pause bracket the work and may be called any number
+// of times, so a stage spread through a loop (the fetch of every row, the reading of every cell) adds
+// up into one figure; Ms() is what goes into the line.
+//
+//     ibJournalStopwatch fetch;
+//     for (;;) { fetch.Resume(); const bool more = cursor.Next(); fetch.Pause(); if (!more) break; … }
+//     ibJournalInfo(wxT("query.road"), wxT("… fetch %lld ms"), fetch.Ms());
+#ifdef NDEBUG
+struct ibJournalStopwatch {
+	void      Resume() {}
+	void      Pause()  {}
+	long long Ms() const { return 0; }
+};
+#else
+struct ibJournalStopwatch {
+	void      Resume() { m_began = std::chrono::steady_clock::now(); }
+	void      Pause()  { m_total += std::chrono::steady_clock::now() - m_began; }
+	long long Ms() const { return std::chrono::duration_cast<std::chrono::milliseconds>(m_total).count(); }
+private:
+	std::chrono::steady_clock::time_point m_began{};
+	std::chrono::steady_clock::duration   m_total{};
+};
 #endif
 
 // Three verbs, one door — the mark is the only difference, and it is what a reader scans by.

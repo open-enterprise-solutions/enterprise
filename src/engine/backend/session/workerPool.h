@@ -55,14 +55,9 @@ public:
 	// stale entries pointing at destroyed sessions.
 	virtual void DropSession(ibSession* session) = 0;
 
-	// Async cancel of whatever task is currently running for `session`.
-	// Sets ibSession::RequestCancel and wakes any worker parked on
-	// the dispatch CV; the interpreter (ibProcUnit::Execute) sees the
-	// flag at its next loop-boundary check and throws
-	// ibBackendInterruptException, which unwinds out of the task.
-	// Tasks not in the interpreter (e.g. blocking on a socket read)
-	// won't notice the flag — cancellation is cooperative, not preemptive.
-	virtual void CancelSession(ibSession* session) = 0;
+	// (No cancel here. Stopping what a session is doing is the session's own command — ibSession::Cancel —
+	//  because the session is what knows everything that is doing it: its thread, its connection, its tenants.
+	//  A pool only runs tasks.)
 
 	// Drain queues, signal workers to stop, join. Idempotent. Pending
 	// tasks at the time of Stop run to completion before workers exit

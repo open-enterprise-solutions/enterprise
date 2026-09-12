@@ -84,14 +84,10 @@ static size_t ibIndexFieldByteWidth(const ibColumnType& t)
 	return 8;
 }
 
-void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
-                         const std::vector<const ibBackendQueryColumn*>& keyCols,
-                         ibMetaID hashColumnId)
+bool ibDerivedKeyNeedsHash(const std::vector<const ibBackendQueryColumn*>& keyCols)
 {
 	if (keyCols.empty())
-		return;
-
-	const wxString indexName = tableName + wxT("_PK");
+		return false;
 
 	// How wide the key really is — in PHYSICAL fields, which is what an index counts. A reference
 	// column is three of them, so a key of seven columns can be an index of twenty-one segments.
@@ -110,9 +106,21 @@ void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
 		for (const ibColumnSlot& field : DescribeColumnLayout(col))
 			keyBytes += ibIndexFieldByteWidth(field.m_type);
 
+	return db_query != nullptr && ibKeyNeedsHash(*db_query, fieldCount, keyBytes);
+}
+
+void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
+                         const std::vector<const ibBackendQueryColumn*>& keyCols,
+                         ibMetaID hashColumnId, const wxString& uniqueIndexName)
+{
+	if (keyCols.empty())
+		return;
+
+	const wxString indexName = uniqueIndexName.IsEmpty() ? tableName + wxT("_PK") : uniqueIndexName;
+
 	// The key must be UNIQUE: it is what the delta upserts against, and a duplicate would let two rows
 	// accumulate half the movements each — totals that are individually plausible and jointly wrong.
-	if (db_query == nullptr || !ibKeyNeedsHash(*db_query, fieldCount, keyBytes)) {
+	if (!ibDerivedKeyNeedsHash(keyCols)) {
 		table.Index(indexName, keyCols, /*unique*/ true);
 		return;
 	}

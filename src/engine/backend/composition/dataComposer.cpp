@@ -745,6 +745,54 @@ std::vector<wxString> ibDataComposer::ShownFor(const Output& output) const
 	return shown;
 }
 
+// ⭐⭐ A DETAIL RECORD SHOWS WHAT IS LEFT UNDER THE HEADINGS — so where nothing is left, there is none.
+//
+// "Where the groupings end, the detail record follows, showing what is left under the headings above"
+// (Max, 2026-08-22). What is left is the fields the output SHOWS that no heading above it printed and
+// that are not its figures. An output that shows only its grouping fields and its resources has nothing
+// left — a record under the deepest heading would repeat that heading's key with the same figure beside
+// it — so there are no records to read (Max, 2026-09-12: *"if you added only the grouping columns to the
+// selection and no others, there can be no detail records by definition — the groups above printed
+// them"*).
+//
+// What it cost to read them anyway: the payroll sheet (rows department → employee, a column per
+// calculation kind, the amount as its only selected field) folded 126 thousand records and a cell
+// across each of them — 252 thousand of its 419 thousand nodes — that no line of it prints, and its
+// fold and its walk spent most of themselves on them (MEASURED 2026-09-12, Debug).
+//
+// ⚠ ASKED OF WHAT IS SHOWN, NOT OF WHAT IS READ. A filter or a sort fetches a field nobody shows, and
+// such a field gives a record nothing to print.
+// ⚠ AN EMPTY SELECTION IS ANSWERED THE WAY THE READ ANSWERS IT (WhenNothingChosen): a report that
+// groups reads its grouping fields alone — nothing left — while a list, or an output that groups by
+// nothing, reads every field, and there the records are the point.
+bool ibDataComposer::WantsDetails(const Output& output) const
+{
+	if (!HasGroupingFields(output) && DetailLevelOf(output) == nullptr)
+		return false;   // no heading to stand under, and no records node asking for them
+
+	const std::vector<wxString> shown = ShownFor(output);
+	if (shown.empty())
+		return ReadsEveryField() || !HasGroupingFields(output);
+
+	// What the headings print — the output's ladder, and a reader's own grouping where one replaces it.
+	std::vector<wxString> grouped = ibComposerGroupingFieldsOf(output);
+	for (const ibGroupLineDescription& line : GetCurrentGroupDesc().m_lines)
+		if (!line.m_path.IsEmpty())
+			grouped.push_back(line.m_path);
+
+	for (const wxString& name : shown) {
+		bool printedAbove = false;
+		for (const wxString& key : grouped)
+			if (key.IsSameAs(name, false)) { printedAbove = true; break; }
+		// A figure is picked by the name it answers to, or by the field it folds — see TOTALS below.
+		for (size_t i = 0; !printedAbove && i < m_resources.size(); ++i)
+			printedAbove = name.IsSameAs(m_resources[i].AnswersTo(), false) || name.IsSameAs(m_resources[i].m_path, false);
+		if (!printedAbove)
+			return true;   // a field no heading prints — the records are where it is shown
+	}
+	return false;
+}
+
 std::vector<wxString> ibDataComposer::ProjectionFor(const Output& output) const
 {
 	const std::vector<wxString> atOutput = SelectedFor(output);

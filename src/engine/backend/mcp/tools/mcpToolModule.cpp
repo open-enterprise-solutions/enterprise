@@ -99,6 +99,13 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const wxString& text,
 	}
 
 	result.AddField(wxT("diagnostics"), ibDataValue::Array(diagnostics));
+
+	// ⭐ WHAT IT TAKES FOR THE TEXT TO RUN, said where the text was written. An application runs what the
+	// base holds and keeps the bytecode it came up with, so a module written here runs nowhere yet — and a
+	// restart alone brought the OLD text up with nothing said (measured 2026-09-11). The path is two calls.
+	result.SetValue(wxT("toRun"),
+		ibMcpText("Written into the configuration here, not into the base: the application runs it after "
+		  "config_apply (a module's text needs no exclusive mode) and a restart - app_run restart: true."));
 	return true;
 }
 

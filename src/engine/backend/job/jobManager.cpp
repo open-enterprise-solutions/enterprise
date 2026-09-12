@@ -1005,6 +1005,14 @@ void ibJobManager::Stop()
 	}
 	m_inFlightCv.notify_all();
 
+	// …CANCELLED BEFORE THEY ARE WAITED FOR, like the background runs above. A scheduled run still going
+	// was only waited for, so a long one held the whole shutdown until it ended on its own; its session
+	// hears the one command every other run hears, and the waits below overlap.
+	for (auto& e : doomed)
+		if (e->m_runSession)
+			if (ibSession* const session = e->m_runSession->Get())
+				session->Cancel();
+
 	// Wait outside the lock. Each run owns its own session inside its task, so
 	// waiting for the task IS waiting for the session to be let go — there is no
 	// holder here to reset.

@@ -45,6 +45,11 @@ public:
 	                                                       const ibQueryRamTable& rows,
 	                                                       const ibMetaData* metaData = nullptr);
 
+	// Whether `holder`'s connection takes a temp table at all — the first two answers Materialise gives
+	// (the dialect's presence, then the probe), for a caller that has not computed its rows yet. Ask it
+	// BEFORE paying for them: on a driver with none (Firebird) every row computed for a temp is thrown away.
+	static bool CanMaterialise(ibDatabaseConnectionHolder* holder);
+
 	~ibTempTableManager();
 	ibTempTableManager(const ibTempTableManager&)            = delete;
 	ibTempTableManager& operator=(const ibTempTableManager&) = delete;

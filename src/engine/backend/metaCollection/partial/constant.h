@@ -82,7 +82,7 @@ class BACKEND_API ibValueMetaObjectConstant :
 		// column, keyed on the CONSTANT's id. This is the second half of "sys_const does not move":
 		// the id decides which column the differ matches, the name decides which field it renders.
 		virtual wxString GetPhysicalName() const override {
-			return m_owner != nullptr ? wxString::Format(wxT("fld%i"), m_owner->GetMetaID()) : wxString();
+			return m_owner != nullptr ? ibPhysicalFieldName(m_owner->GetMetaID()) : wxString();
 		}
 		virtual ibMetaID GetColumnId() const override { return m_owner != nullptr ? m_owner->GetMetaID() : 0; }
 		virtual ibTypeDescription& GetTypeDesc() const override { return m_owner->GetTypeDesc(); }
@@ -357,7 +357,7 @@ public:
 	};
 
 	//get unique identifier
-	virtual ibUniqueKey GetGuid() const { return m_metaObject->GetGuid(); }
+	virtual const ibUniqueKey& GetGuid() const { return m_metaObject->GetGuid(); }
 	virtual bool SaveModify() override { return SetConstValue(m_constValue); }
 
 	// Constants are single-row "global" - lock keyed by namespace path

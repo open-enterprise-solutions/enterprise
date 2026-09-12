@@ -81,7 +81,7 @@ public:
 		// literal. Empty means "unknown", never "no type" — a consumer that needs one asks the value.
 		ibTypeDescription           m_type;
 		// Non-empty for a dot-walk leaf that is a reference / enum / composite: read via
-		// GetColumnObject(m_objectPrefix, m_col), which reassembles the object from its prefixed field spread
+		// GetColumn(m_objectPrefix, m_col), which reassembles the object from its prefixed field spread
 		// (the provider projects it so). Empty => a plain scalar leaf / aggregate / column read by alias.
 		wxString                    m_objectPrefix;
 		// A SYNTHETIC source column (a computed TOTALS measure) the lowering built — owned HERE so it

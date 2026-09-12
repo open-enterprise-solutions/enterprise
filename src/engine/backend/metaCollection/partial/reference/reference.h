@@ -45,6 +45,16 @@ enum class ibReferenceLoad {
 	Latched
 };
 
+// ⭐ WHAT A REFERENCE KNOWS NOW — three states, one field (Max, 2026-09-12). It is born RAW, an identity
+// and nothing else; a batch tells it what it SAYS (ReadBatch) — the fields its kind is said by, in its own
+// values, the rest unread; and the first time anything asks it for more, the object is read and it is FULL
+// (PrepareRef).
+enum class ibReferenceState {
+	Raw,
+	Presentation,
+	Full
+};
+
 
 //********************************************************************************************
 
@@ -60,7 +70,7 @@ private:
 		eTable
 	};
 private:
-	ibValueReferenceDataObject() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_initializedRef(false) {
+	ibValueReferenceDataObject() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true) {
 		m_members.Bind(this, &ibValueReferenceDataObject::FillMembers);
 	}
 	ibValueReferenceDataObject(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid = wxNullGuid);
@@ -134,6 +144,15 @@ public:
 	// enumerate a COMPOSITE reference's branches.
 	static std::vector<ibMetaID> ConvertToMetaIds(const std::vector<ibClassID>& clsids, const ibMetaData* metaData);
 
+	// ⭐⭐ …OR EVERY RAW ONE AT ONCE — Raw to Presentation, when a query's flat list is whole
+	// (ibBackendQueryProvider::ReadReferences). The query made its references and they are in the
+	// register; this asks the register for the ones still RAW and tells them, a table at a time through one
+	// statement, what they say — the fields their kind's template names (GenerateDataDesc) and nothing else.
+	// Asked one at a time, each read its own row when it was first shown: 40 053 queries for one payroll
+	// sheet (MEASURED 2026-09-12). A kind said without a field (an enumeration) is read whole instead — its
+	// values are few, and its order is data a sort needs.
+	static void ReadBatch();
+
 	// Ordering primitive (three-way) — the base virtual GT/GE/LE and operator< all derive from this, so this
 	// ONE method tunes all four for references. Orders by the GUID first, then the TYPE (metaID) as a tiebreak.
 	// The type is NEEDED again now the guid is pure: without it two references with the same guid but a
@@ -201,7 +220,7 @@ public:
 	// fueling the recursive dot-walk hop (value -> ConvertToValue<ibSourceDataObject> -> next explorer).
 	// GetValueByMetaID / SetValueByMetaID above already satisfy both bases; these resolve the rest.
 	// GetGuid overrides BOTH ibValueDataObject's (concrete) and ibSourceDataObject's (pure).
-	virtual ibUniqueKey GetGuid() const override { return m_objGuid; }
+	virtual const ibUniqueKey& GetGuid() const override { return m_objGuid; }
 
 protected:
 
@@ -276,7 +295,7 @@ private:
 
 protected:
 
-	bool m_initializedRef;
+	ibReferenceState m_state = ibReferenceState::Raw;
 
 	const ibValueMetaObjectRecordDataRef* m_metaObject;
 	ibReference* m_reference_impl;
@@ -342,6 +361,11 @@ public:
 
 	static ibValueReferenceDataObject* Find(const ibValueMetaObjectRecordDataRef* metaObject,
 	                                        const ibGuidImpl& objGuid);
+
+	// …and every live reference in `state` that the current session FILED — what ReadBatch tells, and a
+	// list the query made never has to be walked for. Its own only: a rented read files into its host's
+	// table, and each tells what it made itself. Held, so none of them can go while the caller works.
+	static std::vector<ibValuePtr<ibValueReferenceDataObject>> Find(ibReferenceState state);
 
 	// Take note of a newly built one. Called by the CONSTRUCTOR, not by the doors: every reference
 	// is born through it, so one call covers every way of making one — including the raw door and

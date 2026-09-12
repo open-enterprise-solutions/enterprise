@@ -6,6 +6,7 @@
 #include <vector>   // ibMetaMenuItem arrives as a vector of these — see CollectContextMenu
 
 #include "backend/backend_form.h"
+#include "backend/uniqueKey.h"   // ibUniqueKey — the metaobject's own key (m_metaGuid)
 #include "backend/metaCtor.h"
 
 #include "backend/restructureInfo.h"
@@ -428,7 +429,7 @@ public:
 	virtual wxString GetClassName() const final { return ibValue::GetClassName(); }
 	virtual wxString GetObjectTypeName() const final { return ibValue::GetClassName(); }
 
-	ibGuid GetGuid() const { return m_metaGuid; }
+	const ibUniqueKey& GetGuid() const { return m_metaGuid; }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -470,7 +471,7 @@ public:
 	wxString GetFullName() const;
 
 	wxString GetModuleName() const;
-	wxString GetDocPath() const { return m_metaGuid.str(); }
+	wxString GetDocPath() const { return m_metaGuid.GetGuid().str(); }
 
 	// Resolve a child's clsid against THIS owner: returns the canonical clsid the owner hosts
 	// (possibly remapped) or 0 if it does not host this child. ibClassID is UNSIGNED, so 0 — not
@@ -716,6 +717,17 @@ public:
 	// call on the common object). A TABLE-bearing object overrides to Add its table(s) — including nested
 	// tabular sections — and does NOT recurse (its children are attributes/forms, not tables). A non-table
 	// container (folder / common) keeps this default and just descends.
+	//
+	// 🛑⭐ CHANGING WHAT AN EXISTING METATYPE DECLARES HERE IS INVISIBLE TO THE DIFF. Both snapshots — the
+	// baseline and the edited configuration — are projected by THIS code, so a column, an index or a
+	// condition that a new version starts declaring is in both, the diff is empty, and a base that already
+	// holds the object never gets it (schema-authority.md § 6). Two roads, and nothing else:
+	//   * a part with a SAVED id (a predefined section, a standard column) — give it an id only in the copy
+	//     that saves itself, in before-run (§ 6.1; StampIfNeverSaved, StampActionPeriodIfNeverSaved);
+	//   * anything else — a column made unconditional, an index, a key — branch on the configuration's
+	//     COMPATIBILITY VERSION (`GetMetaData()->GetVersion()`, a new rung in ibProgramVersion), here and in
+	//     the runtime together (§ 6.2, compatibility-version.md): the user raises the mode, and the next
+	//     apply is the migration. A metatype no released base holds yet needs neither.
 	virtual void ContributeTables(class ibSchemaSnapshot& out) const {
 		for (unsigned int i = 0; i < GetChildCount(); i++)
 			if (ibValueMetaObject* child = GetChild(i))
@@ -952,7 +964,7 @@ protected:
 
 	int m_metaFlags;
 	ibMetaID m_metaId;			//type id (default is undefined)
-	ibGuid m_metaGuid;
+	ibUniqueKey m_metaGuid;
 
 	ibMetaData* m_metaData;
 

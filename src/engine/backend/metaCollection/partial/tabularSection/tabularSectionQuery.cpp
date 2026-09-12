@@ -68,7 +68,7 @@ std::vector<const ibBackendQueryColumn*> ibTabularQueryable::GetColumns() const
 // metaID are read off GetSourceMetaObject (ibBackendQueryable::GetQueryTableGuid) — a tabular section
 // cannot say that: its metaobject is a COMPOSITE, not the generic data metaobject that question is
 // typed on. It has an identity and no way to publish the thing carrying it, so it states it directly.
-ibGuid ibTabularQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
+const ibUniqueKey& ibTabularQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
 ibMetaID ibTabularQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 wxString ibTabularQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
 wxString ibTabularQueryable::GetQueryName()      const { return m_meta->GetName(); }

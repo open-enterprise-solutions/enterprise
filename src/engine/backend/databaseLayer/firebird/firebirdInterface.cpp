@@ -363,6 +363,10 @@ bool ibInterfaceFirebird::Init()
 	if (m_FirebirdDLL.HasSymbol(symbol))
 		m_pIscServiceQuery = (isc_service_queryType)m_FirebirdDLL.GetSymbol(symbol);
 
+	symbol = wxT("fb_cancel_operation");
+	if (m_FirebirdDLL.HasSymbol(symbol))
+		m_pFbCancelOperation = (fb_cancel_operationType)m_FirebirdDLL.GetSymbol(symbol);
+
 	return true;
 }
 

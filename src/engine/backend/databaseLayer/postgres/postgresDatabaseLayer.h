@@ -56,7 +56,10 @@ public:
 	// Is the connection to the database open?
 	virtual bool IsOpen();
 
-	/// clone database  
+	// Cancel what this connection is running — PQcancel, from any thread (see the base).
+	virtual void Cancel();
+
+	/// clone database
 	virtual ibDatabaseLayer* Clone() { return new ibDatabaseLayerPostgres(*this); }
 
 	// IsActiveTransaction uses the base-class default (m_txDepth > 0).
@@ -101,7 +104,8 @@ public:
 	// aggregates are created with the database. The only driver missing anything at all.
 	virtual bool CreateMissingRoutines() override;
 
-	static int TranslateErrorCode(int nCode);
+	// The status as the code — or the cancel, when a failed result's SQLSTATE says it was the statement cancelled.
+	static int TranslateErrorCode(int nCode, const char* sqlState = nullptr);
 	static bool IsAvailable();
 
 	// Map the most recent error's SQLSTATE (set in m_lastSqlState by
@@ -146,6 +150,7 @@ private:
 	wxString m_strPort;
 
 	void* m_pDatabase;
+	void* m_pCancel = nullptr;   // PGcancel*, made with the connection (Open) — what Cancel hands PQcancel
 
 	// Stashed by SetLastSqlState() — the most recent SQLSTATE libpq
 	// surfaced via PQresultErrorField(PG_DIAG_SQLSTATE). Travels with

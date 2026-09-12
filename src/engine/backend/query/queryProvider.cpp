@@ -28,6 +28,7 @@
 
 #include "backend/diagnostics/journal.h"                              // ibJournal — the technology journal
 
+#include <deque>                                                      // the streaming fold's pools — see ibStreamingFold
 #include <map>                                                        // dot-walk join dedup + col->attr cache
 #include <functional>                                                 // std::function — reference-hierarchy parent chain-up
 #include <stdexcept>                                                  // guard for the not-yet-built multi-source composition path
@@ -140,6 +141,12 @@ std::vector<const ibBackendQueryable*> ibComputedProvider::ResolveReferenceTarge
 	return s_db.ResolveReferenceTargets(queryable, refColumn);
 }
 
+void ibComputedProvider::ReadReferences() const
+{
+	static ibDbTableProvider s_db;
+	s_db.ReadReferences();
+}
+
 // ibComputedProvider — the RAM-computed virtual table (register slice / balance /
 // turnover / subquery). Stateless: computes the rows from the spec, no physical scan, no
 // L2. The flat conditions push into ComputeRows; the boolean predicate TREE, the ORDER BY
@@ -151,15 +158,21 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 	// Ref.Field condition joins the reference leaf and filters in RAM. `cols` receives the source columns +
 	// every joined leaf, so the DISTINCT / sort / limit rebuilds below keep them.
 	std::vector<const ibBackendQueryColumn*> cols;
+	ibJournalStopwatch compute;
+	compute.Resume();
 	ibQueryRamTable rows = ComputeRowsResolved(spec, cols);
+	compute.Pause();
 
 	// ⭐ A COMPUTED SOURCE IS RAM BY NATURE — a register's slice / balance / turnover, a nested query,
 	// a temp we filled. Journalled all the same, and for the same reason as the folds: what a reader
 	// needs is not that this source is unusual, but how many rows it brought home before anything
 	// above it began filtering.
-	ibJournalInfo(wxT("query.road"), wxT("RAM: computed source '%s' read in memory - %ld rows"),
+	ibJournalInfo(wxT("query.road"), wxT("RAM: computed source '%s' read in memory - %ld rows; compute %lld ms"),
 	              spec.m_queryable != nullptr ? spec.m_queryable->GetQueryName() : wxString(wxT("<none>")),
-	              rows.RowCount());
+	              rows.RowCount(), compute.Ms());
+	// …and what this read does to them afterwards, stage by stage — see the line before each return.
+	ibJournalStopwatch exprs, filter, distinct, sort, rebuild;
+	exprs.Resume();
 
 	// COMPUTED output columns (SELECT Qty * Price, a CASE) — evaluate the expression per row and add it as a
 	// column NAMED by its alias (the RAM analog of the DB provider projecting `expr AS alias`). Added to `cols`
@@ -218,7 +231,7 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 	// A DOT-WALK TOTALS DIMENSION IS PUBLISHED UNDER ITS OWN ALIAS — the RAM twin of the DB
 	// provider's `<leaf fields> AS dim0…`. The walk above brought the leaf in keyed by its own id,
 	// which is the very thing that cannot identify the level (a self-reference walks back to the
-	// SAME column). The reader asks for the alias — ColumnObject falls back to Column(prefix) on a
+	// SAME column). The reader asks for the alias — Column(prefix, col) falls back to Column(prefix) on a
 	// RAM source — so the value is copied into a column NAMED for the dimension.
 	std::vector<ibComputedExprColumn> dimCols;
 	if (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty()) {
@@ -240,12 +253,24 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 			cols.push_back(&dimCols[k]);
 		}
 	}
+	exprs.Pause();
 
+	filter.Resume();
 	if (spec.m_predicate)
 		rows = ibQueryComposer::FilterRows(rows, spec.m_predicate.get());
+	filter.Pause();
+
+	// The stages after the read, said once whichever return this read leaves by.
+	auto stages = [&](const wxChar* how) {
+		ibJournalInfo(wxT("query.road"), wxT("RAM: computed source '%s' %s - exprs %lld ms, filter %lld ms, ")
+			wxT("distinct %lld ms, sort %lld ms, rebuild %lld ms"),
+			spec.m_queryable != nullptr ? spec.m_queryable->GetQueryName() : wxString(wxT("<none>")), how,
+			exprs.Ms(), filter.Ms(), distinct.Ms(), sort.Ms(), rebuild.Ms());
+	};
 
 	// SELECT DISTINCT over a computed source (subquery / slice) -- dedup by the output columns while keeping
 	// ALL columns (the sort below may key on one not in the select list). First occurrence wins.
+	distinct.Resume();
 	if (spec.m_distinct && spec.m_selectCols != nullptr && !spec.m_selectCols->empty()) {
 		ibQueryRamTable deduped = RamTableOf(cols);
 		// A row identity is the SEQUENCE of its cells — see ibValueSeqHash (value.h).
@@ -263,34 +288,60 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 		}
 		rows = std::move(deduped);
 	}
+	distinct.Pause();
 
 	if (spec.m_sorts != nullptr && !spec.m_sorts->empty()) {
+		sort.Resume();
+		// ⭐ THE KEYS ARE TAKEN OUT OF THE ROWS ONCE, not once per comparison. The comparator used to ask
+		// the table for both cells of every key on every call — a lookup in the row's map and a COPY of
+		// the value each time — and a sort makes n·log n calls: the payroll sheet's 126 thousand rows by
+		// three keys did that some thirteen million times. Read into one flat array first, the comparator
+		// only looks at what is already there.
+		std::vector<const ibQuerySortItem*> by;
+		for (const ibQuerySortItem& s : *spec.m_sorts)
+			if (s.m_col != nullptr)
+				by.push_back(&s);
+		const size_t width = by.size();
+		std::vector<ibValue> keys(static_cast<size_t>(rows.RowCount()) * width);
+		for (long i = 0; i < rows.RowCount(); ++i)
+			for (size_t k = 0; k < width; ++k)
+				keys[static_cast<size_t>(i) * width + k] = rows.GetCell(i, by[k]->m_col->GetColumnId());
 		std::vector<long> order(static_cast<size_t>(rows.RowCount()));
 		for (long i = 0; i < rows.RowCount(); ++i) order[static_cast<size_t>(i)] = i;
 		std::stable_sort(order.begin(), order.end(), [&](long a, long b) {
-			for (const ibQuerySortItem& s : *spec.m_sorts) {
-				if (s.m_col == nullptr) continue;
-				const ibValue va = rows.GetCell(a, s.m_col->GetColumnId());
-				const ibValue vb = rows.GetCell(b, s.m_col->GetColumnId());
-				const int c = ibQueryComposer::RamSortCompareKey(va, vb, s.m_ascending);
+			const ibValue* const ka = keys.data() + static_cast<size_t>(a) * width;
+			const ibValue* const kb = keys.data() + static_cast<size_t>(b) * width;
+			for (size_t k = 0; k < width; ++k) {
+				const int c = ibQueryComposer::RamSortCompareKey(ka[k], kb[k], by[k]->m_ascending);
 				if (c != 0) return c < 0;
 			}
 			return false;
 		});
+		sort.Pause();
+		rebuild.Resume();
+		// ⚠ THE ROWS ARE PUT IN THE NEW ORDER WHERE THEY STAND, NOT COPIED — `rows` is not read again, and
+		// a copy was every cell of the list made and freed once more (1.6 s of the payroll sheet, 2026-09-12,
+		// Debug). Reordered in place (ReorderRows) and handed to the result whole.
 		ibQueryRamTable sorted = RamTableOf(cols);
 		const long limit = (req.m_count > 0 && req.m_count < rows.RowCount()) ? req.m_count : rows.RowCount();
-		for (long oi = 0; oi < limit; ++oi)
-			AppendRowByCols(rows, order[static_cast<size_t>(oi)], sorted, cols);
+		rows.ReorderRows(order, limit);
+		sorted.AppendRowsFrom(rows);
+		rebuild.Pause();
+		stages(wxT("sorted"));
 		return ibDataQueryResult(std::move(sorted), spec.m_queryable);
 	}
 
 	if (req.m_count > 0 && req.m_count < rows.RowCount()) {
+		rebuild.Resume();
 		ibQueryRamTable limited = RamTableOf(cols);
 		for (long i = 0; i < req.m_count; ++i)
-			AppendRowByCols(rows, i, limited, cols);
+			limited.AppendRowFrom(rows, i);   // moved, as the sort's rebuild above
+		rebuild.Pause();
+		stages(wxT("limited"));
 		return ibDataQueryResult(std::move(limited), spec.m_queryable);
 	}
 
+	stages(wxT("as read"));
 	return ibDataQueryResult(std::move(rows), spec.m_queryable);
 }
 
@@ -654,7 +705,7 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 	// is only obeyed, so the aggregate path and the plain path cannot drift apart.
 	auto readCell = [this](const ibDataQueryResult& sel, size_t i) -> ibValue {
 		if (i < m_readPrefix.size() && !m_readPrefix[i].IsEmpty() && m_readFrom[i] != nullptr)
-			return sel.GetColumnObject(m_readPrefix[i], m_readFrom[i]);
+			return sel.GetColumn(m_readPrefix[i], m_readFrom[i]);
 		if (i < m_readAlias.size() && !m_readAlias[i].IsEmpty())
 			return sel.GetColumn(m_readAlias[i]);
 		if (i < m_readFrom.size() && m_readFrom[i] != nullptr)
@@ -719,15 +770,73 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 
 	// A limit counts the rows that PASS, so with a filter still to apply it cannot be handed down.
 	ibReadPageRequest page; page.m_count = afterRead.empty() ? m_top : 0;   // 0 = all rows; TOP n = the branch limit
+	// The four stages this read is made of, measured apart — see the line at the end.
+	ibJournalStopwatch execute, fetch, cells, store;
+	execute.Resume();
 	ibDataQueryResult sel = q.Execute(page);
+	execute.Pause();
+
+	// ⭐ AN INNER QUERY THAT CAME BACK AS A TABLE IS TAKEN WHOLE — its rows re-keyed under the columns
+	// this query publishes, not read out cell by cell into a second table while the first one dies. Each
+	// read is mapped onto the table first, exactly as readCell would make it: a plain one is its column, a
+	// read by alias or by a dot-walk prefix is the table's column of that NAME (a table answers those by
+	// name — ibRamTableResultSource::Column). Nothing may be left to filter after the read, since that has
+	// to see each row, and a column read for two outputs is a copy, not a move. The payroll sheet's outer
+	// nested query copied 126 thousand rows here (2026-09-12).
+	ibQueryRamTable* const inner = afterRead.empty() ? sel.GetTable() : nullptr;
+	if (inner != nullptr) {
+		const auto byName = [inner](const wxString& name, ibMetaID& id) {
+			for (const ibQueryRamColumn& c : inner->Columns())
+				if (c.m_name == name) { id = c.m_id; return true; }
+			return false;
+		};
+		std::vector<std::pair<ibMetaID, ibMetaID>> rekey;
+		bool plain = true;
+		for (size_t i = 0; i < m_columns.size() && plain; ++i) {
+			if (m_columns[i] == nullptr)
+				continue;   // nothing is published there, and nothing is read
+			const ibBackendQueryColumn* const readFrom = i < m_readFrom.size() ? m_readFrom[i] : nullptr;
+			ibMetaID from = 0;
+			bool found = false;
+			if (i < m_readPrefix.size() && !m_readPrefix[i].IsEmpty() && readFrom != nullptr)
+				found = byName(m_readPrefix[i], from);          // GetColumn(prefix, col) -> Column(prefix)
+			else if (i < m_readAlias.size() && !m_readAlias[i].IsEmpty())
+				found = byName(m_readAlias[i], from);           // GetColumn(alias)
+			else if (readFrom != nullptr) {
+				from  = readFrom->GetColumnId();                // GetValue(column)
+				found = true;
+			}
+			if (!found)
+				continue;   // the read answers empty — and a cell nobody moves there reads empty too
+			for (const std::pair<ibMetaID, ibMetaID>& had : rekey)
+				plain = plain && had.first != from;
+			rekey.emplace_back(from, m_columns[i]->GetColumnId());
+		}
+		if (plain) {
+			store.Resume();
+			t.AppendRowsRekeyed(*inner, rekey);
+			store.Pause();
+			ibJournalInfo(wxT("query.road"), wxT("RAM: nested query computed in memory - %ld rows, taken whole; ")
+				wxT("execute %lld ms, store %lld ms"), t.RowCount(), execute.Ms(), store.Ms());
+			return t;
+		}
+	}
+
 	std::vector<ibValue> rowVals(m_columns.size());
 	long emitted = 0;
-	while (sel.Next()) {
+	for (;;) {
+		fetch.Resume();
+		const bool more = sel.Next();
+		fetch.Pause();
+		if (!more)
+			break;
 		// ⚠ READ THE WAY THE SCHEMA SAYS, STORE UNDER THE EXPOSED COLUMN. Where the inner query gave an
 		// alias the two differ, and asking the result for the alias column would find nothing — the
 		// result knows the inner query's own columns, not the names it publishes them under.
+		cells.Resume();
 		for (size_t i = 0; i < m_columns.size(); ++i)
 			rowVals[i] = m_columns[i] != nullptr ? readCell(sel, i) : ibValue();
+		cells.Pause();
 
 		bool keep = true;
 		for (const auto& condition : afterRead)
@@ -736,12 +845,14 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 		if (!keep)
 			continue;
 
+		store.Resume();
 		const long r = t.AppendRow();
 		for (size_t i = 0; i < m_columns.size(); ++i) {
 			if (m_columns[i] == nullptr)
 				continue;
-			t.SetCell(r, m_columns[i]->GetColumnId(), rowVals[i]);
+			t.SetCell(r, m_columns[i]->GetColumnId(), std::move(rowVals[i]));   // read afresh for the next row
 		}
+		store.Pause();
 		if (!afterRead.empty() && m_top > 0 && ++emitted >= m_top)
 			break;
 	}
@@ -749,8 +860,11 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 	// source to the server where it can (`WITH q_sub0 AS (…)`, ResolveFrom), reaching this line means
 	// something sent it back: no `WITH` in the engine, a shape the declaration cannot carry, or a
 	// source of its own that lives in memory. The refusal itself is journalled where it is decided —
-	// this says what it cost.
-	ibJournalInfo(wxT("query.road"), wxT("RAM: nested query computed in memory - %ld rows"), t.RowCount());
+	// this says what it cost, and WHERE: the statement (for a nested union, everything under it), the
+	// cursor's rows, the values made of their cells, and the table they were kept in.
+	ibJournalInfo(wxT("query.road"), wxT("RAM: nested query computed in memory - %ld rows; ")
+		wxT("execute %lld ms, fetch %lld ms, cells %lld ms, store %lld ms"),
+		t.RowCount(), execute.Ms(), fetch.Ms(), cells.Ms(), store.Ms());
 	return t;
 }
 
@@ -899,11 +1013,37 @@ ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseC
 		q.Where(rc);   // VERBATIM but for the column — rebuilding from (col, op, value) drops m_values / m_path / m_expr
 	}
 	ibReadPageRequest page; page.m_count = 0;   // every matching row
+	ibJournalStopwatch execute, fetch, cells;
+	execute.Resume();
 	ibDataQueryResult sel = q.Execute(page);     // reads through the cursor — never names a runtime table
-	while (sel.Next()) {
+	execute.Pause();
+	// ⭐ A LEAF THAT CAME BACK AS A TABLE IS TAKEN WHOLE. A computed leaf — a nested query, a register's
+	// virtual table — answers with rows it already holds under these very column ids, and the loop below
+	// would copy each of them into a second table cell by cell only to let the first one die: 126 thousand
+	// rows of the payroll sheet paid for that once per branch of its union (2026-09-12). Only where the
+	// leaf is read as itself — an aliased twin keys its cells by ids of its own, and is copied as before.
+	bool readsAsItself = (src == leaf);
+	for (const ibBackendQueryColumn* col : cols)
+		readsAsItself = readsAsItself && readCol(col) == col;
+	ibQueryRamTable* const whole = readsAsItself ? sel.GetTable() : nullptr;
+	if (whole != nullptr) {
+		t.AppendRowsFrom(*whole);
+		ibJournalInfo(wxT("query.road"), wxT("RAM: materialised leaf '%s' - %ld rows, %u columns, taken whole; execute %lld ms"),
+		              leaf != nullptr ? leaf->GetQueryName() : wxString(wxT("<none>")),
+		              t.RowCount(), static_cast<unsigned>(cols.size()), execute.Ms());
+		return t;
+	}
+	for (;;) {
+		fetch.Resume();
+		const bool more = sel.Next();
+		fetch.Pause();
+		if (!more)
+			break;
+		cells.Resume();
 		const long r = t.AppendRow();
 		for (const ibBackendQueryColumn* col : cols)
 			t.SetCell(r, col->GetColumnId(), sel.GetValue(readCol(col)));
+		cells.Pause();
 	}
 	// ⭐⭐ THE LINE THAT SAYS "THESE ROWS CAME HOME". Every road that ends in our memory rather than in
 	// the DBMS passes through here, so ONE line answers the question a wrong-looking report actually
@@ -912,9 +1052,10 @@ ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseC
 	// The ROW COUNT is the point of it. "Went to RAM" is a road; 400 000 rows is a diagnosis — the
 	// composition's own acceptance criterion is that memory grows with the number of GROUPS, and this
 	// is where that is either true or visibly not. Debug only: the whole call compiles away in Release.
-	ibJournalInfo(wxT("query.road"), wxT("RAM: materialised leaf '%s' - %ld rows, %u columns"),
+	ibJournalInfo(wxT("query.road"), wxT("RAM: materialised leaf '%s' - %ld rows, %u columns; ")
+	              wxT("execute %lld ms, fetch %lld ms, cells %lld ms"),
 	              leaf != nullptr ? leaf->GetQueryName() : wxString(wxT("<none>")),
-	              t.RowCount(), static_cast<unsigned>(cols.size()));
+	              t.RowCount(), static_cast<unsigned>(cols.size()), execute.Ms(), fetch.Ms(), cells.Ms());
 	return t;
 }
 
@@ -1721,7 +1862,7 @@ public:
 		for (const ibQueryColumnSelect::Input& in : m_inputs)
 			if (in.m_col != nullptr && in.m_col->GetColumnId() == id) {
 				if (in.m_prefix.IsEmpty()) return m_src.Value(in.m_col);
-				return in.m_object ? m_src.ColumnObject(in.m_prefix, in.m_col) : m_src.Column(in.m_prefix);
+				return in.m_object ? m_src.Column(in.m_prefix, in.m_col) : m_src.Column(in.m_prefix);
 			}
 		return ibValue();
 	}
@@ -2152,7 +2293,7 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 // Finalise a GetColumnId-keyed combined table into the result: ORDER BY (RAM stable
 // sort over m_sorts, each key read by GetColumnId), project the select-list (alias-keyed
 // output), and LIMIT to the page count. One finaliser for both JOIN and UNION.
-ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQuerySpec& spec, const ibReadPageRequest& page)
+ibDataQueryResult ProjectToAliases(ibQueryRamTable&& TC, const ibDataQuerySpec& spec, const ibReadPageRequest& page)
 {
 	const long rows = TC.RowCount();
 
@@ -2308,6 +2449,30 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 		RamComputeWindows(sc.m_expr.get(), TC, windows);
 
 	const long limit = (page.m_count > 0) ? page.m_count : rows;
+
+	// ⭐ WHERE NOTHING IS COMPUTED AND NOTHING IS FOLDED AWAY, THE ROWS ARE HANDED ON. The composed table
+	// dies here, and every cell of this projection is one of its cells under the id the output carries —
+	// so its rows are moved into the new order and re-keyed where an output id differs, instead of copied
+	// cell by cell and freed (126 thousand rows of the payroll sheet, 2026-09-12). A column carried twice
+	// (a synthetic id beside its own) is two cells of one, and takes the copying road below.
+	if (!spec.m_distinct && exprs.empty()) {
+		std::vector<std::pair<ibMetaID, ibMetaID>> rekey;
+		bool eachOnce = true;
+		for (size_t k = 0; k < outCols.size() && eachOnce; ++k) {
+			const ibMetaID from = outCols[k] != nullptr ? outCols[k]->GetColumnId() : 0;
+			for (size_t j = 0; j < k && eachOnce; ++j)
+				eachOnce = (outCols[j] != nullptr ? outCols[j]->GetColumnId() : 0) != from;
+			if (outCols[k] == nullptr)
+				eachOnce = false;   // a projection of nothing — the copying road says what that reads as
+			else if (from != outIds[k])
+				rekey.emplace_back(from, outIds[k]);
+		}
+		if (eachOnce) {
+			TC.ReorderRows(order, std::min(rows, limit));   // the sort's order, cut to the page — in place
+			TO.AppendRowsRekeyed(TC, rekey);
+			return ibDataQueryResult(std::move(TO), spec.m_queryable);
+		}
+	}
 	// The output cells ARE the row identity — they are already a vector of values,
 	// so the fold below inserts them directly instead of rendering them to text.
 	std::unordered_set<std::vector<ibValue>, ibValueSeqHash, ibValueSeqEqual> seenDistinct;
@@ -2338,8 +2503,8 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 				continue;   // duplicate output row -> drop
 		}
 		const long r = TO.AppendRow();
-		for (size_t k = 0; k < outIds.size();  ++k) TO.SetCell(r, outIds[k],  outCells[k]);
-		for (size_t k = 0; k < exprIds.size(); ++k) TO.SetCell(r, exprIds[k], outCells[outCols.size() + k]);
+		for (size_t k = 0; k < outIds.size();  ++k) TO.SetCell(r, outIds[k],  std::move(outCells[k]));
+		for (size_t k = 0; k < exprIds.size(); ++k) TO.SetCell(r, exprIds[k], std::move(outCells[outCols.size() + k]));
 		++emitted;
 	}
 	return ibDataQueryResult(std::move(TO), spec.m_queryable);
@@ -2374,8 +2539,9 @@ ibQueryRamTable RamUnion(const ibDataQuerySpec& spec, const ibQueryNode* unionNo
 		CollectJoinKeys(part, refForBranch);   // a Join branch must also carry its own join keys (else JoinRamTables can't match)
 
 		// Materialise the whole branch subtree (Source / Join / nested Union), conditions BY NAME.
-		const ibQueryRamTable TP = MaterialiseNode(part, refForBranch, spec, /*condsByName*/true);
-		ibQueryComposer::AppendUnionBranch(TO, TP, outCols, branchCols);
+		// …and hand it over: the branch is done with once it is stacked (AppendUnionBranch, the moving one).
+		ibQueryRamTable TP = MaterialiseNode(part, refForBranch, spec, /*condsByName*/true);
+		ibQueryComposer::AppendUnionBranch(TO, std::move(TP), outCols, branchCols);
 
 		// Plain UNION (not ALL) dedupes the ACCUMULATED rows at its operator — SQL left-assoc
 		// semantics (A UNION B UNION ALL C dedupes after B, keeps C's duplicates).
@@ -2455,25 +2621,49 @@ struct ibAggAcc
 	bool     m_have  = false;
 	// DISTINCT only — the one place memory grows with the DATA rather than with the groups, and it
 	// grows with the number of DIFFERENT VALUES in a group, which is what DISTINCT means.
-	std::unordered_set<ibValue, ibValueHash, ibValueEqual> m_seen;
+	//
+	// ⚠ MADE ON THE FIRST DISTINCT VALUE, not with the accumulator. Every node of a fold carries one
+	// accumulator per aggregate, and an empty hash set is not free: it allocates its buckets when it is
+	// built. The payroll sheet opens 419 thousand nodes, none of them DISTINCT, and building and freeing
+	// those sets stood in the stack samples of its fold (MEASURED 2026-09-12, Debug).
+	std::unique_ptr<std::unordered_set<ibValue, ibValueHash, ibValueEqual>> m_seen;
 
 	void Feed(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRow& row)
 	{
+		FeedOperand(a, Operand(a, row));
+	}
+
+	// WHAT ONE ROW GIVES THIS AGGREGATE — read off the row once. COUNT(*) — no source column AND no
+	// computed input — counts the row itself and has no value to read; a COMPUTED input (SUM(Qty *
+	// Price), MAX(CASE …)) evaluates its expression per row; a plain input reads its source column. Same
+	// RAM expr evaluator the JOIN stitch uses.
+	static ibValue Operand(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRow& row)
+	{
+		if (a.m_col == nullptr && !a.m_expr)
+			return ibValue();
+		return a.m_expr ? EvalColumnExprRow(a.m_expr.get(), row) : row.Get(a.m_col);
+	}
+
+	// ⭐ …AND FED WHAT WAS READ. A streaming fold hands one row to every heading on its path — the grand
+	// total, a department, an employee, and a cell across each of them — and it used to ask the row for
+	// the operand at every one of them (2026-09-12). Read once by the fold, it is handed down as it is.
+	void FeedOperand(const ibDataQueryBuilder::AggregateItem& a, const ibValue& v)
+	{
 		using Fn = ibDataQueryBuilder::AggregateFn;
 		++m_rows;
-		// COUNT(*) — no source column AND no computed input — counts the row itself; there is no value to read.
 		if (a.m_col == nullptr && !a.m_expr)
-			return;
-		// A COMPUTED aggregate input (SUM(Qty * Price), MAX(CASE …)) evaluates its expression per row;
-		// a plain input reads its source column. Same RAM expr evaluator the JOIN stitch uses.
-		const ibValue v = a.m_expr ? EvalColumnExprRow(a.m_expr.get(), row) : row.Get(a.m_col);
+			return;   // COUNT(*) — the row is what it counts
 		if (RamIsNullValue(v))
 			return;
-		if (a.m_distinct && !m_seen.insert(v).second)
-			return;   // already folded this value
+		if (a.m_distinct) {
+			if (!m_seen)
+				m_seen = std::make_unique<std::unordered_set<ibValue, ibValueHash, ibValueEqual>>();
+			if (!m_seen->insert(v).second)
+				return;   // already folded this value
+		}
 		switch (a.m_fn) {
 		case Fn::Count:             ++m_n; break;
-		case Fn::Sum: case Fn::Avg: m_sum = m_sum + v.GetNumber(); ++m_n; break;
+		case Fn::Sum: case Fn::Avg: m_sum += v.GetNumber(); ++m_n; break;   // in place — `m_sum + v` copied the sum first
 		case Fn::Min: if (!m_have || v < m_best) { m_best = v; m_have = true; } break;
 		case Fn::Max: if (!m_have || v > m_best) { m_best = v; m_have = true; } break;
 		default: break;
@@ -2888,6 +3078,14 @@ std::unique_ptr<ibTempTableManager> PromoteComputedLeaf(
 	// SetValueColumn — so reference / enum / variant values round-trip from a temp exactly like from a
 	// real table, for KEYS and OUTPUTS alike. No output-type guard needed.)
 
+	// CAN, before the leaf is computed — a database without temp tables would take the rows only to
+	// have them read again by the RAM stitch (ibTempTableManager::CanMaterialise).
+	if (!ibTempTableManager::CanMaterialise(spec.m_holder)) {
+		ibJournalInfo(wxT("query.join"), wxT("IN MEMORY: computed leaf %s - this database takes no temp tables, ")
+			wxT("joining in memory"), computed->GetQueryName());
+		return nullptr;
+	}
+
 	// Materialise the computed leaf (its ctor filters are baked in; the door conditions IT owns are
 	// pushed down as compute filters) into a DB temp table.
 	std::vector<ibQueryCondition> computedConds;
@@ -2976,6 +3174,10 @@ std::vector<std::unique_ptr<ibTempTableManager>> PromoteUnionBranches(const ibDa
 	std::vector<std::unique_ptr<ibTempTableManager>> mgrs;
 	const ibQueryNode* root = spec.m_root;
 	if (root == nullptr || root->m_kind != ibQueryNode::Kind::Union || root->m_parts.empty())
+		return mgrs;
+	// CAN, before any branch is computed: a branch read for a temp the database cannot take is read
+	// again by RamUnion (ibTempTableManager::CanMaterialise).
+	if (!ibTempTableManager::CanMaterialise(spec.m_holder))
 		return mgrs;
 
 	std::shared_ptr<ibQueryNode> newRoot = std::make_shared<ibQueryNode>();
@@ -3090,7 +3292,7 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 	ibQueryRamTable composed = Compose(spec, ReferencedColumns(spec));
 	if (spec.m_predicate)
 		composed = RamFilter(composed, spec.m_predicate.get());
-	return ProjectToAliases(composed, spec, page);
+	return ProjectToAliases(std::move(composed), spec, page);   // the composed rows are handed on, not copied
 }
 
 // Promote a SINGLE computed source (register slice / balance / subquery) to SERVER-SIDE: materialise its
@@ -3118,6 +3320,13 @@ std::unique_ptr<ibTempTableManager> PromoteSingleComputed(
 	const ibBackendQueryable* q = spec.m_queryable;
 	if (q == nullptr || !q->IsComputedInRam() || spec.m_holder == nullptr)
 		return nullptr;
+	// CAN, before the source is computed — the RAM fold it would fall back to computes it again
+	// (ibTempTableManager::CanMaterialise).
+	if (!ibTempTableManager::CanMaterialise(spec.m_holder)) {
+		ibJournalInfo(wxT("query.temp"), wxT("IN MEMORY: computed source %s - this database takes no temp tables, ")
+			wxT("folding in memory"), q->GetQueryName());
+		return nullptr;
+	}
 
 	// Materialise the computed rows (own conditions pushed as compute filters) into a DB temp table.
 	std::vector<ibQueryCondition> ownConds;
@@ -3458,13 +3667,28 @@ public:
 		// number its first level has always carried.
 		for (std::size_t si = 1; si < m_sections.size(); ++si)
 			m_sections[si].m_depth = 1 + (m_sections.front().m_across - m_sections.front().m_from);
-		m_pool.push_back(FoldNode{ &tree.Root(), std::vector<ibAggAcc>(aggs.size()), {}, {}, 0 });   // the root IS the grand total
+		m_pool.emplace_back(&tree.Root(), NewAccs());   // the root IS the grand total
+		m_rowKeys.resize(m_levels.size());
+		m_operands.resize(m_aggs.size());
 	}
 
 	void Feed(const ibQueryRow& row)
 	{
+		// ⭐ THE ROW IS READ ONCE, HERE — every level's key and every aggregate's operand — and what follows
+		// only hands those on. A row belongs to a heading per level and to a cell across each of them, and
+		// each used to ask the row again: the column key once per row heading, the operand once per node
+		// on the path (2026-09-12, the payroll sheet: a dozen reads of four cells per row).
+		for (std::size_t li = 0; li < m_levels.size(); ++li) {
+			ibLevelKey& key = m_rowKeys[li];
+			key.clear();
+			for (const ibTotalField& field : m_levels[li].m_fields)
+				key.push_back(LevelKeyValue(field, row));      // one field is the degenerate one-element key
+		}
+		for (std::size_t i = 0; i < m_aggs.size(); ++i)
+			m_operands[i] = ibAggAcc::Operand(m_aggs[i], row);
+
 		std::size_t cur = 0;
-		FeedNode(cur, row);                                   // the grand total takes every row
+		FeedNode(cur);                                        // the grand total takes every row
 
 		// ⭐⭐ AND THE COLUMNS HANG UNDER THE GRAND TOTAL TOO — which is what "what does this column
 		// add up to" IS. The root is a heading like any other; the only thing that made its cells
@@ -3490,7 +3714,7 @@ public:
 			// covers exactly the rows its parent does, so its figure is the parent's. Left unfed it
 			// would report a nought — a total that reconciles to nothing, sitting where a reader who
 			// walks into the branch would find it.
-			FeedNode(fork, row);
+			FeedNode(fork);
 			FeedLadder(fork, row, m_sections[bi]);
 		}
 	}
@@ -3515,12 +3739,8 @@ public:
 			const ibTotalLevel& level = m_levels[li];
 			if (level.m_fields.empty())
 				break;   // the detail level — handled below, where the row axis ends
-			ibLevelKey key;
-			key.reserve(level.m_fields.size());
-			for (const ibTotalField& field : level.m_fields)
-				key.push_back(LevelKeyValue(field, row));      // one field is the degenerate one-element key
-			cur = Child(cur, std::move(key), level, section.DepthOf(li), /*across*/false);
-			FeedNode(cur, row);
+			cur = Child(cur, m_rowKeys[li], level, section.DepthOf(li), /*across*/false);
+			FeedNode(cur);
 
 
 			// ⭐⭐ AND THE COLUMNS HANG UNDER EVERY ROW HEADING, not only under the deepest one.
@@ -3568,7 +3788,7 @@ public:
 				// ⚠ AND IT IS FED LIKE A HEADING — one row's worth. Without this its accumulators
 				// stay empty and Finish writes a zero into the very total that is supposed to say
 				// what this record contributed.
-				FeedNode(leaf, row);
+				FeedNode(leaf);
 				FeedAcross(leaf, row, section);
 			}
 		}
@@ -3593,7 +3813,7 @@ public:
 	{
 		for (FoldNode& n : m_pool) {
 			for (std::size_t i = 0; i < m_aggs.size(); ++i)
-				n.m_node->m_values[AggSlotId(m_aggs, i)] = n.m_accs[i].Result(m_aggs[i]);
+				n.m_node->m_values[AggSlotId(m_aggs, i)] = m_accPool[n.m_accs + i].Result(m_aggs[i]);
 			n.m_node->m_hasChildren = !n.m_node->m_children.empty();
 		}
 	}
@@ -3610,16 +3830,44 @@ private:
 	// ⭐ TWO MAPS, because a heading in a table opens children of two kinds and their keys are values
 	// of DIFFERENT fields: "True" as a row key and "True" as a column key are not the same child.
 	// One map would have merged them silently — the worst kind of agreement.
+	// ⚠ THE MAPS OF CHILDREN ARE MADE WITH THE FIRST CHILD, and the node is built where it will live. Most
+	// nodes of a fold never open a child — a record, a cell — yet each carried two hash maps from birth,
+	// and an empty one allocates its buckets; the node was built as a temporary, moved into the pool and
+	// destroyed again. The payroll sheet opens 419 thousand of them, and building, moving and freeing
+	// those maps was the heaviest thing in the stack samples of its fold (MEASURED 2026-09-12, Debug).
+	// ⚠ AND ITS ACCUMULATORS LIVE IN ONE POOL BESIDE IT (m_accPool), the node holding where they start.
+	// A vector of its own was one more allocation and one more free per node — 419 thousand of each for
+	// one payroll sheet, and they stood in the stack samples of its fold and of the fold's end.
 	struct FoldNode {
+		using ChildMap = std::unordered_map<ibLevelKey, std::size_t, ibLevelKeyHash, ibLevelKeyEqual>;
+		FoldNode(ibSelectorTree::Node* node, std::size_t accs) : m_node(node), m_accs(accs) {}
 		ibSelectorTree::Node* m_node = nullptr;
-		std::vector<ibAggAcc> m_accs;
-		std::unordered_map<ibLevelKey, std::size_t, ibLevelKeyHash, ibLevelKeyEqual> m_children;
-		std::unordered_map<ibLevelKey, std::size_t, ibLevelKeyHash, ibLevelKeyEqual> m_acrossChildren;
+		std::size_t           m_accs = 0;   // this node's first accumulator in m_accPool — one per aggregate
+		std::unique_ptr<ChildMap> m_children;         // null until the first child is opened
+		// …and the cells across a heading, which are FEW — a column per key, three for an employee, seven
+		// for a department — so they are kept as a list and found by equality, which for the same
+		// reference object is a pointer compare (ibValue::CompareValueLS). A hash map costs its hash and,
+		// in a checked build, a global lock per iterator it makes; the fold asked one for every cell of
+		// every row (2026-09-12). Past kAcrossListMax the list becomes the map, and stays one.
+		// (Made with the first cell, like the maps: most nodes of a fold ARE cells and have none, and an
+		// empty vector is an allocation of its own in a checked build.)
+		// ⭐ AND IT HOLDS THE CELLS, NOT COPIES OF THEIR KEYS: a cell's key is already in its own values,
+		// written there when it was opened, so it is asked of the cell (CellHasKey). A copy per cell was a
+		// vector of values built and kept for each of 120 thousand cells of one payroll sheet.
+		std::unique_ptr<std::vector<std::size_t>> m_acrossList;
+		std::unique_ptr<ChildMap> m_acrossChildren;   // null while the list is enough
 		std::size_t           m_acrossCount = 0;   // cells written so far — where the next one is inserted
+		// THE CHILD THE LAST ROW WENT TO, down the page. The rows arrive sorted by the levels' keys, so
+		// the next row almost always goes to the same department and, two times in three, to the same
+		// employee — and asking whether its key is that child's key is one comparison where the map
+		// would hash the key and compare it anyway. The key is the map's own (a node's key does not
+		// move while the map lives). Not kept across the page: a cell's key changes every row.
+		const ibLevelKey*     m_lastKey   = nullptr;
+		std::size_t           m_lastChild = 0;
 		// THE FORKS THIS HEADING HAS OPENED, by section. Not a map, because a branch is not reached by
-		// a KEY — it is named by the query and there is a fixed handful of them. Left EMPTY until the
+		// a KEY — it is named by the query and there is a fixed handful of them. Left NULL until the
 		// first fork is opened, so a report without `SPLIT` carries nothing extra per node.
-		std::vector<std::size_t> m_branchChildren;
+		std::unique_ptr<std::vector<std::size_t>> m_branchChildren;
 	};
 
 
@@ -3639,16 +3887,12 @@ private:
 				if (section.m_detailsAcross) {
 					const std::size_t leaf = AddDetail(cur, row, section.DepthOfDetails(), section);
 					if (leaf != kNoNode)
-						FeedNode(leaf, row);
+						FeedNode(leaf);
 				}
 				break;
 			}
-			ibLevelKey key;
-			key.reserve(level.m_fields.size());
-			for (const ibTotalField& field : level.m_fields)
-				key.push_back(LevelKeyValue(field, row));
-			cur = Child(cur, std::move(key), level, section.DepthOf(li), /*across*/ li == section.m_across);
-			FeedNode(cur, row);
+			cur = Child(cur, m_rowKeys[li], level, section.DepthOf(li), /*across*/ li == section.m_across);
+			FeedNode(cur);
 		}
 	}
 
@@ -3661,11 +3905,11 @@ private:
 	// the first one made rather than start a second copy of it.
 	std::size_t BranchChild(std::size_t parent, std::size_t branch)
 	{
-		std::vector<std::size_t>& opened = m_pool[parent].m_branchChildren;
-		if (opened.empty())
-			opened.assign(m_sections.size(), kNoNode);
-		if (opened[branch] != kNoNode)
-			return opened[branch];
+		std::unique_ptr<std::vector<std::size_t>>& forks = m_pool[parent].m_branchChildren;
+		if (!forks)
+			forks = std::make_unique<std::vector<std::size_t>>(m_sections.size(), kNoNode);
+		if ((*forks)[branch] != kNoNode)
+			return (*forks)[branch];
 
 		ibSelectorTree::Node* parentNode = m_pool[parent].m_node;
 		// AT THE PARENT'S OWN DEPTH — the fork is not a level, so it must not spend one. What hangs
@@ -3679,25 +3923,52 @@ private:
 			node->m_branch = named->m_name;
 
 		const std::size_t idx = m_pool.size();
-		m_pool.push_back(FoldNode{ node, std::vector<ibAggAcc>(m_aggs.size()), {}, {}, 0 });
-		// ⚠ RE-READ THE POOL ENTRY — the push_back above may have reallocated (same trap as Child).
-		m_pool[parent].m_branchChildren[branch] = idx;
+		m_pool.emplace_back(node, NewAccs());
+		// ⚠ RE-READ THE POOL ENTRY — the emplace above may have reallocated (same trap as Child).
+		(*m_pool[parent].m_branchChildren)[branch] = idx;
 		return idx;
 	}
 
-	void FeedNode(std::size_t idx, const ibQueryRow& row)
+	// The row in hand — read by Feed — into one node's accumulators.
+	void FeedNode(std::size_t idx)
 	{
-		std::vector<ibAggAcc>& accs = m_pool[idx].m_accs;
+		const std::size_t at = m_pool[idx].m_accs;
 		for (std::size_t i = 0; i < m_aggs.size(); ++i)
-			accs[i].Feed(m_aggs[i], row);
+			m_accPool[at + i].FeedOperand(m_aggs[i], m_operands[i]);
 	}
 
-	std::size_t Child(std::size_t parent, ibLevelKey&& key, const ibTotalLevel& level, int childLevel, bool across)
+	// A node's accumulators, one per aggregate, taken from the pool — see FoldNode.
+	std::size_t NewAccs()
 	{
-		auto& opened = across ? m_pool[parent].m_acrossChildren : m_pool[parent].m_children;
-		const auto it = opened.find(key);
-		if (it != opened.end())
-			return it->second;
+		const std::size_t at = m_accPool.size();
+		m_accPool.resize(at + m_aggs.size());
+		return at;
+	}
+
+	// `key` is the row's, read once for every heading it opens (Feed) — so it is copied only into a map
+	// that gains a child, which happens once per GROUP rather than once per row.
+	std::size_t Child(std::size_t parent, const ibLevelKey& key, const ibTotalLevel& level, int childLevel, bool across)
+	{
+		if (!across && m_pool[parent].m_lastKey != nullptr && ibLevelKeyEqual()(*m_pool[parent].m_lastKey, key))
+			return m_pool[parent].m_lastChild;   // the same child as the row before — see FoldNode::m_lastKey
+		if (across && !m_pool[parent].m_acrossChildren) {
+			if (const std::vector<std::size_t>* cells = m_pool[parent].m_acrossList.get()) {
+				for (size_t i = 0; i < cells->size(); ++i)   // by index — no iterators to lock for
+					if (CellHasKey((*cells)[i], level, key))
+						return (*cells)[i];   // the few cells of a heading, walked — see FoldNode::m_acrossList
+			}
+		}
+		else if (const std::unique_ptr<FoldNode::ChildMap>& opened = across ? m_pool[parent].m_acrossChildren
+		                                                                    : m_pool[parent].m_children) {
+			const auto it = opened->find(key);
+			if (it != opened->end()) {
+				if (!across) {
+					m_pool[parent].m_lastKey   = &it->first;
+					m_pool[parent].m_lastChild = it->second;
+				}
+				return it->second;
+			}
+		}
 
 		ibSelectorTree::Node* parentNode = m_pool[parent].m_node;
 		// THE CELLS FIRST, THE SUB-HEADINGS AFTER — see Node::InsertChild. A walk is pre-order, and
@@ -3708,22 +3979,85 @@ private:
 		// A SUBGROUP inherits the grouping fields available from the levels above, so a display column
 		// that dot-walks an ancestor dimension resolves in the subgroup header too. Only the KEYS are
 		// there to inherit at this point — the figures are written at the end, by Finish().
+		// (Room for its own key and its figures is made first, and the copy keeps it — the values are
+		// one vector, and growing it twice more per node was a reallocation each.)
+		child->m_values.reserve(parentNode->m_values.size() + level.m_fields.size() + m_aggs.size());
 		child->m_values = parentNode->m_values;
 		// ⭐ …AND WHICH BRANCH IT STANDS IN, inherited exactly as the keys above are. A branch is a
 		// FACT ABOUT THE NODE — "the rows went this way to reach me" — and not a state of whoever is
 		// walking: stamped only on the fork, a walk that had descended past it could no longer tell
 		// whose nodes it was looking at, and every output printed every branch's headings (Max, live,
 		// 2026-08-27: 125 rows of its own followed by 125 blank ones belonging to the other table).
-		child->m_branch = parentNode->m_branch;
+		// (Outside a SPLIT there is no branch to inherit, and a new node's is already empty.)
+		if (!parentNode->m_branch.empty())
+			child->m_branch = parentNode->m_branch;
 		for (std::size_t i = 0; i < level.m_fields.size() && i < key.size(); ++i)
 			child->m_values[level.m_fields[i].m_col->GetColumnId()] = key[i];
 
 		const std::size_t idx = m_pool.size();
-		m_pool.push_back(FoldNode{ child, std::vector<ibAggAcc>(m_aggs.size()), {} });
-		// ⚠ RE-READ THE POOL ENTRY: the push_back above may have reallocated, and a reference taken
+		m_pool.emplace_back(child, NewAccs());
+		// ⚠ RE-READ THE POOL ENTRY: the emplace above may have reallocated, and a reference taken
 		// before it points into the old buffer.
-		(across ? m_pool[parent].m_acrossChildren : m_pool[parent].m_children).emplace(std::move(key), idx);
+		FoldNode& owner = m_pool[parent];
+		if (across && !owner.m_acrossChildren) {
+			if (!owner.m_acrossList) {
+				owner.m_acrossList = std::make_unique<std::vector<std::size_t>>();
+				owner.m_acrossList->reserve(4);   // a column per key: three for an employee, a few more above
+			}
+			if (owner.m_acrossList->size() < kAcrossListMax) {
+				owner.m_acrossList->push_back(idx);
+				return idx;
+			}
+			// …too many to walk: the list becomes the map it stood in for, and the map carries on — keyed
+			// by what each cell says it is.
+			owner.m_acrossChildren = std::make_unique<FoldNode::ChildMap>();
+			for (const std::size_t cell : *owner.m_acrossList)
+				owner.m_acrossChildren->emplace(KeyOfCell(cell, level), cell);
+			owner.m_acrossList.reset();
+		}
+		std::unique_ptr<FoldNode::ChildMap>& opened = across ? owner.m_acrossChildren : owner.m_children;
+		if (!opened)
+			opened = std::make_unique<FoldNode::ChildMap>();
+		const auto placed = opened->emplace(key, idx);
+		if (!across) {
+			owner.m_lastKey   = &placed.first->first;
+			owner.m_lastChild = idx;
+		}
 		return idx;
+	}
+
+	// How many cells across one heading are found by walking them before they are put in a map.
+	static constexpr std::size_t kAcrossListMax = 16;
+
+	// DOES THIS CELL STAND FOR `key`? Asked of the cell itself: its key went into its own values, under
+	// the level's columns, when Child opened it — and nothing is written over them until the fold is
+	// finished. Compared value by value, exactly as the map compares whole keys (ibLevelKeyEqual).
+	bool CellHasKey(std::size_t cell, const ibTotalLevel& level, const ibLevelKey& key) const
+	{
+		if (key.size() != level.m_fields.size())
+			return false;   // Feed builds one value per field, so this is never the case — but it is not assumed
+		const ibSelectorTree::Node* node = m_pool[cell].m_node;
+		const ibValueEqual same;
+		for (std::size_t i = 0; i < key.size(); ++i) {
+			const ibValue* held = node->m_values.find_value(level.m_fields[i].m_col->GetColumnId());
+			if (held == nullptr || !same(*held, key[i]))
+				return false;
+		}
+		return true;
+	}
+
+	// …and the key itself, read back off the cell — for the rare heading whose cells outgrow the list and
+	// move into the map, which does keep keys of its own.
+	ibLevelKey KeyOfCell(std::size_t cell, const ibTotalLevel& level) const
+	{
+		const ibSelectorTree::Node* node = m_pool[cell].m_node;
+		ibLevelKey key;
+		key.reserve(level.m_fields.size());
+		for (const ibTotalField& field : level.m_fields) {
+			const ibValue* held = node->m_values.find_value(field.m_col->GetColumnId());
+			key.push_back(held != nullptr ? *held : ibValue());
+		}
+		return key;
 	}
 
 	// ⭐ A DETAIL ROW IS A NODE LIKE ANY OTHER NOW — it is returned, because a table hangs its cells
@@ -3758,7 +4092,7 @@ private:
 		if (section.m_across >= section.m_to)
 			return kNoNode;
 		const std::size_t idx = m_pool.size();
-		m_pool.push_back(FoldNode{ leaf, std::vector<ibAggAcc>(m_aggs.size()), {} });
+		m_pool.emplace_back(leaf, NewAccs());
 		return idx;   // …and from here on it is a heading like any other — see Finish
 	}
 
@@ -3775,7 +4109,15 @@ private:
 	const std::vector<ibTotalLevel>&                      m_levels;
 	const std::vector<ibDataQueryBuilder::AggregateItem>& m_aggs;
 	const std::vector<ibQueryRamColumn>&                  m_rowColumns;   // what a DETAIL row writes
-	std::vector<FoldNode>                                 m_pool;
+	// ⚠ DEQUES — both grow a node at a time, 160 thousand of them for one payroll sheet, and a vector moved
+	// every node and accumulator it held at each doubling (a node's maps and an accumulator's value moved
+	// one by one). Indices survive either way; a deque also keeps a reference good while it grows.
+	std::deque<FoldNode>                                  m_pool;
+	std::deque<ibAggAcc>                                  m_accPool;      // every node's accumulators — see FoldNode
+	// THE ROW BEING FED, as the fold needs it: each level's key and each aggregate's operand, read once
+	// per row by Feed and handed to every node on its path. Kept between rows so their storage is reused.
+	std::vector<ibLevelKey>                               m_rowKeys;
+	std::vector<ibValue>                                  m_operands;
 	// THE LADDERS THIS FOLD BUILDS — one without `SPLIT`, and then one per branch. What used to be
 	// three fields about "the levels" now belongs to each section, because with branches there is no
 	// longer a single answer to "where do the columns start".
@@ -4805,12 +5147,26 @@ ibSelectorTree ibQueryComposer::BuildDimensionTree(ibQueryRowCursor& rows,
 	// headings ARE the rows; a streamed ladder is read literally, one heading per rung.
 	ibStreamingFold fold(tree, levels, aggregates, rows.Columns());
 	long read = 0;
-	while (rows.Next()) { fold.Feed(rows); ++read; }
+	ibJournalStopwatch fetch, feed, finish;
+	for (;;) {
+		fetch.Resume();
+		const bool more = rows.Next();
+		fetch.Pause();
+		if (!more)
+			break;
+		feed.Resume();
+		fold.Feed(rows);
+		feed.Pause();
+		++read;
+	}
+	finish.Resume();
 	fold.Finish();
 	PadPeriodLevels(tree, levels, aggregates);   // the quiet months, which no fold can produce
 	ApplyScopedAggregates(tree, aggregates);     // …and the figures that belong to ONE level (OVER)
-	ibJournalInfo(wxT("query.road"), wxT("STREAM: folded %ld rows into %ld nodes (%u levels)"),
-	              read, fold.NodeCount(), static_cast<unsigned>(levels.size()));
+	finish.Pause();
+	ibJournalInfo(wxT("query.road"), wxT("STREAM: folded %ld rows into %ld nodes (%u levels); ")
+	              wxT("fetch %lld ms, feed %lld ms, finish %lld ms"),
+	              read, fold.NodeCount(), static_cast<unsigned>(levels.size()), fetch.Ms(), feed.Ms(), finish.Ms());
 	return tree;
 }
 
@@ -5104,6 +5460,45 @@ void ibQueryComposer::AppendUnionBranch(ibQueryRamTable& out, const ibQueryRamTa
 	}
 }
 
+// ⭐ THE SAME STACKING, FROM A BRANCH NOBODY READS AGAIN — its cells MOVED rather than copied, and where
+// the branch keys its cells exactly as the stack does (the FIRST branch of a union is where the stack's
+// columns come from), its rows moved whole. The union of the payroll sheet copied 126 thousand rows here
+// cell by cell only to free the branch straight after (2026-09-12).
+void ibQueryComposer::AppendUnionBranch(ibQueryRamTable& out, ibQueryRamTable&& branch,
+		const std::vector<const ibBackendQueryColumn*>& outCols,
+		const std::vector<const ibBackendQueryColumn*>& branchCols)
+{
+	bool sameKeys = true;
+	for (size_t k = 0; k < outCols.size() && sameKeys; ++k)
+		sameKeys = branchCols[k] != nullptr && branchCols[k]->GetColumnId() == outCols[k]->GetColumnId();
+	if (sameKeys) {
+		out.AppendRowsFrom(branch);
+		return;
+	}
+	// …and a branch with columns of its own is RE-KEYED, its cells staying the nodes they are
+	// (ibQueryRamTable::AppendRowRekeyed) — unless it offers one column to two outputs, which is a copy.
+	std::vector<std::pair<ibMetaID, ibMetaID>> rekey;
+	bool eachOnce = true;
+	for (size_t k = 0; k < outCols.size() && eachOnce; ++k) {
+		if (branchCols[k] == nullptr)
+			continue;   // absent here — nothing to move, and the stacked row reads it as empty
+		const ibMetaID from = branchCols[k]->GetColumnId();
+		for (const std::pair<ibMetaID, ibMetaID>& had : rekey)
+			eachOnce = eachOnce && had.first != from;
+		rekey.emplace_back(from, outCols[k]->GetColumnId());
+	}
+	if (eachOnce) {
+		out.AppendRowsRekeyed(branch, rekey);
+		return;
+	}
+	for (long i = 0; i < branch.RowCount(); ++i) {
+		const long r = out.AppendRow();
+		for (size_t k = 0; k < outCols.size(); ++k)
+			out.SetCell(r, outCols[k]->GetColumnId(),
+			            branchCols[k] != nullptr ? branch.TakeCell(i, branchCols[k]->GetColumnId()) : ibValue());
+	}
+}
+
 ibQueryRamTable ibQueryComposer::DedupeRows(const ibQueryRamTable& src,
 		const std::vector<const ibBackendQueryColumn*>& cols)
 {
@@ -5256,9 +5651,14 @@ public:
 
 	bool Next() override { return ++m_row < m_table.RowCount(); }
 
+	ibQueryRamTable* Table() override {
+		return m_row < 0 ? &m_table : nullptr;   // a walk has begun — what it already passed is not the caller's
+	}
+
 	ibValue Value(const ibBackendQueryColumn* col) const override {
 		return (m_row >= 0 && col != nullptr) ? m_table.GetCell(m_row, col->GetColumnId()) : ibValue();
 	}
+	using ibDataResultSource::Column;   // the prefix-and-column read keeps the base's answer
 	ibValue Column(const wxString& alias) const override {
 		for (const ibQueryRamColumn& c : m_table.Columns())
 			if (c.m_name == alias) return m_table.GetCell(m_row, c.m_id);
@@ -5279,8 +5679,12 @@ private:
 // ==========================================================================
 
 ibDataQueryResult::ibDataQueryResult(ibQueryRamTable&& ramTable, const ibBackendQueryable* queryable)
-	: m_source(std::make_shared<ibRamTableResultSource>(std::move(ramTable), queryable))
 {
+	// Every RAM road ends here with its flat list whole — its references are told what they say by the
+	// provider it was read from (ibBackendQueryProvider::ReadReferences), before anybody reads a row of it.
+	if (queryable != nullptr)
+		queryable->GetProvider().ReadReferences();
+	m_source = std::make_shared<ibRamTableResultSource>(std::move(ramTable), queryable);
 }
 
 ibDataQueryResult::~ibDataQueryResult() = default;
@@ -5299,7 +5703,13 @@ ibValue  ibDataQueryResult::GetColumn(const wxString& alias)                    
 			return EvalOverResultRow(c, *m_source);
 	return m_source->Column(alias);
 }
-ibValue  ibDataQueryResult::GetColumnObject(const wxString& prefix, const ibBackendQueryColumn* col) const { return m_source->ColumnObject(prefix, col); }
+ibValue  ibDataQueryResult::GetColumn(const wxString& prefix, const ibBackendQueryColumn* col) const { return m_source->Column(prefix, col); }
+// ⚠ NOT WHERE THIS RESULT ANSWERS A NAME ITSELF: GetColumn asks the computed-over-row columns first,
+// and the table does not hold those.
+ibQueryRamTable* ibDataQueryResult::GetTable()
+{
+	return m_source != nullptr && m_computedOverRow.empty() ? m_source->Table() : nullptr;
+}
 
 void ibDataQueryResult::SetMaterialiseColumns(std::vector<const ibBackendQueryColumn*> cols)
 {
@@ -5381,9 +5791,13 @@ public:
 	{
 		if (m_source == nullptr)
 			return ibValue();
-		const auto objectRead = m_objectReads.find(id);
-		if (objectRead != m_objectReads.end())
-			return m_source->ColumnObject(objectRead->second.first, objectRead->second.second);
+		// (Asked only where there is anything to find: a fold reads a few cells of every row through
+		// here, and a lookup in an empty map is still a lookup — a checked build locks for it.)
+		if (!m_objectReads.empty()) {
+			const auto objectRead = m_objectReads.find(id);
+			if (objectRead != m_objectReads.end())
+				return m_source->Column(objectRead->second.first, objectRead->second.second);
+		}
 		for (const ibBackendQueryColumn* c : m_cols)
 			if (c->GetColumnId() == id)
 				return m_source->Value(c);

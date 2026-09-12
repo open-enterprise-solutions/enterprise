@@ -835,14 +835,19 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 	// (a chart), which is a driver question, not a composition one.
 	for (ibDataComposer::Output& output : composer.Outputs())
 		output.m_driver = &driver;
-	const bool composed = composer.Run();
 
 	// The pointers do not outlive this call — the driver is a stack object, and an output holding a
-	// dangling one would be read on the next compose.
-	for (ibDataComposer::Output& output : composer.Outputs())
-		output.m_driver = nullptr;
+	// dangling one would be read on the next compose. On EVERY way out: a run that is cancelled or refused
+	// leaves by a throw, and it left them dangling.
+	struct ibDriverRelease {
+		ibDataComposer& m_composer;
+		~ibDriverRelease() {
+			for (ibDataComposer::Output& output : m_composer.Outputs())
+				output.m_driver = nullptr;
+		}
+	} release{ composer };
 
-	return composed;
+	return composer.Run();
 }
 
 // ⭐⭐ THE COMPOSITION'S OWN FETCH — one shot, not a page.
@@ -880,7 +885,8 @@ void ibValueDataComposition::SubmitFetchAsync(std::function<void()> work)
 	work();
 }
 
-// Cooperative: the flag is raised and the run is waited out — a query already in flight finishes.
+// Cooperative: the flag is raised and the run is waited out — it stops at its next row or line
+// (ibSession::CancelFlag says who listens).
 void ibValueDataComposition::CancelFetch()
 {
 	if (!m_fetchRun)
@@ -893,12 +899,13 @@ void ibValueDataComposition::CancelFetch()
 // (GetFeatures / GetValueByRow / GetValueByMetaID / GetRowAt are GONE with the list surface — a
 //  composition has no dataview rows to marshal a value out of. What it produces is a SHEET.)
 
-ibUniqueKey ibValueDataComposition::GetGuid() const
+const ibUniqueKey& ibValueDataComposition::GetGuid() const
 {
 	if (const ibBackendQueryable* q = GetSourceQueryable())
-		return q->GetQueryTableGuid();
+		return q->GetQueryTableGuid();   // the key its source's metaobject keeps
 
-	return wxNullGuid;
+	static const ibUniqueKey none;   // no source picked yet
+	return none;
 }
 
 // (GetItemKey / ActivateItem are gone with the list surface: they keyed a DATAVIEW row, and a
@@ -1058,7 +1065,11 @@ const ibMetaData* ibValueDataComposition::GetSourceMetaData() const
 void ibValueDataComposition::FillMembers(ibMemberTable& helper) const
 {
 	helper.AppendProc(wxT("Refresh"), wxT("Refresh()"));
-	helper.AppendProc(wxT("Compose"), wxT("Compose(Document)"));
+	// 🛑 ONE PARAMETER, SAID IN THE NUMBER AND NOT ONLY IN THE HELP TEXT. The two-argument AppendProc
+	// takes the second string as the text a person reads and declares NO parameters, so the documented
+	// call `composition.Compose(document)` was refused by the language before it reached CallAsProc:
+	// "Too many parameters passed to 'Compose'" (found 2026-09-12, composing a report from a script).
+	helper.AppendProc(wxT("Compose"), 1, wxT("Compose(Document)"));
 }
 
 bool ibValueDataComposition::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)

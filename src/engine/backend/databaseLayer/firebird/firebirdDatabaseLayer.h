@@ -50,7 +50,10 @@ public:
 	// Is the connection to the database open?
 	virtual bool IsOpen();
 
-	/// clone database  
+	// Cancel what this attachment is running — fb_cancel_operation(raise), from any thread (see the base).
+	virtual void Cancel();
+
+	/// clone database
 	virtual ibDatabaseLayer* Clone() { return new ibDatabaseLayerFirebird(*this); }
 
 	// IsActiveTransaction inherits the base-class default (m_txDepth > 0).

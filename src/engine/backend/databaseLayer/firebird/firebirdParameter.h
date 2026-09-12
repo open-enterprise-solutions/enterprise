@@ -26,7 +26,7 @@ class ibDatabaseParameterFirebird : public ibDatabaseStringConverter
 public:
 	// ctor
 	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar);
-	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxString& strValue, const wxCSConv* conv);
+	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxString& strValue);
 	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const ibNumber& dblValue);
 	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, int nValue);
 	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, double dblValue);

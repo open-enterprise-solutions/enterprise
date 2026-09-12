@@ -30,9 +30,7 @@ ibDatabaseResultSetPostgres::ibDatabaseResultSetPostgres(ibInterfacePostgres* pI
 	int nFields = m_pInterface->GetPQnfields()(m_pResult);
 	for (int i = 0; i < nFields; i++)
 	{
-		wxString strField = ConvertFromUnicodeStream(m_pInterface->GetPQfname()(pResult, i));
-		strField.MakeUpper();
-		m_FieldLookupMap[strField] = i;
+		m_FieldLookupMap[ConvertFromUnicodeStream(m_pInterface->GetPQfname()(pResult, i))] = i;   // as written: the map is case-blind
 	}
 }
 
@@ -319,8 +317,8 @@ bool ibDatabaseResultSetPostgres::IsFieldNull(int nField)
 
 int ibDatabaseResultSetPostgres::LookupField(const wxString& strField)
 {
-	StringToIntMap::iterator SearchIterator = std::find_if(m_FieldLookupMap.begin(), m_FieldLookupMap.end(),
-		[strField](const auto pair) { return stringUtils::CompareString(pair.first, strField); });
+	// Found, not walked — the names are kept as written (constructor) and the map ignores case; see firebirdResultSet.cpp.
+	StringToIntMap::iterator SearchIterator = m_FieldLookupMap.find(strField);
 
 	if (SearchIterator == m_FieldLookupMap.end())
 	{

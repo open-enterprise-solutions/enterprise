@@ -540,7 +540,7 @@ ibValueMetaObject* ibMetaData::PasteMetaObject(const ibClassID& clsid,
 			std::shared_ptr <ibReaderMemory>readerHeaderMemory(reader.open_chunk(headerBlock));
 
 			/*const ibVersionID& version =*/ readerHeaderMemory->r_s32();
-			pasteObject->m_metaGuid = readerHeaderMemory->r_stringZ();
+			pasteObject->m_metaGuid = ibGuid(readerHeaderMemory->r_stringZ());
 
 			// MARK the pasted object as pasted — its paste-guid equals its own guid (the source copy-guid it was
 			// created under). IsPasteMode() then holds while the tree runs, so a form re-loaded here re-homes its

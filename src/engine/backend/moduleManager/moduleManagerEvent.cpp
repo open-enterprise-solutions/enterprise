@@ -39,6 +39,12 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeStart()
 			pu->CallAsProc(wxT("beforeStart"), bCancel);
 		return !bCancel.GetBoolean();
 	}
+	catch (const ibBackendInterruptException&) {
+		// Stopped, not failed — a forced close of an application still in BeforeStart (stopped in the debugger
+		// there, say) cancels its run. The runtime has said so in the messages; a warning window on top of that
+		// was one for nothing (2026-09-11). Not started, as with any BeforeStart that did not finish.
+		return false;
+	}
 	catch (const ibBackendException& err) {
 		ibJournalWarning(wxT("module.event"),_("BeforeStart: %s"), err.GetErrorDescription());
 		return false;

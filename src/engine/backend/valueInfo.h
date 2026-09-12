@@ -34,8 +34,8 @@ public:
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const { return false; }
 
 
-	//get unique identifier 
-	virtual ibUniqueKey GetGuid() const { return m_objGuid; }
+	//get unique identifier — the key as it lies; its raw guid is GetGuid().GetGuid()
+	virtual const ibUniqueKey& GetGuid() const { return m_objGuid; }
 
 	//is new object?
 	virtual bool IsNewObject() const { return m_newObject; }
@@ -49,7 +49,7 @@ public:
 protected:
 	bool m_newObject;
 	ibRowMetaValues m_listObjectValue;
-	ibGuid m_objGuid;
+	ibUniqueKey m_objGuid;
 };
 
 #define reference_size_t int(sizeof(ibReference))

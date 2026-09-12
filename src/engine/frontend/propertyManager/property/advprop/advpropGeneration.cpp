@@ -6,6 +6,8 @@
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
+#include <map>
+
 #define icon_size 16
 
 // -----------------------------------------------------------------------
@@ -73,42 +75,43 @@ wxPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
 {
     class wxPGGenerationEventAdapter : public wxPGEditorDialogAdapter {
         class ibTreeItemPropertyData : public wxTreeItemData {
-            ibValueMetaObject* m_metaObject;
+            ibMetaID m_metaID;
         public:
-            ibTreeItemPropertyData(ibValueMetaObject* opt) : wxTreeItemData(), m_metaObject(opt) {}
-            ibMetaID GetMetaID() const { return m_metaObject->GetMetaID(); }
+            ibTreeItemPropertyData(ibMetaID id) : wxTreeItemData(), m_metaID(id) {}
+            ibMetaID GetMetaID() const { return m_metaID; }
         };
 
-        void FillByClsid(const ibMetaData* metaData, const ibClassID& clsid,
+        // ⭐ WHAT THE PROPERTY OFFERS, grouped by kind — the choices it was built with
+        // (ibPropertyGeneration::GetValueList), not a list of kinds of this dialog's own. It kept one, a
+        // copy of the property's that had fallen behind: a chart of calculation types was offered nowhere.
+        void FillFromChoices(const ibMetaData* metaData, const wxPGChoices& choices,
             ibCheckTree* tc, ibVariantDataGeneration* data) {
 
             wxImageList* imageList = tc->GetImageList();
             wxASSERT(imageList);
-            const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
-            int groupIcon = imageList->Add(so->GetClassIcon());
-            const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName(),
-                groupIcon, groupIcon);
-            for (auto metaObject : metaData->GetAnyArrayObject(clsid)) {
-                ibValueMetaObjectRecordDataMutableRef* registerData = dynamic_cast<ibValueMetaObjectRecordDataMutableRef*>(metaObject);
-                if (registerData != nullptr) {
-                    {
-                        const int icon = imageList->Add(registerData->GetIcon());
-                        ibTreeItemPropertyData* itemData = new ibTreeItemPropertyData(metaObject);
-                        wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetName(),
-                            icon, icon,
-                            itemData);
+            std::map<ibClassID, wxTreeItemId> groups;   // one per kind, opened where the kind first appears
+            for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
+                const ibMetaID id = choices.GetValue(idx);
+                const ibValueMetaObject* metaObject = metaData->FindAnyObjectByFilter(id);
+                if (metaObject == nullptr)
+                    continue;
 
-                        if (data != nullptr) {
-                            const ibMetaDescription& md = data->GetMetaDesc();
-                            tc->SetItemState(newItem, md.ContainMetaType(registerData->GetMetaID()) ? ibCheckTree::CHECKED : ibCheckTree::UNCHECKED);
-                            tc->Check(newItem, md.ContainMetaType(registerData->GetMetaID()));
-                        }
-                        else {
-                            tc->SetItemState(newItem, ibCheckTree::UNCHECKED);
-                            tc->Check(newItem, false);
-                        }
-                    }
+                const ibClassID clsid = metaObject->GetClassType();
+                auto group = groups.find(clsid);
+                if (group == groups.end()) {
+                    const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
+                    const int groupIcon = so != nullptr ? imageList->Add(so->GetClassIcon()) : -1;
+                    group = groups.emplace(clsid, tc->AppendItem(tc->GetRootItem(),
+                        so != nullptr ? so->GetClassName() : wxString(), groupIcon, groupIcon)).first;
                 }
+
+                const int icon = imageList->Add(metaObject->GetIcon());
+                wxTreeItemId newItem = tc->AppendItem(group->second, metaObject->GetName(),
+                    icon, icon, new ibTreeItemPropertyData(id));
+
+                const bool checked = data != nullptr && data->GetMetaDesc().ContainMetaType(id);
+                tc->SetItemState(newItem, checked ? ibCheckTree::CHECKED : ibCheckTree::UNCHECKED);
+                tc->Check(newItem, checked);
             }
         }
 
@@ -121,8 +124,10 @@ wxPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
 
             ibVariantDataGeneration* data = property_cast(dlgProp->GetValue(), ibVariantDataGeneration);
             if (data == nullptr) return false;
-            const ibValueMetaObjectGenericData* metaGenericData = dynamic_cast<const ibValueMetaObjectGenericData*>(dlgProp->GetPropertyObject());
-            if (metaGenericData == nullptr) return false;
+            // No cast: the dialog needs the owner only to reach its metadata, which a (const) property
+            // object answers itself.
+            const ibMetaData* metaData = dlgProp->GetPropertyObject() != nullptr ? dlgProp->GetPropertyObject()->GetMetaData() : nullptr;
+            if (metaData == nullptr) return false;
 
             // launch editor dialog
             wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Choice generation"), wxDefaultPosition, wxDefaultSize,
@@ -164,14 +169,7 @@ wxPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
                 new wxImageList(icon_size, icon_size)
             );
 
-            const ibMetaData* metaData = metaGenericData->GetMetaData();
-            wxASSERT(metaData);
-            if (metaData != nullptr) {
-                FillByClsid(metaData, g_metaCatalogCLSID, tc, data);
-                FillByClsid(metaData, g_metaDocumentCLSID, tc, data);
-                FillByClsid(metaData, g_metaChartOfCharacteristicTypesCLSID, tc, data);
-                FillByClsid(metaData, g_metaChartOfAccountsCLSID, tc, data);
-            }
+            FillFromChoices(metaData, dlgProp->GetChoices(), tc, data);
 
             tc->ExpandAll(); int res = dlg->ShowModal();
 

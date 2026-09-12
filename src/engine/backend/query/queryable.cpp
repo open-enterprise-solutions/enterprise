@@ -56,10 +56,13 @@ const ibBackendQueryColumn* ibBackendQueryable::ResolveColumnByName(const wxStri
 //
 // GetQueryTableName stays virtual on purpose: the PHYSICAL table is a different fact, and a temp
 // source has one without a metaobject anywhere.
-ibGuid ibBackendQueryable::GetQueryTableGuid() const
+const ibUniqueKey& ibBackendQueryable::GetQueryTableGuid() const
 {
 	const ibValueMetaObjectGenericData* const meta = GetSourceMetaObject();
-	return meta != nullptr ? meta->GetGuid() : wxNullGuid;
+	if (meta != nullptr)
+		return meta->GetGuid();   // the metaobject's own key
+	static const ibUniqueKey none;   // a source with no metaobject has no guid
+	return none;
 }
 
 ibMetaID ibBackendQueryable::GetQueryTableId() const

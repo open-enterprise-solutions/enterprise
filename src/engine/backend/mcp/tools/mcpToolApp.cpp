@@ -100,9 +100,10 @@ public:
 		return ibMcpText("Start the application on this base - the thick client or the web server, with "
 			"or without the debugger attached. The same launch the designer's Debug menu "
 			"performs, so connection flags and the debug port are handled. Refuses when the "
-			"configuration has changes the database does not have: read database_diff and apply "
-			"them first, because a launch must never write to a base as a side effect.\n\n"
-			"After changing a module, pass restart: true - a running application keeps the "
+			"configuration has edits the base does not hold - a module written a moment ago as much as "
+			"a change of structure: config_apply them first, because a launch must never write to a base "
+			"as a side effect (database_diff lists only the structure).\n\n"
+			"After changing a module: config_apply, then restart: true - a running application keeps the "
 			"bytecode it came up with, so the new code is invisible until it is started again.");
 	}
 
@@ -139,6 +140,29 @@ public:
 
 		const bool restart = ArgRestart().Flag(params);
 		const long lastStarted = ibMcpStartedApplication();   // see the note above the namespace's end
+
+		// ⚠ THE CONFIGURATION MUST ALREADY BE IN THE BASE. The application reads the database's
+		// copy, so launching with unapplied changes runs the OLD configuration while the caller
+		// believes it is testing the new one — a failure that looks like a bug in the code just
+		// written.
+		// ⭐ ASKED OF THE BASE, with nothing to recognise first. IsConfigSave is virtual on
+		// ibMetaDataConfigurationBase and the active metadata is a configuration by definition, so
+		// the cast to the storage class was a conversion to reach a question already in hand.
+		//
+		// 🛑 AND AN EDIT NOT YET SAVED IS ONE TOO. IsConfigSave compares what was SAVED with the base, so a
+		// module written a moment ago (module_write marks the configuration modified and saves nothing)
+		// passed, and the restarted application ran the old text with nothing said (measured 2026-09-11).
+		// The designer's own Debug menu asks the same question of IsModified before it launches.
+		//
+		// ⚠ ASKED BEFORE ANYTHING IS ENDED: a refusal that arrives after `restart` has closed the running
+		// application has cost the caller that application for nothing.
+		if (activeMetaData->IsModified() || !activeMetaData->IsConfigSave()) {
+			refusal = ibMcpText("The configuration has edits the base does not hold yet, so the application would "
+				"run the old text - a module written a moment ago as much as a change of structure. "
+				"config_apply puts them in the base (a module's text needs no exclusive mode; database_diff "
+				"lists only the structure, so it shows nothing for code), then app_run again.");
+			return false;
+		}
 
 		// ONE DEBUGGER AT A TIME — the same guard the menu keeps. A second debug launch attaches
 		// nothing and leaves the caller waiting at a breakpoint that will never be hit.
@@ -192,20 +216,6 @@ public:
 			for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
 				wxMilliSleep(50);
 			ended = true;
-		}
-
-		// ⚠ THE CONFIGURATION MUST ALREADY BE IN THE BASE. The application reads the database's
-		// copy, so launching with unapplied changes runs the OLD configuration while the caller
-		// believes it is testing the new one — a failure that looks like a bug in the code just
-		// written.
-		// ⭐ ASKED OF THE BASE, with nothing to recognise first. IsConfigSave is virtual on
-		// ibMetaDataConfigurationBase and the active metadata is a configuration by definition, so
-		// the cast to the storage class was a conversion to reach a question already in hand.
-		if (!activeMetaData->IsConfigSave()) {
-			refusal = ibMcpText("The configuration has changes the database does not have - the "
-				"application would run the old one. database_diff lists them; apply them "
-				"first.");
-			return false;
 		}
 
 		const wxString useWeb = application.Lower();

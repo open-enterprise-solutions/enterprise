@@ -7,11 +7,11 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
-#include "backend/session/workerPool.h"            // CancelSession for ibBackgroundRun::Cancel
 #include "backend/moduleManager/moduleManager.h"   // root module manager -> GetProcUnit
 #include "backend/compiler/procUnit.h"             // CallAsFunc by name
 #include "backend/backend_exception.h"
 #include "backend/system/systemManager.h"          // WriteJournalEvent - the run's own record
+#include "backend/diagnostics/journal.h"            // ibJournalInfo - the engine's account of a cancel
 
 #include <wx/log.h>
 
@@ -54,6 +54,18 @@ struct ibBackgroundLaunch {
 	// policy lives on must still be there while the read is out. Empty otherwise.
 	std::shared_ptr<ibSession>        m_parent;
 };
+
+// THE RUN THIS THREAD IS DOING — set around its body (ibCurrentRun), read by ibBackgroundRun::Current.
+thread_local ibBackgroundRun* t_currentRun = nullptr;
+
+struct ibCurrentRun {
+	ibBackgroundRun* const m_previous;
+	explicit ibCurrentRun(ibBackgroundRun* run) : m_previous(t_currentRun) { t_currentRun = run; }
+	~ibCurrentRun() { t_currentRun = m_previous; }
+};
+
+// A run that talks in a loop keeps its last lines, not all of them.
+constexpr size_t kKeptLines = 200;
 
 } // namespace
 
@@ -99,6 +111,25 @@ wxString ibBackgroundRun::Activity() const
 	return m_activity;
 }
 
+ibBackgroundRun* ibBackgroundRun::Current()
+{
+	return t_currentRun;
+}
+
+void ibBackgroundRun::Say(const wxString& text, ibStatusMessage status)
+{
+	std::lock_guard<std::mutex> lk(m_mtx);
+	m_said.push_back({ text, status });
+	if (m_said.size() > kKeptLines)
+		m_said.pop_front();
+}
+
+std::vector<ibBackgroundRun::ibSaid> ibBackgroundRun::Said() const
+{
+	std::lock_guard<std::mutex> lk(m_mtx);
+	return std::vector<ibSaid>(m_said.begin(), m_said.end());
+}
+
 wxString ibBackgroundRun::SessionGuid() const
 {
 	std::lock_guard<std::mutex> lk(m_mtx);
@@ -111,18 +142,25 @@ wxString ibBackgroundRun::SessionGuid() const
 
 void ibBackgroundRun::Cancel()
 {
-	// Cooperative — raises the flag and wakes the worker; the interpreter throws
-	// ibBackendInterruptException at its next loop boundary and the task unwinds.
-	// Under the lock because the manager's tick takes the session away from a run
-	// that has finished — cancelling one at that exact moment must read the holder
-	// or the empty slot, never a half-moved one. A finished run reads empty here
-	// and there is nothing left to cancel, which is the right answer anyway.
-	std::lock_guard<std::mutex> lk(m_mtx);
-	ibSession* const session = m_holder.Get();
-	if (session == nullptr)
+	// The run's session is told (ibSession::Cancel) and it passes the cancel on.
+	// The holder is read under the lock because the manager's tick takes the session
+	// away from a run that has finished — cancelling one at that exact moment must
+	// read the holder or the empty slot, never a half-moved one. A finished run reads
+	// empty here and there is nothing left to cancel, which is the right answer anyway.
+	// The cancel itself goes out after the lock is let go: it asks the manager for
+	// tenants, and the manager takes its own lock before this one.
+	std::shared_ptr<ibSession> session;
+	{
+		std::lock_guard<std::mutex> lk(m_mtx);
+		if (ibSession* const held = m_holder.Get())
+			session = held->shared_from_this();
+	}
+	if (!session) {
+		// Said, because a cancel that does not arrive looks exactly like one that arrived and was ignored.
+		ibJournalInfo(wxT("cancel"), wxT("background run '%s': nothing to cancel - it holds no session"), m_activity);
 		return;
-	if (ibWorkerPool* const pool = session->GetWorkerPool())
-		pool->CancelSession(session);
+	}
+	session->Cancel();
 }
 
 // ---------------------------------------------------------------------------
@@ -400,6 +438,9 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 			// 3. The work itself. Whatever it is — a configuration's procedure
 			//    resolved by name, or an engine read — it is a function of the
 			//    session, and this layer neither knows nor needs to know which.
+			//    While it runs, this thread is doing THIS run: what its code says
+			//    with `Message` is kept here (ibBackgroundRun::Say).
+			const ibCurrentRun doing(run.get());
 			const ibValue result = l.m_body(l.m_session);
 
 			// ⭐ AN ENDING IS AN EVENT TOO. Without this the journal shows a run starting and
@@ -505,3 +546,22 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 	return run;
 }
 
+std::vector<std::shared_ptr<ibSession>> ibJobManager::TenantsOf(const ibSession* landlord) const
+{
+	// A TENANT, not any run hosted there: a standalone run's host is whatever the registry stamped (the
+	// process's web server, where there is one), and cancelling that server's session is not cancelling
+	// every job of the process. A rented read is the unlisted one whose host is the landlord (StartBackground).
+	std::vector<std::shared_ptr<ibSession>> tenants;
+	if (landlord == nullptr)
+		return tenants;
+	std::lock_guard<std::mutex> lk(m_mtx);
+	for (const std::shared_ptr<ibBackgroundRun>& run : m_background) {
+		if (!run || run->m_done.load(std::memory_order_acquire))
+			continue;
+		std::lock_guard<std::mutex> runLk(run->m_mtx);   // the tick's order: the manager's lock, then the run's
+		ibSession* const session = run->m_holder.Get();
+		if (session != nullptr && session->IsUnlisted() && session->Server().get() == landlord)
+			tenants.push_back(session->shared_from_this());
+	}
+	return tenants;
+}

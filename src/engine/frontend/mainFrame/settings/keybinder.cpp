@@ -221,8 +221,9 @@ void ibKeyBinder::SetShortcut(int id, int flags, int code)
 
         key.flags = flags;
         key.code  = code;
-        
+
         command->keys.push_back(key);
+        command->defaultKeys.push_back(key);
 
     }
 
@@ -279,6 +280,9 @@ int ibKeyBinder::StringToKeyCode(const wxString &keyName)
     if (keyName == wxT("ESCAPE")) return WXK_ESCAPE;
     if (keyName == wxT("SPACE")) return WXK_SPACE;
     if (keyName == wxT("DEL") || keyName == wxT("DELETE")) return WXK_DELETE;
+    // Ctrl+Break arrives as WXK_CANCEL. Unknown here, "Ctrl+Break" fell to the line below and was
+    // bound as Ctrl+B.
+    if (keyName == wxT("BREAK") || keyName == wxT("CANCEL")) return WXK_CANCEL;
 
     // it should be an ASCII key...
     return (int)keyName.GetChar(0);
@@ -398,7 +402,7 @@ wxString ibKeyBinder::GetKeyBindingAsText(const Key& key)
     case WXK_HELP:
         res << wxT("Help"); break;
     case WXK_CANCEL:
-        res << wxT("Cancel"); break;
+        res << wxT("Break"); break;   // the key a person presses - Ctrl+Break arrives as WXK_CANCEL
     case WXK_MENU:
         res << wxT("Menu"); break;
     case WXK_CAPITAL:
@@ -490,14 +494,26 @@ wxString ibKeyBinder::GetKeyBindingAsText(const Key& key)
     return res;
 }
 
+static bool SameKeys(const std::vector<ibKeyBinder::Key>& a, const std::vector<ibKeyBinder::Key>& b)
+{
+    if (a.size() != b.size())
+        return false;
+    for (unsigned int i = 0; i < a.size(); ++i)
+        if (a[i].flags != b[i].flags || a[i].code != b[i].code)
+            return false;
+    return true;
+}
+
 wxXmlNode* ibKeyBinder::Save(const wxString& tag) const
 {
 
-    wxXmlNode* root = new wxXmlNode(wxXML_ELEMENT_NODE, tag);    
+    wxXmlNode* root = new wxXmlNode(wxXML_ELEMENT_NODE, tag);
 
     for (unsigned int i = 0; i < m_commands.size(); ++i)
     {
-        if (!m_commands[i]->keys.empty())
+        // Only what the person changed (see the header) - a command with no keys at all is written too
+        // when it had a default, since "removed" is a choice.
+        if (!SameKeys(m_commands[i]->keys, m_commands[i]->defaultKeys))
         {
 
             wxXmlNode* node = new wxXmlNode(wxXML_ELEMENT_NODE, "command");    
@@ -521,13 +537,7 @@ wxXmlNode* ibKeyBinder::Save(const wxString& tag) const
 void ibKeyBinder::Load(wxXmlNode* root)
 {
 
-    // Erase all of the existing key bindings.
-
-    for (unsigned int i = 0; i < m_commands.size(); ++i)
-    {
-        m_commands[i]->keys.clear();
-    }
-
+    // Over the defaults: a command the profile names takes its saved keys (LoadCommand), the rest keep theirs.
     wxXmlNode* node = root->GetChildren();
     while (node != nullptr)
     {

@@ -214,11 +214,14 @@ void ibBackendSpreadsheetObject::PutArea(const wxObjectDataPtr<ibBackendSpreadsh
 				cell->m_detailsParameter;
 
 			if (!detailsParameter.IsEmpty()) {
-	
-				wxString detailsComputeParameter;	
-				detailsComputeParameter << detailsParameter << maxRowBrake + row << col;
-				
-				SetParameter(detailsComputeParameter, doc->GetParameter(detailsParameter));	
+
+				// 🛑 SEPARATED, so the name is one per cell. Glued without anything between them, `Cell_1` at
+				// row 121 column 1 and `Cell_11` at row 2 column 11 both came out `Cell_11211`: past ten
+				// columns and a hundred rows one cell's details replaced another's (found 2026-09-12).
+				wxString detailsComputeParameter;
+				detailsComputeParameter << detailsParameter << wxT('_') << maxRowBrake + row << wxT('_') << col;
+
+				SetParameter(detailsComputeParameter, doc->GetParameter(detailsParameter));
 				cell->m_detailsParameter = detailsComputeParameter;
 			}
 		}
@@ -266,8 +269,8 @@ void ibBackendSpreadsheetObject::JoinArea(const wxObjectDataPtr<ibBackendSpreads
 
 			if (!detailsParameter.IsEmpty()) {
 
-				wxString detailsComputeParameter;
-				detailsComputeParameter << detailsParameter << row << maxColBrake + col;
+				wxString detailsComputeParameter;   // separated, one name per cell — see PutArea
+				detailsComputeParameter << detailsParameter << wxT('_') << row << wxT('_') << maxColBrake + col;
 
 				SetParameter(detailsComputeParameter, doc->GetParameter(detailsParameter));
 				cell->m_detailsParameter = detailsComputeParameter;
@@ -414,6 +417,30 @@ void ibBackendSpreadsheetObject::SetCellBorderBottom(int row, int col, const ibS
 	m_spreadsheetDesc.SetCellBorderBottom(row, col, desc);
 }
 
+void ibBackendSpreadsheetObject::SetCell(int row, int col, const ibSpreadsheetCellDescription& desc)
+{
+	// The listeners in the single setters' order, so a view sees what it would have seen (the details name
+	// is not announced — SetCellDetailsParameter does not announce it either).
+	// ⚠ ASKED ONCE WHETHER ANYBODY LISTENS: a document composed from code has no view at all, and each
+	// announcement walked the empty list anyway — a pair of iterators made and dropped under a checked
+	// build's global lock, for every cell of a 400-thousand-cell sheet.
+	if (!m_spreadsheetNotifiers.empty()) {
+		spreadsheetNotify->SetCellValue(row, col, desc.m_value);
+		spreadsheetNotify->SetCellAlignment(row, col, desc.m_alignHorz, desc.m_alignVert);
+		spreadsheetNotify->SetCellBackgroundColour(row, col, desc.m_backgroundColour);
+		spreadsheetNotify->SetCellTextColour(row, col, desc.m_textColour);
+		spreadsheetNotify->SetCellTextOrient(row, col, desc.m_textOrient);
+		spreadsheetNotify->SetCellFont(row, col, desc.m_font);
+		spreadsheetNotify->SetCellBorderLeft(row, col, desc.m_borderAt[0]);
+		spreadsheetNotify->SetCellBorderRight(row, col, desc.m_borderAt[1]);
+		spreadsheetNotify->SetCellBorderTop(row, col, desc.m_borderAt[2]);
+		spreadsheetNotify->SetCellBorderBottom(row, col, desc.m_borderAt[3]);
+		spreadsheetNotify->SetCellFitMode(row, col, desc.m_fitMode);
+		spreadsheetNotify->SetCellReadOnly(row, col, desc.m_isReadOnly);
+	}
+	m_spreadsheetDesc.SetCell(row, col, desc);
+}
+
 void ibBackendSpreadsheetObject::SetCellSize(int row, int col, int num_rows, int num_cols)
 {
 	spreadsheetNotify->SetCellSize(row, col, num_rows, num_cols);
@@ -487,9 +514,11 @@ void ibBackendSpreadsheetObject::SetCellValue(int row, int col, const wxString& 
 
 bool ibBackendSpreadsheetObject::GetParameter(const wxString& strParameter, ibValue& valueParam) const
 {
-	auto iterator = std::find_if(m_paramVector.begin(), m_paramVector.end(),
-		[strParameter](const auto& pair) { return stringUtils::CompareString(strParameter, pair.first); });
-
+	// FOUND, NOT WALKED — the map folds case in its comparator (ibCaseFoldLess), the rule this lookup always
+	// had. It ran CompareString over every name instead: 90 reads from script on a composed sheet of 400
+	// thousand links took some 375 s (Debug, 2026-09-12), and a cell's drill-down asks here too. Two names
+	// that differ only in case are one parameter now, which is what this lookup always took them for.
+	const auto iterator = m_paramVector.find(strParameter);
 	if (iterator == m_paramVector.end())
 		return false;
 
@@ -499,7 +528,11 @@ bool ibBackendSpreadsheetObject::GetParameter(const wxString& strParameter, ibVa
 
 void ibBackendSpreadsheetObject::SetParameter(const wxString& strParameter, const ibValue& valueParam)
 {
-	m_paramVector.insert_or_assign(strParameter, valueParam);
+	// ⚠ HINTED AT THE END — a writer that names its parameters in increasing order (a composed table
+	// numbers every cell's link, row by row) lands each one there at once, where an unhinted insert walked
+	// a tree of hundreds of thousands of names for every cell (2026-09-12). A name that belongs elsewhere
+	// is placed where it belongs; the hint only ever saves a search.
+	m_paramVector.insert_or_assign(m_paramVector.end(), strParameter, valueParam);
 }
 
 #include "backend_localization.h"

@@ -211,7 +211,9 @@ public:
 	wxString GetDescription() const override
 	{
 		return ibMcpText("Make the edited configuration the one the database holds - the designer's "
-			"Update database configuration. READ database_diff FIRST: this writes DDL and can "
+			"Update database configuration. Code as much as structure: the application runs what the "
+			"database holds, so an edited module gets to the running application only through this, and "
+			"then after a restart (app_run restart). READ database_diff FIRST: this writes DDL and can "
 			"take the base exclusively. With confirm=false it goes all the way and then rolls "
 			"back, answering with the ledger of every CREATE, ALTER and DROP it would have made - "
 			"which is the only way to see the schema changes in advance, because the engine has "

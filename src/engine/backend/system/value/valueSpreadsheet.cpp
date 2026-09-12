@@ -193,7 +193,8 @@ public:
 	}
 
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) {
-		m_spreadsheetDoc->GetParameter(m_members.GetPropName(lPropNum), pvarPropVal);
+		if (!m_spreadsheetDoc->GetParameter(m_members.GetPropName(lPropNum), pvarPropVal))
+			pvarPropVal = ibValue();   // see Get below
 		return true;
 	}
 
@@ -205,7 +206,12 @@ public:
 			pvarRetValue = ibValue(ibNumber(static_cast<int>(GetPMethods()->GetNProps())));
 			return true;
 		case enGet:
-			m_spreadsheetDoc->GetParameter(paParams[0]->GetString(), pvarRetValue);
+			// 🛑 A NAME THE SHEET DOES NOT HOLD ANSWERS UNDEFINED. GetParameter leaves the slot as it
+			// found it on a miss, and the slot is the caller's: a script asking for a missing parameter
+			// got whatever the PREVIOUS call had answered — a figure in a column that has none (found
+			// 2026-09-12, reading a composed payroll sheet back).
+			if (!m_spreadsheetDoc->GetParameter(paParams[0]->GetString(), pvarRetValue))
+				pvarRetValue = ibValue();
 			return true;
 		}
 
@@ -246,20 +252,15 @@ public:
 
 	void FillMembers(ibMemberTable& helper) const {   // bound in ctor (was PrepareNames)
 
-		// Define the comparator struct
-		struct wxCompareStringFunc {
-			bool operator()(const wxString& lhs, const wxString& rhs) const {
-				// Sort based on the 'key' member in ascending order
-				return lhs.Upper() < rhs.Upper();
-			}
-		};
-
 		helper.AppendFunc(wxT("Count"), wxT("Count"));
 		helper.AppendProc(wxT("Fill"), 1, wxT("Fill(any : value)"));
 		helper.AppendFunc(wxT("Get"), 1, wxT("Get(parameter: string)"));
 		helper.AppendProc(wxT("Set"), 2, wxT("Set(parameter: string, any: value)"));
 
-		std::set<wxString, wxCompareStringFunc> arrParameter;
+		// ⚠ FOLDED IN PLACE, NOT UPPER-CASED INTO COPIES — the names were compared as `Upper() < Upper()`, two
+		// strings built per comparison, some twenty comparisons per name: on a composed sheet of 400 thousand
+		// links, asking this collection for its first member took minutes (Debug, 2026-09-12).
+		std::set<wxString, ibCaseFoldLess> arrParameter;
 
 		for (int idx = 0; idx < m_spreadsheetDoc->GetSpreadsheetDesc().GetCellCount(); idx++) {
 

@@ -211,7 +211,7 @@ const ibMetaData* ibValueModelTable::GetSourceMetaData() const
 	return ibApplicationData::GetActiveMetaData();
 }
 
-ibUniqueKey ibValueModelTable::GetGuid() const
+const ibUniqueKey& ibValueModelTable::GetGuid() const
 {
 	// Minted once in the ctor (m_guid, in-class initializer) — stable + unique per RAM-table instance.
 	return m_guid;

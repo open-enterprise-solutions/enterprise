@@ -234,16 +234,19 @@ const ibArg& ArgNameRequired()
 const ibArg& ArgNote()
 {
 	static const ibArg s_a(wxT("note"), ibArg::Kind::Text,
-		ibMcpText("Why this object exists and what was decided - markdown, for whoever builds the "
-			  "configuration next. Write it AS you create: the reasons are never cheaper to "
-			  "record than now."));
+		ibMcpText("Why this object exists, how it works inside and what was decided - markdown, for "
+			  "whoever builds the configuration next. Write it AS you create: the reasons are never "
+			  "cheaper to record than now, and mcp_search reads it - a question about this object's "
+			  "job lands here."));
 	return s_a;
 }
 
 const ibArg& ArgHelp()
 {
 	static const ibArg s_a(wxT("help"), ibArg::Kind::Text,
-		ibMcpText("What the person USING the application should read about this, on F1."));
+		ibMcpText("What the person USING the application should read about this, on F1 - in the words "
+			  "they ask with ('how much is left in each warehouse'), because mcp_search answers a "
+			  "question in those words with the object whose help speaks to it."));
 	return s_a;
 }
 

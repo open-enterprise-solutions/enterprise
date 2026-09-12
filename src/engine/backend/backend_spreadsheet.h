@@ -2,6 +2,7 @@
 #define __BACKEND_CELL_H__
 
 #include "spreadsheetDescription.h"
+#include "backend/stringUtils.h"   // ibCaseFoldLess — the parameters are matched without case
 
 class BACKEND_API ibBackendSpreadsheetNotifier {
 public:
@@ -158,6 +159,12 @@ public:
 	ibSpreadsheetBorderDescription GetCellBorderBottom(int row, int col) const { return m_spreadsheetDesc.GetCellBorderBottom(row, col); }
 	void SetCellBorderBottom(int row, int col, const ibSpreadsheetBorderDescription& desc);
 
+	// ⭐ THE WHOLE CELL IN ONE CALL, from a description of one — for a writer that sets several things about
+	// a cell at once (a composed table: its text, alignment, details link, fill, font and edges). Each
+	// setter above finds the cell again, and a sheet of 360 thousand cells made that nine lookups a cell
+	// (2026-09-12). Whoever is listening is told each thing as the single setters tell it.
+	void SetCell(int row, int col, const ibSpreadsheetCellDescription& desc);
+
 	int GetCellSize(int row, int col, int* num_rows, int* num_cols) const { return m_spreadsheetDesc.GetCellSize(row, col, num_rows, num_cols); }
 	void SetCellSize(int row, int col, int num_rows, int num_cols);
 
@@ -288,7 +295,7 @@ private:
 	std::vector<int> m_colGroupStack;
 
 	//param value
-	std::map<wxString, ibValue> m_paramVector;
+	std::map<wxString, ibValue, ibCaseFoldLess> m_paramVector;   // matched as GetParameter matches them
 
 	//grid notifier 
 	wxVector<wxSharedPtr<ibBackendSpreadsheetNotifier>> m_spreadsheetNotifiers;

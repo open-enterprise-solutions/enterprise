@@ -86,3 +86,58 @@ TEST(RowValues, ClearEmpties) {
     r.clear();
     EXPECT_TRUE(r.empty());
 }
+
+// swap exchanges the contents whole — what a table's rows are reordered by, where they stand.
+TEST(RowValues, SwapExchangesContents) {
+    Row a; a[1] = 10; a[2] = 20;
+    Row b; b[7] = 70;
+    a.swap(b);
+    EXPECT_EQ(a.size(), 1u);
+    EXPECT_EQ(a.at(7), 70);
+    EXPECT_EQ(b.size(), 2u);
+    EXPECT_EQ(b.at(2), 20);
+}
+
+// swap_sorted lays a whole row down at once and hands back what was there; the entries it is handed
+// are already in key order, and afterwards the row answers exactly as one built entry by entry.
+TEST(RowValues, SwapSortedTakesAWholeRowAndHandsBackTheOld) {
+    Row r; r[9] = 90;
+    Row::container_type whole{ {1, 10}, {4, 40}, {6, 60} };
+    r.swap_sorted(whole);
+    EXPECT_EQ(r.size(), 3u);
+    EXPECT_EQ(r.find(9), r.end());              // the old contents are gone from the row…
+    ASSERT_EQ(whole.size(), 1u);                 // …and are in the caller's hands
+    EXPECT_EQ(whole[0].first, 9);
+    EXPECT_EQ(r.at(4), 40);
+    r[5] = 50;                                   // …and the order holds for what comes after
+    std::vector<int> keys;
+    for (const auto& kv : r) keys.push_back(kv.first);
+    EXPECT_EQ(keys, (std::vector<int>{1, 4, 5, 6}));
+}
+
+// find_value answers with the value where it lies — writable through the pointer — or null.
+TEST(RowValues, FindValuePointsAtTheValueOrIsNull) {
+    Row r; r[2] = 20; r[8] = 80;
+    int* v = r.find_value(8);
+    ASSERT_NE(v, nullptr);
+    EXPECT_EQ(*v, 80);
+    *v = 81;
+    EXPECT_EQ(r.at(8), 81);
+    EXPECT_EQ(r.find_value(5), nullptr);         // between two keys
+    EXPECT_EQ(r.find_value(99), nullptr);        // past the last
+    const Row& c = r;
+    EXPECT_EQ(*c.find_value(2), 20);
+}
+
+// Keys arriving out of order still land in order — the insert in the middle, not only at the end.
+TEST(RowValues, InsertOrAssignInTheMiddleKeepsTheOrder) {
+    Row r;
+    r.insert_or_assign(5, 50);
+    r.insert_or_assign(1, 10);
+    const auto placed = r.insert_or_assign(3, 30);
+    EXPECT_TRUE(placed.second);
+    EXPECT_EQ(placed.first->first, 3);
+    std::vector<int> keys;
+    for (const auto& kv : r) keys.push_back(kv.first);
+    EXPECT_EQ(keys, (std::vector<int>{1, 3, 5}));
+}

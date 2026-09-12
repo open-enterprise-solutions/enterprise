@@ -23,9 +23,11 @@
 //     table rows) — the same footprint philosophy as the ibValue audit.
 //
 // Keeps the std::map subset the codebase actually uses (find / at / [] / insert /
-// insert_or_assign / erase / count / clear / size / empty / begin..end / ==,!=,<)
-// and the SAME sorted iteration order, so it is a transparent swap behind the
-// typedef. Used as a std::map key (objectSelector) → provides operator<.
+// insert_or_assign / erase / count / clear / size / empty / swap / begin..end /
+// ==,!=,<) and the SAME sorted iteration order, so it is a transparent swap behind
+// the typedef. Used as a std::map key (objectSelector) → provides operator<.
+// Two additions a tree does not offer: swap_sorted (a whole row handed over at once)
+// and find_value (the value where it lies — a lookup that makes no iterator).
 //
 // Differences from std::map (both benign for the current call sites):
 //   - value_type holds a NON-const Key (the vector must stay sortable/movable);
@@ -65,43 +67,65 @@ public:
 	size_type size()  const noexcept { return m_data.size(); }
 	void      clear()       noexcept { m_data.clear(); }
 	void      reserve(size_type n)   { m_data.reserve(n); }
+	void      swap(ibRowValues& o) noexcept { m_data.swap(o.m_data); }
+
+	// A WHOLE ROW LAID DOWN AT ONCE — for a caller that already holds its entries in key order (a
+	// reference filled from a batch read, a table row re-keyed). `sorted` must be ordered by key with no
+	// key twice. The two are EXCHANGED: this takes `sorted`, and `sorted` is handed back what was here,
+	// so a caller laying down row after row clears it and fills it again in the same memory. Entry by
+	// entry the same row cost a search and an insert per entry — a quarter of a batch fill of forty
+	// thousand rows (stack samples 2026-09-12).
+	void      swap_sorted(container_type& sorted) noexcept { m_data.swap(sorted); }
+
+	// ⭐ EVERY LOOKUP BELOW IS MADE BY POSITION, OVER THE ARRAY ITSELF — an iterator is built only where
+	// one is handed out. A checked build (MSVC, _ITERATOR_DEBUG_LEVEL=2) registers every iterator under
+	// ONE GLOBAL LOCK and unregisters it again, and a search made of begin, end, the search's own result
+	// and the end it was compared with took that lock eight times: on a handful of entries it cost more
+	// than a tree's lookup, and moving the RAM snapshot's rows onto this container made a report SLOWER
+	// until the searches stopped making iterators (measured 2026-09-12, Debug).
 
 	// --- lookup ---
-	iterator       find(const Key& k)       { iterator it = LowerBound(k);       return Hit(it, k) ? it : m_data.end(); }
-	const_iterator find(const Key& k) const { const_iterator it = LowerBound(k); return Hit(it, k) ? it : m_data.end(); }
+	iterator       find(const Key& k)       { const size_type pos = LowerIndex(k); return Hit(pos, k) ? m_data.begin() + static_cast<difference_type>(pos) : m_data.end(); }
+	const_iterator find(const Key& k) const { const size_type pos = LowerIndex(k); return Hit(pos, k) ? m_data.begin() + static_cast<difference_type>(pos) : m_data.end(); }
 
-	size_type count(const Key& k) const { return find(k) != m_data.end() ? 1 : 0; }
+	// THE VALUE WHERE IT LIES, or null — a lookup that makes no iterator at all, for the hot readers that
+	// only want the value (a snapshot's cell, a fold node's figure). find() answers the same question in
+	// the std::map shape, and pays for the iterator it returns.
+	T*       find_value(const Key& k)       { const size_type pos = LowerIndex(k); return Hit(pos, k) ? &m_data[pos].second : nullptr; }
+	const T* find_value(const Key& k) const { const size_type pos = LowerIndex(k); return Hit(pos, k) ? &m_data[pos].second : nullptr; }
+
+	size_type count(const Key& k) const { return Hit(LowerIndex(k), k) ? 1 : 0; }
 
 	// at() throws std::out_of_range on a miss — same as std::map (some callers
 	// rely on the throw, e.g. model.h's try/catch around at()).
 	T& at(const Key& k) {
-		iterator it = LowerBound(k);
-		if (!Hit(it, k)) throw std::out_of_range("ibRowValues::at");
-		return it->second;
+		const size_type pos = LowerIndex(k);
+		if (!Hit(pos, k)) throw std::out_of_range("ibRowValues::at");
+		return m_data[pos].second;
 	}
 	const T& at(const Key& k) const {
-		const_iterator it = LowerBound(k);
-		if (!Hit(it, k)) throw std::out_of_range("ibRowValues::at");
-		return it->second;
+		const size_type pos = LowerIndex(k);
+		if (!Hit(pos, k)) throw std::out_of_range("ibRowValues::at");
+		return m_data[pos].second;
 	}
 
 	// Default-inserts a value-constructed T if absent (std::map semantics).
 	T& operator[](const Key& k) {
-		iterator it = LowerBound(k);
-		if (Hit(it, k)) return it->second;
-		return m_data.emplace(it, k, T())->second;
+		const size_type pos = LowerIndex(k);
+		if (Hit(pos, k)) return m_data[pos].second;
+		return EmplaceAt(pos, k, T());
 	}
 
 	// --- modifiers ---
 	std::pair<iterator, bool> insert(const value_type& v) {
-		iterator it = LowerBound(v.first);
-		if (Hit(it, v.first)) return { it, false };
-		return { m_data.insert(it, v), true };
+		const size_type pos = LowerIndex(v.first);
+		if (Hit(pos, v.first)) return { m_data.begin() + static_cast<difference_type>(pos), false };
+		return { m_data.insert(m_data.begin() + static_cast<difference_type>(pos), v), true };
 	}
 	std::pair<iterator, bool> insert(value_type&& v) {
-		iterator it = LowerBound(v.first);
-		if (Hit(it, v.first)) return { it, false };
-		return { m_data.insert(it, std::move(v)), true };
+		const size_type pos = LowerIndex(v.first);
+		if (Hit(pos, v.first)) return { m_data.begin() + static_cast<difference_type>(pos), false };
+		return { m_data.insert(m_data.begin() + static_cast<difference_type>(pos), std::move(v)), true };
 	}
 
 	// Templated like std::map::insert_or_assign — the mapped value arrives at the
@@ -111,15 +135,19 @@ public:
 	// rides the matching ibValue converting ctor / operator=.
 	template <class M>
 	std::pair<iterator, bool> insert_or_assign(const Key& k, M&& obj) {
-		iterator it = LowerBound(k);
-		if (Hit(it, k)) { it->second = std::forward<M>(obj); return { it, false }; }
-		return { m_data.emplace(it, k, T(std::forward<M>(obj))), true };
+		const size_type pos = LowerIndex(k);
+		if (Hit(pos, k)) {
+			m_data[pos].second = std::forward<M>(obj);
+			return { m_data.begin() + static_cast<difference_type>(pos), false };
+		}
+		EmplaceAt(pos, k, T(std::forward<M>(obj)));
+		return { m_data.begin() + static_cast<difference_type>(pos), true };
 	}
 
 	size_type erase(const Key& k) {
-		iterator it = LowerBound(k);
-		if (!Hit(it, k)) return 0;
-		m_data.erase(it);
+		const size_type pos = LowerIndex(k);
+		if (!Hit(pos, k)) return 0;
+		m_data.erase(m_data.begin() + static_cast<difference_type>(pos));
 		return 1;
 	}
 	iterator erase(iterator pos)                              { return m_data.erase(pos); }
@@ -131,18 +159,25 @@ public:
 	bool operator< (const ibRowValues& o) const { return m_data <  o.m_data; }
 
 private:
-	// First element whose key is NOT less than k (binary search on the key).
-	iterator LowerBound(const Key& k) {
-		return std::lower_bound(m_data.begin(), m_data.end(), k,
+	using difference_type = typename container_type::difference_type;
+
+	// Where the first entry whose key is NOT less than k stands — a binary search over the raw array.
+	size_type LowerIndex(const Key& k) const {
+		const value_type* const first = m_data.data();
+		const value_type* const hit = std::lower_bound(first, first + m_data.size(), k,
 			[](const value_type& e, const Key& key) { return Compare{}(e.first, key); });
+		return static_cast<size_type>(hit - first);
 	}
-	const_iterator LowerBound(const Key& k) const {
-		return std::lower_bound(m_data.begin(), m_data.end(), k,
-			[](const value_type& e, const Key& key) { return Compare{}(e.first, key); });
+	// Equality under a strict-weak Compare: position `pos` holds k iff !(k < its key).
+	bool Hit(size_type pos, const Key& k) const {
+		return pos < m_data.size() && !Compare{}(k, m_data[pos].first);
 	}
-	// Equality under a strict-weak Compare: it points at k iff !(k < it->first).
-	bool Hit(const_iterator it, const Key& k) const {
-		return it != m_data.end() && !Compare{}(k, it->first);
+	// A new entry at its place — at the end (the common case: keys arriving in order) without an
+	// iterator at all.
+	T& EmplaceAt(size_type pos, const Key& k, T&& value) {
+		if (pos == m_data.size())
+			return m_data.emplace_back(k, std::move(value)).second;
+		return m_data.emplace(m_data.begin() + static_cast<difference_type>(pos), k, std::move(value))->second;
 	}
 
 	container_type m_data;

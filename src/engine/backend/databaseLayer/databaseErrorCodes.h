@@ -14,6 +14,14 @@
 #define DATABASE_LAYER_NON_UNIQUE_RESULTSET 10
 #define DATABASE_LAYER_UNSUPPORTED_OPERATION 11
 #define DATABASE_LAYER_ERROR_LOADING_LIBRARY 12
+// The statement was INTERRUPTED (ibDatabaseLayer::Cancel) — not a failure: ThrowDatabaseException
+// throws the platform's ibBackendInterruptException for it, so every caller meets it as the cancel it is.
+//
+// ⚠ OUT OF EVERY DRIVER'S OWN RANGE, because it is the one code the reporter acts on and drivers record their
+// native codes in the same field: SQLite and PostgreSQL small positive numbers of their own (13 is SQLITE_FULL
+// - a full disk would have been thrown as a cancel), Firebird SQLCODEs above -1000 and status codes in the
+// hundreds of millions.
+#define DATABASE_LAYER_QUERY_CANCELLED (-1000000)
 
 // NOT a failure signal for RunQuery / a prepared statement's RunQuery.
 //

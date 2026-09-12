@@ -75,7 +75,9 @@ public:
 
 	ibValueSpreadsheetDetails() {}
 	ibValueSpreadsheetDetails(const wxString& path, ibQueryLowering::ibColumnRole role, const ibValue& value)
-		: m_path(path), m_role(role), m_value(value) {}
+		: m_path(path), m_role(role), m_value(value) {
+		m_parents.reserve(2);   // a table's cell links to its row AND its column — room for both at once
+	}
 
 	// ⭐ THE PATH, NOT THE TITLE. A title is written for a person and may repeat; a path is what the
 	// composition groups and filters by, and the detail is going to do both with it.

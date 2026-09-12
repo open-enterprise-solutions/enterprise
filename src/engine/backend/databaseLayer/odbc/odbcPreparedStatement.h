@@ -14,6 +14,8 @@
 
 #include <wx/dynarray.h>
 
+#include <atomic>
+
 #include "backend/databaseLayer/preparedStatement.h"
 
 #include "odbcParameter.h"
@@ -29,8 +31,8 @@ class ibDatabaseResultSet;
 class ibPreparedStatementODBC : public ibPreparedStatement
 {
 public:
-	// ctor
-	ibPreparedStatementODBC(ibInterfaceODBC* pInterface, SQLHENV sqlEnvHandle, SQLHDBC sqlHDBC);
+	// ctor — `pExecuting` is the connection's slot for the statement it is executing (ibDatabaseLayerODBC::Cancel)
+	ibPreparedStatementODBC(ibInterfaceODBC* pInterface, SQLHENV sqlEnvHandle, SQLHDBC sqlHDBC, std::atomic<void*>* pExecuting);
 	ibPreparedStatementODBC(ibInterfaceODBC* pInterface, SQLHENV sqlEnvHandle, SQLHDBC sqlHDBC, SQLHSTMT sqlStatementHandle);
 	ibPreparedStatementODBC(ibInterfaceODBC* pInterface, SQLHENV sqlEnvHandle, SQLHDBC sqlHDBC, StatementVector statements);
 
@@ -60,6 +62,9 @@ public:
 	void SetOneTimer(bool bOneTimer = true) { m_bOneTimeStatement = bOneTimer; }
 
 private:
+	// SQLExecute, with the connection told which statement it is running — what its Cancel stops.
+	SQLRETURN Execute(SQLHSTMT hstmt);
+
 	void InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr = nullptr);
 	void FreeParameters();
 	void BindParameters();
@@ -75,6 +80,7 @@ private:
 
 	ArrayOfODBCParameters m_Parameters;
 	ibInterfaceODBC* m_pInterface;
+	std::atomic<void*>* m_pExecuting = nullptr;
 };
 
 #endif // __ODBC_PREPARED_STATEMENT_H__

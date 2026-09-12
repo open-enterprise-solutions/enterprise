@@ -323,7 +323,7 @@ public:
 	virtual bool ModifiesData() { return false; }
 
 	//get unique identifier 
-	virtual ibUniqueKey GetGuid() const = 0;
+	virtual const ibUniqueKey& GetGuid() const = 0;
 
 	//get metaData from object. Covariant ibValueMetaObjectGenericData* — the PRECISE type, no caller-side
 	// cast: GenericData is COMPLETE here via genericData.h (extracted from commonObject.h so srcDataObject.h

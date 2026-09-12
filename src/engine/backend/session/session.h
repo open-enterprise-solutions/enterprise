@@ -455,26 +455,33 @@ public:
 	// Authenticated before relying on the value.
 	const wxString& GetSessionRawPassword() const { return m_sessionRawPassword; }
 
-	// Cancellation flag — async hint to interrupt a long-running script
-	// on this session. Pool's CancelSession (or admin Kick on a busy
-	// session) sets it; the interpreter checks it at loop boundaries
-	// inside ibProcUnit::Execute and throws ibBackendInterruptException
-	// when set. Atomic so the cancel request can come from any thread
-	// while the script thread reads on its hot loop. Cleared at the
-	// start of every Execute so a stale set from a prior task doesn't
-	// interrupt the next one.
-	void RequestCancel()           { m_cancelRequested.store(true,  std::memory_order_release); }
-	void ClearCancel()             { m_cancelRequested.store(false, std::memory_order_release); }
-	bool IsCancelRequested() const { return m_cancelRequested.load(std::memory_order_acquire); }
+	// ⭐⭐ THE ONE COMMAND TO STOP: "finish your current operation" — from any thread, from anyone (a closed
+	// window, Ctrl+Break, an administrator's kick, a debugger's Pause, a cancelled job, shutdown). The session
+	// passes it on to everything that is doing its work:
+	//   - its connection first — the statement running on it is cancelled (a thread inside the database cannot
+	//     see a flag), and it answers with the interruption;
+	//   - then its runtime — the flag in m_procUnitState, heard by the interpreter between opcodes and by the
+	//     engine's own long loops between rows (CancelFlag below);
+	//   - its tenants — the rented runs reading for it (ibJobTenancy::Tenant) get the same command, and pass
+	//     it on in turn.
+	// Each unwinds with ibBackendInterruptException, one after another. Nothing else in the engine cancels a
+	// session; everything that wants to calls this.
+	void Cancel();
 
 	// The flag ITSELF, for work that polls instead of running bytecode.
 	// The Firebird Services API is the reason this exists: a sweep or a
 	// backup/restore cycle sits in its own poll loop for up to 30 minutes
 	// and never reaches an interpreter loop boundary, so the one signal
-	// it can watch is this address. The flag lives in the session, which
-	// outlives the task running on it — the pool raises it in Stop()
-	// before waiting for the workers, and the poll bails within one tick.
-	const std::atomic<bool>* CancelFlag() const { return &m_cancelRequested; }
+	// it can watch is this address. The flag lives in the session's runtime
+	// state, which outlives the task running on it — the pool cancels in
+	// Stop() before waiting for the workers, and the poll bails within one tick.
+	//
+	// ⭐ THE ENGINE'S OWN LOOPS HEAR IT THE SAME WAY, and throw what the interpreter throws
+	// (ibBackendInterruptException): the rows of every read (ibQueryResult::Next), a report's
+	// walk and the lines a sheet is written in. A report is folded and written where no
+	// interpreter polls, so before them a window closed on a report composing — and a process
+	// exiting under one — waited for the whole of it (2026-09-12).
+	const std::atomic<bool>* CancelFlag() const { return &m_procUnitState.m_cancel; }
 
 	// Force-exit flag — "voluntary kick" of this session. The interpreter
 	// breaks out of its loop at the next iteration and the window is told
@@ -566,11 +573,12 @@ protected:
 	//
 	// Returning false means "not now": nothing happened and the caller
 	// may try again. Under force the answer is not asked for.
-	// A FORCED CLOSE PUTS OUT THE WORK FIRST. Whoever has no window to close still has a worker that
+	// A FORCED CLOSE PUTS OUT THE WORK FIRST — in Close, before this is called, so every kind gets it,
+	// including the ones that close their own way. Whoever has no window to close still has a worker that
 	// may be draining a task, and tearing the session down around a running body is how a job's
 	// Job.<name> claim ends up held by nobody. Cancelling first means the body unwinds (the
 	// interpreter checks between opcodes, a native pass through the session's cancel flag) and the
-	// teardown below then waits behind an idle queue instead of a live one.
+	// teardown then waits behind an idle queue instead of a live one.
 	//
 	// This is what makes an admin kick sensible on a session that is not a seat: the kick calls
 	// Close(true) on whatever the session is, and each kind answers for itself — a desktop session
@@ -1004,12 +1012,16 @@ private:
 	// first GetLambdaRuntime() call once m_root's procUnit exists.
 	std::unique_ptr<ibProcUnit> m_lambdaRuntime;
 
-	// Per-session state, keyed by the asking type — see Local() above. The map holds the only owning
+	// Per-session state, keyed by the asking type — see Local() above. The list holds the only owning
 	// pointer, so everything parked here is released when the session goes.
 	std::shared_ptr<void> FindLocal(const std::type_index& key) const;
 	void SetLocal(const std::type_index& key, const std::shared_ptr<void>& value);
 
-	std::unordered_map<std::type_index, std::shared_ptr<void>> m_locals;
+	// ⚠ A LIST, NOT A HASH MAP — it holds a handful of types, and it is asked on the hottest path there
+	// is: the reference register looks its table up here once per reference per cell. A hash map's
+	// lookup made two iterators under a checked build's global lock each time, which on 200 thousand
+	// cells of a report stood in the stack samples beside the register itself (2026-09-12, Debug).
+	std::vector<std::pair<std::type_index, std::shared_ptr<void>>> m_locals;
 
 	// Identity fields — populated progressively as the session moves
 	// through Add → Attach. Registry thread is the sole writer.
@@ -1055,11 +1067,6 @@ private:
 	// read path is a single field load, no fallback logic per call.
 	wxString                  m_languageCode;
 	wxString                  m_resolvedLanguageCode;
-
-	// Cancellation request flag — see RequestCancel / IsCancelRequested.
-	// atomic so set/clear from any thread is safe against the script
-	// thread's check loop in ibProcUnit::Execute.
-	std::atomic<bool>         m_cancelRequested { false };
 
 	// Force-exit request flag — see RequestForceExit / IsForceExit.
 	// One-shot: set once, never cleared. The script thread observes it

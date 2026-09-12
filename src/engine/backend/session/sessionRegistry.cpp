@@ -16,7 +16,10 @@
 
 #include <chrono>
 #include <iostream>
+#include <map>
+#include <set>
 #include <sstream>
+#include <thread>
 #include <utility>
 
 #if defined(_WIN32)
@@ -57,6 +60,13 @@ void LogSession(const std::string& msg)
 	std::cerr << tagged << std::endl;
 	ibJournalInfo(wxT("session"),wxT("%s"), wxString::FromUTF8(tagged.c_str()));
 }
+
+// THE HEARTBEAT. Every own row's lastActive moves once a beat (JobHeartbeatOwn, from ThreadBody), and that is
+// the whole of what "alive" means to a peer — so the beat is one number, read by the loop that keeps it and
+// by the question that asks it of somebody else (SettleSilentPeers): a row that stays still for kSilentBeats
+// of them has no owner.
+constexpr auto kHeartbeatInterval = std::chrono::seconds(1);
+constexpr int  kSilentBeats       = 3;
 
 } // namespace
 
@@ -1431,6 +1441,23 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 		// for exactly this race.
 		try { JobRefreshSnapshot(); } catch (...) { /* swallowed: best-effort — a stale snapshot is the old behaviour, not worse */ }
 
+		// ⭐ …AND ASK WHETHER THE PEERS IT HOLDS BREATHE. A process killed a moment ago still has its row, and
+		// "other sessions are active" was the answer until the sweep's cutoff passed: an apply refused for
+		// nobody (2026-09-11, after an application was killed — config_apply refused until the row expired).
+		// A row that stands still for a few beats is removed first (SettleSilentPeers); a live peer answers
+		// within a beat and still blocks, below.
+		{
+			std::vector<wxString> peers;
+			{
+				std::shared_lock<std::shared_mutex> lk(m_snapshotMtx);
+				if (m_snapshot)
+					for (unsigned int i = 0; i < m_snapshot->GetSessionCount(); ++i)
+						if (m_snapshot->GetSession(i) != s.GetId())
+							peers.push_back(m_snapshot->GetSession(i));
+			}
+			SettleSilentPeers(peers);   // refreshes the snapshot when it removes any
+		}
+
 		// Cluster sole-live check + cross-process exclusive scan — peer
 		// processes' rows live in m_snapshot. Any peer row blocks acquire;
 		// our own row is the one we just verified above.
@@ -1654,6 +1681,72 @@ void ibSessionRegistry::JobHeartbeatOwn()
 	}
 }
 
+// ⭐⭐ ASKED, NOT WAITED OUT — see the declaration. lastActive of the named rows, read again every half beat
+// for at most kSilentBeats beats, and done as soon as every one of them has moved: a live peer costs a beat,
+// a dead one the whole window. The stale sweep keeps its own cutoff (JobSweepStale, 10 s) — that one runs
+// unasked over every row and must not take a slow peer for a dead one; this one is asked about a few rows by
+// somebody about to be refused, and watches them.
+//
+// 🛑 OUR OWN HEART KEEPS BEATING WHILE WE WATCH. This runs on the registry thread, which is the thread that
+// beats; sitting still for the window, it would let a peer asking the same question about US at the same
+// moment see our row stand still and remove it. So every poll beats first.
+size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
+{
+	if (peers.empty() || !m_ownsSysSession || !m_writeConn)
+		return 0;
+
+	// Every row's lastActive — or false, and then nobody is proven dead.
+	const auto readBeats = [this](std::map<wxString, wxDateTime>& beats) {
+		beats.clear();
+		try {
+			ibDatabaseQueryBuilder q(&m_writeHolder);
+			ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
+				{ { ibCol(wxT("session")), wxEmptyString }, { ibCol(wxT("lastActive")), wxEmptyString } })));
+			while (rs.Next())
+				beats[rs.GetResultString(wxT("session"))] = rs.GetResultDate(wxT("lastActive"));
+			return true;
+		}
+		catch (...) { return false; }
+	};
+
+	std::map<wxString, wxDateTime> first, now;
+	if (!readBeats(first))
+		return 0;
+	std::set<wxString> still;   // named rows that are there and have not moved yet
+	for (const wxString& peer : peers)
+		if (first.count(peer) != 0)
+			still.insert(peer);
+
+	using clock = std::chrono::steady_clock;
+	const auto deadline = clock::now() + kSilentBeats * kHeartbeatInterval;
+	while (!still.empty() && clock::now() < deadline) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(kHeartbeatInterval) / 2);
+		if (m_stop.load(std::memory_order_acquire))
+			return 0;
+		JobHeartbeatOwn();
+		if (!readBeats(now))
+			return 0;
+		for (auto it = still.begin(); it != still.end(); ) {
+			const auto found = now.find(*it);
+			// Moved — its owner is alive. Gone — its owner closed, or a sweep took it. Neither is ours to remove.
+			if (found == now.end() || found->second != first[*it])
+				it = still.erase(it);
+			else
+				++it;
+		}
+	}
+
+	for (const wxString& silent : still) {
+		SESSION_LOG("[session settle] removing " << silent.ToStdString()
+		          << " - its lastActive stood still for " << kSilentBeats << " beats");
+		DeleteSessionRow(m_writeHolder, silent);
+	}
+	if (!still.empty()) {
+		try { JobRefreshSnapshot(); } catch (...) { /* swallowed: the next tick refreshes; the caller re-reads either way */ }
+	}
+	return still.size();
+}
+
 // Shared UPDATE path for admin directives. Uses the global `db_query`
 // (not the registry's pool-checkout'ed connections) because the admin
 // endpoints may be reached from callers — designer's Active Users
@@ -1723,12 +1816,6 @@ void ibSessionRegistry::JobCheckSignal()
 		if (p.signal == wxT("kick")) {
 			auto it = m_own.find(p.guid);
 			if (auto target = it != m_own.end() ? it->second.Share() : nullptr) {
-				// Cooperative cancel first — gives the running script a chance to unwind via
-				// ibBackendInterruptException at the next opcode, so the close below runs against an idle
-				// worker rather than racing a still-executing task.
-				if (m_workerPool)
-					m_workerPool->CancelSession(target.get());
-
 				// THE USER IS OWED A SENTENCE. Their window is about to vanish under their hands, and a
 				// window that vanishes silently reads as a crash. The reason rides on the session itself,
 				// where the frontend's force-exit listener reads it; an ordinary shutdown leaves it empty
@@ -1741,7 +1828,9 @@ void ibSessionRegistry::JobCheckSignal()
 				// and it says nothing to whoever is USING the session. So a kicked desktop client lost its
 				// row (and vanished from Active Users, which read as success) while its window carried on
 				// living without a session. Close(true) is the door that does both, in order: it raises the
-				// force-exit flag the interpreter polls and calls OnClose(force) — and WHAT that means is
+				// force-exit flag the interpreter polls, cancels the current operation (ibSession::Cancel —
+				// so the close runs against an idle worker, not a task still waiting on the database) and
+				// calls OnClose(force) — and WHAT that means is
 				// the session kind's own business: a desktop session closes its frame, a web client queues
 				// its tab's destroy, a job stops its run (ibJobSession). CloseAll already went through
 				// Close(force); only the kick did not.
@@ -1989,7 +2078,7 @@ void ibSessionRegistry::ThreadBody() noexcept
 	// Snapshot refresh runs at 1 Hz — cheap (one SELECT on sys_session).
 	// Sweep runs at 3 s — heavier (one SELECT over the cluster + zombie-row
 	// DELETEs) and its output is not time-critical for UI.
-	constexpr auto kRefreshInterval = std::chrono::seconds(1);
+	constexpr auto kRefreshInterval = kHeartbeatInterval;   // the beat SettleSilentPeers counts in
 	constexpr auto kSweepInterval   = std::chrono::seconds(3);
 	auto nextRefresh = clock::now() + kRefreshInterval;
 	auto nextSweep   = clock::now() + kSweepInterval;

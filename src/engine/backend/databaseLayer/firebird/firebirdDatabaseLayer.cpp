@@ -516,9 +516,6 @@ bool ibDatabaseLayerFirebird::Open()
 	if (!m_pInterface)
 		return false;
 
-	//wxCSConv conv(wxT("UTF-8"));
-	//SetEncoding(&conv);
-
 	// Leader-election orchestrator hook. UNC / SMB paths route
 	// through `ibFirebirdLeaderMode::InitForDatabase` which decides
 	// whether this process is leader (acquired the SMB byte-range
@@ -870,6 +867,23 @@ bool ibDatabaseLayerFirebird::RunBackupRestoreNow(const std::atomic<bool>* cance
 	return ibFirebirdMaintenance::RunBackupRestoreCycle(m_pInterface.get(), m_strDatabase, conn, cancelToken)
 	    == ibFirebirdMaintenance::Status::Ok;
 }
+// ⭐⭐ THE CANCEL — see ibDatabaseLayer::Cancel. fb_cancel_operation is the one call Firebird takes on an
+// attachment another thread is using: the statement running there returns isc_cancelled to its own caller,
+// which unwinds and rolls back. A status array of its own — this runs while the owning thread may be
+// filling m_pStatus — and "nothing to cancel" is no failure of the caller's.
+void ibDatabaseLayerFirebird::Cancel()
+{
+	if (!m_pInterface || m_pInterface->GetFbCancelOperation() == nullptr)
+		return;
+	isc_db_handle handle = m_pDatabase;   // read once: the owning thread may be reattaching
+	if (handle == 0)
+		return;
+	ISC_STATUS_ARRAY status = {};
+	const ISC_STATUS answer = m_pInterface->GetFbCancelOperation()(status, &handle, fb_cancel_raise);
+	ibJournalInfo(wxT("cancel"), wxT("fb_cancel_operation(raise): %s"),
+		answer == 0 ? wxString(wxT("raised")) : wxString::Format(wxT("answered %ld"), (long)status[1]));
+}
+
 // close database
 bool ibDatabaseLayerFirebird::Close()
 {
@@ -1458,7 +1472,6 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 
 			// Create the result set object
 			ibDatabaseResultSetFirebird* pResultSet = new ibDatabaseResultSetFirebird(m_pInterface.get(), m_pDatabase, pQueryTransaction, pStatement, pOutputSqlda, true, bManageTransaction);
-			pResultSet->SetEncoding(GetEncoding());
 			if (pResultSet->GetErrorCode() != DATABASE_LAYER_OK)
 			{
 				SetErrorCode(pResultSet->GetErrorCode());
@@ -1567,7 +1580,7 @@ ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const wxString&
 	}
 #endif
 
-	ibPreparedStatementFirebird* pStatement = ibPreparedStatementFirebird::CreateStatement(m_pInterface.get(), m_pDatabase, m_pTransaction, strQuery, GetEncoding());
+	ibPreparedStatementFirebird* pStatement = ibPreparedStatementFirebird::CreateStatement(m_pInterface.get(), m_pDatabase, m_pTransaction, strQuery);
 	if (pStatement && (pStatement->GetErrorCode() != DATABASE_LAYER_OK))
 	{
 		SetErrorCode(pStatement->GetErrorCode());
@@ -1819,6 +1832,10 @@ wxArrayString ibDatabaseLayerFirebird::GetColumns(const wxString& table)
 
 int ibDatabaseLayerFirebird::TranslateErrorCode(int nCode)
 {
+	// An interrupted statement (Cancel -> fb_cancel_operation) is the cancel, recorded as the platform's.
+	if (nCode == isc_cancelled)
+		return DATABASE_LAYER_QUERY_CANCELLED;
+
 	// Ultimately, this will probably be a map of Firebird database error code values to ibDatabaseLayer values
 	// For now though, we'll just return the original error code
 	return nCode;
@@ -1858,9 +1875,8 @@ ibBackendDatabaseException::Kind ibDatabaseLayerFirebird::ClassifyDatabaseError(
 		                // surface as Timeout below.
 			return Kind::Deadlock;
 
-		// --- Timeout ---
-		case 335544855: // isc_cancelled (statement cancelled, often via timeout)
-			return Kind::Timeout;
+		// (isc_cancelled is no failure — TranslateErrorCode records it as the cancel. The number that stood here
+		// under that name, 335544855, is isc_collation_not_installed: it filed a missing collation as a timeout.)
 
 		// --- Constraint violations ---
 		case 335544349: // isc_no_dup
@@ -1912,8 +1928,7 @@ wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird
 	else
 	{
 		pInterface->GetIscSqlInterprete()(nCode, szError, sizeof(szError));
-		wxCharBuffer systemEncoding = wxLocale::GetSystemEncodingName().mb_str();
-		strReturn = ibDatabaseStringConverter::ConvertFromUnicodeStream(szError, (const char*)systemEncoding);
+		strReturn = ibDatabaseStringConverter::ConvertFromUnicodeStream(szError);
 
 		// ...and then the status vector, for the same reason the branch above reads
 		// it. The sentence for the CODE is generic by construction -- "a system
@@ -1922,14 +1937,14 @@ wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird
 		// only in the vector. Reading one and not the other is why a lock directory
 		// the process cannot write, a security database it cannot reach and a file
 		// it has no permission on all arrived as one indistinguishable line.
-		// ⚠ AND THROUGH THE SAME CONVERTER AS THE LINE IT IS APPENDED TO. The sentence above went
-		// through the system encoding and these did not, so on a locale that is not UTF-8 one half of
-		// one message came out right and the other half did not — a contradiction inside a single
-		// branch, which is worse than either choice made consistently. (Found reviewing PR #99, which
-		// added the vector walk here; the walk itself is Dmytro Sherstobitov's.)
+		// ⚠ AND THROUGH THE SAME CONVERTER AS THE LINE IT IS APPENDED TO, so on a locale that is not UTF-8
+		// one half of one message cannot come out right and the other half not — a contradiction inside a
+		// single branch, which is worse than either choice made consistently. (Found reviewing PR #99, which
+		// added the vector walk here; the walk itself is Dmytro Sherstobitov's.) A message in the system's
+		// code page is not UTF-8, and the converter hands such bytes to the locale's own conversion.
 		const ISC_STATUS* pVector = static_cast<const ISC_STATUS*>(status);
 		while (pInterface->GetFbInterpret()(szError, 512, &pVector))
-			strReturn += wxT("\n") + ibDatabaseStringConverter::ConvertFromUnicodeStream(szError, (const char*)systemEncoding);
+			strReturn += wxT("\n") + ibDatabaseStringConverter::ConvertFromUnicodeStream(szError);
 	}
 
 	return strReturn;

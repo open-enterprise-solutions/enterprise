@@ -1684,9 +1684,10 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 }
 
 // Resolve a WHERE / ORDER target to a column PATH: size 1 = a plain column, >1 = a reference dot-walk
-// (Producer.Region). Dot-walk is only realizable in a single-source, non-aggregate read (BuildPageIR
-// builds the join + qualifies the leaf); reject it elsewhere rather than let the aggregate / stitch
-// paths silently drop the filter. allowDotWalk = (single source AND not aggregate).
+// (Producer.Region). Dot-walk is realizable in a single-source read — a page (BuildPageIR) or, for a
+// filter, a grouped one (BuildAggregateQuery), both joining it through ibRefJoinChain; reject it
+// elsewhere rather than let a stitch path silently drop the filter. The caller says which it is building
+// (allowDotWalk for the ORDER, allowWhereDotWalk for the WHERE).
 std::vector<const ibBackendQueryColumn*> ResolveWhereTarget(const std::vector<ibSourceBinding>& sources,
                                                             const ibQueryAstExpr& e, bool allowDotWalk)
 {
@@ -3062,23 +3063,30 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// (the provider's BuildPageIR builds the reference join + qualifies the leaf). An aggregate /
 	// JOIN / computed-source query rejects it (a computed source has no DB join to ride).
 	const bool allowDotWalk = !aggregate && !multiSource && !computedPrimary;
+	// ⭐ …EXCEPT A GROUPED READ'S FILTER, which walks now. The aggregate joins it through the chain its GROUP
+	// BY keys already ride (ibRefJoinChain::PathConditions, BuildAggregateQuery), and the two roads that
+	// could not — ROLLUP totals and the group-level page — decline it to the fold, which reads through the
+	// page road. Refused before, because the aggregate's WHERE skipped a condition with a path and the
+	// filter would have fallen away: the payroll statement of one store could not be printed (2026-09-11).
+	// The ORDER stays as it was: a grouped sort by a walk rides its group key (below), not a join.
+	const bool allowWhereDotWalk = !multiSource && !computedPrimary;
 
 	// (The dot-walk expansion is armed at the top of this function — one door for every clause.)
 
 	// WHERE — a FLAT AND-of-simple WHERE rides the door's verb conditions (plain columns + dot-walk
 	// leaves); a BOOLEAN WHERE (OR / NOT / IN / IS NULL) goes through the predicate tree. The tree
 	// supports the full boolean for a single source — INCLUDING dot-walk leaves (Compare/LIKE/BETWEEN)
-	// when allowDotWalk; the provider joins them. For a JOIN the tree lowers only in the co-located
-	// path (the stitch path errors), and a dot-walk leaf there is rejected (allowDotWalk is false).
+	// when allowWhereDotWalk; the provider joins them. For a JOIN the tree lowers only in the co-located
+	// path (the stitch path errors), and a dot-walk leaf there is rejected (allowWhereDotWalk is false).
 	if (ast.m_where) {
 		if (IsFlatAndWhere(*ast.m_where))
 			// A COMPUTED source resolves a flat dot-walk WHERE (Ref.Field = X) in RAM: the provider joins the
 			// reference leaf and filters by it (the register cannot). The boolean predicate path stays gated.
-			LowerFlatWhere(b, sources, *ast.m_where, params, allowDotWalk || computedPrimary);
+			LowerFlatWhere(b, sources, *ast.m_where, params, allowWhereDotWalk || computedPrimary);
 		else
 			// A COMPUTED source resolves a boolean dot-walk WHERE (Ref.A = X OR Ref.B = Y) in RAM too: the
 			// provider joins the leaves (predicate-tree gather) and FilterRows evaluates the tree by the leaf.
-			b.Where(BuildWherePredicate(sources, *ast.m_where, params, allowDotWalk || computedPrimary));
+			b.Where(BuildWherePredicate(sources, *ast.m_where, params, allowWhereDotWalk || computedPrimary));
 	}
 
 	// A VIRTUAL TABLE'S CONDITION ARGUMENT lands here, alongside the written WHERE and by exactly the
@@ -3093,9 +3101,9 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 		if (!condition)
 			continue;
 		if (IsFlatAndWhere(*condition))
-			LowerFlatWhere(b, sources, *condition, params, allowDotWalk || computedPrimary);
+			LowerFlatWhere(b, sources, *condition, params, allowWhereDotWalk || computedPrimary);
 		else
-			b.Where(BuildWherePredicate(sources, *condition, params, allowDotWalk || computedPrimary));
+			b.Where(BuildWherePredicate(sources, *condition, params, allowWhereDotWalk || computedPrimary));
 	}
 
 	// ORDER BY — plain column or reference dot-walk leaf. A COMPUTED source resolves the dot-walk leaf in
@@ -5149,7 +5157,7 @@ ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result,
 			const OutputColumn& oc = schema[i];
 			ibValue v;
 			if (!oc.m_objectPrefix.empty() && oc.m_col != nullptr)
-				v = result.GetColumnObject(oc.m_objectPrefix, oc.m_col);
+				v = result.GetColumn(oc.m_objectPrefix, oc.m_col);
 			else if (oc.m_byAlias)
 				v = result.GetColumn(oc.m_alias);
 			else

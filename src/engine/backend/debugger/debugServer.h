@@ -232,7 +232,9 @@ private:
 
 	unsigned int m_numCurrentNumberStopContext;
 
-	std::map<wxString, std::vector<unsigned int>> m_listBreakpoint; //list of points
+	// module -> (line -> condition). An empty condition stops always; any other stops only where it is true
+	// in the frame that reaches the line (EnterDebugger).
+	std::map<wxString, std::map<unsigned int, wxString>> m_listBreakpoint;
 
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 	std::map <unsigned long long, wxString> m_listExpression;

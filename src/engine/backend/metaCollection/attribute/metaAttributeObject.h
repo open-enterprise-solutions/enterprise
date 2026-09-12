@@ -14,6 +14,32 @@ class ibQueryResult;         // L2 cursor — GetBinaryData reads through it (du
 class ibQueryStatement;      // L2 statement — SetBinaryData binds through it (restore); no raw L1 here
 class ibStructureBatch;      // per-table DDL/seed batch — ProcessAttribute pours its column DDL into it
 
+// "fld<id>" — the physical name of a metadata column, written without a format string. It is asked for
+// once per CELL of every read (the column codec reads each value by its field's name), and a Format
+// parsing "fld%i" there stood in the stack samples of every read of a report (MEASURED 2026-09-12).
+// ⭐ THE LENGTH FIRST, THEN THE NAME IN ONE PASS: the prefix is three characters and the digits are
+// counted before anything is written, so the name is laid down at exactly its length, the digits from
+// the last one back, and handed to the string whole: one allocation, nothing appended (Max, 2026-09-12).
+// ⚠ A FIELD NAME HAS NO MINUS. A negative id is written by its unsigned 32-bit representation — it looks
+// positive, and it is only the spelling of the same value (Max, 2026-09-12: "-23456 -> fld + u32") —
+// so a name is at most ten digits long. One spelling for every column that is named by its metaID.
+inline wxString ibPhysicalFieldName(int metaId)
+{
+	unsigned int v = static_cast<unsigned int>(metaId);
+	size_t digits = 1;
+	for (unsigned int rest = v; rest >= 10u; rest /= 10u)
+		++digits;
+	const size_t length = 3 + digits;
+
+	wxChar text[3 + 10];   // "fld" and the ten digits a u32 can have
+	text[0] = wxT('f');
+	text[1] = wxT('l');
+	text[2] = wxT('d');
+	for (size_t at = length; at > 3; v /= 10u)
+		text[--at] = static_cast<wxChar>(wxT('0') + v % 10u);
+	return wxString(text, length);
+}
+
 // ⭐⭐ AN ATTRIBUTE IS A DESCRIPTIVE COLUMN AND *HOLDS* A QUERY ONE.
 //
 // It stays an ibBackendSourceColumn — a name, a synonym, a type, an icon — because that is what the
@@ -158,7 +184,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// questions, but the schema tier asks them of the ATTRIBUTE directly (an index name, a column
 	// being renamed) and it is right to: both are derived from the metaID, which is the attribute's
 	// own. The facade forwards to them, so there is still exactly one answer.
-	virtual wxString GetPhysicalName() const { return wxString::Format(wxT("fld%i"), m_metaId); }
+	virtual wxString GetPhysicalName() const { return ibPhysicalFieldName(m_metaId); }
 	// The column's model/read id — for a DB attribute it IS the metaID (RAM tables key
 	// their rows by it; the DB path keys its fields off the same id via GetPhysicalName).
 	virtual ibMetaID GetColumnId() const      { return GetMetaID(); }

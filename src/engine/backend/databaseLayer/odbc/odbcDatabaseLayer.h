@@ -46,7 +46,10 @@ public:
 	// Is the connection to the database open?
 	virtual bool IsOpen();
 
-	/// clone database  
+	// Cancel what this connection is running — SQLCancel on the statement executing, from any thread (see the base).
+	virtual void Cancel();
+
+	/// clone database
 	virtual ibDatabaseLayer* Clone() { return new ibDatabaseLayerODBC(*this); }
 
 	// IsActiveTransaction inherits the base-class default
@@ -88,6 +91,9 @@ public:
 	// dictionary, MSSQL-through-ODBC still would not. (docs/register-totals-strategy.md)
 
 	static bool IsAvailable();
+
+	// The native error as the code — or the cancel, when the SQLSTATE says it was the statement cancelled (HY008).
+	static int TranslateErrorCode(int nNativeCode, const wxString& strSqlState);
 
 	// SQLSTATE-based classification — ODBC's standard error identifier
 	// is the same 5-char SQLSTATE as SQL standard / PostgreSQL. Backends
@@ -138,6 +144,10 @@ private:
 
 	bool m_bIsConnected;
 	ibInterfaceODBC* m_pInterface;
+
+	// The statement executing on this connection now, or null — ODBC cancels a statement, not a connection
+	// (SQLCancel). Told by the statement around its SQLExecute (ibPreparedStatementODBC::Execute).
+	std::atomic<void*> m_executing{ nullptr };
 
 	// Stashed by SetLastSqlState() — most recent SQLSTATE pulled from
 	// SQLGetDiagRec. Travels with the next ThrowDatabaseException so

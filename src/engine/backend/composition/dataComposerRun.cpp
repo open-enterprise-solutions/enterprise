@@ -26,6 +26,9 @@
 #include "backend/query/queryRender.h"        // ibQueryColumnFromPath
 #include "backend/query/queryKeywords.h"      // ibQueryKeywordText
 #include "backend/query/queryLexer.h"         // ibQueryLexer::IsIdentifier
+#include "backend/session/session.h"          // ibSession::CancelFlag — the walk hears a cancel
+
+#include <deque>   // the walk's descents and closing buffers, one per depth
 
 ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals)
 {
@@ -285,8 +288,17 @@ bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driver)
 {
 	bool hasTotals = false;
+	// The whole output — the read, the fold, the walk and what the driver made of it — and then the
+	// driver's own closing, which for a printed report is where its section is laid out.
+	ibJournalStopwatch pass, end;
+	pass.Resume();
 	const bool read = RunOutputPass(output, driver, hasTotals);
+	pass.Pause();
+	end.Resume();
 	driver.OnOutputEnd(hasTotals);
+	end.Pause();
+	ibJournalInfo(wxT("composer"), wxT("output '%s' done - pass %lld ms, driver end %lld ms"),
+		output.m_name, pass.Ms(), end.Ms());
 	// …and if this was the last branch of a shared read, the rows are done with — see
 	// ReleaseSharedRead. Here rather than deeper in, because the walk is finished only once the
 	// output has ENDED, and that is the event this function owns.
@@ -301,6 +313,16 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// printed lines naming the same object hold one object and cost one query. This function briefly
 	// opened a scope to bound that; the scope was the wrong shape, because knowing every place a
 	// reference gets reused is knowing nearly every place there is.
+
+	// ⭐ THE CANCEL IS HEARD ON THE WALK — the flag of the session composing (ibSession::CancelFlag), taken once
+	// here and asked at every line handed to the driver. A report is folded and walked in the engine's own
+	// loops, where no interpreter polls: a window closed on a report composing waited for the whole of it.
+	ibSession* const composing = ibSession::Current();
+	const std::atomic<bool>* const cancel = composing != nullptr ? composing->CancelFlag() : nullptr;
+	const auto hearCancel = [cancel]() {
+		if (cancel != nullptr && cancel->load(std::memory_order_relaxed))
+			ibBackendInterruptException::Error();
+	};
 
 	// The driver IS the envelope: a paged driver (the list fetch) vends the page
 	// request; a plain driver reads everything.
@@ -460,10 +482,11 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		// reads exactly like the flat cursor. (⚠ a reference-spread group value needs m_objectPrefix in the
 		// schema — a follow-up; a scalar dim reads straight. docs: group-level paging)
 		while (result.Next()) {
+			hearCancel();
 			for (size_t i = 0; i < schema.size(); ++i) {
 				const ibQueryLowering::OutputColumn& oc = schema[i];
 				if (!oc.m_objectPrefix.empty() && oc.m_col != nullptr)
-					row[i] = result.GetColumnObject(oc.m_objectPrefix, oc.m_col);
+					row[i] = result.GetColumn(oc.m_objectPrefix, oc.m_col);
 				else
 					row[i] = oc.m_byAlias ? result.GetColumn(oc.m_alias) : result.GetValue(oc.m_col);
 			}
@@ -493,10 +516,11 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		// Being ENTERABLE is decided where the source is known — the model reads the hierarchy KIND
 		// off the queryable (IsItemHierarchy) and the folder flag off the row, and ORs this in.
 		while (result.Next()) {
+			hearCancel();
 			for (size_t i = 0; i < schema.size(); ++i) {
 				const ibQueryLowering::OutputColumn& oc = schema[i];
 				if (!oc.m_objectPrefix.empty() && oc.m_col != nullptr)
-					row[i] = result.GetColumnObject(oc.m_objectPrefix, oc.m_col);
+					row[i] = result.GetColumn(oc.m_objectPrefix, oc.m_col);
 				else
 					row[i] = oc.m_byAlias ? result.GetColumn(oc.m_alias) : result.GetValue(oc.m_col);
 			}
@@ -558,9 +582,35 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		// ⚠ THE READ IS THE UNION, THE PRINT IS PER NODE — two questions over one tree. The query
 		// fetches every field any node asked for (ProjectionFor), because a field nobody fetched
 		// cannot be printed anywhere; what each node SHOWS out of that is decided here.
-		std::function<void(ibSelector&, const std::vector<wxString>&)> walk =
-			[&](ibSelector& level, const std::vector<wxString>& shownAbove) {
+		// ⭐ ONE DESCENT AND ONE CLOSING BUFFER PER DEPTH, kept for the whole walk. A heading's descent is
+		// written over the selection its depth already holds (ibSelector::SelectInto), and its own values
+		// are copied into the buffer its depth already has — where every heading used to build both anew:
+		// a selection of a dozen empty containers and a copy of the row, for each of forty thousand
+		// employees of a payroll sheet (2026-09-12, Debug stack samples). Deques, so a deeper level added
+		// while a shallower one is being walked never moves the one in use.
+		std::deque<ibSelector> descentAt;
+		std::deque<std::vector<ibValue>> closingAt;
+		const auto descentFor = [&descentAt](size_t depth) -> ibSelector& {
+			while (descentAt.size() <= depth)
+				descentAt.emplace_back(ibQueryRamTable{}, ibSelectKind::ibSelectKind_ByGroups);
+			return descentAt[depth];
+		};
+		const auto closingFor = [&closingAt](size_t depth) -> std::vector<ibValue>& {
+			while (closingAt.size() <= depth)
+				closingAt.emplace_back();
+			return closingAt[depth];
+		};
+		std::function<void(ibSelector&, const std::vector<wxString>&, size_t)> walk =
+			[&](ibSelector& level, const std::vector<wxString>& shownAbove, size_t depth) {
+			// What a node shows depends on nothing but the level it stands on and what stood above it,
+			// and every node of this loop stands under the same `shownAbove` — so it is worked out once per
+			// level met here, not once per node (a vector of names built and freed for each of 40 thousand
+			// employees and their cells, 2026-09-12).
+			const GroupNode* shownFor   = nullptr;
+			bool             shownKnown = false;
+			std::vector<wxString> shownHere;
 			while (level.Next()) {
+				hearCancel();
 				for (size_t i = 0; i < schema.size(); ++i) {
 					const ibQueryLowering::OutputColumn& oc = schema[i];
 					row[i] = oc.m_byAlias ? level.GetColumn(oc.m_alias) : level.GetValue(oc.m_col);
@@ -586,8 +636,11 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 
 				// WHAT THIS NODE SHOWS — its own table resolved against what stood above it.
 				const GroupNode* here = LevelAt(output, level.Level(), level.Kind());
-				const std::vector<wxString> shownHere = here != nullptr
-					? ibComposerSelectedUnder(shownAbove, *here) : shownAbove;
+				if (!shownKnown || here != shownFor) {
+					shownHere  = here != nullptr ? ibComposerSelectedUnder(shownAbove, *here) : shownAbove;
+					shownFor   = here;
+					shownKnown = true;
+				}
 
 				// …AND EVERYTHING IT DOES NOT SHOW IS BLANKED, not removed. The COLUMNS belong to the
 				// output — a table has the columns it has — so a node fills the cells that are its
@@ -684,8 +737,9 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 					// something inside one cell (Max, 2026-08-26). An ordinary report's rows have no
 					// children at all, so this walk simply finds none.
 					if (level.HasChildren()) {
-						ibSelector cells = level.Select(ibSelectKind::ibSelectKind_ByGroups);
-						walk(cells, shownHere);
+						ibSelector& cells = descentFor(depth + 1);
+						level.SelectInto(cells, ibSelectKind::ibSelectKind_ByGroups);
+						walk(cells, shownHere, depth + 1);
 					}
 					continue;
 				}
@@ -693,12 +747,32 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				// A heading, and then whatever it stands over — including the GRAND TOTAL, which is
 				// a level like any other: the one that groups by nothing. Descending into it is how
 				// the first dimension level is reached when a report asked for it.
+				//
+				// ⚠ A HEADING WITH NOTHING UNDER IT IS WRITTEN WITHOUT A DESCENT — a cell across the page,
+				// the deepest heading of a report that reads no records. The descent below would build a
+				// selection, order it and walk it only to find it empty, and a table has a cell of that
+				// kind under every heading it prints (2026-09-12, the payroll sheet: 120 thousand of
+				// them). Written exactly as the full road writes it when it finds nothing: nothing shown
+				// under it, opened and — for a row heading — closed with its own values.
+				if (!level.HasNodesUnder()) {
+					line.m_hasChildren      = level.HasChildren();
+					line.m_showsWhatIsUnder = false;
+					if (level.Level() > rowLevels)
+						driver.OnColumn(line, row);
+					else {
+						driver.OnGroupBegin(line, row);
+						driver.OnGroupEnd(line, row);
+					}
+					continue;
+				}
+
 				// ⚠ EXPANDABLE MEANS "THERE IS SOMETHING TO SHOW", not "there is something there".
 				// The rows are always folded in now, so the deepest heading always HAS children —
 				// but an output whose ladder never declared a Details level does not write them, and
 				// a triangle that opens onto nothing is worse than no triangle. So the flag asks the
 				// same question the writing does.
-				ibSelector under = level.Select(ibSelectKind::ibSelectKind_ByGroups);
+				ibSelector& under = descentFor(depth + 1);
+				level.SelectInto(under, ibSelectKind::ibSelectKind_ByGroups);
 
 				// Asked by LOOKING: step onto the first child, read what kind it is, and rewind. The
 				// selection is already folded, so this costs a pointer move — and it is the only way
@@ -747,10 +821,14 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				// into the grand-total line (seen live, 2026-08-27: the document number and its date
 				// standing where the totals belong).
 				//
-				// Copied only for the headings that will be closed, so an ordinary report pays one
-				// vector per heading and a detail-heavy one pays nothing extra.
-				const std::vector<ibValue> mine = level.Level() <= rowLevels ? row : std::vector<ibValue>();
-				walk(under, shownHere);
+				// Copied only for the headings that will be closed — into the buffer this depth keeps (see
+				// closingAt), so the copy reuses its memory instead of making a vector per heading.
+				std::vector<ibValue>& mine = closingFor(depth);
+				if (level.Level() <= rowLevels)
+					mine = row;
+				else
+					mine.clear();
+				walk(under, shownHere, depth + 1);
 				// ⭐⭐ …AND THE HEADING CLOSES, with the figures it ended up with. Everything under it
 				// has been written by now, which is the whole difference between this and the event
 				// that opened it — and it is where a total belongs on the page.
@@ -760,7 +838,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		};
 		// THE WALK STARTS WITH THE OUTPUT'S OWN SET — the composition resolved, then the output's
 		// table over it. Everything below inherits from here.
-		walk(sel, shownAtOutput);
+		walk(sel, shownAtOutput, 0);
 	}
 
 	hasTotalsOut = hasTotals;

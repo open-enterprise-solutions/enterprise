@@ -73,7 +73,7 @@ void ibDebuggerClientBridgeDesigner::OnSessionStart(wxSocketClient* sock)
 {
 	m_runLine = std::make_unique<ibDebugRunLine>();
 
-	if (mainFrame != nullptr) mainFrame->Debugger_OnSessionStart();
+	if (mainFrame != nullptr) mainFrame->Debugger_OnStateChanged();
 }
 
 void ibDebuggerClientBridgeDesigner::OnSessionEnd(wxSocketClient* sock)
@@ -84,7 +84,7 @@ void ibDebuggerClientBridgeDesigner::OnSessionEnd(wxSocketClient* sock)
 	if (localWindow != nullptr) localWindow->ClearAndCreate();
 	if (stackWindow != nullptr) stackWindow->ClearAndCreate();
 
-	if (mainFrame != nullptr) mainFrame->Debugger_OnSessionEnd();
+	if (mainFrame != nullptr) mainFrame->Debugger_OnStateChanged();
 }
 
 void ibDebuggerClientBridgeDesigner::OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data)
@@ -126,7 +126,7 @@ void ibDebuggerClientBridgeDesigner::OnEnterLoop(wxSocketClient* sock, const ibD
 				metaTree->EditModule(moduleName, data.m_line, true);
 	}
 
-	if (mainFrame != nullptr) mainFrame->Debugger_OnEnterLoop();
+	if (mainFrame != nullptr) mainFrame->Debugger_OnStateChanged();
 }
 
 void ibDebuggerClientBridgeDesigner::OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data)
@@ -153,7 +153,7 @@ void ibDebuggerClientBridgeDesigner::OnLeaveLoop(wxSocketClient* sock, const ibD
 	// the tables incrementally. Clearing here caused a visible blank-out
 	// of the tables between every debugger step.
 
-	if (mainFrame != nullptr) mainFrame->Debugger_OnLeaveLoop();
+	if (mainFrame != nullptr) mainFrame->Debugger_OnStateChanged();
 }
 
 void ibDebuggerClientBridgeDesigner::OnAutoComplete(const ibDebugAutoCompleteData& data)

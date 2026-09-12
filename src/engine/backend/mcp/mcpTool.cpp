@@ -476,29 +476,40 @@ bool ibMcpIsRegex(const wxString& query)
 
 size_t ibMcpWordsFound(const wxString& haystack, const wxString& query, size_t* asked)
 {
+	std::vector<bool> present;
+	ibMcpWordsPresent(haystack, query, present);
+
+	if (asked != nullptr)
+		*asked = present.size();
+
+	size_t found = 0;
+	for (const bool met : present)
+		found += met ? 1 : 0;
+	return found;
+}
+
+void ibMcpWordsPresent(const wxString& haystack, const wxString& query, std::vector<bool>& met)
+{
+	met.clear();
+
 	// ⭐ A PATTERN IS ANSWERED AS A PATTERN. Whoever is on the other end of this server reads code
 	// for a living and will reach for `lot|batch|fifo` the moment plain words disappoint — and
 	// under a word search that query is one long word that appears nowhere. It costs one branch to
 	// mean what it says instead. Matched whole: a pattern either hit or it did not, so it counts
 	// as the single thing that was asked and ranks beside the exact word matches.
 	if (ibMcpIsRegex(query)) {
-
-		if (asked != nullptr)
-			*asked = 1;
-
 		const wxRegEx* compiled = CompiledQuery(query);
-		return (compiled != nullptr && compiled->Matches(haystack)) ? 1 : 0;
+		met.push_back(compiled != nullptr && compiled->Matches(haystack));
+		return;
 	}
 
 	wxStringTokenizer words(query.Lower(), wxT(" \t,"), wxTOKEN_STRTOK);
 
 	const wxString text = haystack.Lower();
-	size_t found = 0, total = 0;
 
 	while (words.HasMoreTokens()) {
 
 		const wxString word = words.GetNextToken();
-		total++;
 
 		bool present = false;
 
@@ -524,14 +535,35 @@ size_t ibMcpWordsFound(const wxString& haystack, const wxString& query, size_t* 
 		if (!present && word.length() < 4)
 			present = text.Find(word) != wxNOT_FOUND;
 
-		if (present)
-			found++;
+		met.push_back(present);
+	}
+}
+
+wxString ibMcpMatchingLine(const wxString& body, const wxString& query)
+{
+	// ⭐ THE LINE IS FOUND BY THE SAME RULE THAT FOUND THE PLACE (ibMcpWordsFound) - stems, and a
+	// regular expression when that is what was written. Anything else and the two disagree: the
+	// hit is real, the line quoted under it is not the one that matched, and the caller judges the
+	// passage by a sentence that has nothing to do with their question.
+	size_t at = 0;
+
+	while (at <= body.length()) {
+
+		const size_t end = body.find(wxT('\n'), at);
+		const wxString line = body.Mid(at, (end == wxString::npos ? body.length() : end) - at);
+
+		if (ibMcpWordsFound(line, query) > 0) {
+			wxString trimmed = line;
+			trimmed.Trim(true).Trim(false);
+			return trimmed.length() > 200 ? trimmed.Left(197) + wxT("...") : trimmed;
+		}
+
+		if (end == wxString::npos)
+			break;
+		at = end + 1;
 	}
 
-	if (asked != nullptr)
-		*asked = total;
-
-	return found;
+	return wxEmptyString;
 }
 
 ibValueMetaObjectModuleBase* ibMcpModuleOf(ibValueMetaObject* object, wxString& refusal)

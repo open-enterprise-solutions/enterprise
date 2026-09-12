@@ -53,8 +53,12 @@ bool ibDatabaseResultSetFirebird::Next()
 	}
 	else  // Errors!!!
 	{
-		ibJournalError(wxT("db.firebird"),wxT("Error retrieving Next record\n"));
 		InterpretErrorCodes();
+		// ⚠ READ BEFORE IT IS REPORTED. An interrupted fetch is a cancel, not a failure (ThrowDatabaseException
+		// throws it as one); written first as an error, it put an error window in front of the person who had
+		// just closed the report (a debug build shows its error lines) and a crash dump beside it (2026-09-11).
+		if (GetErrorCode() != DATABASE_LAYER_QUERY_CANCELLED)
+			ibJournalError(wxT("db.firebird"),wxT("Error retrieving Next record\n"));
 		ThrowDatabaseException();
 		return false;
 	}
@@ -87,6 +91,16 @@ void ibDatabaseResultSetFirebird::Close()
 			ThrowDatabaseException();
 		}
 	}
+	// …and if the statement is somebody else's, CLOSE THE CURSOR on it, so it can be run again. Firebird keeps
+	// a cursor open even after the last row (a fetch that answers 100 leaves it so), and running the statement
+	// once more was refused while it was — the runs of one prepared statement need exactly that
+	// (ibQueryResult::Next). A cursor that was never opened answers with an error here, and it means nothing:
+	// its own status, and nothing is raised from a destructor's road.
+	else if (m_pStatement)
+	{
+		ISC_STATUS_ARRAY status;
+		m_pInterface->GetIscDsqlFreeStatement()(status, &m_pStatement, DSQL_close);
+	}
 
 	// Free the output fields structure
 	if (m_pFields)
@@ -111,40 +125,29 @@ wxString ibDatabaseResultSetFirebird::GetResultString(int nField)
 {
 	ResetErrorCodes();
 
-	wxString strReturn = wxEmptyString;
+	// Each road returns its own string — made once, where it is known — rather than an empty one made
+	// first and assigned over (a string built and replaced for every text field of every row).
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
-	{
-		// The column is NULL
-		strReturn = wxEmptyString;
-	}
-	else
-	{
-		short nType = pVar->sqltype & ~1;
-		if (nType == SQL_TEXT)
-		{
-			strReturn = ConvertFromUnicodeStream(pVar->sqldata);
-		}
-		else if (nType == SQL_VARYING)
-		{
-			PARAMVARY* pVary = (PARAMVARY*)pVar->sqldata;
-			pVary->vary_string[pVary->vary_length] = '\0';
-			strReturn = ConvertFromUnicodeStream((const char*)pVary->vary_string);
-		}
-		else
-		{
-			// Incompatible field type
-			// Set error codes and throw an exception here
-			strReturn = wxT("");
+		return wxString();   // the column is NULL
 
-			SetErrorMessage(wxT("Invalid field type"));
-			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
-
-			ThrowDatabaseException();
-		}
+	short nType = pVar->sqltype & ~1;
+	if (nType == SQL_TEXT)
+		return ConvertFromUnicodeStream(pVar->sqldata);
+	if (nType == SQL_VARYING)
+	{
+		PARAMVARY* pVary = (PARAMVARY*)pVar->sqldata;
+		pVary->vary_string[pVary->vary_length] = '\0';
+		return ConvertFromUnicodeStream((const char*)pVary->vary_string);
 	}
 
-	return strReturn;
+	// Incompatible field type
+	// Set error codes and throw an exception here
+	SetErrorMessage(wxT("Invalid field type"));
+	SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
+
+	ThrowDatabaseException();
+	return wxString();
 }
 
 long long ibDatabaseResultSetFirebird::GetResultLong(int nField)
@@ -351,13 +354,17 @@ double ibDatabaseResultSetFirebird::GetResultDouble(int nField)
 
 ibNumber ibDatabaseResultSetFirebird::GetResultNumber(int nField)
 {
-	ibNumber dblReturn = 0.00;
+	// ⚠ ZERO IS THE DEFAULT CONSTRUCTOR, NOT `0.00`. A double literal goes through ibNumber(double),
+	// which prints the double with `%.17g` and parses the text back into a big decimal to be exact about
+	// it — and this line ran that for every number of every row read, before the field was even looked
+	// at: it stood in the stack samples of the payroll sheet's reads (2026-09-12, Debug).
+	ibNumber dblReturn;
 
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
 	{
 		// The column is NULL
-		dblReturn = 0.00;
+		dblReturn = ibNumber();
 	}
 	else
 	{
@@ -374,39 +381,40 @@ ibNumber ibDatabaseResultSetFirebird::GetResultNumber(int nField)
 			memcpy(&v, pVar->sqldata, sizeof(v));
 			dblReturn = v;
 		}
+		// ⭐ A SCALED INTEGER IS ITS DIGITS AND ITS SCALE — the decimal point is moved (ShiftDecimal), not
+		// divided for scale times over. Only a scale that lowers the value is the column's own; a
+		// positive one never came from a NUMERIC and is left as it was read.
 		else if (nType == SQL_LONG)
 		{
 			int32_t v = 0;
 			memcpy(&v, pVar->sqldata, sizeof(v));
 			dblReturn = v;
-			for (int i = 0; i < -pVar->sqlscale; i++) dblReturn /= 10;
+			if (pVar->sqlscale < 0) dblReturn.ShiftDecimal(pVar->sqlscale);
 		}
 		else if (nType == SQL_INT64)
 		{
 			int64_t int64val = 0;
 			memcpy(&int64val, pVar->sqldata, sizeof(int64val));
 			dblReturn = ibNumber(int64val);
-			for (int i = 0; i < -pVar->sqlscale; i++)
-				dblReturn /= 10;
+			if (pVar->sqlscale < 0) dblReturn.ShiftDecimal(pVar->sqlscale);
 		}
 		else if (nType == SQL_INT128)
 		{
 			dblReturn.From128Bytes(reinterpret_cast<const uint8_t*>(pVar->sqldata));
-			for (int i = 0; i < -pVar->sqlscale; i++)
-				dblReturn /= 10;
+			if (pVar->sqlscale < 0) dblReturn.ShiftDecimal(pVar->sqlscale);
 		}
 		else if (nType == SQL_SHORT)
 		{
 			short v = 0;
 			memcpy(&v, pVar->sqldata, sizeof(v));
 			dblReturn = v;
-			for (int i = 0; i < -pVar->sqlscale; i++) dblReturn /= 10;
+			if (pVar->sqlscale < 0) dblReturn.ShiftDecimal(pVar->sqlscale);
 		}
 		else
 		{
 			// Incompatible field type
 			// Set error codes and throw an exception here
-			dblReturn = 0.00;
+			dblReturn = ibNumber();
 
 			SetErrorMessage(wxT("Invalid field type"));
 			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
@@ -653,15 +661,18 @@ void ibDatabaseResultSetFirebird::PopulateFieldLookupMap()
 	XSQLVAR* pVar = m_pFields->sqlvar;
 	for (int i = 0; i < m_pFields->sqld; i++, pVar++)
 	{
-		wxString strField = ConvertFromUnicodeStream(pVar->synonymname);
-		m_FieldLookupMap[strField] = i;
+		m_FieldLookupMap[ConvertFromUnicodeStream(pVar->synonymname)] = i;   // as written: the map itself is case-blind (StringToIntMap)
 	}
 }
 
+// ⭐ FOUND, NOT WALKED. A field is asked for by name once per CELL — the column codec reads every value by
+// its field's name — and this was a walk over every field of the row with a case-insensitive compare per
+// field: 17 % of a forty-thousand-employee payroll's posting sat here (MEASURED 2026-09-11, Release, stack
+// samples). One lookup instead — and of the name AS ASKED: an upper-cased copy per lookup was the next
+// cost down the same path, so the map ignores case itself (StringToIntMap, databaseResultSet.h).
 int ibDatabaseResultSetFirebird::LookupField(const wxString& strField)
 {
-	StringToIntMap::iterator SearchIterator = std::find_if(m_FieldLookupMap.begin(), m_FieldLookupMap.end(),
-		[strField](const auto pair) { return stringUtils::CompareString(pair.first, strField); });
+	StringToIntMap::iterator SearchIterator = m_FieldLookupMap.find(strField);
 
 	if (SearchIterator == m_FieldLookupMap.end())
 	{
@@ -687,7 +698,8 @@ void ibDatabaseResultSetFirebird::InterpretErrorCodes()
 	// printed "I'm in this function" on every fbclient failure
 	// without adding context.
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
-	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode));
+	// A system error by its status code, as the layer records one (an interrupted fetch is isc_cancelled).
+	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode < -900 ? (int)m_Status[1] : (int)nSqlCode));
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, m_Status));
 }
 

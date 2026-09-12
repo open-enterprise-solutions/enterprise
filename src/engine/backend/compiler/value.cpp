@@ -1227,7 +1227,8 @@ IB_FORCEINLINE int KindRank(const ibValueTypes type)
 int ibValue::CompareValueLS(const ibValue& cParam) const
 {
 	// A reference answers as its target, and it answers FIRST — every rule below
-	// reads m_typeClass, which for a reffer says only "a reference".
+	// reads m_typeClass, which for a reffer says only "a reference". What "the same"
+	// means is the target's to say, including that it is itself.
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->CompareValueLS(cParam);
 

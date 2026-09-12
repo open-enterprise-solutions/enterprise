@@ -513,6 +513,16 @@ class BACKEND_API ibValueMetaObjectRecordDataRef : public ibValueMetaObjectRecor
 	static constexpr unsigned s_features =
 		ibMetaFeature_Reference | ibMetaFeature_Manager;
 
+	// WHAT A VALUE SAYS, AS ITS KIND WRITES IT — the template, declared by the kind the way a virtual table
+	// declares its arguments (ibQuerySourceParameter): a catalog says its Description; a document its
+	// synonym and Number, then "from" and its Date. See GenerateDataDesc.
+	struct ibDataDescParameter {
+		wxString                              m_prefix;             // before the first field — a document's synonym
+		const ibValueMetaObjectAttributeBase* m_first  = nullptr;   // a catalog's Description, a document's Number
+		wxString                              m_separator;          // between the two — a document's "from"
+		const ibValueMetaObjectAttributeBase* m_second = nullptr;   // a document's Date
+	};
+
 protected:
 	//ctor
 	ibValueMetaObjectRecordDataRef();
@@ -648,7 +658,17 @@ public:
 	// very shape that cost the whole of 2026-08-29 elsewhere: a comparison that said "equal" when it
 	// meant "I don't know", and a filter that dropped a line because its value was falsy. One value
 	// carrying two meanings is a defect wherever it appears.
-	virtual bool GenerateDataDesc(const ibValueDataObject* objValue, wxString& out) const = 0;
+	//
+	// Said here by the template below, its fields asked of the value in hand; a kind that says it some
+	// other way (an enumeration, off its metadata) overrides.
+	virtual bool GenerateDataDesc(const ibValueDataObject* objValue, wxString& out) const;
+
+	// ⭐ …AND THE TEMPLATE IT IS SAID BY — the same rule answering with its STRUCTURE instead of its value
+	// (Max, 2026-09-12: "an overload of GenerateDataDesc that returns the structure instead of the value"),
+	// and the same two answers: `false` — this kind says it without reading a field (an enumeration, off
+	// its metadata). A read that only has to SHOW references fetches these fields and says each one by it
+	// (ibValueReferenceDataObject::ReadBatch). Pure, so no family can forget to say.
+	virtual bool GenerateDataDesc(ibDataDescParameter& out) const = 0;
 
 	// ⚠ PURE, like its neighbour, so no family can forget to say. "I have no order of my own" is an
 	// ANSWER — `return 0` — and the caller then settles it by IDENTITY, which is the only comparison
@@ -743,6 +763,8 @@ public:
 	// ⭐⭐ AN ENUMERATION MEMBER IS DECLARED, NOT STORED — it reads as the configuration writes it in the
 	// designer and as the synonym a person put on it at run time.
 	virtual bool GenerateDataDesc(const ibValueDataObject* objValue, wxString& out) const override;
+	// …so it reads NO field to say it: the member is found by its guid in the metadata.
+	virtual bool GenerateDataDesc(ibDataDescParameter& /*out*/) const override { return false; }
 
 	// ⭐⭐ …AND IT HAS AN ORDER OF ITS OWN, which is the whole point of this override: the members are a
 	// SEQUENCE the author wrote down — "Wholesale, Retail" means something in that order — and the
@@ -1126,6 +1148,11 @@ public:
 	// ⭐ A RECORDED FACT READS AS ITS NUMBER AND ITS MOMENT — which is exactly the pair this class owns,
 	// so the sentence belongs here and not in each metatype that records one.
 	virtual bool GenerateDataDesc(const ibValueDataObject* objValue, wxString& out) const override;
+	// …its synonym and number, "from", and the moment.
+	virtual bool GenerateDataDesc(ibDataDescParameter& out) const override {
+		out = { GetSynonym() + wxT(" "), GetDocumentNumber(), wxT(" ") + wxString(_("from")) + wxT(" "), GetDocumentDate() };
+		return true;
+	}
 
 	// …and it has no order of its own: two records are told apart by identity.
 	virtual int CompareDataValues(const ibValueDataObject* lhs, const ibValueDataObject* rhs) const override;
@@ -1373,6 +1400,11 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	// the base classes — it can be left in the base"*, and *"we require it of the base metadata — base
 	// enumeration, base hierarchy, base document — and each overrides it at its own level"*).
 	virtual bool GenerateDataDesc(const ibValueDataObject* objValue, wxString& out) const override;
+	// …its Description, and nothing around it.
+	virtual bool GenerateDataDesc(ibDataDescParameter& out) const override {
+		out = { wxEmptyString, GetDataDescription() };
+		return true;
+	}
 
 	// …and no order of its own: the rows of a catalog, a chart of accounts or a chart of characteristic
 	// types are told apart by identity.
@@ -2112,7 +2144,7 @@ public:
 	virtual const ibValueMetaObjectRecordData* GetMetaObject() const override = 0;
 
 	//get unique identifier
-	virtual ibUniqueKey GetGuid() const override = 0;
+	virtual const ibUniqueKey& GetGuid() const override = 0;
 
 	//get frame
 	virtual ibBackendValueForm* GetForm() const;
@@ -2212,7 +2244,7 @@ public:
 	bool InitializeObject(ibValueRecordDataObjectExt* source);
 
 	//get unique identifier 
-	virtual ibUniqueKey GetGuid() const { return m_objGuid; }
+	virtual const ibUniqueKey& GetGuid() const { return m_objGuid; }
 
 	//check is empty
 	virtual bool IsEmpty() const { return false; }
@@ -2324,7 +2356,7 @@ public:
 	}
 
 	//get unique identifier
-	virtual ibUniqueKey GetGuid() const { return m_objGuid; }
+	virtual const ibUniqueKey& GetGuid() const { return m_objGuid; }
 
 	//copy new object
 	virtual ibValueRecordDataObjectRef* CopyObjectValue();
@@ -2559,7 +2591,9 @@ class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataO
 	public:
 		void CreateRecordSet();
 		bool WriteRecordSet();
-		bool DeleteRecordSet();
+		// …every set's stored movements, or — `unmodifiedOnly` — only those of the sets nobody has filled
+		// in memory: a filled set replaces its rows when it is written, and deleting under it would lose it.
+		bool DeleteRecordSet(bool unmodifiedOnly = false);
 		void ClearRecordSet();
 		void RefreshRecordSet();
 
@@ -3133,7 +3167,7 @@ public:
 	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
 
 	//get unique identifier
-	virtual ibUniqueKey GetGuid() const override { return m_objGuid; }
+	virtual const ibUniqueKey& GetGuid() const override { return m_objGuid; }
 
 	//save modify
 	virtual bool SaveModify() override { return WriteRegister(); }

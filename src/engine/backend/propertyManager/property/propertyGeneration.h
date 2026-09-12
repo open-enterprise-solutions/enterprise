@@ -12,8 +12,8 @@ public:
 	ibMetaDescription& GetValueAsMetaDesc() const;
 	void SetValue(const ibMetaDescription& val);
 
-	// WHAT THIS ONE MAY BE GENERATED INTO — catalogs, documents, charts of characteristic types and
-	// charts of accounts.
+	// WHAT THIS ONE MAY BE GENERATED INTO — catalogs, documents and the three kinds of chart. The one
+	// list: the editor's dialog groups what this answers rather than keeping a list of its own.
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
 

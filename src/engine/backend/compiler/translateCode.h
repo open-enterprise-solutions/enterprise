@@ -14,22 +14,10 @@
 
 #include "codeDef.h"
 #include "value.h"
-
-// Ordering for the lexer's name tables — keywords and #Define alike. Both are
-// matched case-insensitively, and both are consulted for EVERY identifier the
-// lexer meets, so the folding belongs in the comparator: the alternative is
-// upper-casing the query into a throw-away wxString once per token, per table.
-struct ibCaseFoldLess {
-	bool operator()(const wxString& lhs, const wxString& rhs) const noexcept {
-		auto itLhs = lhs.begin(), itRhs = rhs.begin();
-		for (; itLhs != lhs.end() && itRhs != rhs.end(); ++itLhs, ++itRhs) {
-			const wxUint32 chLhs = ::towupper((*itLhs).GetValue());
-			const wxUint32 chRhs = ::towupper((*itRhs).GetValue());
-			if (chLhs != chRhs) return chLhs < chRhs;
-		}
-		return itRhs != rhs.end();//lhs ran out first, so it is the shorter one
-	}
-};
+// The lexer's name tables — keywords and #Define alike — are matched case-insensitively and consulted for
+// EVERY identifier the lexer meets, so the folding belongs in their comparator (ibCaseFoldLess): the
+// alternative is upper-casing the query into a throw-away wxString once per token, per table.
+#include "backend/stringUtils.h"
 
 //List of keywords
 struct ibKeyWords {

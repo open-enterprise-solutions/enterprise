@@ -38,7 +38,7 @@ const wxString kTagComposition = wxT("Composition");
 bool ibValueMetaObject::SaveNode(ibDataNode& node) const
 {
 	// intrinsics → fields
-	node.SetValue(kTagGuid, m_metaGuid);
+	node.SetValue(kTagGuid, m_metaGuid.GetGuid());
 	node.SetValue(kTagId, (s32)m_metaId);
 	node.SetValue(kTagDeleted, IsDeleted());
 	node.SetValue(kTagHelp, m_strHelpContent);
