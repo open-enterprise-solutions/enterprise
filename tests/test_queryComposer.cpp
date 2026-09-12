@@ -54,7 +54,9 @@ const ibTypeDescription kNoType;
 class TestQueryable : public ibBackendQueryable {
 public:
 	TestQueryable(const wxString& table, ibMetaID metaId, bool computed = false)
-		: m_table(table), m_metaId(metaId), m_computed(computed) {}
+		: m_table(table), m_metaId(metaId), m_computed(computed) {
+		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(metaId); m_key = ibGuid(impl);
+	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
 	// ROW IDENTITY — what the phantom level groups by (a real source answers with its reference, or a
 	// register with recorder + line number). Absent by default: a source that has none.
@@ -62,15 +64,9 @@ public:
 
 	wxString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()    const override { return m_metaId; }
-	// New pure-virtual on ibBackendQueryable (queryable.h) the test source had not
-	// caught up with — abstract-class drift, not a logic change. Synthesise a
-	// stable, table-distinct guid from the id so identity/colocation logic still
-	// tells the two tables apart.
-	ibGuid   GetQueryTableGuid()  const override {
-		ibGuidImpl impl{};
-		impl.m_data1 = static_cast<unsigned long>(m_metaId);
-		return ibGuid(impl);
-	}
+	// A stable, table-distinct guid from the id, so identity/colocation logic still tells the two tables
+	// apart — made once and kept, because the source hands out the key its metaobject keeps (a reference).
+	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	bool     IsComputedInRam()   const override { return m_computed; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
@@ -87,6 +83,7 @@ private:
 	wxString m_table;
 	ibMetaID m_metaId;
 	bool     m_computed;
+	ibUniqueKey m_key;   // its table guid, the id in the first word
 	std::vector<const ibBackendQueryColumn*> m_cols;
 	std::vector<const ibBackendQueryColumn*> m_keys;
 };

@@ -134,15 +134,15 @@ TEST(PropertyInnerModule, PasteNodeValue_ModuleCopiedFromAnotherObject_TakesAFre
 	ASSERT_NE(nullptr, sourceModule);
 	ASSERT_NE(nullptr, targetModule);
 
-	const wxString sourceGuid = sourceModule->GetGuid().str();
-	const wxString targetGuidBefore = targetModule->GetGuid().str();
+	const wxString sourceGuid = sourceModule->GetGuid().GetGuid().str();
+	const wxString targetGuidBefore = targetModule->GetGuid().GetGuid().str();
 	ASSERT_NE(sourceGuid, targetGuidBefore);
 
 	ibDataValue payload;
 	ASSERT_TRUE(ModuleProperty(f.source)->CopyNodeValue(payload));
 	ASSERT_TRUE(ModuleProperty(f.target)->PasteNodeValue(payload));
 
-	const wxString targetGuidAfter = ObjectModuleOf(f.target)->GetGuid().str();
+	const wxString targetGuidAfter = ObjectModuleOf(f.target)->GetGuid().GetGuid().str();
 
 	EXPECT_NE(sourceGuid, targetGuidAfter);
 	EXPECT_NE(targetGuidBefore, targetGuidAfter);
