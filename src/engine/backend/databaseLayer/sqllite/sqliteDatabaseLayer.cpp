@@ -199,6 +199,12 @@ const ibMaterializationDialect& ibDatabaseLayerSQLite::MaterializationDialect()
 		m.m_deltaKeyMatchItem = wxT("{target}.{col} IS {source}.{col}");   // unused by ON CONFLICT — rendered, not spent
 		m.m_totalsTableSuffix = wxEmptyString;       // no fillfactor concept (single writer anyway)
 		m.m_connectionIdExpr  = wxEmptyString;       // single writer => no contention to split; shards are meaningless, not missing
+		// WHAT IS STANDING, asked of the catalogue — not only to guard a drop (SQLite's cannot hurt), but
+		// because "is the bundle installed?" is answered by these (ibMaterializeSql::IsInstalled), and
+		// with none it answered "yes" for triggers an apply had just dropped. Names compare without case,
+		// as SQLite's identifiers do.
+		m.m_viewExistsQuery    = wxT("SELECT 1 FROM sqlite_master WHERE type = 'view' AND name = '{name}' COLLATE NOCASE");
+		m.m_triggerExistsQuery = wxT("SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = '{name}' COLLATE NOCASE");
 		return m;
 	}();
 	return s_mat;

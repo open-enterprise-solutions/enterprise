@@ -3887,9 +3887,18 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		const std::vector<ibWriteRow>& writeRows = *spec.m_writeRows;   // never empty — one row is the degenerate set
 		const ibWriteRow&              firstRow  = writeRows.front();
 
+		// ⭐ EACH COLUMN LAID OUT ONCE. A column's physical fields are the column's own (DescribeColumnLayout),
+		// and every row names the same columns — so they are asked here, a column at a time, and every row
+		// below reads them rather than asking again. Asked per cell, twice a cell (the check and the values),
+		// the layout was the largest single cost of writing a register's rows: some nine of the 25 samples
+		// the rows write took in a 40-thousand-employee posting (2026-09-12, Debug).
+		std::vector<std::vector<wxString>> fieldsOf;
+		fieldsOf.reserve(firstRow.size());
 		std::vector<wxString> columns;
-		for (const auto& wv : firstRow)
-			for (const wxString& f : ColumnFieldNames(wv.first)) columns.push_back(f);
+		for (const auto& wv : firstRow) {
+			fieldsOf.push_back(ColumnFieldNames(wv.first));
+			columns.insert(columns.end(), fieldsOf.back().begin(), fieldsOf.back().end());
+		}
 
 		if (writeRows.size() > 1) {
 			// Only a plain INSERT batches. An UPSERT needs the dialect's own match form and
@@ -3898,28 +3907,24 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 			if (kind != WriteKind::Insert)
 				ibBackendCoreException::Error(_("Only an insert can write several rows in one statement"));
 
-			// COMPARED BY FIELD NAME, NOT BY COLUMN POINTER.
+			// COMPARED BY FIELD NAME WHERE THE POINTER CANNOT SAY.
 			//
 			// A raw column (ibBackendColumnRawDB — the parent row key a tabular section puts on every line)
 			// is handed to SetValue BY VALUE, and the door owns a COPY of each one. So the same
 			// logical column staged on two rows is two objects at two addresses, and a pointer
-			// comparison calls them different — which would refuse every tabular section with more
+			// comparison alone calls them different — which would refuse every tabular section with more
 			// than one line. The names are what the positional bind actually rides on, so they are
-			// what is checked.
-			std::vector<wxString> firstFields;
-			for (const auto& wv : firstRow)
-				for (const wxString& f : ColumnFieldNames(wv.first)) firstFields.push_back(f);
-
+			// what is checked; the same column object is the same fields, and only a different one is
+			// laid out to be compared.
 			for (const ibWriteRow& row : writeRows) {
-				std::vector<wxString> rowFields;
-				for (const auto& wv : row)
-					for (const wxString& f : ColumnFieldNames(wv.first)) rowFields.push_back(f);
-
-				if (rowFields.size() != firstFields.size())
+				if (row.size() != firstRow.size())
 					ibBackendCoreException::Error(_("A batched write has rows with different column counts"));
-				for (std::size_t i = 0; i < rowFields.size(); ++i)
-					if (rowFields[i] != firstFields[i])
+				for (std::size_t c = 0; c < row.size(); ++c) {
+					if (row[c].first == firstRow[c].first)
+						continue;
+					if (ColumnFieldNames(row[c].first) != fieldsOf[c])
 						ibBackendCoreException::Error(_("A batched write has rows naming different columns"));
+				}
 			}
 		}
 
@@ -4019,8 +4024,9 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		auto rowAsValues = [&](const ibWriteRow& row) -> std::vector<ibQueryExprPtr> {
 			std::vector<ibQueryExprPtr> out;
 			out.reserve(columns.size());
-			for (const auto& wv : row) {
-				const std::vector<wxString> fields = ColumnFieldNames(wv.first);
+			for (std::size_t c = 0; c < row.size(); ++c) {
+				const auto& wv = row[c];
+				const std::vector<wxString>& fields = fieldsOf[c];   // the column's layout, laid out once above
 				ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 				int cp = 1;
 				wv.first->BindValue(capture, metaData, wv.second, cp);

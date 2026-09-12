@@ -233,6 +233,12 @@ const ibMaterializationDialect& ibDatabaseLayerPostgres::MaterializationDialect(
 		m.m_connectionIdExpr  = wxT("pg_backend_pid()");   // per-backend id — concurrent writers hash apart
 		m.m_createViewTemplate = wxT("CREATE OR REPLACE VIEW {name} AS {body}");
 		m.m_dropViewTemplate   = wxT("DROP VIEW IF EXISTS {name}");
+		// WHAT IS STANDING, asked of the catalogue — the drops need no guard (IF EXISTS), but "is the bundle
+		// installed?" is answered by these (ibMaterializeSql::IsInstalled), and with none it answered "yes"
+		// for triggers an apply had just dropped. The names were created unquoted, so they are stored folded
+		// to lower case.
+		m.m_viewExistsQuery    = wxT("SELECT 1 FROM pg_class c WHERE c.relkind = 'v' AND c.relname = LOWER('{name}') AND pg_table_is_visible(c.oid)");
+		m.m_triggerExistsQuery = wxT("SELECT 1 FROM pg_trigger t WHERE t.tgname = LOWER('{name}') AND NOT t.tgisinternal");
 		return m;
 	}();
 	return s_mat;

@@ -140,7 +140,11 @@ public:
 			m_data[pos].second = std::forward<M>(obj);
 			return { m_data.begin() + static_cast<difference_type>(pos), false };
 		}
-		EmplaceAt(pos, k, T(std::forward<M>(obj)));
+		// Named and moved, not `T(std::forward<M>(obj))` passed straight in: MSVC reads a cast of a
+		// scalar to its own type as an LVALUE (not the standard's prvalue), which a `T&&` refuses — the
+		// ibValue rows never instantiate it that way, a test's `int` does (x64 CI, 2026-09-12).
+		T value(std::forward<M>(obj));
+		EmplaceAt(pos, k, std::move(value));
 		return { m_data.begin() + static_cast<difference_type>(pos), true };
 	}
 

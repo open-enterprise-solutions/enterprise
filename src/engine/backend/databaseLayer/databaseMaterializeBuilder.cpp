@@ -1212,7 +1212,8 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 	// never created takes the entire restructuring down — the first apply would destroy itself,
 	// and every later statement would run in a dead transaction.
 	//
-	// So a guarded drop asks first. Engines with DROP … IF EXISTS carry no guard and just run.
+	// So a guarded drop asks first. (Every engine carries the guard now, IF EXISTS or not — the same probe
+	// answers IsInstalled; see databaseLayer.h.)
 	for (const ibRenderedStatement& s : m_drop) {
 		if (!s.m_guard.IsEmpty() && !ExistsByProbe(conn, s.m_guard)) {
 			// ⚠ A SKIPPED DROP IS THE ONE WAY AN OBJECT SURVIVES A TABLE IT DEPENDS ON. The probe says

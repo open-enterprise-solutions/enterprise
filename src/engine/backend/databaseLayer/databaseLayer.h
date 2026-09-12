@@ -573,8 +573,15 @@ struct ibMaterializationDialect
 	//
 	// Needed because a failed DDL is NOT harmless on every engine: Firebird ROLLS BACK the
 	// transaction, so a DROP of something that was never created takes the whole restructuring
-	// down with it — the first apply would destroy itself. Engines that spell DROP … IF EXISTS
-	// leave these EMPTY: there the drop cannot fail, so nothing needs probing.
+	// down with it — the first apply would destroy itself.
+	//
+	// 🛑 AND EVERY ENGINE FILLS THEM, IF EXISTS OR NOT. They also answer "is the bundle installed?"
+	// (ibMaterializeSql::IsInstalled), and an engine that left them empty because its drop could not
+	// fail answered that "yes" for anything — including the triggers an apply had just dropped: every
+	// apply takes the bundles off each movements table (schemaSnapshot.cpp, a column may be leaving),
+	// the unchanged-and-installed shortcut then skipped the reinstall, and on PostgreSQL and SQLite the
+	// totals stopped being kept after the first apply (audit 2026-09-12). A guard on a drop that cannot
+	// fail costs one catalogue read; a missing answer cost the maintenance.
 	//
 	// The probe belongs to the dialect because the catalogue it reads is engine-specific
 	// (RDB$RELATIONS / pg_class / sqlite_master), which is exactly the kind of fact a dictionary

@@ -400,3 +400,37 @@ TEST_F(TotalsFix, AReversalInALaterPeriodStaysInThatPeriod)
 	EXPECT_DOUBLE_EQ(Cell(MFEB, wxT("W1"), wxT("qty_in")), -10.0);
 	ExpectParity("a reversal a month later");
 }
+
+// ⭐ WHAT AN APPLY TAKES DOWN, THE SAME APPLY PUTS BACK. Every apply drops the bundles hanging on each
+// movements table (a column may be leaving it — schemaSnapshot.cpp), and then skips reinstalling a bundle
+// whose text did not change AND which reports itself installed. SQLite (and PostgreSQL) had no catalogue
+// probe, so "installed?" answered yes for triggers that had just been dropped: the totals stopped being
+// kept after the first apply, with nothing to say so (audit 2026-09-12). The probe now reads sqlite_master.
+TEST_F(TotalsFix, ADroppedBundleIsNotInstalled_AndTheApplyPutsItBack)
+{
+	if (!ready) return;
+	const ibMaterializeSpec spec = MakeSpec();
+	const ibMaterializeSql sql = RenderMaterialization(spec,
+		&ibDatabaseLayerSQLite::MaterializationDialect(), ibDatabaseLayerSQLite::Dialect());
+	EXPECT_TRUE(sql.IsInstalled(db)) << "installed by the fixture";
+
+	ASSERT_TRUE(ibDropMaterialization(db, spec));   // what every apply does to a movements table's bundles
+	EXPECT_FALSE(sql.IsInstalled(db)) << "the catalogue says the triggers are gone";
+
+	// The same declaration as before — the text is unchanged, and still it is put back.
+	EXPECT_EQ(ibApplyMaterialization(db, spec, &spec), ibMaterializeApply::Rebuilt);
+	EXPECT_TRUE(sql.IsInstalled(db));
+
+	// …and the totals are kept again.
+	Move(1, JAN, wxT("W1"), 10, kIn);
+	EXPECT_DOUBLE_EQ(Cell(MJAN, wxT("W1"), wxT("qty_in")), 10.0);
+	ExpectParity("a bundle put back by the apply");
+}
+
+// An intact bundle with the same text is left alone — the shortcut the probe makes honest, not gone.
+TEST_F(TotalsFix, AnIntactBundleWithTheSameTextIsLeftAlone)
+{
+	if (!ready) return;
+	const ibMaterializeSpec spec = MakeSpec();
+	EXPECT_EQ(ibApplyMaterialization(db, spec, &spec), ibMaterializeApply::Unchanged);
+}
