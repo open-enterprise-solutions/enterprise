@@ -21,10 +21,18 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxString& strValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_STRING), m_strValue(strValue)
+void ibDatabaseParameterFirebird::SetNull()
 {
-	m_pInterface = pInterface;
-	m_pParameter = pVar;
+	m_nParameterType = ibDatabaseParameterFirebird::PARAM_NULL;
+
+	m_nNullFlag = -1;
+	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
+}
+
+void ibDatabaseParameterFirebird::Set(const wxString& strValue)
+{
+	m_nParameterType = ibDatabaseParameterFirebird::PARAM_STRING;
+	m_strValue = strValue;
 
 	// Set to SQL_TEXT manually. The bytes are made once and their length read off them — asking for the
 	// length separately converted the whole string a second time.
@@ -63,7 +71,7 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	// The order matters as much as the clamp: the assignment below REPLACES sqllen with the value's
 	// length, so after it there is no record of how much room the buffer has. Anything that clamps
 	// later would be clamping against the value it just wrote. The two sibling branches in
-	// SetParamBlob already clamp this way; this constructor was the one that did not.
+	// SetParamBlob already clamp this way; this setter was the one that did not.
 	// ⚠ AND ZERO MEANS "I DO NOT KNOW", NOT "THERE IS NO ROOM". Written as
 	// `capacity = sqllen > 0 ? sqllen : 0`, an undescribed parameter clamped every value to NOTHING —
 	// so a string went in and came back EMPTY, with the write reporting success. Caught 2026-08-14 on
@@ -81,10 +89,10 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const ibNumber& dblValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_NUMBER)
+void ibDatabaseParameterFirebird::Set(const ibNumber& dblValue)
 {
-	m_pInterface = pInterface;
-	m_pParameter = pVar;
+	m_nParameterType = ibDatabaseParameterFirebird::PARAM_NUMBER;
+	XSQLVAR* const pVar = m_pParameter;
 
 	int nType = (m_pParameter->sqltype & ~1);
 
@@ -170,7 +178,7 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 			}
 			memcpy(&int64val, &bits, sizeof(int64val));
 		}
-		// The same guard the string constructor carries, for the same reason: these two branches are
+		// The same guard the string setter carries, for the same reason: these two branches are
 		// the only numeric ones that write into a buffer the DESCRIBE allocated rather than pointing
 		// sqldata at a member of their own. A null here is a bind addressing a parameter the
 		// statement does not have, and it used to arrive as an access violation inside the CRT.
@@ -203,10 +211,28 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, int nValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_INT)
+void ibDatabaseParameterFirebird::Set(int nValue)
 {
-	m_pInterface = pInterface;
-	m_pParameter = pVar;
+	// ⭐ AN INTEGER GOES WHERE THE SLOT'S TYPE SAYS, as a number does (Set(ibNumber) above). This used to point
+	// the slot at four bytes whatever it was declared as: right for an INTEGER, a misread for a SMALLINT, and
+	// for a BIGINT eight bytes read from four, over the buffer the describe made for it. An INTEGER with no scale
+	// — the codec's type tags — is written as it is; every other numeric slot takes the number's road, which
+	// scales and checks the fit. Any other slot is refused, as the neighbouring setters refuse theirs: pointing
+	// it at four bytes of a member left the describe's buffer behind, and — the parameter living on for the
+	// statement's next rows — handed a later string bind that member to copy into.
+	const int nType = (m_pParameter->sqltype & ~1);
+	const bool numeric = nType == SQL_SHORT || nType == SQL_LONG || nType == SQL_INT64 || nType == SQL_INT128
+		|| nType == SQL_FLOAT || nType == SQL_DOUBLE;
+	if (numeric && !(nType == SQL_LONG && m_pParameter->sqlscale == 0)) {
+		Set(ibNumber(nValue));
+		m_nParameterType = ibDatabaseParameterFirebird::PARAM_INT;
+		return;
+	}
+	if (nType != SQL_LONG)
+		ibBackendCoreException::Error(
+			_("Firebird: an integer was bound to a parameter the statement declares as SQL type %d"), nType);
+
+	m_nParameterType = ibDatabaseParameterFirebird::PARAM_INT;
 	m_nValue = nValue;
 
 	m_pParameter->sqldata = (char*)&m_nValue;
@@ -215,10 +241,9 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, double dblValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_DOUBLE)
+void ibDatabaseParameterFirebird::Set(double dblValue)
 {
-	m_pInterface = pInterface;
-	m_pParameter = pVar;
+	m_nParameterType = ibDatabaseParameterFirebird::PARAM_DOUBLE;
 
 	int nType = (m_pParameter->sqltype & ~1);
 
@@ -244,24 +269,18 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, bool bValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_BOOL)
+// A boolean is a SMALLINT here (the codec's type), so it goes the integer's road: into the slot's own width,
+// not four bytes pointed at whatever the slot was declared as.
+void ibDatabaseParameterFirebird::Set(bool bValue)
 {
-	m_pInterface = pInterface;
-	m_pParameter = pVar;
-
+	Set(bValue ? 1 : 0);
 	m_bValue = bValue;
-	m_nValue = (m_bValue) ? 1 : 0;
-
-	m_pParameter->sqldata = (char*)&m_nValue;
-
-	m_nNullFlag = 0;
-	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
+	m_nParameterType = ibDatabaseParameterFirebird::PARAM_BOOL;
 }
 
-ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxDateTime& dateValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_DATETIME)
+void ibDatabaseParameterFirebird::Set(const wxDateTime& dateValue)
 {
-	m_pInterface = pInterface;
-	m_pParameter = pVar;
+	m_nParameterType = ibDatabaseParameterFirebird::PARAM_DATETIME;
 
 	struct tm dateAsTm;
 	wxDateTime::Tm tm = dateValue.GetTm();
@@ -279,7 +298,7 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	//
 	// AllocateParameterSpace decides about sqldata per type: a TIMESTAMP gets the deliberate nullptr a
 	// setter later points at a member of its own; a DATE and a TIME get a buffer of their own size,
-	// which FreeParameterSpace releases with delete[]. This constructor pointed sqldata at m_Date for
+	// which FreeParameterSpace releases with delete[]. This setter pointed sqldata at m_Date for
 	// all three. For a DATE that leaked the buffer and handed delete[] the address of a member, and
 	// the debug heap stopped the process on the first write of a date-only column (a calculation
 	// register's periods, 2026-09-10); a TIME did the same and sent the day number as the time.
@@ -314,10 +333,9 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const void* pData, long nDataLength) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_BLOB)
+void ibDatabaseParameterFirebird::Set(const void* pData, long nDataLength)
 {
-	m_pInterface = pInterface;
-	m_pParameter = pVar;
+	m_nParameterType = ibDatabaseParameterFirebird::PARAM_BLOB;
 
 	int nType = (m_pParameter->sqltype & ~1);
 
@@ -344,7 +362,7 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 		// the allocation; FB compares CHAR/BINARY by full declared
 		// length so a short-bound buffer wouldn't match anyway.
 		// ⚠ cap == 0 means UNDESCRIBED, not "no room" — clamping to it would bind nothing (see the string
-		// ctor above, where exactly that emptied every value).
+		// setter above, where exactly that emptied every value).
 		const long cap = (long)m_pParameter->sqllen;
 		const long n   = (cap > 0 && nDataLength > cap) ? cap : nDataLength;
 		RequireParameterBuffer();
@@ -359,7 +377,7 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 		// params, leaving sqldata zero-init and breaking equality
 		// against a binary column whose stored value is non-zero.
 		// ⚠ cap == 0 means UNDESCRIBED, not "no room" — clamping to it would bind nothing (see the string
-		// ctor above, where exactly that emptied every value).
+		// setter above, where exactly that emptied every value).
 		const long cap = (long)m_pParameter->sqllen;
 		const long n   = (cap > 0 && nDataLength > cap) ? cap : nDataLength;
 		// Length prefix as ISC_USHORT.

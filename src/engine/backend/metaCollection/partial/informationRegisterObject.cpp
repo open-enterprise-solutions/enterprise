@@ -11,6 +11,30 @@
 // (Phase B template-method) — the scaffold is in commonObject.cpp; the
 // Begin/Commit + LockByKeys helpers it calls live in commonObjectRecordSetQuery.cpp.
 
+// A period as the register keeps it — truncated to its periodicity; anything but a date as it is.
+static ibValue TruncateToPeriod(const ibValue& period, ibTotalsPeriod unit)
+{
+	if (period.GetType() != TYPE_DATE || !period.GetDateTime().IsValid())
+		return period;
+	return ibValue(ibTruncateToPeriod(period.GetDateTime(), unit));
+}
+
+// The set's own part of it: every line's period and the key's, truncated first — the delete by the key and the lines
+// written after it then name the same month.
+bool ibValueRecordSetObjectInformationRegister::SaveData(bool replace, bool clearTable)
+{
+	const ibTotalsPeriod unit = m_metaObject->GetPeriodicityUnit();
+	if (unit != ibTotalsPeriod::Second) {
+		const ibMetaID period = m_metaObject->GetRegisterPeriod()->GetMetaID();
+		for (long row = 0; row < GetRowCount(); row++)
+			if (ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row)))
+				node->SetValue(period, TruncateToPeriod(node->GetTableValue(period), unit), true);
+		if (FindKeyValue(period))
+			SetKeyValue(period, TruncateToPeriod(GetKeyValue(period), unit));
+	}
+	return ibValueRecordSetObject::SaveData(replace, clearTable);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 const ibSourceExplorer* ibValueRecordManagerObjectInformationRegister::GetSourceExplorer() const
@@ -102,6 +126,16 @@ bool ibValueRecordManagerObjectInformationRegister::WriteRegister(bool replace)
 				scope.SafeBeginTransaction();
 
 				bool newObject = ibValueRecordManagerObjectInformationRegister::IsNewObject();
+
+				// The record's period truncated before anything asks by it — the probe for a record already there asks
+				// by the month a monthly register keeps.
+				const ibTotalsPeriod unit = m_metaObject->GetPeriodicityUnit();
+				if (unit != ibTotalsPeriod::Second && m_recordLine != nullptr) {
+					const ibMetaID period = m_metaObject->GetRegisterPeriod()->GetMetaID();
+					ibValue written;
+					m_recordLine->GetValueByMetaID(period, written);
+					m_recordLine->SetValueByMetaID(period, TruncateToPeriod(written, unit));
+				}
 
 				// A REGISTER'S KEY FLOATS OVER ITS DIMENSIONS, so editing one does not modify a record — it
 				// REPLACES it: the old key is gone from the table and a row under a new key is what remains.

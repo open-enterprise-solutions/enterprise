@@ -31,6 +31,7 @@
 #include "backend/databaseLayer/preparedStatement.h" // ibPreparedStatement (ibQueryStatement base)
 #include "backend/databaseLayer/columnType.h"        // ibColumnType — Cast target + ibDdlColumn type (dialect TYPE-MAP renders it)
 
+#include <algorithm>       // ibQueryStatement::ClearCaptured
 #include <atomic>          // ibQueryResult — the cancel it hears
 #include <cstdint>
 #include <deque>           // ibQueryResult — its fields, found once per result
@@ -408,6 +409,13 @@ enum class ibQueryFrame
 	// sort key is unique BY CONSTRUCTION; with ties the figures move between runs, which is a defect
 	// that reports itself as "the numbers changed" long after the query that caused it.
 	RowsThroughCurrent,
+
+	// ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING — every row BEFORE this one, this one left out.
+	// What a walk over spans asks: "how far do the spans before me reach?" — a question the current
+	// row's own span must not answer (a calculation record's pieces are the gaps such a walk finds).
+	// Empty for the first row of a partition, so the function answers NULL there. The tie rule of the
+	// row form above holds here too.
+	RowsBeforeCurrent,
 
 	// No frame clause at all. RANKING functions (ROW_NUMBER / RANK / DENSE_RANK / LAG / LEAD) take
 	// none and SQL forbids one there, and a window with no ORDER BY folds the whole partition by
@@ -1425,6 +1433,9 @@ public:
 	// (run SetParam* / SetValueAttribute, never RunQuery) — the metadata layer
 	// reuses the write decomposition to build a composite-key read predicate.
 	const std::vector<ibQueryExprPtr>& CapturedValues() const { return m_values; }
+	// Every slot unbound again — a CAPTURE-ONLY statement reused for the next value, so a field that value does
+	// not bind reads as unbound, not as the previous value's.
+	void ClearCaptured() { std::fill(m_values.begin(), m_values.end(), nullptr); }
 
 	// Update-only: an extra WHERE predicate AND-folded with the match-key equality — the
 	// RLS-restricted save uses it to fold the access predicate into the UPDATE. Ignored by other kinds.
@@ -1443,7 +1454,7 @@ public:
 	// delta to subtract.
 	void SetParamAccumulate(int nPosition, const ibNumber& delta);
 
-private:
+protected:   // ibBatchInsert is one — its table, its columns and the values it captured are its own
 	void           Put(int position, ibQueryExprPtr expr);   // 1-based -> m_values[pos-1]
 	ibDmlStatement BuildDml() const;
 
@@ -1454,6 +1465,64 @@ private:
 	std::vector<ibQueryExprPtr> m_values;     // one expr per column, in column order
 	ibDatabaseConnectionHolder* m_holder;
 	ibQueryExprPtr              m_wherePredicate;   // Update only: extra WHERE (RLS), AND-folded with the key match
+};
+
+// ==========================================================================
+// ibBatchInsert — the rows of one INSERT, each bound where it goes: an INSERT statement template whose RunQuery
+// is "this row is bound". A writer binds a row through the SetParam* it already speaks (a column's BindValue, the
+// codec under it), from position 1, and runs it; which statement carries the rows is decided here, as Execute
+// decides it for a batch handed over whole:
+//   · where the engine runs a prepared statement again (ibSqlFeatures::m_batchByReexecution), the one-row
+//     INSERT is prepared once, every value goes straight into its parameter, and each row runs as it is bound;
+//   · elsewhere a row is captured as the template captures any (its values), and kRowsPerStatement of them go as
+//     one multi-row statement — Execute's form, the one those engines are fast at.
+// The prepared statement is L2's own business, held here: nothing above this layer sees one.
+//
+// ⭐ WHY NOT THE BATCH HANDED OVER WHOLE (ibDmlStatement::m_extraRows). Every value of that batch is an IR
+// constant: made for each field of each row, copied into a bind plan, bound, and the tree freed afterwards.
+// A payroll's 72 234 movements spent 53 of the 59 stack samples their write took in that, and 2 in the
+// database (2026-09-14, Debug). A value bound here is set once, into the driver's parameter.
+//
+// ⚠ A VALUE IS BOUND AS A CONSTANT OF A PLAN WOULD BE (ibParamOfConst -> ibBindParam) where the two differ: a
+// double as a number, an empty blob as NULL. An int stays an int — the codec's type tags are ints, and the
+// driver writes one where its slot's type says (Firebird: an INTEGER as it is, any other number scaled).
+// ==========================================================================
+class BACKEND_API ibBatchInsert : public ibQueryStatement
+{
+public:
+	// `columns` are the physical column names in bind order. `holder` null = session default.
+	ibBatchInsert(const wxString& table, std::vector<wxString> columns, ibDatabaseConnectionHolder* holder = nullptr);
+	~ibBatchInsert() override;
+
+	// Keep the base's non-pure overloads visible alongside our overrides.
+	using ibQueryStatement::SetParamDate;
+	using ibQueryStatement::SetParamBlob;
+
+	// --- the row being bound: into the prepared INSERT, or captured as the template's values ---------
+	void SetParamInt(int nPosition, int nValue) override;
+	void SetParamDouble(int nPosition, double dblValue) override;
+	void SetParamNumber(int nPosition, const ibNumber& numValue) override;
+	void SetParamString(int nPosition, const wxString& strValue) override;
+	void SetParamNull(int nPosition) override;
+	void SetParamBlob(int nPosition, const void* pData, long nDataLength) override;
+	void SetParamDate(int nPosition, const wxDateTime& dateValue) override;
+	void SetParamBool(int nPosition, bool bValue) override;
+
+	// The row is bound: it runs, or is held for the next statement. Answers the rows this call wrote — 0 while
+	// the row is held — or < 0 when the database refused one.
+	int RunQuery() override;
+	ibDatabaseResultSet* RunQueryWithResults() override;   // runs; writes have no cursor -> null
+	// …and the rows still held go. The same answer.
+	int Flush();
+
+private:
+	// Position `nPosition` of the row counted as bound on the prepared road (RunQuery binds the rest as NULL).
+	void Bound(int nPosition);
+
+	ibConnectionScope                 m_scope;
+	std::unique_ptr<ibStatementGuard> m_prepared;   // the one-row INSERT, where the engine runs it again
+	std::vector<bool>                 m_bound;      // …and which of its positions this row has bound
+	ibDmlStatement                    m_held;       // elsewhere: the rows held for the next statement
 };
 
 #endif  // __IB_DATABASE_QUERY_BUILDER_H__

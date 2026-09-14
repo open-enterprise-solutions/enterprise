@@ -32,7 +32,7 @@ void ibValueManagerDataObjectCalculationRegister::FillManagerMethods(ibMemberTab
 	helper.AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
 	// TWO ARGUMENTS, because there are two forms: Get(filter) and Get(period, filter).
 	helper.AppendFunc(wxT("Get"), 2, wxT("Get(Period, Filter...)"));
-	helper.AppendFunc(wxT("GetBase"), 2, wxT("GetBase(BaseRegister, Filter...)"));
+	helper.AppendFunc(wxT("GetBase"), 4, wxT("GetBase(Filter, Resources, Dimensions, Sections)"));
 	helper.AppendFunc(wxT("Select"), wxT("Select()"));
 	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(string, owner, guid)"));
 	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(string, owner, guid)"));
@@ -63,11 +63,9 @@ bool ibValueManagerDataObjectCalculationRegister::CallAsFunc(const long lMethodN
 			ibValueManagerDataObjectCalculationRegister::Get();
 		return true;
 	case eGetBase:
-		pvarRetValue = lSizeArray > 1 ?
-			ibValueManagerDataObjectCalculationRegister::GetBase(*paParams[0], *paParams[1])
-			: lSizeArray > 0 ?
-			ibValueManagerDataObjectCalculationRegister::GetBase(*paParams[0])
-			: ibValue();
+		pvarRetValue = ibValueManagerDataObjectCalculationRegister::GetBase(
+			lSizeArray > 0 ? *paParams[0] : ibValue(), lSizeArray > 1 ? *paParams[1] : ibValue(),
+			lSizeArray > 2 ? *paParams[2] : ibValue(), lSizeArray > 3 ? *paParams[3] : ibValue());
 		return true;
 	case eSelect:
 		pvarRetValue = new ibValueSelectorRegisterDataObject(m_metaObject);

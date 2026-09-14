@@ -15,5 +15,10 @@ void ibValueMetaObjectCalculationRegister::OnPropertyChanged(ibProperty* propert
 	if (property == m_propertyChartOfCalculationTypes)
 		ApplyChartBinding();
 
+	// Recalculation switched on in a register made before its marks had a holder: the holder takes its number now — an
+	// edit, like any, so the next apply meets a table it has not got and creates it.
+	if (property == m_propertyUseRecalculation && IsUseRecalculation() && m_recalculation->GetMetaID() == 0)
+		m_recalculation->OnCreateMetaObject(m_metaData, newObjectFlag);
+
 	ibValueMetaObjectRegisterData::OnPropertyChanged(property, oldValue, newValue);
 }

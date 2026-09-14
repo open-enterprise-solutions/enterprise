@@ -185,8 +185,8 @@ class BACKEND_API ibColumnCodec
 public:
 	// WRITE — bind the value's TYPE tag + per-contained-type data + the reference pair into
 	// `statement` from `position` (1-based), advancing it. The physical order is exactly the
-	// one DescribeColumnLayout lays out. Binds into the L2 ibQueryStatement, never a raw L1
-	// statement. Column-based — no attribute.
+	// one DescribeColumnLayout lays out. Binds into the L2 ibQueryStatement (a batch's rows too —
+	// ibBatchInsert is one), never a raw L1 statement. Column-based — no attribute.
 	static void WriteValue(const ibBackendQueryColumn* col, const ibMetaData* metaData,
 	                       const ibValue& value, ibQueryStatement* statement, int& position);
 	static void WriteValue(const ibBackendQueryColumn* col, const ibMetaData* metaData,

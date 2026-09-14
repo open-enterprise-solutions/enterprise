@@ -37,6 +37,10 @@ ibDatabaseParameterFirebirdCollection::~ibDatabaseParameterFirebirdCollection()
 // refused. So the describe's answer is kept, and put back before each bind.
 XSQLVAR* ibDatabaseParameterFirebirdCollection::DescribedSlot(int nPosition)
 {
+	// A position the statement does not have addresses memory past its descriptor — refused, not written.
+	if (m_FirebirdParameters == nullptr || nPosition < 1 || nPosition > m_FirebirdParameters->sqld)
+		ibBackendCoreException::Error(_("Firebird: parameter %d was bound, the statement has %d"),
+			nPosition, m_FirebirdParameters != nullptr ? static_cast<int>(m_FirebirdParameters->sqld) : 0);
 	XSQLVAR* pVar = &m_FirebirdParameters->sqlvar[nPosition - 1];
 	if (nPosition >= 1 && (size_t)nPosition <= m_described.size()) {
 		pVar->sqltype = m_described[nPosition - 1].first;
@@ -48,67 +52,58 @@ XSQLVAR* ibDatabaseParameterFirebirdCollection::DescribedSlot(int nPosition)
 // set field
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, int nValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), nValue);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(nValue);
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, double dblValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), dblValue);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(dblValue);
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const ibNumber& dblValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), dblValue);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(dblValue);
 }
 
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const wxString& strValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), strValue);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(strValue);
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition));
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).SetNull();
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const void* pData, long nDataLength)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), pData, nDataLength);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(pData, nDataLength);
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const wxDateTime& dateValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), dateValue);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(dateValue);
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, bool bValue)
 {
-	ibDatabaseParameterFirebird* pParameter = new ibDatabaseParameterFirebird(m_pInterface, DescribedSlot(nPosition), bValue);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(bValue);
 }
 
-void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, ibDatabaseParameterFirebird* pParameter)
+// The parameter of a position — made on its first bind and kept: every later bind gives it a value. The slot is
+// reset to what the describe said first (DescribedSlot), the bind before this one may have rewritten it.
+ibDatabaseParameterFirebird& ibDatabaseParameterFirebirdCollection::ParameterAt(int nPosition)
 {
+	XSQLVAR* pVar = DescribedSlot(nPosition);
 	// First make sure that there are enough elements in the collection
 	while (m_Parameters.size() < (unsigned int)(nPosition))
 	{
 		m_Parameters.push_back(nullptr);//EmptyParameter);
 	}
-	// Free up any data that is being replaced so the allocated memory isn't lost
-	if (m_Parameters[nPosition - 1] != nullptr)
-	{
-		delete (m_Parameters[nPosition - 1]);
-	}
-	// Now set the new data
-	m_Parameters[nPosition - 1] = pParameter;
+	if (m_Parameters[nPosition - 1] == nullptr)
+		m_Parameters[nPosition - 1] = new ibDatabaseParameterFirebird(m_pInterface, pVar);
+	return *m_Parameters[nPosition - 1];
 }
 
 bool ibDatabaseParameterFirebirdCollection::ResetBlobParameters(isc_db_handle database, isc_tr_handle transaction)

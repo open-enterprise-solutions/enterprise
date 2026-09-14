@@ -5627,3 +5627,32 @@ msgstr "Шару запитів не вдалося підготувати оп�
 #: src/engine/backend/metaCollection/partial/reference/referenceQuery.cpp
 msgid "unknown exception"
 msgstr "невідомий виняток"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp
+msgid "Position start"
+msgstr "Початок позиції"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp
+msgid "Position end"
+msgstr "Кінець позиції"
+
+#: src/engine/backend/query/derivedStateBuilder.cpp
+#, c-format
+msgid "The derived table '%s' cannot be rebuilt: its source is not read from the database"
+msgstr "Похідну таблицю '%s' не можна перебудувати: її джерело читається не з бази даних"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp
+msgid "AS OF WHICH REGISTRATION PERIOD - a moment: the records registered up to the end of the period it falls in, in the register's periodicity, so a month reads as it stood when it closed and a correction registered later is not in it. Left out, every period is read."
+msgstr "НА ЯКИЙ ПЕРІОД РЕЄСТРАЦІЇ - момент: записи, зареєстровані до кінця періоду, в який він потрапляє, за періодичністю регістру, тож місяць читається таким, яким він був на закритті, а виправлення, зареєстроване пізніше, до нього не входить. Не вказано - читаються всі періоди."
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp
+msgid "FOR WHICH DAYS OF ACTION, from - what is in force on this day or later. Left out, from the first."
+msgstr "ЗА ЯКІ ДНІ ДІЇ, з - те, що діє цього дня або пізніше. Не вказано - з першого."
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp
+msgid "FOR WHICH DAYS OF ACTION, to - what is in force on this day or earlier. Left out, to the last."
+msgstr "ЗА ЯКІ ДНІ ДІЇ, по - те, що діє цього дня або раніше. Не вказано - по останній."
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterRecalculationMetadata.cpp
+msgid "THE PERIOD WHOSE RECORDS ARE READ - any moment in it, in the register's periodicity: the records of earlier periods that the records registered in it lead."
+msgstr "ПЕРІОД, ЗАПИСИ ЯКОГО ЧИТАЮТЬСЯ - будь-який момент у ньому, за періодичністю регістру: записи минулих періодів, для яких зареєстровані в ньому записи провідні."

@@ -8,7 +8,7 @@
 
 class BACKEND_API ibValueTabularSectionDataObjectBase : public ibValueModelStorage {
 	public:
-private:
+protected:
 
 	enum Func {
 		enAddValue = 0,
@@ -52,6 +52,11 @@ public:
 			return nullptr;
 		return new ibValueTabularSectionDataObjectReturnLine(this, line);
 	}
+	// Every attribute of the section; the line number is read, never written.
+	virtual void DescribeReturnLine(ibMemberTable& helper) const override;
+	// A new line's columns — every attribute but the line number, each empty as its type makes it (NewRow copies the
+	// line made once).
+	virtual void DescribeNewRow(ibNewRowColumns& columns) const override;
 
 	virtual bool HasDefaultCompare() const override { return false; }
 
@@ -132,8 +137,6 @@ public:
 		virtual ~ibValueTabularSectionDataObjectReturnLine();
 
 		virtual ibValueModel* GetOwnerModel() const { return m_ownerTable; }
-
-		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal); //setting attribute
 		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); //attribute value
@@ -336,6 +339,9 @@ class BACKEND_API ibValueTabularSectionDataObjectRef : public ibValueTabularSect
 	// have lost a real edit without ever saying it had one (Max, 2026-08-29).
 	virtual void MoveValue(const ibDataViewItem& row, int delta) override;
 	virtual void SortValue(const ibDataViewColumnItem& column, bool ascending) override;
+	// …and so are the script's Delete and Clear, which take rows out of the storage directly rather than through
+	// DeleteValue (a watch may not delete, a script may); their object is marked here.
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 
 	//append new row
 	virtual long AppendRow(unsigned int before = 0, const ibDataViewItem& contextRow = ibDataViewItem());

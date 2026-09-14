@@ -296,14 +296,13 @@ ibValueModel* ibValueTabularSectionDataObjectBase::SaveDataToTable() const
 bool ibValueTabularSectionDataObjectRef::SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal)
 {
 	if (varMetaVal != ibValueTabularSectionDataObjectBase::GetValueByMetaID(item, id)) {
-		// Modifiedness again, one level down: the row is set whatever happens, and an open window is
-		// told only where there is one (ibFormToNotify, backend_form.h).
-		ibBackendValueForm* const foundedForm = ibFormToNotify([this] {
-			return ibBackendValueForm::FindFormByUniqueKey(m_objectValue->GetGuid());
-		});
-		bool result = ibValueTabularSectionDataObjectBase::SetValueByMetaID(item, id, varMetaVal);
-		if (result && foundedForm != nullptr)
-			foundedForm->Modify(true);
+		// A LINE THAT CHANGED CHANGES ITS OBJECT — through the object, the way AppendRow does it: its own Modify
+		// tells an open window too, and its flag is what the object's write asks before writing the lines
+		// again (ibValueRecordDataObjectRef::SaveData). Telling only the window left the object believing
+		// itself unchanged.
+		const bool result = ibValueTabularSectionDataObjectBase::SetValueByMetaID(item, id, varMetaVal);
+		if (result && !ibBackendException::IsEvalMode())
+			m_objectValue->Modify(true);
 		return result;
 	}
 
@@ -322,18 +321,20 @@ bool ibValueTabularSectionDataObjectRef::GetValueByMetaID(const ibDataViewItem& 
 ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::ibValueTabularSectionDataObjectReturnLine(ibValueTabularSectionDataObjectBase* ownerTable, const ibDataViewItem& line)
 	: ibValueModelReturnLine(line), m_ownerTable(ownerTable) {
 	HoldOwnerModel(ownerTable);   // the row speaks through the section; see the base
-	m_members.Bind(this, &ibValueTabularSectionDataObjectReturnLine::FillMembers);
 }
 
 ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::~ibValueTabularSectionDataObjectReturnLine() {
 }
 
-void ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::FillMembers(ibMemberTable& helper) const
+void ibValueTabularSectionDataObjectBase::DescribeReturnLine(ibMemberTable& helper) const
 {
+	if (m_metaTable == nullptr)
+		return;
+
 	//set object name
 	wxString objectName;
 
-	for (const auto object : m_ownerTable->m_metaTable->GetGenericAttributeArrayObject()) {
+	for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		if (!object->GetObjectNameAsString(objectName))
@@ -341,7 +342,7 @@ void ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnL
 		helper.AppendProp(
 			objectName,
 			true,
-			!m_ownerTable->m_metaTable->IsNumberLine(object->GetMetaID()),
+			!m_metaTable->IsNumberLine(object->GetMetaID()),
 			object->GetMetaID()
 		);
 	}
@@ -349,12 +350,12 @@ void ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnL
 
 bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	return SetValueByMetaID(m_members.GetPropData(lPropNum), varPropVal);
+	return SetValueByMetaID(m_ownerTable->m_methodHelperReturnLine.GetPropData(lPropNum), varPropVal);
 }
 
 bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	return GetValueByMetaID(m_members.GetPropData(lPropNum), pvarPropVal);
+	return GetValueByMetaID(m_ownerTable->m_methodHelperReturnLine.GetPropData(lPropNum), pvarPropVal);
 }
 
 ibClassID ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::GetClassType() const
@@ -484,13 +485,17 @@ void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes,
 }
 }   // namespace
 
+void ibValueTabularSectionDataObjectBase::DescribeNewRow(ibNewRowColumns& columns) const
+{
+	for (const auto object : m_metaTable->GetGenericAttributeArrayObject())
+		if (!m_metaTable->IsNumberLine(object->GetMetaID()))
+			columns.push_back({ object->GetMetaID(), [object]() { return object->CreateValue(); } });
+}
+
 long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before, const ibDataViewItem& contextRow)
 {
-	ibComposerNode* rowData = new ibComposerNode();
-	for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
-		if (!m_metaTable->IsNumberLine(object->GetMetaID()))
-			rowData->AppendTableValue(object->GetMetaID(), object->CreateValue());
-	}
+	// A copy of the section's own empty line (ibValueModelStorage::NewRow) — made once, from its attributes.
+	ibComposerNode* rowData = NewRow();
 
 	// Grouped add: the new row inherits the dimension values of the group the user is INSIDE — the drilled-into
 	// folder, which the front passes as the context — so it lands in that group instead of losing the value.

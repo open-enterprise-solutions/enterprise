@@ -22,6 +22,7 @@
 #include "backend/session/session.h"
 
 #include "backend/query/dataQueryBuilder.h"   // L3 door — composite-key existence probe, FindBy*
+#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegWhereKeyValue — a key value as a condition
 
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // FindBy* — the attribute read
 #include "backend/metaCollection/partial/reference/reference.h"     // …and the reference it answers with
@@ -81,16 +82,15 @@ bool ibValueRecordManagerObject::ExistData()
 	bool success = false;
 
 	if (m_recordLine != nullptr) {
-		// Composite-key existence probe through the L3 door: each dimension is an
-		// Eq condition, decomposed inside L3 across all its physical fields. The
-		// manual scope / transaction / statement and the GetCompositeSQLFieldName
-		// concat are gone — the door owns the borrow and the binding.
+		// Composite-key existence probe through the L3 door: each dimension is the key's
+		// condition (ibRegWhereKeyValue — a period as the whole of it), decomposed inside L3
+		// across all its physical fields. The door owns the borrow and the binding.
 		try {
 			ibDataQueryBuilder q;
 			q.From(m_metaObject->GetQueryable());
 			for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 				ibValue retValue; m_recordLine->GetValueByMetaID(object->GetMetaID(), retValue);
-				q.Where(object->GetQueryColumn(), ibQueryFilterOp::Equal, retValue);
+				ibRegWhereKeyValue(q, m_metaObject, object, retValue);
 			}
 			ibReadPageRequest page;
 			page.m_count = 1;

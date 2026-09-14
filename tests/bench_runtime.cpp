@@ -1334,7 +1334,7 @@ TEST(RuntimeBench, DISABLED_LinqNoLambda) {
 // Every scenario above resolves names against a tiny surface (host->script
 // looks one function up in a table of one), so all of them take
 // ibMemberTable's linear path. Array surfaces 15 methods — above
-// kFindIndexMin (12) — so this one goes through the hash INDEX instead, which
+// kFindIndexMin (12) — so this one goes through the INDEX instead, which
 // is where a lookup used to pay `name.Upper().ToStdWstring()`. Without this
 // row the suite cannot see a change to name resolution at all.
 TEST(RuntimeBench, DISABLED_MethodResolve) {
@@ -1346,7 +1346,7 @@ TEST(RuntimeBench, DISABLED_MethodResolve) {
         // OPER_CALL_LINQ for it and the runtime dispatches on an enum id with
         // no name lookup at all — the opposite of what this bench is for. Get
         // is an ordinary method, so it goes OPER_CALL_METHOD -> FindMethod ->
-        // the hash index (Array surfaces 15 methods, above kFindIndexMin).
+        // the index (Array surfaces 15 methods, above kFindIndexMin).
         wxT("  var arr; arr = New Array; arr.Add(1);\n")
         wxT("  var i; i = 0; var s; s = 0;\n")
         wxT("  While i < n Do s = arr.Get(0); i = i + 1; EndDo;\n")

@@ -236,14 +236,19 @@ void ibValueTabularSectionDataObjectRef::CopyValue(const ibDataViewItem& row)
 {
 	ibValueTabularSectionDataObjectBase::CopyValue(row);
 
-	if (!ibBackendException::IsEvalMode()) {
-		ibBackendValueForm* const foundedForm = ibFormToNotify([this] {
-			return ibBackendValueForm::FindFormByUniqueKey(m_objectValue->GetGuid());
-		});
-		if (foundedForm != nullptr) {
-			foundedForm->Modify(true);
-		}
-	}
+	if (!ibBackendException::IsEvalMode())
+		m_objectValue->Modify(true);
+}
+
+bool ibValueTabularSectionDataObjectRef::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+{
+	if (!ibValueTabularSectionDataObjectBase::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray))
+		return false;
+
+	const long lMethodData = m_members.GetMethodData(lMethodNum);
+	if ((lMethodData == enDelete || lMethodData == enClear) && !ibBackendException::IsEvalMode())
+		m_objectValue->Modify(true);
+	return true;
 }
 
 // The two ORDER verbs, wrapped for the same reason Copy and Delete are: a section that belongs to a
@@ -272,10 +277,6 @@ void ibValueTabularSectionDataObjectRef::DeleteValue(const ibDataViewItem& row)
 {
 	ibValueTabularSectionDataObjectBase::DeleteValue(row);
 
-	if (!ibBackendException::IsEvalMode()) {
-		ibBackendValueForm* const foundedForm = ibFormToNotify([this] {
-			return ibBackendValueForm::FindFormByUniqueKey(m_objectValue->GetGuid());
-		});
-		if (foundedForm != nullptr) foundedForm->Modify(true);
-	}
+	if (!ibBackendException::IsEvalMode())
+		m_objectValue->Modify(true);
 }

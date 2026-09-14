@@ -122,6 +122,10 @@ public:
 	virtual bool HasPeriod() const { return GetPeriodicity() != ibPeriodicity::eNonPeriodic; }
 	virtual bool HasRecorder() const { return GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder; }
 
+	// ⭐ A RECORD'S PERIOD IS KEPT TO THE PERIODICITY (Max, 2026-09-14): a record of the 15th of July in a monthly register
+	// IS the July record. One written before, with its time, is its day's all the same (Max, 2026-09-15).
+	virtual ibTotalsPeriod GetPeriodicityUnit() const override;
+
 	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
@@ -468,6 +472,9 @@ public:
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 protected:
+	// Every line's period, and the key's, truncated to the register's periodicity before anything is written.
+	virtual bool SaveData(bool replace = true, bool clearTable = true) override;
+
 	friend class ibValue;
 	friend class ibValueMetaObjectInformationRegister;
 };

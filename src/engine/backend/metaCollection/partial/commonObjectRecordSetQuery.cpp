@@ -19,9 +19,23 @@
 
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 write/read door (From/SetValue/Where/Upsert/Delete) + ibBackendColumnRawDB
+#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegWhereKeyValue — a key value as a condition
 
 #include "backend/system/systemManager.h"
 #include "backend/backend_exception.h"
+
+#include <algorithm>
+
+// A line's attributes in the order of their ids — the order its cells are kept in (ibRowValues), so a line read
+// in that order lays each cell at the end rather than into the middle, where the cells after it move over.
+// Inserting the cells, a search and a move each, was half of reading a register set back (stack samples
+// 2026-09-14, Debug); in id order the move is gone.
+static std::vector<ibValueMetaObjectAttributeBase*> ibInIdOrder(std::vector<ibValueMetaObjectAttributeBase*> attributes)
+{
+	std::sort(attributes.begin(), attributes.end(),
+		[](const ibValueMetaObjectAttributeBase* a, const ibValueMetaObjectAttributeBase* b) { return a->GetMetaID() < b->GetMetaID(); });
+	return attributes;
+}
 
 bool ibValueRecordSetObject::LockByKeys()
 {
@@ -43,7 +57,7 @@ bool ibValueRecordSetObject::LockByKeys()
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 				continue;
-			q.Where(object->GetQueryColumn(), m_keyValues.at(object->GetMetaID()));
+			ibRegWhereKeyValue(q, m_metaObject, object, m_keyValues.at(object->GetMetaID()));
 			anyKey = true;
 		}
 		// No key fields populated — nothing to scope the lock to; the UPSERT path catches any
@@ -140,8 +154,7 @@ bool ibValueRecordSetObject::ExistData()
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 				continue;
-			q.Where(object->GetQueryColumn(), ibQueryFilterOp::Equal,
-				m_keyValues.at(object->GetMetaID()));
+			ibRegWhereKeyValue(q, m_metaObject, object, m_keyValues.at(object->GetMetaID()));
 		}
 		ibReadPageRequest page;
 		page.m_count = 1;
@@ -173,7 +186,7 @@ bool ibValueRecordSetObject::ExistData(ibNumber& lastNum)
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 				continue;
-			q.Where(object->GetQueryColumn(), m_keyValues.at(object->GetMetaID()));
+			ibRegWhereKeyValue(q, m_metaObject, object, m_keyValues.at(object->GetMetaID()));
 		}
 		q.Max(m_metaObject->GetRegisterLineNumber()->GetQueryColumn(), wxT("maxLine"));
 		ibDataQueryResult selection = q.SelectAggregate();
@@ -203,17 +216,17 @@ bool ibValueRecordSetObject::ReadData(const ibUniqueKeyPair& key)
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!key.FindKey(object->GetMetaID()))
 				continue;
-			q.Where(object->GetQueryColumn(), ibQueryFilterOp::Equal,
-				key.GetKey(object->GetMetaID()));
+			ibRegWhereKeyValue(q, m_metaObject, object, key.GetKey(object->GetMetaID()));
 		}
 		ibReadPageRequest page;
 		page.m_count = 0;   // every matching line
 		ibDataQueryResult selection = q.Execute(page);
+		// Every attribute of a line, the dimensions among them — each read once (they used to be read first on
+		// their own and then again with the rest, a reference made twice a line).
+		const auto attributes = ibInIdOrder(m_metaObject->GetGenericAttributeArrayObject());   // once, not once a line
 		while (selection.Next()) {
 			ibComposerNode* rowData = new ibComposerNode();
-			for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
-				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
-			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
+			for (const auto object : attributes)
 				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
 			ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 			m_selected = true;
@@ -235,17 +248,18 @@ bool ibValueRecordSetObject::ReadData()
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 				continue;
-			q.Where(object->GetQueryColumn(), ibQueryFilterOp::Equal,
-				m_keyValues.at(object->GetMetaID()));
+			ibRegWhereKeyValue(q, m_metaObject, object, m_keyValues.at(object->GetMetaID()));
 		}
 		ibReadPageRequest page;
 		page.m_count = 0;   // every matching line
 		ibDataQueryResult selection = q.Execute(page);
+		// Asked once: the list is a walk of the metaobject, and asked per line it was a walk for every one of a
+		// payroll's 72 234 movements read back (MEASURED 2026-09-14, Debug). The dimensions are among the
+		// attributes, and read with them once.
+		const auto attributes = ibInIdOrder(m_metaObject->GetGenericAttributeArrayObject());
 		while (selection.Next()) {
 			ibComposerNode* rowData = new ibComposerNode();
-			for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
-				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
-			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
+			for (const auto object : attributes)
 				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
 			ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 			m_selected = true;
@@ -268,13 +282,17 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	// background run: the reason was lost entirely — the refusal named the register and nothing else,
 	// while the actual cause was an empty required field. Payroll is exactly the work that runs as a
 	// background job, so this is where a person would have met a refusal with no reason in it.
+	//
+	// The attributes are asked for once: the list is built by a walk of the metaobject each time it is asked, and
+	// asked per line it was a pass over the register's attributes for every one of a payroll's 72 234 movements.
+	const auto attributes = m_metaObject->GetGenericAttributeArrayObject();
 	bool fillCheck = true; long currLine = 1;
 	wxString fillErrors;
 	for (long row = 0; row < GetRowCount(); row++) {
-		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
+		const ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
+		wxASSERT(node);
+		for (const auto object : attributes) {
 			if (object->FillCheck()) {
-				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
-				wxASSERT(node);
 				if (node->IsEmptyValue(object->GetMetaID())) {
 					wxString fillError =
 						wxString::Format(_("The %s is required on line %i of the %s"), object->GetSynonym(), currLine, m_metaObject->GetSynonym());
@@ -314,22 +332,14 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 		numberLine = oldNumberLine;
 	}
 
-	// Keyed off the record set's EVENT, not off what is physically stored: a NEW set (not selected)
-	// is a create -> INSERT; an EXISTING one (selected) is a rewrite -> UPSERT. m_selected picks the
-	// event so create and write stay distinct, exactly as they do for the owning object, and under a
-	// policy that distinction is which right gets asked (CheckCreate vs CheckUpdate).
-	//
-	// ⚠ Worth knowing when reading the batch below: under `replace` the DELETE above has already
-	// emptied the set, so an UPSERT there can match nothing and is an INSERT in all but name — it
-	// simply cannot batch, because the event says rewrite. Making the rewrite path batch means
-	// either a MERGE in the L2 IR, or separating "which statement" from "which right is asked".
-	// That is a decision about access, not about speed, so it is not taken here.
 	bool hasError = false;
 
 	// Each line's assignments BY COLUMN: a key value, the auto line number, or the row's
 	// value. No fields, no positions — the door / provider owns those.
 	auto stageRow = [&](ibDataQueryBuilder& q, long row) {
-		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
+		ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));   // the line, once — not once an attribute
+		wxASSERT(node);
+		for (const auto object : attributes) {
 			// ⭐ A KEY THAT IS IN THE FILTER IS USED — whatever it holds. The filter's `Use` IS its
 			// presence here (setting Use = True inserts the key, False erases it), so an entry with an
 			// empty value is a deliberate "records whose dimension is blank" and gets written as such.
@@ -340,18 +350,15 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 			else if (m_metaObject->IsRegisterLineNumber(object->GetMetaID()))
 				q.SetValue(object->GetQueryColumn(), ibValue(numberLine++));
 			else {
-				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
-				wxASSERT(node);
 				q.SetValue(object->GetQueryColumn(), node->GetTableValue(object->GetMetaID()));
 			}
 		}
 	};
 
-	if (m_selected) {
-		// A SET THAT CAME FROM THE DATABASE REWRITES ROW BY ROW. Each line may already exist, so the
-		// write is an UPSERT, and the match is the dialect's own per-statement form — Firebird's
-		// UPDATE OR INSERT takes no SELECT source. Batching this needs a MERGE the L2 IR does not
-		// carry yet; until it does, the rewrite path stays as it was rather than pretending.
+	if (m_selected && !replace) {
+		// APPENDED TO A SET THAT CAME FROM THE DATABASE: a line may already exist, so the write is an UPSERT,
+		// and the match is the dialect's own per-statement form — Firebird's UPDATE OR INSERT takes no SELECT
+		// source. Batching this needs a MERGE the L2 IR does not carry yet.
 		for (long row = 0; row < GetRowCount() && !hasError; row++) {
 			ibDataQueryBuilder q;
 			q.From(m_metaObject->GetQueryable());
@@ -360,10 +367,11 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 		}
 	}
 	else {
-		// A FRESH SET IS ONE STATEMENT PER CHUNK, NOT ONE PER LINE. Nothing here can already exist —
-		// a new set under `replace`, or lines whose numbering continues past what is stored — so the
-		// write is a plain INSERT, and the door stages every line before the provider emits it.
-		// A thousand lines cost a thousand statements and a thousand round trips before this.
+		// THE WHOLE SET IN ONE BATCH, ONE STATEMENT PER CHUNK, NOT ONE PER LINE. Nothing here can already exist —
+		// under `replace` the DELETE above has emptied what the key holds, and appended lines continue past what
+		// is stored — so the write is a plain INSERT, and the door stages every line before the provider emits it.
+		// A thousand lines cost a thousand statements and a thousand round trips before this. A set rewritten
+		// under `replace` is therefore asked what a create is asked — the same right (Modify) as a rewrite.
 		ibDataQueryBuilder q;
 		q.From(m_metaObject->GetQueryable());
 		for (long row = 0; row < GetRowCount(); row++) {
@@ -407,7 +415,7 @@ bool ibValueRecordSetObject::DeleteData()
 	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
-		q.Where(object->GetQueryColumn(), m_keyValues.at(object->GetMetaID()));
+		ibRegWhereKeyValue(q, m_metaObject, object, m_keyValues.at(object->GetMetaID()));
 		keyed = true;
 	}
 

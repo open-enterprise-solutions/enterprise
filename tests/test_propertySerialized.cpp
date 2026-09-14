@@ -137,9 +137,9 @@ std::map<wxString, std::vector<wxString>> PropertyLists(const wxString& text)
 
 // The header a serialisation unit belongs to: its own (`<stem>Metadata*.cpp`), or — for a class with no
 // header of its own — the header whose name is the LONGEST prefix of the unit's. A class NESTED in a
-// metatype's header is serialised in a unit named after it: the calculation register's Recalculation is
-// declared in `calculationRegister.h` and written in `calculationRegisterRecalculationMetadata.cpp`, which
-// `calculationRegisterMetadata*.cpp` does not match. A unit whose class HAS a header stays that header's,
+// metatype's header is serialised in a unit named after it: the calculation register's Recalculation was
+// declared in `calculationRegister.h` and written in `calculationRegisterRecalculationMetadata.cpp` (until
+// 2026-09-14), which `calculationRegisterMetadata*.cpp` does not match. A unit whose class HAS a header stays that header's,
 // so a metatype is never credited with what a neighbour sharing its prefix writes.
 wxString OwnerOf(const wxString& unit, const std::set<wxString>& stems)
 {

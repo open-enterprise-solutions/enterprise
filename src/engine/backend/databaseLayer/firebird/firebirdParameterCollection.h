@@ -44,7 +44,6 @@ public:
 	void SetParam(int nPosition, const void* pData, long nDataLength);
 	void SetParam(int nPosition, const wxDateTime& dateValue);
 	void SetParam(int nPosition, bool bValue);
-	void SetParam(int nPosition, ibDatabaseParameterFirebird* pParameter);
 
 	bool ResetBlobParameters(isc_db_handle database, isc_tr_handle transaction);
 	void AllocateParameterSpace();
@@ -53,6 +52,8 @@ public:
 private:
 	// The slot a bind at nPosition writes into, AS THE STATEMENT DESCRIBED IT — see the .cpp.
 	XSQLVAR* DescribedSlot(int nPosition);
+	// The parameter that slot's values go through — one per position, for as long as the statement lives.
+	ibDatabaseParameterFirebird& ParameterAt(int nPosition);
 
 	FirebirdParameterArray m_Parameters;
 	XSQLDA* m_FirebirdParameters;

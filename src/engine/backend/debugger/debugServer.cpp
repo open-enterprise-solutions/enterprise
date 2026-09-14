@@ -475,9 +475,11 @@ void ibDebuggerServer::EnterDebugger(ibRunContext* runContext, const ibByteUnit&
 				m_bDebugStopLine = false;
 				doLoop = true;
 			}
-			// step through
-			else if (auto* st = ibSession::GetPUState();
-				st && m_numCurrentNumberStopContext && m_numCurrentNumberStopContext >= st->GetCountRunContext() && byteCode.m_numLine >= 0)
+			// step through — the run's stack is asked only while a step is pending: finding it goes
+			// through the session registry (a lock and a hash of the thread id), and this is every
+			// line of every run the debugger is attached to (stack samples 2026-09-14, Debug)
+			else if (auto* st = m_numCurrentNumberStopContext ? ibSession::GetPUState() : nullptr;
+				st && m_numCurrentNumberStopContext >= st->GetCountRunContext() && byteCode.m_numLine >= 0)
 			{
 				m_numCurrentNumberStopContext = st->GetCountRunContext();
 				doLoop = true;

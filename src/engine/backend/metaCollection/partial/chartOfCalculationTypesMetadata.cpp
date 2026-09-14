@@ -9,56 +9,8 @@
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/objCtor.h"                                // ibCtorMetaValueType — the chart's own reference type
-#include "backend/query/dataQueryBuilder.h"                 // L3 door — a relation read as data, in one statement
 
 #include <algorithm>
-
-//********************************************************************************************
-//*										 metaData											 *
-//********************************************************************************************
-
-// Moved here from the calculation register, which read the Displacing section only: a relation is the
-// CHART'S, and the base and the leading relations are read exactly the same way.
-void ibValueMetaObjectChartOfCalculationTypes::ReadRelation(const ibValueMetaObjectCalculationTypeRelationTable* table,
-	std::map<ibValue, int>& typeIndex, std::vector<std::pair<int, int>>& edges) const
-{
-	if (table == nullptr || !table->IsAllowed())   // deleted, or never saved into this configuration
-		return;
-	const ibBackendQueryable* rows = table->GetQueryable();
-	const ibValueMetaObjectAttributeBase* named = table->GetCalculationType();
-	if (rows == nullptr || named == nullptr)
-		return;
-	const ibBackendQueryColumn* ownerCol = rows->ResolveColumnByName(wxT("Ref"));   // the owning type — `Ref`, as a query names it
-	const ibBackendQueryColumn* namedCol = rows->ResolveColumnByName(named->GetName());
-	if (namedCol == nullptr)
-		namedCol = named->GetQueryColumn();   // an attribute HOLDS a query column rather than being one
-	if (ownerCol == nullptr || namedCol == nullptr)
-		return;
-
-	const auto ordinal = [&typeIndex](const ibValue& type) -> int {
-		const auto it = typeIndex.find(type);
-		if (it != typeIndex.end())
-			return it->second;
-		const int next = (int)typeIndex.size();
-		typeIndex.emplace(type, next);
-		return next;
-	};
-
-	ibDataQueryBuilder b;
-	b.From(rows);
-	b.WithAccessPolicy(nullptr);   // the chart's relation, not the reader's — see the declaration
-	b.Select(ownerCol, wxT("Owner"));
-	b.Select(namedCol, named->GetName());
-	ibDataQueryResult sel = b.Execute(ibReadPageRequest{});
-	while (sel.Next()) {
-		const ibValue owner = sel.GetValue(ownerCol);
-		const ibValue other = sel.GetValue(namedCol);
-		if (owner.IsEmpty() || other.IsEmpty())
-			continue;   // an edge to nothing names nobody
-		edges.push_back({ ordinal(owner), ordinal(other) });   // {owner of the row, type the row names}
-	}
-}
-
 
 //********************************************************************************************
 //*                                      metaData                                            *

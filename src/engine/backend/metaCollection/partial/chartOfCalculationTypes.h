@@ -8,8 +8,6 @@
 #include "backend/propertyManager/property/propertyChartOfCalculationTypes.h"
 
 #include <array>
-#include <map>
-#include <utility>
 #include <vector>
 
 //********************************************************************************************
@@ -65,24 +63,18 @@ public:
 	// THE THREE RELATIONS, each a predefined section on every calculation type — the same shape a chart
 	// of accounts uses for its analytics kinds. One row is one edge from the type that owns the row to
 	// the type the row names:
-	//   Displacing — "this type is displaced by the named one". The record-set write reads these edges
-	//                AS THEY ARE (ibComputeActionPeriodDisplacementByRelation) — no rank is folded out of
-	//                them, because a rank turns this partial relation into a total one.
+	//   Displacing — "this type is displaced by the named one". The fact reads these edges AS THEY ARE
+	//                (it joins the section, calculationRegister.h) — no rank is folded out of them,
+	//                because a rank turns this partial relation into a total one.
 	//   Base       — "the named type's results are part of this type's base" (GetBase).
 	//   Leading    — "a change to the named type's records makes this type's records stale"
 	//                (the recalculations).
+	// Each is read as a TABLE, joined where the register's records meet it, and not filtered by the
+	// reader's rights: a relation is a property of the CHART, and one that narrows per user is a payroll
+	// that computes differently depending on who asks.
 	ibValueMetaObjectCalculationTypeRelationTable* GetDisplacingTable() const { return m_propertyDisplacingTable->GetMetaObject(); }
 	ibValueMetaObjectCalculationTypeRelationTable* GetBaseTable() const { return m_propertyBaseTable->GetMetaObject(); }
 	ibValueMetaObjectCalculationTypeRelationTable* GetLeadingTable() const { return m_propertyLeadingTable->GetMetaObject(); }
-
-	// ONE READING FOR ALL THREE: every edge of `table` as {owner, named} ordinals into `typeIndex`, which
-	// numbers each calculation type the first time it is met (and may already hold types from an
-	// earlier call — the index is shared, so two relations read into one index compare by ordinal).
-	// Not filtered by the reader's rights: a relation is a property of the CHART, and one that narrows
-	// per user is a payroll that computes differently depending on who asks. (A type's ordinal in the
-	// index is asked of calculation.h — ibCalcTypeOrdinal.)
-	void ReadRelation(const ibValueMetaObjectCalculationTypeRelationTable* table,
-		std::map<ibValue, int>& typeIndex, std::vector<std::pair<int, int>>& edges) const;
 
 	//default constructor
 	ibValueMetaObjectChartOfCalculationTypes();

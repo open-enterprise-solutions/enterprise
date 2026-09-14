@@ -160,9 +160,12 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 	// The back-to-back script-Write case (obj.Write(); obj.Write();) stays
 	// consistent because the first Write's commit syncs the marker before
 	// the second Write's check runs.
+	//
+	// Into the slot, past Modify — the write's own stamp, as Posted is (ApplyPostedAttributeOnWrite): the
+	// object's flag says whether anybody CHANGED it, and SaveData asks exactly that before writing its lines.
 	if (bump) {
 		const wxString newStamp = ibDataVersion::NewStamp();
-		SetValueByMetaID(dvId, ibValue(newStamp));
+		m_listObjectValue.insert_or_assign(dvId, ibValue(newStamp));
 	}
 
 	return true;
@@ -365,8 +368,12 @@ bool ibValueRecordDataObjectRef::SaveData()
 	// Update; creation and write stay separate events, and the rewrite enforces the row filter.
 	bool hasError = m_newObject ? !writer.Insert() : !writer.Update();
 
-	//table parts
-	if (!hasError) {
+	// ⭐ TABLE PARTS — WRITTEN WHEN THE OBJECT CHANGED. A part is the object: every verb that changes a line marks
+	// the object modified (the section's Ref verbs), so an object neither new nor changed holds the lines it was
+	// read with, and writing them would delete and insert the same rows — a payroll document's 72 234 lines on
+	// every posting (MEASURED 2026-09-14). Under an evaluation the verbs mark nothing (a watch changes nothing),
+	// so a sandbox's write keeps writing them all.
+	if (!hasError && (m_newObject || m_objModified || ibBackendException::IsEvalMode())) {
 		for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 			ibValueTabularSectionDataObjectBase* tabularSection = nullptr;
 			if (m_listObjectValue[object->GetMetaID()].ConvertToValue(tabularSection)) {

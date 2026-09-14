@@ -110,6 +110,7 @@ add_executable(oes_tests
     test_accountingTotals.cpp
     test_calcDisplacement.cpp
     test_calcRecalculation.cpp
+    test_calcViews.cpp
     test_uniqueKey.cpp
     test_valueArray.cpp
     test_valueTableIndex.cpp

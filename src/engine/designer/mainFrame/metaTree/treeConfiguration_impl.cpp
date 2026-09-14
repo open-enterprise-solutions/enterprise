@@ -11,7 +11,6 @@
 #include "backend/backend_exception.h"     // an engine refusal arrives as an exception
 #include "backend/mcp/mcpTool.h"           // ibMcpActing — who is the source, before anything asks
 #include "backend/metadataConfiguration.h" // SaveDatabase / the four apply stages
-#include "backend/metaCollection/partial/calculationRegister.h"   // GetRecalculationArrayObject
 #include "backend/restructureInfo.h"       // …and the ledger the decision reads
 #include "frontend/mainFrame/objinspect/objinspect.h"
 #include "frontend/docView/docView.h"
@@ -44,7 +43,6 @@
 #define objectComposersName _("Composers")
 #define objectTablesName _("Tables")
 #define objectEnumerationsName _("Enums")
-#define objectRecalculationsName _("Recalculations")
 
 //***********************************************************************
 //*								metadata                                * 
@@ -1513,29 +1511,11 @@ void ibConfigurationTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObj
 	AddInformationRegisterItem(metaObject, hParentID);   // same shape — an accounting register too
 }
 
-// A CALCULATION REGISTER — the register's groups, with its RECALCULATIONS right after the attributes:
-// the place a reference object keeps its tabular sections, and they are drawn the same way, as tables
-// whose columns are dimensions (Max, 2026-09-10). Written out rather than borrowed from the
-// information register, because appending to that put them after the forms and templates.
+// A CALCULATION REGISTER — the same shape. Its recalculation is a property of its own ("Use recalculation"),
+// with no object of its own to draw (Max, 2026-09-14).
 void ibConfigurationTree::AddCalculationRegisterItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
-	ibValueMetaObjectCalculationRegister* metaObjectValue =
-		metaObject->ConvertToType<ibValueMetaObjectCalculationRegister>();
-	wxASSERT(metaObjectValue);
-
-	AppendObjectGroup(hParentID, g_metaDimensionCLSID, objectDimensionsName,
-		metaObjectValue->GetDimensionArrayObject());
-	AppendObjectGroup(hParentID, g_metaResourceCLSID, objectResourcesName,
-		metaObjectValue->GetResourceArrayObject());
-	AppendObjectGroup(hParentID, g_metaAttributeCLSID, objectAttributesName,
-		metaObjectValue->GetAttributeArrayObject());
-	AppendTableGroup(hParentID, g_metaRecalculationCLSID, objectRecalculationsName,
-		metaObjectValue->GetRecalculationArrayObject());
-	AppendObjectGroup(hParentID, g_metaFormCLSID, objectFormsName,
-		metaObjectValue->GetFormArrayObject());
-	AppendCommandGroup(hParentID, objectCommandsName, metaObjectValue->GetCommandArrayObject());
-	AppendObjectGroup(hParentID, g_metaTemplateCLSID, objectTemplatesName,
-		metaObjectValue->GetTemplateArrayObject());
+	AddInformationRegisterItem(metaObject, hParentID);
 }
 
 #include "frontend/artProvider/artProvider.h"
@@ -1694,15 +1674,6 @@ bool ibConfigurationTree::TableColumns(ibValueMetaObject* table, ibClassID& colu
 		if (metaTable != nullptr)
 			for (auto attribute : metaTable->GetAttributeArrayObject())
 				columns.push_back(attribute);
-		return true;
-	}
-	if (clsid == g_metaRecalculationCLSID) {
-		auto* recalculation = table->ConvertToType<ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation>();
-		wxASSERT(recalculation);
-		columnClsid = g_metaDimensionCLSID;
-		if (recalculation != nullptr)
-			for (auto dimension : recalculation->GetDimensionArrayObject())
-				columns.push_back(dimension);
 		return true;
 	}
 	return false;

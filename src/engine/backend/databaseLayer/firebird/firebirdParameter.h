@@ -24,18 +24,25 @@
 class ibDatabaseParameterFirebird : public ibDatabaseStringConverter
 {
 public:
-	// ctor
+	// ctor — the parameter of its slot, NULL until a value is set
 	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar);
-	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxString& strValue);
-	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const ibNumber& dblValue);
-	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, int nValue);
-	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, double dblValue);
-	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, bool bValue);
-	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxDateTime& dateValue);
-	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const void* pData, long nDataLength);
 
 	// dtor
 	virtual ~ibDatabaseParameterFirebird();
+
+	// ⭐ A VALUE INTO THE SLOT, as often as the statement runs. The parameter of a position is made once and
+	// given each row's value; made anew for every bind, with its string, number and buffer, it was a
+	// construction and a destruction for every field of every row a prepared INSERT ran with — a share of
+	// writing a payroll's 72 234 movements of its own (stack samples 2026-09-14, Debug). Each Set leaves the
+	// slot as the constructor of that value used to.
+	void SetNull();
+	void Set(const wxString& strValue);
+	void Set(const ibNumber& dblValue);
+	void Set(int nValue);
+	void Set(double dblValue);
+	void Set(bool bValue);
+	void Set(const wxDateTime& dateValue);
+	void Set(const void* pData, long nDataLength);
 
 	enum {
 		PARAM_STRING = 0,

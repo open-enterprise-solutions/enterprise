@@ -663,11 +663,12 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 			tc->SetColumnID(c->GetColumnId());
 		}
 		ibDataQueryResult sel = ExecuteAccumulated();
+		std::vector<std::pair<ibMetaID, ibValue>> row;
 		while (sel.Next()) {
-			ibValueModelTable::ibValueModelTableReturnLine* line = table->GetRowAt(table->AppendRow());
+			row.clear();
 			for (const ibBackendQueryColumn* c : cols)
-				if (c != nullptr) line->SetValueByMetaID(c->GetColumnId(), sel.GetValue(c));
-			wxDELETE(line);
+				if (c != nullptr) row.emplace_back(c->GetColumnId(), sel.GetValue(c));
+			table->AppendRow(row);
 		}
 		ret = table;
 		return;

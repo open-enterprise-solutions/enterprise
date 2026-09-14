@@ -374,11 +374,13 @@ public:
 
 	bool ContainType(const ibValueTypes& valType) const {
 		if (valType == ibValueTypes::TYPE_ENUM) {
+			// An enumeration is registered under a clsid of its own kind (ENUM_TYPE_REGISTER), so the kind byte
+			// answers for every other class without the registry — which this question used to ask twice for
+			// each class of the type, a reference's included, on every value a column writes (the largest share
+			// of a register line's write, stack samples 2026-09-14, Debug).
 			for (auto clsid : m_listTypeClass) {
-				if (ibValue::IsRegisterCtor(clsid)) {
-					if (ibValue::GetVTByID(clsid) == ibValueTypes::TYPE_ENUM)
-						return true;
-				}
+				if (IsEnum(clsid) && ibValue::IsRegisterCtor(clsid))
+					return true;
 			}
 			return false;
 		}

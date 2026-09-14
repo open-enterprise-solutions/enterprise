@@ -1,367 +1,433 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : Recalculation — the metaobject: ctor, lifecycle
-//	              events, ReadData/WriteData, plus the vended L4 queryable and its
-//	              source descriptor. Shaped after the DB-backed tabular section
-//	              (metaTableObject.cpp): a subordinate that vends a queryable +
-//	              a parent-qualified physical table and registers as a source on run.
+//	Description : a calculation register's RECALCULATION — its marks' table
+//	              as a queryable and a source, and the marks themselves: what a
+//	              written set's records lead, marked in one statement
+//	              (calculationRegister.h, "The recalculation's marks"). The table
+//	              is declared with the register's (calculationRegisterMetadataSchema.cpp).
 ////////////////////////////////////////////////////////////////////////////
 
-#include "calculationRegister.h"               // the recalculation is the register's; its standard columns take their TYPE from it
-#include "backend/serialize/dataBuilder.h"
+#include "calculationRegister.h"               // the recalculation is the register's; its columns are the register's own
+#include "chartOfCalculationTypes.h"           // the Leading section, read as a table
 #include "backend/metaData.h"
-#include "backend/appData.h"                   // DesignerMode — which copy stamps the month's column
-#include "backend/databaseLayer/databaseMaterializeBuilder.h"   // KeyHashColumnName
-#include "backend/query/schemaSnapshot.h"      // ibDerivedKeyNeedsHash — the schema's own answer about the key
-#include "backend/objCtor.h"
+#include "backend/databaseLayer/databaseQueryBuilder.h"         // L2 — the marks' relation, their INSERT … SELECT and DELETE
+#include "backend/query/dataQueryBuilder.h"    // L3 — a recorder's own marks cleared
+#include "backend/query/columnLayout.h"        // ibOwnerRefField, DescribeColumnLayout
+#include "backend/metaCollection/dimension/metaDimensionObject.h"   // the register's dimensions, its marks' columns
 
-//***********************************************************************
-//*                  ibRecalculationStandardColumn                      *
-//***********************************************************************
-
-const ibValueMetaObjectAttributeBase* ibRecalculationStandardColumn::Identity() const
-{
-	if (m_meta == nullptr)
-		return nullptr;
-	switch (m_role) {
-	case Role::RecalculationObject: return m_meta->GetRecalculationObject();
-	case Role::CalculationType:     return m_meta->GetCalculationType();
-	case Role::ActionPeriod:        return m_meta->GetActionPeriod();
-	}
-	return nullptr;
-}
-
-wxString ibRecalculationStandardColumn::GetName() const
-{
-	switch (m_role) {
-	case Role::RecalculationObject: return wxT("RecalculationObject");
-	case Role::CalculationType:     return wxT("CalculationType");
-	case Role::ActionPeriod:        return wxT("ActionPeriod");
-	}
-	return wxEmptyString;
-}
-
-wxString ibRecalculationStandardColumn::GetSynonym() const
-{
-	const ibValueMetaObjectAttributeBase* identity = Identity();
-	return identity != nullptr ? identity->GetSynonym() : GetName();
-}
-
-wxString ibRecalculationStandardColumn::GetPhysicalName() const
-{
-	const ibValueMetaObjectAttributeBase* identity = Identity();
-	return identity != nullptr ? identity->GetPhysicalName() : wxString();
-}
-
-ibMetaID ibRecalculationStandardColumn::GetColumnId() const
-{
-	const ibValueMetaObjectAttributeBase* identity = Identity();
-	return identity != nullptr ? identity->GetColumnId() : 0;
-}
-
-// Asked of the register at the moment of asking — see the class note. A recalculation that is not (or
-// no longer) under a calculation register has nothing to lend it a type, and answers with an empty one.
-ibTypeDescription& ibRecalculationStandardColumn::GetTypeDesc() const
-{
-	const ibValueMetaObjectCalculationRegister* reg = m_meta != nullptr ? m_meta->GetRegister() : nullptr;
-	const ibValueMetaObjectAttributeBase* lender = nullptr;
-	if (reg != nullptr) {
-		switch (m_role) {
-		case Role::RecalculationObject: lender = reg->GetRegisterRecorder(); break;
-		case Role::CalculationType:     lender = reg->GetCalculationType(); break;
-		case Role::ActionPeriod:        lender = reg->GetActionPeriod(); break;
-		}
-	}
-	if (lender != nullptr)
-		return lender->GetTypeDesc();
-	static ibTypeDescription s_nothingLent;   // nothing may write through it, as through any column's type
-	return s_nothingLent;
-}
+#include <algorithm>
+#include <set>
 
 //***********************************************************************
 //*                   ibRecalculationQueryable                          *
 //***********************************************************************
 
-const ibBackendQueryColumn* ibRecalculationQueryable::RecalculationObjectColumn() const
-{
-	return m_recalcObject.GetColumnId() != 0 ? &m_recalcObject : nullptr;
-}
-
-const ibBackendQueryColumn* ibRecalculationQueryable::CalculationTypeColumn() const
-{
-	return m_calcType.GetColumnId() != 0 ? &m_calcType : nullptr;
-}
-
-const ibBackendQueryColumn* ibRecalculationQueryable::ActionPeriodColumn() const
-{
-	return m_meta->KeepsActionPeriod() ? &m_actionPeriod : nullptr;
-}
-
-const ibBackendQueryColumn* ibRecalculationQueryable::ResolveColumnByName(const wxString& name) const
-{
-	if (name.IsSameAs(wxT("RecalculationObject"), false))
-		return RecalculationObjectColumn();
-	if (name.IsSameAs(wxT("CalculationType"), false))
-		return CalculationTypeColumn();
-	if (name.IsSameAs(wxT("ActionPeriod"), false))
-		return ActionPeriodColumn();
-	// A dimension HOLDS a query column rather than being one, so the metaobject is found first and
-	// asked for its column second — and a name that names nothing answers null rather than dereferencing.
-	const ibValueMetaObjectDimension* dimension =
-		m_meta->FindObjectByFilter<ibValueMetaObjectDimension>(name, { g_metaDimensionCLSID });
-	return dimension != nullptr ? dimension->GetQueryColumn() : nullptr;
-}
-
+// The recorder, the type, the month where the register keeps action periods, then the dimensions — every one the
+// register's own column.
 std::vector<const ibBackendQueryColumn*> ibRecalculationQueryable::GetColumns() const
 {
-	std::vector<const ibBackendQueryColumn*> columns;
-	for (const ibBackendQueryColumn* standard : { RecalculationObjectColumn(), CalculationTypeColumn(), ActionPeriodColumn() })
-		if (standard != nullptr)
-			columns.push_back(standard);
-	for (const auto dimension : m_meta->GetDimensionArrayObject())
+	std::vector<const ibBackendQueryColumn*> columns{ m_reg->GetRegisterRecorder()->GetQueryColumn(),
+		m_reg->GetCalculationType()->GetQueryColumn() };
+	if (m_reg->IsUseActionPeriod())
+		columns.push_back(m_reg->GetActionPeriod()->GetQueryColumn());
+	for (const ibValueMetaObjectDimension* dimension : m_reg->GetDimensionArrayObject())
 		columns.push_back(dimension->GetQueryColumn());
 	return columns;
 }
 
-wxString ibRecalculationQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
-const ibUniqueKey& ibRecalculationQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
-wxString ibRecalculationQueryable::GetQueryName()      const { return m_meta->GetName(); }
-ibMetaID ibRecalculationQueryable::GetQueryTableId()   const { return m_meta->GetMetaID(); }
-const ibMetaData* ibRecalculationQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
-// Identity = the recalculation object, the calculation type, then the dimension columns — the row's
-// natural key. No line number and no uuid.
-//
-// 🛑 THE CALCULATION TYPE IS PART OF IT. The import keyed a row by (object, dimensions) alone, so one
-// document holding a stale bonus AND a stale allowance for the same employee was one row: the second
-// mark overwrote the first (the UPSERT matches on this key), and the unique index would have refused a
-// plain insert of it. Two stale records of two types are two things to recalculate.
-//
-// …AND THE MONTH, LAST, where the register keeps one: two positions of one type for one employee in one
-// run are two things to recalculate (see ibRecalculationStandardColumn). Last, so the leading columns —
-// the ones a lookup by recorder and employee rides — stay where they were.
-std::vector<const ibBackendQueryColumn*> ibRecalculationQueryable::GetPrimaryKeyColumns() const
+const ibBackendQueryColumn* ibRecalculationQueryable::ResolveColumnByName(const wxString& name) const
 {
-	std::vector<const ibBackendQueryColumn*> keys;
-	for (const ibBackendQueryColumn* standard : { RecalculationObjectColumn(), CalculationTypeColumn() })
-		if (standard != nullptr)
-			keys.push_back(standard);
-	for (const auto dimension : m_meta->GetDimensionArrayObject())
-		keys.push_back(dimension->GetQueryColumn());
-	if (const ibBackendQueryColumn* month = ActionPeriodColumn())
-		keys.push_back(month);
-	return keys;
+	for (const ibBackendQueryColumn* column : GetColumns())
+		if (column->GetName().IsSameAs(name, false))
+			return column;
+	return nullptr;
 }
+
+wxString ibRecalculationQueryable::GetQueryTableName() const { return m_reg->GetRecalculationTableName(); }
+const ibUniqueKey& ibRecalculationQueryable::GetQueryTableGuid() const { return m_reg->GetRecalculationObject()->GetGuid(); }
+wxString ibRecalculationQueryable::GetQueryName() const { return m_reg->GetRecalculationObject()->GetName(); }
+ibMetaID ibRecalculationQueryable::GetQueryTableId() const { return m_reg->GetRecalculationObject()->GetMetaID(); }
+const ibMetaData* ibRecalculationQueryable::GetMetaData() const { return m_reg->GetMetaData(); }
 
 //***********************************************************************
 //*                 ibRecalculationSourceDescriptor                     *
 //***********************************************************************
 
-ibRecalculationSourceDescriptor::ibRecalculationSourceDescriptor(ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation* meta)
-	: m_meta(meta), m_queryable(meta)
-{
-}
-
 wxString ibRecalculationSourceDescriptor::GetNamespace() const
 {
-	// parent-qualified: the recalculation's namespace is its parent calculation register's kind.
-	ibValueMetaObject* parent = m_meta->GetParent();
-	return parent != nullptr ? ibValue::GetNameObjectFromID(parent->GetClassType()) : wxString();
+	return ibValue::GetNameObjectFromID(m_meta->GetClassType());
 }
 
 wxString ibRecalculationSourceDescriptor::GetName() const
 {
-	// "<Register>.<Recalculation>" — reached as the 3-segment source.
-	ibValueMetaObject* parent = m_meta->GetParent();
-	return parent != nullptr ? (parent->GetName() + wxT(".") + m_meta->GetName()) : m_meta->GetName();
+	return m_meta->GetName() + wxT(".") + m_meta->GetRecalculationObject()->GetName();
 }
 
+// A table: whatever it is called with, it is the register's own member.
 const ibBackendQueryable* ibRecalculationSourceDescriptor::CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/)
 {
 	return &m_queryable;
 }
 
+// A column of the marks IS the register's attribute.
 void ibRecalculationSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
 {
-	if (m_meta == nullptr)
+	for (const ibBackendQueryColumn* column : m_queryable.GetColumns())
+		explorer.AppendColumn(column, /*enabled*/ true, /*visible*/ true);
+}
+
+//***********************************************************************
+//*                    The recalculation's marks                        *
+//***********************************************************************
+
+namespace {
+
+ibQueryExprPtr Day(const wxString& q, const wxString& field)
+{
+	return ibPeriodTrunc(ibCol(q, field), ibTotalsPeriod::Day);
+}
+
+// A number, typed: bare, a constant binds as a parameter with no type of its own, and Firebird refuses it where
+// nothing beside it lends one.
+ibQueryExprPtr Int(int value)
+{
+	return ibCast(ibConst(ibValue(value)), ibTypeInteger());
+}
+
+ibQueryExprPtr And(const ibQueryExprPtr& a, const ibQueryExprPtr& b)
+{
+	return !a ? b : !b ? a : ibBinOp(ibQueryBinOp::And, a, b);
+}
+
+ibQueryExprPtr Or(const ibQueryExprPtr& a, const ibQueryExprPtr& b)
+{
+	return !a ? b : !b ? a : ibBinOp(ibQueryBinOp::Or, a, b);
+}
+
+ibQueryExprPtr Eq(const ibQueryExprPtr& a, const ibQueryExprPtr& b) { return ibBinOp(ibQueryBinOp::Eq, a, b); }
+ibQueryExprPtr Le(const ibQueryExprPtr& a, const ibQueryExprPtr& b) { return ibBinOp(ibQueryBinOp::Le, a, b); }
+
+// Paired fields of two tables, equal pair by pair.
+ibQueryExprPtr SamePairs(const wxString& first, const std::vector<std::pair<wxString, wxString>>& pairs, const wxString& second)
+{
+	ibQueryExprPtr out;
+	for (const auto& pair : pairs)
+		out = And(out, Eq(ibCol(first, pair.first), ibCol(second, pair.second)));
+	return out;
+}
+
+ibQueryExprPtr Narrowed(const ibRecalculationNarrowing& narrowing, const wxString& alias, int source)
+{
+	return narrowing ? narrowing(alias, source) : nullptr;
+}
+
+// A record that counts: Active, as every register's totals are guarded.
+ibQueryExprPtr Active(const wxString& q, const wxString& field)
+{
+	return ibBinOp(ibQueryBinOp::Ne, ibCol(q, field), Int(0));
+}
+
+// `fields` once each, under their own names — what a derived table carries out.
+std::vector<ibQueryProjItem> Carried(const wxString& q, const std::vector<wxString>& fields)
+{
+	std::vector<ibQueryProjItem> out;
+	std::set<wxString> seen;
+	for (const wxString& field : fields)
+		if (!field.IsEmpty() && seen.insert(field).second)
+			out.push_back(ibQueryProjItem{ ibCol(q, field), field });
+	return out;
+}
+
+// Every field of `a` with the field of `b` laid out for the same role — the pairing ibRegSameValueIR makes, kept
+// here as names: a leading register's fields are joined under aliases this file chooses.
+std::vector<std::pair<wxString, wxString>> PairedByRole(const ibBackendQueryColumn* a, const ibBackendQueryColumn* b)
+{
+	std::vector<std::pair<wxString, wxString>> out;
+	const std::vector<ibColumnSlot> right = DescribeColumnLayout(b);
+	for (const ibColumnSlot& x : DescribeColumnLayout(a))
+		for (const ibColumnSlot& y : right)
+			if (x.m_role == y.m_role) {
+				out.push_back({ x.m_name, y.m_name });
+				break;
+			}
+	return out;
+}
+
+// The dimensions `reg` and `other` both hold, by name — each of reg's with other's: a leading record holds the led
+// record's values on these. A register sharing none with reg leads nothing of it: it could not say whose records.
+std::vector<std::pair<const ibValueMetaObjectDimension*, const ibValueMetaObjectDimension*>>
+SharedDimensions(const ibValueMetaObjectCalculationRegister* reg, const ibValueMetaObjectCalculationRegister* other)
+{
+	std::vector<std::pair<const ibValueMetaObjectDimension*, const ibValueMetaObjectDimension*>> out;
+	for (const ibValueMetaObjectDimension* own : reg->GetDimensionArrayObject())
+		for (const ibValueMetaObjectDimension* theirs : other->GetDimensionArrayObject())
+			if (theirs->GetName().IsSameAs(own->GetName(), false)) {
+				out.push_back({ own, theirs });
+				break;
+			}
+	return out;
+}
+
+} // namespace
+
+ibRecalculationSpec ibRecalculationSpecOf(const ibValueMetaObjectCalculationRegister* reg)
+{
+	ibRecalculationSpec v;
+	if (reg == nullptr || !reg->HasRecalculation())
+		return v;
+	const ibValueMetaObjectChartOfCalculationTypes* chart = reg->GetChartOfCalculationTypes();
+	const ibValueMetaObjectCalculationTypeRelationTable* leading = chart != nullptr ? chart->GetLeadingTable() : nullptr;
+	if (leading == nullptr || !leading->IsAllowed() || leading->GetCalculationType() == nullptr)
+		return v;
+
+	const auto fieldsOf = [](const ibValueMetaObjectAttributeBase* attribute, std::vector<wxString>& out) {
+		for (const wxString& field : ibRegFieldsOf(attribute))
+			out.push_back(field);
+	};
+	const auto dayOf = [](const ibValueMetaObjectAttributeBase* attribute) {
+		return ibRegFieldOfRole(attribute->GetQueryColumn(), ibColumnRole::Date);
+	};
+
+	// The marks' own columns, which are the register's (ibRecalculationQueryable), in their order.
+	v.m_table = reg->GetPhysicalTableName();
+	for (const ibBackendQueryColumn* column : reg->GetRecalculationQueryable()->GetColumns())
+		for (const wxString& field : ColumnFieldNames(column))
+			v.m_mark.push_back(field);
+
+	if (reg->IsUseActionPeriod()) {
+		v.m_start = dayOf(reg->GetActionPeriodStart());
+		v.m_end = dayOf(reg->GetActionPeriodEnd());
+	}
+	if (reg->IsUseBasePeriod()) {
+		v.m_baseStart = dayOf(reg->GetBasePeriodStart());
+		v.m_baseEnd = dayOf(reg->GetBasePeriodEnd());
+	}
+	v.m_typeId = ibRegFieldOfRole(reg->GetCalculationType()->GetQueryColumn(), ibColumnRole::ReferenceId);
+	v.m_registration = dayOf(reg->GetRegistrationPeriod());
+	v.m_active = ibRegValueField(reg->GetRegisterActive());
+	v.m_storno = ibRegValueField(reg->GetStorno());
+	v.m_baseByRegistration = chart->GetBaseDependence() == ibBaseDependence::eBaseByRegistrationPeriod;
+	v.m_leading = leading->GetPhysicalTableName();
+	v.m_owner = ibOwnerRefField();
+
+	for (const ibValueMetaObjectCalculationRegister* other : reg->GetRelatedRegisters()) {
+		const auto shared = SharedDimensions(reg, other);
+		if (shared.empty())
+			continue;
+		ibRecalculationLeading s;
+		s.m_table = other->GetPhysicalTableName();
+		s.m_named = PairedByRole(other->GetCalculationType()->GetQueryColumn(), leading->GetCalculationType()->GetQueryColumn());
+		for (const auto& dimension : shared)
+			for (const auto& pair : PairedByRole(dimension.first->GetQueryColumn(), dimension.second->GetQueryColumn()))
+				s.m_dimensions.push_back(pair);
+		s.m_registration = dayOf(other->GetRegistrationPeriod());
+		s.m_active = ibRegValueField(other->GetRegisterActive());
+		if (other->IsUseActionPeriod()) {
+			s.m_start = dayOf(other->GetActionPeriodStart());
+			s.m_end = dayOf(other->GetActionPeriodEnd());
+		}
+		v.m_sources.push_back(std::move(s));
+	}
+	return v;
+}
+
+// `l` a leading record the narrowing chooses, `r` a Leading row naming l's type, `d` a record of the type owning r,
+// holding l's values on the dimensions the two registers share. One part per leading register: its chosen records — a
+// recorder's, found through the register's key — each meeting the led records of its dimension values through the
+// lookup index.
+ibQueryRelPtr ibRecalculationRelation(const ibRecalculationSpec& v, const ibRecalculationNarrowing& narrowing)
+{
+	if (v.m_table.IsEmpty() || v.m_leading.IsEmpty() || v.m_mark.empty())
+		return nullptr;
+	const bool acts = !v.m_start.IsEmpty(), based = !v.m_baseStart.IsEmpty();
+
+	// The led record: in force and not a storno.
+	const ibQueryExprPtr led = And(Active(wxT("d"), v.m_active), Eq(ibCol(wxT("d"), v.m_storno), Int(0)));
+	const ibQueryExprPtr owned = Eq(ibCol(wxT("r"), v.m_owner), ibCol(wxT("d"), v.m_typeId));
+
+	std::vector<ibQueryProjItem> mark;
+	for (const wxString& field : v.m_mark)
+		mark.push_back(ibQueryProjItem{ ibCol(wxT("d"), field), field });
+
+	ibQueryRelPtr all;
+	size_t parts = 0;
+	for (size_t i = 0; i < v.m_sources.size(); ++i) {
+		const ibRecalculationLeading& s = v.m_sources[i];
+		if (s.m_named.empty())
+			continue;   // its type pairs with no field of a Leading row: it names nothing
+		const int source = static_cast<int>(i);
+		const bool theyAct = !s.m_start.IsEmpty();
+
+		// MEETING IN TIME, term by term as ibFindLedRecords weighs it; with no period on either side to weigh, the
+		// registration period is the only time both records have.
+		const bool byAction = acts && theyAct, byBase = based && theyAct && !v.m_baseByRegistration,
+			byRegistration = based && v.m_baseByRegistration;
+		ibQueryExprPtr meets;
+		if (byAction)
+			meets = Or(meets, And(Le(Day(wxT("l"), s.m_start), Day(wxT("d"), v.m_end)), Le(Day(wxT("d"), v.m_start), Day(wxT("l"), s.m_end))));
+		if (byBase)
+			meets = Or(meets, And(Le(Day(wxT("l"), s.m_start), Day(wxT("d"), v.m_baseEnd)), Le(Day(wxT("d"), v.m_baseStart), Day(wxT("l"), s.m_end))));
+		if (byRegistration)
+			meets = Or(meets, And(Le(Day(wxT("d"), v.m_baseStart), Day(wxT("l"), s.m_registration)), Le(Day(wxT("l"), s.m_registration), Day(wxT("d"), v.m_baseEnd))));
+		if (!meets)
+			meets = Eq(Day(wxT("l"), s.m_registration), Day(wxT("d"), v.m_registration));
+
+		// The chosen records, each once by what the meeting asks of it.
+		std::vector<wxString> leading;
+		for (const auto& pair : s.m_named)
+			leading.push_back(pair.first);
+		for (const auto& pair : s.m_dimensions)
+			leading.push_back(pair.second);
+		for (const wxString& field : { s.m_registration, s.m_start, s.m_end })
+			leading.push_back(field);
+		const ibQueryExprPtr chosen = And(Active(wxT("l"), s.m_active), Narrowed(narrowing, wxT("l"), source));
+		const ibQueryRelPtr joined = ibJoin(ibJoin(
+			ibSubquery(ibDistinct(ibProject(ibFilter(ibScan(s.m_table, wxT("l")), chosen), Carried(wxT("l"), leading))), wxT("l")),
+			ibScan(v.m_leading, wxT("r")), SamePairs(wxT("l"), s.m_named, wxT("r"))),
+			ibScan(v.m_table, wxT("d")), And(owned, SamePairs(wxT("d"), s.m_dimensions, wxT("l"))));
+		const ibQueryRelPtr part = ibProject(ibFilter(joined, And(And(led, meets), Narrowed(narrowing, wxT("d"), -1))), mark);
+		all = all ? ibUnion(all, part) : part;
+		++parts;
+	}
+	if (!all)
+		return nullptr;
+	return parts == 1 ? ibDistinct(all) : all;   // a union already answers each row once
+}
+
+// INSERT … SELECT the marks `rows` name that are not there yet — `rows` under the register's field names, which are
+// the marks' own (`fields`).
+static void InsertMarks(const ibValueMetaObjectCalculationRegister* reg, const std::vector<wxString>& fields,
+	const ibQueryRelPtr& rows)
+{
+	const wxString table = reg->GetRecalculationTableName();
+	std::vector<ibQueryProjItem> projection;
+	ibQueryExprPtr same;
+	for (const wxString& field : fields) {
+		projection.push_back(ibQueryProjItem{ ibCol(wxT("v"), field), field });
+		same = And(same, Eq(ibCol(wxT("t"), field), ibCol(wxT("v"), field)));
+	}
+	const ibQueryExprPtr absent = ibExists(ibProject(ibFilter(ibScan(table, wxT("t")), same),
+		{ ibQueryProjItem{ ibCol(wxT("t"), fields.front()), fields.front() } }), /*negated*/ true);
+	ibDatabaseQueryBuilder insert;
+	if (insert.Execute(ibInsertSelect(table, fields, ibProject(ibFilter(ibSubquery(rows, wxT("v")), absent), projection))) < 0)
+		ibBackendCoreException::Error(_("Register '%s': failed to mark records for the recalculation"), reg->GetSynonym());
+}
+
+// The registers whose recalculation `written` leads, each with its reading narrowed to `written` as the one leader.
+static std::vector<std::pair<const ibValueMetaObjectCalculationRegister*, ibRecalculationSpec>> LedBy(
+	const ibValueMetaObjectCalculationRegister* written)
+{
+	std::vector<std::pair<const ibValueMetaObjectCalculationRegister*, ibRecalculationSpec>> out;
+	const ibMetaData* metaData = written != nullptr ? written->GetMetaData() : nullptr;
+	if (metaData == nullptr)
+		return out;
+	const wxString writtenTable = written->GetPhysicalTableName();
+	for (const ibValueMetaObjectCalculationRegister* reg :
+		metaData->GetAnyArrayObject<ibValueMetaObjectCalculationRegister>(g_metaCalculationRegisterCLSID)) {
+		ibRecalculationSpec spec = ibRecalculationSpecOf(reg);
+		spec.m_sources.erase(std::remove_if(spec.m_sources.begin(), spec.m_sources.end(),
+			[&writtenTable](const ibRecalculationLeading& s) { return s.m_table != writtenTable; }), spec.m_sources.end());
+		if (!spec.m_sources.empty())
+			out.push_back({ reg, std::move(spec) });
+	}
+	return out;
+}
+
+void ibRecalculationMarkLedBy(const ibValueMetaObjectCalculationRegister* written, const ibValue& recorder)
+{
+	const ibMetaData* metaData = written != nullptr ? written->GetMetaData() : nullptr;
+	if (metaData == nullptr || recorder.IsEmpty() || written->GetRegisterRecorder() == nullptr)
 		return;
-	// The record being recalculated + the calculation type (+ the month), then the recalculation's own dimensions.
-	for (const ibBackendQueryColumn* standard : { m_queryable.RecalculationObjectColumn(), m_queryable.CalculationTypeColumn(),
-			m_queryable.ActionPeriodColumn() })
-		if (standard != nullptr)
-			explorer.AppendColumn(standard, /*enabled*/ true, /*visible*/ true);
-	for (const ibValueMetaObjectDimension* dimension : m_meta->GetDimensionArrayObject())
-		if (dimension != nullptr)
-			explorer.AppendColumn(dimension->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+	for (const auto& led : LedBy(written)) {
+		const ibValueMetaObjectCalculationRegister* reg = led.first;
+		// The recorder's records lead; its own records are never led — whichever register holds them.
+		const ibRecalculationNarrowing narrowing = [written, reg, metaData, &recorder](const wxString& alias, int source) {
+			const ibValueMetaObjectCalculationRegister* holder = source < 0 ? reg : written;
+			const ibQueryExprPtr own = ibRegCompositeIR(holder->GetRegisterRecorder()->GetQueryColumn(), metaData,
+				recorder, ibQueryBinOp::Eq, alias);
+			return source < 0 ? ibNot(own) : own;
+		};
+		const ibQueryRelPtr relation = ibRecalculationRelation(led.second, narrowing);
+		if (relation)
+			InsertMarks(reg, led.second.m_mark, relation);
+	}
 }
 
-//***********************************************************************
-//*                 ibValueMetaObjectRecalculation                      *
-//***********************************************************************
-
-ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::ibValueMetaObjectRecalculation() : ibValueMetaObjectCompositeData()
+void ibRecalculationAnswerBy(const ibValueMetaObjectCalculationRegister* reg, const ibValue& recorder)
 {
+	const ibMetaData* metaData = reg != nullptr ? reg->GetMetaData() : nullptr;
+	if (metaData == nullptr || recorder.IsEmpty() || reg->GetStorno() == nullptr)
+		return;
+	const ibRecalculationSpec spec = ibRecalculationSpecOf(reg);
+	if (spec.m_mark.empty())
+		return;
+	// The mark's fields past the recorder — the type, the month, the dimensions — against the storno's. The marks
+	// carry the register's own field names, so the mark's side is qualified by its table: bare, it would read `s`'s.
+	const wxString marks = reg->GetRecalculationTableName();
+	const size_t objectFields = ColumnFieldNames(reg->GetRegisterRecorder()->GetQueryColumn()).size();
+	ibQueryExprPtr answering = And(And(ibRegCompositeIR(reg->GetRegisterRecorder()->GetQueryColumn(), metaData, recorder,
+		ibQueryBinOp::Eq, wxT("s")), ibBinOp(ibQueryBinOp::Ne, ibCol(wxT("s"), ibRegValueField(reg->GetStorno())), Int(0))),
+		Active(wxT("s"), ibRegValueField(reg->GetRegisterActive())));
+	for (size_t f = objectFields; f < spec.m_mark.size(); ++f)
+		answering = And(answering, Eq(ibCol(wxT("s"), spec.m_mark[f]), ibCol(marks, spec.m_mark[f])));
+	const ibQueryExprPtr answered = ibExists(ibProject(ibFilter(ibScan(reg->GetPhysicalTableName(), wxT("s")), answering),
+		{ ibQueryProjItem{ ibCol(wxT("s"), spec.m_mark.front()), spec.m_mark.front() } }));
+	ibDatabaseQueryBuilder clear;
+	if (clear.Execute(ibDelete(marks, answered)) < 0)
+		ibBackendCoreException::Error(_("Register '%s': failed to clear the recalculation of what this recorder corrects"),
+			reg->GetSynonym());
 }
 
-ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::~ibValueMetaObjectRecalculation()
+// THIS recorder's marks in THIS register are answered: its records here were just computed again — or are gone.
+void ibRecalculationAnswerOwn(const ibValueMetaObjectCalculationRegister* reg, const ibValue& recorder)
 {
+	if (reg == nullptr || recorder.IsEmpty() || !reg->HasRecalculation())
+		return;
+	ibDataQueryBuilder clear;
+	clear.From(reg->GetRecalculationQueryable());
+	clear.WithAccessPolicy(nullptr);   // which records are stale is a fact of the payroll, not of the one posting
+	clear.Where(reg->GetRegisterRecorder()->GetQueryColumn(), recorder);
+	if (!clear.Delete())   // deleting nothing is success; a refused statement is not
+		ibBackendCoreException::Error(_("Register '%s': failed to clear the recalculation of this recorder"), reg->GetSynonym());
 }
 
-const ibValueMetaObjectCalculationRegister* ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::GetRegister() const
+void ibRecalculationMarkReversed(const ibValueMetaObjectCalculationRegister* reg, const ibValue& recorder)
 {
-	return GetParentAsType<ibValueMetaObjectCalculationRegister>();
-}
+	const ibMetaData* metaData = reg != nullptr ? reg->GetMetaData() : nullptr;
+	if (metaData == nullptr || recorder.IsEmpty() || reg->GetStorno() == nullptr)
+		return;
+	const wxString records = reg->GetPhysicalTableName();
+	const wxString storno = ibRegValueField(reg->GetStorno()), active = ibRegValueField(reg->GetRegisterActive());
+	const wxString registration = ibRegFieldOfRole(reg->GetRegistrationPeriod()->GetQueryColumn(), ibColumnRole::Date);
 
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::KeepsActionPeriod() const
-{
-	const ibValueMetaObjectCalculationRegister* reg = GetRegister();
-	return reg != nullptr && reg->IsUseActionPeriod() && (*m_propertyActionPeriod)->GetMetaID() != 0;
-}
+	// `s` a storno of the recorder, `d` a record of its position registered before it, of another recorder, in force.
+	ibQueryExprPtr position;
+	std::vector<const ibValueMetaObjectAttributeBase*> parts{ reg->GetCalculationType() };
+	for (const ibValueMetaObjectDimension* dimension : reg->GetDimensionArrayObject())
+		parts.push_back(dimension);
+	if (reg->IsUseActionPeriod())
+		for (const ibValueMetaObjectAttributeBase* part : { static_cast<const ibValueMetaObjectAttributeBase*>(reg->GetActionPeriod()),
+				static_cast<const ibValueMetaObjectAttributeBase*>(reg->GetActionPeriodStart()),
+				static_cast<const ibValueMetaObjectAttributeBase*>(reg->GetActionPeriodEnd()) })
+			parts.push_back(part);
+	for (const ibValueMetaObjectAttributeBase* part : parts)
+		for (const wxString& field : ibRegFieldsOf(part))
+			position = And(position, Eq(ibCol(wxT("d"), field), ibCol(wxT("s"), field)));
+	const ibQueryExprPtr ownStorno = And(And(ibRegCompositeIR(reg->GetRegisterRecorder()->GetQueryColumn(), metaData, recorder,
+		ibQueryBinOp::Eq, wxT("s")), ibBinOp(ibQueryBinOp::Ne, ibCol(wxT("s"), storno), Int(0))), Active(wxT("s"), active));
+	const ibQueryExprPtr reversed = And(And(ibNot(ibRegCompositeIR(reg->GetRegisterRecorder()->GetQueryColumn(), metaData, recorder,
+		ibQueryBinOp::Eq, wxT("d"))), And(Eq(ibCol(wxT("d"), storno), Int(0)), Active(wxT("d"), active))),
+		ibBinOp(ibQueryBinOp::Lt, ibCol(wxT("d"), registration), ibCol(wxT("s"), registration)));
 
-wxString ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::GetKeyHashColumn() const
-{
-	return ibDerivedKeyNeedsHash(GetQueryable()->GetPrimaryKeyColumns()) ? wxString(KeyHashColumnName()) : wxString();
-}
-
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::StampActionPeriodIfNeverSaved(int flags)
-{
-	if ((*m_propertyActionPeriod)->GetMetaID() != 0)
-		return true;
-	// The copy that mirrors the database — the designer's baseline, run with loadConfigFlag, and the running
-	// application, which is not the designer — goes on not having it until the edited one is applied (the
-	// chart's sections ask the same pair, chartOfCalculationTypesMetadata.cpp).
-	if ((flags & loadConfigFlag) != 0 || !appData->DesignerMode())
-		return true;
-	return (*m_propertyActionPeriod)->OnCreateMetaObject(m_metaData, 0);
-}
-
-//***************************************************************************
-//*                       Save & load metaData                              *
-//***************************************************************************
-
-// Beyond Name/Synonym (held by the base) and the dimension children (their own metaobjects), a
-// recalculation carries the IDENTITIES of its standard columns — saved, because a column's number is its
-// field's name and must be the same number the next time the configuration is read.
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::ReadData(const ibDataNode& node)
-{
-	m_propertyRecalculationObject->SetNodeValue(node.GetProperty(m_propertyRecalculationObject->GetName()));
-	m_propertyCalculationType->SetNodeValue(node.GetProperty(m_propertyCalculationType->GetName()));
-	m_propertyActionPeriod->SetNodeValue(node.GetProperty(m_propertyActionPeriod->GetName()));   // absent: id 0, stamped at run
-	return ibValueMetaObjectCompositeData::ReadData(node);
-}
-
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyRecalculationObject->GetName(), m_propertyRecalculationObject->GetNodeValue());
-	node.SetProperty(m_propertyCalculationType->GetName(), m_propertyCalculationType->GetNodeValue());
-	node.SetProperty(m_propertyActionPeriod->GetName(), m_propertyActionPeriod->GetNodeValue());
-	return ibValueMetaObjectCompositeData::WriteData(node);
-}
-
-//***********************************************************************
-//*								Events								    *
-//***********************************************************************
-
-// (The month's attribute takes part in the events only once it has a number — NumberedActionPeriod.)
-
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::OnCreateMetaObject(ibMetaData* metaData, int flags)
-{
-	if (!ibValueMetaObjectCompositeData::OnCreateMetaObject(metaData, flags))
-		return false;
-	// The numbers are handed out HERE, by the create event, like every predefined child's.
-	return (*m_propertyRecalculationObject)->OnCreateMetaObject(metaData, flags) &&
-		(*m_propertyCalculationType)->OnCreateMetaObject(metaData, flags) &&
-		(*m_propertyActionPeriod)->OnCreateMetaObject(metaData, flags);
-}
-
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::OnLoadMetaObject(ibMetaData* metaData)
-{
-	ibValueMetaObjectAttributeBase* month = NumberedActionPeriod();
-	if (!(*m_propertyRecalculationObject)->OnLoadMetaObject(metaData) ||
-		!(*m_propertyCalculationType)->OnLoadMetaObject(metaData) ||
-		(month != nullptr && !month->OnLoadMetaObject(metaData)))
-		return false;
-	return ibValueMetaObjectCompositeData::OnLoadMetaObject(metaData);
-}
-
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::OnSaveMetaObject(int flags)
-{
-	ibValueMetaObjectAttributeBase* month = NumberedActionPeriod();
-	if (!(*m_propertyRecalculationObject)->OnSaveMetaObject(flags) ||
-		!(*m_propertyCalculationType)->OnSaveMetaObject(flags) ||
-		(month != nullptr && !month->OnSaveMetaObject(flags)))
-		return false;
-	return ibValueMetaObjectCompositeData::OnSaveMetaObject(flags);
-}
-
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::OnDeleteMetaObject()
-{
-	ibValueMetaObjectAttributeBase* month = NumberedActionPeriod();
-	if (!(*m_propertyRecalculationObject)->OnDeleteMetaObject() ||
-		!(*m_propertyCalculationType)->OnDeleteMetaObject() ||
-		(month != nullptr && !month->OnDeleteMetaObject()))
-		return false;
-	return ibValueMetaObjectCompositeData::OnDeleteMetaObject();
-}
-
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::OnReloadMetaObject()
-{
-	ibValueMetaObject* metaObject = GetParent();
-	wxASSERT(metaObject);
-	if (metaObject != nullptr && metaObject->OnReloadMetaObject())
-		return ibValueMetaObjectCompositeData::OnReloadMetaObject();
-	return false;
-}
-
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::OnBeforeRunMetaObject(int flags)
-{
-	// Stamped BEFORE it runs — the counter is seeded by now (before-run follows the whole load), and
-	// the attribute registers under its number.
-	if (!StampActionPeriodIfNeverSaved(flags))
-		return false;
-	ibValueMetaObjectAttributeBase* month = NumberedActionPeriod();
-	if (!(*m_propertyRecalculationObject)->OnBeforeRunMetaObject(flags) ||
-		!(*m_propertyCalculationType)->OnBeforeRunMetaObject(flags) ||
-		(month != nullptr && !month->OnBeforeRunMetaObject(flags)))
-		return false;
-	return ibValueMetaObjectCompositeData::OnBeforeRunMetaObject(flags);
-}
-
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::OnAfterRunMetaObject(int flags)
-{
-	ibValueMetaObjectAttributeBase* month = NumberedActionPeriod();
-	if (!(*m_propertyRecalculationObject)->OnAfterRunMetaObject(flags) ||
-		!(*m_propertyCalculationType)->OnAfterRunMetaObject(flags) ||
-		(month != nullptr && !month->OnAfterRunMetaObject(flags)))
-		return false;
-	// Register the recalculation as an L4 query source (parent-qualified "<Register>.<Recalculation>").
-	// Register ALWAYS — the factory is PER-CONFIG (in the metadata), so a read-only DB load still
-	// registers its OWN sources into its OWN factory or the recalculation can't resolve on that config.
-	m_metaData->RegisterSource(&m_queryable);
-	return ibValueMetaObjectCompositeData::OnAfterRunMetaObject(flags);
-}
-
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::OnBeforeCloseMetaObject()   // un-resolve — mirror of OnRun's RegisterSource
-{
-	m_metaData->UnregisterSource(&m_queryable);
-	ibValueMetaObjectAttributeBase* month = NumberedActionPeriod();
-	if (!(*m_propertyRecalculationObject)->OnBeforeCloseMetaObject() ||
-		!(*m_propertyCalculationType)->OnBeforeCloseMetaObject() ||
-		(month != nullptr && !month->OnBeforeCloseMetaObject()))
-		return false;
-	return ibValueMetaObjectCompositeData::OnBeforeCloseMetaObject();
-}
-
-bool ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::OnAfterCloseMetaObject()
-{
-	ibValueMetaObjectAttributeBase* month = NumberedActionPeriod();
-	if (!(*m_propertyRecalculationObject)->OnAfterCloseMetaObject() ||
-		!(*m_propertyCalculationType)->OnAfterCloseMetaObject() ||
-		(month != nullptr && !month->OnAfterCloseMetaObject()))
-		return false;
-	return ibValueMetaObjectCompositeData::OnAfterCloseMetaObject();
+	const ibRecalculationSpec spec = ibRecalculationSpecOf(reg);
+	if (spec.m_mark.empty())
+		return;
+	InsertMarks(reg, spec.m_mark, ibDistinct(ibProject(ibFilter(ibJoin(ibScan(records, wxT("s")),
+		ibScan(records, wxT("d")), position), And(ownStorno, reversed)), Carried(wxT("d"), spec.m_mark))));
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
+// A recalculation saved as an object of its own — loaded so the configuration opens, and let go (calculationRegister.h).
 METADATA_TYPE_REGISTER(ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation, "Recalculation", g_metaRecalculationCLSID);

@@ -749,6 +749,7 @@ bool ibValueMetaObjectRecordDataRecorderRef::WriteData(ibDataNode& node) const
 	// would be a different number in every session, and a number is what a query field is named by.
 	node.SetProperty(m_propertyAttributePointInTime->GetName(), m_propertyAttributePointInTime->GetNodeValue());
 	node.SetProperty(m_propertyRegisterRecord->GetName(), m_propertyRegisterRecord->GetNodeValue());
+	node.SetProperty(m_propertyRegisterRecordsDeletion->GetName(), m_propertyRegisterRecordsDeletion->GetNodeValue());
 	return ibValueMetaObjectRecordDataMutableRef::WriteData(node);
 }
 
@@ -758,6 +759,8 @@ bool ibValueMetaObjectRecordDataRecorderRef::ReadData(const ibDataNode& node)
 	m_propertyAttributeDate->SetNodeValue(node.GetProperty(m_propertyAttributeDate->GetName()));
 	m_propertyAttributePointInTime->SetNodeValue(node.GetProperty(m_propertyAttributePointInTime->GetName()));
 	m_propertyRegisterRecord->SetNodeValue(node.GetProperty(m_propertyRegisterRecord->GetName()));
+	// Absent from a configuration saved before it existed: the default stays — the movements are cleared, as they were.
+	m_propertyRegisterRecordsDeletion->SetNodeValue(node.GetProperty(m_propertyRegisterRecordsDeletion->GetName()));
 	return ibValueMetaObjectRecordDataMutableRef::ReadData(node);
 }
 
@@ -3048,17 +3051,37 @@ bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::WriteRecordSet()
 	return true;
 }
 
-bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::DeleteRecordSet(bool unmodifiedOnly)
+bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::DeleteRecordSet()
 {
+	// A deleted document asks nothing (Max, 2026-09-15): no document, no movements of it.
+	for (auto& pair : m_records) {
+		ibValueRecordSetObject* record = pair.second;
+		wxASSERT(record);
+		// Same as WriteRecordSet — the register speaks for itself; this only names the one that
+		// returned a plain false without saying anything.
+		if (!record->DeleteRecordSet())
+			ibBackendCoreException::Error(_("Failed to clear the movements of register '%s'"),
+				record->GetMetaObject()->GetSynonym());
+	}
+	return true;
+}
+
+bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::DeleteRecordSet(ibDocumentWriteMode writeMode)
+{
+	// ⭐ THE ONE PLACE A POSTING'S MOVEMENTS ARE CLEARED DECIDES WHETHER (Max, 2026-09-14) — the owner's
+	// RegisterRecordsDeletion: before a posting again only when Automatically; the posting undone — unless Never.
+	const ibDocumentRecordsDeletion deletion = m_recorder->GetMetaObject()->GetRegisterRecordsDeletion();
+	if (writeMode != ibDocumentWriteMode::ibDocumentWriteMode_Posting)
+		return deletion == ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Never || DeleteRecordSet();
+	if (deletion != ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Automatically)
+		return true;
 	for (auto& pair : m_records) {
 		ibValueRecordSetObject* record = pair.second;
 		wxASSERT(record);
 		// The mirror of WriteRecordSet's rule: a set that says it is modified holds rows somebody put there,
 		// and it replaces what is stored when it is written — the delete would only take its flag away.
-		if (unmodifiedOnly && record->IsModified())
+		if (record->IsModified())
 			continue;
-		// Same as WriteRecordSet — the register speaks for itself; this only names the one that
-		// returned a plain false without saying anything.
 		if (!record->DeleteRecordSet())
 			ibBackendCoreException::Error(_("Failed to clear the movements of register '%s'"),
 				record->GetMetaObject()->GetSynonym());
@@ -3144,7 +3167,7 @@ bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CallAsFunc(const lo
 //*********************************************************************************************
 
 ibValueRecordDataObjectRecorderRef::ibValueRecordDataObjectRecorderRef(
-	const ibValueMetaObjectRecordDataMutableRef* metaObject, const ibGuid& objGuid) :
+	const ibValueMetaObjectRecordDataRecorderRef* metaObject, const ibGuid& objGuid) :
 	ibValueRecordDataObjectRef(metaObject, objGuid)
 {
 	// m_registerRecords is intentionally NOT initialized here — the
@@ -3267,11 +3290,12 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		// base to compute what it writes — a correction reads the pieces of the record it corrects — and
 		// what it read used to include what this very document wrote the last time: its own storno still
 		// took the corrected record out of force, and the second posting of a payroll counted 0 days where
-		// the first had counted the month (the ATB bench, 2026-09-11). So they go first, in this
+		// the first had counted the month (the 40 000-employee bench, 2026-09-11). So they go first, in this
 		// transaction and through the door undoing a posting uses; the handler then writes the document's
 		// movements from nothing. A register the handler leaves alone therefore keeps none — its movements
-		// are what its handler writes. (A set somebody filled before the write is left to replace its own.)
-		if (reposting && !m_registerRecords->DeleteRecordSet(true)) {
+		// are what its handler writes. (A set somebody filled before the write is left to replace its own; and whether
+		// they are cleared at all is the document's to say — ibRecorderRegister::DeleteRecordSet asks it.)
+		if (reposting && !m_registerRecords->DeleteRecordSet(writeMode)) {
 			if (generateUniqueIdentifier) ResetUniqueIdentifier();
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: failed to clear the movements of the previous posting"),
@@ -3308,7 +3332,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 				GetSourceCaption());
 			return false;
 		}
-		if (!m_registerRecords->DeleteRecordSet()) {
+		if (!m_registerRecords->DeleteRecordSet(writeMode)) {
 			if (generateUniqueIdentifier) ResetUniqueIdentifier();
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: failed to clear the register movements"),
@@ -4012,7 +4036,9 @@ bool ibValueRecordSetObject::SetValueByMetaID(const ibDataViewItem& item, const 
 	if (!appData->DesignerMode()) {
 		ibComposerNode* node = GetViewData<ibComposerNode>(item);
 		if (node != nullptr) {
-			const ibValueMetaObjectAttributeBase* attribute = m_metaObject->FindAnyAttributeObjectByFilter(id);
+			// The set's own column map, not a walk of the metaobject's children: a value set in a line is the
+			// commonest thing a posting does — 72 234 movements a payroll, several fields each.
+			const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
 			if (attribute != nullptr) {
 				// 🛑 A LINE THAT WAS CHANGED MAKES ITS SET CHANGED. The posting pass writes only the sets
 				// that say they are modified (ibRecorderRegister::WriteRecordSet — a set already written as
@@ -4130,16 +4156,15 @@ ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::ibValueRecordS
 	: ibValueModelReturnLine(line), m_ownerTable(ownerTable)
 {
 	HoldOwnerModel(ownerTable);   // the row speaks through the set; see the base
-	m_members.Bind(this, &ibValueRecordSetObjectRegisterReturnLine::FillMembers);
 }
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::~ibValueRecordSetObjectRegisterReturnLine()
 {
 }
 
-void ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::FillMembers(ibMemberTable& helper) const
+void ibValueRecordSetObject::DescribeReturnLine(ibMemberTable& helper) const
 {
-	const ibValueMetaObjectGenericData* metaObject = m_ownerTable->GetMetaObject();
+	const ibValueMetaObjectGenericData* metaObject = GetMetaObject();
 	if (metaObject != nullptr) {
 		wxString objectName;
 		for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
@@ -4200,15 +4225,20 @@ ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSet
 
 //////////////////////////////////////////////////////////////////////////////////////
 
+// The set's own columns — its attributes, laid out once when the set was made. A line added is not a walk of the
+// metaobject: a payroll adds 80 008 of them.
+void ibValueRecordSetObject::DescribeNewRow(ibNewRowColumns& columns) const
+{
+	for (const auto& column : m_recordColumnCollection->m_listColumnInfo) {
+		const ibValueMetaObjectAttributeBase* attribute = column.second->GetAttribute();
+		columns.push_back({ column.first, [attribute]() { return attribute->CreateValue(); } });
+	}
+}
+
 long ibValueRecordSetObject::AppendRow(unsigned int before)
 {
-	ibComposerNode* rowData = new ibComposerNode();
-
-	const ibValueMetaObjectRegisterData* metaObject = GetMetaObject();
-	wxASSERT(metaObject);
-	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
-		rowData->AppendTableValue(object->GetMetaID(), object->CreateValue());
-	}
+	// A copy of the set's own empty line (ibValueModelStorage::NewRow) — made once, from the set's columns.
+	ibComposerNode* rowData = NewRow();
 
 	if (before > 0)
 		return ibValueModelStorage::Insert(rowData, before, !ibBackendException::IsEvalMode());
@@ -4259,7 +4289,7 @@ bool ibValueRecordKeyObject::GetPropVal(const long lPropNum, ibValue& pvarPropVa
 
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const ibMetaID& id = m_members.GetPropData(lPropNum);
+	const ibMetaID& id = m_ownerTable->m_methodHelperReturnLine.GetPropData(lPropNum);
 	if (id != wxNOT_FOUND)
 		return SetValueByMetaID(id, varPropVal);
 	return false;
@@ -4267,7 +4297,7 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::SetPropVa
 
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const ibMetaID& id = m_members.GetPropData(lPropNum);
+	const ibMetaID& id = m_ownerTable->m_methodHelperReturnLine.GetPropData(lPropNum);
 	if (id != wxNOT_FOUND) {
 		return GetValueByMetaID(id, pvarPropVal);
 	}

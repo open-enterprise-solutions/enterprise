@@ -682,6 +682,7 @@
     <ClCompile Include="metaCollection\partial\calculationRegisterManager_impl.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadataSchema.cpp" />
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataTotals.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadata_res.cpp" />
@@ -696,7 +697,6 @@
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesObject.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata.cpp" />
-    <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadataSchema.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\catalogAction.cpp" />
     <ClCompile Include="metaCollection\partial\catalogManager.cpp" />

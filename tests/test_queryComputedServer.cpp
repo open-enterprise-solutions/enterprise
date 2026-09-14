@@ -376,10 +376,11 @@ TEST_F(ComputedServerFix, In_AllNullKeysStripToEmpty)
 
 // A METADATA column (IsRawColumn() == false) is NEVER one field: DescribeColumnLayout always emits the
 // `_TYPE` variant discriminator plus one slot per primitive the type descriptor admits (a string-only
-// descriptor -> `_TYPE`, `_S`). The `In` render therefore OR-folds the same composite equality Eq uses,
-// once per value, so the _TYPE tag is compared too and the value is bound through the write-spread codec
-// (load-bearing for a variant — a native IN on one primitive field would match rows of the wrong variant —
-// and for a reference, whose constant must be the encoded _RRRef blob, not a bare ibConst).
+// descriptor -> `_TYPE`, `_S`). The `In` render therefore binds every value through the write-spread codec,
+// so the _TYPE tag is compared too (load-bearing for a variant — a native IN on one primitive field alone
+// would match rows of the wrong variant — and for a reference, whose constant must be the encoded _RRRef
+// blob, not a bare ibConst). Values of one kind on a single-primitive column spell the tag alike: it is said
+// once and the values go into one native IN (DecomposeIn); anything else is OR-folded, pair by pair.
 //
 // The fixture is built FROM the layout (ColumnFieldNames, in bind order) rather than hardcoding the suffix
 // table, and the discriminator is seeded through ibPersistedTypeTag — so the test asserts against the same
@@ -447,7 +448,34 @@ TEST_F(ComputedServerFix, In_MetadataColumnFoldsCompositeEquality)
 
 	int rows = 0;
 	while (res.Next()) ++rows;
-	EXPECT_EQ(rows, 2);   // North + East via the OR-folded per-value composite equality
+	EXPECT_EQ(rows, 2);   // North + East: the tag once, the two values in one IN
+}
+
+// Values of two kinds do not share a tag, so they go pair by pair — and a number matches no string row.
+TEST_F(ComputedServerFix, In_MetadataColumnValuesOfTwoKindsFoldPairByPair)
+{
+	if (!ready) return;
+
+	TypedCol region(wxT("region"), 322, ibTypeDescription(g_valueStringCLSID));
+	const MetaColFixture f = MakeMetaColTable(*db, wxT("m3"), &region,
+		{ { wxT("North"), 10 }, { wxT("South"), 5 } });
+	ASSERT_EQ(f.fields.size(), 2u);
+
+	ibBackendColumnRawDB qty = ibBackendColumnRawDB::Number(wxT("qty"));
+	PhysicalQ src(wxT("m3"), 323);
+	src.AddCol(&region);
+	src.AddCol(&qty);
+
+	ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
+	q.From(&src);
+	q.Select(&qty, wxT("qty"));
+	q.WhereIn(&region, { ibValue(wxString(wxT("North"))), ibValue(ibNumber(10)) });
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	int rows = 0;
+	while (res.Next()) ++rows;
+	EXPECT_EQ(rows, 1);
 }
 
 // The metadata-column fold must observe the empty set too — this is the branch where an empty OR-fold comes

@@ -531,6 +531,24 @@ inline ibQueryPredicatePtr ibRegFilterPredicate(const TRegister* reg, const ibVa
 	return folded;
 }
 
+// A record set's key value, as a condition — but a period kept to a unit coarser than the second is the whole of it,
+// from its start up to the next one's: a record written earlier with its time (23:59 of a day) is that day's (Max,
+// 2026-09-15).
+template <typename TRegister>
+inline void ibRegWhereKeyValue(ibDataQueryBuilder& q, const TRegister* reg,
+	const ibValueMetaObjectAttributeBase* object, const ibValue& value)
+{
+	const ibTotalsPeriod unit = reg->GetPeriodicityUnit();
+	if (unit != ibTotalsPeriod::Second && reg->IsRegisterPeriod(object->GetMetaID())
+		&& value.GetType() == TYPE_DATE && value.GetDateTime().IsValid()) {
+		const wxDateTime start = ibTruncateToPeriod(value.GetDateTime(), unit);
+		q.WhereCompare(object->GetQueryColumn(), ibQueryFilterOp::GreaterEqual, ibValue(start));
+		q.WhereCompare(object->GetQueryColumn(), ibQueryFilterOp::Less, ibValue(ibNextPeriodStart(start, unit)));
+	}
+	else
+		q.Where(object->GetQueryColumn(), ibQueryFilterOp::Equal, value);
+}
+
 // The flat AND-leaves of a predicate, in order.
 //
 // ⚠ This is what the hand-built L2 aggregates can apply TODAY, and it is deliberately narrow: an OR,
@@ -1111,8 +1129,9 @@ inline void ibRegSelfSourceFromDeclaration(ibSchemaTable& t, const ibMetaData* m
 inline ibValue ibRegSelectionToTable(ibDataQueryResult& selection, const ibBackendQueryable* shape)
 {
 	ibValueModelTable* table = new ibValueModelTable();
-	// 🛑 Held while its rows are made: a row holds its table, so without this the first
-	// `wxDELETE(line)` deletes a table nobody else holds yet. See valueQueryable.cpp, M::ToTable.
+	// 🛑 Held while its rows are made, as every table built for a script is: nobody else holds it
+	// yet, and anything that took and let go of a hold meanwhile would delete it. See
+	// valueQueryable.cpp, M::ToTable.
 	const ibValue keep(table);
 	ibValueModelTable::ibValueModelColumnCollection* cols = table->GetColumnCollection();
 	wxASSERT(cols);
@@ -1121,19 +1140,21 @@ inline ibValue ibRegSelectionToTable(ibDataQueryResult& selection, const ibBacke
 	if (shape != nullptr)
 		columns = shape->GetColumns();
 
+	// Each table column's id, beside the source column it is made from.
+	std::vector<std::pair<const ibBackendQueryColumn*, ibMetaID>> filled;
 	for (const ibBackendQueryColumn* col : columns)
 		if (col != nullptr)
-			cols->AddColumn(col->GetName(), col->GetTypeDesc(), col->GetSynonym());
+			if (const auto* added = cols->AddColumn(col->GetName(), col->GetTypeDesc(), col->GetSynonym()))
+				filled.emplace_back(col, added->GetColumnID());
 
+	std::vector<std::pair<ibMetaID, ibValue>> row;
 	while (selection.Next()) {
-		ibValueModelTable::ibValueModelTableReturnLine* line = table->GetRowAt(table->AppendRow());
-		wxASSERT(line);
 		// By the column, not by its name: GetColumn reads one scalar field under the read's own
 		// alias, and a dimension is a reference of three. Every value used to come back empty.
-		for (const ibBackendQueryColumn* col : columns)
-			if (col != nullptr)
-				line->SetAt(col->GetName(), selection.GetValue(col));
-		wxDELETE(line);
+		row.clear();
+		for (const auto& one : filled)
+			row.emplace_back(one.second, selection.GetValue(one.first));
+		table->AppendRow(row);
 	}
 
 	return table;

@@ -365,7 +365,7 @@ void ibBackendException::ProcessError(const wxString& strFileName,
 	//
 	// ⚠ AND THE TRIGGER IS ORDINARY TEXT, not an edge case. `"discount 20 %"` in a string literal is
 	// enough, and a configuration written in Russian or Ukrainian hits it the same way — which is how
-	// it was found: by bisecting a whole 1C import down to one manager module that crashed the
+	// it was found: by bisecting a whole imported configuration down to one manager module that crashed the
 	// compiler at base open (2026-08-24).
 	ibBackendCoreException::Error(wxT("%s"),
 		ibBackendException::ProcessExceptionError(strFileName, strModuleName, strDocPath, currPos, currLine, strCodeError, codeError, strErrorDesc,

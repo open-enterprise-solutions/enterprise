@@ -429,6 +429,45 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 	return pred;
 }
 
+// ⭐ A SET OF VALUES OF ONE COLUMN — one IN wherever it can be. A column of a single primitive type is two fields,
+// its type tag and its value; values of one kind all spell the tag alike, so it is said once and the values go into
+// the engine's own IN, which Firebird evaluates by a sorted lookup. The OR of pairs it evaluated a branch at a time:
+// every row weighed against as many branches as there were values — 500 line numbers a statement over a payroll
+// document's 72 234 lines took 3.7 s each (MEASURED 2026-09-14). Anything else — a reference, a variant, values of
+// several kinds — goes pair by pair, each value's equality as it says itself.
+ibQueryExprPtr DecomposeIn(const ibBackendQueryColumn* col, const ibMetaData* metaData, const std::vector<ibValue>& values,
+                           const wxString& mainQual)
+{
+	const std::vector<wxString> fields = ColumnFieldNames(col);
+	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(col);
+	const bool primitive = !IsComputedColumn(col) && fields.size() == 2 && layout.size() == 2
+		&& layout[0].m_role == ibColumnRole::Discriminator
+		&& (layout[1].m_role == ibColumnRole::Boolean || layout[1].m_role == ibColumnRole::Number
+			|| layout[1].m_role == ibColumnRole::Date || layout[1].m_role == ibColumnRole::String);
+	const bool oneKind = std::all_of(values.begin(), values.end(),
+		[&values](const ibValue& v) { return v.GetType() == values.front().GetType(); });
+	if (!primitive || !oneKind) {
+		ibQueryExprPtr pred;
+		for (const ibValue& v : values)
+			pred = OrFold(pred, DecomposeEquality(col, metaData, v, mainQual));
+		return pred;
+	}
+
+	ibQueryExprPtr tag;
+	std::vector<ibQueryExprPtr> spelled;
+	for (const ibValue& v : values) {
+		ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+		int position = 1;
+		BindWriteValue(capture, col, metaData, v, position);
+		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
+		if (!tag)
+			tag = consts.size() > 0 && consts[0] ? consts[0] : ibConst(ibValue());
+		spelled.push_back(consts.size() > 1 && consts[1] ? consts[1] : ibConst(ibValue()));
+	}
+	return AndFold(ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields[0]), tag),
+		ibIn(ibColQ(mainQual, fields[1]), std::move(spelled)));
+}
+
 // Decompose a COLUMN ordered compare (>=, <=, >, <) LEXICOGRAPHICALLY over its physical fields, reusing the
 // SAME write-spread as DecomposeEquality so the constants are the column's real stored bytes (a reference's
 // _RRRef blob, correctly encoded — NOT a mis-rendered ibConst). A single-field key (a plain reference = one
@@ -1137,20 +1176,16 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 	// SET-valued `In` (the semi-join key reduction) — reads m_values, not m_value, so it MUST branch before
 	// FilterOpToBinOp below, which would answer Eq and then compare against an unset m_value.
 	if (c.m_op == ibQueryFilterOp::In) {
-		// A METADATA column takes the SAME route Eq does, once per value, OR-folded. Not because the field
-		// name would be wrong — FirstSqlFieldOfColumn already skips the _TYPE discriminator and picks the
+		// A METADATA column takes the route Eq does, through the write spread (DecomposeIn). Not because the
+		// field name would be wrong — FirstSqlFieldOfColumn already skips the _TYPE discriminator and picks the
 		// first primitive slot, which is right for a single-primitive column. It is because of the other two
 		// things the spread carries: the _TYPE discriminator (a VARIANT column would otherwise match rows of
 		// the wrong variant, since a native IN compares one primitive field and ignores the tag), and the
 		// correctly-encoded value (a REFERENCE needs its write-spread _RRRef blob, NOT a bare ibConst — the
 		// same trap the Ne branch below spells out). Guarded on non-empty: an empty OR-fold comes back null,
 		// i.e. NO predicate — which matches EVERYTHING, the exact opposite of the empty-set meaning.
-		if (c.m_col != nullptr && !c.m_col->IsRawColumn() && !c.m_values.empty()) {
-			ibQueryExprPtr pred;
-			for (const ibValue& v : c.m_values)
-				pred = OrFold(pred, DecomposeEquality(c.m_col, queryable->GetMetaData(), v, mainQual));
-			return pred;
-		}
+		if (c.m_col != nullptr && !c.m_col->IsRawColumn() && !c.m_values.empty())
+			return DecomposeIn(c.m_col, queryable->GetMetaData(), c.m_values, mainQual);
 		// Single-field lhs: the row's own key when m_col is null (same shape BuildKeyInPredicate renders for
 		// .WhereKeyIn(), one IN instead of an OR-chain), else the column's first physical field. An EMPTY set
 		// falls through here ON PURPOSE — L2-1 already renders `x IN ()` as `1 = 0`
@@ -4037,26 +4072,24 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 				// it shifts every value after it into somebody else's column. This loop used to pad
 				// and truncate silently, which is how the raw-key defect above stayed invisible: the
 				// key column produced a tag plus a key, the loop kept the first of the two, and the
-				// statement went out looking perfectly well-formed.
-				if (consts.size() != fields.size())
+				// statement went out looking perfectly well-formed. Counted by the positions the bind CONSUMED:
+				// the capture is laid out by the fields, so its own size says nothing about what was bound.
+				if (cp - 1 != static_cast<int>(fields.size()))
 					ibBackendCoreException::Error(
 						_("A batched write captured %d values for a column declaring %d fields"),
-						(int)consts.size(), (int)fields.size());
+						cp - 1, static_cast<int>(fields.size()));
 				for (size_t i = 0; i < fields.size(); ++i)
 					out.push_back(consts[i] ? consts[i] : ibConst(ibValue()));
 			}
 			return out;
 		};
 
-		// BATCHED INSERT — N rows, one statement per chunk.
-		//
-		// It rides ibDmlStatement::m_extraRows, which ALREADY EXISTED for the temp-table manager's
-		// bulk fill; the only thing that had to change is that L2 now spells it two ways, because
-		// Firebird has no multi-row VALUES (see RenderDML). So this is a second TENANT of a
-		// mechanism, not a second mechanism — and the temp filler gained Firebird for free.
+		// BATCHED INSERT — N rows, in the caller's own transaction.
 		//
 		// A thousand register lines used to be a thousand doors, a thousand renders and a thousand
-		// round trips. Now it is a handful of statements, in the caller's own transaction.
+		// round trips. Now each row is bound through its columns' own door (BindValue) into the batch L2
+		// carries (ibBatchInsert), and L2 decides the statements: one prepared INSERT run again per row
+		// where the engine is fast at that, a multi-row statement per chunk elsewhere.
 		if (kind == WriteKind::Insert && writeRows.size() > 1) {
 			// UNDER A ROW POLICY, STAY ONE ROW AT A TIME. The WITH CHECK below decides per row and
 			// answers with a count; folded into a batch, "3 of 1000 were refused" and "1000 were
@@ -4085,38 +4118,30 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 				return total;
 			}
 
-			// CHUNKED, because one statement is not the same as one good statement. A thousand-row
-			// VALUES list (or its UNION ALL twin) is a very large parse tree and a very long
-			// statement text, and Firebird in particular has a hard ceiling on both; past some width
-			// the parse costs more than the round trips it saves. The temp-table manager settled on
-			// 50 for the same reason, and a register row is wider than a temp row — several physical
-			// fields per logical column — so this stays in the same neighbourhood rather than
-			// inventing a second number. A thousand lines become a handful of statements either way;
-			// the curve is flat well before here, so there is nothing to win by tuning it per driver.
-			const std::size_t kRowsPerStatement = 50;
-
-			long total = 0;
-			for (std::size_t start = 0; start < writeRows.size(); start += kRowsPerStatement) {
-				const std::size_t end = (std::min)(start + kRowsPerStatement, writeRows.size());
-
-				ibDmlStatement ins(ibDmlKind::Insert);
-				ins.m_table = table;
-				const std::vector<ibQueryExprPtr> first = rowAsValues(writeRows[start]);
-				for (size_t k = 0; k < columns.size() && k < first.size(); ++k)
-					ins.m_assignments.push_back(ibDmlAssign{ columns[k], first[k] });
-				for (std::size_t r = start + 1; r < end; ++r)
-					ins.m_extraRows.push_back(rowAsValues(writeRows[r]));
-
-				ibDatabaseQueryBuilder q(spec.m_holder);
-				try {
-					const long n = q.Execute(ins);
-					if (n < 0) return -1;
+			try {
+				ibBatchInsert batch(table, columns, spec.m_holder);
+				long total = 0;
+				for (const ibWriteRow& row : writeRows) {
+					int position = 1;
+					for (std::size_t c = 0; c < row.size(); ++c) {
+						const int first = position;
+						row[c].first->BindValue(batch, metaData, row[c].second, position);
+						// ONE VALUE PER FIELD, EXACTLY — the rule rowAsValues above keeps, for the reason written there.
+						if (position - first != static_cast<int>(fieldsOf[c].size()))
+							ibBackendCoreException::Error(
+								_("A batched write captured %d values for a column declaring %d fields"),
+								position - first, static_cast<int>(fieldsOf[c].size()));
+					}
+					const long n = batch.RunQuery();
+					if (n < 0) return -1;   // a refused row stops the set — the caller's TX rolls back
 					total += n;
 				}
-				catch (const ibBackendException&) { throw; }   // the DB's own reason travels up intact
-				catch (...) { return -1; }
+				const long n = batch.Flush();
+				if (n < 0) return -1;
+				return total + n;
 			}
-			return total;
+			catch (const ibBackendException&) { throw; }   // the DB's own reason travels up intact
+			catch (...) { return -1; }
 		}
 
 		// WITH CHECK on CREATE — a restricted INSERT. The folded RLS predicate rides on a derived ONE-ROW

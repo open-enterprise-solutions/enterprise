@@ -372,36 +372,35 @@ ibValueRecordSetObjectAccountingRegister::ibValueAccountingLine::ibValueAccounti
 	ibValueRecordSetObjectAccountingRegister* ownerTable, const ibDataViewItem& line)
 	: ibValueRecordSetObjectRegisterReturnLine(ownerTable, line), m_ownerSet(ownerTable)
 {
-	m_members.Bind(this, &ibValueAccountingLine::FillMembers);
 }
 
 ibValueRecordSetObjectAccountingRegister::ibValueAccountingLine::~ibValueAccountingLine()
 {
 }
 
-void ibValueRecordSetObjectAccountingRegister::ibValueAccountingLine::FillMembers(ibMemberTable& helper) const
+void ibValueRecordSetObjectAccountingRegister::DescribeReturnLine(ibMemberTable& helper) const
 {
-	// The attributes come from the base contributor (bound in its own ctor); these are the two views
-	// over the slot pairs. In a one-sided register there is one collection and it needs no side in its
-	// name — the side is said by RecordType; in a correspondence register there are two, because the
-	// line names both accounts and each has its own analytical breakdown.
-	const ibValueMetaObjectAccountingRegister* meta =
-		m_ownerSet != nullptr ? m_ownerSet->GetAccountingMetaObject() : nullptr;
+	// The attributes, as any register line has them; then the two views over the slot pairs. In a one-sided
+	// register there is one collection and it needs no side in its name — the side is said by RecordType; in a
+	// correspondence register there are two, because the line names both accounts and each has its own
+	// analytical breakdown.
+	ibValueRecordSetObject::DescribeReturnLine(helper);
+	const ibValueMetaObjectAccountingRegister* meta = GetAccountingMetaObject();
 	if (meta == nullptr)
 		return;
 
 	if (meta->IsCorrespondence()) {
-		helper.AppendProp(wxT("AccountDimensionDr"), ePropAccountDimensionDr);
-		helper.AppendProp(wxT("AccountDimensionCr"), ePropAccountDimensionCr);
+		helper.AppendProp(wxT("AccountDimensionDr"), ibValueAccountingLine::ePropAccountDimensionDr);
+		helper.AppendProp(wxT("AccountDimensionCr"), ibValueAccountingLine::ePropAccountDimensionCr);
 	}
 	else {
-		helper.AppendProp(wxT("AccountDimension"), ePropAccountDimension);
+		helper.AppendProp(wxT("AccountDimension"), ibValueAccountingLine::ePropAccountDimension);
 	}
 }
 
 bool ibValueRecordSetObjectAccountingRegister::ibValueAccountingLine::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const ibMetaID& id = m_members.GetPropData(lPropNum);
+	const ibMetaID& id = m_ownerSet->m_methodHelperReturnLine.GetPropData(lPropNum);
 	switch (id) {
 	case ePropAccountDimension:
 	case ePropAccountDimensionDr:
@@ -416,7 +415,7 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountingLine::GetPropVal
 
 bool ibValueRecordSetObjectAccountingRegister::ibValueAccountingLine::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const ibMetaID& id = m_members.GetPropData(lPropNum);
+	const ibMetaID& id = m_ownerSet->m_methodHelperReturnLine.GetPropData(lPropNum);
 
 	// ⭐⭐ THE BREAKDOWN IS A MAP, AND A WHOLE MAP MAY BE HANDED OVER.
 	//

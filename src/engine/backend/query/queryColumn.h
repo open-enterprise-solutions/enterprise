@@ -377,6 +377,7 @@ public:
 	// the other would be storing what it cannot read. The default is the codec (BindWriteValue); a
 	// column with nothing of its own to store overrides it and binds nothing — a moment is READ out of
 	// the date and the reference and WRITTEN by writing those, which is what already happens.
+	// Into an L2 statement — a template (ibQueryStatement) or the rows of a batch (ibBatchInsert is one).
 	virtual void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,
 	                       const class ibValue& value, int& position) const;
 

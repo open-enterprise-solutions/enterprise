@@ -6,6 +6,7 @@
 #include "backend/objCtor.h"   // ibCtorMetaValueType — the type the metadata REGISTERED for the chart
 #include "backend/clsid.h"   // reference_to_clsid — the calc-type attribute's type is a reference into the bound chart
 #include "chartOfCalculationTypes.h"   // the bound chart — resolved, asked for its metaID and for its relations
+#include "backend/diagnostics/journal.h"   // ibJournalInfo — a recalculation saved as an object, let go
 
 // Bind the register to a chart of calculation types: the CalculationType standard attribute becomes a
 // reference into that chart. Empty metaID leaves it untyped (no chart bound yet).
@@ -64,21 +65,6 @@ void ibValueMetaObjectCalculationRegister::ApplyChartBinding()
 	if (chart == nullptr)
 		return;
 	SetChartOfCalculationTypes(chart->GetMetaID());
-}
-
-// THE DISPLACEMENT RELATION, as the chart declares it: one edge per row of a calculation type's Displacing
-// section — {the type the row belongs to, the type the row names}. Read as DATA, in one statement over the
-// whole section, the way the accounting register reads its chart's analytics kinds
-// (accountingRegisterMetadataTotals.cpp): opening each type's card instead would materialise a runtime
-// object per type, which needs a session a background write may not have.
-void ibValueMetaObjectCalculationRegister::ReadDisplacementRelation(std::map<ibValue, int>& typeIndex,
-                                                                    std::vector<std::pair<int, int>>& edges) const
-{
-	const ibValueMetaObjectChartOfCalculationTypes* chart = GetChartOfCalculationTypes();
-	if (chart == nullptr)
-		return;
-	// {owner of the row, type the row names} = {displaced, displacer}
-	chart->ReadRelation(chart->GetDisplacingTable(), typeIndex, edges);
 }
 
 //***********************************************************************
@@ -143,9 +129,9 @@ bool ibValueMetaObjectCalculationRegister::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyAttributeBasePeriodEnd->GetName(),   m_propertyAttributeBasePeriodEnd->GetNodeValue());
 	node.SetProperty(m_propertyAttributeCalculationType->GetName(), m_propertyAttributeCalculationType->GetNodeValue());
 
-	// The actual action periods' table is written for its IDENTITY alone (see the accumulation
-	// register's totals: the id is what the differ matches the physical table by).
-	m_actualPeriods->SaveNode(node.Child(wxT("ActualActionPeriods")));
+	// The recalculation, and its marks' table for its IDENTITY alone — the id is what the differ matches a table by.
+	node.SetProperty(m_propertyUseRecalculation->GetName(), m_propertyUseRecalculation->GetNodeValue());
+	m_recalculation->SaveNode(node.Child(m_recalculation->GetName()));
 
 	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
 	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
@@ -171,8 +157,9 @@ bool ibValueMetaObjectCalculationRegister::ReadData(const ibDataNode& node)
 	m_propertyAttributeBasePeriodEnd->SetNodeValue(node.GetProperty(m_propertyAttributeBasePeriodEnd->GetName()));
 	m_propertyAttributeCalculationType->SetNodeValue(node.GetProperty(m_propertyAttributeCalculationType->GetName()));
 
-	if (const ibDataNode* actualPeriods = node.FindChild(wxT("ActualActionPeriods")))
-		m_actualPeriods->LoadNode(*actualPeriods);
+	m_propertyUseRecalculation->SetNodeValue(node.GetProperty(m_propertyUseRecalculation->GetName()));
+	if (const ibDataNode* saved = node.FindChild(m_recalculation->GetName()))
+		m_recalculation->LoadNode(*saved);
 
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
 	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
@@ -198,7 +185,7 @@ bool ibValueMetaObjectCalculationRegister::OnCreateMetaObject(ibMetaData* metaDa
 		(*m_propertyAttributeStorno)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyAttributeBasePeriodStart)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyAttributeBasePeriodEnd)->OnCreateMetaObject(metaData, flags) &&
-		m_actualPeriods->OnCreateMetaObject(metaData, flags) &&
+		m_recalculation->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyAttributeCalculationType)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyManagerModule)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyObjectModule)->OnCreateMetaObject(metaData, flags);
@@ -219,8 +206,19 @@ bool ibValueMetaObjectCalculationRegister::OnLoadMetaObject(ibMetaData* metaData
 	if (!(*m_propertyAttributeStorno)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyAttributeBasePeriodStart)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyAttributeBasePeriodEnd)->OnLoadMetaObject(metaData)) return false;
-	if (!m_actualPeriods->OnLoadMetaObject(metaData)) return false;
+	if (!m_recalculation->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyAttributeCalculationType)->OnLoadMetaObject(metaData)) return false;
+
+	// A recalculation saved as an object of its own is let go, now that its children have loaded: the marks are the
+	// register's (calculationRegister.h, "A recalculation saved as an object"). Said in the journal, so whoever looks
+	// knows why — and only there: a note about a migration is not a box to click for every copy that loads.
+	std::vector<ibValueMetaObjectRecalculation*> saved;
+	FillArrayObjectByFilter<ibValueMetaObjectRecalculation>(saved, { g_metaRecalculationCLSID });
+	for (ibValueMetaObjectRecalculation* recalculation : saved) {
+		ibJournalInfo(wxT("metadata"), wxT("%s: the recalculation '%s' saved as an object of its own is let go - the register ")
+			wxT("keeps its marks itself now; switch 'Use recalculation' on, and drop the table it had"), GetName(), recalculation->GetName());
+		RemoveChild(recalculation);
+	}
 
 	return ibValueMetaObjectRegisterData::OnLoadMetaObject(metaData);
 }
@@ -267,7 +265,7 @@ bool ibValueMetaObjectCalculationRegister::OnSaveMetaObject(int flags)
 	if (!(*m_propertyAttributeStorno)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeBasePeriodStart)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeBasePeriodEnd)->OnSaveMetaObject(flags)) return false;
-	if (!m_actualPeriods->OnSaveMetaObject(flags)) return false;
+	if (!m_recalculation->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeCalculationType)->OnSaveMetaObject(flags)) return false;
 
 	// A calculation register is always subordinate to a recorder, but at IMPORT (or before the posting
@@ -292,7 +290,7 @@ bool ibValueMetaObjectCalculationRegister::OnDeleteMetaObject()
 	if (!(*m_propertyAttributeStorno)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyAttributeBasePeriodStart)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyAttributeBasePeriodEnd)->OnDeleteMetaObject()) return false;
-	if (!m_actualPeriods->OnDeleteMetaObject()) return false;
+	if (!m_recalculation->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyAttributeCalculationType)->OnDeleteMetaObject()) return false;
 
 	return ibValueMetaObjectRegisterData::OnDeleteMetaObject();
@@ -339,22 +337,11 @@ bool ibValueMetaObjectCalculationRegister::OnAfterRunMetaObject(int flags)
 	// the accounting register declares its Account (accountingRegisterMetadata.cpp OnAfterRunMetaObject).
 	ApplyChartBinding();
 
-	// The actual action periods as a query source — built afresh on every run, because the columns it
-	// publishes are the register's own and a run is where they may have changed.
-	m_actualPeriodsQueryable.reset();
+	// The fact, where the records keep action periods; the recalculation, where the register keeps one.
 	if (IsUseActionPeriod())
-		m_metaData->RegisterSource(&m_actualPeriodsSource);
-
-	// …and the base from every register a base may come from, one source each (`<this>.Base<that>`).
-	// Rebuilt: which registers those are is configuration, and a run is where it may have changed.
-	for (const std::unique_ptr<ibCalcBaseSourceDescriptor>& source : m_baseSources)
-		m_metaData->UnregisterSource(source.get());
-	m_baseSources.clear();
-	for (const ibValueMetaObjectCalculationRegister* base : GetBaseRegisters()) {
-		m_baseSources.push_back(std::make_unique<ibCalcBaseSourceDescriptor>(this, base));
-		m_metaData->RegisterSource(m_baseSources.back().get());
-	}
-
+		m_metaData->RegisterSource(&m_factSource);
+	if (HasRecalculation())
+		m_metaData->RegisterSource(&m_recalculationSource);
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -372,10 +359,8 @@ bool ibValueMetaObjectCalculationRegister::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectCalculationRegister::OnBeforeCloseMetaObject()
 {
-	m_metaData->UnregisterSource(&m_actualPeriodsSource);   // mirror of the run's RegisterSource
-	for (const std::unique_ptr<ibCalcBaseSourceDescriptor>& source : m_baseSources)
-		m_metaData->UnregisterSource(source.get());
-	m_baseSources.clear();
+	m_metaData->UnregisterSource(&m_factSource);   // mirror of the run's RegisterSource
+	m_metaData->UnregisterSource(&m_recalculationSource);
 
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject())
 		return false;

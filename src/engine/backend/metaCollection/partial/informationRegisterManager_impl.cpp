@@ -20,8 +20,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cFilter)
 	ibRequireOpenBase();
 
 	ibValueModelTable* retTable = new ibValueModelTable();
-	// 🛑 Held while its rows are made: a row holds its table, so without this the first
-	// `wxDELETE(retLine)` deletes a table nobody else holds yet. See valueQueryable.cpp, M::ToTable.
+	// Held while its rows are made, as every builder of a table holds it (valueQueryable.cpp, M::ToTable).
 	const ibValue keep(retTable);
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
@@ -44,12 +43,13 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cFilter)
 		ibReadPageRequest page;
 		page.m_count = 0;   // every matching record
 		ibDataQueryResult selection = q.Execute(page);
+		const auto attributes = m_metaObject->GetGenericAttributeArrayObject();   // once, not once a record
+		std::vector<std::pair<ibMetaID, ibValue>> row;
 		while (selection.Next()) {
-			ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
-			wxASSERT(retLine);
-			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
-				retLine->SetValueByMetaID(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
-			wxDELETE(retLine);
+			row.clear();
+			for (const auto object : attributes)
+				row.emplace_back(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
+			retTable->AppendRow(row);
 		}
 	}
 	catch (...) {}
@@ -79,24 +79,25 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cPeriod,
 		m_metaObject->GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
 		const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_metaObject, cFilter, ibRegFilterOver::Records);
 
-		// Period + dimension filtered read through the L3 door: the period is an Eq
-		// condition like any selected dimension; L3 decomposes each across its physical
-		// fields and binds them. Rows come from the L3 selection (GetValue) — no raw
-		// statement, no per-DBMS SQL here.
+		// Period + dimension filtered read through the L3 door: the period is the key's condition
+		// (ibRegWhereKeyValue — the whole period), the dimensions the filter's; L3
+		// decomposes each across its physical fields and binds them. Rows come from the L3
+		// selection (GetValue) — no raw statement, no per-DBMS SQL here.
 		try {
 			ibDataQueryBuilder q;
 			q.From(m_metaObject->GetQueryable());
-			q.Where(m_metaObject->GetRegisterPeriod()->GetQueryColumn(), ibQueryFilterOp::Equal, cPeriod);
-							q.Where(filter);
+			ibRegWhereKeyValue(q, m_metaObject, m_metaObject->GetRegisterPeriod(), cPeriod);
+			q.Where(filter);
 			ibReadPageRequest page;
 			page.m_count = 0;   // every matching record
 			ibDataQueryResult selection = q.Execute(page);
+			const auto attributes = m_metaObject->GetGenericAttributeArrayObject();   // once, not once a record
+			std::vector<std::pair<ibMetaID, ibValue>> row;
 			while (selection.Next()) {
-				ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
-				wxASSERT(retLine);
-				for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
-					retLine->SetValueByMetaID(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
-				wxDELETE(retLine);
+				row.clear();
+				for (const auto object : attributes)
+					row.emplace_back(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
+				retTable->AppendRow(row);
 			}
 		}
 		catch (...) {}
@@ -121,12 +122,13 @@ static ibValue SelectionToTable(ibDataQueryResult& selection,
 			cols->AddColumn(object->GetName(), object->GetTypeDesc(), object->GetSynonym());
 		col->SetColumnID(object->GetMetaID());
 	}
+	const auto attributes = meta->GetGenericAttributeArrayObject();   // once, not once a record
+	std::vector<std::pair<ibMetaID, ibValue>> row;
 	while (selection.Next()) {
-		ibValueModelTable::ibValueModelTableReturnLine* line = table->GetRowAt(table->AppendRow());
-		wxASSERT(line);
-		for (const auto object : meta->GetGenericAttributeArrayObject())
-			line->SetValueByMetaID(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
-		wxDELETE(line);
+		row.clear();
+		for (const auto object : attributes)
+			row.emplace_back(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
+		table->AppendRow(row);
 	}
 	return table;
 }

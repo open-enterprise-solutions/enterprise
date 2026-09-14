@@ -56,7 +56,7 @@ public:
 	// snapshots, the diff is empty and the table is never created: MEASURED 2026-09-10, database_diff
 	// answered "the database already holds this configuration" over a Base section it had no table for.
 	// So the copy that mirrors the database leaves it at 0, and a part at 0 is not part of anything —
-	// no table (the chart's list), no column (below), no relation (ReadRelation) — until the edited copy,
+	// no table (the chart's list), no column (below), no relation a reading joins — until the edited copy,
 	// which did stamp it, is applied and saved.
 	bool StampIfNeverSaved(ibMetaData* metaData);
 	bool IsNeverSaved() const { return GetMetaID() == 0; }
@@ -102,7 +102,7 @@ private:
 	//
 	// ⭐ NO `Priority` COLUMN, and this is the same decision the account dimension kinds table made
 	// about `Order`. What the edges imply is DERIVED from them where it is used
-	// (ibComputeActionPeriodDisplacementByRelation for Displacing) — a number stored beside the row
+	// (the fact joins the Displacing section as it stands) — a number stored beside the row
 	// would be a second spelling of what the edges already say, and the stored one is the one that can
 	// disagree with them.
 	//

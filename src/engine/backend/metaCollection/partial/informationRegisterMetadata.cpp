@@ -24,6 +24,17 @@ ibValueMetaObjectInformationRegister::~ibValueMetaObjectInformationRegister()
 	wxDELETE(m_metaRecordManager);
 }
 
+ibTotalsPeriod ibValueMetaObjectInformationRegister::GetPeriodicityUnit() const
+{
+	switch (GetPeriodicity()) {
+	case ibPeriodicity::eWithinDay:     return ibTotalsPeriod::Day;
+	case ibPeriodicity::eWithinMonth:   return ibTotalsPeriod::Month;
+	case ibPeriodicity::eWithinQuarter: return ibTotalsPeriod::Quarter;
+	case ibPeriodicity::eWithinYear:    return ibTotalsPeriod::Year;
+	default:                            return ibTotalsPeriod::Second;   // within a second, or no period: as written
+	}
+}
+
 ibValueMetaObjectFormBase* ibValueMetaObjectInformationRegister::GetDefaultFormByID(const ibFormID& id) const
 {
 	if (id == eFormRecord && m_propertyDefFormRecord->GetValueAsInteger() != wxNOT_FOUND) {

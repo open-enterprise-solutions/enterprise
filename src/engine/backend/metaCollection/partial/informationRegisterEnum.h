@@ -6,10 +6,15 @@ enum ibWriteRegisterMode {
 	eSubordinateRecorder
 };
 
+// What a record's period is truncated to (ibValueMetaObjectInformationRegister::GetPeriodicityUnit). The numbers are
+// what a saved configuration holds, so a new one goes at the end.
 enum ibPeriodicity {
 	eNonPeriodic,
 	eWithinSecond,
 	eWithinDay,
+	eWithinMonth,
+	eWithinQuarter,
+	eWithinYear,
 };
 
 #pragma region enumeration
@@ -23,6 +28,9 @@ class ibValueEnumPeriodicity : public ibValueEnumeration<ibPeriodicity> {
 		AddEnumeration(ibPeriodicity::eNonPeriodic, wxT("NonPeriodic"), _("Non periodic"));
 		AddEnumeration(ibPeriodicity::eWithinSecond, wxT("WithinSecond"), _("Within second"));
 		AddEnumeration(ibPeriodicity::eWithinDay, wxT("WithinDay"), _("Within day"));
+		AddEnumeration(ibPeriodicity::eWithinMonth, wxT("WithinMonth"), _("Within month"));
+		AddEnumeration(ibPeriodicity::eWithinQuarter, wxT("WithinQuarter"), _("Within quarter"));
+		AddEnumeration(ibPeriodicity::eWithinYear, wxT("WithinYear"), _("Within year"));
 	}
 };
 class ibValueEnumWriteRegisterMode : public ibValueEnumeration<ibWriteRegisterMode> {

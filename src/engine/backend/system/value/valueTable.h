@@ -192,6 +192,7 @@ public:
 			// flatten into the table's inspector): the notify chain column -> value-table -> holder, so a
 			// Caption / Name / Type edit bubbles up and the bound control re-renders live.
 			colInfo->SetAttachOwner(static_cast<ibPropertyObject*>(m_ownerTable));
+			m_ownerTable->OnColumnsChanged();   // the rows' names and a new row's cells are the columns
 			return m_listColumnInfo.emplace_back(colInfo);
 		}
 
@@ -215,6 +216,7 @@ public:
 
 			if (it != m_listColumnInfo.end())   // an id the collection does not hold: erase(end()) is UB
 				m_listColumnInfo.erase(it);
+			m_ownerTable->OnColumnsChanged();
 		}
 
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
@@ -226,6 +228,16 @@ public:
 		}
 
 		virtual unsigned int GetColumnCount() const { return m_listColumnInfo.size(); }
+
+		// The column's type by id, as the column holds it — read per cell by the table, which a copy per cell
+		// (GetColumnType answers by value) made a share of reading a register into a table (MEASURED 2026-09-14).
+		const ibTypeDescription& GetColumnTypeDesc(unsigned int col) const {
+			static const ibTypeDescription none;
+			for (const auto& colInfo : m_listColumnInfo)
+				if (colInfo->GetColumnID() == col)
+					return colInfo->GetTypeDesc();
+			return none;
+		}
 
 		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
@@ -252,8 +264,6 @@ public:
 		virtual ~ibValueModelTableReturnLine();
 
 		virtual ibValueModel* GetOwnerModel() const { return m_ownerTable; }
-
-		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal); //setting attribute
 		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); //attribute value
@@ -317,7 +327,7 @@ public:
 		ibComposerNode* node = GetViewData<ibComposerNode>(item);
 		if (node == nullptr)
 			return false;
-		return node->SetValue(id, ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnType(id), varMetaVal), true);
+		return node->SetValue(id, ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnTypeDesc(id), varMetaVal), true);
 	}
 
 	virtual bool GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const {
@@ -328,7 +338,7 @@ public:
 		// Lazy retype: a column's Type may have changed AFTER a cell was written, so coerce the stored value to
 		// the column's CURRENT type ON READ instead of sweeping every row on a type edit. A stale-typed cell is
 		// converted; an absent / empty cell yields the typed empty — "nothing there" reads back cleanly.
-		pvarMetaVal = ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnType(id), pvarMetaVal);
+		pvarMetaVal = ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnTypeDesc(id), pvarMetaVal);
 		return true;
 	}
 
@@ -420,6 +430,11 @@ public:
 
 	//support def. methods (in runtime)
 	long AppendRow(unsigned int before = 0, const ibDataViewItem& contextRow = ibDataViewItem());
+	// …and a row whose values are given, by column id — made whole: each value adjusted to its column, as every cell
+	// of this table is, and the row appended once. What turns a reading into a table (a register's Get and GetBase,
+	// ToTable) used to add an empty row — every column's default made, a reference's through the registry — and then
+	// set each cell through a row object made and dropped for it (stack samples 2026-09-14, Debug).
+	long AppendRow(const std::vector<std::pair<ibMetaID, ibValue>>& values);
 	void CopyRow(const ibDataViewItem& row);
 	void EditRow(const ibDataViewItem& row);
 	void DeleteRow(const ibDataViewItem& row);
@@ -469,6 +484,14 @@ public:
 	virtual wxString GetObjectTypeName() const override { return GetClassName(); }
 	virtual bool IsEditable() const override { return true; }
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnChildChanged() override;
+
+	// The columns changed — added, removed, or one of them edited: the rows' names and the empty row a new row copies
+	// are both the columns', so both are made again at the next question. The one door every column change goes by.
+	void OnColumnsChanged() { m_methodHelperReturnLine.Invalidate(); InvalidateNewRow(); }
+
+	// A new row's columns, each empty as its type makes it (NewRow copies the row made once).
+	virtual void DescribeNewRow(ibNewRowColumns& columns) const override;
 
 	// Serialize the column collection: one child node per column (id / name / caption / width + type-desc).
 	virtual bool ReadProperty(const ibDataNode& node) override;

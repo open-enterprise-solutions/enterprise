@@ -78,6 +78,7 @@ ibValueModel::ibValueModel()
 	m_modelProvider(nullptr)
 {
 	m_modelProvider = new ibDataViewModelProviderImpl(this);
+	m_methodHelperReturnLine.Bind(this, &ibValueModel::DescribeReturnLine);
 
 	// (A MODEL DEALS IN SETTINGS, and it asks nobody for them: the COMPOSER holds the one in force,
 	//  and the base forwards. The whole schema — query, main table, variants, structure — is what a
@@ -87,6 +88,47 @@ ibValueModel::ibValueModel()
 	// CreateComposer picks ibDataDBComposer (DB) / ibDataRamComposer (RAM).
 	// Subclasses set their source + default sort/grouping STRAIGHT on it in their ctor —
 	// GetModelComposer().FromSource(q).Sort(...) — the persistent settings store the fetch reads.)
+}
+
+ibValue::ibMemberTable* ibValueModel::ibValueModelReturnLine::DoGetPMethods() const
+{
+	const ibValueModel* model = GetOwnerModel();
+	return model != nullptr ? &model->m_methodHelperReturnLine : nullptr;
+}
+
+void ibValueModel::DescribeReturnLine(ibMemberTable& helper) const
+{
+	const ibValueModelColumnCollection* columns = GetColumnCollection();
+	if (columns == nullptr)
+		return;
+	for (unsigned int idx = 0; idx < columns->GetColumnCount(); ++idx)
+		if (const ibValueModelColumnCollection::ibValueModelColumnInfo* column = columns->GetColumnInfo(idx))
+			helper.AppendProp(column->GetColumnName(), column->GetColumnID());
+}
+
+ibComposerNode* ibValueModelStorage::NewRow() const
+{
+	if (!m_newRow) {
+		ibNewRowColumns columns;
+		DescribeNewRow(columns);
+		m_newRow.reset(new ibComposerNode());
+		m_newRowAnew.clear();
+		for (auto& column : columns) {
+			ibValue empty = column.second();
+			// Shared only what no row can write into — a primitive, a reference, an enumeration value, asked of the
+			// value's kind. Anything else (an array, a structure, a table) is one of its own for each row: a row that
+			// wrote into a shared one wrote into every row's.
+			const ibClassID clsid = empty.GetClassType();
+			if (::IsPrimitive(clsid) || ::IsReference(clsid) || ::IsEnum(clsid))   // the clsid kinds, not ibValue's own
+				m_newRow->AppendTableValue(column.first, std::move(empty));
+			else
+				m_newRowAnew.push_back(std::move(column));
+		}
+	}
+	ibComposerNode* row = new ibComposerNode(*m_newRow);
+	for (const auto& column : m_newRowAnew)
+		row->AppendTableValue(column.first, column.second());
+	return row;
 }
 
 ibValueModel::~ibValueModel()

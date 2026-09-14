@@ -12,6 +12,16 @@ enum ibDocumentPostingMode {
 	ibDocumentPostingMode_Regular
 };
 
+// WHAT THE PLATFORM DOES WITH A DOCUMENT'S MOVEMENTS when it is posted again or its posting undone (Max, 2026-09-14).
+// A deleted document takes them with it whatever this says (Max, 2026-09-15). The numbers are what a saved
+// configuration holds.
+enum ibDocumentRecordsDeletion {
+	ibDocumentRecordsDeletion_Automatically,    // cleared before a posting again and when a posting is undone
+	ibDocumentRecordsDeletion_OnUndoPosting,    // kept when posted again — a set the handler writes replaces its own —
+	                                            // and cleared when a posting is undone
+	ibDocumentRecordsDeletion_Never             // not cleared by the platform on either: the configuration clears them
+};
+
 #pragma region enumeration
 #include "backend/compiler/enumUnit.h"
 
@@ -34,6 +44,16 @@ class ibValueEnumDocumentPostingMode : public ibValueEnumeration<ibDocumentPosti
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibDocumentPostingMode::ibDocumentPostingMode_RealTime, wxT("RealTime"), _("Real time"));
 		AddEnumeration(ibDocumentPostingMode::ibDocumentPostingMode_Regular, wxT("Regular"), _("Regular"));
+	}
+};
+class ibValueEnumDocumentRecordsDeletion : public ibValueEnumeration<ibDocumentRecordsDeletion> {
+	public:
+	ibValueEnumDocumentRecordsDeletion() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Automatically, wxT("Automatically"), _("Delete automatically"));
+		AddEnumeration(ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_OnUndoPosting, wxT("OnUndoPosting"), _("Delete automatically on undo posting"));
+		AddEnumeration(ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Never, wxT("Never"), _("Do not delete automatically"));
 	}
 };
 #pragma endregion 

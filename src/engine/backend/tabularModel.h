@@ -569,6 +569,9 @@ public:
 	protected:
 		ibDataViewItem m_lineItem;
 
+		// A row's names are its model's (m_methodHelperReturnLine): the model fills the table, the row uses it.
+		virtual ibMemberTable* DoGetPMethods() const override;
+
 	private:
 		// The model this row speaks through, held (see HoldOwnerModel). Typed as ibValue because the
 		// only thing wanted here is its lifetime; the TYPED pointer stays with the subclass that
@@ -823,6 +826,22 @@ public:
 
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) = 0;
 	virtual ibValueModelColumnCollection* GetColumnCollection() const = 0;
+
+	// What the rows it hands out are called — its columns; a model whose rows have other names, or not all of
+	// them, says which. Bound once, by this class's ctor, into m_methodHelperReturnLine.
+	virtual void DescribeReturnLine(ibMemberTable& helper) const;
+
+protected:
+
+	// ⭐ THE NAMES OF ITS ROWS — one table for every row the model hands out, described by the model and referred
+	// to by the row (ibValueModelReturnLine::DoGetPMethods). A row object lives for one step of a loop, and each
+	// used to build its own on the first question put to it — a register set's line walking every attribute of the
+	// register: a payroll posting touching a document's 72 234 lines and as many new movements paid 0.35 ms a row
+	// for it in Debug (MEASURED 2026-09-14). A model whose columns change under it says so (Invalidate), as a value
+	// table does.
+	mutable ibMemberTable m_methodHelperReturnLine;
+
+public:
 
 	// WHAT THIS COLUMN ACCEPTS (ibTabularDataObject's question, and the structure hop's only input) —
 	// asked of the model's OWN column collection, which every model already keeps in step with its truth:
@@ -1802,6 +1821,23 @@ public:
 	// Fluent top-level builder: model.AddRow().Set(col, v).Set(col2, v2)…; then row.AddRow() for a child (tree).
 	ibComposerNode& AddRow() { ibComposerNode* n = new ibComposerNode(); m_storage.AddValue(this, n, false); return *n; }
 
+	// ⭐⭐ A NEW ROW IS A COPY OF THE MODEL'S OWN EMPTY ROW (Max, 2026-09-14) — the way the names of its rows are the
+	// model's (DescribeReturnLine). The first new row asks for it, and the model makes it then, once: every empty
+	// value through the type it comes from — a reference through the type registry. Every row after it is a COPY,
+	// not a move: the empty row stays for the next. A column change makes it again (InvalidateNewRow), as it describes
+	// the rows' names again. An empty value goes into every copy as it is only when no row can write INTO it — a
+	// primitive, a reference, an enumeration value, whose cell an assignment REPLACES; anything else (an array, a
+	// structure, a table) is made anew for every row, since a row writing into a shared one wrote into all of them
+	// (the audit, 2026-09-15). Before this, a payroll's 80 008 new
+	// movements each made an empty value for every column through the registry, and the posting overwrote them.
+	// (Here and not on ibValueModel: only a model that holds its rows makes new ones — a cursor's rows are read.)
+	ibComposerNode* NewRow() const;
+
+	// What a new row is made of — its columns, each with how its empty value is made; asked by NewRow once, at the
+	// first new row, and again after InvalidateNewRow. A model with no columns of its own describes nothing.
+	using ibNewRowColumns = std::vector<std::pair<ibMetaID, std::function<ibValue()>>>;
+	virtual void DescribeNewRow(ibNewRowColumns& /*columns*/) const {}
+
 	// displayed-item → storage: the item IS a live storage node, so its index is its position in the storage.
 	long StorageIndexOf(const ibDataViewItem& item) const { return GetRow(item); }
 	ibComposerNode* StorageRowOf(const ibDataViewItem& item) const { return m_storage.GetNode(StorageIndexOf(item)); }
@@ -1920,6 +1956,14 @@ protected:
 	// const question that may have to build its own answer, the same reason the member table's name
 	// index is mutable (value.h).
 	mutable std::map<unsigned int, ibColumnIndex> m_columnIndexes;
+
+	// The columns changed: the empty row is made again at the next new row — as a model whose columns change says
+	// so to the names of its rows (m_methodHelperReturnLine.Invalidate).
+	void InvalidateNewRow() { m_newRow.reset(); m_newRowAnew.clear(); }
+
+private:
+	mutable std::unique_ptr<ibComposerNode> m_newRow;   // the empty row every new row copies
+	mutable ibNewRowColumns                 m_newRowAnew;   // the columns made anew for each row (what a row can write into)
 };
 
 // The universal fetch row — nested in the abstract base, surfaced as a plain name (DB copies, RAM live rows,

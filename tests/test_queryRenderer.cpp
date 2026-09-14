@@ -622,6 +622,24 @@ TEST(QueryRenderer, Window_RowsFrameIsTheOtherExplicitAnswer)
 		"ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running FROM Reg7");
 }
 
+// …and the rows BEFORE this one, this one left out — how far the spans before a row reach, which the
+// row's own span must not answer. A calculation record's pieces are the gaps such a walk finds.
+TEST(QueryRenderer, Window_RowsBeforeLeavesTheCurrentRowOut)
+{
+	std::vector<ibQueryProjItem> proj = {
+		{ ibWindowed(ibFunc(wxT("MAX"), { ibCol(wxT("e")) }),
+		             { { ibCol(wxT("rec")) },
+		               { { ibCol(wxT("s")), ibQuerySortDir::Asc }, { ibCol(wxT("e")), ibQuerySortDir::Asc } },
+		               ibQueryFrame::RowsBeforeCurrent }), wxT("reach") },
+	};
+	const ibRenderedQuery out = ibQueryRenderer(FbDialect())
+		.Render(ibQueryIR(ibProject(ibScan(wxT("Spans")), proj)));
+
+	EXPECT_EQ(Sql(out),
+		"SELECT MAX(e) OVER (PARTITION BY rec ORDER BY s ASC, e ASC "
+		"ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS reach FROM Spans");
+}
+
 // A ranking function takes NO frame — SQL forbids one — and the descending order rides through.
 // This is the shape that picks "the record nearest a moment" in one pass.
 TEST(QueryRenderer, Window_RankingTakesNoFrame)

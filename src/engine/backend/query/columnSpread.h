@@ -76,9 +76,9 @@ inline void BindAbsentPrimitive(ibQueryStatement* st, ibColumnRole role, int& po
 // DescribeColumnLayout (kept in lock-step; that order is the keyset anchor) — binding the _TYPE tag,
 // then for each PRESENT primitive the ACTIVE value (via bindActive) when its role matches `tag`, else
 // the absent placeholder, then the reference pair (via bindRef). No slot vector is materialised: this
-// runs on a per-cell write hot path, so it stays allocation-free — the ContainType / HasReference
-// gate is exactly the one DescribeColumnLayout uses, so the field SET and ORDER are byte-identical to
-// the layout (and thus to the DDL).
+// runs on a per-cell write hot path, so it stays allocation-free — which slots the column has is
+// answered in one pass over its classes, each answer the one DescribeColumnLayout gets from ContainType
+// and its reference test, so the field SET and ORDER are byte-identical to the layout (and thus to the DDL).
 template <class BindActive, class BindRef>
 void DriveSpread(const ibBackendQueryColumn* col, int tag,
                  ibQueryStatement* st, int& pos, BindActive bindActive, BindRef bindRef)
@@ -90,23 +90,40 @@ void DriveSpread(const ibBackendQueryColumn* col, int tag,
 	const ibTypeDescription& td = col->GetTypeValueDesc();
 	st->SetParamInt(pos++, tag);   // _TYPE discriminator
 
-	auto primitive = [&](ibValueTypes vt, ibColumnRole role) {
-		if (!td.ContainType(vt))
+	// WHICH SLOTS THE COLUMN HAS, in ONE pass over the classes its type admits — each answer exactly the one
+	// DescribeColumnLayout gets from ContainType / the reference test, so the two stay slot for slot. Asked as
+	// seven searches of the list per cell, this was a share of writing a register line of its own (stack
+	// samples 2026-09-14, Debug).
+	bool hasBoolean = false, hasNumber = false, hasDate = false, hasString = false, hasEnum = false;
+	bool hasSchedule = false, hasTypeDescription = false, hasReference = false;
+	for (const ibClassID& clsid : td.GetClsidList()) {
+		if      (clsid == g_valueBooleanCLSID)         hasBoolean = true;
+		else if (clsid == g_valueNumberCLSID)          hasNumber = true;
+		else if (clsid == g_valueDateCLSID)            hasDate = true;
+		else if (clsid == g_valueStringCLSID)          hasString = true;
+		else if (clsid == g_valueScheduleCLSID)        hasSchedule = true;
+		else if (clsid == g_valueTypeDescriptionCLSID) hasTypeDescription = true;
+		else if (IsReference(clsid))                   hasReference = true;
+		else if (IsEnum(clsid) && ibValue::IsRegisterCtor(clsid)) hasEnum = true;
+	}
+
+	auto primitive = [&](bool present, ibColumnRole role) {
+		if (!present)
 			return;
 		if (ibPersistedTypeTag(role) == tag) bindActive(role, pos);
 		else                                 BindAbsentPrimitive(st, role, pos);
 	};
-	primitive(ibValueTypes::TYPE_BOOLEAN, ibColumnRole::Boolean);
-	primitive(ibValueTypes::TYPE_NUMBER,  ibColumnRole::Number);
-	primitive(ibValueTypes::TYPE_DATE,    ibColumnRole::Date);
-	primitive(ibValueTypes::TYPE_STRING,  ibColumnRole::String);
-	primitive(ibValueTypes::TYPE_ENUM,    ibColumnRole::Enum);
+	primitive(hasBoolean, ibColumnRole::Boolean);
+	primitive(hasNumber,  ibColumnRole::Number);
+	primitive(hasDate,    ibColumnRole::Date);
+	primitive(hasString,  ibColumnRole::String);
+	primitive(hasEnum,    ibColumnRole::Enum);
 
 	// The schedule slot sits between the primitives and the reference pair — the same place
 	// DescribeColumnLayout puts it, and that order is the keyset anchor, so the two must be read
 	// as one thing. Its "absent" form is an empty blob, bound by the caller: a NULL there would
 	// read back as a corrupt schedule rather than as no schedule.
-	if (td.ContainType(g_valueScheduleCLSID)) {
+	if (hasSchedule) {
 		if (tag == ibFieldTypes_Schedule) bindActive(ibColumnRole::Schedule, pos);
 		else                              st->SetParamNull(pos++);
 	}
@@ -117,12 +134,12 @@ void DriveSpread(const ibBackendQueryColumn* col, int tag,
 	// come from here. A slot the layout emits and the driver skips does not bind a NULL, it binds
 	// EVERYTHING AFTER IT ONE POSITION EARLY, and the last parameter of the statement runs off the
 	// end of the prepared buffer. That is what the driver reported as a null parameter buffer.
-	if (td.ContainType(g_valueTypeDescriptionCLSID)) {
+	if (hasTypeDescription) {
 		if (tag == ibFieldTypes_TypeDescription) bindActive(ibColumnRole::TypeDescription, pos);
 		else                                     st->SetParamNull(pos++);
 	}
 
-	if (ibColumnCodec::HasReference(col)) {
+	if (hasReference) {
 		bindRef(ibColumnRole::ReferenceType, pos);
 		bindRef(ibColumnRole::ReferenceId,   pos);
 	}

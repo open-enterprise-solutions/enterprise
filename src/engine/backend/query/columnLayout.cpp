@@ -18,6 +18,7 @@
 
 
 #include <map>
+#include <optional>   // ibColumnCodec::WriteValue — a blob buffer only for the value that has one
 
 // The single role -> suffix table (see columnLayout.h). Built once; an unknown role
 // (only Raw) yields the empty suffix.
@@ -199,21 +200,24 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 	const int tag = ibColumnSpread::TagForValue(cValue);
 
 	// Schedule payload — serialised once, bound at the _SCH slot. Read off the value itself, like
-	// the reference blob below: no metadata, no session.
-	wxMemoryBuffer scheduleBlob;
+	// the reference blob below: no metadata, no session. The buffer exists only for a schedule: made for
+	// every value, it was a kilobyte allocated and freed per cell written (wxMemoryBuffer's default size).
+	std::optional<wxMemoryBuffer> scheduleBlob;
 	if (tag == ibFieldTypes_Schedule) {
+		scheduleBlob.emplace();
 		ibValueSchedule* schedule = nullptr;
 		if (cValue.ConvertToValue(schedule) && schedule != nullptr)
-			ibJobScheduleDescriptionMemory::WriteBuffer(scheduleBlob, schedule->GetSchedule());
+			ibJobScheduleDescriptionMemory::WriteBuffer(*scheduleBlob, schedule->GetSchedule());
 	}
 
 	// Type-description payload — the same arrangement one line up: serialised once here, bound at
 	// the _TD slot below. The value knows its own description; the codec only moves bytes.
-	wxMemoryBuffer typeDescBlob;
+	std::optional<wxMemoryBuffer> typeDescBlob;
 	if (tag == ibFieldTypes_TypeDescription) {
+		typeDescBlob.emplace();
 		ibValueTypeDescription* typeValue = nullptr;
 		if (cValue.ConvertToValue(typeValue) && typeValue != nullptr)
-			ibTypeDescriptionMemory::WriteBuffer(typeDescBlob, typeValue->m_typeDesc);
+			ibTypeDescriptionMemory::WriteBuffer(*typeDescBlob, typeValue->m_typeDesc);
 	}
 
 	// Reference payload — resolved once, bound at the _RTRef/_RRRef slots. A non-reference value
@@ -239,11 +243,11 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 			case ibColumnRole::Date:    statement->SetParamDate(p++, cValue.GetDate()); break;
 			case ibColumnRole::String:  statement->SetParamString(p++, cValue.GetString()); break;
 			case ibColumnRole::Enum:    statement->SetParamInt(p++, cValue.GetInteger()); break;
-			case ibColumnRole::Schedule:
-				statement->SetParamBlob(p++, scheduleBlob.GetData(), scheduleBlob.GetDataLen());
+			case ibColumnRole::Schedule:   // active only under the schedule's tag, which made the buffer
+				statement->SetParamBlob(p++, scheduleBlob->GetData(), scheduleBlob->GetDataLen());
 				break;
 			case ibColumnRole::TypeDescription:
-				statement->SetParamBlob(p++, typeDescBlob.GetData(), typeDescBlob.GetDataLen());
+				statement->SetParamBlob(p++, typeDescBlob->GetData(), typeDescBlob->GetDataLen());
 				break;
 			default:                                                                        break;
 			}

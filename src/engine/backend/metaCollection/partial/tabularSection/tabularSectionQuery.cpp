@@ -96,13 +96,19 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 		ibDataQueryBuilder q;
 		// WHERE owner = srcGuid (the parent filter is a plain raw-column condition, NOT an identity
 		// sentinel — the tabular identity tail is the line number), ORDER BY line number.
-		q.From(m_metaTable->GetQueryable()).Where(ibOwnerRefColumn(), ibValue(wxString(srcGuid)));
+		//
+		// 🛑 THE ORDER WAS SAID HERE AND NOT WRITTEN. Unordered, the lines come back in whatever order the
+		// engine reads them in, and the save numbers them anew in that order — nothing but the storage kept a
+		// document's lines where they were.
+		q.From(m_metaTable->GetQueryable()).Where(ibOwnerRefColumn(), ibValue(wxString(srcGuid)))
+			.OrderBy(m_metaTable->GetNumberLine()->GetQueryColumn(), /*ascending*/ true);
 		ibReadPageRequest page;
 		page.m_count = 0;   // all lines
 		ibDataQueryResult selection = q.Execute(page);
+		const auto attributes = m_metaTable->GetGenericAttributeArrayObject();   // once, not once a line (SaveData)
 		while (selection.Next()) {
 			ibComposerNode* rowData = new ibComposerNode();
-			for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
+			for (const auto object : attributes) {
 				if (m_metaTable->IsNumberLine(object->GetMetaID()))
 					continue;
 				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
@@ -126,13 +132,16 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 		return true;
 
 	bool hasError = false;
+	// The attributes are asked for once: the list is built by a walk of the metaobject each time it is asked, and
+	// asked per line it was a pass over the section's attributes for every one of a payroll's 72 234 lines.
+	const auto attributes = m_metaTable->GetGenericAttributeArrayObject();
 	//check fill attributes
 	bool fillCheck = true; long currLine = 1;
 	for (long row = 0; row < GetRowCount(); row++) {
-		for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
+		const ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));   // the line, once
+		wxASSERT(node);
+		for (const auto object : attributes) {
 			if (object->FillCheck()) {
-				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
-				wxASSERT(node);
 				if (node->IsEmptyValue(object->GetMetaID())) {
 					wxString fillError =
 						wxString::Format(_("The %s is required on line %i of the %s list"), object->GetSynonym(), currLine, m_metaTable->GetSynonym());
@@ -165,15 +174,16 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 	q.WithAccessPolicy(nullptr)
 		.From(m_metaTable->GetQueryable());
 
+	const ibValue owner(m_objectValue->GetGuid());   // made once: the guid's text is built each time it is made
 	for (long row = 0; row < GetRowCount(); row++) {
 		if (row > 0) q.NextRow();
 		// The parent's reference goes on EVERY row: the columns are the statement's, so each
 		// staged row must name the same list in the same order.
-		q.SetValue(ibOwnerRefColumn(), ibValue(m_objectValue->GetGuid()));
-		for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
+		q.SetValue(ibOwnerRefColumn(), owner);
+		const ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));   // the line, once
+		wxASSERT(node);
+		for (const auto object : attributes) {
 			if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
-				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
-				wxASSERT(node);
 				q.SetValue(object->GetQueryColumn(), node->GetTableValue(object->GetMetaID()));
 			}
 			else {

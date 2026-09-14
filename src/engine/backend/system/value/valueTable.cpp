@@ -249,6 +249,23 @@ void ibValueModelTable::OnPropertyChanged(ibProperty* /*property*/, const wxVari
 {
 }
 
+// A column changed — edited in the inspector, the one place a column is renamed or given another type. The rows are
+// named after the columns and a new row is made of them, so both are made again at the next question; the news goes
+// on up to the holder.
+void ibValueModelTable::OnChildChanged()
+{
+	OnColumnsChanged();
+	ibPropertyObject::OnChildChanged();
+}
+
+void ibValueModelTable::DescribeNewRow(ibNewRowColumns& columns) const
+{
+	for (auto& colData : m_tableColumnCollection->m_listColumnInfo) {
+		const ibTypeDescription type = colData->GetTypeDesc();   // the column's type as it stands now — a change forgets the row
+		columns.push_back({ colData->GetColumnID(), [type]() { return ibValueTypeDescription::AdjustValue(type); } });
+	}
+}
+
 bool ibValueModelTable::WriteProperty(ibDataNode& node) const
 {
 	// ⭐⭐ THE TABLE'S OWN IDENTITY, WRITTEN DOWN. It is minted in the ctor, so an unserialised table gets
@@ -292,6 +309,9 @@ bool ibValueModelTable::ReadProperty(const ibDataNode& node)
 		if (m_tableColumnCollection->AddColumn(wxEmptyString, ibTypeDescription(), wxEmptyString, wxDVC_DEFAULT_WIDTH) != nullptr)
 			m_tableColumnCollection->m_listColumnInfo.back()->ReadProperty(colNode);
 	}
+	// The columns were emptied and each read its name and type AFTER it was added — so the rows' names and the
+	// empty row are forgotten once, here, over what the table now is.
+	OnColumnsChanged();
 	return true;
 }
 
@@ -455,26 +475,9 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColu
 ibValueModelTable::ibValueModelTableReturnLine::ibValueModelTableReturnLine(ibValueModelTable* ownerTable, const ibDataViewItem& line) :
 	ibValueModelReturnLine(line), m_ownerTable(ownerTable) {
 	HoldOwnerModel(ownerTable);   // the row speaks through the table; see the base
-	m_members.Bind(this, &ibValueModelTableReturnLine::FillMembers);
 }
 
 ibValueModelTable::ibValueModelTableReturnLine::~ibValueModelTableReturnLine() {
-}
-
-void ibValueModelTable::ibValueModelTableReturnLine::FillMembers(ibMemberTable& helper) const
-{
-	// A row with no table names nothing. The default ctor allows one (`ownerTable = nullptr`), and a
-	// surface built from it used to walk a null column collection.
-	if (m_ownerTable == nullptr || m_ownerTable->m_tableColumnCollection == nullptr)
-		return;
-
-	for (auto& colInfo : m_ownerTable->m_tableColumnCollection->m_listColumnInfo) {
-		wxASSERT(colInfo);
-		helper.AppendProp(
-			colInfo->GetColumnName(),
-			colInfo->GetColumnID()
-		);
-	}
 }
 
 bool ibValueModelTable::ibValueModelTableReturnLine::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -483,7 +486,7 @@ bool ibValueModelTable::ibValueModelTableReturnLine::SetPropVal(const long lProp
 	if (appData != nullptr && appData->DesignerMode())
 		return false;
 	return SetValueByMetaID(
-		m_members.GetPropData(lPropNum),
+		m_ownerTable->m_methodHelperReturnLine.GetPropData(lPropNum),
 		varPropVal
 	);
 }
@@ -499,7 +502,7 @@ bool ibValueModelTable::ibValueModelTableReturnLine::GetPropVal(const long lProp
 		return false;
 
 	return GetValueByMetaID(
-		m_members.GetPropData(lPropNum), pvarPropVal
+		m_ownerTable->m_methodHelperReturnLine.GetPropData(lPropNum), pvarPropVal
 	);
 }
 
@@ -531,12 +534,8 @@ void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes,
 
 long ibValueModelTable::AppendRow(unsigned int before, const ibDataViewItem& contextRow)
 {
-	ibComposerNode* rowData = new ibComposerNode();
-	for (auto& colData : m_tableColumnCollection->m_listColumnInfo) {
-		rowData->AppendTableValue(colData->GetColumnID(),
-			ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnType(colData->GetColumnID()))
-		);
-	}
+	// A copy of the table's own empty row (ibValueModelStorage::NewRow) — made once, from the columns as they stand.
+	ibComposerNode* rowData = NewRow();
 
 	// Grouped add: the new row inherits the dimension values of the group the user is INSIDE — the drilled-into
 	// folder the front passes as the context — so it lands in that group instead of losing the value. At the
@@ -562,13 +561,24 @@ long ibValueModelTable::AppendRow(unsigned int before, const ibDataViewItem& con
 		const ibMetaID col = GetColumnIDByName(one.first);
 		if (col != wxNOT_FOUND)
 			rowData->AppendTableValue(col,
-				ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnType(col), one.second));
+				ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnTypeDesc(col), one.second));
 	}
 
 	// Insert AFTER the active row when AddValue passes a position (before > 0); before == 0 → append at the bottom
 	// (the script Add() path). Mirrors the tabular section so both editable tables place a new row the same way.
 	if (before > 0)
 		return ibValueModelStorage::Insert(rowData, before, !ibBackendException::IsEvalMode());
+	return ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
+}
+
+long ibValueModelTable::AppendRow(const std::vector<std::pair<ibMetaID, ibValue>>& values)
+{
+	// The table's empty row first, as for a row a script adds: a column the values do not name holds its type's empty
+	// value rather than no value at all.
+	ibComposerNode* rowData = NewRow();
+	for (const std::pair<ibMetaID, ibValue>& one : values)
+		rowData->AppendTableValue(one.first,
+			ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnTypeDesc(one.first), one.second));
 	return ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 }
 

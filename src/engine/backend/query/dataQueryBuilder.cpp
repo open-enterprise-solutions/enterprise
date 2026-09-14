@@ -645,8 +645,14 @@ ibDataQueryBuilder& ibDataQueryBuilder::NextRow()
 	if (m_writeRows.back().empty())
 		return *this;
 
+	// Every staged row names the same columns as the one before it, so it is given that room up front: grown
+	// cell by cell, a payroll's 72 234 movements reallocated each row's cells several times over (MEASURED
+	// 2026-09-14: the largest single share of staging a set's lines, Debug).
+	const std::size_t width = m_writeRows.back().size();
 	m_writeRows.emplace_back();
+	m_writeRows.back().reserve(width);
 	m_writeAdditive.emplace_back();
+	m_writeAdditive.back().reserve(width);
 	return *this;
 }
 

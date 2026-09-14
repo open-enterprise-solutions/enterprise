@@ -303,14 +303,22 @@ void ibValueContainer::Delete(const ibValue& varKeyValue)
 	const long idx = IndexOf(varKeyValue);
 	if (idx < 0)
 		return;
-	// Erase keeps insertion order, so every entry after the hole moves down one
-	// slot — and so does its index. Rebuilding the map for the tail is simpler
-	// (and less error-prone) than patching each shifted entry in place. Delete is
-	// the rare operation; the common build / read paths stay O(1).
+	// Erase keeps insertion order, so every entry after the hole moves down one slot — and so does its index.
+	// The index is shifted IN PLACE, not rebuilt: rebuilt, it hashed every remaining key again, and a script
+	// replacing values one key at a time (Delete, then Insert) paid a hash of the whole container per value —
+	// 192 s for the 36 000 employees of one payroll (MEASURED 2026-09-14, Debug). It is still a pass over the
+	// index; `[key] = value` replaces a value in place and is the put.
+	const size_t hole = static_cast<size_t>(idx);
 	m_entries.erase(m_entries.begin() + idx);
-	m_index.clear();
-	for (size_t i = 0; i < m_entries.size(); ++i)
-		m_index.emplace(HashOf(m_entries[i].first), i);
+	for (auto it = m_index.begin(); it != m_index.end();) {
+		if (it->second == hole) {
+			it = m_index.erase(it);
+			continue;
+		}
+		if (it->second > hole)
+			--it->second;
+		++it;
+	}
 }
 
 void ibValueContainer::Insert(const ibValue& varKeyValue, const ibValue& cValue)

@@ -1224,7 +1224,10 @@ private:
 	// Parallel to m_writeRows AND to each row's assignments (both SetValue and AddValue push here):
 	// true = this assignment ACCUMULATES (col = col + value) instead of replacing. Same
 	// index-aligned-vectors shape the group-by keys already use, so the provider walks one loop.
-	std::vector<std::vector<bool>> m_writeAdditive{ 1 };
+	// A BYTE a flag, not std::vector<bool>: its push_back is an insert of one bit through checked bit
+	// iterators, and pushed once a cell it was nearly all of staging a register set's lines (stack samples
+	// 2026-09-14, Debug).
+	std::vector<std::vector<unsigned char>> m_writeAdditive{ 1 };
 	std::vector<AggregateItem>    m_aggregates;     // .Group().Sum()… — GroupBy common aggregate set
 	std::vector<HavingItem>       m_having;         // .Having()
 	std::vector<ibTotalLevel>     m_totals;         // .TotalBy(field, dim) — totals dimensions, in order
@@ -1322,7 +1325,7 @@ struct ibDataQuerySpec
 	// The rows to write, in order. NEVER empty: a door with no SetValue still carries one empty
 	// row, so a reader that wants "the row" says front() and never tests for emptiness first.
 	const std::vector<ibWriteRow>*                  m_writeRows     = nullptr;
-	const std::vector<std::vector<bool>>*           m_writeAdditive = nullptr;   // parallel to m_writeRows and to each row: col = col + value
+	const std::vector<std::vector<unsigned char>>*  m_writeAdditive = nullptr;   // parallel to m_writeRows and to each row: col = col + value
 	const std::vector<ibDotWalkColumn>*             m_dotWalks    = nullptr;
 	const std::vector<ibDotWalkColumn>*             m_dimWalks    = nullptr;   // dot-walk TOTALS dimensions
 	const std::vector<ibQueryColumnSelect>*         m_selectExprs = nullptr;   // computed output columns (arithmetic / CASE)

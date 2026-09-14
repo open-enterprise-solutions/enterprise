@@ -1356,8 +1356,6 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 		                      const ibDataViewItem& line = ibDataViewItem());
 		virtual ~ibValueAccountingLine();
 
-		void FillMembers(ibMemberTable& helper) const;
-
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;
 		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 
@@ -1372,6 +1370,9 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 	private:
 		ibValueRecordSetObjectAccountingRegister* m_ownerSet;
 	};
+
+	// What its lines are called: a register line's names and the dimension collections.
+	virtual void DescribeReturnLine(ibMemberTable& helper) const override;
 
 	void FillMembers(ibMemberTable& helper) const;
 

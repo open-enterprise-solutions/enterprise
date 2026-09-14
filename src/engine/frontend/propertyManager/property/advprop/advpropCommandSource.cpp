@@ -12,7 +12,7 @@
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // ibValueMetaObjectAttribute::GetIconGroup (tree default icon)
 
 // OES: "New command" affordance — create a form command + its handler straight from the button's
-// command picker (the 1C "create handler from the button" flow the picker was missing).
+// command picker (the "create handler from the button" flow the picker was missing).
 #include "frontend/visualView/ctrl/form.h"           // ibValueForm — AddFormCommand / MakeUniqueFormCommandName
 #include "frontend/visualView/ctrl/formCommand.h"    // ibFormCommandValue — the created command (Action event / id / name)
 #include "frontend/visualView/visualHost.h"          // ibFrontendVisualEditorNotebook::FindEditorByForm + ModifyEvent (generate + open handler)
@@ -179,7 +179,7 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 
 			// OES: bottom row = [New command…]  <stretch>  [OK] [Cancel]. The New button creates a fresh
 			// FORM COMMAND (with its handler) right here, so a designer can bind a button to a brand-new
-			// handler without first hand-authoring the command — the missing 1C "create handler" step.
+			// handler without first hand-authoring the command — the missing "create handler" step.
 			ibFormCommandValue* createdFc = nullptr;
 			wxBoxSizer* bottom = new wxBoxSizer(wxHORIZONTAL);
 			wxButton* newBtn = new wxButton(dlg, wxID_ANY, _("New command..."));

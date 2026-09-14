@@ -5777,3 +5777,32 @@ msgstr "Слою запросов не удалось подготовить о�
 #: src/engine/backend/metaCollection/partial/reference/referenceQuery.cpp
 msgid "unknown exception"
 msgstr "неизвестное исключение"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp
+msgid "Position start"
+msgstr "Начало позиции"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp
+msgid "Position end"
+msgstr "Конец позиции"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp
+msgid "AS OF WHICH REGISTRATION PERIOD - a moment: the records registered up to the end of the period it falls in, in the register's periodicity, so a month reads as it stood when it closed and a correction registered later is not in it. Left out, every period is read."
+msgstr "НА КАКОЙ ПЕРИОД РЕГИСТРАЦИИ - момент: записи, зарегистрированные до конца периода, в который он попадает, по периодичности регистра, так что месяц читается таким, каким он был на закрытии, а поправка, зарегистрированная позже, в него не входит. Не указан - читаются все периоды."
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp
+msgid "FOR WHICH DAYS OF ACTION, from - what is in force on this day or later. Left out, from the first."
+msgstr "ЗА КАКИЕ ДНИ ДЕЙСТВИЯ, с - то, что действует в этот день или позже. Не указано - с первого."
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp
+msgid "FOR WHICH DAYS OF ACTION, to - what is in force on this day or earlier. Left out, to the last."
+msgstr "ЗА КАКИЕ ДНИ ДЕЙСТВИЯ, по - то, что действует в этот день или раньше. Не указано - по последний."
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterRecalculationMetadata.cpp
+msgid "THE PERIOD WHOSE RECORDS ARE READ - any moment in it, in the register's periodicity: the records of earlier periods that the records registered in it lead."
+msgstr "ПЕРИОД, ЗАПИСИ КОТОРОГО ЧИТАЮТСЯ - любой момент в нём, по периодичности регистра: записи прошлых периодов, для которых зарегистрированные в нём записи ведущие."
+
+#: src/engine/backend/query/derivedStateBuilder.cpp
+#, c-format
+msgid "The derived table '%s' cannot be rebuilt: its source is not read from the database"
+msgstr "Производную таблицу '%s' нельзя перестроить: её источник читается не из базы данных"

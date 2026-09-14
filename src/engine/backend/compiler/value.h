@@ -7,6 +7,7 @@
 #include <type_traits>   // the pointer catch-all below (enable_if / is_base_of / is_same)
 #include <typeinfo>
 #include <unordered_map>
+#include <map>
 #include <mutex>
 #include <thread>
 
@@ -360,8 +361,11 @@ public:
 
 		// Lazy name->index acceleration for FindProp / FindMethod (the runtime
 		// hot path — every Obj.Attr / obj.Method() resolves a name). Keyed on
-		// the upper-cased name (lookup is case-insensitive, matching
-		// CompareString); value = the FIRST matching vector index, so the result
+		// the name as declared, ordered by ibCaseFoldLess — the folding of
+		// CompareString, so a lookup is case-insensitive and reads the two buffers
+		// in place: no upper-cased copy of the asked name on every call (a posting
+		// that resolves a few million names spent a minute there, stack samples
+		// 2026-09-14, Debug). value = the FIRST matching vector index, so the result
 		// is identical to the old linear "first wins" scan. Used only when the
 		// surface is large enough to pay (kFindIndexMin); rebuilt lazily on the
 		// first lookup after a structural change. An empty map allocates nothing,
@@ -370,12 +374,12 @@ public:
 		// Both name->index maps live in ONE heap node, allocated
 		// lazily only when a surface first crosses kFindIndexMin. The common case (a
 		// small or never-searched helper) carries just this null pointer — not two
-		// inline std::unordered_map objects (~80 B in Debug). emplace = keep first
-		// (lowest index), identical to the old linear "first wins" scan. The atomic
-		// state beside it serializes cold construction without a mutex per value.
+		// inline maps. emplace = keep first (lowest index), identical to the old
+		// linear "first wins" scan. The atomic state beside it serializes cold
+		// construction without a mutex per value.
 		struct FindIndex {
-			std::unordered_map<std::wstring, long> prop;
-			std::unordered_map<std::wstring, long> method;
+			std::map<wxString, long, ibCaseFoldLess> prop;
+			std::map<wxString, long, ibCaseFoldLess> method;
 		};
 		mutable std::shared_ptr<const FindIndex> m_findIndex;
 		enum FindIndexState : uint8_t { kFindStale = 0, kFindBuilding = 1, kFindBuilt = 2 };
@@ -438,12 +442,10 @@ public:
 
 				try {
 					auto index = std::make_shared<FindIndex>();
-					index->prop.reserve(m_props.size());
 					for (long i = 0; i < (long)m_props.size(); ++i)
-						index->prop.emplace(m_props[i].m_fieldName.Upper().ToStdWstring(), i);
-					index->method.reserve(m_methods.size());
+						index->prop.emplace(m_props[i].m_fieldName, i);
 					for (long i = 0; i < (long)m_methods.size(); ++i)
-						index->method.emplace(m_methods[i].m_fieldName.Upper().ToStdWstring(), i);
+						index->method.emplace(m_methods[i].m_fieldName, i);
 					std::shared_ptr<const FindIndex> published = std::move(index);
 					std::atomic_store_explicit(&m_findIndex, published, std::memory_order_release);
 					m_findIndexState.store(kFindBuilt, std::memory_order_release);
@@ -720,7 +722,7 @@ public:
 			if (m_props.size() >= kFindIndexMin) {
 				const auto snapshot = EnsureFindIndex();
 				const auto& idx = snapshot->prop;
-				const auto it = idx.find(strPropName.Upper().ToStdWstring());
+				const auto it = idx.find(strPropName);
 				return it != idx.end() ? it->second : wxNOT_FOUND;
 			}
 			auto iterator = std::find_if(m_props.begin(), m_props.end(),
@@ -822,7 +824,7 @@ public:
 			if (m_methods.size() >= kFindIndexMin) {
 				const auto snapshot = EnsureFindIndex();
 				const auto& idx = snapshot->method;
-				const auto it = idx.find(strMethodName.Upper().ToStdWstring());
+				const auto it = idx.find(strMethodName);
 				return it != idx.end() ? it->second : wxNOT_FOUND;
 			}
 			auto iterator = std::find_if(m_methods.begin(), m_methods.end(), [&strMethodName](const auto& f) {

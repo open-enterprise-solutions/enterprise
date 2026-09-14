@@ -1398,13 +1398,18 @@ wxString ibRenderOverClause(const ibDialectDictionary& dialect,
 		}
 	}
 
-	// The frame is written out in full on every engine. Firebird 3+, PostgreSQL and SQLite 3.25+ all
+	// The frame is written out in full on every engine. Firebird 4+, PostgreSQL and SQLite 3.25+ all
 	// accept both spellings, so there is nothing to negotiate here — and writing it is the entire
 	// point: an omitted frame means whatever each engine decides it means.
 	//
 	// A frame needs an ORDER BY to be about anything; asked for without one, it is dropped rather
 	// than rendered into `RANGE … CURRENT ROW` over an unordered partition, which some engines
-	// reject and others read as the whole partition.
+	// reject and others read as the whole partition. Not the rows BEFORE the current one, though:
+	// dropped, that frame is the whole partition, the current row in it — a different figure that
+	// runs as if it were right. So it is refused, the way a missing window is above.
+	if (orderBy.empty() && frame == ibQueryFrame::RowsBeforeCurrent)
+		ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+			_("The rows before the current one need an order to be counted in"));
 	if (!orderBy.empty()) {
 		switch (frame) {
 		case ibQueryFrame::RangeThroughPeers:
@@ -1412,6 +1417,9 @@ wxString ibRenderOverClause(const ibDialectDictionary& dialect,
 			break;
 		case ibQueryFrame::RowsThroughCurrent:
 			sql += wxT(" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW");
+			break;
+		case ibQueryFrame::RowsBeforeCurrent:
+			sql += wxT(" ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING");
 			break;
 		case ibQueryFrame::NoFrame:
 			break;
@@ -1759,6 +1767,142 @@ ibDatabaseResultSet* ibQueryStatement::RunQueryWithResults()
 {
 	RunQuery();
 	return nullptr;
+}
+
+// ==========================================================================
+// ibBatchInsert
+// ==========================================================================
+
+// CHUNKED where the rows go as one statement, because one statement is not the same as one good statement. A
+// thousand-row VALUES list (or its UNION ALL twin) is a very large parse tree and a very long statement text,
+// and past some width the parse costs more than the round trips it saves. The temp-table manager settled on 50
+// for the same reason, and a register row is wider than a temp row — several physical fields per logical
+// column — so this stays in the same neighbourhood rather than inventing a second number.
+static constexpr size_t kRowsPerStatement = 50;
+
+ibBatchInsert::ibBatchInsert(const wxString& table, std::vector<wxString> columns, ibDatabaseConnectionHolder* holder)
+	: ibQueryStatement(Kind::Insert, table, std::move(columns), {}, holder), m_scope(holder), m_held(ibDmlKind::Insert)
+{
+	const std::shared_ptr<ibDatabaseLayer>& conn = m_scope.shared();
+	if (!conn)
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
+			_("Query layer could not obtain a database connection from the holder."));
+
+	const ibDialectDictionary& dialect = conn->GetDialect();
+	if (!dialect.m_features.m_multiRowValues && dialect.m_features.m_batchByReexecution) {
+		// The one-row INSERT, every value a placeholder — the text Execute's per-row form runs, rendered the
+		// same way (a constant renders as a placeholder), and journalled once.
+		ibDmlStatement one(ibDmlKind::Insert);
+		one.m_table = m_table;
+		for (const wxString& column : m_columns)
+			one.m_assignments.push_back(ibDmlAssign{ column, ibConst(ibValue()) });
+		ibQueryRenderer renderer(dialect);
+		const ibRenderedQuery rendered = renderer.RenderDML(one);
+		m_prepared = std::make_unique<ibStatementGuard>(conn, conn->PrepareStatement(rendered.m_sql));
+		if (!*m_prepared)
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+				wxString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
+		m_bound.assign(m_columns.size(), false);
+	}
+	else
+		m_held.m_table = m_table;
+}
+
+ibBatchInsert::~ibBatchInsert() = default;
+
+void ibBatchInsert::Bound(int p)
+{
+	if (p >= 1 && static_cast<size_t>(p) <= m_bound.size())
+		m_bound[p - 1] = true;
+}
+
+// Into the prepared INSERT where there is one, else captured as any template's value is.
+void ibBatchInsert::SetParamInt(int p, int v)
+{
+	if (m_prepared) { Bound(p); (*m_prepared)->SetParamInt(p, v); }
+	else            ibQueryStatement::SetParamInt(p, v);
+}
+void ibBatchInsert::SetParamDouble(int p, double v)
+{
+	if (m_prepared) { Bound(p); (*m_prepared)->SetParamNumber(p, ibNumber(v)); }
+	else            ibQueryStatement::SetParamDouble(p, v);
+}
+void ibBatchInsert::SetParamNumber(int p, const ibNumber& v)
+{
+	if (m_prepared) { Bound(p); (*m_prepared)->SetParamNumber(p, v); }
+	else            ibQueryStatement::SetParamNumber(p, v);
+}
+void ibBatchInsert::SetParamString(int p, const wxString& v)
+{
+	if (m_prepared) { Bound(p); (*m_prepared)->SetParamString(p, v); }
+	else            ibQueryStatement::SetParamString(p, v);
+}
+void ibBatchInsert::SetParamNull(int p)
+{
+	if (m_prepared) { Bound(p); (*m_prepared)->SetParamNull(p); }
+	else            ibQueryStatement::SetParamNull(p);
+}
+void ibBatchInsert::SetParamDate(int p, const wxDateTime& v)
+{
+	if (m_prepared) { Bound(p); (*m_prepared)->SetParamDate(p, v); }
+	else            ibQueryStatement::SetParamDate(p, v);
+}
+void ibBatchInsert::SetParamBool(int p, bool v)
+{
+	if (m_prepared) { Bound(p); (*m_prepared)->SetParamBool(p, v); }
+	else            ibQueryStatement::SetParamBool(p, v);
+}
+void ibBatchInsert::SetParamBlob(int p, const void* d, long n)
+{
+	if (!m_prepared)     ibQueryStatement::SetParamBlob(p, d, n);
+	else if (n > 0)      { Bound(p); (*m_prepared)->SetParamBlob(p, d, n); }
+	else                 { Bound(p); (*m_prepared)->SetParamNull(p); }   // an empty blob is no value, as in a plan
+}
+
+int ibBatchInsert::RunQuery()
+{
+	if (m_prepared) {
+		// A position this row left unbound writes NULL, as it does on the other road: the parameter lives on for
+		// the statement's next rows, and would carry the row before's value into this one.
+		for (size_t i = 0; i < m_bound.size(); ++i)
+			if (!m_bound[i])
+				(*m_prepared)->SetParamNull(static_cast<int>(i) + 1);
+		m_bound.assign(m_bound.size(), false);
+		return (*m_prepared)->RunQuery();
+	}
+
+	// The row as values, in column order; a field left unbound writes NULL, as the statement template does.
+	std::vector<ibQueryExprPtr> values;
+	values.reserve(m_columns.size());
+	for (const ibQueryExprPtr& value : CapturedValues())
+		values.push_back(value ? value : ibConst(ibValue()));
+	ClearCaptured();
+
+	if (m_held.m_assignments.empty()) {
+		for (size_t i = 0; i < m_columns.size(); ++i)
+			m_held.m_assignments.push_back(ibDmlAssign{ m_columns[i], values[i] });
+	}
+	else
+		m_held.m_extraRows.push_back(std::move(values));
+
+	return m_held.m_extraRows.size() + 1 >= kRowsPerStatement ? Flush() : 0;
+}
+
+ibDatabaseResultSet* ibBatchInsert::RunQueryWithResults()
+{
+	RunQuery();
+	return nullptr;
+}
+
+int ibBatchInsert::Flush()
+{
+	if (m_held.m_assignments.empty())
+		return 0;
+	ibDatabaseQueryBuilder q(m_scope.Holder());
+	const int n = q.Execute(m_held);
+	m_held.m_assignments.clear();
+	m_held.m_extraRows.clear();
+	return n;
 }
 
 // ==========================================================================

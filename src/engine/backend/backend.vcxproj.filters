@@ -1578,6 +1578,9 @@
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadataSchema.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataTotals.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadata_res.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -1585,9 +1588,6 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadataSchema.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata_res.cpp">

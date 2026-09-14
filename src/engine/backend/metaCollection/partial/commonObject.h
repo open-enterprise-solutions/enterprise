@@ -1108,6 +1108,9 @@ class BACKEND_API ibValueMetaObjectRecordDataRecorderRef : public ibValueMetaObj
 public:
 
 	ibMetaDescription& GetRecordDescription() const { return m_propertyRegisterRecord->GetValueAsMetaDesc(); }
+	// What becomes of the movements when the document is posted again or its posting undone (WriteObject). A deleted
+	// document takes them with it whatever this says.
+	ibDocumentRecordsDeletion GetRegisterRecordsDeletion() const { return m_propertyRegisterRecordsDeletion->GetValueAsEnum(); }
 
 	// The NUMBER and the DATE — what a recorded fact is identified and placed by. They come as a pair:
 	// a document is looked up by number and ordered by date, and both are indexed for that reason.
@@ -1188,6 +1191,11 @@ protected:
 protected:
 
 	ibPropertyRecord* m_propertyRegisterRecord = ibPropertyObject::CreateProperty<ibPropertyRecord>(m_categoryData, wxT("ListRegisterRecord"), _("List register record"));
+	// ⭐ THE MOVEMENTS ARE CLEARED, NOT COMPARED (Max, 2026-09-14): posting again clears what the document wrote and its
+	// handler writes it anew — nothing tracks what changed. Whether the platform clears them is this property's to say;
+	// a configuration that has not set it posts as it always has.
+	ibPropertyEnum<ibValueEnumDocumentRecordsDeletion>* m_propertyRegisterRecordsDeletion =ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumDocumentRecordsDeletion>>(m_categoryData,
+		wxT("RegisterRecordsDeletion"), _("Register records deletion"), ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Automatically);
 	ibPropertyContainer<>* m_propertyAttributeNumber = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("Number"), _("Number"), wxEmptyString, 11, true, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_Index));
 	ibPropertyContainer<>* m_propertyAttributeDate = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("Date"), _("Date"), wxEmptyString, ibDateFractions::ibDateFractions_DateTime, true, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_Index));
 	// The moment — registered like the date above, typed as the PointInTime value. See GetPointInTime
@@ -1766,9 +1774,12 @@ public:
 	//has record manager 
 	virtual bool HasRecordManager() const { return false; }
 
-	//has recorder and period 
+	//has recorder and period
 	virtual bool HasPeriod() const { return false; }
 	virtual bool HasRecorder() const { return true; }
+
+	// The unit a record's period is kept to — as written, to the second, unless the register says otherwise.
+	virtual ibTotalsPeriod GetPeriodicityUnit() const { return ibTotalsPeriod::Second; }
 
 	ibValueRecordKeyObject* CreateRecordKeyObjectValue() const;
 	// Build a record key POPULATED from a set of dimension values (a register-list row → its key).
@@ -2591,9 +2602,12 @@ class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataO
 	public:
 		void CreateRecordSet();
 		bool WriteRecordSet();
-		// …every set's stored movements, or — `unmodifiedOnly` — only those of the sets nobody has filled
-		// in memory: a filled set replaces its rows when it is written, and deleting under it would lose it.
-		bool DeleteRecordSet(bool unmodifiedOnly = false);
+		// …every set's stored movements: the document is deleted, and they go with it whatever it says.
+		bool DeleteRecordSet();
+		// …the movements of a posting done again or undone (`writeMode`) — WHETHER they are cleared is the document's
+		// to say, and it is asked here (RegisterRecordsDeletion). A posting again leaves the sets somebody filled in
+		// memory: a filled set replaces its rows when it is written, and deleting under it would lose it.
+		bool DeleteRecordSet(ibDocumentWriteMode writeMode);
 		void ClearRecordSet();
 		void RefreshRecordSet();
 
@@ -2614,7 +2628,7 @@ class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataO
 	};
 
 protected:
-	ibValueRecordDataObjectRecorderRef(const ibValueMetaObjectRecordDataMutableRef* metaObject, const ibGuid& objGuid);
+	ibValueRecordDataObjectRecorderRef(const ibValueMetaObjectRecordDataRecorderRef* metaObject, const ibGuid& objGuid);
 	ibValueRecordDataObjectRecorderRef(const ibValueRecordDataObjectRecorderRef& src);
 
 	// Late-bind of the register-cascade holder. The leaf ctor must
@@ -2628,6 +2642,11 @@ protected:
 
 public:
 	virtual ~ibValueRecordDataObjectRecorderRef();
+
+	//get metaData from object
+	virtual const ibValueMetaObjectRecordDataRecorderRef* GetMetaObject() const {
+		return static_cast<const ibValueMetaObjectRecordDataRecorderRef*>(m_metaObject);
+	}
 
 	// Recorder init — binds RegisterRecords (exported) before the base compiles,
 	// then delegates to the base (ThisObject bind + compile). Shared by all
@@ -2765,6 +2784,10 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 			return nullptr;
 		return new ibValueRecordSetObjectRegisterReturnLine(this, line);
 	}
+	// Every attribute a line of this register has — the settings may turn some off.
+	virtual void DescribeReturnLine(ibMemberTable& helper) const override;
+	// A new line's columns — the set's attributes, each empty as its type makes it (NewRow copies the line made once).
+	virtual void DescribeNewRow(ibNewRowColumns& columns) const override;
 
 	// ⭐⭐ THE FILTER IS PART OF THE SET'S SURFACE, NOT A PRIVILEGE OF ITS OWN MODULE — and it is ONE
 	// declaration, the EXPORT VARIABLE bound in InitializeObject. `Filter.Warehouse` must work inside
@@ -2802,6 +2825,9 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 			// its chart's list) — ask it rather than deciding here.
 			virtual const ibTypeDescription GetColumnTypeValue() const { return m_metaAttribute->GetTypeValueDesc(); }
 
+			// The attribute the column is.
+			const ibValueMetaObjectAttributeBase* GetAttribute() const { return m_metaAttribute; }
+
 			friend ibValueRecordSetObjectRegisterColumnCollection;
 
 		private:
@@ -2831,6 +2857,12 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 		virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue) override;
 		virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue) override;
 
+		// The attribute a column of the set is, by its id — out of this map; the metaobject is not walked for it.
+		const ibValueMetaObjectAttributeBase* GetAttributeByID(const ibMetaID& id) const {
+			const auto found = m_listColumnInfo.find(id);
+			return found != m_listColumnInfo.end() ? found->second->GetAttribute() : nullptr;
+		}
+
 		friend class ibValueRecordSetObject;
 
 	protected:
@@ -2846,8 +2878,6 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 		virtual ~ibValueRecordSetObjectRegisterReturnLine();
 
 		virtual ibValueModel* GetOwnerModel() const { return m_ownerTable; }
-
-		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal); //setting attribute
 		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); //attribute value

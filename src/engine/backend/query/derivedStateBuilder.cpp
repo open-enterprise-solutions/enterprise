@@ -11,7 +11,10 @@
 #include "backend/query/schemaBuilder.h"
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"   // ibCanMaterialize — the capability question belongs to L2-2
 #include "backend/restructureInfo.h"
+#include "backend/backend_exception.h"                // ibBackendCoreException — a rebuild refused aloud
 #include "backend/databaseLayer/connectionScope.h"    // the holder's own transaction scope (no L1 named here)
+#include "backend/databaseLayer/databaseQueryBuilder.h" // L2 — the rebuild's INSERT … SELECT
+#include "backend/query/columnLayout.h"                 // ColumnFieldNames / ibSqlAliasOf — the read's output names
 
 #include <map>
 #include <algorithm>
@@ -127,7 +130,7 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 
 	const ibSchemaMaterialize& spec = derived.m_materialize;
 
-	// 1. READ the source, aggregated by the declared key.
+	// 1. The READ of the source, aggregated by the declared key — built here, run as the SELECT of step 3.
 	//
 	// The period key is grouped by the TRUNCATED expression, through the same ibTotalsPeriod and the
 	// same dialect map the trigger uses. That identity is the point: two separate notions of "start
@@ -150,12 +153,9 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 	for (const ibSchemaDelta& d : spec.m_deltas)
 		read.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, d.m_regenExpr, d.m_column->GetPhysicalName());
 
-	ibDataQueryResult rows = read.SelectAggregate();
-
-	// 2. CLEAR the derived table. It is a cache: everything in it is about to be recomputed. Clearing
-	//    AFTER the read, not before, keeps the window where totals are missing as short as possible —
-	//    and both steps sit inside the caller's restructuring transaction, so a failure rolls the old
-	//    rows back rather than leaving the table empty.
+	// 2. CLEAR the derived table. It is a cache: everything in it is about to be recomputed. Both steps
+	//    sit inside the caller's restructuring transaction, so a failure rolls the old rows back rather
+	//    than leaving the table empty.
 	{
 		ibDataQueryBuilder clear = SystemQuery(holder);
 		clear.From(derived.m_queryable);
@@ -163,36 +163,52 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 			return false;
 	}
 
-	// 3. WRITE the aggregate back. Upsert, not insert: a trigger firing concurrently during the
-	//    rebuild would otherwise collide on the key, and upsert also makes a retried rebuild
-	//    idempotent.
+	// 3. WRITE the aggregate back — ONE statement: the read above, as the SELECT of an INSERT.
 	//
-	// WHAT MAKES A ROW THE SAME ROW is the TABLE's answer, not this function's: the derived table
-	// carries the key the schema declared it with (ibRegSelfSourceFromDeclaration), so the upsert
-	// matches on it the way every ordinary table's does. Composing one here — out of the period, the
-	// keys and a shard column looked up by name — was a second copy of a fact already stated.
-	while (rows.Next()) {
-		ibDataQueryBuilder write = SystemQuery(holder);
-		write.From(derived.m_queryable);
-
-		if (!spec.m_periodColumn.IsEmpty())
-			write.SetValue(ibBackendColumnRawDB::Date(spec.m_periodColumn), rows.GetColumn(spec.m_periodColumn));
-
-		// A SPLIT table still gets ONE row per key from a rebuild — the shard exists to spread
-		// concurrent writers, and a rebuild is a single writer that already holds the consolidated
-		// figure. Shard 0 is where it lands; the trigger spreads everything that follows. Leaving the
-		// column unset would work too (the view sums every shard, so the total is invariant), but a
-		// NULL in the unique key is a fact nobody declared.
-		if (spec.m_shards > 1)
-			write.SetValue(ibBackendColumnRawDB::Number(ShardColumnName()), ibValue(0.0));
-		// The period and the shard are set above, each once, from their own names — `m_keys` holds
-		// neither, so nothing here can put the same physical column into the statement twice.
-		for (const ibBackendQueryColumn* k : spec.m_keys)
-			write.SetValue(k, rows.GetValue(k));
-		for (const ibSchemaDelta& d : spec.m_deltas)
-			write.SetValue(d.m_column, rows.GetColumn(d.m_column->GetPhysicalName()));
-
-		if (!write.Upsert())
+	// ⭐⭐ IT WAS ONE UPSERT PER ROW, a statement built and prepared for every one of them: MEASURED 2026-09-13
+	// on a 40 000-employee copy (Debug), ~5 ms a row, and a calculation register's totals (it kept them then)
+	// ran for tens of minutes of an apply. The relation is the read's own lowering (BuildRelation — the provider's aggregate
+	// query stopped before it runs), so nothing here spells a second GROUP BY; its outputs are the key columns'
+	// fields under their own names and every figure under the statement's spelling (ibSqlAliasOf).
+	//
+	// INSERT, not upsert: the table was cleared just above, inside the same restructuring, which holds the base
+	// exclusively — no trigger writes beside it, and a retried rebuild clears first again.
+	//
+	// A SPLIT table still gets ONE row per key from a rebuild — the shard exists to spread concurrent writers,
+	// and a rebuild is a single writer that already holds the consolidated figure. Shard 0 is where it lands;
+	// the trigger spreads everything that follows. A NULL in the unique key would be a fact nobody declared.
+	const ibQueryRelPtr folded = read.BuildRelation();
+	if (!folded)
+		ibBackendCoreException::Error(_("The derived table '%s' cannot be rebuilt: its source is not read from the database"),
+		                              derived.m_name);
+	std::vector<wxString> columns;
+	std::vector<ibQueryProjItem> values;
+	const auto take = [&](const wxString& column, const wxString& output) {
+		columns.push_back(column);
+		values.push_back(ibQueryProjItem{ ibCol(wxT("r_"), output), column });
+	};
+	if (!spec.m_periodColumn.IsEmpty() && spec.m_periodSource != nullptr)   // the read's own condition, above
+		take(spec.m_periodColumn, ibSqlAliasOf(spec.m_periodColumn));
+	// The period and the shard are named here each once, from their own names — `m_keys` holds neither, so
+	// nothing can put the same physical column into the statement twice.
+	for (const ibBackendQueryColumn* k : spec.m_keys)
+		for (const wxString& field : ColumnFieldNames(k))
+			take(field, field);
+	for (const ibSchemaDelta& d : spec.m_deltas)
+		take(d.m_column->GetPhysicalName(), ibSqlAliasOf(d.m_column->GetPhysicalName()));
+	if (spec.m_shards > 1) {
+		columns.push_back(ShardColumnName());
+		values.push_back(ibQueryProjItem{ ibCast(ibConst(ibValue(0)), ibTypeInteger()), ShardColumnName() });
+	}
+	// …and through the barrier, as the hash fill below: Firebird refuses DML against a table created in the
+	// same transaction, and refuses it at commit.
+	{
+		ibSchemaBuilder schema(holder);
+		const ibDmlStatement insert = ibInsertSelect(derived.m_name, columns, ibProject(ibSubquery(folded, wxT("r_")), values));
+		if (!schema.RunOrDefer(derived.m_name, [insert, holder]() {
+				ibDatabaseQueryBuilder write(holder);
+				return write.Execute(insert) >= 0;
+			}))
 			return false;
 	}
 

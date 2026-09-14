@@ -74,7 +74,35 @@ static ibQueryExprPtr SliceBoundaryPredicate(const ibValueMetaObjectInformationR
 	if (bound.m_date.IsEmpty())
 		return nullptr;
 
-	const ibQueryExprPtr plain = ibRegCompositeIR(periodAttr->GetQueryColumn(), metaData, bound.m_date, periodOp);
+	// ⭐ A PERIOD KEPT TO THE PERIODICITY IS COMPARED AT IT (Max, 2026-09-15): a record is its day's whatever time it
+	// holds, so the moment is carried to the period's edges rather than the column truncated (its index still serves).
+	// A record at its period's start — every one written since — compares exactly as before.
+	const ibTotalsPeriod grain = meta->GetPeriodicityUnit();
+	const bool grained = grain != ibTotalsPeriod::Second
+		&& bound.m_date.GetType() == TYPE_DATE && bound.m_date.GetDateTime().IsValid();
+	auto periodIs = [&](ibQueryBinOp op) -> ibQueryExprPtr {   // the record's period `op` the moment
+		auto compare = [&](ibQueryBinOp o, const ibValue& v) {
+			return ibRegCompositeIR(periodAttr->GetQueryColumn(), metaData, v, o);
+		};
+		if (!grained)
+			return compare(op, bound.m_date);
+		const wxDateTime moment = bound.m_date.GetDateTime();
+		const wxDateTime start = ibTruncateToPeriod(moment, grain);
+		const ibValue next(ibNextPeriodStart(start, grain));
+		const ibValue edge = start == moment ? bound.m_date : next;   // the first period start not before the moment
+		switch (op) {
+		case ibQueryBinOp::Lt: return compare(ibQueryBinOp::Lt, edge);
+		case ibQueryBinOp::Le: return compare(ibQueryBinOp::Lt, next);
+		case ibQueryBinOp::Gt: return compare(ibQueryBinOp::Ge, next);
+		case ibQueryBinOp::Ge: return compare(ibQueryBinOp::Ge, edge);
+		default:   // equal: only a moment that starts a period is one
+			return start == moment
+				? ibBinOp(ibQueryBinOp::And, compare(ibQueryBinOp::Ge, edge), compare(ibQueryBinOp::Lt, next))
+				: nullptr;
+		}
+	};
+
+	const ibQueryExprPtr plain = periodIs(periodOp);
 	if (!bound.HasRecorder() || !meta->HasRecorder() || meta->GetRegisterRecorder() == nullptr)
 		return plain;
 
@@ -82,10 +110,11 @@ static ibQueryExprPtr SliceBoundaryPredicate(const ibValueMetaObjectInformationR
 	const ibQueryBinOp strictly = last ? ibQueryBinOp::Lt : ibQueryBinOp::Gt;
 	const ibQueryBinOp within   = periodOp;   // carries the Including / Excluding side already
 
-	return ibBinOp(ibQueryBinOp::Or,
-		ibRegCompositeIR(periodAttr->GetQueryColumn(), metaData, bound.m_date, strictly),
-		ibBinOp(ibQueryBinOp::And,
-			ibRegCompositeIR(periodAttr->GetQueryColumn(), metaData, bound.m_date, ibQueryBinOp::Eq),
+	const ibQueryExprPtr past = periodIs(strictly), at = periodIs(ibQueryBinOp::Eq);
+	if (!at)
+		return past;   // a moment inside a period: no record's period is that instant
+	return ibBinOp(ibQueryBinOp::Or, past,
+		ibBinOp(ibQueryBinOp::And, at,
 			ibRegCompositeIR(meta->GetRegisterRecorder()->GetQueryColumn(), metaData, bound.m_recorder, within)));
 }
 
