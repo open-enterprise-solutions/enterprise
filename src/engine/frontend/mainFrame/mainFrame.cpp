@@ -16,6 +16,8 @@
 #include <wx/stdpaths.h>   // GetExecutablePath — the reload restart re-launches THIS binary
 #include <wx/filename.h>
 
+#include <mutex>
+
 //common 
 #include "frontend/docView/docView.h"
 #include "frontend/mainFrame/objinspect/objinspect.h"
@@ -35,6 +37,22 @@ void ibFrontendMainFrame::InitFrame(ibFrontendMainFrame* frame)
 		s_instance = frame;
 		wxTheApp->SetTopWindow(s_instance);
 	}
+}
+
+// The reason a session was closed from outside, kept from the force-exit (the registry's thread) until
+// the application's OnExit says it (see SayExitNotice in mainFrame.h).
+static std::mutex s_exitNoticeMutex;
+static wxString   s_exitNotice;
+
+void ibFrontendMainFrame::SayExitNotice()
+{
+	wxString notice;
+	{
+		std::lock_guard<std::mutex> lk(s_exitNoticeMutex);
+		notice.swap(s_exitNotice);
+	}
+	if (!notice.IsEmpty() && wxTheApp != nullptr)
+		wxMessageBox(notice, wxTheApp->GetAppDisplayName(), wxOK | wxICON_INFORMATION);
 }
 
 
@@ -102,12 +120,13 @@ ibFrontendMainFrame::ibFrontendMainFrame(ibSessionHolder&& holder,
 		StartConfigWatch();
 
 		reg->OnForceExit([self](ibSession* target) {
-			if (target != self || wxTheApp == nullptr) return;
+			if (target != self) return;
 			const wxString reason = target->Reason();
 			if (reason.IsEmpty()) return;
-			wxTheApp->CallAfter([reason]() {
-				wxMessageBox(reason, wxTheApp->GetAppDisplayName(), wxOK | wxICON_INFORMATION);
-			});
+			// Kept, not shown: the close has only started, and a modal box here would hold it — the window,
+			// its holder, the session's row and its heartbeat — until the user answered (SayExitNotice).
+			std::lock_guard<std::mutex> lk(s_exitNoticeMutex);
+			s_exitNotice = reason;
 		});
 	}
 }

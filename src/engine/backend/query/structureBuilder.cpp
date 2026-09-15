@@ -4,7 +4,7 @@
 #include "backend/query/schemaBuilder.h"    // ibSchemaBuilder::Reset / Flush — per-save barrier + deferred drain
 #include "backend/databaseLayer/databaseLayer.h"        // ibDatabaseLayer — the connection it holds the TX on
 #include "backend/databaseLayer/connectionHolder.h"     // ibDatabaseConnectionHolder::EnsureConnection
-#include "backend/databaseLayer/databaseLayerDef.h"     // DATABASELAYER_FIREBIRD
+#include "backend/databaseLayer/databaseQueryBuilder.h" // ibDdlCommitsBeforeData — the dialect's barrier, asked of L2
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/backend_exception.h"
 #include "backend/session/session.h"   // ibSession::Current()->Holder() — the DDL holder IS the session's
@@ -108,19 +108,21 @@ int ibStructureBuilder::OnAfterSave(bool rollback)
 		Conn()->RollBack();
 		throw;
 	}
-	return FlushDeferredFirebird();   // FB: drain the seeds deferred past that commit, in their own TX
+	return FlushDeferred();   // a barrier dialect: drain the writes deferred past that commit, in their own TX
 #else
 	return 1;
 #endif
 }
 
-int ibStructureBuilder::FlushDeferredFirebird()
+int ibStructureBuilder::FlushDeferred()
 {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-	// The seed rows into tables created THIS save were deferred past the DDL commit (the ibSchemaBuilder
-	// barrier — FB can't populate a same-TX freshly-created table). The tables are durable after that
-	// commit, so flush the deferred writes in their OWN transaction. No-op off Firebird (empty queue).
-	if (Conn()->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD) {
+	// The writes into tables whose shape THIS save changed were deferred past the DDL commit (the
+	// ibSchemaBuilder barrier); the tables are durable now, so the writes run in their OWN transaction.
+	// ⭐ WHETHER THERE IS A SECOND PHASE IS THE DIALECT'S ANSWER (m_ddlCommitBeforeData), the same one the
+	// barrier itself asks. This asked the DRIVER — `GetDatabaseLayerType() == DATABASELAYER_FIREBIRD`,
+	// the last of the forks the flag was introduced to replace (databaseLayer.h).
+	if (ibDdlCommitsBeforeData(Conn())) {
 		Conn()->BeginTransaction();
 
 		// ⭐⭐ A REFUSAL LEAVES THIS TRANSACTION OPEN UNLESS IT IS CAUGHT HERE, and the deferred queue is
@@ -135,16 +137,10 @@ int ibStructureBuilder::FlushDeferredFirebird()
 		try {
 			ok = ibSchemaBuilder(m_holder).Flush();
 		}
-		catch (const ibBackendException& err) {
-			if (Conn()->IsActiveTransaction())
-				Conn()->RollBack();
-			UndoAppliedDdl();   // put the schema back where the baseline still says it is
-			throw;
-		}
 		catch (...) {
 			if (Conn()->IsActiveTransaction())
 				Conn()->RollBack();
-			UndoAppliedDdl();
+			UndoAppliedDdl();   // put the schema back where the baseline still says it is
 			throw;
 		}
 		if (!ok) {
@@ -265,7 +261,7 @@ int ibStructureBuilder::Recreate(const ibSchemaSnapshot& target)
 		Conn()->RollBack();
 		throw;
 	}
-	return FlushDeferredFirebird();   // FB: drain the deferred seeds in their own TX
+	return FlushDeferred();   // a barrier dialect: drain the deferred writes in their own TX
 #endif
 	return 1;
 }

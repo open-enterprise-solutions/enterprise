@@ -35,8 +35,8 @@ public:
 	// transaction. baseline == null => create-all. Records the delta into the change log (GetChanges).
 	int  OnSave(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target);
 
-	// after write — CLOSE the transaction: rollback if asked, else commit (+ on Firebird flush the seed
-	// rows deferred past the DDL commit, in their own transaction). The just-created tables are durable.
+	// after write — CLOSE the transaction: rollback if asked, else commit (+ on a barrier dialect flush the
+	// writes deferred past the DDL commit, in their own transaction). The just-created tables are durable.
 	int  OnAfterSave(bool rollback);
 
 	// full rebuild (ReCreateDatabase): owns its whole transaction — drop all of `target`'s tables, then
@@ -49,7 +49,7 @@ public:
 
 private:
 	ibDatabaseLayer* Conn() const;   // m_holder->EnsureConnection(), or db_query when no holder
-	int FlushDeferredFirebird();     // FB two-phase: drain seeds deferred past the DDL commit, own TX (no-op elsewhere)
+	int FlushDeferred();             // barrier dialect (m_ddlCommitBeforeData): drain writes deferred past the DDL commit, own TX
 
 	// The compensation for that second phase failing: replay the barrier's undo ledger in reverse —
 	// drop what THIS save created, take off the columns it added, re-add (empty) the ones it dropped,

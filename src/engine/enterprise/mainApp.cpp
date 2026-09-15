@@ -335,6 +335,10 @@ int ibAppEnterprise::OnExit()
 
 	appDataDestroy();
 
+	// Why the session was closed from outside, if it was — said once everything is let go: the session,
+	// its heartbeat and the connection pool (appDataDestroy). A box shown while any of them stood held it.
+	ibFrontendMainFrame::SayExitNotice();
+
 	// Allow clipboard data to persist after close
 	if (wxTheClipboard->Open()) {
 		wxTheClipboard->Flush();

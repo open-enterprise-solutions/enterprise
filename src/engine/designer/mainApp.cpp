@@ -305,6 +305,10 @@ int ibAppDesigner::OnExit()
 
 	appDataDestroy();
 
+	// Why the session was closed from outside, if it was — said once everything is let go: the session,
+	// its heartbeat and the connection pool (appDataDestroy). A box shown while any of them stood held it.
+	ibFrontendMainFrame::SayExitNotice();
+
 	// The leak report used to print here. It now runs from atexit — registered where the hook is
 	// armed — so that it sees the same heap the CRT dump sees. See the note there.
 

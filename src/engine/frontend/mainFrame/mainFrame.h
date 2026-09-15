@@ -240,6 +240,12 @@ public:
 	// was built around the holder is the process's main window.
 	static void InitFrame(ibFrontendMainFrame* mf);
 
+	// The sentence owed to a user whose session was closed from outside (an administrator's kick). It is
+	// said by the application's OnExit once the session is GONE — never while the session still stands:
+	// a message box shown at the start of the close held the window, and with it the session's row and
+	// heartbeat, until it was dismissed (2026-09-15).
+	static void SayExitNotice();
+
 	ibKeyBinder             GetKeyBinder() const { return m_keyBinder; }
 	ibFontColorSettings     GetFontColorSettings() const { return m_fontColorSettings; }
 	ibEditorSettings        GetEditorSettings() const { return m_editorSettings; }
