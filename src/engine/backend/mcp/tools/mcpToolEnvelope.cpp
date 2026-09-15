@@ -183,7 +183,7 @@ public:
 			"full input schema, which is what mcp_call then needs - and, beside it, the PLACES in "
 			"the pattern corpus that speak about the same words, because half of what a caller "
 			"needs is a passage rather than a verb.\n"
-			"⭐ ABOUT TO WORK IN ONE AREA? ASK FOR THE FAMILY, NOT THE VERB - 'metadata_.*', "
+			"ABOUT TO WORK IN ONE AREA? ASK FOR THE FAMILY, NOT THE VERB - 'metadata_.*', "
 			"'report_.*', 'debug_.*' - and every schema in it arrives together. These verbs are "
 			"used in sequence and differ from each other in small ways, so learning them one "
 			"refusal at a time is the slow road, and it is the one a caller takes by default.");

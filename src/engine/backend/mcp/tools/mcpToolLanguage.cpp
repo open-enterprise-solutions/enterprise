@@ -676,7 +676,7 @@ public:
 				+ word(KEY_INTO) + wxT(" <group>")
 			+ wxT("  ") + word(KEY_ORDERBY) + wxT(" <key>[, <key>...] [") + word(KEY_DESCENDING) + wxT("]")
 			+ wxT("  ") + word(KEY_SKIP) + wxT(" <n>  ") + word(KEY_TAKE) + wxT(" <n>")
-			+ wxT("  ") + word(KEY_SELECT) + wxT(" { <name> = <expr>, … }")
+			+ wxT("  ") + word(KEY_SELECT) + wxT(" { <name> = <expr>, ... }")
 			+ wxT("  ") + word(KEY_DISTINCT));
 
 		// ⭐ THE ACCESS-POLICY FORM — a query whose whole job is to narrow another one. It is stated

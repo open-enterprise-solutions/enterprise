@@ -902,7 +902,7 @@ void ibMcpSayObject(const ibValueMetaObject* object, ibDataNode& node, bool with
 			if (wrong > 0) {
 				node.SetValue(wxT("linksNote"),
 					ibMcpText("Some links here do not name what they used to. `agrees: false` means the id "
-					  "resolves, but to a DIFFERENT object than the link's own text says — following it "
+					  "resolves, but to a DIFFERENT object than the link's own text says - following it "
 					  "reads the wrong object and looks perfectly normal; `broken: true` means nothing "
 					  "carries that id at all. Trust `resolves`, not the text, and correct the note."));
 			}
@@ -1560,7 +1560,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 
 		if (written == 0) {
 			refusal = ibMcpText("That caption names no languages - send the shape metadata_get "
-				"answers with, {en: '…', ru: '…'}.");
+				"answers with, {en: '...', ru: '...'}.");
 			return false;
 		}
 

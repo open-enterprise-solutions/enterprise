@@ -160,7 +160,7 @@ const ibArg& ArgParameter()
 		ibMcpText("The name the module fills in, when the WHOLE cell is that value. A cell with one "
 			  "is a hole, not a caption - and it is stamped as a parameter cell, which is what "
 			  "makes the module's Parameters.Set reach it.\n"
-			  "⚠ A PLAIN NAME, NOT A TRANSLATED STRING. It is looked up as written, so it is an "
+			  "A PLAIN NAME, NOT A TRANSLATED STRING. It is looked up as written, so it is an "
 			  "identifier the module knows - never the every-language form a caption may take. "
 			  "The two are different kinds of text and the sheet treats them differently."));
 	return s_a;

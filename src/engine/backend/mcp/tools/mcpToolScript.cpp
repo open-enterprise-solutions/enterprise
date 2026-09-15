@@ -66,7 +66,7 @@ public:
 		return ibMcpText("Compile a module text and report what is wrong with it. The text is compiled and "
 			"thrown away: nothing is stored and no module is replaced. An empty diagnostics list "
 			"means it compiles.\n"
-			"🛑 IT COMPILES A BARE TEXT, WITH NO OWNER. The configuration's globals, managers and "
+			"IT COMPILES A BARE TEXT, WITH NO OWNER. The configuration's globals, managers and "
 			"metatype collections resolve; the OWN NAMES OF AN OBJECT MODULE do not - a document's "
 			"attribute, a catalog's tabular section. So `Var is not found (FixedAsset)` about a "
 			"document's own attribute is this tool's limit and not a fault in the code. For an "

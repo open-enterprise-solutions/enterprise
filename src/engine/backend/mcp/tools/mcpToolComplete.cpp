@@ -301,7 +301,7 @@ public:
 			"functions, including the ones this module declares above the caret. The general "
 			"keywords are not in it; syntax_search answers those properly.\n\n"
 			"THE QUERY KEYWORDS ARE THE ONE EXCEPTION, and they carry `origin: keyword`. A query is "
-			"WRITTEN in them - `from o in Catalogs.Goods where … select …` - so which of them may be "
+			"WRITTEN in them - `from o in Catalogs.Goods where ... select ...` - so which of them may be "
 			"written where the caret stands is part of this question, not a lookup: inside a query "
 			"you are offered its clauses, inside a `restrict` the two it takes, and in open code the "
 			"two openers. `linq_methods` gives the full form of each clause.\n\n"
@@ -443,7 +443,7 @@ public:
 		if (!ibValueAtCaret(text, (unsigned int)position, module, values, &refused)) {
 			refusal = refused.IsEmpty()
 				? ibMcpText("That text compiles, but the expression at that position does not "
-					"resolve to a value — so there is nothing to offer its members. Something in "
+					"resolve to a value - so there is nothing to offer its members. Something in "
 					"the chain leads nowhere: a member that is not there, a method that returns "
 					"nothing, a name this module was never given.")
 				: wxString::Format(

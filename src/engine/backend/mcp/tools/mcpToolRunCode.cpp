@@ -133,11 +133,7 @@ const ibArg& ArgText()
 			  "back under `result` when the run finishes. `Return` does not work here and cannot: "
 			  "this is a module body, not a function. Without it a run has no answer at all, and the "
 			  "only way to see what it worked out is to have it write journal lines and read them "
-			  "back afterwards.\n"
-			  "\n"
-			  "🛑 AND IF THE QUESTION IS ABOUT DATA, THIS IS THE WRONG VERB. `compose_run {query: "
-			  "\"SELECT ...\"}` answers with the rows in ONE call. Use this one for what only CODE "
-			  "can do: posting documents, calling a common module, filling a base."), /*required*/ true);
+			  "back afterwards."), /*required*/ true);
 	return s_a;
 }
 
@@ -377,7 +373,7 @@ public:
 			"'create a hundred customers', 'delete the test documents' - and this is the answer. "
 			"There is no separate verb for any of them, and no other tool here writes data at all.\n"
 			  "\n"
-			"🛑 TO ASK THE DATA SOMETHING, THIS IS THE WRONG VERB. compose_run with `query: \"SELECT ...\"` "
+			"TO ASK THE DATA SOMETHING, THIS IS THE WRONG VERB. compose_run with `query: \"SELECT ...\"` "
 			"answers with the rows in ONE call and writes nothing. This one answers with a session id: the "
 			"value comes back only through code_status and the journal, and only while the application runs "
 			"with the debugger - four calls for one number. Reach for it to CHANGE data, or when the answer "

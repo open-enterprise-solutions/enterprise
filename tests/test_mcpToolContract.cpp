@@ -36,11 +36,107 @@
 #include "backend/mcp/mcpClipboard.h"
 #include "backend/serialize/dataBuilder.h"
 
+#include <wx/dir.h>        // the ASCII rule reads the MCP sources themselves
+#include <wx/file.h>
+#include <wx/filename.h>
+
 #include <map>
 #include <set>
+#include <string>
 #include <algorithm>   // the refusal must name one of the tool's OWN required arguments
 
 namespace {
+
+// The engine's sources, found from THIS file's location - CMake runs the binary from the build tree,
+// so the path is resolved the way test_propertySerialized.cpp resolves its partials.
+wxString EngineSourceDir()
+{
+	wxFileName here(wxString::FromUTF8(__FILE__));
+	here.SetFullName(wxEmptyString);
+	here.RemoveLastDir();                      // tests -> enterprise
+	here.AppendDir(wxT("src"));
+	here.AppendDir(wxT("engine"));
+	return here.GetPath();
+}
+
+// The line of every string literal in a C++ source that carries a byte outside ASCII. Comments are
+// skipped - they are written for people and carry marks on purpose - and so are character literals;
+// a quote standing between two digits (1'000) is a separator, not the start of one.
+std::vector<int> NonAsciiLiteralLines(const std::string& text)
+{
+	std::vector<int> found;
+	int line = 1;
+	const size_t n = text.size();
+	const auto isWord = [](char c) {
+		return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+	};
+
+	for (size_t i = 0; i < n; ++i) {
+		const char c = text[i];
+
+		if (c == '\n') {
+			++line;
+		}
+		else if (c == '/' && i + 1 < n && text[i + 1] == '/') {
+			while (i + 1 < n && text[i + 1] != '\n')
+				++i;                               // the newline itself is counted by the loop
+		}
+		else if (c == '/' && i + 1 < n && text[i + 1] == '*') {
+			i += 2;
+			while (i + 1 < n && !(text[i] == '*' && text[i + 1] == '/')) {
+				if (text[i] == '\n')
+					++line;
+				++i;
+			}
+			++i;                                   // onto the closing '/'
+		}
+		else if (c == '\'') {
+			if (i > 0 && isWord(text[i - 1]))
+				continue;                          // a digit separator
+			for (++i; i < n && text[i] != '\'' && text[i] != '\n'; ++i) {
+				if (text[i] == '\\')
+					++i;
+			}
+		}
+		else if (c == '"') {
+			const int start = line;
+			bool outside = false;
+
+			// A RAW literal - R"delim( ... )delim" - ends at its own delimiter, not at the next quote.
+			if (i > 0 && text[i - 1] == 'R' && (i < 2 || !isWord(text[i - 2]) || text[i - 2] == '8'
+				|| text[i - 2] == 'L' || text[i - 2] == 'u' || text[i - 2] == 'U')) {
+				const size_t open = text.find('(', i);
+				if (open == std::string::npos)
+					break;
+				const std::string close = ")" + text.substr(i + 1, open - i - 1) + "\"";
+				const size_t end = text.find(close, open);
+				const size_t stop = end == std::string::npos ? n : end;
+				for (size_t k = open; k < stop; ++k) {
+					if (text[k] == '\n')
+						++line;
+					else if ((unsigned char)text[k] >= 0x80)
+						outside = true;
+				}
+				i = end == std::string::npos ? n : end + close.size() - 1;
+			}
+			else {
+				for (++i; i < n && text[i] != '"' && text[i] != '\n'; ++i) {
+					if (text[i] == '\\' && i + 1 < n)
+						++i;
+					if ((unsigned char)text[i] >= 0x80)
+						outside = true;
+				}
+				if (i < n && text[i] == '\n')
+					++line;                        // an unterminated literal: do not lose the count
+			}
+
+			if (outside)
+				found.push_back(start);
+		}
+	}
+
+	return found;
+}
 
 // The schema a tool publishes, as a node — the same call the server makes when
 // it answers `tools/list`, and the same one the argument gate reads.
@@ -186,6 +282,56 @@ TEST(McpToolContract, EveryTool_DescribesItselfForTheCaller)
 		EXPECT_FALSE(tool->GetDescription().IsEmpty())
 			<< tool->GetName().ToStdString() << " has no description";
 	}
+}
+
+// ⭐ AND IT ARRIVES AS IT WAS WRITTEN. A tool's text is an `ibMcpText("..." "..." "...")`, which is
+// `L"..." "..." "..."` - and MSVC encodes every piece after the first through the code page (1251)
+// before joining them into the wide string. A mark that page lacks - a star, a warning sign, a stop
+// sign - reached the caller as `?`: fourteen texts, among them the very warnings that send a caller
+// from code_run to compose_run (found 2026-09-15 by reading an answer byte by byte; the build said
+// C4566 on each). The Linux build sends them intact, so no test that runs the tools can see it - only
+// the SOURCE can. The rule was two comments long (mcpTool.h, mcpServer.cpp); this is where it is kept.
+//
+// Read from the sources of every layer that has tools, not only the backend this binary links: the form
+// verbs and the message verbs are sent down the same wire.
+TEST(McpToolContract, EveryTextSentDownTheWire_IsAscii)
+{
+	const wxString engine = EngineSourceDir();
+	size_t scanned = 0;
+
+	for (const wxString layer : { wxString(wxT("backend")), wxString(wxT("frontend")), wxString(wxT("designer")) }) {
+		wxFileName dir(engine, wxEmptyString);
+		dir.AppendDir(layer);
+		dir.AppendDir(wxT("mcp"));
+		if (!wxDirExists(dir.GetPath()))
+			continue;
+
+		wxArrayString files;
+		wxDir::GetAllFiles(dir.GetPath(), &files, wxEmptyString, wxDIR_FILES | wxDIR_DIRS);
+
+		for (const wxString& path : files) {
+			const wxString ext = wxFileName(path).GetExt().Lower();
+			if (ext != wxT("cpp") && ext != wxT("h"))
+				continue;
+
+			wxFile file(path);
+			ASSERT_TRUE(file.IsOpened()) << path.ToStdString();
+			std::string bytes((size_t)file.Length(), '\0');
+			if (!bytes.empty())
+				file.Read(&bytes[0], bytes.size());
+			++scanned;
+
+			for (const int line : NonAsciiLiteralLines(bytes))
+				ADD_FAILURE() << path.ToStdString() << ":" << line
+					<< " - a string literal carries a character outside ASCII. On Windows every piece of"
+					   " an ibMcpText literal after the first is encoded through the code page, and a mark it"
+					   " lacks reaches the caller as '?'. Write it in words: ' - ' for a dash, '...' for an"
+					   " ellipsis, and STOP: / KEY: / NOTE: as the pattern corpus does for its marks.";
+		}
+	}
+
+	EXPECT_GT(scanned, 0u) << "no MCP sources found under " << engine.ToStdString()
+		<< " - the layout must have moved, and the rule is guarding nothing";
 }
 
 TEST(McpToolContract, EveryTool_PublishesAnObjectSchema)

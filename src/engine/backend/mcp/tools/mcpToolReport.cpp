@@ -1512,7 +1512,7 @@ public:
 			"down the ROWS by default, across the "
 			"COLUMNS when asked, which is what makes a cross table. The path must be one the "
 			"query projects: report_fields lists them, and a path that is not there is refused.\n"
-			"⭐ `groupByAll` puts SEVERAL fields in ONE level, which is what an object's own facts "
+			"`groupByAll` puts SEVERAL fields in ONE level, which is what an object's own facts "
 			"want: [\"FixedAsset\", \"InventoryNumber\", \"Method\"] is one line per asset carrying "
 			"all three, where a level each nests them and repeats the row once per level. Reach for "
 			"a level each only when every one of them genuinely subdivides the one above it.\n"
