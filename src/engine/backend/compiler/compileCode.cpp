@@ -2827,7 +2827,7 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 		//   - Context binding (ThisObject / ThisForm) → OPER_GET_CONTEXT /
 		//     OPER_SET_CONTEXT on the handle's slot.
 		//   - regular var / not found → GetVariable's frame-slot emission.
-		m_rootContext->FindVariable(strRealName, foundedVar, true);
+		context->FindVariable(strRealName, foundedVar, true);
 		const bool isScope   = foundedVar && foundedVar->IsContextProp();
 		const bool isExtern  = foundedVar && foundedVar->IsExternal();
 		const bool isContext = foundedVar && foundedVar->IsContext();

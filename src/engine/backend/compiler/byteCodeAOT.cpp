@@ -212,7 +212,12 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // not a class — it would raise on the first `New` rather than misbehave quietly, but a cache that
 // cannot run is still a cache that must not be loaded. The layout did not move; a previously unused
 // operand acquired a meaning, which is the same kind of change as the one above.
-constexpr uint16_t kAOTFormatVersion = 29;
+// 🛑 29 → 30 (2026-09-15): a function's parameter or local called like a binding of the module's object
+// resolves to the parameter (compileCode.cpp, "A NAME DECLARED NEARER WINS"). A v29 blob was compiled
+// with the binding reading it — the layout is the same and the blob loads, and it would go on counting
+// the days of the document's month where the source says the argument's. A cache that answers
+// differently from its source must not be loaded.
+constexpr uint16_t kAOTFormatVersion = 30;
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against

@@ -1190,7 +1190,7 @@ static bool ExistsByProbe(ibDatabaseLayer& conn, const wxString& probe)
 	// stops the restructuring where the fault is instead of letting it walk on half-applied.
 	ibDatabaseResultSet* rs = nullptr;
 	try {
-		rs = conn.RunQueryWithResults(probe);
+		rs = conn.RunQueryWithResults(wxT("%s"), probe);   // a statement is data, not a format (ibRunRendered)
 	}
 	catch (const ibBackendException&) {
 		conn.ResetErrorCodes();

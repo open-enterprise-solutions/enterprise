@@ -184,7 +184,7 @@ std::vector<ibLogRow> ibLoggerReader::Query(const ibLogFilter& filter)
         ibDatabaseLayerSQLite db;
         if (!db.Open(path)) continue;
         try {
-            ibPreparedStatement* raw = db.PrepareStatement(sql);
+            ibPreparedStatement* raw = db.PrepareStatement(wxT("%s"), sql);   // a statement is data, not a format
             if (raw == nullptr) { db.Close(); continue; }
             ibStatementGuard stmt(&db, raw);
             BindParams(raw, bf);
@@ -242,7 +242,7 @@ std::size_t ibLoggerReader::Count(const ibLogFilter& filter)
         ibDatabaseLayerSQLite db;
         if (!db.Open(path)) continue;
         try {
-            ibPreparedStatement* raw = db.PrepareStatement(sql);
+            ibPreparedStatement* raw = db.PrepareStatement(wxT("%s"), sql);   // a statement is data, not a format
             if (raw == nullptr) { db.Close(); continue; }
             ibStatementGuard stmt(&db, raw);
             BindParams(raw, bf);
