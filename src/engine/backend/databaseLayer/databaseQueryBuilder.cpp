@@ -1014,7 +1014,17 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		// plan per BinOp and crossed param bindings (e.g. a guid bound into a
 		// DATE column → FB type-mismatch crash). Sequence explicitly.
 		const wxString lhs = RenderExpr(expr->m_lhs);
-		const wxString rhs = RenderExpr(expr->m_rhs);
+		// ⭐ A LIKE PATTERN IS A STRING OF ITS OWN LENGTH, not of the column's. Firebird types a bare
+		// `col LIKE ?` parameter by the column it faces, so `%` + text + `%` against a code of 8 was
+		// refused before any row was compared - "string right truncation", SQL -303 (typing a name into
+		// an account field, 2026-09-16). Every road to LIKE comes through here - the provider's
+		// conditions, the prefix search that builds its IR by hand - so the pattern is pinned here once.
+		const bool pinPattern = expr->m_binOp == ibQueryBinOp::Like && expr->m_rhs
+			&& expr->m_rhs->m_kind == ibQueryExprKind::Const && expr->m_rhs->m_const.GetType() == TYPE_STRING;
+		const int patternLength = pinPattern ? (int)expr->m_rhs->m_const.GetString().length() : 0;
+		const wxString rhs = pinPattern
+			? RenderExpr(ibCast(expr->m_rhs, ibTypeString(patternLength > 0 ? patternLength : 1)))
+			: RenderExpr(expr->m_rhs);
 		return wxT("(") + lhs + wxT(" ") + BinOpText(expr->m_binOp) + wxT(" ") + rhs + wxT(")");
 	}
 

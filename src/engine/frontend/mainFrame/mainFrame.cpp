@@ -528,6 +528,17 @@ void ibFrontendMainFrame::OnCloseWindow(wxCloseEvent& event)
 	// nobody is asked.
 	const bool force = !event.CanVeto();
 
+	// ⭐ ONE CLOSE AT A TIME. The asking pass puts questions up ("save the changes?"), and a question
+	// runs a message loop - in which a SECOND close can arrive: a WM_CLOSE posted from outside while
+	// the user's own [X] was asking. Run through, the second one closed the very document the first
+	// was still asking about, and the first then answered into freed memory (Modify on a deleted
+	// document, enterprise dump 2026-09-16). The close that is asking decides; one that may be refused
+	// is refused. (A FORCED close arriving under the question is not covered by this - it cannot be.)
+	if (m_closingWindow && !force) {
+		event.Veto();
+		return;
+	}
+
 	if (!force && !AllowClose()) {
 		event.Veto();
 		return;
