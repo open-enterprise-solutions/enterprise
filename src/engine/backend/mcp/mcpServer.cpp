@@ -1644,6 +1644,21 @@ void ibMcpDescribePlatform(ibDataNode& into)
 	into.SetValue(wxT("dialect"), wxString(
 		ibConfigurationWritesInWords(metaData) ? wxT("word-fenced") : wxT("c-style")));
 
+	// ⭐ HOW A TEXT IS WRITTEN, said beside the dialect because both dialects share the one lexer
+	// (ibTranslateCode) and a caller writing code asks here first. A query in code is a MULTI-LINE
+	// string, and without this a caller glues it together line by line with `+` (measured
+	// 2026-09-15: a day of queries written that way through code_run, until Max pointed at `|`).
+	into.SetValue(wxT("strings"),
+		ibMcpText("A string literal may run over several lines, and that is how a query text is "
+		  "written in code: the line break stays in the text, and every continuing line opens with "
+		  "`|` after its indentation, which is dropped. So a query is ONE literal, not a sum of "
+		  "lines:\n"
+		  "  query.Text = \"SELECT Ref\n"
+		  "  |FROM Catalog.Goods\n"
+		  "  |WHERE Code = &Code\";\n"
+		  "A quote inside a string is doubled (\"\"). A literal in apostrophes is a DATE, not a "
+		  "string: '20260915'."));
+
 	std::vector<ibDataValue> languages;
 
 	for (const wxString& language : ibListMetaObjectNames(metaData, wxT("Language")))

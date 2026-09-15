@@ -350,6 +350,10 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			const wxString recField = ibRegValueField(recordType);
 			const int debitTag = static_cast<int>(ibAccountingRecordType::eDebit);
 			const wxString debitTagText = wxString::Format(wxT("%i"), debitTag);
+			// The rebuild's condition is a TYPED comparison through the query layer — it needs the enum's
+			// VALUE, not its ordinal (a number's tag is on no movement, so every row fell to the credit
+			// side on a rebuild). The neighbouring register measured it: accumulationRegisterMetadataSchema.
+			const ibValue debit = ibValue::CreateEnumObject<ibValueEnumAccountingRegisterRecordType>(ibAccountingRecordType::eDebit);
 
 			const ibBackendQueryColumn* cDr = declareColumn(/*credit*/ false);
 			const ibBackendQueryColumn* cCr = declareColumn(/*credit*/ true);
@@ -357,13 +361,13 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			m.Accumulate(cDr,
 				wxT("CASE WHEN {row}.") + recField + wxT(" = ") + debitTagText + wxT(" THEN {row}.") + resField + wxT(" ELSE 0 END"),
 				ibQueryColumnExpr::Case(
-					{ { ibQueryPredicate::Leaf(ibQueryCondition{ recordType->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(debitTag) }),
+					{ { ibQueryPredicate::Leaf(ibQueryCondition{ recordType->GetQueryColumn(), ibQueryFilterOp::Equal, debit }),
 					    ibQueryColumnExpr::Col(res->GetQueryColumn()) } },
 					ibQueryColumnExpr::Const(ibValue(0.0))));
 			m.Accumulate(cCr,
 				wxT("CASE WHEN {row}.") + recField + wxT(" = ") + debitTagText + wxT(" THEN 0 ELSE {row}.") + resField + wxT(" END"),
 				ibQueryColumnExpr::Case(
-					{ { ibQueryPredicate::Leaf(ibQueryCondition{ recordType->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(debitTag) }),
+					{ { ibQueryPredicate::Leaf(ibQueryCondition{ recordType->GetQueryColumn(), ibQueryFilterOp::Equal, debit }),
 					    ibQueryColumnExpr::Const(ibValue(0.0)) } },
 					ibQueryColumnExpr::Col(res->GetQueryColumn())));
 		}

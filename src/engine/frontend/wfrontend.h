@@ -144,6 +144,13 @@ WFRONTEND_API bool        wfrontendSessionExists(const std::string& sessionId);
 WFRONTEND_API void        wfrontendDestroySession(const std::string& sessionId);
 WFRONTEND_API std::size_t wfrontendSessionCount();
 
+// ⭐ MAY THIS SESSION ADMINISTER — the gate on every /admin endpoint. The same right the designer puts
+// on its administration menu (Active Users and its neighbours): DataAdministration, asked ON THE
+// SESSION'S OWN WORKER so the roles folded are that session's user's, not whatever the HTTP thread
+// happens to carry. A base with no accounts answers with the right's declared default, as it does
+// everywhere. False when the session does not exist.
+WFRONTEND_API bool wfrontendSessionMayAdminister(const std::string& sessionId);
+
 // Write "kick" into sys_session.signal for the given session guid.
 // Any wes process owning that row picks it up on its next
 // JobCheckSignal tick (~3s) and submits Remove@Urgent, tearing the
@@ -268,7 +275,7 @@ WFRONTEND_API bool wfrontendModalReply(const std::string& sessionId,
 // ibDialogFunctionAll content. Gated by AccessRight_ModeAllFunction
 // — returns {"allowed":false} when the user lacks the role, otherwise
 // {"allowed":true, "groups":[{clsid,name,items:[{id,name,synonym}]},…]}.
-WFRONTEND_API std::string wfrontendAllFunctionsJSON();
+WFRONTEND_API std::string wfrontendAllFunctionsJSON(const std::string& sessionId);
 
 // Open the form for a metadata object by its metaID. `cmdType` is the
 // raw ibInterfaceCommandType integer (100=Default, 150=Create,

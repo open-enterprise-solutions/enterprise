@@ -163,14 +163,47 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 		}
 		break;
 	case ibDdlKind::DropTable:
-	case ibDdlKind::DropIndex:
-		if (!onCreatedTable) {
-			// Irreversible from here: the shape left with the object. Said, never swallowed — the
-			// next apply will meet the absence and its refusal must be traceable to this moment.
+		if (!onCreatedTable && !ddl.m_columns.empty()) {
+			// ⭐⭐ RE-CREATED FROM THE SHAPE THE STATEMENT CARRIED — EMPTY, as a dropped column comes back.
+			// Without it this was the one step the ledger could only apologise for, and the apology was not
+			// the end of it: the configuration is not published, the baseline still declares the table, and
+			// every later apply issued DROP TABLE against a table that was gone — refused, rolled back, on
+			// every retry, for good (measured 2026-09-15 on a copy: a table of a removed metatype dropped by
+			// the first commit, a deferred CREATE VIEW refused, and the base could not be applied again).
+			// Put back, the database is what the baseline says once more, and the next apply drops it as
+			// planned. Its indexes are not re-created: whatever comes next either drops the table again or
+			// replaces it, and a drop takes the indexes with it. Only a DATA table carries its shape here —
+			// a derived one is left absent on purpose and rebuilt by the differ from the movements
+			// (schemaSnapshot.cpp), because an empty totals table under live maintenance is wrong numbers.
+			const ibDdlStatement undo = ibCreateTable(ddl.m_table, ddl.m_columns);
+			const wxString table = ddl.m_table;
+			h->DdlUndoActions().push_back([undo, table](ibDatabaseLayer* c) {
+				ibExecuteDdl(c, undo);
+				ibLog->Warn(wxT("restructure"), wxT("compensation"), wxString::Format(
+					wxT("table %s re-created EMPTY - its rows died with the first commit"), table));
+			});
+		}
+		else if (!onCreatedTable) {
+			// A drop that did not say what it dropped — nothing to rebuild it from. Said, never swallowed.
 			const wxString table = ddl.m_table;
 			h->DdlUndoActions().push_back([table](ibDatabaseLayer*) {
 				ibLog->Warn(wxT("restructure"), wxT("compensation"), wxString::Format(
-					wxT("cannot restore dropped object of table %s - the next apply may refuse against the old baseline"), table));
+					wxT("cannot restore dropped table %s - the next apply may refuse against the old baseline"), table));
+			});
+		}
+		break;
+	case ibDdlKind::DropIndex:
+		if (!onCreatedTable && !ddl.m_indexColumns.empty()) {
+			// The same for an index: a REBUILT index is dropped in the first phase and created again, so a
+			// failed second phase left the baseline's index missing and the next apply's DROP INDEX refused.
+			const ibDdlStatement undo = ibCreateIndex(ddl.m_table, ddl.m_indexName, ddl.m_indexColumns, ddl.m_unique);
+			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
+		}
+		else if (!onCreatedTable) {
+			const wxString index = ddl.m_indexName;
+			h->DdlUndoActions().push_back([index](ibDatabaseLayer*) {
+				ibLog->Warn(wxT("restructure"), wxT("compensation"), wxString::Format(
+					wxT("cannot restore dropped index %s - the next apply may refuse against the old baseline"), index));
 			});
 		}
 		break;

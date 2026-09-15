@@ -9,6 +9,7 @@
 #include "backend/backend_exception.h"
 #include "backend/session/session.h"   // ibSession::Current()->Holder() — the DDL holder IS the session's
 #include "appData.h"                                     // db_query — the default connection
+#include "backend/logger/logger.h"          // ibLog->Warn — a compensation that cannot run is written down
 
 ibDatabaseLayer* ibStructureBuilder::Conn() const
 {
@@ -199,9 +200,17 @@ void ibStructureBuilder::UndoAppliedDdl()
 		Conn()->Commit();
 	}
 	catch (...) {
-		// Best effort, and deliberately silent: the caller is already carrying the REAL failure and
-		// that is the one worth reporting. An undo that cannot run leaves the schema ahead of the
-		// baseline — worse than this, but not worth replacing the original diagnosis with.
+		// Best effort, and it does not replace the caller's diagnosis: the caller is already carrying
+		// the REAL failure, and that is the one it reports. But it is WRITTEN DOWN — an undo that cannot
+		// run leaves the schema ahead of the baseline, and the next apply's refusal is then traceable
+		// only to this line. It used to be silent, which is how a failed apply could end with nothing
+		// in the journal about why the base no longer matches its configuration.
+		wxString why = wxT("an unknown failure");
+		try { throw; }
+		catch (const ibBackendException& err) { why = err.GetErrorDescription(); }
+		catch (...) {}
+		ibLog->Warn(wxT("restructure"), wxT("compensation"), wxString::Format(
+			wxT("the compensation of a failed apply could not run (%s) - the schema is ahead of the configuration"), why));
 		if (Conn()->IsActiveTransaction()) {
 			try { Conn()->RollBack(); } catch (...) {}
 		}

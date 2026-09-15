@@ -255,14 +255,24 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		const int receiptTag = static_cast<int>(ibRecordType::eReceipt);
 		const wxString receiptTagText = wxString::Format(wxT("%i"), receiptTag);
 
+		// 🛑⭐⭐ THE REBUILD COMPARES A VALUE, AND IT HAS TO BE THE ENUM'S. The trigger text above reads the
+		// raw ordinal and is right; the rebuild's condition goes through the query layer, which compares a
+		// TYPED column by its tag AND its value — and `ibValue(receiptTag)` is a NUMBER, whose tag no
+		// movement carries. So the condition was false for every row: every rebuild of the totals filed
+		// every movement as an expense, and the balance came back as minus the sum of all movements
+		// (measured 2026-09-15 on a copy: -62411 from the totals against 36131 - 26280 = 9851 from the
+		// movements) — silently, after any change that rebuilds the table. Asked with the Receipt VALUE,
+		// the rebuild and the trigger now count the same movement on the same side.
+		const ibValue receipt = ibValue::CreateEnumObject<ibValueEnumAccumulationRegisterRecordType>(ibRecordType::eReceipt);
+
 		m.Accumulate(cIn,  wxT("CASE WHEN {row}.") + recField + wxT(" = ") + receiptTagText + wxT(" THEN {row}.") + resField + wxT(" ELSE 0 END"),
 			ibQueryColumnExpr::Case(
-				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType()->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(receiptTag) }),
+				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType()->GetQueryColumn(), ibQueryFilterOp::Equal, receipt }),
 				    ibQueryColumnExpr::Col(res->GetQueryColumn()) } },
 				ibQueryColumnExpr::Const(ibValue(0.0))));
 		m.Accumulate(cOut, wxT("CASE WHEN {row}.") + recField + wxT(" = ") + receiptTagText + wxT(" THEN 0 ELSE {row}.") + resField + wxT(" END"),
 			ibQueryColumnExpr::Case(
-				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType()->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(receiptTag) }),
+				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType()->GetQueryColumn(), ibQueryFilterOp::Equal, receipt }),
 				    ibQueryColumnExpr::Const(ibValue(0.0)) } },
 				ibQueryColumnExpr::Col(res->GetQueryColumn())));
 

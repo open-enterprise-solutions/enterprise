@@ -34,14 +34,27 @@ void ibValueDatabaseLayer_BindNames(ibValue::ibMemberTable& helper, const ibValu
 }
 
 #include "backend/backend_exception.h"
+#include "backend/metadataConfiguration.h"   // activeMetaData — whose rights the running session folds
 
 bool ibValueDatabaseLayer::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) //function call
 {
+	// ⭐⭐ THE ONE HATCH, CLOSED BY THE RIGHT THAT NAMES IT. Every other road to the data passes the
+	// engine — the access policy, the row-level restrictions, the register rules; this one hands a
+	// script the session's raw connection, so what it runs is answered by nobody. That is a tool for
+	// the person who administers the data, and only for them: DataAdministration, the same right the
+	// designer's administration menu asks. (Nothing runs in the designer anyway — it answers stubs.)
+	if (!appData->DesignerMode() && activeMetaData != nullptr && !activeMetaData->AccessRight_DataAdministration())
+		ibBackendAccessException::Error(_("DatabaseLayer runs raw SQL past the access policy - it needs the Data administration right"));
+
+	// A statement is DATA, not a format: the three doors below are printf-style, and a script's SQL
+	// handed to them as the format turned any per cent sign in it (a LIKE pattern) into a conversion
+	// specifier — the same fault fixed at eight engine call sites (2026-09-15), reachable here from
+	// a script.
 	if (lMethodNum == ePrepareStatement)
 	{
 		if (!appData->DesignerMode())
 		{
-			ibPreparedStatement* preparedStatement = ses_query->PrepareStatement(paParams[0]->GetString());
+			ibPreparedStatement* preparedStatement = ses_query->PrepareStatement(wxT("%s"), paParams[0]->GetString());
 			if (preparedStatement == nullptr) {
 				ibBackendCoreException::Error(ibBackendCoreException::GetLastError());
 				return false;
@@ -56,14 +69,14 @@ bool ibValueDatabaseLayer::CallAsFunc(const long lMethodNum, ibValue& pvarRetVal
 	else if (lMethodNum == eRunQuery)
 	{
 		if (!appData->DesignerMode())
-			pvarRetValue = ses_query->RunQuery(paParams[0]->GetString());
+			pvarRetValue = ses_query->RunQuery(wxT("%s"), paParams[0]->GetString());
 		return true;
 	}
 	else if (lMethodNum == eRunQueryWithResults)
 	{
 		if (!appData->DesignerMode())
 		{
-			ibDatabaseResultSet* resultSet = ses_query->RunQueryWithResults(paParams[0]->GetString());
+			ibDatabaseResultSet* resultSet = ses_query->RunQueryWithResults(wxT("%s"), paParams[0]->GetString());
 			if (resultSet == nullptr) {
 				ibBackendCoreException::Error(ses_query->GetErrorMessage());
 				return false;

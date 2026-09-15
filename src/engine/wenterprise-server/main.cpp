@@ -267,6 +267,24 @@ bool RequireSessionId(const httplib::Request& req, httplib::Response& res, std::
 	return false;
 }
 
+// ⭐ THE /admin GATE. These endpoints kick sessions, evict a whole process and force-release other
+// people's locks — and they answered ANYONE who could reach the port. The right asked is the one the
+// designer puts on its own administration menu (DataAdministration), in the caller's session: no
+// session is 401, a session without the right is 403. Nothing in the platform calls these over HTTP
+// (the designer's Active Users reads the same data in-process), so a monitor that wants them logs in
+// like a person does.
+bool RequireAdministrator(const httplib::Request& req, httplib::Response& res)
+{
+	std::string id;
+	if (!RequireSessionId(req, res, id))
+		return false;
+	if (wfrontendSessionMayAdminister(id))
+		return true;
+	res.status = 403;
+	res.set_content("administration right required\n", "text/plain");
+	return false;
+}
+
 // Probe: is someone already accepting connections on host:port? cpp-httplib
 // binds with SO_REUSEADDR on Windows, so a second wenterprise-server on the
 // same port won't fail to bind — Windows happily round-robins incoming
@@ -635,7 +653,7 @@ int main(int argc, char** argv)
 	svr.Get(prefix + "/functions", [](const httplib::Request& req, httplib::Response& res) {
 		std::string id;
 		if (!RequireSessionId(req, res, id)) return;
-		res.set_content(wfrontendAllFunctionsJSON(),
+		res.set_content(wfrontendAllFunctionsJSON(id),
 			"application/json; charset=utf-8");
 	});
 
@@ -876,7 +894,8 @@ int main(int argc, char** argv)
 	// snapshot. Designed for monitoring agents and the Active Users
 	// dialog; callable freely without rate-limiting at typical loads.
 	svr.Get(prefix + "/admin/diag",
-		[](const httplib::Request&, httplib::Response& res) {
+		[](const httplib::Request& req, httplib::Response& res) {
+			if (!RequireAdministrator(req, res)) return;
 			res.set_content(wfrontendDiagJSON(), "application/json");
 		});
 
@@ -888,6 +907,7 @@ int main(int argc, char** argv)
 	// is the cross-process control channel.
 	svr.Post(prefix + R"(/admin/sessions/([0-9a-fA-F\-]+)/kick)",
 		[](const httplib::Request& req, httplib::Response& res) {
+			if (!RequireAdministrator(req, res)) return;
 			const std::string guid = req.matches[1].str();
 			const bool ok = wfrontendKickSessionByGuid(guid);
 			res.status = ok ? 202 : 500;
@@ -901,6 +921,7 @@ int main(int argc, char** argv)
 	// triggers the same fan-out.
 	svr.Post(prefix + R"(/admin/sessions/([0-9a-fA-F\-]+)/reload)",
 		[](const httplib::Request& req, httplib::Response& res) {
+			if (!RequireAdministrator(req, res)) return;
 			const std::string guid = req.matches[1].str();
 			const bool ok = wfrontendReloadSessionByGuid(guid);
 			res.status = ok ? 202 : 500;
@@ -911,7 +932,8 @@ int main(int argc, char** argv)
 	// One entry per held lock; see wfrontendLocksJSON shape. Cheap to
 	// call (single SELECT, no joins).
 	svr.Get(prefix + "/admin/locks",
-		[](const httplib::Request&, httplib::Response& res) {
+		[](const httplib::Request& req, httplib::Response& res) {
+			if (!RequireAdministrator(req, res)) return;
 			res.set_content(wfrontendLocksJSON(), "application/json");
 		});
 
@@ -921,6 +943,7 @@ int main(int argc, char** argv)
 	// success, 500 on error (already-gone is success — best-effort).
 	svr.Delete(prefix + R"(/admin/locks/([0-9a-fA-F\-]+))",
 		[](const httplib::Request& req, httplib::Response& res) {
+			if (!RequireAdministrator(req, res)) return;
 			const std::string guid = req.matches[1].str();
 			const bool ok = wfrontendForceReleaseLockByGuid(guid);
 			res.status = ok ? 200 : 500;

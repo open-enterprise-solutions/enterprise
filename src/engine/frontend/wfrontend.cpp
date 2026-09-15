@@ -1489,14 +1489,21 @@ WFRONTEND_API bool wfrontendModalReply(const std::string& sessionId,
 // at the menu-visibility layer; this endpoint refuses on the same
 // check so a hostile client can't enumerate metadata bypassing the
 // guard. Returns {"allowed":false} when access denied.
-WFRONTEND_API std::string wfrontendAllFunctionsJSON()
+WFRONTEND_API std::string wfrontendAllFunctionsJSON(const std::string& sessionId)
 {
+	Sessions().Touch(sessionId);
 	if (!g_initialized.load() || activeMetaData == nullptr) {
 		nlohmann::json j;
 		j["allowed"] = false;
 		return j.dump();
 	}
-	if (!activeMetaData->AccessRight_ModeAllFunction()) {
+	// ⚠ ASKED ON THE SESSION'S WORKER. The check used to run on the HTTP thread, where no session of
+	// the caller is bound — so the roles it folded were not the requesting user's. The right belongs
+	// to whoever asked, and only the session's own worker answers in that user's name.
+	ibWebApplication* app = Sessions().FindApp(sessionId);
+	const bool allowed = app != nullptr
+		&& app->RunOnWorker([]() -> bool { return activeMetaData->AccessRight_ModeAllFunction(); }).get();
+	if (!allowed) {
 		nlohmann::json j;
 		j["allowed"] = false;
 		return j.dump();
@@ -1640,6 +1647,17 @@ WFRONTEND_API std::string wfrontendInterfacesJSON()
 // calls metaObject->Execute(). Returns updated active
 // host JSON after the form is opened (so the client refreshes its
 // tab strip + content in one round-trip).
+WFRONTEND_API bool wfrontendSessionMayAdminister(const std::string& sessionId)
+{
+	Sessions().Touch(sessionId);
+	if (!g_initialized.load() || activeMetaData == nullptr)
+		return false;
+	ibWebApplication* app = Sessions().FindApp(sessionId);
+	if (app == nullptr)
+		return false;
+	return app->RunOnWorker([]() -> bool { return activeMetaData->AccessRight_DataAdministration(); }).get();
+}
+
 WFRONTEND_API std::string wfrontendOpenMetaObject(const std::string& sessionId,
 	int metaID, int cmdType)
 {

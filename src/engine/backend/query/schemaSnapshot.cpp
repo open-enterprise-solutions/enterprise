@@ -508,6 +508,16 @@ int DiffSeedInto(ibStructureBatch& batch, const ibSchemaTable* old, const ibSche
 	return 1;
 }
 
+// Every logical column a table stands on — the scaffold, then the declared columns. What a DROP carries
+// so the compensation ledger can put the table back (ibStructureBatch::DropTable).
+std::vector<const ibBackendQueryColumn*> TableColumnsOf(const ibSchemaTable& t)
+{
+	std::vector<const ibBackendQueryColumn*> columns = t.m_scaffold;
+	for (const ibSchemaColumn& c : t.m_columns)
+		columns.push_back(c.m_column);
+	return columns;
+}
+
 // A column's friendly name for the change ledger (falls back to the physical field if unnamed).
 wxString ColName(const ibBackendQueryColumn* col)
 {
@@ -581,7 +591,7 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 	for (const ibSchemaIndex& o : old.m_indexes) {
 		const ibSchemaIndex* c = FindIndex(cur.m_indexes, o.m_name);
 		if (c == nullptr || !SameIndex(o, *c)) {
-			batch.Ddl(ibDropIndex(o.m_name, cur.m_name));
+			batch.DropIndex(o.m_name, o.m_columns, o.m_unique);   // the shape rides along for the compensation
 			if (report != nullptr)
 				report->AppendInfo((c == nullptr ? _("Remove index ") : _("Rebuild index ")) + o.m_name);
 		}
@@ -827,7 +837,14 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 				continue;
 
 			ibStructureBatch batch(old.m_name);   // a drop needs no metadata
-			batch.DropTable();
+			// A DATA table's shape rides along, so a failed second phase can put it back (empty) and the
+			// base matches the baseline again. A DERIVED one's does not: re-created empty it would be a
+			// totals table with no rows under maintenance that counts from zero — numbers that silently
+			// disagree with the movements. The differ rebuilds a missing derived table instead (below).
+			if (old.m_derived)
+				batch.DropTable();
+			else
+				batch.DropTable(TableColumnsOf(old));
 			if (report != nullptr)
 				report->AppendWarning(_("Drop table ") + LedgerName(old));
 			batch.Flush(schema);   // errors THROW (caught by the storage's apply try/catch)
@@ -886,11 +903,21 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 		// a data table: those drops stay unguarded, their absence is a defect that must refuse). It
 		// may legitimately be absent here, and without the guard the next apply died on DROP -607 —
 		// permanently, because the refusal rolled back the very CREATE that would have healed it.
-		if (cur.m_derived && old != nullptr && ibDerivedState::NeedsRegeneration(old, cur)) {
+		//
+		// ⭐⭐ AND AN ABSENT ONE IS REBUILT EVEN WHEN ITS SHAPE DID NOT CHANGE. The replacement above heals
+		// the absence only while the next apply still wants the NEW shape. Revert the change instead —
+		// the ordinary reaction to a failed apply — and the declaration equals the baseline again, so
+		// nothing asked for a rebuild, the table stayed missing, and the maintenance install referred to
+		// it: "Table unknown …_BALANCETOTALS" on every apply, for good (measured 2026-09-15 on a copy).
+		// Same probe, same class — the question the bundle's IsInstalled already asks of its views and
+		// triggers, asked of the table they stand on. Rebuilt, it is regenerated from the movements, so
+		// the totals come back RIGHT rather than empty.
+		if (cur.m_derived && old != nullptr
+		    && (ibDerivedState::NeedsRegeneration(old, cur) || !schema.Connection().TableExists(old->m_name))) {
 			ibDropMaterialization(schema.Connection(), old->m_materialize.ToRenderSpec(old->m_name));
 			if (schema.Connection().TableExists(old->m_name)) {
 				ibStructureBatch drop(old->m_name);
-				drop.DropTable();
+				drop.DropTable();   // no shape: a derived table is never re-created by the compensation
 				drop.Flush(schema);
 			}
 			if (report != nullptr)

@@ -750,6 +750,17 @@ inline ibDdlStatement ibDropTable(const wxString& table, bool ifExists = false)
 	return s;
 }
 
+// The same DROP TABLE carrying the table's COLUMNS. The renderer still spells only the name; the
+// shape is for the barrier's compensation ledger, which re-creates the table (EMPTY — its rows died
+// with the first commit) if the second phase fails, so the schema matches the baseline again.
+inline ibDdlStatement ibDropTable(const wxString& table, std::vector<ibDdlColumn> columns)
+{
+	ibDdlStatement s(ibDdlKind::DropTable);
+	s.m_table   = table;
+	s.m_columns = std::move(columns);
+	return s;
+}
+
 // ANALYZE a table — refresh the optimiser's statistics so it plans against real cardinality
 // (after a temp materialise, a bulk load, or a restructure). The per-driver form lives in the
 // dialect (m_analyzePrefix: PG/SQLite "ANALYZE", FB empty); a driver with
@@ -859,6 +870,19 @@ inline ibDdlStatement ibDropIndex(const wxString& indexName, const wxString& tab
 	ibDdlStatement s(ibDdlKind::DropIndex);
 	s.m_indexName = indexName;
 	s.m_table     = table;
+	return s;
+}
+
+// The same DROP INDEX carrying the index's COLUMNS and uniqueness — for the compensation ledger,
+// which re-creates it if the second phase fails. The renderer spells only the name.
+inline ibDdlStatement ibDropIndex(const wxString& indexName, const wxString& table,
+                                  std::vector<wxString> columns, bool unique)
+{
+	ibDdlStatement s(ibDdlKind::DropIndex);
+	s.m_indexName    = indexName;
+	s.m_table        = table;
+	s.m_indexColumns = std::move(columns);
+	s.m_unique       = unique;
 	return s;
 }
 

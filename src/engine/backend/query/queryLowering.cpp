@@ -1139,10 +1139,16 @@ ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& pa
 		// refused as "needs <Kind>.<Name>.<Member>", and a balance could not be taken from a register's
 		// movements, whose sign is their record type (a receivables report, 2026-09-11).
 		if (e.m_path.size() == 2) {
+			// 🛑 "WAS IT MADE" IS ASKED OF THE CALL, NOT OF THE VALUE. An enumeration made by its type name
+			// holds no member yet — and an enumeration with no member answers IsEmpty() true, which is its
+			// honest reading of itself. Asked "is it empty?" to mean "did the name resolve?", every system
+			// enumeration read as unknown and `VALUE(AccumulationRecordType.Receipt)` was refused for both
+			// of its members (measured 2026-09-15: the object came back, type VALUE, IsEmpty 1).
 			ibValue enumeration;
-			try { enumeration = ibValue::CreateObject(e.m_path[0]); }
+			bool made = false;
+			try { enumeration = ibValue::CreateObject(e.m_path[0]); made = true; }
 			catch (...) { enumeration = ibValue(); }
-			const long member = enumeration.IsEmpty() ? wxNOT_FOUND : enumeration.FindProp(e.m_path[1]);
+			const long member = made ? enumeration.FindProp(e.m_path[1]) : wxNOT_FOUND;
 			ibValue out;
 			if (member == wxNOT_FOUND || !enumeration.GetPropVal(member, out))
 				ThrowQueryException(e.m_line, e.m_col, wxString::Format(

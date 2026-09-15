@@ -13,7 +13,8 @@
 #include "backend/session/workerPoolHeadless.h"
 
 #include "backend/query/schemaSnapshot.h"        // ibSchemaSnapshot + ContributeTables
-#include "backend/query/derivedStateBuilder.h"   // ibDerivedState::CollapseAll
+#include "backend/query/derivedStateBuilder.h"   // ibDerivedState::MaintainTotals
+#include "backend/logger/logger.h"               // ibLog->Warn — a disagreement is said where people read
 
 #include <wx/log.h>
 
@@ -64,13 +65,25 @@ bool FoldTotals(ibSession* session)
 	// The holder names WHOSE connection this runs on. It comes from the job's own
 	// session — falling back to "the calling thread's" would silently borrow
 	// somebody else's (derivedStateBuilder.h).
-	const int folded = ibDerivedState::CollapseAll(snapshot, session->Holder());
-	if (folded < 0) {
+	//
+	// ⭐⭐ VERIFY, THEN FOLD — MaintainTotals, the call written for this job. The job used to
+	// call the fold alone, so the check of the last period against the movements had no
+	// caller at all: totals that had drifted from the movements stayed wrong with nothing
+	// anywhere saying so. That is not hypothetical — a rebuild that filed every movement as
+	// an expense was found by hand on 2026-09-15, and this check is what would have reported
+	// it on the next pass. A disagreement is written to the registration journal, where the
+	// person responsible reads; the Designer's recompute rebuilds the table.
+	const ibDerivedState::ibTotalsMaintenance done = ibDerivedState::MaintainTotals(snapshot, session->Holder());
+	if (done.m_failed) {
 		ibJournalInfo(wxT("job"),wxT("totals fold failed"));
 		return false;
 	}
+	if (done.m_mismatched > 0)
+		ibLog->Warn(wxT("totals"), wxT("verify"), wxString::Format(
+			wxT("%d key(s) of the last period in the register totals disagree with the movements - ")
+			wxT("recompute the totals in the Designer to rebuild them"), done.m_mismatched));
 
-	// CollapseAll walks every table in one pass, so there is never a remainder to
+	// MaintainTotals walks every table in one pass, so there is never a remainder to
 	// report. If it ever grows a chunked form, THIS is the line that turns into
 	// "work remains" and the manager re-queues on the next tick without waiting
 	// out the interval — the dosage contract exists for exactly that.

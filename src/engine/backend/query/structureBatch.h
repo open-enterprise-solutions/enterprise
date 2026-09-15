@@ -61,10 +61,17 @@ public:
 	// (CreateIndex), not a table-level PRIMARY KEY — so the structure speaks only columns.
 	void CreateTable(std::vector<const ibBackendQueryColumn*> columns);
 	void DropTable();
+	// The drop that can be UNDONE: the table's own columns ride the statement, so the barrier's
+	// compensation ledger re-creates the table (empty) if the apply's second phase fails — the same
+	// reason DROP COLUMN takes the slot whole. Without them the drop is irreversible and the next
+	// apply meets a table the baseline still declares and the database no longer has.
+	void DropTable(std::vector<const ibBackendQueryColumn*> columns);
 	// Index over LOGICAL columns — each expands to its physical field names through the layout tier
 	// (a raw uuid column -> "uuid"; a reference attribute -> its _RTRef/_RRRef pair; a dimension -> its
 	// fields). The structure speaks columns, not bare field strings.
 	void CreateIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique = false);
+	// Its mirror, carrying what CreateIndex was given — so a failed second phase can put the index back.
+	void DropIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique);
 	void Ddl(const ibDdlStatement& ddl);                        // any other prebuilt statement, in order
 
 	// --- data seed the subclass pours in --------------------------------------------------------

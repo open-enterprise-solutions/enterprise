@@ -85,6 +85,16 @@ void ibStructureBatch::DropTable()
 	m_steps.push_back(ibDropTable(m_table));
 }
 
+void ibStructureBatch::DropTable(std::vector<const ibBackendQueryColumn*> columns)
+{
+	// The same expansion CreateTable makes — what the ledger re-creates is the table as it was declared.
+	std::vector<ibDdlColumn> ddlCols;
+	for (const ibBackendQueryColumn* col : columns)
+		for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+			ddlCols.push_back(ColumnOf(slot));
+	m_steps.push_back(ibDropTable(m_table, std::move(ddlCols)));
+}
+
 void ibStructureBatch::CreateIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique)
 {
 	// Expand every logical column to its physical field names — the index covers those.
@@ -95,6 +105,15 @@ void ibStructureBatch::CreateIndex(const wxString& indexName, std::vector<const 
 	if (fields.empty())   // a column with no physical fields => no index (the old explicit guard)
 		return;
 	m_steps.push_back(ibCreateIndex(m_table, indexName, std::move(fields), unique));
+}
+
+void ibStructureBatch::DropIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique)
+{
+	std::vector<wxString> fields;
+	for (const ibBackendQueryColumn* col : columns)
+		for (const wxString& f : ColumnFieldNames(col))
+			fields.push_back(f);
+	m_steps.push_back(ibDropIndex(indexName, m_table, std::move(fields), unique));
 }
 
 void ibStructureBatch::Ddl(const ibDdlStatement& ddl)

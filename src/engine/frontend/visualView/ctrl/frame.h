@@ -435,7 +435,9 @@ public:
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
 
-	virtual bool OnEventChanging(ibEvent* event, const wxString& newValue);
+	// `override` on purpose: this was declared with `const wxString&`, overrode nothing, and ran for
+	// nobody — the inspector calls through ibPropertyObject, whose signature takes a wxVariant.
+	virtual bool OnEventChanging(ibEvent* event, const wxVariant& newValue) override;
 	virtual void OnEventChanged(ibEvent* event, const wxVariant& oldValue, const wxVariant& newValue);
 
 	/**
