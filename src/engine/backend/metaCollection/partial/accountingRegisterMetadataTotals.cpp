@@ -826,8 +826,8 @@ using ibAcctIndex   = std::unordered_map<ibAcctKey, size_t, ibValueSeqHash, ibVa
 // GetHashKey and then keying a std::map by the resulting text.
 using ibAcctTypeCache    = std::unordered_map<ibValue, int, ibValueHash, ibValueEqual>;
 using ibAcctKindSet      = std::unordered_set<ibValue, ibValueHash, ibValueEqual>;
-// Account -> the dimension kinds it keeps SUMMARY ONLY. Read whole, in one go (see
-// SummaryOnlyKindsByAccount): a map of an answer, not a cache of one.
+// Account -> the dimension kinds of its kinds table — all of them, or the ones it keeps SUMMARY ONLY.
+// Read whole, in one go (see KindsByAccount): a map of an answer, not a cache of one.
 using ibAcctSummaryMap = std::unordered_map<ibValue, ibAcctKindSet, ibValueHash, ibValueEqual>;
 
 // ⭐⭐ ONE PASS OF A READING — which account column the rows are grouped by, which side's slots the
@@ -900,16 +900,18 @@ wxString FigureName(const ibValueMetaObjectAttributeBase* resource, const wxStri
 // Both sides are always stored and always computed; what the type decides is what the opposite one
 // MEANS. On an active account a credit entry is a REVERSAL — it reduces the debit balance and is not a
 // credit balance of its own — so the two fold into one number with a sign. A passive account is the
-// mirror. An **active-passive** account folds NOT AT ALL: it can stand on both sides at once (classic
-// mutual settlements, where the same account owes some counterparties and is owed by others), and a
-// receivable of 100 against a payable of 100 is not "zero" — that answer is wrong in a way no
-// formatting can undo.
+// mirror. An **active-passive** account folds NOT ACROSS ITS ANALYTICS: it can stand on both sides at
+// once (classic mutual settlements, where the same account owes some counterparties and is owed by
+// others), and a receivable of 100 against a payable of 100 is not "zero" — that answer is wrong in a
+// way no formatting can undo. WITHIN one set of its analytics — one counterparty — it folds like any
+// other account (see AtFullAnalytics).
 //
 // The type is read from the ACCOUNT, once per account: it is data, and the engine has been storing it
 // for years without ever asking (GetAccountType had no callers at all).
 // Declared here, defined below beside the flag it reads: the fold needs it, and the fold reads better
-// next to the key it is folding than at the bottom of the file.
-ibAcctSummaryMap SummaryOnlyKindsByAccount(const ibValueMetaObjectChartOfAccounts* chart);
+// next to the key it is folding than at the bottom of the file. `onlySummary` narrows the answer to
+// the kinds kept for turnovers only; without it, every kind the account's table lists.
+ibAcctSummaryMap KindsByAccount(const ibValueMetaObjectChartOfAccounts* chart, bool onlySummary);
 
 // Drop the turnovers-only breakdowns out of a BALANCE key and merge whatever rows then coincide.
 //
@@ -923,7 +925,7 @@ void FoldOutSummaryOnly(const ibValueMetaObjectChartOfAccounts* chart,
 	if (layouts.empty() || rows.empty())
 		return;
 
-	const ibAcctSummaryMap summaryOnlyByAccount = SummaryOnlyKindsByAccount(chart);
+	const ibAcctSummaryMap summaryOnlyByAccount = KindsByAccount(chart, /*onlySummary*/ true);
 
 	ibAcctRowList merged;
 	ibAcctIndex index;
@@ -1034,7 +1036,7 @@ int AccountTypeOf(const ibValue& account, ibAcctTypeCache& cache)
 // account's rows home at once: the whole table is a handful of rows per account, and a totals
 // reading wants all of them anyway. So this returns the MAP, built once, and the callers look up
 // in it — no lazy filling, no per-account round trip, nothing to invalidate.
-ibAcctSummaryMap SummaryOnlyKindsByAccount(const ibValueMetaObjectChartOfAccounts* chart)
+ibAcctSummaryMap KindsByAccount(const ibValueMetaObjectChartOfAccounts* chart, bool onlySummary)
 {
 	ibAcctSummaryMap byAccount;
 
@@ -1083,7 +1085,7 @@ ibAcctSummaryMap SummaryOnlyKindsByAccount(const ibValueMetaObjectChartOfAccount
 						// asking for it once costs one statement instead of one per row of the report.
 						ibDataQueryResult sel = b.Execute(ibReadPageRequest{});
 						while (sel.Next()) {
-							if (!sel.GetValue(summaryCol).GetBoolean())
+							if (onlySummary && !sel.GetValue(summaryCol).GetBoolean())
 								continue;
 							const ibValue kind = sel.GetValue(kindCol);
 							if (kind.IsEmpty())
@@ -1101,15 +1103,46 @@ ibAcctSummaryMap SummaryOnlyKindsByAccount(const ibValueMetaObjectChartOfAccount
 	return byAccount;
 }
 
+// ⭐⭐ DOES THIS ROW STAND ON ONE SET OF THE ACCOUNT'S ANALYTICS? — the grain at which an active-passive
+// balance may be folded (accounting-register-arc.md §4.7: "folding is legitimate only WITHIN one identical
+// set of dimension values, never across an account"). It does when the reading reports every slot as it
+// stands (no kinds asked — BreakdownWidth), when the account keeps no analytics at all, or when the kinds
+// asked cover every kind the account keeps a BALANCE along (its turnovers-only kinds left the key in
+// FoldOutSummaryOnly). A breakdown by fewer kinds than that is a row across several sets — a receivable
+// and a payable of one counterparty's two contracts — and stays on both sides.
+bool AtFullAnalytics(const ibValue& account, const std::vector<ibValue>& askedKinds,
+                     const ibAcctSummaryMap& kindsByAccount, const ibAcctSummaryMap& summaryOnlyByAccount)
+{
+	if (askedKinds.empty())
+		return true;
+	const auto kinds = kindsByAccount.find(account);
+	if (kinds == kindsByAccount.end())
+		return true;
+	const auto summaryOnly = summaryOnlyByAccount.find(account);
+	for (const ibValue& kind : kinds->second) {
+		if (summaryOnly != summaryOnlyByAccount.end() && summaryOnly->second.count(kind) != 0)
+			continue;
+		if (std::find(askedKinds.begin(), askedKinds.end(), kind) == askedKinds.end())
+			return false;
+	}
+	return true;
+}
+
 // Fold one pair of figures by the account's type. Applied at READ time, which is why declining to fold
 // costs nothing and an unfolded reading of the same data stays available.
-void FoldSideByAccountType(int accountType, ibValue& debit, ibValue& credit)
+//
+// An active-passive pair folds only `withinOneAnalyticsSet` (AtFullAnalytics), and then onto the side its
+// net stands on: one counterparty that was shipped 69 820 and paid 55 000 OWES 14 820 — reporting both
+// figures as its balance (as this did until 2026-09-15) reads as a receivable and a payable at once.
+void FoldSideByAccountType(int accountType, ibValue& debit, ibValue& credit, bool withinOneAnalyticsSet)
 {
-	if (accountType == ibAccountType::eActivePassive)
+	if (accountType == ibAccountType::eActivePassive && !withinOneAnalyticsSet)
 		return;
 
 	const ibNumber net = debit.GetNumber() - credit.GetNumber();
-	if (accountType == ibAccountType::eActive) {
+	const bool onDebit = accountType == ibAccountType::eActive
+		|| (accountType == ibAccountType::eActivePassive && !(net < ibNumber()));
+	if (onDebit) {
 		debit  = ibValue(net);            // a credit entry REDUCED the debit balance
 		credit = ibValue(ibNumber());
 	}
@@ -1117,6 +1150,33 @@ void FoldSideByAccountType(int accountType, ibValue& debit, ibValue& credit)
 		debit  = ibValue(ibNumber());
 		credit = ibValue(ibNumber() - net);
 	}
+}
+
+// ⭐ THE SAME FOLD, SAID TO THE SERVER — FoldSideByAccountType as a CASE over the account's declared type,
+// for the two readings that fold on the server (balance, balance-and-turnovers). The server road reads
+// every slot as it stands (CanReadOnServer refuses a breakdown by kind), so each of its rows stands on
+// one set of the account's analytics, and an active-passive pair folds onto the side its net stands on —
+// exactly as the RAM road folds such a row (AtFullAnalytics). An account row that is missing (the LEFT
+// join to the chart) matches no type and falls through to "do not fold", the answer that loses nothing.
+std::pair<ibQueryExprPtr, ibQueryExprPtr> FoldedPairOnServer(const ibQueryExprPtr& accountType,
+                                                             const ibQueryExprPtr& debit, const ibQueryExprPtr& credit)
+{
+	const auto isType = [&accountType](ibAccountType declared) {
+		return ibBinOp(ibQueryBinOp::Eq, accountType, ibConst(ibValue(static_cast<int>(declared))));
+	};
+	const ibQueryExprPtr zero        = ibConst(ibValue(0.0));
+	const ibQueryExprPtr debitStands = ibBinOp(ibQueryBinOp::And, isType(ibAccountType::eActivePassive),
+		ibBinOp(ibQueryBinOp::Ge, debit, credit));
+
+	const ibQueryExprPtr dr = ibCase({ { isType(ibAccountType::eActive),       ibBinOp(ibQueryBinOp::Sub, debit, credit) },
+	                                   { isType(ibAccountType::ePassive),      zero },
+	                                   { debitStands,                          ibBinOp(ibQueryBinOp::Sub, debit, credit) },
+	                                   { isType(ibAccountType::eActivePassive), zero } }, debit);
+	const ibQueryExprPtr cr = ibCase({ { isType(ibAccountType::ePassive),      ibBinOp(ibQueryBinOp::Sub, credit, debit) },
+	                                   { isType(ibAccountType::eActive),       zero },
+	                                   { debitStands,                          zero },
+	                                   { isType(ibAccountType::eActivePassive), ibBinOp(ibQueryBinOp::Sub, credit, debit) } }, credit);
+	return { dr, cr };
 }
 
 } // namespace
@@ -1251,7 +1311,12 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 				columns.push_back(ibTempColumn(name + wxT("Kind"), name + wxT("Kind"),
 				                               kindSlot->GetTypeDesc(), ibRegDerivedColumnId(synthetic++)));
 
-			columns.push_back(ibTempColumn(name, name, sample->GetTypeDesc(), ibRegDerivedColumnId(synthetic++)));
+			// What the slot HOLDS (GetTypeValueDesc), not what it declares: the declaration is the chart's
+			// characteristic, one class no value carries, and a column of this table is a plain column with
+			// no chart to expand it through — typed by the declaration, it could not be opened in a field
+			// picker, offered no value to filter by, and adjusted every counterparty poured into it to
+			// nothing (2026-09-15).
+			columns.push_back(ibTempColumn(name, name, sample->GetTypeValueDesc(), ibRegDerivedColumnId(synthetic++)));
 		}
 	};
 	addBreakdown(/*creditSide*/ false, kindsDr);
@@ -1351,9 +1416,11 @@ void SeedFromShape(ibQueryRamTable& table, const ibBackendQueryable* shape)
 {
 	if (shape == nullptr)
 		return;
+	// Typed by what the column HOLDS (GetTypeValueDesc): a cell of this table receives a stored value, and
+	// a column typed by a characteristic's declaration adjusts every counterparty put into it to nothing.
 	for (const ibBackendQueryColumn* col : shape->GetColumns())
 		if (col != nullptr)
-			table.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeDesc());
+			table.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeValueDesc());
 }
 
 // Pour the accumulated rows into the table, dropping the ones where nothing happened.
@@ -1440,8 +1507,18 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 	// surface a given pass then reads. What the walk needs is the column's TARGET (the chart of
 	// accounts) and the chart's own parent map, and neither depends on whether this pass stands on the
 	// totals view or on the lines: the hierarchy is the chart's, not the surface's.
-	const ibQueryHierarchyScope scopeDr = ScopeFromAccountCondition(movements, GetRegisterAccount()->GetQueryColumn(),   accountDr);
-	const ibQueryHierarchyScope scopeCr = ScopeFromAccountCondition(movements, GetRegisterAccountCr()->GetQueryColumn(), accountCr);
+	//
+	// ⭐⭐ AND THE ACCOUNT CONDITION IS THE ACCOUNT — the one whose balance is asked — so EVERY PASS reads
+	// it on its OWN account column: the debit pass on the debit account, the credit pass on the credit
+	// account, both reported under it. The correspondent (a reading that names one) is read on the OPPOSITE
+	// column. It was tied to the COLUMN instead of the pass — the account condition always on the debit
+	// column — so the credit pass of "the balance of 36" read the credit side of the entries DEBITING 36:
+	// its correspondents (70, broken down by item), under their own accounts, and with no breakdown of 36's
+	// credit at all. Nothing could see it while a breakdown by kind failed on Firebird (-104); the day it
+	// ran, the balance of 36 by counterparty came back as one empty row and six rows of revenue
+	// (2026-09-15).
+	const ibQueryHierarchyScope scopeAccount = ScopeFromAccountCondition(movements, GetRegisterAccount()->GetQueryColumn(),   accountDr);
+	const ibQueryHierarchyScope scopeCorr    = ScopeFromAccountCondition(movements, GetRegisterAccountCr()->GetQueryColumn(), accountCr);
 	ibAcctRowList rows;   // insertion-ordered; the map is the index into it
 	ibAcctIndex index;
 	std::vector<ibAcctKeyLayout> layouts;              // one per pass — see ibAcctKeyLayout
@@ -1457,19 +1534,23 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 		// The stored totals are keyed by ONE account per row, which is what makes them small. A question
 		// about CORRESPONDENCE ("the balance of 51 against 62") asks about the OTHER account on the same
 		// movement, and that account is not in this table — it never was, by construction. So a reading
-		// that filters by the opposite side falls back to the movements, where both are present.
+		// that names a correspondent falls back to the movements, where both are present — in EITHER pass,
+		// because the correspondent is the opposite account of both.
 		//
 		// This is a routing decision, not a limitation quietly admitted: answering it from the totals
 		// would mean ignoring the filter and returning a plausible, wrong number.
-		const ibQueryPredicatePtr oppositeFilter = pass.m_creditSide ? accountDr : accountCr;
+		const ibQueryPredicatePtr oppositeFilter = accountCr;
 		const bool useTotals = HasMaterializedViews() && (!IsCorrespondence() || oppositeFilter == nullptr);
 		const ibBackendQueryable* source = useTotals ? GetTurnoverViewQueryable(pass.m_creditSide) : movements;
 		if (source == nullptr)
 			source = movements;
 
 		const ibBackendQueryColumn* accountCol = ColumnOn(source, pass.m_account);
-		// This pass reads ONE side, so it reads that side's account scope.
-		const ibQueryHierarchyScope& scope = pass.m_creditSide ? scopeCr : scopeDr;
+		// This pass is about THE account, on its own side — so it reports under the account's scope.
+		const ibQueryHierarchyScope& scope = scopeAccount;
+		// The OTHER account of this pass's movements — the correspondent's column. None in a one-sided register.
+		const ibValueMetaObjectAttributeBase* opposite = !IsCorrespondence() ? nullptr
+			: (pass.m_creditSide ? GetRegisterAccount() : GetRegisterAccountCr());
 		const ibBackendQueryColumn* periodCol  = ColumnOn(source, GetRegisterPeriod());
 
 		ibDataQueryBuilder b;
@@ -1490,10 +1571,10 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 
 		WhereActive(b, this, source, /*onMovements*/ source == movements);
 
-		// The account arguments are FILTERS on their own side, whichever pass is running: "the balance
-		// of 51" and "…in correspondence with 62" are two different questions and both are asked here.
-		WhereAccount(b, ColumnOn(source, GetRegisterAccount()),   scopeDr);
-		WhereAccount(b, ColumnOn(source, GetRegisterAccountCr()), scopeCr);
+		// "The balance of 51" on this pass's own account column; "…in correspondence with 62" on the other.
+		WhereAccount(b, accountCol, scopeAccount);
+		if (opposite != nullptr)
+			WhereAccount(b, ColumnOn(source, opposite), scopeCorr);
 		WhereCondition(b, source, filter);
 		// …and the breakdown half of the same condition, asked of THIS pass's slots.
 		if (const ibQueryPredicatePtr slots = AccountDimensionCondition(this, source, pass.m_creditSide, condition))
@@ -1502,11 +1583,9 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 		b.GroupBy(accountCol);
 
 		std::vector<ibAcctBreakdownColumn> breakdown;
-		// EACH PASS BREAKS DOWN ITS OWN SIDE: the debit pass by the debit account's kinds, the credit pass by
-		// the credit account's. They are different accounts, so one list would force a breakdown that only
-		// one of them has.
-		AddBreakdown(b, this, source, ibAcctShape::Balance, pass.m_creditSide,
-			pass.m_creditSide && IsCorrespondence() ? kindsCr : kindsDr, /*group*/ true, breakdown);
+		// EACH PASS BREAKS DOWN ITS OWN SIDE, by the kinds asked of THE account: its debit slots in the debit
+		// pass, its credit slots in the credit pass. It is one account on two sides, so it is one list.
+		AddBreakdown(b, this, source, ibAcctShape::Balance, pass.m_creditSide, kindsDr, /*group*/ true, breakdown);
 
 		std::vector<const ibBackendQueryColumn*> dimensions;
 		for (const auto dimension : GetDimensionArrayObject())
@@ -1603,12 +1682,16 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 
 	// ⭐ AND NOW THE ACCOUNT SPEAKS. Up to here both sides were computed and kept apart, which is the
 	// only honest way to compute them; the fold is a projection applied at READ time, per account, by
-	// the type the account declares about itself. An active-passive one is left alone — that is what it
-	// exists for.
+	// the type the account declares about itself. An active-passive one folds only on a row that stands on
+	// one set of its analytics (AtFullAnalytics) — across its analytics it keeps both sides, which is what
+	// it exists for.
 	ibAcctTypeCache accountTypes;
+	const ibAcctSummaryMap kindsByAccount       = KindsByAccount(GetChartOfAccounts(), /*onlySummary*/ false);
+	const ibAcctSummaryMap summaryOnlyByAccount = KindsByAccount(GetChartOfAccounts(), /*onlySummary*/ true);
 	for (auto& entry : rows) {
-		const int accountType = AccountTypeOf(
-			entry.second.m_key.empty() ? ibValue() : entry.second.m_key.front(), accountTypes);
+		const ibValue account = entry.second.m_key.empty() ? ibValue() : entry.second.m_key.front();
+		const int accountType = AccountTypeOf(account, accountTypes);
+		const bool oneSet = AtFullAnalytics(account, kindsDr, kindsByAccount, summaryOnlyByAccount);
 		for (const auto resource : GetResourceArrayObject()) {
 			// ⚠ ONLY WHERE A BALANCE IS KEPT, AND ONLY WHERE ONE WAS COMPUTED. A resource that carries
 			// no balance has no pair to fold — and `m_figures[name]` would CREATE the pair rather than
@@ -1621,7 +1704,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 			const auto credit = entry.second.m_figures.find(FigureName(resource, ibAcctFigure::BalanceCr));
 			if (debit == entry.second.m_figures.end() || credit == entry.second.m_figures.end())
 				continue;
-			FoldSideByAccountType(accountType, debit->second, credit->second);
+			FoldSideByAccountType(accountType, debit->second, credit->second, oneSet);
 		}
 	}
 
@@ -1672,8 +1755,19 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 	// surface a given pass then reads. What the walk needs is the column's TARGET (the chart of
 	// accounts) and the chart's own parent map, and neither depends on whether this pass stands on the
 	// totals view or on the lines: the hierarchy is the chart's, not the surface's.
-	const ibQueryHierarchyScope scopeDr = ScopeFromAccountCondition(movements, GetRegisterAccount()->GetQueryColumn(),   accountDr);
-	const ibQueryHierarchyScope scopeCr = ScopeFromAccountCondition(movements, GetRegisterAccountCr()->GetQueryColumn(), accountCr);
+	//
+	// ⭐⭐ THE ACCOUNT CONDITION IS THE ACCOUNT, read by every pass on its OWN column; the correspondent on the
+	// OPPOSITE one — see ComputeBalance, where the same mistake (the condition tied to the debit column)
+	// turned the credit turnover of an account into its correspondents' (2026-09-15).
+	const ibQueryHierarchyScope scopeAccount = ScopeFromAccountCondition(movements, GetRegisterAccount()->GetQueryColumn(),   accountDr);
+	const ibQueryHierarchyScope scopeCorr    = ScopeFromAccountCondition(movements, GetRegisterAccountCr()->GetQueryColumn(), accountCr);
+
+	// ⚠ A BREAKDOWN OF THE CORRESPONDENT IS REFUSED, NOT GUESSED. It is a breakdown of the OTHER account's
+	// slots, and this reading breaks down each pass's own side only; handed the correspondent's kinds, the
+	// credit pass used to break down the account's OWN credit slots by them — a figure filed under the wrong
+	// account's analytics, with nothing to show it.
+	if (IsCorrespondence() && !kindsCr.empty())
+		ibBackendCoreException::Error(_("the turnovers cannot yet be broken down by the correspondent's analytics (CorrAccountDimensions) - read the movements for that"));
 
 	for (const ibAcctPass& pass : PassesOf(this)) {
 		if (pass.m_account == nullptr)
@@ -1681,14 +1775,14 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 
 		const size_t layoutIndex = layouts.size();
 
-		// The same routing as the balance: the totals answer unless the question is about the OTHER
-		// account of the same movement, which a one-account-per-row table does not carry.
+		// The same routing as the balance: the totals answer unless the question names a correspondent —
+		// the OTHER account of the same movement, which a one-account-per-row table does not carry.
 		//
 		// ⚠ AND ONE MORE CASE BELONGS TO THE MOVEMENTS: a reading finer than the stored grain. Totals
 		// are kept per DAY, so an hourly fold — or one per recorder, per line — cannot be derived from
 		// them at all. Sending it to the totals anyway would answer at the wrong granularity, which is
 		// a plausible wrong number rather than an error.
-		const ibQueryPredicatePtr oppositeFilter = pass.m_creditSide ? accountDr : accountCr;
+		const ibQueryPredicatePtr oppositeFilter = accountCr;
 		const bool finerThanStored = (fold.IsCalendar() && fold.m_unit < GetTotalsPeriodUnit())
 			|| fold.FromMovements() || fold.m_kind == ibRegGranularity::Period;
 		const bool useTotals = HasMaterializedViews()
@@ -1700,8 +1794,11 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 			source = movements;
 
 		const ibBackendQueryColumn* accountCol = ColumnOn(source, pass.m_account);
-		// This pass reads ONE side, so it reads that side's account scope.
-		const ibQueryHierarchyScope& scope = pass.m_creditSide ? scopeCr : scopeDr;
+		// This pass is about THE account, on its own side — so it reports under the account's scope.
+		const ibQueryHierarchyScope& scope = scopeAccount;
+		// The OTHER account of this pass's movements — the correspondent's column. None in a one-sided register.
+		const ibValueMetaObjectAttributeBase* opposite = !IsCorrespondence() ? nullptr
+			: (pass.m_creditSide ? GetRegisterAccount() : GetRegisterAccountCr());
 		const ibBackendQueryColumn* periodCol  = ColumnOn(source, GetRegisterPeriod());
 
 		ibDataQueryBuilder b;
@@ -1721,8 +1818,9 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 
 		WhereActive(b, this, source, /*onMovements*/ source == movements);
 
-		WhereAccount(b, ColumnOn(source, GetRegisterAccount()),   scopeDr);
-		WhereAccount(b, ColumnOn(source, GetRegisterAccountCr()), scopeCr);
+		WhereAccount(b, accountCol, scopeAccount);
+		if (opposite != nullptr)
+			WhereAccount(b, ColumnOn(source, opposite), scopeCorr);
 		WhereCondition(b, source, filter);
 		// …and the breakdown half of the same condition, asked of THIS pass's slots.
 		if (const ibQueryPredicatePtr slots = AccountDimensionCondition(this, source, pass.m_creditSide, condition))
@@ -1731,8 +1829,8 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 		b.GroupBy(accountCol);
 
 		std::vector<ibAcctBreakdownColumn> breakdown;
-		AddBreakdown(b, this, source, ibAcctShape::Turnovers, pass.m_creditSide,
-			pass.m_creditSide && IsCorrespondence() ? kindsCr : kindsDr, /*group*/ true, breakdown);
+		// Each pass breaks down its own side by the kinds asked of THE account (see ComputeBalance).
+		AddBreakdown(b, this, source, ibAcctShape::Turnovers, pass.m_creditSide, kindsDr, /*group*/ true, breakdown);
 
 		std::vector<const ibBackendQueryColumn*> dimensions;
 		for (const auto dimension : GetDimensionArrayObject())
@@ -2161,7 +2259,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// kind column and reports it under that column's own alias. Spelling `<name>Kind` out here a second
 	// time is how the question came to be asked of a column the shape did not publish — no error, no
 	// row, just a flag that never fired.
-	const ibAcctSummaryMap summaryOnlyByAccount = SummaryOnlyKindsByAccount(GetChartOfAccounts());
+	const ibAcctSummaryMap summaryOnlyByAccount = KindsByAccount(GetChartOfAccounts(), /*onlySummary*/ true);
 	const auto standsOnTurnoversOnly = [&](const ibQueryRamTable& table, long row) {
 		static const ibAcctKindSet s_none;
 		const ibValue account = GetRegisterAccount() != nullptr
@@ -2414,10 +2512,14 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// carrying a running total of a breakdown that keeps none.
 	ibAcctTypeCache accountTypes;
 	const wxString accountName = GetRegisterAccount() != nullptr ? GetRegisterAccount()->GetName() : wxString();
+	// An active-passive balance folds only on a row that stands on one set of its analytics (AtFullAnalytics).
+	const ibAcctSummaryMap kindsByAccount = KindsByAccount(GetChartOfAccounts(), /*onlySummary*/ false);
 	for (long row = 0; row < retTable.RowCount(); row++) {
 		const bool keepsBalanceHere = static_cast<size_t>(row) >= orderedBalanceless.size()
 			|| !orderedBalanceless[static_cast<size_t>(row)];
-		const int accountType = AccountTypeOf(cellByName(retTable, row, accountName), accountTypes);
+		const ibValue account = cellByName(retTable, row, accountName);
+		const int accountType = AccountTypeOf(account, accountTypes);
+		const bool oneSet = AtFullAnalytics(account, kindsDr, kindsByAccount, summaryOnlyByAccount);
 
 		for (const auto resource : GetResourceArrayObject()) {
 			if (resource == nullptr || !resource->IsBalanceResource())
@@ -2435,7 +2537,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 				}
 				ibValue debit  = retTable.GetCell(row, debitId);
 				ibValue credit = retTable.GetCell(row, creditId);
-				FoldSideByAccountType(accountType, debit, credit);
+				FoldSideByAccountType(accountType, debit, credit, oneSet);
 				retTable.SetCell(row, debitId,  debit);
 				retTable.SetCell(row, creditId, credit);
 			};
@@ -2914,33 +3016,26 @@ ibQueryRelPtr ibAcctBalanceQueryable::GetSourceRelation(const wxString& alias) c
 		ibScan(chartRows->GetQueryTableName(), chartAlias), on, ibQueryJoinType::Left);
 
 	// ⭐⭐ THE FOLD, AS A CASE OVER WHAT THE ACCOUNT DECLARES — the same rule the RAM reading applies
-	// row by row (FoldSideByAccountType), said once to the server:
+	// row by row (FoldSideByAccountType), said once to the server (FoldedPairOnServer):
 	//
 	//   active         a credit entry REDUCED the debit balance   ->  Dr - Cr , 0
 	//   passive        the mirror                                 ->  0 , Cr - Dr
-	//   active-passive both sides stand, and folding them is a LOSS: a receivable of 100 against a
-	//                  payable of 100 is not zero, and "zero" is wrong in a way no formatting undoes
+	//   active-passive onto the side its net stands on — every row here stands on one set of the
+	//                  account's analytics (the key holds all its slots), so one counterparty that was
+	//                  shipped 100 and paid 60 owes 40; a receivable and a payable of two DIFFERENT
+	//                  counterparties are two rows and are never netted
 	std::vector<ibQueryProjItem> projection;
 	for (const wxString& field : r.m_keyColumns)
 		projection.push_back({ ibCol(innerAlias, field), field });
 
 	const ibQueryExprPtr accountType = ibCol(chartAlias, ibRegValueField(chart->GetAccountType()));
-	const auto isType = [&accountType](ibAccountType declared) {
-		return ibBinOp(ibQueryBinOp::Eq, accountType, ibConst(ibValue(static_cast<int>(declared))));
-	};
 
 	for (const ibValueMetaObjectAttributeBase* resource : balanceResources) {
 		const wxString base = resource->GetName();
-		const ibQueryExprPtr debit  = ibCol(innerAlias, base + ibAcctFigure::BalanceDr);
-		const ibQueryExprPtr credit = ibCol(innerAlias, base + ibAcctFigure::BalanceCr);
-		const ibQueryExprPtr zero   = ibConst(ibValue(0.0));
-
-		projection.push_back({ ibCase({ { isType(ibAccountType::eActive),  ibBinOp(ibQueryBinOp::Sub, debit, credit) },
-		                                { isType(ibAccountType::ePassive), zero } }, debit),
-		                       base + ibAcctFigure::BalanceDr });
-		projection.push_back({ ibCase({ { isType(ibAccountType::ePassive), ibBinOp(ibQueryBinOp::Sub, credit, debit) },
-		                                { isType(ibAccountType::eActive),  zero } }, credit),
-		                       base + ibAcctFigure::BalanceCr });
+		const auto folded = FoldedPairOnServer(accountType,
+			ibCol(innerAlias, base + ibAcctFigure::BalanceDr), ibCol(innerAlias, base + ibAcctFigure::BalanceCr));
+		projection.push_back({ folded.first,  base + ibAcctFigure::BalanceDr });
+		projection.push_back({ folded.second, base + ibAcctFigure::BalanceCr });
 	}
 
 	return ibSubquery(ibProject(joined, std::move(projection)), alias);
@@ -3170,17 +3265,10 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 	}
 
 	const ibQueryExprPtr accountType = ibCol(chartAlias, ibRegValueField(chart->GetAccountType()));
-	const auto isType = [&accountType](ibAccountType declared) {
-		return ibBinOp(ibQueryBinOp::Eq, accountType, ibConst(ibValue(static_cast<int>(declared))));
-	};
 	const auto foldPair = [&](const wxString& debitName, const wxString& creditName) {
-		const ibQueryExprPtr debit  = ibCol(innerAlias, debitName);
-		const ibQueryExprPtr credit = ibCol(innerAlias, creditName);
-		const ibQueryExprPtr zero   = ibConst(ibValue(0.0));
-		projection.push_back({ ibCase({ { isType(ibAccountType::eActive),  ibBinOp(ibQueryBinOp::Sub, debit, credit) },
-		                                { isType(ibAccountType::ePassive), zero } }, debit), debitName });
-		projection.push_back({ ibCase({ { isType(ibAccountType::ePassive), ibBinOp(ibQueryBinOp::Sub, credit, debit) },
-		                                { isType(ibAccountType::eActive),  zero } }, credit), creditName });
+		const auto folded = FoldedPairOnServer(accountType, ibCol(innerAlias, debitName), ibCol(innerAlias, creditName));
+		projection.push_back({ folded.first,  debitName });
+		projection.push_back({ folded.second, creditName });
 	};
 
 	for (const ibValueMetaObjectAttributeBase* resource : balanceResources) {

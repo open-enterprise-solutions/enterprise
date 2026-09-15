@@ -20,6 +20,7 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_paramStyle = ibParamStyle::DollarN;       // $1, $2, ...
 		d.m_pagination = ibPagination::LimitOffset;
 		d.m_boolForm   = ibBoolForm::TrueFalse;
+		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
 		d.m_features.m_window        = true;
 		d.m_features.m_cte           = true;
 		d.m_features.m_fullOuterJoin = true;

@@ -930,7 +930,25 @@ wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 		if (rollup) sql += m_dialect.m_rollupPrefix;   // "ROLLUP(" (standard) / "" (MSSQL WITH ROLLUP)
 		for (size_t i = 0; i < groupKeys.size(); ++i) {
 			if (i) sql += wxT(", ");
-			sql += RenderExpr(groupKeys[i]);
+			// ⭐ A KEY THAT BINDS A VALUE IS NAMED BY ITS POSITION. Written out a second time, `CASE WHEN
+			// k = ? …` is not the SELECT's expression to the engine — each `?` is its own parameter — and
+			// Firebird refuses the statement (-104). That is the breakdown of an account by an analytics KIND
+			// (the kind is bound), which could not be read at all (2026-09-15). The key is the SAME expression
+			// object as its projection item (the provider builds them as one), so the position is the item's;
+			// the parameters the second rendering appended are taken back, so the bind plan binds it once.
+			const size_t bound    = m_out.m_params.size();
+			const int    boundPos = m_paramPos;   // the $N counter too — PostgreSQL numbers its placeholders
+			wxString key = RenderExpr(groupKeys[i]);
+			if (m_out.m_params.size() > bound && m_dialect.m_groupByPosition && !rollup) {
+				for (size_t p = 0; p < projection.size(); ++p)
+					if (projection[p].m_expr == groupKeys[i]) {
+						m_out.m_params.erase(m_out.m_params.begin() + bound, m_out.m_params.end());
+						m_paramPos = boundPos;
+						key = wxString::Format(wxT("%u"), static_cast<unsigned int>(p + 1));
+						break;
+					}
+			}
+			sql += key;
 		}
 		if (rollup) sql += m_dialect.m_rollupSuffix;   // ")" (standard) / " WITH ROLLUP" (MSSQL)
 	}

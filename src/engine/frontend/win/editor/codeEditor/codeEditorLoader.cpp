@@ -51,58 +51,12 @@ void ibCodeEditor::AddKeywordFromObject(const ibValue& vObject)
 				wxEmptyString
 			);
 		}
-		ibRuntimeModuleDataObject* moduleDataObject = dynamic_cast<ibRuntimeModuleDataObject*>(vObject.GetRef());
-		if (moduleDataObject != nullptr) {
-			const ibValueMetaObjectModuleBase* computeModuleObject = moduleDataObject->GetMetaObject();
-			if (computeModuleObject != nullptr) {
-				ibParseCode cParser;
-				if (cParser.ParseModule(computeModuleObject->GetModuleText())) {
-					for (auto code : cParser.GetAllContent()) {
-						if (code.m_eType == eExportVariable) {
-							m_ac.Append(
-								ibContentType::eExportVariable,
-								code.m_name,
-								wxEmptyString
-							);
-						}
-						else if (code.m_eType == eExportProcedure) {
-							m_ac.Append(
-								ibContentType::eExportFunction,
-								code.m_name,
-								code.m_shortDescription
-							);
-						}
-						else if (code.m_eType == eExportFunction) {
-							m_ac.Append(
-								ibContentType::eExportFunction,
-								code.m_name,
-								code.m_shortDescription
-							);
-						}
-					}
-				}
-			}
-		}
-		ibValueManagerDataObject* managerDataObject = dynamic_cast<ibValueManagerDataObject*>(vObject.GetRef());
-		if (managerDataObject != nullptr) {
-			const ibValueMetaObjectCommonModule* computeManagerModule = managerDataObject->GetManagerModule();
-			if (computeManagerModule != nullptr) {
-				ibParseCode cParser;
-				if (cParser.ParseModule(computeManagerModule->GetModuleText())) {
-					for (auto code : cParser.GetAllContent()) {
-						if (code.m_eType == eExportVariable) {
-							m_ac.Append(ibContentType::eExportVariable, code.m_name, wxEmptyString);
-						}
-						else if (code.m_eType == eExportProcedure) {
-							m_ac.Append(ibContentType::eExportFunction, code.m_name, code.m_shortDescription);
-						}
-						else if (code.m_eType == eExportFunction) {
-							m_ac.Append(ibContentType::eExportFunction, code.m_name, code.m_shortDescription);
-						}
-					}
-				}
-			}
-		}
+		// ⭐ THE VALUE'S OWN SURFACE IS THE WHOLE ANSWER. A module's exports are already the tail of its
+		// member table (ExportThunk, bound in the descriptor's ctor) and a manager adds its manager
+		// module's in FillMembers — both read the TEXT in the designer (ibExportNamesFromText). Two
+		// blocks here parsed the same text again from the time the table said nothing in the designer,
+		// so every exported function after a manager's or a module's dot was offered TWICE, the second
+		// time without its call form (`Documents.GoodsSale.` → InvoiceSheet ×2, 2026-09-15).
 	}
 }
 

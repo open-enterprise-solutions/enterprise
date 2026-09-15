@@ -356,6 +356,14 @@ struct ibDialectDictionary
 	wxString m_rollupPrefix = wxT("ROLLUP(");
 	wxString m_rollupSuffix = wxT(")");
 
+	// GROUP BY <position> — may a grouping key be named by its place in the SELECT list? A key that
+	// BINDS A VALUE (a CASE comparing a column with a parameter) cannot be written out twice: the engine
+	// does not recognise `CASE WHEN k = ? …` in GROUP BY as the same expression as in SELECT, and refuses
+	// the statement (Firebird -104 "not contained in either an aggregate function or the GROUP BY clause").
+	// Named by position, the key is written once and binds once. FB / PG / SQLite: yes; off by default,
+	// because MSSQL (reached through ODBC) has no positional GROUP BY.
+	bool m_groupByPosition = false;
+
 	// A source-less SELECT (SELECT <consts> with no FROM — the derived one-row VALUES relation the
 	// write-time WITH CHECK builds). Most engines allow a bare FROM-less SELECT (empty here); Firebird
 	// requires a one-row dummy table -> "RDB$DATABASE". Set per driver; empty = emit no FROM at all.
@@ -830,12 +838,22 @@ public:
 	//
 	//   - First Begin drives DoBeginTransaction; subsequent nested
 	//     Begins only bump the counter.
-	//   - Commit on the outermost level drives DoCommit — unless any
-	//     inner RollBack fired, in which case the aborted flag turns
-	//     the outer Commit into a real DoRollBack. "Inner rollback
-	//     poisons outer commit."
+	//   - Commit is "kept" or an exception, and never rolls back on
+	//     its own. After any inner RollBack the aborted flag makes
+	//     every Commit, at any depth, THROW Kind::RolledBack and touch
+	//     nothing ("inner rollback poisons the transaction"). On the
+	//     outermost level it drives DoCommit; a refusal there also
+	//     throws with the transaction still open.
 	//   - RollBack sets the aborted flag and decrements; when the
-	//     counter reaches 0 the real DoRollBack fires.
+	//     counter reaches 0 the real DoRollBack fires. With nothing
+	//     open it THROWS Kind::NoTransaction.
+	//
+	// So the owner of a transaction ends it like this, and the
+	// rollback is always its own, deliberate act:
+	//
+	//     layer->BeginTransaction();
+	//     try { ...work...; layer->Commit(); }
+	//     catch (...) { layer->RollBack(); throw; }
 	//
 	// Drivers override DoBeginTransaction / DoCommit / DoRollBack with
 	// their dialect-specific SQL or native API calls. Drivers must
@@ -847,11 +865,13 @@ public:
 	// nested spelling cannot carry a default here.
 	void BeginTransaction(const ibTxOptions& opts = ibDbTxOptions());
 
-	/// Commit the current transaction (or RollBack if any inner level
-	/// called RollBack first — see the aborted-flag semantics above).
+	/// Commit the current transaction, or throw (Kind::RolledBack if an inner
+	/// level rolled back first; the driver's refusal otherwise) and leave it
+	/// open for its owner to roll back.
 	void Commit();
 
-	/// Rollback the current transaction.
+	/// Roll back the current transaction, or throw Kind::NoTransaction if
+	/// none is open.
 	void RollBack();
 
 	/// Is a transaction currently open on this layer? Derived from the

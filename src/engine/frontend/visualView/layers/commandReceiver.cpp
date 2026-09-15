@@ -78,7 +78,13 @@ static bool ResolveCommandParameter(ibValueForm* form, const ibValueMetaObjectCo
 
 	// (a) the edited object — the form's MAIN source, when its reference type IS the parameter type. An object
 	// form's source object IS-A ibValue (a reference data object); the cross-base access mirrors cast_value.
-	if (ibSourceDataObject* src = form->GetSourceObject())
+	//
+	// ⚠ ONLY WHEN THE SOURCE IS AN OBJECT, which the source says itself (IsTableSource). A LIST form's main
+	// source is the dynamic list, and it names the same metaobject — so the list passed "the type matches"
+	// and went to the command WHOLE: a print command on the sale list failed at `Ref.Number` with "'Number' is
+	// a global function", the receiver a DynamicList with no members (probed 2026-09-15). A table's parameter
+	// is its current row, and that is (b).
+	if (ibSourceDataObject* src = form->GetSourceObject(); src != nullptr && !src->IsTableSource())
 		if (const ibValueMetaObjectGenericData* mo = src->GetSourceMetaObject())
 			if (paramType.ContainType(reference_to_clsid(mo->GetMetaID())))
 				if (ibValue* asValue = dynamic_cast<ibValue*>(src)) {

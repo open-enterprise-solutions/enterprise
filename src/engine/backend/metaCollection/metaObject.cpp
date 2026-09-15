@@ -38,47 +38,13 @@ void ibValueMetaObject::ResetId()
 
 bool ibValueMetaObject::BuildNewName()
 {
-	const wxString& strName = GetName(); bool foundedName = false;
-	std::vector<ibValueMetaObject*> array;
-	if (m_parent != nullptr && m_parent->FillArrayObjectByFilter(array, { GetClassType() })) {
-		for (const auto object : array) {
-			if (object->GetParent() != GetParent())
-				continue;
-			if (object != this &&
-				stringUtils::CompareString(strName, object->GetName())) {
-				foundedName = true;
-				break;
-			}
-		}
-	}
-
-	if (foundedName) {
-		const wxString& metaPrevName = m_propertyName->GetValueAsString();
-		size_t length = metaPrevName.length();
-		while (length >= 0 && stringUtils::IsDigit(metaPrevName[--length]));
-		const wxString& metaName = m_metaData->GetNewName(GetClassType(), GetParent(), metaPrevName.Left(length + 1));
-
-		// ⭐ THROUGH THE RENAME DOOR, not through SetName (Max, 2026-09-01: *"the name change should
-		// probably go through rename"*). SetName only writes the field; RenameMetaObject is the whole
-		// act — it runs OnRenameMetaObject, which brings the rest of the configuration into step with
-		// a name that is about to be taken (a common attribute rewrites its copies, a common module is
-		// re-keyed in the module storage), and it ANNOUNCES the change.
-		//
-		// 🛑 THAT ANNOUNCEMENT IS WHAT WAS MISSING. A paste says `Created` from inside
-		// CreateMetaObject — before the copied data is read and before this runs — so a watcher drew
-		// the row under the name NewItem handed out, and the bump to `Warehouse1` arrived through
-		// SetName, which tells nobody (Max: *"the value is set, but the tree shows the primary name"*).
-		//
-		// ⚠ The uniqueness test inside cannot refuse this one: GetNewName has just built a name that
-		// nothing else carries.
-		m_metaData->RenameMetaObject(this, metaName);
-
-		const wxString& metaPrevSynonym = m_propertySynonym->GetValueAsRawString();
-		const wxString& metaSynonym = metaPrevSynonym.Length() > 0 ? stringUtils::GenerateSynonym(metaName) : wxString(wxEmptyString);
-		SetSynonym(metaSynonym);
-	}
-
-	return !foundedName;
+	// Both halves are the metadata's: GetNewName hands the name back while nobody else carries it (the
+	// bare name is its first candidate) and the next free one otherwise; RenameMetaObject takes it.
+	const wxString newName = m_metaData->GetNewName(GetClassType(), GetParent(), GetName(), /*forConstructor*/ true);
+	if (newName == GetName())
+		return true;
+	m_metaData->RenameMetaObject(this, newName);
+	return false;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////

@@ -418,30 +418,40 @@ TEST(RegisterSurface, ADerivedColumnSaysByItsSignThatNobodyDeclaredIt) {
 //
 //   active         a credit entry REDUCED the debit balance   ->  Dr - Cr , 0
 //   passive        the mirror                                 ->  0 , Cr - Dr
-//   active-passive both sides stand — folding them is a LOSS
+//   active-passive onto the side its net stands on — the server road's rows each stand on ONE set of
+//                  the account's analytics (all its slots are in the key), and within one set folding
+//                  is what the balance IS: a customer shipped 100 and paid 60 owes 40. A receivable
+//                  and a payable of two different counterparties are two rows and never meet.
 //
 // The RAM oracle is FoldSideByAccountType; if these two ever disagree, one road reports a different
 // balance than the other for the same data, and nothing about either answer looks wrong.
 
 namespace {
 
-// The RAM rule, restated here as the oracle — deliberately by hand, so a change to the engine's copy
-// does not silently change what this test holds to be correct.
+// The RAM rule for a row that stands on one set of analytics, restated here as the oracle — deliberately
+// by hand, so a change to the engine's copy does not silently change what this test holds to be correct.
 void FoldOracle(int accountType, double& debit, double& credit)
 {
-    if (accountType == ibAccountType::eActivePassive)
-        return;
     const double net = debit - credit;
-    if (accountType == ibAccountType::eActive) { debit = net;  credit = 0.0; }
-    else                                       { debit = 0.0; credit = -net; }
+    const bool onDebit = accountType == ibAccountType::eActive
+        || (accountType == ibAccountType::eActivePassive && net >= 0.0);
+    if (onDebit) { debit = net;  credit = 0.0; }
+    else         { debit = 0.0; credit = -net; }
 }
 
-// What the projected CASE computes, in the same order of tests the relation declares.
+// What the projected CASE computes (FoldedPairOnServer), in the same order of tests the relation declares.
 void FoldAsProjected(int accountType, double& debit, double& credit)
 {
     const double dr = debit, cr = credit;
-    debit  = (accountType == ibAccountType::eActive)  ? dr - cr : (accountType == ibAccountType::ePassive ? 0.0 : dr);
-    credit = (accountType == ibAccountType::ePassive) ? cr - dr : (accountType == ibAccountType::eActive  ? 0.0 : cr);
+    const bool debitStands = accountType == ibAccountType::eActivePassive && dr >= cr;
+    debit  = accountType == ibAccountType::eActive  ? dr - cr
+           : accountType == ibAccountType::ePassive ? 0.0
+           : debitStands                            ? dr - cr
+           : accountType == ibAccountType::eActivePassive ? 0.0 : dr;
+    credit = accountType == ibAccountType::ePassive ? cr - dr
+           : accountType == ibAccountType::eActive  ? 0.0
+           : debitStands                            ? 0.0
+           : accountType == ibAccountType::eActivePassive ? cr - dr : cr;
 }
 
 } // namespace
@@ -461,13 +471,19 @@ TEST(AcctBalanceServerRoad, TheCaseFoldsExactlyAsTheRamReadingDoes) {
         }
 }
 
-TEST(AcctBalanceServerRoad, ActivePassiveIsNeverFolded) {
-    // The one case that is a LOSS rather than a simplification: a receivable of 100 against a payable
-    // of 100 is not zero, and "zero" is wrong in a way no formatting undoes.
-    double dr = 100.0, cr = 100.0;
+TEST(AcctBalanceServerRoad, ActivePassiveFoldsWithinOneSetOfAnalytics) {
+    // One counterparty's row: shipped 69 820, paid 55 000 — it OWES 14 820, on the debit side. Both
+    // figures reported as its balance (the rule until 2026-09-15) read as a receivable and a payable at once.
+    double dr = 69820.0, cr = 55000.0;
     FoldAsProjected(ibAccountType::eActivePassive, dr, cr);
-    EXPECT_DOUBLE_EQ(100.0, dr);
-    EXPECT_DOUBLE_EQ(100.0, cr);
+    EXPECT_DOUBLE_EQ(14820.0, dr);
+    EXPECT_DOUBLE_EQ(0.0,     cr);
+
+    // …and a supplier we owe more than we paid stands on the credit side.
+    dr = 30000.0; cr = 63000.0;
+    FoldAsProjected(ibAccountType::eActivePassive, dr, cr);
+    EXPECT_DOUBLE_EQ(0.0,     dr);
+    EXPECT_DOUBLE_EQ(33000.0, cr);
 }
 
 TEST(AcctBalanceServerRoad, TheOppositeSideReducesRatherThanAccumulates) {

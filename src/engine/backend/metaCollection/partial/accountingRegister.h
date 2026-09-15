@@ -13,6 +13,7 @@
 
 #include <map>
 #include <memory>
+#include <unordered_map>
 
 class ibValueMetaObjectAccountingRegister;
 // The bound chart — named here, complete only where it is read (chartOfAccounts.h). A register asks it
@@ -1317,8 +1318,8 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 		// The names are not declared anywhere — they are the KINDS THE ACCOUNT DECLARES, read off its
 		// kinds table at the moment of the call, which is why they are resolved dynamically instead of
 		// being built into a member table. A posting written this way says what it means at a glance,
-		// and it still goes through the one road every write takes: find the slot holding that kind or
-		// take a free one, write the pair, adjust the value to the kind's own type.
+		// and it still goes through the one road every write takes: the slot is the kind's POSITION on
+		// the account, the pair is written there, the value adjusted to the kind's own type.
 		//
 		// ⚠ The account has to be filled in FIRST — the names come from it. That is not an ordering
 		// quirk to hide: until the row names an account, there is no such thing as "its analytics".
@@ -1337,9 +1338,13 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 		void Clear();
 
 	private:
+		// The account THIS ROW names on this side — the debit account on the debit side, the credit one on
+		// the credit side, the only one in a one-sided register. Empty until the row names one.
+		ibValue LineAccount() const;
+
 		// The kinds THIS ROW'S ACCOUNT declares, in its own order, each with the name a script writes.
-		// Read per call: the names are data, and until the row names an account there is no such thing
-		// as "its analytics".
+		// The names are data, and until the row names an account there is no such thing as "its
+		// analytics"; the set reads each account's table once (AccountKinds).
 		std::vector<std::pair<wxString, ibValue>> DeclaredKinds() const;
 
 		ibValueRecordSetObjectAccountingRegister* m_recordSet;
@@ -1371,6 +1376,26 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 		ibValueRecordSetObjectAccountingRegister* m_ownerSet;
 	};
 
+	// ⭐ A LINE READ OR WALKED IS THE SAME LINE `Add` HANDS OUT — with the dimension collections. The base
+	// answered a walk with a plain register line, whose member table still named AccountDimensionDr/Cr (the
+	// names are described once, for every line of the set) but which answered them as ordinary columns: a
+	// line just added took `row.AccountDimensionCr[kind]`, a line read back refused it with "Cannot get
+	// array value" (2026-09-15). The calculation register has done this from the start.
+	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override {
+		if (!line.IsOk())
+			return nullptr;
+		return new ibValueAccountingLine(this, line);
+	}
+	virtual ibValue GetEmptyRow() override {
+		return new ibValueAccountingLine(this, ibDataViewItem());
+	}
+
+	// The kinds an ACCOUNT declares, in the order of its own kinds table — read once per account for the
+	// life of the set. A posting names few accounts and writes many lines, and every dimension written
+	// asks which slot its kind goes to; reading the account for each would be a read per line per side
+	// (the off-balance check caches for the same reason, CheckDoubleEntry).
+	const std::vector<std::pair<wxString, ibValue>>& AccountKinds(const ibValue& account) const;
+
 	// What its lines are called: a register line's names and the dimension collections.
 	virtual void DescribeReturnLine(ibMemberTable& helper) const override;
 
@@ -1394,6 +1419,10 @@ private:
 	// through the RECORDER carries one document's postings, which is exactly the scope the rule is
 	// stated over.
 	void CheckDoubleEntry() const;
+
+	// AccountKinds' memory: account -> its kinds, in order. Keyed by the account VALUE (a reference
+	// compares by guid there, ibValueHash).
+	mutable std::unordered_map<ibValue, std::vector<std::pair<wxString, ibValue>>, ibValueHash, ibValueEqual> m_accountKinds;
 };
 
 #endif

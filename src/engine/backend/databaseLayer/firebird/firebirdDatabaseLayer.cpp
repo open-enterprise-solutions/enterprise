@@ -36,6 +36,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_pagination  = ibPagination::FirstSkip;    // SELECT FIRST n SKIP m
 		d.m_boolForm    = ibBoolForm::Smallint;       // no native boolean pre-FB3
 		d.m_selectFromDual = wxT("RDB$DATABASE");     // FB has no bare FROM-less SELECT — the WITH-CHECK one-row source needs a dummy table
+		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
 		// A `?` in a SELECT list is untyped here (-804), and the batched INSERT is spelled as
 		// SELECTs — so each one names the column it is going into and lets FB look the type up.
 		d.m_batchInsertCast = wxT("CAST({value} AS TYPE OF COLUMN {table}.{column})");   // FB 2.5+
@@ -1216,7 +1217,9 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 
 			if (bQuickieTransaction)
 			{
-				Commit();
+				// Our own quickie, so ours to roll back: a refused Commit leaves it open.
+				try { Commit(); }
+				catch (...) { RollBack(); throw; }
 				if (GetErrorCode() != DATABASE_LAYER_OK)
 				{
 					ThrowDatabaseException();
@@ -1312,7 +1315,9 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				// Now commit all the previous queries before calling the query that returns a result set
 				if (bQuickieTransaction)
 				{
-					Commit();
+					// Our own quickie, so ours to roll back: a refused Commit leaves it open.
+					try { Commit(); }
+					catch (...) { RollBack(); throw; }
 					if (GetErrorCode() != DATABASE_LAYER_OK)
 					{
 						ThrowDatabaseException();

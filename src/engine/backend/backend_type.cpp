@@ -66,14 +66,21 @@ ibValue* ibBackendTypeFactory::CreateValueRef() const
 
 #include "backend/system/value/valueType.h"
 
+// ⭐⭐ A VALUE IS ADJUSTED TO WHAT MAY BE STORED, NOT TO WHAT WAS DECLARED (GetTypeValueDesc, see the
+// header). The two differ for exactly one kind of declaration — a CHARACTERISTIC, which declares "whatever
+// this chart admits" as one type and expands to the chart's list on demand. Adjusted to the declaration, a
+// counterparty written into a slot declared as the chart's characteristic matched nothing and came out
+// EMPTY: every account dimension of every posting was stored as its kind with no value (measured
+// 2026-09-15 on a fresh accounting configuration — the kind landed, the value did not, already in memory).
+// For every other declaration the two answers are the same object, so nothing else moves.
 ibValue ibBackendTypeFactory::AdjustValue() const
 {
-	return ibValueTypeDescription::AdjustValue(GetTypeDesc());
+	return ibValueTypeDescription::AdjustValue(GetTypeValueDesc());
 }
 
 ibValue ibBackendTypeFactory::AdjustValue(const ibValue& varValue) const
 {
-	return ibValueTypeDescription::AdjustValue(GetTypeDesc(), varValue);
+	return ibValueTypeDescription::AdjustValue(GetTypeValueDesc(), varValue);
 }
 
 ibValue ibBackendTypeFactory::AdjustValue(const ibValue& varValue, const ibTypeDescription& limit) const
@@ -113,10 +120,11 @@ ibValue* ibBackendTypeConfigFactory::CreateValueRef() const
 	return ibBackendTypeFactory::CreateValueRef();
 }
 
+// …the same rule for a configuration's declarations, where a characteristic actually occurs.
 ibValue ibBackendTypeConfigFactory::AdjustValue() const
 {
 	return ibValueTypeDescription::AdjustValue(
-		GetTypeDesc(),
+		GetTypeValueDesc(),
 		GetMetaData()
 	);
 }
@@ -124,7 +132,7 @@ ibValue ibBackendTypeConfigFactory::AdjustValue() const
 ibValue ibBackendTypeConfigFactory::AdjustValue(const ibValue& varValue) const
 {
 	return ibValueTypeDescription::AdjustValue(
-		GetTypeDesc(),
+		GetTypeValueDesc(),
 		varValue,
 		GetMetaData()
 	);

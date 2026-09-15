@@ -723,49 +723,32 @@ bool ibMetaData::RenameMetaObject(ibValueMetaObject* metaObject, const wxString&
 	if (!IsEditable())   // see CreateMetaObject — the rule lives in the door
 		return false;
 
-	bool foundedName = false;
+	// A name is unique among the siblings OF ITS KIND, and the siblings are the PARENT's to answer
+	// for. (This once searched the configuration's top level, so nothing nested had siblings at all:
+	// a document took a second tabular section `Goods`, 2026-09-15.) The search also answers with the
+	// parent itself when the parent carries the name, and that is not a sibling.
+	const ibValueMetaObject* parent = metaObject->GetParent();
+	const ibValueMetaObject* holder = parent != nullptr
+		? parent->FindObjectByFilter<ibValueMetaObject>(newName, { metaObject->GetClassType() })
+		: nullptr;
+	if (holder != nullptr && holder != metaObject && holder != parent)
+		return false;
 
-	for (const auto object : GetAnyArrayObject(metaObject->GetClassType())) {
-		if (object->GetParent() != metaObject->GetParent())
-			continue;
-		if (object != metaObject &&
-			stringUtils::CompareString(newName, object->GetName())) {
-			foundedName = true;
-			break;
-		}
-	}
+	// The hook runs BEFORE the name changes: it brings the rest of the configuration into step with
+	// the name about to be taken (a common attribute rewrites its copies, a common module is re-keyed
+	// in the module storage), and its refusal means there is no rename.
+	if (!metaObject->OnRenameMetaObject(newName))
+		return false;
 
-	if (foundedName) return false;
+	metaObject->SetName(newName);
+	Modify(true);
 
-	// ⭐ AND IT RENAMES. It used to only ASK — answer whether the name was free, run the hook, and
-	// leave the assignment to the caller — so every caller carried the second half, and the ones
-	// that forgot reported a success the object did not have: an object asked for as "Товары"
-	// stood in the tree as "Catalog3" and said it had been named.
-	//
-	// The hook runs BEFORE the name changes, deliberately: what it does is bring the rest of the
-	// configuration into step with a name that is about to be taken (a common attribute rewrites
-	// its copies, a common module is re-keyed in the module storage), and a refusal from it means
-	// the rename does not happen at all.
-	if (metaObject->OnRenameMetaObject(newName)) {
-		metaObject->SetName(newName);
-		Modify(true);
-
-		// The name is ALREADY the new one when this goes out — a watcher relabelling its row reads
-		// it off the object rather than being handed a string that may not have been taken.
-		//
-		// ⭐ …UNLESS THE OBJECT IS STILL BEING BUILT, and it is already known that it is: the paste
-		// mark stands on every node of a pasted subtree for the whole run, and the outer guard in
-		// PasteObject clears it. A name bumped by BuildNewName under that mark is not a rename
-		// anybody has to hear about — nothing of the object has been shown yet, and the finished
-		// object is announced ONCE, at the end. Without this one paste of a catalog sent a Renamed
-		// per attribute, per tabular section and per form, on top of everything else that speaks
-		// during a build (Max, 2026-09-01: *"a lot of needless events get generated — they must not
-		// be sent"*, *"at create it already knows it is a paste"*).
-		if (!metaObject->IsPasteMode())
-			MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Renamed, metaObject);
-		return true;
-	}
-	return false;
+	// Announced with the new name already in place — unless the object is still being built: a
+	// pasted subtree is announced ONCE, at the end of the paste (Max, 2026-09-01: *"a lot of needless
+	// events get generated — they must not be sent"*).
+	if (!metaObject->IsPasteMode())
+		MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Renamed, metaObject);
+	return true;
 }
 
 bool ibMetaData::RemoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* parent)

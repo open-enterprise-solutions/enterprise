@@ -1008,12 +1008,18 @@ inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* a
 	const std::vector<wxString> fields = ColumnFieldNames(attribute->GetQueryColumn());
 	const bool spreads = fields.size() > 2;
 
+	// ⭐ THE TYPE A STORED COLUMN HOLDS, NOT THE ONE THE AUTHOR DECLARED (GetTypeValueDesc). They differ for
+	// a CHARACTERISTIC — an account dimension's value slot declares "whatever the chart admits" as one
+	// type — and a view column typed by the declaration laid itself out as a bare _TYPE field and told the
+	// reader it held no reference: every analytics value read back from the totals came out empty, so a
+	// balance broken down by counterparty folded all counterparties into one blank row (2026-09-15).
+	const ibTypeDescription& stored = attribute->GetTypeValueDesc();
 	return spreads
 		? ibTempColumn(attribute->GetName(), attribute->GetPhysicalName(),
-		               attribute->GetTypeDesc(), attribute->GetMetaID(), attribute->GetSynonym(),
+		               stored, attribute->GetMetaID(), attribute->GetSynonym(),
 		               ibBackendQueryColumn::Kind::Composite)
 		: ibTempColumn(attribute->GetName(), ibRegValueField(attribute),
-		               attribute->GetTypeDesc(), attribute->GetMetaID(), attribute->GetSynonym(),
+		               stored, attribute->GetMetaID(), attribute->GetSynonym(),
 		               ibBackendQueryColumn::Kind::Computed);
 }
 

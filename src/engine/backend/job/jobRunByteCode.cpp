@@ -321,6 +321,16 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 					answer = produced;
 				break;
 			}
+
+			// ⭐ THE END OF THE TRANSACTION IS INSIDE THE TRY. A Commit that cannot keep the work — a write
+			// inside the run failed and its error was caught, or the driver refused — THROWS and leaves
+			// the transaction open (ibDatabaseLayer::Commit), and the rollback below is ours to take.
+			// Outside the try it was a rollback nobody took, and a run that had kept nothing came back
+			// "complete" (2026-09-15).
+			if (commit)
+				layer->Commit();
+			else
+				layer->RollBack();   // stage one: it all happened, and none of it is kept
 		}
 		catch (...) {
 			// ⚠ THE ROLLBACK IS OUTSIDE EVERY EXIT. A throw is a likely end for sent code, and a
@@ -332,11 +342,6 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 			layer->RollBack();
 			throw;
 		}
-
-		if (commit)
-			layer->Commit();
-		else
-			layer->RollBack();   // stage one: it all happened, and none of it is kept
 		return answer;
 	};
 

@@ -112,15 +112,23 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::CallAsF
 	return false;
 }
 
-// ⭐⭐ WRITING BY KIND — the pair is written TOGETHER.
+// ⭐⭐ WRITING BY KIND — the pair is written TOGETHER, in the slot the ACCOUNT gives the kind.
 //
-// The kind lands in its own column beside the value, rather than being inferred from the account's
-// kinds table by position. That is what makes a stored movement self-describing: an old row still says
-// what its value was a kind OF, so re-ordering an account's kinds later cannot silently change the
-// meaning of data already written, and a reading needs no join per slot per row.
+// The kind lands in its own column beside the value. That is what makes a stored movement
+// self-describing: an old row still says what its value was a kind OF, so re-ordering an account's kinds
+// later cannot silently change the meaning of data already written, and a reading needs no join per slot
+// per row.
 //
-// Which slot is used is decided here and is nobody's business upstream: the one already holding this
-// kind, or the first free one.
+// ⭐⭐ THE SLOT IS THE KIND'S POSITION ON THE ACCOUNT — the order of the account's own kinds table: its
+// first kind in slot 1, its second in slot 2. The author names the kind; the position is the account's.
+// It used to be "the slot already holding this kind, or the first free one", so the slot a kind landed in
+// depended on which kind a posting happened to write first — one account's counterparty in slot 1 on one
+// line and slot 2 on the next, against what the class declares (accountingRegister.h) and what every
+// reading by position assumes (2026-09-15).
+//
+// ⚠ AND SAID, NOT SWALLOWED, when there is no such position: the row names no account yet (the account
+// comes first — it is what decides), or the account does not keep that kind. Filing a value under a kind
+// the account does not keep would be analytics nobody can read back by that account.
 bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::SetAt(
 	const ibValue& varKeyValue, const ibValue& varValue)
 {
@@ -132,30 +140,43 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::SetAt(
 	if (varKeyValue.IsEmpty())
 		ibBackendCoreException::Error(_("an account dimension is addressed by its KIND, and none was given"));
 
+	const ibValue account = LineAccount();
+	if (account.IsEmpty())
+		ibBackendCoreException::Error(_("the line names no account yet: set the account first - it decides which slot the kind \"%s\" goes to"),
+			varKeyValue.GetString());
+
+	const std::vector<std::pair<wxString, ibValue>> kinds = DeclaredKinds();
 	long target = wxNOT_FOUND;
-	long firstFree = wxNOT_FOUND;
-
-	for (unsigned int idx = 0; idx < meta->GetAccountDimensionCount(); idx++) {
-		const ibValueMetaObjectAttributeBase* kindSlot = meta->GetAccountDimensionKindSlot(m_creditSide, idx);
-		if (kindSlot == nullptr)
-			continue;
-
-		ibValue current;
-		m_recordSet->GetValueByMetaID(m_line, kindSlot->GetMetaID(), current);
-		if (!current.IsEmpty() && current == varKeyValue) { target = idx; break; }
-		if (current.IsEmpty() && firstFree == wxNOT_FOUND) firstFree = idx;
-	}
+	for (size_t idx = 0; idx < kinds.size(); idx++)
+		if (kinds[idx].second == varKeyValue) { target = static_cast<long>(idx); break; }
 
 	if (target == wxNOT_FOUND)
-		target = firstFree;
+		ibBackendCoreException::Error(_("account %s keeps no analytics by \"%s\" - its kinds table does not list it"),
+			account.GetString(), varKeyValue.GetString());
 
-	if (target == wxNOT_FOUND) {
-		// ⚠ SAID, NOT SWALLOWED. The number of slots is declared by the chart of accounts, so "no room"
-		// is a configuration statement the author can act on — and a posting that quietly dropped one of
-		// its analytics would be found months later, in a report that does not add up.
-		ibBackendCoreException::Error(_("this register has no free account dimension slot: the chart of accounts declares %u"),
-			meta->GetAccountDimensionCount());
+	if (target >= static_cast<long>(meta->GetAccountDimensionCount())) {
+		// The number of slots is declared by the chart of accounts, so "no room" is a configuration
+		// statement the author can act on.
+		ibBackendCoreException::Error(_("the kind \"%s\" is number %ld on account %s, and the chart of accounts declares %u account dimension slots"),
+			varKeyValue.GetString(), target + 1, account.GetString(), meta->GetAccountDimensionCount());
 		return false;
+	}
+
+	// A slot that held this kind before (the account was changed after the analytics were written) gives
+	// it up — one kind, one slot.
+	for (unsigned int idx = 0; idx < meta->GetAccountDimensionCount(); idx++) {
+		if (static_cast<long>(idx) == target)
+			continue;
+		const ibValueMetaObjectAttributeBase* kindSlot = meta->GetAccountDimensionKindSlot(m_creditSide, idx);
+		const ibValueMetaObjectAttributeBase* slot     = meta->GetAccountDimensionSlot(m_creditSide, idx);
+		if (kindSlot == nullptr || slot == nullptr)
+			continue;
+		ibValue current;
+		m_recordSet->GetValueByMetaID(m_line, kindSlot->GetMetaID(), current);
+		if (!current.IsEmpty() && current == varKeyValue) {
+			m_recordSet->SetValueByMetaID(m_line, kindSlot->GetMetaID(), ibValue());
+			m_recordSet->SetValueByMetaID(m_line, slot->GetMetaID(), ibValue());
+		}
 	}
 
 	const ibValueMetaObjectAttributeBase* kindSlot = meta->GetAccountDimensionKindSlot(m_creditSide, target);
@@ -305,13 +326,21 @@ std::vector<std::pair<wxString, ibValue>> KindsOfAccount(const ibValue& account)
 
 } // namespace
 
-std::vector<std::pair<wxString, ibValue>>
-ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::DeclaredKinds() const
+const std::vector<std::pair<wxString, ibValue>>&
+ibValueRecordSetObjectAccountingRegister::AccountKinds(const ibValue& account) const
+{
+	auto found = m_accountKinds.find(account);
+	if (found == m_accountKinds.end())
+		found = m_accountKinds.emplace(account, KindsOfAccount(account)).first;
+	return found->second;
+}
+
+ibValue ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::LineAccount() const
 {
 	const ibValueMetaObjectAccountingRegister* meta =
 		m_recordSet != nullptr ? m_recordSet->GetAccountingMetaObject() : nullptr;
 	if (meta == nullptr)
-		return {};
+		return ibValue();
 
 	// Whose analytics these are: the debit account on the debit side, the credit one on the credit
 	// side — and in a one-sided register there is only the one account, whichever side the row is.
@@ -319,11 +348,20 @@ ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::DeclaredKind
 		(m_creditSide && meta->IsCorrespondence() && meta->GetRegisterAccountCr() != nullptr)
 			? meta->GetRegisterAccountCr() : meta->GetRegisterAccount();
 	if (accountAttribute == nullptr)
-		return {};
+		return ibValue();
 
 	ibValue account;
 	m_recordSet->GetValueByMetaID(m_line, accountAttribute->GetMetaID(), account);
-	return KindsOfAccount(account);
+	return account;
+}
+
+std::vector<std::pair<wxString, ibValue>>
+ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::DeclaredKinds() const
+{
+	const ibValue account = LineAccount();
+	if (account.IsEmpty())
+		return {};
+	return m_recordSet->AccountKinds(account);
 }
 
 long ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::FindProp(const wxString& strPropName) const

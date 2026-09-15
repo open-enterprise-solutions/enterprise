@@ -47,56 +47,54 @@ void ibDatabaseLayer::Commit()
 	if (m_txDepth == 0)
 		return;                      // no open transaction; silent no-op
 
+	// ⭐⭐ COMMIT IS "KEPT" OR AN EXCEPTION — IT NEVER ROLLS BACK ON ITS OWN. A rollback is its owner's
+	// act, taken knowingly: the owner ends with Commit inside its try and rolls back in its catch.
+	// Committing a transaction an inner level has already rolled back is a mistake, so it is refused
+	// here, at ANY depth, and nothing is touched — the transaction stays open for its owner to roll
+	// back. The next write after a caught failure therefore fails at once, not an hour later.
+	//
+	// It used to turn into a rollback and RETURN: a script that caught one refused posting and went on
+	// writing was told "committed" over an empty base (2026-09-15, a committing code_run seeding a demo
+	// base; a script's own CommitTransaction() answered the same way). Max: *"either success, or an
+	// exception if it was rolled back"*.
+	if (m_txAborted)
+		ibBackendDatabaseException::Throw(ibBackendDatabaseException::Kind::RolledBack,
+			_("Cannot commit: this transaction has already been rolled back at an inner level (a write "
+			  "that failed and whose error was caught). Nothing of it can be kept - roll it back."));
+
 	if (m_txDepth > 1) {
 		--m_txDepth;                 // nested inner commit — count down, defer
 		return;
 	}
 
-	// Outermost level — resolve to the driver. Reset state before the
-	// driver call so that if DoCommit / DoRollBack throws the depth
-	// still reflects "no transaction".
+	// Outermost level — resolve to the driver. A REFUSAL LEAVES THE TRANSACTION OPEN, depth and pin
+	// included, and travels to the owner, whose catch rolls it back (the same rule as above).
 	//
-	// ⚠ THE TX IS *NOT* GONE EITHER WAY — that is what this comment used to claim, and Firebird is the
-	// counter-example. A commit that fails there leaves the transaction ACTIVE and holding every lock
-	// it took; only the DEPTH went to zero, so this layer answered IsActiveTransaction() = false while
-	// the database went on blocking everyone. The next apply then waited on locks nobody would ever
-	// release and died as a "deadlock" that named neither the holder nor the original fault.
-	// Firebird compiles views and triggers AT COMMIT, so a refusal here is not exotic — it is the
-	// normal way a bad bundle reports itself.
-	m_txDepth = 0;
-	const bool aborted = m_txAborted;
-	m_txAborted = false;
-	// Release the holder's TX pin BEFORE the driver call. The layer
-	// stays alive through whatever other shared_ptr the caller holds
-	// (scope, pool entry after drop, etc.); if this was the only
-	// reference it will be released after the driver op completes
-	// naturally via RAII.
-	ibConnectionPool::ClearActiveTxConnection(this);
-	if (aborted) {
-		DoRollBack();
-		return;
-	}
+	// ⚠ THE TX IS *NOT* GONE ON A REFUSAL, and Firebird is why this matters: a commit that fails there
+	// leaves the transaction ACTIVE and holding every lock it took. This layer once zeroed its depth
+	// first, answered IsActiveTransaction() = false while the database went on blocking everyone, and
+	// the next apply died as a "deadlock" that named neither the holder nor the fault; it then rolled
+	// back here on the owner's behalf, because with the depth at zero the owner could not. Now the
+	// depth is kept, so the owner can. Firebird compiles views and triggers AT COMMIT, so a refusal
+	// here is not exotic — it is the normal way a bad bundle reports itself.
+	DoCommit();
 
-	// A REFUSED COMMIT IS ROLLED BACK HERE, once, for every driver and every caller. Doing it at the
-	// call sites would mean each of them knowing this about Firebird — and the two that mattered
-	// (the restructuring commit, the post-commit re-read) could not have done it anyway: the depth
-	// above is already zero, so the state they would have tested says there is nothing to roll back.
-	// The refusal itself still travels; what does not travel any more is the lock.
-	try {
-		DoCommit();
-	}
-	catch (...) {
-		try { DoRollBack(); } catch (...) { /* swallowed: cleanup after a failed commit — the caller's
-		                                       exception is the one worth reporting, and a rollback
-		                                       that also fails leaves nothing further to attempt */ }
-		throw;
-	}
+	m_txDepth = 0;
+	m_txAborted = false;
+	// Release the holder's TX pin LAST: the layer stays alive through whatever other shared_ptr the
+	// caller holds (scope, pool entry after drop, etc.), and nothing below this line touches `this`.
+	ibConnectionPool::ClearActiveTxConnection(this);
 }
 
 void ibDatabaseLayer::RollBack()
 {
+	// ⭐ A ROLLBACK OF NOTHING IS A MISTAKE, SAID. Max: *"rollback, or an exception if there is nothing
+	// to roll back"* — a second rollback, or one after the owner already closed its transaction, means
+	// the books disagree somewhere, and a quiet return hid exactly where. Cleanup that may meet an
+	// already-closed transaction asks IsActiveTransaction() first, or swallows (a destructor).
 	if (m_txDepth == 0)
-		return;                      // nothing to roll back
+		ibBackendDatabaseException::Throw(ibBackendDatabaseException::Kind::NoTransaction,
+			_("Cannot roll back: no transaction is open"));
 
 	m_txAborted = true;              // poison any pending outer commit
 

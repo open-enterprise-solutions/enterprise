@@ -19,6 +19,7 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 		d.m_paramStyle = ibParamStyle::QuestionMark;
 		d.m_pagination = ibPagination::LimitOffset;  // LIMIT n OFFSET m
 		d.m_boolForm   = ibBoolForm::OneZero;
+		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
 		d.m_features.m_window = true;                 // SQLite 3.25+
 		d.m_features.m_cte    = true;                 // WITH … AS (…) — SQLite 3.8.3+
 		d.m_features.m_multiRowValues = true;         // INSERT … VALUES (…), (…) — SQLite 3.7.11+

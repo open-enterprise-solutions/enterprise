@@ -98,10 +98,16 @@ int ibStructureBuilder::OnAfterSave(bool rollback)
 	//
 	// ⚠ AND A COMMIT CAN REFUSE — Firebird compiles the views and triggers a DDL transaction created
 	// at COMMIT rather than at CREATE, so a bundle it cannot compile is rejected right here, with
-	// every individual statement already reported as successful. Nothing is caught at this level: the
-	// rollback of a refused commit belongs to ibDatabaseLayer::Commit (it is the only place that can
-	// still tell there is a transaction to roll back), and the refusal travels up from there.
-	Conn()->Commit();
+	// every individual statement already reported as successful. A refused Commit leaves the
+	// transaction open (ibDatabaseLayer::Commit), so it is rolled back HERE, by its owner, and the
+	// refusal travels on.
+	try {
+		Conn()->Commit();
+	}
+	catch (...) {
+		Conn()->RollBack();
+		throw;
+	}
 	return FlushDeferredFirebird();   // FB: drain the seeds deferred past that commit, in their own TX
 #else
 	return 1;
@@ -146,7 +152,13 @@ int ibStructureBuilder::FlushDeferredFirebird()
 			UndoAppliedDdl();
 			return DATABASE_LAYER_QUERY_RESULT_ERROR;
 		}
-		Conn()->Commit();
+		try {
+			Conn()->Commit();   // a refusal leaves the transaction open — ours to roll back
+		}
+		catch (...) {
+			Conn()->RollBack();
+			throw;
+		}
 	}
 #endif
 	return 1;
@@ -246,7 +258,13 @@ int ibStructureBuilder::Recreate(const ibSchemaSnapshot& target)
 	}
 
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-	Conn()->Commit();
+	try {
+		Conn()->Commit();   // a refusal leaves the transaction open — ours to roll back
+	}
+	catch (...) {
+		Conn()->RollBack();
+		throw;
+	}
 	return FlushDeferredFirebird();   // FB: drain the deferred seeds in their own TX
 #endif
 	return 1;

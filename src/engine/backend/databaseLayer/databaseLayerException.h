@@ -50,6 +50,16 @@ public:
 		// backoff.
 		Timeout,
 
+		// A Commit over a transaction an inner level had already rolled back (a write that failed and
+		// whose error somebody caught). Nothing was touched: the transaction is still open and its
+		// owner rolls it back. Not retryable as it stands — the failure that matters is the one that
+		// was caught.
+		RolledBack,
+
+		// A RollBack with no transaction open — a second rollback, or one after the owner had already
+		// closed its transaction. The books disagree somewhere; not retryable.
+		NoTransaction,
+
 		// Could not classify from native code. Caller treats as
 		// non-retryable by default; rich-text Kind classification can
 		// be added per-driver over time without changing the catch
