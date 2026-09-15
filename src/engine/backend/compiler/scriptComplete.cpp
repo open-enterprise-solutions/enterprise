@@ -14,6 +14,7 @@
 #include "backend/typeDescription.h"             // ibTypeDescription - a type, possibly several
 #include "backend/objCtor.h"                     // ibCtorMetaValueType - one door: the metaobject AND the maker
 #include "backend/metaCollection/metaObjectComposite.h"   // where fields live: catalog, document, register, tabular section
+#include "backend/compiler/blockSyntaxLINQ.h"    // ibLinqClausesAfter - which query word may follow which
 
 #include <limits>   // the "no closing position" sentinel is named, not spelled as a cast
 #include <memory>
@@ -758,7 +759,21 @@ private:
 			// from the run. A `foreach` over it then answers about a group, which is the hop this
 			// case exists to keep open.
 			if (code.m_param3.m_numIndex == 2) {
-				ibLinqGroupedSample(out);
+				// ⭐⭐ …AND WHAT GOES INTO A GROUP IS ON THE TAPE TOO. The rows went into the buckets
+				// through `OPER_LINQ_BUCKET`, which names the collection, the KEY and the ROW - so both
+				// are resolved by the same walk, the way the KEEP above resolves a row. An empty group
+				// answered `g.Key.` with nothing, which is the first thing written after `Into g`.
+				ibValue key, bucketRow;
+				bool haveKey = false, haveBucketRow = false;
+				for (long back = ip - 1; back >= m_firstCode && !haveKey; --back) {
+					const ibByteUnit& bucket = m_byteCode.m_listCode[(size_t)back];
+					if ((bucket.m_numOper % TYPE_DELTA1) != OPER_LINQ_BUCKET || !SameSlot(bucket.m_param1, code.m_param2))
+						continue;
+					haveKey = ValueOfSlot(bucket.m_param2, key, depth + 1, nullptr);
+					haveBucketRow = ValueOfSlot(bucket.m_param3, bucketRow, depth + 1, nullptr);
+					break;
+				}
+				ibLinqGroupedSample(out, haveKey ? key : ibValue(), haveBucketRow ? &bucketRow : nullptr);
 				if (outOrigin != nullptr) *outOrigin = ibNameOrigin::Declared;
 				return ibStep::Value;
 			}
@@ -2217,35 +2232,23 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 			}();
 
 			// A source is being named (`from o |`, `join b |`) — the language wants `in` and
-			// nothing else, and after `on <key> |` it wants `equals`. These are the positions where
-			// a full clause list is not merely noisy but wrong.
-			const bool wantsIn     = (spoken == KEY_FROM || spoken == KEY_JOIN);
-			const bool wantsEquals = (spoken == KEY_ON);
-			const bool wantsBy     = (spoken == KEY_GROUP);
+			// nothing else, after `on <key> |` it wants `equals`, after `group <row> |` it wants `by`.
+			// These are the positions where a full clause list is not merely noisy but wrong, and
+			// they hold inside a `restrict` as much as inside a query.
+			//
+			// ⭐ WHAT FOLLOWS WHAT IS ONE TABLE — ibLinqClausesAfter (blockSyntaxLINQ.h), read here and by
+			// the LINQ constructor that writes a whole block. It was this branch; a constructor asking
+			// the same question from a copy would have drifted from the dropdown the first time either
+			// learned a clause.
+			const bool forced = (spoken == KEY_FROM || spoken == KEY_JOIN || spoken == KEY_ON || spoken == KEY_GROUP);
 
-			if (wantsIn)
-				offerKeyword(KEY_IN);
-			else if (wantsEquals)
-				offerKeyword(KEY_EQUALS);
-			else if (wantsBy)
-				offerKeyword(KEY_BY);
+			if (forced || (insideQuery && !insideRestrict)) {
+				for (const int key : ibLinqClausesAfter(spoken))
+					offerKeyword(key);
+			}
 			else if (insideRestrict) {
 				for (const int key : { KEY_JOIN, KEY_WHERE })
 					offerKeyword(key);
-			}
-			else if (insideQuery) {
-				// The clauses that may still follow. `select` closes the query, so after it only
-				// `distinct` remains; `into` belongs to a `group` that has its key.
-				if (spoken == KEY_SELECT)
-					offerKeyword(KEY_DISTINCT);
-				else if (spoken == KEY_BY)
-					for (const int key : { KEY_INTO, KEY_ORDERBY, KEY_SELECT })
-						offerKeyword(key);
-				else
-					// `from` again: a second source is how this language spells a cross product.
-					for (const int key : { KEY_WHERE, KEY_SELECT, KEY_ORDERBY, KEY_GROUP, KEY_JOIN,
-					                       KEY_TAKE, KEY_SKIP, KEY_FROM })
-						offerKeyword(key);
 			}
 			else {
 				for (const int key : { KEY_FROM, KEY_RESTRICT })

@@ -209,7 +209,9 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 		m_pg->Update();
 	}
 
-	if (m_currentSel != nullptr) {
+	// ShownObject, not m_currentSel: asked again with the address of an object that has since died,
+	// the branch above does not rebuild — and the pointer left standing is a corpse.
+	if (ShownObject() != nullptr) {
 		m_currentSel->OnRefresh();
 		for (auto prop : m_propMap) {
 			wxPGProperty* property = prop.first;
@@ -350,6 +352,16 @@ bool ibObjectInspector::ModifyEvent(ibEvent* event, const wxVariant& newValue)
 void ibObjectInspector::OnPropertyGridChanging(wxPropertyGridEvent& event)
 {
 	ScopedFlag inEvent(m_inGridEvent);   // an edit here may bubble back to Create — keep it deferred
+
+	// A DEAD OBJECT'S ROWS take no edit — and nothing in the maps may be read: its ibProperties died
+	// with it. The grid is cleared once the event unwinds (Create defers itself while one is in flight).
+	if (ShownObject() == nullptr) {
+		event.Veto();
+		if (m_currentSel != nullptr)
+			Create(nullptr, true);
+		return;
+	}
+
 	wxPGProperty* propPtr = event.GetProperty();
 	std::map< wxPGProperty*, ibProperty*>::iterator itProperty = m_propMap.find(propPtr);
 	if (itProperty != m_propMap.end()) {
@@ -394,9 +406,18 @@ void ibObjectInspector::OnPropertyGridChanged(wxPropertyGridEvent& event)
 		return;
 	}
 
+	// The object shown died while the edit was in flight: nothing of it may be refreshed, and the grid
+	// goes — after this event (see OnPropertyGridChanging).
+	if (ShownObject() == nullptr) {
+		if (m_currentSel != nullptr)
+			Create(nullptr, true);
+		event.Skip();
+		return;
+	}
+
 	wxWindowUpdateLocker updateLock(m_pg);   // RAII Thaw — a throwing OnPropertyRefresh must not leave the grid frozen
 
-	if (m_currentSel != nullptr) {
+	{
 		m_currentSel->OnRefresh();
 		for (auto prop : m_propMap) {
 			wxPGProperty* property = prop.first;
@@ -435,6 +456,18 @@ void ibObjectInspector::OnPropertyGridExpand(wxPropertyGridEvent& event)
 
 void ibObjectInspector::OnPropertyGridItemSelected(wxPropertyGridEvent& event)
 {
+	// ⚠ A SELECTION ARRIVES WITHOUT ANYBODY CLICKING: the grid re-selects its row when it is thawed,
+	// and a layout update thaws it (ibFrontendMainFrame::UpdateFrameManager → wxAuiManager::Update).
+	// That is how a dead object's row was selected in the dump of 2026-09-15. So the question is asked
+	// here too, and a rebuild asked from here waits for wxPG to finish selecting.
+	ScopedFlag inEvent(m_inGridEvent);
+
+	if (ShownObject() == nullptr) {
+		if (m_currentSel != nullptr)
+			Create(nullptr, true);
+		return;
+	}
+
 	wxPGProperty* propPtr = event.GetProperty();
 	if (propPtr != nullptr) {
 		m_strSelPropItem = m_pg->GetPropertyName(propPtr);
@@ -444,7 +477,7 @@ void ibObjectInspector::OnPropertyGridItemSelected(wxPropertyGridEvent& event)
 			propPtr = propPtr->GetParent();
 			it = m_propMap.find(propPtr);
 		}
-		if (m_currentSel && it != m_propMap.end()) {
+		if (it != m_propMap.end()) {
 			m_currentSel->OnPropertySelected(it->second);
 		}
 	}

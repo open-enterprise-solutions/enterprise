@@ -96,6 +96,7 @@
     <ClInclude Include="compiler\byteCodeLINQ.h" />
     <ClInclude Include="compiler\compileModule.h" />
     <ClInclude Include="compiler\scriptComplete.h" />
+    <ClInclude Include="compiler\blockSyntaxLINQ.h" />
     <ClInclude Include="compiler\scriptParseCode.h" />
     <ClInclude Include="compiler\scriptCheck.h" />
     <ClInclude Include="compiler\enumFactory.h" />
@@ -538,6 +539,7 @@
     <ClCompile Include="compiler\compileContext.cpp" />
     <ClCompile Include="compiler\compileModule.cpp" />
     <ClCompile Include="compiler\scriptComplete.cpp" />
+    <ClCompile Include="compiler\blockSyntaxLINQ.cpp" />
     <ClCompile Include="compiler\scriptParseCode.cpp" />
     <ClCompile Include="compiler\scriptCheck.cpp" />
     <ClCompile Include="compiler\enumUnit.cpp" />

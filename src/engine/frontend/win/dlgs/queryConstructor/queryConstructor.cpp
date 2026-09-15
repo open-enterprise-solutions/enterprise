@@ -868,7 +868,7 @@ wxWindow* ibDialogQueryConstructor::BuildLinksPage(wxWindow* parent)
 
 	// The condition cell opens IN PLACE like every other editable cell; the "..." inside it is the
 	// full expression editor, and the toolbar's "Condition" verb is the same door for the keyboard.
-	EditOnActivate(m_links);
+	ibDataViewEditOnActivate(m_links);
 	AttachContextMenu(m_links, bar);
 	bottom->Add(m_links, 1, wxEXPAND | wxALL, FromDIP(3));
 	page->SetSizer(bottom);
@@ -936,7 +936,7 @@ wxWindow* ibDialogQueryConstructor::BuildSelectionLinksPage(wxWindow* parent)
 			wxDATAVIEW_CELL_EDITABLE),
 		kLinkColCondition, FromDIP(340), wxAlignment::wxALIGN_LEFT));
 
-	EditOnActivate(m_selectionLinks);
+	ibDataViewEditOnActivate(m_selectionLinks);
 	AttachContextMenu(m_selectionLinks, bar);
 	box->Add(m_selectionLinks, 1, wxEXPAND | wxALL, FromDIP(3));
 	page->SetSizer(box);
@@ -1287,7 +1287,7 @@ wxWindow* ibDialogQueryConstructor::BuildConditionsPage(wxWindow* parent)
 	// got the one line that answers a double-click by editing the cell — the expression cell was there
 	// with its "..." inside and nothing could reach it. A cell you cannot open is a cell that is not
 	// there; the tab read as "the condition cannot be changed".
-	EditOnActivate(m_conditions);
+	ibDataViewEditOnActivate(m_conditions);
 
 	// ⚠ THE ONE PANE THAT HAD NO DROP TARGET. Every other list in the window accepted a dragged
 	// field; this one silently did not, so the gesture that works everywhere else did nothing here.
@@ -2317,7 +2317,7 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 		wxMessageBox(message, _("Query constructor"), wxOK | wxICON_WARNING, this);
 	});
 	m_unionFields->AssociateModel(m_unionFieldModel);
-	EditOnActivate(m_unionFields);   // the Alias cell — the one place an output field is named
+	ibDataViewEditOnActivate(m_unionFields);   // the Alias cell — the one place an output field is named
 	right->Add(m_unionFields, 1, wxEXPAND | wxALL, FromDIP(3));
 	rightPane->SetSizer(right);
 

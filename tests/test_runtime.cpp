@@ -556,6 +556,36 @@ TEST(RuntimeTest, LinqWhere_NullThreeValuedLogic) {
 }
 
 // ===========================================================================
+// LINQ group WITHOUT A NAME is the answer — the groups themselves — and a clause
+// after it has nothing to read. It was refused as "';' expected" on the clause's
+// first word, which tells an author who wrote a Select about a semicolon; the
+// compiler now says what it is and how to go on (`into <name>`).
+// ===========================================================================
+
+TEST(RuntimeTest, LinqClauseAfterAnUnnamedGroup_IsRefusedByName) {
+	const wxString head =
+		wxT("Function Grouped() Public\n")
+		wxT("  var rows; var q;\n")
+		wxT("  rows = New Array; rows.Add(1); rows.Add(1); rows.Add(2);\n");
+	const wxString tail =
+		wxT("  Return q.Count();\n")
+		wxT("EndFunction\n");
+
+	ibCompileCode unnamed(wxT("test"), wxT("memory"), false);
+	wxString why;
+	EXPECT_FALSE(TryCompileNamed(unnamed, head + wxT("  q = from r in rows group r by r select { K = 1 };\n") + tail, why));
+	EXPECT_TRUE(why.Contains(wxT("group without a name"))) << why.ToStdString();
+
+	// Named, the query goes on over the groups; unnamed and last, the groups are the answer.
+	ibCompileCode named(wxT("test"), wxT("memory"), false);
+	EXPECT_TRUE(TryCompileNamed(named, head + wxT("  q = from r in rows group r by r into g select { K = g.Key };\n") + tail, why))
+		<< why.ToStdString();
+	ibCompileCode terminal(wxT("test"), wxT("memory"), false);
+	EXPECT_TRUE(TryCompileNamed(terminal, head + wxT("  q = from r in rows group r by r;\n") + tail, why))
+		<< why.ToStdString();
+}
+
+// ===========================================================================
 // LINQ block join — a key with SEVERAL matching inner rows fans out into one
 // result row per match, like the `.Join()` executor and SQL. This used to die
 // at hash-build time: the block's index was a plain Container, and

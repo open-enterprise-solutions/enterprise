@@ -67,7 +67,19 @@ public:
 			ibJournalInfo(wxT("ui"), wxT("! <debug> clear property"));
 	}
 
-	ibPropertyObject* GetSelectedObject() const { return m_currentSel; }
+	// The object shown — ALIVE, or none. A caller comparing it with another pointer must not be handed a
+	// corpse's address: the next object built may be given the same one.
+	ibPropertyObject* GetSelectedObject() const { return ShownObject(); }
+
+	// ⭐ THE ONE QUESTION EVERY HANDLER ASKS BEFORE TOUCHING THE OBJECT: is the one shown still alive?
+	// `m_currentSel` alone is an ADDRESS; the notifier's owner is the liveness flag (the object's dtor
+	// clears it), so the two together answer. Measured 2026-09-15 (enterprise dump, 21:09): the object
+	// shown died, the grid kept its rows, a layout update re-selected one — and the selection handler
+	// called into the freed object (its vtable read as 0xDDDDDDDD). Create asked this; the three grid
+	// handlers did not.
+	ibPropertyObject* ShownObject() const {
+		return m_currentSel != nullptr && m_notifier->GetOwner() == m_currentSel ? m_currentSel : nullptr;
+	}
 
 	bool IsShownInspector() const;
 	void ShowInspector();

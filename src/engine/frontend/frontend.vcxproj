@@ -386,6 +386,7 @@
     <ClCompile Include="win\dlgs\lineInput\lineInput.cpp" />
     <ClCompile Include="win\dlgs\translateConstructor\translateConstructor.cpp" />
     <ClCompile Include="win\dlgs\formatConstructor\formatConstructor.cpp" />
+    <ClCompile Include="win\dlgs\linqConstructor\linqConstructor.cpp" />
     <ClCompile Include="win\theme\luna_dockart.cpp" />
     <ClCompile Include="win\theme\luna_tabart.cpp" />
     <ClCompile Include="win\theme\luna_toolbarart.cpp" />
@@ -715,6 +716,7 @@
     <ClInclude Include="win\ctrls\dataview\datavgen.h" />
     <ClInclude Include="win\ctrls\dataview\datavlayout.h" />
     <ClInclude Include="win\ctrls\dataview\dataview.h" />
+    <ClInclude Include="win\ctrls\dataview\dataviewEditOnActivate.h" />
     <ClInclude Include="win\ctrls\dataview\dvrenderers.h" />
     <ClInclude Include="win\ctrls\dynamicBorder.h" />
     <ClInclude Include="win\ctrls\floatingNotebook.h" />
@@ -785,6 +787,7 @@
     <ClInclude Include="win\dlgs\lineInput\lineInput.h" />
     <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h" />
     <ClInclude Include="win\dlgs\formatConstructor\formatConstructor.h" />
+    <ClInclude Include="win\dlgs\linqConstructor\linqConstructor.h" />
     <ClInclude Include="win\theme\luna_dockart.h" />
     <ClInclude Include="win\theme\luna_tabart.h" />
     <ClInclude Include="win\theme\luna_toolbarart.h" />

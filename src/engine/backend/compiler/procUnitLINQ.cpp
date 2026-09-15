@@ -742,13 +742,19 @@ private:
 };
 
 // The collection itself. One object per loop, and everything a pipeline does lives on it.
-class ibValueLinqRows : public ibValue {
+//
+// ⭐ AND IT NAMES WHAT MAY BE WRITTEN AFTER IT, as the chain's tail does (ibValueQuery below): a group's
+// `Values` is one of these, and `g.Values.` offered nothing - not `Sum`, not `Count` - in the one place
+// a total over a group is written. The table only NAMES the verbs: a call is compiled by name to
+// OPER_CALL_LINQ (compileCode.cpp) and never looks here, so nothing a run does changes, and the table
+// is shared, not built per value.
+class ibValueLinqRows : public ibValueStaticMembers<&ibBindLinqMethods> {
 public:
-	ibValueLinqRows() : ibValue(ibValueTypes::TYPE_VALUE) {}
+	ibValueLinqRows() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}
 	// A VIEW over somebody else's rows — what a bucket lookup hands out. It keeps the owner alive
 	// and copies nothing.
 	ibValueLinqRows(ibValueLinqRows* owner, const std::vector<ibValue>* view)
-		: ibValue(ibValueTypes::TYPE_VALUE), m_owner(owner), m_view(view) {
+		: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_owner(owner), m_view(view) {
 		if (m_owner != nullptr) m_owner->IncrRef();
 	}
 	virtual ~ibValueLinqRows() { if (m_owner != nullptr) m_owner->DecrRef(); }
@@ -2277,10 +2283,13 @@ void ibLinqField(ibValue& row, const ibValue& value, long ordinal)
 	record->SetField(ordinal, value);
 }
 
-void ibLinqGroupedSample(ibValue& out)
+void ibLinqGroupedSample(ibValue& out, const ibValue& key, const ibValue* row)
 {
+	ibValueLinqRows* const values = new ibValueLinqRows();
+	if (row != nullptr)
+		values->Keep(*row);
 	ibValueLinqRows* const rows = new ibValueLinqRows();
-	rows->Keep(ibValue(new ibValueLinqGroup()));
+	rows->Keep(ibValue(new ibValueLinqGroup(key, ibValue(values))));
 	out = rows;
 }
 

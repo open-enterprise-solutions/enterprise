@@ -71,10 +71,15 @@ BACKEND_API void ibLinqField(ibValue& row, const ibValue& value, long ordinal);
 BACKEND_API bool ibLinqNamedColumns(const ibValue& row, std::vector<wxString>& outNames);
 
 // ⭐ AND A SAMPLE OF WHAT A GROUPING ANSWERS WITH — the collection a grouped query hands back, with
-// one empty group in it. Exported for the same reason as the rule above: the editor has to say what
-// a query will look like WITHOUT running it, and a grouping's shape is settled before a single row
-// is seen — one group per key, and a group is Key and Values whatever the rows were.
-BACKEND_API void ibLinqGroupedSample(ibValue& out);
+// one group in it. Exported for the same reason as the rule above: the editor has to say what a query
+// will look like WITHOUT running it, and a grouping's shape is settled before a single row is seen —
+// one group per key, and a group is Key and Values whatever the rows were.
+//
+// ⭐⭐ THE GROUP CARRIES WHAT THE TAPE PUTS INTO IT when the reader could resolve it: `key` is what the
+// bucket instruction keys by and `row` what it keeps, so `g.Key.` names the key's fields (several keys
+// made into one Structure name themselves) and `g.Values` holds a row of the right kind. An empty
+// group was all a reader got before, and after `g.Key.` it could offer nothing.
+BACKEND_API void ibLinqGroupedSample(ibValue& out, const ibValue& key = ibValue(), const ibValue* row = nullptr);
 
 class BACKEND_API ibProcUnit {
 public:

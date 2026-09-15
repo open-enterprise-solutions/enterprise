@@ -2748,6 +2748,11 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		if (IsNextKeyWord(KEY_SKIP)) {
 			GETKeyWord(KEY_SKIP);
 			const ibParamUnit skipExpr = GetExpression(context);
+			// A NUMBER OF ROWS IS A NUMBER. `Skip "5"` compared a counter with a string on every row and
+			// answered whatever that comparison said; an expression whose type the compiler knows - a
+			// constant, a typed variable - is checked here, the way `For` checks its bound.
+			if (skipExpr.m_clsid != 0 && skipExpr.m_clsid != g_valueNumberCLSID)
+				SetError(ERROR_NUMBER_TYPE);
 			{
 				ibByteUnit c; AddLineInfo(c);
 				c.m_numOper = OPER_ADD;
@@ -2796,6 +2801,8 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		if (IsNextKeyWord(KEY_TAKE)) {
 			GETKeyWord(KEY_TAKE);
 			const ibParamUnit takeExpr = GetExpression(context);
+			if (takeExpr.m_clsid != 0 && takeExpr.m_clsid != g_valueNumberCLSID)
+				SetError(ERROR_NUMBER_TYPE);   // as `Skip` above
 			const ibParamUnit tmpGE = context->CreateVariable();
 			{
 				ibByteUnit c; AddLineInfo(c);
@@ -2893,6 +2900,17 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				GETKeyWord(KEY_INTO);
 				data.m_groupIntoName = GETIdentifier(true);
 				data.m_hasGroupInto  = true;
+			}
+			// ⭐ WITHOUT A NAME THE GROUP IS THE ANSWER, and a clause after it has nothing to read. It was
+			// refused anyway - as "';' expected" on its first word, which tells an author who wrote a
+			// Select about a semicolon; and in the editor's tolerant reading the Select simply vanished,
+			// the answer's columns shown as `Field1`. Said here, as what it is, with the way out.
+			else {
+				for (const int clause : { KEY_SELECT, KEY_WHERE, KEY_ORDERBY, KEY_SKIP, KEY_TAKE, KEY_DISTINCT, KEY_GROUP, KEY_JOIN, KEY_FROM })
+					if (IsNextKeyWord(clause)) {
+						SetError(ERROR_LINQ_AFTER_UNNAMED_GROUP, ibTranslateCode::GetKeyWord(KEY_INTO));
+						break;
+					}
 			}
 		}
 

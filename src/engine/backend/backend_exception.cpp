@@ -203,6 +203,12 @@ static wxString gs_listErrorString[] =
 	// remove a dot they had not written (Max, 2026-09-04). A diagnostic may say what it knows;
 	// it may not guess what was meant.
 	_("'%s' is a global function - it is not a member of this value"),//ERROR_MEMBER_IS_GLOBAL_FUNCTION
+
+	// --- compiler, appended after the runtime block — lock-step with the enum ----
+	// A GROUP WITHOUT A NAME IS THE ANSWER, and a clause written after it was met as "a ';' expected"
+	// on its first word - true, and no help: the author wrote a Select and was told about a semicolon.
+	_("Nothing can follow a group without a name: its answer is the groups themselves, each with Key and Values. "
+	  "To go on - Select, Where, OrderBy - name the group: '%s <name>'."),//ERROR_LINQ_AFTER_UNNAMED_GROUP
 };
 
 //////////////////////////////////////////////////////////////////////

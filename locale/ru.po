@@ -342,6 +342,11 @@ msgstr "Ожидается значение типа Дата"
 msgid "Variable type does not support this operation"
 msgstr "Данный тип переменной не поддерживает эту операцию"
 
+#: src/engine/backend/backend_exception.cpp
+#, c-format
+msgid "Nothing can follow a group without a name: its answer is the groups themselves, each with Key and Values. To go on - Select, Where, OrderBy - name the group: '%s <name>'."
+msgstr "После группы без имени ничего не может идти: её ответ - сами группы, у каждой Key и Values. Чтобы продолжить - Select, Where, OrderBy - дайте группе имя: '%s <имя>'."
+
 #: src/engine/backend/backend_exception.h:185
 msgid "The program was stopped by the user!"
 msgstr "Программа была остановлена ​​пользователем!"
@@ -5932,3 +5937,267 @@ msgstr "Ложь"
 #, c-format
 msgid "'%s' cannot hold ';' or '=': a format string has no way to write them."
 msgstr "'%s' не может содержать ';' или '=': в форматной строке их нельзя записать."
+
+#: src/engine/frontend/win/editor/codeEditor/codeEditor.cpp
+msgid "LINQ query constructor"
+msgstr "Конструктор LINQ-запроса"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Available tables"
+msgstr "Доступные таблицы"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Add as join"
+msgstr "Добавить соединением"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Name in the query"
+msgstr "Имя в запросе"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Reads"
+msgstr "Читает"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Column"
+msgstr "Колонка"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Add an expression"
+msgstr "Добавить выражение"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Move up"
+msgstr "Переместить вверх"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Move down"
+msgstr "Переместить вниз"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+#, c-format
+msgid "Each line is a '%s'. A variable visible here is written by its name - it is the parameter."
+msgstr "Каждая строка - это '%s'. Видимая здесь переменная пишется по имени - она и есть параметр."
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Add a condition"
+msgstr "Добавить условие"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "On groups"
+msgstr "На группах"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Grouped by"
+msgstr "Группировать по"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+#, c-format
+msgid "Group by (%s ... %s)"
+msgstr "Группировочные поля (%s ... %s)"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Total"
+msgstr "Итог"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Of the field"
+msgstr "По полю"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Count the rows"
+msgstr "Посчитать строки"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Totals over each group's rows"
+msgstr "Итоги по строкам каждой группы"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+#, c-format
+msgid "The group's name (%s)"
+msgstr "Имя группы (%s)"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Rows with the same keys become one row of the answer: its columns are the keys and the totals. The order then sorts the groups - by a key, or by a total's column name. Past the name, a condition marked 'On groups' or a field reads the group: <name>.Key, <name>.Values. Without a name the answer is the groups themselves, and no column can be chosen."
+msgstr "Строки с одинаковыми ключами становятся одной строкой ответа: её колонки - ключи и итоги. Порядок после этого сортирует группы - по ключу или по имени колонки итога. После имени условие с отметкой 'На группах' или поле читают группу: <имя>.Key, <имя>.Values. Без имени ответ - сами группы, и колонки выбрать нельзя."
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "rows to pass over"
+msgstr "сколько строк пропустить"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "rows at most"
+msgstr "не больше строк"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+#, c-format
+msgid "now: %s"
+msgstr "сейчас: %s"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+#, c-format
+msgid "The query groups its rows. The answer's columns are the keys and the totals of the Grouping tab, then these - written over the group: %s.Key, %s.Values."
+msgstr "Запрос группирует строки. Колонки ответа - ключи и итоги вкладки 'Группа', затем эти - записанные через группу: %s.Key, %s.Values."
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+#, c-format
+msgid "%s - no repeated rows"
+msgstr "%s - без повторяющихся строк"
+
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Visible here"
+msgstr "Видно здесь"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "(no variables above this place)"
+msgstr "(выше этого места переменных нет)"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "(nothing here)"
+msgstr "(здесь ничего нет)"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+#, c-format
+msgid "%s - its columns are not known before it runs: double-click to write one"
+msgstr "%s - колонки неизвестны до выполнения: двойной щелчок, чтобы написать поле"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "not read as a table here - double-click to write a field by hand"
+msgstr "здесь не читается как таблица - двойной щелчок, чтобы написать поле вручную"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "The field's name, as it is written after a dot. The constructor cannot check it - the compiler's verdict under the block will."
+msgstr "Имя поля, как оно пишется через точку. Конструктор не может его проверить - это сделает вердикт компилятора под блоком."
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "The window opens empty, and OK writes a new block at the caret."
+msgstr "Окно откроется пустым, и OK запишет новый блок в месте курсора."
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "Drag a table or a field from the tree on the left into a list, double-click it, or press the arrow. A table whose columns are not known opens to a line that lets you write a field by hand."
+msgstr "Перетащите таблицу или поле из дерева слева в список, дважды щёлкните по нему или нажмите стрелку. У таблицы с неизвестными колонками внутри есть строка, которая позволяет написать поле вручную."
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "The compiler did not read a query at this place - look at the block."
+msgstr "Компилятор не прочитал запрос в этом месте - посмотрите на блок."
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+#, c-format
+msgid ", %u fields"
+msgstr ", полей: %u"
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+#, c-format
+msgid "The compiler reads it: %s. Columns of the answer: %s."
+msgstr "Компилятор читает так: %s. Колонки ответа: %s."
+
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp
+msgid "the row itself"
+msgstr "сама строка"
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+msgid "A query needs a source: add a table or a variable to read."
+msgstr "Запросу нужен источник: добавьте таблицу или переменную."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+msgid "A source is missing its name in the query or what it reads."
+msgstr "У источника не указано имя в запросе или то, что он читает."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "The join of '%s' needs both keys: what it is joined on, and what that equals."
+msgstr "Соединению '%s' нужны оба ключа: по чему соединять и чему это равно."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "'%s' cannot follow '%s' in a query."
+msgstr "В запросе '%s' не может идти после '%s'."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+msgid "The query's text could not be read."
+msgstr "Текст запроса не удалось прочитать."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "The query has a '%s' clause, which the constructor does not build yet."
+msgstr "В запросе есть предложение '%s', его конструктор пока не строит."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+msgid "There is no query here to open."
+msgstr "Здесь нет запроса, который можно открыть."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+msgid "A source of the query is not written as the constructor reads one."
+msgstr "Источник запроса записан не так, как его читает конструктор."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+msgid "The query groups twice, which the constructor does not build yet."
+msgstr "Запрос группирует дважды, этого конструктор пока не строит."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "'%s' cannot name a source: a name is letters, digits and '_', not starting with a digit."
+msgstr "'%s' не может быть именем источника: имя состоит из букв, цифр и '_' и не начинается с цифры."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "'%s' is not finished: write the field after the dot."
+msgstr "'%s' не дописано: укажите поле после точки."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "'%s' takes a number of rows: a whole number, or a variable that holds one."
+msgstr "'%s' принимает количество строк: целое число или переменную, в которой оно лежит."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+msgid "Totals and conditions on groups are read over groups: add a key to group by."
+msgstr "Итоги и условия на группах читаются по группам: добавьте ключ группировки."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "'%s' cannot name a column: a name is letters, digits and '_', not starting with a digit."
+msgstr "'%s' не может быть именем колонки: имя состоит из букв, цифр и '_' и не начинается с цифры."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "Two columns of the answer are named '%s'."
+msgstr "Две колонки ответа названы '%s'."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "The key '%s' of the grouping does not say what it groups by."
+msgstr "В ключе группировки '%s' не указано, по чему группировать."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "The total '%s' does not say which field it reads."
+msgstr "В итоге '%s' не указано, какое поле он читает."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+msgid "A group without a name answers with the groups themselves - each one's key and its rows. Name the group to choose its columns, totals or conditions on groups."
+msgstr "Группа без имени отвечает самими группами - ключом и строками каждой. Дайте группе имя, чтобы выбрать колонки, итоги или условия на группах."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "'%s' cannot name the group: a name is letters, digits and '_', not starting with a digit."
+msgstr "'%s' не может быть именем группы: имя состоит из букв, цифр и '_' и не начинается с цифры."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "A condition on groups reads '%s' row by row; after grouping it reads the group '%s'."
+msgstr "Условие на группах читает '%s' построчно; после группировки оно читает группу '%s'."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "The order by '%s' reads a row, but the answer is groups: order by a key or a total."
+msgstr "Порядок по '%s' читает строку, а ответ - группы: упорядочивайте по ключу или итогу."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+#, c-format
+msgid "The column '%s' reads '%s' row by row, but the query groups its rows: make it a key or a total on the Grouping tab, or write it over the group '%s'."
+msgstr "Колонка '%s' читает '%s' построчно, а запрос группирует строки: сделайте её ключом или итогом на вкладке 'Группа' или запишите через группу '%s'."
+
+#: src/engine/backend/compiler/blockSyntaxLINQ.cpp
+msgid "The query orders or cuts its rows before grouping them, which the constructor does not build yet."
+msgstr "Запрос упорядочивает или обрезает строки до группировки, этого конструктор пока не строит."

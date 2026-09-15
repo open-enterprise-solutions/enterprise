@@ -59,6 +59,7 @@
 #include <wx/stc/stc.h>
 
 #include "../callbackDropTarget.h"   // the same-process drag: a drop is a notification, the source knows what moved
+#include "frontend/win/ctrls/dataview/dataviewEditOnActivate.h"   // a double-click opens the cell
 #include "queryFieldTree.h"   // the field row: its node, its walk, its drag — shared with the expression editor
 
 #include "mainFrame/settings/fontcolorsettings.h"   // the engine's own font + colours, so this pane matches the code editor
@@ -354,50 +355,9 @@ inline ibDataViewColumn* ChoiceColumn(const wxString& title, unsigned int col, i
 // EVERY LIST IN THIS WINDOW IS THE SAME CONTROL, made the same way. Six listboxes and two listctrls
 // standing beside three dataview grids is what "the designer catches the eye" meant — different row
 // heights, different grid lines, and no cell you could edit where it stood.
-// ⚠ A DOUBLE-CLICK MUST OPEN THE CELL. The grid answers a double-click with ACTIVATE and nothing
-// else, so an editable cell could only be opened with F2 or by clicking a selected row a second
-// time — which is why every grid in this window felt like it "needed some number of clicks".
-// `EditItem` on the activation is what listSettings already does, for the same reason.
-inline void EditOnActivate(ibDataViewCtrl* grid)
-{
-	// ⚠⚠ AND THE HANDLER MUST NOT Skip(). This took four attempts, so the reason is written down.
-	//
-	// The control raises ITEM_ACTIVATED on a double-click and passes the CLICKED COLUMN with it
-	// (datavgen.cpp, `le(wxEVT_DATAVIEW_ITEM_ACTIVATED, this, col, item)`) — so the column was never
-	// the problem, and binding a mouse handler here was worse than useless: mouse events go to the
-	// control's inner window and never reach this one at all.
-	//
-	// What killed it is the line right after:  `if (ProcessWindowEvent(le)) return;`
-	// Skipping means "not handled", so the control carried on and treated the double-click as a
-	// plain click — selecting the row and, in doing so, closing the editor we had just opened. From
-	// outside that is exactly "the cell will not open".
-	//
-	// So: open the cell and OWN the event.
-	grid->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [grid](ibDataViewEvent& event) {
-		ibDataViewColumn* column = event.GetDataViewColumn();
-		if (column == nullptr)
-			column = grid->GetCurrentColumn();
-		if (column == nullptr || column->GetRenderer() == nullptr)
-			return;
-		if (column->GetRenderer()->GetMode() != wxDATAVIEW_CELL_EDITABLE) {
-			event.Skip();   // an inert cell (a path, a derived name): let whoever else wants it have it
-			return;
-		}
-
-		// ⚠⚠ AND IT IS OPENED ON THE NEXT TURN OF THE EVENT LOOP, not here. This is the part four
-		// earlier attempts missed: the control is still INSIDE its own click handling when it
-		// raises this event, and what follows that handling — the click it simulates, the rename
-		// timer it starts with `m_currentCol` — tears down an editor opened underneath it. The
-		// editor appears and vanishes in the same breath, which from outside is "the cell will not
-		// open at all".
-		//
-		// CallAfter puts the edit after all of that, when the control is idle and nothing is left
-		// to undo it.
-		const ibDataViewItem item = event.GetItem();
-		grid->Select(item);
-		grid->CallAfter([grid, item, column] { grid->EditItem(item, column); });
-	});
-}
+// ⚠ A DOUBLE-CLICK MUST OPEN THE CELL — and how is the CONTROL's business now, not this window's:
+// ibDataViewEditOnActivate (dataviewEditOnActivate.h) is this window's answer, moved beside the grid
+// so the LINQ constructor opens its cells the same way (2026-09-15).
 
 inline ibDataViewCtrl* MakeGrid(wxWindow* parent, ibQueryGridModel* model, std::function<void()> onChanged)
 {
@@ -405,7 +365,7 @@ inline ibDataViewCtrl* MakeGrid(wxWindow* parent, ibQueryGridModel* model, std::
 		wxDV_ROW_LINES | wxDV_SINGLE);
 	model->SetOnChanged(std::move(onChanged));
 	grid->AssociateModel(model);
-	EditOnActivate(grid);
+	ibDataViewEditOnActivate(grid);
 	return grid;
 }
 
@@ -420,7 +380,7 @@ inline ibDataViewCtrl* MakeTreeGrid(wxWindow* parent, ibQueryTotalsTreeModel* mo
 		wxDV_ROW_LINES | wxDV_SINGLE);
 	model->SetOnChanged(std::move(onChanged));
 	grid->AssociateModel(model);
-	EditOnActivate(grid);
+	ibDataViewEditOnActivate(grid);
 	return grid;
 }
 

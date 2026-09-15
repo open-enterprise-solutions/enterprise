@@ -633,7 +633,11 @@ public:
 				"answers with the groups - no clause may follow, `select` included. With it, the "
 				"name is bound to one group at a time and the query goes on: the clauses after it "
 				"read `<name>.Key` and `<name>.Values`. So a grouped query that projects wants "
-				"`into` (measured 2026-09-08: `group o by o.Unit select {...}` does not compile).")));
+				"`into`: `group o by o.Unit select {...}` is refused by the compiler, which says so by "
+				"name. Several keys are made into one value, which groups by its contents: "
+				"`by New Structure(\"Unit, Store\", o.Unit, o.Store)`, read back as `<name>.Key.Unit`. "
+				"A total over a group is its Values' aggregate: `<name>.Values.Sum()` over the one "
+				"field the group keeps (`group o.Amount by ...`), `<name>.Values.Count()`.")));
 		clauses.push_back(clause(
 			word(KEY_ORDERBY) + wxT(" <expr>[, <expr>...] [") + word(KEY_ASCENDING) + wxT("|")
 				+ word(KEY_DESCENDING) + wxT("]"),

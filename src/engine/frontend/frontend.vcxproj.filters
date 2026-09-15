@@ -1079,6 +1079,9 @@
     <ClCompile Include="win\dlgs\formatConstructor\formatConstructor.cpp">
       <Filter>win\dlgs\formatConstructor</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\linqConstructor\linqConstructor.cpp">
+      <Filter>win\dlgs\linqConstructor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainFrame\settings\mcpsettingspanel.h">
@@ -1803,6 +1806,9 @@
     <ClInclude Include="win\ctrls\dataview\dataview.h">
       <Filter>win\ctrls\dataview</Filter>
     </ClInclude>
+    <ClInclude Include="win\ctrls\dataview\dataviewEditOnActivate.h">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClInclude>
     <ClInclude Include="win\ctrls\dataview\datavgen.h">
       <Filter>win\ctrls\dataview</Filter>
     </ClInclude>
@@ -1928,6 +1934,9 @@
     </ClInclude>
     <ClInclude Include="win\dlgs\formatConstructor\formatConstructor.h">
       <Filter>win\dlgs\formatConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\linqConstructor\linqConstructor.h">
+      <Filter>win\dlgs\linqConstructor</Filter>
     </ClInclude>
     <ClInclude Include="docView\docManager.h">
       <Filter>docView</Filter>
@@ -2071,6 +2080,9 @@
     </Filter>
     <Filter Include="win\dlgs\formatConstructor">
       <UniqueIdentifier>{D8E1C84A-B7D0-4DF4-8B67-0C82D41A65F5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\linqConstructor">
+      <UniqueIdentifier>{44651288-D557-40EA-A9D9-2311C7175436}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\editor\codeEditor">
       <UniqueIdentifier>{352B5A3C-051F-4521-B828-9114E5C5A0B5}</UniqueIdentifier>

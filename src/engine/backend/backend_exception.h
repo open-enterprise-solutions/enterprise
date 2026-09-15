@@ -85,6 +85,9 @@ enum { //Error message numbers
 	ERROR_MEMBER_NOT_FOUND,
 	ERROR_MEMBER_IS_GLOBAL_FUNCTION,
 
+	// --- compiler, appended after the runtime block so no code above changes its number ------
+	ERROR_LINQ_AFTER_UNNAMED_GROUP,
+
 	LastError
 };
 
