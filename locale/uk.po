@@ -5656,3 +5656,129 @@ msgstr "ЗА ЯКІ ДНІ ДІЇ, по - те, що діє цього дня а
 #: src/engine/backend/metaCollection/partial/calculationRegisterRecalculationMetadata.cpp
 msgid "THE PERIOD WHOSE RECORDS ARE READ - any moment in it, in the register's periodicity: the records of earlier periods that the records registered in it lead."
 msgstr "ПЕРІОД, ЗАПИСИ ЯКОГО ЧИТАЮТЬСЯ - будь-який момент у ньому, за періодичністю регістру: записи минулих періодів, для яких зареєстровані в ньому записи провідні."
+
+#: src/engine/frontend/win/editor/codeEditor/codeEditor.cpp
+msgid "Translation constructor"
+msgstr "Конструктор перекладів"
+
+#: src/engine/frontend/win/dlgs/translateConstructor/translateConstructor.cpp
+msgid "Also in this text, for codes this configuration has no language for. They are kept:"
+msgstr "Ще в цьому тексті, для кодів, яких немає серед мов конфігурації. Вони зберігаються:"
+
+#: src/engine/frontend/win/dlgs/translateConstructor/translateConstructor.cpp
+msgid "Also in this text:"
+msgstr "Ще в цьому тексті:"
+
+#: src/engine/frontend/win/editor/codeEditor/codeEditor.cpp
+msgid "Format string constructor"
+msgstr "Конструктор форматного рядка"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Hours and minutes"
+msgstr "Години та хвилини"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Month and year"
+msgstr "Місяць і рік"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Year"
+msgstr "Рік"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Sortable date"
+msgstr "Дата для сортування"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Format string:"
+msgstr "Форматний рядок:"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+#, c-format
+msgid "Kept as written - codes the platform does not read: %s"
+msgstr "Зберігаються як є - коди, які платформа не читає: %s"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Digits after the point, always that many"
+msgstr "Цифр після крапки, завжди стільки"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Significant digits in all, trailing zeros dropped"
+msgstr "Значущих цифр усього, нулі в кінці відкидаються"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Decimal separator"
+msgstr "Роздільник дробової частини"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Point"
+msgstr "Крапка"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Comma"
+msgstr "Кома"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Group separator"
+msgstr "Роздільник груп розрядів"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Space"
+msgstr "Пробіл"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Non-breaking space"
+msgstr "Нерозривний пробіл"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Apostrophe"
+msgstr "Апостроф"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Digits in a group"
+msgstr "Цифр у групі"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "A zero prints as"
+msgstr "Нуль виводиться як"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Pattern"
+msgstr "Шаблон"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "An empty date prints as"
+msgstr "Порожня дата виводиться як"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "In a pattern: yyyy or yy - the year, mm or m - the month, dd or d - the day, HH or H - the hours, MM or M - the minutes, SS or S - the seconds. The month is lower case, the minutes upper."
+msgstr "У шаблоні: yyyy або yy - рік, mm або m - місяць, dd або d - день, HH або H - години, MM або M - хвилини, SS або S - секунди. Місяць - малими, хвилини - великими."
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "True prints as"
+msgstr "Істина виводиться як"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "False prints as"
+msgstr "Хиба виводиться як"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Boolean"
+msgstr "Булеве"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "empty date"
+msgstr "порожня дата"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "True"
+msgstr "Істина"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "False"
+msgstr "Хиба"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+#, c-format
+msgid "'%s' cannot hold ';' or '=': a format string has no way to write them."
+msgstr "'%s' не може містити ';' або '=': у форматному рядку їх неможливо записати."

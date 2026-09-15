@@ -956,61 +956,80 @@ ibCodeEditor::StringLiteralSpan ibCodeEditor::GetStringLiteralUnderCursor()
 {
 	StringLiteralSpan span;
 
-	// SCAN FROM THE TOP OF THE DOCUMENT, tracking whether we are inside a string. A literal cannot
-	// be recognised by looking around the caret: `""` inside a string is an escaped quote, not a
-	// close followed by an open, and only a scan that started outside can tell the two apart.
-	const wxString text = GetText();
+	// ⭐⭐ THE LEXER SAYS WHERE A LITERAL IS AND WHAT IT HOLDS — not a quote count of our own.
+	//
+	// The editor already keeps the module's token stream (m_tc) for the colouring and the completion,
+	// and a literal is one of its tokens. The scan this replaced counted quotes from the top of the
+	// document by itself, and went wrong in two ways:
+	//  - it compared the caret, a wxSTC position (a BYTE offset into UTF-8), with an index into
+	//    GetText() (a CHARACTER count). Every non-ASCII character above the query - a Russian message
+	//    in a Tstr() - put the caret further on than the scan believed: a click near the end of a
+	//    query opened the constructor on the NEXT literal ("MonthEnd" - not a query), and OK wrote
+	//    the result that many bytes too early, over the code in front of the literal;
+	//  - it did not know comments, so one quote in a `//` line turned every literal below it inside out.
+	// The stream's m_numUtf8String IS a wxSTC position, and a comment never becomes a token.
 	const int caret = GetCurrentPos();
+	const std::vector<ibLexem>& lexems = m_tc.GetLexems();
 
-	int start = -1;
-	for (int i = 0; i < static_cast<int>(text.length()); ++i) {
-		if (text[i] != wxT('"'))
-			continue;
-
-		if (start < 0) {
-			start = i;                       // opening quote
-			continue;
-		}
-		if (i + 1 < static_cast<int>(text.length()) && text[i + 1] == wxT('"')) {
-			++i;                             // "" — an escaped quote, still inside
-			continue;
-		}
-
-		// A closing quote: this literal spans [start, i]. The caret counts as inside when it sits
-		// anywhere from the opening quote to just past the closing one, so a click at either edge
-		// finds the string a person is plainly pointing at.
-		if (caret >= start && caret <= i + 1) {
-			span.m_start = start;
-			span.m_end   = i + 1;
+	// The last token whose stretch starts at or before the caret. A token's recorded start is where
+	// the lexer began looking for it, so its stretch takes in the whitespace and comments in front.
+	size_t at = lexems.size();
+	for (size_t i = 0; i < lexems.size(); ++i) {
+		if (lexems[i].m_lexType == ENDPROGRAM || static_cast<int>(lexems[i].m_numUtf8String) > caret)
 			break;
-		}
-		start = -1;
+		at = i;
 	}
-
-	if (!span.Found())
+	if (at == lexems.size())
 		return span;
 
-	// Take the VALUE out of the spelling: drop the quotes, unescape "", and strip the continuation
-	// markers so what comes out is the query language and not the script's rendering of it.
-	for (int i = span.m_start + 1; i < span.m_end - 1; ++i) {
-		if (text[i] == wxT('"') && i + 1 < span.m_end - 1 && text[i + 1] == wxT('"')) {
-			span.m_text += wxT('"');
-			++i;
-			continue;
+	// WHERE IT OPENS, WHERE IT CLOSES AND WHAT IT SAYS, read by the lexer from the token's start - so
+	// the value is the one the running module would hand a Query: the same `""`, `|` and line breaks.
+	const auto readLiteral = [this, caret, &span](const ibLexem& lex) -> bool {
+		if (lex.m_lexType != CONSTANT || lex.m_valData.GetType() != ibValueTypes::TYPE_STRING)
+			return false;
+		const int from = static_cast<int>(lex.m_numUtf8String);
+		ibTranslateCode reader;
+		reader.Load(GetTextRange(from, GetLength()));
+		try {
+			if (!reader.IsString())
+				return false;
+			const int open = from + static_cast<int>(reader.GetCurrentUtf8Pos());
+			if (GetCharAt(open) != '"')
+				return false;   // a stray `|` the lexer also reads as a string - not a literal to open
+			wxString value;
+			if (!reader.GetString(value))
+				return false;
+			const int close = from + static_cast<int>(reader.GetCurrentUtf8Pos());
+			// Inside from the opening quote to just past the closing one, so a click at either edge
+			// finds the string a person is plainly pointing at.
+			if (caret < open || caret > close)
+				return false;
+			span.m_start = open;
+			span.m_end   = close;
+			span.m_text  = value;
+			return true;
 		}
-		if (text[i] == wxT('\n')) {
-			span.m_text += wxT('\n');
-			// Everything up to and including the next `|` is the continuation marker and its indent.
-			int j = i + 1;
-			while (j < span.m_end - 1 && (text[j] == wxT(' ') || text[j] == wxT('\t') || text[j] == wxT('\r')))
-				++j;
-			if (j < span.m_end - 1 && text[j] == wxT('|'))
-				i = j;
-			continue;
+		catch (...) {
+			return false;   // a literal still being typed has no closing quote yet
 		}
-		span.m_text += text[i];
-	}
+	};
+
+	// A caret just past a closing quote already stands in the NEXT token's stretch.
+	if (!readLiteral(lexems[at]) && at > 0)
+		readLiteral(lexems[at - 1]);
 	return span;
+}
+
+// The indent a literal's continuation lines take: the text in front of `position` on its line, a tab
+// kept a tab and anything else a space - counted in CHARACTERS, since a wxSTC position counts bytes
+// and a Cyrillic name in front of the quote is one column, not two.
+static wxString IndentBefore(wxStyledTextCtrl& editor, int position)
+{
+	const wxString lead = editor.GetTextRange(editor.PositionFromLine(editor.LineFromPosition(position)), position);
+	wxString indent;
+	for (const wxUniChar c : lead)
+		indent += (c == wxT('\t')) ? wxT('\t') : wxT(' ');
+	return indent;
 }
 
 wxString ibCodeEditor::SpellStringLiteral(const wxString& text, const wxString& indent)
@@ -1034,15 +1053,9 @@ void ibCodeEditor::ReplaceStringLiteral(const StringLiteralSpan& span, const wxS
 		return;
 
 	// The indent of the opening quote — continuation lines line up under it.
-	const int line = LineFromPosition(span.m_start);
-	const int lineStart = PositionFromLine(line);
-	wxString indent;
-	for (int i = lineStart; i < span.m_start; ++i)
-		indent += (GetCharAt(i) == wxT('\t')) ? wxT('\t') : wxT(' ');
-
 	SetTargetStart(span.m_start);
 	SetTargetEnd(span.m_end);
-	ReplaceTarget(SpellStringLiteral(text, indent));
+	ReplaceTarget(SpellStringLiteral(text, IndentBefore(*this, span.m_start)));
 }
 
 void ibCodeEditor::InsertStringLiteral(int position, const wxString& text)
@@ -1052,13 +1065,7 @@ void ibCodeEditor::InsertStringLiteral(int position, const wxString& text)
 
 	// Indented to WHERE THE CARET IS, so a query written into the middle of a procedure lines up
 	// with the code around it instead of starting at column zero.
-	const int line = LineFromPosition(position);
-	const int lineStart = PositionFromLine(line);
-	wxString indent;
-	for (int i = lineStart; i < position; ++i)
-		indent += (GetCharAt(i) == wxT('\t')) ? wxT('\t') : wxT(' ');
-
-	InsertText(position, SpellStringLiteral(text, indent));
+	InsertText(position, SpellStringLiteral(text, IndentBefore(*this, position)));
 }
 
 void ibCodeEditor::OnMouseMove(wxMouseEvent& event)
@@ -1090,6 +1097,8 @@ void ibCodeEditor::OnMouseMove(wxMouseEvent& event)
 
 #include "frontend/mainFrame/mainFrame.h"  // wxID_FRONTEND_SYNTAX_HELPER_LOOKUP
 #include "frontend/win/dlgs/queryConstructor/queryConstructor.h"   // the constructor, opened on the literal
+#include "frontend/win/dlgs/translateConstructor/translateConstructor.h"   // …and its sibling for a translated text
+#include "frontend/win/dlgs/formatConstructor/formatConstructor.h"         // …and for a format string
 #include "frontend/artProvider/artProvider.h"                      // wxART_QUERY_CONSTRUCTOR — the icon, registered not embedded
 #include "backend/metadataConfiguration.h"                         // activeMetaData — the config this module belongs to
 
@@ -1136,6 +1145,40 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		if (literal.Found()) ReplaceStringLiteral(literal, text);
 		else                 InsertStringLiteral(caret, text);
 	}, miConstruct->GetId());
+
+	// AND THE TRANSLATION CONSTRUCTOR, on the same literal and by the same rule: a module's messages
+	// are texts a person reads, written once per language like any caption — and the window is the
+	// caption's own (ibDialogTranslateConstructor). The languages are those of the configuration THIS
+	// module belongs to, asked of its document; no document (a code runner) is the language in force.
+	wxMenuItem* miTranslate = menu.Append(wxID_ANY, _("Translation constructor"));
+	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
+		const ibValueMetaObject* moduleObject = m_document != nullptr ? m_document->GetMetaObject() : nullptr;
+		const ibTranslateString before(literal.m_text);
+		ibDialogTranslateConstructor dialog(this, _("Translation constructor"), before,
+			moduleObject != nullptr ? moduleObject->GetMetaData() : nullptr, !IsEditable());
+		if (dialog.ShowModal() != wxID_OK)
+			return;
+		const ibTranslateString after = dialog.GetTranslate();
+		if (after == before)
+			return;   // nothing was changed: the literal keeps the spelling its author gave it
+		if (literal.Found()) ReplaceStringLiteral(literal, after.GetRawText());
+		else                 InsertStringLiteral(caret, after.GetRawText());
+	}, miTranslate->GetId());
+
+	// …AND THE THIRD: the string Format(value, format) reads. Same literal, same rule — and a string that
+	// comes back unchanged is not written, so it keeps its author's spelling.
+	wxMenuItem* miFormat = menu.Append(wxID_ANY, _("Format string constructor"));
+	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
+		const ibFormatString before = ibFormatString::Parse(literal.m_text);
+		ibDialogFormatConstructor dialog(this, _("Format string constructor"), before, !IsEditable());
+		if (dialog.ShowModal() != wxID_OK)
+			return;
+		const ibFormatString after = dialog.GetFormat();
+		if (after == before)
+			return;
+		if (literal.Found()) ReplaceStringLiteral(literal, after.Render());
+		else                 InsertStringLiteral(caret, after.Render());
+	}, miFormat->GetId());
 
 	AppendDebugMenu(menu, menuLine);
 

@@ -5806,3 +5806,129 @@ msgstr "ПЕРИОД, ЗАПИСИ КОТОРОГО ЧИТАЮТСЯ - любо�
 #, c-format
 msgid "The derived table '%s' cannot be rebuilt: its source is not read from the database"
 msgstr "Производную таблицу '%s' нельзя перестроить: её источник читается не из базы данных"
+
+#: src/engine/frontend/win/editor/codeEditor/codeEditor.cpp
+msgid "Translation constructor"
+msgstr "Конструктор переводов"
+
+#: src/engine/frontend/win/dlgs/translateConstructor/translateConstructor.cpp
+msgid "Also in this text, for codes this configuration has no language for. They are kept:"
+msgstr "Ещё в этом тексте, для кодов, которых нет среди языков конфигурации. Они сохраняются:"
+
+#: src/engine/frontend/win/dlgs/translateConstructor/translateConstructor.cpp
+msgid "Also in this text:"
+msgstr "Ещё в этом тексте:"
+
+#: src/engine/frontend/win/editor/codeEditor/codeEditor.cpp
+msgid "Format string constructor"
+msgstr "Конструктор форматной строки"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Hours and minutes"
+msgstr "Часы и минуты"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Month and year"
+msgstr "Месяц и год"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Year"
+msgstr "Год"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Sortable date"
+msgstr "Дата для сортировки"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Format string:"
+msgstr "Форматная строка:"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+#, c-format
+msgid "Kept as written - codes the platform does not read: %s"
+msgstr "Сохраняются как есть - коды, которые платформа не читает: %s"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Digits after the point, always that many"
+msgstr "Цифр после точки, всегда столько"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Significant digits in all, trailing zeros dropped"
+msgstr "Значащих цифр всего, нули в конце отбрасываются"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Decimal separator"
+msgstr "Разделитель дробной части"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Point"
+msgstr "Точка"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Comma"
+msgstr "Запятая"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Group separator"
+msgstr "Разделитель групп разрядов"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Space"
+msgstr "Пробел"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Non-breaking space"
+msgstr "Неразрывный пробел"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Apostrophe"
+msgstr "Апостроф"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Digits in a group"
+msgstr "Цифр в группе"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "A zero prints as"
+msgstr "Ноль выводится как"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Pattern"
+msgstr "Шаблон"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "An empty date prints as"
+msgstr "Пустая дата выводится как"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "In a pattern: yyyy or yy - the year, mm or m - the month, dd or d - the day, HH or H - the hours, MM or M - the minutes, SS or S - the seconds. The month is lower case, the minutes upper."
+msgstr "В шаблоне: yyyy или yy - год, mm или m - месяц, dd или d - день, HH или H - часы, MM или M - минуты, SS или S - секунды. Месяц - строчными, минуты - прописными."
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "True prints as"
+msgstr "Истина выводится как"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "False prints as"
+msgstr "Ложь выводится как"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "Boolean"
+msgstr "Булево"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "empty date"
+msgstr "пустая дата"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "True"
+msgstr "Истина"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+msgid "False"
+msgstr "Ложь"
+
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp
+#, c-format
+msgid "'%s' cannot hold ';' or '=': a format string has no way to write them."
+msgstr "'%s' не может содержать ';' или '=': в форматной строке их нельзя записать."

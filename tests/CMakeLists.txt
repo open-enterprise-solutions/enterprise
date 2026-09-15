@@ -34,6 +34,7 @@ add_executable(oes_tests
     test_string.cpp
     bench_string.cpp
     test_number.cpp
+    test_formatString.cpp
     test_byteCodeAOT.cpp
     test_compiler.cpp
     test_runtime.cpp
@@ -422,6 +423,8 @@ add_executable(oes_frontend_runtime_test
     test_frontendVisualHost.cpp
     test_frontendControls.cpp
     test_frontendQueryConstructor.cpp
+    test_frontendTranslateConstructor.cpp
+    test_frontendFormatConstructor.cpp
 )
 
 target_link_libraries(oes_frontend_runtime_test

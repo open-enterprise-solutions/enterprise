@@ -116,6 +116,10 @@ public:
 		ibBackendLocalization::SetArrayTranslate(m_translations, strResult);
 	}
 
+	// …AND ONE THAT IS TAKEN OUT. Not the same as writing it empty: a language with no cell reads as
+	// another one (GetTranslate), a cell holding an empty text reads as nothing. The rest keep their order.
+	void RemoveTranslate(const wxString& strLangCode);
+
 	bool IsEmpty() const;
 
 	// ⚠ THE STORED FORM, AND ONLY AT THE EDGE — serialisation, and a configuration written before

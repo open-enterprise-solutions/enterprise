@@ -39,8 +39,8 @@ protected:
 		FrontendRuntimeFix::SetUp();     // GTEST_SKIPs on a headless box
 		if (!ready) return;
 		m_frame = new wxFrame(nullptr, wxID_ANY, wxT("literal"));
-		// No document: the literal scan reads the DOCUMENT TEXT and the caret, and nothing else —
-		// which is exactly why it can be tested without a module behind it.
+		// No document: the literal is asked of the editor's own token stream and the caret, and a
+		// document-less editor re-lexes on every change — so SetText is all the setup it needs.
 		m_editor = new ibCodeEditor(nullptr, m_frame, wxID_ANY);
 		m_ready = m_editor != nullptr;
 	}
@@ -132,8 +132,7 @@ TEST_F(CodeEditorFix, TheSecondLiteralOnALineIsTheOneTheCaretIsIn)
 {
 	if (!m_ready) GTEST_SKIP();
 
-	// `""` inside a string is an escaped quote, not a close followed by an open — which is why the
-	// scan starts at the top of the document instead of looking around the caret.
+	// Two literals on one line are two tokens; the caret picks the one it stands in.
 	const wxString source = wxT("f(\"one\", \"two\");");
 	const ibCodeEditor::StringLiteralSpan first  = SpanAt(source, 4);
 	const ibCodeEditor::StringLiteralSpan second = SpanAt(source, 11);
@@ -165,6 +164,71 @@ TEST_F(CodeEditorFix, WritingBackReplacesExactlyThatLiteral)
 	const ibCodeEditor::StringLiteralSpan again = SpanAt(written, 16);
 	ASSERT_TRUE(again.Found());
 	EXPECT_EQ(wxT("SELECT Ref\nFROM Catalog.Products"), again.m_text);
+}
+
+// ⭐⭐ THE CARET IS A wxSTC POSITION — A BYTE OFFSET INTO UTF-8 — and the literal the constructor
+// opens must be found and written back in that same measure. The scan this replaced counted
+// characters of GetText() against it: every Cyrillic letter above a query moved the caret one byte
+// further on than the scan believed, so a click near the end of the query opened the NEXT literal,
+// and OK wrote the query that many bytes too early, over the code in front of it.
+TEST_F(CodeEditorFix, TextInRussianAboveTheQueryDoesNotMoveTheLiteral)
+{
+	if (!m_ready) GTEST_SKIP();
+
+	const wxString source =
+		wxT("Message(\"\\u041D\\u0435 \\u0443\\u043A\\u0430\\u0437\\u0430\\u043D \\u043C\\u0435\\u0441\\u044F\\u0446\");\n")
+		wxT("q = \"SELECT Ref FROM Catalog.Products\"; p = \"MonthEnd\";");
+	// The caret on the last letter of the query - where a byte-for-character slip lands in "MonthEnd".
+	const int at = source.Find(wxT("Products\"")) + 7;
+	const int caret = static_cast<int>(source.Left(at).ToUTF8().length());
+
+	const ibCodeEditor::StringLiteralSpan span = SpanAt(source, caret);
+	ASSERT_TRUE(span.Found());
+	EXPECT_EQ(wxT("SELECT Ref FROM Catalog.Products"), span.m_text);
+	EXPECT_EQ('"', m_editor->GetCharAt(span.m_start));
+	EXPECT_EQ('"', m_editor->GetCharAt(span.m_end - 1));
+
+	// And written back exactly over itself: the message above and the literal after are untouched.
+	m_editor->ReplaceStringLiteral(span, wxT("SELECT Code FROM Catalog.Products"));
+	const wxString written = m_editor->GetText();
+	EXPECT_TRUE(written.StartsWith(source.BeforeFirst(wxT('\n')) + wxT("\nq = \"SELECT Code FROM Catalog.Products\"; p = \"MonthEnd\";")))
+		<< written.ToStdString(wxConvUTF8);
+}
+
+// A comment is not code: a quote in it opens nothing. The old scan counted it, and every literal
+// below one odd quote in a `//` line was read inside out.
+TEST_F(CodeEditorFix, AQuoteInACommentOpensNothing)
+{
+	if (!m_ready) GTEST_SKIP();
+
+	const wxString source =
+		wxT("// the \"odd one out\n")
+		wxT("q = \"SELECT Ref FROM Catalog.Products\";");
+	const ibCodeEditor::StringLiteralSpan span = SpanAt(source, source.Find(wxT("Ref")));
+	ASSERT_TRUE(span.Found());
+	EXPECT_EQ(wxT("SELECT Ref FROM Catalog.Products"), span.m_text);
+}
+
+// A doubled quote is two bytes of spelling for one character of value. The lexer's UTF-8 count
+// stepped over only one of them, so a literal holding `""` closed one byte early — the write-back
+// left a stray quote behind, and every position after it in the module was one short.
+TEST_F(CodeEditorFix, ALiteralWithDoubledQuotesIsWrittenBackWhole)
+{
+	if (!m_ready) GTEST_SKIP();
+
+	const wxString source = wxT("q = \"WHERE Code = \"\"A\"\"\"; after();");
+	const ibCodeEditor::StringLiteralSpan span = SpanAt(source, 10);
+	ASSERT_TRUE(span.Found());
+	EXPECT_EQ(source.Find(wxT("; after")), span.m_end);
+
+	m_editor->ReplaceStringLiteral(span, wxT("SELECT Ref"));
+	EXPECT_EQ(wxT("q = \"SELECT Ref\"; after();"), m_editor->GetText());
+
+	// …and a literal AFTER it is still found where it is.
+	const wxString two = wxT("a = \"x\"\"y\"; q = \"SELECT Ref\";");
+	const ibCodeEditor::StringLiteralSpan second = SpanAt(two, two.Find(wxT("Ref")));
+	ASSERT_TRUE(second.Found());
+	EXPECT_EQ(wxT("SELECT Ref"), second.m_text);
 }
 
 // ----------------------------- read-only ------------------------------------

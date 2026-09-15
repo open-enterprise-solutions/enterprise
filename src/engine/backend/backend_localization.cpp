@@ -323,10 +323,14 @@ void ibBackendLocalization::SetArrayTranslate(ibBackendLocalizationEntryArray& a
 //
 // ⭐ A language that is not in the array is APPENDED. Nobody asking to set a translation means "only
 // if one is already there", and a no-op is the one answer that cannot be told from success.
+//
+// ⚠ THE CODE IS MATCHED THE WAY IT IS READ — without regard to case, as the parser folds a repeated
+// language (CreateLocalizationArray) and FindTranslate finds one. An exact `==` here found `EN` for
+// a reader and missed it for a writer, which appended a second English cell beside the first.
 void ibBackendLocalization::SetArrayTranslate(const wxString& strLangCode, ibBackendLocalizationEntryArray& array, const wxString& strResult)
 {
 	for (auto& entry : array) {
-		if (entry.m_code == strLangCode) {
+		if (stringUtils::CompareString(entry.m_code, strLangCode)) {
 			entry.m_data = strResult;
 			return;
 		}
@@ -433,6 +437,14 @@ wxString ibTranslateString::FindTranslate(const wxString& strLangCode) const
 	wxString strResult;
 	FindTranslate(strLangCode, strResult);
 	return strResult;
+}
+
+void ibTranslateString::RemoveTranslate(const wxString& strLangCode)
+{
+	m_translations.erase(std::remove_if(m_translations.begin(), m_translations.end(),
+		[&strLangCode](const ibBackendLocalizationEntry& entry) {
+			return stringUtils::CompareString(entry.m_code, strLangCode); }),
+		m_translations.end());
 }
 
 bool ibTranslateString::IsEmpty() const

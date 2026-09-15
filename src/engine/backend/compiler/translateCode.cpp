@@ -839,7 +839,12 @@ bool ibTranslateCode::GetString(wxString* strString) const
 						i++;
 						next_pos = i + 1;
 #ifdef UTF8_LEXEM_TRANSLATE
+						// ⚠ BOTH counters step over the second quote. Moving only `i_utf8` left
+						// `i_utf8_offset` - where the next character is read from - one byte behind,
+						// so every `""` pulled each later UTF-8 position in the module one byte short:
+						// the colouring after it, and the literal the editor hands the query constructor.
 						i_utf8++;
+						i_utf8_offset = i_utf8 + 1;
 						next_utf8_pos = i_utf8 + 1;
 #endif
 						continue;

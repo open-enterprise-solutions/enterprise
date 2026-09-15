@@ -1073,6 +1073,12 @@
     <ClCompile Include="win\dlgs\lineInput\lineInput.cpp">
       <Filter>win\dlgs\lineInput</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\translateConstructor\translateConstructor.cpp">
+      <Filter>win\dlgs\translateConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\formatConstructor\formatConstructor.cpp">
+      <Filter>win\dlgs\formatConstructor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainFrame\settings\mcpsettingspanel.h">
@@ -1917,6 +1923,12 @@
     <ClInclude Include="win\dlgs\lineInput\lineInput.h">
       <Filter>win\dlgs\lineInput</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h">
+      <Filter>win\dlgs\translateConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\formatConstructor\formatConstructor.h">
+      <Filter>win\dlgs\formatConstructor</Filter>
+    </ClInclude>
     <ClInclude Include="docView\docManager.h">
       <Filter>docView</Filter>
     </ClInclude>
@@ -2053,6 +2065,12 @@
     </Filter>
     <Filter Include="win\dlgs\lineInput">
       <UniqueIdentifier>{4CEC2B21-0EA4-4B46-BA59-A2FE285DF45F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\translateConstructor">
+      <UniqueIdentifier>{017A57B3-51E1-4B43-A1EE-B2CFFE55BF47}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\formatConstructor">
+      <UniqueIdentifier>{D8E1C84A-B7D0-4DF4-8B67-0C82D41A65F5}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\editor\codeEditor">
       <UniqueIdentifier>{352B5A3C-051F-4521-B828-9114E5C5A0B5}</UniqueIdentifier>

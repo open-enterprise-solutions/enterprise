@@ -784,6 +784,7 @@
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="backend_localization.h" />
+    <ClInclude Include="formatString.h" />
     <ClInclude Include="res\resource.h">
       <Filter>res</Filter>
     </ClInclude>
@@ -1027,6 +1028,9 @@
       <Filter>mcp\tools</Filter>
     </ClCompile>
     <ClCompile Include="mcp\tools\mcpToolValue.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolFormat.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaIntrospect.cpp">
@@ -2093,6 +2097,7 @@
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="backend_localization.cpp" />
+    <ClCompile Include="formatString.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataProperty.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>

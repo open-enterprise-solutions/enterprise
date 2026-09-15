@@ -189,6 +189,7 @@
     <ClInclude Include="eventDispatcher.h" />
     <ClInclude Include="guid.h" />
     <ClInclude Include="backend_localization.h" />
+    <ClInclude Include="formatString.h" />
     <ClInclude Include="metaCollection\metaLanguageObject.h" />
     <ClInclude Include="metaCollection\metaPictureObject.h" />
     <ClInclude Include="homePageDescription.h" />
@@ -466,6 +467,7 @@
     <ClCompile Include="mcp\tools\mcpToolRunCode.cpp" />
     <ClCompile Include="mcp\tools\mcpToolSchema.cpp" />
     <ClCompile Include="mcp\tools\mcpToolValue.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolFormat.cpp" />
     <ClCompile Include="mcp\tools\mcpToolClipboard.cpp" />
     <ClCompile Include="mcp\mcpDebugBridge.cpp" />
     <ClCompile Include="mcp\tools\mcpToolDebug.cpp" />
@@ -512,6 +514,7 @@
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_picture.cpp" />
     <ClCompile Include="backend_localization.cpp" />
+    <ClCompile Include="formatString.cpp" />
     <ClCompile Include="characteristicCtor.cpp" />
     <ClCompile Include="compiler\cache\byteCodeCache.cpp" />
     <ClCompile Include="compiler\byteCodeAOT.cpp" />
